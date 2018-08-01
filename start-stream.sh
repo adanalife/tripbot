@@ -16,7 +16,7 @@ ffmpeg \
   -safe 0 \
   -i <(for f in $VID_DIR/*; do echo "file '$f'"; done | sort -R) \
   -filter_complex \
-  "[0:v]crop=100:100:in_w:in_h-100,boxblur=10[fg]; \
+  "[0:v]crop=50:100:in_w:in_h-50,boxblur=10[fg]; \
    [0:v][fg]overlay=0:main_h-overlay_h[v]" \
   -map "[v]" \
   -s 1920x1200 \
