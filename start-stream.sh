@@ -11,19 +11,16 @@ BOX_OFFSET_Y="50"
   # "[0:v]crop=in_w-100:in_h-100:100:100,boxblur=10[fg]; \
   # [0:v][fg]overlay=100:100[v]" \
 ffmpeg \
-  -re \
   -f concat \
   -safe 0 \
   -i <(for f in $VID_DIR/*.MP4; do echo "file '$f'"; done | sort -R) \
-  -s 1920x1200 \
+  -s 1920x1080 \
   -framerate 15 \
   -an \
   -c:v libx264 \
   -preset ultrafast \
   -pix_fmt yuv420p \
-  -s 720x480 \
-  -threads 2 \
-   -crf 30 \
+  -s 1920x1080 \
   -f flv "rtmp://live.twitch.tv/app/$STREAM_KEY"
 
   # -filter_complex \
