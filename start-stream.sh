@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 
+# This script takes a directory of videos and streams them to Twitch
+#
+# I use it for streaming dashcam footage, and because of this I apply
+# a filter to blur out some a portion of the screen.
+
 if [[ $# -eq 0 ]] ; then
   echo "Usage: $0 [stream key] [dir containing vids]"
   exit 1
@@ -8,10 +13,12 @@ fi
 STREAM_KEY="$1"
 VID_DIR="$2"
 
+#TODO: check if we have ffmpeg and fail gracefully
+
 ffmpeg \
   -hide_banner \
-  -f concat \
   -safe 0 \
+  -f concat \
   -i <(for f in $VID_DIR/*.MP4; do echo "file '$f'"; done) \
   -s 1920x1080 \
   -maxrate 6000k \
