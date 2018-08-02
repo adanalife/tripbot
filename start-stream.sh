@@ -14,13 +14,13 @@ ffmpeg \
   -hide_banner \
   -f concat \
   -safe 0 \
-  -i <(for f in $VID_DIR/*.MP4; do echo "file '$f'"; done | sort -R) \
+  -i <(for f in $VID_DIR/*.MP4; do echo "file '$f'"; done) \
   -s 1920x1080 \
   -maxrate 1600k \
   -bufsize 1000k \
   -framerate 15 \
   -filter_complex \
-  "[0:v]crop=80:100:0:in_h-80,boxblur=10[fg]; \
+  "[0:v]crop=180:100:0:in_h-180,boxblur=10[fg]; \
    [0:v][fg]overlay=0:main_h-overlay_h[v]" \
   -map "[v]" \
   -acodec copy \
@@ -29,9 +29,9 @@ ffmpeg \
   -pix_fmt yuv420p \
   -s 1920x1080 \
   -crf 40 \
-  -f flv "rtmp://live.twitch.tv/app/$STREAM_KEY"
+  -f flv \
+  "rtmp://live.twitch.tv/app/$STREAM_KEY"
 
   #-c:v mpeg2video \
   #-loglevel info \
-
 #  -vcodec copy \
