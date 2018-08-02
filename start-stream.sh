@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 
+if [[ $# -eq 0 ]] ; then
+  echo "Usage: $0 [stream key] [dir containing vids]"
+  exit 1
+fi
+
 STREAM_KEY="$1"
 VID_DIR="$2"
 
