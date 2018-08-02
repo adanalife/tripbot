@@ -16,9 +16,13 @@ ffmpeg \
   -safe 0 \
   -i <(for f in $VID_DIR/*.MP4; do echo "file '$f'"; done | sort -R) \
   -s 1920x1080 \
-  -maxrate 600k \
-  -bufsize 400k \
+  -maxrate 1600k \
+  -bufsize 1000k \
   -framerate 15 \
+  -filter_complex \
+  "[0:v]crop=50:100:0:in_h-50,boxblur=10[fg]; \
+   [0:v][fg]overlay=0:main_h-overlay_h[v]" \
+  -map "[v]" \
   -acodec copy \
   -c:v libx264 \
   -preset ultrafast \
@@ -26,10 +30,6 @@ ffmpeg \
   -s 1920x1080 \
   -f flv "rtmp://live.twitch.tv/app/$STREAM_KEY"
 
-  # -filter_complex \
-  # "[0:v]crop=50:100:0:in_h-50,boxblur=10[fg]; \
-  #  [0:v][fg]overlay=0:main_h-overlay_h[v]" \
-  # -map "[v]" \
   #-c:v mpeg2video \
   #-loglevel info \
 
