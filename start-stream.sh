@@ -1,15 +1,8 @@
 #!/usr/bin/env bash
 
-STREAM_KEY="live_225469317_4rrtBEFgOJ9ZxZSsjeHLScdOgWyZDj"
-VID_DIR="/Volumes/Leeroy/Danas_Photos/Dashcam/DCIM/Movie"
+STREAM_KEY="$1"
+VID_DIR="$2"
 
-BOX_OFFSET_X="30"
-BOX_OFFSET_Y="50"
-
-   # "[0:v]crop=200:200:$BOX_OFFSET_Y:$BOX_OFFSET_X,boxblur=10[fg]; \
-   # #  [0:v][fg]overlay=$BOX_OFFSET_Y:$BOX_OFFSET_X[v]" \
-  # "[0:v]crop=in_w-100:in_h-100:100:100,boxblur=10[fg]; \
-  # [0:v][fg]overlay=100:100[v]" \
 ffmpeg \
   -hide_banner \
   -f concat \
