@@ -11,12 +11,15 @@ BOX_OFFSET_Y="50"
   # "[0:v]crop=in_w-100:in_h-100:100:100,boxblur=10[fg]; \
   # [0:v][fg]overlay=100:100[v]" \
 ffmpeg \
+  -hide_banner \
   -f concat \
   -safe 0 \
   -i <(for f in $VID_DIR/*.MP4; do echo "file '$f'"; done | sort -R) \
   -s 1920x1080 \
+  -maxrate 600k \
+  -bufsize 400k \
   -framerate 15 \
-  -an \
+  -acodec copy \
   -c:v libx264 \
   -preset ultrafast \
   -pix_fmt yuv420p \
@@ -28,5 +31,6 @@ ffmpeg \
   #  [0:v][fg]overlay=0:main_h-overlay_h[v]" \
   # -map "[v]" \
   #-c:v mpeg2video \
+  #-loglevel info \
 
 #  -vcodec copy \
