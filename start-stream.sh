@@ -28,7 +28,8 @@ ffmpeg \
   -preset ultrafast \
   -pix_fmt yuv420p \
   -s 1280x720 \
-  -g 120 \
+  -r 30 \
+  -g 60 \
   -crf 40 \
   -f flv \
   "rtmp://live.twitch.tv/app/$STREAM_KEY"
