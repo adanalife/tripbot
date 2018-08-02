@@ -15,10 +15,6 @@ ffmpeg \
   -f concat \
   -safe 0 \
   -i <(for f in $VID_DIR/*.MP4; do echo "file '$f'"; done | sort -R) \
-  -filter_complex \
-  "[0:v]crop=50:100:0:in_h-50,boxblur=10[fg]; \
-   [0:v][fg]overlay=0:main_h-overlay_h[v]" \
-  -map "[v]" \
   -s 1920x1200 \
   -framerate 15 \
   -an \
@@ -27,9 +23,13 @@ ffmpeg \
   -pix_fmt yuv420p \
   -s 720x480 \
   -threads 2 \
+   -crf 30 \
   -f flv "rtmp://live.twitch.tv/app/$STREAM_KEY"
-#  -crf 30 \
 
+  # -filter_complex \
+  # "[0:v]crop=50:100:0:in_h-50,boxblur=10[fg]; \
+  #  [0:v][fg]overlay=0:main_h-overlay_h[v]" \
+  # -map "[v]" \
   #-c:v mpeg2video \
 
 #  -vcodec copy \
