@@ -20,6 +20,10 @@ ffmpeg \
   -f concat \
   -safe 0 \
   -i <(./smart-shuffle.rb $VID_DIR) \
+  -filter_complex \
+    "[0:v]crop=180:50:0:in_h-out_h,boxblur=10[fg]; \
+     [0:v][fg]overlay=0:main_h-overlay_h[v]" \
+  -map "[v]" \
   -s 1920x1080 \
   -framerate 15 \
   -an \
@@ -27,24 +31,21 @@ ffmpeg \
   -preset ultrafast \
   -pix_fmt yuv420p \
   -s 1280x720 \
-  -crf 23 \
-  -f flv "rtmp://live.twitch.tv/app/$STREAM_KEY"
+  -crf 28 \
+  -f flv \
+  "rtmp://live.twitch.tv/app/$STREAM_KEY"
 
 
 exit 0
-
-# safe to put old configs down here cause we wont ever get down here
+  -r 30 \
 
   -maxrate 12M \
-  -bufsize 10M \
-  -r 30 \
+  -bufsize 6M \
+# safe to put old configs down here cause we wont ever get down here
+
 # ffmpeg \
 #   -s 1920x1080 \
 #   -framerate 15 \
-#   -filter_complex \
-#     "[0:v]crop=180:50:0:in_h-out_h,boxblur=10[fg]; \
-#      [0:v][fg]overlay=0:main_h-overlay_h[v]" \
-#   -map "[v]" \
 #   -c:a copy \
 #   -c:v libx264 \
 #   -preset slow \
