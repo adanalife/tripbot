@@ -1,4 +1,5 @@
 #!/usr/bin/env ruby
+# this ugly script generates a playlist for FFMPEG
 
 # use the dir passed in via CLI
 vid_dir = ARGV.shift
@@ -24,5 +25,9 @@ by_day.each do |date, file_list|
   end
 end
 
-require 'pp'
-pp by_day
+# print the formatted output for ffmpeg
+by_day.keys.shuffle.each do |day|
+  by_day[day].each do |file|
+    puts "file '#{file}'"
+  end
+end

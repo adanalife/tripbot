@@ -19,7 +19,7 @@ ffmpeg \
   -hide_banner \
   -safe 0 \
   -f concat \
-  -i <(for f in $VID_DIR/*.MP4; do echo "file '$f'"; done) \
+  -i <(./smart-shuffle.rb $VID_DIR) \
   -s 1920x1080 \
   -maxrate 6000k \
   -bufsize 4200k \
