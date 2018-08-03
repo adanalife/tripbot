@@ -26,7 +26,7 @@ ffmpeg \
   -map "[v]" \
   -s 1920x1080 \
   -preset fast \
-  -crf 27 \
+  -crf 28 \
   -an \
   -c:v libx264 \
   -x264-params "nal-hrd=cbr" \
