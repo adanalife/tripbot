@@ -37,27 +37,22 @@ ffmpeg \
   -f flv \
   "rtmp://live.twitch.tv/app/$STREAM_KEY"
 
+####################################################################
+# safe to put old configs down here cause we wont ever get down here
+####################################################################
 
 exit 0
-  -r 30 \
+
+# these are other options we could try/have tried
+
   -s 1280x720 \
   -r 30 \
-
   -maxrate 12M \
   -bufsize 6M \
-# safe to put old configs down here cause we wont ever get down here
-
-ffmpeg \
   -s 1920x1080 \
   -framerate 15 \
-  -c:a copy \
-  -c:v libx264 \
   -preset slow \
-  -pix_fmt yuv420p \
   -g 60 \
-  -f flv \
-  "rtmp://live.twitch.tv/app/$STREAM_KEY"
-
   -preset slower \
   -c:v mpeg2video \
   -loglevel info \
