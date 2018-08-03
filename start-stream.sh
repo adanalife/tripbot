@@ -39,6 +39,15 @@ ffmpeg \
   -f flv \
   "rtmp://live.twitch.tv/app/$STREAM_KEY"
 
+  # -preset slower \
   #-c:v mpeg2video \
   #-loglevel info \
 #  -vcodec copy \
+  # -x264-params "nal-hrd=cbr" \
+  # -b:v 1M \
+  # -minrate 1M \
+  # -maxrate 1M \
+  # -bufsize 2M \
+  # -profile:v baseline \
+  # -level 3.0 \
+  # -movflags +faststart \
