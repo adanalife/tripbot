@@ -26,13 +26,20 @@ ffmpeg \
   -c:v libx264 \
   -preset ultrafast \
   -pix_fmt yuv420p \
-  -s 1920x1080 \
+  -s 1280x720 \
+  -crf 23 \
   -f flv "rtmp://live.twitch.tv/app/$STREAM_KEY"
 
+
+exit 0
+
+# safe to put old configs down here cause we wont ever get down here
+
+  -maxrate 12M \
+  -bufsize 10M \
+  -r 30 \
 # ffmpeg \
 #   -s 1920x1080 \
-#   -maxrate 6000k \
-#   -bufsize 4200k \
 #   -framerate 15 \
 #   -filter_complex \
 #     "[0:v]crop=180:50:0:in_h-out_h,boxblur=10[fg]; \
@@ -42,10 +49,7 @@ ffmpeg \
 #   -c:v libx264 \
 #   -preset slow \
 #   -pix_fmt yuv420p \
-#   -s 1280x720 \
-#   -r 30 \
 #   -g 60 \
-#   -crf 40 \
 #   -f flv \
 #   "rtmp://live.twitch.tv/app/$STREAM_KEY"
 
