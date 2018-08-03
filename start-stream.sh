@@ -16,9 +16,10 @@ VID_DIR="$2"
 #TODO: check if we have ffmpeg and fail gracefully
 
 ffmpeg \
+  -hide_banner \
   -f concat \
   -safe 0 \
-  -i <(for f in $VID_DIR/*.MP4; do echo "file '$f'"; done | sort -R) \
+  -i <(./smart-shuffle.rb $VID_DIR) \
   -s 1920x1080 \
   -framerate 15 \
   -an \
@@ -29,10 +30,6 @@ ffmpeg \
   -f flv "rtmp://live.twitch.tv/app/$STREAM_KEY"
 
 # ffmpeg \
-#   -hide_banner \
-#   -safe 0 \
-#   -f concat \
-#   -i <(./smart-shuffle.rb $VID_DIR) \
 #   -s 1920x1080 \
 #   -maxrate 6000k \
 #   -bufsize 4200k \
