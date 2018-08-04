@@ -5,6 +5,9 @@
 # I use it for streaming dashcam footage, and because of this I apply
 # a filter to blur out some a portion of the screen.
 
+#TODO: check if we have ffmpeg and fail gracefully
+#TODO: the blur needs to not cover the E/W
+
 if [[ $# -eq 0 ]] ; then
   echo "Usage: $0 [stream key] [dir containing vids]"
   exit 1
@@ -12,8 +15,6 @@ fi
 
 STREAM_KEY="$1"
 VID_DIR="$2"
-
-#TODO: check if we have ffmpeg and fail gracefully
 
 ffmpeg \
   -hide_banner \
@@ -45,11 +46,9 @@ exit 0
 
 # these are other options we could try/have tried
 
-  -s 1280x720 \
   -r 30 \
   -maxrate 12M \
   -bufsize 6M \
-  -s 1920x1080 \
   -framerate 15 \
   -preset slow \
   -g 60 \
