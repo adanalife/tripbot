@@ -9,8 +9,10 @@ It is composed of two parts:
 1. A Ruby script that generates a randomized playlist
 2. A Bash script that starts an ffmpeg process
 
-Thanks for looking!
+Thanks for watching!
+
 -Dana
+
 [dana.lol](https://dana.lol)
 
 
