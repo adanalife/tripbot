@@ -17,7 +17,9 @@ VID_DIR="$1"
 
 ffmpeg \
   -hide_banner \
-  -i "$VID_DIR/$(ls $VID_DIR | sort -R | head -1)" \
+  -f concat \
+  -safe 0 \
+  -i <(./smart-shuffle.rb $VID_DIR) \
   -filter_complex \
     "[0:v]crop=130:46:25:in_h-out_h-10,boxblur=10[fg]; \
      [0:v][fg]overlay=25:main_h-overlay_h-10[v] "\
@@ -25,10 +27,10 @@ ffmpeg \
   -s 1920x1080 \
   -an \
   -c:v libx264 \
-  -f flv \
+  -f mp4 \
   -r 60 \
-  -t 21600 \
-  test.flv
+  -t 7200 \
+  output-$(date +%s).mp4
 
 ####################################################################
 # safe to put old configs down here cause we wont ever get down here
