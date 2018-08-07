@@ -22,8 +22,8 @@ ffmpeg \
   -safe 0 \
   -i <(./smart-shuffle.rb $VID_DIR) \
   -filter_complex \
-    "[0:v]crop=180:50:0:in_h-out_h,boxblur=10[fg]; \
-     [0:v][fg]overlay=0:main_h-overlay_h[v]" \
+    "[0:v]crop=130:46:25:in_h-out_h-10,boxblur=10[fg]; \
+     [0:v][fg]overlay=25:main_h-overlay_h-10[v] "\
   -map "[v]" \
   -s 1920x1080 \
   -preset fast \
