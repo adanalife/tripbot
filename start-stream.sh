@@ -26,16 +26,16 @@ ffmpeg \
      [0:v][fg]overlay=25:main_h-overlay_h-10[v] "\
   -map "[v]" \
   -s 1920x1080 \
+  -r 30 \
+  -c:v libx264 \
+  -an \
+  -f flv \
   -preset fast \
   -crf 28 \
-  -an \
-  -c:v libx264 \
   -x264-params "nal-hrd=cbr" \
   -pix_fmt yuv420p \
-  -r 30 \
   -minrate 850k -maxrate 850k -b:v 900k -bufsize 280k \
   -force_key_frames 'expr:gte(t,n_forced*2)' \
-  -f flv \
   "rtmp://live.twitch.tv/app/$STREAM_KEY"
 
 ####################################################################

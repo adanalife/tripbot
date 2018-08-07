@@ -28,10 +28,10 @@ ffmpeg \
      [0:v][fg]overlay=25:main_h-overlay_h-10[v] "\
   -map "[v]" \
   -s 1920x1080 \
-  -an \
-  -c:v libx264 \
-  -f mp4 \
   -r 60 \
+  -c:v libx264 \
+  -an \
+  -f mp4 \
   -t 7200 \
   $OUTPUT_DIR/$(date +%Y%m%d_%H%M%S).mp4
 
