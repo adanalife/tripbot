@@ -41,7 +41,6 @@ for i in `seq 0 100`; do
     -c:v libx264      `# output video codec` \
     -an               `# no output audio codec` \
     -f mp4            `# output filetype` \
-    -preset fast \
     \
     $OUTPUT_DIR/video${i}.mp4
 
