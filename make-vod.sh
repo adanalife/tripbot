@@ -15,6 +15,9 @@ fi
 
 VID_DIR="$1"
 
+# use OUTPUT_DIR if set, otherwise use ./outputs
+OUTPUT_DIR="${OUTPUT_DIR:-outputs}"
+
 ffmpeg \
   -hide_banner \
   -f concat \
@@ -30,7 +33,7 @@ ffmpeg \
   -f mp4 \
   -r 60 \
   -t 7200 \
-  outputs/$(date +%s).mp4
+  $OUTPUT_DIR/$(date +%Y%m%d_%H%M%S).mp4
 
 ####################################################################
 # safe to put old configs down here cause we wont ever get down here

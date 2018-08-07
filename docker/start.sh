@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
 
-/root/make-vod.sh /data/inputs | tee -a /data/outputs/make-vod.log
+time \
+  /root/make-vod.sh $INPUT_DIR | \
+    tee -a $OUTPUT_DIR/make-vod.log
 
