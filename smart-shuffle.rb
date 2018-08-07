@@ -31,3 +31,23 @@ by_day.keys.shuffle.each do |day|
     puts "file '#{file}'"
   end
 end
+
+playlist_text = []
+by_day.keys.shuffle.each do |day|
+  by_day[day].each do |file|
+    playlist_text << "file '#{file}'"
+  end
+end
+
+# require 'pry'
+# binding.pry
+
+# separate the playlist into groups of 20 files (~60m)
+shuffled_video_groups = playlist_text.each_slice(20).to_a
+shuffled_video_groups.each_with_index do |playlist, i|
+  playlist_filename = "outputs/playlist#{i}.txt"
+  File.open(playlist_filename, 'w') do |file|
+    content = playlist.join("\n")
+    file.write(content + "\n")
+  end
+end
