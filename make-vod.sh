@@ -18,30 +18,43 @@ VID_DIR="$1"
 # use OUTPUT_DIR if set, otherwise use ./outputs
 OUTPUT_DIR="${OUTPUT_DIR:-outputs}"
 
-ffmpeg \
-  -hide_banner      `# reduce output` \
-  -f concat -safe 0 `# combine files` \
-  -i <(./smart-shuffle.rb $VID_DIR) `# use script to generate input file` \
-  \
-  -filter_complex   `# cover the bottom left corner of the output` \
-    "[0:v]crop=130:46:25:in_h-out_h-10,boxblur=10[fg]; \
-     [0:v][fg]overlay=25:main_h-overlay_h-10[v] " -map "[v]" \
-  \
-  -s 1920x1080      `# output resolution` \
-  -r 60             `# output FPS` \
-  \
-  -c:v libx264      `# output video codec` \
-  -an               `# no output audio codec` \
-  -f mp4            `# output filetype` \
-  \
-  -t 7200           `# duration in seconds` \
-  $OUTPUT_DIR/$(date +%Y%m%d_%H%M%S).mp4 
+trap "exit 0" SIGINT SIGTERM
 
+for i in `seq 0 100`; do
+
+  echo
+  echo "Working on playlist${i}.txt"
+  echo
+
+  ffmpeg \
+    -hide_banner      `# reduce output` \
+    -f concat -safe 0 `# combine files` \
+    -i $OUTPUT_DIR/playlists/playlist${i}.txt `# use playlists that were pre-generated` \
+    \
+    -filter_complex   `# cover the bottom left corner of the output` \
+      "[0:v]crop=130:46:25:in_h-out_h-10,boxblur=10[fg]; \
+       [0:v][fg]overlay=25:main_h-overlay_h-10[v] " -map "[v]" \
+    \
+    -s 1920x1080      `# output resolution` \
+    -r 60             `# output FPS` \
+    \
+    -c:v libx264      `# output video codec` \
+    -an               `# no output audio codec` \
+    -f mp4            `# output filetype` \
+    \
+    $OUTPUT_DIR/video${i}.mp4
+
+  echo
+  echo "Done with playlist${i}.txt"
+  echo
+
+done
 ####################################################################
 # safe to put old configs down here cause we wont ever get down here
 ####################################################################
 
 exit 0
 
+    -t 7200           `# duration in seconds` \
      movie=/Users/dmerrick/other_projects/stream/logo-fade-animation.gif[inner]; \
      [v][inner]overlay=70:70[v]" \
