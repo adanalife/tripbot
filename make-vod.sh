@@ -19,21 +19,23 @@ VID_DIR="$1"
 OUTPUT_DIR="${OUTPUT_DIR:-outputs}"
 
 ffmpeg \
-  -hide_banner \
-  -f concat \
-  -safe 0 \
-  -i <(./smart-shuffle.rb $VID_DIR) \
-  -filter_complex \
+  -hide_banner      `# reduce output` \
+  -f concat -safe 0 `# combine files` \
+  -i <(./smart-shuffle.rb $VID_DIR) `# use script to generate input file` \
+  \
+  -filter_complex   `# cover the bottom left corner of the output` \
     "[0:v]crop=130:46:25:in_h-out_h-10,boxblur=10[fg]; \
-     [0:v][fg]overlay=25:main_h-overlay_h-10[v] "\
-  -map "[v]" \
-  -s 1920x1080 \
-  -r 60 \
-  -c:v libx264 \
-  -an \
-  -f mp4 \
-  -t 7200 \
-  $OUTPUT_DIR/$(date +%Y%m%d_%H%M%S).mp4
+     [0:v][fg]overlay=25:main_h-overlay_h-10[v] " -map "[v]" \
+  \
+  -s 1920x1080      `# output resolution` \
+  -r 60             `# output FPS` \
+  \
+  -c:v libx264      `# output video codec` \
+  -an               `# no output audio codec` \
+  -f mp4            `# output filetype` \
+  \
+  -t 7200           `# duration in seconds` \
+  $OUTPUT_DIR/$(date +%Y%m%d_%H%M%S).mp4 
 
 ####################################################################
 # safe to put old configs down here cause we wont ever get down here
