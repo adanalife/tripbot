@@ -1,8 +1,4 @@
-#
-# Ubuntu Dockerfile
-#
-# https://github.com/dockerfile/ubuntu
-#
+# docker run -v /path/to/videos:/data/inputs -v $(pwd)/outputs:/data/outputs -it danalol-stream:latest
 
 # Pull base image.
 FROM ubuntu:16.04

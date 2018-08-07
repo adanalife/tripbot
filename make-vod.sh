@@ -30,7 +30,7 @@ ffmpeg \
   -f mp4 \
   -r 60 \
   -t 7200 \
-  output-$(date +%s).mp4
+  outputs/$(date +%s).mp4
 
 ####################################################################
 # safe to put old configs down here cause we wont ever get down here
