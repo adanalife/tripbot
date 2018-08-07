@@ -8,9 +8,10 @@ FROM ubuntu:16.04
 # Set environment variables.
 ENV INPUT_DIR /data/inputs
 ENV OUTPUT_DIR /data/outputs
+ENV PLAYLISTS_DIR /data/playlists
 ENV HOME /root
 
-RUN mkdir -p $INPUT_DIR $OUTPUT_DIR
+RUN mkdir -p $INPUT_DIR $OUTPUT_DIR $PLAYLISTS_DIR
 VOLUME $OUTPUT_DIR
 
 # Install.
@@ -37,9 +38,6 @@ RUN mkdir /root/bin
 ADD smart-shuffle.rb /root
 ADD make-vod.sh /root
 ADD docker/start.sh /root
-
-RUN mkdir /root/playlists
-ADD playlists /root/playlists
 
 # Define working directory.
 WORKDIR /root

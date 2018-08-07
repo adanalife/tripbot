@@ -17,6 +17,7 @@ VID_DIR="$1"
 
 # use OUTPUT_DIR if set, otherwise use ./outputs
 OUTPUT_DIR="${OUTPUT_DIR:-outputs}"
+PLAYLISTS_DIR="${PLAYLISTS_DIR:-playlists}"
 
 trap "exit 0" SIGINT SIGTERM
 
@@ -29,7 +30,7 @@ for i in `seq 0 100`; do
   ffmpeg \
     -hide_banner      `# reduce output` \
     -f concat -safe 0 `# combine files` \
-    -i playlists/playlist${i}.txt `# use playlists that were pre-generated` \
+    -i ${PLAYLISTS_DIR}/playlist${i}.txt `# use playlists that were pre-generated` \
     \
     -filter_complex   `# cover the bottom left corner of the output` \
       "[0:v]crop=130:46:25:in_h-out_h-10,boxblur=10[fg]; \

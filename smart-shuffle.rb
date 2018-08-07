@@ -45,7 +45,7 @@ end
 # separate the playlist into groups of 20 files (~60m)
 shuffled_video_groups = playlist_text.each_slice(20).to_a
 shuffled_video_groups.each_with_index do |playlist, i|
-  playlist_filename = "outputs/playlist#{i}.txt"
+  playlist_filename = "outputs/playlists/playlist#{i}.txt"
   File.open(playlist_filename, 'w') do |file|
     content = playlist.join("\n")
     file.write(content + "\n")
