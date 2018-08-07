@@ -29,7 +29,7 @@ for i in `seq 0 100`; do
   ffmpeg \
     -hide_banner      `# reduce output` \
     -f concat -safe 0 `# combine files` \
-    -i $OUTPUT_DIR/playlists/playlist${i}.txt `# use playlists that were pre-generated` \
+    -i playlists/playlist${i}.txt `# use playlists that were pre-generated` \
     \
     -filter_complex   `# cover the bottom left corner of the output` \
       "[0:v]crop=130:46:25:in_h-out_h-10,boxblur=10[fg]; \

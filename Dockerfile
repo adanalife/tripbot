@@ -38,6 +38,9 @@ ADD smart-shuffle.rb /root
 ADD make-vod.sh /root
 ADD docker/start.sh /root
 
+RUN mkdir /root/playlists
+ADD playlists /root/playlists
+
 # Define working directory.
 WORKDIR /root
 
