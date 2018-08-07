@@ -1,6 +1,7 @@
 # docker build -t danalol-stream .
 # docker run -v /path/to/videos:/data/inputs -v $(pwd)/outputs:/data/outputs -it danalol-stream:latest
 
+#TODO: try jrottenberg/ffmpeg?
 # Pull base image.
 FROM ubuntu:16.04
 
