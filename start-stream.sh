@@ -17,25 +17,26 @@ STREAM_KEY="$1"
 VID_DIR="$2"
 
 ffmpeg \
-  -hide_banner \
-  -f concat \
-  -safe 0 \
-  -i <(./smart-shuffle.rb $VID_DIR) \
-  -filter_complex \
+  -hide_banner      `# reduce output` \
+  -f concat -safe 0 `# combine files` \
+  -i <(./smart-shuffle.rb $VID_DIR) `# use script to generate input file` \
+  \
+  -filter_complex   `# cover the bottom left corner of the output` \
     "[0:v]crop=130:46:25:in_h-out_h-10,boxblur=10[fg]; \
-     [0:v][fg]overlay=25:main_h-overlay_h-10[v] "\
-  -map "[v]" \
-  -s 1920x1080 \
-  -r 30 \
-  -c:v libx264 \
-  -an \
-  -f flv \
-  -preset fast \
-  -crf 28 \
-  -x264-params "nal-hrd=cbr" \
-  -pix_fmt yuv420p \
-  -minrate 850k -maxrate 850k -b:v 900k -bufsize 280k \
-  -force_key_frames 'expr:gte(t,n_forced*2)' \
+     [0:v][fg]overlay=25:main_h-overlay_h-10[v] " -map "[v]" \
+   \
+  -s 1920x1080      `# output resolution` \
+  -r 30             `# output FPS` \
+  \
+  -c:v libx264      `# output video codec` \
+  -an               `# no output audio codec` \
+  -f flv            `# output filetype` \
+  -preset fast      `# speed up encoding ` \
+  -crf 28           `# optimize the file` \
+  -pix_fmt yuv420p  `# required for streaming?` \
+  -x264-params "nal-hrd=cbr" `# try and force constant bit rate` \
+  -minrate 850k -maxrate 850k -b:v 900k -bufsize 280k `# set bitrate controls` \
+  -force_key_frames 'expr:gte(t,n_forced*2)' `# keyframes every two seconds` \
   "rtmp://live.twitch.tv/app/$STREAM_KEY"
 
 ####################################################################
