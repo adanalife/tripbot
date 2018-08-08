@@ -24,7 +24,7 @@ trap "exit 0" SIGINT SIGTERM
 for i in `seq 0 100`; do
 
   echo
-  echo "Working on playlist${i}.txt"
+  echo "Creating video${i} from playlist${i}"
   echo
 
   ffmpeg \
@@ -46,7 +46,7 @@ for i in `seq 0 100`; do
     $OUTPUT_DIR/video${i}.mp4
 
   echo
-  echo "Done with playlist${i}.txt"
+  echo "Done with video${i}!"
   echo
 
 done
