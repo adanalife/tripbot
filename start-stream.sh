@@ -43,28 +43,3 @@ ffmpeg \
   -force_key_frames 'expr:gte(t,n_forced*2)' `# keyframes every two seconds` \
   "rtmp://live.twitch.tv/app/$STREAM_KEY"
 
-####################################################################
-# safe to put old configs down here cause we wont ever get down here
-####################################################################
-
-exit 0
-
-# these are other options we could try/have tried
-
-  -r 30 \
-  -maxrate 12M \
-  -bufsize 6M \
-  -framerate 15 \
-  -preset slow \
-  -g 60 \
-  -preset slower \
-  -c:v mpeg2video \
-  -loglevel info \
-  -vcodec copy \
-  -b:v 1M \
-  -minrate 1M \
-  -maxrate 1M \
-  -bufsize 2M \
-  -profile:v baseline \
-  -level 3.0 \
-  -movflags +faststart \

@@ -54,12 +54,4 @@ for i in `seq 0 100`; do
   echo
 
 done
-####################################################################
-# safe to put old configs down here cause we wont ever get down here
-####################################################################
 
-exit 0
-
-    -t 7200           `# duration in seconds` \
-     movie=/Users/dmerrick/other_projects/stream/logo-fade-animation.gif[inner]; \
-     [v][inner]overlay=70:70[v]" \
