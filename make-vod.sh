@@ -1,19 +1,23 @@
 #!/usr/bin/env bash
 
-# This script takes a directory of videos and streams them to Twitch
+# This script takes a directory of videos and combines them
 #
 # I use it for streaming dashcam footage, and because of this I apply
 # a filter to blur out some a portion of the screen.
 
-#TODO: check if we have ffmpeg and fail gracefully
-#TODO: the blur needs to not cover the E/W
-
+# make sure we have the right arguments
 if [[ $# -eq 0 ]] ; then
   echo "Usage: $0 [dir containing vids]"
   exit 1
 fi
 
 VID_DIR="$1"
+
+# make sure we have ffmpeg installed
+if ! [ -x "$(command -v ffmpeg)" ]; then
+  echo 'Error: ffmpeg is not installed.' >&2
+  exit 2
+fi
 
 # use OUTPUT_DIR if set, otherwise use ./outputs
 OUTPUT_DIR="${OUTPUT_DIR:-outputs}"
