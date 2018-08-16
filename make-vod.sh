@@ -25,16 +25,19 @@ PLAYLISTS_DIR="${PLAYLISTS_DIR:-playlists}"
 
 trap "exit 0" SIGINT SIGTERM
 
-for i in `seq 0 100`; do
+for playlist in $PLAYLISTS_DIR/*.txt; do
+
+  # extract the playlist number
+  n=$(echo $playlist | sed -e 's/[^0-9]//g')
 
   echo
-  echo "Creating video${i} from playlist${i}"
+  echo "Creating video${n} from playlist${n}"
   echo
 
   time ffmpeg \
     -hide_banner      `# reduce output` \
     -f concat -safe 0 `# combine files` \
-    -i ${PLAYLISTS_DIR}/playlist${i}.txt `# use playlists that were pre-generated` \
+    -i ${PLAYLISTS_DIR}/${playlist} `# use playlists that were pre-generated` \
     \
     -filter_complex   `# cover the bottom left corner of the output` \
       "[0:v]crop=130:46:25:in_h-out_h-10,boxblur=10[fg]; \
@@ -47,10 +50,10 @@ for i in `seq 0 100`; do
     -an               `# no output audio codec` \
     -f mp4            `# output filetype` \
     \
-    $OUTPUT_DIR/video${i}.mp4
+    $OUTPUT_DIR/video${n}.mp4
 
   echo
-  echo "Done with video${i}!"
+  echo "Done with video${n}!"
   echo
 
 done
