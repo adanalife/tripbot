@@ -31,7 +31,7 @@ for i in `seq 0 100`; do
   echo "Creating video${i} from playlist${i}"
   echo
 
-  ffmpeg \
+  time ffmpeg \
     -hide_banner      `# reduce output` \
     -f concat -safe 0 `# combine files` \
     -i ${PLAYLISTS_DIR}/playlist${i}.txt `# use playlists that were pre-generated` \
