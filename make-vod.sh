@@ -37,7 +37,7 @@ for playlist in $PLAYLISTS_DIR/*.txt; do
   time ffmpeg \
     -hide_banner      `# reduce output` \
     -f concat -safe 0 `# combine files` \
-    -i ${PLAYLISTS_DIR}/${playlist} `# use playlists that were pre-generated` \
+    -i ${playlist} `# use playlists that were pre-generated` \
     \
     -filter_complex   `# cover the bottom left corner of the output` \
       "[0:v]crop=130:46:25:in_h-out_h-10,boxblur=10[fg]; \
