@@ -1,0 +1,2 @@
+file '/data/inputs/DCIM/Movie/2018_0518_220233_001.MP4'
+file '/data/inputs/DCIM/Movie/2018_0518_220533_002.MP4'
