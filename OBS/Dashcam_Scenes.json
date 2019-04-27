@@ -1,7 +1,7 @@
 {
     "current_program_scene": "Scene",
     "current_scene": "Scene",
-    "current_transition": "Fade",
+    "current_transition": "Cut",
     "groups": [
         {
             "balance": 0.5,
@@ -176,6 +176,94 @@
         }
     ],
     "sources": [
+        {
+            "balance": 0.5,
+            "deinterlace_field_order": 0,
+            "deinterlace_mode": 0,
+            "enabled": true,
+            "flags": 0,
+            "hotkeys": {},
+            "id": "text_ft2_source",
+            "mixers": 0,
+            "monitoring_type": 0,
+            "muted": false,
+            "name": "instructions",
+            "private_settings": {},
+            "push-to-mute": false,
+            "push-to-mute-delay": 0,
+            "push-to-talk": false,
+            "push-to-talk-delay": 0,
+            "settings": {
+                "color1": 4294967295,
+                "color2": 4288059030,
+                "font": {
+                    "face": "Trebuchet MS",
+                    "flags": 0,
+                    "size": 28,
+                    "style": "Regular"
+                },
+                "outline": false,
+                "text": "Type !help in chat for instructions"
+            },
+            "sync": 0,
+            "volume": 1.0
+        },
+        {
+            "balance": 0.5,
+            "deinterlace_field_order": 0,
+            "deinterlace_mode": 0,
+            "enabled": true,
+            "flags": 0,
+            "hotkeys": {},
+            "id": "text_ft2_source",
+            "mixers": 0,
+            "monitoring_type": 0,
+            "muted": false,
+            "name": "follow message",
+            "private_settings": {},
+            "push-to-mute": false,
+            "push-to-mute-delay": 0,
+            "push-to-talk": false,
+            "push-to-talk-delay": 0,
+            "settings": {
+                "color1": 4294967295,
+                "color2": 4288059030,
+                "drop_shadow": false,
+                "font": {
+                    "face": "Trebuchet MS",
+                    "flags": 0,
+                    "size": 28,
+                    "style": "Regular"
+                },
+                "outline": false,
+                "text": "Don't forget to follow :)"
+            },
+            "sync": 0,
+            "volume": 1.0
+        },
+        {
+            "balance": 0.5,
+            "deinterlace_field_order": 0,
+            "deinterlace_mode": 0,
+            "enabled": true,
+            "flags": 0,
+            "hotkeys": {},
+            "id": "image_source",
+            "mixers": 0,
+            "monitoring_type": 0,
+            "muted": false,
+            "name": "overlay",
+            "private_settings": {},
+            "push-to-mute": false,
+            "push-to-mute-delay": 0,
+            "push-to-talk": false,
+            "push-to-talk-delay": 0,
+            "settings": {
+                "file": "/Users/dmerrick/Pictures/OBS/twitch-overlay.png"
+            },
+            "sync": 0,
+            "volume": 1.0
+        },
         {
             "balance": 0.5,
             "deinterlace_field_order": 0,
@@ -528,46 +616,6 @@
                 "loop": true,
                 "playback_behavior": "pause_unpause",
                 "playlist": [
-                    {
-                        "hidden": false,
-                        "selected": false,
-                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0802_162033_010.MP4"
-                    },
-                    {
-                        "hidden": false,
-                        "selected": false,
-                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0802_162333_011.MP4"
-                    },
-                    {
-                        "hidden": false,
-                        "selected": false,
-                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0802_162633_012.MP4"
-                    },
-                    {
-                        "hidden": false,
-                        "selected": false,
-                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0802_162933_013.MP4"
-                    },
-                    {
-                        "hidden": false,
-                        "selected": false,
-                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0802_163233_014.MP4"
-                    },
-                    {
-                        "hidden": false,
-                        "selected": false,
-                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0802_163533_015.MP4"
-                    },
-                    {
-                        "hidden": false,
-                        "selected": false,
-                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0802_163833_016.MP4"
-                    },
-                    {
-                        "hidden": false,
-                        "selected": false,
-                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0802_164133_017.MP4"
-                    },
                     {
                         "hidden": false,
                         "selected": false,
@@ -1357,11 +1405,6 @@
                         "hidden": false,
                         "selected": false,
                         "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0814_153206_005.MP4"
-                    },
-                    {
-                        "hidden": false,
-                        "selected": false,
-                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0814_153506_006.MP4"
                     },
                     {
                         "hidden": false,
@@ -13806,13 +13849,17 @@
                 "libobs.hide_scene_item.Sound Flower": [],
                 "libobs.hide_scene_item.VLC Video Source": [],
                 "libobs.hide_scene_item.commands": [],
-                "libobs.hide_scene_item.message in corner": [],
+                "libobs.hide_scene_item.follow message": [],
+                "libobs.hide_scene_item.instructions": [],
+                "libobs.hide_scene_item.overlay": [],
                 "libobs.hide_scene_item.test stream msg": [],
                 "libobs.show_scene_item.Grey Logo": [],
                 "libobs.show_scene_item.Sound Flower": [],
                 "libobs.show_scene_item.VLC Video Source": [],
                 "libobs.show_scene_item.commands": [],
-                "libobs.show_scene_item.message in corner": [],
+                "libobs.show_scene_item.follow message": [],
+                "libobs.show_scene_item.instructions": [],
+                "libobs.show_scene_item.overlay": [],
                 "libobs.show_scene_item.test stream msg": []
             },
             "id": "scene",
@@ -13827,16 +13874,16 @@
             "push-to-talk-delay": 0,
             "settings": {
                 "custom_size": false,
-                "id_counter": 13,
+                "id_counter": 17,
                 "items": [
                     {
                         "align": 5,
                         "bounds": {
-                            "x": 0.0,
-                            "y": 0.0
+                            "x": 1920.0,
+                            "y": 1080.0
                         },
                         "bounds_align": 0,
-                        "bounds_type": 0,
+                        "bounds_type": 2,
                         "crop_bottom": 0,
                         "crop_left": 0,
                         "crop_right": 0,
@@ -13849,7 +13896,10 @@
                             "x": 0.0,
                             "y": 0.0
                         },
-                        "private_settings": {},
+                        "private_settings": {
+                            "color": "",
+                            "color-preset": 0
+                        },
                         "rot": 0.0,
                         "scale": {
                             "x": 1.0,
@@ -13943,7 +13993,7 @@
                             "y": 1.0
                         },
                         "scale_filter": "disable",
-                        "visible": true
+                        "visible": false
                     },
                     {
                         "align": 5,
@@ -13972,6 +14022,35 @@
                             "y": 1.076923131942749
                         },
                         "scale_filter": "disable",
+                        "visible": false
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 0,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": false,
+                        "id": 15,
+                        "locked": true,
+                        "name": "overlay",
+                        "pos": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 1.0,
+                            "y": 1.0
+                        },
+                        "scale_filter": "disable",
                         "visible": true
                     },
                     {
@@ -13987,21 +14066,50 @@
                         "crop_right": 0,
                         "crop_top": 0,
                         "group_item_backup": false,
-                        "id": 13,
+                        "id": 16,
                         "locked": false,
-                        "name": "message in corner",
+                        "name": "follow message",
                         "pos": {
-                            "x": 1746.0,
-                            "y": 973.0
+                            "x": 1589.0,
+                            "y": 1037.0
                         },
                         "private_settings": {},
                         "rot": 0.0,
                         "scale": {
-                            "x": 1.1854838132858276,
-                            "y": 1.1891891956329346
+                            "x": 1.0,
+                            "y": 1.0
                         },
                         "scale_filter": "disable",
-                        "visible": false
+                        "visible": true
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 0,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": false,
+                        "id": 17,
+                        "locked": false,
+                        "name": "instructions",
+                        "pos": {
+                            "x": 63.0,
+                            "y": 1037.0
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 1.0,
+                            "y": 1.0
+                        },
+                        "scale_filter": "disable",
+                        "visible": true
                     }
                 ]
             },
@@ -14102,32 +14210,6 @@
             "push-to-talk-delay": 0,
             "settings": {
                 "text": "test stream -- follow ADanaLife_"
-            },
-            "sync": 0,
-            "volume": 1.0
-        },
-        {
-            "balance": 0.5,
-            "deinterlace_field_order": 0,
-            "deinterlace_mode": 0,
-            "enabled": true,
-            "flags": 0,
-            "hotkeys": {},
-            "id": "text_ft2_source",
-            "mixers": 0,
-            "monitoring_type": 0,
-            "muted": false,
-            "name": "message in corner",
-            "private_settings": {},
-            "push-to-mute": false,
-            "push-to-mute-delay": 0,
-            "push-to-talk": false,
-            "push-to-talk-delay": 0,
-            "settings": {
-                "custom_width": 1,
-                "drop_shadow": false,
-                "outline": true,
-                "text": "!birthday"
             },
             "sync": 0,
             "volume": 1.0
