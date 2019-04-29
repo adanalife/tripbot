@@ -1,3 +1,4 @@
 outputs
 .ruby-gemset
 .DS_Store
+ignore/
