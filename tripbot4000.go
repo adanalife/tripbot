@@ -3,7 +3,6 @@ package main
 import (
 	"log"
 	"os"
-	"strings"
 
 	twitch "github.com/gempir/go-twitch-irc"
 )
@@ -12,6 +11,22 @@ const (
 	clientUsername = "TripBot4000"
 	channelToJoin  = "adanalife_"
 )
+
+var ignoredUsers = []string{
+	"anotherttvviewer",
+	"commanderroot",
+	"electricallongboard",
+	"logviewer",
+}
+
+func userIsIgnored(user string) bool {
+	for _, b := range ignoredUsers {
+		if b == a {
+			return true
+		}
+	}
+	return false
+}
 
 func main() {
 	clientAuthenticationToken, ok := os.LookupEnv("TWITCH_AUTH_TOKEN")
@@ -22,11 +37,15 @@ func main() {
 	client := twitch.NewClient(clientUsername, clientAuthenticationToken)
 
 	client.OnUserJoinMessage(func(joinMessage twitch.UserJoinMessage) {
-		log.Println(joinMessage.Raw)
+		if !userIsIgnored(joinMessage.User.Name) {
+			log.Println(joinMessage.Raw)
+		}
 	})
 
 	client.OnUserPartMessage(func(partMessage twitch.UserPartMessage) {
-		log.Println(partMessage.Raw)
+		if !userIsIgnored(partMessage.User.Name) {
+			log.Println(partMessage.Raw)
+		}
 	})
 
 	client.Join(channelToJoin)
