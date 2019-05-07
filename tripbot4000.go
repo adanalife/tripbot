@@ -21,28 +21,16 @@ func main() {
 
 	client := twitch.NewClient(clientUsername, clientAuthenticationToken)
 
-	client.OnPrivateMessage(func(message twitch.PrivateMessage) {
-		log.Println("pm", message.User.Name, message.Message)
-		if strings.Contains(strings.ToLower(message.Message), "ping") {
-			client.Whisper(message.User.Name, "PONG")
-			log.Println(message.User.Name, "PONG", message.Message)
-		}
-	})
-
-	client.OnWhisperMessage(func(message twitch.WhisperMessage) {
-		log.Println("whisp", message.User.Name, message.Message)
-		if strings.Contains(strings.ToLower(message.Message), "ping") {
-			client.Whisper(message.User.Name, "PONG")
-			log.Println(message.User.Name, "PONG", message.Message)
-		}
-	})
-
 	client.OnUserJoinMessage(func(joinMessage twitch.UserJoinMessage) {
 		log.Println(joinMessage.Raw)
 	})
 
+	client.OnUserPartMessage(func(partMessage twitch.UserPartMessage) {
+		log.Println(partMessage.Raw)
+	})
+
 	client.Join(channelToJoin)
-	log.Println("Joined channel ", channelToJoin)
+	log.Println("Joined channel", channelToJoin)
 
 	err := client.Connect()
 	if err != nil {
