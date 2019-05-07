@@ -20,8 +20,8 @@ var ignoredUsers = []string{
 }
 
 func userIsIgnored(user string) bool {
-	for _, b := range ignoredUsers {
-		if b == a {
+	for _, ignored := range ignoredUsers {
+		if user == ignored {
 			return true
 		}
 	}
@@ -37,13 +37,13 @@ func main() {
 	client := twitch.NewClient(clientUsername, clientAuthenticationToken)
 
 	client.OnUserJoinMessage(func(joinMessage twitch.UserJoinMessage) {
-		if !userIsIgnored(joinMessage.User.Name) {
+		if !userIsIgnored(joinMessage.User) {
 			log.Println(joinMessage.Raw)
 		}
 	})
 
 	client.OnUserPartMessage(func(partMessage twitch.UserPartMessage) {
-		if !userIsIgnored(partMessage.User.Name) {
+		if !userIsIgnored(partMessage.User) {
 			log.Println(partMessage.Raw)
 		}
 	})
