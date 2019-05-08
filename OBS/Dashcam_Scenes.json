@@ -1,7 +1,7 @@
 {
     "current_program_scene": "Scene",
     "current_scene": "Scene",
-    "current_transition": "Cut",
+    "current_transition": "Fade",
     "groups": [
         {
             "balance": 0.5,
@@ -9,7 +9,12 @@
             "deinterlace_mode": 0,
             "enabled": true,
             "flags": 0,
-            "hotkeys": {},
+            "hotkeys": {
+                "libobs.hide_scene_item.left overlay": [],
+                "libobs.hide_scene_item.old instructions": [],
+                "libobs.show_scene_item.left overlay": [],
+                "libobs.show_scene_item.old instructions": []
+            },
             "id": "group",
             "mixers": 0,
             "monitoring_type": 0,
@@ -70,9 +75,38 @@
                         "group_item_backup": false,
                         "id": 25,
                         "locked": true,
-                        "name": "instructions",
+                        "name": "old instructions",
                         "pos": {
                             "x": 63.0,
+                            "y": 1040.0
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 1.0,
+                            "y": 1.0
+                        },
+                        "scale_filter": "disable",
+                        "visible": false
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 417.0,
+                            "y": 27.0
+                        },
+                        "bounds_align": 4,
+                        "bounds_type": 6,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": false,
+                        "id": 29,
+                        "locked": false,
+                        "name": "rotating text",
+                        "pos": {
+                            "x": 44.0,
                             "y": 1040.0
                         },
                         "private_settings": {},
@@ -95,7 +129,12 @@
             "deinterlace_mode": 0,
             "enabled": true,
             "flags": 0,
-            "hotkeys": {},
+            "hotkeys": {
+                "libobs.hide_scene_item.follow message": [],
+                "libobs.hide_scene_item.right overlay": [],
+                "libobs.show_scene_item.follow message": [],
+                "libobs.show_scene_item.right overlay": []
+            },
             "id": "group",
             "mixers": 0,
             "monitoring_type": 0,
@@ -345,9 +384,440 @@
         },
         {
             "name": "Original Scene Backup"
+        },
+        {
+            "name": "SceneRightHidden"
         }
     ],
     "sources": [
+        {
+            "balance": 0.5,
+            "deinterlace_field_order": 0,
+            "deinterlace_mode": 0,
+            "enabled": true,
+            "flags": 0,
+            "hotkeys": {},
+            "id": "text_ft2_source",
+            "mixers": 0,
+            "monitoring_type": 0,
+            "muted": false,
+            "name": "rotating text",
+            "private_settings": {},
+            "push-to-mute": false,
+            "push-to-mute-delay": 0,
+            "push-to-talk": false,
+            "push-to-talk-delay": 0,
+            "settings": {
+                "color1": 4294967295,
+                "color2": 4288059030,
+                "font": {
+                    "face": "Trebuchet MS",
+                    "flags": 0,
+                    "size": 28,
+                    "style": "Regular"
+                },
+                "from_file": true,
+                "outline": false,
+                "text": "",
+                "text_file": "/Users/dmerrick/other_projects/danalol-stream/OBS/current-message.txt"
+            },
+            "sync": 0,
+            "volume": 1.0
+        },
+        {
+            "balance": 0.5,
+            "deinterlace_field_order": 0,
+            "deinterlace_mode": 0,
+            "enabled": true,
+            "flags": 0,
+            "hotkeys": {},
+            "id": "text_ft2_source",
+            "mixers": 0,
+            "monitoring_type": 0,
+            "muted": false,
+            "name": "leaderboard",
+            "private_settings": {},
+            "push-to-mute": false,
+            "push-to-mute-delay": 0,
+            "push-to-talk": false,
+            "push-to-talk-delay": 0,
+            "settings": {
+                "color1": 4294967295,
+                "color2": 4288059030,
+                "drop_shadow": false,
+                "font": {
+                    "face": "Trebuchet MS",
+                    "flags": 0,
+                    "size": 18,
+                    "style": "Regular"
+                },
+                "from_file": true,
+                "outline": false,
+                "text": "",
+                "text_file": "/Users/dmerrick/other_projects/danalol-stream/OBS/leaderboard.txt"
+            },
+            "sync": 0,
+            "volume": 1.0
+        },
+        {
+            "balance": 0.5,
+            "deinterlace_field_order": 0,
+            "deinterlace_mode": 0,
+            "enabled": true,
+            "flags": 0,
+            "hotkeys": {
+                "OBSBasic.SelectScene": [],
+                "libobs.hide_scene_item.Grey Logo": [],
+                "libobs.hide_scene_item.STAGING test stream msg": [],
+                "libobs.hide_scene_item.Sound Flower": [],
+                "libobs.hide_scene_item.VLC Video Source": [],
+                "libobs.hide_scene_item.left corner": [],
+                "libobs.hide_scene_item.right corner": [],
+                "libobs.show_scene_item.Grey Logo": [],
+                "libobs.show_scene_item.STAGING test stream msg": [],
+                "libobs.show_scene_item.Sound Flower": [],
+                "libobs.show_scene_item.VLC Video Source": [],
+                "libobs.show_scene_item.left corner": [],
+                "libobs.show_scene_item.right corner": []
+            },
+            "id": "scene",
+            "mixers": 0,
+            "monitoring_type": 0,
+            "muted": false,
+            "name": "SceneRightHidden",
+            "private_settings": {},
+            "push-to-mute": false,
+            "push-to-mute-delay": 0,
+            "push-to-talk": false,
+            "push-to-talk-delay": 0,
+            "settings": {
+                "custom_size": false,
+                "id_counter": 6,
+                "items": [
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 1920.0,
+                            "y": 1080.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 2,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": false,
+                        "id": 1,
+                        "locked": false,
+                        "name": "VLC Video Source",
+                        "pos": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 1.0,
+                            "y": 1.0
+                        },
+                        "scale_filter": "disable",
+                        "visible": true
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 0,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": false,
+                        "id": 2,
+                        "locked": false,
+                        "name": "Sound Flower",
+                        "pos": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 1.0,
+                            "y": 1.0
+                        },
+                        "scale_filter": "disable",
+                        "visible": true
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 0,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": false,
+                        "id": 3,
+                        "locked": false,
+                        "name": "STAGING test stream msg",
+                        "pos": {
+                            "x": 34.0,
+                            "y": 35.0
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 2.2941176891326904,
+                            "y": 2.2941176891326904
+                        },
+                        "scale_filter": "disable",
+                        "visible": false
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 0,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": false,
+                        "id": 4,
+                        "locked": false,
+                        "name": "Grey Logo",
+                        "pos": {
+                            "x": 24.0,
+                            "y": 1029.0
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 1.0,
+                            "y": 1.0
+                        },
+                        "scale_filter": "disable",
+                        "visible": false
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 0,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": true,
+                        "id": 24,
+                        "locked": true,
+                        "name": "left overlay",
+                        "pos": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 1.0,
+                            "y": 1.0
+                        },
+                        "scale_filter": "disable",
+                        "visible": true
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 0,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": true,
+                        "id": 25,
+                        "locked": true,
+                        "name": "old instructions",
+                        "pos": {
+                            "x": 63.0,
+                            "y": 1040.0
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 1.0,
+                            "y": 1.0
+                        },
+                        "scale_filter": "disable",
+                        "visible": false
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 417.0,
+                            "y": 27.0
+                        },
+                        "bounds_align": 4,
+                        "bounds_type": 6,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": true,
+                        "id": 29,
+                        "locked": false,
+                        "name": "rotating text",
+                        "pos": {
+                            "x": 44.0,
+                            "y": 1040.0
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 1.0,
+                            "y": 1.0
+                        },
+                        "scale_filter": "disable",
+                        "visible": true
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 0,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": false,
+                        "id": 5,
+                        "locked": false,
+                        "name": "left corner",
+                        "pos": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 1.0,
+                            "y": 1.0
+                        },
+                        "scale_filter": "disable",
+                        "visible": true
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 0,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": true,
+                        "id": 22,
+                        "locked": true,
+                        "name": "right overlay",
+                        "pos": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 1.0,
+                            "y": 1.0
+                        },
+                        "scale_filter": "disable",
+                        "visible": true
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 0,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": true,
+                        "id": 23,
+                        "locked": true,
+                        "name": "follow message",
+                        "pos": {
+                            "x": 1589.0,
+                            "y": 1040.0
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 1.0,
+                            "y": 1.0
+                        },
+                        "scale_filter": "disable",
+                        "visible": true
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 0,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": false,
+                        "id": 6,
+                        "locked": false,
+                        "name": "right corner",
+                        "pos": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 1.0,
+                            "y": 1.0
+                        },
+                        "scale_filter": "disable",
+                        "visible": false
+                    }
+                ]
+            },
+            "sync": 0,
+            "volume": 1.0
+        },
         {
             "balance": 0.5,
             "deinterlace_field_order": 0,
@@ -405,7 +875,7 @@
             "mixers": 0,
             "monitoring_type": 0,
             "muted": false,
-            "name": "instructions",
+            "name": "old instructions",
             "private_settings": {},
             "push-to-mute": false,
             "push-to-mute-delay": 0,
@@ -778,8 +1248,1434 @@
             "push-to-talk-delay": 0,
             "settings": {
                 "loop": true,
+                "network_caching": 4000,
                 "playback_behavior": "pause_unpause",
                 "playlist": [
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0606_202213_017.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0606_202513_018.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0606_202813_019.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0606_203113_020.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0606_203413_021.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0606_203713_022.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0606_204013_023.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0606_204313_024.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0606_204613_025.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0606_204913_026.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0606_205213_027.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0606_205513_028.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0606_205813_029.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0606_210113_030.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0606_210413_031.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0606_210713_032.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0606_211013_033.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0606_211313_034.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0606_211613_035.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0606_211913_036.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0606_212213_037.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0606_212513_038.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0606_212813_039.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0606_213113_040.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0606_213413_041.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0606_213713_042.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0606_214013_043.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0606_214313_044.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0606_214613_045.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0606_214913_046.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0606_215213_047.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0606_215513_048.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0606_215813_049.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0606_220113_050.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_143926_001.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_144213_002.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_154205_001.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_154805_003.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_155105_004.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_155405_005.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_155705_006.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_160005_007.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_160305_008.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_160605_009.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_160905_010.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_161205_011.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_161505_012.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_172013_001.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_172313_002.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_172613_003.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_172914_004.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_173214_005.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_173514_006.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_173814_007.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_174114_008.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_174414_009.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_174714_010.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_175014_011.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_175314_012.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_175614_013.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_175914_014.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_180814_017_b.mp4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_181114_018.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_181414_019.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_181714_020.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_182014_021.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_182314_022.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_182614_023.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_182914_024.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_183214_025.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_183514_026.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_183814_027.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_184114_028.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_184414_029.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_184714_030.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_185014_031.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_185314_032.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_185614_033.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_185914_034.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_190214_035.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_190514_036.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_190814_037.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_191114_038.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_191414_039.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_191714_040.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_192014_041.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_192314_042.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_192614_043.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_192914_044.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_193214_045.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_193514_046.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_193814_047.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_194114_048.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_194414_049.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_213114_001.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_213415_002.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0609_213715_003.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0610_140300_001.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0610_140558_002.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0610_140858_003.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0610_141158_004_c.mov"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0610_141458_005.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0610_141758_006.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0611_154301_001.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0611_154556_002.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0611_154856_003.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0611_155156_004.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0611_155456_005.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0611_155756_006.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0611_160056_007.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0611_160356_008.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0611_163156_001.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0611_164057_004_b.mp4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0611_164357_005.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0611_164657_006.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0611_164958_007.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0611_165258_008.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0611_165558_009.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0611_165858_010.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0611_170158_011.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0611_170458_012.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0611_170758_013.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0611_171058_014.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0611_171358_015.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0611_171658_016.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0611_171958_017.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0611_173458_022_b.mp4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0611_173758_023.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0611_174058_024_RO.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0611_174358_025.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0611_174658_026.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0611_174958_027.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0611_175258_028.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0611_175558_029.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0611_175858_030.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0611_180158_031.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0611_180458_032.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0611_180758_033.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0611_181658_036_b.mp4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0611_185537_001.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0611_185837_002.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0611_190137_003.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0611_190437_004.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0611_190737_005.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0611_191037_006.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0611_191337_007.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0611_191637_008.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0611_191937_009.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0611_192237_010.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0611_192537_011.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0611_192837_012.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0611_193137_013.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0701_172613_001.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0701_172726_002.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0701_173026_003.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0701_173326_004.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0701_173626_005.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0701_173926_006.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0701_174226_007.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0701_174526_008.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0701_174826_009.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0701_175126_010.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0701_175426_011.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0701_175726_012.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0701_180026_013.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0701_180326_014.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0701_180626_015.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0701_180926_016.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0701_181226_017.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0701_181526_018.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0701_181826_019.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0701_182126_020.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0701_182426_021.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0701_182726_022.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0701_183026_023.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0701_183326_024.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0701_183626_025.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0701_183926_026.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0701_184226_027.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0701_184526_028.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0701_184826_029.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0701_185126_030.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0701_185426_031.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0701_185726_032.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0701_190026_033.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0701_190326_034.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0701_190626_035.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0701_190926_036.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0701_191226_037.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0701_191526_038.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0701_191826_039.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0701_192126_040.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0701_192426_041.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0701_194226_047.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0701_194526_048.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0701_205725_072.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0701_210025_073.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0701_210325_074.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0701_210625_075.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0701_210925_076.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0701_211225_077.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0701_211526_078.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0701_211825_079.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0701_212125_080.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0701_212425_081.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0730_133539_001.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0730_133604_002.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0730_133904_003.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0730_134204_004.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0730_134504_005.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0730_134804_006.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0730_135104_007.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0730_135404_008.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0730_135704_009.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0730_141948_001.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0730_142247_002.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0730_142547_003.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_185653_001.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_185949_002.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_190249_003.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_190549_004.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_190849_005.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_191149_006.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_191449_007.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_191749_008.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_193857_001.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_194157_002.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_204157_022_b.mp4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_204457_023.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_204757_024.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_205057_025.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_205357_026.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_205657_027.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_205957_028.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_210257_029.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_210557_030.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_210857_031.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_211157_032.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_211457_033.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_211757_034.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_212057_035.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_212357_036.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_212657_037.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_212957_038.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_213557_040_b.mp4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_213857_041.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_214157_042.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_214457_043.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_214757_044.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_215057_045.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_215357_046.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_215657_047.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_215957_048.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_220257_049.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_220557_050.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_220857_051_RO.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_221158_052.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_221757_054.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_222057_055_b.mp4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_222357_056.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_222657_057.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_222957_058.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_223257_059.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_223557_060.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_223857_061.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_224157_062.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_224457_063.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_224757_064.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_225058_065.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_225357_066.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_225657_067.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_225957_068.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_230257_069.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_230557_070.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_230857_071.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_231158_072.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_231458_073.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_231758_074.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0731_232058_075.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0802_155341_001.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0802_155633_002.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0802_155933_003.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0802_160233_004.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0802_161133_007.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0802_161733_009.MP4"
+                    },
                     {
                         "hidden": false,
                         "selected": false,
@@ -829,6 +2725,11 @@
                         "hidden": false,
                         "selected": false,
                         "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0805_192925_011.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0805_194051_001_b.mp4"
                     },
                     {
                         "hidden": false,
@@ -1059,6 +2960,11 @@
                         "hidden": false,
                         "selected": false,
                         "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0805_215852_047.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0809_140632_001.MP4"
                     },
                     {
                         "hidden": false,
@@ -1318,6 +3224,11 @@
                     {
                         "hidden": false,
                         "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0811_143923_001.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
                         "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0811_144215_002.MP4"
                     },
                     {
@@ -1544,6 +3455,11 @@
                         "hidden": false,
                         "selected": false,
                         "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0811_165716_047.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0814_151743_004_b.mp4"
                     },
                     {
                         "hidden": false,
@@ -1923,6 +3839,11 @@
                     {
                         "hidden": false,
                         "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0814_191539_058_b.mp4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
                         "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0814_191839_059.MP4"
                     },
                     {
@@ -2044,6 +3965,11 @@
                         "hidden": false,
                         "selected": false,
                         "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0815_155834_014.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0815_160434_016_b.mp4"
                     },
                     {
                         "hidden": false,
@@ -2218,6 +4144,11 @@
                     {
                         "hidden": false,
                         "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0815_183928_001_b.mp4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
                         "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0815_184228_002.MP4"
                     },
                     {
@@ -2309,6 +4240,11 @@
                         "hidden": false,
                         "selected": false,
                         "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0823_171307_003.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0824_164720_001.MP4"
                     },
                     {
                         "hidden": false,
@@ -2634,6 +4570,16 @@
                         "hidden": false,
                         "selected": false,
                         "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0825_164937_014.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0825_165237_015_a.mp4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0825_165537_016_b.mp4"
                     },
                     {
                         "hidden": false,
@@ -2968,6 +4914,11 @@
                     {
                         "hidden": false,
                         "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0831_145027_029.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
                         "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0831_145327_030.MP4"
                     },
                     {
@@ -3004,6 +4955,21 @@
                         "hidden": false,
                         "selected": false,
                         "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0831_151427_037.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0831_151727_038_b.mp4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0831_152027_039_a.mp4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0831_152327_040_b.mp4"
                     },
                     {
                         "hidden": false,
@@ -3213,6 +5179,11 @@
                     {
                         "hidden": false,
                         "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0831_200621_003_b.mp4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
                         "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0831_200921_004.MP4"
                     },
                     {
@@ -3299,6 +5270,11 @@
                         "hidden": false,
                         "selected": false,
                         "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0902_135520_002.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0902_140447_001_b.mp4"
                     },
                     {
                         "hidden": false,
@@ -3509,6 +5485,11 @@
                         "hidden": false,
                         "selected": false,
                         "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0902_161047_043.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0902_161947_001.MP4"
                     },
                     {
                         "hidden": false,
@@ -5154,6 +7135,11 @@
                         "hidden": false,
                         "selected": false,
                         "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0919_130826_020.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0919_140712_001_b.mp4"
                     },
                     {
                         "hidden": false,
@@ -7223,6 +9209,11 @@
                     {
                         "hidden": false,
                         "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0925_130952_016_a.mp4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
                         "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0925_131454_001.MP4"
                     },
                     {
@@ -7698,6 +9689,11 @@
                     {
                         "hidden": false,
                         "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0925_192617_004_b.mp4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
                         "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_0925_192917_005.MP4"
                     },
                     {
@@ -8129,6 +10125,11 @@
                         "hidden": false,
                         "selected": false,
                         "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_1007_174326_003.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_1007_174626_004.MP4"
                     },
                     {
                         "hidden": false,
@@ -8738,6 +10739,11 @@
                     {
                         "hidden": false,
                         "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_1008_143218_002_b.mp4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
                         "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_1008_143519_003.MP4"
                     },
                     {
@@ -8794,6 +10800,11 @@
                         "hidden": false,
                         "selected": false,
                         "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_1008_150819_014.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_1008_151629_001_b.mp4"
                     },
                     {
                         "hidden": false,
@@ -10648,12 +12659,12 @@
                     {
                         "hidden": false,
                         "selected": false,
-                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_1012_223905_005.MP4"
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_1012_223905_005_b.mp4"
                     },
                     {
                         "hidden": false,
                         "selected": false,
-                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_1012_225706_001.MP4"
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_1012_225706_001_b.mp4"
                     },
                     {
                         "hidden": false,
@@ -11098,6 +13109,11 @@
                     {
                         "hidden": false,
                         "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_1015_234344_005_b.mp4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
                         "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_1015_234644_006.MP4"
                     },
                     {
@@ -11238,12 +13254,12 @@
                     {
                         "hidden": false,
                         "selected": false,
-                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_1016_055231_006.MP4"
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_1016_055231_006_a.mp4"
                     },
                     {
                         "hidden": false,
                         "selected": false,
-                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_1016_055531_007.MP4"
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_1016_055531_007_b.mp4"
                     },
                     {
                         "hidden": false,
@@ -11788,11 +13804,6 @@
                     {
                         "hidden": false,
                         "selected": false,
-                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_1018_003717_012.MP4"
-                    },
-                    {
-                        "hidden": false,
-                        "selected": false,
                         "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_1023_140509_001.MP4"
                     },
                     {
@@ -12118,6 +14129,11 @@
                     {
                         "hidden": false,
                         "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_1024_022517_001_b.mp4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
                         "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_1024_022817_002.MP4"
                     },
                     {
@@ -12229,6 +14245,11 @@
                         "hidden": false,
                         "selected": false,
                         "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_1030_202533_005.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_1030_203433_008_c.mp4"
                     },
                     {
                         "hidden": false,
@@ -12548,6 +14569,11 @@
                     {
                         "hidden": false,
                         "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_1031_230649_003.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
                         "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_1031_231549_006.MP4"
                     },
                     {
@@ -12744,6 +14770,11 @@
                         "hidden": false,
                         "selected": false,
                         "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_1101_173621_001.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_1101_174258_001_b.mp4"
                     },
                     {
                         "hidden": false,
@@ -13163,17 +15194,12 @@
                     {
                         "hidden": false,
                         "selected": false,
-                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_1120_215255_024.MP4"
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_1120_215255_024_a.mp4"
                     },
                     {
                         "hidden": false,
                         "selected": false,
-                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_1120_215556_025.MP4"
-                    },
-                    {
-                        "hidden": false,
-                        "selected": false,
-                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_1120_215855_026.MP4"
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_1120_215855_026_b.mp4"
                     },
                     {
                         "hidden": false,
@@ -13254,6 +15280,11 @@
                         "hidden": false,
                         "selected": false,
                         "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_1121_200012_002.MP4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_1121_200612_004_b.mp4"
                     },
                     {
                         "hidden": false,
@@ -13653,6 +15684,11 @@
                     {
                         "hidden": false,
                         "selected": false,
+                        "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_1206_202501_005_b.mp4"
+                    },
+                    {
+                        "hidden": false,
+                        "selected": false,
                         "value": "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/_all/2018_1206_202801_006.MP4"
                     },
                     {
@@ -14013,22 +16049,18 @@
                 "libobs.hide_scene_item.STAGING test stream msg": [],
                 "libobs.hide_scene_item.Sound Flower": [],
                 "libobs.hide_scene_item.VLC Video Source": [],
-                "libobs.hide_scene_item.follow message": [],
-                "libobs.hide_scene_item.instructions": [],
+                "libobs.hide_scene_item.leaderboard": [],
                 "libobs.hide_scene_item.left corner": [],
-                "libobs.hide_scene_item.left overlay": [],
                 "libobs.hide_scene_item.right corner": [],
-                "libobs.hide_scene_item.right overlay": [],
+                "libobs.hide_scene_item.rotating text": [],
                 "libobs.show_scene_item.Grey Logo": [],
                 "libobs.show_scene_item.STAGING test stream msg": [],
                 "libobs.show_scene_item.Sound Flower": [],
                 "libobs.show_scene_item.VLC Video Source": [],
-                "libobs.show_scene_item.follow message": [],
-                "libobs.show_scene_item.instructions": [],
+                "libobs.show_scene_item.leaderboard": [],
                 "libobs.show_scene_item.left corner": [],
-                "libobs.show_scene_item.left overlay": [],
                 "libobs.show_scene_item.right corner": [],
-                "libobs.show_scene_item.right overlay": []
+                "libobs.show_scene_item.rotating text": []
             },
             "id": "scene",
             "mixers": 0,
@@ -14042,7 +16074,7 @@
             "push-to-talk-delay": 0,
             "settings": {
                 "custom_size": false,
-                "id_counter": 27,
+                "id_counter": 29,
                 "items": [
                     {
                         "align": 5,
@@ -14207,9 +16239,38 @@
                         "group_item_backup": true,
                         "id": 25,
                         "locked": true,
-                        "name": "instructions",
+                        "name": "old instructions",
                         "pos": {
                             "x": 63.0,
+                            "y": 1040.0
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 1.0,
+                            "y": 1.0
+                        },
+                        "scale_filter": "disable",
+                        "visible": false
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 417.0,
+                            "y": 27.0
+                        },
+                        "bounds_align": 4,
+                        "bounds_type": 6,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": true,
+                        "id": 29,
+                        "locked": false,
+                        "name": "rotating text",
+                        "pos": {
+                            "x": 44.0,
                             "y": 1040.0
                         },
                         "private_settings": {},
@@ -14224,8 +16285,8 @@
                     {
                         "align": 5,
                         "bounds": {
-                            "x": 0.0,
-                            "y": 0.0
+                            "x": 1.0,
+                            "y": 1.0
                         },
                         "bounds_align": 0,
                         "bounds_type": 0,
@@ -14242,7 +16303,7 @@
                             "y": 0.0
                         },
                         "private_settings": {
-                            "collapsed": true
+                            "collapsed": false
                         },
                         "rot": 0.0,
                         "scale": {
@@ -14329,6 +16390,37 @@
                         "pos": {
                             "x": 0.0,
                             "y": 0.0
+                        },
+                        "private_settings": {
+                            "collapsed": false
+                        },
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 1.0,
+                            "y": 1.0
+                        },
+                        "scale_filter": "disable",
+                        "visible": true
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 0,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": false,
+                        "id": 28,
+                        "locked": true,
+                        "name": "leaderboard",
+                        "pos": {
+                            "x": 18.0,
+                            "y": 891.0
                         },
                         "private_settings": {},
                         "rot": 0.0,
