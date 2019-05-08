@@ -4,3 +4,4 @@ outputs
 ignore/
 *.db
 *.MP4
+OBS/leaderboard.txt
