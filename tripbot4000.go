@@ -3,6 +3,8 @@ package main
 import (
 	"log"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/boltdb/bolt"
@@ -59,6 +61,16 @@ func (s *Store) Open() error {
 
 func (s *Store) Close() error {
 	if s.db != nil {
+		s.db.View(func(tx *bolt.Tx) error {
+			joinedBucket := tx.Bucket([]byte(userJoinsBucket))
+			err := joinedBucket.ForEach(func(k, _ []byte) error {
+				user := string(k)
+				log.Println("logging out", user)
+				s.recordUserPart(string(user))
+				return nil
+			})
+			return err
+		})
 		s.db.Close()
 	}
 	return nil
@@ -74,16 +86,6 @@ func (s *Store) printStats() {
 		})
 		return err
 	})
-}
-
-// returns true if a given user should be ignored
-func userIsIgnored(user string) bool {
-	for _, ignored := range ignoredUsers {
-		if user == ignored {
-			return true
-		}
-	}
-	return false
 }
 
 func (s *Store) recordUserJoin(user string) {
@@ -130,8 +132,14 @@ func (s *Store) recordUserPart(user string) {
 
 	// update the DB with the total duration watched
 	s.db.Update(func(tx *bolt.Tx) error {
+		joinedBucket := tx.Bucket([]byte(userJoinsBucket))
 		watchedBucket := tx.Bucket([]byte(userWatchedBucket))
 		err := watchedBucket.Put([]byte(user), []byte(totalDurationWatched.String()))
+		if err != nil {
+			return err
+		}
+		// remove the user from the joined bucket
+		err = joinedBucket.Delete([]byte(user))
 		return err
 	})
 
@@ -158,6 +166,15 @@ func main() {
 		panic(err)
 	}
 
+	// catch CTRL-Cs and run datastore.Close()
+	c := make(chan os.Signal)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-c
+		datastore.Close()
+		os.Exit(1)
+	}()
+
 	datastore.printStats()
 
 	client := twitch.NewClient(clientUsername, clientAuthenticationToken)
@@ -183,4 +200,14 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+}
+
+// returns true if a given user should be ignored
+func userIsIgnored(user string) bool {
+	for _, ignored := range ignoredUsers {
+		if user == ignored {
+			return true
+		}
+	}
+	return false
 }
