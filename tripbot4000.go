@@ -37,6 +37,7 @@ func userIsIgnored(user string) bool {
 
 func recordUserJoin(user string) {
 	userJoins[user] = time.Now()
+	log.Println(user, "joined the channel")
 }
 
 func recordUserPart(user string) {
@@ -44,9 +45,9 @@ func recordUserPart(user string) {
 		duration := time.Since(joinTime)
 		userWatched[user] += duration
 	} else {
-		log.Println("Part message with no join for user", user)
+		log.Println("Hmm, part message with no join for user", user)
 	}
-	log.Println(user, "has", userWatched[user])
+	log.Println(user, "left the channel, hours watched:", userWatched[user])
 }
 
 func main() {
@@ -60,14 +61,14 @@ func main() {
 	client.OnUserJoinMessage(func(joinMessage twitch.UserJoinMessage) {
 		if !userIsIgnored(joinMessage.User) {
 			recordUserJoin(joinMessage.User)
-			log.Println(joinMessage.Raw)
+			// log.Println(joinMessage.Raw)
 		}
 	})
 
 	client.OnUserPartMessage(func(partMessage twitch.UserPartMessage) {
 		if !userIsIgnored(partMessage.User) {
 			recordUserPart(partMessage.User)
-			log.Println(partMessage.Raw)
+			// log.Println(partMessage.Raw)
 		}
 	})
 
