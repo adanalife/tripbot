@@ -1,10 +1,12 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"time"
 
+	"github.com/boltdb/bolt"
 	twitch "github.com/gempir/go-twitch-irc"
 )
 
@@ -65,6 +67,28 @@ func main() {
 		panic("You must set TWITCH_AUTH_TOKEN")
 	}
 
+	db, err := bolt.Open("tripbot.db", 0600, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
+
+	db.Update(func(tx *bolt.Tx) error {
+		_, err := tx.CreateBucket([]byte("user_joins"))
+		if err != nil {
+			log.Panicf("create bucket: %s", err)
+		}
+		return nil
+	})
+
+	db.Update(func(tx *bolt.Tx) error {
+		_, err := tx.CreateBucket([]byte("user_watched"))
+		if err != nil {
+			log.Panicf("create bucket: %s", err)
+		}
+		return nil
+	})
+
 	client := twitch.NewClient(clientUsername, clientAuthenticationToken)
 
 	client.OnUserJoinMessage(func(joinMessage twitch.UserJoinMessage) {
@@ -84,7 +108,7 @@ func main() {
 	client.Join(channelToJoin)
 	log.Println("Joined channel", channelToJoin)
 
-	err := client.Connect()
+	err = client.Connect()
 	if err != nil {
 		panic(err)
 	}
