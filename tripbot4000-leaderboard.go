@@ -18,6 +18,17 @@ var ignoredUsers = []string{
 	"adanalife_",
 	"tripbot4000",
 	"nightbot",
+	"anotherttvviewer",
+	"apricotdrupefruit",
+	"commanderroot",
+	"communityshowcase",
+	"electricallongboard",
+	"logviewer",
+	"lurxx",
+	"p0lizei_",
+	"unixchat",
+	"v_and_k",
+	"virgoproz",
 }
 
 func durationToMiles(d time.Duration) int {
