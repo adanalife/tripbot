@@ -47,7 +47,16 @@ func recordUserPart(user string) {
 	} else {
 		log.Println("Hmm, part message with no join for user", user)
 	}
-	log.Println(user, "left the channel, hours watched:", userWatched[user])
+	log.Println(user, "left the channel, total watched:", fmtDuration(userWatched[user]))
+}
+
+// helper func to make Durations prettier
+func fmtDuration(d time.Duration) string {
+	d = d.Round(time.Minute)
+	h := d / time.Hour
+	d -= h * time.Hour
+	m := d / time.Minute
+	return fmt.Sprintf("%02d:%02d", h, m)
 }
 
 func main() {
