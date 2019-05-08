@@ -21,9 +21,14 @@ const (
 // these are other bots who shouldn't get points
 var ignoredUsers = []string{
 	"anotherttvviewer",
+	"apricotdrupefruit",
 	"commanderroot",
 	"electricallongboard",
 	"logviewer",
+	"lurxx",
+	"p0lizei_",
+	"v_and_k",
+	"virgoproz",
 }
 
 type Store struct {
@@ -151,21 +156,14 @@ func (s *Store) recordUserPart(user string) {
 	log.Println(user, "left the channel, total watched:", totalDurationWatched)
 }
 
-// helper func to make Durations prettier
-// func fmtDuration(d time.Duration) string {
-// 	d = d.Round(time.Minute)
-// 	h := d / time.Hour
-// 	d -= h * time.Hour
-// 	m := d / time.Minute
-// 	return fmt.Sprintf("%02d:%02d", h, m)
-// }
-
 func main() {
+	// first we must check for required ENV vars
 	clientAuthenticationToken, ok := os.LookupEnv("TWITCH_AUTH_TOKEN")
 	if !ok {
 		panic("You must set TWITCH_AUTH_TOKEN")
 	}
 
+	// initialize the database
 	datastore := NewStore("tripbot.db")
 	if err := datastore.Open(); err != nil {
 		panic(err)
@@ -180,27 +178,29 @@ func main() {
 		os.Exit(1)
 	}()
 
+	// show the DB contents at the start
 	datastore.printStats()
 
+	// time to set up the Twitch client
 	client := twitch.NewClient(clientUsername, clientAuthenticationToken)
 
 	client.OnUserJoinMessage(func(joinMessage twitch.UserJoinMessage) {
 		if !userIsIgnored(joinMessage.User) {
 			datastore.recordUserJoin(joinMessage.User)
-			// log.Println(joinMessage.Raw)
 		}
 	})
 
 	client.OnUserPartMessage(func(partMessage twitch.UserPartMessage) {
 		if !userIsIgnored(partMessage.User) {
 			datastore.recordUserPart(partMessage.User)
-			// log.Println(partMessage.Raw)
 		}
 	})
 
+	// join the channel
 	client.Join(channelToJoin)
 	log.Println("Joined channel", channelToJoin)
 
+	// actually connect to Twitch
 	err := client.Connect()
 	if err != nil {
 		panic(err)
