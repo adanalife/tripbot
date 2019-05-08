@@ -1,8 +1,6 @@
 package main
 
 import (
-	"bytes"
-	"encoding/gob"
 	"log"
 	"os"
 	"time"
@@ -66,9 +64,17 @@ func (s *Store) Close() error {
 	return nil
 }
 
-// datastore for user joins
-// var userJoins map[string]time.Time = make(map[string]time.Time)
-// var userWatched map[string]time.Duration = make(map[string]time.Duration)
+func (s *Store) printStats() {
+	s.db.View(func(tx *bolt.Tx) error {
+		watchedBucket := tx.Bucket([]byte(userWatchedBucket))
+		err := watchedBucket.ForEach(func(k, v []byte) error {
+			duration, err := time.ParseDuration(string(v))
+			log.Printf("%s has watched %s.\n", k, duration)
+			return err
+		})
+		return err
+	})
+}
 
 // returns true if a given user should be ignored
 func userIsIgnored(user string) bool {
@@ -84,9 +90,9 @@ func (s *Store) recordUserJoin(user string) {
 	log.Println(user, "joined the channel")
 
 	s.db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(userJoinsBucket))
+		joinedBucket := tx.Bucket([]byte(userJoinsBucket))
 		currentTime, err := time.Now().MarshalText()
-		err = b.Put([]byte(user), []byte(currentTime))
+		err = joinedBucket.Put([]byte(user), []byte(currentTime))
 		return err
 	})
 }
@@ -117,17 +123,15 @@ func (s *Store) recordUserPart(user string) {
 	// calculate total duration watched
 	totalDurationWatched := previousDurationWatched + durationWatched
 
+	//TODO: remove me
+	log.Println("previous:", previousDurationWatched)
+	log.Println("current:", durationWatched)
+	log.Println("total:", totalDurationWatched)
+
 	// update the DB with the total duration watched
 	s.db.Update(func(tx *bolt.Tx) error {
-		// convert Duration to []byte
-		// c.p. https://stackoverflow.com/a/23004209
-		var buf bytes.Buffer
-		err := gob.NewEncoder(&buf).Encode(totalDurationWatched)
-		if err != nil {
-			return err
-		}
 		watchedBucket := tx.Bucket([]byte(userWatchedBucket))
-		err = watchedBucket.Put([]byte(user), []byte(buf.Bytes()))
+		err := watchedBucket.Put([]byte(user), []byte(totalDurationWatched.String()))
 		return err
 	})
 
@@ -153,6 +157,8 @@ func main() {
 	if err := datastore.Open(); err != nil {
 		panic(err)
 	}
+
+	datastore.printStats()
 
 	client := twitch.NewClient(clientUsername, clientAuthenticationToken)
 
