@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"encoding/gob"
-	"fmt"
 	"log"
 	"os"
 	"time"
@@ -97,35 +96,23 @@ func (s *Store) recordUserPart(user string) {
 	var durationWatched time.Duration
 	var previousDurationWatched time.Duration
 
-	// first find the time the user joined the channel
 	s.db.View(func(tx *bolt.Tx) error {
 		joinedBucket := tx.Bucket([]byte(userJoinsBucket))
-		joinTime = time.Now()
+		watchedBucket := tx.Bucket([]byte(userWatchedBucket))
+
+		// first find the time the user joined the channel
 		err := joinTime.UnmarshalText(joinedBucket.Get([]byte(user)))
 		if err != nil {
 			return err
 		}
 
-		// if we didn't find anything, we can't continue
-		// if joinTime == nil {
-		// 	return err
-		// }
-
 		// seems like we did find a time, so calculate the duration watched
 		durationWatched = time.Since(joinTime)
 
 		// fetch the previous duration watched from the DB
-		watchedBucket := tx.Bucket([]byte(userWatchedBucket))
 		previousDurationWatched, err = time.ParseDuration(string(watchedBucket.Get([]byte(user))))
 		return err
 	})
-
-	log.Println("test")
-
-	// maybe they're a new user
-	// if previousDurationWatched == 0 {
-	// 	previousDurationWatched = 0
-	// }
 
 	// calculate total duration watched
 	totalDurationWatched := previousDurationWatched + durationWatched
@@ -135,27 +122,26 @@ func (s *Store) recordUserPart(user string) {
 		// convert Duration to []byte
 		// c.p. https://stackoverflow.com/a/23004209
 		var buf bytes.Buffer
-		enc := gob.NewEncoder(&buf)
-		err := enc.Encode(totalDurationWatched)
+		err := gob.NewEncoder(&buf).Encode(totalDurationWatched)
 		if err != nil {
 			return err
 		}
-		b := tx.Bucket([]byte(userWatchedBucket))
-		err = b.Put([]byte(user), []byte(buf.Bytes()))
+		watchedBucket := tx.Bucket([]byte(userWatchedBucket))
+		err = watchedBucket.Put([]byte(user), []byte(buf.Bytes()))
 		return err
 	})
 
-	log.Println(user, "left the channel, total watched:", fmtDuration(totalDurationWatched))
+	log.Println(user, "left the channel, total watched:", totalDurationWatched)
 }
 
 // helper func to make Durations prettier
-func fmtDuration(d time.Duration) string {
-	d = d.Round(time.Minute)
-	h := d / time.Hour
-	d -= h * time.Hour
-	m := d / time.Minute
-	return fmt.Sprintf("%02d:%02d", h, m)
-}
+// func fmtDuration(d time.Duration) string {
+// 	d = d.Round(time.Minute)
+// 	h := d / time.Hour
+// 	d -= h * time.Hour
+// 	m := d / time.Minute
+// 	return fmt.Sprintf("%02d:%02d", h, m)
+// }
 
 func main() {
 	clientAuthenticationToken, ok := os.LookupEnv("TWITCH_AUTH_TOKEN")
