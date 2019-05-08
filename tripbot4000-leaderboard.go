@@ -25,7 +25,7 @@ func durationToMiles(d time.Duration) int {
 }
 
 func main() {
-	db, err := bolt.Open("tripbot.db", 0666, &bolt.Options{ReadOnly: true})
+	db, err := bolt.Open("tripbot-copy.db", 0666, &bolt.Options{ReadOnly: true})
 	if err != nil {
 		log.Fatal(err)
 	}

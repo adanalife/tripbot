@@ -2,4 +2,5 @@ outputs
 .ruby-gemset
 .DS_Store
 ignore/
-tripbot.db
+*.db
+*.MP4
