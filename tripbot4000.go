@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"os"
+	"time"
 
 	twitch "github.com/gempir/go-twitch-irc"
 )
@@ -12,6 +13,7 @@ const (
 	channelToJoin  = "adanalife_"
 )
 
+// these are other bots who shouldn't get points
 var ignoredUsers = []string{
 	"anotherttvviewer",
 	"commanderroot",
@@ -19,6 +21,11 @@ var ignoredUsers = []string{
 	"logviewer",
 }
 
+// datastore for user joins
+var userJoins map[string]time.Time = make(map[string]time.Time)
+var userWatched map[string]time.Duration = make(map[string]time.Duration)
+
+// returns true if a given user should be ignored
 func userIsIgnored(user string) bool {
 	for _, ignored := range ignoredUsers {
 		if user == ignored {
@@ -26,6 +33,20 @@ func userIsIgnored(user string) bool {
 		}
 	}
 	return false
+}
+
+func recordUserJoin(user string) {
+	userJoins[user] = time.Now()
+}
+
+func recordUserPart(user string) {
+	if joinTime, ok := userJoins[user]; ok {
+		duration := time.Since(joinTime)
+		userWatched[user] += duration
+	} else {
+		log.Println("Part message with no join for user", user)
+	}
+	log.Println(user, "has", userWatched[user])
 }
 
 func main() {
@@ -38,12 +59,14 @@ func main() {
 
 	client.OnUserJoinMessage(func(joinMessage twitch.UserJoinMessage) {
 		if !userIsIgnored(joinMessage.User) {
+			recordUserJoin(joinMessage.User)
 			log.Println(joinMessage.Raw)
 		}
 	})
 
 	client.OnUserPartMessage(func(partMessage twitch.UserPartMessage) {
 		if !userIsIgnored(partMessage.User) {
+			recordUserPart(partMessage.User)
 			log.Println(partMessage.Raw)
 		}
 	})
