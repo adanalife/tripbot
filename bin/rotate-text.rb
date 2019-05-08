@@ -17,7 +17,7 @@ possible_messages = [
   "Earn 1 mile for every 10m watched",
   "Don't like music? Mute it!",
   "Music by Soma.FM",
-  "Something cool? Clip it!",
+  "See something cool? Clip it!",
   "#{leader.strip} is leader with #{miles}"
 ]
 
