@@ -23,10 +23,12 @@ var ignoredUsers = []string{
 	"anotherttvviewer",
 	"apricotdrupefruit",
 	"commanderroot",
+	"communityshowcase",
 	"electricallongboard",
 	"logviewer",
 	"lurxx",
 	"p0lizei_",
+	"unixchat",
 	"v_and_k",
 	"virgoproz",
 }
