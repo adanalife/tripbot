@@ -11,7 +11,7 @@ function ctrl_c() {
 }
 
 while true; do
-	if (( RANDOM % 5 == 0 )); then
+	if (( RANDOM % 10 == 0 )); then
 		cp tripbot.db tripbot-copy.db
 		go run tripbot4000-leaderboard.go > OBS/leaderboard.txt
 	else
