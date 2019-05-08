@@ -14,6 +14,8 @@ while true; do
 	if (( RANDOM % 10 == 0 )); then
 		cp tripbot.db tripbot-copy.db
 		go run tripbot4000-leaderboard.go > OBS/leaderboard.txt
+		# make a copy
+		cp OBS/leaderboard.txt OBS/leaderboard-copy.txt
 	else
 		# clear out the file
 		echo "" > OBS/leaderboard.txt
