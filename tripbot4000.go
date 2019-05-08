@@ -94,30 +94,33 @@ func (s *Store) recordUserJoin(user string) {
 
 func (s *Store) recordUserPart(user string) {
 	var joinTime time.Time
+	var durationWatched time.Duration
 	var previousDurationWatched time.Duration
 
 	// first find the time the user joined the channel
 	s.db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(userJoinsBucket))
+		joinedBucket := tx.Bucket([]byte(userJoinsBucket))
 		joinTime = time.Now()
-		err := joinTime.UnmarshalText(b.Get([]byte(user)))
+		err := joinTime.UnmarshalText(joinedBucket.Get([]byte(user)))
+		if err != nil {
+			return err
+		}
+
+		// if we didn't find anything, we can't continue
+		// if joinTime == nil {
+		// 	return err
+		// }
+
+		// seems like we did find a time, so calculate the duration watched
+		durationWatched = time.Since(joinTime)
+
+		// fetch the previous duration watched from the DB
+		watchedBucket := tx.Bucket([]byte(userWatchedBucket))
+		previousDurationWatched, err = time.ParseDuration(string(watchedBucket.Get([]byte(user))))
 		return err
 	})
 
-	// if we didn't find anything, we can't continue
-	// if joinTime == nil {
-	// 	return err
-	// }
-
-	// seems like we did find a time, so calculate the duration watched
-	durationWatched := time.Since(joinTime)
-
-	// fetch the previous duration watched from the DB
-	s.db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(userWatchedBucket))
-		previousDurationWatched, err := time.ParseDuration(string(b.Get([]byte(user))))
-		return err
-	})
+	log.Println("test")
 
 	// maybe they're a new user
 	// if previousDurationWatched == 0 {
