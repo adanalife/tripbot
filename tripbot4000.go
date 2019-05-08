@@ -61,16 +61,25 @@ func (s *Store) Open() error {
 
 func (s *Store) Close() error {
 	if s.db != nil {
+		var onlineUsers = []string{}
+
+		// first we make a list of all of the online users
 		s.db.View(func(tx *bolt.Tx) error {
 			joinedBucket := tx.Bucket([]byte(userJoinsBucket))
 			err := joinedBucket.ForEach(func(k, _ []byte) error {
 				user := string(k)
-				log.Println("logging out", user)
-				s.recordUserPart(string(user))
+				onlineUsers = append(onlineUsers, user)
 				return nil
 			})
 			return err
 		})
+
+		// then we loop over it and record the current watched duration
+		for _, user := range onlineUsers {
+			log.Println("logging out", user)
+			s.recordUserPart(string(user))
+		}
+
 		s.db.Close()
 	}
 	return nil
@@ -125,15 +134,11 @@ func (s *Store) recordUserPart(user string) {
 	// calculate total duration watched
 	totalDurationWatched := previousDurationWatched + durationWatched
 
-	//TODO: remove me
-	log.Println("previous:", previousDurationWatched)
-	log.Println("current:", durationWatched)
-	log.Println("total:", totalDurationWatched)
-
 	// update the DB with the total duration watched
 	s.db.Update(func(tx *bolt.Tx) error {
 		joinedBucket := tx.Bucket([]byte(userJoinsBucket))
 		watchedBucket := tx.Bucket([]byte(userWatchedBucket))
+
 		err := watchedBucket.Put([]byte(user), []byte(totalDurationWatched.String()))
 		if err != nil {
 			return err
