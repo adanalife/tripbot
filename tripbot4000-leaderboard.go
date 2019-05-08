@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"sort"
 	"time"
@@ -11,7 +12,7 @@ import (
 const userWatchedBucket = "user_watched"
 
 func durationToMiles(d time.Duration) int {
-	return int(d.Minutes() / 15)
+	return int(d.Minutes() / 10)
 }
 
 func main() {
@@ -26,31 +27,31 @@ func main() {
 	db.View(func(tx *bolt.Tx) error {
 		watchedBucket := tx.Bucket([]byte(userWatchedBucket))
 		err := watchedBucket.ForEach(func(k, v []byte) error {
+			user := string(k)
+			if user == "tripbot4000" {
+				return nil
+			}
 			duration, err := time.ParseDuration(string(v))
 			if err != nil {
 				return err
 			}
 			intDuration := int(duration)
 			sortedValues = append(sortedValues, intDuration)
-			reversedMap[intDuration] = string(k)
+			reversedMap[intDuration] = user
 			return err
 		})
 		return err
 	})
 
+	// sort and reverse the values
 	sort.Sort(sort.Reverse(sort.IntSlice(sortedValues)))
-	// spew.Dump(sortedValues)
 
+	fmt.Println("Odometer Leaderboard")
+	// print the top 5
 	for i := 0; i < 5; i++ {
-		// duration, err := time.ParseDuration(sortedValues[i].(time.Duration))
-		// if err != nil {
-		// 	panic(err)
-		// }
-		// var duration time.Duration
-		// duration = sortedValues[i]
 		duration := time.Duration(sortedValues[i])
 		user := reversedMap[sortedValues[i]]
 
-		log.Println(user, "has", duration)
+		fmt.Println(durationToMiles(duration), "miles:", user)
 	}
 }
