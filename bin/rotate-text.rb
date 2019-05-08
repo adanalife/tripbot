@@ -24,6 +24,6 @@ puts "starting #$PROGRAM_NAME script"
 
 loop do
   File.write(File.expand_path(message_file), possible_messages.sample)
-  sleep 30
+  sleep 45
 end
 
