@@ -10,6 +10,7 @@ import (
 )
 
 const (
+	leaderboardSize = 5
 	userWatchedBucket = "user_watched"
 	userJoinsBucket   = "user_joins"
 )
@@ -26,9 +27,11 @@ var ignoredUsers = []string{
 	"logviewer",
 	"lurxx",
 	"p0lizei_",
+	"slocool",
 	"unixchat",
 	"v_and_k",
 	"virgoproz",
+	"zanekyber",
 }
 
 func durationToMiles(d time.Duration) int {
@@ -85,7 +88,7 @@ func main() {
 
 	fmt.Println("Odometer Leaderboard")
 	// print the top 5
-	for i := 0; i < 5; i++ {
+	for i := 0; i < leaderboardSize; i++ {
 		duration := time.Duration(sortedValues[i])
 		user := reversedMap[sortedValues[i]]
 
