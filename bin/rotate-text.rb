@@ -8,11 +8,14 @@ message_file = "./OBS/current-message.txt"
 miles, leader = File.read(File.expand_path(leaderboard_file)).split("\n")[1].split(":")
 
 possible_messages = [
+  "Type !help in chat for instructions",
+  "Type !help in chat for instructions",
+  "Type !help in chat for instructions",
+  "Type !help in chat for instructions",
   "Sub goal #1 (emotes): #{sub_goal}",
   "Please leave feedback in the comments <3",
   "Subscribe with Twitch Prime <3",
   "Choppy? Sorry, new hardware coming soon",
-  "Type !help in chat for instructions",
   "Use !less to mark something as boring",
   "Earn 1 mile for every 10m watched",
   "Don't like music? Mute it!",
