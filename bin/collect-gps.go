@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	tesseractCfg = "/Users/dmerrick/other_projects/danalol-stream/tesseract.cfg"
+	tesseractCfg = "~/other_projects/danalol-stream/tesseract.cfg"
 	screencapDir = "/Volumes/usbshare1/first frame of every video"
 	croppedPath  = "/Volumes/usbshare1/cropped-corners"
 )
@@ -31,53 +31,28 @@ func main() {
 			if path == screencapDir {
 				return nil
 			}
+
 			// crop the image
 			croppedImage := cropImage(path)
 			// read off the text
 			textFromImage := readText(croppedImage)
+			// pull out the coords
 			coordStr := extractCoords(textFromImage)
-			// don't print anything if we didn't get good coords
+
+			// don't do anything if we didn't get good coords
 			if coordStr == "" {
 				return nil
 			}
-			fmt.Println(coordStr)
 
+			// fmt.Println(coordStr)
 			fmt.Println(googleMapsURL(coordStr))
 			return nil
 		})
+	// something went wrong walking the directory
 	if err != nil {
 		log.Println(err)
 	}
 
-}
-
-func extractCoords(text string) string {
-	// strip all whitespace
-	tidy := strings.Replace(text, " ", "", -1)
-	split := splitOnRegex(tidy, "MPH")
-	// exit here if we didn't read the coords correctly
-	if len(split) < 2 {
-		return ""
-	}
-	coords := split[1]
-	return coords
-}
-
-// readText uses OCR to read the text from an image file
-func readText(imgFile string) string {
-	client := gosseract.NewClient()
-	client.SetConfigFile(tesseractCfg)
-	client.SetWhitelist("NSEW.1234567890MPH")
-	client.SetBlacklist("abcdefghijklmnopqrstuvwxyz")
-	// https://github.com/tesseract-ocr/tesseract/wiki/ImproveQuality#page-segmentation-method
-	client.SetPageSegMode(gosseract.PSM_SINGLE_BLOCK)
-	defer client.Close()
-	client.SetImage(imgFile)
-	text, err := client.Text()
-	if err != nil {
-		log.Fatalf("failed to read text: %v", err)
-	}
-	return text
 }
 
 // cropImage cuts a dashcam screencap down to just the bottom right corner
@@ -104,15 +79,50 @@ func cropImage(srcFilename string) string {
 	return croppedFile
 }
 
-// fileExists simply returns true if a file exists
-func fileExists(path string) bool {
-	_, err := os.Stat(path)
-	if os.IsNotExist(err) {
-		return false
+// readText uses OCR to read the text from an image file
+func readText(imgFile string) string {
+	client := gosseract.NewClient()
+	defer client.Close()
+
+	// set up tesseract to improve OCR accuracy
+	client.SetConfigFile(tesseractCfg)
+	client.SetWhitelist("NSEW.1234567890MPH")
+	client.SetBlacklist("abcdefghijklmnopqrstuvwxyz/\\")
+	// https://github.com/tesseract-ocr/tesseract/wiki/ImproveQuality#page-segmentation-method
+	client.SetPageSegMode(gosseract.PSM_SINGLE_BLOCK)
+
+	// read the file
+	client.SetImage(imgFile)
+	text, err := client.Text()
+	if err != nil {
+		log.Fatalf("failed to read text: %v", err)
 	}
-	return err == nil
+	return text
 }
 
+// extractCoords expects an OCR-ed string which
+// may or may not contain GPS coordinates, and
+// returns its best guess at what the coords are
+func extractCoords(text string) string {
+	// strip all whitespace
+	tidy := strings.Replace(text, " ", "", -1)
+	// try to separate the text using the speed
+	split := splitOnRegex(tidy, "MPH")
+	// if we didn't find the speed, just exit
+	if len(split) < 2 {
+		return ""
+	}
+	// use only the second half (the GPS coordinates)
+	coords := split[1]
+	return coords
+}
+
+// googleMapsURL returns a google maps link to the coords provided
+func googleMapsURL(coordsStr string) string {
+	return fmt.Sprintf("https://www.google.com/maps?q=%s", coordsStr)
+}
+
+// splitOnRegex will is the equivalent of str.split(/regex/)
 func splitOnRegex(text string, delimeter string) []string {
 	reg := regexp.MustCompile(delimeter)
 	indexes := reg.FindAllStringIndex(text, -1)
@@ -126,6 +136,11 @@ func splitOnRegex(text string, delimeter string) []string {
 	return result
 }
 
-func googleMapsURL(coordsStr string) string {
-	return fmt.Sprintf("https://www.google.com/maps?q=%s", coordsStr)
+// fileExists simply returns true if a file exists
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		return false
+	}
+	return err == nil
 }
