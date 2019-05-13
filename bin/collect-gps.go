@@ -6,6 +6,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 
 	"github.com/disintegration/imaging"
 	"github.com/otiai10/gosseract"
@@ -32,7 +33,8 @@ func main() {
 			croppedImage := cropImage(path)
 			// read off the text
 			textFromImage := readText(croppedImage)
-			fmt.Println(textFromImage)
+			tidyText := tidyOutput(textFromImage)
+			fmt.Println(tidyText)
 			return nil
 		})
 	if err != nil {
@@ -41,9 +43,15 @@ func main() {
 
 }
 
+func tidyOutput(text string) string {
+	// strip all whitespace
+	return strings.Replace(text, " ", "", -1)
+}
+
 // readText uses OCR to read the text from an image file
 func readText(imgFile string) string {
 	client := gosseract.NewClient()
+	client.SetConfigFile("./tesseract.cfg")
 	client.SetWhitelist("NSEW.1234567890MPH")
 	// https://github.com/tesseract-ocr/tesseract/wiki/ImproveQuality#page-segmentation-method
 	client.SetPageSegMode(7)
