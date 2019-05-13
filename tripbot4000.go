@@ -84,7 +84,7 @@ func main() {
 
 	// all chat messages
 	client.OnPrivateMessage(func(message twitch.PrivateMessage) {
-		if strings.Contains(strings.ToLower(message.Message), "!tripbot") {
+		if strings.HasPrefix(strings.ToLower(message.Message), "!tripbot") {
 
 			// only run once every 3 minutes
 			if time.Now().After(lastRun + 3*time.Minute) {
