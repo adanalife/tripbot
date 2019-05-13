@@ -5,9 +5,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
-	"github.com/boltdb/bolt"
 	"github.com/dmerrick/danalol-stream/pkg/store"
 	twitch "github.com/gempir/go-twitch-irc"
 )
@@ -41,7 +39,7 @@ func main() {
 	}
 
 	// initialize the database
-	datastore := NewStore("tripbot.db")
+	datastore := store.NewStore("tripbot.db")
 	if err := datastore.Open(); err != nil {
 		panic(err)
 	}
@@ -56,20 +54,20 @@ func main() {
 	}()
 
 	// show the DB contents at the start
-	datastore.printStats()
+	datastore.PrintStats()
 
 	// time to set up the Twitch client
 	client := twitch.NewClient(clientUsername, clientAuthenticationToken)
 
 	client.OnUserJoinMessage(func(joinMessage twitch.UserJoinMessage) {
 		if !userIsIgnored(joinMessage.User) {
-			datastore.recordUserJoin(joinMessage.User)
+			datastore.RecordUserJoin(joinMessage.User)
 		}
 	})
 
 	client.OnUserPartMessage(func(partMessage twitch.UserPartMessage) {
 		if !userIsIgnored(partMessage.User) {
-			datastore.recordUserPart(partMessage.User)
+			datastore.RecordUserPart(partMessage.User)
 		}
 	})
 

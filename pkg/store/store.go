@@ -71,7 +71,7 @@ func (s *Store) Close() error {
 	return nil
 }
 
-func (s *Store) printStats() {
+func (s *Store) PrintStats() {
 	s.db.View(func(tx *bolt.Tx) error {
 		watchedBucket := tx.Bucket([]byte(userWatchedBucket))
 		err := watchedBucket.ForEach(func(k, v []byte) error {
@@ -83,7 +83,7 @@ func (s *Store) printStats() {
 	})
 }
 
-func (s *Store) recordUserJoin(user string) {
+func (s *Store) RecordUserJoin(user string) {
 	log.Println(user, "joined the channel")
 
 	s.db.Update(func(tx *bolt.Tx) error {
@@ -94,7 +94,7 @@ func (s *Store) recordUserJoin(user string) {
 	})
 }
 
-func (s *Store) recordUserPart(user string) {
+func (s *Store) RecordUserPart(user string) {
 	var joinTime time.Time
 	var durationWatched time.Duration
 	var previousDurationWatched time.Duration
