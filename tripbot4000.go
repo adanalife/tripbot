@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/dmerrick/danalol-stream/pkg/screenshot"
 	"github.com/dmerrick/danalol-stream/pkg/store"
@@ -33,6 +34,9 @@ var ignoredUsers = []string{
 	"v_and_k",
 	"virgoproz",
 }
+
+// the last time a google maps link was generated
+var lastRun Time
 
 func main() {
 	// first we must check for required ENV vars
@@ -81,16 +85,22 @@ func main() {
 	// all chat messages
 	client.OnPrivateMessage(func(message twitch.PrivateMessage) {
 		if strings.Contains(strings.ToLower(message.Message), "!tripbot") {
-			// get the currently-playing video
-			currentVid := screenshot.GetCurrentVideo()
-			screenshotPath := screenshot.ScreenshotPath(currentVid)
-			// extract the coordinates, generate a google maps url
-			url, err := screenshot.ProcessImage(screenshotPath)
-			if err != nil {
-				client.Say(channelToJoin, "Sorry, I couldn't figure out the coordinates this time :(")
-			} else {
-				client.Say(channelToJoin, fmt.Sprintf("Here's a link, hopefully it works! %s", url))
+
+			// only run once every 3 minutes
+			if time.Now().After(lastRun + 3*time.Minute) {
+				// get the currently-playing video
+				currentVid := screenshot.GetCurrentVideo()
+				screenshotPath := screenshot.ScreenshotPath(currentVid)
+				// extract the coordinates, generate a google maps url
+				url, err := screenshot.ProcessImage(screenshotPath)
+				if err != nil {
+					client.Say(channelToJoin, "Sorry, I couldn't figure out the coordinates this time :(")
+				} else {
+					client.Say(channelToJoin, fmt.Sprintf("Here's a link, hopefully it works! %s", url))
+				}
+				lastRun = time.Now()
 			}
+
 		}
 	})
 
