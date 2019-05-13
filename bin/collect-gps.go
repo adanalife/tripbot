@@ -16,6 +16,31 @@ const (
 	croppedPath  = "/Volumes/usbshare1/cropped-corners"
 )
 
+func main() {
+
+	// loop over every file in the screencapDir
+	err := filepath.Walk(screencapDir,
+		func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			// skip the directory name itself
+			if path == screencapDir {
+				return nil
+			}
+			// crop the image
+			croppedImage := cropImage(path)
+			// read off the text
+			textFromImage := readText(croppedImage)
+			fmt.Println(textFromImage)
+			return nil
+		})
+	if err != nil {
+		log.Println(err)
+	}
+
+}
+
 // readText uses OCR to read the text from an image file
 func readText(imgFile string) string {
 	client := gosseract.NewClient()
@@ -56,29 +81,4 @@ func fileExists(path string) bool {
 		return false
 	}
 	return err == nil
-}
-
-func main() {
-
-	// loop over every file in the screencapDir
-	err := filepath.Walk(screencapDir,
-		func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				return err
-			}
-			// skip the directory name itself
-			if path == screencapDir {
-				return nil
-			}
-			// crop the image
-			croppedImage := cropImage(path)
-			// read off the text
-			textFromImage := readText(croppedImage)
-			fmt.Println(textFromImage)
-			return nil
-		})
-	if err != nil {
-		log.Println(err)
-	}
-
 }
