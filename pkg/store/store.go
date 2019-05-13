@@ -2,13 +2,9 @@ package main
 
 import (
 	"log"
-	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	"github.com/boltdb/bolt"
-	twitch "github.com/gempir/go-twitch-irc"
 )
 
 const (
