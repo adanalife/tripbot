@@ -1,6 +1,7 @@
 package screenshot
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"os"
