@@ -7,6 +7,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"strings"
 
 	"github.com/disintegration/imaging"
 	"github.com/otiai10/gosseract"
@@ -49,24 +50,23 @@ func main() {
 }
 
 func extractCoords(text string) string {
-	return text
 	// strip all whitespace
-	// tidy := strings.Replace(text, " ", "", -1)
-	// split := splitOnRegex(tidy, "MPH")
+	tidy := strings.Replace(text, " ", "", -1)
+	split := splitOnRegex(tidy, "MPH")
 	// exit here if we didn't read the coords correctly
-	// if len(split) < 2 {
-	// 	return ""
-	// }
-	// coords := split[1]
-	// return coords
+	if len(split) < 2 {
+		return ""
+	}
+	coords := split[1]
+	return coords
 }
 
 // readText uses OCR to read the text from an image file
 func readText(imgFile string) string {
 	client := gosseract.NewClient()
 	client.SetConfigFile(tesseractCfg)
-	// client.SetWhitelist("NSEW.1234567890MPH")
-	// client.SetBlacklist("NSEW.1234567890MPH")
+	client.SetWhitelist("NSEW.1234567890MPH")
+	client.SetBlacklist("abcdefghijklmnopqrstuvwxyz")
 	// https://github.com/tesseract-ocr/tesseract/wiki/ImproveQuality#page-segmentation-method
 	client.SetPageSegMode(gosseract.PSM_SINGLE_BLOCK)
 	defer client.Close()
