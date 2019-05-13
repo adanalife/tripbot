@@ -39,7 +39,7 @@ func ScreenshotPath(videoFile string) string {
 	return path.Join(screencapDir, screencapFile)
 }
 
-func ProcessImage(path string) error {
+func ProcessImage(path string) (string, error) {
 	// crop the image
 	croppedImage := cropImage(path)
 	// read off the text
@@ -49,12 +49,13 @@ func ProcessImage(path string) error {
 
 	// don't do anything if we didn't get good coords
 	if coordStr == "" {
-		return nil
+		return coordStr, errors.New("error reading coords from file")
 	}
 
 	// fmt.Println(coordStr)
-	fmt.Println(googleMapsURL(coordStr))
-	return nil
+	// fmt.Println(googleMapsURL(coordStr))
+	url := googleMapsURL(coordStr)
+	return url, nil
 }
 
 // cropImage cuts a dashcam screencap down to just the bottom right corner

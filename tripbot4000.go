@@ -80,12 +80,17 @@ func main() {
 	// all chat messages
 	client.OnPrivateMessage(func(message twitch.PrivateMessage) {
 		if strings.Contains(strings.ToLower(message.Message), "!tripbot") {
+			// get the currently-playing video
 			currentVid := screenshot.GetCurrentVideo()
 			screenshotPath := screenshot.ScreenshotPath(currentVid)
-			screenshot.ProcessImage(screenshotPath)
-			// client.Say(channelToJoin, "what's that now?")
+			// extract the coordinates, generate a google maps url
+			url, err := screenshot.ProcessImage(screenshotPath)
+			if err != nil {
+				client.Say(channelToJoin, "Sorry, I couldn't figure out the coordinates this time :(")
+			} else {
+				client.Say(channelToJoin, fmt.Sprintf("Here's a link, hopefully it works! %s", url))
+			}
 		}
-		// log.Println("private:", message.User.Name, message.Message)
 	})
 
 	// join the channel
