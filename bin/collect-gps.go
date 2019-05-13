@@ -5,19 +5,13 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
-	"path"
 	"path/filepath"
-	"regexp"
-	"strings"
 
 	"github.com/dmerrick/danalol-stream/pkg/screenshot"
 )
 
 const (
-	screencapDir     = "/Volumes/usbshare1/first frame of every video"
-	croppedPath      = "/Volumes/usbshare1/cropped-corners"
-	getCurrentScript = "/Users/dmerrick/other_projects/danalol-stream/bin/current-file.sh"
+	screencapDir = "/Volumes/usbshare1/first frame of every video"
 )
 
 // this will hold the filename passed in via the CLI
@@ -42,10 +36,11 @@ func main() {
 
 	if videoFile != "" {
 		path := screenshot.ScreenshotPath(videoFile)
-		err := processImage(path)
+		url, err := screenshot.ProcessImage(path)
 		if err != nil {
 			log.Fatalf("failed to process image: %v", err)
 		}
+		fmt.Println(url)
 
 	} else {
 
@@ -61,7 +56,11 @@ func main() {
 				}
 
 				// actually process the image
-				err = screenshot.ProcessImage(path)
+				url, err := screenshot.ProcessImage(path)
+				if err != nil {
+					log.Fatalf("failed to process image: %v", err)
+				}
+				fmt.Println(url)
 				return err
 			})
 		// something went wrong walking the directory
