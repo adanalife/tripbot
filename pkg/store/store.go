@@ -63,7 +63,7 @@ func (s *Store) Close() error {
 		// then we loop over it and record the current watched duration
 		for _, user := range onlineUsers {
 			log.Println("logging out", user)
-			s.recordUserPart(string(user))
+			s.RecordUserPart(string(user))
 		}
 
 		s.db.Close()
