@@ -36,7 +36,7 @@ var ignoredUsers = []string{
 }
 
 // the last time a google maps link was generated
-var lastRun Time
+var lastRun time.Time
 
 func main() {
 	// first we must check for required ENV vars
