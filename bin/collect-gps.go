@@ -6,6 +6,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/disintegration/imaging"
@@ -33,8 +34,12 @@ func main() {
 			croppedImage := cropImage(path)
 			// read off the text
 			textFromImage := readText(croppedImage)
-			tidyText := tidyOutput(textFromImage)
-			fmt.Println(tidyText)
+			coords := extractCoords(textFromImage)
+			// don't print anything if we didn't get good coords
+			if coords == "" {
+				return nil
+			}
+			fmt.Println(coords)
 			return nil
 		})
 	if err != nil {
@@ -43,9 +48,15 @@ func main() {
 
 }
 
-func tidyOutput(text string) string {
+func extractCoords(text string) string {
 	// strip all whitespace
-	return strings.Replace(text, " ", "", -1)
+	tidy := strings.Replace(text, " ", "", -1)
+	split := splitOnRegex(tidy, "MPH")
+	if len(split) < 2 {
+		return ""
+	}
+	coords := split[1]
+	return coords
 }
 
 // readText uses OCR to read the text from an image file
@@ -95,4 +106,17 @@ func fileExists(path string) bool {
 		return false
 	}
 	return err == nil
+}
+
+func splitOnRegex(text string, delimeter string) []string {
+	reg := regexp.MustCompile(delimeter)
+	indexes := reg.FindAllStringIndex(text, -1)
+	laststart := 0
+	result := make([]string, len(indexes)+1)
+	for i, element := range indexes {
+		result[i] = text[laststart:element[0]]
+		laststart = element[1]
+	}
+	result[len(indexes)] = text[laststart:len(text)]
+	return result
 }
