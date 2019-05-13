@@ -71,6 +71,14 @@ func main() {
 		}
 	})
 
+	client.OnWhisperMessage(func(message twitch.WhisperMessage) {
+		log.Println("whisper:", message.User.Name, message.Message)
+	})
+
+	client.OnPrivateMessage(func(message twitch.PrivateMessage) {
+		log.Println("private:", message.User.Name, message.Message)
+	})
+
 	// join the channel
 	client.Join(channelToJoin)
 	log.Println("Joined channel", channelToJoin)
