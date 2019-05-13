@@ -1,11 +1,12 @@
 package main
 
 import (
-	"io/ioutil"
+	_ "io/ioutil"
 	"log"
-	_ "path/filepath"
+	"os"
+	"path/filepath"
 
-	_ "github.com/disintegration/imaging"
+	"github.com/disintegration/imaging"
 	_ "github.com/otiai10/gosseract"
 )
 
@@ -15,34 +16,51 @@ const (
 	croppedPath   = "./cropped"
 )
 
+func cropImage(srcFilename string) string {
+	// Open a test image.
+	src, err := imaging.Open(srcFilename)
+	if err != nil {
+		log.Fatalf("failed to open image: %v", err)
+	}
+
+	// crop the image to just the bottom left text
+	croppedImage := imaging.CropAnchor(src, 600, 60, imaging.BottomLeft)
+	// Save the resulting image
+	croppedFile := filepath.Join(croppedPath, srcFilename)
+	err = imaging.Save(croppedImage, croppedFile)
+	return croppedFile
+}
+
 func main() {
 	// imgFile := filepath.Join(framePath, screencapFile)
-	// croppedFile := filepath.Join(croppedPath, filepath.Base(screencapFile), ".png")
 
 	// _, dashcamTimestamp := filepath.Split(imgFile)
 
-	files, err := ioutil.ReadDir(screencapPath)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	for i, f := range files {
-		log.Println(f.Name())
-		if i > 2 {
-			break
-		}
-	}
-
-	// 	// Open a test image.
-	// 	src, err := imaging.Open(imgFile)
-	// 	if err != nil {
-	// 		log.Fatalf("failed to open image: %v", err)
+	// files, err := ioutil.ReadDir(screencapPath)
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+	// for i, f := range files {
+	// 	log.Println(f.Name())
+	// 	if i > 2 {
+	// 		break
 	// 	}
+	// }
 
-	// 	// Crop the original image to 300x300px size using the center anchor.
-	// 	src = imaging.CropAnchor(src, 600, 60, imaging.BottomLeft)
-	// 	// Save the resulting image as JPEG.
-	// 	err = imaging.Save(src, croppedFile)
+	err := filepath.Walk(screencapPath,
+		func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			log.Println("cropping", path)
+			croppedImage := cropImage(path)
+			log.Println(readText(croppedImage))
+			break
+			return nil
+		})
+	if err != nil {
+		log.Println(err)
+	}
 
 	// 	client := gosseract.NewClient()
 	// 	defer client.Close()
