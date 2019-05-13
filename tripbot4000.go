@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/dmerrick/danalol-stream/pkg/store"
@@ -75,8 +76,12 @@ func main() {
 		log.Println("whisper:", message.User.Name, message.Message)
 	})
 
+	// all chat messages
 	client.OnPrivateMessage(func(message twitch.PrivateMessage) {
-		log.Println("private:", message.User.Name, message.Message)
+		if strings.Contains(strings.ToLower(message.Message), "!google") {
+			client.Say(channelToJoin, "what's that now?")
+		}
+		// log.Println("private:", message.User.Name, message.Message)
 	})
 
 	// join the channel
