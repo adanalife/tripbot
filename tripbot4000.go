@@ -87,7 +87,7 @@ func main() {
 		if strings.HasPrefix(strings.ToLower(message.Message), "!tripbot") {
 
 			// only run once every 3 minutes
-			if time.Now().After(lastRun + 3*time.Minute) {
+			if time.Now().Sub(lastRun) >= 3*time.Minute {
 				// get the currently-playing video
 				currentVid := screenshot.GetCurrentVideo()
 				screenshotPath := screenshot.ScreenshotPath(currentVid)
