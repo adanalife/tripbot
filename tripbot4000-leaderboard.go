@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	leaderboardSize = 5
+	leaderboardSize   = 5
 	userWatchedBucket = "user_watched"
 	userJoinsBucket   = "user_joins"
 )
@@ -34,10 +34,6 @@ var ignoredUsers = []string{
 	"zanekyber",
 	"feuerwehr",
 	"jobi_essen",
-}
-
-func durationToMiles(d time.Duration) int {
-	return int(d.Minutes() / 10)
 }
 
 func main() {
@@ -96,4 +92,8 @@ func main() {
 
 		fmt.Println(durationToMiles(duration), "miles:", user)
 	}
+}
+
+func durationToMiles(d time.Duration) int {
+	return int(d.Minutes() / 10)
 }
