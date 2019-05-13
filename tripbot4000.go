@@ -22,6 +22,7 @@ const (
 // these are other bots who shouldn't get points
 // https://www.reddit.com/r/Twitch/comments/9n0nip
 var ignoredUsers = []string{
+	"nightbot",
 	"anotherttvviewer",
 	"apricotdrupefruit",
 	"commanderroot",
@@ -30,9 +31,13 @@ var ignoredUsers = []string{
 	"logviewer",
 	"lurxx",
 	"p0lizei_",
+	"slocool",
 	"unixchat",
 	"v_and_k",
 	"virgoproz",
+	"zanekyber",
+	"feuerwehr",
+	"jobi_essen",
 }
 
 // the last time a google maps link was generated
