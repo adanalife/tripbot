@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"regexp"
@@ -15,20 +16,36 @@ import (
 )
 
 const (
-	tesseractCfg = "~/other_projects/danalol-stream/tesseract.cfg"
-	screencapDir = "/Volumes/usbshare1/first frame of every video"
-	croppedPath  = "/Volumes/usbshare1/cropped-corners"
+	tesseractCfg     = "~/other_projects/danalol-stream/tesseract.cfg"
+	screencapDir     = "/Volumes/usbshare1/first frame of every video"
+	croppedPath      = "/Volumes/usbshare1/cropped-corners"
+	getCurrentScript = "/Users/dmerrick/other_projects/danalol-stream/bin/current-file.sh"
 )
 
 // this will hold the filename passed in via the CLI
 var videoFile string
+var current bool
 
 func init() {
 	flag.StringVar(&videoFile, "file", "", "File to load")
+	flag.BoolVar(&current, "current", false, "Use currently-playing video")
 	flag.Parse()
 }
 
 func main() {
+
+	// set videoFile if -current was passed n
+	if current {
+		if videoFile != "" {
+			log.Fatal("you cannot use -current and -file at the same time")
+		}
+		// run the shell script to get currently-playing video
+		out, err := exec.Command(getCurrentScript).Output()
+		if err != nil {
+			log.Fatalf("failed to run script: %v", err)
+		}
+		videoFile = string(out)
+	}
 
 	if videoFile != "" {
 		split := splitOnRegex(videoFile, "\\.")
