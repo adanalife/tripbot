@@ -32,6 +32,8 @@ var ignoredUsers = []string{
 	"v_and_k",
 	"virgoproz",
 	"zanekyber",
+	"feuerwehr",
+	"jobi_essen",
 }
 
 func durationToMiles(d time.Duration) int {
