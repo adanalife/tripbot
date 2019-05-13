@@ -44,9 +44,15 @@ func main() {
 // readText uses OCR to read the text from an image file
 func readText(imgFile string) string {
 	client := gosseract.NewClient()
+	client.SetWhitelist("NSEW.1234567890MPH")
+	// https://github.com/tesseract-ocr/tesseract/wiki/ImproveQuality#page-segmentation-method
+	client.SetPageSegMode(7)
 	defer client.Close()
 	client.SetImage(imgFile)
-	text, _ := client.Text()
+	text, err := client.Text()
+	if err != nil {
+		log.Fatalf("failed to read text: %v", err)
+	}
 	return text
 }
 
