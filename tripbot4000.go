@@ -7,6 +7,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/dmerrick/danalol-stream/pkg/screenshot"
 	"github.com/dmerrick/danalol-stream/pkg/store"
 	twitch "github.com/gempir/go-twitch-irc"
 )
@@ -79,7 +80,9 @@ func main() {
 	// all chat messages
 	client.OnPrivateMessage(func(message twitch.PrivateMessage) {
 		if strings.Contains(strings.ToLower(message.Message), "!tripbot") {
-			client.Say(channelToJoin, "what's that now?")
+			current := screenshot.GetCurrentVideo()
+			screenshot.ProcessImage(current)
+			// client.Say(channelToJoin, "what's that now?")
 		}
 		// log.Println("private:", message.User.Name, message.Message)
 	})
