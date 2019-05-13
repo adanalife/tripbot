@@ -35,12 +35,14 @@ func main() {
 			croppedImage := cropImage(path)
 			// read off the text
 			textFromImage := readText(croppedImage)
-			coords := extractCoords(textFromImage)
+			coordStr := extractCoords(textFromImage)
 			// don't print anything if we didn't get good coords
-			if coords == "" {
+			if coordStr == "" {
 				return nil
 			}
-			fmt.Println(coords)
+			fmt.Println(coordStr)
+
+			fmt.Println(googleMapsURL(coordStr))
 			return nil
 		})
 	if err != nil {
@@ -122,4 +124,8 @@ func splitOnRegex(text string, delimeter string) []string {
 	}
 	result[len(indexes)] = text[laststart:len(text)]
 	return result
+}
+
+func googleMapsURL(coordsStr string) string {
+	return fmt.Sprintf("https://www.google.com/maps?q=%s", coordsStr)
 }
