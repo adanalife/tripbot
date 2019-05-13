@@ -102,6 +102,10 @@ func cropImage(srcFilename string) string {
 
 	// crop the image to just the bottom left text
 	croppedImage := imaging.CropAnchor(src, 600, 60, imaging.BottomLeft)
+	croppedImage = imaging.Grayscale(croppedImage)
+	croppedImage = imaging.AdjustContrast(croppedImage, 20)
+	croppedImage = imaging.Sharpen(croppedImage, 2)
+	croppedImage = imaging.Invert(croppedImage)
 	// save the resulting image to the disk
 	err = imaging.Save(croppedImage, croppedFile)
 	if err != nil {
