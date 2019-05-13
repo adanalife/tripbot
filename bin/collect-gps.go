@@ -12,22 +12,22 @@ import (
 )
 
 const (
-	screencapFile = "2018_1008_005230_049.png"
-	screencapPath = "/Volumes/usbshare1/first frame of every video"
-	croppedPath   = "/Volumes/usbshare1/cropped-corners"
+	screencapDir = "/Volumes/usbshare1/first frame of every video"
+	croppedPath  = "/Volumes/usbshare1/cropped-corners"
 )
 
-func readText(croppedFile string) string {
+// readText uses OCR to read the text from an image file
+func readText(imgFile string) string {
 	client := gosseract.NewClient()
 	defer client.Close()
-	client.SetImage(croppedFile)
+	client.SetImage(imgFile)
 	text, _ := client.Text()
 	return text
 }
 
+// cropImage cuts a dashcam screencap down to just the bottom right corner
 func cropImage(srcFilename string) string {
-
-	// we want to exit early if the cropped file already exists
+	// exit early if the cropped file already exists
 	croppedFile := filepath.Join(croppedPath, path.Base(srcFilename))
 	if fileExists(croppedFile) {
 		return croppedFile
@@ -41,13 +41,17 @@ func cropImage(srcFilename string) string {
 
 	// crop the image to just the bottom left text
 	croppedImage := imaging.CropAnchor(src, 600, 60, imaging.BottomLeft)
-	// Save the resulting image
+	// save the resulting image to the disk
 	err = imaging.Save(croppedImage, croppedFile)
+	if err != nil {
+		log.Fatalf("failed to save image: %v", err)
+	}
 	return croppedFile
 }
 
-func fileExists(f string) bool {
-	_, err := os.Stat(f)
+// fileExists simply returns true if a file exists
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
 	if os.IsNotExist(err) {
 		return false
 	}
@@ -56,18 +60,19 @@ func fileExists(f string) bool {
 
 func main() {
 
-	err := filepath.Walk(screencapPath,
+	// loop over every file in the screencapDir
+	err := filepath.Walk(screencapDir,
 		func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				return err
 			}
-			if path == screencapPath {
+			// skip the directory name itself
+			if path == screencapDir {
 				return nil
 			}
-			// log.Println("cropping", path)
-			// log.Println("cropping", path)
-			// log.Println("cropped file:", croppedImage)
+			// crop the image
 			croppedImage := cropImage(path)
+			// read off the text
 			textFromImage := readText(croppedImage)
 			fmt.Println(textFromImage)
 			return nil
