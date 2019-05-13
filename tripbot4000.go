@@ -78,7 +78,7 @@ func main() {
 
 	// all chat messages
 	client.OnPrivateMessage(func(message twitch.PrivateMessage) {
-		if strings.Contains(strings.ToLower(message.Message), "!google") {
+		if strings.Contains(strings.ToLower(message.Message), "!tripbot") {
 			client.Say(channelToJoin, "what's that now?")
 		}
 		// log.Println("private:", message.User.Name, message.Message)
