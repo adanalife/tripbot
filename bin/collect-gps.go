@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -19,40 +20,70 @@ const (
 	croppedPath  = "/Volumes/usbshare1/cropped-corners"
 )
 
+// this will hold the filename passed in via the CLI
+var videoFile string
+
+func init() {
+	flag.StringVar(&videoFile, "file", "", "File to load")
+	flag.Parse()
+}
+
 func main() {
 
-	// loop over every file in the screencapDir
-	err := filepath.Walk(screencapDir,
-		func(path string, info os.FileInfo, err error) error {
-			if err != nil {
+	if videoFile != "" {
+		split := splitOnRegex(videoFile, "\\.")
+		if len(split) < 2 {
+			log.Fatalf("you must provide a file name")
+		}
+		screencapFile := fmt.Sprintf("%s.png", split[0])
+		path := path.Join(screencapDir, screencapFile)
+
+		err := processImage(path)
+		if err != nil {
+			log.Fatalf("failed to process image: %v", err)
+		}
+
+	} else {
+
+		// loop over every file in the screencapDir
+		err := filepath.Walk(screencapDir,
+			func(path string, info os.FileInfo, err error) error {
+				if err != nil {
+					return err
+				}
+				// skip the directory name itself
+				if path == screencapDir {
+					return nil
+				}
+
+				// actually process the image
+				err = processImage(path)
 				return err
-			}
-			// skip the directory name itself
-			if path == screencapDir {
-				return nil
-			}
-
-			// crop the image
-			croppedImage := cropImage(path)
-			// read off the text
-			textFromImage := readText(croppedImage)
-			// pull out the coords
-			coordStr := extractCoords(textFromImage)
-
-			// don't do anything if we didn't get good coords
-			if coordStr == "" {
-				return nil
-			}
-
-			// fmt.Println(coordStr)
-			fmt.Println(googleMapsURL(coordStr))
-			return nil
-		})
-	// something went wrong walking the directory
-	if err != nil {
-		log.Println(err)
+			})
+		// something went wrong walking the directory
+		if err != nil {
+			log.Println(err)
+		}
 	}
 
+}
+
+func processImage(path string) error {
+	// crop the image
+	croppedImage := cropImage(path)
+	// read off the text
+	textFromImage := readText(croppedImage)
+	// pull out the coords
+	coordStr := extractCoords(textFromImage)
+
+	// don't do anything if we didn't get good coords
+	if coordStr == "" {
+		return nil
+	}
+
+	// fmt.Println(coordStr)
+	fmt.Println(googleMapsURL(coordStr))
+	return nil
 }
 
 // cropImage cuts a dashcam screencap down to just the bottom right corner
