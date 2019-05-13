@@ -17,8 +17,8 @@ import (
 const (
 	tesseractCfg        = "~/other_projects/danalol-stream/tesseract.cfg"
 	screencapDir        = "/Volumes/usbshare1/first frame of every video"
-	croppedPath         = "/Volumes/usbshare1/cropped-corners"
 	getCurrentVidScript = "/Users/dmerrick/other_projects/danalol-stream/bin/current-file.sh"
+	CroppedPath         = "/Volumes/usbshare1/cropped-corners"
 )
 
 func GetCurrentVideo() string {
@@ -28,6 +28,15 @@ func GetCurrentVideo() string {
 		log.Fatalf("failed to run script: %v", err)
 	}
 	return string(out)
+}
+
+func ScreenshotPath(videoPath string) string {
+	split := splitOnRegex(videoFile, "\\.")
+	if len(split) < 2 {
+		log.Fatalf("you must provide a valid file name")
+	}
+	screencapFile := fmt.Sprintf("%s.png", split[0])
+	return path.Join(screencapDir, screencapFile)
 }
 
 func ProcessImage(path string) error {
@@ -51,7 +60,7 @@ func ProcessImage(path string) error {
 // cropImage cuts a dashcam screencap down to just the bottom right corner
 func cropImage(srcFilename string) string {
 	// exit early if the cropped file already exists
-	croppedFile := filepath.Join(croppedPath, path.Base(srcFilename))
+	croppedFile := filepath.Join(CroppedPath, path.Base(srcFilename))
 	if fileExists(croppedFile) {
 		return croppedFile
 	}

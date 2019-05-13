@@ -80,8 +80,9 @@ func main() {
 	// all chat messages
 	client.OnPrivateMessage(func(message twitch.PrivateMessage) {
 		if strings.Contains(strings.ToLower(message.Message), "!tripbot") {
-			current := screenshot.GetCurrentVideo()
-			screenshot.ProcessImage(current)
+			currentVid := screenshot.GetCurrentVideo()
+			screenshotPath := screenshot.ScreenshotPath(currentVid)
+			screenshot.ProcessImage(screenshotPath)
 			// client.Say(channelToJoin, "what's that now?")
 		}
 		// log.Println("private:", message.User.Name, message.Message)
