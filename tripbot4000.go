@@ -99,7 +99,7 @@ func main() {
 				// extract the coordinates, generate a google maps url
 				url, err := screenshot.ProcessImage(screenshotPath)
 				if err != nil {
-					client.Say(channelToJoin, "Sorry, I couldn't figure out the coordinates this time :(")
+					client.Say(channelToJoin, "Sorry, it didn't work this time :(. Try again in a few minutes!")
 				} else {
 					client.Say(channelToJoin, fmt.Sprintf("Here's a link, hopefully it works! %s", url))
 				}
