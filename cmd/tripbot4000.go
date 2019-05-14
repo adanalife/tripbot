@@ -20,7 +20,7 @@ const (
 )
 
 // these are other bots who shouldn't get points
-// https://www.reddit.com/r/Twitch/comments/9n0nip
+// https://twitchinsights.net/bots
 var ignoredUsers = []string{
 	"nightbot",
 	"anotherttvviewer",

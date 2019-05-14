@@ -15,6 +15,7 @@ const (
 	userJoinsBucket   = "user_joins"
 )
 
+// https://twitchinsights.net/bots
 var ignoredUsers = []string{
 	"adanalife_",
 	"tripbot4000",
