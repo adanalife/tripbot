@@ -1,4 +1,5 @@
 #!/usr/bin/env ruby
+
 # this ugly script generates a playlist for FFMPEG
 
 # use the dir passed in via CLI
