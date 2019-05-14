@@ -2,8 +2,8 @@
 
 # This script takes a directory of videos and combines them
 #
-# I use it for streaming dashcam footage, and because of this I apply
-# a filter to blur out some a portion of the screen.
+# I used it for streaming dashcam footage, and because of this I
+# added a filter to blur out some a portion of the screen.
 
 # make sure we have the right arguments
 if [[ $# -eq 0 ]] ; then
