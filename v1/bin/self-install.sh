@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+# this script was used to make installing this project easier
+
 # enable SSH on the account
 sudo systemsetup -setremotelogin on
 
