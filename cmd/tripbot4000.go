@@ -38,6 +38,10 @@ var ignoredUsers = []string{
 	"zanekyber",
 	"feuerwehr",
 	"jobi_essen",
+	"freddyybot",
+	"taormina2600",
+	"avocadobadado",
+	"eubyt",
 }
 
 // the last time a google maps link was generated
