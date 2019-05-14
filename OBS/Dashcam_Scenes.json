@@ -401,6 +401,41 @@
             "mixers": 0,
             "monitoring_type": 0,
             "muted": false,
+            "name": "!tripbot",
+            "private_settings": {},
+            "push-to-mute": false,
+            "push-to-mute-delay": 0,
+            "push-to-talk": false,
+            "push-to-talk-delay": 0,
+            "settings": {
+                "color1": 4294967295,
+                "color2": 4288059030,
+                "drop_shadow": false,
+                "font": {
+                    "face": "Trebuchet MS",
+                    "flags": 0,
+                    "size": 18,
+                    "style": "Regular"
+                },
+                "from_file": false,
+                "outline": false,
+                "text": "New command: !tripbot",
+                "text_file": "/Users/dmerrick/other_projects/danalol-stream/OBS/leaderboard.txt"
+            },
+            "sync": 0,
+            "volume": 1.0
+        },
+        {
+            "balance": 0.5,
+            "deinterlace_field_order": 0,
+            "deinterlace_mode": 0,
+            "enabled": true,
+            "flags": 0,
+            "hotkeys": {},
+            "id": "text_ft2_source",
+            "mixers": 0,
+            "monitoring_type": 0,
+            "muted": false,
             "name": "rotating text",
             "private_settings": {},
             "push-to-mute": false,
@@ -1248,7 +1283,7 @@
             "push-to-talk-delay": 0,
             "settings": {
                 "loop": true,
-                "network_caching": 4000,
+                "network_caching": 10000,
                 "playback_behavior": "pause_unpause",
                 "playlist": [
                     {
@@ -16045,6 +16080,7 @@
             "flags": 0,
             "hotkeys": {
                 "OBSBasic.SelectScene": [],
+                "libobs.hide_scene_item.!tripbot": [],
                 "libobs.hide_scene_item.Grey Logo": [],
                 "libobs.hide_scene_item.STAGING test stream msg": [],
                 "libobs.hide_scene_item.Sound Flower": [],
@@ -16053,6 +16089,7 @@
                 "libobs.hide_scene_item.left corner": [],
                 "libobs.hide_scene_item.right corner": [],
                 "libobs.hide_scene_item.rotating text": [],
+                "libobs.show_scene_item.!tripbot": [],
                 "libobs.show_scene_item.Grey Logo": [],
                 "libobs.show_scene_item.STAGING test stream msg": [],
                 "libobs.show_scene_item.Sound Flower": [],
@@ -16074,7 +16111,7 @@
             "push-to-talk-delay": 0,
             "settings": {
                 "custom_size": false,
-                "id_counter": 29,
+                "id_counter": 30,
                 "items": [
                     {
                         "align": 5,
@@ -16427,6 +16464,35 @@
                         "scale": {
                             "x": 1.0,
                             "y": 1.0
+                        },
+                        "scale_filter": "disable",
+                        "visible": true
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 0,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": false,
+                        "id": 30,
+                        "locked": false,
+                        "name": "!tripbot",
+                        "pos": {
+                            "x": 1563.0,
+                            "y": 989.0
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 1.7760416269302368,
+                            "y": 1.7619047164916992
                         },
                         "scale_filter": "disable",
                         "visible": true
