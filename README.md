@@ -2,7 +2,7 @@
 
 ![](assets/stream-screencap.jpg)
 
-This is the source code to [twitch.tv/ADanaLife_](https://twitch.tv/ADanaLife_)
+This is the source code to [whereisdana.today](http://whereisdana.today)
 
 If you like it, please follow my channel. Thanks for watching!
 
