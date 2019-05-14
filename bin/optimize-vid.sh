@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 
+# this script takes a video file and generates an optimized-for-twitch version
+#TODO: finish me!
+
+# OBS outout from VLC plugin:
 # info: [x264 encoder: 'simple_h264_stream'] preset: faster
 # info: [x264 encoder: 'simple_h264_stream'] settings:
 #         rate_control: CBR
