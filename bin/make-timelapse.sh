@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+# this script generates a timelapse using a directory of screenshots
+
 if [[ $# -eq 0 ]] ; then
     echo "Usage: $0 [output filename]"
     exit 0
