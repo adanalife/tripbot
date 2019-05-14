@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 
+# this script manages the text file that OBS reads
+# most of the time the text file will be empty, but
+# occasionally it will contain the miles leaderboard
+
 echo "starting script"
 
 # trap ctrl-c and call ctrl_c()
