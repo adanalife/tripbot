@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+# this script generates frames from specific moments in each video
+
 DIR=/Volumes/usbshare1
 loglevel=error
 niceness=5
