@@ -9,7 +9,6 @@ import (
 	"os"
 	"strings"
 
-	// "github.com/kr/pretty"
 	"googlemaps.github.io/maps"
 )
 
@@ -31,7 +30,8 @@ func parseLatLng(vidStr string) (maps.LatLng, error) {
 	nIndex := strings.Index(vidStr, "N")
 	lat := vidStr[nIndex+1:]
 	lon := vidStr[1:nIndex]
-	coords := fmt.Sprintf("%s,%s", lat, lon)
+	//TODO: I hardcoded the minus sign, better to fix that properly
+	coords := fmt.Sprintf("%s,-%s", lat, lon)
 	fmt.Println(coords)
 
 	// now we can just pass the string to the library
@@ -60,16 +60,22 @@ func main() {
 		log.Fatalf("fatal error: %s", err)
 	}
 
+	//TODO: make a CustomIcon?
+	marker := maps.Marker{
+		Location: []maps.LatLng{loc},
+	}
+
 	r := &maps.StaticMapRequest{
 		Center:   *center,
-		Zoom:     *zoom,
-		Size:     "800x600", // *size,
+		Zoom:     6,         // *zoom,
+		Size:     "600x400", // *size,
 		Scale:    *scale,
 		Format:   maps.Format(*format),
 		Language: *language,
 		Region:   *region,
 		MapType:  maps.MapType(*maptype),
-		Visible:  []maps.LatLng{loc},
+		Markers:  []maps.Marker{marker},
+		// Visible:  []maps.LatLng{loc},
 	}
 
 	img, err := client.StaticMap(context.Background(), r)
@@ -77,7 +83,7 @@ func main() {
 		log.Fatalf("fatal error: %s", err)
 	}
 
-	// pretty.Println(resp)
+	// save the file
 	f, err := os.Create("map.png")
 	if err != nil {
 		log.Fatal(err)
