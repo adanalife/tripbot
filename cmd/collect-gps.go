@@ -58,7 +58,9 @@ func main() {
 				// actually process the image
 				url, err := screenshot.ProcessImage(path)
 				if err != nil {
-					log.Fatalf("failed to process image: %v", err)
+					//TODO: error loglevel?
+					log.Printf("failed to process image: %v", err)
+					return nil
 				}
 				fmt.Println(url)
 				return err
