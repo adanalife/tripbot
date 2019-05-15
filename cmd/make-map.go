@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"image/png"
 	"log"
 	"os"
+	"strings"
 
 	// "github.com/kr/pretty"
 	"googlemaps.github.io/maps"
@@ -22,6 +24,24 @@ var (
 	region   = flag.String("region", "", "Region the appropriate borders to display, based on geo-political sensitivities.")
 )
 
+func parseLatLng(vidStr string) (maps.LatLng, error) {
+	// first we have to change the string format
+	// from: W111.845329N40.774768
+	//   to: 40.774768,111.845329
+	nIndex := strings.Index(vidStr, "N")
+	lat := vidStr[nIndex+1:]
+	lon := vidStr[1:nIndex]
+	coords := fmt.Sprintf("%s,%s", lat, lon)
+	fmt.Println(coords)
+
+	// now we can just pass the string to the library
+	loc, err := maps.ParseLatLng(coords)
+	if err != nil {
+		return loc, err
+	}
+	return loc, err
+}
+
 func main() {
 	// first we must check for required ENV vars
 	googleMapsAPIKey, ok := os.LookupEnv("GOOGLE_MAPS_API_KEY")
@@ -33,15 +53,23 @@ func main() {
 		log.Fatalf("fatal error: %s", err)
 	}
 
+	// just an example
+	coords := "W111.845329N40.774768"
+	loc, err := parseLatLng(coords)
+	if err != nil {
+		log.Fatalf("fatal error: %s", err)
+	}
+
 	r := &maps.StaticMapRequest{
 		Center:   *center,
 		Zoom:     *zoom,
-		Size:     "200x200", // *size,
+		Size:     "800x600", // *size,
 		Scale:    *scale,
 		Format:   maps.Format(*format),
 		Language: *language,
 		Region:   *region,
 		MapType:  maps.MapType(*maptype),
+		Visible:  []maps.LatLng{loc},
 	}
 
 	img, err := client.StaticMap(context.Background(), r)
