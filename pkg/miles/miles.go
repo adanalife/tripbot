@@ -11,12 +11,12 @@ import (
 
 func ForUser(user string) int {
 	datastore := context.Background().Value(helpers.StoreKey)
-	duration, err := store.DurationForUser(user)
+	duration, err := datastore.DurationForUser(user)
 	if err != nil {
 		//TODO: better error here
 		log.Println(err)
 	}
-	return durationToMiles(duration)
+	return DurationToMiles(duration)
 }
 
 func DurationToMiles(dur time.Duration) int {
