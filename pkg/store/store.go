@@ -22,8 +22,8 @@ func CreateOrFindInContext() Store {
 	} else {
 		datastore := NewStore(helpers.DbPath)
 		datastore.Open()
-		context.WithValue(context.Background(), config.StoreKey, datastore)
-		return datastore
+		context.WithValue(context.Background(), helpers.StoreKey, datastore)
+		return *datastore
 	}
 }
 
