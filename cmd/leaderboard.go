@@ -4,7 +4,7 @@ import (
 	"fmt"
 	// "log"
 
-	"github.com/davecgh/go-spew/spew"
+	// "github.com/davecgh/go-spew/spew"
 	"github.com/dmerrick/danalol-stream/pkg/miles"
 	"github.com/dmerrick/danalol-stream/pkg/store"
 )
@@ -15,10 +15,8 @@ const (
 
 func main() {
 	datastore := store.CreateOrFindInContext()
-	spew.Dump(datastore)
 
 	userList := datastore.TopUsers(leaderboardSize)
-	spew.Dump(userList)
 	// if err != nil {
 	// 	log.Fatalf("unable to calculate leaderboard: %s", err)
 	// }
