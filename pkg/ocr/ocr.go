@@ -1,4 +1,4 @@
-package screenshot
+package ocr
 
 import (
 	"errors"

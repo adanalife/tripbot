@@ -8,7 +8,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/dmerrick/danalol-stream/pkg/screenshot"
+	"github.com/dmerrick/danalol-stream/pkg/ocr"
 	"github.com/dmerrick/danalol-stream/pkg/store"
 	twitch "github.com/gempir/go-twitch-irc"
 )
@@ -102,6 +102,7 @@ func main() {
 
 	// all chat messages
 	client.OnPrivateMessage(func(message twitch.PrivateMessage) {
+
 		if strings.HasPrefix(strings.ToLower(message.Message), "!help") {
 			log.Println(message.User.Name, "ran !help")
 			msg := fmt.Sprintf("%s (run !help again for more)", helpMessages[helpIndex])
@@ -114,13 +115,13 @@ func main() {
 			log.Println(message.User.Name, "ran !tripbot")
 
 			// get the currently-playing video
-			currentVid := screenshot.GetCurrentVideo()
+			currentVid := ocr.GetCurrentVideo()
 
 			// only run once every 3 minutes
 			if currentVid != lastVid {
-				screenshotPath := screenshot.ScreenshotPath(currentVid)
+				screenshotPath := ocr.ScreenshotPath(currentVid)
 				// extract the coordinates, generate a google maps url
-				url, err := screenshot.ProcessImage(screenshotPath)
+				url, err := ocr.ProcessImage(screenshotPath)
 				if err != nil {
 					client.Say(channelToJoin, "Sorry, it didn't work this time :(. Try again in a few minutes!")
 				} else {

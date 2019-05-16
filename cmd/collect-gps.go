@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/dmerrick/danalol-stream/pkg/screenshot"
+	"github.com/dmerrick/danalol-stream/pkg/ocr"
 )
 
 const (
@@ -31,12 +31,12 @@ func main() {
 		if videoFile != "" {
 			log.Fatal("you cannot use -current and -file at the same time")
 		}
-		videoFile = screenshot.GetCurrentVideo()
+		videoFile = ocr.GetCurrentVideo()
 	}
 
 	if videoFile != "" {
-		path := screenshot.ScreenshotPath(videoFile)
-		url, err := screenshot.ProcessImage(path)
+		path := ocr.ScreenshotPath(videoFile)
+		url, err := ocr.ProcessImage(path)
 		if err != nil {
 			log.Fatalf("failed to process image: %v", err)
 		}
@@ -56,7 +56,7 @@ func main() {
 				}
 
 				// actually process the image
-				url, err := screenshot.ProcessImage(path)
+				url, err := ocr.ProcessImage(path)
 				if err != nil {
 					//TODO: error loglevel?
 					log.Printf("failed to process image: %v", err)
