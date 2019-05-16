@@ -25,7 +25,6 @@ func main() {
 
 	fmt.Println("Odometer Leaderboard")
 	for _, user := range userList {
-		// fmt.Println(miles.ForUser(user), "miles:", user)
-		fmt.Println("miles:", user)
+		fmt.Println(miles.ForUser(user), "miles:", user)
 	}
 }
