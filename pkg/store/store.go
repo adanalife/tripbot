@@ -4,6 +4,8 @@ import (
 	"log"
 	"time"
 
+	// "context"
+
 	"github.com/boltdb/bolt"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 )
@@ -13,10 +15,25 @@ const (
 	userWatchedBucket = "user_watched"
 )
 
+// func CreateOrFindInContext() store.Store {
+// 	datastore := context.Background().Value(helpers.StoreKey)
+// 	if datastore != nil {
+// 		return datastore
+// 	} else {
+// 		datastore := store.NewStore()
+// 		datastore.Open()
+// 		return datastore
+// 	}
+// }
+
 // fetch the current view duration
-func currentViewDuration(user string) time.Duration {
+func (s *Store) CurrentViewDuration(user string) time.Duration {
 	var joinTime time.Time
-	err := joinTime.UnmarshalText(userJoinsBucket.Get([]byte(user)))
+	s.View(func(tx *bolt.Tx) error {
+		joinedBucket := tx.Bucket([]byte(userJoinsBucket))
+		err := joinTime.UnmarshalText(joinedBucket.Get([]byte(user)))
+		return err
+	})
 	if err != nil {
 		return 0
 	} else {
@@ -45,7 +62,7 @@ func (s *Store) TopUsers(size int) []string {
 			}
 
 			// fetch current view duration...
-			currentDuration := currentViewDuration(user)
+			currentDuration := store.CurrentViewDuration(user)
 			// ...and the previous view duration
 			duration, err := time.ParseDuration(string(v))
 			if err != nil {
