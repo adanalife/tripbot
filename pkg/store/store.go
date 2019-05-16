@@ -2,6 +2,7 @@ package store
 
 import (
 	"log"
+	"sort"
 	"time"
 
 	// "context"
@@ -29,7 +30,7 @@ const (
 // fetch the current view duration
 func (s *Store) CurrentViewDuration(user string) time.Duration {
 	var joinTime time.Time
-	s.db.View(func(tx *bolt.Tx) error {
+	err := s.db.View(func(tx *bolt.Tx) error {
 		joinedBucket := tx.Bucket([]byte(userJoinsBucket))
 		err := joinTime.UnmarshalText(joinedBucket.Get([]byte(user)))
 		return err
@@ -62,7 +63,7 @@ func (s *Store) TopUsers(size int) []string {
 			}
 
 			// fetch current view duration...
-			currentDuration := store.CurrentViewDuration(user)
+			currentDuration := CurrentViewDuration(user)
 			// ...and the previous view duration
 			duration, err := time.ParseDuration(string(v))
 			if err != nil {
