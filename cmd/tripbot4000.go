@@ -63,7 +63,7 @@ func main() {
 			msg := fmt.Sprintf("%s (run !help again for more)", helpers.HelpMessages[helpIndex])
 			client.Say(channelToJoin, msg)
 			// bump the index
-			helpIndex = (helpIndex + 1) % len(helpMessages)
+			helpIndex = (helpIndex + 1) % len(helpers.HelpMessages)
 		}
 
 		if strings.HasPrefix(strings.ToLower(message.Message), "!tripbot") {
