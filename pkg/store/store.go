@@ -56,7 +56,7 @@ func CreateOrFindInContext() *Store {
 
 func (s *Store) MilesForUser(user string) int {
 	duration := s.DurationForUser(user)
-	return DurationToMiles(duration)
+	return helpers.DurationToMiles(duration)
 }
 
 // fetch the current view duration
