@@ -8,8 +8,8 @@ import (
 )
 
 func ProjectRoot() string {
-	_, b, _, _ = runtime.Caller(0)
-	basepath = filepath.Dir(b)
+	_, b, _, _ := runtime.Caller(0)
+	basepath := filepath.Dir(b)
 	return basepath
 }
 
