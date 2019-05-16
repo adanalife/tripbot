@@ -1,15 +1,12 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"os"
-	"os/signal"
 	"strings"
-	"syscall"
 
-	"github.com/dmerrick/danalol-stream/pkg/config"
+	// "github.com/dmerrick/danalol-stream/pkg/helpers"
 	"github.com/dmerrick/danalol-stream/pkg/ocr"
 	"github.com/dmerrick/danalol-stream/pkg/store"
 	twitch "github.com/gempir/go-twitch-irc"
@@ -66,23 +63,7 @@ func main() {
 	}
 
 	// initialize the database
-	datastore := store.NewStore("tripbot.db")
-	if err := datastore.Open(); err != nil {
-		panic(err)
-	}
-
-	// catch CTRL-Cs and run datastore.Close()
-	c := make(chan os.Signal)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		<-c
-		datastore.Close()
-		os.Exit(1)
-	}()
-
-	// attach the store to the context
-	//TODO: use me
-	context.WithValue(context.Background(), config.StoreKey, datastore)
+	datastore := store.FindOrCreate()
 
 	// show the DB contents at the start
 	// datastore.PrintStats()

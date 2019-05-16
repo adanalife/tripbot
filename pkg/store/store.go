@@ -1,7 +1,6 @@
 package store
 
 import (
-	"fmt"
 	"log"
 	"os"
 	"os/signal"
