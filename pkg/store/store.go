@@ -1,7 +1,6 @@
 package store
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"os"
@@ -11,7 +10,6 @@ import (
 	"time"
 
 	"github.com/boltdb/bolt"
-	"github.com/davecgh/go-spew/spew"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 )
 
@@ -20,17 +18,18 @@ const (
 	userWatchedBucket = "user_watched"
 )
 
-func CreateOrFindInContext() *Store {
-	var datastore *Store
-	datastoreFromCtx := context.Background().Value(helpers.StoreKey)
-	if datastore != nil {
-		fmt.Println("using existing datastore")
-		return datastoreFromCtx.(*Store)
+// this stores the current datastore
+var currentDatastore *Store
+
+func FindOrCreate() *Store {
+
+	// use the pre-existing datastore if we have one
+	if currentDatastore != nil {
+		return currentDatastore
 	}
 
-	fmt.Println("creating new datastore")
 	// initialize the database
-	datastore = NewStore(helpers.DbPath)
+	datastore := NewStore(helpers.DbPath)
 	if err := datastore.Open(); err != nil {
 		panic(err)
 	}
@@ -44,9 +43,9 @@ func CreateOrFindInContext() *Store {
 		os.Exit(1)
 	}()
 
-	// attach the store to the context
-	context.WithValue(context.Background(), helpers.StoreKey, datastore)
-	spew.Dump(datastore)
+	// save the current datastore for use later
+	currentDatastore = datastore
+
 	return datastore
 }
 

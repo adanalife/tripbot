@@ -13,7 +13,7 @@ const (
 )
 
 func main() {
-	datastore := store.CreateOrFindInContext()
+	datastore := store.FindOrCreate()
 
 	userList := datastore.TopUsers(leaderboardSize)
 	// if err != nil {
