@@ -93,6 +93,7 @@ func (s *Store) TopUsers(size int) []string {
 
 func (s *Store) DurationForUser(user string) time.Duration {
 	var previousDurationWatched *time.Duration
+
 	s.db.View(func(tx *bolt.Tx) error {
 		watchedBucket := tx.Bucket([]byte(userWatchedBucket))
 
@@ -101,7 +102,7 @@ func (s *Store) DurationForUser(user string) time.Duration {
 		previousDurationWatched = &duration
 		return err
 	})
-	return &previousDurationWatched
+	return *previousDurationWatched
 }
 
 type Store struct {
