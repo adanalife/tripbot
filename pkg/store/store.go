@@ -29,7 +29,7 @@ const (
 // fetch the current view duration
 func (s *Store) CurrentViewDuration(user string) time.Duration {
 	var joinTime time.Time
-	s.View(func(tx *bolt.Tx) error {
+	s.db.View(func(tx *bolt.Tx) error {
 		joinedBucket := tx.Bucket([]byte(userJoinsBucket))
 		err := joinTime.UnmarshalText(joinedBucket.Get([]byte(user)))
 		return err
@@ -47,7 +47,7 @@ func (s *Store) TopUsers(size int) []string {
 
 	sortedValues := []int{}
 
-	s.View(func(tx *bolt.Tx) error {
+	s.db.View(func(tx *bolt.Tx) error {
 		watchedBucket := tx.Bucket([]byte(userWatchedBucket))
 		joinedBucket := tx.Bucket([]byte(userJoinsBucket))
 
