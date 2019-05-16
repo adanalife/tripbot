@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/dmerrick/danalol-stream/config"
+	"github.com/dmerrick/danalol-stream/helpers"
 )
 
 const (
@@ -12,7 +12,7 @@ const (
 )
 
 func main() {
-	db := context.Background().Value(config.StoreKey)
+	db := context.Background().Value(helpers.StoreKey)
 
 	userList, err := db.TopUsers(leaderboardSize)
 	if err != nil {

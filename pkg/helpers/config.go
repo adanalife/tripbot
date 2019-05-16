@@ -1,4 +1,4 @@
-package config
+package helpers
 
 // this is used to access the db in the context
 //TODO: this probably doesnt belong here?
