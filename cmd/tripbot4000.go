@@ -43,6 +43,16 @@ var ignoredUsers = []string{
 	"eubyt",
 }
 
+var helpMessages = []string{
+	"!tripbot: Get the current location",
+	"!map: Show a map of the whole trip",
+	"!info: Get more details on the footage",
+	"!song: Get the current music",
+}
+
+// used to determine which help message to display
+var helpIndex = 0
+
 // the most-recently processed video
 var lastVid string
 
@@ -92,6 +102,16 @@ func main() {
 
 	// all chat messages
 	client.OnPrivateMessage(func(message twitch.PrivateMessage) {
+		if strings.HasPrefix(strings.ToLower(message.Message), "!newhelp") {
+			log.Println(message.User.Name, "ran !newhelp")
+			msg := fmt.Sprintf("%s (run !help again for more)", helpMessages[helpIndex])
+			client.Say(channelToJoin, msg)
+			// bump the index
+			helpIndex = (helpIndex + 1) % len(helpMessages)
+			//TODO: remove this
+			log.Println(helpIndex)
+		}
+
 		if strings.HasPrefix(strings.ToLower(message.Message), "!tripbot") {
 			log.Println(message.User.Name, "ran !tripbot")
 
