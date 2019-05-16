@@ -4,7 +4,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/dmerrick/danalol-stream/config"
+	"github.com/dmerrick/danalol-stream/pkg/helpers"
 )
 
 func ForUser(user string) int {
