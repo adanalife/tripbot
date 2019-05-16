@@ -1,5 +1,7 @@
 package config
 
+// this is used to access the db in the context
+//TODO: this probably doesnt belong here?
 type storeContextKey string
 
 var StoreKey = storeContextKey("store")
