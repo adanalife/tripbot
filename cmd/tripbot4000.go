@@ -105,7 +105,7 @@ func main() {
 				if err != nil {
 					client.Say(channelToJoin, "Sorry, it didn't work this time :(. Try again in a few minutes!")
 				} else {
-					client.Say(channelToJoin, fmt.Sprintf("Here's a link, hopefully it works! %s", url))
+					client.Say(channelToJoin, fmt.Sprintf("If this doesn't work, try again in a few minutes: %s", url))
 				}
 				lastRun = time.Now()
 			}
