@@ -16,16 +16,16 @@ const (
 	userWatchedBucket = "user_watched"
 )
 
-// func CreateOrFindInContext() store.Store {
-// 	datastore := context.Background().Value(helpers.StoreKey)
-// 	if datastore != nil {
-// 		return datastore
-// 	} else {
-// 		datastore := store.NewStore()
-// 		datastore.Open()
-// 		return datastore
-// 	}
-// }
+func CreateOrFindInContext() store.Store {
+	datastore := context.Background().Value(helpers.StoreKey)
+	if datastore != nil {
+		return datastore
+	} else {
+		datastore := store.NewStore()
+		datastore.Open()
+		return datastore
+	}
+}
 
 // fetch the current view duration
 func (s *Store) CurrentViewDuration(user string) time.Duration {
