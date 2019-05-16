@@ -5,12 +5,82 @@ import (
 	"time"
 
 	"github.com/boltdb/bolt"
+	"github.com/dmerrick/danalol-stream/config"
 )
 
 const (
 	userJoinsBucket   = "user_joins"
 	userWatchedBucket = "user_watched"
 )
+
+// fetch the current view duration
+func currentViewDuration(user string) time.Duration {
+	var joinTime time.Time
+	err := joinTime.UnmarshalText(joinedBucket.Get([]byte(user)))
+	if err != nil {
+		return 0
+	} else {
+		return time.Since(joinTime)
+	}
+}
+
+func (s *Store) TopUsers(size int) []string {
+	var reversedMap = make(map[int]string)
+	var topUsers = []string{}
+
+	sortedValues := []int{}
+
+	s.View(func(tx *bolt.Tx) error {
+		watchedBucket := tx.Bucket([]byte(userWatchedBucket))
+		joinedBucket := tx.Bucket([]byte(userJoinsBucket))
+
+		err := watchedBucket.ForEach(func(k, v []byte) error {
+			user := string(k)
+			// don't include these in leaderboard
+			//TODO: this should be a func
+			for _, ignored := range config.IgnoredUsers {
+				if user == ignored {
+					return nil
+				}
+			}
+
+			// fetch current view duration...
+			currentDuration := currentViewDuration(user)
+			// ...and the previous view duration
+			duration, err := time.ParseDuration(string(v))
+			if err != nil {
+				return err
+			}
+			// add them together
+			intDuration := int(duration) + int(currentDuration)
+			sortedValues = append(sortedValues, intDuration)
+			reversedMap[intDuration] = user
+			return err
+		})
+
+		return err
+	})
+
+	// sort and reverse
+	sorted := sort.Sort(sort.Reverse(sort.IntSlice(sortedValues)))
+
+	// print the top 5
+	for i := 0; i < size; i++ {
+		append(topUsers, reversedMap[sortedValues[i]])
+	}
+
+	return topUsers
+}
+
+func (s *Store) DurationForUser(user string) (time.Duration, error) {
+	s.db.View(func(tx *bolt.Tx) error {
+		watchedBucket := tx.Bucket([]byte(userWatchedBucket))
+
+		// fetch the previous duration watched from the DB
+		previousDurationWatched, err = time.ParseDuration(string(watchedBucket.Get([]byte(user))))
+		return previousDurationWatched, err
+	})
+}
 
 type Store struct {
 	path string
