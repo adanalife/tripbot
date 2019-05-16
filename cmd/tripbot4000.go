@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -8,6 +9,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/ocr"
 	"github.com/dmerrick/danalol-stream/pkg/store"
 	twitch "github.com/gempir/go-twitch-irc"
@@ -78,8 +80,11 @@ func main() {
 		os.Exit(1)
 	}()
 
+	// attach the store to the context
+	ctx := context.WithValue(context.Background(), config.StoreKey, store)
+
 	// show the DB contents at the start
-	datastore.PrintStats()
+	// datastore.PrintStats()
 
 	// time to set up the Twitch client
 	client := twitch.NewClient(clientUsername, clientAuthenticationToken)
