@@ -1,7 +1,6 @@
 package store
 
 import (
-	"log"
 	"time"
 
 	"github.com/dmerrick/danalol-stream/pkg/store"
