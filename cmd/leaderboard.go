@@ -1,12 +1,12 @@
 package main
 
 import (
-	"context"
 	"fmt"
-	"log"
+	// "log"
 
-	"github.com/dmerrick/danalol-stream/pkg/helpers"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/dmerrick/danalol-stream/pkg/miles"
+	"github.com/dmerrick/danalol-stream/pkg/store"
 )
 
 const (
@@ -14,15 +14,18 @@ const (
 )
 
 func main() {
-	db := context.Background().Value(helpers.StoreKey)
+	datastore := store.CreateOrFindInContext()
+	spew.Dump(datastore)
 
-	userList, err := db.TopUsers(leaderboardSize)
-	if err != nil {
-		log.Fatalf("unable to calculate leaderboard: %s", err)
-	}
+	userList := datastore.TopUsers(leaderboardSize)
+	spew.Dump(userList)
+	// if err != nil {
+	// 	log.Fatalf("unable to calculate leaderboard: %s", err)
+	// }
 
 	fmt.Println("Odometer Leaderboard")
 	for _, user := range userList {
-		fmt.Println(miles.ForUser(user), "miles:", user)
+		// fmt.Println(miles.ForUser(user), "miles:", user)
+		fmt.Println("miles:", user)
 	}
 }
