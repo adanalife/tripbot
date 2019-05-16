@@ -101,7 +101,7 @@ func (s *Store) DurationForUser(user string) time.Duration {
 		previousDurationWatched = &duration
 		return err
 	})
-	return previousDurationWatched
+	return &previousDurationWatched
 }
 
 type Store struct {
