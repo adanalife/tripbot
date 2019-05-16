@@ -15,15 +15,15 @@ const (
 	userWatchedBucket = "user_watched"
 )
 
-func CreateOrFindInContext() Store {
+func CreateOrFindInContext() *Store {
 	datastore := context.Background().Value(helpers.StoreKey)
 	if datastore != nil {
-		return datastore.(Store)
+		return &datastore.(Store)
 	} else {
 		datastore := NewStore(helpers.DbPath)
 		datastore.Open()
 		context.WithValue(context.Background(), helpers.StoreKey, datastore)
-		return *datastore
+		return datastore
 	}
 }
 
