@@ -1,11 +1,10 @@
 package store
 
 import (
+	"context"
 	"log"
 	"sort"
 	"time"
-
-	// "context"
 
 	"github.com/boltdb/bolt"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
@@ -16,12 +15,12 @@ const (
 	userWatchedBucket = "user_watched"
 )
 
-func CreateOrFindInContext() store.Store {
+func CreateOrFindInContext() Store {
 	datastore := context.Background().Value(helpers.StoreKey)
 	if datastore != nil {
 		return datastore
 	} else {
-		datastore := store.NewStore()
+		datastore := NewStore()
 		datastore.Open()
 		return datastore
 	}
