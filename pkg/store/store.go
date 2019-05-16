@@ -27,7 +27,7 @@ func CreateOrFindInContext() *Store {
 		if err != nil {
 			log.Fatalf("error: %s", err)
 		}
-		context.WithValue(context.Background(), helpers.StoreKey, datastore)
+		context.WithValue(context.Background(), helpers.StoreKey, *datastore)
 		return datastore
 	}
 }
