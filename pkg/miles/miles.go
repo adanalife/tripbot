@@ -6,11 +6,11 @@ import (
 	"time"
 
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
-	"github.com/dmerrick/danalol-stream/pkg/store"
+	// "github.com/dmerrick/danalol-stream/pkg/store"
 )
 
 func ForUser(user string) int {
-	datastore := context.Background().Value(helpers.StoreKey)
+	datastore := helpers.CreateOrFindInContext()
 	duration, err := datastore.DurationForUser(user)
 	if err != nil {
 		//TODO: better error here
