@@ -18,13 +18,15 @@ const (
 
 func CreateOrFindInContext() *Store {
 	datastore := context.Background().Value(helpers.StoreKey)
+	spew.Dump(datastore)
 	if datastore != nil {
-
-		spew.Dump(datastore)
 		return datastore.(*Store)
 	} else {
 		datastore := NewStore(helpers.DbPath)
-		datastore.Open()
+		err := datastore.Open()
+		if err != nil {
+			log.Fatalf("error: %s", err)
+		}
 		context.WithValue(context.Background(), helpers.StoreKey, datastore)
 		return datastore
 	}
