@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/boltdb/bolt"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 )
 
@@ -18,7 +19,8 @@ const (
 func CreateOrFindInContext() *Store {
 	datastore := context.Background().Value(helpers.StoreKey)
 	if datastore != nil {
-		return datastore.(*Store)
+		spew.Dump(datastore)
+		return datastore.(Store)
 	} else {
 		datastore := NewStore(helpers.DbPath)
 		datastore.Open()
