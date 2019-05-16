@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/boltdb/bolt"
-	"github.com/dmerrick/danalol-stream/config"
+	"github.com/dmerrick/danalol-stream/pkg/helpers"
 )
 
 const (
@@ -38,7 +38,7 @@ func (s *Store) TopUsers(size int) []string {
 			user := string(k)
 			// don't include these in leaderboard
 			//TODO: this should be a func
-			for _, ignored := range config.IgnoredUsers {
+			for _, ignored := range helpers.IgnoredUsers {
 				if user == ignored {
 					return nil
 				}
