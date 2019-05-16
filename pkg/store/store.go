@@ -20,8 +20,9 @@ func CreateOrFindInContext() Store {
 	if datastore != nil {
 		return datastore
 	} else {
-		datastore := NewStore()
+		datastore := NewStore(helpers.DbPath)
 		datastore.Open()
+		context.Background().WithValue(helpers.StoreKey, datastore)
 		return datastore
 	}
 }

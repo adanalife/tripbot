@@ -6,6 +6,8 @@ type storeContextKey string
 
 var StoreKey = storeContextKey("store")
 
+var DbPath = "tripbot.db"
+
 // https://twitchinsights.net/bots
 var IgnoredUsers = []string{
 	"adanalife_",
