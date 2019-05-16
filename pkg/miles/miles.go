@@ -4,12 +4,11 @@ import (
 	"log"
 	"time"
 
-	"github.com/dmerrick/danalol-stream/pkg/helpers"
-	// "github.com/dmerrick/danalol-stream/pkg/store"
+	"github.com/dmerrick/danalol-stream/pkg/store"
 )
 
 func ForUser(user string) int {
-	datastore := helpers.CreateOrFindInContext()
+	datastore := store.CreateOrFindInContext()
 	duration, err := datastore.DurationForUser(user)
 	if err != nil {
 		//TODO: better error here
