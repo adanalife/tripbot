@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -20,19 +21,16 @@ const (
 )
 
 func CreateOrFindInContext() *Store {
-	// datastore := context.Background().Value(helpers.StoreKey)
-	// spew.Dump(datastore)
-	// if datastore != nil {
-	// 	return datastore.(*Store)
-	// } else {
-	// datastore := NewStore(helpers.DbPath)
-	// err := datastore.Open()
-	// if err != nil {
-	// 	log.Fatalf("error: %s", err)
-	// }
-	// context.WithValue(context.Background(), helpers.StoreKey, *datastore)
+	var datastore *Store
+	datastoreFromCtx := context.Background().Value(helpers.StoreKey)
+	if datastore != nil {
+		fmt.Println("using existing datastore")
+		return datastoreFromCtx.(*Store)
+	}
+
+	fmt.Println("creating new datastore")
 	// initialize the database
-	datastore := NewStore(helpers.DbPath)
+	datastore = NewStore(helpers.DbPath)
 	if err := datastore.Open(); err != nil {
 		panic(err)
 	}
@@ -47,11 +45,9 @@ func CreateOrFindInContext() *Store {
 	}()
 
 	// attach the store to the context
-	//TODO: use me
 	context.WithValue(context.Background(), helpers.StoreKey, datastore)
 	spew.Dump(datastore)
 	return datastore
-	// }
 }
 
 func (s *Store) MilesForUser(user string) int {
