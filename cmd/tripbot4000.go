@@ -7,7 +7,6 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/dmerrick/danalol-stream/pkg/screenshot"
 	"github.com/dmerrick/danalol-stream/pkg/store"
