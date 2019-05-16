@@ -3,11 +3,14 @@ package store
 import (
 	"context"
 	"log"
+	"os"
+	"os/signal"
 	"sort"
+	"syscall"
 	"time"
 
 	"github.com/boltdb/bolt"
-	// "github.com/davecgh/go-spew/spew"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 )
 
@@ -22,14 +25,38 @@ func CreateOrFindInContext() *Store {
 	// if datastore != nil {
 	// 	return datastore.(*Store)
 	// } else {
+	// datastore := NewStore(helpers.DbPath)
+	// err := datastore.Open()
+	// if err != nil {
+	// 	log.Fatalf("error: %s", err)
+	// }
+	// context.WithValue(context.Background(), helpers.StoreKey, *datastore)
+	// initialize the database
 	datastore := NewStore(helpers.DbPath)
-	err := datastore.Open()
-	if err != nil {
-		log.Fatalf("error: %s", err)
+	if err := datastore.Open(); err != nil {
+		panic(err)
 	}
-	context.WithValue(context.Background(), helpers.StoreKey, *datastore)
+
+	// catch CTRL-Cs and run datastore.Close()
+	c := make(chan os.Signal)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-c
+		datastore.Close()
+		os.Exit(1)
+	}()
+
+	// attach the store to the context
+	//TODO: use me
+	context.WithValue(context.Background(), helpers.StoreKey, datastore)
+	spew.Dump(datastore)
 	return datastore
 	// }
+}
+
+func (s *Store) MilesForUser(user string) int {
+	duration := s.DurationForUser(user)
+	return DurationToMiles(duration)
 }
 
 // fetch the current view duration
@@ -76,7 +103,7 @@ func (s *Store) TopUsers(size int) []string {
 				return err
 			}
 			// add them together
-			intDuration := int(duration) + int(currentDuration)
+			intDuration := int(duration) // + int(currentDuration)
 			sortedValues = append(sortedValues, intDuration)
 			reversedMap[intDuration] = user
 			return err
