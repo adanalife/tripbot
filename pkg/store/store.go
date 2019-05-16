@@ -21,7 +21,7 @@ func CreateOrFindInContext() *Store {
 	if datastore != nil {
 
 		spew.Dump(datastore)
-		return &datastore.(*Store)
+		return datastore.(*Store)
 	} else {
 		datastore := NewStore(helpers.DbPath)
 		datastore.Open()
