@@ -44,8 +44,8 @@ var ignoredUsers = []string{
 	"eubyt",
 }
 
-// the last time a google maps link was generated
-var lastRun time.Time
+// the most-recently processed video
+var lastVid string
 
 func main() {
 	// first we must check for required ENV vars
@@ -95,10 +95,11 @@ func main() {
 	client.OnPrivateMessage(func(message twitch.PrivateMessage) {
 		if strings.HasPrefix(strings.ToLower(message.Message), "!tripbot") {
 
+			// get the currently-playing video
+			currentVid := screenshot.GetCurrentVideo()
+
 			// only run once every 3 minutes
-			if time.Now().Sub(lastRun) >= 3*time.Minute {
-				// get the currently-playing video
-				currentVid := screenshot.GetCurrentVideo()
+			if currentVid == lastVid {
 				screenshotPath := screenshot.ScreenshotPath(currentVid)
 				// extract the coordinates, generate a google maps url
 				url, err := screenshot.ProcessImage(screenshotPath)
@@ -107,7 +108,8 @@ func main() {
 				} else {
 					client.Say(channelToJoin, fmt.Sprintf("If this doesn't work, try again in a few minutes: %s", url))
 				}
-				lastRun = time.Now()
+				// update the last vid
+				lastVid = currentVid
 			}
 
 		}
