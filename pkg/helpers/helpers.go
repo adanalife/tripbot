@@ -9,7 +9,7 @@ func DurationToMiles(dur time.Duration) int {
 }
 
 // returns true if a given user should be ignored
-func userIsIgnored(user string) bool {
+func UserIsIgnored(user string) bool {
 	for _, ignored := range IgnoredUsers {
 		if user == ignored {
 			return true
