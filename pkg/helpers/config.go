@@ -27,3 +27,10 @@ var IgnoredUsers = []string{
 	"avocadobadado",
 	"eubyt",
 }
+
+var HelpMessages = []string{
+	"!tripbot: Get the current location",
+	"!map: Show a map of the whole trip",
+	"!info: Get more details on the footage",
+	"!song: Get the current music",
+}

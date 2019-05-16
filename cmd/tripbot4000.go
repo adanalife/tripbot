@@ -17,13 +17,6 @@ const (
 	channelToJoin  = "adanalife_"
 )
 
-var helpMessages = []string{
-	"!tripbot: Get the current location",
-	"!map: Show a map of the whole trip",
-	"!info: Get more details on the footage",
-	"!song: Get the current music",
-}
-
 // used to determine which help message to display
 var helpIndex = 0
 
@@ -67,7 +60,7 @@ func main() {
 
 		if strings.HasPrefix(strings.ToLower(message.Message), "!help") {
 			log.Println(message.User.Name, "ran !help")
-			msg := fmt.Sprintf("%s (run !help again for more)", helpMessages[helpIndex])
+			msg := fmt.Sprintf("%s (run !help again for more)", helpers.HelpMessages[helpIndex])
 			client.Say(channelToJoin, msg)
 			// bump the index
 			helpIndex = (helpIndex + 1) % len(helpMessages)
