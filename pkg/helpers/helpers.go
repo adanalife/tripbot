@@ -1,8 +1,17 @@
 package helpers
 
 import (
+	"fmt"
+	"path/filepath"
+	"runtime"
 	"time"
 )
+
+func ProjectRoot() string {
+	_, b, _, _ = runtime.Caller(0)
+	basepath = filepath.Dir(b)
+	return basepath
+}
 
 func DurationToMiles(dur time.Duration) int {
 	return int(dur.Minutes() / 10)
