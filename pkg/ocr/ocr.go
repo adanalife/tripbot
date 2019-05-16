@@ -12,11 +12,11 @@ import (
 	"strings"
 
 	"github.com/disintegration/imaging"
+	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	"github.com/otiai10/gosseract"
 )
 
 const (
-	tesseractCfg        = "~/other_projects/danalol-stream/tesseract.cfg"
 	screencapDir        = "/Volumes/usbshare1/first frame of every video"
 	getCurrentVidScript = "/Users/dmerrick/other_projects/danalol-stream/bin/current-file.sh"
 	croppedPath         = "/Volumes/usbshare1/cropped-corners"
@@ -75,10 +75,13 @@ func cropImage(srcFilename string) string {
 
 	// crop the image to just the bottom left text
 	croppedImage := imaging.CropAnchor(src, 600, 60, imaging.BottomLeft)
+
+	// apply some tweaks to make it easier to read
 	croppedImage = imaging.Grayscale(croppedImage)
 	croppedImage = imaging.AdjustContrast(croppedImage, 20)
 	croppedImage = imaging.Sharpen(croppedImage, 2)
 	croppedImage = imaging.Invert(croppedImage)
+
 	// save the resulting image to the disk
 	err = imaging.Save(croppedImage, croppedFile)
 	if err != nil {
@@ -93,7 +96,7 @@ func readText(imgFile string) string {
 	defer client.Close()
 
 	// set up tesseract to improve OCR accuracy
-	client.SetConfigFile(tesseractCfg)
+	client.SetConfigFile(path.Join(helpers.ProjectRoot(), "configs/tesseract.cfg"))
 	client.SetWhitelist("NSEW.1234567890MPH")
 	client.SetBlacklist("abcdefghijklmnopqrstuvwxyz/\\")
 	// https://github.com/tesseract-ocr/tesseract/wiki/ImproveQuality#page-segmentation-method
