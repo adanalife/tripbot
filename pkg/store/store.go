@@ -17,7 +17,7 @@ const (
 )
 
 func CreateOrFindInContext() *Store {
-	datastore := context.Background().Value(helpers.StoreKey).(Store)
+	datastore := context.Background().Value(helpers.StoreKey)
 	if datastore != nil {
 		spew.Dump(datastore)
 		return &datastore
