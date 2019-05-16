@@ -98,7 +98,7 @@ func (s *Store) DurationForUser(user string) time.Duration {
 
 		// fetch the previous duration watched from the DB
 		duration, err := time.ParseDuration(string(watchedBucket.Get([]byte(user))))
-		previousDurationWatched = duration
+		previousDurationWatched = &duration
 		return err
 	})
 	return previousDurationWatched
