@@ -1,6 +1,7 @@
 package miles
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/dmerrick/danalol-stream/pkg/store"
@@ -8,6 +9,7 @@ import (
 
 func ForUser(user string) int {
 	datastore := store.CreateOrFindInContext()
+	fmt.Println(user)
 	duration := datastore.DurationForUser(user)
 	return DurationToMiles(duration)
 }
