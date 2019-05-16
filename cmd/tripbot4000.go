@@ -98,7 +98,7 @@ func main() {
 			currentVid := screenshot.GetCurrentVideo()
 
 			// only run once every 3 minutes
-			if currentVid == lastVid {
+			if currentVid != lastVid {
 				screenshotPath := screenshot.ScreenshotPath(currentVid)
 				// extract the coordinates, generate a google maps url
 				url, err := screenshot.ProcessImage(screenshotPath)
