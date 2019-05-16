@@ -97,9 +97,8 @@ func readText(imgFile string) string {
 
 	// set up tesseract to improve OCR accuracy
 	client.SetConfigFile(path.Join(helpers.ProjectRoot(), "configs/tesseract.cfg"))
-	client.SetWhitelist("NSEW.1234567890MPH")
-	client.SetBlacklist("abcdefghijklmnopqrstuvwxyz/\\")
 	// https://github.com/tesseract-ocr/tesseract/wiki/ImproveQuality#page-segmentation-method
+	//TODO: use single line
 	client.SetPageSegMode(gosseract.PSM_SINGLE_BLOCK)
 
 	// read the file
