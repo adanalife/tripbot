@@ -81,7 +81,8 @@ func main() {
 	}()
 
 	// attach the store to the context
-	ctx := context.WithValue(context.Background(), config.StoreKey, store)
+	//TODO: use me
+	context.WithValue(context.Background(), config.StoreKey, datastore)
 
 	// show the DB contents at the start
 	// datastore.PrintStats()
