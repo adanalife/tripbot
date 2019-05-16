@@ -102,14 +102,12 @@ func main() {
 
 	// all chat messages
 	client.OnPrivateMessage(func(message twitch.PrivateMessage) {
-		if strings.HasPrefix(strings.ToLower(message.Message), "!newhelp") {
-			log.Println(message.User.Name, "ran !newhelp")
+		if strings.HasPrefix(strings.ToLower(message.Message), "!help") {
+			log.Println(message.User.Name, "ran !help")
 			msg := fmt.Sprintf("%s (run !help again for more)", helpMessages[helpIndex])
 			client.Say(channelToJoin, msg)
 			// bump the index
 			helpIndex = (helpIndex + 1) % len(helpMessages)
-			//TODO: remove this
-			log.Println(helpIndex)
 		}
 
 		if strings.HasPrefix(strings.ToLower(message.Message), "!tripbot") {
