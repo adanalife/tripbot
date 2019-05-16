@@ -93,6 +93,7 @@ func main() {
 	// all chat messages
 	client.OnPrivateMessage(func(message twitch.PrivateMessage) {
 		if strings.HasPrefix(strings.ToLower(message.Message), "!tripbot") {
+			log.Println(message.User.Name, "ran !tripbot")
 
 			// get the currently-playing video
 			currentVid := screenshot.GetCurrentVideo()
