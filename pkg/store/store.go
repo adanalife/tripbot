@@ -17,19 +17,19 @@ const (
 )
 
 func CreateOrFindInContext() *Store {
-	datastore := context.Background().Value(helpers.StoreKey)
-	spew.Dump(datastore)
-	if datastore != nil {
-		return datastore.(*Store)
-	} else {
-		datastore := NewStore(helpers.DbPath)
-		err := datastore.Open()
-		if err != nil {
-			log.Fatalf("error: %s", err)
-		}
-		context.WithValue(context.Background(), helpers.StoreKey, *datastore)
-		return datastore
+	// datastore := context.Background().Value(helpers.StoreKey)
+	// spew.Dump(datastore)
+	// if datastore != nil {
+	// 	return datastore.(*Store)
+	// } else {
+	datastore := NewStore(helpers.DbPath)
+	err := datastore.Open()
+	if err != nil {
+		log.Fatalf("error: %s", err)
 	}
+	context.WithValue(context.Background(), helpers.StoreKey, *datastore)
+	return datastore
+	// }
 }
 
 // fetch the current view duration
