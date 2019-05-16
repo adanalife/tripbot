@@ -92,14 +92,15 @@ func (s *Store) TopUsers(size int) []string {
 }
 
 func (s *Store) DurationForUser(user string) time.Duration {
-	previousDurationWatched, err := s.db.View(func(tx *bolt.Tx) (time.Duration, error) {
+	var previousDurationWatched *time.Duration
+	s.db.View(func(tx *bolt.Tx) error {
 		watchedBucket := tx.Bucket([]byte(userWatchedBucket))
 
 		// fetch the previous duration watched from the DB
-		previousDurationWatched, err := time.ParseDuration(string(watchedBucket.Get([]byte(user))))
-		return previousDurationWatched, err
+		duration, err := time.ParseDuration(string(watchedBucket.Get([]byte(user))))
+		previousDurationWatched = duration
+		return err
 	})
-	//TODO: handle err here
 	return previousDurationWatched
 }
 
