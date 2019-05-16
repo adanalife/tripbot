@@ -22,7 +22,7 @@ func CreateOrFindInContext() Store {
 	} else {
 		datastore := NewStore(helpers.DbPath)
 		datastore.Open()
-		context.Background().WithValue(helpers.StoreKey, datastore)
+		context.WithValue(context.Background(), config.StoreKey, datastore)
 		return datastore
 	}
 }
