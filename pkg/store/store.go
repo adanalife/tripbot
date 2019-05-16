@@ -16,7 +16,7 @@ const (
 // fetch the current view duration
 func currentViewDuration(user string) time.Duration {
 	var joinTime time.Time
-	err := joinTime.UnmarshalText(joinedBucket.Get([]byte(user)))
+	err := joinTime.UnmarshalText(userJoinsBucket.Get([]byte(user)))
 	if err != nil {
 		return 0
 	} else {
@@ -66,7 +66,7 @@ func (s *Store) TopUsers(size int) []string {
 
 	// print the top 5
 	for i := 0; i < size; i++ {
-		append(topUsers, reversedMap[sortedValues[i]])
+		topUsers = append(topUsers, reversedMap[sortedValues[i]])
 	}
 
 	return topUsers
