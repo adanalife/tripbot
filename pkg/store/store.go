@@ -63,7 +63,7 @@ func (s *Store) TopUsers(size int) []string {
 			}
 
 			// fetch current view duration...
-			currentDuration := CurrentViewDuration(user)
+			currentDuration := s.CurrentViewDuration(user)
 			// ...and the previous view duration
 			duration, err := time.ParseDuration(string(v))
 			if err != nil {
@@ -80,7 +80,7 @@ func (s *Store) TopUsers(size int) []string {
 	})
 
 	// sort and reverse
-	sorted := sort.Sort(sort.Reverse(sort.IntSlice(sortedValues)))
+	sort.Sort(sort.Reverse(sort.IntSlice(sortedValues)))
 
 	// print the top 5
 	for i := 0; i < size; i++ {
@@ -90,7 +90,7 @@ func (s *Store) TopUsers(size int) []string {
 	return topUsers
 }
 
-func (s *Store) DurationForUser(user string) (time.Duration, error) {
+func (s *Store) DurationForUser(user string) time.Duration {
 	var previousDurationWatched time.Duration
 	s.db.View(func(tx *bolt.Tx) error {
 		watchedBucket := tx.Bucket([]byte(userWatchedBucket))
