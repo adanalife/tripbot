@@ -1,15 +1,18 @@
 package helpers
 
 import (
+	"path"
 	"path/filepath"
 	"runtime"
 	"time"
 )
 
+// returns the root directory of the project
 func ProjectRoot() string {
 	_, b, _, _ := runtime.Caller(0)
-	basepath := filepath.Dir(b)
-	return basepath
+	helperPath := filepath.Dir(b)
+	projectRoot := path.Join(helperPath, "../..")
+	return path.Clean(projectRoot)
 }
 
 func DurationToMiles(dur time.Duration) int {
