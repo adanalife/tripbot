@@ -9,7 +9,7 @@ import (
 
 func ForUser(user string) int {
 	datastore := store.CreateOrFindInContext()
-	duration, err := datastore.DurationForUser(user)
+	duration := datastore.DurationForUser(user)
 	if err != nil {
 		//TODO: better error here
 		log.Println(err)
