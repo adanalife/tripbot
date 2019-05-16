@@ -69,7 +69,7 @@ func (s *Store) TopUsers(size int) []string {
 			}
 
 			// fetch current view duration...
-			currentDuration := s.CurrentViewDuration(user)
+			// currentDuration := s.CurrentViewDuration(user)
 			// ...and the previous view duration
 			duration, err := time.ParseDuration(string(v))
 			if err != nil {
