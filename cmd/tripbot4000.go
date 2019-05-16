@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	// "github.com/dmerrick/danalol-stream/pkg/helpers"
+	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	"github.com/dmerrick/danalol-stream/pkg/ocr"
 	"github.com/dmerrick/danalol-stream/pkg/store"
 	twitch "github.com/gempir/go-twitch-irc"
@@ -16,31 +16,6 @@ const (
 	clientUsername = "TripBot4000"
 	channelToJoin  = "adanalife_"
 )
-
-// these are other bots who shouldn't get points
-// https://twitchinsights.net/bots
-var ignoredUsers = []string{
-	"nightbot",
-	"anotherttvviewer",
-	"apricotdrupefruit",
-	"commanderroot",
-	"communityshowcase",
-	"electricallongboard",
-	"logviewer",
-	"lurxx",
-	"p0lizei_",
-	"slocool",
-	"unixchat",
-	"v_and_k",
-	"virgoproz",
-	"zanekyber",
-	"feuerwehr",
-	"jobi_essen",
-	"freddyybot",
-	"taormina2600",
-	"avocadobadado",
-	"eubyt",
-}
 
 var helpMessages = []string{
 	"!tripbot: Get the current location",
@@ -72,13 +47,13 @@ func main() {
 	client := twitch.NewClient(clientUsername, clientAuthenticationToken)
 
 	client.OnUserJoinMessage(func(joinMessage twitch.UserJoinMessage) {
-		if !userIsIgnored(joinMessage.User) {
+		if !helpers.UserIsIgnored(joinMessage.User) {
 			datastore.RecordUserJoin(joinMessage.User)
 		}
 	})
 
 	client.OnUserPartMessage(func(partMessage twitch.UserPartMessage) {
-		if !userIsIgnored(partMessage.User) {
+		if !helpers.UserIsIgnored(partMessage.User) {
 			datastore.RecordUserPart(partMessage.User)
 		}
 	})
@@ -130,14 +105,4 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-}
-
-// returns true if a given user should be ignored
-func userIsIgnored(user string) bool {
-	for _, ignored := range ignoredUsers {
-		if user == ignored {
-			return true
-		}
-	}
-	return false
 }
