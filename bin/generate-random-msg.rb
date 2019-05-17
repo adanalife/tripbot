@@ -15,8 +15,6 @@ possible_messages = [
   "Type !help in chat for instructions",
   "Type !help in chat for instructions",
   "Type !help in chat for instructions",
-  "Type !help in chat for instructions",
-  "Type !help in chat for instructions",
   "Sub goal #1 (emotes): #{sub_goal}",
   "Please leave feedback in the comments <3",
   "Subscribe with Twitch Prime <3",

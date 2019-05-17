@@ -77,7 +77,7 @@ func main() {
 			case miles >= 250:
 				msg = "Holy crap! @%s has %d miles!"
 			default:
-				msg = "@%s has %d miles"
+				msg = "@%s has %d miles. Earn 1 mile every 10 minutes by watching the stream"
 			}
 			msg = fmt.Sprintf(msg, user, miles)
 			client.Say(channelToJoin, msg)
