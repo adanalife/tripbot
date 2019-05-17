@@ -69,7 +69,17 @@ func main() {
 		if strings.HasPrefix(strings.ToLower(message.Message), "!miles") {
 			user := message.User.Name
 			log.Println(user, "ran !miles")
-			msg := fmt.Sprintf("@%s has %s miles", user, store.MilesForUser(user))
+			miles := datastore.MilesForUser(user)
+			msg := ""
+			switch {
+			case miles == 1:
+				msg = "@%s has only %d mile"
+			case miles >= 250:
+				msg = "Holy crap! @%s has %d miles!"
+			default:
+				msg = "%s has %d miles"
+			}
+			msg = fmt.Sprintf(msg, user, miles)
 			client.Say(channelToJoin, msg)
 		}
 
