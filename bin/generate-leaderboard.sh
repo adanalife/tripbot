@@ -17,7 +17,7 @@ function ctrl_c() {
 while true; do
 	if (( RANDOM % 8 == 0 )); then
 		cp tripbot.db tripbot-copy.db
-		go run cmd/tripbot4000-leaderboard.go > OBS/leaderboard.txt
+		go run cmd/leaderboard.go > OBS/leaderboard.txt
 		# make a copy for the generate message script
 		cp OBS/leaderboard.txt OBS/leaderboard-copy.txt
 	else
