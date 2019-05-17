@@ -50,7 +50,7 @@ func FindOrCreate() *Store {
 
 func (s *Store) MilesForUser(user string) int {
 	prevDuration := s.DurationForUser(user)
-	currDuration := s.DurationForUser(user)
+	currDuration := s.CurrentViewDuration(user)
 	return helpers.DurationToMiles(prevDuration + currDuration)
 }
 
