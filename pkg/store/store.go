@@ -49,8 +49,9 @@ func FindOrCreate() *Store {
 }
 
 func (s *Store) MilesForUser(user string) int {
-	duration := s.DurationForUser(user)
-	return helpers.DurationToMiles(duration)
+	prevDuration := s.DurationForUser(user)
+	currDuration := s.DurationForUser(user)
+	return helpers.DurationToMiles(prevDuration + currDuration)
 }
 
 // fetch the current view duration
