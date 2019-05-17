@@ -26,7 +26,7 @@ func GetCurrentVideo() string {
 	// run the shell script to get currently-playing video
 	out, err := exec.Command(getCurrentVidScript).Output()
 	if err != nil {
-		log.Fatalf("failed to run script: %v", err)
+		log.Printf("failed to run script: %v", err)
 	}
 	return string(out)
 }
@@ -34,7 +34,7 @@ func GetCurrentVideo() string {
 func ScreenshotPath(videoFile string) string {
 	split := splitOnRegex(videoFile, "\\.")
 	if len(split) < 2 {
-		log.Fatalf("you must provide a valid file name")
+		log.Printf("you must provide a valid file name")
 	}
 	screencapFile := fmt.Sprintf("%s.png", split[0])
 	return path.Join(screencapDir, screencapFile)
@@ -70,7 +70,7 @@ func cropImage(srcFilename string) string {
 	// open the image
 	src, err := imaging.Open(srcFilename)
 	if err != nil {
-		log.Fatalf("failed to open image: %v", err)
+		log.Printf("failed to open image: %v", err)
 	}
 
 	// crop the image to just the bottom left text
@@ -85,7 +85,7 @@ func cropImage(srcFilename string) string {
 	// save the resulting image to the disk
 	err = imaging.Save(croppedImage, croppedFile)
 	if err != nil {
-		log.Fatalf("failed to save image: %v", err)
+		log.Printf("failed to save image: %v", err)
 	}
 	return croppedFile
 }
@@ -105,7 +105,7 @@ func readText(imgFile string) string {
 	client.SetImage(imgFile)
 	text, err := client.Text()
 	if err != nil {
-		log.Fatalf("failed to read text: %v", err)
+		log.Printf("failed to read text: %v", err)
 	}
 	return text
 }
