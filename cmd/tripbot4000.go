@@ -66,6 +66,13 @@ func main() {
 			helpIndex = (helpIndex + 1) % len(helpers.HelpMessages)
 		}
 
+		if strings.HasPrefix(strings.ToLower(message.Message), "!miles") {
+			user := message.User.Name
+			log.Println(user, "ran !miles")
+			msg := fmt.Sprintf("@%s has %s miles", user, store.MilesForUser(user))
+			client.Say(channelToJoin, msg)
+		}
+
 		if strings.HasPrefix(strings.ToLower(message.Message), "!tripbot") {
 			log.Println(message.User.Name, "ran !tripbot")
 
