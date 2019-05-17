@@ -29,8 +29,9 @@ var IgnoredUsers = []string{
 }
 
 var HelpMessages = []string{
-	"!tripbot: Get the current location",
+	"!tripbot: Get the current location (beta)",
 	"!map: Show a map of the whole trip",
 	"!info: Get more details on the footage",
 	"!song: Get the current music",
+	"!miles: See your current miles",
 }
