@@ -65,9 +65,8 @@ func (s *Store) CurrentViewDuration(user string) time.Duration {
 	if err != nil {
 		log.Printf("encountered error getting current view duration: %s", err)
 		return 0
-	} else {
-		return time.Since(joinTime)
 	}
+	return time.Since(joinTime)
 }
 
 func (s *Store) TopUsers(size int) []string {
@@ -210,6 +209,9 @@ func (s *Store) RecordUserJoin(user string) {
 	s.db.Update(func(tx *bolt.Tx) error {
 		joinedBucket := tx.Bucket([]byte(userJoinsBucket))
 		currentTime, err := time.Now().MarshalText()
+		if err != nil {
+			return err
+		}
 		err = joinedBucket.Put([]byte(user), []byte(currentTime))
 		return err
 	})
