@@ -134,10 +134,8 @@ func main() {
 
 			// save the image
 			err = saveImage(img, fullImgFilename)
-			if err != nil {
-				fmt.Println(imgFilename, "created!")
-			}
 
+			fmt.Println(imgFilename, "created!")
 			index = index + 1
 			return err
 		})
