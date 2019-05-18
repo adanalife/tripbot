@@ -101,7 +101,7 @@ func main() {
 
 			loc, err := helpers.ParseLatLng(coordStr)
 			if err != nil {
-				fmt.Println(imgFilename, "coords invalid", err)
+				fmt.Println(imgFilename, "coords invalid")
 				return nil
 			}
 
