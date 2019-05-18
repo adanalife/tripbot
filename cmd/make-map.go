@@ -32,7 +32,13 @@ func saveImage(img image.Image, imgPath string) error {
 	return err
 }
 
-func makeGoogleMap(c *maps.Client, loc maps.LatLng, mapPath maps.Path) (image.Image, error) {
+func makeGoogleMap(c *maps.Client, loc maps.LatLng, pathPoints []maps.LatLng) (image.Image, error) {
+	// create the path
+	mapPath := maps.Path{
+		Location: append(pathPoints, loc),
+	}
+
+	// add a marker for current location
 	//TODO custom icon
 	marker := maps.Marker{
 		Location: []maps.LatLng{loc},
@@ -87,18 +93,14 @@ func main() {
 			imgFilename := filepath.Base(path)
 			fullImgFilename := gopath.Join(config.MapsOutputDir, imgFilename)
 
-			// // check if file already exists
-			// if helpers.FileExists(fullImgFilename) {
-			// 	fmt.Println(imgFilename, "already exists")
-			// 	return nil
-			// }
-
+			// extract the coords from the image
 			coordStr, err := ocr.CoordsFromImage(path)
 			if err != nil {
 				fmt.Println(imgFilename, "coords not found")
 				return nil
 			}
 
+			// convert to a LatLng
 			loc, err := helpers.ParseLatLng(coordStr)
 			if err != nil {
 				fmt.Println(imgFilename, "coords invalid")
@@ -122,12 +124,8 @@ func main() {
 				return nil
 			}
 
-			mapPath := maps.Path{
-				Location: append(pathPoints, loc),
-			}
-
 			// create the google map
-			img, err := makeGoogleMap(client, loc, mapPath)
+			img, err := makeGoogleMap(client, loc, pathPoints)
 			if err != nil {
 				fmt.Println(imgFilename, "error from gmaps api", err)
 			}
