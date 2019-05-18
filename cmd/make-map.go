@@ -67,6 +67,23 @@ func main() {
 
 			fmt.Println(imgFilename)
 
+			// only update the path every 5 frames
+			if index%5 == 0 {
+				if len(pathPoints) > 24 {
+					// remove the oldest element
+					pathPoints = pathPoints[1:]
+				}
+
+				// append the current location to the list
+				pathPoints = append(pathPoints, loc)
+			}
+
+			// fmt.Println(len(pathPoints))
+
+			mapPath := maps.Path{
+				Location: append(pathPoints, loc),
+			}
+
 			marker := maps.Marker{
 				//TODO custom icon
 				// CustomIcon: maps.CustomIcon{
@@ -77,26 +94,8 @@ func main() {
 				Location: []maps.LatLng{loc},
 			}
 
-			// update path every 5 loops
-			if index%5 == 0 {
-				// create a trail
-				if len(pathPoints) > 25 {
-					// remove the oldest element
-					pathPoints = pathPoints[1:]
-				}
-
-				// append the current location to the list
-				pathPoints = append(pathPoints, loc)
-			}
-
-			fmt.Println(len(pathPoints))
-
-			mapPath := maps.Path{
-				Location: append(pathPoints, loc),
-			}
-
 			r := &maps.StaticMapRequest{
-				Center:   "",
+				Center:   loc.String(),
 				Zoom:     6,
 				Size:     "600x400",
 				Scale:    -1,
