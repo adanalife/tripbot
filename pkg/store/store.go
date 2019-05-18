@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/boltdb/bolt"
-	"github.com/dmerrick/danalol-stream/pkg/helpers"
 )
 
 // this stores the current datastore
