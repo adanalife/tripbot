@@ -13,7 +13,8 @@ const (
 )
 
 func main() {
-	datastore := store.FindOrCreate()
+	db := "tripbot-copy.db"
+	datastore := store.FindOrCreate(db)
 
 	userList := datastore.TopUsers(leaderboardSize)
 	// if err != nil {

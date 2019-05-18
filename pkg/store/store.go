@@ -14,14 +14,19 @@ import (
 // this stores the current datastore
 var currentDatastore *Store
 
-func FindOrCreate() *Store {
+func FindOrCreate(dbFile string) *Store {
 	// use the pre-existing datastore if we have one
 	if currentDatastore != nil {
 		return currentDatastore
 	}
 
 	// initialize the database
-	datastore := NewStore(helpers.DbPath)
+	if dbFile != "" {
+		datastore := NewStore(helpers.DbPath)
+	} else {
+		datastore := NewStore(dbFile)
+	}
+
 	if err := datastore.Open(); err != nil {
 		panic(err)
 	}
