@@ -77,6 +77,17 @@ func main() {
 				return nil
 			}
 
+			// this is where we will save the map image
+			imgFilename := filepath.Base(path)
+
+			// check if file already exists
+			_, err = os.Stat(imgFilename)
+			if err == nil {
+				fmt.Println(imgFilename, "already exists")
+			}
+
+			fmt.Println(imgFilename)
+
 			// crop the image
 			croppedImage := ocr.CropImage(path)
 			// read off the text
@@ -85,9 +96,8 @@ func main() {
 			coordStr := ocr.ExtractCoords(textFromImage)
 
 			loc, err := parseLatLng(coordStr)
-
 			if err != nil {
-				log.Printf("fatal error: %s", err)
+				log.Printf("parsing error: %s", err)
 				return nil
 			}
 
@@ -114,23 +124,19 @@ func main() {
 				log.Printf("staticmap fatal error: %s", err)
 			}
 
-			// save the file
-			imgFilename := filepath.Base(path)
-
-			fmt.Println(imgFilename)
-
+			// actually create the image
 			f, err := os.Create(imgFilename)
 			if err != nil {
-				log.Fatal(err)
+				log.Println(err)
 			}
 
 			if err := png.Encode(f, img); err != nil {
 				f.Close()
-				log.Fatal(err)
+				log.Println(err)
 			}
 
 			if err := f.Close(); err != nil {
-				log.Fatal(err)
+				log.Println(err)
 			}
 			return err
 		})
