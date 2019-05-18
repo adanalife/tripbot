@@ -32,7 +32,7 @@ func main() {
 
 	// initialize the database
 	//TODO: empty string is confusing
-	datastore := store.FindOrCreate("")
+	datastore := store.FindOrCreate(helpers.DbPath)
 
 	// time to set up the Twitch client
 	client := twitch.NewClient(clientUsername, clientAuthenticationToken)
