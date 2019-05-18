@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"image/png"
@@ -10,9 +9,9 @@ import (
 	"os"
 	p "path"
 	"path/filepath"
-	"strings"
 
 	"github.com/dmerrick/danalol-stream/pkg/config"
+	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	"github.com/dmerrick/danalol-stream/pkg/ocr"
 	"googlemaps.github.io/maps"
 )
@@ -27,32 +26,6 @@ var (
 	language = flag.String("language", "", "Language defines the language to use for display of labels on map tiles.")
 	region   = flag.String("region", "", "Region the appropriate borders to display, based on geo-political sensitivities.")
 )
-
-func parseLatLng(vidStr string) (maps.LatLng, error) {
-	// first we have to change the string format
-	// from: W111.845329N40.774768
-	//   to: 40.774768,111.845329
-	nIndex := strings.Index(vidStr, "N")
-
-	// check if we even found an N
-	if nIndex < 0 {
-		empty, _ := maps.ParseLatLng("")
-		return empty, errors.New("can't find an N in the string")
-	}
-
-	// split up ad lat and long
-	lat := vidStr[nIndex+1:]
-	lon := vidStr[1:nIndex]
-	//TODO: I hardcoded the minus sign, better to fix that properly
-	coords := fmt.Sprintf("%s,-%s", lat, lon)
-
-	// fmt.Println(coords)
-
-	// now we can just pass the string to the library
-	loc, err := maps.ParseLatLng(coords)
-
-	return loc, err
-}
 
 func main() {
 	// first we must check for required ENV vars
@@ -88,16 +61,15 @@ func main() {
 				return nil
 			}
 
-			// crop the image
-			croppedImage := ocr.CropImage(path)
-			// read off the text
-			textFromImage := ocr.ReadText(croppedImage)
-			// pull out the coords
-			coordStr := ocr.ExtractCoords(textFromImage)
-
-			loc, err := parseLatLng(coordStr)
+			coordStr, err := ocr.CoordsFromImage(path)
 			if err != nil {
-				fmt.Println(imgFilename, "parsing error")
+				fmt.Println(imgFilename, "unable to find coords")
+				return nil
+			}
+
+			loc, err := helpers.ParseLatLng(coordStr)
+			if err != nil {
+				fmt.Println(imgFilename, "coords were invalid")
 				return nil
 			}
 

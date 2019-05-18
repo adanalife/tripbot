@@ -48,9 +48,6 @@ func CoordsFromImage(path string) (string, error) {
 		return coordStr, errors.New("error reading coords from file")
 	}
 
-	// fmt.Println(coordStr)
-	// fmt.Println(googleMapsURL(coordStr))
-	// url := googleMapsURL(coordStr)
 	return coordStr, nil
 }
 
@@ -105,7 +102,7 @@ func ReadText(imgFile string) string {
 	return text
 }
 
-// extractCoords expects an OCR-ed string which
+// ExtractCoords expects an OCR-ed string which
 // may or may not contain GPS coordinates, and
 // returns its best guess at what the coords are
 func ExtractCoords(text string) string {
