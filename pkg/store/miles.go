@@ -33,7 +33,7 @@ func (s *Store) DurationForUser(user string) time.Duration {
 func (s *Store) CurrentViewDuration(user string) time.Duration {
 	var joinTime time.Time
 	err := s.db.View(func(tx *bolt.Tx) error {
-		joinedBucket := tx.Bucket([]byte(userJoinsBucket))
+		joinedBucket := tx.Bucket([]byte(helpers.UserJoinsBucket))
 		err := joinTime.UnmarshalText(joinedBucket.Get([]byte(user)))
 		return err
 	})

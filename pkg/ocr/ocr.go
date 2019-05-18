@@ -18,7 +18,7 @@ import (
 
 func GetCurrentVideo() string {
 	// run the shell script to get currently-playing video
-	out, err := exec.Command(getCurrentVidScript).Output()
+	out, err := exec.Command(helpers.GetCurrentVidScript).Output()
 	if err != nil {
 		log.Printf("failed to run script: %v", err)
 	}
@@ -31,7 +31,7 @@ func ScreenshotPath(videoFile string) string {
 		log.Printf("you must provide a valid file name")
 	}
 	screencapFile := fmt.Sprintf("%s.png", split[0])
-	return path.Join(screencapDir, screencapFile)
+	return path.Join(helpers.ScreencapDir, screencapFile)
 }
 
 func ProcessImage(path string) (string, error) {
@@ -56,7 +56,7 @@ func ProcessImage(path string) (string, error) {
 // cropImage cuts a dashcam screencap down to just the bottom right corner
 func CropImage(srcFilename string) string {
 	// exit early if the cropped file already exists
-	croppedFile := filepath.Join(croppedPath, path.Base(srcFilename))
+	croppedFile := filepath.Join(helpers.CroppedPath, path.Base(srcFilename))
 	if fileExists(croppedFile) {
 		return croppedFile
 	}
