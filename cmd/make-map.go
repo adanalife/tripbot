@@ -45,7 +45,8 @@ func parseLatLng(vidStr string) (maps.LatLng, error) {
 	lon := vidStr[1:nIndex]
 	//TODO: I hardcoded the minus sign, better to fix that properly
 	coords := fmt.Sprintf("%s,-%s", lat, lon)
-	fmt.Println(coords)
+
+	// fmt.Println(coords)
 
 	// now we can just pass the string to the library
 	loc, err := maps.ParseLatLng(coords)
@@ -97,7 +98,7 @@ func main() {
 
 			loc, err := parseLatLng(coordStr)
 			if err != nil {
-				log.Printf("parsing error: %s", err)
+				fmt.Println(imgFilename, "parsing error")
 				return nil
 			}
 
