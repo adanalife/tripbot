@@ -7,9 +7,6 @@ sub_goal = "4/5"
 leaderboard_file = "./OBS/leaderboard-copy.txt"
 message_file = "./OBS/current-message.txt"
 
-# fetch the current leader
-miles, leader = File.read(File.expand_path(leaderboard_file)).split("\n")[1].split(":")
-
 possible_messages = [
   "Type !help in chat for instructions",
   "Type !help in chat for instructions",
@@ -25,13 +22,22 @@ possible_messages = [
   "Music by Soma.FM !song",
   "Tripbot loves you <3 !tripbot",
   "See something cool? Clip it!",
-  "#{leader.strip} is leader with #{miles}"
+  "LEADER",
 ]
 
 puts "starting #$PROGRAM_NAME script"
 
 loop do
-  File.write(File.expand_path(message_file), possible_messages.sample)
+  # pick a random message
+  current = possible_messages.sample
+
+  if current == "LEADER"
+    # fetch the current leader
+    miles, leader = File.read(File.expand_path(leaderboard_file)).split("\n")[1].split(":")
+    current = "#{leader.strip} is leader with #{miles}"
+  end
+
+  File.write(File.expand_path(message_file), current)
   sleep 45
 end
 
