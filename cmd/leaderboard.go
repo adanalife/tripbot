@@ -15,13 +15,9 @@ func init() {
 }
 
 func main() {
-	db := "tripbot-copy.db"
-	datastore := store.FindOrCreate(db)
+	datastore := store.FindOrCreate("tripbot-copy.db")
 
 	userList := datastore.TopUsers(leaderboardSize)
-	// if err != nil {
-	// 	log.Fatalf("unable to calculate leaderboard: %s", err)
-	// }
 
 	fmt.Println("Odometer Leaderboard")
 	for _, user := range userList {
