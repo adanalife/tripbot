@@ -11,11 +11,6 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 )
 
-const (
-	userJoinsBucket   = "user_joins"
-	userWatchedBucket = "user_watched"
-)
-
 // this stores the current datastore
 var currentDatastore *Store
 
