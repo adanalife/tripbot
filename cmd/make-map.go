@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"image"
 	"image/png"
 	"log"
 	"os"
@@ -14,6 +15,28 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/ocr"
 	"googlemaps.github.io/maps"
 )
+
+// actually create the image
+func saveImage(img image.Image, imgPath string) error {
+	f, err := os.Create(imgPath)
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+	defer f.Close()
+
+	err = png.Encode(f, img)
+
+	if err != nil {
+		log.Println(err)
+	}
+	return err
+}
+
+func makeGoogleMap(c *maps.Client, mapRequest *maps.StaticMapRequest) (image.Image, error) {
+	img, err := c.StaticMap(context.Background(), mapRequest)
+	return img, err
+}
 
 func main() {
 	// first we must check for required ENV vars
@@ -117,26 +140,11 @@ func main() {
 				// Visible:  []maps.LatLng{loc},
 			}
 
-			img, err := client.StaticMap(context.Background(), r)
+			img, err := makeGoogleMap(client, r)
 			if err != nil {
 				fmt.Println(imgFilename, "error from gmaps api", err)
-				return nil
 			}
-
-			// actually create the image
-			f, err := os.Create(fullImgFilename)
-			if err != nil {
-				log.Println(err)
-			}
-
-			if err := png.Encode(f, img); err != nil {
-				f.Close()
-				log.Println(err)
-			}
-
-			if err := f.Close(); err != nil {
-				log.Println(err)
-			}
+			err = saveImage(img, fullImgFilename)
 
 			index = index + 1
 			return err
