@@ -142,5 +142,5 @@ func (s *Store) RecordUserPart(user string) {
 		return err
 	})
 
-	log.Println(user, "left the channel, total watched:", totalDurationWatched)
+	log.Printf("%s left the channel (total: %s, session: %s)", user, totalDurationWatched, durationWatched)
 }
