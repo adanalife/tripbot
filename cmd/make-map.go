@@ -26,7 +26,6 @@ func saveImage(img image.Image, imgPath string) error {
 	defer f.Close()
 
 	err = png.Encode(f, img)
-
 	if err != nil {
 		log.Println(err)
 	}
@@ -88,13 +87,6 @@ func main() {
 				return nil
 			}
 
-			// check if file already exists
-			if helpers.FileExists(fullImgFilename) {
-				fmt.Println(imgFilename, "already exists but continuing anyway")
-			} else {
-				fmt.Println(imgFilename)
-			}
-
 			// only update the path every 5 frames
 			if index%5 == 0 {
 				if len(pathPoints) > 24 {
@@ -108,6 +100,7 @@ func main() {
 
 			// stop here before we make the image
 			if helpers.FileExists(fullImgFilename) {
+				fmt.Println(imgFilename, "already exists")
 				return nil
 			}
 
@@ -115,13 +108,8 @@ func main() {
 				Location: append(pathPoints, loc),
 			}
 
+			//TODO custom icon
 			marker := maps.Marker{
-				//TODO custom icon
-				// CustomIcon: maps.CustomIcon{
-				// 	IconURL: "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/160/apple/198/minibus_1f690.png",
-				// 	Anchor:  "topleft",
-				// 	Scale:   2,
-				// },
 				Location: []maps.LatLng{loc},
 			}
 
@@ -136,19 +124,24 @@ func main() {
 				MapType:  maps.MapType(""),
 				Paths:    []maps.Path{mapPath},
 				Markers:  []maps.Marker{marker},
-				// Markers:  allMarkers,
-				// Visible:  []maps.LatLng{loc},
 			}
 
+			// create the google map
 			img, err := makeGoogleMap(client, r)
 			if err != nil {
 				fmt.Println(imgFilename, "error from gmaps api", err)
 			}
+
+			// save the image
 			err = saveImage(img, fullImgFilename)
+			if err != nil {
+				fmt.Println(imgFilename, "created!")
+			}
 
 			index = index + 1
 			return err
 		})
+
 	// something went wrong walking the directory
 	if err != nil {
 		log.Println(err)
