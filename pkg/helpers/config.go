@@ -8,9 +8,9 @@ const (
 	GetCurrentVidScript = "/Users/dmerrick/other_projects/danalol-stream/bin/current-file.sh"
 
 	//TODO move these off usbshare1
-	ScreencapDir = "/Volumes/usbshare1/first frame of every video"
-	OutputDir    = "/Volumes/usbshare1/maps"
-	CroppedPath  = "/Volumes/usbshare1/cropped-corners"
+	ScreencapDir  = "/Volumes/usbshare1/first frame of every video"
+	MapsOutputDir = "/Volumes/usbshare1/maps"
+	CroppedPath   = "/Volumes/usbshare1/cropped-corners"
 
 	DbPath            = "tripbot.db"
 	UserJoinsBucket   = "user_joins"

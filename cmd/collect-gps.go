@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	"github.com/dmerrick/danalol-stream/pkg/ocr"
 )
 
@@ -41,13 +42,13 @@ func main() {
 	} else {
 
 		// loop over every file in the screencapDir
-		err := filepath.Walk(screencapDir,
+		err := filepath.Walk(helpers.ScreencapDir,
 			func(path string, info os.FileInfo, err error) error {
 				if err != nil {
 					return err
 				}
 				// skip the directory name itself
-				if path == screencapDir {
+				if path == helpers.ScreencapDir {
 					return nil
 				}
 
