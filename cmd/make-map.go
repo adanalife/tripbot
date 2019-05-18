@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"image/png"
@@ -34,6 +35,12 @@ func parseLatLng(vidStr string) (maps.LatLng, error) {
 	// from: W111.845329N40.774768
 	//   to: 40.774768,111.845329
 	nIndex := strings.Index(vidStr, "N")
+
+	if nIndex < 0 {
+		empty, _ := maps.ParseLatLng("")
+		return empty, errors.New("can't find and N in the string")
+	}
+
 	lat := vidStr[nIndex+1:]
 	lon := vidStr[1:nIndex]
 	//TODO: I hardcoded the minus sign, better to fix that properly
@@ -56,7 +63,7 @@ func main() {
 	}
 	client, err := maps.NewClient(maps.WithAPIKey(googleMapsAPIKey))
 	if err != nil {
-		log.Fatalf("fatal error: %s", err)
+		log.Fatalf("client error: %s", err)
 	}
 
 	// loop over every file in the screencapDir
@@ -78,8 +85,10 @@ func main() {
 			coordStr := ocr.ExtractCoords(textFromImage)
 
 			loc, err := parseLatLng(coordStr)
+
 			if err != nil {
-				log.Fatalf("fatal error: %s", err)
+				log.Printf("fatal error: %s", err)
+				return nil
 			}
 
 			//TODO: make a CustomIcon?
@@ -102,11 +111,11 @@ func main() {
 
 			img, err := client.StaticMap(context.Background(), r)
 			if err != nil {
-				log.Fatalf("fatal error: %s", err)
+				log.Printf("staticmap fatal error: %s", err)
 			}
 
 			// save the file
-			imgFilename := fmt.Sprintf("%s.png", path)
+			imgFilename := filepath.Base(path)
 
 			fmt.Println(imgFilename)
 
