@@ -15,7 +15,7 @@ import (
 	"googlemaps.github.io/maps"
 )
 
-// returns the root directory of the project
+// ProjectRoot returns the root directory of the project
 func ProjectRoot() string {
 	_, b, _, _ := runtime.Caller(0)
 	helperPath := filepath.Dir(b)
@@ -23,11 +23,12 @@ func ProjectRoot() string {
 	return path.Clean(projectRoot)
 }
 
+// DurationToMiles converts Durations to miles
 func DurationToMiles(dur time.Duration) int {
 	return int(dur.Minutes() / 10)
 }
 
-// returns true if a given user should be ignored
+// UserIsIgnored returns true if a given user should be ignored
 func UserIsIgnored(user string) bool {
 	for _, ignored := range config.IgnoredUsers {
 		if user == ignored {
@@ -42,11 +43,12 @@ func GoogleMapsURL(coordsStr string) string {
 	return fmt.Sprintf("https://www.google.com/maps?q=%s", coordsStr)
 }
 
-func ParseLatLng(vidStr string) (maps.LatLng, error) {
+// ParseLatLng converts an OCRed string into a LatLng
+func ParseLatLng(ocrStr string) (maps.LatLng, error) {
 	// first we have to change the string format
 	// from: W111.845329N40.774768
 	//   to: 40.774768,111.845329
-	nIndex := strings.Index(vidStr, "N")
+	nIndex := strings.Index(ocrStr, "N")
 
 	// check if we even found an N
 	if nIndex < 0 {
@@ -55,8 +57,10 @@ func ParseLatLng(vidStr string) (maps.LatLng, error) {
 	}
 
 	// split up ad lat and long
-	lat := vidStr[nIndex+1:]
-	lon := vidStr[1:nIndex]
+	lat := ocrStr[nIndex+1:]
+	lon := ocrStr[1:nIndex]
+
+	// format the string to make Google Maps happy
 	//TODO: I hardcoded the minus sign, better to fix that properly
 	coords := fmt.Sprintf("%s,-%s", lat, lon)
 
@@ -68,7 +72,7 @@ func ParseLatLng(vidStr string) (maps.LatLng, error) {
 	return loc, err
 }
 
-// splitOnRegex will is the equivalent of str.split(/regex/)
+// SplitOnRegex will is the equivalent of str.split(/regex/)
 func SplitOnRegex(text string, delimeter string) []string {
 	reg := regexp.MustCompile(delimeter)
 	indexes := reg.FindAllStringIndex(text, -1)
@@ -82,7 +86,7 @@ func SplitOnRegex(text string, delimeter string) []string {
 	return result
 }
 
-// fileExists simply returns true if a file exists
+// FileExists simply returns true if a file exists
 func FileExists(path string) bool {
 	_, err := os.Stat(path)
 	if os.IsNotExist(err) {
