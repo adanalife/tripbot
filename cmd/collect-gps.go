@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/dmerrick/danalol-stream/pkg/config"
+	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	"github.com/dmerrick/danalol-stream/pkg/ocr"
 )
 
@@ -35,10 +36,11 @@ func main() {
 	// a file was passed in via the CLI
 	if videoFile != "" {
 		path := ocr.ScreenshotPath(videoFile)
-		url, err := ocr.ProcessImage(path)
+		coords, err := ocr.CoordsFromImage(path)
 		if err != nil {
 			log.Fatalf("failed to process image: %v", err)
 		}
+		url := helpers.GoogleMapsURL(coords)
 		fmt.Println(url)
 
 	} else {
@@ -55,12 +57,12 @@ func main() {
 				}
 
 				// actually process the image
-				url, err := ocr.ProcessImage(path)
+				coords, err := ocr.CoordsFromImage(path)
 				if err != nil {
-					//TODO: error loglevel?
 					log.Printf("failed to process image: %v", err)
 					return nil
 				}
+				url := helpers.GoogleMapsURL(coords)
 				fmt.Println(url)
 				return err
 			})

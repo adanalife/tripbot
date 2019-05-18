@@ -1,6 +1,7 @@
 package helpers
 
 import (
+	"fmt"
 	"path"
 	"path/filepath"
 	"runtime"
@@ -29,4 +30,9 @@ func UserIsIgnored(user string) bool {
 		}
 	}
 	return false
+}
+
+// GoogleMapsURL returns a google maps link to the coords provided
+func GoogleMapsURL(coordsStr string) string {
+	return fmt.Sprintf("https://www.google.com/maps?q=%s", coordsStr)
 }

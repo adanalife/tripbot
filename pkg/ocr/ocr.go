@@ -35,7 +35,7 @@ func ScreenshotPath(videoFile string) string {
 	return path.Join(config.ScreencapDir, screencapFile)
 }
 
-func ProcessImage(path string) (string, error) {
+func CoordsFromImage(path string) (string, error) {
 	// crop the image
 	croppedImage := CropImage(path)
 	// read off the text
@@ -50,8 +50,8 @@ func ProcessImage(path string) (string, error) {
 
 	// fmt.Println(coordStr)
 	// fmt.Println(googleMapsURL(coordStr))
-	url := googleMapsURL(coordStr)
-	return url, nil
+	// url := googleMapsURL(coordStr)
+	return coordStr, nil
 }
 
 // cropImage cuts a dashcam screencap down to just the bottom right corner
@@ -120,11 +120,6 @@ func ExtractCoords(text string) string {
 	// use only the second half (the GPS coordinates)
 	coords := split[1]
 	return coords
-}
-
-// googleMapsURL returns a google maps link to the coords provided
-func googleMapsURL(coordsStr string) string {
-	return fmt.Sprintf("https://www.google.com/maps?q=%s", coordsStr)
 }
 
 // splitOnRegex will is the equivalent of str.split(/regex/)

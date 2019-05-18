@@ -87,10 +87,11 @@ func main() {
 			if currentVid != lastVid {
 				screenshotPath := ocr.ScreenshotPath(currentVid)
 				// extract the coordinates, generate a google maps url
-				url, err := ocr.ProcessImage(screenshotPath)
+				coords, err := ocr.CoordsFromImage(screenshotPath)
 				if err != nil {
 					client.Say(config.ChannelName, "Sorry, it didn't work this time :(. Try again in a few minutes!")
 				} else {
+					url := helpers.GoogleMapsURL(coords)
 					client.Say(config.ChannelName, fmt.Sprintf("If this doesn't work, try again in a few minutes: %s", url))
 				}
 				// update the last vid
