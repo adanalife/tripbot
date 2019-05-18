@@ -32,7 +32,25 @@ func saveImage(img image.Image, imgPath string) error {
 	return err
 }
 
-func makeGoogleMap(c *maps.Client, mapRequest *maps.StaticMapRequest) (image.Image, error) {
+func makeGoogleMap(c *maps.Client, loc maps.LatLng, mapPath maps.Path) (image.Image, error) {
+	//TODO custom icon
+	marker := maps.Marker{
+		Location: []maps.LatLng{loc},
+	}
+
+	mapRequest := &maps.StaticMapRequest{
+		Center:   loc.String(),
+		Zoom:     6,
+		Size:     "600x400",
+		Scale:    -1,
+		Format:   maps.Format(""),
+		Language: "",
+		Region:   "",
+		MapType:  maps.MapType(""),
+		Paths:    []maps.Path{mapPath},
+		Markers:  []maps.Marker{marker},
+	}
+
 	img, err := c.StaticMap(context.Background(), mapRequest)
 	return img, err
 }
@@ -83,7 +101,7 @@ func main() {
 
 			loc, err := helpers.ParseLatLng(coordStr)
 			if err != nil {
-				fmt.Println(imgFilename, "coords invalid")
+				fmt.Println(imgFilename, "coords invalid", err)
 				return nil
 			}
 
@@ -108,26 +126,8 @@ func main() {
 				Location: append(pathPoints, loc),
 			}
 
-			//TODO custom icon
-			marker := maps.Marker{
-				Location: []maps.LatLng{loc},
-			}
-
-			r := &maps.StaticMapRequest{
-				Center:   loc.String(),
-				Zoom:     6,
-				Size:     "600x400",
-				Scale:    -1,
-				Format:   maps.Format(""),
-				Language: "",
-				Region:   "",
-				MapType:  maps.MapType(""),
-				Paths:    []maps.Path{mapPath},
-				Markers:  []maps.Marker{marker},
-			}
-
 			// create the google map
-			img, err := makeGoogleMap(client, r)
+			img, err := makeGoogleMap(client, loc, mapPath)
 			if err != nil {
 				fmt.Println(imgFilename, "error from gmaps api", err)
 			}
