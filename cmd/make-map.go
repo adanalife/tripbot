@@ -74,13 +74,13 @@ func main() {
 
 			fmt.Println(imgFilename)
 
-			//TODO: make a CustomIcon?
 			marker := maps.Marker{
-				CustomIcon: maps.CustomIcon{
-					IconURL: "/Volumes/usbshare1/minibus.png",
-					Anchor:  "topleft",
-					Scale:   2,
-				},
+				//TODO: use a CustomIcon?
+				// CustomIcon: maps.CustomIcon{
+				// 	IconURL: "/Volumes/usbshare1/minibus.png",
+				// 	Anchor:  "topleft",
+				// 	Scale:   2,
+				// },
 				Location: []maps.LatLng{loc},
 			}
 

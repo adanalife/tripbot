@@ -27,7 +27,6 @@ func main() {
 	}
 
 	// initialize the database
-	//TODO: empty string is confusing
 	datastore := store.FindOrCreate(config.DbPath)
 
 	// time to set up the Twitch client
