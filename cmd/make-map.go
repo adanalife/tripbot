@@ -73,6 +73,12 @@ func main() {
 				Location: []maps.LatLng{loc},
 			}
 
+			// reset the markers if we have enough
+			if len(allMarkers) > 15 {
+				allMarkers = []maps.Marker{}
+			}
+
+			// append the current marker to the list
 			allMarkers = append(allMarkers, marker)
 
 			r := &maps.StaticMapRequest{
