@@ -35,32 +35,37 @@ func ScreenshotPath(videoFile string) string {
 
 func CoordsFromImage(path string) (string, error) {
 	// crop the image
-	croppedImage := cropImage(path)
+	croppedImage, err := cropImage(path)
+	if err != nil {
+		return "", err
+	}
 	// read off the text
-	textFromImage := readText(croppedImage)
+	textFromImage, err := readText(croppedImage)
+	if err != nil {
+		return "", err
+	}
 	// pull out the coords
-	coordStr := extractCoords(textFromImage)
-
-	// don't do anything if we didn't get good coords
-	if coordStr == "" {
-		return coordStr, errors.New("error reading coords from file")
+	coordStr, err := extractCoords(textFromImage)
+	if err != nil {
+		return "", err
 	}
 
-	return coordStr, nil
+	return coordStr, err
 }
 
 // cropImage cuts a dashcam screencap down to just the bottom right corner
-func cropImage(srcFilename string) string {
+func cropImage(srcFilename string) (string, error) {
 	// exit early if the cropped file already exists
 	croppedFile := filepath.Join(config.CroppedPath, path.Base(srcFilename))
 	if helpers.FileExists(croppedFile) {
-		return croppedFile
+		return croppedFile, nil
 	}
 
 	// open the image
 	src, err := imaging.Open(srcFilename)
 	if err != nil {
 		log.Printf("failed to open image: %v", err)
+		return "", err
 	}
 
 	// crop the image to just the bottom left text
@@ -76,12 +81,13 @@ func cropImage(srcFilename string) string {
 	err = imaging.Save(croppedImage, croppedFile)
 	if err != nil {
 		log.Printf("failed to save image: %v", err)
+		return "", err
 	}
-	return croppedFile
+	return croppedFile, err
 }
 
 // readText uses OCR to read the text from an image file
-func readText(imgFile string) string {
+func readText(imgFile string) (string, error) {
 	client := gosseract.NewClient()
 	defer client.Close()
 
@@ -96,23 +102,24 @@ func readText(imgFile string) string {
 	text, err := client.Text()
 	if err != nil {
 		log.Printf("failed to read text: %v", err)
+		return "", err
 	}
-	return text
+	return text, err
 }
 
 // extractCoords expects an OCR-ed string which
 // may or may not contain GPS coordinates, and
 // returns its best guess at what the coords are
-func extractCoords(text string) string {
+func extractCoords(text string) (string, error) {
 	// strip all whitespace
 	tidy := strings.Replace(text, " ", "", -1)
 	// try to separate the text using the speed
 	split := helpers.SplitOnRegex(tidy, "MPH")
 	// if we didn't find the speed, just exit
 	if len(split) < 2 {
-		return ""
+		return "", errors.New("didn't find MPH in string")
 	}
 	// use only the second half (the GPS coordinates)
 	coords := split[1]
-	return coords
+	return coords, nil
 }

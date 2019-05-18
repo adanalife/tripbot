@@ -96,7 +96,8 @@ func main() {
 			// extract the coords from the image
 			coordStr, err := ocr.CoordsFromImage(path)
 			if err != nil {
-				fmt.Println(imgFilename, "coords not found")
+				fmt.Println(imgFilename, "coords not found:", err)
+				// fmt.Println(imgFilename, "coords not found")
 				return nil
 			}
 
@@ -128,6 +129,7 @@ func main() {
 			img, err := makeGoogleMap(client, loc, pathPoints)
 			if err != nil {
 				fmt.Println(imgFilename, "error from gmaps api", err)
+				return nil
 			}
 
 			// save the image
