@@ -26,7 +26,9 @@ func main() {
 		log.Fatalf("client error: %s", err)
 	}
 
-	allMarkers := []maps.Marker{}
+	// this will contain the overlay path
+	pathPoints := []maps.LatLng{}
+	index := 0
 
 	// loop over every file in the screencapDir
 	err = filepath.Walk(config.ScreencapDir,
@@ -63,23 +65,33 @@ func main() {
 
 			fmt.Println(imgFilename)
 
-			marker := maps.Marker{
-				//TODO: use a CustomIcon?
-				// CustomIcon: maps.CustomIcon{
-				// 	IconURL: "/Volumes/usbshare1/minibus.png",
-				// 	Anchor:  "topleft",
-				// 	Scale:   2,
-				// },
-				Location: []maps.LatLng{loc},
-			}
+			//marker := maps.Marker{
+			//	//TODO: use a CustomIcon?
+			//	// CustomIcon: maps.CustomIcon{
+			//	// 	IconURL: "/Volumes/usbshare1/minibus.png",
+			//	// 	Anchor:  "topleft",
+			//	// 	Scale:   2,
+			//	// },
+			//	Location: []maps.LatLng{loc},
+			//}
 
-			// reset the markers if we have enough
-			if len(allMarkers) > 15 {
-				allMarkers = []maps.Marker{}
-			}
+			// update path every 5 loops
+			if index%5 == 0 {
+				// create a trail
+				if len(pathPoints) > 15 {
+					// remove the oldest element
+					pathPoints = pathPoints[1:]
+				}
 
-			// append the current marker to the list
-			allMarkers = append(allMarkers, marker)
+				// append the current location to the list
+				pathPoints = append(pathPoints, loc)
+			}
+			//TODO move this down?
+			index = index + 1
+
+			mapPath := maps.Path{
+				Location: pathPoints,
+			}
 
 			r := &maps.StaticMapRequest{
 				Center:   "",
@@ -90,7 +102,8 @@ func main() {
 				Language: "",
 				Region:   "",
 				MapType:  maps.MapType(""),
-				Markers:  allMarkers,
+				Paths:    []maps.Path{mapPath},
+				// Markers:  allMarkers,
 				// Markers:  []maps.Marker{marker},
 				// Visible:  []maps.LatLng{loc},
 			}
