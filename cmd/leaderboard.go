@@ -1,17 +1,18 @@
 package main
 
 import (
+	"flag"
 	"fmt"
-	// "log"
 
-	// "github.com/davecgh/go-spew/spew"
 	"github.com/dmerrick/danalol-stream/pkg/store"
 )
 
-const (
-	//TODO: this should be a CLI flag
-	leaderboardSize = 5
-)
+var leaderboardSize int
+
+func init() {
+	flag.IntVar(&leaderboardSize, "num", 5, "The size of the leaderboard")
+	flag.Parse()
+}
 
 func main() {
 	db := "tripbot-copy.db"

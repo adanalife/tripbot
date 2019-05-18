@@ -80,7 +80,7 @@ func (s *Store) TopUsers(size int) []string {
 	// sort and reverse
 	sort.Sort(sort.Reverse(sort.IntSlice(sortedValues)))
 
-	// print the top 5
+	// include only the specified-number of users
 	for i := 0; i < size; i++ {
 		topUsers = append(topUsers, reversedMap[sortedValues[i]])
 	}
