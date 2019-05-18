@@ -55,13 +55,13 @@ func main() {
 
 			coordStr, err := ocr.CoordsFromImage(path)
 			if err != nil {
-				fmt.Println(imgFilename, "unable to find coords")
+				fmt.Println(imgFilename, "coords not found")
 				return nil
 			}
 
 			loc, err := helpers.ParseLatLng(coordStr)
 			if err != nil {
-				fmt.Println(imgFilename, "coords were invalid")
+				fmt.Println(imgFilename, "coords invalid")
 				return nil
 			}
 
@@ -119,7 +119,8 @@ func main() {
 
 			img, err := client.StaticMap(context.Background(), r)
 			if err != nil {
-				log.Printf("staticmap fatal error: %s", err)
+				fmt.Println(imgFilename, "error from gmaps api", err)
+				return nil
 			}
 
 			// actually create the image
