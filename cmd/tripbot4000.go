@@ -98,6 +98,8 @@ func main() {
 				}
 				// update the last vid
 				lastVid = currentVid
+			} else {
+				client.Say(channelToJoin, fmt.Sprintf("I still need a minute, sorry!"))
 			}
 
 		}
