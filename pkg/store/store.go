@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/boltdb/bolt"
-	"github.com/dmerrick/danalol-stream/pkg/helpers"
+	"github.com/dmerrick/danalol-stream/pkg/config"
 )
 
 // this stores the current datastore
@@ -64,8 +64,8 @@ func (s *Store) Open() error {
 
 	// Initialize all the required buckets.
 	if err := s.db.Update(func(tx *bolt.Tx) error {
-		tx.CreateBucketIfNotExists([]byte(helpers.UserJoinsBucket))
-		tx.CreateBucketIfNotExists([]byte(helpers.UserWatchedBucket))
+		tx.CreateBucketIfNotExists([]byte(config.UserJoinsBucket))
+		tx.CreateBucketIfNotExists([]byte(config.UserWatchedBucket))
 		return nil
 	}); err != nil {
 		s.Close()
@@ -81,7 +81,7 @@ func (s *Store) Close() error {
 
 		// first we make a list of all of the online users
 		s.db.View(func(tx *bolt.Tx) error {
-			joinedBucket := tx.Bucket([]byte(helpers.UserJoinsBucket))
+			joinedBucket := tx.Bucket([]byte(config.UserJoinsBucket))
 			err := joinedBucket.ForEach(func(k, _ []byte) error {
 				user := string(k)
 				onlineUsers = append(onlineUsers, user)

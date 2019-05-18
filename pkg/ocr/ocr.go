@@ -12,13 +12,14 @@ import (
 	"strings"
 
 	"github.com/disintegration/imaging"
+	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	"github.com/otiai10/gosseract"
 )
 
 func GetCurrentVideo() string {
 	// run the shell script to get currently-playing video
-	out, err := exec.Command(helpers.GetCurrentVidScript).Output()
+	out, err := exec.Command(config.GetCurrentVidScript).Output()
 	if err != nil {
 		log.Printf("failed to run script: %v", err)
 	}
@@ -31,7 +32,7 @@ func ScreenshotPath(videoFile string) string {
 		log.Printf("you must provide a valid file name")
 	}
 	screencapFile := fmt.Sprintf("%s.png", split[0])
-	return path.Join(helpers.ScreencapDir, screencapFile)
+	return path.Join(config.ScreencapDir, screencapFile)
 }
 
 func ProcessImage(path string) (string, error) {
@@ -56,7 +57,7 @@ func ProcessImage(path string) (string, error) {
 // cropImage cuts a dashcam screencap down to just the bottom right corner
 func CropImage(srcFilename string) string {
 	// exit early if the cropped file already exists
-	croppedFile := filepath.Join(helpers.CroppedPath, path.Base(srcFilename))
+	croppedFile := filepath.Join(config.CroppedPath, path.Base(srcFilename))
 	if fileExists(croppedFile) {
 		return croppedFile
 	}

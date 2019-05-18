@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/boltdb/bolt"
+	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 )
 
@@ -19,7 +20,7 @@ func (s *Store) DurationForUser(user string) time.Duration {
 	var previousDurationWatched *time.Duration
 
 	s.db.View(func(tx *bolt.Tx) error {
-		watchedBucket := tx.Bucket([]byte(helpers.UserWatchedBucket))
+		watchedBucket := tx.Bucket([]byte(config.UserWatchedBucket))
 
 		// fetch the previous duration watched from the DB
 		duration, err := time.ParseDuration(string(watchedBucket.Get([]byte(user))))
@@ -33,7 +34,7 @@ func (s *Store) DurationForUser(user string) time.Duration {
 func (s *Store) CurrentViewDuration(user string) time.Duration {
 	var joinTime time.Time
 	err := s.db.View(func(tx *bolt.Tx) error {
-		joinedBucket := tx.Bucket([]byte(helpers.UserJoinsBucket))
+		joinedBucket := tx.Bucket([]byte(config.UserJoinsBucket))
 		err := joinTime.UnmarshalText(joinedBucket.Get([]byte(user)))
 		return err
 	})
@@ -51,7 +52,7 @@ func (s *Store) TopUsers(size int) []string {
 	sortedValues := []int{}
 
 	s.db.View(func(tx *bolt.Tx) error {
-		watchedBucket := tx.Bucket([]byte(helpers.UserWatchedBucket))
+		watchedBucket := tx.Bucket([]byte(config.UserWatchedBucket))
 		//TODO: do I need this?
 		// joinedBucket := tx.Bucket([]byte(userJoinsBucket))
 
@@ -59,7 +60,7 @@ func (s *Store) TopUsers(size int) []string {
 			user := string(k)
 			// don't include these in leaderboard
 			//TODO: this should be a func
-			for _, ignored := range helpers.IgnoredUsers {
+			for _, ignored := range config.IgnoredUsers {
 				if user == ignored {
 					return nil
 				}
@@ -97,7 +98,7 @@ func (s *Store) RecordUserJoin(user string) {
 	log.Println(user, "joined the channel")
 
 	s.db.Update(func(tx *bolt.Tx) error {
-		joinedBucket := tx.Bucket([]byte(helpers.UserJoinsBucket))
+		joinedBucket := tx.Bucket([]byte(config.UserJoinsBucket))
 		currentTime, err := time.Now().MarshalText()
 		if err != nil {
 			return err
@@ -113,8 +114,8 @@ func (s *Store) RecordUserPart(user string) {
 	var previousDurationWatched time.Duration
 
 	s.db.View(func(tx *bolt.Tx) error {
-		joinedBucket := tx.Bucket([]byte(helpers.UserJoinsBucket))
-		watchedBucket := tx.Bucket([]byte(helpers.UserWatchedBucket))
+		joinedBucket := tx.Bucket([]byte(config.UserJoinsBucket))
+		watchedBucket := tx.Bucket([]byte(config.UserWatchedBucket))
 
 		// first find the time the user joined the channel
 		err := joinTime.UnmarshalText(joinedBucket.Get([]byte(user)))
@@ -135,8 +136,8 @@ func (s *Store) RecordUserPart(user string) {
 
 	// update the DB with the total duration watched
 	s.db.Update(func(tx *bolt.Tx) error {
-		joinedBucket := tx.Bucket([]byte(helpers.UserJoinsBucket))
-		watchedBucket := tx.Bucket([]byte(helpers.UserWatchedBucket))
+		joinedBucket := tx.Bucket([]byte(config.UserJoinsBucket))
+		watchedBucket := tx.Bucket([]byte(config.UserWatchedBucket))
 
 		err := watchedBucket.Put([]byte(user), []byte(totalDurationWatched.String()))
 		if err != nil {

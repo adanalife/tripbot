@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/dmerrick/danalol-stream/pkg/helpers"
+	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/ocr"
 	"googlemaps.github.io/maps"
 )
@@ -68,13 +68,13 @@ func main() {
 	allMarkers := []maps.Marker{}
 
 	// loop over every file in the screencapDir
-	err = filepath.Walk(helpers.ScreencapDir,
+	err = filepath.Walk(config.ScreencapDir,
 		func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				return err
 			}
 			// skip the directory name itself
-			if path == helpers.ScreencapDir {
+			if path == config.ScreencapDir {
 				return nil
 			}
 
@@ -134,7 +134,7 @@ func main() {
 				log.Printf("staticmap fatal error: %s", err)
 			}
 
-			fullImgFilename := p.Join(helpers.MapsOutputDir, imgFilename)
+			fullImgFilename := p.Join(config.MapsOutputDir, imgFilename)
 
 			// actually create the image
 			f, err := os.Create(fullImgFilename)

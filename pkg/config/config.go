@@ -1,4 +1,4 @@
-package helpers
+package config
 
 const (
 	BotUsername = "TripBot4000"

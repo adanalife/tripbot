@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	"github.com/dmerrick/danalol-stream/pkg/ocr"
 	"github.com/dmerrick/danalol-stream/pkg/store"
@@ -27,10 +28,10 @@ func main() {
 
 	// initialize the database
 	//TODO: empty string is confusing
-	datastore := store.FindOrCreate(helpers.DbPath)
+	datastore := store.FindOrCreate(config.DbPath)
 
 	// time to set up the Twitch client
-	client := twitch.NewClient(helpers.BotUsername, clientAuthenticationToken)
+	client := twitch.NewClient(config.BotUsername, clientAuthenticationToken)
 
 	client.OnUserJoinMessage(func(joinMessage twitch.UserJoinMessage) {
 		if !helpers.UserIsIgnored(joinMessage.User) {
@@ -53,10 +54,10 @@ func main() {
 
 		if strings.HasPrefix(strings.ToLower(message.Message), "!help") {
 			log.Println(message.User.Name, "ran !help")
-			msg := fmt.Sprintf("%s (run !help again for more)", helpers.HelpMessages[helpIndex])
-			client.Say(helpers.ChannelName, msg)
+			msg := fmt.Sprintf("%s (run !help again for more)", config.HelpMessages[helpIndex])
+			client.Say(config.ChannelName, msg)
 			// bump the index
-			helpIndex = (helpIndex + 1) % len(helpers.HelpMessages)
+			helpIndex = (helpIndex + 1) % len(config.HelpMessages)
 		}
 
 		if strings.HasPrefix(strings.ToLower(message.Message), "!miles") {
@@ -73,7 +74,7 @@ func main() {
 				msg = "@%s has %d miles. Earn 1 mile every 10 minutes by watching the stream"
 			}
 			msg = fmt.Sprintf(msg, user, miles)
-			client.Say(helpers.ChannelName, msg)
+			client.Say(config.ChannelName, msg)
 		}
 
 		if strings.HasPrefix(strings.ToLower(message.Message), "!tripbot") {
@@ -88,22 +89,22 @@ func main() {
 				// extract the coordinates, generate a google maps url
 				url, err := ocr.ProcessImage(screenshotPath)
 				if err != nil {
-					client.Say(helpers.ChannelName, "Sorry, it didn't work this time :(. Try again in a few minutes!")
+					client.Say(config.ChannelName, "Sorry, it didn't work this time :(. Try again in a few minutes!")
 				} else {
-					client.Say(helpers.ChannelName, fmt.Sprintf("If this doesn't work, try again in a few minutes: %s", url))
+					client.Say(config.ChannelName, fmt.Sprintf("If this doesn't work, try again in a few minutes: %s", url))
 				}
 				// update the last vid
 				lastVid = currentVid
 			} else {
-				client.Say(helpers.ChannelName, fmt.Sprintf("I still need a minute, sorry!"))
+				client.Say(config.ChannelName, fmt.Sprintf("I still need a minute, sorry!"))
 			}
 
 		}
 	})
 
 	// join the channel
-	client.Join(helpers.ChannelName)
-	log.Println("Joined channel", helpers.ChannelName)
+	client.Join(config.ChannelName)
+	log.Println("Joined channel", config.ChannelName)
 
 	// actually connect to Twitch
 	err := client.Connect()
