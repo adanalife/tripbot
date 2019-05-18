@@ -97,7 +97,7 @@ func (s *Store) RecordUserJoin(user string) {
 	log.Println(user, "joined the channel")
 
 	s.db.Update(func(tx *bolt.Tx) error {
-		joinedBucket := tx.Bucket([]byte(userJoinsBucket))
+		joinedBucket := tx.Bucket([]byte(helpers.UserJoinsBucket))
 		currentTime, err := time.Now().MarshalText()
 		if err != nil {
 			return err
