@@ -2,10 +2,7 @@ package store
 
 import (
 	"log"
-	"os"
-	"os/signal"
 	"sort"
-	"syscall"
 	"time"
 
 	"github.com/boltdb/bolt"
