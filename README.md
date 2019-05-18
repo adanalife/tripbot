@@ -10,4 +10,4 @@ If you like it, please follow my channel. Thanks for watching!
 
 [dana.lol](https://dana.lol)
 
-
+[![Go Report Card](https://goreportcard.com/badge/github.com/dmerrick/danalol-stream)](https://goreportcard.com/report/github.com/dmerrick/danalol-stream)
