@@ -41,9 +41,10 @@ func main() {
 
 			// this is where we will save the map image
 			imgFilename := filepath.Base(path)
+			fullImgFilename := gopath.Join(config.MapsOutputDir, imgFilename)
 
 			// check if file already exists
-			if helpers.FileExists(imgFilename) {
+			if helpers.FileExists(fullImgFilename) {
 				fmt.Println(imgFilename, "already exists")
 				return nil
 			}
@@ -92,8 +93,6 @@ func main() {
 			if err != nil {
 				log.Printf("staticmap fatal error: %s", err)
 			}
-
-			fullImgFilename := gopath.Join(config.MapsOutputDir, imgFilename)
 
 			// actually create the image
 			f, err := os.Create(fullImgFilename)
