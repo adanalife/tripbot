@@ -20,6 +20,20 @@ func (s *Store) MilesForUser(user string) int {
 	return helpers.DurationToMiles(prevDuration + currDuration)
 }
 
+func (s *Store) DurationForUser(user string) time.Duration {
+	var previousDurationWatched *time.Duration
+
+	s.db.View(func(tx *bolt.Tx) error {
+		watchedBucket := tx.Bucket([]byte(userWatchedBucket))
+
+		// fetch the previous duration watched from the DB
+		duration, err := time.ParseDuration(string(watchedBucket.Get([]byte(user))))
+		previousDurationWatched = &duration
+		return err
+	})
+	return *previousDurationWatched
+}
+
 // fetch the current view duration
 func (s *Store) CurrentViewDuration(user string) time.Duration {
 	var joinTime time.Time
@@ -82,32 +96,6 @@ func (s *Store) TopUsers(size int) []string {
 	}
 
 	return topUsers
-}
-
-func (s *Store) DurationForUser(user string) time.Duration {
-	var previousDurationWatched *time.Duration
-
-	s.db.View(func(tx *bolt.Tx) error {
-		watchedBucket := tx.Bucket([]byte(userWatchedBucket))
-
-		// fetch the previous duration watched from the DB
-		duration, err := time.ParseDuration(string(watchedBucket.Get([]byte(user))))
-		previousDurationWatched = &duration
-		return err
-	})
-	return *previousDurationWatched
-}
-
-func (s *Store) PrintStats() {
-	s.db.View(func(tx *bolt.Tx) error {
-		watchedBucket := tx.Bucket([]byte(userWatchedBucket))
-		err := watchedBucket.ForEach(func(k, v []byte) error {
-			duration, err := time.ParseDuration(string(v))
-			log.Printf("%s has watched %s.\n", k, duration)
-			return err
-		})
-		return err
-	})
 }
 
 func (s *Store) RecordUserJoin(user string) {

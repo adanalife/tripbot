@@ -33,9 +33,6 @@ func main() {
 	// initialize the database
 	datastore := store.FindOrCreate()
 
-	// show the DB contents at the start
-	// datastore.PrintStats()
-
 	// time to set up the Twitch client
 	client := twitch.NewClient(clientUsername, clientAuthenticationToken)
 
