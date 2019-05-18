@@ -28,6 +28,8 @@ func main() {
 
 	// this will contain the overlay path
 	pathPoints := []maps.LatLng{}
+
+	// the number of loops we've gone over
 	index := 0
 
 	// loop over every file in the screencapDir
@@ -65,20 +67,20 @@ func main() {
 
 			fmt.Println(imgFilename)
 
-			//marker := maps.Marker{
-			//	//TODO: use a CustomIcon?
-			//	// CustomIcon: maps.CustomIcon{
-			//	// 	IconURL: "/Volumes/usbshare1/minibus.png",
-			//	// 	Anchor:  "topleft",
-			//	// 	Scale:   2,
-			//	// },
-			//	Location: []maps.LatLng{loc},
-			//}
+			marker := maps.Marker{
+				//TODO custom icon
+				// CustomIcon: maps.CustomIcon{
+				// 	IconURL: "https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/160/apple/198/minibus_1f690.png",
+				// 	Anchor:  "topleft",
+				// 	Scale:   2,
+				// },
+				Location: []maps.LatLng{loc},
+			}
 
 			// update path every 5 loops
 			if index%5 == 0 {
 				// create a trail
-				if len(pathPoints) > 15 {
+				if len(pathPoints) > 25 {
 					// remove the oldest element
 					pathPoints = pathPoints[1:]
 				}
@@ -86,25 +88,25 @@ func main() {
 				// append the current location to the list
 				pathPoints = append(pathPoints, loc)
 			}
-			//TODO move this down?
-			index = index + 1
+
+			fmt.Println(len(pathPoints))
 
 			mapPath := maps.Path{
-				Location: pathPoints,
+				Location: append(pathPoints, loc),
 			}
 
 			r := &maps.StaticMapRequest{
 				Center:   "",
-				Zoom:     6,         // *zoom,
-				Size:     "600x400", // *size,
+				Zoom:     6,
+				Size:     "600x400",
 				Scale:    -1,
 				Format:   maps.Format(""),
 				Language: "",
 				Region:   "",
 				MapType:  maps.MapType(""),
 				Paths:    []maps.Path{mapPath},
+				Markers:  []maps.Marker{marker},
 				// Markers:  allMarkers,
-				// Markers:  []maps.Marker{marker},
 				// Visible:  []maps.LatLng{loc},
 			}
 
@@ -127,6 +129,8 @@ func main() {
 			if err := f.Close(); err != nil {
 				log.Println(err)
 			}
+
+			index = index + 1
 			return err
 		})
 	// something went wrong walking the directory
