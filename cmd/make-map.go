@@ -8,6 +8,7 @@ import (
 	"image/png"
 	"log"
 	"os"
+	p "path"
 	"path/filepath"
 	"strings"
 
@@ -17,6 +18,7 @@ import (
 
 const (
 	screencapDir = "/Volumes/usbshare1/first frame of every video"
+	outputDir    = "/Volumes/usbshare1/maps"
 )
 
 var (
@@ -36,11 +38,13 @@ func parseLatLng(vidStr string) (maps.LatLng, error) {
 	//   to: 40.774768,111.845329
 	nIndex := strings.Index(vidStr, "N")
 
+	// check if we even found an N
 	if nIndex < 0 {
 		empty, _ := maps.ParseLatLng("")
-		return empty, errors.New("can't find and N in the string")
+		return empty, errors.New("can't find an N in the string")
 	}
 
+	// split up ad lat and long
 	lat := vidStr[nIndex+1:]
 	lon := vidStr[1:nIndex]
 	//TODO: I hardcoded the minus sign, better to fix that properly
@@ -50,9 +54,7 @@ func parseLatLng(vidStr string) (maps.LatLng, error) {
 
 	// now we can just pass the string to the library
 	loc, err := maps.ParseLatLng(coords)
-	if err != nil {
-		return loc, err
-	}
+
 	return loc, err
 }
 
@@ -66,6 +68,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("client error: %s", err)
 	}
+
+	allMarkers := []maps.Marker{}
 
 	// loop over every file in the screencapDir
 	err = filepath.Walk(screencapDir,
@@ -85,9 +89,8 @@ func main() {
 			_, err = os.Stat(imgFilename)
 			if err == nil {
 				fmt.Println(imgFilename, "already exists")
+				return nil
 			}
-
-			fmt.Println(imgFilename)
 
 			// crop the image
 			croppedImage := ocr.CropImage(path)
@@ -102,10 +105,19 @@ func main() {
 				return nil
 			}
 
+			fmt.Println(imgFilename)
+
 			//TODO: make a CustomIcon?
 			marker := maps.Marker{
+				CustomIcon: maps.CustomIcon{
+					IconURL: "/Volumes/usbshare1/minibus.png",
+					Anchor:  "topleft",
+					Scale:   2,
+				},
 				Location: []maps.LatLng{loc},
 			}
+
+			allMarkers = append(allMarkers, marker)
 
 			r := &maps.StaticMapRequest{
 				Center:   *center,
@@ -116,7 +128,8 @@ func main() {
 				Language: *language,
 				Region:   *region,
 				MapType:  maps.MapType(*maptype),
-				Markers:  []maps.Marker{marker},
+				Markers:  allMarkers,
+				// Markers:  []maps.Marker{marker},
 				// Visible:  []maps.LatLng{loc},
 			}
 
@@ -125,8 +138,10 @@ func main() {
 				log.Printf("staticmap fatal error: %s", err)
 			}
 
+			fullImgFilename := p.Join(outputDir, imgFilename)
+
 			// actually create the image
-			f, err := os.Create(imgFilename)
+			f, err := os.Create(fullImgFilename)
 			if err != nil {
 				log.Println(err)
 			}
