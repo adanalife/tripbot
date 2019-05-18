@@ -12,11 +12,6 @@ import (
 	twitch "github.com/gempir/go-twitch-irc"
 )
 
-const (
-	clientUsername = "TripBot4000"
-	channelToJoin  = "adanalife_"
-)
-
 // used to determine which help message to display
 var helpIndex = 0
 

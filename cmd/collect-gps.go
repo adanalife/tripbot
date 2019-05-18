@@ -10,10 +10,6 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/ocr"
 )
 
-const (
-	screencapDir = "/Volumes/usbshare1/first frame of every video"
-)
-
 // this will hold the filename passed in via the CLI
 var videoFile string
 var current bool

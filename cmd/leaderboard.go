@@ -9,6 +9,7 @@ import (
 )
 
 const (
+	//TODO: this should be a CLI flag
 	leaderboardSize = 5
 )
 

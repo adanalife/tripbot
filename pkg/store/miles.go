@@ -9,11 +9,6 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 )
 
-const (
-	userJoinsBucket   = "user_joins"
-	userWatchedBucket = "user_watched"
-)
-
 func (s *Store) MilesForUser(user string) int {
 	prevDuration := s.DurationForUser(user)
 	currDuration := s.CurrentViewDuration(user)

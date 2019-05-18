@@ -16,11 +16,6 @@ import (
 	"googlemaps.github.io/maps"
 )
 
-const (
-	screencapDir = "/Volumes/usbshare1/first frame of every video"
-	outputDir    = "/Volumes/usbshare1/maps"
-)
-
 var (
 	center   = flag.String("center", "", "Center the center of the map, equidistant from all edges of the map.")
 	zoom     = flag.Int("zoom", -1, "Zoom the zoom level of the map, which determines the magnification level of the map.")

@@ -16,12 +16,6 @@ import (
 	"github.com/otiai10/gosseract"
 )
 
-const (
-	screencapDir        = "/Volumes/usbshare1/first frame of every video"
-	getCurrentVidScript = "/Users/dmerrick/other_projects/danalol-stream/bin/current-file.sh"
-	croppedPath         = "/Volumes/usbshare1/cropped-corners"
-)
-
 func GetCurrentVideo() string {
 	// run the shell script to get currently-playing video
 	out, err := exec.Command(getCurrentVidScript).Output()

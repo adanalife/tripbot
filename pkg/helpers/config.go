@@ -1,6 +1,21 @@
 package helpers
 
-var DbPath = "tripbot.db"
+const (
+	ClientUsername = "TripBot4000"
+	ChannelToJoin  = "adanalife_"
+
+	//TODO this should use the ProjectRoot helper
+	GetCurrentVidScript = "/Users/dmerrick/other_projects/danalol-stream/bin/current-file.sh"
+
+	//TODO move these off usbshare1
+	ScreencapDir = "/Volumes/usbshare1/first frame of every video"
+	OutputDir    = "/Volumes/usbshare1/maps"
+	CroppedPath  = "/Volumes/usbshare1/cropped-corners"
+
+	DbPath            = "tripbot.db"
+	UserJoinsBucket   = "user_joins"
+	UserWatchedBucket = "user_watched"
+)
 
 // https://twitchinsights.net/bots
 var IgnoredUsers = []string{
