@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"image/png"
 	"log"
@@ -14,17 +13,6 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	"github.com/dmerrick/danalol-stream/pkg/ocr"
 	"googlemaps.github.io/maps"
-)
-
-var (
-	center   = flag.String("center", "", "Center the center of the map, equidistant from all edges of the map.")
-	zoom     = flag.Int("zoom", -1, "Zoom the zoom level of the map, which determines the magnification level of the map.")
-	size     = flag.String("size", "", "Size defines the rectangular dimensions of the map image.")
-	scale    = flag.Int("scale", -1, "Scale affects the number of pixels that are returned.")
-	format   = flag.String("format", "", "Format defines the format of the resulting image.")
-	maptype  = flag.String("maptype", "", "Maptype defines the type of map to construct.")
-	language = flag.String("language", "", "Language defines the language to use for display of labels on map tiles.")
-	region   = flag.String("region", "", "Region the appropriate borders to display, based on geo-political sensitivities.")
 )
 
 func main() {
@@ -87,14 +75,14 @@ func main() {
 			allMarkers = append(allMarkers, marker)
 
 			r := &maps.StaticMapRequest{
-				Center:   *center,
+				Center:   "",
 				Zoom:     6,         // *zoom,
 				Size:     "600x400", // *size,
-				Scale:    *scale,
-				Format:   maps.Format(*format),
-				Language: *language,
-				Region:   *region,
-				MapType:  maps.MapType(*maptype),
+				Scale:    -1,
+				Format:   maps.Format(""),
+				Language: "",
+				Region:   "",
+				MapType:  maps.MapType(""),
 				Markers:  allMarkers,
 				// Markers:  []maps.Marker{marker},
 				// Visible:  []maps.LatLng{loc},
