@@ -6,7 +6,7 @@ import (
 	"image/png"
 	"log"
 	"os"
-	p "path"
+	gopath "path"
 	"path/filepath"
 
 	"github.com/dmerrick/danalol-stream/pkg/config"
@@ -93,7 +93,7 @@ func main() {
 				log.Printf("staticmap fatal error: %s", err)
 			}
 
-			fullImgFilename := p.Join(config.MapsOutputDir, imgFilename)
+			fullImgFilename := gopath.Join(config.MapsOutputDir, imgFilename)
 
 			// actually create the image
 			f, err := os.Create(fullImgFilename)
