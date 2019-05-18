@@ -1,8 +1,8 @@
 package helpers
 
 const (
-	ClientUsername = "TripBot4000"
-	ChannelToJoin  = "adanalife_"
+	BotUsername = "TripBot4000"
+	ChannelName = "adanalife_"
 
 	//TODO this should use the ProjectRoot helper
 	GetCurrentVidScript = "/Users/dmerrick/other_projects/danalol-stream/bin/current-file.sh"
