@@ -4,11 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/disintegration/imaging"
@@ -27,7 +25,7 @@ func GetCurrentVideo() string {
 }
 
 func ScreenshotPath(videoFile string) string {
-	split := splitOnRegex(videoFile, "\\.")
+	split := helpers.SplitOnRegex(videoFile, "\\.")
 	if len(split) < 2 {
 		log.Printf("you must provide a valid file name")
 	}
@@ -55,7 +53,7 @@ func CoordsFromImage(path string) (string, error) {
 func cropImage(srcFilename string) string {
 	// exit early if the cropped file already exists
 	croppedFile := filepath.Join(config.CroppedPath, path.Base(srcFilename))
-	if fileExists(croppedFile) {
+	if helpers.FileExists(croppedFile) {
 		return croppedFile
 	}
 
@@ -109,7 +107,7 @@ func extractCoords(text string) string {
 	// strip all whitespace
 	tidy := strings.Replace(text, " ", "", -1)
 	// try to separate the text using the speed
-	split := splitOnRegex(tidy, "MPH")
+	split := helpers.SplitOnRegex(tidy, "MPH")
 	// if we didn't find the speed, just exit
 	if len(split) < 2 {
 		return ""
@@ -117,27 +115,4 @@ func extractCoords(text string) string {
 	// use only the second half (the GPS coordinates)
 	coords := split[1]
 	return coords
-}
-
-// splitOnRegex will is the equivalent of str.split(/regex/)
-func splitOnRegex(text string, delimeter string) []string {
-	reg := regexp.MustCompile(delimeter)
-	indexes := reg.FindAllStringIndex(text, -1)
-	laststart := 0
-	result := make([]string, len(indexes)+1)
-	for i, element := range indexes {
-		result[i] = text[laststart:element[0]]
-		laststart = element[1]
-	}
-	result[len(indexes)] = text[laststart:]
-	return result
-}
-
-// fileExists simply returns true if a file exists
-func fileExists(path string) bool {
-	_, err := os.Stat(path)
-	if os.IsNotExist(err) {
-		return false
-	}
-	return err == nil
 }

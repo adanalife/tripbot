@@ -55,8 +55,7 @@ func main() {
 			imgFilename := filepath.Base(path)
 
 			// check if file already exists
-			_, err = os.Stat(imgFilename)
-			if err == nil {
+			if helpers.FileExists(imgFilename) {
 				fmt.Println(imgFilename, "already exists")
 				return nil
 			}

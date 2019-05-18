@@ -3,8 +3,10 @@ package helpers
 import (
 	"errors"
 	"fmt"
+	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -64,4 +66,27 @@ func ParseLatLng(vidStr string) (maps.LatLng, error) {
 	loc, err := maps.ParseLatLng(coords)
 
 	return loc, err
+}
+
+// splitOnRegex will is the equivalent of str.split(/regex/)
+func SplitOnRegex(text string, delimeter string) []string {
+	reg := regexp.MustCompile(delimeter)
+	indexes := reg.FindAllStringIndex(text, -1)
+	laststart := 0
+	result := make([]string, len(indexes)+1)
+	for i, element := range indexes {
+		result[i] = text[laststart:element[0]]
+		laststart = element[1]
+	}
+	result[len(indexes)] = text[laststart:]
+	return result
+}
+
+// fileExists simply returns true if a file exists
+func FileExists(path string) bool {
+	_, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		return false
+	}
+	return err == nil
 }
