@@ -63,8 +63,8 @@ func (s *Store) Open() error {
 
 	// Initialize all the required buckets.
 	if err := s.db.Update(func(tx *bolt.Tx) error {
-		tx.CreateBucketIfNotExists([]byte(userJoinsBucket))
-		tx.CreateBucketIfNotExists([]byte(userWatchedBucket))
+		tx.CreateBucketIfNotExists([]byte(helpers.UserJoinsBucket))
+		tx.CreateBucketIfNotExists([]byte(helpers.UserWatchedBucket))
 		return nil
 	}); err != nil {
 		s.Close()
