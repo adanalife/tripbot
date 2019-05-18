@@ -46,35 +46,29 @@ func (s *Store) CurrentViewDuration(user string) time.Duration {
 }
 
 func (s *Store) TopUsers(size int) []string {
-	var reversedMap = make(map[int]string)
 	var topUsers = []string{}
-
-	sortedValues := []int{}
+	var reversedMap = make(map[int]string)
+	var sortedValues = []int{}
 
 	s.db.View(func(tx *bolt.Tx) error {
 		watchedBucket := tx.Bucket([]byte(config.UserWatchedBucket))
-		//TODO: do I need this?
-		// joinedBucket := tx.Bucket([]byte(userJoinsBucket))
 
 		err := watchedBucket.ForEach(func(k, v []byte) error {
 			user := string(k)
 			// don't include these in leaderboard
-			//TODO: this should be a func
-			for _, ignored := range config.IgnoredUsers {
-				if user == ignored {
-					return nil
-				}
+			if helpers.UserIsIgnored(user) {
+				return nil
 			}
 
 			// fetch current view duration...
-			// currentDuration := s.CurrentViewDuration(user)
+			currDuration := s.CurrentViewDuration(user)
 			// ...and the previous view duration
-			duration, err := time.ParseDuration(string(v))
+			prevDuration, err := time.ParseDuration(string(v))
 			if err != nil {
 				return err
 			}
 			// add them together
-			intDuration := int(duration) // + int(currentDuration)
+			intDuration := int(currDuration) + int(prevDuration)
 			sortedValues = append(sortedValues, intDuration)
 			reversedMap[intDuration] = user
 			return err
