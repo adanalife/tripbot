@@ -1,9 +1,12 @@
 package config
 
 const (
+	// BotUsername is the name of the bot
 	BotUsername = "TripBot4000"
+	// ChannelName is the channel to join
 	ChannelName = "adanalife_"
 
+	// GetCurrentVidScript is a script that figures out the currently-playing video
 	//TODO this should use the ProjectRoot helper
 	GetCurrentVidScript = "/Users/dmerrick/other_projects/danalol-stream/bin/current-file.sh"
 
@@ -17,6 +20,7 @@ const (
 	UserWatchedBucket = "user_watched"
 )
 
+// IgnoredUsers are users who shouldn't be in the running for miles
 // https://twitchinsights.net/bots
 var IgnoredUsers = []string{
 	"adanalife_",
@@ -24,25 +28,26 @@ var IgnoredUsers = []string{
 	"nightbot",
 	"anotherttvviewer",
 	"apricotdrupefruit",
+	"avocadobadado",
 	"commanderroot",
 	"communityshowcase",
 	"electricallongboard",
+	"eubyt",
+	"feuerwehr",
+	"freddyybot",
+	"jobi_essen",
 	"logviewer",
 	"lurxx",
 	"p0lizei_",
 	"slocool",
+	"taormina2600",
 	"unixchat",
 	"v_and_k",
 	"virgoproz",
 	"zanekyber",
-	"feuerwehr",
-	"jobi_essen",
-	"freddyybot",
-	"taormina2600",
-	"avocadobadado",
-	"eubyt",
 }
 
+// HelpMessages are all of the different things !help can return
 var HelpMessages = []string{
 	"!tripbot: Get the current location (beta)",
 	"!map: Show a map of the whole trip",
