@@ -20,6 +20,7 @@ const (
 	UserWatchedBucket = "user_watched"
 )
 
+//TODO: this should load from a config file
 // IgnoredUsers are users who shouldn't be in the running for miles
 // https://twitchinsights.net/bots
 var IgnoredUsers = []string{
