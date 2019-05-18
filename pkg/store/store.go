@@ -21,11 +21,7 @@ func FindOrCreate(dbFile string) *Store {
 	}
 
 	// initialize the database
-	//TODO optimize this
 	datastore := NewStore(dbFile)
-	if dbFile != "" {
-		datastore = NewStore(helpers.DbPath)
-	}
 
 	if err := datastore.Open(); err != nil {
 		panic(err)
