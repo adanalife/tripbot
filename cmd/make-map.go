@@ -47,11 +47,11 @@ func main() {
 			imgFilename := filepath.Base(path)
 			fullImgFilename := gopath.Join(config.MapsOutputDir, imgFilename)
 
-			// check if file already exists
-			if helpers.FileExists(fullImgFilename) {
-				fmt.Println(imgFilename, "already exists")
-				return nil
-			}
+			// // check if file already exists
+			// if helpers.FileExists(fullImgFilename) {
+			// 	fmt.Println(imgFilename, "already exists")
+			// 	return nil
+			// }
 
 			coordStr, err := ocr.CoordsFromImage(path)
 			if err != nil {
@@ -65,7 +65,12 @@ func main() {
 				return nil
 			}
 
-			fmt.Println(imgFilename)
+			// check if file already exists
+			if helpers.FileExists(fullImgFilename) {
+				fmt.Println(imgFilename, "already exists but continuing anyway")
+			} else {
+				fmt.Println(imgFilename)
+			}
 
 			// only update the path every 5 frames
 			if index%5 == 0 {
@@ -78,7 +83,10 @@ func main() {
 				pathPoints = append(pathPoints, loc)
 			}
 
-			// fmt.Println(len(pathPoints))
+			// stop here before we make the image
+			if helpers.FileExists(fullImgFilename) {
+				return nil
+			}
 
 			mapPath := maps.Path{
 				Location: append(pathPoints, loc),
