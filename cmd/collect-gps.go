@@ -23,14 +23,16 @@ func init() {
 
 func main() {
 
-	// set videoFile if -current was passed n
+	// set videoFile if -current was passed in
 	if current {
+		// first we check if too many flags were used
 		if videoFile != "" {
 			log.Fatal("you cannot use -current and -file at the same time")
 		}
 		videoFile = ocr.GetCurrentVideo()
 	}
 
+	// a file was passed in via the CLI
 	if videoFile != "" {
 		path := ocr.ScreenshotPath(videoFile)
 		url, err := ocr.ProcessImage(path)
