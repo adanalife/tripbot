@@ -30,7 +30,7 @@ func main() {
 	datastore := store.FindOrCreate(helpers.DbPath)
 
 	// time to set up the Twitch client
-	client := twitch.NewClient(BotUsername, clientAuthenticationToken)
+	client := twitch.NewClient(helpers.BotUsername, clientAuthenticationToken)
 
 	client.OnUserJoinMessage(func(joinMessage twitch.UserJoinMessage) {
 		if !helpers.UserIsIgnored(joinMessage.User) {
