@@ -42,11 +42,11 @@ func ScreenshotPath(videoFile string) string {
 
 func ProcessImage(path string) (string, error) {
 	// crop the image
-	croppedImage := cropImage(path)
+	croppedImage := CropImage(path)
 	// read off the text
-	textFromImage := readText(croppedImage)
+	textFromImage := ReadText(croppedImage)
 	// pull out the coords
-	coordStr := extractCoords(textFromImage)
+	coordStr := ExtractCoords(textFromImage)
 
 	// don't do anything if we didn't get good coords
 	if coordStr == "" {
@@ -60,7 +60,7 @@ func ProcessImage(path string) (string, error) {
 }
 
 // cropImage cuts a dashcam screencap down to just the bottom right corner
-func cropImage(srcFilename string) string {
+func CropImage(srcFilename string) string {
 	// exit early if the cropped file already exists
 	croppedFile := filepath.Join(croppedPath, path.Base(srcFilename))
 	if fileExists(croppedFile) {
@@ -91,7 +91,7 @@ func cropImage(srcFilename string) string {
 }
 
 // readText uses OCR to read the text from an image file
-func readText(imgFile string) string {
+func ReadText(imgFile string) string {
 	client := gosseract.NewClient()
 	defer client.Close()
 
@@ -113,7 +113,7 @@ func readText(imgFile string) string {
 // extractCoords expects an OCR-ed string which
 // may or may not contain GPS coordinates, and
 // returns its best guess at what the coords are
-func extractCoords(text string) string {
+func ExtractCoords(text string) string {
 	// strip all whitespace
 	tidy := strings.Replace(text, " ", "", -1)
 	// try to separate the text using the speed

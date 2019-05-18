@@ -7,9 +7,15 @@ import (
 	"image/png"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 
+	"github.com/dmerrick/danalol-stream/pkg/ocr"
 	"googlemaps.github.io/maps"
+)
+
+const (
+	screencapDir = "/Volumes/usbshare1/first frame of every video"
 )
 
 var (
@@ -53,48 +59,75 @@ func main() {
 		log.Fatalf("fatal error: %s", err)
 	}
 
-	// just an example
-	coords := "W111.845329N40.774768"
-	loc, err := parseLatLng(coords)
+	// loop over every file in the screencapDir
+	err = filepath.Walk(screencapDir,
+		func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			// skip the directory name itself
+			if path == screencapDir {
+				return nil
+			}
+
+			// crop the image
+			croppedImage := ocr.CropImage(path)
+			// read off the text
+			textFromImage := ocr.ReadText(croppedImage)
+			// pull out the coords
+			coordStr := ocr.ExtractCoords(textFromImage)
+
+			loc, err := parseLatLng(coordStr)
+			if err != nil {
+				log.Fatalf("fatal error: %s", err)
+			}
+
+			//TODO: make a CustomIcon?
+			marker := maps.Marker{
+				Location: []maps.LatLng{loc},
+			}
+
+			r := &maps.StaticMapRequest{
+				Center:   *center,
+				Zoom:     6,         // *zoom,
+				Size:     "600x400", // *size,
+				Scale:    *scale,
+				Format:   maps.Format(*format),
+				Language: *language,
+				Region:   *region,
+				MapType:  maps.MapType(*maptype),
+				Markers:  []maps.Marker{marker},
+				// Visible:  []maps.LatLng{loc},
+			}
+
+			img, err := client.StaticMap(context.Background(), r)
+			if err != nil {
+				log.Fatalf("fatal error: %s", err)
+			}
+
+			// save the file
+			imgFilename := fmt.Sprintf("%s.png", path)
+
+			fmt.Println(imgFilename)
+
+			f, err := os.Create(imgFilename)
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			if err := png.Encode(f, img); err != nil {
+				f.Close()
+				log.Fatal(err)
+			}
+
+			if err := f.Close(); err != nil {
+				log.Fatal(err)
+			}
+			return err
+		})
+	// something went wrong walking the directory
 	if err != nil {
-		log.Fatalf("fatal error: %s", err)
+		log.Println(err)
 	}
 
-	//TODO: make a CustomIcon?
-	marker := maps.Marker{
-		Location: []maps.LatLng{loc},
-	}
-
-	r := &maps.StaticMapRequest{
-		Center:   *center,
-		Zoom:     6,         // *zoom,
-		Size:     "600x400", // *size,
-		Scale:    *scale,
-		Format:   maps.Format(*format),
-		Language: *language,
-		Region:   *region,
-		MapType:  maps.MapType(*maptype),
-		Markers:  []maps.Marker{marker},
-		// Visible:  []maps.LatLng{loc},
-	}
-
-	img, err := client.StaticMap(context.Background(), r)
-	if err != nil {
-		log.Fatalf("fatal error: %s", err)
-	}
-
-	// save the file
-	f, err := os.Create("map.png")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	if err := png.Encode(f, img); err != nil {
-		f.Close()
-		log.Fatal(err)
-	}
-
-	if err := f.Close(); err != nil {
-		log.Fatal(err)
-	}
 }
