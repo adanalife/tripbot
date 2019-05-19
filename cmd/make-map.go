@@ -64,6 +64,8 @@ func main() {
 	// the number of loops we've gone over
 	index := 0
 
+	gosseractClient := ocr.NewClient()
+
 	// loop over every file in the screencapDir
 	err = filepath.Walk(config.VideoDir,
 		func(path string, _ os.FileInfo, err error) error {
@@ -74,8 +76,6 @@ func main() {
 			if path == config.VideoDir {
 				return nil
 			}
-
-			fmt.Println(index)
 
 			// this is where we will save the map image
 			imgFilename := filepath.Base(path)
@@ -94,7 +94,7 @@ func main() {
 			}
 
 			// extract the coords from the image
-			lat, lon, err := ocr.CoordsFromVideoWithRetry(path)
+			lat, lon, err := ocr.CoordsFromVideoWithRetry(gosseractClient, path)
 			if err != nil {
 				fmt.Println(imgFilename, "coords not found:", err)
 				return nil

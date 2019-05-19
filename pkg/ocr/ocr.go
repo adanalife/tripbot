@@ -24,6 +24,19 @@ var timestampsToTry = []string{
 	"230",
 }
 
+func NewClient() *gosseract.Client {
+	fmt.Println("making new client")
+	gosseractClient := gosseract.NewClient()
+	defer gosseractClient.Close()
+
+	// set up tesseract to improve OCR accuracy
+	gosseractClient.SetConfigFile(path.Join(helpers.ProjectRoot(), "configs/tesseract.cfg"))
+	// https://github.com/tesseract-ocr/tesseract/wiki/ImproveQuality#page-segmentation-method
+	//TODO: use single line
+	gosseractClient.SetPageSegMode(gosseract.PSM_SINGLE_BLOCK)
+	return gosseractClient
+}
+
 func GetCurrentVideo() string {
 	// run the shell script to get currently-playing video
 	out, err := exec.Command(config.GetCurrentVidScript).Output()
@@ -33,7 +46,7 @@ func GetCurrentVideo() string {
 	return string(out)
 }
 
-func CoordsFromVideoWithRetry(videoFile string) (float64, float64, error) {
+func CoordsFromVideoWithRetry(client *gosseract.Client, videoFile string) (float64, float64, error) {
 	split := helpers.SplitOnRegex(filepath.Base(videoFile), "\\.")
 	if len(split) < 2 {
 		return 0, 0, errors.New("no period found in video file")
@@ -45,7 +58,7 @@ func CoordsFromVideoWithRetry(videoFile string) (float64, float64, error) {
 		subdir := fmt.Sprintf("0%s", timestamp)
 		fullPath := path.Join(config.ScreencapDir, subdir, screencapFile)
 
-		lat, lon, err := CoordsFromImage(fullPath)
+		lat, lon, err := CoordsFromImage(client, fullPath)
 		if err == nil {
 			return lat, lon, err
 		}
@@ -53,14 +66,15 @@ func CoordsFromVideoWithRetry(videoFile string) (float64, float64, error) {
 	return 0, 0, errors.New("none of the screencaps had valid coords")
 }
 
-func CoordsFromImage(path string) (float64, float64, error) {
+func CoordsFromImage(client *gosseract.Client, path string) (float64, float64, error) {
+	fmt.Println("got into CoordsFromImage")
 	// crop the image
 	croppedImage, err := cropImage(path)
 	if err != nil {
 		return 0, 0, err
 	}
 	// read off the text
-	textFromImage, err := readText(croppedImage)
+	textFromImage, err := readText(client, croppedImage)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -113,19 +127,13 @@ func cropImage(srcFilename string) (string, error) {
 }
 
 // readText uses OCR to read the text from an image file
-func readText(imgFile string) (string, error) {
-	client := gosseract.NewClient()
-	defer client.Close()
-
-	// set up tesseract to improve OCR accuracy
-	client.SetConfigFile(path.Join(helpers.ProjectRoot(), "configs/tesseract.cfg"))
-	// https://github.com/tesseract-ocr/tesseract/wiki/ImproveQuality#page-segmentation-method
-	//TODO: use single line
-	client.SetPageSegMode(gosseract.PSM_SINGLE_BLOCK)
-
+func readText(gosseractClient *gosseract.Client, imgFile string) (string, error) {
+	fmt.Println("got into readText")
 	// read the file
-	client.SetImage(imgFile)
-	text, err := client.Text()
+	gosseractClient.SetImage(imgFile)
+	fmt.Println("set file")
+	text, err := gosseractClient.Text()
+	fmt.Println("ran text()")
 	if err != nil {
 		// log.Printf("failed to read text: %v", err)
 		return "", err
