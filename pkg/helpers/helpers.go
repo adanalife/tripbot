@@ -61,7 +61,11 @@ func ParseLatLng(ocrStr string) (float64, float64, error) {
 	lon, _ := strconv.ParseFloat(ocrStr[1:nIndex], 64)
 
 	if lat == 0.0 || lon == 0.0 {
-		return lat, lon, errors.New("failed to convert to float")
+		return lat, lon, errors.New("failed to convert lat or lon to float")
+	}
+
+	if lat < -90 || lat > 90 || lon < -180 || lon > 180 {
+		return lat, lon, errors.New("lat or lon had impossible magnitude")
 	}
 
 	//TODO: I hardcoded the minus sign, better to fix that properly
