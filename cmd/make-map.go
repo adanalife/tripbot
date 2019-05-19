@@ -32,16 +32,46 @@ func saveImage(img image.Image, imgPath string) error {
 	return err
 }
 
-func makeGoogleMap(c *maps.Client, loc maps.LatLng, pathPoints []maps.LatLng) (image.Image, error) {
-	// create the path
-	mapPath := maps.Path{
-		Location: append(pathPoints, loc),
+// this splits a big array of LatLngs into an array of Paths
+func splitPathPoints(pathPoints []maps.LatLng) []maps.Path {
+	var divided []maps.Path
+
+	chunkSize := 15
+	for i := 0; i < len(pathPoints); i += chunkSize {
+		end := i + chunkSize
+
+		if end > len(pathPoints) {
+			end = len(pathPoints)
+		}
+
+		// create a Path using this chunk of points
+		mapPath := maps.Path{
+			Location: pathPoints[i:end],
+		}
+
+		divided = append(divided, mapPath)
 	}
+	maxSize := 300
+	if len(divided) > maxSize {
+		return divided[:maxSize]
+	}
+	return divided
+}
+
+func makeGoogleMap(c *maps.Client, loc maps.LatLng, pathPoints []maps.LatLng) (image.Image, error) {
+	// add the current point
+	pathPoints = append(pathPoints, loc)
+	paths := splitPathPoints(pathPoints)
 
 	// add a marker for current location
-	//TODO custom icon
+	iconURL := "https://staging.dana.lol/assets/minibus.png"
 	marker := maps.Marker{
 		Location: []maps.LatLng{loc},
+		CustomIcon: maps.CustomIcon{
+			IconURL: iconURL,
+			Anchor:  "center",
+			Scale:   4,
+		},
 	}
 
 	mapRequest := &maps.StaticMapRequest{
@@ -53,8 +83,9 @@ func makeGoogleMap(c *maps.Client, loc maps.LatLng, pathPoints []maps.LatLng) (i
 		Language: "",
 		Region:   "",
 		MapType:  maps.MapType(""),
-		Paths:    []maps.Path{mapPath},
-		Markers:  []maps.Marker{marker},
+		// Paths:    []maps.Path{mapPath},
+		Paths:   paths,
+		Markers: []maps.Marker{marker},
 	}
 
 	img, err := c.StaticMap(context.Background(), mapRequest)
