@@ -102,6 +102,15 @@ func main() {
 
 		}
 
+		if strings.HasPrefix(strings.ToLower(message.Message), "!leaderboard") {
+			log.Println(message.User.Name, "ran !leaderboard")
+			userList := datastore.TopUsers(3)
+			for i, user := range userList {
+				msg := fmt.Printf("#%d: %s (%dmi)", i, user, datastore.MilesForUser(user))
+				client.Say(config.ChannelName, msg)
+			}
+		}
+
 		if strings.HasPrefix(strings.ToLower(message.Message), "!date") {
 			log.Println(message.User.Name, "ran !date")
 			// get the currently-playing video
