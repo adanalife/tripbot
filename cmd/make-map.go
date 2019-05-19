@@ -16,6 +16,33 @@ import (
 	"googlemaps.github.io/maps"
 )
 
+var googleMapsStyle = []string{
+	"element:geometry%7Ccolor:0x242f3e",
+	"element:labels.text.stroke%7Clightness:-80",
+	"feature:administrative%7Celement:labels.text.fill%7Ccolor:0x746855",
+	"feature:administrative.locality%7Celement:labels.text.fill%7Ccolor:0xd59563",
+	"feature:poi%7Celement:labels.text.fill%7Ccolor:0xd59563",
+	"feature:poi.park%7Celement:geometry%7Ccolor:0x263c3f",
+	"feature:poi.park%7Celement:labels.text.fill%7Ccolor:0x6b9a76",
+	"feature:road%7Celement:geometry.fill%7Ccolor:0x2b3544",
+	"feature:road%7Celement:labels.text.fill%7Ccolor:0x9ca5b3",
+	"feature:road.arterial%7Celement:geometry.fill%7Ccolor:0x38414e",
+	"feature:road.arterial%7Celement:geometry.stroke%7Ccolor:0x212a37",
+	"feature:road.arterial%7Celement:labels%7Cvisibility:off",
+	"feature:road.highway%7Celement:geometry.fill%7Ccolor:0x746855",
+	"feature:road.highway%7Celement:geometry.stroke%7Ccolor:0x1f2835",
+	"feature:road.highway%7Celement:labels%7Cvisibility:off",
+	"feature:road.highway%7Celement:labels.text.fill%7Ccolor:0xf3d19c",
+	"feature:road.local%7Cvisibility:off",
+	"feature:road.local%7Celement:geometry.fill%7Ccolor:0x38414e",
+	"feature:road.local%7Celement:geometry.stroke%7Ccolor:0x212a37",
+	"feature:transit%7Celement:geometry%7Ccolor:0x2f3948",
+	"feature:transit.station%7Celement:labels.text.fill%7Ccolor:0xd59563",
+	"feature:water%7Celement:geometry%7Ccolor:0x17263c",
+	"feature:water%7Celement:labels.text.fill%7Ccolor:0x515c6d",
+	"feature:water%7Celement:labels.text.stroke%7Clightness:-20",
+}
+
 // actually create the image
 func saveImage(img image.Image, imgPath string) error {
 	f, err := os.Create(imgPath)
@@ -75,14 +102,15 @@ func makeGoogleMap(c *maps.Client, loc maps.LatLng, pathPoints []maps.LatLng) (i
 	}
 
 	mapRequest := &maps.StaticMapRequest{
-		Center:   loc.String(),
-		Zoom:     6,
-		Size:     "600x400",
-		Scale:    -1,
-		Format:   maps.Format(""),
-		Language: "",
-		Region:   "",
-		MapType:  maps.MapType(""),
+		MapStyles: googleMapsStyle,
+		Center:    loc.String(),
+		Zoom:      6,
+		Size:      "600x400",
+		Scale:     -1,
+		Format:    maps.Format(""),
+		Language:  "",
+		Region:    "",
+		MapType:   maps.MapType(""),
 		// Paths:    []maps.Path{mapPath},
 		Paths:   paths,
 		Markers: []maps.Marker{marker},
