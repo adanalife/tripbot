@@ -56,6 +56,10 @@ func ParseLatLng(ocrStr string) (float64, float64, error) {
 		return 0, 0, errors.New("can't find an N in the string")
 	}
 
+	if nIndex == 0 {
+		return 0, 0, errors.New("N was the first letter")
+	}
+
 	// split up ad lat and long
 	lat, _ := strconv.ParseFloat(ocrStr[nIndex+1:], 64)
 	lon, _ := strconv.ParseFloat(ocrStr[1:nIndex], 64)
