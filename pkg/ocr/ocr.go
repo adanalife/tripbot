@@ -85,7 +85,7 @@ func cropImage(srcFilename string) (string, error) {
 	// open the image
 	src, err := imaging.Open(srcFilename)
 	if err != nil {
-		if err.Error() == "too many open files" {
+		if strings.Contains(err.Error(), "too many open files") {
 			log.Fatal("too many open files")
 		}
 		log.Printf("failed to open image: %v", err)
