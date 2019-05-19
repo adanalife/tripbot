@@ -45,6 +45,10 @@ func main() {
 		}
 	})
 
+	client.OnUserStateMessage(func(message twitch.UserStateMessage) {
+		log.Println("user state:", message.User, message.Raw)
+	})
+
 	client.OnWhisperMessage(func(message twitch.WhisperMessage) {
 		log.Println("whisper:", message.User.Name, message.Message)
 	})
