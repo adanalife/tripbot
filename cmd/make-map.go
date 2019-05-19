@@ -9,6 +9,7 @@ import (
 	"os"
 	gopath "path"
 	"path/filepath"
+	"time"
 
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
@@ -93,6 +94,14 @@ func main() {
 			imgFilename := filepath.Base(path)
 			fullImgFilename := gopath.Join(config.MapsOutputDir, imgFilename)
 
+			// skip stuff from before this time
+			// time.Date(year, time.Month(month), day, hour, minute, second, 0, time.UTC)
+			skipTo := time.Date(2018, time.August, 10, 0, 0, 0, 0, time.UTC)
+			vidTime := helpers.VidStrToDate(imgFilename)
+			if vidTime.Before(skipTo) {
+				fmt.Println(imgFilename, "ignored")
+				return nil
+			}
 			// extract the coords from the image
 			coordStr, err := ocr.CoordsFromImage(path)
 			if err != nil {
