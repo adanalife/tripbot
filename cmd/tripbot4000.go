@@ -123,10 +123,8 @@ func main() {
 				realDate := helpers.ActualDate(vidDate, lat, lon)
 				// "Mon, 02 Jan 2006 15:04:05 MST"
 				fmtDate := realDate.Format(time.RFC1123)
-				client.Say(config.ChannelName, fmt.Sprintf("this was recorded on %s", fmtDate))
+				client.Say(config.ChannelName, fmt.Sprintf("This moment was %s", fmtDate))
 			}
-
-			// client.Say(config.ChannelName, msg)
 		}
 	})
 
