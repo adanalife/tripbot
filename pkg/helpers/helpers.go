@@ -40,8 +40,9 @@ func UserIsIgnored(user string) bool {
 }
 
 // GoogleMapsURL returns a google maps link to the coords provided
+//TODO find query param for zoom level
 func GoogleMapsURL(lat, long float64) string {
-	return fmt.Sprintf("https://www.google.com/maps?q=\"%f,%f\"", lat, long)
+	return fmt.Sprintf("https://www.google.com/maps/search/?api=1&query=%f,%f", lat, long)
 }
 
 // ParseLatLng converts an OCRed string into a LatLng
