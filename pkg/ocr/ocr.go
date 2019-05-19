@@ -24,12 +24,14 @@ func GetCurrentVideo() string {
 	return string(out)
 }
 
+//TODO rename to VideoStrToScreencap
 func ScreenshotPath(videoFile string) string {
 	split := helpers.SplitOnRegex(videoFile, "\\.")
 	if len(split) < 2 {
 		log.Printf("you must provide a valid file name")
 	}
-	screencapFile := fmt.Sprintf("%s.png", split[0])
+	//TODO add the leading 0
+	screencapFile := fmt.Sprintf("%s-000.png", split[0])
 	return path.Join(config.ScreencapDir, screencapFile)
 }
 
