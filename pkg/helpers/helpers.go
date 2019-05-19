@@ -60,7 +60,7 @@ func ParseLatLng(ocrStr string) (float64, float64, error) {
 	lat, _ := strconv.ParseFloat(ocrStr[nIndex+1:], 64)
 	lon, _ := strconv.ParseFloat(ocrStr[1:nIndex], 64)
 
-	if lat == 0 && lon == 0 {
+	if lat == 0.0 || lon == 0.0 {
 		return lat, lon, errors.New("failed to convert to float")
 	}
 
