@@ -71,6 +71,8 @@ func cropImage(srcFilename string) (string, error) {
 
 	// crop the image to just the bottom left text
 	croppedImage := imaging.CropAnchor(src, 600, 60, imaging.BottomLeft)
+	//TODO this is an attempt to force the file to get closed
+	src = nil
 
 	// apply some tweaks to make it easier to read
 	croppedImage = imaging.Grayscale(croppedImage)
