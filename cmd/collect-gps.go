@@ -36,11 +36,11 @@ func main() {
 	// a file was passed in via the CLI
 	if videoFile != "" {
 		path := ocr.ScreenshotPath(videoFile)
-		coords, err := ocr.CoordsFromImage(path)
+		lat, lon, err := ocr.CoordsFromImage(path)
 		if err != nil {
 			log.Fatalf("failed to process image: %v", err)
 		}
-		url := helpers.GoogleMapsURL(coords)
+		url := helpers.GoogleMapsURL(lat, lon)
 		fmt.Println(url)
 
 	} else {
@@ -57,12 +57,12 @@ func main() {
 				}
 
 				// actually process the image
-				coords, err := ocr.CoordsFromImage(path)
+				lat, lon, err := ocr.CoordsFromImage(path)
 				if err != nil {
 					log.Printf("failed to process image: %v", err)
 					return nil
 				}
-				url := helpers.GoogleMapsURL(coords)
+				url := helpers.GoogleMapsURL(lat, lon)
 				fmt.Println(url)
 				return err
 			})
