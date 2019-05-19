@@ -9,12 +9,15 @@ import (
 	"os"
 	gopath "path"
 	"path/filepath"
+	"time"
 
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	"github.com/dmerrick/danalol-stream/pkg/ocr"
 	"googlemaps.github.io/maps"
 )
+
+var skipTo = time.Date(2018, time.Month(5), 12, 0, 0, 0, 0, time.UTC)
 
 var googleMapsStyle = []string{
 	"element:geometry|color:0x242f3e",
@@ -157,12 +160,13 @@ func main() {
 
 			// skip stuff from before this time
 			// time.Date(year, time.Month(month), day, hour, minute, second, 0, time.UTC)
-			// skipTo := time.Date(2018, time.October, 15, 0, 0, 0, 0, time.UTC)
-			// vidTime := helpers.VidStrToDate(imgFilename)
-			// if vidTime.Before(skipTo) {
-			// 	fmt.Println(imgFilename, "ignored")
-			// 	return nil
-			// }
+			if skipDate != nil {
+				vidTime := helpers.VidStrToDate(imgFilename)
+				if vidTime.Before(skipTo) {
+					fmt.Println(imgFilename, "ignored")
+					return nil
+				}
+			}
 
 			// extract the coords from the image
 			lat, lon, err := ocr.CoordsFromVideoWithRetry(path)
