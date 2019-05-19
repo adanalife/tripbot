@@ -17,30 +17,30 @@ import (
 )
 
 var googleMapsStyle = []string{
-	"element:geometry%7Ccolor:0x242f3e",
-	"element:labels.text.stroke%7Clightness:-80",
-	"feature:administrative%7Celement:labels.text.fill%7Ccolor:0x746855",
-	"feature:administrative.locality%7Celement:labels.text.fill%7Ccolor:0xd59563",
-	"feature:poi%7Celement:labels.text.fill%7Ccolor:0xd59563",
-	"feature:poi.park%7Celement:geometry%7Ccolor:0x263c3f",
-	"feature:poi.park%7Celement:labels.text.fill%7Ccolor:0x6b9a76",
-	"feature:road%7Celement:geometry.fill%7Ccolor:0x2b3544",
-	"feature:road%7Celement:labels.text.fill%7Ccolor:0x9ca5b3",
-	"feature:road.arterial%7Celement:geometry.fill%7Ccolor:0x38414e",
-	"feature:road.arterial%7Celement:geometry.stroke%7Ccolor:0x212a37",
-	"feature:road.arterial%7Celement:labels%7Cvisibility:off",
-	"feature:road.highway%7Celement:geometry.fill%7Ccolor:0x746855",
-	"feature:road.highway%7Celement:geometry.stroke%7Ccolor:0x1f2835",
-	"feature:road.highway%7Celement:labels%7Cvisibility:off",
-	"feature:road.highway%7Celement:labels.text.fill%7Ccolor:0xf3d19c",
-	"feature:road.local%7Cvisibility:off",
-	"feature:road.local%7Celement:geometry.fill%7Ccolor:0x38414e",
-	"feature:road.local%7Celement:geometry.stroke%7Ccolor:0x212a37",
-	"feature:transit%7Celement:geometry%7Ccolor:0x2f3948",
-	"feature:transit.station%7Celement:labels.text.fill%7Ccolor:0xd59563",
-	"feature:water%7Celement:geometry%7Ccolor:0x17263c",
-	"feature:water%7Celement:labels.text.fill%7Ccolor:0x515c6d",
-	"feature:water%7Celement:labels.text.stroke%7Clightness:-20",
+	"element:geometry|color:0x242f3e",
+	"element:labels.text.stroke|lightness:-80",
+	"feature:administrative|element:labels.text.fill|color:0x746855",
+	"feature:administrative.locality|element:labels.text.fill|color:0xd59563",
+	"feature:poi|element:labels.text.fill|color:0xd59563",
+	"feature:poi.park|element:geometry|color:0x263c3f",
+	"feature:poi.park|element:labels.text.fill|color:0x6b9a76",
+	"feature:road|element:geometry.fill|color:0x2b3544",
+	"feature:road|element:labels.text.fill|color:0x9ca5b3",
+	"feature:road.arterial|element:geometry.fill|color:0x38414e",
+	"feature:road.arterial|element:geometry.stroke|color:0x212a37",
+	"feature:road.arterial|element:labels|visibility:off",
+	"feature:road.highway|element:geometry.fill|color:0x746855",
+	"feature:road.highway|element:geometry.stroke|color:0x1f2835",
+	"feature:road.highway|element:labels|visibility:off",
+	"feature:road.highway|element:labels.text.fill|color:0xf3d19c",
+	"feature:road.local|visibility:off",
+	"feature:road.local|element:geometry.fill|color:0x38414e",
+	"feature:road.local|element:geometry.stroke|color:0x212a37",
+	"feature:transit|element:geometry|color:0x2f3948",
+	"feature:transit.station|element:labels.text.fill|color:0xd59563",
+	"feature:water|element:geometry|color:0x17263c",
+	"feature:water|element:labels.text.fill|color:0x515c6d",
+	"feature:water|element:labels.text.stroke|lightness:-20",
 }
 
 // actually create the image
@@ -73,6 +73,7 @@ func splitPathPoints(pathPoints []maps.LatLng) []maps.Path {
 
 		// create a Path using this chunk of points
 		mapPath := maps.Path{
+			Color:    "0xccff00", // highlighter yellow
 			Location: pathPoints[i:end],
 		}
 
