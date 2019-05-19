@@ -18,7 +18,7 @@ import (
 )
 
 var skipToDate = true
-var skipDate = time.Date(2018, time.Month(5), 19, 0, 0, 0, 0, time.UTC)
+var skipDate = time.Date(2018, time.Month(5), 29, 0, 0, 0, 0, time.UTC)
 
 var googleMapsStyle = []string{
 	"element:geometry|color:0x242f3e",
@@ -174,7 +174,8 @@ func splitPathPoints(pathPoints []maps.LatLng) []maps.Path {
 
 	chunkSize := 15
 	for i := 0; i < len(pathPoints); i += chunkSize {
-		end := i + chunkSize
+		// add 1 so we overlap with next chunk
+		end := i + chunkSize + 1
 
 		if end > len(pathPoints) {
 			end = len(pathPoints)
