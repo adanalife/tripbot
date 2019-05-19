@@ -96,7 +96,7 @@ func main() {
 
 			// skip stuff from before this time
 			// time.Date(year, time.Month(month), day, hour, minute, second, 0, time.UTC)
-			skipTo := time.Date(2018, time.September, 24, 0, 0, 0, 0, time.UTC)
+			skipTo := time.Date(2018, time.October, 15, 0, 0, 0, 0, time.UTC)
 			vidTime := helpers.VidStrToDate(imgFilename)
 			if vidTime.Before(skipTo) {
 				fmt.Println(imgFilename, "ignored")

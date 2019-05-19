@@ -96,7 +96,7 @@ func main() {
 					client.Say(config.ChannelName, "Sorry, it didn't work this time :(. Try again in a few minutes!")
 				} else {
 					url := helpers.GoogleMapsURL(lat, lon)
-					client.Say(config.ChannelName, fmt.Sprintf("If this doesn't work, try again in a few minutes: %s", url))
+					client.Say(config.ChannelName, fmt.Sprintf("Try this URL: %s", url))
 				}
 				// update the last vid
 				lastVid = currentVid
