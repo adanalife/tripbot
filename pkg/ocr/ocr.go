@@ -15,6 +15,15 @@ import (
 	"github.com/otiai10/gosseract"
 )
 
+var timestampsToTry = []string{
+	"000",
+	"030",
+	"100",
+	"130",
+	"200",
+	"230",
+}
+
 func GetCurrentVideo() string {
 	// run the shell script to get currently-playing video
 	out, err := exec.Command(config.GetCurrentVidScript).Output()
@@ -24,15 +33,24 @@ func GetCurrentVideo() string {
 	return string(out)
 }
 
-//TODO rename to VideoStrToScreencap
-func ScreenshotPath(videoFile string) string {
-	split := helpers.SplitOnRegex(videoFile, "\\.")
+func CoordsFromVideoWithRetry(videoFile string) (float64, float64, error) {
+	split := helpers.SplitOnRegex(filepath.Base(videoFile), "\\.")
 	if len(split) < 2 {
-		log.Printf("you must provide a valid file name")
+		return 0, 0, errors.New("no period found in video file")
 	}
-	//TODO add the leading 0
-	screencapFile := fmt.Sprintf("%s-000.png", split[0])
-	return path.Join(config.ScreencapDir, screencapFile)
+
+	for _, timestamp := range timestampsToTry {
+		screencapFile := fmt.Sprintf("%s-%s.png", split[0], timestamp)
+		//TODO: just rename the files so we can skip this step
+		subdir := fmt.Sprintf("0%s", timestamp)
+		fullPath := path.Join(config.ScreencapDir, subdir, screencapFile)
+
+		lat, lon, err := CoordsFromImage(fullPath)
+		if err == nil {
+			return lat, lon, err
+		}
+	}
+	return 0, 0, errors.New("none of the screencaps had valid coords")
 }
 
 func CoordsFromImage(path string) (float64, float64, error) {
@@ -85,7 +103,7 @@ func cropImage(srcFilename string) (string, error) {
 	// save the resulting image to the disk
 	err = imaging.Save(croppedImage, croppedFile)
 	if err != nil {
-		log.Printf("failed to save image: %v", err)
+		// log.Printf("failed to save image: %v", err)
 		return "", err
 	}
 	return croppedFile, err
@@ -106,7 +124,7 @@ func readText(imgFile string) (string, error) {
 	client.SetImage(imgFile)
 	text, err := client.Text()
 	if err != nil {
-		log.Printf("failed to read text: %v", err)
+		// log.Printf("failed to read text: %v", err)
 		return "", err
 	}
 	return text, err

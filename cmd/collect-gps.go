@@ -35,8 +35,7 @@ func main() {
 
 	// a file was passed in via the CLI
 	if videoFile != "" {
-		path := ocr.ScreenshotPath(videoFile)
-		lat, lon, err := ocr.CoordsFromImage(path)
+		lat, lon, err := ocr.CoordsFromVideoWithRetry(videoFile)
 		if err != nil {
 			log.Fatalf("failed to process image: %v", err)
 		}
@@ -46,20 +45,20 @@ func main() {
 	} else {
 
 		// loop over every file in the screencapDir
-		err := filepath.Walk(config.ScreencapDir,
+		err := filepath.Walk(config.VideoDir,
 			func(path string, info os.FileInfo, err error) error {
 				if err != nil {
 					return err
 				}
 				// skip the directory name itself
-				if path == config.ScreencapDir {
+				if path == config.VideoDir {
 					return nil
 				}
 
 				// actually process the image
-				lat, lon, err := ocr.CoordsFromImage(path)
+				lat, lon, err := ocr.CoordsFromVideoWithRetry(path)
 				if err != nil {
-					log.Printf("failed to process image: %v", err)
+					log.Printf("failed to process video: %v", err)
 					return nil
 				}
 				url := helpers.GoogleMapsURL(lat, lon)

@@ -87,14 +87,14 @@ func main() {
 			// get the currently-playing video
 			currentVid := ocr.GetCurrentVideo()
 
-			// only run once every 3 minutes
+			// only run if this video hasn't yet been processed
 			if currentVid != lastVid {
-				screenshotPath := ocr.ScreenshotPath(currentVid)
-				// extract the coordinates, generate a google maps url
-				lat, lon, err := ocr.CoordsFromImage(screenshotPath)
+				// extract the coordinates
+				lat, lon, err := ocr.CoordsFromVideoWithRetry(currentVid)
 				if err != nil {
 					client.Say(config.ChannelName, "Sorry, it didn't work this time :(. Try again in a few minutes!")
 				} else {
+					// generate a google maps url
 					url := helpers.GoogleMapsURL(lat, lon)
 					client.Say(config.ChannelName, fmt.Sprintf("Try this URL: %s", url))
 				}
@@ -119,7 +119,7 @@ func main() {
 			log.Println(message.User.Name, "ran !date")
 			// get the currently-playing video
 			currentVid := ocr.GetCurrentVideo()
-			lat, lon, err := ocr.CoordsFromImage(ocr.ScreenshotPath(currentVid))
+			lat, lon, err := ocr.CoordsFromVideoWithRetry(currentVid)
 			if err != nil {
 				client.Say(config.ChannelName, "That didn't work, sorry!")
 			} else {

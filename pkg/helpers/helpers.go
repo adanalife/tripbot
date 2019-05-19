@@ -120,3 +120,8 @@ func ActualDate(utcDate time.Time, lat, long float64) time.Time {
 	}
 	return utcDate.In(location)
 }
+
+func RemoveFileExtension(filename string) string {
+	ext := path.Ext(filename)
+	return filename[0 : len(filename)-len(ext)]
+}

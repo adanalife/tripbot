@@ -9,7 +9,6 @@ import (
 	"os"
 	gopath "path"
 	"path/filepath"
-	"time"
 
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
@@ -80,34 +79,35 @@ func main() {
 	index := 0
 
 	// loop over every file in the screencapDir
-	err = filepath.Walk(config.ScreencapDir,
+	err = filepath.Walk(config.VideoDir,
 		func(path string, _ os.FileInfo, err error) error {
 			if err != nil {
 				return err
 			}
 			// skip the directory name itself
-			if path == config.ScreencapDir {
+			if path == config.VideoDir {
 				return nil
 			}
 
 			// this is where we will save the map image
 			imgFilename := filepath.Base(path)
+			imgFilename = helpers.RemoveFileExtension(imgFilename)
+			imgFilename = fmt.Sprintf("%s.png", imgFilename)
 			fullImgFilename := gopath.Join(config.MapsOutputDir, imgFilename)
 
 			// skip stuff from before this time
 			// time.Date(year, time.Month(month), day, hour, minute, second, 0, time.UTC)
-			skipTo := time.Date(2018, time.October, 15, 0, 0, 0, 0, time.UTC)
-			vidTime := helpers.VidStrToDate(imgFilename)
-			if vidTime.Before(skipTo) {
-				fmt.Println(imgFilename, "ignored")
-				return nil
-			}
+			// skipTo := time.Date(2018, time.October, 15, 0, 0, 0, 0, time.UTC)
+			// vidTime := helpers.VidStrToDate(imgFilename)
+			// if vidTime.Before(skipTo) {
+			// 	fmt.Println(imgFilename, "ignored")
+			// 	return nil
+			// }
 
 			// extract the coords from the image
-			lat, lon, err := ocr.CoordsFromImage(path)
+			lat, lon, err := ocr.CoordsFromVideoWithRetry(path)
 			if err != nil {
 				fmt.Println(imgFilename, "coords not found:", err)
-				// fmt.Println(imgFilename, "coords not found")
 				return nil
 			}
 
