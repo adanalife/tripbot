@@ -17,7 +17,8 @@ import (
 	"googlemaps.github.io/maps"
 )
 
-var skipTo = time.Date(2018, time.Month(5), 12, 0, 0, 0, 0, time.UTC)
+var skipToDate = true
+var skipDate = time.Date(2018, time.Month(5), 12, 0, 0, 0, 0, time.UTC)
 
 var googleMapsStyle = []string{
 	"element:geometry|color:0x242f3e",
@@ -160,9 +161,9 @@ func main() {
 
 			// skip stuff from before this time
 			// time.Date(year, time.Month(month), day, hour, minute, second, 0, time.UTC)
-			if skipDate != nil {
+			if skipToDate {
 				vidTime := helpers.VidStrToDate(imgFilename)
-				if vidTime.Before(skipTo) {
+				if vidTime.Before(skipDate) {
 					fmt.Println(imgFilename, "ignored")
 					return nil
 				}
