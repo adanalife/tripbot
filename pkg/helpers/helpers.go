@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -93,4 +94,16 @@ func FileExists(path string) bool {
 		return false
 	}
 	return err == nil
+}
+
+func VidStrToDate(vidStr string) time.Time {
+	year, _ := strconv.Atoi(vidStr[:4])
+	month, _ := strconv.Atoi(vidStr[5:7])
+	day, _ := strconv.Atoi(vidStr[7:9])
+	hour, _ := strconv.Atoi(vidStr[10:12])
+	minute, _ := strconv.Atoi(vidStr[12:14])
+	second, _ := strconv.Atoi(vidStr[14:16])
+
+	t := time.Date(year, time.Month(month), day, hour, minute, second, 0, time.UTC)
+	return t
 }
