@@ -33,24 +33,25 @@ func ScreenshotPath(videoFile string) string {
 	return path.Join(config.ScreencapDir, screencapFile)
 }
 
-func CoordsFromImage(path string) (string, error) {
+func CoordsFromImage(path string) (float64, float64, error) {
 	// crop the image
 	croppedImage, err := cropImage(path)
 	if err != nil {
-		return "", err
+		return 0, 0, err
 	}
 	// read off the text
 	textFromImage, err := readText(croppedImage)
 	if err != nil {
-		return "", err
+		return 0, 0, err
 	}
 	// pull out the coords
 	coordStr, err := extractCoords(textFromImage)
 	if err != nil {
-		return "", err
+		return 0, 0, err
 	}
 
-	return coordStr, err
+	lat, lon, err := helpers.ParseLatLng(coordStr)
+	return lat, lon, err
 }
 
 // cropImage cuts a dashcam screencap down to just the bottom right corner

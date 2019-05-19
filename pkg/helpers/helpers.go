@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bradfitz/latlong"
 	"github.com/dmerrick/danalol-stream/pkg/config"
-	"googlemaps.github.io/maps"
 )
 
 // ProjectRoot returns the root directory of the project
@@ -40,12 +40,12 @@ func UserIsIgnored(user string) bool {
 }
 
 // GoogleMapsURL returns a google maps link to the coords provided
-func GoogleMapsURL(coordsStr string) string {
-	return fmt.Sprintf("https://www.google.com/maps?q=%s", coordsStr)
+func GoogleMapsURL(lat, long float64) string {
+	return fmt.Sprintf("https://www.google.com/maps?q=%s,", lat, long)
 }
 
 // ParseLatLng converts an OCRed string into a LatLng
-func ParseLatLng(ocrStr string) (maps.LatLng, error) {
+func ParseLatLng(ocrStr string) (float64, float64, error) {
 	// first we have to change the string format
 	// from: W111.845329N40.774768
 	//   to: 40.774768,111.845329
@@ -53,24 +53,15 @@ func ParseLatLng(ocrStr string) (maps.LatLng, error) {
 
 	// check if we even found an N
 	if nIndex < 0 {
-		empty, _ := maps.ParseLatLng("")
-		return empty, errors.New("can't find an N in the string")
+		return 0, 0, errors.New("can't find an N in the string")
 	}
 
 	// split up ad lat and long
-	lat := ocrStr[nIndex+1:]
-	lon := ocrStr[1:nIndex]
+	lat, _ := strconv.ParseFloat(ocrStr[nIndex+1:], 64)
+	lon, _ := strconv.ParseFloat(ocrStr[1:nIndex], 64)
 
-	// format the string to make Google Maps happy
 	//TODO: I hardcoded the minus sign, better to fix that properly
-	coords := fmt.Sprintf("%s,-%s", lat, lon)
-
-	// fmt.Println(coords)
-
-	// now we can just pass the string to the library
-	loc, err := maps.ParseLatLng(coords)
-
-	return loc, err
+	return lat, -lon, nil
 }
 
 // SplitOnRegex will is the equivalent of str.split(/regex/)
@@ -106,4 +97,13 @@ func VidStrToDate(vidStr string) time.Time {
 
 	t := time.Date(year, time.Month(month), day, hour, minute, second, 0, time.UTC)
 	return t
+}
+
+func ActualDate(utcDate time.Time, lat, long float64) time.Time {
+	timezone := latlong.LookupZoneName(lat, long)
+	location, err := time.LoadLocation(timezone)
+	if err != nil {
+		panic(err)
+	}
+	return utcDate.In(location)
 }

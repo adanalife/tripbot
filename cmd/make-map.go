@@ -103,17 +103,23 @@ func main() {
 				return nil
 			}
 			// extract the coords from the image
-			coordStr, err := ocr.CoordsFromImage(path)
+			lat, lon, err := ocr.CoordsFromImage(path)
 			if err != nil {
 				fmt.Println(imgFilename, "coords not found:", err)
 				// fmt.Println(imgFilename, "coords not found")
 				return nil
 			}
 
-			// convert to a LatLng
-			loc, err := helpers.ParseLatLng(coordStr)
+			// lat, lon, err := helpers.ParseLatLng(coordStr)
+			// if err != nil {
+			// 	fmt.Println(imgFilename, "failed to convert str to latlng")
+			// 	return nil
+			// }
+
+			// create location that the maps API can use
+			loc, err := maps.ParseLatLng(fmt.Sprintf("%s,%s", lat, lon))
 			if err != nil {
-				fmt.Println(imgFilename, "coords invalid")
+				fmt.Println(imgFilename, "invalid coords")
 				return nil
 			}
 

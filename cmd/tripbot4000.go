@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
@@ -86,11 +87,11 @@ func main() {
 			if currentVid != lastVid {
 				screenshotPath := ocr.ScreenshotPath(currentVid)
 				// extract the coordinates, generate a google maps url
-				coords, err := ocr.CoordsFromImage(screenshotPath)
+				lat, lon, err := ocr.CoordsFromImage(screenshotPath)
 				if err != nil {
 					client.Say(config.ChannelName, "Sorry, it didn't work this time :(. Try again in a few minutes!")
 				} else {
-					url := helpers.GoogleMapsURL(coords)
+					url := helpers.GoogleMapsURL(lat, lon)
 					client.Say(config.ChannelName, fmt.Sprintf("If this doesn't work, try again in a few minutes: %s", url))
 				}
 				// update the last vid
@@ -99,6 +100,24 @@ func main() {
 				client.Say(config.ChannelName, fmt.Sprintf("I still need a minute, sorry!"))
 			}
 
+		}
+
+		if strings.HasPrefix(strings.ToLower(message.Message), "!date") {
+			log.Println(message.User.Name, "ran !date")
+			// get the currently-playing video
+			currentVid := ocr.GetCurrentVideo()
+			lat, lon, err := ocr.CoordsFromImage(ocr.ScreenshotPath(currentVid))
+			if err != nil {
+				client.Say(config.ChannelName, "That didn't work, sorry!")
+			} else {
+				vidDate := helpers.VidStrToDate(currentVid)
+				realDate := helpers.ActualDate(vidDate, lat, lon)
+				// "Mon, 02 Jan 2006 15:04:05 MST"
+				fmtDate := realDate.Format(time.RFC1123)
+				client.Say(config.ChannelName, fmt.Sprintf("this was recorded on %s", fmtDate))
+			}
+
+			// client.Say(config.ChannelName, msg)
 		}
 	})
 
