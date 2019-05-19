@@ -106,7 +106,7 @@ func main() {
 			log.Println(message.User.Name, "ran !leaderboard")
 			userList := datastore.TopUsers(3)
 			for i, user := range userList {
-				msg := fmt.Sprintf("#%d: %s (%dmi)", i, user, datastore.MilesForUser(user))
+				msg := fmt.Sprintf("#%d: %s (%dmi)", i+1, user, datastore.MilesForUser(user))
 				client.Say(config.ChannelName, msg)
 			}
 		}
