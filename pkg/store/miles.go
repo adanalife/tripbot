@@ -144,3 +144,28 @@ func (s *Store) RecordUserPart(user string) {
 
 	log.Printf("%s left the channel (total: %s, session: %s)", user, totalDurationWatched, durationWatched)
 }
+func (s *Store) GiveUserDuration(user string, durToAdd time.Duration) {
+	var previousDurationWatched time.Duration
+	var err error
+
+	s.db.View(func(tx *bolt.Tx) error {
+		watchedBucket := tx.Bucket([]byte(config.UserWatchedBucket))
+
+		// fetch the previous duration watched from the DB
+		previousDurationWatched, err = time.ParseDuration(string(watchedBucket.Get([]byte(user))))
+		return err
+	})
+
+	// calculate total duration watched
+	totalDurationWatched := previousDurationWatched + durToAdd
+
+	// update the DB with the total duration watched
+	s.db.Update(func(tx *bolt.Tx) error {
+		watchedBucket := tx.Bucket([]byte(config.UserWatchedBucket))
+
+		err = watchedBucket.Put([]byte(user), []byte(totalDurationWatched.String()))
+		return err
+	})
+
+	log.Printf("gave %s %s, new total: %s)", user, durToAdd, totalDurationWatched)
+}
