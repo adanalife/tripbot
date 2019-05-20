@@ -33,15 +33,9 @@ func GetCurrentVideo() string {
 	return string(out)
 }
 
-func CoordsFromVideoWithRetry(videoFile string) (float64, float64, error) {
-	//TODO: use Ext() instead of spliting here
-	split := helpers.SplitOnRegex(filepath.Base(videoFile), "\\.")
-	if len(split) < 2 {
-		return 0, 0, errors.New("no period found in video file")
-	}
-
+func CoordsFromVideoWithRetry(videoStr string) (float64, float64, error) {
 	for _, timestamp := range timestampsToTry {
-		screencapFile := fmt.Sprintf("%s-%s.png", split[0], timestamp)
+		screencapFile := fmt.Sprintf("%s-%s.png", videoStr, timestamp)
 		//TODO: just rename the files so we can skip this step
 		subdir := fmt.Sprintf("0%s", timestamp)
 		fullPath := path.Join(config.ScreencapDir, subdir, screencapFile)

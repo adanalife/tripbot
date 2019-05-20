@@ -66,6 +66,7 @@ func (s *Store) Open() error {
 	if err := s.db.Update(func(tx *bolt.Tx) error {
 		tx.CreateBucketIfNotExists([]byte(config.UserJoinsBucket))
 		tx.CreateBucketIfNotExists([]byte(config.UserWatchedBucket))
+		tx.CreateBucketIfNotExists([]byte(config.CoordsBucket))
 		return nil
 	}); err != nil {
 		s.Close()
