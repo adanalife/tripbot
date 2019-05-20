@@ -61,6 +61,7 @@ var GoogleMapsStyle = []string{
 	"element:labels.text.stroke|lightness:-80",
 	"feature:administrative|element:labels.text.fill|color:0x746855",
 	"feature:administrative.locality|element:labels.text.fill|color:0xd59563",
+	"feature:administrative.province|element:geometry.stroke|color:0xffeb3b",
 	"feature:poi|element:labels.text.fill|color:0xd59563",
 	"feature:poi.park|element:geometry|color:0x263c3f",
 	"feature:poi.park|element:labels.text.fill|color:0x6b9a76",
