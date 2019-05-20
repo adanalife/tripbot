@@ -18,7 +18,7 @@ import (
 	"googlemaps.github.io/maps"
 )
 
-var skipToDate = true
+var skipToDate = false
 var skipDate = time.Date(2018, time.Month(9), 29, 0, 0, 0, 0, time.UTC)
 
 var googleMapsStyle = []string{
@@ -98,12 +98,6 @@ func main() {
 				fmt.Println(imgFilename, "coords not found:", err)
 				return nil
 			}
-
-			// lat, lon, err := helpers.ParseLatLng(coordStr)
-			// if err != nil {
-			// 	fmt.Println(imgFilename, "failed to convert str to latlng")
-			// 	return nil
-			// }
 
 			// create location that the maps API can use
 			loc, err := maps.ParseLatLng(fmt.Sprintf("%f,%f", lat, lon))
@@ -210,19 +204,22 @@ func makeGoogleMap(c *maps.Client, loc maps.LatLng, pathPoints []maps.LatLng) (i
 		},
 	}
 
+	// center the map in the center of the USA
+	centerOfUSA := maps.LatLng{Lat: 39.5, Lng: -98.35}
+
 	mapRequest := &maps.StaticMapRequest{
 		MapStyles: googleMapsStyle,
-		Center:    loc.String(),
-		Zoom:      6,
-		Size:      "600x400",
-		Scale:     -1,
-		Format:    maps.Format(""),
-		Language:  "",
-		Region:    "",
-		MapType:   maps.MapType(""),
-		// Paths:    []maps.Path{mapPath},
-		Paths:   paths,
-		Markers: []maps.Marker{marker},
+		// Center:    loc.String(),
+		Center:   centerOfUSA.String(),
+		Paths:    paths,
+		Zoom:     4,
+		Size:     "800x600",
+		Scale:    -1,
+		Language: "",
+		Region:   "",
+		Format:   maps.Format(""),
+		MapType:  maps.MapType(""),
+		Markers:  []maps.Marker{marker},
 	}
 
 	img, err := c.StaticMap(context.Background(), mapRequest)
