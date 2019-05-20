@@ -170,6 +170,7 @@ func makeGoogleMap(c *maps.Client, loc maps.LatLng, pathPoints []maps.LatLng) (i
 	paths := splitPathPoints(pathPoints)
 
 	// add a marker for current location
+	//TODO move off staging
 	iconURL := "https://staging.dana.lol/assets/minibus.png"
 	marker := maps.Marker{
 		Location: []maps.LatLng{loc},
