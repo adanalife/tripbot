@@ -69,8 +69,14 @@ func ParseLatLng(ocrStr string) (float64, float64, error) {
 		return lat, lon, errors.New("failed to convert lat or lon to float")
 	}
 
-	if lat < -90 || lat > 90 || lon < -180 || lon > 180 {
+	// error on impossible coords
+	if lat < -90.0 || lat > 90.0 || lon < -180.0 || lon > 180.0 {
 		return lat, lon, errors.New("lat or lon had impossible magnitude")
+	}
+
+	// skip anything outside of the continental US (for error correction)
+	if lat < -25.7 || lat > 49.23 || lon < -124.44 || lon > -66.57 {
+		return lat, lon, errors.New("lat or lon outside USA")
 	}
 
 	//TODO: I hardcoded the minus sign, better to fix that properly
