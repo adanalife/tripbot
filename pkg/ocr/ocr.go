@@ -27,7 +27,8 @@ var timestampsToTry = []string{
 //TODO move me out of here
 func GetCurrentVideo() string {
 	// run the shell script to get currently-playing video
-	out, err := exec.Command(config.GetCurrentVidScript).Output()
+	scriptPath := path.Join(helpers.ProjectRoot(), "bin/current-file.sh")
+	out, err := exec.Command(scriptPath).Output()
 	if err != nil {
 		log.Printf("failed to run script: %v", err)
 	}

@@ -12,6 +12,7 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/ocr"
 	"github.com/dmerrick/danalol-stream/pkg/store"
 	twitch "github.com/gempir/go-twitch-irc"
+	"github.com/kelvins/geocoder"
 )
 
 // used to determine which help message to display
@@ -26,6 +27,11 @@ func main() {
 	if !ok {
 		panic("You must set TWITCH_AUTH_TOKEN")
 	}
+	googleMapsAPIKey, ok := os.LookupEnv("GOOGLE_MAPS_API_KEY")
+	if !ok {
+		panic("You must set GOOGLE_MAPS_API_KEY")
+	}
+	geocoder.ApiKey = googleMapsAPIKey
 
 	// initialize the database
 	datastore := store.FindOrCreate(config.DbPath)

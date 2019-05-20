@@ -6,10 +6,6 @@ const (
 	// ChannelName is the channel to join
 	ChannelName = "adanalife_"
 
-	// GetCurrentVidScript is a script that figures out the currently-playing video
-	//TODO this should use the ProjectRoot helper
-	GetCurrentVidScript = "/Users/dmerrick/other_projects/danalol-stream/bin/current-file.sh"
-
 	//TODO move these off usbshare1
 	ScreencapDir  = "/Volumes/usbshare1/screencaps"
 	VideoDir      = "/Volumes/usbshare1/Dashcam/_all"
