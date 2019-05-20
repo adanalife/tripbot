@@ -14,6 +14,17 @@ import (
 // this stores the current datastore
 var currentDatastore *Store
 
+type Store struct {
+	path string
+	db   *bolt.DB
+}
+
+func NewStore(path string) *Store {
+	return &Store{
+		path: path,
+	}
+}
+
 func FindOrCreate(dbFile string) *Store {
 	// use the pre-existing datastore if we have one
 	if currentDatastore != nil {
@@ -40,17 +51,6 @@ func FindOrCreate(dbFile string) *Store {
 	currentDatastore = datastore
 
 	return datastore
-}
-
-type Store struct {
-	path string
-	db   *bolt.DB
-}
-
-func NewStore(path string) *Store {
-	return &Store{
-		path: path,
-	}
 }
 
 // Open opens and initializes the database.
