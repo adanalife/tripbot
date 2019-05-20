@@ -9,6 +9,7 @@ import (
 	"os"
 	gopath "path"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/dmerrick/danalol-stream/pkg/config"
@@ -18,7 +19,7 @@ import (
 )
 
 var skipToDate = true
-var skipDate = time.Date(2018, time.Month(5), 29, 0, 0, 0, 0, time.UTC)
+var skipDate = time.Date(2018, time.Month(9), 29, 0, 0, 0, 0, time.UTC)
 
 var googleMapsStyle = []string{
 	"element:geometry|color:0x242f3e",
@@ -75,8 +76,6 @@ func main() {
 				return nil
 			}
 
-			fmt.Println(index)
-
 			// this is where we will save the map image
 			imgFilename := filepath.Base(path)
 			imgFilename = helpers.RemoveFileExtension(imgFilename)
@@ -115,11 +114,6 @@ func main() {
 
 			// only update the path every 5 frames
 			if index%5 == 0 {
-				if len(pathPoints) > 24 {
-					// remove the oldest element
-					pathPoints = pathPoints[1:]
-				}
-
 				// append the current location to the list
 				pathPoints = append(pathPoints, loc)
 			}
@@ -134,6 +128,10 @@ func main() {
 			img, err := makeGoogleMap(client, loc, pathPoints)
 			if err != nil {
 				fmt.Println(imgFilename, "error from gmaps api", err)
+				if strings.Contains(err.Error(), "request header list larger than peer") {
+					log.Fatalln("gmaps fatal")
+
+				}
 				return nil
 			}
 
@@ -189,7 +187,7 @@ func splitPathPoints(pathPoints []maps.LatLng) []maps.Path {
 
 		divided = append(divided, mapPath)
 	}
-	maxSize := 300
+	maxSize := 250
 	if len(divided) > maxSize {
 		return divided[:maxSize]
 	}

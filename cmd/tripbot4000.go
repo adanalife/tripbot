@@ -96,7 +96,7 @@ func main() {
 				} else {
 					// generate a google maps url
 					url := helpers.GoogleMapsURL(lat, lon)
-					client.Say(config.ChannelName, fmt.Sprintf("Try this URL: %s", url))
+					client.Say(config.ChannelName, url)
 				}
 				// update the last vid
 				lastVid = currentVid

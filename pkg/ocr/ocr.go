@@ -115,7 +115,7 @@ func cropImage(srcFilename string) (string, error) {
 // readText uses OCR to read the text from an image file
 func readText(imgFile string) (string, error) {
 	client := gosseract.NewClient()
-	defer client.Close()
+	// defer client.Close()
 
 	// set up tesseract to improve OCR accuracy
 	client.SetConfigFile(path.Join(helpers.ProjectRoot(), "configs/tesseract.cfg"))
@@ -126,6 +126,7 @@ func readText(imgFile string) (string, error) {
 	// read the file
 	client.SetImage(imgFile)
 	text, err := client.Text()
+	client.Close()
 	if err != nil {
 		// log.Printf("failed to read text: %v", err)
 		return "", err
