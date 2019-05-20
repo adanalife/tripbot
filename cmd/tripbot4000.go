@@ -146,7 +146,8 @@ func main() {
 				client.Say(config.ChannelName, "That didn't work, sorry!")
 			} else {
 				state, _ := helpers.StateFromCoords(lat, lon)
-				client.Say(config.ChannelName, state)
+				msg := fmt.Sprintf("We're in %s", state)
+				client.Say(config.ChannelName, msg)
 			}
 		}
 	})

@@ -182,15 +182,15 @@ func makeGoogleMap(c *maps.Client, loc maps.LatLng, pathPoints []maps.LatLng) (i
 	}
 
 	// center the map in the center of the USA
-	centerOfUSA := maps.LatLng{Lat: 39.5, Lng: -98.35}
+	// centerOfUSA := maps.LatLng{Lat: 39.5, Lng: -98.35}
 
 	mapRequest := &maps.StaticMapRequest{
 		MapStyles: config.GoogleMapsStyle,
-		// Center:    loc.String(),
-		Center:   centerOfUSA.String(),
+		Center:    loc.String(),
+		// Center:    centerOfUSA.String(),
 		Paths:    paths,
-		Zoom:     4,
-		Size:     "800x600",
+		Zoom:     5,
+		Size:     "600x400",
 		Scale:    -1,
 		Language: "",
 		Region:   "",
