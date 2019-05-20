@@ -15,7 +15,7 @@ possible_messages = [
   "Leave feedback in chat",
   "Subscribe with Twitch Prime <3",
   "Earn 1 mile for every 10m watched (!miles)",
-  "I won't be offended if you mute the music",
+  "I won't be offended if you play your own music",
   "Music by Soma.fm (!song)",
   "Tripbot loves you <3 (!tripbot)",
   "See something cool? Clip it!",
