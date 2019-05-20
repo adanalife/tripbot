@@ -17,6 +17,19 @@ import (
 	"github.com/kelvins/geocoder"
 )
 
+func CityFromCoords(lat, lon float64) (string, error) {
+	location := geocoder.Location{Latitude: lat, Longitude: lon}
+
+	addresses, err := geocoder.GeocodingReverse(location)
+	if err != nil {
+		return "", err
+	}
+
+	address := addresses[0]
+	addStr := fmt.Sprintf("%s, %s", address.City, address.State)
+	return addStr, err
+}
+
 func StateFromCoords(lat, lon float64) (string, error) {
 	location := geocoder.Location{Latitude: lat, Longitude: lon}
 

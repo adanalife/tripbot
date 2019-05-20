@@ -101,8 +101,13 @@ func main() {
 					client.Say(config.ChannelName, "Sorry, it didn't work this time :(. Try again in a few minutes!")
 				} else {
 					// generate a google maps url
+					address, _ := helpers.CityFromCoords(lat, lon)
+					if err != nil {
+						log.Println("geocoding error", err)
+					}
 					url := helpers.GoogleMapsURL(lat, lon)
-					client.Say(config.ChannelName, url)
+					msg := fmt.Sprintf("%s %s", address, url)
+					client.Say(config.ChannelName, msg)
 				}
 				// update the last vid
 				lastVid = currentVid
