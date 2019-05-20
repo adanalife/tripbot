@@ -27,6 +27,9 @@ func CityFromCoords(lat, lon float64) (string, error) {
 
 	address := addresses[0]
 	addStr := fmt.Sprintf("%s, %s", address.City, address.State)
+	if address.City == "" {
+		addStr = fmt.Sprintf("somewhere in %s", address.State)
+	}
 	return addStr, err
 }
 
