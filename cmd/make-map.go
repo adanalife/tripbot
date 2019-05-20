@@ -21,33 +21,6 @@ import (
 var skipToDate = false
 var skipDate = time.Date(2018, time.Month(9), 29, 0, 0, 0, 0, time.UTC)
 
-var googleMapsStyle = []string{
-	"element:geometry|color:0x242f3e",
-	"element:labels.text.stroke|lightness:-80",
-	"feature:administrative|element:labels.text.fill|color:0x746855",
-	"feature:administrative.locality|element:labels.text.fill|color:0xd59563",
-	"feature:poi|element:labels.text.fill|color:0xd59563",
-	"feature:poi.park|element:geometry|color:0x263c3f",
-	"feature:poi.park|element:labels.text.fill|color:0x6b9a76",
-	"feature:road|element:geometry.fill|color:0x2b3544",
-	"feature:road|element:labels.text.fill|color:0x9ca5b3",
-	"feature:road.arterial|element:geometry.fill|color:0x38414e",
-	"feature:road.arterial|element:geometry.stroke|color:0x212a37",
-	"feature:road.arterial|element:labels|visibility:off",
-	"feature:road.highway|element:geometry.fill|color:0x746855",
-	"feature:road.highway|element:geometry.stroke|color:0x1f2835",
-	"feature:road.highway|element:labels|visibility:off",
-	"feature:road.highway|element:labels.text.fill|color:0xf3d19c",
-	"feature:road.local|visibility:off",
-	"feature:road.local|element:geometry.fill|color:0x38414e",
-	"feature:road.local|element:geometry.stroke|color:0x212a37",
-	"feature:transit|element:geometry|color:0x2f3948",
-	"feature:transit.station|element:labels.text.fill|color:0xd59563",
-	"feature:water|element:geometry|color:0x17263c",
-	"feature:water|element:labels.text.fill|color:0x515c6d",
-	"feature:water|element:labels.text.stroke|lightness:-20",
-}
-
 func main() {
 	// first we must check for required ENV vars
 	googleMapsAPIKey, ok := os.LookupEnv("GOOGLE_MAPS_API_KEY")
@@ -208,7 +181,7 @@ func makeGoogleMap(c *maps.Client, loc maps.LatLng, pathPoints []maps.LatLng) (i
 	centerOfUSA := maps.LatLng{Lat: 39.5, Lng: -98.35}
 
 	mapRequest := &maps.StaticMapRequest{
-		MapStyles: googleMapsStyle,
+		MapStyles: config.GoogleMapsStyle,
 		// Center:    loc.String(),
 		Center:   centerOfUSA.String(),
 		Paths:    paths,
