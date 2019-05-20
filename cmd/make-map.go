@@ -14,10 +14,11 @@ import (
 
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
+	"github.com/dmerrick/danalol-stream/pkg/store"
 	"googlemaps.github.io/maps"
 )
 
-var skipToDate = true
+var skipToDate = false
 var skipDate = time.Date(2018, time.Month(9), 29, 0, 0, 0, 0, time.UTC)
 
 func main() {
@@ -30,6 +31,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("client error: %s", err)
 	}
+
+	// initialize the DB
+	datastore := store.FindOrCreate(config.DbPath)
 
 	// this will contain the overlay path
 	pathPoints := []maps.LatLng{}
