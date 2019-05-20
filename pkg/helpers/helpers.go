@@ -14,7 +14,18 @@ import (
 
 	"github.com/bradfitz/latlong"
 	"github.com/dmerrick/danalol-stream/pkg/config"
+	"github.com/kelvins/geocoder"
 )
+
+func StateFromCoords(lat, lon float64) (string, error) {
+	location := geocoder.Location{Latitude: lat, Longitude: lon}
+
+	addresses, err := geocoder.GeocodingReverse(location)
+	if err != nil {
+		return "", err
+	}
+	return addresses[0].State, err
+}
 
 // ProjectRoot returns the root directory of the project
 func ProjectRoot() string {

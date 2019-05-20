@@ -130,6 +130,19 @@ func main() {
 				client.Say(config.ChannelName, fmt.Sprintf("This moment was %s", fmtDate))
 			}
 		}
+
+		if strings.HasPrefix(strings.ToLower(message.Message), "!state") {
+			log.Println(message.User.Name, "ran !state")
+			// get the currently-playing video
+			currentVid := ocr.GetCurrentVideo()
+			lat, lon, err := datastore.CoordsFromVideoPath(currentVid)
+			if err != nil {
+				client.Say(config.ChannelName, "That didn't work, sorry!")
+			} else {
+				state, _ := helpers.StateFromCoords(lat, lon)
+				client.Say(config.ChannelName, state)
+			}
+		}
 	})
 
 	// join the channel
