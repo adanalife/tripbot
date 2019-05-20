@@ -148,7 +148,7 @@ func splitPathPoints(pathPoints []maps.LatLng) []maps.Path {
 
 		// create a Path using this chunk of points
 		mapPath := maps.Path{
-			Color:    "0xccff00", // highlighter yellow
+			// Color:    "0xccff00", // highlighter yellow
 			Location: pathPoints[i:end],
 		}
 
@@ -181,7 +181,7 @@ func makeGoogleMap(c *maps.Client, loc maps.LatLng, pathPoints []maps.LatLng) (i
 	centerOfUSA := maps.LatLng{Lat: 39.5, Lng: -98.35}
 
 	mapRequest := &maps.StaticMapRequest{
-		MapStyles: config.GoogleMapsStyle,
+		// MapStyles: config.GoogleMapsStyle,
 		// Center:    loc.String(),
 		Center:   centerOfUSA.String(),
 		Paths:    paths,
