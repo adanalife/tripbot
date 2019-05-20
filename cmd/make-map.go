@@ -14,7 +14,6 @@ import (
 
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
-	"github.com/dmerrick/danalol-stream/pkg/ocr"
 	"googlemaps.github.io/maps"
 )
 
@@ -66,7 +65,7 @@ func main() {
 			}
 
 			// extract the coords from the image
-			lat, lon, err := ocr.CoordsFromVideoWithRetry(path)
+			lat, lon, err := datastore.CoordsFromVideoPath(path)
 			if err != nil {
 				fmt.Println(imgFilename, "coords not found:", err)
 				return nil

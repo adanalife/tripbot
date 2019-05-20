@@ -90,7 +90,7 @@ func main() {
 			// only run if this video hasn't yet been processed
 			if currentVid != lastVid {
 				// extract the coordinates
-				lat, lon, err := ocr.CoordsFromVideoWithRetry(currentVid)
+				lat, lon, err := datastore.CoordsFromVideoPath(currentVid)
 				if err != nil {
 					client.Say(config.ChannelName, "Sorry, it didn't work this time :(. Try again in a few minutes!")
 				} else {
@@ -119,7 +119,7 @@ func main() {
 			log.Println(message.User.Name, "ran !date")
 			// get the currently-playing video
 			currentVid := ocr.GetCurrentVideo()
-			lat, lon, err := ocr.CoordsFromVideoWithRetry(currentVid)
+			lat, lon, err := datastore.CoordsFromVideoPath(currentVid)
 			if err != nil {
 				client.Say(config.ChannelName, "That didn't work, sorry!")
 			} else {

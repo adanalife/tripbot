@@ -24,6 +24,7 @@ var timestampsToTry = []string{
 	"230",
 }
 
+//TODO move me out of here
 func GetCurrentVideo() string {
 	// run the shell script to get currently-playing video
 	out, err := exec.Command(config.GetCurrentVidScript).Output()
