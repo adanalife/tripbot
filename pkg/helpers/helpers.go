@@ -130,6 +130,10 @@ func ActualDate(utcDate time.Time, lat, long float64) time.Time {
 	return utcDate.In(location)
 }
 
+func ToVidStr(videoPath string) string {
+	return RemoveFileExtension(path.Base(videoPath))
+}
+
 func RemoveFileExtension(filename string) string {
 	ext := path.Ext(filename)
 	return filename[0 : len(filename)-len(ext)]

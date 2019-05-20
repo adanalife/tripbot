@@ -16,9 +16,11 @@ const (
 	MapsOutputDir = "/Volumes/usbshare1/maps"
 	CroppedPath   = "/Volumes/usbshare1/cropped-corners"
 
+	//TODO capitalize me
 	DbPath            = "tripbot.db"
 	UserJoinsBucket   = "user_joins"
 	UserWatchedBucket = "user_watched"
+	CoordsBucket      = "coords"
 )
 
 //TODO: this should load from a config file

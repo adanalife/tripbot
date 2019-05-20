@@ -35,7 +35,7 @@ func main() {
 
 	// a file was passed in via the CLI
 	if videoFile != "" {
-		lat, lon, err := ocr.CoordsFromVideoWithRetry(videoFile)
+		lat, lon, err := helpers.CoordsFromVideoPath(videoFile)
 		if err != nil {
 			log.Fatalf("failed to process image: %v", err)
 		}
@@ -56,7 +56,7 @@ func main() {
 				}
 
 				// actually process the image
-				lat, lon, err := ocr.CoordsFromVideoWithRetry(path)
+				lat, lon, err := helpers.CoordsFromVideoPath(path)
 				if err != nil {
 					log.Printf("failed to process video: %v", err)
 					return nil
