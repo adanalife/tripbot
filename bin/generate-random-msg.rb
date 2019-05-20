@@ -12,7 +12,7 @@ possible_messages = [
   "Type !help in chat for instructions",
   "Type !help in chat for instructions",
   "Sub goal #1 (emotes): #{sub_goal}",
-  "Leave feedback in the comments",
+  "Leave feedback in chat",
   "Subscribe with Twitch Prime <3",
   "Earn 1 mile for every 10m watched (!miles)",
   "I won't be offended if you mute the music",
