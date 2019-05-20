@@ -18,7 +18,7 @@ import (
 	"googlemaps.github.io/maps"
 )
 
-var skipToDate = false
+var skipToDate = true
 var skipDate = time.Date(2018, time.Month(9), 29, 0, 0, 0, 0, time.UTC)
 
 func main() {

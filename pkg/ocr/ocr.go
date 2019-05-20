@@ -12,7 +12,6 @@ import (
 	"github.com/disintegration/imaging"
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
-	"github.com/dmerrick/danalol-stream/pkg/store"
 	"github.com/otiai10/gosseract"
 )
 
@@ -23,27 +22,6 @@ var timestampsToTry = []string{
 	"130",
 	"200",
 	"230",
-}
-
-func CoordsFromVideoPath(videoPath string) (float64, float64, error) {
-	videoStr := helpers.ToVidStr(videoPath)
-	// first look up the coords in the DB
-	lat, lon, err := store.FetchSavedCoords(videoStr)
-	if err == nil {
-		fmt.Println("coords found for", videoStr, lat, lon)
-		// cool, they were in the DB already
-		return lat, lon, err
-	}
-	// okay we need to pull them from the video file
-	lat, lon, err = ocr.CoordsFromVideoWithRetry(videoFile)
-	if err != nil {
-		// something went wrong reading the coords
-		return lat, lon, err
-	}
-	// now save these coords in the DB for next time
-	err = store.StoreCoords(videoStr, lat, lon)
-	fmt.Println("storing coords for", videoStr, lat, lon)
-	return lat, lon, err
 }
 
 func GetCurrentVideo() string {

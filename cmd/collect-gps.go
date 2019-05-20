@@ -10,6 +10,7 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	"github.com/dmerrick/danalol-stream/pkg/ocr"
+	"github.com/dmerrick/danalol-stream/pkg/store"
 )
 
 // this will hold the filename passed in via the CLI
@@ -33,9 +34,11 @@ func main() {
 		videoFile = ocr.GetCurrentVideo()
 	}
 
+	datastore := store.FindOrCreate(config.DbPath)
+
 	// a file was passed in via the CLI
 	if videoFile != "" {
-		lat, lon, err := helpers.CoordsFromVideoPath(videoFile)
+		lat, lon, err := datastore.CoordsFromVideoPath(videoFile)
 		if err != nil {
 			log.Fatalf("failed to process image: %v", err)
 		}
@@ -56,7 +59,7 @@ func main() {
 				}
 
 				// actually process the image
-				lat, lon, err := helpers.CoordsFromVideoPath(path)
+				lat, lon, err := datastore.CoordsFromVideoPath(path)
 				if err != nil {
 					log.Printf("failed to process video: %v", err)
 					return nil
