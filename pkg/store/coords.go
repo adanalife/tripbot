@@ -16,7 +16,6 @@ func (s *Store) CoordsFromVideoPath(videoPath string) (float64, float64, error) 
 	// first look up the coords in the DB
 	lat, lon, err := s.FetchSavedCoords(videoStr)
 	if err == nil {
-		fmt.Println("coords found for", videoStr, lat, lon)
 		// cool, they were in the DB already
 		return lat, lon, err
 	}
@@ -28,7 +27,6 @@ func (s *Store) CoordsFromVideoPath(videoPath string) (float64, float64, error) 
 	}
 	// now save these coords in the DB for next time
 	err = s.StoreCoords(videoStr, lat, lon)
-	fmt.Println("storing coords for", videoStr, lat, lon)
 	return lat, lon, err
 }
 
@@ -57,7 +55,7 @@ func (s *Store) StoreCoords(vidStr string, lat, lon float64) error {
 		coordsBucket := tx.Bucket([]byte(config.CoordsBucket))
 
 		// convert to a string
-		coordsStr := fmt.Sprintf("%d,%d", lat, lon)
+		coordsStr := fmt.Sprintf("%f,%f", lat, lon)
 
 		// insert into bucket
 		err := coordsBucket.Put([]byte(vidStr), []byte(coordsStr))
