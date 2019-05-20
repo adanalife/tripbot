@@ -11,16 +11,13 @@ possible_messages = [
   "Type !help in chat for instructions",
   "Type !help in chat for instructions",
   "Type !help in chat for instructions",
-  "Type !help in chat for instructions",
   "Sub goal #1 (emotes): #{sub_goal}",
-  "Please leave feedback in the comments <3",
+  "Leave feedback in the comments",
   "Subscribe with Twitch Prime <3",
-  "Choppy? Sorry, new hardware coming soon",
-  "Use !less to mark something as boring",
-  "Earn 1 mile for every 10m watched !miles",
-  "Don't like music? Mute it!",
-  "Music by Soma.FM !song",
-  "Tripbot loves you <3 !tripbot",
+  "Earn 1 mile for every 10m watched (!miles)",
+  "I won't be offended if you mute the music",
+  "Music by Soma.fm (!song)",
+  "Tripbot loves you <3 (!tripbot)",
   "See something cool? Clip it!",
   "LEADER",
 ]
@@ -34,7 +31,7 @@ loop do
   if current == "LEADER"
     # fetch the current leader
     miles, leader = File.read(File.expand_path(leaderboard_file)).split("\n")[1].split(":")
-    current = "#{leader.strip} is leader with #{miles}"
+    current = "#{leader.strip} is leader with #{miles} (!leaderboard)"
   end
 
   File.write(File.expand_path(message_file), current)
