@@ -51,12 +51,15 @@ func main() {
 		}
 	})
 
-	client.OnUserStateMessage(func(message twitch.UserStateMessage) {
-		log.Println("user state:", message.User, message.Type, message.Message, message.Channel, message.EmoteSets, message.Tags)
+	client.OnUserNoticeMessage(func(message twitch.UserNoticeMessage) {
+		log.Println("user notice:", message.User, message.Type, message.Message, message.SystemMsg, message.EmoteSets, message.Tags)
 	})
 
 	client.OnWhisperMessage(func(message twitch.WhisperMessage) {
 		log.Println("whisper:", message.User.Name, message.Message)
+		if message.User.Name == config.ChannelName {
+			log.Println("THIS IS WHERE THE BOT'D SAY:", message.Message)
+		}
 	})
 
 	// all chat messages
