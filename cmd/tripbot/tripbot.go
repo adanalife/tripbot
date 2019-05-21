@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"math/rand"
 	"os"
 	"strings"
 	"time"
@@ -17,7 +18,8 @@ import (
 )
 
 // used to determine which help message to display
-var helpIndex = 0
+// randomized so it starts with a new one every restart
+var helpIndex = rand.Intn(len(config.HelpMessages))
 
 // the most-recently processed video
 var lastVid string
