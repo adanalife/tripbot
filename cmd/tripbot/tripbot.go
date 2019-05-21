@@ -88,25 +88,28 @@ func main() {
 		}
 
 		if strings.HasPrefix(strings.ToLower(message.Message), "!miles") {
-			user := message.User.Name
 			log.Println(user, "ran !miles")
-			miles := datastore.MilesForUser(user)
-			msg := ""
-			switch {
-			case miles == 1:
-				msg = "@%s has only %d mile"
-			case miles >= 250:
-				msg = "Holy crap! @%s has %d miles!"
-			default:
-				msg = "@%s has %d miles. Earn 1 mile every 10 minutes by watching the stream"
+			// run if the user is a follower
+			if mytwitch.UserIsFollower(user) {
+				miles := datastore.MilesForUser(user)
+				msg := ""
+				switch {
+				case miles == 1:
+					msg = "@%s has only %d mile"
+				case miles >= 250:
+					msg = "Holy crap! @%s has %d miles!"
+				default:
+					msg = "@%s has %d miles. Earn 1 mile every 10 minutes by watching the stream"
+				}
+				msg = fmt.Sprintf(msg, user, miles)
+				client.Say(config.ChannelName, msg)
+			} else {
+				client.Say(config.ChannelName, "You must be a follower to run that command :)")
 			}
-			msg = fmt.Sprintf(msg, user, miles)
-			client.Say(config.ChannelName, msg)
 		}
 
 		if strings.HasPrefix(strings.ToLower(message.Message), "!tripbot") {
 			log.Println(message.User.Name, "ran !tripbot")
-
 			// run if the user is a follower
 			if mytwitch.UserIsFollower(user) {
 				// get the currently-playing video
@@ -141,40 +144,55 @@ func main() {
 
 		if strings.HasPrefix(strings.ToLower(message.Message), "!leaderboard") {
 			log.Println(message.User.Name, "ran !leaderboard")
-			userList := datastore.TopUsers(3)
-			for i, user := range userList {
-				msg := fmt.Sprintf("#%d: %s (%dmi)", i+1, user, datastore.MilesForUser(user))
-				client.Say(config.ChannelName, msg)
+			// run if the user is a follower
+			if mytwitch.UserIsFollower(user) {
+				userList := datastore.TopUsers(3)
+				for i, user := range userList {
+					msg := fmt.Sprintf("#%d: %s (%dmi)", i+1, user, datastore.MilesForUser(user))
+					client.Say(config.ChannelName, msg)
+				}
+			} else {
+				client.Say(config.ChannelName, "You must be a follower to run that command :)")
 			}
 		}
 
 		if strings.HasPrefix(strings.ToLower(message.Message), "!date") {
 			log.Println(message.User.Name, "ran !date")
-			// get the currently-playing video
-			currentVid := ocr.GetCurrentVideo()
-			lat, lon, err := datastore.CoordsFromVideoPath(currentVid)
-			if err != nil {
-				client.Say(config.ChannelName, "That didn't work, sorry!")
+			// run if the user is a follower
+			if mytwitch.UserIsFollower(user) {
+				// get the currently-playing video
+				currentVid := ocr.GetCurrentVideo()
+				lat, lon, err := datastore.CoordsFromVideoPath(currentVid)
+				if err != nil {
+					client.Say(config.ChannelName, "That didn't work, sorry!")
+				} else {
+					vidDate := helpers.VidStrToDate(currentVid)
+					realDate := helpers.ActualDate(vidDate, lat, lon)
+					// "Mon, 02 Jan 2006 15:04:05 MST"
+					fmtDate := realDate.Format(time.RFC1123)
+					client.Say(config.ChannelName, fmt.Sprintf("This moment was %s", fmtDate))
+				}
 			} else {
-				vidDate := helpers.VidStrToDate(currentVid)
-				realDate := helpers.ActualDate(vidDate, lat, lon)
-				// "Mon, 02 Jan 2006 15:04:05 MST"
-				fmtDate := realDate.Format(time.RFC1123)
-				client.Say(config.ChannelName, fmt.Sprintf("This moment was %s", fmtDate))
+				client.Say(config.ChannelName, "You must be a follower to run that command :)")
 			}
 		}
 
 		if strings.HasPrefix(strings.ToLower(message.Message), "!state") {
 			log.Println(message.User.Name, "ran !state")
-			// get the currently-playing video
-			currentVid := ocr.GetCurrentVideo()
-			lat, lon, err := datastore.CoordsFromVideoPath(currentVid)
-			if err != nil {
-				client.Say(config.ChannelName, "That didn't work, sorry!")
+			// run if the user is a follower
+			if mytwitch.UserIsFollower(user) {
+				// get the currently-playing video
+				currentVid := ocr.GetCurrentVideo()
+				lat, lon, err := datastore.CoordsFromVideoPath(currentVid)
+				if err != nil {
+					client.Say(config.ChannelName, "That didn't work, sorry!")
+				} else {
+					state, _ := helpers.StateFromCoords(lat, lon)
+					msg := fmt.Sprintf("We're in %s", state)
+					client.Say(config.ChannelName, msg)
+				}
 			} else {
-				state, _ := helpers.StateFromCoords(lat, lon)
-				msg := fmt.Sprintf("We're in %s", state)
-				client.Say(config.ChannelName, msg)
+				client.Say(config.ChannelName, "You must be a follower to run that command :)")
 			}
 		}
 	})
