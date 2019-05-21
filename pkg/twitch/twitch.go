@@ -28,11 +28,11 @@ func FindOrCreateClient(clientID string) (*helix.Client, error) {
 	return client, err
 }
 
-func UserIsFollower(user string) (bool, error) {
+func UserIsFollower(user string) bool {
 	//TODO a better way to do this?
 	client, err := FindOrCreateClient("")
 	if err != nil {
-		return false, err
+		return false
 	}
 
 	usersResp, err := client.GetUsers(&helix.UsersParams{
@@ -42,7 +42,7 @@ func UserIsFollower(user string) (bool, error) {
 	})
 	if err != nil {
 		log.Println("error getting user info", err)
-		return false, err
+		return false
 	}
 
 	// get the twitch user_id
@@ -54,13 +54,13 @@ func UserIsFollower(user string) (bool, error) {
 	})
 	if err != nil {
 		log.Println("error getting user follows", err)
-		return false, err
+		return false
 	}
 
 	if followsResp.Data.Total < 1 {
-		return false, err
+		return false
 	}
-	return true, err
+	return true
 
 }
 

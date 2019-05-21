@@ -79,11 +79,6 @@ func main() {
 		//TODO: use this
 		user := message.User.Name
 
-		// just print if the user is a follower for now
-		//TODO error handling
-		isFollower, _ := mytwitch.UserIsFollower(user)
-		log.Println(user, "is follower?", isFollower)
-
 		if strings.HasPrefix(strings.ToLower(message.Message), "!help") {
 			log.Println(message.User.Name, "ran !help")
 			msg := fmt.Sprintf("%s (repeat this command for more)", config.HelpMessages[helpIndex])
@@ -112,29 +107,34 @@ func main() {
 		if strings.HasPrefix(strings.ToLower(message.Message), "!tripbot") {
 			log.Println(message.User.Name, "ran !tripbot")
 
-			// get the currently-playing video
-			currentVid := ocr.GetCurrentVideo()
+			// run if the user is a follower
+			if mytwitch.UserIsFollower(user) {
+				// get the currently-playing video
+				currentVid := ocr.GetCurrentVideo()
 
-			// only run if this video hasn't yet been processed
-			if currentVid != lastVid {
-				// extract the coordinates
-				lat, lon, err := datastore.CoordsFromVideoPath(currentVid)
-				if err != nil {
-					client.Say(config.ChannelName, "Sorry, it didn't work this time :(. Try again in a few minutes!")
-				} else {
-					// generate a google maps url
-					address, _ := helpers.CityFromCoords(lat, lon)
+				// only run if this video hasn't yet been processed
+				if currentVid != lastVid {
+					// extract the coordinates
+					lat, lon, err := datastore.CoordsFromVideoPath(currentVid)
 					if err != nil {
-						log.Println("geocoding error", err)
+						client.Say(config.ChannelName, "Sorry, it didn't work this time :(. Try again in a few minutes!")
+					} else {
+						// generate a google maps url
+						address, _ := helpers.CityFromCoords(lat, lon)
+						if err != nil {
+							log.Println("geocoding error", err)
+						}
+						url := helpers.GoogleMapsURL(lat, lon)
+						msg := fmt.Sprintf("%s %s", address, url)
+						client.Say(config.ChannelName, msg)
 					}
-					url := helpers.GoogleMapsURL(lat, lon)
-					msg := fmt.Sprintf("%s %s", address, url)
-					client.Say(config.ChannelName, msg)
+					// update the last vid
+					lastVid = currentVid
+				} else {
+					client.Say(config.ChannelName, fmt.Sprintf("That's too soon, I need a minute"))
 				}
-				// update the last vid
-				lastVid = currentVid
 			} else {
-				client.Say(config.ChannelName, fmt.Sprintf("That's too soon, I need a minute"))
+				client.Say(config.ChannelName, "You must be a follower to run that command :)")
 			}
 
 		}
