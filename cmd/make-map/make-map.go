@@ -40,6 +40,7 @@ func main() {
 
 	// the number of loops we've gone over
 	index := 0
+	skipIndex := 0
 
 	// loop over every file in the screencapDir
 	err = filepath.Walk(config.VideoDir,
@@ -59,7 +60,6 @@ func main() {
 			fullImgFilename := gopath.Join(config.MapsOutputDir, imgFilename)
 
 			// skip stuff from before this time
-			// time.Date(year, time.Month(month), day, hour, minute, second, 0, time.UTC)
 			if skipToDate {
 				vidTime := helpers.VidStrToDate(imgFilename)
 				if vidTime.Before(skipDate) {
@@ -72,6 +72,14 @@ func main() {
 			lat, lon, err := datastore.CoordsFromVideoPath(path)
 			if err != nil {
 				fmt.Println(imgFilename, "coords not found:", err)
+				skipIndex = skipIndex + 1
+				return nil
+			}
+
+			// skip 3/4
+			skipIndex = skipIndex + 1
+			if skipIndex%4 != 0 {
+				// fmt.Println("skipping", imgFilename)
 				return nil
 			}
 
@@ -151,7 +159,7 @@ func splitPathPoints(pathPoints []maps.LatLng) []maps.Path {
 
 		// create a Path using this chunk of points
 		mapPath := maps.Path{
-			Color:    "0xccff00", // highlighter yellow
+			// Color:    "0xccff00", // highlighter yellow
 			Location: pathPoints[i:end],
 		}
 
@@ -176,21 +184,23 @@ func makeGoogleMap(c *maps.Client, loc maps.LatLng, pathPoints []maps.LatLng) (i
 		Location: []maps.LatLng{loc},
 		CustomIcon: maps.CustomIcon{
 			IconURL: iconURL,
-			Anchor:  "center",
+			Anchor:  "bottom",
 			Scale:   4,
 		},
 	}
 
 	// center the map in the center of the USA
-	// centerOfUSA := maps.LatLng{Lat: 39.5, Lng: -98.35}
+	centerOfUSA := maps.LatLng{Lat: 39.5, Lng: -98.35}
 
 	mapRequest := &maps.StaticMapRequest{
-		MapStyles: config.GoogleMapsStyle,
-		Center:    loc.String(),
-		// Center:    centerOfUSA.String(),
+		Center: centerOfUSA.String(),
+		Zoom:   4,
+		Size:   "800x600",
+		// MapStyles: config.GoogleMapsStyle,
+		// Center:    loc.String(),
+		// Zoom:     5,
+		// Size:     "600x400",
 		Paths:    paths,
-		Zoom:     5,
-		Size:     "600x400",
 		Scale:    -1,
 		Language: "",
 		Region:   "",
