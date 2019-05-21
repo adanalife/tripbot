@@ -116,7 +116,7 @@ func main() {
 				// update the last vid
 				lastVid = currentVid
 			} else {
-				client.Say(config.ChannelName, fmt.Sprintf("I still need a minute, sorry!"))
+				client.Say(config.ChannelName, fmt.Sprintf("That's too soon, I need a minute"))
 			}
 
 		}
