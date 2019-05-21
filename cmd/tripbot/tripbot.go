@@ -52,7 +52,7 @@ func main() {
 	})
 
 	client.OnUserNoticeMessage(func(message twitch.UserNoticeMessage) {
-		log.Println("user notice:", message.User, message.Type, message.Message, message.SystemMsg, message.EmoteSets, message.Tags)
+		log.Println("user notice:", message.User, message.Type, message.Message, message.SystemMsg, message.Emotes, message.Tags)
 	})
 
 	client.OnWhisperMessage(func(message twitch.WhisperMessage) {
