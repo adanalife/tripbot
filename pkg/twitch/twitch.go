@@ -22,6 +22,11 @@ func FindOrCreateClient(clientID string) (*helix.Client, error) {
 }
 
 func UserIsFollower(user string) bool {
+	// I can't follow myself so just do this
+	if user == config.ChannelName {
+		return true
+	}
+
 	//TODO a better way to do this?
 	client, err := FindOrCreateClient("")
 	if err != nil {
