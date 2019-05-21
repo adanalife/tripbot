@@ -11,6 +11,13 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/ocr"
 )
 
+var knownBadVids = []string{
+	"2018_1009_162218_025",
+	"2018_1009_172519_046",
+	"2018_1009_175519_056",
+	"2018_1009_185504_007",
+}
+
 func (s *Store) CoordsFromVideoPath(videoPath string) (float64, float64, error) {
 	videoStr := helpers.ToVidStr(videoPath)
 	// first look up the coords in the DB
@@ -19,6 +26,14 @@ func (s *Store) CoordsFromVideoPath(videoPath string) (float64, float64, error) 
 		// cool, they were in the DB already
 		return lat, lon, err
 	}
+
+	fmt.Println(videoStr)
+	for _, vd := range knownBadVids {
+		if videoStr == vd {
+			return 0, 0, errors.New("skipping known bad point")
+		}
+	}
+
 	// okay we need to pull them from the video file
 	lat, lon, err = ocr.CoordsFromVideoWithRetry(videoStr)
 	if err != nil {
