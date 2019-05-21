@@ -11,6 +11,7 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	"github.com/dmerrick/danalol-stream/pkg/ocr"
 	"github.com/dmerrick/danalol-stream/pkg/store"
+	mytwitch "github.com/dmerrick/danalol-stream/pkg/twitch"
 	twitch "github.com/gempir/go-twitch-irc"
 	"github.com/kelvins/geocoder"
 )
@@ -27,11 +28,21 @@ func main() {
 	if !ok {
 		panic("You must set TWITCH_AUTH_TOKEN")
 	}
+	twitchClientID, ok := os.LookupEnv("TWITCH_CLIENT_ID")
+	if !ok {
+		panic("You must set TWITCH_CLIENT_ID")
+	}
 	googleMapsAPIKey, ok := os.LookupEnv("GOOGLE_MAPS_API_KEY")
 	if !ok {
 		panic("You must set GOOGLE_MAPS_API_KEY")
 	}
 	geocoder.ApiKey = googleMapsAPIKey
+
+	// initialize the twitch API client
+	_, err := mytwitch.FindOrCreateClient(twitchClientID)
+	if err != nil {
+		log.Fatal("unable to create twitch API client", err)
+	}
 
 	// initialize the database
 	datastore := store.FindOrCreate(config.DbPath)
@@ -65,6 +76,13 @@ func main() {
 
 	// all chat messages
 	client.OnPrivateMessage(func(message twitch.PrivateMessage) {
+		//TODO: use this
+		user := message.User.Name
+
+		// just print if the user is a follower for now
+		//TODO error handling
+		isFollower, _ := mytwitch.UserIsFollower(user)
+		log.Println(user, "is follower?", isFollower)
 
 		if strings.HasPrefix(strings.ToLower(message.Message), "!help") {
 			log.Println(message.User.Name, "ran !help")
@@ -166,7 +184,7 @@ func main() {
 	log.Println("Joined channel", config.ChannelName)
 
 	// actually connect to Twitch
-	err := client.Connect()
+	err = client.Connect()
 	if err != nil {
 		panic(err)
 	}
