@@ -58,7 +58,7 @@ func main() {
 	client.OnWhisperMessage(func(message twitch.WhisperMessage) {
 		log.Println("whisper:", message.User.Name, message.Message)
 		if message.User.Name == config.ChannelName {
-			log.Println("THIS IS WHERE THE BOT'D SAY:", message.Message)
+			client.Say(config.ChannelName, message.Message)
 		}
 	})
 
