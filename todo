@@ -1,0 +1,89 @@
+REVISIT
+dont do fatal and quit the bot
+empty out unused cmd/ files
+
+
+BEFORE NEXT STREAM START
+fix buffer
+fix text resizing
+add tags
+
+add twitch chat
+https://www.nightdev.com/kapchat/
+
+
+webserver for nightbot to hit
+
+fix whitelist/blacklist
+
+better miles stuff
+
+move off of usbshare1
+
+log follows/subs with tripbot
+
+add more and less
+
+alerts for certain userss
+
+auto-update title!
+
+!miles (user)
+
+funny !miles for me
+
+only followers get miles
+
+
+
+gmaps api key
+AIzaSyCGVBzP0yfsvaGwj76wFkOGJTlnldKhJ4s
+
+gomod
+golint
+govet
+
+http://devs.cloudimmunity.com/gotchas-and-common-mistakes-in-go-golang/
+
+move db to db/
+
+
+
+rename tripbot to location
+
+
+
+make state lines more clear
+
+!uptime for bot
+
+!city/!town
+city can sometimes be empty
+
+!progress towards loop?
+
+search log for more reset users
+
+change to UserNoticeMessage
+https://godoc.org/github.com/gempir/go-twitch-irc#UserNoticeMessage
+
+check if user is subscriber
+https://discuss.dev.twitch.tv/t/quick-and-dirty-way-to-check-if-a-user-is-a-subscriber-mod-if-tags-arent-given/11422/5
+https://discuss.dev.twitch.tv/t/is-the-api-for-checking-subscriptions-really-working/12108
+
+
+maybe ask for a subscriber when tripbot fails?
+
+
+post youtube vid to vanlife
+https://www.youtube.com/watch?v=L7VLh7Ubp-E
+
+
+https://github.com/joho/godotenv
+
+https://github.com/spf13/viper
+
+https://github.com/nathan-osman/go-sunrise
+
+vim go tips
+go-callvis
