@@ -27,7 +27,6 @@ func (s *Store) CoordsFromVideoPath(videoPath string) (float64, float64, error) 
 		return lat, lon, err
 	}
 
-	fmt.Println(videoStr)
 	for _, vd := range knownBadVids {
 		if videoStr == vd {
 			return 0, 0, errors.New("skipping known bad point")
