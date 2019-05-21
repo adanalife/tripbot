@@ -1,17 +1,10 @@
 package twitch
 
 import (
-	// "fmt"
-	// "log"
-
 	"log"
 
-	"github.com/davecgh/go-spew/spew"
+	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/nicklaw5/helix"
-)
-
-const (
-	ourChannelID = "225469317"
 )
 
 var currentTwitchClient *helix.Client
@@ -49,7 +42,7 @@ func UserIsFollower(user string) bool {
 	userID := usersResp.Data.Users[0].ID
 
 	followsResp, err := client.GetUsersFollows(&helix.UsersFollowsParams{
-		ToID:   ourChannelID,
+		ToID:   config.ChannelID,
 		FromID: userID,
 	})
 	if err != nil {
@@ -62,27 +55,4 @@ func UserIsFollower(user string) bool {
 	}
 	return true
 
-}
-
-func main() {
-
-	// 3z9codsl6ke8np8y2o2xhintw9visz
-	// deopjfdsrzg7bgltu7sf2iu7zqoao8
-
-	usersToCheck := []string{
-		"pokimane",
-		"bleo",
-		"tripbot4000",
-		"mathgaming",
-		"shroud",
-	}
-
-	for _, user := range usersToCheck {
-		following, err := UserIsFollower(user)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		spew.Dump(user, following)
-	}
 }
