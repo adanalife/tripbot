@@ -7,21 +7,18 @@ BEFORE NEXT STREAM START
 fix buffer
 fix text resizing
 add tags
-
-
-randomize the first help message
-
-
-whisper users after first mile?
-
 add twitch chat
 https://www.nightdev.com/kapchat/
 
 
+randomize the first help message
+
+whisper users after first mile?
+
+
+EVENTUALLY
 webserver for nightbot to hit
-
 fix whitelist/blacklist
-
 better miles stuff
 
 move off of usbshare1
