@@ -57,6 +57,7 @@ func main() {
 
 	client.OnWhisperMessage(func(message twitch.WhisperMessage) {
 		log.Println("whisper:", message.User.Name, message.Message)
+		// if the message comes from me, then post the message to chat
 		if message.User.Name == config.ChannelName {
 			client.Say(config.ChannelName, message.Message)
 		}
