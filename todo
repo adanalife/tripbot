@@ -8,6 +8,12 @@ fix buffer
 fix text resizing
 add tags
 
+
+randomize the first help message
+
+
+whisper users after first mile?
+
 add twitch chat
 https://www.nightdev.com/kapchat/
 
@@ -34,10 +40,6 @@ funny !miles for me
 
 only followers get miles
 
-
-
-gmaps api key
-AIzaSyCGVBzP0yfsvaGwj76wFkOGJTlnldKhJ4s
 
 gomod
 golint
@@ -87,3 +89,9 @@ https://github.com/nathan-osman/go-sunrise
 
 vim go tips
 go-callvis
+
+
+
+when _I_ whisper tripbot, send it to chat
+
+
