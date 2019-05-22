@@ -28,6 +28,8 @@ func UserIsFollower(user string) bool {
 		return true
 	}
 
+	return true
+
 	spew.Dump(user)
 
 	//TODO a better way to do this?
@@ -58,6 +60,7 @@ func UserIsFollower(user string) bool {
 		log.Println("error getting user follows", err)
 		return false
 	}
+
 
 	if followsResp.Data.Total < 1 {
 		log.Println("apparently not a follower")
