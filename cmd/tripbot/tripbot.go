@@ -188,9 +188,13 @@ func main() {
 				if err != nil {
 					client.Say(config.ChannelName, "That didn't work, sorry!")
 				} else {
-					state, _ := helpers.StateFromCoords(lat, lon)
-					msg := fmt.Sprintf("We're in %s", state)
-					client.Say(config.ChannelName, msg)
+					state, err := helpers.StateFromCoords(lat, lon)
+					if err != nil || state == "" {
+						client.Say(config.ChannelName, "That didn't work, sorry!")
+					} else {
+						msg := fmt.Sprintf("We're in %s", state)
+						client.Say(config.ChannelName, msg)
+					}
 				}
 			} else {
 				client.Say(config.ChannelName, "You must be a follower to run that command :)")
