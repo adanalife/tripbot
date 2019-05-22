@@ -5,7 +5,8 @@ const (
 	BotUsername = "TripBot4000"
 	// ChannelName is the channel to join
 	ChannelName = "adanalife_"
-	ChannelID   = "225469317"
+	// ChannelID is the internal twitch ID of the channel
+	ChannelID = "225469317"
 
 	//TODO move these off usbshare1
 	ScreencapDir  = "/Volumes/usbshare1/screencaps"
