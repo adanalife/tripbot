@@ -8,7 +8,7 @@ message_file = "./OBS/right-message.txt"
 possible_messages = [
   "Don't forget to follow :)",
   "Don't forget to follow :)",
-  "Try running !tripbot",
+  "Try running !tripbot <3",
 ]
 
 puts "starting #$PROGRAM_NAME script"
