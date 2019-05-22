@@ -11,8 +11,6 @@ add twitch chat
 https://www.nightdev.com/kapchat/
 
 
-randomize the first help message
-
 whisper users after first mile?
 
 
@@ -51,13 +49,11 @@ move db to db/
 rename tripbot to location
 
 
-
 make state lines more clear
 
 !uptime for bot
 
 !city/!town
-city can sometimes be empty
 
 !progress towards loop?
 
@@ -89,6 +85,6 @@ go-callvis
 
 
 
-when _I_ whisper tripbot, send it to chat
+there is a bug where if last vid is "" it will never updat
 
-
+make a special VideoStr type
