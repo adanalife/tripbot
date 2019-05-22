@@ -30,6 +30,7 @@ func UserIsFollower(user string) bool {
 	//TODO a better way to do this?
 	client, err := FindOrCreateClient("")
 	if err != nil {
+		log.Println("error creating client", err)
 		return false
 	}
 
