@@ -8,8 +8,8 @@ import (
 )
 
 const (
-	user = "olivecat50"
-	dur  = "154h12m38.296097s"
+	user = "downonluk"
+	dur  = "1h56m30.323223s"
 )
 
 func main() {
