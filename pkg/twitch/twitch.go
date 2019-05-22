@@ -57,6 +57,7 @@ func UserIsFollower(user string) bool {
 	}
 
 	if followsResp.Data.Total < 1 {
+		log.Println("apparently not a follower")
 		return false
 	}
 	return true
