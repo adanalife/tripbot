@@ -918,7 +918,7 @@
             "push-to-talk-delay": 0,
             "settings": {
                 "loop": true,
-                "network_caching": 12000,
+                "network_caching": 9000,
                 "playback_behavior": "pause_unpause",
                 "playlist": [
                     {
