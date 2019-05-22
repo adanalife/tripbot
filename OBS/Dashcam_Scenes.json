@@ -199,14 +199,14 @@
                         "locked": true,
                         "name": "right rotating",
                         "pos": {
-                            "x": 1569.0,
-                            "y": 1039.0
+                            "x": 1581.0,
+                            "y": 1040.0
                         },
                         "private_settings": {},
                         "rot": 0.0,
                         "scale": {
-                            "x": 1.1228668689727783,
-                            "y": 1.1212121248245239
+                            "x": 1.0307167768478394,
+                            "y": 1.0303030014038086
                         },
                         "scale_filter": "disable",
                         "visible": true
@@ -754,14 +754,14 @@
                         "locked": true,
                         "name": "right rotating",
                         "pos": {
-                            "x": 1569.0,
-                            "y": 1039.0
+                            "x": 1581.0,
+                            "y": 1040.0
                         },
                         "private_settings": {},
                         "rot": 0.0,
                         "scale": {
-                            "x": 1.1228668689727783,
-                            "y": 1.1212121248245239
+                            "x": 1.0307167768478394,
+                            "y": 1.0303030014038086
                         },
                         "scale_filter": "disable",
                         "visible": true
@@ -815,13 +815,13 @@
                         "name": "leaderboard",
                         "pos": {
                             "x": 18.0,
-                            "y": 891.0
+                            "y": 867.0
                         },
                         "private_settings": {},
                         "rot": 0.0,
                         "scale": {
-                            "x": 1.0,
-                            "y": 1.0
+                            "x": 1.1978609561920166,
+                            "y": 1.1967213153839111
                         },
                         "scale_filter": "disable",
                         "visible": true
@@ -869,11 +869,11 @@
                         "crop_top": 0,
                         "group_item_backup": false,
                         "id": 32,
-                        "locked": true,
+                        "locked": false,
                         "name": "Chat",
                         "pos": {
-                            "x": 1585.0,
-                            "y": 850.0
+                            "x": 1621.0,
+                            "y": 836.0
                         },
                         "private_settings": {},
                         "rot": 0.0,
@@ -23662,14 +23662,14 @@
                         "locked": true,
                         "name": "right rotating",
                         "pos": {
-                            "x": 1569.0,
-                            "y": 1039.0
+                            "x": 1581.0,
+                            "y": 1040.0
                         },
                         "private_settings": {},
                         "rot": 0.0,
                         "scale": {
-                            "x": 1.1228668689727783,
-                            "y": 1.1212121248245239
+                            "x": 1.0307167768478394,
+                            "y": 1.0303030014038086
                         },
                         "scale_filter": "disable",
                         "visible": true
@@ -23830,10 +23830,10 @@
             "push-to-talk": false,
             "push-to-talk-delay": 0,
             "settings": {
-                "fps": 60,
+                "fps": 20,
                 "fps_custom": true,
-                "height": 200,
-                "url": "https://www.nightdev.com/hosted/obschat/?theme=s0n0s_1080&channel=adanalife_&fade=120&bot_activity=true&prevent_clipping=true",
+                "height": 201,
+                "url": "https://www.nightdev.com/hosted/obschat/?theme=s0n0s_1080&channel=adanalife_&fade=120&bot_activity=true&prevent_clipping=false",
                 "width": 300
             },
             "sync": 0,
