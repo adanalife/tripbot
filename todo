@@ -7,8 +7,7 @@ BEFORE NEXT STREAM START
 fix buffer
 fix text resizing
 add tags
-add twitch chat
-https://www.nightdev.com/kapchat/
+outdoors, family friendly, photography, automotive, travel
 
 
 whisper users after first mile?
@@ -83,7 +82,7 @@ https://github.com/nathan-osman/go-sunrise
 vim go tips
 go-callvis
 
-
+make tmuxinator script that starts all of the scripts
 
 there is a bug where if last vid is "" it will never updat
 
