@@ -69,7 +69,7 @@ func main() {
 	})
 
 	client.OnWhisperMessage(func(message twitch.WhisperMessage) {
-		log.Println("whisper:", message.User.Name, message.Message)
+		log.Println("whisper from", message.User.Name, ":", message.Message)
 		// if the message comes from me, then post the message to chat
 		if message.User.Name == config.ChannelName {
 			client.Say(config.ChannelName, message.Message)
@@ -78,11 +78,10 @@ func main() {
 
 	// all chat messages
 	client.OnPrivateMessage(func(message twitch.PrivateMessage) {
-		//TODO: use this
 		user := message.User.Name
 
 		if strings.HasPrefix(strings.ToLower(message.Message), "!help") {
-			log.Println(message.User.Name, "ran !help")
+			log.Println(user, "ran !help")
 			msg := fmt.Sprintf("%s (repeat this command for more)", config.HelpMessages[helpIndex])
 			client.Say(config.ChannelName, msg)
 			// bump the index
@@ -111,7 +110,7 @@ func main() {
 		}
 
 		if strings.HasPrefix(strings.ToLower(message.Message), "!tripbot") {
-			log.Println(message.User.Name, "ran !tripbot")
+			log.Println(user, "ran !tripbot")
 			// run if the user is a follower
 			if mytwitch.UserIsFollower(user) {
 				// get the currently-playing video
@@ -145,12 +144,12 @@ func main() {
 		}
 
 		if strings.HasPrefix(strings.ToLower(message.Message), "!leaderboard") {
-			log.Println(message.User.Name, "ran !leaderboard")
+			log.Println(user, "ran !leaderboard")
 			// run if the user is a follower
 			if mytwitch.UserIsFollower(user) {
 				userList := datastore.TopUsers(3)
-				for i, user := range userList {
-					msg := fmt.Sprintf("#%d: %s (%dmi)", i+1, user, datastore.MilesForUser(user))
+				for i, leader := range userList {
+					msg := fmt.Sprintf("#%d: %s (%dmi)", i+1, user, datastore.MilesForUser(leader))
 					client.Say(config.ChannelName, msg)
 				}
 			} else {
@@ -159,7 +158,7 @@ func main() {
 		}
 
 		if strings.HasPrefix(strings.ToLower(message.Message), "!date") {
-			log.Println(message.User.Name, "ran !date")
+			log.Println(user, "ran !date")
 			// run if the user is a follower
 			if mytwitch.UserIsFollower(user) {
 				// get the currently-playing video
@@ -180,7 +179,7 @@ func main() {
 		}
 
 		if strings.HasPrefix(strings.ToLower(message.Message), "!state") {
-			log.Println(message.User.Name, "ran !state")
+			log.Println(user, "ran !state")
 			// run if the user is a follower
 			if mytwitch.UserIsFollower(user) {
 				// get the currently-playing video
