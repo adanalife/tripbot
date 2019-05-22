@@ -5,7 +5,7 @@
 
 sub_goal = "4/5"
 leaderboard_file = "./OBS/leaderboard-copy.txt"
-message_file = "./OBS/current-message.txt"
+message_file = "./OBS/left-message.txt"
 
 possible_messages = [
   "Type !help in chat for instructions",
