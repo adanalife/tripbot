@@ -9,7 +9,7 @@ import (
 
 const (
 	user = "downonluk"
-	dur  = "1h56m30.323223s"
+	dur  = "13h49m16.396262s"
 )
 
 func main() {
