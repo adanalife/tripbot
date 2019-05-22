@@ -3,7 +3,6 @@ package twitch
 import (
 	"log"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/nicklaw5/helix"
 )
@@ -27,10 +26,6 @@ func UserIsFollower(user string) bool {
 	if user == config.ChannelName {
 		return true
 	}
-
-	return true
-
-	spew.Dump(user)
 
 	//TODO a better way to do this?
 	client, err := FindOrCreateClient("")
@@ -63,8 +58,6 @@ func UserIsFollower(user string) bool {
 
 
 	if followsResp.Data.Total < 1 {
-		log.Println("apparently not a follower")
-		spew.Dump(followsResp.Data)
 		return false
 	}
 	return true
