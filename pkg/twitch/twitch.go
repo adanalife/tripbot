@@ -28,6 +28,8 @@ func UserIsFollower(user string) bool {
 		return true
 	}
 
+	spew.Dump(user)
+
 	//TODO a better way to do this?
 	client, err := FindOrCreateClient("")
 	if err != nil {
