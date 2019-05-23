@@ -163,7 +163,7 @@ func main() {
 			if mytwitch.UserIsFollower(user) {
 				userList := datastore.TopUsers(3)
 				for i, leader := range userList {
-					msg := fmt.Sprintf("#%d: %s (%dmi)", i+1, user, datastore.MilesForUser(leader))
+					msg := fmt.Sprintf("#%d: %s (%dmi)", i+1, leader, datastore.MilesForUser(leader))
 					client.Say(config.ChannelName, msg)
 				}
 			} else {
