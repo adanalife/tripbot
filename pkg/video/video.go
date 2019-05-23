@@ -29,7 +29,7 @@ func New(file string) (Video, error) {
 	dashStr := removeFileExtension(fileName)
 
 	// validate the dash string
-	err := valid(dashStr)
+	err := validate(dashStr)
 	if err != nil {
 		return newVid, err
 	}
@@ -65,7 +65,7 @@ func (v Video) Date() time.Time {
 	return t
 }
 
-func valid(dashStr string) error {
+func validate(dashStr string) error {
 	if len(dashStr) < 20 {
 		return errors.New("dash string too short")
 	}
