@@ -9,6 +9,7 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	"github.com/dmerrick/danalol-stream/pkg/ocr"
+	"github.com/dmerrick/danalol-stream/pkg/video"
 )
 
 var knownBadVids = []string{
@@ -18,8 +19,8 @@ var knownBadVids = []string{
 	"2018_1009_185504_007",
 }
 
-func (s *Store) CoordsFromVideoPath(videoPath string) (float64, float64, error) {
-	videoStr := helpers.ToVidStr(videoPath)
+func (s *Store) CoordsFromVideo(vid video.Video) (float64, float64, error) {
+	videoStr := vid.String()
 	// first look up the coords in the DB
 	lat, lon, err := s.FetchSavedCoords(videoStr)
 	if err == nil {

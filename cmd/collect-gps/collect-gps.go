@@ -11,6 +11,7 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	"github.com/dmerrick/danalol-stream/pkg/ocr"
 	"github.com/dmerrick/danalol-stream/pkg/store"
+	"github.com/dmerrick/danalol-stream/pkg/video"
 )
 
 // this will hold the filename passed in via the CLI
@@ -38,7 +39,9 @@ func main() {
 
 	// a file was passed in via the CLI
 	if videoFile != "" {
-		lat, lon, err := datastore.CoordsFromVideoPath(videoFile)
+		//TODO handle err
+		vid, _ := video.New(videoFile)
+		lat, lon, err := datastore.CoordsFromVideo(vid)
 		if err != nil {
 			log.Fatalf("failed to process image: %v", err)
 		}
@@ -54,12 +57,14 @@ func main() {
 					return err
 				}
 				// skip the directory name itself
-				if path == config.VideoDir {
+				if path == config.VideoDir || path == "" {
 					return nil
 				}
 
 				// actually process the image
-				lat, lon, err := datastore.CoordsFromVideoPath(path)
+				//TODO handle err
+				vid, _ := video.New(path)
+				lat, lon, err := datastore.CoordsFromVideo(vid)
 				if err != nil {
 					log.Printf("failed to process video: %v", err)
 					return nil

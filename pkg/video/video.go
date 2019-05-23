@@ -32,7 +32,6 @@ func New(file string) (Video, error) {
 
 // ex: 2018_0514_224801_013
 func (v Video) String() string {
-	fmt.Println()
 	return v.DashStr
 }
 
@@ -47,8 +46,6 @@ func (v Video) Path() string {
 }
 
 func valid(dashStr string) error {
-	fmt.Println("trying", dashStr)
-
 	if len(dashStr) < 20 {
 		return errors.New("dash string too short")
 	}
