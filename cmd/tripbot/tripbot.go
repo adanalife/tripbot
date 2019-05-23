@@ -15,6 +15,7 @@ import (
 	mytwitch "github.com/dmerrick/danalol-stream/pkg/twitch"
 	"github.com/dmerrick/danalol-stream/pkg/video"
 	twitch "github.com/gempir/go-twitch-irc"
+	"github.com/joho/godotenv"
 	"github.com/kelvins/geocoder"
 )
 
@@ -26,23 +27,28 @@ var helpIndex = rand.Intn(len(config.HelpMessages))
 var lastVid string
 
 func main() {
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
+
 	// first we must check for required ENV vars
-	clientAuthenticationToken, ok := os.LookupEnv("TWITCH_AUTH_TOKEN")
-	if !ok {
+	clientAuthenticationToken := os.Getenv("TWITCH_AUTH_TOKEN")
+	if clientAuthenticationToken == "" {
 		panic("You must set TWITCH_AUTH_TOKEN")
 	}
-	twitchClientID, ok := os.LookupEnv("TWITCH_CLIENT_ID")
-	if !ok {
+	twitchClientID := os.Getenv("TWITCH_CLIENT_ID")
+	if twitchClientID == "" {
 		panic("You must set TWITCH_CLIENT_ID")
 	}
-	googleMapsAPIKey, ok := os.LookupEnv("GOOGLE_MAPS_API_KEY")
-	if !ok {
+	googleMapsAPIKey := os.Getenv("TWITCH_CLIENT_ID")
+	if googleMapsAPIKey == "" {
 		panic("You must set GOOGLE_MAPS_API_KEY")
 	}
 	geocoder.ApiKey = googleMapsAPIKey
 
 	// initialize the twitch API client
-	_, err := mytwitch.FindOrCreateClient(twitchClientID)
+	_, err = mytwitch.FindOrCreateClient(twitchClientID)
 	if err != nil {
 		log.Fatal("unable to create twitch API client", err)
 	}

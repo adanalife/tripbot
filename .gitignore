@@ -4,3 +4,4 @@ ignore/
 *.db
 *.MP4
 OBS/*.txt
+.env

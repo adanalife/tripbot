@@ -16,6 +16,7 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	"github.com/dmerrick/danalol-stream/pkg/store"
 	"github.com/dmerrick/danalol-stream/pkg/video"
+	"github.com/joho/godotenv"
 	"googlemaps.github.io/maps"
 )
 
@@ -23,11 +24,17 @@ var skipToDate = false
 var skipDate = time.Date(2018, time.Month(9), 29, 0, 0, 0, 0, time.UTC)
 
 func main() {
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
+
 	// first we must check for required ENV vars
-	googleMapsAPIKey, ok := os.LookupEnv("GOOGLE_MAPS_API_KEY")
-	if !ok {
+	googleMapsAPIKey := os.Getenv("TWITCH_CLIENT_ID")
+	if googleMapsAPIKey == "" {
 		panic("You must set GOOGLE_MAPS_API_KEY")
 	}
+
 	client, err := maps.NewClient(maps.WithAPIKey(googleMapsAPIKey))
 	if err != nil {
 		log.Fatalf("client error: %s", err)
