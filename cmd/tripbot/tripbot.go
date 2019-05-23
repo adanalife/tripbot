@@ -32,6 +32,10 @@ func main() {
 	}
 
 	// first we must check for required ENV vars
+	botUsername := os.Getenv("BOT_USERNAME")
+	if botUsername == "" {
+		panic("You must set BOT_USERNAME")
+	}
 	clientAuthenticationToken := os.Getenv("TWITCH_AUTH_TOKEN")
 	if clientAuthenticationToken == "" {
 		panic("You must set TWITCH_AUTH_TOKEN")
@@ -56,7 +60,7 @@ func main() {
 	datastore := store.FindOrCreate(config.DbPath)
 
 	// time to set up the Twitch client
-	client := twitch.NewClient(config.BotUsername, clientAuthenticationToken)
+	client := twitch.NewClient(botUsername, clientAuthenticationToken)
 
 	client.OnUserJoinMessage(func(joinMessage twitch.UserJoinMessage) {
 		if !helpers.UserIsIgnored(joinMessage.User) {

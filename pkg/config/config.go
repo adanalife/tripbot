@@ -1,8 +1,6 @@
 package config
 
 const (
-	// BotUsername is the name of the bot
-	BotUsername = "TripBot4000"
 	// ChannelName is the channel to join
 	ChannelName = "adanalife_"
 	// ChannelID is the internal twitch ID of the channel
