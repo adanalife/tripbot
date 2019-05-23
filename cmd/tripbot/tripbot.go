@@ -44,7 +44,7 @@ func main() {
 	if twitchClientID == "" {
 		panic("You must set TWITCH_CLIENT_ID")
 	}
-	googleMapsAPIKey := os.Getenv("TWITCH_CLIENT_ID")
+	googleMapsAPIKey := os.Getenv("GOOGLE_MAPS_API_KEY")
 	if googleMapsAPIKey == "" {
 		panic("You must set GOOGLE_MAPS_API_KEY")
 	}
