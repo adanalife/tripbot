@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"path"
 	"regexp"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/dmerrick/danalol-stream/pkg/config"
 )
@@ -48,6 +50,19 @@ func (v Video) File() string {
 // ex: /Volumes/.../2018_0514_224801_013.MP4
 func (v Video) Path() string {
 	return path.Join(config.VideoDir, v.File())
+}
+
+func (v Video) Date() time.Time {
+	vidStr := v.String()
+	year, _ := strconv.Atoi(vidStr[:4])
+	month, _ := strconv.Atoi(vidStr[5:7])
+	day, _ := strconv.Atoi(vidStr[7:9])
+	hour, _ := strconv.Atoi(vidStr[10:12])
+	minute, _ := strconv.Atoi(vidStr[12:14])
+	second, _ := strconv.Atoi(vidStr[14:16])
+
+	t := time.Date(year, time.Month(month), day, hour, minute, second, 0, time.UTC)
+	return t
 }
 
 func valid(dashStr string) error {

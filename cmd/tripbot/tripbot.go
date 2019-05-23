@@ -182,8 +182,7 @@ func main() {
 				if err != nil {
 					client.Say(config.ChannelName, "That didn't work, sorry!")
 				} else {
-					vidDate := helpers.VidStrToDate(currentVid)
-					realDate := helpers.ActualDate(vidDate, lat, lon)
+					realDate := helpers.ActualDate(vid.Date(), lat, lon)
 					// "Mon, 02 Jan 2006 15:04:05 MST"
 					fmtDate := realDate.Format(time.RFC1123)
 					client.Say(config.ChannelName, fmt.Sprintf("This moment was %s", fmtDate))
