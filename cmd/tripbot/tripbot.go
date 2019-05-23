@@ -13,6 +13,7 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/ocr"
 	"github.com/dmerrick/danalol-stream/pkg/store"
 	mytwitch "github.com/dmerrick/danalol-stream/pkg/twitch"
+	"github.com/dmerrick/danalol-stream/pkg/video"
 	twitch "github.com/gempir/go-twitch-irc"
 	"github.com/kelvins/geocoder"
 )
@@ -119,7 +120,11 @@ func main() {
 				// only run if this video hasn't yet been processed
 				if currentVid != lastVid {
 					// extract the coordinates
-					lat, lon, err := datastore.CoordsFromVideoPath(currentVid)
+					vid, err := video.New(currentVid)
+					if err != nil {
+						log.Println("unable to create video: %v", err)
+					}
+					lat, lon, err := datastore.CoordsFromVideo(vid)
 					if err != nil {
 						client.Say(config.ChannelName, "Sorry, it didn't work this time :(. Try again in a few minutes!")
 					} else {
@@ -163,7 +168,11 @@ func main() {
 			if mytwitch.UserIsFollower(user) {
 				// get the currently-playing video
 				currentVid := ocr.GetCurrentVideo()
-				lat, lon, err := datastore.CoordsFromVideoPath(currentVid)
+				vid, err := video.New(currentVid)
+				if err != nil {
+					log.Println("unable to create video: %v", err)
+				}
+				lat, lon, err := datastore.CoordsFromVideo(vid)
 				if err != nil {
 					client.Say(config.ChannelName, "That didn't work, sorry!")
 				} else {
@@ -184,7 +193,11 @@ func main() {
 			if mytwitch.UserIsFollower(user) {
 				// get the currently-playing video
 				currentVid := ocr.GetCurrentVideo()
-				lat, lon, err := datastore.CoordsFromVideoPath(currentVid)
+				vid, err := video.New(currentVid)
+				if err != nil {
+					log.Println("unable to create video: %v", err)
+				}
+				lat, lon, err := datastore.CoordsFromVideo(vid)
 				if err != nil {
 					client.Say(config.ChannelName, "That didn't work, sorry!")
 				} else {
