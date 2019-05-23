@@ -10,6 +10,8 @@ add tags
 outdoors, family friendly, photography, automotive, travel
 
 
+make a special VideoStr type
+
 whisper users after first mile?
 
 
@@ -65,9 +67,12 @@ http://devs.cloudimmunity.com/gotchas-and-common-mistakes-in-go-golang/
 move db to db/
 
 
+make tmuxinator script that starts all of the scripts
+
+there is a bug where if last vid is "" it will never updat
+
 
 rename tripbot to location
-
 
 make state lines more clear
 
@@ -103,8 +108,18 @@ https://github.com/nathan-osman/go-sunrise
 vim go tips
 go-callvis
 
-make tmuxinator script that starts all of the scripts
 
-there is a bug where if last vid is "" it will never updat
 
-make a special VideoStr type
+
+2018_0514_160958_005.MP4 needs clipping
+2018_0514_165158_019.MP4 too
+2018_0514_183552_011.MP4
+2018_0514_184752_015.MP4
+2018_0514_221801_003.MP4
+2018_0514_224801_013.MP4
+2018_0516_012130_001.MP4
+
+
+
+DANALOL
+faq anchor links dont work?
