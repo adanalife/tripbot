@@ -39,8 +39,10 @@ func main() {
 
 	// a file was passed in via the CLI
 	if videoFile != "" {
-		//TODO handle err
-		vid, _ := video.New(videoFile)
+		vid, err := video.New(videoFile)
+		if err != nil {
+			log.Println("unable to create video: %v", err)
+		}
 		lat, lon, err := datastore.CoordsFromVideo(vid)
 		if err != nil {
 			log.Fatalf("failed to process image: %v", err)
@@ -57,13 +59,16 @@ func main() {
 					return err
 				}
 				// skip the directory name itself
-				if path == config.VideoDir || path == "" {
+				if path == config.VideoDir {
 					return nil
 				}
 
 				// actually process the image
-				//TODO handle err
-				vid, _ := video.New(path)
+				vid, err := video.New(videoFile)
+				if err != nil {
+					log.Println("unable to create video:", err)
+					return nil
+				}
 				lat, lon, err := datastore.CoordsFromVideo(vid)
 				if err != nil {
 					log.Printf("failed to process video: %v", err)

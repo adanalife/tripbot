@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path"
 	"regexp"
+	"strings"
 
 	"github.com/dmerrick/danalol-stream/pkg/config"
 )
@@ -18,6 +19,10 @@ type Video struct {
 
 func New(file string) (Video, error) {
 	var newVid Video
+
+	if file == "" {
+		return newVid, errors.New("no file provided")
+	}
 	fileName := path.Base(file)
 	dashStr := removeFileExtension(fileName)
 
@@ -50,6 +55,10 @@ func valid(dashStr string) error {
 		return errors.New("dash string too short")
 	}
 	shortened := dashStr[:20]
+
+	if strings.HasPrefix(".", shortened) {
+		return errors.New("dash string can't be a hidden file")
+	}
 
 	//TODO: this should probably live in an init()
 	var validDashStr = regexp.MustCompile(`^[_0-9]{20}$`)
