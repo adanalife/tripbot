@@ -56,7 +56,6 @@ func UserIsFollower(user string) bool {
 		return false
 	}
 
-
 	if followsResp.Data.Total < 1 {
 		return false
 	}

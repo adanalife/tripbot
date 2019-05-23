@@ -21,7 +21,7 @@ var knownBadVids = []string{
 func (s *Store) CoordsFor(vid video.Video) (float64, float64, error) {
 	videoStr := vid.String()
 	// first look up the coords in the DB
-	lat, lon, err := s.FetchSavedCoords(videoStr)
+	lat, lon, err := s.fetchSavedCoords(videoStr)
 	if err == nil {
 		// cool, they were in the DB already
 		return lat, lon, err
@@ -44,7 +44,7 @@ func (s *Store) CoordsFor(vid video.Video) (float64, float64, error) {
 	return lat, lon, err
 }
 
-func (s *Store) FetchSavedCoords(vidStr string) (float64, float64, error) {
+func (s *Store) fetchSavedCoords(vidStr string) (float64, float64, error) {
 	var lat, lon float64
 	var err error
 
