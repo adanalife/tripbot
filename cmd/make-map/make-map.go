@@ -15,6 +15,7 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	"github.com/dmerrick/danalol-stream/pkg/store"
+	"github.com/dmerrick/danalol-stream/pkg/video"
 	"googlemaps.github.io/maps"
 )
 
@@ -53,10 +54,14 @@ func main() {
 				return nil
 			}
 
+			vid, err := video.New(path)
+			if err != nil {
+				log.Println("unable to create video:", err)
+				return nil
+			}
+
 			// this is where we will save the map image
-			imgFilename := filepath.Base(path)
-			imgFilename = helpers.RemoveFileExtension(imgFilename)
-			imgFilename = fmt.Sprintf("%s.png", imgFilename)
+			imgFilename := fmt.Sprintf("%s.png", vid.String())
 			fullImgFilename := gopath.Join(config.MapsOutputDir, imgFilename)
 
 			// skip stuff from before this time
@@ -69,7 +74,7 @@ func main() {
 			}
 
 			// extract the coords from the image
-			lat, lon, err := datastore.CoordsFromVideoPath(path)
+			lat, lon, err := datastore.CoordsFromVideo(vid)
 			if err != nil {
 				fmt.Println(imgFilename, "coords not found:", err)
 				skipIndex = skipIndex + 1
