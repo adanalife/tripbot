@@ -126,8 +126,11 @@ func (s *Store) RecordUserPart(user string) {
 	})
 
 	// don't do anything if something went wrong
-	if err != nil || durationWatched == 0 {
-		log.Println("something broke or watched was zero:", err)
+	if err != nil {
+		log.Println("error saving duration:", err)
+	}
+	if durationWatched == 0 {
+		log.Println("duration watched would be zero")
 		return
 	}
 
