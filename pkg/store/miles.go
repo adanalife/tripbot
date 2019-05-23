@@ -107,7 +107,7 @@ func (s *Store) RecordUserPart(user string) {
 	var durationWatched time.Duration
 	var previousDurationWatched time.Duration
 
-	s.db.View(func(tx *bolt.Tx) error {
+	err := s.db.View(func(tx *bolt.Tx) error {
 		joinedBucket := tx.Bucket([]byte(config.UserJoinsBucket))
 		watchedBucket := tx.Bucket([]byte(config.UserWatchedBucket))
 
@@ -124,6 +124,12 @@ func (s *Store) RecordUserPart(user string) {
 		previousDurationWatched, err = time.ParseDuration(string(watchedBucket.Get([]byte(user))))
 		return err
 	})
+
+	// don't do anything if something went wrong
+	if err != nil || durationWatched == 0 {
+		log.Println("something broke or watched was zero:", err)
+		return
+	}
 
 	// calculate total duration watched
 	totalDurationWatched := previousDurationWatched + durationWatched
