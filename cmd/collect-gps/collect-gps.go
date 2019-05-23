@@ -64,7 +64,7 @@ func main() {
 				}
 
 				// actually process the image
-				vid, err := video.New(videoFile)
+				vid, err := video.New(path)
 				if err != nil {
 					log.Println("unable to create video:", err)
 					return nil
