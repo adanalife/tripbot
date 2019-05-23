@@ -8,7 +8,6 @@ import (
 	"github.com/boltdb/bolt"
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
-	"github.com/dmerrick/danalol-stream/pkg/ocr"
 	"github.com/dmerrick/danalol-stream/pkg/video"
 )
 
@@ -19,7 +18,7 @@ var knownBadVids = []string{
 	"2018_1009_185504_007",
 }
 
-func (s *Store) CoordsFromVideo(vid video.Video) (float64, float64, error) {
+func (s *Store) CoordsFor(vid video.Video) (float64, float64, error) {
 	videoStr := vid.String()
 	// first look up the coords in the DB
 	lat, lon, err := s.FetchSavedCoords(videoStr)
@@ -35,7 +34,7 @@ func (s *Store) CoordsFromVideo(vid video.Video) (float64, float64, error) {
 	}
 
 	// okay we need to pull them from the video file
-	lat, lon, err = ocr.CoordsFromVideoWithRetry(videoStr)
+	lat, lon, err = vid.CoordsWithRetry()
 	if err != nil {
 		// something went wrong reading the coords
 		return lat, lon, err

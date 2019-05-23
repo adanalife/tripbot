@@ -81,7 +81,7 @@ func main() {
 			}
 
 			// extract the coords from the image
-			lat, lon, err := datastore.CoordsFromVideo(vid)
+			lat, lon, err := datastore.CoordsFor(vid)
 			if err != nil {
 				fmt.Println(imgFilename, "coords not found:", err)
 				skipIndex = skipIndex + 1

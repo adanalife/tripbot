@@ -129,7 +129,7 @@ func main() {
 					if err != nil {
 						log.Println("unable to create video: %v", err)
 					}
-					lat, lon, err := datastore.CoordsFromVideo(vid)
+					lat, lon, err := datastore.CoordsFor(vid)
 					if err != nil {
 						client.Say(config.ChannelName, "Sorry, it didn't work this time :(. Try again in a few minutes!")
 					} else {
@@ -177,7 +177,7 @@ func main() {
 				if err != nil {
 					log.Println("unable to create video: %v", err)
 				}
-				lat, lon, err := datastore.CoordsFromVideo(vid)
+				lat, lon, err := datastore.CoordsFor(vid)
 				if err != nil {
 					client.Say(config.ChannelName, "That didn't work, sorry!")
 				} else {
@@ -201,7 +201,7 @@ func main() {
 				if err != nil {
 					log.Println("unable to create video: %v", err)
 				}
-				lat, lon, err := datastore.CoordsFromVideo(vid)
+				lat, lon, err := datastore.CoordsFor(vid)
 				if err != nil {
 					client.Say(config.ChannelName, "That didn't work, sorry!")
 				} else {

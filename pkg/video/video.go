@@ -13,7 +13,17 @@ import (
 
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
+	"github.com/dmerrick/danalol-stream/pkg/ocr"
 )
+
+var timestampsToTry = []string{
+	"000",
+	"030",
+	"100",
+	"130",
+	"200",
+	"230",
+}
 
 // a DashStr is the string we get from the dashcam
 // an example file: 2018_0514_224801_013.MP4
@@ -66,6 +76,24 @@ func (v Video) Date() time.Time {
 
 	t := time.Date(year, time.Month(month), day, hour, minute, second, 0, time.UTC)
 	return t
+}
+
+// timestamp is something like 000, 030, 100, etc
+func (v Video) screencap(timestamp string) string {
+	screencapFile := fmt.Sprintf("%s-%s.png", v.String(), timestamp)
+	//TODO: just rename the files so we can skip this step
+	subdir := fmt.Sprintf("0%s", timestamp)
+	return path.Join(config.ScreencapDir, subdir, screencapFile)
+}
+
+func (v Video) CoordsWithRetry() (float64, float64, error) {
+	for _, timestamp := range timestampsToTry {
+		lat, lon, err := ocr.CoordsFromImage(v.screencap(timestamp))
+		if err == nil {
+			return lat, lon, err
+		}
+	}
+	return 0, 0, errors.New("none of the screencaps had valid coords")
 }
 
 func CurrentlyPlaying() string {

@@ -2,7 +2,6 @@ package ocr
 
 import (
 	"errors"
-	"fmt"
 	"log"
 	"path"
 	"path/filepath"
@@ -13,30 +12,6 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	"github.com/otiai10/gosseract"
 )
-
-var timestampsToTry = []string{
-	"000",
-	"030",
-	"100",
-	"130",
-	"200",
-	"230",
-}
-
-func CoordsFromVideoWithRetry(videoStr string) (float64, float64, error) {
-	for _, timestamp := range timestampsToTry {
-		screencapFile := fmt.Sprintf("%s-%s.png", videoStr, timestamp)
-		//TODO: just rename the files so we can skip this step
-		subdir := fmt.Sprintf("0%s", timestamp)
-		fullPath := path.Join(config.ScreencapDir, subdir, screencapFile)
-
-		lat, lon, err := CoordsFromImage(fullPath)
-		if err == nil {
-			return lat, lon, err
-		}
-	}
-	return 0, 0, errors.New("none of the screencaps had valid coords")
-}
 
 func CoordsFromImage(path string) (float64, float64, error) {
 	// crop the image
