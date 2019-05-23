@@ -9,10 +9,6 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/config"
 )
 
-func init() {
-	var validID = regexp.MustCompile(`^[a-z]+\[[0-9]+\]$`)
-}
-
 // a DashStr is the string we get from the dashcam
 // an example file: 2018_0514_224801_013.MP4
 // an example dashstr: 2018_0514_224801_013
@@ -20,12 +16,18 @@ type Video struct {
 	DashStr string
 }
 
-func New(file string) Video {
-	dashStr := removeFileExtension(path.Base(videoPath))
-	if !valid(dashStr) {
-		return errors.New("did not match regex")
+func New(file string) (Video, error) {
+	var newVid Video
+	fileName := path.Base(file)
+	dashStr := removeFileExtension(fileName)
+
+	// validate the dash string
+	err := valid(dashStr)
+	if err != nil {
+		return newVid, err
 	}
-	return video.Video{file}
+	newVid = Video{dashStr}
+	return newVid, err
 }
 
 // ex: 2018_0514_224801_013
@@ -44,8 +46,20 @@ func (v Video) Path() string {
 	return path.Join(config.VideoDir, v.File())
 }
 
-func valid(dashStr) bool {
-	return validID.MatchString(dashStr[:21])
+func valid(dashStr string) error {
+	fmt.Println("trying", dashStr)
+
+	if len(dashStr) < 20 {
+		return errors.New("dash string too short")
+	}
+	shortened := dashStr[:20]
+
+	//TODO: this should probably live in an init()
+	var validDashStr = regexp.MustCompile(`^[_0-9]{20}$`)
+	if !validDashStr.MatchString(shortened) {
+		return errors.New("dash string did not match regex")
+	}
+	return nil
 }
 
 func removeFileExtension(filename string) string {
