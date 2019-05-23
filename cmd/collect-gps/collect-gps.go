@@ -9,7 +9,6 @@ import (
 
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
-	"github.com/dmerrick/danalol-stream/pkg/ocr"
 	"github.com/dmerrick/danalol-stream/pkg/store"
 	"github.com/dmerrick/danalol-stream/pkg/video"
 )
@@ -32,7 +31,7 @@ func main() {
 		if videoFile != "" {
 			log.Fatal("you cannot use -current and -file at the same time")
 		}
-		videoFile = ocr.GetCurrentVideo()
+		videoFile = video.CurrentlyPlaying()
 	}
 
 	datastore := store.FindOrCreate(config.DbPath)

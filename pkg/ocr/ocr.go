@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
@@ -22,17 +21,6 @@ var timestampsToTry = []string{
 	"130",
 	"200",
 	"230",
-}
-
-//TODO move me out of here
-func GetCurrentVideo() string {
-	// run the shell script to get currently-playing video
-	scriptPath := path.Join(helpers.ProjectRoot(), "bin/current-file.sh")
-	out, err := exec.Command(scriptPath).Output()
-	if err != nil {
-		log.Printf("failed to run script: %v", err)
-	}
-	return string(out)
 }
 
 func CoordsFromVideoWithRetry(videoStr string) (float64, float64, error) {

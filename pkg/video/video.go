@@ -3,6 +3,8 @@ package video
 import (
 	"errors"
 	"fmt"
+	"log"
+	"os/exec"
 	"path"
 	"regexp"
 	"strconv"
@@ -10,6 +12,7 @@ import (
 	"time"
 
 	"github.com/dmerrick/danalol-stream/pkg/config"
+	"github.com/dmerrick/danalol-stream/pkg/helpers"
 )
 
 // a DashStr is the string we get from the dashcam
@@ -63,6 +66,16 @@ func (v Video) Date() time.Time {
 
 	t := time.Date(year, time.Month(month), day, hour, minute, second, 0, time.UTC)
 	return t
+}
+
+func CurrentlyPlaying() string {
+	// run the shell script to get currently-playing video
+	scriptPath := path.Join(helpers.ProjectRoot(), "bin/current-file.sh")
+	out, err := exec.Command(scriptPath).Output()
+	if err != nil {
+		log.Printf("failed to run script: %v", err)
+	}
+	return string(out)
 }
 
 func validate(dashStr string) error {

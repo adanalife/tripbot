@@ -10,7 +10,6 @@ import (
 
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
-	"github.com/dmerrick/danalol-stream/pkg/ocr"
 	"github.com/dmerrick/danalol-stream/pkg/store"
 	mytwitch "github.com/dmerrick/danalol-stream/pkg/twitch"
 	"github.com/dmerrick/danalol-stream/pkg/video"
@@ -121,7 +120,7 @@ func main() {
 			// run if the user is a follower
 			if mytwitch.UserIsFollower(user) {
 				// get the currently-playing video
-				currentVid := ocr.GetCurrentVideo()
+				currentVid := video.CurrentlyPlaying()
 
 				// only run if this video hasn't yet been processed
 				if currentVid != lastVid {
@@ -173,7 +172,7 @@ func main() {
 			// run if the user is a follower
 			if mytwitch.UserIsFollower(user) {
 				// get the currently-playing video
-				currentVid := ocr.GetCurrentVideo()
+				currentVid := video.CurrentlyPlaying()
 				vid, err := video.New(currentVid)
 				if err != nil {
 					log.Println("unable to create video: %v", err)
@@ -197,7 +196,7 @@ func main() {
 			// run if the user is a follower
 			if mytwitch.UserIsFollower(user) {
 				// get the currently-playing video
-				currentVid := ocr.GetCurrentVideo()
+				currentVid := video.CurrentlyPlaying()
 				vid, err := video.New(currentVid)
 				if err != nil {
 					log.Println("unable to create video: %v", err)
