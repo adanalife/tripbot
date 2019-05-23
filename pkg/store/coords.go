@@ -40,7 +40,7 @@ func (s *Store) CoordsFor(vid video.Video) (float64, float64, error) {
 		return lat, lon, err
 	}
 	// now save these coords in the DB for next time
-	err = s.StoreCoords(videoStr, lat, lon)
+	err = s.storeCoords(videoStr, lat, lon)
 	return lat, lon, err
 }
 
@@ -64,7 +64,7 @@ func (s *Store) fetchSavedCoords(vidStr string) (float64, float64, error) {
 	return lat, lon, err
 }
 
-func (s *Store) StoreCoords(vidStr string, lat, lon float64) error {
+func (s *Store) storeCoords(vidStr string, lat, lon float64) error {
 	err := s.db.Update(func(tx *bolt.Tx) error {
 		coordsBucket := tx.Bucket([]byte(config.CoordsBucket))
 
