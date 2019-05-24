@@ -103,55 +103,29 @@ func (s *Store) RecordUserJoin(user string) {
 }
 
 func (s *Store) RecordUserPart(user string) {
-	var joinTime time.Time
-	var durationWatched time.Duration
-	var previousDurationWatched time.Duration
-
-	err := s.db.View(func(tx *bolt.Tx) error {
-		joinedBucket := tx.Bucket([]byte(config.UserJoinsBucket))
-		watchedBucket := tx.Bucket([]byte(config.UserWatchedBucket))
-
-		// first find the time the user joined the channel
-		err := joinTime.UnmarshalText(joinedBucket.Get([]byte(user)))
-		if err != nil {
-			return err
-		}
-
-		// seems like we did find a time, so calculate the duration watched
-		durationWatched = time.Since(joinTime)
-
-		// fetch the previous duration watched from the DB
-		previousDurationWatched, err = time.ParseDuration(string(watchedBucket.Get([]byte(user))))
-		return err
-	})
-
-	// don't do anything if something went wrong
-	if err != nil {
-		log.Println("error saving duration:", err)
-	}
-	if durationWatched == 0 {
-		log.Println("duration watched would be zero")
-		return
-	}
-
 	// calculate total duration watched
-	totalDurationWatched := previousDurationWatched + durationWatched
+	previousDurationWatched := DurationForUser(user)
+	currentDurationWatched := CurrentViewDuration(user)
+	totalDurationWatched := previousDurationWatched + currentDurationWatched
 
 	// update the DB with the total duration watched
-	s.db.Update(func(tx *bolt.Tx) error {
+	err := s.db.Update(func(tx *bolt.Tx) error {
 		joinedBucket := tx.Bucket([]byte(config.UserJoinsBucket))
 		watchedBucket := tx.Bucket([]byte(config.UserWatchedBucket))
 
-		err := watchedBucket.Put([]byte(user), []byte(totalDurationWatched.String()))
+		// remove the user from the joined bucket
+		err := joinedBucket.Delete([]byte(user))
 		if err != nil {
 			return err
 		}
-		// remove the user from the joined bucket
-		err = joinedBucket.Delete([]byte(user))
+		err = watchedBucket.Put([]byte(user), []byte(totalDurationWatched.String()))
 		return err
 	})
+	if err != nil {
+		log.Printf("there was an error, user=%s, total=%s, current=%s", user, totalDurationWatched, currentDurationWatched)
+	}
 
-	log.Printf("%s left the channel (total: %s, session: %s)", user, totalDurationWatched, durationWatched)
+	log.Printf("%s left the channel (total: %s, session: %s)", user, totalDurationWatched, currentDurationWatched)
 }
 func (s *Store) GiveUserDuration(user string, durToAdd time.Duration) {
 	var previousDurationWatched time.Duration
