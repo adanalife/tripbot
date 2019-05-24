@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/boltdb/bolt"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 )
@@ -35,6 +36,7 @@ func (s *Store) CurrentViewDuration(user string) time.Duration {
 	var joinTime time.Time
 	err := s.db.View(func(tx *bolt.Tx) error {
 		joinedBucket := tx.Bucket([]byte(config.UserJoinsBucket))
+		spew.Dump(joinedBucket.Get([]byte(user)))
 		err := joinTime.UnmarshalText(joinedBucket.Get([]byte(user)))
 		return err
 	})
