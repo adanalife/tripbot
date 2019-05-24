@@ -104,8 +104,8 @@ func (s *Store) RecordUserJoin(user string) {
 
 func (s *Store) RecordUserPart(user string) {
 	// calculate total duration watched
-	previousDurationWatched := DurationForUser(user)
-	currentDurationWatched := CurrentViewDuration(user)
+	previousDurationWatched := s.DurationForUser(user)
+	currentDurationWatched := s.CurrentViewDuration(user)
 	totalDurationWatched := previousDurationWatched + currentDurationWatched
 
 	// update the DB with the total duration watched
@@ -128,16 +128,9 @@ func (s *Store) RecordUserPart(user string) {
 	log.Printf("%s left the channel (total: %s, session: %s)", user, totalDurationWatched, currentDurationWatched)
 }
 func (s *Store) GiveUserDuration(user string, durToAdd time.Duration) {
-	var previousDurationWatched time.Duration
 	var err error
 
-	s.db.View(func(tx *bolt.Tx) error {
-		watchedBucket := tx.Bucket([]byte(config.UserWatchedBucket))
-
-		// fetch the previous duration watched from the DB
-		previousDurationWatched, err = time.ParseDuration(string(watchedBucket.Get([]byte(user))))
-		return err
-	})
+	previousDurationWatched := s.DurationForUser(user)
 
 	// calculate total duration watched
 	totalDurationWatched := previousDurationWatched + durToAdd
