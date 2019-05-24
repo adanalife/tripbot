@@ -39,7 +39,7 @@ func (s *Store) CurrentViewDuration(user string) time.Duration {
 		return err
 	})
 	if err != nil {
-		// log.Printf("encountered error getting current view duration: %s", err)
+		log.Printf("encountered error getting current view duration: %s", err)
 		return 0
 	}
 	return time.Since(joinTime)
