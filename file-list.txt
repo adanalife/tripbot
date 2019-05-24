@@ -101,8 +101,8 @@
 ./_all/2018_0513_022650_002.MP4
 ./_all/2018_0513_022950_003.MP4
 ./_all/2018_0513_023250_004.MP4
-./_all/2018_0513_023550_005.MP4
-./_all/2018_0513_023850_006.MP4
+./_all/2018_0513_023550_005_a.mp4
+./_all/2018_0513_023850_006_b.mp4
 ./_all/2018_0513_024150_007.MP4
 ./_all/2018_0513_024450_008.MP4
 ./_all/2018_0513_024750_009.MP4
@@ -4636,6 +4636,8 @@
 ./not moving - at all/2018_1207_004135_027.MP4
 ./not moving - at all/2018_1211_183913_011.MP4
 ./not moving - has been clipped/2018_0513_002850_001.MP4
+./not moving - has been clipped/2018_0513_023550_005.MP4
+./not moving - has been clipped/2018_0513_023850_006.MP4
 ./not moving - has been clipped/2018_0513_234013_004.MP4
 ./not moving - has been clipped/2018_0514_165758_021.MP4
 ./not moving - has been clipped/2018_0514_222101_004.MP4
