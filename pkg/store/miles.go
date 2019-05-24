@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/boltdb/bolt"
-	"github.com/davecgh/go-spew/spew"
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 )
@@ -37,7 +36,6 @@ func (s *Store) CurrentViewDuration(user string) time.Duration {
 	err := s.db.View(func(tx *bolt.Tx) error {
 		joinedBucket := tx.Bucket([]byte(config.UserJoinsBucket))
 		joinStr := string(joinedBucket.Get([]byte(user)))
-		spew.Dump(joinStr)
 		if joinStr == "" {
 			log.Printf("join time was empty for", user)
 		}
