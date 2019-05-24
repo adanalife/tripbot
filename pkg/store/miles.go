@@ -36,7 +36,11 @@ func (s *Store) CurrentViewDuration(user string) time.Duration {
 	var joinTime time.Time
 	err := s.db.View(func(tx *bolt.Tx) error {
 		joinedBucket := tx.Bucket([]byte(config.UserJoinsBucket))
-		spew.Dump(joinedBucket.Get([]byte(user)))
+		joinStr := string(joinedBucket.Get([]byte(user)))
+		spew.Dump(joinStr)
+		if joinStr == nil {
+			log.Printf("join time was empty for", user)
+		}
 		err := joinTime.UnmarshalText(joinedBucket.Get([]byte(user)))
 		return err
 	})
