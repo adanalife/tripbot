@@ -37,7 +37,7 @@ func (s *Store) CurrentViewDuration(user string) time.Duration {
 		joinedBucket := tx.Bucket([]byte(config.UserJoinsBucket))
 		joinStr := string(joinedBucket.Get([]byte(user)))
 		if joinStr == "" {
-			log.Printf("join time was empty for", user)
+			log.Printf("join time was empty for %s", user)
 		}
 		err := joinTime.UnmarshalText(joinedBucket.Get([]byte(user)))
 		return err
