@@ -1,14 +1,20 @@
 package config
 
+import (
+	"os"
+	"path"
+)
+
 const (
 	// ChannelName is the channel to join
 	ChannelName = "adanalife_"
 	// ChannelID is the internal twitch ID of the channel
 	ChannelID = "225469317"
 
-	//TODO move these off usbshare1
-	ScreencapDir  = "/Volumes/usbshare1/Dashcam/screencaps"
-	VideoDir      = "/Volumes/usbshare1/Dashcam/_all"
+	screencapDir = "screencaps"
+	videoDir     = "_all"
+
+	// MapsOutputDir is where the maps script saves the frames
 	MapsOutputDir = "/Volumes/usbshare1/maps"
 	// CroppedPath is where we store the cropped versions of screencaps (to OCR them)
 	CroppedPath = "/Volumes/usbshare1/cropped-corners"
@@ -19,6 +25,14 @@ const (
 	UserWatchedBucket = "user_watched"
 	CoordsBucket      = "coords"
 )
+
+func VideoDir() string {
+	return path.Join(os.Getenv("DASHCAM_DIR"), videoDir)
+}
+
+func ScreencapDir() string {
+	return path.Join(os.Getenv("DASHCAM_DIR"), screencapDir)
+}
 
 //TODO: this should load from a config file
 // IgnoredUsers are users who shouldn't be in the running for miles

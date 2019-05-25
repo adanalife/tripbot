@@ -44,7 +44,7 @@ func main() {
 		}
 	}()
 
-	err = watcher.Add(config.ScreencapDir)
+	err = watcher.Add(config.ScreencapDir())
 	if err != nil {
 		log.Fatal(err)
 	}

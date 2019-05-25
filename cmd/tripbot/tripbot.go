@@ -38,6 +38,9 @@ func main() {
 	if botUsername == "" {
 		panic("You must set BOT_USERNAME")
 	}
+	if os.Getenv("DASHCAM_DIR") == "" {
+		panic("You must set DASHCAM_DIR")
+	}
 	clientAuthenticationToken := os.Getenv("TWITCH_AUTH_TOKEN")
 	if clientAuthenticationToken == "" {
 		panic("You must set TWITCH_AUTH_TOKEN")

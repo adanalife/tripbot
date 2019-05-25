@@ -52,13 +52,13 @@ func main() {
 	} else {
 
 		// loop over every file in the screencapDir
-		err := filepath.Walk(config.VideoDir,
+		err := filepath.Walk(config.VideoDir(),
 			func(path string, info os.FileInfo, err error) error {
 				if err != nil {
 					return err
 				}
 				// skip the directory name itself
-				if path == config.VideoDir {
+				if path == config.VideoDir() {
 					return nil
 				}
 

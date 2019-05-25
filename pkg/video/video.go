@@ -75,7 +75,7 @@ func (v Video) File() string {
 
 // ex: /Volumes/.../2018_0514_224801_013.MP4
 func (v Video) Path() string {
-	return path.Join(config.VideoDir, v.File())
+	return path.Join(config.VideoDir(), v.File())
 }
 
 func (v Video) Date() time.Time {
@@ -94,7 +94,7 @@ func (v Video) Date() time.Time {
 // timestamp is something like 000, 030, 100, etc
 func (v Video) screencap(timestamp string) string {
 	screencapFile := fmt.Sprintf("%s-%s.png", v.DashStr(), timestamp)
-	return path.Join(config.ScreencapDir, timestamp, screencapFile)
+	return path.Join(config.ScreencapDir(), timestamp, screencapFile)
 }
 
 func (v Video) CoordsWithRetry() (float64, float64, error) {

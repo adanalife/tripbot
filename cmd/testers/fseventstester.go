@@ -14,7 +14,7 @@ import (
 )
 
 func main() {
-	path := config.ScreencapDir
+	path := config.ScreencapDir()
 	// path, err := ioutil.TempDir("", "fsexample")
 	// if err != nil {
 	// 	log.Fatalf("Failed to create TempDir: %v", err)
