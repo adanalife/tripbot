@@ -135,7 +135,7 @@ func main() {
 				} else {
 					realDate := helpers.ActualDate(vid.Date(), lat, lon)
 					// "Mon, 02 Jan 2006 15:04:05 MST"
-					_, sunset := helpers.SunriseSunset()
+					_, sunset := helpers.SunriseSunset(realDate, lat, lon)
 					fmtDate := sunset.Format(time.RFC1123)
 					msg := fmt.Sprintf("Sunset on this day was %s", fmtDate)
 					client.Say(config.ChannelName, msg)
