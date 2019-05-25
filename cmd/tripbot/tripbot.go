@@ -121,10 +121,10 @@ func main() {
 					if err != nil {
 						log.Println("error from openweathermap:", err)
 					}
-					weather := w.HistoryByCoord(&Coordinates{
+					weather := w.HistoryByCoord(&owm.Coordinates{
 						Longitude: lat,
 						Latitude:  lon,
-					}, &HistoricalParameters{
+					}, &owm.HistoricalParameters{
 						Start: realDate.UnixTime(),
 						Cnt:   1,
 					})
