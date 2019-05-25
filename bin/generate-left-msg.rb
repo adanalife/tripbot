@@ -3,7 +3,7 @@
 # this script manages the text file that OBS reads from
 # it is used to update the rotating text in the corner
 
-sub_goal = "1/10"
+sub_goal = "2/10"
 leaderboard_file = "./OBS/leaderboard-copy.txt"
 message_file = "./OBS/left-message.txt"
 
