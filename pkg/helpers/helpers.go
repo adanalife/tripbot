@@ -147,7 +147,6 @@ func ActualDate(utcDate time.Time, lat, long float64) time.Time {
 }
 
 func SunriseSunset(utcDate time.Time, lat, long float64) (time.Time, time.Time) {
-	actualDate := ActualDate(utcDate, lat, long)
 	rise, set := sunrise.SunriseSunset(
 		lat, long,
 		utcDate.Year(), utcDate.Month(), utcDate.Day(),
