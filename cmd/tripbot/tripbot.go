@@ -84,7 +84,7 @@ func main() {
 	client.OnUserNoticeMessage(func(message twitch.UserNoticeMessage) {
 		log.Println("user notice:", message.SystemMsg, "***", message.Emotes, "***", message.Tags)
 		// send message to chat if someone subs
-		msg := fmt.Sprintf("%s Your support powers me bleedPurple")
+		msg := fmt.Sprintf("%s Your support powers me bleedPurple", message.Message)
 		client.Say(config.ChannelName, msg)
 	})
 
