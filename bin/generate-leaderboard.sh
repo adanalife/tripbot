@@ -16,7 +16,7 @@ function ctrl_c() {
 
 while true; do
 	if (( RANDOM % 8 == 0 )); then
-		cp tripbot.db tripbot-copy.db
+		cp db/tripbot.db db/tripbot-copy.db
 		go run cmd/leaderboard.go > OBS/leaderboard.txt 2>/dev/null
 		# make a copy for the generate message script
 		cp OBS/leaderboard.txt OBS/leaderboard-copy.txt
