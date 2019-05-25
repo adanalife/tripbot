@@ -150,7 +150,7 @@ func SunriseSunset(utcDate time.Time, lat, long float64) (time.Time, time.Time) 
 	actualDate := ActualDate(utcDate, lat, long)
 	rise, set := sunrise.SunriseSunset(
 		lat, long,
-		actualDate.Year(), actualDate.Month(), actualDate.Day(),
+		utcDate.Year(), utcDate.Month(), utcDate.Day(),
 	)
-	return rise, set
+	return ActualDate(rise, lat, long), ActualDate(set, lat, long)
 }

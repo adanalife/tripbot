@@ -134,10 +134,9 @@ func main() {
 					client.Say(config.ChannelName, "That didn't work, sorry!")
 				} else {
 					realDate := helpers.ActualDate(vid.Date(), lat, lon)
-					// "Mon, 02 Jan 2006 15:04:05 MST"
-					_, sunset := helpers.SunriseSunset(realDate, lat, lon)
-					fmtDate := sunset.Format(time.RFC1123)
-					msg := fmt.Sprintf("Sunset on this day was %s", fmtDate)
+					_, sunset := helpers.SunriseSunset(vid.Date(), lat, lon)
+					dateDiff := sunset.Sub(realDate)
+					msg := fmt.Sprintf("Sunset is in %s", dateDiff)
 					client.Say(config.ChannelName, msg)
 				}
 			} else {
