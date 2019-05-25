@@ -18,11 +18,17 @@ import (
 
 var timestampsToTry = []string{
 	"000",
+	"015",
 	"030",
+	"045",
 	"100",
+	"115",
 	"130",
+	"145",
 	"200",
+	"215",
 	"230",
+	"245",
 }
 
 // a DashStr is the string we get from the dashcam
@@ -81,9 +87,7 @@ func (v Video) Date() time.Time {
 // timestamp is something like 000, 030, 100, etc
 func (v Video) screencap(timestamp string) string {
 	screencapFile := fmt.Sprintf("%s-%s.png", v.String(), timestamp)
-	//TODO: just rename the files so we can skip this step
-	subdir := fmt.Sprintf("0%s", timestamp)
-	return path.Join(config.ScreencapDir, subdir, screencapFile)
+	return path.Join(config.ScreencapDir, timestamp, screencapFile)
 }
 
 func (v Video) CoordsWithRetry() (float64, float64, error) {
