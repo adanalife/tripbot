@@ -61,6 +61,8 @@ func main() {
 		log.Fatal("unable to create twitch API client", err)
 	}
 
+	uptime := time.Now()
+
 	// initialize the database
 	datastore := store.FindOrCreate(config.DbPath)
 
@@ -104,6 +106,13 @@ func main() {
 			client.Say(config.ChannelName, msg)
 			// bump the index
 			helpIndex = (helpIndex + 1) % len(config.HelpMessages)
+		}
+
+		if strings.HasPrefix(strings.ToLower(message.Message), "!uptime") {
+			log.Println(user, "ran !uptime")
+			dur := time.Now().Sub(uptime)
+			msg := fmt.Sprintf("I have been running for %s", durafmt.Parse(dur))
+			client.Say(config.ChannelName, msg)
 		}
 
 		if strings.HasPrefix(strings.ToLower(message.Message), "!miles") {

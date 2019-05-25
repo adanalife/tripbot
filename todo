@@ -1,13 +1,10 @@
 TODO
 nightbot can read from Lastfm?!
-log follows/subs with tripbot
-add more and less
-alerts for certain userss
+alerts for certain users
 auto-update title!
 !miles (user)
 funny !miles for me
 make tmuxinator script that starts all of the scripts
-!uptime for bot
 !city/!town
 !progress towards loop?
 search log for more reset users
@@ -16,6 +13,7 @@ save in db the error status
 
 
 EVENTUALLY
+add more and less
 webserver for nightbot to hit
 fix whitelist/blacklist
 better miles stuff
