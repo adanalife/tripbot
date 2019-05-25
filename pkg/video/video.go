@@ -31,11 +31,10 @@ var timestampsToTry = []string{
 	"245",
 }
 
-// a DashStr is the string we get from the dashcam
-// an example file: 2018_0514_224801_013.MP4
-// an example dashstr: 2018_0514_224801_013
+// Videos represent a video file containing dashcam footage
 type Video struct {
-	DashStr string
+	//TODO can Slug be private?
+	Slug string
 }
 
 func New(file string) (Video, error) {
@@ -56,14 +55,22 @@ func New(file string) (Video, error) {
 	return newVid, err
 }
 
-// ex: 2018_0514_224801_013
+// ex: 2018_0514_224801_013_a_opt
 func (v Video) String() string {
-	return v.DashStr
+	return v.Slug
+}
+
+// a DashStr is the string we get from the dashcam
+// an example file: 2018_0514_224801_013.MP4
+// an example dashstr: 2018_0514_224801_013
+// ex: 2018_0514_224801_013
+func (v Video) DashStr() string {
+	return v.Slug[:20]
 }
 
 // ex: 2018_0514_224801_013.MP4
 func (v Video) File() string {
-	return fmt.Sprintf("%s.MP4", v.DashStr)
+	return fmt.Sprintf("%s.MP4", v.Slug)
 }
 
 // ex: /Volumes/.../2018_0514_224801_013.MP4
@@ -86,7 +93,7 @@ func (v Video) Date() time.Time {
 
 // timestamp is something like 000, 030, 100, etc
 func (v Video) screencap(timestamp string) string {
-	screencapFile := fmt.Sprintf("%s-%s.png", v.String(), timestamp)
+	screencapFile := fmt.Sprintf("%s-%s.png", v.DashStr(), timestamp)
 	return path.Join(config.ScreencapDir, timestamp, screencapFile)
 }
 
