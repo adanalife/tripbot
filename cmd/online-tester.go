@@ -21,7 +21,7 @@ func main() {
 		if err != nil {
 			log.Println("unable to create Video: %v", err)
 		}
-		fmt.Println(vid)
+		fmt.Println(vid.File())
 
 		lat, lon, err := datastore.CoordsFor(vid)
 		if err != nil {
