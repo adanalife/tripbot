@@ -29,6 +29,9 @@ func main() {
 		log.Fatal("Error loading .env file")
 	}
 
+	if os.Getenv("DASHCAM_DIR") == "" {
+		panic("You must set DASHCAM_DIR")
+	}
 	// first we must check for required ENV vars
 	googleMapsAPIKey := os.Getenv("TWITCH_CLIENT_ID")
 	if googleMapsAPIKey == "" {
