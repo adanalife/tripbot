@@ -14,6 +14,7 @@ import (
 	mytwitch "github.com/dmerrick/danalol-stream/pkg/twitch"
 	"github.com/dmerrick/danalol-stream/pkg/video"
 	twitch "github.com/gempir/go-twitch-irc"
+	"github.com/hako/durafmt"
 	"github.com/joho/godotenv"
 	"github.com/kelvins/geocoder"
 )
@@ -127,7 +128,7 @@ func main() {
 				currentVid := video.CurrentlyPlaying()
 				vid, err := video.New(currentVid)
 				if err != nil {
-					log.Println("unable to create video: %v", err)
+					log.Println("unable to create Video: %v", err)
 				}
 				lat, lon, err := datastore.CoordsFor(vid)
 				if err != nil {
@@ -136,7 +137,7 @@ func main() {
 					realDate := helpers.ActualDate(vid.Date(), lat, lon)
 					_, sunset := helpers.SunriseSunset(vid.Date(), lat, lon)
 					dateDiff := sunset.Sub(realDate)
-					msg := fmt.Sprintf("Sunset is in %s", dateDiff)
+					msg := fmt.Sprintf("Sunset on this day is in %s", durafmt.ParseShort(dateDiff))
 					client.Say(config.ChannelName, msg)
 				}
 			} else {
@@ -156,7 +157,7 @@ func main() {
 					// extract the coordinates
 					vid, err := video.New(currentVid)
 					if err != nil {
-						log.Println("unable to create video: %v", err)
+						log.Println("unable to create Video: %v", err)
 					}
 					lat, lon, err := datastore.CoordsFor(vid)
 					if err != nil {
