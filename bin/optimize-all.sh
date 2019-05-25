@@ -20,8 +20,8 @@ cd "${DASHCAM_DIR}/optimized"
 
 for file in ${DASHCAM_DIR}/_all/*.MP4; do
   # skip this file if it's already optimized
-  if grep -q _opt "$file"; then
-	echo "skipping $file because it's already optimized"
+  if [[ "$file" =~ _opt ]]; then
+    echo "skipping $file because it's already optimized"
     continue
   fi
   $SCRIPTPATH/optimize-vid.sh $file
