@@ -109,8 +109,8 @@ func (v Video) CoordsWithRetry() (float64, float64, error) {
 
 func CurrentlyPlaying() string {
 	// run the shell script to get currently-playing video
-	scriptPath := path.Join(helpers.ProjectRoot(), "bin/current-file.sh")
-	cmd := fmt.Sprintf("cd %s && %s", helpers.ProjectRoot(), scriptPath)
+	// scriptPath := path.Join(helpers.ProjectRoot(), "bin/current-file.sh")
+	cmd := fmt.Sprintf("bash -c 'cd %s && bin/current-file.sh'", helpers.ProjectRoot())
 	out, err := exec.Command(cmd).Output()
 	if err != nil {
 		log.Printf("failed to run script: %v", err)
