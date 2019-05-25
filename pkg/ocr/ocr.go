@@ -76,6 +76,8 @@ func cropImage(srcFilename string) (string, error) {
 
 // readText uses OCR to read the text from an image file
 func readText(imgFile string) (string, error) {
+	//TODO: check that we even have a valid file to open
+
 	client := gosseract.NewClient()
 	// defer client.Close()
 
