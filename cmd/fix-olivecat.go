@@ -13,7 +13,7 @@ const (
 )
 
 func main() {
-	datastore := store.FindOrCreate(config.DbPath)
+	datastore := store.FindOrCreate(config.DBPath)
 	parsedDur, _ := time.ParseDuration(dur)
 	datastore.GiveUserDuration(user, parsedDur)
 }

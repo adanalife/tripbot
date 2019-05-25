@@ -64,7 +64,7 @@ func main() {
 	uptime := time.Now()
 
 	// initialize the database
-	datastore := store.FindOrCreate(config.DbPath)
+	datastore := store.FindOrCreate(config.DBPath)
 
 	// time to set up the Twitch client
 	client := twitch.NewClient(botUsername, clientAuthenticationToken)

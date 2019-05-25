@@ -42,7 +42,7 @@ func main() {
 		videoFile = video.CurrentlyPlaying()
 	}
 
-	datastore := store.FindOrCreate(config.DbPath)
+	datastore := store.FindOrCreate(config.DBPath)
 
 	// a file was passed in via the CLI
 	if videoFile != "" {

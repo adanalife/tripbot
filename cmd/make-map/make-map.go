@@ -44,7 +44,7 @@ func main() {
 	}
 
 	// initialize the DB
-	datastore := store.FindOrCreate(config.DbPath)
+	datastore := store.FindOrCreate(config.DBPath)
 
 	// this will contain the overlay path
 	pathPoints := []maps.LatLng{}

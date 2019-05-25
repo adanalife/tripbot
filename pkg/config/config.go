@@ -19,8 +19,7 @@ const (
 	// CroppedPath is where we store the cropped versions of screencaps (to OCR them)
 	CroppedPath = "/Volumes/usbshare1/cropped-corners"
 
-	//TODO capitalize me
-	DbPath            = "tripbot.db"
+	DBPath            = "tripbot.db"
 	UserJoinsBucket   = "user_joins"
 	UserWatchedBucket = "user_watched"
 	CoordsBucket      = "coords"
