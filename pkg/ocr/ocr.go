@@ -2,6 +2,7 @@ package ocr
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"path"
 	"path/filepath"
@@ -50,6 +51,7 @@ func cropImage(srcFilename string) (string, error) {
 			log.Fatal("too many open files")
 		}
 		if strings.Contains(err.Error(), "no such file or directory") {
+			fmt.Println(err)
 			err = errors.New("screencap file was not present")
 		}
 		log.Printf("failed to open image: %v", err)

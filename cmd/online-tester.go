@@ -11,7 +11,7 @@ import (
 
 func main() {
 
-	datastore := store.FindOrCreate("tripbot-copy.db")
+	datastore := store.FindOrCreate("db/tripbot-copy.db")
 
 	videoFile := video.CurrentlyPlaying()
 
