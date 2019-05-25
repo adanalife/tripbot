@@ -1,5 +1,4 @@
 TODO
-nightbot can read from Lastfm?!
 alerts for certain users
 auto-update title!
 !miles (user)
@@ -9,16 +8,20 @@ make tmuxinator script that starts all of the scripts
 !progress towards loop?
 search log for more reset users
 save in db the error status
-
+nightbot can read from Lastfm?!
+constantly fetch current video
 
 
 EVENTUALLY
 add more and less
 webserver for nightbot to hit
 fix whitelist/blacklist
-better miles stuff
+miles
+  spendable miles
+  only followers get miles
+  subs get miles bonus
+  whisper users after first mile?
 put !helps in bottom corner
-only followers get miles
 move db to db/
 rename tripbot to location
 check if user is subscriber
@@ -55,9 +58,6 @@ add tags
 outdoors, family friendly, photography, automotive, travel
 get lastfm working
 
-
-POSSIBLE FUTURE FEATURES
-whisper users after first mile?
 
 
 GOLANG STUFF
