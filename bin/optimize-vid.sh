@@ -22,5 +22,5 @@ just_file=${no_extension##*/}
 
 # for info on keyint=120:no-scenecut
 # https://video.stackexchange.com/a/24684
-ffmpeg -i $1 -preset faster -crf 10 -bufsize 20000k -maxrate 10000k -pix_fmt yuv420p -c:v libx264 -x264opts keyint=120:no-scenecut -s 1920x1080 -r 60 -an ${just_file}_opt.MP4
+ffmpeg -n -i $1 -preset faster -crf 10 -bufsize 20000k -maxrate 10000k -pix_fmt yuv420p -c:v libx264 -x264opts keyint=120:no-scenecut -s 1920x1080 -r 60 -an ${just_file}_opt.MP4
 
