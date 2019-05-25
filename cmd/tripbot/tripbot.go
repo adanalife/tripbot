@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	_ "github.com/dimiro1/banner/autoload"
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	"github.com/dmerrick/danalol-stream/pkg/store"
