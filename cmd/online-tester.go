@@ -16,18 +16,20 @@ func main() {
 	videoFile := video.CurrentlyPlaying()
 
 	// a file was passed in via the CLI
-	if videoFile != "" {
-		vid, err := video.New(videoFile)
-		if err != nil {
-			log.Println("unable to create Video: %v", err)
-		}
-		fmt.Println(vid.File())
-
-		lat, lon, err := datastore.CoordsFor(vid)
-		if err != nil {
-			log.Fatalf("failed to process image: %v", err)
-		}
-		url := helpers.GoogleMapsURL(lat, lon)
-		fmt.Println(url)
+	if videoFile == "" {
+		log.Fatal("no video found")
 	}
+
+	vid, err := video.New(videoFile)
+	if err != nil {
+		log.Println("unable to create Video: %v", err)
+	}
+	fmt.Println(vid.File())
+
+	lat, lon, err := datastore.CoordsFor(vid)
+	if err != nil {
+		log.Fatalf("failed to process image: %v", err)
+	}
+	url := helpers.GoogleMapsURL(lat, lon)
+	fmt.Println(url)
 }
