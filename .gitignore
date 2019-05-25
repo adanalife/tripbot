@@ -5,4 +5,5 @@ ignore/
 *.MP4
 OBS/*.txt
 .env
+*.pid
 *.log
