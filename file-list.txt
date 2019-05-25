@@ -9,6 +9,7 @@
 ./not moving - good parts
 ./not moving - has been clipped
 ./not moving - to go over
+./optimized
 ./pulled over
 ./_all/2018_0512_202234_001.MP4
 ./_all/2018_0512_202531_002.MP4
@@ -61,7 +62,7 @@
 ./_all/2018_0513_001221_039.MP4
 ./_all/2018_0513_001521_040.MP4
 ./_all/2018_0513_001821_041.MP4
-./_all/2018_0513_002121_042.MP4
+./_all/2018_0513_002121_042_a.mp4
 ./_all/2018_0513_002850_001_b.mp4
 ./_all/2018_0513_003152_002.MP4
 ./_all/2018_0513_003452_003.MP4
@@ -153,7 +154,7 @@
 ./_all/2018_0513_182330_006.MP4
 ./_all/2018_0513_182630_007.MP4
 ./_all/2018_0513_233112_001.MP4
-./_all/2018_0513_233413_002.MP4
+./_all/2018_0513_233413_002_a.mp4
 ./_all/2018_0513_234013_004_b.mp4
 ./_all/2018_0513_234313_005_RO.MP4
 ./_all/2018_0513_234614_006.MP4
@@ -177,7 +178,7 @@
 ./_all/2018_0514_160058_002.MP4
 ./_all/2018_0514_160358_003.MP4
 ./_all/2018_0514_160658_004.MP4
-./_all/2018_0514_160958_005.MP4
+./_all/2018_0514_160958_005_a.mp4
 ./_all/2018_0514_161258_006.MP4
 ./_all/2018_0514_161558_007.MP4
 ./_all/2018_0514_161858_008.MP4
@@ -190,7 +191,7 @@
 ./_all/2018_0514_164258_016.MP4
 ./_all/2018_0514_164558_017.MP4
 ./_all/2018_0514_164858_018.MP4
-./_all/2018_0514_165158_019.MP4
+./_all/2018_0514_165158_019_a.mp4
 ./_all/2018_0514_165758_021_b.mp4
 ./_all/2018_0514_170059_022.MP4
 ./_all/2018_0514_170359_023.MP4
@@ -211,11 +212,11 @@
 ./_all/2018_0514_182652_008.MP4
 ./_all/2018_0514_182952_009.MP4
 ./_all/2018_0514_183252_010.MP4
-./_all/2018_0514_183552_011.MP4
+./_all/2018_0514_183552_011_c.mov
 ./_all/2018_0514_183852_012.MP4
 ./_all/2018_0514_184152_013.MP4
 ./_all/2018_0514_184452_014.MP4
-./_all/2018_0514_184752_015.MP4
+./_all/2018_0514_184752_015_b.mp4
 ./_all/2018_0514_185052_016.MP4
 ./_all/2018_0514_185352_017.MP4
 ./_all/2018_0514_185652_018.MP4
@@ -232,7 +233,7 @@
 ./_all/2018_0514_214815_004.MP4
 ./_all/2018_0514_221200_001.MP4
 ./_all/2018_0514_221501_002.MP4
-./_all/2018_0514_221801_003.MP4
+./_all/2018_0514_221801_003_a.mp4
 ./_all/2018_0514_222101_004_b.mp4
 ./_all/2018_0514_222401_005.MP4
 ./_all/2018_0514_222701_006.MP4
@@ -242,7 +243,7 @@
 ./_all/2018_0514_223901_010.MP4
 ./_all/2018_0514_224201_011.MP4
 ./_all/2018_0514_224501_012.MP4
-./_all/2018_0514_224801_013.MP4
+./_all/2018_0514_224801_013_a.mp4
 ./_all/2018_0514_225101_014.MP4
 ./_all/2018_0514_225401_015.MP4
 ./_all/2018_0514_225701_016.MP4
@@ -261,7 +262,6 @@
 ./_all/2018_0515_120135_009.MP4
 ./_all/2018_0515_120436_010.MP4
 ./_all/2018_0515_120736_011.MP4
-./_all/2018_0515_121036_012.MP4
 ./_all/2018_0515_222415_001_b.mp4
 ./_all/2018_0515_222713_002.MP4
 ./_all/2018_0515_223013_003.MP4
@@ -276,7 +276,7 @@
 ./_all/2018_0516_004443_005.MP4
 ./_all/2018_0516_004743_006.MP4
 ./_all/2018_0516_010136_001.MP4
-./_all/2018_0516_012130_001.MP4
+./_all/2018_0516_012130_001_b.mp4
 ./_all/2018_0516_012430_002.MP4
 ./_all/2018_0516_012731_003.MP4
 ./_all/2018_0516_013031_004.MP4
@@ -359,7 +359,7 @@
 ./_all/2018_0517_002321_005.MP4
 ./_all/2018_0517_002621_006.MP4
 ./_all/2018_0517_002921_007.MP4
-./_all/2018_0517_003221_008.MP4
+./_all/2018_0517_003221_008_a.mp4
 ./_all/2018_0517_003521_009_b.mp4
 ./_all/2018_0517_003821_010.MP4
 ./_all/2018_0517_004121_011.MP4
@@ -584,14 +584,12 @@
 ./_all/2018_0518_202513_018.MP4
 ./_all/2018_0518_202813_019.MP4
 ./_all/2018_0518_203113_020.MP4
-./_all/2018_0518_203413_021.MP4
-./_all/2018_0518_204118_001.MP4
 ./_all/2018_0518_204419_002.MP4
 ./_all/2018_0518_204719_003.MP4
 ./_all/2018_0518_205019_004.MP4
 ./_all/2018_0518_205319_005.MP4
 ./_all/2018_0518_205619_006.MP4
-./_all/2018_0518_205919_007.MP4
+./_all/2018_0518_205919_007_a.mp4
 ./_all/2018_0518_210653_001.MP4
 ./_all/2018_0518_210954_002.MP4
 ./_all/2018_0518_220233_001.MP4
@@ -629,7 +627,7 @@
 ./_all/2018_0519_044546_003.MP4
 ./_all/2018_0519_044846_004.MP4
 ./_all/2018_0519_145157_001.MP4
-./_all/2018_0519_145458_002.MP4
+./_all/2018_0519_145458_002_b.mp4
 ./_all/2018_0519_145758_003.MP4
 ./_all/2018_0519_150058_004.MP4
 ./_all/2018_0519_150358_005.MP4
@@ -694,8 +692,8 @@
 ./_all/2018_0519_185958_024.MP4
 ./_all/2018_0519_190258_025.MP4
 ./_all/2018_0519_190558_026.MP4
-./_all/2018_0519_190858_027.MP4
-./_all/2018_0519_191158_028.MP4
+./_all/2018_0519_190858_027_a.mp4
+./_all/2018_0519_191158_028_b.mp4
 ./_all/2018_0519_191458_029.MP4
 ./_all/2018_0519_191758_030.MP4
 ./_all/2018_0519_192058_031.MP4
@@ -716,7 +714,7 @@
 ./_all/2018_0521_211646_014.MP4
 ./_all/2018_0521_211946_015.MP4
 ./_all/2018_0521_212246_016.MP4
-./_all/2018_0521_212546_017.MP4
+./_all/2018_0521_212546_017_b.mp4
 ./_all/2018_0521_212846_018.MP4
 ./_all/2018_0521_213146_019.MP4
 ./_all/2018_0521_213447_020.MP4
@@ -1361,7 +1359,7 @@
 ./_all/2018_0605_211038_026.MP4
 ./_all/2018_0605_211337_027.MP4
 ./_all/2018_0605_211638_028.MP4
-./_all/2018_0605_211938_029.MP4
+./_all/2018_0605_211938_029_a.mp4
 ./_all/2018_0605_222657_001_b.mp4
 ./_all/2018_0605_222956_002.MP4
 ./_all/2018_0605_223257_003.MP4
@@ -1428,7 +1426,7 @@
 ./_all/2018_0606_150706_014.MP4
 ./_all/2018_0606_151006_015.MP4
 ./_all/2018_0606_151307_016.MP4
-./_all/2018_0606_151607_017.MP4
+./_all/2018_0606_151607_017_a.mp4
 ./_all/2018_0606_151907_018_b.mp4
 ./_all/2018_0606_152207_019.MP4
 ./_all/2018_0606_152507_020.MP4
@@ -1530,7 +1528,7 @@
 ./_all/2018_0609_175014_011.MP4
 ./_all/2018_0609_175314_012.MP4
 ./_all/2018_0609_175614_013.MP4
-./_all/2018_0609_175914_014.MP4
+./_all/2018_0609_175914_014_a.mp4
 ./_all/2018_0609_180814_017_b.mp4
 ./_all/2018_0609_181114_018.MP4
 ./_all/2018_0609_181414_019.MP4
@@ -1581,7 +1579,7 @@
 ./_all/2018_0611_155756_006.MP4
 ./_all/2018_0611_160056_007.MP4
 ./_all/2018_0611_160356_008.MP4
-./_all/2018_0611_163156_001.MP4
+./_all/2018_0611_163156_001_a.mp4
 ./_all/2018_0611_164057_004_b.mp4
 ./_all/2018_0611_164357_005.MP4
 ./_all/2018_0611_164657_006.MP4
@@ -1595,7 +1593,7 @@
 ./_all/2018_0611_171058_014.MP4
 ./_all/2018_0611_171358_015.MP4
 ./_all/2018_0611_171658_016.MP4
-./_all/2018_0611_171958_017.MP4
+./_all/2018_0611_171958_017_a.mp4
 ./_all/2018_0611_173458_022_b.mp4
 ./_all/2018_0611_173758_023.MP4
 ./_all/2018_0611_174058_024_RO.MP4
@@ -1696,7 +1694,7 @@
 ./_all/2018_0731_191449_007.MP4
 ./_all/2018_0731_191749_008.MP4
 ./_all/2018_0731_193857_001.MP4
-./_all/2018_0731_194157_002.MP4
+./_all/2018_0731_194157_002_a.mp4
 ./_all/2018_0731_204157_022_b.mp4
 ./_all/2018_0731_204457_023.MP4
 ./_all/2018_0731_204757_024.MP4
@@ -1713,7 +1711,7 @@
 ./_all/2018_0731_212057_035.MP4
 ./_all/2018_0731_212357_036.MP4
 ./_all/2018_0731_212657_037.MP4
-./_all/2018_0731_212957_038.MP4
+./_all/2018_0731_212957_038_a.mp4
 ./_all/2018_0731_213557_040_b.mp4
 ./_all/2018_0731_213857_041.MP4
 ./_all/2018_0731_214157_042.MP4
@@ -1986,7 +1984,7 @@
 ./_all/2018_0814_190339_054.MP4
 ./_all/2018_0814_190639_055.MP4
 ./_all/2018_0814_190939_056.MP4
-./_all/2018_0814_191239_057.MP4
+./_all/2018_0814_191239_057_a.mp4
 ./_all/2018_0814_191539_058_b.mp4
 ./_all/2018_0814_191839_059.MP4
 ./_all/2018_0814_192139_060.MP4
@@ -2012,7 +2010,7 @@
 ./_all/2018_0815_154934_011.MP4
 ./_all/2018_0815_155234_012.MP4
 ./_all/2018_0815_155534_013.MP4
-./_all/2018_0815_155834_014.MP4
+./_all/2018_0815_155834_014_a.mp4
 ./_all/2018_0815_160434_016_b.mp4
 ./_all/2018_0815_160734_017.MP4
 ./_all/2018_0815_161034_018.MP4
@@ -2210,7 +2208,7 @@
 ./_all/2018_0831_150527_034.MP4
 ./_all/2018_0831_150827_035.MP4
 ./_all/2018_0831_151127_036.MP4
-./_all/2018_0831_151427_037.MP4
+./_all/2018_0831_151427_037_a.mp4
 ./_all/2018_0831_151727_038_b.mp4
 ./_all/2018_0831_152027_039_a.mp4
 ./_all/2018_0831_152327_040_b.mp4
@@ -2254,7 +2252,7 @@
 ./_all/2018_0831_193519_021.MP4
 ./_all/2018_0831_193819_022.MP4
 ./_all/2018_0831_194119_023.MP4
-./_all/2018_0831_200020_001.MP4
+./_all/2018_0831_200020_001_a.mp4
 ./_all/2018_0831_200621_003_b.mp4
 ./_all/2018_0831_200921_004.MP4
 ./_all/2018_0831_201221_005.MP4
@@ -2646,7 +2644,6 @@
 ./_all/2018_0919_125926_017.MP4
 ./_all/2018_0919_130226_018.MP4
 ./_all/2018_0919_130526_019.MP4
-./_all/2018_0919_130826_020.MP4
 ./_all/2018_0919_140712_001_b.mp4
 ./_all/2018_0919_141012_002.MP4
 ./_all/2018_0919_141312_003.MP4
@@ -3156,7 +3153,7 @@
 ./_all/2018_0925_190651_062.MP4
 ./_all/2018_0925_191717_001.MP4
 ./_all/2018_0925_192017_002.MP4
-./_all/2018_0925_192317_003.MP4
+./_all/2018_0925_192317_003_a.mov
 ./_all/2018_0925_192617_004_b.mp4
 ./_all/2018_0925_192917_005.MP4
 ./_all/2018_0925_193217_006.MP4
@@ -3840,7 +3837,7 @@
 ./_all/2018_1015_212320_023.MP4
 ./_all/2018_1015_212620_024.MP4
 ./_all/2018_1015_212920_025.MP4
-./_all/2018_1015_233144_001.MP4
+./_all/2018_1015_233144_001_a.mp4
 ./_all/2018_1015_234344_005_b.mp4
 ./_all/2018_1015_234644_006.MP4
 ./_all/2018_1015_234944_007.MP4
@@ -4044,7 +4041,7 @@
 ./_all/2018_1024_020647_040.MP4
 ./_all/2018_1024_020947_041.MP4
 ./_all/2018_1024_021247_042.MP4
-./_all/2018_1024_021547_043.MP4
+./_all/2018_1024_021547_043_a.mp4
 ./_all/2018_1024_022517_001_b.mp4
 ./_all/2018_1024_022817_002.MP4
 ./_all/2018_1024_023117_003.MP4
@@ -4275,7 +4272,7 @@
 ./_all/2018_1120_230832_005.MP4
 ./_all/2018_1120_231132_006.MP4
 ./_all/2018_1121_195715_001.MP4
-./_all/2018_1121_200012_002.MP4
+./_all/2018_1121_200012_002_a.mp4
 ./_all/2018_1121_200612_004_b.mp4
 ./_all/2018_1121_200913_005.MP4
 ./_all/2018_1121_201212_006.MP4
@@ -4355,7 +4352,7 @@
 ./_all/2018_1206_201300_001.MP4
 ./_all/2018_1206_201601_002.MP4
 ./_all/2018_1206_201901_003.MP4
-./_all/2018_1206_202201_004.MP4
+./_all/2018_1206_202201_004_a.mp4
 ./_all/2018_1206_202501_005_b.mp4
 ./_all/2018_1206_202801_006.MP4
 ./_all/2018_1206_203101_007.MP4
@@ -4542,6 +4539,7 @@
 ./ferries/2018_0831_165305_001.MP4
 ./ferries/2018_0831_165606_002.MP4
 ./ferries/2018_0831_165906_003.MP4
+./interesting/2018_0518_203413_021.MP4
 ./interesting/2018_0609_154505_002.MP4
 ./interesting/2018_0731_221457_053.MP4
 ./interesting/2018_0831_144427_027.MP4
@@ -4585,6 +4583,7 @@
 ./not moving - at all/2018_0516_152800_017.MP4
 ./not moving - at all/2018_0516_153100_018.MP4
 ./not moving - at all/2018_0516_153400_019.MP4
+./not moving - at all/2018_0518_204118_001.MP4
 ./not moving - at all/2018_0601_233019_060.MP4
 ./not moving - at all/2018_0603_200613_041.MP4
 ./not moving - at all/2018_0603_200912_042.MP4
@@ -4609,6 +4608,7 @@
 ./not moving - at all/2018_0815_175309_011.MP4
 ./not moving - at all/2018_0823_171607_004.MP4
 ./not moving - at all/2018_0831_200321_002.MP4
+./not moving - at all/2018_0919_130826_020.MP4
 ./not moving - at all/2018_0919_140055_001.MP4
 ./not moving - at all/2018_0919_141612_004.MP4
 ./not moving - at all/2018_0922_205312_012.MP4
@@ -4635,60 +4635,1156 @@
 ./not moving - at all/2018_1207_003835_026.MP4
 ./not moving - at all/2018_1207_004135_027.MP4
 ./not moving - at all/2018_1211_183913_011.MP4
+./not moving - has been clipped/2018_0513_002121_042.MP4
 ./not moving - has been clipped/2018_0513_002850_001.MP4
 ./not moving - has been clipped/2018_0513_023550_005.MP4
 ./not moving - has been clipped/2018_0513_023850_006.MP4
+./not moving - has been clipped/2018_0513_233413_002.MP4
 ./not moving - has been clipped/2018_0513_234013_004.MP4
+./not moving - has been clipped/2018_0514_160958_005.MP4
+./not moving - has been clipped/2018_0514_165158_019.MP4
 ./not moving - has been clipped/2018_0514_165758_021.MP4
+./not moving - has been clipped/2018_0514_183552_011.MP4
+./not moving - has been clipped/2018_0514_184752_015.MP4
+./not moving - has been clipped/2018_0514_221801_003.MP4
 ./not moving - has been clipped/2018_0514_222101_004.MP4
+./not moving - has been clipped/2018_0514_224801_013.MP4
 ./not moving - has been clipped/2018_0515_113735_001.MP4
+./not moving - has been clipped/2018_0515_121036_012.MP4
 ./not moving - has been clipped/2018_0515_222415_001.MP4
+./not moving - has been clipped/2018_0516_012130_001.MP4
+./not moving - has been clipped/2018_0517_003221_008.MP4
 ./not moving - has been clipped/2018_0517_003521_009.MP4
+./not moving - has been clipped/2018_0518_205919_007.MP4
+./not moving - has been clipped/2018_0519_145458_002.MP4
+./not moving - has been clipped/2018_0519_190858_027.MP4
+./not moving - has been clipped/2018_0519_191158_028.MP4
+./not moving - has been clipped/2018_0521_212546_017.MP4
 ./not moving - has been clipped/2018_0603_194812_035.MP4
 ./not moving - has been clipped/2018_0603_195112_036.MP4
 ./not moving - has been clipped/2018_0604_174839_012.MP4
+./not moving - has been clipped/2018_0605_211938_029.MP4
 ./not moving - has been clipped/2018_0605_222657_001.MP4
 ./not moving - has been clipped/2018_0606_005830_001.MP4
 ./not moving - has been clipped/2018_0606_143406_003.MP4
 ./not moving - has been clipped/2018_0606_143706_004.MP4
+./not moving - has been clipped/2018_0606_151607_017.MP4
 ./not moving - has been clipped/2018_0606_151907_018.MP4
+./not moving - has been clipped/2018_0609_175914_014.MP4
 ./not moving - has been clipped/2018_0609_180814_017.MP4
 ./not moving - has been clipped/2018_0610_141158_004.MP4
+./not moving - has been clipped/2018_0611_163156_001.MP4
 ./not moving - has been clipped/2018_0611_164057_004.MP4
+./not moving - has been clipped/2018_0611_171958_017.MP4
 ./not moving - has been clipped/2018_0611_173458_022.MP4
 ./not moving - has been clipped/2018_0611_181658_036.MP4
+./not moving - has been clipped/2018_0731_194157_002.MP4
 ./not moving - has been clipped/2018_0731_204157_022.MP4
+./not moving - has been clipped/2018_0731_212957_038.MP4
 ./not moving - has been clipped/2018_0731_213557_040.MP4
 ./not moving - has been clipped/2018_0731_222057_055.MP4
 ./not moving - has been clipped/2018_0805_194051_001.MP4
 ./not moving - has been clipped/2018_0814_151743_004.MP4
+./not moving - has been clipped/2018_0814_191239_057.MP4
 ./not moving - has been clipped/2018_0814_191539_058.MP4
+./not moving - has been clipped/2018_0815_155834_014.MP4
 ./not moving - has been clipped/2018_0815_160434_016.MP4
 ./not moving - has been clipped/2018_0815_183928_001.MP4
 ./not moving - has been clipped/2018_0825_165237_015.MP4
 ./not moving - has been clipped/2018_0825_165537_016.MP4
+./not moving - has been clipped/2018_0831_151427_037.MP4
 ./not moving - has been clipped/2018_0831_151727_038.MP4
 ./not moving - has been clipped/2018_0831_152027_039.MP4
 ./not moving - has been clipped/2018_0831_152327_040.MP4
+./not moving - has been clipped/2018_0831_200020_001.MP4
 ./not moving - has been clipped/2018_0831_200621_003.MP4
 ./not moving - has been clipped/2018_0902_140447_001.MP4
 ./not moving - has been clipped/2018_0919_140712_001.MP4
 ./not moving - has been clipped/2018_0925_130952_016.MP4
+./not moving - has been clipped/2018_0925_192317_003.MP4
 ./not moving - has been clipped/2018_0925_192617_004.MP4
 ./not moving - has been clipped/2018_1008_143218_002.MP4
 ./not moving - has been clipped/2018_1008_151629_001.MP4
 ./not moving - has been clipped/2018_1012_223905_005.MP4
 ./not moving - has been clipped/2018_1012_225706_001.MP4
+./not moving - has been clipped/2018_1015_233144_001.MP4
 ./not moving - has been clipped/2018_1015_234344_005.MP4
 ./not moving - has been clipped/2018_1016_055231_006.MP4
 ./not moving - has been clipped/2018_1016_055531_007.MP4
+./not moving - has been clipped/2018_1024_021547_043.MP4
 ./not moving - has been clipped/2018_1024_022517_001.MP4
 ./not moving - has been clipped/2018_1030_203433_008.MP4
 ./not moving - has been clipped/2018_1101_174258_001.MP4
 ./not moving - has been clipped/2018_1120_215255_024.MP4
 ./not moving - has been clipped/2018_1120_215855_026.MP4
+./not moving - has been clipped/2018_1121_200012_002.MP4
 ./not moving - has been clipped/2018_1121_200612_004.MP4
+./not moving - has been clipped/2018_1206_202201_004.MP4
 ./not moving - has been clipped/2018_1206_202501_005.MP4
+./optimized/2018_0512_202234_001_opt.MP4
+./optimized/2018_0512_202531_002_opt.MP4
+./optimized/2018_0512_202831_003_opt.MP4
+./optimized/2018_0512_203132_004_opt.MP4
+./optimized/2018_0512_203432_005_opt.MP4
+./optimized/2018_0512_211732_002_opt.MP4
+./optimized/2018_0512_212032_003_opt.MP4
+./optimized/2018_0512_212332_004_opt.MP4
+./optimized/2018_0512_221820_001_opt.MP4
+./optimized/2018_0512_222421_003_opt.MP4
+./optimized/2018_0513_134118_034_opt.MP4
+./optimized/2018_0513_134718_036_opt.MP4
+./optimized/2018_0513_135318_038_opt.MP4
+./optimized/2018_0513_180831_001_opt.MP4
+./optimized/2018_0513_181130_002_opt.MP4
+./optimized/2018_0513_181430_003_opt.MP4
+./optimized/2018_0513_181730_004_opt.MP4
+./optimized/2018_0513_234614_006_opt.MP4
+./optimized/2018_0513_235657_001_opt.MP4
+./optimized/2018_0514_000856_005_opt.MP4
+./optimized/2018_0514_001456_007_opt.MP4
+./optimized/2018_0514_152306_001_opt.MP4
+./optimized/2018_0514_152605_002_opt.MP4
+./optimized/2018_0514_152906_003_opt.MP4
+./optimized/2018_0514_153206_004_opt.MP4
+./optimized/2018_0514_153506_005_opt.MP4
+./optimized/2018_0514_153806_006_opt.MP4
+./optimized/2018_0514_155759_001_opt.MP4
+./optimized/2018_0514_160058_002_opt.MP4
+./optimized/2018_0514_160358_003_opt.MP4
+./optimized/2018_0514_160658_004_opt.MP4
+./optimized/2018_0514_160958_005_opt.MP4
+./optimized/2018_0514_161258_006_opt.MP4
+./optimized/2018_0514_161558_007_opt.MP4
+./optimized/2018_0514_161858_008_opt.MP4
+./optimized/2018_0514_162158_009_opt.MP4
+./optimized/2018_0514_162458_010_opt.MP4
+./optimized/2018_0514_162758_011_opt.MP4
+./optimized/2018_0514_163358_013_opt.MP4
+./optimized/2018_0514_163658_014_opt.MP4
+./optimized/2018_0514_163958_015_opt.MP4
+./optimized/2018_0514_164258_016_opt.MP4
+./optimized/2018_0514_164558_017_opt.MP4
+./optimized/2018_0514_164858_018_opt.MP4
+./optimized/2018_0514_165158_019_opt.MP4
+./optimized/2018_0514_170059_022_opt.MP4
+./optimized/2018_0514_170359_023_opt.MP4
+./optimized/2018_0514_170658_024_opt.MP4
+./optimized/2018_0514_170959_025_opt.MP4
+./optimized/2018_0514_171259_026_opt.MP4
+./optimized/2018_0514_171559_027_opt.MP4
+./optimized/2018_0514_171859_028_opt.MP4
+./optimized/2018_0514_172159_029_opt.MP4
+./optimized/2018_0514_180852_002_opt.MP4
+./optimized/2018_0514_181152_003_opt.MP4
+./optimized/2018_0514_181452_004_opt.MP4
+./optimized/2018_0514_181752_005_opt.MP4
+./optimized/2018_0514_182052_006_opt.MP4
+./optimized/2018_0514_182352_007_opt.MP4
+./optimized/2018_0514_182652_008_opt.MP4
+./optimized/2018_0514_182952_009_opt.MP4
+./optimized/2018_0514_183852_012_opt.MP4
+./optimized/2018_0514_184152_013_opt.MP4
+./optimized/2018_0514_184452_014_opt.MP4
+./optimized/2018_0514_184752_015_opt.MP4
+./optimized/2018_0514_193529_001_opt.MP4
+./optimized/2018_0514_193829_002_opt.MP4
+./optimized/2018_0514_194129_003_opt.MP4
+./optimized/2018_0514_194429_004_opt.MP4
+./optimized/2018_0514_194729_005_opt.MP4
+./optimized/2018_0514_195029_006_opt.MP4
+./optimized/2018_0514_213914_001_opt.MP4
+./optimized/2018_0514_214215_002_opt.MP4
+./optimized/2018_0514_214515_003_opt.MP4
+./optimized/2018_0514_221200_001_opt.MP4
+./optimized/2018_0514_221501_002_opt.MP4
+./optimized/2018_0514_222401_005_opt.MP4
+./optimized/2018_0514_222701_006_opt.MP4
+./optimized/2018_0514_223001_007_opt.MP4
+./optimized/2018_0514_223301_008_opt.MP4
+./optimized/2018_0514_223601_009_opt.MP4
+./optimized/2018_0514_223901_010_opt.MP4
+./optimized/2018_0514_224201_011_opt.MP4
+./optimized/2018_0514_224501_012_opt.MP4
+./optimized/2018_0514_224801_013_opt.MP4
+./optimized/2018_0514_225101_014_opt.MP4
+./optimized/2018_0514_232015_001_opt.MP4
+./optimized/2018_0515_223313_004_opt.MP4
+./optimized/2018_0516_003543_002_opt.MP4
+./optimized/2018_0516_003843_003_opt.MP4
+./optimized/2018_0516_010136_001_opt.MP4
+./optimized/2018_0516_012130_001_opt.MP4
+./optimized/2018_0516_012430_002_opt.MP4
+./optimized/2018_0516_012731_003_opt.MP4
+./optimized/2018_0516_013031_004_opt.MP4
+./optimized/2018_0516_144000_001_opt.MP4
+./optimized/2018_0516_144300_002_opt.MP4
+./optimized/2018_0516_144600_003_opt.MP4
+./optimized/2018_0516_144900_004_opt.MP4
+./optimized/2018_0516_145200_005_opt.MP4
+./optimized/2018_0516_145500_006_opt.MP4
+./optimized/2018_0516_145800_007_opt.MP4
+./optimized/2018_0516_150100_008_opt.MP4
+./optimized/2018_0516_151000_011_opt.MP4
+./optimized/2018_0516_154001_021_opt.MP4
+./optimized/2018_0516_155801_027_opt.MP4
+./optimized/2018_0516_160101_028_opt.MP4
+./optimized/2018_0516_160401_029_opt.MP4
+./optimized/2018_0516_160701_030_opt.MP4
+./optimized/2018_0516_161301_032_opt.MP4
+./optimized/2018_0516_165644_001_opt.MP4
+./optimized/2018_0516_170653_001_opt.MP4
+./optimized/2018_0516_170954_002_opt.MP4
+./optimized/2018_0517_003821_010_opt.MP4
+./optimized/2018_0517_004721_013_opt.MP4
+./optimized/2018_0517_005021_014_opt.MP4
+./optimized/2018_0517_010032_001_opt.MP4
+./optimized/2018_0517_010933_004_opt.MP4
+./optimized/2018_0517_144451_001_opt.MP4
+./optimized/2018_0517_144750_002_opt.MP4
+./optimized/2018_0517_145051_003_opt.MP4
+./optimized/2018_0517_145350_004_opt.MP4
+./optimized/2018_0517_145950_006_opt.MP4
+./optimized/2018_0517_150250_007_opt.MP4
+./optimized/2018_0517_150550_008_opt.MP4
+./optimized/2018_0517_154451_021_opt.MP4
+./optimized/2018_0517_154751_022_opt.MP4
+./optimized/2018_0517_155051_023_opt.MP4
+./optimized/2018_0517_171548_001_opt.MP4
+./optimized/2018_0517_171848_002_opt.MP4
+./optimized/2018_0517_172148_003_opt.MP4
+./optimized/2018_0517_172448_004_opt.MP4
+./optimized/2018_0517_172748_005_opt.MP4
+./optimized/2018_0517_173048_006_opt.MP4
+./optimized/2018_0517_180048_016_opt.MP4
+./optimized/2018_0517_180348_017_opt.MP4
+./optimized/2018_0517_180948_019_opt.MP4
+./optimized/2018_0517_181248_020_opt.MP4
+./optimized/2018_0517_181548_021_opt.MP4
+./optimized/2018_0517_181848_022_opt.MP4
+./optimized/2018_0517_183037_001_opt.MP4
+./optimized/2018_0517_191303_001_opt.MP4
+./optimized/2018_0517_194903_013_opt.MP4
+./optimized/2018_0518_205319_005_opt.MP4
+./optimized/2018_0518_205619_006_opt.MP4
+./optimized/2018_0518_220233_001_opt.MP4
+./optimized/2018_0519_153359_015_opt.MP4
+./optimized/2018_0519_153659_016_opt.MP4
+./optimized/2018_0519_155159_021_opt.MP4
+./optimized/2018_0519_155759_023_opt.MP4
+./optimized/2018_0522_153001_007_opt.MP4
+./optimized/2018_0522_195217_001_opt.MP4
+./optimized/2018_0522_213617_004_opt.MP4
+./optimized/2018_0522_215417_010_opt.MP4
+./optimized/2018_0522_223017_022_opt.MP4
+./optimized/2018_0522_223917_025_opt.MP4
+./optimized/2018_0522_224517_027_opt.MP4
+./optimized/2018_0522_225117_029_opt.MP4
+./optimized/2018_0522_230617_034_opt.MP4
+./optimized/2018_0522_230917_035_opt.MP4
+./optimized/2018_0522_231217_036_opt.MP4
+./optimized/2018_0522_231817_038_opt.MP4
+./optimized/2018_0531_203212_003_opt.MP4
+./optimized/2018_0601_145104_022_opt.MP4
+./optimized/2018_0602_141931_004_opt.MP4
+./optimized/2018_0602_142230_005_opt.MP4
+./optimized/2018_0602_142530_006_opt.MP4
+./optimized/2018_0602_142831_007_opt.MP4
+./optimized/2018_0602_144345_001_opt.MP4
+./optimized/2018_0602_144647_002_opt.MP4
+./optimized/2018_0602_144946_003_opt.MP4
+./optimized/2018_0602_163501_001_opt.MP4
+./optimized/2018_0602_163801_002_opt.MP4
+./optimized/2018_0602_164401_004_opt.MP4
+./optimized/2018_0602_181119_001_opt.MP4
+./optimized/2018_0602_181420_002_opt.MP4
+./optimized/2018_0602_213125_001_opt.MP4
+./optimized/2018_0602_222225_018_opt.MP4
+./optimized/2018_0602_222525_019_opt.MP4
+./optimized/2018_0602_223126_021_opt.MP4
+./optimized/2018_0602_231626_036_opt.MP4
+./optimized/2018_0602_231926_037_opt.MP4
+./optimized/2018_0602_232526_039_opt.MP4
+./optimized/2018_0602_233126_041_opt.MP4
+./optimized/2018_0602_233426_042_opt.MP4
+./optimized/2018_0602_233726_043_opt.MP4
+./optimized/2018_0602_235226_048_opt.MP4
+./optimized/2018_0603_190312_020_opt.MP4
+./optimized/2018_0604_171542_001_opt.MP4
+./optimized/2018_0604_171839_002_opt.MP4
+./optimized/2018_0604_172139_003_opt.MP4
+./optimized/2018_0604_173339_007_opt.MP4
+./optimized/2018_0604_173639_008_opt.MP4
+./optimized/2018_0604_173939_009_opt.MP4
+./optimized/2018_0604_174239_010_opt.MP4
+./optimized/2018_0604_175139_013_opt.MP4
+./optimized/2018_0604_175439_014_opt.MP4
+./optimized/2018_0604_175739_015_opt.MP4
+./optimized/2018_0604_223543_001_opt.MP4
+./optimized/2018_0604_223842_002_opt.MP4
+./optimized/2018_0604_224142_003_opt.MP4
+./optimized/2018_0604_224442_004_opt.MP4
+./optimized/2018_0604_224742_005_opt.MP4
+./optimized/2018_0605_141506_001_opt.MP4
+./optimized/2018_0605_141804_002_opt.MP4
+./optimized/2018_0605_143437_001_opt.MP4
+./optimized/2018_0605_143957_001_opt.MP4
+./optimized/2018_0605_144257_002_opt.MP4
+./optimized/2018_0605_144857_004_opt.MP4
+./optimized/2018_0605_145157_005_opt.MP4
+./optimized/2018_0605_145457_006_opt.MP4
+./optimized/2018_0605_145757_007_opt.MP4
+./optimized/2018_0605_195536_001_opt.MP4
+./optimized/2018_0605_195837_002_opt.MP4
+./optimized/2018_0605_200737_005_opt.MP4
+./optimized/2018_0605_201037_006_opt.MP4
+./optimized/2018_0606_154607_027_opt.MP4
+./optimized/2018_0606_155507_030_opt.MP4
+./optimized/2018_0606_183037_002_opt.MP4
+./optimized/2018_0606_194912_006_opt.MP4
+./optimized/2018_0606_195812_009_opt.MP4
+./optimized/2018_0606_200112_010_opt.MP4
+./optimized/2018_0606_200413_011_opt.MP4
+./optimized/2018_0606_200712_012_opt.MP4
+./optimized/2018_0606_201012_013_opt.MP4
+./optimized/2018_0606_201312_014_opt.MP4
+./optimized/2018_0606_201613_015_opt.MP4
+./optimized/2018_0606_201913_016_opt.MP4
+./optimized/2018_0606_202213_017_opt.MP4
+./optimized/2018_0606_202513_018_opt.MP4
+./optimized/2018_0606_202813_019_opt.MP4
+./optimized/2018_0606_203113_020_opt.MP4
+./optimized/2018_0606_203413_021_opt.MP4
+./optimized/2018_0606_203713_022_opt.MP4
+./optimized/2018_0606_204913_026_opt.MP4
+./optimized/2018_0606_205213_027_opt.MP4
+./optimized/2018_0606_210113_030_opt.MP4
+./optimized/2018_0606_210413_031_opt.MP4
+./optimized/2018_0606_212813_039_opt.MP4
+./optimized/2018_0606_213113_040_opt.MP4
+./optimized/2018_0606_213413_041_opt.MP4
+./optimized/2018_0609_161205_011_opt.MP4
+./optimized/2018_0609_172013_001_opt.MP4
+./optimized/2018_0609_175014_011_opt.MP4
+./optimized/2018_0609_175314_012_opt.MP4
+./optimized/2018_0609_175614_013_opt.MP4
+./optimized/2018_0609_181114_018_opt.MP4
+./optimized/2018_0609_181414_019_opt.MP4
+./optimized/2018_0609_181714_020_opt.MP4
+./optimized/2018_0609_182014_021_opt.MP4
+./optimized/2018_0609_182314_022_opt.MP4
+./optimized/2018_0609_182614_023_opt.MP4
+./optimized/2018_0609_183214_025_opt.MP4
+./optimized/2018_0609_183514_026_opt.MP4
+./optimized/2018_0609_183814_027_opt.MP4
+./optimized/2018_0609_184114_028_opt.MP4
+./optimized/2018_0609_184414_029_opt.MP4
+./optimized/2018_0609_184714_030_opt.MP4
+./optimized/2018_0609_185014_031_opt.MP4
+./optimized/2018_0609_185614_033_opt.MP4
+./optimized/2018_0609_213114_001_opt.MP4
+./optimized/2018_0610_140300_001_opt.MP4
+./optimized/2018_0610_140858_003_opt.MP4
+./optimized/2018_0611_154301_001_opt.MP4
+./optimized/2018_0611_155156_004_opt.MP4
+./optimized/2018_0611_155456_005_opt.MP4
+./optimized/2018_0611_155756_006_opt.MP4
+./optimized/2018_0611_160056_007_opt.MP4
+./optimized/2018_0611_164357_005_opt.MP4
+./optimized/2018_0611_164657_006_opt.MP4
+./optimized/2018_0611_164958_007_opt.MP4
+./optimized/2018_0611_171658_016_opt.MP4
+./optimized/2018_0611_190737_005_opt.MP4
+./optimized/2018_0611_191337_007_opt.MP4
+./optimized/2018_0611_191937_009_opt.MP4
+./optimized/2018_0701_172726_002_opt.MP4
+./optimized/2018_0701_173626_005_opt.MP4
+./optimized/2018_0701_185426_031_opt.MP4
+./optimized/2018_0701_185726_032_opt.MP4
+./optimized/2018_0701_190026_033_opt.MP4
+./optimized/2018_0701_190326_034_opt.MP4
+./optimized/2018_0701_210325_074_opt.MP4
+./optimized/2018_0701_210925_076_opt.MP4
+./optimized/2018_0701_211225_077_opt.MP4
+./optimized/2018_0701_212125_080_opt.MP4
+./optimized/2018_0730_133539_001_opt.MP4
+./optimized/2018_0730_133604_002_opt.MP4
+./optimized/2018_0730_135404_008_opt.MP4
+./optimized/2018_0730_142247_002_opt.MP4
+./optimized/2018_0731_185653_001_opt.MP4
+./optimized/2018_0731_185949_002_opt.MP4
+./optimized/2018_0731_190249_003_opt.MP4
+./optimized/2018_0731_190549_004_opt.MP4
+./optimized/2018_0731_190849_005_opt.MP4
+./optimized/2018_0731_191149_006_opt.MP4
+./optimized/2018_0731_204757_024_opt.MP4
+./optimized/2018_0731_205057_025_opt.MP4
+./optimized/2018_0731_205357_026_opt.MP4
+./optimized/2018_0731_205957_028_opt.MP4
+./optimized/2018_0731_210257_029_opt.MP4
+./optimized/2018_0731_210557_030_opt.MP4
+./optimized/2018_0731_211157_032_opt.MP4
+./optimized/2018_0731_211457_033_opt.MP4
+./optimized/2018_0802_155341_001_opt.MP4
+./optimized/2018_0805_190225_002_opt.MP4
+./optimized/2018_0805_190525_003_opt.MP4
+./optimized/2018_0805_190825_004_opt.MP4
+./optimized/2018_0805_191125_005_opt.MP4
+./optimized/2018_0805_202552_016_opt.MP4
+./optimized/2018_0805_202852_017_RO_opt.MP4
+./optimized/2018_0805_203152_018_RO_opt.MP4
+./optimized/2018_0805_203752_020_opt.MP4
+./optimized/2018_0805_204052_021_opt.MP4
+./optimized/2018_0805_204352_022_opt.MP4
+./optimized/2018_0805_204652_023_opt.MP4
+./optimized/2018_0805_204952_024_opt.MP4
+./optimized/2018_0805_205252_025_opt.MP4
+./optimized/2018_0805_210752_030_opt.MP4
+./optimized/2018_0805_211052_031_opt.MP4
+./optimized/2018_0805_211352_032_opt.MP4
+./optimized/2018_0805_211952_034_opt.MP4
+./optimized/2018_0805_212852_037_opt.MP4
+./optimized/2018_0805_213752_040_opt.MP4
+./optimized/2018_0805_214352_042_opt.MP4
+./optimized/2018_0805_214652_043_opt.MP4
+./optimized/2018_0805_214952_044_opt.MP4
+./optimized/2018_0805_215252_045_opt.MP4
+./optimized/2018_0805_215552_046_opt.MP4
+./optimized/2018_0809_140632_001_opt.MP4
+./optimized/2018_0809_140915_002_opt.MP4
+./optimized/2018_0809_141215_003_opt.MP4
+./optimized/2018_0809_141515_004_opt.MP4
+./optimized/2018_0809_141815_005_opt.MP4
+./optimized/2018_0809_142115_006_opt.MP4
+./optimized/2018_0809_145716_002_opt.MP4
+./optimized/2018_0809_150016_003_opt.MP4
+./optimized/2018_0809_164653_001_opt.MP4
+./optimized/2018_0809_165854_005_opt.MP4
+./optimized/2018_0809_170154_006_opt.MP4
+./optimized/2018_0809_170454_007_opt.MP4
+./optimized/2018_0809_171054_009_opt.MP4
+./optimized/2018_0809_184822_002_opt.MP4
+./optimized/2018_0809_185122_003_opt.MP4
+./optimized/2018_0809_185422_004_opt.MP4
+./optimized/2018_0809_185722_005_opt.MP4
+./optimized/2018_0809_190022_006_opt.MP4
+./optimized/2018_0809_190322_007_opt.MP4
+./optimized/2018_0809_191822_012_opt.MP4
+./optimized/2018_0809_193022_016_opt.MP4
+./optimized/2018_0809_193322_017_opt.MP4
+./optimized/2018_0809_193622_018_opt.MP4
+./optimized/2018_0809_193922_019_opt.MP4
+./optimized/2018_0809_194222_020_opt.MP4
+./optimized/2018_0809_194522_021_opt.MP4
+./optimized/2018_0809_194823_022_opt.MP4
+./optimized/2018_0811_143923_001_opt.MP4
+./optimized/2018_0811_144215_002_opt.MP4
+./optimized/2018_0811_144815_004_opt.MP4
+./optimized/2018_0811_145115_005_opt.MP4
+./optimized/2018_0811_145415_006_opt.MP4
+./optimized/2018_0811_163316_039_opt.MP4
+./optimized/2018_0811_164516_043_RO_opt.MP4
+./optimized/2018_0811_164816_044_opt.MP4
+./optimized/2018_0811_165116_045_opt.MP4
+./optimized/2018_0811_165416_046_opt.MP4
+./optimized/2018_0814_152606_003_opt.MP4
+./optimized/2018_0814_152906_004_opt.MP4
+./optimized/2018_0814_155306_012_opt.MP4
+./optimized/2018_0814_155606_013_opt.MP4
+./optimized/2018_0814_155906_014_opt.MP4
+./optimized/2018_0814_160206_015_opt.MP4
+./optimized/2018_0814_165139_010_opt.MP4
+./optimized/2018_0814_171539_018_opt.MP4
+./optimized/2018_0814_171839_019_opt.MP4
+./optimized/2018_0814_180339_034_opt.MP4
+./optimized/2018_0814_180639_035_opt.MP4
+./optimized/2018_0814_181239_037_opt.MP4
+./optimized/2018_0814_183639_045_opt.MP4
+./optimized/2018_0814_183939_046_opt.MP4
+./optimized/2018_0814_184239_047_opt.MP4
+./optimized/2018_0814_184539_048_opt.MP4
+./optimized/2018_0814_184839_049_opt.MP4
+./optimized/2018_0814_190039_053_opt.MP4
+./optimized/2018_0814_225615_004_opt.MP4
+./optimized/2018_0815_151936_001_opt.MP4
+./optimized/2018_0815_152237_002_opt.MP4
+./optimized/2018_0815_153434_006_opt.MP4
+./optimized/2018_0815_153734_007_opt.MP4
+./optimized/2018_0815_154034_008_opt.MP4
+./optimized/2018_0815_154334_009_opt.MP4
+./optimized/2018_0815_155534_013_opt.MP4
+./optimized/2018_0815_155834_014_opt.MP4
+./optimized/2018_0815_160734_017_opt.MP4
+./optimized/2018_0815_161034_018_opt.MP4
+./optimized/2018_0815_161334_019_opt.MP4
+./optimized/2018_0815_161634_020_opt.MP4
+./optimized/2018_0815_162234_022_opt.MP4
+./optimized/2018_0815_162534_023_opt.MP4
+./optimized/2018_0815_162834_024_opt.MP4
+./optimized/2018_0815_163134_025_RO_opt.MP4
+./optimized/2018_0815_163734_027_opt.MP4
+./optimized/2018_0815_164634_030_opt.MP4
+./optimized/2018_0815_164934_031_opt.MP4
+./optimized/2018_0815_165234_032_opt.MP4
+./optimized/2018_0815_165534_033_opt.MP4
+./optimized/2018_0815_165834_034_opt.MP4
+./optimized/2018_0815_170134_035_opt.MP4
+./optimized/2018_0815_170434_036_opt.MP4
+./optimized/2018_0815_170734_037_opt.MP4
+./optimized/2018_0815_171034_038_opt.MP4
+./optimized/2018_0815_171334_039_opt.MP4
+./optimized/2018_0815_172609_002_opt.MP4
+./optimized/2018_0815_172909_003_opt.MP4
+./optimized/2018_0815_174109_007_opt.MP4
+./optimized/2018_0815_174409_008_opt.MP4
+./optimized/2018_0815_174709_009_opt.MP4
+./optimized/2018_0815_175009_010_opt.MP4
+./optimized/2018_0815_183928_001_b.mp4_opt.MP4
+./optimized/2018_0815_184228_002_opt.MP4
+./optimized/2018_0815_184528_003_opt.MP4
+./optimized/2018_0815_185728_007_opt.MP4
+./optimized/2018_0815_190028_008_opt.MP4
+./optimized/2018_0815_190328_009_opt.MP4
+./optimized/2018_0815_190628_010_opt.MP4
+./optimized/2018_0823_161738_001_opt.MP4
+./optimized/2018_0823_161958_002_opt.MP4
+./optimized/2018_0823_162258_003_opt.MP4
+./optimized/2018_0823_162858_005_opt.MP4
+./optimized/2018_0823_170707_001_opt.MP4
+./optimized/2018_0823_171007_002_opt.MP4
+./optimized/2018_0823_171307_003_opt.MP4
+./optimized/2018_0824_164720_001_opt.MP4
+./optimized/2018_0824_165017_002_opt.MP4
+./optimized/2018_0824_165317_003_opt.MP4
+./optimized/2018_0824_165617_004_opt.MP4
+./optimized/2018_0824_165917_005_opt.MP4
+./optimized/2018_0824_170217_006_opt.MP4
+./optimized/2018_0824_170517_007_opt.MP4
+./optimized/2018_0824_170817_008_opt.MP4
+./optimized/2018_0824_195233_001_opt.MP4
+./optimized/2018_0824_201333_008_opt.MP4
+./optimized/2018_0824_205233_021_opt.MP4
+./optimized/2018_0825_122306_002_opt.MP4
+./optimized/2018_0825_122606_003_opt.MP4
+./optimized/2018_0825_122906_004_opt.MP4
+./optimized/2018_0825_123206_005_opt.MP4
+./optimized/2018_0825_142207_001_opt.MP4
+./optimized/2018_0825_142808_003_opt.MP4
+./optimized/2018_0825_143108_004_opt.MP4
+./optimized/2018_0825_153843_001_opt.MP4
+./optimized/2018_0825_154143_002_opt.MP4
+./optimized/2018_0825_154443_003_opt.MP4
+./optimized/2018_0825_154743_004_opt.MP4
+./optimized/2018_0825_155043_005_opt.MP4
+./optimized/2018_0825_161036_001_opt.MP4
+./optimized/2018_0825_161336_002_opt.MP4
+./optimized/2018_0825_161636_003_opt.MP4
+./optimized/2018_0825_161936_004_opt.MP4
+./optimized/2018_0825_162236_005_opt.MP4
+./optimized/2018_0825_163137_008_opt.MP4
+./optimized/2018_0825_163436_009_opt.MP4
+./optimized/2018_0825_164337_012_opt.MP4
+./optimized/2018_0825_170437_019_opt.MP4
+./optimized/2018_0825_171937_024_opt.MP4
+./optimized/2018_0825_172237_025_opt.MP4
+./optimized/2018_0825_180602_001_opt.MP4
+./optimized/2018_0825_181748_002_opt.MP4
+./optimized/2018_0825_182948_006_opt.MP4
+./optimized/2018_0825_183248_007_opt.MP4
+./optimized/2018_0825_183548_008_opt.MP4
+./optimized/2018_0825_183848_009_opt.MP4
+./optimized/2018_0825_184148_010_opt.MP4
+./optimized/2018_0825_184748_012_opt.MP4
+./optimized/2018_0825_185048_013_opt.MP4
+./optimized/2018_0825_185348_014_opt.MP4
+./optimized/2018_0825_190602_001_opt.MP4
+./optimized/2018_0828_140220_001_opt.MP4
+./optimized/2018_0828_140818_001_opt.MP4
+./optimized/2018_0830_225357_001_opt.MP4
+./optimized/2018_0830_225644_002_opt.MP4
+./optimized/2018_0831_132630_001_opt.MP4
+./optimized/2018_0831_132931_002_opt.MP4
+./optimized/2018_0831_133227_003_opt.MP4
+./optimized/2018_0831_133527_004_opt.MP4
+./optimized/2018_0831_133827_005_opt.MP4
+./optimized/2018_0831_134127_006_opt.MP4
+./optimized/2018_0831_134427_007_opt.MP4
+./optimized/2018_0831_134727_008_opt.MP4
+./optimized/2018_0831_135027_009_opt.MP4
+./optimized/2018_0831_135627_011_opt.MP4
+./optimized/2018_0831_140227_013_opt.MP4
+./optimized/2018_0831_140527_014_opt.MP4
+./optimized/2018_0831_140827_015_opt.MP4
+./optimized/2018_0831_141127_016_opt.MP4
+./optimized/2018_0831_141427_017_opt.MP4
+./optimized/2018_0831_141727_018_opt.MP4
+./optimized/2018_0831_142627_021_opt.MP4
+./optimized/2018_0831_142927_022_opt.MP4
+./optimized/2018_0831_143227_023_opt.MP4
+./optimized/2018_0831_143527_024_opt.MP4
+./optimized/2018_0831_145327_030_opt.MP4
+./optimized/2018_0831_150227_033_opt.MP4
+./optimized/2018_0831_150527_034_opt.MP4
+./optimized/2018_0831_153227_043_opt.MP4
+./optimized/2018_0831_153528_044_opt.MP4
+./optimized/2018_0831_153827_045_opt.MP4
+./optimized/2018_0831_154128_046_opt.MP4
+./optimized/2018_0831_154427_047_opt.MP4
+./optimized/2018_0831_155327_050_opt.MP4
+./optimized/2018_0831_183518_001_opt.MP4
+./optimized/2018_0831_183819_002_opt.MP4
+./optimized/2018_0831_184119_003_opt.MP4
+./optimized/2018_0831_184419_004_opt.MP4
+./optimized/2018_0831_184719_005_opt.MP4
+./optimized/2018_0831_192619_018_opt.MP4
+./optimized/2018_0831_192919_019_opt.MP4
+./optimized/2018_0831_200020_001_opt.MP4
+./optimized/2018_0831_200921_004_opt.MP4
+./optimized/2018_0831_201221_005_opt.MP4
+./optimized/2018_0831_212126_001_opt.MP4
+./optimized/2018_0831_212427_002_opt.MP4
+./optimized/2018_0831_212727_003_opt.MP4
+./optimized/2018_0831_213327_005_opt.MP4
+./optimized/2018_0831_213627_006_opt.MP4
+./optimized/2018_0831_213927_007_opt.MP4
+./optimized/2018_0902_140747_002_opt.MP4
+./optimized/2018_0902_141347_004_opt.MP4
+./optimized/2018_0902_141647_005_opt.MP4
+./optimized/2018_0902_141947_006_opt.MP4
+./optimized/2018_0902_142247_007_opt.MP4
+./optimized/2018_0902_142847_009_opt.MP4
+./optimized/2018_0902_144947_016_opt.MP4
+./optimized/2018_0902_145247_017_opt.MP4
+./optimized/2018_0902_145547_018_opt.MP4
+./optimized/2018_0902_145847_019_opt.MP4
+./optimized/2018_0902_150147_020_opt.MP4
+./optimized/2018_0902_150447_021_opt.MP4
+./optimized/2018_0902_150747_022_opt.MP4
+./optimized/2018_0902_151047_023_opt.MP4
+./optimized/2018_0902_151347_024_opt.MP4
+./optimized/2018_0902_152547_028_opt.MP4
+./optimized/2018_0902_153447_031_opt.MP4
+./optimized/2018_0902_154047_033_opt.MP4
+./optimized/2018_0902_155847_039_opt.MP4
+./optimized/2018_0902_160147_040_opt.MP4
+./optimized/2018_0902_160447_041_opt.MP4
+./optimized/2018_0902_160747_042_opt.MP4
+./optimized/2018_0902_161947_001_opt.MP4
+./optimized/2018_0902_163148_005_opt.MP4
+./optimized/2018_0902_165548_013_opt.MP4
+./optimized/2018_0902_165848_014_opt.MP4
+./optimized/2018_0902_170148_015_opt.MP4
+./optimized/2018_0902_170448_016_opt.MP4
+./optimized/2018_0902_174032_009_opt.MP4
+./optimized/2018_0904_123020_001_opt.MP4
+./optimized/2018_0904_123312_002_opt.MP4
+./optimized/2018_0904_131512_016_opt.MP4
+./optimized/2018_0904_135112_028_opt.MP4
+./optimized/2018_0904_140012_031_opt.MP4
+./optimized/2018_0904_140312_032_opt.MP4
+./optimized/2018_0904_140912_034_opt.MP4
+./optimized/2018_0904_141212_035_opt.MP4
+./optimized/2018_0904_141512_036_opt.MP4
+./optimized/2018_0904_152251_003_opt.MP4
+./optimized/2018_0904_152551_004_opt.MP4
+./optimized/2018_0904_152851_005_opt.MP4
+./optimized/2018_0904_153151_006_opt.MP4
+./optimized/2018_0904_153451_007_opt.MP4
+./optimized/2018_0904_162552_024_opt.MP4
+./optimized/2018_0904_163452_027_opt.MP4
+./optimized/2018_0904_225427_001_opt.MP4
+./optimized/2018_0904_230927_006_opt.MP4
+./optimized/2018_0910_125802_001_opt.MP4
+./optimized/2018_0910_130633_004_opt.MP4
+./optimized/2018_0910_130933_005_opt.MP4
+./optimized/2018_0910_131233_006_opt.MP4
+./optimized/2018_0910_144404_013_opt.MP4
+./optimized/2018_0910_145004_015_opt.MP4
+./optimized/2018_0910_145304_016_opt.MP4
+./optimized/2018_0917_112128_001_opt.MP4
+./optimized/2018_0917_112352_002_opt.MP4
+./optimized/2018_0917_112652_003_opt.MP4
+./optimized/2018_0917_125353_032_opt.MP4
+./optimized/2018_0917_125653_033_opt.MP4
+./optimized/2018_0917_165129_001_opt.MP4
+./optimized/2018_0917_165430_002_opt.MP4
+./optimized/2018_0917_170630_006_opt.MP4
+./optimized/2018_0917_170930_007_opt.MP4
+./optimized/2018_0917_171530_009_opt.MP4
+./optimized/2018_0918_154258_002_opt.MP4
+./optimized/2018_0918_201651_001_opt.MP4
+./optimized/2018_0919_121426_002_opt.MP4
+./optimized/2018_0919_122626_006_opt.MP4
+./optimized/2018_0919_122926_007_opt.MP4
+./optimized/2018_0919_141012_002_opt.MP4
+./optimized/2018_0919_141312_003_opt.MP4
+./optimized/2018_0919_143412_010_opt.MP4
+./optimized/2018_0919_171243_019_opt.MP4
+./optimized/2018_0919_220209_001_opt.MP4
+./optimized/2018_0919_222310_008_opt.MP4
+./optimized/2018_0919_222610_009_opt.MP4
+./optimized/2018_0919_222910_010_opt.MP4
+./optimized/2018_0919_223210_011_RO_opt.MP4
+./optimized/2018_0919_223511_012_opt.MP4
+./optimized/2018_0920_131000_003_opt.MP4
+./optimized/2018_0920_131600_005_opt.MP4
+./optimized/2018_0920_145420_002_opt.MP4
+./optimized/2018_0920_153150_002_opt.MP4
+./optimized/2018_0920_155823_001_opt.MP4
+./optimized/2018_0920_160424_003_opt.MP4
+./optimized/2018_0920_160724_004_opt.MP4
+./optimized/2018_0920_161024_005_opt.MP4
+./optimized/2018_0920_161324_006_opt.MP4
+./optimized/2018_0920_161624_007_opt.MP4
+./optimized/2018_0920_161924_008_opt.MP4
+./optimized/2018_0920_194424_002_opt.MP4
+./optimized/2018_0920_194724_003_opt.MP4
+./optimized/2018_0920_195924_007_opt.MP4
+./optimized/2018_0920_200224_008_opt.MP4
+./optimized/2018_0920_221858_001_opt.MP4
+./optimized/2018_0920_222158_002_opt.MP4
+./optimized/2018_0920_222458_003_opt.MP4
+./optimized/2018_0920_222758_004_opt.MP4
+./optimized/2018_0920_223058_005_opt.MP4
+./optimized/2018_0920_223358_006_opt.MP4
+./optimized/2018_0920_223658_007_opt.MP4
+./optimized/2018_0920_225158_012_opt.MP4
+./optimized/2018_0922_220515_023_opt.MP4
+./optimized/2018_0922_220815_024_opt.MP4
+./optimized/2018_0922_224846_002_opt.MP4
+./optimized/2018_0923_120725_005_opt.MP4
+./optimized/2018_0923_121325_007_opt.MP4
+./optimized/2018_0923_121625_008_opt.MP4
+./optimized/2018_0923_121925_009_opt.MP4
+./optimized/2018_0923_122225_010_opt.MP4
+./optimized/2018_0923_122825_012_opt.MP4
+./optimized/2018_0923_123125_013_opt.MP4
+./optimized/2018_0923_125050_001_opt.MP4
+./optimized/2018_0923_125351_002_opt.MP4
+./optimized/2018_0923_130740_001_opt.MP4
+./optimized/2018_0924_120725_001_opt.MP4
+./optimized/2018_0924_121026_002_opt.MP4
+./optimized/2018_0924_121322_003_opt.MP4
+./optimized/2018_0924_121622_004_opt.MP4
+./optimized/2018_0924_121922_005_opt.MP4
+./optimized/2018_0924_124631_001_opt.MP4
+./optimized/2018_0924_124931_002_opt.MP4
+./optimized/2018_0924_125231_003_opt.MP4
+./optimized/2018_0924_125531_004_opt.MP4
+./optimized/2018_0924_125831_005_opt.MP4
+./optimized/2018_0924_130132_006_opt.MP4
+./optimized/2018_0924_132355_001_opt.MP4
+./optimized/2018_0924_132656_002_opt.MP4
+./optimized/2018_0924_132956_003_RO_opt.MP4
+./optimized/2018_0924_133256_004_opt.MP4
+./optimized/2018_0924_134756_009_opt.MP4
+./optimized/2018_0925_145608_001_opt.MP4
+./optimized/2018_0925_145910_002_opt.MP4
+./optimized/2018_0925_151704_001_opt.MP4
+./optimized/2018_0925_152005_002_opt.MP4
+./optimized/2018_0925_152305_003_opt.MP4
+./optimized/2018_0925_152605_004_opt.MP4
+./optimized/2018_0925_152905_005_opt.MP4
+./optimized/2018_0925_153205_006_opt.MP4
+./optimized/2018_0925_160450_001_opt.MP4
+./optimized/2018_0925_160752_002_opt.MP4
+./optimized/2018_0925_161352_004_opt.MP4
+./optimized/2018_0925_161652_005_opt.MP4
+./optimized/2018_1005_181742_001_opt.MP4
+./optimized/2018_1005_182320_003_opt.MP4
+./optimized/2018_1007_173728_001_opt.MP4
+./optimized/2018_1007_174026_002_opt.MP4
+./optimized/2018_1012_230607_004_opt.MP4
+./optimized/2018_1012_230907_005_opt.MP4
+./optimized/2018_1014_220445_004_opt.MP4
+./optimized/2018_1015_183819_004_opt.MP4
+./optimized/2018_1015_184119_005_opt.MP4
+./optimized/2018_1015_191119_015_opt.MP4
+./optimized/2018_1015_195956_001_opt.MP4
+./optimized/2018_1016_233219_005_opt.MP4
+./optimized/2018_1017_213827_012_opt.MP4
+./optimized/2018_1017_222124_002_opt.MP4
+./optimized/2018_1018_000417_001_opt.MP4
+./optimized/2018_1018_002517_008_opt.MP4
+./optimized/2018_1018_002817_009_opt.MP4
+./optimized/2018_1018_003117_010_opt.MP4
+./optimized/2018_1018_003417_011_opt.MP4
+./optimized/2018_1024_000949_001_opt.MP4
+./optimized/2018_1024_001547_003_opt.MP4
+./optimized/2018_1024_001847_004_opt.MP4
+./optimized/2018_1024_002147_005_opt.MP4
+./optimized/2018_1024_002447_006_opt.MP4
+./optimized/2018_1024_002747_007_opt.MP4
+./optimized/2018_1024_003047_008_opt.MP4
+./optimized/2018_1024_003347_009_opt.MP4
+./optimized/2018_1024_003647_010_opt.MP4
+./optimized/2018_1024_003947_011_opt.MP4
+./optimized/2018_1024_004247_012_opt.MP4
+./optimized/2018_1024_004547_013_opt.MP4
+./optimized/2018_1024_004847_014_opt.MP4
+./optimized/2018_1024_005147_015_opt.MP4
+./optimized/2018_1024_005447_016_opt.MP4
+./optimized/2018_1024_005747_017_opt.MP4
+./optimized/2018_1024_010047_018_opt.MP4
+./optimized/2018_1024_010347_019_opt.MP4
+./optimized/2018_1024_010647_020_opt.MP4
+./optimized/2018_1024_010947_021_opt.MP4
+./optimized/2018_1024_011247_022_opt.MP4
+./optimized/2018_1024_011547_023_opt.MP4
+./optimized/2018_1024_011847_024_opt.MP4
+./optimized/2018_1024_012147_025_opt.MP4
+./optimized/2018_1024_012447_026_opt.MP4
+./optimized/2018_1024_012747_027_opt.MP4
+./optimized/2018_1024_013047_028_opt.MP4
+./optimized/2018_1024_013347_029_opt.MP4
+./optimized/2018_1024_013647_030_opt.MP4
+./optimized/2018_1024_013947_031_opt.MP4
+./optimized/2018_1024_014247_032_opt.MP4
+./optimized/2018_1024_014547_033_opt.MP4
+./optimized/2018_1024_014847_034_opt.MP4
+./optimized/2018_1024_015147_035_opt.MP4
+./optimized/2018_1024_015447_036_opt.MP4
+./optimized/2018_1024_015747_037_opt.MP4
+./optimized/2018_1024_020047_038_opt.MP4
+./optimized/2018_1024_020347_039_opt.MP4
+./optimized/2018_1024_020647_040_opt.MP4
+./optimized/2018_1024_020947_041_opt.MP4
+./optimized/2018_1024_021247_042_opt.MP4
+./optimized/2018_1024_021547_043_opt.MP4
+./optimized/2018_1024_022817_002_opt.MP4
+./optimized/2018_1024_023117_003_opt.MP4
+./optimized/2018_1025_191101_001_opt.MP4
+./optimized/2018_1025_191354_002_opt.MP4
+./optimized/2018_1025_191654_003_opt.MP4
+./optimized/2018_1025_191954_004_opt.MP4
+./optimized/2018_1025_192254_005_opt.MP4
+./optimized/2018_1025_192554_006_opt.MP4
+./optimized/2018_1025_192854_007_opt.MP4
+./optimized/2018_1029_170320_001_opt.MP4
+./optimized/2018_1029_170618_002_opt.MP4
+./optimized/2018_1029_170918_003_opt.MP4
+./optimized/2018_1030_201338_001_opt.MP4
+./optimized/2018_1030_201633_002_opt.MP4
+./optimized/2018_1030_201933_003_opt.MP4
+./optimized/2018_1030_202233_004_opt.MP4
+./optimized/2018_1030_202533_005_opt.MP4
+./optimized/2018_1030_203733_009_opt.MP4
+./optimized/2018_1030_204537_001_opt.MP4
+./optimized/2018_1030_204837_002_opt.MP4
+./optimized/2018_1030_205137_003_opt.MP4
+./optimized/2018_1031_153349_001_opt.MP4
+./optimized/2018_1031_153647_002_opt.MP4
+./optimized/2018_1031_153947_003_opt.MP4
+./optimized/2018_1031_154933_001_opt.MP4
+./optimized/2018_1031_155233_002_opt.MP4
+./optimized/2018_1031_155533_003_opt.MP4
+./optimized/2018_1031_155833_004_opt.MP4
+./optimized/2018_1031_160133_005_opt.MP4
+./optimized/2018_1031_160433_006_opt.MP4
+./optimized/2018_1031_160733_007_opt.MP4
+./optimized/2018_1031_161033_008_opt.MP4
+./optimized/2018_1031_161333_009_opt.MP4
+./optimized/2018_1031_161633_010_opt.MP4
+./optimized/2018_1031_161933_011_opt.MP4
+./optimized/2018_1031_162233_012_opt.MP4
+./optimized/2018_1031_162533_013_opt.MP4
+./optimized/2018_1031_162833_014_opt.MP4
+./optimized/2018_1031_163133_015_opt.MP4
+./optimized/2018_1031_163433_016_opt.MP4
+./optimized/2018_1031_163733_017_opt.MP4
+./optimized/2018_1031_164033_018_opt.MP4
+./optimized/2018_1031_164333_019_opt.MP4
+./optimized/2018_1031_164633_020_opt.MP4
+./optimized/2018_1031_164933_021_opt.MP4
+./optimized/2018_1031_165233_022_opt.MP4
+./optimized/2018_1031_165533_023_opt.MP4
+./optimized/2018_1031_165833_024_opt.MP4
+./optimized/2018_1031_170133_025_opt.MP4
+./optimized/2018_1031_170433_026_opt.MP4
+./optimized/2018_1031_170734_027_opt.MP4
+./optimized/2018_1031_171034_028_opt.MP4
+./optimized/2018_1031_171334_029_opt.MP4
+./optimized/2018_1031_171634_030_opt.MP4
+./optimized/2018_1031_171934_031_opt.MP4
+./optimized/2018_1031_172234_032_opt.MP4
+./optimized/2018_1031_172534_033_opt.MP4
+./optimized/2018_1031_172834_034_opt.MP4
+./optimized/2018_1031_173134_035_opt.MP4
+./optimized/2018_1031_173434_036_opt.MP4
+./optimized/2018_1031_173734_037_opt.MP4
+./optimized/2018_1031_174034_038_opt.MP4
+./optimized/2018_1031_174334_039_opt.MP4
+./optimized/2018_1031_174634_040_opt.MP4
+./optimized/2018_1031_180758_001_opt.MP4
+./optimized/2018_1031_181058_002_opt.MP4
+./optimized/2018_1031_211257_001_opt.MP4
+./optimized/2018_1031_211558_002_opt.MP4
+./optimized/2018_1031_211858_003_opt.MP4
+./optimized/2018_1031_212158_004_opt.MP4
+./optimized/2018_1031_230049_001_opt.MP4
+./optimized/2018_1031_230349_002_opt.MP4
+./optimized/2018_1031_230649_003_opt.MP4
+./optimized/2018_1031_231549_006_opt.MP4
+./optimized/2018_1031_231849_007_opt.MP4
+./optimized/2018_1031_232149_008_opt.MP4
+./optimized/2018_1101_144006_001_opt.MP4
+./optimized/2018_1101_144305_002_opt.MP4
+./optimized/2018_1101_144605_003_opt.MP4
+./optimized/2018_1101_154219_001_opt.MP4
+./optimized/2018_1101_154519_002_opt.MP4
+./optimized/2018_1101_154819_003_opt.MP4
+./optimized/2018_1101_155119_004_opt.MP4
+./optimized/2018_1101_160343_001_opt.MP4
+./optimized/2018_1101_160644_002_opt.MP4
+./optimized/2018_1101_160944_003_opt.MP4
+./optimized/2018_1101_161244_004_opt.MP4
+./optimized/2018_1101_161544_005_opt.MP4
+./optimized/2018_1101_161844_006_opt.MP4
+./optimized/2018_1101_162144_007_opt.MP4
+./optimized/2018_1101_162444_008_opt.MP4
+./optimized/2018_1101_162744_009_opt.MP4
+./optimized/2018_1101_163044_010_opt.MP4
+./optimized/2018_1101_163344_011_opt.MP4
+./optimized/2018_1101_163644_012_opt.MP4
+./optimized/2018_1101_163944_013_opt.MP4
+./optimized/2018_1101_164244_014_opt.MP4
+./optimized/2018_1101_164544_015_opt.MP4
+./optimized/2018_1101_164844_016_opt.MP4
+./optimized/2018_1101_165144_017_opt.MP4
+./optimized/2018_1101_165837_001_opt.MP4
+./optimized/2018_1101_170138_002_opt.MP4
+./optimized/2018_1101_170438_003_opt.MP4
+./optimized/2018_1101_170738_004_opt.MP4
+./optimized/2018_1101_171038_005_opt.MP4
+./optimized/2018_1101_171338_006_opt.MP4
+./optimized/2018_1101_171638_007_opt.MP4
+./optimized/2018_1101_171938_008_opt.MP4
+./optimized/2018_1101_174559_002_opt.MP4
+./optimized/2018_1101_174859_003_opt.MP4
+./optimized/2018_1101_175159_004_opt.MP4
+./optimized/2018_1101_175459_005_opt.MP4
+./optimized/2018_1101_175759_006_opt.MP4
+./optimized/2018_1101_180059_007_opt.MP4
+./optimized/2018_1101_180359_008_opt.MP4
+./optimized/2018_1101_180659_009_opt.MP4
+./optimized/2018_1101_180959_010_opt.MP4
+./optimized/2018_1101_181259_011_opt.MP4
+./optimized/2018_1101_181559_012_opt.MP4
+./optimized/2018_1101_181859_013_opt.MP4
+./optimized/2018_1101_182159_014_opt.MP4
+./optimized/2018_1101_182459_015_opt.MP4
+./optimized/2018_1101_182759_016_opt.MP4
+./optimized/2018_1101_183059_017_opt.MP4
+./optimized/2018_1101_183359_018_opt.MP4
+./optimized/2018_1101_183659_019_opt.MP4
+./optimized/2018_1101_183959_020_opt.MP4
+./optimized/2018_1101_184259_021_opt.MP4
+./optimized/2018_1101_184559_022_opt.MP4
+./optimized/2018_1101_184859_023_opt.MP4
+./optimized/2018_1101_185159_024_opt.MP4
+./optimized/2018_1101_185459_025_opt.MP4
+./optimized/2018_1101_185759_026_opt.MP4
+./optimized/2018_1101_190059_027_opt.MP4
+./optimized/2018_1101_190359_028_opt.MP4
+./optimized/2018_1101_190659_029_opt.MP4
+./optimized/2018_1101_190959_030_opt.MP4
+./optimized/2018_1101_221116_001_opt.MP4
+./optimized/2018_1107_182108_001_opt.MP4
+./optimized/2018_1107_182338_002_opt.MP4
+./optimized/2018_1107_182639_003_opt.MP4
+./optimized/2018_1107_182939_004_opt.MP4
+./optimized/2018_1107_183239_005_opt.MP4
+./optimized/2018_1107_183539_006_opt.MP4
+./optimized/2018_1113_195716_001_opt.MP4
+./optimized/2018_1113_195946_002_opt.MP4
+./optimized/2018_1113_200246_003_opt.MP4
+./optimized/2018_1113_200546_004_opt.MP4
+./optimized/2018_1113_200846_005_opt.MP4
+./optimized/2018_1113_201147_006_opt.MP4
+./optimized/2018_1113_201447_007_opt.MP4
+./optimized/2018_1113_201746_008_opt.MP4
+./optimized/2018_1113_202047_009_opt.MP4
+./optimized/2018_1113_232806_001_opt.MP4
+./optimized/2018_1113_233105_002_opt.MP4
+./optimized/2018_1113_233405_003_opt.MP4
+./optimized/2018_1113_233705_004_opt.MP4
+./optimized/2018_1113_234005_005_RO_opt.MP4
+./optimized/2018_1113_234305_006_opt.MP4
+./optimized/2018_1113_234605_007_opt.MP4
+./optimized/2018_1113_234905_008_opt.MP4
+./optimized/2018_1113_235205_009_opt.MP4
+./optimized/2018_1113_235805_011_opt.MP4
+./optimized/2018_1120_204429_001_opt.MP4
+./optimized/2018_1120_204655_002_opt.MP4
+./optimized/2018_1120_204955_003_opt.MP4
+./optimized/2018_1120_205255_004_opt.MP4
+./optimized/2018_1120_205555_005_opt.MP4
+./optimized/2018_1120_205855_006_opt.MP4
+./optimized/2018_1120_210155_007_opt.MP4
+./optimized/2018_1120_210455_008_opt.MP4
+./optimized/2018_1120_210755_009_opt.MP4
+./optimized/2018_1120_211055_010_opt.MP4
+./optimized/2018_1120_211355_011_opt.MP4
+./optimized/2018_1120_211655_012_opt.MP4
+./optimized/2018_1120_211955_013_opt.MP4
+./optimized/2018_1120_212255_014_opt.MP4
+./optimized/2018_1120_212555_015_opt.MP4
+./optimized/2018_1120_212855_016_opt.MP4
+./optimized/2018_1120_213155_017_opt.MP4
+./optimized/2018_1120_213455_018_opt.MP4
+./optimized/2018_1120_213755_019_opt.MP4
+./optimized/2018_1120_214055_020_opt.MP4
+./optimized/2018_1120_214355_021_opt.MP4
+./optimized/2018_1120_214655_022_opt.MP4
+./optimized/2018_1120_214956_023_opt.MP4
+./optimized/2018_1120_221120_001_opt.MP4
+./optimized/2018_1120_221421_002_opt.MP4
+./optimized/2018_1120_221721_003_opt.MP4
+./optimized/2018_1120_222022_004_opt.MP4
+./optimized/2018_1120_222321_005_opt.MP4
+./optimized/2018_1120_222621_006_opt.MP4
+./optimized/2018_1120_222921_007_opt.MP4
+./optimized/2018_1120_225631_001_opt.MP4
+./optimized/2018_1120_225932_002_opt.MP4
+./optimized/2018_1120_230232_003_opt.MP4
+./optimized/2018_1120_230532_004_opt.MP4
+./optimized/2018_1120_230832_005_opt.MP4
+./optimized/2018_1120_231132_006_opt.MP4
+./optimized/2018_1121_195715_001_opt.MP4
+./optimized/2018_1121_200012_002_opt.MP4
+./optimized/2018_1121_201212_006_opt.MP4
+./optimized/2018_1121_201512_007_opt.MP4
+./optimized/2018_1121_201813_008_opt.MP4
+./optimized/2018_1121_202113_009_opt.MP4
+./optimized/2018_1121_202413_010_opt.MP4
+./optimized/2018_1121_202713_011_opt.MP4
+./optimized/2018_1121_203013_012_opt.MP4
+./optimized/2018_1121_203313_013_opt.MP4
+./optimized/2018_1121_203613_014_opt.MP4
+./optimized/2018_1121_203913_015_opt.MP4
+./optimized/2018_1121_204213_016_opt.MP4
+./optimized/2018_1121_204513_017_opt.MP4
+./optimized/2018_1121_204813_018_opt.MP4
+./optimized/2018_1121_230946_001_opt.MP4
+./optimized/2018_1121_231245_002_opt.MP4
+./optimized/2018_1121_231545_003_opt.MP4
+./optimized/2018_1124_182149_001_opt.MP4
+./optimized/2018_1124_182436_002_opt.MP4
+./optimized/2018_1124_182736_003_opt.MP4
+./optimized/2018_1124_183036_004_opt.MP4
+./optimized/2018_1124_183336_005_opt.MP4
+./optimized/2018_1124_190335_001_opt.MP4
+./optimized/2018_1124_190635_002_opt.MP4
+./optimized/2018_1124_190935_003_opt.MP4
+./optimized/2018_1124_191235_004_opt.MP4
+./optimized/2018_1124_191535_005_opt.MP4
+./optimized/2018_1124_191835_006_opt.MP4
+./optimized/2018_1124_192135_007_opt.MP4
+./optimized/2018_1124_192435_008_opt.MP4
+./optimized/2018_1124_192735_009_opt.MP4
+./optimized/2018_1124_193035_010_opt.MP4
+./optimized/2018_1124_194040_001_opt.MP4
+./optimized/2018_1124_194341_002_opt.MP4
+./optimized/2018_1124_194641_003_opt.MP4
+./optimized/2018_1124_194941_004_opt.MP4
+./optimized/2018_1124_195241_005_opt.MP4
+./optimized/2018_1124_195541_006_opt.MP4
+./optimized/2018_1124_195841_007_opt.MP4
+./optimized/2018_1124_200141_008_opt.MP4
+./optimized/2018_1124_200441_009_opt.MP4
+./optimized/2018_1124_200741_010_opt.MP4
+./optimized/2018_1124_201041_011_opt.MP4
+./optimized/2018_1124_201341_012_opt.MP4
+./optimized/2018_1124_201641_013_opt.MP4
+./optimized/2018_1206_174648_001_opt.MP4
+./optimized/2018_1206_174849_002_opt.MP4
+./optimized/2018_1206_175149_003_opt.MP4
+./optimized/2018_1206_175449_004_opt.MP4
+./optimized/2018_1206_175749_005_opt.MP4
+./optimized/2018_1206_180049_006_opt.MP4
+./optimized/2018_1206_180349_007_opt.MP4
+./optimized/2018_1206_180649_008_opt.MP4
+./optimized/2018_1206_180949_009_opt.MP4
+./optimized/2018_1206_181249_010_opt.MP4
+./optimized/2018_1206_181549_011_opt.MP4
+./optimized/2018_1206_181849_012_opt.MP4
+./optimized/2018_1206_182149_013_opt.MP4
+./optimized/2018_1206_182448_014_opt.MP4
+./optimized/2018_1206_182748_015_opt.MP4
+./optimized/2018_1206_183048_016_opt.MP4
+./optimized/2018_1206_183348_017_opt.MP4
+./optimized/2018_1206_183648_018_opt.MP4
+./optimized/2018_1206_183948_019_opt.MP4
+./optimized/2018_1206_184248_020_opt.MP4
+./optimized/2018_1206_184548_021_opt.MP4
+./optimized/2018_1206_184848_022_opt.MP4
+./optimized/2018_1206_185148_023_opt.MP4
+./optimized/2018_1206_185448_024_opt.MP4
+./optimized/2018_1206_185748_025_opt.MP4
+./optimized/2018_1206_201300_001_opt.MP4
+./optimized/2018_1206_201901_003_opt.MP4
+./optimized/2018_1206_202201_004_opt.MP4
+./optimized/2018_1206_202801_006_opt.MP4
+./optimized/2018_1206_203101_007_opt.MP4
+./optimized/2018_1206_214040_001_opt.MP4
+./optimized/2018_1206_214340_002_opt.MP4
+./optimized/2018_1206_214940_004_opt.MP4
+./optimized/2018_1206_215240_005_opt.MP4
+./optimized/2018_1206_215540_006_opt.MP4
+./optimized/2018_1206_215840_007_opt.MP4
+./optimized/2018_1206_220140_008_opt.MP4
+./optimized/2018_1206_220440_009_opt.MP4
+./optimized/2018_1206_220740_010_opt.MP4
+./optimized/2018_1206_221040_011_opt.MP4
+./optimized/2018_1206_221340_012_opt.MP4
+./optimized/2018_1206_230614_001_opt.MP4
+./optimized/2018_1206_232334_001_opt.MP4
+./optimized/2018_1206_232635_002_opt.MP4
+./optimized/2018_1206_232935_003_opt.MP4
+./optimized/2018_1206_233235_004_opt.MP4
+./optimized/2018_1206_233535_005_opt.MP4
+./optimized/2018_1206_233835_006_opt.MP4
+./optimized/2018_1206_234135_007_opt.MP4
+./optimized/2018_1206_234435_008_opt.MP4
+./optimized/2018_1206_234735_009_opt.MP4
+./optimized/2018_1206_235035_010_opt.MP4
+./optimized/2018_1206_235335_011_opt.MP4
+./optimized/2018_1206_235635_012_opt.MP4
+./optimized/2018_1206_235935_013_opt.MP4
+./optimized/2018_1207_000235_014_opt.MP4
+./optimized/2018_1207_000535_015_opt.MP4
+./optimized/2018_1207_000835_016_opt.MP4
+./optimized/2018_1207_001135_017_opt.MP4
+./optimized/2018_1207_001435_018_opt.MP4
+./optimized/2018_1207_001735_019_opt.MP4
+./optimized/2018_1207_002335_021_opt.MP4
+./optimized/2018_1207_002635_022_opt.MP4
+./optimized/2018_1207_002935_023_opt.MP4
+./optimized/2018_1207_003235_024_opt.MP4
+./optimized/2018_1207_003535_025_opt.MP4
+./optimized/2018_1211_180936_001_opt.MP4
+./optimized/2018_1211_181214_002_opt.MP4
+./optimized/2018_1211_181514_003_opt.MP4
+./optimized/2018_1211_181814_004_opt.MP4
+./optimized/2018_1211_182114_005_opt.MP4
+./optimized/2018_1211_182414_006_opt.MP4
+./optimized/2018_1211_182714_007_opt.MP4
+./optimized/2018_1211_183012_008_opt.MP4
+./optimized/2018_1211_183313_009_opt.MP4
+./optimized/2018_1211_183613_010_opt.MP4
+./optimized/2018_1211_201645_001_opt.MP4
+./optimized/2018_1211_201946_002_opt.MP4
+./optimized/2018_1211_202246_003_opt.MP4
+./optimized/2018_1211_202546_004_opt.MP4
+./optimized/2018_1211_202846_005_opt.MP4
+./optimized/2018_1211_203146_006_opt.MP4
+./optimized/2018_1212_015641_001_opt.MP4
+./optimized/2018_1212_015941_002_opt.MP4
+./optimized/2018_1212_020241_003_opt.MP4
+./optimized/2018_1212_020541_004_opt.MP4
+./optimized/2018_1212_020841_005_opt.MP4
+./optimized/2018_1212_021141_006_opt.MP4
+./optimized/2018_1212_021441_007_opt.MP4
+./optimized/2018_1212_021741_008_opt.MP4
 ./pulled over/2018_0601_005202_009.MP4
 ./pulled over/2018_0601_005502_010.MP4
 ./pulled over/2018_0601_005802_011.MP4
@@ -4719,3 +5815,4 @@
 ./pulled over/2018_0601_021302_036.MP4
 ./pulled over/2018_0601_021602_037.MP4
 ./pulled over/2018_0601_021902_038.MP4
+/Users/danamerrick/other_projects/stream
