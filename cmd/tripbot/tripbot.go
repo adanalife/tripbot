@@ -121,7 +121,7 @@ func main() {
 					client.Say(config.ChannelName, "That didn't work, sorry!")
 				} else {
 					realDate := helpers.ActualDate(vid.Date(), lat, lon)
-					w, err := owm.NewHistorical("F", "EN", owmAPIKey) // fahrenheit / english
+					w, err := owm.NewHistorical("F", owmAPIKey)
 					if err != nil {
 						log.Println("error from openweathermap:", err)
 					}
