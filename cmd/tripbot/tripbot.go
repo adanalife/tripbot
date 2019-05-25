@@ -125,7 +125,7 @@ func main() {
 						Longitude: lat,
 						Latitude:  lon,
 					}, &owm.HistoricalParameters{
-						Start: realDate.UnixTime(),
+						Start: realDate.Unix(),
 						Cnt:   1,
 					})
 					spew.Dump(weather)
