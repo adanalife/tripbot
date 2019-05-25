@@ -119,6 +119,32 @@ func main() {
 			}
 		}
 
+		if strings.HasPrefix(strings.ToLower(message.Message), "!sunset") {
+			log.Println(user, "ran !sunset")
+			// run if the user is a follower
+			if mytwitch.UserIsFollower(user) {
+				// get the currently-playing video
+				currentVid := video.CurrentlyPlaying()
+				vid, err := video.New(currentVid)
+				if err != nil {
+					log.Println("unable to create video: %v", err)
+				}
+				lat, lon, err := datastore.CoordsFor(vid)
+				if err != nil {
+					client.Say(config.ChannelName, "That didn't work, sorry!")
+				} else {
+					realDate := helpers.ActualDate(vid.Date(), lat, lon)
+					// "Mon, 02 Jan 2006 15:04:05 MST"
+					_, sunset := helpers.SunriseSunset()
+					fmtDate := sunset.Format(time.RFC1123)
+					msg := fmt.Sprintf("Sunset on this day was %s", fmtDate)
+					client.Say(config.ChannelName, msg)
+				}
+			} else {
+				client.Say(config.ChannelName, "You must be a follower to run that command :)")
+			}
+		}
+
 		if strings.HasPrefix(strings.ToLower(message.Message), "!tripbot") {
 			log.Println(user, "ran !tripbot")
 			// run if the user is a follower

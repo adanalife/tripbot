@@ -15,6 +15,7 @@ import (
 	"github.com/bradfitz/latlong"
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/kelvins/geocoder"
+	"github.com/nathan-osman/go-sunrise"
 )
 
 func CityFromCoords(lat, lon float64) (string, error) {
@@ -143,4 +144,13 @@ func ActualDate(utcDate time.Time, lat, long float64) time.Time {
 		panic(err)
 	}
 	return utcDate.In(location)
+}
+
+func SunriseSunset(utcDate time.Time, lat, long float64) (time.Time, time.Time) {
+	actualDate := ActualDate(utcDate, lat, long)
+	rise, set := sunrise.SunriseSunset(
+		lat, long,
+		actualDate.Year, actualDate.Month, actualDate.Day,
+	)
+	return rise, set
 }
