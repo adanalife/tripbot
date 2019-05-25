@@ -36,12 +36,16 @@ func main() {
 	}
 
 	// first we must check for required ENV vars
+	if os.Getenv("DASHCAM_DIR") == "" {
+		panic("You must set DASHCAM_DIR")
+	}
 	botUsername := os.Getenv("BOT_USERNAME")
 	if botUsername == "" {
 		panic("You must set BOT_USERNAME")
 	}
-	if os.Getenv("DASHCAM_DIR") == "" {
-		panic("You must set DASHCAM_DIR")
+	owmAPIKey := os.Getenv("OWM_API_KEY")
+	if owmAPIKey == "" {
+		panic("You must set OWM_API_KEY")
 	}
 	clientAuthenticationToken := os.Getenv("TWITCH_AUTH_TOKEN")
 	if clientAuthenticationToken == "" {
@@ -117,7 +121,7 @@ func main() {
 					client.Say(config.ChannelName, "That didn't work, sorry!")
 				} else {
 					realDate := helpers.ActualDate(vid.Date(), lat, lon)
-					w, err := owm.NewHistorical("F", "EN") // fahrenheit / english
+					w, err := owm.NewHistorical("F", "EN", owmAPIKey) // fahrenheit / english
 					if err != nil {
 						log.Println("error from openweathermap:", err)
 					}

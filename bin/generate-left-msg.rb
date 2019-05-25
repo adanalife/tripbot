@@ -31,7 +31,11 @@ loop do
 
   if current == "LEADER"
     # fetch the current leader
+    begin
     miles, leader = File.read(File.expand_path(leaderboard_file)).split("\n")[1].split(":")
+    rescue
+      next
+    end
     next unless leader
     current = "#{leader.strip} is leader with #{miles} (!leaderboard)"
   end
