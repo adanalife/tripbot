@@ -11,135 +11,85 @@ outdoors, family friendly, photography, automotive, travel
 get lastfm working
 
 
-
-make a special VideoStr type
-
+POSSIBLE FUTURE FEATURES
 whisper users after first mile?
 
 
-make a cool banner
-https://github.com/dimiro1/banner
-
+GOLANG STUFF
 https://github.com/gosuri/go-store
 https://github.com/vrecan/death
-
 https://github.com/giorgisio/goav (ffmpeg bindings)
 https://github.com/go-critic/go-critic
 https://github.com/fatih/vim-go
-
 https://github.com/a8m/go-lang-cheat-sheet
-
-errorx
 https://github.com/joomcode/errorx
-
-
-
 http://go-database-sql.org/overview.html
-
 https://github.com/golang-standards/project-layout
+gomod
+golint
+govet
+http://devs.cloudimmunity.com/gotchas-and-common-mistakes-in-go-golang/
+https://github.com/joho/godotenv
+https://github.com/spf13/viper
+https://github.com/fsnotify/fsnotify
+vim go tips
+go-callvis
+
 
 EVENTUALLY
 webserver for nightbot to hit
 fix whitelist/blacklist
 better miles stuff
-
-move off of usbshare1
-
-log follows/subs with tripbot
-
-add more and less
-
-alerts for certain userss
-
-auto-update title!
-
-!miles (user)
-
-funny !miles for me
-
+put !helps in bottom corner
 only followers get miles
-
-
-gomod
-golint
-govet
-
-http://devs.cloudimmunity.com/gotchas-and-common-mistakes-in-go-golang/
-
 move db to db/
+rename tripbot to location
+check if user is subscriber
+  https://discuss.dev.twitch.tv/t/quick-and-dirty-way-to-check-if-a-user-is-a-subscriber-mod-if-tags-arent-given/11422/5
+  https://discuss.dev.twitch.tv/t/is-the-api-for-checking-subscriptions-really-working/12108
+maybe ask for a subscriber when tripbot fails?
+post youtube vid to vanlife
+  https://www.youtube.com/watch?v=L7VLh7Ubp-E
+trophies/acheivements
+  mile counts
+  full day
+  night owl
+  subscriber
+page me on these:
+  !frozen
+  !sound
+  no sound
+  no audio
+  frozen
 
 
+TODO
+nightbot can read from Lastfm?!
+move off of usbshare1
+log follows/subs with tripbot
+add more and less
+alerts for certain userss
+auto-update title!
+!miles (user)
+funny !miles for me
 make tmuxinator script that starts all of the scripts
+!uptime for bot
+!city/!town
+!progress towards loop?
+search log for more reset users
+save in db the error status
 
+
+BUGS
 there is a bug where if last vid is "" it will never updat
 
 
-rename tripbot to location
-
+DESIGN
 make state lines more clear
 
-!uptime for bot
-
-!city/!town
-
-!progress towards loop?
-
-search log for more reset users
-
-change to UserNoticeMessage
-https://godoc.org/github.com/gempir/go-twitch-irc#UserNoticeMessage
-
-check if user is subscriber
-https://discuss.dev.twitch.tv/t/quick-and-dirty-way-to-check-if-a-user-is-a-subscriber-mod-if-tags-arent-given/11422/5
-https://discuss.dev.twitch.tv/t/is-the-api-for-checking-subscriptions-really-working/12108
-
-
-maybe ask for a subscriber when tripbot fails?
-
-
-post youtube vid to vanlife
-https://www.youtube.com/watch?v=L7VLh7Ubp-E
-
-
-https://github.com/joho/godotenv
-
-https://github.com/spf13/viper
-
-https://github.com/nathan-osman/go-sunrise
-
-https://github.com/fsnotify/fsnotify
-
-vim go tips
-go-callvis
-
-
-
-
-trophies/acheivements
-mile counts
-full day
-night owl
-subscriber
-
-page me on these:
-!frozen
-!sound
-no sound
-no audio
-frozen
-
-nightbot can read from Lastfm?!
 
 DANALOL
 faq anchor links dont work?
-
-
-failed to open image: open /Volumes/usbshare1/screencaps/0230/2018_0513_234013_004_b-230.png: no such file or directory
-
-
-put !helps in bottom corner
-
-make !help include (x of y)
 
 
 NEEDS SISTER CLIPPING
@@ -150,14 +100,6 @@ NEEDS SISTER CLIPPING
 2018_0518_205919_007_a
 2018_0519_145458_002_b
 2018_0521_212546_017_b
-
-script to check if coords are valid
-add more screencaps to screencapsdir
-
-save in db the error status
-
-
-
 
 NEEDS CLIPPING
 2018_0601_203618_002.MP4
