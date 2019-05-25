@@ -3,7 +3,7 @@
 PID_FILE=OBS/OBS.pid
 
 echo "starting OBS..."
-nice -n "-15" /Applications/OBS.app/Contents/MacOS/OBS -start >> obs-$(date "+%Y-%m-%d").log 2>&1 &
+nice -n "-15" /Applications/OBS.app/Contents/MacOS/OBS -start >> log/obs-$(date "+%Y-%m-%d").log 2>&1 &
 
 # save pid to file
 PID=$!
