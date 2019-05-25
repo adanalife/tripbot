@@ -92,7 +92,7 @@ func main() {
 
 		if strings.HasPrefix(strings.ToLower(message.Message), "!help") {
 			log.Println(user, "ran !help")
-			msg := fmt.Sprintf("%s (repeat this command for more)", config.HelpMessages[helpIndex])
+			msg := fmt.Sprintf("%s (%d of %d)", config.HelpMessages[helpIndex], helpIndex+1, len(config.HelpMessages))
 			client.Say(config.ChannelName, msg)
 			// bump the index
 			helpIndex = (helpIndex + 1) % len(config.HelpMessages)
