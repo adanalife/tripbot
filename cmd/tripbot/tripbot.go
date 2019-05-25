@@ -80,7 +80,10 @@ func main() {
 	})
 
 	client.OnUserNoticeMessage(func(message twitch.UserNoticeMessage) {
-		log.Println("user notice:", message.User, message.Type, message.Message, message.SystemMsg, message.Emotes, message.Tags)
+		log.Println("user notice:", message.SystemMsg, "***", message.Emotes, "***", message.Tags)
+		// send message to chat if someone subs
+		msg := fmt.Sprintf("%s Your support powers me bleedPurple")
+		client.Say(config.ChannelName, msg)
 	})
 
 	client.OnWhisperMessage(func(message twitch.WhisperMessage) {
