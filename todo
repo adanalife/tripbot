@@ -1,3 +1,50 @@
+TODO
+nightbot can read from Lastfm?!
+log follows/subs with tripbot
+add more and less
+alerts for certain userss
+auto-update title!
+!miles (user)
+funny !miles for me
+make tmuxinator script that starts all of the scripts
+!uptime for bot
+!city/!town
+!progress towards loop?
+search log for more reset users
+save in db the error status
+
+
+
+EVENTUALLY
+webserver for nightbot to hit
+fix whitelist/blacklist
+better miles stuff
+put !helps in bottom corner
+only followers get miles
+move db to db/
+rename tripbot to location
+check if user is subscriber
+  https://discuss.dev.twitch.tv/t/quick-and-dirty-way-to-check-if-a-user-is-a-subscriber-mod-if-tags-arent-given/11422/5
+  https://discuss.dev.twitch.tv/t/is-the-api-for-checking-subscriptions-really-working/12108
+maybe ask for a subscriber when tripbot fails?
+post youtube vid to vanlife
+  https://www.youtube.com/watch?v=L7VLh7Ubp-E
+trophies/acheivements
+  mile counts
+  full day
+  night owl
+  subscriber
+page me on these:
+  !frozen
+  !sound
+  no sound
+  no audio
+  frozen
+
+
+BUGS
+there is a bug where if last vid is "" it will never updat
+
 REVISIT
 dont do fatal and quit the bot
 empty out unused cmd/ files
@@ -34,54 +81,6 @@ https://github.com/spf13/viper
 https://github.com/fsnotify/fsnotify
 vim go tips
 go-callvis
-
-
-EVENTUALLY
-webserver for nightbot to hit
-fix whitelist/blacklist
-better miles stuff
-put !helps in bottom corner
-only followers get miles
-move db to db/
-rename tripbot to location
-check if user is subscriber
-  https://discuss.dev.twitch.tv/t/quick-and-dirty-way-to-check-if-a-user-is-a-subscriber-mod-if-tags-arent-given/11422/5
-  https://discuss.dev.twitch.tv/t/is-the-api-for-checking-subscriptions-really-working/12108
-maybe ask for a subscriber when tripbot fails?
-post youtube vid to vanlife
-  https://www.youtube.com/watch?v=L7VLh7Ubp-E
-trophies/acheivements
-  mile counts
-  full day
-  night owl
-  subscriber
-page me on these:
-  !frozen
-  !sound
-  no sound
-  no audio
-  frozen
-
-
-TODO
-nightbot can read from Lastfm?!
-move off of usbshare1
-log follows/subs with tripbot
-add more and less
-alerts for certain userss
-auto-update title!
-!miles (user)
-funny !miles for me
-make tmuxinator script that starts all of the scripts
-!uptime for bot
-!city/!town
-!progress towards loop?
-search log for more reset users
-save in db the error status
-
-
-BUGS
-there is a bug where if last vid is "" it will never updat
 
 
 DESIGN
