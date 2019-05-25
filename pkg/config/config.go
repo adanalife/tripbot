@@ -7,10 +7,11 @@ const (
 	ChannelID = "225469317"
 
 	//TODO move these off usbshare1
-	ScreencapDir  = "/Volumes/usbshare1/screencaps"
+	ScreencapDir  = "/Volumes/usbshare1/Dashcam/screencaps"
 	VideoDir      = "/Volumes/usbshare1/Dashcam/_all"
 	MapsOutputDir = "/Volumes/usbshare1/maps"
-	CroppedPath   = "/Volumes/usbshare1/cropped-corners"
+	// CroppedPath is where we store the cropped versions of screencaps (to OCR them)
+	CroppedPath = "/Volumes/usbshare1/cropped-corners"
 
 	//TODO capitalize me
 	DbPath            = "tripbot.db"
