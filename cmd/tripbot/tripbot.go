@@ -8,8 +8,6 @@ import (
 	"strings"
 	"time"
 
-	owm "github.com/briandowns/openweathermap"
-	"github.com/davecgh/go-spew/spew"
 	_ "github.com/dimiro1/banner/autoload"
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
@@ -42,10 +40,6 @@ func main() {
 	botUsername := os.Getenv("BOT_USERNAME")
 	if botUsername == "" {
 		panic("You must set BOT_USERNAME")
-	}
-	owmAPIKey := os.Getenv("OWM_API_KEY")
-	if owmAPIKey == "" {
-		panic("You must set OWM_API_KEY")
 	}
 	clientAuthenticationToken := os.Getenv("TWITCH_AUTH_TOKEN")
 	if clientAuthenticationToken == "" {
@@ -105,41 +99,6 @@ func main() {
 	// all chat messages
 	client.OnPrivateMessage(func(message twitch.PrivateMessage) {
 		user := message.User.Name
-
-		if strings.HasPrefix(strings.ToLower(message.Message), "!temperature") {
-			log.Println(user, "ran !temperature")
-			// run if the user is a follower
-			if mytwitch.UserIsFollower(user) {
-				// get the currently-playing video
-				currentVid := video.CurrentlyPlaying()
-				vid, err := video.New(currentVid)
-				if err != nil {
-					log.Println("unable to create Video: %v", err)
-				}
-				lat, lon, err := datastore.CoordsFor(vid)
-				if err != nil {
-					client.Say(config.ChannelName, "That didn't work, sorry!")
-				} else {
-					realDate := helpers.ActualDate(vid.Date(), lat, lon)
-					w, err := owm.NewHistorical("F", owmAPIKey)
-					if err != nil {
-						log.Println("error from openweathermap:", err)
-					}
-					weather := w.HistoryByCoord(&owm.Coordinates{
-						Longitude: lat,
-						Latitude:  lon,
-					}, &owm.HistoricalParameters{
-						Start: realDate.Unix(),
-						Cnt:   1,
-					})
-					spew.Dump(weather)
-					// msg := fmt.Sprintf("")
-					// client.Say(config.ChannelName, msg)
-				}
-			} else {
-				client.Say(config.ChannelName, "You must be a follower to run that command :)")
-			}
-		}
 
 		if strings.HasPrefix(strings.ToLower(message.Message), "!help") {
 			log.Println(user, "ran !help")
