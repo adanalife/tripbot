@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	"github.com/dmerrick/danalol-stream/pkg/store"
 	"github.com/dmerrick/danalol-stream/pkg/video"
@@ -12,7 +11,7 @@ import (
 
 func main() {
 
-	datastore := store.FindOrCreate(config.DbPath)
+	datastore := store.FindOrCreate("tripbot-copy.db")
 
 	videoFile := video.CurrentlyPlaying()
 
@@ -22,6 +21,8 @@ func main() {
 		if err != nil {
 			log.Println("unable to create Video: %v", err)
 		}
+		fmt.Println(vid)
+
 		lat, lon, err := datastore.CoordsFor(vid)
 		if err != nil {
 			log.Fatalf("failed to process image: %v", err)
