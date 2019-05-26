@@ -88,7 +88,7 @@ func main() {
 
 	client.OnUserPartMessage(func(partMessage twitch.UserPartMessage) {
 		if !helpers.UserIsIgnored(partMessage.User) {
-			events.Logout(joinMessage.User)
+			events.Logout(partMessage.User)
 			datastore.RecordUserPart(partMessage.User)
 		}
 	})
