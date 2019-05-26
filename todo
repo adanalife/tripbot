@@ -10,6 +10,7 @@ search log for more reset users
 save in db the error status
 nightbot can read from Lastfm?!
 constantly fetch current video
+implement a way to "refetch" coords that are not accurate
 
 
 EVENTUALLY
