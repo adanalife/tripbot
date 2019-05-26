@@ -13,7 +13,6 @@ constantly fetch current video
 implement a way to "refetch" coords that are not accurate
 log all chats to separte file
 create user and a Online?() method
-calculate duration off miles diff
 
 
 EVENTUALLY
@@ -23,6 +22,7 @@ add more and less
 webserver for nightbot to hit
 fix whitelist/blacklist
 miles
+  miles fall off after a while?
   spendable miles
   only followers get miles
   subs get miles bonus

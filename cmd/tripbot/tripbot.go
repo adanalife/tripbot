@@ -186,6 +186,22 @@ func main() {
 			}
 		}
 
+		if strings.HasPrefix(strings.ToLower(message.Message), "!optimized") {
+			log.Println(user, "ran !optimized")
+			// run if the user is a follower
+			if mytwitch.UserIsFollower(user) {
+				// get the currently-playing video
+				currentVid := video.CurrentlyPlaying()
+				if strings.Contains(currentVid, "_opt") {
+					client.Say(config.ChannelName, "This video has been optimized")
+				} else {
+					client.Say(config.ChannelName, "This video is not yet optimized")
+				}
+			} else {
+				client.Say(config.ChannelName, "You must be a follower to run that command :)")
+			}
+		}
+
 		if strings.HasPrefix(strings.ToLower(message.Message), "!sunset") {
 			log.Println(user, "ran !sunset")
 			// run if the user is a follower
