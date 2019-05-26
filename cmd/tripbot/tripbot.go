@@ -15,6 +15,7 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/database"
 	"github.com/dmerrick/danalol-stream/pkg/events"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
+	"github.com/dmerrick/danalol-stream/pkg/miles"
 	"github.com/dmerrick/danalol-stream/pkg/store"
 	mytwitch "github.com/dmerrick/danalol-stream/pkg/twitch"
 	"github.com/dmerrick/danalol-stream/pkg/video"
@@ -148,6 +149,27 @@ func main() {
 			// run if the user is a follower
 			if mytwitch.UserIsFollower(user) {
 				miles := datastore.MilesForUser(user)
+				msg := ""
+				switch {
+				case miles == 1:
+					msg = "@%s has only %d mile"
+				case miles >= 250:
+					msg = "Holy crap! @%s has %d miles!"
+				default:
+					msg = "@%s has %d miles. Earn 1 mile every 10 minutes by watching the stream"
+				}
+				msg = fmt.Sprintf(msg, user, miles)
+				client.Say(config.ChannelName, msg)
+			} else {
+				client.Say(config.ChannelName, "You must be a follower to run that command :)")
+			}
+		}
+
+		if strings.HasPrefix(strings.ToLower(message.Message), "!newmiles") {
+			log.Println(user, "ran !newmiles")
+			// run if the user is a follower
+			if mytwitch.UserIsFollower(user) {
+				miles := miles.ForUser(user)
 				msg := ""
 				switch {
 				case miles == 1:
