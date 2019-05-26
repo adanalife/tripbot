@@ -5,7 +5,9 @@ import (
 	"log"
 	"math/rand"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	_ "github.com/dimiro1/banner/autoload"
@@ -36,6 +38,16 @@ func main() {
 	if err != nil {
 		log.Fatal("Error loading .env file")
 	}
+
+	// catch CTRL-C and clean up
+	c := make(chan os.Signal)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-c
+		log.Println("caught CTRL-C")
+		events.LogoutAll(uptime)
+		os.Exit(1)
+	}()
 
 	// first we must check for required ENV vars
 	if os.Getenv("DASHCAM_DIR") == "" {
@@ -71,8 +83,6 @@ func main() {
 		log.Fatal("error initializing the DB", err)
 	}
 	defer database.DBCon.Close()
-	// defers are LIFO
-	defer events.LogoutAll(uptime)
 
 	// initialize the local datastore
 	datastore := store.FindOrCreate(config.DBPath)
