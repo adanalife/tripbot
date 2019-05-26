@@ -38,12 +38,11 @@ func main() {
 	// schema := ""
 	// db.MustExec(schema)
 
-	tx := database.DBCon.MustBegin()
-	// tx.MustExec("INSERT INTO events (username, event, date_created) VALUES ($1, $2, $3)", "adanalife_", "login", time.Now())
-	tx.MustExec("INSERT INTO events (username, event) VALUES ($1, $2)", "adanalife_", "logout")
 	// Named queries can use structs, so if you have an existing struct (i.e. person := &Person{}) that you have populated, you can pass it in as &person
 	// tx.NamedExec("INSERT INTO events (username, event) VALUES (:username, :event)", &Event{"adanalife_", "login"})
-	tx.Commit()
+	// tx := database.DBCon.MustBegin()
+	// tx.MustExec("INSERT INTO events (username, event) VALUES ($1, $2)", "adanalife_", "logout")
+	// tx.Commit()
 
 	// tx.MustExec("INSERT INTO person (first_name, last_name, email) VALUES ($1, $2, $3)", "John", "Doe", "johndoeDNE@gmail.net")
 	// tx.MustExec("INSERT INTO place (country, city, telcode) VALUES ($1, $2, $3)", "United States", "New York", "1")
@@ -57,8 +56,8 @@ func main() {
 
 	spew.Dump(events)
 
-	first_event := events[0]
-	spew.Dump(first_event)
+	// first_event := events[0]
+	// spew.Dump(first_event)
 
 	// // Person{FirstName:"Jason", LastName:"Moiron", Email:"jmoiron@jmoiron.net"}
 	// // Person{FirstName:"John", LastName:"Doe", Email:"johndoeDNE@gmail.net"}

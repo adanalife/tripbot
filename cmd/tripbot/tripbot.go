@@ -80,15 +80,15 @@ func main() {
 	client := twitch.NewClient(botUsername, clientAuthenticationToken)
 
 	client.OnUserJoinMessage(func(joinMessage twitch.UserJoinMessage) {
+		events.Login(joinMessage.User)
 		if !helpers.UserIsIgnored(joinMessage.User) {
-			events.Login(joinMessage.User)
 			datastore.RecordUserJoin(joinMessage.User)
 		}
 	})
 
 	client.OnUserPartMessage(func(partMessage twitch.UserPartMessage) {
+		events.Logout(partMessage.User)
 		if !helpers.UserIsIgnored(partMessage.User) {
-			events.Logout(partMessage.User)
 			datastore.RecordUserPart(partMessage.User)
 		}
 	})
