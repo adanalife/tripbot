@@ -24,6 +24,7 @@ for file in ${DASHCAM_DIR}/_all/*.MP4; do
     echo "skipping $file because it's already optimized"
     continue
   fi
+  #TODO: skip the file if it already exists in output dir
   $SCRIPTPATH/optimize-vid.sh $file
 done
 
