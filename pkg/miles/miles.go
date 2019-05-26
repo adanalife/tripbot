@@ -5,7 +5,6 @@ import (
 	"log"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/dmerrick/danalol-stream/pkg/database"
 	"github.com/dmerrick/danalol-stream/pkg/events"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
@@ -14,8 +13,10 @@ import (
 func ForUser(user string) int {
 	evnts := []events.Event{}
 	query := fmt.Sprintf("SELECT username, event, date_created from events where username = '%s' AND event in ('login', 'logout')", user)
-	//TODO catch error here
-	database.DBCon.Select(&evnts, query)
+	err := database.DBCon.Select(&evnts, query)
+	if err != nil {
+		log.Println("error fetching events from db", err)
+	}
 	pairs := splitIntoPairs(evnts)
 	dur := combinePairs(pairs)
 	return helpers.DurationToMiles(dur)
@@ -23,7 +24,19 @@ func ForUser(user string) int {
 
 func splitIntoPairs(evnts []events.Event) [][]events.Event {
 	var pairs [][]events.Event
-	for i := 0; i < len(evnts)-2; i++ {
+	// no events were found
+	if len(evnts) == 0 {
+		return pairs
+	}
+
+	// check if their most recent event is a login
+	if evnts[len(evnts)-1].Event == "login" {
+		log.Println("user is logged in, adding a logout event")
+		// ... in which case add the current time to the list
+		evnts = append(evnts, events.Event{DateCreated: time.Now(), Event: "logout"})
+	}
+
+	for i := 0; i < len(evnts)-1; i++ {
 		// we're only looking for logins here
 		if evnts[i].Event == "logout" {
 			continue
@@ -46,7 +59,6 @@ func splitIntoPairs(evnts []events.Event) [][]events.Event {
 		}
 
 		if len(pair) != 2 {
-			spew.Dump(pair)
 			log.Fatal("pair wasn't full for some reason")
 		}
 
@@ -60,8 +72,6 @@ func combinePairs(pairs [][]events.Event) time.Duration {
 	for _, pair := range pairs {
 		login, logout := pair[0].DateCreated, pair[1].DateCreated
 		durSum = durSum + logout.Sub(login)
-		// spew.Dump(login)
-		// spew.Dump(logout)
 	}
 	return durSum
 }
