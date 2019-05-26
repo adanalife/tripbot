@@ -22,7 +22,9 @@ func LogoutAll(botStart time.Time) {
 		log.Println("query resulted in no matches")
 	}
 	for _, event := range events {
-		LogoutIfNecessary(event.Username)
+		user := event.Username
+		log.Println("logging out", user, "(if necessary)")
+		LogoutIfNecessary(user)
 	}
 }
 
