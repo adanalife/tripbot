@@ -15,19 +15,11 @@ type Event struct {
 func Login(user string) {
 	tx := database.DBCon.MustBegin()
 	tx.MustExec("INSERT INTO events (username, event) VALUES ($1, $2)", user, "login")
-	// tx.NamedExec(
-	// 	"INSERT INTO events (username, event) VALUES (:username, :event)",
-	// 	&Event{user, "login"},
-	// )
 	tx.Commit()
 }
 
 func Logout(user string) {
 	tx := database.DBCon.MustBegin()
 	tx.MustExec("INSERT INTO events (username, event) VALUES ($1, $2)", user, "logout")
-	// tx.NamedExec(
-	// 	"INSERT INTO events (username, event) VALUES (:username, :event)",
-	// 	&Event{user, "logout"},
-	// )
 	tx.Commit()
 }
