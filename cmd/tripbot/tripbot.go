@@ -10,6 +10,8 @@ import (
 
 	_ "github.com/dimiro1/banner/autoload"
 	"github.com/dmerrick/danalol-stream/pkg/config"
+	"github.com/dmerrick/danalol-stream/pkg/database"
+	"github.com/dmerrick/danalol-stream/pkg/events"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	"github.com/dmerrick/danalol-stream/pkg/store"
 	mytwitch "github.com/dmerrick/danalol-stream/pkg/twitch"
@@ -28,6 +30,8 @@ var helpIndex = rand.Intn(len(config.HelpMessages))
 var lastVid string
 
 func main() {
+	uptime := time.Now()
+
 	err := godotenv.Load()
 	if err != nil {
 		log.Fatal("Error loading .env file")
@@ -61,24 +65,30 @@ func main() {
 		log.Fatal("unable to create twitch API client", err)
 	}
 
-	uptime := time.Now()
+	// initialize the SQL database
+	database.DBCon, err = database.Initialize()
+	if err != nil {
+		log.Fatal("error initializing the DB", err)
+	}
 
-	// initialize the database
+	// initialize the local datastore
 	datastore := store.FindOrCreate(config.DBPath)
 	// make sure everyone is logged out
-	datastore.ClearJoinBucket()
+	// datastore.ClearJoinBucket()
 
-	// time to set up the Twitch client
+	// set up the Twitch client
 	client := twitch.NewClient(botUsername, clientAuthenticationToken)
 
 	client.OnUserJoinMessage(func(joinMessage twitch.UserJoinMessage) {
 		if !helpers.UserIsIgnored(joinMessage.User) {
+			events.Login(joinMessage.User)
 			datastore.RecordUserJoin(joinMessage.User)
 		}
 	})
 
 	client.OnUserPartMessage(func(partMessage twitch.UserPartMessage) {
 		if !helpers.UserIsIgnored(partMessage.User) {
+			events.Logout(joinMessage.User)
 			datastore.RecordUserPart(partMessage.User)
 		}
 	})

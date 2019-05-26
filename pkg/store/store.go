@@ -9,6 +9,7 @@ import (
 
 	"github.com/boltdb/bolt"
 	"github.com/dmerrick/danalol-stream/pkg/config"
+	"github.com/dmerrick/danalol-stream/pkg/events"
 )
 
 // this stores the current datastore
@@ -94,6 +95,7 @@ func (s *Store) Close() error {
 		// then we loop over it and record the current watched duration
 		for _, user := range onlineUsers {
 			log.Println("logging out", user)
+			events.Logout(string(user))
 			s.RecordUserPart(string(user))
 		}
 
