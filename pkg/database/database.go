@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"time"
 
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
@@ -22,12 +21,6 @@ var (
 		"DATABASE_HOST",
 	}
 )
-
-type Event struct {
-	Username    string    `db:"username"`
-	Event       string    `db:"event"`
-	DateCreated time.Time `db:"date_created"`
-}
 
 func Initialize() (*sqlx.DB, error) {
 	// first we have to check we have all of the right ENV vars

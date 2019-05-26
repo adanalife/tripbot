@@ -1,13 +1,11 @@
 package main
 
 import (
-	"fmt"
 	"log"
-	"time"
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/dmerrick/danalol-stream/pkg/database"
-	"github.com/dmerrick/danalol-stream/pkg/events"
+	"github.com/dmerrick/danalol-stream/pkg/miles"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 )
@@ -26,15 +24,81 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	vents := []database.Event{}
+	usersToCheck := []string{
+		"bleo",
+		"pokimane",
+		"tripbot4000",
+		"mathgaming",
+		"shroud",
+		"olivecat50",
+		"sithdaddy",
+	}
 
-	fakeStart := time.Now().Add(time.Duration(-60) * time.Minute)
-	fmt.Println(fakeStart)
-	// database.DBCon.Select(&events, "SELECT DISTINCT username, date_created from events where event='login'")
-	database.DBCon.Select(&vents, "SELECT DISTINCT username, date_created from events where event='login' and date_created >= $1", fakeStart)
-	spew.Dump(vents)
+	for _, user := range usersToCheck {
+		miles := miles.ForUser(user)
+		spew.Dump(user, miles)
+	}
 
-	events.LogoutAll(fakeStart)
+	// vents := []events.Event{}
+	// query := fmt.Sprintf("SELECT username, event, date_created from events where username = '%s' AND event in ('login', 'logout')", user)
+	// err = database.DBCon.Select(&vents, query)
+	// spew.Dump(err)
+	// database.DBCon.Select(&vents, "SELECT * from events where username=$1 AND event in ('login', 'logout')", user)
+	// spew.Dump(vents)
+	// spew.Dump(len(vents))
+
+	// var pairs [][]events.Event
+	// for i := 0; i < len(vents)-2; i++ {
+	// 	// we're only looking for logins here
+	// 	if vents[i].Event == "logout" {
+	// 		continue
+	// 	}
+
+	// 	// this will contain a login/logout pair
+	// 	pair := make([]events.Event, 2)
+
+	// 	// check if the _next_ event is a login
+	// 	if vents[i+1].Event == "login" {
+	// 		// next event is login, so we'll use that instead
+	// 		continue
+	// 	}
+
+	// 	// okay so we know the next event isn't a login
+	// 	if vents[i].Event == "login" {
+	// 		// set the pair
+	// 		pair[0] = vents[i]
+	// 		pair[1] = vents[i+1]
+	// 	}
+
+	// 	if len(pair) != 2 {
+	// 		spew.Dump(pair)
+	// 		log.Fatal("pair wasn't full for some reason")
+	// 	}
+
+	// 	pairs = append(pairs, pair)
+	// }
+
+	// spew.Dump(pairs)
+
+	// var durSum time.Duration
+	// for _, pair := range pairs {
+	// 	login, logout := pair[0].DateCreated, pair[1].DateCreated
+	// 	durSum = durSum + logout.Sub(login)
+	// 	// spew.Dump(login)
+	// 	// spew.Dump(logout)
+	// }
+	// spew.Dump(durSum)
+
+	// for _, event := range vents {
+	// }
+
+	// fakeStart := time.Now().Add(time.Duration(-60) * time.Minute)
+	// fmt.Println(fakeStart)
+	// // database.DBCon.Select(&events, "SELECT DISTINCT username, date_created from events where event='login'")
+	// database.DBCon.Select(&vents, "SELECT DISTINCT username, date_created from events where event='login' and date_created >= $1", fakeStart)
+	// spew.Dump(vents)
+
+	// events.LogoutAll(fakeStart)
 
 	// // Query the database, storing results in a []Person (wrapped in []interface{})
 	// db.Select(&events, "SELECT * FROM events ORDER BY date_created ASC")
