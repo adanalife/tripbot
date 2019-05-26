@@ -1,13 +1,10 @@
 package main
 
 import (
-	"fmt"
 	"log"
-	"os"
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/dmerrick/danalol-stream/pkg/database"
-	"github.com/jmoiron/sqlx"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 )
@@ -21,15 +18,15 @@ func main() {
 	var err error
 	godotenv.Load()
 
-	pgUser := os.Getenv("DATABASE_USER")
-	pgPassword := os.Getenv("DATABASE_PASS")
-	pgDatabase := os.Getenv("DATABASE_DB")
-	pgHost := os.Getenv("DATABASE_HOST")
+	// pgUser := os.Getenv("DATABASE_USER")
+	// pgPassword := os.Getenv("DATABASE_PASS")
+	// pgDatabase := os.Getenv("DATABASE_DB")
+	// pgHost := os.Getenv("DATABASE_HOST")
 
-	// this Pings the database trying to connect, panics on error
-	// use sqlx.Open() for sql.Open() semantics
-	connStr := fmt.Sprintf("postgres://%s:%s@%s/%s?sslmode=disable", pgUser, pgPassword, pgHost, pgDatabase)
-	database.DBCon, err = sqlx.Connect("postgres", connStr)
+	// // this Pings the database trying to connect, panics on error
+	// // use sqlx.Open() for sql.Open() semantics
+	// connStr := fmt.Sprintf("postgres://%s:%s@%s/%s?sslmode=disable", pgUser, pgPassword, pgHost, pgDatabase)
+	database.DBCon, err = database.Initialize()
 	if err != nil {
 		log.Fatalln(err)
 	}
