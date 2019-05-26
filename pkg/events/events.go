@@ -43,6 +43,7 @@ func LogoutIfNecessary(user string) {
 		// last event was a login, so log them out
 		log.Println("last event for", user, "was a login, logging them out")
 		Logout(user)
+		return
 	}
 	// nothing to be done
 	log.Println("last event for", user, "was a logout, nothing to be done")
@@ -65,6 +66,7 @@ func LoginIfNecessary(user string) {
 		// last event was a logout, so log them in
 		log.Println("last event for", user, "was a logout, logging them in")
 		Login(user)
+		return
 	}
 	// nothing to be done
 	log.Println("last event for", user, "was a login, nothing to be done")
