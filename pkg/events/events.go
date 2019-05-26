@@ -28,6 +28,7 @@ func LogoutAll(botStart time.Time) {
 	}
 }
 
+// LogOutIfNecessary() will create a logout event if they need one
 func LogoutIfNecessary(user string) {
 	// we need to check to see if the last event was a logout
 	events := []Event{}
@@ -46,7 +47,6 @@ func LogoutIfNecessary(user string) {
 		return
 	}
 	// nothing to be done
-	log.Println("last event for", user, "was a logout, nothing to be done")
 	return
 }
 
@@ -69,7 +69,6 @@ func LoginIfNecessary(user string) {
 		return
 	}
 	// nothing to be done
-	log.Println("last event for", user, "was a login, nothing to be done")
 	return
 }
 
