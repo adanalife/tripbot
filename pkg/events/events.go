@@ -23,7 +23,7 @@ func LogoutAll(botStart time.Time) {
 	}
 	for _, event := range events {
 		user := event.Username
-		log.Println("logging out", user, "(if necessary)")
+		log.Println("logging out", user)
 		LogoutIfNecessary(user)
 	}
 }
