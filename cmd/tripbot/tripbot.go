@@ -70,6 +70,9 @@ func main() {
 	if err != nil {
 		log.Fatal("error initializing the DB", err)
 	}
+	defer database.DBCon.Close()
+	// defers are LIFO
+	defer events.LogoutAll(uptime)
 
 	// initialize the local datastore
 	datastore := store.FindOrCreate(config.DBPath)
