@@ -1,10 +1,13 @@
 package main
 
 import (
+	"fmt"
 	"log"
+	"time"
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/dmerrick/danalol-stream/pkg/database"
+	"github.com/dmerrick/danalol-stream/pkg/events"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 )
@@ -18,25 +21,31 @@ func main() {
 	var err error
 	godotenv.Load()
 
-	// pgUser := os.Getenv("DATABASE_USER")
-	// pgPassword := os.Getenv("DATABASE_PASS")
-	// pgDatabase := os.Getenv("DATABASE_DB")
-	// pgHost := os.Getenv("DATABASE_HOST")
-
-	// // this Pings the database trying to connect, panics on error
-	// // use sqlx.Open() for sql.Open() semantics
-	// connStr := fmt.Sprintf("postgres://%s:%s@%s/%s?sslmode=disable", pgUser, pgPassword, pgHost, pgDatabase)
 	database.DBCon, err = database.Initialize()
 	if err != nil {
 		log.Fatalln(err)
 	}
-	// force a connection and test that it worked
-	err = database.DBCon.Ping()
 
-	// exec the schema or fail; multi-statement Exec behavior varies between
-	// database drivers;  pq will exec them all, sqlite3 won't, ymmv
-	// schema := ""
-	// db.MustExec(schema)
+	vents := []database.Event{}
+
+	fakeStart := time.Now().Add(time.Duration(-60) * time.Minute)
+	fmt.Println(fakeStart)
+	// database.DBCon.Select(&events, "SELECT DISTINCT username, date_created from events where event='login'")
+	database.DBCon.Select(&vents, "SELECT DISTINCT username, date_created from events where event='login' and date_created >= $1", fakeStart)
+	spew.Dump(vents)
+
+	events.LogoutAll(fakeStart)
+
+	// // Query the database, storing results in a []Person (wrapped in []interface{})
+	// db.Select(&events, "SELECT * FROM events ORDER BY date_created ASC")
+	// database.DBCon.Select(&events, "SELECT username, event, date_created FROM events")
+	// spew.Dump(events)
+
+	// user := "adanalife_staging"
+	// database.DBCon.Select(&events, "SELECT event, date_created FROM events WHERE username=? AND event IN ('logout','login')", user)
+
+	// first_event := events[0]
+	// spew.Dump(first_event)
 
 	// Named queries can use structs, so if you have an existing struct (i.e. person := &Person{}) that you have populated, you can pass it in as &person
 	// tx.NamedExec("INSERT INTO events (username, event) VALUES (:username, :event)", &Event{"adanalife_", "login"})
@@ -48,19 +57,6 @@ func main() {
 	// tx.MustExec("INSERT INTO place (country, city, telcode) VALUES ($1, $2, $3)", "United States", "New York", "1")
 	// tx.MustExec("INSERT INTO place (country, telcode) VALUES ($1, $2)", "Hong Kong", "852")
 	// tx.MustExec("INSERT INTO place (country, telcode) VALUES ($1, $2)", "Singapore", "65")
-
-	// // Query the database, storing results in a []Person (wrapped in []interface{})
-	events := []database.Event{}
-	// db.Select(&events, "SELECT * FROM events ORDER BY date_created ASC")
-	// database.DBCon.Select(&events, "SELECT username, event, date_created FROM events")
-	// spew.Dump(events)
-
-	user := "adanalife_staging"
-	database.DBCon.Select(&events, "SELECT event, date_created FROM events WHERE username=? AND event IN ('logout','login')", user)
-	spew.Dump(events)
-
-	// first_event := events[0]
-	// spew.Dump(first_event)
 
 	// // Person{FirstName:"Jason", LastName:"Moiron", Email:"jmoiron@jmoiron.net"}
 	// // Person{FirstName:"John", LastName:"Doe", Email:"johndoeDNE@gmail.net"}
