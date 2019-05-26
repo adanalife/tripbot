@@ -153,15 +153,15 @@ func (s *Store) GiveUserDuration(user string, durToAdd time.Duration) {
 }
 
 func (s *Store) ClearJoinBucket() error {
-	joinedBucket := tx.Bucket([]byte(config.UserJoinsBucket))
-	err := joinedBucket.ForEach(func(k, v []byte) error {
-		user := string(k)
-
-		// remove the user from the joined bucket
-		err := joinedBucket.Delete([]byte(user))
-		if err != nil {
+	err := s.db.Update(func(tx *bolt.Tx) error {
+		joinedBucket := tx.Bucket([]byte(config.UserJoinsBucket))
+		err := joinedBucket.ForEach(func(k, v []byte) error {
+			user := string(k)
+			// remove the user from the joined bucket
+			err := joinedBucket.Delete([]byte(user))
 			return err
-		}
+		})
+		return err
 	})
 	return err
 }
