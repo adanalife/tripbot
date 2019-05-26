@@ -52,8 +52,11 @@ func main() {
 	// // Query the database, storing results in a []Person (wrapped in []interface{})
 	events := []database.Event{}
 	// db.Select(&events, "SELECT * FROM events ORDER BY date_created ASC")
-	database.DBCon.Select(&events, "SELECT username, event, date_created FROM events")
+	// database.DBCon.Select(&events, "SELECT username, event, date_created FROM events")
+	// spew.Dump(events)
 
+	user := "adanalife_staging"
+	database.DBCon.Select(&events, "SELECT event, date_created FROM events WHERE username=? AND event IN ('logout','login')", user)
 	spew.Dump(events)
 
 	// first_event := events[0]
