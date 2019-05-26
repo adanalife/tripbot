@@ -112,6 +112,9 @@ func main() {
 	client.OnPrivateMessage(func(message twitch.PrivateMessage) {
 		user := message.User.Name
 
+		// log the user in if their login time isn't currently recorded
+		events.LoginIfNecessary(user)
+
 		if strings.HasPrefix(strings.ToLower(message.Message), "!help") {
 			log.Println(user, "ran !help")
 			msg := fmt.Sprintf("%s (%d of %d)", config.HelpMessages[helpIndex], helpIndex+1, len(config.HelpMessages))
