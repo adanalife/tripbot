@@ -11,6 +11,9 @@ save in db the error status
 nightbot can read from Lastfm?!
 constantly fetch current video
 implement a way to "refetch" coords that are not accurate
+log all chats to separte file
+create user and a Online?() method
+calculate duration off miles diff
 
 
 EVENTUALLY
@@ -47,7 +50,7 @@ page me on these:
 
 
 BUGS
-there is a bug where if last vid is "" it will never updat
+there is a bug where if lastVid is "" it will never updat
 
 REVISIT
 dont do fatal and quit the bot
