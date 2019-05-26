@@ -65,6 +65,8 @@ func main() {
 
 	// initialize the database
 	datastore := store.FindOrCreate(config.DBPath)
+	// make sure everyone is logged out
+	datastore.ClearJoinBucket()
 
 	// time to set up the Twitch client
 	client := twitch.NewClient(botUsername, clientAuthenticationToken)

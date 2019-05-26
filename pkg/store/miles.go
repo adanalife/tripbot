@@ -133,6 +133,7 @@ func (s *Store) RecordUserPart(user string) {
 
 	log.Printf("%s left the channel (total: %s, session: %s)", user, totalDurationWatched, currentDurationWatched)
 }
+
 func (s *Store) GiveUserDuration(user string, durToAdd time.Duration) {
 	var err error
 
@@ -150,4 +151,17 @@ func (s *Store) GiveUserDuration(user string, durToAdd time.Duration) {
 	})
 
 	log.Printf("gave %s %s, new total: %s)", user, durToAdd, totalDurationWatched)
+}
+
+func (s *Store) ClearJoinBucket() error {
+	err := joinedBucket.ForEach(func(k, v []byte) error {
+		user := string(k)
+
+		// remove the user from the joined bucket
+		err := joinedBucket.Delete([]byte(user))
+		if err != nil {
+			return err
+		}
+	})
+	return err
 }
