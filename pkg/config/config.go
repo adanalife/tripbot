@@ -60,6 +60,7 @@ var IgnoredUsers = []string{
 	"virgoproz",
 	"zanekyber",
 	"n3td3v",
+	"musemagician", // not a bot?
 }
 
 // HelpMessages are all of the different things !help can return
