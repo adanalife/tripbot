@@ -4,44 +4,13 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"time"
 
 	"github.com/davecgh/go-spew/spew"
+	"github.com/dmerrick/danalol-stream/pkg/database"
 	"github.com/jmoiron/sqlx"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 )
-
-// var schema = `
-// CREATE TABLE person (
-//     first_name text,
-//     last_name text,
-//     email text
-// );
-
-// CREATE TABLE place (
-//     country text,
-//     city text NULL,
-//     telcode integer
-// )`
-
-// type Person struct {
-// 	FirstName string `db:"first_name"`
-// 	LastName  string `db:"last_name"`
-// 	Email     string
-// }
-
-// type Place struct {
-//     Country string
-//     City    sql.NullString
-//     TelCode int
-// }
-
-type Event struct {
-	Username    string    `db:"username"`
-	Event       string    `db:"event"`
-	DateCreated time.Time `db:"date_created"`
-}
 
 var pgUser, pgPassword, pgDatabase, pgHost string
 
@@ -49,6 +18,7 @@ func init() {
 }
 
 func main() {
+	var err error
 	godotenv.Load()
 
 	pgUser := os.Getenv("DATABASE_USER")
@@ -59,19 +29,19 @@ func main() {
 	// this Pings the database trying to connect, panics on error
 	// use sqlx.Open() for sql.Open() semantics
 	connStr := fmt.Sprintf("postgres://%s:%s@%s/%s?sslmode=disable", pgUser, pgPassword, pgHost, pgDatabase)
-	db, err := sqlx.Connect("postgres", connStr)
+	database.DBCon, err = sqlx.Connect("postgres", connStr)
 	if err != nil {
 		log.Fatalln(err)
 	}
 	// force a connection and test that it worked
-	err = db.Ping()
+	err = database.DBCon.Ping()
 
 	// exec the schema or fail; multi-statement Exec behavior varies between
 	// database drivers;  pq will exec them all, sqlite3 won't, ymmv
 	// schema := ""
 	// db.MustExec(schema)
 
-	tx := db.MustBegin()
+	tx := database.DBCon.MustBegin()
 	// tx.MustExec("INSERT INTO events (username, event, date_created) VALUES ($1, $2, $3)", "adanalife_", "login", time.Now())
 	tx.MustExec("INSERT INTO events (username, event) VALUES ($1, $2)", "adanalife_", "logout")
 	// Named queries can use structs, so if you have an existing struct (i.e. person := &Person{}) that you have populated, you can pass it in as &person
@@ -84,13 +54,13 @@ func main() {
 	// tx.MustExec("INSERT INTO place (country, telcode) VALUES ($1, $2)", "Singapore", "65")
 
 	// // Query the database, storing results in a []Person (wrapped in []interface{})
-	events := []Event{}
+	events := []database.Event{}
 	// db.Select(&events, "SELECT * FROM events ORDER BY date_created ASC")
-	db.Select(&events, "SELECT username, event, date_created FROM events")
-	spew.Dump(events)
-	first_event := events[0]
+	database.DBCon.Select(&events, "SELECT username, event, date_created FROM events")
 
-	fmt.Printf("%#v\n%#v", first_event)
+	spew.Dump(events)
+
+	first_event := events[0]
 	spew.Dump(first_event)
 
 	// // Person{FirstName:"Jason", LastName:"Moiron", Email:"jmoiron@jmoiron.net"}
