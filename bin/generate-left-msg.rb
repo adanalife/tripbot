@@ -13,6 +13,7 @@ possible_messages = [
   "Type !help in chat for instructions",
   "We are aware of issues with miles, improvements soon",
   "We are aware of issues with miles, improvements soon",
+  "OliveCat50 and tadeas14 are miles superstars",
   "Sub goal #1 reached! Emotes coming soon",
   "Sub goal #2 (map overlay): #{sub_goal}",
   "Leave feedback in chat",
