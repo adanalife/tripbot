@@ -40,6 +40,7 @@ var IgnoredUsers = []string{
 	"adanalife_",
 	"tripbot4000",
 	"nightbot",
+	"streamlabs",
 	"anotherttvviewer",
 	"apricotdrupefruit",
 	"avocadobadado",
@@ -60,10 +61,11 @@ var IgnoredUsers = []string{
 	"virgoproz",
 	"zanekyber",
 	"n3td3v",
-	"musemagician",   // not a bot?
-	"d_addie_",       // not a bot?
-	"franellerich",   // not a bot?
-	"brhymessublime", // not a bot?
+	"0_applebadapple_0",
+	"mrreflector",
+	"konkky",
+	"teyyd",
+	"cyclemotion",
 }
 
 // HelpMessages are all of the different things !help can return
