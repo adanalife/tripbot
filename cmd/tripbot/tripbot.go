@@ -95,16 +95,10 @@ func main() {
 
 	client.OnUserJoinMessage(func(joinMessage twitch.UserJoinMessage) {
 		events.LoginIfNecessary(joinMessage.User)
-		if !helpers.UserIsIgnored(joinMessage.User) {
-			datastore.RecordUserJoin(joinMessage.User)
-		}
 	})
 
 	client.OnUserPartMessage(func(partMessage twitch.UserPartMessage) {
 		events.LogoutIfNecessary(partMessage.User)
-		if !helpers.UserIsIgnored(partMessage.User) {
-			datastore.RecordUserPart(partMessage.User)
-		}
 	})
 
 	client.OnUserNoticeMessage(func(message twitch.UserNoticeMessage) {
