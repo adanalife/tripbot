@@ -147,9 +147,9 @@ func ActualDate(utcDate time.Time, lat, long float64) time.Time {
 	return utcDate.In(location)
 }
 
-func SunsetStr(utcDate time.Time, lat, long float64) string {
+func SunsetStr(utcDate time.Time, lat, lon float64) string {
 	realDate := ActualDate(utcDate, lat, lon)
-	_, sunset := SunriseSunset(realDate, lat, lon)
+	_, sunset := sunriseSunset(realDate, lat, lon)
 	dateDiff := sunset.Sub(realDate)
 	if dateDiff < 0 {
 		// it was in the past
