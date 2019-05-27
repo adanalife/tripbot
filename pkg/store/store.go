@@ -1,7 +1,6 @@
 package store
 
 import (
-	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -9,7 +8,6 @@ import (
 
 	"github.com/boltdb/bolt"
 	"github.com/dmerrick/danalol-stream/pkg/config"
-	"github.com/dmerrick/danalol-stream/pkg/events"
 )
 
 // this stores the current datastore
@@ -79,25 +77,6 @@ func (s *Store) Open() error {
 
 func (s *Store) Close() error {
 	if s.db != nil {
-		var onlineUsers = []string{}
-
-		// first we make a list of all of the online users
-		s.db.View(func(tx *bolt.Tx) error {
-			joinedBucket := tx.Bucket([]byte(config.UserJoinsBucket))
-			err := joinedBucket.ForEach(func(k, _ []byte) error {
-				user := string(k)
-				onlineUsers = append(onlineUsers, user)
-				return nil
-			})
-			return err
-		})
-
-		// then we loop over it and record the current watched duration
-		for _, user := range onlineUsers {
-			log.Println("logging out", user)
-			events.LogoutIfNecessary(string(user))
-		}
-
 		s.db.Close()
 	}
 	return nil

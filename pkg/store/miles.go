@@ -29,26 +29,6 @@ func (s *Store) DurationForUser(user string) time.Duration {
 	return *previousDurationWatched
 }
 
-// fetch the current view duration
-// func (s *Store) CurrentViewDuration(user string) time.Duration {
-// 	var joinTime time.Time
-// 	err := s.db.View(func(tx *bolt.Tx) error {
-// 		joinedBucket := tx.Bucket([]byte(config.UserJoinsBucket))
-// 		joinStr := string(joinedBucket.Get([]byte(user)))
-// 		if joinStr == "" {
-// 			log.Printf("join time was empty for %s", user)
-// 			return nil
-// 		}
-// 		err := joinTime.UnmarshalText(joinedBucket.Get([]byte(user)))
-// 		return err
-// 	})
-// 	if err != nil {
-// 		log.Printf("encountered error getting current view duration: %s", err)
-// 		return 0
-// 	}
-// 	return time.Since(joinTime)
-// }
-
 func (s *Store) TopUsers(size int) []string {
 	var topUsers = []string{}
 	var reversedMap = make(map[int]string)
@@ -88,46 +68,6 @@ func (s *Store) TopUsers(size int) []string {
 
 	return topUsers
 }
-
-// func (s *Store) RecordUserJoin(user string) {
-// 	log.Println(user, "joined the channel")
-
-// 	s.db.Update(func(tx *bolt.Tx) error {
-// 		joinedBucket := tx.Bucket([]byte(config.UserJoinsBucket))
-// 		currentTime, err := time.Now().MarshalText()
-// 		if err != nil {
-// 			return err
-// 		}
-// 		err = joinedBucket.Put([]byte(user), []byte(currentTime))
-// 		return err
-// 	})
-// }
-
-// func (s *Store) RecordUserPart(user string) {
-// 	// calculate total duration watched
-// 	previousDurationWatched := s.DurationForUser(user)
-// 	currentDurationWatched := s.CurrentViewDuration(user)
-// 	totalDurationWatched := previousDurationWatched + currentDurationWatched
-
-// 	// update the DB with the total duration watched
-// 	err := s.db.Update(func(tx *bolt.Tx) error {
-// 		joinedBucket := tx.Bucket([]byte(config.UserJoinsBucket))
-// 		watchedBucket := tx.Bucket([]byte(config.UserWatchedBucket))
-
-// 		// remove the user from the joined bucket
-// 		err := joinedBucket.Delete([]byte(user))
-// 		if err != nil {
-// 			return err
-// 		}
-// 		err = watchedBucket.Put([]byte(user), []byte(totalDurationWatched.String()))
-// 		return err
-// 	})
-// 	if err != nil {
-// 		log.Printf("there was an error, user=%s, total=%s, current=%s", user, totalDurationWatched, currentDurationWatched)
-// 	}
-
-// 	log.Printf("%s left the channel (total: %s, session: %s)", user, totalDurationWatched, currentDurationWatched)
-// }
 
 func (s *Store) GiveUserDuration(user string, durToAdd time.Duration) {
 	var err error
