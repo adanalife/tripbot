@@ -216,11 +216,7 @@ func main() {
 				if err != nil {
 					client.Say(config.ChannelName, "That didn't work, sorry!")
 				} else {
-					realDate := helpers.ActualDate(vid.Date(), lat, lon)
-					_, sunset := helpers.SunriseSunset(vid.Date(), lat, lon)
-					dateDiff := sunset.Sub(realDate)
-					msg := fmt.Sprintf("Sunset on this day is in %s", durafmt.ParseShort(dateDiff))
-					client.Say(config.ChannelName, msg)
+					client.Say(config.ChannelName, helpers.SunsetStr(vid.Date(), lat, lon))
 				}
 			} else {
 				client.Say(config.ChannelName, "You must be a follower to run that command :)")

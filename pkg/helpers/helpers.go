@@ -14,6 +14,7 @@ import (
 
 	"github.com/bradfitz/latlong"
 	"github.com/dmerrick/danalol-stream/pkg/config"
+	"github.com/hako/durafmt"
 	"github.com/kelvins/geocoder"
 	"github.com/nathan-osman/go-sunrise"
 )
@@ -146,7 +147,14 @@ func ActualDate(utcDate time.Time, lat, long float64) time.Time {
 	return utcDate.In(location)
 }
 
-func SunriseSunset(utcDate time.Time, lat, long float64) (time.Time, time.Time) {
+func SunsetStr(utcDate time.Time, lat, long float64) string {
+	realDate := helpers.ActualDate(vid.Date(), lat, lon)
+	_, sunset := helpers.SunriseSunset(realDate, lat, lon)
+	dateDiff := sunset.Sub(realDate)
+	return durafmt.ParseShort(dateDiff)
+}
+
+func sunriseSunset(utcDate time.Time, lat, long float64) (time.Time, time.Time) {
 	rise, set := sunrise.SunriseSunset(
 		lat, long,
 		utcDate.Year(), utcDate.Month(), utcDate.Day(),
