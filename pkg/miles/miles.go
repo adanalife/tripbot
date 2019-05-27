@@ -7,8 +7,13 @@ import (
 
 	"github.com/dmerrick/danalol-stream/pkg/database"
 	"github.com/dmerrick/danalol-stream/pkg/events"
-	"github.com/dmerrick/danalol-stream/pkg/helpers"
 )
+
+// DurationToMiles converts Durations to miles
+func DurationToMiles(dur time.Duration) float32 {
+	// 0.1mi every 3 minutes
+	return float32(0.1 * dur.Minutes() / 3.0)
+}
 
 // ForUser returns the miles for a given user
 func ForUser(user string) int {
@@ -20,7 +25,7 @@ func ForUser(user string) int {
 	}
 	pairs := splitIntoPairs(evnts)
 	dur := combinePairs(pairs)
-	return helpers.DurationToMiles(dur)
+	return DurationToMiles(dur)
 }
 
 // splitIntoPairs takes a list of events and smartly pairs together matching login/logout events
