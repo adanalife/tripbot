@@ -2,8 +2,12 @@ package main
 
 import (
 	"flag"
+	"fmt"
+	"log"
 
+	"github.com/dmerrick/danalol-stream/pkg/database"
 	"github.com/dmerrick/danalol-stream/pkg/miles"
+	"github.com/joho/godotenv"
 )
 
 var leaderboardSize int
@@ -16,10 +20,17 @@ func init() {
 func main() {
 	// datastore := store.FindOrCreate("db/tripbot-copy.db")
 
-	miles.TopUsers(leaderboardSize)
+	var err error
+	godotenv.Load()
+	database.DBCon, err = database.Initialize()
+	if err != nil {
+		log.Fatal("error initializing db:", err)
+	}
 
-	// fmt.Println("Odometer Leaderboard")
-	// for _, user := range userList {
-	// 	fmt.Println(datastore.MilesForUser(user), "miles:", user)
-	// }
+	leaderboard := miles.TopUsers(leaderboardSize)
+
+	fmt.Println("Odometer Leaderboard")
+	for user, miles := range leaderboard {
+		fmt.Printf("%.1f miles: %s\n", miles, user)
+	}
 }

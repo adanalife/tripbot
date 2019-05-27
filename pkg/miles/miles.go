@@ -10,14 +10,25 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/events"
 )
 
-func TopUsers(size int) map[string]int {
+func TopUsers(size int) map[string]float32 {
 	oneMonthAgo := time.Now().Add(time.Duration(-30*24) * time.Hour)
+	spew.Dump(oneMonthAgo)
 	//TODO maybe don't use an Events map?
 	evnts := []events.Event{}
-	database.DBCon.Select(&evnts, "SELECT DISTINCT username from events where event='login' and date_created >= $1", oneMonthAgo)
-	spew.Dump(evnts)
-	ret := make(map[string]int)
-	return ret
+	err := database.DBCon.Select(&evnts, "SELECT DISTINCT username from events where event='login' and date_created >= $1", oneMonthAgo)
+	if err != nil {
+		log.Println("problem with db:", err)
+	}
+	leaderboard := make(map[string]float32)
+	for i, event := range evnts {
+		// stop at the max size
+		if i > size {
+			break
+		}
+		user := event.Username
+		leaderboard[user] = ForUser(user)
+	}
+	return leaderboard
 }
 
 // DurationToMiles converts Durations to miles
