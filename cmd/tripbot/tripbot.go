@@ -173,11 +173,11 @@ func main() {
 				msg := ""
 				switch {
 				case miles == 1:
-					msg = "@%s has only %.2f mile"
+					msg = "@%s has only %.1f mile"
 				case miles >= 250:
-					msg = "Holy crap! @%s has %.2f miles!"
+					msg = "Holy crap! @%s has %.1f miles!"
 				default:
-					msg = "@%s has %.2f miles. Earn 1 mile every 10 minutes by watching the stream"
+					msg = "@%s has %.1f miles. Earn 1 mile every 10 minutes by watching the stream"
 				}
 				msg = fmt.Sprintf(msg, user, miles)
 				client.Say(config.ChannelName, msg)
