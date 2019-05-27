@@ -151,7 +151,13 @@ func SunsetStr(utcDate time.Time, lat, long float64) string {
 	realDate := helpers.ActualDate(vid.Date(), lat, lon)
 	_, sunset := helpers.SunriseSunset(realDate, lat, lon)
 	dateDiff := sunset.Sub(realDate)
-	return durafmt.ParseShort(dateDiff)
+	if dateDiff < 0 {
+		// it was in the past
+		// we dont want to keep the - sign
+		dateDiff = -dateDiff
+		return fmt.Sprintf("Sunset on this day was %s ago", durafmt.ParseShort(dateDiff))
+	}
+	return fmt.Sprintf("Sunset on this day is in %s", durafmt.ParseShort(dateDiff))
 }
 
 func sunriseSunset(utcDate time.Time, lat, long float64) (time.Time, time.Time) {
