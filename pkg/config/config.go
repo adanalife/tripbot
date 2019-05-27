@@ -75,6 +75,10 @@ var HelpMessages = []string{
 	"!info: Get more details on the footage",
 	"!song: Get the current music",
 	"!miles: See your current miles",
+	"!leaderboard: See who has the most miles",
+	"!state: Get the state we are currently in (beta)",
+	"!sunset: Get time until sunset (on the day of filming)",
+	"!temperature: Will be unlocked when the donation goal is reached",
 }
 
 var GoogleMapsStyle = []string{
