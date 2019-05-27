@@ -138,8 +138,8 @@ func main() {
 			client.Say(config.ChannelName, msg)
 		}
 
-		if strings.HasPrefix(strings.ToLower(message.Message), "!miles") {
-			log.Println(user, "ran !miles")
+		if strings.HasPrefix(strings.ToLower(message.Message), "!oldmiles") {
+			log.Println(user, "ran !oldmiles")
 			// run if the user is a follower
 			if mytwitch.UserIsFollower(user) {
 				miles := datastore.MilesForUser(user)
@@ -159,8 +159,8 @@ func main() {
 			}
 		}
 
-		if strings.HasPrefix(strings.ToLower(message.Message), "!newmiles") {
-			log.Println(user, "ran !newmiles")
+		if strings.HasPrefix(strings.ToLower(message.Message), "!miles") {
+			log.Println(user, "ran !miles")
 			// run if the user is a follower
 			if mytwitch.UserIsFollower(user) {
 				miles := miles.ForUser(user)
