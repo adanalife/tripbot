@@ -16,9 +16,8 @@ function ctrl_c() {
 
 while true; do
 	if (( RANDOM % 8 == 0 )); then
-		cp db/tripbot.db db/tripbot-copy.db
-		go run cmd/leaderboard.go > OBS/leaderboard.txt 2>/dev/null
-		# make a copy for the generate message script
+		go run cmd/leaderboard/leaderboard.go > OBS/leaderboard.txt 2>/dev/null
+		# make a copy so we can read it in the rotater script
 		cp OBS/leaderboard.txt OBS/leaderboard-copy.txt
 	else
 		# clear out the file
