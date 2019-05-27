@@ -16,9 +16,8 @@ possible_messages = [
   "OliveCat50 and tadeas14 are miles superstars",
   "Sub goal #1 reached! Emotes coming soon",
   "Sub goal #2 (map overlay): #{sub_goal}",
-  "Leave feedback in chat",
-  "Subscribe with Twitch Prime <3",
-  "Earn 1 mile for every 10m watched (!miles)",
+  "Your subscriptions keep the channel running",
+  "Earn miles for every minute you watch (!miles)",
   "I won't be offended if you play your own music",
   "Music by Soma.fm (!song)",
   "Tripbot loves you <3 (!tripbot)",
@@ -35,7 +34,7 @@ loop do
   if current == "LEADER"
     # fetch the current leader
     begin
-    miles, leader = File.read(File.expand_path(leaderboard_file)).split("\n")[1].split(":")
+      miles, leader = File.read(File.expand_path(leaderboard_file)).split("\n")[1].split(":")
     rescue
       next
     end
