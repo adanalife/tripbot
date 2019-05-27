@@ -1,11 +1,13 @@
 package main
 
 import (
+	"fmt"
 	"log"
+	"time"
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/dmerrick/danalol-stream/pkg/database"
-	"github.com/dmerrick/danalol-stream/pkg/miles"
+	"github.com/dmerrick/danalol-stream/pkg/events"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 )
@@ -24,20 +26,20 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	usersToCheck := []string{
-		"bleo",
-		"pokimane",
-		"tripbot4000",
-		"mathgaming",
-		"shroud",
-		"olivecat50",
-		"sithdaddy",
-	}
+	// usersToCheck := []string{
+	// 	"bleo",
+	// 	"pokimane",
+	// 	"tripbot4000",
+	// 	"mathgaming",
+	// 	"shroud",
+	// 	"olivecat50",
+	// 	"sithdaddy",
+	// }
 
-	for _, user := range usersToCheck {
-		miles := miles.ForUser(user)
-		spew.Dump(user, miles)
-	}
+	// for _, user := range usersToCheck {
+	// 	miles := miles.ForUser(user)
+	// 	spew.Dump(user, miles)
+	// }
 
 	// vents := []events.Event{}
 	// query := fmt.Sprintf("SELECT username, event, date_created from events where username = '%s' AND event in ('login', 'logout')", user)
@@ -92,11 +94,11 @@ func main() {
 	// for _, event := range vents {
 	// }
 
-	// fakeStart := time.Now().Add(time.Duration(-60) * time.Minute)
-	// fmt.Println(fakeStart)
-	// // database.DBCon.Select(&events, "SELECT DISTINCT username, date_created from events where event='login'")
-	// database.DBCon.Select(&vents, "SELECT DISTINCT username, date_created from events where event='login' and date_created >= $1", fakeStart)
-	// spew.Dump(vents)
+	vents := []events.Event{}
+	fakeStart := time.Now().Add(time.Duration(-30*24) * time.Hour)
+	fmt.Println(fakeStart)
+	database.DBCon.Select(&vents, "SELECT DISTINCT username, date_created from events where event='login' and date_created >= $1", fakeStart)
+	spew.Dump(vents)
 
 	// events.LogoutAll(fakeStart)
 

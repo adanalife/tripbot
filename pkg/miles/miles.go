@@ -5,9 +5,20 @@ import (
 	"log"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/dmerrick/danalol-stream/pkg/database"
 	"github.com/dmerrick/danalol-stream/pkg/events"
 )
+
+func TopUsers(size int) map[string]int {
+	oneMonthAgo := time.Now().Add(time.Duration(-30*24) * time.Hour)
+	//TODO maybe don't use an Events map?
+	evnts := []events.Event{}
+	database.DBCon.Select(&evnts, "SELECT DISTINCT username from events where event='login' and date_created >= $1", oneMonthAgo)
+	spew.Dump(evnts)
+	ret := make(map[string]int)
+	return ret
+}
 
 // DurationToMiles converts Durations to miles
 func DurationToMiles(dur time.Duration) float32 {
