@@ -3,6 +3,7 @@ package miles
 import (
 	"fmt"
 	"log"
+	"sort"
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
@@ -10,7 +11,8 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/events"
 )
 
-func TopUsers(size int) map[string]float32 {
+// func TopUsers(size int) map[string]float32 {
+func TopUsers(size int) [][]string {
 	oneMonthAgo := time.Now().Add(time.Duration(-30*24) * time.Hour)
 	spew.Dump(oneMonthAgo)
 	//TODO maybe don't use an Events map?
@@ -20,15 +22,11 @@ func TopUsers(size int) map[string]float32 {
 		log.Println("problem with db:", err)
 	}
 	leaderboard := make(map[string]float32)
-	for i, event := range evnts {
-		// stop at the max size
-		if i > size {
-			break
-		}
+	for _, event := range evnts {
 		user := event.Username
 		leaderboard[user] = ForUser(user)
 	}
-	return leaderboard
+	return sortByValue(leaderboard)
 }
 
 // DurationToMiles converts Durations to miles
@@ -102,4 +100,26 @@ func combinePairs(pairs [][]events.Event) time.Duration {
 		durSum = durSum + logout.Sub(login)
 	}
 	return durSum
+}
+
+// this is ugly but I took it right from StackOverflow
+// https://stackoverflow.com/a/18695428
+func sortByValue(kv map[string]float32) [][]string {
+	sorted := [][]string{}
+	n := map[float64][]string{}
+	var a []float64
+	for k, v := range kv {
+		n[float64(v)] = append(n[float64(v)], k)
+	}
+	for k := range n {
+		a = append(a, k)
+	}
+	// sort.Sort(sort.Reverse(sort.Float64s(a)))
+	sort.Float64s(a)
+	for _, k := range a {
+		for i, s := range n[k] {
+			sorted[i] = []string{s, fmt.Sprintf("%.1f", k)}
+		}
+	}
+	return sorted
 }
