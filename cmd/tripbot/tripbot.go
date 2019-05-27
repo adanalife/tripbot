@@ -180,7 +180,7 @@ func main() {
 					msg = "@%s has %.1f miles"
 				}
 				// add the other part randomly
-				if math.Rand(3) == 0 {
+				if rand.Intn(3) == 0 {
 					msg = fmt.Sprintf("%s. Earn miles for every minute you watch the stream!", msg)
 				}
 				msg = fmt.Sprintf(msg, user, miles)
