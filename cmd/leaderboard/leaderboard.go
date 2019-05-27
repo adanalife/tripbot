@@ -30,7 +30,7 @@ func main() {
 	leaderboard := miles.TopUsers(leaderboardSize)
 
 	fmt.Println("Odometer Leaderboard")
-	for user, miles := range leaderboard {
-		fmt.Printf("%.1f miles: %s\n", miles, user)
+	for _, score := range leaderboard {
+		fmt.Printf("%s miles: %s\n", score[1], score[0])
 	}
 }

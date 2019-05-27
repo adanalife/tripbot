@@ -6,17 +6,16 @@ import (
 	"sort"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
+	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/database"
 	"github.com/dmerrick/danalol-stream/pkg/events"
 )
 
 // func TopUsers(size int) map[string]float32 {
 func TopUsers(size int) [][]string {
-	oneMonthAgo := time.Now().Add(time.Duration(-30*24) * time.Hour)
-	spew.Dump(oneMonthAgo)
 	//TODO maybe don't use an Events map?
 	evnts := []events.Event{}
+	oneMonthAgo := time.Now().Add(time.Duration(-30*24) * time.Hour)
 	err := database.DBCon.Select(&evnts, "SELECT DISTINCT username from events where event='login' and date_created >= $1", oneMonthAgo)
 	if err != nil {
 		log.Println("problem with db:", err)
@@ -26,7 +25,8 @@ func TopUsers(size int) [][]string {
 		user := event.Username
 		leaderboard[user] = ForUser(user)
 	}
-	return sortByValue(leaderboard)
+	allScoresSorted := sortByValue(leaderboard)
+	return allScoresSorted[:size]
 }
 
 // DurationToMiles converts Durations to miles
@@ -108,17 +108,33 @@ func sortByValue(kv map[string]float32) [][]string {
 	sorted := [][]string{}
 	n := map[float64][]string{}
 	var a []float64
+	var shouldBeIgnored bool
 	for k, v := range kv {
 		n[float64(v)] = append(n[float64(v)], k)
 	}
 	for k := range n {
 		a = append(a, k)
 	}
-	// sort.Sort(sort.Reverse(sort.Float64s(a)))
 	sort.Float64s(a)
+	// https://github.com/golang/go/wiki/SliceTricks#reversing
+	for i := len(a)/2 - 1; i >= 0; i-- {
+		opp := len(a) - 1 - i
+		a[i], a[opp] = a[opp], a[i]
+	}
+
 	for _, k := range a {
-		for i, s := range n[k] {
-			sorted[i] = []string{s, fmt.Sprintf("%.1f", k)}
+		for _, user := range n[k] {
+			shouldBeIgnored = false
+			for _, ignored := range config.IgnoredUsers {
+				if user == ignored {
+					shouldBeIgnored = true
+				}
+			}
+			if shouldBeIgnored {
+				continue
+			}
+
+			sorted = append(sorted, []string{user, fmt.Sprintf("%.1f", k)})
 		}
 	}
 	return sorted
