@@ -263,9 +263,9 @@ func main() {
 			log.Println(user, "ran !leaderboard")
 			// run if the user is a follower
 			if mytwitch.UserIsFollower(user) {
-				userList := datastore.TopUsers(3)
-				for i, leader := range userList {
-					msg := fmt.Sprintf("#%d: %s (%dmi)", i+1, leader, datastore.MilesForUser(leader))
+				userList := miles.TopUsers(3)
+				for i, leaderPair := range userList {
+					msg := fmt.Sprintf("#%d: %s (%smi)", i+1, leaderPair[0], leaderPair[1])
 					client.Say(config.ChannelName, msg)
 				}
 			} else {
