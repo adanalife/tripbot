@@ -102,13 +102,14 @@ func combinePairs(pairs [][]events.Event) time.Duration {
 	return durSum
 }
 
-// this is ugly but I took it right from StackOverflow
+// this is super ugly
+// note that golang has no built-in support for sorting float32s
 // https://stackoverflow.com/a/18695428
 func sortByValue(kv map[string]float32) [][]string {
-	sorted := [][]string{}
-	n := map[float64][]string{}
 	var a []float64
 	var shouldBeIgnored bool
+	sorted := [][]string{}
+	n := map[float64][]string{}
 	for k, v := range kv {
 		n[float64(v)] = append(n[float64(v)], k)
 	}
@@ -116,6 +117,7 @@ func sortByValue(kv map[string]float32) [][]string {
 		a = append(a, k)
 	}
 	sort.Float64s(a)
+	// reverse the array
 	// https://github.com/golang/go/wiki/SliceTricks#reversing
 	for i := len(a)/2 - 1; i >= 0; i-- {
 		opp := len(a) - 1 - i
