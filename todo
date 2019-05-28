@@ -1,5 +1,5 @@
 TODO
-alerts for certain users
+add !time
 dont rotate randomly, shuffle then loop (then shuffle?)
 auto-update title!
 historical gas prices?
@@ -24,9 +24,18 @@ game where people have to find a frame and run a command during that vid
 new miles formula: 0.1 per 3 min?
 tripbot has restarted. say hi so he knows youre in here
 update (and rename?) collect-gps to use postgres
+redo CurrentlyPlaying() to use PIDfile
 
+
+STREAM OVERLAY:
+sub goal
+donation goal
+recent events?
+map overlay
+dashboard look with guages?
 
 EVENTUALLY
+alerts for certain users
 donations
   donation counter for !temperature?
 add more and less
