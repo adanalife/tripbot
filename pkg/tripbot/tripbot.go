@@ -1,4 +1,4 @@
-package main
+package tripbot
 
 import (
 	"go.uber.org/zap"
