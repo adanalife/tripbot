@@ -4,7 +4,7 @@ import (
 	"go.uber.org/zap"
 )
 
-var ChatLog *SugaredLogger
+var ChatLog *zap.SugaredLogger
 
 func init() {
 	logger, _ := zap.NewProduction()
