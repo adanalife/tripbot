@@ -1,13 +1,10 @@
 package tripbot
 
 import (
-	"go.uber.org/zap"
+	"github.com/dmerrick/danalol-stream/pkg/events"
+	"github.com/gempir/go-twitch-irc"
 )
 
-var ChatLog *zap.SugaredLogger
-
-func init() {
-	logger, _ := zap.NewProduction()
-	defer logger.Sync() // flushes buffer, if any
-	ChatLog = logger.Sugar()
+func UserJoin(joinMessage twitch.UserJoinMessage) {
+	events.LoginIfNecessary(joinMessage.User)
 }

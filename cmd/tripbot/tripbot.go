@@ -17,6 +17,7 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	"github.com/dmerrick/danalol-stream/pkg/miles"
 	"github.com/dmerrick/danalol-stream/pkg/store"
+	"github.com/dmerrick/danalol-stream/pkg/tripbot"
 	mytwitch "github.com/dmerrick/danalol-stream/pkg/twitch"
 	"github.com/dmerrick/danalol-stream/pkg/video"
 	twitch "github.com/gempir/go-twitch-irc"
@@ -93,9 +94,7 @@ func main() {
 	// set up the Twitch client
 	client := twitch.NewClient(botUsername, clientAuthenticationToken)
 
-	client.OnUserJoinMessage(func(joinMessage twitch.UserJoinMessage) {
-		events.LoginIfNecessary(joinMessage.User)
-	})
+	client.OnUserJoinMessage(tripbot.UserJoin)
 
 	client.OnUserPartMessage(func(partMessage twitch.UserPartMessage) {
 		events.LogoutIfNecessary(partMessage.User)
