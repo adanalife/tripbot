@@ -120,6 +120,10 @@ func main() {
 	client.OnPrivateMessage(func(message twitch.PrivateMessage) {
 		user := message.User.Name
 
+		// log message to chat log
+		tripbot.ChatLog.Infow(message.Message,
+			"user", user,
+		)
 		// log the user in if their login time isn't currently recorded
 		events.LoginIfNecessary(user)
 

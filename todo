@@ -1,5 +1,6 @@
 TODO
 add !time
+https://github.com/gempir/go-twitch-irc/issues/103
 dont rotate randomly, shuffle then loop (then shuffle?)
 auto-update title!
 historical gas prices?
