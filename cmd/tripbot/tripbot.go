@@ -88,32 +88,15 @@ func main() {
 
 	// initialize the local datastore
 	datastore := store.FindOrCreate(config.DBPath)
-	// make sure everyone is logged out
-	// datastore.ClearJoinBucket()
 
 	// set up the Twitch client
 	client := twitch.NewClient(botUsername, clientAuthenticationToken)
 
+	// attach handlers
 	client.OnUserJoinMessage(tripbot.UserJoin)
-
-	client.OnUserPartMessage(func(partMessage twitch.UserPartMessage) {
-		events.LogoutIfNecessary(partMessage.User)
-	})
-
-	client.OnUserNoticeMessage(func(message twitch.UserNoticeMessage) {
-		log.Println("user notice:", message.SystemMsg, "***", message.Emotes, "***", message.Tags)
-		// send message to chat if someone subs
-		msg := fmt.Sprintf("%s Your support powers me bleedPurple", message.Message)
-		client.Say(config.ChannelName, msg)
-	})
-
-	client.OnWhisperMessage(func(message twitch.WhisperMessage) {
-		log.Println("whisper from", message.User.Name, ":", message.Message)
-		// if the message comes from me, then post the message to chat
-		if message.User.Name == config.ChannelName {
-			client.Say(config.ChannelName, message.Message)
-		}
-	})
+	client.OnUserPartMessage(tripbot.UserPart)
+	client.OnUserNoticeMessage(tripbot.UserNotice)
+	client.OnWhisperMessage(tripbot.Whisper)
 
 	// all chat messages
 	client.OnPrivateMessage(func(message twitch.PrivateMessage) {
