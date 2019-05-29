@@ -90,7 +90,7 @@ func main() {
 	datastore := store.FindOrCreate(config.DBPath)
 
 	// set up the Twitch client
-	client := twitch.NewClient(botUsername, clientAuthenticationToken)
+	client := tripbot.Initialize(botUsername, clientAuthenticationToken)
 
 	// attach handlers
 	client.OnUserJoinMessage(tripbot.UserJoin)
