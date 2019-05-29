@@ -9,6 +9,7 @@ import (
 	"github.com/gempir/go-twitch-irc"
 )
 
+//TODO: can we make this private?
 var Client *twitch.Client
 
 func Initialize(username, token string) *twitch.Client {
