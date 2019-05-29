@@ -1,0 +1,9 @@
+vendor/
+.idea/
+.vscode/
+
+coverage.out
+coverage.html
+
+go-twitch-irc
+debug.test
