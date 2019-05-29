@@ -20,7 +20,7 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/tripbot"
 	mytwitch "github.com/dmerrick/danalol-stream/pkg/twitch"
 	"github.com/dmerrick/danalol-stream/pkg/video"
-	twitch "github.com/gempir/go-twitch-irc"
+	twitch "github.com/gempir/go-twitch-irc/v2"
 	"github.com/hako/durafmt"
 	"github.com/joho/godotenv"
 	"github.com/kelvins/geocoder"
