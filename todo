@@ -5,6 +5,8 @@ auto-update title!
 historical gas prices?
 make super rare rotator
 rename videos to include state
+make log prettier
+log all chat to separate log file
 !miles (user)
 funny !miles for me
 make tmuxinator script that starts all of the scripts
