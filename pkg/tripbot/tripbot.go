@@ -9,5 +9,5 @@ var ChatLog *zap.SugaredLogger
 func init() {
 	logger, _ := zap.NewProduction()
 	defer logger.Sync() // flushes buffer, if any
-	ChatLog := logger.Sugar()
+	ChatLog = logger.Sugar()
 }
