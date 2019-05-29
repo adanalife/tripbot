@@ -4,6 +4,7 @@
 # it is used to update the rotating text in the corner
 
 sub_goal = "2/10"
+
 leaderboard_file = "./OBS/leaderboard-copy.txt"
 message_file = "./OBS/left-message.txt"
 
@@ -14,6 +15,7 @@ possible_messages = [
   "New system for miles is now live!",
   "Sub goal #1 reached! Emotes coming soon",
   "Sub goal #2 (map overlay): #{sub_goal}",
+  "Donation goal #1: implement !temperature",
   "Your subscriptions keep the channel running",
   "Earn miles for every minute you watch (!miles)",
   "I won't be offended if you play your own music",
