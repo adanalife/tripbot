@@ -18,25 +18,28 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/video"
 	"github.com/gempir/go-twitch-irc/v2"
 	"github.com/hako/durafmt"
+	"github.com/joho/godotenv"
 	"github.com/kelvins/geocoder"
 )
+
+var lastVid, botUsername, clientAuthenticationToken, twitchClientID, googleMapsAPIKey string
+var client *twitch.Client
+var datastore *store.Store
+var uptime time.Time
 
 // used to determine which help message to display
 // randomized so it starts with a new one every restart
 var helpIndex = rand.Intn(len(config.HelpMessages))
 
-// the most-recently processed video
-var lastVid string
-
-var botUsername, clientAuthenticationToken, twitchClientID, googleMapsAPIKey string
-
-var client *twitch.Client
-var datastore *store.Store
-var uptime time.Time
-
 func Initialize() *twitch.Client {
 	var err error
 	uptime = time.Now()
+
+	// load ENV vars from .env file
+	err = godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
 
 	// first we must check for required ENV vars
 	if os.Getenv("DASHCAM_DIR") == "" {
