@@ -41,7 +41,7 @@ func main() {
 	}()
 
 	// set up the Twitch client
-	client := tripbot.Initialize(botUsername, clientAuthenticationToken)
+	client := tripbot.Initialize()
 
 	// attach handlers
 	client.OnUserJoinMessage(tripbot.UserJoin)

@@ -30,11 +30,13 @@ var lastVid string
 
 var botUsername, clientAuthenticationToken, twitchClientID, googleMapsAPIKey string
 
-//TODO: can we make this private?
-var Client *twitch.Client
+var client *twitch.Client
+var datastore *store.Store
+var uptime time.Time
 
-func Initialize(username, token string) *twitch.Client {
+func Initialize() *twitch.Client {
 	var err error
+	uptime = time.Now()
 
 	// first we must check for required ENV vars
 	if os.Getenv("DASHCAM_DIR") == "" {
@@ -75,9 +77,9 @@ func Initialize(username, token string) *twitch.Client {
 	defer database.DBCon.Close()
 
 	// initialize the local datastore
-	datastore := store.FindOrCreate(config.DBPath)
+	datastore = store.FindOrCreate(config.DBPath)
 
-	return twitch.NewClient(username, token)
+	return twitch.NewClient(botUsername, clientAuthenticationToken)
 }
 
 func UserJoin(joinMessage twitch.UserJoinMessage) {
@@ -92,14 +94,14 @@ func UserNotice(message twitch.UserNoticeMessage) {
 	log.Println("user notice:", message.SystemMsg, "***", message.Emotes, "***", message.Tags)
 	// send message to chat if someone subs
 	msg := fmt.Sprintf("%s Your support powers me bleedPurple", message.Message)
-	Client.Say(config.ChannelName, msg)
+	client.Say(config.ChannelName, msg)
 }
 
 func Whisper(message twitch.WhisperMessage) {
 	log.Println("whisper from", message.User.Name, ":", message.Message)
 	// if the message comes from me, then post the message to chat
 	if message.User.Name == config.ChannelName {
-		Client.Say(config.ChannelName, message.Message)
+		client.Say(config.ChannelName, message.Message)
 	}
 }
 
@@ -313,7 +315,6 @@ func PrivateMessage(message twitch.PrivateMessage) {
 }
 
 // func main() {
-// 	uptime := time.Now()
 
 // 	err := godotenv.Load()
 // 	if err != nil {
