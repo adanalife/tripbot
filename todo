@@ -1,5 +1,6 @@
 TODO
 add !time
+regular db backups
 https://github.com/gempir/go-twitch-irc/issues/103
 dont rotate randomly, shuffle then loop (then shuffle?)
 auto-update title!
