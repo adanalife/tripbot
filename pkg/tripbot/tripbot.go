@@ -337,5 +337,7 @@ func Initialize() *twitch.Client {
 	// initialize the local datastore
 	datastore = store.FindOrCreate(config.DBPath)
 
-	return twitch.NewClient(botUsername, clientAuthenticationToken)
+	client = twitch.NewClient(botUsername, clientAuthenticationToken)
+
+	return client
 }
