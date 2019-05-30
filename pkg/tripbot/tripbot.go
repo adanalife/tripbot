@@ -25,7 +25,7 @@ import (
 var lastVid, botUsername, clientAuthenticationToken, twitchClientID, googleMapsAPIKey string
 var client *twitch.Client
 var datastore *store.Store
-var uptime time.Time
+var Uptime time.Time
 
 // used to determine which help message to display
 // randomized so it starts with a new one every restart
@@ -48,7 +48,7 @@ func PrivateMessage(message twitch.PrivateMessage) {
 
 	if strings.HasPrefix(strings.ToLower(message.Message), "!uptime") {
 		log.Println(user, "ran !uptime")
-		dur := time.Now().Sub(uptime)
+		dur := time.Now().Sub(Uptime)
 		msg := fmt.Sprintf("I have been running for %s", durafmt.Parse(dur))
 		client.Say(config.ChannelName, msg)
 	}
@@ -289,7 +289,7 @@ func Whisper(message twitch.WhisperMessage) {
 
 func Initialize() *twitch.Client {
 	var err error
-	uptime = time.Now()
+	Uptime = time.Now()
 
 	// load ENV vars from .env file
 	err = godotenv.Load()
@@ -333,7 +333,6 @@ func Initialize() *twitch.Client {
 	if err != nil {
 		log.Fatal("error initializing the DB", err)
 	}
-	defer database.DBCon.Close()
 
 	// initialize the local datastore
 	datastore = store.FindOrCreate(config.DBPath)

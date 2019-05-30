@@ -8,6 +8,7 @@ import (
 
 	_ "github.com/dimiro1/banner/autoload"
 	"github.com/dmerrick/danalol-stream/pkg/config"
+	"github.com/dmerrick/danalol-stream/pkg/database"
 	"github.com/dmerrick/danalol-stream/pkg/events"
 	"github.com/dmerrick/danalol-stream/pkg/tripbot"
 )
@@ -19,7 +20,8 @@ func main() {
 	go func() {
 		<-c
 		log.Println("caught CTRL-C")
-		events.LogoutAll(uptime)
+		events.LogoutAll(tripbot.Uptime)
+		database.DBCon.Close()
 		os.Exit(1)
 	}()
 
@@ -38,7 +40,7 @@ func main() {
 	log.Println("Joined channel", config.ChannelName)
 
 	// actually connect to Twitch
-	err = client.Connect()
+	err := client.Connect()
 	if err != nil {
 		panic(err)
 	}
