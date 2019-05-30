@@ -52,7 +52,7 @@ func PrivateMessage(message twitch.PrivateMessage) {
 		if isFollower(user) {
 			oldMilesCmd(user)
 		} else {
-			client.Say(followerMsg)
+			client.Say(config.ChannelName, followerMsg)
 		}
 	}
 
@@ -60,7 +60,7 @@ func PrivateMessage(message twitch.PrivateMessage) {
 		if isFollower(user) {
 			milesCmd(user)
 		} else {
-			client.Say(followerMsg)
+			client.Say(config.ChannelName, followerMsg)
 		}
 	}
 
@@ -68,7 +68,7 @@ func PrivateMessage(message twitch.PrivateMessage) {
 		if isFollower(user) {
 			sunsetCmd(user)
 		} else {
-			client.Say(followerMsg)
+			client.Say(config.ChannelName, followerMsg)
 		}
 	}
 
@@ -76,7 +76,7 @@ func PrivateMessage(message twitch.PrivateMessage) {
 		if isFollower(user) {
 			tripbotCmd(user)
 		} else {
-			client.Say(followerMsg)
+			client.Say(config.ChannelName, followerMsg)
 		}
 	}
 
@@ -84,7 +84,7 @@ func PrivateMessage(message twitch.PrivateMessage) {
 		if isFollower(user) {
 			leaderboardCmd(user)
 		} else {
-			client.Say(followerMsg)
+			client.Say(config.ChannelName, followerMsg)
 		}
 	}
 
@@ -92,7 +92,7 @@ func PrivateMessage(message twitch.PrivateMessage) {
 		if isFollower(user) {
 			timeCmd(user)
 		} else {
-			client.Say(followerMsg)
+			client.Say(config.ChannelName, followerMsg)
 		}
 	}
 
@@ -100,7 +100,7 @@ func PrivateMessage(message twitch.PrivateMessage) {
 		if isFollower(user) {
 			dateCmd(user)
 		} else {
-			client.Say(followerMsg)
+			client.Say(config.ChannelName, followerMsg)
 		}
 	}
 
@@ -108,7 +108,7 @@ func PrivateMessage(message twitch.PrivateMessage) {
 		if isFollower(user) {
 			stateCmd(user)
 		} else {
-			client.Say(followerMsg)
+			client.Say(config.ChannelName, followerMsg)
 		}
 	}
 }
@@ -121,16 +121,15 @@ func UserPart(partMessage twitch.UserPartMessage) {
 	events.LogoutIfNecessary(partMessage.User)
 }
 
+// send message to chat if someone subs
 func UserNotice(message twitch.UserNoticeMessage) {
-	log.Println("user notice:", message.SystemMsg, "***", message.Emotes, "***", message.Tags)
-	// send message to chat if someone subs
 	msg := fmt.Sprintf("%s Your support powers me bleedPurple", message.Message)
 	client.Say(config.ChannelName, msg)
 }
 
+// if the message comes from me, then post the message to chat
 func Whisper(message twitch.WhisperMessage) {
 	log.Println("whisper from", message.User.Name, ":", message.Message)
-	// if the message comes from me, then post the message to chat
 	if message.User.Name == config.ChannelName {
 		client.Say(config.ChannelName, message.Message)
 	}
