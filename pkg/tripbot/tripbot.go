@@ -27,6 +27,8 @@ var Uptime time.Time
 // randomized so it starts with a new one every restart
 var helpIndex = rand.Intn(len(config.HelpMessages))
 
+const followerMsg = "You must be a follower to run that command :)"
+
 // all chat messages
 func PrivateMessage(message twitch.PrivateMessage) {
 	user := message.User.Name
@@ -42,40 +44,72 @@ func PrivateMessage(message twitch.PrivateMessage) {
 		uptimeCmd(user)
 	}
 
-	if strings.HasPrefix(strings.ToLower(message.Message), "!oldmiles") {
-		oldMilesCmd(user)
-	}
-
-	if strings.HasPrefix(strings.ToLower(message.Message), "!miles") {
-		milesCmd(user)
-	}
-
 	if strings.HasPrefix(strings.ToLower(message.Message), "!optimized") {
 		optimizedCmd(user)
 	}
 
+	if strings.HasPrefix(strings.ToLower(message.Message), "!oldmiles") {
+		if isFollower(user) {
+			oldMilesCmd(user)
+		} else {
+			client.Say(followerMsg)
+		}
+	}
+
+	if strings.HasPrefix(strings.ToLower(message.Message), "!miles") {
+		if isFollower(user) {
+			milesCmd(user)
+		} else {
+			client.Say(followerMsg)
+		}
+	}
+
 	if strings.HasPrefix(strings.ToLower(message.Message), "!sunset") {
-		sunsetCmd(user)
+		if isFollower(user) {
+			sunsetCmd(user)
+		} else {
+			client.Say(followerMsg)
+		}
 	}
 
 	if strings.HasPrefix(strings.ToLower(message.Message), "!tripbot") {
-		tripbotCmd(user)
+		if isFollower(user) {
+			tripbotCmd(user)
+		} else {
+			client.Say(followerMsg)
+		}
 	}
 
 	if strings.HasPrefix(strings.ToLower(message.Message), "!leaderboard") {
-		leaderboardCmd(user)
+		if isFollower(user) {
+			leaderboardCmd(user)
+		} else {
+			client.Say(followerMsg)
+		}
 	}
 
 	if strings.HasPrefix(strings.ToLower(message.Message), "!time") {
-		timeCmd(user)
+		if isFollower(user) {
+			timeCmd(user)
+		} else {
+			client.Say(followerMsg)
+		}
 	}
 
 	if strings.HasPrefix(strings.ToLower(message.Message), "!date") {
-		dateCmd(user)
+		if isFollower(user) {
+			dateCmd(user)
+		} else {
+			client.Say(followerMsg)
+		}
 	}
 
 	if strings.HasPrefix(strings.ToLower(message.Message), "!state") {
-		stateCmd(user)
+		if isFollower(user) {
+			stateCmd(user)
+		} else {
+			client.Say(followerMsg)
+		}
 	}
 }
 

@@ -15,6 +15,10 @@ import (
 	"github.com/hako/durafmt"
 )
 
+func isFollower(user string) bool {
+	return mytwitch.UserIsFollower(user)
+}
+
 func helpCmd(user string) {
 	log.Println(user, "ran !help")
 	msg := fmt.Sprintf("%s (%d of %d)", config.HelpMessages[helpIndex], helpIndex+1, len(config.HelpMessages))
@@ -28,6 +32,22 @@ func uptimeCmd(user string) {
 	dur := time.Now().Sub(Uptime)
 	msg := fmt.Sprintf("I have been running for %s", durafmt.Parse(dur))
 	client.Say(config.ChannelName, msg)
+}
+
+func optimizedCmd(user string) {
+	log.Println(user, "ran !optimized")
+	// run if the user is a follower
+	if mytwitch.UserIsFollower(user) {
+		// get the currently-playing video
+		currentVid := video.CurrentlyPlaying()
+		if strings.Contains(currentVid, "_opt") {
+			client.Say(config.ChannelName, "This video has been optimized")
+		} else {
+			client.Say(config.ChannelName, "This video is not yet optimized")
+		}
+	} else {
+		client.Say(config.ChannelName, "You must be a follower to run that command :)")
+	}
 }
 
 func oldMilesCmd(user string) {
@@ -71,22 +91,6 @@ func milesCmd(user string) {
 		}
 		msg = fmt.Sprintf(msg, user, miles)
 		client.Say(config.ChannelName, msg)
-	} else {
-		client.Say(config.ChannelName, "You must be a follower to run that command :)")
-	}
-}
-
-func optimizedCmd(user string) {
-	log.Println(user, "ran !optimized")
-	// run if the user is a follower
-	if mytwitch.UserIsFollower(user) {
-		// get the currently-playing video
-		currentVid := video.CurrentlyPlaying()
-		if strings.Contains(currentVid, "_opt") {
-			client.Say(config.ChannelName, "This video has been optimized")
-		} else {
-			client.Say(config.ChannelName, "This video is not yet optimized")
-		}
 	} else {
 		client.Say(config.ChannelName, "You must be a follower to run that command :)")
 	}
