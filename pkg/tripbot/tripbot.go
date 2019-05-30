@@ -188,6 +188,30 @@ func PrivateMessage(message twitch.PrivateMessage) {
 		}
 	}
 
+	if strings.HasPrefix(strings.ToLower(message.Message), "!time") {
+		log.Println(user, "ran !time")
+		// run if the user is a follower
+		if mytwitch.UserIsFollower(user) {
+			// get the currently-playing video
+			currentVid := video.CurrentlyPlaying()
+			vid, err := video.New(currentVid)
+			if err != nil {
+				log.Println("unable to create Video: %v", err)
+			}
+			lat, lon, err := datastore.CoordsFor(vid)
+			if err != nil {
+				client.Say(config.ChannelName, "That didn't work, sorry!")
+			} else {
+				realDate := helpers.ActualDate(vid.Date(), lat, lon)
+				// "15:04 MST"
+				fmtTime := realDate.Format("1:04AM MST")
+				client.Say(config.ChannelName, fmt.Sprintf("This moment was %s", fmtTime))
+			}
+		} else {
+			client.Say(config.ChannelName, "You must be a follower to run that command :)")
+		}
+	}
+
 	if strings.HasPrefix(strings.ToLower(message.Message), "!date") {
 		log.Println(user, "ran !date")
 		// run if the user is a follower
