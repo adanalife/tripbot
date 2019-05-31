@@ -15,7 +15,7 @@ possible_messages = [
   "New system for miles is now live!",
   "Sub goal #1 reached! Emotes coming soon",
   "Sub goal #2 (map overlay): #{sub_goal}",
-  "Donation goal #1: implement !temperature",
+  "Donation goal #1: Implement !temperature",
   "Your subscriptions keep the channel running",
   "Earn miles for every minute you watch (!miles)",
   "I won't be offended if you play your own music",
