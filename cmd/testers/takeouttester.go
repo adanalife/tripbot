@@ -38,11 +38,11 @@ func main() {
 	startDate, _ := time.Parse(time.RFC3339, "2018-02-13T00:00:00Z")
 	endDate, _ := time.Parse(time.RFC3339, "2018-05-10T00:00:00Z")
 
-	for _, loc := range locations.Locations {
+	for i, loc := range locations.Locations {
 		fixLatLon(&loc)
 		actualDate := helpers.ActualDate(convertTimestamp(loc), loc.Latitude, loc.Longitude)
 
-		if actualDate.After(startDate) && actualDate.Before(endDate) {
+		if i%3 == 0 && actualDate.After(startDate) && actualDate.Before(endDate) {
 			fmt.Printf("%s %.6f, %.6f\n", actualDate.Format(time.RFC822), loc.Latitude, loc.Longitude)
 		}
 	}

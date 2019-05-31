@@ -5,8 +5,12 @@ go 1.12
 require (
 	github.com/boltdb/bolt v1.3.1
 	github.com/bradfitz/latlong v0.0.0-20170410180902-f3db6d0dff40
+	github.com/briandowns/openweathermap v0.0.0-20180804155945-5f41b7c9d92d
+	github.com/davecgh/go-spew v1.1.1
 	github.com/dimiro1/banner v0.0.0-20161108151223-c2f858997d49
 	github.com/disintegration/imaging v1.6.0
+	github.com/fsnotify/fsevents v0.1.1
+	github.com/fsnotify/fsnotify v1.4.7
 	github.com/gempir/go-twitch-irc/v2 v2.1.0
 	github.com/hako/durafmt v0.0.0-20180520121703-7b7ae1e72ead
 	github.com/jmoiron/sqlx v1.2.0
