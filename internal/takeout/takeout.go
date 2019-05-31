@@ -1,9 +1,9 @@
-package main
+package takeout
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
+	"log"
 	"math"
 	"os"
 	"strconv"
@@ -25,13 +25,14 @@ type Location struct {
 	VerticalAccuracy float64 `json:"verticalAccuracy"`
 }
 
-func main() {
+func LoadLocations() Locations {
+	log.Println("loading locations from json...")
 	jsonFile, _ := os.Open("loc.json")
 	defer jsonFile.Close()
 
 	byteValue, _ := ioutil.ReadAll(jsonFile)
 	// var result map[string]interface{}
-	var locations Locations
+	var tripLocations, locations Locations
 
 	json.Unmarshal(byteValue, &locations)
 	// spew.Dump(locations)
@@ -43,11 +44,13 @@ func main() {
 		actualDate := helpers.ActualDate(convertTimestamp(loc), loc.Latitude, loc.Longitude)
 
 		if i%3 == 0 && actualDate.After(startDate) && actualDate.Before(endDate) {
-			fmt.Printf("%s %.6f, %.6f\n", actualDate.Format(time.RFC822), loc.Latitude, loc.Longitude)
+			tripLocations.Locations = append(tripLocations.Locations, loc)
+			// fmt.Printf("%s %.6f, %.6f\n", actualDate.Format(time.RFC822), loc.Latitude, loc.Longitude)
 		}
 	}
 
-	fmt.Println(startDate, endDate)
+	log.Println("...done!")
+	return tripLocations
 }
 
 func convertTimestamp(loc Location) time.Time {

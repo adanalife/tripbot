@@ -12,6 +12,7 @@ require (
 	github.com/fsnotify/fsevents v0.1.1
 	github.com/fsnotify/fsnotify v1.4.7
 	github.com/gempir/go-twitch-irc/v2 v2.1.0
+	github.com/google/uuid v1.1.1 // indirect
 	github.com/hako/durafmt v0.0.0-20180520121703-7b7ae1e72ead
 	github.com/jmoiron/sqlx v1.2.0
 	github.com/joho/godotenv v1.3.0
@@ -21,4 +22,6 @@ require (
 	github.com/nathan-osman/go-sunrise v0.0.0-20171121204956-7c449e7c690b
 	github.com/nicklaw5/helix v0.5.2
 	github.com/otiai10/gosseract v2.2.1+incompatible
+	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4 // indirect
+	googlemaps.github.io/maps v0.0.0-20190514133808-4d12cf0fa845 // indirect
 )
