@@ -42,7 +42,7 @@ func LogoutIfNecessary(user string) {
 	event := events[0]
 	if event.Event == "login" {
 		// last event was a login, so log them out
-		log.Println("last event for", user, "was a login, logging them out")
+		log.Println("logging out", user)
 		Logout(user)
 		return
 	}
@@ -57,14 +57,14 @@ func LoginIfNecessary(user string) {
 	database.DBCon.Select(&events, query)
 	if len(events) == 0 {
 		// no login/logout events for user
-		log.Println("no login/logout events for", user, "so logging them in")
+		log.Println("logging in", user)
 		Login(user)
 		return
 	}
 	event := events[0]
 	if event.Event == "logout" {
 		// last event was a logout, so log them in
-		log.Println("last event for", user, "was a logout, logging them in")
+		log.Println("logging in", user)
 		Login(user)
 		return
 	}
