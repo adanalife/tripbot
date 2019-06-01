@@ -20,4 +20,4 @@ ls -R . | awk '
 NF&&f{ print s"/"$0 }'
 
 # go back to where we started
-cd -
+cd - >/dev/null

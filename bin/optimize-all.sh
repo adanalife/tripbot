@@ -29,5 +29,5 @@ for file in ${DASHCAM_DIR}/_all/*.MP4; do
 done
 
 # move back to where we were
-cd -
+cd - >/dev/null
 
