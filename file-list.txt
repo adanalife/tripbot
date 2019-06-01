@@ -1157,7 +1157,7 @@
 ./_all/2018_0602_184720_013_opt.MP4
 ./_all/2018_0602_185020_014_opt.MP4
 ./_all/2018_0602_185320_015_opt.MP4
-./_all/2018_0602_185620_016_opt.MP4
+./_all/2018_0602_185620_016_a.mp4
 ./_all/2018_0602_213125_001.MP4
 ./_all/2018_0602_213425_002_opt.MP4
 ./_all/2018_0602_213725_003_opt.MP4
@@ -1314,7 +1314,7 @@
 ./_all/2018_0604_225342_007_opt.MP4
 ./_all/2018_0604_225642_008_opt.MP4
 ./_all/2018_0604_225942_009_opt.MP4
-./_all/2018_0604_230242_010_opt.MP4
+./_all/2018_0604_230242_010_a.mp4
 ./_all/2018_0605_141506_001.MP4
 ./_all/2018_0605_141804_002_opt.MP4
 ./_all/2018_0605_142104_003_opt.MP4
@@ -4688,10 +4688,12 @@
 ./not moving - has been clipped/2018_0601_203618_002.MP4
 ./not moving - has been clipped/2018_0601_233319_061.MP4
 ./not moving - has been clipped/2018_0602_000540_001.MP4
+./not moving - has been clipped/2018_0602_185620_016.MP4
 ./not moving - has been clipped/2018_0603_194812_035.MP4
 ./not moving - has been clipped/2018_0603_195112_036.MP4
 ./not moving - has been clipped/2018_0604_174239_010.MP4
 ./not moving - has been clipped/2018_0604_174839_012.MP4
+./not moving - has been clipped/2018_0604_230242_010.MP4
 ./not moving - has been clipped/2018_0605_144857_004.MP4
 ./not moving - has been clipped/2018_0605_211938_029.MP4
 ./not moving - has been clipped/2018_0605_222657_001.MP4
@@ -4786,6 +4788,8 @@
 ./optimized/2018_1008_220511_007_opt.MP4
 ./optimized/2018_1008_220811_008_opt.MP4
 ./optimized/2018_1008_221111_009_opt.MP4
+./optimized/2018_1008_221411_010_opt.MP4
+./optimized/2018_1008_221711_011_opt.MP4
 ./pulled over/2018_0601_005202_009.MP4
 ./pulled over/2018_0601_005502_010.MP4
 ./pulled over/2018_0601_005802_011.MP4
@@ -59539,7 +59543,6 @@
 ./unoptimized/2018_0602_184720_013.MP4
 ./unoptimized/2018_0602_185020_014.MP4
 ./unoptimized/2018_0602_185320_015.MP4
-./unoptimized/2018_0602_185620_016.MP4
 ./unoptimized/2018_0602_213425_002.MP4
 ./unoptimized/2018_0602_213725_003.MP4
 ./unoptimized/2018_0602_214025_004.MP4
@@ -59691,7 +59694,6 @@
 ./unoptimized/2018_0604_225342_007.MP4
 ./unoptimized/2018_0604_225642_008.MP4
 ./unoptimized/2018_0604_225942_009.MP4
-./unoptimized/2018_0604_230242_010.MP4
 ./unoptimized/2018_0605_141804_002.MP4
 ./unoptimized/2018_0605_142104_003.MP4
 ./unoptimized/2018_0605_143437_001.MP4
