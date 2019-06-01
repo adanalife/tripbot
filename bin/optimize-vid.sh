@@ -34,4 +34,5 @@ nice ffmpeg -n -i $1 \
   -r 60 \
   -an \
   ${just_file}_opt.MP4
+#TODO: add blur effect to corner
 
