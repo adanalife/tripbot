@@ -1,6 +1,7 @@
 TODO
 add !time
 regular db backups
+everyone gets a mile when someone follows
 https://github.com/gempir/go-twitch-irc/issues/103
 dont rotate randomly, shuffle then loop (then shuffle?)
 auto-update title!
@@ -69,6 +70,7 @@ trophies/acheivements
   night owl
   subscriber
 page me on these:
+  https://github.com/sfreiberg/gotwilio
   !frozen
   !sound
   no sound
