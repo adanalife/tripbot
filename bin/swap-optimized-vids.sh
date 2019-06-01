@@ -28,6 +28,8 @@ for file in ${ALL_DIR}/*; do
 		set -ex
 		mv $file ${UNOPTIMIZED_DIR}/
 		mv $optimized ${ALL_DIR}/
+		# echo "mv $file ${UNOPTIMIZED_DIR}/"
+		# echo "mv $optimized ${ALL_DIR}/"
 		set +ex
 	else
 		echo "no optimized candidate for $slug, moving on"
