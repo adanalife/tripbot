@@ -78,6 +78,7 @@ var HelpMessages = []string{
 	"!leaderboard: See who has the most miles",
 	"!state: Get the state we are currently in (beta)",
 	"!sunset: Get time until sunset (on the day of filming)",
+	"!report: Report a stream issue (frozen, no audio, etc)",
 	"!temperature: Will be unlocked when the donation goal is reached",
 }
 
