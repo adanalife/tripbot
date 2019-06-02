@@ -16,6 +16,7 @@ import (
 	"github.com/gempir/go-twitch-irc/v2"
 	"github.com/joho/godotenv"
 	"github.com/kelvins/geocoder"
+	"github.com/sfreiberg/gotwilio"
 )
 
 var lastVid, botUsername, clientAuthenticationToken, twitchClientID, googleMapsAPIKey string
@@ -111,6 +112,14 @@ func PrivateMessage(message twitch.PrivateMessage) {
 			client.Say(config.ChannelName, followerMsg)
 		}
 	}
+
+	if strings.HasPrefix(strings.ToLower(message.Message), "!report") {
+		if isFollower(user) {
+			reportCmd(user)
+		} else {
+			client.Say(config.ChannelName, followerMsg)
+		}
+	}
 }
 
 func UserJoin(joinMessage twitch.UserJoinMessage) {
@@ -165,9 +174,28 @@ func Initialize() *twitch.Client {
 	if googleMapsAPIKey == "" {
 		panic("You must set GOOGLE_MAPS_API_KEY")
 	}
+	twilioAccountSid = os.Getenv("TWILIO_ACCT_SID")
+	if twilioAccountSid == "" {
+		panic("You must set TWILIO_ACCT_SID")
+	}
+	twilioAuthToken = os.Getenv("TWILIO_AUTH_TOKEN")
+	if twilioAuthToken == "" {
+		panic("You must set TWILIO_AUTH_TOKEN")
+	}
+	twilioFromNum = os.Getenv("TWILIO_FROM_NUM")
+	if twilioFromNum == "" {
+		panic("You must set TWILIO_FROM_NUM")
+	}
+	twilioToNum = os.Getenv("TWILIO_TO_NUM")
+	if twilioToNum == "" {
+		panic("You must set TWILIO_TO_NUM")
+	}
 
 	// set up geocoder (for translating coords to places)
 	geocoder.ApiKey = googleMapsAPIKey
+
+	// set up Twilio (for text messages)
+	twilioClient := gotwilio.NewTwilioClient(twilioAccountSid, twilioAuthToken)
 
 	// initialize the twitch API client
 	//TODO: rename me to Initialize()

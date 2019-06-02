@@ -195,3 +195,9 @@ func stateCmd(user string) {
 		}
 	}
 }
+
+func reportCmd(user string) {
+	message := "Report from Twitch Chat!"
+	twilioClient.SendSMS(twilioFromNum, twilioToNum, message, "", "")
+	client.Say(config.ChannelName, "Your report has been submitted. Thank you!")
+}
