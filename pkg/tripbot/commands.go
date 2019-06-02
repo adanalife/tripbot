@@ -151,8 +151,7 @@ func timeCmd(user string) {
 		client.Say(config.ChannelName, "That didn't work, sorry!")
 	} else {
 		realDate := helpers.ActualDate(vid.Date(), lat, lon)
-		// "15:04 MST"
-		fmtTime := realDate.Format("1:04AM MST")
+		fmtTime := realDate.Format("3:04pm MST")
 		client.Say(config.ChannelName, fmt.Sprintf("This moment was %s", fmtTime))
 	}
 }
