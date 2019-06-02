@@ -26,11 +26,11 @@ for file in ${ALL_DIR}/*; do
 	if [ -e $optimized ]; then
 		echo "optimized version exists, swapping $slug"
 		# set -ex
-		# mv $file ${UNOPTIMIZED_DIR}/
-		# mv $optimized ${ALL_DIR}/
+		mv $file ${UNOPTIMIZED_DIR}/
+		mv $optimized ${ALL_DIR}/
 		# set +ex
-		echo "mv $file ${UNOPTIMIZED_DIR}/"
-		echo "mv $optimized ${ALL_DIR}/"
+		# echo "mv $file ${UNOPTIMIZED_DIR}/"
+		# echo "mv $optimized ${ALL_DIR}/"
 	else
 		# echo "no optimized candidate for $slug, moving on"
 		true
