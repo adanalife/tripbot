@@ -20,6 +20,8 @@ import (
 )
 
 var lastVid, botUsername, clientAuthenticationToken, twitchClientID, googleMapsAPIKey string
+var twilioAuthToken, twilioAccountSid, twilioFromNum, twilioToNum string
+var twilioClient *gotwilio.Twilio
 var client *twitch.Client
 var datastore *store.Store
 var Uptime time.Time
@@ -115,7 +117,7 @@ func PrivateMessage(message twitch.PrivateMessage) {
 
 	if strings.HasPrefix(strings.ToLower(message.Message), "!report") {
 		if isFollower(user) {
-			reportCmd(user)
+			reportCmd(user, message.Message)
 		} else {
 			client.Say(config.ChannelName, followerMsg)
 		}
@@ -195,7 +197,7 @@ func Initialize() *twitch.Client {
 	geocoder.ApiKey = googleMapsAPIKey
 
 	// set up Twilio (for text messages)
-	twilioClient := gotwilio.NewTwilioClient(twilioAccountSid, twilioAuthToken)
+	twilioClient = gotwilio.NewTwilioClient(twilioAccountSid, twilioAuthToken)
 
 	// initialize the twitch API client
 	//TODO: rename me to Initialize()
