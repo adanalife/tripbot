@@ -15,7 +15,7 @@ function ctrl_c() {
 }
 
 while true; do
-	if (( RANDOM % 8 == 0 )); then
+	if (( RANDOM % 10 == 0 )); then
 		go run cmd/leaderboard/leaderboard.go > OBS/leaderboard.txt 2>/dev/null
 		# make a copy so we can read it in the rotater script
 		cp OBS/leaderboard.txt OBS/leaderboard-copy.txt
