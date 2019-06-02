@@ -20,7 +20,7 @@ import (
 )
 
 var lastVid, botUsername, clientAuthenticationToken, twitchClientID, googleMapsAPIKey string
-var twilioAuthToken, twilioAccountSid, twilioFromNum, twilioToNum string
+var twilioFromNum, twilioToNum string
 var twilioClient *gotwilio.Twilio
 var client *twitch.Client
 var datastore *store.Store
@@ -176,11 +176,11 @@ func Initialize() *twitch.Client {
 	if googleMapsAPIKey == "" {
 		panic("You must set GOOGLE_MAPS_API_KEY")
 	}
-	twilioAccountSid = os.Getenv("TWILIO_ACCT_SID")
+	twilioAccountSid := os.Getenv("TWILIO_ACCT_SID")
 	if twilioAccountSid == "" {
 		panic("You must set TWILIO_ACCT_SID")
 	}
-	twilioAuthToken = os.Getenv("TWILIO_AUTH_TOKEN")
+	twilioAuthToken := os.Getenv("TWILIO_AUTH_TOKEN")
 	if twilioAuthToken == "" {
 		panic("You must set TWILIO_AUTH_TOKEN")
 	}
