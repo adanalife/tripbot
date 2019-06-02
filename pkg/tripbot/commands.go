@@ -169,7 +169,7 @@ func dateCmd(user string) {
 		client.Say(config.ChannelName, "That didn't work, sorry!")
 	} else {
 		realDate := helpers.ActualDate(vid.Date(), lat, lon)
-		fmtDate := realDate.Format("Monday January 1, 2006")
+		fmtDate := realDate.Format("Monday January 2, 2006")
 		client.Say(config.ChannelName, fmt.Sprintf("This moment was %s", fmtDate))
 	}
 }
