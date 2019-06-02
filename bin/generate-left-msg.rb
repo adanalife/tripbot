@@ -20,6 +20,7 @@ possible_messages = [
   "Earn miles for every minute you watch (!miles)",
   "I won't be offended if you play your own music",
   "Music by Soma.fm (!song)",
+  "Use !report to report stream issues",
   "Tripbot loves you <3 (!tripbot)",
   "LEADER",
   "RARE",
