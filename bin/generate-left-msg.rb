@@ -16,7 +16,7 @@ possible_messages = [
   "Sub goal #1 reached! Emotes coming soon",
   "Sub goal #2 (map overlay): #{sub_goal}",
   "Donation goal (!temperature): #{donation_goal}",
-  "Twitch Prime subs keep the channel running",
+  "Twitch Prime subs keep us on air ;)",
   "Earn miles for every minute you watch (!miles)",
   "I won't be offended if you play your own music",
   "Music by Soma.fm (!song)",
