@@ -13,6 +13,7 @@ rename videos to include state
 make log prettier
 log all chat to separate log file
 !miles (user)
+!horn plays an audio track
 funny !miles for me
 make tmuxinator script that starts all of the scripts
 !city/!town
