@@ -18,6 +18,7 @@ funny !miles for me
 make tmuxinator script that starts all of the scripts
 !city/!town
 !progress towards loop?
+add "x years y months ago" to !date and !time
 search log for more reset users
 save in db the error status
 nightbot can read from Lastfm?!
@@ -33,6 +34,7 @@ new miles formula: 0.1 per 3 min?
 tripbot has restarted. say hi so he knows youre in here
 update (and rename?) collect-gps to use postgres
 redo CurrentlyPlaying() to use PIDfile
+https://nationalparktypeface.com/
 
 
 STREAM OVERLAY:
@@ -91,7 +93,7 @@ BEFORE NEXT STREAM START
 fix buffer
 fix text resizing
 add tags
-outdoors, family friendly, photography, automotive, travel
+outdoors, family friendly, photography, automotive, travel, exploration
 get lastfm working
 https://streamlabs.com/dashboard#/widgets
 
