@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	_ "github.com/dimiro1/banner/autoload"
 	"github.com/dmerrick/danalol-stream/pkg/config"
@@ -40,8 +41,13 @@ func main() {
 	log.Println("Joined channel", config.ChannelName)
 
 	// actually connect to Twitch
-	err := client.Connect()
-	if err != nil {
-		panic(err)
+	// wrapped in a loop in case twitch goes down
+	for {
+		log.Println("Connecting to Twitch...")
+		err := client.Connect()
+		if err != nil {
+			log.Println(err)
+			time.Sleep(time.Minute)
+		}
 	}
 }
