@@ -17,7 +17,7 @@ const (
 	// MapsOutputDir is where the maps script saves the frames
 	MapsOutputDir = "/Volumes/usbshare1/maps"
 	// CroppedPath is where we store the cropped versions of screencaps (to OCR them)
-	CroppedPath = "/Volumes/usbshare1/cropped-corners"
+	CroppedPath = "/Volumes/Luna/cropped-corners"
 
 	DBPath            = "db/tripbot.db"
 	UserJoinsBucket   = "user_joins"
