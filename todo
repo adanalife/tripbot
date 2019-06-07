@@ -37,6 +37,13 @@ redo CurrentlyPlaying() to use PIDfile
 https://nationalparktypeface.com/
 
 
+panic: dial tcp: lookup irc.chat.twitch.tv: no such host
+goroutine 1 [running]:
+main.main()
+        /Users/dmerrick/other_projects/danalol-stream/cmd/tripbot/tripbot.go:45 +0x2a6
+exit status 2
+
+
 STREAM OVERLAY:
 sub goal
 donation goal
@@ -146,6 +153,9 @@ DARK
 2018_0925_003130_044.MP4
 2018_1009_013014_008.MP4
 
+PRETTY
+2018_0830_235248_002_opt.MP4
+
 ACCIDENT?
 2018_0730_142247_002_opt.MP4
 
@@ -160,3 +170,7 @@ NEEDS CLIPPING
 2018_0519_192058_031_opt.MP4
 2018_0521_210746_011_opt.MP4
 2018_0814_221416_006_opt.MP4
+2018_0815_162234_022_opt.MP4
+2018_0815_173509_005_opt.MP4
+2018_0825_123506_006_opt.MP4
+2018_0825_155343_006_opt.MP4
