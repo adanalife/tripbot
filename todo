@@ -1,5 +1,6 @@
 TODO
 remove all panic()s
+if message contains stream title, it's a bot
 add !time
 regular db backups
 everyone gets a mile when someone follows
@@ -149,6 +150,7 @@ DARK
 
 PRETTY
 2018_0830_235248_002_opt.MP4
+2018_1009_004112_059_opt.MP4
 
 ACCIDENT?
 2018_0730_142247_002_opt.MP4
