@@ -2,9 +2,11 @@ TODO
 https://godoc.org/cloud.google.com/go/bigquery
 remove all panic()s
 if message contains stream title, it's a bot
+log current file on server shutdown
 !uptime that includes OBS start time (create a file?)
 tripbot talks to the channel on timers
 keep track of number of states a person has been in
+"failed to open image: screencap file was not present"
 ask user to translate coords if we cant read them
 regular db backups
 everyone gets a mile when someone follows
