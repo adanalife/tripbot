@@ -1,7 +1,12 @@
 TODO
 https://godoc.org/cloud.google.com/go/bigquery
 remove all panic()s
+fix !help because you can only run it once
+!location gives more accuracy based on miles
+!mood
+silly extra data like poll data
 if message contains stream title, it's a bot
+use the next video if it cant find coords
 log current file on server shutdown
 !uptime that includes OBS start time (create a file?)
 tripbot talks to the channel on timers
@@ -14,7 +19,7 @@ https://github.com/gempir/go-twitch-irc/issues/103
 dont rotate randomly, shuffle then loop (then shuffle?)
 auto-update title!
 historical gas prices?
-!elevation
+!elevation/!altitude
 !leaderboard could make the leaderboard show up!
 !leaderboard for just online people
 make super rare rotator
@@ -46,6 +51,10 @@ redo CurrentlyPlaying() to use PIDfile
 https://nationalparktypeface.com/
 
 Top 10 Lettuce: 1. looperkele (1945), 2. owglass (1482), 3. souldead1988 (756), 4. guadaloopz (657), 5. therealspartan9001 (480), 6. fesup (451), 7. looptheloop (432), 8. valkir47 (431), 9. trifr0st (424), 10. st0x (405).
+
+fix dono message:
+17:40MathGaming(): aww yisss
+17:40TripBot4000: aww yisss Your support powers me 
 
 
 STREAM OVERLAY:
@@ -181,3 +190,5 @@ NEEDS CLIPPING
 2018_0825_155343_006_opt.MP4
 2018_0602_141029_001_opt.MP4
 2018_0815_162234_022_opt.MP4
+2018_0925_131753_002_opt.MP4
+2018_0731_232058_075_opt.MP4
