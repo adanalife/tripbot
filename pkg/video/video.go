@@ -65,6 +65,10 @@ func (v Video) String() string {
 // an example dashstr: 2018_0514_224801_013
 // ex: 2018_0514_224801_013
 func (v Video) DashStr() string {
+	//TODO: this never should have happened, but it did and it crashed the bot
+	if len(v.Slug) < 20 {
+		return ""
+	}
 	return v.Slug[:20]
 }
 
