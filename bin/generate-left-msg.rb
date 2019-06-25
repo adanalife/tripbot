@@ -3,14 +3,13 @@
 # this script manages the text file that OBS reads from
 # it is used to update the rotating text in the corner
 
-sub_goal = "2/10"
+sub_goal = "3/10"
 donation_goal = "10/150"
 
 leaderboard_file = "./OBS/leaderboard-copy.txt"
 message_file = "./OBS/left-message.txt"
 
 possible_messages = [
-  "Type !help in chat for tips",
   "Type !help in chat for tips",
   "Type !help in chat for tips",
   "Sub goal #1 reached! Emotes coming soon",
