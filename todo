@@ -1,4 +1,5 @@
 TODO
+https://godoc.org/cloud.google.com/go/bigquery
 remove all panic()s
 if message contains stream title, it's a bot
 !uptime that includes OBS start time (create a file?)
