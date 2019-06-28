@@ -57,10 +57,20 @@ func splitIntoPairs(evnts []events.Event) [][]events.Event {
 	}
 
 	// check if their most recent event is a login
-	if evnts[len(evnts)-1].Event == "login" {
-		// log.Println("user is logged in, adding a logout event")
-		// ... in which case add the current time to the list
-		evnts = append(evnts, events.Event{DateCreated: time.Now(), Event: "logout"})
+	mostRecent := evnts[len(evnts)-1]
+	if mostRecent.Event == "login" {
+		// have they been watching for super long?
+		if time.Since(mostRecent.DateCreated) > time.Hour*24*7 {
+			log.Println("user has been logged in for over a week")
+			//TODO: actually create event
+			// give them the benefit of the doubt and add a logout 1 day later
+			newEvent := events.Event{DateCreated: mostRecent.DateCreated.AddDate(0, 0, 1), Event: "logout"}
+			evnts = append(evnts, newEvent)
+		} else {
+			// they might be legit still watching, so just create an in-memory event
+			evnts = append(evnts, events.Event{DateCreated: time.Now(), Event: "logout"})
+		}
+
 	}
 
 	// now we're going to loop over all of the events and split them into pairs
