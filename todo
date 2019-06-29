@@ -1,6 +1,10 @@
 TODO
+add version and a changelog for the public
+bonus pool for miles
 https://godoc.org/cloud.google.com/go/bigquery
+auto-re-run failed commands when next vid starts
 remove all panic()s
+wikipedia article for current town
 fix !help because you can only run it once
 !location gives more accuracy based on miles
 !mood
