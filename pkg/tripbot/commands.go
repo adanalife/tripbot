@@ -10,13 +10,14 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	"github.com/dmerrick/danalol-stream/pkg/miles"
-	mytwitch "github.com/dmerrick/danalol-stream/pkg/twitch"
 	"github.com/dmerrick/danalol-stream/pkg/video"
 	"github.com/hako/durafmt"
 )
 
 func isFollower(user string) bool {
-	return mytwitch.UserIsFollower(user)
+	// return mytwitch.UserIsFollower(user)
+	//TODO: fixme
+	return true
 }
 
 func helpCmd(user string) {
