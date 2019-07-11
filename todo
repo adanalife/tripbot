@@ -18,6 +18,7 @@ keep track of number of states a person has been in
 "failed to open image: screencap file was not present"
 ask user to translate coords if we cant read them
 regular db backups
+upgrade golang libs
 everyone gets a mile when someone follows
 https://github.com/gempir/go-twitch-irc/issues/103
 dont rotate randomly, shuffle then loop (then shuffle?)
@@ -53,6 +54,8 @@ tripbot has restarted. say hi so he knows youre in here
 update (and rename?) collect-gps to use postgres
 redo CurrentlyPlaying() to use PIDfile
 https://nationalparktypeface.com/
+!prime that explains twitch prime
+"no audio" triggers alert
 
 Top 10 Lettuce: 1. looperkele (1945), 2. owglass (1482), 3. souldead1988 (756), 4. guadaloopz (657), 5. therealspartan9001 (480), 6. fesup (451), 7. looptheloop (432), 8. valkir47 (431), 9. trifr0st (424), 10. st0x (405).
 
