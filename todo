@@ -1,63 +1,73 @@
 TODO
-add version and a changelog for the public
-bonus pool for miles
-https://godoc.org/cloud.google.com/go/bigquery
-auto-re-run failed commands when next vid starts
+
+QUICK AND DIRTY
 remove all panic()s
 wikipedia article for current town
 fix !help because you can only run it once
-!location gives more accuracy based on miles
-!mood
-silly extra data like poll data
 if message contains stream title, it's a bot
-use the next video if it cant find coords
 log current file on server shutdown
-!uptime that includes OBS start time (create a file?)
-tripbot talks to the channel on timers
-keep track of number of states a person has been in
-"failed to open image: screencap file was not present"
-ask user to translate coords if we cant read them
-regular db backups
 upgrade golang libs
-everyone gets a mile when someone follows
-https://github.com/gempir/go-twitch-irc/issues/103
+do a db backup
+"failed to open image: screencap file was not present"
 dont rotate randomly, shuffle then loop (then shuffle?)
-auto-update title!
-historical gas prices?
-!elevation/!altitude
 !leaderboard could make the leaderboard show up!
 !leaderboard for just online people
 make super rare rotator
-rename videos to include state
 make log prettier
-log all chat to separate log file
 !miles (user)
+!city/!town
+add "x years y months ago" to !date and !time
+Top 10 Lettuce: 1. looperkele (1945), 2. owglass (1482), 3. souldead1988 (756), 4. guadaloopz (657), 5. therealspartan9001 (480), 6. fesup (451), 7. looptheloop (432), 8. valkir47 (431), 9. trifr0st (424), 10. st0x (405).
+"no audio" triggers alert
+"Sunset on this day is in -35 minutes"
+
+INVOLVED
+add version and a changelog for the public
+https://godoc.org/cloud.google.com/go/bigquery
+use the next video if it cant find coords
+tripbot talks to the channel on timers
+everyone gets a mile when someone follows
+auto-update title!
+  rename videos to include state
+!elevation/!altitude
+log all chat to separate log file
+!progress towards loop?
+constantly fetch current video
+
+HARD
+bonus pool for miles
+silly extra data like poll data
+save in db the error status
+historical gas prices?
+keep track of number of states a person has been in
+ask user to translate coords if we cant read them
+
+NOT SURE
+auto-re-run failed commands when next vid starts
+!location gives more accuracy based on miles
+!mood
+!uptime that includes OBS start time (create a file?)
+regular db backups
+https://github.com/gempir/go-twitch-irc/issues/103
 !horn plays an audio track
 funny !miles for me
-make tmuxinator script that starts all of the scripts
-!city/!town
-!progress towards loop?
-add "x years y months ago" to !date and !time
+
+HAVEN'T GONE OVER
 search log for more reset users
-save in db the error status
 nightbot can read from Lastfm?!
-constantly fetch current video
 implement a way to "refetch" coords that are not accurate
 log all chats to separte file
 create user and a Online?() method
 test having a disappearing png on obs
 make a meme?
 game where people have to find a frame and run a command during that vid
-"Sunset on this day is in -35 minutes"
 new miles formula: 0.1 per 3 min?
 tripbot has restarted. say hi so he knows youre in here
 update (and rename?) collect-gps to use postgres
 redo CurrentlyPlaying() to use PIDfile
 https://nationalparktypeface.com/
 !prime that explains twitch prime
-"no audio" triggers alert
 
-Top 10 Lettuce: 1. looperkele (1945), 2. owglass (1482), 3. souldead1988 (756), 4. guadaloopz (657), 5. therealspartan9001 (480), 6. fesup (451), 7. looptheloop (432), 8. valkir47 (431), 9. trifr0st (424), 10. st0x (405).
 
 fix dono message:
 17:40MathGaming(): aww yisss
@@ -124,6 +134,9 @@ outdoors, family friendly, photography, automotive, travel, exploration
 get lastfm working
 https://streamlabs.com/dashboard#/widgets
 
+
+IN CHAT
+"why turkish people cant drive like a human ?"
 
 
 GOLANG STUFF
