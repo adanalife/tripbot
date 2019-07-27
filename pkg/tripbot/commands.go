@@ -204,7 +204,7 @@ func reportCmd(user, message string) {
 	log.Println(user, "ran !report")
 	message = fmt.Sprintf("Report from Twitch Chat: %s", message)
 	twilioClient.SendSMS(twilioFromNum, twilioToNum, message, "", "")
-	client.Say(config.ChannelName, "Your report has been submitted. Thank you!")
+	client.Say(config.ChannelName, "Thank you, I will look into this ASAP!")
 }
 
 func shutdownCmd(user string) {

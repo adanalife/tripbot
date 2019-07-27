@@ -6,14 +6,11 @@ update README a bit
 wikipedia article for current town
 fix !help because you can only run it once
 if message contains stream title, it's a bot
-log current file on server shutdown
 upgrade golang libs
-do a db backup
 "failed to open image: screencap file was not present"
 dont rotate randomly, shuffle then loop (then shuffle?)
 !leaderboard could make the leaderboard show up!
 !leaderboard for just online people
-make super rare rotator
 make log prettier
 !miles (user)
 !city/!town

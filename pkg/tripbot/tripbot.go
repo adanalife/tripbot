@@ -126,11 +126,21 @@ func PrivateMessage(message twitch.PrivateMessage) {
 		}
 	}
 
-	if strings.HasPrefix(strings.ToLower(message.Message), "!report") {
-		if isFollower(user) {
-			reportCmd(user, message.Message)
-		} else {
-			client.Say(config.ChannelName, followerMsg)
+	// any of these should trigger the report command
+	reportStrings := []string{
+		"!report",
+		"no audio",
+		"no sound",
+		"no music",
+		"frozen",
+	}
+	for _, rs := range reportStrings {
+		if strings.HasPrefix(strings.ToLower(message.Message), rs) {
+			if isFollower(user) {
+				reportCmd(user, message.Message)
+			} else {
+				client.Say(config.ChannelName, followerMsg)
+			}
 		}
 	}
 
