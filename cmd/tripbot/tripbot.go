@@ -22,8 +22,10 @@ func main() {
 	go func() {
 		<-c
 		log.Println("caught CTRL-C")
-		log.Printf("currently playing: %s", video.CurrentlyPlaying())
+		// anything below this probably wont be executed
+		// use !shutdown instead
 		events.LogoutAll(tripbot.Uptime)
+		log.Printf("currently playing: %s", video.CurrentlyPlaying())
 		database.DBCon.Close()
 		os.Exit(1)
 	}()

@@ -4,10 +4,13 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/dmerrick/danalol-stream/pkg/config"
+	"github.com/dmerrick/danalol-stream/pkg/database"
+	"github.com/dmerrick/danalol-stream/pkg/events"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	"github.com/dmerrick/danalol-stream/pkg/miles"
 	"github.com/dmerrick/danalol-stream/pkg/video"
@@ -202,4 +205,17 @@ func reportCmd(user, message string) {
 	message = fmt.Sprintf("Report from Twitch Chat: %s", message)
 	twilioClient.SendSMS(twilioFromNum, twilioToNum, message, "", "")
 	client.Say(config.ChannelName, "Your report has been submitted. Thank you!")
+}
+
+func shutdownCmd(user string) {
+	log.Println(user, "ran !shutdown")
+	if user != config.ChannelName {
+		client.Say(config.ChannelName, "I'm sorry, I won't do that")
+		return
+	}
+	client.Say(config.ChannelName, "Shutting down...")
+	log.Printf("currently playing: %s", video.CurrentlyPlaying())
+	events.LogoutAll(Uptime)
+	database.DBCon.Close()
+	os.Exit(0)
 }

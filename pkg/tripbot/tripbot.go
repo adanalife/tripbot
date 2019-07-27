@@ -133,6 +133,10 @@ func PrivateMessage(message twitch.PrivateMessage) {
 			client.Say(config.ChannelName, followerMsg)
 		}
 	}
+
+	if strings.HasPrefix(strings.ToLower(message.Message), "!shutdown") {
+		shutdownCmd(user)
+	}
 }
 
 func UserJoin(joinMessage twitch.UserJoinMessage) {
