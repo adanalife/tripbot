@@ -135,11 +135,16 @@ func locationCmd(user string) {
 
 func leaderboardCmd(user string) {
 	log.Println(user, "ran !leaderboard")
-	userList := miles.TopUsers(3)
+	size := 10
+	userList := miles.TopUsers(size)
+	msg := fmt.Sprintf("Top %d miles: ", size)
 	for i, leaderPair := range userList {
-		msg := fmt.Sprintf("#%d: %s (%smi)", i+1, leaderPair[0], leaderPair[1])
-		client.Say(config.ChannelName, msg)
+		msg += fmt.Sprintf("%d. %s (%s)", i+1, leaderPair[0], leaderPair[1])
+		if i+1 != size {
+			msg += ", "
+		}
 	}
+	client.Say(config.ChannelName, msg)
 }
 
 func timeCmd(user string) {
