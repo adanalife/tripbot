@@ -42,6 +42,7 @@ var IgnoredUsers = []string{
 	"nightbot",
 	"streamlabs",
 	"0_applebadapple_0",
+	"angeloflight",
 	"anotherttvviewer",
 	"apricotdrupefruit",
 	"avocadobadado",
