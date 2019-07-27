@@ -2,6 +2,7 @@ TODO
 
 QUICK AND DIRTY
 remove all panic()s
+update README a bit
 wikipedia article for current town
 fix !help because you can only run it once
 if message contains stream title, it's a bot
@@ -20,9 +21,12 @@ add "x years y months ago" to !date and !time
 Top 10 Lettuce: 1. looperkele (1945), 2. owglass (1482), 3. souldead1988 (756), 4. guadaloopz (657), 5. therealspartan9001 (480), 6. fesup (451), 7. looptheloop (432), 8. valkir47 (431), 9. trifr0st (424), 10. st0x (405).
 "no audio" triggers alert
 "Sunset on this day is in -35 minutes"
+regular posts to chat (if no one has said anything)
+fix dono message
 
 INVOLVED
 add version and a changelog for the public
+  !changelog
 https://godoc.org/cloud.google.com/go/bigquery
 use the next video if it cant find coords
 tripbot talks to the channel on timers
@@ -30,6 +34,7 @@ everyone gets a mile when someone follows
 auto-update title!
   rename videos to include state
 !elevation/!altitude
+  https://developers.google.com/maps/documentation/javascript/elevation
 log all chat to separate log file
 !progress towards loop?
 constantly fetch current video
@@ -51,6 +56,7 @@ regular db backups
 https://github.com/gempir/go-twitch-irc/issues/103
 !horn plays an audio track
 funny !miles for me
+prize for someone whi ckips every oil change
 
 HAVEN'T GONE OVER
 search log for more reset users
@@ -212,3 +218,5 @@ NEEDS CLIPPING
 2018_0815_162234_022_opt.MP4
 2018_0925_131753_002_opt.MP4
 2018_0731_232058_075_opt.MP4
+2018_0601_133438_001_opt.MP4
+2018_0904_123020_001_opt.MP4
