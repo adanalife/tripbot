@@ -12,6 +12,7 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/database"
 	"github.com/dmerrick/danalol-stream/pkg/events"
 	"github.com/dmerrick/danalol-stream/pkg/tripbot"
+	"github.com/dmerrick/danalol-stream/pkg/video"
 )
 
 func main() {
@@ -21,6 +22,7 @@ func main() {
 	go func() {
 		<-c
 		log.Println("caught CTRL-C")
+		log.Printf("currently playing: %s", video.CurrentlyPlaying())
 		events.LogoutAll(tripbot.Uptime)
 		database.DBCon.Close()
 		os.Exit(1)
