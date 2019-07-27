@@ -112,7 +112,7 @@ func locationCmd(user string) {
 		}
 		lat, lon, err := datastore.CoordsFor(vid)
 		if err != nil {
-			client.Say(config.ChannelName, "Sorry, it didn't work this time :(. Try again in a few minutes!")
+			client.Say(config.ChannelName, "I couldn't figure out the GPS coordinates... try again in ~3 minutes!")
 		} else {
 			// generate a google maps url
 			address, _ := helpers.CityFromCoords(lat, lon)
