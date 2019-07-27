@@ -2,6 +2,7 @@ TODO
 
 QUICK AND DIRTY
 remove all panic()s
+!commands command
 update README a bit
 wikipedia article for current town
 fix !help because you can only run it once
@@ -15,8 +16,6 @@ make log prettier
 !miles (user)
 !city/!town
 add "x years y months ago" to !date and !time
-Top 10 Lettuce: 1. looperkele (1945), 2. owglass (1482), 3. souldead1988 (756), 4. guadaloopz (657), 5. therealspartan9001 (480), 6. fesup (451), 7. looptheloop (432), 8. valkir47 (431), 9. trifr0st (424), 10. st0x (405).
-"no audio" triggers alert
 "Sunset on this day is in -35 minutes"
 regular posts to chat (if no one has said anything)
 fix dono message

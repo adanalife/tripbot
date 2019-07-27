@@ -47,10 +47,6 @@ func PrivateMessage(message twitch.PrivateMessage) {
 		uptimeCmd(user)
 	}
 
-	if strings.HasPrefix(strings.ToLower(message.Message), "!optimized") {
-		optimizedCmd(user)
-	}
-
 	if strings.HasPrefix(strings.ToLower(message.Message), "!oldmiles") {
 		if isFollower(user) {
 			oldMilesCmd(user)
@@ -159,7 +155,14 @@ func UserPart(partMessage twitch.UserPartMessage) {
 
 // send message to chat if someone subs
 func UserNotice(message twitch.UserNoticeMessage) {
-	msg := fmt.Sprintf("%s Your support powers me bleedPurple", message.Message)
+	if message.Message != "" {
+		msg := fmt.Sprintf("%s just subscribed with message: %s", message.User, message.Message)
+		client.Say(config.ChannelName, msg)
+	} else {
+		msg := fmt.Sprintf("%s just subscribed", message.User)
+		client.Say(config.ChannelName, msg)
+	}
+	msg := fmt.Sprintf("Thank you. Your support keeps me running bleedPurple", message.Message)
 	client.Say(config.ChannelName, msg)
 }
 

@@ -5,7 +5,6 @@ import (
 	"log"
 	"math/rand"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/dmerrick/danalol-stream/pkg/config"
@@ -36,17 +35,6 @@ func uptimeCmd(user string) {
 	dur := time.Now().Sub(Uptime)
 	msg := fmt.Sprintf("I have been running for %s", durafmt.Parse(dur))
 	client.Say(config.ChannelName, msg)
-}
-
-func optimizedCmd(user string) {
-	log.Println(user, "ran !optimized")
-	// get the currently-playing video
-	currentVid := video.CurrentlyPlaying()
-	if strings.Contains(currentVid, "_opt") {
-		client.Say(config.ChannelName, "This video has been optimized")
-	} else {
-		client.Say(config.ChannelName, "This video is not yet optimized")
-	}
 }
 
 func oldMilesCmd(user string) {
