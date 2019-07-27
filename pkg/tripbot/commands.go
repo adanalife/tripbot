@@ -98,8 +98,8 @@ func sunsetCmd(user string) {
 	}
 }
 
-func tripbotCmd(user string) {
-	log.Println(user, "ran !tripbot")
+func locationCmd(user string) {
+	log.Println(user, "ran !location (or similar)")
 	// get the currently-playing video
 	currentVid := video.CurrentlyPlaying()
 

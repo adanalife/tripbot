@@ -75,11 +75,22 @@ func PrivateMessage(message twitch.PrivateMessage) {
 		}
 	}
 
-	if strings.HasPrefix(strings.ToLower(message.Message), "!tripbot") {
-		if isFollower(user) {
-			tripbotCmd(user)
-		} else {
-			client.Say(config.ChannelName, followerMsg)
+	// any of these should trigger the location command
+	locationStrings := []string{
+		"!tripbot",
+		"!location",
+		"!loc",
+		"where is this",
+		"where are we",
+		"where are you",
+	}
+	for _, s := range locationStrings {
+		if strings.HasPrefix(strings.ToLower(message.Message), s) {
+			if isFollower(user) {
+				locationCmd(user)
+			} else {
+				client.Say(config.ChannelName, followerMsg)
+			}
 		}
 	}
 
