@@ -20,7 +20,8 @@ possible_messages = [
   "I won't be offended if you play your own music",
   "Music by Soma.fm (!song)",
   "Use !report to report stream issues",
-  "Tripbot loves you <3 (!tripbot)",
+  # "Tripbot loves you <3 (!tripbot)",
+  "Where are we? (!location)",
   "LEADER",
   "RARE",
 ]
