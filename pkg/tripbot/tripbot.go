@@ -75,7 +75,6 @@ func PrivateMessage(message twitch.PrivateMessage) {
 	locationStrings := []string{
 		"!tripbot",
 		"!location",
-		"!loc",
 		"where is this",
 		"where are we",
 		"where are you",
