@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/dmerrick/danalol-stream/pkg/database"
+	"github.com/dmerrick/danalol-stream/pkg/helpers"
 )
 
 type Event struct {
@@ -41,8 +42,11 @@ func LogoutIfNecessary(user string) {
 	}
 	event := events[0]
 	if event.Event == "login" {
-		// last event was a login, so log them out
-		log.Println("logging out", user)
+		// no output if they are an ignored user
+		if !helpers.UserIsIgnored(user) {
+			// last event was a login, so log them out
+			log.Println("logging out", user)
+		}
 		Logout(user)
 		return
 	}
@@ -56,15 +60,21 @@ func LoginIfNecessary(user string) {
 	query := fmt.Sprintf("SELECT event, date_created FROM events WHERE username='%s' AND event IN ('logout','login') ORDER BY date_created DESC LIMIT 1", user)
 	database.DBCon.Select(&events, query)
 	if len(events) == 0 {
-		// no login/logout events for user
-		log.Println("logging in", user)
+		// no output if they are an ignored user
+		if !helpers.UserIsIgnored(user) {
+			// no login/logout events for user
+			log.Println("logging in", user)
+		}
 		Login(user)
 		return
 	}
 	event := events[0]
 	if event.Event == "logout" {
-		// last event was a logout, so log them in
-		log.Println("logging in", user)
+		// no output if they are an ignored user
+		if !helpers.UserIsIgnored(user) {
+			// last event was a logout, so log them in
+			log.Println("logging in", user)
+		}
 		Login(user)
 		return
 	}
