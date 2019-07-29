@@ -44,8 +44,10 @@ func LogoutIfNecessary(user string) {
 	if event.Event == "login" {
 		// no output if they are an ignored user
 		if !helpers.UserIsIgnored(user) {
+			// include the duration they were logged in
+			loggedInDur := time.Now().Sub(event.DateCreated)
 			// last event was a login, so log them out
-			log.Println("logging out", user)
+			log.Printf("logging out %s (%s)", user, loggedInDur)
 		}
 		Logout(user)
 		return
