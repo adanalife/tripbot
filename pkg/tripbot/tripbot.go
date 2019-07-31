@@ -75,6 +75,9 @@ func PrivateMessage(message twitch.PrivateMessage) {
 	locationStrings := []string{
 		"!tripbot",
 		"!location",
+		"!locton",
+		"!locaton",
+		"!locatoion",
 		"where is this",
 		"where are we",
 		"where are you",
@@ -155,13 +158,13 @@ func UserPart(partMessage twitch.UserPartMessage) {
 // send message to chat if someone subs
 func UserNotice(message twitch.UserNoticeMessage) {
 	if message.Message != "" {
-		msg := fmt.Sprintf("%s just subscribed with message: %s", message.User, message.Message)
+		msg := fmt.Sprintf("%s just subscribed with message: %s", message.User.DisplayName, message.Message)
 		client.Say(config.ChannelName, msg)
 	} else {
 		msg := fmt.Sprintf("%s just subscribed", message.User)
 		client.Say(config.ChannelName, msg)
 	}
-	msg := fmt.Sprintf("Thank you. Your support keeps me running bleedPurple", message.Message)
+	msg := fmt.Sprintf("Thank you. Your support keeps me running bleedPurple")
 	client.Say(config.ChannelName, msg)
 }
 
