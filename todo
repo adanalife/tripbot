@@ -25,6 +25,9 @@ fix dono message
 !guess ___ state
 !direction
 !route
+!speed
+!live
+!rerun
 
 INVOLVED
 add version and a changelog for the public

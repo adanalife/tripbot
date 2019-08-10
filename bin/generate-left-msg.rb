@@ -12,7 +12,8 @@ message_file = "./OBS/left-message.txt"
 possible_messages = [
   "Type !help in chat for tips",
   "Type !help in chat for tips",
-  "Sub goal #1 reached! Emotes coming soon",
+  "Looking for designer for emotes and more",
+  "Looking for designer for emotes and more",
   "Sub goal #2 (map overlay): #{sub_goal}",
   "Donation goal (!temperature): #{donation_goal}",
   "Twitch Prime subs keep us on air ;)",
