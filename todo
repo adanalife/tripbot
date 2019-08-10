@@ -1,6 +1,7 @@
 TODO
 
 QUICK AND DIRTY
+different zoom levels for !location
 remove all panic()s
 maybe tripbot should use /me for color?
 !commands command
