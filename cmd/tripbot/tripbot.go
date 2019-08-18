@@ -8,6 +8,7 @@ import (
 	"time"
 
 	_ "github.com/dimiro1/banner/autoload"
+	"github.com/dmerrick/danalol-stream/pkg/background"
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/database"
 	"github.com/dmerrick/danalol-stream/pkg/events"
@@ -27,6 +28,7 @@ func main() {
 		events.LogoutAll(tripbot.Uptime)
 		log.Printf("currently playing: %s", video.CurrentlyPlaying())
 		database.DBCon.Close()
+		background.StopCron()
 		os.Exit(1)
 	}()
 
@@ -43,6 +45,8 @@ func main() {
 	// join the channel
 	client.Join(config.ChannelName)
 	log.Println("Joined channel", config.ChannelName)
+
+	background.StartCron()
 
 	// actually connect to Twitch
 	// wrapped in a loop in case twitch goes down

@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/dmerrick/danalol-stream/pkg/background"
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/database"
 	"github.com/dmerrick/danalol-stream/pkg/events"
@@ -208,6 +209,7 @@ func shutdownCmd(user string) {
 	}
 	client.Say(config.ChannelName, "Shutting down...")
 	log.Printf("currently playing: %s", video.CurrentlyPlaying())
+	background.StopCron()
 	events.LogoutAll(Uptime)
 	database.DBCon.Close()
 	os.Exit(0)

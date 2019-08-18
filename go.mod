@@ -24,6 +24,7 @@ require (
 	github.com/nathan-osman/go-sunrise v0.0.0-20171121204956-7c449e7c690b
 	github.com/nicklaw5/helix v0.5.2
 	github.com/otiai10/gosseract v2.2.1+incompatible
+	github.com/robfig/cron v1.2.0
 	github.com/sfreiberg/gotwilio v0.0.0-20190522212351-14c666f1d505
 	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4 // indirect
 	googlemaps.github.io/maps v0.0.0-20190514133808-4d12cf0fa845 // indirect
