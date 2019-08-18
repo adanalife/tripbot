@@ -26,7 +26,7 @@ func main() {
 		// anything below this probably wont be executed
 		// use !shutdown instead
 		events.LogoutAll(tripbot.Uptime)
-		log.Printf("currently playing: %s", video.CurrentlyPlaying())
+		log.Printf("currently playing: %s", video.CurrentlyPlaying)
 		database.DBCon.Close()
 		background.StopCron()
 		os.Exit(1)
@@ -49,6 +49,7 @@ func main() {
 	// start cron and attach cronjobs
 	background.StartCron()
 	background.Cron.AddFunc("@every 27m30s", tripbot.Chatter)
+	background.Cron.AddFunc("@every 30s", video.GetCurrentlyPlaying)
 
 	// actually connect to Twitch
 	// wrapped in a loop in case twitch goes down

@@ -39,7 +39,7 @@ func main() {
 		if videoFile != "" {
 			log.Fatal("you cannot use -current and -file at the same time")
 		}
-		videoFile = video.CurrentlyPlaying()
+		videoFile = video.CurrentlyPlaying
 	}
 
 	datastore := store.FindOrCreate(config.DBPath)

@@ -23,7 +23,7 @@ func main() {
 
 	datastore := store.FindOrCreate("db/tripbot-copy.db")
 
-	videoFile := video.CurrentlyPlaying()
+	videoFile := video.CurrentlyPlaying
 
 	// a file was passed in via the CLI
 	if videoFile == "" {

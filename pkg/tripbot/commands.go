@@ -82,7 +82,7 @@ func milesCmd(user string) {
 func sunsetCmd(user string) {
 	log.Println(user, "ran !sunset")
 	// get the currently-playing video
-	currentVid := video.CurrentlyPlaying()
+	currentVid := video.CurrentlyPlaying
 	vid, err := video.New(currentVid)
 	if err != nil {
 		log.Println("unable to create Video: %v", err)
@@ -98,7 +98,7 @@ func sunsetCmd(user string) {
 func locationCmd(user string) {
 	log.Println(user, "ran !location (or similar)")
 	// get the currently-playing video
-	currentVid := video.CurrentlyPlaying()
+	currentVid := video.CurrentlyPlaying
 
 	// only run if this video hasn't yet been processed
 	if currentVid != lastVid {
@@ -144,7 +144,7 @@ func leaderboardCmd(user string) {
 func timeCmd(user string) {
 	log.Println(user, "ran !time")
 	// get the currently-playing video
-	currentVid := video.CurrentlyPlaying()
+	currentVid := video.CurrentlyPlaying
 	vid, err := video.New(currentVid)
 	if err != nil {
 		log.Println("unable to create Video: %v", err)
@@ -162,7 +162,7 @@ func timeCmd(user string) {
 func dateCmd(user string) {
 	log.Println(user, "ran !date")
 	// get the currently-playing video
-	currentVid := video.CurrentlyPlaying()
+	currentVid := video.CurrentlyPlaying
 	vid, err := video.New(currentVid)
 	if err != nil {
 		log.Println("unable to create video: %v", err)
@@ -180,7 +180,7 @@ func dateCmd(user string) {
 func stateCmd(user string) {
 	log.Println(user, "ran !state")
 	// get the currently-playing video
-	currentVid := video.CurrentlyPlaying()
+	currentVid := video.CurrentlyPlaying
 	vid, err := video.New(currentVid)
 	if err != nil {
 		log.Println("unable to create video: %v", err)
@@ -213,7 +213,7 @@ func shutdownCmd(user string) {
 		return
 	}
 	client.Say(config.ChannelName, "Shutting down...")
-	log.Printf("currently playing: %s", video.CurrentlyPlaying())
+	log.Printf("currently playing: %s", video.CurrentlyPlaying)
 	background.StopCron()
 	events.LogoutAll(Uptime)
 	database.DBCon.Close()

@@ -16,6 +16,8 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/ocr"
 )
 
+var CurrentlyPlaying string
+
 var timestampsToTry = []string{
 	"000",
 	"015",
@@ -111,7 +113,7 @@ func (v Video) CoordsWithRetry() (float64, float64, error) {
 	return 0, 0, errors.New("none of the screencaps had valid coords")
 }
 
-func CurrentlyPlaying() string {
+func GetCurrentlyPlaying() {
 	// run the shell script to get currently-playing video
 	scriptPath := path.Join(helpers.ProjectRoot(), "bin/current-file.sh")
 	// cmd := fmt.Sprintf("/usr/bin/cd %s && %s", helpers.ProjectRoot(), scriptPath)
@@ -119,7 +121,9 @@ func CurrentlyPlaying() string {
 	if err != nil {
 		log.Printf("failed to run script: %v", err)
 	}
-	return string(out)
+	CurrentlyPlaying = string(out)
+	//TODO: remove me
+	log.Println("current vid:", CurrentlyPlaying)
 }
 
 func validate(dashStr string) error {
