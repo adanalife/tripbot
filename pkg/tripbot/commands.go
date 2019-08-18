@@ -90,7 +90,7 @@ func sunsetCmd(user string) {
 	}
 	lat, lon, err := datastore.CoordsFor(vid)
 	if err != nil {
-		client.Say(config.ChannelName, "That didn't work, sorry!")
+		client.Say(config.ChannelName, "I couldn't figure out current GPS coords, sorry!")
 	} else {
 		client.Say(config.ChannelName, helpers.SunsetStr(vid.Date(), lat, lon))
 	}
@@ -145,7 +145,7 @@ func timeCmd(user string) {
 	}
 	lat, lon, err := datastore.CoordsFor(vid)
 	if err != nil {
-		client.Say(config.ChannelName, "That didn't work, sorry!")
+		client.Say(config.ChannelName, "I couldn't figure out current GPS coords, sorry!")
 	} else {
 		realDate := helpers.ActualDate(vid.Date(), lat, lon)
 		fmtTime := realDate.Format("3:04pm MST")
@@ -163,7 +163,7 @@ func dateCmd(user string) {
 	}
 	lat, lon, err := datastore.CoordsFor(vid)
 	if err != nil {
-		client.Say(config.ChannelName, "That didn't work, sorry!")
+		client.Say(config.ChannelName, "I couldn't figure out current GPS coords, sorry!")
 	} else {
 		realDate := helpers.ActualDate(vid.Date(), lat, lon)
 		fmtDate := realDate.Format("Monday January 2, 2006")
@@ -181,11 +181,11 @@ func stateCmd(user string) {
 	}
 	lat, lon, err := datastore.CoordsFor(vid)
 	if err != nil {
-		client.Say(config.ChannelName, "That didn't work, sorry!")
+		client.Say(config.ChannelName, "I couldn't figure out current GPS coords, sorry!")
 	} else {
 		state, err := helpers.StateFromCoords(lat, lon)
 		if err != nil || state == "" {
-			client.Say(config.ChannelName, "That didn't work, sorry!")
+			client.Say(config.ChannelName, "That didn't work this time, sorry!")
 		} else {
 			msg := fmt.Sprintf("We're in %s", state)
 			client.Say(config.ChannelName, msg)
