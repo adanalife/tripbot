@@ -50,7 +50,7 @@ func LogoutIfNecessary(user string) {
 			// last event was a login, so log them out
 			log.Printf("logging out %s (%s)", user, loggedInDur)
 		}
-		Logout(user)
+		logout(user)
 		return
 	}
 	// nothing to be done
@@ -68,7 +68,7 @@ func LoginIfNecessary(user string) {
 			// no login/logout events for user
 			log.Println("logging in", user)
 		}
-		Login(user)
+		login(user)
 		return
 	}
 	event := events[0]
@@ -78,15 +78,14 @@ func LoginIfNecessary(user string) {
 			// last event was a logout, so log them in
 			log.Println("logging in", user)
 		}
-		Login(user)
+		login(user)
 		return
 	}
 	// nothing to be done
 	return
 }
 
-//TODO: make this private?
-func Login(user string) {
+func login(user string) {
 	if config.ReadOnly {
 		log.Printf("Not logging in %s because we're in read-only mode", user)
 		return
@@ -96,8 +95,7 @@ func Login(user string) {
 	tx.Commit()
 }
 
-//TODO: make this private?
-func Logout(user string) {
+func logout(user string) {
 	if config.ReadOnly {
 		log.Printf("Not logging out %s because we're in read-only mode", user)
 		return
