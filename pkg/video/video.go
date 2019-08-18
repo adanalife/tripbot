@@ -121,9 +121,7 @@ func GetCurrentlyPlaying() {
 	if err != nil {
 		log.Printf("failed to run script: %v", err)
 	}
-	CurrentlyPlaying = string(out)
-	//TODO: remove me
-	log.Println("current vid:", CurrentlyPlaying)
+	CurrentlyPlaying = strings.TrimSpace(string(out))
 }
 
 func validate(dashStr string) error {
