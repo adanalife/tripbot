@@ -49,6 +49,7 @@ func main() {
 	// run this right away to set the currently-playing video
 	// (otherwise it will be unset until the first cron job runs)
 	video.GetCurrentlyPlaying()
+	log.Println("Currently playing:", video.CurrentlyPlaying)
 
 	// start cron and attach cronjobs
 	background.StartCron()
