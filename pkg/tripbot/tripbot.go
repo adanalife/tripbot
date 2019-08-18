@@ -19,7 +19,7 @@ import (
 	"github.com/sfreiberg/gotwilio"
 )
 
-var lastVid, botUsername, clientAuthenticationToken, twitchClientID, googleMapsAPIKey string
+var botUsername, clientAuthenticationToken, twitchClientID, googleMapsAPIKey string
 var twilioFromNum, twilioToNum string
 var twilioClient *gotwilio.Twilio
 var client *twitch.Client

@@ -101,30 +101,23 @@ func locationCmd(user string) {
 	// get the currently-playing video
 	currentVid := video.CurrentlyPlaying
 
-	// only run if this video hasn't yet been processed
-	if currentVid != lastVid {
-		// extract the coordinates
-		vid, err := video.New(currentVid)
-		if err != nil {
-			log.Println("unable to create Video: %v", err)
-		}
-		lat, lon, err := datastore.CoordsFor(vid)
-		if err != nil {
-			client.Say(config.ChannelName, "I couldn't figure out the GPS coordinates... try again in ~3 minutes!")
-		} else {
-			// generate a google maps url
-			address, _ := helpers.CityFromCoords(lat, lon)
-			if err != nil {
-				log.Println("geocoding error", err)
-			}
-			url := helpers.GoogleMapsURL(lat, lon)
-			msg := fmt.Sprintf("%s %s", address, url)
-			client.Say(config.ChannelName, msg)
-		}
-		// update the last vid
-		lastVid = currentVid
+	// extract the coordinates
+	vid, err := video.New(currentVid)
+	if err != nil {
+		log.Println("unable to create Video: %v", err)
+	}
+	lat, lon, err := datastore.CoordsFor(vid)
+	if err != nil {
+		client.Say(config.ChannelName, "I couldn't figure out the GPS coordinates... try again in ~3 minutes!")
 	} else {
-		client.Say(config.ChannelName, fmt.Sprintf("That's too soon, I need a minute"))
+		// generate a google maps url
+		address, _ := helpers.CityFromCoords(lat, lon)
+		if err != nil {
+			log.Println("geocoding error", err)
+		}
+		url := helpers.GoogleMapsURL(lat, lon)
+		msg := fmt.Sprintf("%s %s", address, url)
+		client.Say(config.ChannelName, msg)
 	}
 }
 
