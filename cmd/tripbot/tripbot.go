@@ -46,7 +46,9 @@ func main() {
 	client.Join(config.ChannelName)
 	log.Println("Joined channel", config.ChannelName)
 
+	// start cron and attach cronjobs
 	background.StartCron()
+	background.Cron.AddFunc("@every 27m30s", tripbot.Chatter)
 
 	// actually connect to Twitch
 	// wrapped in a loop in case twitch goes down

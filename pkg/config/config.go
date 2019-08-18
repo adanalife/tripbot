@@ -86,7 +86,7 @@ var IgnoredUsers = []string{
 
 // HelpMessages are all of the different things !help can return
 var HelpMessages = []string{
-	"!tripbot: Get the current location (beta)",
+	"!location: Get the current location (beta)",
 	"!map: Show a map of the whole trip",
 	"!info: Get more details on the footage",
 	"!song: Get the current music",

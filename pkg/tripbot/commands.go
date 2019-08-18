@@ -23,12 +23,17 @@ func isFollower(user string) bool {
 	return true
 }
 
-func helpCmd(user string) {
-	log.Println(user, "ran !help")
-	msg := fmt.Sprintf("%s (%d of %d)", config.HelpMessages[helpIndex], helpIndex+1, len(config.HelpMessages))
-	client.Say(config.ChannelName, msg)
+func help() string {
+	text := config.HelpMessages[helpIndex]
 	// bump the index
 	helpIndex = (helpIndex + 1) % len(config.HelpMessages)
+	return text
+}
+
+func helpCmd(user string) {
+	log.Println(user, "ran !help")
+	msg := fmt.Sprintf("%s (%d of %d)", help(), helpIndex+1, len(config.HelpMessages))
+	client.Say(config.ChannelName, msg)
 }
 
 func uptimeCmd(user string) {
@@ -213,4 +218,10 @@ func shutdownCmd(user string) {
 	events.LogoutAll(Uptime)
 	database.DBCon.Close()
 	os.Exit(0)
+}
+
+// Chatter will post a message to chat
+func Chatter() {
+	rand.Intn(len(config.HelpMessages))
+	client.Say(config.ChannelName, help())
 }
