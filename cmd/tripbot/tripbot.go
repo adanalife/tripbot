@@ -46,6 +46,10 @@ func main() {
 	client.Join(config.ChannelName)
 	log.Println("Joined channel", config.ChannelName)
 
+	// run this right away to set the currently-playing video
+	// (otherwise it will be unset until the first cron job runs)
+	video.GetCurrentlyPlaying()
+
 	// start cron and attach cronjobs
 	background.StartCron()
 	background.Cron.AddFunc("@every 27m30s", tripbot.Chatter)
