@@ -3,11 +3,10 @@ package config
 import (
 	"os"
 	"path"
+	"strconv"
 )
 
 const (
-	// ChannelName is the channel to join
-	ChannelName = "adanalife_"
 	// ChannelID is the internal twitch ID of the channel
 	ChannelID = "225469317"
 
@@ -24,6 +23,14 @@ const (
 	UserWatchedBucket = "user_watched"
 	CoordsBucket      = "coords"
 )
+
+var ChannelName string
+var ReadOnly bool
+
+func init() {
+	ChannelName = os.Getenv("CHANNEL_NAME")
+	ReadOnly, _ = strconv.ParseBool(os.Getenv("READ_ONLY"))
+}
 
 func VideoDir() string {
 	return path.Join(os.Getenv("DASHCAM_DIR"), videoDir)

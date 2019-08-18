@@ -5,6 +5,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/database"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 )
@@ -86,6 +87,10 @@ func LoginIfNecessary(user string) {
 
 //TODO: make this private?
 func Login(user string) {
+	if config.ReadOnly {
+		log.Printf("Not logging in %s because we're in read-only mode", user)
+		return
+	}
 	tx := database.DBCon.MustBegin()
 	tx.MustExec("INSERT INTO events (username, event) VALUES ($1, $2)", user, "login")
 	tx.Commit()
@@ -93,6 +98,10 @@ func Login(user string) {
 
 //TODO: make this private?
 func Logout(user string) {
+	if config.ReadOnly {
+		log.Printf("Not logging out %s because we're in read-only mode", user)
+		return
+	}
 	tx := database.DBCon.MustBegin()
 	tx.MustExec("INSERT INTO events (username, event) VALUES ($1, $2)", user, "logout")
 	tx.Commit()
