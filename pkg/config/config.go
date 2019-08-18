@@ -1,9 +1,12 @@
 package config
 
 import (
+	"log"
 	"os"
 	"path"
 	"strconv"
+
+	"github.com/joho/godotenv"
 )
 
 const (
@@ -28,6 +31,11 @@ var ChannelName string
 var ReadOnly bool
 
 func init() {
+	// load ENV vars from .env file
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
 	ChannelName = os.Getenv("CHANNEL_NAME")
 	ReadOnly, _ = strconv.ParseBool(os.Getenv("READ_ONLY"))
 }
