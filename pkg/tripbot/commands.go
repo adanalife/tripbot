@@ -5,6 +5,7 @@ import (
 	"log"
 	"math/rand"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/dmerrick/danalol-stream/pkg/background"
@@ -208,7 +209,7 @@ func reportCmd(user, message string) {
 
 func shutdownCmd(user string) {
 	log.Println(user, "ran !shutdown")
-	if user != config.ChannelName {
+	if user != strings.ToLower(config.ChannelName) {
 		client.Say(config.ChannelName, "I'm sorry, I won't do that")
 		return
 	}
