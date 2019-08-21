@@ -161,7 +161,7 @@ func UserNotice(message twitch.UserNoticeMessage) {
 		msg := fmt.Sprintf("%s just subscribed with message: %s", message.User.DisplayName, message.Message)
 		client.Say(config.ChannelName, msg)
 	} else {
-		msg := fmt.Sprintf("%s just subscribed", message.User)
+		msg := fmt.Sprintf("%s just subscribed", message.User.DisplayName)
 		client.Say(config.ChannelName, msg)
 	}
 	msg := fmt.Sprintf("Thank you. Your support keeps me running bleedPurple")
