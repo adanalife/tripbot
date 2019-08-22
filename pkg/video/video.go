@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
-	"github.com/hako/durafmt"
 )
 
 // this is the video that is currently playing
@@ -35,7 +34,7 @@ func GetCurrentlyPlaying() {
 		timeStarted = time.Now()
 		// set up the video for others to use
 		CurrentlyPlaying, err = New(curVid)
-		log.Printf("played %s for %s, now playing %s", preVid, durafmt.ParseShort(durationPlayed), curVid)
+		log.Printf("played %s for %s, now playing %s", preVid, durationPlayed, curVid)
 		if err != nil {
 			log.Println("unable to create Video from %s: %v", curVid, err)
 		}
