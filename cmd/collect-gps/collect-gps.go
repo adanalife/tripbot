@@ -50,7 +50,7 @@ func main() {
 		if err != nil {
 			log.Println("unable to create video: %v", err)
 		}
-		lat, lon, err := datastore.CoordsFor(vid)
+		lat, lon, err := vid.Location()
 		if err != nil {
 			log.Fatalf("failed to process image: %v", err)
 		}
@@ -76,7 +76,7 @@ func main() {
 					log.Println("unable to create video:", err)
 					return nil
 				}
-				lat, lon, err := datastore.CoordsFor(vid)
+				lat, lon, err := vid.Location()
 				if err != nil {
 					log.Printf("failed to process video: %v", err)
 					return nil

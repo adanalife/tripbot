@@ -90,7 +90,7 @@ func sunsetCmd(user string) {
 	log.Println(user, "ran !sunset")
 	// get the currently-playing video
 	vid := video.CurrentlyPlaying
-	lat, lon, err := datastore.CoordsFor(vid)
+	lat, lon, err := vid.Location()
 	if err != nil {
 		client.Say(config.ChannelName, "I couldn't figure out current GPS coords, sorry!")
 	} else {
@@ -103,7 +103,7 @@ func locationCmd(user string) {
 	// get the currently-playing video
 	vid := video.CurrentlyPlaying
 	// extract the coordinates
-	lat, lon, err := datastore.CoordsFor(vid)
+	lat, lon, err := vid.Location()
 	if err != nil {
 		client.Say(config.ChannelName, "I couldn't figure out the GPS coordinates... try again in ~3 minutes!")
 	} else {
@@ -136,7 +136,7 @@ func timeCmd(user string) {
 	log.Println(user, "ran !time")
 	// get the currently-playing video
 	vid := video.CurrentlyPlaying
-	lat, lon, err := datastore.CoordsFor(vid)
+	lat, lon, err := vid.Location()
 	if err != nil {
 		client.Say(config.ChannelName, "I couldn't figure out current GPS coords, sorry!")
 	} else {
@@ -150,7 +150,7 @@ func dateCmd(user string) {
 	log.Println(user, "ran !date")
 	// get the currently-playing video
 	vid := video.CurrentlyPlaying
-	lat, lon, err := datastore.CoordsFor(vid)
+	lat, lon, err := vid.Location()
 	if err != nil {
 		client.Say(config.ChannelName, "I couldn't figure out current GPS coords, sorry!")
 	} else {
@@ -164,7 +164,7 @@ func stateCmd(user string) {
 	log.Println(user, "ran !state")
 	// get the currently-playing video
 	vid := video.CurrentlyPlaying
-	lat, lon, err := datastore.CoordsFor(vid)
+	lat, lon, err := vid.Location()
 	if err != nil {
 		client.Say(config.ChannelName, "I couldn't figure out current GPS coords, sorry!")
 	} else {
@@ -193,7 +193,7 @@ func secretInfoCmd(user string) {
 	}
 	vid := video.CurrentlyPlaying
 	msg := fmt.Sprintf("currently playing: %s, playtime: %s", vid, video.CurrentProgress())
-	lat, lon, err := datastore.CoordsFor(vid)
+	lat, lon, err := vid.Location()
 	if err != nil {
 		msg = fmt.Sprintf("%s, err: %s", msg, err)
 	} else {

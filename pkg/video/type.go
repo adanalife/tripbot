@@ -56,6 +56,16 @@ func LoadOrCreate(path string) (Video, error) {
 	return videos[0], nil
 }
 
+// Location returns a lat/lng pair
+//TODO: refactor out the error return value
+func (v Video) Location() (float64, float64, error) {
+	var err error
+	if v.Flagged {
+		err = errors.New("video is flagged")
+	}
+	return v.Lat, v.Lng, err
+}
+
 // ex: 2018_0514_224801_013_a_opt
 func (v Video) String() string {
 	return v.Slug
@@ -83,8 +93,8 @@ func (v Video) Path() string {
 	return path.Join(config.VideoDir(), v.File())
 }
 
-// Date returns a time.Time object for the video
-func (v Video) Date() time.Time {
+// toDate returns a time.Time object for the video
+func (v Video) toDate() time.Time {
 	vidStr := v.String()
 	year, _ := strconv.Atoi(vidStr[:4])
 	month, _ := strconv.Atoi(vidStr[5:7])
@@ -97,8 +107,8 @@ func (v Video) Date() time.Time {
 	return t
 }
 
-// LatLng will use OCR to read the coordinates from a screenshot (seriously)
-func (v Video) LatLng() (float64, float64, error) {
+// ocrCoords will use OCR to read the coordinates from a screenshot (seriously)
+func (v Video) ocrCoords() (float64, float64, error) {
 	for _, timestamp := range timestampsToTry {
 		lat, lon, err := ocr.CoordsFromImage(v.screencap(timestamp))
 		if err == nil {
@@ -147,7 +157,7 @@ func create(file string) (Video, error) {
 func (v Video) save() error {
 	flagged := false
 	// try to get at least one good coords pair
-	lat, lng, err := v.LatLng()
+	lat, lng, err := v.ocrCoords()
 	if err != nil {
 		log.Println("error fetching coords:", err)
 		flagged = true
@@ -159,7 +169,7 @@ func (v Video) save() error {
 		v.Slug,
 		lat,
 		lng,
-		v.Date(),
+		v.toDate(),
 		flagged,
 	)
 	return tx.Commit()

@@ -37,7 +37,7 @@ func (s *Store) CoordsFor(vid video.Video) (float64, float64, error) {
 	}
 
 	// okay we need to pull them from the video file
-	lat, lon, err = vid.LatLng()
+	lat, lon, err = vid.Location()
 	if err != nil {
 		// something went wrong reading the coords
 		return lat, lon, err

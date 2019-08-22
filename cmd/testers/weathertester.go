@@ -22,7 +22,7 @@ func main() {
 
 	vidStr := "2018_0920_172817_007.MP4"
 	vid, _ := video.LoadOrCreate(vidStr)
-	lat, lon, _ := datastore.CoordsFor(vid)
+	lat, lon, _ := vid.Location()
 
 	realDate := helpers.ActualDate(vid.Date(), lat, lon)
 

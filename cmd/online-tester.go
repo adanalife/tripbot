@@ -36,7 +36,7 @@ func main() {
 	}
 	fmt.Println(vid.File())
 
-	lat, lon, err := datastore.CoordsFor(vid)
+	lat, lon, err := vid.Location()
 	if err != nil {
 		log.Fatalf("failed to process image: %v", err)
 	}
