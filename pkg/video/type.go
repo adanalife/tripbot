@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/dmerrick/danalol-stream/pkg/config"
+	"github.com/dmerrick/danalol-stream/pkg/ocr"
 )
 
 // these are different timestamps we have screenshots prepared for
@@ -92,6 +93,17 @@ func (v Video) Date() time.Time {
 
 	t := time.Date(year, time.Month(month), day, hour, minute, second, 0, time.UTC)
 	return t
+}
+
+// LatLng will use OCR to read the coordinates from a screenshot (seriously)
+func (v Video) LatLng() (float64, float64, error) {
+	for _, timestamp := range timestampsToTry {
+		lat, lon, err := ocr.CoordsFromImage(v.screencap(timestamp))
+		if err == nil {
+			return lat, lon, err
+		}
+	}
+	return 0, 0, errors.New("none of the screencaps had valid coords")
 }
 
 // timestamp is something like 000, 030, 100, etc

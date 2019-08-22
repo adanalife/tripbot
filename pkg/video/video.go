@@ -1,14 +1,12 @@
 package video
 
 import (
-	"errors"
 	"log"
 	"os/exec"
 	"path"
 	"strings"
 
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
-	"github.com/dmerrick/danalol-stream/pkg/ocr"
 )
 
 // these are used to keep track of the current video
@@ -27,16 +25,6 @@ func GetCurrentlyPlaying() {
 	} else {
 		// it's a new video, reset the timer
 	}
-}
-
-func (v Video) CoordsWithRetry() (float64, float64, error) {
-	for _, timestamp := range timestampsToTry {
-		lat, lon, err := ocr.CoordsFromImage(v.screencap(timestamp))
-		if err == nil {
-			return lat, lon, err
-		}
-	}
-	return 0, 0, errors.New("none of the screencaps had valid coords")
 }
 
 func figureOutCurrentVideo() string {
