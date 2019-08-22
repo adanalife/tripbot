@@ -197,7 +197,7 @@ func secretInfoCmd(user string) {
 	if err != nil {
 		msg = fmt.Sprintf("%s, err: %s", msg, err)
 	} else {
-		msg = fmt.Sprintf("%s, lat: %d, lng: %d", msg, lat, lon)
+		msg = fmt.Sprintf("%s, lat: %f, lng: %f", msg, lat, lon)
 	}
 	log.Println(msg)
 	client.Say(config.ChannelName, msg)
