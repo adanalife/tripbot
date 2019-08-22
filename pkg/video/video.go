@@ -5,8 +5,10 @@ import (
 	"os/exec"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
+	"github.com/hako/durafmt"
 )
 
 // this is the video that is currently playing
@@ -14,6 +16,7 @@ var CurrentlyPlaying Video
 
 // these are used to keep track of the current video
 var curVid, preVid string
+var timeStarted time.Time
 
 // GetCurrentlyPlaying will use lsof to figure out
 // which dashcam video is currently playing (seriously)
@@ -26,9 +29,13 @@ func GetCurrentlyPlaying() {
 
 	// if the currently-playing video has changed
 	if curVid != preVid {
+		// calculate the time running
+		durationPlayed := time.Since(timeStarted)
+		// reset the stopwatch
+		timeStarted = time.Now()
 		// set up the video for others to use
 		CurrentlyPlaying, err = New(curVid)
-		log.Println("currently playing:", curVid)
+		log.Printf("played %s for %s, now playing %s", preVid, durafmt.ParseShort(durationPlayed), curVid)
 		if err != nil {
 			log.Println("unable to create Video from %s: %v", curVid, err)
 		}
