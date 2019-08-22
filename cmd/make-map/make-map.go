@@ -16,7 +16,6 @@ import (
 	"github.com/dmerrick/danalol-stream/internal/takeout"
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
-	"github.com/dmerrick/danalol-stream/pkg/store"
 	"github.com/dmerrick/danalol-stream/pkg/video"
 	"github.com/joho/godotenv"
 	"googlemaps.github.io/maps"
@@ -45,9 +44,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("client error: %s", err)
 	}
-
-	// initialize the DB
-	datastore := store.FindOrCreate(config.DBPath)
 
 	// this will contain the overlay path
 	pathPoints := []maps.LatLng{}

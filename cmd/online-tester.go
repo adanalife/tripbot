@@ -6,7 +6,6 @@ import (
 	"os"
 
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
-	"github.com/dmerrick/danalol-stream/pkg/store"
 	"github.com/dmerrick/danalol-stream/pkg/video"
 	"github.com/joho/godotenv"
 )
@@ -20,8 +19,6 @@ func main() {
 	if os.Getenv("DASHCAM_DIR") == "" {
 		panic("You must set DASHCAM_DIR")
 	}
-
-	datastore := store.FindOrCreate("db/tripbot-copy.db")
 
 	videoFile := video.CurrentlyPlaying
 
