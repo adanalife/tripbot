@@ -10,7 +10,7 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 )
 
-// this is the video that is currently playing
+// CurrentlyPlaying is the video that is currently playing
 var CurrentlyPlaying Video
 
 // these are used to keep track of the current video
@@ -29,7 +29,7 @@ func GetCurrentlyPlaying() {
 	// if the currently-playing video has changed
 	if curVid != preVid {
 		// calculate the time running
-		durationPlayed := time.Since(timeStarted)
+		durationPlayed := CurrentProgress()
 		// reset the stopwatch
 		timeStarted = time.Now()
 		// set up the video for others to use
@@ -40,6 +40,11 @@ func GetCurrentlyPlaying() {
 		}
 		//TODO: start and reset a timer here
 	}
+}
+
+// CurrentProgress represents how long the video has been playing
+func CurrentProgress() time.Duration {
+	return time.Since(timeStarted)
 }
 
 func figureOutCurrentVideo() string {
