@@ -16,8 +16,11 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/ocr"
 )
 
-var CurrentlyPlaying string
+// these are used to keep track of the current video
+var CurrentlyPlaying, previouslyPlaying string
 
+// these are different timestamps we have screenshots prepared for
+// the "000" corresponds to 0m0s, "130" corresponds to 1m30s
 var timestampsToTry = []string{
 	"000",
 	"015",
@@ -84,6 +87,7 @@ func (v Video) Path() string {
 	return path.Join(config.VideoDir(), v.File())
 }
 
+// Date returns a time.Time object for the video
 func (v Video) Date() time.Time {
 	vidStr := v.String()
 	year, _ := strconv.Atoi(vidStr[:4])
@@ -121,7 +125,13 @@ func GetCurrentlyPlaying() {
 	if err != nil {
 		log.Printf("failed to run script: %v", err)
 	}
+	previouslyPlaying = CurrentlyPlaying
 	CurrentlyPlaying = strings.TrimSpace(string(out))
+	if CurrentlyPlaying == previouslyPlaying {
+		// it's the same video as last time
+	} else {
+		// it's a new video, reset the timer
+	}
 }
 
 func validate(dashStr string) error {
