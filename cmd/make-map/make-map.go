@@ -36,7 +36,7 @@ func main() {
 		panic("You must set DASHCAM_DIR")
 	}
 	// first we must check for required ENV vars
-	googleMapsAPIKey := os.Getenv("TWITCH_CLIENT_ID")
+	googleMapsAPIKey := os.Getenv("GOOGLE_MAPS_API_KEY")
 	if googleMapsAPIKey == "" {
 		panic("You must set GOOGLE_MAPS_API_KEY")
 	}
