@@ -36,6 +36,7 @@ type Video struct {
 	Slug string
 }
 
+// New takes a file (filename or path) and returns a Video
 func New(file string) (Video, error) {
 	var newVid Video
 

@@ -9,21 +9,29 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 )
 
+// this is the video that is currently playing
+var CurrentlyPlaying Video
+
 // these are used to keep track of the current video
-var CurrentlyPlaying, previouslyPlaying string
+var curVid, preVid string
 
 // GetCurrentlyPlaying will use lsof to figure out
 // which dashcam video is currently playing (seriously)
 func GetCurrentlyPlaying() {
+	var err error
 	// save the video we used last time
-	previouslyPlaying = CurrentlyPlaying
+	preVid = curVid
 	// figure out whats currently playing
-	CurrentlyPlaying = figureOutCurrentVideo()
+	curVid = figureOutCurrentVideo()
 
-	if CurrentlyPlaying == previouslyPlaying {
-		// it's the same video as last time
-	} else {
-		// it's a new video, reset the timer
+	// if the currently-playing video has changed
+	if curVid != preVid {
+		// set up the video for others to use
+		CurrentlyPlaying, err = New(curVid)
+		if err != nil {
+			log.Println("unable to create Video from %s: %v", curVid, err)
+		}
+		//TODO: start and reset a timer here
 	}
 }
 

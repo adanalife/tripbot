@@ -83,11 +83,7 @@ func milesCmd(user string) {
 func sunsetCmd(user string) {
 	log.Println(user, "ran !sunset")
 	// get the currently-playing video
-	currentVid := video.CurrentlyPlaying
-	vid, err := video.New(currentVid)
-	if err != nil {
-		log.Println("unable to create Video: %v", err)
-	}
+	vid := video.CurrentlyPlaying
 	lat, lon, err := datastore.CoordsFor(vid)
 	if err != nil {
 		client.Say(config.ChannelName, "I couldn't figure out current GPS coords, sorry!")
@@ -99,13 +95,8 @@ func sunsetCmd(user string) {
 func locationCmd(user string) {
 	log.Println(user, "ran !location (or similar)")
 	// get the currently-playing video
-	currentVid := video.CurrentlyPlaying
-
+	vid := video.CurrentlyPlaying
 	// extract the coordinates
-	vid, err := video.New(currentVid)
-	if err != nil {
-		log.Println("unable to create Video: %v", err)
-	}
 	lat, lon, err := datastore.CoordsFor(vid)
 	if err != nil {
 		client.Say(config.ChannelName, "I couldn't figure out the GPS coordinates... try again in ~3 minutes!")
@@ -138,11 +129,7 @@ func leaderboardCmd(user string) {
 func timeCmd(user string) {
 	log.Println(user, "ran !time")
 	// get the currently-playing video
-	currentVid := video.CurrentlyPlaying
-	vid, err := video.New(currentVid)
-	if err != nil {
-		log.Println("unable to create Video: %v", err)
-	}
+	vid := video.CurrentlyPlaying
 	lat, lon, err := datastore.CoordsFor(vid)
 	if err != nil {
 		client.Say(config.ChannelName, "I couldn't figure out current GPS coords, sorry!")
@@ -156,11 +143,7 @@ func timeCmd(user string) {
 func dateCmd(user string) {
 	log.Println(user, "ran !date")
 	// get the currently-playing video
-	currentVid := video.CurrentlyPlaying
-	vid, err := video.New(currentVid)
-	if err != nil {
-		log.Println("unable to create video: %v", err)
-	}
+	vid := video.CurrentlyPlaying
 	lat, lon, err := datastore.CoordsFor(vid)
 	if err != nil {
 		client.Say(config.ChannelName, "I couldn't figure out current GPS coords, sorry!")
@@ -174,11 +157,7 @@ func dateCmd(user string) {
 func stateCmd(user string) {
 	log.Println(user, "ran !state")
 	// get the currently-playing video
-	currentVid := video.CurrentlyPlaying
-	vid, err := video.New(currentVid)
-	if err != nil {
-		log.Println("unable to create video: %v", err)
-	}
+	vid := video.CurrentlyPlaying
 	lat, lon, err := datastore.CoordsFor(vid)
 	if err != nil {
 		client.Say(config.ChannelName, "I couldn't figure out current GPS coords, sorry!")
