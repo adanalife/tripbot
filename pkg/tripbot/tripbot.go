@@ -11,7 +11,6 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/database"
 	"github.com/dmerrick/danalol-stream/pkg/events"
-	"github.com/dmerrick/danalol-stream/pkg/store"
 	mytwitch "github.com/dmerrick/danalol-stream/pkg/twitch"
 	"github.com/gempir/go-twitch-irc/v2"
 	"github.com/joho/godotenv"
@@ -23,7 +22,6 @@ var botUsername, clientAuthenticationToken, twitchClientID, googleMapsAPIKey str
 var twilioFromNum, twilioToNum string
 var twilioClient *gotwilio.Twilio
 var client *twitch.Client
-var datastore *store.Store
 var Uptime time.Time
 
 // used to determine which help message to display
@@ -45,14 +43,6 @@ func PrivateMessage(message twitch.PrivateMessage) {
 
 	if strings.HasPrefix(strings.ToLower(message.Message), "!uptime") {
 		uptimeCmd(user)
-	}
-
-	if strings.HasPrefix(strings.ToLower(message.Message), "!oldmiles") {
-		if isFollower(user) {
-			oldMilesCmd(user)
-		} else {
-			client.Say(config.ChannelName, followerMsg)
-		}
 	}
 
 	if strings.HasPrefix(strings.ToLower(message.Message), "!miles") {
@@ -245,9 +235,6 @@ func Initialize() *twitch.Client {
 	if err != nil {
 		log.Fatal("error initializing the DB", err)
 	}
-
-	// initialize the local datastore
-	datastore = store.FindOrCreate(config.DBPath)
 
 	client = twitch.NewClient(botUsername, clientAuthenticationToken)
 

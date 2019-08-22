@@ -50,22 +50,6 @@ func uptimeCmd(user string) {
 	client.Say(config.ChannelName, msg)
 }
 
-func oldMilesCmd(user string) {
-	log.Println(user, "ran !oldmiles")
-	miles := datastore.MilesForUser(user)
-	msg := ""
-	switch {
-	case miles == 1:
-		msg = "@%s has only %d mile"
-	case miles >= 250:
-		msg = "Holy crap! @%s has %d miles!"
-	default:
-		msg = "@%s has %d miles. Earn 1 mile every 10 minutes by watching the stream"
-	}
-	msg = fmt.Sprintf(msg, user, miles)
-	client.Say(config.ChannelName, msg)
-}
-
 func milesCmd(user string) {
 	log.Println(user, "ran !miles")
 	miles := miles.ForUser(user)
@@ -164,8 +148,7 @@ func stateCmd(user string) {
 	log.Println(user, "ran !state")
 	// get the currently-playing video
 	vid := video.CurrentlyPlaying
-	lat, lon, err := vid.Location()
-	if err != nil {
+	if vid.Flagged {
 		client.Say(config.ChannelName, "I couldn't figure out current GPS coords, sorry!")
 	} else {
 		msg := fmt.Sprintf("We're in %s", vid.State)
