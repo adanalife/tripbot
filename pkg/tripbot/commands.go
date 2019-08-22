@@ -18,6 +18,12 @@ import (
 	"github.com/hako/durafmt"
 )
 
+// Chatter will post a message to chat
+func Chatter() {
+	rand.Intn(len(config.HelpMessages))
+	client.Say(config.ChannelName, help())
+}
+
 func isFollower(user string) bool {
 	// return mytwitch.UserIsFollower(user)
 	//TODO: fixme
@@ -191,10 +197,4 @@ func shutdownCmd(user string) {
 	events.LogoutAll(Uptime)
 	database.DBCon.Close()
 	os.Exit(0)
-}
-
-// Chatter will post a message to chat
-func Chatter() {
-	rand.Intn(len(config.HelpMessages))
-	client.Say(config.ChannelName, help())
 }
