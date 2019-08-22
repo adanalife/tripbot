@@ -12,6 +12,7 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	"github.com/dmerrick/danalol-stream/pkg/video"
 	"github.com/joho/godotenv"
+	"github.com/kelvins/geocoder"
 )
 
 // this will hold the filename passed in via the CLI
@@ -26,6 +27,12 @@ func init() {
 	if os.Getenv("DASHCAM_DIR") == "" {
 		panic("You must set DASHCAM_DIR")
 	}
+	googleMapsAPIKey := os.Getenv("GOOGLE_MAPS_API_KEY")
+	if googleMapsAPIKey == "" {
+		panic("You must set GOOGLE_MAPS_API_KEY")
+	}
+	geocoder.ApiKey = googleMapsAPIKey
+
 	flag.StringVar(&videoFile, "file", "", "File to load")
 	flag.BoolVar(&current, "current", false, "Use currently-playing video")
 	flag.Parse()

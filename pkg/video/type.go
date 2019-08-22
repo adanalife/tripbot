@@ -21,6 +21,7 @@ type Video struct {
 	NextVid     sql.NullInt64 `db:"next_vid"`
 	PrevVid     sql.NullInt64 `db:"prev_vid"`
 	Flagged     bool          `db:"flagged"`
+	State       string        `db:"state"`
 	DateFilmed  time.Time     `db:"date_filmed"`
 	DateCreated time.Time     `db:"date_created"`
 }

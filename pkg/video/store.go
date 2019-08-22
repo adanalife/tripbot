@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/dmerrick/danalol-stream/pkg/database"
+	"github.com/dmerrick/danalol-stream/pkg/helpers"
 )
 
 // LoadOrCreate() will look up the video in the DB,
@@ -93,6 +94,7 @@ func (v Video) save() error {
 	flagged := v.Flagged
 	lat := v.Lat
 	lng := v.Lng
+	state := v.State
 
 	if lat == 0 || lng == 0 {
 		// try to get at least one good coords pair
@@ -103,9 +105,17 @@ func (v Video) save() error {
 		}
 	}
 
+	if !flagged {
+		// figure out which state we're in
+		state, err = helpers.StateFromCoords(lat, lng)
+		if err != nil {
+			log.Println("error geocoding coords:", err)
+		}
+	}
+
 	tx := database.DBCon.MustBegin()
 	tx.MustExec(
-		"INSERT INTO videos (slug, lat, lng, date_filmed, flagged, prev_vid, next_vid) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+		"INSERT INTO videos (slug, lat, lng, date_filmed, flagged, prev_vid, next_vid, state) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
 		v.Slug,
 		lat,
 		lng,
@@ -113,6 +123,7 @@ func (v Video) save() error {
 		flagged,
 		v.PrevVid,
 		v.NextVid,
+		state,
 	)
 	return tx.Commit()
 }
