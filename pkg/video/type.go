@@ -93,7 +93,7 @@ func (v Video) Path() string {
 	return path.Join(config.VideoDir(), v.File())
 }
 
-// toDate returns a time.Time object for the video
+// toDate parses the vidStr and returns a time.Time object for the video
 func (v Video) toDate() time.Time {
 	vidStr := v.String()
 	year, _ := strconv.Atoi(vidStr[:4])
