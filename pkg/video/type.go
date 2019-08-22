@@ -1,8 +1,10 @@
 package video
 
 import (
+	"database/sql"
 	"errors"
 	"fmt"
+	"log"
 	"path"
 	"regexp"
 	"strconv"
@@ -10,49 +12,101 @@ import (
 	"time"
 
 	"github.com/dmerrick/danalol-stream/pkg/config"
+	"github.com/dmerrick/danalol-stream/pkg/database"
 	"github.com/dmerrick/danalol-stream/pkg/ocr"
 )
 
-// these are different timestamps we have screenshots prepared for
-// the "000" corresponds to 0m0s, "130" corresponds to 1m30s
-var timestampsToTry = []string{
-	"000",
-	"015",
-	"030",
-	"045",
-	"100",
-	"115",
-	"130",
-	"145",
-	"200",
-	"215",
-	"230",
-	"245",
-}
-
 // Videos represent a video file containing dashcam footage
 type Video struct {
-	//TODO can Slug be private?
-	Slug string
+	Id          int           `db:"id"`
+	Slug        string        `db:"slug"`
+	Lat         float64       `db:"lat"`
+	Lng         float64       `db:"lng"`
+	NextVid     sql.NullInt64 `db:"next_vid"`
+	PrevVid     sql.NullInt64 `db:"prev_vid"`
+	Flagged     bool          `db:"flagged"`
+	DateFilmed  time.Time     `db:"date_filmed"`
+	DateCreated time.Time     `db:"date_created"`
 }
 
-// New takes a file (filename or path) and returns a Video
-func New(file string) (Video, error) {
+func LoadOrCreate(path string) (Video, error) {
+	slug := slug(path)
+	log.Println("slug is:", slug)
+
+	// try to find the slug in the DB
+	videos := []Video{}
+	query := fmt.Sprintf("SELECT * FROM videos WHERE slug='%s'", slug)
+	err := database.DBCon.Select(&videos, query)
+	if err != nil {
+		log.Println("error fetching vid from DB:", err)
+		// create a new video
+		newVid, err := create(slug)
+		return newVid, err
+	}
+
+	// did we find anything in the DB?
+	if len(videos) == 0 {
+		log.Println("no matches, creating a new Video")
+		newVid, err := create(slug)
+		if err != nil {
+			log.Println("error creating new vid:", err)
+		}
+		return newVid, err
+	}
+	return videos[0], nil
+}
+
+// create will create a new Video from a slug
+func create(file string) (Video, error) {
 	var newVid Video
+	var blankDate time.Time
 
 	if file == "" {
 		return newVid, errors.New("no file provided")
 	}
-	fileName := path.Base(file)
-	dashStr := removeFileExtension(fileName)
+	slug := slug(file)
 
 	// validate the dash string
-	err := validate(dashStr)
+	err := validate(slug)
 	if err != nil {
 		return newVid, err
 	}
-	newVid = Video{dashStr}
+
+	// create new (mostly) empty vid
+	newVid = Video{
+		Slug:        slug,
+		Lat:         0,
+		Lng:         0,
+		Flagged:     false,
+		DateFilmed:  blankDate,
+		DateCreated: blankDate,
+	}
+
+	// store the video in the DB
+	err = newVid.save()
+
 	return newVid, err
+}
+
+func (v Video) save() error {
+	flagged := false
+	// try to get at least one good coords pair
+	lat, lng, err := v.LatLng()
+	if err != nil {
+		log.Println("error fetching coords:", err)
+		flagged = true
+	}
+
+	tx := database.DBCon.MustBegin()
+	tx.MustExec(
+		"INSERT INTO videos (slug, lat, lng, date_filmed, flagged) VALUES ($1, $2, $3, $4, $5)",
+		v.Slug,
+		lat,
+		lng,
+		v.Date(),
+		flagged,
+	)
+	return tx.Commit()
 }
 
 // ex: 2018_0514_224801_013_a_opt
@@ -107,6 +161,23 @@ func (v Video) LatLng() (float64, float64, error) {
 	return 0, 0, errors.New("none of the screencaps had valid coords")
 }
 
+// these are different timestamps we have screenshots prepared for
+// the "000" corresponds to 0m0s, "130" corresponds to 1m30s
+var timestampsToTry = []string{
+	"000",
+	"015",
+	"030",
+	"045",
+	"100",
+	"115",
+	"130",
+	"145",
+	"200",
+	"215",
+	"230",
+	"245",
+}
+
 // timestamp is something like 000, 030, 100, etc
 func (v Video) screencap(timestamp string) string {
 	screencapFile := fmt.Sprintf("%s-%s.png", v.DashStr(), timestamp)
@@ -134,4 +205,10 @@ func validate(dashStr string) error {
 func removeFileExtension(filename string) string {
 	ext := path.Ext(filename)
 	return filename[0 : len(filename)-len(ext)]
+}
+
+// slug strips the path and extension off the file
+func slug(file string) string {
+	fileName := path.Base(file)
+	return removeFileExtension(fileName)
 }
