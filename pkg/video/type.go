@@ -29,31 +29,18 @@ type Video struct {
 	DateCreated time.Time     `db:"date_created"`
 }
 
+// LoadOrCreate() will look up the video in the DB,
+// or add it to the DB if it's not there yet
 func LoadOrCreate(path string) (Video, error) {
 	slug := slug(path)
-	log.Println("slug is:", slug)
 
-	// try to find the slug in the DB
-	videos := []Video{}
-	query := fmt.Sprintf("SELECT * FROM videos WHERE slug='%s'", slug)
-	err := database.DBCon.Select(&videos, query)
+	vid, err := load(slug)
 	if err != nil {
-		log.Println("error fetching vid from DB:", err)
 		// create a new video
-		newVid, err := create(slug)
-		return newVid, err
+		vid, err = create(slug)
 	}
 
-	// did we find anything in the DB?
-	if len(videos) == 0 {
-		log.Println("no matches, creating a new Video")
-		newVid, err := create(slug)
-		if err != nil {
-			log.Println("error creating new vid:", err)
-		}
-		return newVid, err
-	}
-	return videos[0], nil
+	return vid, err
 }
 
 // Location returns a lat/lng pair
@@ -118,6 +105,25 @@ func (v Video) ocrCoords() (float64, float64, error) {
 	return 0, 0, errors.New("none of the screencaps had valid coords")
 }
 
+func load(slug string) (Video, error) {
+	var newVid Video
+	// try to find the slug in the DB
+	videos := []Video{}
+	query := fmt.Sprintf("SELECT * FROM videos WHERE slug='%s'", slug)
+	err := database.DBCon.Select(&videos, query)
+	if err != nil {
+		log.Println("error fetching vid from DB:", err)
+		return newVid, err
+	}
+
+	// did we find anything in the DB?
+	if len(videos) == 0 {
+		err = errors.New("no matches found")
+		return newVid, err
+	}
+	return videos[0], nil
+}
+
 // create will create a new Video from a slug
 //TODO: this is kinda weird, we create an empty Video
 // and then we save it to the DB... maybe we could just
@@ -149,8 +155,15 @@ func create(file string) (Video, error) {
 
 	// store the video in the DB
 	err = newVid.save()
+	if err != nil {
+		log.Println("error saving to DB:", err)
+	}
 
-	return newVid, err
+	// now fetch it from the DB
+	//TODO: this is an extra DB call, do we care?
+	dbVid, err := load(slug)
+
+	return dbVid, err
 }
 
 // save() will store the video in the DB

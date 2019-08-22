@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 
 	"github.com/dmerrick/danalol-stream/pkg/config"
+	"github.com/dmerrick/danalol-stream/pkg/database"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
-	"github.com/dmerrick/danalol-stream/pkg/store"
 	"github.com/dmerrick/danalol-stream/pkg/video"
 	"github.com/joho/godotenv"
 )
@@ -29,20 +29,25 @@ func init() {
 	flag.StringVar(&videoFile, "file", "", "File to load")
 	flag.BoolVar(&current, "current", false, "Use currently-playing video")
 	flag.Parse()
+
+	// initialize the SQL database
+	database.DBCon, err = database.Initialize()
+	if err != nil {
+		log.Fatal("error initializing the DB", err)
+	}
 }
 
 func main() {
-
 	// set videoFile if -current was passed in
 	if current {
 		// first we check if too many flags were used
 		if videoFile != "" {
 			log.Fatal("you cannot use -current and -file at the same time")
 		}
-		videoFile = video.CurrentlyPlaying
+		// preload the currently-playing vid
+		video.GetCurrentlyPlaying()
+		videoFile = video.CurrentlyPlaying.String()
 	}
-
-	datastore := store.FindOrCreate(config.DBPath)
 
 	// a file was passed in via the CLI
 	if videoFile != "" {
