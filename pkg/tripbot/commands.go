@@ -168,13 +168,8 @@ func stateCmd(user string) {
 	if err != nil {
 		client.Say(config.ChannelName, "I couldn't figure out current GPS coords, sorry!")
 	} else {
-		state, err := helpers.StateFromCoords(lat, lon)
-		if err != nil || state == "" {
-			client.Say(config.ChannelName, "That didn't work this time, sorry!")
-		} else {
-			msg := fmt.Sprintf("We're in %s", state)
-			client.Say(config.ChannelName, msg)
-		}
+		msg := fmt.Sprintf("We're in %s", vid.State)
+		client.Say(config.ChannelName, msg)
 	}
 }
 
