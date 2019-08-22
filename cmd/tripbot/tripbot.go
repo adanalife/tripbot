@@ -26,7 +26,7 @@ func main() {
 		// anything below this probably wont be executed
 		// use !shutdown instead
 		events.LogoutAll(tripbot.Uptime)
-		log.Printf("currently playing: %s", video.CurrentlyPlaying)
+		log.Printf("last played: %s", video.CurrentlyPlaying)
 		database.DBCon.Close()
 		background.StopCron()
 		os.Exit(1)
