@@ -6,7 +6,6 @@ import (
 	"os"
 
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
-	"github.com/dmerrick/danalol-stream/pkg/store"
 	"github.com/dmerrick/danalol-stream/pkg/video"
 	"github.com/joho/godotenv"
 )
@@ -21,8 +20,6 @@ func main() {
 		panic("You must set DASHCAM_DIR")
 	}
 
-	datastore := store.FindOrCreate("db/tripbot-copy.db")
-
 	videoFile := video.CurrentlyPlaying
 
 	// a file was passed in via the CLI
@@ -30,13 +27,13 @@ func main() {
 		log.Fatal("no video found")
 	}
 
-	vid, err := video.New(videoFile)
+	vid, err := video.LoadOrCreate(videoFile)
 	if err != nil {
 		log.Println("unable to create Video: %v", err)
 	}
 	fmt.Println(vid.File())
 
-	lat, lon, err := datastore.CoordsFor(vid)
+	lat, lon, err := vid.Location()
 	if err != nil {
 		log.Fatalf("failed to process image: %v", err)
 	}

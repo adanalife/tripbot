@@ -8,10 +8,11 @@ import (
 	"path/filepath"
 
 	"github.com/dmerrick/danalol-stream/pkg/config"
+	"github.com/dmerrick/danalol-stream/pkg/database"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
-	"github.com/dmerrick/danalol-stream/pkg/store"
 	"github.com/dmerrick/danalol-stream/pkg/video"
 	"github.com/joho/godotenv"
+	"github.com/kelvins/geocoder"
 )
 
 // this will hold the filename passed in via the CLI
@@ -26,31 +27,42 @@ func init() {
 	if os.Getenv("DASHCAM_DIR") == "" {
 		panic("You must set DASHCAM_DIR")
 	}
+	googleMapsAPIKey := os.Getenv("GOOGLE_MAPS_API_KEY")
+	if googleMapsAPIKey == "" {
+		panic("You must set GOOGLE_MAPS_API_KEY")
+	}
+	geocoder.ApiKey = googleMapsAPIKey
+
 	flag.StringVar(&videoFile, "file", "", "File to load")
 	flag.BoolVar(&current, "current", false, "Use currently-playing video")
 	flag.Parse()
+
+	// initialize the SQL database
+	database.DBCon, err = database.Initialize()
+	if err != nil {
+		log.Fatal("error initializing the DB", err)
+	}
 }
 
 func main() {
-
 	// set videoFile if -current was passed in
 	if current {
 		// first we check if too many flags were used
 		if videoFile != "" {
 			log.Fatal("you cannot use -current and -file at the same time")
 		}
-		videoFile = video.CurrentlyPlaying
+		// preload the currently-playing vid
+		video.GetCurrentlyPlaying()
+		videoFile = video.CurrentlyPlaying.String()
 	}
-
-	datastore := store.FindOrCreate(config.DBPath)
 
 	// a file was passed in via the CLI
 	if videoFile != "" {
-		vid, err := video.New(videoFile)
+		vid, err := video.LoadOrCreate(videoFile)
 		if err != nil {
 			log.Println("unable to create video: %v", err)
 		}
-		lat, lon, err := datastore.CoordsFor(vid)
+		lat, lon, err := vid.Location()
 		if err != nil {
 			log.Fatalf("failed to process image: %v", err)
 		}
@@ -71,12 +83,12 @@ func main() {
 				}
 
 				// actually process the image
-				vid, err := video.New(path)
+				vid, err := video.LoadOrCreate(path)
 				if err != nil {
 					log.Println("unable to create video:", err)
 					return nil
 				}
-				lat, lon, err := datastore.CoordsFor(vid)
+				lat, lon, err := vid.Location()
 				if err != nil {
 					log.Printf("failed to process video: %v", err)
 					return nil

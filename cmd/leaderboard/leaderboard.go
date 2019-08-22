@@ -18,9 +18,8 @@ func init() {
 }
 
 func main() {
-	// datastore := store.FindOrCreate("db/tripbot-copy.db")
-
 	var err error
+
 	godotenv.Load()
 	database.DBCon, err = database.Initialize()
 	if err != nil {

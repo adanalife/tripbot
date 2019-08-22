@@ -33,7 +33,7 @@ func GetCurrentlyPlaying() {
 		// reset the stopwatch
 		timeStarted = time.Now()
 		// set up the video for others to use
-		CurrentlyPlaying, err = New(curVid)
+		CurrentlyPlaying, err = LoadOrCreate(curVid)
 		log.Printf("played %s for %s, now playing %s", preVid, durationPlayed, curVid)
 		if err != nil {
 			log.Println("unable to create Video from %s: %v", curVid, err)

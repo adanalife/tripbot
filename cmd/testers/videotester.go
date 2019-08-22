@@ -24,7 +24,7 @@ func main() {
 }
 
 func Display(str string) {
-	vid, err := video.New(str)
+	vid, err := video.LoadOrCreate(str)
 
 	spew.Dump(str)
 	if err != nil {

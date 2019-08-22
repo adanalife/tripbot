@@ -1,58 +1,39 @@
 package video
 
 import (
+	"database/sql"
 	"errors"
 	"fmt"
 	"path"
-	"regexp"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/ocr"
 )
 
-// these are different timestamps we have screenshots prepared for
-// the "000" corresponds to 0m0s, "130" corresponds to 1m30s
-var timestampsToTry = []string{
-	"000",
-	"015",
-	"030",
-	"045",
-	"100",
-	"115",
-	"130",
-	"145",
-	"200",
-	"215",
-	"230",
-	"245",
-}
-
 // Videos represent a video file containing dashcam footage
 type Video struct {
-	//TODO can Slug be private?
-	Slug string
+	Id          int           `db:"id"`
+	Slug        string        `db:"slug"`
+	Lat         float64       `db:"lat"`
+	Lng         float64       `db:"lng"`
+	NextVid     sql.NullInt64 `db:"next_vid"`
+	PrevVid     sql.NullInt64 `db:"prev_vid"`
+	Flagged     bool          `db:"flagged"`
+	State       string        `db:"state"`
+	DateFilmed  time.Time     `db:"date_filmed"`
+	DateCreated time.Time     `db:"date_created"`
 }
 
-// New takes a file (filename or path) and returns a Video
-func New(file string) (Video, error) {
-	var newVid Video
-
-	if file == "" {
-		return newVid, errors.New("no file provided")
+// Location returns a lat/lng pair
+//TODO: refactor out the error return value
+func (v Video) Location() (float64, float64, error) {
+	var err error
+	if v.Flagged {
+		err = errors.New("video is flagged")
 	}
-	fileName := path.Base(file)
-	dashStr := removeFileExtension(fileName)
-
-	// validate the dash string
-	err := validate(dashStr)
-	if err != nil {
-		return newVid, err
-	}
-	newVid = Video{dashStr}
-	return newVid, err
+	return v.Lat, v.Lng, err
 }
 
 // ex: 2018_0514_224801_013_a_opt
@@ -82,8 +63,8 @@ func (v Video) Path() string {
 	return path.Join(config.VideoDir(), v.File())
 }
 
-// Date returns a time.Time object for the video
-func (v Video) Date() time.Time {
+// toDate parses the vidStr and returns a time.Time object for the video
+func (v Video) toDate() time.Time {
 	vidStr := v.String()
 	year, _ := strconv.Atoi(vidStr[:4])
 	month, _ := strconv.Atoi(vidStr[5:7])
@@ -96,8 +77,8 @@ func (v Video) Date() time.Time {
 	return t
 }
 
-// LatLng will use OCR to read the coordinates from a screenshot (seriously)
-func (v Video) LatLng() (float64, float64, error) {
+// ocrCoords will use OCR to read the coordinates from a screenshot (seriously)
+func (v Video) ocrCoords() (float64, float64, error) {
 	for _, timestamp := range timestampsToTry {
 		lat, lon, err := ocr.CoordsFromImage(v.screencap(timestamp))
 		if err == nil {
@@ -107,28 +88,33 @@ func (v Video) LatLng() (float64, float64, error) {
 	return 0, 0, errors.New("none of the screencaps had valid coords")
 }
 
+// slug strips the path and extension off the file
+func slug(file string) string {
+	fileName := path.Base(file)
+	return removeFileExtension(fileName)
+}
+
+// these are different timestamps we have screenshots prepared for
+// the "000" corresponds to 0m0s, "130" corresponds to 1m30s
+var timestampsToTry = []string{
+	"000",
+	"015",
+	"030",
+	"045",
+	"100",
+	"115",
+	"130",
+	"145",
+	"200",
+	"215",
+	"230",
+	"245",
+}
+
 // timestamp is something like 000, 030, 100, etc
 func (v Video) screencap(timestamp string) string {
 	screencapFile := fmt.Sprintf("%s-%s.png", v.DashStr(), timestamp)
 	return path.Join(config.ScreencapDir(), timestamp, screencapFile)
-}
-
-func validate(dashStr string) error {
-	if len(dashStr) < 20 {
-		return errors.New("dash string too short")
-	}
-	shortened := dashStr[:20]
-
-	if strings.HasPrefix(".", shortened) {
-		return errors.New("dash string can't be a hidden file")
-	}
-
-	//TODO: this should probably live in an init()
-	var validDashStr = regexp.MustCompile(`^[_0-9]{20}$`)
-	if !validDashStr.MatchString(shortened) {
-		return errors.New("dash string did not match regex")
-	}
-	return nil
 }
 
 func removeFileExtension(filename string) string {

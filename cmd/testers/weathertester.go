@@ -21,8 +21,8 @@ func main() {
 	datastore := store.FindOrCreate(config.DBPath)
 
 	vidStr := "2018_0920_172817_007.MP4"
-	vid, _ := video.New(vidStr)
-	lat, lon, _ := datastore.CoordsFor(vid)
+	vid, _ := video.LoadOrCreate(vidStr)
+	lat, lon, _ := vid.Location()
 
 	realDate := helpers.ActualDate(vid.Date(), lat, lon)
 

@@ -90,11 +90,11 @@ func sunsetCmd(user string) {
 	log.Println(user, "ran !sunset")
 	// get the currently-playing video
 	vid := video.CurrentlyPlaying
-	lat, lon, err := datastore.CoordsFor(vid)
+	lat, lon, err := vid.Location()
 	if err != nil {
 		client.Say(config.ChannelName, "I couldn't figure out current GPS coords, sorry!")
 	} else {
-		client.Say(config.ChannelName, helpers.SunsetStr(vid.Date(), lat, lon))
+		client.Say(config.ChannelName, helpers.SunsetStr(vid.DateFilmed, lat, lon))
 	}
 }
 
@@ -103,7 +103,7 @@ func locationCmd(user string) {
 	// get the currently-playing video
 	vid := video.CurrentlyPlaying
 	// extract the coordinates
-	lat, lon, err := datastore.CoordsFor(vid)
+	lat, lon, err := vid.Location()
 	if err != nil {
 		client.Say(config.ChannelName, "I couldn't figure out the GPS coordinates... try again in ~3 minutes!")
 	} else {
@@ -136,11 +136,11 @@ func timeCmd(user string) {
 	log.Println(user, "ran !time")
 	// get the currently-playing video
 	vid := video.CurrentlyPlaying
-	lat, lon, err := datastore.CoordsFor(vid)
+	lat, lon, err := vid.Location()
 	if err != nil {
 		client.Say(config.ChannelName, "I couldn't figure out current GPS coords, sorry!")
 	} else {
-		realDate := helpers.ActualDate(vid.Date(), lat, lon)
+		realDate := helpers.ActualDate(vid.DateFilmed, lat, lon)
 		fmtTime := realDate.Format("3:04pm MST")
 		client.Say(config.ChannelName, fmt.Sprintf("This moment was %s", fmtTime))
 	}
@@ -150,11 +150,11 @@ func dateCmd(user string) {
 	log.Println(user, "ran !date")
 	// get the currently-playing video
 	vid := video.CurrentlyPlaying
-	lat, lon, err := datastore.CoordsFor(vid)
+	lat, lon, err := vid.Location()
 	if err != nil {
 		client.Say(config.ChannelName, "I couldn't figure out current GPS coords, sorry!")
 	} else {
-		realDate := helpers.ActualDate(vid.Date(), lat, lon)
+		realDate := helpers.ActualDate(vid.DateFilmed, lat, lon)
 		fmtDate := realDate.Format("Monday January 2, 2006")
 		client.Say(config.ChannelName, fmt.Sprintf("This moment was %s", fmtDate))
 	}
@@ -164,17 +164,12 @@ func stateCmd(user string) {
 	log.Println(user, "ran !state")
 	// get the currently-playing video
 	vid := video.CurrentlyPlaying
-	lat, lon, err := datastore.CoordsFor(vid)
+	lat, lon, err := vid.Location()
 	if err != nil {
 		client.Say(config.ChannelName, "I couldn't figure out current GPS coords, sorry!")
 	} else {
-		state, err := helpers.StateFromCoords(lat, lon)
-		if err != nil || state == "" {
-			client.Say(config.ChannelName, "That didn't work this time, sorry!")
-		} else {
-			msg := fmt.Sprintf("We're in %s", state)
-			client.Say(config.ChannelName, msg)
-		}
+		msg := fmt.Sprintf("We're in %s", vid.State)
+		client.Say(config.ChannelName, msg)
 	}
 }
 
@@ -193,7 +188,7 @@ func secretInfoCmd(user string) {
 	}
 	vid := video.CurrentlyPlaying
 	msg := fmt.Sprintf("currently playing: %s, playtime: %s", vid, video.CurrentProgress())
-	lat, lon, err := datastore.CoordsFor(vid)
+	lat, lon, err := vid.Location()
 	if err != nil {
 		msg = fmt.Sprintf("%s, err: %s", msg, err)
 	} else {

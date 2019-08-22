@@ -49,11 +49,13 @@ func main() {
 	// run this right away to set the currently-playing video
 	// (otherwise it will be unset until the first cron job runs)
 	video.GetCurrentlyPlaying()
+	v := video.CurrentlyPlaying
+	video.LoadOrCreate(v.String())
 
 	// start cron and attach cronjobs
 	background.StartCron()
 	background.Cron.AddFunc("@every 27m30s", tripbot.Chatter)
-	background.Cron.AddFunc("@every 30s", video.GetCurrentlyPlaying)
+	background.Cron.AddFunc("@every 60s", video.GetCurrentlyPlaying)
 
 	// actually connect to Twitch
 	// wrapped in a loop in case twitch goes down

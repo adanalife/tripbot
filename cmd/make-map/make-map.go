@@ -16,7 +16,6 @@ import (
 	"github.com/dmerrick/danalol-stream/internal/takeout"
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
-	"github.com/dmerrick/danalol-stream/pkg/store"
 	"github.com/dmerrick/danalol-stream/pkg/video"
 	"github.com/joho/godotenv"
 	"googlemaps.github.io/maps"
@@ -46,9 +45,6 @@ func main() {
 		log.Fatalf("client error: %s", err)
 	}
 
-	// initialize the DB
-	datastore := store.FindOrCreate(config.DBPath)
-
 	// this will contain the overlay path
 	pathPoints := []maps.LatLng{}
 
@@ -67,7 +63,7 @@ func main() {
 				return nil
 			}
 
-			vid, err := video.New(path)
+			vid, err := video.LoadOrCreate(path)
 			if err != nil {
 				log.Println("unable to create video:", err)
 				return nil
@@ -87,7 +83,7 @@ func main() {
 			}
 
 			// extract the coords from the image
-			lat, lon, err := datastore.CoordsFor(vid)
+			lat, lon, err := vid.Location()
 			if err != nil {
 				fmt.Println(imgFilename, "coords not found:", err)
 				skipIndex = skipIndex + 1

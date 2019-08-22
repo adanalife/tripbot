@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/bradfitz/latlong"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/hako/durafmt"
 	"github.com/kelvins/geocoder"
@@ -40,6 +41,7 @@ func StateFromCoords(lat, lon float64) (string, error) {
 
 	addresses, err := geocoder.GeocodingReverse(location)
 	if err != nil {
+		spew.Dump(err)
 		return "", err
 	}
 	return addresses[0].State, err
