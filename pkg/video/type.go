@@ -56,59 +56,6 @@ func LoadOrCreate(path string) (Video, error) {
 	return videos[0], nil
 }
 
-// create will create a new Video from a slug
-func create(file string) (Video, error) {
-	var newVid Video
-	var blankDate time.Time
-
-	if file == "" {
-		return newVid, errors.New("no file provided")
-	}
-	slug := slug(file)
-
-	// validate the dash string
-	err := validate(slug)
-	if err != nil {
-		return newVid, err
-	}
-
-	// create new (mostly) empty vid
-	newVid = Video{
-		Slug:        slug,
-		Lat:         0,
-		Lng:         0,
-		Flagged:     false,
-		DateFilmed:  blankDate,
-		DateCreated: blankDate,
-	}
-
-	// store the video in the DB
-	err = newVid.save()
-
-	return newVid, err
-}
-
-func (v Video) save() error {
-	flagged := false
-	// try to get at least one good coords pair
-	lat, lng, err := v.LatLng()
-	if err != nil {
-		log.Println("error fetching coords:", err)
-		flagged = true
-	}
-
-	tx := database.DBCon.MustBegin()
-	tx.MustExec(
-		"INSERT INTO videos (slug, lat, lng, date_filmed, flagged) VALUES ($1, $2, $3, $4, $5)",
-		v.Slug,
-		lat,
-		lng,
-		v.Date(),
-		flagged,
-	)
-	return tx.Commit()
-}
-
 // ex: 2018_0514_224801_013_a_opt
 func (v Video) String() string {
 	return v.Slug
@@ -161,6 +108,69 @@ func (v Video) LatLng() (float64, float64, error) {
 	return 0, 0, errors.New("none of the screencaps had valid coords")
 }
 
+// create will create a new Video from a slug
+//TODO: this is kinda weird, we create an empty Video
+// and then we save it to the DB... maybe we could just
+// save right to the DB? It would take some refactoring.
+func create(file string) (Video, error) {
+	var newVid Video
+	var blankDate time.Time
+
+	if file == "" {
+		return newVid, errors.New("no file provided")
+	}
+	slug := slug(file)
+
+	// validate the dash string
+	err := validate(slug)
+	if err != nil {
+		return newVid, err
+	}
+
+	// create new (mostly) empty vid
+	newVid = Video{
+		Slug:        slug,
+		Lat:         0,
+		Lng:         0,
+		Flagged:     false,
+		DateFilmed:  blankDate,
+		DateCreated: blankDate,
+	}
+
+	// store the video in the DB
+	err = newVid.save()
+
+	return newVid, err
+}
+
+// save() will store the video in the DB
+func (v Video) save() error {
+	flagged := false
+	// try to get at least one good coords pair
+	lat, lng, err := v.LatLng()
+	if err != nil {
+		log.Println("error fetching coords:", err)
+		flagged = true
+	}
+
+	tx := database.DBCon.MustBegin()
+	tx.MustExec(
+		"INSERT INTO videos (slug, lat, lng, date_filmed, flagged) VALUES ($1, $2, $3, $4, $5)",
+		v.Slug,
+		lat,
+		lng,
+		v.Date(),
+		flagged,
+	)
+	return tx.Commit()
+}
+
+// slug strips the path and extension off the file
+func slug(file string) string {
+	fileName := path.Base(file)
+	return removeFileExtension(fileName)
+}
+
 // these are different timestamps we have screenshots prepared for
 // the "000" corresponds to 0m0s, "130" corresponds to 1m30s
 var timestampsToTry = []string{
@@ -205,10 +215,4 @@ func validate(dashStr string) error {
 func removeFileExtension(filename string) string {
 	ext := path.Ext(filename)
 	return filename[0 : len(filename)-len(ext)]
-}
-
-// slug strips the path and extension off the file
-func slug(file string) string {
-	fileName := path.Base(file)
-	return removeFileExtension(fileName)
 }
