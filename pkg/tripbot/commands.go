@@ -94,7 +94,7 @@ func sunsetCmd(user string) {
 	if err != nil {
 		client.Say(config.ChannelName, "I couldn't figure out current GPS coords, sorry!")
 	} else {
-		client.Say(config.ChannelName, helpers.SunsetStr(vid.Date(), lat, lon))
+		client.Say(config.ChannelName, helpers.SunsetStr(vid.DateFilmed, lat, lon))
 	}
 }
 
@@ -140,7 +140,7 @@ func timeCmd(user string) {
 	if err != nil {
 		client.Say(config.ChannelName, "I couldn't figure out current GPS coords, sorry!")
 	} else {
-		realDate := helpers.ActualDate(vid.Date(), lat, lon)
+		realDate := helpers.ActualDate(vid.DateFilmed, lat, lon)
 		fmtTime := realDate.Format("3:04pm MST")
 		client.Say(config.ChannelName, fmt.Sprintf("This moment was %s", fmtTime))
 	}
@@ -154,7 +154,7 @@ func dateCmd(user string) {
 	if err != nil {
 		client.Say(config.ChannelName, "I couldn't figure out current GPS coords, sorry!")
 	} else {
-		realDate := helpers.ActualDate(vid.Date(), lat, lon)
+		realDate := helpers.ActualDate(vid.DateFilmed, lat, lon)
 		fmtDate := realDate.Format("Monday January 2, 2006")
 		client.Say(config.ChannelName, fmt.Sprintf("This moment was %s", fmtDate))
 	}
