@@ -89,22 +89,30 @@ func create(file string) (Video, error) {
 
 // save() will store the video in the DB
 func (v Video) save() error {
-	flagged := false
-	// try to get at least one good coords pair
-	lat, lng, err := v.ocrCoords()
-	if err != nil {
-		log.Println("error fetching coords:", err)
-		flagged = true
+	var err error
+	flagged := v.Flagged
+	lat := v.Lat
+	lng := v.Lng
+
+	if lat == 0 || lng == 0 {
+		// try to get at least one good coords pair
+		lat, lng, err = v.ocrCoords()
+		if err != nil {
+			log.Println("error OCRing coords:", err)
+			flagged = true
+		}
 	}
 
 	tx := database.DBCon.MustBegin()
 	tx.MustExec(
-		"INSERT INTO videos (slug, lat, lng, date_filmed, flagged) VALUES ($1, $2, $3, $4, $5)",
+		"INSERT INTO videos (slug, lat, lng, date_filmed, flagged, prev_vid, next_vid) VALUES ($1, $2, $3, $4, $5, $6, $7)",
 		v.Slug,
 		lat,
 		lng,
 		v.toDate(),
 		flagged,
+		v.PrevVid,
+		v.NextVid,
 	)
 	return tx.Commit()
 }
