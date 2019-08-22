@@ -46,7 +46,7 @@ func main() {
 
 	// a file was passed in via the CLI
 	if videoFile != "" {
-		vid, err := video.New(videoFile)
+		vid, err := video.LoadOrCreate(videoFile)
 		if err != nil {
 			log.Println("unable to create video: %v", err)
 		}
@@ -71,7 +71,7 @@ func main() {
 				}
 
 				// actually process the image
-				vid, err := video.New(path)
+				vid, err := video.LoadOrCreate(path)
 				if err != nil {
 					log.Println("unable to create video:", err)
 					return nil

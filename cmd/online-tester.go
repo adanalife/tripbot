@@ -30,7 +30,7 @@ func main() {
 		log.Fatal("no video found")
 	}
 
-	vid, err := video.New(videoFile)
+	vid, err := video.LoadOrCreate(videoFile)
 	if err != nil {
 		log.Println("unable to create Video: %v", err)
 	}

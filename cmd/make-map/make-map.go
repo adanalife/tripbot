@@ -67,7 +67,7 @@ func main() {
 				return nil
 			}
 
-			vid, err := video.New(path)
+			vid, err := video.LoadOrCreate(path)
 			if err != nil {
 				log.Println("unable to create video:", err)
 				return nil
