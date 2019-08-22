@@ -124,6 +124,10 @@ func PrivateMessage(message twitch.PrivateMessage) {
 		}
 	}
 
+	if strings.HasPrefix(strings.ToLower(message.Message), "!secretinfo") {
+		secretInfoCmd(user)
+	}
+
 	// any of these should trigger the report command
 	reportStrings := []string{
 		"!report",

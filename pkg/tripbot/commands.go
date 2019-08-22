@@ -178,11 +178,29 @@ func stateCmd(user string) {
 	}
 }
 
+//TODO: maybe there could be a !cancel command or something
 func reportCmd(user, message string) {
 	log.Println(user, "ran !report")
 	message = fmt.Sprintf("Report from Twitch Chat: %s", message)
 	twilioClient.SendSMS(twilioFromNum, twilioToNum, message, "", "")
 	client.Say(config.ChannelName, "Thank you, I will look into this ASAP!")
+}
+
+func secretInfoCmd(user string) {
+	log.Println(user, "ran !secretinfo")
+	if user != strings.ToLower(config.ChannelName) {
+		return
+	}
+	vid := video.CurrentlyPlaying
+	msg := fmt.Sprintf("currently playing: %s, playtime: %s", vid, video.CurrentProgress())
+	lat, lon, err := datastore.CoordsFor(vid)
+	if err != nil {
+		msg = fmt.Sprintf("%s, err: %s", msg, err)
+	} else {
+		msg = fmt.Sprintf("%s, lat: %d, lng: %d", msg, lat, lon)
+	}
+	log.Println(msg)
+	client.Say(config.ChannelName, msg)
 }
 
 func shutdownCmd(user string) {
