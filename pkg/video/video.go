@@ -28,6 +28,7 @@ func GetCurrentlyPlaying() {
 	if curVid != preVid {
 		// set up the video for others to use
 		CurrentlyPlaying, err = New(curVid)
+		log.Println("currently playing:", curVid)
 		if err != nil {
 			log.Println("unable to create Video from %s: %v", curVid, err)
 		}
