@@ -11,6 +11,7 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/video"
 )
 
+// these are videos where the OCR glitched for one reason or another
 var knownBadVids = []string{
 	"2018_1009_162218_025",
 	"2018_1009_172519_046",
@@ -20,17 +21,19 @@ var knownBadVids = []string{
 
 func (s *Store) CoordsFor(vid video.Video) (float64, float64, error) {
 	videoStr := vid.String()
-	// first look up the coords in the DB
-	lat, lon, err := s.fetchSavedCoords(videoStr)
-	if err == nil {
-		// cool, they were in the DB already
-		return lat, lon, err
-	}
 
+	// check to see if we should skip this video
 	for _, vd := range knownBadVids {
 		if videoStr == vd {
 			return 0, 0, errors.New("skipping known bad point")
 		}
+	}
+
+	// okay now look up the coords in the DB
+	lat, lon, err := s.fetchSavedCoords(videoStr)
+	if err == nil {
+		// cool, they were in the DB already
+		return lat, lon, err
 	}
 
 	// okay we need to pull them from the video file
