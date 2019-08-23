@@ -149,7 +149,7 @@ func guessCmd(user, message string) {
 	var msg string
 
 	if len(message) <= 7 {
-		msg = "You must specify a state to guess. Try !guess CA"
+		msg = "Try and guess what state we're in! For example: !guess CA"
 		client.Say(config.ChannelName, msg)
 		return
 	}
