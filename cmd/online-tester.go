@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/dmerrick/danalol-stream/pkg/database"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	"github.com/dmerrick/danalol-stream/pkg/video"
 	"github.com/joho/godotenv"
@@ -20,14 +21,15 @@ func main() {
 		panic("You must set DASHCAM_DIR")
 	}
 
-	videoFile := video.CurrentlyPlaying
-
-	// a file was passed in via the CLI
-	if videoFile == "" {
-		log.Fatal("no video found")
+	// initialize the SQL database
+	database.DBCon, err = database.Initialize()
+	if err != nil {
+		log.Fatal("error initializing the DB", err)
 	}
 
-	vid, err := video.LoadOrCreate(videoFile)
+	video.GetCurrentlyPlaying()
+	vid := video.CurrentlyPlaying
+
 	if err != nil {
 		log.Println("unable to create Video: %v", err)
 	}
