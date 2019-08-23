@@ -29,29 +29,24 @@ func GetCurrentlyPlaying() {
 
 	// if the currently-playing video has changed
 	if curVid != preVid {
-		// calculate the time running
-		durationPlayed := CurrentProgress()
+		log.Printf("now playing %s", curVid)
+
 		// reset the stopwatch
 		timeStarted = time.Now()
-		// set up the video for others to use
+
+		// share the Video with the system
 		CurrentlyPlaying, err = LoadOrCreate(curVid)
-		log.Printf("played %s for %s, now playing %s", preVid, durationPlayed, curVid)
 		if err != nil {
 			log.Println("unable to create Video from %s: %v", curVid, err)
 		}
+
 		// copy the no-GPS image to a new location
-		noGPSSrc := path.Join(helpers.ProjectRoot(), "OBS/GPS.png")
-		noGPSDest := path.Join(helpers.ProjectRoot(), "OBS/GPS-live.png")
-		if CurrentlyPlaying.Flagged {
-			log.Println("current vid is flagged, creating image")
-			os.Link(noGPSSrc, noGPSDest)
-		} else {
-			os.Remove(noGPSDest)
-		}
+		createNoGPSImageIfNeeded()
 	}
 }
 
 // CurrentProgress represents how long the video has been playing
+// it will be useful eventually for choosing the exact right screenshot
 func CurrentProgress() time.Duration {
 	return time.Since(timeStarted)
 }
@@ -66,4 +61,16 @@ func figureOutCurrentVideo() string {
 		return ""
 	}
 	return strings.TrimSpace(string(out))
+}
+
+// copy the no-GPS image to a new location
+func createNoGPSImageIfNeeded() {
+	noGPSSrc := path.Join(helpers.ProjectRoot(), "OBS/GPS.png")
+	noGPSDest := path.Join(helpers.ProjectRoot(), "OBS/GPS-live.png")
+	if CurrentlyPlaying.Flagged {
+		log.Println("current vid is flagged, creating image")
+		os.Link(noGPSSrc, noGPSDest)
+	} else {
+		os.Remove(noGPSDest)
+	}
 }
