@@ -40,8 +40,12 @@ func GetCurrentlyPlaying() {
 			log.Println("unable to create Video from %s: %v", curVid, err)
 		}
 
-		// copy the no-GPS image to a new location
-		createNoGPSImageIfNeeded()
+		// show the no-GPS image
+		if CurrentlyPlaying.Flagged {
+			showNoGPSImage()
+		} else {
+			hideNoGPSImage()
+		}
 	}
 }
 
@@ -63,14 +67,13 @@ func figureOutCurrentVideo() string {
 	return strings.TrimSpace(string(out))
 }
 
-// copy the no-GPS image to a new location
-func createNoGPSImageIfNeeded() {
+func showNoGPSImage() {
 	noGPSSrc := path.Join(helpers.ProjectRoot(), "OBS/GPS.png")
 	noGPSDest := path.Join(helpers.ProjectRoot(), "OBS/GPS-live.png")
-	if CurrentlyPlaying.Flagged {
-		log.Println("current vid is flagged, creating image")
-		os.Link(noGPSSrc, noGPSDest)
-	} else {
-		os.Remove(noGPSDest)
-	}
+	os.Link(noGPSSrc, noGPSDest)
+}
+
+func hideNoGPSImage() {
+	noGPSDest := path.Join(helpers.ProjectRoot(), "OBS/GPS-live.png")
+	os.Remove(noGPSDest)
 }
