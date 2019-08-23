@@ -2,6 +2,7 @@ package video
 
 import (
 	"log"
+	"os"
 	"os/exec"
 	"path"
 	"strings"
@@ -38,7 +39,15 @@ func GetCurrentlyPlaying() {
 		if err != nil {
 			log.Println("unable to create Video from %s: %v", curVid, err)
 		}
-		//TODO: start and reset a timer here
+		// copy the no-GPS image to a new location
+		noGPSSrc := path.Join(helpers.ProjectRoot(), "OBS/GPS.png")
+		noGPSDest := path.Join(helpers.ProjectRoot(), "OBS/GPS-live.png")
+		if CurrentlyPlaying.Flagged {
+			log.Println("current vid is flagged, creating image")
+			os.Link(noGPSSrc, noGPSDest)
+		} else {
+			os.Remove(noGPSDest)
+		}
 	}
 }
 
