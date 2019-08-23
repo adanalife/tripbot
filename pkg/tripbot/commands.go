@@ -144,6 +144,40 @@ func dateCmd(user string) {
 	}
 }
 
+func guessCmd(user, message string) {
+	log.Println(user, "ran !guess")
+	var msg string
+
+	if len(message) <= 7 {
+		msg = "You must specify a state to guess. Try !guess CA"
+		client.Say(config.ChannelName, msg)
+		return
+	}
+
+	// get the arg from the command
+	// there might be a better way to do this
+	parts := strings.Split(message, " ")
+	guess := strings.Join(parts[1:], " ")
+
+	// convert to short form if necessary
+	if len(guess) == 2 {
+		guess = stateAbbrevs[strings.ToUpper(guess)]
+	}
+
+	// get the currently-playing video
+	vid := video.CurrentlyPlaying
+	if vid.Flagged {
+		client.Say(config.ChannelName, "I couldn't figure out current GPS coords, sorry!")
+	} else {
+		if strings.ToLower(guess) == strings.ToLower(vid.State) {
+			msg = fmt.Sprintf("@%s got it! We're in %s", user, vid.State)
+		} else {
+			msg = "Try again! EarthDay"
+		}
+		client.Say(config.ChannelName, msg)
+	}
+}
+
 func stateCmd(user string) {
 	log.Println(user, "ran !state")
 	// get the currently-playing video

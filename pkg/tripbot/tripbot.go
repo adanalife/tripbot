@@ -106,6 +106,14 @@ func PrivateMessage(message twitch.PrivateMessage) {
 		}
 	}
 
+	if strings.HasPrefix(strings.ToLower(message.Message), "!guess") {
+		if isFollower(user) {
+			guessCmd(user, message.Message)
+		} else {
+			client.Say(config.ChannelName, followerMsg)
+		}
+	}
+
 	if strings.HasPrefix(strings.ToLower(message.Message), "!state") {
 		if isFollower(user) {
 			stateCmd(user)

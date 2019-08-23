@@ -96,6 +96,7 @@ var HelpMessages = []string{
 	"!sunset: Get time until sunset (on the day of filming)",
 	"!report: Report a stream issue (frozen, no audio, etc)",
 	"!temperature: Will be unlocked when the donation goal is reached",
+	"!guess: Guess which state we are in",
 }
 
 var GoogleMapsStyle = []string{
