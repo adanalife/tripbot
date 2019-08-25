@@ -148,12 +148,14 @@ func (v Video) save() error {
 	return tx.Commit()
 }
 
+// Next() finds the next unflagged video
+//TODO: should this be NextUnflagged?
 //TODO: handle errors in here?
 func (v Video) Next() Video {
-	if !v.NextVid.Valid {
-		log.Println("invalid NextVid value")
-	}
 	vid, _ := loadById(v.NextVid.Int64)
+	for !vid.Flagged {
+		vid, _ = loadById(v.NextVid.Int64)
+	}
 	return vid
 }
 
