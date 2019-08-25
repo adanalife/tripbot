@@ -152,9 +152,13 @@ func (v Video) save() error {
 //TODO: should this be NextUnflagged?
 //TODO: handle errors in here?
 func (v Video) Next() Video {
-	vid, _ := loadById(v.NextVid.Int64)
-	for vid.Flagged {
-		vid, _ = loadById(v.NextVid.Int64)
+	vid := v
+	for { // ever
+		vid, _ = loadById(vid.NextVid.Int64)
+		// use the first unflagged video we find
+		if !vid.Flagged {
+			break
+		}
 	}
 	return vid
 }
