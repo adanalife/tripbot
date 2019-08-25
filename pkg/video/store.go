@@ -153,7 +153,7 @@ func (v Video) save() error {
 //TODO: handle errors in here?
 func (v Video) Next() Video {
 	vid, _ := loadById(v.NextVid.Int64)
-	for !vid.Flagged {
+	for vid.Flagged {
 		vid, _ = loadById(v.NextVid.Int64)
 	}
 	return vid
