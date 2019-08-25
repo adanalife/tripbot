@@ -74,32 +74,33 @@ func sunsetCmd(user string) {
 	log.Println(user, "ran !sunset")
 	// get the currently-playing video
 	vid := video.CurrentlyPlaying
-	lat, lon, err := vid.Location()
-	if err != nil {
-		client.Say(config.ChannelName, "I couldn't figure out current GPS coords, sorry!")
-	} else {
-		client.Say(config.ChannelName, helpers.SunsetStr(vid.DateFilmed, lat, lon))
+	if vid.Flagged {
+		client.Say(config.ChannelName, "I couldn't figure out current GPS coords, using next closest...")
+		vid = vid.Next()
 	}
+	lat, lng, _ := vid.Location()
+	client.Say(config.ChannelName, helpers.SunsetStr(vid.DateFilmed, lat, lng))
 }
 
 func locationCmd(user string) {
 	log.Println(user, "ran !location (or similar)")
 	// get the currently-playing video
 	vid := video.CurrentlyPlaying
-	// extract the coordinates
-	lat, lon, err := vid.Location()
-	if err != nil {
-		client.Say(config.ChannelName, "I couldn't figure out the GPS coordinates... try again in ~3 minutes!")
-	} else {
-		// generate a google maps url
-		address, _ := helpers.CityFromCoords(lat, lon)
-		if err != nil {
-			log.Println("geocoding error", err)
-		}
-		url := helpers.GoogleMapsURL(lat, lon)
-		msg := fmt.Sprintf("%s %s", address, url)
-		client.Say(config.ChannelName, msg)
+	if vid.Flagged {
+		client.Say(config.ChannelName, "I couldn't figure out current GPS coords, using next closest...")
+		vid = vid.Next()
 	}
+	// extract the coordinates
+	lat, lng, err := vid.Location()
+	// geocode the location
+	address, _ := helpers.CityFromCoords(lat, lng)
+	if err != nil {
+		log.Println("geocoding error", err)
+	}
+	// generate a google maps url
+	url := helpers.GoogleMapsURL(lat, lng)
+	msg := fmt.Sprintf("%s %s", address, url)
+	client.Say(config.ChannelName, msg)
 }
 
 func leaderboardCmd(user string) {
@@ -118,13 +119,21 @@ func leaderboardCmd(user string) {
 
 func timeCmd(user string) {
 	log.Println(user, "ran !time")
+	var err error
+	var lat, lng float64
 	// get the currently-playing video
 	vid := video.CurrentlyPlaying
-	lat, lon, err := vid.Location()
+	if vid.Flagged {
+		// use the location from the next vid
+		lat, lng, err = vid.Next().Location()
+	} else {
+		lat, lng, err = vid.Location()
+	}
 	if err != nil {
+		// why would we get in here?
 		client.Say(config.ChannelName, "I couldn't figure out current GPS coords, sorry!")
 	} else {
-		realDate := helpers.ActualDate(vid.DateFilmed, lat, lon)
+		realDate := helpers.ActualDate(vid.DateFilmed, lat, lng)
 		fmtTime := realDate.Format("3:04pm MST")
 		client.Say(config.ChannelName, fmt.Sprintf("This moment was %s", fmtTime))
 	}
@@ -132,13 +141,21 @@ func timeCmd(user string) {
 
 func dateCmd(user string) {
 	log.Println(user, "ran !date")
+	var err error
+	var lat, lng float64
 	// get the currently-playing video
 	vid := video.CurrentlyPlaying
-	lat, lon, err := vid.Location()
+	if vid.Flagged {
+		// use the location from the next vid
+		lat, lng, err = vid.Next().Location()
+	} else {
+		lat, lng, err = vid.Location()
+	}
 	if err != nil {
+		// why would we get in here?
 		client.Say(config.ChannelName, "I couldn't figure out current GPS coords, sorry!")
 	} else {
-		realDate := helpers.ActualDate(vid.DateFilmed, lat, lon)
+		realDate := helpers.ActualDate(vid.DateFilmed, lat, lng)
 		fmtDate := realDate.Format("Monday January 2, 2006")
 		client.Say(config.ChannelName, fmt.Sprintf("This moment was %s", fmtDate))
 	}
@@ -167,15 +184,16 @@ func guessCmd(user, message string) {
 	// get the currently-playing video
 	vid := video.CurrentlyPlaying
 	if vid.Flagged {
-		client.Say(config.ChannelName, "I couldn't figure out current GPS coords, sorry!")
-	} else {
-		if strings.ToLower(guess) == strings.ToLower(vid.State) {
-			msg = fmt.Sprintf("@%s got it! We're in %s", user, vid.State)
-		} else {
-			msg = "Try again! EarthDay"
-		}
-		client.Say(config.ChannelName, msg)
+		client.Say(config.ChannelName, "I couldn't figure out current GPS coords, using next closest...")
+		vid = vid.Next()
 	}
+
+	if strings.ToLower(guess) == strings.ToLower(vid.State) {
+		msg = fmt.Sprintf("@%s got it! We're in %s", user, vid.State)
+	} else {
+		msg = "Try again! EarthDay"
+	}
+	client.Say(config.ChannelName, msg)
 }
 
 func stateCmd(user string) {
@@ -183,11 +201,11 @@ func stateCmd(user string) {
 	// get the currently-playing video
 	vid := video.CurrentlyPlaying
 	if vid.Flagged {
-		client.Say(config.ChannelName, "I couldn't figure out current GPS coords, sorry!")
-	} else {
-		msg := fmt.Sprintf("We're in %s", vid.State)
-		client.Say(config.ChannelName, msg)
+		client.Say(config.ChannelName, "I couldn't figure out current GPS coords, using next closest...")
+		vid = vid.Next()
 	}
+	msg := fmt.Sprintf("We're in %s", vid.State)
+	client.Say(config.ChannelName, msg)
 }
 
 //TODO: maybe there could be a !cancel command or something
@@ -205,11 +223,11 @@ func secretInfoCmd(user string) {
 	}
 	vid := video.CurrentlyPlaying
 	msg := fmt.Sprintf("currently playing: %s, playtime: %s", vid, video.CurrentProgress())
-	lat, lon, err := vid.Location()
+	lat, lng, err := vid.Location()
 	if err != nil {
 		msg = fmt.Sprintf("%s, err: %s", msg, err)
 	} else {
-		msg = fmt.Sprintf("%s, lat: %f, lng: %f", msg, lat, lon)
+		msg = fmt.Sprintf("%s, lat: %f, lng: %f", msg, lat, lng)
 	}
 	log.Println(msg)
 	client.Say(config.ChannelName, msg)

@@ -47,7 +47,7 @@ func load(slug string) (Video, error) {
 }
 
 //TODO: combine this with load()?
-func loadById(id int) (Video, error) {
+func loadById(id int64) (Video, error) {
 	var newVid Video
 	// try to find the slug in the DB
 	videos := []Video{}
@@ -146,6 +146,15 @@ func (v Video) save() error {
 		state,
 	)
 	return tx.Commit()
+}
+
+//TODO: handle errors in here?
+func (v Video) Next() Video {
+	if !v.NextVid.Valid {
+		log.Println("invalid NextVid value")
+	}
+	vid, _ := loadById(v.NextVid.Int64)
+	return vid
 }
 
 func (v Video) SetNextVid(nextVid Video) error {
