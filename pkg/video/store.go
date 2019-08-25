@@ -26,12 +26,32 @@ func LoadOrCreate(path string) (Video, error) {
 	return vid, err
 }
 
-// Location returns a lat/lng pair
+// load() fetches a Video from the DB
 func load(slug string) (Video, error) {
 	var newVid Video
 	// try to find the slug in the DB
 	videos := []Video{}
 	query := fmt.Sprintf("SELECT * FROM videos WHERE slug='%s'", slug)
+	err := database.DBCon.Select(&videos, query)
+	if err != nil {
+		log.Println("error fetching vid from DB:", err)
+		return newVid, err
+	}
+
+	// did we find anything in the DB?
+	if len(videos) == 0 {
+		err = errors.New("no matches found")
+		return newVid, err
+	}
+	return videos[0], nil
+}
+
+//TODO: combine this with load()?
+func loadById(id int) (Video, error) {
+	var newVid Video
+	// try to find the slug in the DB
+	videos := []Video{}
+	query := fmt.Sprintf("SELECT * FROM videos WHERE id='%d'", id)
 	err := database.DBCon.Select(&videos, query)
 	if err != nil {
 		log.Println("error fetching vid from DB:", err)
@@ -126,6 +146,15 @@ func (v Video) save() error {
 		state,
 	)
 	return tx.Commit()
+}
+
+func (v Video) SetNextVid(nextVid Video) error {
+	_, err := database.DBCon.NamedExec(`UPDATE videos SET next_vid=:next WHERE id = :id`,
+		map[string]interface{}{
+			"next": nextVid.Id,
+			"id":   v.Id,
+		})
+	return err
 }
 
 func validate(dashStr string) error {
