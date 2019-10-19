@@ -1,5 +1,10 @@
 TODO
 
+
+2019/09/30 23:38:20 unable to create Video from %s: %v 2018_062_opt.MP4 dash string too short
+leaderboard blocks other commands, should be async
+
+
 QUICK AND DIRTY
 "waste your sub on me!"
 if miles are 0.0, add a friendly message
@@ -248,3 +253,4 @@ NEEDS CLIPPING
 2018_0919_155513_037_opt.MP4
 2018_1101_165444_018_opt.MP4
 2018_0605_201937_009_RO_opt.MP4
+2018_0925_190350_061_opt.MP4
