@@ -3,20 +3,18 @@
 # this script manages the text file that OBS reads from
 # it is used to update the rotating text in the corner
 
-sub_goal = "9/10"
+sub_goal = "10/10"
 donation_goal = "10/150"
 
 leaderboard_file = "./OBS/leaderboard-copy.txt"
 message_file = "./OBS/left-message.txt"
 
 possible_messages = [
-  "Type !help in chat for tips",
-  "Type !help in chat for tips",
-  "Looking for designer for emotes and more",
-  "Looking for designer for emotes and more",
-  "Sub goal #2 (map overlay): #{sub_goal}",
+  "Looking for artist for emotes and more",
+  "Looking for artist for emotes and more",
+  "Sub goal #2 (map overlay): coming soon!",
   "Donation goal (!temperature): #{donation_goal}",
-  "Twitch Prime subs keep us on air ;)",
+  "Twitch Prime subs keep us on air :D",
   "Earn miles for every minute you watch (!miles)",
   "I won't be offended if you play your own music",
   "Music by Soma.fm (!song)",
