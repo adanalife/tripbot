@@ -54,7 +54,7 @@ func main() {
 
 	// start cron and attach cronjobs
 	background.StartCron()
-	background.Cron.AddFunc("@every 27m30s", tripbot.Chatter)
+	background.Cron.AddFunc("@every 57m30s", tripbot.Chatter)
 	background.Cron.AddFunc("@every 60s", video.GetCurrentlyPlaying)
 
 	// actually connect to Twitch
