@@ -20,6 +20,7 @@ type User struct {
 	DateCreated time.Time `db:"date_created"`
 }
 
+// save() will take the given user and store it in the DB
 func (u User) save() {
 	if config.Verbose {
 		log.Println("saving user", u.Username)
@@ -32,6 +33,7 @@ func (u User) save() {
 	}
 }
 
+// Login will note the users presence in the DB
 func Login(username string) {
 	user := FindOrCreate(username)
 	// increment the number of visits
@@ -41,10 +43,11 @@ func Login(username string) {
 	user.save()
 }
 
+// FindOrCreate will try to find the user in the DB, otherwise it will create a new user
 func FindOrCreate(username string) User {
-	//TODO: remove this
-	log.Printf("FindOrCreate(%s)", username)
-	var emptyUser User
+	if config.Verbose {
+		log.Printf("FindOrCreate(%s)", username)
+	}
 	user := Find(username)
 	if user != emptyUser {
 		return user
@@ -53,6 +56,8 @@ func FindOrCreate(username string) User {
 	return create(username)
 }
 
+//TODO: does this need to be public?
+// Find will look up the username in the DB, and return a User if possible
 func Find(username string) User {
 	user := User{}
 	err := database.DBCon.Get(&user, "SELECT * FROM users WHERE username=$1", username)
