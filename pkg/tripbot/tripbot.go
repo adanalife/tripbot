@@ -159,6 +159,7 @@ func UserJoin(joinMessage twitch.UserJoinMessage) {
 
 func UserPart(partMessage twitch.UserPartMessage) {
 	events.LogoutIfNecessary(partMessage.User)
+	users.LoginIfNecessary(partMessage.User)
 }
 
 // send message to chat if someone subs
