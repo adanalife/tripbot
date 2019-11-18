@@ -18,3 +18,9 @@ If you like it, please follow my channel. Thanks for watching!
 ```
 mv log/bot.log log/bot.$(date "+%Y%m%d").log
 ```
+
+### Start the bot
+
+```
+go run cmd/tripbot/tripbot.go
+```

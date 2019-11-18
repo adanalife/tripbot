@@ -1,6 +1,7 @@
 CREATE TABLE users (
   id             SERIAL PRIMARY KEY,
   username       VARCHAR(64) NOT NULL,
+  /* float32: https://github.com/go-pg/pg/wiki/Model-Definition */
   miles          REAL,
   num_visits     INTEGER,
   has_donated    BOOLEAN,

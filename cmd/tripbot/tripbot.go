@@ -45,6 +45,7 @@ func main() {
 	// join the channel
 	client.Join(config.ChannelName)
 	log.Println("Joined channel", config.ChannelName)
+	log.Printf("URL: https://twitch.tv/%s", config.ChannelName)
 
 	// run this right away to set the currently-playing video
 	// (otherwise it will be unset until the first cron job runs)
