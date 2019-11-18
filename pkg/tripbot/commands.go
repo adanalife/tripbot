@@ -244,7 +244,7 @@ func shutdownCmd(user string) {
 	log.Printf("currently playing: %s", video.CurrentlyPlaying)
 	background.StopCron()
 	events.LogoutAll(Uptime)
-	users.LogoutAll
+	users.Shutdown()
 	database.DBCon.Close()
 	os.Exit(0)
 }
