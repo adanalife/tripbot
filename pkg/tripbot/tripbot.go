@@ -38,7 +38,7 @@ func PrivateMessage(message twitch.PrivateMessage) {
 	// log the user in if their login time isn't currently recorded
 	events.LoginIfNecessary(username)
 
-	users.FindOrCreate(username)
+	users.Login(username)
 
 	if strings.HasPrefix(strings.ToLower(message.Message), "!help") {
 		helpCmd(username)

@@ -20,6 +20,21 @@ type User struct {
 	DateCreated time.Time `db:"date_created"`
 }
 
+func (u User) save() User {
+	log.Println("this is where we'll save the user")
+	spew.Dump(u)
+	return u
+}
+
+func Login(username string) {
+	user := FindOrCreate(username)
+	// increment the number of visits
+	user.NumVisits = user.NumVisits + 1
+	// update the last seen date
+	user.LastSeen = time.Now()
+	user.save()
+}
+
 func FindOrCreate(username string) User {
 	//TODO: remove this
 	log.Printf("FindOrCreate(%s)", username)
@@ -37,19 +52,9 @@ func Find(username string) User {
 	err := database.DBCon.Get(&user, "SELECT * FROM users WHERE username=$1", username)
 	fmt.Printf("%#v\n", user)
 	if err != nil {
-		spew.Dump(err)
+		log.Println("error finding user", username, err)
 	}
 	return user
-	// var emptyUser User
-	//TODO: does this have to be a slice?
-	// users := []User{}
-	// database.DBCon.Select(&users, "SELECT * from users where username='$1'", username)
-	// spew.Dump(users)
-	// if len(users) == 0 {
-	// 	log.Println("could not find user", username)
-	// 	return emptyUser
-	// }
-	// return users[0]
 }
 
 //TODO: maybe return an err here?
