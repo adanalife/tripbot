@@ -1,7 +1,6 @@
 package users
 
 import (
-	"fmt"
 	"log"
 	"time"
 
@@ -20,10 +19,14 @@ type User struct {
 	DateCreated time.Time `db:"date_created"`
 }
 
-func (u User) save() User {
+func (u User) save() {
 	log.Println("this is where we'll save the user")
 	spew.Dump(u)
-	return u
+	query := `UPDATE users SET last_seen=:last_seen, num_visits=:num_visits WHERE id = :id`
+	_, err := database.DBCon.NamedExec(query, u)
+	if err != nil {
+		spew.Dump(err)
+	}
 }
 
 func Login(username string) {
@@ -50,7 +53,7 @@ func FindOrCreate(username string) User {
 func Find(username string) User {
 	user := User{}
 	err := database.DBCon.Get(&user, "SELECT * FROM users WHERE username=$1", username)
-	fmt.Printf("%#v\n", user)
+	// fmt.Printf("%#v\n", user)
 	if err != nil {
 		log.Println("error finding user", username, err)
 	}
