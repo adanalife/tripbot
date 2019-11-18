@@ -15,6 +15,7 @@ type User struct {
 	Miles       float32   `db:"miles"`
 	NumVisits   uint16    `db:"num_visits"`
 	HasDonated  bool      `db:"has_donated"`
+	IsBot       bool      `db:"is_bot"`
 	FirstSeen   time.Time `db:"first_seen"`
 	LastSeen    time.Time `db:"last_seen"`
 	DateCreated time.Time `db:"date_created"`
@@ -34,16 +35,6 @@ func (u User) save() {
 	if err != nil {
 		log.Println("error saving user:", err)
 	}
-}
-
-// FindInSession searches the current session for the user
-func FindInSession(username string) User {
-	for _, loggedInUser := range LoggedIn {
-		if username == loggedInUser.Username {
-			return loggedInUser
-		}
-	}
-	return nilUser
 }
 
 // LogoutIfNecessary will log out the user if it finds them in the session
@@ -126,7 +117,7 @@ func FindOrCreate(username string) User {
 // Find will look up the username in the DB, and return a User if possible
 func Find(username string) User {
 	user := User{}
-	_ := database.DBCon.Get(&user, "SELECT * FROM users WHERE username=$1", username)
+	database.DBCon.Get(&user, "SELECT * FROM users WHERE username=$1", username)
 	return user
 }
 
