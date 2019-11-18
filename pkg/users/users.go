@@ -20,7 +20,7 @@ type User struct {
 	DateCreated time.Time `db:"date_created"`
 }
 
-// save() will take the given user and store it in the DB
+// User.save() will take the given user and store it in the DB
 func (u User) save() {
 	if config.Verbose {
 		log.Println("saving user", u.Username)
@@ -84,6 +84,7 @@ func Find(username string) User {
 }
 
 //TODO: maybe return an err here?
+// create() will actually create the DB record
 func create(username string) User {
 	log.Println("creating user", username)
 	tx := database.DBCon.MustBegin()
