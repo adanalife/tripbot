@@ -14,6 +14,7 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/events"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	"github.com/dmerrick/danalol-stream/pkg/miles"
+	"github.com/dmerrick/danalol-stream/pkg/users"
 	"github.com/dmerrick/danalol-stream/pkg/video"
 	"github.com/hako/durafmt"
 )
@@ -236,7 +237,7 @@ func secretInfoCmd(user string) {
 func shutdownCmd(user string) {
 	log.Println(user, "ran !shutdown")
 	if user != strings.ToLower(config.ChannelName) {
-		client.Say(config.ChannelName, "I'm sorry, I won't do that")
+		client.Say(config.ChannelName, "Nice try bucko")
 		return
 	}
 	client.Say(config.ChannelName, "Shutting down...")
