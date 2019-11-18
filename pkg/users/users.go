@@ -126,11 +126,7 @@ func FindOrCreate(username string) User {
 // Find will look up the username in the DB, and return a User if possible
 func Find(username string) User {
 	user := User{}
-	err := database.DBCon.Get(&user, "SELECT * FROM users WHERE username=$1", username)
-	// fmt.Printf("%#v\n", user)
-	if err != nil {
-		log.Println("error finding user", username, err)
-	}
+	_ := database.DBCon.Get(&user, "SELECT * FROM users WHERE username=$1", username)
 	return user
 }
 
