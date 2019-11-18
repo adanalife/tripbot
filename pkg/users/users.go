@@ -33,9 +33,24 @@ func (u User) save() {
 	}
 }
 
-// Login will note the users presence in the DB
-func Login(username string) {
+// LoginIfNecessary checks the list of currently-logged in users and will
+// run login() if this user isn't currently logged in
+func LoginIfNecessary(username string) {
+	// check if the user is currently logged in
+	for _, u := range LoggedIn {
+		if u.Username == username {
+			return
+		}
+	}
+	// they weren't logged in, so note in the DB
+	login(username)
+}
+
+// login will record the users presence in the DB
+func login(username string) {
 	user := FindOrCreate(username)
+
+	LoggedIn = append(LoggedIn, user)
 	// increment the number of visits
 	user.NumVisits = user.NumVisits + 1
 	// update the last seen date
@@ -49,7 +64,7 @@ func FindOrCreate(username string) User {
 		log.Printf("FindOrCreate(%s)", username)
 	}
 	user := Find(username)
-	if user != emptyUser {
+	if user.ID != 0 {
 		return user
 	}
 	// create the user in the DB

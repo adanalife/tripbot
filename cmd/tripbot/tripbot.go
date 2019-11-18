@@ -13,6 +13,7 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/database"
 	"github.com/dmerrick/danalol-stream/pkg/events"
 	"github.com/dmerrick/danalol-stream/pkg/tripbot"
+	"github.com/dmerrick/danalol-stream/pkg/users"
 	"github.com/dmerrick/danalol-stream/pkg/video"
 )
 
@@ -28,6 +29,7 @@ func main() {
 		events.LogoutAll(tripbot.Uptime)
 		log.Printf("last played: %s", video.CurrentlyPlaying)
 		database.DBCon.Close()
+		users.ShutDown()
 		background.StopCron()
 		os.Exit(1)
 	}()

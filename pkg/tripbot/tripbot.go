@@ -38,7 +38,7 @@ func PrivateMessage(message twitch.PrivateMessage) {
 	// log the user in if their login time isn't currently recorded
 	events.LoginIfNecessary(username)
 
-	users.Login(username)
+	users.LoginIfNecessary(username)
 
 	if strings.HasPrefix(strings.ToLower(message.Message), "!help") {
 		helpCmd(username)
@@ -154,6 +154,7 @@ func PrivateMessage(message twitch.PrivateMessage) {
 
 func UserJoin(joinMessage twitch.UserJoinMessage) {
 	events.LoginIfNecessary(joinMessage.User)
+	users.LoginIfNecessary(joinMessage.User)
 }
 
 func UserPart(partMessage twitch.UserPartMessage) {
