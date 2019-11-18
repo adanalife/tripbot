@@ -2,7 +2,7 @@
 ## How to make a DB dumb
 
 ```
-pg_dump postgres://USER:PASS@dmerrick-void.local/tripbot_prod?sslmode=disable > db_dump.sql
+pg_dump postgres://USER:PASS@dmerrick-void.local/tripbot_prod?sslmode=disable > db_dump.$(date "+%Y%m%d").sql
 ```
 
 ## Migrate the db
