@@ -86,7 +86,7 @@ func LoginIfNecessary(user string) {
 }
 
 func login(user string) {
-	if config.ReadOnly {
+	if config.ReadOnly && config.Verbose {
 		log.Printf("Not logging in %s because we're in read-only mode", user)
 		return
 	}
@@ -96,7 +96,7 @@ func login(user string) {
 }
 
 func logout(user string) {
-	if config.ReadOnly {
+	if config.ReadOnly && config.Verbose {
 		log.Printf("Not logging out %s because we're in read-only mode", user)
 		return
 	}

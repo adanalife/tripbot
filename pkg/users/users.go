@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
+	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/database"
 )
 
@@ -20,12 +21,14 @@ type User struct {
 }
 
 func (u User) save() {
-	log.Println("this is where we'll save the user")
-	spew.Dump(u)
+	if config.Verbose {
+		log.Println("saving user", u.Username)
+		spew.Dump(u)
+	}
 	query := `UPDATE users SET last_seen=:last_seen, num_visits=:num_visits WHERE id = :id`
 	_, err := database.DBCon.NamedExec(query, u)
 	if err != nil {
-		spew.Dump(err)
+		log.Println("error saving user:", err)
 	}
 }
 
