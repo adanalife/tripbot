@@ -4,6 +4,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/dmerrick/danalol-stream/pkg/database"
 )
 
@@ -18,34 +19,37 @@ type User struct {
 	DateCreated time.Time `db:"date_created"`
 }
 
-//TODO: maybe return an err here?
-func create(username string) {
-	log.Println("creating user", username)
-	tx := database.DBCon.MustBegin()
-	tx.MustExec("INSERT INTO users (username) VALUES ($1)", username)
-	tx.Commit()
-}
-
 func FindOrCreate(username string) User {
+	//TODO: remove this
+	log.Printf("FindOrCreate(%s)", username)
 	var emptyUser User
 	user := Find(username)
 	if user != emptyUser {
 		return user
 	}
 	// create the user in the DB
-	create(username)
-	// we call Find() a second time here, which is a lil inefficient
-	return Find(username)
+	return create(username)
 }
 
 func Find(username string) User {
 	var emptyUser User
 	//TODO: does this have to be a slice?
 	users := []User{}
-	database.DBCon.Select(&users, "SELECT username from users where username='$1'", username)
+	database.DBCon.Select(&users, "SELECT * from users where username='$1'", username)
+	spew.Dump(users)
 	if len(users) == 0 {
 		log.Println("could not find user", username)
 		return emptyUser
 	}
 	return users[0]
+}
+
+//TODO: maybe return an err here?
+func create(username string) User {
+	log.Println("creating user", username)
+	tx := database.DBCon.MustBegin()
+	// create a new row, using default vals and creating a single visit
+	tx.MustExec("INSERT INTO users (username, num_visits) VALUES ($1, 1)", username)
+	tx.Commit()
+	return Find(username)
 }
