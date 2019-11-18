@@ -1,6 +1,7 @@
 package users
 
 import (
+	"fmt"
 	"log"
 	"time"
 
@@ -9,8 +10,8 @@ import (
 )
 
 type User struct {
-	Username string `db:"username"`
-	// Event       string    `db:"event"`
+	ID          uint16    `db:"id"`
+	Username    string    `db:"username"`
 	Miles       float32   `db:"miles"`
 	NumVisits   uint16    `db:"num_visits"`
 	HasDonated  bool      `db:"has_donated"`
@@ -32,16 +33,23 @@ func FindOrCreate(username string) User {
 }
 
 func Find(username string) User {
-	var emptyUser User
-	//TODO: does this have to be a slice?
-	users := []User{}
-	database.DBCon.Select(&users, "SELECT * from users where username='$1'", username)
-	spew.Dump(users)
-	if len(users) == 0 {
-		log.Println("could not find user", username)
-		return emptyUser
+	user := User{}
+	err := database.DBCon.Get(&user, "SELECT * FROM users WHERE username=$1", username)
+	fmt.Printf("%#v\n", user)
+	if err != nil {
+		spew.Dump(err)
 	}
-	return users[0]
+	return user
+	// var emptyUser User
+	//TODO: does this have to be a slice?
+	// users := []User{}
+	// database.DBCon.Select(&users, "SELECT * from users where username='$1'", username)
+	// spew.Dump(users)
+	// if len(users) == 0 {
+	// 	log.Println("could not find user", username)
+	// 	return emptyUser
+	// }
+	// return users[0]
 }
 
 //TODO: maybe return an err here?
@@ -49,7 +57,7 @@ func create(username string) User {
 	log.Println("creating user", username)
 	tx := database.DBCon.MustBegin()
 	// create a new row, using default vals and creating a single visit
-	tx.MustExec("INSERT INTO users (username, num_visits) VALUES ($1, 1)", username)
+	tx.MustExec("INSERT INTO users (username, num_visits) VALUES ($1, $2)", username, 1)
 	tx.Commit()
 	return Find(username)
 }
