@@ -4,7 +4,6 @@ import (
 	"log"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/database"
 )
@@ -28,7 +27,6 @@ var nilUser = User{}
 func (u User) save() {
 	if config.Verbose {
 		log.Println("saving user", u.Username)
-		spew.Dump(u)
 	}
 	query := `UPDATE users SET last_seen=:last_seen, num_visits=:num_visits WHERE id = :id`
 	_, err := database.DBCon.NamedExec(query, u)
