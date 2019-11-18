@@ -12,6 +12,7 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/database"
 	"github.com/dmerrick/danalol-stream/pkg/events"
 	mytwitch "github.com/dmerrick/danalol-stream/pkg/twitch"
+	"github.com/dmerrick/danalol-stream/pkg/users"
 	"github.com/gempir/go-twitch-irc/v2"
 	"github.com/joho/godotenv"
 	"github.com/kelvins/geocoder"
@@ -32,30 +33,32 @@ const followerMsg = "You must be a follower to run that command :)"
 
 // all chat messages
 func PrivateMessage(message twitch.PrivateMessage) {
-	user := message.User.Name
+	username := message.User.Name
 
 	// log the user in if their login time isn't currently recorded
-	events.LoginIfNecessary(user)
+	events.LoginIfNecessary(username)
+
+	users.LoginIfNecessary(username)
 
 	if strings.HasPrefix(strings.ToLower(message.Message), "!help") {
-		helpCmd(user)
+		helpCmd(username)
 	}
 
 	if strings.HasPrefix(strings.ToLower(message.Message), "!uptime") {
-		uptimeCmd(user)
+		uptimeCmd(username)
 	}
 
 	if strings.HasPrefix(strings.ToLower(message.Message), "!miles") {
-		if isFollower(user) {
-			milesCmd(user)
+		if isFollower(username) {
+			milesCmd(username)
 		} else {
 			client.Say(config.ChannelName, followerMsg)
 		}
 	}
 
 	if strings.HasPrefix(strings.ToLower(message.Message), "!sunset") {
-		if isFollower(user) {
-			sunsetCmd(user)
+		if isFollower(username) {
+			sunsetCmd(username)
 		} else {
 			client.Say(config.ChannelName, followerMsg)
 		}
@@ -74,8 +77,8 @@ func PrivateMessage(message twitch.PrivateMessage) {
 	}
 	for _, s := range locationStrings {
 		if strings.HasPrefix(strings.ToLower(message.Message), s) {
-			if isFollower(user) {
-				locationCmd(user)
+			if isFollower(username) {
+				locationCmd(username)
 			} else {
 				client.Say(config.ChannelName, followerMsg)
 			}
@@ -83,47 +86,47 @@ func PrivateMessage(message twitch.PrivateMessage) {
 	}
 
 	if strings.HasPrefix(strings.ToLower(message.Message), "!leaderboard") {
-		if isFollower(user) {
-			leaderboardCmd(user)
+		if isFollower(username) {
+			leaderboardCmd(username)
 		} else {
 			client.Say(config.ChannelName, followerMsg)
 		}
 	}
 
 	if strings.HasPrefix(strings.ToLower(message.Message), "!time") {
-		if isFollower(user) {
-			timeCmd(user)
+		if isFollower(username) {
+			timeCmd(username)
 		} else {
 			client.Say(config.ChannelName, followerMsg)
 		}
 	}
 
 	if strings.HasPrefix(strings.ToLower(message.Message), "!date") {
-		if isFollower(user) {
-			dateCmd(user)
+		if isFollower(username) {
+			dateCmd(username)
 		} else {
 			client.Say(config.ChannelName, followerMsg)
 		}
 	}
 
 	if strings.HasPrefix(strings.ToLower(message.Message), "!guess") {
-		if isFollower(user) {
-			guessCmd(user, message.Message)
+		if isFollower(username) {
+			guessCmd(username, message.Message)
 		} else {
 			client.Say(config.ChannelName, followerMsg)
 		}
 	}
 
 	if strings.HasPrefix(strings.ToLower(message.Message), "!state") {
-		if isFollower(user) {
-			stateCmd(user)
+		if isFollower(username) {
+			stateCmd(username)
 		} else {
 			client.Say(config.ChannelName, followerMsg)
 		}
 	}
 
 	if strings.HasPrefix(strings.ToLower(message.Message), "!secretinfo") {
-		secretInfoCmd(user)
+		secretInfoCmd(username)
 	}
 
 	// any of these should trigger the report command
@@ -136,8 +139,8 @@ func PrivateMessage(message twitch.PrivateMessage) {
 	}
 	for _, rs := range reportStrings {
 		if strings.HasPrefix(strings.ToLower(message.Message), rs) {
-			if isFollower(user) {
-				reportCmd(user, message.Message)
+			if isFollower(username) {
+				reportCmd(username, message.Message)
 			} else {
 				client.Say(config.ChannelName, followerMsg)
 			}
@@ -145,16 +148,18 @@ func PrivateMessage(message twitch.PrivateMessage) {
 	}
 
 	if strings.HasPrefix(strings.ToLower(message.Message), "!shutdown") {
-		shutdownCmd(user)
+		shutdownCmd(username)
 	}
 }
 
 func UserJoin(joinMessage twitch.UserJoinMessage) {
 	events.LoginIfNecessary(joinMessage.User)
+	users.LoginIfNecessary(joinMessage.User)
 }
 
 func UserPart(partMessage twitch.UserPartMessage) {
 	events.LogoutIfNecessary(partMessage.User)
+	users.LoginIfNecessary(partMessage.User)
 }
 
 // send message to chat if someone subs

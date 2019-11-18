@@ -13,6 +13,7 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/database"
 	"github.com/dmerrick/danalol-stream/pkg/events"
 	"github.com/dmerrick/danalol-stream/pkg/tripbot"
+	"github.com/dmerrick/danalol-stream/pkg/users"
 	"github.com/dmerrick/danalol-stream/pkg/video"
 )
 
@@ -27,6 +28,7 @@ func main() {
 		// use !shutdown instead
 		events.LogoutAll(tripbot.Uptime)
 		log.Printf("last played: %s", video.CurrentlyPlaying)
+		users.Shutdown()
 		database.DBCon.Close()
 		background.StopCron()
 		os.Exit(1)
@@ -45,6 +47,7 @@ func main() {
 	// join the channel
 	client.Join(config.ChannelName)
 	log.Println("Joined channel", config.ChannelName)
+	log.Printf("URL: https://twitch.tv/%s", config.ChannelName)
 
 	// run this right away to set the currently-playing video
 	// (otherwise it will be unset until the first cron job runs)
@@ -56,6 +59,7 @@ func main() {
 	background.StartCron()
 	background.Cron.AddFunc("@every 57m30s", tripbot.Chatter)
 	background.Cron.AddFunc("@every 60s", video.GetCurrentlyPlaying)
+	background.Cron.AddFunc("@every 60s", users.PrintCurrentSession)
 
 	// actually connect to Twitch
 	// wrapped in a loop in case twitch goes down

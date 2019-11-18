@@ -80,9 +80,9 @@ func (v Video) toDate() time.Time {
 // ocrCoords will use OCR to read the coordinates from a screenshot (seriously)
 func (v Video) ocrCoords() (float64, float64, error) {
 	for _, timestamp := range timestampsToTry {
-		lat, lon, err := ocr.CoordsFromImage(v.screencap(timestamp))
+		lat, lng, err := ocr.CoordsFromImage(v.screencap(timestamp))
 		if err == nil {
-			return lat, lon, err
+			return lat, lng, err
 		}
 	}
 	return 0, 0, errors.New("none of the screencaps had valid coords")

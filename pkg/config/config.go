@@ -29,6 +29,7 @@ const (
 
 var ChannelName string
 var ReadOnly bool
+var Verbose bool
 
 func init() {
 	// load ENV vars from .env file
@@ -38,6 +39,7 @@ func init() {
 	}
 	ChannelName = os.Getenv("CHANNEL_NAME")
 	ReadOnly, _ = strconv.ParseBool(os.Getenv("READ_ONLY"))
+	Verbose, _ = strconv.ParseBool(os.Getenv("VERBOSE"))
 }
 
 func VideoDir() string {

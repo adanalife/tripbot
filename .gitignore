@@ -7,3 +7,5 @@ OBS/*.txt
 .env
 *.pid
 *.log
+db/*.sql
+db/*.gz
