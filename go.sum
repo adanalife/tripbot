@@ -43,6 +43,8 @@ github.com/nathan-osman/go-sunrise v0.0.0-20171121204956-7c449e7c690b h1:nWQAhkN
 github.com/nathan-osman/go-sunrise v0.0.0-20171121204956-7c449e7c690b/go.mod h1:kCE4+NvReDuwiJGk03l6QONGmYy805GQP3xGcCm8cBg=
 github.com/nicklaw5/helix v0.5.2 h1:hHADgjBTjAXI2k1HH5rDXw1/8umkeWJViFaZc5I8ydQ=
 github.com/nicklaw5/helix v0.5.2/go.mod h1:nRcok4VLg8ONQYW/iXBZ24wcfiJjTlDbhgk0ZatOrUY=
+github.com/nicklaw5/helix v0.5.4 h1:OAyIHMdmzsNwYJOZscvxAS6eU63YFjtE++CEKvAgujY=
+github.com/nicklaw5/helix v0.5.4/go.mod h1:nRcok4VLg8ONQYW/iXBZ24wcfiJjTlDbhgk0ZatOrUY=
 github.com/otiai10/gosseract v2.2.1+incompatible h1:Ry5ltVdpdp4LAa2bMjsSJH34XHVOV7XMi41HtzL8X2I=
 github.com/otiai10/gosseract v2.2.1+incompatible/go.mod h1:XrzWItCzCpFRZ35n3YtVTgq5bLAhFIkascoRo8G32QE=
 github.com/robfig/cron v1.2.0 h1:ZjScXvvxeQ63Dbyxy76Fj3AT3Ut0aKsyd2/tl3DTMuQ=

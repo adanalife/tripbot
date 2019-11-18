@@ -24,3 +24,10 @@ mv log/bot.log log/bot.$(date "+%Y%m%d").log
 ```
 go run cmd/tripbot/tripbot.go
 ```
+
+
+### Update a package
+
+```
+go get -u github.com/nicklaw5/helix
+```

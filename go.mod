@@ -22,7 +22,7 @@ require (
 	github.com/lib/pq v1.1.1
 	github.com/mattn/go-colorable v0.1.2 // indirect
 	github.com/nathan-osman/go-sunrise v0.0.0-20171121204956-7c449e7c690b
-	github.com/nicklaw5/helix v0.5.2
+	github.com/nicklaw5/helix v0.5.4
 	github.com/otiai10/gosseract v2.2.1+incompatible
 	github.com/robfig/cron v1.2.0
 	github.com/sfreiberg/gotwilio v0.0.0-20190522212351-14c666f1d505
