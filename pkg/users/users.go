@@ -33,14 +33,49 @@ func (u User) save() {
 	}
 }
 
+//TODO: consider rolling this into logout()
+func (u User) LogoutIfNecessary() {
+	// check if the user is currently logged in
+	if u.isLoggedIn() {
+		u.logout()
+		return
+	}
+	log.Println("hmm, LogoutIfNecessary() called and user not logged in:", u.Username)
+}
+
+// logout() removes the user from the list of currently-logged in users,
+// and updates the DB with their most up-to-date values
+func (u User) logout() {
+	// remove the user from the logged in list
+	// https://stackoverflow.com/a/34070691
+	for i, v := range LoggedIn {
+		if v == u {
+			LoggedIn = append(LoggedIn[:i], LoggedIn[i+1:]...)
+			break
+		}
+	}
+	// update the last seen date
+	u.LastSeen = time.Now()
+	// store the user in the db
+	u.save()
+}
+
+// isLoggedIn checks if the user is currently logged in
+func (u User) isLoggedIn() bool {
+	for _, loggedInUser := range LoggedIn {
+		if u == loggedInUser {
+			return true
+		}
+	}
+	return false
+}
+
 // LoginIfNecessary checks the list of currently-logged in users and will
 // run login() if this user isn't currently logged in
 func LoginIfNecessary(username string) {
 	// check if the user is currently logged in
-	for _, u := range LoggedIn {
-		if u.Username == username {
-			return
-		}
+	if isLoggedIn(username) {
+		return
 	}
 	// they weren't logged in, so note in the DB
 	login(username)
