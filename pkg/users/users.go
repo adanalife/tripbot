@@ -20,6 +20,9 @@ type User struct {
 	DateCreated time.Time `db:"date_created"`
 }
 
+// nilUser gets used as a nil value for users
+var nilUser = User{}
+
 // User.save() will take the given user and store it in the DB
 func (u User) save() {
 	if config.Verbose {
@@ -33,19 +36,32 @@ func (u User) save() {
 	}
 }
 
-//TODO: consider rolling this into logout()
-func (u User) LogoutIfNecessary() {
-	// check if the user is currently logged in
-	if u.isLoggedIn() {
-		u.logout()
+// FindInSession searches the current session for the user
+func FindInSession(username string) User {
+	for _, loggedInUser := range LoggedIn {
+		if username == loggedInUser.Username {
+			return loggedInUser
+		}
+	}
+	return nilUser
+}
+
+// LogoutIfNecessary will log out the user if it finds them in the session
+func LogoutIfNecessary(username string) {
+	// find the user in the current session
+	user := FindInSession(username)
+	// user was in the session
+	if user != nilUser {
+		user.logout()
 		return
 	}
-	log.Println("hmm, LogoutIfNecessary() called and user not logged in:", u.Username)
+	log.Println("hmm, LogoutIfNecessary() called and user not logged in:", username)
 }
 
 // logout() removes the user from the list of currently-logged in users,
 // and updates the DB with their most up-to-date values
 func (u User) logout() {
+	log.Println("logging out", u.Username)
 	// remove the user from the logged in list
 	// https://stackoverflow.com/a/34070691
 	for i, v := range LoggedIn {
@@ -60,21 +76,21 @@ func (u User) logout() {
 	u.save()
 }
 
-// isLoggedIn checks if the user is currently logged in
-func (u User) isLoggedIn() bool {
-	for _, loggedInUser := range LoggedIn {
-		if u == loggedInUser {
-			return true
-		}
-	}
-	return false
-}
+// // isLoggedIn checks if the user is currently logged in
+// func (u User) isLoggedIn() bool {
+// 	for _, loggedInUser := range LoggedIn {
+// 		if u == loggedInUser {
+// 			return true
+// 		}
+// 	}
+// 	return false
+// }
 
 // LoginIfNecessary checks the list of currently-logged in users and will
 // run login() if this user isn't currently logged in
 func LoginIfNecessary(username string) {
 	// check if the user is currently logged in
-	if isLoggedIn(username) {
+	if FindInSession(username) != nilUser {
 		return
 	}
 	// they weren't logged in, so note in the DB
