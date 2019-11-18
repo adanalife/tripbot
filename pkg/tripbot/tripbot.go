@@ -38,6 +38,7 @@ func PrivateMessage(message twitch.PrivateMessage) {
 	// log the user in if their login time isn't currently recorded
 	events.LoginIfNecessary(username)
 
+	// log in the user
 	users.LoginIfNecessary(username)
 
 	if strings.HasPrefix(strings.ToLower(message.Message), "!help") {
@@ -152,14 +153,16 @@ func PrivateMessage(message twitch.PrivateMessage) {
 	}
 }
 
+// this event fires when a user joins the channel
 func UserJoin(joinMessage twitch.UserJoinMessage) {
-	events.LoginIfNecessary(joinMessage.User)
 	users.LoginIfNecessary(joinMessage.User)
+	events.LoginIfNecessary(joinMessage.User)
 }
 
+// this event fires when a user leaves the channel
 func UserPart(partMessage twitch.UserPartMessage) {
-	events.LogoutIfNecessary(partMessage.User)
 	users.LoginIfNecessary(partMessage.User)
+	events.LogoutIfNecessary(partMessage.User)
 }
 
 // send message to chat if someone subs
