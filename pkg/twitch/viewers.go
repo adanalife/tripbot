@@ -9,18 +9,19 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
+	"github.com/dmerrick/danalol-stream/pkg/config"
 )
 
-//TODO: make this use ChannelName instead of hardcoding it
-const chattersAPIURL = "https://tmi.twitch.tv/group/user/adanalife_/chatters"
+// chattersAPIURL is the URL to hit for current chatter list
+var chattersAPIURL = "https://tmi.twitch.tv/group/user/" + config.ChannelName + "/chatters"
 
-// this is the json returned by the Twitch chatters endpoint
+// chattersResponse is the json returned by the Twitch chatters endpoint
 type chattersResponse struct {
 	count    int `json:"chatter_count"`
 	chatters map[string][]string
 }
 
-// this will contain the current viewers
+// currentChatters will contain the current viewers
 var currentChatters chattersResponse
 
 //TODO: is this even necessary?
@@ -28,6 +29,7 @@ func ViewerCount() int {
 	return currentChatters.count
 }
 
+// Chatters returns a slice containing all current chatters
 func Chatters() []string {
 	var chatters []string
 	for _, list := range currentChatters.chatters {
@@ -38,6 +40,7 @@ func Chatters() []string {
 	return chatters
 }
 
+// UpdateViewers makes a request to the chatters API and updates currentChatters
 func UpdateViewers() {
 	client := http.Client{
 		Timeout: 2 * time.Second,
