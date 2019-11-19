@@ -161,7 +161,7 @@ func UserJoin(joinMessage twitch.UserJoinMessage) {
 
 // this event fires when a user leaves the channel
 func UserPart(partMessage twitch.UserPartMessage) {
-	users.LoginIfNecessary(partMessage.User)
+	users.LogoutIfNecessary(partMessage.User)
 	events.LogoutIfNecessary(partMessage.User)
 }
 

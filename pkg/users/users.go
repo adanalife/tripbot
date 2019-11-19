@@ -51,14 +51,8 @@ func LogoutIfNecessary(username string) {
 // and updates the DB with their most up-to-date values
 func (u User) logout() {
 	log.Println("logging out", u.Username)
-	// remove the user from the logged in list
-	// https://stackoverflow.com/a/34070691
-	for i, v := range LoggedIn {
-		if v == u {
-			LoggedIn = append(LoggedIn[:i], LoggedIn[i+1:]...)
-			break
-		}
-	}
+	//TODO: calculate miles using LoggedIn[username]
+	delete(LoggedIn, u.Username)
 	// update the last seen date
 	u.LastSeen = time.Now()
 	// store the user in the db
@@ -88,13 +82,14 @@ func LoginIfNecessary(username string) {
 
 // login will record the users presence in the DB
 func login(username string) {
+	now := time.Now()
 	user := FindOrCreate(username)
 
-	LoggedIn = append(LoggedIn, user)
+	LoggedIn[username] = now
 	// increment the number of visits
 	user.NumVisits = user.NumVisits + 1
 	// update the last seen date
-	user.LastSeen = time.Now()
+	user.LastSeen = now
 	user.save()
 }
 
