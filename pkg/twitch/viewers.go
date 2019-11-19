@@ -7,11 +7,12 @@ import (
 	"log"
 	"net/http"
 	"time"
+
+	"github.com/dmerrick/danalol-stream/pkg/config"
 )
 
 // chattersAPIURL is the URL to hit for current chatter list
-// var chattersAPIURL = "https://tmi.twitch.tv/group/user/" + config.ChannelName + "/chatters"
-var chattersAPIURL = "https://tmi.twitch.tv/group/user/adanalife_/chatters"
+var chattersAPIURL = "https://tmi.twitch.tv/group/user/" + config.ChannelName + "/chatters"
 
 // chattersResponse is the json returned by the Twitch chatters endpoint
 type chattersResponse struct {
