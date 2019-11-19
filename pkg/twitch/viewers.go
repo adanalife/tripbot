@@ -23,13 +23,14 @@ type chattersResponse struct {
 var currentChatters chattersResponse
 
 //TODO: is this even necessary?
-func ViewerCount() int {
+func ChatterCount() int {
 	return currentChatters.Count
 }
 
 // Chatters returns a map where the keys are current chatters
 // we use an empty struct for performance reasons
 // c.p. https://stackoverflow.com/a/10486196
+//TODO: consider using an int as the value and have that be the ID in the DB
 func Chatters() map[string]struct{} {
 	//TODO: maybe we don't want to make this every time?
 	var chatters = make(map[string]struct{})
@@ -41,8 +42,8 @@ func Chatters() map[string]struct{} {
 	return chatters
 }
 
-// UpdateViewers makes a request to the chatters API and updates currentChatters
-func UpdateViewers() {
+// UpdateChatters makes a request to the chatters API and updates currentChatters
+func UpdateChatters() {
 	client := http.Client{
 		Timeout: 2 * time.Second,
 	}
