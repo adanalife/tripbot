@@ -7,18 +7,16 @@ import (
 	"log"
 	"net/http"
 	"time"
-
-	"github.com/davecgh/go-spew/spew"
-	"github.com/dmerrick/danalol-stream/pkg/config"
 )
 
 // chattersAPIURL is the URL to hit for current chatter list
-var chattersAPIURL = "https://tmi.twitch.tv/group/user/" + config.ChannelName + "/chatters"
+// var chattersAPIURL = "https://tmi.twitch.tv/group/user/" + config.ChannelName + "/chatters"
+var chattersAPIURL = "https://tmi.twitch.tv/group/user/adanalife_/chatters"
 
 // chattersResponse is the json returned by the Twitch chatters endpoint
 type chattersResponse struct {
-	count    int `json:"chatter_count"`
-	chatters map[string][]string
+	Count    int `json:"chatter_count"`
+	Chatters map[string][]string
 }
 
 // currentChatters will contain the current viewers
@@ -26,13 +24,13 @@ var currentChatters chattersResponse
 
 //TODO: is this even necessary?
 func ViewerCount() int {
-	return currentChatters.count
+	return currentChatters.Count
 }
 
 // Chatters returns a slice containing all current chatters
 func Chatters() []string {
 	var chatters []string
-	for _, list := range currentChatters.chatters {
+	for _, list := range currentChatters.Chatters {
 		for _, chatter := range list {
 			chatters = append(chatters, chatter)
 		}
@@ -65,8 +63,6 @@ func UpdateViewers() {
 		log.Println("error reading request body", err)
 		return
 	}
-
-	spew.Dump(body)
 
 	err = json.Unmarshal(body, &currentChatters)
 	if err != nil {
