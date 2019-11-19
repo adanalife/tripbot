@@ -35,64 +35,6 @@ func (u User) save() {
 	}
 }
 
-// LogoutIfNecessary will log out the user if it finds them in the session
-func LogoutIfNecessary(username string) {
-	// find the user in the current session
-	user := FindInSession(username)
-	// user was in the session
-	if user != nilUser {
-		user.logout()
-		return
-	}
-	log.Println("hmm, LogoutIfNecessary() called and user not logged in:", username)
-}
-
-// logout() removes the user from the list of currently-logged in users,
-// and updates the DB with their most up-to-date values
-func (u User) logout() {
-	log.Println("logging out", u.Username)
-	//TODO: calculate miles using LoggedIn[username]
-	delete(LoggedIn, u.Username)
-	// update the last seen date
-	u.LastSeen = time.Now()
-	// store the user in the db
-	u.save()
-}
-
-// // isLoggedIn checks if the user is currently logged in
-// func (u User) isLoggedIn() bool {
-// 	for _, loggedInUser := range LoggedIn {
-// 		if u == loggedInUser {
-// 			return true
-// 		}
-// 	}
-// 	return false
-// }
-
-// LoginIfNecessary checks the list of currently-logged in users and will
-// run login() if this user isn't currently logged in
-func LoginIfNecessary(username string) {
-	// check if the user is currently logged in
-	if FindInSession(username) != nilUser {
-		return
-	}
-	// they weren't logged in, so note in the DB
-	login(username)
-}
-
-// login will record the users presence in the DB
-func login(username string) {
-	now := time.Now()
-	user := FindOrCreate(username)
-
-	LoggedIn[username] = now
-	// increment the number of visits
-	user.NumVisits = user.NumVisits + 1
-	// update the last seen date
-	user.LastSeen = now
-	user.save()
-}
-
 // FindOrCreate will try to find the user in the DB, otherwise it will create a new user
 func FindOrCreate(username string) User {
 	if config.Verbose {
