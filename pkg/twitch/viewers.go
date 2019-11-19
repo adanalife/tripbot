@@ -81,6 +81,7 @@ func UpdateChatters() {
 	currentChatters = latestChatters
 }
 
+//TODO: this was added for debugging purposes and can probably be removed
 func PrintCurrentChatters() {
 	usernames := make([]string, 0, len(Chatters()))
 	for username := range Chatters() {
