@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -78,4 +79,13 @@ func UpdateChatters() {
 	}
 
 	currentChatters = latestChatters
+}
+
+func PrintCurrentChatters() {
+	usernames := make([]string, 0, len(Chatters()))
+	for username := range Chatters() {
+		usernames = append(usernames, username)
+	}
+	sort.Sort(sort.StringSlice(usernames))
+	log.Printf("Current chatters: %s", strings.Join(usernames, ", "))
 }

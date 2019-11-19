@@ -46,6 +46,7 @@ func UpdateSession() {
 	}
 
 	PrintCurrentSession()
+	twitch.PrintCurrentChatters()
 }
 
 // ShutDown loops through all of the logged-in users and logs them out
