@@ -6,13 +6,14 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/dmerrick/danalol-stream/pkg/config"
 )
 
 // chattersAPIURL is the URL to hit for current chatter list
-var chattersAPIURL = "https://tmi.twitch.tv/group/user/" + config.ChannelName + "/chatters"
+var chattersAPIURL = "https://tmi.twitch.tv/group/user/" + strings.ToLower(config.ChannelName) + "/chatters"
 
 // chattersResponse is the json returned by the Twitch chatters endpoint
 type chattersResponse struct {
@@ -57,7 +58,7 @@ func UpdateChatters() {
 		return
 	}
 
-	// req.Header.Set("User-Agent", "tripbot")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36")
 
 	res, err := client.Do(req)
 	if err != nil {
