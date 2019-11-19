@@ -7,28 +7,30 @@ import (
 	"log"
 	"net/http"
 	"time"
+
+	"github.com/davecgh/go-spew/spew"
 )
 
 //TODO: make this use ChannelName instead of hardcoding it
 const chattersAPIURL = "https://tmi.twitch.tv/group/user/adanalife_/chatters"
 
 // this is the json returned by the Twitch chatters endpoint
-type viewersResponse struct {
-	Count    int `json:"chatter_count"`
-	Chatters map[string][]string
+type chattersResponse struct {
+	count    int `json:"chatter_count"`
+	chatters map[string][]string
 }
 
 // this will contain the current viewers
-var CurrentViewers viewersResponse
+var currentChatters chattersResponse
 
 //TODO: is this even necessary?
 func ViewerCount() int {
-	return CurrentViewers.Count
+	return currentChatters.count
 }
 
 func Chatters() []string {
 	var chatters []string
-	for _, list := range CurrentViewers.Chatters {
+	for _, list := range currentChatters.chatters {
 		for _, chatter := range list {
 			chatters = append(chatters, chatter)
 		}
@@ -61,7 +63,9 @@ func UpdateViewers() {
 		return
 	}
 
-	err = json.Unmarshal(body, &CurrentViewers)
+	spew.Dump(body)
+
+	err = json.Unmarshal(body, &currentChatters)
 	if err != nil {
 		fmt.Println("error unmarshalling json", err)
 	}
