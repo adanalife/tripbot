@@ -31,11 +31,11 @@ func UpdateSession() {
 	for loggedInUser, _ := range LoggedIn {
 		if _, ok := currentChatters[loggedInUser]; ok {
 			// they're logged in and a current chatter, do nothing
-			break
+			continue
 		} else {
 			// they're logged in and NOT a current chatter, so log them out
 			logout(loggedInUser)
-			break
+			continue
 		}
 	}
 
