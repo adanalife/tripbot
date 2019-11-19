@@ -27,12 +27,15 @@ func ViewerCount() int {
 	return currentChatters.Count
 }
 
-// Chatters returns a slice containing all current chatters
-func Chatters() []string {
-	var chatters []string
+// Chatters returns a map where the keys are current chatters
+// we use an empty struct for performance reasons
+// c.p. https://stackoverflow.com/a/10486196
+func Chatters() map[string]struct{} {
+	//TODO: maybe we don't want to make this every time?
+	var chatters = make(map[string]struct{})
 	for _, list := range currentChatters.Chatters {
 		for _, chatter := range list {
-			chatters = append(chatters, chatter)
+			chatters[chatter] = struct{}{}
 		}
 	}
 	return chatters

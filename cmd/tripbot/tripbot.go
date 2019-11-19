@@ -61,7 +61,6 @@ func main() {
 	//TODO: move these somewhere central
 	background.Cron.AddFunc("@every 57m30s", tripbot.Chatter)
 	background.Cron.AddFunc("@every 60s", video.GetCurrentlyPlaying)
-	background.Cron.AddFunc("@every 60s", users.PrintCurrentSession)
 	background.Cron.AddFunc("@every 60s", users.UpdateSession)
 
 	// actually connect to Twitch
