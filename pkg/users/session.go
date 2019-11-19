@@ -23,7 +23,7 @@ func UpdateSession() {
 	//TODO: move this to a separate CRON task?
 	twitch.UpdateChatters()
 
-	log.Println("there are", twitch.ChatterCount(), "people in chat")
+	log.Println("there are", twitch.ChatterCount(), "people in chat and", len(LoggedIn), "in the session")
 	currentChatters := twitch.Chatters()
 
 	// log out the people who arent present
