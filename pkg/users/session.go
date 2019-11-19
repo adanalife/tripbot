@@ -34,7 +34,7 @@ func UpdateSession() {
 			break
 		} else {
 			// they're logged in and NOT a current chatter, so log them out
-			LogoutIfNecessary(loggedInUser)
+			logout(loggedInUser)
 			break
 		}
 	}
@@ -53,18 +53,8 @@ func Shutdown() {
 	log.Println("these were the logged-in users")
 	spew.Dump(LoggedIn)
 	for username, _ := range LoggedIn {
-		user := Find(username)
-		user.logout()
+		logout(username)
 	}
-}
-
-// FindInSession searches the current session for the user
-func FindInSession(username string) User {
-	if _, ok := LoggedIn[username]; ok {
-		//TODO: maybe don't return a User here?
-		return Find(username)
-	}
-	return nilUser
 }
 
 func PrintCurrentSession() {
@@ -80,7 +70,7 @@ func PrintCurrentSession() {
 // run login() if this user isn't currently logged in
 func LoginIfNecessary(username string) {
 	// check if the user is currently logged in
-	if FindInSession(username) != nilUser {
+	if isLoggedIn(username) {
 		return
 	}
 	// they weren't logged in, so note in the DB
@@ -89,11 +79,8 @@ func LoginIfNecessary(username string) {
 
 // LogoutIfNecessary will log out the user if it finds them in the session
 func LogoutIfNecessary(username string) {
-	// find the user in the current session
-	user := FindInSession(username)
-	// user was in the session
-	if user != nilUser {
-		user.logout()
+	if isLoggedIn(username) {
+		logout(username)
 		return
 	}
 	log.Println("hmm, LogoutIfNecessary() called and user not logged in:", username)
@@ -114,22 +101,24 @@ func login(username string) {
 
 // logout() removes the user from the list of currently-logged in users,
 // and updates the DB with their most up-to-date values
-func (u User) logout() {
-	log.Println("logging out", u.Username)
+func logout(username string) {
+	log.Println("logging out", username)
+
+	user := Find(username)
 	//TODO: calculate miles using LoggedIn[username]
-	delete(LoggedIn, u.Username)
 	// update the last seen date
-	u.LastSeen = time.Now()
+	user.LastSeen = time.Now()
 	// store the user in the db
-	u.save()
+	user.save()
+
+	// remove them from the session
+	delete(LoggedIn, username)
 }
 
-// // isLoggedIn checks if the user is currently logged in
-// func (u User) isLoggedIn() bool {
-// 	for _, loggedInUser := range LoggedIn {
-// 		if u == loggedInUser {
-// 			return true
-// 		}
-// 	}
-// 	return false
-// }
+// isLoggedIn checks if the user is currently logged in
+func isLoggedIn(username string) bool {
+	if _, ok := LoggedIn[username]; ok {
+		return true
+	}
+	return false
+}

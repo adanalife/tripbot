@@ -45,6 +45,8 @@ func Chatters() map[string]struct{} {
 
 // UpdateChatters makes a request to the chatters API and updates currentChatters
 func UpdateChatters() {
+	var latestChatters chattersResponse
+
 	client := http.Client{
 		Timeout: 2 * time.Second,
 	}
@@ -69,8 +71,10 @@ func UpdateChatters() {
 		return
 	}
 
-	err = json.Unmarshal(body, &currentChatters)
+	err = json.Unmarshal(body, &latestChatters)
 	if err != nil {
 		fmt.Println("error unmarshalling json", err)
 	}
+
+	currentChatters = latestChatters
 }

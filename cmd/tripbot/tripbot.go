@@ -58,6 +58,9 @@ func main() {
 	// start cron and attach cronjobs
 	background.StartCron()
 
+	// fetch initial session
+	users.UpdateSession()
+
 	//TODO: move these somewhere central
 	background.Cron.AddFunc("@every 57m30s", tripbot.Chatter)
 	background.Cron.AddFunc("@every 60s", video.GetCurrentlyPlaying)
