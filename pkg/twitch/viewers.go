@@ -2,7 +2,6 @@ package twitch
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -75,7 +74,7 @@ func UpdateChatters() {
 
 	err = json.Unmarshal(body, &latestChatters)
 	if err != nil {
-		fmt.Println("error unmarshalling json", err)
+		log.Println("error unmarshalling json", err)
 	}
 
 	currentChatters = latestChatters
