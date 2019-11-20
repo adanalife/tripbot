@@ -46,26 +46,6 @@ func UpdateSession() {
 	// twitch.PrintCurrentChatters()
 }
 
-// ShutDown loops through all of the logged-in users and logs them out
-func Shutdown() {
-	log.Println("these were the logged-in users")
-	spew.Dump(LoggedIn)
-	for username, _ := range LoggedIn {
-		logout(username)
-	}
-}
-
-func PrintCurrentSession() {
-	log.Println("there are", twitch.ChatterCount(), "people in chat and", len(LoggedIn), "in the session")
-
-	usernames := make([]string, 0, len(LoggedIn))
-	for username := range LoggedIn {
-		usernames = append(usernames, username)
-	}
-	sort.Sort(sort.StringSlice(usernames))
-	log.Printf("Currently logged in: %s", strings.Join(usernames, ", "))
-}
-
 // LoginIfNecessary checks the list of currently-logged in users and will
 // run login() if this user isn't currently logged in
 func LoginIfNecessary(username string) {
@@ -121,4 +101,25 @@ func isLoggedIn(username string) bool {
 		return true
 	}
 	return false
+}
+
+// ShutDown loops through all of the logged-in users and logs them out
+func Shutdown() {
+	log.Println("these were the logged-in users")
+	spew.Dump(LoggedIn)
+	for username, _ := range LoggedIn {
+		logout(username)
+	}
+}
+
+// PrintCurrentSession simply prints info about the current session
+func PrintCurrentSession() {
+	log.Println("there are", twitch.ChatterCount(), "people in chat and", len(LoggedIn), "in the session")
+
+	usernames := make([]string, 0, len(LoggedIn))
+	for username := range LoggedIn {
+		usernames = append(usernames, username)
+	}
+	sort.Sort(sort.StringSlice(usernames))
+	log.Printf("Currently logged in: %s", strings.Join(usernames, ", "))
 }
