@@ -98,6 +98,14 @@ func PrivateMessage(message twitch.PrivateMessage) {
 
 	if strings.HasPrefix(strings.ToLower(message.Message), "!leaderboard") {
 		if isFollower(username) {
+			oldLeaderboardCmd(username)
+		} else {
+			client.Say(config.ChannelName, followerMsg)
+		}
+	}
+
+	if strings.HasPrefix(strings.ToLower(message.Message), "!newleaderboard") {
+		if isFollower(username) {
 			leaderboardCmd(username)
 		} else {
 			client.Say(config.ChannelName, followerMsg)

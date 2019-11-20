@@ -67,6 +67,7 @@ func LogoutIfNecessary(username string) {
 }
 
 // login will record the users presence in the DB
+//TODO: do we want to make a DB update here? we could do it on logout()
 func login(username string) {
 	now := time.Now()
 	user := FindOrCreate(username)
