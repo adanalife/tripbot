@@ -49,7 +49,17 @@ func PrivateMessage(message twitch.PrivateMessage) {
 		uptimeCmd(username)
 	}
 
+	//TODO: rename this to oldmiles
 	if strings.HasPrefix(strings.ToLower(message.Message), "!miles") {
+		if isFollower(username) {
+			oldMilesCmd(username)
+		} else {
+			client.Say(config.ChannelName, followerMsg)
+		}
+	}
+
+	//TODO: rename this to miles
+	if strings.HasPrefix(strings.ToLower(message.Message), "!newmiles") {
 		if isFollower(username) {
 			milesCmd(username)
 		} else {

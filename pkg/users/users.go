@@ -6,6 +6,7 @@ import (
 
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/database"
+	"github.com/dmerrick/danalol-stream/pkg/miles"
 )
 
 type User struct {
@@ -20,12 +21,17 @@ type User struct {
 	DateCreated time.Time `db:"date_created"`
 }
 
+func (u User) CurrentMiles() float32 {
+	loggedInDur := time.Now().Sub(LoggedIn[u.Username])
+	return u.Miles + miles.DurationToMiles(loggedInDur)
+}
+
 // User.save() will take the given user and store it in the DB
 func (u User) save() {
 	if config.Verbose {
 		log.Println("saving user", u.Username)
 	}
-	query := `UPDATE users SET last_seen=:last_seen, num_visits=:num_visits WHERE id = :id`
+	query := `UPDATE users SET last_seen=:last_seen, num_visits=:num_visits, miles=:miles WHERE id = :id`
 	_, err := database.DBCon.NamedExec(query, u)
 	if err != nil {
 		log.Println("error saving user:", err)

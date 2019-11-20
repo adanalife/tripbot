@@ -51,7 +51,15 @@ func uptimeCmd(user string) {
 	client.Say(config.ChannelName, msg)
 }
 
-func milesCmd(user string) {
+func milesCmd(username string) {
+	log.Println(username, "ran !newmiles")
+	user := users.Find(username)
+	msg := "@%s has %.5f miles."
+	msg = fmt.Sprintf(msg, username, user.CurrentMiles())
+	client.Say(config.ChannelName, msg)
+}
+
+func oldMilesCmd(user string) {
 	log.Println(user, "ran !miles")
 	miles := miles.ForUser(user)
 	msg := ""

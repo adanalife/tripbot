@@ -84,11 +84,15 @@ func login(username string) {
 func logout(username string) {
 	log.Println("logging out", username)
 
+	now := time.Now()
 	user := Find(username)
-	//TODO: calculate miles using LoggedIn[username]
+
+	// update miles
+	user.Miles = user.CurrentMiles()
 	// update the last seen date
-	user.LastSeen = time.Now()
+	user.LastSeen = now
 	// store the user in the db
+	spew.Dump(user)
 	user.save()
 
 	// remove them from the session
