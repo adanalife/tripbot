@@ -75,13 +75,29 @@ func create(username string) User {
 // note that we return an array because maps are unordered
 func Leaderboard(size int) [][]string {
 	var leaderboard [][]string
+
+	// first we find the top users by querying the DB
 	users := []User{}
+	//TODO: filter out bots here
 	query := fmt.Sprintf("SELECT * FROM users WHERE miles != 0 ORDER BY miles DESC LIMIT %d", size)
 	database.DBCon.Select(&users, query)
+
+	smallest := users[len(users)].Miles
+
 	for _, user := range users {
 		miles := fmt.Sprintf("%.1f", user.CurrentMiles())
 		pair := []string{user.Username, miles}
 		leaderboard = append(leaderboard, pair)
 	}
+
+	// next we want to see if anyone in the current session deserves a spot on the list
+	for username, _ := range LoggedIn {
+		user = Find(username)
+		miles := fmt.Sprintf("%.1f", user.CurrentMiles())
+	}
+
 	return leaderboard
+}
+
+func insertIntoLeaderboard(leaderboard [][]string, pair []string) [][]string {
 }
