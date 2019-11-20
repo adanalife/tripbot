@@ -20,9 +20,6 @@ type User struct {
 	DateCreated time.Time `db:"date_created"`
 }
 
-// nilUser gets used as a nil value for users
-var nilUser = User{}
-
 // User.save() will take the given user and store it in the DB
 func (u User) save() {
 	if config.Verbose {
