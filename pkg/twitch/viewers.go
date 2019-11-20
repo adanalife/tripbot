@@ -17,14 +17,14 @@ var chattersAPIURL = "https://tmi.twitch.tv/group/user/" + strings.ToLower(confi
 
 // chattersResponse is the json returned by the Twitch chatters endpoint
 type chattersResponse struct {
-	Count    int `json:"chatter_count"`
-	Chatters map[string][]string
+	Count    int                 `json:"chatter_count"`
+	Chatters map[string][]string `json:"chatters"`
 }
 
 // currentChatters will contain the current viewers
 var currentChatters chattersResponse
 
-//TODO: is this even necessary?
+// ChatterCount returns the number of chatters (as reported by Twitch)
 func ChatterCount() int {
 	return currentChatters.Count
 }
@@ -80,6 +80,7 @@ func UpdateChatters() {
 	currentChatters = latestChatters
 }
 
+// PrintCurrentChatters prints the current chatters
 //TODO: this was added for debugging purposes and can probably be removed
 func PrintCurrentChatters() {
 	usernames := make([]string, 0, len(Chatters()))
