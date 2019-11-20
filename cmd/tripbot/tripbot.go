@@ -65,6 +65,7 @@ func main() {
 	background.Cron.AddFunc("@every 57m30s", tripbot.Chatter)
 	background.Cron.AddFunc("@every 60s", video.GetCurrentlyPlaying)
 	background.Cron.AddFunc("@every 60s", users.UpdateSession)
+	background.Cron.AddFunc("@every 5m", users.PrintCurrentSession)
 
 	// actually connect to Twitch
 	// wrapped in a loop in case twitch goes down

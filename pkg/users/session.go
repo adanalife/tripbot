@@ -20,10 +20,8 @@ var LoggedIn = make(map[string]time.Time)
 // UpdateSession will use the data from the Twitch API to maintain a list
 // of currently-logged-in users
 func UpdateSession() {
-	//TODO: move this to a separate CRON task?
+	// fetch the latest chatters from Twitch
 	twitch.UpdateChatters()
-
-	log.Println("there are", twitch.ChatterCount(), "people in chat and", len(LoggedIn), "in the session")
 	currentChatters := twitch.Chatters()
 
 	// log out the people who arent present
@@ -44,7 +42,7 @@ func UpdateSession() {
 		LoginIfNecessary(chatter)
 	}
 
-	PrintCurrentSession()
+	// PrintCurrentSession()
 	// twitch.PrintCurrentChatters()
 }
 
@@ -58,6 +56,8 @@ func Shutdown() {
 }
 
 func PrintCurrentSession() {
+	log.Println("there are", twitch.ChatterCount(), "people in chat and", len(LoggedIn), "in the session")
+
 	usernames := make([]string, 0, len(LoggedIn))
 	for username := range LoggedIn {
 		usernames = append(usernames, username)
