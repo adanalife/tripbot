@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
+
 	"github.com/dmerrick/danalol-stream/pkg/background"
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/database"
@@ -105,7 +107,7 @@ func locationCmd(user string) {
 	// geocode the location
 	address, _ := helpers.CityFromCoords(lat, lng)
 	if err != nil {
-		log.Println("geocoding error", err)
+		terrors.Log(err, "geocoding error")
 	}
 	// generate a google maps url
 	url := helpers.GoogleMapsURL(lat, lng)

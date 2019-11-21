@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
+
 	"github.com/disintegration/imaging"
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
@@ -52,7 +54,7 @@ func cropImage(srcFilename string) (string, error) {
 		if strings.Contains(err.Error(), "no such file or directory") {
 			err = errors.New("screencap file was not present")
 		}
-		log.Printf("failed to open image: %v", err)
+		terrors.Log(err, "failed to open image")
 		return "", err
 	}
 
@@ -68,7 +70,7 @@ func cropImage(srcFilename string) (string, error) {
 	// save the resulting image to the disk
 	err = imaging.Save(croppedImage, croppedFile)
 	if err != nil {
-		// log.Printf("failed to save image: %v", err)
+		// terrors.Log(err, "failed to save image")
 		return "", err
 	}
 	return croppedFile, err
@@ -92,7 +94,7 @@ func readText(imgFile string) (string, error) {
 	text, err := client.Text()
 	client.Close()
 	if err != nil {
-		// log.Printf("failed to read text: %v", err)
+		// terrors.Log(err, "failed to read text")
 		return "", err
 	}
 	return text, err

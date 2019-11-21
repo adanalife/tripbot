@@ -1,9 +1,8 @@
 package twitch
 
 import (
-	"log"
-
 	"github.com/dmerrick/danalol-stream/pkg/config"
+	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	"github.com/nicklaw5/helix"
 )
 
@@ -30,7 +29,7 @@ func UserIsFollower(user string) bool {
 	//TODO a better way to do this?
 	client, err := FindOrCreateClient("")
 	if err != nil {
-		log.Println("error creating client", err)
+		terrors.Log(err, "error creating client")
 		return false
 	}
 
@@ -40,7 +39,7 @@ func UserIsFollower(user string) bool {
 		},
 	})
 	if err != nil {
-		log.Println("error getting user info", err)
+		terrors.Log(err, "error getting user info")
 		return false
 	}
 
@@ -52,7 +51,7 @@ func UserIsFollower(user string) bool {
 		FromID: userID,
 	})
 	if err != nil {
-		log.Println("error getting user follows", err)
+		terrors.Log(err, "error getting user follows")
 		return false
 	}
 

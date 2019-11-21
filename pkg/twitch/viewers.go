@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
+
 	"github.com/dmerrick/danalol-stream/pkg/config"
 )
 
@@ -54,7 +56,7 @@ func UpdateChatters() {
 
 	req, err := http.NewRequest(http.MethodGet, chattersAPIURL, nil)
 	if err != nil {
-		log.Println("error creating request", err)
+		terrors.Log(err, "error creating request")
 		return
 	}
 
@@ -62,19 +64,19 @@ func UpdateChatters() {
 
 	res, err := client.Do(req)
 	if err != nil {
-		log.Println("error making request", err)
+		terrors.Log(err, "error making request")
 		return
 	}
 
 	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
-		log.Println("error reading request body", err)
+		terrors.Log(err, "error reading request body")
 		return
 	}
 
 	err = json.Unmarshal(body, &latestChatters)
 	if err != nil {
-		log.Println("error unmarshalling json", err)
+		terrors.Log(err, "error unmarshalling json")
 	}
 
 	currentChatters = latestChatters

@@ -2,12 +2,12 @@ package miles
 
 import (
 	"fmt"
-	"log"
 	"sort"
 	"time"
 
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/database"
+	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	"github.com/dmerrick/danalol-stream/pkg/events"
 )
 
@@ -18,7 +18,7 @@ func TopUsers(size int) [][]string {
 	oneMonthAgo := time.Now().Add(time.Duration(-30*24) * time.Hour)
 	err := database.DBCon.Select(&evnts, "SELECT DISTINCT username from events where event='login' and date_created >= $1", oneMonthAgo)
 	if err != nil {
-		log.Println("problem with db:", err)
+		terrors.Log(err, "problem with DB")
 	}
 	leaderboard := make(map[string]float32)
 	for _, event := range evnts {
@@ -41,7 +41,7 @@ func ForUser(user string) float32 {
 	query := fmt.Sprintf("SELECT username, event, date_created from events where username = '%s' AND event in ('login', 'logout')", user)
 	err := database.DBCon.Select(&evnts, query)
 	if err != nil {
-		log.Println("error fetching events from db", err)
+		terrors.Log(err, "error fetching events from db")
 	}
 	pairs := splitIntoPairs(evnts)
 	dur := combinePairs(pairs)

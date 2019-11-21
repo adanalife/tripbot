@@ -3,12 +3,12 @@ package video
 import (
 	"errors"
 	"fmt"
-	"log"
 	"regexp"
 	"strings"
 	"time"
 
 	"github.com/dmerrick/danalol-stream/pkg/database"
+	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 )
 
@@ -34,7 +34,7 @@ func load(slug string) (Video, error) {
 	query := fmt.Sprintf("SELECT * FROM videos WHERE slug='%s'", slug)
 	err := database.DBCon.Select(&videos, query)
 	if err != nil {
-		log.Println("error fetching vid from DB:", err)
+		terrors.Log(err, "error fetching vid from DB")
 		return newVid, err
 	}
 
@@ -54,7 +54,7 @@ func loadById(id int64) (Video, error) {
 	query := fmt.Sprintf("SELECT * FROM videos WHERE id='%d'", id)
 	err := database.DBCon.Select(&videos, query)
 	if err != nil {
-		log.Println("error fetching vid from DB:", err)
+		terrors.Log(err, "error fetching vid from DB")
 		return newVid, err
 	}
 
@@ -98,7 +98,7 @@ func create(file string) (Video, error) {
 	// store the video in the DB
 	err = newVid.save()
 	if err != nil {
-		log.Println("error saving to DB:", err)
+		terrors.Log(err, "error saving to DB")
 	}
 
 	// now fetch it from the DB
@@ -120,7 +120,7 @@ func (v Video) save() error {
 		// try to get at least one good coords pair
 		lat, lng, err = v.ocrCoords()
 		if err != nil {
-			log.Println("error OCRing coords:", err)
+			terrors.Log(err, "error OCRing coords")
 			flagged = true
 		}
 	}
@@ -129,7 +129,7 @@ func (v Video) save() error {
 		// figure out which state we're in
 		state, err = helpers.StateFromCoords(lat, lng)
 		if err != nil {
-			log.Println("error geocoding coords:", err)
+			terrors.Log(err, "error geocoding coords")
 		}
 	}
 

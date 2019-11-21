@@ -1,6 +1,7 @@
 package video
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"os/exec"
@@ -8,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 )
 
@@ -37,7 +39,7 @@ func GetCurrentlyPlaying() {
 		// share the Video with the system
 		CurrentlyPlaying, err = LoadOrCreate(curVid)
 		if err != nil {
-			log.Println("unable to create Video from %s: %v", curVid, err)
+			terrors.Log(err, fmt.Sprintf("unable to create Video from %s", curVid))
 		}
 
 		// show the no-GPS image
@@ -61,7 +63,7 @@ func figureOutCurrentVideo() string {
 	// cmd := fmt.Sprintf("/usr/bin/cd %s && %s", helpers.ProjectRoot(), scriptPath)
 	out, err := exec.Command(scriptPath).Output()
 	if err != nil {
-		log.Printf("failed to run script: %v", err)
+		terrors.Log(err, "failed to run script")
 		return ""
 	}
 	return strings.TrimSpace(string(out))

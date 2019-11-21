@@ -5,6 +5,8 @@ import (
 	"log"
 	"time"
 
+	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
+
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/database"
 	"github.com/dmerrick/danalol-stream/pkg/miles"
@@ -35,7 +37,7 @@ func (u User) save() {
 	query := `UPDATE users SET last_seen=:last_seen, num_visits=:num_visits, miles=:miles WHERE id = :id`
 	_, err := database.DBCon.NamedExec(query, u)
 	if err != nil {
-		log.Println("error saving user:", err)
+		terrors.Log(err, "error saving user")
 	}
 }
 
