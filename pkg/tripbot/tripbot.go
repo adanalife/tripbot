@@ -10,6 +10,7 @@ import (
 
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/database"
+	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	"github.com/dmerrick/danalol-stream/pkg/events"
 	mytwitch "github.com/dmerrick/danalol-stream/pkg/twitch"
 	"github.com/dmerrick/danalol-stream/pkg/users"
@@ -261,13 +262,13 @@ func Initialize() *twitch.Client {
 	//TODO: rename me to Initialize()
 	_, err = mytwitch.FindOrCreateClient(twitchClientID)
 	if err != nil {
-		log.Fatal("unable to create twitch API client", err)
+		terrors.Fatal(err, "unable to create twitch API client")
 	}
 
 	// initialize the SQL database
 	database.DBCon, err = database.Initialize()
 	if err != nil {
-		log.Fatal("error initializing the DB", err)
+		terrors.Fatal(err, "error initializing the DB")
 	}
 
 	client = twitch.NewClient(botUsername, clientAuthenticationToken)
