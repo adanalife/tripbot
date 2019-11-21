@@ -16,6 +16,7 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/miles"
 	"github.com/dmerrick/danalol-stream/pkg/users"
 	"github.com/dmerrick/danalol-stream/pkg/video"
+	"github.com/getsentry/sentry-go"
 	"github.com/hako/durafmt"
 )
 
@@ -268,5 +269,6 @@ func shutdownCmd(user string) {
 	events.LogoutAll(Uptime)
 	users.Shutdown()
 	database.DBCon.Close()
+	sentry.Flush(time.Second * 5)
 	os.Exit(0)
 }

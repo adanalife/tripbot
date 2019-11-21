@@ -15,6 +15,7 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/tripbot"
 	"github.com/dmerrick/danalol-stream/pkg/users"
 	"github.com/dmerrick/danalol-stream/pkg/video"
+	"github.com/getsentry/sentry-go"
 )
 
 func main() {
@@ -31,6 +32,7 @@ func main() {
 		users.Shutdown()
 		database.DBCon.Close()
 		background.StopCron()
+		sentry.Flush(time.Second * 5)
 		os.Exit(1)
 	}()
 
