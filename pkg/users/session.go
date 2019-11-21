@@ -8,6 +8,7 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/dmerrick/danalol-stream/pkg/twitch"
+	"github.com/logrusorgru/aurora"
 )
 
 //TODO: consider moving this whole thing elsewhere (to background perhaps?)
@@ -119,7 +120,7 @@ func Shutdown() {
 
 // PrintCurrentSession simply prints info about the current session
 func PrintCurrentSession() {
-	log.Println("there are", Cyan(twitch.ChatterCount()), "people in chat and", Cyan(len(LoggedIn)), "in the session")
+	log.Println("there are", aurora.Cyan(twitch.ChatterCount()), "people in chat and", aurora.Cyan(len(LoggedIn)), "in the session")
 
 	usernames := make([]string, 0, len(LoggedIn))
 	for username := range LoggedIn {

@@ -20,7 +20,7 @@ require (
 	github.com/joho/godotenv v1.3.0
 	github.com/kelvins/geocoder v0.0.0-20170531023420-8464fc2d2478
 	github.com/lib/pq v1.1.1
-	github.com/logrusorgru/aurora v0.0.0-20191116043053-66b7ad493a23 // indirect
+	github.com/logrusorgru/aurora v0.0.0-20191116043053-66b7ad493a23
 	github.com/mattn/go-colorable v0.1.2 // indirect
 	github.com/nathan-osman/go-sunrise v0.0.0-20171121204956-7c449e7c690b
 	github.com/nicklaw5/helix v0.5.4
