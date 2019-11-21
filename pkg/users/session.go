@@ -119,7 +119,7 @@ func Shutdown() {
 
 // PrintCurrentSession simply prints info about the current session
 func PrintCurrentSession() {
-	log.Println("there are", twitch.ChatterCount(), "people in chat and", len(LoggedIn), "in the session")
+	log.Println("there are", Cyan(twitch.ChatterCount()), "people in chat and", Cyan(len(LoggedIn)), "in the session")
 
 	usernames := make([]string, 0, len(LoggedIn))
 	for username := range LoggedIn {
