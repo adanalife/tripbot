@@ -99,6 +99,7 @@ var HelpMessages = []string{
 	"!report: Report a stream issue (frozen, no audio, etc)",
 	"!temperature: Will be unlocked when the donation goal is reached",
 	"!guess: Guess which state we are in",
+	"!survey: Fill out a survey and help the stream",
 }
 
 var GoogleMapsStyle = []string{
