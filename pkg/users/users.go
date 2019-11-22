@@ -43,6 +43,17 @@ func (u User) save() {
 	}
 }
 
+// User.String prints a colored version of the user
+func (u User) String() string {
+	if u.IsBot {
+		return aurora.Gray(15, u.Username).String()
+	}
+	if u.Username == config.ChannelName {
+		return aurora.Gray(11, u.Username).String()
+	}
+	return aurora.Magenta(u.Username).String()
+}
+
 // FindOrCreate will try to find the user in the DB, otherwise it will create a new user
 func FindOrCreate(username string) User {
 	if config.Verbose {

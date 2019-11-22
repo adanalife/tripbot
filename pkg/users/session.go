@@ -1,6 +1,7 @@
 package users
 
 import (
+	"errors"
 	"log"
 	"sort"
 	"strings"
@@ -8,6 +9,9 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/dmerrick/danalol-stream/pkg/events"
+	"github.com/dmerrick/danalol-stream/pkg/helpers"
+
+	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	"github.com/dmerrick/danalol-stream/pkg/twitch"
 	"github.com/logrusorgru/aurora"
 )
@@ -81,6 +85,11 @@ func login(username string) {
 	// update the last seen date
 	user.LastSeen = now
 	user.save()
+
+	// raise an error if a user is supposed to be a bot
+	if helpers.UserIsIgnored(username) && !user.IsBot {
+		terrors.Log(errors.New("user should be bot"), username)
+	}
 
 	// add them to the session
 	LoggedIn[username] = user
@@ -165,10 +174,9 @@ func PrintCurrentSession() {
 		user := LoggedIn[username]
 		if user.IsBot {
 			bots = bots + 1
-			coloredUsernames = append(coloredUsernames, aurora.Gray(15, username).String())
-		} else {
-			coloredUsernames = append(coloredUsernames, aurora.Magenta(username).String())
 		}
+		// add the colored username to the list
+		coloredUsernames = append(coloredUsernames, user.String())
 	}
 	log.Println("there are",
 		twitch.ChatterCount(), "people in chat,",
