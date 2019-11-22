@@ -6,6 +6,7 @@ import (
 	"time"
 
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
+	"github.com/logrusorgru/aurora"
 
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/database"
@@ -32,7 +33,7 @@ func (u User) CurrentMiles() float32 {
 // User.save() will take the given user and store it in the DB
 func (u User) save() {
 	if config.Verbose {
-		log.Println("saving user", u.Username)
+		log.Println("saving user", aurora.Magenta(u.Username))
 	}
 	query := `UPDATE users SET last_seen=:last_seen, num_visits=:num_visits, miles=:miles WHERE id = :id`
 	_, err := database.DBCon.NamedExec(query, u)
@@ -44,7 +45,7 @@ func (u User) save() {
 // FindOrCreate will try to find the user in the DB, otherwise it will create a new user
 func FindOrCreate(username string) User {
 	if config.Verbose {
-		log.Printf("FindOrCreate(%s)", username)
+		log.Printf("FindOrCreate(%s)", aurora.Magenta(username))
 	}
 	user := Find(username)
 	if user.ID != 0 {

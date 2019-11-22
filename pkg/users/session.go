@@ -64,7 +64,7 @@ func LogoutIfNecessary(username string) {
 		logout(username)
 		return
 	}
-	log.Println("hmm, LogoutIfNecessary() called and user not logged in:", username)
+	log.Println("hmm, LogoutIfNecessary() called and user not logged in:", aurora.Magenta(username))
 }
 
 // login will record the users presence in the DB
@@ -84,7 +84,7 @@ func login(username string) {
 // logout() removes the user from the list of currently-logged in users,
 // and updates the DB with their most up-to-date values
 func logout(username string) {
-	log.Println("logging out", username)
+	log.Println("logging out", aurora.Magenta(username))
 
 	now := time.Now()
 	user := Find(username)
@@ -124,7 +124,7 @@ func PrintCurrentSession() {
 
 	usernames := make([]string, 0, len(LoggedIn))
 	for username := range LoggedIn {
-		usernames = append(usernames, username)
+		usernames = append(usernames, aurora.Magenta(username).String())
 	}
 	sort.Sort(sort.StringSlice(usernames))
 	log.Printf("Currently logged in: %s", strings.Join(usernames, ", "))

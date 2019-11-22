@@ -11,6 +11,7 @@ import (
 
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
+	"github.com/logrusorgru/aurora"
 )
 
 // CurrentlyPlaying is the video that is currently playing
@@ -31,7 +32,7 @@ func GetCurrentlyPlaying() {
 
 	// if the currently-playing video has changed
 	if curVid != preVid {
-		log.Printf("now playing %s", curVid)
+		log.Printf("now playing %s", aurora.Yellow(curVid))
 
 		// reset the stopwatch
 		timeStarted = time.Now()

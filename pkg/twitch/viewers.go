@@ -10,6 +10,7 @@ import (
 	"time"
 
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
+	"github.com/logrusorgru/aurora"
 
 	"github.com/dmerrick/danalol-stream/pkg/config"
 )
@@ -87,7 +88,7 @@ func UpdateChatters() {
 func PrintCurrentChatters() {
 	usernames := make([]string, 0, len(Chatters()))
 	for username := range Chatters() {
-		usernames = append(usernames, username)
+		usernames = append(usernames, aurora.Magenta(username).String())
 	}
 	sort.Sort(sort.StringSlice(usernames))
 	log.Printf("Current chatters: %s", strings.Join(usernames, ", "))
