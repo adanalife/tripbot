@@ -2,10 +2,10 @@ package errors
 
 import (
 	"log"
-	"os"
 
 	"github.com/getsentry/sentry-go"
 	"github.com/logrusorgru/aurora"
+	"github.com/spf13/cast"
 )
 
 func init() {
@@ -19,9 +19,23 @@ func init() {
 	sentry.Init(sentry.ClientOptions{})
 }
 
-func Log(e error, msg string) {
-	sentry.CaptureException(e)
+func Log(e error, keyvals ...interface{}) {
 	log.Printf("%s: %s", aurora.Red(msg), e)
+
+	hub = sentry.CurrentHub()
+	hub.WithScope(func(scope *sentry.Scope) {
+		// Add given keyvals
+		extra := make(map[string]interface{})
+		for i := 0; i < len(keyvals)-1; i += 2 {
+			key := cast.ToString(keyvals[i])
+			if key == "" {
+				continue
+			}
+			extra[key] = cast.ToString(keyvals[i+1])
+		}
+		scope.SetExtras(extra)
+		hub.CaptureException(e)
+	})
 }
 
 func Fatal(e error, msg string) {
