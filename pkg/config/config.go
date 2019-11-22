@@ -54,7 +54,6 @@ func ScreencapDir() string {
 // IgnoredUsers are users who shouldn't be in the running for miles
 // https://twitchinsights.net/bots
 var IgnoredUsers = []string{
-	"adanalife_",
 	"tripbot4000",
 	"nightbot",
 	"streamlabs",

@@ -9,6 +9,7 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/database"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	"github.com/dmerrick/danalol-stream/pkg/events"
+	"github.com/dmerrick/danalol-stream/pkg/helpers"
 )
 
 // func TopUsers(size int) map[string]float32 {
@@ -117,7 +118,6 @@ func combinePairs(pairs [][]events.Event) time.Duration {
 // https://stackoverflow.com/a/18695428
 func sortByValue(kv map[string]float32) [][]string {
 	var a []float64
-	var shouldBeIgnored bool
 	sorted := [][]string{}
 	n := map[float64][]string{}
 	for k, v := range kv {
@@ -136,16 +136,12 @@ func sortByValue(kv map[string]float32) [][]string {
 
 	for _, k := range a {
 		for _, user := range n[k] {
-			shouldBeIgnored = false
-			for _, ignored := range config.IgnoredUsers {
-				if user == ignored {
-					shouldBeIgnored = true
-				}
-			}
-			if shouldBeIgnored {
+			if helpers.UserIsIgnored(username) {
 				continue
 			}
-
+			if username == config.ChannelName {
+				continue
+			}
 			sorted = append(sorted, []string{user, fmt.Sprintf("%.1f", k)})
 		}
 	}
