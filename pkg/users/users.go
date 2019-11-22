@@ -28,6 +28,7 @@ type User struct {
 }
 
 func (u User) CurrentMiles() float32 {
+	//TODO: return u.Miles if u.LoggedIn is not present
 	loggedInDur := time.Now().Sub(u.LoggedIn)
 	return u.Miles + miles.DurationToMiles(loggedInDur)
 }
@@ -68,11 +69,18 @@ func FindOrCreate(username string) User {
 	return create(username)
 }
 
-//TODO: does this need to be public?
 // Find will look up the username in the DB, and return a User if possible
 func Find(username string) User {
-	user := User{}
-	database.DBCon.Get(&user, "SELECT * FROM users WHERE username=$1", username)
+	var user User
+	query := fmt.Sprintf("SELECT * FROM users WHERE username='%s'", username)
+	err := database.DBCon.Get(&user, query)
+	// spew.Config.ContinueOnMethod = true
+	// spew.Config.MaxDepth = 2
+	// spew.Dump(user)
+	if err != nil {
+		//TODO: is there a better way to do this?
+		return User{ID: 0}
+	}
 	return user
 }
 
