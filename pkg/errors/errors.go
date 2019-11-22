@@ -12,6 +12,7 @@ func init() {
 	sentry.Init(sentry.ClientOptions{})
 }
 
+//TODO: include msg as an attribute somehow
 func Log(e error, msg string) {
 	sentry.CaptureException(e)
 	log.Printf("%s: %s", aurora.Red(msg), e)
