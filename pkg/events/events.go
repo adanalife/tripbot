@@ -1,13 +1,11 @@
 package events
 
 import (
-	"fmt"
 	"log"
 	"time"
 
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/database"
-	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	"github.com/logrusorgru/aurora"
 )
 
@@ -31,62 +29,7 @@ func LogoutAll(botStart time.Time) {
 	}
 }
 
-// LogOutIfNecessary() will create a logout event if they need one
-func LogoutIfNecessary(user string) {
-	// we need to check to see if the last event was a logout
-	events := []Event{}
-	query := fmt.Sprintf("SELECT event, date_created FROM events WHERE username='%s' AND event IN ('logout','login') ORDER BY date_created DESC LIMIT 1", user)
-	database.DBCon.Select(&events, query)
-	if len(events) == 0 {
-		// no login/logout events for user
-		log.Println("no login/logout events for", user, "how did we get here?")
-		return
-	}
-	event := events[0]
-	if event.Event == "login" {
-		// no output if they are an ignored user
-		if !helpers.UserIsIgnored(user) {
-			// include the duration they were logged in
-			loggedInDur := time.Now().Sub(event.DateCreated)
-			// last event was a login, so log them out
-			log.Printf("logging out %s (%s)", aurora.Magenta(user), loggedInDur)
-		}
-		logout(user)
-		return
-	}
-	// nothing to be done
-	return
-}
-
-// LoginIfNecessary() will create a login event if there should already be one
-func LoginIfNecessary(user string) {
-	events := []Event{}
-	query := fmt.Sprintf("SELECT event, date_created FROM events WHERE username='%s' AND event IN ('logout','login') ORDER BY date_created DESC LIMIT 1", user)
-	database.DBCon.Select(&events, query)
-	if len(events) == 0 {
-		// no output if they are an ignored user
-		if !helpers.UserIsIgnored(user) {
-			// no login/logout events for user
-			log.Println("logging in", aurora.Magenta(user))
-		}
-		login(user)
-		return
-	}
-	event := events[0]
-	if event.Event == "logout" {
-		// no output if they are an ignored user
-		if !helpers.UserIsIgnored(user) {
-			// last event was a logout, so log them in
-			log.Println("logging in", aurora.Magenta(user))
-		}
-		login(user)
-		return
-	}
-	// nothing to be done
-	return
-}
-
-func login(user string) {
+func Login(user string) {
 	if config.ReadOnly && config.Verbose {
 		log.Printf("Not logging in %s because we're in read-only mode", aurora.Magenta(user))
 		return
@@ -96,7 +39,7 @@ func login(user string) {
 	tx.Commit()
 }
 
-func logout(user string) {
+func Logout(user string) {
 	if config.ReadOnly && config.Verbose {
 		log.Printf("Not logging out %s because we're in read-only mode", aurora.Magenta(user))
 		return

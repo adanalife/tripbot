@@ -11,7 +11,6 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/database"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
-	"github.com/dmerrick/danalol-stream/pkg/events"
 	mytwitch "github.com/dmerrick/danalol-stream/pkg/twitch"
 	"github.com/dmerrick/danalol-stream/pkg/users"
 	"github.com/gempir/go-twitch-irc/v2"
@@ -35,9 +34,6 @@ const followerMsg = "You must be a follower to run that command :)"
 // all chat messages
 func PrivateMessage(message twitch.PrivateMessage) {
 	username := message.User.Name
-
-	// log the user in if their login time isn't currently recorded
-	events.LoginIfNecessary(username)
 
 	// log in the user
 	users.LoginIfNecessary(username)
@@ -175,13 +171,11 @@ func PrivateMessage(message twitch.PrivateMessage) {
 // this event fires when a user joins the channel
 func UserJoin(joinMessage twitch.UserJoinMessage) {
 	users.LoginIfNecessary(joinMessage.User)
-	events.LoginIfNecessary(joinMessage.User)
 }
 
 // this event fires when a user leaves the channel
 func UserPart(partMessage twitch.UserPartMessage) {
 	users.LogoutIfNecessary(partMessage.User)
-	events.LogoutIfNecessary(partMessage.User)
 }
 
 // send message to chat if someone subs

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
+	"github.com/dmerrick/danalol-stream/pkg/events"
 	"github.com/dmerrick/danalol-stream/pkg/twitch"
 	"github.com/logrusorgru/aurora"
 )
@@ -79,6 +80,9 @@ func login(username string) {
 	// update the last seen date
 	user.LastSeen = now
 	user.save()
+
+	// create a login event as well
+	events.Login(username)
 }
 
 // logout() removes the user from the list of currently-logged in users,
@@ -96,6 +100,9 @@ func logout(username string) {
 	// store the user in the db
 	spew.Dump(user)
 	user.save()
+
+	// create a login event as well
+	events.Logout(username)
 
 	// remove them from the session
 	delete(LoggedIn, username)
