@@ -36,6 +36,8 @@ func (v Video) Location() (float64, float64, error) {
 	return v.Lat, v.Lng, err
 }
 
+//TODO: add color, include location/state/lat/lng?
+//TODO: where else does this get used tho?
 // ex: 2018_0514_224801_013_a_opt
 func (v Video) String() string {
 	return v.Slug
