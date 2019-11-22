@@ -135,14 +135,14 @@ func sortByValue(kv map[string]float32) [][]string {
 	}
 
 	for _, k := range a {
-		for _, user := range n[k] {
+		for _, username := range n[k] {
 			if helpers.UserIsIgnored(username) {
 				continue
 			}
 			if username == config.ChannelName {
 				continue
 			}
-			sorted = append(sorted, []string{user, fmt.Sprintf("%.1f", k)})
+			sorted = append(sorted, []string{username, fmt.Sprintf("%.1f", k)})
 		}
 	}
 	return sorted
