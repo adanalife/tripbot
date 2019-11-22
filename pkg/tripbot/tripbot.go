@@ -194,7 +194,7 @@ func UserNotice(message twitch.UserNoticeMessage) {
 // if the message comes from me, then post the message to chat
 func Whisper(message twitch.WhisperMessage) {
 	log.Println("whisper from", message.User.Name, ":", message.Message)
-	if message.User.Name == config.ChannelName {
+	if message.User.Name == strings.ToLower(config.ChannelName) {
 		client.Say(config.ChannelName, message.Message)
 	}
 }

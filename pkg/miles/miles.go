@@ -3,6 +3,7 @@ package miles
 import (
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/dmerrick/danalol-stream/pkg/config"
@@ -139,7 +140,7 @@ func sortByValue(kv map[string]float32) [][]string {
 			if helpers.UserIsIgnored(username) {
 				continue
 			}
-			if username == config.ChannelName {
+			if username == strings.ToLower(config.ChannelName) {
 				continue
 			}
 			sorted = append(sorted, []string{username, fmt.Sprintf("%.1f", k)})

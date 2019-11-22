@@ -3,6 +3,7 @@ package users
 import (
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
@@ -48,7 +49,7 @@ func (u User) String() string {
 	if u.IsBot {
 		return aurora.Gray(15, u.Username).String()
 	}
-	if u.Username == config.ChannelName {
+	if u.Username == strings.ToLower(config.ChannelName) {
 		return aurora.Gray(11, u.Username).String()
 	}
 	return aurora.Magenta(u.Username).String()

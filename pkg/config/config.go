@@ -37,6 +37,7 @@ func init() {
 	if err != nil {
 		log.Fatal("Error loading .env file")
 	}
+	//TODO: consider using strings.ToLower() on channel name here and removing elsewhere
 	ChannelName = os.Getenv("CHANNEL_NAME")
 	ReadOnly, _ = strconv.ParseBool(os.Getenv("READ_ONLY"))
 	Verbose, _ = strconv.ParseBool(os.Getenv("VERBOSE"))

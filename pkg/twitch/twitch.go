@@ -1,6 +1,8 @@
 package twitch
 
 import (
+	"strings"
+
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	"github.com/nicklaw5/helix"
@@ -22,7 +24,7 @@ func FindOrCreateClient(clientID string) (*helix.Client, error) {
 
 func UserIsFollower(user string) bool {
 	// I can't follow myself so just do this
-	if user == config.ChannelName {
+	if user == strings.ToLower(config.ChannelName) {
 		return true
 	}
 
