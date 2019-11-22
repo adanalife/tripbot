@@ -9,13 +9,14 @@ import (
 )
 
 func init() {
-	sentryDsn := os.Getenv("SENTRY_DSN")
-	if sentryDsn == "" {
-		log.Fatal("you must set SENTRY_DSN")
-	}
-	sentry.Init(sentry.ClientOptions{
-		Dsn: os.Getenv("SENTRY_DSN"),
-	})
+	// sentryDsn := os.Getenv("SENTRY_DSN")
+	// if sentryDsn == "" {
+	// 	log.Fatal("you must set SENTRY_DSN")
+	// }
+	// sentry.Init(sentry.ClientOptions{
+	// 	Dsn: os.Getenv("SENTRY_DSN"),
+	// })
+	sentry.Init(sentry.ClientOptions{})
 }
 
 func Log(e error, msg string) {
