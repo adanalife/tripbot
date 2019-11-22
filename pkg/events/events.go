@@ -15,20 +15,6 @@ type Event struct {
 	DateCreated time.Time `db:"date_created"`
 }
 
-func LogoutAll(botStart time.Time) {
-	//TODO maybe don't use an Events map?
-	events := []Event{}
-	database.DBCon.Select(&events, "SELECT DISTINCT username from events where event='login' and date_created >= $1", botStart)
-	if len(events) == 0 {
-		log.Println("query resulted in no matches")
-	}
-	for _, event := range events {
-		user := event.Username
-		log.Println("logging out", aurora.Magenta(user))
-		LogoutIfNecessary(user)
-	}
-}
-
 func Login(user string) {
 	if config.ReadOnly && config.Verbose {
 		log.Printf("Not logging in %s because we're in read-only mode", aurora.Magenta(user))

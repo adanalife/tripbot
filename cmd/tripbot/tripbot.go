@@ -12,7 +12,6 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/background"
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/database"
-	"github.com/dmerrick/danalol-stream/pkg/events"
 	"github.com/dmerrick/danalol-stream/pkg/tripbot"
 	"github.com/dmerrick/danalol-stream/pkg/users"
 	"github.com/dmerrick/danalol-stream/pkg/video"
@@ -28,8 +27,7 @@ func main() {
 		<-c
 		log.Println("caught CTRL-C")
 		// anything below this probably wont be executed
-		// use !shutdown instead
-		events.LogoutAll(tripbot.Uptime)
+		// try and use !shutdown instead
 		log.Printf("last played: %s", video.CurrentlyPlaying)
 		users.Shutdown()
 		database.DBCon.Close()
