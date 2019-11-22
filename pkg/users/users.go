@@ -23,10 +23,11 @@ type User struct {
 	FirstSeen   time.Time `db:"first_seen"`
 	LastSeen    time.Time `db:"last_seen"`
 	DateCreated time.Time `db:"date_created"`
+	LoggedIn    time.Time
 }
 
 func (u User) CurrentMiles() float32 {
-	loggedInDur := time.Now().Sub(LoggedIn[u.Username])
+	loggedInDur := time.Now().Sub(u.LoggedIn)
 	return u.Miles + miles.DurationToMiles(loggedInDur)
 }
 

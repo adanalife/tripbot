@@ -15,9 +15,8 @@ import (
 //TODO: consider moving this whole thing elsewhere (to background perhaps?)
 
 // LoggedIn is a map that contains all the currently logged-in users,
-// mapped to their login time
-// var LoggedIn map[string]time.Time
-var LoggedIn = make(map[string]time.Time)
+// mapping their username to a User
+var LoggedIn = make(map[string]User)
 
 // UpdateSession will use the data from the Twitch API to maintain a list
 // of currently-logged-in users
@@ -27,13 +26,13 @@ func UpdateSession() {
 	currentChatters := twitch.Chatters()
 
 	// log out the people who arent present
-	for loggedInUser, _ := range LoggedIn {
-		if _, ok := currentChatters[loggedInUser]; ok {
+	for username, user := range LoggedIn {
+		if _, ok := currentChatters[username]; ok {
 			// they're logged in and a current chatter, do nothing
 			continue
 		} else {
 			// they're logged in and NOT a current chatter, so log them out
-			logout(loggedInUser)
+			user.logout()
 			continue
 		}
 	}
@@ -62,7 +61,8 @@ func LoginIfNecessary(username string) {
 // LogoutIfNecessary will log out the user if it finds them in the session
 func LogoutIfNecessary(username string) {
 	if isLoggedIn(username) {
-		logout(username)
+		user := LoggedIn[username]
+		user.logout()
 		return
 	}
 	log.Println("hmm, LogoutIfNecessary() called and user not logged in:", aurora.Magenta(username))
@@ -72,41 +72,64 @@ func LogoutIfNecessary(username string) {
 //TODO: do we want to make a DB update here? we could do it on logout()
 func login(username string) {
 	now := time.Now()
-	user := FindOrCreate(username)
 
-	LoggedIn[username] = now
+	user := FindOrCreate(username)
 	// increment the number of visits
 	user.NumVisits = user.NumVisits + 1
+	// set the login time
+	user.LoggedIn = now
 	// update the last seen date
 	user.LastSeen = now
 	user.save()
+
+	// add them to the session
+	LoggedIn[username] = user
 
 	// create a login event as well
 	events.Login(username)
 }
 
-// logout() removes the user from the list of currently-logged in users,
+// User.logout() removes the user from the list of currently-logged in users,
 // and updates the DB with their most up-to-date values
-func logout(username string) {
-	log.Println("logging out", aurora.Magenta(username))
+func (u User) logout() {
+	log.Println("logging out", aurora.Magenta(u.Username))
 
 	now := time.Now()
-	user := Find(username)
-
 	// update miles
-	user.Miles = user.CurrentMiles()
+	u.Miles = u.CurrentMiles()
 	// update the last seen date
-	user.LastSeen = now
+	u.LastSeen = now
 	// store the user in the db
-	spew.Dump(user)
-	user.save()
+	u.save()
 
 	// create a login event as well
-	events.Logout(username)
+	events.Logout(u.Username)
 
 	// remove them from the session
-	delete(LoggedIn, username)
+	delete(LoggedIn, u.Username)
 }
+
+// logout() removes the user from the list of currently-logged in users,
+// and updates the DB with their most up-to-date values
+// func logout(username string) {
+// 	log.Println("logging out", aurora.Magenta(username))
+
+// 	now := time.Now()
+// 	user := Find(username)
+
+// 	// update miles
+// 	user.Miles = user.CurrentMiles()
+// 	// update the last seen date
+// 	user.LastSeen = now
+// 	// store the user in the db
+// 	user.save()
+
+// 	// create a login event as well
+// 	events.Logout(username)
+
+// 	// remove them from the session
+// 	delete(LoggedIn, username)
+// }
 
 // isLoggedIn checks if the user is currently logged in
 func isLoggedIn(username string) bool {
@@ -120,8 +143,8 @@ func isLoggedIn(username string) bool {
 func Shutdown() {
 	log.Println("these were the logged-in users")
 	spew.Dump(LoggedIn)
-	for username, _ := range LoggedIn {
-		logout(username)
+	for _, user := range LoggedIn {
+		user.logout()
 	}
 }
 
@@ -130,7 +153,7 @@ func PrintCurrentSession() {
 	log.Println("there are", aurora.Cyan(twitch.ChatterCount()), "people in chat and", aurora.Cyan(len(LoggedIn)), "in the session")
 
 	usernames := make([]string, 0, len(LoggedIn))
-	for username := range LoggedIn {
+	for username, _ := range LoggedIn {
 		usernames = append(usernames, aurora.Magenta(username).String())
 	}
 	sort.Sort(sort.StringSlice(usernames))
