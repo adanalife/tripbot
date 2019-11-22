@@ -1,3 +1,4 @@
+//TODO: this would be better as just 'db'
 package database
 
 import (
@@ -10,6 +11,7 @@ import (
 )
 
 var (
+	//TODO: this would be better as just 'con'
 	// this is how we will share the DB connection
 	DBCon *sqlx.DB
 
