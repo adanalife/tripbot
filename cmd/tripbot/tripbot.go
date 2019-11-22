@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -16,6 +17,7 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/users"
 	"github.com/dmerrick/danalol-stream/pkg/video"
 	"github.com/getsentry/sentry-go"
+	"github.com/logrusorgru/aurora"
 )
 
 func main() {
@@ -49,7 +51,7 @@ func main() {
 	// join the channel
 	client.Join(config.ChannelName)
 	log.Println("Joined channel", config.ChannelName)
-	log.Printf("URL: https://twitch.tv/%s", config.ChannelName)
+	log.Printf("URL: %s", aurora.Underline(aurora.Blue(fmt.Sprintf("https://twitch.tv/%s", config.ChannelName))))
 
 	// run this right away to set the currently-playing video
 	// (otherwise it will be unset until the first cron job runs)
