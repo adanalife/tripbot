@@ -2,20 +2,13 @@ package errors
 
 import (
 	"log"
-	"os"
 
 	"github.com/getsentry/sentry-go"
 	"github.com/logrusorgru/aurora"
 )
 
 func init() {
-	// sentryDsn := os.Getenv("SENTRY_DSN")
-	// if sentryDsn == "" {
-	// 	log.Fatal("you must set SENTRY_DSN")
-	// }
-	// sentry.Init(sentry.ClientOptions{
-	// 	Dsn: os.Getenv("SENTRY_DSN"),
-	// })
+	// sentry options are picked up through ENV vars
 	sentry.Init(sentry.ClientOptions{})
 }
 
