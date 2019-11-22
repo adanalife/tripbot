@@ -69,7 +69,7 @@ func LogoutIfNecessary(username string) {
 		user.logout()
 		return
 	}
-	log.Println("hmm, LogoutIfNecessary() called and user not logged in:", aurora.Magenta(username))
+	log.Println("hmm, LogoutIfNecessary() called and user not logged in:", username)
 }
 
 // login will record the users presence in the DB
@@ -101,7 +101,7 @@ func login(username string) {
 // User.logout() removes the user from the list of currently-logged in users,
 // and updates the DB with their most up-to-date values
 func (u User) logout() {
-	log.Println("logging out", aurora.Magenta(u.Username))
+	log.Println("logging out", u)
 
 	now := time.Now()
 	// update miles
