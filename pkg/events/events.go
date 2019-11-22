@@ -8,6 +8,7 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/database"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
+	"github.com/logrusorgru/aurora"
 )
 
 type Event struct {
@@ -25,7 +26,7 @@ func LogoutAll(botStart time.Time) {
 	}
 	for _, event := range events {
 		user := event.Username
-		log.Println("logging out", user)
+		log.Println("logging out", aurora.Magenta(user))
 		LogoutIfNecessary(user)
 	}
 }
@@ -48,7 +49,7 @@ func LogoutIfNecessary(user string) {
 			// include the duration they were logged in
 			loggedInDur := time.Now().Sub(event.DateCreated)
 			// last event was a login, so log them out
-			log.Printf("logging out %s (%s)", user, loggedInDur)
+			log.Printf("logging out %s (%s)", aurora.Magenta(user), loggedInDur)
 		}
 		logout(user)
 		return
@@ -66,7 +67,7 @@ func LoginIfNecessary(user string) {
 		// no output if they are an ignored user
 		if !helpers.UserIsIgnored(user) {
 			// no login/logout events for user
-			log.Println("logging in", user)
+			log.Println("logging in", aurora.Magenta(user))
 		}
 		login(user)
 		return
@@ -76,7 +77,7 @@ func LoginIfNecessary(user string) {
 		// no output if they are an ignored user
 		if !helpers.UserIsIgnored(user) {
 			// last event was a logout, so log them in
-			log.Println("logging in", user)
+			log.Println("logging in", aurora.Magenta(user))
 		}
 		login(user)
 		return
@@ -87,7 +88,7 @@ func LoginIfNecessary(user string) {
 
 func login(user string) {
 	if config.ReadOnly && config.Verbose {
-		log.Printf("Not logging in %s because we're in read-only mode", user)
+		log.Printf("Not logging in %s because we're in read-only mode", aurora.Magenta(user))
 		return
 	}
 	tx := database.DBCon.MustBegin()
@@ -97,7 +98,7 @@ func login(user string) {
 
 func logout(user string) {
 	if config.ReadOnly && config.Verbose {
-		log.Printf("Not logging out %s because we're in read-only mode", user)
+		log.Printf("Not logging out %s because we're in read-only mode", aurora.Magenta(user))
 		return
 	}
 	tx := database.DBCon.MustBegin()
