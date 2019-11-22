@@ -62,6 +62,7 @@ func main() {
 
 	// fetch initial session
 	users.UpdateSession()
+	users.PrintCurrentSession()
 
 	//TODO: move these somewhere central
 	background.Cron.AddFunc("@every 57m30s", tripbot.Chatter)

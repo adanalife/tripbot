@@ -150,12 +150,31 @@ func Shutdown() {
 
 // PrintCurrentSession simply prints info about the current session
 func PrintCurrentSession() {
-	log.Println("there are", aurora.Cyan(twitch.ChatterCount()), "people in chat and", aurora.Cyan(len(LoggedIn)), "in the session")
+	bots := 0
 
+	// create a list of only usernames, and sort it
 	usernames := make([]string, 0, len(LoggedIn))
 	for username, _ := range LoggedIn {
-		usernames = append(usernames, aurora.Magenta(username).String())
+		usernames = append(usernames, username)
 	}
 	sort.Sort(sort.StringSlice(usernames))
-	log.Printf("Currently logged in: %s", strings.Join(usernames, ", "))
+
+	// now loop over the sorted names and colorize them
+	coloredUsernames := make([]string, 0, len(usernames))
+	for _, username := range usernames {
+		user := LoggedIn[username]
+		if user.IsBot {
+			bots = bots + 1
+			coloredUsernames = append(coloredUsernames, aurora.Gray(15, username).String())
+		} else {
+			coloredUsernames = append(coloredUsernames, aurora.Magenta(username).String())
+		}
+	}
+	log.Println("there are",
+		twitch.ChatterCount(), "people in chat,",
+		aurora.Cyan(len(LoggedIn)-bots), "humans, and",
+		aurora.Gray(15, bots), "bots",
+	)
+
+	log.Printf("Currently logged in: %s", strings.Join(coloredUsernames, ", "))
 }
