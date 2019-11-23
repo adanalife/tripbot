@@ -11,6 +11,7 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/database"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
+	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	mytwitch "github.com/dmerrick/danalol-stream/pkg/twitch"
 	"github.com/dmerrick/danalol-stream/pkg/users"
 	"github.com/gempir/go-twitch-irc/v2"
@@ -262,7 +263,11 @@ func Initialize() *twitch.Client {
 	if err != nil {
 		terrors.Fatal(err, "unable to create twitch API client")
 	}
-	log.Println(c.GetAuthorizationURL("", false))
+
+	//TODO: use these security features
+	authURL := c.GetAuthorizationURL("", false)
+	log.Println(authURL)
+	helpers.OpenInBrowser(authURL)
 
 	// _, err = mytwitch.InitializeUserClient(twitchClientID, twitchClientSecret)
 	// if err != nil {

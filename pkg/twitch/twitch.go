@@ -14,13 +14,6 @@ func UserIsFollower(user string) bool {
 		return true
 	}
 
-	//TODO a better way to do this?
-	// client, err := FindOrCreateClient("")
-	// if err != nil {
-	// 	terrors.Log(err, "error creating client")
-	// 	return false
-	// }
-
 	client := currentTwitchClient
 
 	usersResp, err := client.GetUsers(&helix.UsersParams{

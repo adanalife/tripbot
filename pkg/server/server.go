@@ -29,9 +29,9 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		code := string(codes[0])
-		mytwitch.GenerateUserAccessToken(code)
 		//TODO: consider removing this line
 		log.Println("Code received from Twitch:", aurora.Cyan(code))
+		mytwitch.GenerateUserAccessToken(code)
 	case "POST":
 		fmt.Fprintf(w, "Perhaps you meant to make a GET request?\n")
 	default:

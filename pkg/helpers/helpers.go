@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"regexp"
@@ -15,6 +16,7 @@ import (
 	"github.com/bradfitz/latlong"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/dmerrick/danalol-stream/pkg/config"
+	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	"github.com/hako/durafmt"
 	"github.com/kelvins/geocoder"
 	"github.com/nathan-osman/go-sunrise"
@@ -168,4 +170,24 @@ func sunriseSunset(utcDate time.Time, lat, long float64) (time.Time, time.Time) 
 		utcDate.Year(), utcDate.Month(), utcDate.Day(),
 	)
 	return ActualDate(rise, lat, long), ActualDate(set, lat, long)
+}
+
+// https://gist.github.com/hyg/9c4afcd91fe24316cbf0
+func OpenInBrowser(url string) {
+	var err error
+
+	switch runtime.GOOS {
+	case "linux":
+		err = exec.Command("xdg-open", url).Start()
+	case "windows":
+		err = exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
+	case "darwin":
+		err = exec.Command("open", url).Start()
+	default:
+		err = fmt.Errorf("unsupported platform")
+	}
+	if err != nil {
+		terrors.Log(err, "unable to open browser")
+	}
+
 }
