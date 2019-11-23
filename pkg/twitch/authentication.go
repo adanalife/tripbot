@@ -18,13 +18,18 @@ var currentTwitchUserClient *helix.Client
 var UserAccessToken string
 var UserRefreshToken string
 
-func FindOrCreateClient(clientID string) (*helix.Client, error) {
+func FindOrCreateClient(clientID, clientSecret string) (*helix.Client, error) {
 	// use the existing client if we have one
 	if currentTwitchClient != nil {
 		return currentTwitchClient, nil
 	}
 	client, err := helix.NewClient(&helix.Options{
-		ClientID: clientID,
+		ClientID:     clientID,
+		ClientSecret: clientSecret,
+		//TODO: maybe don't hardcode this
+		RedirectURI: "http://localhost:8080/auth/callback",
+		//TODO: move to configs lib
+		Scopes: []string{"openid", "user:edit:broadcast", "channel:read:subscriptions"},
 	})
 	currentTwitchClient = client
 	return client, err
@@ -61,9 +66,9 @@ func GenerateUserAccessToken(code string) {
 	//	return
 	//}
 
-	resp, err := currentTwitchUserClient.GetUserAccessToken(code)
+	resp, err := currentTwitchClient.GetUserAccessToken(code)
+	// resp, err := currentTwitchUserClient.GetUserAccessToken(code)
 	if err != nil {
-		terrors.Log(err, "error getting user access token from twitch")
 		spew.Dump(err)
 	}
 	spew.Dump(resp)

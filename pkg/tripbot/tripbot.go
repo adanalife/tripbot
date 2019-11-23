@@ -258,15 +258,16 @@ func Initialize() *twitch.Client {
 
 	// initialize the twitch API client
 	//TODO: rename me to Initialize()
-	_, err = mytwitch.FindOrCreateClient(twitchClientID)
+	c, err := mytwitch.FindOrCreateClient(twitchClientID, twitchClientSecret)
 	if err != nil {
 		terrors.Fatal(err, "unable to create twitch API client")
 	}
+	log.Println(c.GetAuthorizationURL("", false))
 
-	_, err = mytwitch.InitializeUserClient(twitchClientID, twitchClientSecret)
-	if err != nil {
-		terrors.Fatal(err, "unable to create twitch API client")
-	}
+	// _, err = mytwitch.InitializeUserClient(twitchClientID, twitchClientSecret)
+	// if err != nil {
+	// 	terrors.Fatal(err, "unable to create twitch API client")
+	// }
 
 	// initialize the SQL database
 	database.DBCon, err = database.Initialize()
