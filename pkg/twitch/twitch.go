@@ -8,20 +8,6 @@ import (
 	"github.com/nicklaw5/helix"
 )
 
-var currentTwitchClient *helix.Client
-
-func FindOrCreateClient(clientID string) (*helix.Client, error) {
-	// use the existing client if we have one
-	if currentTwitchClient != nil {
-		return currentTwitchClient, nil
-	}
-	client, err := helix.NewClient(&helix.Options{
-		ClientID: clientID,
-	})
-	currentTwitchClient = client
-	return client, err
-}
-
 func UserIsFollower(user string) bool {
 	// I can't follow myself so just do this
 	if user == strings.ToLower(config.ChannelName) {

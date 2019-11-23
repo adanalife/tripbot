@@ -19,7 +19,7 @@ import (
 	"github.com/sfreiberg/gotwilio"
 )
 
-var botUsername, clientAuthenticationToken, twitchClientID, googleMapsAPIKey string
+var botUsername, clientAuthenticationToken, twitchClientID, twitchClientSecret, googleMapsAPIKey string
 var twilioFromNum, twilioToNum string
 var twilioClient *gotwilio.Twilio
 var client *twitch.Client
@@ -225,6 +225,10 @@ func Initialize() *twitch.Client {
 	if twitchClientID == "" {
 		panic("You must set TWITCH_CLIENT_ID")
 	}
+	twitchClientSecret = os.Getenv("TWITCH_CLIENT_SECRET")
+	if twitchClientSecret == "" {
+		panic("You must set TWITCH_CLIENT_SECRET")
+	}
 	googleMapsAPIKey = os.Getenv("GOOGLE_MAPS_API_KEY")
 	if googleMapsAPIKey == "" {
 		panic("You must set GOOGLE_MAPS_API_KEY")
@@ -255,6 +259,11 @@ func Initialize() *twitch.Client {
 	// initialize the twitch API client
 	//TODO: rename me to Initialize()
 	_, err = mytwitch.FindOrCreateClient(twitchClientID)
+	if err != nil {
+		terrors.Fatal(err, "unable to create twitch API client")
+	}
+
+	_, err = mytwitch.InitializeUserClient(twitchClientID, twitchClientSecret)
 	if err != nil {
 		terrors.Fatal(err, "unable to create twitch API client")
 	}

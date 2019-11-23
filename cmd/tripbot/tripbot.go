@@ -12,6 +12,7 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/background"
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/database"
+	"github.com/dmerrick/danalol-stream/pkg/server"
 	"github.com/dmerrick/danalol-stream/pkg/tripbot"
 	"github.com/dmerrick/danalol-stream/pkg/users"
 	"github.com/dmerrick/danalol-stream/pkg/video"
@@ -35,6 +36,10 @@ func main() {
 		sentry.Flush(time.Second * 5)
 		os.Exit(1)
 	}()
+
+	// start the HTTP server
+	// (right now just used for callbacks)
+	go server.Start()
 
 	// set up the Twitch client
 	client := tripbot.Initialize()
