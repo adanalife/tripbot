@@ -14,6 +14,7 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/database"
 	"github.com/dmerrick/danalol-stream/pkg/server"
 	"github.com/dmerrick/danalol-stream/pkg/tripbot"
+	mytwitch "github.com/dmerrick/danalol-stream/pkg/twitch"
 	"github.com/dmerrick/danalol-stream/pkg/users"
 	"github.com/dmerrick/danalol-stream/pkg/video"
 	"github.com/getsentry/sentry-go"
@@ -74,6 +75,7 @@ func main() {
 	background.Cron.AddFunc("@every 60s", video.GetCurrentlyPlaying)
 	background.Cron.AddFunc("@every 60s", users.UpdateSession)
 	background.Cron.AddFunc("@every 5m", users.PrintCurrentSession)
+	background.Cron.AddFunc("@every 10m", mytwitch.RefreshUserAccessToken)
 
 	// actually connect to Twitch
 	// wrapped in a loop in case twitch goes down

@@ -1,7 +1,10 @@
 package twitch
 
 import (
+	"log"
+
 	"github.com/davecgh/go-spew/spew"
+	"github.com/logrusorgru/aurora"
 	"github.com/nicklaw5/helix"
 )
 
@@ -21,6 +24,7 @@ func FindOrCreateClient(clientID, clientSecret string) (*helix.Client, error) {
 		ClientID:     clientID,
 		ClientSecret: clientSecret,
 		//TODO: maybe don't hardcode this
+		// this is set at https://dev.twitch.tv/console/apps
 		RedirectURI: "http://localhost:8080/auth/callback",
 		//TODO: move to configs lib
 		Scopes: []string{"openid", "user:edit:broadcast", "channel:read:subscriptions"},
@@ -37,7 +41,24 @@ func GenerateUserAccessToken(code string) {
 	if err != nil {
 		spew.Dump(err)
 	}
-	spew.Dump(resp)
+
+	UserAccessToken = resp.Data.AccessToken
+	UserRefreshToken = resp.Data.RefreshToken
+}
+
+func RefreshUserAccessToken() {
+	// check to see if we have the required tokens to work with
+	if UserRefreshToken == "" || UserAccessToken == "" {
+		authURL := currentTwitchClient.GetAuthorizationURL("", false)
+		log.Println("no user access token was present, did you log in with OAuth?")
+		log.Println(aurora.Blue(authURL).Underline())
+		return
+	}
+
+	resp, err := currentTwitchClient.RefreshUserAccessToken(UserRefreshToken)
+	if err != nil {
+		spew.Dump(err)
+	}
 
 	UserAccessToken = resp.Data.AccessToken
 	UserRefreshToken = resp.Data.RefreshToken
