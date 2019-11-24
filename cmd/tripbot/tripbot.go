@@ -63,6 +63,9 @@ func main() {
 	v := video.CurrentlyPlaying
 	video.LoadOrCreate(v.String())
 
+	// initialize the leaderboard
+	users.InitLeaderboard()
+
 	// start cron and attach cronjobs
 	background.StartCron()
 
@@ -74,12 +77,13 @@ func main() {
 	users.PrintCurrentSession()
 
 	//TODO: move these somewhere central
-	background.Cron.AddFunc("@every 57m30s", tripbot.Chatter)
 	background.Cron.AddFunc("@every 60s", video.GetCurrentlyPlaying)
-	background.Cron.AddFunc("@every 60s", users.UpdateSession)
+	background.Cron.AddFunc("@every 61s", users.UpdateSession)
+	background.Cron.AddFunc("@every 62s", users.UpdateLeaderboard)
 	background.Cron.AddFunc("@every 5m", users.PrintCurrentSession)
-	background.Cron.AddFunc("@every 1h", mytwitch.RefreshUserAccessToken)
 	background.Cron.AddFunc("@every 15m", mytwitch.GetSubscribers)
+	background.Cron.AddFunc("@every 1h", mytwitch.RefreshUserAccessToken)
+	background.Cron.AddFunc("@every 57m30s", tripbot.Chatter)
 
 	// actually connect to Twitch
 	// wrapped in a loop in case twitch goes down

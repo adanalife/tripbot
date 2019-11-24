@@ -28,9 +28,11 @@ type User struct {
 }
 
 func (u User) CurrentMiles() float32 {
-	//TODO: return u.Miles if u.LoggedIn is not present
-	loggedInDur := time.Now().Sub(u.LoggedIn)
-	return u.Miles + miles.DurationToMiles(loggedInDur)
+	if isLoggedIn(u.Username) {
+		loggedInDur := time.Now().Sub(u.LoggedIn)
+		return u.Miles + miles.DurationToMiles(loggedInDur)
+	}
+	return u.Miles
 }
 
 // User.save() will take the given user and store it in the DB
@@ -93,19 +95,4 @@ func create(username string) User {
 	tx.MustExec("INSERT INTO users (username, num_visits) VALUES ($1, $2)", username, 1)
 	tx.Commit()
 	return Find(username)
-}
-
-// Leaderboard returns the users with the most miles
-// note that we return an array because maps are unordered
-func Leaderboard(size int) [][]string {
-	var leaderboard [][]string
-	users := []User{}
-	query := fmt.Sprintf("SELECT * FROM users WHERE miles != 0 ORDER BY miles DESC LIMIT %d", size)
-	database.DBCon.Select(&users, query)
-	for _, user := range users {
-		miles := fmt.Sprintf("%.1f", user.CurrentMiles())
-		pair := []string{user.Username, miles}
-		leaderboard = append(leaderboard, pair)
-	}
-	return leaderboard
 }

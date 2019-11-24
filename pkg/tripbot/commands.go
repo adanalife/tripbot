@@ -110,7 +110,7 @@ func locationCmd(user users.User) {
 func leaderboardCmd(user users.User) {
 	log.Println(user.Username, "ran !newleaderboard")
 	size := 10
-	leaderboard := users.Leaderboard(size)
+	leaderboard := users.Leaderboard[:size]
 	msg := fmt.Sprintf("Top %d miles: ", size)
 	for i, leaderPair := range leaderboard {
 		msg += fmt.Sprintf("%d. %s (%s)", i+1, leaderPair[0], leaderPair[1])
