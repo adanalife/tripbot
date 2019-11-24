@@ -44,7 +44,7 @@ func GetSubscribers() {
 
 	// pull out the usernames
 	for _, sub := range resp.Data.Subscriptions {
-		subscribers = append(subscribers, sub.UserName)
+		subscribers = append(subscribers, strings.ToLower(sub.UserName))
 	}
 
 	spew.Dump(subscribers)
