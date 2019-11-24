@@ -1,6 +1,7 @@
 package server
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -22,16 +23,18 @@ func handle(w http.ResponseWriter, r *http.Request) {
 		codes, ok := r.URL.Query()["code"]
 
 		if !ok || len(codes[0]) < 1 {
-			msg := "Param 'code' is missing"
-			log.Println(msg)
-			//TODO: better error than StatusNotFound
+			msg := "no code in response from twitch"
+			terrors.Log(errors.New("code missing"), msg)
+			//TODO: better error than StatusNotFound (404)
 			http.Error(w, msg, http.StatusNotFound)
 			return
 		}
 		code := string(codes[0])
-		//TODO: consider removing this line
-		log.Println("Code received from Twitch:", aurora.Cyan(code))
+
+		log.Println(aurora.Cyan("successfully received token from twitch!"))
+		// use the code to generate an access token
 		mytwitch.GenerateUserAccessToken(code)
+
 	case "POST":
 		fmt.Fprintf(w, "Perhaps you meant to make a GET request?\n")
 	default:
