@@ -3,7 +3,9 @@ package users
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
+	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/database"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	"github.com/logrusorgru/aurora"
@@ -16,7 +18,7 @@ var maxLeaderboardSize = 50
 // Leaderboard creates a leaderboard
 func InitLeaderboard() {
 	users := []User{}
-	query := fmt.Sprintf("SELECT * FROM users WHERE miles != 0 AND is_bot = false ORDER BY miles DESC LIMIT %d", initLeaderboardSize)
+	query := fmt.Sprintf("SELECT * FROM users WHERE miles != 0 AND is_bot = false AND username != %s ORDER BY miles DESC LIMIT %d", strings.ToLower(config.ChannelName), initLeaderboardSize)
 	database.DBCon.Select(&users, query)
 	for _, user := range users {
 		miles := fmt.Sprintf("%.1f", user.Miles)
@@ -27,8 +29,8 @@ func InitLeaderboard() {
 
 func UpdateLeaderboard() {
 	for _, user := range LoggedIn {
-		// skip adding this user if they're a bot
-		if user.IsBot {
+		// skip adding this user if they're a bot (or me)
+		if user.IsBot || user.Username == strings.ToLower(config.ChannelName) {
 			continue
 		}
 		insertIntoLeaderboard(user)
