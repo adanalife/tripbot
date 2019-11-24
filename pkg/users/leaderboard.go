@@ -28,7 +28,7 @@ func InitLeaderboard() {
 func UpdateLeaderboard() {
 	for _, user := range LoggedIn {
 		// skip adding this user if they're a bot
-		if user.isBot {
+		if user.IsBot {
 			continue
 		}
 		insertIntoLeaderboard(user)
