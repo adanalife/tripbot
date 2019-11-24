@@ -261,8 +261,7 @@ func Initialize() *twitch.Client {
 	twilioClient = gotwilio.NewTwilioClient(twilioAccountSid, twilioAuthToken)
 
 	// initialize the twitch API client
-	//TODO: rename me to Initialize()
-	c, err := mytwitch.FindOrCreateClient(twitchClientID, twitchClientSecret)
+	c, err := mytwitch.Initialize(twitchClientID, twitchClientSecret)
 	if err != nil {
 		terrors.Fatal(err, "unable to create twitch API client")
 	}

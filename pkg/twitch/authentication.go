@@ -15,7 +15,8 @@ var currentTwitchClient *helix.Client
 var UserAccessToken string
 var UserRefreshToken string
 
-func FindOrCreateClient(clientID, clientSecret string) (*helix.Client, error) {
+// Initialize creates a twitch client, or returns the existing one
+func Initialize(clientID, clientSecret string) (*helix.Client, error) {
 	// use the existing client if we have one
 	if currentTwitchClient != nil {
 		return currentTwitchClient, nil

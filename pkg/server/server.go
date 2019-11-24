@@ -47,6 +47,7 @@ func Start() {
 	http.HandleFunc("/", handle)
 	//TODO: configurable port
 	if err := http.ListenAndServe(":8080", nil); err != nil {
+		//TODO: consider making this Fatal
 		terrors.Log(err, "couldn't start server")
 	}
 }
