@@ -1,9 +1,9 @@
 package twitch
 
 import (
+	"log"
 	"strings"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	"github.com/nicklaw5/helix"
@@ -47,9 +47,14 @@ func GetSubscribers() {
 		subscribers = append(subscribers, strings.ToLower(sub.UserName))
 	}
 
-	spew.Dump(subscribers)
+	if len(subscribers) > 0 {
+		log.Println("subscribers:", strings.Join(subscribers, ", "))
+	} else {
+		log.Println(config.ChannelName, "has no subscribers :(")
+	}
 }
 
+// UserIsSubscriber returns true if the user subscribes to the channel
 func UserIsSubscriber(username string) bool {
 	for _, sub := range subscribers {
 		if username == sub {
@@ -59,6 +64,7 @@ func UserIsSubscriber(username string) bool {
 	return false
 }
 
+// UserIsFollower returns true if the user follows the channel
 func UserIsFollower(user string) bool {
 	// I can't follow myself so just do this
 	if user == strings.ToLower(config.ChannelName) {
@@ -77,7 +83,7 @@ func UserIsFollower(user string) bool {
 		return false
 	}
 
-	// get the twitch user_id
+	// pull out the twitch user_id
 	userID := usersResp.Data.Users[0].ID
 
 	followsResp, err := client.GetUsersFollows(&helix.UsersFollowsParams{

@@ -60,6 +60,7 @@ func RefreshUserAccessToken() {
 	resp, err := currentTwitchClient.RefreshUserAccessToken(UserRefreshToken)
 	if err != nil {
 		spew.Dump(err)
+		return
 	}
 
 	UserAccessToken = resp.Data.AccessToken
@@ -68,5 +69,5 @@ func RefreshUserAccessToken() {
 	// update the current client with the new access token
 	currentTwitchClient.SetUserAccessToken(UserAccessToken)
 
-	spew.Dump(UserAccessToken, UserRefreshToken)
+	log.Println(aurora.Cyan("successfully updated user access token"))
 }
