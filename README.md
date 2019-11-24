@@ -31,3 +31,9 @@ go run cmd/tripbot/tripbot.go
 ```
 go get -u github.com/nicklaw5/helix
 ```
+
+### See out-of-date packages
+```
+go get -u github.com/psampaz/go-mod-outdated
+go list -u -m -json all | go-mod-outdated
+```
