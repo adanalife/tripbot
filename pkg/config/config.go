@@ -10,9 +10,6 @@ import (
 )
 
 const (
-	// ChannelID is the internal twitch ID of the channel
-	ChannelID = "225469317"
-
 	screencapDir = "screencaps"
 	videoDir     = "_all"
 

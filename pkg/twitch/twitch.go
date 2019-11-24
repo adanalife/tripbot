@@ -72,11 +72,11 @@ func UserIsFollower(username string) bool {
 		return true
 	}
 
-	// get the channel ID
+	// get the channel ID for the given user
 	userID := getChannelID(username)
 
-	followsResp, err := currentTwitchClient.GetUsersFollows(&helix.UsersFollowsParams{
-		ToID:   config.ChannelID,
+	resp, err := currentTwitchClient.GetUsersFollows(&helix.UsersFollowsParams{
+		ToID:   ChannelID,
 		FromID: userID,
 	})
 	if err != nil {
@@ -84,7 +84,7 @@ func UserIsFollower(username string) bool {
 		return false
 	}
 
-	if followsResp.Data.Total < 1 {
+	if resp.Data.Total < 1 {
 		return false
 	}
 	return true
