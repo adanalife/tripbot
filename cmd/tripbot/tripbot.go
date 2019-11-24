@@ -66,6 +66,9 @@ func main() {
 	// start cron and attach cronjobs
 	background.StartCron()
 
+	// update subscribers list
+	mytwitch.GetSubscribers()
+
 	// fetch initial session
 	users.UpdateSession()
 	users.PrintCurrentSession()
@@ -76,7 +79,7 @@ func main() {
 	background.Cron.AddFunc("@every 60s", users.UpdateSession)
 	background.Cron.AddFunc("@every 5m", users.PrintCurrentSession)
 	background.Cron.AddFunc("@every 10m", mytwitch.RefreshUserAccessToken)
-	background.Cron.AddFunc("@every 20s", mytwitch.GetSubscribers)
+	background.Cron.AddFunc("@every 2m", mytwitch.GetSubscribers)
 
 	// actually connect to Twitch
 	// wrapped in a loop in case twitch goes down

@@ -2,6 +2,7 @@ package users
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"sort"
 	"strings"
@@ -13,6 +14,7 @@ import (
 
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	"github.com/dmerrick/danalol-stream/pkg/twitch"
+	mytwitch "github.com/dmerrick/danalol-stream/pkg/twitch"
 	"github.com/logrusorgru/aurora"
 )
 
@@ -89,6 +91,12 @@ func login(username string) {
 	// raise an error if a user is supposed to be a bot
 	if helpers.UserIsIgnored(username) && !user.IsBot {
 		terrors.Log(errors.New("user should be bot"), username)
+	}
+
+	// just a silly message to confirm subscriber feature is working
+	if mytwitch.UserIsSubscriber(username) {
+		msg := fmt.Sprintf("subscriber %s logged in!", username)
+		log.Println(aurora.Magenta(msg))
 	}
 
 	// add them to the session

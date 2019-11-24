@@ -9,18 +9,25 @@ import (
 	"github.com/nicklaw5/helix"
 )
 
+// ChannelID contains the twitch-internal user ID
 var ChannelID string
 
+// subscribers is a list of the usernames of the current subscribers
+//TODO: this could include tier and gift info if we wanted
+var subscribers []string
+
+// getChannelID makes a request to twitch to get the user ID for the channel
 func getChannelID() {
 	resp, err := currentTwitchClient.GetUsers(&helix.UsersParams{
 		Logins: []string{config.ChannelName},
 	})
 	if err != nil {
-		spew.Dump(err)
+		terrors.Log(err, "error getting user info from twitch")
 	}
 	ChannelID = resp.Data.Users[0].ID
 }
 
+// GetSubscribers pulls down the most recent list of subscribers
 func GetSubscribers() {
 	if ChannelID == "" {
 		getChannelID()
@@ -29,9 +36,27 @@ func GetSubscribers() {
 		BroadcasterID: ChannelID,
 	})
 	if err != nil {
-		spew.Dump(err)
+		terrors.Log(err, "error getting subscriptions from twitch")
 	}
-	spew.Dump(resp)
+
+	// reset the current subscriber list
+	subscribers = []string{}
+
+	// pull out the usernames
+	for _, sub := range resp.Data.Subscriptions {
+		subscribers = append(subscribers, sub.UserName)
+	}
+
+	spew.Dump(subscribers)
+}
+
+func UserIsSubscriber(username string) bool {
+	for _, sub := range subscribers {
+		if username == sub {
+			return true
+		}
+	}
+	return false
 }
 
 func UserIsFollower(user string) bool {
