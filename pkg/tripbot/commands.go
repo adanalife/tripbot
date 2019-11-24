@@ -27,12 +27,6 @@ func Chatter() {
 	client.Say(config.ChannelName, help())
 }
 
-func isFollower(user string) bool {
-	// return mytwitch.UserIsFollower(user)
-	//TODO: fixme
-	return true
-}
-
 func help() string {
 	text := config.HelpMessages[helpIndex]
 	// bump the index

@@ -32,6 +32,7 @@ var Uptime time.Time
 var helpIndex = rand.Intn(len(config.HelpMessages))
 
 const followerMsg = "You must be a follower to run that command :)"
+const subscriberMsg = "You must be a subscriber to run that command :)"
 
 // all chat messages
 func PrivateMessage(message twitch.PrivateMessage) {
@@ -50,7 +51,7 @@ func PrivateMessage(message twitch.PrivateMessage) {
 
 	//TODO: rename this to oldmiles
 	if strings.HasPrefix(strings.ToLower(message.Message), "!miles") {
-		if isFollower(username) {
+		if mytwitch.UserIsFollower(username) {
 			oldMilesCmd(username)
 		} else {
 			client.Say(config.ChannelName, followerMsg)
@@ -59,7 +60,7 @@ func PrivateMessage(message twitch.PrivateMessage) {
 
 	//TODO: rename this to miles
 	if strings.HasPrefix(strings.ToLower(message.Message), "!newmiles") {
-		if isFollower(username) {
+		if mytwitch.UserIsFollower(username) {
 			milesCmd(username)
 		} else {
 			client.Say(config.ChannelName, followerMsg)
@@ -67,7 +68,7 @@ func PrivateMessage(message twitch.PrivateMessage) {
 	}
 
 	if strings.HasPrefix(strings.ToLower(message.Message), "!sunset") {
-		if isFollower(username) {
+		if mytwitch.UserIsFollower(username) {
 			sunsetCmd(username)
 		} else {
 			client.Say(config.ChannelName, followerMsg)
@@ -87,7 +88,7 @@ func PrivateMessage(message twitch.PrivateMessage) {
 	}
 	for _, s := range locationStrings {
 		if strings.HasPrefix(strings.ToLower(message.Message), s) {
-			if isFollower(username) {
+			if mytwitch.UserIsFollower(username) {
 				locationCmd(username)
 			} else {
 				client.Say(config.ChannelName, followerMsg)
@@ -96,7 +97,7 @@ func PrivateMessage(message twitch.PrivateMessage) {
 	}
 
 	if strings.HasPrefix(strings.ToLower(message.Message), "!leaderboard") {
-		if isFollower(username) {
+		if mytwitch.UserIsFollower(username) {
 			oldLeaderboardCmd(username)
 		} else {
 			client.Say(config.ChannelName, followerMsg)
@@ -104,7 +105,7 @@ func PrivateMessage(message twitch.PrivateMessage) {
 	}
 
 	if strings.HasPrefix(strings.ToLower(message.Message), "!newleaderboard") {
-		if isFollower(username) {
+		if mytwitch.UserIsFollower(username) {
 			leaderboardCmd(username)
 		} else {
 			client.Say(config.ChannelName, followerMsg)
@@ -112,7 +113,7 @@ func PrivateMessage(message twitch.PrivateMessage) {
 	}
 
 	if strings.HasPrefix(strings.ToLower(message.Message), "!time") {
-		if isFollower(username) {
+		if mytwitch.UserIsFollower(username) {
 			timeCmd(username)
 		} else {
 			client.Say(config.ChannelName, followerMsg)
@@ -120,7 +121,7 @@ func PrivateMessage(message twitch.PrivateMessage) {
 	}
 
 	if strings.HasPrefix(strings.ToLower(message.Message), "!date") {
-		if isFollower(username) {
+		if mytwitch.UserIsFollower(username) {
 			dateCmd(username)
 		} else {
 			client.Say(config.ChannelName, followerMsg)
@@ -128,7 +129,7 @@ func PrivateMessage(message twitch.PrivateMessage) {
 	}
 
 	if strings.HasPrefix(strings.ToLower(message.Message), "!guess") {
-		if isFollower(username) {
+		if mytwitch.UserIsFollower(username) {
 			guessCmd(username, message.Message)
 		} else {
 			client.Say(config.ChannelName, followerMsg)
@@ -136,7 +137,7 @@ func PrivateMessage(message twitch.PrivateMessage) {
 	}
 
 	if strings.HasPrefix(strings.ToLower(message.Message), "!state") {
-		if isFollower(username) {
+		if mytwitch.UserIsFollower(username) {
 			stateCmd(username)
 		} else {
 			client.Say(config.ChannelName, followerMsg)
@@ -157,7 +158,7 @@ func PrivateMessage(message twitch.PrivateMessage) {
 	}
 	for _, rs := range reportStrings {
 		if strings.HasPrefix(strings.ToLower(message.Message), rs) {
-			if isFollower(username) {
+			if mytwitch.UserIsFollower(username) {
 				reportCmd(username, message.Message)
 			} else {
 				client.Say(config.ChannelName, followerMsg)
@@ -167,6 +168,14 @@ func PrivateMessage(message twitch.PrivateMessage) {
 
 	if strings.HasPrefix(strings.ToLower(message.Message), "!shutdown") {
 		shutdownCmd(username)
+	}
+
+	if strings.HasPrefix(strings.ToLower(message.Message), "!onlyatest") {
+		if mytwitch.UserIsSubscriber(username) {
+			client.Say(config.ChannelName, "It worked!")
+		} else {
+			client.Say(config.ChannelName, subscriberMsg)
+		}
 	}
 }
 
