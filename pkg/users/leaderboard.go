@@ -16,21 +16,23 @@ var maxLeaderboardSize = 50
 // Leaderboard creates a leaderboard
 func InitLeaderboard() {
 	users := []User{}
-	query := fmt.Sprintf("SELECT * FROM users WHERE miles != 0 ORDER BY miles DESC LIMIT %d", initLeaderboardSize)
+	query := fmt.Sprintf("SELECT * FROM users WHERE miles != 0 AND is_bot = false ORDER BY miles DESC LIMIT %d", initLeaderboardSize)
 	database.DBCon.Select(&users, query)
 	for _, user := range users {
 		miles := fmt.Sprintf("%.1f", user.Miles)
 		pair := []string{user.Username, miles}
 		Leaderboard = append(Leaderboard, pair)
 	}
-	printLeaderboard()
 }
 
 func UpdateLeaderboard() {
 	for _, user := range LoggedIn {
+		// skip adding this user if they're a bot
+		if user.isBot {
+			continue
+		}
 		insertIntoLeaderboard(user)
 	}
-	// printLeaderboard()
 	// truncate Leaderboard if it gets too big
 	if len(Leaderboard) > maxLeaderboardSize {
 		Leaderboard = Leaderboard[:maxLeaderboardSize]
@@ -82,6 +84,7 @@ func removeFromLeaderboard(username string) {
 	}
 }
 
+// this was used for development
 func printLeaderboard() {
 	for i, pair := range Leaderboard {
 		fmt.Printf("%d: %s - %s\n", i+1, pair[1], aurora.Magenta(pair[0]))
