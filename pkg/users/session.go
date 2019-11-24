@@ -24,6 +24,17 @@ import (
 // mapping their username to a User
 var LoggedIn = make(map[string]User)
 
+//// Session quickly finds the user in the session
+////TODO: better name?
+//func Session(username string) User {
+//	if isLoggedIn(username) {
+//		return LoggedIn[username]
+//	}
+//	terrors.Log(errors.New("user not found in session"), username)
+//	//TODO: better way to handle this?
+//	return User{ID: 0}
+//}
+
 // UpdateSession will use the data from the Twitch API to maintain a list
 // of currently-logged-in users
 func UpdateSession() {
@@ -55,13 +66,13 @@ func UpdateSession() {
 
 // LoginIfNecessary checks the list of currently-logged in users and will
 // run login() if this user isn't currently logged in
-func LoginIfNecessary(username string) {
+func LoginIfNecessary(username string) User {
 	// check if the user is currently logged in
 	if isLoggedIn(username) {
-		return
+		return LoggedIn[username]
 	}
 	// they weren't logged in, so note in the DB
-	login(username)
+	return login(username)
 }
 
 // LogoutIfNecessary will log out the user if it finds them in the session
@@ -74,7 +85,7 @@ func LogoutIfNecessary(username string) {
 
 // login will record the users presence in the DB
 //TODO: do we want to make a DB update here? we could do it on logout()
-func login(username string) {
+func login(username string) User {
 	now := time.Now()
 
 	user := FindOrCreate(username)
@@ -102,6 +113,8 @@ func login(username string) {
 
 	// create a login event as well
 	events.Login(username)
+
+	return user
 }
 
 // User.logout() removes the user from the list of currently-logged in users,

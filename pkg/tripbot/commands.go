@@ -34,30 +34,29 @@ func help() string {
 	return text
 }
 
-func helpCmd(user string) {
-	log.Println(user, "ran !help")
+func helpCmd(user users.User) {
+	log.Println(user.Username, "ran !help")
 	msg := fmt.Sprintf("%s (%d of %d)", help(), helpIndex+1, len(config.HelpMessages))
 	client.Say(config.ChannelName, msg)
 }
 
-func uptimeCmd(user string) {
-	log.Println(user, "ran !uptime")
+func uptimeCmd(user users.User) {
+	log.Println(user.Username, "ran !uptime")
 	dur := time.Now().Sub(Uptime)
 	msg := fmt.Sprintf("I have been running for %s", durafmt.Parse(dur))
 	client.Say(config.ChannelName, msg)
 }
 
-func milesCmd(username string) {
-	log.Println(username, "ran !newmiles")
-	user := users.LoggedIn[username]
+func milesCmd(user users.User) {
+	log.Println(user.Username, "ran !newmiles")
 	msg := "@%s has %.5f miles."
-	msg = fmt.Sprintf(msg, username, user.CurrentMiles())
+	msg = fmt.Sprintf(msg, user.Username, user.CurrentMiles())
 	client.Say(config.ChannelName, msg)
 }
 
-func oldMilesCmd(user string) {
-	log.Println(user, "ran !miles")
-	miles := miles.ForUser(user)
+func oldMilesCmd(user users.User) {
+	log.Println(user.Username, "ran !miles")
+	miles := miles.ForUser(user.Username)
 	msg := ""
 	switch {
 	case miles == 1:
@@ -71,12 +70,12 @@ func oldMilesCmd(user string) {
 	if rand.Intn(3) == 0 {
 		msg = fmt.Sprintf("%s Earn miles for every minute you watch the stream!", msg)
 	}
-	msg = fmt.Sprintf(msg, user, miles)
+	msg = fmt.Sprintf(msg, user.Username, miles)
 	client.Say(config.ChannelName, msg)
 }
 
-func sunsetCmd(user string) {
-	log.Println(user, "ran !sunset")
+func sunsetCmd(user users.User) {
+	log.Println(user.Username, "ran !sunset")
 	// get the currently-playing video
 	vid := video.CurrentlyPlaying
 	if vid.Flagged {
@@ -87,8 +86,8 @@ func sunsetCmd(user string) {
 	client.Say(config.ChannelName, helpers.SunsetStr(vid.DateFilmed, lat, lng))
 }
 
-func locationCmd(user string) {
-	log.Println(user, "ran !location (or similar)")
+func locationCmd(user users.User) {
+	log.Println(user.Username, "ran !location (or similar)")
 	// get the currently-playing video
 	vid := video.CurrentlyPlaying
 	if vid.Flagged {
@@ -108,8 +107,8 @@ func locationCmd(user string) {
 	client.Say(config.ChannelName, msg)
 }
 
-func leaderboardCmd(user string) {
-	log.Println(user, "ran !newleaderboard")
+func leaderboardCmd(user users.User) {
+	log.Println(user.Username, "ran !newleaderboard")
 	size := 10
 	leaderboard := users.Leaderboard(size)
 	msg := fmt.Sprintf("Top %d miles: ", size)
@@ -122,8 +121,8 @@ func leaderboardCmd(user string) {
 	client.Say(config.ChannelName, msg)
 }
 
-func oldLeaderboardCmd(user string) {
-	log.Println(user, "ran !leaderboard")
+func oldLeaderboardCmd(user users.User) {
+	log.Println(user.Username, "ran !leaderboard")
 	size := 10
 	userList := miles.TopUsers(size)
 	msg := fmt.Sprintf("Top %d miles: ", size)
@@ -136,8 +135,8 @@ func oldLeaderboardCmd(user string) {
 	client.Say(config.ChannelName, msg)
 }
 
-func timeCmd(user string) {
-	log.Println(user, "ran !time")
+func timeCmd(user users.User) {
+	log.Println(user.Username, "ran !time")
 	var err error
 	var lat, lng float64
 	// get the currently-playing video
@@ -158,8 +157,8 @@ func timeCmd(user string) {
 	}
 }
 
-func dateCmd(user string) {
-	log.Println(user, "ran !date")
+func dateCmd(user users.User) {
+	log.Println(user.Username, "ran !date")
 	var err error
 	var lat, lng float64
 	// get the currently-playing video
@@ -180,8 +179,8 @@ func dateCmd(user string) {
 	}
 }
 
-func guessCmd(user, message string) {
-	log.Println(user, "ran !guess")
+func guessCmd(user users.User, message string) {
+	log.Println(user.Username, "ran !guess")
 	var msg string
 
 	if len(message) <= 7 {
@@ -208,15 +207,15 @@ func guessCmd(user, message string) {
 	}
 
 	if strings.ToLower(guess) == strings.ToLower(vid.State) {
-		msg = fmt.Sprintf("@%s got it! We're in %s", user, vid.State)
+		msg = fmt.Sprintf("@%s got it! We're in %s", user.Username, vid.State)
 	} else {
 		msg = "Try again! EarthDay"
 	}
 	client.Say(config.ChannelName, msg)
 }
 
-func stateCmd(user string) {
-	log.Println(user, "ran !state")
+func stateCmd(user users.User) {
+	log.Println(user.Username, "ran !state")
 	// get the currently-playing video
 	vid := video.CurrentlyPlaying
 	if vid.Flagged {
@@ -228,16 +227,16 @@ func stateCmd(user string) {
 }
 
 //TODO: maybe there could be a !cancel command or something
-func reportCmd(user, message string) {
-	log.Println(user, "ran !report")
+func reportCmd(user users.User, message string) {
+	log.Println(user.Username, "ran !report")
 	message = fmt.Sprintf("Report from Twitch Chat: %s", message)
 	twilioClient.SendSMS(twilioFromNum, twilioToNum, message, "", "")
 	client.Say(config.ChannelName, "Thank you, I will look into this ASAP!")
 }
 
-func secretInfoCmd(user string) {
-	log.Println(user, "ran !secretinfo")
-	if user != strings.ToLower(config.ChannelName) {
+func secretInfoCmd(user users.User) {
+	log.Println(user.Username, "ran !secretinfo")
+	if user.Username != strings.ToLower(config.ChannelName) {
 		return
 	}
 	vid := video.CurrentlyPlaying
@@ -252,9 +251,9 @@ func secretInfoCmd(user string) {
 	client.Say(config.ChannelName, msg)
 }
 
-func shutdownCmd(user string) {
-	log.Println(user, "ran !shutdown")
-	if user != strings.ToLower(config.ChannelName) {
+func shutdownCmd(user users.User) {
+	log.Println(user.Username, "ran !shutdown")
+	if user.Username != strings.ToLower(config.ChannelName) {
 		client.Say(config.ChannelName, "Nice try bucko")
 		return
 	}

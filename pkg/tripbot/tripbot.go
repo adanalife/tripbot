@@ -39,20 +39,20 @@ func PrivateMessage(message twitch.PrivateMessage) {
 	username := message.User.Name
 
 	// log in the user
-	users.LoginIfNecessary(username)
+	user := users.LoginIfNecessary(username)
 
 	if strings.HasPrefix(strings.ToLower(message.Message), "!help") {
-		helpCmd(username)
+		helpCmd(user)
 	}
 
 	if strings.HasPrefix(strings.ToLower(message.Message), "!uptime") {
-		uptimeCmd(username)
+		uptimeCmd(user)
 	}
 
 	//TODO: rename this to oldmiles
 	if strings.HasPrefix(strings.ToLower(message.Message), "!miles") {
 		if mytwitch.UserIsFollower(username) {
-			oldMilesCmd(username)
+			oldMilesCmd(user)
 		} else {
 			client.Say(config.ChannelName, followerMsg)
 		}
@@ -61,7 +61,7 @@ func PrivateMessage(message twitch.PrivateMessage) {
 	//TODO: rename this to miles
 	if strings.HasPrefix(strings.ToLower(message.Message), "!newmiles") {
 		if mytwitch.UserIsFollower(username) {
-			milesCmd(username)
+			milesCmd(user)
 		} else {
 			client.Say(config.ChannelName, followerMsg)
 		}
@@ -69,7 +69,7 @@ func PrivateMessage(message twitch.PrivateMessage) {
 
 	if strings.HasPrefix(strings.ToLower(message.Message), "!sunset") {
 		if mytwitch.UserIsFollower(username) {
-			sunsetCmd(username)
+			sunsetCmd(user)
 		} else {
 			client.Say(config.ChannelName, followerMsg)
 		}
@@ -89,7 +89,7 @@ func PrivateMessage(message twitch.PrivateMessage) {
 	for _, s := range locationStrings {
 		if strings.HasPrefix(strings.ToLower(message.Message), s) {
 			if mytwitch.UserIsFollower(username) {
-				locationCmd(username)
+				locationCmd(user)
 			} else {
 				client.Say(config.ChannelName, followerMsg)
 			}
@@ -98,7 +98,7 @@ func PrivateMessage(message twitch.PrivateMessage) {
 
 	if strings.HasPrefix(strings.ToLower(message.Message), "!leaderboard") {
 		if mytwitch.UserIsFollower(username) {
-			oldLeaderboardCmd(username)
+			oldLeaderboardCmd(user)
 		} else {
 			client.Say(config.ChannelName, followerMsg)
 		}
@@ -106,7 +106,7 @@ func PrivateMessage(message twitch.PrivateMessage) {
 
 	if strings.HasPrefix(strings.ToLower(message.Message), "!newleaderboard") {
 		if mytwitch.UserIsFollower(username) {
-			leaderboardCmd(username)
+			leaderboardCmd(user)
 		} else {
 			client.Say(config.ChannelName, followerMsg)
 		}
@@ -114,7 +114,7 @@ func PrivateMessage(message twitch.PrivateMessage) {
 
 	if strings.HasPrefix(strings.ToLower(message.Message), "!time") {
 		if mytwitch.UserIsFollower(username) {
-			timeCmd(username)
+			timeCmd(user)
 		} else {
 			client.Say(config.ChannelName, followerMsg)
 		}
@@ -122,7 +122,7 @@ func PrivateMessage(message twitch.PrivateMessage) {
 
 	if strings.HasPrefix(strings.ToLower(message.Message), "!date") {
 		if mytwitch.UserIsFollower(username) {
-			dateCmd(username)
+			dateCmd(user)
 		} else {
 			client.Say(config.ChannelName, followerMsg)
 		}
@@ -130,7 +130,7 @@ func PrivateMessage(message twitch.PrivateMessage) {
 
 	if strings.HasPrefix(strings.ToLower(message.Message), "!guess") {
 		if mytwitch.UserIsFollower(username) {
-			guessCmd(username, message.Message)
+			guessCmd(user, message.Message)
 		} else {
 			client.Say(config.ChannelName, followerMsg)
 		}
@@ -138,14 +138,14 @@ func PrivateMessage(message twitch.PrivateMessage) {
 
 	if strings.HasPrefix(strings.ToLower(message.Message), "!state") {
 		if mytwitch.UserIsFollower(username) {
-			stateCmd(username)
+			stateCmd(user)
 		} else {
 			client.Say(config.ChannelName, followerMsg)
 		}
 	}
 
 	if strings.HasPrefix(strings.ToLower(message.Message), "!secretinfo") {
-		secretInfoCmd(username)
+		secretInfoCmd(user)
 	}
 
 	// any of these should trigger the report command
@@ -159,7 +159,7 @@ func PrivateMessage(message twitch.PrivateMessage) {
 	for _, rs := range reportStrings {
 		if strings.HasPrefix(strings.ToLower(message.Message), rs) {
 			if mytwitch.UserIsFollower(username) {
-				reportCmd(username, message.Message)
+				reportCmd(user, message.Message)
 			} else {
 				client.Say(config.ChannelName, followerMsg)
 			}
@@ -167,7 +167,7 @@ func PrivateMessage(message twitch.PrivateMessage) {
 	}
 
 	if strings.HasPrefix(strings.ToLower(message.Message), "!shutdown") {
-		shutdownCmd(username)
+		shutdownCmd(user)
 	}
 
 	if strings.HasPrefix(strings.ToLower(message.Message), "!onlyatest") {
