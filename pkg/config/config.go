@@ -80,6 +80,7 @@ var IgnoredUsers = []string{
 	"unixchat",
 	"v_and_k",
 	"virgoproz",
+	"winsock",
 	"zanekyber",
 }
 
