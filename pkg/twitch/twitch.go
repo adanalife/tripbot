@@ -16,6 +16,7 @@ var ChannelID string
 //TODO: this could include tier and gift info if we wanted
 var subscribers []string
 
+//TODO: turn this into a helper and use it in UserIsFollower() as well
 // getChannelID makes a request to twitch to get the user ID for the channel
 func getChannelID() {
 	resp, err := currentTwitchClient.GetUsers(&helix.UsersParams{

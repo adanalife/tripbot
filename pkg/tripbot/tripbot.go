@@ -17,6 +17,7 @@ import (
 	"github.com/gempir/go-twitch-irc/v2"
 	"github.com/joho/godotenv"
 	"github.com/kelvins/geocoder"
+	"github.com/logrusorgru/aurora"
 	"github.com/sfreiberg/gotwilio"
 )
 
@@ -266,15 +267,11 @@ func Initialize() *twitch.Client {
 		terrors.Fatal(err, "unable to create twitch API client")
 	}
 
-	//TODO: use these security features
+	//TODO: actually use these security features
 	authURL := c.GetAuthorizationURL("", false)
-	log.Println(authURL)
+	log.Println("if your browser doesn't open automatically:")
+	log.Println(aurora.Blue(authURL).Underline())
 	helpers.OpenInBrowser(authURL)
-
-	// _, err = mytwitch.InitializeUserClient(twitchClientID, twitchClientSecret)
-	// if err != nil {
-	// 	terrors.Fatal(err, "unable to create twitch API client")
-	// }
 
 	// initialize the SQL database
 	database.DBCon, err = database.Initialize()
