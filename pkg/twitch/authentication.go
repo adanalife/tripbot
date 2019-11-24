@@ -35,8 +35,9 @@ func Initialize(clientID, clientSecret string) (*helix.Client, error) {
 	return client, err
 }
 
-// code is returned after going through the OAuth flow
-// it is set by the web server
+// GenerateUserAccessToken sends a code to Twitch to generate a
+// user access token. This is called by the web server after
+// going through the OAuth flow
 func GenerateUserAccessToken(code string) {
 	resp, err := currentTwitchClient.GetUserAccessToken(code)
 	if err != nil {
@@ -50,12 +51,17 @@ func GenerateUserAccessToken(code string) {
 	currentTwitchClient.SetUserAccessToken(UserAccessToken)
 }
 
+// RefreshUserAccessToken makes a call to Twitch to generate a
+// fresh user access token. It requires a UserRefreshToken to be
+// set already.
 func RefreshUserAccessToken() {
 	// check to see if we have the required tokens to work with
 	if UserRefreshToken == "" || UserAccessToken == "" {
-		authURL := currentTwitchClient.GetAuthorizationURL("", false)
 		log.Println("no user access token was present, did you log in with OAuth?")
+		authURL := currentTwitchClient.GetAuthorizationURL("", false)
 		log.Println(aurora.Blue(authURL).Underline())
+		// send a text message cause some features won't work
+		// without a user access token
 		helpers.SendSMS("refreshing user access token failed!")
 		return
 	}

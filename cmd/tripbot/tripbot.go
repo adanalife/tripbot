@@ -84,7 +84,7 @@ func main() {
 	// actually connect to Twitch
 	// wrapped in a loop in case twitch goes down
 	for {
-		log.Println("Connecting to Twitch...")
+		log.Println("Connecting to Twitch")
 		err := client.Connect()
 		if err != nil {
 			log.Println(err)
