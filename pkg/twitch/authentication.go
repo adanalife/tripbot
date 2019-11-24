@@ -37,13 +37,15 @@ func FindOrCreateClient(clientID, clientSecret string) (*helix.Client, error) {
 // it is set by the web server
 func GenerateUserAccessToken(code string) {
 	resp, err := currentTwitchClient.GetUserAccessToken(code)
-	// resp, err := currentTwitchUserClient.GetUserAccessToken(code)
 	if err != nil {
 		spew.Dump(err)
 	}
 
 	UserAccessToken = resp.Data.AccessToken
 	UserRefreshToken = resp.Data.RefreshToken
+
+	// update the current client with the access token
+	currentTwitchClient.SetUserAccessToken(UserAccessToken)
 }
 
 func RefreshUserAccessToken() {
@@ -62,6 +64,9 @@ func RefreshUserAccessToken() {
 
 	UserAccessToken = resp.Data.AccessToken
 	UserRefreshToken = resp.Data.RefreshToken
+
+	// update the current client with the new access token
+	currentTwitchClient.SetUserAccessToken(UserAccessToken)
 
 	spew.Dump(UserAccessToken, UserRefreshToken)
 }

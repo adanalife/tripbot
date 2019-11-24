@@ -3,10 +3,36 @@ package twitch
 import (
 	"strings"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	"github.com/nicklaw5/helix"
 )
+
+var ChannelID string
+
+func getChannelID() {
+	resp, err := currentTwitchClient.GetUsers(&helix.UsersParams{
+		Logins: []string{config.ChannelName},
+	})
+	if err != nil {
+		spew.Dump(err)
+	}
+	ChannelID = resp.Data.Users[0].ID
+}
+
+func GetSubscribers() {
+	if ChannelID == "" {
+		getChannelID()
+	}
+	resp, err := currentTwitchClient.GetSubscriptions(&helix.SubscriptionsParams{
+		BroadcasterID: ChannelID,
+	})
+	if err != nil {
+		spew.Dump(err)
+	}
+	spew.Dump(resp)
+}
 
 func UserIsFollower(user string) bool {
 	// I can't follow myself so just do this

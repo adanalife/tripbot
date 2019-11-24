@@ -76,6 +76,7 @@ func main() {
 	background.Cron.AddFunc("@every 60s", users.UpdateSession)
 	background.Cron.AddFunc("@every 5m", users.PrintCurrentSession)
 	background.Cron.AddFunc("@every 10m", mytwitch.RefreshUserAccessToken)
+	background.Cron.AddFunc("@every 20s", mytwitch.GetSubscribers)
 
 	// actually connect to Twitch
 	// wrapped in a loop in case twitch goes down
