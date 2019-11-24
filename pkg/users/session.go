@@ -69,9 +69,7 @@ func LogoutIfNecessary(username string) {
 	if isLoggedIn(username) {
 		user := LoggedIn[username]
 		user.logout()
-		return
 	}
-	log.Println("hmm, LogoutIfNecessary() called and user not logged in:", username)
 }
 
 // login will record the users presence in the DB
