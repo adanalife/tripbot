@@ -78,7 +78,7 @@ func main() {
 	background.Cron.AddFunc("@every 60s", video.GetCurrentlyPlaying)
 	background.Cron.AddFunc("@every 60s", users.UpdateSession)
 	background.Cron.AddFunc("@every 5m", users.PrintCurrentSession)
-	background.Cron.AddFunc("@every 10m", mytwitch.RefreshUserAccessToken)
+	background.Cron.AddFunc("@every 1h", mytwitch.RefreshUserAccessToken)
 	background.Cron.AddFunc("@every 15m", mytwitch.GetSubscribers)
 
 	// actually connect to Twitch
