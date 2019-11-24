@@ -18,12 +18,9 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/kelvins/geocoder"
 	"github.com/logrusorgru/aurora"
-	"github.com/sfreiberg/gotwilio"
 )
 
 var botUsername, clientAuthenticationToken, twitchClientID, twitchClientSecret, googleMapsAPIKey string
-var twilioFromNum, twilioToNum string
-var twilioClient *gotwilio.Twilio
 var client *twitch.Client
 var Uptime time.Time
 
@@ -246,28 +243,9 @@ func Initialize() *twitch.Client {
 	if googleMapsAPIKey == "" {
 		panic("You must set GOOGLE_MAPS_API_KEY")
 	}
-	twilioAccountSid := os.Getenv("TWILIO_ACCT_SID")
-	if twilioAccountSid == "" {
-		panic("You must set TWILIO_ACCT_SID")
-	}
-	twilioAuthToken := os.Getenv("TWILIO_AUTH_TOKEN")
-	if twilioAuthToken == "" {
-		panic("You must set TWILIO_AUTH_TOKEN")
-	}
-	twilioFromNum = os.Getenv("TWILIO_FROM_NUM")
-	if twilioFromNum == "" {
-		panic("You must set TWILIO_FROM_NUM")
-	}
-	twilioToNum = os.Getenv("TWILIO_TO_NUM")
-	if twilioToNum == "" {
-		panic("You must set TWILIO_TO_NUM")
-	}
 
 	// set up geocoder (for translating coords to places)
 	geocoder.ApiKey = googleMapsAPIKey
-
-	// set up Twilio (for text messages)
-	twilioClient = gotwilio.NewTwilioClient(twilioAccountSid, twilioAuthToken)
 
 	// initialize the twitch API client
 	c, err := mytwitch.Initialize(twitchClientID, twitchClientSecret)

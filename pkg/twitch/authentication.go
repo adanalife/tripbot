@@ -4,6 +4,7 @@ import (
 	"log"
 
 	"github.com/davecgh/go-spew/spew"
+	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	"github.com/logrusorgru/aurora"
 	"github.com/nicklaw5/helix"
 )
@@ -55,7 +56,7 @@ func RefreshUserAccessToken() {
 		authURL := currentTwitchClient.GetAuthorizationURL("", false)
 		log.Println("no user access token was present, did you log in with OAuth?")
 		log.Println(aurora.Blue(authURL).Underline())
-		//TODO: send txt message here
+		helpers.SendSMS("refreshing user access token failed!")
 		return
 	}
 
