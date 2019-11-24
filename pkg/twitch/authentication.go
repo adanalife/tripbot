@@ -55,6 +55,7 @@ func RefreshUserAccessToken() {
 		authURL := currentTwitchClient.GetAuthorizationURL("", false)
 		log.Println("no user access token was present, did you log in with OAuth?")
 		log.Println(aurora.Blue(authURL).Underline())
+		//TODO: send txt message here
 		return
 	}
 
