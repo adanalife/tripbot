@@ -16,22 +16,22 @@ var ChannelID string
 //TODO: this could include tier and gift info if we wanted
 var subscribers []string
 
-//TODO: turn this into a helper and use it in UserIsFollower() as well
 // getChannelID makes a request to twitch to get the user ID for the channel
-func getChannelID() {
+func getChannelID(username string) string {
 	resp, err := currentTwitchClient.GetUsers(&helix.UsersParams{
-		Logins: []string{config.ChannelName},
+		Logins: []string{username},
 	})
 	if err != nil {
 		terrors.Log(err, "error getting user info from twitch")
 	}
-	ChannelID = resp.Data.Users[0].ID
+	return resp.Data.Users[0].ID
 }
 
 // GetSubscribers pulls down the most recent list of subscribers
 func GetSubscribers() {
+	//TODO: should we do this elsewhere as well?
 	if ChannelID == "" {
-		getChannelID()
+		ChannelID = getChannelID(config.ChannelName)
 	}
 	resp, err := currentTwitchClient.GetSubscriptions(&helix.SubscriptionsParams{
 		BroadcasterID: ChannelID,
@@ -66,28 +66,16 @@ func UserIsSubscriber(username string) bool {
 }
 
 // UserIsFollower returns true if the user follows the channel
-func UserIsFollower(user string) bool {
+func UserIsFollower(username string) bool {
 	// I can't follow myself so just do this
-	if user == strings.ToLower(config.ChannelName) {
+	if username == strings.ToLower(config.ChannelName) {
 		return true
 	}
 
-	client := currentTwitchClient
+	// get the channel ID
+	userID := getChannelID(username)
 
-	usersResp, err := client.GetUsers(&helix.UsersParams{
-		Logins: []string{
-			user,
-		},
-	})
-	if err != nil {
-		terrors.Log(err, "error getting user info")
-		return false
-	}
-
-	// pull out the twitch user_id
-	userID := usersResp.Data.Users[0].ID
-
-	followsResp, err := client.GetUsersFollows(&helix.UsersFollowsParams{
+	followsResp, err := currentTwitchClient.GetUsersFollows(&helix.UsersFollowsParams{
 		ToID:   config.ChannelID,
 		FromID: userID,
 	})
