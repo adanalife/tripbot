@@ -58,8 +58,9 @@ func ProjectRoot() string {
 }
 
 // DurationToMiles converts Durations to miles
-func DurationToMiles(dur time.Duration) int {
-	return int(dur.Minutes() / 10)
+func DurationToMiles(dur time.Duration) float32 {
+	// 0.1mi every 3 minutes
+	return float32(0.1 * dur.Minutes() / 3.0)
 }
 
 // UserIsIgnored returns true if a given user should be ignored

@@ -7,12 +7,12 @@ import (
 	"time"
 
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
+	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	"github.com/dmerrick/danalol-stream/pkg/twitch"
 	"github.com/logrusorgru/aurora"
 
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/database"
-	"github.com/dmerrick/danalol-stream/pkg/miles"
 )
 
 type User struct {
@@ -31,7 +31,7 @@ type User struct {
 func (u User) CurrentMiles() float32 {
 	if isLoggedIn(u.Username) {
 		loggedInDur := time.Now().Sub(u.LoggedIn)
-		return u.Miles + miles.DurationToMiles(loggedInDur)
+		return u.Miles + helpers.DurationToMiles(loggedInDur)
 	}
 	return u.Miles
 }

@@ -31,12 +31,6 @@ func TopUsers(size int) [][]string {
 	return allScoresSorted[:size]
 }
 
-// DurationToMiles converts Durations to miles
-func DurationToMiles(dur time.Duration) float32 {
-	// 0.1mi every 3 minutes
-	return float32(0.1 * dur.Minutes() / 3.0)
-}
-
 // ForUser returns the miles for a given user
 func ForUser(user string) float32 {
 	evnts := []events.Event{}
@@ -47,7 +41,7 @@ func ForUser(user string) float32 {
 	}
 	pairs := splitIntoPairs(evnts)
 	dur := combinePairs(pairs)
-	return DurationToMiles(dur)
+	return helpers.DurationToMiles(dur)
 }
 
 // splitIntoPairs takes a list of events and smartly pairs together matching login/logout events
