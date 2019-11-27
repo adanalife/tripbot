@@ -170,6 +170,8 @@ func PrintCurrentSession() {
 		user := *LoggedIn[username]
 		if user.IsBot {
 			bots = bots + 1
+			// don't add them to the output
+			continue
 		}
 		// add the colored username to the list
 		coloredUsernames = append(coloredUsernames, user.String())
