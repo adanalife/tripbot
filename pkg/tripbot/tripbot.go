@@ -20,7 +20,7 @@ import (
 	"github.com/logrusorgru/aurora"
 )
 
-var botUsername, clientAuthenticationToken, twitchClientID, twitchClientSecret, googleMapsAPIKey string
+var botUsername, googleMapsAPIKey string
 var client *twitch.Client
 var Uptime time.Time
 
@@ -227,18 +227,6 @@ func Initialize() *twitch.Client {
 	if botUsername == "" {
 		panic("You must set BOT_USERNAME")
 	}
-	clientAuthenticationToken = os.Getenv("TWITCH_AUTH_TOKEN")
-	if clientAuthenticationToken == "" {
-		panic("You must set TWITCH_AUTH_TOKEN")
-	}
-	twitchClientID = os.Getenv("TWITCH_CLIENT_ID")
-	if twitchClientID == "" {
-		panic("You must set TWITCH_CLIENT_ID")
-	}
-	twitchClientSecret = os.Getenv("TWITCH_CLIENT_SECRET")
-	if twitchClientSecret == "" {
-		panic("You must set TWITCH_CLIENT_SECRET")
-	}
 	googleMapsAPIKey = os.Getenv("GOOGLE_MAPS_API_KEY")
 	if googleMapsAPIKey == "" {
 		panic("You must set GOOGLE_MAPS_API_KEY")
@@ -248,7 +236,7 @@ func Initialize() *twitch.Client {
 	geocoder.ApiKey = googleMapsAPIKey
 
 	// initialize the twitch API client
-	c, err := mytwitch.Initialize(twitchClientID, twitchClientSecret)
+	c, err := mytwitch.Client()
 	if err != nil {
 		terrors.Fatal(err, "unable to create twitch API client")
 	}
@@ -265,7 +253,7 @@ func Initialize() *twitch.Client {
 		terrors.Fatal(err, "error initializing the DB")
 	}
 
-	client = twitch.NewClient(botUsername, clientAuthenticationToken)
+	client = twitch.NewClient(botUsername, mytwitch.AuthToken)
 
 	return client
 }

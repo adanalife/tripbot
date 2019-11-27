@@ -10,6 +10,10 @@ import (
 type TwitchAuthentication struct {
 	ChannelID       string `json:"channel_id"`
 	UserAccessToken string `json:"user_access_token"`
+	ClientID        string `json:"client_id"`
+	//TODO: do we need these ever?
+	// AuthToken       string `json:"auth_token"`
+	// ClientSecret    string `json:"client_secret"`
 }
 
 func TwitchAuthJSON() string {
@@ -17,6 +21,10 @@ func TwitchAuthJSON() string {
 	auth := TwitchAuthentication{
 		ChannelID:       mytwitch.ChannelID,
 		UserAccessToken: mytwitch.UserAccessToken,
+		ClientID:        mytwitch.ClientID,
+		//TODO: do we need these ever?
+		// AuthToken:       mytwitch.AuthToken,
+		// ClientSecret:    mytwitch.ClientSecret,
 	}
 	jsonData, err := json.Marshal(auth)
 	if err != nil {

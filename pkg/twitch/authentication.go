@@ -2,6 +2,7 @@ package twitch
 
 import (
 	"log"
+	"os"
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
@@ -12,19 +13,40 @@ import (
 // currentTwitchClient is the standard twitch client
 var currentTwitchClient *helix.Client
 
-// these are used to authenticate requests
+// these are used to authenticate to twitch
+var ClientID string
+var ClientSecret string
+var AuthToken string
+
+// these are used to authenticate requests that require user permissions
 var UserAccessToken string
 var UserRefreshToken string
 
-// Initialize creates a twitch client, or returns the existing one
-func Initialize(clientID, clientSecret string) (*helix.Client, error) {
+// init makes sure we have all of the require ENV vars
+func init() {
+	AuthToken = os.Getenv("TWITCH_AUTH_TOKEN")
+	if AuthToken == "" {
+		panic("You must set TWITCH_AUTH_TOKEN")
+	}
+	ClientID = os.Getenv("TWITCH_CLIENT_ID")
+	if ClientID == "" {
+		panic("You must set TWITCH_CLIENT_ID")
+	}
+	ClientSecret = os.Getenv("TWITCH_CLIENT_SECRET")
+	if ClientSecret == "" {
+		panic("You must set TWITCH_CLIENT_SECRET")
+	}
+}
+
+// Client creates a twitch client, or returns the existing one
+func Client() (*helix.Client, error) {
 	// use the existing client if we have one
 	if currentTwitchClient != nil {
 		return currentTwitchClient, nil
 	}
 	client, err := helix.NewClient(&helix.Options{
-		ClientID:     clientID,
-		ClientSecret: clientSecret,
+		ClientID:     ClientID,
+		ClientSecret: ClientSecret,
 		//TODO: maybe don't hardcode this
 		// this is set at https://dev.twitch.tv/console/apps
 		RedirectURI: "http://localhost:8080/auth/callback",
