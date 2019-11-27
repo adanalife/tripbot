@@ -11,6 +11,7 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/dmerrick/danalol-stream/pkg/events"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
+	"github.com/hako/durafmt"
 
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	"github.com/dmerrick/danalol-stream/pkg/twitch"
@@ -120,7 +121,12 @@ func login(username string) User {
 // User.logout() removes the user from the list of currently-logged in users,
 // and updates the DB with their most up-to-date values
 func (u User) logout() {
-	log.Println("logging out", u)
+
+	loggedInDur := time.Now().Sub(u.LoggedIn)
+	prettyDur := durafmt.ParseShort(loggedInDur)
+	dur := fmt.Sprintf("(%s)", aurora.Green(prettyDur))
+
+	log.Println("logging out", u, dur)
 
 	now := time.Now()
 	// update miles
