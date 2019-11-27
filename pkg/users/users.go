@@ -31,7 +31,14 @@ type User struct {
 func (u User) CurrentMiles() float32 {
 	if isLoggedIn(u.Username) {
 		loggedInDur := time.Now().Sub(u.LoggedIn)
-		return u.Miles + helpers.DurationToMiles(loggedInDur)
+		sessionMiles := helpers.DurationToMiles(loggedInDur)
+		// give subscribers a miles bonus
+		if u.IsSubscriber() {
+			bonusMiles := sessionMiles * 0.05
+			log.Println(u.String(), "gets", aurora.Green(bonusMiles), "bonus miles")
+			return u.Miles + sessionMiles + bonusMiles
+		}
+		return u.Miles + sessionMiles
 	}
 	return u.Miles
 }
