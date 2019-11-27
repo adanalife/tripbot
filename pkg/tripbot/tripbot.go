@@ -28,7 +28,7 @@ var Uptime time.Time
 // randomized so it starts with a new one every restart
 var helpIndex = rand.Intn(len(config.HelpMessages))
 
-const followerMsg = "You must be a follower to run that command :)"
+const followerMsg = "Follow the stream to run unlimited commands :)"
 const subscriberMsg = "You must be a subscriber to run that command :)"
 
 // all chat messages
@@ -48,7 +48,7 @@ func PrivateMessage(message twitch.PrivateMessage) {
 
 	//TODO: rename this to oldmiles
 	if strings.HasPrefix(strings.ToLower(message.Message), "!miles") {
-		if user.IsFollower() {
+		if user.HasCommandAvailable() {
 			oldMilesCmd(user)
 		} else {
 			client.Say(config.ChannelName, followerMsg)
@@ -57,7 +57,7 @@ func PrivateMessage(message twitch.PrivateMessage) {
 
 	//TODO: rename this to miles
 	if strings.HasPrefix(strings.ToLower(message.Message), "!newmiles") {
-		if user.IsFollower() {
+		if user.HasCommandAvailable() {
 			milesCmd(user)
 		} else {
 			client.Say(config.ChannelName, followerMsg)
@@ -65,7 +65,7 @@ func PrivateMessage(message twitch.PrivateMessage) {
 	}
 
 	if strings.HasPrefix(strings.ToLower(message.Message), "!sunset") {
-		if user.IsFollower() {
+		if user.HasCommandAvailable() {
 			sunsetCmd(user)
 		} else {
 			client.Say(config.ChannelName, followerMsg)
@@ -85,7 +85,7 @@ func PrivateMessage(message twitch.PrivateMessage) {
 	}
 	for _, s := range locationStrings {
 		if strings.HasPrefix(strings.ToLower(message.Message), s) {
-			if user.IsFollower() {
+			if user.HasCommandAvailable() {
 				locationCmd(user)
 			} else {
 				client.Say(config.ChannelName, followerMsg)
@@ -94,7 +94,7 @@ func PrivateMessage(message twitch.PrivateMessage) {
 	}
 
 	if strings.HasPrefix(strings.ToLower(message.Message), "!leaderboard") {
-		if user.IsFollower() {
+		if user.HasCommandAvailable() {
 			oldLeaderboardCmd(user)
 		} else {
 			client.Say(config.ChannelName, followerMsg)
@@ -102,7 +102,7 @@ func PrivateMessage(message twitch.PrivateMessage) {
 	}
 
 	if strings.HasPrefix(strings.ToLower(message.Message), "!newleaderboard") {
-		if user.IsFollower() {
+		if user.HasCommandAvailable() {
 			leaderboardCmd(user)
 		} else {
 			client.Say(config.ChannelName, followerMsg)
@@ -110,7 +110,7 @@ func PrivateMessage(message twitch.PrivateMessage) {
 	}
 
 	if strings.HasPrefix(strings.ToLower(message.Message), "!time") {
-		if user.IsFollower() {
+		if user.HasCommandAvailable() {
 			timeCmd(user)
 		} else {
 			client.Say(config.ChannelName, followerMsg)
@@ -118,7 +118,7 @@ func PrivateMessage(message twitch.PrivateMessage) {
 	}
 
 	if strings.HasPrefix(strings.ToLower(message.Message), "!date") {
-		if user.IsFollower() {
+		if user.HasCommandAvailable() {
 			dateCmd(user)
 		} else {
 			client.Say(config.ChannelName, followerMsg)
@@ -126,7 +126,7 @@ func PrivateMessage(message twitch.PrivateMessage) {
 	}
 
 	if strings.HasPrefix(strings.ToLower(message.Message), "!guess") {
-		if user.IsFollower() {
+		if user.HasCommandAvailable() {
 			guessCmd(user, message.Message)
 		} else {
 			client.Say(config.ChannelName, followerMsg)
@@ -134,7 +134,7 @@ func PrivateMessage(message twitch.PrivateMessage) {
 	}
 
 	if strings.HasPrefix(strings.ToLower(message.Message), "!state") {
-		if user.IsFollower() {
+		if user.HasCommandAvailable() {
 			stateCmd(user)
 		} else {
 			client.Say(config.ChannelName, followerMsg)
@@ -155,7 +155,7 @@ func PrivateMessage(message twitch.PrivateMessage) {
 	}
 	for _, rs := range reportStrings {
 		if strings.HasPrefix(strings.ToLower(message.Message), rs) {
-			if user.IsFollower() {
+			if user.HasCommandAvailable() {
 				reportCmd(user, message.Message)
 			} else {
 				client.Say(config.ChannelName, followerMsg)

@@ -23,6 +23,7 @@ import (
 
 // LoggedIn is a map that contains all the currently logged-in users,
 // mapping their username to a User
+//TODO: should this be pointers to users?
 var LoggedIn = make(map[string]User)
 
 //// Session quickly finds the user in the session
@@ -96,6 +97,8 @@ func login(username string) User {
 	user.LoggedIn = now
 	// update the last seen date
 	user.LastSeen = now
+	// set their last command date yesterday
+	user.lastCmd = now.AddDate(0, 0, -1)
 	user.save()
 
 	// raise an error if a user is supposed to be a bot

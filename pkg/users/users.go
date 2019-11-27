@@ -26,6 +26,7 @@ type User struct {
 	LastSeen    time.Time `db:"last_seen"`
 	DateCreated time.Time `db:"date_created"`
 	LoggedIn    time.Time
+	lastCmd     time.Time
 }
 
 func (u User) CurrentMiles() float32 {
@@ -102,6 +103,28 @@ func Find(username string) User {
 		return User{ID: 0}
 	}
 	return user
+}
+
+// HasCommandAvailable lets users run a command once a day,
+// unless they are a follower in which case they can run
+// as many as they like
+func (u User) HasCommandAvailable() bool {
+	// followers get unlimited commands
+	if u.IsFollower() {
+		return true
+	}
+	// check if they ran a command in the last 24 hrs
+	now := time.Now()
+	if now.Sub(u.lastCmd) > 24*time.Hour {
+		log.Println("letting", u, "run a command")
+		// update their lastCmd time
+		u.lastCmd = now
+		// update the user in the session
+		//TODO: could this be replaced by using pointers?
+		LoggedIn[u.Username] = u
+		return true
+	}
+	return false
 }
 
 //TODO: maybe return an err here?
