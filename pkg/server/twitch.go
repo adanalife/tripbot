@@ -8,12 +8,14 @@ import (
 )
 
 type TwitchAuthentication struct {
+	ChannelID       string `json:"channel_id"`
 	UserAccessToken string `json:"user_access_token"`
 }
 
 func TwitchAuthJSON() string {
 	var jsonData []byte
 	auth := TwitchAuthentication{
+		ChannelID:       mytwitch.ChannelID,
 		UserAccessToken: mytwitch.UserAccessToken,
 	}
 	jsonData, err := json.Marshal(auth)

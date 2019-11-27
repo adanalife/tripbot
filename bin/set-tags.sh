@@ -4,14 +4,17 @@ source .env
 # CHANNEL_NAME=adanalife_
 
 # get the broadcaster ID
-CHANNEL_ID=$(curl -s -H "Client-ID: $TWITCH_CLIENT_ID" -X GET "https://api.twitch.tv/helix/users?login=$CHANNEL_NAME" | jq -r .data[0].id)
-echo $CHANNEL_ID
+# CHANNEL_ID=$(curl -s -H "Client-ID: $TWITCH_CLIENT_ID" -X GET "https://api.twitch.tv/helix/users?login=$CHANNEL_NAME" | jq -r .data[0].id)
+# echo $CHANNEL_ID
 
 # to get the current tags:
 # TAGS=$(curl -s -H "Client-ID: $TWITCH_CLIENT_ID" -X GET "https://api.twitch.tv/helix/streams/tags?broadcaster_id=$CHANNEL_ID" | jq -c '[.data[].tag_id]')
 # echo $TAGS
 
-USER_ACCESS_TOKEN=$(curl -s http://localhost:8080/auth/twitch | jq -r .user_access_token)
+RESP=$(curl -s http://localhost:8080/auth/twitch)
+
+CHANNEL_ID=$(echo $RESP | jq -r .channel_id)
+USER_ACCESS_TOKEN=$(echo $RESP | jq -r .user_access_token)
 
 # 6ea6bca4-4712-4ab9-a906-e3336a9d8039 english (not required)
 # 1400ca9c-84ea-414e-a85b-076a70d38ecf automotive
