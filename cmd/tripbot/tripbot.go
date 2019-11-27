@@ -84,6 +84,7 @@ func main() {
 	background.Cron.AddFunc("@every 15m", mytwitch.GetSubscribers)
 	background.Cron.AddFunc("@every 1h", mytwitch.RefreshUserAccessToken)
 	background.Cron.AddFunc("@every 57m30s", tripbot.Chatter)
+	background.Cron.AddFunc("@every 12h", mytwitch.SetStreamTags)
 
 	// actually connect to Twitch
 	// wrapped in a loop in case twitch goes down
