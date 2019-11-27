@@ -18,6 +18,11 @@ func handle(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/health" {
 			fmt.Fprintf(w, "OK")
 
+		} else if r.URL.Path == "/auth/twitch" {
+			authJSON := TwitchAuthJSON()
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintf(w, authJSON)
+
 			// oauth callback URL, requests come from Twitch and have a special code
 			// we then use that code to generate a User Access Token
 		} else if r.URL.Path == "/auth/callback" {
