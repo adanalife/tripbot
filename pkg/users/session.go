@@ -113,11 +113,13 @@ func login(username string) *User {
 // and updates the DB with their most up-to-date values
 func (u User) logout() {
 
-	loggedInDur := time.Now().Sub(u.LoggedIn)
-	prettyDur := durafmt.ParseShort(loggedInDur)
-	dur := fmt.Sprintf("(%s)", aurora.Green(prettyDur))
-
-	log.Println("logging out", u, dur)
+	// print logout message if they're human
+	if !u.IsBot {
+		loggedInDur := time.Now().Sub(u.LoggedIn)
+		prettyDur := durafmt.ParseShort(loggedInDur)
+		dur := fmt.Sprintf("(%s)", aurora.Green(prettyDur))
+		log.Println("logging out", u, dur)
+	}
 
 	now := time.Now()
 	// update miles
