@@ -13,7 +13,7 @@ import (
 func SetStreamTags() {
 	// run the shell script to get set stream tags
 	scriptPath := path.Join(helpers.ProjectRoot(), "bin/set-tags.sh")
-	out, err := exec.Command(scriptPath).Output()
+	_, err := exec.Command(scriptPath).Output()
 	//TODO: remove me
 	helpers.SendSMS("set stream tags!")
 	if err != nil {
