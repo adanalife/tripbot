@@ -237,7 +237,7 @@ func reportCmd(user *users.User, message string) {
 func bonusMilesCmd(user *users.User) {
 	log.Println(user.Username, "ran !bonusmiles")
 	bonus := user.BonusMiles()
-	msg := fmt.Sprintf("%s has earned %.2f bonus miles this session", user.Username, bonus)
+	msg := fmt.Sprintf("%s has earned %.4f bonus miles this session", user.Username, bonus)
 	client.Say(config.ChannelName, msg)
 }
 
