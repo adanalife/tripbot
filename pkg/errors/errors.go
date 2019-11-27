@@ -14,6 +14,9 @@ func init() {
 
 //TODO: include msg as an attribute somehow
 func Log(e error, msg string) {
+	sentry.AddBreadcrumb(&sentry.Breadcrumb{
+		Message: msg,
+	})
 	sentry.CaptureException(e)
 	log.Printf("%s: %s", aurora.Red(msg), e)
 }
