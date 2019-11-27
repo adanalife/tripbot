@@ -8,7 +8,7 @@ import (
 )
 
 type TwitchAuthentication struct {
-	UserAccessToken string `json:"userAccessToken"`
+	UserAccessToken string `json:"user_access_token"`
 }
 
 func TwitchAuthJSON() string {
