@@ -19,6 +19,13 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "OK")
 
 		} else if r.URL.Path == "/auth/twitch" {
+			secret, ok := r.URL.Query()["auth"]
+			//TODO: more secure password (lol)
+			if !ok || len(secret[0]) < 1 || secret[0] != "yes" {
+				http.Error(w, "404 not found", http.StatusNotFound)
+				return
+			}
+
 			authJSON := TwitchAuthJSON()
 			w.Header().Set("Content-Type", "application/json")
 			fmt.Fprintf(w, authJSON)

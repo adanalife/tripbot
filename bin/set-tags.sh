@@ -7,7 +7,7 @@
 # a6ff589a-33e5-4caf-8286-29dea98fc2e2 travel
 # 89e105c9-2c45-42a9-a5f0-fc1ea6e7ba8b outdoors
 
-RESP=$(curl -s http://localhost:8080/auth/twitch)
+RESP=$(curl -s 'http://localhost:8080/auth/twitch?auth=yes')
 echo $RESP | jq
 
 # extract the fields from the response

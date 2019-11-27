@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-RESP=$(curl -s http://localhost:8080/auth/twitch)
+RESP=$(curl -s 'http://localhost:8080/auth/twitch?auth=yes')
 echo $RESP
 
 CHANNEL_ID=$(echo $RESP | jq -r .channel_id)
