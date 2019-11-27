@@ -33,7 +33,7 @@ func UpdateLeaderboard() {
 		if user.IsBot || user.Username == strings.ToLower(config.ChannelName) {
 			continue
 		}
-		insertIntoLeaderboard(user)
+		insertIntoLeaderboard(*user)
 	}
 	// truncate Leaderboard if it gets too big
 	if len(Leaderboard) > maxLeaderboardSize {

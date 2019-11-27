@@ -34,27 +34,27 @@ func help() string {
 	return text
 }
 
-func helpCmd(user users.User) {
+func helpCmd(user *users.User) {
 	log.Println(user.Username, "ran !help")
 	msg := fmt.Sprintf("%s (%d of %d)", help(), helpIndex+1, len(config.HelpMessages))
 	client.Say(config.ChannelName, msg)
 }
 
-func uptimeCmd(user users.User) {
+func uptimeCmd(user *users.User) {
 	log.Println(user.Username, "ran !uptime")
 	dur := time.Now().Sub(Uptime)
 	msg := fmt.Sprintf("I have been running for %s", durafmt.Parse(dur))
 	client.Say(config.ChannelName, msg)
 }
 
-func milesCmd(user users.User) {
+func milesCmd(user *users.User) {
 	log.Println(user.Username, "ran !newmiles")
 	msg := "@%s has %.5f miles."
 	msg = fmt.Sprintf(msg, user.Username, user.CurrentMiles())
 	client.Say(config.ChannelName, msg)
 }
 
-func oldMilesCmd(user users.User) {
+func oldMilesCmd(user *users.User) {
 	log.Println(user.Username, "ran !miles")
 	miles := miles.ForUser(user.Username)
 	msg := ""
@@ -74,7 +74,7 @@ func oldMilesCmd(user users.User) {
 	client.Say(config.ChannelName, msg)
 }
 
-func sunsetCmd(user users.User) {
+func sunsetCmd(user *users.User) {
 	log.Println(user.Username, "ran !sunset")
 	// get the currently-playing video
 	vid := video.CurrentlyPlaying
@@ -86,7 +86,7 @@ func sunsetCmd(user users.User) {
 	client.Say(config.ChannelName, helpers.SunsetStr(vid.DateFilmed, lat, lng))
 }
 
-func locationCmd(user users.User) {
+func locationCmd(user *users.User) {
 	log.Println(user.Username, "ran !location (or similar)")
 	// get the currently-playing video
 	vid := video.CurrentlyPlaying
@@ -107,7 +107,7 @@ func locationCmd(user users.User) {
 	client.Say(config.ChannelName, msg)
 }
 
-func leaderboardCmd(user users.User) {
+func leaderboardCmd(user *users.User) {
 	log.Println(user.Username, "ran !newleaderboard")
 	size := 10
 	leaderboard := users.Leaderboard[:size]
@@ -121,7 +121,7 @@ func leaderboardCmd(user users.User) {
 	client.Say(config.ChannelName, msg)
 }
 
-func oldLeaderboardCmd(user users.User) {
+func oldLeaderboardCmd(user *users.User) {
 	log.Println(user.Username, "ran !leaderboard")
 	size := 10
 	userList := miles.TopUsers(size)
@@ -135,7 +135,7 @@ func oldLeaderboardCmd(user users.User) {
 	client.Say(config.ChannelName, msg)
 }
 
-func timeCmd(user users.User) {
+func timeCmd(user *users.User) {
 	log.Println(user.Username, "ran !time")
 	var err error
 	var lat, lng float64
@@ -157,7 +157,7 @@ func timeCmd(user users.User) {
 	}
 }
 
-func dateCmd(user users.User) {
+func dateCmd(user *users.User) {
 	log.Println(user.Username, "ran !date")
 	var err error
 	var lat, lng float64
@@ -179,7 +179,7 @@ func dateCmd(user users.User) {
 	}
 }
 
-func guessCmd(user users.User, message string) {
+func guessCmd(user *users.User, message string) {
 	log.Println(user.Username, "ran !guess")
 	var msg string
 
@@ -214,7 +214,7 @@ func guessCmd(user users.User, message string) {
 	client.Say(config.ChannelName, msg)
 }
 
-func stateCmd(user users.User) {
+func stateCmd(user *users.User) {
 	log.Println(user.Username, "ran !state")
 	// get the currently-playing video
 	vid := video.CurrentlyPlaying
@@ -227,14 +227,14 @@ func stateCmd(user users.User) {
 }
 
 //TODO: maybe there could be a !cancel command or something
-func reportCmd(user users.User, message string) {
+func reportCmd(user *users.User, message string) {
 	log.Println(user.Username, "ran !report")
 	message = fmt.Sprintf("Report from Twitch Chat: %s", message)
 	helpers.SendSMS(message)
 	client.Say(config.ChannelName, "Thank you, I will look into this ASAP!")
 }
 
-func secretInfoCmd(user users.User) {
+func secretInfoCmd(user *users.User) {
 	log.Println(user.Username, "ran !secretinfo")
 	if user.Username != strings.ToLower(config.ChannelName) {
 		return
@@ -251,7 +251,7 @@ func secretInfoCmd(user users.User) {
 	client.Say(config.ChannelName, msg)
 }
 
-func shutdownCmd(user users.User) {
+func shutdownCmd(user *users.User) {
 	log.Println(user.Username, "ran !shutdown")
 	if user.Username != strings.ToLower(config.ChannelName) {
 		client.Say(config.ChannelName, "Nice try bucko")

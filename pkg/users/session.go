@@ -23,19 +23,7 @@ import (
 
 // LoggedIn is a map that contains all the currently logged-in users,
 // mapping their username to a User
-//TODO: should this be pointers to users?
-var LoggedIn = make(map[string]User)
-
-//// Session quickly finds the user in the session
-////TODO: better name?
-//func Session(username string) User {
-//	if isLoggedIn(username) {
-//		return LoggedIn[username]
-//	}
-//	terrors.Log(errors.New("user not found in session"), username)
-//	//TODO: better way to handle this?
-//	return User{ID: 0}
-//}
+var LoggedIn = make(map[string]*User)
 
 // UpdateSession will use the data from the Twitch API to maintain a list
 // of currently-logged-in users
@@ -68,7 +56,7 @@ func UpdateSession() {
 
 // LoginIfNecessary checks the list of currently-logged in users and will
 // run login() if this user isn't currently logged in
-func LoginIfNecessary(username string) User {
+func LoginIfNecessary(username string) *User {
 	// check if the user is currently logged in
 	if isLoggedIn(username) {
 		return LoggedIn[username]
@@ -80,14 +68,14 @@ func LoginIfNecessary(username string) User {
 // LogoutIfNecessary will log out the user if it finds them in the session
 func LogoutIfNecessary(username string) {
 	if isLoggedIn(username) {
-		user := LoggedIn[username]
+		user := *LoggedIn[username]
 		user.logout()
 	}
 }
 
 // login will record the users presence in the DB
 //TODO: do we want to make a DB update here? we could do it on logout()
-func login(username string) User {
+func login(username string) *User {
 	now := time.Now()
 
 	user := FindOrCreate(username)
@@ -113,12 +101,12 @@ func login(username string) User {
 	}
 
 	// add them to the session
-	LoggedIn[username] = user
+	LoggedIn[username] = &user
 
 	// create a login event as well
 	events.Login(username)
 
-	return user
+	return &user
 }
 
 // User.logout() removes the user from the list of currently-logged in users,
@@ -145,28 +133,6 @@ func (u User) logout() {
 	// remove them from the session
 	delete(LoggedIn, u.Username)
 }
-
-// logout() removes the user from the list of currently-logged in users,
-// and updates the DB with their most up-to-date values
-// func logout(username string) {
-// 	log.Println("logging out", aurora.Magenta(username))
-
-// 	now := time.Now()
-// 	user := Find(username)
-
-// 	// update miles
-// 	user.Miles = user.CurrentMiles()
-// 	// update the last seen date
-// 	user.LastSeen = now
-// 	// store the user in the db
-// 	user.save()
-
-// 	// create a login event as well
-// 	events.Logout(username)
-
-// 	// remove them from the session
-// 	delete(LoggedIn, username)
-// }
 
 // isLoggedIn checks if the user is currently logged in
 func isLoggedIn(username string) bool {
@@ -199,7 +165,7 @@ func PrintCurrentSession() {
 	// now loop over the sorted names and colorize them
 	coloredUsernames := make([]string, 0, len(usernames))
 	for _, username := range usernames {
-		user := LoggedIn[username]
+		user := *LoggedIn[username]
 		if user.IsBot {
 			bots = bots + 1
 		}

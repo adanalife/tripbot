@@ -108,7 +108,7 @@ func Find(username string) User {
 // HasCommandAvailable lets users run a command once a day,
 // unless they are a follower in which case they can run
 // as many as they like
-func (u User) HasCommandAvailable() bool {
+func (u *User) HasCommandAvailable() bool {
 	// followers get unlimited commands
 	if u.IsFollower() {
 		return true
@@ -119,9 +119,6 @@ func (u User) HasCommandAvailable() bool {
 		log.Println("letting", u, "run a command")
 		// update their lastCmd time
 		u.lastCmd = now
-		// update the user in the session
-		//TODO: could this be replaced by using pointers?
-		LoggedIn[u.Username] = u
 		return true
 	}
 	return false
