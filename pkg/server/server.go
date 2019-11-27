@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/davecgh/go-spew/spew"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	mytwitch "github.com/dmerrick/danalol-stream/pkg/twitch"
 	"github.com/logrusorgru/aurora"
@@ -60,9 +61,29 @@ func handle(w http.ResponseWriter, r *http.Request) {
 // Start starts the web server
 func Start() {
 	log.Println("Starting web server")
-	http.HandleFunc("/", handle)
+	http.HandleFunc("/", auth(handle))
 	//TODO: configurable port
 	if err := http.ListenAndServe(":8080", nil); err != nil {
 		terrors.Fatal(err, "couldn't start server")
 	}
+}
+
+// https://stackoverflow.com/a/34405834
+func auth(fn http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user, pass, _ := r.BasicAuth()
+		spew.Dump(user, pass)
+		if !check(user, pass) {
+			http.Error(w, "Unauthorized.", 401)
+			return
+		}
+		fn(w, r)
+	}
+}
+
+func check(u, p string) bool {
+	if u == "trip" && p == "bot" {
+		return true
+	}
+	return false
 }
