@@ -35,13 +35,22 @@ func (u User) CurrentMiles() float32 {
 		sessionMiles := helpers.DurationToMiles(loggedInDur)
 		// give subscribers a miles bonus
 		if u.IsSubscriber() {
-			bonusMiles := sessionMiles * 0.05
+			bonusMiles := u.BonusMiles()
 			log.Println(u.String(), "gets", aurora.Green(bonusMiles), "bonus miles")
 			return u.Miles + sessionMiles + bonusMiles
 		}
 		return u.Miles + sessionMiles
 	}
 	return u.Miles
+}
+
+func (u User) BonusMiles() float32 {
+	if isLoggedIn(u.Username) {
+		loggedInDur := time.Now().Sub(u.LoggedIn)
+		sessionMiles := helpers.DurationToMiles(loggedInDur)
+		return sessionMiles * 0.05
+	}
+	return 0.0
 }
 
 // User.save() will take the given user and store it in the DB

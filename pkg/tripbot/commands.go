@@ -234,6 +234,13 @@ func reportCmd(user *users.User, message string) {
 	client.Say(config.ChannelName, "Thank you, I will look into this ASAP!")
 }
 
+func bonusMilesCmd(user *users.User) {
+	log.Println(user.Username, "ran !bonusmiles")
+	bonus := user.BonusMiles()
+	msg := fmt.Sprintf("%s has earned %.2f bonus miles this session", user.Username, bonus)
+	client.Say(config.ChannelName, msg)
+}
+
 func secretInfoCmd(user *users.User) {
 	log.Println(user.Username, "ran !secretinfo")
 	if user.Username != strings.ToLower(config.ChannelName) {

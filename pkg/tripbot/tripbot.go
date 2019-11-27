@@ -167,9 +167,9 @@ func PrivateMessage(message twitch.PrivateMessage) {
 		shutdownCmd(user)
 	}
 
-	if strings.HasPrefix(strings.ToLower(message.Message), "!onlyatest") {
+	if strings.HasPrefix(strings.ToLower(message.Message), "!bonusmiles") {
 		if user.IsSubscriber() {
-			client.Say(config.ChannelName, "It worked!")
+			bonusMilesCmd(user)
 		} else {
 			client.Say(config.ChannelName, subscriberMsg)
 		}
