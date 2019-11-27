@@ -13,6 +13,8 @@ source .env
 
 RESP=$(curl -s http://localhost:8080/auth/twitch)
 
+echo $RESP | jq
+
 CHANNEL_ID=$(echo $RESP | jq -r .channel_id)
 USER_ACCESS_TOKEN=$(echo $RESP | jq -r .user_access_token)
 
