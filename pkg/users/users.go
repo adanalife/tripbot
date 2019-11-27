@@ -7,6 +7,7 @@ import (
 	"time"
 
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
+	"github.com/dmerrick/danalol-stream/pkg/twitch"
 	"github.com/logrusorgru/aurora"
 
 	"github.com/dmerrick/danalol-stream/pkg/config"
@@ -45,6 +46,16 @@ func (u User) save() {
 	if err != nil {
 		terrors.Log(err, "error saving user")
 	}
+}
+
+// IsFollower returns true if the user is a follower
+func (u User) IsFollower() bool {
+	return twitch.UserIsFollower(u.Username)
+}
+
+// IsSubscriber returns true if the user is a subscriber
+func (u User) IsSubscriber() bool {
+	return twitch.UserIsSubscriber(u.Username)
 }
 
 // User.String prints a colored version of the user
