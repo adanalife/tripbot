@@ -4,40 +4,6 @@ TODO
 2019/09/30 23:38:20 unable to create Video from %s: %v 2018_062_opt.MP4 dash string too short
 leaderboard blocks other commands, should be async
 
-
-QUICK AND DIRTY
-"waste your sub on me!"
-if miles are 0.0, add a friendly message
-!helpwanted
-!km
-get interviewed?
-!storm / !rain / !meteo
-different zoom levels for !location
-remove all panic()s
-maybe tripbot should use /me for color?
-!commands command
-update README a bit
-wikipedia article for current town
-fix !help because you can only run it once
-if message contains stream title, it's a bot
-upgrade golang libs
-"failed to open image: screencap file was not present"
-dont rotate randomly, shuffle then loop (then shuffle?)
-!leaderboard could make the leaderboard show up!
-!leaderboard for just online people
-make log prettier
-!miles (user)
-!city/!town
-add "x years y months ago" to !date and !time
-"Sunset on this day is in -35 minutes"
-fix dono message
-"think of me next time you use your twitch prime"
-!guess ___ state
-!direction
-!route
-!speed
-!live
-!rerun
 //TODO: flag these (manually)
 // these are videos where the OCR glitched for one reason or another
 var knownBadVids = []string{
@@ -49,31 +15,23 @@ var knownBadVids = []string{
 
 
 INVOLVED
+get interviewed?
 PostGIS
 add version and a changelog for the public
   !changelog
 https://godoc.org/cloud.google.com/go/bigquery
-use the next video if it cant find coords
-tripbot talks to the channel on timers
-everyone gets a mile when someone follows
-auto-update title!
-  rename videos to include state
 !elevation/!altitude
   https://developers.google.com/maps/documentation/javascript/elevation
 log all chat to separate log file
-!progress towards loop?
-constantly fetch current video
 
 HARD
 bonus pool for miles
 silly extra data like poll data
-save in db the error status
 historical gas prices?
-keep track of number of states a person has been in
+save in db the error status
 ask user to translate coords if we cant read them
 
 NOT SURE
-auto-re-run failed commands when next vid starts
 !location gives more accuracy based on miles
 !mood
 !uptime that includes OBS start time (create a file?)
@@ -84,18 +42,12 @@ funny !miles for me
 prize for someone whi ckips every oil change
 
 HAVEN'T GONE OVER
-search log for more reset users
 nightbot can read from Lastfm?!
 implement a way to "refetch" coords that are not accurate
-log all chats to separte file
-create user and a Online?() method
 test having a disappearing png on obs
 make a meme?
 game where people have to find a frame and run a command during that vid
-new miles formula: 0.1 per 3 min?
 tripbot has restarted. say hi so he knows youre in here
-update (and rename?) collect-gps to use postgres
-redo CurrentlyPlaying() to use PIDfile
 https://nationalparktypeface.com/
 !prime that explains twitch prime
 
