@@ -1,10 +1,8 @@
 package server
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"strings"
@@ -13,7 +11,6 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/tripbot"
 	mytwitch "github.com/dmerrick/danalol-stream/pkg/twitch"
 	"github.com/logrusorgru/aurora"
-	"github.com/nicklaw5/helix"
 )
 
 func handle(w http.ResponseWriter, r *http.Request) {
@@ -25,7 +22,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 
 			// twitch issues a request here when creating a new webhook subscription
 		} else if strings.HasPrefix(r.URL.Path, "/webhooks/twitch") {
-			log.Println("got request to", r.URL.Path)
+			log.Println("got webhook to", r.URL.Path)
 			challenge, ok := r.URL.Query()["hub.challenge"]
 			if !ok || len(challenge[0]) < 1 {
 				http.Error(w, "404 not found", http.StatusNotFound)
@@ -76,36 +73,15 @@ func handle(w http.ResponseWriter, r *http.Request) {
 		}
 
 	case "POST":
-		// healthcheck URL, for tools to verify the bot is alive
+		// webhooks are received via POST at this url
 		if r.URL.Path == "/webhooks/twitch/users/follows" {
-			// resp := &helix.Response{}
-			resp := &helix.UsersFollowsResponse{}
-			bodyBytes, err := ioutil.ReadAll(r.Body)
+
+			resp, err := decodeUserWebhookResponse(r)
 			if err != nil {
 				log.Println("something went wrong")
 				//TODO: better error
 				http.Error(w, "404 not found", http.StatusNotFound)
 				return
-			}
-
-			// print the webhook contents
-			// fmt.Println(string(bodyBytes) + "\n")
-
-			// Only attempt to decode the response if we have a response we can handle
-			if len(bodyBytes) > 0 && resp.StatusCode < http.StatusInternalServerError {
-				if resp.StatusCode < http.StatusBadRequest {
-					// if resp.Data != nil && resp.StatusCode < http.StatusBadRequest {
-					// Successful request
-					err = json.Unmarshal(bodyBytes, &resp.Data)
-				} else {
-					// Failed request
-					err = json.Unmarshal(bodyBytes, &resp)
-				}
-
-				if err != nil {
-					terrors.Log(err, "failed to decode API response")
-					return
-				}
 			}
 
 			for _, follower := range resp.Data.Follows {
