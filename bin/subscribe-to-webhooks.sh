@@ -10,7 +10,7 @@ LEASE_SECONDS=864000 # this is the max
 
 CALLBACK_URL="$SERVER_URL/webhooks/twitch/users/follows"
 
-RESP=$(curl -s "$SERVER_URL/auth/twitch?auth=yes")
+RESP=$(curl -ks "$SERVER_URL/auth/twitch?auth=yes")
 # RESP=$(curl -s 'http://localhost:8080/auth/twitch?auth=yes')
 echo $RESP
 
@@ -18,11 +18,11 @@ CHANNEL_ID=$(echo $RESP | jq -r .channel_id)
 CLIENT_ID=$(echo $RESP | jq -r .client_id)
 APP_ACCESS_TOKEN=$(echo $RESP | jq -r .app_access_token)
 
-# curl -s \
-#   -H "Client-ID: $CLIENT_ID" \
-#   -H "Authorization: Bearer $APP_ACCESS_TOKEN" \
-#   -X GET 'https://api.twitch.tv/helix/webhooks/subscriptions' \
-#   | jq
+curl -s \
+  -H "Client-ID: $CLIENT_ID" \
+  -H "Authorization: Bearer $APP_ACCESS_TOKEN" \
+  -X GET 'https://api.twitch.tv/helix/webhooks/subscriptions' \
+  | jq
 
 curl -s \
   -H "Client-ID: $CLIENT_ID" \

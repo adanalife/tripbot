@@ -29,12 +29,14 @@ func UpdateWebhookSubscriptions() {
 		topic := pair[0]
 		endpoint := pair[1]
 		//TODO: eventually use Secret param too
-		_, err := currentTwitchClient.PostWebhookSubscription(&helix.WebhookSubscriptionPayload{
+		resp, err := currentTwitchClient.PostWebhookSubscription(&helix.WebhookSubscriptionPayload{
 			Mode:         "subscribe",
 			Topic:        topic,
 			Callback:     config.ExternalURL + endpoint,
 			LeaseSeconds: 24 * 60 * 60, // 24h is the max allowed
 		})
+		spew.Dump(resp)
+
 		if err != nil {
 			terrors.Log(err, "failed to create webhook subscription for "+endpoint)
 		}

@@ -111,7 +111,9 @@ func Start() {
 	log.Println("Starting web server")
 	http.HandleFunc("/", handle)
 	//TODO: configurable port
-	if err := http.ListenAndServe(":8080", nil); err != nil {
+	err := http.ListenAndServeTLS(":8080", "configs/tripbot.dana.lol.crt", "configs/tripbot.dana.lol.key", nil)
+	// err := http.ListenAndServe(":8080", nil)
+	if err != nil {
 		terrors.Fatal(err, "couldn't start server")
 	}
 }
