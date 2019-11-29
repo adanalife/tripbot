@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/dmerrick/danalol-stream/pkg/config"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	"github.com/logrusorgru/aurora"
@@ -48,9 +49,8 @@ func Client() (*helix.Client, error) {
 	client, err := helix.NewClient(&helix.Options{
 		ClientID:     ClientID,
 		ClientSecret: ClientSecret,
-		//TODO: maybe don't hardcode this
 		// this is set at https://dev.twitch.tv/console/apps
-		RedirectURI: "http://localhost:8080/auth/callback",
+		RedirectURI: config.ExternalURL + "/auth/callback",
 		//TODO: move to configs lib
 		Scopes: []string{"openid", "user:edit:broadcast", "channel:read:subscriptions"},
 	})
