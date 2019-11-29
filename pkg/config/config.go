@@ -13,19 +13,13 @@ const (
 	screencapDir = "screencaps"
 	videoDir     = "_all"
 
-	// MapsOutputDir is where the maps script saves the frames
-	MapsOutputDir = "/Volumes/usbshare1/maps"
-	// CroppedPath is where we store the cropped versions of screencaps (to OCR them)
-	//TODO: this has to be customizable
-	CroppedPath = "/Volumes/usbshare1/cropped-corners"
-
 	DBPath            = "db/tripbot.db"
 	UserJoinsBucket   = "user_joins"
 	UserWatchedBucket = "user_watched"
 	CoordsBucket      = "coords"
 )
 
-var ChannelName string
+var ChannelName, MapsOutputDir, CroppedPath string
 var ReadOnly bool
 var Verbose bool
 
@@ -39,6 +33,11 @@ func init() {
 	ChannelName = os.Getenv("CHANNEL_NAME")
 	ReadOnly, _ = strconv.ParseBool(os.Getenv("READ_ONLY"))
 	Verbose, _ = strconv.ParseBool(os.Getenv("VERBOSE"))
+
+	// MapsOutputDir is where the maps script saves the frames
+	MapsOutputDir = os.Getenv("MAPS_OUTPUT_DIR")
+	// CroppedPath is where we store the cropped versions of screencaps (to OCR them)
+	CroppedPath = os.Getenv("CROPPED_CORNERS_DIR")
 }
 
 func VideoDir() string {
