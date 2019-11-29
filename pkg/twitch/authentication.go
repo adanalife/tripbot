@@ -4,7 +4,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/davecgh/go-spew/spew"
+	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	"github.com/logrusorgru/aurora"
 	"github.com/nicklaw5/helix"
@@ -17,6 +17,7 @@ var currentTwitchClient *helix.Client
 var ClientID string
 var ClientSecret string
 var AuthToken string
+var AppAccessToken string
 
 // these are used to authenticate requests that require user permissions
 var UserAccessToken string
@@ -53,7 +54,18 @@ func Client() (*helix.Client, error) {
 		//TODO: move to configs lib
 		Scopes: []string{"openid", "user:edit:broadcast", "channel:read:subscriptions"},
 	})
+	if err != nil {
+		terrors.Log(err, "error creating client")
+	}
 	currentTwitchClient = client
+
+	// set the AppAccessToken
+	resp, err := client.GetAppAccessToken()
+	if err != nil {
+		terrors.Log(err, "error getting app access token from twitch")
+	}
+	AppAccessToken = resp.Data.AccessToken
+
 	return client, err
 }
 
@@ -63,7 +75,8 @@ func Client() (*helix.Client, error) {
 func GenerateUserAccessToken(code string) {
 	resp, err := currentTwitchClient.GetUserAccessToken(code)
 	if err != nil {
-		spew.Dump(err)
+		terrors.Log(err, "error getting user access token from twitch")
+		return
 	}
 
 	UserAccessToken = resp.Data.AccessToken
@@ -90,7 +103,7 @@ func RefreshUserAccessToken() {
 
 	resp, err := currentTwitchClient.RefreshUserAccessToken(UserRefreshToken)
 	if err != nil {
-		spew.Dump(err)
+		terrors.Log(err, "error refreshing user access token")
 		return
 	}
 

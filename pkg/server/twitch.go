@@ -11,6 +11,7 @@ type TwitchAuthentication struct {
 	ChannelID       string `json:"channel_id"`
 	UserAccessToken string `json:"user_access_token"`
 	ClientID        string `json:"client_id"`
+	AppAccessToken  string `json:"app_access_token"`
 	//TODO: do we need these ever?
 	// AuthToken       string `json:"auth_token"`
 	// ClientSecret    string `json:"client_secret"`
@@ -22,6 +23,7 @@ func TwitchAuthJSON() string {
 		ChannelID:       mytwitch.ChannelID,
 		UserAccessToken: mytwitch.UserAccessToken,
 		ClientID:        mytwitch.ClientID,
+		AppAccessToken:  mytwitch.AppAccessToken,
 		//TODO: do we need these ever?
 		// AuthToken:       mytwitch.AuthToken,
 		// ClientSecret:    mytwitch.ClientSecret,
