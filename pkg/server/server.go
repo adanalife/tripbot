@@ -3,6 +3,7 @@ package server
 import (
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 
@@ -58,9 +59,20 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-	// someone tried a POST or a PUT or something
+	case "POST":
+		// healthcheck URL, for tools to verify the bot is alive
+		if r.URL.Path == "/webhooks" {
+			b, _ := ioutil.ReadAll(r.Body)
+			fmt.Println(string(b) + "\n")
+			fmt.Fprintf(w, "OK")
+		} else {
+			http.Error(w, "404 not found", http.StatusNotFound)
+			log.Println("someone tried hitting", r.URL.Path)
+			return
+		}
+	// someone tried a PUT or a DELETE or something
 	default:
-		fmt.Fprintf(w, "Only GET methods are supported.\n")
+		fmt.Fprintf(w, "Only GET/POST methods are supported.\n")
 	}
 }
 
