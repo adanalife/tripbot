@@ -39,7 +39,6 @@ func main() {
 	}()
 
 	// start the HTTP server
-	// (right now just used for callbacks)
 	go server.Start()
 
 	// set up the Twitch client
@@ -76,6 +75,9 @@ func main() {
 	users.UpdateSession()
 	users.PrintCurrentSession()
 
+	// create webhook subscriptions
+	mytwitch.UpdateWebhookSubscriptions()
+
 	//TODO: move these somewhere central
 	background.Cron.AddFunc("@every 60s", video.GetCurrentlyPlaying)
 	background.Cron.AddFunc("@every 61s", users.UpdateSession)
@@ -85,6 +87,7 @@ func main() {
 	background.Cron.AddFunc("@every 1h", mytwitch.RefreshUserAccessToken)
 	background.Cron.AddFunc("@every 57m30s", tripbot.Chatter)
 	background.Cron.AddFunc("@every 12h", mytwitch.SetStreamTags)
+	background.Cron.AddFunc("@every 12h", mytwitch.UpdateWebhookSubscriptions)
 
 	// actually connect to Twitch
 	// wrapped in a loop in case twitch goes down
