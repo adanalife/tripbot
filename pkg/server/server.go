@@ -106,50 +106,6 @@ func handle(w http.ResponseWriter, r *http.Request) {
 
 			spew.Dump(resp.Data.Follows)
 
-			// // data := resp.Data.([]interface{})
-			// var data []*helix.ManyFollows
-			// for _, d := range resp.Data.([]interface{}) {
-			// 	data = append(data, d.(*helix.ManyFollows))
-			// }
-			// spew.Dump(data)
-
-			// users := &helix.UsersFollowsResponse{}
-			// users.StatusCode = resp.StatusCode
-			// users.Header = resp.Header
-			// users.Error = resp.Error
-			// users.ErrorStatus = resp.ErrorStatus
-			// users.ErrorMessage = resp.ErrorMessage
-			// // users.Data.Total = resp.Data.(*helix.ManyFollows).Total
-			// // users.Data.Follows = resp.Data.(*helix.ManyFollows).Follows
-			// // users.Data.Follows = data.([]*helix.ManyFollows).Follows
-			// users.Data.Follows = data[0].Follows
-			// // users.Data.Pagination = resp.Data.(*helix.ManyFollows).Pagination
-
-			// spew.Dump(users)
-
-			// follow := helix.UserFollow{}
-			// mapstructure.Decode(resp.Data.([]interface{})[0], &follow)
-			// spew.Dump(follow)
-			// spew.Dump(resp.Data.([]*helix.UserFollow))
-			// b := make([]*helix.UserFollow, len(resp.Data))
-			// dataSlice := resp.Data.([]interface{})
-
-			// for _, follow := range dataSlice {
-			// 	spew.Dump(follow.(helix.UserFollow))
-			// }
-
-			// newSlice := resp.Data.([]helix.ManyFollows)
-			// spew.Dump(newSlice)
-
-			// b := []*helix.UserFollow{}
-			// for i := range dataSlice {
-			// 	b[i] = dataSlice[i].(*helix.UserFollow)
-			// }
-
-			// spew.Dump(b)
-			// follows := resp.Data.(*helix.UserFollow)
-			// spew.Dump(follows)
-			// b, _ := ioutil.ReadAll(r.Body)
 			fmt.Fprintf(w, "OK")
 		} else {
 			http.Error(w, "404 not found", http.StatusNotFound)
