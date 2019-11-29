@@ -1,15 +1,18 @@
 package server
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
 
+	"github.com/davecgh/go-spew/spew"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	mytwitch "github.com/dmerrick/danalol-stream/pkg/twitch"
 	"github.com/logrusorgru/aurora"
+	"github.com/nicklaw5/helix"
 )
 
 func handle(w http.ResponseWriter, r *http.Request) {
@@ -18,6 +21,16 @@ func handle(w http.ResponseWriter, r *http.Request) {
 		// healthcheck URL, for tools to verify the bot is alive
 		if r.URL.Path == "/health" {
 			fmt.Fprintf(w, "OK")
+
+		} else if r.URL.Path == "/webhooks" {
+			log.Println("got request to /webhooks")
+			challenge, ok := r.URL.Query()["hub.challenge"]
+			if !ok || len(challenge[0]) < 1 {
+				http.Error(w, "404 not found", http.StatusNotFound)
+				return
+			}
+			log.Println("returning challenge")
+			fmt.Fprintf(w, string(challenge[0]))
 
 		} else if r.URL.Path == "/auth/twitch" {
 			secret, ok := r.URL.Query()["auth"]
@@ -62,8 +75,81 @@ func handle(w http.ResponseWriter, r *http.Request) {
 	case "POST":
 		// healthcheck URL, for tools to verify the bot is alive
 		if r.URL.Path == "/webhooks" {
-			b, _ := ioutil.ReadAll(r.Body)
-			fmt.Println(string(b) + "\n")
+			// resp := &helix.Response{}
+			resp := &helix.UsersFollowsResponse{}
+			bodyBytes, err := ioutil.ReadAll(r.Body)
+			if err != nil {
+				log.Println("something went wrong")
+				//TODO: better error
+				http.Error(w, "404 not found", http.StatusNotFound)
+				return
+			}
+
+			fmt.Println(string(bodyBytes) + "\n")
+
+			// Only attempt to decode the response if we have a response we can handle
+			if len(bodyBytes) > 0 && resp.StatusCode < http.StatusInternalServerError {
+				if resp.StatusCode < http.StatusBadRequest {
+					// if resp.Data != nil && resp.StatusCode < http.StatusBadRequest {
+					// Successful request
+					err = json.Unmarshal(bodyBytes, &resp.Data)
+				} else {
+					// Failed request
+					err = json.Unmarshal(bodyBytes, &resp)
+				}
+
+				if err != nil {
+					log.Println(fmt.Errorf("Failed to decode API response: %s", err.Error()))
+					return
+				}
+			}
+
+			spew.Dump(resp.Data.Follows)
+
+			// // data := resp.Data.([]interface{})
+			// var data []*helix.ManyFollows
+			// for _, d := range resp.Data.([]interface{}) {
+			// 	data = append(data, d.(*helix.ManyFollows))
+			// }
+			// spew.Dump(data)
+
+			// users := &helix.UsersFollowsResponse{}
+			// users.StatusCode = resp.StatusCode
+			// users.Header = resp.Header
+			// users.Error = resp.Error
+			// users.ErrorStatus = resp.ErrorStatus
+			// users.ErrorMessage = resp.ErrorMessage
+			// // users.Data.Total = resp.Data.(*helix.ManyFollows).Total
+			// // users.Data.Follows = resp.Data.(*helix.ManyFollows).Follows
+			// // users.Data.Follows = data.([]*helix.ManyFollows).Follows
+			// users.Data.Follows = data[0].Follows
+			// // users.Data.Pagination = resp.Data.(*helix.ManyFollows).Pagination
+
+			// spew.Dump(users)
+
+			// follow := helix.UserFollow{}
+			// mapstructure.Decode(resp.Data.([]interface{})[0], &follow)
+			// spew.Dump(follow)
+			// spew.Dump(resp.Data.([]*helix.UserFollow))
+			// b := make([]*helix.UserFollow, len(resp.Data))
+			// dataSlice := resp.Data.([]interface{})
+
+			// for _, follow := range dataSlice {
+			// 	spew.Dump(follow.(helix.UserFollow))
+			// }
+
+			// newSlice := resp.Data.([]helix.ManyFollows)
+			// spew.Dump(newSlice)
+
+			// b := []*helix.UserFollow{}
+			// for i := range dataSlice {
+			// 	b[i] = dataSlice[i].(*helix.UserFollow)
+			// }
+
+			// spew.Dump(b)
+			// follows := resp.Data.(*helix.UserFollow)
+			// spew.Dump(follows)
+			// b, _ := ioutil.ReadAll(r.Body)
 			fmt.Fprintf(w, "OK")
 		} else {
 			http.Error(w, "404 not found", http.StatusNotFound)
