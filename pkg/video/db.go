@@ -28,6 +28,8 @@ func LoadOrCreate(path string) (Video, error) {
 
 // load() fetches a Video from the DB
 func load(slug string) (Video, error) {
+	//TODO: consider replacing this with a &Video{},
+	// perhaps Video{ID:0}?
 	var newVid Video
 	// try to find the slug in the DB
 	videos := []Video{}
@@ -109,6 +111,7 @@ func create(file string) (Video, error) {
 }
 
 // save() will store the video in the DB
+//TODO: I think this can be achieved much easier, c.p. user save
 func (v Video) save() error {
 	var err error
 	flagged := v.Flagged

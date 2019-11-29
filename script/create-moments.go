@@ -30,6 +30,7 @@ func process(videoFile string) {
 		terrors.Log(err, fmt.Sprintf("failed to create video: %v", videoFile))
 		return
 	}
+
 	lat, lon, err := vid.Location()
 	if err != nil {
 		terrors.Log(err, fmt.Sprintf("failed to process image: %v", videoFile))
