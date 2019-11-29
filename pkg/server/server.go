@@ -74,6 +74,8 @@ func handle(w http.ResponseWriter, r *http.Request) {
 
 	case "POST":
 		// webhooks are received via POST at this url
+		//TODO: we can use helix.GetWebhookTopicFromRequest() and
+		// share a webhooks URL
 		if r.URL.Path == "/webhooks/twitch/users/follows" {
 
 			resp, err := decodeUserWebhookResponse(r)

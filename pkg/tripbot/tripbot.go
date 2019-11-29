@@ -1,7 +1,6 @@
 package tripbot
 
 import (
-	"fmt"
 	"log"
 	"math/rand"
 	"os"
@@ -191,14 +190,14 @@ func UserNotice(message twitch.UserNoticeMessage) {
 	// update the internal subscriber list
 	mytwitch.GetSubscribers()
 
-	if message.Message != "" {
-		msg := fmt.Sprintf("%s just subscribed with message: %s", message.User.DisplayName, message.Message)
-		client.Say(config.ChannelName, msg)
-	} else {
-		msg := fmt.Sprintf("%s just subscribed", message.User.DisplayName)
-		client.Say(config.ChannelName, msg)
-	}
-	client.Say(config.ChannelName, "Thank you. Your support keeps me running bleedPurple")
+	// if message.Message != "" {
+	// 	msg := fmt.Sprintf("%s just subscribed with message: %s", message.User.DisplayName, message.Message)
+	// 	client.Say(config.ChannelName, msg)
+	// } else {
+	// 	msg := fmt.Sprintf("%s just subscribed", message.User.DisplayName)
+	// 	client.Say(config.ChannelName, msg)
+	// }
+	// client.Say(config.ChannelName, "Thank you. Your support keeps me running bleedPurple")
 }
 
 // if the message comes from me, then post the message to chat
