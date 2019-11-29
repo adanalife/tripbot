@@ -81,7 +81,7 @@ func (v Video) toDate() time.Time {
 
 // ocrCoords will use OCR to read the coordinates from a screenshot (seriously)
 func (v Video) ocrCoords() (float64, float64, error) {
-	for _, timestamp := range timestampsToTry {
+	for _, timestamp := range config.TimestampsToTry {
 		lat, lng, err := ocr.CoordsFromImage(v.screencap(timestamp))
 		if err == nil {
 			return lat, lng, err
@@ -94,23 +94,6 @@ func (v Video) ocrCoords() (float64, float64, error) {
 func slug(file string) string {
 	fileName := path.Base(file)
 	return removeFileExtension(fileName)
-}
-
-// these are different timestamps we have screenshots prepared for
-// the "000" corresponds to 0m0s, "130" corresponds to 1m30s
-var timestampsToTry = []string{
-	"000",
-	"015",
-	"030",
-	"045",
-	"100",
-	"115",
-	"130",
-	"145",
-	"200",
-	"215",
-	"230",
-	"245",
 }
 
 // timestamp is something like 000, 030, 100, etc

@@ -120,3 +120,20 @@ var GoogleMapsStyle = []string{
 	"feature:water|element:labels.text.fill|color:0x515c6d",
 	"feature:water|element:labels.text.stroke|color:0x17263c&size=480x360",
 }
+
+// these are different timestamps we have screenshots prepared for
+// the "000" corresponds to 0m0s, "130" corresponds to 1m30s
+var TimestampsToTry = []string{
+	"000",
+	"015",
+	"030",
+	"045",
+	"100",
+	"115",
+	"130",
+	"145",
+	"200",
+	"215",
+	"230",
+	"245",
+}
