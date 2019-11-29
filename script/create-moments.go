@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path"
 	"path/filepath"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/database"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
@@ -21,29 +21,33 @@ import (
 var videoFile string
 var current bool
 
+//TODO: this isn't a videoFile anymore
 func process(videoFile string) {
+	log.Println("working on:", videoFile)
+
 	vid, err := video.LoadOrCreate(videoFile)
 	if err != nil {
-		log.Println("unable to create video: %v", err)
+		terrors.Log(err, fmt.Sprintf("failed to create video: %v", videoFile))
+		return
 	}
 	lat, lon, err := vid.Location()
 	if err != nil {
-		log.Fatalf("failed to process image: %v", err)
+		terrors.Log(err, fmt.Sprintf("failed to process image: %v", videoFile))
+		return
 	}
 	url := helpers.GoogleMapsURL(lat, lon)
 	fmt.Println(url)
 }
 
-func screencapDir() {
-	// index 11 corresponds to 245 (aka 2m45s), which should have the least screencaps
-	config.VideoDir()
-	config.TimestampsToTry[11]
-
+func screencapDir() string {
+	// index 11 corresponds to 245 (aka 2m45s)
+	// which should have the least screencaps
+	return path.Join(config.ScreencapDir(), config.TimestampsToTry[11])
 }
 
 func main() {
 
-	spew.Dump(config.ScreencapDir())
+	log.Println("going to loop over:", screencapDir())
 
 	// make sure we were given enough args
 	checkArgs()
@@ -54,13 +58,14 @@ func main() {
 
 	} else {
 		// loop over every file in the screencapDir
-		err := filepath.Walk(screencapDir(),
+		pathToWalk := screencapDir()
+		err := filepath.Walk(pathToWalk,
 			func(path string, info os.FileInfo, err error) error {
 				if err != nil {
 					return err
 				}
 				// skip the directory name itself
-				if path == config.VideoDir() {
+				if path == pathToWalk {
 					return nil
 				}
 
