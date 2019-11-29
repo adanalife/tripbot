@@ -57,7 +57,6 @@ func Client() (*helix.Client, error) {
 	if err != nil {
 		terrors.Log(err, "error creating client")
 	}
-	currentTwitchClient = client
 
 	// set the AppAccessToken
 	resp, err := client.GetAppAccessToken()
@@ -65,6 +64,10 @@ func Client() (*helix.Client, error) {
 		terrors.Log(err, "error getting app access token from twitch")
 	}
 	AppAccessToken = resp.Data.AccessToken
+	client.SetAppAccessToken(AppAccessToken)
+
+	// use this as the shared client
+	currentTwitchClient = client
 
 	return client, err
 }

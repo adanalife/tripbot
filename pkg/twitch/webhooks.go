@@ -25,6 +25,7 @@ func UpdateWebhookSubscriptions() {
 	}
 
 	// talk to twitch and see what the current webhooks are
+	//TODO: this doesnt seem to work, like at all
 	resp, err := currentTwitchClient.GetWebhookSubscriptions(&helix.WebhookSubscriptionsParams{
 		First: 10,
 	})
