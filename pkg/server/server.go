@@ -7,9 +7,10 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"strings"
 
-	"github.com/davecgh/go-spew/spew"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
+	"github.com/dmerrick/danalol-stream/pkg/tripbot"
 	mytwitch "github.com/dmerrick/danalol-stream/pkg/twitch"
 	"github.com/logrusorgru/aurora"
 	"github.com/nicklaw5/helix"
@@ -22,8 +23,9 @@ func handle(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/health" {
 			fmt.Fprintf(w, "OK")
 
-		} else if r.URL.Path == "/webhooks" {
-			log.Println("got request to /webhooks")
+			// twitch issues a request here when creating a new webhook subscription
+		} else if strings.HasPrefix(r.URL.Path, "/webhooks/twitch") {
+			log.Println("got request to", r.URL.Path)
 			challenge, ok := r.URL.Query()["hub.challenge"]
 			if !ok || len(challenge[0]) < 1 {
 				http.Error(w, "404 not found", http.StatusNotFound)
@@ -32,6 +34,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			log.Println("returning challenge")
 			fmt.Fprintf(w, string(challenge[0]))
 
+			// this endpoint returns private twitch access tokens
 		} else if r.URL.Path == "/auth/twitch" {
 			secret, ok := r.URL.Query()["auth"]
 			//TODO: more secure password (lol)
@@ -74,7 +77,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 
 	case "POST":
 		// healthcheck URL, for tools to verify the bot is alive
-		if r.URL.Path == "/webhooks" {
+		if r.URL.Path == "/webhooks/twitch/users/follows" {
 			// resp := &helix.Response{}
 			resp := &helix.UsersFollowsResponse{}
 			bodyBytes, err := ioutil.ReadAll(r.Body)
@@ -85,7 +88,8 @@ func handle(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			fmt.Println(string(bodyBytes) + "\n")
+			// print the webhook contents
+			// fmt.Println(string(bodyBytes) + "\n")
 
 			// Only attempt to decode the response if we have a response we can handle
 			if len(bodyBytes) > 0 && resp.StatusCode < http.StatusInternalServerError {
@@ -99,17 +103,23 @@ func handle(w http.ResponseWriter, r *http.Request) {
 				}
 
 				if err != nil {
-					log.Println(fmt.Errorf("Failed to decode API response: %s", err.Error()))
+					terrors.Log(err, "failed to decode API response")
 					return
 				}
 			}
 
-			spew.Dump(resp.Data.Follows)
+			for _, follower := range resp.Data.Follows {
+				username := follower.FromName
+				log.Println("got webhook for new follower:", username)
+				// announce new follower in chat
+				tripbot.AnnounceNewFollower(username)
+			}
 
 			fmt.Fprintf(w, "OK")
 		} else {
+			// someone tried to make a post and we dont know what to do with it
 			http.Error(w, "404 not found", http.StatusNotFound)
-			log.Println("someone tried hitting", r.URL.Path)
+			log.Println("someone tried posting to", r.URL.Path)
 			return
 		}
 	// someone tried a PUT or a DELETE or something

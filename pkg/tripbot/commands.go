@@ -23,7 +23,7 @@ import (
 
 // Chatter will post a message to chat
 func Chatter() {
-	rand.Intn(len(config.HelpMessages))
+	// rand.Intn(len(config.HelpMessages))
 	client.Say(config.ChannelName, help())
 }
 
@@ -32,6 +32,11 @@ func help() string {
 	// bump the index
 	helpIndex = (helpIndex + 1) % len(config.HelpMessages)
 	return text
+}
+
+func AnnounceNewFollower(username string) {
+	msg := fmt.Sprintf("Thank you for the follow, @%s", username)
+	client.Say(config.ChannelName, msg)
 }
 
 func helpCmd(user *users.User) {
