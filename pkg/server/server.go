@@ -22,7 +22,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 
 			// twitch issues a request here when creating a new webhook subscription
 		} else if strings.HasPrefix(r.URL.Path, "/webhooks/twitch") {
-			log.Println("got webhook to", r.URL.Path)
+			log.Println("got webhook challenge request at", r.URL.Path)
 			challenge, ok := r.URL.Query()["hub.challenge"]
 			if !ok || len(challenge[0]) < 1 {
 				http.Error(w, "404 not found", http.StatusNotFound)
