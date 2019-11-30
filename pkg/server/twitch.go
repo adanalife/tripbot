@@ -23,6 +23,22 @@ type TwitchAuthentication struct {
 	// ClientSecret    string `json:"client_secret"`
 }
 
+// example payload:
+// {"data":[{"event_data":{"broadcaster_id":"225469317","broadcaster_name":"ADanaLife_","is_gift":false,"plan_name":"Channel Subscription (adanalife_)","tier":"1000", "user_id":"26784661","user_name":"MathGaming"},"event_timestamp":"2019-11-30T00:44:31Z","event_type":"subscriptions.subscribe","id":"1UJVQq8yMh9kOe0OmHpw3jbKkGH","version":"1.0"}]}
+type SubscriptionWebhook struct {
+	helix.ResponseCommon
+	Data ManyEvents
+}
+
+type ManyEvents struct {
+	Events []Event `json:"data"`
+}
+
+type Event struct {
+	Id        string             `json:"id"`
+	EventData helix.Subscription `json:"event_data"`
+}
+
 func TwitchAuthJSON() string {
 	var jsonData []byte
 	auth := TwitchAuthentication{
@@ -76,7 +92,8 @@ func decodeFollowWebhookResponse(r *http.Request) (*helix.UsersFollowsResponse, 
 func decodeSubscriptionWebhookResponse(r *http.Request) (*helix.SubscriptionsResponse, error) {
 	log.Println("decoding subscription webhook")
 
-	resp := &helix.SubscriptionsResponse{}
+	// we use a custom struct because the 3rd party lib doesnt support webhooks yet
+	resp := &SubscriptionWebhook{}
 	bodyBytes, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		terrors.Log(err, "failed to read request body")
