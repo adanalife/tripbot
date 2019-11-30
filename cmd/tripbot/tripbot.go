@@ -47,7 +47,7 @@ func main() {
 	// attach handlers
 	client.OnUserJoinMessage(tripbot.UserJoin)
 	client.OnUserPartMessage(tripbot.UserPart)
-	client.OnUserNoticeMessage(tripbot.UserNotice)
+	// client.OnUserNoticeMessage(tripbot.UserNotice)
 	client.OnWhisperMessage(tripbot.Whisper)
 	client.OnPrivateMessage(tripbot.PrivateMessage)
 
