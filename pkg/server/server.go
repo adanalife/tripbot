@@ -113,6 +113,9 @@ func handle(w http.ResponseWriter, r *http.Request) {
 				tripbot.AnnounceSubscriber(sub)
 			}
 
+			// update the internal subscribers list
+			mytwitch.GetSubscribers()
+
 			fmt.Fprintf(w, "OK")
 		} else {
 			// someone tried to make a post and we dont know what to do with it

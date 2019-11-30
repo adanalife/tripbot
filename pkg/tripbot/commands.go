@@ -45,8 +45,9 @@ func AnnounceNewFollower(username string) {
 func AnnounceSubscriber(sub helix.Subscription) {
 	spew.Dump(sub)
 	username := sub.UserName
-	msg := fmt.Sprintf("Thank you for the sub, @%s!", username)
+	msg := fmt.Sprintf("Thank you for the sub, @%s", username)
 	client.Say(config.ChannelName, msg)
+	client.Say(config.ChannelName, "Thank you! Enjoy your !bonusmiles bleedPurple")
 }
 
 func helpCmd(user *users.User) {
