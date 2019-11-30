@@ -106,11 +106,11 @@ func handle(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			for _, sub := range resp.Data.Subscriptions {
-				username := sub.UserName
+			for _, event := range resp.Data.Events {
+				username := event.Subscription.UserName
 				log.Println("got webhook for new sub:", username)
 				// announce new sub in chat
-				tripbot.AnnounceSubscriber(sub)
+				tripbot.AnnounceSubscriber(event.Subscription)
 			}
 
 			// update the internal subscribers list

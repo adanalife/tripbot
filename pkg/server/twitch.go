@@ -35,8 +35,8 @@ type ManyEvents struct {
 }
 
 type Event struct {
-	Id        string             `json:"id"`
-	EventData helix.Subscription `json:"event_data"`
+	Id           string             `json:"id"`
+	Subscription helix.Subscription `json:"event_data"`
 }
 
 func TwitchAuthJSON() string {
@@ -89,7 +89,7 @@ func decodeFollowWebhookResponse(r *http.Request) (*helix.UsersFollowsResponse, 
 	return resp, err
 }
 
-func decodeSubscriptionWebhookResponse(r *http.Request) (*helix.SubscriptionsResponse, error) {
+func decodeSubscriptionWebhookResponse(r *http.Request) (*SubscriptionWebhook, error) {
 	log.Println("decoding subscription webhook")
 
 	// we use a custom struct because the 3rd party lib doesnt support webhooks yet
