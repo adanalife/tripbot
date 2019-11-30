@@ -73,14 +73,14 @@ func handle(w http.ResponseWriter, r *http.Request) {
 		}
 
 	case "POST":
-		// webhooks are received via POST at this url
+		// user webhooks are received via POST at this url
 		//TODO: we can use helix.GetWebhookTopicFromRequest() and
 		// share a webhooks URL
 		if r.URL.Path == "/webhooks/twitch/users/follows" {
 
-			resp, err := decodeUserWebhookResponse(r)
+			resp, err := decodeFollowWebhookResponse(r)
 			if err != nil {
-				log.Println("something went wrong")
+				terrors.Log(err, "error decoding follow webhook")
 				//TODO: better error
 				http.Error(w, "404 not found", http.StatusNotFound)
 				return
@@ -91,6 +91,26 @@ func handle(w http.ResponseWriter, r *http.Request) {
 				log.Println("got webhook for new follower:", username)
 				// announce new follower in chat
 				tripbot.AnnounceNewFollower(username)
+			}
+
+			fmt.Fprintf(w, "OK")
+
+			// these are sent when users subscribe
+		} else if r.URL.Path == "/webhooks/twitch/subscriptions/events" {
+
+			resp, err := decodeSubscriptionWebhookResponse(r)
+			if err != nil {
+				terrors.Log(err, "error decoding subscription webhook")
+				//TODO: better error
+				http.Error(w, "404 not found", http.StatusNotFound)
+				return
+			}
+
+			for _, sub := range resp.Data.Subscriptions {
+				username := sub.UserName
+				log.Println("got webhook for new sub:", username)
+				// announce new sub in chat
+				tripbot.AnnounceSubscriber(sub)
 			}
 
 			fmt.Fprintf(w, "OK")

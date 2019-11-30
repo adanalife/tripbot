@@ -8,7 +8,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
+	"github.com/nicklaw5/helix"
 
 	"github.com/dmerrick/danalol-stream/pkg/background"
 	"github.com/dmerrick/danalol-stream/pkg/config"
@@ -36,6 +38,14 @@ func help() string {
 
 func AnnounceNewFollower(username string) {
 	msg := fmt.Sprintf("Thank you for the follow, @%s", username)
+	client.Say(config.ChannelName, msg)
+}
+
+//TODO: do more with the Subscription... IsGift, Tier, PlanName, etc.
+func AnnounceSubscriber(sub helix.Subscription) {
+	spew.Dump(sub)
+	username := sub.UserName
+	msg := fmt.Sprintf("Thank you for the sub, @%s!", username)
 	client.Say(config.ChannelName, msg)
 }
 
