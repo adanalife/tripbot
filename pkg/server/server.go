@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/davecgh/go-spew/spew"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	"github.com/dmerrick/danalol-stream/pkg/tripbot"
 	mytwitch "github.com/dmerrick/danalol-stream/pkg/twitch"
@@ -26,6 +27,8 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			log.Println("got webhook challenge request at", r.URL.Path)
 			challenge, ok := r.URL.Query()["hub.challenge"]
 			if !ok || len(challenge[0]) < 1 {
+				terrors.Log(nil, "something went wrong with the challenge")
+				spew.Dump(r.URL.Query())
 				http.Error(w, "404 not found", http.StatusNotFound)
 				return
 			}
