@@ -36,57 +36,57 @@ func (osc *Onscreen) AddDur(dur time.Duration) {
 }
 
 // intended to be run in a goroutine
-func (d *Onscreen) Start() {
+func (osc *Onscreen) Start() {
 	fmt.Println("starting")
-	spew.Dump(d)
+	spew.Dump(osc)
 	// loop until we're past expiry time
-	for time.Now().Before(d.Expires) {
+	for time.Now().Before(osc.Expires) {
 		fmt.Println("updating")
-		err := d.Update(d)
+		err := osc.Update(osc)
 		if err != nil {
 			terrors.Log(err, "error during update")
 		}
 		// fmt.Println("sleeping")
-		time.Sleep(d.Interval)
+		time.Sleep(osc.Interval)
 	}
 	fmt.Println("ending")
-	spew.Dump(d)
+	spew.Dump(osc)
 
 	// the loop is over, so hide the onscreen
-	d.Hide()
+	osc.Hide()
 }
 
-func (d *Onscreen) Show() {
-	if d.image {
-		showImage(d.Content)
+func (osc *Onscreen) Show() {
+	if osc.image {
+		showImage(osc.Content)
 	} else {
-		d.showText()
+		osc.showText()
 	}
 }
-func (d *Onscreen) Hide() {
-	if d.image {
-		hideImage(d.Content)
+func (osc *Onscreen) Hide() {
+	if osc.image {
+		hideImage(osc.Content)
 	} else {
-		d.hideText()
+		osc.hideText()
 	}
 }
 
-func (d Onscreen) showText() {
-	if d.OutputFile == "" {
+func (osc Onscreen) showText() {
+	if osc.OutputFile == "" {
 		terrors.Log(nil, "no OutputFile set")
 		return
 	}
-	fmt.Println("writing to file:", d.OutputFile)
-	b := []byte(d.Content)
-	err := ioutil.WriteFile(d.OutputFile, b, 0644)
+	fmt.Println("writing to file:", osc.OutputFile)
+	b := []byte(osc.Content)
+	err := ioutil.WriteFile(osc.OutputFile, b, 0644)
 	if err != nil {
 		terrors.Log(err, "error writing to file")
 	}
 }
 
-func (d Onscreen) hideText() {
-	fmt.Println("removing file:", d.OutputFile)
-	os.Remove(d.OutputFile)
+func (osc Onscreen) hideText() {
+	fmt.Println("removing file:", osc.OutputFile)
+	os.Remove(osc.OutputFile)
 }
 
 func showImage(imgPath string) {
