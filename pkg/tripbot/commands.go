@@ -68,8 +68,12 @@ func uptimeCmd(user *users.User) {
 
 func milesCmd(user *users.User) {
 	log.Println(user.Username, "ran !miles")
+	miles := user.CurrentMiles()
 	msg := "@%s has %.2f miles."
-	msg = fmt.Sprintf(msg, user.Username, user.CurrentMiles())
+	msg = fmt.Sprintf(msg, user.Username, miles)
+	if miles < 0.1 {
+		msg += " You'll earn more miles every minute you watch the stream."
+	}
 	client.Say(config.ChannelName, msg)
 }
 
