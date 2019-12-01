@@ -1,6 +1,7 @@
 package errors
 
 import (
+	"errors"
 	"log"
 
 	"github.com/getsentry/sentry-go"
@@ -12,8 +13,10 @@ func init() {
 	sentry.Init(sentry.ClientOptions{})
 }
 
-//TODO: include msg as an attribute somehow
 func Log(e error, msg string) {
+	if e == nil {
+		e = errors.New(msg)
+	}
 	sentry.AddBreadcrumb(&sentry.Breadcrumb{
 		Message: msg,
 	})
@@ -22,6 +25,12 @@ func Log(e error, msg string) {
 }
 
 func Fatal(e error, msg string) {
+	if e == nil {
+		e = errors.New(msg)
+	}
+	sentry.AddBreadcrumb(&sentry.Breadcrumb{
+		Message: msg,
+	})
 	sentry.CaptureException(e)
 	log.Fatalf("%s: %s", aurora.Red(msg), e)
 }
