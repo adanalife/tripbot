@@ -10,6 +10,7 @@ import (
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	"github.com/dmerrick/danalol-stream/pkg/tripbot"
 	mytwitch "github.com/dmerrick/danalol-stream/pkg/twitch"
+	"github.com/dmerrick/danalol-stream/pkg/users"
 	"github.com/logrusorgru/aurora"
 )
 
@@ -25,6 +26,8 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			log.Println("got webhook challenge request at", r.URL.Path)
 			challenge, ok := r.URL.Query()["hub.challenge"]
 			if !ok || len(challenge[0]) < 1 {
+				terrors.Log(nil, "something went wrong with the challenge")
+				log.Printf("%#v", r.URL.Query())
 				http.Error(w, "404 not found", http.StatusNotFound)
 				return
 			}
@@ -40,9 +43,8 @@ func handle(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			authJSON := TwitchAuthJSON()
 			w.Header().Set("Content-Type", "application/json")
-			fmt.Fprintf(w, authJSON)
+			fmt.Fprintf(w, twitchAuthJSON())
 
 			// oauth callback URL, requests come from Twitch and have a special code
 			// we then use that code to generate a User Access Token
@@ -89,6 +91,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			for _, follower := range resp.Data.Follows {
 				username := follower.FromName
 				log.Println("got webhook for new follower:", username)
+				users.LoginIfNecessary(username)
 				// announce new follower in chat
 				tripbot.AnnounceNewFollower(username)
 			}
@@ -109,6 +112,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			for _, event := range resp.Data.Events {
 				username := event.Subscription.UserName
 				log.Println("got webhook for new sub:", username)
+				users.LoginIfNecessary(username)
 				// announce new sub in chat
 				tripbot.AnnounceSubscriber(event.Subscription)
 			}

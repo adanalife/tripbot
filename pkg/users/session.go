@@ -153,6 +153,14 @@ func Shutdown() {
 	}
 }
 
+// GiveEveryoneMiles gives all logged-in users miles
+func GiveEveryoneMiles(gift float32) {
+	log.Println(aurora.Green("giving all logged-in users gift miles"))
+	for _, user := range LoggedIn {
+		user.Miles += gift
+	}
+}
+
 // PrintCurrentSession simply prints info about the current session
 func PrintCurrentSession() {
 	bots := 0

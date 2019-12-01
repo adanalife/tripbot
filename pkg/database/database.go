@@ -7,6 +7,7 @@ import (
 
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	"github.com/jmoiron/sqlx"
+	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 )
 
@@ -29,10 +30,15 @@ var (
 func init() {
 	var err error
 
+	err = godotenv.Load()
+	if err != nil {
+		terrors.Fatal(err, "Error loading .env file")
+	}
+
 	// first we have to check we have all of the right ENV vars
 	for _, env := range requiredENV {
 		if os.Getenv(env) == "" {
-			terrors.Fatal(nil, "missing required ENV var")
+			terrors.Fatal(nil, "missing required ENV var "+env)
 		}
 	}
 
