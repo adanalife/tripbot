@@ -67,6 +67,22 @@ func PrivateMessage(message twitch.PrivateMessage) {
 		}
 	}
 
+	// any of these should trigger the kilometres command
+	kilometresStrings := []string{
+		"!km",
+		"!kilometres",
+		"!kilometers",
+	}
+	for _, s := range kilometresStrings {
+		if strings.HasPrefix(strings.ToLower(message.Message), s) {
+			if user.HasCommandAvailable() {
+				kilometresCmd(user)
+			} else {
+				client.Say(config.ChannelName, followerMsg)
+			}
+		}
+	}
+
 	if strings.HasPrefix(strings.ToLower(message.Message), "!sunset") {
 		if user.HasCommandAvailable() {
 			sunsetCmd(user)

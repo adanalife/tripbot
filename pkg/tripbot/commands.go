@@ -73,6 +73,14 @@ func milesCmd(user *users.User) {
 	client.Say(config.ChannelName, msg)
 }
 
+func kilometresCmd(user *users.User) {
+	log.Println(user.Username, "ran !kilometres")
+	km := user.CurrentMiles() * 1.609344
+	msg := "@%s has %.2f kilometres."
+	msg = fmt.Sprintf(msg, user.Username, km)
+	client.Say(config.ChannelName, msg)
+}
+
 func oldMilesCmd(user *users.User) {
 	log.Println(user.Username, "ran !oldmiles")
 	miles := miles.ForUser(user.Username)
