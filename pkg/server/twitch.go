@@ -13,14 +13,30 @@ import (
 	"github.com/nicklaw5/helix"
 )
 
+// TwitchAuthentication is sensitive internal twitch access tokens,
+// which are made available via the server to supporting scripts
+// (if properly authenticated)
 type TwitchAuthentication struct {
 	ChannelID       string `json:"channel_id"`
 	UserAccessToken string `json:"user_access_token"`
 	ClientID        string `json:"client_id"`
 	AppAccessToken  string `json:"app_access_token"`
-	//TODO: do we need these ever?
-	// AuthToken       string `json:"auth_token"`
-	// ClientSecret    string `json:"client_secret"`
+}
+
+// twitchAuthJSON returns the Twitch access tokens as JSON
+func twitchAuthJSON() string {
+	var jsonData []byte
+	auth := TwitchAuthentication{
+		ChannelID:       mytwitch.ChannelID,
+		UserAccessToken: mytwitch.UserAccessToken,
+		ClientID:        mytwitch.ClientID,
+		AppAccessToken:  mytwitch.AppAccessToken,
+	}
+	jsonData, err := json.Marshal(auth)
+	if err != nil {
+		terrors.Log(err, "unable to marshal twitch auth")
+	}
+	return string(jsonData)
 }
 
 // example payload:
@@ -37,24 +53,6 @@ type ManyEvents struct {
 type Event struct {
 	Id           string             `json:"id"`
 	Subscription helix.Subscription `json:"event_data"`
-}
-
-func TwitchAuthJSON() string {
-	var jsonData []byte
-	auth := TwitchAuthentication{
-		ChannelID:       mytwitch.ChannelID,
-		UserAccessToken: mytwitch.UserAccessToken,
-		ClientID:        mytwitch.ClientID,
-		AppAccessToken:  mytwitch.AppAccessToken,
-		//TODO: do we need these ever?
-		// AuthToken:       mytwitch.AuthToken,
-		// ClientSecret:    mytwitch.ClientSecret,
-	}
-	jsonData, err := json.Marshal(auth)
-	if err != nil {
-		terrors.Log(err, "unable to marshal twitch auth")
-	}
-	return string(jsonData)
 }
 
 func decodeFollowWebhookResponse(r *http.Request) (*helix.UsersFollowsResponse, error) {

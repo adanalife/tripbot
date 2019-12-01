@@ -40,9 +40,8 @@ func handle(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			authJSON := TwitchAuthJSON()
 			w.Header().Set("Content-Type", "application/json")
-			fmt.Fprintf(w, authJSON)
+			fmt.Fprintf(w, twitchAuthJSON())
 
 			// oauth callback URL, requests come from Twitch and have a special code
 			// we then use that code to generate a User Access Token
