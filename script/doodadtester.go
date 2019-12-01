@@ -16,15 +16,15 @@ func main() {
 
 	Leaderboard := onscreens.New()
 	Leaderboard.Update = update
-	Leaderboard.Expires = time.Now().Add(time.Duration(1 * time.Minute))
+	Leaderboard.Expires = time.Now().Add(time.Duration(20 * time.Second))
 	Leaderboard.OutputFile = path.Join(helpers.ProjectRoot(), "OBS/leaderboard.txt")
 
 	spew.Dump(Leaderboard)
 
 	go Leaderboard.Start()
 
-	for true {
-		Leaderboard.Show()
+	// just loop for for a while so the program doesnt terminate
+	for Leaderboard != nil {
 		time.Sleep(10 * time.Second)
 	}
 }
@@ -42,5 +42,6 @@ func update(osc *onscreens.Onscreen) error {
 
 	osc.Content = output
 
+	osc.Show()
 	return nil
 }

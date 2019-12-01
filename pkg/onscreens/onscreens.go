@@ -3,6 +3,7 @@ package onscreens
 import (
 	"fmt"
 	"io/ioutil"
+	"os"
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
@@ -46,6 +47,12 @@ func (d *Onscreen) Start() {
 	}
 	fmt.Println("ending")
 	spew.Dump(d)
+
+	// the loop is over, so hide the onscreen
+	d.Hide()
+	// remove self from ram
+	d = nil
+	spew.Dump(d)
 }
 
 func (d Onscreen) Show() {
@@ -59,7 +66,7 @@ func (d Onscreen) Hide() {
 	if d.image {
 		hideImage(d.Content)
 	} else {
-		hideText(d.Content)
+		d.hideText()
 	}
 }
 
@@ -75,8 +82,10 @@ func (d Onscreen) showText() {
 		terrors.Log(err, "error writing to file")
 	}
 }
-func hideText(text string) {
-	fmt.Println("hiding", text)
+
+func (d Onscreen) hideText() {
+	fmt.Println("removing file:", d.OutputFile)
+	os.Remove(d.OutputFile)
 }
 
 func showImage(imgPath string) {
