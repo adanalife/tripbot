@@ -45,9 +45,12 @@ func AnnounceNewFollower(username string) {
 func AnnounceSubscriber(sub helix.Subscription) {
 	spew.Dump(sub)
 	username := sub.UserName
-	msg := fmt.Sprintf("Thank you for the sub, @%s", username)
+	msg := fmt.Sprintf("Thank you for the sub, @%s; enjoy your !bonusmiles bleedPurple", username)
 	client.Say(config.ChannelName, msg)
-	client.Say(config.ChannelName, "Enjoy your !bonusmiles bleedPurple")
+	// give everyone a bonus mile
+	users.GiveEveryoneMiles(1.0)
+	msg = fmt.Sprintf("The %d current viewers have been given a bonus mile, too HolidayPresent", len(users.LoggedIn))
+	client.Say(config.ChannelName, msg)
 }
 
 func helpCmd(user *users.User) {
@@ -126,6 +129,9 @@ func locationCmd(user *users.User) {
 func leaderboardCmd(user *users.User) {
 	log.Println(user.Username, "ran !leaderboard")
 	size := 10
+	if size > len(users.Leaderboard) {
+		size = len(users.Leaderboard)
+	}
 	leaderboard := users.Leaderboard[:size]
 	msg := fmt.Sprintf("Top %d miles: ", size)
 	for i, leaderPair := range leaderboard {
