@@ -3,11 +3,8 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
 
-	"github.com/dmerrick/danalol-stream/pkg/database"
-	"github.com/dmerrick/danalol-stream/pkg/miles"
-	"github.com/joho/godotenv"
+	"github.com/dmerrick/danalol-stream/pkg/users"
 )
 
 var leaderboardSize int
@@ -18,15 +15,8 @@ func init() {
 }
 
 func main() {
-	var err error
-
-	godotenv.Load()
-	database.DBCon, err = database.Initialize()
-	if err != nil {
-		log.Fatal("error initializing db:", err)
-	}
-
-	leaderboard := miles.TopUsers(leaderboardSize)
+	users.InitLeaderboard()
+	leaderboard := users.Leaderboard[:leaderboardSize]
 
 	fmt.Println("Odometer Leaderboard")
 	for _, score := range leaderboard {

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 
+	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 )
@@ -24,7 +25,16 @@ var (
 	}
 )
 
-func Initialize() (*sqlx.DB, error) {
+func init() {
+	var err error
+	// initialize the SQL database
+	DBCon, err = initialize()
+	if err != nil {
+		terrors.Fatal(err, "error initializing the DB")
+	}
+}
+
+func initialize() (*sqlx.DB, error) {
 	// first we have to check we have all of the right ENV vars
 	for _, env := range requiredENV {
 		if os.Getenv(env) == "" {

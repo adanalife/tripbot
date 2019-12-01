@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/dmerrick/danalol-stream/pkg/config"
-	"github.com/dmerrick/danalol-stream/pkg/database"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	mytwitch "github.com/dmerrick/danalol-stream/pkg/twitch"
@@ -248,12 +247,6 @@ func Initialize() *twitch.Client {
 	log.Println("if your browser doesn't open automatically:")
 	log.Println(aurora.Blue(authURL).Underline())
 	helpers.OpenInBrowser(authURL)
-
-	// initialize the SQL database
-	database.DBCon, err = database.Initialize()
-	if err != nil {
-		terrors.Fatal(err, "error initializing the DB")
-	}
 
 	client = twitch.NewClient(botUsername, mytwitch.AuthToken)
 
