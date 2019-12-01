@@ -78,7 +78,10 @@ func main() {
 	// create webhook subscriptions
 	mytwitch.UpdateWebhookSubscriptions()
 
+	background.ShowOnscreenLeaderboard()
+
 	//TODO: move these somewhere central
+	background.Cron.AddFunc("@every 60s", background.ShowOnscreenLeaderboard)
 	background.Cron.AddFunc("@every 60s", video.GetCurrentlyPlaying)
 	background.Cron.AddFunc("@every 61s", users.UpdateSession)
 	background.Cron.AddFunc("@every 62s", users.UpdateLeaderboard)
