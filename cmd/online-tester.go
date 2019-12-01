@@ -5,7 +5,6 @@ import (
 	"log"
 	"os"
 
-	"github.com/dmerrick/danalol-stream/pkg/database"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	"github.com/dmerrick/danalol-stream/pkg/video"
 	"github.com/joho/godotenv"
@@ -19,12 +18,6 @@ func main() {
 
 	if os.Getenv("DASHCAM_DIR") == "" {
 		panic("You must set DASHCAM_DIR")
-	}
-
-	// initialize the SQL database
-	database.DBCon, err = database.Initialize()
-	if err != nil {
-		log.Fatal("error initializing the DB", err)
 	}
 
 	video.GetCurrentlyPlaying()

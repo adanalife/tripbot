@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
@@ -20,11 +19,6 @@ func init() {
 func main() {
 	var err error
 	godotenv.Load()
-
-	database.DBCon, err = database.Initialize()
-	if err != nil {
-		log.Fatalln(err)
-	}
 
 	// usersToCheck := []string{
 	// 	"bleo",

@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 
 	"github.com/dmerrick/danalol-stream/pkg/config"
-	"github.com/dmerrick/danalol-stream/pkg/database"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	"github.com/dmerrick/danalol-stream/pkg/video"
 	"github.com/joho/godotenv"
@@ -37,11 +36,6 @@ func init() {
 	flag.BoolVar(&current, "current", false, "Use currently-playing video")
 	flag.Parse()
 
-	// initialize the SQL database
-	database.DBCon, err = database.Initialize()
-	if err != nil {
-		log.Fatal("error initializing the DB", err)
-	}
 }
 
 func main() {

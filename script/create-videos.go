@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 
 	"github.com/dmerrick/danalol-stream/pkg/config"
-	"github.com/dmerrick/danalol-stream/pkg/database"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	"github.com/dmerrick/danalol-stream/pkg/video"
@@ -99,12 +98,6 @@ func init() {
 	flag.StringVar(&videoFile, "file", "", "File to load")
 	flag.BoolVar(&current, "current", false, "Use currently-playing video")
 	flag.Parse()
-
-	// initialize the SQL database
-	database.DBCon, err = database.Initialize()
-	if err != nil {
-		log.Fatal("error initializing the DB", err)
-	}
 }
 
 func checkArgs() {

@@ -2,7 +2,6 @@
 package database
 
 import (
-	"errors"
 	"fmt"
 	"os"
 
@@ -25,30 +24,27 @@ var (
 	}
 )
 
+//TODO: is it a bad idea to actually connect to the DB here
+// AKA "automatically"?
 func init() {
 	var err error
-	// initialize the SQL database
-	DBCon, err = initialize()
-	if err != nil {
-		terrors.Fatal(err, "error initializing the DB")
-	}
-}
 
-func initialize() (*sqlx.DB, error) {
 	// first we have to check we have all of the right ENV vars
 	for _, env := range requiredENV {
 		if os.Getenv(env) == "" {
-			return DBCon, errors.New("missing required ENV var")
+			terrors.Fatal(nil, "missing required ENV var")
 		}
 	}
 
-	DBCon, err := sqlx.Connect("postgres", connStr())
+	DBCon, err = sqlx.Connect("postgres", connStr())
 	if err != nil {
-		return DBCon, err
+		terrors.Fatal(err, "error initializing the DB")
 	}
 	// force a connection and test that it worked
 	err = DBCon.Ping()
-	return DBCon, err
+	if err != nil {
+		terrors.Fatal(err, "error connecting to DB")
+	}
 }
 
 // returns a valid postgres:// url
