@@ -10,6 +10,7 @@ import (
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	"github.com/dmerrick/danalol-stream/pkg/tripbot"
 	mytwitch "github.com/dmerrick/danalol-stream/pkg/twitch"
+	"github.com/dmerrick/danalol-stream/pkg/users"
 	"github.com/logrusorgru/aurora"
 )
 
@@ -88,6 +89,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			for _, follower := range resp.Data.Follows {
 				username := follower.FromName
 				log.Println("got webhook for new follower:", username)
+				users.LoginIfNecessary(username)
 				// announce new follower in chat
 				tripbot.AnnounceNewFollower(username)
 			}
@@ -108,6 +110,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			for _, event := range resp.Data.Events {
 				username := event.Subscription.UserName
 				log.Println("got webhook for new sub:", username)
+				users.LoginIfNecessary(username)
 				// announce new sub in chat
 				tripbot.AnnounceSubscriber(event.Subscription)
 			}
