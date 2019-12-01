@@ -2,27 +2,30 @@ package main
 
 import (
 	"fmt"
+	"time"
 
-	"github.com/dmerrick/danalol-stream/pkg/doodads"
+	"github.com/davecgh/go-spew/spew"
+	"github.com/dmerrick/danalol-stream/pkg/onscreens"
 	"github.com/dmerrick/danalol-stream/pkg/users"
 )
 
 func main() {
-	LeaderboardDoodad := doodads.Doodad{}
+	users.InitLeaderboard()
 
-	content := generateContent()
-	LeaderboardDoodad.Content = content
+	Leaderboard := onscreens.New()
+	Leaderboard.Update = update
+	Leaderboard.Expires = time.Now().Add(time.Duration(60 * time.Second))
 
-	LeaderboardDoodad.Show()
+	spew.Dump(Leaderboard)
 
+	go Leaderboard.Start()
+
+	Leaderboard.Show()
 }
 
-func generateContent() string {
+func update(osc *onscreens.Onscreen) error {
 	var output string
 	output = "Odometer Leaderboard\n"
-
-	users.InitLeaderboard()
-	users.UpdateLeaderboard()
 
 	size := 5
 	leaderboard := users.Leaderboard[:size]
@@ -30,5 +33,8 @@ func generateContent() string {
 	for _, score := range leaderboard {
 		output = output + fmt.Sprintf("%s miles: %s\n", score[1], score[0])
 	}
-	return output
+
+	osc.Content = output
+
+	return nil
 }
