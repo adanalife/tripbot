@@ -10,6 +10,7 @@ import (
 )
 
 type Event struct {
+	ID          int       `db:"id"`
 	Username    string    `db:"username"`
 	Event       string    `db:"event"`
 	DateCreated time.Time `db:"date_created"`
