@@ -31,6 +31,10 @@ func New() *Onscreen {
 	return newOnscreen
 }
 
+func (osc *Onscreen) AddDur(dur time.Duration) {
+	osc.Expires = osc.Expires.Add(dur)
+}
+
 // intended to be run in a goroutine
 func (d *Onscreen) Start() {
 	fmt.Println("starting")
@@ -42,7 +46,7 @@ func (d *Onscreen) Start() {
 		if err != nil {
 			terrors.Log(err, "error during update")
 		}
-		fmt.Println("sleeping")
+		// fmt.Println("sleeping")
 		time.Sleep(d.Interval)
 	}
 	fmt.Println("ending")
@@ -50,19 +54,16 @@ func (d *Onscreen) Start() {
 
 	// the loop is over, so hide the onscreen
 	d.Hide()
-	// remove self from ram
-	d = nil
-	spew.Dump(d)
 }
 
-func (d Onscreen) Show() {
+func (d *Onscreen) Show() {
 	if d.image {
 		showImage(d.Content)
 	} else {
 		d.showText()
 	}
 }
-func (d Onscreen) Hide() {
+func (d *Onscreen) Hide() {
 	if d.image {
 		hideImage(d.Content)
 	} else {

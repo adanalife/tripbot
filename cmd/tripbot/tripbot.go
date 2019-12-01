@@ -78,7 +78,7 @@ func main() {
 	// create webhook subscriptions
 	mytwitch.UpdateWebhookSubscriptions()
 
-	background.ShowOnscreenLeaderboard()
+	// background.ShowOnscreenLeaderboard()
 
 	//TODO: move these somewhere central
 	background.Cron.AddFunc("@every 60s", background.ShowOnscreenLeaderboard)

@@ -12,7 +12,7 @@ import (
 
 var defaultDuration = time.Duration(20 * time.Second)
 
-var Leaderboard onscreens.Onscreen
+var Leaderboard *onscreens.Onscreen
 
 func ShowOnscreenLeaderboard() {
 	Leaderboard = onscreens.New()
