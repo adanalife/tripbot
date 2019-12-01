@@ -64,14 +64,14 @@ func uptimeCmd(user *users.User) {
 }
 
 func milesCmd(user *users.User) {
-	log.Println(user.Username, "ran !newmiles")
+	log.Println(user.Username, "ran !miles")
 	msg := "@%s has %.5f miles."
 	msg = fmt.Sprintf(msg, user.Username, user.CurrentMiles())
 	client.Say(config.ChannelName, msg)
 }
 
 func oldMilesCmd(user *users.User) {
-	log.Println(user.Username, "ran !miles")
+	log.Println(user.Username, "ran !oldmiles")
 	miles := miles.ForUser(user.Username)
 	msg := ""
 	switch {
@@ -124,7 +124,7 @@ func locationCmd(user *users.User) {
 }
 
 func leaderboardCmd(user *users.User) {
-	log.Println(user.Username, "ran !newleaderboard")
+	log.Println(user.Username, "ran !leaderboard")
 	size := 10
 	leaderboard := users.Leaderboard[:size]
 	msg := fmt.Sprintf("Top %d miles: ", size)
@@ -138,7 +138,7 @@ func leaderboardCmd(user *users.User) {
 }
 
 func oldLeaderboardCmd(user *users.User) {
-	log.Println(user.Username, "ran !leaderboard")
+	log.Println(user.Username, "ran !oldleaderboard")
 	size := 10
 	userList := miles.TopUsers(size)
 	msg := fmt.Sprintf("Top %d miles: ", size)

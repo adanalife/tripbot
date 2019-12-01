@@ -45,8 +45,7 @@ func PrivateMessage(message twitch.PrivateMessage) {
 		uptimeCmd(user)
 	}
 
-	//TODO: rename this to oldmiles
-	if strings.HasPrefix(strings.ToLower(message.Message), "!miles") {
+	if strings.HasPrefix(strings.ToLower(message.Message), "!oldmiles") {
 		if user.HasCommandAvailable() {
 			oldMilesCmd(user)
 		} else {
@@ -54,12 +53,18 @@ func PrivateMessage(message twitch.PrivateMessage) {
 		}
 	}
 
-	//TODO: rename this to miles
-	if strings.HasPrefix(strings.ToLower(message.Message), "!newmiles") {
-		if user.HasCommandAvailable() {
-			milesCmd(user)
-		} else {
-			client.Say(config.ChannelName, followerMsg)
+	// any of these should trigger the miles command
+	milesStrings := []string{
+		"!miles",
+		"!newmiles",
+	}
+	for _, s := range milesStrings {
+		if strings.HasPrefix(strings.ToLower(message.Message), s) {
+			if user.HasCommandAvailable() {
+				milesCmd(user)
+			} else {
+				client.Say(config.ChannelName, followerMsg)
+			}
 		}
 	}
 
@@ -92,7 +97,7 @@ func PrivateMessage(message twitch.PrivateMessage) {
 		}
 	}
 
-	if strings.HasPrefix(strings.ToLower(message.Message), "!leaderboard") {
+	if strings.HasPrefix(strings.ToLower(message.Message), "!oldleaderboard") {
 		if user.HasCommandAvailable() {
 			oldLeaderboardCmd(user)
 		} else {
@@ -100,11 +105,18 @@ func PrivateMessage(message twitch.PrivateMessage) {
 		}
 	}
 
-	if strings.HasPrefix(strings.ToLower(message.Message), "!newleaderboard") {
-		if user.HasCommandAvailable() {
-			leaderboardCmd(user)
-		} else {
-			client.Say(config.ChannelName, followerMsg)
+	// any of these should trigger the leaderboard command
+	leaderboardStrings := []string{
+		"!leaderboard",
+		"!newleaderboard",
+	}
+	for _, s := range leaderboardStrings {
+		if strings.HasPrefix(strings.ToLower(message.Message), s) {
+			if user.HasCommandAvailable() {
+				leaderboardCmd(user)
+			} else {
+				client.Say(config.ChannelName, followerMsg)
+			}
 		}
 	}
 
