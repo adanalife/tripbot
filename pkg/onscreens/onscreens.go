@@ -2,9 +2,11 @@ package onscreens
 
 import (
 	"fmt"
+	"io/ioutil"
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
+	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 )
 
 var defaultDuration = time.Duration(30 * time.Second)
@@ -12,11 +14,12 @@ var defaultDuration = time.Duration(30 * time.Second)
 type UpdateFunc func(*Onscreen) error
 
 type Onscreen struct {
-	Content  string
-	Expires  time.Time
-	Interval time.Duration
-	Update   UpdateFunc
-	image    bool
+	Content    string
+	Expires    time.Time
+	Interval   time.Duration
+	Update     UpdateFunc
+	image      bool
+	OutputFile string
 }
 
 func New() *Onscreen {
@@ -28,13 +31,16 @@ func New() *Onscreen {
 }
 
 // intended to be run in a goroutine
-func (d Onscreen) Start() {
+func (d *Onscreen) Start() {
 	fmt.Println("starting")
 	spew.Dump(d)
 	// loop until we're past expiry time
 	for time.Now().Before(d.Expires) {
 		fmt.Println("updating")
-		d.Update(&d)
+		err := d.Update(d)
+		if err != nil {
+			terrors.Log(err, "error during update")
+		}
 		fmt.Println("sleeping")
 		time.Sleep(d.Interval)
 	}
@@ -46,7 +52,7 @@ func (d Onscreen) Show() {
 	if d.image {
 		showImage(d.Content)
 	} else {
-		showText(d.Content)
+		d.showText()
 	}
 }
 func (d Onscreen) Hide() {
@@ -57,9 +63,17 @@ func (d Onscreen) Hide() {
 	}
 }
 
-func showText(text string) {
-	fmt.Println(text)
-	spew.Dump(text)
+func (d Onscreen) showText() {
+	if d.OutputFile == "" {
+		terrors.Log(nil, "no OutputFile set")
+		return
+	}
+	fmt.Println("writing to file:", d.OutputFile)
+	b := []byte(d.Content)
+	err := ioutil.WriteFile(d.OutputFile, b, 0644)
+	if err != nil {
+		terrors.Log(err, "error writing to file")
+	}
 }
 func hideText(text string) {
 	fmt.Println("hiding", text)
