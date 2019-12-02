@@ -69,16 +69,21 @@ func main() {
 	background.StartCron()
 
 	// update subscribers list
-	mytwitch.GetSubscribers()
+	// mytwitch.GetSubscribers()
 
 	// fetch initial session
 	users.UpdateSession()
 	users.PrintCurrentSession()
 
 	// create webhook subscriptions
-	mytwitch.UpdateWebhookSubscriptions()
+	// mytwitch.UpdateWebhookSubscriptions()
 
-	// background.ShowOnscreenLeaderboard()
+	background.ShowOnscreenLeaderboard()
+
+	go func() {
+		time.Sleep(10 * time.Second)
+		background.Leaderboard.Stop()
+	}()
 
 	//TODO: move these somewhere central
 	background.Cron.AddFunc("@every 60s", background.ShowOnscreenLeaderboard)

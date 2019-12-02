@@ -21,6 +21,7 @@ type Onscreen struct {
 	Update     UpdateFunc
 	image      bool
 	OutputFile string
+	quit       chan bool //struct{}
 }
 
 func New() *Onscreen {
@@ -28,6 +29,7 @@ func New() *Onscreen {
 	newOnscreen.Content = ""
 	newOnscreen.Expires = time.Now().Add(time.Duration(defaultDuration))
 	newOnscreen.Interval = time.Duration(10 * time.Second)
+	newOnscreen.quit = make(chan bool)
 	return newOnscreen
 }
 
@@ -45,26 +47,36 @@ func (osc *Onscreen) Extend(dur time.Duration) {
 	osc.Expires = osc.Expires.Add(dur)
 }
 
+func (osc *Onscreen) Stop() {
+	spew.Dump(osc)
+	osc.quit <- true
+}
+
 // intended to be run in a goroutine
 func (osc *Onscreen) Start() {
 	fmt.Println("starting")
 	spew.Dump(osc)
 
-	for true {
-		fmt.Println("updating")
-		err := osc.Update(osc)
-		if err != nil {
-			terrors.Log(err, "error during update")
-		}
+	for {
+		select {
+		case <-osc.quit:
+			break
+		default:
+			fmt.Println("updating")
+			err := osc.Update(osc)
+			if err != nil {
+				terrors.Log(err, "error during update")
+			}
 
-		if osc.expired() {
-			osc.Hide()
-		} else {
-			osc.Show()
-		}
+			if osc.expired() {
+				osc.Hide()
+			} else {
+				osc.Show()
+			}
 
-		// fmt.Println("sleeping")
-		time.Sleep(osc.Interval)
+			// fmt.Println("sleeping")
+			time.Sleep(osc.Interval)
+		}
 	}
 	fmt.Println("ending")
 }
