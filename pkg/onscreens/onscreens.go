@@ -31,7 +31,17 @@ func New() *Onscreen {
 	return newOnscreen
 }
 
-func (osc *Onscreen) AddDur(dur time.Duration) {
+func (osc *Onscreen) expired() bool {
+	return time.Now().After(osc.Expires)
+}
+
+func (osc *Onscreen) Extend(dur time.Duration) {
+	// if it's expired, expire dur from now
+	if osc.expired() {
+		osc.Expires = time.Now().Add(dur)
+		return
+	}
+	// otherwise, add dur to the current expiry date
 	osc.Expires = osc.Expires.Add(dur)
 }
 
@@ -40,7 +50,7 @@ func (osc *Onscreen) Start() {
 	fmt.Println("starting")
 	spew.Dump(osc)
 	// loop until we're past expiry time
-	for time.Now().Before(osc.Expires) {
+	for !osc.expired() {
 		fmt.Println("updating")
 		err := osc.Update(osc)
 		if err != nil {
