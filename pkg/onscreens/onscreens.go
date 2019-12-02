@@ -49,21 +49,24 @@ func (osc *Onscreen) Extend(dur time.Duration) {
 func (osc *Onscreen) Start() {
 	fmt.Println("starting")
 	spew.Dump(osc)
-	// loop until we're past expiry time
-	for !osc.expired() {
+
+	for true {
 		fmt.Println("updating")
 		err := osc.Update(osc)
 		if err != nil {
 			terrors.Log(err, "error during update")
 		}
+
+		if osc.expired() {
+			osc.Hide()
+		} else {
+			osc.Show()
+		}
+
 		// fmt.Println("sleeping")
 		time.Sleep(osc.Interval)
 	}
 	fmt.Println("ending")
-	spew.Dump(osc)
-
-	// the loop is over, so hide the onscreen
-	osc.Hide()
 }
 
 func (osc *Onscreen) Show() {
