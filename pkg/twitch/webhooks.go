@@ -10,7 +10,6 @@ import (
 )
 
 // UpdateWebhookSubscriptions will create new webhook subscriptions
-//TODO: use the twitch API instead of a shell script when possible
 func UpdateWebhookSubscriptions() {
 
 	// c.p. https://dev.twitch.tv/docs/api/webhooks-reference

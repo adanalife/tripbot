@@ -14,7 +14,7 @@ fi
 
 SERVER_URL=$1
 
-RESP=$(curl -s "http://$SERVER_URL/auth/twitch?auth=yes")
+RESP=$(curl -s "$SERVER_URL/auth/twitch?auth=yes")
 echo $RESP | jq
 
 # extract the fields from the response
