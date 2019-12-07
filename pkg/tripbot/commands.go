@@ -123,6 +123,8 @@ func locationCmd(user *users.User) {
 	vid := video.CurrentlyPlaying
 	if vid.Flagged {
 		client.Say(config.ChannelName, "I couldn't figure out current GPS coords, using next closest...")
+		//TODO: write something like vid.FindClosest() that
+		// chooses whether or not to use Next() vs Prev()
 		vid = vid.Next()
 	}
 	// extract the coordinates
