@@ -10,10 +10,10 @@ import (
 
 	_ "github.com/dimiro1/banner/autoload"
 	"github.com/dmerrick/danalol-stream/pkg/background"
+	"github.com/dmerrick/danalol-stream/pkg/chatbot"
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/database"
 	"github.com/dmerrick/danalol-stream/pkg/server"
-	"github.com/dmerrick/danalol-stream/pkg/chatbot"
 	mytwitch "github.com/dmerrick/danalol-stream/pkg/twitch"
 	"github.com/dmerrick/danalol-stream/pkg/users"
 	"github.com/dmerrick/danalol-stream/pkg/video"
@@ -42,14 +42,14 @@ func main() {
 	go server.Start()
 
 	// set up the Twitch client
-	client := tripbot.Initialize()
+	client := chatbot.Initialize()
 
 	// attach handlers
-	client.OnUserJoinMessage(tripbot.UserJoin)
-	client.OnUserPartMessage(tripbot.UserPart)
-	// client.OnUserNoticeMessage(tripbot.UserNotice)
-	client.OnWhisperMessage(tripbot.Whisper)
-	client.OnPrivateMessage(tripbot.PrivateMessage)
+	client.OnUserJoinMessage(chatbot.UserJoin)
+	client.OnUserPartMessage(chatbot.UserPart)
+	// client.OnUserNoticeMessage(chatbot.UserNotice)
+	client.OnWhisperMessage(chatbot.Whisper)
+	client.OnPrivateMessage(chatbot.PrivateMessage)
 
 	// join the channel
 	client.Join(config.ChannelName)
@@ -85,7 +85,7 @@ func main() {
 	background.Cron.AddFunc("@every 5m", users.PrintCurrentSession)
 	background.Cron.AddFunc("@every 15m", mytwitch.GetSubscribers)
 	background.Cron.AddFunc("@every 1h", mytwitch.RefreshUserAccessToken)
-	background.Cron.AddFunc("@every 57m30s", tripbot.Chatter)
+	background.Cron.AddFunc("@every 57m30s", chatbot.Chatter)
 	background.Cron.AddFunc("@every 12h", mytwitch.SetStreamTags)
 	background.Cron.AddFunc("@every 12h", mytwitch.UpdateWebhookSubscriptions)
 

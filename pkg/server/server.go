@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"strings"
 
-	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	"github.com/dmerrick/danalol-stream/pkg/chatbot"
+	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	mytwitch "github.com/dmerrick/danalol-stream/pkg/twitch"
 	"github.com/dmerrick/danalol-stream/pkg/users"
 	"github.com/logrusorgru/aurora"
@@ -93,7 +93,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 				log.Println("got webhook for new follower:", username)
 				users.LoginIfNecessary(username)
 				// announce new follower in chat
-				tripbot.AnnounceNewFollower(username)
+				chatbot.AnnounceNewFollower(username)
 			}
 
 			fmt.Fprintf(w, "OK")
@@ -114,7 +114,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 				log.Println("got webhook for new sub:", username)
 				users.LoginIfNecessary(username)
 				// announce new sub in chat
-				tripbot.AnnounceSubscriber(event.Subscription)
+				chatbot.AnnounceSubscriber(event.Subscription)
 			}
 
 			// update the internal subscribers list

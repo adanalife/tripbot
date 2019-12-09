@@ -116,7 +116,7 @@ func runCommand(user users.User, message string) {
 			client.Say(config.ChannelName, followerMsg)
 		}
 	default:
-		err := fmt.Errorf("command %s not found", command)
+		err = fmt.Errorf("command %s not found", command)
 	}
 	if err != nil {
 		terrors.Log(err, "error running command")
@@ -137,7 +137,7 @@ func PrivateMessage(msg twitch.PrivateMessage) {
 		user := users.LoginIfNecessary(username)
 
 		//TODO is it okay that this isn't a pointer?
-		runCommand(user, message)
+		runCommand(*user, message)
 	}
 }
 
