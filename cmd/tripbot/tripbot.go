@@ -78,16 +78,8 @@ func main() {
 	// create webhook subscriptions
 	mytwitch.UpdateWebhookSubscriptions()
 
-	//TODO: move these somewhere central
-	background.Cron.AddFunc("@every 60s", video.GetCurrentlyPlaying)
-	background.Cron.AddFunc("@every 61s", users.UpdateSession)
-	background.Cron.AddFunc("@every 62s", users.UpdateLeaderboard)
-	background.Cron.AddFunc("@every 5m", users.PrintCurrentSession)
-	background.Cron.AddFunc("@every 15m", mytwitch.GetSubscribers)
-	background.Cron.AddFunc("@every 1h", mytwitch.RefreshUserAccessToken)
-	background.Cron.AddFunc("@every 57m30s", chatbot.Chatter)
-	background.Cron.AddFunc("@every 12h", mytwitch.SetStreamTags)
-	background.Cron.AddFunc("@every 12h", mytwitch.UpdateWebhookSubscriptions)
+	// start the cron jobs
+	scheduleBackgroundJobs()
 
 	// actually connect to Twitch
 	// wrapped in a loop in case twitch goes down
@@ -99,4 +91,17 @@ func main() {
 			time.Sleep(time.Minute)
 		}
 	}
+}
+
+func scheduleBackgroundJobs() {
+	// schedule these functions
+	background.Cron.AddFunc("@every 60s", video.GetCurrentlyPlaying)
+	background.Cron.AddFunc("@every 61s", users.UpdateSession)
+	background.Cron.AddFunc("@every 62s", users.UpdateLeaderboard)
+	background.Cron.AddFunc("@every 5m", users.PrintCurrentSession)
+	background.Cron.AddFunc("@every 15m", mytwitch.GetSubscribers)
+	background.Cron.AddFunc("@every 1h", mytwitch.RefreshUserAccessToken)
+	background.Cron.AddFunc("@every 57m30s", chatbot.Chatter)
+	background.Cron.AddFunc("@every 12h", mytwitch.SetStreamTags)
+	background.Cron.AddFunc("@every 12h", mytwitch.UpdateWebhookSubscriptions)
 }
