@@ -27,5 +27,6 @@ require (
 	github.com/robfig/cron v1.2.0
 	github.com/sfreiberg/gotwilio v0.0.0-20190522212351-14c666f1d505
 	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4 // indirect
+	golang.org/x/tools/gopls v0.2.1 // indirect
 	googlemaps.github.io/maps v0.0.0-20190514133808-4d12cf0fa845
 )
