@@ -20,7 +20,6 @@ var (
 	requiredENV = []string{
 		"DATABASE_USER",
 		"DATABASE_DB",
-		"DATABASE_PASS",
 		"DATABASE_HOST",
 	}
 )
