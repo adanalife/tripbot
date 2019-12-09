@@ -71,6 +71,13 @@ func Initialize() *twitch.Client {
 
 	client = twitch.NewClient(botUsername, mytwitch.AuthToken)
 
+	// attach handlers
+	client.OnUserJoinMessage(UserJoin)
+	client.OnUserPartMessage(UserPart)
+	// client.OnUserNoticeMessage(chatbot.UserNotice)
+	client.OnWhisperMessage(Whisper)
+	client.OnPrivateMessage(PrivateMessage)
+
 	return client
 }
 

@@ -33,13 +33,6 @@ func main() {
 	// set up the Twitch client
 	client := chatbot.Initialize()
 
-	// attach handlers
-	client.OnUserJoinMessage(chatbot.UserJoin)
-	client.OnUserPartMessage(chatbot.UserPart)
-	// client.OnUserNoticeMessage(chatbot.UserNotice)
-	client.OnWhisperMessage(chatbot.Whisper)
-	client.OnPrivateMessage(chatbot.PrivateMessage)
-
 	// join the channel
 	client.Join(config.ChannelName)
 	log.Println("Joined channel", config.ChannelName)
