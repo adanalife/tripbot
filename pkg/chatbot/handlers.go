@@ -20,7 +20,7 @@ func runCommand(user users.User, message string) {
 
 	switch command {
 	case "!help":
-		helpCmd(&user)
+		helpCmd(&user, params)
 	case "!uptime":
 		uptimeCmd(&user)
 	case "!oldmiles":

@@ -21,9 +21,40 @@ import (
 	"github.com/hako/durafmt"
 )
 
-func helpCmd(user *users.User) {
-	log.Println(user.Username, "ran !help")
-	msg := fmt.Sprintf("%s (%d of %d)", help(), helpIndex+1, len(config.HelpMessages))
+func helpCmd(user *users.User, params []string) {
+	var msg string
+
+	log.Println(user.Username, "ran !help", params)
+	if len(params) == 0 {
+		msg = "Greetings, I am Tripbot, your robot assistant. What would you like to do today? Try \"!help commands\", or \"!help location\" to get started."
+		client.Whisper(user.Username, msg)
+		return
+	}
+
+	switch params[0] {
+	case "commands":
+		msg = "I offer many commands to inform and entertain you on our adventure. Some examples include: !location, !miles, !sunset, and !guess. To learn more about a command, use !help followed by the command name, like \"!help miles\" or \"!help state\"."
+	case "location":
+		msg = "The !location command gives you details about our current location. Related commands: !state, !guess."
+	case "state":
+		msg = "The !state command gives you the state we're currently in. Related commands: !location, !guess."
+	case "guess":
+		msg = "The !guess command lets you guess what state we're currently in. For example: \"!guess CA\" or \"!guess texas\". Try not to cheat! Related commands: !location, !state."
+	case "miles":
+		msg = "The !miles command lets you see your current miles. Miles are accumulated every minute you watch the stream. Related commands: !leaderboard, !kilometres."
+	case "leaderboard":
+		msg = "The !leaderboard command lets you see who has the most miles. Related commands: !miles, !kilometres."
+	case "kilometres":
+		msg = "The !kilometres command lets you see your current as kilometres. Miles/kilometres are accumulated every minute you watch the stream. Alias: !km. Related commands: !miles, !leaderboard."
+	case "sunset":
+		msg = "The !sunset command tells you the time until sunset on the date of filming. If it's after sunset, it will tell you how long it has been. Related commands: !date, !time."
+	case "date":
+		msg = "The !date command tells you the date the footage was filmed. Related command: !time."
+	case "time":
+		msg = "The !time command tells you the time (and timezone) in which the footage was filmed. Related command: !date."
+	default:
+		msg = "I'm not exactly sure what you mean. Try \"!help commands\" to learn more about what I can do for you."
+	}
 	client.Say(config.ChannelName, msg)
 }
 
