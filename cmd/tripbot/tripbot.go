@@ -23,24 +23,6 @@ import (
 
 // var ctrlC chan os.Signal
 
-// catch CTRL-C and clean up
-func gracefulShutdown() {
-	ctrlC := make(chan os.Signal)
-	signal.Notify(ctrlC, os.Interrupt, syscall.SIGTERM)
-
-	// wait for signal
-	<-ctrlC
-	log.Println(aurora.Red("caught CTRL-C"))
-	// anything below this probably wont be executed
-	// try and use !shutdown instead
-	log.Printf("last played: %s", video.CurrentlyPlaying)
-	users.Shutdown()
-	database.DBCon.Close()
-	background.StopCron()
-	sentry.Flush(time.Second * 5)
-	os.Exit(1)
-}
-
 func main() {
 	// start the graceful shutdown listener
 	go gracefulShutdown()
@@ -98,6 +80,25 @@ func main() {
 			time.Sleep(time.Minute)
 		}
 	}
+}
+
+// catch CTRL-C and clean up
+func gracefulShutdown() {
+	ctrlC := make(chan os.Signal)
+	signal.Notify(ctrlC, os.Interrupt, syscall.SIGTERM)
+
+	// wait for signal
+	<-ctrlC
+
+	log.Println(aurora.Red("caught CTRL-C"))
+	// anything below this probably wont be executed
+	// try and use !shutdown instead
+	log.Printf("last played: %s", video.CurrentlyPlaying)
+	users.Shutdown()
+	database.DBCon.Close()
+	background.StopCron()
+	sentry.Flush(time.Second * 5)
+	os.Exit(1)
 }
 
 func scheduleBackgroundJobs() {
