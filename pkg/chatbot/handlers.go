@@ -52,7 +52,7 @@ func runCommand(user users.User, message string) {
 		}
 	case "!guess":
 		if user.HasCommandAvailable() {
-			guessCmd(user, message.Message)
+			guessCmd(user, params)
 		} else {
 			client.Say(config.ChannelName, followerMsg)
 		}

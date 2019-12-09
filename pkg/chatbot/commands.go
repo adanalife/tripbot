@@ -185,22 +185,22 @@ func dateCmd(user *users.User) {
 	}
 }
 
-func guessCmd(user *users.User, message string) {
+//TODO: refactor to use golang '...' syntax
+func guessCmd(user *users.User, params []string) {
 	log.Println(user.Username, "ran !guess")
 	var msg string
 
-	if len(message) <= 7 {
+	if len(params) == 0 {
 		msg = "Try and guess what state we're in! For example: !guess CA"
 		client.Say(config.ChannelName, msg)
 		return
 	}
 
 	// get the arg from the command
-	// there might be a better way to do this
-	parts := strings.Split(message, " ")
-	guess := strings.Join(parts[1:], " ")
+	guess := strings.Join(params[1:], " ")
 
-	// convert to short form if necessary
+	// convert to short form if they used the full name
+	// e.g. "Massachusetts" instead of "MA"
 	if len(guess) == 2 {
 		guess = stateAbbrevs[strings.ToUpper(guess)]
 	}
@@ -212,7 +212,7 @@ func guessCmd(user *users.User, message string) {
 		vid = vid.Next()
 	}
 
-	if strings.ToLower(guess) == strings.ToLower(vid.State) {
+	if guess == strings.ToLower(vid.State) {
 		msg = fmt.Sprintf("@%s got it! We're in %s", user.Username, vid.State)
 	} else {
 		msg = "Try again! EarthDay"
