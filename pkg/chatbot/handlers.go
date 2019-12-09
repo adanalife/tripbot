@@ -20,7 +20,9 @@ func runCommand(user users.User, message string) {
 
 	switch command {
 	case "!help":
-		helpCmd(&user, params)
+		// whisper if the user ran !help with no params
+		whisper := (len(params) == 0)
+		helpCmd(&user, params, whisper)
 	case "!uptime":
 		uptimeCmd(&user)
 	case "!oldmiles":

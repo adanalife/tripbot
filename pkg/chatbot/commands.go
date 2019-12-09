@@ -21,14 +21,12 @@ import (
 	"github.com/hako/durafmt"
 )
 
-func helpCmd(user *users.User, params []string) {
+func getHelpMessage(params []string) string {
 	var msg string
 
-	log.Println(user.Username, "ran !help", params)
 	if len(params) == 0 {
 		msg = "Greetings, I am Tripbot, your robot assistant. What would you like to do today? Try \"!help commands\", or \"!help location\" to get started."
-		client.Whisper(user.Username, msg)
-		return
+		return msg
 	}
 
 	switch params[0] {
@@ -55,7 +53,19 @@ func helpCmd(user *users.User, params []string) {
 	default:
 		msg = "I'm not exactly sure what you mean. Try \"!help commands\" to learn more about what I can do for you."
 	}
-	client.Say(config.ChannelName, msg)
+
+	return msg
+}
+
+func helpCmd(user *users.User, params []string, whisper bool) {
+	log.Println(user.Username, "ran !help", params)
+
+	msg := getHelpMessage(params)
+	if whisper {
+		client.Whisper(user.Username, msg)
+	} else {
+		client.Say(config.ChannelName, msg)
+	}
 }
 
 func uptimeCmd(user *users.User) {
