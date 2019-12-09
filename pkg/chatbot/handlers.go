@@ -1,7 +1,6 @@
 package chatbot
 
 import (
-	"fmt"
 	"log"
 	"strings"
 
@@ -12,16 +11,16 @@ import (
 	"github.com/gempir/go-twitch-irc/v2"
 )
 
-func runCommand(user users.User, message string) {
-	var err error
-
+func runCommand(user users.User, message string, whisper bool) {
 	split := strings.Split(message, " ")
 	command := split[0]
 	params := split[1:]
 
 	switch command {
 	case "!help":
-		helpCmd(&user)
+		// whisper if the user ran !help with no params
+		whisper = (whisper || len(params) == 0)
+		helpCmd(&user, params, whisper)
 	case "!song":
 		songCmd(&user)
 	case "!uptime":
@@ -118,17 +117,13 @@ func runCommand(user users.User, message string) {
 		} else {
 			Say(followerMsg)
 		}
-	default:
-		err = fmt.Errorf("command %s not found", command)
-	}
-	if err != nil {
-		terrors.Log(err, "error running command")
 	}
 }
 
 // handles all chat messages
 func PrivateMessage(msg twitch.PrivateMessage) {
 	username := msg.User.Name
+	//TODO: also include ones prefixed with whitespace?
 	//TODO: we lose capitalization here, is that okay?
 	message := strings.ToLower(msg.Message)
 
@@ -142,9 +137,8 @@ func PrivateMessage(msg twitch.PrivateMessage) {
 		// log in the user
 		user := users.LoginIfNecessary(username)
 
-		//TODO is it okay that this isn't a pointer?
-		runCommand(*user, message)
-	}
+	// run the command if possible
+	runCommand(*user, message, false)
 }
 
 // this event fires when a user joins the channel
@@ -164,10 +158,28 @@ func UserPart(partMessage twitch.UserPartMessage) {
 // }
 
 // if the message comes from me, then post the message to chat
-//TODO: log to stackdriver
-func Whisper(message twitch.WhisperMessage) {
-	log.Println("whisper from", message.User.Name, ":", message.Message)
-	if message.User.Name == strings.ToLower(config.ChannelName) {
-		Say(message.Message)
+func Whisper(msg twitch.WhisperMessage) {
+	log.Println("whisper from", msg.User.Name, ":", msg.Message)
+
+	// allow the channel owner to speak through the bot's mouth
+	if msg.User.Name == strings.ToLower(config.ChannelName) {
+		// not using the "message" var here cause I want to preserve
+		// capitalization in the parroted message
+		client.Say(config.ChannelName, msg.Message)
+		return
+	}
+
+	username := msg.User.Name
+	message := strings.ToLower(msg.Message)
+
+	// log in the user
+	user := users.LoginIfNecessary(username)
+
+	if strings.HasPrefix(message, "!help") {
+		runCommand(*user, message, true) // send as a whisper
+		return
+	} else {
+		msg := "I'm sorry, I haven't yet been taught how to respond to that. Try \"!help commands\"."
+		client.Whisper(username, msg)
 	}
 }
