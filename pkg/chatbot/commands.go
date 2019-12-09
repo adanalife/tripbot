@@ -8,9 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
-	"github.com/nicklaw5/helix"
 
 	"github.com/dmerrick/danalol-stream/pkg/background"
 	"github.com/dmerrick/danalol-stream/pkg/config"

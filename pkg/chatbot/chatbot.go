@@ -1,12 +1,13 @@
 package chatbot
 
 import (
+	"fmt"
 	"log"
 	"math/rand"
 	"os"
-	"strings"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
@@ -16,6 +17,7 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/kelvins/geocoder"
 	"github.com/logrusorgru/aurora"
+	"github.com/nicklaw5/helix"
 )
 
 var botUsername, googleMapsAPIKey string
@@ -28,7 +30,6 @@ var helpIndex = rand.Intn(len(config.HelpMessages))
 
 const followerMsg = "Follow the stream to run unlimited commands :)"
 const subscriberMsg = "You must be a subscriber to run that command :)"
-
 
 func Initialize() *twitch.Client {
 	var err error
@@ -102,4 +103,3 @@ func AnnounceSubscriber(sub helix.Subscription) {
 	msg = fmt.Sprintf("The %d current viewers have been given a bonus mile, too HolidayPresent", len(users.LoggedIn))
 	client.Say(config.ChannelName, msg)
 }
-
