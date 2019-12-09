@@ -23,36 +23,6 @@ import (
 	"github.com/hako/durafmt"
 )
 
-// Chatter will post a message to chat
-func Chatter() {
-	// rand.Intn(len(config.HelpMessages))
-	client.Say(config.ChannelName, help())
-}
-
-func help() string {
-	text := config.HelpMessages[helpIndex]
-	// bump the index
-	helpIndex = (helpIndex + 1) % len(config.HelpMessages)
-	return text
-}
-
-func AnnounceNewFollower(username string) {
-	msg := fmt.Sprintf("Thank you for the follow, @%s", username)
-	client.Say(config.ChannelName, msg)
-}
-
-//TODO: do more with the Subscription... IsGift, Tier, PlanName, etc.
-func AnnounceSubscriber(sub helix.Subscription) {
-	spew.Dump(sub)
-	username := sub.UserName
-	msg := fmt.Sprintf("Thank you for the sub, @%s; enjoy your !bonusmiles bleedPurple", username)
-	client.Say(config.ChannelName, msg)
-	// give everyone a bonus mile
-	users.GiveEveryoneMiles(1.0)
-	msg = fmt.Sprintf("The %d current viewers have been given a bonus mile, too HolidayPresent", len(users.LoggedIn))
-	client.Say(config.ChannelName, msg)
-}
-
 func helpCmd(user *users.User) {
 	log.Println(user.Username, "ran !help")
 	msg := fmt.Sprintf("%s (%d of %d)", help(), helpIndex+1, len(config.HelpMessages))
