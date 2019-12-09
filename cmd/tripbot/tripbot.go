@@ -21,8 +21,6 @@ import (
 	"github.com/logrusorgru/aurora"
 )
 
-// var ctrlC chan os.Signal
-
 func main() {
 	// start the graceful shutdown listener
 	go gracefulShutdown()
@@ -32,11 +30,6 @@ func main() {
 
 	// set up the Twitch client
 	client := chatbot.Initialize()
-
-	// join the channel
-	client.Join(config.ChannelName)
-	log.Println("Joined channel", config.ChannelName)
-	log.Printf("URL: %s", aurora.Underline(aurora.Blue(fmt.Sprintf("https://twitch.tv/%s", config.ChannelName))))
 
 	// run this right away to set the currently-playing video
 	// (otherwise it will be unset until the first cron job runs)
@@ -49,6 +42,7 @@ func main() {
 
 	// start cron and attach cronjobs
 	background.StartCron()
+	scheduleBackgroundJobs()
 
 	// update subscribers list
 	mytwitch.GetSubscribers()
@@ -60,9 +54,9 @@ func main() {
 	// create webhook subscriptions
 	mytwitch.UpdateWebhookSubscriptions()
 
-	// start the cron jobs
-	scheduleBackgroundJobs()
-
+	client.Join(config.ChannelName)
+	log.Println("Joined channel", config.ChannelName)
+	log.Printf("URL: %s", aurora.Blue(fmt.Sprintf("https://twitch.tv/%s", config.ChannelName)).Underline())
 	// actually connect to Twitch
 	// wrapped in a loop in case twitch goes down
 	for {
@@ -94,6 +88,8 @@ func gracefulShutdown() {
 	os.Exit(1)
 }
 
+// the reason we put this here is because adding this to background
+// would cause circular dependencies
 func scheduleBackgroundJobs() {
 	// schedule these functions
 	background.Cron.AddFunc("@every 60s", video.GetCurrentlyPlaying)

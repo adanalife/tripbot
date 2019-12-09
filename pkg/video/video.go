@@ -23,6 +23,7 @@ var timeStarted time.Time
 
 // GetCurrentlyPlaying will use lsof to figure out
 // which dashcam video is currently playing (seriously)
+//TODO: consider making this return a video struct
 func GetCurrentlyPlaying() {
 	var err error
 	// save the video we used last time
