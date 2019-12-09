@@ -1,111 +1,122 @@
 package chatbot
 
+import (
+	"fmt"
+	"log"
+	"strings"
+
+	"github.com/dmerrick/danalol-stream/pkg/config"
+	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
+	"github.com/dmerrick/danalol-stream/pkg/users"
+	"github.com/gempir/go-twitch-irc/v2"
+)
+
 func runCommand(user users.User, message string) {
+	var err error
+
 	split := strings.Split(message, " ")
 	command := split[0]
 	params := split[1:]
 
 	switch command {
 	case "!help":
-		helpCmd(user)
+		helpCmd(&user)
 	case "!uptime":
-		uptimeCmd(user)
-	case "!uptime":
-		uptimeCmd(user)
+		uptimeCmd(&user)
 	case "!oldmiles":
 		if user.HasCommandAvailable() {
-			oldMilesCmd(user)
+			oldMilesCmd(&user)
 		} else {
 			client.Say(config.ChannelName, followerMsg)
 		}
 	case "!shutdown":
-		shutdownCmd(user)
+		shutdownCmd(&user)
 	case "!bonusmiles":
 		if user.IsSubscriber() {
-			bonusMilesCmd(user)
+			bonusMilesCmd(&user)
 		} else {
 			client.Say(config.ChannelName, subscriberMsg)
 		}
 	case "!sunset":
 		if user.HasCommandAvailable() {
-			sunsetCmd(user)
+			sunsetCmd(&user)
 		} else {
 			client.Say(config.ChannelName, followerMsg)
 		}
 	case "!oldleaderboard":
 		if user.HasCommandAvailable() {
-			oldLeaderboardCmd(user)
+			oldLeaderboardCmd(&user)
 		} else {
 			client.Say(config.ChannelName, followerMsg)
 		}
 	case "!time":
 		if user.HasCommandAvailable() {
-			timeCmd(user)
+			timeCmd(&user)
 		} else {
 			client.Say(config.ChannelName, followerMsg)
 		}
 	case "!date":
 		if user.HasCommandAvailable() {
-			dateCmd(user)
+			dateCmd(&user)
 		} else {
 			client.Say(config.ChannelName, followerMsg)
 		}
 	case "!guess":
 		if user.HasCommandAvailable() {
-			guessCmd(user, params)
+			guessCmd(&user, params)
 		} else {
 			client.Say(config.ChannelName, followerMsg)
 		}
 	case "!state":
 		if user.HasCommandAvailable() {
-			stateCmd(user)
+			stateCmd(&user)
 		} else {
 			client.Say(config.ChannelName, followerMsg)
 		}
 	case "!secretinfo":
-		secretInfoCmd(user)
-	// any of these should trigger the miles command
-        case "!miles", "!newmiles":
+		secretInfoCmd(&user)
+		// any of these should trigger the miles command
+	case "!miles", "!newmiles":
 		if user.HasCommandAvailable() {
-			milesCmd(user)
+			milesCmd(&user)
 		} else {
 			client.Say(config.ChannelName, followerMsg)
 		}
 
-	// any of these should trigger the kilometres command
-        case "!km", "!kilometres", "!kilometers":
+		// any of these should trigger the kilometres command
+	case "!km", "!kilometres", "!kilometers":
 		if user.HasCommandAvailable() {
-			kilometresCmd(user)
+			kilometresCmd(&user)
 		} else {
 			client.Say(config.ChannelName, followerMsg)
 		}
 
-	// any of these should trigger the location command
-        case "!tripbot", "!location", "!locton", "!locaton", "!locatoion", "where is this", "where are we", "where are you":
+		// any of these should trigger the location command
+	case "!tripbot", "!location", "!locton", "!locaton", "!locatoion", "where is this", "where are we", "where are you":
 		if user.HasCommandAvailable() {
-			locationCmd(user)
+			locationCmd(&user)
 		} else {
 			client.Say(config.ChannelName, followerMsg)
 		}
 
-	// any of these should trigger the leaderboard command
-        case "!leaderboard", "!newleaderboard":
+		// any of these should trigger the leaderboard command
+	case "!leaderboard", "!newleaderboard":
 		if user.HasCommandAvailable() {
-			leaderboardCmd(user)
+			leaderboardCmd(&user)
 		} else {
 			client.Say(config.ChannelName, followerMsg)
 		}
 
-	// any of these should trigger the report command
-	//TODO: probably want to allow people to run this more than once?
-        case "!report", "no audio", "no sound", "no music", "frozen":
+		// any of these should trigger the report command
+		//TODO: probably want to allow people to run this more than once?
+	case "!report", "no audio", "no sound", "no music", "frozen":
 		if user.HasCommandAvailable() {
-			reportCmd(user, message.Message)
+			reportCmd(&user, params)
 		} else {
 			client.Say(config.ChannelName, followerMsg)
 		}
 	default:
-		err = fmt.Errorf("command %s not found", command)
+		err := fmt.Errorf("command %s not found", command)
 	}
 	if err != nil {
 		terrors.Log(err, "error running command")
@@ -113,10 +124,10 @@ func runCommand(user users.User, message string) {
 }
 
 // handles all chat messages
-func PrivateMessage(message twitch.PrivateMessage) {
-	username := message.User.Name
+func PrivateMessage(msg twitch.PrivateMessage) {
+	username := msg.User.Name
 	//TODO: we lose capitalization here, is that okay?
-	message := strings.ToLower(message.Message)
+	message := strings.ToLower(msg.Message)
 
 	// check to see if the message is a command
 	//TODO: also include ones prefixed with whitespace?
@@ -125,6 +136,7 @@ func PrivateMessage(message twitch.PrivateMessage) {
 		// log in the user
 		user := users.LoginIfNecessary(username)
 
+		//TODO is it okay that this isn't a pointer?
 		runCommand(user, message)
 	}
 }

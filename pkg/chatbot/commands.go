@@ -231,8 +231,10 @@ func stateCmd(user *users.User) {
 }
 
 //TODO: maybe there could be a !cancel command or something
-func reportCmd(user *users.User, message string) {
+//TODO: use fancy golang ... syntax?
+func reportCmd(user *users.User, params []string) {
 	log.Println(user.Username, "ran !report")
+	message := strings.Join(params, " ")
 	message = fmt.Sprintf("Report from Twitch Chat: %s", message)
 	helpers.SendSMS(message)
 	client.Say(config.ChannelName, "Thank you, I will look into this ASAP!")
