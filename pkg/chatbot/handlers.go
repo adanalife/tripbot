@@ -120,6 +120,7 @@ func PrivateMessage(message twitch.PrivateMessage) {
 
 	// check to see if the message is a command
 	//TODO: also include ones prefixed with whitespace?
+	//TODO: not all commands start with "!"s
 	if strings.HasPrefix(message, "!") {
 		// log in the user
 		user := users.LoginIfNecessary(username)
