@@ -1,4 +1,4 @@
-package tripbot
+package chatbot
 
 // A handy map of US state codes to full names
 var stateAbbrevs = map[string]string{

@@ -1,4 +1,4 @@
-package tripbot
+package chatbot
 
 import (
 	"fmt"
