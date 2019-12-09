@@ -13,7 +13,7 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/database"
 	"github.com/dmerrick/danalol-stream/pkg/server"
-	"github.com/dmerrick/danalol-stream/pkg/tripbot"
+	"github.com/dmerrick/danalol-stream/pkg/chatbot"
 	mytwitch "github.com/dmerrick/danalol-stream/pkg/twitch"
 	"github.com/dmerrick/danalol-stream/pkg/users"
 	"github.com/dmerrick/danalol-stream/pkg/video"

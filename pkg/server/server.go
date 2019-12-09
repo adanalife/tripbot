@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
-	"github.com/dmerrick/danalol-stream/pkg/tripbot"
+	"github.com/dmerrick/danalol-stream/pkg/chatbot"
 	mytwitch "github.com/dmerrick/danalol-stream/pkg/twitch"
 	"github.com/dmerrick/danalol-stream/pkg/users"
 	"github.com/logrusorgru/aurora"
