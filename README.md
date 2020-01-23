@@ -12,6 +12,24 @@ If you like it, please follow my channel. Thanks for watching!
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/dmerrick/danalol-stream)](https://goreportcard.com/report/github.com/dmerrick/danalol-stream)
 
+## Install
+
+Go should auto-magically pull down all of the required packages when you use `go run` to run something.
+You will also need to run:
+
+```
+# install tesseract
+sudo apt install tesseract-ocr libtesseract-dev
+```
+
+To get Streamlabs chat to work on Linux, I ended up using the [obs-linuxbrowser](https://github.com/bazukas/obs-linuxbrowser) plugin for OBS.
+
+### Database
+
+See [db/README.md](#) for database instructions.
+
+
+## Common Tasks
 
 ### Backup logs
 
