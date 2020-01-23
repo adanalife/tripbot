@@ -13,6 +13,7 @@ require (
 	github.com/fsnotify/fsnotify v1.4.7
 	github.com/gempir/go-twitch-irc/v2 v2.1.0
 	github.com/getsentry/sentry-go v0.3.1
+	github.com/golang-migrate/migrate v3.5.4+incompatible // indirect
 	github.com/google/uuid v1.1.1 // indirect
 	github.com/gorilla/schema v1.1.0 // indirect
 	github.com/hako/durafmt v0.0.0-20180520121703-7b7ae1e72ead
