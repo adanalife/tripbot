@@ -27,6 +27,8 @@ sudo apt install tesseract-ocr libtesseract-dev
 
 To get Streamlabs chat to work on Linux, I ended up using the [obs-linuxbrowser](https://github.com/bazukas/obs-linuxbrowser) plugin for OBS.
 
+For more detailed install instructions, see [infra/README.md](infra/README.md)
+
 ### Database
 
 See [db/README.md](#) for database instructions.
@@ -58,13 +60,3 @@ go get -u github.com/nicklaw5/helix
 go get -u github.com/psampaz/go-mod-outdated
 go list -u -m -json all | go-mod-outdated
 ```
-
-
-## Setting up new machine
-
-install mopidy
-install scrobbler and somafm
-configure pulseaudio
-https://docs.mopidy.com/en/latest/running/service/#system-service-and-pulseaudio
-install gmpc
-
