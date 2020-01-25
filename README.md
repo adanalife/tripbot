@@ -1,5 +1,8 @@
 # A Dana Life... Live!
 
+[![Go Report Card](https://goreportcard.com/badge/github.com/dmerrick/danalol-stream)](https://goreportcard.com/report/github.com/dmerrick/danalol-stream)
+[![GoDoc](https://godoc.org/github.com/dmerrick/danalol-stream?status.svg)](https://godoc.org/github.com/dmerrick/danalol-stream)
+
 ![](assets/stream-screencap.jpg)
 
 This is the source code to [whereisdana.today](http://whereisdana.today)
