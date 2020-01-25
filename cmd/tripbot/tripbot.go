@@ -98,7 +98,7 @@ func scheduleBackgroundJobs() {
 	background.Cron.AddFunc("@every 5m", users.PrintCurrentSession)
 	background.Cron.AddFunc("@every 15m", mytwitch.GetSubscribers)
 	background.Cron.AddFunc("@every 1h", mytwitch.RefreshUserAccessToken)
-	background.Cron.AddFunc("@every 57m30s", chatbot.Chatter)
+	background.Cron.AddFunc("@every 2h57m30s", tripbot.Chatter)
 	background.Cron.AddFunc("@every 12h", mytwitch.SetStreamTags)
 	background.Cron.AddFunc("@every 12h", mytwitch.UpdateWebhookSubscriptions)
 }
