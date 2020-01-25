@@ -55,3 +55,13 @@ go get -u github.com/nicklaw5/helix
 go get -u github.com/psampaz/go-mod-outdated
 go list -u -m -json all | go-mod-outdated
 ```
+
+
+## Setting up new machine
+
+install mopidy
+install scrobbler and somafm
+configure pulseaudio
+https://docs.mopidy.com/en/latest/running/service/#system-service-and-pulseaudio
+install gmpc
+
