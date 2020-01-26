@@ -19,7 +19,8 @@ const (
 	CoordsBucket      = "coords"
 )
 
-var ChannelName, MapsOutputDir, CroppedPath, ExternalURL, GoogleProjectID string
+//TODO: split this into multiple lines
+var ChannelName, MapsOutputDir, CroppedPath, ExternalURL, GoogleProjectID, BotUsername string
 var ReadOnly bool
 var Verbose bool
 
@@ -29,6 +30,7 @@ func init() {
 	if err != nil {
 		log.Fatal("Error loading .env file")
 	}
+	//TODO: pretty much all of these are required, we should fail if missing
 	//TODO: consider using strings.ToLower() on channel name here and removing elsewhere
 	ChannelName = os.Getenv("CHANNEL_NAME")
 	ReadOnly, _ = strconv.ParseBool(os.Getenv("READ_ONLY"))
@@ -41,6 +43,11 @@ func init() {
 	ExternalURL = os.Getenv("EXTERNAL_URL")
 
 	GoogleProjectID = os.Getenv("GOOGLE_APPS_PROJECT_ID")
+
+	BotUsername = os.Getenv("BOT_USERNAME")
+	if BotUsername == "" {
+		panic("You must set BOT_USERNAME")
+	}
 }
 
 func VideoDir() string {

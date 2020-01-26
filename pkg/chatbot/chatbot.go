@@ -21,8 +21,7 @@ import (
 	"github.com/nicklaw5/helix"
 )
 
-//TODO: move BotUsername to config
-var BotUsername, googleMapsAPIKey string
+var googleMapsAPIKey string
 var client *twitch.Client
 var Uptime time.Time
 
@@ -47,10 +46,6 @@ func Initialize() *twitch.Client {
 	if os.Getenv("DASHCAM_DIR") == "" {
 		panic("You must set DASHCAM_DIR")
 	}
-	BotUsername = os.Getenv("BOT_USERNAME")
-	if BotUsername == "" {
-		panic("You must set BOT_USERNAME")
-	}
 	googleMapsAPIKey = os.Getenv("GOOGLE_MAPS_API_KEY")
 	if googleMapsAPIKey == "" {
 		panic("You must set GOOGLE_MAPS_API_KEY")
@@ -71,7 +66,7 @@ func Initialize() *twitch.Client {
 	log.Println(aurora.Blue(authURL).Underline())
 	helpers.OpenInBrowser(authURL)
 
-	client = twitch.NewClient(BotUsername, mytwitch.AuthToken)
+	client = twitch.NewClient(config.BotUsername, mytwitch.AuthToken)
 
 	// attach handlers
 	client.OnUserJoinMessage(UserJoin)
@@ -85,7 +80,7 @@ func Initialize() *twitch.Client {
 
 // Say will make a post in chat
 func Say(msg string) {
-	mylog.ChatMsg(BotUsername, msg)
+	mylog.ChatMsg(config.BotUsername, msg)
 	client.Say(config.ChannelName, msg)
 }
 
