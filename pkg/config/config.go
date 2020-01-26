@@ -32,6 +32,8 @@ var (
 	ReadOnly bool
 	// Verbose determines output verbosity
 	Verbose bool
+	// DashcamDir contains the dashcam footage
+	DashcamDir string
 	// MapsOutputDir is where generated maps will be stored
 	MapsOutputDir string
 	// CroppedPath is where we store the cropped versions of screencaps (to OCR them)
@@ -70,16 +72,17 @@ func init() {
 	GoogleProjectID = os.Getenv("GOOGLE_APPS_PROJECT_ID")
 	ReadOnly, _ = strconv.ParseBool(os.Getenv("READ_ONLY"))
 	Verbose, _ = strconv.ParseBool(os.Getenv("VERBOSE"))
+	DashcamDir = os.Getenv("DASHCAM_DIR")
 	MapsOutputDir = os.Getenv("MAPS_OUTPUT_DIR")
 	CroppedPath = os.Getenv("CROPPED_CORNERS_DIR")
 }
 
 func VideoDir() string {
-	return path.Join(os.Getenv("DASHCAM_DIR"), videoDir)
+	return path.Join(DashcamDir, videoDir)
 }
 
 func ScreencapDir() string {
-	return path.Join(os.Getenv("DASHCAM_DIR"), screencapDir)
+	return path.Join(DashcamDir, screencapDir)
 }
 
 //TODO: this should load from a config file

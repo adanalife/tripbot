@@ -23,9 +23,7 @@ func init() {
 	if err != nil {
 		log.Fatal("Error loading .env file")
 	}
-	if os.Getenv("DASHCAM_DIR") == "" {
-		panic("You must set DASHCAM_DIR")
-	}
+
 	googleMapsAPIKey := os.Getenv("GOOGLE_MAPS_API_KEY")
 	if googleMapsAPIKey == "" {
 		panic("You must set GOOGLE_MAPS_API_KEY")
