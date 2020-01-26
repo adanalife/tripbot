@@ -274,7 +274,10 @@ func shutdownCmd(user *users.User) {
 	log.Printf("currently playing: %s", video.CurrentlyPlaying)
 	background.StopCron()
 	users.Shutdown()
-	database.DBCon.Close()
+	err := database.DBCon.Close()
+	if err != nil {
+		log.Println(err)
+	}
 	sentry.Flush(time.Second * 5)
 	os.Exit(0)
 }
