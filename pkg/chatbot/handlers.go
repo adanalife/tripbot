@@ -28,7 +28,7 @@ func runCommand(user users.User, message string) {
 		if user.HasCommandAvailable() {
 			oldMilesCmd(&user)
 		} else {
-			client.Say(config.ChannelName, followerMsg)
+			Say(followerMsg)
 		}
 	case "!shutdown":
 		shutdownCmd(&user)
@@ -36,43 +36,43 @@ func runCommand(user users.User, message string) {
 		if user.IsSubscriber() {
 			bonusMilesCmd(&user)
 		} else {
-			client.Say(config.ChannelName, subscriberMsg)
+			Say(subscriberMsg)
 		}
 	case "!sunset":
 		if user.HasCommandAvailable() {
 			sunsetCmd(&user)
 		} else {
-			client.Say(config.ChannelName, followerMsg)
+			Say(followerMsg)
 		}
 	case "!oldleaderboard":
 		if user.HasCommandAvailable() {
 			oldLeaderboardCmd(&user)
 		} else {
-			client.Say(config.ChannelName, followerMsg)
+			Say(followerMsg)
 		}
 	case "!time":
 		if user.HasCommandAvailable() {
 			timeCmd(&user)
 		} else {
-			client.Say(config.ChannelName, followerMsg)
+			Say(followerMsg)
 		}
 	case "!date":
 		if user.HasCommandAvailable() {
 			dateCmd(&user)
 		} else {
-			client.Say(config.ChannelName, followerMsg)
+			Say(followerMsg)
 		}
 	case "!guess":
 		if user.HasCommandAvailable() {
 			guessCmd(&user, params)
 		} else {
-			client.Say(config.ChannelName, followerMsg)
+			Say(followerMsg)
 		}
 	case "!state":
 		if user.HasCommandAvailable() {
 			stateCmd(&user)
 		} else {
-			client.Say(config.ChannelName, followerMsg)
+			Say(followerMsg)
 		}
 	case "!secretinfo":
 		secretInfoCmd(&user)
@@ -81,7 +81,7 @@ func runCommand(user users.User, message string) {
 		if user.HasCommandAvailable() {
 			milesCmd(&user)
 		} else {
-			client.Say(config.ChannelName, followerMsg)
+			Say(followerMsg)
 		}
 
 		// any of these should trigger the kilometres command
@@ -89,7 +89,7 @@ func runCommand(user users.User, message string) {
 		if user.HasCommandAvailable() {
 			kilometresCmd(&user)
 		} else {
-			client.Say(config.ChannelName, followerMsg)
+			Say(followerMsg)
 		}
 
 		// any of these should trigger the location command
@@ -97,7 +97,7 @@ func runCommand(user users.User, message string) {
 		if user.HasCommandAvailable() {
 			locationCmd(&user)
 		} else {
-			client.Say(config.ChannelName, followerMsg)
+			Say(followerMsg)
 		}
 
 		// any of these should trigger the leaderboard command
@@ -105,7 +105,7 @@ func runCommand(user users.User, message string) {
 		if user.HasCommandAvailable() {
 			leaderboardCmd(&user)
 		} else {
-			client.Say(config.ChannelName, followerMsg)
+			Say(followerMsg)
 		}
 
 		// any of these should trigger the report command
@@ -114,7 +114,7 @@ func runCommand(user users.User, message string) {
 		if user.HasCommandAvailable() {
 			reportCmd(&user, params)
 		} else {
-			client.Say(config.ChannelName, followerMsg)
+			Say(followerMsg)
 		}
 	default:
 		err = fmt.Errorf("command %s not found", command)
@@ -166,6 +166,6 @@ func UserPart(partMessage twitch.UserPartMessage) {
 func Whisper(message twitch.WhisperMessage) {
 	log.Println("whisper from", message.User.Name, ":", message.Message)
 	if message.User.Name == strings.ToLower(config.ChannelName) {
-		client.Say(config.ChannelName, message.Message)
+		Say(message.Message)
 	}
 }

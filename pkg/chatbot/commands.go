@@ -24,14 +24,14 @@ import (
 func helpCmd(user *users.User) {
 	log.Println(user.Username, "ran !help")
 	msg := fmt.Sprintf("%s (%d of %d)", help(), helpIndex+1, len(config.HelpMessages))
-	client.Say(config.ChannelName, msg)
+	Say(msg)
 }
 
 func uptimeCmd(user *users.User) {
 	log.Println(user.Username, "ran !uptime")
 	dur := time.Now().Sub(Uptime)
 	msg := fmt.Sprintf("I have been running for %s", durafmt.Parse(dur))
-	client.Say(config.ChannelName, msg)
+	Say(msg)
 }
 
 func milesCmd(user *users.User) {
@@ -42,7 +42,7 @@ func milesCmd(user *users.User) {
 	if miles < 0.1 {
 		msg += " You'll earn more miles every minute you watch the stream."
 	}
-	client.Say(config.ChannelName, msg)
+	Say(msg)
 }
 
 func kilometresCmd(user *users.User) {
@@ -50,7 +50,7 @@ func kilometresCmd(user *users.User) {
 	km := user.CurrentMiles() * 1.609344
 	msg := "@%s has %.2f kilometres."
 	msg = fmt.Sprintf(msg, user.Username, km)
-	client.Say(config.ChannelName, msg)
+	Say(msg)
 }
 
 func oldMilesCmd(user *users.User) {
@@ -70,7 +70,7 @@ func oldMilesCmd(user *users.User) {
 		msg = fmt.Sprintf("%s Earn miles for every minute you watch the stream!", msg)
 	}
 	msg = fmt.Sprintf(msg, user.Username, miles)
-	client.Say(config.ChannelName, msg)
+	Say(msg)
 }
 
 func sunsetCmd(user *users.User) {
@@ -78,11 +78,11 @@ func sunsetCmd(user *users.User) {
 	// get the currently-playing video
 	vid := video.CurrentlyPlaying
 	if vid.Flagged {
-		client.Say(config.ChannelName, "I couldn't figure out current GPS coords, using next closest...")
+		Say("I couldn't figure out current GPS coords, using next closest...")
 		vid = vid.Next()
 	}
 	lat, lng, _ := vid.Location()
-	client.Say(config.ChannelName, helpers.SunsetStr(vid.DateFilmed, lat, lng))
+	Say(helpers.SunsetStr(vid.DateFilmed, lat, lng))
 }
 
 func locationCmd(user *users.User) {
@@ -90,7 +90,7 @@ func locationCmd(user *users.User) {
 	// get the currently-playing video
 	vid := video.CurrentlyPlaying
 	if vid.Flagged {
-		client.Say(config.ChannelName, "I couldn't figure out current GPS coords, using next closest...")
+		Say("I couldn't figure out current GPS coords, using next closest...")
 		//TODO: write something like vid.FindClosest() that
 		// chooses whether or not to use Next() vs Prev()
 		vid = vid.Next()
@@ -105,7 +105,7 @@ func locationCmd(user *users.User) {
 	// generate a google maps url
 	url := helpers.GoogleMapsURL(lat, lng)
 	msg := fmt.Sprintf("%s %s", address, url)
-	client.Say(config.ChannelName, msg)
+	Say(msg)
 }
 
 func leaderboardCmd(user *users.User) {
@@ -122,7 +122,7 @@ func leaderboardCmd(user *users.User) {
 			msg += ", "
 		}
 	}
-	client.Say(config.ChannelName, msg)
+	Say(msg)
 }
 
 func oldLeaderboardCmd(user *users.User) {
@@ -136,7 +136,7 @@ func oldLeaderboardCmd(user *users.User) {
 			msg += ", "
 		}
 	}
-	client.Say(config.ChannelName, msg)
+	Say(msg)
 }
 
 func timeCmd(user *users.User) {
@@ -153,11 +153,11 @@ func timeCmd(user *users.User) {
 	}
 	if err != nil {
 		// why would we get in here?
-		client.Say(config.ChannelName, "I couldn't figure out current GPS coords, sorry!")
+		Say("I couldn't figure out current GPS coords, sorry!")
 	} else {
 		realDate := helpers.ActualDate(vid.DateFilmed, lat, lng)
 		fmtTime := realDate.Format("3:04pm MST")
-		client.Say(config.ChannelName, fmt.Sprintf("This moment was %s", fmtTime))
+		Say(fmt.Sprintf("This moment was %s", fmtTime))
 	}
 }
 
@@ -175,11 +175,11 @@ func dateCmd(user *users.User) {
 	}
 	if err != nil {
 		// why would we get in here?
-		client.Say(config.ChannelName, "I couldn't figure out current GPS coords, sorry!")
+		Say("I couldn't figure out current GPS coords, sorry!")
 	} else {
 		realDate := helpers.ActualDate(vid.DateFilmed, lat, lng)
 		fmtDate := realDate.Format("Monday January 2, 2006")
-		client.Say(config.ChannelName, fmt.Sprintf("This moment was %s", fmtDate))
+		Say(fmt.Sprintf("This moment was %s", fmtDate))
 	}
 }
 
@@ -190,7 +190,7 @@ func guessCmd(user *users.User, params []string) {
 
 	if len(params) == 0 {
 		msg = "Try and guess what state we're in! For example: !guess CA"
-		client.Say(config.ChannelName, msg)
+		Say(msg)
 		return
 	}
 
@@ -206,7 +206,7 @@ func guessCmd(user *users.User, params []string) {
 	// get the currently-playing video
 	vid := video.CurrentlyPlaying
 	if vid.Flagged {
-		client.Say(config.ChannelName, "I couldn't figure out current GPS coords, using next closest...")
+		Say("I couldn't figure out current GPS coords, using next closest...")
 		vid = vid.Next()
 	}
 
@@ -215,7 +215,7 @@ func guessCmd(user *users.User, params []string) {
 	} else {
 		msg = "Try again! EarthDay"
 	}
-	client.Say(config.ChannelName, msg)
+	Say(msg)
 }
 
 func stateCmd(user *users.User) {
@@ -223,11 +223,11 @@ func stateCmd(user *users.User) {
 	// get the currently-playing video
 	vid := video.CurrentlyPlaying
 	if vid.Flagged {
-		client.Say(config.ChannelName, "I couldn't figure out current GPS coords, using next closest...")
+		Say("I couldn't figure out current GPS coords, using next closest...")
 		vid = vid.Next()
 	}
 	msg := fmt.Sprintf("We're in %s", vid.State)
-	client.Say(config.ChannelName, msg)
+	Say(msg)
 }
 
 //TODO: maybe there could be a !cancel command or something
@@ -237,14 +237,14 @@ func reportCmd(user *users.User, params []string) {
 	message := strings.Join(params, " ")
 	message = fmt.Sprintf("Report from Twitch Chat: %s", message)
 	helpers.SendSMS(message)
-	client.Say(config.ChannelName, "Thank you, I will look into this ASAP!")
+	Say("Thank you, I will look into this ASAP!")
 }
 
 func bonusMilesCmd(user *users.User) {
 	log.Println(user.Username, "ran !bonusmiles")
 	bonus := user.BonusMiles()
 	msg := fmt.Sprintf("%s has earned %.4f bonus miles this session", user.Username, bonus)
-	client.Say(config.ChannelName, msg)
+	Say(msg)
 }
 
 func secretInfoCmd(user *users.User) {
@@ -261,16 +261,16 @@ func secretInfoCmd(user *users.User) {
 		msg = fmt.Sprintf("%s, lat: %f, lng: %f", msg, lat, lng)
 	}
 	log.Println(msg)
-	client.Say(config.ChannelName, msg)
+	Say(msg)
 }
 
 func shutdownCmd(user *users.User) {
 	log.Println(user.Username, "ran !shutdown")
 	if user.Username != strings.ToLower(config.ChannelName) {
-		client.Say(config.ChannelName, "Nice try bucko")
+		Say("Nice try bucko")
 		return
 	}
-	client.Say(config.ChannelName, "Shutting down...")
+	Say("Shutting down...")
 	log.Printf("currently playing: %s", video.CurrentlyPlaying)
 	background.StopCron()
 	users.Shutdown()

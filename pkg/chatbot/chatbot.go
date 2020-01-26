@@ -81,10 +81,16 @@ func Initialize() *twitch.Client {
 	return client
 }
 
-// Chatter will post a message to chat
+// Say will make a post in chat
+func Say(msg string) {
+	client.Say(config.ChannelName, msg)
+}
+
+// Chatter is designed to most a randomized message on a timer
+// right now it just posts random "help messages"
 func Chatter() {
 	// rand.Intn(len(config.HelpMessages))
-	client.Say(config.ChannelName, help())
+	Say(help())
 }
 
 func help() string {
@@ -96,17 +102,18 @@ func help() string {
 
 func AnnounceNewFollower(username string) {
 	msg := fmt.Sprintf("Thank you for the follow, @%s", username)
-	client.Say(config.ChannelName, msg)
+	Say(msg)
 }
 
-//TODO: do more with the Subscription... IsGift, Tier, PlanName, etc.
+// AnnounceSubscriber makes a post in chat that a user has subscribed
 func AnnounceSubscriber(sub helix.Subscription) {
+	//TODO: do more with the Subscription... IsGift, Tier, PlanName, etc.
 	spew.Dump(sub)
 	username := sub.UserName
 	msg := fmt.Sprintf("Thank you for the sub, @%s; enjoy your !bonusmiles bleedPurple", username)
-	client.Say(config.ChannelName, msg)
+	Say(msg)
 	// give everyone a bonus mile
 	users.GiveEveryoneMiles(1.0)
 	msg = fmt.Sprintf("The %d current viewers have been given a bonus mile, too HolidayPresent", len(users.LoggedIn))
-	client.Say(config.ChannelName, msg)
+	Say(msg)
 }
