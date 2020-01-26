@@ -11,6 +11,7 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
+	mylog "github.com/dmerrick/danalol-stream/pkg/log"
 	mytwitch "github.com/dmerrick/danalol-stream/pkg/twitch"
 	"github.com/dmerrick/danalol-stream/pkg/users"
 	"github.com/gempir/go-twitch-irc/v2"
@@ -20,7 +21,8 @@ import (
 	"github.com/nicklaw5/helix"
 )
 
-var botUsername, googleMapsAPIKey string
+//TODO: move BotUsername to config
+var BotUsername, googleMapsAPIKey string
 var client *twitch.Client
 var Uptime time.Time
 
@@ -45,8 +47,8 @@ func Initialize() *twitch.Client {
 	if os.Getenv("DASHCAM_DIR") == "" {
 		panic("You must set DASHCAM_DIR")
 	}
-	botUsername = os.Getenv("BOT_USERNAME")
-	if botUsername == "" {
+	BotUsername = os.Getenv("BOT_USERNAME")
+	if BotUsername == "" {
 		panic("You must set BOT_USERNAME")
 	}
 	googleMapsAPIKey = os.Getenv("GOOGLE_MAPS_API_KEY")
@@ -69,7 +71,7 @@ func Initialize() *twitch.Client {
 	log.Println(aurora.Blue(authURL).Underline())
 	helpers.OpenInBrowser(authURL)
 
-	client = twitch.NewClient(botUsername, mytwitch.AuthToken)
+	client = twitch.NewClient(BotUsername, mytwitch.AuthToken)
 
 	// attach handlers
 	client.OnUserJoinMessage(UserJoin)
@@ -83,6 +85,7 @@ func Initialize() *twitch.Client {
 
 // Say will make a post in chat
 func Say(msg string) {
+	mylog.ChatMsg(BotUsername, msg)
 	client.Say(config.ChannelName, msg)
 }
 
