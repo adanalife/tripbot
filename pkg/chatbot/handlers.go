@@ -7,6 +7,7 @@ import (
 
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
+	mylog "github.com/dmerrick/danalol-stream/pkg/log"
 	"github.com/dmerrick/danalol-stream/pkg/users"
 	"github.com/gempir/go-twitch-irc/v2"
 )
@@ -129,6 +130,9 @@ func PrivateMessage(msg twitch.PrivateMessage) {
 	//TODO: we lose capitalization here, is that okay?
 	message := strings.ToLower(msg.Message)
 
+	// log to stackdriver
+	mylog.ChatMsg(username, msg.Message)
+
 	// check to see if the message is a command
 	//TODO: also include ones prefixed with whitespace?
 	//TODO: not all commands start with "!"s
@@ -158,6 +162,7 @@ func UserPart(partMessage twitch.UserPartMessage) {
 // }
 
 // if the message comes from me, then post the message to chat
+//TODO: log to stackdriver
 func Whisper(message twitch.WhisperMessage) {
 	log.Println("whisper from", message.User.Name, ":", message.Message)
 	if message.User.Name == strings.ToLower(config.ChannelName) {

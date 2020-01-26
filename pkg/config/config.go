@@ -19,7 +19,7 @@ const (
 	CoordsBucket      = "coords"
 )
 
-var ChannelName, MapsOutputDir, CroppedPath, ExternalURL string
+var ChannelName, MapsOutputDir, CroppedPath, ExternalURL, GoogleProjectID string
 var ReadOnly bool
 var Verbose bool
 
@@ -39,6 +39,8 @@ func init() {
 	// CroppedPath is where we store the cropped versions of screencaps (to OCR them)
 	CroppedPath = os.Getenv("CROPPED_CORNERS_DIR")
 	ExternalURL = os.Getenv("EXTERNAL_URL")
+
+	GoogleProjectID = os.Getenv("GOOGLE_APPS_PROJECT_ID")
 }
 
 func VideoDir() string {
