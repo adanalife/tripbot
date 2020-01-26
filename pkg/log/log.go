@@ -9,7 +9,7 @@ import (
 )
 
 var client *logging.Client
-var ChatLogger *log.Logger
+var chatLogger *log.Logger
 
 func init() {
 	var err error
@@ -26,9 +26,9 @@ func init() {
 	// defer client.Close()
 
 	// this will include all Twitch chat messages
-	ChatLogger = client.Logger("twitch-chat").StandardLogger(logging.Info)
+	chatLogger = client.Logger("twitch-chat").StandardLogger(logging.Info)
 }
 
 func ChatMsg(username, msg string) {
-	ChatLogger.Printf("%s: %s", username, msg)
+	chatLogger.Printf("%s: %s", username, msg)
 }
