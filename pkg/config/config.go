@@ -20,14 +20,22 @@ const (
 )
 
 var (
-	ChannelName     string
-	BotUsername     string
-	MapsOutputDir   string
-	CroppedPath     string
-	ExternalURL     string
+	// ChannelName is the username of the stream
+	ChannelName string
+	// BotUsername is the username of the bot
+	BotUsername string
+	// MapsOutputDir is where generated maps will be stored
+	MapsOutputDir string
+	// CroppedPath is where the cropped corners (containing GPS) live
+	CroppedPath string
+	// ExternalURL is the where the bot's HTTP server can be reached
+	ExternalURL string
+	// GoogleProjectID is the Google Cloud project ID
 	GoogleProjectID string
-	ReadOnly        bool
-	Verbose         bool
+	// ReadOnly is used to prevent writing some things to the DB
+	ReadOnly bool
+	// Verbose determines output verbosity
+	Verbose bool
 )
 
 func init() {
