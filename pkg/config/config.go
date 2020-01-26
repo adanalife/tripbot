@@ -24,10 +24,6 @@ var (
 	ChannelName string
 	// BotUsername is the username of the bot
 	BotUsername string
-	// MapsOutputDir is where generated maps will be stored
-	MapsOutputDir string
-	// CroppedPath is where the cropped corners (containing GPS) live
-	CroppedPath string
 	// ExternalURL is the where the bot's HTTP server can be reached
 	ExternalURL string
 	// GoogleProjectID is the Google Cloud project ID
@@ -36,6 +32,10 @@ var (
 	ReadOnly bool
 	// Verbose determines output verbosity
 	Verbose bool
+	// MapsOutputDir is where generated maps will be stored
+	MapsOutputDir string
+	// CroppedPath is where we store the cropped versions of screencaps (to OCR them)
+	CroppedPath string
 )
 
 func init() {
@@ -44,24 +44,34 @@ func init() {
 	if err != nil {
 		log.Fatal("Error loading .env file")
 	}
-	//TODO: pretty much all of these are required, we should fail if missing
+
+	requiredVars := []string{
+		"CHANNEL_NAME",
+		"BOT_USERNAME",
+		"EXTERNAL_URL",
+		"GOOGLE_APPS_PROJECT_ID",
+		"READ_ONLY",
+		"VERBOSE",
+		"DASHCAM_DIR",
+		"MAPS_OUTPUT_DIR",
+		"CROPPED_CORNERS_DIR",
+	}
+	for _, v := range requiredVars {
+		_, ok := os.LookupEnv(v)
+		if !ok {
+			log.Fatalf("You must set %s", v)
+		}
+	}
+
 	//TODO: consider using strings.ToLower() on channel name here and removing elsewhere
 	ChannelName = os.Getenv("CHANNEL_NAME")
+	BotUsername = os.Getenv("BOT_USERNAME")
+	ExternalURL = os.Getenv("EXTERNAL_URL")
+	GoogleProjectID = os.Getenv("GOOGLE_APPS_PROJECT_ID")
 	ReadOnly, _ = strconv.ParseBool(os.Getenv("READ_ONLY"))
 	Verbose, _ = strconv.ParseBool(os.Getenv("VERBOSE"))
-
-	// MapsOutputDir is where the maps script saves the frames
 	MapsOutputDir = os.Getenv("MAPS_OUTPUT_DIR")
-	// CroppedPath is where we store the cropped versions of screencaps (to OCR them)
 	CroppedPath = os.Getenv("CROPPED_CORNERS_DIR")
-	ExternalURL = os.Getenv("EXTERNAL_URL")
-
-	GoogleProjectID = os.Getenv("GOOGLE_APPS_PROJECT_ID")
-
-	BotUsername = os.Getenv("BOT_USERNAME")
-	if BotUsername == "" {
-		panic("You must set BOT_USERNAME")
-	}
 }
 
 func VideoDir() string {
