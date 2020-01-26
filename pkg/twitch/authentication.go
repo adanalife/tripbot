@@ -26,18 +26,20 @@ var UserRefreshToken string
 
 // init makes sure we have all of the require ENV vars
 func init() {
+	requiredVars := []string{
+		"TWITCH_AUTH_TOKEN",
+		"TWITCH_CLIENT_ID",
+		"TWITCH_CLIENT_SECRET",
+	}
+	for _, v := range requiredVars {
+		_, ok := os.LookupEnv(v)
+		if !ok {
+			log.Fatalf("You must set %s", v)
+		}
+	}
 	AuthToken = os.Getenv("TWITCH_AUTH_TOKEN")
-	if AuthToken == "" {
-		panic("You must set TWITCH_AUTH_TOKEN")
-	}
 	ClientID = os.Getenv("TWITCH_CLIENT_ID")
-	if ClientID == "" {
-		panic("You must set TWITCH_CLIENT_ID")
-	}
 	ClientSecret = os.Getenv("TWITCH_CLIENT_SECRET")
-	if ClientSecret == "" {
-		panic("You must set TWITCH_CLIENT_SECRET")
-	}
 }
 
 // Client creates a twitch client, or returns the existing one
