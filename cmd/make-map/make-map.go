@@ -17,7 +17,6 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	"github.com/dmerrick/danalol-stream/pkg/video"
-	"github.com/joho/godotenv"
 	"googlemaps.github.io/maps"
 )
 
@@ -26,18 +25,14 @@ var skipDate = time.Date(2018, time.Month(9), 29, 0, 0, 0, 0, time.UTC)
 
 func main() {
 	spew.Dump(takeout.LoadLocations())
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal("Error loading .env file")
-	}
 
-	// first we must check for required ENV vars
-	googleMapsAPIKey := os.Getenv("GOOGLE_MAPS_API_KEY")
-	if googleMapsAPIKey == "" {
-		panic("You must set GOOGLE_MAPS_API_KEY")
-	}
+	//TODO: remove this if it's not needed
+	// err := godotenv.Load()
+	// if err != nil {
+	// 	log.Fatal("Error loading .env file")
+	// }
 
-	client, err := maps.NewClient(maps.WithAPIKey(googleMapsAPIKey))
+	client, err := maps.NewClient(maps.WithAPIKey(config.GoogleMapsAPIKey))
 	if err != nil {
 		log.Fatalf("client error: %s", err)
 	}

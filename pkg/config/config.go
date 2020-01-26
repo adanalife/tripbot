@@ -28,6 +28,8 @@ var (
 	ExternalURL string
 	// GoogleProjectID is the Google Cloud project ID
 	GoogleProjectID string
+	// GoogleMapsAPIKey is the API key with which we access Google Maps
+	GoogleMapsAPIKey string
 	// ReadOnly is used to prevent writing some things to the DB
 	ReadOnly bool
 	// Verbose determines output verbosity
@@ -52,6 +54,7 @@ func init() {
 		"BOT_USERNAME",
 		"EXTERNAL_URL",
 		"GOOGLE_APPS_PROJECT_ID",
+		"GOOGLE_MAPS_API_KEY",
 		"READ_ONLY",
 		"VERBOSE",
 		"DASHCAM_DIR",
@@ -70,6 +73,7 @@ func init() {
 	BotUsername = os.Getenv("BOT_USERNAME")
 	ExternalURL = os.Getenv("EXTERNAL_URL")
 	GoogleProjectID = os.Getenv("GOOGLE_APPS_PROJECT_ID")
+	GoogleMapsAPIKey = os.Getenv("GOOGLE_MAPS_API_KEY")
 	ReadOnly, _ = strconv.ParseBool(os.Getenv("READ_ONLY"))
 	Verbose, _ = strconv.ParseBool(os.Getenv("VERBOSE"))
 	DashcamDir = os.Getenv("DASHCAM_DIR")

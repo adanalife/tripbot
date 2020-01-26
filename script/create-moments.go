@@ -11,7 +11,6 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	"github.com/dmerrick/danalol-stream/pkg/moments"
-	"github.com/joho/godotenv"
 	"github.com/kelvins/geocoder"
 )
 
@@ -89,15 +88,12 @@ func main() {
 }
 
 func init() {
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal("Error loading .env file")
-	}
-	googleMapsAPIKey := os.Getenv("GOOGLE_MAPS_API_KEY")
-	if googleMapsAPIKey == "" {
-		panic("You must set GOOGLE_MAPS_API_KEY")
-	}
-	geocoder.ApiKey = googleMapsAPIKey
+	//TODO: remove if unnecessary
+	// err := godotenv.Load()
+	// if err != nil {
+	// 	log.Fatal("Error loading .env file")
+	// }
+	geocoder.ApiKey = config.GoogleMapsAPIKey
 
 	flag.StringVar(&screencapFile, "file", "", "File to load")
 	flag.BoolVar(&current, "current", false, "Use currently-playing video")

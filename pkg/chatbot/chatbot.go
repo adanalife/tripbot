@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
-	"os"
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
@@ -15,7 +14,6 @@ import (
 	mytwitch "github.com/dmerrick/danalol-stream/pkg/twitch"
 	"github.com/dmerrick/danalol-stream/pkg/users"
 	"github.com/gempir/go-twitch-irc/v2"
-	"github.com/joho/godotenv"
 	"github.com/kelvins/geocoder"
 	"github.com/logrusorgru/aurora"
 	"github.com/nicklaw5/helix"
@@ -36,20 +34,15 @@ func Initialize() *twitch.Client {
 	var err error
 	Uptime = time.Now()
 
+	//TODO: remove this, doesn't seem needed
 	// load ENV vars from .env file
-	err = godotenv.Load()
-	if err != nil {
-		log.Fatal("Error loading .env file")
-	}
-
-	// first we must check for required ENV vars
-	googleMapsAPIKey = os.Getenv("GOOGLE_MAPS_API_KEY")
-	if googleMapsAPIKey == "" {
-		panic("You must set GOOGLE_MAPS_API_KEY")
-	}
+	// err = godotenv.Load()
+	// if err != nil {
+	// 	log.Fatal("Error loading .env file")
+	// }
 
 	// set up geocoder (for translating coords to places)
-	geocoder.ApiKey = googleMapsAPIKey
+	geocoder.ApiKey = config.GoogleMapsAPIKey
 
 	// initialize the twitch API client
 	c, err := mytwitch.Client()

@@ -10,7 +10,6 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	"github.com/dmerrick/danalol-stream/pkg/video"
-	"github.com/joho/godotenv"
 	"github.com/kelvins/geocoder"
 )
 
@@ -19,16 +18,13 @@ var videoFile string
 var current bool
 
 func init() {
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal("Error loading .env file")
-	}
+	//TODO: remove this if it's no longer needed
+	// err := godotenv.Load()
+	// if err != nil {
+	// 	log.Fatal("Error loading .env file")
+	// }
 
-	googleMapsAPIKey := os.Getenv("GOOGLE_MAPS_API_KEY")
-	if googleMapsAPIKey == "" {
-		panic("You must set GOOGLE_MAPS_API_KEY")
-	}
-	geocoder.ApiKey = googleMapsAPIKey
+	geocoder.ApiKey = config.GoogleMapsAPIKey
 
 	flag.StringVar(&videoFile, "file", "", "File to load")
 	flag.BoolVar(&current, "current", false, "Use currently-playing video")
