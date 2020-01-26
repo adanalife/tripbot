@@ -19,10 +19,16 @@ const (
 	CoordsBucket      = "coords"
 )
 
-//TODO: split this into multiple lines
-var ChannelName, MapsOutputDir, CroppedPath, ExternalURL, GoogleProjectID, BotUsername string
-var ReadOnly bool
-var Verbose bool
+var (
+	ChannelName     string
+	BotUsername     string
+	MapsOutputDir   string
+	CroppedPath     string
+	ExternalURL     string
+	GoogleProjectID string
+	ReadOnly        bool
+	Verbose         bool
+)
 
 func init() {
 	// load ENV vars from .env file
