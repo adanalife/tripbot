@@ -60,6 +60,6 @@ ffmpeg -encoders | grep nvenc
 # sudo apt-get install vlc
 
 
-
-
+# bind ESC to capslock
+# https://askubuntu.com/a/365701
 
