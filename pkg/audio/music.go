@@ -8,17 +8,20 @@ import (
 	"github.com/fhs/gompd/mpd"
 )
 
-var mpdServer = "localhost:6600"
 var mpdConn *mpd.Client
 
-const grooveSaladURL = "http://somafm.com/groovesalad256.pls"
+const (
+	grooveSaladURL = "http://somafm.com/groovesalad256.pls"
+	mpdServer      = "localhost:6600"
+)
 
 func init() {
 	var err error
 	// Connect to MPD server
 	mpdConn, err = mpd.Dial("tcp", mpdServer)
 	if err != nil {
-		terrors.Log(err, "Error connecting to MPD")
+		//TODO: maybe we dont want this hard dependency?
+		terrors.Fatal(err, "Error connecting to MPD")
 	}
 
 	startGrooveSalad()
