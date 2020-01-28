@@ -10,6 +10,7 @@ import (
 )
 
 const (
+	// these are the default subdirectories
 	screencapDir = "screencaps"
 	videoDir     = "_all"
 
@@ -19,6 +20,7 @@ const (
 	CoordsBucket      = "coords"
 )
 
+//TODO: add consistency between use of Dir vs Path in these names
 var (
 	// ChannelName is the username of the stream
 	ChannelName string
@@ -40,6 +42,10 @@ var (
 	MapsOutputDir string
 	// CroppedPath is where we store the cropped versions of screencaps (to OCR them)
 	CroppedPath string
+	// ScreencapDir is where we store full screenshots from the videos
+	ScreencapDir string
+	// VideoDir is where the videos live
+	VideoDir string
 )
 
 func init() {
@@ -78,14 +84,26 @@ func init() {
 	DashcamDir = os.Getenv("DASHCAM_DIR")
 	MapsOutputDir = os.Getenv("MAPS_OUTPUT_DIR")
 	CroppedPath = os.Getenv("CROPPED_CORNERS_DIR")
-}
 
-func VideoDir() string {
-	return path.Join(DashcamDir, videoDir)
-}
+	VideoDir = path.Join(DashcamDir, videoDir)
+	ScreencapDir = path.Join(DashcamDir, screencapDir)
 
-func ScreencapDir() string {
-	return path.Join(DashcamDir, screencapDir)
+	// check that the paths exist
+	requiredDirs := []string{
+		DashcamDir,
+		VideoDir,
+		ScreencapDir,
+		CroppedPath,
+		MapsOutputDir,
+	}
+	for _, d := range requiredDirs {
+		_, err := os.Stat(d)
+		if err != nil {
+			if os.IsNotExist(err) {
+				log.Fatalf("Directory %s does not exist", d)
+			}
+		}
+	}
 }
 
 //TODO: this should load from a config file

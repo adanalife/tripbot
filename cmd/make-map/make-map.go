@@ -45,13 +45,13 @@ func main() {
 	skipIndex := 0
 
 	// loop over every file in the screencapDir
-	err = filepath.Walk(config.VideoDir(),
+	err = filepath.Walk(config.VideoDir,
 		func(path string, _ os.FileInfo, err error) error {
 			if err != nil {
 				return err
 			}
 			// skip the directory name itself
-			if path == config.VideoDir() {
+			if path == config.VideoDir {
 				return nil
 			}
 
