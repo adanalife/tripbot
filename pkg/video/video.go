@@ -62,10 +62,10 @@ func CurrentProgress() time.Duration {
 func figureOutCurrentVideo() string {
 	// run the shell script to get currently-playing video
 	scriptPath := path.Join(helpers.ProjectRoot(), "bin/current-file.sh")
-	// cmd := fmt.Sprintf("/usr/bin/cd %s && %s", helpers.ProjectRoot(), scriptPath)
 	out, err := exec.Command(scriptPath).Output()
 	if err != nil {
-		terrors.Log(err, "failed to run script")
+		terrors.Log(err, "failed to get currently-playing video")
+		log.Println(out)
 		return ""
 	}
 	return strings.TrimSpace(string(out))

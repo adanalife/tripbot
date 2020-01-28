@@ -19,7 +19,7 @@ fi
 output=$(lsof -p $(cat $OBS_PIDFILE) 2>/dev/null)
 if [ $? -eq 0 ]; then
   #TODO: error message if more than 1 result from search
-  echo $output | grep -i '\.MP4' | sed -e 's/^.*2018_/2018_/'
+  echo $output | grep -i '\.MP4' | sed -e 's/^.*2018_/2018_/' -e 's/MP4.*/MP4/'
 else
   echo "No MP4s were found in lsof output. Check that the PID is correct and that OBS is playing videos"
   exit 3
