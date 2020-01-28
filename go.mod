@@ -11,6 +11,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1
 	github.com/dimiro1/banner v0.0.0-20161108151223-c2f858997d49
 	github.com/disintegration/imaging v1.6.0
+	github.com/fhs/gompd v2.0.0+incompatible
 	github.com/fsnotify/fsevents v0.1.1
 	github.com/fsnotify/fsnotify v1.4.7
 	github.com/gempir/go-twitch-irc/v2 v2.1.0

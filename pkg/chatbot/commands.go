@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dmerrick/danalol-stream/pkg/audio"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 
 	"github.com/dmerrick/danalol-stream/pkg/background"
@@ -210,7 +211,7 @@ func guessCmd(user *users.User, params []string) {
 		vid = vid.Next()
 	}
 
-	if guess == strings.ToLower(vid.State) {
+	if strings.ToLower(guess) == strings.ToLower(vid.State) {
 		msg = fmt.Sprintf("@%s got it! We're in %s", user.Username, vid.State)
 	} else {
 		msg = "Try again! EarthDay"
@@ -278,6 +279,7 @@ func shutdownCmd(user *users.User) {
 	if err != nil {
 		log.Println(err)
 	}
+	audio.Shutdown()
 	sentry.Flush(time.Second * 5)
 	os.Exit(0)
 }

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	_ "github.com/dimiro1/banner/autoload"
+	"github.com/dmerrick/danalol-stream/pkg/audio"
 	"github.com/dmerrick/danalol-stream/pkg/background"
 	"github.com/dmerrick/danalol-stream/pkg/chatbot"
 	"github.com/dmerrick/danalol-stream/pkg/config"
@@ -84,6 +85,7 @@ func gracefulShutdown() {
 	users.Shutdown()
 	database.DBCon.Close()
 	background.StopCron()
+	audio.Shutdown()
 	sentry.Flush(time.Second * 5)
 	os.Exit(1)
 }
@@ -93,6 +95,7 @@ func gracefulShutdown() {
 func scheduleBackgroundJobs() {
 	// schedule these functions
 	background.Cron.AddFunc("@every 60s", video.GetCurrentlyPlaying)
+	background.Cron.AddFunc("@every 60s", audio.CurrentlyPlaying)
 	background.Cron.AddFunc("@every 61s", users.UpdateSession)
 	background.Cron.AddFunc("@every 62s", users.UpdateLeaderboard)
 	background.Cron.AddFunc("@every 5m", users.PrintCurrentSession)
