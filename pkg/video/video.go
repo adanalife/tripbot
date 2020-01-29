@@ -63,10 +63,9 @@ func figureOutCurrentVideo() string {
 	// run the shell script to get currently-playing video
 	scriptPath := path.Join(helpers.ProjectRoot(), "bin/current-file.sh")
 	out, err := exec.Command(scriptPath).Output()
-	spew.Dump(out)
 	if err != nil {
 		terrors.Log(err, "failed to get currently-playing video")
-		log.Println(out)
+		log.Println(string(out))
 		return ""
 	}
 	return strings.TrimSpace(string(out))
