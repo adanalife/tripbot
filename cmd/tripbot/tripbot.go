@@ -9,11 +9,12 @@ import (
 	"time"
 
 	_ "github.com/dimiro1/banner/autoload"
+	"github.com/dmerrick/danalol-stream/pkg/audio"
 	"github.com/dmerrick/danalol-stream/pkg/background"
+	"github.com/dmerrick/danalol-stream/pkg/chatbot"
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/database"
 	"github.com/dmerrick/danalol-stream/pkg/server"
-	"github.com/dmerrick/danalol-stream/pkg/tripbot"
 	mytwitch "github.com/dmerrick/danalol-stream/pkg/twitch"
 	"github.com/dmerrick/danalol-stream/pkg/users"
 	"github.com/dmerrick/danalol-stream/pkg/video"
@@ -22,39 +23,14 @@ import (
 )
 
 func main() {
-	// catch CTRL-C and clean up
-	c := make(chan os.Signal)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		<-c
-		log.Println("caught CTRL-C")
-		// anything below this probably wont be executed
-		// try and use !shutdown instead
-		log.Printf("last played: %s", video.CurrentlyPlaying)
-		users.Shutdown()
-		database.DBCon.Close()
-		background.StopCron()
-		sentry.Flush(time.Second * 5)
-		os.Exit(1)
-	}()
+	// start the graceful shutdown listener
+	go gracefulShutdown()
 
 	// start the HTTP server
 	go server.Start()
 
 	// set up the Twitch client
-	client := tripbot.Initialize()
-
-	// attach handlers
-	client.OnUserJoinMessage(tripbot.UserJoin)
-	client.OnUserPartMessage(tripbot.UserPart)
-	// client.OnUserNoticeMessage(tripbot.UserNotice)
-	client.OnWhisperMessage(tripbot.Whisper)
-	client.OnPrivateMessage(tripbot.PrivateMessage)
-
-	// join the channel
-	client.Join(config.ChannelName)
-	log.Println("Joined channel", config.ChannelName)
-	log.Printf("URL: %s", aurora.Underline(aurora.Blue(fmt.Sprintf("https://twitch.tv/%s", config.ChannelName))))
+	client := chatbot.Initialize()
 
 	// run this right away to set the currently-playing video
 	// (otherwise it will be unset until the first cron job runs)
@@ -67,6 +43,7 @@ func main() {
 
 	// start cron and attach cronjobs
 	background.StartCron()
+	scheduleBackgroundJobs()
 
 	// update subscribers list
 	// mytwitch.GetSubscribers()
@@ -85,18 +62,9 @@ func main() {
 		background.Leaderboard.Stop()
 	}()
 
-	//TODO: move these somewhere central
-	background.Cron.AddFunc("@every 60s", background.ShowOnscreenLeaderboard)
-	background.Cron.AddFunc("@every 60s", video.GetCurrentlyPlaying)
-	background.Cron.AddFunc("@every 61s", users.UpdateSession)
-	background.Cron.AddFunc("@every 62s", users.UpdateLeaderboard)
-	background.Cron.AddFunc("@every 5m", users.PrintCurrentSession)
-	background.Cron.AddFunc("@every 15m", mytwitch.GetSubscribers)
-	background.Cron.AddFunc("@every 1h", mytwitch.RefreshUserAccessToken)
-	background.Cron.AddFunc("@every 57m30s", tripbot.Chatter)
-	background.Cron.AddFunc("@every 12h", mytwitch.SetStreamTags)
-	background.Cron.AddFunc("@every 12h", mytwitch.UpdateWebhookSubscriptions)
-
+	client.Join(config.ChannelName)
+	log.Println("Joined channel", config.ChannelName)
+	log.Printf("URL: %s", aurora.Blue(fmt.Sprintf("https://twitch.tv/%s", config.ChannelName)).Underline())
 	// actually connect to Twitch
 	// wrapped in a loop in case twitch goes down
 	for {
@@ -107,4 +75,40 @@ func main() {
 			time.Sleep(time.Minute)
 		}
 	}
+}
+
+// catch CTRL-C and clean up
+func gracefulShutdown() {
+	ctrlC := make(chan os.Signal)
+	signal.Notify(ctrlC, os.Interrupt, syscall.SIGTERM)
+
+	// wait for signal
+	<-ctrlC
+
+	log.Println(aurora.Red("caught CTRL-C"))
+	// anything below this probably wont be executed
+	// try and use !shutdown instead
+	log.Printf("last played: %s", video.CurrentlyPlaying)
+	users.Shutdown()
+	database.DBCon.Close()
+	background.StopCron()
+	audio.Shutdown()
+	sentry.Flush(time.Second * 5)
+	os.Exit(1)
+}
+
+// the reason we put this here is because adding this to background
+// would cause circular dependencies
+func scheduleBackgroundJobs() {
+	// schedule these functions
+	background.Cron.AddFunc("@every 60s", video.GetCurrentlyPlaying)
+	background.Cron.AddFunc("@every 60s", audio.CurrentlyPlaying)
+	background.Cron.AddFunc("@every 61s", users.UpdateSession)
+	background.Cron.AddFunc("@every 62s", users.UpdateLeaderboard)
+	background.Cron.AddFunc("@every 5m", users.PrintCurrentSession)
+	background.Cron.AddFunc("@every 15m", mytwitch.GetSubscribers)
+	background.Cron.AddFunc("@every 1h", mytwitch.RefreshUserAccessToken)
+	background.Cron.AddFunc("@every 2h57m30s", chatbot.Chatter)
+	background.Cron.AddFunc("@every 12h", mytwitch.SetStreamTags)
+	background.Cron.AddFunc("@every 12h", mytwitch.UpdateWebhookSubscriptions)
 }

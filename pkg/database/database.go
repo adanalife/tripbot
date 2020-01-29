@@ -3,6 +3,7 @@ package database
 
 import (
 	"fmt"
+	"log"
 	"os"
 
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
@@ -15,14 +16,6 @@ var (
 	//TODO: this would be better as just 'con'
 	// this is how we will share the DB connection
 	DBCon *sqlx.DB
-
-	//TODO should this be a const?
-	requiredENV = []string{
-		"DATABASE_USER",
-		"DATABASE_DB",
-		"DATABASE_PASS",
-		"DATABASE_HOST",
-	}
 )
 
 //TODO: is it a bad idea to actually connect to the DB here
@@ -36,9 +29,15 @@ func init() {
 	}
 
 	// first we have to check we have all of the right ENV vars
-	for _, env := range requiredENV {
-		if os.Getenv(env) == "" {
-			terrors.Fatal(nil, "missing required ENV var "+env)
+	requiredVars := []string{
+		"DATABASE_USER",
+		"DATABASE_DB",
+		"DATABASE_HOST",
+	}
+	for _, v := range requiredVars {
+		_, ok := os.LookupEnv(v)
+		if !ok {
+			log.Fatalf("You must set %s", v)
 		}
 	}
 

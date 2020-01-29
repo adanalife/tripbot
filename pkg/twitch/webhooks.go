@@ -10,10 +10,10 @@ import (
 )
 
 // UpdateWebhookSubscriptions will create new webhook subscriptions
-//TODO: use the twitch API instead of a shell script when possible
 func UpdateWebhookSubscriptions() {
 
 	// c.p. https://dev.twitch.tv/docs/api/webhooks-reference
+	//TODO: maybe don't sunscribe to subscription events on staging?
 	topics := [][]string{
 		[]string{
 			"https://api.twitch.tv/helix/users/follows?first=1&to_id=" + ChannelID,

@@ -23,6 +23,7 @@ var timeStarted time.Time
 
 // GetCurrentlyPlaying will use lsof to figure out
 // which dashcam video is currently playing (seriously)
+//TODO: consider making this return a video struct
 func GetCurrentlyPlaying() {
 	var err error
 	// save the video we used last time
@@ -61,13 +62,14 @@ func CurrentProgress() time.Duration {
 func figureOutCurrentVideo() string {
 	// run the shell script to get currently-playing video
 	scriptPath := path.Join(helpers.ProjectRoot(), "bin/current-file.sh")
-	// cmd := fmt.Sprintf("/usr/bin/cd %s && %s", helpers.ProjectRoot(), scriptPath)
 	out, err := exec.Command(scriptPath).Output()
+	outString := strings.TrimSpace(string(out))
 	if err != nil {
-		terrors.Log(err, "failed to run script")
+		terrors.Log(err, "failed to get currently-playing video")
+		log.Println(outString)
 		return ""
 	}
-	return strings.TrimSpace(string(out))
+	return outString
 }
 
 func showNoGPSImage() {

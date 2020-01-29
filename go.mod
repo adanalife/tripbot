@@ -3,19 +3,25 @@ module github.com/dmerrick/danalol-stream
 go 1.12
 
 require (
+	cloud.google.com/go v0.52.0 // indirect
+	cloud.google.com/go/logging v1.0.0
 	github.com/boltdb/bolt v1.3.1
 	github.com/bradfitz/latlong v0.0.0-20170410180902-f3db6d0dff40
 	github.com/briandowns/openweathermap v0.0.0-20180804155945-5f41b7c9d92d
 	github.com/davecgh/go-spew v1.1.1
 	github.com/dimiro1/banner v0.0.0-20161108151223-c2f858997d49
 	github.com/disintegration/imaging v1.6.0
+	github.com/fhs/gompd v2.0.0+incompatible
 	github.com/fsnotify/fsevents v0.1.1
 	github.com/fsnotify/fsnotify v1.4.7
 	github.com/gempir/go-twitch-irc/v2 v2.1.0
 	github.com/getsentry/sentry-go v0.3.1
+	github.com/golang-migrate/migrate v3.5.4+incompatible // indirect
+	github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e // indirect
 	github.com/google/uuid v1.1.1 // indirect
 	github.com/gorilla/schema v1.1.0 // indirect
 	github.com/hako/durafmt v0.0.0-20180520121703-7b7ae1e72ead
+	github.com/hashicorp/golang-lru v0.5.4 // indirect
 	github.com/jmoiron/sqlx v1.2.0
 	github.com/joho/godotenv v1.3.0
 	github.com/kelvins/geocoder v0.0.0-20170531023420-8464fc2d2478
@@ -26,6 +32,8 @@ require (
 	github.com/otiai10/gosseract v2.2.1+incompatible
 	github.com/robfig/cron v1.2.0
 	github.com/sfreiberg/gotwilio v0.0.0-20190522212351-14c666f1d505
-	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4 // indirect
+	golang.org/x/sys v0.0.0-20200124204421-9fbb57f87de9 // indirect
+	golang.org/x/tools/gopls v0.2.1 // indirect
+	google.golang.org/genproto v0.0.0-20200122232147-0452cf42e150 // indirect
 	googlemaps.github.io/maps v0.0.0-20190514133808-4d12cf0fa845
 )

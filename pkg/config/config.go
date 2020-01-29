@@ -10,6 +10,7 @@ import (
 )
 
 const (
+	// these are the default subdirectories
 	screencapDir = "screencaps"
 	videoDir     = "_all"
 
@@ -19,9 +20,33 @@ const (
 	CoordsBucket      = "coords"
 )
 
-var ChannelName, MapsOutputDir, CroppedPath, ExternalURL string
-var ReadOnly bool
-var Verbose bool
+//TODO: add consistency between use of Dir vs Path in these names
+var (
+	// ChannelName is the username of the stream
+	ChannelName string
+	// BotUsername is the username of the bot
+	BotUsername string
+	// ExternalURL is the where the bot's HTTP server can be reached
+	ExternalURL string
+	// GoogleProjectID is the Google Cloud project ID
+	GoogleProjectID string
+	// GoogleMapsAPIKey is the API key with which we access Google Maps
+	GoogleMapsAPIKey string
+	// ReadOnly is used to prevent writing some things to the DB
+	ReadOnly bool
+	// Verbose determines output verbosity
+	Verbose bool
+	// DashcamDir contains the dashcam footage
+	DashcamDir string
+	// MapsOutputDir is where generated maps will be stored
+	MapsOutputDir string
+	// CroppedPath is where we store the cropped versions of screencaps (to OCR them)
+	CroppedPath string
+	// ScreencapDir is where we store full screenshots from the videos
+	ScreencapDir string
+	// VideoDir is where the videos live
+	VideoDir string
+)
 
 func init() {
 	// load ENV vars from .env file
@@ -29,24 +54,56 @@ func init() {
 	if err != nil {
 		log.Fatal("Error loading .env file")
 	}
+
+	requiredVars := []string{
+		"CHANNEL_NAME",
+		"BOT_USERNAME",
+		"EXTERNAL_URL",
+		"GOOGLE_APPS_PROJECT_ID",
+		"GOOGLE_MAPS_API_KEY",
+		"READ_ONLY",
+		"DASHCAM_DIR",
+		"MAPS_OUTPUT_DIR",
+		"CROPPED_CORNERS_DIR",
+	}
+	for _, v := range requiredVars {
+		_, ok := os.LookupEnv(v)
+		if !ok {
+			log.Fatalf("You must set %s", v)
+		}
+	}
+
 	//TODO: consider using strings.ToLower() on channel name here and removing elsewhere
 	ChannelName = os.Getenv("CHANNEL_NAME")
+	BotUsername = os.Getenv("BOT_USERNAME")
+	ExternalURL = os.Getenv("EXTERNAL_URL")
+	GoogleProjectID = os.Getenv("GOOGLE_APPS_PROJECT_ID")
+	GoogleMapsAPIKey = os.Getenv("GOOGLE_MAPS_API_KEY")
 	ReadOnly, _ = strconv.ParseBool(os.Getenv("READ_ONLY"))
 	Verbose, _ = strconv.ParseBool(os.Getenv("VERBOSE"))
-
-	// MapsOutputDir is where the maps script saves the frames
+	DashcamDir = os.Getenv("DASHCAM_DIR")
 	MapsOutputDir = os.Getenv("MAPS_OUTPUT_DIR")
-	// CroppedPath is where we store the cropped versions of screencaps (to OCR them)
 	CroppedPath = os.Getenv("CROPPED_CORNERS_DIR")
-	ExternalURL = os.Getenv("EXTERNAL_URL")
-}
 
-func VideoDir() string {
-	return path.Join(os.Getenv("DASHCAM_DIR"), videoDir)
-}
+	VideoDir = path.Join(DashcamDir, videoDir)
+	ScreencapDir = path.Join(DashcamDir, screencapDir)
 
-func ScreencapDir() string {
-	return path.Join(os.Getenv("DASHCAM_DIR"), screencapDir)
+	// check that the paths exist
+	requiredDirs := []string{
+		DashcamDir,
+		VideoDir,
+		ScreencapDir,
+		CroppedPath,
+		MapsOutputDir,
+	}
+	for _, d := range requiredDirs {
+		_, err := os.Stat(d)
+		if err != nil {
+			if os.IsNotExist(err) {
+				log.Fatalf("Directory %s does not exist", d)
+			}
+		}
+	}
 }
 
 //TODO: this should load from a config file

@@ -17,7 +17,6 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	"github.com/dmerrick/danalol-stream/pkg/video"
-	"github.com/joho/godotenv"
 	"googlemaps.github.io/maps"
 )
 
@@ -26,21 +25,14 @@ var skipDate = time.Date(2018, time.Month(9), 29, 0, 0, 0, 0, time.UTC)
 
 func main() {
 	spew.Dump(takeout.LoadLocations())
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal("Error loading .env file")
-	}
 
-	if os.Getenv("DASHCAM_DIR") == "" {
-		panic("You must set DASHCAM_DIR")
-	}
-	// first we must check for required ENV vars
-	googleMapsAPIKey := os.Getenv("GOOGLE_MAPS_API_KEY")
-	if googleMapsAPIKey == "" {
-		panic("You must set GOOGLE_MAPS_API_KEY")
-	}
+	//TODO: remove this if it's not needed
+	// err := godotenv.Load()
+	// if err != nil {
+	// 	log.Fatal("Error loading .env file")
+	// }
 
-	client, err := maps.NewClient(maps.WithAPIKey(googleMapsAPIKey))
+	client, err := maps.NewClient(maps.WithAPIKey(config.GoogleMapsAPIKey))
 	if err != nil {
 		log.Fatalf("client error: %s", err)
 	}
@@ -53,13 +45,13 @@ func main() {
 	skipIndex := 0
 
 	// loop over every file in the screencapDir
-	err = filepath.Walk(config.VideoDir(),
+	err = filepath.Walk(config.VideoDir,
 		func(path string, _ os.FileInfo, err error) error {
 			if err != nil {
 				return err
 			}
 			// skip the directory name itself
-			if path == config.VideoDir() {
+			if path == config.VideoDir {
 				return nil
 			}
 

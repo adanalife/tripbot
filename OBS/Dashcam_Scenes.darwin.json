@@ -897,7 +897,7 @@
                         "locked": true,
                         "name": "my message",
                         "pos": {
-                            "x": 910.0,
+                            "x": 742.0,
                             "y": 1038.0
                         },
                         "private_settings": {},
@@ -23839,7 +23839,7 @@
                 },
                 "from_file": false,
                 "outline": false,
-                "text": "new command: !guess",
+                "text": "!guess was broken for a week, sorry!",
                 "text_file": "/Users/dmerrick/other_projects/danalol-stream/OBS/leaderboard.txt"
             },
             "sync": 0,

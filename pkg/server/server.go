@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/dmerrick/danalol-stream/pkg/chatbot"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
-	"github.com/dmerrick/danalol-stream/pkg/tripbot"
 	mytwitch "github.com/dmerrick/danalol-stream/pkg/twitch"
 	"github.com/dmerrick/danalol-stream/pkg/users"
 	"github.com/logrusorgru/aurora"
@@ -93,7 +93,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 				log.Println("got webhook for new follower:", username)
 				users.LoginIfNecessary(username)
 				// announce new follower in chat
-				tripbot.AnnounceNewFollower(username)
+				chatbot.AnnounceNewFollower(username)
 			}
 
 			fmt.Fprintf(w, "OK")
@@ -114,7 +114,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 				log.Println("got webhook for new sub:", username)
 				users.LoginIfNecessary(username)
 				// announce new sub in chat
-				tripbot.AnnounceSubscriber(event.Subscription)
+				chatbot.AnnounceSubscriber(event.Subscription)
 			}
 
 			// update the internal subscribers list
@@ -139,7 +139,7 @@ func Start() {
 	http.HandleFunc("/", handle)
 	//TODO: configurable port
 	//TODO: replace certs with autocert: https://stackoverflow.com/a/40494806
-	err := http.ListenAndServeTLS(":8080", "configs/tripbot.dana.lol.fullchain.pem", "configs/tripbot.dana.lol.key", nil)
+	err := http.ListenAndServeTLS(":8080", "infra/tripbot.dana.lol.fullchain.pem", "infra/tripbot.dana.lol.key", nil)
 	// err := http.ListenAndServe(":8080", nil)
 	if err != nil {
 		terrors.Fatal(err, "couldn't start server")

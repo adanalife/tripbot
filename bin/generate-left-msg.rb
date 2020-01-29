@@ -4,7 +4,7 @@
 # it is used to update the rotating text in the corner
 
 sub_goal = "10/10"
-donation_goal = "10/150"
+donation_goal = "15/150"
 
 leaderboard_file = "./OBS/leaderboard-copy.txt"
 message_file = "./OBS/left-message.txt"
