@@ -37,16 +37,6 @@ func init() {
 	startGrooveSalad()
 }
 
-func Shutdown() {
-	if Enabled {
-		err := mpdConn.Close()
-		if err != nil {
-			terrors.Log(err, "Error while closing MPD connection")
-		}
-	}
-
-}
-
 func mpdState() string {
 	status, err := mpdConn.Status()
 	if err != nil {
@@ -85,4 +75,18 @@ func CurrentlyPlaying() {
 		output = fmt.Sprintf("%s - %s", song["Artist"], song["Title"])
 		log.Println(output)
 	}
+}
+
+func Shutdown() {
+	if Enabled {
+		err := mpdConn.Stop()
+		if err != nil {
+			terrors.Log(err, "Error stopping MPD")
+		}
+		err = mpdConn.Close()
+		if err != nil {
+			terrors.Log(err, "Error while closing MPD connection")
+		}
+	}
+
 }
