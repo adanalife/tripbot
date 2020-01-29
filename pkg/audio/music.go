@@ -41,6 +41,7 @@ func mpdState() string {
 	status, err := mpdConn.Status()
 	if err != nil {
 		terrors.Log(err, "Error getting MPD status")
+		return "error"
 	}
 	return status["state"]
 }
