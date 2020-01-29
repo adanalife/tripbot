@@ -5,8 +5,10 @@ ignore/
 *.db
 *.MP4
 OBS/*.txt
+OBS/GPS-live.png
 .env
 *.pid
 *.log
 db/*.sql
 db/*.gz
+
