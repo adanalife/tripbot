@@ -9,6 +9,7 @@ import (
 )
 
 var mpdConn *mpd.Client
+var Enabled = true
 
 const (
 	grooveSaladURL = "http://somafm.com/groovesalad256.pls"
@@ -17,6 +18,14 @@ const (
 
 func init() {
 	var err error
+
+	// disable audio on OS X
+	if runtime.GOOS != "linux" {
+		log.Println("Disabling audio since we're not on Linux")
+		Enabled = false
+		return
+	}
+
 	// Connect to MPD server
 	mpdConn, err = mpd.Dial("tcp", mpdServer)
 	if err != nil {
@@ -28,10 +37,13 @@ func init() {
 }
 
 func Shutdown() {
-	err := mpdConn.Close()
-	if err != nil {
-		terrors.Log(err, "Error while closing MPD connection")
+	if Enabled {
+		err := mpdConn.Close()
+		if err != nil {
+			terrors.Log(err, "Error while closing MPD connection")
+		}
 	}
+
 }
 
 func mpdState() string {
@@ -58,16 +70,18 @@ func startGrooveSalad() {
 }
 
 func CurrentlyPlaying() {
-	output := ""
-	state := mpdState()
-	if state != "play" {
-		output = fmt.Sprintf("State: %s", state)
-		return
+	if Enabled {
+		output := ""
+		state := mpdState()
+		if state != "play" {
+			output = fmt.Sprintf("State: %s", state)
+			return
+		}
+		song, err := mpdConn.CurrentSong()
+		if err != nil {
+			terrors.Log(err, "Error getting current song from MPD")
+		}
+		output = fmt.Sprintf("%s - %s", song["Artist"], song["Title"])
+		log.Println(output)
 	}
-	song, err := mpdConn.CurrentSong()
-	if err != nil {
-		terrors.Log(err, "Error getting current song from MPD")
-	}
-	output = fmt.Sprintf("%s - %s", song["Artist"], song["Title"])
-	log.Println(output)
 }
