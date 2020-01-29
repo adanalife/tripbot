@@ -196,7 +196,7 @@ func guessCmd(user *users.User, params []string) {
 	}
 
 	// get the arg from the command
-	guess := strings.Join(params[1:], " ")
+	guess := strings.Join(params, " ")
 
 	// convert to short form if they used the full name
 	// e.g. "Massachusetts" instead of "MA"
