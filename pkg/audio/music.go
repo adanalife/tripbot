@@ -61,21 +61,23 @@ func startGrooveSalad() {
 	}
 }
 
-func CurrentlyPlaying() {
+func CurrentlyPlaying() string {
+	output := ""
 	if Enabled {
-		output := ""
 		state := mpdState()
 		if state != "play" {
-			output = fmt.Sprintf("State: %s", state)
-			return
+			output = fmt.Sprintf("Player state: %s", state)
+			return output
 		}
 		song, err := mpdConn.CurrentSong()
 		if err != nil {
 			terrors.Log(err, "Error getting current song from MPD")
+			return ""
 		}
-		output = fmt.Sprintf("%s - %s", song["Artist"], song["Title"])
-		log.Println(output)
+		//TODO: there are other attributes in here, use them?
+		output = song["Title"]
 	}
+	return output
 }
 
 func Shutdown() {

@@ -28,6 +28,17 @@ func helpCmd(user *users.User) {
 	Say(msg)
 }
 
+func songCmd(user *users.User) {
+	log.Println(user.Username, "ran !song")
+	currentSong := audio.CurrentlyPlaying()
+	// just print the link to somaFM if there's an issue
+	if currentSong == "" {
+		Say("https://somafm.com/groovesalad/songhistory.html")
+		return
+	}
+	Say(currentSong)
+}
+
 func uptimeCmd(user *users.User) {
 	log.Println(user.Username, "ran !uptime")
 	dur := time.Now().Sub(Uptime)
