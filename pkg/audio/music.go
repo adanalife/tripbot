@@ -3,6 +3,7 @@ package audio
 import (
 	"fmt"
 	"log"
+	"runtime"
 
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	"github.com/fhs/gompd/mpd"
