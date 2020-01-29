@@ -539,7 +539,8 @@
             "push-to-talk-delay": 0,
             "settings": {
                 "height": 300,
-                "url": "https://streamlabs.com/widgets/chat-box/v1/05E1185A353317C6B6A1"
+                "url": "https://streamlabs.com/widgets/chat-box/v1/05E1185A353317C6B6A1",
+                "width": 800
             },
             "sync": 0,
             "volume": 1.0
@@ -1847,14 +1848,14 @@
                         "locked": true,
                         "name": "leaderboard",
                         "pos": {
-                            "x": 18.0,
-                            "y": 867.0
+                            "x": 1575.0,
+                            "y": 866.0
                         },
                         "private_settings": {},
                         "rot": 0.0,
                         "scale": {
-                            "x": 1.1978609561920166,
-                            "y": 1.1967213153839111
+                            "x": 1.1497006416320801,
+                            "y": 1.1485713720321655
                         },
                         "scale_filter": "disable",
                         "visible": true
@@ -1902,17 +1903,17 @@
                         "crop_top": 0,
                         "group_item_backup": false,
                         "id": 44,
-                        "locked": false,
+                        "locked": true,
                         "name": "Linux Browser",
                         "pos": {
-                            "x": 1404.0,
-                            "y": 831.0
+                            "x": 0.0,
+                            "y": 807.0
                         },
                         "private_settings": {},
                         "rot": 0.0,
                         "scale": {
-                            "x": 0.64499998092651367,
-                            "y": 0.64499998092651367
+                            "x": 0.73374998569488525,
+                            "y": 0.73333334922790527
                         },
                         "scale_filter": "disable",
                         "visible": true
