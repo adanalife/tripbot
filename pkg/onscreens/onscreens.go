@@ -9,14 +9,13 @@ import (
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 )
 
-var defaultDuration = time.Duration(30 * time.Second)
-
-type UpdateFunc func(*Onscreen) error
+// var defaultDuration = time.Duration(30 * time.Second)
+var defaultSleepInterval = time.Duration(5 * time.Second)
 
 type Onscreen struct {
-	Content string
-	Expires time.Time
-	// Interval   time.Duration
+	Content       string
+	Expires       time.Time
+	SleepInterval time.Duration
 	// Update     UpdateFunc
 	isImage    bool
 	OutputFile string
@@ -26,10 +25,20 @@ type Onscreen struct {
 func New() *Onscreen {
 	newOnscreen := &Onscreen{}
 	newOnscreen.Content = ""
-	newOnscreen.Expires = time.Now().Add(time.Duration(defaultDuration))
-	// newOnscreen.Interval = time.Duration(10 * time.Second)
+	newOnscreen.Expires = time.Now()
+	newOnscreen.SleepInterval = time.Duration(defaultSleepInterval)
 	// newOnscreen.quit = make(chan bool)
+	// start the background loop
+	go newOnscreen.backgroundLoop()
 	return newOnscreen
+}
+
+//TODO: do we need a way to close out this loop?
+func (osc *Onscreen) backgroundLoop() {
+	if osc.isExpired() {
+		osc.Hide()
+	}
+	time.Sleep(osc.SleepInterval)
 }
 
 func (osc *Onscreen) isExpired() bool {
@@ -112,7 +121,11 @@ func (osc Onscreen) showText() {
 // hideText will delete the OutputFile (hiding the text)
 func (osc Onscreen) hideText() {
 	fmt.Println("removing file:", osc.OutputFile)
-	os.Remove(osc.OutputFile)
+	err := os.Remove(osc.OutputFile)
+	if err != nil {
+		terrors.Log(err, "error removing file")
+	}
+
 }
 
 func showImage(imgPath string) {
