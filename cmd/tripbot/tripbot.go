@@ -55,7 +55,8 @@ func main() {
 	// create webhook subscriptions
 	// mytwitch.UpdateWebhookSubscriptions()
 
-	background.ShowOnscreenLeaderboard()
+	background.InitLeaderboard()
+	background.ShowLeaderboard()
 
 	client.Join(config.ChannelName)
 	log.Println("Joined channel", config.ChannelName)

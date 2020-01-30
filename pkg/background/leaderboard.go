@@ -2,25 +2,37 @@ package background
 
 import (
 	"fmt"
+	"math/rand"
 	"path"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	"github.com/dmerrick/danalol-stream/pkg/onscreens"
 	"github.com/dmerrick/danalol-stream/pkg/users"
 )
 
 var leaderboardDuration = time.Duration(20 * time.Second)
+var leaderboardFile = path.Join(helpers.ProjectRoot(), "OBS/leaderboard.txt")
 
 var Leaderboard *onscreens.Onscreen
 
-func ShowOnscreenLeaderboard() {
+func InitLeaderboard() {
 	Leaderboard = onscreens.New()
-	Leaderboard.OutputFile = path.Join(helpers.ProjectRoot(), "OBS/leaderboard.txt")
-	spew.Dump(Leaderboard.OutputFile)
-	spew.Dump(leaderboardContent())
+	Leaderboard.OutputFile = leaderboardFile
+	go leaderboardLoop()
+}
+
+func ShowLeaderboard() {
 	Leaderboard.Show(leaderboardContent(), leaderboardDuration)
+}
+
+func leaderboardLoop() {
+	for { // forever
+		if rand.Intn(10) == 0 {
+			ShowLeaderboard()
+		}
+		time.Sleep(time.Duration(30 * time.Second))
+	}
 }
 
 // leaderboardContent creates the content for the leaderboard

@@ -93,7 +93,6 @@ func (osc Onscreen) showText() {
 
 // hideText will delete the OutputFile (hiding the text)
 func (osc Onscreen) hideText() {
-	fmt.Println("removing file:", osc.OutputFile)
 	if helpers.FileExists(osc.OutputFile) {
 		err := os.Remove(osc.OutputFile)
 		if err != nil {
