@@ -57,11 +57,6 @@ func main() {
 
 	background.ShowOnscreenLeaderboard()
 
-	go func() {
-		time.Sleep(10 * time.Second)
-		background.Leaderboard.Hide()
-	}()
-
 	client.Join(config.ChannelName)
 	log.Println("Joined channel", config.ChannelName)
 	log.Printf("URL: %s", aurora.Blue(fmt.Sprintf("https://twitch.tv/%s", config.ChannelName)).Underline())

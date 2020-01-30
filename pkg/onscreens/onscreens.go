@@ -9,17 +9,14 @@ import (
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 )
 
-// var defaultDuration = time.Duration(30 * time.Second)
 var defaultSleepInterval = time.Duration(5 * time.Second)
 
 type Onscreen struct {
 	Content       string
 	Expires       time.Time
 	SleepInterval time.Duration
-	// Update     UpdateFunc
-	isImage    bool
-	OutputFile string
-	// quit       chan bool //struct{}
+	isImage       bool
+	OutputFile    string
 }
 
 func New() *Onscreen {
@@ -27,18 +24,21 @@ func New() *Onscreen {
 	newOnscreen.Content = ""
 	newOnscreen.Expires = time.Now()
 	newOnscreen.SleepInterval = time.Duration(defaultSleepInterval)
-	// newOnscreen.quit = make(chan bool)
 	// start the background loop
 	go newOnscreen.backgroundLoop()
 	return newOnscreen
 }
 
+// backgroundLoop will loop forever, hiding the Onscren if needed
 //TODO: do we need a way to close out this loop?
 func (osc *Onscreen) backgroundLoop() {
-	if osc.isExpired() {
-		osc.Hide()
+	for { // forever
+		if osc.isExpired() {
+			fmt.Println("onscreen", osc.OutputFile, "is expired")
+			osc.Hide()
+		}
+		time.Sleep(osc.SleepInterval)
 	}
-	time.Sleep(osc.SleepInterval)
 }
 
 func (osc *Onscreen) isExpired() bool {
@@ -54,40 +54,6 @@ func (osc *Onscreen) Extend(dur time.Duration) {
 	// otherwise, add dur to the current expiry date
 	osc.Expires = osc.Expires.Add(dur)
 }
-
-// func (osc *Onscreen) Stop() {
-// 	spew.Dump(osc)
-// 	osc.quit <- true
-// }
-
-// // intended to be run in a goroutine
-// func (osc *Onscreen) Start() {
-// 	fmt.Println("starting")
-// 	spew.Dump(osc)
-
-// 	for {
-// 		select {
-// 		case <-osc.quit:
-// 			break
-// 		default:
-// 			fmt.Println("updating")
-// 			err := osc.Update(osc)
-// 			if err != nil {
-// 				terrors.Log(err, "error during update")
-// 			}
-
-// 			if osc.expired() {
-// 				osc.Hide()
-// 			} else {
-// 				osc.Show()
-// 			}
-
-// 			// fmt.Println("sleeping")
-// 			time.Sleep(osc.Interval)
-// 		}
-// 	}
-// 	fmt.Println("ending")
-// }
 
 func (osc *Onscreen) Show(content string, dur time.Duration) {
 	if osc.isImage {
