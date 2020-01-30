@@ -1,6 +1,7 @@
 package background
 
 import (
+	"log"
 	"math/rand"
 	"path"
 	"time"
@@ -26,6 +27,7 @@ var possibleRightMessages = []string{
 }
 
 func InitRightRotator() {
+	log.Println("Creating right rotator onscreen")
 	RightRotator = onscreens.New(rightRotatorFile)
 	go rightRotatorLoop()
 }

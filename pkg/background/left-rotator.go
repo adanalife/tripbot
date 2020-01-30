@@ -2,6 +2,7 @@ package background
 
 import (
 	"fmt"
+	"log"
 	"math/rand"
 	"path"
 	"time"
@@ -35,6 +36,7 @@ var possibleLeftMessages = []string{
 }
 
 func InitLeftRotator() {
+	log.Println("Creating left rotator onscreen")
 	LeftRotator = onscreens.New(leftRotatorFile)
 	go leftRotatorLoop()
 }

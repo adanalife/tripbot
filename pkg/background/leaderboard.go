@@ -2,6 +2,7 @@ package background
 
 import (
 	"fmt"
+	"log"
 	"math/rand"
 	"path"
 	"time"
@@ -17,6 +18,7 @@ var leaderboardFile = path.Join(helpers.ProjectRoot(), "OBS/leaderboard.txt")
 var Leaderboard *onscreens.Onscreen
 
 func InitLeaderboard() {
+	log.Println("Creating leaderboard onscreen")
 	Leaderboard = onscreens.New(leaderboardFile)
 	go leaderboardLoop()
 }
