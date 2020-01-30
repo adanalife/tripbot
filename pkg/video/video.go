@@ -3,12 +3,12 @@ package video
 import (
 	"fmt"
 	"log"
-	"os"
 	"os/exec"
 	"path"
 	"strings"
 	"time"
 
+	"github.com/dmerrick/danalol-stream/pkg/background"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	"github.com/logrusorgru/aurora"
@@ -46,9 +46,9 @@ func GetCurrentlyPlaying() {
 
 		// show the no-GPS image
 		if CurrentlyPlaying.Flagged {
-			showNoGPSImage()
+			background.GPSImage.Show("", 60*time.Second)
 		} else {
-			hideNoGPSImage()
+			background.GPSImage.Hide()
 		}
 	}
 }
@@ -70,15 +70,4 @@ func figureOutCurrentVideo() string {
 		return ""
 	}
 	return outString
-}
-
-func showNoGPSImage() {
-	noGPSSrc := path.Join(helpers.ProjectRoot(), "OBS/GPS.png")
-	noGPSDest := path.Join(helpers.ProjectRoot(), "OBS/GPS-live.png")
-	os.Link(noGPSSrc, noGPSDest)
-}
-
-func hideNoGPSImage() {
-	noGPSDest := path.Join(helpers.ProjectRoot(), "OBS/GPS-live.png")
-	os.Remove(noGPSDest)
 }

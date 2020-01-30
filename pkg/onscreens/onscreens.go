@@ -1,11 +1,16 @@
 package onscreens
 
 import (
+	"fmt"
 	"io/ioutil"
+	"os"
 	"time"
 
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
+	"github.com/dmerrick/danalol-stream/pkg/helpers"
 )
+
+const imageSuffix = "-live"
 
 var defaultSleepInterval = time.Duration(5 * time.Second)
 
@@ -26,6 +31,12 @@ func New(outputFile string) *Onscreen {
 	// start the background loop
 	go newOnscreen.backgroundLoop()
 	return newOnscreen
+}
+
+func NewImage(imageFile string) *Onscreen {
+	osc := New(imageFile)
+	osc.isImage = true
+	return osc
 }
 
 // backgroundLoop will loop forever, hiding the Onscreen if needed
@@ -59,14 +70,15 @@ func (osc *Onscreen) Show(content string, dur time.Duration) {
 	// add the duration to the expiry time
 	osc.Extend(dur)
 	if osc.isImage {
-		showImage(osc.Content)
+		osc.showImage()
 	} else {
 		osc.showText()
 	}
 }
+
 func (osc *Onscreen) Hide() {
 	if osc.isImage {
-		hideImage(osc.Content)
+		osc.hideImage()
 	} else {
 		osc.hideText()
 	}
@@ -90,13 +102,24 @@ func (osc Onscreen) hideText() {
 	}
 }
 
-func showImage(imgPath string) {
-	// src := path.Join(helpers.ProjectRoot(), "OBS/GPS.png")
-	// dest := path.Join(helpers.ProjectRoot(), "OBS/GPS-live.png")
-	// os.Link(src, dest)
+// add suffix to the end of the file
+func (osc Onscreen) liveImage() string {
+	return fmt.Sprintf("%s%s", osc.outputFile, imageSuffix)
 }
 
-func hideImage(imgPath string) {
-	// noGPSDest := path.Join(helpers.ProjectRoot(), "OBS/GPS-live.png")
-	// os.Remove(noGPSDest)
+func (osc Onscreen) showImage() {
+	// copy the image to the live location
+	err := os.Link(osc.outputFile, osc.liveImage())
+	if err != nil {
+		terrors.Log(err, "error removing image")
+	}
+}
+
+func (osc Onscreen) hideImage() {
+	if helpers.FileExists(osc.liveImage()) {
+		err := os.Remove(osc.liveImage())
+		if err != nil {
+			terrors.Log(err, "error removing image")
+		}
+	}
 }
