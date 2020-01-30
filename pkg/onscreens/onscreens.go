@@ -1,7 +1,6 @@
 package onscreens
 
 import (
-	"fmt"
 	"io/ioutil"
 	"os"
 	"time"
@@ -36,10 +35,7 @@ func New(outputFile string) *Onscreen {
 func (osc *Onscreen) backgroundLoop() {
 	for { // forever
 		if osc.isExpired() {
-			fmt.Println("onscreen", osc.outputFile, "is expired")
 			osc.Hide()
-		} else {
-			fmt.Println("not expired yet")
 		}
 		time.Sleep(osc.SleepInterval)
 	}
@@ -80,7 +76,6 @@ func (osc *Onscreen) Hide() {
 
 // showText will write the Content to the outputFile
 func (osc Onscreen) showText() {
-	fmt.Println("writing to file:", osc.outputFile)
 	b := []byte(osc.Content)
 	err := ioutil.WriteFile(osc.outputFile, b, 0644)
 	if err != nil {
