@@ -6,7 +6,6 @@ import (
 	"path"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	"github.com/dmerrick/danalol-stream/pkg/onscreens"
 	"github.com/dmerrick/danalol-stream/pkg/users"
@@ -62,7 +61,6 @@ func leftRotatorContent() string {
 	// some messages require custom logic
 	switch message {
 	case "LEADER":
-		spew.Dump(users.Leaderboard[:1])
 		// get the first leader in the leaderboard
 		leader := users.Leaderboard[:1][0]
 		output = fmt.Sprintf("%s is leader with %s miles (!leaderboard)", leader[0], leader[1])
