@@ -12,11 +12,13 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/users"
 )
 
+var LeftRotator *onscreens.Onscreen
+
+var leftRotatorUpdateFrequency = time.Duration(45 * time.Second)
+
 // super long duration cause this is always on
 var leftRotatorDuration = time.Duration(24 * time.Hour)
-var leftRotatorFile = path.Join(helpers.ProjectRoot(), "OBS/leaderboard.txt")
-
-var LeftRotator *onscreens.Onscreen
+var leftRotatorFile = path.Join(helpers.ProjectRoot(), "OBS/left-message.txt")
 
 var possibleMessages = []string{
 	"Looking for artist for emotes and more",
@@ -41,7 +43,7 @@ func InitLeftRotator() {
 func leftRotatorLoop() {
 	for { // forever
 		LeftRotator.Show(leftRotatorContent(), leftRotatorDuration)
-		time.Sleep(time.Duration(30 * time.Second))
+		time.Sleep(time.Duration(leftRotatorUpdateFrequency))
 	}
 }
 
@@ -57,12 +59,13 @@ func leftRotatorContent() string {
 	// pick a random message
 	message := possibleMessages[rand.Intn(len(possibleMessages))]
 
+	// some messages require custom logic
 	switch message {
 	case "LEADER":
 		spew.Dump(users.Leaderboard[:1])
 		// get the first leader in the leaderboard
 		leader := users.Leaderboard[:1][0]
-		output = fmt.Sprintf("%s is leader with %s miles (!leaderboard)", leader[1], leader[0])
+		output = fmt.Sprintf("%s is leader with %s miles (!leaderboard)", leader[0], leader[1])
 	default:
 		output = message
 	}
