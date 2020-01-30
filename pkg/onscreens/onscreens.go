@@ -31,7 +31,7 @@ func New(outputFile string) *Onscreen {
 	return newOnscreen
 }
 
-// backgroundLoop will loop forever, hiding the Onscren if needed
+// backgroundLoop will loop forever, hiding the Onscreen if needed
 //TODO: do we need a way to close out this loop?
 func (osc *Onscreen) backgroundLoop() {
 	for { // forever

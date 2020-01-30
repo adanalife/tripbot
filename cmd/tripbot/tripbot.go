@@ -56,7 +56,8 @@ func main() {
 	// mytwitch.UpdateWebhookSubscriptions()
 
 	background.InitLeaderboard()
-	background.ShowLeaderboard()
+	// background.ShowLeaderboard()
+	background.InitLeftRotator()
 
 	client.Join(config.ChannelName)
 	log.Println("Joined channel", config.ChannelName)
