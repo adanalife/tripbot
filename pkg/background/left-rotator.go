@@ -19,7 +19,7 @@ var leftRotatorUpdateFrequency = time.Duration(45 * time.Second)
 var leftRotatorDuration = time.Duration(24 * time.Hour)
 var leftRotatorFile = path.Join(helpers.ProjectRoot(), "OBS/left-message.txt")
 
-var possibleMessages = []string{
+var possibleLeftMessages = []string{
 	"Looking for artist for emotes and more",
 	"Want to help the stream? Fill out the !survey",
 	"Want to help the stream? Fill out the !survey",
@@ -56,7 +56,7 @@ func leftRotatorContent() string {
 	}
 
 	// pick a random message
-	message := possibleMessages[rand.Intn(len(possibleMessages))]
+	message := possibleLeftMessages[rand.Intn(len(possibleLeftMessages))]
 
 	// some messages require custom logic
 	switch message {
