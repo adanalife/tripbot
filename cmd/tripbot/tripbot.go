@@ -59,7 +59,7 @@ func main() {
 
 	go func() {
 		time.Sleep(10 * time.Second)
-		background.Leaderboard.Stop()
+		background.Leaderboard.Hide()
 	}()
 
 	client.Join(config.ChannelName)
