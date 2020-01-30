@@ -47,14 +47,14 @@ func main() {
 	scheduleBackgroundJobs()
 
 	// update subscribers list
-	// mytwitch.GetSubscribers()
+	mytwitch.GetSubscribers()
 
 	// fetch initial session
 	users.UpdateSession()
 	users.PrintCurrentSession()
 
 	// create webhook subscriptions
-	// mytwitch.UpdateWebhookSubscriptions()
+	mytwitch.UpdateWebhookSubscriptions()
 
 	background.InitLeaderboard()
 	background.InitLeftRotator()
