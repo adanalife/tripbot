@@ -22,6 +22,7 @@ const (
 
 //TODO: add consistency between use of Dir vs Path in these names
 var (
+	Environment string
 	// ChannelName is the username of the stream
 	ChannelName string
 	// BotUsername is the username of the bot
@@ -56,6 +57,7 @@ func init() {
 	}
 
 	requiredVars := []string{
+		"ENV",
 		"CHANNEL_NAME",
 		"BOT_USERNAME",
 		"EXTERNAL_URL",
@@ -73,6 +75,7 @@ func init() {
 		}
 	}
 
+	Environment = os.Getenv("ENV")
 	//TODO: consider using strings.ToLower() on channel name here and removing elsewhere
 	ChannelName = os.Getenv("CHANNEL_NAME")
 	BotUsername = os.Getenv("BOT_USERNAME")

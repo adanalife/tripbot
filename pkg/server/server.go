@@ -14,6 +14,7 @@ import (
 	"github.com/logrusorgru/aurora"
 )
 
+//TODO: consider adding routes to control MPD
 func handle(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
