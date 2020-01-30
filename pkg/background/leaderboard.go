@@ -17,8 +17,7 @@ var leaderboardFile = path.Join(helpers.ProjectRoot(), "OBS/leaderboard.txt")
 var Leaderboard *onscreens.Onscreen
 
 func InitLeaderboard() {
-	Leaderboard = onscreens.New()
-	Leaderboard.OutputFile = leaderboardFile
+	Leaderboard = onscreens.New(leaderboardFile)
 	go leaderboardLoop()
 }
 

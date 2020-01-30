@@ -17,14 +17,15 @@ type Onscreen struct {
 	Expires       time.Time
 	SleepInterval time.Duration
 	isImage       bool
-	OutputFile    string
+	outputFile    string
 }
 
-func New() *Onscreen {
+func New(outputFile string) *Onscreen {
 	newOnscreen := &Onscreen{}
 	newOnscreen.Content = ""
 	newOnscreen.Expires = time.Now()
 	newOnscreen.SleepInterval = time.Duration(defaultSleepInterval)
+	newOnscreen.outputFile = outputFile
 	// start the background loop
 	go newOnscreen.backgroundLoop()
 	return newOnscreen
@@ -35,7 +36,7 @@ func New() *Onscreen {
 func (osc *Onscreen) backgroundLoop() {
 	for { // forever
 		if osc.isExpired() {
-			fmt.Println("onscreen", osc.OutputFile, "is expired")
+			fmt.Println("onscreen", osc.outputFile, "is expired")
 			osc.Hide()
 		} else {
 			fmt.Println("not expired yet")
@@ -77,24 +78,20 @@ func (osc *Onscreen) Hide() {
 	}
 }
 
-// showText will write the Content to the OutputFile
+// showText will write the Content to the outputFile
 func (osc Onscreen) showText() {
-	if osc.OutputFile == "" {
-		terrors.Log(nil, "no OutputFile set")
-		return
-	}
-	fmt.Println("writing to file:", osc.OutputFile)
+	fmt.Println("writing to file:", osc.outputFile)
 	b := []byte(osc.Content)
-	err := ioutil.WriteFile(osc.OutputFile, b, 0644)
+	err := ioutil.WriteFile(osc.outputFile, b, 0644)
 	if err != nil {
 		terrors.Log(err, "error writing to file")
 	}
 }
 
-// hideText will delete the OutputFile (hiding the text)
+// hideText will delete the outputFile (hiding the text)
 func (osc Onscreen) hideText() {
-	if helpers.FileExists(osc.OutputFile) {
-		err := os.Remove(osc.OutputFile)
+	if helpers.FileExists(osc.outputFile) {
+		err := os.Remove(osc.outputFile)
 		if err != nil {
 			terrors.Log(err, "error removing file")
 		}
