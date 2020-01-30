@@ -2,11 +2,9 @@ package onscreens
 
 import (
 	"io/ioutil"
-	"os"
 	"time"
 
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
-	"github.com/dmerrick/danalol-stream/pkg/helpers"
 )
 
 var defaultSleepInterval = time.Duration(5 * time.Second)
@@ -83,13 +81,12 @@ func (osc Onscreen) showText() {
 	}
 }
 
-// hideText will delete the outputFile (hiding the text)
+// hideText will truncate the outputFile (hiding the text)
 func (osc Onscreen) hideText() {
-	if helpers.FileExists(osc.outputFile) {
-		err := os.Remove(osc.outputFile)
-		if err != nil {
-			terrors.Log(err, "error removing file")
-		}
+	b := []byte("") // empty file
+	err := ioutil.WriteFile(osc.outputFile, b, 0644)
+	if err != nil {
+		terrors.Log(err, "error emptying to file")
 	}
 }
 
