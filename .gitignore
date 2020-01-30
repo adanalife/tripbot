@@ -5,7 +5,7 @@ ignore/
 *.db
 *.MP4
 OBS/*.txt
-OBS/GPS-live.png
+OBS/*-live
 .env
 *.pid
 *.log
