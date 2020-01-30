@@ -7,6 +7,7 @@ import (
 	"time"
 
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
+	"github.com/dmerrick/danalol-stream/pkg/helpers"
 )
 
 var defaultSleepInterval = time.Duration(5 * time.Second)
@@ -36,6 +37,8 @@ func (osc *Onscreen) backgroundLoop() {
 		if osc.isExpired() {
 			fmt.Println("onscreen", osc.OutputFile, "is expired")
 			osc.Hide()
+		} else {
+			fmt.Println("not expired yet")
 		}
 		time.Sleep(osc.SleepInterval)
 	}
@@ -56,6 +59,10 @@ func (osc *Onscreen) Extend(dur time.Duration) {
 }
 
 func (osc *Onscreen) Show(content string, dur time.Duration) {
+	// set the content
+	osc.Content = content
+	// add the duration to the expiry time
+	osc.Extend(dur)
 	if osc.isImage {
 		showImage(osc.Content)
 	} else {
@@ -87,11 +94,12 @@ func (osc Onscreen) showText() {
 // hideText will delete the OutputFile (hiding the text)
 func (osc Onscreen) hideText() {
 	fmt.Println("removing file:", osc.OutputFile)
-	err := os.Remove(osc.OutputFile)
-	if err != nil {
-		terrors.Log(err, "error removing file")
+	if helpers.FileExists(osc.OutputFile) {
+		err := os.Remove(osc.OutputFile)
+		if err != nil {
+			terrors.Log(err, "error removing file")
+		}
 	}
-
 }
 
 func showImage(imgPath string) {

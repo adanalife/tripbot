@@ -97,6 +97,7 @@ func init() {
 		MapsOutputDir,
 	}
 	for _, d := range requiredDirs {
+		// we cant use helpers.FileExists() here due to import loop
 		_, err := os.Stat(d)
 		if err != nil {
 			if os.IsNotExist(err) {
