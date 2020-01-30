@@ -17,7 +17,7 @@ var LeftRotator *onscreens.Onscreen
 var leftRotatorUpdateFrequency = time.Duration(45 * time.Second)
 
 // super long duration cause this is always on
-var leftRotatorDuration = time.Duration(24 * time.Hour)
+var leftRotatorDuration = time.Duration(10 * 365 * 24 * time.Hour)
 var leftRotatorFile = path.Join(helpers.ProjectRoot(), "OBS/left-message.txt")
 
 var possibleLeftMessages = []string{

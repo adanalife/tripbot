@@ -15,7 +15,7 @@ var RightRotator *onscreens.Onscreen
 var rightRotatorUpdateFrequency = time.Duration(90 * time.Second)
 
 // super long duration cause this is always on
-var rightRotatorDuration = time.Duration(24 * time.Hour)
+var rightRotatorDuration = time.Duration(10 * 365 * 24 * time.Hour)
 var rightRotatorFile = path.Join(helpers.ProjectRoot(), "OBS/right-message.txt")
 
 var possibleRightMessages = []string{
