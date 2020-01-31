@@ -123,8 +123,8 @@ func (osc Onscreen) showImage() {
 
 func (osc Onscreen) hideImage() {
 	spew.Dump(osc)
+	log.Println("Removing", osc.liveImage())
 	if helpers.FileExists(osc.liveImage()) {
-		log.Println("Removing", osc.liveImage())
 		err := os.Remove(osc.liveImage())
 		if err != nil {
 			terrors.Log(err, "error removing image")
