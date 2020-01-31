@@ -238,6 +238,35 @@
                         },
                         "scale_filter": "disable",
                         "visible": true
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 0,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": false,
+                        "id": 42,
+                        "locked": true,
+                        "name": "GPS",
+                        "pos": {
+                            "x": 1528.0,
+                            "y": 1039.0
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": -0.10546875,
+                            "y": 0.10546875
+                        },
+                        "scale_filter": "disable",
+                        "visible": true
                     }
                 ]
             },
@@ -407,7 +436,7 @@
             "push-to-talk": false,
             "push-to-talk-delay": 0,
             "settings": {
-                "file": "/Users/dmerrick/other_projects/danalol-stream/OBS/GPS-live.png",
+                "file": "/Users/dmerrick/other_projects/danalol-stream/OBS/GPS.png-live",
                 "unload": false
             },
             "sync": 0,
@@ -832,6 +861,35 @@
                         "crop_left": 0,
                         "crop_right": 0,
                         "crop_top": 0,
+                        "group_item_backup": true,
+                        "id": 42,
+                        "locked": true,
+                        "name": "GPS",
+                        "pos": {
+                            "x": 1528.0,
+                            "y": 1039.0
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": -0.10546875,
+                            "y": 0.10546875
+                        },
+                        "scale_filter": "disable",
+                        "visible": true
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 0,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
                         "group_item_backup": false,
                         "id": 26,
                         "locked": true,
@@ -934,35 +992,6 @@
                         "scale": {
                             "x": 1.0,
                             "y": 1.0
-                        },
-                        "scale_filter": "disable",
-                        "visible": true
-                    },
-                    {
-                        "align": 5,
-                        "bounds": {
-                            "x": 0.0,
-                            "y": 0.0
-                        },
-                        "bounds_align": 0,
-                        "bounds_type": 0,
-                        "crop_bottom": 0,
-                        "crop_left": 0,
-                        "crop_right": 0,
-                        "crop_top": 0,
-                        "group_item_backup": false,
-                        "id": 42,
-                        "locked": true,
-                        "name": "GPS",
-                        "pos": {
-                            "x": 1528.0,
-                            "y": 1039.0
-                        },
-                        "private_settings": {},
-                        "rot": 0.0,
-                        "scale": {
-                            "x": -0.10546875,
-                            "y": 0.10546875
                         },
                         "scale_filter": "disable",
                         "visible": true
@@ -23703,6 +23732,35 @@
                         "scale": {
                             "x": 1.0307167768478394,
                             "y": 1.0303030014038086
+                        },
+                        "scale_filter": "disable",
+                        "visible": true
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 0,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": true,
+                        "id": 42,
+                        "locked": true,
+                        "name": "GPS",
+                        "pos": {
+                            "x": 1528.0,
+                            "y": 1039.0
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": -0.10546875,
+                            "y": 0.10546875
                         },
                         "scale_filter": "disable",
                         "visible": true
