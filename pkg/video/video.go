@@ -46,10 +46,8 @@ func GetCurrentlyPlaying() {
 
 		// show the no-GPS image
 		if CurrentlyPlaying.Flagged {
-			log.Println("SHOWING NO-GPS IMAGE")
 			background.GPSImage.Show("", 60*time.Second)
 		} else {
-			log.Println("HIDING NO-GPS IMAGE")
 			background.GPSImage.Hide()
 		}
 	}

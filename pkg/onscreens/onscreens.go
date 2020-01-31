@@ -3,15 +3,14 @@ package onscreens
 import (
 	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 )
 
+// imageSuffix is added to the end of image files to make the "live"
 const imageSuffix = "-live"
 
 var defaultSleepInterval = time.Duration(5 * time.Second)
@@ -68,11 +67,11 @@ func (osc *Onscreen) Extend(dur time.Duration) {
 }
 
 func (osc *Onscreen) Show(content string, dur time.Duration) {
+	osc.IsShowing = true
 	// set the content
 	osc.Content = content
 	// add the duration to the expiry time
 	osc.Extend(dur)
-	osc.IsShowing = true
 	if osc.isImage {
 		osc.showImage()
 	} else {
@@ -122,8 +121,6 @@ func (osc Onscreen) showImage() {
 }
 
 func (osc Onscreen) hideImage() {
-	spew.Dump(osc)
-	log.Println("Removing", osc.liveImage())
 	if helpers.FileExists(osc.liveImage()) {
 		err := os.Remove(osc.liveImage())
 		if err != nil {
