@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 )
@@ -121,6 +122,7 @@ func (osc Onscreen) showImage() {
 }
 
 func (osc Onscreen) hideImage() {
+	spew.Dump(osc)
 	if helpers.FileExists(osc.liveImage()) {
 		log.Println("Removing", osc.liveImage())
 		err := os.Remove(osc.liveImage())
