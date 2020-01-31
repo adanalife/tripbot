@@ -3,6 +3,7 @@ package onscreens
 import (
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"time"
 
@@ -18,6 +19,7 @@ type Onscreen struct {
 	Content       string
 	Expires       time.Time
 	SleepInterval time.Duration
+	IsShowing     bool
 	isImage       bool
 	outputFile    string
 }
@@ -43,7 +45,7 @@ func NewImage(imageFile string) *Onscreen {
 //TODO: do we need a way to close out this loop?
 func (osc *Onscreen) backgroundLoop() {
 	for { // forever
-		if osc.isExpired() {
+		if osc.IsShowing && osc.isExpired() {
 			osc.Hide()
 		}
 		time.Sleep(osc.SleepInterval)
@@ -69,6 +71,7 @@ func (osc *Onscreen) Show(content string, dur time.Duration) {
 	osc.Content = content
 	// add the duration to the expiry time
 	osc.Extend(dur)
+	osc.IsShowing = true
 	if osc.isImage {
 		osc.showImage()
 	} else {
@@ -77,6 +80,7 @@ func (osc *Onscreen) Show(content string, dur time.Duration) {
 }
 
 func (osc *Onscreen) Hide() {
+	osc.IsShowing = false
 	if osc.isImage {
 		osc.hideImage()
 	} else {
@@ -118,6 +122,7 @@ func (osc Onscreen) showImage() {
 
 func (osc Onscreen) hideImage() {
 	if helpers.FileExists(osc.liveImage()) {
+		log.Println("Removing", osc.liveImage())
 		err := os.Remove(osc.liveImage())
 		if err != nil {
 			terrors.Log(err, "error removing image")
