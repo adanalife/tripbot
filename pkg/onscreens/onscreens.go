@@ -10,6 +10,11 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 )
 
+//TODO: these live in the background package and could/should
+// be moved into this package
+//TODO: we don't always need SleepInterval/Expires... some
+// of these run forever (maybe refactor into ShowFor()?)
+
 // imageSuffix is added to the end of image files to make the "live"
 const imageSuffix = "-live"
 
