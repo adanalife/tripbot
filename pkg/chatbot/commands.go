@@ -36,7 +36,8 @@ func songCmd(user *users.User) {
 		Say("https://somafm.com/groovesalad/songhistory.html")
 		return
 	}
-	Say(currentSong)
+	msg := fmt.Sprintf("We're listening to %s", currentSong)
+	Say(msg)
 }
 
 func uptimeCmd(user *users.User) {
