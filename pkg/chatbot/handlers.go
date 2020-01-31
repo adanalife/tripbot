@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/dmerrick/danalol-stream/pkg/config"
-	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	mylog "github.com/dmerrick/danalol-stream/pkg/log"
 	"github.com/dmerrick/danalol-stream/pkg/users"
 	"github.com/gempir/go-twitch-irc/v2"
@@ -18,8 +17,9 @@ func runCommand(user users.User, message string, whisper bool) {
 
 	switch command {
 	case "!help":
+		//TODO: do we need this?
 		// whisper if the user ran !help with no params
-		whisper = (whisper || len(params) == 0)
+		// whisper = (whisper || len(params) == 0)
 		helpCmd(&user, params, whisper)
 	case "!song":
 		songCmd(&user)
@@ -137,8 +137,9 @@ func PrivateMessage(msg twitch.PrivateMessage) {
 		// log in the user
 		user := users.LoginIfNecessary(username)
 
-	// run the command if possible
-	runCommand(*user, message, false)
+		// run the command if possible
+		runCommand(*user, message, false)
+	}
 }
 
 // this event fires when a user joins the channel
