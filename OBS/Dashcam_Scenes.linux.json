@@ -684,7 +684,7 @@
             "hotkeys": {
                 "OBSBasic.SelectScene": [],
                 "libobs.hide_scene_item.Audio Output Capture (PulseAudio)": [],
-                "libobs.hide_scene_item.Linux Browser": [],
+                "libobs.hide_scene_item.Twitch Chat": [],
                 "libobs.hide_scene_item.VLC Video Source": [],
                 "libobs.hide_scene_item.leaderboard": [],
                 "libobs.hide_scene_item.left corner": [],
@@ -692,7 +692,7 @@
                 "libobs.hide_scene_item.old stuff": [],
                 "libobs.hide_scene_item.right corner": [],
                 "libobs.show_scene_item.Audio Output Capture (PulseAudio)": [],
-                "libobs.show_scene_item.Linux Browser": [],
+                "libobs.show_scene_item.Twitch Chat": [],
                 "libobs.show_scene_item.VLC Video Source": [],
                 "libobs.show_scene_item.leaderboard": [],
                 "libobs.show_scene_item.left corner": [],
@@ -1115,17 +1115,17 @@
                         "crop_top": 0,
                         "group_item_backup": false,
                         "id": 44,
-                        "locked": true,
-                        "name": "Linux Browser",
+                        "locked": false,
+                        "name": "Twitch Chat",
                         "pos": {
-                            "x": 0.0,
-                            "y": 807.0
+                            "x": -77.0,
+                            "y": 803.0
                         },
                         "private_settings": {},
                         "rot": 0.0,
                         "scale": {
-                            "x": 0.73374998569488525,
-                            "y": 0.73333334922790527
+                            "x": 0.7462499737739563,
+                            "y": 0.74666666984558105
                         },
                         "scale_filter": "disable",
                         "visible": true
@@ -2095,7 +2095,7 @@
             "mixers": 0,
             "monitoring_type": 0,
             "muted": false,
-            "name": "Linux Browser",
+            "name": "Twitch Chat",
             "prev_ver": 402653190,
             "private_settings": {},
             "push-to-mute": false,
@@ -2105,7 +2105,7 @@
             "settings": {
                 "height": 300,
                 "url": "https://streamlabs.com/widgets/chat-box/v1/05E1185A353317C6B6A1",
-                "width": 800
+                "width": 900
             },
             "sync": 0,
             "volume": 1.0
