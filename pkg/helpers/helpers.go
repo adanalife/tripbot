@@ -173,6 +173,7 @@ func sunriseSunset(utcDate time.Time, lat, long float64) (time.Time, time.Time) 
 	return ActualDate(rise, lat, long), ActualDate(set, lat, long)
 }
 
+//TODO: we use skratchdot/open-golang elsewhere, replace this with that
 // https://gist.github.com/hyg/9c4afcd91fe24316cbf0
 func OpenInBrowser(url string) {
 	var err error
