@@ -33,7 +33,7 @@ require (
 	github.com/otiai10/gosseract v2.2.1+incompatible
 	github.com/robfig/cron v1.2.0
 	github.com/sfreiberg/gotwilio v0.0.0-20190522212351-14c666f1d505
-	github.com/skratchdot/open-golang v0.0.0-20200116055534-eef842397966 // indirect
+	github.com/skratchdot/open-golang v0.0.0-20200116055534-eef842397966
 	golang.org/x/sys v0.0.0-20200124204421-9fbb57f87de9 // indirect
 	golang.org/x/tools/gopls v0.2.1 // indirect
 	google.golang.org/genproto v0.0.0-20200122232147-0452cf42e150 // indirect

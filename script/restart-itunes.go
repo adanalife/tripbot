@@ -3,7 +3,6 @@ package main
 import (
 	"log"
 	"syscall"
-	"fmt"
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/mitchellh/go-ps"
@@ -11,7 +10,11 @@ import (
 )
 
 func main() {
+	stopiTunes()
+	startiTunes()
+}
 
+func stopiTunes() {
 	itunesBinary := "iTunes"
 
 	processes, err := ps.Processes()
@@ -32,18 +35,15 @@ func main() {
 	}
 
 	if itunesProcess != nil {
-		fmt.Println("pid for iTunes is:", itunesProcess.Pid())
-		fmt.Println("killing it...")
+		log.Printf("pid for iTunes is %d, killing it...", itunesProcess.Pid())
 		err = syscall.Kill(itunesProcess.Pid(), syscall.SIGKILL)
 		if err != nil {
 			log.Println("error killing pid", err)
 		}
 	}
+}
 
-
-	// restartCmd := "open -a iTunes http://somafm.com/groovesalad256.pls"
-	// spew.Dump(restartCmd)
-
-	fmt.Println("opening iTunes")
+func startiTunes() {
+	log.Println("opening iTunes")
 	open.RunWith("http://somafm.com/groovesalad256.pls", "iTunes")
 }
