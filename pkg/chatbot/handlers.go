@@ -34,6 +34,8 @@ func runCommand(user users.User, message string) {
 		}
 	case "!shutdown":
 		shutdownCmd(&user)
+	case "!restartmusic":
+		restartMusicCmd(&user)
 	case "!bonusmiles":
 		if user.IsSubscriber() {
 			bonusMilesCmd(&user)
