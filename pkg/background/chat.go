@@ -6,7 +6,6 @@ import (
 	"path"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	"github.com/dmerrick/danalol-stream/pkg/onscreens"
 )
@@ -22,7 +21,6 @@ var ChatLines = []string{}
 func InitChat() {
 	log.Println("Creating chat onscreen")
 	Chat = onscreens.New(chatFile)
-	// go chatLoop()
 }
 
 //TODO: actually use time
@@ -30,15 +28,6 @@ func AddChatLine(username, line string, t time.Time) {
 	ChatLines = append(ChatLines, fmt.Sprintf("[%s] %s", username, line))
 	Chat.Show(chatContent(), chatDuration)
 }
-
-// func chatLoop() {
-// 	for { // forever
-// 		if rand.Intn(10) == 0 {
-// 			ShowChat()
-// 		}
-// 		time.Sleep(time.Duration(30 * time.Second))
-// 	}
-// }
 
 // chatContent creates the content for the chat
 func chatContent() string {
@@ -60,7 +49,6 @@ func chatContent() string {
 	for _, fullLine := range lines {
 		line := ""
 		lineLength := len(fullLine)
-		spew.Dump("lineLength", lineLength)
 		if lineLength > lineBreak {
 			// include the first characters
 			line = fullLine[:lineBreak]
@@ -68,15 +56,11 @@ func chatContent() string {
 			line += "\n  "
 			// we want to add one more line (subracting 2 for the indent)
 			endpoint = lineBreak + lineBreak - 2
-			spew.Dump("endpoint", endpoint)
 			// but sometimes the endpoint is beyond the size of the line
 			if endpoint > lineLength {
 				// in which case we should just use the end of the line
 				endpoint = lineLength
-				spew.Dump("updated endpoint", endpoint)
 			}
-			spew.Dump("final endpoint", endpoint)
-			spew.Dump(fullLine[lineBreak:endpoint])
 			line += fullLine[lineBreak:endpoint]
 			//TODO: consider adding a "..." after really long messages
 		}
