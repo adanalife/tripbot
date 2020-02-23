@@ -18,8 +18,6 @@ const (
 )
 
 func init() {
-	var err error
-
 	// disable audio on OS X
 	if runtime.GOOS != "linux" {
 		log.Println("Disabling audio since we're not on Linux")
@@ -27,15 +25,20 @@ func init() {
 		return
 	}
 
-	// Connect to MPD server
-	mpdConn, err = mpd.Dial("tcp", mpdServer)
-	if err != nil {
-		//TODO: maybe we dont want this hard dependency?
-		terrors.Fatal(err, "Error connecting to MPD")
-	}
+	// connect to the MPD server
+	connect()
 
 	//TODO: this shouldn't live in init probably
 	startGrooveSalad()
+}
+
+func connect() {
+	var err error
+	// Connect to MPD server
+	mpdConn, err = mpd.Dial("tcp", mpdServer)
+	if err != nil {
+		terrors.Log(err, "Error connecting to MPD")
+	}
 }
 
 func mpdState() string {
@@ -58,6 +61,18 @@ func startGrooveSalad() {
 		err = mpdConn.Play(-1)
 		if err != nil {
 			terrors.Log(err, "Error playing MPD track")
+		}
+	}
+}
+
+// RefreshClient is intended to run periodically, because otherwise
+// the connection will time out
+func RefreshClient() {
+	if Enabled {
+		state := mpdState()
+		log.Println(state)
+		if state == "error" {
+			connect()
 		}
 	}
 }

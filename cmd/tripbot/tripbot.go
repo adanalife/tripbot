@@ -100,6 +100,8 @@ func gracefulShutdown() {
 func scheduleBackgroundJobs() {
 	// schedule these functions
 	background.Cron.AddFunc("@every 60s", video.GetCurrentlyPlaying)
+	// use this to keep the connection to MPD running
+	background.Cron.AddFunc("@every 60s", audio.RefreshClient)
 	background.Cron.AddFunc("@every 61s", users.UpdateSession)
 	background.Cron.AddFunc("@every 62s", users.UpdateLeaderboard)
 	background.Cron.AddFunc("@every 5m", users.PrintCurrentSession)
