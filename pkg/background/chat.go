@@ -11,6 +11,7 @@ import (
 )
 
 const lineBreak = 40
+const maxLines = 5
 
 var chatDuration = time.Duration(40 * time.Second)
 var chatFile = path.Join(helpers.ProjectRoot(), "OBS/chat.txt")
@@ -23,7 +24,6 @@ func InitChat() {
 	Chat = onscreens.New(chatFile)
 }
 
-//TODO: include time as parameter?
 func AddChatLine(username, line string) {
 	ChatLines = append(ChatLines, fmt.Sprintf("[%s] %s", username, line))
 	Chat.Show(chatContent(), chatDuration)
@@ -33,16 +33,16 @@ func AddChatLine(username, line string) {
 func chatContent() string {
 	var output string
 
-	size := 5
 	// check to see if we even have enough lines
+	size := maxLines
 	if len(ChatLines) < size {
 		size = len(ChatLines)
 	}
-	// get the last lines
-	lines := ChatLines[len(ChatLines)-size:]
+	// get the last lines, resetting size
+	ChatLines = ChatLines[len(ChatLines)-size:]
 
 	// add all the lines together
-	for _, line := range lines {
+	for _, line := range ChatLines {
 		output = output + "\n" + breakUpLine(line)
 	}
 
