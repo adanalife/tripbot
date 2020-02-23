@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"strings"
-	"time"
 
 	"github.com/dmerrick/danalol-stream/pkg/background"
 	"github.com/dmerrick/danalol-stream/pkg/config"
@@ -139,7 +138,8 @@ func PrivateMessage(msg twitch.PrivateMessage) {
 	// log to stackdriver
 	mylog.ChatMsg(username, msg.Message)
 
-	background.AddChatLine(username, msg.Message, time.Now())
+	// include in the onscreen chat box
+	background.AddChatLine(username, msg.Message)
 
 	// check to see if the message is a command
 	//TODO: also include ones prefixed with whitespace?

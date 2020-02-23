@@ -23,8 +23,8 @@ func InitChat() {
 	Chat = onscreens.New(chatFile)
 }
 
-//TODO: actually use time
-func AddChatLine(username, line string, t time.Time) {
+//TODO: include time as parameter?
+func AddChatLine(username, line string) {
 	ChatLines = append(ChatLines, fmt.Sprintf("[%s] %s", username, line))
 	Chat.Show(chatContent(), chatDuration)
 }
