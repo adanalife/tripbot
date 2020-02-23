@@ -6,7 +6,9 @@ ignore/
 *.MP4
 OBS/*.txt
 OBS/*-live
-.env
+.env.dev
+.env.staging
+.env.production
 *.pid
 *.log
 db/*.sql
