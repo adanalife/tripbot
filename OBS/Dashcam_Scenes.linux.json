@@ -378,7 +378,11 @@
             "flags": 0,
             "hotkeys": {
                 "libobs.hide_scene_item.STAGING test stream msg": [],
-                "libobs.show_scene_item.STAGING test stream msg": []
+                "libobs.hide_scene_item.Twitch Chat": [],
+                "libobs.hide_scene_item.VLC Video Source": [],
+                "libobs.show_scene_item.STAGING test stream msg": [],
+                "libobs.show_scene_item.Twitch Chat": [],
+                "libobs.show_scene_item.VLC Video Source": []
             },
             "id": "group",
             "mixers": 0,
@@ -424,7 +428,7 @@
                             "y": 2.2941176891326904
                         },
                         "scale_filter": "disable",
-                        "visible": true
+                        "visible": false
                     },
                     {
                         "align": 5,
@@ -555,6 +559,149 @@
             "deinterlace_field_order": 0,
             "deinterlace_mode": 0,
             "enabled": true,
+            "filters": [
+                {
+                    "balance": 0.5,
+                    "deinterlace_field_order": 0,
+                    "deinterlace_mode": 0,
+                    "enabled": true,
+                    "flags": 0,
+                    "hotkeys": {},
+                    "id": "crop_filter",
+                    "mixers": 0,
+                    "monitoring_type": 0,
+                    "muted": false,
+                    "name": "Crop/Pad",
+                    "prev_ver": 402653190,
+                    "private_settings": {},
+                    "push-to-mute": false,
+                    "push-to-mute-delay": 0,
+                    "push-to-talk": false,
+                    "push-to-talk-delay": 0,
+                    "settings": {
+                        "left": -5,
+                        "right": -5
+                    },
+                    "sync": 0,
+                    "volume": 1.0
+                }
+            ],
+            "flags": 0,
+            "hotkeys": {},
+            "id": "text_ft2_source",
+            "mixers": 0,
+            "monitoring_type": 0,
+            "muted": false,
+            "name": "Chat Onscreen",
+            "prev_ver": 402653190,
+            "private_settings": {},
+            "push-to-mute": false,
+            "push-to-mute-delay": 0,
+            "push-to-talk": false,
+            "push-to-talk-delay": 0,
+            "settings": {
+                "color1": 4294967295,
+                "color2": 4288059030,
+                "custom_width": 40,
+                "drop_shadow": false,
+                "font": {
+                    "face": "Sans Serif",
+                    "flags": 0,
+                    "size": 10,
+                    "style": ""
+                },
+                "from_file": true,
+                "log_mode": false,
+                "outline": false,
+                "text": "",
+                "text_file": "/home/dmerrick/other_projects/danalol-stream/OBS/chat.txt",
+                "word_wrap": false
+            },
+            "sync": 0,
+            "volume": 1.0
+        },
+        {
+            "balance": 0.5,
+            "deinterlace_field_order": 0,
+            "deinterlace_mode": 0,
+            "enabled": true,
+            "filters": [
+                {
+                    "balance": 0.5,
+                    "deinterlace_field_order": 0,
+                    "deinterlace_mode": 0,
+                    "enabled": true,
+                    "flags": 0,
+                    "hotkeys": {},
+                    "id": "mask_filter",
+                    "mixers": 0,
+                    "monitoring_type": 0,
+                    "muted": false,
+                    "name": "Image Mask/Blend",
+                    "prev_ver": 402653190,
+                    "private_settings": {},
+                    "push-to-mute": false,
+                    "push-to-mute-delay": 0,
+                    "push-to-talk": false,
+                    "push-to-talk-delay": 0,
+                    "settings": {
+                        "opacity": 100
+                    },
+                    "sync": 0,
+                    "volume": 1.0
+                },
+                {
+                    "balance": 0.5,
+                    "deinterlace_field_order": 0,
+                    "deinterlace_mode": 0,
+                    "enabled": true,
+                    "flags": 0,
+                    "hotkeys": {},
+                    "id": "chroma_key_filter",
+                    "mixers": 0,
+                    "monitoring_type": 0,
+                    "muted": false,
+                    "name": "Chroma Key",
+                    "prev_ver": 402653190,
+                    "private_settings": {},
+                    "push-to-mute": false,
+                    "push-to-mute-delay": 0,
+                    "push-to-talk": false,
+                    "push-to-talk-delay": 0,
+                    "settings": {
+                        "opacity": 72
+                    },
+                    "sync": 0,
+                    "volume": 1.0
+                }
+            ],
+            "flags": 0,
+            "hotkeys": {},
+            "id": "xcomposite_input",
+            "mixers": 0,
+            "monitoring_type": 0,
+            "muted": false,
+            "name": "Window Capture - Terminal",
+            "prev_ver": 402653190,
+            "private_settings": {},
+            "push-to-mute": false,
+            "push-to-mute-delay": 0,
+            "push-to-talk": false,
+            "push-to-talk-delay": 0,
+            "settings": {
+                "capture_window": "33554435\r\nTerminal - dmerrick@dmerrick-stream  tmuxinator start stream\r\nxfce4-terminal",
+                "cut_right": 12,
+                "cut_top": 24,
+                "swap_redblue": false
+            },
+            "sync": 0,
+            "volume": 1.0
+        },
+        {
+            "balance": 0.5,
+            "deinterlace_field_order": 0,
+            "deinterlace_mode": 0,
+            "enabled": true,
             "flags": 0,
             "hotkeys": {},
             "id": "xcomposite_input",
@@ -569,7 +716,8 @@
             "push-to-talk": false,
             "push-to-talk-delay": 0,
             "settings": {
-                "capture_window": "58720262\r\n2018_0512_222721_004_opt.MP4 - VLC media player\r\nvlc",
+                "capture_window": "67108864\r\nVLC media player\r\nvlc",
+                "show_cursor": false,
                 "swap_redblue": false
             },
             "sync": 0,
@@ -742,8 +890,8 @@
                 },
                 "from_file": true,
                 "outline": false,
-                "text": "new command: !guess",
-                "text_file": "/home/dmerrick/other_projects/danalol-stream/OBS/left-message.txt"
+                "text": "",
+                "text_file": "/home/dmerrick/other_projects/danalol-stream/OBS/my-message.txt"
             },
             "sync": 0,
             "volume": 1.0
@@ -1598,20 +1746,22 @@
             "flags": 0,
             "hotkeys": {
                 "OBSBasic.SelectScene": [],
+                "libobs.hide_scene_item.Audio Input Capture (PulseAudio)": [],
                 "libobs.hide_scene_item.Audio Output Capture (PulseAudio)": [],
+                "libobs.hide_scene_item.Chat Onscreen": [],
                 "libobs.hide_scene_item.Screen Capture - Left Monitor": [],
-                "libobs.hide_scene_item.Twitch Chat": [],
-                "libobs.hide_scene_item.VLC Video Source": [],
+                "libobs.hide_scene_item.Window Capture - Terminal": [],
                 "libobs.hide_scene_item.Window Capture - VLC": [],
                 "libobs.hide_scene_item.leaderboard": [],
                 "libobs.hide_scene_item.left corner": [],
                 "libobs.hide_scene_item.my message": [],
                 "libobs.hide_scene_item.old stuff": [],
                 "libobs.hide_scene_item.right corner": [],
+                "libobs.show_scene_item.Audio Input Capture (PulseAudio)": [],
                 "libobs.show_scene_item.Audio Output Capture (PulseAudio)": [],
+                "libobs.show_scene_item.Chat Onscreen": [],
                 "libobs.show_scene_item.Screen Capture - Left Monitor": [],
-                "libobs.show_scene_item.Twitch Chat": [],
-                "libobs.show_scene_item.VLC Video Source": [],
+                "libobs.show_scene_item.Window Capture - Terminal": [],
                 "libobs.show_scene_item.Window Capture - VLC": [],
                 "libobs.show_scene_item.leaderboard": [],
                 "libobs.show_scene_item.left corner": [],
@@ -1632,7 +1782,7 @@
             "push-to-talk-delay": 0,
             "settings": {
                 "custom_size": false,
-                "id_counter": 49,
+                "id_counter": 54,
                 "items": [
                     {
                         "align": 5,
@@ -1748,7 +1898,7 @@
                             "y": 2.2941176891326904
                         },
                         "scale_filter": "disable",
-                        "visible": true
+                        "visible": false
                     },
                     {
                         "align": 5,
@@ -1832,7 +1982,7 @@
                             "y": 0.0
                         },
                         "private_settings": {
-                            "collapsed": true
+                            "collapsed": false
                         },
                         "rot": 0.0,
                         "scale": {
@@ -1950,7 +2100,7 @@
                             "y": 0.0
                         },
                         "private_settings": {
-                            "collapsed": true
+                            "collapsed": false
                         },
                         "rot": 0.0,
                         "scale": {
@@ -2095,17 +2245,104 @@
                         "locked": true,
                         "name": "my message",
                         "pos": {
-                            "x": 910.0,
-                            "y": 1038.0
+                            "x": 645.0,
+                            "y": 1035.0
                         },
                         "private_settings": {},
                         "rot": 0.0,
                         "scale": {
-                            "x": 1.7760416269302368,
-                            "y": 1.7619047164916992
+                            "x": 1.9118387699127197,
+                            "y": 1.9090908765792847
                         },
                         "scale_filter": "disable",
-                        "visible": false
+                        "visible": true
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 0,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": false,
+                        "id": 50,
+                        "locked": true,
+                        "name": "Window Capture - Terminal",
+                        "pos": {
+                            "x": 1545.0,
+                            "y": 638.0
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 0.28749999403953552,
+                            "y": 0.28750923275947571
+                        },
+                        "scale_filter": "disable",
+                        "visible": true
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 0,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": false,
+                        "id": 53,
+                        "locked": false,
+                        "name": "Audio Input Capture (PulseAudio)",
+                        "pos": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 1.0,
+                            "y": 1.0
+                        },
+                        "scale_filter": "disable",
+                        "visible": true
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 472.0,
+                            "y": 208.0
+                        },
+                        "bounds_align": 10,
+                        "bounds_type": 4,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": false,
+                        "id": 54,
+                        "locked": false,
+                        "name": "Chat Onscreen",
+                        "pos": {
+                            "x": 5.0,
+                            "y": 820.0
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 3.0862069129943848,
+                            "y": 3.0853657722473145
+                        },
+                        "scale_filter": "disable",
+                        "visible": true
                     }
                 ]
             },
@@ -2263,10 +2500,39 @@
             "push-to-talk": false,
             "push-to-talk-delay": 0,
             "settings": {
-                "device_id": "alsa_output.pci-0000_01_00.1.hdmi-stereo-extra1.monitor"
+                "device_id": "alsa_output.pci-0000_01_00.1.hdmi-stereo.monitor"
             },
             "sync": 0,
-            "volume": 0.27111920714378357
+            "volume": 0.1035391092300415
+        },
+        {
+            "balance": 0.5,
+            "deinterlace_field_order": 0,
+            "deinterlace_mode": 0,
+            "enabled": true,
+            "flags": 0,
+            "hotkeys": {
+                "libobs.mute": [],
+                "libobs.push-to-mute": [],
+                "libobs.push-to-talk": [],
+                "libobs.unmute": []
+            },
+            "id": "pulse_input_capture",
+            "mixers": 255,
+            "monitoring_type": 2,
+            "muted": false,
+            "name": "Audio Input Capture (PulseAudio)",
+            "prev_ver": 402653190,
+            "private_settings": {},
+            "push-to-mute": false,
+            "push-to-mute-delay": 0,
+            "push-to-talk": false,
+            "push-to-talk-delay": 0,
+            "settings": {
+                "device_id": "alsa_input.usb-Razer_Razer_Megalodon-00.mono-fallback"
+            },
+            "sync": 0,
+            "volume": 0.33335202932357788
         }
     ],
     "transition_duration": 300,

@@ -29,7 +29,7 @@ func init() {
 	connect()
 
 	//TODO: this shouldn't live in init probably
-	startGrooveSalad()
+	// startGrooveSalad()
 }
 
 func connect() {
