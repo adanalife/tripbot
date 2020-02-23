@@ -56,6 +56,7 @@ func main() {
 	// create webhook subscriptions
 	mytwitch.UpdateWebhookSubscriptions()
 
+	background.InitChat()
 	background.InitLeaderboard()
 	background.InitLeftRotator()
 	background.InitRightRotator()
