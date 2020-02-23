@@ -6,11 +6,14 @@ import (
 	"path"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	"github.com/dmerrick/danalol-stream/pkg/onscreens"
 )
 
-var chatDuration = time.Duration(20 * time.Second)
+const lineBreak = 40
+
+var chatDuration = time.Duration(40 * time.Second)
 var chatFile = path.Join(helpers.ProjectRoot(), "OBS/chat.txt")
 
 var Chat *onscreens.Onscreen
@@ -39,19 +42,44 @@ func AddChatLine(username, line string, t time.Time) {
 
 // chatContent creates the content for the chat
 func chatContent() string {
-
 	var output string
+	var endpoint int
 
 	size := 5
+	// check to see if we even have enough lines
 	if len(ChatLines) < size {
 		size = len(ChatLines)
 	}
-	lines := ChatLines[size:]
+	// get the last lines
+	lines := ChatLines[len(ChatLines)-size:]
 
 	// spew.Dump(ChatLines)
 	// spew.Dump(lines)
 
-	for _, line := range lines {
+	// add all the lines together
+	for _, fullLine := range lines {
+		line := ""
+		lineLength := len(fullLine)
+		spew.Dump("lineLength", lineLength)
+		if lineLength > lineBreak {
+			// include the first characters
+			line = fullLine[:lineBreak]
+			// add a newline and an indent
+			line += "\n  "
+			// we want to add one more line (subracting 2 for the indent)
+			endpoint = lineBreak + lineBreak - 2
+			spew.Dump("endpoint", endpoint)
+			// but sometimes the endpoint is beyond the size of the line
+			if endpoint > lineLength {
+				// in which case we should just use the end of the line
+				endpoint = lineLength
+				spew.Dump("updated endpoint", endpoint)
+			}
+			spew.Dump("final endpoint", endpoint)
+			spew.Dump(fullLine[lineBreak:endpoint])
+			line += fullLine[lineBreak:endpoint]
+			//TODO: consider adding a "..." after really long messages
+		}
 		output = output + "\n" + line
 	}
 
