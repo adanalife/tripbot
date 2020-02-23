@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
+	"github.com/dmerrick/danalol-stream/pkg/background"
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
@@ -70,7 +71,11 @@ func Initialize() *twitch.Client {
 
 // Say will make a post in chat
 func Say(msg string) {
+	// include the message in the log
 	mylog.ChatMsg(config.BotUsername, msg)
+	// include the bot output in chat
+	background.AddChatLine(config.BotUsername, msg)
+	// say the message to chat
 	client.Say(config.ChannelName, msg)
 }
 
