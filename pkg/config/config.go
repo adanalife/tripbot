@@ -50,14 +50,11 @@ var (
 )
 
 func init() {
-	// load ENV vars from .env file
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal("Error loading .env file")
-	}
+
+	// set the Environment and load dotenv
+	setEnvironment()
 
 	requiredVars := []string{
-		"ENV",
 		"CHANNEL_NAME",
 		"BOT_USERNAME",
 		"EXTERNAL_URL",
@@ -75,7 +72,6 @@ func init() {
 		}
 	}
 
-	Environment = os.Getenv("ENV")
 	//TODO: consider using strings.ToLower() on channel name here and removing elsewhere
 	ChannelName = os.Getenv("CHANNEL_NAME")
 	BotUsername = os.Getenv("BOT_USERNAME")
@@ -107,6 +103,35 @@ func init() {
 				log.Fatalf("Directory %s does not exist", d)
 			}
 		}
+	}
+}
+
+// setEnvironment sets the Environment var from the CLI
+func setEnvironment() {
+	var err error
+
+	env, ok := os.LookupEnv("ENV")
+	if !ok {
+		log.Fatalln("You must set ENV")
+	}
+
+	// standardize the ENV
+	switch env {
+	case "stage", "staging":
+		Environment = "staging"
+	case "prod", "production":
+		Environment = "production"
+	case "dev", "development":
+		Environment = "development"
+	default:
+		log.Fatalf("Unknown ENV: %s", env)
+	}
+
+	// load ENV vars from .env file
+	err = godotenv.Load(".env." + Environment)
+
+	if err != nil {
+		log.Fatal("Error loading .env file:", err)
 	}
 }
 

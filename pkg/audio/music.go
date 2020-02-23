@@ -34,6 +34,7 @@ func init() {
 		terrors.Fatal(err, "Error connecting to MPD")
 	}
 
+	//TODO: this shouldn't live in init probably
 	startGrooveSalad()
 }
 
