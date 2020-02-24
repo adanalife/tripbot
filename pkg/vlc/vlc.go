@@ -37,6 +37,12 @@ func Init() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	// loop forever
+	err = player.SetPlaybackMode(theirVlc.Loop)
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 func Shutdown() {
@@ -50,6 +56,10 @@ func LoadMedia() {
 	var files []string
 
 	err := filepath.Walk(config.VideoDir, func(path string, info os.FileInfo, err error) error {
+		// skip the dir itself
+		if path == config.VideoDir {
+			return nil
+		}
 		files = append(files, path)
 		return nil
 	})
@@ -66,9 +76,6 @@ func LoadMedia() {
 	}
 
 	spew.Dump(mediaList)
-
-	//TODO: deal with this
-	// defer media.Release()
 }
 
 func Play() {
