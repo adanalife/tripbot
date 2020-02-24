@@ -41,6 +41,8 @@ func Init() {
 	if err != nil {
 		terrors.Fatal(err, "error setting VLC playback mode")
 	}
+
+	loadMedia()
 }
 
 func Shutdown() {
@@ -49,7 +51,7 @@ func Shutdown() {
 	theirVlc.Release()
 }
 
-func LoadMedia() {
+func loadMedia() {
 	var files []string
 
 	// add all files from the VideoDir to the medialist
