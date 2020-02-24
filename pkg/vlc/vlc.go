@@ -1,16 +1,14 @@
 package vlc
 
 import (
-	"log"
 	"os"
 	"path/filepath"
 
 	theirVlc "github.com/adrg/libvlc-go"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/dmerrick/danalol-stream/pkg/config"
+	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 )
-
-//TODO: remove all panics and Fatals
 
 var player *theirVlc.ListPlayer
 var mediaList *theirVlc.MediaList
@@ -20,28 +18,28 @@ func Init() {
 
 	//TODO: add more flags (--no-audio?)
 	if err = theirVlc.Init("--quiet"); err != nil {
-		log.Fatal(err)
+		terrors.Fatal(err, "error initializing VLC")
 	}
 
 	// create a new player
 	player, err = theirVlc.NewListPlayer()
 	if err != nil {
-		log.Fatal(err)
+		terrors.Fatal(err, "error creating VLC player")
 	}
 	mediaList, err = theirVlc.NewMediaList()
 	if err != nil {
-		log.Fatal(err)
+		terrors.Fatal(err, "error creating VLC media list")
 	}
 
 	err = player.SetMediaList(mediaList)
 	if err != nil {
-		log.Fatal(err)
+		terrors.Fatal(err, "error setting VLC media list")
 	}
 
 	// loop forever
 	err = player.SetPlaybackMode(theirVlc.Loop)
 	if err != nil {
-		log.Fatal(err)
+		terrors.Fatal(err, "error setting VLC playback mode")
 	}
 }
 
@@ -52,9 +50,9 @@ func Shutdown() {
 }
 
 func LoadMedia() {
-	log.Println("loadMedia()")
 	var files []string
 
+	// add all files from the VideoDir to the medialist
 	err := filepath.Walk(config.VideoDir, func(path string, info os.FileInfo, err error) error {
 		// skip the dir itself
 		if path == config.VideoDir {
@@ -64,24 +62,21 @@ func LoadMedia() {
 		return nil
 	})
 	if err != nil {
-		panic(err)
+		terrors.Fatal(err, "error walking VideoDir")
 	}
 
 	for _, file := range files {
 		// add the media to VLC
 		err = mediaList.AddMediaFromPath(file)
 		if err != nil {
-			log.Fatal(err)
+			terrors.Fatal(err, "error adding files to VLC media list")
 		}
 	}
 
 	spew.Dump(mediaList)
 }
 
-func Play() {
-	log.Println("play()")
-	// Start playing the media.
-	if err := player.Play(); err != nil {
-		log.Fatal(err)
-	}
+func Play() error {
+	// start playing the media
+	return player.Play()
 }
