@@ -6,10 +6,14 @@ import (
 	"path/filepath"
 
 	theirVlc "github.com/adrg/libvlc-go"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/dmerrick/danalol-stream/pkg/config"
 )
 
-var player *theirVlc.Player
+//TODO: remove all panics and Fatals
+
+var player *theirVlc.ListPlayer
+var mediaList *theirVlc.MediaList
 
 func Init() {
 	var err error
@@ -20,7 +24,16 @@ func Init() {
 	}
 
 	// create a new player
-	player, err = theirVlc.NewPlayer()
+	player, err = theirVlc.NewListPlayer()
+	if err != nil {
+		log.Fatal(err)
+	}
+	mediaList, err = theirVlc.NewMediaList()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = player.SetMediaList(mediaList)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -43,13 +56,16 @@ func LoadMedia() {
 	if err != nil {
 		panic(err)
 	}
+
 	for _, file := range files {
 		// add the media to VLC
-		_, err := player.LoadMediaFromPath(file)
+		err = mediaList.AddMediaFromPath(file)
 		if err != nil {
 			log.Fatal(err)
 		}
 	}
+
+	spew.Dump(mediaList)
 
 	//TODO: deal with this
 	// defer media.Release()
