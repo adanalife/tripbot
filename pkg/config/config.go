@@ -6,7 +6,6 @@ import (
 	"path"
 	"strconv"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/joho/godotenv"
 )
 
@@ -91,7 +90,6 @@ func init() {
 	ScreencapDir = path.Join(DashcamDir, screencapDir)
 
 	DisableTwitchWebhooks, _ = strconv.ParseBool(os.Getenv("DISABLE_TWITCH_WEBHOOKS"))
-	spew.Dump(DisableTwitchWebhooks)
 
 	// check that the paths exist
 	requiredDirs := []string{
