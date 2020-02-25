@@ -37,7 +37,7 @@ func main() {
 	if runtime.GOOS != "darwin" {
 		// start VLC
 		vlc.Init()
-		vlc.PlayRandom()
+		vlc.Play()
 	}
 
 	// run this right away to set the currently-playing video
