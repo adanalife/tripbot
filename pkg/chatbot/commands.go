@@ -12,6 +12,7 @@ import (
 
 	"github.com/dmerrick/danalol-stream/pkg/audio"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
+	"github.com/dmerrick/danalol-stream/pkg/vlc"
 	"github.com/mitchellh/go-ps"
 	"github.com/skratchdot/open-golang/open"
 
@@ -42,6 +43,19 @@ func songCmd(user *users.User) {
 	}
 	msg := fmt.Sprintf("We're listening to %s", currentSong)
 	Say(msg)
+}
+
+func timewarpCmd(user *users.User) {
+	log.Println(user.Username, "ran !timewarp")
+	// exit early if we're on OS X
+	if runtime.GOOS == "darwin" {
+		Say("Sorry, timewarp isn't available right now")
+		return
+	}
+	// shuffle to a new video
+	vlc.PlayRandom()
+	// update the currently-playing video
+	video.GetCurrentlyPlaying()
 }
 
 func uptimeCmd(user *users.User) {
