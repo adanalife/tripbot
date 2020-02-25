@@ -55,10 +55,12 @@ func Init() {
 	}
 
 	loadMedia()
-	// createEventHandler()
+	createEventHandler()
 }
 
 func Shutdown() {
+	<-eventManagerQuit
+
 	player.Stop()
 	player.Release()
 	theirVlc.Release()
@@ -105,9 +107,6 @@ func PlayRandom() error {
 
 func eventCallback(event theirVlc.Event, userData interface{}) {
 	switch event {
-	case theirVlc.MediaPlayerEndReached:
-		log.Println("Player end reached")
-		close(eventManagerQuit)
 	case theirVlc.MediaPlayerTimeChanged:
 		media, err := player.Media()
 		if err != nil {
@@ -135,12 +134,11 @@ func createEventHandler() {
 	}
 
 	// Create event handler.
-	eventManagerQuit := make(chan struct{})
+	eventManagerQuit = make(chan struct{})
 
 	// Register events with the event manager.
 	events := []theirVlc.Event{
 		theirVlc.MediaPlayerTimeChanged,
-		theirVlc.MediaPlayerEndReached,
 	}
 
 	var eventIDs []theirVlc.EventID
@@ -154,11 +152,9 @@ func createEventHandler() {
 	}
 
 	// De-register attached events.
-	defer func() {
-		for _, eventID := range eventIDs {
-			eventManager.Detach(eventID)
-		}
-	}()
-
-	<-eventManagerQuit
+	// defer func() {
+	// 	for _, eventID := range eventIDs {
+	// 		eventManager.Detach(eventID)
+	// 	}
+	// }()
 }
