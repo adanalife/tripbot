@@ -1,7 +1,6 @@
 package vlc
 
 import (
-	"log"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -15,9 +14,6 @@ import (
 var player *theirVlc.Player
 var playlist *theirVlc.ListPlayer
 var mediaList *theirVlc.MediaList
-
-var eventManager *theirVlc.EventManager
-var eventManagerQuit chan struct{}
 
 func Init() {
 	var err error
@@ -59,8 +55,6 @@ func Init() {
 }
 
 func Shutdown() {
-	<-eventManagerQuit
-
 	player.Stop()
 	player.Release()
 	theirVlc.Release()
@@ -103,58 +97,4 @@ func PlayRandom() error {
 
 	// start playing the media
 	return playlist.PlayAtIndex(uint(random))
-}
-
-func eventCallback(event theirVlc.Event, userData interface{}) {
-	switch event {
-	case theirVlc.MediaPlayerTimeChanged:
-		media, err := player.Media()
-		if err != nil {
-			log.Println(err)
-			break
-		}
-
-		stats, err := media.Stats()
-		if err != nil {
-			log.Println(err)
-			break
-		}
-
-		log.Printf("%+v\n", stats)
-	}
-}
-
-func createEventHandler() {
-	var err error
-
-	// Retrieve player event manager.
-	eventManager, err = player.EventManager()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// Create event handler.
-	eventManagerQuit = make(chan struct{})
-
-	// Register events with the event manager.
-	events := []theirVlc.Event{
-		theirVlc.MediaPlayerTimeChanged,
-	}
-
-	var eventIDs []theirVlc.EventID
-	for _, event := range events {
-		eventID, err := eventManager.Attach(event, eventCallback, nil)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		eventIDs = append(eventIDs, eventID)
-	}
-
-	// De-register attached events.
-	// defer func() {
-	// 	for _, eventID := range eventIDs {
-	// 		eventManager.Detach(eventID)
-	// 	}
-	// }()
 }
