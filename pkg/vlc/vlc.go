@@ -1,26 +1,18 @@
 package vlc
 
 import (
-	"fmt"
-	"io/ioutil"
-	"log"
 	"math/rand"
 	"os"
-	"path"
 	"path/filepath"
 
 	theirVlc "github.com/adrg/libvlc-go"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
-	"github.com/dmerrick/danalol-stream/pkg/helpers"
-	"github.com/mitchellh/go-ps"
 )
 
 var player *theirVlc.ListPlayer
 var mediaList *theirVlc.MediaList
-
-const pidFile = "OBS/VLC.pid"
 
 func Init() {
 	var err error
@@ -52,33 +44,6 @@ func Init() {
 	}
 
 	loadMedia()
-	writePidFile()
-}
-
-func writePidFile() {
-	vlcBinary := "vlc"
-
-	processes, err := ps.Processes()
-	if err != nil {
-		terrors.Log(err, "error getting pid for VLC")
-	}
-
-	var vlcProcess ps.Process
-	for _, p := range processes {
-		if p.Executable() == vlcBinary {
-			vlcProcess = p
-			// ignore other VLC processes
-			break
-		}
-	}
-
-	if vlcProcess != nil {
-		log.Printf("pid for VLC is %d, writing to file", vlcProcess.Pid())
-		pidPath := path.Join(helpers.ProjectRoot(), pidFile)
-		ioutil.WriteFile(pidPath, []byte(fmt.Sprintf("%d", vlcProcess.Pid())), 0664)
-	} else {
-		log.Println("no VLC process found")
-	}
 }
 
 func Shutdown() {
