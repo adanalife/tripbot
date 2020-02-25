@@ -27,6 +27,8 @@ import (
 	"github.com/hako/durafmt"
 )
 
+var lastTimewarpTime time.Time
+
 func helpCmd(user *users.User) {
 	log.Println(user.Username, "ran !help")
 	msg := fmt.Sprintf("%s (%d of %d)", help(), helpIndex+1, len(config.HelpMessages))
@@ -47,15 +49,27 @@ func songCmd(user *users.User) {
 
 func timewarpCmd(user *users.User) {
 	log.Println(user.Username, "ran !timewarp")
+
 	// exit early if we're on OS X
 	if runtime.GOOS == "darwin" {
 		Say("Sorry, timewarp isn't available right now")
 		return
 	}
+
+	// rate-limit the number of times this can run
+	if user.Username != strings.ToLower(config.ChannelName) {
+		if time.Now().Sub(lastTimewarpTime) < 20*time.Second {
+			Say("Not yet; enjoy the moment!")
+			return
+		}
+	}
+
 	// shuffle to a new video
 	vlc.PlayRandom()
 	// update the currently-playing video
 	video.GetCurrentlyPlaying()
+	// update our record of last time it ran
+	lastTimewarpTime = time.Now()
 }
 
 func uptimeCmd(user *users.User) {
