@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 
 	theirVlc "github.com/adrg/libvlc-go"
-	"github.com/davecgh/go-spew/spew"
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 )
@@ -14,6 +13,10 @@ import (
 var player *theirVlc.Player
 var playlist *theirVlc.ListPlayer
 var mediaList *theirVlc.MediaList
+
+//TODO: this map is gonna be huge, with 4000+ videos
+// it also might do irresponsible things with pointers?
+// (see this commit history for another approach)
 var mediaToVid = make(map[theirVlc.Media]string)
 
 func Init() {
@@ -71,22 +74,6 @@ func CurrentlyPlaying() string {
 	}
 
 	return mediaToVid[*cur]
-
-	// saving this alternative to the mediaToVid map:
-	// count, err := mediaList.Count()
-	// if err != nil {
-	// 	terrors.Log(err, "error counting media in VLC media list")
-	// }
-	// for i := 0; i < count; i++ {
-	// 	m, err := mediaList.MediaAtIndex(i)
-	// 	if err != nil {
-	// 		terrors.Log(err, "error fetching currently-playing media")
-	// 	}
-	// 	if cur == m {
-	// 		return allVids[i]
-	// 	}
-	// }
-	// return ""
 }
 
 func loadMedia() {
@@ -120,8 +107,6 @@ func loadMedia() {
 		mediaToVid[*m] = files[i]
 		i++
 	}
-
-	spew.Dump(mediaToVid)
 }
 
 // PlayRandom plays a random file from the playlist
