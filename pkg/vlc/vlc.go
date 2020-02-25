@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"os"
 	"path"
 	"path/filepath"
@@ -113,7 +114,12 @@ func loadMedia() {
 	spew.Dump(mediaList)
 }
 
-func Play() error {
+func PlayRandom() error {
+	count, err := mediaList.Count()
+	if err != nil {
+		terrors.Log(err, "error counting media in VLC media list")
+	}
+	random := uint(rand.Intn(count))
 	// start playing the media
-	return player.Play()
+	return player.PlayAtIndex(random)
 }
