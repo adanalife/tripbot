@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"math/rand"
 	"os"
 	"os/signal"
 	"runtime"
@@ -25,6 +26,9 @@ import (
 )
 
 func main() {
+	// create a brand new random seed
+	rand.Seed(time.Now().UnixNano())
+
 	// start the graceful shutdown listener
 	go gracefulShutdown()
 

@@ -84,7 +84,9 @@ func PlayRandom() error {
 	if err != nil {
 		terrors.Log(err, "error counting media in VLC media list")
 	}
-	random := uint(rand.Intn(count))
+
+	random := rand.Intn(count)
+
 	// start playing the media
-	return player.PlayAtIndex(random)
+	return player.PlayAtIndex(uint(random))
 }
