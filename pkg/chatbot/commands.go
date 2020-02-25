@@ -337,12 +337,12 @@ func restartMusicCmd(user *users.User) {
 		return
 	}
 
+	Say("Restarting music player...")
 	if runtime.GOOS == "darwin" {
-		Say("Restarting music player...")
 		stopiTunes()
 		startiTunes()
 	} else {
-		log.Println("not restarting iTunes cause not on OS X")
+		audio.StartGrooveSalad()
 	}
 }
 

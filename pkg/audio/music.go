@@ -29,7 +29,7 @@ func init() {
 	connect()
 
 	//TODO: this shouldn't live in init probably
-	startGrooveSalad()
+	StartGrooveSalad()
 }
 
 func connect() {
@@ -50,18 +50,16 @@ func mpdState() string {
 	return status["state"]
 }
 
-func startGrooveSalad() {
-	if mpdState() != "play" {
-		log.Println("Starting Groove Salad")
-		err := mpdConn.Add(grooveSaladURL)
-		if err != nil {
-			terrors.Log(err, "Error adding to MPD playlist")
-		}
-		// negative values play the current track
-		err = mpdConn.Play(-1)
-		if err != nil {
-			terrors.Log(err, "Error playing MPD track")
-		}
+func StartGrooveSalad() {
+	log.Println("Starting Groove Salad")
+	err := mpdConn.Add(grooveSaladURL)
+	if err != nil {
+		terrors.Log(err, "Error adding to MPD playlist")
+	}
+	// negative values play the current track
+	err = mpdConn.Play(-1)
+	if err != nil {
+		terrors.Log(err, "Error playing MPD track")
 	}
 }
 
@@ -97,11 +95,7 @@ func CurrentlyPlaying() string {
 
 func Shutdown() {
 	if Enabled {
-		err := mpdConn.Stop()
-		if err != nil {
-			terrors.Log(err, "Error stopping MPD")
-		}
-		err = mpdConn.Close()
+		err := mpdConn.Close()
 		if err != nil {
 			terrors.Log(err, "Error while closing MPD connection")
 		}
