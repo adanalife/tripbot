@@ -28,8 +28,10 @@ var timeStarted time.Time
 //TODO: consider making this return a video struct
 func GetCurrentlyPlaying() {
 	var err error
+
 	// save the video we used last time
 	preVid = curVid
+
 	// figure out whats currently playing
 	if runtime.GOOS == "darwin" {
 		curVid = figureOutCurrentVideo()
