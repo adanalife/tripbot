@@ -19,33 +19,36 @@ var mediaToVid = make(map[theirVlc.Media]string)
 func Init() {
 	var err error
 
-	//TODO: add more flags (--no-audio?)
-	if err = theirVlc.Init("--quiet"); err != nil {
+	// the vids dont have audio anyway, so add --no-audio
+	if err = theirVlc.Init("--quiet", "--no-audio"); err != nil {
 		terrors.Fatal(err, "error initializing VLC")
 	}
 
-	// create a new player
+	// create a new playlist-player
 	playlist, err = theirVlc.NewListPlayer()
 	if err != nil {
 		terrors.Fatal(err, "error creating VLC playlist player")
 	}
 
+	// save the player so we can use it later
 	player, err = playlist.Player()
 	if err != nil {
 		terrors.Fatal(err, "error fetching VLC player")
 	}
 
+	// this will store all of our videos
 	mediaList, err = theirVlc.NewMediaList()
 	if err != nil {
 		terrors.Fatal(err, "error creating VLC media list")
 	}
 
+	// plug our medialist into the player
 	err = playlist.SetMediaList(mediaList)
 	if err != nil {
 		terrors.Fatal(err, "error setting VLC media list")
 	}
 
-	// loop forever
+	// set the player to loop forever
 	err = playlist.SetPlaybackMode(theirVlc.Loop)
 	if err != nil {
 		terrors.Fatal(err, "error setting VLC playback mode")
@@ -61,10 +64,6 @@ func Shutdown() {
 }
 
 func CurrentlyPlaying() string {
-	// count, err := mediaList.Count()
-	// if err != nil {
-	// 	terrors.Log(err, "error counting media in VLC media list")
-	// }
 
 	cur, err := player.Media()
 	if err != nil {
@@ -73,6 +72,11 @@ func CurrentlyPlaying() string {
 
 	return mediaToVid[*cur]
 
+	// saving this alternative to the mediaToVid map:
+	// count, err := mediaList.Count()
+	// if err != nil {
+	// 	terrors.Log(err, "error counting media in VLC media list")
+	// }
 	// for i := 0; i < count; i++ {
 	// 	m, err := mediaList.MediaAtIndex(i)
 	// 	if err != nil {
@@ -120,6 +124,7 @@ func loadMedia() {
 	spew.Dump(mediaToVid)
 }
 
+// PlayRandom plays a random file from the playlist
 func PlayRandom() error {
 	count, err := mediaList.Count()
 	if err != nil {
