@@ -29,7 +29,7 @@ func init() {
 	connect()
 
 	//TODO: this shouldn't live in init probably
-	// startGrooveSalad()
+	startGrooveSalad()
 }
 
 func connect() {
@@ -70,7 +70,6 @@ func startGrooveSalad() {
 func RefreshClient() {
 	if Enabled {
 		state := mpdState()
-		log.Println(state)
 		if state == "error" {
 			connect()
 		}
