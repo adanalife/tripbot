@@ -1,9 +1,11 @@
 package vlc
 
 import (
+	"log"
 	"math/rand"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	theirVlc "github.com/adrg/libvlc-go"
 	"github.com/dmerrick/danalol-stream/pkg/config"
@@ -19,6 +21,7 @@ var mediaList *theirVlc.MediaList
 // (see this commit history for another approach)
 var mediaToVid = make(map[theirVlc.Media]string)
 
+// Init creates a VLC player and sets up a playlist
 func Init() {
 	var err error
 
@@ -60,14 +63,21 @@ func Init() {
 	loadMedia()
 }
 
+// Shutdown cleans up VLC as best it can
+//TODO: are there more things to close gracefully?
 func Shutdown() {
+	if runtime.GOOS == "darwin" {
+		log.Println("not stopping VLC cause we're on darwin")
+		return
+	}
 	player.Stop()
 	player.Release()
 	theirVlc.Release()
 }
 
+// CurrentlyPlaying finds the currently-playing video path
+// (it's pretty hacky right now)
 func CurrentlyPlaying() string {
-
 	cur, err := player.Media()
 	if err != nil {
 		terrors.Log(err, "error fetching currently-playing media")
@@ -76,6 +86,8 @@ func CurrentlyPlaying() string {
 	return mediaToVid[*cur]
 }
 
+// loadMedia walks the VideoDir and adds all videos to
+// the playlist.
 func loadMedia() {
 	var files []string
 	// add all files from the VideoDir to the medialist
@@ -91,6 +103,7 @@ func loadMedia() {
 		terrors.Fatal(err, "error walking VideoDir")
 	}
 
+	// we use a uint here because that's what MediaAtIndex wants
 	i := uint(0)
 	for _, file := range files {
 		// add the media to VLC
