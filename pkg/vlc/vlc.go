@@ -14,6 +14,7 @@ import (
 var player *theirVlc.Player
 var playlist *theirVlc.ListPlayer
 var mediaList *theirVlc.MediaList
+var mediaToVid = make(map[theirVlc.Media]string)
 
 func Init() {
 	var err error
@@ -51,7 +52,6 @@ func Init() {
 	}
 
 	loadMedia()
-	createEventHandler()
 }
 
 func Shutdown() {
@@ -60,9 +60,33 @@ func Shutdown() {
 	theirVlc.Release()
 }
 
+func CurrentlyPlaying() string {
+	// count, err := mediaList.Count()
+	// if err != nil {
+	// 	terrors.Log(err, "error counting media in VLC media list")
+	// }
+
+	cur, err := player.Media()
+	if err != nil {
+		terrors.Log(err, "error fetching currently-playing media")
+	}
+
+	return mediaToVid[*cur]
+
+	// for i := 0; i < count; i++ {
+	// 	m, err := mediaList.MediaAtIndex(i)
+	// 	if err != nil {
+	// 		terrors.Log(err, "error fetching currently-playing media")
+	// 	}
+	// 	if cur == m {
+	// 		return allVids[i]
+	// 	}
+	// }
+	// return ""
+}
+
 func loadMedia() {
 	var files []string
-
 	// add all files from the VideoDir to the medialist
 	err := filepath.Walk(config.VideoDir, func(path string, info os.FileInfo, err error) error {
 		// skip the dir itself
@@ -76,15 +100,24 @@ func loadMedia() {
 		terrors.Fatal(err, "error walking VideoDir")
 	}
 
+	i := uint(0)
 	for _, file := range files {
 		// add the media to VLC
 		err = mediaList.AddMediaFromPath(file)
 		if err != nil {
 			terrors.Fatal(err, "error adding files to VLC media list")
 		}
+		// get that media object back
+		m, err := mediaList.MediaAtIndex(i)
+		if err != nil {
+			terrors.Log(err, "error fetching media at index")
+		}
+		// store the media in a map
+		mediaToVid[*m] = files[i]
+		i++
 	}
 
-	spew.Dump(mediaList)
+	spew.Dump(mediaToVid)
 }
 
 func PlayRandom() error {
