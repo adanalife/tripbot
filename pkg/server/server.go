@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/dmerrick/danalol-stream/pkg/chatbot"
+	"github.com/dmerrick/danalol-stream/pkg/config"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	mytwitch "github.com/dmerrick/danalol-stream/pkg/twitch"
 	"github.com/dmerrick/danalol-stream/pkg/users"
@@ -25,6 +26,12 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			// twitch issues a request here when creating a new webhook subscription
 		} else if strings.HasPrefix(r.URL.Path, "/webhooks/twitch") {
 			log.Println("got webhook challenge request at", r.URL.Path)
+			// exit early if we've disabled webhooks
+			if config.DisableTwitchWebhooks {
+				http.Error(w, "501 not implemented", http.StatusNotImplemented)
+				return
+			}
+
 			challenge, ok := r.URL.Query()["hub.challenge"]
 			if !ok || len(challenge[0]) < 1 {
 				terrors.Log(nil, "something went wrong with the challenge")
@@ -81,6 +88,11 @@ func handle(w http.ResponseWriter, r *http.Request) {
 		// share a webhooks URL
 		if r.URL.Path == "/webhooks/twitch/users/follows" {
 
+			if config.DisableTwitchWebhooks {
+				http.Error(w, "501 not implemented", http.StatusNotImplemented)
+				return
+			}
+
 			resp, err := decodeFollowWebhookResponse(r)
 			if err != nil {
 				terrors.Log(err, "error decoding follow webhook")
@@ -101,6 +113,11 @@ func handle(w http.ResponseWriter, r *http.Request) {
 
 			// these are sent when users subscribe
 		} else if r.URL.Path == "/webhooks/twitch/subscriptions/events" {
+
+			if config.DisableTwitchWebhooks {
+				http.Error(w, "501 not implemented", http.StatusNotImplemented)
+				return
+			}
 
 			resp, err := decodeSubscriptionWebhookResponse(r)
 			if err != nil {

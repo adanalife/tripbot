@@ -35,13 +35,6 @@ func Initialize() *twitch.Client {
 	var err error
 	Uptime = time.Now()
 
-	//TODO: remove this, doesn't seem needed
-	// load ENV vars from .env file
-	// err = godotenv.Load()
-	// if err != nil {
-	// 	log.Fatal("Error loading .env file")
-	// }
-
 	// set up geocoder (for translating coords to places)
 	geocoder.ApiKey = config.GoogleMapsAPIKey
 
@@ -51,11 +44,13 @@ func Initialize() *twitch.Client {
 		terrors.Fatal(err, "unable to create twitch API client")
 	}
 
-	//TODO: actually use these security features
-	authURL := c.GetAuthorizationURL("", false)
-	log.Println("if your browser doesn't open automatically:")
-	log.Println(aurora.Blue(authURL).Underline())
-	helpers.OpenInBrowser(authURL)
+	if !config.DisableTwitchWebhooks {
+		//TODO: actually use these security features
+		authURL := c.GetAuthorizationURL("", false)
+		log.Println("if your browser doesn't open automatically:")
+		log.Println(aurora.Blue(authURL).Underline())
+		helpers.OpenInBrowser(authURL)
+	}
 
 	client = twitch.NewClient(config.BotUsername, mytwitch.AuthToken)
 
