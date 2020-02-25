@@ -33,7 +33,7 @@ func runCommand(user users.User, message string) {
 		} else {
 			Say(followerMsg)
 		}
-	case "!timewarp":
+	case "!timewarp", "!tw":
 		timewarpCmd(&user)
 	case "!shutdown":
 		shutdownCmd(&user)

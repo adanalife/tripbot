@@ -47,7 +47,15 @@ func songCmd(user *users.User) {
 
 func timewarpCmd(user *users.User) {
 	log.Println(user.Username, "ran !timewarp")
+	// exit early if we're on OS X
+	if runtime.GOOS == "darwin" {
+		Say("Sorry, timewarp isn't available right now")
+		return
+	}
+	// shuffle to a new video
 	vlc.PlayRandom()
+	// update the currently-playing video
+	video.GetCurrentlyPlaying()
 }
 
 func uptimeCmd(user *users.User) {
