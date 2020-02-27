@@ -3,12 +3,14 @@ package video
 import (
 	"fmt"
 	"log"
+	"os"
 	"os/exec"
 	"path"
 	"runtime"
 	"strings"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/dmerrick/danalol-stream/pkg/background"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
@@ -78,4 +80,29 @@ func figureOutCurrentVideo() string {
 		return ""
 	}
 	return outString
+}
+
+//TODO: this really shouldnt live in the video pkg,
+// but there was an import cycle
+func ShowFlag() {
+	cur := CurrentlyPlaying
+	// remove the existing flag file
+	err := os.Remove(background.FlagImageFile)
+	if err != nil {
+		terrors.Log(err, "error removing old flag image")
+	}
+
+	// copy the image to the live location
+	err = os.Symlink(flagSourceFile(cur.State), background.FlagImageFile)
+	if err != nil {
+		terrors.Log(err, "error creating new flag image")
+	}
+	background.FlagImage.Show("", 10*time.Second)
+}
+
+// flagSourceFile returns the full path to a flag image file
+func flagSourceFile(state string) string {
+	spew.Dump(state, strings.ToLower(state))
+	fileName := fmt.Sprintf("%s.jpg", strings.ToLower(state))
+	return path.Join(helpers.ProjectRoot(), "assets/flags", fileName)
 }

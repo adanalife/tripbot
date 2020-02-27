@@ -37,7 +37,7 @@ func helpCmd(user *users.User) {
 
 func flagCmd(user *users.User) {
 	log.Println(user.Username, "ran !flag")
-	FlagImageOnscreen.ShowFlag()
+	video.ShowFlag()
 }
 
 func songCmd(user *users.User) {
