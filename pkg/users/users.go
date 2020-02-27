@@ -36,7 +36,9 @@ func (u User) CurrentMiles() float32 {
 		// give subscribers a miles bonus
 		if u.IsSubscriber() {
 			bonusMiles := u.BonusMiles()
-			log.Println(u.String(), "will get", aurora.Green(bonusMiles), "bonus miles")
+			if config.Verbose {
+				log.Println(u.String(), "will get", aurora.Green(bonusMiles), "bonus miles")
+			}
 			return u.Miles + sessionMiles + bonusMiles
 		}
 		return u.Miles + sessionMiles
