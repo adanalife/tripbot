@@ -23,6 +23,8 @@ func runCommand(user users.User, message string) {
 	switch command {
 	case "!help":
 		helpCmd(&user)
+	case "!flag":
+		flagCmd(&user)
 	case "!song":
 		songCmd(&user)
 	case "!uptime":

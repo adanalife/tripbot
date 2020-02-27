@@ -35,6 +35,11 @@ func helpCmd(user *users.User) {
 	Say(msg)
 }
 
+func flagCmd(user *users.User) {
+	log.Println(user.Username, "ran !flag")
+	FlagImageOnscreen.ShowFlag()
+}
+
 func songCmd(user *users.User) {
 	log.Println(user.Username, "ran !song")
 	currentSong := audio.CurrentlyPlaying()
