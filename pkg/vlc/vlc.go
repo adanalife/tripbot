@@ -26,7 +26,9 @@ func Init() {
 	var err error
 
 	// the vids dont have audio anyway, so add --no-audio
-	if err = theirVlc.Init("--quiet", "--no-audio"); err != nil {
+	//TODO: move these to a const
+	//TODO: this should probably include/exclude hardware decoding
+	if err = theirVlc.Init("--quiet", "--no-audio", "--network-caching", "6666"); err != nil {
 		terrors.Fatal(err, "error initializing VLC")
 	}
 
