@@ -85,15 +85,18 @@ func figureOutCurrentVideo() string {
 //TODO: this really shouldnt live in the video pkg,
 // but there was an import cycle
 func ShowFlag() {
-	cur := CurrentlyPlaying
-	// remove the existing flag file
-	err := os.Remove(background.FlagImageFile)
-	if err != nil {
-		terrors.Log(err, "error removing old flag image")
+	if helpers.FileExists(background.FlagImageFile) {
+		log.Printf("removing %s because it already exists", background.FlagImageFile)
+		// remove the existing flag file
+		err := os.Remove(background.FlagImageFile)
+		if err != nil {
+			terrors.Log(err, "error removing old flag image")
+		}
 	}
 
+	cur := CurrentlyPlaying
 	// copy the image to the live location
-	err = os.Symlink(flagSourceFile(cur.State), background.FlagImageFile)
+	err := os.Symlink(flagSourceFile(cur.State), background.FlagImageFile)
 	if err != nil {
 		terrors.Log(err, "error creating new flag image")
 	}
