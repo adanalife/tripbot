@@ -68,10 +68,12 @@ func main() {
 	// create webhook subscriptions
 	mytwitch.UpdateWebhookSubscriptions()
 
+	// create the various onscreen items/effects
 	background.InitChat()
 	background.InitLeaderboard()
 	background.InitLeftRotator()
 	background.InitRightRotator()
+	background.InitFlagImage()
 
 	client.Join(config.ChannelName)
 	log.Println("Joined channel", config.ChannelName)
