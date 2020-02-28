@@ -6,6 +6,7 @@ require (
 	cloud.google.com/go v0.52.0 // indirect
 	cloud.google.com/go/logging v1.0.0
 	github.com/adrg/libvlc-go v0.0.0-20200221131135-db86d4e7b47f
+	github.com/adrg/libvlc-go/v3 v3.0.1
 	github.com/boltdb/bolt v1.3.1
 	github.com/bradfitz/latlong v0.0.0-20170410180902-f3db6d0dff40
 	github.com/briandowns/openweathermap v0.0.0-20180804155945-5f41b7c9d92d

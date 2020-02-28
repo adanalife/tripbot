@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"runtime"
 
-	libvlc "github.com/adrg/libvlc-go"
+	libvlc "github.com/adrg/libvlc-go/v3"
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 )
