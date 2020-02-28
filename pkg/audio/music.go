@@ -5,6 +5,7 @@ import (
 	"log"
 	"runtime"
 
+	"github.com/dmerrick/danalol-stream/pkg/config"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	"github.com/fhs/gompd/mpd"
 )
@@ -28,8 +29,10 @@ func init() {
 	// connect to the MPD server
 	connect()
 
-	//TODO: this shouldn't live in init probably
-	StartGrooveSalad()
+	if !config.DisableMusicAutoplay {
+		//TODO: this shouldn't live in init probably
+		StartGrooveSalad()
+	}
 }
 
 func connect() {

@@ -49,8 +49,13 @@ var (
 	VideoDir string
 	// DisableTwitchWebhooks disables recieving webhooks from Twitch (new followers for instance)
 	DisableTwitchWebhooks bool
-	TripbotServerPort     string
-	VlcServerPort         string
+	// DisableMusicAutoplay disables the auto-play for MPD
+	DisableMusicAutoplay bool
+
+	// TripbotServerPort is used to specify the port on which the webserver runs
+	TripbotServerPort string
+	// TripbotServerPort is used to specify the port on which the VLC webserver runs
+	VlcServerPort string
 )
 
 func init() {
@@ -94,6 +99,7 @@ func init() {
 	ScreencapDir = path.Join(DashcamDir, screencapDir)
 
 	DisableTwitchWebhooks, _ = strconv.ParseBool(os.Getenv("DISABLE_TWITCH_WEBHOOKS"))
+	DisableMusicAutoplay, _ = strconv.ParseBool(os.Getenv("DISABLE_MUSIC_AUTOPLAY"))
 
 	TripbotServerPort = os.Getenv("TRIPBOT_SERVER_PORT")
 	VlcServerPort = os.Getenv("VLC_SERVER_PORT")
