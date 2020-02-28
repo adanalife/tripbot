@@ -6,6 +6,7 @@ ignore/
 *.MP4
 OBS/*.txt
 OBS/*-live
+OBS/flag.jpg
 .env.dev
 .env.staging
 .env.production
