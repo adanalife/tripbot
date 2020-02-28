@@ -155,10 +155,10 @@ func handle(w http.ResponseWriter, r *http.Request) {
 func Start() {
 	log.Println("Starting web server")
 	http.HandleFunc("/", handle)
-	//TODO: configurable port
+	port := fmt.Sprintf(":%s", config.TripbotServerPort)
 	//TODO: replace certs with autocert: https://stackoverflow.com/a/40494806
-	err := http.ListenAndServeTLS(":8089", "infra/tripbot.dana.lol.fullchain.pem", "infra/tripbot.dana.lol.key", nil)
-	// err := http.ListenAndServe(":8080", nil)
+	err := http.ListenAndServeTLS(port, "infra/tripbot.dana.lol.fullchain.pem", "infra/tripbot.dana.lol.key", nil)
+	// err := http.ListenAndServe(port, nil)
 	if err != nil {
 		terrors.Fatal(err, "couldn't start server")
 	}

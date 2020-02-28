@@ -49,6 +49,8 @@ var (
 	VideoDir string
 	// DisableTwitchWebhooks disables recieving webhooks from Twitch (new followers for instance)
 	DisableTwitchWebhooks bool
+	TripbotServerPort     string
+	VlcServerPort         string
 )
 
 func init() {
@@ -66,6 +68,8 @@ func init() {
 		"DASHCAM_DIR",
 		"MAPS_OUTPUT_DIR",
 		"CROPPED_CORNERS_DIR",
+		"TRIPBOT_SERVER_PORT",
+		"VLC_SERVER_PORT",
 	}
 	for _, v := range requiredVars {
 		_, ok := os.LookupEnv(v)
@@ -90,6 +94,9 @@ func init() {
 	ScreencapDir = path.Join(DashcamDir, screencapDir)
 
 	DisableTwitchWebhooks, _ = strconv.ParseBool(os.Getenv("DISABLE_TWITCH_WEBHOOKS"))
+
+	TripbotServerPort = os.Getenv("TRIPBOT_SERVER_PORT")
+	VlcServerPort = os.Getenv("VLC_SERVER_PORT")
 
 	// check that the paths exist
 	requiredDirs := []string{
