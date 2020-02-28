@@ -6,13 +6,10 @@ import (
 	"math/rand"
 	"os"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/dmerrick/danalol-stream/pkg/audio"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
-	"github.com/mitchellh/go-ps"
-	"github.com/skratchdot/open-golang/open"
 
 	"github.com/dmerrick/danalol-stream/pkg/background"
 	"github.com/dmerrick/danalol-stream/pkg/config"
@@ -343,47 +340,8 @@ func restartMusicCmd(user *users.User) {
 
 	Say("Restarting music player...")
 	if helpers.RunningOnDarwin() {
-		stopiTunes()
-		startiTunes()
+		audio.RestartItunes()
 	} else {
 		audio.StartGrooveSalad()
-	}
-}
-
-func stopiTunes() {
-	itunesBinary := "iTunes"
-
-	processes, err := ps.Processes()
-	if err != nil {
-		terrors.Log(err, "error getting pids")
-	}
-
-	//spew.Dump(processes)
-
-	var itunesProcess ps.Process
-	for _, p := range processes {
-		if p.Executable() == itunesBinary {
-			itunesProcess = p
-			// there probably isn't a second iTunes process
-			break
-		}
-	}
-
-	if itunesProcess != nil {
-		log.Printf("pid for iTunes is %d, killing it...", itunesProcess.Pid())
-		err = syscall.Kill(itunesProcess.Pid(), syscall.SIGKILL)
-		if err != nil {
-			terrors.Log(err, "error killing pid")
-		}
-	} else {
-		log.Println("no iTunes process found")
-	}
-}
-
-func startiTunes() {
-	log.Println("opening iTunes")
-	err := open.RunWith("http://somafm.com/groovesalad256.pls", "iTunes")
-	if err != nil {
-		terrors.Log(err, "error starting iTunes")
 	}
 }
