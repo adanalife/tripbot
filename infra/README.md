@@ -7,11 +7,11 @@ ssh-keygen -t ecdsa -b 521
 
 git clone git@github.com:dmerrick/git-prompt.git
 git clone git@github.com:dmerrick/configs.git
-./setup.sh
+#./setup.sh
+stow bash tmux vim # ...
 
 # install rvm
 # install tmuxinator to global gemset
-
 
 apt install xsel # pbcopy/pbpaste
 # install firefox
