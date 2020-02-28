@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/joho/godotenv"
+	"github.com/logrusorgru/aurora"
 )
 
 const (
@@ -100,6 +101,14 @@ func init() {
 
 	DisableTwitchWebhooks, _ = strconv.ParseBool(os.Getenv("DISABLE_TWITCH_WEBHOOKS"))
 	DisableMusicAutoplay, _ = strconv.ParseBool(os.Getenv("DISABLE_MUSIC_AUTOPLAY"))
+
+	// give helpful reminders when things are disabled
+	if DisableTwitchWebhooks {
+		log.Println(aurora.Yellow("Disabling Twitch webhooks"))
+	}
+	if DisableMusicAutoplay {
+		log.Println(aurora.Yellow("Disabling music autoplay"))
+	}
 
 	TripbotServerPort = os.Getenv("TRIPBOT_SERVER_PORT")
 	VlcServerPort = os.Getenv("VLC_SERVER_PORT")
