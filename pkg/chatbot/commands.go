@@ -64,9 +64,12 @@ func timewarpCmd(user *users.User) {
 		}
 	}
 
-	Say("Here we go...!")
+	// only say this if the caller is not me
+	if user.Username != strings.ToLower(config.ChannelName) {
+		Say("Here we go...!")
+	}
 
-	// shuffle to a new video
+	// shuffle to a new //video
 	vlcClient.PlayRandom()
 	// update the currently-playing video
 	video.GetCurrentlyPlaying()
