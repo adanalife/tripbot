@@ -21,6 +21,15 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			// return the currently-playing file
 			fmt.Fprintf(w, CurrentlyPlaying())
 
+		} else if strings.HasPrefix(r.URL.Path, "/vlc/random") {
+			// play a random file
+			err := PlayRandom()
+			if err != nil {
+				//TODO: return a 500 error
+				http.Error(w, "404 not found", http.StatusNotFound)
+			}
+			fmt.Fprintf(w, "OK")
+
 			// some other URL was used
 		} else {
 			http.Error(w, "404 not found", http.StatusNotFound)
