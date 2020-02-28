@@ -5,7 +5,6 @@ import (
 	"log"
 	"math/rand"
 	"os"
-	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -51,7 +50,7 @@ func timewarpCmd(user *users.User) {
 	log.Println(user.Username, "ran !timewarp")
 
 	// exit early if we're on OS X
-	if runtime.GOOS == "darwin" {
+	if helpers.RunningOnDarwin() {
 		Say("Sorry, timewarp isn't available right now")
 		return
 	}
@@ -343,7 +342,7 @@ func restartMusicCmd(user *users.User) {
 	}
 
 	Say("Restarting music player...")
-	if runtime.GOOS == "darwin" {
+	if helpers.RunningOnDarwin() {
 		stopiTunes()
 		startiTunes()
 	} else {

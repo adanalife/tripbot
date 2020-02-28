@@ -5,7 +5,6 @@ import (
 	"log"
 	"os/exec"
 	"path"
-	"runtime"
 	"strings"
 	"time"
 
@@ -33,7 +32,7 @@ func GetCurrentlyPlaying() {
 	preVid = curVid
 
 	// figure out whats currently playing
-	if runtime.GOOS == "darwin" {
+	if helpers.RunningOnDarwin() {
 		curVid = figureOutCurrentVideo()
 	} else {
 		curVid = vlcClient.CurrentlyPlaying()

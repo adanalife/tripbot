@@ -5,11 +5,11 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
-	"runtime"
 
 	libvlc "github.com/adrg/libvlc-go/v3"
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
+	"github.com/dmerrick/danalol-stream/pkg/helpers"
 )
 
 var player *libvlc.Player
@@ -63,7 +63,7 @@ func InitPlayer() {
 // Shutdown cleans up VLC as best it can
 //TODO: are there more things to close gracefully?
 func Shutdown() {
-	if runtime.GOOS == "darwin" {
+	if helpers.RunningOnDarwin() {
 		log.Println("not stopping VLC cause we're on darwin")
 		return
 	}

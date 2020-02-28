@@ -3,15 +3,15 @@ package main
 import (
 	"log"
 	"math/rand"
-	"runtime"
 	"time"
 
+	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	vlcServer "github.com/dmerrick/danalol-stream/pkg/vlc-server"
 )
 
 func main() {
 	// we don't yet support libvlc on darwin
-	if runtime.GOOS == "darwin" {
+	if helpers.RunningOnDarwin() {
 		log.Fatal("This doesn't yet work on darwin")
 	}
 

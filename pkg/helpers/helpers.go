@@ -181,3 +181,8 @@ func OpenInBrowser(url string) {
 		terrors.Log(err, "error opening browser")
 	}
 }
+
+// RunningOnDarwin returns true if we're on darwin (OS X)
+func RunningOnDarwin() bool {
+	return runtime.GOOS == "darwin"
+}
