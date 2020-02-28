@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"math/rand"
 	"runtime"
 	"time"
 
@@ -9,11 +10,13 @@ import (
 )
 
 func main() {
-
 	// we don't yet support libvlc on darwin
 	if runtime.GOOS == "darwin" {
 		log.Fatal("This doesn't yet work on darwin")
 	}
+
+	// create a brand new random seed
+	rand.Seed(time.Now().UnixNano())
 
 	// start VLC
 	vlcServer.InitPlayer()
@@ -22,8 +25,6 @@ func main() {
 
 	// start the webserver
 	vlcServer.Start() // starts the server
-
-	time.Sleep(10 * time.Second)
 
 	defer vlcServer.Shutdown()
 }
