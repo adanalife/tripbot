@@ -22,7 +22,7 @@ var mediaList *libvlc.MediaList
 var mediaToVid = make(map[libvlc.Media]string)
 
 // Init creates a VLC player and sets up a playlist
-func Init() {
+func InitPlayer() {
 	var err error
 
 	// the vids dont have audio anyway, so add --no-audio

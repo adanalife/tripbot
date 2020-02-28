@@ -17,8 +17,9 @@ func handle(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/health" {
 			fmt.Fprintf(w, "OK")
 
-		} else if strings.HasPrefix(r.URL.Path, "/vlc/play") {
-			//TODO: do something here
+		} else if strings.HasPrefix(r.URL.Path, "/vlc/current") {
+			// return the currently-playing file
+			fmt.Fprintf(w, CurrentlyPlaying())
 
 			// some other URL was used
 		} else {
@@ -40,7 +41,7 @@ func Start() {
 	//TODO: configurable port
 	//TODO: replace certs with autocert: https://stackoverflow.com/a/40494806
 	// err := http.ListenAndServeTLS(":8080", "infra/tripbot.dana.lol.fullchain.pem", "infra/tripbot.dana.lol.key", nil)
-	err := http.ListenAndServe(":8080", nil)
+	err := http.ListenAndServe(":8088", nil)
 	if err != nil {
 		terrors.Fatal(err, "couldn't start server")
 	}

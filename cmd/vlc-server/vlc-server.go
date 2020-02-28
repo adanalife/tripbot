@@ -16,11 +16,14 @@ func main() {
 	}
 
 	// start VLC
-	vlcServer.Init()
+	vlcServer.InitPlayer()
+	// start by playing a random video
 	vlcServer.PlayRandom()
 
-	// vlcServer.Start() // starts the server
+	// start the webserver
+	vlcServer.Start() // starts the server
 
 	time.Sleep(10 * time.Second)
+
 	defer vlcServer.Shutdown()
 }
