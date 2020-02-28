@@ -62,3 +62,9 @@ go get -u github.com/nicklaw5/helix
 go get -u github.com/psampaz/go-mod-outdated
 go list -u -m -json all | go-mod-outdated
 ```
+
+
+### Set up letsencrypt DNS challenge
+```
+sudo certbot -d tripbot.dana.lol --manual --preferred-challenges dns certonly
+```
