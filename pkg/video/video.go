@@ -12,7 +12,7 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/background"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
-	"github.com/dmerrick/danalol-stream/pkg/vlc"
+	vlcClient "github.com/dmerrick/danalol-stream/pkg/vlc-client"
 	"github.com/logrusorgru/aurora"
 )
 
@@ -36,7 +36,7 @@ func GetCurrentlyPlaying() {
 	if runtime.GOOS == "darwin" {
 		curVid = figureOutCurrentVideo()
 	} else {
-		curVid = vlc.CurrentlyPlaying()
+		curVid = vlcClient.CurrentlyPlaying()
 	}
 
 	// if the currently-playing video has changed

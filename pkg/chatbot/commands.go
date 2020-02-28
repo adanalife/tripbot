@@ -12,7 +12,6 @@ import (
 
 	"github.com/dmerrick/danalol-stream/pkg/audio"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
-	"github.com/dmerrick/danalol-stream/pkg/vlc"
 	"github.com/mitchellh/go-ps"
 	"github.com/skratchdot/open-golang/open"
 
@@ -23,6 +22,7 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/miles"
 	"github.com/dmerrick/danalol-stream/pkg/users"
 	"github.com/dmerrick/danalol-stream/pkg/video"
+	vlcClient "github.com/dmerrick/danalol-stream/pkg/vlc-client"
 	"github.com/getsentry/sentry-go"
 	"github.com/hako/durafmt"
 )
@@ -67,7 +67,7 @@ func timewarpCmd(user *users.User) {
 	Say("Here we go...!")
 
 	// shuffle to a new video
-	vlc.PlayRandom()
+	vlcClient.PlayRandom()
 	// update the currently-playing video
 	video.GetCurrentlyPlaying()
 	// update our record of last time it ran

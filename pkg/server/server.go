@@ -157,7 +157,7 @@ func Start() {
 	http.HandleFunc("/", handle)
 	//TODO: configurable port
 	//TODO: replace certs with autocert: https://stackoverflow.com/a/40494806
-	err := http.ListenAndServeTLS(":8080", "infra/tripbot.dana.lol.fullchain.pem", "infra/tripbot.dana.lol.key", nil)
+	err := http.ListenAndServeTLS(":8089", "infra/tripbot.dana.lol.fullchain.pem", "infra/tripbot.dana.lol.key", nil)
 	// err := http.ListenAndServe(":8080", nil)
 	if err != nil {
 		terrors.Fatal(err, "couldn't start server")
