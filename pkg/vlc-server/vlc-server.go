@@ -1,4 +1,4 @@
-package vlc-server
+package vlcServer
 
 import (
 	"log"

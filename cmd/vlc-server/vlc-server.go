@@ -5,7 +5,7 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/dmerrick/danalol-stream/pkg/vlc"
+	vlcServer "github.com/dmerrick/danalol-stream/pkg/vlc-server"
 )
 
 func main() {
@@ -15,9 +15,11 @@ func main() {
 	}
 
 	// start VLC
-	vlc.Init()
-	vlc.PlayRandom()
+	vlcServer.Init()
+	vlcServer.PlayRandom()
+
+	vlcServer.Start() // starts the server
 
 	time.Sleep(10 * time.Second)
-	defer vlc.Shutdown()
+	defer vlcServer.Shutdown()
 }
