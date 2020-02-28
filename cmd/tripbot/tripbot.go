@@ -6,7 +6,6 @@ import (
 	"math/rand"
 	"os"
 	"os/signal"
-	"runtime"
 	"syscall"
 	"time"
 
@@ -20,7 +19,6 @@ import (
 	mytwitch "github.com/dmerrick/danalol-stream/pkg/twitch"
 	"github.com/dmerrick/danalol-stream/pkg/users"
 	"github.com/dmerrick/danalol-stream/pkg/video"
-	"github.com/dmerrick/danalol-stream/pkg/vlc"
 	"github.com/getsentry/sentry-go"
 	"github.com/logrusorgru/aurora"
 )
@@ -37,12 +35,6 @@ func main() {
 
 	// set up the Twitch client
 	client := chatbot.Initialize()
-
-	if runtime.GOOS != "darwin" {
-		// start VLC
-		vlc.Init()
-		vlc.PlayRandom()
-	}
 
 	// run this right away to set the currently-playing video
 	// (otherwise it will be unset until the first cron job runs)
@@ -104,7 +96,6 @@ func gracefulShutdown() {
 	database.DBCon.Close()
 	background.StopCron()
 	audio.Shutdown()
-	vlc.Shutdown()
 	sentry.Flush(time.Second * 5)
 	os.Exit(1)
 }

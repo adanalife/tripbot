@@ -1,4 +1,4 @@
-package vlc
+package vlc-server
 
 import (
 	"log"
@@ -7,19 +7,19 @@ import (
 	"path/filepath"
 	"runtime"
 
-	theirVlc "github.com/adrg/libvlc-go"
+	libvlc "github.com/adrg/libvlc-go"
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 )
 
-var player *theirVlc.Player
-var playlist *theirVlc.ListPlayer
-var mediaList *theirVlc.MediaList
+var player *libvlc.Player
+var playlist *libvlc.ListPlayer
+var mediaList *libvlc.MediaList
 
 //TODO: this map is gonna be huge, with 4000+ videos
 // it also might do irresponsible things with pointers?
 // (see this commit history for another approach)
-var mediaToVid = make(map[theirVlc.Media]string)
+var mediaToVid = make(map[libvlc.Media]string)
 
 // Init creates a VLC player and sets up a playlist
 func Init() {
@@ -28,12 +28,12 @@ func Init() {
 	// the vids dont have audio anyway, so add --no-audio
 	//TODO: move these to a const
 	//TODO: this should probably include/exclude hardware decoding
-	if err = theirVlc.Init("--quiet", "--no-audio", "--network-caching", "6666"); err != nil {
+	if err = libvlc.Init("--quiet", "--no-audio", "--network-caching", "6666"); err != nil {
 		terrors.Fatal(err, "error initializing VLC")
 	}
 
 	// create a new playlist-player
-	playlist, err = theirVlc.NewListPlayer()
+	playlist, err = libvlc.NewListPlayer()
 	if err != nil {
 		terrors.Fatal(err, "error creating VLC playlist player")
 	}
@@ -45,7 +45,7 @@ func Init() {
 	}
 
 	// this will store all of our videos
-	mediaList, err = theirVlc.NewMediaList()
+	mediaList, err = libvlc.NewMediaList()
 	if err != nil {
 		terrors.Fatal(err, "error creating VLC media list")
 	}
@@ -57,7 +57,7 @@ func Init() {
 	}
 
 	// set the player to loop forever
-	err = playlist.SetPlaybackMode(theirVlc.Loop)
+	err = playlist.SetPlaybackMode(libvlc.Loop)
 	if err != nil {
 		terrors.Fatal(err, "error setting VLC playback mode")
 	}
@@ -74,7 +74,7 @@ func Shutdown() {
 	}
 	player.Stop()
 	player.Release()
-	theirVlc.Release()
+	libvlc.Release()
 }
 
 // CurrentlyPlaying finds the currently-playing video path
