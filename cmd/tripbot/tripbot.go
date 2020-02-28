@@ -15,6 +15,7 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/chatbot"
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/database"
+	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	"github.com/dmerrick/danalol-stream/pkg/server"
 	mytwitch "github.com/dmerrick/danalol-stream/pkg/twitch"
 	"github.com/dmerrick/danalol-stream/pkg/users"
@@ -115,4 +116,7 @@ func scheduleBackgroundJobs() {
 	background.Cron.AddFunc("@every 2h57m30s", chatbot.Chatter)
 	background.Cron.AddFunc("@every 12h", mytwitch.SetStreamTags)
 	background.Cron.AddFunc("@every 12h", mytwitch.UpdateWebhookSubscriptions)
+	if helpers.RunningOnDarwin() {
+		background.Cron.AddFunc("@every 6h", audio.RestartItunes)
+	}
 }
