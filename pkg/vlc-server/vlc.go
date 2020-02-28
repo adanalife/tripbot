@@ -16,11 +16,6 @@ var player *libvlc.Player
 var playlist *libvlc.ListPlayer
 var mediaList *libvlc.MediaList
 
-//TODO: this map is gonna be huge, with 4000+ videos
-// it also might do irresponsible things with pointers?
-// (see this commit history for another approach)
-var mediaToVid = make(map[libvlc.Media]string)
-
 // Init creates a VLC player and sets up a playlist
 func InitPlayer() {
 	var err error
@@ -85,7 +80,13 @@ func CurrentlyPlaying() string {
 		terrors.Log(err, "error fetching currently-playing media")
 	}
 
-	return mediaToVid[*cur]
+	// get media path
+	path, err := cur.Location()
+	if err != nil {
+		terrors.Log(err, "error fetching currently-playing media")
+	}
+
+	return path
 }
 
 // loadMedia walks the VideoDir and adds all videos to
@@ -105,22 +106,12 @@ func loadMedia() {
 		terrors.Fatal(err, "error walking VideoDir")
 	}
 
-	// we use a uint here because that's what MediaAtIndex wants
-	i := uint(0)
 	for _, file := range files {
 		// add the media to VLC
 		err = mediaList.AddMediaFromPath(file)
 		if err != nil {
 			terrors.Fatal(err, "error adding files to VLC media list")
 		}
-		// get that media object back
-		m, err := mediaList.MediaAtIndex(i)
-		if err != nil {
-			terrors.Log(err, "error fetching media at index")
-		}
-		// store the media in a map
-		mediaToVid[*m] = files[i]
-		i++
 	}
 }
 
