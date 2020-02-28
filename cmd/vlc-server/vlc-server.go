@@ -10,7 +10,8 @@ import (
 
 func main() {
 
-	if runtime.GOOS != "darwin" {
+	// we don't yet support libvlc on darwin
+	if runtime.GOOS == "darwin" {
 		log.Fatal("This doesn't yet work on darwin")
 	}
 
@@ -18,7 +19,7 @@ func main() {
 	vlcServer.Init()
 	vlcServer.PlayRandom()
 
-	vlcServer.Start() // starts the server
+	// vlcServer.Start() // starts the server
 
 	time.Sleep(10 * time.Second)
 	defer vlcServer.Shutdown()
