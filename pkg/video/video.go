@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/dmerrick/danalol-stream/pkg/background"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
@@ -99,12 +98,15 @@ func ShowFlag() {
 	if err != nil {
 		terrors.Log(err, "error creating new flag image")
 	}
-	background.FlagImage.Show("", 10*time.Second)
+	background.FlagImage.ShowFor("", 10*time.Second)
 }
 
 // flagSourceFile returns the full path to a flag image file
 func flagSourceFile(state string) string {
-	spew.Dump(state, strings.ToLower(state))
-	fileName := fmt.Sprintf("%s.jpg", strings.ToLower(state))
+	// replace the spaces with dashes
+	state = strings.Replace(state, " ", "-", -1)
+	// make it lowercase
+	state = strings.ToLower(state)
+	fileName := fmt.Sprintf("%s.jpg", state)
 	return path.Join(helpers.ProjectRoot(), "assets/flags", fileName)
 }
