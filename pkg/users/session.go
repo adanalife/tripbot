@@ -186,6 +186,22 @@ func colorizeUsernames(usernames []string) []string {
 	return coloredUsernames
 }
 
+// humans returns the users in the session who are not bots
+func humans() []*User {
+	var humans []*User
+	for _, user := range LoggedIn {
+		if !user.IsBot {
+			humans = append(humans, user)
+		}
+	}
+	return humans
+}
+
+// countHumans returns the number of humans in the session
+func countHumans() int {
+	return len(humans())
+}
+
 // bots returns the users in the session who are known bots
 func bots() []*User {
 	var bots []*User
@@ -206,12 +222,11 @@ func countBots() int {
 func PrintCurrentSession() {
 	usernames := sortedUsernameList()
 	coloredUsernames := colorizeUsernames(usernames)
-	bots := countBots()
 
 	log.Println("there are",
-		twitch.ChatterCount(), "people in chat,",
-		aurora.Cyan(len(LoggedIn)-bots), "humans, and",
-		aurora.Gray(15, bots), "bots",
+		twitch.ChatterCount(), "users in chat,",
+		aurora.Cyan(countHumans()), "humans, and",
+		aurora.Gray(15, countBots()), "bots",
 	)
 
 	log.Printf("Currently logged in: %s", strings.Join(coloredUsernames, ", "))
