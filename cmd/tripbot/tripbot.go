@@ -25,48 +25,86 @@ import (
 )
 
 func main() {
+	createRandomSeed()
+	listenForShutdown()
+	startHttpServer()
+	setUpTwitchClient()
+	findInitialVideo()
+	setUpLeaderboard()
+	startCron()
+	updateSubscribers()
+	getCurrentUsers()
+	updateWebhookSubscriptions()
+	createOnscreens()
+	connectToTwitch()
+}
+
+func createRandomSeed() {
 	// create a brand new random seed
 	rand.Seed(time.Now().UnixNano())
+}
 
+func listenForShutdown() {
 	// start the graceful shutdown listener
 	go gracefulShutdown()
+}
 
+func startHttpServer() {
 	// start the HTTP server
 	go server.Start()
+}
 
+//TODO: can this be moved to the bottom?
+func setUpTwitchClient() {
 	// set up the Twitch client
 	client := chatbot.Initialize()
+}
 
+func findInitialVideo() {
 	// run this right away to set the currently-playing video
 	// (otherwise it will be unset until the first cron job runs)
 	background.InitGPSImage() // this has to happen first
 	video.GetCurrentlyPlaying()
 	v := video.CurrentlyPlaying
 	video.LoadOrCreate(v.String())
+}
 
+func setUpLeaderboard() {
 	// initialize the leaderboard
 	users.InitLeaderboard()
+}
 
+func startCron() {
 	// start cron and attach cronjobs
 	background.StartCron()
 	scheduleBackgroundJobs()
+}
 
+func updateSubscribers() {
 	// update subscribers list
 	mytwitch.GetSubscribers()
+}
 
+func getCurrentUsers() {
 	// fetch initial session
 	users.UpdateSession()
 	users.PrintCurrentSession()
+}
 
+func updateWebhookSubscriptions() {
 	// create webhook subscriptions
 	mytwitch.UpdateWebhookSubscriptions()
+}
 
+func createOnscreens() {
 	background.InitChat()
 	background.InitLeaderboard()
 	background.InitLeftRotator()
 	background.InitRightRotator()
 	background.InitMiddleText()
+}
 
+func connectToTwitch() {
 	client.Join(config.ChannelName)
 	log.Println("Joined channel", config.ChannelName)
 	log.Printf("URL: %s", aurora.Blue(fmt.Sprintf("https://twitch.tv/%s", config.ChannelName)).Underline())
