@@ -30,8 +30,8 @@ var vlcCmdFlags = []string{
 func InitPlayer() {
 	var err error
 
-	// the vids dont have audio anyway, so add --no-audio
-	if err = libvlc.Init(vlcCmdFlags); err != nil {
+	// start up VLC with given command flags
+	if err = libvlc.Init(vlcCmdFlags...); err != nil {
 		terrors.Fatal(err, "error initializing VLC")
 	}
 
