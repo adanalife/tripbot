@@ -271,6 +271,8 @@ func guessCmd(user *users.User, params []string) {
 
 	if strings.ToLower(guess) == strings.ToLower(vid.State) {
 		msg = fmt.Sprintf("@%s got it! We're in %s", user.Username, vid.State)
+		// show the flag for the state
+		video.ShowFlag()
 	} else {
 		msg = "Try again! EarthDay"
 	}
