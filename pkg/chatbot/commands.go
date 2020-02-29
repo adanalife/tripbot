@@ -354,6 +354,7 @@ func restartMusicCmd(user *users.User) {
 	}
 }
 
+//TODO: this will always be lower case, find out why
 // middleCmd sets the text at the bottom-middle of the stream
 func middleCmd(user *users.User, params []string) {
 	log.Println(user.Username, "ran !middle")
