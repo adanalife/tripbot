@@ -1,13 +1,21 @@
 package helpers
 
 func StateAbbrevToState(abbrev string) string {
-	return stateAbbrevs[strings.ToUpper(abbrev)]
+	val, ok := stateAbbrevs[strings.ToUpper(abbrev)]
+	if !ok {
+		return ""
+	}
+	return val
 }
 
 func StateToStateAbbrev(state string) string {
 	// capitalize the first letter of the state
 	state = strings.Title(strings.ToLower(state))
-	return InvertMap(stateAbbrevs)[state]
+	val, ok := InvertMap(stateAbbrevs)[state]
+	if !ok {
+		return ""
+	}
+	return val
 }
 
 // A handy map of US state codes to full names
