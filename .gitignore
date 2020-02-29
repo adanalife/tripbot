@@ -4,6 +4,7 @@
 ignore/
 *.db
 *.MP4
+OBS/Twitch
 OBS/*.txt
 OBS/*-live
 .env.dev
