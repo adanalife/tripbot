@@ -21,7 +21,8 @@ var mediaList *libvlc.MediaList
 var vlcCmdFlags = []string{
 	"--quiet",                   // reduce output
 	"--no-audio",                // none of the videos have audio
-	"--network-caching", "6666", // cache (in ms)
+	"--network-caching", "6666", // network cache (in ms)
+	"--file-caching", "6666", // file cache (in ms)
 	"--avcodec-hw", "none", // disable hardware decoding
 }
 
