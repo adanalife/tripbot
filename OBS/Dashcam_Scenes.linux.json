@@ -29,7 +29,7 @@
         "volume": 0.17402465641498566
     },
     "current_program_scene": "Live Coding",
-    "current_scene": "Live Coding",
+    "current_scene": "Main Scene",
     "current_transition": "Fade",
     "groups": [
         {
@@ -652,6 +652,31 @@
             "enabled": true,
             "flags": 0,
             "hotkeys": {},
+            "id": "image_source",
+            "mixers": 0,
+            "monitoring_type": 0,
+            "muted": false,
+            "name": "Flag Onscreen - Right Middle",
+            "prev_ver": 402653190,
+            "private_settings": {},
+            "push-to-mute": false,
+            "push-to-mute-delay": 0,
+            "push-to-talk": false,
+            "push-to-talk-delay": 0,
+            "settings": {
+                "file": "/home/dmerrick/other_projects/danalol-stream/OBS/flag.jpg-live",
+                "unload": true
+            },
+            "sync": 0,
+            "volume": 1.0
+        },
+        {
+            "balance": 0.5,
+            "deinterlace_field_order": 0,
+            "deinterlace_mode": 0,
+            "enabled": true,
+            "flags": 0,
+            "hotkeys": {},
             "id": "text_ft2_source",
             "mixers": 0,
             "monitoring_type": 0,
@@ -990,7 +1015,7 @@
                             "y": 1080.0
                         },
                         "bounds_align": 0,
-                        "bounds_type": 2,
+                        "bounds_type": 1,
                         "crop_bottom": 0,
                         "crop_left": 0,
                         "crop_right": 0,
@@ -1956,6 +1981,7 @@
                 "libobs.hide_scene_item.Audio Input Capture (PulseAudio)": [],
                 "libobs.hide_scene_item.Audio Output Capture (PulseAudio)": [],
                 "libobs.hide_scene_item.Background Slideshow": [],
+                "libobs.hide_scene_item.Flag Onscreen - Right Middle": [],
                 "libobs.hide_scene_item.LEFT CORNER": [],
                 "libobs.hide_scene_item.MIDDLE": [],
                 "libobs.hide_scene_item.Middle Text Onscreen - Center": [],
@@ -1970,6 +1996,7 @@
                 "libobs.show_scene_item.Audio Input Capture (PulseAudio)": [],
                 "libobs.show_scene_item.Audio Output Capture (PulseAudio)": [],
                 "libobs.show_scene_item.Background Slideshow": [],
+                "libobs.show_scene_item.Flag Onscreen - Right Middle": [],
                 "libobs.show_scene_item.LEFT CORNER": [],
                 "libobs.show_scene_item.MIDDLE": [],
                 "libobs.show_scene_item.Middle Text Onscreen - Center": [],
@@ -1995,7 +2022,7 @@
             "push-to-talk-delay": 0,
             "settings": {
                 "custom_size": false,
-                "id_counter": 60,
+                "id_counter": 61,
                 "items": [
                     {
                         "align": 5,
@@ -2645,6 +2672,35 @@
                         },
                         "scale_filter": "disable",
                         "visible": false
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 0,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": false,
+                        "id": 61,
+                        "locked": true,
+                        "name": "Flag Onscreen - Right Middle",
+                        "pos": {
+                            "x": 1786.0,
+                            "y": 753.0
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 0.071666665375232697,
+                            "y": 0.071666665375232697
+                        },
+                        "scale_filter": "disable",
+                        "visible": true
                     }
                 ]
             },
@@ -2890,7 +2946,7 @@
                 "libobs.hide_scene_item.Audio Input Capture (PulseAudio)": [],
                 "libobs.hide_scene_item.Audio Output Capture (PulseAudio)": [],
                 "libobs.hide_scene_item.Background Slideshow": [],
-                "libobs.hide_scene_item.Flag Onscreen": [],
+                "libobs.hide_scene_item.Flag Onscreen - Right Corner": [],
                 "libobs.hide_scene_item.LEFT CORNER": [],
                 "libobs.hide_scene_item.MIDDLE": [],
                 "libobs.hide_scene_item.Middle Text Onscreen - Right Corner": [],
@@ -2901,7 +2957,7 @@
                 "libobs.show_scene_item.Audio Input Capture (PulseAudio)": [],
                 "libobs.show_scene_item.Audio Output Capture (PulseAudio)": [],
                 "libobs.show_scene_item.Background Slideshow": [],
-                "libobs.show_scene_item.Flag Onscreen": [],
+                "libobs.show_scene_item.Flag Onscreen - Right Corner": [],
                 "libobs.show_scene_item.LEFT CORNER": [],
                 "libobs.show_scene_item.MIDDLE": [],
                 "libobs.show_scene_item.Middle Text Onscreen - Right Corner": [],
@@ -3559,17 +3615,17 @@
                         "crop_top": 0,
                         "group_item_backup": false,
                         "id": 16,
-                        "locked": false,
-                        "name": "Flag Onscreen",
+                        "locked": true,
+                        "name": "Flag Onscreen - Right Corner",
                         "pos": {
-                            "x": 1852.0,
-                            "y": 1012.0
+                            "x": 1875.0,
+                            "y": 1035.0
                         },
                         "private_settings": {},
                         "rot": 0.0,
                         "scale": {
-                            "x": 0.056666668504476547,
-                            "y": 0.056666668504476547
+                            "x": 0.037500001490116119,
+                            "y": 0.037500001490116119
                         },
                         "scale_filter": "disable",
                         "visible": true
@@ -3590,7 +3646,7 @@
             "mixers": 0,
             "monitoring_type": 0,
             "muted": false,
-            "name": "Flag Onscreen",
+            "name": "Flag Onscreen - Right Corner",
             "prev_ver": 402653190,
             "private_settings": {},
             "push-to-mute": false,
@@ -3598,7 +3654,7 @@
             "push-to-talk": false,
             "push-to-talk-delay": 0,
             "settings": {
-                "file": "/home/dmerrick/other_projects/danalol-stream/OBS/flag.jpg",
+                "file": "/home/dmerrick/other_projects/danalol-stream/OBS/flag.jpg-live",
                 "unload": true
             },
             "sync": 0,
