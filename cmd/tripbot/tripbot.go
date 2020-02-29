@@ -71,7 +71,7 @@ func findInitialVideo() {
 	v := video.CurrentlyPlaying
 	_, err := video.LoadOrCreate(v.String())
 	if err != nil {
-		terrors.Log(err, "error loading initial video, is VLC running?")
+		terrors.Log(err, "error loading initial video, is there a video playing?")
 	}
 }
 
