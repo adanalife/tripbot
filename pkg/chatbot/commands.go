@@ -286,6 +286,8 @@ func stateCmd(user *users.User) {
 		vid = vid.Next()
 	}
 	msg := fmt.Sprintf("We're in %s", vid.State)
+	// show the flag for the state
+	video.ShowFlag()
 	Say(msg)
 }
 
