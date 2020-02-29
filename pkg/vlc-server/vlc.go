@@ -22,8 +22,9 @@ func InitPlayer() {
 
 	// the vids dont have audio anyway, so add --no-audio
 	//TODO: move these to a const
-	//TODO: this should probably include/exclude hardware decoding
-	if err = libvlc.Init("--quiet", "--no-audio", "--network-caching", "6666"); err != nil {
+	//TODO: figure out if vdpau_avcodec can be better than none
+	//TODO: there are a ton of potentially-useful avcodec flags
+	if err = libvlc.Init("--quiet", "--no-audio", "--network-caching", "6666", "--avcodec-hw", "none"); err != nil {
 		terrors.Fatal(err, "error initializing VLC")
 	}
 
