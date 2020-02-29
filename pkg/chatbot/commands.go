@@ -53,7 +53,7 @@ func timewarpCmd(user *users.User) {
 	}
 
 	// rate-limit the number of times this can run
-	if helpers.UserIsAdmin(user.Username) {
+	if !helpers.UserIsAdmin(user.Username) {
 		if time.Now().Sub(lastTimewarpTime) < 20*time.Second {
 			Say("Not yet; enjoy the moment!")
 			return
@@ -299,7 +299,7 @@ func bonusMilesCmd(user *users.User) {
 
 func secretInfoCmd(user *users.User) {
 	log.Println(user.Username, "ran !secretinfo")
-	if helpers.UserIsAdmin(user.Username) {
+	if !helpers.UserIsAdmin(user.Username) {
 		return
 	}
 	vid := video.CurrentlyPlaying
@@ -316,7 +316,7 @@ func secretInfoCmd(user *users.User) {
 
 func shutdownCmd(user *users.User) {
 	log.Println(user.Username, "ran !shutdown")
-	if helpers.UserIsAdmin(user.Username) {
+	if !helpers.UserIsAdmin(user.Username) {
 		Say("Nice try bucko")
 		return
 	}
@@ -335,7 +335,7 @@ func shutdownCmd(user *users.User) {
 
 func restartMusicCmd(user *users.User) {
 	log.Println(user.Username, "ran !restartmusic")
-	if helpers.UserIsAdmin(user.Username) {
+	if !helpers.UserIsAdmin(user.Username) {
 		Say("You can't do that, but please !report any stream issues")
 		return
 	}
@@ -352,7 +352,7 @@ func restartMusicCmd(user *users.User) {
 func middleCmd(user *users.User, params []string) {
 	log.Println(user.Username, "ran !middle")
 	// don't let strangers run this
-	if helpers.UserIsAdmin(user.Username) {
+	if !helpers.UserIsAdmin(user.Username) {
 		return
 	}
 
