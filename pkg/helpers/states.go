@@ -1,7 +1,17 @@
 package helpers
 
+func StateAbbrevToState(abbrev string) string {
+	return stateAbbrevs[strings.ToUpper(abbrev)]
+}
+
+func StateToStateAbbrev(state string) string {
+	// capitalize the first letter of the state
+	state = strings.Title(strings.ToLower(state))
+	return InvertMap(stateAbbrevs)[state]
+}
+
 // A handy map of US state codes to full names
-var StateAbbrevs = map[string]string{
+var stateAbbrevs = map[string]string{
 	"AL": "Alabama",
 	"AK": "Alaska",
 	"AZ": "Arizona",

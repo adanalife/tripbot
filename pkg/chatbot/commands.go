@@ -256,7 +256,7 @@ func guessCmd(user *users.User, params []string) {
 	// convert to short form if they used the full name
 	// e.g. "Massachusetts" instead of "MA"
 	if len(guess) == 2 {
-		guess = stateAbbrevs[strings.ToUpper(guess)]
+		guess = helpers.StateAbbrevToState(guess)
 	}
 
 	// get the currently-playing video
