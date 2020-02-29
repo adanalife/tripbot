@@ -65,6 +65,8 @@ func timewarpCmd(user *users.User) {
 		Say("Here we go...!")
 	}
 
+	// show timewarp onscreen
+	background.ShowTimewarp()
 	// shuffle to a new //video
 	vlcClient.PlayRandom()
 	// update the currently-playing video

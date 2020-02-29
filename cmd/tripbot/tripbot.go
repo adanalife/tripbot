@@ -123,6 +123,7 @@ func createOnscreens() {
 	background.InitLeftRotator()
 	background.InitRightRotator()
 	background.InitMiddleText()
+	background.InitTimewarp()
 }
 
 // connectToTwitch joins Twitch chat and starts listening
