@@ -1,7 +1,7 @@
-package chatbot
+package helpers
 
 // A handy map of US state codes to full names
-var stateAbbrevs = map[string]string{
+var StateAbbrevs = map[string]string{
 	"AL": "Alabama",
 	"AK": "Alaska",
 	"AZ": "Arizona",

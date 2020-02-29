@@ -144,6 +144,15 @@ func FileExists(path string) bool {
 	return err == nil
 }
 
+// InvertMap takes a string map and returns it as value->key
+func InvertMap(m map[string]string) map[string]string {
+    n := make(map[string]string)
+    for k, v := range m {
+        n[v] = k
+    }
+    return n
+}
+
 func ActualDate(utcDate time.Time, lat, long float64) time.Time {
 	timezone := latlong.LookupZoneName(lat, long)
 	location, err := time.LoadLocation(timezone)
