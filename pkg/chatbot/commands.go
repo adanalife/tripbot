@@ -69,7 +69,7 @@ func timewarpCmd(user *users.User) {
 	background.ShowTimewarp()
 
 	// only say this if the caller is not me
-	if helpers.UserIsAdmin(user.Username) {
+	if !helpers.UserIsAdmin(user.Username) {
 		Say("Here we go...!")
 	}
 
