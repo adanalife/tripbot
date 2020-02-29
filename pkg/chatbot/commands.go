@@ -350,7 +350,7 @@ func restartMusicCmd(user *users.User) {
 	if helpers.RunningOnDarwin() {
 		audio.RestartItunes()
 	} else {
-		audio.StartGrooveSalad()
+		audio.PlayGrooveSalad()
 	}
 }
 

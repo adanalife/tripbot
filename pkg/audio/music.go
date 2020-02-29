@@ -34,7 +34,7 @@ func init() {
 
 	if !config.DisableMusicAutoplay {
 		//TODO: this shouldn't live in init probably
-		StartGrooveSalad()
+		PlayGrooveSalad()
 	}
 }
 
@@ -56,7 +56,7 @@ func mpdState() string {
 	return status["state"]
 }
 
-func StartGrooveSalad() {
+func PlayGrooveSalad() {
 	log.Println("Starting Groove Salad")
 	err := mpdConn.Add(grooveSaladURL)
 	if err != nil {
