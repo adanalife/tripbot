@@ -56,9 +56,9 @@ func Shutdown() {
 	}
 }
 
-// CurrentlyPlaying finds the currently-playing video path
+// currentlyPlaying finds the currently-playing video path
 // (it's pretty hacky right now)
-func CurrentlyPlaying() string {
+func currentlyPlaying() string {
 	cur, err := player.Media()
 	if err != nil {
 		terrors.Log(err, "error fetching currently-playing media")

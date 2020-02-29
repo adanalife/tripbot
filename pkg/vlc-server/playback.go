@@ -7,6 +7,16 @@ import (
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 )
 
+//TODO: handle the case where index is outside range
+func back(n int) error {
+	return playAtIndex(currentIndex() - n)
+}
+
+//TODO: handle the case where index is outside range
+func skip(n int) error {
+	return playAtIndex(currentIndex() + n)
+}
+
 func playVideoFile(vidStr string) error {
 	// extract just the filename
 	videoFile := filepath.Base(vidStr)
@@ -14,6 +24,7 @@ func playVideoFile(vidStr string) error {
 	return playAtIndex(index)
 }
 
+//TODO: handle the case where index is outside range
 func playAtIndex(index int) error {
 	// start playing the media
 	return playlist.PlayAtIndex(uint(index))
@@ -39,4 +50,8 @@ func getIndex(vidStr string) int {
 		}
 	}
 	return -1
+}
+
+func currentIndex() int {
+	return getIndex(currentlyPlaying())
 }

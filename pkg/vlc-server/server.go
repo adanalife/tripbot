@@ -20,7 +20,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 
 		} else if strings.HasPrefix(r.URL.Path, "/vlc/current") {
 			// return the currently-playing file
-			fmt.Fprintf(w, CurrentlyPlaying())
+			fmt.Fprintf(w, currentlyPlaying())
 
 		} else if strings.HasPrefix(r.URL.Path, "/vlc/play") {
 			videoFile, ok := r.URL.Query()["video"]
