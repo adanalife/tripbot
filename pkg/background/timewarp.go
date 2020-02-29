@@ -11,7 +11,7 @@ import (
 
 var Timewarp *onscreens.Onscreen
 
-var timewarpDuration = time.Duration(6 * time.Second)
+var timewarpDuration = time.Duration(2 * time.Second)
 var timewarpFile = path.Join(helpers.ProjectRoot(), "OBS/timewarp.txt")
 
 func InitTimewarp() {
