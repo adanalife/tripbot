@@ -84,6 +84,24 @@ func timewarpCmd(user *users.User) {
 	lastTimewarpTime = time.Now()
 }
 
+func skipCmd(user *users.User) {
+	log.Println(user.Username, "ran !skip")
+
+	// exit early if we're on OS X
+	if helpers.RunningOnDarwin() {
+		Say("Sorry, skip isn't available right now")
+		return
+	}
+
+	// shuffle to a new video
+	err := vlcClient.Skip()
+	if err != nil {
+		terrors.Log(err, "error from VLC client")
+	}
+	// update the currently-playing video
+	video.GetCurrentlyPlaying()
+}
+
 func uptimeCmd(user *users.User) {
 	log.Println(user.Username, "ran !uptime")
 	dur := time.Now().Sub(Uptime)

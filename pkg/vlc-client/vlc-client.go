@@ -4,11 +4,11 @@ import (
 	"io/ioutil"
 	"net/http"
 
+	"github.com/dmerrick/danalol-stream/pkg/config"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 )
 
-//TODO: make this a Config value
-const vlcServerURL = "http://localhost:8088"
+var vlcServerURL = config.VlcServerHost + ":" + config.VlcServerPort
 
 // CurrentlyPlaying finds the currently-playing video path
 func CurrentlyPlaying() string {
@@ -25,6 +25,15 @@ func PlayRandom() error {
 	_, err := getUrl(vlcServerURL + "/vlc/random")
 	if err != nil {
 		terrors.Log(err, "error playing random video")
+		return err
+	}
+	return nil
+}
+
+func Skip() error {
+	_, err := getUrl(vlcServerURL + "/vlc/skip")
+	if err != nil {
+		terrors.Log(err, "error skipping video")
 		return err
 	}
 	return nil

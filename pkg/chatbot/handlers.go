@@ -37,6 +37,11 @@ func runCommand(user users.User, message string) {
 		}
 	case "!timewarp", "!tw":
 		timewarpCmd(&user)
+	case "!skip":
+		// skipCmd(&user, params)
+		skipCmd(&user)
+	// case "!back":
+	// 	backCmd(&user, params)
 	case "!shutdown":
 		shutdownCmd(&user)
 	case "!restartmusic":

@@ -57,7 +57,9 @@ var (
 	TripbotHttpAuth string
 	// TripbotServerPort is used to specify the port on which the webserver runs
 	TripbotServerPort string
-	// TripbotServerPort is used to specify the port on which the VLC webserver runs
+	// VlcServerHost is used to specify the host for the VLC webserver
+	VlcServerHost string
+	// VlcServerPort is used to specify the port on which the VLC webserver runs
 	VlcServerPort string
 )
 
@@ -78,6 +80,7 @@ func init() {
 		"CROPPED_CORNERS_DIR",
 		"TRIPBOT_HTTP_AUTH",
 		"TRIPBOT_SERVER_PORT",
+		"VLC_SERVER_HOST",
 		"VLC_SERVER_PORT",
 	}
 	for _, v := range requiredVars {
@@ -102,6 +105,7 @@ func init() {
 	ExternalURL = os.Getenv("EXTERNAL_URL")
 	TripbotHttpAuth = os.Getenv("TRIPBOT_HTTP_AUTH")
 	TripbotServerPort = os.Getenv("TRIPBOT_SERVER_PORT")
+	VlcServerHost = os.Getenv("VLC_SERVER_HOST")
 	VlcServerPort = os.Getenv("VLC_SERVER_PORT")
 
 	// google-specific settings
