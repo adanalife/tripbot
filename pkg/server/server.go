@@ -1,6 +1,7 @@
 package server
 
 import (
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"log"
@@ -13,7 +14,31 @@ import (
 	mytwitch "github.com/dmerrick/danalol-stream/pkg/twitch"
 	"github.com/dmerrick/danalol-stream/pkg/users"
 	"github.com/logrusorgru/aurora"
+	"golang.org/x/crypto/acme/autocert"
 )
+
+var certManager autocert.Manager
+var server *http.Server
+
+func init() {
+	port := fmt.Sprintf(":%s", config.TripbotServerPort)
+
+	// automatically create SSL certs
+	// using let's encrypt
+	// c.p. https://stackoverflow.com/a/40494806
+	certManager = autocert.Manager{
+		Prompt: autocert.AcceptTOS,
+		//TODO: make this a Config var
+		HostPolicy: autocert.HostWhitelist("tripbot.dana.lol"),
+		Cache:      autocert.DirCache("infra/certs"),
+	}
+	server = &http.Server{
+		Addr: port,
+		TLSConfig: &tls.Config{
+			GetCertificate: certManager.GetCertificate,
+		},
+	}
+}
 
 //TODO: consider adding routes to control MPD
 func handle(w http.ResponseWriter, r *http.Request) {
@@ -45,8 +70,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			// this endpoint returns private twitch access tokens
 		} else if r.URL.Path == "/auth/twitch" {
 			secret, ok := r.URL.Query()["auth"]
-			//TODO: more secure password (lol)
-			if !ok || len(secret[0]) < 1 || secret[0] != "yes" {
+			if !ok || !isValidSecret(secret[0]) {
 				http.Error(w, "404 not found", http.StatusNotFound)
 				return
 			}
@@ -155,11 +179,18 @@ func handle(w http.ResponseWriter, r *http.Request) {
 func Start() {
 	log.Println("Starting web server")
 	http.HandleFunc("/", handle)
-	//TODO: configurable port
-	//TODO: replace certs with autocert: https://stackoverflow.com/a/40494806
-	err := http.ListenAndServeTLS(":8080", "infra/tripbot.dana.lol.fullchain.pem", "infra/tripbot.dana.lol.key", nil)
-	// err := http.ListenAndServe(":8080", nil)
+
+	// start http server (for http->https redirect)
+	//TODO: config port
+	go http.ListenAndServe(":8888", certManager.HTTPHandler(nil))
+
+	err := server.ListenAndServeTLS("", "")
 	if err != nil {
 		terrors.Fatal(err, "couldn't start server")
 	}
+}
+
+// isValidSecret returns true if the given secret matches the configured oen
+func isValidSecret(secret string) bool {
+	return len(secret) < 1 || secret != config.TripbotHttpAuth
 }

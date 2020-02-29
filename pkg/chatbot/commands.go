@@ -5,16 +5,11 @@ import (
 	"log"
 	"math/rand"
 	"os"
-	"runtime"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/dmerrick/danalol-stream/pkg/audio"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
-	"github.com/dmerrick/danalol-stream/pkg/vlc"
-	"github.com/mitchellh/go-ps"
-	"github.com/skratchdot/open-golang/open"
 
 	"github.com/dmerrick/danalol-stream/pkg/background"
 	"github.com/dmerrick/danalol-stream/pkg/config"
@@ -23,6 +18,7 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/miles"
 	"github.com/dmerrick/danalol-stream/pkg/users"
 	"github.com/dmerrick/danalol-stream/pkg/video"
+	vlcClient "github.com/dmerrick/danalol-stream/pkg/vlc-client"
 	"github.com/getsentry/sentry-go"
 	"github.com/hako/durafmt"
 )
@@ -56,23 +52,29 @@ func timewarpCmd(user *users.User) {
 	log.Println(user.Username, "ran !timewarp")
 
 	// exit early if we're on OS X
-	if runtime.GOOS == "darwin" {
+	if helpers.RunningOnDarwin() {
 		Say("Sorry, timewarp isn't available right now")
 		return
 	}
 
 	// rate-limit the number of times this can run
-	if user.Username != strings.ToLower(config.ChannelName) {
+	if !helpers.UserIsAdmin(user.Username) {
 		if time.Now().Sub(lastTimewarpTime) < 20*time.Second {
 			Say("Not yet; enjoy the moment!")
 			return
 		}
 	}
 
-	Say("Here we go...!")
+	// show timewarp onscreen
+	background.ShowTimewarp()
+
+	// only say this if the caller is not me
+	if helpers.UserIsAdmin(user.Username) {
+		Say("Here we go...!")
+	}
 
 	// shuffle to a new video
-	vlc.PlayRandom()
+	vlcClient.PlayRandom()
 	// update the currently-playing video
 	video.GetCurrentlyPlaying()
 	// update our record of last time it ran
@@ -303,7 +305,7 @@ func bonusMilesCmd(user *users.User) {
 
 func secretInfoCmd(user *users.User) {
 	log.Println(user.Username, "ran !secretinfo")
-	if user.Username != strings.ToLower(config.ChannelName) {
+	if !helpers.UserIsAdmin(user.Username) {
 		return
 	}
 	vid := video.CurrentlyPlaying
@@ -320,7 +322,7 @@ func secretInfoCmd(user *users.User) {
 
 func shutdownCmd(user *users.User) {
 	log.Println(user.Username, "ran !shutdown")
-	if user.Username != strings.ToLower(config.ChannelName) {
+	if !helpers.UserIsAdmin(user.Username) {
 		Say("Nice try bucko")
 		return
 	}
@@ -339,54 +341,38 @@ func shutdownCmd(user *users.User) {
 
 func restartMusicCmd(user *users.User) {
 	log.Println(user.Username, "ran !restartmusic")
-	if user.Username != strings.ToLower(config.ChannelName) {
+	if !helpers.UserIsAdmin(user.Username) {
 		Say("You can't do that, but please !report any stream issues")
 		return
 	}
 
 	Say("Restarting music player...")
-	if runtime.GOOS == "darwin" {
-		stopiTunes()
-		startiTunes()
+	if helpers.RunningOnDarwin() {
+		audio.RestartItunes()
 	} else {
 		audio.StartGrooveSalad()
 	}
 }
 
-func stopiTunes() {
-	itunesBinary := "iTunes"
-
-	processes, err := ps.Processes()
-	if err != nil {
-		terrors.Log(err, "error getting pids")
+// middleCmd sets the text at the bottom-middle of the stream
+func middleCmd(user *users.User, params []string) {
+	log.Println(user.Username, "ran !middle")
+	// don't let strangers run this
+	if !helpers.UserIsAdmin(user.Username) {
+		return
 	}
 
-	//spew.Dump(processes)
-
-	var itunesProcess ps.Process
-	for _, p := range processes {
-		if p.Executable() == itunesBinary {
-			itunesProcess = p
-			// there probably isn't a second iTunes process
-			break
-		}
+	// don't do anything if empty
+	if len(params) == 0 {
+		Say("What do you want to say?")
+		return
 	}
 
-	if itunesProcess != nil {
-		log.Printf("pid for iTunes is %d, killing it...", itunesProcess.Pid())
-		err = syscall.Kill(itunesProcess.Pid(), syscall.SIGKILL)
-		if err != nil {
-			terrors.Log(err, "error killing pid")
-		}
-	} else {
-		log.Println("no iTunes process found")
-	}
-}
+	// use the params as the text
+	text := strings.Join(params, " ")
 
-func startiTunes() {
-	log.Println("opening iTunes")
-	err := open.RunWith("http://somafm.com/groovesalad256.pls", "iTunes")
-	if err != nil {
-		terrors.Log(err, "error starting iTunes")
-	}
+	// just to help debug
+	log.Printf("setting middle text to: %s", text)
+
+	background.MiddleText.Show(text)
 }

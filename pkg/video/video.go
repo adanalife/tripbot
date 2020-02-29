@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"path"
-	"runtime"
 	"strings"
 	"time"
 
@@ -14,7 +13,7 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/background"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
-	"github.com/dmerrick/danalol-stream/pkg/vlc"
+	vlcClient "github.com/dmerrick/danalol-stream/pkg/vlc-client"
 	"github.com/logrusorgru/aurora"
 )
 
@@ -35,10 +34,10 @@ func GetCurrentlyPlaying() {
 	preVid = curVid
 
 	// figure out whats currently playing
-	if runtime.GOOS == "darwin" {
+	if helpers.RunningOnDarwin() {
 		curVid = figureOutCurrentVideo()
 	} else {
-		curVid = vlc.CurrentlyPlaying()
+		curVid = vlcClient.CurrentlyPlaying()
 	}
 
 	// if the currently-playing video has changed
@@ -56,7 +55,7 @@ func GetCurrentlyPlaying() {
 
 		// show the no-GPS image
 		if CurrentlyPlaying.Flagged {
-			background.GPSImage.Show("", 60*time.Second)
+			background.GPSImage.ShowFor("", 60*time.Second)
 		} else {
 			background.GPSImage.Hide()
 		}

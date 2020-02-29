@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/joho/godotenv"
+	"github.com/logrusorgru/aurora"
 )
 
 const (
@@ -49,6 +50,15 @@ var (
 	VideoDir string
 	// DisableTwitchWebhooks disables recieving webhooks from Twitch (new followers for instance)
 	DisableTwitchWebhooks bool
+	// DisableMusicAutoplay disables the auto-play for MPD
+	DisableMusicAutoplay bool
+
+	// TripbotHttpAuth is used to authenticate users to the HTTP server
+	TripbotHttpAuth string
+	// TripbotServerPort is used to specify the port on which the webserver runs
+	TripbotServerPort string
+	// TripbotServerPort is used to specify the port on which the VLC webserver runs
+	VlcServerPort string
 )
 
 func init() {
@@ -66,6 +76,9 @@ func init() {
 		"DASHCAM_DIR",
 		"MAPS_OUTPUT_DIR",
 		"CROPPED_CORNERS_DIR",
+		"TRIPBOT_HTTP_AUTH",
+		"TRIPBOT_SERVER_PORT",
+		"VLC_SERVER_PORT",
 	}
 	for _, v := range requiredVars {
 		_, ok := os.LookupEnv(v)
@@ -77,19 +90,38 @@ func init() {
 	//TODO: consider using strings.ToLower() on channel name here and removing elsewhere
 	ChannelName = os.Getenv("CHANNEL_NAME")
 	BotUsername = os.Getenv("BOT_USERNAME")
-	ExternalURL = os.Getenv("EXTERNAL_URL")
-	GoogleProjectID = os.Getenv("GOOGLE_APPS_PROJECT_ID")
-	GoogleMapsAPIKey = os.Getenv("GOOGLE_MAPS_API_KEY")
 	ReadOnly, _ = strconv.ParseBool(os.Getenv("READ_ONLY"))
 	Verbose, _ = strconv.ParseBool(os.Getenv("VERBOSE"))
+
+	// directory settings
 	DashcamDir = os.Getenv("DASHCAM_DIR")
 	MapsOutputDir = os.Getenv("MAPS_OUTPUT_DIR")
 	CroppedPath = os.Getenv("CROPPED_CORNERS_DIR")
 
-	VideoDir = path.Join(DashcamDir, videoDir)
-	ScreencapDir = path.Join(DashcamDir, screencapDir)
+	// HTTP server settings
+	ExternalURL = os.Getenv("EXTERNAL_URL")
+	TripbotHttpAuth = os.Getenv("TRIPBOT_HTTP_AUTH")
+	TripbotServerPort = os.Getenv("TRIPBOT_SERVER_PORT")
+	VlcServerPort = os.Getenv("VLC_SERVER_PORT")
+
+	// google-specific settings
+	GoogleProjectID = os.Getenv("GOOGLE_APPS_PROJECT_ID")
+	GoogleMapsAPIKey = os.Getenv("GOOGLE_MAPS_API_KEY")
 
 	DisableTwitchWebhooks, _ = strconv.ParseBool(os.Getenv("DISABLE_TWITCH_WEBHOOKS"))
+	DisableMusicAutoplay, _ = strconv.ParseBool(os.Getenv("DISABLE_MUSIC_AUTOPLAY"))
+
+	// give helpful reminders when things are disabled
+	if DisableTwitchWebhooks {
+		log.Println(aurora.Yellow("Disabling Twitch webhooks"))
+	}
+	if DisableMusicAutoplay {
+		log.Println(aurora.Yellow("Disabling music autoplay"))
+	}
+
+	// assemble compound settings
+	VideoDir = path.Join(DashcamDir, videoDir)
+	ScreencapDir = path.Join(DashcamDir, screencapDir)
 
 	// check that the paths exist
 	requiredDirs := []string{

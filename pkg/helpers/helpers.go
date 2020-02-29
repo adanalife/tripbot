@@ -181,3 +181,14 @@ func OpenInBrowser(url string) {
 		terrors.Log(err, "error opening browser")
 	}
 }
+
+// RunningOnDarwin returns true if we're on darwin (OS X)
+func RunningOnDarwin() bool {
+	return runtime.GOOS == "darwin"
+}
+
+// UserIsAdmin returns true if a given user runs the channel
+// it's used to restrict admin features
+func UserIsAdmin(username string) bool {
+	return strings.ToLower(username) == strings.ToLower(config.ChannelName)
+}

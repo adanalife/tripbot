@@ -24,7 +24,7 @@ func InitLeaderboard() {
 }
 
 func ShowLeaderboard() {
-	Leaderboard.Show(leaderboardContent(), leaderboardDuration)
+	Leaderboard.ShowFor(leaderboardContent(), leaderboardDuration)
 }
 
 func leaderboardLoop() {

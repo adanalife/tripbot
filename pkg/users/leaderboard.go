@@ -8,6 +8,7 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/database"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
+	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	"github.com/logrusorgru/aurora"
 )
 
@@ -30,7 +31,7 @@ func InitLeaderboard() {
 func UpdateLeaderboard() {
 	for _, user := range LoggedIn {
 		// skip adding this user if they're a bot (or me)
-		if user.IsBot || user.Username == strings.ToLower(config.ChannelName) {
+		if user.IsBot || helpers.UserIsAdmin(user.Username) {
 			continue
 		}
 		insertIntoLeaderboard(*user)

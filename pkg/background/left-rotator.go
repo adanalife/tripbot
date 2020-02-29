@@ -16,8 +16,6 @@ var LeftRotator *onscreens.Onscreen
 
 var leftRotatorUpdateFrequency = time.Duration(45 * time.Second)
 
-// super long duration cause this is always on
-var leftRotatorDuration = time.Duration(10 * 365 * 24 * time.Hour)
 var leftRotatorFile = path.Join(helpers.ProjectRoot(), "OBS/left-message.txt")
 
 var possibleLeftMessages = []string{
@@ -43,7 +41,7 @@ func InitLeftRotator() {
 
 func leftRotatorLoop() {
 	for { // forever
-		LeftRotator.Show(leftRotatorContent(), leftRotatorDuration)
+		LeftRotator.Show(leftRotatorContent())
 		time.Sleep(time.Duration(leftRotatorUpdateFrequency))
 	}
 }
