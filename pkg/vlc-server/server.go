@@ -37,15 +37,33 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			//TODO: better response
 			fmt.Fprintf(w, "OK")
 
+		} else if strings.HasPrefix(r.URL.Path, "/vlc/back") {
+			num, ok := r.URL.Query()["n"]
+			if !ok || len(num) > 1 {
+				back(1)
+				return
+			}
+			i, err := strconv.Atoi(num[0])
+			if err != nil {
+				terrors.Log(err, "couldn't convert input to int")
+				http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
+				return
+			}
+
+			back(i)
+
+			//TODO: better response
+			fmt.Fprintf(w, "OK")
+
 		} else if strings.HasPrefix(r.URL.Path, "/vlc/skip") {
-			numSkips, ok := r.URL.Query()["n"]
-			if !ok || len(numSkips) > 1 {
+			num, ok := r.URL.Query()["n"]
+			if !ok || len(num) > 1 {
 				skip(1)
 				return
 			}
-			i, err := strconv.Atoi(numSkips[0])
+			i, err := strconv.Atoi(num[0])
 			if err != nil {
-				terrors.Log(err, "couldn't start server")
+				terrors.Log(err, "couldn't convert input to int")
 				http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
 				return
 			}
