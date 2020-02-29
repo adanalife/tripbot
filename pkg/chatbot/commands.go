@@ -74,7 +74,10 @@ func timewarpCmd(user *users.User) {
 	}
 
 	// shuffle to a new video
-	vlcClient.PlayRandom()
+	err := vlcClient.PlayRandom()
+	if err != nil {
+		terrors.Log(err, "error from VLC client")
+	}
 	// update the currently-playing video
 	video.GetCurrentlyPlaying()
 	// update our record of last time it ran
