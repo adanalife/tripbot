@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/dmerrick/danalol-stream/pkg/background"
+	"github.com/dmerrick/danalol-stream/pkg/config"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	vlcClient "github.com/dmerrick/danalol-stream/pkg/vlc-client"
@@ -84,7 +85,9 @@ func figureOutCurrentVideo() string {
 // but there was an import cycle
 func ShowFlag() {
 	if helpers.FileExists(background.FlagImageFile) {
-		log.Printf("removing %s because it already exists", background.FlagImageFile)
+		if config.Verbose {
+			log.Printf("removing %s because it already exists", background.FlagImageFile)
+		}
 		// remove the existing flag file
 		err := os.Remove(background.FlagImageFile)
 		if err != nil {
@@ -92,12 +95,15 @@ func ShowFlag() {
 		}
 	}
 
-	cur := CurrentlyPlaying
+	// this is the image we should be showing
+	newFlagFile := flagSourceFile(CurrentlyPlaying.State)
+
 	// copy the image to the live location
-	err := os.Symlink(flagSourceFile(cur.State), background.FlagImageFile)
+	err := os.Symlink(newFlagFile, background.FlagImageFile)
 	if err != nil {
 		terrors.Log(err, "error creating new flag image")
 	}
+	// actually display the flag
 	background.FlagImage.ShowFor("", 10*time.Second)
 }
 
