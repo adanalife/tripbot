@@ -60,13 +60,14 @@ func timewarpCmd(user *users.User) {
 		}
 	}
 
+	// show timewarp onscreen
+	background.ShowTimewarp()
+
 	// only say this if the caller is not me
 	if helpers.UserIsAdmin(user.Username) {
 		Say("Here we go...!")
 	}
 
-	// show timewarp onscreen
-	background.ShowTimewarp()
 	// shuffle to a new //video
 	vlcClient.PlayRandom()
 	// update the currently-playing video
