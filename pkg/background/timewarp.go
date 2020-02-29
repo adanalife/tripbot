@@ -20,6 +20,5 @@ func InitTimewarp() {
 }
 
 func ShowTimewarp() {
-	log.Println("showing timewarp onscreen")
 	Timewarp.ShowFor("Timewarp!", timewarpDuration)
 }
