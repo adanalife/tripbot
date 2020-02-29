@@ -28,43 +28,9 @@ var vlcCmdFlags = []string{
 
 // Init creates a VLC player and sets up a playlist
 func InitPlayer() {
-	var err error
-
-	// start up VLC with given command flags
-	if err = libvlc.Init(vlcCmdFlags...); err != nil {
-		terrors.Fatal(err, "error initializing VLC")
-	}
-
-	// create a new playlist-player
-	playlist, err = libvlc.NewListPlayer()
-	if err != nil {
-		terrors.Fatal(err, "error creating VLC playlist player")
-	}
-
-	// save the player so we can use it later
-	player, err = playlist.Player()
-	if err != nil {
-		terrors.Fatal(err, "error fetching VLC player")
-	}
-
-	// this will store all of our videos
-	mediaList, err = libvlc.NewMediaList()
-	if err != nil {
-		terrors.Fatal(err, "error creating VLC media list")
-	}
-
-	// plug our medialist into the player
-	err = playlist.SetMediaList(mediaList)
-	if err != nil {
-		terrors.Fatal(err, "error setting VLC media list")
-	}
-
-	// set the player to loop forever
-	err = playlist.SetPlaybackMode(libvlc.Loop)
-	if err != nil {
-		terrors.Fatal(err, "error setting VLC playback mode")
-	}
-
+	startVLC()
+	createPlayer()
+	setToLoop()
 	loadMedia()
 }
 
@@ -97,6 +63,62 @@ func CurrentlyPlaying() string {
 	return path
 }
 
+// PlayRandom plays a random file from the playlist
+func PlayRandom() error {
+	count, err := mediaList.Count()
+	if err != nil {
+		terrors.Log(err, "error counting media in VLC media list")
+	}
+
+	random := rand.Intn(count)
+
+	// start playing the media
+	return playlist.PlayAtIndex(uint(random))
+}
+
+func startVLC() {
+	// start up VLC with given command flags
+	if err := libvlc.Init(vlcCmdFlags...); err != nil {
+		terrors.Fatal(err, "error initializing VLC")
+	}
+}
+
+func createPlayer() {
+	var err error
+
+	// create a new playlist-player
+	playlist, err = libvlc.NewListPlayer()
+	if err != nil {
+		terrors.Fatal(err, "error creating VLC playlist player")
+	}
+
+	// save the player so we can use it later
+	player, err = playlist.Player()
+	if err != nil {
+		terrors.Fatal(err, "error fetching VLC player")
+	}
+
+	// this will store all of our videos
+	mediaList, err = libvlc.NewMediaList()
+	if err != nil {
+		terrors.Fatal(err, "error creating VLC media list")
+	}
+
+	// plug our medialist into the player
+	err = playlist.SetMediaList(mediaList)
+	if err != nil {
+		terrors.Fatal(err, "error setting VLC media list")
+	}
+}
+
+func setToLoop() {
+	// set the player to loop forever
+	err := playlist.SetPlaybackMode(libvlc.Loop)
+	if err != nil {
+		terrors.Fatal(err, "error setting VLC playback mode")
+	}
+}
+
 // loadMedia walks the VideoDir and adds all videos to
 // the playlist.
 func loadMedia() {
@@ -121,17 +143,4 @@ func loadMedia() {
 			terrors.Fatal(err, "error adding files to VLC media list")
 		}
 	}
-}
-
-// PlayRandom plays a random file from the playlist
-func PlayRandom() error {
-	count, err := mediaList.Count()
-	if err != nil {
-		terrors.Log(err, "error counting media in VLC media list")
-	}
-
-	random := rand.Intn(count)
-
-	// start playing the media
-	return playlist.PlayAtIndex(uint(random))
 }
