@@ -186,15 +186,20 @@ func colorizeUsernames(usernames []string) []string {
 	return coloredUsernames
 }
 
-// countBots returns the number of bots in the session
-func countBots() int {
-	bots := 0
+// bots returns the users in the session who are known bots
+func bots() []*User {
+	var bots []*User
 	for _, user := range LoggedIn {
 		if user.IsBot {
-			bots = bots + 1
+			bots = append(bots, user)
 		}
 	}
 	return bots
+}
+
+// countBots returns the number of bots in the session
+func countBots() int {
+	return len(bots())
 }
 
 // PrintCurrentSession simply prints info about the current session
