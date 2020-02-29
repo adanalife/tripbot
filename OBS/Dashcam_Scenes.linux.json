@@ -38,129 +38,6 @@
             "deinterlace_mode": 0,
             "enabled": true,
             "flags": 0,
-            "hotkeys": {
-                "libobs.hide_scene_item.Middle Text Onscreen": [],
-                "libobs.hide_scene_item.STAGING test stream msg": [],
-                "libobs.hide_scene_item.Timewarp Onscreen": [],
-                "libobs.show_scene_item.Middle Text Onscreen": [],
-                "libobs.show_scene_item.STAGING test stream msg": [],
-                "libobs.show_scene_item.Timewarp Onscreen": []
-            },
-            "id": "group",
-            "mixers": 0,
-            "monitoring_type": 0,
-            "muted": false,
-            "name": "MIDDLE 2",
-            "prev_ver": 402653190,
-            "private_settings": {},
-            "push-to-mute": false,
-            "push-to-mute-delay": 0,
-            "push-to-talk": false,
-            "push-to-talk-delay": 0,
-            "settings": {
-                "custom_size": true,
-                "cx": 2688,
-                "cy": 1998,
-                "id_counter": 3,
-                "items": [
-                    {
-                        "align": 5,
-                        "bounds": {
-                            "x": 0.0,
-                            "y": 0.0
-                        },
-                        "bounds_align": 0,
-                        "bounds_type": 0,
-                        "crop_bottom": 0,
-                        "crop_left": 0,
-                        "crop_right": 0,
-                        "crop_top": 0,
-                        "group_item_backup": false,
-                        "id": 1,
-                        "locked": false,
-                        "name": "STAGING test stream msg",
-                        "pos": {
-                            "x": 0.0,
-                            "y": 56.970882415771484
-                        },
-                        "private_settings": {},
-                        "rot": 0.0,
-                        "scale": {
-                            "x": 2.2941176891326904,
-                            "y": 2.2941176891326904
-                        },
-                        "scale_filter": "disable",
-                        "visible": false
-                    },
-                    {
-                        "align": 5,
-                        "bounds": {
-                            "x": 0.0,
-                            "y": 0.0
-                        },
-                        "bounds_align": 0,
-                        "bounds_type": 0,
-                        "crop_bottom": 0,
-                        "crop_left": 0,
-                        "crop_right": 0,
-                        "crop_top": 0,
-                        "group_item_backup": false,
-                        "id": 2,
-                        "locked": false,
-                        "name": "Middle Text Onscreen",
-                        "pos": {
-                            "x": 1731.6207275390625,
-                            "y": 1934.531005859375
-                        },
-                        "private_settings": {},
-                        "rot": 0.0,
-                        "scale": {
-                            "x": 2.8537313938140869,
-                            "y": 2.8636362552642822
-                        },
-                        "scale_filter": "disable",
-                        "visible": true
-                    },
-                    {
-                        "align": 5,
-                        "bounds": {
-                            "x": 0.0,
-                            "y": 0.0
-                        },
-                        "bounds_align": 0,
-                        "bounds_type": 0,
-                        "crop_bottom": 0,
-                        "crop_left": 0,
-                        "crop_right": 0,
-                        "crop_top": 0,
-                        "group_item_backup": false,
-                        "id": 3,
-                        "locked": false,
-                        "name": "Timewarp Onscreen",
-                        "pos": {
-                            "x": 181.25006103515625,
-                            "y": 0.0
-                        },
-                        "private_settings": {},
-                        "rot": 0.0,
-                        "scale": {
-                            "x": 4.7916665077209473,
-                            "y": 4.7906975746154785
-                        },
-                        "scale_filter": "disable",
-                        "visible": true
-                    }
-                ]
-            },
-            "sync": 0,
-            "volume": 1.0
-        },
-        {
-            "balance": 0.5,
-            "deinterlace_field_order": 0,
-            "deinterlace_mode": 0,
-            "enabled": true,
-            "flags": 0,
             "hotkeys": {},
             "id": "group",
             "mixers": 0,
@@ -175,8 +52,8 @@
             "push-to-talk-delay": 0,
             "settings": {
                 "custom_size": true,
-                "cx": 1652,
-                "cy": 1998,
+                "cx": 2617,
+                "cy": 2011,
                 "id_counter": 0,
                 "items": [
                     {
@@ -197,7 +74,7 @@
                         "name": "STAGING test stream msg",
                         "pos": {
                             "x": 0.0,
-                            "y": 56.970882415771484
+                            "y": 56.970870971679688
                         },
                         "private_settings": {},
                         "rot": 0.0,
@@ -221,18 +98,18 @@
                         "crop_right": 0,
                         "crop_top": 0,
                         "group_item_backup": false,
-                        "id": 30,
+                        "id": 57,
                         "locked": true,
-                        "name": "Middle Text Onscreen",
+                        "name": "Timewarp Onscreen",
                         "pos": {
-                            "x": 695.64874267578125,
-                            "y": 1934.53125
+                            "x": 181.2498779296875,
+                            "y": 0.0
                         },
                         "private_settings": {},
                         "rot": 0.0,
                         "scale": {
-                            "x": 2.8537313938140869,
-                            "y": 2.8636362552642822
+                            "x": 4.7916665077209473,
+                            "y": 4.7906975746154785
                         },
                         "scale_filter": "disable",
                         "visible": true
@@ -250,18 +127,47 @@
                         "crop_right": 0,
                         "crop_top": 0,
                         "group_item_backup": false,
-                        "id": 57,
+                        "id": 59,
                         "locked": true,
-                        "name": "Timewarp Onscreen",
+                        "name": "Middle Text Onscreen - Center",
                         "pos": {
-                            "x": 181.25006103515625,
-                            "y": 0.0
+                            "x": 630.5928955078125,
+                            "y": 1928.15625
                         },
                         "private_settings": {},
                         "rot": 0.0,
                         "scale": {
-                            "x": 4.7916665077209473,
-                            "y": 4.7906975746154785
+                            "x": 3.7219517230987549,
+                            "y": 3.7215909957885742
+                        },
+                        "scale_filter": "disable",
+                        "visible": false
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 0,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": false,
+                        "id": 20,
+                        "locked": true,
+                        "name": "Middle Text Onscreen - Right Corner",
+                        "pos": {
+                            "x": 1775.07763671875,
+                            "y": 1944.53125
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 2.5118589401245117,
+                            "y": 2.5120739936828613
                         },
                         "scale_filter": "disable",
                         "visible": true
@@ -289,7 +195,7 @@
             "mixers": 0,
             "monitoring_type": 0,
             "muted": false,
-            "name": "left corner",
+            "name": "LEFT CORNER",
             "prev_ver": 402653190,
             "private_settings": {},
             "push-to-mute": false,
@@ -414,7 +320,7 @@
             "mixers": 0,
             "monitoring_type": 0,
             "muted": false,
-            "name": "right corner",
+            "name": "RIGHT CORNER",
             "prev_ver": 402653190,
             "private_settings": {},
             "push-to-mute": false,
@@ -687,7 +593,7 @@
             "mixers": 0,
             "monitoring_type": 0,
             "muted": false,
-            "name": "old stuff",
+            "name": "OLD STUFF",
             "prev_ver": 402653190,
             "private_settings": {},
             "push-to-mute": false,
@@ -827,6 +733,78 @@
         }
     ],
     "sources": [
+        {
+            "balance": 0.5,
+            "deinterlace_field_order": 0,
+            "deinterlace_mode": 0,
+            "enabled": true,
+            "flags": 0,
+            "hotkeys": {},
+            "id": "text_ft2_source",
+            "mixers": 0,
+            "monitoring_type": 0,
+            "muted": false,
+            "name": "Middle Text Onscreen - Center",
+            "prev_ver": 402653190,
+            "private_settings": {},
+            "push-to-mute": false,
+            "push-to-mute-delay": 0,
+            "push-to-talk": false,
+            "push-to-talk-delay": 0,
+            "settings": {
+                "color1": 4294967295,
+                "color2": 4288059030,
+                "drop_shadow": false,
+                "font": {
+                    "face": "Trebuchet MS",
+                    "flags": 0,
+                    "size": 18,
+                    "style": "Regular"
+                },
+                "from_file": true,
+                "outline": false,
+                "text": "",
+                "text_file": "/home/dmerrick/other_projects/danalol-stream/OBS/middle-text.txt"
+            },
+            "sync": 0,
+            "volume": 1.0
+        },
+        {
+            "balance": 0.5,
+            "deinterlace_field_order": 0,
+            "deinterlace_mode": 0,
+            "enabled": true,
+            "flags": 0,
+            "hotkeys": {},
+            "id": "text_ft2_source",
+            "mixers": 0,
+            "monitoring_type": 0,
+            "muted": false,
+            "name": "Middle Text Onscreen - Right Corner",
+            "prev_ver": 402653190,
+            "private_settings": {},
+            "push-to-mute": false,
+            "push-to-mute-delay": 0,
+            "push-to-talk": false,
+            "push-to-talk-delay": 0,
+            "settings": {
+                "color1": 4294967295,
+                "color2": 4288059030,
+                "drop_shadow": false,
+                "font": {
+                    "face": "Trebuchet MS",
+                    "flags": 0,
+                    "size": 18,
+                    "style": "Regular"
+                },
+                "from_file": true,
+                "outline": false,
+                "text": "",
+                "text_file": "/home/dmerrick/other_projects/danalol-stream/OBS/middle-text.txt"
+            },
+            "sync": 0,
+            "volume": 1.0
+        },
         {
             "balance": 0.5,
             "deinterlace_field_order": 0,
@@ -1235,17 +1213,17 @@
             "hotkeys": {
                 "OBSBasic.SelectScene": [],
                 "libobs.hide_scene_item.Grey Logo": [],
+                "libobs.hide_scene_item.LEFT CORNER": [],
+                "libobs.hide_scene_item.RIGHT CORNER": [],
                 "libobs.hide_scene_item.STAGING test stream msg": [],
                 "libobs.hide_scene_item.Sound Flower": [],
                 "libobs.hide_scene_item.VLC Video Source": [],
-                "libobs.hide_scene_item.left corner": [],
-                "libobs.hide_scene_item.right corner": [],
                 "libobs.show_scene_item.Grey Logo": [],
+                "libobs.show_scene_item.LEFT CORNER": [],
+                "libobs.show_scene_item.RIGHT CORNER": [],
                 "libobs.show_scene_item.STAGING test stream msg": [],
                 "libobs.show_scene_item.Sound Flower": [],
-                "libobs.show_scene_item.VLC Video Source": [],
-                "libobs.show_scene_item.left corner": [],
-                "libobs.show_scene_item.right corner": []
+                "libobs.show_scene_item.VLC Video Source": []
             },
             "id": "scene",
             "mixers": 0,
@@ -1480,7 +1458,7 @@
                         "group_item_backup": false,
                         "id": 5,
                         "locked": false,
-                        "name": "left corner",
+                        "name": "LEFT CORNER",
                         "pos": {
                             "x": 0.0,
                             "y": 0.0
@@ -1625,7 +1603,7 @@
                         "group_item_backup": false,
                         "id": 6,
                         "locked": false,
-                        "name": "right corner",
+                        "name": "RIGHT CORNER",
                         "pos": {
                             "x": 0.0,
                             "y": 0.0
@@ -2066,29 +2044,29 @@
                 "libobs.hide_scene_item.Audio Input Capture (PulseAudio)": [],
                 "libobs.hide_scene_item.Audio Output Capture (PulseAudio)": [],
                 "libobs.hide_scene_item.Background Slideshow": [],
+                "libobs.hide_scene_item.LEFT CORNER": [],
                 "libobs.hide_scene_item.MIDDLE": [],
-                "libobs.hide_scene_item.Middle Text Onscreen": [],
+                "libobs.hide_scene_item.Middle Text Onscreen - Center": [],
+                "libobs.hide_scene_item.OLD STUFF": [],
+                "libobs.hide_scene_item.RIGHT CORNER": [],
                 "libobs.hide_scene_item.STAGING test stream msg": [],
                 "libobs.hide_scene_item.Screen Capture - Left Monitor": [],
                 "libobs.hide_scene_item.Timewarp Onscreen": [],
                 "libobs.hide_scene_item.Window Capture - Terminal": [],
                 "libobs.hide_scene_item.Window Capture - VLC": [],
-                "libobs.hide_scene_item.left corner": [],
-                "libobs.hide_scene_item.old stuff": [],
-                "libobs.hide_scene_item.right corner": [],
                 "libobs.show_scene_item.Audio Input Capture (PulseAudio)": [],
                 "libobs.show_scene_item.Audio Output Capture (PulseAudio)": [],
                 "libobs.show_scene_item.Background Slideshow": [],
+                "libobs.show_scene_item.LEFT CORNER": [],
                 "libobs.show_scene_item.MIDDLE": [],
-                "libobs.show_scene_item.Middle Text Onscreen": [],
+                "libobs.show_scene_item.Middle Text Onscreen - Center": [],
+                "libobs.show_scene_item.OLD STUFF": [],
+                "libobs.show_scene_item.RIGHT CORNER": [],
                 "libobs.show_scene_item.STAGING test stream msg": [],
                 "libobs.show_scene_item.Screen Capture - Left Monitor": [],
                 "libobs.show_scene_item.Timewarp Onscreen": [],
                 "libobs.show_scene_item.Window Capture - Terminal": [],
-                "libobs.show_scene_item.Window Capture - VLC": [],
-                "libobs.show_scene_item.left corner": [],
-                "libobs.show_scene_item.old stuff": [],
-                "libobs.show_scene_item.right corner": []
+                "libobs.show_scene_item.Window Capture - VLC": []
             },
             "id": "scene",
             "mixers": 0,
@@ -2103,7 +2081,7 @@
             "push-to-talk-delay": 0,
             "settings": {
                 "custom_size": false,
-                "id_counter": 58,
+                "id_counter": 59,
                 "items": [
                     {
                         "align": 5,
@@ -2326,7 +2304,7 @@
                         "group_item_backup": false,
                         "id": 43,
                         "locked": true,
-                        "name": "old stuff",
+                        "name": "OLD STUFF",
                         "pos": {
                             "x": -77.0,
                             "y": 0.0
@@ -2473,7 +2451,7 @@
                         "group_item_backup": false,
                         "id": 26,
                         "locked": true,
-                        "name": "right corner",
+                        "name": "RIGHT CORNER",
                         "pos": {
                             "x": 0.0,
                             "y": 0.0
@@ -2591,18 +2569,165 @@
                         "group_item_backup": false,
                         "id": 27,
                         "locked": true,
-                        "name": "left corner",
+                        "name": "LEFT CORNER",
                         "pos": {
                             "x": 0.0,
                             "y": 0.0
                         },
                         "private_settings": {
-                            "collapsed": false
+                            "collapsed": true
                         },
                         "rot": 0.0,
                         "scale": {
                             "x": 1.0,
                             "y": 1.0
+                        },
+                        "scale_filter": "disable",
+                        "visible": true
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 0,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": true,
+                        "id": 12,
+                        "locked": true,
+                        "name": "STAGING test stream msg",
+                        "pos": {
+                            "x": 441.99993896484375,
+                            "y": 119.83309936523438
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 1.1205143928527832,
+                            "y": 1.1207903623580933
+                        },
+                        "scale_filter": "disable",
+                        "visible": false
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 0,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": true,
+                        "id": 57,
+                        "locked": true,
+                        "name": "Timewarp Onscreen",
+                        "pos": {
+                            "x": 530.5277099609375,
+                            "y": 92.0
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 2.3403904438018799,
+                            "y": 2.3404934406280518
+                        },
+                        "scale_filter": "disable",
+                        "visible": true
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 0,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": true,
+                        "id": 59,
+                        "locked": true,
+                        "name": "Middle Text Onscreen - Center",
+                        "pos": {
+                            "x": 750.0,
+                            "y": 1034.0
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 1.8179104328155518,
+                            "y": 1.8181818723678589
+                        },
+                        "scale_filter": "disable",
+                        "visible": false
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 0,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": true,
+                        "id": 20,
+                        "locked": true,
+                        "name": "Middle Text Onscreen - Right Corner",
+                        "pos": {
+                            "x": 1309.0,
+                            "y": 1042.0
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 1.2268656492233276,
+                            "y": 1.2272727489471436
+                        },
+                        "scale_filter": "disable",
+                        "visible": true
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 0,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": false,
+                        "id": 58,
+                        "locked": true,
+                        "name": "MIDDLE",
+                        "pos": {
+                            "x": 441.99993896484375,
+                            "y": 92.0
+                        },
+                        "private_settings": {
+                            "collapsed": true
+                        },
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 0.48842933773994446,
+                            "y": 0.4885496199131012
                         },
                         "scale_filter": "disable",
                         "visible": true
@@ -2635,122 +2760,6 @@
                         },
                         "scale_filter": "disable",
                         "visible": false
-                    },
-                    {
-                        "align": 5,
-                        "bounds": {
-                            "x": 0.0,
-                            "y": 0.0
-                        },
-                        "bounds_align": 0,
-                        "bounds_type": 0,
-                        "crop_bottom": 0,
-                        "crop_left": 0,
-                        "crop_right": 0,
-                        "crop_top": 0,
-                        "group_item_backup": true,
-                        "id": 12,
-                        "locked": true,
-                        "name": "STAGING test stream msg",
-                        "pos": {
-                            "x": 442.0,
-                            "y": 119.83309936523438
-                        },
-                        "private_settings": {},
-                        "rot": 0.0,
-                        "scale": {
-                            "x": 1.1205143928527832,
-                            "y": 1.1207903623580933
-                        },
-                        "scale_filter": "disable",
-                        "visible": false
-                    },
-                    {
-                        "align": 5,
-                        "bounds": {
-                            "x": 0.0,
-                            "y": 0.0
-                        },
-                        "bounds_align": 0,
-                        "bounds_type": 0,
-                        "crop_bottom": 0,
-                        "crop_left": 0,
-                        "crop_right": 0,
-                        "crop_top": 0,
-                        "group_item_backup": true,
-                        "id": 30,
-                        "locked": true,
-                        "name": "Middle Text Onscreen",
-                        "pos": {
-                            "x": 781.7752685546875,
-                            "y": 1037.114501953125
-                        },
-                        "private_settings": {},
-                        "rot": 0.0,
-                        "scale": {
-                            "x": 1.3938461542129517,
-                            "y": 1.3990284204483032
-                        },
-                        "scale_filter": "disable",
-                        "visible": true
-                    },
-                    {
-                        "align": 5,
-                        "bounds": {
-                            "x": 0.0,
-                            "y": 0.0
-                        },
-                        "bounds_align": 0,
-                        "bounds_type": 0,
-                        "crop_bottom": 0,
-                        "crop_left": 0,
-                        "crop_right": 0,
-                        "crop_top": 0,
-                        "group_item_backup": true,
-                        "id": 57,
-                        "locked": true,
-                        "name": "Timewarp Onscreen",
-                        "pos": {
-                            "x": 530.52783203125,
-                            "y": 92.0
-                        },
-                        "private_settings": {},
-                        "rot": 0.0,
-                        "scale": {
-                            "x": 2.3403904438018799,
-                            "y": 2.3404934406280518
-                        },
-                        "scale_filter": "disable",
-                        "visible": true
-                    },
-                    {
-                        "align": 5,
-                        "bounds": {
-                            "x": 0.0,
-                            "y": 0.0
-                        },
-                        "bounds_align": 0,
-                        "bounds_type": 0,
-                        "crop_bottom": 0,
-                        "crop_left": 0,
-                        "crop_right": 0,
-                        "crop_top": 0,
-                        "group_item_backup": false,
-                        "id": 58,
-                        "locked": true,
-                        "name": "MIDDLE",
-                        "pos": {
-                            "x": 442.0,
-                            "y": 92.0
-                        },
-                        "private_settings": {},
-                        "rot": 0.0,
-                        "scale": {
-                            "x": 0.48842933773994446,
-                            "y": 0.4885496199131012
-                        },
-                        "scale_filter": "disable",
-                        "visible": true
                     }
                 ]
             },
@@ -2997,26 +3006,24 @@
                 "libobs.hide_scene_item.Audio Output Capture (PulseAudio)": [],
                 "libobs.hide_scene_item.Background Slideshow": [],
                 "libobs.hide_scene_item.Flag Onscreen": [],
-                "libobs.hide_scene_item.MIDDLE 2": [],
-                "libobs.hide_scene_item.Middle Text Onscreen": [],
-                "libobs.hide_scene_item.STAGING test stream msg": [],
+                "libobs.hide_scene_item.LEFT CORNER": [],
+                "libobs.hide_scene_item.MIDDLE": [],
+                "libobs.hide_scene_item.Middle Text Onscreen - Right Corner": [],
+                "libobs.hide_scene_item.OLD STUFF": [],
+                "libobs.hide_scene_item.RIGHT CORNER": [],
                 "libobs.hide_scene_item.Screen Capture - Left Monitor": [],
                 "libobs.hide_scene_item.Window Capture - VLC": [],
-                "libobs.hide_scene_item.left corner": [],
-                "libobs.hide_scene_item.old stuff": [],
-                "libobs.hide_scene_item.right corner": [],
                 "libobs.show_scene_item.Audio Input Capture (PulseAudio)": [],
                 "libobs.show_scene_item.Audio Output Capture (PulseAudio)": [],
                 "libobs.show_scene_item.Background Slideshow": [],
                 "libobs.show_scene_item.Flag Onscreen": [],
-                "libobs.show_scene_item.MIDDLE 2": [],
-                "libobs.show_scene_item.Middle Text Onscreen": [],
-                "libobs.show_scene_item.STAGING test stream msg": [],
+                "libobs.show_scene_item.LEFT CORNER": [],
+                "libobs.show_scene_item.MIDDLE": [],
+                "libobs.show_scene_item.Middle Text Onscreen - Right Corner": [],
+                "libobs.show_scene_item.OLD STUFF": [],
+                "libobs.show_scene_item.RIGHT CORNER": [],
                 "libobs.show_scene_item.Screen Capture - Left Monitor": [],
-                "libobs.show_scene_item.Window Capture - VLC": [],
-                "libobs.show_scene_item.left corner": [],
-                "libobs.show_scene_item.old stuff": [],
-                "libobs.show_scene_item.right corner": []
+                "libobs.show_scene_item.Window Capture - VLC": []
             },
             "id": "scene",
             "mixers": 0,
@@ -3031,7 +3038,7 @@
             "push-to-talk-delay": 0,
             "settings": {
                 "custom_size": false,
-                "id_counter": 18,
+                "id_counter": 20,
                 "items": [
                     {
                         "align": 5,
@@ -3253,8 +3260,8 @@
                         "crop_top": 0,
                         "group_item_backup": false,
                         "id": 6,
-                        "locked": false,
-                        "name": "old stuff",
+                        "locked": true,
+                        "name": "OLD STUFF",
                         "pos": {
                             "x": -77.0,
                             "y": 0.0
@@ -3400,8 +3407,8 @@
                         "crop_top": 0,
                         "group_item_backup": false,
                         "id": 7,
-                        "locked": false,
-                        "name": "right corner",
+                        "locked": true,
+                        "name": "RIGHT CORNER",
                         "pos": {
                             "x": 0.0,
                             "y": 0.0
@@ -3518,8 +3525,8 @@
                         "crop_top": 0,
                         "group_item_backup": false,
                         "id": 8,
-                        "locked": false,
-                        "name": "left corner",
+                        "locked": true,
+                        "name": "LEFT CORNER",
                         "pos": {
                             "x": 0.0,
                             "y": 0.0
@@ -3547,19 +3554,19 @@
                         "crop_left": 0,
                         "crop_right": 0,
                         "crop_top": 0,
-                        "group_item_backup": false,
-                        "id": 9,
+                        "group_item_backup": true,
+                        "id": 12,
                         "locked": true,
                         "name": "STAGING test stream msg",
                         "pos": {
-                            "x": 100.0,
-                            "y": 71.0
+                            "x": 441.99993896484375,
+                            "y": 119.83309936523438
                         },
                         "private_settings": {},
                         "rot": 0.0,
                         "scale": {
-                            "x": 2.2941176891326904,
-                            "y": 2.2941176891326904
+                            "x": 1.1205143928527832,
+                            "y": 1.1207903623580933
                         },
                         "scale_filter": "disable",
                         "visible": false
@@ -3576,22 +3583,111 @@
                         "crop_left": 0,
                         "crop_right": 0,
                         "crop_top": 0,
-                        "group_item_backup": false,
-                        "id": 10,
+                        "group_item_backup": true,
+                        "id": 57,
                         "locked": true,
-                        "name": "Middle Text Onscreen",
+                        "name": "Timewarp Onscreen",
                         "pos": {
-                            "x": 1078.0,
-                            "y": 1022.0
+                            "x": 530.5277099609375,
+                            "y": 92.0
                         },
                         "private_settings": {},
                         "rot": 0.0,
                         "scale": {
-                            "x": 1.9118387699127197,
-                            "y": 1.9090908765792847
+                            "x": 2.3403904438018799,
+                            "y": 2.3404934406280518
+                        },
+                        "scale_filter": "disable",
+                        "visible": true
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 0,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": true,
+                        "id": 59,
+                        "locked": true,
+                        "name": "Middle Text Onscreen - Center",
+                        "pos": {
+                            "x": 750.0,
+                            "y": 1034.0
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 1.8179104328155518,
+                            "y": 1.8181818723678589
                         },
                         "scale_filter": "disable",
                         "visible": false
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 0,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": true,
+                        "id": 20,
+                        "locked": true,
+                        "name": "Middle Text Onscreen - Right Corner",
+                        "pos": {
+                            "x": 1309.0,
+                            "y": 1042.0
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 1.2268656492233276,
+                            "y": 1.2272727489471436
+                        },
+                        "scale_filter": "disable",
+                        "visible": true
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 0,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": false,
+                        "id": 19,
+                        "locked": true,
+                        "name": "MIDDLE",
+                        "pos": {
+                            "x": 441.99993896484375,
+                            "y": 92.0
+                        },
+                        "private_settings": {
+                            "collapsed": true
+                        },
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 0.48842933773994446,
+                            "y": 0.4885496199131012
+                        },
+                        "scale_filter": "disable",
+                        "visible": true
                     },
                     {
                         "align": 5,
@@ -3618,122 +3714,6 @@
                         "scale": {
                             "x": 0.056666668504476547,
                             "y": 0.056666668504476547
-                        },
-                        "scale_filter": "disable",
-                        "visible": true
-                    },
-                    {
-                        "align": 5,
-                        "bounds": {
-                            "x": 0.0,
-                            "y": 0.0
-                        },
-                        "bounds_align": 0,
-                        "bounds_type": 0,
-                        "crop_bottom": 0,
-                        "crop_left": 0,
-                        "crop_right": 0,
-                        "crop_top": 0,
-                        "group_item_backup": true,
-                        "id": 1,
-                        "locked": false,
-                        "name": "STAGING test stream msg",
-                        "pos": {
-                            "x": 442.0,
-                            "y": 119.83309936523438
-                        },
-                        "private_settings": {},
-                        "rot": 0.0,
-                        "scale": {
-                            "x": 1.1205143928527832,
-                            "y": 1.1207903623580933
-                        },
-                        "scale_filter": "disable",
-                        "visible": false
-                    },
-                    {
-                        "align": 5,
-                        "bounds": {
-                            "x": 0.0,
-                            "y": 0.0
-                        },
-                        "bounds_align": 0,
-                        "bounds_type": 0,
-                        "crop_bottom": 0,
-                        "crop_left": 0,
-                        "crop_right": 0,
-                        "crop_top": 0,
-                        "group_item_backup": true,
-                        "id": 2,
-                        "locked": false,
-                        "name": "Middle Text Onscreen",
-                        "pos": {
-                            "x": 1287.7744140625,
-                            "y": 1037.1143798828125
-                        },
-                        "private_settings": {},
-                        "rot": 0.0,
-                        "scale": {
-                            "x": 1.3938461542129517,
-                            "y": 1.3990284204483032
-                        },
-                        "scale_filter": "disable",
-                        "visible": true
-                    },
-                    {
-                        "align": 5,
-                        "bounds": {
-                            "x": 0.0,
-                            "y": 0.0
-                        },
-                        "bounds_align": 0,
-                        "bounds_type": 0,
-                        "crop_bottom": 0,
-                        "crop_left": 0,
-                        "crop_right": 0,
-                        "crop_top": 0,
-                        "group_item_backup": true,
-                        "id": 3,
-                        "locked": false,
-                        "name": "Timewarp Onscreen",
-                        "pos": {
-                            "x": 530.52783203125,
-                            "y": 92.0
-                        },
-                        "private_settings": {},
-                        "rot": 0.0,
-                        "scale": {
-                            "x": 2.3403904438018799,
-                            "y": 2.3404934406280518
-                        },
-                        "scale_filter": "disable",
-                        "visible": true
-                    },
-                    {
-                        "align": 5,
-                        "bounds": {
-                            "x": 0.0,
-                            "y": 0.0
-                        },
-                        "bounds_align": 0,
-                        "bounds_type": 0,
-                        "crop_bottom": 0,
-                        "crop_left": 0,
-                        "crop_right": 0,
-                        "crop_top": 0,
-                        "group_item_backup": false,
-                        "id": 18,
-                        "locked": false,
-                        "name": "MIDDLE 2",
-                        "pos": {
-                            "x": 442.0,
-                            "y": 92.0
-                        },
-                        "private_settings": {},
-                        "rot": 0.0,
-                        "scale": {
-                            "x": 0.48842933773994446,
-                            "y": 0.4885496199131012
                         },
                         "scale_filter": "disable",
                         "visible": true
