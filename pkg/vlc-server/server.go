@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/davecgh/go-spew/spew"
@@ -36,6 +37,24 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			//TODO: better response
 			fmt.Fprintf(w, "OK")
 
+		} else if strings.HasPrefix(r.URL.Path, "/vlc/skip") {
+			numSkips, ok := r.URL.Query()["n"]
+			if !ok || len(numSkips) > 1 {
+				skip(1)
+				return
+			}
+			i, err := strconv.Atoi(numSkips[0])
+			if err != nil {
+				terrors.Log(err, "couldn't start server")
+				http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
+				return
+			}
+
+			skip(i)
+
+			//TODO: better response
+			fmt.Fprintf(w, "OK")
+
 		} else if strings.HasPrefix(r.URL.Path, "/vlc/random") {
 			// play a random file
 			err := PlayRandom()
@@ -60,7 +79,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 
 // Start starts the web server
 func Start() {
-	log.Println("Starting web server")
+	log.Println("Starting VLC web server")
 	http.HandleFunc("/", handle)
 	port := fmt.Sprintf(":%s", config.VlcServerPort)
 	//TODO: replace certs with autocert: https://stackoverflow.com/a/40494806

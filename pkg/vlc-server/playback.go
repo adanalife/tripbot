@@ -17,17 +17,17 @@ func skip(n int) error {
 	return playAtIndex(currentIndex() + n)
 }
 
+//TODO: handle the case where index is outside range
+func playAtIndex(index int) error {
+	// start playing the media
+	return playlist.PlayAtIndex(uint(index))
+}
+
 func playVideoFile(vidStr string) error {
 	// extract just the filename
 	videoFile := filepath.Base(vidStr)
 	index := getIndex(videoFile)
 	return playAtIndex(index)
-}
-
-//TODO: handle the case where index is outside range
-func playAtIndex(index int) error {
-	// start playing the media
-	return playlist.PlayAtIndex(uint(index))
 }
 
 // PlayRandom plays a random file from the playlist
@@ -53,5 +53,7 @@ func getIndex(vidStr string) int {
 }
 
 func currentIndex() int {
-	return getIndex(currentlyPlaying())
+	// extract just the filename
+	videoFile := filepath.Base(currentlyPlaying())
+	return getIndex(videoFile)
 }

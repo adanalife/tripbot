@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 
 	libvlc "github.com/adrg/libvlc-go/v3"
-	"github.com/davecgh/go-spew/spew"
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
@@ -137,6 +136,7 @@ func loadMedia() {
 		terrors.Fatal(err, "error walking VideoDir")
 	}
 
+	// loop over the files and add their paths to VLC
 	for _, file := range filePaths {
 		// add the media to VLC
 		err = mediaList.AddMediaFromPath(file)
@@ -144,6 +144,4 @@ func loadMedia() {
 			terrors.Fatal(err, "error adding files to VLC media list")
 		}
 	}
-
-	spew.Dump(videoFiles)
 }
