@@ -42,6 +42,9 @@ func leaderboardContent() string {
 	output = "Odometer Leaderboard\n"
 
 	size := 5
+	if len(users.Leaderboard) < size {
+		size = len(users.Leaderboard)
+	}
 	leaderboard := users.Leaderboard[:size]
 
 	for _, score := range leaderboard {
