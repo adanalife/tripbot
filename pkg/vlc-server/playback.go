@@ -2,12 +2,15 @@ package vlcServer
 
 import (
 	"math/rand"
+	"path/filepath"
 
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 )
 
 func playVideoFile(vidStr string) error {
-	index := getIndex(vidStr)
+	// extract just the filename
+	videoFile := filepath.Base(vidStr)
+	index := getIndex(videoFile)
 	return playAtIndex(index)
 }
 
