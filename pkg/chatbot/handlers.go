@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"github.com/dmerrick/danalol-stream/pkg/background"
-	"github.com/dmerrick/danalol-stream/pkg/config"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
+	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	mylog "github.com/dmerrick/danalol-stream/pkg/log"
 	"github.com/dmerrick/danalol-stream/pkg/users"
 	"github.com/gempir/go-twitch-irc/v2"
@@ -177,7 +177,7 @@ func UserPart(partMessage twitch.UserPartMessage) {
 //TODO: log to stackdriver
 func Whisper(message twitch.WhisperMessage) {
 	log.Println("whisper from", message.User.Name, ":", message.Message)
-	if message.User.Name == strings.ToLower(config.ChannelName) {
+	if helpers.UserIsAdmin(message.User.Name) {
 		Say(message.Message)
 	}
 }

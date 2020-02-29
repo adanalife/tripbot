@@ -3,10 +3,8 @@ package miles
 import (
 	"fmt"
 	"sort"
-	"strings"
 	"time"
 
-	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/database"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	"github.com/dmerrick/danalol-stream/pkg/events"
@@ -134,7 +132,7 @@ func sortByValue(kv map[string]float32) [][]string {
 			if helpers.UserIsIgnored(username) {
 				continue
 			}
-			if username == strings.ToLower(config.ChannelName) {
+			if helpers.UserIsAdmin(username) {
 				continue
 			}
 			sorted = append(sorted, []string{username, fmt.Sprintf("%.1f", k)})
