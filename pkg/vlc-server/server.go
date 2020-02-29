@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 )
@@ -20,6 +21,20 @@ func handle(w http.ResponseWriter, r *http.Request) {
 		} else if strings.HasPrefix(r.URL.Path, "/vlc/current") {
 			// return the currently-playing file
 			fmt.Fprintf(w, CurrentlyPlaying())
+
+		} else if strings.HasPrefix(r.URL.Path, "/vlc/play") {
+			videoFile, ok := r.URL.Query()["video"]
+			if !ok || len(videoFile) > 1 {
+				//TODO: eventually this could just play instead of hard-requiring a param
+				http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
+				return
+			}
+
+			spew.Dump(videoFile)
+			PlayVideoFile(videoFile[0])
+
+			//TODO: better response
+			fmt.Fprintf(w, "OK")
 
 		} else if strings.HasPrefix(r.URL.Path, "/vlc/random") {
 			// play a random file

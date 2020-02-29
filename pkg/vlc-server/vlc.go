@@ -2,11 +2,11 @@ package vlcServer
 
 import (
 	"log"
-	"math/rand"
 	"os"
 	"path/filepath"
 
 	libvlc "github.com/adrg/libvlc-go/v3"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
@@ -15,6 +15,7 @@ import (
 var player *libvlc.Player
 var playlist *libvlc.ListPlayer
 var mediaList *libvlc.MediaList
+var videoFiles []string
 
 //TODO: figure out if vdpau_avcodec can be better than none
 //TODO: there are a ton of potentially-useful avcodec flags
@@ -63,19 +64,6 @@ func CurrentlyPlaying() string {
 	return path
 }
 
-// PlayRandom plays a random file from the playlist
-func PlayRandom() error {
-	count, err := mediaList.Count()
-	if err != nil {
-		terrors.Log(err, "error counting media in VLC media list")
-	}
-
-	random := rand.Intn(count)
-
-	// start playing the media
-	return playlist.PlayAtIndex(uint(random))
-}
-
 func startVLC() {
 	// start up VLC with given command flags
 	if err := libvlc.Init(vlcCmdFlags...); err != nil {
@@ -122,25 +110,26 @@ func setToLoop() {
 // loadMedia walks the VideoDir and adds all videos to
 // the playlist.
 func loadMedia() {
-	var files []string
 	// add all files from the VideoDir to the medialist
 	err := filepath.Walk(config.VideoDir, func(path string, info os.FileInfo, err error) error {
 		// skip the dir itself
 		if path == config.VideoDir {
 			return nil
 		}
-		files = append(files, path)
+		videoFiles = append(videoFiles, path)
 		return nil
 	})
 	if err != nil {
 		terrors.Fatal(err, "error walking VideoDir")
 	}
 
-	for _, file := range files {
+	for _, file := range videoFiles {
 		// add the media to VLC
 		err = mediaList.AddMediaFromPath(file)
 		if err != nil {
 			terrors.Fatal(err, "error adding files to VLC media list")
 		}
 	}
+
+	spew.Dump(videoFiles)
 }
