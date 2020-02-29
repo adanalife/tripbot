@@ -20,9 +20,12 @@ import (
 	mytwitch "github.com/dmerrick/danalol-stream/pkg/twitch"
 	"github.com/dmerrick/danalol-stream/pkg/users"
 	"github.com/dmerrick/danalol-stream/pkg/video"
+	"github.com/gempir/go-twitch-irc/v2"
 	"github.com/getsentry/sentry-go"
 	"github.com/logrusorgru/aurora"
 )
+
+var client *twitch.Client
 
 func main() {
 	createRandomSeed()
@@ -57,7 +60,7 @@ func startHttpServer() {
 //TODO: can this be moved to the bottom?
 func setUpTwitchClient() {
 	// set up the Twitch client
-	client := chatbot.Initialize()
+	client = chatbot.Initialize()
 }
 
 func findInitialVideo() {
