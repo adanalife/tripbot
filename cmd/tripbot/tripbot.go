@@ -15,6 +15,7 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/chatbot"
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/database"
+	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	"github.com/dmerrick/danalol-stream/pkg/server"
 	mytwitch "github.com/dmerrick/danalol-stream/pkg/twitch"
@@ -68,7 +69,10 @@ func findInitialVideo() {
 	background.InitGPSImage() // this has to happen first
 	video.GetCurrentlyPlaying()
 	v := video.CurrentlyPlaying
-	video.LoadOrCreate(v.String())
+	_, err := video.LoadOrCreate(v.String())
+	if err != nil {
+		terrors.Log(err, "error loading initial video, is VLC running?")
+	}
 }
 
 // setUpLeaderboard figures out the current leaderboard
@@ -152,7 +156,10 @@ func gracefulShutdown() {
 	// try and use !shutdown instead
 	log.Printf("last played: %s", video.CurrentlyPlaying)
 	users.Shutdown()
-	database.DBCon.Close()
+	err := database.DBCon.Close()
+	if err != nil {
+		terrors.Log(err, "error closing DB connection")
+	}
 	background.StopCron()
 	audio.Shutdown()
 	sentry.Flush(time.Second * 5)
@@ -163,19 +170,25 @@ func gracefulShutdown() {
 // the reason we put this is in this package is because adding this to background
 // would cause circular dependencies
 func scheduleBackgroundJobs() {
+	var err error
+
 	// schedule these functions
-	background.Cron.AddFunc("@every 60s", video.GetCurrentlyPlaying)
+	err = background.Cron.AddFunc("@every 60s", video.GetCurrentlyPlaying)
 	// use this to keep the connection to MPD running
-	background.Cron.AddFunc("@every 60s", audio.RefreshClient)
-	background.Cron.AddFunc("@every 61s", users.UpdateSession)
-	background.Cron.AddFunc("@every 62s", users.UpdateLeaderboard)
-	background.Cron.AddFunc("@every 5m", users.PrintCurrentSession)
-	background.Cron.AddFunc("@every 15m", mytwitch.GetSubscribers)
-	background.Cron.AddFunc("@every 1h", mytwitch.RefreshUserAccessToken)
-	background.Cron.AddFunc("@every 2h57m30s", chatbot.Chatter)
-	background.Cron.AddFunc("@every 12h", mytwitch.SetStreamTags)
-	background.Cron.AddFunc("@every 12h", mytwitch.UpdateWebhookSubscriptions)
+	err = background.Cron.AddFunc("@every 60s", audio.RefreshClient)
+	err = background.Cron.AddFunc("@every 61s", users.UpdateSession)
+	err = background.Cron.AddFunc("@every 62s", users.UpdateLeaderboard)
+	err = background.Cron.AddFunc("@every 5m", users.PrintCurrentSession)
+	err = background.Cron.AddFunc("@every 15m", mytwitch.GetSubscribers)
+	err = background.Cron.AddFunc("@every 1h", mytwitch.RefreshUserAccessToken)
+	err = background.Cron.AddFunc("@every 2h57m30s", chatbot.Chatter)
+	err = background.Cron.AddFunc("@every 12h", mytwitch.SetStreamTags)
+	err = background.Cron.AddFunc("@every 12h", mytwitch.UpdateWebhookSubscriptions)
 	if helpers.RunningOnDarwin() {
-		background.Cron.AddFunc("@every 6h", audio.RestartItunes)
+		err = background.Cron.AddFunc("@every 6h", audio.RestartItunes)
+	}
+
+	if err != nil {
+		terrors.Log(err, "error adding at least one background job!")
 	}
 }
