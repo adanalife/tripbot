@@ -27,14 +27,15 @@ import (
 
 var client *twitch.Client
 
+// main performs the various steps to get the bot running
 func main() {
 	createRandomSeed()
 	listenForShutdown()
 	startHttpServer()
-	setUpTwitchClient()
 	findInitialVideo()
 	setUpLeaderboard()
 	startCron()
+	setUpTwitchClient() // required for the below
 	updateSubscribers()
 	getCurrentUsers()
 	updateWebhookSubscriptions()
@@ -42,75 +43,90 @@ func main() {
 	connectToTwitch()
 }
 
+// createRandomSeed ensures that random numbers will be random
 func createRandomSeed() {
 	// create a brand new random seed
 	rand.Seed(time.Now().UnixNano())
 }
 
+// listenForShutdown creates a background job that listens for a graceful shutdown request
 func listenForShutdown() {
 	// start the graceful shutdown listener
 	go gracefulShutdown()
 }
 
+// startHttpServer starts a webserver, which is
+// used for admin tools and recieving webhooks
 func startHttpServer() {
 	// start the HTTP server
 	go server.Start()
 }
 
-//TODO: can this be moved to the bottom?
-func setUpTwitchClient() {
-	// set up the Twitch client
-	client = chatbot.Initialize()
-}
-
+// findInitialVideo will determin the vido that is currently-playing
+// we want to run this early, otherwise it will be unset until the first cron job runs
 func findInitialVideo() {
-	// run this right away to set the currently-playing video
-	// (otherwise it will be unset until the first cron job runs)
 	background.InitGPSImage() // this has to happen first
 	video.GetCurrentlyPlaying()
 	v := video.CurrentlyPlaying
 	video.LoadOrCreate(v.String())
 }
 
+// setUpLeaderboard figures out the current leaderboard
+// and displays the oscreen for it
 func setUpLeaderboard() {
 	// initialize the leaderboard
 	users.InitLeaderboard()
+	background.InitLeaderboard()
 }
 
+// startCron starts the background workers
 func startCron() {
 	// start cron and attach cronjobs
 	background.StartCron()
 	scheduleBackgroundJobs()
 }
 
+// setUpTwitchClient sets up the Twitch client,
+// used by many bot features
+func setUpTwitchClient() {
+	// set up the Twitch client
+	client = chatbot.Initialize()
+}
+
+// updateSubscribers gets the list of current subscribers
 func updateSubscribers() {
 	// update subscribers list
 	mytwitch.GetSubscribers()
 }
 
+// getCurrentUsers gets the users watching the stream
 func getCurrentUsers() {
 	// fetch initial session
 	users.UpdateSession()
 	users.PrintCurrentSession()
 }
 
+//updateWebhookSubscriptions makes sure webhooks are being sent to the bot
 func updateWebhookSubscriptions() {
 	// create webhook subscriptions
 	mytwitch.UpdateWebhookSubscriptions()
 }
 
+// createOnscreens starts the various onscreen elements
+// (like the chat boxes in the corners)
 func createOnscreens() {
 	background.InitChat()
-	background.InitLeaderboard()
 	background.InitLeftRotator()
 	background.InitRightRotator()
 	background.InitMiddleText()
 }
 
+// connectToTwitch joins Twitch chat and starts listening
 func connectToTwitch() {
 	client.Join(config.ChannelName)
 	log.Println("Joined channel", config.ChannelName)
 	log.Printf("URL: %s", aurora.Blue(fmt.Sprintf("https://twitch.tv/%s", config.ChannelName)).Underline())
+
 	// actually connect to Twitch
 	// wrapped in a loop in case twitch goes down
 	for {
@@ -123,7 +139,7 @@ func connectToTwitch() {
 	}
 }
 
-// catch CTRL-C and clean up
+// gracefulShutdown catches CTRL-C and cleans up
 func gracefulShutdown() {
 	ctrlC := make(chan os.Signal)
 	signal.Notify(ctrlC, os.Interrupt, syscall.SIGTERM)
@@ -143,7 +159,8 @@ func gracefulShutdown() {
 	os.Exit(1)
 }
 
-// the reason we put this here is because adding this to background
+// scheduleBackgroundJobs schedules the various backgroun jobs
+// the reason we put this is in this package is because adding this to background
 // would cause circular dependencies
 func scheduleBackgroundJobs() {
 	// schedule these functions
