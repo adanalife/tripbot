@@ -52,8 +52,8 @@
             "push-to-talk-delay": 0,
             "settings": {
                 "custom_size": true,
-                "cx": 2617,
-                "cy": 2011,
+                "cx": 1187,
+                "cy": 345,
                 "id_counter": 0,
                 "items": [
                     {
@@ -110,64 +110,6 @@
                         "scale": {
                             "x": 4.7916665077209473,
                             "y": 4.7906975746154785
-                        },
-                        "scale_filter": "disable",
-                        "visible": true
-                    },
-                    {
-                        "align": 5,
-                        "bounds": {
-                            "x": 0.0,
-                            "y": 0.0
-                        },
-                        "bounds_align": 0,
-                        "bounds_type": 0,
-                        "crop_bottom": 0,
-                        "crop_left": 0,
-                        "crop_right": 0,
-                        "crop_top": 0,
-                        "group_item_backup": false,
-                        "id": 59,
-                        "locked": true,
-                        "name": "Middle Text Onscreen - Center",
-                        "pos": {
-                            "x": 630.5928955078125,
-                            "y": 1928.15625
-                        },
-                        "private_settings": {},
-                        "rot": 0.0,
-                        "scale": {
-                            "x": 3.7219517230987549,
-                            "y": 3.7215909957885742
-                        },
-                        "scale_filter": "disable",
-                        "visible": false
-                    },
-                    {
-                        "align": 5,
-                        "bounds": {
-                            "x": 0.0,
-                            "y": 0.0
-                        },
-                        "bounds_align": 0,
-                        "bounds_type": 0,
-                        "crop_bottom": 0,
-                        "crop_left": 0,
-                        "crop_right": 0,
-                        "crop_top": 0,
-                        "group_item_backup": false,
-                        "id": 20,
-                        "locked": true,
-                        "name": "Middle Text Onscreen - Right Corner",
-                        "pos": {
-                            "x": 1775.07763671875,
-                            "y": 1944.53125
-                        },
-                        "private_settings": {},
-                        "rot": 0.0,
-                        "scale": {
-                            "x": 2.5118589401245117,
-                            "y": 2.5120739936828613
                         },
                         "scale_filter": "disable",
                         "visible": true
@@ -376,7 +318,7 @@
                         "crop_top": 0,
                         "group_item_backup": false,
                         "id": 23,
-                        "locked": false,
+                        "locked": true,
                         "name": "right rotating",
                         "pos": {
                             "x": 1568.0,
@@ -652,7 +594,7 @@
                         "crop_top": 0,
                         "group_item_backup": false,
                         "id": 44,
-                        "locked": false,
+                        "locked": true,
                         "name": "Twitch Chat",
                         "pos": {
                             "x": 0.0,
@@ -1108,42 +1050,6 @@
             "mixers": 0,
             "monitoring_type": 0,
             "muted": false,
-            "name": "Middle Text Onscreen",
-            "prev_ver": 402653190,
-            "private_settings": {},
-            "push-to-mute": false,
-            "push-to-mute-delay": 0,
-            "push-to-talk": false,
-            "push-to-talk-delay": 0,
-            "settings": {
-                "color1": 4294967295,
-                "color2": 4288059030,
-                "drop_shadow": false,
-                "font": {
-                    "face": "Trebuchet MS",
-                    "flags": 0,
-                    "size": 18,
-                    "style": "Regular"
-                },
-                "from_file": true,
-                "outline": false,
-                "text": "",
-                "text_file": "/home/dmerrick/other_projects/danalol-stream/OBS/middle-text.txt"
-            },
-            "sync": 0,
-            "volume": 1.0
-        },
-        {
-            "balance": 0.5,
-            "deinterlace_field_order": 0,
-            "deinterlace_mode": 0,
-            "enabled": true,
-            "flags": 0,
-            "hotkeys": {},
-            "id": "text_ft2_source",
-            "mixers": 0,
-            "monitoring_type": 0,
-            "muted": false,
             "name": "left rotating",
             "prev_ver": 402653190,
             "private_settings": {},
@@ -1515,7 +1421,7 @@
                         "crop_top": 0,
                         "group_item_backup": true,
                         "id": 23,
-                        "locked": false,
+                        "locked": true,
                         "name": "right rotating",
                         "pos": {
                             "x": 1568.0,
@@ -2274,7 +2180,7 @@
                         "crop_top": 0,
                         "group_item_backup": true,
                         "id": 44,
-                        "locked": false,
+                        "locked": true,
                         "name": "Twitch Chat",
                         "pos": {
                             "x": -77.0,
@@ -2363,7 +2269,7 @@
                         "crop_top": 0,
                         "group_item_backup": true,
                         "id": 23,
-                        "locked": false,
+                        "locked": true,
                         "name": "right rotating",
                         "pos": {
                             "x": 1568.0,
@@ -2655,48 +2561,21 @@
                         "crop_left": 0,
                         "crop_right": 0,
                         "crop_top": 0,
-                        "group_item_backup": true,
-                        "id": 59,
+                        "group_item_backup": false,
+                        "id": 58,
                         "locked": true,
-                        "name": "Middle Text Onscreen - Center",
+                        "name": "MIDDLE",
                         "pos": {
-                            "x": 750.0,
-                            "y": 1034.0
+                            "x": 441.99993896484375,
+                            "y": 92.0
                         },
-                        "private_settings": {},
+                        "private_settings": {
+                            "collapsed": true
+                        },
                         "rot": 0.0,
                         "scale": {
-                            "x": 1.8179104328155518,
-                            "y": 1.8181818723678589
-                        },
-                        "scale_filter": "disable",
-                        "visible": false
-                    },
-                    {
-                        "align": 5,
-                        "bounds": {
-                            "x": 0.0,
-                            "y": 0.0
-                        },
-                        "bounds_align": 0,
-                        "bounds_type": 0,
-                        "crop_bottom": 0,
-                        "crop_left": 0,
-                        "crop_right": 0,
-                        "crop_top": 0,
-                        "group_item_backup": true,
-                        "id": 20,
-                        "locked": true,
-                        "name": "Middle Text Onscreen - Right Corner",
-                        "pos": {
-                            "x": 1309.0,
-                            "y": 1042.0
-                        },
-                        "private_settings": {},
-                        "rot": 0.0,
-                        "scale": {
-                            "x": 1.2268656492233276,
-                            "y": 1.2272727489471436
+                            "x": 0.48842933773994446,
+                            "y": 0.4885496199131012
                         },
                         "scale_filter": "disable",
                         "visible": true
@@ -2714,20 +2593,18 @@
                         "crop_right": 0,
                         "crop_top": 0,
                         "group_item_backup": false,
-                        "id": 58,
+                        "id": 59,
                         "locked": true,
-                        "name": "MIDDLE",
+                        "name": "Middle Text Onscreen - Center",
                         "pos": {
-                            "x": 441.99993896484375,
-                            "y": 92.0
+                            "x": 750.0,
+                            "y": 1034.0
                         },
-                        "private_settings": {
-                            "collapsed": true
-                        },
+                        "private_settings": {},
                         "rot": 0.0,
                         "scale": {
-                            "x": 0.48842933773994446,
-                            "y": 0.4885496199131012
+                            "x": 1.8179104328155518,
+                            "y": 1.8181818723678589
                         },
                         "scale_filter": "disable",
                         "visible": true
@@ -3231,7 +3108,7 @@
                         "crop_top": 0,
                         "group_item_backup": true,
                         "id": 44,
-                        "locked": false,
+                        "locked": true,
                         "name": "Twitch Chat",
                         "pos": {
                             "x": -77.0,
@@ -3320,7 +3197,7 @@
                         "crop_top": 0,
                         "group_item_backup": true,
                         "id": 23,
-                        "locked": false,
+                        "locked": true,
                         "name": "right rotating",
                         "pos": {
                             "x": 1568.0,
@@ -3612,48 +3489,21 @@
                         "crop_left": 0,
                         "crop_right": 0,
                         "crop_top": 0,
-                        "group_item_backup": true,
-                        "id": 59,
+                        "group_item_backup": false,
+                        "id": 19,
                         "locked": true,
-                        "name": "Middle Text Onscreen - Center",
+                        "name": "MIDDLE",
                         "pos": {
-                            "x": 750.0,
-                            "y": 1034.0
+                            "x": 441.99993896484375,
+                            "y": 92.0
                         },
-                        "private_settings": {},
+                        "private_settings": {
+                            "collapsed": true
+                        },
                         "rot": 0.0,
                         "scale": {
-                            "x": 1.8179104328155518,
-                            "y": 1.8181818723678589
-                        },
-                        "scale_filter": "disable",
-                        "visible": false
-                    },
-                    {
-                        "align": 5,
-                        "bounds": {
-                            "x": 0.0,
-                            "y": 0.0
-                        },
-                        "bounds_align": 0,
-                        "bounds_type": 0,
-                        "crop_bottom": 0,
-                        "crop_left": 0,
-                        "crop_right": 0,
-                        "crop_top": 0,
-                        "group_item_backup": true,
-                        "id": 20,
-                        "locked": true,
-                        "name": "Middle Text Onscreen - Right Corner",
-                        "pos": {
-                            "x": 1309.0,
-                            "y": 1042.0
-                        },
-                        "private_settings": {},
-                        "rot": 0.0,
-                        "scale": {
-                            "x": 1.2268656492233276,
-                            "y": 1.2272727489471436
+                            "x": 0.48842933773994446,
+                            "y": 0.4885496199131012
                         },
                         "scale_filter": "disable",
                         "visible": true
@@ -3671,20 +3521,18 @@
                         "crop_right": 0,
                         "crop_top": 0,
                         "group_item_backup": false,
-                        "id": 19,
+                        "id": 20,
                         "locked": true,
-                        "name": "MIDDLE",
+                        "name": "Middle Text Onscreen - Right Corner",
                         "pos": {
-                            "x": 441.99993896484375,
-                            "y": 92.0
+                            "x": 1309.0,
+                            "y": 1042.0
                         },
-                        "private_settings": {
-                            "collapsed": true
-                        },
+                        "private_settings": {},
                         "rot": 0.0,
                         "scale": {
-                            "x": 0.48842933773994446,
-                            "y": 0.4885496199131012
+                            "x": 1.2268656492233276,
+                            "y": 1.2272727489471436
                         },
                         "scale_filter": "disable",
                         "visible": true
