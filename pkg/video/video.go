@@ -3,14 +3,12 @@ package video
 import (
 	"fmt"
 	"log"
-	"os"
 	"os/exec"
 	"path"
 	"strings"
 	"time"
 
 	"github.com/dmerrick/danalol-stream/pkg/background"
-	"github.com/dmerrick/danalol-stream/pkg/config"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	vlcClient "github.com/dmerrick/danalol-stream/pkg/vlc-client"
