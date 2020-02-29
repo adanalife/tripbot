@@ -52,69 +52,10 @@
             "push-to-talk-delay": 0,
             "settings": {
                 "custom_size": true,
-                "cx": 1187,
-                "cy": 345,
+                "cx": 0,
+                "cy": 0,
                 "id_counter": 0,
-                "items": [
-                    {
-                        "align": 5,
-                        "bounds": {
-                            "x": 0.0,
-                            "y": 0.0
-                        },
-                        "bounds_align": 0,
-                        "bounds_type": 0,
-                        "crop_bottom": 0,
-                        "crop_left": 0,
-                        "crop_right": 0,
-                        "crop_top": 0,
-                        "group_item_backup": false,
-                        "id": 12,
-                        "locked": true,
-                        "name": "STAGING test stream msg",
-                        "pos": {
-                            "x": 0.0,
-                            "y": 56.970870971679688
-                        },
-                        "private_settings": {},
-                        "rot": 0.0,
-                        "scale": {
-                            "x": 2.2941176891326904,
-                            "y": 2.2941176891326904
-                        },
-                        "scale_filter": "disable",
-                        "visible": false
-                    },
-                    {
-                        "align": 5,
-                        "bounds": {
-                            "x": 0.0,
-                            "y": 0.0
-                        },
-                        "bounds_align": 0,
-                        "bounds_type": 0,
-                        "crop_bottom": 0,
-                        "crop_left": 0,
-                        "crop_right": 0,
-                        "crop_top": 0,
-                        "group_item_backup": false,
-                        "id": 57,
-                        "locked": true,
-                        "name": "Timewarp Onscreen",
-                        "pos": {
-                            "x": 181.2498779296875,
-                            "y": 0.0
-                        },
-                        "private_settings": {},
-                        "rot": 0.0,
-                        "scale": {
-                            "x": 4.7916665077209473,
-                            "y": 4.7906975746154785
-                        },
-                        "scale_filter": "disable",
-                        "visible": true
-                    }
-                ]
+                "items": []
             },
             "sync": 0,
             "volume": 1.0
@@ -608,6 +549,35 @@
                         },
                         "scale_filter": "disable",
                         "visible": false
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 0,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": false,
+                        "id": 12,
+                        "locked": true,
+                        "name": "STAGING test stream msg",
+                        "pos": {
+                            "x": 518.99993896484375,
+                            "y": 119.83309936523438
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 1.1205143928527832,
+                            "y": 1.1207903623580933
+                        },
+                        "scale_filter": "disable",
+                        "visible": false
                     }
                 ]
             },
@@ -675,6 +645,42 @@
         }
     ],
     "sources": [
+        {
+            "balance": 0.5,
+            "deinterlace_field_order": 0,
+            "deinterlace_mode": 0,
+            "enabled": true,
+            "flags": 0,
+            "hotkeys": {},
+            "id": "text_ft2_source",
+            "mixers": 0,
+            "monitoring_type": 0,
+            "muted": false,
+            "name": "Timewarp Onscreen - Center",
+            "prev_ver": 402653190,
+            "private_settings": {},
+            "push-to-mute": false,
+            "push-to-mute-delay": 0,
+            "push-to-talk": false,
+            "push-to-talk-delay": 0,
+            "settings": {
+                "color1": 4294967295,
+                "color2": 4288059030,
+                "drop_shadow": true,
+                "font": {
+                    "face": "Sans Serif",
+                    "flags": 0,
+                    "size": 72,
+                    "style": ""
+                },
+                "from_file": true,
+                "outline": false,
+                "text": "",
+                "text_file": "/home/dmerrick/other_projects/danalol-stream/OBS/timewarp.txt"
+            },
+            "sync": 0,
+            "volume": 1.0
+        },
         {
             "balance": 0.5,
             "deinterlace_field_order": 0,
@@ -758,7 +764,7 @@
             "mixers": 0,
             "monitoring_type": 0,
             "muted": false,
-            "name": "Timewarp Onscreen",
+            "name": "Timewarp Onscreen - Right Corner",
             "prev_ver": 402653190,
             "private_settings": {},
             "push-to-mute": false,
@@ -1957,7 +1963,8 @@
                 "libobs.hide_scene_item.RIGHT CORNER": [],
                 "libobs.hide_scene_item.STAGING test stream msg": [],
                 "libobs.hide_scene_item.Screen Capture - Left Monitor": [],
-                "libobs.hide_scene_item.Timewarp Onscreen": [],
+                "libobs.hide_scene_item.Timewarp Onscreen - Center": [],
+                "libobs.hide_scene_item.Timewarp Onscreen - Right Corner": [],
                 "libobs.hide_scene_item.Window Capture - Terminal": [],
                 "libobs.hide_scene_item.Window Capture - VLC": [],
                 "libobs.show_scene_item.Audio Input Capture (PulseAudio)": [],
@@ -1970,7 +1977,8 @@
                 "libobs.show_scene_item.RIGHT CORNER": [],
                 "libobs.show_scene_item.STAGING test stream msg": [],
                 "libobs.show_scene_item.Screen Capture - Left Monitor": [],
-                "libobs.show_scene_item.Timewarp Onscreen": [],
+                "libobs.show_scene_item.Timewarp Onscreen - Center": [],
+                "libobs.show_scene_item.Timewarp Onscreen - Right Corner": [],
                 "libobs.show_scene_item.Window Capture - Terminal": [],
                 "libobs.show_scene_item.Window Capture - VLC": []
             },
@@ -1987,7 +1995,7 @@
             "push-to-talk-delay": 0,
             "settings": {
                 "custom_size": false,
-                "id_counter": 59,
+                "id_counter": 60,
                 "items": [
                     {
                         "align": 5,
@@ -2191,6 +2199,35 @@
                         "scale": {
                             "x": 0.7462499737739563,
                             "y": 0.74666666984558105
+                        },
+                        "scale_filter": "disable",
+                        "visible": false
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 0,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": true,
+                        "id": 12,
+                        "locked": true,
+                        "name": "STAGING test stream msg",
+                        "pos": {
+                            "x": 441.99993896484375,
+                            "y": 119.83309936523438
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 1.1205143928527832,
+                            "y": 1.1207903623580933
                         },
                         "scale_filter": "disable",
                         "visible": false
@@ -2503,64 +2540,6 @@
                         "crop_left": 0,
                         "crop_right": 0,
                         "crop_top": 0,
-                        "group_item_backup": true,
-                        "id": 12,
-                        "locked": true,
-                        "name": "STAGING test stream msg",
-                        "pos": {
-                            "x": 441.99993896484375,
-                            "y": 119.83309936523438
-                        },
-                        "private_settings": {},
-                        "rot": 0.0,
-                        "scale": {
-                            "x": 1.1205143928527832,
-                            "y": 1.1207903623580933
-                        },
-                        "scale_filter": "disable",
-                        "visible": false
-                    },
-                    {
-                        "align": 5,
-                        "bounds": {
-                            "x": 0.0,
-                            "y": 0.0
-                        },
-                        "bounds_align": 0,
-                        "bounds_type": 0,
-                        "crop_bottom": 0,
-                        "crop_left": 0,
-                        "crop_right": 0,
-                        "crop_top": 0,
-                        "group_item_backup": true,
-                        "id": 57,
-                        "locked": true,
-                        "name": "Timewarp Onscreen",
-                        "pos": {
-                            "x": 530.5277099609375,
-                            "y": 92.0
-                        },
-                        "private_settings": {},
-                        "rot": 0.0,
-                        "scale": {
-                            "x": 2.3403904438018799,
-                            "y": 2.3404934406280518
-                        },
-                        "scale_filter": "disable",
-                        "visible": true
-                    },
-                    {
-                        "align": 5,
-                        "bounds": {
-                            "x": 0.0,
-                            "y": 0.0
-                        },
-                        "bounds_align": 0,
-                        "bounds_type": 0,
-                        "crop_bottom": 0,
-                        "crop_left": 0,
-                        "crop_right": 0,
-                        "crop_top": 0,
                         "group_item_backup": false,
                         "id": 58,
                         "locked": true,
@@ -2605,6 +2584,35 @@
                         "scale": {
                             "x": 1.8179104328155518,
                             "y": 1.8181818723678589
+                        },
+                        "scale_filter": "disable",
+                        "visible": true
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 0,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": false,
+                        "id": 60,
+                        "locked": true,
+                        "name": "Timewarp Onscreen - Center",
+                        "pos": {
+                            "x": 577.0,
+                            "y": 105.0
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 2.0906736850738525,
+                            "y": 2.0919539928436279
                         },
                         "scale_filter": "disable",
                         "visible": true
@@ -3135,6 +3143,35 @@
                         "crop_left": 0,
                         "crop_right": 0,
                         "crop_top": 0,
+                        "group_item_backup": true,
+                        "id": 12,
+                        "locked": true,
+                        "name": "STAGING test stream msg",
+                        "pos": {
+                            "x": 441.99993896484375,
+                            "y": 119.83309936523438
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 1.1205143928527832,
+                            "y": 1.1207903623580933
+                        },
+                        "scale_filter": "disable",
+                        "visible": false
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 0,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
                         "group_item_backup": false,
                         "id": 6,
                         "locked": true,
@@ -3431,48 +3468,21 @@
                         "crop_left": 0,
                         "crop_right": 0,
                         "crop_top": 0,
-                        "group_item_backup": true,
-                        "id": 12,
+                        "group_item_backup": false,
+                        "id": 19,
                         "locked": true,
-                        "name": "STAGING test stream msg",
+                        "name": "MIDDLE",
                         "pos": {
                             "x": 441.99993896484375,
                             "y": 119.83309936523438
                         },
-                        "private_settings": {},
+                        "private_settings": {
+                            "collapsed": true
+                        },
                         "rot": 0.0,
                         "scale": {
-                            "x": 1.1205143928527832,
-                            "y": 1.1207903623580933
-                        },
-                        "scale_filter": "disable",
-                        "visible": false
-                    },
-                    {
-                        "align": 5,
-                        "bounds": {
-                            "x": 0.0,
-                            "y": 0.0
-                        },
-                        "bounds_align": 0,
-                        "bounds_type": 0,
-                        "crop_bottom": 0,
-                        "crop_left": 0,
-                        "crop_right": 0,
-                        "crop_top": 0,
-                        "group_item_backup": true,
-                        "id": 57,
-                        "locked": true,
-                        "name": "Timewarp Onscreen",
-                        "pos": {
-                            "x": 530.5277099609375,
-                            "y": 92.0
-                        },
-                        "private_settings": {},
-                        "rot": 0.0,
-                        "scale": {
-                            "x": 2.3403904438018799,
-                            "y": 2.3404934406280518
+                            "x": 0.48842933773994446,
+                            "y": 0.4885496199131012
                         },
                         "scale_filter": "disable",
                         "visible": true
@@ -3490,20 +3500,18 @@
                         "crop_right": 0,
                         "crop_top": 0,
                         "group_item_backup": false,
-                        "id": 19,
+                        "id": 57,
                         "locked": true,
-                        "name": "MIDDLE",
+                        "name": "Timewarp Onscreen - Right Corner",
                         "pos": {
-                            "x": 441.99993896484375,
-                            "y": 92.0
+                            "x": 1209.0,
+                            "y": 588.0
                         },
-                        "private_settings": {
-                            "collapsed": true
-                        },
+                        "private_settings": {},
                         "rot": 0.0,
                         "scale": {
-                            "x": 0.48842933773994446,
-                            "y": 0.4885496199131012
+                            "x": 1.3056994676589966,
+                            "y": 1.3103448152542114
                         },
                         "scale_filter": "disable",
                         "visible": true
