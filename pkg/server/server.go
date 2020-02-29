@@ -70,8 +70,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			// this endpoint returns private twitch access tokens
 		} else if r.URL.Path == "/auth/twitch" {
 			secret, ok := r.URL.Query()["auth"]
-			//TODO: more secure password (lol)
-			if !ok || len(secret[0]) < 1 || secret[0] != "yes" {
+			if !ok || !isValidSecret(secret[0]) {
 				http.Error(w, "404 not found", http.StatusNotFound)
 				return
 			}
@@ -189,4 +188,9 @@ func Start() {
 	if err != nil {
 		terrors.Fatal(err, "couldn't start server")
 	}
+}
+
+// isValidSecret returns true if the given secret matches the configured oen
+func isValidSecret(secret string) bool {
+	return len(secret) < 1 || secret != config.TwitchHttpAuth
 }
