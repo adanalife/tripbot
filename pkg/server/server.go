@@ -1,7 +1,6 @@
 package server
 
 import (
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"log"
@@ -19,26 +18,6 @@ import (
 
 var certManager autocert.Manager
 var server *http.Server
-
-func init() {
-	port := fmt.Sprintf(":%s", config.TripbotServerPort)
-
-	// automatically create SSL certs
-	// using let's encrypt
-	// c.p. https://stackoverflow.com/a/40494806
-	certManager = autocert.Manager{
-		Prompt: autocert.AcceptTOS,
-		//TODO: make this a Config var
-		HostPolicy: autocert.HostWhitelist("tripbot.dana.lol"),
-		Cache:      autocert.DirCache("infra/certs"),
-	}
-	server = &http.Server{
-		Addr: port,
-		TLSConfig: &tls.Config{
-			GetCertificate: certManager.GetCertificate,
-		},
-	}
-}
 
 //TODO: consider adding routes to control MPD
 func handle(w http.ResponseWriter, r *http.Request) {
@@ -180,11 +159,12 @@ func Start() {
 	log.Println("Starting web server")
 	http.HandleFunc("/", handle)
 
-	// start http server (for http->https redirect)
-	//TODO: config port
-	go http.ListenAndServe(":8888", certManager.HTTPHandler(nil))
+	port := fmt.Sprintf(":%s", config.TripbotServerPort)
 
-	err := server.ListenAndServeTLS("", "")
+	//TODO: replace certs with autocert: https://stackoverflow.com/a/40494806
+	// unfortunately autocert assumes the ports are on 80 and 443
+	err := http.ListenAndServeTLS(port, "infra/certs/tripbot.dana.lol.fullchain.pem", "infra/certs/tripbot.dana.lol.key", nil)
+
 	if err != nil {
 		terrors.Fatal(err, "couldn't start server")
 	}

@@ -64,7 +64,17 @@ go list -u -m -json all | go-mod-outdated
 ```
 
 
-### Set up letsencrypt DNS challenge
+### Create SSL certificates using letsencrypt
 ```
 sudo certbot -d tripbot.dana.lol --manual --preferred-challenges dns certonly
+# use this to verify the DNS change:
+dig -t txt _acme-challenge.tripbot.dana.lol
+# copy over the new certs
+sudo cp /etc/letsencrypt/live/tripbot.dana.lol/fullchain.pem infra/certs/tripbot.dana.lol.fullchain.pem
+sudo cp /etc/letsencrypt/live/tripbot.dana.lol/privkey.pem infra/certs/tripbot.dana.lol.key
+```
+
+To renew certs:
+```
+sudo certbot renew
 ```
