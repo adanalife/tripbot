@@ -31,7 +31,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			}
 
 			spew.Dump(videoFile)
-			PlayVideoFile(videoFile[0])
+			playVideoFile(videoFile[0])
 
 			//TODO: better response
 			fmt.Fprintf(w, "OK")

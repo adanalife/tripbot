@@ -6,12 +6,12 @@ import (
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 )
 
-func PlayVideoFile(vidStr string) error {
+func playVideoFile(vidStr string) error {
 	index := getIndex(vidStr)
-	return PlayAtIndex(index)
+	return playAtIndex(index)
 }
 
-func PlayAtIndex(index int) error {
+func playAtIndex(index int) error {
 	// start playing the media
 	return playlist.PlayAtIndex(uint(index))
 }
@@ -26,7 +26,7 @@ func PlayRandom() error {
 	random := rand.Intn(count)
 
 	// start playing the media
-	return PlayAtIndex(random)
+	return playAtIndex(random)
 }
 
 func getIndex(vidStr string) int {

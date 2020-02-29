@@ -42,9 +42,18 @@ func Shutdown() {
 		log.Println("not stopping VLC cause we're on darwin")
 		return
 	}
-	player.Stop()
-	player.Release()
-	libvlc.Release()
+	err := player.Stop()
+	if err != nil {
+		terrors.Log(err, "error stopping player")
+	}
+	err = player.Release()
+	if err != nil {
+		terrors.Log(err, "error releasing player")
+	}
+	err = libvlc.Release()
+	if err != nil {
+		terrors.Log(err, "error releasing libvlc")
+	}
 }
 
 // CurrentlyPlaying finds the currently-playing video path
@@ -110,20 +119,25 @@ func setToLoop() {
 // loadMedia walks the VideoDir and adds all videos to
 // the playlist.
 func loadMedia() {
+	var filePaths []string
 	// add all files from the VideoDir to the medialist
 	err := filepath.Walk(config.VideoDir, func(path string, info os.FileInfo, err error) error {
 		// skip the dir itself
 		if path == config.VideoDir {
 			return nil
 		}
-		videoFiles = append(videoFiles, path)
+		// add full path to list of paths
+		filePaths = append(filePaths, path)
+		// add the video filename to videoFiles list
+		videoFile := filepath.Base(path)
+		videoFiles = append(videoFiles, videoFile)
 		return nil
 	})
 	if err != nil {
 		terrors.Fatal(err, "error walking VideoDir")
 	}
 
-	for _, file := range videoFiles {
+	for _, file := range filePaths {
 		// add the media to VLC
 		err = mediaList.AddMediaFromPath(file)
 		if err != nil {
