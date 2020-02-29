@@ -16,6 +16,9 @@ OBS/Twitch
 OBS/*.txt
 OBS/*-live
 
+# ignore SSL certs
+infra/certs
+
 # env files shouldn't get checked in
 # because they have secrets
 .env.dev
