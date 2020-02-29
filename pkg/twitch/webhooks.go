@@ -21,7 +21,10 @@ var subsTopic = []string{
 // UpdateWebhookSubscriptions will create new webhook subscriptions
 func UpdateWebhookSubscriptions() {
 	subscribeToWebhook(followsTopic)
-	subscribeToWebhook(subsTopic)
+	// since the staging account isn't an affiliate, don't bother
+	if config.IsProduction() {
+		subscribeToWebhook(subsTopic)
+	}
 	getWebookSubscriptions()
 }
 
