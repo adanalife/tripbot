@@ -192,5 +192,5 @@ func Start() {
 
 // isValidSecret returns true if the given secret matches the configured oen
 func isValidSecret(secret string) bool {
-	return len(secret) < 1 || secret != config.TwitchHttpAuth
+	return len(secret) < 1 || secret != config.TripbotHttpAuth
 }
