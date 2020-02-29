@@ -84,6 +84,14 @@ func figureOutCurrentVideo() string {
 //TODO: this really shouldnt live in the video pkg,
 // but there was an import cycle
 func ShowFlag() {
+	//TODO: this should trigger when a state change event fires instead of every time we run this
+	updateFlagFile()
+	// actually display the flag
+	background.FlagImage.ShowFor("", 10*time.Second)
+}
+
+// updateFlagFile replaces the current flag image with the current state flag
+func updateFlagFile() {
 	if helpers.FileExists(background.FlagImageFile) {
 		if config.Verbose {
 			log.Printf("removing %s because it already exists", background.FlagImageFile)
@@ -103,8 +111,6 @@ func ShowFlag() {
 	if err != nil {
 		terrors.Log(err, "error creating new flag image")
 	}
-	// actually display the flag
-	background.FlagImage.ShowFor("", 10*time.Second)
 }
 
 // flagSourceFile returns the full path to a flag image file
