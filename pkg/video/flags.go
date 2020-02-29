@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"path"
+	"strings"
 	"time"
 
 	"github.com/dmerrick/danalol-stream/pkg/background"
@@ -48,8 +49,11 @@ func updateFlagFile() {
 
 // flagSourceFile returns the full path to a flag image file
 func flagSourceFile(state string) string {
+	// convert it to an abbreviation
+	abbrev := helpers.StateToStateAbbrev(state)
 	// make it lowercase
-	state = helpers.StateToStateAbbrev(state)
-	fileName := fmt.Sprintf("%s.png", state)
-	return path.Join(helpers.ProjectRoot(), "assets/flags/small", fileName)
+	abbrev = strings.ToLower(abbrev)
+	fileName := fmt.Sprintf("%s.png", abbrev)
+
+	return path.Join(helpers.ProjectRoot(), "assets/flags/medium", fileName)
 }

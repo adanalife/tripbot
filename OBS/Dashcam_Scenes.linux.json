@@ -28,7 +28,7 @@
         "sync": 0,
         "volume": 0.17402465641498566
     },
-    "current_program_scene": "Live Coding",
+    "current_program_scene": "Main Scene",
     "current_scene": "Main Scene",
     "current_transition": "Fade",
     "groups": [
@@ -535,7 +535,7 @@
             "push-to-talk": false,
             "push-to-talk-delay": 0,
             "settings": {
-                "file": "/home/dmerrick/other_projects/danalol-stream/OBS/flag.jpg-live",
+                "file": "/home/dmerrick/other_projects/danalol-stream/OBS/flag.png-live",
                 "unload": true
             },
             "sync": 0,
@@ -1850,14 +1850,14 @@
                         "locked": true,
                         "name": "Flag Onscreen - Right Middle",
                         "pos": {
-                            "x": 1786.0,
-                            "y": 753.0
+                            "x": 1769.0,
+                            "y": 747.0
                         },
                         "private_settings": {},
                         "rot": 0.0,
                         "scale": {
-                            "x": 0.071666665375232697,
-                            "y": 0.071666665375232697
+                            "x": 0.23818181455135345,
+                            "y": 0.23896104097366333
                         },
                         "scale_filter": "disable",
                         "visible": true
@@ -2700,14 +2700,14 @@
                         "locked": true,
                         "name": "Flag Onscreen - Right Corner",
                         "pos": {
-                            "x": 1875.0,
-                            "y": 1035.0
+                            "x": 1793.0,
+                            "y": 994.0
                         },
                         "private_settings": {},
                         "rot": 0.0,
                         "scale": {
-                            "x": 0.037500001490116119,
-                            "y": 0.037500001490116119
+                            "x": 0.19636364281177521,
+                            "y": 0.19480518996715546
                         },
                         "scale_filter": "disable",
                         "visible": true
@@ -2736,7 +2736,7 @@
             "push-to-talk": false,
             "push-to-talk-delay": 0,
             "settings": {
-                "file": "/home/dmerrick/other_projects/danalol-stream/OBS/flag.jpg-live",
+                "file": "/home/dmerrick/other_projects/danalol-stream/OBS/flag.png-live",
                 "unload": true
             },
             "sync": 0,

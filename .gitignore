@@ -15,7 +15,7 @@ ignore/
 OBS/Twitch
 OBS/*.txt
 OBS/*-live
-OBS/flag.jpg
+OBS/flag.png
 
 # ignore SSL certs
 infra/certs

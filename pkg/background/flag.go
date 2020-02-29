@@ -9,7 +9,7 @@ import (
 )
 
 var FlagImage *onscreens.Onscreen
-var FlagImageFile = path.Join(helpers.ProjectRoot(), "OBS/flag.jpg")
+var FlagImageFile = path.Join(helpers.ProjectRoot(), "OBS/flag.png")
 
 // var flagDuration = time.Duration(150 * time.Second)
 
