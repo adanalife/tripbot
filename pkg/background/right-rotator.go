@@ -21,6 +21,7 @@ var possibleRightMessages = []string{
 	"Don't forget to follow :)",
 	"Try running !location",
 	"Try running !location",
+	"Try running !timewarp",
 	"Streaming 24 hours a day",
 }
 

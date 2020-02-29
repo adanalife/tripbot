@@ -30,6 +30,9 @@ var possibleLeftMessages = []string{
 	"Use !report to report stream issues",
 	"Try and !guess what state we're in",
 	"Where are we? (!location)",
+	"Crave something new? Try !timewarp",
+	"Dana isn't always here. Find him on !socialmedia",
+	"New here? Use !commands to interact with the bot",
 	"LEADER",
 }
 
