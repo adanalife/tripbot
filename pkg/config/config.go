@@ -123,6 +123,10 @@ func init() {
 	VideoDir = path.Join(DashcamDir, videoDir)
 	ScreencapDir = path.Join(DashcamDir, screencapDir)
 
+
+	//TODO: the MapsOutputDir could get created automatically
+	//TODO: maybe also the CroppedPath, (which should be "CroppedDir")
+	//      but note that it would need to be smart enough to generate new cropped corners
 	// check that the paths exist
 	requiredDirs := []string{
 		DashcamDir,
