@@ -123,7 +123,6 @@ func init() {
 	VideoDir = path.Join(DashcamDir, videoDir)
 	ScreencapDir = path.Join(DashcamDir, screencapDir)
 
-
 	//TODO: the MapsOutputDir could get created automatically
 	//TODO: maybe also the CroppedPath, (which should be "CroppedDir")
 	//      but note that it would need to be smart enough to generate new cropped corners
@@ -214,17 +213,16 @@ var IgnoredUsers = []string{
 // HelpMessages are all of the different things !help can return
 var HelpMessages = []string{
 	"!location: Get the current location (beta)",
-	"!map: Show a map of the whole trip",
-	"!info: Get more details on the footage",
 	"!song: Get the current music",
 	"!miles: See your current miles",
 	"!leaderboard: See who has the most miles",
 	"!state: Get the state we are currently in (beta)",
 	"!sunset: Get time until sunset (on the day of filming)",
 	"!report: Report a stream issue (frozen, no audio, etc)",
-	"!temperature: Will be unlocked when the donation goal is reached",
 	"!guess: Guess which state we are in",
 	"!survey: Fill out a survey and help the stream",
+	"!timewarp: Magically warp to a new moment in time",
+	"!commands: List more commands you can use",
 }
 
 var GoogleMapsStyle = []string{
