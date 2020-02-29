@@ -16,15 +16,21 @@ var player *libvlc.Player
 var playlist *libvlc.ListPlayer
 var mediaList *libvlc.MediaList
 
+//TODO: figure out if vdpau_avcodec can be better than none
+//TODO: there are a ton of potentially-useful avcodec flags
+var vlcCmdFlags = []string{
+	"--quiet",                   // reduce output
+	"--no-audio",                // none of the videos have audio
+	"--network-caching", "6666", // cache (in ms)
+	"--avcodec-hw", "none", // disable hardware decoding
+}
+
 // Init creates a VLC player and sets up a playlist
 func InitPlayer() {
 	var err error
 
 	// the vids dont have audio anyway, so add --no-audio
-	//TODO: move these to a const
-	//TODO: figure out if vdpau_avcodec can be better than none
-	//TODO: there are a ton of potentially-useful avcodec flags
-	if err = libvlc.Init("--quiet", "--no-audio", "--network-caching", "6666", "--avcodec-hw", "none"); err != nil {
+	if err = libvlc.Init(vlcCmdFlags); err != nil {
 		terrors.Fatal(err, "error initializing VLC")
 	}
 
