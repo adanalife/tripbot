@@ -37,8 +37,20 @@ func updateFlagFile() {
 		}
 	}
 
+	vid := CurrentlyPlaying
+	// find the next unflagged video
+	if vid.Flagged {
+		vid = vid.Next()
+	}
+
 	// this is the image we should be showing
-	newFlagFile := flagSourceFile(CurrentlyPlaying.State)
+	newFlagFile := flagSourceFile(vid.State)
+
+	// if nothing was returned, we don't have an image to use
+	if newFlagFile == "" {
+		err := fmt.Errorf("no matching image found")
+		terrors.Log(err, "error creating new flag image")
+	}
 
 	// copy the image to the live location
 	err := os.Symlink(newFlagFile, background.FlagImageFile)
@@ -51,6 +63,10 @@ func updateFlagFile() {
 func flagSourceFile(state string) string {
 	// convert it to an abbreviation
 	abbrev := helpers.StateToStateAbbrev(state)
+	// return nothing if nothing was found
+	if abbrev == "" {
+		return ""
+	}
 	// make it lowercase
 	abbrev = strings.ToLower(abbrev)
 	fileName := fmt.Sprintf("%s.png", abbrev)
