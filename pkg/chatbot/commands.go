@@ -345,3 +345,26 @@ func restartMusicCmd(user *users.User) {
 		audio.StartGrooveSalad()
 	}
 }
+
+// middleCmd sets the text at the bottom-middle of the stream
+func middleCmd(user *users.User, params []string) {
+	log.Println(user.Username, "ran !middle")
+	// don't let strangers run this
+	if user.Username != strings.ToLower(config.ChannelName) {
+		return
+	}
+
+	// don't do anything if empty
+	if len(params) == 0 {
+		Say("What do you want to say?")
+		return
+	}
+
+	// use the params as the text
+	text := strings.Join(params, " ")
+
+	// just to help debug
+	log.Printf("setting middle text to: %s", text)
+
+	background.MiddleText.Show(text)
+}

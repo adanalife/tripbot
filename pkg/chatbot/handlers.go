@@ -83,6 +83,8 @@ func runCommand(user users.User, message string) {
 		}
 	case "!secretinfo":
 		secretInfoCmd(&user)
+	case "!middle":
+		middleCmd(&user, params)
 		// any of these should trigger the miles command
 	case "!miles", "!newmiles":
 		if user.HasCommandAvailable() {

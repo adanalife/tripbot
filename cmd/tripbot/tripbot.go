@@ -65,6 +65,7 @@ func main() {
 	background.InitLeaderboard()
 	background.InitLeftRotator()
 	background.InitRightRotator()
+	background.InitMiddleText()
 
 	client.Join(config.ChannelName)
 	log.Println("Joined channel", config.ChannelName)

@@ -26,7 +26,7 @@ func InitChat() {
 
 func AddChatLine(username, line string) {
 	ChatLines = append(ChatLines, fmt.Sprintf("[%s] %s", username, line))
-	Chat.Show(chatContent(), chatDuration)
+	Chat.ShowFor(chatContent(), chatDuration)
 }
 
 // chatContent creates the content for the chat
