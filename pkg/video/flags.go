@@ -36,7 +36,7 @@ func updateFlagFile() {
 // flagSourceFile returns the full path to a flag image file
 func flagSourceFile(state string) string {
 	// make it lowercase
-	state = strings.ToLower(state)
-	fileName := fmt.Sprintf("%s.jpg", state)
+	state = helpers.StateToStateAbbrev(state)
+	fileName := fmt.Sprintf("%s.png", state)
 	return path.Join(helpers.ProjectRoot(), "assets/flags/small", fileName)
 }
