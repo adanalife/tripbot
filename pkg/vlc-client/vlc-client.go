@@ -1,6 +1,7 @@
 package vlcClient
 
 import (
+	"fmt"
 	"io/ioutil"
 	"net/http"
 
@@ -30,8 +31,13 @@ func PlayRandom() error {
 	return nil
 }
 
-func Skip() error {
-	_, err := getUrl(vlcServerURL + "/vlc/skip")
+func Skip(n int) error {
+	url := vlcServerURL + "/vlc/skip"
+	if n > 0 {
+		// add a request param
+		url = fmt.Sprintf("%s?n=%d", url, n)
+	}
+	_, err := getUrl(url)
 	if err != nil {
 		terrors.Log(err, "error skipping video")
 		return err

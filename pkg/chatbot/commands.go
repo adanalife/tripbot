@@ -5,9 +5,11 @@ import (
 	"log"
 	"math/rand"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/dmerrick/danalol-stream/pkg/audio"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 
@@ -84,7 +86,9 @@ func timewarpCmd(user *users.User) {
 	lastTimewarpTime = time.Now()
 }
 
-func skipCmd(user *users.User) {
+func skipCmd(user *users.User, params []string) {
+	var err error
+	var n int
 	log.Println(user.Username, "ran !skip")
 
 	// exit early if we're on OS X
@@ -93,8 +97,25 @@ func skipCmd(user *users.User) {
 		return
 	}
 
-	// shuffle to a new video
-	err := vlcClient.Skip()
+	// first we count the given params
+	if len(params) == 0 {
+		// just skip once if no params
+		n = 1
+	} else {
+		// we were given args
+		// try and convert their input to a number
+		n, err = strconv.Atoi(params[0])
+		// if conversion fails or they give too many args
+		if err != nil || len(params) > 1 {
+			Say("Usage: !skip [num]")
+			return
+		}
+	}
+
+	spew.Dump(n)
+
+	// skip to a new video
+	err = vlcClient.Skip(n)
 	if err != nil {
 		terrors.Log(err, "error from VLC client")
 	}
