@@ -36,11 +36,23 @@ func runCommand(user users.User, message string) {
 			Say(followerMsg)
 		}
 	case "!timewarp", "!tw":
-		timewarpCmd(&user)
+		if user.HasCommandAvailable() {
+			timewarpCmd(&user)
+		} else {
+			Say(followerMsg)
+		}
 	case "!skip":
-		skipCmd(&user, params)
+		if user.HasCommandAvailable() {
+			skipCmd(&user, params)
+		} else {
+			Say(followerMsg)
+		}
 	case "!back":
-		backCmd(&user, params)
+		if user.HasCommandAvailable() {
+			backCmd(&user, params)
+		} else {
+			Say(followerMsg)
+		}
 	case "!shutdown":
 		shutdownCmd(&user)
 	case "!restartmusic":
