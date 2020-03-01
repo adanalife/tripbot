@@ -62,13 +62,13 @@ func Back(n int) error {
 func getUrl(url string) (string, error) {
 	response, err := http.Get(url)
 	if err != nil {
-		terrors.Log(err, "error fetching URL")
+		terrors.Log(err, "error connecting to VLC server")
 		return "", err
 	} else {
 		defer response.Body.Close()
 		contents, err := ioutil.ReadAll(response.Body)
 		if err != nil {
-			terrors.Log(err, "error reading reponse body")
+			terrors.Log(err, "error reading reponse from VLC server")
 			return "", err
 		}
 		return string(contents), nil
