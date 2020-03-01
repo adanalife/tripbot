@@ -24,6 +24,8 @@ import (
 	"github.com/hako/durafmt"
 )
 
+// lastTimewarpTime is used to rate-limit users so they cant
+// over-do the time-skip features (including !skip and !back)
 var lastTimewarpTime time.Time
 
 func helpCmd(user *users.User) {
@@ -96,6 +98,14 @@ func skipCmd(user *users.User, params []string) {
 		return
 	}
 
+	// rate-limit the number of times this can run
+	if !helpers.UserIsAdmin(user.Username) {
+		if time.Now().Sub(lastTimewarpTime) < 20*time.Second {
+			Say("Not yet; enjoy the moment!")
+			return
+		}
+	}
+
 	// first we count the given params
 	if len(params) == 0 {
 		// just skip once if no params
@@ -118,6 +128,8 @@ func skipCmd(user *users.User, params []string) {
 	}
 	// update the currently-playing video
 	video.GetCurrentlyPlaying()
+	// update our record of last time it ran
+	lastTimewarpTime = time.Now()
 }
 
 func backCmd(user *users.User, params []string) {
@@ -129,6 +141,14 @@ func backCmd(user *users.User, params []string) {
 	if helpers.RunningOnDarwin() {
 		Say("Sorry, back isn't available right now")
 		return
+	}
+
+	// rate-limit the number of times this can run
+	if !helpers.UserIsAdmin(user.Username) {
+		if time.Now().Sub(lastTimewarpTime) < 20*time.Second {
+			Say("Not yet; enjoy the moment!")
+			return
+		}
 	}
 
 	// first we count the given params
@@ -153,6 +173,8 @@ func backCmd(user *users.User, params []string) {
 	}
 	// update the currently-playing video
 	video.GetCurrentlyPlaying()
+	// update our record of last time it ran
+	lastTimewarpTime = time.Now()
 }
 
 func uptimeCmd(user *users.User) {
