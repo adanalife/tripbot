@@ -7,21 +7,6 @@ import (
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 )
 
-func back(n int) error {
-	index := currentIndex() - n
-	if index < 0 {
-		// if we're negative, we have to find our spot at the back of the list
-		index = len(videoFiles) + index
-	}
-	return playAtIndex(index)
-}
-
-func skip(n int) error {
-	index := currentIndex() + n
-	index = index % len(videoFiles)
-	return playAtIndex(index)
-}
-
 //TODO: should we handle the case where index is outside range?
 // or just explicitly pass in what we get here?
 func playAtIndex(index int) error {
@@ -33,6 +18,24 @@ func playVideoFile(vidStr string) error {
 	// extract just the filename
 	videoFile := filepath.Base(vidStr)
 	index := getIndex(videoFile)
+	return playAtIndex(index)
+}
+
+// skip plays the video n items forward in the playlist,
+func skip(n int) error {
+	index := currentIndex() + n
+	index = index % len(videoFiles)
+	return playAtIndex(index)
+}
+
+// back plays the video n items backward in the playlist,
+func back(n int) error {
+	index := currentIndex() - n
+	index = index % len(videoFiles)
+	if index < 0 {
+		// if we're negative, we have to find our spot at the back of the list
+		index = len(videoFiles) + index
+	}
 	return playAtIndex(index)
 }
 
