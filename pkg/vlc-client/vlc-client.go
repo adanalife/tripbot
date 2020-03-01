@@ -45,6 +45,20 @@ func Skip(n int) error {
 	return nil
 }
 
+func Back(n int) error {
+	url := vlcServerURL + "/vlc/back"
+	if n > 0 {
+		// add a request param
+		url = fmt.Sprintf("%s?n=%d", url, n)
+	}
+	_, err := getUrl(url)
+	if err != nil {
+		terrors.Log(err, "error going back to a video")
+		return err
+	}
+	return nil
+}
+
 func getUrl(url string) (string, error) {
 	response, err := http.Get(url)
 	if err != nil {

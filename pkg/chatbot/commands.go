@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/dmerrick/danalol-stream/pkg/audio"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 
@@ -112,10 +111,43 @@ func skipCmd(user *users.User, params []string) {
 		}
 	}
 
-	spew.Dump(n)
-
 	// skip to a new video
 	err = vlcClient.Skip(n)
+	if err != nil {
+		terrors.Log(err, "error from VLC client")
+	}
+	// update the currently-playing video
+	video.GetCurrentlyPlaying()
+}
+
+func backCmd(user *users.User, params []string) {
+	var err error
+	var n int
+	log.Println(user.Username, "ran !back")
+
+	// exit early if we're on OS X
+	if helpers.RunningOnDarwin() {
+		Say("Sorry, back isn't available right now")
+		return
+	}
+
+	// first we count the given params
+	if len(params) == 0 {
+		// just back once if no params
+		n = 1
+	} else {
+		// we were given args
+		// try and convert their input to a number
+		n, err = strconv.Atoi(params[0])
+		// if conversion fails or they give too many args
+		if err != nil || len(params) > 1 {
+			Say("Usage: !back [num]")
+			return
+		}
+	}
+
+	// back to an old video
+	err = vlcClient.Back(n)
 	if err != nil {
 		terrors.Log(err, "error from VLC client")
 	}
