@@ -134,10 +134,7 @@ func jumpCmd(user *users.User, params []string) {
 		Say("Usage: !jump [state]")
 		return
 	}
-	// only say this if the caller is not me
-	if !helpers.UserIsAdmin(user.Username) {
-		Say(fmt.Sprintf("Jumping to %s...!", titlecaseState))
-	}
+	Say(fmt.Sprintf("Jumping to %s...!", titlecaseState))
 	// update the currently-playing video
 	video.GetCurrentlyPlaying()
 	// update our record of last time it ran
