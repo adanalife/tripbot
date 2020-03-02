@@ -203,8 +203,8 @@ func FindRandomByState(state string) (Video, error) {
 			return newVid, fmt.Errorf("unable to parse state abbrev")
 		}
 	}
-	// title-case the state
-	state = strings.Title(strings.ToLower(state))
+	// title-case the state (it's stored in the DB like that)
+	state = helpers.TitlecaseState(state)
 
 	// try to find the slug in the DB
 	videos := []Video{}
@@ -218,7 +218,7 @@ func FindRandomByState(state string) (Video, error) {
 
 	// did we find anything in the DB?
 	if len(videos) == 0 {
-		return newVid, fmt.Errorf("no matches found")
+		return newVid, &terrors.NoFootageForStateError{Msg: "no matches found"}
 	}
 	return videos[0], nil
 }

@@ -114,6 +114,14 @@ func jumpCmd(user *users.User, params []string) {
 	// skip to a video from the given state
 	state := strings.Join(params, " ")
 	randomVid, err := video.FindRandomByState(state)
+	// check to see if we even have footage for this state
+	if _, ok := err.(*terrors.NoFootageForStateError); ok {
+		state = helpers.TitlecaseState(state)
+		msg := fmt.Sprintf("No footage for %s... yet! ;) !prime", state)
+		Say(msg)
+		return
+	}
+	// check to see if there was an error finding a candidate video
 	if err != nil {
 		terrors.Log(err, "error from finding random video for state")
 		Say("Usage: !jump [state]")

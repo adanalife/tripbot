@@ -20,6 +20,14 @@ func StateToStateAbbrev(state string) string {
 	return val
 }
 
+//TODO: this doesnt handle the case where the state is invalid
+func TitlecaseState(state string) string {
+	if len(state) == 2 {
+		state = StateAbbrevToState(state)
+	}
+	return strings.Title(strings.ToLower(state))
+}
+
 // A handy map of US state codes to full names
 var stateAbbrevs = map[string]string{
 	"AL": "Alabama",
