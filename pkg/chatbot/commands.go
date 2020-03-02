@@ -105,7 +105,8 @@ func jumpCmd(user *users.User, params []string) {
 		}
 	}
 
-	if len(params) == 0 {
+	// exit if the user gave no args or too many
+	if len(params) == 0 || len(params) > 2 {
 		Say("Usage: !jump [state]")
 		return
 	}
