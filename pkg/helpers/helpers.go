@@ -135,6 +135,14 @@ func SplitOnRegex(text string, delimeter string) []string {
 	return result
 }
 
+func RemoveNonLetters(input string) string {
+	reg, err := regexp.Compile("[^a-zA-Z]+")
+	if err != nil {
+		terrors.Log(err, "error compiling regex")
+	}
+	return reg.ReplaceAllString(input, "")
+}
+
 // FileExists simply returns true if a file exists
 func FileExists(path string) bool {
 	_, err := os.Stat(path)

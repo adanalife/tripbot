@@ -113,6 +113,8 @@ func jumpCmd(user *users.User, params []string) {
 
 	// skip to a video from the given state
 	state := strings.Join(params, " ")
+	// sanitize the input
+	state = helpers.RemoveNonLetters(state)
 	titlecaseState := helpers.TitlecaseState(state)
 	randomVid, err := video.FindRandomByState(state)
 	// check to see if we even have footage for this state
