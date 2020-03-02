@@ -136,10 +136,10 @@ func connectToTwitch() {
 	// actually connect to Twitch
 	// wrapped in a loop in case twitch goes down
 	for {
-		log.Println("Connecting to Twitch")
+		log.Println(aurora.Magenta("Initializing connection to Twitch"))
 		err := client.Connect()
 		if err != nil {
-			log.Println(err)
+			terrors.Log(err, "unable to connect to twitch")
 			time.Sleep(time.Minute)
 		}
 	}
@@ -156,7 +156,7 @@ func gracefulShutdown() {
 	log.Println(aurora.Red("caught CTRL-C"))
 	// anything below this probably wont be executed
 	// try and use !shutdown instead
-	log.Printf("last played: %s", video.CurrentlyPlaying)
+	log.Printf("Last played video: %s", aurora.Yellow(video.CurrentlyPlaying.File()))
 	users.Shutdown()
 	err := database.DBCon.Close()
 	if err != nil {

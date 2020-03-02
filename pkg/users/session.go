@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
+	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/events"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	"github.com/hako/durafmt"
@@ -146,8 +147,10 @@ func isLoggedIn(username string) bool {
 
 // ShutDown loops through all of the logged-in users and logs them out
 func Shutdown() {
-	log.Println("these were the logged-in users")
-	spew.Dump(LoggedIn)
+	if config.Verbose {
+		log.Println("these were the logged-in users")
+		spew.Dump(LoggedIn)
+	}
 	for _, user := range LoggedIn {
 		user.logout()
 	}

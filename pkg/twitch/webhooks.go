@@ -54,7 +54,9 @@ func getWebookSubscriptions() {
 	}
 
 	if resp.Data.Total > 0 {
-		spew.Dump(resp.Data.WebhookSubscriptions)
+		if config.Verbose {
+			spew.Dump(resp.Data.WebhookSubscriptions)
+		}
 	} else {
 		log.Println("no webhooks found")
 	}
