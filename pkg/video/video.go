@@ -40,8 +40,6 @@ func GetCurrentlyPlaying() {
 
 	// if the currently-playing video has changed
 	if curVid != preVid {
-		log.Printf("now playing %s", aurora.Yellow(curVid))
-
 		// reset the stopwatch
 		timeStarted = time.Now()
 
@@ -51,8 +49,14 @@ func GetCurrentlyPlaying() {
 			terrors.Log(err, fmt.Sprintf("unable to create Video from %s", curVid))
 		}
 
+		log.Printf("now playing %s - %s",
+			aurora.Yellow(CurrentlyPlaying.File()),
+			aurora.Green(helpers.StateToStateAbbrev(CurrentlyPlaying.State)),
+		)
+
 		// show the no-GPS image
 		if CurrentlyPlaying.Flagged {
+			//TODO: kinda cludgy that we hardcode 60s here
 			background.GPSImage.ShowFor("", 60*time.Second)
 		} else {
 			background.GPSImage.Hide()
