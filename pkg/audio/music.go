@@ -50,7 +50,8 @@ func connect() {
 func mpdState() string {
 	status, err := mpdConn.Status()
 	if err != nil {
-		terrors.Log(err, "Error getting MPD status")
+		// disabled because it was constantly EOF-ing
+		// terrors.Log(err, "Error getting MPD status")
 		return "error"
 	}
 	return status["state"]
