@@ -32,8 +32,8 @@ func TopUsers(size int) [][]string {
 // ForUser returns the miles for a given user
 func ForUser(user string) float32 {
 	evnts := []events.Event{}
-	query := fmt.Sprintf("SELECT username, event, date_created from events where username = '%s' AND event in ('login', 'logout')", user)
-	err := database.DBCon.Select(&evnts, query)
+	query := `SELECT username, event, date_created from events where username = $1 AND event in ('login', 'logout')`
+	err := database.DBCon.Select(&evnts, query, user)
 	if err != nil {
 		terrors.Log(err, "error fetching events from db")
 	}

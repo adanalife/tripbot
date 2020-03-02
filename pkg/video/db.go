@@ -33,8 +33,8 @@ func load(slug string) (Video, error) {
 	var newVid Video
 	// try to find the slug in the DB
 	videos := []Video{}
-	query := fmt.Sprintf("SELECT * FROM videos WHERE slug='%s'", slug)
-	err := database.DBCon.Select(&videos, query)
+	query := `SELECT * FROM videos WHERE slug=$1`
+	err := database.DBCon.Select(&videos, query, slug)
 	if err != nil {
 		terrors.Log(err, "error fetching vid from DB")
 		return newVid, err
@@ -53,8 +53,8 @@ func loadById(id int64) (Video, error) {
 	var newVid Video
 	// try to find the slug in the DB
 	videos := []Video{}
-	query := fmt.Sprintf("SELECT * FROM videos WHERE id='%d'", id)
-	err := database.DBCon.Select(&videos, query)
+	query := `SELECT * FROM videos WHERE id=$1`
+	err := database.DBCon.Select(&videos, query, id)
 	if err != nil {
 		terrors.Log(err, "error fetching vid from DB")
 		return newVid, err
@@ -209,9 +209,8 @@ func FindRandomByState(state string) (Video, error) {
 	// try to find the slug in the DB
 	videos := []Video{}
 	//TODO: ORDER BY random() will eventually get too slow
-	query := fmt.Sprintf("SELECT * FROM videos WHERE state='%s' ORDER BY random() LIMIT 1", state)
-	//TODO: use safer query syntax
-	err := database.DBCon.Select(&videos, query)
+	query := `SELECT * FROM videos WHERE state=$1 ORDER BY random() LIMIT 1`
+	err := database.DBCon.Select(&videos, query, state)
 	if err != nil {
 		terrors.Log(err, "error fetching vid from DB")
 		return newVid, err

@@ -1,7 +1,6 @@
 package users
 
 import (
-	"fmt"
 	"log"
 	"time"
 
@@ -103,8 +102,8 @@ func FindOrCreate(username string) User {
 // Find will look up the username in the DB, and return a User if possible
 func Find(username string) User {
 	var user User
-	query := fmt.Sprintf("SELECT * FROM users WHERE username='%s'", username)
-	err := database.DBCon.Get(&user, query)
+	query := `SELECT * FROM users WHERE username=$1`
+	err := database.DBCon.Get(&user, query, username)
 	// spew.Config.ContinueOnMethod = true
 	// spew.Config.MaxDepth = 2
 	// spew.Dump(user)

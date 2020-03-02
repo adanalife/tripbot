@@ -19,8 +19,8 @@ var maxLeaderboardSize = 50
 // Leaderboard creates a leaderboard
 func InitLeaderboard() {
 	users := []User{}
-	query := fmt.Sprintf("SELECT * FROM users WHERE miles != 0 AND is_bot = false AND username!='%s' ORDER BY miles DESC LIMIT %d", strings.ToLower(config.ChannelName), initLeaderboardSize)
-	database.DBCon.Select(&users, query)
+	query := `SELECT * FROM users WHERE miles != 0 AND is_bot = false AND username!=$1 ORDER BY miles DESC LIMIT $2`
+	database.DBCon.Select(&users, query, strings.ToLower(config.ChannelName), initLeaderboardSize)
 	for _, user := range users {
 		miles := fmt.Sprintf("%.1f", user.Miles)
 		pair := []string{user.Username, miles}
