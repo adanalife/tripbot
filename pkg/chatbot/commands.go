@@ -113,11 +113,11 @@ func jumpCmd(user *users.User, params []string) {
 
 	// skip to a video from the given state
 	state := strings.Join(params, " ")
+	titlecaseState := helpers.TitlecaseState(state)
 	randomVid, err := video.FindRandomByState(state)
 	// check to see if we even have footage for this state
 	if _, ok := err.(*terrors.NoFootageForStateError); ok {
-		state = helpers.TitlecaseState(state)
-		msg := fmt.Sprintf("No footage for %s... yet! ;) !prime", state)
+		msg := fmt.Sprintf("No footage for %s... yet! ;) !prime", titlecaseState)
 		Say(msg)
 		return
 	}
@@ -133,6 +133,10 @@ func jumpCmd(user *users.User, params []string) {
 		terrors.Log(err, "error from VLC client")
 		Say("Usage: !jump [state]")
 		return
+	}
+	// only say this if the caller is not me
+	if !helpers.UserIsAdmin(user.Username) {
+		Say(fmt.Sprintf("Jumping to %s...!", titlecaseState))
 	}
 	// update the currently-playing video
 	video.GetCurrentlyPlaying()
