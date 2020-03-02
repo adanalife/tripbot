@@ -87,6 +87,50 @@ func timewarpCmd(user *users.User) {
 	lastTimewarpTime = time.Now()
 }
 
+func jumpCmd(user *users.User, params []string) {
+	var err error
+	log.Println(user.Username, "ran !jump")
+
+	// exit early if we're on OS X
+	if helpers.RunningOnDarwin() {
+		Say("Sorry, jump isn't available right now")
+		return
+	}
+
+	// rate-limit the number of times this can run
+	if !helpers.UserIsAdmin(user.Username) {
+		if time.Now().Sub(lastTimewarpTime) < 20*time.Second {
+			Say("Not yet; enjoy the moment!")
+			return
+		}
+	}
+
+	if len(params) == 0 {
+		Say("Usage: !jump [state]")
+		return
+	}
+
+	// skip to a video from the given state
+	state := strings.Join(params, " ")
+	randomVid, err := video.FindRandomByState(state)
+	if err != nil {
+		terrors.Log(err, "error from finding random video for state")
+		Say("Usage: !jump [state]")
+		return
+	}
+	// tell VLC to play it
+	err = vlcClient.PlayFileInPlaylist(randomVid.File())
+	if err != nil {
+		terrors.Log(err, "error from VLC client")
+		Say("Usage: !jump [state]")
+		return
+	}
+	// update the currently-playing video
+	video.GetCurrentlyPlaying()
+	// update our record of last time it ran
+	lastTimewarpTime = time.Now()
+}
+
 func skipCmd(user *users.User, params []string) {
 	var err error
 	var n int

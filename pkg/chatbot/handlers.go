@@ -41,6 +41,12 @@ func runCommand(user users.User, message string) {
 		} else {
 			Say(followerMsg)
 		}
+	case "!goto", "!jump":
+		if user.HasCommandAvailable() {
+			jumpCmd(&user, params)
+		} else {
+			Say(followerMsg)
+		}
 	case "!skip":
 		if user.HasCommandAvailable() {
 			skipCmd(&user, params)

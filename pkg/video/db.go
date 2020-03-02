@@ -192,3 +192,34 @@ func validate(dashStr string) error {
 	}
 	return nil
 }
+
+func FindRandomByState(state string) (Video, error) {
+	var newVid Video
+
+	// convert to long form
+	if len(state) == 2 {
+		state = helpers.StateAbbrevToState(state)
+		if state == "" {
+			return newVid, fmt.Errorf("unable to parse state abbrev")
+		}
+	}
+	// title-case the state
+	state = strings.Title(strings.ToLower(state))
+
+	// try to find the slug in the DB
+	videos := []Video{}
+	//TODO: ORDER BY random() will eventually get too slow
+	query := fmt.Sprintf("SELECT * FROM videos WHERE state='%s' ORDER BY random() LIMIT 1", state)
+	//TODO: use safer query syntax
+	err := database.DBCon.Select(&videos, query)
+	if err != nil {
+		terrors.Log(err, "error fetching vid from DB")
+		return newVid, err
+	}
+
+	// did we find anything in the DB?
+	if len(videos) == 0 {
+		return newVid, fmt.Errorf("no matches found")
+	}
+	return videos[0], nil
+}

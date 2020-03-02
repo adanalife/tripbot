@@ -31,6 +31,18 @@ func PlayRandom() error {
 	return nil
 }
 
+// PlayFileInPlaylist plays a given file
+func PlayFileInPlaylist(filename string) error {
+	url := vlcServerURL + "/vlc/play"
+	url = fmt.Sprintf("%s?video=%s", url, filename)
+	_, err := getUrl(url)
+	if err != nil {
+		terrors.Log(err, "error playing file")
+		return err
+	}
+	return nil
+}
+
 func Skip(n int) error {
 	url := vlcServerURL + "/vlc/skip"
 	if n > 0 {

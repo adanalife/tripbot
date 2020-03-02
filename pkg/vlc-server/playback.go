@@ -14,6 +14,7 @@ func playAtIndex(index int) error {
 	return playlist.PlayAtIndex(uint(index))
 }
 
+// playVideoFile plays a video file in the playlist
 func playVideoFile(vidStr string) error {
 	// extract just the filename
 	videoFile := filepath.Base(vidStr)
