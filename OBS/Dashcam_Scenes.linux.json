@@ -523,6 +523,38 @@
             "enabled": true,
             "flags": 0,
             "hotkeys": {},
+            "id": "text_ft2_source",
+            "mixers": 0,
+            "monitoring_type": 0,
+            "muted": false,
+            "name": "Broken video warning",
+            "prev_ver": 402653190,
+            "private_settings": {},
+            "push-to-mute": false,
+            "push-to-mute-delay": 0,
+            "push-to-talk": false,
+            "push-to-talk-delay": 0,
+            "settings": {
+                "drop_shadow": true,
+                "font": {
+                    "face": "Sans Serif",
+                    "flags": 0,
+                    "size": 32,
+                    "style": ""
+                },
+                "outline": false,
+                "text": "If you can see this, the stream is broken in some way.\n\nPlease use !report ASAP and Dana will come fix it!"
+            },
+            "sync": 0,
+            "volume": 1.0
+        },
+        {
+            "balance": 0.5,
+            "deinterlace_field_order": 0,
+            "deinterlace_mode": 0,
+            "enabled": true,
+            "flags": 0,
+            "hotkeys": {},
             "id": "image_source",
             "mixers": 0,
             "monitoring_type": 0,
@@ -1141,6 +1173,7 @@
                 "libobs.hide_scene_item.Audio Input Capture (PulseAudio)": [],
                 "libobs.hide_scene_item.Audio Output Capture (PulseAudio)": [],
                 "libobs.hide_scene_item.Background Slideshow": [],
+                "libobs.hide_scene_item.Broken video warning": [],
                 "libobs.hide_scene_item.Flag Onscreen - Right Middle": [],
                 "libobs.hide_scene_item.LEFT CORNER": [],
                 "libobs.hide_scene_item.MIDDLE": [],
@@ -1156,6 +1189,7 @@
                 "libobs.show_scene_item.Audio Input Capture (PulseAudio)": [],
                 "libobs.show_scene_item.Audio Output Capture (PulseAudio)": [],
                 "libobs.show_scene_item.Background Slideshow": [],
+                "libobs.show_scene_item.Broken video warning": [],
                 "libobs.show_scene_item.Flag Onscreen - Right Middle": [],
                 "libobs.show_scene_item.LEFT CORNER": [],
                 "libobs.show_scene_item.MIDDLE": [],
@@ -1182,7 +1216,7 @@
             "push-to-talk-delay": 0,
             "settings": {
                 "custom_size": false,
-                "id_counter": 61,
+                "id_counter": 62,
                 "items": [
                     {
                         "align": 5,
@@ -1209,6 +1243,35 @@
                         "scale": {
                             "x": 1.0,
                             "y": 1.0
+                        },
+                        "scale_filter": "disable",
+                        "visible": true
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 0,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": false,
+                        "id": 62,
+                        "locked": false,
+                        "name": "Broken video warning",
+                        "pos": {
+                            "x": 465.0,
+                            "y": 877.0
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 1.1913043260574341,
+                            "y": 1.1891891956329346
                         },
                         "scale_filter": "disable",
                         "visible": true
