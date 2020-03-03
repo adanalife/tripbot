@@ -19,6 +19,8 @@ OBS/flag.png
 
 # ignore SSL certs
 infra/certs
+# ignore google credentials
+infra/google
 
 # env files shouldn't get checked in
 # because they have secrets
