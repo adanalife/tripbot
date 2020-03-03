@@ -15,7 +15,7 @@ var vlcServerURL = config.VlcServerHost + ":" + config.VlcServerPort
 func CurrentlyPlaying() string {
 	response, err := getUrl(vlcServerURL + "/vlc/current")
 	if err != nil {
-		terrors.Log(err, "error getting current video")
+		terrors.Log(err, "unable to determine current video")
 		return ""
 	}
 	return response
