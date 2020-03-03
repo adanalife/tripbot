@@ -101,6 +101,8 @@ func jumpCmd(user *users.User, params []string) {
 		Say("Usage: !jump [state]")
 		return
 	}
+	// show the flag for the state
+	video.ShowFlag()
 	Say(fmt.Sprintf("Jumping to %s...!", titlecaseState))
 	// update the currently-playing video
 	video.GetCurrentlyPlaying()
