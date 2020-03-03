@@ -1850,14 +1850,14 @@
                         "locked": true,
                         "name": "Flag Onscreen - Right Middle",
                         "pos": {
-                            "x": 1769.0,
-                            "y": 747.0
+                            "x": 1580.0,
+                            "y": 36.0
                         },
                         "private_settings": {},
                         "rot": 0.0,
                         "scale": {
-                            "x": 0.23818181455135345,
-                            "y": 0.23896104097366333
+                            "x": 0.56545454263687134,
+                            "y": 0.56675750017166138
                         },
                         "scale_filter": "disable",
                         "visible": true
