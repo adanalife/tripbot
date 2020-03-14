@@ -18,12 +18,19 @@ var videoFiles []string
 
 //TODO: figure out if vdpau_avcodec can be better than none
 //TODO: there are a ton of potentially-useful avcodec flags
+//TODO: break some of these into ENV vars
 var vlcCmdFlags = []string{
-	"--quiet",                   // reduce output
+	// "-vv",     // be very verbose
+	"--quiet",                   // reduce terminal output
+	"--ignore-config",           // ignore any config files that might get loaded
 	"--no-audio",                // none of the videos have audio
 	"--network-caching", "6666", // network cache (in ms)
-	"--file-caching", "6666", // file cache (in ms)
-	"--avcodec-hw", "none", // disable hardware decoding
+	"--file-caching", "11111", // file cache (in ms)
+	// can be none, vdpau_avcodec, or cuda
+	"--avcodec-hw", "vdpau_avcodec", // enable hardware decoding
+	"--avcodec-threads", "1",
+	"--file-logging",                                      // enable file logging
+	"--logfile", "log/vlc." + config.Environment + ".log", // specify location of log
 }
 
 // Init creates a VLC player and sets up a playlist
