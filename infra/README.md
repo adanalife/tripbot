@@ -46,6 +46,7 @@ sudo ubuntu-drivers devices
 # i used non-free cause the version was highest
 
 
+# OUTDATED
 # install ffmpeg/obs with the script
 git clone https://github.com/lutris/ffmpeg-nvenc.git
 # you know ffmpeg works if this has results:
