@@ -5,6 +5,9 @@ jobs:
     name: runner / golangci-lint
     runs-on: ubuntu-latest
     steps:
+      - name: Install Linux packages
+        if: matrix.platform == 'ubuntu-latest'
+        run: sudo apt update && sudo apt install -y --no-install-recommends tesseract-ocr libtesseract-dev libvlc-dev
       - name: Check out code into the Go module directory
         uses: actions/checkout@v1
       - name: golangci-lint
