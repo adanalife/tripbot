@@ -9,9 +9,9 @@ services:
       dockerfile: cmd/tripbot/Dockerfile
     depends_on:
       - db
-      - mpd
+      # - mpd
     ports:
-      - "8080:8080"
+      - "8080"
     volumes:
       - .env.development:/go/src/github.com/dmerrick/danalol-stream/.env.development
       - /Volumes/usbshare1/Dashcam:/data/Dashcam
@@ -24,23 +24,24 @@ services:
     image: postgres
     restart: always
     ports:
-      - "5432:5432"
+      - "5432"
     environment:
       POSTGRES_PASSWORD: example
       POSTGRES_USER: example
       POSTGRES_DB: tripbot_dev
 
-  mpd:
-    image: vimagick/mpd
-    ports:
-      - "6600:6600"
-      # - "8800:8800"
-    # volumes:
-    #   - ./mpd.conf:/etc/mpd.conf
-    #   - ./music:/var/lib/mpd/music
-    #   - ./playlists:/var/lib/mpd/playlists
-    # devices:
-    #   - /dev/snd
-    # depends_on:
-    #   - icecast
-    restart: unless-stopped
+  #TODO: get this working
+  # mpd:
+  #   image: vimagick/mpd
+  #   ports:
+  #     - "6600:6600"
+  #     # - "8800:8800"
+  #   # volumes:
+  #   #   - ./mpd.conf:/etc/mpd.conf
+  #   #   - ./music:/var/lib/mpd/music
+  #   #   - ./playlists:/var/lib/mpd/playlists
+  #   # devices:
+  #   #   - /dev/snd
+  #   # depends_on:
+  #   #   - icecast
+  #   restart: unless-stopped
