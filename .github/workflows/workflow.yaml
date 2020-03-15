@@ -33,5 +33,5 @@ jobs:
         current-version: 'v1.0.0'
         version-fragment: 'bug'
     #TODO: tag the release with this on merge?
-	- name: Print latest version
-	  run: echo ${{ steps.bump_version.outputs.next-version }}
+    - name: Print latest version
+      run: echo ${{ steps.bump_version.outputs.next-version }}
