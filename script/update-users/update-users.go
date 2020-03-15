@@ -53,7 +53,7 @@ func main() {
 		if user.Miles == 0 {
 			last := lastEvent(username)
 			user.LastSeen = last
-			user.SetLastSeen()
+			user.Save()
 		}
 
 		// first := firstEvent(username)
