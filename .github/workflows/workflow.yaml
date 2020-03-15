@@ -1,11 +1,13 @@
 on: [push, pull_request]
 name: Test
+env:
+  ENV: test
 jobs:
   test:
     strategy:
       matrix:
         go-version: [1.14.x]
-        platform: [ubuntu-latest, macos-latest]
+        platform: [ubuntu-latest]
     runs-on: ${{ matrix.platform }}
     steps:
     - name: Install Go
@@ -14,5 +16,8 @@ jobs:
         go-version: ${{ matrix.go-version }}
     - name: Checkout code
       uses: actions/checkout@v2
+    - name: Install Linux packages
+      if: matrix.platform == 'ubuntu-latest'
+      run: sudo apt update && sudo apt install -y --no-install-recommends tesseract-ocr libtesseract-dev
     - name: Test
       run: go test ./...
