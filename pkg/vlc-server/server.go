@@ -82,6 +82,10 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			}
 			fmt.Fprintf(w, "OK")
 
+			// return a favicon if anyone asks for one
+		} else if r.URL.Path == "/favicon.ico" {
+			http.ServeFile(w, r, "assets/favicon.ico")
+
 			// some other URL was used
 		} else {
 			http.Error(w, "404 not found", http.StatusNotFound)
@@ -97,7 +101,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 
 // Start starts the web server
 func Start() {
-	log.Println("Starting VLC web server")
+	log.Println("Starting VLC web server on port", config.VlcServerPort)
 	http.HandleFunc("/", handle)
 	port := fmt.Sprintf(":%s", config.VlcServerPort)
 	//TODO: replace certs with autocert: https://stackoverflow.com/a/40494806

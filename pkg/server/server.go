@@ -78,9 +78,10 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "Success!")
 			return
 
-			// return a favicon
+			// return a favicon if anyone asks for one
 		} else if r.URL.Path == "/favicon.ico" {
 			http.ServeFile(w, r, "assets/favicon.ico")
+
 			// some other URL was used
 		} else {
 			http.Error(w, "404 not found", http.StatusNotFound)
