@@ -3,10 +3,14 @@ version: '3'
 services:
   tripbot:
     environment:
-      ENV: staging
-    # env_file: ./.env.staging
+      ENV: development
     build:
       context: .
       dockerfile: cmd/tripbot/Dockerfile
     ports:
       - "8080:8080"
+    volumes:
+      - .env.development:/go/src/github.com/dmerrick/danalol-stream/.env.development
+      - /Volumes/usbshare1/Dashcam:/data/Dashcam
+      - /Volumes/usbshare1/cropped-corners:/data/cropped-corners
+      - /Volumes/usbshare1/maps:/data/maps
