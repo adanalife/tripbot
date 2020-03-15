@@ -10,28 +10,29 @@ jobs:
         platform: [ubuntu-latest]
     runs-on: ${{ matrix.platform }}
     steps:
-    - name: Install Go
+    - name: Install Golang
       uses: actions/setup-go@v1
       with:
         go-version: ${{ matrix.go-version }}
-    - name: Checkout code
+    - name: Checkout Source Code
       uses: actions/checkout@v2
-    - uses: actions/cache@v1
+    - name: Restore Cache
+      uses: actions/cache@v1
       with:
         path: ~/go/pkg/mod
         key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
         restore-keys: |
           ${{ runner.os }}-go-
-    - name: Install Linux packages
+    - name: Install Dependencies (linux)
       if: matrix.platform == 'ubuntu-latest'
       run: sudo apt update && sudo apt install -y --no-install-recommends tesseract-ocr libtesseract-dev libvlc-dev
-    - name: Test
+    - name: Run Go Tests
       run: go test ./...
     - name: Increment Semantic Version
       uses: christian-draeger/increment-semantic-version@1.0.1
       with:
-        current-version: 'v1.0.0'
+        current-version: '1.0.0'
         version-fragment: 'bug'
     #TODO: tag the release with this on merge?
-    - name: Print latest version
+    - name: Print Next Version
       run: echo ${{ steps.bump_version.outputs.next-version }}
