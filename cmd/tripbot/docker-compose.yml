@@ -1,4 +1,4 @@
-version: '3'
+version: '3.7'
 
 services:
   tripbot:
@@ -7,6 +7,9 @@ services:
     build:
       context: .
       dockerfile: cmd/tripbot/Dockerfile
+    depends_on:
+      - db
+      - mpd
     ports:
       - "8080:8080"
     volumes:
@@ -14,3 +17,30 @@ services:
       - /Volumes/usbshare1/Dashcam:/data/Dashcam
       - /Volumes/usbshare1/cropped-corners:/data/cropped-corners
       - /Volumes/usbshare1/maps:/data/maps
+
+  #TODO: change credentials
+  #TODO: share data volume
+  db:
+    image: postgres
+    restart: always
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_PASSWORD: example
+      POSTGRES_USER: example
+      POSTGRES_DB: tripbot_dev
+
+  mpd:
+    image: vimagick/mpd
+    ports:
+      - "6600:6600"
+      # - "8800:8800"
+    # volumes:
+    #   - ./mpd.conf:/etc/mpd.conf
+    #   - ./music:/var/lib/mpd/music
+    #   - ./playlists:/var/lib/mpd/playlists
+    # devices:
+    #   - /dev/snd
+    # depends_on:
+    #   - icecast
+    restart: unless-stopped
