@@ -1,0 +1,12 @@
+version: '3'
+
+services:
+  tripbot:
+    environment:
+      ENV: staging
+    # env_file: ./.env.staging
+    build:
+      context: .
+      dockerfile: cmd/tripbot/Dockerfile
+    ports:
+      - "8080:8080"
