@@ -156,6 +156,7 @@ func gracefulShutdown() {
 	log.Println(aurora.Red("caught CTRL-C"))
 	// anything below this probably wont be executed
 	// try and use !shutdown instead
+	//TODO: print different message if CurrentlyPlaying is ""
 	log.Printf("Last played video: %s", aurora.Yellow(video.CurrentlyPlaying.File()))
 	users.Shutdown()
 	err := database.DBCon.Close()

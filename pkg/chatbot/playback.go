@@ -84,7 +84,7 @@ func jumpCmd(user *users.User, params []string) {
 	randomVid, err := video.FindRandomByState(state)
 	// check to see if we even have footage for this state
 	if _, ok := err.(*terrors.NoFootageForStateError); ok {
-		msg := fmt.Sprintf("No footage for %s... yet! ;) !prime", titlecaseState)
+		msg := fmt.Sprintf("No footage for %s... yet! ;)", titlecaseState)
 		Say(msg)
 		return
 	}
