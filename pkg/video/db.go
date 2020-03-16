@@ -33,8 +33,8 @@ func load(slug string) (Video, error) {
 	var newVid Video
 	// try to find the slug in the DB
 	videos := []Video{}
-	query := fmt.Sprintf("SELECT * FROM videos WHERE slug='%s'", slug)
-	err := database.DBCon.Select(&videos, query)
+	query := `SELECT * FROM videos WHERE slug=$1`
+	err := database.DBCon.Select(&videos, query, slug)
 	if err != nil {
 		terrors.Log(err, "error fetching vid from DB")
 		return newVid, err
@@ -53,8 +53,8 @@ func loadById(id int64) (Video, error) {
 	var newVid Video
 	// try to find the slug in the DB
 	videos := []Video{}
-	query := fmt.Sprintf("SELECT * FROM videos WHERE id='%d'", id)
-	err := database.DBCon.Select(&videos, query)
+	query := `SELECT * FROM videos WHERE id=$1`
+	err := database.DBCon.Select(&videos, query, id)
 	if err != nil {
 		terrors.Log(err, "error fetching vid from DB")
 		return newVid, err
@@ -191,4 +191,34 @@ func validate(dashStr string) error {
 		return errors.New("dash string did not match regex")
 	}
 	return nil
+}
+
+func FindRandomByState(state string) (Video, error) {
+	var newVid Video
+
+	// convert to long form
+	if len(state) == 2 {
+		state = helpers.StateAbbrevToState(state)
+		if state == "" {
+			return newVid, fmt.Errorf("unable to parse state abbrev")
+		}
+	}
+	// title-case the state (it's stored in the DB like that)
+	state = helpers.TitlecaseState(state)
+
+	// try to find the slug in the DB
+	videos := []Video{}
+	//TODO: ORDER BY random() will eventually get too slow
+	query := `SELECT * FROM videos WHERE state=$1 ORDER BY random() LIMIT 1`
+	err := database.DBCon.Select(&videos, query, state)
+	if err != nil {
+		terrors.Log(err, "error fetching vid from DB")
+		return newVid, err
+	}
+
+	// did we find anything in the DB?
+	if len(videos) == 0 {
+		return newVid, &terrors.NoFootageForStateError{Msg: "no matches found"}
+	}
+	return videos[0], nil
 }

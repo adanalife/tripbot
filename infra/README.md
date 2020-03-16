@@ -7,11 +7,11 @@ ssh-keygen -t ecdsa -b 521
 
 git clone git@github.com:dmerrick/git-prompt.git
 git clone git@github.com:dmerrick/configs.git
-./setup.sh
+#./setup.sh
+stow bash tmux vim # ...
 
 # install rvm
 # install tmuxinator to global gemset
-
 
 apt install xsel # pbcopy/pbpaste
 # install firefox
@@ -46,6 +46,7 @@ sudo ubuntu-drivers devices
 # i used non-free cause the version was highest
 
 
+# OUTDATED
 # install ffmpeg/obs with the script
 git clone https://github.com/lutris/ffmpeg-nvenc.git
 # you know ffmpeg works if this has results:

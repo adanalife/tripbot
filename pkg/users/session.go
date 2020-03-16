@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
+	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/events"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	"github.com/hako/durafmt"
@@ -146,8 +147,10 @@ func isLoggedIn(username string) bool {
 
 // ShutDown loops through all of the logged-in users and logs them out
 func Shutdown() {
-	log.Println("these were the logged-in users")
-	spew.Dump(LoggedIn)
+	if config.Verbose {
+		log.Println("these were the logged-in users")
+		spew.Dump(LoggedIn)
+	}
 	for _, user := range LoggedIn {
 		user.logout()
 	}
@@ -161,33 +164,72 @@ func GiveEveryoneMiles(gift float32) {
 	}
 }
 
-// PrintCurrentSession simply prints info about the current session
-func PrintCurrentSession() {
-	bots := 0
-
-	// create a list of only usernames, and sort it
+// sortedUsernameList creates a list of only usernames, and sort it
+func sortedUsernameList() []string {
 	usernames := make([]string, 0, len(LoggedIn))
 	for username, _ := range LoggedIn {
 		usernames = append(usernames, username)
 	}
 	sort.Sort(sort.StringSlice(usernames))
+	return usernames
+}
 
-	// now loop over the sorted names and colorize them
+// colorizeUsernames loops over the sorted names and colorizes them
+func colorizeUsernames(usernames []string) []string {
 	coloredUsernames := make([]string, 0, len(usernames))
 	for _, username := range usernames {
 		user := *LoggedIn[username]
 		if user.IsBot {
-			bots = bots + 1
 			// don't add them to the output
 			continue
 		}
 		// add the colored username to the list
 		coloredUsernames = append(coloredUsernames, user.String())
 	}
+	return coloredUsernames
+}
+
+// humans returns the users in the session who are not bots
+func humans() []*User {
+	var humans []*User
+	for _, user := range LoggedIn {
+		if !user.IsBot {
+			humans = append(humans, user)
+		}
+	}
+	return humans
+}
+
+// countHumans returns the number of humans in the session
+func countHumans() int {
+	return len(humans())
+}
+
+// bots returns the users in the session who are known bots
+func bots() []*User {
+	var bots []*User
+	for _, user := range LoggedIn {
+		if user.IsBot {
+			bots = append(bots, user)
+		}
+	}
+	return bots
+}
+
+// countBots returns the number of bots in the session
+func countBots() int {
+	return len(bots())
+}
+
+// PrintCurrentSession simply prints info about the current session
+func PrintCurrentSession() {
+	usernames := sortedUsernameList()
+	coloredUsernames := colorizeUsernames(usernames)
+
 	log.Println("there are",
-		twitch.ChatterCount(), "people in chat,",
-		aurora.Cyan(len(LoggedIn)-bots), "humans, and",
-		aurora.Gray(15, bots), "bots",
+		twitch.ChatterCount(), "users in chat,",
+		aurora.Cyan(countHumans()), "humans, and",
+		aurora.Gray(15, countBots()), "bots",
 	)
 
 	log.Printf("Currently logged in: %s", strings.Join(coloredUsernames, ", "))

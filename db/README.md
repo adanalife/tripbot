@@ -14,6 +14,8 @@ sudo -u postgres psql
 
 `psql postgres://$DATABASE_USER:$DATABASE_PASS@$DATABASE_HOST/$DATABASE_DB`
 
+You might need to add `?sslmode=disable` for local development servers.
+
 ## To run a migration
 
 Migrations are run using [go-migrate](https://github.com/golang-migrate/migrate).

@@ -67,7 +67,8 @@ func main() {
 
 			// skip stuff from before this time
 			if skipToDate {
-				vidTime := vid.Date()
+				//TODO: is DateFilmed correct here?
+				vidTime := vid.DateFilmed
 				if vidTime.Before(skipDate) {
 					fmt.Println(imgFilename, "ignored")
 					return nil

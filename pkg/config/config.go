@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/joho/godotenv"
+	"github.com/logrusorgru/aurora"
 )
 
 const (
@@ -47,17 +48,27 @@ var (
 	ScreencapDir string
 	// VideoDir is where the videos live
 	VideoDir string
+	// DisableTwitchWebhooks disables recieving webhooks from Twitch (new followers for instance)
+	DisableTwitchWebhooks bool
+	// DisableMusicAutoplay disables the auto-play for MPD
+	DisableMusicAutoplay bool
+
+	// TripbotHttpAuth is used to authenticate users to the HTTP server
+	TripbotHttpAuth string
+	// TripbotServerPort is used to specify the port on which the webserver runs
+	TripbotServerPort string
+	// VlcServerHost is used to specify the host for the VLC webserver
+	VlcServerHost string
+	// VlcServerPort is used to specify the port on which the VLC webserver runs
+	VlcServerPort string
 )
 
 func init() {
-	// load ENV vars from .env file
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal("Error loading .env file")
-	}
+
+	// set the Environment and load dotenv
+	setEnvironment()
 
 	requiredVars := []string{
-		"ENV",
 		"CHANNEL_NAME",
 		"BOT_USERNAME",
 		"EXTERNAL_URL",
@@ -67,6 +78,10 @@ func init() {
 		"DASHCAM_DIR",
 		"MAPS_OUTPUT_DIR",
 		"CROPPED_CORNERS_DIR",
+		"TRIPBOT_HTTP_AUTH",
+		"TRIPBOT_SERVER_PORT",
+		"VLC_SERVER_HOST",
+		"VLC_SERVER_PORT",
 	}
 	for _, v := range requiredVars {
 		_, ok := os.LookupEnv(v)
@@ -75,22 +90,46 @@ func init() {
 		}
 	}
 
-	Environment = os.Getenv("ENV")
 	//TODO: consider using strings.ToLower() on channel name here and removing elsewhere
 	ChannelName = os.Getenv("CHANNEL_NAME")
 	BotUsername = os.Getenv("BOT_USERNAME")
-	ExternalURL = os.Getenv("EXTERNAL_URL")
-	GoogleProjectID = os.Getenv("GOOGLE_APPS_PROJECT_ID")
-	GoogleMapsAPIKey = os.Getenv("GOOGLE_MAPS_API_KEY")
 	ReadOnly, _ = strconv.ParseBool(os.Getenv("READ_ONLY"))
 	Verbose, _ = strconv.ParseBool(os.Getenv("VERBOSE"))
+
+	// directory settings
 	DashcamDir = os.Getenv("DASHCAM_DIR")
 	MapsOutputDir = os.Getenv("MAPS_OUTPUT_DIR")
 	CroppedPath = os.Getenv("CROPPED_CORNERS_DIR")
 
+	// HTTP server settings
+	ExternalURL = os.Getenv("EXTERNAL_URL")
+	TripbotHttpAuth = os.Getenv("TRIPBOT_HTTP_AUTH")
+	TripbotServerPort = os.Getenv("TRIPBOT_SERVER_PORT")
+	VlcServerHost = os.Getenv("VLC_SERVER_HOST")
+	VlcServerPort = os.Getenv("VLC_SERVER_PORT")
+
+	// google-specific settings
+	GoogleProjectID = os.Getenv("GOOGLE_APPS_PROJECT_ID")
+	GoogleMapsAPIKey = os.Getenv("GOOGLE_MAPS_API_KEY")
+
+	DisableTwitchWebhooks, _ = strconv.ParseBool(os.Getenv("DISABLE_TWITCH_WEBHOOKS"))
+	DisableMusicAutoplay, _ = strconv.ParseBool(os.Getenv("DISABLE_MUSIC_AUTOPLAY"))
+
+	// give helpful reminders when things are disabled
+	if DisableTwitchWebhooks {
+		log.Println(aurora.Yellow("Disabling Twitch webhooks"))
+	}
+	if DisableMusicAutoplay {
+		log.Println(aurora.Yellow("Disabling music autoplay"))
+	}
+
+	// assemble compound settings
 	VideoDir = path.Join(DashcamDir, videoDir)
 	ScreencapDir = path.Join(DashcamDir, screencapDir)
 
+	//TODO: the MapsOutputDir could get created automatically
+	//TODO: maybe also the CroppedPath, (which should be "CroppedDir")
+	//      but note that it would need to be smart enough to generate new cropped corners
 	// check that the paths exist
 	requiredDirs := []string{
 		DashcamDir,
@@ -107,6 +146,35 @@ func init() {
 				log.Fatalf("Directory %s does not exist", d)
 			}
 		}
+	}
+}
+
+// setEnvironment sets the Environment var from the CLI
+func setEnvironment() {
+	var err error
+
+	env, ok := os.LookupEnv("ENV")
+	if !ok {
+		log.Fatalln("You must set ENV")
+	}
+
+	// standardize the ENV
+	switch env {
+	case "stage", "staging":
+		Environment = "staging"
+	case "prod", "production":
+		Environment = "production"
+	case "dev", "development":
+		Environment = "development"
+	default:
+		log.Fatalf("Unknown ENV: %s", env)
+	}
+
+	// load ENV vars from .env file
+	err = godotenv.Load(".env." + Environment)
+
+	if err != nil {
+		log.Fatal("Error loading .env file:", err)
 	}
 }
 
@@ -149,17 +217,16 @@ var IgnoredUsers = []string{
 // HelpMessages are all of the different things !help can return
 var HelpMessages = []string{
 	"!location: Get the current location (beta)",
-	"!map: Show a map of the whole trip",
-	"!info: Get more details on the footage",
 	"!song: Get the current music",
 	"!miles: See your current miles",
 	"!leaderboard: See who has the most miles",
 	"!state: Get the state we are currently in (beta)",
 	"!sunset: Get time until sunset (on the day of filming)",
 	"!report: Report a stream issue (frozen, no audio, etc)",
-	"!temperature: Will be unlocked when the donation goal is reached",
 	"!guess: Guess which state we are in",
 	"!survey: Fill out a survey and help the stream",
+	"!timewarp: Magically warp to a new moment in time",
+	"!commands: List more commands you can use",
 }
 
 var GoogleMapsStyle = []string{

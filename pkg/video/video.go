@@ -11,6 +11,7 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/background"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
+	vlcClient "github.com/dmerrick/danalol-stream/pkg/vlc-client"
 	"github.com/logrusorgru/aurora"
 )
 
@@ -26,15 +27,19 @@ var timeStarted time.Time
 //TODO: consider making this return a video struct
 func GetCurrentlyPlaying() {
 	var err error
+
 	// save the video we used last time
 	preVid = curVid
+
 	// figure out whats currently playing
-	curVid = figureOutCurrentVideo()
+	if helpers.RunningOnDarwin() {
+		curVid = figureOutCurrentVideo()
+	} else {
+		curVid = vlcClient.CurrentlyPlaying()
+	}
 
 	// if the currently-playing video has changed
 	if curVid != preVid {
-		log.Printf("now playing %s", aurora.Yellow(curVid))
-
 		// reset the stopwatch
 		timeStarted = time.Now()
 
@@ -44,9 +49,15 @@ func GetCurrentlyPlaying() {
 			terrors.Log(err, fmt.Sprintf("unable to create Video from %s", curVid))
 		}
 
+		log.Printf("now playing %s - %s",
+			aurora.Yellow(CurrentlyPlaying.File()),
+			aurora.Green(helpers.StateToStateAbbrev(CurrentlyPlaying.State)),
+		)
+
 		// show the no-GPS image
 		if CurrentlyPlaying.Flagged {
-			background.GPSImage.Show("", 60*time.Second)
+			//TODO: kinda cludgy that we hardcode 60s here
+			background.GPSImage.ShowFor("", 60*time.Second)
 		} else {
 			background.GPSImage.Hide()
 		}

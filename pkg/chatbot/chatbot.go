@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
+	"github.com/dmerrick/danalol-stream/pkg/background"
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
@@ -34,13 +35,6 @@ func Initialize() *twitch.Client {
 	var err error
 	Uptime = time.Now()
 
-	//TODO: remove this, doesn't seem needed
-	// load ENV vars from .env file
-	// err = godotenv.Load()
-	// if err != nil {
-	// 	log.Fatal("Error loading .env file")
-	// }
-
 	// set up geocoder (for translating coords to places)
 	geocoder.ApiKey = config.GoogleMapsAPIKey
 
@@ -50,11 +44,13 @@ func Initialize() *twitch.Client {
 		terrors.Fatal(err, "unable to create twitch API client")
 	}
 
-	//TODO: actually use these security features
-	authURL := c.GetAuthorizationURL("", false)
-	log.Println("if your browser doesn't open automatically:")
-	log.Println(aurora.Blue(authURL).Underline())
-	helpers.OpenInBrowser(authURL)
+	if !config.DisableTwitchWebhooks {
+		//TODO: actually use these security features
+		authURL := c.GetAuthorizationURL("", false)
+		log.Println("if your browser doesn't open automatically:")
+		log.Println(aurora.Blue(authURL).Underline())
+		helpers.OpenInBrowser(authURL)
+	}
 
 	client = twitch.NewClient(config.BotUsername, mytwitch.AuthToken)
 
@@ -70,7 +66,11 @@ func Initialize() *twitch.Client {
 
 // Say will make a post in chat
 func Say(msg string) {
+	// include the message in the log
 	mylog.ChatMsg(config.BotUsername, msg)
+	// include the bot output in chat
+	background.AddChatLine(config.BotUsername, msg)
+	// say the message to chat
 	client.Say(config.ChannelName, msg)
 }
 

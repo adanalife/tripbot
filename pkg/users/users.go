@@ -1,9 +1,7 @@
 package users
 
 import (
-	"fmt"
 	"log"
-	"strings"
 	"time"
 
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
@@ -36,7 +34,9 @@ func (u User) CurrentMiles() float32 {
 		// give subscribers a miles bonus
 		if u.IsSubscriber() {
 			bonusMiles := u.BonusMiles()
-			log.Println(u.String(), "gets", aurora.Green(bonusMiles), "bonus miles")
+			if config.Verbose {
+				log.Println(u.String(), "will get", aurora.Green(bonusMiles), "bonus miles")
+			}
 			return u.Miles + sessionMiles + bonusMiles
 		}
 		return u.Miles + sessionMiles
@@ -80,7 +80,7 @@ func (u User) String() string {
 	if u.IsBot {
 		return aurora.Gray(15, u.Username).String()
 	}
-	if u.Username == strings.ToLower(config.ChannelName) {
+	if helpers.UserIsAdmin(u.Username) {
 		return aurora.Gray(11, u.Username).String()
 	}
 	return aurora.Magenta(u.Username).String()
@@ -102,8 +102,8 @@ func FindOrCreate(username string) User {
 // Find will look up the username in the DB, and return a User if possible
 func Find(username string) User {
 	var user User
-	query := fmt.Sprintf("SELECT * FROM users WHERE username='%s'", username)
-	err := database.DBCon.Get(&user, query)
+	query := `SELECT * FROM users WHERE username=$1`
+	err := database.DBCon.Get(&user, query, username)
 	// spew.Config.ContinueOnMethod = true
 	// spew.Config.MaxDepth = 2
 	// spew.Dump(user)

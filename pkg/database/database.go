@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/dmerrick/danalol-stream/pkg/config"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	"github.com/jmoiron/sqlx"
 	"github.com/joho/godotenv"
@@ -23,7 +24,7 @@ var (
 func init() {
 	var err error
 
-	err = godotenv.Load()
+	err = godotenv.Load(".env." + config.Environment)
 	if err != nil {
 		terrors.Fatal(err, "Error loading .env file")
 	}

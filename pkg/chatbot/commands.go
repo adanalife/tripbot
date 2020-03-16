@@ -22,6 +22,21 @@ import (
 	"github.com/hako/durafmt"
 )
 
+// lastTimewarpTime is used to rate-limit users so they cant
+// over-do the time-skip features (including !skip and !back)
+var lastTimewarpTime time.Time
+
+func helpCmd(user *users.User) {
+	log.Println(user.Username, "ran !help")
+	msg := fmt.Sprintf("%s (%d of %d)", help(), helpIndex+1, len(config.HelpMessages))
+	Say(msg)
+}
+
+func flagCmd(user *users.User) {
+	log.Println(user.Username, "ran !flag")
+	video.ShowFlag()
+}
+
 func songCmd(user *users.User) {
 	log.Println(user.Username, "ran !song")
 	currentSong := audio.CurrentlyPlaying()
@@ -256,7 +271,7 @@ func guessCmd(user *users.User, params []string) {
 	// convert to short form if they used the full name
 	// e.g. "Massachusetts" instead of "MA"
 	if len(guess) == 2 {
-		guess = stateAbbrevs[strings.ToUpper(guess)]
+		guess = helpers.StateAbbrevToState(guess)
 	}
 
 	// get the currently-playing video
@@ -268,6 +283,8 @@ func guessCmd(user *users.User, params []string) {
 
 	if strings.ToLower(guess) == strings.ToLower(vid.State) {
 		msg = fmt.Sprintf("@%s got it! We're in %s", user.Username, vid.State)
+		// show the flag for the state
+		video.ShowFlag()
 	} else {
 		msg = "Try again! EarthDay"
 	}
@@ -283,6 +300,8 @@ func stateCmd(user *users.User) {
 		vid = vid.Next()
 	}
 	msg := fmt.Sprintf("We're in %s", vid.State)
+	// show the flag for the state
+	video.ShowFlag()
 	Say(msg)
 }
 
@@ -305,7 +324,7 @@ func bonusMilesCmd(user *users.User) {
 
 func secretInfoCmd(user *users.User) {
 	log.Println(user.Username, "ran !secretinfo")
-	if user.Username != strings.ToLower(config.ChannelName) {
+	if !helpers.UserIsAdmin(user.Username) {
 		return
 	}
 	vid := video.CurrentlyPlaying
@@ -322,7 +341,7 @@ func secretInfoCmd(user *users.User) {
 
 func shutdownCmd(user *users.User) {
 	log.Println(user.Username, "ran !shutdown")
-	if user.Username != strings.ToLower(config.ChannelName) {
+	if !helpers.UserIsAdmin(user.Username) {
 		Say("Nice try bucko")
 		return
 	}
@@ -337,4 +356,43 @@ func shutdownCmd(user *users.User) {
 	audio.Shutdown()
 	sentry.Flush(time.Second * 5)
 	os.Exit(0)
+}
+
+func restartMusicCmd(user *users.User) {
+	log.Println(user.Username, "ran !restartmusic")
+	if !helpers.UserIsAdmin(user.Username) {
+		Say("You can't do that, but please !report any stream issues")
+		return
+	}
+
+	Say("Restarting music player...")
+	if helpers.RunningOnDarwin() {
+		audio.RestartItunes()
+	} else {
+		audio.PlayGrooveSalad()
+	}
+}
+
+//TODO: this will always be lower case, find out why
+// middleCmd sets the text at the bottom-middle of the stream
+func middleCmd(user *users.User, params []string) {
+	log.Println(user.Username, "ran !middle")
+	// don't let strangers run this
+	if !helpers.UserIsAdmin(user.Username) {
+		return
+	}
+
+	// don't do anything if empty
+	if len(params) == 0 {
+		Say("What do you want to say?")
+		return
+	}
+
+	// use the params as the text
+	text := strings.Join(params, " ")
+
+	// just to help debug
+	log.Printf("setting middle text to: %s", text)
+
+	background.MiddleText.Show(text)
 }

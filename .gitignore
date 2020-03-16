@@ -1,14 +1,39 @@
+# no need to include system-specific
+# ruby stuff
 .ruby-gemset
 .ruby-version
+
+# stuff that should generally be ignored
 .DS_Store
 ignore/
-*.db
+
+# ignore stray movie files that made it in
 *.MP4
+
+# things in the OBS directory that are
+# temporary or private
+OBS/Twitch
 OBS/*.txt
 OBS/*-live
-.env
+OBS/flag.png
+
+# ignore SSL certs
+infra/certs
+# ignore google credentials
+infra/google
+
+# env files shouldn't get checked in
+# because they have secrets
+.env.dev
+.env.staging
+.env.production
+
+# pidfiles are temporary
 *.pid
+
+# logs and DB dumps don't need to be checked in
 *.log
+*.db
 db/*.sql
 db/*.gz
 

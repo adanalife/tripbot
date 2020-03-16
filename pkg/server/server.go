@@ -8,11 +8,16 @@ import (
 	"strings"
 
 	"github.com/dmerrick/danalol-stream/pkg/chatbot"
+	"github.com/dmerrick/danalol-stream/pkg/config"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	mytwitch "github.com/dmerrick/danalol-stream/pkg/twitch"
 	"github.com/dmerrick/danalol-stream/pkg/users"
 	"github.com/logrusorgru/aurora"
+	"golang.org/x/crypto/acme/autocert"
 )
+
+var certManager autocert.Manager
+var server *http.Server
 
 //TODO: consider adding routes to control MPD
 func handle(w http.ResponseWriter, r *http.Request) {
@@ -25,6 +30,12 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			// twitch issues a request here when creating a new webhook subscription
 		} else if strings.HasPrefix(r.URL.Path, "/webhooks/twitch") {
 			log.Println("got webhook challenge request at", r.URL.Path)
+			// exit early if we've disabled webhooks
+			if config.DisableTwitchWebhooks {
+				http.Error(w, "501 not implemented", http.StatusNotImplemented)
+				return
+			}
+
 			challenge, ok := r.URL.Query()["hub.challenge"]
 			if !ok || len(challenge[0]) < 1 {
 				terrors.Log(nil, "something went wrong with the challenge")
@@ -38,8 +49,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			// this endpoint returns private twitch access tokens
 		} else if r.URL.Path == "/auth/twitch" {
 			secret, ok := r.URL.Query()["auth"]
-			//TODO: more secure password (lol)
-			if !ok || len(secret[0]) < 1 || secret[0] != "yes" {
+			if !ok || !isValidSecret(secret[0]) {
 				http.Error(w, "404 not found", http.StatusNotFound)
 				return
 			}
@@ -68,6 +78,10 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "Success!")
 			return
 
+			// return a favicon if anyone asks for one
+		} else if r.URL.Path == "/favicon.ico" {
+			http.ServeFile(w, r, "assets/favicon.ico")
+
 			// some other URL was used
 		} else {
 			http.Error(w, "404 not found", http.StatusNotFound)
@@ -80,6 +94,11 @@ func handle(w http.ResponseWriter, r *http.Request) {
 		//TODO: we can use helix.GetWebhookTopicFromRequest() and
 		// share a webhooks URL
 		if r.URL.Path == "/webhooks/twitch/users/follows" {
+
+			if config.DisableTwitchWebhooks {
+				http.Error(w, "501 not implemented", http.StatusNotImplemented)
+				return
+			}
 
 			resp, err := decodeFollowWebhookResponse(r)
 			if err != nil {
@@ -101,6 +120,11 @@ func handle(w http.ResponseWriter, r *http.Request) {
 
 			// these are sent when users subscribe
 		} else if r.URL.Path == "/webhooks/twitch/subscriptions/events" {
+
+			if config.DisableTwitchWebhooks {
+				http.Error(w, "501 not implemented", http.StatusNotImplemented)
+				return
+			}
 
 			resp, err := decodeSubscriptionWebhookResponse(r)
 			if err != nil {
@@ -136,13 +160,21 @@ func handle(w http.ResponseWriter, r *http.Request) {
 
 // Start starts the web server
 func Start() {
-	log.Println("Starting web server")
+	log.Println("Starting web server on port", config.TripbotServerPort)
+
 	http.HandleFunc("/", handle)
-	//TODO: configurable port
+	port := fmt.Sprintf(":%s", config.TripbotServerPort)
+
 	//TODO: replace certs with autocert: https://stackoverflow.com/a/40494806
-	err := http.ListenAndServeTLS(":8080", "infra/tripbot.dana.lol.fullchain.pem", "infra/tripbot.dana.lol.key", nil)
-	// err := http.ListenAndServe(":8080", nil)
+	// unfortunately autocert assumes the ports are on 80 and 443
+	err := http.ListenAndServeTLS(port, "infra/certs/tripbot.dana.lol.fullchain.pem", "infra/certs/tripbot.dana.lol.key", nil)
+
 	if err != nil {
 		terrors.Fatal(err, "couldn't start server")
 	}
+}
+
+// isValidSecret returns true if the given secret matches the configured oen
+func isValidSecret(secret string) bool {
+	return len(secret) < 1 || secret != config.TripbotHttpAuth
 }

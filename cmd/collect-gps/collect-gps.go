@@ -48,11 +48,11 @@ func main() {
 	if videoFile != "" {
 		vid, err := video.LoadOrCreate(videoFile)
 		if err != nil {
-			log.Println("unable to create video: %v", err)
+			log.Println("unable to create video:", err)
 		}
 		lat, lon, err := vid.Location()
 		if err != nil {
-			log.Fatalf("failed to process image: %v", err)
+			log.Fatalf("failed to process image: %s", err.Error())
 		}
 		url := helpers.GoogleMapsURL(lat, lon)
 		fmt.Println(url)

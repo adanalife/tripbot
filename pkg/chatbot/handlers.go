@@ -4,6 +4,7 @@ import (
 	"log"
 	"strings"
 
+	"github.com/dmerrick/danalol-stream/pkg/background"
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	mylog "github.com/dmerrick/danalol-stream/pkg/log"
 	"github.com/dmerrick/danalol-stream/pkg/users"
@@ -21,6 +22,8 @@ func runCommand(user users.User, message string, whisper bool) {
 		// whisper if the user ran !help with no params
 		// whisper = (whisper || len(params) == 0)
 		helpCmd(&user, params, whisper)
+	case "!flag":
+		flagCmd(&user)
 	case "!song":
 		songCmd(&user)
 	case "!uptime":
@@ -31,8 +34,38 @@ func runCommand(user users.User, message string, whisper bool) {
 		} else {
 			Say(followerMsg)
 		}
+	case "!timewarp", "!tw":
+		if user.HasCommandAvailable() {
+			timewarpCmd(&user)
+		} else {
+			Say(followerMsg)
+		}
+	case "!goto", "!jump":
+		if user.HasCommandAvailable() {
+			jumpCmd(&user, params)
+		} else {
+			Say(followerMsg)
+		}
+	case "!skip":
+		if user.HasCommandAvailable() {
+			skipCmd(&user, params)
+		} else {
+			Say(followerMsg)
+		}
+	case "!back":
+		if user.HasCommandAvailable() {
+			backCmd(&user, params)
+		} else {
+			Say(followerMsg)
+		}
 	case "!shutdown":
 		shutdownCmd(&user)
+	case "!restartmusic":
+		restartMusicCmd(&user)
+	case "!socialmedia":
+		Say("Find me outside of Twitch: !twitter, !instagram, !facebook, !youtube")
+	case "!commands":
+		Say("You can try: !location, !guess, !date, !state, !sunset, !timewarp, !miles, !leaderboard")
 	case "!bonusmiles":
 		if user.IsSubscriber() {
 			bonusMilesCmd(&user)
@@ -77,6 +110,8 @@ func runCommand(user users.User, message string, whisper bool) {
 		}
 	case "!secretinfo":
 		secretInfoCmd(&user)
+	case "!middle":
+		middleCmd(&user, params)
 		// any of these should trigger the miles command
 	case "!miles", "!newmiles":
 		if user.HasCommandAvailable() {
@@ -130,6 +165,9 @@ func PrivateMessage(msg twitch.PrivateMessage) {
 	// log to stackdriver
 	mylog.ChatMsg(username, msg.Message)
 
+	// include in the onscreen chat box
+	background.AddChatLine(username, msg.Message)
+
 	// check to see if the message is a command
 	//TODO: also include ones prefixed with whitespace?
 	//TODO: not all commands start with "!"s
@@ -158,6 +196,7 @@ func UserPart(partMessage twitch.UserPartMessage) {
 // 	mytwitch.GetSubscribers()
 // }
 
+//TODO: log to stackdriver
 // if the message comes from me, then post the message to chat
 func Whisper(msg twitch.WhisperMessage) {
 	log.Println("whisper from", msg.User.Name, ":", msg.Message)

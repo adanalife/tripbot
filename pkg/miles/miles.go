@@ -3,10 +3,8 @@ package miles
 import (
 	"fmt"
 	"sort"
-	"strings"
 	"time"
 
-	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/database"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	"github.com/dmerrick/danalol-stream/pkg/events"
@@ -34,8 +32,8 @@ func TopUsers(size int) [][]string {
 // ForUser returns the miles for a given user
 func ForUser(user string) float32 {
 	evnts := []events.Event{}
-	query := fmt.Sprintf("SELECT username, event, date_created from events where username = '%s' AND event in ('login', 'logout')", user)
-	err := database.DBCon.Select(&evnts, query)
+	query := `SELECT username, event, date_created from events where username = $1 AND event in ('login', 'logout')`
+	err := database.DBCon.Select(&evnts, query, user)
 	if err != nil {
 		terrors.Log(err, "error fetching events from db")
 	}
@@ -134,7 +132,7 @@ func sortByValue(kv map[string]float32) [][]string {
 			if helpers.UserIsIgnored(username) {
 				continue
 			}
-			if username == strings.ToLower(config.ChannelName) {
+			if helpers.UserIsAdmin(username) {
 				continue
 			}
 			sorted = append(sorted, []string{username, fmt.Sprintf("%.1f", k)})

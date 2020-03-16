@@ -6,6 +6,7 @@ import (
 
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
+	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	"github.com/nicklaw5/helix"
 )
 
@@ -68,7 +69,7 @@ func UserIsSubscriber(username string) bool {
 // UserIsFollower returns true if the user follows the channel
 func UserIsFollower(username string) bool {
 	// I can't follow myself so just do this
-	if username == strings.ToLower(config.ChannelName) {
+	if helpers.UserIsAdmin(username) {
 		return true
 	}
 

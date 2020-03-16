@@ -18,11 +18,13 @@ import (
 // imageSuffix is added to the end of image files to make the "live"
 const imageSuffix = "-live"
 
-var defaultSleepInterval = time.Duration(5 * time.Second)
+// defaultSleepInterval is how often onscreens refresh themselves
+const defaultSleepInterval = time.Duration(5 * time.Second)
 
 type Onscreen struct {
 	Content       string
 	Expires       time.Time
+	DontExpire    bool
 	SleepInterval time.Duration
 	IsShowing     bool
 	isImage       bool
@@ -33,6 +35,7 @@ func New(outputFile string) *Onscreen {
 	newOnscreen := &Onscreen{}
 	newOnscreen.Content = ""
 	newOnscreen.Expires = time.Now()
+	newOnscreen.DontExpire = false
 	newOnscreen.SleepInterval = time.Duration(defaultSleepInterval)
 	newOnscreen.outputFile = outputFile
 	// start the background loop
@@ -58,6 +61,11 @@ func (osc *Onscreen) backgroundLoop() {
 }
 
 func (osc *Onscreen) isExpired() bool {
+	// return false if set to not expire
+	if osc.DontExpire {
+		return false
+	}
+	// return true if current date is after exp date
 	return time.Now().After(osc.Expires)
 }
 
@@ -71,12 +79,31 @@ func (osc *Onscreen) Extend(dur time.Duration) {
 	osc.Expires = osc.Expires.Add(dur)
 }
 
-func (osc *Onscreen) Show(content string, dur time.Duration) {
+// Show makes an onscreen visible until hidden
+func (osc *Onscreen) Show(content string) {
+	// set it to never expire
+	osc.DontExpire = true
+	// make visible with the content
+	osc.show(content)
+}
+
+// ShowFor makes an Onscreen visible for a duration
+func (osc *Onscreen) ShowFor(content string, dur time.Duration) {
+	// if it was set to not expire, running this
+	// means we changed our mind
+	osc.DontExpire = false
+	// add the duration to the expiry time
+	osc.Extend(dur)
+	// make visible with the content
+	osc.show(content)
+}
+
+// show is what makes an Onscreen visible
+func (osc *Onscreen) show(content string) {
+	// mark it as visible
 	osc.IsShowing = true
 	// set the content
 	osc.Content = content
-	// add the duration to the expiry time
-	osc.Extend(dur)
 	if osc.isImage {
 		osc.showImage()
 	} else {

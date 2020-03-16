@@ -3,8 +3,8 @@ package helpers
 import (
 	"errors"
 	"fmt"
+	"log"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"regexp"
@@ -20,6 +20,7 @@ import (
 	"github.com/hako/durafmt"
 	"github.com/kelvins/geocoder"
 	"github.com/nathan-osman/go-sunrise"
+	"github.com/skratchdot/open-golang/open"
 )
 
 func CityFromCoords(lat, lon float64) (string, error) {
@@ -134,6 +135,14 @@ func SplitOnRegex(text string, delimeter string) []string {
 	return result
 }
 
+func RemoveNonLetters(input string) string {
+	reg, err := regexp.Compile("[^a-zA-Z]+")
+	if err != nil {
+		terrors.Log(err, "error compiling regex")
+	}
+	return reg.ReplaceAllString(input, "")
+}
+
 // FileExists simply returns true if a file exists
 func FileExists(path string) bool {
 	_, err := os.Stat(path)
@@ -141,6 +150,15 @@ func FileExists(path string) bool {
 		return false
 	}
 	return err == nil
+}
+
+// InvertMap takes a string map and returns it as value->key
+func InvertMap(m map[string]string) map[string]string {
+	n := make(map[string]string)
+	for k, v := range m {
+		n[v] = k
+	}
+	return n
 }
 
 func ActualDate(utcDate time.Time, lat, long float64) time.Time {
@@ -173,22 +191,21 @@ func sunriseSunset(utcDate time.Time, lat, long float64) (time.Time, time.Time) 
 	return ActualDate(rise, lat, long), ActualDate(set, lat, long)
 }
 
-// https://gist.github.com/hyg/9c4afcd91fe24316cbf0
 func OpenInBrowser(url string) {
-	var err error
-
-	switch runtime.GOOS {
-	case "linux":
-		err = exec.Command("xdg-open", url).Start()
-	case "windows":
-		err = exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
-	case "darwin":
-		err = exec.Command("open", url).Start()
-	default:
-		err = fmt.Errorf("unsupported platform")
-	}
+	log.Println("opening url")
+	err := open.Run(url)
 	if err != nil {
-		terrors.Log(err, "unable to open browser")
+		terrors.Log(err, "error opening browser")
 	}
+}
 
+// RunningOnDarwin returns true if we're on darwin (OS X)
+func RunningOnDarwin() bool {
+	return runtime.GOOS == "darwin"
+}
+
+// UserIsAdmin returns true if a given user runs the channel
+// it's used to restrict admin features
+func UserIsAdmin(username string) bool {
+	return strings.ToLower(username) == strings.ToLower(config.ChannelName)
 }

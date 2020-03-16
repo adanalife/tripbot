@@ -14,8 +14,6 @@ var RightRotator *onscreens.Onscreen
 
 var rightRotatorUpdateFrequency = time.Duration(90 * time.Second)
 
-// super long duration cause this is always on
-var rightRotatorDuration = time.Duration(10 * 365 * 24 * time.Hour)
 var rightRotatorFile = path.Join(helpers.ProjectRoot(), "OBS/right-message.txt")
 
 var possibleRightMessages = []string{
@@ -23,6 +21,7 @@ var possibleRightMessages = []string{
 	"Don't forget to follow :)",
 	"Try running !location",
 	"Try running !location",
+	"Try running !timewarp",
 	"Streaming 24 hours a day",
 }
 
@@ -34,7 +33,7 @@ func InitRightRotator() {
 
 func rightRotatorLoop() {
 	for { // forever
-		RightRotator.Show(rightRotatorContent(), rightRotatorDuration)
+		RightRotator.Show(rightRotatorContent())
 		time.Sleep(time.Duration(rightRotatorUpdateFrequency))
 	}
 }
