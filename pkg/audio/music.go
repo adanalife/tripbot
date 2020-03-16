@@ -1,7 +1,6 @@
 package audio
 
 import (
-	"fmt"
 	"log"
 	"runtime"
 	"syscall"
@@ -86,13 +85,12 @@ func CurrentlyPlaying() string {
 	if Enabled {
 		state := mpdState()
 		if state != "play" {
-			output = fmt.Sprintf("Player state: %s", state)
-			return output
+			return state
 		}
 		song, err := mpdConn.CurrentSong()
 		if err != nil {
 			terrors.Log(err, "Error getting current song from MPD")
-			return ""
+			return "error"
 		}
 		//TODO: there are other attributes in here, use them?
 		output = song["Title"]

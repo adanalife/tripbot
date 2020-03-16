@@ -40,8 +40,15 @@ func flagCmd(user *users.User) {
 func songCmd(user *users.User) {
 	log.Println(user.Username, "ran !song")
 	currentSong := audio.CurrentlyPlaying()
+
+	//TODO: what are the other possible player states?
+	if currentSong == "stop" {
+		Say("Player is currently stopped")
+		return
+	}
+
 	// just print the link to somaFM if there's an issue
-	if currentSong == "" {
+	if currentSong == "error" {
 		Say("https://somafm.com/groovesalad/songhistory.html")
 		return
 	}
