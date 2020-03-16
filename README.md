@@ -2,6 +2,7 @@
 
 [![GoDoc](https://godoc.org/github.com/dmerrick/danalol-stream?status.svg)](https://godoc.org/github.com/dmerrick/danalol-stream)
 [![Go Report Card](https://goreportcard.com/badge/github.com/dmerrick/danalol-stream)](https://goreportcard.com/report/github.com/dmerrick/danalol-stream)
+[![Build Status](https://img.shields.io/endpoint.svg?url=https%3A%2F%2Factions-badge.atrox.dev%2Fdmerrick%2Fdanalol-stream%2Fbadge&style=flat)](https://actions-badge.atrox.dev/dmerrick/danalol-stream/goto)
 
 ![](assets/stream-screencap.jpg)
 
