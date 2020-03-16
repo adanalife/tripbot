@@ -3,7 +3,7 @@ on: [push]
 env:
   ENV: test
 jobs:
-  go test:
+  test:
     strategy:
       matrix:
         go-version: [1.14.x]
