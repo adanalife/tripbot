@@ -8,8 +8,7 @@ jobs:
     steps:
       - name: Install Linux packages
         run: sudo apt update && sudo apt install -y --no-install-recommends tesseract-ocr libtesseract-dev libvlc-dev
-      - name: Check out code into the Go module directory
-        uses: actions/checkout@v1
+      - uses: actions/checkout@v2
       - name: golangci-lint
         uses: reviewdog/action-golangci-lint@v1
         # uses: docker://reviewdog/action-golangci-lint:v1 # pre-build docker image
@@ -20,7 +19,7 @@ jobs:
     name: shellcheck
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@v2
       - name: shellcheck
         uses: reviewdog/action-shellcheck@v1
         with:
@@ -33,8 +32,7 @@ jobs:
     name: golint
     runs-on: ubuntu-latest
     steps:
-      - name: Check out code into the Go module directory
-        uses: actions/checkout@v1
+      - uses: actions/checkout@v2
       - name: golint
         uses: reviewdog/action-golangci-lint@v1
         with:
@@ -47,8 +45,7 @@ jobs:
     name: errcheck
     runs-on: ubuntu-latest
     steps:
-      - name: Check out code into the Go module directory
-        uses: actions/checkout@v1
+      - uses: actions/checkout@v2
       - name: errcheck
         uses: reviewdog/action-golangci-lint@v1
         with:
@@ -60,8 +57,7 @@ jobs:
     name: misspell
     runs-on: ubuntu-latest
     steps:
-      - name: Check out code.
-        uses: actions/checkout@v1
+      - uses: actions/checkout@v2
       - name: misspell
         uses: reviewdog/action-misspell@v1
         with:
