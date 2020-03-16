@@ -25,10 +25,9 @@ You will also need to run:
 sudo apt install tesseract-ocr libtesseract-dev libvlc-dev
 ```
 
-
 ### Infra
 
-For more detailed install instructions, see [infra/README.md](infra/README.md)
+See [infra/README.md](infra/README.md) for infra setup instructions.
 
 ### Database
 
