@@ -80,7 +80,7 @@ func getUrl(url string) (string, error) {
 		defer response.Body.Close()
 		contents, err := ioutil.ReadAll(response.Body)
 		if err != nil {
-			terrors.Log(err, "error reading reponse from VLC server")
+			terrors.Log(err, "error reading response from VLC server")
 			return "", err
 		}
 		return string(contents), nil
