@@ -65,3 +65,15 @@ jobs:
           github_token: ${{ secrets.github_token }}
           locale: "US"
           level: info
+
+  golangci-lint-dockerfile:
+    name: golangci-lint (Dockerfile)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - name: golangci-lint w/ Dockerfile
+        uses: ./ # Build with Dockerfile
+        with:
+          github_token: ${{ secrets.github_token }}
+          # golangci_lint_flags: "./testdata"
+          tool_name: "golangci-lint-dockerfile"
