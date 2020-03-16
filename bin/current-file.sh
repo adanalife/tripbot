@@ -16,7 +16,7 @@ elif [[ "$OSTYPE" == "darwin"* ]]; then
 fi
 
 
-#TODO: check for presense of file here
+#TODO: check for presence of file here
 if [ ! -f $PIDFILE ]; then
   echo "Pidfile not found. Is OBS(OS X)/VLC(linux) running??"
   exit 2

@@ -48,7 +48,7 @@ var (
 	ScreencapDir string
 	// VideoDir is where the videos live
 	VideoDir string
-	// DisableTwitchWebhooks disables recieving webhooks from Twitch (new followers for instance)
+	// DisableTwitchWebhooks disables receiving webhooks from Twitch (new followers for instance)
 	DisableTwitchWebhooks bool
 	// DisableMusicAutoplay disables the auto-play for MPD
 	DisableMusicAutoplay bool

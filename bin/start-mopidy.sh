@@ -59,7 +59,7 @@ echo
 #  "id": 1
 #}' http://127.0.0.1:6680/mopidy/rpc
 
-# start teh song
+# start the song
 echo "starting the track"
 curl -s -X POST -H Content-Type:application/json -d '{
   "method": "core.playback.play",

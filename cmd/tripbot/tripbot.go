@@ -57,7 +57,7 @@ func listenForShutdown() {
 }
 
 // startHttpServer starts a webserver, which is
-// used for admin tools and recieving webhooks
+// used for admin tools and receiving webhooks
 func startHttpServer() {
 	// start the HTTP server
 	go server.Start()
