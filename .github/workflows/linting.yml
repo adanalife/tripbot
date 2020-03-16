@@ -20,7 +20,7 @@ jobs:
         with:
           github_token: ${{ secrets.github_token }}
   shellcheck:
-    name: runner / shellcheck
+    name: shellcheck
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v1
@@ -35,7 +35,7 @@ jobs:
 
   # Use golint via golangci-lint binary with "warning" level.
   golint:
-    name: runner / golint
+    name: golint
     runs-on: ubuntu-latest
     steps:
       - name: Check out code into the Go module directory
@@ -50,7 +50,7 @@ jobs:
 
   # You can add more and more supported linters with different config.
   errcheck:
-    name: runner / errcheck
+    name: errcheck
     runs-on: ubuntu-latest
     steps:
       - name: Check out code into the Go module directory
@@ -64,7 +64,7 @@ jobs:
           level: info
 
   misspell:
-    name: runner / misspell
+    name: misspell
     runs-on: ubuntu-latest
     steps:
       - name: Check out code.
