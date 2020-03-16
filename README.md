@@ -15,22 +15,19 @@ If you like it, please follow my channel. Thanks for watching!
 [dana.lol](https://dana.lol)
 
 
-## Install
+## Install Dependencies
 
 Go should auto-magically pull down all of the required packages when you use `go run` to run something.
 You will also need to run:
 
 ```
-# install tesseract
-sudo apt install tesseract-ocr libtesseract-dev
+# install tesseract and libvlc
+sudo apt install tesseract-ocr libtesseract-dev libvlc-dev
 ```
-
-To get Streamlabs chat to work on Linux, I ended up using the [obs-linuxbrowser](https://github.com/bazukas/obs-linuxbrowser) plugin for OBS.
-
 
 ### Infra
 
-For more detailed install instructions, see [infra/README.md](infra/README.md)
+See [infra/README.md](infra/README.md) for infra setup instructions.
 
 ### Database
 
@@ -79,3 +76,8 @@ To renew certs:
 ```
 sudo certbot renew
 ```
+
+### Tag a release version
+
+All merges to master will bump the semantic version and create a new tag automatically.
+By default it will be a patch release, but if you include #minor or #major in a commit message, it will bump those.
