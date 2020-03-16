@@ -15,7 +15,7 @@ If you like it, please follow my channel. Thanks for watching!
 [dana.lol](https://dana.lol)
 
 
-## Install
+## Install Dependencies
 
 Go should auto-magically pull down all of the required packages when you use `go run` to run something.
 You will also need to run:
@@ -79,3 +79,8 @@ To renew certs:
 ```
 sudo certbot renew
 ```
+
+### Tag a release version
+
+All merges to master will bump the semantic version and create a new tag automatically.
+By default it will be a patch release, but if you include #minor or #major in a commit message, it will bump those.
