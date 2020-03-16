@@ -6,6 +6,7 @@ import (
 
 	"github.com/dmerrick/danalol-stream/pkg/background"
 	"github.com/dmerrick/danalol-stream/pkg/config"
+	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	mylog "github.com/dmerrick/danalol-stream/pkg/log"
 	"github.com/dmerrick/danalol-stream/pkg/users"
 	"github.com/gempir/go-twitch-irc/v2"
@@ -202,7 +203,7 @@ func Whisper(msg twitch.WhisperMessage) {
 	log.Println("whisper from", msg.User.Name, ":", msg.Message)
 
 	// allow the channel owner to speak through the bot's mouth
-	if msg.User.Name == strings.ToLower(config.ChannelName) {
+	if helpers.UserIsAdmin(message.User.Name) {
 		// not using the "message" var here cause I want to preserve
 		// capitalization in the parroted message
 		client.Say(config.ChannelName, msg.Message)
