@@ -21,11 +21,9 @@ Go should auto-magically pull down all of the required packages when you use `go
 You will also need to run:
 
 ```
-# install tesseract
-sudo apt install tesseract-ocr libtesseract-dev
+# install tesseract and libvlc
+sudo apt install tesseract-ocr libtesseract-dev libvlc-dev
 ```
-
-To get Streamlabs chat to work on Linux, I ended up using the [obs-linuxbrowser](https://github.com/bazukas/obs-linuxbrowser) plugin for OBS.
 
 
 ### Infra
