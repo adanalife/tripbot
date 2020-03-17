@@ -4,7 +4,7 @@ FROM golang:1.14-buster
 
 WORKDIR /go/src/github.com/dmerrick/danalol-stream
 
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install --no-install-recommends -y \
     git \
     libtesseract-dev \
     tesseract-ocr \
