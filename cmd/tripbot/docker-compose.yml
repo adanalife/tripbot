@@ -14,7 +14,7 @@ services:
       # this should match the TRIPBOT_SERVER_PORT env var
       - "8080"
     volumes:
-      - assets/video:/danalol/Dashcam/_all
+      - ./assets/video:/danalol/Dashcam/_all
       # - .env.development:/go/src/github.com/dmerrick/danalol-stream/.env.development
       # - /Volumes/usbshare1/cropped-corners:/danalol/cropped-corners
       # - /Volumes/usbshare1/maps:/danalol/maps
