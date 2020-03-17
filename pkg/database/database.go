@@ -26,7 +26,8 @@ func init() {
 
 	err = godotenv.Load(".env." + config.Environment)
 	if err != nil {
-		terrors.Fatal(err, "Error loading .env file")
+		log.Println("Error loading .env file:", err)
+		log.Println("Continuing anyway...")
 	}
 
 	// first we have to check we have all of the right ENV vars
