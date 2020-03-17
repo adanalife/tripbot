@@ -20,11 +20,11 @@ jobs:
         key: ${{ runner.os }}-video-${{ hashFiles('assets/video/*.MP4') }}
         restore-keys: |
           ${{ runner.os }}-video-
-    - name: Checkout (with LFS)
-    # use git-lfs to download big video file(s)
-      uses: actions/checkout@v1
-      with:
-        lfs: true
+    # - name: Checkout (with LFS)
+    # # use git-lfs to download big video file(s)
+    #   uses: actions/checkout@v1
+    #   with:
+    #     lfs: true
     - name: Set ENV
       run: echo "ENV=${ENV}" >> cmd/tripbot/env.docker
     - name: Build the docker-compose stack
