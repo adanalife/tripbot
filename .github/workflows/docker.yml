@@ -14,17 +14,20 @@ jobs:
     - name: Checkout (without LFS)
       uses: actions/checkout@v1
     - name: Fetch videos from cache
+      id: restore-videos
       uses: actions/cache@v1
       with:
         path: assets/video
         key: ${{ runner.os }}-video-${{ hashFiles('assets/video/*.MP4') }}
         restore-keys: |
           ${{ runner.os }}-video-
-    # - name: Checkout (with LFS)
-    # # use git-lfs to download big video file(s)
-    #   uses: actions/checkout@v1
-    #   with:
-    #     lfs: true
+    # use git-lfs to download big video file(s)
+    # (but only if the cache hit missed)
+    - name: Checkout (with LFS)
+      uses: actions/checkout@v1
+      if: steps.restore-videos.outputs.cache-hit != 'true'
+      with:
+        lfs: true
     - name: Set ENV
       run: echo "ENV=${ENV}" >> cmd/tripbot/env.docker
     - name: Build the docker-compose stack
