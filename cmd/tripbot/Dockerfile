@@ -14,14 +14,22 @@ RUN apt-get update && apt-get install -y \
 #      because otherwise, stuff like infra and .env.prod could come in
 COPY . .
 
-RUN ls /go/src/github.com/dmerrick/danalol-stream
+# create symlink to /danalol
+RUN ln -s /go/src/github.com/dmerrick/danalol-stream /danalol
+
+# create danalol user
+RUN adduser -S -D -H -h /danalol danalol
+
+# give app user ownership
+RUN chown danalol /danalol
+
+RUN ls -alh /go/src/github.com/dmerrick/danalol-stream
+
+# switch to the app user
+USER danalol
 
 # RUN go install github.com/dmerrick/danalol-stream/cmd/tripbot
 RUN go build -o bin/tripbot cmd/tripbot/tripbot.go
-
-#TODO: run as a special user
-# RUN adduser -S -D -H -h /app appuser
-# USER appuser
 
 EXPOSE 8080
 
