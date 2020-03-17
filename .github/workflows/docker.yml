@@ -11,8 +11,8 @@ jobs:
     #   PORT: 8080
 
     steps:
-    # checkout without LFS first
-    - uses: actions/checkout@v1
+    - name: Checkout (without LFS)
+      uses: actions/checkout@v1
     - name: Fetch videos from cache
       uses: actions/cache@v1
       with:
@@ -20,10 +20,10 @@ jobs:
         key: ${{ runner.os }}-video-${{ hashFiles('assets/video/*.MP4') }}
         restore-keys: |
           ${{ runner.os }}-video-
-    # checkout with LFS
+    - name: Checkout (with LFS)
+    # use git-lfs to download big video file(s)
     - uses: actions/checkout@v1
       with:
-        # use git-lfs to download big video file(s)
         lfs: true
     - name: Set ENV
       run: echo "ENV=${ENV}" >> cmd/tripbot/env.docker
