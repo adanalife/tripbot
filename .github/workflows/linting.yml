@@ -1,76 +1,51 @@
 name: Linting
 on: [pull_request]
 jobs:
-  golangci-lint:
-    name: runner / golangci-lint
-    strategy:
-      matrix:
-        go-version: [1.14.x]
-        platform: [ubuntu-latest]
-    runs-on: ${{ matrix.platform }}
-    steps:
-      - name: Install Linux packages
-        if: matrix.platform == 'ubuntu-latest'
-        run: sudo apt update && sudo apt install -y --no-install-recommends tesseract-ocr libtesseract-dev libvlc-dev
-      - name: Check out code into the Go module directory
-        uses: actions/checkout@v1
-      - name: golangci-lint
-        uses: reviewdog/action-golangci-lint@v1
-        # uses: docker://reviewdog/action-golangci-lint:v1 # pre-build docker image
-        with:
-          github_token: ${{ secrets.github_token }}
-  shellcheck:
-    name: runner / shellcheck
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v1
-      - name: shellcheck
-        uses: reviewdog/action-shellcheck@v1
-        with:
-          github_token: ${{ secrets.github_token }}
-          reporter: github-pr-review # Change reporter.
-          path: "." # Optional.
-          pattern: "*.sh" # Optional.
-          exclude: "./.git/*" # Optional.
 
-  # Use golint via golangci-lint binary with "warning" level.
   golint:
-    name: runner / golint
+    name: golint
     runs-on: ubuntu-latest
     steps:
-      - name: Check out code into the Go module directory
-        uses: actions/checkout@v1
+      - uses: actions/checkout@v2
       - name: golint
         uses: reviewdog/action-golangci-lint@v1
         with:
           github_token: ${{ secrets.github_token }}
           golangci_lint_flags: "--disable-all -E golint"
-          tool_name: golint # Change reporter name.
           level: warning # GitHub Status Check won't become failure with this level.
 
-  # You can add more and more supported linters with different config.
   errcheck:
-    name: runner / errcheck
+    name: errcheck
     runs-on: ubuntu-latest
     steps:
-      - name: Check out code into the Go module directory
-        uses: actions/checkout@v1
+      - uses: actions/checkout@v2
       - name: errcheck
         uses: reviewdog/action-golangci-lint@v1
         with:
           github_token: ${{ secrets.github_token }}
           golangci_lint_flags: "--disable-all -E errcheck"
-          tool_name: errcheck
+          level: info
+
+  shellcheck:
+    name: shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: shellcheck
+        uses: reviewdog/action-shellcheck@v1
+        with:
+          github_token: ${{ secrets.github_token }}
+          pattern: "*.sh"
           level: info
 
   misspell:
-    name: runner / misspell
+    name: misspell
     runs-on: ubuntu-latest
     steps:
-      - name: Check out code.
-        uses: actions/checkout@v1
+      - uses: actions/checkout@v2
       - name: misspell
         uses: reviewdog/action-misspell@v1
         with:
           github_token: ${{ secrets.github_token }}
           locale: "US"
+          level: info
