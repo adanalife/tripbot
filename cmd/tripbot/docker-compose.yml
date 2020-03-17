@@ -11,7 +11,7 @@ services:
       - db
       # - mpd
     ports:
-      - "${TRIPBOT_SERVER_PORT}"
+      - ${TRIPBOT_SERVER_PORT}
     volumes:
       - .env.development:/go/src/github.com/dmerrick/danalol-stream/.env.development
       - /Volumes/usbshare1/Dashcam:/data/Dashcam

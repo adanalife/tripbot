@@ -33,6 +33,6 @@ USER danalol
 # RUN go install github.com/dmerrick/danalol-stream/cmd/tripbot
 RUN go build -o bin/tripbot cmd/tripbot/tripbot.go
 
-EXPOSE $TRIPBOT_SERVER_PORT
+EXPOSE 8080
 
 CMD ["./bin/tripbot"]
