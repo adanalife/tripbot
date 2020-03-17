@@ -11,7 +11,8 @@ services:
       - db
       # - mpd
     ports:
-      - ${TRIPBOT_SERVER_PORT}
+      # this should match the TRIPBOT_SERVER_PORT env var
+      - "8080"
     volumes:
       - .env.development:/go/src/github.com/dmerrick/danalol-stream/.env.development
       - /Volumes/usbshare1/Dashcam:/data/Dashcam
