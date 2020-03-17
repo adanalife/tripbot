@@ -141,7 +141,7 @@ func init() {
 				log.Println("Creating directory", d)
 				err = os.MkdirAll(d, 0755)
 				if err != nil {
-					log.Fatalf("Error creating directory %s", d)
+					log.Fatalf("Error creating directory %s: %s", d, err)
 				}
 			}
 		}
