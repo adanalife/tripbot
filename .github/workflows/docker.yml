@@ -12,6 +12,9 @@ jobs:
 
     steps:
     - uses: actions/checkout@v1
+      with:
+        # use git-lfs to download big video file(s)
+        lfs: true
     - name: Set ENV
       run: echo "ENV=${ENV}" >> cmd/tripbot/env.docker
     - name: Build the docker-compose stack
