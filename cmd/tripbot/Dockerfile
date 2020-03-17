@@ -21,7 +21,7 @@ RUN ln -s /go/src/github.com/dmerrick/danalol-stream /danalol
 RUN adduser --system --group --disabled-password --no-create-home --home /danalol danalol
 
 # give app user ownership
-RUN chown danalol:danalol /danalol
+RUN chown -R danalol:danalol /danalol
 
 RUN ls -alh /go/src/github.com/dmerrick/danalol-stream
 
