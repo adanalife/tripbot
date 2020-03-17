@@ -18,10 +18,10 @@ COPY . .
 RUN ln -s /go/src/github.com/dmerrick/danalol-stream /danalol
 
 # create danalol user
-RUN adduser -S -D -H -h /danalol danalol
+RUN adduser --system --group --disabled-password --no-create-home --home /danalol danalol
 
 # give app user ownership
-RUN chown danalol /danalol
+RUN chown danalol:danalol /danalol
 
 RUN ls -alh /go/src/github.com/dmerrick/danalol-stream
 
