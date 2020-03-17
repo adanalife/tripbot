@@ -11,6 +11,16 @@ jobs:
     #   PORT: 8080
 
     steps:
+    # checkout without LFS first
+    - uses: actions/checkout@v1
+    - name: Fetch videos from cache
+      uses: actions/cache@v1
+      with:
+        path: assets/video
+        key: ${{ runner.os }}-video-${{ hashFiles('assets/video/*.MP4') }}
+        restore-keys: |
+          ${{ runner.os }}-video-
+    # checkout with LFS
     - uses: actions/checkout@v1
       with:
         # use git-lfs to download big video file(s)
