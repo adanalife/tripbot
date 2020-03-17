@@ -12,8 +12,7 @@ import (
 
 const (
 	// these are the default subdirectories
-	screencapDir = "screencaps"
-	videoDir     = "_all"
+	videoDir = "_all"
 
 	DBPath            = "db/tripbot.db"
 	UserJoinsBucket   = "user_joins"
@@ -76,6 +75,7 @@ func init() {
 		"GOOGLE_MAPS_API_KEY",
 		"READ_ONLY",
 		"DASHCAM_DIR",
+		"SCREENCAP_DIR",
 		"MAPS_OUTPUT_DIR",
 		"CROPPED_CORNERS_DIR",
 		"TRIPBOT_HTTP_AUTH",
@@ -98,6 +98,7 @@ func init() {
 
 	// directory settings
 	DashcamDir = os.Getenv("DASHCAM_DIR")
+	ScreencapDir = os.Getenv("SCREENCAP_DIR")
 	MapsOutputDir = os.Getenv("MAPS_OUTPUT_DIR")
 	CroppedCornersDir = os.Getenv("CROPPED_CORNERS_DIR")
 
@@ -125,7 +126,6 @@ func init() {
 
 	// assemble compound settings
 	VideoDir = path.Join(DashcamDir, videoDir)
-	ScreencapDir = path.Join(DashcamDir, screencapDir)
 
 	// thes dirs will get created on boot if necessary
 	dirsToCreate := []string{
