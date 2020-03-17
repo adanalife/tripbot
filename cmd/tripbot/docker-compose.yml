@@ -9,7 +9,7 @@ services:
       dockerfile: cmd/tripbot/Dockerfile
     depends_on:
       - db
-      # - mpd
+      - mpd
     ports:
       # this should match the TRIPBOT_SERVER_PORT env var
       - "8080"
@@ -32,17 +32,15 @@ services:
       POSTGRES_DB: tripbot_dev
 
   #TODO: get this working
-  # mpd:
-  #   image: vimagick/mpd
-  #   ports:
-  #     - "6600:6600"
-  #     # - "8800:8800"
-  #   # volumes:
-  #   #   - ./mpd.conf:/etc/mpd.conf
-  #   #   - ./music:/var/lib/mpd/music
-  #   #   - ./playlists:/var/lib/mpd/playlists
-  #   # devices:
-  #   #   - /dev/snd
-  #   # depends_on:
-  #   #   - icecast
-  #   restart: unless-stopped
+  mpd:
+    image: vimagick/mpd
+    ports:
+      - "6600:6600"
+    #   - "8800:8800"
+    # volumes:
+    #   - ./mpd.conf:/etc/mpd.conf
+    #   - ./music:/var/lib/mpd/music
+    #   - ./playlists:/var/lib/mpd/playlists
+    # devices:
+    #   - /dev/snd
+    restart: unless-stopped
