@@ -42,8 +42,8 @@ var (
 	DashcamDir string
 	// MapsOutputDir is where generated maps will be stored
 	MapsOutputDir string
-	// CroppedPath is where we store the cropped versions of screencaps (to OCR them)
-	CroppedPath string
+	// CroppedCornersDir is where we store the cropped versions of screencaps (to OCR them)
+	CroppedCornersDir string
 	// ScreencapDir is where we store full screenshots from the videos
 	ScreencapDir string
 	// VideoDir is where the videos live
@@ -99,7 +99,7 @@ func init() {
 	// directory settings
 	DashcamDir = os.Getenv("DASHCAM_DIR")
 	MapsOutputDir = os.Getenv("MAPS_OUTPUT_DIR")
-	CroppedPath = os.Getenv("CROPPED_CORNERS_DIR")
+	CroppedCornersDir = os.Getenv("CROPPED_CORNERS_DIR")
 
 	// HTTP server settings
 	ExternalURL = os.Getenv("EXTERNAL_URL")
@@ -127,15 +127,32 @@ func init() {
 	VideoDir = path.Join(DashcamDir, videoDir)
 	ScreencapDir = path.Join(DashcamDir, screencapDir)
 
-	//TODO: the MapsOutputDir could get created automatically
-	//TODO: maybe also the CroppedPath, (which should be "CroppedDir")
-	//      but note that it would need to be smart enough to generate new cropped corners
+	// thes dirs will get created on boot if necessary
+	dirsToCreate := []string{
+		ScreencapDir,
+		CroppedCornersDir,
+		MapsOutputDir,
+	}
+	for _, d := range dirsToCreate {
+		// we cant use helpers.FileExists() here due to import loop
+		_, err := os.Stat(d)
+		if err != nil {
+			if os.IsNotExist(err) {
+				log.Println("Creating directory", d)
+				err = os.MkdirAll(d, 0755)
+				if err != nil {
+					log.Fatalf("Error creating directory %s", d)
+				}
+			}
+		}
+	}
+
 	// check that the paths exist
 	requiredDirs := []string{
 		DashcamDir,
 		VideoDir,
 		ScreencapDir,
-		CroppedPath,
+		CroppedCornersDir,
 		MapsOutputDir,
 	}
 	for _, d := range requiredDirs {
