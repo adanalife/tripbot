@@ -23,7 +23,7 @@ RUN adduser --system --group --disabled-password --no-create-home --home /danalo
 # give app user ownership
 RUN chown -R danalol:danalol /danalol
 
-RUN ls -alh /go/src/github.com/dmerrick/danalol-stream
+RUN ls -alh /danalol
 
 # switch to the app user
 USER danalol
