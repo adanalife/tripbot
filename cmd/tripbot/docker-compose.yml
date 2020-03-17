@@ -2,6 +2,8 @@ version: '3.7'
 
 services:
   tripbot:
+    env_file:
+      - cmd/tripbot/env.docker
     build:
       context: .
       dockerfile: cmd/tripbot/Dockerfile
