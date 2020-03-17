@@ -8,6 +8,7 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	"github.com/fhs/gompd/mpd"
+	"github.com/logrusorgru/aurora"
 	"github.com/mitchellh/go-ps"
 	"github.com/skratchdot/open-golang/open"
 )
@@ -23,7 +24,7 @@ const (
 func init() {
 	// disable audio on OS X
 	if runtime.GOOS != "linux" {
-		log.Println("Disabling audio since we're not on Linux")
+		log.Println(aurora.Yellow("Disabling audio since we're not on Linux"))
 		Enabled = false
 		return
 	}
