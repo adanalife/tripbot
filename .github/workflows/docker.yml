@@ -1,11 +1,7 @@
-name: Docker Image CI
-
-on: [push]
-
+name: Docker
+on: [pull_request]
 jobs:
-
   build:
-
     runs-on: ubuntu-latest
     env:
       ENV: test
@@ -22,6 +18,6 @@ jobs:
     - name: Check running containers
       run: docker ps -a
     - name: Check logs
-      run: docker logs backend
+      run: docker logs tripbot
     # - name: Run test suite
     #   run: docker exec backend pytest --skip-auth
