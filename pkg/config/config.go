@@ -166,6 +166,8 @@ func setEnvironment() {
 		Environment = "production"
 	case "dev", "development":
 		Environment = "development"
+	case "test", "testing":
+		Environment = "testing"
 	default:
 		log.Fatalf("Unknown ENV: %s", env)
 	}
