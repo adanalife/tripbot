@@ -13,7 +13,7 @@ jobs:
     steps:
     - uses: actions/checkout@v1
     - name: Build the docker-compose stack
-      run: docker-compose -e ENV=test --project-directory . -f cmd/tripbot/docker-compose.yml up -d
+      run: ENV=test docker-compose --project-directory . -f cmd/tripbot/docker-compose.yml up -d
     - name: Check running containers
       run: docker ps -a
     - name: Check logs
