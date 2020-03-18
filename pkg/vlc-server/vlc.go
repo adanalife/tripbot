@@ -132,6 +132,10 @@ func loadMedia() {
 		if path == config.VideoDir {
 			return nil
 		}
+		// skip non-video files
+		if filepath.Ext(path) != ".MP4" {
+			return nil
+		}
 		// add full path to list of paths
 		filePaths = append(filePaths, path)
 		// add the video filename to videoFiles list
