@@ -22,9 +22,12 @@ infra/certs
 # ignore google credentials
 infra/google
 
+bin/tripbot
+bin/vlc-server
+
 # env files shouldn't get checked in
 # because they have secrets
-.env.dev
+.env.development
 .env.staging
 .env.production
 
