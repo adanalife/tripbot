@@ -12,8 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
-	"github.com/dmerrick/danalol-stream/internal/takeout"
+	// "github.com/dmerrick/danalol-stream/internal/takeout"
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/helpers"
 	"github.com/dmerrick/danalol-stream/pkg/video"
@@ -24,7 +23,7 @@ var skipToDate = false
 var skipDate = time.Date(2018, time.Month(9), 29, 0, 0, 0, 0, time.UTC)
 
 func main() {
-	spew.Dump(takeout.LoadLocations())
+	// spew.Dump(takeout.LoadLocations())
 
 	//TODO: remove this if it's not needed
 	// err := godotenv.Load()
