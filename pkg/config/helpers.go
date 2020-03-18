@@ -7,3 +7,7 @@ func IsProduction() bool {
 func IsStaging() bool {
 	return Environment == "staging"
 }
+
+func IsTesting() bool {
+	return Environment == "testing"
+}
