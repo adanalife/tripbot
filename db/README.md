@@ -28,7 +28,7 @@ Migrations are run using [go-migrate](https://github.com/golang-migrate/migrate)
 
 ## To take a backup
 
-`pg_dump <postgres://url> > db_dump.<date>.sql`
+`pg_dump <postgres://url> > db_dump.$(date "+%Y%m%d").sql`
 
 
 ## Restore from backup
