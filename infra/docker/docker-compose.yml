@@ -43,6 +43,9 @@ services:
       POSTGRES_PASSWORD: example
       POSTGRES_USER: example
       POSTGRES_DB: tripbot_dev
+    volumes:
+      - ./infra/docker/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./tmp/data:/var/lib/postgresql/data
 
   mpd:
     image: wernight/mopidy
