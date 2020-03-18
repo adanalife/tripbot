@@ -139,10 +139,9 @@ func (osc Onscreen) hideText() {
 }
 
 // liveImage adds a suffix to the end of the file
-// this is the file that OBS will be configured to look at
+// which is the file that OBS will be configured to look at
 func (osc Onscreen) liveImage() string {
-	filename := fmt.Sprintf("%s%s", osc.outputFile, imageSuffix)
-	return filename
+	return fmt.Sprintf("%s%s", osc.outputFile, imageSuffix)
 }
 
 func (osc Onscreen) showImage() {
