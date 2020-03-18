@@ -22,6 +22,7 @@ infra/certs
 # ignore google credentials
 infra/google
 
+# compiled binaries
 bin/tripbot
 bin/vlc-server
 
