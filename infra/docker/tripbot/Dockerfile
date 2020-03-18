@@ -3,32 +3,30 @@ FROM golang:1.14-buster
 
 WORKDIR /go/src/github.com/dmerrick/danalol-stream
 
+# install dependencies
 RUN apt-get update && apt-get install --no-install-recommends -y \
-    git \
     libtesseract-dev \
     tesseract-ocr \
  && rm -rf /var/lib/apt/lists/*
 
+# create app user
+RUN adduser --system --group --disabled-password --no-create-home danalol
+
+# copy over project
 #TODO: maybe just copy pkg, cmd, internal, etc?
-#      because otherwise, stuff like infra and .env.prod could come in
-COPY . .
+COPY --chown=danalol:danalol . .
 
-# create symlink to /danalol
-RUN ln -s /go/src/github.com/dmerrick/danalol-stream /danalol
+# create symlink to /danalol and give user permissions on it
+RUN ln -s /go/src/github.com/dmerrick/danalol-stream /danalol \
+ && chown danalol:danalol /danalol
 
-# create danalol user
-RUN adduser --system --group --disabled-password --no-create-home --home /danalol danalol
-
-#TODO: try switching user first and saving some time on build
-
-# give app user ownership
-RUN chown danalol:danalol /danalol
-RUN chown -R danalol:danalol /go/src/github.com/dmerrick/danalol-stream
+# set home dir for app user
+RUN usermod --home /danalol danalol
 
 # switch to the app user
 USER danalol
 
-# RUN go install github.com/dmerrick/danalol-stream/cmd/tripbot
+# build the binary
 RUN go build -o bin/tripbot cmd/tripbot/tripbot.go
 
 EXPOSE 8080
