@@ -160,6 +160,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 
 // Start starts the web server
 func Start() {
+	var err error
 	log.Println("Starting web server on port", config.TripbotServerPort)
 
 	http.HandleFunc("/", handle)
@@ -167,7 +168,11 @@ func Start() {
 
 	//TODO: replace certs with autocert: https://stackoverflow.com/a/40494806
 	// unfortunately autocert assumes the ports are on 80 and 443
-	err := http.ListenAndServeTLS(port, "infra/certs/tripbot.dana.lol.fullchain.pem", "infra/certs/tripbot.dana.lol.key", nil)
+	if config.IsTesting() || config.IsDevelopment() {
+		err = http.ListenAndServe(port, nil)
+	} else {
+		err = http.ListenAndServeTLS(port, "infra/certs/tripbot.dana.lol.fullchain.pem", "infra/certs/tripbot.dana.lol.key", nil)
+	}
 
 	if err != nil {
 		terrors.Fatal(err, "couldn't start server")
