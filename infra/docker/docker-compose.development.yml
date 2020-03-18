@@ -1,0 +1,10 @@
+version: '3.7'
+
+services:
+  tripbot:
+    environment:
+      ENV: development
+
+  vlc:
+    environment:
+      ENV: development

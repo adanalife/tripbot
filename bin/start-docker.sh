@@ -7,4 +7,5 @@ docker-compose \
   -p danalol-stream \
   --project-directory . \
   -f infra/docker/docker-compose.yml \
+  -f infra/docker/docker-compose.development.yml \
   up
