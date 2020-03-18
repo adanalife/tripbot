@@ -1,0 +1,14 @@
+version: '3.7'
+
+services:
+  tripbot:
+    environment:
+      - CHANNEL_NAME
+      - BOT_USERNAME
+      - TWITCH_AUTH_TOKEN
+
+  vlc:
+    environment:
+      - CHANNEL_NAME
+      - BOT_USERNAME
+      - TWITCH_AUTH_TOKEN
