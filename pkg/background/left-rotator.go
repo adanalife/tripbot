@@ -7,7 +7,7 @@ import (
 	"path"
 	"time"
 
-	"github.com/dmerrick/danalol-stream/pkg/helpers"
+	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/onscreens"
 	"github.com/dmerrick/danalol-stream/pkg/users"
 )
@@ -16,7 +16,7 @@ var LeftRotator *onscreens.Onscreen
 
 var leftRotatorUpdateFrequency = time.Duration(45 * time.Second)
 
-var leftRotatorFile = path.Join(helpers.ProjectRoot(), "OBS/left-message.txt")
+var leftRotatorFile = path.Join(config.RunDir, "left-message.txt")
 
 var possibleLeftMessages = []string{
 	"Looking for artist for emotes and more",

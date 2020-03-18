@@ -48,6 +48,8 @@ var (
 	ScreencapDir string
 	// VideoDir is where the videos live
 	VideoDir string
+	RunDir   string
+
 	// DisableTwitchWebhooks disables receiving webhooks from Twitch (new followers for instance)
 	DisableTwitchWebhooks bool
 	// DisableMusicAutoplay disables the auto-play for MPD
@@ -78,6 +80,7 @@ func init() {
 		"SCREENCAP_DIR",
 		"MAPS_OUTPUT_DIR",
 		"CROPPED_CORNERS_DIR",
+		"RUN_DIR",
 		"TRIPBOT_HTTP_AUTH",
 		"TRIPBOT_SERVER_PORT",
 		"VLC_SERVER_HOST",
@@ -101,6 +104,7 @@ func init() {
 	ScreencapDir = os.Getenv("SCREENCAP_DIR")
 	MapsOutputDir = os.Getenv("MAPS_OUTPUT_DIR")
 	CroppedCornersDir = os.Getenv("CROPPED_CORNERS_DIR")
+	RunDir = os.Getenv("RUN_DIR")
 
 	// HTTP server settings
 	ExternalURL = os.Getenv("EXTERNAL_URL")
@@ -132,6 +136,7 @@ func init() {
 		ScreencapDir,
 		CroppedCornersDir,
 		MapsOutputDir,
+		RunDir,
 	}
 	for _, d := range dirsToCreate {
 		// we cant use helpers.FileExists() here due to import loop
@@ -154,6 +159,7 @@ func init() {
 		ScreencapDir,
 		CroppedCornersDir,
 		MapsOutputDir,
+		RunDir,
 	}
 	for _, d := range requiredDirs {
 		// we cant use helpers.FileExists() here due to import loop
