@@ -83,3 +83,11 @@ sudo certbot renew
 
 All merges to master will bump the semantic version and create a new tag automatically.
 By default it will be a patch release, but if you include `#minor` or `#major` in a commit message, it will bump those.
+
+### Create new video manifest
+
+The video manifest is used in the GitHub Actions build process to avoid pulling down big files too often.
+
+```
+md5sum assets/video/*.MP4 > assets/video/manifest.txt
+```

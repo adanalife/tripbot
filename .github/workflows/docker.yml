@@ -18,7 +18,7 @@ jobs:
       uses: actions/cache@v1
       with:
         path: assets/video
-        key: ${{ runner.os }}-video-${{ hashFiles('assets/video/*.MP4') }}
+        key: ${{ runner.os }}-video-${{ hashFiles('assets/video/manifest.txt') }}
         restore-keys: |
           ${{ runner.os }}-video-
     # use git-lfs to download big video file(s)
