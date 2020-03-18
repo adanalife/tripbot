@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-PID_FILE=OBS/OBS.pid
+PID_FILE=run/OBS.pid
 DATE="$(date "+%Y%m%d")"
 
 echo "starting OBS..."
