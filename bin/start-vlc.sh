@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-PID_FILE=OBS/VLC.pid
+PID_FILE=run/VLC.pid
 DATE="$(date "+%Y%m%d")"
 
 echo "starting VLC..."
