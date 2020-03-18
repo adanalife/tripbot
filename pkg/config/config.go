@@ -10,6 +10,8 @@ import (
 	"github.com/logrusorgru/aurora"
 )
 
+//TODO: not all required ENV vars are required for vlc-server
+
 const (
 	// these are the default subdirectories
 	videoDir = "_all"
@@ -20,7 +22,6 @@ const (
 	CoordsBucket      = "coords"
 )
 
-//TODO: add consistency between use of Dir vs Path in these names
 var (
 	Environment string
 	// ChannelName is the username of the stream
