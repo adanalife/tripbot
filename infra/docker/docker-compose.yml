@@ -42,16 +42,13 @@ services:
       POSTGRES_USER: example
       POSTGRES_DB: tripbot_dev
 
-  #TODO: get this working
   mpd:
-    image: vimagick/mpd
+    image: wernight/mopidy
     ports:
-      - "6600:6600"
-    #   - "8800:8800"
-    # volumes:
-    #   - ./mpd.conf:/etc/mpd.conf
-    #   - ./music:/var/lib/mpd/music
-    #   - ./playlists:/var/lib/mpd/playlists
+      - "6600:6601"
+      # - "6680:6680"
+    volumes:
+      - ./infra/mopidy.conf:/config/mopidy.conf
     # devices:
     #   - /dev/snd
     restart: unless-stopped
