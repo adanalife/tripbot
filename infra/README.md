@@ -1,6 +1,9 @@
 ## Setting up new machine
 
+These are just notes, this doc needs to be updated with Docker setup instructions.
 
+
+```
 #TODO: put this in order, make it pretty
 
 ssh-keygen -t ecdsa -b 521
@@ -63,4 +66,4 @@ ffmpeg -encoders | grep nvenc
 
 # bind ESC to capslock
 # https://askubuntu.com/a/365701
-
+```
