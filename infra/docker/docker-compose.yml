@@ -17,6 +17,7 @@ services:
     #TODO: do we even need this?
     volumes:
       - ./assets/video:/danalol/Dashcam/_all
+    restart: unless-stopped
 
   vlc:
     env_file:
@@ -29,6 +30,7 @@ services:
       - "8090"
     volumes:
       - ./assets/video:/danalol/Dashcam/_all
+    restart: unless-stopped
 
   #TODO: change credentials
   #TODO: share data volume

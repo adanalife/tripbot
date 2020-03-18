@@ -39,6 +39,8 @@ jobs:
     - run: sleep 10
     - name: Check logs (again)
       run: docker logs danalol-stream_tripbot_1
+    - name: Check logs (vlc)
+      run: docker logs danalol-stream_vlc_1
     # - name: Run a healthcheck against tripbot
     #   run: curl -v https://tripbot:8080/health
     # - name: Run test suite
