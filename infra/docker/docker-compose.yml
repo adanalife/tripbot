@@ -3,21 +3,32 @@ version: '3.7'
 services:
   tripbot:
     env_file:
-      - cmd/tripbot/env.docker
+      - infra/docker/env.docker
     build:
       context: .
-      dockerfile: cmd/tripbot/Dockerfile
+      dockerfile: infra/docker/tripbot/Dockerfile
     depends_on:
       - db
+      - vlc
       - mpd
     ports:
       # this should match the TRIPBOT_SERVER_PORT env var
       - "8080"
+    #TODO: do we even need this?
     volumes:
       - ./assets/video:/danalol/Dashcam/_all
-      # - .env.development:/go/src/github.com/dmerrick/danalol-stream/.env.development
-      # - /Volumes/usbshare1/cropped-corners:/danalol/cropped-corners
-      # - /Volumes/usbshare1/maps:/danalol/maps
+
+  vlc:
+    env_file:
+      - infra/docker/env.docker
+    build:
+      context: .
+      dockerfile: infra/docker/vlc/Dockerfile
+    ports:
+      # this should match the VLC_SERVER_PORT env var
+      - "8090"
+    volumes:
+      - ./assets/video:/danalol/Dashcam/_all
 
   #TODO: change credentials
   #TODO: share data volume
