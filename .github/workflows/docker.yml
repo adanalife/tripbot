@@ -3,6 +3,7 @@ on: [pull_request]
 jobs:
   build:
     runs-on: ubuntu-latest
+    environment:
       CHANNEL_NAME: ${{ secrets.CHANNEL_NAME }}
       BOT_USERNAME: ${{ secrets.BOT_USERNAME }}
       TWITCH_AUTH_TOKEN: ${{ secrets.TWITCH_AUTH_TOKEN }}
