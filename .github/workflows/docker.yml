@@ -36,5 +36,7 @@ jobs:
       run: docker ps -a
     - name: Check logs
       run: docker logs danalol-stream_tripbot_1
+    - name: Run a healthcheck against tripbot
+      run: curl -v https://tripbot:8080/health
     # - name: Run test suite
-    #   run: docker exec backend pytest --skip-auth
+    #   run: docker exec tripbot go test ./...
