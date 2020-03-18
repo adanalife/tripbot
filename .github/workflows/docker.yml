@@ -34,17 +34,15 @@ jobs:
       run: docker-compose --project-directory . -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.testing.yml -f infra/docker/docker-compose.github.yml build --parallel
     - name: Start the docker-compose stack
       run: docker-compose --project-directory . --env-file infra/docker/env.docker -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.testing.yml -f infra/docker/docker-compose.github.yml up -d
-    - name: Check running containers
-      run: docker ps -a
-    - name: Check logs
-      run: docker logs danalol-stream_tripbot_1
     - run: sleep 10
+    - name: Check logs (tripbot)
+      run: docker logs danalol-stream_tripbot_1
     - name: Check logs (migrate)
       run: docker logs danalol-stream_migrate_1
     - name: Check logs (vlc)
       run: docker logs danalol-stream_vlc_1
-    - name: Check logs (again)
-      run: docker logs danalol-stream_tripbot_1
+    - name: Check running containers
+      run: docker ps -a
     # - name: Run a healthcheck against tripbot
     #   run: curl -v https://tripbot:8080/health
     # - name: Run test suite
