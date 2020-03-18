@@ -26,6 +26,6 @@ USER danalol
 
 RUN go build -o bin/vlc-server cmd/vlc-server/vlc-server.go
 
-EXPOSE 8080
+EXPOSE 8088
 
 CMD ["./bin/vlc-server"]

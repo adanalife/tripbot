@@ -26,8 +26,8 @@ services:
       context: .
       dockerfile: infra/docker/vlc/Dockerfile
     ports:
-      # this should match the VLC_SERVER_PORT env var
-      - "8090"
+      # this should match the VLC_SERVER_HOST env var
+      - "8088"
     volumes:
       - ./assets/video:/danalol/Dashcam/_all
     restart: unless-stopped
