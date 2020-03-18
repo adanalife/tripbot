@@ -32,8 +32,6 @@ services:
       - ./assets/video:/danalol/Dashcam/_all
     restart: unless-stopped
 
-  #TODO: change credentials
-  #TODO: share data volume
   db:
     image: postgres
     restart: always
@@ -51,7 +49,6 @@ services:
     image: wernight/mopidy
     ports:
       - "6600:6601"
-      # - "6680:6680"
     volumes:
       - ./infra/mopidy.conf:/config/mopidy.conf
     # devices:
