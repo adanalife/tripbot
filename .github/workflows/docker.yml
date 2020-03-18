@@ -3,8 +3,6 @@ on: [pull_request]
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      ENV: test
     #   PG_PASS: ${{ secrets.PG_PASS }}
     #   DATABASE_URL: postgresql://postgres:${{ secrets.SECRET_PASSWORD }}@postgres/postgres
     #   SECRET_KEY: ${{ secrets.SECRET_KEY }}
@@ -28,8 +26,6 @@ jobs:
       if: steps.restore-videos.outputs.cache-hit != 'true'
       with:
         lfs: true
-    - name: Set ENV
-      run: echo "ENV=${ENV}" >> cmd/tripbot/env.docker
     - name: Build the docker-compose stack
       run: docker-compose --project-directory . -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.testing.yml up -d
     - name: Check running containers
