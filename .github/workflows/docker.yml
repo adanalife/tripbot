@@ -27,6 +27,8 @@ jobs:
       with:
         lfs: true
     - name: Build the docker-compose stack
+      run: docker-compose --project-directory . -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.testing.yml build --parallel
+    - name: Build the docker-compose stack
       run: docker-compose --project-directory . -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.testing.yml up -d
     - name: Check running containers
       run: docker ps -a
