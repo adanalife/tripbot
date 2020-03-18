@@ -5,6 +5,7 @@ WORKDIR /go/src/github.com/dmerrick/danalol-stream
 
 RUN apt-get update && apt-get install --no-install-recommends -y \
     libvlc-dev \
+    vlc-plugin-base \
  && rm -rf /var/lib/apt/lists/*
 
 #TODO: maybe just copy pkg, cmd, internal, etc?
