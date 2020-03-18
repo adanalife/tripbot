@@ -2,8 +2,10 @@ version: '3.7'
 
 services:
   tripbot:
-    env_file:
-      - infra/docker/env.docker
+    # environment:
+    #   ENV: testing
+    # env_file:
+    #   - infra/docker/env.docker
     build:
       context: .
       dockerfile: infra/docker/tripbot/Dockerfile
@@ -19,8 +21,10 @@ services:
       - ./assets/video:/danalol/Dashcam/_all
 
   vlc:
-    env_file:
-      - infra/docker/env.docker
+    # environment:
+    #   ENV: testing
+    # env_file:
+    #   - infra/docker/env.docker
     build:
       context: .
       dockerfile: infra/docker/vlc/Dockerfile
