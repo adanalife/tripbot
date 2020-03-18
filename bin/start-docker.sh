@@ -8,4 +8,5 @@ docker-compose \
   --project-directory . \
   -f infra/docker/docker-compose.yml \
   -f infra/docker/docker-compose.development.yml \
-  up
+  up \
+  $@ # allow params (like --build) to be passed to the up command
