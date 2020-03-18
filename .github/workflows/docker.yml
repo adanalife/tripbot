@@ -29,7 +29,7 @@ jobs:
     #TODO: do both of these need the ENV file?
     # if you need to debug docker builds, remove --parallel
     - name: Build docker-compose stack
-      run: docker-compose --project-directory . --env-file infra/docker/env.docker -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.testing.yml -f infra/docker/docker-compose.github.yml build --parallel
+      run: docker-compose --project-directory . -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.testing.yml -f infra/docker/docker-compose.github.yml build --parallel
     - name: Start the docker-compose stack
       run: docker-compose --project-directory . --env-file infra/docker/env.docker -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.testing.yml -f infra/docker/docker-compose.github.yml up -d
     - name: Check running containers
