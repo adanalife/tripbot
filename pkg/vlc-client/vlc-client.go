@@ -9,7 +9,7 @@ import (
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 )
 
-var vlcServerURL = config.VlcServerHost + ":" + config.VlcServerPort
+var vlcServerURL = config.VlcServerHost
 
 // CurrentlyPlaying finds the currently-playing video path
 func CurrentlyPlaying() string {

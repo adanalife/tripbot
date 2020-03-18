@@ -101,9 +101,12 @@ func handle(w http.ResponseWriter, r *http.Request) {
 
 // Start starts the web server
 func Start() {
-	log.Println("Starting VLC web server on port", config.VlcServerPort)
+	log.Println("Starting VLC web server on host", config.VlcServerHost)
 	http.HandleFunc("/", handle)
-	port := fmt.Sprintf(":%s", config.VlcServerPort)
+
+	// ListenAndServe() wants a port in the format ":NUM"
+	//TODO: error if there's no colon to split on
+	port := ":" + strings.Split(config.VlcServerHost, ":")[1]
 	//TODO: replace certs with autocert: https://stackoverflow.com/a/40494806
 	// err := http.ListenAndServeTLS(port, "infra/tripbot.dana.lol.fullchain.pem", "infra/tripbot.dana.lol.key", nil)
 	err := http.ListenAndServe(port, nil)
