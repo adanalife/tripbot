@@ -23,11 +23,11 @@ jobs:
           ${{ runner.os }}-video-
     # use git-lfs to download big video file(s)
     # (but only if the cache hit missed)
-    # - name: Checkout (with LFS)
-    #   uses: actions/checkout@v1
-    #   if: steps.restore-videos.outputs.cache-hit != 'true'
-    #   with:
-    #     lfs: true
+    - name: Checkout (with LFS)
+      uses: actions/checkout@v1
+      if: steps.restore-videos.outputs.cache-hit != 'true'
+      with:
+        lfs: true
     #TODO: do both of these need the ENV file?
     # if you need to debug docker builds, remove --parallel
     - name: Build docker-compose stack
