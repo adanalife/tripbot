@@ -45,6 +45,9 @@ func connect() {
 }
 
 func mpdState() string {
+	if mpdConn == nil {
+		return "error"
+	}
 	status, err := mpdConn.Status()
 	if err != nil {
 		// disabled because it was constantly EOF-ing
@@ -56,6 +59,10 @@ func mpdState() string {
 
 func PlayGrooveSalad() {
 	log.Println("Starting Groove Salad")
+	if mpdConn == nil {
+		log.Println("No connection to MPD found")
+		return
+	}
 	err := mpdConn.Add(grooveSaladURL)
 	if err != nil {
 		terrors.Log(err, "Error adding to MPD playlist")
