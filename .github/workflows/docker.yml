@@ -40,7 +40,7 @@ jobs:
         path: vendor
         key: ${{ runner.os }}-vendor-${{ hashFiles('**/go.sum') }}
         restore-keys: |
-          ${{ runner.os }}-go-
+          ${{ runner.os }}-vendor-
     - run: go mod vendor
       if: steps.restore-vendor.outputs.cache-hit != 'true'
     - name: Build docker-compose stack
