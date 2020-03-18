@@ -4,11 +4,16 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
+      # secrets to pass into app
       CHANNEL_NAME: ${{ secrets.CHANNEL_NAME }}
       BOT_USERNAME: ${{ secrets.BOT_USERNAME }}
       TWITCH_AUTH_TOKEN: ${{ secrets.TWITCH_AUTH_TOKEN }}
       TWITCH_CLIENT_ID: ${{ secrets.TWITCH_CLIENT_ID }}
       TWITCH_CLIENT_SECRET: ${{ secrets.TWITCH_CLIENT_SECRET }}
+      # enable BuildKit
+      # https://www.docker.com/blog/faster-builds-in-compose-thanks-to-buildkit-support/
+      COMPOSE_DOCKER_CLI_BUILD: 1
+      DOCKER_BUILDKIT: 1
 
     steps:
     - name: Checkout (without LFS)
