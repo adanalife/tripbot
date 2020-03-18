@@ -28,11 +28,11 @@ jobs:
           ${{ runner.os }}-video-
     # use git-lfs to download big video file(s)
     # (but only if the cache hit missed)
-    - name: Checkout (with LFS)
-      uses: actions/checkout@v1
-      if: steps.restore-videos.outputs.cache-hit != 'true'
-      with:
-        lfs: true
+    # - name: Checkout (with LFS)
+    #   uses: actions/checkout@v1
+    #   if: steps.restore-videos.outputs.cache-hit != 'true'
+    #   with:
+    #     lfs: true
     - name: Build docker-compose stack
       run: docker-compose --project-directory . -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.testing.yml -f infra/docker/docker-compose.github.yml build
     - name: Start the docker-compose stack
