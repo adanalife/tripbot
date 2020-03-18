@@ -6,6 +6,6 @@
 docker-compose \
   -p danalol-stream \
   --project-directory . \
-  -f cmd/tripbot/docker-compose.yml \
+  -f infra/docker/docker-compose.yml \
   --env-file .env.staging \
   build
