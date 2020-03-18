@@ -1,6 +1,7 @@
 package twitch
 
 import (
+	"fmt"
 	"log"
 	"strings"
 
@@ -24,6 +25,10 @@ func getChannelID(username string) string {
 	})
 	if err != nil {
 		terrors.Log(err, "error getting user info from twitch")
+	}
+	if len(resp.Data.Users) < 1 {
+		terrors.Log(fmt.Errorf("missing data"), "no user in response from twitch")
+		return ""
 	}
 	return resp.Data.Users[0].ID
 }
