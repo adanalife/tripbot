@@ -54,6 +54,7 @@ func cropImage(srcFilename string) (string, error) {
 			// this is fatal intentionally, else you get lots of similar errors
 			log.Fatal("too many open files")
 		}
+		//TODO: automatically create a screencap file here
 		if strings.Contains(err.Error(), "no such file or directory") {
 			err = errors.New("screencap file was not present")
 		}

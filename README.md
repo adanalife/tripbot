@@ -3,6 +3,8 @@
 [![GoDoc](https://godoc.org/github.com/dmerrick/danalol-stream?status.svg)](https://godoc.org/github.com/dmerrick/danalol-stream)
 [![Go Report Card](https://goreportcard.com/badge/github.com/dmerrick/danalol-stream)](https://goreportcard.com/report/github.com/dmerrick/danalol-stream)
 [![Build Status](https://img.shields.io/endpoint.svg?url=https%3A%2F%2Factions-badge.atrox.dev%2Fdmerrick%2Fdanalol-stream%2Fbadge&style=flat)](https://actions-badge.atrox.dev/dmerrick/danalol-stream/goto)
+[![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
+
 
 ![](assets/stream-screencap.jpg)
 
@@ -81,3 +83,11 @@ sudo certbot renew
 
 All merges to master will bump the semantic version and create a new tag automatically.
 By default it will be a patch release, but if you include `#minor` or `#major` in a commit message, it will bump those.
+
+### Create new video manifest
+
+The video manifest is used in the GitHub Actions build process to avoid pulling down big files too often.
+
+```
+md5sum assets/video/*.MP4 > assets/video/manifest.txt
+```
