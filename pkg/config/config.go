@@ -110,7 +110,7 @@ func init() {
 	TripbotServerPort = os.Getenv("TRIPBOT_SERVER_PORT")
 	VlcServerHost = os.Getenv("VLC_SERVER_HOST")
 	VlcServerPort = os.Getenv("VLC_SERVER_PORT")
-	MpdServerPort = os.Getenv("MPD_SERVER_PORT")
+	MpdServerHost = os.Getenv("MPD_SERVER_HOST")
 
 	// google-specific settings
 	GoogleProjectID = os.Getenv("GOOGLE_APPS_PROJECT_ID")

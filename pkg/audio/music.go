@@ -38,7 +38,7 @@ func init() {
 func connect() {
 	var err error
 	// Connect to MPD server
-	mpdConn, err = mpd.Dial("tcp", config.MpdServer)
+	mpdConn, err = mpd.Dial("tcp", config.MpdServerHost)
 	if err != nil {
 		terrors.Log(err, "Error connecting to MPD")
 	}
