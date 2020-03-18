@@ -39,10 +39,10 @@ func CoordsFromImage(path string) (float64, float64, error) {
 // cropImage cuts a dashcam screencap down to just the bottom right corner
 func cropImage(srcFilename string) (string, error) {
 
-	//TODO: if config.CroppedPath isn't accessible, because we can't proceed
+	//TODO: if config.CroppedCornersDir isn't accessible, because we can't proceed
 
 	// exit early if the cropped file already exists
-	croppedFile := filepath.Join(config.CroppedPath, path.Base(srcFilename))
+	croppedFile := filepath.Join(config.CroppedCornersDir, path.Base(srcFilename))
 	if helpers.FileExists(croppedFile) {
 		return croppedFile, nil
 	}

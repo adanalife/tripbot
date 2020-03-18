@@ -10,10 +10,11 @@ import (
 	"github.com/logrusorgru/aurora"
 )
 
+//TODO: not all required ENV vars are required for vlc-server
+
 const (
 	// these are the default subdirectories
-	screencapDir = "screencaps"
-	videoDir     = "_all"
+	videoDir = "_all"
 
 	DBPath            = "db/tripbot.db"
 	UserJoinsBucket   = "user_joins"
@@ -21,7 +22,6 @@ const (
 	CoordsBucket      = "coords"
 )
 
-//TODO: add consistency between use of Dir vs Path in these names
 var (
 	Environment string
 	// ChannelName is the username of the stream
@@ -42,8 +42,8 @@ var (
 	DashcamDir string
 	// MapsOutputDir is where generated maps will be stored
 	MapsOutputDir string
-	// CroppedPath is where we store the cropped versions of screencaps (to OCR them)
-	CroppedPath string
+	// CroppedCornersDir is where we store the cropped versions of screencaps (to OCR them)
+	CroppedCornersDir string
 	// ScreencapDir is where we store full screenshots from the videos
 	ScreencapDir string
 	// VideoDir is where the videos live
@@ -59,8 +59,7 @@ var (
 	TripbotServerPort string
 	// VlcServerHost is used to specify the host for the VLC webserver
 	VlcServerHost string
-	// VlcServerPort is used to specify the port on which the VLC webserver runs
-	VlcServerPort string
+	MpdServerHost string
 )
 
 func init() {
@@ -76,12 +75,13 @@ func init() {
 		"GOOGLE_MAPS_API_KEY",
 		"READ_ONLY",
 		"DASHCAM_DIR",
+		"SCREENCAP_DIR",
 		"MAPS_OUTPUT_DIR",
 		"CROPPED_CORNERS_DIR",
 		"TRIPBOT_HTTP_AUTH",
 		"TRIPBOT_SERVER_PORT",
 		"VLC_SERVER_HOST",
-		"VLC_SERVER_PORT",
+		"MPD_SERVER_HOST",
 	}
 	for _, v := range requiredVars {
 		_, ok := os.LookupEnv(v)
@@ -98,15 +98,16 @@ func init() {
 
 	// directory settings
 	DashcamDir = os.Getenv("DASHCAM_DIR")
+	ScreencapDir = os.Getenv("SCREENCAP_DIR")
 	MapsOutputDir = os.Getenv("MAPS_OUTPUT_DIR")
-	CroppedPath = os.Getenv("CROPPED_CORNERS_DIR")
+	CroppedCornersDir = os.Getenv("CROPPED_CORNERS_DIR")
 
 	// HTTP server settings
 	ExternalURL = os.Getenv("EXTERNAL_URL")
 	TripbotHttpAuth = os.Getenv("TRIPBOT_HTTP_AUTH")
 	TripbotServerPort = os.Getenv("TRIPBOT_SERVER_PORT")
 	VlcServerHost = os.Getenv("VLC_SERVER_HOST")
-	VlcServerPort = os.Getenv("VLC_SERVER_PORT")
+	MpdServerHost = os.Getenv("MPD_SERVER_HOST")
 
 	// google-specific settings
 	GoogleProjectID = os.Getenv("GOOGLE_APPS_PROJECT_ID")
@@ -125,17 +126,33 @@ func init() {
 
 	// assemble compound settings
 	VideoDir = path.Join(DashcamDir, videoDir)
-	ScreencapDir = path.Join(DashcamDir, screencapDir)
 
-	//TODO: the MapsOutputDir could get created automatically
-	//TODO: maybe also the CroppedPath, (which should be "CroppedDir")
-	//      but note that it would need to be smart enough to generate new cropped corners
+	// thes dirs will get created on boot if necessary
+	dirsToCreate := []string{
+		ScreencapDir,
+		CroppedCornersDir,
+		MapsOutputDir,
+	}
+	for _, d := range dirsToCreate {
+		// we cant use helpers.FileExists() here due to import loop
+		_, err := os.Stat(d)
+		if err != nil {
+			if os.IsNotExist(err) {
+				log.Println("Creating directory", d)
+				err = os.MkdirAll(d, 0755)
+				if err != nil {
+					log.Fatalf("Error creating directory %s: %s", d, err)
+				}
+			}
+		}
+	}
+
 	// check that the paths exist
 	requiredDirs := []string{
 		DashcamDir,
 		VideoDir,
 		ScreencapDir,
-		CroppedPath,
+		CroppedCornersDir,
 		MapsOutputDir,
 	}
 	for _, d := range requiredDirs {
@@ -166,6 +183,8 @@ func setEnvironment() {
 		Environment = "production"
 	case "dev", "development":
 		Environment = "development"
+	case "test", "testing":
+		Environment = "testing"
 	default:
 		log.Fatalf("Unknown ENV: %s", env)
 	}
@@ -174,7 +193,8 @@ func setEnvironment() {
 	err = godotenv.Load(".env." + Environment)
 
 	if err != nil {
-		log.Fatal("Error loading .env file:", err)
+		log.Println("Error loading .env file:", err)
+		log.Println("Continuing anyway...")
 	}
 }
 

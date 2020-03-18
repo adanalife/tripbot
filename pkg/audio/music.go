@@ -8,6 +8,7 @@ import (
 	"github.com/dmerrick/danalol-stream/pkg/config"
 	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
 	"github.com/fhs/gompd/mpd"
+	"github.com/logrusorgru/aurora"
 	"github.com/mitchellh/go-ps"
 	"github.com/skratchdot/open-golang/open"
 )
@@ -15,15 +16,12 @@ import (
 var mpdConn *mpd.Client
 var Enabled = true
 
-const (
-	grooveSaladURL = "http://somafm.com/groovesalad256.pls"
-	mpdServer      = "localhost:6600"
-)
+const grooveSaladURL = "http://somafm.com/groovesalad256.pls"
 
 func init() {
 	// disable audio on OS X
 	if runtime.GOOS != "linux" {
-		log.Println("Disabling audio since we're not on Linux")
+		log.Println(aurora.Yellow("Disabling audio since we're not on Linux"))
 		Enabled = false
 		return
 	}
@@ -40,7 +38,7 @@ func init() {
 func connect() {
 	var err error
 	// Connect to MPD server
-	mpdConn, err = mpd.Dial("tcp", mpdServer)
+	mpdConn, err = mpd.Dial("tcp", config.MpdServerHost)
 	if err != nil {
 		terrors.Log(err, "Error connecting to MPD")
 	}

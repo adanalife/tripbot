@@ -1,0 +1,65 @@
+version: '3.7'
+
+services:
+  tripbot:
+    env_file:
+      - infra/docker/env.docker
+    build:
+      context: .
+      dockerfile: infra/docker/tripbot/Dockerfile
+    depends_on:
+      - db
+      - vlc
+      - mpd
+    ports:
+      # this should match the TRIPBOT_SERVER_PORT env var
+      - "8080"
+    #TODO: do we even need this?
+    volumes:
+      - ./assets/video:/danalol/Dashcam/_all
+    restart: unless-stopped
+
+  vlc:
+    env_file:
+      - infra/docker/env.docker
+    build:
+      context: .
+      dockerfile: infra/docker/vlc/Dockerfile
+    ports:
+      # this should match the VLC_SERVER_HOST env var
+      - "8088"
+    volumes:
+      - ./assets/video:/danalol/Dashcam/_all
+    restart: unless-stopped
+
+  db:
+    image: postgres
+    restart: always
+    ports:
+      - "5432"
+    environment:
+      POSTGRES_PASSWORD: "${DATABASE_PASS}"
+      POSTGRES_USER: "${DATABASE_USER}"
+      POSTGRES_DB: "${DATABASE_DB}"
+    volumes:
+      - ./infra/docker/init.sql:/docker-entrypoint-initdb.d/init.sql
+      # - ./tmp/data:/var/lib/postgresql/data
+
+  mpd:
+    image: wernight/mopidy
+    ports:
+      - "6600:6601"
+    volumes:
+      - ./infra/mopidy.conf:/config/mopidy.conf
+    # devices:
+    #   - /dev/snd
+    restart: unless-stopped
+
+  migrate:
+    image: migrate/migrate
+    depends_on:
+      - db
+    volumes:
+      - ./db/migrate:/migrations
+    command: ["-path", "/migrations", "-database",  "postgres://${DATABASE_USER}:${DATABASE_PASS}@${DATABASE_HOST}:5432/${DATABASE_DB}?sslmode=disable", "up"]
+    restart: on-failure

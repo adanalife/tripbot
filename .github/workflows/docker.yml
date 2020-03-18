@@ -1,0 +1,49 @@
+name: Docker
+on: [pull_request]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      CHANNEL_NAME: ${{ secrets.CHANNEL_NAME }}
+      BOT_USERNAME: ${{ secrets.BOT_USERNAME }}
+      TWITCH_AUTH_TOKEN: ${{ secrets.TWITCH_AUTH_TOKEN }}
+      TWITCH_CLIENT_ID: ${{ secrets.TWITCH_CLIENT_ID }}
+      TWITCH_CLIENT_SECRET: ${{ secrets.TWITCH_CLIENT_SECRET }}
+
+    steps:
+    - name: Checkout (without LFS)
+      uses: actions/checkout@v1
+    - name: Fetch videos from cache
+      id: restore-videos
+      uses: actions/cache@v1
+      with:
+        path: assets/video
+        key: ${{ runner.os }}-video-${{ hashFiles('assets/video/*.MP4') }}
+        restore-keys: |
+          ${{ runner.os }}-video-
+    # use git-lfs to download big video file(s)
+    # (but only if the cache hit missed)
+    - name: Checkout (with LFS)
+      uses: actions/checkout@v1
+      if: steps.restore-videos.outputs.cache-hit != 'true'
+      with:
+        lfs: true
+    #TODO: do both of these need the ENV file?
+    # if you need to debug docker builds, remove --parallel
+    - name: Build docker-compose stack
+      run: docker-compose --project-directory . -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.testing.yml -f infra/docker/docker-compose.github.yml build --parallel
+    - name: Start the docker-compose stack
+      run: docker-compose --project-directory . --env-file infra/docker/env.docker -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.testing.yml -f infra/docker/docker-compose.github.yml up -d
+    - run: sleep 10
+    - name: Check logs (tripbot)
+      run: docker logs danalol-stream_tripbot_1
+    - name: Check logs (migrate)
+      run: docker logs danalol-stream_migrate_1
+    - name: Check logs (vlc)
+      run: docker logs danalol-stream_vlc_1
+    - name: Check running containers
+      run: docker ps -a
+    # - name: Run a healthcheck against tripbot
+    #   run: curl -v https://tripbot:8080/health
+    # - name: Run test suite
+    #   run: docker exec tripbot go test ./...

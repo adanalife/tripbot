@@ -1,0 +1,21 @@
+version: '3.7'
+
+services:
+  tripbot:
+    # these are set at the github level:
+    # https://github.com/dmerrick/danalol-stream/settings/secrets/new
+    environment:
+      - CHANNEL_NAME
+      - BOT_USERNAME
+      - TWITCH_AUTH_TOKEN
+      - TWITCH_CLIENT_ID
+      - TWITCH_CLIENT_SECRET
+
+  vlc:
+    #TODO: almost none of these are actually required
+    environment:
+      - CHANNEL_NAME
+      - BOT_USERNAME
+      - TWITCH_AUTH_TOKEN
+      - TWITCH_CLIENT_ID
+      - TWITCH_CLIENT_SECRET

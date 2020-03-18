@@ -22,9 +22,13 @@ infra/certs
 # ignore google credentials
 infra/google
 
+# compiled binaries
+bin/tripbot
+bin/vlc-server
+
 # env files shouldn't get checked in
 # because they have secrets
-.env.dev
+.env.development
 .env.staging
 .env.production
 
@@ -37,3 +41,5 @@ infra/google
 db/*.sql
 db/*.gz
 
+# temporary files
+tmp
