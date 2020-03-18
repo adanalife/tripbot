@@ -45,7 +45,7 @@ services:
       POSTGRES_DB: tripbot_dev
     volumes:
       - ./infra/docker/init.sql:/docker-entrypoint-initdb.d/init.sql
-      - ./tmp/data:/var/lib/postgresql/data
+      # - ./tmp/data:/var/lib/postgresql/data
 
   mpd:
     image: wernight/mopidy
@@ -65,3 +65,4 @@ services:
     volumes:
       - ./db/migrate:/migrations
     command: ["-path", "/migrations", "-database",  "postgres://${DATABASE_USER}:${DATABASE_PASS}@${DATABASE_HOST}:5432/${DATABASE_DB}?sslmode=disable", "up"]
+    restart: on-failure
