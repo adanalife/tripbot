@@ -1,5 +1,4 @@
 # buster is the debian release, c.p. https://askubuntu.com/a/445496
-#TODO: we used to have "as go-builder", is that useful?
 FROM golang:1.14-buster
 
 WORKDIR /go/src/github.com/dmerrick/danalol-stream
@@ -20,12 +19,11 @@ RUN ln -s /go/src/github.com/dmerrick/danalol-stream /danalol
 # create danalol user
 RUN adduser --system --group --disabled-password --no-create-home --home /danalol danalol
 
+#TODO: try switching user first and saving some time on build
+
 # give app user ownership
 RUN chown danalol:danalol /danalol
 RUN chown -R danalol:danalol /go/src/github.com/dmerrick/danalol-stream
-
-RUN ls -alh /danalol
-RUN ls -alh /go/src/github.com/dmerrick/danalol-stream
 
 # switch to the app user
 USER danalol
