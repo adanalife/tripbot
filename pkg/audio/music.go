@@ -16,10 +16,7 @@ import (
 var mpdConn *mpd.Client
 var Enabled = true
 
-const (
-	grooveSaladURL = "http://somafm.com/groovesalad256.pls"
-	mpdServer      = "localhost:6600"
-)
+const grooveSaladURL = "http://somafm.com/groovesalad256.pls"
 
 func init() {
 	// disable audio on OS X
@@ -41,7 +38,7 @@ func init() {
 func connect() {
 	var err error
 	// Connect to MPD server
-	mpdConn, err = mpd.Dial("tcp", mpdServer)
+	mpdConn, err = mpd.Dial("tcp", config.MpdServer)
 	if err != nil {
 		terrors.Log(err, "Error connecting to MPD")
 	}

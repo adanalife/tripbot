@@ -60,6 +60,7 @@ var (
 	VlcServerHost string
 	// VlcServerPort is used to specify the port on which the VLC webserver runs
 	VlcServerPort string
+	MpdServerHost string
 )
 
 func init() {
@@ -82,6 +83,7 @@ func init() {
 		"TRIPBOT_SERVER_PORT",
 		"VLC_SERVER_HOST",
 		"VLC_SERVER_PORT",
+		"MPD_SERVER_HOST",
 	}
 	for _, v := range requiredVars {
 		_, ok := os.LookupEnv(v)
@@ -108,6 +110,7 @@ func init() {
 	TripbotServerPort = os.Getenv("TRIPBOT_SERVER_PORT")
 	VlcServerHost = os.Getenv("VLC_SERVER_HOST")
 	VlcServerPort = os.Getenv("VLC_SERVER_PORT")
+	MpdServerPort = os.Getenv("MPD_SERVER_PORT")
 
 	// google-specific settings
 	GoogleProjectID = os.Getenv("GOOGLE_APPS_PROJECT_ID")
