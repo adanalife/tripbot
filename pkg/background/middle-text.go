@@ -4,11 +4,11 @@ import (
 	"log"
 	"path"
 
-	"github.com/dmerrick/danalol-stream/pkg/helpers"
+	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/onscreens"
 )
 
-var middleTextFile = path.Join(helpers.ProjectRoot(), "OBS/middle-text.txt")
+var middleTextFile = path.Join(config.RunDir, "middle-text.txt")
 
 var MiddleText *onscreens.Onscreen
 

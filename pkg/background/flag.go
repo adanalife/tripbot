@@ -4,12 +4,12 @@ import (
 	"log"
 	"path"
 
-	"github.com/dmerrick/danalol-stream/pkg/helpers"
+	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/onscreens"
 )
 
 var FlagImage *onscreens.Onscreen
-var FlagImageFile = path.Join(helpers.ProjectRoot(), "OBS/flag.png")
+var FlagImageFile = path.Join(config.RunDir, "flag.png")
 
 // var flagDuration = time.Duration(150 * time.Second)
 
