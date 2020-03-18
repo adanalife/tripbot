@@ -40,9 +40,9 @@ services:
     ports:
       - "5432"
     environment:
-      POSTGRES_PASSWORD: example
-      POSTGRES_USER: example
-      POSTGRES_DB: tripbot_dev
+      POSTGRES_PASSWORD: "${DATABASE_PASS}"
+      POSTGRES_USER: "${DATABASE_USER}"
+      POSTGRES_DB: "${DATABASE_DB}"
     volumes:
       - ./infra/docker/init.sql:/docker-entrypoint-initdb.d/init.sql
       # - ./tmp/data:/var/lib/postgresql/data
