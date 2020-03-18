@@ -4,7 +4,7 @@ FROM golang:1.14-buster
 WORKDIR /go/src/github.com/dmerrick/danalol-stream
 
 RUN apt-get update && apt-get install --no-install-recommends -y \
-    libvlc-dev
+    libvlc-dev \
  && rm -rf /var/lib/apt/lists/*
 
 #TODO: maybe just copy pkg, cmd, internal, etc?
