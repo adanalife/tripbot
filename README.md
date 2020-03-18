@@ -80,4 +80,4 @@ sudo certbot renew
 ### Tag a release version
 
 All merges to master will bump the semantic version and create a new tag automatically.
-By default it will be a patch release, but if you include #minor or #major in a commit message, it will bump those.
+By default it will be a patch release, but if you include `#minor` or `#major` in a commit message, it will bump those.
