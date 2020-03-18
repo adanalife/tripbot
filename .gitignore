@@ -40,3 +40,5 @@ bin/vlc-server
 db/*.sql
 db/*.gz
 
+# temporary files
+tmp
