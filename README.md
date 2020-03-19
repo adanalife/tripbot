@@ -51,6 +51,6 @@ See [infra/README.md](infra/README.md) for infra setup instructions.
 
 ### Database
 
-See [db/README.md](#) for database instructions.
+See [db/README.md](db/README.md) for database instructions.
 
 
