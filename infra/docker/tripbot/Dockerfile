@@ -1,7 +1,7 @@
 # buster is the debian release, c.p. https://askubuntu.com/a/445496
 FROM golang:1.14-buster
 
-WORKDIR /go/src/github.com/dmerrick/danalol-stream
+WORKDIR /go/src/github.com/dmerrick/tripbot
 
 # install dependencies
 RUN apt-get update && apt-get install --no-install-recommends -y \
@@ -17,7 +17,7 @@ RUN adduser --system --group --disabled-password --no-create-home danalol
 COPY --chown=danalol:danalol . .
 
 # create symlink to /danalol and give user permissions on it
-RUN ln -s /go/src/github.com/dmerrick/danalol-stream /danalol \
+RUN ln -s /go/src/github.com/dmerrick/tripbot /danalol \
  && chown danalol:danalol /danalol
 
 # set home dir for app user
