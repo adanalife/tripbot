@@ -63,6 +63,8 @@ func runCommand(user users.User, message string) {
 		shutdownCmd(&user)
 	case "!restartmusic":
 		restartMusicCmd(&user)
+	case "!carnoise":
+		carNoiseCmd(&user)
 	case "!socialmedia":
 		Say("Find me outside of Twitch: !twitter, !instagram, !facebook, !youtube")
 	case "!commands":

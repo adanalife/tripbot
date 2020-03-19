@@ -333,6 +333,20 @@ func restartMusicCmd(user *users.User) {
 	}
 }
 
+func carNoiseCmd(user *users.User) {
+	log.Println(user.Username, "ran !carnoise")
+	if !helpers.UserIsAdmin(user.Username) {
+		return
+	}
+
+	if helpers.RunningOnDarwin() {
+		return
+	}
+
+	Say("Switching audio to car noise")
+	audio.PlayCarNoise()
+}
+
 //TODO: this will always be lower case, find out why
 // middleCmd sets the text at the bottom-middle of the stream
 func middleCmd(user *users.User, params []string) {

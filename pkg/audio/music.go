@@ -16,7 +16,10 @@ import (
 var mpdConn *mpd.Client
 var Enabled = true
 
-const grooveSaladURL = "http://somafm.com/groovesalad256.pls"
+const (
+	grooveSaladURL = "http://somafm.com/groovesalad256.pls"
+	carNoiseURL    = "https://www.youtube.com/watch?v=eyT2qL6VAl8"
+)
 
 func init() {
 	// disable audio on OS X
@@ -64,6 +67,23 @@ func PlayGrooveSalad() {
 		return
 	}
 	err := mpdConn.Add(grooveSaladURL)
+	if err != nil {
+		terrors.Log(err, "Error adding to MPD playlist")
+	}
+	// negative values play the current track
+	err = mpdConn.Play(-1)
+	if err != nil {
+		terrors.Log(err, "Error playing MPD track")
+	}
+}
+
+func PlayCarNoise() {
+	log.Println("Starting Car Noise")
+	if mpdConn == nil {
+		log.Println("No connection to MPD found")
+		return
+	}
+	err := mpdConn.Add(carNoiseURL)
 	if err != nil {
 		terrors.Log(err, "Error adding to MPD playlist")
 	}
