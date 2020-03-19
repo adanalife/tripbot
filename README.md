@@ -15,7 +15,8 @@ Thanks for watching!
 
 ### How it all works
 
-There are two main components, the chatbot itself, and a VLC-based video server.
+There are two main components.
+There's the chatbot itself, which listens for user commands, and a VLC-based video server, which manages the currently-playing video.
 They can be run on separate computers.
 
 The general flow of information looks like this:
