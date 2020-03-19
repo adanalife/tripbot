@@ -11,7 +11,6 @@ require (
 	github.com/dimiro1/banner v0.0.0-20161108151223-c2f858997d49
 	github.com/disintegration/imaging v1.6.0
 	github.com/fhs/gompd v2.0.0+incompatible
-	github.com/fsnotify/fsevents v0.1.1 // indirect
 	github.com/gempir/go-twitch-irc/v2 v2.1.0
 	github.com/getsentry/sentry-go v0.3.1
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0 // indirect
