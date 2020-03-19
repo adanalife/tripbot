@@ -1,4 +1,4 @@
-module github.com/dmerrick/danalol-stream
+module github.com/dmerrick/tripbot
 
 go 1.12
 
