@@ -1,4 +1,55 @@
-## Setting up new machine
+## Common Tasks
+
+### Tag a release version
+
+All merges to master will bump the semantic version and create a new tag automatically.
+By default it will be a patch release, but if you include `#minor` or `#major` in a commit message, it will bump those.
+
+### Backup logs
+
+```bash
+mv log/bot.log log/bot.$(date "+%Y%m%d").log
+```
+
+### Update a package
+
+```bash
+go get -u github.com/nicklaw5/helix
+```
+
+### See out-of-date packages
+```bash
+go get -u github.com/psampaz/go-mod-outdated
+go list -u -m -json all | go-mod-outdated
+```
+
+
+### Create SSL certificates using letsencrypt
+```bash
+EXTERNAL_URL=tripbot.example.com
+sudo certbot -d $EXTERNAL_URL --manual --preferred-challenges dns certonly
+# use this to verify the DNS change:
+dig -t txt _acme-challenge.$EXTERNAL_URL
+# copy over the new certs
+sudo cp /etc/letsencrypt/live/$EXTERNAL_URL/fullchain.pem infra/certs/$EXTERNAL_URL.fullchain.pem
+sudo cp /etc/letsencrypt/live/$EXTERNAL_URL/privkey.pem infra/certs/$EXTERNAL_URL.key
+```
+
+To renew certs:
+```bash
+sudo certbot renew
+```
+
+### Create new video manifest
+
+The video manifest is used in the GitHub Actions build process to avoid pulling down big files too often.
+
+```bash
+md5sum assets/video/*.MP4 > assets/video/manifest.txt
+```
+
+
+## Notes on Setting up new machine
 
 These are just notes, this doc needs to be updated with Docker setup instructions.
 
