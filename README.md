@@ -29,13 +29,14 @@ alias devenv="$(pwd)/bin/devenv"
 
 # spin up tripbot stack on current machine
 devenv up --daemon
-# shut down everything
-devenv down
-
 # see running containers
 devenv ps
+
 # see logs for a specific container
 devenv logs tripbot
+
+# shut down everything
+devenv down
 ```
 
 
