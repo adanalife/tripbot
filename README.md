@@ -5,13 +5,16 @@
 [![Build Status](https://img.shields.io/endpoint.svg?url=https%3A%2F%2Factions-badge.atrox.dev%2Fdmerrick%2Ftripbot%2Fbadge&style=flat)](https://actions-badge.atrox.dev/dmerrick/tripbot/goto)
 [![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
 
-This is the source code to [whereisdana.today](http://whereisdana.today)
+This is the source code to [whereisdana.today](http://whereisdana.today), a 24/7 interactive [slow-tv](https://en.wikipedia.org/wiki/Slow_television) art project.
 
-There are two main components, the chatbot itself, and a VLC server.
+There are two main components, the chatbot itself, and a VLC-based video server.
+They can be run on separate computers.
 
 The general flow of information looks like this:
 
 ![](assets/infra-diagram.png)
+
+*Not pictured: a relational database, an MPD-based audio server, and a NAS.*
 
 If you like the project, please consider subscribing to my channel.
 Thanks for watching!
