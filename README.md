@@ -1,4 +1,4 @@
-# A Dana Life... Live!
+# Tripbot loves you :robot: :heart:
 
 [![GoDoc](https://godoc.org/github.com/dmerrick/tripbot?status.svg)](https://godoc.org/github.com/dmerrick/tripbot)
 [![Go Report Card](https://goreportcard.com/badge/github.com/dmerrick/tripbot)](https://goreportcard.com/report/github.com/dmerrick/tripbot)
