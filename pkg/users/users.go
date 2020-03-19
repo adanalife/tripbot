@@ -4,13 +4,13 @@ import (
 	"log"
 	"time"
 
-	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
-	"github.com/dmerrick/danalol-stream/pkg/helpers"
-	"github.com/dmerrick/danalol-stream/pkg/twitch"
+	terrors "github.com/dmerrick/tripbot/pkg/errors"
+	"github.com/dmerrick/tripbot/pkg/helpers"
+	"github.com/dmerrick/tripbot/pkg/twitch"
 	"github.com/logrusorgru/aurora"
 
-	"github.com/dmerrick/danalol-stream/pkg/config"
-	"github.com/dmerrick/danalol-stream/pkg/database"
+	"github.com/dmerrick/tripbot/pkg/config"
+	"github.com/dmerrick/tripbot/pkg/database"
 )
 
 type User struct {

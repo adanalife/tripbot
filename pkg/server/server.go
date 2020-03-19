@@ -7,11 +7,11 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/dmerrick/danalol-stream/pkg/chatbot"
-	"github.com/dmerrick/danalol-stream/pkg/config"
-	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
-	mytwitch "github.com/dmerrick/danalol-stream/pkg/twitch"
-	"github.com/dmerrick/danalol-stream/pkg/users"
+	"github.com/dmerrick/tripbot/pkg/chatbot"
+	"github.com/dmerrick/tripbot/pkg/config"
+	terrors "github.com/dmerrick/tripbot/pkg/errors"
+	mytwitch "github.com/dmerrick/tripbot/pkg/twitch"
+	"github.com/dmerrick/tripbot/pkg/users"
 	"github.com/logrusorgru/aurora"
 	"golang.org/x/crypto/acme/autocert"
 )

@@ -8,10 +8,10 @@ import (
 	"path"
 	"path/filepath"
 
-	"github.com/dmerrick/danalol-stream/pkg/config"
-	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
-	"github.com/dmerrick/danalol-stream/pkg/helpers"
-	"github.com/dmerrick/danalol-stream/pkg/video"
+	"github.com/dmerrick/tripbot/pkg/config"
+	terrors "github.com/dmerrick/tripbot/pkg/errors"
+	"github.com/dmerrick/tripbot/pkg/helpers"
+	"github.com/dmerrick/tripbot/pkg/video"
 	"github.com/kelvins/geocoder"
 )
 

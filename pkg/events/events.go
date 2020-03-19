@@ -4,8 +4,8 @@ import (
 	"log"
 	"time"
 
-	"github.com/dmerrick/danalol-stream/pkg/config"
-	"github.com/dmerrick/danalol-stream/pkg/database"
+	"github.com/dmerrick/tripbot/pkg/config"
+	"github.com/dmerrick/tripbot/pkg/database"
 	"github.com/logrusorgru/aurora"
 )
 

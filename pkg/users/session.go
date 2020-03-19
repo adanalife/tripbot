@@ -9,14 +9,14 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/dmerrick/danalol-stream/pkg/config"
-	"github.com/dmerrick/danalol-stream/pkg/events"
-	"github.com/dmerrick/danalol-stream/pkg/helpers"
+	"github.com/dmerrick/tripbot/pkg/config"
+	"github.com/dmerrick/tripbot/pkg/events"
+	"github.com/dmerrick/tripbot/pkg/helpers"
 	"github.com/hako/durafmt"
 
-	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
-	"github.com/dmerrick/danalol-stream/pkg/twitch"
-	mytwitch "github.com/dmerrick/danalol-stream/pkg/twitch"
+	terrors "github.com/dmerrick/tripbot/pkg/errors"
+	"github.com/dmerrick/tripbot/pkg/twitch"
+	mytwitch "github.com/dmerrick/tripbot/pkg/twitch"
 	"github.com/logrusorgru/aurora"
 )
 

@@ -4,8 +4,8 @@ import (
 	"log"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/dmerrick/danalol-stream/pkg/config"
-	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
+	"github.com/dmerrick/tripbot/pkg/config"
+	terrors "github.com/dmerrick/tripbot/pkg/errors"
 	"github.com/nicklaw5/helix"
 )
 

@@ -7,11 +7,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
+	terrors "github.com/dmerrick/tripbot/pkg/errors"
 
 	"github.com/disintegration/imaging"
-	"github.com/dmerrick/danalol-stream/pkg/config"
-	"github.com/dmerrick/danalol-stream/pkg/helpers"
+	"github.com/dmerrick/tripbot/pkg/config"
+	"github.com/dmerrick/tripbot/pkg/helpers"
 	"github.com/otiai10/gosseract"
 )
 
