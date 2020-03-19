@@ -20,15 +20,15 @@ var videoFiles []string
 //TODO: there are a ton of potentially-useful avcodec flags
 //TODO: break some of these into ENV vars
 var vlcCmdFlags = []string{
-	// "-vv",     // be very verbose
+	"--ignore-config", // ignore any config files that might get loaded
+	// "-vv",                       // be very verbose (used for debugging)
 	"--quiet",                   // reduce terminal output
-	"--ignore-config",           // ignore any config files that might get loaded
 	"--no-audio",                // none of the videos have audio
 	"--network-caching", "6666", // network cache (in ms)
 	"--file-caching", "11111", // file cache (in ms)
 	// can be none, vdpau_avcodec, or cuda
-	"--avcodec-hw", "vdpau_avcodec", // enable hardware decoding
-	"--avcodec-threads", "1",
+	"--avcodec-hw", "none,", // enable hardware decoding
+	"--vout", "xvideo", // use X11 (and skip vdpau)
 	"--file-logging",                                      // enable file logging
 	"--logfile", "log/vlc." + config.Environment + ".log", // specify location of log
 }
