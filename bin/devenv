@@ -6,7 +6,7 @@ export COMPOSE_DOCKER_CLI_BUILD=1
 export DOCKER_BUILDKIT=1
 
 docker-compose \
-  -p danalol-stream \
+  --project-name tripbot \
   --project-directory . \
   --env-file infra/docker/env.docker \
   -f infra/docker/docker-compose.yml \
