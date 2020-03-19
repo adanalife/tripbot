@@ -17,15 +17,23 @@ If you like it, please follow my channel. Thanks for watching!
 [dana.lol](https://dana.lol)
 
 
-## Install Dependencies
+## Running tripbot locally
 
-Go should auto-magically pull down all of the required packages when you use `go run` to run something.
-You will also need to run:
+You can use `docker-compose` to run tripbot on your own machine.
+A helper script (`[bin/devenv](https://github.com/dmerrick/tripbot/blob/master/bin/devenv)`) has been created to make the process a little easier.
+For example:
 
+```bash
+# spin up a local tripbot
+bin/devenv up
+# spin down the tripbot stack
+bin/devenv down
+# see logs for a specific container
+docker logs tripbot_db_1
 ```
-# install tesseract and libvlc
-sudo apt install tesseract-ocr libtesseract-dev libvlc-dev
-```
+
+
+## Other Useful Docs
 
 ### Infra
 
