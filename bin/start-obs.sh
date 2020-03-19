@@ -16,7 +16,7 @@ else
   if [ "$OBS_START_STREAMING" = "true" ] ; then
 	/snap/bin/obs-studio --verbose --startstreaming "$@" >> log/obs-"${DATE}".log 2>&1 &
   else
-	nice -n "-15" obs -start "$@" >> log/obs-"${DATE}".log 2>&1 &
+	/snap/bin/obs-studio --verbose "$@" >> log/obs-"${DATE}".log 2>&1 &
   fi
 fi
 
