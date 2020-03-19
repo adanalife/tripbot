@@ -10,12 +10,11 @@ ignore/
 # ignore stray movie files that made it in
 *.MP4
 
-# things in the OBS directory that are
-# temporary or private
-OBS/Twitch
-OBS/*.txt
-OBS/*-live
-OBS/flag.png
+# things in the OBS directory that are private
+configs/OBS/Twitch
+
+# the temporary files managed by the app
+run
 
 # ignore SSL certs
 infra/certs

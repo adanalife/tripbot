@@ -7,13 +7,13 @@ import (
 	"path"
 	"time"
 
-	"github.com/dmerrick/danalol-stream/pkg/helpers"
+	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/onscreens"
 	"github.com/dmerrick/danalol-stream/pkg/users"
 )
 
 var leaderboardDuration = time.Duration(20 * time.Second)
-var leaderboardFile = path.Join(helpers.ProjectRoot(), "OBS/leaderboard.txt")
+var leaderboardFile = path.Join(config.RunDir, "leaderboard.txt")
 
 var Leaderboard *onscreens.Onscreen
 

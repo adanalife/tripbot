@@ -75,6 +75,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			// use the code to generate an access token
 			mytwitch.GenerateUserAccessToken(code)
 
+			//TODO: return a pretty HTML page here (black background, logo, etc)
 			fmt.Fprintf(w, "Success!")
 			return
 

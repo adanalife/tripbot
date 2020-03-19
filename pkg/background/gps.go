@@ -12,7 +12,7 @@ import (
 var GPSImage *onscreens.Onscreen
 
 var gpsDuration = time.Duration(150 * time.Second)
-var gpsImageFile = path.Join(helpers.ProjectRoot(), "OBS/GPS.png")
+var gpsImageFile = path.Join(helpers.ProjectRoot(), "assets", "GPS.png")
 
 func InitGPSImage() {
 	log.Println("Creating GPS image onscreen")

@@ -6,7 +6,7 @@ import (
 	"path"
 	"time"
 
-	"github.com/dmerrick/danalol-stream/pkg/helpers"
+	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/onscreens"
 )
 
@@ -14,7 +14,7 @@ var RightRotator *onscreens.Onscreen
 
 var rightRotatorUpdateFrequency = time.Duration(90 * time.Second)
 
-var rightRotatorFile = path.Join(helpers.ProjectRoot(), "OBS/right-message.txt")
+var rightRotatorFile = path.Join(config.RunDir, "right-message.txt")
 
 var possibleRightMessages = []string{
 	"Don't forget to follow :)",

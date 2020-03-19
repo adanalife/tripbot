@@ -6,7 +6,7 @@ import (
 	"path"
 	"time"
 
-	"github.com/dmerrick/danalol-stream/pkg/helpers"
+	"github.com/dmerrick/danalol-stream/pkg/config"
 	"github.com/dmerrick/danalol-stream/pkg/onscreens"
 )
 
@@ -14,7 +14,7 @@ const lineBreak = 40
 const maxLines = 5
 
 var chatDuration = time.Duration(40 * time.Second)
-var chatFile = path.Join(helpers.ProjectRoot(), "OBS/chat.txt")
+var chatFile = path.Join(config.RunDir, "chat.txt")
 
 var Chat *onscreens.Onscreen
 var ChatLines = []string{}
