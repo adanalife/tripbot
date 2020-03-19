@@ -6,8 +6,8 @@ import (
 	"os"
 	"time"
 
-	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
-	"github.com/dmerrick/danalol-stream/pkg/helpers"
+	terrors "github.com/dmerrick/tripbot/pkg/errors"
+	"github.com/dmerrick/tripbot/pkg/helpers"
 )
 
 //TODO: these live in the background package and could/should

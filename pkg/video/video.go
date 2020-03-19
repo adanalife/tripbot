@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dmerrick/danalol-stream/pkg/background"
-	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
-	"github.com/dmerrick/danalol-stream/pkg/helpers"
-	vlcClient "github.com/dmerrick/danalol-stream/pkg/vlc-client"
+	"github.com/dmerrick/tripbot/pkg/background"
+	terrors "github.com/dmerrick/tripbot/pkg/errors"
+	"github.com/dmerrick/tripbot/pkg/helpers"
+	vlcClient "github.com/dmerrick/tripbot/pkg/vlc-client"
 	"github.com/logrusorgru/aurora"
 )
 

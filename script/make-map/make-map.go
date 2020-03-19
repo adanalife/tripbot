@@ -12,10 +12,10 @@ import (
 	"strings"
 	"time"
 
-	// "github.com/dmerrick/danalol-stream/internal/takeout"
-	"github.com/dmerrick/danalol-stream/pkg/config"
-	"github.com/dmerrick/danalol-stream/pkg/helpers"
-	"github.com/dmerrick/danalol-stream/pkg/video"
+	// "github.com/dmerrick/tripbot/internal/takeout"
+	"github.com/dmerrick/tripbot/pkg/config"
+	"github.com/dmerrick/tripbot/pkg/helpers"
+	"github.com/dmerrick/tripbot/pkg/video"
 	"googlemaps.github.io/maps"
 )
 

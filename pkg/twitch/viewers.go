@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
+	terrors "github.com/dmerrick/tripbot/pkg/errors"
 
-	"github.com/dmerrick/danalol-stream/pkg/config"
+	"github.com/dmerrick/tripbot/pkg/config"
 )
 
 // chattersAPIURL is the URL to hit for current chatter list

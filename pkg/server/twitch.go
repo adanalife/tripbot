@@ -8,8 +8,8 @@ import (
 	"net/http"
 
 	"github.com/davecgh/go-spew/spew"
-	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
-	mytwitch "github.com/dmerrick/danalol-stream/pkg/twitch"
+	terrors "github.com/dmerrick/tripbot/pkg/errors"
+	mytwitch "github.com/dmerrick/tripbot/pkg/twitch"
 	"github.com/nicklaw5/helix"
 )
 

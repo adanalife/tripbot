@@ -5,11 +5,11 @@ import (
 	"log"
 	"strings"
 
-	"github.com/dmerrick/danalol-stream/pkg/background"
-	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
-	"github.com/dmerrick/danalol-stream/pkg/helpers"
-	mylog "github.com/dmerrick/danalol-stream/pkg/log"
-	"github.com/dmerrick/danalol-stream/pkg/users"
+	"github.com/dmerrick/tripbot/pkg/background"
+	terrors "github.com/dmerrick/tripbot/pkg/errors"
+	"github.com/dmerrick/tripbot/pkg/helpers"
+	mylog "github.com/dmerrick/tripbot/pkg/log"
+	"github.com/dmerrick/tripbot/pkg/users"
 	"github.com/gempir/go-twitch-irc/v2"
 )
 

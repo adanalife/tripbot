@@ -5,7 +5,7 @@ import (
 	"log"
 
 	"cloud.google.com/go/logging"
-	"github.com/dmerrick/danalol-stream/pkg/config"
+	"github.com/dmerrick/tripbot/pkg/config"
 )
 
 var client *logging.Client

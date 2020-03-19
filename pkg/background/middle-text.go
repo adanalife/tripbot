@@ -4,8 +4,8 @@ import (
 	"log"
 	"path"
 
-	"github.com/dmerrick/danalol-stream/pkg/config"
-	"github.com/dmerrick/danalol-stream/pkg/onscreens"
+	"github.com/dmerrick/tripbot/pkg/config"
+	"github.com/dmerrick/tripbot/pkg/onscreens"
 )
 
 var middleTextFile = path.Join(config.RunDir, "middle-text.txt")

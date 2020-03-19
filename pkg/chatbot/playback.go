@@ -7,13 +7,13 @@ import (
 	"strings"
 	"time"
 
-	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
+	terrors "github.com/dmerrick/tripbot/pkg/errors"
 
-	"github.com/dmerrick/danalol-stream/pkg/background"
-	"github.com/dmerrick/danalol-stream/pkg/helpers"
-	"github.com/dmerrick/danalol-stream/pkg/users"
-	"github.com/dmerrick/danalol-stream/pkg/video"
-	vlcClient "github.com/dmerrick/danalol-stream/pkg/vlc-client"
+	"github.com/dmerrick/tripbot/pkg/background"
+	"github.com/dmerrick/tripbot/pkg/helpers"
+	"github.com/dmerrick/tripbot/pkg/users"
+	"github.com/dmerrick/tripbot/pkg/video"
+	vlcClient "github.com/dmerrick/tripbot/pkg/vlc-client"
 )
 
 func timewarpCmd(user *users.User) {

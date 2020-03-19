@@ -5,8 +5,8 @@ import (
 	"path"
 	"time"
 
-	"github.com/dmerrick/danalol-stream/pkg/helpers"
-	"github.com/dmerrick/danalol-stream/pkg/onscreens"
+	"github.com/dmerrick/tripbot/pkg/helpers"
+	"github.com/dmerrick/tripbot/pkg/onscreens"
 )
 
 var GPSImage *onscreens.Onscreen

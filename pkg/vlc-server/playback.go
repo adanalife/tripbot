@@ -4,7 +4,7 @@ import (
 	"math/rand"
 	"path/filepath"
 
-	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
+	terrors "github.com/dmerrick/tripbot/pkg/errors"
 )
 
 //TODO: should we handle the case where index is outside range?

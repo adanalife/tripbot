@@ -3,7 +3,7 @@ version: '3.7'
 services:
   tripbot:
     # these are set at the github level:
-    # https://github.com/dmerrick/danalol-stream/settings/secrets/new
+    # https://github.com/dmerrick/tripbot/settings/secrets/new
     environment:
       - CHANNEL_NAME
       - BOT_USERNAME

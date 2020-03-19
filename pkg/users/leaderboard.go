@@ -5,10 +5,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dmerrick/danalol-stream/pkg/config"
-	"github.com/dmerrick/danalol-stream/pkg/database"
-	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
-	"github.com/dmerrick/danalol-stream/pkg/helpers"
+	"github.com/dmerrick/tripbot/pkg/config"
+	"github.com/dmerrick/tripbot/pkg/database"
+	terrors "github.com/dmerrick/tripbot/pkg/errors"
+	"github.com/dmerrick/tripbot/pkg/helpers"
 	"github.com/logrusorgru/aurora"
 )
 

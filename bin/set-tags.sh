@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# this script sets the stream tags
+#TODO: turn this into golang code
+
 # 6ea6bca4-4712-4ab9-a906-e3336a9d8039 english (not required)
 # 1400ca9c-84ea-414e-a85b-076a70d38ecf automotive
 # 77223888-8535-4614-974b-b1b2673456eb visual asmr

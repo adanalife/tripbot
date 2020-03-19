@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dmerrick/danalol-stream/pkg/background"
-	"github.com/dmerrick/danalol-stream/pkg/config"
-	terrors "github.com/dmerrick/danalol-stream/pkg/errors"
-	"github.com/dmerrick/danalol-stream/pkg/helpers"
+	"github.com/dmerrick/tripbot/pkg/background"
+	"github.com/dmerrick/tripbot/pkg/config"
+	terrors "github.com/dmerrick/tripbot/pkg/errors"
+	"github.com/dmerrick/tripbot/pkg/helpers"
 )
 
 //TODO: this really shouldnt live in the video pkg,
