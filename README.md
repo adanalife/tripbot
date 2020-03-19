@@ -8,11 +8,12 @@
 This is the source code to [whereisdana.today](http://whereisdana.today)
 
 There are two main components, the chatbot itself, and a VLC server.
+
 The general flow of information looks like this:
 
 ![](assets/infra-diagram.png)
 
-If you like the stream and/or the bot, please consider subscribing to my channel.
+If you like the project, please consider subscribing to my channel.
 Thanks for watching!
 
 -Dana ([dana.lol](https://dana.lol))
