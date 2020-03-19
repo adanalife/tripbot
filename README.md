@@ -20,13 +20,13 @@ If you like it, please follow my channel. Thanks for watching!
 ## Running tripbot locally
 
 You can use `docker-compose` to run tripbot on your own machine.
-A helper script (`[bin/devenv](https://github.com/dmerrick/tripbot/blob/master/bin/devenv)`) has been created to make the process a little easier.
+A helper script ([`bin/devenv`](https://github.com/dmerrick/tripbot/blob/master/bin/devenv)) has been created to make the process a little easier.
 For example:
 
 ```bash
-# spin up a local tripbot
+# spin up tripbot stack on current machine
 bin/devenv up
-# spin down the tripbot stack
+# shut down everything
 bin/devenv down
 # see logs for a specific container
 docker logs tripbot_db_1
