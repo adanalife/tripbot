@@ -28,7 +28,7 @@ var vlcCmdFlags = []string{
 	"--file-caching", "11111", // file cache (in ms)
 	// can be none, vdpau_avcodec, or cuda
 	"--avcodec-hw", "none,", // enable hardware decoding
-	"--vout", "xvideo", // use X11 (and skip vdpau)
+	"--vout", "x11", // use X11 (and skip vdpau)
 	"--file-logging",                                      // enable file logging
 	"--logfile", "log/vlc." + config.Environment + ".log", // specify location of log
 }
