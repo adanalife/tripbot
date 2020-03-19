@@ -24,12 +24,18 @@ A helper script ([`bin/devenv`](https://github.com/dmerrick/tripbot/blob/master/
 For example:
 
 ```bash
+# (optional) create alias for devenv script
+alias devenv="$(pwd)/bin/devenv"
+
 # spin up tripbot stack on current machine
-bin/devenv up
+devenv up --daemon
 # shut down everything
-bin/devenv down
+devenv down
+
+# see running containers
+devenv ps
 # see logs for a specific container
-docker logs tripbot_db_1
+devenv logs tripbot
 ```
 
 
