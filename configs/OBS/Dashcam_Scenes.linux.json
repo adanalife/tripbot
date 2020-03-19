@@ -544,7 +544,7 @@
             "push-to-talk": false,
             "push-to-talk-delay": 0,
             "settings": {
-                "file": "/home/dmerrick/other_projects/danalol-stream/OBS/flag.png-live",
+                "file": "/home/dmerrick/other_projects/danalol-stream/run/flag.png-live",
                 "unload": true
             },
             "sync": 0,
@@ -1375,7 +1375,7 @@
             "push-to-talk": false,
             "push-to-talk-delay": 0,
             "settings": {
-                "file": "/home/dmerrick/other_projects/danalol-stream/OBS/GPS.png-live",
+                "file": "/home/dmerrick/other_projects/danalol-stream/run/GPS.png-live",
                 "unload": false
             },
             "sync": 0,
@@ -2239,7 +2239,7 @@
                 "from_file": true,
                 "outline": false,
                 "text": "Don't forget to follow :)",
-                "text_file": "/home/dmerrick/other_projects/danalol-stream/OBS/right-message.txt",
+                "text_file": "/home/dmerrick/other_projects/danalol-stream/run/right-message.txt",
                 "word_wrap": true
             },
             "sync": 0,
@@ -2265,7 +2265,7 @@
             "push-to-talk": false,
             "push-to-talk-delay": 0,
             "settings": {
-                "file": "/home/dmerrick/other_projects/danalol-stream/OBS/twitch-overlay-left.png"
+                "file": "/home/dmerrick/other_projects/danalol-stream/assets/twitch-overlay-left.png"
             },
             "sync": 0,
             "versioned_id": "image_source",
@@ -2290,7 +2290,7 @@
             "push-to-talk": false,
             "push-to-talk-delay": 0,
             "settings": {
-                "file": "/home/dmerrick/other_projects/danalol-stream/OBS/twitch-overlay-right.png"
+                "file": "/home/dmerrick/other_projects/danalol-stream/assets/twitch-overlay-right.png"
             },
             "sync": 0,
             "versioned_id": "image_source",
@@ -2327,7 +2327,7 @@
                 "from_file": true,
                 "outline": false,
                 "text": "",
-                "text_file": "/home/dmerrick/other_projects/danalol-stream/OBS/leaderboard.txt"
+                "text_file": "/home/dmerrick/other_projects/danalol-stream/run/leaderboard.txt"
             },
             "sync": 0,
             "versioned_id": "text_ft2_source",
@@ -2363,7 +2363,7 @@
                 "from_file": true,
                 "outline": false,
                 "text": "",
-                "text_file": "/home/dmerrick/other_projects/danalol-stream/OBS/left-message.txt"
+                "text_file": "/home/dmerrick/other_projects/danalol-stream/run/left-message.txt"
             },
             "sync": 0,
             "versioned_id": "text_ft2_source",
@@ -2626,7 +2626,7 @@
                 "log_mode": false,
                 "outline": false,
                 "text": "",
-                "text_file": "/home/dmerrick/other_projects/danalol-stream/OBS/chat.txt",
+                "text_file": "/home/dmerrick/other_projects/danalol-stream/run/chat.txt",
                 "word_wrap": false
             },
             "sync": 0,
@@ -2664,7 +2664,7 @@
                 "from_file": true,
                 "outline": false,
                 "text": "",
-                "text_file": "/home/dmerrick/other_projects/danalol-stream/OBS/timewarp.txt"
+                "text_file": "/home/dmerrick/other_projects/danalol-stream/run/timewarp.txt"
             },
             "sync": 0,
             "versioned_id": "text_ft2_source",
@@ -2701,7 +2701,7 @@
                 "from_file": true,
                 "outline": false,
                 "text": "",
-                "text_file": "/home/dmerrick/other_projects/danalol-stream/OBS/middle-text.txt"
+                "text_file": "/home/dmerrick/other_projects/danalol-stream/run/middle-text.txt"
             },
             "sync": 0,
             "versioned_id": "text_ft2_source",
@@ -2738,7 +2738,7 @@
                 "from_file": true,
                 "outline": false,
                 "text": "",
-                "text_file": "/home/dmerrick/other_projects/danalol-stream/OBS/middle-text.txt"
+                "text_file": "/home/dmerrick/other_projects/danalol-stream/run/middle-text.txt"
             },
             "sync": 0,
             "versioned_id": "text_ft2_source",
@@ -2775,7 +2775,7 @@
                 "from_file": true,
                 "outline": false,
                 "text": "",
-                "text_file": "/home/dmerrick/other_projects/danalol-stream/OBS/timewarp.txt"
+                "text_file": "/home/dmerrick/other_projects/danalol-stream/run/timewarp.txt"
             },
             "sync": 0,
             "versioned_id": "text_ft2_source",
@@ -2800,7 +2800,7 @@
             "push-to-talk": false,
             "push-to-talk-delay": 0,
             "settings": {
-                "file": "/home/dmerrick/other_projects/danalol-stream/OBS/flag.png-live",
+                "file": "/home/dmerrick/other_projects/danalol-stream/run/flag.png-live",
                 "unload": true
             },
             "sync": 0,
