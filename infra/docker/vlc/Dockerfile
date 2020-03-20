@@ -31,4 +31,4 @@ RUN go build -o bin/vlc-server cmd/vlc-server/vlc-server.go
 
 EXPOSE 8088
 
-CMD ["./bin/vlc-server"]
+ENTRYPOINT ["./bin/vlc-server"]

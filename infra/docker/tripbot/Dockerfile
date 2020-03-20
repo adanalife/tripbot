@@ -31,4 +31,4 @@ RUN go build -o bin/tripbot cmd/tripbot/tripbot.go
 
 EXPOSE 8080
 
-CMD ["./bin/tripbot"]
+ENTRYPOINT ["./bin/tripbot"]
