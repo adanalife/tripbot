@@ -13,7 +13,7 @@ services:
       - mpd
     ports:
       # this should match the TRIPBOT_SERVER_PORT env var
-      - "8080"
+      - "8080:8080"
     #TODO: do we even need this?
     volumes:
       - ./assets/video:/danalol/Dashcam/_all
