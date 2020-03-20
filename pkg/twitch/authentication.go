@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/dmerrick/tripbot/pkg/config"
 	terrors "github.com/dmerrick/tripbot/pkg/errors"
 	"github.com/dmerrick/tripbot/pkg/helpers"
@@ -23,6 +24,12 @@ var AppAccessToken string
 // these are used to authenticate requests that require user permissions
 var UserAccessToken string
 var UserRefreshToken string
+
+var scopes = []string{
+	"openid",
+	"user:edit:broadcast",
+	"channel:read:subscriptions",
+}
 
 // init makes sure we have all of the require ENV vars
 func init() {
@@ -46,15 +53,17 @@ func init() {
 func Client() (*helix.Client, error) {
 	// use the existing client if we have one
 	if currentTwitchClient != nil {
+		spew.Dump(currentTwitchClient)
 		return currentTwitchClient, nil
 	}
+
+	spew.Dump(aurora.Blue("creating client"))
 	client, err := helix.NewClient(&helix.Options{
 		ClientID:     ClientID,
 		ClientSecret: ClientSecret,
 		// this is set at https://dev.twitch.tv/console/apps
 		RedirectURI: config.ExternalURL + "/auth/callback",
-		//TODO: move to configs lib
-		Scopes: []string{"openid", "user:edit:broadcast", "channel:read:subscriptions"},
+		Scopes:      scopes,
 	})
 	if err != nil {
 		terrors.Log(err, "error creating client")

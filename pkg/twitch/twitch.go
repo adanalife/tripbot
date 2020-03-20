@@ -5,6 +5,7 @@ import (
 	"log"
 	"strings"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/dmerrick/tripbot/pkg/config"
 	terrors "github.com/dmerrick/tripbot/pkg/errors"
 	"github.com/dmerrick/tripbot/pkg/helpers"
@@ -26,6 +27,8 @@ func getChannelID(username string) string {
 	if err != nil {
 		terrors.Log(err, "error getting user info from twitch")
 	}
+	spew.Dump(config.ChannelName)
+	spew.Dump(resp.Data)
 	if len(resp.Data.Users) < 1 {
 		terrors.Log(fmt.Errorf("missing data"), "no user in response from twitch")
 		return ""
