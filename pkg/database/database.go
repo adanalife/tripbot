@@ -54,7 +54,8 @@ func connectToDB() *sqlx.DB {
 	dbConnection, err := sqlx.Connect("postgres", connStr())
 	if err != nil {
 		terrors.Log(err, "error initializing the DB")
-		return &sqlx.DB{}
+		// return &sqlx.DB{}
+		return nil
 	}
 	return dbConnection
 }
