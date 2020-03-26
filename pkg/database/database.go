@@ -48,7 +48,7 @@ func connectToDB() *sqlx.DB {
 	dbConnection, err := sqlx.Connect("postgres", connStr())
 	if err != nil {
 		// we don't use terrors here cause it might spam
-		log.Println(aurora.Red("connection to DB failed"))
+		log.Println(aurora.Red("connection to DB failed:"), err.Error())
 		return nil
 	}
 	return dbConnection
