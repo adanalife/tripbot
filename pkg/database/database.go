@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/dmerrick/tripbot/pkg/config"
 	terrors "github.com/dmerrick/tripbot/pkg/errors"
@@ -16,7 +17,7 @@ import (
 var (
 	//TODO: this would be better as just 'con'
 	// this is how we will share the DB connection
-	DBCon *sqlx.DB
+	dbConnection *sqlx.DB
 )
 
 //TODO: is it a bad idea to actually connect to the DB here
@@ -43,15 +44,46 @@ func init() {
 		}
 	}
 
-	DBCon, err = sqlx.Connect("postgres", connStr())
-	if err != nil {
-		terrors.Fatal(err, "error initializing the DB")
-	}
 	// force a connection and test that it worked
-	err = DBCon.Ping()
-	if err != nil {
-		terrors.Fatal(err, "error connecting to DB")
+	alive := isAlive()
+	if !alive {
+		terrors.Fatal(fmt.Errorf("database error"), "error creating first connection to the DB")
 	}
+}
+
+func connectToDB() *sqlx.DB {
+	dbConnection, err := sqlx.Connect("postgres", connStr())
+	if err != nil {
+		terrors.Log(err, "error initializing the DB")
+		return &sqlx.DB{}
+	}
+	return dbConnection
+}
+
+func Connection() *sqlx.DB {
+	// during startup - if it does not exist, create it
+	if dbConnection == nil {
+		dbConnection = connectToDB()
+	}
+	connected := isAlive()
+	for connected != true { // reconnect if we lost connection
+		log.Print("Connection to DB was lost. Waiting...")
+		dbConnection.Close()
+		time.Sleep(5 * time.Second)
+		log.Print("Reconnecting...")
+		dbConnection = connectToDB()
+		connected = isAlive()
+	}
+	return dbConnection
+}
+
+func isAlive() bool {
+	err := Connection().Ping()
+	if err != nil {
+		terrors.Log(err, "error connecting to DB")
+		return false
+	}
+	return true
 }
 
 // returns a valid postgres:// url

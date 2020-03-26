@@ -20,7 +20,7 @@ var maxLeaderboardSize = 50
 func InitLeaderboard() {
 	users := []User{}
 	query := `SELECT * FROM users WHERE miles != 0 AND is_bot = false AND username!=$1 ORDER BY miles DESC LIMIT $2`
-	database.DBCon.Select(&users, query, strings.ToLower(config.ChannelName), initLeaderboardSize)
+	database.Connection().Select(&users, query, strings.ToLower(config.ChannelName), initLeaderboardSize)
 	for _, user := range users {
 		miles := fmt.Sprintf("%.1f", user.Miles)
 		pair := []string{user.Username, miles}

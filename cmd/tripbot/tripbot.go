@@ -159,7 +159,7 @@ func gracefulShutdown() {
 	//TODO: print different message if CurrentlyPlaying is ""
 	log.Printf("Last played video: %s", aurora.Yellow(video.CurrentlyPlaying.File()))
 	users.Shutdown()
-	err := database.DBCon.Close()
+	err := database.Connection().Close()
 	if err != nil {
 		terrors.Log(err, "error closing DB connection")
 	}
