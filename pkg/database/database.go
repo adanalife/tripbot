@@ -68,7 +68,6 @@ func Connection() *sqlx.DB {
 	connected := isAlive()
 	for connected != true { // reconnect if we lost connection
 		log.Print("Connection to DB was lost. Waiting...")
-		dbConnection.Close()
 		time.Sleep(5 * time.Second)
 		log.Print("Reconnecting...")
 		dbConnection = connectToDB()
