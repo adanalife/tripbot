@@ -45,9 +45,9 @@ func init() {
 	}
 
 	// force a connection and test that it worked
-	if !isAlive() {
-		terrors.Fatal(fmt.Errorf("database error"), "error creating first connection to the DB")
-	}
+	// if !isAlive() {
+	// 	terrors.Fatal(fmt.Errorf("database error"), "error creating first connection to the DB")
+	// }
 }
 
 func connectToDB() *sqlx.DB {
@@ -78,7 +78,7 @@ func Connection() *sqlx.DB {
 
 func isAlive() bool {
 	if dbConnection == nil {
-		dbConnection = connectToDB()
+		return false
 	}
 	err := dbConnection.Ping()
 	if err != nil {
