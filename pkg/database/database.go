@@ -15,11 +15,8 @@ import (
 	"github.com/logrusorgru/aurora"
 )
 
-var (
-	//TODO: this would be better as just 'con'
-	// this is how we will share the DB connection
-	dbConnection *sqlx.DB
-)
+// this is how we will share the DB connection
+var dbConnection *sqlx.DB
 
 func init() {
 	var err error
