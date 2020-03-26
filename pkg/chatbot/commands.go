@@ -309,7 +309,7 @@ func shutdownCmd(user *users.User) {
 	log.Printf("currently playing: %s", video.CurrentlyPlaying)
 	background.StopCron()
 	users.Shutdown()
-	err := database.DBCon.Close()
+	err := database.Connection().Close()
 	if err != nil {
 		log.Println(err)
 	}

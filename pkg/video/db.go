@@ -34,7 +34,7 @@ func load(slug string) (Video, error) {
 	// try to find the slug in the DB
 	videos := []Video{}
 	query := `SELECT * FROM videos WHERE slug=$1`
-	err := database.DBCon.Select(&videos, query, slug)
+	err := database.Connection().Select(&videos, query, slug)
 	if err != nil {
 		terrors.Log(err, "error fetching vid from DB")
 		return newVid, err
@@ -54,7 +54,7 @@ func loadById(id int64) (Video, error) {
 	// try to find the slug in the DB
 	videos := []Video{}
 	query := `SELECT * FROM videos WHERE id=$1`
-	err := database.DBCon.Select(&videos, query, id)
+	err := database.Connection().Select(&videos, query, id)
 	if err != nil {
 		terrors.Log(err, "error fetching vid from DB")
 		return newVid, err
@@ -136,7 +136,7 @@ func (v Video) save() error {
 		}
 	}
 
-	tx := database.DBCon.MustBegin()
+	tx := database.Connection().MustBegin()
 	tx.MustExec(
 		"INSERT INTO videos (slug, lat, lng, date_filmed, flagged, prev_vid, next_vid, state) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
 		v.Slug,
@@ -167,7 +167,7 @@ func (v Video) Next() Video {
 }
 
 func (v Video) SetNextVid(nextVid Video) error {
-	_, err := database.DBCon.NamedExec(`UPDATE videos SET next_vid=:next WHERE id = :id`,
+	_, err := database.Connection().NamedExec(`UPDATE videos SET next_vid=:next WHERE id = :id`,
 		map[string]interface{}{
 			"next": nextVid.Id,
 			"id":   v.Id,
@@ -210,7 +210,7 @@ func FindRandomByState(state string) (Video, error) {
 	videos := []Video{}
 	//TODO: ORDER BY random() will eventually get too slow
 	query := `SELECT * FROM videos WHERE state=$1 ORDER BY random() LIMIT 1`
-	err := database.DBCon.Select(&videos, query, state)
+	err := database.Connection().Select(&videos, query, state)
 	if err != nil {
 		terrors.Log(err, "error fetching vid from DB")
 		return newVid, err
