@@ -1,7 +1,8 @@
 ## Tripbot loves you :robot: :heart:
 
-[![GoDoc](https://godoc.org/github.com/dmerrick/tripbot?status.svg)](https://godoc.org/github.com/dmerrick/tripbot)
+[![GoDoc](https://godoc.org/github.com/dmerrick/tripbot?status.svg)](https://pkg.go.dev/github.com/dmerrick/tripbot)
 [![Go Report Card](https://goreportcard.com/badge/github.com/dmerrick/tripbot)](https://goreportcard.com/report/github.com/dmerrick/tripbot)
+[![Version](https://img.shields.io/github/v/release/dmerrick/tripbot?sort=semver&include_prereleases)](https://github.com/dmerrick/tripbot/releases)
 [![Build Status](https://img.shields.io/endpoint.svg?url=https%3A%2F%2Factions-badge.atrox.dev%2Fdmerrick%2Ftripbot%2Fbadge&style=flat)](https://actions-badge.atrox.dev/dmerrick/tripbot/goto)
 [![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
 
