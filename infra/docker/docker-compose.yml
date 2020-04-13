@@ -47,12 +47,10 @@ services:
 
   mpd:
     image: wernight/mopidy
-    ports:
-      - "6600:6601"
     volumes:
       - ./infra/mopidy.conf:/config/mopidy.conf
-    # devices:
-    #   - /dev/snd
+    devices:
+      - /dev/snd
     restart: unless-stopped
 
   migrate:

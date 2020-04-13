@@ -16,3 +16,8 @@ services:
   db:
     volumes:
       - ./tmp/data:/var/lib/postgresql/data
+
+  mpd:
+    ports:
+      - "6601:6600"
+      - "6680:6680"
