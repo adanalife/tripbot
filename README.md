@@ -8,7 +8,7 @@
 
 This is the source code to [whereisdana.today](http://whereisdana.today), a 24/7 interactive [slow-tv](https://en.wikipedia.org/wiki/Slow_television) art project.
 
-If you like it, please consider subscribing to my channel on [Twitch.tv](https://www.twitch.tv/ADanaLife_).
+If you like it, please consider [subscribing](https://dana.lol/prime) to my channel on [Twitch.tv](https://www.twitch.tv/ADanaLife_).
 Thanks for watching!
 
 -Dana ([dana.lol](https://dana.lol))
@@ -24,6 +24,8 @@ The general flow of information looks like this:
 ![](assets/infra-diagram.png)
 
 *Not pictured: a relational database, an MPD-based audio server, and a NAS.*
+
+For more detail, check out [Tripbot, the Adventure Robot](https://dana.lol/2020/04/15/tripbot-the-adventure-robot/).
 
 
 ### Running tripbot locally
