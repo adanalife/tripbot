@@ -22,7 +22,13 @@ var videoFiles []string
 var vlcCmdFlags = []string{
 	"--ignore-config", // ignore any config files that might get loaded
 	// "-vv",                       // be very verbose (used for debugging)
-	"--quiet",                   // reduce terminal output
+	"--quiet", // reduce terminal output
+	"--fullscreen",
+	// "--width", "1920",
+	// "--height", "1080",
+	// "--canvas-width", "1920",
+	// "--canvas-height", "1080",
+	// "--aspect-ratio", "16:9",
 	"--no-audio",                // none of the videos have audio
 	"--network-caching", "6666", // network cache (in ms)
 	"--file-caching", "11111", // file cache (in ms)
