@@ -18,6 +18,7 @@ var maxLeaderboardSize = 50
 
 // Leaderboard creates a leaderboard
 func InitLeaderboard() {
+	//TODO: exclude MathGaming here
 	users := []User{}
 	query := `SELECT * FROM users WHERE miles != 0 AND is_bot = false AND username!=$1 ORDER BY miles DESC LIMIT $2`
 	database.Connection().Select(&users, query, strings.ToLower(config.ChannelName), initLeaderboardSize)
