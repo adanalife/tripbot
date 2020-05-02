@@ -87,7 +87,7 @@ func (osc *Onscreen) Show(content string) {
 	osc.show(content)
 }
 
-// ShowFor makes an Onscreen visible for a duration
+// ShowFor makes an Onscreen visible for a duration of time
 func (osc *Onscreen) ShowFor(content string, dur time.Duration) {
 	// if it was set to not expire, running this
 	// means we changed our mind
@@ -96,6 +96,16 @@ func (osc *Onscreen) ShowFor(content string, dur time.Duration) {
 	osc.Extend(dur)
 	// make visible with the content
 	osc.show(content)
+}
+
+// Hide will remove an onscreen from the screen
+func (osc *Onscreen) Hide() {
+	osc.IsShowing = false
+	if osc.isImage {
+		osc.hideImage()
+	} else {
+		osc.hideText()
+	}
 }
 
 // show is what makes an Onscreen visible
@@ -111,21 +121,21 @@ func (osc *Onscreen) show(content string) {
 	}
 }
 
-func (osc *Onscreen) Hide() {
-	osc.IsShowing = false
-	if osc.isImage {
-		osc.hideImage()
-	} else {
-		osc.hideText()
-	}
-}
-
 // showText will write the Content to the outputFile
 func (osc Onscreen) showText() {
 	b := []byte(osc.Content)
 	err := ioutil.WriteFile(osc.outputFile, b, 0644)
 	if err != nil {
 		terrors.Log(err, "error writing to file")
+	}
+}
+
+// showImage will create a new "live" image file
+func (osc Onscreen) showImage() {
+	// copy the image to the live location
+	err := os.Link(osc.outputFile, osc.liveImage())
+	if err != nil {
+		terrors.Log(err, "error creating image")
 	}
 }
 
@@ -138,20 +148,7 @@ func (osc Onscreen) hideText() {
 	}
 }
 
-// liveImage adds a suffix to the end of the file
-// which is the file that OBS will be configured to look at
-func (osc Onscreen) liveImage() string {
-	return fmt.Sprintf("%s%s", osc.outputFile, imageSuffix)
-}
-
-func (osc Onscreen) showImage() {
-	// copy the image to the live location
-	err := os.Link(osc.outputFile, osc.liveImage())
-	if err != nil {
-		terrors.Log(err, "error creating image")
-	}
-}
-
+// hideImage will remove the "live" version of an image file
 func (osc Onscreen) hideImage() {
 	if helpers.FileExists(osc.liveImage()) {
 		err := os.Remove(osc.liveImage())
@@ -159,4 +156,10 @@ func (osc Onscreen) hideImage() {
 			terrors.Log(err, "error removing image")
 		}
 	}
+}
+
+// liveImage adds a suffix to the end of the file
+// which is the file that OBS will be configured to look at
+func (osc Onscreen) liveImage() string {
+	return fmt.Sprintf("%s%s", osc.outputFile, imageSuffix)
 }
