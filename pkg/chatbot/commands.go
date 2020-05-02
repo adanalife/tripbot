@@ -352,6 +352,7 @@ func middleCmd(user *users.User, params []string) {
 	if len(params) == 1 && strings.ToLower(params[0]) == "hide" {
 		Say("Got it! Hiding the message.")
 		background.MiddleText.Hide()
+		return
 	}
 
 	// use the params as the text
