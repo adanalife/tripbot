@@ -348,6 +348,12 @@ func middleCmd(user *users.User, params []string) {
 		return
 	}
 
+	// if the arg was "hide", hide the text from view
+	if len(params) == 1 && strings.Downcase(params[0]) == "hide" {
+		Say("Got it! Hiding the message.")
+	    background.MiddleText.Hide()
+	}
+
 	// use the params as the text
 	text := strings.Join(params, " ")
 
