@@ -66,7 +66,7 @@ func runCommand(user users.User, message string) {
 	case "!socialmedia":
 		Say("Find me outside of Twitch: !twitter, !instagram, !facebook, !youtube")
 	case "!commands":
-		Say("You can try: !location, !guess, !date, !state, !sunset, !timewarp, !miles, !leaderboard")
+		Say("You can try: !location, !guess, !date, !state, !sunset, !timewarp, !miles, !leaderboard, and many other hidden commands!")
 	case "!bonusmiles":
 		if user.IsSubscriber() {
 			bonusMilesCmd(&user)
