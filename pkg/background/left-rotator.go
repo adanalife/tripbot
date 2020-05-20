@@ -30,7 +30,7 @@ var possibleLeftMessages = []string{
 	"Try and !guess what state we're in",
 	"Where are we? (!location)",
 	"Crave something new? Try !timewarp",
-	"Find me on !socialmedia",
+	"Talk to me on !socialmedia",
 	"New here? Use !commands to interact with the bot",
 	"LEADER",
 }
