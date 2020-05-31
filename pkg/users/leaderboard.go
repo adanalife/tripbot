@@ -8,6 +8,7 @@ import (
 	"github.com/dmerrick/tripbot/pkg/database"
 	terrors "github.com/dmerrick/tripbot/pkg/errors"
 	"github.com/dmerrick/tripbot/pkg/helpers"
+	"github.com/jmoiron/sqlx"
 	"github.com/logrusorgru/aurora"
 )
 
@@ -18,8 +19,12 @@ var maxLeaderboardSize = 50
 // Leaderboard creates a leaderboard
 func InitLeaderboard() {
 	users := []User{}
-	query := `SELECT * FROM users WHERE miles != 0 AND is_bot = false AND username NOT IN ($1) ORDER BY miles DESC LIMIT $2`
-	database.Connection().Select(&users, query, config.IgnoredUsers, initLeaderboardSize)
+
+	q := `SELECT * FROM users WHERE miles != 0 AND is_bot = false AND username NOT IN ($1) ORDER BY miles DESC LIMIT $2`
+	query, args, _ := sqlx.In(q, config.IgnoredUsers, initLeaderboardSize)
+	query = database.Connection().Rebind(query)
+	database.Connection().Select(&users, query, args)
+
 	for _, user := range users {
 		miles := fmt.Sprintf("%.1f", user.Miles)
 		pair := []string{user.Username, miles}
