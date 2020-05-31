@@ -25,6 +25,8 @@ func runCommand(user users.User, message string) {
 		helpCmd(&user)
 	case "!flag":
 		flagCmd(&user)
+	case "!version":
+		versionCmd(&user)
 	case "!song":
 		songCmd(&user)
 	case "!uptime":

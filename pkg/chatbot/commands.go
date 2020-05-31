@@ -5,6 +5,8 @@ import (
 	"log"
 	"math/rand"
 	"os"
+	"os/exec"
+	"path"
 	"strings"
 	"time"
 
@@ -26,6 +28,8 @@ import (
 // over-do the time-skip features (including !skip and !back)
 var lastTimewarpTime time.Time
 
+var currentVersion string
+
 func helpCmd(user *users.User) {
 	log.Println(user.Username, "ran !help")
 	msg := fmt.Sprintf("%s (%d of %d)", help(), helpIndex+1, len(config.HelpMessages))
@@ -35,6 +39,25 @@ func helpCmd(user *users.User) {
 func flagCmd(user *users.User) {
 	log.Println(user.Username, "ran !flag")
 	video.ShowFlag()
+}
+
+func versionCmd(user *users.User) {
+	log.Println(user.Username, "ran !version")
+
+	// check if we already know the version
+	if currentVersion == "" {
+		// run the shell script to get current tripbot version
+		scriptPath := path.Join(helpers.ProjectRoot(), "bin/current-version.sh")
+		out, err := exec.Command(scriptPath).Output()
+		if err != nil {
+			terrors.Log(err, "failed to get current version")
+			Say("Failed to get current version :(")
+			return
+		}
+		currentVersion = strings.TrimSpace(string(out))
+	}
+
+	Say("Current version is " + currentVersion)
 }
 
 func songCmd(user *users.User) {
