@@ -3,7 +3,6 @@ package users
 import (
 	"fmt"
 	"strconv"
-	"strings"
 
 	"github.com/dmerrick/tripbot/pkg/config"
 	"github.com/dmerrick/tripbot/pkg/database"
@@ -18,10 +17,9 @@ var maxLeaderboardSize = 50
 
 // Leaderboard creates a leaderboard
 func InitLeaderboard() {
-	//TODO: exclude MathGaming here
 	users := []User{}
-	query := `SELECT * FROM users WHERE miles != 0 AND is_bot = false AND username!=$1 ORDER BY miles DESC LIMIT $2`
-	database.Connection().Select(&users, query, strings.ToLower(config.ChannelName), initLeaderboardSize)
+	query := `SELECT * FROM users WHERE miles != 0 AND is_bot = false AND username NOT IN ($1) ORDER BY miles DESC LIMIT $2`
+	database.Connection().Select(&users, query, config.IgnoredUsers, initLeaderboardSize)
 	for _, user := range users {
 		miles := fmt.Sprintf("%.1f", user.Miles)
 		pair := []string{user.Username, miles}

@@ -208,9 +208,6 @@ func setEnvironment() {
 // IgnoredUsers are users who shouldn't be in the running for miles
 // https://twitchinsights.net/bots
 var IgnoredUsers = []string{
-	"tripbot4000",
-	"nightbot",
-	"streamlabs",
 	"0_applebadapple_0",
 	"angeloflight",
 	"anotherttvviewer",
@@ -227,12 +224,16 @@ var IgnoredUsers = []string{
 	"konkky",
 	"logviewer",
 	"lurxx",
+	"mathgaming",
 	"mrreflector",
 	"n3td3v",
+	"nightbot",
 	"p0lizei_",
 	"slocool",
+	"streamlabs",
 	"taormina2600",
 	"teyyd",
+	"tripbot4000",
 	"unixchat",
 	"v_and_k",
 	"virgoproz",
