@@ -3,6 +3,7 @@ package users
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/dmerrick/tripbot/pkg/config"
 	"github.com/dmerrick/tripbot/pkg/database"
@@ -19,11 +20,20 @@ var maxLeaderboardSize = 50
 // Leaderboard creates a leaderboard
 func InitLeaderboard() {
 	users := []User{}
+	ignoredUsers := append(config.IgnoredUsers, strings.ToLower(config.ChannelName))
 
-	q := `SELECT * FROM users WHERE miles != 0 AND is_bot = false AND username NOT IN ($1) ORDER BY miles DESC LIMIT $2`
-	query, args, _ := sqlx.In(q, config.IgnoredUsers, initLeaderboardSize)
+	// we use MySQL-style ? bindvars instead of postgres ones here
+	// because that's what sqlx wants for In()
+	q := `SELECT * FROM users WHERE miles != 0 AND is_bot = false AND username NOT IN (?) ORDER BY miles DESC LIMIT ?`
+	query, args, err := sqlx.In(q, ignoredUsers, initLeaderboardSize)
+	if err != nil {
+		terrors.Log(err, "error generating query")
+	}
 	query = database.Connection().Rebind(query)
-	database.Connection().Select(&users, query, args)
+	err = database.Connection().Select(&users, query, args...)
+	if err != nil {
+		terrors.Log(err, "error generating query")
+	}
 
 	for _, user := range users {
 		miles := fmt.Sprintf("%.1f", user.Miles)
