@@ -45,7 +45,7 @@ func InitLeaderboard() {
 func UpdateLeaderboard() {
 	for _, user := range LoggedIn {
 		// skip adding this user if they're a bot or ignored
-		if user.IsBot || helpers.UserIsIgnored(user.Username) {
+		if user.IsBot || helpers.UserIsIgnored(user.Username) || helpers.UserIsAdmin(user.Username) {
 			continue
 		}
 		insertIntoLeaderboard(*user)
