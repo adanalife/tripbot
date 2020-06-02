@@ -20,8 +20,8 @@ var maxLeaderboardSize = 50
 // Leaderboard creates a leaderboard
 func InitLeaderboard() {
 	users := []User{}
-	ignoredUsers := append(config.IgnoredUsers, strings.ToLower(config.ChannelName))
 
+	ignoredUsers := append(config.IgnoredUsers, strings.ToLower(config.ChannelName))
 	// we use MySQL-style ? bindvars instead of postgres ones here
 	// because that's what sqlx wants for In()
 	q := `SELECT * FROM users WHERE miles != 0 AND is_bot = false AND username NOT IN (?) ORDER BY miles DESC LIMIT ?`
@@ -44,8 +44,8 @@ func InitLeaderboard() {
 
 func UpdateLeaderboard() {
 	for _, user := range LoggedIn {
-		// skip adding this user if they're a bot (or me)
-		if user.IsBot || helpers.UserIsAdmin(user.Username) {
+		// skip adding this user if they're a bot or ignored
+		if user.IsBot || helpers.UserIsIgnored(user.Username) {
 			continue
 		}
 		insertIntoLeaderboard(*user)
