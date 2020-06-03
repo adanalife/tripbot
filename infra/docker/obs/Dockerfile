@@ -11,6 +11,7 @@ RUN export DEBIAN_FRONTEND=noninteractive \
       cmake \
       fluxbox \
       git \
+      golang-go \
       libasound2-dev \
       libavcodec-dev \
       libavdevice-dev \
@@ -36,6 +37,7 @@ RUN export DEBIAN_FRONTEND=noninteractive \
       libudev-dev \
       libv4l-dev \
       libvlc-dev \
+      libvlc-dev \
       libx11-dev \
       libx11-xcb-dev \
       libx264-dev \
@@ -56,6 +58,7 @@ RUN export DEBIAN_FRONTEND=noninteractive \
       tigervnc-standalone-server \
       ubuntu-drivers-common \
       vim \
+      vlc-plugin-base \
       wget \
       xterm \
       zlib1g-dev \
@@ -90,19 +93,21 @@ RUN echo "?package(bash):needs=\"X11\" section=\"DockerCustom\" title=\"OBS Scre
   && update-menus
 
 # set up stream key and scenes
-RUN mkdir -p /root/.config/obs-studio/basic/profiles/Untitled/ /root/.config/obs-studio/basic/scenes/
-COPY config/basic.ini config/service.json /root/.config/obs-studio/basic/profiles/Untitled/
-COPY config/global.ini /root/.config/obs-studio/global.ini
-COPY config/Dashcam_Scenes.docker.json /root/.config/obs-studio/basic/scenes/Untitled.json
+# RUN mkdir -p /root/.config/obs-studio/basic/profiles/Untitled/ /root/.config/obs-studio/basic/scenes/
+# COPY config/basic.ini config/service.json /root/.config/obs-studio/basic/profiles/Untitled/
+# COPY config/global.ini /root/.config/obs-studio/global.ini
+# COPY config/Dashcam_Scenes.docker.json /root/.config/obs-studio/basic/scenes/Untitled.json
 #TODO: instead of naming these both Untitled, edit ~/.config/obs-studio/global.ini
 
-# Copy various files to their respective places
-COPY script/container_startup.sh /opt/container_startup.sh
-COPY script/x11vnc_entrypoint.sh /opt/x11vnc_entrypoint.sh
+# create symlink to /danalol and give user permissions on it
+RUN ln -s /go/src/github.com/dmerrick/tripbot /opt/tripbot
+
+EXPOSE 8088
 
 # Subsequent images can put their scripts to run at startup here
 RUN mkdir /opt/startup_scripts \
   && echo "#!/usr/bin/env bash\nobs --startstreaming" > /opt/startup_scripts/start-obs.sh \
+  && echo "#!/usr/bin/env bash\ncd /opt/tripbot\ngo build -o bin/vlc-server cmd/vlc-server/vlc-server.go\nbin/vlc-server" > /opt/startup_scripts/start-vlc.sh \
   && chmod +x /opt/startup_scripts/start-obs.sh
 
-ENTRYPOINT ["/opt/container_startup.sh"]
+ENTRYPOINT ["/opt/tripbot/infra/docker/obs/script/container_startup.sh"]

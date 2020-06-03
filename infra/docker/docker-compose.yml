@@ -9,7 +9,7 @@ services:
       dockerfile: infra/docker/tripbot/Dockerfile
     depends_on:
       - db
-      - vlc
+      - obs
       - mpd
     ports:
       # this should match the TRIPBOT_SERVER_PORT env var
@@ -19,16 +19,20 @@ services:
       - ./assets/video:/danalol/Dashcam/_all
     restart: unless-stopped
 
-  vlc:
+  obs:
     env_file:
       - infra/docker/env.docker
     build:
       context: .
-      dockerfile: infra/docker/vlc/Dockerfile
+      dockerfile: infra/docker/obs/Dockerfile
     ports:
       # this should match the VLC_SERVER_HOST env var
       - "8088"
+      - "5902:5900"
     volumes:
+      - .:/go/src/github.com/dmerrick/tripbot
+      # - ./infra/docker/obs/script/container_startup.sh:/opt/container_startup.sh
+      # - ./infra/docker/obs/script/x11vnc_entrypoint.sh:/opt/x11vnc_entrypoint.sh
       - ./assets/video:/danalol/Dashcam/_all
     restart: unless-stopped
 
