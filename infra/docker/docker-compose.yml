@@ -31,8 +31,7 @@ services:
       - "5902:5900"
     volumes:
       - .:/go/src/github.com/dmerrick/tripbot
-      # - ./infra/docker/obs/script/container_startup.sh:/opt/container_startup.sh
-      # - ./infra/docker/obs/script/x11vnc_entrypoint.sh:/opt/x11vnc_entrypoint.sh
+      - ./infra/docker/obs/script/startup_scripts:/opt/startup_scripts
       - ./assets/video:/danalol/Dashcam/_all
     restart: unless-stopped
 

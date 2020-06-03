@@ -92,22 +92,9 @@ RUN echo "?package(bash):needs=\"X11\" section=\"DockerCustom\" title=\"OBS Scre
   && echo "?package(bash):needs=\"X11\" section=\"DockerCustom\" title=\"Xterm\" command=\"xterm -ls -bg black -fg white\"" >> /usr/share/menu/custom-docker \
   && update-menus
 
-# set up stream key and scenes
-# RUN mkdir -p /root/.config/obs-studio/basic/profiles/Untitled/ /root/.config/obs-studio/basic/scenes/
-# COPY config/basic.ini config/service.json /root/.config/obs-studio/basic/profiles/Untitled/
-# COPY config/global.ini /root/.config/obs-studio/global.ini
-# COPY config/Dashcam_Scenes.docker.json /root/.config/obs-studio/basic/scenes/Untitled.json
-#TODO: instead of naming these both Untitled, edit ~/.config/obs-studio/global.ini
-
 # create symlink to /danalol and give user permissions on it
 RUN ln -s /go/src/github.com/dmerrick/tripbot /opt/tripbot
 
 EXPOSE 8088
-
-# Subsequent images can put their scripts to run at startup here
-RUN mkdir /opt/startup_scripts \
-  && echo "#!/usr/bin/env bash\nobs --startstreaming" > /opt/startup_scripts/start-obs.sh \
-  && echo "#!/usr/bin/env bash\ncd /opt/tripbot\ngo build -o bin/vlc-server cmd/vlc-server/vlc-server.go\nbin/vlc-server" > /opt/startup_scripts/start-vlc.sh \
-  && chmod +x /opt/startup_scripts/start-obs.sh
 
 ENTRYPOINT ["/opt/tripbot/infra/docker/obs/script/container_startup.sh"]
