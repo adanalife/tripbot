@@ -47,6 +47,9 @@ jobs:
       run: docker logs tripbot_tripbot_1
     - name: Check running containers
       run: docker ps -a
+
+    #TODO: consider taking a screenshot:
+    # docker exec -e DISPLAY=:0.0 -w /tmp tripbot_obs_1 scrot -z -t 20 -e 'cat $m && rm $f $m' > screenshot.png
     # - name: Run a healthcheck against tripbot
     #   run: curl -v https://tripbot:8080/health
     # - name: Run test suite
