@@ -116,4 +116,4 @@ WORKDIR /opt/tripbot
 #RUN usermod --home /danalol danalol
 #RUN chown -R danalol:danalol /danalol
 
-ENTRYPOINT ["/opt/tripbot/infra/docker/obs/script/container_startup.sh"]
+ENTRYPOINT ["/opt/tripbot/script/container_startup.sh"]
