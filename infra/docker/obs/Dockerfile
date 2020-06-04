@@ -1,3 +1,4 @@
+# this comes from Dockerfile.nvidia
 FROM my-ffmpeg:latest
 
 # install dependencies
