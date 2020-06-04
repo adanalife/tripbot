@@ -27,10 +27,11 @@ func runCommand(user users.User, message string) {
 		flagCmd(&user)
 	case "!version":
 		versionCmd(&user)
-	case "!song":
+	case "!song", "!currentsong", "!music", "!currentmusic":
 		songCmd(&user)
 	case "!uptime":
 		uptimeCmd(&user)
+		//TODO: remove this
 	case "!oldmiles":
 		if user.HasCommandAvailable() {
 			oldMilesCmd(&user)
@@ -67,7 +68,7 @@ func runCommand(user users.User, message string) {
 		restartMusicCmd(&user)
 	case "!socialmedia":
 		Say("Find me outside of Twitch: !twitter, !instagram, !facebook, !youtube")
-	case "!commands":
+	case "!commands", "!controls":
 		Say("You can try: !location, !guess, !date, !state, !sunset, !timewarp, !miles, !leaderboard, and many other hidden commands!")
 	case "!bonusmiles":
 		if user.IsSubscriber() {
@@ -116,7 +117,7 @@ func runCommand(user users.User, message string) {
 	case "!middle":
 		middleCmd(&user, params)
 		// any of these should trigger the miles command
-	case "!miles", "!newmiles":
+	case "!miles", "!points":
 		if user.HasCommandAvailable() {
 			milesCmd(&user)
 		} else {
@@ -132,7 +133,8 @@ func runCommand(user users.User, message string) {
 		}
 
 		// any of these should trigger the location command
-	case "!tripbot", "!location", "!locton", "!locaton", "!locatoion", "where is this", "where are we", "where are you":
+		//TODO: add support for: "where is this", "where are we", "where are you"
+	case "!tripbot", "!location", "!locton", "!locaton", "!locatoion", "1location", "!city", "!town":
 		if user.HasCommandAvailable() {
 			locationCmd(&user)
 		} else {
