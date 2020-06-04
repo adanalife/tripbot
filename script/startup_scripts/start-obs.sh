@@ -2,7 +2,7 @@
 
 #TODO: fail if STREAM_KEY isn't present
 
-cd /opt/tripbot/configs/obs-studio
+cd /opt/tripbot/configs/obs-studio || exit 3
 
 mkdir -p /root/.config/obs-studio/basic/profiles/Untitled/ /root/.config/obs-studio/basic/scenes/
 

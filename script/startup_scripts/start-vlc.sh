@@ -9,7 +9,7 @@ sed -i 's/geteuid/getppid/' /usr/bin/vlc
 export FONTCONFIG_PATH=/etc/fonts
 
 # compile vlc-server
-cd /opt/tripbot
+cd /opt/tripbot || exit 2
 go build -o bin/vlc-server cmd/vlc-server/vlc-server.go | tee -a log/build-vlc.log 2>&1
 
 # run vlc-server
