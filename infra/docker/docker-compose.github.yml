@@ -12,9 +12,9 @@ services:
       - TWITCH_CLIENT_SECRET
 
   obs:
-    #TODO: almost none of these are actually required
     environment:
       - CHANNEL_NAME
+      #TODO: almost none of these are actually required by OBS
       - BOT_USERNAME
       - TWITCH_AUTH_TOKEN
       - TWITCH_CLIENT_ID

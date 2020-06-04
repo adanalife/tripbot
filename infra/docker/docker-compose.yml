@@ -65,5 +65,9 @@ services:
       - db
     volumes:
       - ./db/migrate:/migrations
-    command: ["-path", "/migrations", "-database",  "postgres://${DATABASE_USER}:${DATABASE_PASS}@${DATABASE_HOST}:5432/${DATABASE_DB}?sslmode=disable", "up"]
+    command: [
+      "-path", "/migrations",
+      "-database",  "postgres://${DATABASE_USER}:${DATABASE_PASS}@${DATABASE_HOST}:5432/${DATABASE_DB}?sslmode=disable",
+      "up"
+    ]
     restart: on-failure
