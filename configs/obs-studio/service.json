@@ -1,9 +1,0 @@
-{
-    "settings": {
-        "bwtest": false,
-        "key": "STREAMKEY",
-        "server": "auto",
-        "service": "Twitch"
-    },
-    "type": "rtmp_common"
-}

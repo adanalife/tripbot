@@ -7,7 +7,7 @@ services:
     env_file:
       - ./.env.development
 
-  obs:
+  vlc:
     environment:
       ENV: development
     env_file:

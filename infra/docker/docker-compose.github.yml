@@ -11,7 +11,7 @@ services:
       - TWITCH_CLIENT_ID
       - TWITCH_CLIENT_SECRET
 
-  obs:
+  vlc:
     #TODO: almost none of these are actually required
     environment:
       - CHANNEL_NAME
