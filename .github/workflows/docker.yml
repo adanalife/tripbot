@@ -41,8 +41,8 @@ jobs:
     - run: sleep 10
     - name: Check logs (migrate)
       run: docker logs tripbot_migrate_1
-    - name: Check logs (vlc)
-      run: docker logs tripbot_vlc_1
+    - name: Check logs (obs)
+      run: docker logs tripbot_obs_1
     - name: Check logs (tripbot) 🤖
       run: docker logs tripbot_tripbot_1
     - name: Check running containers
