@@ -1,7 +1,10 @@
 #!/bin/bash
+
+# this script is the container entrypoint
+# for the OBS container
+
 OUR_IP=$(hostname -i)
 
-#TODO: use env vars to print a link to the twitch channel
 
 # start VNC server (Uses VNC_PASSWD Docker ENV variable)
 mkdir -p "$HOME/.vnc" && echo "$VNC_PASSWD" | vncpasswd -f > "$HOME/.vnc/passwd"
@@ -10,6 +13,9 @@ vncserver :0 -localhost no -nolisten -rfbauth "$HOME/.vnc/passwd" -xstartup /opt
 echo -e "\n\n------------------ VNC environment started ------------------"
 echo -e "\nVNCSERVER started on DISPLAY= $DISPLAY \n\t=> connect via VNC viewer with $OUR_IP:5900"
 echo -e "\nvlc-server started:\n\t=> connect via http://$OUR_IP:8088\n" #TODO: make this port a var
+
+#TODO: use env vars to print a link to the twitch channel
+#TODO: tail a useful log in here
 
 if [ -z "$1" ]; then
   tail -f /dev/null

@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+# this script is executed as part of the x11 startup process
+
 # hack VLC so we can run it as root
 # c.p. https://unix.stackexchange.com/a/199422/202812
 sed -i 's/geteuid/getppid/' /usr/bin/vlc
