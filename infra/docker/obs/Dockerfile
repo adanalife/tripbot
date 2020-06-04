@@ -38,7 +38,6 @@ RUN export DEBIAN_FRONTEND=noninteractive \
     libudev-dev \
     libv4l-dev \
     libvlc-dev \
-    libvlc-dev \
     libx11-dev \
     libx11-xcb-dev \
     libx264-dev \
