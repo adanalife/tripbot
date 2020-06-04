@@ -1,5 +1,5 @@
 # this comes from Dockerfile.nvidia
-FROM my-ffmpeg:latest
+FROM danalol/ffmpeg
 
 # install dependencies
 # most of these come from the obs-studio
