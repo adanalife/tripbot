@@ -29,6 +29,8 @@ services:
       # this should match the VLC_SERVER_HOST env var
       - "8088"
       - "5902:5900"
+    environment:
+      STREAM_KEY: "${STREAM_KEY}"
     volumes:
       - .:/go/src/github.com/dmerrick/tripbot
       - ./assets/video:/danalol/Dashcam/_all
