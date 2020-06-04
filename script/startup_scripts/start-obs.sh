@@ -7,12 +7,12 @@
 # COPY config/Dashcam_Scenes.docker.json /root/.config/obs-studio/basic/scenes/Untitled.json
 #TODO: instead of naming these both Untitled, edit ~/.config/obs-studio/global.ini
 
-cd /opt/tripbot
+# copy configs over
+cp -r /opt/tripbot/config/obs-studio /root/.config/
 
-# copy OBS config files into place before starting
-mkdir -p /root/.config/obs-studio/basic/profiles/Untitled/ /root/.config/obs-studio/basic/scenes/
-cp config/OBS/basic.ini config/OBS/service.json /root/.config/obs-studio/basic/profiles/Untitled/
-cp config/OBS/global.ini /root/.config/obs-studio/
-cp config/OBS/Dashcam_Scenes.docker.json /root/.config/obs-studio/basic/scenes/Untitled.json
+export FIXTHIS="pass this in via docker"
+
+# set the streamkey from ENV var
+sed -i "s/STREAMKEY/$FIXTHIS/" /root/.config/obs-studio/basic/profiles/Untitled/service.json
 
 obs --startstreaming
