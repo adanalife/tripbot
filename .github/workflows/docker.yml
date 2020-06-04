@@ -34,24 +34,11 @@ jobs:
       continue-on-error: true
       with:
         lfs: true
-
-    - name: Run local docker registry
-      run: docker run -d -p 5000:5000 registry:2
-    - name: Build and push image
-      uses: docker/build-push-action@v1
-      env:
-        DOCKER_BUILDKIT: 1
-      with:
-        registry: localhost:5000
-        repository: my-ffmpeg
-        dockerfile: infra/docker/obs/Dockerfile.nvidia
-
     - name: Build docker-compose stack
       run: docker-compose --project-directory . -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.testing.yml -f infra/docker/docker-compose.github.yml build
     - name: Start the docker-compose stack
       run: docker-compose --project-directory . --env-file infra/docker/env.docker -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.testing.yml -f infra/docker/docker-compose.github.yml up -d
     - run: sleep 10
-
     - name: Check logs (migrate)
       run: docker logs tripbot_migrate_1
     - name: Check logs (vlc)
