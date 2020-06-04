@@ -29,6 +29,7 @@ services:
       # this should match the VLC_SERVER_HOST env var
       - "8088"
       - "5902:5900"
+    privileged: true
     environment:
       STREAM_KEY: "${STREAM_KEY}"
     volumes:

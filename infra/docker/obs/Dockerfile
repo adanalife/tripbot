@@ -7,6 +7,8 @@ FROM danalol/ffmpeg
 RUN export DEBIAN_FRONTEND=noninteractive \
   && apt-get update \
   && apt-get install -y \
+    nvidia-driver-440 \
+    libnvidia-encode-440 \
     build-essential \
     checkinstall \
     cmake \
