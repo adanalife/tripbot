@@ -58,6 +58,7 @@ RUN export DEBIAN_FRONTEND=noninteractive \
       tigervnc-standalone-server \
       ubuntu-drivers-common \
       vim \
+      vlc \
       vlc-plugin-base \
       wget \
       xterm \
@@ -65,11 +66,23 @@ RUN export DEBIAN_FRONTEND=noninteractive \
     && apt-get clean -y \
     && rm -rf /var/lib/apt/lists/*
 
+# install golang v1.14
+RUN export DEBIAN_FRONTEND=noninteractive \
+  && add-apt-repository ppa:longsleep/golang-backports \
+  && apt-get update \
+  && apt-get install -y golang-go \
+  && apt-get clean -y \
+  && rm -rf /var/lib/apt/lists/*
+
 # for the VNC connection
 EXPOSE 5900
 
+# for the http endpoint
+EXPOSE 8088
+
 # Use environment variable to allow custom VNC passwords
 ENV VNC_PASSWD=123456
+#TODO: add ENV for stream key
 
 # install obs
 RUN cd /tmp \
@@ -88,13 +101,19 @@ RUN cd /tmp \
   # && git clone https://github.com/obsproject/obs-vst ./plugins/obs-vst \
 
 # Add menu entries to the container
-RUN echo "?package(bash):needs=\"X11\" section=\"DockerCustom\" title=\"OBS Screencast\" command=\"obs\"" >> /usr/share/menu/custom-docker \
-  && echo "?package(bash):needs=\"X11\" section=\"DockerCustom\" title=\"Xterm\" command=\"xterm -ls -bg black -fg white\"" >> /usr/share/menu/custom-docker \
+RUN echo "?package(bash):needs=\"X11\" section=\"ADanaLife\" title=\"OBS Screencast\" command=\"obs\"" >> /usr/share/menu/danalol \
+  && echo "?package(bash):needs=\"X11\" section=\"ADanaLife\" title=\"vlc-server\" command=\"cd /opt/tripbot && FONTCONFIG_PATH=/etc/fonts bin/vlc-server\"" >> /usr/share/menu/danalol \
+  && echo "?package(bash):needs=\"X11\" section=\"ADanaLife\" title=\"Xterm\" command=\"xterm -ls -bg black -fg white\"" >> /usr/share/menu/danalol \
   && update-menus
 
 # create symlink to /danalol and give user permissions on it
 RUN ln -s /go/src/github.com/dmerrick/tripbot /opt/tripbot
+WORKDIR /opt/tripbot
 
-EXPOSE 8088
+## create app user
+#RUN adduser --system --group --disabled-password --no-create-home danalol
+##TODO: merge this with above command
+#RUN usermod --home /danalol danalol
+#RUN chown -R danalol:danalol /danalol
 
 ENTRYPOINT ["/opt/tripbot/infra/docker/obs/script/container_startup.sh"]
