@@ -13,4 +13,4 @@ cd /opt/tripbot
 go build -o bin/vlc-server cmd/vlc-server/vlc-server.go | tee -a log/build-vlc.log 2>&1
 
 # run vlc-server
-bin/vlc-server | tee -a log/start-vlc.log 2>&1
+bin/vlc-server | tee -a log/start-vlc.log 2>&1 &
