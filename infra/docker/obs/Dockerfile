@@ -78,12 +78,11 @@ RUN export DEBIAN_FRONTEND=noninteractive \
 # for the VNC connection
 EXPOSE 5900
 
-# for the http endpoint
+# for the HTTP endpoint
 EXPOSE 8088
 
-# Use environment variable to allow custom VNC passwords
+# this allows for custom VNC passwords
 ENV VNC_PASSWD=123456
-#TODO: add ENV for stream key
 
 # install obs
 RUN cd /tmp \
@@ -101,13 +100,13 @@ RUN cd /tmp \
   #TODO: possibly add obs-vst?
   # && git clone https://github.com/obsproject/obs-vst ./plugins/obs-vst \
 
-# Add menu entries to the container
+# add menu entries for fluxbox
 RUN echo "?package(bash):needs=\"X11\" section=\"ADanaLife\" title=\"OBS Screencast\" command=\"obs\"" >> /usr/share/menu/danalol \
   && echo "?package(bash):needs=\"X11\" section=\"ADanaLife\" title=\"vlc-server\" command=\"cd /opt/tripbot && FONTCONFIG_PATH=/etc/fonts bin/vlc-server\"" >> /usr/share/menu/danalol \
   && echo "?package(bash):needs=\"X11\" section=\"ADanaLife\" title=\"Xterm\" command=\"xterm -ls -bg black -fg white\"" >> /usr/share/menu/danalol \
   && update-menus
 
-# create symlink to /danalol and give user permissions on it
+# create symlink to /opt/tripbot
 RUN ln -s /go/src/github.com/dmerrick/tripbot /opt/tripbot
 WORKDIR /opt/tripbot
 

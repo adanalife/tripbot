@@ -51,7 +51,7 @@ md5sum assets/video/*.MP4 > assets/video/manifest.txt
 
 ### Create new ffmpeg docker image
 
-We use the ffpmeg docker file, but with an updated version of freetype.
+We use the [ffpmeg docker file](https://github.com/jrottenberg/ffmpeg/blob/0aed486/docker-images/4.2/nvidia1804/Dockerfile), but with an updated version of freetype.
 Specifically, the freetype version matches the one available in `apt`, because the obs-studio build was failing.
 It was failing because the version of freetype installed on the system was newer than the one used to build ffmpeg.
 
