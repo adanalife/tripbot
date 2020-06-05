@@ -243,16 +243,18 @@ var IgnoredUsers = []string{
 
 // HelpMessages are all of the different things !help can return
 var HelpMessages = []string{
-	"!location: Get the current location (beta)",
-	"!song: Get the current music",
+	"!location: Get the current location",
+	// "!song: Get the current music",
 	"!miles: See your current miles",
 	"!leaderboard: See who has the most miles",
-	"!state: Get the state we are currently in (beta)",
+	"!state: Get the state we are currently in",
 	"!sunset: Get time until sunset (on the day of filming)",
 	"!report: Report a stream issue (frozen, no audio, etc)",
 	"!guess: Guess which state we are in",
 	"!survey: Fill out a survey and help the stream",
 	"!timewarp: Magically warp to a new moment in time",
+	"!commands: List more commands you can use",
+	"!commands: List more commands you can use",
 	"!commands: List more commands you can use",
 }
 
