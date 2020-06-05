@@ -14,8 +14,9 @@ services:
     ports:
       # this should match the TRIPBOT_SERVER_PORT env var
       - "8080"
-    #TODO: do we even need this?
     volumes:
+      - .:/go/src/github.com/dmerrick/tripbot
+      #TODO: do we even need this?
       - ./assets/video:/danalol/Dashcam/_all
     restart: unless-stopped
 

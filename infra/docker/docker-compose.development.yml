@@ -6,6 +6,8 @@ services:
       ENV: development
     env_file:
       - ./.env.development
+    command: bash -c go run cmd/tripbot/tripbot.go
+    # entrypoint: ["go", "run", "cmd/tripbot/tripbot.go"]
 
   obs:
     environment:

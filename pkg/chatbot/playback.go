@@ -16,6 +16,10 @@ import (
 	vlcClient "github.com/dmerrick/tripbot/pkg/vlc-client"
 )
 
+// lastTimewarpTime is used to rate-limit users so they cant
+// over-do the time-skip features (including !skip and !back)
+var lastTimewarpTime time.Time
+
 func timewarpCmd(user *users.User) {
 	log.Println(user.Username, "ran !timewarp")
 

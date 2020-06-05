@@ -1,7 +1,7 @@
 # buster is the debian release, c.p. https://askubuntu.com/a/445496
 FROM golang:1.14-buster
 
-WORKDIR /go/src/github.com/dmerrick/tripbot
+WORKDIR /go/src/github.com/adanalife/tripbot
 
 # install dependencies
 RUN apt-get update && apt-get install --no-install-recommends -y \
@@ -17,14 +17,15 @@ RUN adduser --system --group --disabled-password --no-create-home danalol
 COPY --chown=danalol:danalol . .
 
 # create symlink to /danalol and give user permissions on it
-RUN ln -s /go/src/github.com/dmerrick/tripbot /danalol \
- && chown danalol:danalol /danalol
+RUN ln -s /go/src/github.com/dmerrick/tripbot /opt/tripbot \
+ && chown danalol:danalol /opt/tripbot
 
 # set home dir for app user
-RUN usermod --home /danalol danalol
+RUN usermod --home /opt/tripbot danalol
 
 # switch to the app user
 USER danalol
+WORKDIR /opt/tripbot
 
 # build the binary
 RUN go build -o bin/tripbot cmd/tripbot/tripbot.go
