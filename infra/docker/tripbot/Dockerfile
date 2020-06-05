@@ -18,7 +18,8 @@ COPY --chown=danalol:danalol . .
 
 # create symlink to /danalol and give user permissions on it
 RUN ln -s /go/src/github.com/dmerrick/tripbot /opt/tripbot \
- && chown danalol:danalol /opt/tripbot
+  && mkdir /opt/data \
+  && chown danalol:danalol /opt/tripbot /opt/data
 
 # set home dir for app user
 RUN usermod --home /opt/tripbot danalol

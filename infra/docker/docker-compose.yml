@@ -17,7 +17,7 @@ services:
     volumes:
       - .:/go/src/github.com/dmerrick/tripbot
       #TODO: do we even need this?
-      - ./assets/video:/danalol/Dashcam/_all
+      - ./assets/video:/opt/data/Dashcam/_all
     restart: unless-stopped
 
   obs:
@@ -34,7 +34,7 @@ services:
       STREAM_KEY: "${STREAM_KEY}"
     volumes:
       - .:/go/src/github.com/dmerrick/tripbot
-      - ./assets/video:/danalol/Dashcam/_all
+      - ./assets/video:/opt/data/Dashcam/_all
     restart: unless-stopped
 
   db:
