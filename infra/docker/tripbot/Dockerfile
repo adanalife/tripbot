@@ -33,4 +33,4 @@ RUN go build -o bin/tripbot cmd/tripbot/tripbot.go
 EXPOSE 8080
 
 WORKDIR /opt/tripbot
-CMD ["/opt/tripbot/bin/tripbot"]
+CMD ["./bin/tripbot"]
