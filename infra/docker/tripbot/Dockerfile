@@ -16,7 +16,7 @@ RUN adduser --system --group --disabled-password --no-create-home danalol
 #TODO: maybe just copy pkg, cmd, internal, etc?
 COPY --chown=danalol:danalol . .
 
-# create symlink to /danalol and give user permissions on it
+# create symlink to /opt/tripbot and give user permissions on it
 RUN ln -s /go/src/github.com/dmerrick/tripbot /opt/tripbot \
   && mkdir /opt/data \
   && chown danalol:danalol /opt/tripbot /opt/data
