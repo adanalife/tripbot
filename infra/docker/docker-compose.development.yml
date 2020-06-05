@@ -6,14 +6,16 @@ services:
       ENV: development
     env_file:
       - ./.env.development
-    command: bash -c go run cmd/tripbot/tripbot.go
-    # entrypoint: ["go", "run", "cmd/tripbot/tripbot.go"]
+    entrypoint: bash
+    command: -c "go run cmd/tripbot/tripbot.go 2>&1"
 
   obs:
     environment:
       ENV: development
     env_file:
       - ./.env.development
+    entrypoint: "true"
+    restart: on-failure
 
   db:
     volumes:

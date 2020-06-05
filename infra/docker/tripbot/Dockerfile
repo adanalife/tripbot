@@ -1,7 +1,7 @@
 # buster is the debian release, c.p. https://askubuntu.com/a/445496
 FROM golang:1.14-buster
 
-WORKDIR /go/src/github.com/adanalife/tripbot
+WORKDIR /go/src/github.com/dmerrick/tripbot
 
 # install dependencies
 RUN apt-get update && apt-get install --no-install-recommends -y \
@@ -25,11 +25,11 @@ RUN usermod --home /opt/tripbot danalol
 
 # switch to the app user
 USER danalol
-WORKDIR /opt/tripbot
 
 # build the binary
 RUN go build -o bin/tripbot cmd/tripbot/tripbot.go
 
 EXPOSE 8080
 
-CMD ["./bin/tripbot"]
+WORKDIR /opt/tripbot
+CMD ["/opt/tripbot/bin/tripbot"]
