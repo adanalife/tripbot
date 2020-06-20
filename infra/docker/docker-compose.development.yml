@@ -12,6 +12,8 @@ services:
       ENV: development
     env_file:
       - ./.env.development
+    entrypoint: "true"
+    restart: on-failure
 
   db:
     volumes:
