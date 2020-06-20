@@ -78,7 +78,8 @@ func Say(msg string) {
 // right now it just posts random "help messages"
 func Chatter() {
 	// rand.Intn(len(config.HelpMessages))
-	Say(help())
+	// use twitch emote feature to add some color
+	Say("/me " + help())
 }
 
 func help() string {
