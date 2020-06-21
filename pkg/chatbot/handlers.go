@@ -160,7 +160,10 @@ func runCommand(user users.User, message string) {
 			Say(followerMsg)
 		}
 	default:
-		err = fmt.Errorf("command %s not found", command)
+		if strings.HasPrefix(command, "!") {
+			// log the command as an error so we can implement it in the future
+			err = fmt.Errorf("command %s not found", command)
+		}
 	}
 	if err != nil {
 		terrors.Log(err, "error running command")
@@ -181,14 +184,10 @@ func PrivateMessage(msg twitch.PrivateMessage) {
 
 	// check to see if the message is a command
 	//TODO: also include ones prefixed with whitespace?
-	//TODO: not all commands start with "!"s
-	if strings.HasPrefix(message, "!") {
-		// log in the user
-		user := users.LoginIfNecessary(username)
+	// log in the user
+	user := users.LoginIfNecessary(username)
 
-		//TODO is it okay that this isn't a pointer?
-		runCommand(*user, message)
-	}
+	runCommand(*user, message)
 }
 
 // this event fires when a user joins the channel
