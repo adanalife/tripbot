@@ -92,7 +92,7 @@ func login(username string) *User {
 
 	// raise an error if a user is supposed to be a bot
 	if helpers.UserIsIgnored(username) && !user.IsBot {
-		terrors.Log(errors.New("user %s should be bot"), username)
+		terrors.Log(errors.New("user should be bot"), username)
 	}
 
 	// just a silly message to confirm subscriber feature is working
