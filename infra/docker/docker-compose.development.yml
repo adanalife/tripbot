@@ -4,6 +4,7 @@ services:
   tripbot:
     environment:
       ENV: development
+    env_file:
       - ./.env.development
     entrypoint: bash
     command: -c "go run cmd/tripbot/tripbot.go 2>&1"
