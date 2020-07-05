@@ -5,10 +5,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dmerrick/tripbot/pkg/config"
-	"github.com/dmerrick/tripbot/pkg/database"
-	terrors "github.com/dmerrick/tripbot/pkg/errors"
-	"github.com/dmerrick/tripbot/pkg/helpers"
+	"github.com/adanalife/tripbot/pkg/config"
+	"github.com/adanalife/tripbot/pkg/database"
+	terrors "github.com/adanalife/tripbot/pkg/errors"
+	"github.com/adanalife/tripbot/pkg/helpers"
+	"github.com/jmoiron/sqlx"
 	"github.com/logrusorgru/aurora"
 )
 
@@ -19,8 +20,21 @@ var maxLeaderboardSize = 50
 // Leaderboard creates a leaderboard
 func InitLeaderboard() {
 	users := []User{}
-	query := `SELECT * FROM users WHERE miles != 0 AND is_bot = false AND username!=$1 ORDER BY miles DESC LIMIT $2`
-	database.DBCon.Select(&users, query, strings.ToLower(config.ChannelName), initLeaderboardSize)
+
+	ignoredUsers := append(config.IgnoredUsers, strings.ToLower(config.ChannelName))
+	// we use MySQL-style ? bindvars instead of postgres ones here
+	// because that's what sqlx wants for In()
+	q := `SELECT * FROM users WHERE miles != 0 AND is_bot = false AND username NOT IN (?) ORDER BY miles DESC LIMIT ?`
+	query, args, err := sqlx.In(q, ignoredUsers, initLeaderboardSize)
+	if err != nil {
+		terrors.Log(err, "error generating query")
+	}
+	query = database.Connection().Rebind(query)
+	err = database.Connection().Select(&users, query, args...)
+	if err != nil {
+		terrors.Log(err, "error generating query")
+	}
+
 	for _, user := range users {
 		miles := fmt.Sprintf("%.1f", user.Miles)
 		pair := []string{user.Username, miles}
@@ -30,8 +44,8 @@ func InitLeaderboard() {
 
 func UpdateLeaderboard() {
 	for _, user := range LoggedIn {
-		// skip adding this user if they're a bot (or me)
-		if user.IsBot || helpers.UserIsAdmin(user.Username) {
+		// skip adding this user if they're a bot or ignored
+		if user.IsBot || helpers.UserIsIgnored(user.Username) || helpers.UserIsAdmin(user.Username) {
 			continue
 		}
 		insertIntoLeaderboard(*user)

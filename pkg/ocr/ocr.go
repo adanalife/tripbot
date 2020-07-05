@@ -7,11 +7,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	terrors "github.com/dmerrick/tripbot/pkg/errors"
+	terrors "github.com/adanalife/tripbot/pkg/errors"
 
 	"github.com/disintegration/imaging"
-	"github.com/dmerrick/tripbot/pkg/config"
-	"github.com/dmerrick/tripbot/pkg/helpers"
+	"github.com/adanalife/tripbot/pkg/config"
+	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/otiai10/gosseract"
 )
 

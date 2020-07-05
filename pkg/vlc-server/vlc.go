@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 
 	libvlc "github.com/adrg/libvlc-go/v3"
-	"github.com/dmerrick/tripbot/pkg/config"
-	terrors "github.com/dmerrick/tripbot/pkg/errors"
-	"github.com/dmerrick/tripbot/pkg/helpers"
+	"github.com/adanalife/tripbot/pkg/config"
+	terrors "github.com/adanalife/tripbot/pkg/errors"
+	"github.com/adanalife/tripbot/pkg/helpers"
 )
 
 var player *libvlc.Player
@@ -22,7 +22,13 @@ var videoFiles []string
 var vlcCmdFlags = []string{
 	"--ignore-config", // ignore any config files that might get loaded
 	// "-vv",                       // be very verbose (used for debugging)
-	"--quiet",                   // reduce terminal output
+	"--quiet", // reduce terminal output
+	"--fullscreen",
+	// "--width", "1920",
+	// "--height", "1080",
+	// "--canvas-width", "1920",
+	// "--canvas-height", "1080",
+	// "--aspect-ratio", "16:9",
 	"--no-audio",                // none of the videos have audio
 	"--network-caching", "6666", // network cache (in ms)
 	"--file-caching", "11111", // file cache (in ms)

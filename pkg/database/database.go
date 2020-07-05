@@ -5,22 +5,19 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
-	"github.com/dmerrick/tripbot/pkg/config"
-	terrors "github.com/dmerrick/tripbot/pkg/errors"
+	"github.com/adanalife/tripbot/pkg/config"
+	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/jmoiron/sqlx"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
+	"github.com/logrusorgru/aurora"
 )
 
-var (
-	//TODO: this would be better as just 'con'
-	// this is how we will share the DB connection
-	DBCon *sqlx.DB
-)
+// this is how we will share the DB connection
+var dbConnection *sqlx.DB
 
-//TODO: is it a bad idea to actually connect to the DB here
-// AKA "automatically"?
 func init() {
 	var err error
 
@@ -42,16 +39,46 @@ func init() {
 			log.Fatalf("You must set %s", v)
 		}
 	}
+}
 
-	DBCon, err = sqlx.Connect("postgres", connStr())
+func connectToDB() *sqlx.DB {
+	dbConnection, err := sqlx.Connect("postgres", connStr())
 	if err != nil {
-		terrors.Fatal(err, "error initializing the DB")
+		// we don't use terrors here cause it might spam
+		log.Println(aurora.Red("connection to DB failed:"), err.Error())
+		return nil
 	}
-	// force a connection and test that it worked
-	err = DBCon.Ping()
+	return dbConnection
+}
+
+func Connection() *sqlx.DB {
+	// if it does not exist, create it
+	if dbConnection == nil {
+		dbConnection = connectToDB()
+	}
+	connected := isAlive()
+	for connected != true { // reconnect if we lost connection
+		log.Print("Connection to DB was lost. Waiting...")
+		time.Sleep(5 * time.Second)
+		dbConnection = connectToDB()
+		connected = isAlive()
+		if connected {
+			log.Println(aurora.Green("connection made!"))
+		}
+	}
+	return dbConnection
+}
+
+func isAlive() bool {
+	if dbConnection == nil {
+		return false
+	}
+	err := dbConnection.Ping()
 	if err != nil {
-		terrors.Fatal(err, "error connecting to DB")
+		terrors.Log(err, "error connecting to DB")
+		return false
 	}
+	return true
 }
 
 // returns a valid postgres:// url

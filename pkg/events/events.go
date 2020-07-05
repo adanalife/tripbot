@@ -4,8 +4,8 @@ import (
 	"log"
 	"time"
 
-	"github.com/dmerrick/tripbot/pkg/config"
-	"github.com/dmerrick/tripbot/pkg/database"
+	"github.com/adanalife/tripbot/pkg/config"
+	"github.com/adanalife/tripbot/pkg/database"
 	"github.com/logrusorgru/aurora"
 )
 
@@ -21,7 +21,7 @@ func Login(user string) {
 		log.Printf("Not logging in %s because we're in read-only mode", aurora.Magenta(user))
 		return
 	}
-	tx := database.DBCon.MustBegin()
+	tx := database.Connection().MustBegin()
 	tx.MustExec("INSERT INTO events (username, event) VALUES ($1, $2)", user, "login")
 	tx.Commit()
 }
@@ -31,7 +31,7 @@ func Logout(user string) {
 		log.Printf("Not logging out %s because we're in read-only mode", aurora.Magenta(user))
 		return
 	}
-	tx := database.DBCon.MustBegin()
+	tx := database.Connection().MustBegin()
 	tx.MustExec("INSERT INTO events (username, event) VALUES ($1, $2)", user, "logout")
 	tx.Commit()
 }

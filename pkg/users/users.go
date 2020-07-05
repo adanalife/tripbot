@@ -4,13 +4,13 @@ import (
 	"log"
 	"time"
 
-	terrors "github.com/dmerrick/tripbot/pkg/errors"
-	"github.com/dmerrick/tripbot/pkg/helpers"
-	"github.com/dmerrick/tripbot/pkg/twitch"
+	terrors "github.com/adanalife/tripbot/pkg/errors"
+	"github.com/adanalife/tripbot/pkg/helpers"
+	"github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/logrusorgru/aurora"
 
-	"github.com/dmerrick/tripbot/pkg/config"
-	"github.com/dmerrick/tripbot/pkg/database"
+	"github.com/adanalife/tripbot/pkg/config"
+	"github.com/adanalife/tripbot/pkg/database"
 )
 
 type User struct {
@@ -59,7 +59,7 @@ func (u User) save() {
 		log.Println("saving user", u)
 	}
 	query := `UPDATE users SET last_seen=:last_seen, num_visits=:num_visits, miles=:miles WHERE id = :id`
-	_, err := database.DBCon.NamedExec(query, u)
+	_, err := database.Connection().NamedExec(query, u)
 	if err != nil {
 		terrors.Log(err, "error saving user")
 	}
@@ -103,7 +103,7 @@ func FindOrCreate(username string) User {
 func Find(username string) User {
 	var user User
 	query := `SELECT * FROM users WHERE username=$1`
-	err := database.DBCon.Get(&user, query, username)
+	err := database.Connection().Get(&user, query, username)
 	// spew.Config.ContinueOnMethod = true
 	// spew.Config.MaxDepth = 2
 	// spew.Dump(user)
@@ -137,7 +137,7 @@ func (u *User) HasCommandAvailable() bool {
 // create() will actually create the DB record
 func create(username string) User {
 	log.Println("creating user", username)
-	tx := database.DBCon.MustBegin()
+	tx := database.Connection().MustBegin()
 	// create a new row, using default vals and creating a single visit
 	tx.MustExec("INSERT INTO users (username, num_visits) VALUES ($1, $2)", username, 1)
 	tx.Commit()

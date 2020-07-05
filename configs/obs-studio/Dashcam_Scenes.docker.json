@@ -544,7 +544,7 @@
             "push-to-talk": false,
             "push-to-talk-delay": 0,
             "settings": {
-                "file": "/home/dmerrick/other_projects/danalol-stream/run/flag.png-live",
+                "file": "/opt/tripbot/run/flag.png-live",
                 "unload": true
             },
             "sync": 0,
@@ -1283,7 +1283,7 @@
                     {
                         "hidden": false,
                         "selected": false,
-                        "value": "/home/dmerrick/Videos/Dashcam/screencaps/100"
+                        "value": "/opt/data/screencaps/100"
                     }
                 ],
                 "playback_behavior": "stop_restart",
@@ -1375,7 +1375,7 @@
             "push-to-talk": false,
             "push-to-talk-delay": 0,
             "settings": {
-                "file": "/home/dmerrick/other_projects/danalol-stream/run/GPS.png-live",
+                "file": "/opt/tripbot/run/GPS.png-live",
                 "unload": false
             },
             "sync": 0,
@@ -2239,7 +2239,7 @@
                 "from_file": true,
                 "outline": false,
                 "text": "Don't forget to follow :)",
-                "text_file": "/home/dmerrick/other_projects/danalol-stream/run/right-message.txt",
+                "text_file": "/opt/tripbot/run/right-message.txt",
                 "word_wrap": true
             },
             "sync": 0,
@@ -2265,7 +2265,7 @@
             "push-to-talk": false,
             "push-to-talk-delay": 0,
             "settings": {
-                "file": "/home/dmerrick/other_projects/danalol-stream/assets/twitch-overlay-left.png"
+                "file": "/opt/tripbot/assets/twitch-overlay-left.png"
             },
             "sync": 0,
             "versioned_id": "image_source",
@@ -2290,7 +2290,7 @@
             "push-to-talk": false,
             "push-to-talk-delay": 0,
             "settings": {
-                "file": "/home/dmerrick/other_projects/danalol-stream/assets/twitch-overlay-right.png"
+                "file": "/opt/tripbot/assets/twitch-overlay-right.png"
             },
             "sync": 0,
             "versioned_id": "image_source",
@@ -2327,7 +2327,7 @@
                 "from_file": true,
                 "outline": false,
                 "text": "",
-                "text_file": "/home/dmerrick/other_projects/danalol-stream/run/leaderboard.txt"
+                "text_file": "/opt/tripbot/run/leaderboard.txt"
             },
             "sync": 0,
             "versioned_id": "text_ft2_source",
@@ -2363,7 +2363,7 @@
                 "from_file": true,
                 "outline": false,
                 "text": "",
-                "text_file": "/home/dmerrick/other_projects/danalol-stream/run/left-message.txt"
+                "text_file": "/opt/tripbot/run/left-message.txt"
             },
             "sync": 0,
             "versioned_id": "text_ft2_source",
@@ -2478,7 +2478,7 @@
             "push-to-talk": false,
             "push-to-talk-delay": 0,
             "settings": {
-                "file": "/home/dmerrick/other_projects/danalol-stream/assets/stream-screencap.jpg"
+                "file": "/opt/tripbot/assets/stream-screencap.jpg"
             },
             "sync": 0,
             "versioned_id": "image_source",
@@ -2626,7 +2626,7 @@
                 "log_mode": false,
                 "outline": false,
                 "text": "",
-                "text_file": "/home/dmerrick/other_projects/danalol-stream/run/chat.txt",
+                "text_file": "/opt/tripbot/run/chat.txt",
                 "word_wrap": false
             },
             "sync": 0,
@@ -2664,7 +2664,7 @@
                 "from_file": true,
                 "outline": false,
                 "text": "",
-                "text_file": "/home/dmerrick/other_projects/danalol-stream/run/timewarp.txt"
+                "text_file": "/opt/tripbot/run/timewarp.txt"
             },
             "sync": 0,
             "versioned_id": "text_ft2_source",
@@ -2701,7 +2701,7 @@
                 "from_file": true,
                 "outline": false,
                 "text": "",
-                "text_file": "/home/dmerrick/other_projects/danalol-stream/run/middle-text.txt"
+                "text_file": "/opt/tripbot/run/middle-text.txt"
             },
             "sync": 0,
             "versioned_id": "text_ft2_source",
@@ -2738,7 +2738,7 @@
                 "from_file": true,
                 "outline": false,
                 "text": "",
-                "text_file": "/home/dmerrick/other_projects/danalol-stream/run/middle-text.txt"
+                "text_file": "/opt/tripbot/run/middle-text.txt"
             },
             "sync": 0,
             "versioned_id": "text_ft2_source",
@@ -2775,7 +2775,7 @@
                 "from_file": true,
                 "outline": false,
                 "text": "",
-                "text_file": "/home/dmerrick/other_projects/danalol-stream/run/timewarp.txt"
+                "text_file": "/opt/tripbot/run/timewarp.txt"
             },
             "sync": 0,
             "versioned_id": "text_ft2_source",
@@ -2800,7 +2800,7 @@
             "push-to-talk": false,
             "push-to-talk-delay": 0,
             "settings": {
-                "file": "/home/dmerrick/other_projects/danalol-stream/run/flag.png-live",
+                "file": "/opt/tripbot/run/flag.png-live",
                 "unload": true
             },
             "sync": 0,

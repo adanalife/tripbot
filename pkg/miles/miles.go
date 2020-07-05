@@ -5,10 +5,10 @@ import (
 	"sort"
 	"time"
 
-	"github.com/dmerrick/tripbot/pkg/database"
-	terrors "github.com/dmerrick/tripbot/pkg/errors"
-	"github.com/dmerrick/tripbot/pkg/events"
-	"github.com/dmerrick/tripbot/pkg/helpers"
+	"github.com/adanalife/tripbot/pkg/database"
+	terrors "github.com/adanalife/tripbot/pkg/errors"
+	"github.com/adanalife/tripbot/pkg/events"
+	"github.com/adanalife/tripbot/pkg/helpers"
 )
 
 // func TopUsers(size int) map[string]float32 {
@@ -16,7 +16,7 @@ func TopUsers(size int) [][]string {
 	//TODO maybe don't use an Events map?
 	evnts := []events.Event{}
 	oneMonthAgo := time.Now().Add(time.Duration(-30*24) * time.Hour)
-	err := database.DBCon.Select(&evnts, "SELECT DISTINCT username from events where event='login' and date_created >= $1", oneMonthAgo)
+	err := database.Connection().Select(&evnts, "SELECT DISTINCT username from events where event='login' and date_created >= $1", oneMonthAgo)
 	if err != nil {
 		terrors.Log(err, "problem with DB")
 	}
@@ -33,7 +33,7 @@ func TopUsers(size int) [][]string {
 func ForUser(user string) float32 {
 	evnts := []events.Event{}
 	query := `SELECT username, event, date_created from events where username = $1 AND event in ('login', 'logout')`
-	err := database.DBCon.Select(&evnts, query, user)
+	err := database.Connection().Select(&evnts, query, user)
 	if err != nil {
 		terrors.Log(err, "error fetching events from db")
 	}

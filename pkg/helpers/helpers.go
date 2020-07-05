@@ -15,8 +15,8 @@ import (
 
 	"github.com/bradfitz/latlong"
 	"github.com/davecgh/go-spew/spew"
-	"github.com/dmerrick/tripbot/pkg/config"
-	terrors "github.com/dmerrick/tripbot/pkg/errors"
+	"github.com/adanalife/tripbot/pkg/config"
+	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/hako/durafmt"
 	"github.com/kelvins/geocoder"
 	"github.com/nathan-osman/go-sunrise"
@@ -191,6 +191,7 @@ func sunriseSunset(utcDate time.Time, lat, long float64) (time.Time, time.Time) 
 	return ActualDate(rise, lat, long), ActualDate(set, lat, long)
 }
 
+//TODO: text the admin if it errors opening browser
 func OpenInBrowser(url string) {
 	log.Println("opening url")
 	err := open.Run(url)

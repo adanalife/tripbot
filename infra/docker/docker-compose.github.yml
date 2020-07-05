@@ -3,18 +3,20 @@ version: '3.7'
 services:
   tripbot:
     # these are set at the github level:
-    # https://github.com/dmerrick/tripbot/settings/secrets/new
+    # https://github.com/adanalife/tripbot/settings/secrets/new
     environment:
       - CHANNEL_NAME
       - BOT_USERNAME
       - TWITCH_AUTH_TOKEN
       - TWITCH_CLIENT_ID
       - TWITCH_CLIENT_SECRET
+    entrypoint: bash
+    command: -c "go run cmd/tripbot/tripbot.go 2>&1"
 
-  vlc:
-    #TODO: almost none of these are actually required
+  obs:
     environment:
       - CHANNEL_NAME
+      #TODO: almost none of these are actually required by OBS
       - BOT_USERNAME
       - TWITCH_AUTH_TOKEN
       - TWITCH_CLIENT_ID

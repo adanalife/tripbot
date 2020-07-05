@@ -7,9 +7,9 @@ import (
 	"path"
 	"time"
 
-	"github.com/dmerrick/tripbot/pkg/config"
-	"github.com/dmerrick/tripbot/pkg/onscreens"
-	"github.com/dmerrick/tripbot/pkg/users"
+	"github.com/adanalife/tripbot/pkg/config"
+	"github.com/adanalife/tripbot/pkg/onscreens"
+	"github.com/adanalife/tripbot/pkg/users"
 )
 
 var LeftRotator *onscreens.Onscreen
@@ -22,16 +22,15 @@ var possibleLeftMessages = []string{
 	"Looking for artist for emotes and more",
 	"Want to help the stream? Fill out the !survey",
 	"Want to help the stream? Fill out the !survey",
-	"Want to help the stream? Fill out the !survey",
-	"Twitch Prime subs keep us on air :D",
+	// "Twitch Prime subs keep us on air :D",
 	"Earn miles for every minute you watch (!miles)",
-	"I won't be offended if you play your own music",
-	"Music by Soma.fm (!song)",
+	// "I won't be offended if you play your own music",
+	// "Music by Soma.fm (!song)",
 	"Use !report to report stream issues",
 	"Try and !guess what state we're in",
 	"Where are we? (!location)",
 	"Crave something new? Try !timewarp",
-	"Dana isn't always here. Find him on !socialmedia",
+	"Talk to me on !socialmedia",
 	"New here? Use !commands to interact with the bot",
 	"LEADER",
 }

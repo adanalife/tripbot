@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dmerrick/tripbot/pkg/background"
-	terrors "github.com/dmerrick/tripbot/pkg/errors"
-	"github.com/dmerrick/tripbot/pkg/helpers"
-	vlcClient "github.com/dmerrick/tripbot/pkg/vlc-client"
+	"github.com/adanalife/tripbot/pkg/background"
+	terrors "github.com/adanalife/tripbot/pkg/errors"
+	"github.com/adanalife/tripbot/pkg/helpers"
+	vlcClient "github.com/adanalife/tripbot/pkg/vlc-client"
 	"github.com/logrusorgru/aurora"
 )
 

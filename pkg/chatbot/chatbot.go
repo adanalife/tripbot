@@ -7,13 +7,13 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/dmerrick/tripbot/pkg/background"
-	"github.com/dmerrick/tripbot/pkg/config"
-	terrors "github.com/dmerrick/tripbot/pkg/errors"
-	"github.com/dmerrick/tripbot/pkg/helpers"
-	mylog "github.com/dmerrick/tripbot/pkg/log"
-	mytwitch "github.com/dmerrick/tripbot/pkg/twitch"
-	"github.com/dmerrick/tripbot/pkg/users"
+	"github.com/adanalife/tripbot/pkg/background"
+	"github.com/adanalife/tripbot/pkg/config"
+	terrors "github.com/adanalife/tripbot/pkg/errors"
+	"github.com/adanalife/tripbot/pkg/helpers"
+	mylog "github.com/adanalife/tripbot/pkg/log"
+	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
+	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/gempir/go-twitch-irc/v2"
 	"github.com/kelvins/geocoder"
 	"github.com/logrusorgru/aurora"
@@ -78,7 +78,8 @@ func Say(msg string) {
 // right now it just posts random "help messages"
 func Chatter() {
 	// rand.Intn(len(config.HelpMessages))
-	Say(help())
+	// use twitch emote feature to add some color
+	Say("/me " + help())
 }
 
 func help() string {

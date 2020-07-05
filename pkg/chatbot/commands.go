@@ -5,26 +5,29 @@ import (
 	"log"
 	"math/rand"
 	"os"
+	"os/exec"
+	"path"
 	"strings"
 	"time"
 
-	"github.com/dmerrick/tripbot/pkg/audio"
-	terrors "github.com/dmerrick/tripbot/pkg/errors"
+	"github.com/adanalife/tripbot/pkg/audio"
+	terrors "github.com/adanalife/tripbot/pkg/errors"
 
-	"github.com/dmerrick/tripbot/pkg/background"
-	"github.com/dmerrick/tripbot/pkg/config"
-	"github.com/dmerrick/tripbot/pkg/database"
-	"github.com/dmerrick/tripbot/pkg/helpers"
-	"github.com/dmerrick/tripbot/pkg/miles"
-	"github.com/dmerrick/tripbot/pkg/users"
-	"github.com/dmerrick/tripbot/pkg/video"
+	"github.com/adanalife/tripbot/pkg/background"
+	"github.com/adanalife/tripbot/pkg/config"
+	"github.com/adanalife/tripbot/pkg/database"
+	"github.com/adanalife/tripbot/pkg/helpers"
+	"github.com/adanalife/tripbot/pkg/miles"
+	"github.com/adanalife/tripbot/pkg/users"
+	"github.com/adanalife/tripbot/pkg/video"
 	"github.com/getsentry/sentry-go"
 	"github.com/hako/durafmt"
 )
 
-// lastTimewarpTime is used to rate-limit users so they cant
-// over-do the time-skip features (including !skip and !back)
-var lastTimewarpTime time.Time
+// lastHelloTime is used to rate-limit the hello command
+var lastHelloTime time.Time = time.Now()
+
+var currentVersion string
 
 func helpCmd(user *users.User) {
 	log.Println(user.Username, "ran !help")
@@ -32,9 +35,57 @@ func helpCmd(user *users.User) {
 	Say(msg)
 }
 
+func helloCmd(user *users.User, params []string) {
+	log.Println(user.Username, "said hello")
+
+	// check if it was just a one-word hello
+	if len(params) > 0 {
+		return
+	}
+
+	// check if we said hi too recently
+	if time.Now().Sub(lastHelloTime) < 20*time.Second {
+		return
+	}
+
+	// say a random greeting back, with random punctuation
+	greetings := []string{"Hello", "Hey", "Hi"}
+	punctuation := []string{"!", ".", ".", "."}
+	msg := greetings[rand.Intn(len(greetings))]
+	msg += punctuation[rand.Intn(len(punctuation))]
+
+	// give a little help message if the user is new
+	if user.CurrentMiles() < 2.0 {
+		msg += " I'm Tripbot, your adventure companion. Try using !commands to interact with me."
+	}
+
+	Say(msg)
+	// update our record of last time it ran
+	lastHelloTime = time.Now()
+}
+
 func flagCmd(user *users.User) {
 	log.Println(user.Username, "ran !flag")
 	video.ShowFlag()
+}
+
+func versionCmd(user *users.User) {
+	log.Println(user.Username, "ran !version")
+
+	// check if we already know the version
+	if currentVersion == "" {
+		// run the shell script to get current tripbot version
+		scriptPath := path.Join(helpers.ProjectRoot(), "bin/current-version.sh")
+		out, err := exec.Command(scriptPath).Output()
+		if err != nil {
+			terrors.Log(err, "failed to get current version")
+			Say("Failed to get current version :(")
+			return
+		}
+		currentVersion = strings.TrimSpace(string(out))
+	}
+
+	Say("Current version is " + currentVersion)
 }
 
 func songCmd(user *users.User) {
@@ -70,6 +121,9 @@ func milesCmd(user *users.User) {
 	msg = fmt.Sprintf(msg, user.Username, miles)
 	if miles < 0.1 {
 		msg += " You'll earn more miles every minute you watch the stream."
+	}
+	if miles == 0.0 {
+		msg += " (Sometimes it takes a bit for me to notice you. You should be good now!)"
 	}
 	Say(msg)
 }
@@ -309,7 +363,7 @@ func shutdownCmd(user *users.User) {
 	log.Printf("currently playing: %s", video.CurrentlyPlaying)
 	background.StopCron()
 	users.Shutdown()
-	err := database.DBCon.Close()
+	err := database.Connection().Close()
 	if err != nil {
 		log.Println(err)
 	}
@@ -345,6 +399,13 @@ func middleCmd(user *users.User, params []string) {
 	// don't do anything if empty
 	if len(params) == 0 {
 		Say("What do you want to say?")
+		return
+	}
+
+	// if the arg was "hide", hide the text from view
+	if len(params) == 1 && strings.ToLower(params[0]) == "hide" {
+		Say("Got it! Hiding the message.")
+		background.MiddleText.Hide()
 		return
 	}
 

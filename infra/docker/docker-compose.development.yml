@@ -4,17 +4,18 @@ services:
   tripbot:
     environment:
       ENV: development
-    #TODO: do we need this if we use a volume?
-    # env_file:
-    #   - ./.env.development
-    volumes:
-      - ./.env.development:/danalol/.env.development
+      - ./.env.development
+    entrypoint: bash
+    command: -c "go run cmd/tripbot/tripbot.go 2>&1"
 
-  vlc:
+  obs:
     environment:
       ENV: development
     env_file:
       - ./.env.development
+    # uncomment this to disable obs container
+    # entrypoint: "true"
+    restart: on-failure
 
   db:
     volumes:

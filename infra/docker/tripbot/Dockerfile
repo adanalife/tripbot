@@ -1,7 +1,7 @@
 # buster is the debian release, c.p. https://askubuntu.com/a/445496
 FROM golang:1.14-buster
 
-WORKDIR /go/src/github.com/dmerrick/tripbot
+WORKDIR /go/src/github.com/adanalife/tripbot
 
 # install dependencies
 RUN apt-get update && apt-get install --no-install-recommends -y \
@@ -10,25 +10,28 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
  && rm -rf /var/lib/apt/lists/*
 
 # create app user
-RUN adduser --system --group --disabled-password --no-create-home danalol
+# RUN adduser --system --group --disabled-password --no-create-home danalol
 
 # copy over project
 #TODO: maybe just copy pkg, cmd, internal, etc?
-COPY --chown=danalol:danalol . .
+COPY . .
+# COPY --chown=danalol:danalol . .
 
-# create symlink to /danalol and give user permissions on it
-RUN ln -s /go/src/github.com/dmerrick/tripbot /danalol \
- && chown danalol:danalol /danalol
+# create symlink to /opt/tripbot and give user permissions on it
+RUN ln -s /go/src/github.com/adanalife/tripbot /opt/tripbot \
+  && mkdir /opt/data #\
+  # && chown danalol:danalol /opt/tripbot /opt/data
 
 # set home dir for app user
-RUN usermod --home /danalol danalol
+# RUN usermod --home /opt/tripbot danalol
 
 # switch to the app user
-USER danalol
+# USER danalol
 
 # build the binary
 RUN go build -o bin/tripbot cmd/tripbot/tripbot.go
 
 EXPOSE 8080
 
-ENTRYPOINT ["./bin/tripbot"]
+WORKDIR /opt/tripbot
+CMD ["./bin/tripbot"]
