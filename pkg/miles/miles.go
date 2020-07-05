@@ -5,10 +5,10 @@ import (
 	"sort"
 	"time"
 
-	"github.com/dmerrick/tripbot/pkg/database"
-	terrors "github.com/dmerrick/tripbot/pkg/errors"
-	"github.com/dmerrick/tripbot/pkg/events"
-	"github.com/dmerrick/tripbot/pkg/helpers"
+	"github.com/adanalife/tripbot/pkg/database"
+	terrors "github.com/adanalife/tripbot/pkg/errors"
+	"github.com/adanalife/tripbot/pkg/events"
+	"github.com/adanalife/tripbot/pkg/helpers"
 )
 
 // func TopUsers(size int) map[string]float32 {

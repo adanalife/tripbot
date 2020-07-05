@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dmerrick/tripbot/pkg/database"
-	terrors "github.com/dmerrick/tripbot/pkg/errors"
-	"github.com/dmerrick/tripbot/pkg/helpers"
+	"github.com/adanalife/tripbot/pkg/database"
+	terrors "github.com/adanalife/tripbot/pkg/errors"
+	"github.com/adanalife/tripbot/pkg/helpers"
 )
 
 // LoadOrCreate() will look up the video in the DB,

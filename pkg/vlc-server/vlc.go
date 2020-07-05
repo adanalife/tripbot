@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 
 	libvlc "github.com/adrg/libvlc-go/v3"
-	"github.com/dmerrick/tripbot/pkg/config"
-	terrors "github.com/dmerrick/tripbot/pkg/errors"
-	"github.com/dmerrick/tripbot/pkg/helpers"
+	"github.com/adanalife/tripbot/pkg/config"
+	terrors "github.com/adanalife/tripbot/pkg/errors"
+	"github.com/adanalife/tripbot/pkg/helpers"
 )
 
 var player *libvlc.Player

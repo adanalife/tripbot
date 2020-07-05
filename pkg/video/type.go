@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/dmerrick/tripbot/pkg/config"
-	"github.com/dmerrick/tripbot/pkg/ocr"
+	"github.com/adanalife/tripbot/pkg/config"
+	"github.com/adanalife/tripbot/pkg/ocr"
 )
 
 // Videos represent a video file containing dashcam footage
