@@ -4,8 +4,8 @@ import (
 	"log"
 	"time"
 
-	"github.com/dmerrick/tripbot/pkg/config"
-	"github.com/dmerrick/tripbot/pkg/database"
+	"github.com/adanalife/tripbot/pkg/config"
+	"github.com/adanalife/tripbot/pkg/database"
 	"github.com/logrusorgru/aurora"
 )
 

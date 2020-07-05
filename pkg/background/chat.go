@@ -6,8 +6,8 @@ import (
 	"path"
 	"time"
 
-	"github.com/dmerrick/tripbot/pkg/config"
-	"github.com/dmerrick/tripbot/pkg/onscreens"
+	"github.com/adanalife/tripbot/pkg/config"
+	"github.com/adanalife/tripbot/pkg/onscreens"
 )
 
 const lineBreak = 40

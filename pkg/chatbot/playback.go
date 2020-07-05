@@ -7,13 +7,13 @@ import (
 	"strings"
 	"time"
 
-	terrors "github.com/dmerrick/tripbot/pkg/errors"
+	terrors "github.com/adanalife/tripbot/pkg/errors"
 
-	"github.com/dmerrick/tripbot/pkg/background"
-	"github.com/dmerrick/tripbot/pkg/helpers"
-	"github.com/dmerrick/tripbot/pkg/users"
-	"github.com/dmerrick/tripbot/pkg/video"
-	vlcClient "github.com/dmerrick/tripbot/pkg/vlc-client"
+	"github.com/adanalife/tripbot/pkg/background"
+	"github.com/adanalife/tripbot/pkg/helpers"
+	"github.com/adanalife/tripbot/pkg/users"
+	"github.com/adanalife/tripbot/pkg/video"
+	vlcClient "github.com/adanalife/tripbot/pkg/vlc-client"
 )
 
 // lastTimewarpTime is used to rate-limit users so they cant

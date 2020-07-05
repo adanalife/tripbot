@@ -7,9 +7,9 @@ import (
 	"path"
 	"time"
 
-	"github.com/dmerrick/tripbot/pkg/config"
-	"github.com/dmerrick/tripbot/pkg/onscreens"
-	"github.com/dmerrick/tripbot/pkg/users"
+	"github.com/adanalife/tripbot/pkg/config"
+	"github.com/adanalife/tripbot/pkg/onscreens"
+	"github.com/adanalife/tripbot/pkg/users"
 )
 
 var leaderboardDuration = time.Duration(20 * time.Second)

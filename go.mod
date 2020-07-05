@@ -1,4 +1,4 @@
-module github.com/dmerrick/tripbot
+module github.com/adanalife/tripbot
 
 go 1.12
 

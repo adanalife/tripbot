@@ -5,8 +5,8 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/dmerrick/tripbot/pkg/helpers"
-	vlcServer "github.com/dmerrick/tripbot/pkg/vlc-server"
+	"github.com/adanalife/tripbot/pkg/helpers"
+	vlcServer "github.com/adanalife/tripbot/pkg/vlc-server"
 )
 
 func main() {

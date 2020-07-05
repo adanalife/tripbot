@@ -5,11 +5,11 @@ import (
 	"log"
 	"strings"
 
-	"github.com/dmerrick/tripbot/pkg/background"
-	terrors "github.com/dmerrick/tripbot/pkg/errors"
-	"github.com/dmerrick/tripbot/pkg/helpers"
-	mylog "github.com/dmerrick/tripbot/pkg/log"
-	"github.com/dmerrick/tripbot/pkg/users"
+	"github.com/adanalife/tripbot/pkg/background"
+	terrors "github.com/adanalife/tripbot/pkg/errors"
+	"github.com/adanalife/tripbot/pkg/helpers"
+	mylog "github.com/adanalife/tripbot/pkg/log"
+	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/gempir/go-twitch-irc/v2"
 )
 
