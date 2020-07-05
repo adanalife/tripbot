@@ -191,6 +191,7 @@ func sunriseSunset(utcDate time.Time, lat, long float64) (time.Time, time.Time) 
 	return ActualDate(rise, lat, long), ActualDate(set, lat, long)
 }
 
+//TODO: text the admin if it errors opening browser
 func OpenInBrowser(url string) {
 	log.Println("opening url")
 	err := open.Run(url)
