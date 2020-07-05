@@ -14,9 +14,10 @@ services:
     ports:
       # this should match the TRIPBOT_SERVER_PORT env var
       - "8080"
-    #TODO: do we even need this?
     volumes:
-      - ./assets/video:/danalol/Dashcam/_all
+      - .:/go/src/github.com/adanalife/tripbot
+      #TODO: do we even need this?
+      - ./assets/video:/opt/data/Dashcam/_all
     restart: unless-stopped
 
   obs:
@@ -33,8 +34,8 @@ services:
     environment:
       STREAM_KEY: "${STREAM_KEY}"
     volumes:
-      - .:/go/src/github.com/dmerrick/tripbot
-      - ./assets/video:/danalol/Dashcam/_all
+      - .:/go/src/github.com/adanalife/tripbot
+      - ./assets/video:/opt/data/Dashcam/_all
     restart: unless-stopped
 
   db:

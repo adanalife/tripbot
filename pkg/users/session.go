@@ -9,14 +9,14 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/dmerrick/tripbot/pkg/config"
-	"github.com/dmerrick/tripbot/pkg/events"
-	"github.com/dmerrick/tripbot/pkg/helpers"
+	"github.com/adanalife/tripbot/pkg/config"
+	"github.com/adanalife/tripbot/pkg/events"
+	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/hako/durafmt"
 
-	terrors "github.com/dmerrick/tripbot/pkg/errors"
-	"github.com/dmerrick/tripbot/pkg/twitch"
-	mytwitch "github.com/dmerrick/tripbot/pkg/twitch"
+	terrors "github.com/adanalife/tripbot/pkg/errors"
+	"github.com/adanalife/tripbot/pkg/twitch"
+	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/logrusorgru/aurora"
 )
 

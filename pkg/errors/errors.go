@@ -4,7 +4,7 @@ import (
 	"errors"
 	"log"
 
-	"github.com/dmerrick/tripbot/pkg/config"
+	"github.com/adanalife/tripbot/pkg/config"
 	"github.com/getsentry/sentry-go"
 	"github.com/logrusorgru/aurora"
 )

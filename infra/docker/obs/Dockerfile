@@ -1,3 +1,5 @@
+#TODO: consider using static binaries instead:
+# https://johnvansickle.com/ffmpeg/
 # this comes from Dockerfile.nvidia
 FROM danalol/ffmpeg
 
@@ -108,7 +110,7 @@ RUN echo "?package(bash):needs=\"X11\" section=\"ADanaLife\" title=\"OBS Screenc
   && update-menus
 
 # create symlink to /opt/tripbot
-RUN ln -s /go/src/github.com/dmerrick/tripbot /opt/tripbot
+RUN ln -s /go/src/github.com/adanalife/tripbot /opt/tripbot
 WORKDIR /opt/tripbot
 
 ENTRYPOINT ["/opt/tripbot/script/container_startup.sh"]

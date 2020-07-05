@@ -6,12 +6,17 @@ services:
       ENV: development
     env_file:
       - ./.env.development
+    entrypoint: bash
+    command: -c "go run cmd/tripbot/tripbot.go 2>&1"
 
   obs:
     environment:
       ENV: development
     env_file:
       - ./.env.development
+    # uncomment this to disable obs container
+    # entrypoint: "true"
+    restart: on-failure
 
   db:
     volumes:

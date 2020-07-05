@@ -5,11 +5,11 @@ import (
 	"log"
 	"strings"
 
-	"github.com/dmerrick/tripbot/pkg/background"
-	terrors "github.com/dmerrick/tripbot/pkg/errors"
-	"github.com/dmerrick/tripbot/pkg/helpers"
-	mylog "github.com/dmerrick/tripbot/pkg/log"
-	"github.com/dmerrick/tripbot/pkg/users"
+	"github.com/adanalife/tripbot/pkg/background"
+	terrors "github.com/adanalife/tripbot/pkg/errors"
+	"github.com/adanalife/tripbot/pkg/helpers"
+	mylog "github.com/adanalife/tripbot/pkg/log"
+	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/gempir/go-twitch-irc/v2"
 )
 
@@ -23,6 +23,8 @@ func runCommand(user users.User, message string) {
 	switch command {
 	case "!help":
 		helpCmd(&user)
+	case "hello", "hi", "hey", "hallo":
+		helloCmd(&user, params)
 	case "!flag":
 		flagCmd(&user)
 	case "!version":
@@ -158,7 +160,10 @@ func runCommand(user users.User, message string) {
 			Say(followerMsg)
 		}
 	default:
-		err = fmt.Errorf("command %s not found", command)
+		if strings.HasPrefix(command, "!") {
+			// log the command as an error so we can implement it in the future
+			err = fmt.Errorf("command %s not found", command)
+		}
 	}
 	if err != nil {
 		terrors.Log(err, "error running command")
@@ -179,14 +184,10 @@ func PrivateMessage(msg twitch.PrivateMessage) {
 
 	// check to see if the message is a command
 	//TODO: also include ones prefixed with whitespace?
-	//TODO: not all commands start with "!"s
-	if strings.HasPrefix(message, "!") {
-		// log in the user
-		user := users.LoginIfNecessary(username)
+	// log in the user
+	user := users.LoginIfNecessary(username)
 
-		//TODO is it okay that this isn't a pointer?
-		runCommand(*user, message)
-	}
+	runCommand(*user, message)
 }
 
 // this event fires when a user joins the channel

@@ -243,17 +243,19 @@ var IgnoredUsers = []string{
 
 // HelpMessages are all of the different things !help can return
 var HelpMessages = []string{
-	"!location: Get the current location (beta)",
-	"!song: Get the current music",
-	"!miles: See your current miles",
-	"!leaderboard: See who has the most miles",
-	"!state: Get the state we are currently in (beta)",
-	"!sunset: Get time until sunset (on the day of filming)",
-	"!report: Report a stream issue (frozen, no audio, etc)",
+	"!commands: List more commands you can use",
+	"!commands: List more commands you can use",
+	"!commands: List more commands you can use",
 	"!guess: Guess which state we are in",
+	"!leaderboard: See who has the most miles",
+	"!location: Get the current location",
+	"!miles: See your current miles",
+	"!report: Report a stream issue (frozen, no audio, etc)",
+	"!state: Get the state we are currently in",
+	"!sunset: Get time until sunset (on the day of filming)",
 	"!survey: Fill out a survey and help the stream",
 	"!timewarp: Magically warp to a new moment in time",
-	"!commands: List more commands you can use",
+	// "!song: Get the current music",
 }
 
 var GoogleMapsStyle = []string{

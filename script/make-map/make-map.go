@@ -12,10 +12,10 @@ import (
 	"strings"
 	"time"
 
-	// "github.com/dmerrick/tripbot/internal/takeout"
-	"github.com/dmerrick/tripbot/pkg/config"
-	"github.com/dmerrick/tripbot/pkg/helpers"
-	"github.com/dmerrick/tripbot/pkg/video"
+	// "github.com/adanalife/tripbot/internal/takeout"
+	"github.com/adanalife/tripbot/pkg/config"
+	"github.com/adanalife/tripbot/pkg/helpers"
+	"github.com/adanalife/tripbot/pkg/video"
 	"googlemaps.github.io/maps"
 )
 

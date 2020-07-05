@@ -10,23 +10,22 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dmerrick/tripbot/pkg/audio"
-	terrors "github.com/dmerrick/tripbot/pkg/errors"
+	"github.com/adanalife/tripbot/pkg/audio"
+	terrors "github.com/adanalife/tripbot/pkg/errors"
 
-	"github.com/dmerrick/tripbot/pkg/background"
-	"github.com/dmerrick/tripbot/pkg/config"
-	"github.com/dmerrick/tripbot/pkg/database"
-	"github.com/dmerrick/tripbot/pkg/helpers"
-	"github.com/dmerrick/tripbot/pkg/miles"
-	"github.com/dmerrick/tripbot/pkg/users"
-	"github.com/dmerrick/tripbot/pkg/video"
+	"github.com/adanalife/tripbot/pkg/background"
+	"github.com/adanalife/tripbot/pkg/config"
+	"github.com/adanalife/tripbot/pkg/database"
+	"github.com/adanalife/tripbot/pkg/helpers"
+	"github.com/adanalife/tripbot/pkg/miles"
+	"github.com/adanalife/tripbot/pkg/users"
+	"github.com/adanalife/tripbot/pkg/video"
 	"github.com/getsentry/sentry-go"
 	"github.com/hako/durafmt"
 )
 
-// lastTimewarpTime is used to rate-limit users so they cant
-// over-do the time-skip features (including !skip and !back)
-var lastTimewarpTime time.Time
+// lastHelloTime is used to rate-limit the hello command
+var lastHelloTime time.Time = time.Now()
 
 var currentVersion string
 
@@ -34,6 +33,35 @@ func helpCmd(user *users.User) {
 	log.Println(user.Username, "ran !help")
 	msg := fmt.Sprintf("%s (%d of %d)", help(), helpIndex+1, len(config.HelpMessages))
 	Say(msg)
+}
+
+func helloCmd(user *users.User, params []string) {
+	log.Println(user.Username, "said hello")
+
+	// check if it was just a one-word hello
+	if len(params) > 0 {
+		return
+	}
+
+	// check if we said hi too recently
+	if time.Now().Sub(lastHelloTime) < 20*time.Second {
+		return
+	}
+
+	// say a random greeting back, with random punctuation
+	greetings := []string{"Hello", "Hey", "Hi"}
+	punctuation := []string{"!", ".", ".", "."}
+	msg := greetings[rand.Intn(len(greetings))]
+	msg += punctuation[rand.Intn(len(punctuation))]
+
+	// give a little help message if the user is new
+	if user.CurrentMiles() < 2.0 {
+		msg += " I'm Tripbot, your adventure companion. Try using !commands to interact with me."
+	}
+
+	Say(msg)
+	// update our record of last time it ran
+	lastHelloTime = time.Now()
 }
 
 func flagCmd(user *users.User) {

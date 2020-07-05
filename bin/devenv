@@ -5,6 +5,8 @@
 export COMPOSE_DOCKER_CLI_BUILD=1
 export DOCKER_BUILDKIT=1
 
+#TODO: check if docker is running, if not start it(?)
+
 docker-compose \
   --project-name tripbot \
   --project-directory . \
