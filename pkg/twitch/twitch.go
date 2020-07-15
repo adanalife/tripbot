@@ -26,6 +26,12 @@ func getChannelID(username string) string {
 	if err != nil {
 		terrors.Log(err, "error getting user info from twitch")
 	}
+
+	if resp == nil {
+		terrors.Log(err, "empty response from twitch")
+		return ""
+	}
+
 	if len(resp.Data.Users) < 1 {
 		terrors.Log(fmt.Errorf("missing data"), "no user in response from twitch")
 		return ""
