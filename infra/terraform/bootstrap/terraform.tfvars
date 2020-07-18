@@ -1,2 +1,2 @@
-state_bucket = "danalol-core-tf-state"
+state_bucket = "adanalife-core-tf-state"
 admin_users  = ["dana.merrick"]
