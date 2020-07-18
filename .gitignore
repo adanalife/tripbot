@@ -43,3 +43,8 @@ db/*.gz
 # temporary files
 tmp
 vendor
+
+# terraform stuff
+.terraform
+*.plan
+*.tfstate.backup
