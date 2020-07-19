@@ -19,6 +19,26 @@ variable core_account_id {
   description = "The AWS account ID for the core account"
 }
 
+variable vpc_public_subnet_cidrs {
+  type        = list(string)
+  description = "A list of CIDRs for the public subnet"
+}
+
+variable vpc_private_subnet_cidrs {
+  type        = list(string)
+  description = "A list of CIDRs for the private subnet"
+}
+
+variable vpc_database_subnet_cidrs {
+  type        = list(string)
+  description = "A list of CIDRs for database subnets"
+}
+
+variable vpc_dns_servers {
+  type        = list(string)
+  description = "A list of DNS server IPs"
+}
+
 locals {
   org_name = "adanalife"
   # this is how we will refer to the account in other places
