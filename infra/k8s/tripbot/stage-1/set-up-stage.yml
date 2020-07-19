@@ -13,8 +13,9 @@ spec:
         command:
          - bash
         args:
+          #TODO: remove the mkdir
          - -c
-         - mkdir -p /opt/tripbot/assets/video/_all && go run cmd/tripbot/tripbot.go 2>&1
+         - ls /opt/tripbot/infra/certs && mkdir -p /opt/tripbot/assets/video/_all && sleep 600 #go run cmd/tripbot/tripbot.go 2>&1
         env:
          - name: ENV
            value: "stage"
@@ -31,7 +32,7 @@ spec:
           name: stage-dotenv
         # mount ssl-certs secret
         - name: ssl-certs
-          mountPath: /opt/tripbot/infra/google
+          mountPath: /opt/tripbot/infra/certs
           readOnly: true
         # mount google-creds secret
         - name: google-creds
