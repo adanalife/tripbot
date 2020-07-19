@@ -23,8 +23,9 @@ var server *http.Server
 func handle(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
+		//TODO: write real healthchecks for ready vs live
 		// healthcheck URL, for tools to verify the bot is alive
-		if r.URL.Path == "/health" {
+		if r.URL.Path == "/health/ready" || r.URL.Path == "/health/live" {
 			fmt.Fprintf(w, "OK")
 
 			// twitch issues a request here when creating a new webhook subscription
