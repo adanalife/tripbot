@@ -14,7 +14,7 @@ spec:
          - bash
         args:
          - -c
-         - ls -al /opt/tripbot/assets && ls /opt/tripbot/assets/video && go run cmd/tripbot/tripbot.go 2>&1
+         - go run cmd/tripbot/tripbot.go 2>&1
         env:
          - name: ENV
            value: "stage"
