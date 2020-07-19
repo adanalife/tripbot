@@ -2,20 +2,15 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: env-stage
+  name: stage-dotenv
 data:
-  env-stage: |
+  stage-dotenv: |
     ENV=stage
-    READ_ONLY="false"
-    VERBOSE="false"
 
     EXTERNAL_URL="https://tripbot.dana.lol:3458"
 
-    TRIPBOT_HTTP_AUTH="" #TODO: turn into secret
     TRIPBOT_SERVER_PORT="8082"
     VLC_SERVER_PORT="8090"
-    VLC_SERVER_HOST=http://localhost
-    MPD_SERVER_HOST=localhost:6600
     DATABASE_HOST="localhost"
     DATABASE_DB="tripbot_dev"
 
@@ -32,11 +27,14 @@ data:
 
     DATABASE_USER="tripbot_dev"
     DATABASE_PASS="markka.ada.ester.alarmist" #TODO: turn into secret
+    TRIPBOT_HTTP_AUTH="" #TODO: turn into secret
 
     SENTRY_ENVIRONMENT="staging"
 
     DISABLE_TWITCH_WEBHOOKS="true"
     DISABLE_MUSIC_AUTOPLAY="true"
+    READ_ONLY="false"
+    VERBOSE="false"
 
     #TODO: move the below into secrets
 
