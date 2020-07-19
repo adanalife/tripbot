@@ -19,6 +19,14 @@ variable core_account_id {
   description = "The AWS account ID for the core account"
 }
 
+variable rds_tripbot_username {
+  type = string
+}
+
+variable rds_tripbot_password {
+  type = string
+}
+
 locals {
   org_name = "adanalife"
   # this is how we will refer to the account in other places
