@@ -15,7 +15,7 @@ spec:
         args:
           #TODO: remove the mkdir
          - -c
-         - ls /opt/tripbot/infra/certs && mkdir -p /opt/tripbot/assets/video/_all && sleep 600 #go run cmd/tripbot/tripbot.go 2>&1
+         - mkdir -p /opt/tripbot/assets/video/_all && go run cmd/tripbot/tripbot.go 2>&1
         env:
          - name: ENV
            value: "stage"
@@ -23,6 +23,8 @@ spec:
            value: "http://localhost"
          - name: MPD_SERVER_HOST
            value: "localhost:6600"
+         - name: DATABASE_HOST
+           value: "db"
 
         volumeMounts:
         # mount stage-dotenv volume to /opt/tripbot
@@ -31,9 +33,9 @@ spec:
           subPath: .env.staging
           name: stage-dotenv
         # mount ssl-certs secret
-        - name: ssl-certs
-          mountPath: /opt/tripbot/infra/certs
-          readOnly: true
+        # - name: ssl-certs
+        #   mountPath: /opt/tripbot/infra/certs
+        #   readOnly: true
         # mount google-creds secret
         - name: google-creds
           mountPath: /opt/tripbot/infra/google
@@ -48,9 +50,9 @@ spec:
           items:
             - key: stage-dotenv
               path: .env.staging
-      - name: ssl-certs
-        secret:
-          secretName: ssl-certs
+      # - name: ssl-certs
+      #   secret:
+      #     secretName: ssl-certs
       - name: google-creds
         secret:
           secretName: google-creds
