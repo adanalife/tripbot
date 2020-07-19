@@ -9,6 +9,16 @@ data:
     READ_ONLY="false"
     VERBOSE="false"
 
+    EXTERNAL_URL="https://tripbot.dana.lol:3458"
+
+    TRIPBOT_HTTP_AUTH="" #TODO: turn into secret
+    TRIPBOT_SERVER_PORT="8082"
+    VLC_SERVER_PORT="8090"
+    VLC_SERVER_HOST=http://localhost
+    MPD_SERVER_HOST=localhost:6600
+    DATABASE_HOST="localhost"
+    DATABASE_DB="tripbot_dev"
+
     DASHCAM_DIR=/opt/data/Dashcam
     SCREENCAP_DIR=/opt/data/screencaps
     CROPPED_CORNERS_DIR=/opt/data/cropped-corners
@@ -18,34 +28,30 @@ data:
     CHANNEL_NAME="adanalife_staging"
     BOT_USERNAME="adanalife_staging"
 
-    TWITCH_AUTH_TOKEN="" #TODO: turn into secret
-    # get these here: https://dev.twitch.tv/dashboard/apps/create
-    TWITCH_CLIENT_ID="" #TODO: turn into secret
-    TWITCH_CLIENT_SECRET="" #TODO: turn into secret
-
-    GOOGLE_APPLICATION_CREDENTIALS="/opt/tripbot/infra/tripbot-stage.json"
     GOOGLE_APPS_PROJECT_ID="tripbot-stage"
-    GOOGLE_MAPS_API_KEY="" #TODO: turn into secret
 
-    DATABASE_HOST="localhost"
     DATABASE_USER="tripbot_dev"
     DATABASE_PASS="markka.ada.ester.alarmist" #TODO: turn into secret
-    DATABASE_DB="tripbot_dev"
 
-    TWILIO_ACCT_SID="" #TODO: turn into secret
-    TWILIO_AUTH_TOKEN="" #TODO: turn into secret
-    TWILIO_FROM_NUM="" #TODO: turn into secret
-    TWILIO_TO_NUM="" #TODO: turn into secret
-
-    SENTRY_DSN=""
     SENTRY_ENVIRONMENT="staging"
 
     DISABLE_TWITCH_WEBHOOKS="true"
     DISABLE_MUSIC_AUTOPLAY="true"
 
-    EXTERNAL_URL="https://tripbot.dana.lol:3458"
-    TRIPBOT_HTTP_AUTH="" #TODO: turn into secret
-    TRIPBOT_SERVER_PORT="8082"
-    VLC_SERVER_PORT="8090"
-    VLC_SERVER_HOST=http://localhost
-    MPD_SERVER_HOST=localhost:6600
+    #TODO: move the below into secrets
+
+    # get these here: https://dev.twitch.tv/dashboard/apps/create
+    TWITCH_CLIENT_ID=""
+    TWITCH_CLIENT_SECRET=""
+    TWITCH_AUTH_TOKEN=""
+    GOOGLE_MAPS_API_KEY=""
+
+    TWILIO_ACCT_SID=""
+    TWILIO_AUTH_TOKEN=""
+    TWILIO_FROM_NUM=""
+    TWILIO_TO_NUM=""
+
+    SENTRY_DSN="" #TODO: does this need to be secret?
+
+    #TODO: this is a file that should be it's own secret(?)
+    GOOGLE_APPLICATION_CREDENTIALS="/opt/tripbot/infra/tripbot-stage.json" #TODO: turn into secret
