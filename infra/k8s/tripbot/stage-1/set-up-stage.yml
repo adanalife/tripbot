@@ -9,13 +9,12 @@ spec:
       containers:
 
       - name: tripbot
-        image: adanalife/tripbot:latest
         imagePullPolicy: Always
         command:
          - bash
         args:
          - -c
-         - go run cmd/tripbot/tripbot.go 2>&1
+         - ls -al /opt/tripbot/assets && ls /opt/tripbot/assets/video && go run cmd/tripbot/tripbot.go 2>&1
         env:
          - name: ENV
            value: "stage"

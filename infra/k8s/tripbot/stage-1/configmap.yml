@@ -14,7 +14,7 @@ data:
     DATABASE_HOST="localhost"
     DATABASE_DB="tripbot_dev"
 
-    DASHCAM_DIR=/opt/data/Dashcam
+    DASHCAM_DIR=/opt/tripbot/assets/video
     SCREENCAP_DIR=/opt/data/screencaps
     CROPPED_CORNERS_DIR=/opt/data/cropped-corners
     MAPS_OUTPUT_DIR=/opt/data/maps
