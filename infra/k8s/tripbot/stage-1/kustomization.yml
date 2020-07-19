@@ -1,0 +1,6 @@
+bases:
+  - ../base
+patchesStrategicMerge:
+  - set-up-stage.yml
+resources:
+  - configmap.yml

@@ -14,8 +14,8 @@ services:
       ENV: development
     env_file:
       - ./.env.development
-    # uncomment this to disable obs container
-    # entrypoint: "true"
+    # comment this to enable obs container
+    entrypoint: "true"
     restart: on-failure
 
   db:

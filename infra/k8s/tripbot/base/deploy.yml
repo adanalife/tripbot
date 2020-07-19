@@ -1,0 +1,40 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    run: tripbot
+  name: tripbot
+spec:
+  ports:
+  - name: http
+    port: 80
+    targetPort: 80
+  - name: https
+    port: 443
+    targetPort: 80
+  selector:
+    app: tripbot-server
+  type: LoadBalancer
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tripbot
+spec:
+  selector:
+    matchLabels:
+      app: tripbot-server
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: tripbot-server
+    spec:
+      containers:
+
+      - name: tripbot
+        image: adanalife/tripbot:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080

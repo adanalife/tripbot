@@ -1,0 +1,38 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tripbot
+spec:
+  template:
+    spec:
+      containers:
+
+      - name: tripbot
+        image: adanalife/tripbot:latest
+        imagePullPolicy: Always
+        command:
+        - bash
+        args:
+        - -c
+        - go run cmd/tripbot/tripbot.go 2>&1
+        env:
+         - name: ENV
+           value: "stage"
+        volumeMounts:
+        - mountPath: /opt/tripbot/.env.staging # mount env-stage volume to /opt/tripbot
+          readOnly: true
+          subPath: .env.staging
+          name: env-stage
+        - mountPath: /opt/tripbot/log
+          name: log
+
+      volumes:
+      - name: env-stage
+        configMap:
+          name: env-stage
+          items:
+            - key: env-stage
+              path: .env.staging
+      - name: log
+        emptyDir: {}
