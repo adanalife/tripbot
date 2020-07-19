@@ -30,7 +30,7 @@ spec:
          - name: DATABASE_USER
            value: "tripbot"
          - name: DATABASE_PASS
-           value: ""
+           value: "keeper-agrimony-snack-cartel"
 
         volumeMounts:
         # mount stage-dotenv volume to /opt/tripbot
