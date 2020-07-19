@@ -24,6 +24,7 @@ data:
     BOT_USERNAME="adanalife_staging"
 
     GOOGLE_APPS_PROJECT_ID="tripbot-stage"
+    GOOGLE_APPLICATION_CREDENTIALS="/opt/tripbot/infra/google/tripbot-stage.json"
 
     DATABASE_USER="tripbot_dev"
     DATABASE_PASS="markka.ada.ester.alarmist" #TODO: turn into secret
@@ -51,5 +52,3 @@ data:
 
     SENTRY_DSN="" #TODO: does this need to be secret?
 
-    #TODO: this is a file that should be it's own secret(?)
-    GOOGLE_APPLICATION_CREDENTIALS="/opt/tripbot/infra/tripbot-stage.json" #TODO: turn into secret

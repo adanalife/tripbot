@@ -14,7 +14,7 @@ spec:
          - bash
         args:
          - -c
-         - go run cmd/tripbot/tripbot.go 2>&1
+         - mkdir -p /opt/tripbot/assets/video/_all && go run cmd/tripbot/tripbot.go 2>&1
         env:
          - name: ENV
            value: "stage"
@@ -29,6 +29,14 @@ spec:
           readOnly: true
           subPath: .env.staging
           name: stage-dotenv
+        # mount ssl-certs secret
+        - name: ssl-certs
+          mountPath: /opt/tripbot/infra/google
+          readOnly: true
+        # mount google-creds secret
+        - name: google-creds
+          mountPath: /opt/tripbot/infra/google
+          readOnly: true
         - mountPath: /opt/tripbot/log
           name: log
 
@@ -39,5 +47,11 @@ spec:
           items:
             - key: stage-dotenv
               path: .env.staging
+      - name: ssl-certs
+        secret:
+          secretName: ssl-certs
+      - name: google-creds
+        secret:
+          secretName: google-creds
       - name: log
         emptyDir: {}
