@@ -48,6 +48,36 @@ spec:
              secretKeyRef:
                name: tripbot-secrets
                key: TWITCH_AUTH_TOKEN
+         - name: SENTRY_DSN
+           valueFrom:
+             secretKeyRef:
+               name: tripbot-secrets
+               key: SENTRY_DSN
+         - name: TRIPBOT_HTTP_AUTH
+           valueFrom:
+             secretKeyRef:
+               name: tripbot-secrets
+               key: TRIPBOT_HTTP_AUTH
+         - name: TWILIO_FROM_NUM
+           valueFrom:
+             secretKeyRef:
+               name: tripbot-secrets
+               key: TWILIO_FROM_NUM
+         - name: TWILIO_TO_NUM
+           valueFrom:
+             secretKeyRef:
+               name: tripbot-secrets
+               key: TWILIO_TO_NUM
+         - name: TWILIO_ACCT_SID
+           valueFrom:
+             secretKeyRef:
+               name: tripbot-secrets
+               key: TWILIO_ACCT_SID
+         - name: GOOGLE_MAPS_API_KEY
+           valueFrom:
+             secretKeyRef:
+               name: tripbot-secrets
+               key: GOOGLE_MAPS_API_KEY
 
         volumeMounts:
         # mount stage-dotenv volume to /opt/tripbot
