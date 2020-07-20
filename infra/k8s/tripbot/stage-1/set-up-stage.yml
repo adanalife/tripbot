@@ -58,6 +58,11 @@ spec:
              secretKeyRef:
                name: tripbot-secrets
                key: TRIPBOT_HTTP_AUTH
+         - name: TWILIO_AUTH_TOKEN
+           valueFrom:
+             secretKeyRef:
+               name: tripbot-secrets
+               key: TWILIO_AUTH_TOKEN
          - name: TWILIO_FROM_NUM
            valueFrom:
              secretKeyRef:
