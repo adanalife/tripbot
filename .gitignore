@@ -20,6 +20,8 @@ run
 infra/certs
 # ignore google credentials
 infra/**/google
+# ignore k8s secrets
+infra/k8s/**/secrets.yml
 
 # compiled binaries
 bin/tripbot
