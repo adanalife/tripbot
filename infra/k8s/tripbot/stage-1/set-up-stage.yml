@@ -24,13 +24,10 @@ spec:
          - name: MPD_SERVER_HOST
            value: "localhost:6600"
          - name: DATABASE_HOST
-           value: "tripbot-db.ciamdnodrzhr.us-east-1.rds.amazonaws.com"
-         - name: DATABASE_DB
-           value: "tripbot"
-         - name: DATABASE_USER
-           value: "tripbot"
-         # - name: DATABASE_PASS
-         #   value: "keeper-agrimony-snack-cartel"
+           valueFrom:
+             secretKeyRef:
+               name: tripbot-secrets
+               key: DATABASE_HOST
          - name: DATABASE_PASS
            valueFrom:
              secretKeyRef:
@@ -58,10 +55,6 @@ spec:
           readOnly: true
           subPath: .env.staging
           name: stage-dotenv
-        # mount ssl-certs secret
-        # - name: ssl-certs
-        #   mountPath: /opt/tripbot/infra/certs
-        #   readOnly: true
         # mount google-creds secret
         - name: google-creds
           mountPath: /opt/tripbot/infra/google
@@ -76,9 +69,6 @@ spec:
           items:
             - key: stage-dotenv
               path: .env.staging
-      # - name: ssl-certs
-      #   secret:
-      #     secretName: ssl-certs
       - name: google-creds
         secret:
           secretName: google-creds

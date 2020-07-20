@@ -12,6 +12,9 @@ data:
     TRIPBOT_SERVER_PORT=8080
     VLC_SERVER_PORT="8090"
 
+    DATABASE_DB=tripbot
+    DATABASE_USER=tripbot
+
     DASHCAM_DIR=/opt/tripbot/assets/video
     SCREENCAP_DIR=/opt/data/screencaps
     CROPPED_CORNERS_DIR=/opt/data/cropped-corners

@@ -6,10 +6,6 @@ resources:
   - configmap.yml
   - secrets.yml
 secretGenerator:
-# - name: ssl-certs
-#   files:
-#   - certs/tripbot.dana.lol.fullchain.pem
-#   - certs/tripbot.dana.lol.key
 - name: google-creds
   files:
   - google/tripbot-stage.json

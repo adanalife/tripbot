@@ -17,7 +17,7 @@ configs/OBS/Twitch
 run
 
 # ignore SSL certs
-infra/**/certs
+infra/certs
 # ignore google credentials
 infra/**/google
 
