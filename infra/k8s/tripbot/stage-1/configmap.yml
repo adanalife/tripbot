@@ -9,25 +9,23 @@ data:
 
     EXTERNAL_URL="https://tripbot.dana.lol:3458"
 
-    TRIPBOT_SERVER_PORT=8080
     VLC_SERVER_PORT="8090"
 
+    #TODO: these should all be hardcoded defaults
+    TRIPBOT_SERVER_PORT=8080
     DATABASE_DB=tripbot
     DATABASE_USER=tripbot
-
     DASHCAM_DIR=/opt/tripbot/assets/video
     SCREENCAP_DIR=/opt/data/screencaps
     CROPPED_CORNERS_DIR=/opt/data/cropped-corners
     MAPS_OUTPUT_DIR=/opt/data/maps
     RUN_DIR=/opt/data/run
+    GOOGLE_APPLICATION_CREDENTIALS="/opt/tripbot/infra/google/tripbot-stage.json"
 
     CHANNEL_NAME="adanalife_staging"
     BOT_USERNAME="adanalife_staging"
 
     GOOGLE_APPS_PROJECT_ID="tripbot-stage"
-    GOOGLE_APPLICATION_CREDENTIALS="/opt/tripbot/infra/google/tripbot-stage.json"
-
-    TRIPBOT_HTTP_AUTH="" #TODO: turn into secret
 
     SENTRY_ENVIRONMENT="staging"
 
@@ -35,19 +33,3 @@ data:
     DISABLE_MUSIC_AUTOPLAY="true"
     READ_ONLY="false"
     VERBOSE="false"
-
-    #TODO: move the below into secrets
-
-    # get these here: https://dev.twitch.tv/dashboard/apps/create
-    TWITCH_CLIENT_ID=""
-    TWITCH_CLIENT_SECRET=""
-    TWITCH_AUTH_TOKEN=""
-    GOOGLE_MAPS_API_KEY=""
-
-    TWILIO_ACCT_SID=""
-    TWILIO_AUTH_TOKEN=""
-    TWILIO_FROM_NUM=""
-    TWILIO_TO_NUM=""
-
-    SENTRY_DSN="" #TODO: does this need to be secret?
-
