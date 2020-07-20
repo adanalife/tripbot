@@ -19,7 +19,7 @@ run
 # ignore SSL certs
 infra/certs
 # ignore google credentials
-infra/google
+infra/**/google
 
 # compiled binaries
 bin/tripbot

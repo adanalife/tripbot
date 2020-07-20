@@ -29,9 +29,9 @@ RUN ln -s /go/src/github.com/adanalife/tripbot /opt/tripbot \
 # USER danalol
 
 # build the binary
+WORKDIR /opt/tripbot
 RUN go build -o bin/tripbot cmd/tripbot/tripbot.go
 
 EXPOSE 8080
 
-WORKDIR /opt/tripbot
 CMD ["./bin/tripbot"]
