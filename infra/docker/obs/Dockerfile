@@ -1,7 +1,7 @@
 #TODO: consider using static binaries instead:
 # https://johnvansickle.com/ffmpeg/
 # this comes from Dockerfile.nvidia
-FROM danalol/ffmpeg
+FROM adanalife/ffmpeg
 
 # install dependencies
 # most of these come from the obs-studio
