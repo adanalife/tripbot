@@ -29,8 +29,28 @@ spec:
            value: "tripbot"
          - name: DATABASE_USER
            value: "tripbot"
+         # - name: DATABASE_PASS
+         #   value: "keeper-agrimony-snack-cartel"
          - name: DATABASE_PASS
-           value: "keeper-agrimony-snack-cartel"
+           valueFrom:
+             secretKeyRef:
+               name: tripbot-secrets
+               key: DATABASE_PASS
+         - name: TWITCH_CLIENT_ID
+           valueFrom:
+             secretKeyRef:
+               name: tripbot-secrets
+               key: TWITCH_CLIENT_ID
+         - name: TWITCH_CLIENT_SECRET
+           valueFrom:
+             secretKeyRef:
+               name: tripbot-secrets
+               key: TWITCH_CLIENT_SECRET
+         - name: TWITCH_AUTH_TOKEN
+           valueFrom:
+             secretKeyRef:
+               name: tripbot-secrets
+               key: TWITCH_AUTH_TOKEN
 
         volumeMounts:
         # mount stage-dotenv volume to /opt/tripbot

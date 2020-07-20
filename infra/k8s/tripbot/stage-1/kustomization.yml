@@ -4,6 +4,7 @@ patchesStrategicMerge:
   - set-up-stage.yml
 resources:
   - configmap.yml
+  - secrets.yml
 secretGenerator:
 # - name: ssl-certs
 #   files:
