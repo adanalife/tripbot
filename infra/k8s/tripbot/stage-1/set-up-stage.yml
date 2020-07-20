@@ -1,0 +1,84 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tripbot
+spec:
+  template:
+    spec:
+      containers:
+
+      - name: tripbot
+        imagePullPolicy: Always
+        command:
+         - bash
+        args:
+          #TODO: remove the mkdir
+         - -c
+         - mkdir -p /opt/tripbot/assets/video/_all && go run cmd/tripbot/tripbot.go 2>&1
+        env:
+         - name: ENV
+           value: "stage"
+         - name: VLC_SERVER_HOST
+           value: "http://localhost"
+         - name: MPD_SERVER_HOST
+           value: "localhost:6600"
+         - name: DATABASE_HOST
+           valueFrom:
+             secretKeyRef:
+               name: tripbot-secrets
+               key: DATABASE_HOST
+         - name: DATABASE_PASS
+           valueFrom:
+             secretKeyRef:
+               name: tripbot-secrets
+               key: DATABASE_PASS
+         - name: TWITCH_CLIENT_ID
+           valueFrom:
+             secretKeyRef:
+               name: tripbot-secrets
+               key: TWITCH_CLIENT_ID
+         - name: TWITCH_CLIENT_SECRET
+           valueFrom:
+             secretKeyRef:
+               name: tripbot-secrets
+               key: TWITCH_CLIENT_SECRET
+         - name: TWITCH_AUTH_TOKEN
+           valueFrom:
+             secretKeyRef:
+               name: tripbot-secrets
+               key: TWITCH_AUTH_TOKEN
+
+        volumeMounts:
+        # mount stage-dotenv volume to /opt/tripbot
+        - mountPath: /opt/tripbot/.env.staging
+          readOnly: true
+          subPath: .env.staging
+          name: stage-dotenv
+        # mount google-creds secret
+        - name: google-creds
+          mountPath: /opt/tripbot/infra/google
+          readOnly: true
+        - mountPath: /opt/tripbot/log
+          name: log
+
+      volumes:
+      - name: stage-dotenv
+        configMap:
+          name: stage-dotenv
+          items:
+            - key: stage-dotenv
+              path: .env.staging
+      - name: google-creds
+        secret:
+          secretName: google-creds
+      - name: nginx-conf
+        configMap:
+          name: nginx-conf # place ConfigMap `nginx-conf` on /etc/nginx
+          items:
+            - key: nginx.conf
+              path: nginx.conf
+            - key: virtualhost.conf
+              path: virtualhost/virtualhost.conf # dig directory
+      - name: log
+        emptyDir: {}

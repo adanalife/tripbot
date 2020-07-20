@@ -8,7 +8,6 @@ export DOCKER_BUILDKIT=1
 #TODO: check if docker is running, if not start it(?)
 
 docker-compose \
-  --project-name tripbot \
   --project-directory . \
   --env-file infra/docker/env.docker \
   -f infra/docker/docker-compose.yml \

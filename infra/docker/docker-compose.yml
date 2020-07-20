@@ -2,6 +2,7 @@ version: '3.7'
 
 services:
   tripbot:
+    image: adanalife/tripbot
     env_file:
       - infra/docker/env.docker
     build:
@@ -21,6 +22,7 @@ services:
     restart: unless-stopped
 
   obs:
+    image: adanalife/obs
     env_file:
       - infra/docker/env.docker
     build:
