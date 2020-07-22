@@ -1,3 +1,18 @@
+## Running kubernetes locally
+
+```bash
+brew install k3d
+# expose the container's port 80 to localhost:8081
+# and mount assets/video to the container's /video
+k3d cluster create adanalife-dev -p 8081:80@loadbalancer --volume $(pwd)/assets/video:/video
+# set up kubectl to use this cluster
+export KUBECONFIG="$(k3d kubeconfig merge adanalife-dev)"
+# create local tripbot deployment
+kubectl apply -k infra/k8s/tripbot/stage-1/
+curl localhost:8081
+```
+
+
 ## Common Tasks
 
 ### Tag a release version

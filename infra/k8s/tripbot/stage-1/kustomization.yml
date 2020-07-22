@@ -5,6 +5,7 @@ patchesStrategicMerge:
 resources:
   - configmap.yml
   - secrets.yml
+  - shared-volume.yml
 secretGenerator:
 - name: google-creds
   files:

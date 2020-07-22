@@ -13,9 +13,8 @@ spec:
         command:
          - bash
         args:
-          #TODO: remove the mkdir
          - -c
-         - mkdir -p /opt/tripbot/assets/video/_all && go run cmd/tripbot/tripbot.go 2>&1
+         - go run cmd/tripbot/tripbot.go 2>&1
         env:
          - name: ENV
            value: "stage"
@@ -94,6 +93,8 @@ spec:
         - name: google-creds
           mountPath: /opt/tripbot/infra/google
           readOnly: true
+        - name: host-volume
+          mountPath: /opt/data/Dashcam/_all
         - mountPath: /opt/tripbot/log
           name: log
 
@@ -115,5 +116,8 @@ spec:
               path: nginx.conf
             - key: virtualhost.conf
               path: virtualhost/virtualhost.conf # dig directory
+      - name: host-volume
+        persistentVolumeClaim:
+          claimName: pvc-hostpath
       - name: log
         emptyDir: {}
