@@ -10,11 +10,11 @@ spec:
 
       - name: obs
         imagePullPolicy: Always
-        command:
-         - bash
-        args:
-         - -c
-         - sleep 600
+        # command:
+        #  - bash
+        # args:
+        #  - -c
+        #  - sleep 600
         env:
          - name: ENV
            value: "stage"

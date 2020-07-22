@@ -9,6 +9,10 @@ spec:
     port: 80
     protocol: TCP
     targetPort: 80
+  - name: rdp
+    port: 5900
+    protocol: TCP
+    targetPort: 5900
   sessionAffinity: None
   type: ClusterIP
   selector:
