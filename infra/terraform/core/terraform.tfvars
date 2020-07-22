@@ -3,6 +3,8 @@
 email_prefix = "danadotlol+"
 email_domain = "gmail.com"
 
+domain = "dana.lol"
+
 # this is where the core accounts Terraform state will live
 state_bucket = "adanalife-core-tf-state"
 

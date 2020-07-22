@@ -28,6 +28,11 @@ variable email_prefix {
   description = "The prefix for account email addresses. Emails will be in the format <prefix><account name>@<domain>"
 }
 
+variable domain {
+  type        = string
+  description = "The domain name used for DNS"
+}
+
 variable account_names {
   type    = list(string)
   default = []
