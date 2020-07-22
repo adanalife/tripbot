@@ -7,6 +7,7 @@ FROM adanalife/ffmpeg
 # most of these come from the obs-studio
 # install from source instructions
 RUN export DEBIAN_FRONTEND=noninteractive \
+  && unset LD_LIBRARY_PATH \
   && apt-get update \
   && apt-get install -y \
     build-essential \
@@ -107,8 +108,17 @@ RUN echo "?package(bash):needs=\"X11\" section=\"ADanaLife\" title=\"OBS Screenc
   && echo "?package(bash):needs=\"X11\" section=\"ADanaLife\" title=\"Xterm\" command=\"xterm -ls -bg black -fg white\"" >> /usr/share/menu/danalol \
   && update-menus
 
+# copy over project
+#TODO: maybe just copy pkg, cmd, internal, etc?
+WORKDIR /go/src/github.com/adanalife/tripbot
+COPY . .
+
 # create symlink to /opt/tripbot
-RUN ln -s /go/src/github.com/adanalife/tripbot /opt/tripbot
+RUN ln -s /go/src/github.com/adanalife/tripbot /opt/tripbot \
+  && mkdir /opt/data
+
+# build the binary
 WORKDIR /opt/tripbot
+RUN go build -o bin/vlc-server cmd/vlc-server/vlc-server.go
 
 ENTRYPOINT ["/opt/tripbot/script/container_startup.sh"]

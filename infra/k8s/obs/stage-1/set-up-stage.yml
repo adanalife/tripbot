@@ -14,7 +14,7 @@ spec:
          - bash
         args:
          - -c
-         - go run cmd/vlc-server/vlc-server.go 2>&1
+         - sleep 600
         env:
          - name: ENV
            value: "stage"
@@ -94,9 +94,9 @@ spec:
           subPath: .env.staging
         # mount google-creds secret
         #TODO: does tripbot really need access to this?
-        - name: google-creds
-          mountPath: /opt/tripbot/infra/google
-          readOnly: true
+        # - name: google-creds
+        #   mountPath: /opt/tripbot/infra/google
+        #   readOnly: true
         - name: log
           mountPath: /opt/tripbot/log
 
@@ -110,9 +110,9 @@ spec:
           items:
             - key: stage-dotenv
               path: .env.staging
-      - name: google-creds
-        secret:
-          secretName: google-creds
+      # - name: google-creds
+      #   secret:
+      #     secretName: google-creds
       - name: nginx-conf
         configMap:
           name: nginx-conf # place ConfigMap `nginx-conf` on /etc/nginx
