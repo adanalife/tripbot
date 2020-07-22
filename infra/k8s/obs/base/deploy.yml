@@ -21,22 +21,23 @@ spec:
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8080
-        readinessProbe:
-          httpGet:
-            path: /health/ready
-            port: 80
-          initialDelaySeconds: 30
-          periodSeconds: 10
-          timeoutSeconds: 3
-          failureThreshold: 1
-        livenessProbe:
-          httpGet:
-            path: /health/live
-            port: 80
-          initialDelaySeconds: 60
-          periodSeconds: 10
-          timeoutSeconds: 3
-          failureThreshold: 1
+        - containerPort: 5900
+        # readinessProbe:
+        #   httpGet:
+        #     path: /health/ready
+        #     port: 80
+        #   initialDelaySeconds: 30
+        #   periodSeconds: 10
+        #   timeoutSeconds: 3
+        #   failureThreshold: 1
+        # livenessProbe:
+        #   httpGet:
+        #     path: /health/live
+        #     port: 80
+        #   initialDelaySeconds: 60
+        #   periodSeconds: 10
+        #   timeoutSeconds: 3
+        #   failureThreshold: 1
 
       # we use nginx as a proxy in front of the obs server
       - name: nginx

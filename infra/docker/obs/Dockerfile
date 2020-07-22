@@ -81,7 +81,7 @@ RUN export DEBIAN_FRONTEND=noninteractive \
 EXPOSE 5900
 
 # for the HTTP endpoint
-EXPOSE 8088
+EXPOSE 8080
 
 # this allows for custom VNC passwords
 ENV VNC_PASSWD=123456
