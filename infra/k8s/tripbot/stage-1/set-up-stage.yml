@@ -84,21 +84,26 @@ spec:
                key: GOOGLE_MAPS_API_KEY
 
         volumeMounts:
+        # mount dashcam folder
+        #TODO: does tripbot really need access to this?
+        - name: dashcam-volume
+          mountPath: /opt/data/Dashcam/_all
         # mount stage-dotenv volume to /opt/tripbot
-        - mountPath: /opt/tripbot/.env.staging
+        - name: stage-dotenv
+          mountPath: /opt/tripbot/.env.staging
           readOnly: true
           subPath: .env.staging
-          name: stage-dotenv
         # mount google-creds secret
         - name: google-creds
           mountPath: /opt/tripbot/infra/google
           readOnly: true
-        - name: host-volume
-          mountPath: /opt/data/Dashcam/_all
-        - mountPath: /opt/tripbot/log
-          name: log
+        - name: log
+          mountPath: /opt/tripbot/log
 
       volumes:
+      - name: dashcam-volume
+        persistentVolumeClaim:
+          claimName: dashcam-from-host-claim
       - name: stage-dotenv
         configMap:
           name: stage-dotenv
@@ -116,8 +121,5 @@ spec:
               path: nginx.conf
             - key: virtualhost.conf
               path: virtualhost/virtualhost.conf # dig directory
-      - name: host-volume
-        persistentVolumeClaim:
-          claimName: pvc-hostpath
       - name: log
         emptyDir: {}
