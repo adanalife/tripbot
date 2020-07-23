@@ -1,0 +1,12 @@
+bases:
+  - ../base
+patchesStrategicMerge:
+  - set-up-prod.yml
+resources:
+  - configmap.yml
+  - secrets.yml
+  - shared-volume.yml
+secretGenerator:
+- name: google-creds
+  files:
+  - google/tripbot-prod.json
