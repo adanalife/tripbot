@@ -88,6 +88,7 @@ spec:
         #TODO: does tripbot really need access to this?
         - name: dashcam-volume
           mountPath: /opt/data/Dashcam/_all
+          readOnly: true
         # mount stage-dotenv volume to /opt/tripbot
         - name: stage-dotenv
           mountPath: /opt/tripbot/.env.staging

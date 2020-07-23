@@ -9,4 +9,4 @@ resources:
 secretGenerator:
 - name: google-creds
   files:
-  - google/tripbot-stage.json
+  - google/tripbot.json

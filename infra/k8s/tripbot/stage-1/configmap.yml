@@ -20,7 +20,7 @@ data:
     CROPPED_CORNERS_DIR=/opt/data/cropped-corners
     MAPS_OUTPUT_DIR=/opt/data/maps
     RUN_DIR=/opt/data/run
-    GOOGLE_APPLICATION_CREDENTIALS="/opt/tripbot/infra/google/tripbot-stage.json"
+    GOOGLE_APPLICATION_CREDENTIALS="/opt/tripbot/infra/google/tripbot.json"
 
     CHANNEL_NAME="adanalife_staging"
     BOT_USERNAME="adanalife_staging"

@@ -2,10 +2,10 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: stage-dotenv
+  name: prod-dotenv
 data:
-  stage-dotenv: |
-    ENV=stage
+  prod-dotenv: |
+    ENV=prod
 
     EXTERNAL_URL="https://tripbot.dana.lol:3458"
 
@@ -18,14 +18,14 @@ data:
     CROPPED_CORNERS_DIR=/opt/data/cropped-corners
     MAPS_OUTPUT_DIR=/opt/data/maps
     RUN_DIR=/opt/data/run
-    GOOGLE_APPLICATION_CREDENTIALS="/opt/tripbot/infra/google/tripbot-prod.json"
+    GOOGLE_APPLICATION_CREDENTIALS="/opt/tripbot/infra/google/tripbot.json"
 
     CHANNEL_NAME="adanalife_staging"
     BOT_USERNAME="adanalife_staging"
 
-    GOOGLE_APPS_PROJECT_ID="tripbot-stage"
+    GOOGLE_APPS_PROJECT_ID="tripbot-prod"
 
-    SENTRY_ENVIRONMENT="staging"
+    SENTRY_ENVIRONMENT="production"
 
     DISABLE_TWITCH_WEBHOOKS="true"
     DISABLE_MUSIC_AUTOPLAY="true"
