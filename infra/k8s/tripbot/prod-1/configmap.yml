@@ -7,10 +7,10 @@ data:
   prod-dotenv: |
     ENV=prod
 
-    EXTERNAL_URL="https://tripbot.dana.lol:3458"
+    EXTERNAL_URL="https://tripbot.dana.lol:3456" # shadyglen void
 
     TRIPBOT_SERVER_PORT=8080
-    VLC_SERVER_PORT=8080
+    #VLC_SERVER_PORT=8088 # currently unused
     DATABASE_DB=tripbot_prod
     DATABASE_USER=tripbot
     DASHCAM_DIR=/opt/data/Dashcam
