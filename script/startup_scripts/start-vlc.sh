@@ -12,7 +12,11 @@ export FONTCONFIG_PATH=/etc/fonts
 
 # compile vlc-server
 cd /opt/tripbot || exit 2
-go build -o bin/vlc-server cmd/vlc-server/vlc-server.go | tee -a log/build-vlc.log 2>&1
+
+# check if we have vlc-server compiled
+if [[ ! -x "bin/vlc-server" ]]; then
+  go build -o bin/vlc-server cmd/vlc-server/vlc-server.go | tee -a log/build-vlc.log 2>&1
+fi
 
 # run vlc-server
 bin/vlc-server | tee -a log/start-vlc.log 2>&1 &
