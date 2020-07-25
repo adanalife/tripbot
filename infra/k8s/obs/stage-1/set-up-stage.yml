@@ -24,42 +24,16 @@ spec:
            value: "localhost:6600"
 
         volumeMounts:
-        # mount dashcam folder
-        - name: dashcam-volume
-          mountPath: /opt/data/Dashcam/_all
         # mount stage-dotenv volume to /opt/tripbot
         - name: stage-dotenv
           mountPath: /opt/tripbot/.env.staging
           readOnly: true
           subPath: .env.staging
-        # mount google-creds secret
-        #TODO: does tripbot really need access to this?
-        # - name: google-creds
-        #   mountPath: /opt/tripbot/infra/google
-        #   readOnly: true
-        - name: log
-          mountPath: /opt/tripbot/log
 
       volumes:
-      - name: dashcam-volume
-        persistentVolumeClaim:
-          claimName: dashcam-from-host-claim
       - name: stage-dotenv
         configMap:
           name: stage-dotenv
           items:
             - key: stage-dotenv
               path: .env.staging
-      # - name: google-creds
-      #   secret:
-      #     secretName: google-creds
-      - name: nginx-conf
-        configMap:
-          name: nginx-conf # place ConfigMap `nginx-conf` on /etc/nginx
-          items:
-            - key: nginx.conf
-              path: nginx.conf
-            - key: virtualhost.conf
-              path: virtualhost/virtualhost.conf # dig directory
-      - name: log
-        emptyDir: {}

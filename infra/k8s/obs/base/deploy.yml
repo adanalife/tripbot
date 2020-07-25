@@ -89,6 +89,17 @@ spec:
                name: tripbot-secrets
                key: TWILIO_AUTH_TOKEN
 
+        volumeMounts:
+        # mount dashcam folder
+        - name: dashcam-volume
+          mountPath: /opt/data/Dashcam/_all
+        # mount google-creds secret
+        # - name: google-creds
+        #   mountPath: /opt/tripbot/infra/google
+        #   readOnly: true
+        - name: log
+          mountPath: /opt/tripbot/log
+
       # we use nginx as a proxy in front of the obs server
       - name: nginx
         image: nginx
@@ -100,3 +111,21 @@ spec:
           name: nginx-conf
         - mountPath: /var/log/nginx
           name: log
+
+      volumes:
+      - name: dashcam-volume
+        persistentVolumeClaim:
+          claimName: dashcam-from-host-claim
+      # - name: google-creds
+      #   secret:
+      #     secretName: google-creds
+      - name: nginx-conf
+        configMap:
+          name: nginx-conf # place ConfigMap `nginx-conf` on /etc/nginx
+          items:
+            - key: nginx.conf
+              path: nginx.conf
+            - key: virtualhost.conf
+              path: virtualhost/virtualhost.conf # dig directory
+      - name: log
+        emptyDir: {}
