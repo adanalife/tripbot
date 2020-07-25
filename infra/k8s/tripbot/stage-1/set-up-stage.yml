@@ -37,3 +37,6 @@ spec:
           items:
             - key: stage-dotenv
               path: .env.staging
+      - name: google-creds
+        secret:
+          secretName: stage-google-creds
