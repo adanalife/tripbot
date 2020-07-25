@@ -35,3 +35,8 @@ Migrations are run using [go-migrate](https://github.com/golang-migrate/migrate)
 ```
 psql <postgres://url> < db_dump.sql
 ```
+
+## Import from seed
+```sql
+\copy videos FROM 'db/seed/videos.csv'  DELIMITER ',' CSV HEADER;
+```
