@@ -16,8 +16,6 @@ const (
 	// these are the default values
 	// #VLC_SERVER_PORT=8088 # currently unused
 	defaultTripbotServerPort = "8080"
-	defaultDatabaseDB        = "tripbot" //todo
-	defaultDatabaseUser      = "tripbot" //todo
 	defaultDashcamDir        = "/opt/data/Dashcam"
 	defaultScreencapDir      = "/opt/data/screencaps"
 	defaultCroppedCornersDir = "/opt/data/cropped-corner"
