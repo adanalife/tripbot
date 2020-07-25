@@ -10,6 +10,7 @@ data:
     EXTERNAL_URL="https://tripbot.dana.lol:3458"
 
     GOOGLE_APPS_PROJECT_ID="tripbot-stage"
+    GOOGLE_APPLICATION_CREDENTIALS="/opt/tripbot/infra/google/tripbot.json"
 
     SENTRY_ENVIRONMENT="staging"
 

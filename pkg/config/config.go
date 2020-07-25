@@ -23,7 +23,6 @@ const (
 	defaultCroppedCornersDir = "/opt/data/cropped-corner"
 	defaultMapsOutputDir     = "/opt/data/maps"
 	defaultRunDir            = "/opt/data/run"
-	defaultGoogleCreds       = "/opt/tripbot/infra/google/tripbot.json" //TODO
 
 	videoDir          = "_all"
 	DBPath            = "db/tripbot.db"
