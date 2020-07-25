@@ -43,6 +43,10 @@ spec:
         - name: dashcam-volume
           mountPath: /opt/data/Dashcam/_all
           readOnly: true
+        # mount google-creds secret
+        - name: google-creds
+          mountPath: /opt/tripbot/infra/google
+          readOnly: true
         - name: log
           mountPath: /opt/tripbot/log
 
@@ -69,6 +73,9 @@ spec:
             - key: nginx.conf
               path: nginx.conf
             - key: virtualhost.conf
-              path: virtualhost/virtualhost.conf # dig directory
+              path: virtualhost/virtualhost.conf
+      - name: google-creds
+        secret:
+          secretName: google-creds
       - name: log
         emptyDir: {}
