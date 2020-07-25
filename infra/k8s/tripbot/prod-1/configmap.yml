@@ -7,8 +7,9 @@ data:
   prod-dotenv: |
     ENV=prod
 
-    CHANNEL_NAME="adanalife_staging"
-    BOT_USERNAME="Tripbot4000"
+    # CHANNEL_NAME="adanalife_"
+    # OUTPUT_CHANNEL="adanalife_staging"
+    # BOT_USERNAME="Tripbot4000"
 
     EXTERNAL_URL="https://tripbot.dana.lol:3456" # shadyglen void
 
