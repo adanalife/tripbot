@@ -4,6 +4,7 @@
 brew install k3d
 # expose the container's port 80 to localhost:8081
 # and mount assets/video to the container's /video
+#TODO: pass in rancher/k3s:v1.18.6-k3s1 ??
 k3d cluster create adanalife-dev -p 8081:80@loadbalancer --volume $(pwd)/assets/video:/video
 # set up kubectl to use this cluster
 export KUBECONFIG="$(k3d kubeconfig merge adanalife-dev)"
