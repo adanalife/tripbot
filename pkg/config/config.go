@@ -14,9 +14,18 @@ import (
 
 const (
 	// these are the default values
-	videoDir          = "_all"
-	defaultDashcamDir = "/opt/data/Dashcam"
+	// #VLC_SERVER_PORT=8088 # currently unused
+	defaultTripbotServerPort = "8080"
+	defaultDatabaseDB        = "tripbot"
+	defaultDatabaseUser      = "tripbot"
+	defaultDashcamDir        = "/opt/data/Dashcam"
+	defaultScreencapDir      = "/opt/data/screencaps"
+	defaultCroppedCornersDir = "/opt/data/cropped-corner"
+	defaultMapsOutputDir     = "/opt/data/maps"
+	defaultRunDir            = "/opt/data/run"
+	defaultGoogleCreds       = "/opt/tripbot/infra/google/tripbot.json"
 
+	videoDir          = "_all"
 	DBPath            = "db/tripbot.db"
 	UserJoinsBucket   = "user_joins"
 	UserWatchedBucket = "user_watched"
@@ -84,7 +93,6 @@ func init() {
 		"CROPPED_CORNERS_DIR",
 		"RUN_DIR",
 		"TRIPBOT_HTTP_AUTH",
-		"TRIPBOT_SERVER_PORT",
 		"VLC_SERVER_HOST",
 		"MPD_SERVER_HOST",
 	}
@@ -112,7 +120,7 @@ func init() {
 	// HTTP server settings
 	ExternalURL = os.Getenv("EXTERNAL_URL")
 	TripbotHttpAuth = os.Getenv("TRIPBOT_HTTP_AUTH")
-	TripbotServerPort = os.Getenv("TRIPBOT_SERVER_PORT")
+	TripbotServerPort = getEnv("TRIPBOT_SERVER_PORT", defaultTripbotServerPort)
 	VlcServerHost = os.Getenv("VLC_SERVER_HOST")
 	MpdServerHost = os.Getenv("MPD_SERVER_HOST")
 
