@@ -87,7 +87,7 @@ spec:
         # mount dashcam folder
         #TODO: does tripbot really need access to this?
         - name: dashcam-volume
-          mountPath: /opt/data/Dashcam/_all
+          mountPath: /opt/data/Dashcam
           readOnly: true
         # mount prod-dotenv volume to /opt/tripbot
         - name: prod-dotenv
