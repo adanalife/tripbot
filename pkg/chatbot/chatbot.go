@@ -72,7 +72,7 @@ func Say(msg string) {
 	background.AddChatLine(config.BotUsername, msg)
 	// figure out what channel to speak to
 	speakTo := config.ChannelName
-	if config.OutputChannel != nil {
+	if config.OutputChannel != "" {
 		speakTo = config.OutputChannel
 	}
 	// say the message to chat
