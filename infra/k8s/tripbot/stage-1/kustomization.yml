@@ -5,6 +5,6 @@ patchesStrategicMerge:
 resources:
   - secrets.yml
 secretGenerator:
-- name: google-creds
+- name: stage-google-creds
   files:
   - google/tripbot.json
