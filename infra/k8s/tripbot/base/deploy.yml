@@ -37,6 +37,14 @@ spec:
           periodSeconds: 10
           timeoutSeconds: 3
           failureThreshold: 1
+        volumeMounts:
+        # mount dashcam folder
+        #TODO: does tripbot really need access to this?
+        - name: dashcam-volume
+          mountPath: /opt/data/Dashcam/_all
+          readOnly: true
+        - name: log
+          mountPath: /opt/tripbot/log
 
           # we use nginx as a proxy in front of the tripbot server
       - name: nginx
@@ -49,3 +57,18 @@ spec:
           name: nginx-conf
         - mountPath: /var/log/nginx
           name: log
+
+      volumes:
+      - name: dashcam-volume
+        persistentVolumeClaim:
+          claimName: dashcam-from-host-claim
+      - name: nginx-conf
+        configMap:
+          name: nginx-conf # place ConfigMap `nginx-conf` on /etc/nginx
+          items:
+            - key: nginx.conf
+              path: nginx.conf
+            - key: virtualhost.conf
+              path: virtualhost/virtualhost.conf # dig directory
+      - name: log
+        emptyDir: {}
