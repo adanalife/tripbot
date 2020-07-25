@@ -38,6 +38,7 @@ spec:
         #   periodSeconds: 10
         #   timeoutSeconds: 3
         #   failureThreshold: 1
+        env:
          - name: DATABASE_HOST
            valueFrom:
              secretKeyRef:
