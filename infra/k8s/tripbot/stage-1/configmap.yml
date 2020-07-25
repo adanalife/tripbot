@@ -21,9 +21,6 @@ data:
     RUN_DIR=/opt/data/run
     GOOGLE_APPLICATION_CREDENTIALS="/opt/tripbot/infra/google/tripbot.json"
 
-    CHANNEL_NAME="adanalife_staging"
-    BOT_USERNAME="adanalife_staging"
-
     GOOGLE_APPS_PROJECT_ID="tripbot-stage"
 
     SENTRY_ENVIRONMENT="staging"
