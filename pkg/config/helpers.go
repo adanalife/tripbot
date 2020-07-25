@@ -1,5 +1,7 @@
 package config
 
+import "os"
+
 func IsProduction() bool {
 	return Environment == "production"
 }
@@ -14,4 +16,11 @@ func IsDevelopment() bool {
 
 func IsTesting() bool {
 	return Environment == "testing"
+}
+
+func getEnv(key, fallback string) string {
+	if value, ok := os.LookupEnv(key); ok {
+		return value
+	}
+	return fallback
 }

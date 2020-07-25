@@ -13,8 +13,9 @@ import (
 //TODO: not all required ENV vars are required for vlc-server
 
 const (
-	// these are the default subdirectories
-	videoDir = "_all"
+	// these are the default values
+	videoDir          = "_all"
+	defaultDashcamDir = "/opt/data/Dashcam"
 
 	DBPath            = "db/tripbot.db"
 	UserJoinsBucket   = "user_joins"
@@ -78,7 +79,6 @@ func init() {
 		"GOOGLE_APPS_PROJECT_ID",
 		"GOOGLE_MAPS_API_KEY",
 		"READ_ONLY",
-		"DASHCAM_DIR",
 		"SCREENCAP_DIR",
 		"MAPS_OUTPUT_DIR",
 		"CROPPED_CORNERS_DIR",
@@ -103,7 +103,7 @@ func init() {
 	Verbose, _ = strconv.ParseBool(os.Getenv("VERBOSE"))
 
 	// directory settings
-	DashcamDir = os.Getenv("DASHCAM_DIR")
+	DashcamDir = getEnv("DASHCAM_DIR", defaultDashcamDir)
 	ScreencapDir = os.Getenv("SCREENCAP_DIR")
 	MapsOutputDir = os.Getenv("MAPS_OUTPUT_DIR")
 	CroppedCornersDir = os.Getenv("CROPPED_CORNERS_DIR")
