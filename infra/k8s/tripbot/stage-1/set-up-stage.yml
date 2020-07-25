@@ -18,6 +18,10 @@ spec:
         env:
          - name: ENV
            value: "stage"
+         - name: CHANNEL_NAME
+           value: "adanalife_staging"
+         - name: BOT_USERNAME
+           value: "adanalife_staging"
          - name: VLC_SERVER_HOST
            value: "http://localhost"
          - name: MPD_SERVER_HOST

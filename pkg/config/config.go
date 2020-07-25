@@ -13,9 +13,16 @@ import (
 //TODO: not all required ENV vars are required for vlc-server
 
 const (
-	// these are the default subdirectories
-	videoDir = "_all"
+	// these are the default values
+	// #VLC_SERVER_PORT=8088 # currently unused
+	defaultTripbotServerPort = "8080"
+	defaultDashcamDir        = "/opt/data/Dashcam"
+	defaultScreencapDir      = "/opt/data/screencaps"
+	defaultCroppedCornersDir = "/opt/data/cropped-corner"
+	defaultMapsOutputDir     = "/opt/data/maps"
+	defaultRunDir            = "/opt/data/run"
 
+	videoDir          = "_all"
 	DBPath            = "db/tripbot.db"
 	UserJoinsBucket   = "user_joins"
 	UserWatchedBucket = "user_watched"
@@ -78,13 +85,7 @@ func init() {
 		"GOOGLE_APPS_PROJECT_ID",
 		"GOOGLE_MAPS_API_KEY",
 		"READ_ONLY",
-		"DASHCAM_DIR",
-		"SCREENCAP_DIR",
-		"MAPS_OUTPUT_DIR",
-		"CROPPED_CORNERS_DIR",
-		"RUN_DIR",
 		"TRIPBOT_HTTP_AUTH",
-		"TRIPBOT_SERVER_PORT",
 		"VLC_SERVER_HOST",
 		"MPD_SERVER_HOST",
 	}
@@ -103,16 +104,16 @@ func init() {
 	Verbose, _ = strconv.ParseBool(os.Getenv("VERBOSE"))
 
 	// directory settings
-	DashcamDir = os.Getenv("DASHCAM_DIR")
-	ScreencapDir = os.Getenv("SCREENCAP_DIR")
-	MapsOutputDir = os.Getenv("MAPS_OUTPUT_DIR")
-	CroppedCornersDir = os.Getenv("CROPPED_CORNERS_DIR")
-	RunDir = os.Getenv("RUN_DIR")
+	DashcamDir = getEnv("DASHCAM_DIR", defaultDashcamDir)
+	ScreencapDir = getEnv("SCREENCAP_DIR", defaultScreencapDir)
+	MapsOutputDir = getEnv("MAPS_OUTPUT_DIR", defaultMapsOutputDir)
+	CroppedCornersDir = getEnv("CROPPED_CORNERS_DIR", defaultCroppedCornersDir)
+	RunDir = getEnv("RUN_DIR", defaultRunDir)
 
 	// HTTP server settings
 	ExternalURL = os.Getenv("EXTERNAL_URL")
 	TripbotHttpAuth = os.Getenv("TRIPBOT_HTTP_AUTH")
-	TripbotServerPort = os.Getenv("TRIPBOT_SERVER_PORT")
+	TripbotServerPort = getEnv("TRIPBOT_SERVER_PORT", defaultTripbotServerPort)
 	VlcServerHost = os.Getenv("VLC_SERVER_HOST")
 	MpdServerHost = os.Getenv("MPD_SERVER_HOST")
 
