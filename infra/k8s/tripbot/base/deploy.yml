@@ -53,11 +53,11 @@ spec:
              secretKeyRef:
                name: tripbot-secrets
                key: DATABASE_USER
-         - name: DATABASE_HOST
+         - name: DATABASE_PASS
            valueFrom:
              secretKeyRef:
                name: tripbot-secrets
-               key: DATABASE_HOST
+               key: DATABASE_PASS
          - name: TWITCH_CLIENT_ID
            valueFrom:
              secretKeyRef:
