@@ -6,7 +6,6 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/adanalife/tripbot/pkg/background"
 	"github.com/adanalife/tripbot/pkg/config"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
@@ -14,6 +13,7 @@ import (
 	mylog "github.com/adanalife/tripbot/pkg/log"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/users"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/gempir/go-twitch-irc/v2"
 	"github.com/kelvins/geocoder"
 	"github.com/logrusorgru/aurora"
@@ -70,8 +70,13 @@ func Say(msg string) {
 	mylog.ChatMsg(config.BotUsername, msg)
 	// include the bot output in chat
 	background.AddChatLine(config.BotUsername, msg)
+	// figure out what channel to speak to
+	speakTo := config.ChannelName
+	if config.OutputChannel != nil {
+		speakTo = config.OutputChannel
+	}
 	// say the message to chat
-	client.Say(config.ChannelName, msg)
+	client.Say(speakTo, msg)
 }
 
 // Chatter is designed to most a randomized message on a timer

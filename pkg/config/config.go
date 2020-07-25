@@ -26,6 +26,8 @@ var (
 	Environment string
 	// ChannelName is the username of the stream
 	ChannelName string
+	// OutputChannel is the stream to which the bot will speak
+	OutputChannel string
 	// BotUsername is the username of the bot
 	BotUsername string
 	// ExternalURL is the where the bot's HTTP server can be reached
@@ -95,6 +97,7 @@ func init() {
 
 	//TODO: consider using strings.ToLower() on channel name here and removing elsewhere
 	ChannelName = os.Getenv("CHANNEL_NAME")
+	OutputChannel = os.Getenv("OUTPUT_CHANNEL")
 	BotUsername = os.Getenv("BOT_USERNAME")
 	ReadOnly, _ = strconv.ParseBool(os.Getenv("READ_ONLY"))
 	Verbose, _ = strconv.ParseBool(os.Getenv("VERBOSE"))
