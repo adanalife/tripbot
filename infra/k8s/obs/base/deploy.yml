@@ -38,6 +38,56 @@ spec:
         #   periodSeconds: 10
         #   timeoutSeconds: 3
         #   failureThreshold: 1
+         - name: DATABASE_HOST
+           valueFrom:
+             secretKeyRef:
+               name: tripbot-secrets
+               key: DATABASE_HOST
+         - name: DATABASE_DB
+           valueFrom:
+             secretKeyRef:
+               name: tripbot-secrets
+               key: DATABASE_DB
+         - name: DATABASE_USER
+           valueFrom:
+             secretKeyRef:
+               name: tripbot-secrets
+               key: DATABASE_USER
+         - name: DATABASE_HOST
+           valueFrom:
+             secretKeyRef:
+               name: tripbot-secrets
+               key: DATABASE_HOST
+         - name: TWITCH_CLIENT_ID
+           valueFrom:
+             secretKeyRef:
+               name: tripbot-secrets
+               key: TWITCH_CLIENT_ID
+         - name: TWITCH_CLIENT_SECRET
+           valueFrom:
+             secretKeyRef:
+               name: tripbot-secrets
+               key: TWITCH_CLIENT_SECRET
+         - name: TWITCH_AUTH_TOKEN
+           valueFrom:
+             secretKeyRef:
+               name: tripbot-secrets
+               key: TWITCH_AUTH_TOKEN
+         - name: SENTRY_DSN
+           valueFrom:
+             secretKeyRef:
+               name: tripbot-secrets
+               key: SENTRY_DSN
+         - name: TRIPBOT_HTTP_AUTH
+           valueFrom:
+             secretKeyRef:
+               name: tripbot-secrets
+               key: TRIPBOT_HTTP_AUTH
+         - name: TWILIO_AUTH_TOKEN
+           valueFrom:
+             secretKeyRef:
+               name: tripbot-secrets
+               key: TWILIO_AUTH_TOKEN
 
       # we use nginx as a proxy in front of the obs server
       - name: nginx
