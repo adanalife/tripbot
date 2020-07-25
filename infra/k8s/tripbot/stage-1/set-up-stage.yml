@@ -89,10 +89,6 @@ spec:
           mountPath: /opt/tripbot/.env.staging
           readOnly: true
           subPath: .env.staging
-        # mount google-creds secret
-        - name: google-creds
-          mountPath: /opt/tripbot/infra/google
-          readOnly: true
 
       volumes:
       - name: stage-dotenv
@@ -101,6 +97,3 @@ spec:
           items:
             - key: stage-dotenv
               path: .env.staging
-      - name: google-creds
-        secret:
-          secretName: google-creds
