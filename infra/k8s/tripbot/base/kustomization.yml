@@ -2,3 +2,4 @@ resources:
   - deploy.yml
   - nginx.yml
   - ingress.yml
+  - shared-volume.yml
