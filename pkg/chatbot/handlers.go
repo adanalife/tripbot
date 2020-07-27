@@ -20,7 +20,18 @@ var (
 		Name: "tripbot_chat_messages_total",
 		Help: "The total number of chat messages",
 	})
+	chatCommands = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "tripbot_chat_commands_total",
+		Help: "The total number of chat commands",
+	}, []string{"command"},
+	)
 )
+
+func incChatCommandCounter(command string) {
+	if cnt, err := chatCommands.GetMetricWithLabelValues(command); err == nil {
+		cnt.Add(1)
+	}
+}
 
 func runCommand(user users.User, message string) {
 	var err error
@@ -31,12 +42,16 @@ func runCommand(user users.User, message string) {
 
 	switch command {
 	case "!help":
+		incChatCommandCounter("!help")
 		helpCmd(&user)
 	case "hello", "hi", "hey", "hallo":
+		incChatCommandCounter("hello")
 		helloCmd(&user, params)
 	case "!flag":
+		incChatCommandCounter("!flag")
 		flagCmd(&user)
 	case "!version":
+		incChatCommandCounter("!version")
 		versionCmd(&user)
 	case "!song", "!currentsong", "!music", "!currentmusic":
 		songCmd(&user)
