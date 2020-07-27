@@ -7,9 +7,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/adanalife/tripbot/pkg/config"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
+	"github.com/davecgh/go-spew/spew"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func handle(w http.ResponseWriter, r *http.Request) {
@@ -102,6 +103,10 @@ func handle(w http.ResponseWriter, r *http.Request) {
 // Start starts the web server
 func Start() {
 	log.Println("Starting VLC web server on host", config.VlcServerHost)
+
+	// make prometheus metrics available
+	http.Handle("/metrics", promhttp.Handler())
+
 	http.HandleFunc("/", handle)
 
 	// ListenAndServe() wants a port in the format ":NUM"
