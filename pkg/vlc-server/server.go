@@ -9,6 +9,7 @@ import (
 
 	"github.com/adanalife/tripbot/pkg/config"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
+	"github.com/adanalife/tripbot/pkg/onscreens"
 	"github.com/davecgh/go-spew/spew"
 )
 
@@ -82,14 +83,15 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			}
 			fmt.Fprintf(w, "OK")
 
-		} else if strings.HasPrefix(r.URL.Path, "/onscreen/left") {
+		} else if strings.HasPrefix(r.URL.Path, "/onscreen/middle") {
 
-			// play a random file
-			err := PlayRandom()
-			if err != nil {
-				//TODO: return a 500 error
-				http.Error(w, "404 not found", http.StatusNotFound)
+			msg, ok := r.URL.Query()["msg"]
+			if !ok || len(msg) > 1 {
+				//TODO: eventually this could just play instead of hard-requiring a param
+				http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
+				return
 			}
+			onscreens.MiddleText.Show(msg)
 			fmt.Fprintf(w, "OK")
 
 			// return a favicon if anyone asks for one
