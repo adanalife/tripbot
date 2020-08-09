@@ -17,6 +17,8 @@ services:
     # comment this to enable obs container
     # entrypoint: "true"
     restart: on-failure
+    entrypoint: bash
+    command: -c "go run cmd/vlc-server/vlc-server.go 2>&1"
 
   db:
     volumes:
