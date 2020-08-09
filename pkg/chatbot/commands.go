@@ -195,7 +195,7 @@ func locationCmd(user *users.User) {
 func leaderboardCmd(user *users.User) {
 	log.Println(user.Username, "ran !leaderboard")
 	// display leaderboard on screen
-	background.ShowLeaderboard()
+	onscreensClient.ShowLeaderboard()
 	size := 10
 	if size > len(users.Leaderboard) {
 		size = len(users.Leaderboard)

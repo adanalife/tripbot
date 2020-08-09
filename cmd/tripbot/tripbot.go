@@ -79,7 +79,7 @@ func findInitialVideo() {
 func setUpLeaderboard() {
 	// initialize the leaderboard
 	users.InitLeaderboard()
-	background.InitLeaderboard()
+	// background.InitLeaderboard()
 }
 
 // startCron starts the background workers
@@ -157,7 +157,7 @@ func gracefulShutdown() {
 	os.Exit(1)
 }
 
-// scheduleBackgroundJobs schedules the various backgroun jobs
+// scheduleBackgroundJobs schedules the various background jobs
 // the reason we put this is in this package is because adding this to background
 // would cause circular dependencies
 func scheduleBackgroundJobs() {

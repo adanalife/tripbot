@@ -12,7 +12,6 @@ import (
 //TODO: eventually support HTTPS
 var onscreensServerURL = "http://" + config.VlcServerHost
 
-// CurrentlyPlaying finds the currently-playing video path
 func SetMiddleText(msg string) string {
 	url := onscreensServerURL + "/onscreens/middle"
 	url = fmt.Sprintf("%s?msg=\"%s\"", url, msg)
@@ -22,6 +21,17 @@ func SetMiddleText(msg string) string {
 		return err
 	}
 	return nil
+}
+
+func ShowLeaderboard() string {
+	// url := onscreensServerURL + "/onscreens/middle"
+	// url = fmt.Sprintf("%s?msg=\"%s\"", url, msg)
+	// _, err := getUrl(url)
+	// if err != nil {
+	// 	terrors.Log(err, "error setting middle onscreen")
+	// 	return err
+	// }
+	// return nil
 }
 
 //TODO: move this to a common location
