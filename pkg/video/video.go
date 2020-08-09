@@ -10,6 +10,7 @@ import (
 
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
+	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
 	vlcClient "github.com/adanalife/tripbot/pkg/vlc-client"
 	"github.com/logrusorgru/aurora"
 )
