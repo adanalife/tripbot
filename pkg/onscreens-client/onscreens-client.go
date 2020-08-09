@@ -9,6 +9,10 @@ import (
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 )
 
+//TODO: add these
+// AddChatLine(username, msg.Message)
+// ShowFlagFor("", 10*time.Second)
+
 //TODO: eventually support HTTPS
 var onscreensServerURL = "http://" + config.VlcServerHost
 
