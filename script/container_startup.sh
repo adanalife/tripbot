@@ -10,7 +10,7 @@ vncserver :0 -localhost no -nolisten -rfbauth "$HOME/.vnc/passwd" -xstartup /opt
 
 echo -e "\n\n------------------ OBS environment started ------------------"
 echo -e "\nVNC server started:\n\t=> connect via VNC at vnc://$OUR_IP:5900"
-echo -e "\nvlc-server started:\n\t=> connect via http://$OUR_IP:8088/vlc/current\n"
+echo -e "\nvlc-server started:\n\t=> connect via http://$OUR_IP:8080/vlc/current\n"
 echo -e "\nOBS started:\n\t=> view at https://twitch.tv/$CHANNEL_NAME\n"
 
 if [ ! -z "${STREAM_KEY}" ]; then
