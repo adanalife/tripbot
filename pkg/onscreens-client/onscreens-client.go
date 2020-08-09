@@ -48,10 +48,13 @@ func HideGPSImage() string {
 	return "TODO"
 }
 
-//TODO: add these
-// AddChatLine(username, msg.Message)
-// FlagShowFor("", 10*time.Second)
-// GPSClientShowFor("", 60*time.Second)
+func HideMiddleText() string {
+	return "TODO"
+}
+
+func ShowMiddleText(msg string) string {
+	return "TODO"
+}
 
 //TODO: move this to a common location
 func getUrl(url string) (string, error) {

@@ -406,7 +406,7 @@ func middleCmd(user *users.User, params []string) {
 	// if the arg was "hide", hide the text from view
 	if len(params) == 1 && strings.ToLower(params[0]) == "hide" {
 		Say("Got it! Hiding the message.")
-		onscreens.MiddleText.Hide()
+		onscreensClient.HideMiddleText()
 		return
 	}
 
@@ -416,5 +416,5 @@ func middleCmd(user *users.User, params []string) {
 	// just to help debug
 	log.Printf("setting middle text to: %s", text)
 
-	onscreens.MiddleText.Show(text)
+	onscreensClient.ShowMiddleText(text)
 }
