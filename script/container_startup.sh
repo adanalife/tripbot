@@ -10,7 +10,7 @@ vncserver :0 -localhost no -nolisten -rfbauth "$HOME/.vnc/passwd" -xstartup /opt
 
 echo -e "\n\n------------------ OBS environment started ------------------"
 echo -e "\nVNC server started:\n\t=> connect via VNC at vnc://$OUR_IP:5900"
-echo -e "\nvlc-server started:\n\t=> connect via http://$OUR_IP:8080/vlc/current\n"
+echo -e "\nvlc-server started:\n\t=> connect via http://$VLC_SERVER_HOST/vlc/current\n"
 echo -e "\nOBS started:\n\t=> view at https://twitch.tv/$CHANNEL_NAME\n"
 
 if [ ! -z "${STREAM_KEY}" ]; then
@@ -18,10 +18,12 @@ if [ ! -z "${STREAM_KEY}" ]; then
 fi
 
 if [ -z "$1" ]; then
-  echo -e "\n\n--------------------- VLC server log ------------------------"
-  tail -F /opt/tripbot/log/vlc*.log
+  # tail all the logs we care about
+  # (c.p. https://unix.stackexchange.com/a/195930/202812)
+  tail -F /opt/tripbot/log/vlc*.log \
+    | awk '/^==> / {a=substr($0, 5, length-8); next}
+                 {print a":"$0}'
 else
-  # unknown option ==> call command
   echo -e "\n\n------------------ EXECUTE COMMAND ------------------"
   echo "Executing command: '$*'"
   exec "$@"
