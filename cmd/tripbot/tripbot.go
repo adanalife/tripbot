@@ -16,7 +16,6 @@ import (
 	"github.com/adanalife/tripbot/pkg/database"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
-	"github.com/adanalife/tripbot/pkg/onscreens"
 	"github.com/adanalife/tripbot/pkg/server"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/users"
@@ -41,7 +40,6 @@ func main() {
 	updateSubscribers()
 	getCurrentUsers()
 	updateWebhookSubscriptions()
-	createOnscreens()
 	connectToTwitch()
 }
 
@@ -115,17 +113,6 @@ func getCurrentUsers() {
 func updateWebhookSubscriptions() {
 	// create webhook subscriptions
 	mytwitch.UpdateWebhookSubscriptions()
-}
-
-// createOnscreens starts the various onscreen elements
-// (like the chat boxes in the corners)
-func createOnscreens() {
-	background.InitChat()
-	onscreens.InitLeftRotator()
-	background.InitRightRotator()
-	onscreens.InitMiddleText()
-	background.InitTimewarp()
-	background.InitFlagImage()
 }
 
 // connectToTwitch joins Twitch chat and starts listening
