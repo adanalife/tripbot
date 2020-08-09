@@ -123,7 +123,7 @@ func createOnscreens() {
 	background.InitChat()
 	onscreens.InitLeftRotator()
 	background.InitRightRotator()
-	background.InitMiddleText()
+	onscreens.InitMiddleText()
 	background.InitTimewarp()
 	background.InitFlagImage()
 }
