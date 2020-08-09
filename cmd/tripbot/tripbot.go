@@ -65,7 +65,7 @@ func startHttpServer() {
 // findInitialVideo will determin the vido that is currently-playing
 // we want to run this early, otherwise it will be unset until the first cron job runs
 func findInitialVideo() {
-	background.InitGPSImage() // this has to happen first
+	// background.InitGPSImage() // this has to happen first
 	video.GetCurrentlyPlaying()
 	v := video.CurrentlyPlaying
 	_, err := video.LoadOrCreate(v.String())

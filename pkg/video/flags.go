@@ -21,6 +21,7 @@ func ShowFlag() {
 	//TODO: this should trigger when a state change event fires instead of every time we run this
 	updateFlagFile()
 	// actually display the flag
+	//TODO: this needs to be a vlcClient thing
 	background.FlagImage.ShowFor("", 10*time.Second)
 }
 
