@@ -83,7 +83,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			}
 			fmt.Fprintf(w, "OK")
 
-		} else if strings.HasPrefix(r.URL.Path, "/onscreen/middle") {
+		} else if strings.HasPrefix(r.URL.Path, "/onscreens/middle/show") {
 
 			msg, ok := r.URL.Query()["msg"]
 			if !ok || len(msg) > 1 {
