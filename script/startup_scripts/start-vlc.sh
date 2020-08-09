@@ -10,6 +10,8 @@ sed -i 's/geteuid/getppid/' /usr/bin/vlc
 #TODO: fix this
 export FONTCONFIG_PATH=/etc/fonts
 
+export DISPLAY=":0.0"
+
 # compile vlc-server
 cd /opt/tripbot || exit 2
 
