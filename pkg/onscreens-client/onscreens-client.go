@@ -14,7 +14,7 @@ import (
 var onscreensServerURL = "http://" + config.VlcServerHost
 
 func SetMiddleText(msg string) error {
-	url := onscreensServerURL + "/onscreens/middle"
+	url := onscreensServerURL + "/onscreens/middle/set"
 	url = fmt.Sprintf("%s?msg=\"%s\"", url, msg)
 	_, err := getUrl(url)
 	if err != nil {
@@ -24,12 +24,22 @@ func SetMiddleText(msg string) error {
 	return nil
 }
 
-func ShowLeaderboard() string {
-	return "TODO"
+func ShowLeaderboard() error {
+	_, err := getUrl(onscreensServerURL + "/onscreens/leaderboard/show")
+	if err != nil {
+		terrors.Log(err, "error showing leaderboard onscreen")
+		return err
+	}
+	return nil
 }
 
 func ShowTimewarp() string {
-	return "TODO"
+	_, err := getUrl(onscreensServerURL + "/onscreens/timewarp/show")
+	if err != nil {
+		terrors.Log(err, "error showing timewarp onscreen")
+		return err
+	}
+	return nil
 }
 
 func AddChatLine(username, msg string) string {
