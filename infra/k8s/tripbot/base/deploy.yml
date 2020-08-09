@@ -37,6 +37,14 @@ spec:
           periodSeconds: 10
           timeoutSeconds: 3
           failureThreshold: 1
+        resources:
+          requests:
+            memory: 128Mi
+            cpu: 2
+            ephemeral-storage: 1Gi
+          limits:
+            memory: 256Mi
+            cpu: 2
         env:
          - name: DATABASE_HOST
            valueFrom:
@@ -108,6 +116,8 @@ spec:
              secretKeyRef:
                name: tripbot-secrets
                key: GOOGLE_MAPS_API_KEY
+         - name: GOOGLE_APPLICATION_CREDENTIALS
+           value: "/opt/tripbot/infra/google/tripbot.json"
         volumeMounts:
         # mount dashcam folder
         #TODO: does tripbot really need access to this?
