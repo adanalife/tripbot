@@ -7,9 +7,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/adanalife/tripbot/pkg/config"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
+	"github.com/davecgh/go-spew/spew"
 )
 
 func handle(w http.ResponseWriter, r *http.Request) {
@@ -74,6 +74,16 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "OK")
 
 		} else if strings.HasPrefix(r.URL.Path, "/vlc/random") {
+			// play a random file
+			err := PlayRandom()
+			if err != nil {
+				//TODO: return a 500 error
+				http.Error(w, "404 not found", http.StatusNotFound)
+			}
+			fmt.Fprintf(w, "OK")
+
+		} else if strings.HasPrefix(r.URL.Path, "/onscreen/left") {
+
 			// play a random file
 			err := PlayRandom()
 			if err != nil {

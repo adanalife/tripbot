@@ -9,7 +9,6 @@ import (
 	"syscall"
 	"time"
 
-	_ "github.com/dimiro1/banner/autoload"
 	"github.com/adanalife/tripbot/pkg/audio"
 	"github.com/adanalife/tripbot/pkg/background"
 	"github.com/adanalife/tripbot/pkg/chatbot"
@@ -17,10 +16,12 @@ import (
 	"github.com/adanalife/tripbot/pkg/database"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
+	"github.com/adanalife/tripbot/pkg/onscreens"
 	"github.com/adanalife/tripbot/pkg/server"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/adanalife/tripbot/pkg/video"
+	_ "github.com/dimiro1/banner/autoload"
 	"github.com/gempir/go-twitch-irc/v2"
 	"github.com/getsentry/sentry-go"
 	"github.com/logrusorgru/aurora"
@@ -120,7 +121,7 @@ func updateWebhookSubscriptions() {
 // (like the chat boxes in the corners)
 func createOnscreens() {
 	background.InitChat()
-	background.InitLeftRotator()
+	onscreens.InitLeftRotator()
 	background.InitRightRotator()
 	background.InitMiddleText()
 	background.InitTimewarp()

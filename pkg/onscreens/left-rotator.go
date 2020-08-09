@@ -1,4 +1,4 @@
-package background
+package onscreens
 
 import (
 	"fmt"
@@ -8,11 +8,10 @@ import (
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/config"
-	"github.com/adanalife/tripbot/pkg/onscreens"
 	"github.com/adanalife/tripbot/pkg/users"
 )
 
-var LeftRotator *onscreens.Onscreen
+var LeftRotator *Onscreen
 
 var leftRotatorUpdateFrequency = time.Duration(45 * time.Second)
 
@@ -37,7 +36,7 @@ var possibleLeftMessages = []string{
 
 func InitLeftRotator() {
 	log.Println("Creating left rotator onscreen")
-	LeftRotator = onscreens.New(leftRotatorFile)
+	LeftRotator = New(leftRotatorFile)
 	go leftRotatorLoop()
 }
 
