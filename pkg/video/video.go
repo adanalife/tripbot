@@ -56,7 +56,7 @@ func GetCurrentlyPlaying() {
 		// show the no-GPS image
 		if CurrentlyPlaying.Flagged {
 			//TODO: kinda cludgy that we hardcode 60s here
-			onscreensClient.GPSImageShowFor(60 * time.Second)
+			onscreensClient.ShowGPSImage(60 * time.Second)
 		} else {
 			onscreensClient.HideGPSImage()
 		}

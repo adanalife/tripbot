@@ -10,7 +10,6 @@ import (
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	mylog "github.com/adanalife/tripbot/pkg/log"
-	"github.com/adanalife/tripbot/pkg/onscreens"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/davecgh/go-spew/spew"
@@ -69,7 +68,7 @@ func Say(msg string) {
 	// include the message in the log
 	mylog.ChatMsg(config.BotUsername, msg)
 	// include the bot output in chat
-	onscreens.AddChatLine(config.BotUsername, msg)
+	onscreensClient.AddChatLine(config.BotUsername, msg)
 	// figure out what channel to speak to
 	speakTo := config.ChannelName
 	if config.OutputChannel != "" {

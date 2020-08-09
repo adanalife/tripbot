@@ -40,7 +40,11 @@ func ShowFlag(time.Duration) string {
 	return "TODO"
 }
 
-func ShowGPS(time.Duration) string {
+func ShowGPSImage(time.Duration) string {
+	return "TODO"
+}
+
+func HideGPSImage() string {
 	return "TODO"
 }
 

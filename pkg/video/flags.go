@@ -22,7 +22,7 @@ func ShowFlag() {
 	updateFlagFile()
 	// actually display the flag
 	//TODO: this needs to be a vlcClient thing
-	onscreensClient.ShowFlagFor(10 * time.Second)
+	onscreensClient.ShowFlag(10 * time.Second)
 }
 
 // updateFlagFile replaces the current flag image with the current state flag
