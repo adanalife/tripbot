@@ -1,4 +1,4 @@
-package background
+package onscreens
 
 import (
 	"fmt"
@@ -8,18 +8,17 @@ import (
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/config"
-	"github.com/adanalife/tripbot/pkg/onscreens"
 	"github.com/adanalife/tripbot/pkg/users"
 )
 
 var leaderboardDuration = time.Duration(20 * time.Second)
 var leaderboardFile = path.Join(config.RunDir, "leaderboard.txt")
 
-var Leaderboard *onscreens.Onscreen
+var Leaderboard *Onscreen
 
 func InitLeaderboard() {
 	log.Println("Creating leaderboard onscreen")
-	Leaderboard = onscreens.New(leaderboardFile)
+	Leaderboard = New(leaderboardFile)
 	go leaderboardLoop()
 }
 

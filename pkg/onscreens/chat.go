@@ -1,4 +1,4 @@
-package background
+package onscreens
 
 import (
 	"fmt"
@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/config"
-	"github.com/adanalife/tripbot/pkg/onscreens"
 )
 
 const lineBreak = 40
@@ -16,12 +15,12 @@ const maxLines = 5
 var chatDuration = time.Duration(40 * time.Second)
 var chatFile = path.Join(config.RunDir, "chat.txt")
 
-var Chat *onscreens.Onscreen
+var Chat *Onscreen
 var ChatLines = []string{}
 
 func InitChat() {
 	log.Println("Creating chat onscreen")
-	Chat = onscreens.New(chatFile)
+	Chat = New(chatFile)
 }
 
 func AddChatLine(username, line string) {

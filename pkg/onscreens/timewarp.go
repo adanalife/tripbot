@@ -1,4 +1,4 @@
-package background
+package onscreens
 
 import (
 	"log"
@@ -6,17 +6,16 @@ import (
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/config"
-	"github.com/adanalife/tripbot/pkg/onscreens"
 )
 
-var Timewarp *onscreens.Onscreen
+var Timewarp *Onscreen
 
 var timewarpDuration = time.Duration(2 * time.Second)
 var timewarpFile = path.Join(config.RunDir, "timewarp.txt")
 
 func InitTimewarp() {
 	log.Println("Creating timewarp onscreen")
-	Timewarp = onscreens.New(timewarpFile)
+	Timewarp = New(timewarpFile)
 }
 
 func ShowTimewarp() {
