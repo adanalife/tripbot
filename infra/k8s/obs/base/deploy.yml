@@ -38,6 +38,14 @@ spec:
         #   periodSeconds: 10
         #   timeoutSeconds: 3
         #   failureThreshold: 1
+        resources:
+          requests:
+            memory: 128Mi
+            cpu: 2
+            ephemeral-storage: 1Gi
+          limits:
+            memory: 256Mi
+            cpu: 2
         env:
          - name: DATABASE_HOST
            valueFrom:
