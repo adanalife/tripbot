@@ -1,4 +1,4 @@
-package onscreens
+package onscreensServer
 
 import (
 	"fmt"
