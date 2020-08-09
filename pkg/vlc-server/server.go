@@ -91,7 +91,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
 				return
 			}
-			onscreens.MiddleText.Show(msg)
+			onscreens.MiddleText.Show(strings.Join(msg, " "))
 			fmt.Fprintf(w, "OK")
 
 			// return a favicon if anyone asks for one
