@@ -4,15 +4,11 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"time"
 
 	"github.com/adanalife/tripbot/pkg/config"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 )
-
-//TODO: add these
-// AddChatLine(username, msg.Message)
-// FlagShowFor("", 10*time.Second)
-// GPSClientShowFor("", 60*time.Second)
 
 //TODO: eventually support HTTPS
 var onscreensServerURL = "http://" + config.VlcServerHost
@@ -35,6 +31,23 @@ func ShowLeaderboard() string {
 func ShowTimewarp() string {
 	return "TODO"
 }
+
+func AddChatLine(username, msg string) string {
+	return "TODO"
+}
+
+func ShowFlag(time.Duration) string {
+	return "TODO"
+}
+
+func ShowGPS(time.Duration) string {
+	return "TODO"
+}
+
+//TODO: add these
+// AddChatLine(username, msg.Message)
+// FlagShowFor("", 10*time.Second)
+// GPSClientShowFor("", 60*time.Second)
 
 //TODO: move this to a common location
 func getUrl(url string) (string, error) {
