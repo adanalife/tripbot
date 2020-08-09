@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/adanalife/tripbot/pkg/background"
 	"github.com/adanalife/tripbot/pkg/config"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
@@ -30,7 +29,7 @@ func ShowFlag() {
 func updateFlagFile() {
 	if helpers.FileExists(onscreens.FlagImageFile) {
 		if config.Verbose {
-			log.Printf("removing %s because it already exists", background.FlagImageFile)
+			log.Printf("removing %s because it already exists", onscreens.FlagImageFile)
 		}
 		// remove the existing flag file
 		err := os.Remove(onscreens.FlagImageFile)

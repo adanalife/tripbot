@@ -11,7 +11,8 @@ import (
 
 //TODO: add these
 // AddChatLine(username, msg.Message)
-// ShowFlagFor("", 10*time.Second)
+// FlagShowFor("", 10*time.Second)
+// GPSClientShowFor("", 60*time.Second)
 
 //TODO: eventually support HTTPS
 var onscreensServerURL = "http://" + config.VlcServerHost
