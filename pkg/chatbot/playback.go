@@ -9,7 +9,6 @@ import (
 
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 
-	"github.com/adanalife/tripbot/pkg/background"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/adanalife/tripbot/pkg/video"
@@ -38,7 +37,7 @@ func timewarpCmd(user *users.User) {
 	}
 
 	// show timewarp onscreen
-	background.ShowTimewarp()
+	onscreensClient.ShowTimewarp()
 
 	// only say this if the caller is not me
 	if !helpers.UserIsAdmin(user.Username) {

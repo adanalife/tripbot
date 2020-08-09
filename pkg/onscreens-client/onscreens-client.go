@@ -24,14 +24,11 @@ func SetMiddleText(msg string) string {
 }
 
 func ShowLeaderboard() string {
-	// url := onscreensServerURL + "/onscreens/middle"
-	// url = fmt.Sprintf("%s?msg=\"%s\"", url, msg)
-	// _, err := getUrl(url)
-	// if err != nil {
-	// 	terrors.Log(err, "error setting middle onscreen")
-	// 	return err
-	// }
-	// return nil
+	return "TODO"
+}
+
+func ShowTimewarp() string {
+	return "TODO"
 }
 
 //TODO: move this to a common location
