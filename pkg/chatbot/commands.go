@@ -12,7 +12,7 @@ import (
 
 	"github.com/adanalife/tripbot/pkg/audio"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
-	"github.com/adanalife/tripbot/pkg/onscreens"
+	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
 
 	"github.com/adanalife/tripbot/pkg/background"
 	"github.com/adanalife/tripbot/pkg/config"

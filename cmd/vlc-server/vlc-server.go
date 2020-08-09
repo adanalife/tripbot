@@ -6,19 +6,19 @@ import (
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/helpers"
-	"github.com/adanalife/tripbot/pkg/onscreens"
+	onscreensServer "github.com/adanalife/tripbot/pkg/onscreens-server"
 	vlcServer "github.com/adanalife/tripbot/pkg/vlc-server"
 )
 
 // createOnscreens starts the various onscreen elements
 // (like the chat boxes in the corners)
 func createOnscreens() {
-	onscreens.InitChat()
-	onscreens.InitLeftRotator()
-	onscreens.InitRightRotator()
-	onscreens.InitMiddleText()
-	onscreens.InitTimewarp()
-	onscreens.InitFlagImage()
+	onscreensServer.InitChat()
+	onscreensServer.InitLeftRotator()
+	onscreensServer.InitRightRotator()
+	onscreensServer.InitMiddleText()
+	onscreensServer.InitTimewarp()
+	onscreensServer.InitFlagImage()
 }
 
 func main() {

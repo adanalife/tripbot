@@ -11,7 +11,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/config"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
-	"github.com/adanalife/tripbot/pkg/onscreens"
+	onscreensServer "github.com/adanalife/tripbot/pkg/onscreens-server"
 )
 
 //TODO: this really shouldnt live in the video pkg,
@@ -22,17 +22,17 @@ func ShowFlag() {
 	updateFlagFile()
 	// actually display the flag
 	//TODO: this needs to be a vlcClient thing
-	onscreensClient.ShowFlag(10 * time.Second)
+	onscreensServer.ShowFlag(10 * time.Second)
 }
 
 // updateFlagFile replaces the current flag image with the current state flag
 func updateFlagFile() {
-	if helpers.FileExists(onscreens.FlagImageFile) {
+	if helpers.FileExists(onscreensServer.FlagImageFile) {
 		if config.Verbose {
-			log.Printf("removing %s because it already exists", onscreens.FlagImageFile)
+			log.Printf("removing %s because it already exists", onscreensServer.FlagImageFile)
 		}
 		// remove the existing flag file
-		err := os.Remove(onscreens.FlagImageFile)
+		err := os.Remove(onscreensServer.FlagImageFile)
 		if err != nil {
 			terrors.Log(err, "error removing old flag image")
 		}
@@ -54,7 +54,7 @@ func updateFlagFile() {
 	}
 
 	// copy the image to the live location
-	err := os.Symlink(newFlagFile, onscreens.FlagImageFile)
+	err := os.Symlink(newFlagFile, onscreensServer.FlagImageFile)
 	if err != nil {
 		terrors.Log(err, "error creating new flag image")
 	}
