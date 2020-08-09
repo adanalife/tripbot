@@ -11,7 +11,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/config"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
-	onscreensServer "github.com/adanalife/tripbot/pkg/onscreens-server"
+	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
 )
 
 //TODO: this really shouldnt live in the video pkg,
@@ -22,7 +22,7 @@ func ShowFlag() {
 	updateFlagFile()
 	// actually display the flag
 	//TODO: this needs to be a vlcClient thing
-	onscreensServer.ShowFlag(10 * time.Second)
+	onscreensClient.ShowFlag(10 * time.Second)
 }
 
 // updateFlagFile replaces the current flag image with the current state flag

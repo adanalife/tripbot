@@ -12,6 +12,8 @@ services:
   obs:
     environment:
       ENV: development
+      DISPLAY: ":0.0"
+      FONTCONFIG_PATH: /etc/fonts
     env_file:
       - ./.env.development
     # comment this to enable obs container

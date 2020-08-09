@@ -9,7 +9,7 @@ import (
 
 	"github.com/adanalife/tripbot/pkg/config"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
-	"github.com/adanalife/tripbot/pkg/onscreens-server"
+	onscreensServer "github.com/adanalife/tripbot/pkg/onscreens-server"
 	"github.com/davecgh/go-spew/spew"
 )
 
@@ -91,7 +91,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
 				return
 			}
-			onscreens.MiddleText.Show(strings.Join(msg, " "))
+			onscreensServer.MiddleText.Show(strings.Join(msg, " "))
 			fmt.Fprintf(w, "OK")
 
 			// return a favicon if anyone asks for one

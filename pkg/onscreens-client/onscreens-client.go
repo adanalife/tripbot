@@ -13,7 +13,7 @@ import (
 //TODO: eventually support HTTPS
 var onscreensServerURL = "http://" + config.VlcServerHost
 
-func SetMiddleText(msg string) string {
+func SetMiddleText(msg string) error {
 	url := onscreensServerURL + "/onscreens/middle"
 	url = fmt.Sprintf("%s?msg=\"%s\"", url, msg)
 	_, err := getUrl(url)
