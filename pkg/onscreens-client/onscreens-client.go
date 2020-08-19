@@ -33,7 +33,7 @@ func ShowLeaderboard() error {
 	return nil
 }
 
-func ShowTimewarp() string {
+func ShowTimewarp() error {
 	_, err := getUrl(onscreensServerURL + "/onscreens/timewarp/show")
 	if err != nil {
 		terrors.Log(err, "error showing timewarp onscreen")
