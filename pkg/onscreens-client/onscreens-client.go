@@ -24,6 +24,26 @@ func SetMiddleText(msg string) error {
 	return nil
 }
 
+func HideMiddleText() error {
+	_, err := getUrl(onscreensServerURL + "/onscreens/middle/hide")
+	if err != nil {
+		terrors.Log(err, "error showing leaderboard onscreen")
+		return err
+	}
+	return nil
+}
+
+func ShowMiddleText(dur time.Duration) error {
+	url := onscreensServerURL + "/onscreens/middle/show"
+	url = fmt.Sprintf("%s?duration=\"%s\"", url, dur)
+	_, err := getUrl(url)
+	if err != nil {
+		terrors.Log(err, "error showing middle onscreen")
+		return err
+	}
+	return err
+}
+
 func ShowLeaderboard() error {
 	_, err := getUrl(onscreensServerURL + "/onscreens/leaderboard/show")
 	if err != nil {
@@ -42,28 +62,46 @@ func ShowTimewarp() error {
 	return nil
 }
 
-func AddChatLine(username, msg string) string {
-	return "TODO"
+func AddChatLine(username, msg string) error {
+	url := onscreensServerURL + "/onscreens/chat/add"
+	url = fmt.Sprintf("%s?msg=\"%s\"", url, msg)
+	_, err := getUrl(url)
+	if err != nil {
+		terrors.Log(err, "error adding chat onscreen")
+		return err
+	}
+	return nil
 }
 
-func ShowFlag(time.Duration) string {
-	return "TODO"
+func ShowFlag(dur time.Duration) error {
+	url := onscreensServerURL + "/onscreens/flag/show"
+	url = fmt.Sprintf("%s?duration=\"%s\"", url, dur)
+	_, err := getUrl(url)
+	if err != nil {
+		terrors.Log(err, "error showing flag onscreen")
+		return err
+	}
+	return nil
 }
 
-func ShowGPSImage(time.Duration) string {
-	return "TODO"
+func ShowGPSImage(dur time.Duration) error {
+	url := onscreensServerURL + "/onscreens/gps/show"
+	url = fmt.Sprintf("%s?duration=\"%s\"", url, dur)
+	_, err := getUrl(url)
+	if err != nil {
+		terrors.Log(err, "error showing gps onscreen")
+		return err
+	}
+	return nil
 }
 
-func HideGPSImage() string {
-	return "TODO"
-}
-
-func HideMiddleText() string {
-	return "TODO"
-}
-
-func ShowMiddleText(msg string) string {
-	return "TODO"
+func HideGPSImage() error {
+	_, err := getUrl(onscreensServerURL + "/onscreens/gps/hide")
+	if err != nil {
+		terrors.Log(err, "error hiding gps onscreen")
+		return err
+	}
+	return nil
 }
 
 //TODO: move this to a common location
