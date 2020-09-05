@@ -77,6 +77,12 @@ RUN export DEBIAN_FRONTEND=noninteractive \
   && apt-get clean -y \
   && rm -rf /var/lib/apt/lists/*
 
+# install tesseract
+RUN apt-get update && apt-get install --no-install-recommends -y \
+    libtesseract-dev \
+    tesseract-ocr \
+ && rm -rf /var/lib/apt/lists/*
+
 # for the VNC connection
 EXPOSE 5900
 

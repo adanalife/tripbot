@@ -4,6 +4,7 @@ FROM golang:1.14-buster
 WORKDIR /go/src/github.com/adanalife/tripbot
 
 # install dependencies
+#TODO: do we need tesseract for tripbot?
 RUN apt-get update && apt-get install --no-install-recommends -y \
     libtesseract-dev \
     tesseract-ocr \
