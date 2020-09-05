@@ -22,6 +22,7 @@ services:
     restart: unless-stopped
 
   obs:
+    privileged: true
     image: adanalife/obs
     env_file:
       - infra/docker/env.docker

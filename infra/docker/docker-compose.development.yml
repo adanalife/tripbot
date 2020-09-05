@@ -19,10 +19,15 @@ services:
     # comment this to enable obs container
     #entrypoint: "true"
     restart: on-failure
-    entrypoint: bash
-    command: -c "go run cmd/vlc-server/vlc-server.go 2>&1"
-    # command: -c "/opt/tripbot/script/startup_scripts/start-vlc.sh 2>&1"
+    # entrypoint: bash
+    # command: -c "go run cmd/vlc-server/vlc-server.go 2>&1"
+    volumes:
+      - /home/dmerrick/Videos/Dashcam/_all:/opt/data/Dashcam/_all:ro
 
   db:
     volumes:
       - ./tmp/data:/var/lib/postgresql/data
+
+networks:
+  tripbot_default:
+    external: true
