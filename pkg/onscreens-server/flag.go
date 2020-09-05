@@ -11,6 +11,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/config"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
+	"github.com/adanalife/tripbot/pkg/video"
 )
 
 var FlagImage *Onscreen
@@ -27,8 +28,7 @@ func ShowFlag(dur time.Duration) {
 	//TODO: this should trigger when a state change event fires instead of every time we run this
 	updateFlagFile()
 	// actually display the flag
-	//TODO: this needs to be a vlcClient thing
-	onscreensClient.ShowFlag(10 * time.Second)
+	FlagImage.ShowFor("", 10*time.Second)
 }
 
 // updateFlagFile replaces the current flag image with the current state flag
@@ -44,7 +44,7 @@ func updateFlagFile() {
 		}
 	}
 
-	vid := CurrentlyPlaying
+	vid := video.CurrentlyPlaying
 	// find the next unflagged video
 	if vid.Flagged {
 		vid = vid.Next()

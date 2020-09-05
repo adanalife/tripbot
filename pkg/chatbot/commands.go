@@ -67,7 +67,7 @@ func helloCmd(user *users.User, params []string) {
 
 func flagCmd(user *users.User) {
 	log.Println(user.Username, "ran !flag")
-	video.ShowFlag()
+	onscreensClient.ShowFlag(10 * time.Second)
 }
 
 func versionCmd(user *users.User) {
@@ -299,7 +299,7 @@ func guessCmd(user *users.User, params []string) {
 	if strings.ToLower(guess) == strings.ToLower(vid.State) {
 		msg = fmt.Sprintf("@%s got it! We're in %s", user.Username, vid.State)
 		// show the flag for the state
-		video.ShowFlag()
+		onscreensClient.ShowFlag(10 * time.Second)
 	} else {
 		msg = "Try again! EarthDay"
 	}
@@ -316,7 +316,7 @@ func stateCmd(user *users.User) {
 	}
 	msg := fmt.Sprintf("We're in %s", vid.State)
 	// show the flag for the state
-	video.ShowFlag()
+	onscreensClient.ShowFlag(10 * time.Second)
 	Say(msg)
 }
 
@@ -416,5 +416,5 @@ func middleCmd(user *users.User, params []string) {
 	// just to help debug
 	log.Printf("setting middle text to: %s", text)
 
-	onscreensClient.ShowMiddleText(text)
+	onscreensClient.SetMiddleText(text)
 }
