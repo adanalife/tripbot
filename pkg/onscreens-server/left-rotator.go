@@ -1,6 +1,7 @@
 package onscreensServer
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"math/rand"
@@ -8,6 +9,7 @@ import (
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/config"
+	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/users"
 )
 
@@ -62,6 +64,10 @@ func leftRotatorContent() string {
 	// some messages require custom logic
 	switch message {
 	case "LEADER":
+		//TODO: maybe turn this into a call to tripbot?
+		if len(users.Leaderboard) == 0 {
+			terrors.Log(errors.New("leaderboard empty"), "")
+		}
 		// get the first leader in the leaderboard
 		leader := users.Leaderboard[:1][0]
 		output = fmt.Sprintf("%s is leader with %s miles (!leaderboard)", leader[0], leader[1])

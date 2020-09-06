@@ -2,6 +2,9 @@
 
 # this script is the container entrypoint for the OBS container
 
+#TODO: set background in /etc/X11/fluxbox/overlay
+#TODO: remove vncconfig from /etc/X11/Xvnc-session
+
 cat << EOF > /etc/supervisor/conf.d/syslog.conf
 [program:syslog]
 command=/usr/sbin/syslog-ng -F

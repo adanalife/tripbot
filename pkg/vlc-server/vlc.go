@@ -5,10 +5,10 @@ import (
 	"os"
 	"path/filepath"
 
-	libvlc "github.com/adrg/libvlc-go/v3"
 	"github.com/adanalife/tripbot/pkg/config"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
+	libvlc "github.com/adrg/libvlc-go/v3"
 )
 
 var player *libvlc.Player
@@ -21,7 +21,8 @@ var videoFiles []string
 //TODO: break some of these into ENV vars
 var vlcCmdFlags = []string{
 	"--ignore-config", // ignore any config files that might get loaded
-	// "-vv",                       // be very verbose (used for debugging)
+	"-vv",             // be very verbose (used for debugging)
+	"--syslog-debug",
 	"--quiet", // reduce terminal output
 	"--fullscreen",
 	// "--width", "1920",
@@ -33,10 +34,10 @@ var vlcCmdFlags = []string{
 	"--network-caching", "6666", // network cache (in ms)
 	"--file-caching", "11111", // file cache (in ms)
 	// can be none, vdpau_avcodec, or cuda
-	"--avcodec-hw", "none,", // enable hardware decoding
+	"--avcodec-hw", "none", // enable hardware decoding
 	"--vout", "x11", // use X11 (and skip vdpau)
-	"--file-logging",                                      // enable file logging
-	"--logfile", "log/vlc." + config.Environment + ".log", // specify location of log
+	// "--file-logging",                                      // enable file logging
+	// "--logfile", "log/vlc." + config.Environment + ".log", // specify location of log
 }
 
 // Init creates a VLC player and sets up a playlist
