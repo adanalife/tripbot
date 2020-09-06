@@ -4,7 +4,7 @@
 
 cat << EOF > /etc/supervisor/conf.d/syslog.conf
 [program:syslog]
-command=command=/usr/sbin/syslog-ng -F
+command=/usr/sbin/syslog-ng -F
 auto_start=true
 autorestart=true
 stdout_logfile=/var/log/syslog
