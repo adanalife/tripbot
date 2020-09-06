@@ -89,7 +89,6 @@ trap cleanup SIGTERM
 
 nohup supervisord --nodaemon -c /etc/supervisor/supervisord.conf 2>&1 | logger -t supervisor-init &
 supervisor_pid=$!
-#wait "$supervisor_pid"
 
 # grc adds color to the output
 grc -- tail -F /var/log/syslog

@@ -38,6 +38,7 @@ services:
     environment:
       DISPLAY: ":0.0"
       XDG_RUNTIME_DIR: "/root/.cache/xdgr"
+      # hack to make fontconfig happy
       FONTCONFIG_PATH: "/etc/fonts"
       STREAM_KEY: "${STREAM_KEY}"
     volumes:

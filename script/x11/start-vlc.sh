@@ -18,18 +18,10 @@ cleanup() {
 
 trap cleanup SIGTERM
 
-# sleep 5
-# export DISPLAY=":0.0"
-
 # hack VLC so we can run it as root
 # c.p. https://unix.stackexchange.com/a/199422/202812
 sed -i 's/geteuid/getppid/' /usr/bin/vlc
 
-# hack to make fontconfig happy
-#TODO: fix this
-export FONTCONFIG_PATH=/etc/fonts
-
-# compile vlc-server
 cd /opt/tripbot || exit 2
 
 # check if we have vlc-server compiled
