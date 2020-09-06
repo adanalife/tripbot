@@ -5,6 +5,10 @@
 #TODO: set background in /etc/X11/fluxbox/overlay
 #TODO: remove vncconfig from /etc/X11/Xvnc-session
 
+#TODO: remove these
+echo "DANATEST" > /opt/data/run/left-message.txt
+echo "DANATEST" > /opt/data/run/right-message.txt
+
 cat << EOF > /etc/supervisor/conf.d/syslog.conf
 [program:syslog]
 command=/usr/sbin/syslog-ng -F

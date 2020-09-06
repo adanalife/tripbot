@@ -23,7 +23,7 @@ services:
     command: -c "cd /opt/tripbot && rm bin/vlc-server && script/container_startup.sh"
     # command: -c "go run cmd/vlc-server/vlc-server.go 2>&1"
     volumes:
-      - /home/dmerrick/Videos/Dashcam:/opt/data/Dashcam:ro
+      - /home/dmerrick/Videos/Dashcam/screencaps:/opt/data/screencaps:ro
       # I had to include this to overwrite the volume set in the base file
       - /home/dmerrick/Videos/Dashcam/_all:/opt/data/Dashcam/_all:ro
 

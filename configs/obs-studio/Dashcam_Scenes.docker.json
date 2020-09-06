@@ -544,7 +544,7 @@
             "push-to-talk": false,
             "push-to-talk-delay": 0,
             "settings": {
-                "file": "/opt/tripbot/run/flag.png-live",
+                "file": "/opt/data/run/flag.png-live",
                 "unload": true
             },
             "sync": 0,
@@ -1375,7 +1375,7 @@
             "push-to-talk": false,
             "push-to-talk-delay": 0,
             "settings": {
-                "file": "/opt/tripbot/run/GPS.png-live",
+                "file": "/opt/data/run/GPS.png-live",
                 "unload": false
             },
             "sync": 0,
@@ -2239,7 +2239,7 @@
                 "from_file": true,
                 "outline": false,
                 "text": "Don't forget to follow :)",
-                "text_file": "/opt/tripbot/run/right-message.txt",
+                "text_file": "/opt/data/run/right-message.txt",
                 "word_wrap": true
             },
             "sync": 0,
@@ -2327,7 +2327,7 @@
                 "from_file": true,
                 "outline": false,
                 "text": "",
-                "text_file": "/opt/tripbot/run/leaderboard.txt"
+                "text_file": "/opt/data/run/leaderboard.txt"
             },
             "sync": 0,
             "versioned_id": "text_ft2_source",
@@ -2363,7 +2363,7 @@
                 "from_file": true,
                 "outline": false,
                 "text": "",
-                "text_file": "/opt/tripbot/run/left-message.txt"
+                "text_file": "/opt/data/run/left-message.txt"
             },
             "sync": 0,
             "versioned_id": "text_ft2_source",
@@ -2626,7 +2626,7 @@
                 "log_mode": false,
                 "outline": false,
                 "text": "",
-                "text_file": "/opt/tripbot/run/chat.txt",
+                "text_file": "/opt/data/run/chat.txt",
                 "word_wrap": false
             },
             "sync": 0,
@@ -2664,7 +2664,7 @@
                 "from_file": true,
                 "outline": false,
                 "text": "",
-                "text_file": "/opt/tripbot/run/timewarp.txt"
+                "text_file": "/opt/data/run/timewarp.txt"
             },
             "sync": 0,
             "versioned_id": "text_ft2_source",
@@ -2701,7 +2701,7 @@
                 "from_file": true,
                 "outline": false,
                 "text": "",
-                "text_file": "/opt/tripbot/run/middle-text.txt"
+                "text_file": "/opt/data/run/middle-text.txt"
             },
             "sync": 0,
             "versioned_id": "text_ft2_source",
@@ -2738,7 +2738,7 @@
                 "from_file": true,
                 "outline": false,
                 "text": "",
-                "text_file": "/opt/tripbot/run/middle-text.txt"
+                "text_file": "/opt/data/run/middle-text.txt"
             },
             "sync": 0,
             "versioned_id": "text_ft2_source",
@@ -2775,7 +2775,7 @@
                 "from_file": true,
                 "outline": false,
                 "text": "",
-                "text_file": "/opt/tripbot/run/timewarp.txt"
+                "text_file": "/opt/data/run/timewarp.txt"
             },
             "sync": 0,
             "versioned_id": "text_ft2_source",
@@ -2800,7 +2800,7 @@
             "push-to-talk": false,
             "push-to-talk-delay": 0,
             "settings": {
-                "file": "/opt/tripbot/run/flag.png-live",
+                "file": "/opt/data/run/flag.png-live",
                 "unload": true
             },
             "sync": 0,
