@@ -35,6 +35,7 @@ services:
       - "5902:5900"
     environment:
       STREAM_KEY: "${STREAM_KEY}"
+      DISPLAY: ":0.0"
     volumes:
       - .:/go/src/github.com/adanalife/tripbot
       - ./assets/video:/opt/data/Dashcam/_all
