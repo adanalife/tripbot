@@ -4,4 +4,5 @@
 mkdir -p "$HOME/.vnc" \
   && echo "$VNC_PASSWD" | vncpasswd -f > "$HOME/.vnc/passwd"
 
-vncserver "$DISPLAY" -fg -Log *:syslog:100 -localhost no -nolisten -passwd "$HOME/.vnc/passwd" -xstartup /opt/tripbot/script/x11/start-fluxbox.sh
+vncserver "$DISPLAY" -fg -Log *:syslog:100 -localhost no -nolisten -passwd "$HOME/.vnc/passwd"
+# vncserver "$DISPLAY" -fg -Log *:syslog:100 -localhost no -nolisten -passwd "$HOME/.vnc/passwd" -xstartup /opt/tripbot/script/x11/start-fluxbox.sh
