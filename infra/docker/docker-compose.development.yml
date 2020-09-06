@@ -13,6 +13,7 @@ services:
     environment:
       ENV: development
       DISPLAY: ":0.0"
+      XDG_RUNTIME_DIR: "/root/.cache/xdgr"
       FONTCONFIG_PATH: /etc/fonts
       VLC_VERBOSE: "true"
       # DISABLE_OBS: "true"
@@ -28,6 +29,7 @@ services:
       - /home/dmerrick/Videos/Dashcam/screencaps:/opt/data/screencaps:ro
       # I had to include this to overwrite the volume set in the base file
       - /home/dmerrick/Videos/Dashcam/_all:/opt/data/Dashcam/_all:ro
+      # - /tmp/.X11-unix:/tmp/.X11-unix
 
   db:
     volumes:

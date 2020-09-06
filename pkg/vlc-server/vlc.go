@@ -24,8 +24,6 @@ var vlcCmdFlags = []string{
 	"--ignore-config", // ignore any config files that might get loaded
 	"--fullscreen",    // start fullscreened
 	"--vout", "x11",   // use X11 (and skip vdpau)
-	"--syslog",
-	// "--quiet", // reduce terminal output
 	"--no-audio",                // none of the videos have audio
 	"--network-caching", "6666", // network cache (in ms)
 	"--file-caching", "11111", // file cache (in ms)
@@ -36,6 +34,12 @@ var vlcCmdFlags = []string{
 	// "--canvas-width", "1920",
 	// "--canvas-height", "1080",
 	// "--aspect-ratio", "16:9",
+}
+
+// these get added if verbose flag is NOT set
+var vlcNotVerboseFlags = []string{
+	"--syslog", // log to syslog
+	"--quiet",  // reduce terminal output
 }
 
 // these add a lot more output
@@ -94,11 +98,15 @@ func startVLC() {
 	// set command line flags
 	if config.VlcVerbose {
 		vlcCmdFlags = append(vlcCmdFlags, vlcVerboseFlags...)
+	} else {
+		vlcCmdFlags = append(vlcCmdFlags, vlcNotVerboseFlags...)
 	}
+
+	spew.Dump("DANATEST0")
+	spew.Dump(vlcCmdFlags)
 
 	// start up VLC with given command flags
 	if err := libvlc.Init(vlcCmdFlags...); err != nil {
-		spew.Dump(vlcCmdFlags)
 		terrors.Fatal(err, "error initializing VLC")
 	}
 }

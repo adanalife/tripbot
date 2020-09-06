@@ -5,12 +5,11 @@
 #TODO: set background in /etc/X11/fluxbox/overlay
 #TODO: remove vncconfig from /etc/X11/Xvnc-session
 
-#TODO: remove this?
-mkdir -p /opt/data/run
+mkdir -p $XDG_RUNTIME_DIR
+chmod 0700 $XDG_RUNTIME_DIR
 
-#TODO: remove these
-# echo "DANATEST" > /opt/data/run/left-message.txt
-# echo "DANATEST" > /opt/data/run/right-message.txt
+mkdir -p /opt/data/run
+touch /opt/data/run/{left,right}-message.txt
 
 cat << EOF > /etc/supervisor/conf.d/syslog.conf
 [program:syslog]
@@ -62,6 +61,17 @@ stderr_logfile=syslog
 startsecs=2
 EOF
 
+cleanup() {
+  echo "Gracefully stopping supervisor"
+  supervisorctl stop all
+  kill -TERM "$supervisor_pid" 2>/dev/null
+  exit 3
+}
+
+trap cleanup SIGTERM
+
 nohup supervisord --nodaemon -c /etc/supervisor/supervisord.conf 2>&1 | logger -t supervisor-init &
+supervisor_pid=$!
+#wait "$supervisor_pid"
 
 tail -F /var/log/syslog
