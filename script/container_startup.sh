@@ -13,6 +13,21 @@ chmod 0700 $XDG_RUNTIME_DIR
 mkdir -p /opt/data/run
 touch /opt/data/run/{left,right}-message.txt
 
+mkdir -p /root/.fluxbox
+cat << EOF > /root/.fluxbox/startup
+#!/bin/sh
+
+#TODO: not 100% sure what this does
+# Change your keymap:
+xmodmap "/root/.Xmodmap"
+
+# set the resolution
+xrandr -s 1920x1200 -r 60
+
+exec fluxbox | logger -t fluxbox
+EOF
+chmod +x /root/.fluxbox/startup
+
 cat << EOF > /etc/supervisor/conf.d/syslog.conf
 [program:syslog]
 command=/usr/sbin/syslog-ng -F
@@ -76,4 +91,5 @@ nohup supervisord --nodaemon -c /etc/supervisor/supervisord.conf 2>&1 | logger -
 supervisor_pid=$!
 #wait "$supervisor_pid"
 
-tail -F /var/log/syslog
+# grc adds color to the output
+grc -- tail -F /var/log/syslog

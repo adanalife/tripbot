@@ -9,7 +9,6 @@ import (
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	libvlc "github.com/adrg/libvlc-go/v3"
-	"github.com/davecgh/go-spew/spew"
 )
 
 var player *libvlc.Player
@@ -29,10 +28,10 @@ var vlcCmdFlags = []string{
 	"--file-caching", "11111", // file cache (in ms)
 	// can be none, vdpau_avcodec, or cuda
 	"--avcodec-hw", "none", // enable hardware decoding
-	// "--width", "1920",
-	// "--height", "1080",
-	// "--canvas-width", "1920",
-	// "--canvas-height", "1080",
+	"--width", "1920",
+	"--height", "1080",
+	"--canvas-width", "1920",
+	"--canvas-height", "1080",
 	// "--aspect-ratio", "16:9",
 }
 
@@ -101,9 +100,6 @@ func startVLC() {
 	} else {
 		vlcCmdFlags = append(vlcCmdFlags, vlcNotVerboseFlags...)
 	}
-
-	spew.Dump("DANATEST0")
-	spew.Dump(vlcCmdFlags)
 
 	// start up VLC with given command flags
 	if err := libvlc.Init(vlcCmdFlags...); err != nil {

@@ -6,7 +6,6 @@ import (
 	"path"
 	"strconv"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/joho/godotenv"
 	"github.com/logrusorgru/aurora"
 )
@@ -106,8 +105,6 @@ func init() {
 	ReadOnly, _ = strconv.ParseBool(os.Getenv("READ_ONLY"))
 	Verbose, _ = strconv.ParseBool(os.Getenv("VERBOSE"))
 	VlcVerbose, _ = strconv.ParseBool(os.Getenv("VLC_VERBOSE"))
-	spew.Dump("DANATEST")
-	spew.Dump(VlcVerbose)
 
 	// directory settings
 	DashcamDir = getEnv("DASHCAM_DIR", defaultDashcamDir)
