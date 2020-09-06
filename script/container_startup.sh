@@ -5,6 +5,7 @@
 cat << EOF > /etc/supervisor/conf.d/syslog.conf
 [program:syslog]
 command=/usr/sbin/syslog-ng -F
+priority=1
 auto_start=true
 autorestart=true
 stdout_logfile=/var/log/syslog
@@ -15,6 +16,7 @@ cat << EOF > /etc/supervisor/conf.d/vnc.conf
 [program:vnc]
 directory=/opt/tripbot
 command=script/x11/start-vnc.sh
+priority=100
 auto_start=true
 autorestart=true
 stdout_logfile=syslog
