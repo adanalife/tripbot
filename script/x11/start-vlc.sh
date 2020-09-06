@@ -38,7 +38,7 @@ if [[ ! -x "bin/vlc-server" ]]; then
 fi
 
 # start vlc-server
-bin/vlc-server &
+bin/vlc-server 2>&1 | logger -t vlc-server &
 
 vlc_pid=$!
 wait "$vlc_pid"

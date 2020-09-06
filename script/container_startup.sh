@@ -5,9 +5,10 @@
 #TODO: set background in /etc/X11/fluxbox/overlay
 #TODO: remove vncconfig from /etc/X11/Xvnc-session
 
+#TODO: remove this?
+mkdir -p /opt/data/run
+
 #TODO: remove these
-# ls /opt/data
-# mkdir -p /opt/data/run
 # echo "DANATEST" > /opt/data/run/left-message.txt
 # echo "DANATEST" > /opt/data/run/right-message.txt
 
@@ -61,4 +62,6 @@ stderr_logfile=syslog
 startsecs=2
 EOF
 
-supervisord --nodaemon -c /etc/supervisor/supervisord.conf
+nohup supervisord --nodaemon -c /etc/supervisor/supervisord.conf 2>&1 | logger -t supervisor-init &
+
+tail -F /var/log/syslog

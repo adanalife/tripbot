@@ -67,6 +67,9 @@ func leftRotatorContent() string {
 		//TODO: maybe turn this into a call to tripbot?
 		if len(users.Leaderboard) == 0 {
 			terrors.Log(errors.New("leaderboard empty"), "")
+			// just use the default value
+			output = message
+			break
 		}
 		// get the first leader in the leaderboard
 		leader := users.Leaderboard[:1][0]
