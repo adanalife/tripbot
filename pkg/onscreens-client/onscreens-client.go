@@ -10,7 +10,6 @@ import (
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 )
 
-//TODO: eventually support HTTPS
 var onscreensServerURL = "http://" + config.VlcServerHost
 
 func SetMiddleText(msg string) error {

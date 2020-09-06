@@ -3,6 +3,7 @@ version: '3.7'
 services:
   tripbot:
     image: adanalife/tripbot
+    hostname: tripbot
     env_file:
       - infra/docker/env.docker
     build:
@@ -10,8 +11,6 @@ services:
       dockerfile: infra/docker/tripbot/Dockerfile
     depends_on:
       - db
-      - obs
-      - mpd
     ports:
       # this should match the TRIPBOT_SERVER_PORT env var
       - "8080"
@@ -24,11 +23,15 @@ services:
   obs:
     privileged: true
     image: adanalife/obs
+    hostname: obs
     env_file:
       - infra/docker/env.docker
     build:
       context: .
       dockerfile: infra/docker/obs/Dockerfile
+    depends_on:
+      - db
+      # - mpd
     ports:
       # this should match the VLC_SERVER_HOST env var
       - "8080"
@@ -63,6 +66,9 @@ services:
     # devices:
     #   - /dev/snd
     restart: unless-stopped
+    # hide output
+    logging:
+      driver: none
 
   migrate:
     image: migrate/migrate

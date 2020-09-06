@@ -2,6 +2,15 @@
 
 # this script is executed as part of the x11 startup process
 
+set -x
+
+# check if X is running before starting
+if ! xset q &>/dev/null; then
+  echo "No X server at \$DISPLAY [$DISPLAY]" >&2
+  sleep 1
+  exit 1
+fi
+
 # hack VLC so we can run it as root
 # c.p. https://unix.stackexchange.com/a/199422/202812
 sed -i 's/geteuid/getppid/' /usr/bin/vlc

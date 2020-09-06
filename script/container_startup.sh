@@ -16,7 +16,6 @@ cat << EOF > /etc/supervisor/conf.d/vnc.conf
 [program:vnc]
 directory=/opt/tripbot
 command=script/x11/start-vnc.sh
-priority=100
 auto_start=true
 autorestart=true
 stdout_logfile=syslog
@@ -31,6 +30,7 @@ auto_start=true
 autorestart=true
 stdout_logfile=syslog
 stderr_logfile=syslog
+startsecs=2
 EOF
 
 cat << EOF > /etc/supervisor/conf.d/obs.conf
@@ -41,6 +41,7 @@ auto_start=true
 autorestart=true
 stdout_logfile=syslog
 stderr_logfile=syslog
+startsecs=2
 EOF
 
 supervisord --nodaemon -c /etc/supervisor/supervisord.conf
