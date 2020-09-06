@@ -10,7 +10,8 @@ FROM adanalife/ffmpeg
 RUN export DEBIAN_FRONTEND=noninteractive \
   && unset LD_LIBRARY_PATH \
   && apt-get update \
-  && apt-get install -y \
+  && apt-get install -y --no-install-suggests \
+    ack-grep \
     build-essential \
     checkinstall \
     cmake \
@@ -82,7 +83,7 @@ RUN export DEBIAN_FRONTEND=noninteractive \
 
 # install tesseract
 RUN apt-get update \
-  && apt-get install --no-install-recommends -y \
+  && apt-get install --no-install-suggests -y \
     libtesseract-dev \
     tesseract-ocr \
   && rm -rf /var/lib/apt/lists/*
@@ -115,8 +116,18 @@ RUN cd /tmp \
 # add menu entries for fluxbox
 RUN echo "?package(bash):needs=\"X11\" section=\"ADanaLife\" title=\"OBS Screencast\" command=\"obs\"" >> /usr/share/menu/danalol \
   && echo "?package(bash):needs=\"X11\" section=\"ADanaLife\" title=\"vlc-server\" command=\"cd /opt/tripbot && FONTCONFIG_PATH=/etc/fonts bin/vlc-server\"" >> /usr/share/menu/danalol \
+  && echo "?package(bash):needs=\"X11\" section=\"ADanaLife\" title=\"vlc stop\" command=\"supervisorctl stop vlc\"" >> /usr/share/menu/danalol \
+  && echo "?package(bash):needs=\"X11\" section=\"ADanaLife\" title=\"vlc start\" command=\"supervisorctl start vlc\"" >> /usr/share/menu/danalol \
+  && echo "?package(bash):needs=\"X11\" section=\"ADanaLife\" title=\"obs stop\" command=\"supervisorctl stop obs\"" >> /usr/share/menu/danalol \
+  && echo "?package(bash):needs=\"X11\" section=\"ADanaLife\" title=\"obs start\" command=\"supervisorctl start obs\"" >> /usr/share/menu/danalol \
   && echo "?package(bash):needs=\"X11\" section=\"ADanaLife\" title=\"Xterm\" command=\"xterm -ls -bg black -fg white\"" >> /usr/share/menu/danalol \
   && update-menus
+
+# add helpful bash tricks
+RUN echo '"\e[A":history-search-backward' >> /root/.inputrc \
+  && echo '"\e[B":history-search-forward' >> /root/.inputrc \
+  && echo "supervisorctl status" >> /root/.bash_history \
+  && echo "vim /var/log/syslog" >> /root/.bash_history
 
 # copy over project
 #TODO: maybe just copy pkg, cmd, internal, etc?
