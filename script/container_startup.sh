@@ -33,15 +33,15 @@ stderr_logfile=syslog
 startsecs=2
 EOF
 
-cat << EOF > /etc/supervisor/conf.d/obs.conf
-[program:obs]
-directory=/opt/tripbot
-command=script/x11/start-obs.sh
-auto_start=true
-autorestart=true
-stdout_logfile=syslog
-stderr_logfile=syslog
-startsecs=2
-EOF
+# cat << EOF > /etc/supervisor/conf.d/obs.conf
+# [program:obs]
+# directory=/opt/tripbot
+# command=script/x11/start-obs.sh
+# auto_start=true
+# autorestart=true
+# stdout_logfile=syslog
+# stderr_logfile=syslog
+# startsecs=2
+# EOF
 
 supervisord --nodaemon -c /etc/supervisor/supervisord.conf

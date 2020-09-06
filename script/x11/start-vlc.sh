@@ -11,6 +11,16 @@ if ! xset q &>/dev/null; then
   exit 1
 fi
 
+cleanup() {
+  echo "Passing SIGTERM to vlc-server"
+  kill -TERM "$vlc_pid" 2>/dev/null
+}
+
+trap cleanup SIGTERM
+
+# sleep 5
+# export DISPLAY=":0.0"
+
 # hack VLC so we can run it as root
 # c.p. https://unix.stackexchange.com/a/199422/202812
 sed -i 's/geteuid/getppid/' /usr/bin/vlc
@@ -28,4 +38,7 @@ if [[ ! -x "bin/vlc-server" ]]; then
 fi
 
 # start vlc-server
-bin/vlc-server
+bin/vlc-server &
+
+vlc_pid=$!
+wait "$vlc_pid"

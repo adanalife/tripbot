@@ -29,9 +29,8 @@ services:
     build:
       context: .
       dockerfile: infra/docker/obs/Dockerfile
-    depends_on:
-      - db
-      # - mpd
+    # depends_on:
+    #   - mpd
     ports:
       # this should match the VLC_SERVER_HOST env var
       - "8080"
