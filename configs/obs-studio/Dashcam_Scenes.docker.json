@@ -39,159 +39,6 @@
       "deinterlace_mode": 0,
       "enabled": true,
       "flags": 0,
-      "hotkeys": {},
-      "id": "group",
-      "mixers": 0,
-      "monitoring_type": 0,
-      "muted": false,
-      "name": "MIDDLE",
-      "prev_ver": 419430408,
-      "private_settings": {},
-      "push-to-mute": false,
-      "push-to-mute-delay": 0,
-      "push-to-talk": false,
-      "push-to-talk-delay": 0,
-      "settings": {
-        "custom_size": true,
-        "cx": 0,
-        "cy": 0,
-        "id_counter": 0,
-        "items": []
-      },
-      "sync": 0,
-      "versioned_id": "group",
-      "volume": 1
-    },
-    {
-      "balance": 0.5,
-      "deinterlace_field_order": 0,
-      "deinterlace_mode": 0,
-      "enabled": true,
-      "flags": 0,
-      "hotkeys": {
-        "libobs.hide_scene_item.Chat Onscreen": [],
-        "libobs.hide_scene_item.left overlay": [],
-        "libobs.hide_scene_item.left rotating": [],
-        "libobs.show_scene_item.Chat Onscreen": [],
-        "libobs.show_scene_item.left overlay": [],
-        "libobs.show_scene_item.left rotating": []
-      },
-      "id": "group",
-      "mixers": 0,
-      "monitoring_type": 0,
-      "muted": false,
-      "name": "LEFT CORNER",
-      "prev_ver": 419430408,
-      "private_settings": {},
-      "push-to-mute": false,
-      "push-to-mute-delay": 0,
-      "push-to-talk": false,
-      "push-to-talk-delay": 0,
-      "settings": {
-        "custom_size": true,
-        "cx": 1920,
-        "cy": 1080,
-        "id_counter": 0,
-        "items": [
-          {
-            "align": 5,
-            "bounds": {
-              "x": 0,
-              "y": 0
-            },
-            "bounds_align": 0,
-            "bounds_type": 0,
-            "crop_bottom": 0,
-            "crop_left": 0,
-            "crop_right": 0,
-            "crop_top": 0,
-            "group_item_backup": false,
-            "id": 24,
-            "locked": true,
-            "name": "left overlay",
-            "pos": {
-              "x": 0,
-              "y": 0
-            },
-            "private_settings": {},
-            "rot": 0,
-            "scale": {
-              "x": 1,
-              "y": 1
-            },
-            "scale_filter": "disable",
-            "visible": true
-          },
-          {
-            "align": 5,
-            "bounds": {
-              "x": 417,
-              "y": 27
-            },
-            "bounds_align": 4,
-            "bounds_type": 6,
-            "crop_bottom": 0,
-            "crop_left": 0,
-            "crop_right": 0,
-            "crop_top": 0,
-            "group_item_backup": false,
-            "id": 29,
-            "locked": true,
-            "name": "left rotating",
-            "pos": {
-              "x": 63,
-              "y": 1043
-            },
-            "private_settings": {},
-            "rot": 0,
-            "scale": {
-              "x": 1,
-              "y": 1
-            },
-            "scale_filter": "disable",
-            "visible": true
-          },
-          {
-            "align": 5,
-            "bounds": {
-              "x": 472,
-              "y": 208
-            },
-            "bounds_align": 10,
-            "bounds_type": 4,
-            "crop_bottom": 0,
-            "crop_left": 0,
-            "crop_right": 0,
-            "crop_top": 0,
-            "group_item_backup": false,
-            "id": 54,
-            "locked": true,
-            "name": "Chat Onscreen",
-            "pos": {
-              "x": 5,
-              "y": 820
-            },
-            "private_settings": {},
-            "rot": 0,
-            "scale": {
-              "x": 3.0862069129943848,
-              "y": 3.0853657722473145
-            },
-            "scale_filter": "disable",
-            "visible": false
-          }
-        ]
-      },
-      "sync": 0,
-      "versioned_id": "group",
-      "volume": 1
-    },
-    {
-      "balance": 0.5,
-      "deinterlace_field_order": 0,
-      "deinterlace_mode": 0,
-      "enabled": true,
-      "flags": 0,
       "hotkeys": {
         "libobs.hide_scene_item.GPS": [],
         "libobs.hide_scene_item.leaderboard": [],
@@ -348,18 +195,16 @@
       "enabled": true,
       "flags": 0,
       "hotkeys": {
-        "libobs.hide_scene_item.STAGING test stream msg": [],
-        "libobs.hide_scene_item.Twitch Chat": [],
-        "libobs.hide_scene_item.VLC Video Source": [],
-        "libobs.show_scene_item.STAGING test stream msg": [],
-        "libobs.show_scene_item.Twitch Chat": [],
-        "libobs.show_scene_item.VLC Video Source": []
+        "libobs.hide_scene_item.left overlay": [],
+        "libobs.hide_scene_item.left rotating": [],
+        "libobs.show_scene_item.left overlay": [],
+        "libobs.show_scene_item.left rotating": []
       },
       "id": "group",
       "mixers": 0,
       "monitoring_type": 0,
       "muted": false,
-      "name": "OLD STUFF",
+      "name": "LEFT CORNER",
       "prev_ver": 419430408,
       "private_settings": {},
       "push-to-mute": false,
@@ -368,42 +213,98 @@
       "push-to-talk-delay": 0,
       "settings": {
         "custom_size": true,
-        "cx": 1997,
+        "cx": 1920,
         "cy": 1080,
         "id_counter": 0,
         "items": [
           {
             "align": 5,
             "bounds": {
-              "x": 1920,
-              "y": 1080
+              "x": 0,
+              "y": 0
             },
             "bounds_align": 0,
-            "bounds_type": 2,
+            "bounds_type": 0,
             "crop_bottom": 0,
             "crop_left": 0,
             "crop_right": 0,
             "crop_top": 0,
             "group_item_backup": false,
-            "id": 2,
+            "id": 24,
             "locked": true,
-            "name": "VLC Video Source",
+            "name": "left overlay",
             "pos": {
-              "x": 77,
+              "x": 0,
               "y": 0
             },
-            "private_settings": {
-              "color": "",
-              "color-preset": 0
-            },
+            "private_settings": {},
             "rot": 0,
             "scale": {
               "x": 1,
               "y": 1
             },
             "scale_filter": "disable",
-            "visible": false
+            "visible": true
           },
+          {
+            "align": 5,
+            "bounds": {
+              "x": 417,
+              "y": 27
+            },
+            "bounds_align": 4,
+            "bounds_type": 6,
+            "crop_bottom": 0,
+            "crop_left": 0,
+            "crop_right": 0,
+            "crop_top": 0,
+            "group_item_backup": false,
+            "id": 29,
+            "locked": true,
+            "name": "left rotating",
+            "pos": {
+              "x": 63,
+              "y": 1043
+            },
+            "private_settings": {},
+            "rot": 0,
+            "scale": {
+              "x": 1,
+              "y": 1
+            },
+            "scale_filter": "disable",
+            "visible": true
+          }
+        ]
+      },
+      "sync": 0,
+      "versioned_id": "group",
+      "volume": 1
+    },
+    {
+      "balance": 0.5,
+      "deinterlace_field_order": 0,
+      "deinterlace_mode": 0,
+      "enabled": true,
+      "flags": 0,
+      "hotkeys": {},
+      "id": "group",
+      "mixers": 0,
+      "monitoring_type": 0,
+      "muted": false,
+      "name": "MIDDLE",
+      "prev_ver": 419430408,
+      "private_settings": {},
+      "push-to-mute": false,
+      "push-to-mute-delay": 0,
+      "push-to-talk": false,
+      "push-to-talk-delay": 0,
+      "settings": {
+        "custom_size": true,
+        "cx": 23,
+        "cy": 67,
+        "id_counter": 0,
+        "items": [
           {
             "align": 5,
             "bounds": {
@@ -417,50 +318,21 @@
             "crop_right": 0,
             "crop_top": 0,
             "group_item_backup": false,
-            "id": 44,
+            "id": 59,
             "locked": true,
-            "name": "Twitch Chat",
+            "name": "Middle Text Onscreen - Center",
             "pos": {
-              "x": 0,
-              "y": 803
-            },
-            "private_settings": {},
-            "rot": 0,
-            "scale": {
-              "x": 0.7462499737739563,
-              "y": 0.746666669845581
-            },
-            "scale_filter": "disable",
-            "visible": false
-          },
-          {
-            "align": 5,
-            "bounds": {
               "x": 0,
               "y": 0
             },
-            "bounds_align": 0,
-            "bounds_type": 0,
-            "crop_bottom": 0,
-            "crop_left": 0,
-            "crop_right": 0,
-            "crop_top": 0,
-            "group_item_backup": false,
-            "id": 12,
-            "locked": true,
-            "name": "STAGING test stream msg",
-            "pos": {
-              "x": 518.9999389648438,
-              "y": 119.83309936523438
-            },
             "private_settings": {},
             "rot": 0,
             "scale": {
-              "x": 1.1205143928527832,
-              "y": 1.1207903623580933
+              "x": 3.721951723098755,
+              "y": 3.721590995788574
             },
             "scale_filter": "disable",
-            "visible": false
+            "visible": true
           }
         ]
       },
@@ -518,9 +390,6 @@
       "name": "Main Scene"
     },
     {
-      "name": "Live Coding"
-    },
-    {
       "name": "Very Basic"
     }
   ],
@@ -531,397 +400,18 @@
       "deinterlace_mode": 0,
       "enabled": true,
       "flags": 0,
-      "hotkeys": {},
-      "id": "text_ft2_source",
-      "mixers": 0,
-      "monitoring_type": 0,
-      "muted": false,
-      "name": "Broken video warning",
-      "prev_ver": 419430408,
-      "private_settings": {},
-      "push-to-mute": false,
-      "push-to-mute-delay": 0,
-      "push-to-talk": false,
-      "push-to-talk-delay": 0,
-      "settings": {
-        "drop_shadow": true,
-        "font": {
-          "face": "Sans Serif",
-          "flags": 0,
-          "size": 32,
-          "style": ""
-        },
-        "outline": false,
-        "text": "If you can see this, the stream is broken in some way.\n\nPlease use !report ASAP and Dana will come fix it!"
-      },
-      "sync": 0,
-      "versioned_id": "text_ft2_source",
-      "volume": 1
-    },
-    {
-      "balance": 0.5,
-      "deinterlace_field_order": 0,
-      "deinterlace_mode": 0,
-      "enabled": true,
-      "flags": 0,
-      "hotkeys": {},
-      "id": "image_source",
-      "mixers": 0,
-      "monitoring_type": 0,
-      "muted": false,
-      "name": "Flag Onscreen - Right Middle",
-      "prev_ver": 419430408,
-      "private_settings": {},
-      "push-to-mute": false,
-      "push-to-mute-delay": 0,
-      "push-to-talk": false,
-      "push-to-talk-delay": 0,
-      "settings": {
-        "file": "/opt/data/run/flag.png-live",
-        "unload": true
-      },
-      "sync": 0,
-      "versioned_id": "image_source",
-      "volume": 1
-    },
-    {
-      "balance": 0.5,
-      "deinterlace_field_order": 0,
-      "deinterlace_mode": 0,
-      "enabled": true,
-      "flags": 0,
-      "hotkeys": {},
-      "id": "text_ft2_source",
-      "mixers": 0,
-      "monitoring_type": 0,
-      "muted": false,
-      "name": "Timewarp Onscreen - Center",
-      "prev_ver": 419430408,
-      "private_settings": {},
-      "push-to-mute": false,
-      "push-to-mute-delay": 0,
-      "push-to-talk": false,
-      "push-to-talk-delay": 0,
-      "settings": {
-        "color1": 4294967295,
-        "color2": 4288059030,
-        "drop_shadow": true,
-        "font": {
-          "face": "Sans Serif",
-          "flags": 0,
-          "size": 72,
-          "style": ""
-        },
-        "from_file": true,
-        "outline": false,
-        "text": "",
-        "text_file": "/opt/data/run/timewarp.txt"
-      },
-      "sync": 0,
-      "versioned_id": "text_ft2_source",
-      "volume": 1
-    },
-    {
-      "balance": 0.5,
-      "deinterlace_field_order": 0,
-      "deinterlace_mode": 0,
-      "enabled": true,
-      "flags": 0,
-      "hotkeys": {},
-      "id": "text_ft2_source",
-      "mixers": 0,
-      "monitoring_type": 0,
-      "muted": false,
-      "name": "Middle Text Onscreen - Center",
-      "prev_ver": 419430408,
-      "private_settings": {},
-      "push-to-mute": false,
-      "push-to-mute-delay": 0,
-      "push-to-talk": false,
-      "push-to-talk-delay": 0,
-      "settings": {
-        "color1": 4294967295,
-        "color2": 4288059030,
-        "drop_shadow": false,
-        "font": {
-          "face": "Trebuchet MS",
-          "flags": 0,
-          "size": 18,
-          "style": "Regular"
-        },
-        "from_file": true,
-        "outline": false,
-        "text": "",
-        "text_file": "/opt/data/run/middle-text.txt"
-      },
-      "sync": 0,
-      "versioned_id": "text_ft2_source",
-      "volume": 1
-    },
-    {
-      "balance": 0.5,
-      "deinterlace_field_order": 0,
-      "deinterlace_mode": 0,
-      "enabled": true,
-      "flags": 0,
-      "hotkeys": {},
-      "id": "text_ft2_source",
-      "mixers": 0,
-      "monitoring_type": 0,
-      "muted": false,
-      "name": "Middle Text Onscreen - Right Corner",
-      "prev_ver": 419430408,
-      "private_settings": {},
-      "push-to-mute": false,
-      "push-to-mute-delay": 0,
-      "push-to-talk": false,
-      "push-to-talk-delay": 0,
-      "settings": {
-        "color1": 4294967295,
-        "color2": 4288059030,
-        "drop_shadow": false,
-        "font": {
-          "face": "Trebuchet MS",
-          "flags": 0,
-          "size": 18,
-          "style": "Regular"
-        },
-        "from_file": true,
-        "outline": false,
-        "text": "",
-        "text_file": "/opt/data/run/middle-text.txt"
-      },
-      "sync": 0,
-      "versioned_id": "text_ft2_source",
-      "volume": 1
-    },
-    {
-      "balance": 0.5,
-      "deinterlace_field_order": 0,
-      "deinterlace_mode": 0,
-      "enabled": true,
-      "flags": 0,
-      "hotkeys": {},
-      "id": "text_ft2_source",
-      "mixers": 0,
-      "monitoring_type": 0,
-      "muted": false,
-      "name": "Timewarp Onscreen - Right Corner",
-      "prev_ver": 419430408,
-      "private_settings": {},
-      "push-to-mute": false,
-      "push-to-mute-delay": 0,
-      "push-to-talk": false,
-      "push-to-talk-delay": 0,
-      "settings": {
-        "color1": 4294967295,
-        "color2": 4288059030,
-        "drop_shadow": true,
-        "font": {
-          "face": "Sans Serif",
-          "flags": 0,
-          "size": 72,
-          "style": ""
-        },
-        "from_file": true,
-        "outline": false,
-        "text": "",
-        "text_file": "/opt/data/run/timewarp.txt"
-      },
-      "sync": 0,
-      "versioned_id": "text_ft2_source",
-      "volume": 1
-    },
-    {
-      "balance": 0.5,
-      "deinterlace_field_order": 0,
-      "deinterlace_mode": 0,
-      "enabled": true,
-      "filters": [
-        {
-          "balance": 0.5,
-          "deinterlace_field_order": 0,
-          "deinterlace_mode": 0,
-          "enabled": true,
-          "flags": 0,
-          "hotkeys": {},
-          "id": "crop_filter",
-          "mixers": 0,
-          "monitoring_type": 0,
-          "muted": false,
-          "name": "Crop/Pad",
-          "prev_ver": 419430408,
-          "private_settings": {},
-          "push-to-mute": false,
-          "push-to-mute-delay": 0,
-          "push-to-talk": false,
-          "push-to-talk-delay": 0,
-          "settings": {
-            "left": -5,
-            "right": -5
-          },
-          "sync": 0,
-          "versioned_id": "crop_filter",
-          "volume": 1
-        }
-      ],
-      "flags": 0,
-      "hotkeys": {},
-      "id": "text_ft2_source",
-      "mixers": 0,
-      "monitoring_type": 0,
-      "muted": false,
-      "name": "Chat Onscreen",
-      "prev_ver": 419430408,
-      "private_settings": {},
-      "push-to-mute": false,
-      "push-to-mute-delay": 0,
-      "push-to-talk": false,
-      "push-to-talk-delay": 0,
-      "settings": {
-        "color1": 4294967295,
-        "color2": 4288059030,
-        "custom_width": 40,
-        "drop_shadow": false,
-        "font": {
-          "face": "Sans Serif",
-          "flags": 0,
-          "size": 10,
-          "style": ""
-        },
-        "from_file": true,
-        "log_mode": false,
-        "outline": false,
-        "text": "",
-        "text_file": "/opt/data/run/chat.txt",
-        "word_wrap": false
-      },
-      "sync": 0,
-      "versioned_id": "text_ft2_source",
-      "volume": 1
-    },
-    {
-      "balance": 0.5,
-      "deinterlace_field_order": 0,
-      "deinterlace_mode": 0,
-      "enabled": true,
-      "flags": 0,
-      "hotkeys": {},
-      "id": "xcomposite_input",
-      "mixers": 0,
-      "monitoring_type": 0,
-      "muted": false,
-      "name": "Window Capture - Terminal",
-      "prev_ver": 419430408,
-      "private_settings": {},
-      "push-to-mute": false,
-      "push-to-mute-delay": 0,
-      "push-to-talk": false,
-      "push-to-talk-delay": 0,
-      "settings": {
-        "capture_window": "100663306\r\ndmerrick@dmerrick-stream  tmuxinator s stream\r\ngnome-terminal-server",
-        "cut_right": 0,
-        "cut_top": 0,
-        "swap_redblue": false
-      },
-      "sync": 0,
-      "versioned_id": "xcomposite_input",
-      "volume": 1
-    },
-    {
-      "balance": 0.5,
-      "deinterlace_field_order": 0,
-      "deinterlace_mode": 0,
-      "enabled": true,
-      "flags": 0,
-      "hotkeys": {},
-      "id": "xcomposite_input",
-      "mixers": 0,
-      "monitoring_type": 0,
-      "muted": false,
-      "name": "Window Capture - VLC",
-      "prev_ver": 419430408,
-      "private_settings": {},
-      "push-to-mute": false,
-      "push-to-mute-delay": 0,
-      "push-to-talk": false,
-      "push-to-talk-delay": 0,
-      "settings": {
-        "capture_window": "67108864\r\nVLC media player\r\nvlc",
-        "show_cursor": false,
-        "swap_redblue": false
-      },
-      "sync": 0,
-      "versioned_id": "xcomposite_input",
-      "volume": 1
-    },
-    {
-      "balance": 0.5,
-      "deinterlace_field_order": 0,
-      "deinterlace_mode": 0,
-      "enabled": true,
-      "flags": 0,
-      "hotkeys": {},
-      "id": "xshm_input",
-      "mixers": 0,
-      "monitoring_type": 0,
-      "muted": false,
-      "name": "Screen Capture - Left Monitor",
-      "prev_ver": 419430408,
-      "private_settings": {},
-      "push-to-mute": false,
-      "push-to-mute-delay": 0,
-      "push-to-talk": false,
-      "push-to-talk-delay": 0,
-      "settings": {
-        "advanced": false,
-        "show_cursor": false
-      },
-      "sync": 0,
-      "versioned_id": "xshm_input",
-      "volume": 1
-    },
-    {
-      "balance": 0.5,
-      "deinterlace_field_order": 0,
-      "deinterlace_mode": 0,
-      "enabled": true,
-      "flags": 0,
-      "hotkeys": {},
-      "id": "image_source",
-      "mixers": 0,
-      "monitoring_type": 0,
-      "muted": false,
-      "name": "Image",
-      "prev_ver": 419430408,
-      "private_settings": {},
-      "push-to-mute": false,
-      "push-to-mute-delay": 0,
-      "push-to-talk": false,
-      "push-to-talk-delay": 0,
-      "settings": {
-        "file": "/opt/tripbot/assets/stream-screencap.jpg"
-      },
-      "sync": 0,
-      "versioned_id": "image_source",
-      "volume": 1
-    },
-    {
-      "balance": 0.5,
-      "deinterlace_field_order": 0,
-      "deinterlace_mode": 0,
-      "enabled": true,
-      "flags": 0,
       "hotkeys": {
-        "OBSBasic.SelectScene": [],
-        "libobs.hide_scene_item.Image": [],
-        "libobs.show_scene_item.Image": []
+        "SlideShow.NextSlide": [],
+        "SlideShow.PlayPause": [],
+        "SlideShow.PreviousSlide": [],
+        "SlideShow.Restart": [],
+        "SlideShow.Stop": []
       },
-      "id": "scene",
+      "id": "slideshow",
       "mixers": 0,
       "monitoring_type": 0,
       "muted": false,
-      "name": "Very Basic",
+      "name": "Background Slideshow",
       "prev_ver": 419430408,
       "private_settings": {},
       "push-to-mute": false,
@@ -929,144 +419,21 @@
       "push-to-talk": false,
       "push-to-talk-delay": 0,
       "settings": {
-        "custom_size": false,
-        "id_counter": 1,
-        "items": [
+        "files": [
           {
-            "align": 5,
-            "bounds": {
-              "x": 1920,
-              "y": 1080
-            },
-            "bounds_align": 0,
-            "bounds_type": 1,
-            "crop_bottom": 0,
-            "crop_left": 0,
-            "crop_right": 0,
-            "crop_top": 0,
-            "group_item_backup": false,
-            "id": 1,
-            "locked": false,
-            "name": "Image",
-            "pos": {
-              "x": 0,
-              "y": 0
-            },
-            "private_settings": {},
-            "rot": 0,
-            "scale": {
-              "x": 1,
-              "y": 1
-            },
-            "scale_filter": "disable",
-            "visible": true
+            "hidden": false,
+            "selected": false,
+            "value": "/opt/data/screencaps/100"
           }
-        ]
+        ],
+        "playback_behavior": "stop_restart",
+        "randomize": true,
+        "slide_time": 8000,
+        "transition": "swipe",
+        "transition_speed": 900
       },
       "sync": 0,
-      "versioned_id": "scene",
-      "volume": 1
-    },
-    {
-      "balance": 0.5,
-      "deinterlace_field_order": 0,
-      "deinterlace_mode": 0,
-      "enabled": true,
-      "flags": 0,
-      "hotkeys": {
-        "linuxbrowser.reloadpage": []
-      },
-      "id": "linuxbrowser-source",
-      "mixers": 0,
-      "monitoring_type": 0,
-      "muted": false,
-      "name": "Twitch Chat",
-      "prev_ver": 419430408,
-      "private_settings": {},
-      "push-to-mute": false,
-      "push-to-mute-delay": 0,
-      "push-to-talk": false,
-      "push-to-talk-delay": 0,
-      "settings": {
-        "height": 300,
-        "url": "https://streamlabs.com/widgets/chat-box/v1/05E1185A353317C6B6A1",
-        "width": 900
-      },
-      "sync": 0,
-      "versioned_id": "linuxbrowser-source",
-      "volume": 1
-    },
-    {
-      "balance": 0.5,
-      "deinterlace_field_order": 0,
-      "deinterlace_mode": 0,
-      "enabled": true,
-      "flags": 0,
-      "hotkeys": {},
-      "id": "text_ft2_source",
-      "mixers": 0,
-      "monitoring_type": 0,
-      "muted": false,
-      "name": "left rotating",
-      "prev_ver": 419430408,
-      "private_settings": {},
-      "push-to-mute": false,
-      "push-to-mute-delay": 0,
-      "push-to-talk": false,
-      "push-to-talk-delay": 0,
-      "settings": {
-        "color1": 4294967295,
-        "color2": 4288059030,
-        "font": {
-          "face": "Trebuchet MS",
-          "flags": 0,
-          "size": 28,
-          "style": "Regular"
-        },
-        "from_file": true,
-        "outline": false,
-        "text": "",
-        "text_file": "/opt/data/run/left-message.txt"
-      },
-      "sync": 0,
-      "versioned_id": "text_ft2_source",
-      "volume": 1
-    },
-    {
-      "balance": 0.5,
-      "deinterlace_field_order": 0,
-      "deinterlace_mode": 0,
-      "enabled": true,
-      "flags": 0,
-      "hotkeys": {},
-      "id": "text_ft2_source",
-      "mixers": 0,
-      "monitoring_type": 0,
-      "muted": false,
-      "name": "leaderboard",
-      "prev_ver": 419430408,
-      "private_settings": {},
-      "push-to-mute": false,
-      "push-to-mute-delay": 0,
-      "push-to-talk": false,
-      "push-to-talk-delay": 0,
-      "settings": {
-        "color1": 4294967295,
-        "color2": 4288059030,
-        "drop_shadow": false,
-        "font": {
-          "face": "Trebuchet MS",
-          "flags": 0,
-          "size": 18,
-          "style": "Regular"
-        },
-        "from_file": true,
-        "outline": false,
-        "text": "",
-        "text_file": "/opt/data/run/leaderboard.txt"
-      },
-      "sync": 0,
-      "versioned_id": "text_ft2_source",
+      "versioned_id": "slideshow",
       "volume": 1
     },
     {
@@ -1080,7 +447,7 @@
       "mixers": 0,
       "monitoring_type": 0,
       "muted": false,
-      "name": "right overlay",
+      "name": "GPS",
       "prev_ver": 419430408,
       "private_settings": {},
       "push-to-mute": false,
@@ -1088,108 +455,12 @@
       "push-to-talk": false,
       "push-to-talk-delay": 0,
       "settings": {
-        "file": "/opt/tripbot/assets/twitch-overlay-right.png"
+        "file": "/opt/data/run/GPS.png-live",
+        "unload": false
       },
       "sync": 0,
       "versioned_id": "image_source",
       "volume": 1
-    },
-    {
-      "balance": 0.5,
-      "deinterlace_field_order": 0,
-      "deinterlace_mode": 0,
-      "enabled": true,
-      "flags": 0,
-      "hotkeys": {},
-      "id": "image_source",
-      "mixers": 0,
-      "monitoring_type": 0,
-      "muted": false,
-      "name": "left overlay",
-      "prev_ver": 419430408,
-      "private_settings": {},
-      "push-to-mute": false,
-      "push-to-mute-delay": 0,
-      "push-to-talk": false,
-      "push-to-talk-delay": 0,
-      "settings": {
-        "file": "/opt/tripbot/assets/twitch-overlay-left.png"
-      },
-      "sync": 0,
-      "versioned_id": "image_source",
-      "volume": 1
-    },
-    {
-      "balance": 0.5,
-      "deinterlace_field_order": 0,
-      "deinterlace_mode": 0,
-      "enabled": true,
-      "flags": 0,
-      "hotkeys": {},
-      "id": "text_ft2_source",
-      "mixers": 0,
-      "monitoring_type": 0,
-      "muted": false,
-      "name": "right rotating",
-      "prev_ver": 419430408,
-      "private_settings": {},
-      "push-to-mute": false,
-      "push-to-mute-delay": 0,
-      "push-to-talk": false,
-      "push-to-talk-delay": 0,
-      "settings": {
-        "color1": 4294967295,
-        "color2": 4288059030,
-        "custom_width": 10,
-        "drop_shadow": false,
-        "font": {
-          "face": "Trebuchet MS",
-          "flags": 0,
-          "size": 28,
-          "style": "Regular"
-        },
-        "from_file": true,
-        "outline": false,
-        "text": "Don't forget to follow :)",
-        "text_file": "/opt/data/run/right-message.txt",
-        "word_wrap": true
-      },
-      "sync": 0,
-      "versioned_id": "text_ft2_source",
-      "volume": 1
-    },
-    {
-      "balance": 0.5,
-      "deinterlace_field_order": 0,
-      "deinterlace_mode": 0,
-      "enabled": true,
-      "flags": 0,
-      "hotkeys": {
-        "VLCSource.PlayPause": [],
-        "VLCSource.PlaylistNext": [],
-        "VLCSource.PlaylistPrev": [],
-        "VLCSource.Restart": [],
-        "VLCSource.Stop": [],
-        "libobs.mute": [],
-        "libobs.push-to-mute": [],
-        "libobs.push-to-talk": [],
-        "libobs.unmute": []
-      },
-      "id": "vlc_source",
-      "mixers": 0,
-      "monitoring_type": 0,
-      "muted": true,
-      "name": "VLC Video Source",
-      "prev_ver": 419430408,
-      "private_settings": {},
-      "push-to-mute": false,
-      "push-to-mute-delay": 0,
-      "push-to-talk": false,
-      "push-to-talk-delay": 0,
-      "settings": {},
-      "sync": 0,
-      "versioned_id": "vlc_source",
-      "volume": 0
     },
     {
       "balance": 0.5,
@@ -1199,33 +470,23 @@
       "flags": 0,
       "hotkeys": {
         "OBSBasic.SelectScene": [],
-        "libobs.hide_scene_item.Audio Input Capture (PulseAudio)": [],
-        "libobs.hide_scene_item.Audio Output Capture (PulseAudio)": [],
         "libobs.hide_scene_item.Background Slideshow": [],
         "libobs.hide_scene_item.Broken video warning": [],
         "libobs.hide_scene_item.Flag Onscreen - Right Middle": [],
         "libobs.hide_scene_item.LEFT CORNER": [],
         "libobs.hide_scene_item.MIDDLE": [],
         "libobs.hide_scene_item.Middle Text Onscreen - Center": [],
-        "libobs.hide_scene_item.OLD STUFF": [],
         "libobs.hide_scene_item.RIGHT CORNER": [],
-        "libobs.hide_scene_item.Screen Capture - Left Monitor": [],
         "libobs.hide_scene_item.Timewarp Onscreen - Center": [],
-        "libobs.hide_scene_item.Window Capture - Terminal": [],
         "libobs.hide_scene_item.Window Capture - VLC": [],
-        "libobs.show_scene_item.Audio Input Capture (PulseAudio)": [],
-        "libobs.show_scene_item.Audio Output Capture (PulseAudio)": [],
         "libobs.show_scene_item.Background Slideshow": [],
         "libobs.show_scene_item.Broken video warning": [],
         "libobs.show_scene_item.Flag Onscreen - Right Middle": [],
         "libobs.show_scene_item.LEFT CORNER": [],
         "libobs.show_scene_item.MIDDLE": [],
         "libobs.show_scene_item.Middle Text Onscreen - Center": [],
-        "libobs.show_scene_item.OLD STUFF": [],
         "libobs.show_scene_item.RIGHT CORNER": [],
-        "libobs.show_scene_item.Screen Capture - Left Monitor": [],
         "libobs.show_scene_item.Timewarp Onscreen - Center": [],
-        "libobs.show_scene_item.Window Capture - Terminal": [],
         "libobs.show_scene_item.Window Capture - VLC": []
       },
       "id": "scene",
@@ -1322,214 +583,6 @@
               "y": 0
             },
             "private_settings": {},
-            "rot": 0,
-            "scale": {
-              "x": 1,
-              "y": 1
-            },
-            "scale_filter": "disable",
-            "visible": true
-          },
-          {
-            "align": 5,
-            "bounds": {
-              "x": 0,
-              "y": 0
-            },
-            "bounds_align": 0,
-            "bounds_type": 0,
-            "crop_bottom": 0,
-            "crop_left": 0,
-            "crop_right": 0,
-            "crop_top": 0,
-            "group_item_backup": false,
-            "id": 48,
-            "locked": true,
-            "name": "Screen Capture - Left Monitor",
-            "pos": {
-              "x": -102,
-              "y": 43
-            },
-            "private_settings": {},
-            "rot": 0,
-            "scale": {
-              "x": 0.7132812738418579,
-              "y": 0.7131944298744202
-            },
-            "scale_filter": "disable",
-            "visible": false
-          },
-          {
-            "align": 5,
-            "bounds": {
-              "x": 0,
-              "y": 0
-            },
-            "bounds_align": 0,
-            "bounds_type": 0,
-            "crop_bottom": 0,
-            "crop_left": 0,
-            "crop_right": 0,
-            "crop_top": 0,
-            "group_item_backup": false,
-            "id": 53,
-            "locked": false,
-            "name": "Audio Input Capture (PulseAudio)",
-            "pos": {
-              "x": 0,
-              "y": 0
-            },
-            "private_settings": {},
-            "rot": 0,
-            "scale": {
-              "x": 1,
-              "y": 1
-            },
-            "scale_filter": "disable",
-            "visible": true
-          },
-          {
-            "align": 5,
-            "bounds": {
-              "x": 0,
-              "y": 0
-            },
-            "bounds_align": 0,
-            "bounds_type": 0,
-            "crop_bottom": 0,
-            "crop_left": 0,
-            "crop_right": 0,
-            "crop_top": 0,
-            "group_item_backup": false,
-            "id": 45,
-            "locked": true,
-            "name": "Audio Output Capture (PulseAudio)",
-            "pos": {
-              "x": 0,
-              "y": 0
-            },
-            "private_settings": {},
-            "rot": 0,
-            "scale": {
-              "x": 1,
-              "y": 1
-            },
-            "scale_filter": "disable",
-            "visible": true
-          },
-          {
-            "align": 5,
-            "bounds": {
-              "x": 1920,
-              "y": 1080
-            },
-            "bounds_align": 0,
-            "bounds_type": 2,
-            "crop_bottom": 0,
-            "crop_left": 0,
-            "crop_right": 0,
-            "crop_top": 0,
-            "group_item_backup": true,
-            "id": 2,
-            "locked": true,
-            "name": "VLC Video Source",
-            "pos": {
-              "x": 0,
-              "y": 0
-            },
-            "private_settings": {
-              "color": "",
-              "color-preset": 0
-            },
-            "rot": 0,
-            "scale": {
-              "x": 1,
-              "y": 1
-            },
-            "scale_filter": "disable",
-            "visible": false
-          },
-          {
-            "align": 5,
-            "bounds": {
-              "x": 0,
-              "y": 0
-            },
-            "bounds_align": 0,
-            "bounds_type": 0,
-            "crop_bottom": 0,
-            "crop_left": 0,
-            "crop_right": 0,
-            "crop_top": 0,
-            "group_item_backup": true,
-            "id": 44,
-            "locked": true,
-            "name": "Twitch Chat",
-            "pos": {
-              "x": -77,
-              "y": 803
-            },
-            "private_settings": {},
-            "rot": 0,
-            "scale": {
-              "x": 0.7462499737739563,
-              "y": 0.746666669845581
-            },
-            "scale_filter": "disable",
-            "visible": false
-          },
-          {
-            "align": 5,
-            "bounds": {
-              "x": 0,
-              "y": 0
-            },
-            "bounds_align": 0,
-            "bounds_type": 0,
-            "crop_bottom": 0,
-            "crop_left": 0,
-            "crop_right": 0,
-            "crop_top": 0,
-            "group_item_backup": true,
-            "id": 12,
-            "locked": true,
-            "name": "STAGING test stream msg",
-            "pos": {
-              "x": 441.99993896484375,
-              "y": 119.83309936523438
-            },
-            "private_settings": {},
-            "rot": 0,
-            "scale": {
-              "x": 1.1205143928527832,
-              "y": 1.1207903623580933
-            },
-            "scale_filter": "disable",
-            "visible": false
-          },
-          {
-            "align": 5,
-            "bounds": {
-              "x": 0,
-              "y": 0
-            },
-            "bounds_align": 0,
-            "bounds_type": 0,
-            "crop_bottom": 0,
-            "crop_left": 0,
-            "crop_right": 0,
-            "crop_top": 0,
-            "group_item_backup": false,
-            "id": 43,
-            "locked": true,
-            "name": "OLD STUFF",
-            "pos": {
-              "x": -77,
-              "y": 0
-            },
-            "private_settings": {
-              "collapsed": true
-            },
             "rot": 0,
             "scale": {
               "x": 1,
@@ -1746,35 +799,6 @@
           {
             "align": 5,
             "bounds": {
-              "x": 472,
-              "y": 208
-            },
-            "bounds_align": 10,
-            "bounds_type": 4,
-            "crop_bottom": 0,
-            "crop_left": 0,
-            "crop_right": 0,
-            "crop_top": 0,
-            "group_item_backup": true,
-            "id": 54,
-            "locked": true,
-            "name": "Chat Onscreen",
-            "pos": {
-              "x": 5,
-              "y": 820
-            },
-            "private_settings": {},
-            "rot": 0,
-            "scale": {
-              "x": 3.0862069129943848,
-              "y": 3.0853657722473145
-            },
-            "scale_filter": "disable",
-            "visible": false
-          },
-          {
-            "align": 5,
-            "bounds": {
               "x": 1,
               "y": 1
             },
@@ -1815,21 +839,19 @@
             "crop_left": 0,
             "crop_right": 0,
             "crop_top": 0,
-            "group_item_backup": false,
-            "id": 58,
+            "group_item_backup": true,
+            "id": 59,
             "locked": true,
-            "name": "MIDDLE",
+            "name": "Middle Text Onscreen - Center",
             "pos": {
-              "x": 441.99993896484375,
-              "y": 92
+              "x": 750,
+              "y": 1034
             },
-            "private_settings": {
-              "collapsed": true
-            },
+            "private_settings": {},
             "rot": 0,
             "scale": {
-              "x": 0.48842933773994446,
-              "y": 0.4885496199131012
+              "x": 1.8179104328155518,
+              "y": 1.8181818723678589
             },
             "scale_filter": "disable",
             "visible": true
@@ -1847,18 +869,20 @@
             "crop_right": 0,
             "crop_top": 0,
             "group_item_backup": false,
-            "id": 59,
+            "id": 58,
             "locked": true,
-            "name": "Middle Text Onscreen - Center",
+            "name": "MIDDLE",
             "pos": {
               "x": 750,
               "y": 1034
             },
-            "private_settings": {},
+            "private_settings": {
+              "collapsed": true
+            },
             "rot": 0,
             "scale": {
-              "x": 1.8179104328155518,
-              "y": 1.8181818723678589
+              "x": 0.48842933773994446,
+              "y": 0.4885496199131012
             },
             "scale_filter": "disable",
             "visible": true
@@ -1891,35 +915,6 @@
             },
             "scale_filter": "disable",
             "visible": true
-          },
-          {
-            "align": 5,
-            "bounds": {
-              "x": 0,
-              "y": 0
-            },
-            "bounds_align": 0,
-            "bounds_type": 0,
-            "crop_bottom": 0,
-            "crop_left": 0,
-            "crop_right": 0,
-            "crop_top": 0,
-            "group_item_backup": false,
-            "id": 50,
-            "locked": true,
-            "name": "Window Capture - Terminal",
-            "pos": {
-              "x": 1545,
-              "y": 638
-            },
-            "private_settings": {},
-            "rot": 0,
-            "scale": {
-              "x": 0.2874999940395355,
-              "y": 0.2875092327594757
-            },
-            "scale_filter": "disable",
-            "visible": false
           },
           {
             "align": 5,
@@ -1967,7 +962,7 @@
       "mixers": 0,
       "monitoring_type": 0,
       "muted": false,
-      "name": "STAGING test stream msg",
+      "name": "right rotating",
       "prev_ver": 419430408,
       "private_settings": {},
       "push-to-mute": false,
@@ -1975,9 +970,21 @@
       "push-to-talk": false,
       "push-to-talk-delay": 0,
       "settings": {
+        "color1": 4294967295,
+        "color2": 4288059030,
+        "custom_width": 10,
         "drop_shadow": false,
-        "outline": true,
-        "text": "test stream -- follow ADanaLife_"
+        "font": {
+          "face": "Trebuchet MS",
+          "flags": 0,
+          "size": 28,
+          "style": "Regular"
+        },
+        "from_file": true,
+        "outline": false,
+        "text": "Don't forget to follow :)",
+        "text_file": "/opt/data/run/right-message.txt",
+        "word_wrap": true
       },
       "sync": 0,
       "versioned_id": "text_ft2_source",
@@ -1994,7 +1001,7 @@
       "mixers": 0,
       "monitoring_type": 0,
       "muted": false,
-      "name": "GPS",
+      "name": "left overlay",
       "prev_ver": 419430408,
       "private_settings": {},
       "push-to-mute": false,
@@ -2002,8 +1009,7 @@
       "push-to-talk": false,
       "push-to-talk-delay": 0,
       "settings": {
-        "file": "/opt/data/run/GPS.png-live",
-        "unload": false
+        "file": "/opt/tripbot/assets/twitch-overlay-left.png"
       },
       "sync": 0,
       "versioned_id": "image_source",
@@ -2015,78 +1021,12 @@
       "deinterlace_mode": 0,
       "enabled": true,
       "flags": 0,
-      "hotkeys": {
-        "libobs.mute": [],
-        "libobs.push-to-mute": [],
-        "libobs.push-to-talk": [],
-        "libobs.unmute": []
-      },
-      "id": "pulse_output_capture",
-      "mixers": 255,
-      "monitoring_type": 0,
-      "muted": false,
-      "name": "Audio Output Capture (PulseAudio)",
-      "prev_ver": 419430408,
-      "private_settings": {},
-      "push-to-mute": false,
-      "push-to-mute-delay": 0,
-      "push-to-talk": false,
-      "push-to-talk-delay": 0,
-      "settings": {
-        "device_id": "alsa_output.pci-0000_01_00.1.hdmi-stereo.monitor"
-      },
-      "sync": 0,
-      "versioned_id": "pulse_output_capture",
-      "volume": 0.1035391092300415
-    },
-    {
-      "balance": 0.5,
-      "deinterlace_field_order": 0,
-      "deinterlace_mode": 0,
-      "enabled": true,
-      "flags": 0,
-      "hotkeys": {
-        "libobs.mute": [],
-        "libobs.push-to-mute": [],
-        "libobs.push-to-talk": [],
-        "libobs.unmute": []
-      },
-      "id": "pulse_input_capture",
-      "mixers": 255,
-      "monitoring_type": 2,
-      "muted": false,
-      "name": "Audio Input Capture (PulseAudio)",
-      "prev_ver": 419430408,
-      "private_settings": {},
-      "push-to-mute": false,
-      "push-to-mute-delay": 0,
-      "push-to-talk": false,
-      "push-to-talk-delay": 0,
-      "settings": {
-        "device_id": "alsa_input.usb-Razer_Razer_Megalodon-00.mono-fallback"
-      },
-      "sync": 0,
-      "versioned_id": "pulse_input_capture",
-      "volume": 0.3333520293235779
-    },
-    {
-      "balance": 0.5,
-      "deinterlace_field_order": 0,
-      "deinterlace_mode": 0,
-      "enabled": true,
-      "flags": 0,
-      "hotkeys": {
-        "SlideShow.NextSlide": [],
-        "SlideShow.PlayPause": [],
-        "SlideShow.PreviousSlide": [],
-        "SlideShow.Restart": [],
-        "SlideShow.Stop": []
-      },
-      "id": "slideshow",
+      "hotkeys": {},
+      "id": "image_source",
       "mixers": 0,
       "monitoring_type": 0,
       "muted": false,
-      "name": "Background Slideshow",
+      "name": "right overlay",
       "prev_ver": 419430408,
       "private_settings": {},
       "push-to-mute": false,
@@ -2094,21 +1034,83 @@
       "push-to-talk": false,
       "push-to-talk-delay": 0,
       "settings": {
-        "files": [
-          {
-            "hidden": false,
-            "selected": false,
-            "value": "/opt/data/screencaps/100"
-          }
-        ],
-        "playback_behavior": "stop_restart",
-        "randomize": true,
-        "slide_time": 8000,
-        "transition": "swipe",
-        "transition_speed": 900
+        "file": "/opt/tripbot/assets/twitch-overlay-right.png"
       },
       "sync": 0,
-      "versioned_id": "slideshow",
+      "versioned_id": "image_source",
+      "volume": 1
+    },
+    {
+      "balance": 0.5,
+      "deinterlace_field_order": 0,
+      "deinterlace_mode": 0,
+      "enabled": true,
+      "flags": 0,
+      "hotkeys": {},
+      "id": "text_ft2_source",
+      "mixers": 0,
+      "monitoring_type": 0,
+      "muted": false,
+      "name": "leaderboard",
+      "prev_ver": 419430408,
+      "private_settings": {},
+      "push-to-mute": false,
+      "push-to-mute-delay": 0,
+      "push-to-talk": false,
+      "push-to-talk-delay": 0,
+      "settings": {
+        "color1": 4294967295,
+        "color2": 4288059030,
+        "drop_shadow": false,
+        "font": {
+          "face": "Trebuchet MS",
+          "flags": 0,
+          "size": 18,
+          "style": "Regular"
+        },
+        "from_file": true,
+        "outline": false,
+        "text": "",
+        "text_file": "/opt/data/run/leaderboard.txt"
+      },
+      "sync": 0,
+      "versioned_id": "text_ft2_source",
+      "volume": 1
+    },
+    {
+      "balance": 0.5,
+      "deinterlace_field_order": 0,
+      "deinterlace_mode": 0,
+      "enabled": true,
+      "flags": 0,
+      "hotkeys": {},
+      "id": "text_ft2_source",
+      "mixers": 0,
+      "monitoring_type": 0,
+      "muted": false,
+      "name": "left rotating",
+      "prev_ver": 419430408,
+      "private_settings": {},
+      "push-to-mute": false,
+      "push-to-mute-delay": 0,
+      "push-to-talk": false,
+      "push-to-talk-delay": 0,
+      "settings": {
+        "color1": 4294967295,
+        "color2": 4288059030,
+        "font": {
+          "face": "Trebuchet MS",
+          "flags": 0,
+          "size": 28,
+          "style": "Regular"
+        },
+        "from_file": true,
+        "outline": false,
+        "text": "",
+        "text_file": "/opt/data/run/left-message.txt"
+      },
+      "sync": 0,
+      "versioned_id": "text_ft2_source",
       "volume": 1
     },
     {
@@ -2119,36 +1121,14 @@
       "flags": 0,
       "hotkeys": {
         "OBSBasic.SelectScene": [],
-        "libobs.hide_scene_item.Audio Input Capture (PulseAudio)": [],
-        "libobs.hide_scene_item.Audio Output Capture (PulseAudio)": [],
-        "libobs.hide_scene_item.Background Slideshow": [],
-        "libobs.hide_scene_item.Flag Onscreen - Right Corner": [],
-        "libobs.hide_scene_item.LEFT CORNER": [],
-        "libobs.hide_scene_item.MIDDLE": [],
-        "libobs.hide_scene_item.Middle Text Onscreen - Right Corner": [],
-        "libobs.hide_scene_item.OLD STUFF": [],
-        "libobs.hide_scene_item.RIGHT CORNER": [],
-        "libobs.hide_scene_item.Screen Capture - Left Monitor": [],
-        "libobs.hide_scene_item.Timewarp Onscreen - Right Corner": [],
-        "libobs.hide_scene_item.Window Capture - VLC": [],
-        "libobs.show_scene_item.Audio Input Capture (PulseAudio)": [],
-        "libobs.show_scene_item.Audio Output Capture (PulseAudio)": [],
-        "libobs.show_scene_item.Background Slideshow": [],
-        "libobs.show_scene_item.Flag Onscreen - Right Corner": [],
-        "libobs.show_scene_item.LEFT CORNER": [],
-        "libobs.show_scene_item.MIDDLE": [],
-        "libobs.show_scene_item.Middle Text Onscreen - Right Corner": [],
-        "libobs.show_scene_item.OLD STUFF": [],
-        "libobs.show_scene_item.RIGHT CORNER": [],
-        "libobs.show_scene_item.Screen Capture - Left Monitor": [],
-        "libobs.show_scene_item.Timewarp Onscreen - Right Corner": [],
-        "libobs.show_scene_item.Window Capture - VLC": []
+        "libobs.hide_scene_item.Image": [],
+        "libobs.show_scene_item.Image": []
       },
       "id": "scene",
       "mixers": 0,
       "monitoring_type": 0,
       "muted": false,
-      "name": "Live Coding",
+      "name": "Very Basic",
       "prev_ver": 419430408,
       "private_settings": {},
       "push-to-mute": false,
@@ -2157,16 +1137,16 @@
       "push-to-talk-delay": 0,
       "settings": {
         "custom_size": false,
-        "id_counter": 20,
+        "id_counter": 1,
         "items": [
           {
             "align": 5,
             "bounds": {
-              "x": 0,
-              "y": 0
+              "x": 1920,
+              "y": 1080
             },
             "bounds_align": 0,
-            "bounds_type": 0,
+            "bounds_type": 1,
             "crop_bottom": 0,
             "crop_left": 0,
             "crop_right": 0,
@@ -2174,7 +1154,7 @@
             "group_item_backup": false,
             "id": 1,
             "locked": false,
-            "name": "Background Slideshow",
+            "name": "Image",
             "pos": {
               "x": 0,
               "y": 0
@@ -2184,626 +1164,6 @@
             "scale": {
               "x": 1,
               "y": 1
-            },
-            "scale_filter": "disable",
-            "visible": true
-          },
-          {
-            "align": 5,
-            "bounds": {
-              "x": 1920,
-              "y": 1080
-            },
-            "bounds_align": 0,
-            "bounds_type": 2,
-            "crop_bottom": 0,
-            "crop_left": 0,
-            "crop_right": 0,
-            "crop_top": 0,
-            "group_item_backup": false,
-            "id": 2,
-            "locked": false,
-            "name": "Window Capture - VLC",
-            "pos": {
-              "x": 0,
-              "y": 0
-            },
-            "private_settings": {},
-            "rot": 0,
-            "scale": {
-              "x": 1,
-              "y": 1
-            },
-            "scale_filter": "disable",
-            "visible": true
-          },
-          {
-            "align": 5,
-            "bounds": {
-              "x": 1920,
-              "y": 1080
-            },
-            "bounds_align": 0,
-            "bounds_type": 2,
-            "crop_bottom": 0,
-            "crop_left": 0,
-            "crop_right": 0,
-            "crop_top": 0,
-            "group_item_backup": false,
-            "id": 3,
-            "locked": false,
-            "name": "Screen Capture - Left Monitor",
-            "pos": {
-              "x": 0,
-              "y": 0
-            },
-            "private_settings": {},
-            "rot": 0,
-            "scale": {
-              "x": 1,
-              "y": 1
-            },
-            "scale_filter": "disable",
-            "visible": true
-          },
-          {
-            "align": 5,
-            "bounds": {
-              "x": 0,
-              "y": 0
-            },
-            "bounds_align": 0,
-            "bounds_type": 0,
-            "crop_bottom": 0,
-            "crop_left": 0,
-            "crop_right": 0,
-            "crop_top": 0,
-            "group_item_backup": false,
-            "id": 4,
-            "locked": false,
-            "name": "Audio Input Capture (PulseAudio)",
-            "pos": {
-              "x": 0,
-              "y": 0
-            },
-            "private_settings": {},
-            "rot": 0,
-            "scale": {
-              "x": 1,
-              "y": 1
-            },
-            "scale_filter": "disable",
-            "visible": true
-          },
-          {
-            "align": 5,
-            "bounds": {
-              "x": 0,
-              "y": 0
-            },
-            "bounds_align": 0,
-            "bounds_type": 0,
-            "crop_bottom": 0,
-            "crop_left": 0,
-            "crop_right": 0,
-            "crop_top": 0,
-            "group_item_backup": false,
-            "id": 5,
-            "locked": false,
-            "name": "Audio Output Capture (PulseAudio)",
-            "pos": {
-              "x": 0,
-              "y": 0
-            },
-            "private_settings": {},
-            "rot": 0,
-            "scale": {
-              "x": 1,
-              "y": 1
-            },
-            "scale_filter": "disable",
-            "visible": true
-          },
-          {
-            "align": 5,
-            "bounds": {
-              "x": 1920,
-              "y": 1080
-            },
-            "bounds_align": 0,
-            "bounds_type": 2,
-            "crop_bottom": 0,
-            "crop_left": 0,
-            "crop_right": 0,
-            "crop_top": 0,
-            "group_item_backup": true,
-            "id": 2,
-            "locked": true,
-            "name": "VLC Video Source",
-            "pos": {
-              "x": 0,
-              "y": 0
-            },
-            "private_settings": {
-              "color": "",
-              "color-preset": 0
-            },
-            "rot": 0,
-            "scale": {
-              "x": 1,
-              "y": 1
-            },
-            "scale_filter": "disable",
-            "visible": false
-          },
-          {
-            "align": 5,
-            "bounds": {
-              "x": 0,
-              "y": 0
-            },
-            "bounds_align": 0,
-            "bounds_type": 0,
-            "crop_bottom": 0,
-            "crop_left": 0,
-            "crop_right": 0,
-            "crop_top": 0,
-            "group_item_backup": true,
-            "id": 44,
-            "locked": true,
-            "name": "Twitch Chat",
-            "pos": {
-              "x": -77,
-              "y": 803
-            },
-            "private_settings": {},
-            "rot": 0,
-            "scale": {
-              "x": 0.7462499737739563,
-              "y": 0.746666669845581
-            },
-            "scale_filter": "disable",
-            "visible": false
-          },
-          {
-            "align": 5,
-            "bounds": {
-              "x": 0,
-              "y": 0
-            },
-            "bounds_align": 0,
-            "bounds_type": 0,
-            "crop_bottom": 0,
-            "crop_left": 0,
-            "crop_right": 0,
-            "crop_top": 0,
-            "group_item_backup": true,
-            "id": 12,
-            "locked": true,
-            "name": "STAGING test stream msg",
-            "pos": {
-              "x": 441.99993896484375,
-              "y": 119.83309936523438
-            },
-            "private_settings": {},
-            "rot": 0,
-            "scale": {
-              "x": 1.1205143928527832,
-              "y": 1.1207903623580933
-            },
-            "scale_filter": "disable",
-            "visible": false
-          },
-          {
-            "align": 5,
-            "bounds": {
-              "x": 0,
-              "y": 0
-            },
-            "bounds_align": 0,
-            "bounds_type": 0,
-            "crop_bottom": 0,
-            "crop_left": 0,
-            "crop_right": 0,
-            "crop_top": 0,
-            "group_item_backup": false,
-            "id": 6,
-            "locked": true,
-            "name": "OLD STUFF",
-            "pos": {
-              "x": -77,
-              "y": 0
-            },
-            "private_settings": {
-              "collapsed": true
-            },
-            "rot": 0,
-            "scale": {
-              "x": 1,
-              "y": 1
-            },
-            "scale_filter": "disable",
-            "visible": false
-          },
-          {
-            "align": 5,
-            "bounds": {
-              "x": 1920,
-              "y": 1080
-            },
-            "bounds_align": 0,
-            "bounds_type": 2,
-            "crop_bottom": 0,
-            "crop_left": 0,
-            "crop_right": 0,
-            "crop_top": 0,
-            "group_item_backup": true,
-            "id": 22,
-            "locked": true,
-            "name": "right overlay",
-            "pos": {
-              "x": 0,
-              "y": 0
-            },
-            "private_settings": {},
-            "rot": 0,
-            "scale": {
-              "x": 1,
-              "y": 1
-            },
-            "scale_filter": "disable",
-            "visible": true
-          },
-          {
-            "align": 5,
-            "bounds": {
-              "x": 0,
-              "y": 0
-            },
-            "bounds_align": 0,
-            "bounds_type": 0,
-            "crop_bottom": 0,
-            "crop_left": 0,
-            "crop_right": 0,
-            "crop_top": 0,
-            "group_item_backup": true,
-            "id": 23,
-            "locked": true,
-            "name": "right rotating",
-            "pos": {
-              "x": 1568,
-              "y": 1042
-            },
-            "private_settings": {},
-            "rot": 0,
-            "scale": {
-              "x": 0.9373297095298767,
-              "y": 0.9411764740943909
-            },
-            "scale_filter": "disable",
-            "visible": true
-          },
-          {
-            "align": 5,
-            "bounds": {
-              "x": 0,
-              "y": 0
-            },
-            "bounds_align": 0,
-            "bounds_type": 0,
-            "crop_bottom": 0,
-            "crop_left": 0,
-            "crop_right": 0,
-            "crop_top": 0,
-            "group_item_backup": true,
-            "id": 42,
-            "locked": true,
-            "name": "GPS",
-            "pos": {
-              "x": 1538,
-              "y": 1037
-            },
-            "private_settings": {},
-            "rot": 0,
-            "scale": {
-              "x": -0.1328125,
-              "y": 0.1328125
-            },
-            "scale_filter": "disable",
-            "visible": true
-          },
-          {
-            "align": 5,
-            "bounds": {
-              "x": 0,
-              "y": 0
-            },
-            "bounds_align": 0,
-            "bounds_type": 0,
-            "crop_bottom": 0,
-            "crop_left": 0,
-            "crop_right": 0,
-            "crop_top": 0,
-            "group_item_backup": true,
-            "id": 28,
-            "locked": true,
-            "name": "leaderboard",
-            "pos": {
-              "x": 1575,
-              "y": 866
-            },
-            "private_settings": {},
-            "rot": 0,
-            "scale": {
-              "x": 1.14970064163208,
-              "y": 1.1485713720321655
-            },
-            "scale_filter": "disable",
-            "visible": true
-          },
-          {
-            "align": 5,
-            "bounds": {
-              "x": 0,
-              "y": 0
-            },
-            "bounds_align": 0,
-            "bounds_type": 0,
-            "crop_bottom": 0,
-            "crop_left": 0,
-            "crop_right": 0,
-            "crop_top": 0,
-            "group_item_backup": false,
-            "id": 7,
-            "locked": true,
-            "name": "RIGHT CORNER",
-            "pos": {
-              "x": 0,
-              "y": 0
-            },
-            "private_settings": {
-              "collapsed": true
-            },
-            "rot": 0,
-            "scale": {
-              "x": 1,
-              "y": 1
-            },
-            "scale_filter": "disable",
-            "visible": false
-          },
-          {
-            "align": 5,
-            "bounds": {
-              "x": 0,
-              "y": 0
-            },
-            "bounds_align": 0,
-            "bounds_type": 0,
-            "crop_bottom": 0,
-            "crop_left": 0,
-            "crop_right": 0,
-            "crop_top": 0,
-            "group_item_backup": true,
-            "id": 24,
-            "locked": true,
-            "name": "left overlay",
-            "pos": {
-              "x": 0,
-              "y": 0
-            },
-            "private_settings": {},
-            "rot": 0,
-            "scale": {
-              "x": 1,
-              "y": 1
-            },
-            "scale_filter": "disable",
-            "visible": true
-          },
-          {
-            "align": 5,
-            "bounds": {
-              "x": 417,
-              "y": 27
-            },
-            "bounds_align": 4,
-            "bounds_type": 6,
-            "crop_bottom": 0,
-            "crop_left": 0,
-            "crop_right": 0,
-            "crop_top": 0,
-            "group_item_backup": true,
-            "id": 29,
-            "locked": true,
-            "name": "left rotating",
-            "pos": {
-              "x": 63,
-              "y": 1043
-            },
-            "private_settings": {},
-            "rot": 0,
-            "scale": {
-              "x": 1,
-              "y": 1
-            },
-            "scale_filter": "disable",
-            "visible": true
-          },
-          {
-            "align": 5,
-            "bounds": {
-              "x": 472,
-              "y": 208
-            },
-            "bounds_align": 10,
-            "bounds_type": 4,
-            "crop_bottom": 0,
-            "crop_left": 0,
-            "crop_right": 0,
-            "crop_top": 0,
-            "group_item_backup": true,
-            "id": 54,
-            "locked": true,
-            "name": "Chat Onscreen",
-            "pos": {
-              "x": 5,
-              "y": 820
-            },
-            "private_settings": {},
-            "rot": 0,
-            "scale": {
-              "x": 3.0862069129943848,
-              "y": 3.0853657722473145
-            },
-            "scale_filter": "disable",
-            "visible": false
-          },
-          {
-            "align": 5,
-            "bounds": {
-              "x": 1,
-              "y": 1
-            },
-            "bounds_align": 0,
-            "bounds_type": 0,
-            "crop_bottom": 0,
-            "crop_left": 0,
-            "crop_right": 0,
-            "crop_top": 0,
-            "group_item_backup": false,
-            "id": 8,
-            "locked": true,
-            "name": "LEFT CORNER",
-            "pos": {
-              "x": 0,
-              "y": 0
-            },
-            "private_settings": {
-              "collapsed": true
-            },
-            "rot": 0,
-            "scale": {
-              "x": 1,
-              "y": 1
-            },
-            "scale_filter": "disable",
-            "visible": false
-          },
-          {
-            "align": 5,
-            "bounds": {
-              "x": 0,
-              "y": 0
-            },
-            "bounds_align": 0,
-            "bounds_type": 0,
-            "crop_bottom": 0,
-            "crop_left": 0,
-            "crop_right": 0,
-            "crop_top": 0,
-            "group_item_backup": false,
-            "id": 19,
-            "locked": true,
-            "name": "MIDDLE",
-            "pos": {
-              "x": 441.99993896484375,
-              "y": 119.83309936523438
-            },
-            "private_settings": {
-              "collapsed": true
-            },
-            "rot": 0,
-            "scale": {
-              "x": 0.48842933773994446,
-              "y": 0.4885496199131012
-            },
-            "scale_filter": "disable",
-            "visible": true
-          },
-          {
-            "align": 5,
-            "bounds": {
-              "x": 0,
-              "y": 0
-            },
-            "bounds_align": 0,
-            "bounds_type": 0,
-            "crop_bottom": 0,
-            "crop_left": 0,
-            "crop_right": 0,
-            "crop_top": 0,
-            "group_item_backup": false,
-            "id": 57,
-            "locked": true,
-            "name": "Timewarp Onscreen - Right Corner",
-            "pos": {
-              "x": 1209,
-              "y": 588
-            },
-            "private_settings": {},
-            "rot": 0,
-            "scale": {
-              "x": 1.3056994676589966,
-              "y": 1.3103448152542114
-            },
-            "scale_filter": "disable",
-            "visible": true
-          },
-          {
-            "align": 5,
-            "bounds": {
-              "x": 0,
-              "y": 0
-            },
-            "bounds_align": 0,
-            "bounds_type": 0,
-            "crop_bottom": 0,
-            "crop_left": 0,
-            "crop_right": 0,
-            "crop_top": 0,
-            "group_item_backup": false,
-            "id": 20,
-            "locked": true,
-            "name": "Middle Text Onscreen - Right Corner",
-            "pos": {
-              "x": 1309,
-              "y": 1042
-            },
-            "private_settings": {},
-            "rot": 0,
-            "scale": {
-              "x": 1.2268656492233276,
-              "y": 1.2272727489471436
-            },
-            "scale_filter": "disable",
-            "visible": true
-          },
-          {
-            "align": 5,
-            "bounds": {
-              "x": 0,
-              "y": 0
-            },
-            "bounds_align": 0,
-            "bounds_type": 0,
-            "crop_bottom": 0,
-            "crop_left": 0,
-            "crop_right": 0,
-            "crop_top": 0,
-            "group_item_backup": false,
-            "id": 16,
-            "locked": true,
-            "name": "Flag Onscreen - Right Corner",
-            "pos": {
-              "x": 1793,
-              "y": 994
-            },
-            "private_settings": {},
-            "rot": 0,
-            "scale": {
-              "x": 0.1963636428117752,
-              "y": 0.19480518996715546
             },
             "scale_filter": "disable",
             "visible": true
@@ -2825,7 +1185,133 @@
       "mixers": 0,
       "monitoring_type": 0,
       "muted": false,
-      "name": "Flag Onscreen - Right Corner",
+      "name": "Image",
+      "prev_ver": 419430408,
+      "private_settings": {},
+      "push-to-mute": false,
+      "push-to-mute-delay": 0,
+      "push-to-talk": false,
+      "push-to-talk-delay": 0,
+      "settings": {
+        "file": "/opt/tripbot/assets/stream-screencap.jpg"
+      },
+      "sync": 0,
+      "versioned_id": "image_source",
+      "volume": 1
+    },
+    {
+      "balance": 0.5,
+      "deinterlace_field_order": 0,
+      "deinterlace_mode": 0,
+      "enabled": true,
+      "flags": 0,
+      "hotkeys": {},
+      "id": "xcomposite_input",
+      "mixers": 0,
+      "monitoring_type": 0,
+      "muted": false,
+      "name": "Window Capture - VLC",
+      "prev_ver": 419430408,
+      "private_settings": {},
+      "push-to-mute": false,
+      "push-to-mute-delay": 0,
+      "push-to-talk": false,
+      "push-to-talk-delay": 0,
+      "settings": {
+        "capture_window": "67108864\r\nVLC media player\r\nvlc",
+        "show_cursor": false,
+        "swap_redblue": false
+      },
+      "sync": 0,
+      "versioned_id": "xcomposite_input",
+      "volume": 1
+    },
+    {
+      "balance": 0.5,
+      "deinterlace_field_order": 0,
+      "deinterlace_mode": 0,
+      "enabled": true,
+      "flags": 0,
+      "hotkeys": {},
+      "id": "text_ft2_source",
+      "mixers": 0,
+      "monitoring_type": 0,
+      "muted": false,
+      "name": "Middle Text Onscreen - Center",
+      "prev_ver": 419430408,
+      "private_settings": {},
+      "push-to-mute": false,
+      "push-to-mute-delay": 0,
+      "push-to-talk": false,
+      "push-to-talk-delay": 0,
+      "settings": {
+        "color1": 4294967295,
+        "color2": 4288059030,
+        "drop_shadow": false,
+        "font": {
+          "face": "Trebuchet MS",
+          "flags": 0,
+          "size": 18,
+          "style": "Regular"
+        },
+        "from_file": true,
+        "outline": false,
+        "text": "",
+        "text_file": "/opt/data/run/middle-text.txt"
+      },
+      "sync": 0,
+      "versioned_id": "text_ft2_source",
+      "volume": 1
+    },
+    {
+      "balance": 0.5,
+      "deinterlace_field_order": 0,
+      "deinterlace_mode": 0,
+      "enabled": true,
+      "flags": 0,
+      "hotkeys": {},
+      "id": "text_ft2_source",
+      "mixers": 0,
+      "monitoring_type": 0,
+      "muted": false,
+      "name": "Timewarp Onscreen - Center",
+      "prev_ver": 419430408,
+      "private_settings": {},
+      "push-to-mute": false,
+      "push-to-mute-delay": 0,
+      "push-to-talk": false,
+      "push-to-talk-delay": 0,
+      "settings": {
+        "color1": 4294967295,
+        "color2": 4288059030,
+        "drop_shadow": true,
+        "font": {
+          "face": "Sans Serif",
+          "flags": 0,
+          "size": 72,
+          "style": ""
+        },
+        "from_file": true,
+        "outline": false,
+        "text": "",
+        "text_file": "/opt/data/run/timewarp.txt"
+      },
+      "sync": 0,
+      "versioned_id": "text_ft2_source",
+      "volume": 1
+    },
+    {
+      "balance": 0.5,
+      "deinterlace_field_order": 0,
+      "deinterlace_mode": 0,
+      "enabled": true,
+      "flags": 0,
+      "hotkeys": {},
+      "id": "image_source",
+      "mixers": 0,
+      "monitoring_type": 0,
+      "muted": false,
+      "name": "Flag Onscreen - Right Middle",
       "prev_ver": 419430408,
       "private_settings": {},
       "push-to-mute": false,
@@ -2838,6 +1324,39 @@
       },
       "sync": 0,
       "versioned_id": "image_source",
+      "volume": 1
+    },
+    {
+      "balance": 0.5,
+      "deinterlace_field_order": 0,
+      "deinterlace_mode": 0,
+      "enabled": true,
+      "flags": 0,
+      "hotkeys": {},
+      "id": "text_ft2_source",
+      "mixers": 0,
+      "monitoring_type": 0,
+      "muted": false,
+      "name": "Broken video warning",
+      "prev_ver": 419430408,
+      "private_settings": {},
+      "push-to-mute": false,
+      "push-to-mute-delay": 0,
+      "push-to-talk": false,
+      "push-to-talk-delay": 0,
+      "settings": {
+        "drop_shadow": true,
+        "font": {
+          "face": "Sans Serif",
+          "flags": 0,
+          "size": 32,
+          "style": ""
+        },
+        "outline": false,
+        "text": "If you can see this, the stream is broken in some way.\n\nPlease use !report ASAP and Dana will come fix it!"
+      },
+      "sync": 0,
+      "versioned_id": "text_ft2_source",
       "volume": 1
     }
   ],
