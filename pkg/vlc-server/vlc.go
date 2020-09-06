@@ -23,7 +23,7 @@ var vlcCmdFlags = []string{
 	"--ignore-config", // ignore any config files that might get loaded
 	"-vv",             // be very verbose (used for debugging)
 	"--syslog-debug",
-	"--quiet", // reduce terminal output
+	// "--quiet", // reduce terminal output
 	"--fullscreen",
 	// "--width", "1920",
 	// "--height", "1080",

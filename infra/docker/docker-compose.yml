@@ -17,7 +17,7 @@ services:
     volumes:
       - .:/go/src/github.com/adanalife/tripbot
       #TODO: do we even need this?
-      - ./assets/video:/opt/data/Dashcam/_all
+      - ./assets/video:/opt/data/Dashcam/_all:ro
     restart: unless-stopped
 
   obs:
@@ -40,7 +40,7 @@ services:
       DISPLAY: ":0.0"
     volumes:
       - .:/go/src/github.com/adanalife/tripbot
-      - ./assets/video:/opt/data/Dashcam/_all
+      - ./assets/video:/opt/data/Dashcam/_all:ro
     restart: unless-stopped
 
   db:
