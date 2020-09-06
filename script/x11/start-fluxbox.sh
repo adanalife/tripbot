@@ -1,3 +1,3 @@
 #!/usr/bin/env bash
 
-/usr/bin/fluxbox &
+/usr/bin/fluxbox | logger -t fluxbox &
