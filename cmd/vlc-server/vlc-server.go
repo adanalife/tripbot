@@ -72,6 +72,7 @@ func gracefulShutdown() {
 	log.Println(aurora.Red("caught CTRL-C"))
 	// anything below this probably wont be executed
 	vlcServer.Shutdown()
+	//TODO: stop cron here
 	sentry.Flush(time.Second * 5)
 	os.Exit(1)
 }
