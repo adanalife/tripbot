@@ -6,6 +6,7 @@ FROM adanalife/ffmpeg
 # install dependencies
 # most of these come from the obs-studio
 # install from source instructions
+#TODO: add --no-install-suggests
 RUN export DEBIAN_FRONTEND=noninteractive \
   && unset LD_LIBRARY_PATH \
   && apt-get update \
@@ -57,7 +58,9 @@ RUN export DEBIAN_FRONTEND=noninteractive \
     qtbase5-dev \
     scrot \
     software-properties-common \
+    supervisor \
     swig \
+    syslog-ng \
     tigervnc-standalone-server \
     ubuntu-drivers-common \
     vim \
