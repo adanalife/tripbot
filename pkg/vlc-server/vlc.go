@@ -9,6 +9,7 @@ import (
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	libvlc "github.com/adrg/libvlc-go/v3"
+	"github.com/davecgh/go-spew/spew"
 )
 
 var player *libvlc.Player
@@ -21,23 +22,26 @@ var videoFiles []string
 //TODO: break some of these into ENV vars
 var vlcCmdFlags = []string{
 	"--ignore-config", // ignore any config files that might get loaded
-	"-vv",             // be very verbose (used for debugging)
-	"--syslog-debug",
+	"--fullscreen",    // start fullscreened
+	"--vout", "x11",   // use X11 (and skip vdpau)
+	"--syslog",
 	// "--quiet", // reduce terminal output
-	"--fullscreen",
-	// "--width", "1920",
-	// "--height", "1080",
-	// "--canvas-width", "1920",
-	// "--canvas-height", "1080",
-	// "--aspect-ratio", "16:9",
 	"--no-audio",                // none of the videos have audio
 	"--network-caching", "6666", // network cache (in ms)
 	"--file-caching", "11111", // file cache (in ms)
 	// can be none, vdpau_avcodec, or cuda
 	"--avcodec-hw", "none", // enable hardware decoding
-	"--vout", "x11", // use X11 (and skip vdpau)
-	// "--file-logging",                                      // enable file logging
-	// "--logfile", "log/vlc." + config.Environment + ".log", // specify location of log
+	// "--width", "1920",
+	// "--height", "1080",
+	// "--canvas-width", "1920",
+	// "--canvas-height", "1080",
+	// "--aspect-ratio", "16:9",
+}
+
+// these add a lot more output
+var vlcVerboseFlags = []string{
+	"-vv",            // be very verbose (used for debugging)
+	"--syslog-debug", // post debug output to syslog
 }
 
 // Init creates a VLC player and sets up a playlist
@@ -87,8 +91,14 @@ func currentlyPlaying() string {
 }
 
 func startVLC() {
+	// set command line flags
+	if config.VlcVerbose {
+		vlcCmdFlags = append(vlcCmdFlags, vlcVerboseFlags...)
+	}
+
 	// start up VLC with given command flags
 	if err := libvlc.Init(vlcCmdFlags...); err != nil {
+		spew.Dump(vlcCmdFlags)
 		terrors.Fatal(err, "error initializing VLC")
 	}
 }

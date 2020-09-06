@@ -15,7 +15,7 @@ cat << EOF > /etc/supervisor/conf.d/syslog.conf
 [program:syslog]
 command=/usr/sbin/syslog-ng -F
 priority=1
-auto_start=true
+autostart=true
 autorestart=true
 stdout_logfile=/var/log/syslog
 stderr_logfile=/var/log/syslog
@@ -25,7 +25,7 @@ cat << EOF > /etc/supervisor/conf.d/vnc.conf
 [program:vnc]
 directory=/opt/tripbot
 command=script/x11/start-vnc.sh
-auto_start=true
+autostart=true
 autorestart=true
 stdout_logfile=syslog
 stderr_logfile=syslog
@@ -35,18 +35,26 @@ cat << EOF > /etc/supervisor/conf.d/vlc.conf
 [program:vlc]
 directory=/opt/tripbot
 command=script/x11/start-vlc.sh
-auto_start=true
+autostart=true
 autorestart=true
 stdout_logfile=syslog
 stderr_logfile=syslog
 startsecs=2
 EOF
 
+# don't autostart OBS if this flag is set
+if [ "${DISABLE_OBS}" == "true" ]; then
+  echo "Disabling OBS autostart"
+  OBS_AUTOSTART="false"
+else
+  OBS_AUTOSTART="true"
+fi
+
 cat << EOF > /etc/supervisor/conf.d/obs.conf
 [program:obs]
 directory=/opt/tripbot
 command=script/x11/start-obs.sh
-auto_start=true
+autostart=$OBS_AUTOSTART
 autorestart=true
 stdout_logfile=syslog
 stderr_logfile=syslog

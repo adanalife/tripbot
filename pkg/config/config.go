@@ -47,6 +47,8 @@ var (
 	ReadOnly bool
 	// Verbose determines output verbosity
 	Verbose bool
+	// VlcVerbose adds extra VLC output
+	VlcVerbose bool
 	// DashcamDir contains the dashcam footage
 	DashcamDir string
 	// MapsOutputDir is where generated maps will be stored
@@ -102,6 +104,7 @@ func init() {
 	BotUsername = os.Getenv("BOT_USERNAME")
 	ReadOnly, _ = strconv.ParseBool(os.Getenv("READ_ONLY"))
 	Verbose, _ = strconv.ParseBool(os.Getenv("VERBOSE"))
+	VlcVerbose, _ = strconv.ParseBool(os.Getenv("VLC_VERBOSE"))
 
 	// directory settings
 	DashcamDir = getEnv("DASHCAM_DIR", defaultDashcamDir)
