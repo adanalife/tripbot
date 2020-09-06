@@ -15,14 +15,14 @@ services:
       DISPLAY: ":0.0"
       FONTCONFIG_PATH: /etc/fonts
       VLC_VERBOSE: "true"
-      DISABLE_OBS: "true"
+      # DISABLE_OBS: "true"
     env_file:
       - ./.env.development
     # comment this to enable obs container
     #entrypoint: "true"
     restart: on-failure
     entrypoint: bash
-    command: -c "cd /opt/tripbot && rm bin/vlc-server && script/container_startup.sh"
+    command: -c "cd /opt/tripbot && rm -f bin/vlc-server && script/container_startup.sh"
     # command: -c "go run cmd/vlc-server/vlc-server.go 2>&1"
     volumes:
       - /home/dmerrick/Videos/Dashcam/screencaps:/opt/data/screencaps:ro
