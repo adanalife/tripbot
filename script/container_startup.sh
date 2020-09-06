@@ -3,7 +3,9 @@
 # this script is the container entrypoint for the OBS container
 
 #TODO: set background in /etc/X11/fluxbox/overlay
-#TODO: remove vncconfig from /etc/X11/Xvnc-session
+
+# don't ipen vncconfig on startup
+sed -i '/vncconfig/s/^/#/' /etc/X11/Xvnc-session
 
 mkdir -p $XDG_RUNTIME_DIR
 chmod 0700 $XDG_RUNTIME_DIR
