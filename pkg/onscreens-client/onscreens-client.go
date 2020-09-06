@@ -61,17 +61,6 @@ func ShowTimewarp() error {
 	return nil
 }
 
-func AddChatLine(username, msg string) error {
-	url := onscreensServerURL + "/onscreens/chat/add"
-	url = fmt.Sprintf("%s?msg=\"%s\"", url, msg)
-	_, err := getUrl(url)
-	if err != nil {
-		terrors.Log(err, "error adding chat onscreen")
-		return err
-	}
-	return nil
-}
-
 func ShowFlag(dur time.Duration) error {
 	url := onscreensServerURL + "/onscreens/flag/show"
 	url = fmt.Sprintf("%s?duration=\"%s\"", url, dur)

@@ -8,7 +8,6 @@ import (
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	mylog "github.com/adanalife/tripbot/pkg/log"
-	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/gempir/go-twitch-irc/v2"
 )
@@ -178,9 +177,6 @@ func PrivateMessage(msg twitch.PrivateMessage) {
 
 	// log to stackdriver
 	mylog.ChatMsg(username, msg.Message)
-
-	// include in the onscreen chat box
-	onscreensClient.AddChatLine(username, msg.Message)
 
 	// check to see if the message is a command
 	//TODO: also include ones prefixed with whitespace?
