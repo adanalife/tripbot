@@ -23,15 +23,15 @@ stdout_logfile=syslog
 stderr_logfile=syslog
 EOF
 
-# cat << EOF > /etc/supervisor/conf.d/vlc.conf
-# [program:vlc]
-# directory=/opt/tripbot
-# command=script/x11/start-vlc.sh
-# auto_start=true
-# autorestart=true
-# stdout_logfile=syslog
-# stderr_logfile=syslog
-# EOF
+cat << EOF > /etc/supervisor/conf.d/vlc.conf
+[program:vlc]
+directory=/opt/tripbot
+command=script/x11/start-vlc.sh
+auto_start=true
+autorestart=true
+stdout_logfile=syslog
+stderr_logfile=syslog
+EOF
 
 # cat << EOF > /etc/supervisor/conf.d/obs.conf
 # [program:obs]
