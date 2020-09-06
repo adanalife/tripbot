@@ -24,4 +24,4 @@ cp Dashcam_Scenes.docker.json /root/.config/obs-studio/basic/scenes/Untitled.jso
 # set the streamkey from ENV var
 sed -i "s/STREAMKEY/$STREAM_KEY/" /root/.config/obs-studio/basic/profiles/Untitled/service.json
 
-obs --startstreaming
+obs --startstreaming --minimize-to-tray

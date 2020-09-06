@@ -6,6 +6,8 @@
 #TODO: remove vncconfig from /etc/X11/Xvnc-session
 
 #TODO: remove these
+ls /opt/data
+mkdir -p /opt/data/run
 echo "DANATEST" > /opt/data/run/left-message.txt
 echo "DANATEST" > /opt/data/run/right-message.txt
 
