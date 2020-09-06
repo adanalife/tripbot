@@ -36,8 +36,10 @@ services:
       - "8080"
       - "5902:5900"
     environment:
-      STREAM_KEY: "${STREAM_KEY}"
       DISPLAY: ":0.0"
+      XDG_RUNTIME_DIR: "/root/.cache/xdgr"
+      FONTCONFIG_PATH: "/etc/fonts"
+      STREAM_KEY: "${STREAM_KEY}"
     volumes:
       - .:/go/src/github.com/adanalife/tripbot
       - ./assets/video:/opt/data/Dashcam/_all:ro
