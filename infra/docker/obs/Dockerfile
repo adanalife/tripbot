@@ -18,6 +18,7 @@ RUN export DEBIAN_FRONTEND=noninteractive \
     fluxbox \
     git \
     golang-go \
+    htop \
     libasound2-dev \
     libavcodec-dev \
     libavdevice-dev \
