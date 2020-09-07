@@ -144,4 +144,9 @@ RUN ln -s /go/src/github.com/adanalife/tripbot /opt/tripbot \
 WORKDIR /opt/tripbot
 RUN go build -o bin/vlc-server cmd/vlc-server/vlc-server.go
 
+RUN apt-get update \
+  && apt-get install --no-install-suggests -y \
+    vdpau-va-driver \
+  && rm -rf /var/lib/apt/lists/*
+
 ENTRYPOINT ["/opt/tripbot/script/container_startup.sh"]

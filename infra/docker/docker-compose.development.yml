@@ -22,6 +22,7 @@ services:
     entrypoint: bash
     command: -c "cd /opt/tripbot && rm -f bin/vlc-server && script/container_startup.sh"
     volumes:
+      - .bash_history.remote:/root/.bash_history
       - /home/dmerrick/Videos/Dashcam/screencaps:/opt/data/screencaps:ro
       - /home/dmerrick/Videos/Dashcam/_all:/opt/data/Dashcam/_all:ro
 
