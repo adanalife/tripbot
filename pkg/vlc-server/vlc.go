@@ -27,7 +27,7 @@ var vlcCmdFlags = []string{
 	"--network-caching", "6666", // network cache (in ms)
 	"--file-caching", "11111", // file cache (in ms)
 	// can be none, vdpau_avcodec, or cuda
-	"--avcodec-hw", "vdpau_avcodec",
+	"--avcodec-hw", "cuda",
 	"--width", "1920",
 	"--height", "1080",
 	"--canvas-width", "1920",

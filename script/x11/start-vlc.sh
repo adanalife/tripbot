@@ -13,7 +13,7 @@ fi
 
 cleanup() {
   echo "Passing SIGTERM to vlc-server"
-  kill -TERM "$vlc_pid" 2>/dev/null
+  kill -TERM "$(cat /opt/data/run/vlc-server.pid)" 2>/dev/null
 }
 
 trap cleanup SIGTERM
@@ -30,7 +30,4 @@ if [[ ! -x "bin/vlc-server" ]]; then
 fi
 
 # start vlc-server
-bin/vlc-server 2>&1 | logger -t vlc-server &
-
-vlc_pid=$!
-wait "$vlc_pid"
+bin/vlc-server 2>&1 | logger -t vlc-server

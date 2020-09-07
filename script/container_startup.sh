@@ -13,6 +13,23 @@ chmod 0700 $XDG_RUNTIME_DIR
 mkdir -p /opt/data/run
 touch /opt/data/run/{left,right}-message.txt
 
+cat << EOF > /etc/syslog-ng/conf.d/obs-info.conf
+filter f_annoying_obs_info {
+    program("obs") #and
+    #match("time error") and
+    #match("is too large") and
+    #match("set clock manually");
+};
+filter f_supervisord {
+    program("supervisord") #and
+    #match("time error") and
+    #match("is too large") and
+    #match("set clock manually");
+};
+log { source(s_src); filter(f_annoying_obs_info);  flags(final); };
+log { source(s_src); filter(f_supervisord); flags(final); };
+EOF
+
 mkdir -p /root/.fluxbox
 cat << EOF > /root/.fluxbox/startup
 #!/bin/sh
@@ -92,3 +109,4 @@ supervisor_pid=$!
 
 # grc adds color to the output
 grc -- tail -F /var/log/syslog
+#| grep -v "obs info" | grep -v "obs\ttitle" | grep -v "obs\tclass" | grep -v "obs\tBit depth" | grep -v "obs\tFound proper GLXFBConfig"

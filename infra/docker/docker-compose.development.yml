@@ -8,10 +8,13 @@ services:
       - ./.env.development
     entrypoint: bash
     command: -c "go run cmd/tripbot/tripbot.go 2>&1"
+    volumes:
+      - /home/dmerrick/Videos/Dashcam/screencaps:/opt/data/screencaps:ro
 
   obs:
     environment:
       ENV: development
+      VDPAU_DRIVER: nvidia
       # VLC_VERBOSE: "true"
       # DISABLE_OBS: "true"
     env_file:

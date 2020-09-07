@@ -4,4 +4,4 @@
 mkdir -p "$HOME/.vnc" \
   && echo "$VNC_PASSWD" | vncpasswd -f > "$HOME/.vnc/passwd"
 
-vncserver "$DISPLAY" -fg -Log *:syslog:100 -localhost no -nolisten -passwd "$HOME/.vnc/passwd"
+vncserver "$DISPLAY" -fg -Log *:syslog:100 -localhost no -nolisten -passwd "$HOME/.vnc/passwd" -geometry 1920x1200
