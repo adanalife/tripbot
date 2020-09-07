@@ -83,6 +83,28 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			}
 			fmt.Fprintf(w, "OK")
 
+		} else if strings.HasPrefix(r.URL.Path, "/onscreens/flag/show") {
+			//TODO: implement me
+			fmt.Fprintf(w, "OK")
+		} else if strings.HasPrefix(r.URL.Path, "/onscreens/gps/hide") {
+			//TODO: implement me
+			fmt.Fprintf(w, "OK")
+		} else if strings.HasPrefix(r.URL.Path, "/onscreens/gps/show") {
+			//TODO: implement me
+			fmt.Fprintf(w, "OK")
+		} else if strings.HasPrefix(r.URL.Path, "/onscreens/leaderboard/show") {
+			//TODO: implement me
+			fmt.Fprintf(w, "OK")
+		} else if strings.HasPrefix(r.URL.Path, "/onscreens/middle/hide") {
+			//TODO: implement me
+			fmt.Fprintf(w, "OK")
+		} else if strings.HasPrefix(r.URL.Path, "/onscreens/timewarp/show") {
+			//TODO: implement me
+			fmt.Fprintf(w, "OK")
+		} else if strings.HasPrefix(r.URL.Path, "/onscreens/middle/set") {
+			//TODO: implement me
+			fmt.Fprintf(w, "OK")
+
 		} else if strings.HasPrefix(r.URL.Path, "/onscreens/middle/show") {
 
 			msg, ok := r.URL.Query()["msg"]
