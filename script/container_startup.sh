@@ -14,20 +14,14 @@ mkdir -p /opt/data/run
 touch /opt/data/run/{left,right}-message.txt
 
 cat << EOF > /etc/syslog-ng/conf.d/obs-info.conf
-filter f_annoying_obs_info {
-    program("obs") #and
-    #match("time error") and
-    #match("is too large") and
-    #match("set clock manually");
+@define allow-config-dups 1
+filter f_syslog3 { not facility(auth, authpriv, mail) and not filter(f_debug)
+  or (message("obs") and message("VLC") and message("update settings"))
+  or (message("obs") and message("title: VLC media player"))
+  or (message("obs") and message("class: vlc"))
+  or (message("obs") and message("Bit depth: 24"))
+  or (message("obs") and message("Found proper GLXFBConfig (in 100): yes"));
 };
-filter f_supervisord {
-    program("supervisord") #and
-    #match("time error") and
-    #match("is too large") and
-    #match("set clock manually");
-};
-log { source(s_src); filter(f_annoying_obs_info);  flags(final); };
-log { source(s_src); filter(f_supervisord); flags(final); };
 EOF
 
 mkdir -p /root/.fluxbox
