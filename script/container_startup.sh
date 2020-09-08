@@ -24,24 +24,20 @@ filter f_syslog3 { not facility(auth, authpriv, mail) and not filter(f_debug)
 };
 EOF
 
-#mkdir -p /root/.fluxbox
-#cat << EOF > /root/.fluxbox/startup
-##!/bin/sh
+mkdir -p /root/.fluxbox
+cat << EOF > /root/.fluxbox/startup
+#!/bin/sh
 
-##TODO: not 100% sure what this does
-## Change your keymap:
-#xmodmap "/root/.Xmodmap"
+#TODO: not 100% sure what this does
+# Change your keymap:
+xmodmap "/root/.Xmodmap"
 
-## set the resolution
-#xrandr -s 1920x1200 -r 60
+# set the resolution
+xrandr -s 1920x1200 -r 60
 
-#exec fluxbox | logger -t fluxbox
-#EOF
-#chmod +x /root/.fluxbox/startup
-
-# awesomewm stuff
-mkdir -p ~/.config/awesome
-echo "exec /usr/bin/awesome 2>&1 | logger -t awesomewm" > ~/.xinitrc
+exec fluxbox | logger -t fluxbox
+EOF
+chmod +x /root/.fluxbox/startup
 
 cat << EOF > /etc/supervisor/conf.d/syslog.conf
 [program:syslog]
