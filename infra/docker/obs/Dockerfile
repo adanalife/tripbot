@@ -12,10 +12,10 @@ RUN export DEBIAN_FRONTEND=noninteractive \
   && apt-get update \
   && apt-get install -y --no-install-suggests \
     ack-grep \
+    awesome \
     build-essential \
     checkinstall \
     cmake \
-    fluxbox \
     git \
     golang-go \
     grc \
