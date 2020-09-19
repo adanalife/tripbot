@@ -1,6 +1,7 @@
 package vlcServer
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -9,6 +10,9 @@ import (
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	libvlc "github.com/adrg/libvlc-go/v3"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3"
 )
 
 var player *libvlc.Player
@@ -143,9 +147,17 @@ func setToLoop() {
 	}
 }
 
-// loadMedia walks the VideoDir and adds all videos to
-// the playlist.
 func loadMedia() {
+	if config.DashcamBucket == "" {
+		loadLocalMedia()
+	} else {
+		loadLocalMedia(config.DashcamBucket)
+	}
+}
+
+// loadLocalMedia walks the VideoDir and adds all videos to
+// the playlist.
+func loadLocalMedia() {
 	var filePaths []string
 	// add all files from the VideoDir to the medialist
 	err := filepath.Walk(config.VideoDir, func(path string, info os.FileInfo, err error) error {
@@ -175,5 +187,26 @@ func loadMedia() {
 		if err != nil {
 			terrors.Fatal(err, "error adding files to VLC media list")
 		}
+	}
+}
+
+func loadS3Media(bucket string) {
+	sess, err := session.NewSession(&aws.Config{})
+
+	// Create S3 service client
+	svc := s3.New(sess)
+
+	// Get the list of items
+	resp, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(bucket)})
+	if err != nil {
+		terrors.Fatal(err, "Unable to list items in bucket")
+	}
+
+	for _, item := range resp.Contents {
+		fmt.Println("Name:         ", *item.Key)
+		fmt.Println("Last modified:", *item.LastModified)
+		fmt.Println("Size:         ", *item.Size)
+		fmt.Println("Storage class:", *item.StorageClass)
+		fmt.Println("")
 	}
 }

@@ -5,7 +5,11 @@
 export COMPOSE_DOCKER_CLI_BUILD=1
 export DOCKER_BUILDKIT=1
 
-#TODO: check if docker is running, if not start it(?)
+#if [ $(uname) == 'Darwin' ]; then
+#  #TODO: check if docker is running first
+#  open -a Docker
+#fi
+
 
 docker-compose \
   --project-directory . \

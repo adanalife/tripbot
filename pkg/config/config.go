@@ -51,6 +51,8 @@ var (
 	VlcVerbose bool
 	// DashcamDir contains the dashcam footage
 	DashcamDir string
+	// DashcamBucket is a bucket containing the dashcam footage
+	DashcamBucket string
 	// MapsOutputDir is where generated maps will be stored
 	MapsOutputDir string
 	// CroppedCornersDir is where we store the cropped versions of screencaps (to OCR them)
@@ -108,6 +110,7 @@ func init() {
 
 	// directory settings
 	DashcamDir = getEnv("DASHCAM_DIR", defaultDashcamDir)
+	DashcamBucket = getEnv("DASHCAM_BUCKET", "")
 	ScreencapDir = getEnv("SCREENCAP_DIR", defaultScreencapDir)
 	MapsOutputDir = getEnv("MAPS_OUTPUT_DIR", defaultMapsOutputDir)
 	CroppedCornersDir = getEnv("CROPPED_CORNERS_DIR", defaultCroppedCornersDir)
