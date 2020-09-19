@@ -191,6 +191,8 @@ func loadLocalMedia() {
 }
 
 func loadS3Media(bucket string) {
+	fmt.Println("DANATEST")
+
 	sess, err := session.NewSession(&aws.Config{})
 
 	// Create S3 service client
