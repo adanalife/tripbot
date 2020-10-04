@@ -12,12 +12,9 @@ export DOCKER_BUILDKIT=1
 #  open -a Docker
 #fi
 
-
-# make db dir for postgres containert
-#mkdir -p tmp/data
-
-# create empty bash_history file to be shared with containers
-touch .bash_history.remote
+# pre-populate the bash_history
+echo "supervisorctl status" >> .bash_history.remote
+echo "vim /var/log/syslog" >> .bash_history.remote
 
 docker-compose \
   --project-directory . \

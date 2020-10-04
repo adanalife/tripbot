@@ -127,9 +127,7 @@ RUN echo "?package(bash):needs=\"X11\" section=\"ADanaLife\" title=\"OBS Screenc
 
 # add helpful bash tricks
 RUN echo '"\e[A":history-search-backward' >> /root/.inputrc \
-  && echo '"\e[B":history-search-forward' >> /root/.inputrc \
-  && echo "supervisorctl status" >> /root/.bash_history \
-  && echo "vim /var/log/syslog" >> /root/.bash_history
+  && echo '"\e[B":history-search-forward' >> /root/.inputrc
 
 # copy over project
 #TODO: maybe just copy pkg, cmd, internal, etc?
