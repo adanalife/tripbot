@@ -16,10 +16,10 @@ services:
       ENV: development
       VDPAU_DRIVER: nvidia
       DISABLE_OBS: "${DISABLE_OBS}"
-      AWS_REGION: "${AWS_REGION}"
-      AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID}"
-      AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY}"
-      AWS_SESSION_TOKEN: "${AWS_SESSION_TOKEN}"
+      # AWS_REGION: "${AWS_REGION}"
+      # AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID}"
+      # AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY}"
+      # AWS_SESSION_TOKEN: "${AWS_SESSION_TOKEN}"
       # VLC_VERBOSE: "true"
       # DISABLE_OBS: "true"
     env_file:

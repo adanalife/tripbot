@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/davecgh/go-spew/spew"
 )
 
 var player *libvlc.Player
@@ -191,8 +192,6 @@ func loadLocalMedia() {
 }
 
 func loadS3Media(bucket string) {
-	fmt.Println("DANATEST")
-
 	sess, err := session.NewSession(&aws.Config{})
 
 	// Create S3 service client
@@ -204,11 +203,23 @@ func loadS3Media(bucket string) {
 		terrors.Fatal(err, "Unable to list items in bucket")
 	}
 
+	// for _, item := range resp.Contents {
+	// 	fmt.Println("Name:         ", *item.Key)
+	// 	fmt.Println("Last modified:", *item.LastModified)
+	// 	fmt.Println("Size:         ", *item.Size)
+	// 	fmt.Println("Storage class:", *item.StorageClass)
+	// 	fmt.Println("")
+	// }
+
+	// loop over the bucket items and add their paths to VLC
 	for _, item := range resp.Contents {
-		fmt.Println("Name:         ", *item.Key)
-		fmt.Println("Last modified:", *item.LastModified)
-		fmt.Println("Size:         ", *item.Size)
-		fmt.Println("Storage class:", *item.StorageClass)
-		fmt.Println("")
+		video_filename := *item.Key
+		s3_path := fmt.Sprintf("s3://%s/%s", bucket, video_filename)
+		spew.Dump(s3_path)
+		// add the media to VLC
+		err = mediaList.AddMediaFromPath(s3_path)
+		if err != nil {
+			terrors.Fatal(err, "error adding files to VLC media list")
+		}
 	}
 }
