@@ -202,6 +202,7 @@ func OpenInBrowser(url string) {
 	}
 }
 
+//TODO: remove this and all darwin-only support
 // RunningOnDarwin returns true if we're on darwin (OS X)
 func RunningOnDarwin() bool {
 	return runtime.GOOS == "darwin"
