@@ -151,7 +151,7 @@ func loadMedia() {
 	if config.DashcamBucket == "" {
 		loadLocalMedia()
 	} else {
-		loadLocalMedia(config.DashcamBucket)
+		loadS3Media(config.DashcamBucket)
 	}
 }
 
