@@ -13,6 +13,12 @@ export DOCKER_BUILDKIT=1
 #fi
 
 
+# make db dir for postgres containert
+#mkdir -p tmp/data
+
+# create empty bash_history file to be shared with containers
+touch .bash_history.remote
+
 docker-compose \
   --project-directory . \
   --env-file infra/docker/env.docker \
