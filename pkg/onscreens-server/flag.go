@@ -24,6 +24,7 @@ func InitFlagImage() {
 	FlagImage = NewImage(FlagImageFile)
 }
 
+//TODO: this should probably return an error
 func ShowFlag(dur time.Duration) {
 	//TODO: this should trigger when a state change event fires instead of every time we run this
 	updateFlagFile()

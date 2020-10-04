@@ -24,6 +24,7 @@ func createOnscreens() {
 	onscreensServer.InitRightRotator()
 	onscreensServer.InitMiddleText()
 	onscreensServer.InitTimewarp()
+	onscreensServer.InitLeaderboard()
 	onscreensServer.InitFlagImage()
 }
 

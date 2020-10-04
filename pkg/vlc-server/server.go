@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/adanalife/tripbot/pkg/config"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
@@ -78,32 +79,41 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			// play a random file
 			err := PlayRandom()
 			if err != nil {
-				//TODO: return a 500 error
-				http.Error(w, "404 not found", http.StatusNotFound)
+				http.Error(w, "error playing random", http.StatusInternalServerError)
 			}
 			fmt.Fprintf(w, "OK")
 
 		} else if strings.HasPrefix(r.URL.Path, "/onscreens/flag/show") {
-			//TODO: implement me
+			durStr, ok := r.URL.Query()["dur"]
+			if !ok || len(durStr) > 1 {
+				http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
+				return
+			}
+			dur, err := time.ParseDuration(strings.Join(durStr, " "))
+			if err != nil {
+				http.Error(w, "unable to parse duration", http.StatusInternalServerError)
+			}
+			onscreensServer.ShowFlag(dur)
 			fmt.Fprintf(w, "OK")
 		} else if strings.HasPrefix(r.URL.Path, "/onscreens/gps/hide") {
 			//TODO: implement me
-			fmt.Fprintf(w, "OK")
+			http.Error(w, "not yet implemented", http.StatusNotImplemented)
 		} else if strings.HasPrefix(r.URL.Path, "/onscreens/gps/show") {
 			//TODO: implement me
-			fmt.Fprintf(w, "OK")
+			http.Error(w, "not yet implemented", http.StatusNotImplemented)
 		} else if strings.HasPrefix(r.URL.Path, "/onscreens/leaderboard/show") {
 			//TODO: implement me
-			fmt.Fprintf(w, "OK")
+			//TODO: this should include the leaderboard as a param
+			http.Error(w, "not yet implemented", http.StatusNotImplemented)
 		} else if strings.HasPrefix(r.URL.Path, "/onscreens/middle/hide") {
 			//TODO: implement me
-			fmt.Fprintf(w, "OK")
+			http.Error(w, "not yet implemented", http.StatusNotImplemented)
 		} else if strings.HasPrefix(r.URL.Path, "/onscreens/timewarp/show") {
 			//TODO: implement me
-			fmt.Fprintf(w, "OK")
+			http.Error(w, "not yet implemented", http.StatusNotImplemented)
 		} else if strings.HasPrefix(r.URL.Path, "/onscreens/middle/set") {
 			//TODO: implement me
-			fmt.Fprintf(w, "OK")
+			http.Error(w, "not yet implemented", http.StatusNotImplemented)
 
 		} else if strings.HasPrefix(r.URL.Path, "/onscreens/middle/show") {
 

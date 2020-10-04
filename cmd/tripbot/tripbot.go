@@ -76,12 +76,11 @@ func findInitialVideo() {
 	}
 }
 
-// setUpLeaderboard figures out the current leaderboard
-// and displays the oscreen for it
+// setUpLeaderboard fetches the current leaderboard
+// from the DB and stores it in memory
 func setUpLeaderboard() {
 	// initialize the leaderboard
 	users.InitLeaderboard()
-	// background.InitLeaderboard()
 }
 
 // startCron starts the background workers
