@@ -104,16 +104,19 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			onscreensServer.ShowGPSImage()
 			fmt.Fprintf(w, "OK")
 
+		} else if strings.HasPrefix(r.URL.Path, "/onscreens/timewarp/show") {
+			//TODO: implement me
+			http.Error(w, "not yet implemented", http.StatusNotImplemented)
+
 		} else if strings.HasPrefix(r.URL.Path, "/onscreens/leaderboard/show") {
 			//TODO: implement me
 			//TODO: this should include the leaderboard as a param
 			http.Error(w, "not yet implemented", http.StatusNotImplemented)
+
 		} else if strings.HasPrefix(r.URL.Path, "/onscreens/middle/hide") {
 			//TODO: implement me
 			http.Error(w, "not yet implemented", http.StatusNotImplemented)
-		} else if strings.HasPrefix(r.URL.Path, "/onscreens/timewarp/show") {
-			//TODO: implement me
-			http.Error(w, "not yet implemented", http.StatusNotImplemented)
+
 		} else if strings.HasPrefix(r.URL.Path, "/onscreens/middle/set") {
 			//TODO: implement me
 			http.Error(w, "not yet implemented", http.StatusNotImplemented)
@@ -122,7 +125,6 @@ func handle(w http.ResponseWriter, r *http.Request) {
 
 			msg, ok := r.URL.Query()["msg"]
 			if !ok || len(msg) > 1 {
-				//TODO: eventually this could just play instead of hard-requiring a param
 				http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
 				return
 			}
