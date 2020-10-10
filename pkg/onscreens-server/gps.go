@@ -21,7 +21,7 @@ func InitGPSImage() {
 //TODO: this should probably return an error
 func ShowGPSImage() {
 	// actually display the flag
-	GPSImage.Show()
+	GPSImage.Show("")
 }
 
 //TODO: this should probably return an error
