@@ -95,12 +95,15 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			}
 			onscreensServer.ShowFlag(dur)
 			fmt.Fprintf(w, "OK")
+
 		} else if strings.HasPrefix(r.URL.Path, "/onscreens/gps/hide") {
-			//TODO: implement me
-			http.Error(w, "not yet implemented", http.StatusNotImplemented)
+			onscreensServer.HideGPSImage()
+			fmt.Fprintf(w, "OK")
+
 		} else if strings.HasPrefix(r.URL.Path, "/onscreens/gps/show") {
-			//TODO: implement me
-			http.Error(w, "not yet implemented", http.StatusNotImplemented)
+			onscreensServer.ShowGPSImage()
+			fmt.Fprintf(w, "OK")
+
 		} else if strings.HasPrefix(r.URL.Path, "/onscreens/leaderboard/show") {
 			//TODO: implement me
 			//TODO: this should include the leaderboard as a param
