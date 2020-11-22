@@ -20,6 +20,7 @@ import (
 // createOnscreens starts the various onscreen elements
 // (like the chat boxes in the corners)
 func createOnscreens() {
+	onscreensServer.InitGPSImage()
 	onscreensServer.InitLeftRotator()
 	onscreensServer.InitRightRotator()
 	onscreensServer.InitMiddleText()
