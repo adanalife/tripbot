@@ -44,6 +44,9 @@ func main() {
 	// initialize the onscreen elements
 	createOnscreens()
 
+	// await graceful shutdown signal
+	listenForShutdown()
+
 	// start VLC
 	vlcServer.InitPlayer()
 	// start by playing a random video
