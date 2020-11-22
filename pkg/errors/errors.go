@@ -14,6 +14,7 @@ func init() {
 	sentry.Init(sentry.ClientOptions{})
 }
 
+//TODO: go through calls to this, find places we create a new Error, and change to nil
 func Log(e error, msg string) {
 	if e == nil {
 		e = errors.New(msg)
