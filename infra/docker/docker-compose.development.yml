@@ -10,7 +10,7 @@ services:
     command: -c "go run cmd/tripbot/tripbot.go 2>&1"
     volumes:
       # - /home/dmerrick/Videos/Dashcam/screencaps:/opt/data/screencaps:ro
-      - /Volumes/Leeroy/Dana\'s\ Photos/Dashcam\ Scratchpad/Dashcam/screencaps:/opt/data/screencaps:ro
+      - "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/screencaps:/opt/data/screencaps:ro"
 
   obs:
     environment:
