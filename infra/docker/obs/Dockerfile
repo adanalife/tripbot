@@ -6,7 +6,6 @@ FROM adanalife/ffmpeg
 # install dependencies
 # most of these come from the obs-studio
 # install from source instructions
-#TODO: add --no-install-suggests
 RUN export DEBIAN_FRONTEND=noninteractive \
   && unset LD_LIBRARY_PATH \
   && apt-get update \
@@ -90,6 +89,13 @@ RUN apt-get update \
     tesseract-ocr \
   && rm -rf /var/lib/apt/lists/*
 
+# install vdpau driver
+#TODO: is this necessary?
+RUN apt-get update \
+  && apt-get install --no-install-suggests -y \
+    vdpau-va-driver \
+  && rm -rf /var/lib/apt/lists/*
+
 # for the VNC connection
 EXPOSE 5900
 
@@ -141,10 +147,5 @@ RUN ln -s /go/src/github.com/adanalife/tripbot /opt/tripbot \
 # build the binary
 WORKDIR /opt/tripbot
 RUN go build -o bin/vlc-server cmd/vlc-server/vlc-server.go
-
-RUN apt-get update \
-  && apt-get install --no-install-suggests -y \
-    vdpau-va-driver \
-  && rm -rf /var/lib/apt/lists/*
 
 ENTRYPOINT ["/opt/tripbot/script/container_startup.sh"]
