@@ -26,6 +26,12 @@ func init() {
 		return
 	}
 
+	if config.DisableMusic {
+		log.Println(aurora.Yellow("Disabling audio"))
+		Enabled = false
+		return
+	}
+
 	// connect to the MPD server
 	connect()
 

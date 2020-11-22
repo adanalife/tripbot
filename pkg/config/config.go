@@ -65,6 +65,8 @@ var (
 
 	// DisableTwitchWebhooks disables receiving webhooks from Twitch (new followers for instance)
 	DisableTwitchWebhooks bool
+	// DisableMusic disables MPD completely
+	DisableMusic bool
 	// DisableMusicAutoplay disables the auto-play for MPD
 	DisableMusicAutoplay bool
 
@@ -128,11 +130,15 @@ func init() {
 	GoogleMapsAPIKey = os.Getenv("GOOGLE_MAPS_API_KEY")
 
 	DisableTwitchWebhooks, _ = strconv.ParseBool(os.Getenv("DISABLE_TWITCH_WEBHOOKS"))
+	DisableMusic, _ = strconv.ParseBool(os.Getenv("DISABLE_MUSIC"))
 	DisableMusicAutoplay, _ = strconv.ParseBool(os.Getenv("DISABLE_MUSIC_AUTOPLAY"))
 
 	// give helpful reminders when things are disabled
 	if DisableTwitchWebhooks {
 		log.Println(aurora.Yellow("Disabling Twitch webhooks"))
+	}
+	if DisableMusic {
+		log.Println(aurora.Yellow("Disabling music"))
 	}
 	if DisableMusicAutoplay {
 		log.Println(aurora.Yellow("Disabling music autoplay"))
