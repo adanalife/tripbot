@@ -39,4 +39,4 @@ services:
 
   db:
     volumes:
-      - ./tmp/data:/var/lib/postgresql/data
+      - ./tmp/postgres_data:/var/lib/postgresql/data
