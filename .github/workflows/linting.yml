@@ -1,5 +1,11 @@
 name: Linting
-on: [pull_request]
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+    tags:
+      - v*
 jobs:
 
   golint:
