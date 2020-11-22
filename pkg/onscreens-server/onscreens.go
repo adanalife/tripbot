@@ -3,6 +3,7 @@ package onscreensServer
 import (
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"time"
 
@@ -135,7 +136,15 @@ func (osc Onscreen) showImage() {
 	// copy the image to the live location
 	err := os.Link(osc.outputFile, osc.liveImage())
 	if err != nil {
-		terrors.Log(err, "error creating image")
+		// cast to LinkError so we can unwrap the error message
+		linkErr := err.(*os.LinkError)
+		if linkErr.Unwrap().Error() == "file exists" {
+			// print friendly message
+			log.Println(osc.outputFile, "is already present")
+		} else {
+			// something more serious went wrong
+			terrors.Log(linkErr, "error creating image")
+		}
 	}
 }
 
