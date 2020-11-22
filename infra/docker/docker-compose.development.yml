@@ -9,7 +9,8 @@ services:
     entrypoint: bash
     command: -c "go run cmd/tripbot/tripbot.go 2>&1"
     volumes:
-      - /home/dmerrick/Videos/Dashcam/screencaps:/opt/data/screencaps:ro
+      # - /home/dmerrick/Videos/Dashcam/screencaps:/opt/data/screencaps:ro
+      - /Volumes/Leeroy/Dana\'s\ Photos/Dashcam\ Scratchpad/Dashcam/screencaps:/opt/data/screencaps:ro
 
   obs:
     environment:
@@ -31,8 +32,10 @@ services:
     command: -c "cd /opt/tripbot && rm -f bin/vlc-server && script/container_startup.sh"
     volumes:
       - .bash_history.remote:/root/.bash_history
-      - /home/dmerrick/Videos/Dashcam/screencaps:/opt/data/screencaps:ro
-      - /home/dmerrick/Videos/Dashcam/_all:/opt/data/Dashcam/_all:ro
+      - /Volumes/Leeroy/Dana\'s\ Photos/Dashcam\ Scratchpad/Dashcam/screencaps:/opt/data/screencaps:ro
+      - /Volumes/Leeroy/Dana\'s\ Photos/Dashcam\ Scratchpad/Dashcam/_all:/opt/data/Dashcam/_all:ro
+      # - /home/dmerrick/Videos/Dashcam/screencaps:/opt/data/screencaps:ro
+      # - /home/dmerrick/Videos/Dashcam/_all:/opt/data/Dashcam/_all:ro
 
   db:
     volumes:
