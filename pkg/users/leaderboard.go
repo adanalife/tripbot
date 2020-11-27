@@ -109,7 +109,6 @@ func printLeaderboard() {
 }
 
 // LeaderboardContent creates the content for the leaderboard onscreen
-// it returns a base64 encoded string to pass to vlc-server
 func LeaderboardContent() string {
 	var output string
 	output = "Odometer Leaderboard\n"
@@ -124,5 +123,5 @@ func LeaderboardContent() string {
 		output = output + fmt.Sprintf("%s miles: %s\n", score[1], score[0])
 	}
 
-	return helpers.Base64Encode(output)
+	return output
 }

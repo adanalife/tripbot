@@ -15,6 +15,7 @@ import (
 	"github.com/davecgh/go-spew/spew"
 )
 
+//TODO: use more StatusExpectationFailed instead of http.StatusUnprocessableEntity
 func handle(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
@@ -85,14 +86,21 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "OK")
 
 		} else if strings.HasPrefix(r.URL.Path, "/onscreens/flag/show") {
-			durStr, ok := r.URL.Query()["dur"]
-			if !ok || len(durStr) > 1 {
+			base64content, ok := r.URL.Query()["dur"]
+			if !ok || len(base64content) > 1 {
 				http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
 				return
 			}
-			dur, err := time.ParseDuration(strings.Join(durStr, " "))
+			dur, err := helpers.Base64Decode(base64content[0])
+			if err != nil {
+				terrors.Log(err, "unable to decode string")
+				http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
+				return
+			}
+			dur, err := time.ParseDuration(dur)
 			if err != nil {
 				http.Error(w, "unable to parse duration", http.StatusInternalServerError)
+				return
 			}
 			onscreensServer.ShowFlag(dur)
 			fmt.Fprintf(w, "OK")
@@ -131,12 +139,18 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "OK")
 
 		} else if strings.HasPrefix(r.URL.Path, "/onscreens/middle/show") {
-			msg, ok := r.URL.Query()["msg"]
-			if !ok || len(msg) > 1 {
+			base64content, ok := r.URL.Query()["msg"]
+			if !ok || len(base64content) > 1 {
 				http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
 				return
 			}
-			onscreensServer.MiddleText.Show(strings.Join(msg, " "))
+			msg, err := helpers.Base64Decode(base64content[0])
+			if err != nil {
+				terrors.Log(err, "unable to decode string")
+				http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
+				return
+			}
+			onscreensServer.MiddleText.Show(msg)
 			fmt.Fprintf(w, "OK")
 
 			// return a favicon if anyone asks for one

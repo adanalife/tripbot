@@ -8,6 +8,7 @@ import (
 
 	"github.com/adanalife/tripbot/pkg/config"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
+	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/users"
 )
 
@@ -24,7 +25,7 @@ func HideMiddleText() error {
 
 func ShowMiddleText(msg string) error {
 	url := onscreensServerURL + "/onscreens/middle/show"
-	url = fmt.Sprintf("%s?msg=\"%s\"", url, msg)
+	url = fmt.Sprintf("%s?msg=%s", url, helpers.Base64Encode(msg))
 	_, err := getUrl(url)
 	if err != nil {
 		terrors.Log(err, "error showing middle onscreen")
@@ -36,7 +37,7 @@ func ShowMiddleText(msg string) error {
 func ShowLeaderboard() error {
 	content := users.LeaderboardContent()
 	url := onscreensServerURL + "/onscreens/leaderboard/show"
-	url = fmt.Sprintf("%s?content=%s", url, content)
+	url = fmt.Sprintf("%s?content=%s", url, helpers.Base64Encode(content))
 	_, err := getUrl(url)
 	if err != nil {
 		terrors.Log(err, "error showing leaderboard onscreen")
@@ -56,7 +57,7 @@ func ShowTimewarp() error {
 
 func ShowFlag(dur time.Duration) error {
 	url := onscreensServerURL + "/onscreens/flag/show"
-	url = fmt.Sprintf("%s?duration=\"%s\"", url, dur)
+	url = fmt.Sprintf("%s?duration=%s", url, helpers.Base64Encode(string(dur)))
 	_, err := getUrl(url)
 	if err != nil {
 		terrors.Log(err, "error showing flag onscreen")
@@ -67,7 +68,7 @@ func ShowFlag(dur time.Duration) error {
 
 func ShowGPSImage(dur time.Duration) error {
 	url := onscreensServerURL + "/onscreens/gps/show"
-	url = fmt.Sprintf("%s?duration=\"%s\"", url, dur)
+	url = fmt.Sprintf("%s?duration=%s", url, helpers.Base64Encode(string(dur)))
 	_, err := getUrl(url)
 	if err != nil {
 		terrors.Log(err, "error showing gps onscreen")
