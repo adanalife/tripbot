@@ -5,11 +5,9 @@ import (
 	"math/rand"
 	"os"
 	"os/signal"
-	"path"
 	"syscall"
 	"time"
 
-	"github.com/adanalife/tripbot/pkg/config"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	onscreensServer "github.com/adanalife/tripbot/pkg/onscreens-server"
 	vlcServer "github.com/adanalife/tripbot/pkg/vlc-server"
@@ -39,7 +37,7 @@ func main() {
 	// create a brand new random seed
 	rand.Seed(time.Now().UnixNano())
 
-	helpers.WritePidFile(path.Join(config.RunDir, "vlc-server.pid"))
+	helpers.WritePidFile(vlcServer.PidFile)
 
 	// initialize the onscreen elements
 	createOnscreens()

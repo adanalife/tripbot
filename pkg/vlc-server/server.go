@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -13,6 +14,8 @@ import (
 	onscreensServer "github.com/adanalife/tripbot/pkg/onscreens-server"
 	"github.com/davecgh/go-spew/spew"
 )
+
+var PidFile = path.Join(config.RunDir, "vlc-server.pid")
 
 func handle(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
