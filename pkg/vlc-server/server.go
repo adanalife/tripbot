@@ -106,8 +106,8 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "OK")
 
 		} else if strings.HasPrefix(r.URL.Path, "/onscreens/timewarp/show") {
-			//TODO: implement me
-			http.Error(w, "not yet implemented", http.StatusNotImplemented)
+			onscreensServer.ShowTimewarp()
+			fmt.Fprintf(w, "OK")
 
 		} else if strings.HasPrefix(r.URL.Path, "/onscreens/leaderboard/show") {
 			base64content, ok := r.URL.Query()["content"]
@@ -127,12 +127,17 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "OK")
 
 		} else if strings.HasPrefix(r.URL.Path, "/onscreens/middle/hide") {
-			//TODO: implement me
-			http.Error(w, "not yet implemented", http.StatusNotImplemented)
+			onscreensServer.MiddleText.Hide()
+			fmt.Fprintf(w, "OK")
 
 		} else if strings.HasPrefix(r.URL.Path, "/onscreens/middle/set") {
-			//TODO: implement me
-			http.Error(w, "not yet implemented", http.StatusNotImplemented)
+			msg, ok := r.URL.Query()["msg"]
+			if !ok || len(msg) > 1 {
+				http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
+				return
+			}
+			onscreensServer.MiddleText.SetContent(strings.Join(msg, " "))
+			fmt.Fprintf(w, "OK")
 
 		} else if strings.HasPrefix(r.URL.Path, "/onscreens/middle/show") {
 
