@@ -416,5 +416,5 @@ func middleCmd(user *users.User, params []string) {
 	// just to help debug
 	log.Printf("setting middle text to: %s", text)
 
-	onscreensClient.SetMiddleText(text)
+	onscreensClient.ShowMiddleText(text)
 }

@@ -13,17 +13,6 @@ import (
 
 var onscreensServerURL = "http://" + config.VlcServerHost
 
-func SetMiddleText(msg string) error {
-	url := onscreensServerURL + "/onscreens/middle/set"
-	url = fmt.Sprintf("%s?msg=\"%s\"", url, msg)
-	_, err := getUrl(url)
-	if err != nil {
-		terrors.Log(err, "error setting middle onscreen")
-		return err
-	}
-	return nil
-}
-
 func HideMiddleText() error {
 	_, err := getUrl(onscreensServerURL + "/onscreens/middle/hide")
 	if err != nil {
@@ -33,9 +22,9 @@ func HideMiddleText() error {
 	return nil
 }
 
-func ShowMiddleText(dur time.Duration) error {
+func ShowMiddleText(msg string) error {
 	url := onscreensServerURL + "/onscreens/middle/show"
-	url = fmt.Sprintf("%s?duration=\"%s\"", url, dur)
+	url = fmt.Sprintf("%s?msg=\"%s\"", url, msg)
 	_, err := getUrl(url)
 	if err != nil {
 		terrors.Log(err, "error showing middle onscreen")

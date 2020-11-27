@@ -130,17 +130,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			onscreensServer.MiddleText.Hide()
 			fmt.Fprintf(w, "OK")
 
-		} else if strings.HasPrefix(r.URL.Path, "/onscreens/middle/set") {
-			msg, ok := r.URL.Query()["msg"]
-			if !ok || len(msg) > 1 {
-				http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
-				return
-			}
-			onscreensServer.MiddleText.SetContent(strings.Join(msg, " "))
-			fmt.Fprintf(w, "OK")
-
 		} else if strings.HasPrefix(r.URL.Path, "/onscreens/middle/show") {
-
 			msg, ok := r.URL.Query()["msg"]
 			if !ok || len(msg) > 1 {
 				http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
