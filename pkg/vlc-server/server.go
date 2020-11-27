@@ -17,9 +17,9 @@ import (
 func handle(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
-		// healthcheck URL, for tools to verify the bot is alive
+		// healthcheck URL, for tools to verify the stream is alive
 		if r.URL.Path == "/health" {
-			fmt.Fprintf(w, "OK")
+			healthCheck(w)
 
 		} else if strings.HasPrefix(r.URL.Path, "/vlc/current") {
 			// return the currently-playing file
