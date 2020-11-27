@@ -44,8 +44,10 @@ func ShowMiddleText(dur time.Duration) error {
 }
 
 func ShowLeaderboard() error {
-	//TODO: this needs to be a POST
-	_, err := getUrl(onscreensServerURL + "/onscreens/leaderboard/show")
+	content := users.LeaderboardContent()
+	url := onscreensServerURL + "/onscreens/leaderboard/show"
+	url = fmt.Sprintf("%s?content=\"%s\"", url, content)
+	_, err := getUrl(url)
 	if err != nil {
 		terrors.Log(err, "error showing leaderboard onscreen")
 		return err

@@ -1,6 +1,7 @@
 package helpers
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -278,4 +279,17 @@ func PidExists(pid int) (bool, error) {
 		return true, nil
 	}
 	return false, err
+}
+
+// https://stackoverflow.com/a/28672789
+func Base64Encode(str string) string {
+	return base64.StdEncoding.EncodeToString([]byte(str))
+}
+
+func Base64Decode(str string) (string, error) {
+	data, err := base64.StdEncoding.DecodeString(str)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
 }

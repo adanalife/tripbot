@@ -107,3 +107,22 @@ func printLeaderboard() {
 		fmt.Printf("%d: %s - %s\n", i+1, pair[1], aurora.Magenta(pair[0]))
 	}
 }
+
+// LeaderboardContent creates the content for the leaderboard onscreen
+// it returns a base64 encoded string to pass to vlc-server
+func LeaderboardContent() string {
+	var output string
+	output = "Odometer Leaderboard\n"
+
+	size := 5
+	if len(Leaderboard) < size {
+		size = len(Leaderboard)
+	}
+	leaderboard := Leaderboard[:size]
+
+	for _, score := range leaderboard {
+		output = output + fmt.Sprintf("%s miles: %s\n", score[1], score[0])
+	}
+
+	return helpers.Base64Encode(output)
+}

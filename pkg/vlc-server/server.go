@@ -11,6 +11,7 @@ import (
 
 	"github.com/adanalife/tripbot/pkg/config"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
+	"github.com/adanalife/tripbot/pkg/helpers"
 	onscreensServer "github.com/adanalife/tripbot/pkg/onscreens-server"
 	"github.com/davecgh/go-spew/spew"
 )
@@ -113,9 +114,20 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "not yet implemented", http.StatusNotImplemented)
 
 		} else if strings.HasPrefix(r.URL.Path, "/onscreens/leaderboard/show") {
-			//TODO: implement me
-			//TODO: this should include the leaderboard as a param
-			http.Error(w, "not yet implemented", http.StatusNotImplemented)
+			base64content, ok := r.URL.Query()["content"]
+			if !ok || len(base64content) > 1 {
+				http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
+				return
+			}
+			content, err := helpers.Base64Decode(base64content)
+			if err != nil {
+				terrors.Log(err, "unable to decode string")
+				http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
+				return
+			}
+
+			onscreensServer.Leaderboard.Show(content)
+			fmt.Fprintf(w, "OK")
 
 		} else if strings.HasPrefix(r.URL.Path, "/onscreens/middle/hide") {
 			//TODO: implement me
