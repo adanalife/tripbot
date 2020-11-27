@@ -61,7 +61,12 @@ var (
 	ScreencapDir string
 	// VideoDir is where the videos live
 	VideoDir string
-	RunDir   string
+	// RunDir is where temporary-but-important runtime files live (such as pidfiles and onscreen content)
+	RunDir string
+
+	VLCPidFile     string
+	OBSPidFile     string
+	TripbotPidFile string
 
 	// DisableTwitchWebhooks disables receiving webhooks from Twitch (new followers for instance)
 	DisableTwitchWebhooks bool
@@ -146,6 +151,9 @@ func init() {
 
 	// assemble compound settings
 	VideoDir = path.Join(DashcamDir, videoDir)
+	VLCPidFile = path.Join(RunDir, "vlc-server.pid")
+	OBSPidFile = path.Join(RunDir, "OBS.pid")
+	TripbotPidFile = path.Join(RunDir, "tripbot.pid")
 
 	// thes dirs will get created on boot if necessary
 	dirsToCreate := []string{

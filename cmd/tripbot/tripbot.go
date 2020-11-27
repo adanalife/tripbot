@@ -6,7 +6,6 @@ import (
 	"math/rand"
 	"os"
 	"os/signal"
-	"path"
 	"syscall"
 	"time"
 
@@ -52,7 +51,7 @@ func createRandomSeed() {
 
 // listenForShutdown creates a background job that listens for a graceful shutdown request
 func listenForShutdown() {
-	helpers.WritePidFile(path.Join(config.RunDir, "tripbot.pid"))
+	helpers.WritePidFile(config.TripbotPidFile)
 	// start the graceful shutdown listener
 	go gracefulShutdown()
 }
