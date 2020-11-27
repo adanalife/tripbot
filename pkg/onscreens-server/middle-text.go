@@ -19,7 +19,3 @@ func InitMiddleText() {
 	// keep the same text from before the bot started
 	MiddleText.IsShowing = true
 }
-
-func SetContent(content string) {
-	MiddleText.Content = content
-}

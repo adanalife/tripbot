@@ -109,6 +109,10 @@ func (osc *Onscreen) Hide() {
 	}
 }
 
+func (osc *Onscreen) SetContent(content string) {
+	osc.Content = content
+}
+
 // show is what makes an Onscreen visible
 func (osc *Onscreen) show(content string) {
 	// mark it as visible
