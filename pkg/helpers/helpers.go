@@ -217,6 +217,7 @@ func UserIsAdmin(username string) bool {
 // this nastiness taken from:
 // https://gist.github.com/davidnewhall/3627895a9fc8fa0affbd747183abca39
 // Write a pid file, but first make sure it doesn't exist with a running pid.
+//TODO: consider refactoring to use PidExists()
 func WritePidFile(pidFile string) error {
 	// Read in the pid file as a slice of bytes.
 	if piddata, err := ioutil.ReadFile(pidFile); err == nil {
@@ -241,10 +242,40 @@ func ReadPidFile(pidFile string) int {
 	// Read in the pid file as a slice of bytes.
 	if piddata, err := ioutil.ReadFile(pidFile); err == nil {
 		// Convert the file contents to an integer.
-		if pid, err := strconv.Atoi(string(piddata)); err == nil {
+		pid, err := strconv.Atoi(strings.TrimSpace(string(piddata)))
+		if err == nil {
 			return pid
 		}
 	}
 	// return an invalid pid otherwise
 	return -1
+}
+
+// https://stackoverflow.com/a/59459658
+func PidExists(pid int) (bool, error) {
+	if pid <= 0 {
+		return false, fmt.Errorf("invalid pid %v", pid)
+	}
+	proc, err := os.FindProcess(int(pid))
+	if err != nil {
+		return false, err
+	}
+	err = proc.Signal(syscall.Signal(0))
+	if err == nil {
+		return true, nil
+	}
+	if err.Error() == "os: process already finished" {
+		return false, nil
+	}
+	errno, ok := err.(syscall.Errno)
+	if !ok {
+		return false, err
+	}
+	switch errno {
+	case syscall.ESRCH:
+		return false, nil
+	case syscall.EPERM:
+		return true, nil
+	}
+	return false, err
 }

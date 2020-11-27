@@ -3,29 +3,22 @@ package vlcServer
 import (
 	"fmt"
 	"net/http"
-	"os"
-	"syscall"
 
+	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
 )
 
 func healthCheck(w http.ResponseWriter) {
 	obsPid := helpers.ReadPidFile(OBSPidFile)
-	if !isPidRunning(obsPid) {
+	pidRunning, err := helpers.PidExists(obsPid)
+	if err != nil {
+		terrors.Log(err, "error fetching OBS pid")
+		http.Error(w, "error fetching OBS pid", http.StatusFailedDependency)
+		return
+	}
+	if !pidRunning {
 		http.Error(w, "OBS not running", http.StatusFailedDependency)
+		return
 	}
 	fmt.Fprintf(w, "OK")
-}
-
-// https://stackoverflow.com/questions/15204162/check-if-a-process-exists-in-go-way
-func isPidRunning(pid int) bool {
-	process, err := os.FindProcess(pid)
-	if err != nil {
-		fmt.Printf("Failed to find process: %s\n", err)
-		return false
-	} else {
-		err := process.Signal(syscall.Signal(0))
-		fmt.Printf("process.Signal on pid %d returned: %v\n", pid, err)
-		return true
-	}
 }
