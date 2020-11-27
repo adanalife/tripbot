@@ -16,18 +16,6 @@ import (
 	"github.com/logrusorgru/aurora"
 )
 
-// createOnscreens starts the various onscreen elements
-// (like the chat boxes in the corners)
-func createOnscreens() {
-	onscreensServer.InitGPSImage()
-	onscreensServer.InitLeftRotator()
-	onscreensServer.InitRightRotator()
-	onscreensServer.InitMiddleText()
-	onscreensServer.InitTimewarp()
-	onscreensServer.InitLeaderboard()
-	onscreensServer.InitFlagImage()
-}
-
 func main() {
 
 	// we don't yet support libvlc on darwin
@@ -38,6 +26,7 @@ func main() {
 	// create a brand new random seed
 	rand.Seed(time.Now().UnixNano())
 
+	// write the current pid to a pidfile
 	helpers.WritePidFile(config.VLCPidFile)
 
 	// initialize the onscreen elements
@@ -48,13 +37,25 @@ func main() {
 
 	// start VLC
 	vlcServer.InitPlayer()
-	// start by playing a random video
-	vlcServer.PlayRandom()
+	vlcServer.PlayRandom() // play a random video
 
 	// start the webserver
-	vlcServer.Start() // starts the server
+	vlcServer.Start()
 
+	// listen for termination signals and gracefully shutdown
 	defer vlcServer.Shutdown()
+}
+
+// createOnscreens starts the various onscreen elements
+// (like the chat boxes in the corners)
+func createOnscreens() {
+	onscreensServer.InitGPSImage()
+	onscreensServer.InitLeftRotator()
+	onscreensServer.InitRightRotator()
+	onscreensServer.InitMiddleText()
+	onscreensServer.InitTimewarp()
+	onscreensServer.InitLeaderboard()
+	onscreensServer.InitFlagImage()
 }
 
 // listenForShutdown creates a background job that listens for a graceful shutdown request

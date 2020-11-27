@@ -34,7 +34,7 @@ func main() {
 	listenForShutdown()
 	startHttpServer()
 	findInitialVideo()
-	setUpLeaderboard()
+	users.InitLeaderboard()
 	startCron()
 	setUpTwitchClient() // required for the below
 	updateSubscribers()
@@ -72,13 +72,6 @@ func findInitialVideo() {
 	if err != nil {
 		terrors.Log(err, "error loading initial video, is there a video playing?")
 	}
-}
-
-// setUpLeaderboard fetches the current leaderboard
-// from the DB and stores it in memory
-func setUpLeaderboard() {
-	// initialize the leaderboard
-	users.InitLeaderboard()
 }
 
 // startCron starts the background workers
