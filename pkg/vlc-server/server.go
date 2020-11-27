@@ -119,7 +119,8 @@ func handle(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
 				return
 			}
-			content, err := helpers.Base64Decode(base64content)
+			spew.Dump(base64content)
+			content, err := helpers.Base64Decode(strings.Join(base64content, " "))
 			if err != nil {
 				terrors.Log(err, "unable to decode string")
 				http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)

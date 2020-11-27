@@ -8,6 +8,7 @@ import (
 
 	"github.com/adanalife/tripbot/pkg/config"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
+	"github.com/adanalife/tripbot/pkg/users"
 )
 
 var onscreensServerURL = "http://" + config.VlcServerHost
