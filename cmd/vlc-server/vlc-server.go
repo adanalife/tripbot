@@ -37,7 +37,7 @@ func main() {
 	// create a brand new random seed
 	rand.Seed(time.Now().UnixNano())
 
-	helpers.WritePidFile(vlcServer.PidFile)
+	helpers.WritePidFile(vlcServer.VLCPidFile)
 
 	// initialize the onscreen elements
 	createOnscreens()

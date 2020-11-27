@@ -236,3 +236,15 @@ func WritePidFile(pidFile string) error {
 	// or the pid in it doesn't belong to the user running this app.
 	return ioutil.WriteFile(pidFile, []byte(fmt.Sprintf("%d", os.Getpid())), 0664)
 }
+
+func ReadPidFile(pidFile string) int {
+	// Read in the pid file as a slice of bytes.
+	if piddata, err := ioutil.ReadFile(pidFile); err == nil {
+		// Convert the file contents to an integer.
+		if pid, err := strconv.Atoi(string(piddata)); err == nil {
+			return pid
+		}
+	}
+	// return an invalid pid otherwise
+	return -1
+}
