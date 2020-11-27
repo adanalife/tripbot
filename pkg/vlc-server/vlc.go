@@ -28,11 +28,12 @@ var vlcCmdFlags = []string{
 	"--ignore-config", // ignore any config files that might get loaded
 	"--fullscreen",    // start fullscreened
 	"--vout", "x11",   // use X11 (and skip vdpau)
-	"--no-audio",                // none of the videos have audio
-	"--network-caching", "6666", // network cache (in ms)
-	"--file-caching", "11111", // file cache (in ms)
+	"--no-audio", // none of the videos have audio
+	// "--network-caching", "500", // network cache (in ms)
+	"--file-caching", "777", // file cache (in ms)
 	// can be none, vdpau_avcodec, or cuda
-	"--avcodec-hw", "cuda",
+	"--avcodec-hw", "vdpau_avcodec",
+	// "--avcodec-dr", "0",
 	"--width", "1920",
 	"--height", "1080",
 	"--canvas-width", "1920",
