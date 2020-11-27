@@ -109,23 +109,10 @@ func getUrl(url string) (string, error) {
 			terrors.Log(err, "error reading response from VLC server")
 			return "", err
 		}
+		// make note of non-200 status codes
+		if response.StatusCode != 200 {
+			terrors.Log(nil, fmt.Sprintf("non-200 response from server (%d)", response.StatusCode))
+		}
 		return string(contents), nil
 	}
 }
-
-//func postLeaderboard(url string) (string, error) {
-//	//TODO: change to post
-//	response, err := http.Get(url)
-//	if err != nil {
-//		terrors.Log(err, "error connecting to VLC server")
-//		return "", err
-//	} else {
-//		defer response.Body.Close()
-//		contents, err := ioutil.ReadAll(response.Body)
-//		if err != nil {
-//			terrors.Log(err, "error reading response from VLC server")
-//			return "", err
-//		}
-//		return string(contents), nil
-//	}
-//}
