@@ -120,7 +120,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 		} else if strings.HasPrefix(r.URL.Path, "/onscreens/leaderboard/show") {
 			base64content, ok := r.URL.Query()["content"]
 			if !ok || len(base64content) > 1 {
-				http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
+				http.Error(w, "417 unprocessable entity", http.StatusExpectationFailed)
 				return
 			}
 			spew.Dump(base64content[0])
