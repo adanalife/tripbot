@@ -91,13 +91,13 @@ func handle(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
 				return
 			}
-			dur, err := helpers.Base64Decode(base64content[0])
+			durStr, err := helpers.Base64Decode(base64content[0])
 			if err != nil {
 				terrors.Log(err, "unable to decode string")
 				http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
 				return
 			}
-			dur, err := time.ParseDuration(dur)
+			dur, err := time.ParseDuration(durStr)
 			if err != nil {
 				http.Error(w, "unable to parse duration", http.StatusInternalServerError)
 				return
