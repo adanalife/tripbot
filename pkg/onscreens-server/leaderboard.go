@@ -20,7 +20,10 @@ func InitLeaderboard() {
 }
 
 func ShowLeaderboard(content string) {
-	Leaderboard.ShowFor(content, leaderboardDuration)
+
+	//TODO: re-enable this
+	log.Println("Not showing leaderboard")
+	// Leaderboard.ShowFor(content, leaderboardDuration)
 }
 
 // func leaderboardLoop() {
