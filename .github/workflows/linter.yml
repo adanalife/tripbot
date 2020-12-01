@@ -1,0 +1,22 @@
+---
+name: Super Linter
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+jobs:
+  build:
+    name: Run Linters
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: run-linters
+        uses: github/super-linter@v3
+        env:
+          # allow failures for the time being
+          DISABLE_ERRORS: true
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

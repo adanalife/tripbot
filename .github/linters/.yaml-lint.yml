@@ -1,0 +1,9 @@
+---
+# c.p. https://yamllint.readthedocs.io/en/stable/configuration.html
+extends: relaxed
+
+rules:
+  line-length: disable
+  braces:
+    min-spaces-inside-empty: 0
+    max-spaces-inside-empty: 0
