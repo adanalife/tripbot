@@ -31,7 +31,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			videoFile, ok := r.URL.Query()["video"]
 			if !ok || len(videoFile) > 1 {
 				//TODO: eventually this could just play instead of hard-requiring a param
-				http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
+				http.Error(w, "417 expectation failed", http.StatusExpectationFailed)
 				return
 			}
 
@@ -88,7 +88,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 		} else if strings.HasPrefix(r.URL.Path, "/onscreens/flag/show") {
 			base64content, ok := r.URL.Query()["dur"]
 			if !ok || len(base64content) > 1 {
-				http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
+				http.Error(w, "417 expectation failed", http.StatusExpectationFailed)
 				return
 			}
 			durStr, err := helpers.Base64Decode(base64content[0])
@@ -120,7 +120,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 		} else if strings.HasPrefix(r.URL.Path, "/onscreens/leaderboard/show") {
 			base64content, ok := r.URL.Query()["content"]
 			if !ok || len(base64content) > 1 {
-				http.Error(w, "417 unprocessable entity", http.StatusExpectationFailed)
+				http.Error(w, "417 expectation failed", http.StatusExpectationFailed)
 				return
 			}
 			spew.Dump(base64content[0])
@@ -141,7 +141,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 		} else if strings.HasPrefix(r.URL.Path, "/onscreens/middle/show") {
 			base64content, ok := r.URL.Query()["msg"]
 			if !ok || len(base64content) > 1 {
-				http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
+				http.Error(w, "417 expectation failed", http.StatusExpectationFailed)
 				return
 			}
 			msg, err := helpers.Base64Decode(base64content[0])
