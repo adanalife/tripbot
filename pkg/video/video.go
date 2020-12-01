@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/adanalife/tripbot/pkg/background"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
+	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
 	vlcClient "github.com/adanalife/tripbot/pkg/vlc-client"
 	"github.com/logrusorgru/aurora"
 )
@@ -57,9 +57,9 @@ func GetCurrentlyPlaying() {
 		// show the no-GPS image
 		if CurrentlyPlaying.Flagged {
 			//TODO: kinda cludgy that we hardcode 60s here
-			background.GPSImage.ShowFor("", 60*time.Second)
+			onscreensClient.ShowGPSImage(60 * time.Second)
 		} else {
-			background.GPSImage.Hide()
+			onscreensClient.HideGPSImage()
 		}
 	}
 }

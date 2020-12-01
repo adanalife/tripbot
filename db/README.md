@@ -14,6 +14,9 @@ sudo -u postgres psql
 
 `psql postgres://$DATABASE_USER:$DATABASE_PASS@$DATABASE_HOST/$DATABASE_DB`
 
+Development example:
+`psql postgres://tripbot_docker:hunter2@$(./bin/devenv port db 5432)/tripbot_docker`
+
 You might need to add `?sslmode=disable` for local development servers.
 
 ## To run a migration

@@ -9,7 +9,6 @@ import (
 	"syscall"
 	"time"
 
-	_ "github.com/dimiro1/banner/autoload"
 	"github.com/adanalife/tripbot/pkg/audio"
 	"github.com/adanalife/tripbot/pkg/background"
 	"github.com/adanalife/tripbot/pkg/chatbot"
@@ -21,6 +20,7 @@ import (
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/adanalife/tripbot/pkg/video"
+	_ "github.com/dimiro1/banner/autoload"
 	"github.com/gempir/go-twitch-irc/v2"
 	"github.com/getsentry/sentry-go"
 	"github.com/logrusorgru/aurora"
@@ -34,13 +34,12 @@ func main() {
 	listenForShutdown()
 	startHttpServer()
 	findInitialVideo()
-	setUpLeaderboard()
+	users.InitLeaderboard()
 	startCron()
 	setUpTwitchClient() // required for the below
 	updateSubscribers()
 	getCurrentUsers()
 	updateWebhookSubscriptions()
-	createOnscreens()
 	connectToTwitch()
 }
 
@@ -52,6 +51,7 @@ func createRandomSeed() {
 
 // listenForShutdown creates a background job that listens for a graceful shutdown request
 func listenForShutdown() {
+	helpers.WritePidFile(config.TripbotPidFile)
 	// start the graceful shutdown listener
 	go gracefulShutdown()
 }
@@ -66,21 +66,12 @@ func startHttpServer() {
 // findInitialVideo will determin the vido that is currently-playing
 // we want to run this early, otherwise it will be unset until the first cron job runs
 func findInitialVideo() {
-	background.InitGPSImage() // this has to happen first
 	video.GetCurrentlyPlaying()
 	v := video.CurrentlyPlaying
 	_, err := video.LoadOrCreate(v.String())
 	if err != nil {
 		terrors.Log(err, "error loading initial video, is there a video playing?")
 	}
-}
-
-// setUpLeaderboard figures out the current leaderboard
-// and displays the oscreen for it
-func setUpLeaderboard() {
-	// initialize the leaderboard
-	users.InitLeaderboard()
-	background.InitLeaderboard()
 }
 
 // startCron starts the background workers
@@ -114,17 +105,6 @@ func getCurrentUsers() {
 func updateWebhookSubscriptions() {
 	// create webhook subscriptions
 	mytwitch.UpdateWebhookSubscriptions()
-}
-
-// createOnscreens starts the various onscreen elements
-// (like the chat boxes in the corners)
-func createOnscreens() {
-	background.InitChat()
-	background.InitLeftRotator()
-	background.InitRightRotator()
-	background.InitMiddleText()
-	background.InitTimewarp()
-	background.InitFlagImage()
 }
 
 // connectToTwitch joins Twitch chat and starts listening
@@ -169,7 +149,7 @@ func gracefulShutdown() {
 	os.Exit(1)
 }
 
-// scheduleBackgroundJobs schedules the various backgroun jobs
+// scheduleBackgroundJobs schedules the various background jobs
 // the reason we put this is in this package is because adding this to background
 // would cause circular dependencies
 func scheduleBackgroundJobs() {

@@ -6,7 +6,6 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/adanalife/tripbot/pkg/background"
 	"github.com/adanalife/tripbot/pkg/config"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
@@ -68,8 +67,6 @@ func Initialize() *twitch.Client {
 func Say(msg string) {
 	// include the message in the log
 	mylog.ChatMsg(config.BotUsername, msg)
-	// include the bot output in chat
-	background.AddChatLine(config.BotUsername, msg)
 	// figure out what channel to speak to
 	speakTo := config.ChannelName
 	if config.OutputChannel != "" {

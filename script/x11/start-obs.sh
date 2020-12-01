@@ -2,7 +2,12 @@
 
 # this script is executed as part of the x11 startup process
 
-#TODO: fail if STREAM_KEY isn't present
+# check if X is running before starting
+if ! xset q &>/dev/null; then
+  echo "No X server at \$DISPLAY [$DISPLAY]" >&2
+  sleep 1
+  exit 1
+fi
 
 cd /opt/tripbot/configs/obs-studio || exit 3
 
@@ -19,4 +24,4 @@ cp Dashcam_Scenes.docker.json /root/.config/obs-studio/basic/scenes/Untitled.jso
 # set the streamkey from ENV var
 sed -i "s/STREAMKEY/$STREAM_KEY/" /root/.config/obs-studio/basic/profiles/Untitled/service.json
 
-obs --startstreaming
+obs --startstreaming --minimize-to-tray

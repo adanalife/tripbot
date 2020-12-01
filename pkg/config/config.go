@@ -47,8 +47,12 @@ var (
 	ReadOnly bool
 	// Verbose determines output verbosity
 	Verbose bool
+	// VlcVerbose adds extra VLC output
+	VlcVerbose bool
 	// DashcamDir contains the dashcam footage
 	DashcamDir string
+	// DashcamBucket is a bucket containing the dashcam footage
+	DashcamBucket string
 	// MapsOutputDir is where generated maps will be stored
 	MapsOutputDir string
 	// CroppedCornersDir is where we store the cropped versions of screencaps (to OCR them)
@@ -57,10 +61,17 @@ var (
 	ScreencapDir string
 	// VideoDir is where the videos live
 	VideoDir string
-	RunDir   string
+	// RunDir is where temporary-but-important runtime files live (such as pidfiles and onscreen content)
+	RunDir string
+
+	VLCPidFile     string
+	OBSPidFile     string
+	TripbotPidFile string
 
 	// DisableTwitchWebhooks disables receiving webhooks from Twitch (new followers for instance)
 	DisableTwitchWebhooks bool
+	// DisableMusic disables MPD completely
+	DisableMusic bool
 	// DisableMusicAutoplay disables the auto-play for MPD
 	DisableMusicAutoplay bool
 
@@ -102,9 +113,11 @@ func init() {
 	BotUsername = os.Getenv("BOT_USERNAME")
 	ReadOnly, _ = strconv.ParseBool(os.Getenv("READ_ONLY"))
 	Verbose, _ = strconv.ParseBool(os.Getenv("VERBOSE"))
+	VlcVerbose, _ = strconv.ParseBool(os.Getenv("VLC_VERBOSE"))
 
 	// directory settings
 	DashcamDir = getEnv("DASHCAM_DIR", defaultDashcamDir)
+	DashcamBucket = getEnv("DASHCAM_BUCKET", "")
 	ScreencapDir = getEnv("SCREENCAP_DIR", defaultScreencapDir)
 	MapsOutputDir = getEnv("MAPS_OUTPUT_DIR", defaultMapsOutputDir)
 	CroppedCornersDir = getEnv("CROPPED_CORNERS_DIR", defaultCroppedCornersDir)
@@ -122,11 +135,15 @@ func init() {
 	GoogleMapsAPIKey = os.Getenv("GOOGLE_MAPS_API_KEY")
 
 	DisableTwitchWebhooks, _ = strconv.ParseBool(os.Getenv("DISABLE_TWITCH_WEBHOOKS"))
+	DisableMusic, _ = strconv.ParseBool(os.Getenv("DISABLE_MUSIC"))
 	DisableMusicAutoplay, _ = strconv.ParseBool(os.Getenv("DISABLE_MUSIC_AUTOPLAY"))
 
 	// give helpful reminders when things are disabled
 	if DisableTwitchWebhooks {
 		log.Println(aurora.Yellow("Disabling Twitch webhooks"))
+	}
+	if DisableMusic {
+		log.Println(aurora.Yellow("Disabling music"))
 	}
 	if DisableMusicAutoplay {
 		log.Println(aurora.Yellow("Disabling music autoplay"))
@@ -134,6 +151,9 @@ func init() {
 
 	// assemble compound settings
 	VideoDir = path.Join(DashcamDir, videoDir)
+	VLCPidFile = path.Join(RunDir, "vlc-server.pid")
+	OBSPidFile = path.Join(RunDir, "OBS.pid")
+	TripbotPidFile = path.Join(RunDir, "tripbot.pid")
 
 	// thes dirs will get created on boot if necessary
 	dirsToCreate := []string{

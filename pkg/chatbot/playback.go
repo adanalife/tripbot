@@ -9,8 +9,8 @@ import (
 
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 
-	"github.com/adanalife/tripbot/pkg/background"
 	"github.com/adanalife/tripbot/pkg/helpers"
+	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/adanalife/tripbot/pkg/video"
 	vlcClient "github.com/adanalife/tripbot/pkg/vlc-client"
@@ -38,7 +38,7 @@ func timewarpCmd(user *users.User) {
 	}
 
 	// show timewarp onscreen
-	background.ShowTimewarp()
+	onscreensClient.ShowTimewarp()
 
 	// only say this if the caller is not me
 	if !helpers.UserIsAdmin(user.Username) {
@@ -109,7 +109,7 @@ func jumpCmd(user *users.User, params []string) {
 	// update the currently-playing video
 	video.GetCurrentlyPlaying()
 	// show the flag for the state
-	video.ShowFlag()
+	onscreensClient.ShowFlag(10 * time.Second)
 	// update our record of last time it ran
 	lastTimewarpTime = time.Now()
 }

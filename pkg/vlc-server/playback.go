@@ -1,6 +1,7 @@
 package vlcServer
 
 import (
+	"errors"
 	"math/rand"
 	"path/filepath"
 
@@ -45,6 +46,12 @@ func PlayRandom() error {
 	count, err := mediaList.Count()
 	if err != nil {
 		terrors.Log(err, "error counting media in VLC media list")
+	}
+
+	if count < 1 {
+		err = errors.New("missing media")
+		terrors.Log(err, "no media was found to play")
+		return err
 	}
 
 	random := rand.Intn(count)

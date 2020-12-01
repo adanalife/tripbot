@@ -1,25 +1,22 @@
-package background
+package onscreensServer
 
 import (
-	"fmt"
 	"log"
 	"math/rand"
 	"path"
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/config"
-	"github.com/adanalife/tripbot/pkg/onscreens"
-	"github.com/adanalife/tripbot/pkg/users"
 )
 
-var LeftRotator *onscreens.Onscreen
+var LeftRotator *Onscreen
 
 var leftRotatorUpdateFrequency = time.Duration(45 * time.Second)
 
 var leftRotatorFile = path.Join(config.RunDir, "left-message.txt")
 
 var possibleLeftMessages = []string{
-	"Looking for artist for emotes and more",
+	// "Looking for artist for emotes and more",
 	"Want to help the stream? Fill out the !survey",
 	"Want to help the stream? Fill out the !survey",
 	// "Twitch Prime subs keep us on air :D",
@@ -32,12 +29,12 @@ var possibleLeftMessages = []string{
 	"Crave something new? Try !timewarp",
 	"Talk to me on !socialmedia",
 	"New here? Use !commands to interact with the bot",
-	"LEADER",
+	// "LEADER",
 }
 
 func InitLeftRotator() {
 	log.Println("Creating left rotator onscreen")
-	LeftRotator = onscreens.New(leftRotatorFile)
+	LeftRotator = New(leftRotatorFile)
 	go leftRotatorLoop()
 }
 
@@ -62,10 +59,17 @@ func leftRotatorContent() string {
 
 	// some messages require custom logic
 	switch message {
-	case "LEADER":
-		// get the first leader in the leaderboard
-		leader := users.Leaderboard[:1][0]
-		output = fmt.Sprintf("%s is leader with %s miles (!leaderboard)", leader[0], leader[1])
+	//case "LEADER":
+	//	//TODO: maybe turn this into a call to tripbot?
+	//	if len(users.Leaderboard) == 0 {
+	//		terrors.Log(errors.New("leaderboard empty"), "")
+	//		// just use the default value
+	//		output = message
+	//		break
+	//	}
+	//	// get the first leader in the leaderboard
+	//	leader := users.Leaderboard[:1][0]
+	//	output = fmt.Sprintf("%s is leader with %s miles (!leaderboard)", leader[0], leader[1])
 	default:
 		output = message
 	}

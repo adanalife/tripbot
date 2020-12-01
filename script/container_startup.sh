@@ -2,27 +2,105 @@
 
 # this script is the container entrypoint for the OBS container
 
-OUR_IP=$(hostname -i)
+#TODO: set background in /etc/X11/fluxbox/overlay
 
-# start VNC server (Uses VNC_PASSWD Docker ENV variable)
-mkdir -p "$HOME/.vnc" && echo "$VNC_PASSWD" | vncpasswd -f > "$HOME/.vnc/passwd"
-vncserver :0 -localhost no -nolisten -rfbauth "$HOME/.vnc/passwd" -xstartup /opt/tripbot/script/x11vnc_entrypoint.sh
+# don't ipen vncconfig on startup
+sed -i '/vncconfig/s/^/#/' /etc/X11/Xvnc-session
 
-echo -e "\n\n------------------ OBS environment started ------------------"
-echo -e "\nVNC server started:\n\t=> connect via VNC at vnc://$OUR_IP:5900"
-echo -e "\nvlc-server started:\n\t=> connect via http://$OUR_IP:8080/vlc/current\n"
-echo -e "\nOBS started:\n\t=> view at https://twitch.tv/$CHANNEL_NAME\n"
+mkdir -p $XDG_RUNTIME_DIR
+chmod 0700 $XDG_RUNTIME_DIR
 
-if [ ! -z "${STREAM_KEY}" ]; then
-  echo -e "\n\nStream is \e[31mLIVE\e[0m!" # red text
-fi
+mkdir -p /opt/data/run
+touch /opt/data/run/{left,right}-message.txt
 
-if [ -z "$1" ]; then
-  echo -e "\n\n--------------------- VLC server log ------------------------"
-  tail -F /opt/tripbot/log/vlc*.log
+cat << EOF > /etc/syslog-ng/conf.d/obs-info.conf
+@define allow-config-dups 1
+filter f_syslog3 { not facility(auth, authpriv, mail) and not filter(f_debug)
+  or (message("obs") and message("VLC") and message("update settings"))
+  or (message("obs") and message("title: VLC media player"))
+  or (message("obs") and message("class: vlc"))
+  or (message("obs") and message("Bit depth: 24"))
+  or (message("obs") and message("Found proper GLXFBConfig (in 100): yes"));
+};
+EOF
+
+mkdir -p /root/.fluxbox
+cat << EOF > /root/.fluxbox/startup
+#!/bin/sh
+
+#TODO: not 100% sure what this does
+# Change your keymap:
+xmodmap "/root/.Xmodmap"
+
+# set the resolution
+xrandr -s 1920x1200 -r 60
+
+exec fluxbox | logger -t fluxbox
+EOF
+chmod +x /root/.fluxbox/startup
+
+cat << EOF > /etc/supervisor/conf.d/syslog.conf
+[program:syslog]
+command=/usr/sbin/syslog-ng -F
+priority=1
+autostart=true
+autorestart=true
+stdout_logfile=/var/log/syslog
+stderr_logfile=/var/log/syslog
+EOF
+
+cat << EOF > /etc/supervisor/conf.d/vnc.conf
+[program:vnc]
+directory=/opt/tripbot
+command=script/x11/start-vnc.sh
+autostart=true
+autorestart=true
+stdout_logfile=syslog
+stderr_logfile=syslog
+EOF
+
+cat << EOF > /etc/supervisor/conf.d/vlc.conf
+[program:vlc]
+directory=/opt/tripbot
+command=script/x11/start-vlc.sh
+autostart=true
+autorestart=true
+stdout_logfile=syslog
+stderr_logfile=syslog
+startsecs=2
+EOF
+
+# don't autostart OBS if this flag is set
+if [ "${DISABLE_OBS}" == "true" ]; then
+  echo "Disabling OBS autostart"
+  OBS_AUTOSTART="false"
 else
-  # unknown option ==> call command
-  echo -e "\n\n------------------ EXECUTE COMMAND ------------------"
-  echo "Executing command: '$*'"
-  exec "$@"
+  OBS_AUTOSTART="true"
 fi
+
+cat << EOF > /etc/supervisor/conf.d/obs.conf
+[program:obs]
+directory=/opt/tripbot
+command=script/x11/start-obs.sh
+autostart=$OBS_AUTOSTART
+autorestart=true
+stdout_logfile=syslog
+stderr_logfile=syslog
+startsecs=2
+EOF
+
+cleanup() {
+  echo "Gracefully stopping supervisor"
+  supervisorctl stop all
+  kill -TERM "$supervisor_pid" 2>/dev/null
+  exit 3
+}
+
+trap cleanup SIGTERM
+
+nohup supervisord --nodaemon -c /etc/supervisor/supervisord.conf 2>&1 | logger -t supervisor-init &
+supervisor_pid=$!
+
+# grc adds color to the output
+grc -- tail -F /var/log/syslog
+#| grep -v "obs info" | grep -v "obs\ttitle" | grep -v "obs\tclass" | grep -v "obs\tBit depth" | grep -v "obs\tFound proper GLXFBConfig"
