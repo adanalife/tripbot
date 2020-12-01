@@ -47,7 +47,7 @@ func connect() {
 	mpdConn, err = mpd.Dial("tcp", config.MpdServerHost)
 	if err != nil {
 		//TODO: an exponential backoff would be nice here
-		log.Println(aurora.Red("Error connecting to MPD"))
+		log.Println(aurora.Red("Error connecting to MPD"), ":", err.Error())
 	}
 }
 
