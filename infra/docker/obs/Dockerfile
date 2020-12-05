@@ -106,9 +106,10 @@ EXPOSE 8080
 # this allows for custom VNC passwords
 ENV VNC_PASSWD=123456
 
+WORKDIR /tmp
+
 # install obs and the obs-browser plugin
-RUN cd /tmp \
-  && git clone https://github.com/obsproject/obs-studio \
+RUN git clone https://github.com/obsproject/obs-studio \
   && cd obs-studio \
   && wget https://cdn-fastly.obsproject.com/downloads/cef_binary_3770_linux64.tar.bz2 \
   && tar xjf cef_binary_3770_linux64.tar.bz2 \
