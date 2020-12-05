@@ -8,6 +8,8 @@
 
 FROM    nvidia/cuda:10.2-devel-ubuntu18.04 AS devel-base
 
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
 ENV	    NVIDIA_DRIVER_CAPABILITIES compute,utility,video
 WORKDIR     /tmp/workdir
 

@@ -2,3 +2,5 @@
 ignored:
   # Pin versions in apt get install. Instead of `apt-get install <package>` use `apt-get install <package>=<version>`
   - DL3008
+  # disabled cause there are lots to change in Dockerfile.nvidia
+  - DL3003
