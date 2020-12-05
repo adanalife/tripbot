@@ -21,3 +21,9 @@ jobs:
           # DISABLE_ERRORS: true
           VALIDATE_ALL_CODEBASE: true
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DISABLE_BASH: true
+          DISABLE_DOCKERFILE: true
+          DISABLE_DOCKERFILE_HADOLINT: true
+          DISABLE_GO: true
+          DISABLE_KUBERNETES_KUBEVAL: true
+          DISABLE_MARKDOWN: true
