@@ -19,4 +19,5 @@ jobs:
         env:
           # allow failures for the time being
           # DISABLE_ERRORS: true
+          VALIDATE_ALL_CODEBASE: true
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
