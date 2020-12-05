@@ -1,0 +1,10 @@
+# https://github.com/koalaman/shellcheck/wiki/Ignore
+
+# Double quote to prevent globbing and word splitting.
+disable=SC2086
+
+# Use a ( subshell ) to avoid having to cd back.
+disable=SC2103
+
+# Consider using { cmd1; cmd2; } >> file instead of individual redirects.
+disable=SC2129
