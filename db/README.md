@@ -2,7 +2,7 @@ On a Mac, it's probably easiest to use Postgres.app.
 
 On Linux:
 
-```
+```bash
 sudo apt install postgres
 sudo -u postgres psql
 > CREATE DATABASE "tripbot_dev";

@@ -81,7 +81,7 @@ docker push danalol/ffmpeg
 These are just notes, this doc needs to be updated with Docker setup instructions.
 
 
-```
+```bash
 #TODO: put this in order, make it pretty
 
 ssh-keygen -t ecdsa -b 521

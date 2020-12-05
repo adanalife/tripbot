@@ -22,7 +22,7 @@ They can be run on separate computers.
 
 The general flow of information looks like this:
 
-![](assets/infra-diagram.png)
+![A diagram showing the different components](assets/infra-diagram.png)
 
 *Not pictured: a relational database, an MPD-based audio server, and a NAS.*
 
