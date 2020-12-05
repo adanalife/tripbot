@@ -1,2 +1,3 @@
+# https://github.com/replicatedhq/dockerfilelint#configuring
 rules:
   missing_tag: off
