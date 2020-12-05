@@ -12,6 +12,7 @@ import (
 
 	"github.com/adanalife/tripbot/pkg/audio"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
+	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
 
 	"github.com/adanalife/tripbot/pkg/background"
 	"github.com/adanalife/tripbot/pkg/config"
@@ -66,7 +67,7 @@ func helloCmd(user *users.User, params []string) {
 
 func flagCmd(user *users.User) {
 	log.Println(user.Username, "ran !flag")
-	video.ShowFlag()
+	onscreensClient.ShowFlag(10 * time.Second)
 }
 
 func versionCmd(user *users.User) {
@@ -193,21 +194,22 @@ func locationCmd(user *users.User) {
 
 func leaderboardCmd(user *users.User) {
 	log.Println(user.Username, "ran !leaderboard")
-	// display leaderboard on screen
-	background.ShowLeaderboard()
-	size := 10
-	if size > len(users.Leaderboard) {
-		size = len(users.Leaderboard)
-	}
-	leaderboard := users.Leaderboard[:size]
-	msg := fmt.Sprintf("Top %d miles: ", size)
-	for i, leaderPair := range leaderboard {
-		msg += fmt.Sprintf("%d. %s (%s)", i+1, leaderPair[0], leaderPair[1])
-		if i+1 != len(leaderboard) {
-			msg += ", "
-		}
-	}
-	Say(msg)
+	Say("This command is disabled... for now!")
+	// // display leaderboard on screen
+	// onscreensClient.ShowLeaderboard()
+	// size := 10
+	// if size > len(users.Leaderboard) {
+	// 	size = len(users.Leaderboard)
+	// }
+	// leaderboard := users.Leaderboard[:size]
+	// msg := fmt.Sprintf("Top %d miles: ", size)
+	// for i, leaderPair := range leaderboard {
+	// 	msg += fmt.Sprintf("%d. %s (%s)", i+1, leaderPair[0], leaderPair[1])
+	// 	if i+1 != len(leaderboard) {
+	// 		msg += ", "
+	// 	}
+	// }
+	// Say(msg)
 }
 
 func oldLeaderboardCmd(user *users.User) {
@@ -298,7 +300,7 @@ func guessCmd(user *users.User, params []string) {
 	if strings.ToLower(guess) == strings.ToLower(vid.State) {
 		msg = fmt.Sprintf("@%s got it! We're in %s", user.Username, vid.State)
 		// show the flag for the state
-		video.ShowFlag()
+		onscreensClient.ShowFlag(10 * time.Second)
 	} else {
 		msg = "Try again! EarthDay"
 	}
@@ -315,7 +317,7 @@ func stateCmd(user *users.User) {
 	}
 	msg := fmt.Sprintf("We're in %s", vid.State)
 	// show the flag for the state
-	video.ShowFlag()
+	onscreensClient.ShowFlag(10 * time.Second)
 	Say(msg)
 }
 
@@ -405,7 +407,7 @@ func middleCmd(user *users.User, params []string) {
 	// if the arg was "hide", hide the text from view
 	if len(params) == 1 && strings.ToLower(params[0]) == "hide" {
 		Say("Got it! Hiding the message.")
-		background.MiddleText.Hide()
+		onscreensClient.HideMiddleText()
 		return
 	}
 
@@ -415,5 +417,5 @@ func middleCmd(user *users.User, params []string) {
 	// just to help debug
 	log.Printf("setting middle text to: %s", text)
 
-	background.MiddleText.Show(text)
+	onscreensClient.ShowMiddleText(text)
 }

@@ -8,16 +8,35 @@ services:
       - ./.env.development
     entrypoint: bash
     command: -c "go run cmd/tripbot/tripbot.go 2>&1"
+    volumes:
+      # - /home/dmerrick/Videos/Dashcam/screencaps:/opt/data/screencaps:ro
+      - "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/screencaps:/opt/data/screencaps:ro"
 
   obs:
     environment:
       ENV: development
+      VDPAU_DRIVER: nvidia
+      DISABLE_OBS: "${DISABLE_OBS}"
+      # AWS_REGION: "${AWS_REGION}"
+      # AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID}"
+      # AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY}"
+      # AWS_SESSION_TOKEN: "${AWS_SESSION_TOKEN}"
+      # VLC_VERBOSE: "true"
+      # DISABLE_OBS: "true"
     env_file:
       - ./.env.development
-    # comment this to enable obs container
-    # entrypoint: "true"
+    # set this to true to disable the OBS container
+    #entrypoint: "true"
     restart: on-failure
+    entrypoint: bash
+    command: -c "cd /opt/tripbot && rm -f bin/vlc-server && script/container_startup.sh"
+    volumes:
+      - .bash_history.remote:/root/.bash_history
+      - /Volumes/Leeroy/Dana\'s\ Photos/Dashcam\ Scratchpad/Dashcam/screencaps:/opt/data/screencaps:ro
+      - /Volumes/Leeroy/Dana\'s\ Photos/Dashcam\ Scratchpad/Dashcam/_all:/opt/data/Dashcam/_all:ro
+      # - /home/dmerrick/Videos/Dashcam/screencaps:/opt/data/screencaps:ro
+      # - /home/dmerrick/Videos/Dashcam/_all:/opt/data/Dashcam/_all:ro
 
   db:
     volumes:
-      - ./tmp/data:/var/lib/postgresql/data
+      - ./tmp/postgres_data:/var/lib/postgresql/data

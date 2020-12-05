@@ -33,6 +33,9 @@ bin/vlc-server
 .env.staging
 .env.production
 
+# this will differ on different computers
+.bash_history.remote
+
 # pidfiles are temporary
 *.pid
 

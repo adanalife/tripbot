@@ -5,7 +5,6 @@ import (
 	"log"
 	"strings"
 
-	"github.com/adanalife/tripbot/pkg/background"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	mylog "github.com/adanalife/tripbot/pkg/log"
@@ -206,9 +205,6 @@ func PrivateMessage(msg twitch.PrivateMessage) {
 
 	// log to stackdriver
 	mylog.ChatMsg(username, msg.Message)
-
-	// include in the onscreen chat box
-	background.AddChatLine(username, msg.Message)
 
 	// check to see if the message is a command
 	//TODO: also include ones prefixed with whitespace?

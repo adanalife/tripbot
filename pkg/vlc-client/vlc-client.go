@@ -72,6 +72,7 @@ func Back(n int) error {
 	return nil
 }
 
+//TODO: move this to a common location
 func getUrl(url string) (string, error) {
 	response, err := http.Get(url)
 	if err != nil {

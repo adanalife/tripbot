@@ -1,8 +1,10 @@
 package helpers
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"path"
@@ -11,12 +13,13 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
-	"github.com/bradfitz/latlong"
-	"github.com/davecgh/go-spew/spew"
 	"github.com/adanalife/tripbot/pkg/config"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
+	"github.com/bradfitz/latlong"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/hako/durafmt"
 	"github.com/kelvins/geocoder"
 	"github.com/nathan-osman/go-sunrise"
@@ -200,6 +203,7 @@ func OpenInBrowser(url string) {
 	}
 }
 
+//TODO: remove this and all darwin-only support
 // RunningOnDarwin returns true if we're on darwin (OS X)
 func RunningOnDarwin() bool {
 	return runtime.GOOS == "darwin"
@@ -209,4 +213,83 @@ func RunningOnDarwin() bool {
 // it's used to restrict admin features
 func UserIsAdmin(username string) bool {
 	return strings.ToLower(username) == strings.ToLower(config.ChannelName)
+}
+
+// this nastiness taken from:
+// https://gist.github.com/davidnewhall/3627895a9fc8fa0affbd747183abca39
+// Write a pid file, but first make sure it doesn't exist with a running pid.
+//TODO: consider refactoring to use PidExists()
+func WritePidFile(pidFile string) error {
+	// Read in the pid file as a slice of bytes.
+	if piddata, err := ioutil.ReadFile(pidFile); err == nil {
+		// Convert the file contents to an integer.
+		if pid, err := strconv.Atoi(string(piddata)); err == nil {
+			// Look for the pid in the process list.
+			if process, err := os.FindProcess(pid); err == nil {
+				// Send the process a signal zero kill.
+				if err := process.Signal(syscall.Signal(0)); err == nil {
+					// We only get an error if the pid isn't running, or it's not ours.
+					return fmt.Errorf("pid already running: %d", pid)
+				}
+			}
+		}
+	}
+	// If we get here, then the pidfile didn't exist,
+	// or the pid in it doesn't belong to the user running this app.
+	return ioutil.WriteFile(pidFile, []byte(fmt.Sprintf("%d", os.Getpid())), 0664)
+}
+
+func ReadPidFile(pidFile string) int {
+	// Read in the pid file as a slice of bytes.
+	if piddata, err := ioutil.ReadFile(pidFile); err == nil {
+		// Convert the file contents to an integer.
+		pid, err := strconv.Atoi(strings.TrimSpace(string(piddata)))
+		if err == nil {
+			return pid
+		}
+	}
+	// return an invalid pid otherwise
+	return -1
+}
+
+// https://stackoverflow.com/a/59459658
+func PidExists(pid int) (bool, error) {
+	if pid <= 0 {
+		return false, fmt.Errorf("invalid pid %v", pid)
+	}
+	proc, err := os.FindProcess(int(pid))
+	if err != nil {
+		return false, err
+	}
+	err = proc.Signal(syscall.Signal(0))
+	if err == nil {
+		return true, nil
+	}
+	if err.Error() == "os: process already finished" {
+		return false, nil
+	}
+	errno, ok := err.(syscall.Errno)
+	if !ok {
+		return false, err
+	}
+	switch errno {
+	case syscall.ESRCH:
+		return false, nil
+	case syscall.EPERM:
+		return true, nil
+	}
+	return false, err
+}
+
+// https://stackoverflow.com/a/28672789
+func Base64Encode(str string) string {
+	return base64.StdEncoding.EncodeToString([]byte(str))
+}
+
+func Base64Decode(str string) (string, error) {
+	data, err := base64.StdEncoding.DecodeString(str)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
 }

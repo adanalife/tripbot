@@ -6,6 +6,7 @@ require (
 	cloud.google.com/go v0.52.0 // indirect
 	cloud.google.com/go/logging v1.0.0
 	github.com/adrg/libvlc-go/v3 v3.0.1
+	github.com/aws/aws-sdk-go v1.34.27
 	github.com/bradfitz/latlong v0.0.0-20170410180902-f3db6d0dff40
 	github.com/davecgh/go-spew v1.1.1
 	github.com/dimiro1/banner v0.0.0-20161108151223-c2f858997d49

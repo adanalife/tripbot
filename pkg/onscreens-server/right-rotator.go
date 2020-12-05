@@ -1,4 +1,4 @@
-package background
+package onscreensServer
 
 import (
 	"log"
@@ -7,10 +7,9 @@ import (
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/config"
-	"github.com/adanalife/tripbot/pkg/onscreens"
 )
 
-var RightRotator *onscreens.Onscreen
+var RightRotator *Onscreen
 
 var rightRotatorUpdateFrequency = time.Duration(90 * time.Second)
 
@@ -27,7 +26,7 @@ var possibleRightMessages = []string{
 
 func InitRightRotator() {
 	log.Println("Creating right rotator onscreen")
-	RightRotator = onscreens.New(rightRotatorFile)
+	RightRotator = New(rightRotatorFile)
 	go rightRotatorLoop()
 }
 

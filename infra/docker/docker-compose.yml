@@ -3,6 +3,7 @@ version: '3.7'
 services:
   tripbot:
     image: adanalife/tripbot
+    hostname: tripbot
     env_file:
       - infra/docker/env.docker
     build:
@@ -10,33 +11,39 @@ services:
       dockerfile: infra/docker/tripbot/Dockerfile
     depends_on:
       - db
-      - obs
-      - mpd
     ports:
       # this should match the TRIPBOT_SERVER_PORT env var
       - "8080"
     volumes:
       - .:/go/src/github.com/adanalife/tripbot
       #TODO: do we even need this?
-      - ./assets/video:/opt/data/Dashcam/_all
+      - ./assets/video:/opt/data/Dashcam/_all:ro
     restart: unless-stopped
 
   obs:
+    privileged: true
     image: adanalife/obs
+    hostname: obs
     env_file:
       - infra/docker/env.docker
     build:
       context: .
       dockerfile: infra/docker/obs/Dockerfile
+    # depends_on:
+    #   - mpd
     ports:
       # this should match the VLC_SERVER_HOST env var
       - "8080"
       - "5902:5900"
     environment:
+      DISPLAY: ":0.0"
+      XDG_RUNTIME_DIR: "/root/.cache/xdgr"
+      # hack to make fontconfig happy
+      FONTCONFIG_PATH: "/etc/fonts"
       STREAM_KEY: "${STREAM_KEY}"
     volumes:
       - .:/go/src/github.com/adanalife/tripbot
-      - ./assets/video:/opt/data/Dashcam/_all
+      - ./assets/video:/opt/data/Dashcam/_all:ro
     restart: unless-stopped
 
   db:
@@ -61,6 +68,9 @@ services:
     # devices:
     #   - /dev/snd
     restart: unless-stopped
+    # hide output
+    logging:
+      driver: none
 
   migrate:
     image: migrate/migrate

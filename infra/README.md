@@ -144,4 +144,8 @@ ffmpeg -encoders | grep nvenc
 
 # bind ESC to capslock
 # https://askubuntu.com/a/365701
+
+
+# get fonts working in obs-studio snap
+# https://askubuntu.com/a/943112
 ```

@@ -1,4 +1,4 @@
-package video
+package onscreensServer
 
 import (
 	"fmt"
@@ -8,36 +8,44 @@ import (
 	"strings"
 	"time"
 
-	"github.com/adanalife/tripbot/pkg/background"
 	"github.com/adanalife/tripbot/pkg/config"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
+	"github.com/adanalife/tripbot/pkg/video"
 )
 
-//TODO: this really shouldnt live in the video pkg,
-// but there was an import cycle
+var FlagImage *Onscreen
+var FlagImageFile = path.Join(config.RunDir, "flag.png")
 
-func ShowFlag() {
+// var flagDuration = time.Duration(150 * time.Second)
+
+func InitFlagImage() {
+	log.Println("Creating flag image onscreen")
+	FlagImage = NewImage(FlagImageFile)
+}
+
+//TODO: this should probably return an error
+func ShowFlag(dur time.Duration) {
 	//TODO: this should trigger when a state change event fires instead of every time we run this
 	updateFlagFile()
 	// actually display the flag
-	background.FlagImage.ShowFor("", 10*time.Second)
+	FlagImage.ShowFor("", 10*time.Second)
 }
 
 // updateFlagFile replaces the current flag image with the current state flag
 func updateFlagFile() {
-	if helpers.FileExists(background.FlagImageFile) {
+	if helpers.FileExists(FlagImageFile) {
 		if config.Verbose {
-			log.Printf("removing %s because it already exists", background.FlagImageFile)
+			log.Printf("removing %s because it already exists", FlagImageFile)
 		}
 		// remove the existing flag file
-		err := os.Remove(background.FlagImageFile)
+		err := os.Remove(FlagImageFile)
 		if err != nil {
 			terrors.Log(err, "error removing old flag image")
 		}
 	}
 
-	vid := CurrentlyPlaying
+	vid := video.CurrentlyPlaying
 	// find the next unflagged video
 	if vid.Flagged {
 		vid = vid.Next()
@@ -53,7 +61,7 @@ func updateFlagFile() {
 	}
 
 	// copy the image to the live location
-	err := os.Symlink(newFlagFile, background.FlagImageFile)
+	err := os.Symlink(newFlagFile, FlagImageFile)
 	if err != nil {
 		terrors.Log(err, "error creating new flag image")
 	}

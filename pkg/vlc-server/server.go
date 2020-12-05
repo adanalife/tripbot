@@ -6,19 +6,23 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/adanalife/tripbot/pkg/config"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
+	"github.com/adanalife/tripbot/pkg/helpers"
+	onscreensServer "github.com/adanalife/tripbot/pkg/onscreens-server"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
+//TODO: use more StatusExpectationFailed instead of http.StatusUnprocessableEntity
 func handle(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
-		// healthcheck URL, for tools to verify the bot is alive
+		// healthcheck URL, for tools to verify the stream is alive
 		if r.URL.Path == "/health" {
-			fmt.Fprintf(w, "OK")
+			healthCheck(w)
 
 		} else if strings.HasPrefix(r.URL.Path, "/vlc/current") {
 			// return the currently-playing file
@@ -28,7 +32,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			videoFile, ok := r.URL.Query()["video"]
 			if !ok || len(videoFile) > 1 {
 				//TODO: eventually this could just play instead of hard-requiring a param
-				http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
+				http.Error(w, "417 expectation failed", http.StatusExpectationFailed)
 				return
 			}
 
@@ -78,9 +82,76 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			// play a random file
 			err := PlayRandom()
 			if err != nil {
-				//TODO: return a 500 error
-				http.Error(w, "404 not found", http.StatusNotFound)
+				http.Error(w, "error playing random", http.StatusInternalServerError)
 			}
+			fmt.Fprintf(w, "OK")
+
+		} else if strings.HasPrefix(r.URL.Path, "/onscreens/flag/show") {
+			base64content, ok := r.URL.Query()["dur"]
+			if !ok || len(base64content) > 1 {
+				http.Error(w, "417 expectation failed", http.StatusExpectationFailed)
+				return
+			}
+			durStr, err := helpers.Base64Decode(base64content[0])
+			if err != nil {
+				terrors.Log(err, "unable to decode string")
+				http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
+				return
+			}
+			dur, err := time.ParseDuration(durStr)
+			if err != nil {
+				http.Error(w, "unable to parse duration", http.StatusInternalServerError)
+				return
+			}
+			onscreensServer.ShowFlag(dur)
+			fmt.Fprintf(w, "OK")
+
+		} else if strings.HasPrefix(r.URL.Path, "/onscreens/gps/hide") {
+			onscreensServer.HideGPSImage()
+			fmt.Fprintf(w, "OK")
+
+		} else if strings.HasPrefix(r.URL.Path, "/onscreens/gps/show") {
+			onscreensServer.ShowGPSImage()
+			fmt.Fprintf(w, "OK")
+
+		} else if strings.HasPrefix(r.URL.Path, "/onscreens/timewarp/show") {
+			onscreensServer.ShowTimewarp()
+			fmt.Fprintf(w, "OK")
+
+		} else if strings.HasPrefix(r.URL.Path, "/onscreens/leaderboard/show") {
+			base64content, ok := r.URL.Query()["content"]
+			if !ok || len(base64content) > 1 {
+				http.Error(w, "417 expectation failed", http.StatusExpectationFailed)
+				return
+			}
+			spew.Dump(base64content[0])
+			content, err := helpers.Base64Decode(base64content[0])
+			if err != nil {
+				terrors.Log(err, "unable to decode string")
+				http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
+				return
+			}
+
+			onscreensServer.Leaderboard.Show(content)
+			fmt.Fprintf(w, "OK")
+
+		} else if strings.HasPrefix(r.URL.Path, "/onscreens/middle/hide") {
+			onscreensServer.MiddleText.Hide()
+			fmt.Fprintf(w, "OK")
+
+		} else if strings.HasPrefix(r.URL.Path, "/onscreens/middle/show") {
+			base64content, ok := r.URL.Query()["msg"]
+			if !ok || len(base64content) > 1 {
+				http.Error(w, "417 expectation failed", http.StatusExpectationFailed)
+				return
+			}
+			msg, err := helpers.Base64Decode(base64content[0])
+			if err != nil {
+				terrors.Log(err, "unable to decode string")
+				http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
+				return
+			}
+			onscreensServer.MiddleText.Show(msg)
 			fmt.Fprintf(w, "OK")
 
 			// return a favicon if anyone asks for one
