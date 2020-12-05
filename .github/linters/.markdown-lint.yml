@@ -2,6 +2,7 @@
   "default": true,
   "line-length": false,
   "no-multiple-blanks": false,
+  "no-trailing-punctuation": false,
   "first-line-h1": false
 }
 
