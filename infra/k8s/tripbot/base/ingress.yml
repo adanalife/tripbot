@@ -2,6 +2,8 @@
 apiVersion: v1
 kind: Service
 metadata:
+  labels:
+    k8s-app: tripbot
   name: tripbot
 spec:
   ports:
@@ -29,3 +31,19 @@ spec:
         backend:
           serviceName: tripbot
           servicePort: 80
+
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  labels:
+    k8s-app: tripbot-metrics
+  name: tripbot
+spec:
+  endpoints:
+  - interval: 30s
+    port: http
+    scheme: http
+  selector:
+    matchLabels:
+      k8s-app: tripbot

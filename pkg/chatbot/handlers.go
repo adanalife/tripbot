@@ -7,10 +7,17 @@ import (
 
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
+	"github.com/adanalife/tripbot/pkg/instrumentation"
 	mylog "github.com/adanalife/tripbot/pkg/log"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/gempir/go-twitch-irc/v2"
 )
+
+func incChatCommandCounter(command string) {
+	if cnt, err := instrumentation.ChatCommands.GetMetricWithLabelValues(command); err == nil {
+		cnt.Add(1)
+	}
+}
 
 func runCommand(user users.User, message string) {
 	var err error
@@ -21,12 +28,16 @@ func runCommand(user users.User, message string) {
 
 	switch command {
 	case "!help":
+		incChatCommandCounter("!help")
 		helpCmd(&user)
 	case "hello", "hi", "hey", "hallo":
+		incChatCommandCounter("hello")
 		helloCmd(&user, params)
 	case "!flag":
+		incChatCommandCounter("!flag")
 		flagCmd(&user)
 	case "!version":
+		incChatCommandCounter("!version")
 		versionCmd(&user)
 	case "!song", "!currentsong", "!music", "!currentmusic":
 		songCmd(&user)
@@ -172,6 +183,10 @@ func runCommand(user users.User, message string) {
 // handles all chat messages
 func PrivateMessage(msg twitch.PrivateMessage) {
 	username := msg.User.Name
+
+	// increment the Prometheus counter
+	instrumentation.ChatMessages.Inc()
+
 	//TODO: we lose capitalization here, is that okay?
 	message := strings.ToLower(msg.Message)
 

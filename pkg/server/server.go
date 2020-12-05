@@ -13,6 +13,7 @@ import (
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/logrusorgru/aurora"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"golang.org/x/crypto/acme/autocert"
 )
 
@@ -164,6 +165,9 @@ func handle(w http.ResponseWriter, r *http.Request) {
 func Start() {
 	var err error
 	log.Println("Starting web server on port", config.TripbotServerPort)
+
+	// make prometheus metrics available
+	http.Handle("/metrics", promhttp.Handler())
 
 	http.HandleFunc("/", handle)
 	port := fmt.Sprintf(":%s", config.TripbotServerPort)

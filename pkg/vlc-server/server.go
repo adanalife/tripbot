@@ -13,6 +13,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/helpers"
 	onscreensServer "github.com/adanalife/tripbot/pkg/onscreens-server"
 	"github.com/davecgh/go-spew/spew"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 //TODO: use more StatusExpectationFailed instead of http.StatusUnprocessableEntity
@@ -173,6 +174,10 @@ func handle(w http.ResponseWriter, r *http.Request) {
 // Start starts the web server
 func Start() {
 	log.Println("Starting VLC web server on host", config.VlcServerHost)
+
+	// make prometheus metrics available
+	http.Handle("/metrics", promhttp.Handler())
+
 	http.HandleFunc("/", handle)
 
 	// ListenAndServe() wants a port in the format ":NUM"

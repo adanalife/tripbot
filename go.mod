@@ -30,11 +30,11 @@ require (
 	github.com/nicklaw5/helix v0.5.4
 	github.com/otiai10/gosseract v2.2.1+incompatible
 	github.com/otiai10/mint v1.3.0 // indirect
+	github.com/prometheus/client_golang v1.7.1
 	github.com/robfig/cron v1.2.0
 	github.com/sfreiberg/gotwilio v0.0.0-20190522212351-14c666f1d505
 	github.com/skratchdot/open-golang v0.0.0-20200116055534-eef842397966
 	golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550
-	golang.org/x/sys v0.0.0-20200124204421-9fbb57f87de9 // indirect
 	golang.org/x/tools v0.0.0-20200221224223-e1da425f72fd // indirect
 	google.golang.org/genproto v0.0.0-20200122232147-0452cf42e150 // indirect
 	googlemaps.github.io/maps v0.0.0-20190514133808-4d12cf0fa845
