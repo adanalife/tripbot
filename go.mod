@@ -5,8 +5,6 @@ go 1.12
 require (
 	cloud.google.com/go v0.73.0 // indirect
 	cloud.google.com/go/logging v1.1.2
-	github.com/CloudyKit/jet v2.1.3-0.20180809161101-62edd43e4f88+incompatible // indirect
-	github.com/Joker/jade v1.0.1-0.20190614124447-d475f43051e7 // indirect
 	github.com/adrg/libvlc-go/v3 v3.0.6
 	github.com/aws/aws-sdk-go v1.36.2
 	github.com/bradfitz/latlong v0.0.0-20170410180902-f3db6d0dff40
@@ -14,15 +12,12 @@ require (
 	github.com/dimiro1/banner v1.0.0
 	github.com/disintegration/imaging v1.6.2
 	github.com/fhs/gompd v2.0.0+incompatible
-	github.com/flosch/pongo2 v0.0.0-20190707114632-bbf5a6c351f4 // indirect
 	github.com/gempir/go-twitch-irc/v2 v2.5.0
 	github.com/getsentry/sentry-go v0.8.0
 	github.com/go-sql-driver/mysql v1.5.0 // indirect
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0 // indirect
-	github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e // indirect
 	github.com/gorilla/schema v1.2.0 // indirect
 	github.com/hako/durafmt v0.0.0-20200710122514-c0fb7b4da026
-	github.com/iris-contrib/i18n v0.0.0-20171121225848-987a633949d0 // indirect
 	github.com/jmoiron/sqlx v1.2.0
 	github.com/joho/godotenv v1.3.0
 	github.com/jonas-p/go-shp v0.1.1 // indirect
@@ -30,7 +25,6 @@ require (
 	github.com/lib/pq v1.9.0
 	github.com/logrusorgru/aurora v2.0.3+incompatible
 	github.com/mattn/go-colorable v0.1.8 // indirect
-	github.com/mediocregopher/mediocre-go-lib v0.0.0-20181029021733-cb65787f37ed // indirect
 	github.com/mitchellh/go-ps v1.0.0
 	github.com/nathan-osman/go-sunrise v0.0.0-20201029015502-9a83cd1a5746
 	github.com/nicklaw5/helix v1.4.0
