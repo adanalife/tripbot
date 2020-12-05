@@ -1,7 +1,7 @@
 {
   "default": true,
   "line-length": false,
-  "no-multiple-blanks ": false,
+  "no-multiple-blanks": false,
   "first-line-h1": false
 }
 
