@@ -4,6 +4,9 @@ kind: Deployment
 metadata:
   name: tripbot
 spec:
+  selector:
+    matchLabels:
+      app: tripbot
   template:
     spec:
       containers:
