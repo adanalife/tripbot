@@ -11,7 +11,7 @@ fi
 DASHCAM_DIR=$1
 
 # we cd into the dir so we don't include the dir name in output
-cd "$DASHCAM_DIR"
+cd "$DASHCAM_DIR" || exit 2
 
 # https://stackoverflow.com/questions/1767384
 find . | awk '
@@ -20,5 +20,5 @@ find . | awk '
 NF&&f{ print s"/"$0 }'
 
 # go back to where we started
-# shellcheck disable=SC2164
+# shellcheck disable=SC2164,SC2103
 cd - >/dev/null
