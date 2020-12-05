@@ -44,12 +44,8 @@ func Initialize() *twitch.Client {
 	}
 
 	if !config.DisableTwitchWebhooks {
-		//TODO: actually use the security features they provide here
-		authURL := c.GetAuthorizationURL(&helix.AuthorizationURLParams{
-			//TODO: move to configs lib
-			Scopes:       []string{"openid", "user:edit:broadcast", "channel:read:subscriptions"},
-			ResponseType: "token",
-		})
+		//TODO: actually use these security features
+		authURL := c.GetAuthorizationURL("", false)
 		log.Println("if your browser doesn't open automatically:")
 		log.Println(aurora.Blue(authURL).Underline())
 		helpers.OpenInBrowser(authURL)

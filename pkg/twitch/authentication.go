@@ -53,17 +53,19 @@ func Client() (*helix.Client, error) {
 		ClientSecret: ClientSecret,
 		// this is set at https://dev.twitch.tv/console/apps
 		RedirectURI: config.ExternalURL + "/auth/callback",
+		//TODO: move to configs lib
+		Scopes: []string{"openid", "user:edit:broadcast", "channel:read:subscriptions"},
 	})
 	if err != nil {
 		terrors.Log(err, "error creating client")
 	}
 
 	// set the AppAccessToken
-	AppAccessToken := client.GetAppAccessToken()
-	// if err != nil {
-	// 	terrors.Log(err, "error getting app access token from twitch")
-	// }
-	// AppAccessToken = resp.Data.AccessToken
+	resp, err := client.GetAppAccessToken()
+	if err != nil {
+		terrors.Log(err, "error getting app access token from twitch")
+	}
+	AppAccessToken = resp.Data.AccessToken
 	client.SetAppAccessToken(AppAccessToken)
 
 	// use this as the shared client
@@ -76,7 +78,15 @@ func Client() (*helix.Client, error) {
 // user access token. This is called by the web server after
 // going through the OAuth flow
 func GenerateUserAccessToken(code string) {
-	UserAccessToken = currentTwitchClient.GetUserAccessToken()
+	resp, err := currentTwitchClient.GetUserAccessToken(code)
+	if err != nil {
+		terrors.Log(err, "error getting user access token from twitch")
+		return
+	}
+
+	UserAccessToken = resp.Data.AccessToken
+	UserRefreshToken = resp.Data.RefreshToken
+
 	// update the current client with the access token
 	currentTwitchClient.SetUserAccessToken(UserAccessToken)
 }
@@ -88,12 +98,7 @@ func RefreshUserAccessToken() {
 	// check to see if we have the required tokens to work with
 	if UserRefreshToken == "" || UserAccessToken == "" {
 		log.Println("no user access token was present, did you log in with OAuth?")
-		authURL := currentTwitchClient.GetAuthorizationURL(&helix.AuthorizationURLParams{
-			//TODO: move to configs lib
-			Scopes:       []string{"openid", "user:edit:broadcast", "channel:read:subscriptions"},
-			ResponseType: "token",
-		})
-
+		authURL := currentTwitchClient.GetAuthorizationURL("", false)
 		log.Println(aurora.Blue(authURL).Underline())
 		// send a text message cause some features won't work
 		// without a user access token
