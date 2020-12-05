@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+
+# enable buildkit
+# https://www.docker.com/blog/faster-builds-in-compose-thanks-to-buildkit-support/
+export COMPOSE_DOCKER_CLI_BUILD=1
+export DOCKER_BUILDKIT=1
+
+# check if docker is running, if not start it
+#TODO: figure out if this is something we want to finish
+#if [ $(uname) == 'Darwin' ]; then
+#  #TODO: check if docker is running first
+#  open -a Docker
+#fi
+
+# pre-populate the bash_history
+echo "supervisorctl status" >> .bash_history.remote
+echo "vim /var/log/syslog" >> .bash_history.remote
+
+docker-compose \
+  --project-directory . \
+  --env-file infra/docker/env.docker \
+  -f infra/docker/docker-compose.yml \
+  -f infra/docker/docker-compose.production.yml \
+  "$@"
