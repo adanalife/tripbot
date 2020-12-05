@@ -34,6 +34,7 @@ go get -u github.com/nicklaw5/helix
 ```
 
 ### See out-of-date packages
+
 ```bash
 go get -u github.com/psampaz/go-mod-outdated
 go list -u -m -json all | go-mod-outdated
@@ -41,6 +42,7 @@ go list -u -m -json all | go-mod-outdated
 
 
 ### Create SSL certificates using letsencrypt
+
 ```bash
 EXTERNAL_URL=tripbot.example.com
 sudo certbot -d $EXTERNAL_URL --manual --preferred-challenges dns certonly
@@ -52,6 +54,7 @@ sudo cp /etc/letsencrypt/live/$EXTERNAL_URL/privkey.pem infra/certs/$EXTERNAL_UR
 ```
 
 To renew certs:
+
 ```bash
 sudo certbot renew
 ```

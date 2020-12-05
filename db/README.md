@@ -35,11 +35,12 @@ Migrations are run using [go-migrate](https://github.com/golang-migrate/migrate)
 
 
 ## Restore from backup
-```
-psql <postgres://url> < db_dump.sql
-```
+
+`psql <postgres://url> < db_dump.sql`
 
 ## Import from seed
+
 ```sql
 \copy videos FROM 'db/seed/videos.csv'  DELIMITER ',' CSV HEADER;
 ```
+
