@@ -14,7 +14,8 @@ WORKDIR     /tmp/workdir
 RUN     apt-get -yqq update && \
         apt-get install -yq --no-install-recommends ca-certificates expat libgomp1 && \
         apt-get autoremove -y && \
-        apt-get clean -y
+        apt-get clean -y && \
+        rm -rf /var/lib/apt/lists/*
 
 FROM        nvidia/cuda:10.2-runtime-ubuntu18.04 AS runtime-base
 
@@ -24,7 +25,8 @@ WORKDIR     /tmp/workdir
 RUN     apt-get -yqq update && \
         apt-get install -yq --no-install-recommends ca-certificates expat libgomp1 libxcb-shape0-dev && \
         apt-get autoremove -y && \
-        apt-get clean -y
+        apt-get clean -y && \
+        rm -rf /var/lib/apt/lists/*
 
 
 FROM  devel-base as build
@@ -105,7 +107,8 @@ RUN      buildDeps="autoconf \
                     yasm \
                     zlib1g-dev" && \
         apt-get -yqq update && \
-        apt-get install -yq --no-install-recommends ${buildDeps}
+        apt-get install -yq --no-install-recommends ${buildDeps} && \
+        rm -rf /var/lib/apt/lists/*
 
 RUN \
 	DIR=/tmp/nv-codec-headers && \
@@ -551,7 +554,6 @@ RUN \
 
 
 FROM        runtime-base AS release
-MAINTAINER  Julien Rottenberg <julien@rottenberg.info>
 
 ENV         LD_LIBRARY_PATH=/usr/local/lib:/usr/local/lib64:/usr/lib:/usr/lib64:/lib:/lib64
 

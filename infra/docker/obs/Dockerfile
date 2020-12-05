@@ -1,7 +1,7 @@
 #TODO: consider using static binaries instead:
 # https://johnvansickle.com/ffmpeg/
 # this comes from Dockerfile.nvidia
-FROM adanalife/ffmpeg
+FROM adanalife/ffmpeg:v4.2.3
 
 # install dependencies
 # most of these come from the obs-studio
@@ -9,7 +9,7 @@ FROM adanalife/ffmpeg
 RUN export DEBIAN_FRONTEND=noninteractive \
   && unset LD_LIBRARY_PATH \
   && apt-get update \
-  && apt-get install -y --no-install-suggests \
+  && apt-get install -y --no-install-recommends \
     ack-grep \
     build-essential \
     checkinstall \
@@ -78,13 +78,14 @@ RUN export DEBIAN_FRONTEND=noninteractive \
 RUN export DEBIAN_FRONTEND=noninteractive \
   && add-apt-repository ppa:longsleep/golang-backports \
   && apt-get update \
-  && apt-get install -y golang-go \
+  && apt-get install --no-install-recommends -y \
+    golang-go \
   && apt-get clean -y \
   && rm -rf /var/lib/apt/lists/*
 
 # install tesseract
 RUN apt-get update \
-  && apt-get install --no-install-suggests -y \
+  && apt-get install --no-install-recommends -y \
     libtesseract-dev \
     tesseract-ocr \
   && rm -rf /var/lib/apt/lists/*
@@ -92,7 +93,7 @@ RUN apt-get update \
 # install vdpau driver
 #TODO: is this necessary?
 RUN apt-get update \
-  && apt-get install --no-install-suggests -y \
+  && apt-get install --no-install-recommends -y \
     vdpau-va-driver \
   && rm -rf /var/lib/apt/lists/*
 
