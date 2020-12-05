@@ -7,27 +7,14 @@ import (
 
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
+	"github.com/adanalife/tripbot/pkg/instrumentation"
 	mylog "github.com/adanalife/tripbot/pkg/log"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/gempir/go-twitch-irc/v2"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
-)
-
-var (
-	chatMessages = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "tripbot_chat_messages_total",
-		Help: "The total number of chat messages",
-	})
-	chatCommands = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "tripbot_chat_commands_total",
-		Help: "The total number of chat commands",
-	}, []string{"command"},
-	)
 )
 
 func incChatCommandCounter(command string) {
-	if cnt, err := chatCommands.GetMetricWithLabelValues(command); err == nil {
+	if cnt, err := instrumentation.ChatCommands.GetMetricWithLabelValues(command); err == nil {
 		cnt.Add(1)
 	}
 }
@@ -198,7 +185,7 @@ func PrivateMessage(msg twitch.PrivateMessage) {
 	username := msg.User.Name
 
 	// increment the Prometheus counter
-	chatMessages.Inc()
+	instrumentation.ChatMessages.Inc()
 
 	//TODO: we lose capitalization here, is that okay?
 	message := strings.ToLower(msg.Message)

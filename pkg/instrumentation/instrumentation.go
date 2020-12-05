@@ -6,8 +6,13 @@ import (
 )
 
 var (
-	opsProcessed = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "myapp_processed_ops_total",
-		Help: "The total number of processed events",
+	ChatMessages = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "tripbot_chat_messages_total",
+		Help: "The total number of chat messages",
 	})
+	ChatCommands = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "tripbot_chat_commands_total",
+		Help: "The total number of chat commands",
+	}, []string{"command"},
+	)
 )
