@@ -89,11 +89,10 @@ func RefreshUserAccessToken() {
 	if UserRefreshToken == "" || UserAccessToken == "" {
 		log.Println("no user access token was present, did you log in with OAuth?")
 		authURL := currentTwitchClient.GetAuthorizationURL(&helix.AuthorizationURLParams{
+			//TODO: move to configs lib
+			Scopes:       []string{"openid", "user:edit:broadcast", "channel:read:subscriptions"},
 			ResponseType: "token",
-			////TODO: move to configs lib
-			Scopes: []string{"openid", "user:edit:broadcast", "channel:read:subscriptions"},
 		})
-		// "", false)
 
 		log.Println(aurora.Blue(authURL).Underline())
 		// send a text message cause some features won't work
