@@ -39,7 +39,7 @@ func main() {
 	vlcServer.PlayRandom() // play a random video
 
 	// start the webserver
-	config.SetServerType("vlc-server")
+	config.SetServerType("vlc_server")
 	vlcServer.Start()
 
 	// listen for termination signals and gracefully shutdown

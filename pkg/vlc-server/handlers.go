@@ -4,28 +4,15 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"strings"
+	"strconv"
 	"time"
 
-	"github.com/adanalife/tripbot/pkg/config"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
-<<<<<<< HEAD
 	onscreensServer "github.com/adanalife/tripbot/pkg/onscreens-server"
 	"github.com/davecgh/go-spew/spew"
-=======
-	sentrynegroni "github.com/getsentry/sentry-go/negroni"
->>>>>>> origin/master
-	"github.com/gorilla/mux"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-	metrics "github.com/slok/go-http-metrics/metrics/prometheus"
-	"github.com/slok/go-http-metrics/middleware"
-	negronimiddleware "github.com/slok/go-http-metrics/middleware/negroni"
-	"github.com/unrolled/secure"
-	"github.com/urfave/negroni"
 )
 
-<<<<<<< HEAD
 // healthcheck URL, for tools to verify the stream is alive
 func healthHandler(w http.ResponseWriter, r *http.Request) {
 	//TODO: rewrite this as a handler
@@ -193,129 +180,5 @@ func catchAllHandler(w http.ResponseWriter, r *http.Request) {
 	// someone tried a PUT or a DELETE or something
 	default:
 		fmt.Fprintf(w, "Only GET methods are supported.\n")
-	}
-}
-
-=======
->>>>>>> origin/master
-// Start starts the web server
-func Start() {
-	log.Println("Starting VLC web server on host", config.VlcServerHost)
-
-	r := mux.NewRouter()
-<<<<<<< HEAD
-
-	// add the prometheus middleware
-	r.Use(helpers.PrometheusMiddleware)
-	// make prometheus metrics available
-	r.Path("/metrics").Handler(promhttp.Handler())
-
-	r.HandleFunc("/health", healthHandler).Methods("GET")
-
-	// vlc endpoints
-	//TODO: consider refactoring into a subrouter
-	r.HandleFunc("/vlc/current", vlcCurrentHandler).Methods("GET")
-	r.HandleFunc("/vlc/play", vlcPlayHandler).Methods("GET")
-	r.HandleFunc("/vlc/back", vlcBackHandler).Methods("GET")
-	r.HandleFunc("/vlc/skip", vlcSkipHandler).Methods("GET")
-	r.HandleFunc("/vlc/random", vlcRandomHandler).Methods("GET")
-
-	// onscreen endpoints
-	//TODO: consider refactoring into a subrouter
-	r.HandleFunc("/onscreens/flag/show", onscreensFlagShowHandler).Methods("GET")
-	r.HandleFunc("/onscreens/gps/hide", onscreensGpsHideHandler).Methods("GET")
-	r.HandleFunc("/onscreens/gps/show", onscreensGpsShowHandler).Methods("GET")
-	r.HandleFunc("/onscreens/timewarp/show", onscreensTimewarpShowHandler).Methods("GET")
-	r.HandleFunc("/onscreens/leaderboard/show", onscreensLeaderboardShowHandler).Methods("GET")
-	r.HandleFunc("/onscreens/middle/hide", onscreensMiddleHideHandler).Methods("GET")
-	r.HandleFunc("/onscreens/middle/show", onscreensMiddleShowHandler).Methods("GET")
-
-	//TODO: refactor into static serving
-	r.HandleFunc("/favicon.ico", faviconHandler).Methods("GET")
-
-	//TODO: update to be proper catchall(?)
-	// r.PathPrefix("/").Handler(catchAllHandler)
-	r.HandleFunc("/", catchAllHandler)
-	http.Handle("/", r)
-
-	// ListenAndServe() wants a port in the format ":NUM"
-=======
-
-	// healthcheck endpoints
-	hp := r.PathPrefix("/health").Methods("GET").Subrouter()
-	hp.HandleFunc("/live", healthHandler)
-	hp.HandleFunc("/ready", healthHandler)
-
-	// vlc endpoints
-	vlc := r.PathPrefix("/vlc").Methods("GET").Subrouter()
-	vlc.HandleFunc("/current", vlcCurrentHandler)
-	vlc.HandleFunc("/play", vlcPlayHandler)
-	vlc.HandleFunc("/back", vlcBackHandler)
-	vlc.HandleFunc("/skip", vlcSkipHandler)
-	vlc.HandleFunc("/random", vlcRandomHandler)
-
-	// onscreen endpoints
-	osc := r.PathPrefix("/onscreens").Methods("GET").Subrouter()
-	osc.HandleFunc("/flag/show", onscreensFlagShowHandler)
-	osc.HandleFunc("/gps/hide", onscreensGpsHideHandler)
-	osc.HandleFunc("/gps/show", onscreensGpsShowHandler)
-	osc.HandleFunc("/timewarp/show", onscreensTimewarpShowHandler)
-	osc.HandleFunc("/leaderboard/show", onscreensLeaderboardShowHandler)
-	osc.HandleFunc("/middle/hide", onscreensMiddleHideHandler)
-	osc.HandleFunc("/middle/show", onscreensMiddleShowHandler)
-
-	// prometheus metrics endpoint
-	r.Path("/metrics").Handler(promhttp.Handler())
-
-	// static assets
-	r.HandleFunc("/favicon.ico", faviconHandler).Methods("GET")
-
-	// catch everything else
-	r.HandleFunc("/", catchAllHandler)
-
-	helpers.PrintAllRoutes(r)
-
-	// negroni classic adds panic recovery, logger, and static file middlewares
-	// c.p. https://github.com/urfave/negroni
-	//TODO: consider adding HTMLPanicFormatter
-	app := negroni.Classic()
-
-	// attach http-metrics (prometheus) middleware
-	metricsMw := middleware.New(middleware.Config{
-		Recorder: metrics.NewRecorder(metrics.Config{}),
-		Service:  config.ServerType,
-	})
-	app.Use(negronimiddleware.Handler("", metricsMw))
-
-	// attach security middleware
-	secureMw := secure.New(secure.Options{
-		FrameDeny:     true,
-		IsDevelopment: config.IsDevelopment(),
-	})
-	app.Use(negroni.HandlerFunc(secureMw.HandlerFuncWithNext))
-
-	// attach Sentry middleware (for reporting exceptions)
-	app.Use(sentrynegroni.New(sentrynegroni.Options{}))
-
-	// attaching routes to handler happens last
-	app.UseHandler(r)
-
->>>>>>> origin/master
-	//TODO: error if there's no colon to split on
-	port := strings.Split(config.VlcServerHost, ":")[1]
-
-	srv := &http.Server{
-		Addr: fmt.Sprintf("0.0.0.0:%s", port),
-		// Good practice to set timeouts to avoid Slowloris attacks.
-		WriteTimeout:   time.Second * 15,
-		ReadTimeout:    time.Second * 15,
-		IdleTimeout:    time.Second * 60,
-		MaxHeaderBytes: 1 << 20, // 1 MB
-		Handler:        app,     // Pass our instance of negroni in
-	}
-
-	//TODO: add graceful shutdown
-	if err := srv.ListenAndServe(); err != nil {
-		terrors.Fatal(err, "couldn't start server")
 	}
 }

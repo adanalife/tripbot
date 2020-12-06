@@ -230,7 +230,17 @@ func setEnvironment() {
 }
 
 func SetServerType(server_type string) {
-	ServerType = server_type
+	allowedServerTypes := []string{
+		"tripbot",
+		"vlc_server",
+	}
+	for _, t := range allowedServerTypes {
+		if t == server_type {
+			ServerType = server_type
+			return
+		}
+	}
+	log.Fatalln(aurora.Red("Invalid server type"))
 }
 
 //TODO: this should load from a config file
