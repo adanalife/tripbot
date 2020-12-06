@@ -59,6 +59,7 @@ services:
       # hack to make fontconfig happy
       FONTCONFIG_PATH: "/etc/fonts"
       STREAM_KEY: "${STREAM_KEY}"
+    command: -c "cd /opt/tripbot && rm -f bin/vlc-server && script/container_startup.sh"
     volumes:
       - .bash_history.remote:/root/.bash_history
       - .:/go/src/github.com/adanalife/tripbot

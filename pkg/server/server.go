@@ -13,10 +13,8 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/urfave/negroni"
-	"golang.org/x/crypto/acme/autocert"
 )
 
-var certManager autocert.Manager
 var server *http.Server
 
 // Start starts the web server

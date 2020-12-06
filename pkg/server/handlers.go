@@ -12,11 +12,7 @@ import (
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/logrusorgru/aurora"
-	"golang.org/x/crypto/acme/autocert"
 )
-
-var certManager autocert.Manager
-var server *http.Server
 
 //TODO: write real healthchecks for ready vs live
 // healthcheck URL, for tools to verify the bot is alive
