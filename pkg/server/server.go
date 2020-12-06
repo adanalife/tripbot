@@ -13,6 +13,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/helpers"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/users"
+	sentrynegroni "github.com/getsentry/sentry-go/negroni"
 	"github.com/gorilla/mux"
 	"github.com/logrusorgru/aurora"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
