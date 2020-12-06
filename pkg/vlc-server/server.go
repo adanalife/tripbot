@@ -195,12 +195,13 @@ func Start() {
 
 	// add the prometheus middleware
 	r.Use(helpers.PrometheusMiddleware)
-	// make prometheus metrics available
+	// make prometheus metrics available for scraping
 	r.Path("/metrics").Handler(promhttp.Handler())
 
-	// healthcheck endpoint
-	//TODO: add /ready and /live
-	r.HandleFunc("/health", healthHandler).Methods("GET")
+	// healthcheck endpoints
+	hp := r.PathPrefix("/health").Methods("GET").Subrouter()
+	hp.HandleFunc("/live", healthHandler)
+	hp.HandleFunc("/ready", healthHandler)
 
 	// vlc endpoints
 	vlc := r.PathPrefix("/vlc").Methods("GET").Subrouter()
@@ -223,6 +224,7 @@ func Start() {
 	//TODO: refactor into static serving
 	r.HandleFunc("/favicon.ico", faviconHandler).Methods("GET")
 
+	// catch everything else
 	//TODO: update to be proper catchall(?)
 	// r.PathPrefix("/").Handler(catchAllHandler)
 	r.HandleFunc("/", catchAllHandler)

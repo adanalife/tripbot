@@ -170,18 +170,30 @@ func Start() {
 
 	// add prometheus middleware
 	r.Use(helpers.PrometheusMiddleware)
-	// make prometheus metrics available
+	// make prometheus metrics available for scraping
 	r.Path("/metrics").Handler(promhttp.Handler())
 
-	r.HandleFunc("/health/live", healthHandler).Methods("GET")
-	r.HandleFunc("/health/ready", healthHandler).Methods("GET")
-	r.HandleFunc("/webhooks/twitch", webhooksTwitchHandler).Methods("GET")
-	r.HandleFunc("/auth/twitch", authTwitchHandler).Methods("GET")
-	r.HandleFunc("/auth/callback", authCallbackHandler).Methods("GET")
+	// healthcheck endpoints
+	hp := r.PathPrefix("/health").Methods("GET").Subrouter()
+	hp.HandleFunc("/live", healthHandler)
+	hp.HandleFunc("/ready", healthHandler)
+
+	// webhooks endpoints
+	// note that these can be both GET and POST requests
+	wh := r.PathPrefix("/webhooks").Subrouter()
+	wh.HandleFunc("/twitch", webhooksTwitchHandler).Methods("GET")
+	wh.HandleFunc("/twitch/users/follows", webhooksTwitchUsersFollowsHandler).Methods("POST")
+	wh.HandleFunc("/twitch/subscriptions/events", webhooksTwitchSubscriptionsEventsHandler).Methods("POST")
+
+	// auth endpoints
+	auth := r.PathPrefix("/auth").Methods("GET").Subrouter()
+	auth.HandleFunc("/twitch", authTwitchHandler)
+	auth.HandleFunc("/callback", authCallbackHandler)
+
+	// static assets
 	r.HandleFunc("/favicon.ico", faviconHandler).Methods("GET")
 
-	r.HandleFunc("/webhooks/twitch/users/follows", webhooksTwitchUsersFollowsHandler).Methods("POST")
-	r.HandleFunc("/webhooks/twitch/subscriptions/events", webhooksTwitchSubscriptionsEventsHandler).Methods("POST")
+	// catch everything else
 	//TODO: update to be proper catchall(?)
 	// r.PathPrefix("/").Handler(catchAllHandler)
 	r.HandleFunc("/", catchAllHandler)
