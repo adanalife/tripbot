@@ -27,3 +27,4 @@ jobs:
         environment: production
         version: ${{ steps.bump-version.outputs.new_tag }}
         projects: tripbot vlc-server
+        set_commits: skip
