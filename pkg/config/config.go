@@ -236,10 +236,11 @@ func SetServerType(server_type string) {
 	}
 	for _, t := range allowedServerTypes {
 		if t == server_type {
-			log.Fatalln("Invalid server type")
+			ServerType = server_type
+			return
 		}
 	}
-	ServerType = server_type
+	log.Fatalln(aurora.Red("Invalid server type"))
 }
 
 //TODO: this should load from a config file
