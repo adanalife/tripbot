@@ -22,8 +22,9 @@ jobs:
           # DISABLE_ERRORS: true
           VALIDATE_ALL_CODEBASE: true
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # VALIDATE_GO: false
+          # disabled because it's not working with C libs
+          VALIDATE_GO: false
           # disabled cause there are lots to change in Dockerfile.nvidia
-          VALIDATE_DOCKER_HADOLINT: false
+          VALIDATE_DOCKERFILE_HADOLINT: false
           # disabled cause they dont support CRDs rn
           VALIDATE_KUBERNETES_KUBEVAL: false

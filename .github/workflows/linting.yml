@@ -1,0 +1,45 @@
+name: Linting
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+    tags:
+      - v*
+jobs:
+
+  golint:
+    name: golint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: golint
+        uses: reviewdog/action-golangci-lint@v1
+        with:
+          github_token: ${{ secrets.github_token }}
+          golangci_lint_flags: "--disable-all -E golint"
+          level: warning # GitHub Status Check won't become failure with this level.
+
+  errcheck:
+    name: errcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: errcheck
+        uses: reviewdog/action-golangci-lint@v1
+        with:
+          github_token: ${{ secrets.github_token }}
+          golangci_lint_flags: "--disable-all -E errcheck"
+          level: info
+
+  misspell:
+    name: misspell
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: misspell
+        uses: reviewdog/action-misspell@v1
+        with:
+          github_token: ${{ secrets.github_token }}
+          locale: "US"
+          level: info
