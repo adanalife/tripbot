@@ -15,6 +15,7 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/urfave/negroni"
 )
 
 // healthcheck URL, for tools to verify the stream is alive
@@ -193,11 +194,6 @@ func Start() {
 
 	r := mux.NewRouter()
 
-	// add the prometheus middleware
-	r.Use(helpers.PrometheusMiddleware)
-	// make prometheus metrics available for scraping
-	r.Path("/metrics").Handler(promhttp.Handler())
-
 	// healthcheck endpoints
 	hp := r.PathPrefix("/health").Methods("GET").Subrouter()
 	hp.HandleFunc("/live", healthHandler)
@@ -221,11 +217,23 @@ func Start() {
 	osc.HandleFunc("/middle/hide", onscreensMiddleHideHandler)
 	osc.HandleFunc("/middle/show", onscreensMiddleShowHandler)
 
+	// prometheus metrics endpoint
+	r.Path("/metrics").Handler(promhttp.Handler())
+
 	// static assets
 	r.HandleFunc("/favicon.ico", faviconHandler).Methods("GET")
 
 	// catch everything else
 	r.HandleFunc("/", catchAllHandler)
+
+	helpers.PrintAllRoutes(r)
+
+	// negroni classic adds panic recovery, logger, and static file middlewares
+	// c.p. https://github.com/urfave/negroni
+	n := negroni.Classic()
+	// attach prometheus middleware
+	n.Use(negroni.HandlerFunc(helpers.PrometheusMiddleware))
+	n.UseHandler(r)
 
 	//TODO: error if there's no colon to split on
 	port := strings.Split(config.VlcServerHost, ":")[1]
@@ -236,7 +244,7 @@ func Start() {
 		WriteTimeout: time.Second * 15,
 		ReadTimeout:  time.Second * 15,
 		IdleTimeout:  time.Second * 60,
-		Handler:      r, // Pass our instance of gorilla/mux in.
+		Handler:      n, // Pass our instance of negroni in
 	}
 
 	//TODO: add graceful shutdown

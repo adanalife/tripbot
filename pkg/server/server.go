@@ -169,9 +169,6 @@ func Start() {
 
 	r := mux.NewRouter()
 
-	// make prometheus metrics available for scraping
-	r.Path("/metrics").Handler(promhttp.Handler())
-
 	// healthcheck endpoints
 	hp := r.PathPrefix("/health").Methods("GET").Subrouter()
 	hp.HandleFunc("/live", healthHandler)
@@ -191,6 +188,9 @@ func Start() {
 
 	// static assets
 	r.HandleFunc("/favicon.ico", faviconHandler).Methods("GET")
+
+	// prometheus metrics endpoint
+	r.Path("/metrics").Handler(promhttp.Handler())
 
 	// catch everything else
 	r.HandleFunc("/", catchAllHandler)
