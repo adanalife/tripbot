@@ -11,6 +11,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/config"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
+	onscreensServer "github.com/adanalife/tripbot/pkg/onscreens-server"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -90,8 +91,7 @@ func vlcRandomHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "OK")
 }
 
-func vlcRandomHandler(w http.ResponseWriter, r *http.Request) {
-	// } else if strings.HasPrefix(r.URL.Path, "/onscreens/flag/show") {
+func onscreensFlagShowHandler(w http.ResponseWriter, r *http.Request) {
 	base64content, ok := r.URL.Query()["duration"]
 	if !ok || len(base64content) > 1 {
 		http.Error(w, "417 expectation failed", http.StatusExpectationFailed)
@@ -113,28 +113,21 @@ func vlcRandomHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func onscreensGpsHideHandler(w http.ResponseWriter, r *http.Request) {
-	//} else if strings.HasPrefix(r.URL.Path, "/onscreens/gps/hide") {
 	onscreensServer.HideGPSImage()
 	fmt.Fprintf(w, "OK")
-
 }
 
 func onscreensGpsShowHandler(w http.ResponseWriter, r *http.Request) {
-	//} else if strings.HasPrefix(r.URL.Path, "/onscreens/gps/show") {
 	onscreensServer.ShowGPSImage()
 	fmt.Fprintf(w, "OK")
-
 }
 
 func onscreensTimewarpShowHandler(w http.ResponseWriter, r *http.Request) {
-	//} else if strings.HasPrefix(r.URL.Path, "/onscreens/timewarp/show") {
 	onscreensServer.ShowTimewarp()
 	fmt.Fprintf(w, "OK")
-
 }
 
 func onscreensLeaderboardShowHandler(w http.ResponseWriter, r *http.Request) {
-	//} else if strings.HasPrefix(r.URL.Path, "/onscreens/leaderboard/show") {
 	base64content, ok := r.URL.Query()["content"]
 	if !ok || len(base64content) > 1 {
 		http.Error(w, "417 expectation failed", http.StatusExpectationFailed)
@@ -150,7 +143,6 @@ func onscreensLeaderboardShowHandler(w http.ResponseWriter, r *http.Request) {
 
 	onscreensServer.Leaderboard.Show(content)
 	fmt.Fprintf(w, "OK")
-
 }
 
 func onscreensMiddleHideHandler(w http.ResponseWriter, r *http.Request) {
@@ -207,11 +199,17 @@ func Start() {
 	r.Path("/metrics").Handler(promhttp.Handler())
 
 	r.HandleFunc("/health", healthHandler).Methods("GET")
+
+	// vlc endpoints
+	//TODO: consider refactoring into a subrouter
 	r.HandleFunc("/vlc/current", vlcCurrentHandler).Methods("GET")
 	r.HandleFunc("/vlc/play", vlcPlayHandler).Methods("GET")
 	r.HandleFunc("/vlc/back", vlcBackHandler).Methods("GET")
 	r.HandleFunc("/vlc/skip", vlcSkipHandler).Methods("GET")
 	r.HandleFunc("/vlc/random", vlcRandomHandler).Methods("GET")
+
+	// onscreen endpoints
+	//TODO: consider refactoring into a subrouter
 	r.HandleFunc("/onscreens/flag/show", onscreensFlagShowHandler).Methods("GET")
 	r.HandleFunc("/onscreens/gps/hide", onscreensGpsHideHandler).Methods("GET")
 	r.HandleFunc("/onscreens/gps/show", onscreensGpsShowHandler).Methods("GET")
@@ -219,7 +217,11 @@ func Start() {
 	r.HandleFunc("/onscreens/leaderboard/show", onscreensLeaderboardShowHandler).Methods("GET")
 	r.HandleFunc("/onscreens/middle/hide", onscreensMiddleHideHandler).Methods("GET")
 	r.HandleFunc("/onscreens/middle/show", onscreensMiddleShowHandler).Methods("GET")
+
+	//TODO: refactor into static serving
 	r.HandleFunc("/favicon.ico", faviconHandler).Methods("GET")
+
+	//TODO: update to be proper catchall(?)
 	// r.PathPrefix("/").Handler(catchAllHandler)
 	r.HandleFunc("/", catchAllHandler)
 	http.Handle("/", r)
