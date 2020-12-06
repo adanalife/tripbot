@@ -58,7 +58,6 @@ func Start() {
 
 	// negroni classic adds panic recovery, logger, and static file middlewares
 	// c.p. https://github.com/urfave/negroni
-	//TODO: consider adding HTMLPanicFormatter
 	app := negroni.Classic()
 
 	// attach http-metrics (prometheus) middleware
@@ -67,18 +66,6 @@ func Start() {
 		Service:  config.ServerType,
 	})
 	app.Use(negronimiddleware.Handler("", metricsMw))
-
-	// // attach recovery middleware (for catching panics)
-	// recoveryMw := negroni.NewRecovery()
-	// // add a pretty panic page
-	// recoveryMw.Formatter = &negroni.HTMLPanicFormatter{}
-	// app.Use(recoveryMw)
-
-	// // attach logger middleware
-	// app.Use(negroni.NewLogger())
-
-	// attach static assets middleware
-	// app.Use(negroni.NewStatic(http.Dir("/assets")))
 
 	// attach security middleware
 	secureMw := secure.New(secure.Options{
