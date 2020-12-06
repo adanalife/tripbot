@@ -10,7 +10,6 @@ import (
 	"github.com/adanalife/tripbot/pkg/config"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
-	"github.com/davecgh/go-spew/spew"
 	sentrynegroni "github.com/getsentry/sentry-go/negroni"
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -75,9 +74,9 @@ func Start() {
 
 	// attach security middleware
 	secureMw := secure.New(secure.Options{
-		FrameDeny: true,
+		FrameDeny:     true,
+		IsDevelopment: config.IsDevelopment(),
 	})
-	spew.Dump(secureMw)
 	app.Use(negroni.HandlerFunc(secureMw.HandlerFuncWithNext))
 
 	// attach Sentry middleware (for reporting exceptions)
