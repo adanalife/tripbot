@@ -38,6 +38,35 @@ services:
       # - /home/dmerrick/Videos/Dashcam/screencaps:/opt/data/screencaps:ro
       # - /home/dmerrick/Videos/Dashcam/_all:/opt/data/Dashcam/_all:ro
 
+  vlc:
+    privileged: true
+    image: adanalife/obs
+    hostname: obs
+    env_file:
+      - infra/docker/env.docker
+    build:
+      context: .
+      dockerfile: infra/docker/obs/Dockerfile
+    ports:
+      # this should match the VLC_SERVER_HOST env var
+      - "8080"
+      - "5902:5900"
+    environment:
+      DISABLE_OBS: "true"
+      ENV: development
+      DISPLAY: ":0.0"
+      XDG_RUNTIME_DIR: "/root/.cache/xdgr"
+      # hack to make fontconfig happy
+      FONTCONFIG_PATH: "/etc/fonts"
+      STREAM_KEY: "${STREAM_KEY}"
+    command: -c "cd /opt/tripbot && rm -f bin/vlc-server && script/container_startup.sh"
+    volumes:
+      - .bash_history.remote:/root/.bash_history
+      - .:/go/src/github.com/adanalife/tripbot
+      - /Volumes/Leeroy/Dana\'s\ Photos/Dashcam\ Scratchpad/Dashcam/screencaps:/opt/data/screencaps:ro
+      - /Volumes/Leeroy/Dana\'s\ Photos/Dashcam\ Scratchpad/Dashcam/_all:/opt/data/Dashcam/_all:ro
+    restart: unless-stopped
+
   db:
     volumes:
       - ./tmp/postgres_data:/var/lib/postgresql/data
