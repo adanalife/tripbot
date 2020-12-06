@@ -53,15 +53,16 @@ func Client() (*helix.Client, error) {
 		ClientSecret: ClientSecret,
 		// this is set at https://dev.twitch.tv/console/apps
 		RedirectURI: config.ExternalURL + "/auth/callback",
-		//TODO: move to configs lib
-		Scopes: []string{"openid", "user:edit:broadcast", "channel:read:subscriptions"},
 	})
 	if err != nil {
 		terrors.Log(err, "error creating client")
 	}
 
+	//TODO: move to configs lib
+	//TODO: revisit that we need all of these
+	scopes := []string{"openid", "user:edit:broadcast", "channel:read:subscriptions"}
 	// set the AppAccessToken
-	resp, err := client.GetAppAccessToken()
+	resp, err := client.RequestAppAccessToken(scopes)
 	if err != nil {
 		terrors.Log(err, "error getting app access token from twitch")
 	}
@@ -78,7 +79,7 @@ func Client() (*helix.Client, error) {
 // user access token. This is called by the web server after
 // going through the OAuth flow
 func GenerateUserAccessToken(code string) {
-	resp, err := currentTwitchClient.GetUserAccessToken(code)
+	resp, err := currentTwitchClient.RequestUserAccessToken(code)
 	if err != nil {
 		terrors.Log(err, "error getting user access token from twitch")
 		return
@@ -98,7 +99,11 @@ func RefreshUserAccessToken() {
 	// check to see if we have the required tokens to work with
 	if UserRefreshToken == "" || UserAccessToken == "" {
 		log.Println("no user access token was present, did you log in with OAuth?")
-		authURL := currentTwitchClient.GetAuthorizationURL("", false)
+		authURL := currentTwitchClient.GetAuthorizationURL(&helix.AuthorizationURLParams{
+			//TODO: move to configs lib
+			Scopes:       []string{"openid", "user:edit:broadcast", "channel:read:subscriptions"},
+			ResponseType: "code",
+		})
 		log.Println(aurora.Blue(authURL).Underline())
 		// send a text message cause some features won't work
 		// without a user access token

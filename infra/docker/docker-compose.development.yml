@@ -4,6 +4,7 @@ services:
   tripbot:
     environment:
       ENV: development
+      GOOGLE_APPLICATION_CREDENTIALS: /opt/tripbot/infra/google/tripbot-stage.json
     env_file:
       - ./.env.development
     entrypoint: bash
