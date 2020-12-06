@@ -203,12 +203,12 @@ func Start() {
 	r.HandleFunc("/health", healthHandler).Methods("GET")
 
 	// vlc endpoints
-	//TODO: consider refactoring into a subrouter
-	r.HandleFunc("/vlc/current", vlcCurrentHandler).Methods("GET")
-	r.HandleFunc("/vlc/play", vlcPlayHandler).Methods("GET")
-	r.HandleFunc("/vlc/back", vlcBackHandler).Methods("GET")
-	r.HandleFunc("/vlc/skip", vlcSkipHandler).Methods("GET")
-	r.HandleFunc("/vlc/random", vlcRandomHandler).Methods("GET")
+	vlc := r.PathPrefix("/vlc").Methods("GET").Subrouter()
+	vlc.HandleFunc("/current", vlcCurrentHandler)
+	vlc.HandleFunc("/play", vlcPlayHandler)
+	vlc.HandleFunc("/back", vlcBackHandler)
+	vlc.HandleFunc("/skip", vlcSkipHandler)
+	vlc.HandleFunc("/random", vlcRandomHandler)
 
 	// onscreen endpoints
 	//TODO: consider refactoring into a subrouter
