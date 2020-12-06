@@ -11,11 +11,9 @@ import (
 	"github.com/adanalife/tripbot/pkg/config"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
-	"github.com/adanalife/tripbot/pkg/instrumentation"
 	onscreensServer "github.com/adanalife/tripbot/pkg/onscreens-server"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/gorilla/mux"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
@@ -179,12 +177,13 @@ func Start() {
 	log.Println("Starting VLC web server on host", config.VlcServerHost)
 
 	r := mux.NewRouter()
-	r.Use(prometheusMiddleware)
-	r.HandleFunc("/", HomeHandler)
 
+	// add the prometheus middleware
+	r.Use(helpers.PrometheusMiddleware)
 	// make prometheus metrics available
 	r.Path("/metrics").Handler(promhttp.Handler())
 
+	r.HandleFunc("/", HomeHandler)
 	http.Handle("/", r)
 
 	// ListenAndServe() wants a port in the format ":NUM"
@@ -196,15 +195,4 @@ func Start() {
 	if err != nil {
 		terrors.Fatal(err, "couldn't start server")
 	}
-}
-
-// prometheusMiddleware implements mux.MiddlewareFunc.
-func prometheusMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		route := mux.CurrentRoute(r)
-		path, _ := route.GetPathTemplate()
-		timer := prometheus.NewTimer(instrumentation.VlcServerHttpDuration.WithLabelValues(path))
-		next.ServeHTTP(w, r)
-		timer.ObserveDuration()
-	})
 }

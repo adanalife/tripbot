@@ -10,8 +10,10 @@ import (
 	"github.com/adanalife/tripbot/pkg/chatbot"
 	"github.com/adanalife/tripbot/pkg/config"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
+	"github.com/adanalife/tripbot/pkg/helpers"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/users"
+	"github.com/gorilla/mux"
 	"github.com/logrusorgru/aurora"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"golang.org/x/crypto/acme/autocert"
@@ -21,7 +23,7 @@ var certManager autocert.Manager
 var server *http.Server
 
 //TODO: consider adding routes to control MPD
-func handle(w http.ResponseWriter, r *http.Request) {
+func HomeHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
 		//TODO: write real healthchecks for ready vs live
@@ -166,10 +168,16 @@ func Start() {
 	var err error
 	log.Println("Starting web server on port", config.TripbotServerPort)
 
-	// make prometheus metrics available
-	http.Handle("/metrics", promhttp.Handler())
+	r := mux.NewRouter()
 
-	http.HandleFunc("/", handle)
+	// add prometheus middleware
+	r.Use(helpers.PrometheusMiddleware)
+	// make prometheus metrics available
+	r.Path("/metrics").Handler(promhttp.Handler())
+
+	r.HandleFunc("/", HomeHandler)
+	http.Handle("/", r)
+
 	port := fmt.Sprintf(":%s", config.TripbotServerPort)
 
 	// serve http

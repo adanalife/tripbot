@@ -15,4 +15,8 @@ var (
 		Help: "The total number of chat commands",
 	}, []string{"command"},
 	)
+	// TripbotServerHttpDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
+	// 	Name: "tripbot_server_http_duration_seconds",
+	// 	Help: "Duration of HTTP requests.",
+	// }, []string{"path"})
 )
