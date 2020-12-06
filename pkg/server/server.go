@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"strings"
 
 	"github.com/adanalife/tripbot/pkg/chatbot"
 	"github.com/adanalife/tripbot/pkg/config"
@@ -22,77 +21,78 @@ import (
 var certManager autocert.Manager
 var server *http.Server
 
+//TODO: write real healthchecks for ready vs live
+// healthcheck URL, for tools to verify the bot is alive
+func healthHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "OK")
+}
+
+// twitch issues a request here when creating a new webhook subscription
+func webhooksTwitchHandler(w http.ResponseWriter, r *http.Request) {
+	log.Println("got webhook challenge request at", r.URL.Path)
+	// exit early if we've disabled webhooks
+	if config.DisableTwitchWebhooks {
+		http.Error(w, "501 not implemented", http.StatusNotImplemented)
+		return
+	}
+
+	challenge, ok := r.URL.Query()["hub.challenge"]
+	if !ok || len(challenge[0]) < 1 {
+		terrors.Log(nil, "something went wrong with the challenge")
+		log.Printf("%#v", r.URL.Query())
+		http.Error(w, "404 not found", http.StatusNotFound)
+		return
+	}
+	log.Println("returning challenge")
+	fmt.Fprintf(w, string(challenge[0]))
+}
+
+// this endpoint returns private twitch access tokens
+func authTwitchHandler(w http.ResponseWriter, r *http.Request) {
+	secret, ok := r.URL.Query()["auth"]
+	if !ok || !isValidSecret(secret[0]) {
+		http.Error(w, "404 not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	fmt.Fprintf(w, twitchAuthJSON())
+}
+
+// oauth callback URL, requests come from Twitch and have a special code
+// we then use that code to generate a User Access Token
+func authCallbackHandler(w http.ResponseWriter, r *http.Request) {
+	codes, ok := r.URL.Query()["code"]
+
+	if !ok || len(codes[0]) < 1 {
+		msg := "no code in response from twitch"
+		terrors.Log(errors.New("code missing"), msg)
+		//TODO: better error than StatusNotFound (404)
+		http.Error(w, msg, http.StatusNotFound)
+		return
+	}
+	code := string(codes[0])
+
+	log.Println(aurora.Cyan("successfully received token from twitch!"))
+	// use the code to generate an access token
+	mytwitch.GenerateUserAccessToken(code)
+
+	//TODO: return a pretty HTML page here (black background, logo, etc)
+	fmt.Fprintf(w, "Success!")
+}
+
+// return a favicon if anyone asks for one
+func faviconHandler(w http.ResponseWriter, r *http.Request) {
+	http.ServeFile(w, r, "assets/favicon.ico")
+}
+
 //TODO: consider adding routes to control MPD
 func catchAllHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
-		//TODO: write real healthchecks for ready vs live
-		// healthcheck URL, for tools to verify the bot is alive
-		if r.URL.Path == "/health/ready" || r.URL.Path == "/health/live" {
-			fmt.Fprintf(w, "OK")
-
-			// twitch issues a request here when creating a new webhook subscription
-		} else if strings.HasPrefix(r.URL.Path, "/webhooks/twitch") {
-			log.Println("got webhook challenge request at", r.URL.Path)
-			// exit early if we've disabled webhooks
-			if config.DisableTwitchWebhooks {
-				http.Error(w, "501 not implemented", http.StatusNotImplemented)
-				return
-			}
-
-			challenge, ok := r.URL.Query()["hub.challenge"]
-			if !ok || len(challenge[0]) < 1 {
-				terrors.Log(nil, "something went wrong with the challenge")
-				log.Printf("%#v", r.URL.Query())
-				http.Error(w, "404 not found", http.StatusNotFound)
-				return
-			}
-			log.Println("returning challenge")
-			fmt.Fprintf(w, string(challenge[0]))
-
-			// this endpoint returns private twitch access tokens
-		} else if r.URL.Path == "/auth/twitch" {
-			secret, ok := r.URL.Query()["auth"]
-			if !ok || !isValidSecret(secret[0]) {
-				http.Error(w, "404 not found", http.StatusNotFound)
-				return
-			}
-
-			w.Header().Set("Content-Type", "application/json")
-			fmt.Fprintf(w, twitchAuthJSON())
-
-			// oauth callback URL, requests come from Twitch and have a special code
-			// we then use that code to generate a User Access Token
-		} else if r.URL.Path == "/auth/callback" {
-			codes, ok := r.URL.Query()["code"]
-
-			if !ok || len(codes[0]) < 1 {
-				msg := "no code in response from twitch"
-				terrors.Log(errors.New("code missing"), msg)
-				//TODO: better error than StatusNotFound (404)
-				http.Error(w, msg, http.StatusNotFound)
-				return
-			}
-			code := string(codes[0])
-
-			log.Println(aurora.Cyan("successfully received token from twitch!"))
-			// use the code to generate an access token
-			mytwitch.GenerateUserAccessToken(code)
-
-			//TODO: return a pretty HTML page here (black background, logo, etc)
-			fmt.Fprintf(w, "Success!")
-			return
-
-			// return a favicon if anyone asks for one
-		} else if r.URL.Path == "/favicon.ico" {
-			http.ServeFile(w, r, "assets/favicon.ico")
-
-			// some other URL was used
-		} else {
-			http.Error(w, "404 not found", http.StatusNotFound)
-			log.Println("someone tried hitting", r.URL.Path)
-			return
-		}
+		http.Error(w, "404 not found", http.StatusNotFound)
+		log.Println("someone tried hitting", r.URL.Path)
+		return
 
 	case "POST":
 		// user webhooks are received via POST at this url
@@ -175,6 +175,12 @@ func Start() {
 	// make prometheus metrics available
 	r.Path("/metrics").Handler(promhttp.Handler())
 
+	r.HandleFunc("/health/live", healthHandler).Methods("GET")
+	r.HandleFunc("/health/ready", healthHandler).Methods("GET")
+	r.HandleFunc("/webhooks/twitch", webhooksTwitchHandler).Methods("GET")
+	r.HandleFunc("/auth/twitch", authTwitchHandler).Methods("GET")
+	r.HandleFunc("/auth/callback", authCallbackHandler).Methods("GET")
+	r.HandleFunc("/favicon.ico", faviconHandler).Methods("GET")
 	//TODO: update to be proper catchall(?)
 	// r.PathPrefix("/").Handler(catchAllHandler)
 	r.HandleFunc("/", catchAllHandler)
