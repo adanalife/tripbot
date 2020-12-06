@@ -20,21 +20,13 @@ jobs:
     - uses: actions/checkout@v2
       with:
         fetch-depth: '0'
-    - name: Create Sentry release (tripbot)
+    - name: Create Sentry release
       uses: getsentry/action-release@v1
       env:
         SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
         SENTRY_PROJECT: tripbot
-      with:
-        environment: production
-        version: ${{ steps.bump-version.outputs.new_tag }}
-    - name: Create Sentry release (vlc-server)
-      uses: getsentry/action-release@v1
-      env:
-        SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-        SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
-        SENTRY_PROJECT: vlc-server
+        SENTRY_LOG_LEVEL: debug
       with:
         environment: production
         version: ${{ steps.bump-version.outputs.new_tag }}
