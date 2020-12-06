@@ -211,14 +211,14 @@ func Start() {
 	vlc.HandleFunc("/random", vlcRandomHandler)
 
 	// onscreen endpoints
-	//TODO: consider refactoring into a subrouter
-	r.HandleFunc("/onscreens/flag/show", onscreensFlagShowHandler).Methods("GET")
-	r.HandleFunc("/onscreens/gps/hide", onscreensGpsHideHandler).Methods("GET")
-	r.HandleFunc("/onscreens/gps/show", onscreensGpsShowHandler).Methods("GET")
-	r.HandleFunc("/onscreens/timewarp/show", onscreensTimewarpShowHandler).Methods("GET")
-	r.HandleFunc("/onscreens/leaderboard/show", onscreensLeaderboardShowHandler).Methods("GET")
-	r.HandleFunc("/onscreens/middle/hide", onscreensMiddleHideHandler).Methods("GET")
-	r.HandleFunc("/onscreens/middle/show", onscreensMiddleShowHandler).Methods("GET")
+	osc := r.PathPrefix("/onscreens").Methods("GET").Subrouter()
+	osc.HandleFunc("/flag/show", onscreensFlagShowHandler)
+	osc.HandleFunc("/gps/hide", onscreensGpsHideHandler)
+	osc.HandleFunc("/gps/show", onscreensGpsShowHandler)
+	osc.HandleFunc("/timewarp/show", onscreensTimewarpShowHandler)
+	osc.HandleFunc("/leaderboard/show", onscreensLeaderboardShowHandler)
+	osc.HandleFunc("/middle/hide", onscreensMiddleHideHandler)
+	osc.HandleFunc("/middle/show", onscreensMiddleShowHandler)
 
 	//TODO: refactor into static serving
 	r.HandleFunc("/favicon.ico", faviconHandler).Methods("GET")
