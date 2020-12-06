@@ -10,12 +10,14 @@ import (
 	"github.com/adanalife/tripbot/pkg/config"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
+	"github.com/davecgh/go-spew/spew"
 	sentrynegroni "github.com/getsentry/sentry-go/negroni"
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	metrics "github.com/slok/go-http-metrics/metrics/prometheus"
 	"github.com/slok/go-http-metrics/middleware"
 	negronimiddleware "github.com/slok/go-http-metrics/middleware/negroni"
+	"github.com/unrolled/secure"
 	"github.com/urfave/negroni"
 )
 
@@ -65,14 +67,20 @@ func Start() {
 	app := negroni.Classic()
 
 	// attach http-metrics (prometheus) middleware
-	mdlw := middleware.New(middleware.Config{
-		Recorder: metrics.NewRecorder(metrics.Config{
-			Prefix: config.ServerType,
-		}),
+	metricsMw := middleware.New(middleware.Config{
+		Recorder: metrics.NewRecorder(metrics.Config{}),
+		Service:  config.ServerType,
 	})
-	app.Use(negronimiddleware.Handler("", mdlw))
+	app.Use(negronimiddleware.Handler("", metricsMw))
 
-	// attach sentry middleware
+	// attach security middleware
+	secureMw := secure.New(secure.Options{
+		FrameDeny: true,
+	})
+	spew.Dump(secureMw)
+	app.Use(negroni.HandlerFunc(secureMw.HandlerFuncWithNext))
+
+	// attach Sentry middleware (for reporting exceptions)
 	app.Use(sentrynegroni.New(sentrynegroni.Options{}))
 
 	// attaching routes to handler happens last
