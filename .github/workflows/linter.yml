@@ -14,6 +14,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
+      - run: apt-get update && apt-get install --no-install-recommends -y libtesseract-dev tesseract-ocr
       - name: run-linters
         uses: github/super-linter@v3
         env:
@@ -22,5 +23,7 @@ jobs:
           VALIDATE_ALL_CODEBASE: true
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # VALIDATE_GO: false
+          # disabled cause there are lots to change in Dockerfile.nvidia
+          VALIDATE_DOCKER_HADOLINT: false
           # disabled cause they dont support CRDs rn
           VALIDATE_KUBERNETES_KUBEVAL: false
