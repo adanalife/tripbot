@@ -196,6 +196,8 @@ func Start() {
 	// catch everything else
 	r.HandleFunc("/", catchAllHandler)
 
+	helpers.PrintAllRoutes(r)
+
 	srv := &http.Server{
 		Addr: fmt.Sprintf("0.0.0.0:%s", config.TripbotServerPort),
 		// Good practice to set timeouts to avoid Slowloris attacks.
