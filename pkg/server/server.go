@@ -59,36 +59,36 @@ func Start() {
 	// negroni classic adds panic recovery, logger, and static file middlewares
 	// c.p. https://github.com/urfave/negroni
 	//TODO: consider adding HTMLPanicFormatter
-	app := negroni.New()
+	app := negroni.Classic()
 
-	// // attach http-metrics (prometheus) middleware
+	// attach http-metrics (prometheus) middleware
 	metricsMw := middleware.New(middleware.Config{
 		Recorder: metrics.NewRecorder(metrics.Config{}),
 		Service:  config.ServerType,
 	})
 	app.Use(negronimiddleware.Handler("", metricsMw))
 
-	// attach recovery middleware (for catching panics)
-	recoveryMw := negroni.NewRecovery()
-	// add a pretty panic page
-	recoveryMw.Formatter = &negroni.HTMLPanicFormatter{}
-	app.Use(recoveryMw)
+	// // attach recovery middleware (for catching panics)
+	// recoveryMw := negroni.NewRecovery()
+	// // add a pretty panic page
+	// recoveryMw.Formatter = &negroni.HTMLPanicFormatter{}
+	// app.Use(recoveryMw)
 
-	// attach logger middleware
-	app.Use(negroni.NewLogger())
+	// // attach logger middleware
+	// app.Use(negroni.NewLogger())
+
+	// attach static assets middleware
+	// app.Use(negroni.NewStatic(http.Dir("/assets")))
 
 	// attach security middleware
 	secureMw := secure.New(secure.Options{
 		FrameDeny: true,
 	})
 	spew.Dump(secureMw)
-	//app.Use(negroni.HandlerFunc(secureMw.HandlerFuncWithNext))
+	app.Use(negroni.HandlerFunc(secureMw.HandlerFuncWithNext))
 
 	// attach Sentry middleware (for reporting exceptions)
 	app.Use(sentrynegroni.New(sentrynegroni.Options{}))
-
-	// attach static assets middleware
-	// app.Use(negroni.NewStatic(http.Dir("/assets")))
 
 	// attaching routes to handler happens last
 	app.UseHandler(r)
