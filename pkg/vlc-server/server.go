@@ -198,6 +198,8 @@ func Start() {
 	// make prometheus metrics available
 	r.Path("/metrics").Handler(promhttp.Handler())
 
+	// healthcheck endpoint
+	//TODO: add /ready and /live
 	r.HandleFunc("/health", healthHandler).Methods("GET")
 
 	// vlc endpoints
@@ -224,15 +226,24 @@ func Start() {
 	//TODO: update to be proper catchall(?)
 	// r.PathPrefix("/").Handler(catchAllHandler)
 	r.HandleFunc("/", catchAllHandler)
-	http.Handle("/", r)
 
-	// ListenAndServe() wants a port in the format ":NUM"
 	//TODO: error if there's no colon to split on
-	port := ":" + strings.Split(config.VlcServerHost, ":")[1]
+	port := strings.Split(config.VlcServerHost, ":")[1]
+	addr := fmt.Sprintf("0.0.0.0:%s", port)
+
+	srv := &http.Server{
+		Addr: addr,
+		// Good practice to set timeouts to avoid Slowloris attacks.
+		WriteTimeout: time.Second * 15,
+		ReadTimeout:  time.Second * 15,
+		IdleTimeout:  time.Second * 60,
+		Handler:      r, // Pass our instance of gorilla/mux in.
+	}
+
+	//TODO: add proper graceful shutdown
 	//TODO: replace certs with autocert: https://stackoverflow.com/a/40494806
-	// err := http.ListenAndServeTLS(port, "infra/tripbot.dana.lol.fullchain.pem", "infra/tripbot.dana.lol.key", nil)
-	err := http.ListenAndServe(port, nil)
-	if err != nil {
+	// http.ListenAndServeTLS(port, "infra/fullchain.pem", "infra/private.key", nil)
+	if err := srv.ListenAndServe(); err != nil {
 		terrors.Fatal(err, "couldn't start server")
 	}
 }
