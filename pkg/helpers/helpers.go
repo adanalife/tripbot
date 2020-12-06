@@ -22,6 +22,7 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/hako/durafmt"
 	"github.com/kelvins/geocoder"
+	"github.com/logrusorgru/aurora"
 	"github.com/nathan-osman/go-sunrise"
 	"github.com/skratchdot/open-golang/open"
 )
@@ -199,7 +200,7 @@ func OpenInBrowser(url string) {
 	log.Println("opening url")
 	err := open.Run(url)
 	if err != nil {
-		log.Println(err, "error opening browser")
+		log.Println(aurora.Red("error opening browser"), err)
 	}
 }
 

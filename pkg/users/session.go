@@ -91,7 +91,7 @@ func login(username string) *User {
 
 	// raise an error if a user is supposed to be a bot
 	if helpers.UserIsIgnored(username) && !user.IsBot {
-		log.Println(errors.New("user should be bot"), username)
+		log.Println(aurora.Red(username), errors.New("user should be bot"))
 	}
 
 	// just a silly message to confirm subscriber feature is working
