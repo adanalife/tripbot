@@ -23,7 +23,7 @@ var certManager autocert.Manager
 var server *http.Server
 
 //TODO: consider adding routes to control MPD
-func HomeHandler(w http.ResponseWriter, r *http.Request) {
+func catchAllHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
 		//TODO: write real healthchecks for ready vs live
@@ -175,7 +175,9 @@ func Start() {
 	// make prometheus metrics available
 	r.Path("/metrics").Handler(promhttp.Handler())
 
-	r.HandleFunc("/", HomeHandler)
+	//TODO: update to be proper catchall(?)
+	// r.PathPrefix("/").Handler(catchAllHandler)
+	r.HandleFunc("/", catchAllHandler)
 	http.Handle("/", r)
 
 	port := fmt.Sprintf(":%s", config.TripbotServerPort)
