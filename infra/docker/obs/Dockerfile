@@ -9,7 +9,7 @@ FROM adanalife/ffmpeg:v4.2.3
 RUN export DEBIAN_FRONTEND=noninteractive \
   && unset LD_LIBRARY_PATH \
   && apt-get update \
-  && apt-get install -y --no-install-recommends \
+  && apt-get install -y --no-install-suggests \
     ack-grep \
     build-essential \
     checkinstall \
