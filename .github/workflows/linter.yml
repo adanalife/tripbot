@@ -14,13 +14,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
-      - run: sudo apt-get update && sudo apt-get install --no-install-recommends -y libtesseract-dev tesseract-ocr
       - name: run-linters
         uses: github/super-linter@v3
         env:
-          # allow failures for the time being
-          # DISABLE_ERRORS: true
-          VALIDATE_ALL_CODEBASE: true
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # disabled because it's not working with C libs
           VALIDATE_GO: false

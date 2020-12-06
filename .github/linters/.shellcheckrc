@@ -11,6 +11,3 @@ disable=SC2129
 
 # Use a ( subshell ) to avoid having to cd back.
 disable=SC2103
-
-# Use 'cd ... || exit' or 'cd ... || return' in case cd fails.
-# disable=SC2164
