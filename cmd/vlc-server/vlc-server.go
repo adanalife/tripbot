@@ -17,7 +17,6 @@ import (
 )
 
 func main() {
-
 	// we don't yet support libvlc on darwin
 	if helpers.RunningOnDarwin() {
 		log.Fatal("This doesn't yet work on darwin")
@@ -40,6 +39,7 @@ func main() {
 	vlcServer.PlayRandom() // play a random video
 
 	// start the webserver
+	config.SetServerType("vlc-server")
 	vlcServer.Start()
 
 	// listen for termination signals and gracefully shutdown

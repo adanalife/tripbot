@@ -59,6 +59,7 @@ func listenForShutdown() {
 // startHttpServer starts a webserver, which is
 // used for admin tools and receiving webhooks
 func startHttpServer() {
+	config.SetServerType("tripbot")
 	// start the HTTP server
 	go server.Start()
 }
