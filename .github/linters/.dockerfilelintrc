@@ -1,3 +1,5 @@
 # https://github.com/replicatedhq/dockerfilelint#configuring
 rules:
   missing_tag: off
+  # disabled because we're need it on the obs container
+  apt-get_recommends: off
