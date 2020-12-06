@@ -221,7 +221,7 @@ func Start() {
 	osc.HandleFunc("/middle/hide", onscreensMiddleHideHandler)
 	osc.HandleFunc("/middle/show", onscreensMiddleShowHandler)
 
-	//TODO: refactor into static serving
+	// static assets
 	r.HandleFunc("/favicon.ico", faviconHandler).Methods("GET")
 
 	// catch everything else
