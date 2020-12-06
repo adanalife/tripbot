@@ -17,14 +17,21 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         DEFAULT_BUMP: patch
         WITH_V: true
-    - name: Create Sentry release
+    - name: Create Sentry release (tripbot)
       uses: getsentry/action-release@v1
       env:
         SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
-        # SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+        SENTRY_PROJECT: tripbot
       with:
         environment: production
         version: ${{ steps.bump-version.outputs.new_tag }}
-        projects: tripbot vlc-server
-        set_commits: skip
+    - name: Create Sentry release (vlc-server)
+      uses: getsentry/action-release@v1
+      env:
+        SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+        SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+        SENTRY_PROJECT: vlc-server
+      with:
+        environment: production
+        version: ${{ steps.bump-version.outputs.new_tag }}
