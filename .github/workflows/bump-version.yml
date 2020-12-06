@@ -25,5 +25,5 @@ jobs:
         # SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
       with:
         environment: production
-        version: ${{ steps.bump-version.outputs.tag }}
+        version: ${{ steps.bump-version.outputs.new_tag }}
         projects: tripbot vlc-server
