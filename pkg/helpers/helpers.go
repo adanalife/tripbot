@@ -22,6 +22,7 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/hako/durafmt"
 	"github.com/kelvins/geocoder"
+	"github.com/logrusorgru/aurora"
 	"github.com/nathan-osman/go-sunrise"
 	"github.com/skratchdot/open-golang/open"
 )
@@ -194,12 +195,12 @@ func sunriseSunset(utcDate time.Time, lat, long float64) (time.Time, time.Time) 
 	return ActualDate(rise, lat, long), ActualDate(set, lat, long)
 }
 
-//TODO: text the admin if it errors opening browser
+//TODO: text the admin if it errors opening browser?
 func OpenInBrowser(url string) {
 	log.Println("opening url")
 	err := open.Run(url)
 	if err != nil {
-		terrors.Log(err, "error opening browser")
+		log.Println(aurora.Red("error opening browser"), err)
 	}
 }
 

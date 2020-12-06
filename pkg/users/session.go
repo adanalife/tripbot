@@ -8,13 +8,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/adanalife/tripbot/pkg/config"
 	"github.com/adanalife/tripbot/pkg/events"
 	"github.com/adanalife/tripbot/pkg/helpers"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/hako/durafmt"
 
-	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/twitch"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/logrusorgru/aurora"
@@ -92,7 +91,7 @@ func login(username string) *User {
 
 	// raise an error if a user is supposed to be a bot
 	if helpers.UserIsIgnored(username) && !user.IsBot {
-		terrors.Log(errors.New("user should be bot"), username)
+		log.Println(aurora.Red(username), errors.New("user should be bot"))
 	}
 
 	// just a silly message to confirm subscriber feature is working
