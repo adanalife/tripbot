@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - master
+      - adding-sentry-release
 jobs:
   build:
     runs-on: ubuntu-latest
