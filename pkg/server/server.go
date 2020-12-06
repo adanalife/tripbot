@@ -86,6 +86,62 @@ func faviconHandler(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, "assets/favicon.ico")
 }
 
+// user webhooks are received via POST at this url
+//TODO: we can use helix.GetWebhookTopicFromRequest() and share a webhooks URL
+func webhooksTwitchUsersFollowsHandler(w http.ResponseWriter, r *http.Request) {
+	if config.DisableTwitchWebhooks {
+		http.Error(w, "501 not implemented", http.StatusNotImplemented)
+		return
+	}
+
+	resp, err := decodeFollowWebhookResponse(r)
+	if err != nil {
+		terrors.Log(err, "error decoding follow webhook")
+		//TODO: better error
+		http.Error(w, "404 not found", http.StatusNotFound)
+		return
+	}
+
+	for _, follower := range resp.Data.Follows {
+		username := follower.FromName
+		log.Println("got webhook for new follower:", username)
+		users.LoginIfNecessary(username)
+		// announce new follower in chat
+		chatbot.AnnounceNewFollower(username)
+	}
+
+	fmt.Fprintf(w, "OK")
+}
+
+// these are sent when users subscribe
+func webhooksTwitchSubscriptionsEventsHandler(w http.ResponseWriter, r *http.Request) {
+	if config.DisableTwitchWebhooks {
+		http.Error(w, "501 not implemented", http.StatusNotImplemented)
+		return
+	}
+
+	resp, err := decodeSubscriptionWebhookResponse(r)
+	if err != nil {
+		terrors.Log(err, "error decoding subscription webhook")
+		//TODO: better error
+		http.Error(w, "404 not found", http.StatusNotFound)
+		return
+	}
+
+	for _, event := range resp.Data.Events {
+		username := event.Subscription.UserName
+		log.Println("got webhook for new sub:", username)
+		users.LoginIfNecessary(username)
+		// announce new sub in chat
+		chatbot.AnnounceSubscriber(event.Subscription)
+	}
+
+	// update the internal subscribers list
+	mytwitch.GetSubscribers()
+
+	fmt.Fprintf(w, "OK")
+}
+
 //TODO: consider adding routes to control MPD
 func catchAllHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
@@ -95,68 +151,10 @@ func catchAllHandler(w http.ResponseWriter, r *http.Request) {
 		return
 
 	case "POST":
-		// user webhooks are received via POST at this url
-		//TODO: we can use helix.GetWebhookTopicFromRequest() and
-		// share a webhooks URL
-		if r.URL.Path == "/webhooks/twitch/users/follows" {
-
-			if config.DisableTwitchWebhooks {
-				http.Error(w, "501 not implemented", http.StatusNotImplemented)
-				return
-			}
-
-			resp, err := decodeFollowWebhookResponse(r)
-			if err != nil {
-				terrors.Log(err, "error decoding follow webhook")
-				//TODO: better error
-				http.Error(w, "404 not found", http.StatusNotFound)
-				return
-			}
-
-			for _, follower := range resp.Data.Follows {
-				username := follower.FromName
-				log.Println("got webhook for new follower:", username)
-				users.LoginIfNecessary(username)
-				// announce new follower in chat
-				chatbot.AnnounceNewFollower(username)
-			}
-
-			fmt.Fprintf(w, "OK")
-
-			// these are sent when users subscribe
-		} else if r.URL.Path == "/webhooks/twitch/subscriptions/events" {
-
-			if config.DisableTwitchWebhooks {
-				http.Error(w, "501 not implemented", http.StatusNotImplemented)
-				return
-			}
-
-			resp, err := decodeSubscriptionWebhookResponse(r)
-			if err != nil {
-				terrors.Log(err, "error decoding subscription webhook")
-				//TODO: better error
-				http.Error(w, "404 not found", http.StatusNotFound)
-				return
-			}
-
-			for _, event := range resp.Data.Events {
-				username := event.Subscription.UserName
-				log.Println("got webhook for new sub:", username)
-				users.LoginIfNecessary(username)
-				// announce new sub in chat
-				chatbot.AnnounceSubscriber(event.Subscription)
-			}
-
-			// update the internal subscribers list
-			mytwitch.GetSubscribers()
-
-			fmt.Fprintf(w, "OK")
-		} else {
-			// someone tried to make a post and we dont know what to do with it
-			http.Error(w, "404 not found", http.StatusNotFound)
-			log.Println("someone tried posting to", r.URL.Path)
-			return
-		}
+		// someone tried to make a post and we dont know what to do with it
+		http.Error(w, "404 not found", http.StatusNotFound)
+		log.Println("someone tried posting to", r.URL.Path)
+		return
 	// someone tried a PUT or a DELETE or something
 	default:
 		fmt.Fprintf(w, "Only GET/POST methods are supported.\n")
@@ -181,6 +179,9 @@ func Start() {
 	r.HandleFunc("/auth/twitch", authTwitchHandler).Methods("GET")
 	r.HandleFunc("/auth/callback", authCallbackHandler).Methods("GET")
 	r.HandleFunc("/favicon.ico", faviconHandler).Methods("GET")
+
+	r.HandleFunc("/webhooks/twitch/users/follows", webhooksTwitchUsersFollowsHandler).Methods("POST")
+	r.HandleFunc("/webhooks/twitch/subscriptions/events", webhooksTwitchSubscriptionsEventsHandler).Methods("POST")
 	//TODO: update to be proper catchall(?)
 	// r.PathPrefix("/").Handler(catchAllHandler)
 	r.HandleFunc("/", catchAllHandler)
