@@ -31,6 +31,7 @@ const (
 
 var (
 	Environment string
+	ServerType  string // tripbot or vlc-server
 	// ChannelName is the username of the stream
 	ChannelName string
 	// OutputChannel is the stream to which the bot will speak
@@ -226,6 +227,10 @@ func setEnvironment() {
 		log.Println("Error loading .env file:", err)
 		log.Println("Continuing anyway...")
 	}
+}
+
+func SetServerType(server_type string) {
+	ServerType = server_type
 }
 
 //TODO: this should load from a config file
