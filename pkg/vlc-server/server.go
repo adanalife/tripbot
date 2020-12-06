@@ -87,7 +87,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "OK")
 
 		} else if strings.HasPrefix(r.URL.Path, "/onscreens/flag/show") {
-			base64content, ok := r.URL.Query()["dur"]
+			base64content, ok := r.URL.Query()["duration"]
 			if !ok || len(base64content) > 1 {
 				http.Error(w, "417 expectation failed", http.StatusExpectationFailed)
 				return
