@@ -225,16 +225,13 @@ func Start() {
 	r.HandleFunc("/favicon.ico", faviconHandler).Methods("GET")
 
 	// catch everything else
-	//TODO: update to be proper catchall(?)
-	// r.PathPrefix("/").Handler(catchAllHandler)
 	r.HandleFunc("/", catchAllHandler)
 
 	//TODO: error if there's no colon to split on
 	port := strings.Split(config.VlcServerHost, ":")[1]
-	addr := fmt.Sprintf("0.0.0.0:%s", port)
 
 	srv := &http.Server{
-		Addr: addr,
+		Addr: fmt.Sprintf("0.0.0.0:%s", port),
 		// Good practice to set timeouts to avoid Slowloris attacks.
 		WriteTimeout: time.Second * 15,
 		ReadTimeout:  time.Second * 15,
@@ -242,9 +239,7 @@ func Start() {
 		Handler:      r, // Pass our instance of gorilla/mux in.
 	}
 
-	//TODO: add proper graceful shutdown
-	//TODO: replace certs with autocert: https://stackoverflow.com/a/40494806
-	// http.ListenAndServeTLS(port, "infra/fullchain.pem", "infra/private.key", nil)
+	//TODO: add graceful shutdown
 	if err := srv.ListenAndServe(); err != nil {
 		terrors.Fatal(err, "couldn't start server")
 	}

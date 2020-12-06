@@ -194,14 +194,10 @@ func Start() {
 	r.HandleFunc("/favicon.ico", faviconHandler).Methods("GET")
 
 	// catch everything else
-	//TODO: update to be proper catchall(?)
-	// r.PathPrefix("/").Handler(catchAllHandler)
 	r.HandleFunc("/", catchAllHandler)
 
-	addr := fmt.Sprintf("0.0.0.0:%s", config.TripbotServerPort)
-
 	srv := &http.Server{
-		Addr: addr,
+		Addr: fmt.Sprintf("0.0.0.0:%s", config.TripbotServerPort),
 		// Good practice to set timeouts to avoid Slowloris attacks.
 		WriteTimeout: time.Second * 15,
 		ReadTimeout:  time.Second * 15,
@@ -209,9 +205,9 @@ func Start() {
 		Handler:      r, // Pass our instance of gorilla/mux in.
 	}
 
-	//TODO: add proper graceful shutdown
+	//TODO: add graceful shutdown
 	if err := srv.ListenAndServe(); err != nil {
-		terrors.Log(err, "couldn't start server")
+		terrors.Fatal(err, "couldn't start server")
 	}
 }
 
