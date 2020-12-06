@@ -231,6 +231,7 @@ func Start() {
 
 	// negroni classic adds panic recovery, logger, and static file middlewares
 	// c.p. https://github.com/urfave/negroni
+	//TODO: consider adding HTMLPanicFormatter
 	app := negroni.Classic()
 
 	// attach prometheus middleware
