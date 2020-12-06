@@ -40,45 +40,6 @@ func webhooksTwitchHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, string(challenge[0]))
 }
 
-// this endpoint returns private twitch access tokens
-func authTwitchHandler(w http.ResponseWriter, r *http.Request) {
-	secret, ok := r.URL.Query()["auth"]
-	if !ok || !isValidSecret(secret[0]) {
-		http.Error(w, "404 not found", http.StatusNotFound)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	fmt.Fprintf(w, twitchAuthJSON())
-}
-
-// oauth callback URL, requests come from Twitch and have a special code
-// we then use that code to generate a User Access Token
-func authCallbackHandler(w http.ResponseWriter, r *http.Request) {
-	codes, ok := r.URL.Query()["code"]
-
-	if !ok || len(codes[0]) < 1 {
-		msg := "no code in response from twitch"
-		terrors.Log(errors.New("code missing"), msg)
-		//TODO: better error than StatusNotFound (404)
-		http.Error(w, msg, http.StatusNotFound)
-		return
-	}
-	code := string(codes[0])
-
-	log.Println(aurora.Cyan("successfully received token from twitch!"))
-	// use the code to generate an access token
-	mytwitch.GenerateUserAccessToken(code)
-
-	//TODO: return a pretty HTML page here (black background, logo, etc)
-	fmt.Fprintf(w, "Success!")
-}
-
-// return a favicon if anyone asks for one
-func faviconHandler(w http.ResponseWriter, r *http.Request) {
-	http.ServeFile(w, r, "assets/favicon.ico")
-}
-
 // user webhooks are received via POST at this url
 //TODO: we can use helix.GetWebhookTopicFromRequest() and share a webhooks URL
 func webhooksTwitchUsersFollowsHandler(w http.ResponseWriter, r *http.Request) {
@@ -133,6 +94,45 @@ func webhooksTwitchSubscriptionsEventsHandler(w http.ResponseWriter, r *http.Req
 	mytwitch.GetSubscribers()
 
 	fmt.Fprintf(w, "OK")
+}
+
+// this endpoint returns private twitch access tokens
+func authTwitchHandler(w http.ResponseWriter, r *http.Request) {
+	secret, ok := r.URL.Query()["auth"]
+	if !ok || !isValidSecret(secret[0]) {
+		http.Error(w, "404 not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	fmt.Fprintf(w, twitchAuthJSON())
+}
+
+// oauth callback URL, requests come from Twitch and have a special code
+// we then use that code to generate a User Access Token
+func authCallbackHandler(w http.ResponseWriter, r *http.Request) {
+	codes, ok := r.URL.Query()["code"]
+
+	if !ok || len(codes[0]) < 1 {
+		msg := "no code in response from twitch"
+		terrors.Log(errors.New("code missing"), msg)
+		//TODO: better error than StatusNotFound (404)
+		http.Error(w, msg, http.StatusNotFound)
+		return
+	}
+	code := string(codes[0])
+
+	log.Println(aurora.Cyan("successfully received token from twitch!"))
+	// use the code to generate an access token
+	mytwitch.GenerateUserAccessToken(code)
+
+	//TODO: return a pretty HTML page here (black background, logo, etc)
+	fmt.Fprintf(w, "Success!")
+}
+
+// return a favicon if anyone asks for one
+func faviconHandler(w http.ResponseWriter, r *http.Request) {
+	http.ServeFile(w, r, "assets/favicon.ico")
 }
 
 //TODO: consider adding routes to control MPD
