@@ -17,7 +17,6 @@ import (
 //TODO: write real healthchecks for ready vs live
 // healthcheck URL, for tools to verify the bot is alive
 func healthHandler(w http.ResponseWriter, r *http.Request) {
-	log.Fatalf("oopsy")
 	fmt.Fprintf(w, "OK")
 }
 
