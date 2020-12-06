@@ -230,6 +230,15 @@ func setEnvironment() {
 }
 
 func SetServerType(server_type string) {
+	allowedServerTypes := []string{
+		"tripbot",
+		"vlc_server",
+	}
+	for _, t := range allowedServerTypes {
+		if t == server_type {
+			log.Fatalln("Invalid server type")
+		}
+	}
 	ServerType = server_type
 }
 

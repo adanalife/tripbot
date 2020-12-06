@@ -12,6 +12,9 @@ import (
 	sentrynegroni "github.com/getsentry/sentry-go/negroni"
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	metrics "github.com/slok/go-http-metrics/metrics/prometheus"
+	"github.com/slok/go-http-metrics/middleware"
+	negronimiddleware "github.com/slok/go-http-metrics/middleware/negroni"
 	"github.com/urfave/negroni"
 )
 
@@ -56,8 +59,14 @@ func Start() {
 	//TODO: consider adding HTMLPanicFormatter
 	app := negroni.Classic()
 
-	// attach prometheus middleware
-	app.Use(negroni.HandlerFunc(helpers.PrometheusMiddleware))
+	// attach http-metrics (prometheus) middleware
+	mdlw := middleware.New(middleware.Config{
+		Recorder: metrics.NewRecorder(metrics.Config{
+			Prefix: config.ServerType,
+		}),
+	})
+	app.Use(negronimiddleware.Handler("", mdlw))
+
 	// attach sentry middleware
 	app.Use(sentrynegroni.New(sentrynegroni.Options{}))
 
