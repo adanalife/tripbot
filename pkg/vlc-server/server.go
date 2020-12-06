@@ -11,13 +11,16 @@ import (
 	"github.com/adanalife/tripbot/pkg/config"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
+	"github.com/adanalife/tripbot/pkg/instrumentation"
 	onscreensServer "github.com/adanalife/tripbot/pkg/onscreens-server"
 	"github.com/davecgh/go-spew/spew"
+	"github.com/gorilla/mux"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 //TODO: use more StatusExpectationFailed instead of http.StatusUnprocessableEntity
-func handle(w http.ResponseWriter, r *http.Request) {
+func HomeHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
 		// healthcheck URL, for tools to verify the stream is alive
@@ -175,10 +178,14 @@ func handle(w http.ResponseWriter, r *http.Request) {
 func Start() {
 	log.Println("Starting VLC web server on host", config.VlcServerHost)
 
-	// make prometheus metrics available
-	http.Handle("/metrics", promhttp.Handler())
+	r := mux.NewRouter()
+	r.Use(prometheusMiddleware)
+	r.HandleFunc("/", HomeHandler)
 
-	http.HandleFunc("/", handle)
+	// make prometheus metrics available
+	r.Path("/metrics").Handler(promhttp.Handler())
+
+	http.Handle("/", r)
 
 	// ListenAndServe() wants a port in the format ":NUM"
 	//TODO: error if there's no colon to split on
@@ -189,4 +196,15 @@ func Start() {
 	if err != nil {
 		terrors.Fatal(err, "couldn't start server")
 	}
+}
+
+// prometheusMiddleware implements mux.MiddlewareFunc.
+func prometheusMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		route := mux.CurrentRoute(r)
+		path, _ := route.GetPathTemplate()
+		timer := prometheus.NewTimer(instrumentation.VlcServerHttpDuration.WithLabelValues(path))
+		next.ServeHTTP(w, r)
+		timer.ObserveDuration()
+	})
 }

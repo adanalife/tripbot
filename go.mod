@@ -16,6 +16,7 @@ require (
 	github.com/getsentry/sentry-go v0.8.0
 	github.com/go-sql-driver/mysql v1.5.0 // indirect
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0 // indirect
+	github.com/gorilla/mux v1.8.0
 	github.com/gorilla/schema v1.2.0 // indirect
 	github.com/hako/durafmt v0.0.0-20200710122514-c0fb7b4da026
 	github.com/jmoiron/sqlx v1.2.0
