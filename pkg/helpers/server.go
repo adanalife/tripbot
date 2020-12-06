@@ -11,17 +11,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-// PrometheusMiddleware implements mux.MiddlewareFunc.
-// func PrometheusMiddleware(next http.Handler) http.Handler {
-// 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-// 		route := mux.CurrentRoute(r)
-// 		path, _ := route.GetPathTemplate()
-// 		timer := prometheus.NewTimer(instrumentation.HttpDuration.WithLabelValues(config.ServerType, path))
-// 		next.ServeHTTP(w, r)
-// 		timer.ObserveDuration()
-// 	})
-// }
-
+// PrometheusMiddleware implements negroni.Handler
 func PrometheusMiddleware(rw http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
 	route := mux.CurrentRoute(r)
 	path, _ := route.GetPathTemplate()
