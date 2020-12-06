@@ -29,4 +29,4 @@ jobs:
         SENTRY_LOG_LEVEL: debug
       with:
         environment: production
-        # version: ${{ steps.bump-version.outputs.new_tag }}
+        version: ${{ steps.bump-version.outputs.tag }}
