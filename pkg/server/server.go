@@ -16,6 +16,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/logrusorgru/aurora"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/urfave/negroni"
 	"golang.org/x/crypto/acme/autocert"
 )
 
@@ -168,8 +169,6 @@ func Start() {
 
 	r := mux.NewRouter()
 
-	// add prometheus middleware
-	r.Use(helpers.PrometheusMiddleware)
 	// make prometheus metrics available for scraping
 	r.Path("/metrics").Handler(promhttp.Handler())
 
@@ -198,13 +197,20 @@ func Start() {
 
 	helpers.PrintAllRoutes(r)
 
+	// negroni classic adds panic recovery, logger, and static file middlewares
+	// c.p. https://github.com/urfave/negroni
+	n := negroni.Classic()
+	// attach prometheus middleware
+	n.Use(negroni.HandlerFunc(helpers.PrometheusMiddleware))
+	n.UseHandler(r)
+
 	srv := &http.Server{
 		Addr: fmt.Sprintf("0.0.0.0:%s", config.TripbotServerPort),
 		// Good practice to set timeouts to avoid Slowloris attacks.
 		WriteTimeout: time.Second * 15,
 		ReadTimeout:  time.Second * 15,
 		IdleTimeout:  time.Second * 60,
-		Handler:      r, // Pass our instance of gorilla/mux in.
+		Handler:      n, // Pass our instance of negroni in
 	}
 
 	//TODO: add graceful shutdown

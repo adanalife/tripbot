@@ -12,14 +12,22 @@ import (
 )
 
 // PrometheusMiddleware implements mux.MiddlewareFunc.
-func PrometheusMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		route := mux.CurrentRoute(r)
-		path, _ := route.GetPathTemplate()
-		timer := prometheus.NewTimer(instrumentation.HttpDuration.WithLabelValues(config.ServerType, path))
-		next.ServeHTTP(w, r)
-		timer.ObserveDuration()
-	})
+// func PrometheusMiddleware(next http.Handler) http.Handler {
+// 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// 		route := mux.CurrentRoute(r)
+// 		path, _ := route.GetPathTemplate()
+// 		timer := prometheus.NewTimer(instrumentation.HttpDuration.WithLabelValues(config.ServerType, path))
+// 		next.ServeHTTP(w, r)
+// 		timer.ObserveDuration()
+// 	})
+// }
+
+func PrometheusMiddleware(rw http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
+	route := mux.CurrentRoute(r)
+	path, _ := route.GetPathTemplate()
+	timer := prometheus.NewTimer(instrumentation.HttpDuration.WithLabelValues(config.ServerType, path))
+	next(rw, r)
+	timer.ObserveDuration()
 }
 
 func PrintAllRoutes(r *mux.Router) {
