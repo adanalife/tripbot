@@ -199,18 +199,24 @@ func Start() {
 
 	// negroni classic adds panic recovery, logger, and static file middlewares
 	// c.p. https://github.com/urfave/negroni
-	n := negroni.Classic()
+	app := negroni.Classic()
+
 	// attach prometheus middleware
-	n.Use(negroni.HandlerFunc(helpers.PrometheusMiddleware))
-	n.UseHandler(r)
+	app.Use(negroni.HandlerFunc(helpers.PrometheusMiddleware))
+	// attach sentry middleware
+	app.Use(sentrynegroni.New(sentrynegroni.Options{}))
+
+	// attaching routes to handler happens last
+	app.UseHandler(r)
 
 	srv := &http.Server{
 		Addr: fmt.Sprintf("0.0.0.0:%s", config.TripbotServerPort),
 		// Good practice to set timeouts to avoid Slowloris attacks.
-		WriteTimeout: time.Second * 15,
-		ReadTimeout:  time.Second * 15,
-		IdleTimeout:  time.Second * 60,
-		Handler:      n, // Pass our instance of negroni in
+		WriteTimeout:   time.Second * 15,
+		ReadTimeout:    time.Second * 15,
+		IdleTimeout:    time.Second * 60,
+		MaxHeaderBytes: 1 << 20, // 1 MB
+		Handler:        app,     // Pass our instance of negroni in
 	}
 
 	//TODO: add graceful shutdown
