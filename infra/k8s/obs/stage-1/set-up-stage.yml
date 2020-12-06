@@ -4,6 +4,9 @@ kind: Deployment
 metadata:
   name: obs
 spec:
+  selector:
+    matchLabels:
+      app: obs
   template:
     spec:
       containers:

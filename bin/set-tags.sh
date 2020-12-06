@@ -18,12 +18,12 @@ fi
 SERVER_URL=$1
 
 RESP=$(curl -s "$SERVER_URL/auth/twitch?auth=yes")
-echo $RESP | jq
+echo "$RESP" | jq
 
 # extract the fields from the response
-CHANNEL_ID=$(echo $RESP | jq -r .channel_id)
-CLIENT_ID=$(echo $RESP | jq -r .client_id)
-USER_ACCESS_TOKEN=$(echo $RESP | jq -r .user_access_token)
+CHANNEL_ID=$(echo "$RESP" | jq -r .channel_id)
+CLIENT_ID=$(echo "$RESP" | jq -r .client_id)
+USER_ACCESS_TOKEN=$(echo "$RESP" | jq -r .user_access_token)
 
 curl -s -H "Client-ID: $CLIENT_ID" \
   -H 'Content-Type: application/json' \

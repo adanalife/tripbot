@@ -121,7 +121,7 @@ func milesCmd(user *users.User) {
 	msg := "@%s has %.2f miles."
 	msg = fmt.Sprintf(msg, user.Username, miles)
 	if miles < 0.1 {
-		msg += " You'll earn more miles every minute you watch the stream."
+		msg += " You'll earn more miles the longer you watch the stream."
 	}
 	if miles == 0.0 {
 		msg += " (Sometimes it takes a bit for me to notice you. You should be good now!)"

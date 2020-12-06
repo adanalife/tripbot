@@ -7,8 +7,8 @@
 # don't ipen vncconfig on startup
 sed -i '/vncconfig/s/^/#/' /etc/X11/Xvnc-session
 
-mkdir -p $XDG_RUNTIME_DIR
-chmod 0700 $XDG_RUNTIME_DIR
+mkdir -p "$XDG_RUNTIME_DIR"
+chmod 0700 "$XDG_RUNTIME_DIR"
 
 mkdir -p /opt/data/run
 touch /opt/data/run/{left,right}-message.txt

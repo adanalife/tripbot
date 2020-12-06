@@ -15,10 +15,12 @@ if [ ! -f $PIDFILE ]; then
   exit 2
 fi
 
-output=$(lsof -p $(cat $PIDFILE) 2>/dev/null)
+output=$(lsof -p "$(cat $PIDFILE)" 2>/dev/null)
+
+# shellcheck disable=SC2181
 if [ $? -eq 0 ]; then
   #TODO: error message if more than 1 result from search
-  echo $output | grep -i '\.MP4' | sed -e 's/^.*2018_/2018_/' -e 's/MP4.*/MP4/'
+  echo "$output" | grep -i '\.MP4' | sed -e 's/^.*2018_/2018_/' -e 's/MP4.*/MP4/'
 else
   echo "No MP4s were found in lsof output. Check that the PID is correct and that OBS is playing videos"
   exit 3
