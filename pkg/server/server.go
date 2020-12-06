@@ -15,6 +15,7 @@ import (
 	metrics "github.com/slok/go-http-metrics/metrics/prometheus"
 	"github.com/slok/go-http-metrics/middleware"
 	negronimiddleware "github.com/slok/go-http-metrics/middleware/negroni"
+	"github.com/unrolled/secure"
 	"github.com/urfave/negroni"
 )
 
@@ -56,18 +57,23 @@ func Start() {
 
 	// negroni classic adds panic recovery, logger, and static file middlewares
 	// c.p. https://github.com/urfave/negroni
-	//TODO: consider adding HTMLPanicFormatter
 	app := negroni.Classic()
 
 	// attach http-metrics (prometheus) middleware
-	mdlw := middleware.New(middleware.Config{
-		Recorder: metrics.NewRecorder(metrics.Config{
-			Prefix: config.ServerType,
-		}),
+	metricsMw := middleware.New(middleware.Config{
+		Recorder: metrics.NewRecorder(metrics.Config{}),
+		Service:  config.ServerType,
 	})
-	app.Use(negronimiddleware.Handler("", mdlw))
+	app.Use(negronimiddleware.Handler("", metricsMw))
 
-	// attach sentry middleware
+	// attach security middleware
+	secureMw := secure.New(secure.Options{
+		FrameDeny:     true,
+		IsDevelopment: config.IsDevelopment(),
+	})
+	app.Use(negroni.HandlerFunc(secureMw.HandlerFuncWithNext))
+
+	// attach Sentry middleware (for reporting exceptions)
 	app.Use(sentrynegroni.New(sentrynegroni.Options{}))
 
 	// attaching routes to handler happens last
