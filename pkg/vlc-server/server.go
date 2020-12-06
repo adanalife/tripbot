@@ -29,12 +29,17 @@ func vlcCurrentHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func vlcPlayHandler(w http.ResponseWriter, r *http.Request) {
-	videoFile, ok := r.URL.Query()["video"]
-	if !ok || len(videoFile) > 1 {
-		//TODO: eventually this could just play instead of hard-requiring a param
-		http.Error(w, "417 expectation failed", http.StatusExpectationFailed)
-		return
-	}
+	vars := mux.Vars(r)
+	spew.Dump(vars)
+	spew.Dump(vars["video"])
+
+	videoFile := vars["video"]
+	//videoFile, ok := r.URL.Query()["video"]
+	//if !ok || len(videoFile) > 1 {
+	//	//TODO: eventually this could just play instead of hard-requiring a param
+	//	http.Error(w, "417 expectation failed", http.StatusExpectationFailed)
+	//	return
+	//}
 
 	spew.Dump(videoFile)
 	playVideoFile(videoFile[0])
@@ -205,7 +210,7 @@ func Start() {
 	// vlc endpoints
 	//TODO: consider refactoring into a subrouter
 	r.HandleFunc("/vlc/current", vlcCurrentHandler).Methods("GET")
-	r.HandleFunc("/vlc/play", vlcPlayHandler).Methods("GET")
+	r.HandleFunc("/vlc/play/{id:[0-9]+}", vlcPlayHandler).Methods("GET")
 	r.HandleFunc("/vlc/back", vlcBackHandler).Methods("GET")
 	r.HandleFunc("/vlc/skip", vlcSkipHandler).Methods("GET")
 	r.HandleFunc("/vlc/random", vlcRandomHandler).Methods("GET")
