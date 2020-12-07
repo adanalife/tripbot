@@ -11,6 +11,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/helpers"
 	onscreensServer "github.com/adanalife/tripbot/pkg/onscreens-server"
 	"github.com/davecgh/go-spew/spew"
+	"github.com/gorilla/mux"
 )
 
 // healthcheck URL, for tools to verify the stream is alive
@@ -25,15 +26,19 @@ func vlcCurrentHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func vlcPlayHandler(w http.ResponseWriter, r *http.Request) {
-	videoFile, ok := r.URL.Query()["video"]
-	if !ok || len(videoFile) > 1 {
-		//TODO: eventually this could just play instead of hard-requiring a param
-		http.Error(w, "417 expectation failed", http.StatusExpectationFailed)
-		return
-	}
+	vars := mux.Vars(r)
+	spew.Dump(vars)
+
+	videoFile := vars["video"]
+
+	//if len(videoFile) == 0 {
+	//	//TODO: eventually this could just play instead of hard-requiring a param
+	//	http.Error(w, "417 expectation failed", http.StatusExpectationFailed)
+	//	return
+	//}
 
 	spew.Dump(videoFile)
-	playVideoFile(videoFile[0])
+	playVideoFile(videoFile)
 
 	//TODO: better response
 	fmt.Fprintf(w, "OK")

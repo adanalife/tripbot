@@ -35,6 +35,7 @@ func Start() {
 	vlc := r.PathPrefix("/vlc").Methods("GET").Subrouter()
 	vlc.HandleFunc("/current", vlcCurrentHandler)
 	vlc.HandleFunc("/play", vlcPlayHandler)
+	vlc.HandleFunc("/play/{video}", vlcPlayHandler)
 	vlc.HandleFunc("/back", vlcBackHandler)
 	vlc.HandleFunc("/skip", vlcSkipHandler)
 	vlc.HandleFunc("/random", vlcRandomHandler)
