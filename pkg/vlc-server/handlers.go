@@ -31,12 +31,6 @@ func vlcPlayHandler(w http.ResponseWriter, r *http.Request) {
 
 	videoFile := vars["video"]
 
-	//if len(videoFile) == 0 {
-	//	//TODO: eventually this could just play instead of hard-requiring a param
-	//	http.Error(w, "417 expectation failed", http.StatusExpectationFailed)
-	//	return
-	//}
-
 	spew.Dump(videoFile)
 	playVideoFile(videoFile)
 
