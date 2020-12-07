@@ -28,27 +28,29 @@ func Start() {
 
 	// healthcheck endpoints
 	hp := r.PathPrefix("/health").Methods("GET").Subrouter()
+	hp.HandleFunc("/", healthHandler)
 	hp.HandleFunc("/live", healthHandler)
 	hp.HandleFunc("/ready", healthHandler)
 
 	// vlc endpoints
 	vlc := r.PathPrefix("/vlc").Methods("GET").Subrouter()
 	vlc.HandleFunc("/current", vlcCurrentHandler)
-	vlc.HandleFunc("/play", vlcPlayHandler)
 	vlc.HandleFunc("/play/{video}", vlcPlayHandler)
-	vlc.HandleFunc("/back", vlcBackHandler)
-	vlc.HandleFunc("/skip", vlcSkipHandler)
 	vlc.HandleFunc("/random", vlcRandomHandler)
+	vlc.HandleFunc("/back", vlcBackHandler)
+	vlc.HandleFunc("/back/{n}", vlcBackHandler)
+	vlc.HandleFunc("/skip", vlcSkipHandler)
+	vlc.HandleFunc("/skip/{n}", vlcSkipHandler)
 
 	// onscreen endpoints
 	osc := r.PathPrefix("/onscreens").Methods("GET").Subrouter()
 	osc.HandleFunc("/flag/show", onscreensFlagShowHandler)
 	osc.HandleFunc("/gps/hide", onscreensGpsHideHandler)
 	osc.HandleFunc("/gps/show", onscreensGpsShowHandler)
-	osc.HandleFunc("/timewarp/show", onscreensTimewarpShowHandler)
 	osc.HandleFunc("/leaderboard/show", onscreensLeaderboardShowHandler)
 	osc.HandleFunc("/middle/hide", onscreensMiddleHideHandler)
 	osc.HandleFunc("/middle/show", onscreensMiddleShowHandler)
+	osc.HandleFunc("/timewarp/show", onscreensTimewarpShowHandler)
 
 	// prometheus metrics endpoint
 	r.Path("/metrics").Handler(promhttp.Handler())
