@@ -87,24 +87,36 @@ func vlcRandomHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func onscreensFlagShowHandler(w http.ResponseWriter, r *http.Request) {
-	base64content, ok := r.URL.Query()["duration"]
-	if !ok || len(base64content) > 1 {
+	vars := mux.Vars(r)
+	spew.Dump(vars)
+
+	switch vars["action"] {
+	case "show":
+		base64content, ok := r.URL.Query()["duration"]
+		if !ok || len(base64content) > 1 {
+			http.Error(w, "417 expectation failed", http.StatusExpectationFailed)
+			return
+		}
+		durStr, err := helpers.Base64Decode(base64content[0])
+		if err != nil {
+			terrors.Log(err, "unable to decode string")
+			http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
+			return
+		}
+		dur, err := time.ParseDuration(durStr)
+		if err != nil {
+			http.Error(w, "unable to parse duration", http.StatusInternalServerError)
+			return
+		}
+		onscreensServer.ShowFlag(dur)
+		fmt.Fprintf(w, "OK")
+	case "hide":
+		onscreensServer.Flag.Hide()
+		fmt.Fprintf(w, "OK")
+	default:
 		http.Error(w, "417 expectation failed", http.StatusExpectationFailed)
 		return
 	}
-	durStr, err := helpers.Base64Decode(base64content[0])
-	if err != nil {
-		terrors.Log(err, "unable to decode string")
-		http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
-		return
-	}
-	dur, err := time.ParseDuration(durStr)
-	if err != nil {
-		http.Error(w, "unable to parse duration", http.StatusInternalServerError)
-		return
-	}
-	onscreensServer.ShowFlag(dur)
-	fmt.Fprintf(w, "OK")
 }
 
 func onscreensGpsHandler(w http.ResponseWriter, r *http.Request) {
@@ -151,27 +163,51 @@ func onscreensMiddleHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func onscreensTimewarpShowHandler(w http.ResponseWriter, r *http.Request) {
-	onscreensServer.ShowTimewarp()
-	fmt.Fprintf(w, "OK")
-}
-
-func onscreensLeaderboardShowHandler(w http.ResponseWriter, r *http.Request) {
-	base64content, ok := r.URL.Query()["content"]
-	if !ok || len(base64content) > 1 {
+func onscreensTimewarpHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	spew.Dump(vars)
+	switch vars["action"] {
+	case "show":
+		//TODO: is this different from Timewarp.Show()?
+		onscreensServer.ShowTimewarp()
+		fmt.Fprintf(w, "OK")
+	case "hide":
+		onscreensServer.Timewarp.Hide()
+		fmt.Fprintf(w, "OK")
+	default:
 		http.Error(w, "417 expectation failed", http.StatusExpectationFailed)
 		return
 	}
-	spew.Dump(base64content[0])
-	content, err := helpers.Base64Decode(base64content[0])
-	if err != nil {
-		terrors.Log(err, "unable to decode string")
-		http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
+}
+
+func onscreensLeaderboardHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	spew.Dump(vars)
+
+	switch vars["action"] {
+	case "show":
+		base64content, ok := r.URL.Query()["content"]
+		if !ok || len(base64content) > 1 {
+			http.Error(w, "417 expectation failed", http.StatusExpectationFailed)
+			return
+		}
+		spew.Dump(base64content[0])
+		content, err := helpers.Base64Decode(base64content[0])
+		if err != nil {
+			terrors.Log(err, "unable to decode string")
+			http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
+			return
+		}
+
+		onscreensServer.Leaderboard.Show(content)
+		fmt.Fprintf(w, "OK")
+	case "hide":
+		onscreensServer.Leaderboard.Hide()
+		fmt.Fprintf(w, "OK")
+	default:
+		http.Error(w, "417 expectation failed", http.StatusExpectationFailed)
 		return
 	}
-
-	onscreensServer.Leaderboard.Show(content)
-	fmt.Fprintf(w, "OK")
 }
 
 func faviconHandler(w http.ResponseWriter, r *http.Request) {
