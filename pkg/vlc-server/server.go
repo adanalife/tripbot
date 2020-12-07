@@ -44,13 +44,13 @@ func Start() {
 
 	// onscreen endpoints
 	osc := r.PathPrefix("/onscreens").Methods("GET").Subrouter()
-	osc.HandleFunc("/flag/show", onscreensFlagShowHandler)
-	osc.HandleFunc("/gps/hide", onscreensGpsHideHandler)
-	osc.HandleFunc("/gps/show", onscreensGpsShowHandler)
-	osc.HandleFunc("/leaderboard/show", onscreensLeaderboardShowHandler)
-	osc.HandleFunc("/middle/hide", onscreensMiddleHideHandler)
-	osc.HandleFunc("/middle/show", onscreensMiddleShowHandler)
-	osc.HandleFunc("/timewarp/show", onscreensTimewarpShowHandler)
+	osc.HandleFunc("/flag/{action}", onscreensFlagHandler)
+	osc.HandleFunc("/gps/{action}", onscreensGpsHandler)
+	osc.HandleFunc("/gps/{action}", onscreensGpsHandler)
+	osc.HandleFunc("/leaderboard/{action}", onscreensLeaderboardHandler)
+	osc.HandleFunc("/middle/{action}", onscreensMiddleHandler)
+	osc.HandleFunc("/middle/{action}", onscreensMiddleHandler)
+	osc.HandleFunc("/timewarp/{action}", onscreensTimewarpHandler)
 
 	// prometheus metrics endpoint
 	r.Path("/metrics").Handler(promhttp.Handler())
