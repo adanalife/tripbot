@@ -35,7 +35,7 @@ services:
     volumes:
       - .bash_history.remote:/root/.bash_history
       - /Volumes/Leeroy/Dana\'s\ Photos/Dashcam\ Scratchpad/Dashcam/screencaps:/opt/data/screencaps:ro
-      - /Volumes/Leeroy/Dana\'s\ Photos/Dashcam\ Scratchpad/Dashcam/_all:/opt/data/Dashcam/_all:ro
+      # - /Volumes/Leeroy/Dana\'s\ Photos/Dashcam\ Scratchpad/Dashcam/_all:/opt/data/Dashcam/_all:ro
       # - /home/dmerrick/Videos/Dashcam/screencaps:/opt/data/screencaps:ro
       # - /home/dmerrick/Videos/Dashcam/_all:/opt/data/Dashcam/_all:ro
 
