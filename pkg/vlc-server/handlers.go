@@ -86,7 +86,7 @@ func vlcRandomHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "OK")
 }
 
-func onscreensFlagShowHandler(w http.ResponseWriter, r *http.Request) {
+func onscreensFlagHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	spew.Dump(vars)
 
@@ -111,7 +111,7 @@ func onscreensFlagShowHandler(w http.ResponseWriter, r *http.Request) {
 		onscreensServer.ShowFlag(dur)
 		fmt.Fprintf(w, "OK")
 	case "hide":
-		onscreensServer.Flag.Hide()
+		onscreensServer.FlagImage.Hide()
 		fmt.Fprintf(w, "OK")
 	default:
 		http.Error(w, "417 expectation failed", http.StatusExpectationFailed)
