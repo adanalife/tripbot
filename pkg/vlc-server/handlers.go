@@ -107,14 +107,48 @@ func onscreensFlagShowHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "OK")
 }
 
-func onscreensGpsHideHandler(w http.ResponseWriter, r *http.Request) {
-	onscreensServer.HideGPSImage()
-	fmt.Fprintf(w, "OK")
+func onscreensGpsHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	spew.Dump(vars)
+
+	switch vars["action"] {
+	case "show":
+		onscreensServer.ShowGPSImage()
+		fmt.Fprintf(w, "OK")
+	case "hide":
+		onscreensServer.HideGPSImage()
+		fmt.Fprintf(w, "OK")
+	default:
+		http.Error(w, "417 expectation failed", http.StatusExpectationFailed)
+		return
+	}
 }
 
-func onscreensGpsShowHandler(w http.ResponseWriter, r *http.Request) {
-	onscreensServer.ShowGPSImage()
-	fmt.Fprintf(w, "OK")
+func onscreensMiddleHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	spew.Dump(vars)
+	switch vars["action"] {
+	case "show":
+		base64content, ok := r.URL.Query()["msg"]
+		if !ok || len(base64content) > 1 {
+			http.Error(w, "417 expectation failed", http.StatusExpectationFailed)
+			return
+		}
+		msg, err := helpers.Base64Decode(base64content[0])
+		if err != nil {
+			terrors.Log(err, "unable to decode string")
+			http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
+			return
+		}
+		onscreensServer.MiddleText.Show(msg)
+		fmt.Fprintf(w, "OK")
+	case "hide":
+		onscreensServer.MiddleText.Hide()
+		fmt.Fprintf(w, "OK")
+	default:
+		http.Error(w, "417 expectation failed", http.StatusExpectationFailed)
+		return
+	}
 }
 
 func onscreensTimewarpShowHandler(w http.ResponseWriter, r *http.Request) {
@@ -137,28 +171,6 @@ func onscreensLeaderboardShowHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	onscreensServer.Leaderboard.Show(content)
-	fmt.Fprintf(w, "OK")
-}
-
-func onscreensMiddleHideHandler(w http.ResponseWriter, r *http.Request) {
-	onscreensServer.MiddleText.Hide()
-	fmt.Fprintf(w, "OK")
-
-}
-
-func onscreensMiddleShowHandler(w http.ResponseWriter, r *http.Request) {
-	base64content, ok := r.URL.Query()["msg"]
-	if !ok || len(base64content) > 1 {
-		http.Error(w, "417 expectation failed", http.StatusExpectationFailed)
-		return
-	}
-	msg, err := helpers.Base64Decode(base64content[0])
-	if err != nil {
-		terrors.Log(err, "unable to decode string")
-		http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
-		return
-	}
-	onscreensServer.MiddleText.Show(msg)
 	fmt.Fprintf(w, "OK")
 }
 
