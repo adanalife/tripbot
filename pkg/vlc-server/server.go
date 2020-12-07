@@ -61,7 +61,9 @@ func Start() {
 	// catch everything else
 	r.HandleFunc("/", catchAllHandler)
 
-	helpers.PrintAllRoutes(r)
+	if config.Verbose {
+		helpers.PrintAllRoutes(r)
+	}
 
 	// negroni classic adds panic recovery, logger, and static file middlewares
 	// c.p. https://github.com/urfave/negroni
