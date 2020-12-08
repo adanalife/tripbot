@@ -22,7 +22,7 @@ func incChatCommandCounter(command string) {
 func runCommand(user users.User, message string) {
 	var err error
 
-	split := strings.Split(message, " ")
+	split := strings.Split(strings.TrimSpace(message), " ")
 	command := split[0]
 	params := split[1:]
 
