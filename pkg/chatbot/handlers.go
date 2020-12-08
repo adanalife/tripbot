@@ -21,10 +21,15 @@ func incChatCommandCounter(command string) {
 
 func runCommand(user users.User, message string) {
 	var err error
+	var params []string
 
-	split := strings.Split(strings.TrimSpace(message), " ")
+	msg := strings.TrimSpace(message)
+	split := strings.Split(msg, " ")
 	command := split[0]
-	params := split[1:]
+
+	if len(split) > 1 {
+		params = split[1:]
+	}
 
 	switch command {
 	case "!help":
