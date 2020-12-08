@@ -31,7 +31,7 @@ var currentVersion string
 
 func helpCmd(user *users.User) {
 	log.Println(user.Username, "ran !help")
-	msg := fmt.Sprintf("%s (%d of %d)", help(), helpIndex+1, len(c.Conf.HelpMessages))
+	msg := fmt.Sprintf("%s (%d of %d)", help(), helpIndex+1, len(c.HelpMessages))
 	Say(msg)
 }
 

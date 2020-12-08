@@ -64,7 +64,7 @@ func Start() {
 	// attach http-metrics (prometheus) middleware
 	metricsMw := middleware.New(middleware.Config{
 		Recorder: metrics.NewRecorder(metrics.Config{}),
-		Service:  config.ServerType,
+		Service:  c.Conf.ServerType,
 	})
 	app.Use(negronimiddleware.Handler("", metricsMw))
 

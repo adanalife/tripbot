@@ -39,14 +39,14 @@ func Initialize() *twitch.Client {
 	geocoder.ApiKey = c.Conf.GoogleMapsAPIKey
 
 	// initialize the twitch API client
-	c, err := mytwitch.Client()
+	myClient, err := mytwitch.Client()
 	if err != nil {
 		terrors.Fatal(err, "unable to create twitch API client")
 	}
 
 	if !c.Conf.DisableTwitchWebhooks {
 		//TODO: actually use the security features provided here
-		authURL := c.GetAuthorizationURL(&helix.AuthorizationURLParams{
+		authURL := myClient.GetAuthorizationURL(&helix.AuthorizationURLParams{
 			//TODO: move to configs lib
 			//TODO: revisit that we need all of these
 			Scopes:       []string{"openid", "user:edit:broadcast", "channel:read:subscriptions"},

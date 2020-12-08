@@ -115,19 +115,19 @@ func setEnvironment() {
 	}
 }
 
-func SetServerType(server_type string) {
-	allowedServerTypes := []string{
-		"tripbot",
-		"vlc_server",
-	}
-	for _, t := range allowedServerTypes {
-		if t == server_type {
-			Conf.ServerType = server_type
-			return
-		}
-	}
-	log.Fatalln(aurora.Red("Invalid server type"))
-}
+// func SetServerType(server_type string) {
+// 	allowedServerTypes := []string{
+// 		"tripbot",
+// 		"vlc_server",
+// 	}
+// 	for _, t := range allowedServerTypes {
+// 		if t == server_type {
+// 			Conf.ServerType = server_type
+// 			return
+// 		}
+// 	}
+// 	log.Fatalln(aurora.Red("Invalid server type"))
+// }
 
 //TODO: this should load from a config file
 // IgnoredUsers are users who shouldn't be in the running for miles
