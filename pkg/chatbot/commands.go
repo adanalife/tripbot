@@ -125,6 +125,13 @@ func milesCmd(user *users.User, params []string) {
 		miles = user.CurrentMiles()
 	} else {
 		u := users.Find(params[0])
+
+		// check to see if they are in our DB
+		if u.ID == 0 {
+			Say("I don't know them, sorry!")
+			return
+		}
+
 		username = u.Username
 		miles = u.CurrentMiles()
 	}
