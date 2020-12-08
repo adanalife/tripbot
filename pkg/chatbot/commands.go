@@ -114,16 +114,30 @@ func uptimeCmd(user *users.User) {
 	Say(msg)
 }
 
-func milesCmd(user *users.User) {
+func milesCmd(user *users.User, params []string) {
 	log.Println(user.Username, "ran !miles")
-	miles := user.CurrentMiles()
-	msg := "@%s has %.2f miles."
-	msg = fmt.Sprintf(msg, user.Username, miles)
-	if miles < 0.1 {
-		msg += " You'll earn more miles the longer you watch the stream."
+	var username string
+	var miles float32
+
+	// check to see if an arg was provided
+	if len(params) == 0 {
+		username = user.Username
+		miles = user.CurrentMiles()
+	} else {
+		u := users.Find(params[0])
+		username = u.Username
+		miles = u.CurrentMiles()
 	}
-	if miles == 0.0 {
-		msg += " (Sometimes it takes a bit for me to notice you. You should be good now!)"
+
+	msg := "@%s has %.2f miles."
+	msg = fmt.Sprintf(msg, username, miles)
+	if len(params) == 0 {
+		if miles < 0.1 {
+			msg += " You'll earn more miles the longer you watch the stream."
+		}
+		if miles == 0.0 {
+			msg += " (Sometimes it takes a bit for me to notice you. You should be good now!)"
+		}
 	}
 	Say(msg)
 }
