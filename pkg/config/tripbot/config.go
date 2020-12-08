@@ -4,22 +4,22 @@ import (
 	"log"
 	"os"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/joho/godotenv"
 	"github.com/kelseyhightower/envconfig"
 	"github.com/logrusorgru/aurora"
 )
 
 //TODO: not all required ENV vars are required for vlc-server
-var Conf TripbotConfig
+var Conf *TripbotConfig
 
 func LoadTripbotConfig() *TripbotConfig {
-	//TODO: whats SERVICE doing here?
-	var cfg TripbotConfig
-	err := envconfig.Process("SERVICE", &cfg)
+	// var cfg TripbotConfig
+	err := envconfig.Process("TRIPBOT", &Conf)
 	if err != nil {
 		log.Fatalf("could not load config: %v", err)
 	}
-	return &cfg
+	return Conf
 }
 
 func init() {
@@ -27,7 +27,9 @@ func init() {
 	// set the Environment and load dotenv
 	setEnvironment()
 
-	Conf := LoadTripbotConfig()
+	LoadTripbotConfig()
+
+	spew.Dump(Conf)
 
 	//TODO: consider using strings.ToLower() on channel name here and removing elsewhere
 
