@@ -21,12 +21,7 @@ const (
 	defaultCroppedCornersDir = "/opt/data/cropped-corner"
 	defaultMapsOutputDir     = "/opt/data/maps"
 	defaultRunDir            = "/opt/data/run"
-
-	videoDir          = "_all"
-	DBPath            = "db/tripbot.db"
-	UserJoinsBucket   = "user_joins"
-	UserWatchedBucket = "user_watched"
-	CoordsBucket      = "coords"
+	videoDir                 = "_all"
 )
 
 var (
