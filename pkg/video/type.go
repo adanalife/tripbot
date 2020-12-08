@@ -8,7 +8,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/adanalife/tripbot/pkg/config"
+	c "github.com/adanalife/tripbot/pkg/config/tripbot"
+	config "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/ocr"
 )
 
@@ -62,7 +63,7 @@ func (v Video) File() string {
 
 // ex: /Volumes/.../2018_0514_224801_013.MP4
 func (v Video) Path() string {
-	return path.Join(config.VideoDir, v.File())
+	return path.Join(c.Conf.VideoDir, v.File())
 }
 
 // toDate parses the vidStr and returns a time.Time object for the video
@@ -99,7 +100,7 @@ func slug(file string) string {
 // timestamp is something like 000, 030, 100, etc
 func (v Video) screencap(timestamp string) string {
 	screencapFile := fmt.Sprintf("%s-%s.png", v.DashStr(), timestamp)
-	return path.Join(config.ScreencapDir, screencapFile)
+	return path.Join(c.Conf.ScreencapDir, screencapFile)
 }
 
 func removeFileExtension(filename string) string {

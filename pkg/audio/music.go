@@ -26,7 +26,7 @@ func init() {
 		return
 	}
 
-	if c.Config.DisableMusic {
+	if c.Conf.DisableMusic {
 		log.Println(aurora.Yellow("Disabling audio"))
 		Enabled = false
 		return
@@ -35,7 +35,7 @@ func init() {
 	// connect to the MPD server
 	connect()
 
-	if !c.Config.DisableMusicAutoplay {
+	if !c.Conf.DisableMusicAutoplay {
 		//TODO: this shouldn't live in init probably
 		PlayGrooveSalad()
 	}
@@ -44,7 +44,7 @@ func init() {
 func connect() {
 	var err error
 	// Connect to MPD server
-	mpdConn, err = mpd.Dial("tcp", c.Config.MpdServerHost)
+	mpdConn, err = mpd.Dial("tcp", c.Conf.MpdServerHost)
 	if err != nil {
 		//TODO: an exponential backoff would be nice here
 		log.Println(aurora.Red("Error connecting to MPD"), ":", err.Error())
