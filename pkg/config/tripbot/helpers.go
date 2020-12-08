@@ -3,19 +3,19 @@ package config
 import "os"
 
 func IsProduction() bool {
-	return Environment == "production"
+	return cfg.Environment == "production"
 }
 
 func IsStaging() bool {
-	return Environment == "staging"
+	return cfg.Environment == "staging"
 }
 
 func IsDevelopment() bool {
-	return Environment == "development"
+	return cfg.Environment == "development"
 }
 
 func IsTesting() bool {
-	return Environment == "testing"
+	return cfg.Environment == "testing"
 }
 
 func getEnv(key, fallback string) string {

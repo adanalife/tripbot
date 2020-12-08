@@ -22,6 +22,7 @@ require (
 	github.com/jmoiron/sqlx v1.2.0
 	github.com/joho/godotenv v1.3.0
 	github.com/jonas-p/go-shp v0.1.1 // indirect
+	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/kelvins/geocoder v0.0.0-20200113010004-f579500e9e27
 	github.com/lib/pq v1.9.0
 	github.com/logrusorgru/aurora v2.0.3+incompatible
