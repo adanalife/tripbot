@@ -18,7 +18,6 @@ import (
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
 	"github.com/adanalife/tripbot/pkg/helpers"
-	"github.com/adanalife/tripbot/pkg/miles"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/adanalife/tripbot/pkg/video"
 	"github.com/getsentry/sentry-go"
@@ -137,26 +136,6 @@ func kilometresCmd(user *users.User) {
 	Say(msg)
 }
 
-func oldMilesCmd(user *users.User) {
-	log.Println(user.Username, "ran !oldmiles")
-	miles := miles.ForUser(user.Username)
-	msg := ""
-	switch {
-	case miles == 1:
-		msg = "@%s has only %.1f mile."
-	case miles >= 250:
-		msg = "Holy crap! @%s has %.1f miles!"
-	default:
-		msg = "@%s has %.1f miles."
-	}
-	// add the other part randomly
-	if rand.Intn(3) == 0 {
-		msg = fmt.Sprintf("%s Earn miles for every minute you watch the stream!", msg)
-	}
-	msg = fmt.Sprintf(msg, user.Username, miles)
-	Say(msg)
-}
-
 func sunsetCmd(user *users.User) {
 	log.Println(user.Username, "ran !sunset")
 	// get the currently-playing video
@@ -210,20 +189,6 @@ func leaderboardCmd(user *users.User) {
 	// 	}
 	// }
 	// Say(msg)
-}
-
-func oldLeaderboardCmd(user *users.User) {
-	log.Println(user.Username, "ran !oldleaderboard")
-	size := 10
-	userList := miles.TopUsers(size)
-	msg := fmt.Sprintf("Top %d miles: ", size)
-	for i, leaderPair := range userList {
-		msg += fmt.Sprintf("%d. %s (%s)", i+1, leaderPair[0], leaderPair[1])
-		if i+1 != size {
-			msg += ", "
-		}
-	}
-	Say(msg)
 }
 
 func timeCmd(user *users.User) {

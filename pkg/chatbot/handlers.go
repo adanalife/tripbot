@@ -43,13 +43,6 @@ func runCommand(user users.User, message string) {
 		songCmd(&user)
 	case "!uptime":
 		uptimeCmd(&user)
-		//TODO: remove this
-	case "!oldmiles":
-		if user.HasCommandAvailable() {
-			oldMilesCmd(&user)
-		} else {
-			Say(followerMsg)
-		}
 	case "!timewarp", "!tw":
 		if user.HasCommandAvailable() {
 			timewarpCmd(&user)
@@ -91,12 +84,6 @@ func runCommand(user users.User, message string) {
 	case "!sunset":
 		if user.HasCommandAvailable() {
 			sunsetCmd(&user)
-		} else {
-			Say(followerMsg)
-		}
-	case "!oldleaderboard":
-		if user.HasCommandAvailable() {
-			oldLeaderboardCmd(&user)
 		} else {
 			Say(followerMsg)
 		}
