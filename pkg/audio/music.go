@@ -5,7 +5,7 @@ import (
 	"runtime"
 	"syscall"
 
-	"github.com/adanalife/tripbot/pkg/config"
+	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/fhs/gompd/mpd"
 	"github.com/logrusorgru/aurora"
@@ -26,7 +26,7 @@ func init() {
 		return
 	}
 
-	if config.DisableMusic {
+	if c.Config.DisableMusic {
 		log.Println(aurora.Yellow("Disabling audio"))
 		Enabled = false
 		return
@@ -35,7 +35,7 @@ func init() {
 	// connect to the MPD server
 	connect()
 
-	if !config.DisableMusicAutoplay {
+	if !c.Config.DisableMusicAutoplay {
 		//TODO: this shouldn't live in init probably
 		PlayGrooveSalad()
 	}
@@ -44,7 +44,7 @@ func init() {
 func connect() {
 	var err error
 	// Connect to MPD server
-	mpdConn, err = mpd.Dial("tcp", config.MpdServerHost)
+	mpdConn, err = mpd.Dial("tcp", c.Config.MpdServerHost)
 	if err != nil {
 		//TODO: an exponential backoff would be nice here
 		log.Println(aurora.Red("Error connecting to MPD"), ":", err.Error())

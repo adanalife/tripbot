@@ -10,10 +10,11 @@ import (
 )
 
 //TODO: not all required ENV vars are required for vlc-server
-var cfg TripbotConfig
+var Conf TripbotConfig
 
 func LoadTripbotConfig() *TripbotConfig {
-	// var cfg TripbotConfig
+	//TODO: whats SERVICE doing here?
+	var cfg TripbotConfig
 	err := envconfig.Process("SERVICE", &cfg)
 	if err != nil {
 		log.Fatalf("could not load config: %v", err)
@@ -26,81 +27,27 @@ func init() {
 	// set the Environment and load dotenv
 	setEnvironment()
 
-	cfg := LoadTripbotConfig()
-
-	//requiredVars := []string{
-	//	"CHANNEL_NAME",
-	//	"BOT_USERNAME",
-	//	"EXTERNAL_URL",
-	//	"GOOGLE_APPS_PROJECT_ID",
-	//	"GOOGLE_MAPS_API_KEY",
-	//	"READ_ONLY",
-	//	"TRIPBOT_HTTP_AUTH",
-	//	"VLC_SERVER_HOST",
-	//	"MPD_SERVER_HOST",
-	//}
-	//for _, v := range requiredVars {
-	//	_, ok := os.LookupEnv(v)
-	//	if !ok {
-	//		log.Fatalf("You must set %s", v)
-	//	}
-	//}
-
-	//ChannelName = os.Getenv("CHANNEL_NAME")
-	//OutputChannel = os.Getenv("OUTPUT_CHANNEL")
-	//BotUsername = os.Getenv("BOT_USERNAME")
-	//ReadOnly, _ = strconv.ParseBool(os.Getenv("READ_ONLY"))
-	//Verbose, _ = strconv.ParseBool(os.Getenv("VERBOSE"))
-	//VlcVerbose, _ = strconv.ParseBool(os.Getenv("VLC_VERBOSE"))
-
-	//// directory settings
-	//DashcamDir = getEnv("DASHCAM_DIR", defaultDashcamDir)
-	//DashcamBucket = getEnv("DASHCAM_BUCKET", "")
-	//ScreencapDir = getEnv("SCREENCAP_DIR", defaultScreencapDir)
-	//MapsOutputDir = getEnv("MAPS_OUTPUT_DIR", defaultMapsOutputDir)
-	//CroppedCornersDir = getEnv("CROPPED_CORNERS_DIR", defaultCroppedCornersDir)
-	//RunDir = getEnv("RUN_DIR", defaultRunDir)
-
-	//// HTTP server settings
-	//ExternalURL = os.Getenv("EXTERNAL_URL")
-	//TripbotHttpAuth = os.Getenv("TRIPBOT_HTTP_AUTH")
-	//TripbotServerPort = getEnv("TRIPBOT_SERVER_PORT", defaultTripbotServerPort)
-	//VlcServerHost = os.Getenv("VLC_SERVER_HOST")
-	//MpdServerHost = os.Getenv("MPD_SERVER_HOST")
-
-	//// google-specific settings
-	//GoogleProjectID = os.Getenv("GOOGLE_APPS_PROJECT_ID")
-	//GoogleMapsAPIKey = os.Getenv("GOOGLE_MAPS_API_KEY")
-
-	//DisableTwitchWebhooks, _ = strconv.ParseBool(os.Getenv("DISABLE_TWITCH_WEBHOOKS"))
-	//DisableMusic, _ = strconv.ParseBool(os.Getenv("DISABLE_MUSIC"))
-	//DisableMusicAutoplay, _ = strconv.ParseBool(os.Getenv("DISABLE_MUSIC_AUTOPLAY"))
+	Conf := LoadTripbotConfig()
 
 	//TODO: consider using strings.ToLower() on channel name here and removing elsewhere
 
 	// give helpful reminders when things are disabled
-	if cfg.DisableTwitchWebhooks {
+	if Conf.DisableTwitchWebhooks {
 		log.Println(aurora.Yellow("Disabling Twitch webhooks"))
 	}
-	if cfg.DisableMusic {
+	if Conf.DisableMusic {
 		log.Println(aurora.Yellow("Disabling music"))
 	}
-	if cfg.DisableMusicAutoplay {
+	if Conf.DisableMusicAutoplay {
 		log.Println(aurora.Yellow("Disabling music autoplay"))
 	}
 
-	// // assemble compound settings
-	// VideoDir = path.Join(DashcamDir, videoDir)
-	// VLCPidFile = path.Join(RunDir, "vlc-server.pid")
-	// OBSPidFile = path.Join(RunDir, "OBS.pid")
-	// TripbotPidFile = path.Join(RunDir, "tripbot.pid")
-
 	// thes dirs will get created on boot if necessary
 	dirsToCreate := []string{
-		cfg.ScreencapDir,
-		cfg.CroppedCornersDir,
-		cfg.MapsOutputDir,
-		cfg.RunDir,
+		Conf.ScreencapDir,
+		Conf.CroppedCornersDir,
+		Conf.MapsOutputDir,
+		Conf.RunDir,
 	}
 	for _, d := range dirsToCreate {
 		// we cant use helpers.FileExists() here due to import loop
@@ -118,12 +65,12 @@ func init() {
 
 	// check that the paths exist
 	requiredDirs := []string{
-		cfg.DashcamDir,
-		cfg.VideoDir,
-		cfg.ScreencapDir,
-		cfg.CroppedCornersDir,
-		cfg.MapsOutputDir,
-		cfg.RunDir,
+		Conf.DashcamDir,
+		Conf.VideoDir,
+		Conf.ScreencapDir,
+		Conf.CroppedCornersDir,
+		Conf.MapsOutputDir,
+		Conf.RunDir,
 	}
 	for _, d := range requiredDirs {
 		// we cant use helpers.FileExists() here due to import loop
@@ -148,19 +95,19 @@ func setEnvironment() {
 	// standardize the ENV
 	switch env {
 	case "stage", "staging":
-		cfg.Environment = "staging"
+		Conf.Environment = "staging"
 	case "prod", "production":
-		cfg.Environment = "production"
+		Conf.Environment = "production"
 	case "dev", "development":
-		cfg.Environment = "development"
+		Conf.Environment = "development"
 	case "test", "testing":
-		cfg.Environment = "testing"
+		Conf.Environment = "testing"
 	default:
 		log.Fatalf("Unknown ENV: %s", env)
 	}
 
 	// load ENV vars from .env file
-	err = godotenv.Load(".env." + cfg.Environment)
+	err = godotenv.Load(".env." + Conf.Environment)
 
 	if err != nil {
 		log.Println("Error loading .env file:", err)
@@ -175,7 +122,7 @@ func SetServerType(server_type string) {
 	}
 	for _, t := range allowedServerTypes {
 		if t == server_type {
-			cfg.ServerType = server_type
+			Conf.ServerType = server_type
 			return
 		}
 	}
