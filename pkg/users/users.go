@@ -32,10 +32,6 @@ func (u User) CurrentMiles() float32 {
 		// lookup the user in the session so the LoggedIn value is current
 		loggedInDur := time.Now().Sub(LoggedIn[u.Username].LoggedIn)
 		sessionMiles := helpers.DurationToMiles(loggedInDur)
-		// spew.Dump("u.LoggedIn", u.LoggedIn)
-		// spew.Dump("loggedInDur", loggedInDur)
-		// spew.Dump("u.Miles", u.Miles)
-		// spew.Dump("sessionMiles", sessionMiles)
 		// give subscribers a miles bonus
 		if u.IsSubscriber() {
 			bonusMiles := u.BonusMiles()
