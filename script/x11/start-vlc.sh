@@ -26,8 +26,8 @@ cd /opt/tripbot || exit 2
 
 # check if we have vlc-server compiled
 if [[ ! -x "bin/vlc-server" ]]; then
-  go build -o bin/vlc-server cmd/vlc-server/vlc-server.go 2>&1 | logger -t vlc-build
+  go build -o bin/vlc-server cmd/vlc-server/vlc-server.go | logger -t vlc-build 2>&1
 fi
 
 # start vlc-server
-bin/vlc-server 2>&1 | logger -t vlc-server
+bin/vlc-server | logger -t vlc-server 2>&1
