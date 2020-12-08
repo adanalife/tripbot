@@ -6,7 +6,8 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/adanalife/tripbot/pkg/config"
+	c "github.com/adanalife/tripbot/pkg/config/tripbot"
+	config "github.com/adanalife/tripbot/pkg/config/tripbot"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	mylog "github.com/adanalife/tripbot/pkg/log"
@@ -25,7 +26,7 @@ var Uptime time.Time
 
 // used to determine which help message to display
 // randomized so it starts with a new one every restart
-var helpIndex = rand.Intn(len(config.HelpMessages))
+var helpIndex = rand.Intn(len(c.HelpMessages))
 
 const followerMsg = "Follow the stream to run unlimited commands :)"
 const subscriberMsg = "You must be a subscriber to run that command :)"
@@ -35,7 +36,7 @@ func Initialize() *twitch.Client {
 	Uptime = time.Now()
 
 	// set up geocoder (for translating coords to places)
-	geocoder.ApiKey = config.GoogleMapsAPIKey
+	geocoder.ApiKey = c.Conf.GoogleMapsAPIKey
 
 	// initialize the twitch API client
 	c, err := mytwitch.Client()
@@ -43,7 +44,7 @@ func Initialize() *twitch.Client {
 		terrors.Fatal(err, "unable to create twitch API client")
 	}
 
-	if !config.DisableTwitchWebhooks {
+	if !c.Conf.DisableTwitchWebhooks {
 		//TODO: actually use the security features provided here
 		authURL := c.GetAuthorizationURL(&helix.AuthorizationURLParams{
 			//TODO: move to configs lib
@@ -56,7 +57,7 @@ func Initialize() *twitch.Client {
 		helpers.OpenInBrowser(authURL)
 	}
 
-	client = twitch.NewClient(config.BotUsername, mytwitch.AuthToken)
+	client = twitch.NewClient(c.Conf.BotUsername, mytwitch.AuthToken)
 
 	// attach handlers
 	client.OnUserJoinMessage(UserJoin)
@@ -71,11 +72,11 @@ func Initialize() *twitch.Client {
 // Say will make a post in chat
 func Say(msg string) {
 	// include the message in the log
-	mylog.ChatMsg(config.BotUsername, msg)
+	mylog.ChatMsg(c.Conf.BotUsername, msg)
 	// figure out what channel to speak to
-	speakTo := config.ChannelName
-	if config.OutputChannel != "" {
-		speakTo = config.OutputChannel
+	speakTo := c.Conf.ChannelName
+	if c.Conf.OutputChannel != "" {
+		speakTo = c.Conf.OutputChannel
 	}
 	// say the message to chat
 	client.Say(speakTo, msg)

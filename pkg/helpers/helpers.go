@@ -16,7 +16,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/adanalife/tripbot/pkg/config"
+	c "github.com/adanalife/tripbot/pkg/config/tripbot"
+	config "github.com/adanalife/tripbot/pkg/config/tripbot"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/bradfitz/latlong"
 	"github.com/davecgh/go-spew/spew"
@@ -213,7 +214,7 @@ func RunningOnDarwin() bool {
 // UserIsAdmin returns true if a given user runs the channel
 // it's used to restrict admin features
 func UserIsAdmin(username string) bool {
-	return strings.ToLower(username) == strings.ToLower(config.ChannelName)
+	return strings.ToLower(username) == strings.ToLower(c.Conf.ChannelName)
 }
 
 // this nastiness taken from:

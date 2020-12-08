@@ -12,7 +12,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/audio"
 	"github.com/adanalife/tripbot/pkg/background"
 	"github.com/adanalife/tripbot/pkg/chatbot"
-	"github.com/adanalife/tripbot/pkg/config"
+	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
@@ -51,7 +51,7 @@ func createRandomSeed() {
 
 // listenForShutdown creates a background job that listens for a graceful shutdown request
 func listenForShutdown() {
-	helpers.WritePidFile(config.TripbotPidFile)
+	helpers.WritePidFile(c.Conf.TripbotPidFile)
 	// start the graceful shutdown listener
 	go gracefulShutdown()
 }
@@ -59,7 +59,7 @@ func listenForShutdown() {
 // startHttpServer starts a webserver, which is
 // used for admin tools and receiving webhooks
 func startHttpServer() {
-	config.SetServerType("tripbot")
+	c.Conf.SetServerType("tripbot")
 	// start the HTTP server
 	go server.Start()
 }
@@ -110,9 +110,9 @@ func updateWebhookSubscriptions() {
 
 // connectToTwitch joins Twitch chat and starts listening
 func connectToTwitch() {
-	client.Join(config.ChannelName)
-	log.Println("Joined channel", config.ChannelName)
-	log.Printf("URL: %s", aurora.Blue(fmt.Sprintf("https://twitch.tv/%s", config.ChannelName)).Underline())
+	client.Join(c.Conf.ChannelName)
+	log.Println("Joined channel", c.Conf.ChannelName)
+	log.Printf("URL: %s", aurora.Blue(fmt.Sprintf("https://twitch.tv/%s", c.Conf.ChannelName)).Underline())
 
 	// actually connect to Twitch
 	// wrapped in a loop in case twitch goes down

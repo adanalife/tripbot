@@ -15,7 +15,7 @@ import (
 	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
 
 	"github.com/adanalife/tripbot/pkg/background"
-	"github.com/adanalife/tripbot/pkg/config"
+	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/miles"
@@ -32,7 +32,7 @@ var currentVersion string
 
 func helpCmd(user *users.User) {
 	log.Println(user.Username, "ran !help")
-	msg := fmt.Sprintf("%s (%d of %d)", help(), helpIndex+1, len(config.HelpMessages))
+	msg := fmt.Sprintf("%s (%d of %d)", help(), helpIndex+1, len(c.Conf.HelpMessages))
 	Say(msg)
 }
 

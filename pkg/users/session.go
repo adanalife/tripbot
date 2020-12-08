@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/adanalife/tripbot/pkg/config"
+	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/events"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/davecgh/go-spew/spew"
@@ -146,7 +146,7 @@ func isLoggedIn(username string) bool {
 
 // ShutDown loops through all of the logged-in users and logs them out
 func Shutdown() {
-	if config.Verbose {
+	if c.Conf.Verbose {
 		log.Println("these were the logged-in users")
 		spew.Dump(LoggedIn)
 	}

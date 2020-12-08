@@ -5,12 +5,12 @@ import (
 	"io/ioutil"
 	"net/http"
 
-	"github.com/adanalife/tripbot/pkg/config"
+	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 )
 
 //TODO: eventually support HTTPS
-var vlcServerURL = "http://" + config.VlcServerHost
+var vlcServerURL = "http://" + c.Conf.VlcServerHost
 
 // CurrentlyPlaying finds the currently-playing video path
 func CurrentlyPlaying() string {

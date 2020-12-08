@@ -9,7 +9,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/logrusorgru/aurora"
 
-	"github.com/adanalife/tripbot/pkg/config"
+	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
 )
 
@@ -34,7 +34,7 @@ func (u User) CurrentMiles() float32 {
 		// give subscribers a miles bonus
 		if u.IsSubscriber() {
 			bonusMiles := u.BonusMiles()
-			if config.Verbose {
+			if c.Conf.Verbose {
 				log.Println(u.String(), "will get", aurora.Green(bonusMiles), "bonus miles")
 			}
 			return u.Miles + sessionMiles + bonusMiles
@@ -55,7 +55,7 @@ func (u User) BonusMiles() float32 {
 
 // User.save() will take the given user and store it in the DB
 func (u User) save() {
-	if config.Verbose {
+	if c.Conf.Verbose {
 		log.Println("saving user", u)
 	}
 	query := `UPDATE users SET last_seen=:last_seen, num_visits=:num_visits, miles=:miles WHERE id = :id`
@@ -88,7 +88,7 @@ func (u User) String() string {
 
 // FindOrCreate will try to find the user in the DB, otherwise it will create a new user
 func FindOrCreate(username string) User {
-	if config.Verbose {
+	if c.Conf.Verbose {
 		log.Printf("FindOrCreate(%s)", username)
 	}
 	user := Find(username)

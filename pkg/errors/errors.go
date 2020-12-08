@@ -4,7 +4,7 @@ import (
 	"errors"
 	"log"
 
-	"github.com/adanalife/tripbot/pkg/config"
+	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/getsentry/sentry-go"
 	"github.com/logrusorgru/aurora"
 )
@@ -20,7 +20,7 @@ func Log(e error, msg string) {
 		e = errors.New(msg)
 	}
 	// only log to sentry if on production
-	if config.IsProduction() {
+	if c.IsProduction() {
 		sentry.AddBreadcrumb(&sentry.Breadcrumb{
 			Message: msg,
 		})
@@ -34,7 +34,7 @@ func Fatal(e error, msg string) {
 		e = errors.New(msg)
 	}
 	// only log to sentry if on production
-	if config.IsProduction() {
+	if c.IsProduction() {
 		sentry.AddBreadcrumb(&sentry.Breadcrumb{
 			Message: msg,
 		})
