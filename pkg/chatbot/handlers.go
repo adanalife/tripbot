@@ -118,7 +118,7 @@ func runCommand(user users.User, message string) {
 		// any of these should trigger the miles command
 	case "!miles", "!points":
 		if user.HasCommandAvailable() {
-			milesCmd(&user)
+			milesCmd(&user, params)
 		} else {
 			Say(followerMsg)
 		}
