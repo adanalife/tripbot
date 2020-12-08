@@ -28,26 +28,29 @@ func Start() {
 
 	// healthcheck endpoints
 	hp := r.PathPrefix("/health").Methods("GET").Subrouter()
+	hp.HandleFunc("/", healthHandler)
 	hp.HandleFunc("/live", healthHandler)
 	hp.HandleFunc("/ready", healthHandler)
 
 	// vlc endpoints
 	vlc := r.PathPrefix("/vlc").Methods("GET").Subrouter()
 	vlc.HandleFunc("/current", vlcCurrentHandler)
-	vlc.HandleFunc("/play", vlcPlayHandler)
-	vlc.HandleFunc("/back", vlcBackHandler)
-	vlc.HandleFunc("/skip", vlcSkipHandler)
+	vlc.HandleFunc("/play/{video}", vlcPlayHandler)
 	vlc.HandleFunc("/random", vlcRandomHandler)
+	vlc.HandleFunc("/back", vlcBackHandler)
+	vlc.HandleFunc("/back/{n}", vlcBackHandler)
+	vlc.HandleFunc("/skip", vlcSkipHandler)
+	vlc.HandleFunc("/skip/{n}", vlcSkipHandler)
 
 	// onscreen endpoints
 	osc := r.PathPrefix("/onscreens").Methods("GET").Subrouter()
-	osc.HandleFunc("/flag/show", onscreensFlagShowHandler)
-	osc.HandleFunc("/gps/hide", onscreensGpsHideHandler)
-	osc.HandleFunc("/gps/show", onscreensGpsShowHandler)
-	osc.HandleFunc("/timewarp/show", onscreensTimewarpShowHandler)
-	osc.HandleFunc("/leaderboard/show", onscreensLeaderboardShowHandler)
-	osc.HandleFunc("/middle/hide", onscreensMiddleHideHandler)
-	osc.HandleFunc("/middle/show", onscreensMiddleShowHandler)
+	osc.HandleFunc("/flag/{action}", onscreensFlagHandler)
+	osc.HandleFunc("/gps/{action}", onscreensGpsHandler)
+	osc.HandleFunc("/gps/{action}", onscreensGpsHandler)
+	osc.HandleFunc("/leaderboard/{action}", onscreensLeaderboardHandler)
+	osc.HandleFunc("/middle/{action}", onscreensMiddleHandler)
+	osc.HandleFunc("/middle/{action}", onscreensMiddleHandler)
+	osc.HandleFunc("/timewarp/{action}", onscreensTimewarpHandler)
 
 	// prometheus metrics endpoint
 	r.Path("/metrics").Handler(promhttp.Handler())
@@ -58,7 +61,9 @@ func Start() {
 	// catch everything else
 	r.HandleFunc("/", catchAllHandler)
 
-	helpers.PrintAllRoutes(r)
+	if config.Verbose {
+		helpers.PrintAllRoutes(r)
+	}
 
 	// negroni classic adds panic recovery, logger, and static file middlewares
 	// c.p. https://github.com/urfave/negroni
