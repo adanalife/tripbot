@@ -25,10 +25,19 @@ func runCommand(user users.User, message string) {
 
 	msg := strings.TrimSpace(message)
 	split := strings.Split(msg, " ")
+
+	// the command is the first part
 	command := split[0]
 
 	if len(split) > 1 {
+		// the params are the second part
 		params = split[1:]
+
+		// this invalid unicode character shows up when you run the same command twice
+		// (it may be specific to Chatterino as a twitch client?)
+		if params[len(params)-1] == "\U000e0000" {
+			params = params[:len(params)-1]
+		}
 	}
 
 	switch command {
