@@ -124,8 +124,15 @@ func milesCmd(user *users.User, params []string) {
 		username = user.Username
 		miles = user.CurrentMiles()
 	} else {
-		u := users.Find(params[0])
-		username = u.Username
+		username = helpers.StripAtSign(params[0])
+		u := users.Find(username)
+
+		// check to see if they are in our DB
+		if u.ID == 0 {
+			Say("I don't know them, sorry!")
+			return
+		}
+
 		miles = u.CurrentMiles()
 	}
 
