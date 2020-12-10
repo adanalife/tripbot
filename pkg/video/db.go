@@ -121,11 +121,13 @@ func (v Video) save() error {
 
 	if lat == 0 || lng == 0 {
 		// try to get at least one good coords pair
-		lat, lng, err = v.ocrCoords()
-		if err != nil {
-			terrors.Log(err, "error OCRing coords")
-			flagged = true
-		}
+		// lat, lng, err = v.ocrCoords()
+		// if err != nil {
+		// 	terrors.Log(err, "error OCRing coords")
+		// 	flagged = true
+		// }
+		terrors.Log(nil, "OCRing coords skipped!")
+		flagged = true
 	}
 
 	if !flagged {
