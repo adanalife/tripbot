@@ -213,7 +213,12 @@ func RunningOnDarwin() bool {
 
 // RunningOnWindows returns true if we're on windows
 func RunningOnWindows() bool {
-	return runtime.GOOS == "darwin"
+	return runtime.GOOS == "windows"
+}
+
+// RunningOnLinux returns true if we're on linux
+func RunningOnLinux() bool {
+	return runtime.GOOS == "linux"
 }
 
 // UserIsAdmin returns true if a given user runs the channel

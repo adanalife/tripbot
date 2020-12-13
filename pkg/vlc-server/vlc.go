@@ -22,31 +22,35 @@ var videoFiles []string
 var vlcCmdFlags = []string{
 	"--ignore-config", // ignore any config files that might get loaded
 	"--fullscreen",    // start fullscreened
-	//"--vout", "x11",   // use X11 (and skip vdpau)
-	"--no-audio", // none of the videos have audio
+	"--no-audio",      // none of the videos have audio
 	// "--network-caching", "500", // network cache (in ms)
 	"--file-caching", "1111", // file cache (in ms)
-	// can be none, vdpau_avcodec, or cuda
-	"--avcodec-hw", "vdpau_avcodec",
-	// "--avcodec-dr", "0",
 	"--width", "1920",
 	"--height", "1080",
 	"--canvas-width", "1920",
 	"--canvas-height", "1080",
 	// "--aspect-ratio", "16:9",
-	"--video-wallpaper",
 }
+
+var vlcLinuxSpecificFlags = []string{
+	"--vout", "x11", // use X11 (and skip vdpau, improves performance)
+	"--avcodec-hw", "vdpau_avcodec", // can be none, vdpau_avcodec, or cuda
+	// "--avcodec-dr", "0",
+
+}
+
+//var vlcWindowsSpecificFlags = []string{
+//	"--video-wallpaper",
+//}
 
 // these get added if verbose flag is NOT set
 var vlcNotVerboseFlags = []string{
-	//"--syslog", // log to syslog
 	"--quiet", // reduce terminal output
 }
 
 // these add a lot more output
 var vlcVerboseFlags = []string{
 	"-vv", // be very verbose (used for debugging)
-	//"--syslog-debug", // post debug output to syslog
 }
 
 // Init creates a VLC player and sets up a playlist
@@ -100,8 +104,21 @@ func startVLC() {
 	// set command line flags
 	if config.VlcVerbose {
 		vlcCmdFlags = append(vlcCmdFlags, vlcVerboseFlags...)
+		// we use syslog on linux
+		if helpers.RunningOnLinux() {
+			// post debug output to syslog
+			vlcCmdFlags = append(vlcCmdFlags, "--syslog-debug")
+		}
 	} else {
 		vlcCmdFlags = append(vlcCmdFlags, vlcNotVerboseFlags...)
+		if helpers.RunningOnLinux() {
+			// log to syslog
+			vlcCmdFlags = append(vlcCmdFlags, "--syslog")
+		}
+	}
+
+	if helpers.RunningOnLinux() {
+		vlcCmdFlags = append(vlcCmdFlags, vlcLinuxSpecificFlags...)
 	}
 
 	// start up VLC with given command flags
