@@ -2,6 +2,7 @@ package onscreensServer
 
 import (
 	"fmt"
+	"github.com/davecgh/go-spew/spew"
 	"log"
 	"os"
 	"path"
@@ -69,6 +70,7 @@ func updateFlagFile() {
 
 // flagSourceFile returns the full path to a flag image file
 func flagSourceFile(state string) string {
+	spew.Dump("generating flag path for", state)
 	// convert it to an abbreviation
 	abbrev := helpers.StateToStateAbbrev(state)
 	// return nothing if nothing was found

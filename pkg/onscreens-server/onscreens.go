@@ -1,11 +1,9 @@
 package onscreensServer
 
 import (
-	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
-	"path/filepath"
 	"time"
 
 	terrors "github.com/adanalife/tripbot/pkg/errors"
@@ -138,11 +136,8 @@ func (osc Onscreen) showText() {
 
 // showImage will create a new "live" image file
 func (osc Onscreen) showImage() {
-	// remove ..s and other funny path stuff
-	outputFile := filepath.Clean(osc.outputFile)
-	liveImage := filepath.Clean(osc.liveImage())
 	// copy the image to the live location
-	err := os.Link(outputFile, liveImage)
+	err := os.Link(osc.outputFile, osc.liveImage())
 	if err != nil {
 		// cast to LinkError so we can unwrap the error message
 		linkErr := err.(*os.LinkError)
@@ -178,5 +173,5 @@ func (osc Onscreen) hideImage() {
 // liveImage adds a suffix to the end of the file
 // which is the file that OBS will be configured to look at
 func (osc Onscreen) liveImage() string {
-	return fmt.Sprintf("%s%s", osc.outputFile, imageSuffix)
+	return osc.outputFile + imageSuffix
 }

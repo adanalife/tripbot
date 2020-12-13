@@ -48,3 +48,5 @@ db/*.gz
 # temporary files
 tmp
 vendor
+
+*.exe

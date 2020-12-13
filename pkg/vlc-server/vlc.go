@@ -92,7 +92,8 @@ func currentlyPlaying() string {
 		terrors.Log(err, "error fetching currently-playing media")
 	}
 
-	return path
+	// strip the path off and just return the filename
+	return filepath.Base(path)
 }
 
 func startVLC() {

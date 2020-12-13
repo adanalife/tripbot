@@ -59,7 +59,8 @@ func ProjectRoot() string {
 	_, b, _, _ := runtime.Caller(0)
 	helperPath := filepath.Dir(b)
 	projectRoot := path.Join(helperPath, "../..")
-	return path.Clean(projectRoot)
+	absolutePath, _ := filepath.Abs(projectRoot)
+	return absolutePath
 }
 
 // DurationToMiles converts Durations to miles
@@ -207,6 +208,11 @@ func OpenInBrowser(url string) {
 //TODO: remove this and all darwin-only support
 // RunningOnDarwin returns true if we're on darwin (OS X)
 func RunningOnDarwin() bool {
+	return runtime.GOOS == "darwin"
+}
+
+// RunningOnWindows returns true if we're on windows
+func RunningOnWindows() bool {
 	return runtime.GOOS == "darwin"
 }
 
