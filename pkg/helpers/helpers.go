@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
-	"path"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -58,7 +57,7 @@ func StateFromCoords(lat, lon float64) (string, error) {
 func ProjectRoot() string {
 	_, b, _, _ := runtime.Caller(0)
 	helperPath := filepath.Dir(b)
-	projectRoot := path.Join(helperPath, "../..")
+	projectRoot := filepath.Join(helperPath, "..", "..")
 	absolutePath, _ := filepath.Abs(projectRoot)
 	return absolutePath
 }

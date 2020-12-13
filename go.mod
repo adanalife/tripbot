@@ -6,7 +6,6 @@ require (
 	cloud.google.com/go v0.73.0 // indirect
 	cloud.google.com/go/logging v1.1.2
 	github.com/adrg/libvlc-go/v3 v3.0.7
-	github.com/aws/aws-sdk-go v1.36.2
 	github.com/bradfitz/latlong v0.0.0-20170410180902-f3db6d0dff40
 	github.com/davecgh/go-spew v1.1.1
 	github.com/dimiro1/banner v1.0.0
@@ -39,7 +38,6 @@ require (
 	github.com/slok/go-http-metrics v0.9.0
 	github.com/unrolled/secure v1.0.8
 	github.com/urfave/negroni v1.0.0
-	golang.org/x/crypto v0.0.0-20201203163018-be400aefbc4c
 	golang.org/x/image v0.0.0-20200927104501-e162460cd6b5 // indirect
 	golang.org/x/net v0.0.0-20201202161906-c7110b5ffcbb // indirect
 	golang.org/x/oauth2 v0.0.0-20201203001011-0b49973bad19 // indirect

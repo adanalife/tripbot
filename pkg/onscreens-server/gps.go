@@ -2,7 +2,7 @@ package onscreensServer
 
 import (
 	"log"
-	"path"
+	"path/filepath"
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/helpers"
@@ -11,7 +11,7 @@ import (
 var GPSImage *Onscreen
 
 var gpsDuration = time.Duration(150 * time.Second)
-var gpsImageFile = path.Join(helpers.ProjectRoot(), "assets", "GPS.png")
+var gpsImageFile = filepath.Join(helpers.ProjectRoot(), "assets", "GPS.png")
 
 func InitGPSImage() {
 	log.Println("Creating GPS image onscreen")

@@ -7,9 +7,9 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/davecgh/go-spew/spew"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/nicklaw5/helix"
 )
 

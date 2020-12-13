@@ -5,7 +5,7 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"log"
 	"os"
-	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -16,7 +16,7 @@ import (
 )
 
 var FlagImage *Onscreen
-var FlagImageFile = path.Join(config.RunDir, "flag.png")
+var FlagImageFile = filepath.Join(config.RunDir, "flag.png")
 
 // var flagDuration = time.Duration(150 * time.Second)
 
@@ -81,5 +81,5 @@ func flagSourceFile(state string) string {
 	abbrev = strings.ToLower(abbrev)
 	fileName := fmt.Sprintf("%s.png", abbrev)
 
-	return path.Join(helpers.ProjectRoot(), "assets/flags/medium", fileName)
+	return filepath.Join(helpers.ProjectRoot(), "assets", "flags", "medium", fileName)
 }

@@ -39,9 +39,9 @@ var vlcLinuxSpecificFlags = []string{
 
 }
 
-//var vlcWindowsSpecificFlags = []string{
-//	"--video-wallpaper",
-//}
+var vlcWindowsSpecificFlags = []string{
+	"--video-wallpaper",
+}
 
 // these get added if verbose flag is NOT set
 var vlcNotVerboseFlags = []string{
@@ -119,6 +119,10 @@ func startVLC() {
 
 	if helpers.RunningOnLinux() {
 		vlcCmdFlags = append(vlcCmdFlags, vlcLinuxSpecificFlags...)
+	}
+
+	if helpers.RunningOnWindows() {
+		vlcCmdFlags = append(vlcCmdFlags, vlcWindowsSpecificFlags...)
 	}
 
 	// start up VLC with given command flags

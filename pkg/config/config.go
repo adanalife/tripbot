@@ -3,7 +3,7 @@ package config
 import (
 	"log"
 	"os"
-	"path"
+	"path/filepath"
 	"strconv"
 
 	"github.com/joho/godotenv"
@@ -143,10 +143,10 @@ func init() {
 	}
 
 	// assemble compound settings
-	VideoDir = path.Join(DashcamDir, videoDir)
-	VLCPidFile = path.Join(RunDir, "vlc-server.pid")
-	OBSPidFile = path.Join(RunDir, "OBS.pid")
-	TripbotPidFile = path.Join(RunDir, "tripbot.pid")
+	VideoDir = filepath.Join(DashcamDir, videoDir)
+	VLCPidFile = filepath.Join(RunDir, "vlc-server.pid")
+	OBSPidFile = filepath.Join(RunDir, "OBS.pid")
+	TripbotPidFile = filepath.Join(RunDir, "tripbot.pid")
 
 	// thes dirs will get created on boot if necessary
 	dirsToCreate := []string{
