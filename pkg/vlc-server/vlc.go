@@ -22,7 +22,7 @@ var videoFiles []string
 var vlcCmdFlags = []string{
 	"--ignore-config", // ignore any config files that might get loaded
 	"--fullscreen",    // start fullscreened
-	"--vout", "x11",   // use X11 (and skip vdpau)
+	//"--vout", "x11",   // use X11 (and skip vdpau)
 	"--no-audio", // none of the videos have audio
 	// "--network-caching", "500", // network cache (in ms)
 	"--file-caching", "1111", // file cache (in ms)
@@ -34,18 +34,19 @@ var vlcCmdFlags = []string{
 	"--canvas-width", "1920",
 	"--canvas-height", "1080",
 	// "--aspect-ratio", "16:9",
+	"--video-wallpaper",
 }
 
 // these get added if verbose flag is NOT set
 var vlcNotVerboseFlags = []string{
-	"--syslog", // log to syslog
-	"--quiet",  // reduce terminal output
+	//"--syslog", // log to syslog
+	"--quiet", // reduce terminal output
 }
 
 // these add a lot more output
 var vlcVerboseFlags = []string{
-	"-vv",            // be very verbose (used for debugging)
-	"--syslog-debug", // post debug output to syslog
+	"-vv", // be very verbose (used for debugging)
+	//"--syslog-debug", // post debug output to syslog
 }
 
 // Init creates a VLC player and sets up a playlist

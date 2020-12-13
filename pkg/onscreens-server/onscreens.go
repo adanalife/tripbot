@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"path/filepath"
 	"time"
 
 	terrors "github.com/adanalife/tripbot/pkg/errors"
@@ -137,8 +138,11 @@ func (osc Onscreen) showText() {
 
 // showImage will create a new "live" image file
 func (osc Onscreen) showImage() {
+	// remove ..s and other funny path stuff
+	outputFile := filepath.Clean(osc.outputFile)
+	liveImage := filepath.Clean(osc.liveImage())
 	// copy the image to the live location
-	err := os.Link(osc.outputFile, osc.liveImage())
+	err := os.Link(outputFile, liveImage)
 	if err != nil {
 		// cast to LinkError so we can unwrap the error message
 		linkErr := err.(*os.LinkError)

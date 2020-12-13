@@ -44,6 +44,7 @@ func Start() {
 
 	// onscreen endpoints
 	osc := r.PathPrefix("/onscreens").Methods("GET").Subrouter()
+	//TODO: add state variable
 	osc.HandleFunc("/flag/{action}", onscreensFlagHandler)
 	osc.HandleFunc("/gps/{action}", onscreensGpsHandler)
 	osc.HandleFunc("/gps/{action}", onscreensGpsHandler)

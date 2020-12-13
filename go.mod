@@ -1,11 +1,11 @@
 module github.com/adanalife/tripbot
 
-go 1.12
+go 1.15
 
 require (
 	cloud.google.com/go v0.73.0 // indirect
 	cloud.google.com/go/logging v1.1.2
-	github.com/adrg/libvlc-go/v3 v3.0.6
+	github.com/adrg/libvlc-go/v3 v3.0.7
 	github.com/aws/aws-sdk-go v1.36.2
 	github.com/bradfitz/latlong v0.0.0-20170410180902-f3db6d0dff40
 	github.com/davecgh/go-spew v1.1.1
