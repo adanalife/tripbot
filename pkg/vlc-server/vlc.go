@@ -40,6 +40,8 @@ var vlcLinuxSpecificFlags = []string{
 }
 
 var vlcWindowsSpecificFlags = []string{
+	// we do this so the window is always visible, otherwise
+	// when you minimize, it hides the video in OBS
 	"--video-wallpaper",
 }
 
