@@ -103,7 +103,7 @@ func onscreensFlagHandler(w http.ResponseWriter, r *http.Request) {
 
 	switch vars["action"] {
 	case "show":
-		base64content, ok := r.URL.Query()["duration"]
+		base64content, ok := r.URL.Query()["state"]
 		if !ok || len(base64content) > 1 {
 			http.Error(w, "417 expectation failed", http.StatusExpectationFailed)
 			return
