@@ -7,7 +7,6 @@ import (
 	"image/png"
 	"log"
 	"os"
-	gopath "path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -62,7 +61,7 @@ func main() {
 
 			// this is where we will save the map image
 			imgFilename := fmt.Sprintf("%s.png", vid.String())
-			fullImgFilename := gopath.Join(config.MapsOutputDir, imgFilename)
+			fullImgFilename := filepath.Join(config.MapsOutputDir, imgFilename)
 
 			// skip stuff from before this time
 			if skipToDate {

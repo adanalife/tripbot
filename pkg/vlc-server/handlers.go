@@ -17,16 +17,18 @@ import (
 
 // healthcheck URL, for tools to verify the stream is alive
 func healthHandler(w http.ResponseWriter, r *http.Request) {
-	obsPid := helpers.ReadPidFile(config.OBSPidFile)
-	pidRunning, err := helpers.PidExists(obsPid)
-	if err != nil {
-		terrors.Log(err, "error fetching OBS pid")
-		http.Error(w, "error fetching OBS pid", http.StatusFailedDependency)
-		return
-	}
-	if !pidRunning {
-		http.Error(w, "OBS not running", http.StatusFailedDependency)
-		return
+	if !helpers.RunningOnWindows() {
+		obsPid := helpers.ReadPidFile(config.OBSPidFile)
+		pidRunning, err := helpers.PidExists(obsPid)
+		if err != nil {
+			terrors.Log(err, "error fetching OBS pid")
+			http.Error(w, "error fetching OBS pid", http.StatusFailedDependency)
+			return
+		}
+		if !pidRunning {
+			http.Error(w, "OBS not running", http.StatusFailedDependency)
+			return
+		}
 	}
 	fmt.Fprintf(w, "OK")
 }
@@ -132,7 +134,6 @@ func onscreensFlagHandler(w http.ResponseWriter, r *http.Request) {
 
 func onscreensGpsHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	spew.Dump(vars)
 
 	switch vars["action"] {
 	case "show":
@@ -149,7 +150,6 @@ func onscreensGpsHandler(w http.ResponseWriter, r *http.Request) {
 
 func onscreensMiddleHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	spew.Dump(vars)
 	switch vars["action"] {
 	case "show":
 		base64content, ok := r.URL.Query()["msg"]
@@ -176,7 +176,6 @@ func onscreensMiddleHandler(w http.ResponseWriter, r *http.Request) {
 
 func onscreensTimewarpHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	spew.Dump(vars)
 	switch vars["action"] {
 	case "show":
 		//TODO: is this different from Timewarp.Show()?
@@ -193,7 +192,6 @@ func onscreensTimewarpHandler(w http.ResponseWriter, r *http.Request) {
 
 func onscreensLeaderboardHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	spew.Dump(vars)
 
 	switch vars["action"] {
 	case "show":
@@ -237,6 +235,7 @@ func catchAllHandler(w http.ResponseWriter, r *http.Request) {
 
 	// someone tried a PUT or a DELETE or something
 	default:
+		//TODO: theres an http error class for this
 		fmt.Fprintf(w, "Only GET methods are supported.\n")
 	}
 }

@@ -6,7 +6,7 @@ import (
 	"math/rand"
 	"os"
 	"os/exec"
-	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -72,10 +72,15 @@ func flagCmd(user *users.User) {
 func versionCmd(user *users.User) {
 	log.Println(user.Username, "ran !version")
 
+	if helpers.RunningOnWindows() {
+		Say("Sorry, I can't answer that right now")
+		return
+	}
+
 	// check if we already know the version
 	if currentVersion == "" {
 		// run the shell script to get current tripbot version
-		scriptPath := path.Join(helpers.ProjectRoot(), "bin/current-version.sh")
+		scriptPath := filepath.Join(helpers.ProjectRoot(), "bin", "current-version.sh")
 		out, err := exec.Command(scriptPath).Output()
 		if err != nil {
 			terrors.Log(err, "failed to get current version")

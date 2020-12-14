@@ -3,7 +3,7 @@ package onscreensServer
 import (
 	"log"
 	"math/rand"
-	"path"
+	"path/filepath"
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/config"
@@ -13,7 +13,7 @@ var LeftRotator *Onscreen
 
 var leftRotatorUpdateFrequency = time.Duration(45 * time.Second)
 
-var leftRotatorFile = path.Join(config.RunDir, "left-message.txt")
+var leftRotatorFile = filepath.Join(config.RunDir, "left-message.txt")
 
 var possibleLeftMessages = []string{
 	// "Looking for artist for emotes and more",

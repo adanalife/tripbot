@@ -57,7 +57,7 @@ func ShowTimewarp() error {
 
 func ShowFlag(dur time.Duration) error {
 	url := onscreensServerURL + "/onscreens/flag/show"
-	url = fmt.Sprintf("%s?duration=%s", url, helpers.Base64Encode(string(dur)))
+	url = fmt.Sprintf("%s?duration=%s", url, helpers.Base64Encode(string(rune(dur))))
 	_, err := getUrl(url)
 	if err != nil {
 		terrors.Log(err, "error showing flag onscreen")
@@ -68,7 +68,7 @@ func ShowFlag(dur time.Duration) error {
 
 func ShowGPSImage(dur time.Duration) error {
 	url := onscreensServerURL + "/onscreens/gps/show"
-	url = fmt.Sprintf("%s?duration=%s", url, helpers.Base64Encode(string(dur)))
+	url = fmt.Sprintf("%s?duration=%s", url, helpers.Base64Encode(string(rune(dur))))
 	_, err := getUrl(url)
 	if err != nil {
 		terrors.Log(err, "error showing gps onscreen")

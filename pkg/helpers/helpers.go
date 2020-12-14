@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
-	"path"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -58,8 +57,9 @@ func StateFromCoords(lat, lon float64) (string, error) {
 func ProjectRoot() string {
 	_, b, _, _ := runtime.Caller(0)
 	helperPath := filepath.Dir(b)
-	projectRoot := path.Join(helperPath, "../..")
-	return path.Clean(projectRoot)
+	projectRoot := filepath.Join(helperPath, "..", "..")
+	absolutePath, _ := filepath.Abs(projectRoot)
+	return absolutePath
 }
 
 // DurationToMiles converts Durations to miles
@@ -208,6 +208,16 @@ func OpenInBrowser(url string) {
 // RunningOnDarwin returns true if we're on darwin (OS X)
 func RunningOnDarwin() bool {
 	return runtime.GOOS == "darwin"
+}
+
+// RunningOnWindows returns true if we're on windows
+func RunningOnWindows() bool {
+	return runtime.GOOS == "windows"
+}
+
+// RunningOnLinux returns true if we're on linux
+func RunningOnLinux() bool {
+	return runtime.GOOS == "linux"
 }
 
 // UserIsAdmin returns true if a given user runs the channel

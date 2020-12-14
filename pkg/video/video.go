@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os/exec"
-	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -71,12 +71,15 @@ func CurrentProgress() time.Duration {
 }
 
 func figureOutCurrentVideo() string {
+	if helpers.RunningOnWindows() {
+		terrors.Log(nil, "can't run script on windows")
+		return ""
+	}
 	// run the shell script to get currently-playing video
-	scriptPath := path.Join(helpers.ProjectRoot(), "bin/current-file.sh")
+	scriptPath := filepath.Join(helpers.ProjectRoot(), "bin", "current-file.sh")
 	out, err := exec.Command(scriptPath).Output()
 	outString := strings.TrimSpace(string(out))
 	if err != nil {
-		terrors.Log(err, "failed to get currently-playing video")
 		log.Println(outString)
 		return ""
 	}
