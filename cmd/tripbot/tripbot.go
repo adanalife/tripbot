@@ -166,10 +166,12 @@ func scheduleBackgroundJobs() {
 	err = background.Cron.AddFunc("@every 15m", mytwitch.GetSubscribers)
 	err = background.Cron.AddFunc("@every 1h", mytwitch.RefreshUserAccessToken)
 	err = background.Cron.AddFunc("@every 2h57m30s", chatbot.Chatter)
-	err = background.Cron.AddFunc("@every 12h", mytwitch.SetStreamTags)
 	err = background.Cron.AddFunc("@every 12h", mytwitch.UpdateWebhookSubscriptions)
 	if helpers.RunningOnDarwin() {
 		err = background.Cron.AddFunc("@every 6h", audio.RestartItunes)
+	}
+	if !helpers.RunningOnWindows() {
+		err = background.Cron.AddFunc("@every 12h", mytwitch.SetStreamTags)
 	}
 
 	if err != nil {
