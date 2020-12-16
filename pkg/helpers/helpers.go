@@ -15,8 +15,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/adanalife/tripbot/pkg/config"
-	terrors "github.com/adanalife/tripbot/pkg/errors"
+	"github.com/adanalife/tripbot/internal/config"
+	terrors "github.com/adanalife/tripbot/internal/errors"
 	"github.com/bradfitz/latlong"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/hako/durafmt"

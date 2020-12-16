@@ -8,10 +8,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/adanalife/tripbot/pkg/config"
+	"github.com/adanalife/tripbot/internal/config"
+	onscreensServer "github.com/adanalife/tripbot/internal/onscreens-server"
+	vlcServer "github.com/adanalife/tripbot/internal/vlc-server"
 	"github.com/adanalife/tripbot/pkg/helpers"
-	onscreensServer "github.com/adanalife/tripbot/pkg/onscreens-server"
-	vlcServer "github.com/adanalife/tripbot/pkg/vlc-server"
 	"github.com/getsentry/sentry-go"
 	"github.com/logrusorgru/aurora"
 )
