@@ -7,15 +7,13 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/joho/godotenv"
 	"github.com/kelseyhightower/envconfig"
-	"github.com/logrusorgru/aurora"
 )
 
-var Conf *TripbotConfig
-var env string
+var Conf *VlcServerConfig
 
-func LoadTripbotConfig() *TripbotConfig {
-	var cfg TripbotConfig
-	err := envconfig.Process("TRIPBOT", &cfg)
+func LoadVlcServerConfig() *VlcServerConfig {
+	var cfg VlcServerConfig
+	err := envconfig.Process("VLC_SERVER", &cfg)
 	if err != nil {
 		log.Fatalf("could not load config: %v", err)
 	}
@@ -27,67 +25,68 @@ func init() {
 	// set the Environment and load dotenv
 	setEnvironment()
 
-	Conf = LoadTripbotConfig()
+	Conf = LoadVlcServerConfig()
 
 	spew.Dump(Conf)
 
 	//TODO: consider using strings.ToLower() on channel name here and removing elsewhere
 
-	// give helpful reminders when things are disabled
-	if Conf.DisableTwitchWebhooks {
-		log.Println(aurora.Yellow("Disabling Twitch webhooks"))
-	}
-	if Conf.DisableMusic {
-		log.Println(aurora.Yellow("Disabling music"))
-	}
-	if Conf.DisableMusicAutoplay {
-		log.Println(aurora.Yellow("Disabling music autoplay"))
-	}
+	// // give helpful reminders when things are disabled
+	// if Conf.DisableTwitchWebhooks {
+	// 	log.Println(aurora.Yellow("Disabling Twitch webhooks"))
+	// }
+	// if Conf.DisableMusic {
+	// 	log.Println(aurora.Yellow("Disabling music"))
+	// }
+	// if Conf.DisableMusicAutoplay {
+	// 	log.Println(aurora.Yellow("Disabling music autoplay"))
+	// }
 
-	// thes dirs will get created on boot if necessary
-	dirsToCreate := []string{
-		Conf.ScreencapDir,
-		Conf.CroppedCornersDir,
-		Conf.MapsOutputDir,
-		Conf.RunDir,
-	}
-	for _, d := range dirsToCreate {
-		// we cant use helpers.FileExists() here due to import loop
-		_, err := os.Stat(d)
-		if err != nil {
-			if os.IsNotExist(err) {
-				log.Println("Creating directory", d)
-				err = os.MkdirAll(d, 0755)
-				if err != nil {
-					log.Fatalf("Error creating directory %s: %s", d, err)
-				}
-			}
-		}
-	}
+	// // thes dirs will get created on boot if necessary
+	// dirsToCreate := []string{
+	// 	Conf.ScreencapDir,
+	// 	Conf.CroppedCornersDir,
+	// 	Conf.MapsOutputDir,
+	// 	Conf.RunDir,
+	// }
+	// for _, d := range dirsToCreate {
+	// 	// we cant use helpers.FileExists() here due to import loop
+	// 	_, err := os.Stat(d)
+	// 	if err != nil {
+	// 		if os.IsNotExist(err) {
+	// 			log.Println("Creating directory", d)
+	// 			err = os.MkdirAll(d, 0755)
+	// 			if err != nil {
+	// 				log.Fatalf("Error creating directory %s: %s", d, err)
+	// 			}
+	// 		}
+	// 	}
+	// }
 
-	// check that the paths exist
-	requiredDirs := []string{
-		Conf.DashcamDir,
-		Conf.VideoDir,
-		Conf.ScreencapDir,
-		Conf.CroppedCornersDir,
-		Conf.MapsOutputDir,
-		Conf.RunDir,
-	}
-	for _, d := range requiredDirs {
-		// we cant use helpers.FileExists() here due to import loop
-		_, err := os.Stat(d)
-		if err != nil {
-			if os.IsNotExist(err) {
-				log.Fatalf("Directory %s does not exist", d)
-			}
-		}
-	}
+	// // check that the paths exist
+	// requiredDirs := []string{
+	// 	Conf.DashcamDir,
+	// 	Conf.VideoDir,
+	// 	Conf.ScreencapDir,
+	// 	Conf.CroppedCornersDir,
+	// 	Conf.MapsOutputDir,
+	// 	Conf.RunDir,
+	// }
+	// for _, d := range requiredDirs {
+	// 	// we cant use helpers.FileExists() here due to import loop
+	// 	_, err := os.Stat(d)
+	// 	if err != nil {
+	// 		if os.IsNotExist(err) {
+	// 			log.Fatalf("Directory %s does not exist", d)
+	// 		}
+	// 	}
+	// }
 }
 
 // setEnvironment sets the Environment var from the CLI
 func setEnvironment() {
 	var err error
+	var env string
 
 	envVar, ok := os.LookupEnv("ENV")
 	if !ok {
