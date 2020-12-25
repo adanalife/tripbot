@@ -34,6 +34,16 @@ func UserIsAdmin(username string) bool {
 	return strings.ToLower(username) == strings.ToLower(Conf.ChannelName)
 }
 
+// UserIsIgnored returns true if a given user should be ignored
+func UserIsIgnored(user string) bool {
+	for _, ignored := range c.IgnoredUsers {
+		if user == ignored {
+			return true
+		}
+	}
+	return false
+}
+
 //TODO: this should load from a config file
 // IgnoredUsers are users who shouldn't be in the running for miles
 // https://twitchinsights.net/bots
