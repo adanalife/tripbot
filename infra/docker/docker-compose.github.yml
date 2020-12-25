@@ -14,10 +14,4 @@ services:
     command: -c "go run cmd/tripbot/tripbot.go 2>&1"
 
   obs:
-    environment:
-      - CHANNEL_NAME
-      #TODO: almost none of these are actually required by vlc-server
-      - BOT_USERNAME
-      - TWITCH_AUTH_TOKEN
-      - TWITCH_CLIENT_ID
-      - TWITCH_CLIENT_SECRET
+    environment: {}
