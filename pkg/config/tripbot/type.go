@@ -3,6 +3,7 @@ package config
 type TripbotConfig struct {
 	Environment string `required:"true" envconfig:"ENV"`
 	ServerType  string `default:"tripbot"`
+
 	// ChannelName is the username of the stream
 	ChannelName string `required:"true" envconfig:"CHANNEL_NAME"`
 	// OutputChannel is the stream to which the bot will speak
