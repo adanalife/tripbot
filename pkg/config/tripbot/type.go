@@ -1,7 +1,6 @@
 package config
 
 type TripbotConfig struct {
-	//TODO: is this right?
 	Environment string `required:"true" envconfig:"ENV"`
 	ServerType  string `default:"tripbot"`
 	// ChannelName is the username of the stream
@@ -25,17 +24,14 @@ type TripbotConfig struct {
 	DashcamDir string `default:"/opt/data/Dashcam" envconfig:"DASHCAM_DIR"`
 	// VideoDir is where the videos live
 	VideoDir string `default:"/opt/data/Dashcam/_all" envconfig:"VIDEO_DIR"`
+	// ScreencapDir is where we store full screenshots from the videos
+	ScreencapDir string `default:"/opt/data/screencaps" envconfig:"SCREENCAP_DIR"`
 	// // MapsOutputDir is where generated maps will be stored
 	// MapsOutputDir string `default:"/opt/data/maps" envconfig:"MAPS_OUTPUT_DIR"`
 	// // CroppedCornersDir is where we store the cropped versions of screencaps (to OCR them)
 	// CroppedCornersDir string `default:"/opt/data/cropped-corner" envconfig:"CROPPED_CORNERS_DIR"`
-	// ScreencapDir is where we store full screenshots from the videos
-	ScreencapDir string `default:"/opt/data/screencaps" envconfig:"SCREENCAP_DIR"`
-	// // RunDir is where temporary-but-important runtime files live (such as pidfiles and onscreen content)
-	// RunDir string `default:"/opt/data/run" envconfig:"RUN_DIR"`
 
-	// VLCPidFile     string `default:"/opt/data/run/vlc-server.pid" envconfig:"VLC_PIDFILE"`
-	// OBSPidFile     string `default:"/opt/data/run/OBS.pid" envconfig:"OBS_PIDFILE"`
+	// TripbotPidFile is where the tripbot PID is written
 	TripbotPidFile string `default:"/opt/data/run/tripbot.pid" envconfig:"TRIPBOT_PIDFILE"`
 
 	// DisableTwitchWebhooks disables receiving webhooks from Twitch (new followers for instance)
