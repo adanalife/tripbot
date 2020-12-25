@@ -32,10 +32,7 @@ func init() {
 
 	//TODO: consider using strings.ToLower() on channel name here and removing elsewhere
 
-	// // give helpful reminders when things are disabled
-	if Conf.DisableTwitchWebhooks {
-		log.Println(aurora.Yellow("Disabling Twitch webhooks"))
-	}
+	// give helpful reminders when things are disabled
 	if Conf.DisableMusic {
 		log.Println(aurora.Yellow("Disabling music"))
 	}

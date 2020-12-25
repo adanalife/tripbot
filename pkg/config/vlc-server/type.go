@@ -34,13 +34,13 @@ type VlcServerConfig struct {
 	VLCPidFile string `default:"/opt/data/run/vlc-server.pid" envconfig:"VLC_PIDFILE"`
 	OBSPidFile string `default:"/opt/data/run/OBS.pid" envconfig:"OBS_PIDFILE"`
 
-	// DisableTwitchWebhooks disables receiving webhooks from Twitch (new followers for instance)
-	DisableTwitchWebhooks bool `default:"false" envconfig:"DISABLE_TWITCH_WEBHOOKS"`
-	// DisableMusic disables MPD completely
-	//TODO: rename to disable_audio
-	DisableMusic bool `default:"false" envconfig:"DISABLE_MUSIC"`
-	// DisableMusicAutoplay disables the auto-play for MPD
-	DisableMusicAutoplay bool `default:"false" envconfig:"DISABLE_MUSIC_AUTOPLAY"`
+	// // DisableTwitchWebhooks disables receiving webhooks from Twitch (new followers for instance)
+	// DisableTwitchWebhooks bool `default:"false" envconfig:"DISABLE_TWITCH_WEBHOOKS"`
+	//// DisableMusic disables MPD completely
+	////TODO: rename to disable_audio
+	//DisableMusic bool `default:"false" envconfig:"DISABLE_MUSIC"`
+	//// DisableMusicAutoplay disables the auto-play for MPD
+	//DisableMusicAutoplay bool `default:"false" envconfig:"DISABLE_MUSIC_AUTOPLAY"`
 
 	//// TripbotHttpAuth is used to authenticate users to the HTTP server
 	//TripbotHttpAuth string `required:"true" envconfig:"TRIPBOT_HTTP_AUTH"`
