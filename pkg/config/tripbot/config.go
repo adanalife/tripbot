@@ -4,8 +4,8 @@ import (
 	"log"
 	"os"
 
+	"github.com/adanalife/tripbot/pkg/config"
 	"github.com/davecgh/go-spew/spew"
-	"github.com/joho/godotenv"
 	"github.com/kelseyhightower/envconfig"
 	"github.com/logrusorgru/aurora"
 )
@@ -24,7 +24,7 @@ func LoadTripbotConfig() *TripbotConfig {
 func init() {
 
 	// set the Environment and load dotenv
-	setEnvironment()
+	config.SetEnvironment()
 
 	Conf = LoadTripbotConfig()
 
@@ -47,7 +47,6 @@ func init() {
 	dirsToCreate := []string{
 		Conf.ScreencapDir,
 		// Conf.CroppedCornersDir,
-		// Conf.RunDir,
 	}
 	for _, d := range dirsToCreate {
 		// we cant use helpers.FileExists() here due to import loop
@@ -65,10 +64,9 @@ func init() {
 
 	// check that the paths exist
 	requiredDirs := []string{
-		// Conf.VideoDir,
 		Conf.ScreencapDir,
+		// Conf.VideoDir,
 		// Conf.CroppedCornersDir,
-		// Conf.RunDir,
 	}
 	for _, d := range requiredDirs {
 		// we cant use helpers.FileExists() here due to import loop
@@ -78,38 +76,5 @@ func init() {
 				log.Fatalf("Directory %s does not exist", d)
 			}
 		}
-	}
-}
-
-// setEnvironment sets the Environment var from the CLI
-func setEnvironment() {
-	var err error
-	var env string
-
-	envVar, ok := os.LookupEnv("ENV")
-	if !ok {
-		log.Fatalln("You must set ENV")
-	}
-
-	// standardize the ENV
-	switch envVar {
-	case "stage", "staging":
-		env = "staging"
-	case "prod", "production":
-		env = "production"
-	case "dev", "development":
-		env = "development"
-	case "test", "testing":
-		env = "testing"
-	default:
-		log.Fatalf("Unknown ENV: %s", envVar)
-	}
-
-	// load ENV vars from .env file
-	err = godotenv.Load(".env." + env)
-
-	if err != nil {
-		log.Println("Error loading .env file:", err)
-		log.Println("Continuing anyway...")
 	}
 }
