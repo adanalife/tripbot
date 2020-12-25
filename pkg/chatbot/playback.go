@@ -9,6 +9,7 @@ import (
 
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 
+	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
 	"github.com/adanalife/tripbot/pkg/users"
@@ -30,7 +31,7 @@ func timewarpCmd(user *users.User) {
 	}
 
 	// rate-limit the number of times this can run
-	if !helpers.UserIsAdmin(user.Username) {
+	if !c.UserIsAdmin(user.Username) {
 		if time.Now().Sub(lastTimewarpTime) < 20*time.Second {
 			Say("Not yet; enjoy the moment!")
 			return

@@ -1,6 +1,9 @@
 package config
 
-import "os"
+import (
+	"os"
+	"strings"
+)
 
 func IsProduction() bool {
 	return Conf.Environment == "production"
@@ -23,6 +26,12 @@ func getEnv(key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+// UserIsAdmin returns true if a given user runs the channel
+// it's used to restrict admin features
+func UserIsAdmin(username string) bool {
+	return strings.ToLower(username) == strings.ToLower(Conf.ChannelName)
 }
 
 //TODO: this should load from a config file

@@ -220,12 +220,6 @@ func RunningOnLinux() bool {
 	return runtime.GOOS == "linux"
 }
 
-// UserIsAdmin returns true if a given user runs the channel
-// it's used to restrict admin features
-func UserIsAdmin(username string) bool {
-	return strings.ToLower(username) == strings.ToLower(c.Conf.ChannelName)
-}
-
 // this nastiness taken from:
 // https://gist.github.com/davidnewhall/3627895a9fc8fa0affbd747183abca39
 // Write a pid file, but first make sure it doesn't exist with a running pid.

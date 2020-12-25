@@ -7,7 +7,6 @@ import (
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
-	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/nicklaw5/helix"
 )
 
@@ -82,7 +81,7 @@ func UserIsSubscriber(username string) bool {
 // UserIsFollower returns true if the user follows the channel
 func UserIsFollower(username string) bool {
 	// I can't follow myself so just do this
-	if helpers.UserIsAdmin(username) {
+	if c.UserIsAdmin(username) {
 		return true
 	}
 

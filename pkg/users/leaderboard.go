@@ -8,7 +8,6 @@ import (
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
-	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/jmoiron/sqlx"
 	"github.com/logrusorgru/aurora"
 )
@@ -45,7 +44,7 @@ func InitLeaderboard() {
 func UpdateLeaderboard() {
 	for _, user := range LoggedIn {
 		// skip adding this user if they're a bot or ignored
-		if user.IsBot || helpers.UserIsIgnored(user.Username) || helpers.UserIsAdmin(user.Username) {
+		if user.IsBot || c.UserIsIgnored(user.Username) || c.UserIsAdmin(user.Username) {
 			continue
 		}
 		insertIntoLeaderboard(*user)

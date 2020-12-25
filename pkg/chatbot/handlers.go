@@ -5,8 +5,8 @@ import (
 	"log"
 	"strings"
 
+	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
-	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 	mylog "github.com/adanalife/tripbot/pkg/log"
 	"github.com/adanalife/tripbot/pkg/users"
@@ -222,7 +222,7 @@ func UserPart(partMessage twitch.UserPartMessage) {
 //TODO: log to stackdriver
 func Whisper(message twitch.WhisperMessage) {
 	log.Println("whisper from", message.User.Name, ":", message.Message)
-	if helpers.UserIsAdmin(message.User.Name) {
+	if c.UserIsAdmin(message.User.Name) {
 		Say(message.Message)
 	}
 }
