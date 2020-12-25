@@ -73,7 +73,7 @@ func Start() {
 	// attach security middleware
 	secureMw := secure.New(secure.Options{
 		FrameDeny:     true,
-		IsDevelopment: c.IsDevelopment(),
+		IsDevelopment: c.Conf.IsDevelopment(),
 	})
 	app.Use(negroni.HandlerFunc(secureMw.HandlerFuncWithNext))
 

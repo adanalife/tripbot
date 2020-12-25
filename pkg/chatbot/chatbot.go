@@ -90,7 +90,7 @@ func Chatter() {
 }
 
 func help() string {
-	text := config.HelpMessages[helpIndex]
+	text := c.HelpMessages[helpIndex]
 	// bump the index
 	helpIndex = (helpIndex + 1) % len(c.HelpMessages)
 	return text

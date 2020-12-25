@@ -42,7 +42,7 @@ func timewarpCmd(user *users.User) {
 	onscreensClient.ShowTimewarp()
 
 	// only say this if the caller is not me
-	if !helpers.UserIsAdmin(user.Username) {
+	if !c.UserIsAdmin(user.Username) {
 		Say("Here we go...!")
 	}
 
@@ -68,7 +68,7 @@ func jumpCmd(user *users.User, params []string) {
 	}
 
 	// rate-limit the number of times this can run
-	if !helpers.UserIsAdmin(user.Username) {
+	if !c.UserIsAdmin(user.Username) {
 		if time.Now().Sub(lastTimewarpTime) < 20*time.Second {
 			Say("Not yet; enjoy the moment!")
 			return
@@ -127,7 +127,7 @@ func skipCmd(user *users.User, params []string) {
 	}
 
 	// rate-limit the number of times this can run
-	if !helpers.UserIsAdmin(user.Username) {
+	if !c.UserIsAdmin(user.Username) {
 		if time.Now().Sub(lastTimewarpTime) < 20*time.Second {
 			Say("Not yet; enjoy the moment!")
 			return
@@ -172,7 +172,7 @@ func backCmd(user *users.User, params []string) {
 	}
 
 	// rate-limit the number of times this can run
-	if !helpers.UserIsAdmin(user.Username) {
+	if !c.UserIsAdmin(user.Username) {
 		if time.Now().Sub(lastTimewarpTime) < 20*time.Second {
 			Say("Not yet; enjoy the moment!")
 			return
