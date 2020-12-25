@@ -4,7 +4,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"github.com/adanalife/tripbot/pkg/config"
+	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
 )
@@ -17,7 +17,7 @@ func SetStreamTags() {
 	}
 	// run the shell script to get set stream tags
 	scriptPath := filepath.Join(helpers.ProjectRoot(), "bin", "set-tags.sh")
-	_, err := exec.Command(scriptPath, config.ExternalURL).Output()
+	_, err := exec.Command(scriptPath, c.Conf.ExternalURL).Output()
 	if err != nil {
 		terrors.Log(err, "failed to run script")
 		return
