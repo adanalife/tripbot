@@ -23,7 +23,7 @@ var subsTopic = []string{
 func UpdateWebhookSubscriptions() {
 	subscribeToWebhook(followsTopic)
 	// since the staging account isn't an affiliate, don't bother
-	if c.IsProduction() {
+	if c.Conf.IsProduction() {
 		subscribeToWebhook(subsTopic)
 	}
 	getWebookSubscriptions()

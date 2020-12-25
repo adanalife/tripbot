@@ -1,6 +1,7 @@
 package main
 
 import (
+	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"log"
 	"math/rand"
 	"os"
@@ -34,6 +35,8 @@ func main() {
 	// await graceful shutdown signal
 	listenForShutdown()
 
+	initializeErrorLogger()
+
 	// start VLC
 	vlcServer.InitPlayer()
 	vlcServer.PlayRandom() // play a random video
@@ -55,6 +58,10 @@ func createOnscreens() {
 	onscreensServer.InitTimewarp()
 	onscreensServer.InitLeaderboard()
 	onscreensServer.InitFlagImage()
+}
+
+func initializeErrorLogger() {
+	terrors.Init(c.Conf)
 }
 
 // listenForShutdown creates a background job that listens for a graceful shutdown request

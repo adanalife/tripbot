@@ -5,20 +5,20 @@ import (
 	"strings"
 )
 
-func IsProduction() bool {
-	return Conf.Environment == "production"
+func (c TripbotConfig) IsProduction() bool {
+	return c.Environment == "production"
 }
 
-func IsStaging() bool {
-	return Conf.Environment == "staging"
+func (c TripbotConfig) IsStaging() bool {
+	return c.Environment == "staging"
 }
 
-func IsDevelopment() bool {
-	return Conf.Environment == "development"
+func (c TripbotConfig) IsDevelopment() bool {
+	return c.Environment == "development"
 }
 
-func IsTesting() bool {
-	return Conf.Environment == "testing"
+func (c TripbotConfig) IsTesting() bool {
+	return c.Environment == "testing"
 }
 
 func getEnv(key, fallback string) string {

@@ -6,11 +6,10 @@ import (
 	"math/rand"
 	"time"
 
+	mylog "github.com/adanalife/tripbot/pkg/chatbot/log"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
-	config "github.com/adanalife/tripbot/pkg/config/tripbot"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
-	mylog "github.com/adanalife/tripbot/pkg/log"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/davecgh/go-spew/spew"
@@ -93,7 +92,7 @@ func Chatter() {
 func help() string {
 	text := config.HelpMessages[helpIndex]
 	// bump the index
-	helpIndex = (helpIndex + 1) % len(config.HelpMessages)
+	helpIndex = (helpIndex + 1) % len(c.HelpMessages)
 	return text
 }
 

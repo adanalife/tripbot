@@ -1,6 +1,7 @@
 package audio
 
 import (
+	"github.com/adanalife/tripbot/pkg/helpers"
 	"log"
 	"runtime"
 	"syscall"
@@ -126,6 +127,9 @@ func RestartItunes() {
 }
 
 func stopiTunes() {
+	if helpers.RunningOnWindows() {
+		return
+	}
 	itunesBinary := "iTunes"
 
 	processes, err := ps.Processes()
@@ -156,6 +160,9 @@ func stopiTunes() {
 }
 
 func startiTunes() {
+	if helpers.RunningOnWindows() {
+		return
+	}
 	log.Println("opening iTunes")
 	err := open.RunWith("http://somafm.com/groovesalad256.pls", "iTunes")
 	if err != nil {

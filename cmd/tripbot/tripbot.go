@@ -32,6 +32,7 @@ var client *twitch.Client
 func main() {
 	createRandomSeed()
 	listenForShutdown()
+	initializeErrorLogger()
 	startHttpServer()
 	findInitialVideo()
 	users.InitLeaderboard()
@@ -54,6 +55,10 @@ func listenForShutdown() {
 	helpers.WritePidFile(c.Conf.TripbotPidFile)
 	// start the graceful shutdown listener
 	go gracefulShutdown()
+}
+
+func initializeErrorLogger() {
+	terrors.Init(c.Conf)
 }
 
 // startHttpServer starts a webserver, which is

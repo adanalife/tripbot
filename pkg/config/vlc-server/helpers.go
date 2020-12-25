@@ -2,20 +2,20 @@ package config
 
 import "os"
 
-func IsProduction() bool {
-	return Conf.Environment == "production"
+func (c VlcServerConfig) IsProduction() bool {
+	return c.Environment == "production"
 }
 
-func IsStaging() bool {
-	return Conf.Environment == "staging"
+func (c VlcServerConfig) IsStaging() bool {
+	return c.Environment == "staging"
 }
 
-func IsDevelopment() bool {
-	return Conf.Environment == "development"
+func (c VlcServerConfig) IsDevelopment() bool {
+	return c.Environment == "development"
 }
 
-func IsTesting() bool {
-	return Conf.Environment == "testing"
+func (c VlcServerConfig) IsTesting() bool {
+	return c.Environment == "testing"
 }
 
 func getEnv(key, fallback string) string {
