@@ -20,24 +20,22 @@ type TripbotConfig struct {
 	ReadOnly bool `default:"false" envconfig:"READ_ONLY"`
 	// Verbose determines output verbosity
 	Verbose bool `default:"false" envconfig:"VERBOSE"`
-	// VlcVerbose adds extra VLC output
-	VlcVerbose bool `default:"false" envconfig:"VLC_VERBOSE"`
 
 	// DashcamDir contains the dashcam footage
 	DashcamDir string `default:"/opt/data/Dashcam" envconfig:"DASHCAM_DIR"`
 	// VideoDir is where the videos live
 	VideoDir string `default:"/opt/data/Dashcam/_all" envconfig:"VIDEO_DIR"`
-	// MapsOutputDir is where generated maps will be stored
-	MapsOutputDir string `default:"/opt/data/maps" envconfig:"MAPS_OUTPUT_DIR"`
-	// CroppedCornersDir is where we store the cropped versions of screencaps (to OCR them)
-	CroppedCornersDir string `default:"/opt/data/cropped-corner" envconfig:"CROPPED_CORNERS_DIR"`
-	// ScreencapDir is where we store full screenshots from the videos
-	ScreencapDir string `default:"/opt/data/screencaps" envconfig:"SCREENCAP_DIR"`
+	// // MapsOutputDir is where generated maps will be stored
+	// MapsOutputDir string `default:"/opt/data/maps" envconfig:"MAPS_OUTPUT_DIR"`
+	// // CroppedCornersDir is where we store the cropped versions of screencaps (to OCR them)
+	// CroppedCornersDir string `default:"/opt/data/cropped-corner" envconfig:"CROPPED_CORNERS_DIR"`
+	// // ScreencapDir is where we store full screenshots from the videos
+	// ScreencapDir string `default:"/opt/data/screencaps" envconfig:"SCREENCAP_DIR"`
 	// RunDir is where temporary-but-important runtime files live (such as pidfiles and onscreen content)
 	RunDir string `default:"/opt/data/run" envconfig:"RUN_DIR"`
 
-	VLCPidFile     string `default:"/opt/data/run/vlc-server.pid" envconfig:"VLC_PIDFILE"`
-	OBSPidFile     string `default:"/opt/data/run/OBS.pid" envconfig:"OBS_PIDFILE"`
+	// VLCPidFile     string `default:"/opt/data/run/vlc-server.pid" envconfig:"VLC_PIDFILE"`
+	// OBSPidFile     string `default:"/opt/data/run/OBS.pid" envconfig:"OBS_PIDFILE"`
 	TripbotPidFile string `default:"/opt/data/run/tripbot.pid" envconfig:"TRIPBOT_PIDFILE"`
 
 	// DisableTwitchWebhooks disables receiving webhooks from Twitch (new followers for instance)
@@ -56,9 +54,3 @@ type TripbotConfig struct {
 	VlcServerHost string `required:"true" envconfig:"VLC_SERVER_HOST"`
 	MpdServerHost string `required:"true" envconfig:"MPD_SERVER_HOST"`
 }
-
-// type VlcServerConfig struct {
-// 	Debug       bool   `default:"false"`
-// 	PostgresDSN string `envconfig:"POSTGRES_DSN"`
-// 	Port        string `default:":3000"`
-// }
