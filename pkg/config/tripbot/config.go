@@ -47,7 +47,7 @@ func init() {
 	dirsToCreate := []string{
 		Conf.ScreencapDir,
 		// Conf.CroppedCornersDir,
-		Conf.RunDir,
+		// Conf.RunDir,
 	}
 	for _, d := range dirsToCreate {
 		// we cant use helpers.FileExists() here due to import loop
@@ -69,7 +69,7 @@ func init() {
 		// Conf.VideoDir,
 		Conf.ScreencapDir,
 		// Conf.CroppedCornersDir,
-		Conf.RunDir,
+		// Conf.RunDir,
 	}
 	for _, d := range requiredDirs {
 		// we cant use helpers.FileExists() here due to import loop

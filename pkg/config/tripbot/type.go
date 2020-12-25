@@ -31,8 +31,8 @@ type TripbotConfig struct {
 	// CroppedCornersDir string `default:"/opt/data/cropped-corner" envconfig:"CROPPED_CORNERS_DIR"`
 	// ScreencapDir is where we store full screenshots from the videos
 	ScreencapDir string `default:"/opt/data/screencaps" envconfig:"SCREENCAP_DIR"`
-	// RunDir is where temporary-but-important runtime files live (such as pidfiles and onscreen content)
-	RunDir string `default:"/opt/data/run" envconfig:"RUN_DIR"`
+	// // RunDir is where temporary-but-important runtime files live (such as pidfiles and onscreen content)
+	// RunDir string `default:"/opt/data/run" envconfig:"RUN_DIR"`
 
 	// VLCPidFile     string `default:"/opt/data/run/vlc-server.pid" envconfig:"VLC_PIDFILE"`
 	// OBSPidFile     string `default:"/opt/data/run/OBS.pid" envconfig:"OBS_PIDFILE"`
