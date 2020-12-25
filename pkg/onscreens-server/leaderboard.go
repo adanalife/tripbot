@@ -2,14 +2,14 @@ package onscreensServer
 
 import (
 	"log"
-	"path"
+	"path/filepath"
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/config"
 )
 
 var leaderboardDuration = time.Duration(20 * time.Second)
-var leaderboardFile = path.Join(config.RunDir, "leaderboard.txt")
+var leaderboardFile = filepath.Join(config.RunDir, "leaderboard.txt")
 
 var Leaderboard *Onscreen
 

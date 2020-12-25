@@ -16,7 +16,7 @@ services:
   obs:
     environment:
       - CHANNEL_NAME
-      #TODO: almost none of these are actually required by OBS
+      #TODO: almost none of these are actually required by vlc-server
       - BOT_USERNAME
       - TWITCH_AUTH_TOKEN
       - TWITCH_CLIENT_ID

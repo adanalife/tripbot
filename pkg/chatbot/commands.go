@@ -6,7 +6,7 @@ import (
 	"math/rand"
 	"os"
 	"os/exec"
-	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -72,10 +72,15 @@ func flagCmd(user *users.User) {
 func versionCmd(user *users.User) {
 	log.Println(user.Username, "ran !version")
 
+	if helpers.RunningOnWindows() {
+		Say("Sorry, I can't answer that right now")
+		return
+	}
+
 	// check if we already know the version
 	if currentVersion == "" {
 		// run the shell script to get current tripbot version
-		scriptPath := path.Join(helpers.ProjectRoot(), "bin/current-version.sh")
+		scriptPath := filepath.Join(helpers.ProjectRoot(), "bin", "current-version.sh")
 		out, err := exec.Command(scriptPath).Output()
 		if err != nil {
 			terrors.Log(err, "failed to get current version")
@@ -114,16 +119,37 @@ func uptimeCmd(user *users.User) {
 	Say(msg)
 }
 
-func milesCmd(user *users.User) {
+func milesCmd(user *users.User, params []string) {
 	log.Println(user.Username, "ran !miles")
-	miles := user.CurrentMiles()
-	msg := "@%s has %.2f miles."
-	msg = fmt.Sprintf(msg, user.Username, miles)
-	if miles < 0.1 {
-		msg += " You'll earn more miles the longer you watch the stream."
+	var username string
+	var miles float32
+
+	// check to see if an arg was provided
+	if len(params) == 0 {
+		username = user.Username
+		miles = user.CurrentMiles()
+	} else {
+		username = helpers.StripAtSign(params[0])
+		u := users.Find(username)
+
+		// check to see if they are in our DB
+		if u.ID == 0 {
+			Say("I don't know them, sorry!")
+			return
+		}
+
+		miles = u.CurrentMiles()
 	}
-	if miles == 0.0 {
-		msg += " (Sometimes it takes a bit for me to notice you. You should be good now!)"
+
+	msg := "@%s has %.2f miles."
+	msg = fmt.Sprintf(msg, username, miles)
+	if len(params) == 0 {
+		if miles < 0.1 {
+			msg += " You'll earn more miles the longer you watch the stream."
+		}
+		if miles == 0.0 {
+			msg += " (Sometimes it takes a bit for me to notice you. You should be good now!)"
+		}
 	}
 	Say(msg)
 }

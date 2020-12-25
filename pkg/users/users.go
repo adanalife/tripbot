@@ -29,7 +29,8 @@ type User struct {
 
 func (u User) CurrentMiles() float32 {
 	if isLoggedIn(u.Username) {
-		loggedInDur := time.Now().Sub(u.LoggedIn)
+		// lookup the user in the session so the LoggedIn value is current
+		loggedInDur := time.Now().Sub(LoggedIn[u.Username].LoggedIn)
 		sessionMiles := helpers.DurationToMiles(loggedInDur)
 		// give subscribers a miles bonus
 		if u.IsSubscriber() {

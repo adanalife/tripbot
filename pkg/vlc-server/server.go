@@ -27,6 +27,7 @@ func Start() {
 	r := mux.NewRouter()
 
 	// healthcheck endpoints
+	//TODO: handle HEAD requests here too
 	hp := r.PathPrefix("/health").Methods("GET").Subrouter()
 	hp.HandleFunc("/", healthHandler)
 	hp.HandleFunc("/live", healthHandler)
@@ -44,6 +45,7 @@ func Start() {
 
 	// onscreen endpoints
 	osc := r.PathPrefix("/onscreens").Methods("GET").Subrouter()
+	//TODO: add state variable
 	osc.HandleFunc("/flag/{action}", onscreensFlagHandler)
 	osc.HandleFunc("/gps/{action}", onscreensGpsHandler)
 	osc.HandleFunc("/gps/{action}", onscreensGpsHandler)

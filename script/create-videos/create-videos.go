@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path"
 	"path/filepath"
 
 	"github.com/adanalife/tripbot/pkg/config"
@@ -41,7 +40,7 @@ func process(videoFile string) {
 func screencapDir() string {
 	// index 11 corresponds to 245 (aka 2m45s)
 	// which should have the least screencaps
-	return path.Join(config.ScreencapDir, config.TimestampsToTry[11])
+	return filepath.Join(config.ScreencapDir, config.TimestampsToTry[11])
 }
 
 func main() {

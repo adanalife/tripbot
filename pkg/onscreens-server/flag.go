@@ -2,9 +2,10 @@ package onscreensServer
 
 import (
 	"fmt"
+	"github.com/davecgh/go-spew/spew"
 	"log"
 	"os"
-	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -15,7 +16,7 @@ import (
 )
 
 var FlagImage *Onscreen
-var FlagImageFile = path.Join(config.RunDir, "flag.png")
+var FlagImageFile = filepath.Join(config.RunDir, "flag.png")
 
 // var flagDuration = time.Duration(150 * time.Second)
 
@@ -69,6 +70,7 @@ func updateFlagFile() {
 
 // flagSourceFile returns the full path to a flag image file
 func flagSourceFile(state string) string {
+	spew.Dump("generating flag path for", state)
 	// convert it to an abbreviation
 	abbrev := helpers.StateToStateAbbrev(state)
 	// return nothing if nothing was found
@@ -79,5 +81,5 @@ func flagSourceFile(state string) string {
 	abbrev = strings.ToLower(abbrev)
 	fileName := fmt.Sprintf("%s.png", abbrev)
 
-	return path.Join(helpers.ProjectRoot(), "assets/flags/medium", fileName)
+	return filepath.Join(helpers.ProjectRoot(), "assets", "flags", "medium", fileName)
 }

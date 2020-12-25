@@ -21,10 +21,24 @@ func incChatCommandCounter(command string) {
 
 func runCommand(user users.User, message string) {
 	var err error
+	var params []string
 
-	split := strings.Split(message, " ")
+	msg := strings.TrimSpace(message)
+	split := strings.Split(msg, " ")
+
+	// the command is the first part
 	command := split[0]
-	params := split[1:]
+
+	if len(split) > 1 {
+		// the params are the second part
+		params = split[1:]
+
+		// this invalid unicode character shows up when you run the same command twice
+		// (it may be specific to Chatterino as a twitch client?)
+		if params[len(params)-1] == "\U000e0000" {
+			params = params[:len(params)-1]
+		}
+	}
 
 	switch command {
 	case "!help":
@@ -118,7 +132,7 @@ func runCommand(user users.User, message string) {
 		// any of these should trigger the miles command
 	case "!miles", "!points":
 		if user.HasCommandAvailable() {
-			milesCmd(&user)
+			milesCmd(&user, params)
 		} else {
 			Say(followerMsg)
 		}
