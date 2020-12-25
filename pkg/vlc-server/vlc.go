@@ -55,7 +55,7 @@ var vlcVerboseFlags = []string{
 	"-vv", // be very verbose (used for debugging)
 }
 
-// Init creates a VLC player and sets up a playlist
+// InitPlayer creates a VLC player and sets up a playlist
 func InitPlayer() {
 	startVLC()
 	createPlayer()

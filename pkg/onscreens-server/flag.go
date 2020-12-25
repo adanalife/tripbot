@@ -31,6 +31,7 @@ func ShowFlag(dur time.Duration) {
 	FlagImage.ShowFor("", 10*time.Second)
 }
 
+//TODO: fix this
 // updateFlagFile replaces the current flag image with the current state flag
 //func updateFlagFile() {
 //	if helpers.FileExists(FlagImageFile) {

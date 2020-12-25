@@ -61,7 +61,7 @@ func createOnscreens() {
 }
 
 func initializeErrorLogger() {
-	terrors.Init(c.Conf)
+	terrors.Initialize(c.Conf)
 }
 
 // listenForShutdown creates a background job that listens for a graceful shutdown request

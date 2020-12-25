@@ -11,7 +11,7 @@ import (
 
 var conf config.Config
 
-func Init(c config.Config) {
+func Initialize(c config.Config) {
 	// sentry options are picked up through ENV vars
 	sentry.Init(sentry.ClientOptions{})
 

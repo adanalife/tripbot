@@ -113,16 +113,19 @@ func onscreensFlagHandler(w http.ResponseWriter, r *http.Request) {
 		durStr, err := helpers.Base64Decode(base64content[0])
 		if err != nil {
 			terrors.Log(err, "unable to decode string")
-			http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
+			http.Error(w, "422 unable to decode string", http.StatusUnprocessableEntity)
 			return
 		}
 		dur, err := time.ParseDuration(durStr)
 		if err != nil {
-			http.Error(w, "unable to parse duration", http.StatusInternalServerError)
+			http.Error(w, "422 unable to parse duration", http.StatusUnprocessableEntity)
 			return
 		}
-		onscreensServer.ShowFlag(dur)
-		fmt.Fprintf(w, "OK")
+		//TODO: fix this
+		http.Error(w, "501 not implemented", http.StatusNotImplemented)
+		return
+		//onscreensServer.ShowFlag(dur)
+		//fmt.Fprintf(w, "OK")
 	case "hide":
 		onscreensServer.FlagImage.Hide()
 		fmt.Fprintf(w, "OK")

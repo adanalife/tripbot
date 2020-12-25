@@ -58,7 +58,7 @@ func listenForShutdown() {
 }
 
 func initializeErrorLogger() {
-	terrors.Init(c.Conf)
+	terrors.Initialize(c.Conf)
 }
 
 // startHttpServer starts a webserver, which is
