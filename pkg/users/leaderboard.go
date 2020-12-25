@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
-	config "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
@@ -22,7 +21,7 @@ var maxLeaderboardSize = 50
 func InitLeaderboard() {
 	users := []User{}
 
-	ignoredUsers := append(config.IgnoredUsers, strings.ToLower(c.Conf.ChannelName))
+	ignoredUsers := append(c.IgnoredUsers, strings.ToLower(c.Conf.ChannelName))
 	// we use MySQL-style ? bindvars instead of postgres ones here
 	// because that's what sqlx wants for In()
 	q := `SELECT * FROM users WHERE miles != 0 AND is_bot = false AND username NOT IN (?) ORDER BY miles DESC LIMIT ?`

@@ -16,7 +16,6 @@ import (
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
-	config "github.com/adanalife/tripbot/pkg/config/tripbot"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/bradfitz/latlong"
 	"github.com/davecgh/go-spew/spew"
@@ -71,7 +70,7 @@ func DurationToMiles(dur time.Duration) float32 {
 
 // UserIsIgnored returns true if a given user should be ignored
 func UserIsIgnored(user string) bool {
-	for _, ignored := range config.IgnoredUsers {
+	for _, ignored := range c.IgnoredUsers {
 		if user == ignored {
 			return true
 		}
