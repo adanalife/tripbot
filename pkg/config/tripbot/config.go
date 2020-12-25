@@ -7,7 +7,6 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/joho/godotenv"
 	"github.com/kelseyhightower/envconfig"
-	"github.com/logrusorgru/aurora"
 )
 
 var Conf *TripbotConfig
@@ -33,16 +32,16 @@ func init() {
 
 	//TODO: consider using strings.ToLower() on channel name here and removing elsewhere
 
-	// give helpful reminders when things are disabled
-	if Conf.DisableTwitchWebhooks {
-		log.Println(aurora.Yellow("Disabling Twitch webhooks"))
-	}
-	if Conf.DisableMusic {
-		log.Println(aurora.Yellow("Disabling music"))
-	}
-	if Conf.DisableMusicAutoplay {
-		log.Println(aurora.Yellow("Disabling music autoplay"))
-	}
+	// // give helpful reminders when things are disabled
+	// if Conf.DisableTwitchWebhooks {
+	// 	log.Println(aurora.Yellow("Disabling Twitch webhooks"))
+	// }
+	// if Conf.DisableMusic {
+	// 	log.Println(aurora.Yellow("Disabling music"))
+	// }
+	// if Conf.DisableMusicAutoplay {
+	// 	log.Println(aurora.Yellow("Disabling music autoplay"))
+	// }
 
 	// thes dirs will get created on boot if necessary
 	dirsToCreate := []string{
@@ -67,8 +66,8 @@ func init() {
 
 	// check that the paths exist
 	requiredDirs := []string{
-		Conf.DashcamDir,
-		Conf.VideoDir,
+		// Conf.DashcamDir,
+		// Conf.VideoDir,
 		Conf.ScreencapDir,
 		Conf.CroppedCornersDir,
 		Conf.MapsOutputDir,
