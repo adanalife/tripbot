@@ -12,14 +12,15 @@ import (
 
 //TODO: not all required ENV vars are required for vlc-server
 var Conf *TripbotConfig
+var env string
 
 func LoadTripbotConfig() *TripbotConfig {
-	// var cfg TripbotConfig
-	err := envconfig.Process("TRIPBOT", &Conf)
+	var cfg TripbotConfig
+	err := envconfig.Process("TRIPBOT", &cfg)
 	if err != nil {
 		log.Fatalf("could not load config: %v", err)
 	}
-	return Conf
+	return &cfg
 }
 
 func init() {
@@ -27,7 +28,7 @@ func init() {
 	// set the Environment and load dotenv
 	setEnvironment()
 
-	LoadTripbotConfig()
+	Conf = LoadTripbotConfig()
 
 	spew.Dump(Conf)
 
@@ -89,27 +90,27 @@ func init() {
 func setEnvironment() {
 	var err error
 
-	env, ok := os.LookupEnv("ENV")
+	envVar, ok := os.LookupEnv("ENV")
 	if !ok {
 		log.Fatalln("You must set ENV")
 	}
 
 	// standardize the ENV
-	switch env {
+	switch envVar {
 	case "stage", "staging":
-		Conf.Environment = "staging"
+		env = "staging"
 	case "prod", "production":
-		Conf.Environment = "production"
+		env = "production"
 	case "dev", "development":
-		Conf.Environment = "development"
+		env = "development"
 	case "test", "testing":
-		Conf.Environment = "testing"
+		env = "testing"
 	default:
-		log.Fatalf("Unknown ENV: %s", env)
+		log.Fatalf("Unknown ENV: %s", envVar)
 	}
 
 	// load ENV vars from .env file
-	err = godotenv.Load(".env." + Conf.Environment)
+	err = godotenv.Load(".env." + env)
 
 	if err != nil {
 		log.Println("Error loading .env file:", err)

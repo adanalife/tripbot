@@ -2,7 +2,6 @@ package twitch
 
 import (
 	"fmt"
-	"github.com/davecgh/go-spew/spew"
 	"log"
 	"strings"
 
@@ -53,7 +52,7 @@ func GetSubscribers() {
 		terrors.Log(err, "error getting subscriptions from twitch")
 	}
 
-	spew.Dump(resp)
+	// spew.Dump(resp)
 
 	// reset the current subscriber list
 	subscribers = []string{}
