@@ -7,10 +7,10 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/adanalife/tripbot/internal/config"
-	terrors "github.com/adanalife/tripbot/internal/errors"
-	"github.com/adanalife/tripbot/internal/video"
+	"github.com/adanalife/tripbot/pkg/config"
+	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
+	"github.com/adanalife/tripbot/pkg/video"
 	"github.com/kelvins/geocoder"
 )
 
