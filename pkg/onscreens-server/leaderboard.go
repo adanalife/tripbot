@@ -5,11 +5,11 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/adanalife/tripbot/pkg/config"
+	c "github.com/adanalife/tripbot/pkg/config/vlc-server"
 )
 
 var leaderboardDuration = time.Duration(20 * time.Second)
-var leaderboardFile = filepath.Join(config.RunDir, "leaderboard.txt")
+var leaderboardFile = filepath.Join(c.Conf.RunDir, "leaderboard.txt")
 
 var Leaderboard *Onscreen
 

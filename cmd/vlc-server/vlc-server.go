@@ -8,7 +8,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/adanalife/tripbot/pkg/config"
+	c "github.com/adanalife/tripbot/pkg/config/vlc-server"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	onscreensServer "github.com/adanalife/tripbot/pkg/onscreens-server"
 	vlcServer "github.com/adanalife/tripbot/pkg/vlc-server"
@@ -26,7 +26,7 @@ func main() {
 	rand.Seed(time.Now().UnixNano())
 
 	// write the current pid to a pidfile
-	helpers.WritePidFile(config.VLCPidFile)
+	helpers.WritePidFile(c.Conf.VLCPidFile)
 
 	// initialize the onscreen elements
 	createOnscreens()
@@ -39,7 +39,7 @@ func main() {
 	vlcServer.PlayRandom() // play a random video
 
 	// start the webserver
-	config.SetServerType("vlc_server")
+	// c.Conf.SetServerType("vlc_server")
 	vlcServer.Start()
 
 	// listen for termination signals and gracefully shutdown

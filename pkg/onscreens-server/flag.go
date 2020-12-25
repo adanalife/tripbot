@@ -2,21 +2,22 @@ package onscreensServer
 
 import (
 	"fmt"
-	"github.com/davecgh/go-spew/spew"
 	"log"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/adanalife/tripbot/pkg/config"
+	"github.com/davecgh/go-spew/spew"
+
+	c "github.com/adanalife/tripbot/pkg/config/vlc-server"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/video"
 )
 
 var FlagImage *Onscreen
-var FlagImageFile = filepath.Join(config.RunDir, "flag.png")
+var FlagImageFile = filepath.Join(c.Conf.RunDir, "flag.png")
 
 // var flagDuration = time.Duration(150 * time.Second)
 
@@ -36,7 +37,7 @@ func ShowFlag(dur time.Duration) {
 // updateFlagFile replaces the current flag image with the current state flag
 func updateFlagFile() {
 	if helpers.FileExists(FlagImageFile) {
-		if config.Verbose {
+		if c.Conf.Verbose {
 			log.Printf("removing %s because it already exists", FlagImageFile)
 		}
 		// remove the existing flag file
