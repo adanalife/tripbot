@@ -45,8 +45,6 @@ func init() {
 
 	// thes dirs will get created on boot if necessary
 	dirsToCreate := []string{
-		// Conf.ScreencapDir,
-		// Conf.CroppedCornersDir,
 		// Conf.MapsOutputDir,
 		Conf.RunDir,
 	}
@@ -68,8 +66,6 @@ func init() {
 	requiredDirs := []string{
 		Conf.DashcamDir,
 		Conf.VideoDir,
-		// Conf.ScreencapDir,
-		// Conf.CroppedCornersDir,
 		// Conf.MapsOutputDir,
 		Conf.RunDir,
 	}

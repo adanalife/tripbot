@@ -31,22 +31,10 @@ func init() {
 
 	//TODO: consider using strings.ToLower() on channel name here and removing elsewhere
 
-	// // give helpful reminders when things are disabled
-	// if Conf.DisableTwitchWebhooks {
-	// 	log.Println(aurora.Yellow("Disabling Twitch webhooks"))
-	// }
-	// if Conf.DisableMusic {
-	// 	log.Println(aurora.Yellow("Disabling music"))
-	// }
-	// if Conf.DisableMusicAutoplay {
-	// 	log.Println(aurora.Yellow("Disabling music autoplay"))
-	// }
-
 	// thes dirs will get created on boot if necessary
 	dirsToCreate := []string{
 		Conf.ScreencapDir,
-		Conf.CroppedCornersDir,
-		Conf.MapsOutputDir,
+		// Conf.CroppedCornersDir,
 		Conf.RunDir,
 	}
 	for _, d := range dirsToCreate {
@@ -68,8 +56,7 @@ func init() {
 		// Conf.DashcamDir,
 		// Conf.VideoDir,
 		Conf.ScreencapDir,
-		Conf.CroppedCornersDir,
-		Conf.MapsOutputDir,
+		// Conf.CroppedCornersDir,
 		Conf.RunDir,
 	}
 	for _, d := range requiredDirs {
