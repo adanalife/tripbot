@@ -10,7 +10,6 @@ import (
 )
 
 var Conf *TripbotConfig
-var env string
 
 func LoadTripbotConfig() *TripbotConfig {
 	var cfg TripbotConfig
@@ -87,6 +86,7 @@ func init() {
 // setEnvironment sets the Environment var from the CLI
 func setEnvironment() {
 	var err error
+	var env string
 
 	envVar, ok := os.LookupEnv("ENV")
 	if !ok {
