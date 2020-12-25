@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/adanalife/tripbot/pkg/config"
+	c "github.com/adanalife/tripbot/pkg/config/vlc-server"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	libvlc "github.com/adrg/libvlc-go/v3"
@@ -104,7 +104,7 @@ func currentlyPlaying() string {
 
 func startVLC() {
 	// set command line flags
-	if config.VlcVerbose {
+	if c.Conf.VlcVerbose {
 		vlcCmdFlags = append(vlcCmdFlags, vlcVerboseFlags...)
 		// we use syslog on linux
 		if helpers.RunningOnLinux() {
@@ -178,9 +178,9 @@ func loadMedia() {
 func loadLocalMedia() {
 	var filePaths []string
 	// add all files from the VideoDir to the medialist
-	err := filepath.Walk(config.VideoDir, func(path string, info os.FileInfo, err error) error {
+	err := filepath.Walk(c.Conf.VideoDir, func(path string, info os.FileInfo, err error) error {
 		// skip the dir itself
-		if path == config.VideoDir {
+		if path == c.Conf.VideoDir {
 			return nil
 		}
 		// skip non-video files
