@@ -36,7 +36,7 @@ func UserIsAdmin(username string) bool {
 
 // UserIsIgnored returns true if a given user should be ignored
 func UserIsIgnored(user string) bool {
-	for _, ignored := range c.IgnoredUsers {
+	for _, ignored := range IgnoredUsers {
 		if user == ignored {
 			return true
 		}

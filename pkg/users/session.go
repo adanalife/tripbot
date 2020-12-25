@@ -10,7 +10,6 @@ import (
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/events"
-	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/hako/durafmt"
 
@@ -90,7 +89,7 @@ func login(username string) *User {
 	user.save()
 
 	// raise an error if a user is supposed to be a bot
-	if helpers.UserIsIgnored(username) && !user.IsBot {
+	if c.UserIsIgnored(username) && !user.IsBot {
 		log.Println(aurora.Red(username), errors.New("user should be bot"))
 	}
 
