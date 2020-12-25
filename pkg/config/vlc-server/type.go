@@ -9,8 +9,6 @@ type VlcServerConfig struct {
 	// VlcVerbose adds extra VLC output
 	VlcVerbose bool `default:"false" envconfig:"VLC_VERBOSE"`
 
-	// DashcamDir contains the dashcam footage
-	DashcamDir string `default:"/opt/data/Dashcam" envconfig:"DASHCAM_DIR"`
 	// VideoDir is where the videos live
 	VideoDir string `default:"/opt/data/Dashcam/_all" envconfig:"VIDEO_DIR"`
 	// RunDir is where temporary-but-important runtime files live (such as pidfiles and onscreen content)

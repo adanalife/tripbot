@@ -65,7 +65,6 @@ func init() {
 
 	// check that the paths exist
 	requiredDirs := []string{
-		// Conf.DashcamDir,
 		// Conf.VideoDir,
 		Conf.ScreencapDir,
 		// Conf.CroppedCornersDir,

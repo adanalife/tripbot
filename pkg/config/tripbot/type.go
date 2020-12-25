@@ -20,8 +20,6 @@ type TripbotConfig struct {
 	// Verbose determines output verbosity
 	Verbose bool `default:"false" envconfig:"VERBOSE"`
 
-	// DashcamDir contains the dashcam footage
-	DashcamDir string `default:"/opt/data/Dashcam" envconfig:"DASHCAM_DIR"`
 	// VideoDir is where the videos live
 	VideoDir string `default:"/opt/data/Dashcam/_all" envconfig:"VIDEO_DIR"`
 	// ScreencapDir is where we store full screenshots from the videos
