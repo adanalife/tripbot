@@ -12,7 +12,7 @@ import (
 	"time"
 
 	// "github.com/adanalife/tripbot/internal/takeout"
-
+	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/video"
 	"googlemaps.github.io/maps"
