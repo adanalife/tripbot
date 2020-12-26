@@ -1,10 +1,11 @@
 package audio
 
 import (
-	"github.com/adanalife/tripbot/pkg/helpers"
 	"log"
 	"runtime"
 	"syscall"
+
+	"github.com/adanalife/tripbot/pkg/helpers"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	terrors "github.com/adanalife/tripbot/pkg/errors"

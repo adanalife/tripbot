@@ -9,7 +9,6 @@ import (
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
-	"github.com/davecgh/go-spew/spew"
 	sentrynegroni "github.com/getsentry/sentry-go/negroni"
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -24,7 +23,6 @@ var server *http.Server
 
 // Start starts the web server
 func Start() {
-	spew.Dump(c.Conf)
 	log.Println("Starting web server on port", c.Conf.TripbotServerPort)
 
 	r := mux.NewRouter()

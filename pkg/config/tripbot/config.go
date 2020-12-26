@@ -21,7 +21,7 @@ func LoadTripbotConfig() *TripbotConfig {
 	return &cfg
 }
 
-func Initialize() {
+func init() {
 
 	// set the Environment and load dotenv
 	config.SetEnvironment()

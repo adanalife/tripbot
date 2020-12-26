@@ -31,7 +31,6 @@ var client *twitch.Client
 // main performs the various steps to get the bot running
 func main() {
 	createRandomSeed()
-	loadConfig()
 	listenForShutdown()
 	initializeErrorLogger()
 	startHttpServer()
@@ -49,10 +48,6 @@ func main() {
 func createRandomSeed() {
 	// create a brand new random seed
 	rand.Seed(time.Now().UnixNano())
-}
-
-func loadConfig() {
-	c.Initialize()
 }
 
 // listenForShutdown creates a background job that listens for a graceful shutdown request
