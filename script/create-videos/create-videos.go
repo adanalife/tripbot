@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/adanalife/tripbot/pkg/config"
+	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/video"
@@ -40,10 +40,11 @@ func process(videoFile string) {
 func screencapDir() string {
 	// index 11 corresponds to 245 (aka 2m45s)
 	// which should have the least screencaps
-	return filepath.Join(config.ScreencapDir, config.TimestampsToTry[11])
+	return filepath.Join(c.Conf.ScreencapDir, c.TimestampsToTry[11])
 }
 
 func main() {
+	terrors.Initialize(c.Conf)
 
 	log.Println("going to loop over:", screencapDir())
 
@@ -85,7 +86,7 @@ func init() {
 	// if err != nil {
 	// 	log.Fatal("Error loading .env file")
 	// }
-	geocoder.ApiKey = config.GoogleMapsAPIKey
+	geocoder.ApiKey = c.Conf.GoogleMapsAPIKey
 
 	flag.StringVar(&videoFile, "file", "", "File to load")
 	flag.BoolVar(&current, "current", false, "Use currently-playing video")
