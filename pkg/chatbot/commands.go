@@ -15,7 +15,7 @@ import (
 	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
 
 	"github.com/adanalife/tripbot/pkg/background"
-	"github.com/adanalife/tripbot/pkg/config"
+	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/users"
@@ -31,7 +31,7 @@ var currentVersion string
 
 func helpCmd(user *users.User) {
 	log.Println(user.Username, "ran !help")
-	msg := fmt.Sprintf("%s (%d of %d)", help(), helpIndex+1, len(config.HelpMessages))
+	msg := fmt.Sprintf("%s (%d of %d)", help(), helpIndex+1, len(c.HelpMessages))
 	Say(msg)
 }
 
@@ -331,7 +331,7 @@ func bonusMilesCmd(user *users.User) {
 
 func secretInfoCmd(user *users.User) {
 	log.Println(user.Username, "ran !secretinfo")
-	if !helpers.UserIsAdmin(user.Username) {
+	if !c.UserIsAdmin(user.Username) {
 		return
 	}
 	vid := video.CurrentlyPlaying
@@ -348,7 +348,7 @@ func secretInfoCmd(user *users.User) {
 
 func shutdownCmd(user *users.User) {
 	log.Println(user.Username, "ran !shutdown")
-	if !helpers.UserIsAdmin(user.Username) {
+	if !c.UserIsAdmin(user.Username) {
 		Say("Nice try bucko")
 		return
 	}
@@ -367,7 +367,7 @@ func shutdownCmd(user *users.User) {
 
 func restartMusicCmd(user *users.User) {
 	log.Println(user.Username, "ran !restartmusic")
-	if !helpers.UserIsAdmin(user.Username) {
+	if !c.UserIsAdmin(user.Username) {
 		Say("You can't do that, but please !report any stream issues")
 		return
 	}
@@ -385,7 +385,7 @@ func restartMusicCmd(user *users.User) {
 func middleCmd(user *users.User, params []string) {
 	log.Println(user.Username, "ran !middle")
 	// don't let strangers run this
-	if !helpers.UserIsAdmin(user.Username) {
+	if !c.UserIsAdmin(user.Username) {
 		return
 	}
 

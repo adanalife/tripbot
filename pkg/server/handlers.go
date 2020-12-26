@@ -7,7 +7,7 @@ import (
 	"net/http"
 
 	"github.com/adanalife/tripbot/pkg/chatbot"
-	"github.com/adanalife/tripbot/pkg/config"
+	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/users"
@@ -24,7 +24,7 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 func webhooksTwitchHandler(w http.ResponseWriter, r *http.Request) {
 	log.Println("got webhook challenge request at", r.URL.Path)
 	// exit early if we've disabled webhooks
-	if config.DisableTwitchWebhooks {
+	if c.Conf.DisableTwitchWebhooks {
 		http.Error(w, "501 not implemented", http.StatusNotImplemented)
 		return
 	}
@@ -43,7 +43,7 @@ func webhooksTwitchHandler(w http.ResponseWriter, r *http.Request) {
 // user webhooks are received via POST at this url
 //TODO: we can use helix.GetWebhookTopicFromRequest() and share a webhooks URL
 func webhooksTwitchUsersFollowsHandler(w http.ResponseWriter, r *http.Request) {
-	if config.DisableTwitchWebhooks {
+	if c.Conf.DisableTwitchWebhooks {
 		http.Error(w, "501 not implemented", http.StatusNotImplemented)
 		return
 	}
@@ -69,7 +69,7 @@ func webhooksTwitchUsersFollowsHandler(w http.ResponseWriter, r *http.Request) {
 
 // these are sent when users subscribe
 func webhooksTwitchSubscriptionsEventsHandler(w http.ResponseWriter, r *http.Request) {
-	if config.DisableTwitchWebhooks {
+	if c.Conf.DisableTwitchWebhooks {
 		http.Error(w, "501 not implemented", http.StatusNotImplemented)
 		return
 	}

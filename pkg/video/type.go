@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/adanalife/tripbot/pkg/config"
+	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 )
 
 // Videos represent a video file containing dashcam footage
@@ -62,7 +62,7 @@ func (v Video) File() string {
 
 // ex: /Volumes/.../2018_0514_224801_013.MP4
 func (v Video) Path() string {
-	return filepath.Join(config.VideoDir, v.File())
+	return filepath.Join(c.Conf.VideoDir, v.File())
 }
 
 // toDate parses the vidStr and returns a time.Time object for the video
@@ -82,7 +82,7 @@ func (v Video) toDate() time.Time {
 //TODO: re-enable this so it's not a dependency of vlc-server
 // ocrCoords will use OCR to read the coordinates from a screenshot (seriously)
 // func (v Video) ocrCoords() (float64, float64, error) {
-// 	for _, timestamp := range config.TimestampsToTry {
+// 	for _, timestamp := range c.Conf.TimestampsToTry {
 // 		lat, lng, err := ocr.CoordsFromImage(v.screencap(timestamp))
 // 		if err == nil {
 // 			return lat, lng, err
@@ -100,7 +100,7 @@ func slug(file string) string {
 // timestamp is something like 000, 030, 100, etc
 func (v Video) screencap(timestamp string) string {
 	screencapFile := fmt.Sprintf("%s-%s.png", v.DashStr(), timestamp)
-	return filepath.Join(config.ScreencapDir, screencapFile)
+	return filepath.Join(c.Conf.ScreencapDir, screencapFile)
 }
 
 func removeFileExtension(filename string) string {

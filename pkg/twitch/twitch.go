@@ -2,13 +2,11 @@ package twitch
 
 import (
 	"fmt"
-	"github.com/davecgh/go-spew/spew"
 	"log"
 	"strings"
 
-	"github.com/adanalife/tripbot/pkg/config"
+	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
-	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/nicklaw5/helix"
 )
 
@@ -44,7 +42,7 @@ func getChannelID(username string) string {
 func GetSubscribers() {
 	//TODO: should we do this elsewhere as well?
 	if ChannelID == "" {
-		ChannelID = getChannelID(config.ChannelName)
+		ChannelID = getChannelID(c.Conf.ChannelName)
 	}
 	resp, err := currentTwitchClient.GetSubscriptions(&helix.SubscriptionsParams{
 		BroadcasterID: ChannelID,
@@ -53,7 +51,7 @@ func GetSubscribers() {
 		terrors.Log(err, "error getting subscriptions from twitch")
 	}
 
-	spew.Dump(resp)
+	// spew.Dump(resp)
 
 	// reset the current subscriber list
 	subscribers = []string{}
@@ -66,7 +64,7 @@ func GetSubscribers() {
 	if len(subscribers) > 0 {
 		log.Println("subscribers:", strings.Join(subscribers, ", "))
 	} else {
-		log.Println(config.ChannelName, "has no subscribers :(")
+		log.Println(c.Conf.ChannelName, "has no subscribers :(")
 	}
 }
 
@@ -83,7 +81,7 @@ func UserIsSubscriber(username string) bool {
 // UserIsFollower returns true if the user follows the channel
 func UserIsFollower(username string) bool {
 	// I can't follow myself so just do this
-	if helpers.UserIsAdmin(username) {
+	if c.UserIsAdmin(username) {
 		return true
 	}
 

@@ -12,7 +12,7 @@ import (
 	"time"
 
 	// "github.com/adanalife/tripbot/internal/takeout"
-	"github.com/adanalife/tripbot/pkg/config"
+	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/video"
 	"googlemaps.github.io/maps"
@@ -30,7 +30,7 @@ func main() {
 	// 	log.Fatal("Error loading .env file")
 	// }
 
-	client, err := maps.NewClient(maps.WithAPIKey(config.GoogleMapsAPIKey))
+	client, err := maps.NewClient(maps.WithAPIKey(c.Conf.GoogleMapsAPIKey))
 	if err != nil {
 		log.Fatalf("client error: %s", err)
 	}
@@ -43,13 +43,13 @@ func main() {
 	skipIndex := 0
 
 	// loop over every file in the screencapDir
-	err = filepath.Walk(config.VideoDir,
+	err = filepath.Walk(c.Conf.VideoDir,
 		func(path string, _ os.FileInfo, err error) error {
 			if err != nil {
 				return err
 			}
 			// skip the directory name itself
-			if path == config.VideoDir {
+			if path == c.Conf.VideoDir {
 				return nil
 			}
 
@@ -61,7 +61,7 @@ func main() {
 
 			// this is where we will save the map image
 			imgFilename := fmt.Sprintf("%s.png", vid.String())
-			fullImgFilename := filepath.Join(config.MapsOutputDir, imgFilename)
+			fullImgFilename := filepath.Join(c.Conf.MapsOutputDir, imgFilename)
 
 			// skip stuff from before this time
 			if skipToDate {
@@ -201,7 +201,7 @@ func makeGoogleMap(c *maps.Client, loc maps.LatLng, pathPoints []maps.LatLng) (i
 		Center: centerOfUSA.String(),
 		Zoom:   4,
 		Size:   "800x600",
-		// MapStyles: config.GoogleMapsStyle,
+		// MapStyles: c.GoogleMapsStyle,
 		// Center:    loc.String(),
 		// Zoom:     5,
 		// Size:     "600x400",

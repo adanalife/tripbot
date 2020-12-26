@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/adanalife/tripbot/pkg/config"
+	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/video"
 	"github.com/kelvins/geocoder"
@@ -24,7 +24,7 @@ func init() {
 	// 	log.Fatal("Error loading .env file")
 	// }
 
-	geocoder.ApiKey = config.GoogleMapsAPIKey
+	geocoder.ApiKey = c.Conf.GoogleMapsAPIKey
 
 	flag.StringVar(&videoFile, "file", "", "File to load")
 	flag.BoolVar(&current, "current", false, "Use currently-playing video")
@@ -60,13 +60,13 @@ func main() {
 	} else {
 
 		// loop over every file in the screencapDir
-		err := filepath.Walk(config.VideoDir,
+		err := filepath.Walk(c.Conf.VideoDir,
 			func(path string, info os.FileInfo, err error) error {
 				if err != nil {
 					return err
 				}
 				// skip the directory name itself
-				if path == config.VideoDir {
+				if path == c.Conf.VideoDir {
 					return nil
 				}
 

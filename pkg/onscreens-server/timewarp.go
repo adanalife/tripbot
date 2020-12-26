@@ -5,13 +5,13 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/adanalife/tripbot/pkg/config"
+	c "github.com/adanalife/tripbot/pkg/config/vlc-server"
 )
 
 var Timewarp *Onscreen
 
 var timewarpDuration = time.Duration(2 * time.Second)
-var timewarpFile = filepath.Join(config.RunDir, "timewarp.txt")
+var timewarpFile = filepath.Join(c.Conf.RunDir, "timewarp.txt")
 
 func InitTimewarp() {
 	log.Println("Creating timewarp onscreen")

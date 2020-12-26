@@ -5,7 +5,9 @@ import (
 	"runtime"
 	"syscall"
 
-	"github.com/adanalife/tripbot/pkg/config"
+	"github.com/adanalife/tripbot/pkg/helpers"
+
+	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/fhs/gompd/mpd"
 	"github.com/logrusorgru/aurora"
@@ -26,7 +28,7 @@ func init() {
 		return
 	}
 
-	if config.DisableMusic {
+	if c.Conf.DisableMusic {
 		log.Println(aurora.Yellow("Disabling audio"))
 		Enabled = false
 		return
@@ -35,7 +37,7 @@ func init() {
 	// connect to the MPD server
 	connect()
 
-	if !config.DisableMusicAutoplay {
+	if !c.Conf.DisableMusicAutoplay {
 		//TODO: this shouldn't live in init probably
 		PlayGrooveSalad()
 	}
@@ -44,7 +46,7 @@ func init() {
 func connect() {
 	var err error
 	// Connect to MPD server
-	mpdConn, err = mpd.Dial("tcp", config.MpdServerHost)
+	mpdConn, err = mpd.Dial("tcp", c.Conf.MpdServerHost)
 	if err != nil {
 		//TODO: an exponential backoff would be nice here
 		log.Println(aurora.Red("Error connecting to MPD"), ":", err.Error())
@@ -126,6 +128,9 @@ func RestartItunes() {
 }
 
 func stopiTunes() {
+	if helpers.RunningOnWindows() {
+		return
+	}
 	itunesBinary := "iTunes"
 
 	processes, err := ps.Processes()
@@ -156,6 +161,9 @@ func stopiTunes() {
 }
 
 func startiTunes() {
+	if helpers.RunningOnWindows() {
+		return
+	}
 	log.Println("opening iTunes")
 	err := open.RunWith("http://somafm.com/groovesalad256.pls", "iTunes")
 	if err != nil {

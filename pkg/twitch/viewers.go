@@ -9,11 +9,11 @@ import (
 
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 
-	"github.com/adanalife/tripbot/pkg/config"
+	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 )
 
 // chattersAPIURL is the URL to hit for current chatter list
-var chattersAPIURL = "https://tmi.twitch.tv/group/user/" + strings.ToLower(config.ChannelName) + "/chatters"
+var chattersAPIURL = "https://tmi.twitch.tv/group/user/" + strings.ToLower(c.Conf.ChannelName) + "/chatters"
 
 // chattersResponse is the json returned by the Twitch chatters endpoint
 type chattersResponse struct {
@@ -58,6 +58,7 @@ func UpdateChatters() {
 		return
 	}
 
+	//TODO: make this a config var
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36")
 
 	res, err := client.Do(req)

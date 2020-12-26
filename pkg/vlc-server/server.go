@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/adanalife/tripbot/pkg/config"
+	c "github.com/adanalife/tripbot/pkg/config/vlc-server"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	sentrynegroni "github.com/getsentry/sentry-go/negroni"
@@ -22,7 +22,7 @@ import (
 
 // Start starts the web server
 func Start() {
-	log.Println("Starting VLC web server on host", config.VlcServerHost)
+	log.Println("Starting VLC web server on host", c.Conf.VlcServerHost)
 
 	r := mux.NewRouter()
 
@@ -63,7 +63,7 @@ func Start() {
 	// catch everything else
 	r.HandleFunc("/", catchAllHandler)
 
-	if config.Verbose {
+	if c.Conf.Verbose {
 		helpers.PrintAllRoutes(r)
 	}
 
@@ -75,14 +75,14 @@ func Start() {
 	// attach http-metrics (prometheus) middleware
 	metricsMw := middleware.New(middleware.Config{
 		Recorder: metrics.NewRecorder(metrics.Config{}),
-		Service:  config.ServerType,
+		Service:  c.Conf.ServerType,
 	})
 	app.Use(negronimiddleware.Handler("", metricsMw))
 
 	// attach security middleware
 	secureMw := secure.New(secure.Options{
 		FrameDeny:     true,
-		IsDevelopment: config.IsDevelopment(),
+		IsDevelopment: c.Conf.IsDevelopment(),
 	})
 	app.Use(negroni.HandlerFunc(secureMw.HandlerFuncWithNext))
 
@@ -93,7 +93,7 @@ func Start() {
 	app.UseHandler(r)
 
 	//TODO: error if there's no colon to split on
-	port := strings.Split(config.VlcServerHost, ":")[1]
+	port := strings.Split(c.Conf.VlcServerHost, ":")[1]
 
 	srv := &http.Server{
 		Addr: fmt.Sprintf("0.0.0.0:%s", port),

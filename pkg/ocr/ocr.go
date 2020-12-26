@@ -9,7 +9,7 @@ import (
 
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 
-	"github.com/adanalife/tripbot/pkg/config"
+	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/disintegration/imaging"
 	"github.com/otiai10/gosseract"
@@ -39,10 +39,10 @@ func CoordsFromImage(path string) (float64, float64, error) {
 // cropImage cuts a dashcam screencap down to just the bottom right corner
 func cropImage(srcFilename string) (string, error) {
 
-	//TODO: if config.CroppedCornersDir isn't accessible, because we can't proceed
+	//TODO: if c.Conf.CroppedCornersDir isn't accessible, because we can't proceed
 
 	// exit early if the cropped file already exists
-	croppedFile := filepath.Join(config.CroppedCornersDir, path.Base(srcFilename))
+	croppedFile := filepath.Join(c.Conf.CroppedCornersDir, path.Base(srcFilename))
 	if helpers.FileExists(croppedFile) {
 		return croppedFile, nil
 	}

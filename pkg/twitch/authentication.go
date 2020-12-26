@@ -4,7 +4,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/adanalife/tripbot/pkg/config"
+	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/logrusorgru/aurora"
@@ -52,7 +52,7 @@ func Client() (*helix.Client, error) {
 		ClientID:     ClientID,
 		ClientSecret: ClientSecret,
 		// this is set at https://dev.twitch.tv/console/apps
-		RedirectURI: config.ExternalURL + "/auth/callback",
+		RedirectURI: c.Conf.ExternalURL + "/auth/callback",
 	})
 	if err != nil {
 		terrors.Log(err, "error creating client")

@@ -6,14 +6,14 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/adanalife/tripbot/pkg/config"
+	c "github.com/adanalife/tripbot/pkg/config/vlc-server"
 )
 
 var LeftRotator *Onscreen
 
 var leftRotatorUpdateFrequency = time.Duration(45 * time.Second)
 
-var leftRotatorFile = filepath.Join(config.RunDir, "left-message.txt")
+var leftRotatorFile = filepath.Join(c.Conf.RunDir, "left-message.txt")
 
 var possibleLeftMessages = []string{
 	// "Looking for artist for emotes and more",

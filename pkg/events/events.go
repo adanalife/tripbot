@@ -4,7 +4,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/adanalife/tripbot/pkg/config"
+	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
 	"github.com/logrusorgru/aurora"
 )
@@ -17,7 +17,7 @@ type Event struct {
 }
 
 func Login(user string) {
-	if config.ReadOnly && config.Verbose {
+	if c.Conf.ReadOnly && c.Conf.Verbose {
 		log.Printf("Not logging in %s because we're in read-only mode", aurora.Magenta(user))
 		return
 	}
@@ -27,7 +27,7 @@ func Login(user string) {
 }
 
 func Logout(user string) {
-	if config.ReadOnly && config.Verbose {
+	if c.Conf.ReadOnly && c.Conf.Verbose {
 		log.Printf("Not logging out %s because we're in read-only mode", aurora.Magenta(user))
 		return
 	}

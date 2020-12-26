@@ -2,23 +2,21 @@ package vlcServer
 
 import (
 	"fmt"
-	"log"
-	"net/http"
-	"strconv"
-	"time"
-
-	"github.com/adanalife/tripbot/pkg/config"
+	c "github.com/adanalife/tripbot/pkg/config/vlc-server"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	onscreensServer "github.com/adanalife/tripbot/pkg/onscreens-server"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/gorilla/mux"
+	"log"
+	"net/http"
+	"strconv"
 )
 
 // healthcheck URL, for tools to verify the stream is alive
 func healthHandler(w http.ResponseWriter, r *http.Request) {
 	if !helpers.RunningOnWindows() {
-		obsPid := helpers.ReadPidFile(config.OBSPidFile)
+		obsPid := helpers.ReadPidFile(c.Conf.OBSPidFile)
 		pidRunning, err := helpers.PidExists(obsPid)
 		if err != nil {
 			terrors.Log(err, "error fetching OBS pid")
@@ -110,19 +108,22 @@ func onscreensFlagHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "417 expectation failed", http.StatusExpectationFailed)
 			return
 		}
-		durStr, err := helpers.Base64Decode(base64content[0])
-		if err != nil {
-			terrors.Log(err, "unable to decode string")
-			http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
-			return
-		}
-		dur, err := time.ParseDuration(durStr)
-		if err != nil {
-			http.Error(w, "unable to parse duration", http.StatusInternalServerError)
-			return
-		}
-		onscreensServer.ShowFlag(dur)
-		fmt.Fprintf(w, "OK")
+		//TODO: fix this
+		http.Error(w, "501 not implemented", http.StatusNotImplemented)
+		return
+		//durStr, err := helpers.Base64Decode(base64content[0])
+		//if err != nil {
+		//	terrors.Log(err, "unable to decode string")
+		//	http.Error(w, "422 unable to decode string", http.StatusUnprocessableEntity)
+		//	return
+		//}
+		//dur, err := time.ParseDuration(durStr)
+		//if err != nil {
+		//	http.Error(w, "422 unable to parse duration", http.StatusUnprocessableEntity)
+		//	return
+		//}
+		//onscreensServer.ShowFlag(dur)
+		//fmt.Fprintf(w, "OK")
 	case "hide":
 		onscreensServer.FlagImage.Hide()
 		fmt.Fprintf(w, "OK")
