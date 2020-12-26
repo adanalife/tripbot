@@ -1,7 +1,6 @@
 package config
 
 import (
-	"os"
 	"strings"
 )
 
@@ -19,13 +18,6 @@ func (c TripbotConfig) IsDevelopment() bool {
 
 func (c TripbotConfig) IsTesting() bool {
 	return c.Environment == "testing"
-}
-
-func getEnv(key, fallback string) string {
-	if value, ok := os.LookupEnv(key); ok {
-		return value
-	}
-	return fallback
 }
 
 // UserIsAdmin returns true if a given user runs the channel

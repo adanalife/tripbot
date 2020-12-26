@@ -1,7 +1,5 @@
 package config
 
-import "os"
-
 func (c VlcServerConfig) IsProduction() bool {
 	return c.Environment == "production"
 }
@@ -16,11 +14,4 @@ func (c VlcServerConfig) IsDevelopment() bool {
 
 func (c VlcServerConfig) IsTesting() bool {
 	return c.Environment == "testing"
-}
-
-func getEnv(key, fallback string) string {
-	if value, ok := os.LookupEnv(key); ok {
-		return value
-	}
-	return fallback
 }
