@@ -1,13 +1,14 @@
 package main
 
 import (
-	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"log"
 	"math/rand"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	terrors "github.com/adanalife/tripbot/pkg/errors"
 
 	c "github.com/adanalife/tripbot/pkg/config/vlc-server"
 	"github.com/adanalife/tripbot/pkg/helpers"
@@ -35,6 +36,7 @@ func main() {
 	// await graceful shutdown signal
 	listenForShutdown()
 
+	// set up error logging
 	initializeErrorLogger()
 
 	// start VLC
@@ -60,6 +62,7 @@ func createOnscreens() {
 	onscreensServer.InitFlagImage()
 }
 
+// initializeErrorLogger makes sure the logger is configured
 func initializeErrorLogger() {
 	terrors.Initialize(c.Conf)
 }

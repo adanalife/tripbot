@@ -57,6 +57,7 @@ func listenForShutdown() {
 	go gracefulShutdown()
 }
 
+// initializeErrorLogger makes sure the logger is configured
 func initializeErrorLogger() {
 	terrors.Initialize(c.Conf)
 }

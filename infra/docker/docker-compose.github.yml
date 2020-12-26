@@ -12,6 +12,3 @@ services:
       - TWITCH_CLIENT_SECRET
     entrypoint: bash
     command: -c "go run cmd/tripbot/tripbot.go 2>&1"
-
-  obs:
-    environment: {}

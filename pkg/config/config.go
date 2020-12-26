@@ -7,12 +7,13 @@ import (
 	"github.com/joho/godotenv"
 )
 
+// Config is used so we can pass TripbotConfig OR VlcServerConfig
+// into some functions that need it
 type Config interface {
-	//Env() string
 	IsProduction() bool
 }
 
-// setEnvironment sets the Environment var from the CLI
+// SetEnvironment loads in the ENV vars from a dotenv file
 func SetEnvironment() {
 	var err error
 	var env string
@@ -22,7 +23,7 @@ func SetEnvironment() {
 		log.Fatalln("You must set ENV")
 	}
 
-	// standardize the ENV
+	// standardize the ENV to the long name
 	switch envVar {
 	case "stage", "staging":
 		env = "staging"

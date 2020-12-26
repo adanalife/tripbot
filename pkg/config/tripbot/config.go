@@ -43,7 +43,7 @@ func init() {
 		log.Println(aurora.Yellow("Disabling music autoplay"))
 	}
 
-	// thes dirs will get created on boot if necessary
+	// these dirs will get created on boot if necessary
 	dirsToCreate := []string{
 		Conf.ScreencapDir,
 		// Conf.CroppedCornersDir,
