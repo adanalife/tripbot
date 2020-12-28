@@ -21,19 +21,18 @@ type Scoreboard struct {
 }
 
 // Create() will actually create the DB record
-func Create(name string) (error, Scoreboard) {
+func Create(name string) (Scoreboard, error) {
 	log.Println("creating scoreboard", name)
 	tx := database.Connection().MustBegin()
 	// create a new row, using default vals and creating a single visit
 	result, err := tx.Exec("INSERT INTO scoreboards (name) VALUES ($1)", name)
 	if err != nil {
-		return err, Scoreboard{ID: 0}
+		return Scoreboard{ID: 0}, err
 	}
 	spew.Dump("res", result)
 	err = tx.Commit()
 	spew.Dump(err)
-	//TODO: fix this
-	return err, FindScoreboard(name)
+	return FindScoreboard(name), err
 }
 
 //// create() will actually create the DB record

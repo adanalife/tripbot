@@ -8,7 +8,7 @@ services:
     env_file:
       - ./.env.development
     entrypoint: bash
-    #TODO: add apt update, apt install -y postgresql
+    #TODO: add apt update, apt install -y postgresql vim
     #TODO: add dir in this repo with scripts intended to be run in docker
     command: -c "go run cmd/tripbot/tripbot.go 2>&1"
     volumes:

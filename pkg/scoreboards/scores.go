@@ -39,14 +39,14 @@ func (s Score) save() {
 }
 
 // create() will actually create the DB record
-func create(user_id, scoreboard_id uint16) (error, Score) {
+func create(user_id, scoreboard_id uint16) (Score, error) {
 	log.Printf("creating score user_id:%d, scoreboard_id:%d", user_id, scoreboard_id)
 	tx := database.Connection().MustBegin()
 	// create a new row, using default vals and creating a single visit
 	tx.MustExec("INSERT INTO scores (user_id, scoreboard_id) VALUES ($1, $2)", user_id, scoreboard_id)
 	err := tx.Commit()
 	spew.Dump(err)
-	return err, FindScore(user_id, scoreboard_id)
+	return FindScore(user_id, scoreboard_id), err
 }
 
 //// FindScore will look up the username in the DB, and return a Score if possible
