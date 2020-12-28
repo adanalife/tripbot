@@ -139,7 +139,8 @@ func (v Video) save() error {
 	}
 
 	tx := database.Connection().MustBegin()
-	tx.MustExec(
+	//TODO: do something with result var here?
+	_, err = tx.Exec(
 		"INSERT INTO videos (slug, lat, lng, date_filmed, flagged, prev_vid, next_vid, state) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
 		v.Slug,
 		lat,
@@ -150,6 +151,9 @@ func (v Video) save() error {
 		v.NextVid,
 		state,
 	)
+	if err != nil {
+		return err
+	}
 	return tx.Commit()
 }
 

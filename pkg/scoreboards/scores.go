@@ -1,4 +1,4 @@
-package users
+package scoreboards
 
 import (
 	"log"
@@ -29,10 +29,10 @@ type Score struct {
 // User.save() will take the given score and store it in the DB
 func (s Score) save() {
 	if c.Conf.Verbose {
-		log.Println("saving score", u)
+		log.Println("saving score", s)
 	}
 	query := `UPDATE scores SET score=:score, WHERE id = :id`
-	_, err := database.Connection().NamedExec(query, u)
+	_, err := database.Connection().NamedExec(query, s)
 	if err != nil {
 		terrors.Log(err, "error saving score")
 	}
@@ -46,9 +46,22 @@ func create(user_id, scoreboard_id uint16) (error, Score) {
 	tx.MustExec("INSERT INTO scores (user_id, scoreboard_id) VALUES ($1, $2)", user_id, scoreboard_id)
 	err := tx.Commit()
 	spew.Dump(err)
-	//TODO: fix this
-	return err, &Score{}
-	// return err, Find(username)
+	return err, FindScore(user_id, scoreboard_id)
+}
+
+//// FindScore will look up the username in the DB, and return a Score if possible
+func FindScore(user_id, scoreboard_id uint16) Score {
+	var score Score
+	query := `SELECT * FROM scores WHERE user_id=$1 AND scoreboard_id=$2`
+	err := database.Connection().Get(&score, query, user_id, scoreboard_id)
+	spew.Config.ContinueOnMethod = true
+	spew.Config.MaxDepth = 2
+	spew.Dump(score)
+	if err != nil {
+		//TODO: is there a better way to do this?
+		return Score{ID: 0}
+	}
+	return score
 }
 
 //// User.String prints a colored version of the user
@@ -73,19 +86,4 @@ func create(user_id, scoreboard_id uint16) (error, Score) {
 //	}
 //	// create the user in the DB
 //	return create(username)
-//}
-
-//// Find will look up the username in the DB, and return a User if possible
-//func Find(username string) User {
-//	var user User
-//	query := `SELECT * FROM users WHERE username=$1`
-//	err := database.Connection().Get(&user, query, username)
-//	// spew.Config.ContinueOnMethod = true
-//	// spew.Config.MaxDepth = 2
-//	// spew.Dump(user)
-//	if err != nil {
-//		//TODO: is there a better way to do this?
-//		return User{ID: 0}
-//	}
-//	return user
 //}

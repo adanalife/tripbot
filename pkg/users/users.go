@@ -140,7 +140,8 @@ func create(username string) User {
 	log.Println("creating user", username)
 	tx := database.Connection().MustBegin()
 	// create a new row, using default vals and creating a single visit
-	tx.MustExec("INSERT INTO users (username, num_visits) VALUES ($1, $2)", username, 1)
+	//TODO: do something with results, error returned here
+	tx.Exec("INSERT INTO users (username, num_visits) VALUES ($1, $2)", username, 1)
 	tx.Commit()
 	return Find(username)
 }
