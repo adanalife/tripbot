@@ -1,7 +1,10 @@
 package users
 
 import (
+	"log"
 	"time"
+
+	"github.com/adanalife/tripbot/pkg/database"
 )
 
 // CREATE TABLE scores (
@@ -20,44 +23,17 @@ type Score struct {
 	DateCreated  time.Time `db:"date_created"`
 }
 
-//func (u User) CurrentMiles() float32 {
-//	if isLoggedIn(u.Username) {
-//		// lookup the user in the session so the LoggedIn value is current
-//		loggedInDur := time.Now().Sub(LoggedIn[u.Username].LoggedIn)
-//		sessionMiles := helpers.DurationToMiles(loggedInDur)
-//		// give subscribers a miles bonus
-//		if u.IsSubscriber() {
-//			bonusMiles := u.BonusMiles()
-//			if c.Conf.Verbose {
-//				log.Println(u.String(), "will get", aurora.Green(bonusMiles), "bonus miles")
-//			}
-//			return u.Miles + sessionMiles + bonusMiles
-//		}
-//		return u.Miles + sessionMiles
-//	}
-//	return u.Miles
-//}
-
-//func (u User) BonusMiles() float32 {
-//	if isLoggedIn(u.Username) {
-//		loggedInDur := time.Now().Sub(u.LoggedIn)
-//		sessionMiles := helpers.DurationToMiles(loggedInDur)
-//		return sessionMiles * 0.05
-//	}
-//	return 0.0
-//}
-
-//// User.save() will take the given user and store it in the DB
-//func (u User) save() {
-//	if c.Conf.Verbose {
-//		log.Println("saving user", u)
-//	}
-//	query := `UPDATE users SET last_seen=:last_seen, num_visits=:num_visits, miles=:miles WHERE id = :id`
-//	_, err := database.Connection().NamedExec(query, u)
-//	if err != nil {
-//		terrors.Log(err, "error saving user")
-//	}
-//}
+// User.save() will take the given user and store it in the DB
+func (s Score) save() {
+	if c.Conf.Verbose {
+		log.Println("saving score", u)
+	}
+	query := `UPDATE scores SET score=:score, WHERE id = :id`
+	_, err := database.Connection().NamedExec(query, u)
+	if err != nil {
+		terrors.Log(err, "error saving score")
+	}
+}
 
 //// IsFollower returns true if the user is a follower
 //func (u User) IsFollower() bool {
