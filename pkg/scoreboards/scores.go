@@ -4,7 +4,10 @@ import (
 	"log"
 	"time"
 
+	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
+	terrors "github.com/adanalife/tripbot/pkg/errors"
+	"github.com/davecgh/go-spew/spew"
 )
 
 // CREATE TABLE scores (
@@ -23,7 +26,7 @@ type Score struct {
 	DateCreated  time.Time `db:"date_created"`
 }
 
-// User.save() will take the given user and store it in the DB
+// User.save() will take the given score and store it in the DB
 func (s Score) save() {
 	if c.Conf.Verbose {
 		log.Println("saving score", u)
@@ -35,15 +38,18 @@ func (s Score) save() {
 	}
 }
 
-//// IsFollower returns true if the user is a follower
-//func (u User) IsFollower() bool {
-//	return twitch.UserIsFollower(u.Username)
-//}
-
-//// IsSubscriber returns true if the user is a subscriber
-//func (u User) IsSubscriber() bool {
-//	return twitch.UserIsSubscriber(u.Username)
-//}
+// create() will actually create the DB record
+func create(user_id, scoreboard_id uint16) (error, Score) {
+	log.Printf("creating score user_id:%d, scoreboard_id:%d", user_id, scoreboard_id)
+	tx := database.Connection().MustBegin()
+	// create a new row, using default vals and creating a single visit
+	tx.MustExec("INSERT INTO scores (user_id, scoreboard_id) VALUES ($1, $2)", user_id, scoreboard_id)
+	err := tx.Commit()
+	spew.Dump(err)
+	//TODO: fix this
+	return err, &Score{}
+	// return err, Find(username)
+}
 
 //// User.String prints a colored version of the user
 //func (u User) String() string {
@@ -82,34 +88,4 @@ func (s Score) save() {
 //		return User{ID: 0}
 //	}
 //	return user
-//}
-
-//// HasCommandAvailable lets users run a command once a day,
-//// unless they are a follower in which case they can run
-//// as many as they like
-//func (u *User) HasCommandAvailable() bool {
-//	// followers get unlimited commands
-//	if u.IsFollower() {
-//		return true
-//	}
-//	// check if they ran a command in the last 24 hrs
-//	now := time.Now()
-//	if now.Sub(u.lastCmd) > 24*time.Hour {
-//		log.Println("letting", u, "run a command")
-//		// update their lastCmd time
-//		u.lastCmd = now
-//		return true
-//	}
-//	return false
-//}
-
-////TODO: maybe return an err here?
-//// create() will actually create the DB record
-//func create(username string) User {
-//	log.Println("creating user", username)
-//	tx := database.Connection().MustBegin()
-//	// create a new row, using default vals and creating a single visit
-//	tx.MustExec("INSERT INTO users (username, num_visits) VALUES ($1, $2)", username, 1)
-//	tx.Commit()
-//	return Find(username)
 //}
