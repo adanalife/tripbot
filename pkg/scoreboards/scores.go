@@ -49,7 +49,10 @@ func create(user_id, scoreboard_id uint16) (Score, error) {
 	return FindScore(user_id, scoreboard_id), err
 }
 
-//// FindScore will look up the username in the DB, and return a Score if possible
+//TODO: add FindScoreByName and SetScoreByName
+
+//TODO is this acually used?
+// FindScore will look up the username in the DB, and return a Score if possible
 func FindScore(user_id, scoreboard_id uint16) Score {
 	var score Score
 	query := `SELECT * FROM scores WHERE user_id=$1 AND scoreboard_id=$2`
@@ -63,17 +66,6 @@ func FindScore(user_id, scoreboard_id uint16) Score {
 	}
 	return score
 }
-
-//// User.String prints a colored version of the user
-//func (u User) String() string {
-//	if u.IsBot {
-//		return aurora.Gray(15, u.Username).String()
-//	}
-//	if c.UserIsAdmin(u.Username) {
-//		return aurora.Gray(11, u.Username).String()
-//	}
-//	return aurora.Magenta(u.Username).String()
-//}
 
 //// FindOrCreate will try to find the user in the DB, otherwise it will create a new user
 //func FindOrCreate(username string) User {
