@@ -16,7 +16,7 @@ type Scoreboard struct {
 	DateCreated time.Time `db:"date_created"`
 }
 
-func FindOrCreateScoreboard(name string) (Scoreboard, error) {
+func findOrCreateScoreboard(name string) (Scoreboard, error) {
 	scoreboard, err := findScoreboard(name)
 	if err == sql.ErrNoRows {
 		// create a new scorebaord if none found

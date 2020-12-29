@@ -13,14 +13,6 @@ import (
 //TODO: change underscores to camelCase
 //TODO: change Score.score to value
 
-// CREATE TABLE scores (
-//   id            SERIAL PRIMARY KEY,
-//   user_id       INTEGER NOT NULL,
-//   scoreboard_id INTEGER NOT NULL,
-//   score         REAL DEFAULT 0.0, /* float32: https://github.com/go-pg/pg/wiki/Model-Definition */
-//   date_created  TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-// );
-
 type Score struct {
 	ID           uint16    `db:"id"`
 	UserID       uint16    `db:"user_id"`
@@ -36,7 +28,7 @@ func GetScoreByName(username, scoreboardName string) (float32, error) {
 		terrors.Log(err, "error getting user ID")
 		return -1.0, err
 	}
-	scoreboard, err := findScoreboard(scoreboardName)
+	scoreboard, err := findOrCreateScoreboard(scoreboardName)
 	if err != nil {
 		//TODO
 	}
@@ -57,7 +49,7 @@ func AddToScoreByName(username, scoreboardName string, scoreToAdd float32) error
 		//TODO
 		return err
 	}
-	scoreboard, err := findScoreboard(scoreboardName)
+	scoreboard, err := findOrCreateScoreboard(scoreboardName)
 	if err != nil {
 		//TODO
 	}
@@ -69,30 +61,6 @@ func AddToScoreByName(username, scoreboardName string, scoreToAdd float32) error
 	}
 	score.Score += scoreToAdd
 	return score.save()
-}
-
-func getUserIDByName(username string) (uint16, error) {
-	var userID uint16
-	query := `SELECT id FROM users WHERE username=$1`
-	row := database.Connection().QueryRow(query, username)
-	// spew.Dump(row)
-	err := row.Scan(&userID)
-	if err != nil {
-		terrors.Log(err, "error scanning row")
-	}
-	return userID, err
-}
-
-// findScore will look up the username in the DB, and return a Score if possible
-func findScore(user_id, scoreboard_id uint16) (Score, error) {
-	var score Score
-	query := `SELECT * FROM scores WHERE user_id=$1 AND scoreboard_id=$2`
-	err := database.Connection().Get(&score, query, user_id, scoreboard_id)
-	if err != nil {
-		spew.Dump(err)
-		terrors.Log(err, "error getting score from db")
-	}
-	return score, err
 }
 
 // findOrCreateScore will look up the username in the DB, and return a Score if possible
@@ -109,17 +77,16 @@ func findOrCreateScore(user_id, scoreboard_id uint16) (Score, error) {
 	return score, err
 }
 
-// User.save() will take the given score and store it in the DB
-func (s Score) save() error {
-	// if c.Conf.Verbose {
-	log.Println("saving score", s)
-	// }
-	query := `UPDATE scores SET score=:score WHERE id = :id`
-	_, err := database.Connection().NamedExec(query, s)
+// findScore will look up the username in the DB, and return a Score if possible
+func findScore(user_id, scoreboard_id uint16) (Score, error) {
+	var score Score
+	query := `SELECT * FROM scores WHERE user_id=$1 AND scoreboard_id=$2`
+	err := database.Connection().Get(&score, query, user_id, scoreboard_id)
 	if err != nil {
-		terrors.Log(err, "error saving score")
+		spew.Dump(err)
+		terrors.Log(err, "error getting score from db")
 	}
-	return err
+	return score, err
 }
 
 // createScore() will actually create the DB record
@@ -139,4 +106,29 @@ func createScore(user_id, scoreboard_id uint16) (Score, error) {
 		return score, err
 	}
 	return findScore(user_id, scoreboard_id)
+}
+
+// User.save() will take the given score and store it in the DB
+func (s Score) save() error {
+	// if c.Conf.Verbose {
+	log.Println("saving score", s)
+	// }
+	query := `UPDATE scores SET score=:score WHERE id = :id`
+	_, err := database.Connection().NamedExec(query, s)
+	if err != nil {
+		terrors.Log(err, "error saving score")
+	}
+	return err
+}
+
+func getUserIDByName(username string) (uint16, error) {
+	var userID uint16
+	query := `SELECT id FROM users WHERE username=$1`
+	row := database.Connection().QueryRow(query, username)
+	// spew.Dump(row)
+	err := row.Scan(&userID)
+	if err != nil {
+		terrors.Log(err, "error scanning row")
+	}
+	return userID, err
 }
