@@ -220,7 +220,7 @@ func UserPart(partMessage twitch.UserPartMessage) {
 
 // if the message comes from me, then post the message to chat
 //TODO: log to stackdriver
-func Whisper(message twitch.WhisperMessage) {
+func GetWhisper(message twitch.WhisperMessage) {
 	log.Println("whisper from", message.User.Name, ":", message.Message)
 	if c.UserIsAdmin(message.User.Name) {
 		Say(message.Message)

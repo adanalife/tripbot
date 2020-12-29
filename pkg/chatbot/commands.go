@@ -29,6 +29,7 @@ var lastHelloTime time.Time = time.Now()
 
 var currentVersion string
 
+// this is the scoreboard name used for counting correct guesses
 const guessScoreboard = "guess_state_total"
 
 func helpCmd(user *users.User) {
@@ -196,7 +197,8 @@ func locationCmd(user *users.User) {
 	// generate a google maps url
 	url := helpers.GoogleMapsURL(lat, lng)
 	msg := fmt.Sprintf("%s %s", address, url)
-	Say(msg)
+	Say("Sending the location in a whisper... shh!")
+	Whisper(user.Username, msg)
 }
 
 func leaderboardCmd(user *users.User) {
