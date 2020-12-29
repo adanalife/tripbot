@@ -3,11 +3,14 @@ package users
 import "github.com/adanalife/tripbot/pkg/scoreboards"
 
 func (u User) GetScore(scoreboardName string) float32 {
-	score := scoreboards.FindScoreByName(u.Username, scoreboardName)
-	return score.Score
+	value, err := scoreboards.GetScoreByName(u.Username, scoreboardName)
+	if err != nil {
+		//TODO: do something here
+	}
+	return value
 }
 
-func (u User) SetScore(scoreboardName string, valueToAdd float32) {
+func (u User) AddToScore(scoreboardName string, valueToAdd float32) {
 	err := scoreboards.AddToScoreByName(u.Username, scoreboardName, valueToAdd)
 	if err != nil {
 		//TODO: do something here

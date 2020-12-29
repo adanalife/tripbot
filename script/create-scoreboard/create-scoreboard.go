@@ -23,6 +23,10 @@ func main() {
 	u := users.Find("mathgaming")
 	spew.Dump(u)
 
-	spew.Dump(u.GetScoreByName("danatest"))
-	spew.Dump(u.GetScoreByName(s.Name))
+	spew.Dump(u.GetScore("danatest"))
+	spew.Dump(u.GetScore(s.Name))
+
+	u.AddToScore("danatest", 1.1)
+
+	spew.Dump(u.GetScore("danatest"))
 }

@@ -35,6 +35,23 @@ func Create(name string) (Scoreboard, error) {
 	return FindScoreboard(name), err
 }
 
+//// FindScoreboard will look up the username in the DB, and return a Scoreboard if possible
+func FindScoreboard(name string) Scoreboard {
+	var scoreboard Scoreboard
+	query := `SELECT * FROM scoreboards WHERE name=$1`
+	err := database.Connection().Get(&scoreboard, query, name)
+
+	// spew.Config.ContinueOnMethod = true
+	// spew.Config.MaxDepth = 2
+	// spew.Dump(scoreboard)
+
+	if err != nil {
+		//TODO: is there a better way to do this?
+		return Scoreboard{ID: 0}
+	}
+	return scoreboard
+}
+
 //// create() will actually create the DB record
 //func create(username string) User {
 //	log.Println("creating user", username)
@@ -57,23 +74,6 @@ func Create(name string) (Scoreboard, error) {
 //	// create the user in the DB
 //	return create(username)
 //}
-
-//// FindScoreboard will look up the username in the DB, and return a Scoreboard if possible
-func FindScoreboard(name string) Scoreboard {
-	var scoreboard Scoreboard
-	query := `SELECT * FROM scoreboards WHERE name=$1`
-	err := database.Connection().Get(&scoreboard, query, name)
-
-	spew.Config.ContinueOnMethod = true
-	spew.Config.MaxDepth = 2
-	spew.Dump(scoreboard)
-
-	if err != nil {
-		//TODO: is there a better way to do this?
-		return Scoreboard{ID: 0}
-	}
-	return scoreboard
-}
 
 //// FindOrCreate will try to find the user in the DB, otherwise it will create a new user
 //func FindOrCreate(username string) User {
