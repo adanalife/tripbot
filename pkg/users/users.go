@@ -148,10 +148,16 @@ func (u *User) HasCommandAvailable() bool {
 	return false
 }
 
-func (u *User) HasGuessCommandAvailable() bool {
+func (u *User) HasGuessCommandAvailable(lastTimewarpTime time.Time) bool {
+	// let the user run if there has been a timewarp recently
+	if u.lastCmd.Before(lastTimewarpTime) {
+		return true
+	}
+
 	threshold := 3 * time.Minute
 	// check if they ran a location command recently
 	now := time.Now()
+
 	if now.Sub(u.lastCmd) > threshold {
 		log.Println("letting", u, "run guess command")
 		// update their lastLocation time

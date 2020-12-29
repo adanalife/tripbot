@@ -279,7 +279,7 @@ func guessCmd(user *users.User, params []string) {
 	}
 
 	// don't let people guess if they already know the answer
-	if !user.HasGuessCommandAvailable() {
+	if !user.HasGuessCommandAvailable(lastTimewarpTime) {
 		msg = "I recently told you the answer! Try again later."
 		Say(msg)
 		return

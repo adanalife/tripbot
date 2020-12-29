@@ -19,6 +19,7 @@ import (
 
 // lastTimewarpTime is used to rate-limit users so they cant
 // over-do the time-skip features (including !skip and !back)
+// plus it's also used to reset peoples lastLocation time
 var lastTimewarpTime time.Time
 
 func timewarp() {
