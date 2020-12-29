@@ -13,6 +13,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/audio"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
+	"github.com/adanalife/tripbot/pkg/scoreboards"
 
 	"github.com/adanalife/tripbot/pkg/background"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
@@ -307,6 +308,7 @@ func guessCmd(user *users.User, params []string) {
 		onscreensClient.ShowFlag(10 * time.Second)
 		// increase their guess score
 		user.AddToScore(guessScoreboard, 1.0)
+		user.AddToScore(scoreboards.CurrentGuessScoreboard(), 1.0)
 		// do a timewarp
 		timewarp()
 	} else {
