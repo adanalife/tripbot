@@ -86,6 +86,7 @@ func Whisper(username, msg string) {
 	//TODO: include whispers in log
 	// include the message in the log
 	// mylog.ChatMsg(c.Conf.BotUsername, msg)
+	log.Println("sending whisper to", username, ":", msg)
 	// say the message to chat
 	client.Whisper(username, msg)
 }
