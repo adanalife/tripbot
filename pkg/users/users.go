@@ -28,6 +28,7 @@ type User struct {
 }
 
 func (u User) loggedInDur() time.Duration {
+	// exit early if they're not logged in
 	if !isLoggedIn(u.Username) {
 		return 0 * time.Second
 	}
@@ -35,6 +36,7 @@ func (u User) loggedInDur() time.Duration {
 	return time.Now().Sub(LoggedIn[u.Username].LoggedIn)
 }
 
+//TODO: make private
 func (u User) SessionMiles() float32 {
 	// exit early if they're not logged in
 	if !isLoggedIn(u.Username) {

@@ -82,10 +82,6 @@ func findScore(user_id, scoreboard_id uint16) (Score, error) {
 	var score Score
 	query := `SELECT * FROM scores WHERE user_id=$1 AND scoreboard_id=$2`
 	err := database.Connection().Get(&score, query, user_id, scoreboard_id)
-	if err != nil {
-		spew.Dump(err)
-		terrors.Log(err, "error getting score from db")
-	}
 	return score, err
 }
 

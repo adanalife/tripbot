@@ -21,6 +21,9 @@ var subsTopic = []string{
 
 // UpdateWebhookSubscriptions will create new webhook subscriptions
 func UpdateWebhookSubscriptions() {
+	if c.Conf.DisableTwitchWebhooks {
+		return
+	}
 	subscribeToWebhook(followsTopic)
 	// since the staging account isn't an affiliate, don't bother
 	if c.Conf.IsProduction() {
