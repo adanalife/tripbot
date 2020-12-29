@@ -7,7 +7,6 @@ import (
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
-	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/davecgh/go-spew/spew"
 )
 
@@ -31,7 +30,7 @@ type Score struct {
 }
 
 // User.save() will take the given score and store it in the DB
-func (s Score) save() {
+func (s Score) save() error {
 	if c.Conf.Verbose {
 		log.Println("saving score", s)
 	}
@@ -40,6 +39,7 @@ func (s Score) save() {
 	if err != nil {
 		terrors.Log(err, "error saving score")
 	}
+	return err
 }
 
 // create() will actually create the DB record
@@ -53,16 +53,21 @@ func create(user_id, scoreboard_id uint16) (Score, error) {
 	return FindScore(user_id, scoreboard_id), err
 }
 
-func FindScoreByName(username, scoreboardName string) uint16 {
-	user := users.FindOrCreate(username)
-	scoreboard := findScoreboard(scoreboardName)
-	score := findScore(user.ID, scoreboard.ID)
+func FindScoreByName(username, scoreboardName string) float32 {
+	query := `SELECT id FROM users WHERE username=$1`
+	result, err := database.Connection().Exec(query, username)
+	spew.Dump(result)
+	if err != nil {
+		//TODO
+	}
+	userID := result
+	scoreboard := FindScoreboard(scoreboardName)
+	score := findScore(userID, scoreboard.ID)
 	return score.score
 }
 
-func AddToScoreByName(userName, scoreboardName string, scoreToAdd uint16) error {
-	user := users.FindOrCreate(username)
-	scoreboard := findScoreboard(scoreboardName)
+func AddToScoreByName(username, scoreboardName string, scoreToAdd uint16) error {
+	scoreboard := FindScoreboard(scoreboardName)
 	score := findScore(user.ID, scoreboard.ID)
 	score.score += scoreToAdd
 	return score.save()

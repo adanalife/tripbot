@@ -7,7 +7,9 @@ func (u User) GetScore(scoreboardName string) float32 {
 	return score.Score
 }
 
-func (u User) SetScore(scoreboardName string, value float32) {
-	score := scoreboards.SetScoreByName(u.Username, scoreboardName, value)
-	return score.Score
+func (u User) SetScore(scoreboardName string, valueToAdd float32) {
+	err := scoreboards.AddToScoreByName(u.Username, scoreboardName, valueToAdd)
+	if err != nil {
+		//TODO: do something here
+	}
 }
