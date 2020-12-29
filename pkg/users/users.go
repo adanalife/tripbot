@@ -37,8 +37,7 @@ func (u User) loggedInDur() time.Duration {
 	return time.Now().Sub(LoggedIn[u.Username].LoggedIn)
 }
 
-//TODO: make private
-func (u User) SessionMiles() float32 {
+func (u User) sessionMiles() float32 {
 	// exit early if they're not logged in
 	if !isLoggedIn(u.Username) {
 		return 0.0
@@ -57,7 +56,7 @@ func (u User) SessionMiles() float32 {
 }
 
 func (u User) CurrentMiles() float32 {
-	return u.Miles + u.SessionMiles()
+	return u.Miles + u.sessionMiles()
 }
 
 func (u User) BonusMiles() float32 {

@@ -114,7 +114,7 @@ func login(username string) *User {
 // User.logout() removes the user from the list of currently-logged in users,
 // and updates the DB with their most up-to-date values
 func (u User) logout() {
-	sessionMiles := u.SessionMiles()
+	sessionMiles := u.sessionMiles()
 
 	// print logout message if they're human
 	if !u.IsBot {
