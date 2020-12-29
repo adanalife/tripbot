@@ -36,7 +36,10 @@ func GetScoreByName(username, scoreboardName string) (float32, error) {
 		terrors.Log(err, "error getting user ID")
 		return -1.0, err
 	}
-	scoreboard := findScoreboard(scoreboardName)
+	scoreboard, err := findScoreboard(scoreboardName)
+	if err != nil {
+		//TODO
+	}
 	score, err = findOrCreateScore(userID, scoreboard.ID)
 
 	if err != nil {
@@ -54,7 +57,10 @@ func AddToScoreByName(username, scoreboardName string, scoreToAdd float32) error
 		//TODO
 		return err
 	}
-	scoreboard := findScoreboard(scoreboardName)
+	scoreboard, err := findScoreboard(scoreboardName)
+	if err != nil {
+		//TODO
+	}
 	score, err = findOrCreateScore(userID, scoreboard.ID)
 	spew.Dump(score)
 	if err != nil {
@@ -94,7 +100,7 @@ func findOrCreateScore(user_id, scoreboard_id uint16) (Score, error) {
 	score, err := findScore(user_id, scoreboard_id)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			score, err = create(user_id, scoreboard_id)
+			score, err = createScore(user_id, scoreboard_id)
 		} else {
 			// it was some other error
 			terrors.Log(err, "error getting score from db")
@@ -116,8 +122,8 @@ func (s Score) save() error {
 	return err
 }
 
-// create() will actually create the DB record
-func create(user_id, scoreboard_id uint16) (Score, error) {
+// createScore() will actually create the DB record
+func createScore(user_id, scoreboard_id uint16) (Score, error) {
 	var score Score
 	log.Printf("creating score user_id:%d, scoreboard_id:%d", user_id, scoreboard_id)
 	tx := database.Connection().MustBegin()
@@ -134,16 +140,3 @@ func create(user_id, scoreboard_id uint16) (Score, error) {
 	}
 	return findScore(user_id, scoreboard_id)
 }
-
-//// FindOrCreate will try to find the user in the DB, otherwise it will create a new user
-//func FindOrCreate(username string) User {
-//	if c.Conf.Verbose {
-//		log.Printf("FindOrCreate(%s)", username)
-//	}
-//	user := Find(username)
-//	if user.ID != 0 {
-//		return user
-//	}
-//	// create the user in the DB
-//	return create(username)
-//}

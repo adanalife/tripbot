@@ -22,8 +22,8 @@ type Scoreboard struct {
 	DateCreated time.Time `db:"date_created"`
 }
 
-// create() will actually create the DB record
-func create(name string) (Scoreboard, error) {
+// createScoreboard() will actually create the DB record
+func createScoreboard(name string) (Scoreboard, error) {
 	var scoreboard Scoreboard
 	if c.Conf.Verbose {
 		log.Println("creating scoreboard", name)
@@ -40,7 +40,7 @@ func create(name string) (Scoreboard, error) {
 		//TODO
 		return scoreboard, err
 	}
-	return FindScoreboard(name)
+	return findScoreboard(name)
 }
 
 //// findScoreboard will look up the username in the DB, and return a Scoreboard if possible
@@ -55,7 +55,7 @@ func findScoreboard(name string) (Scoreboard, error) {
 func FindOrCreateScoreboard(name string) (Scoreboard, error) {
 	scoreboard, err := findScoreboard(name)
 	if err == sql.ErrNoRows {
-		scoreboard, err = create(name)
+		scoreboard, err = createScoreboard(name)
 	} else {
 		// it was some other error
 		terrors.Log(err, "error getting scoreboard from db")
