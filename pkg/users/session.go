@@ -87,6 +87,8 @@ func login(username string) *User {
 	user.LastSeen = now
 	// set their last command date yesterday
 	user.lastCmd = now.AddDate(0, 0, -1)
+	// set their last !location date to yesterday
+	user.lastLocation = now.AddDate(0, 0, -1)
 	user.save()
 
 	// raise an error if a user is supposed to be a bot

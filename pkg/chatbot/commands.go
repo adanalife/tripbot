@@ -197,6 +197,8 @@ func locationCmd(user *users.User) {
 	// generate a google maps url
 	url := helpers.GoogleMapsURL(lat, lng)
 	msg := fmt.Sprintf("%s %s", address, url)
+	// record that they know the location now
+	user.SetLastLocationTime()
 	Say("Sending the location in a whisper... shh!")
 	Whisper(user.Username, msg)
 }
@@ -276,6 +278,13 @@ func guessCmd(user *users.User, params []string) {
 		return
 	}
 
+	// don't let people guess if they already know the answer
+	if !user.HasGuessCommandAvailable() {
+		msg = "I recently told you the answer! Try again later."
+		Say(msg)
+		return
+	}
+
 	// get the arg from the command
 	guess := strings.Join(params, " ")
 
@@ -317,7 +326,10 @@ func stateCmd(user *users.User) {
 	msg := fmt.Sprintf("We're in %s", vid.State)
 	// show the flag for the state
 	onscreensClient.ShowFlag(10 * time.Second)
-	Say(msg)
+	// record that they know the location now
+	user.SetLastLocationTime()
+	Say("Sending the state in a whisper... shh!")
+	Whisper(user.Username, msg)
 }
 
 //TODO: maybe there could be a !cancel command or something

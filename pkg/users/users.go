@@ -14,17 +14,18 @@ import (
 )
 
 type User struct {
-	ID          uint16    `db:"id"`
-	Username    string    `db:"username"`
-	Miles       float32   `db:"miles"`
-	NumVisits   uint16    `db:"num_visits"`
-	HasDonated  bool      `db:"has_donated"`
-	IsBot       bool      `db:"is_bot"`
-	FirstSeen   time.Time `db:"first_seen"`
-	LastSeen    time.Time `db:"last_seen"`
-	DateCreated time.Time `db:"date_created"`
-	LoggedIn    time.Time
-	lastCmd     time.Time
+	ID           uint16    `db:"id"`
+	Username     string    `db:"username"`
+	Miles        float32   `db:"miles"`
+	NumVisits    uint16    `db:"num_visits"`
+	HasDonated   bool      `db:"has_donated"`
+	IsBot        bool      `db:"is_bot"`
+	FirstSeen    time.Time `db:"first_seen"`
+	LastSeen     time.Time `db:"last_seen"`
+	DateCreated  time.Time `db:"date_created"`
+	LoggedIn     time.Time
+	lastCmd      time.Time
+	lastLocation time.Time
 }
 
 func (u User) loggedInDur() time.Duration {
@@ -146,6 +147,23 @@ func (u *User) HasCommandAvailable() bool {
 		return true
 	}
 	return false
+}
+
+func (u *User) HasGuessCommandAvailable() bool {
+	threshold := 3 * time.Minute
+	// check if they ran a location command recently
+	now := time.Now()
+	if now.Sub(u.lastCmd) > threshold {
+		log.Println("letting", u, "run guess command")
+		// update their lastLocation time
+		u.lastLocation = now
+		return true
+	}
+	return false
+}
+
+func (u *User) SetLastLocationTime() {
+	u.lastLocation = time.Now()
 }
 
 //TODO: maybe return an err here?
