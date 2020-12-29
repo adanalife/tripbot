@@ -36,7 +36,7 @@ func GetScoreByName(username, scoreboardName string) (float32, error) {
 		terrors.Log(err, "error getting user ID")
 		return -1.0, err
 	}
-	scoreboard := FindScoreboard(scoreboardName)
+	scoreboard := findScoreboard(scoreboardName)
 	score, err = findOrCreateScore(userID, scoreboard.ID)
 
 	if err != nil {
@@ -54,7 +54,7 @@ func AddToScoreByName(username, scoreboardName string, scoreToAdd float32) error
 		//TODO
 		return err
 	}
-	scoreboard := FindScoreboard(scoreboardName)
+	scoreboard := findScoreboard(scoreboardName)
 	score, err = findOrCreateScore(userID, scoreboard.ID)
 	spew.Dump(score)
 	if err != nil {
