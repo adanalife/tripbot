@@ -29,6 +29,8 @@ var lastHelloTime time.Time = time.Now()
 
 var currentVersion string
 
+const guessScoreboard = "guess_state_total"
+
 func helpCmd(user *users.User) {
 	log.Println(user.Username, "ran !help")
 	msg := fmt.Sprintf("%s (%d of %d)", help(), helpIndex+1, len(c.HelpMessages))
@@ -292,6 +294,10 @@ func guessCmd(user *users.User, params []string) {
 		msg = fmt.Sprintf("@%s got it! We're in %s", user.Username, vid.State)
 		// show the flag for the state
 		onscreensClient.ShowFlag(10 * time.Second)
+		// increase their guess score
+		user.AddToScore(guessScoreboard, 1.0)
+		// do a timewarp
+		timewarp()
 	} else {
 		msg = "Try again! EarthDay"
 	}
