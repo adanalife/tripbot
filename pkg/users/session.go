@@ -117,16 +117,18 @@ func (u User) logout() {
 		loggedInDur := time.Now().Sub(u.LoggedIn)
 		prettyDur := durafmt.ParseShort(loggedInDur)
 		dur := fmt.Sprintf("(%s)", aurora.Green(prettyDur))
-		log.Println("logging out", u, dur)
+		sessionMiles := fmt.Sprintf("(%1.2f)", aurora.Yellow(u.SessionMiles()))
+		log.Println("logging out", u, dur, sessionMiles)
 	}
 
-	now := time.Now()
 	// update miles
 	u.Miles = u.CurrentMiles()
 	// update the last seen date
-	u.LastSeen = now
+	u.LastSeen = time.Now()
 	// store the user in the db
 	u.save()
+
+	//TODO: update monthly scoreboard here
 
 	// create a login event as well
 	events.Logout(u.Username)

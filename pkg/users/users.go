@@ -27,27 +27,39 @@ type User struct {
 	lastCmd     time.Time
 }
 
-func (u User) CurrentMiles() float32 {
-	if isLoggedIn(u.Username) {
-		// lookup the user in the session so the LoggedIn value is current
-		loggedInDur := time.Now().Sub(LoggedIn[u.Username].LoggedIn)
-		sessionMiles := helpers.DurationToMiles(loggedInDur)
-		// give subscribers a miles bonus
-		if u.IsSubscriber() {
-			bonusMiles := u.BonusMiles()
-			if c.Conf.Verbose {
-				log.Println(u.String(), "will get", aurora.Green(bonusMiles), "bonus miles")
-			}
-			return u.Miles + sessionMiles + bonusMiles
-		}
-		return u.Miles + sessionMiles
+func (u User) loggedInDur() time.Duration {
+	if !isLoggedIn(u.Username) {
+		return 0 * time.Second
 	}
-	return u.Miles
+	// lookup the user in the session so the LoggedIn value is current
+	return time.Now().Sub(LoggedIn[u.Username].LoggedIn)
+}
+
+func (u User) SessionMiles() float32 {
+	// exit early if they're not logged in
+	if !isLoggedIn(u.Username) {
+		return 0.0
+	}
+	loggedInDur := u.loggedInDur()
+	sessionMiles := helpers.DurationToMiles(loggedInDur)
+	// give subscribers a miles bonus
+	if u.IsSubscriber() {
+		bonusMiles := u.BonusMiles()
+		if c.Conf.Verbose {
+			log.Println(u.String(), "will get", aurora.Green(bonusMiles), "bonus miles")
+		}
+		sessionMiles += bonusMiles
+	}
+	return sessionMiles
+}
+
+func (u User) CurrentMiles() float32 {
+	return u.Miles + u.SessionMiles()
 }
 
 func (u User) BonusMiles() float32 {
 	if isLoggedIn(u.Username) {
-		loggedInDur := time.Now().Sub(u.LoggedIn)
+		loggedInDur := u.loggedInDur()
 		sessionMiles := helpers.DurationToMiles(loggedInDur)
 		return sessionMiles * 0.05
 	}
