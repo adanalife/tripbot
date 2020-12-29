@@ -108,7 +108,7 @@ func (s Score) save() error {
 	// if c.Conf.Verbose {
 	log.Println("saving score", s)
 	// }
-	query := `UPDATE scores SET score=:score, WHERE id = :id`
+	query := `UPDATE scores SET score=:score WHERE id = :id`
 	_, err := database.Connection().NamedExec(query, s)
 	if err != nil {
 		terrors.Log(err, "error saving score")
