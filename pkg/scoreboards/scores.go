@@ -135,7 +135,7 @@ func createScore(user_id, scoreboard_id uint16) (Score, error) {
 	}
 	err = tx.Commit()
 	if err != nil {
-		terrors.Log(err, "error commiting change in DB")
+		terrors.Log(err, "error commiting score change in DB")
 		return score, err
 	}
 	return findScore(user_id, scoreboard_id)

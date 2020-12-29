@@ -10,16 +10,30 @@ import (
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 )
 
-// CREATE TABLE scoreboards (
-//   id           SERIAL PRIMARY KEY,
-//   name         VARCHAR(64) UNIQUE NOT NULL,
-//   date_created TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-// );
-
 type Scoreboard struct {
 	ID          uint16    `db:"id"`
 	Name        string    `db:"name"`
 	DateCreated time.Time `db:"date_created"`
+}
+
+func FindOrCreateScoreboard(name string) (Scoreboard, error) {
+	scoreboard, err := findScoreboard(name)
+	if err == sql.ErrNoRows {
+		// create a new scorebaord if none found
+		scoreboard, err = createScoreboard(name)
+	} else {
+		// it was some other error
+		terrors.Log(err, "error getting scoreboard from db")
+	}
+	return scoreboard, err
+}
+
+//// findScoreboard will look up the scoreboard in the DB, and return a Scoreboard if possible
+func findScoreboard(name string) (Scoreboard, error) {
+	var scoreboard Scoreboard
+	query := `SELECT * FROM scoreboards WHERE name=$1`
+	err := database.Connection().Get(&scoreboard, query, name)
+	return scoreboard, err
 }
 
 // createScoreboard() will actually create the DB record
@@ -32,33 +46,13 @@ func createScoreboard(name string) (Scoreboard, error) {
 	// create a new scoreboard
 	_, err := tx.Exec("INSERT INTO scoreboards (name) VALUES ($1)", name)
 	if err != nil {
-		//TODO
+		terrors.Log(err, "error inserting scoreboard into db")
 		return scoreboard, err
 	}
 	err = tx.Commit()
 	if err != nil {
-		//TODO
+		terrors.Log(err, "error commiting scoreboard change in DB")
 		return scoreboard, err
 	}
 	return findScoreboard(name)
-}
-
-//// findScoreboard will look up the username in the DB, and return a Scoreboard if possible
-func findScoreboard(name string) (Scoreboard, error) {
-	var scoreboard Scoreboard
-	query := `SELECT * FROM scoreboards WHERE name=$1`
-	err := database.Connection().Get(&scoreboard, query, name)
-
-	return scoreboard, err
-}
-
-func FindOrCreateScoreboard(name string) (Scoreboard, error) {
-	scoreboard, err := findScoreboard(name)
-	if err == sql.ErrNoRows {
-		scoreboard, err = createScoreboard(name)
-	} else {
-		// it was some other error
-		terrors.Log(err, "error getting scoreboard from db")
-	}
-	return scoreboard, err
 }
