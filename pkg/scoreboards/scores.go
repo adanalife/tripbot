@@ -1,6 +1,7 @@
 package scoreboards
 
 import (
+	"database/sql"
 	"log"
 	"time"
 
@@ -32,15 +33,16 @@ func GetScoreByName(username, scoreboardName string) (float32, error) {
 	var score Score
 	userID, err := getUserIDByName(username)
 	if err != nil {
-		//TODO
-		return 0.0, err
+		terrors.Log(err, "error getting user ID")
+		return -1.0, err
 	}
 	scoreboard := FindScoreboard(scoreboardName)
-	score, err = findScore(userID, scoreboard.ID)
+	score, err = findOrCreateScore(userID, scoreboard.ID)
 
 	if err != nil {
-		//TODO
-		return 0.0, err
+		spew.Dump(err)
+		terrors.Log(err, "error finding score")
+		return -1.0, err
 	}
 	return score.Score, err
 }
@@ -53,10 +55,10 @@ func AddToScoreByName(username, scoreboardName string, scoreToAdd float32) error
 		return err
 	}
 	scoreboard := FindScoreboard(scoreboardName)
-	score, err = findScore(userID, scoreboard.ID)
+	score, err = findOrCreateScore(userID, scoreboard.ID)
 	spew.Dump(score)
 	if err != nil {
-		//TODO
+		terrors.Log(err, "error finding score")
 		return err
 	}
 	score.Score += scoreToAdd
@@ -70,20 +72,34 @@ func getUserIDByName(username string) (uint16, error) {
 	// spew.Dump(row)
 	err := row.Scan(&userID)
 	if err != nil {
-		//TODO
+		terrors.Log(err, "error scanning row")
 	}
 	return userID, err
 }
 
-//TODO: return an error
 // findScore will look up the username in the DB, and return a Score if possible
 func findScore(user_id, scoreboard_id uint16) (Score, error) {
 	var score Score
 	query := `SELECT * FROM scores WHERE user_id=$1 AND scoreboard_id=$2`
 	err := database.Connection().Get(&score, query, user_id, scoreboard_id)
-	// spew.Config.ContinueOnMethod = true
-	// spew.Config.MaxDepth = 2
-	// spew.Dump(score)
+	if err != nil {
+		spew.Dump(err)
+		terrors.Log(err, "error getting score from db")
+	}
+	return score, err
+}
+
+// findOrCreateScore will look up the username in the DB, and return a Score if possible
+func findOrCreateScore(user_id, scoreboard_id uint16) (Score, error) {
+	score, err := findScore(user_id, scoreboard_id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			score, err = create(user_id, scoreboard_id)
+		} else {
+			// it was some other error
+			terrors.Log(err, "error getting score from db")
+		}
+	}
 	return score, err
 }
 
@@ -102,18 +118,20 @@ func (s Score) save() error {
 
 // create() will actually create the DB record
 func create(user_id, scoreboard_id uint16) (Score, error) {
+	var score Score
 	log.Printf("creating score user_id:%d, scoreboard_id:%d", user_id, scoreboard_id)
 	tx := database.Connection().MustBegin()
-	// create a new row, using default vals and creating a single visit
+	// create a new row using default value
 	_, err := tx.Exec("INSERT INTO scores (user_id, scoreboard_id) VALUES ($1, $2)", user_id, scoreboard_id)
 	if err != nil {
-		//TODO
+		terrors.Log(err, "error inserting score in DB")
+		return score, err
 	}
 	err = tx.Commit()
 	if err != nil {
-		//TODO
+		terrors.Log(err, "error commiting change in DB")
+		return score, err
 	}
-	// spew.Dump(err)
 	return findScore(user_id, scoreboard_id)
 }
 
