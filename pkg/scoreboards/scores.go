@@ -5,6 +5,7 @@ import (
 	"log"
 	"time"
 
+	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/davecgh/go-spew/spew"
@@ -17,7 +18,7 @@ type Score struct {
 	ID           uint16    `db:"id"`
 	UserID       uint16    `db:"user_id"`
 	ScoreboardID uint16    `db:"scoreboard_id"`
-	Score        float32   `db:"score"`
+	Value        float32   `db:"value"`
 	DateCreated  time.Time `db:"date_created"`
 }
 
@@ -39,7 +40,7 @@ func GetScoreByName(username, scoreboardName string) (float32, error) {
 		terrors.Log(err, "error finding score")
 		return -1.0, err
 	}
-	return score.Score, err
+	return score.Value, err
 }
 
 func AddToScoreByName(username, scoreboardName string, scoreToAdd float32) error {
@@ -59,7 +60,7 @@ func AddToScoreByName(username, scoreboardName string, scoreToAdd float32) error
 		terrors.Log(err, "error finding score")
 		return err
 	}
-	score.Score += scoreToAdd
+	score.Value += scoreToAdd
 	return score.save()
 }
 
@@ -106,10 +107,10 @@ func createScore(user_id, scoreboard_id uint16) (Score, error) {
 
 // User.save() will take the given score and store it in the DB
 func (s Score) save() error {
-	// if c.Conf.Verbose {
-	log.Println("saving score", s)
-	// }
-	query := `UPDATE scores SET score=:score WHERE id = :id`
+	if c.Conf.Verbose {
+		log.Println("saving score", s)
+	}
+	query := `UPDATE scores SET value=:value WHERE id = :id`
 	_, err := database.Connection().NamedExec(query, s)
 	if err != nil {
 		terrors.Log(err, "error saving score")

@@ -28,7 +28,7 @@ func findOrCreateScoreboard(name string) (Scoreboard, error) {
 	return scoreboard, err
 }
 
-//// findScoreboard will look up the scoreboard in the DB, and return a Scoreboard if possible
+// findScoreboard will look up the scoreboard in the DB, and return a Scoreboard if possible
 func findScoreboard(name string) (Scoreboard, error) {
 	var scoreboard Scoreboard
 	query := `SELECT * FROM scoreboards WHERE name=$1`
