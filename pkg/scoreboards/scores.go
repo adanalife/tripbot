@@ -7,8 +7,12 @@ import (
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
+	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/davecgh/go-spew/spew"
 )
+
+//TODO: change underscores to camelCase
+//TODO: change Score.score to value
 
 // CREATE TABLE scores (
 //   id            SERIAL PRIMARY KEY,
@@ -49,19 +53,31 @@ func create(user_id, scoreboard_id uint16) (Score, error) {
 	return FindScore(user_id, scoreboard_id), err
 }
 
-//TODO: add FindScoreByName and SetScoreByName
+func FindScoreByName(username, scoreboardName string) uint16 {
+	user := users.FindOrCreate(username)
+	scoreboard := findScoreboard(scoreboardName)
+	score := findScore(user.ID, scoreboard.ID)
+	return score.score
+}
 
-//TODO is this acually used?
-// FindScore will look up the username in the DB, and return a Score if possible
-func FindScore(user_id, scoreboard_id uint16) Score {
+func AddToScoreByName(userName, scoreboardName string, scoreToAdd uint16) error {
+	user := users.FindOrCreate(username)
+	scoreboard := findScoreboard(scoreboardName)
+	score := findScore(user.ID, scoreboard.ID)
+	score.score += scoreToAdd
+	return score.save()
+}
+
+//TODO: return an error
+// findScore will look up the username in the DB, and return a Score if possible
+func findScore(user_id, scoreboard_id uint16) Score {
 	var score Score
 	query := `SELECT * FROM scores WHERE user_id=$1 AND scoreboard_id=$2`
 	err := database.Connection().Get(&score, query, user_id, scoreboard_id)
-	spew.Config.ContinueOnMethod = true
-	spew.Config.MaxDepth = 2
-	spew.Dump(score)
+	// spew.Config.ContinueOnMethod = true
+	// spew.Config.MaxDepth = 2
+	// spew.Dump(score)
 	if err != nil {
-		//TODO: is there a better way to do this?
 		return Score{ID: 0}
 	}
 	return score
