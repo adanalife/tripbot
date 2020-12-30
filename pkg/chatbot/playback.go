@@ -22,6 +22,7 @@ import (
 // plus it's also used to reset peoples lastLocation time
 var lastTimewarpTime time.Time
 
+// timewarp jumps the playhead to a random video in the loop
 func timewarp() {
 	// show timewarp onscreen
 	onscreensClient.ShowTimewarp()

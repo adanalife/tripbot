@@ -14,6 +14,7 @@ import (
 //TODO: change underscores to camelCase
 //TODO: change Score.score to value
 
+// Score represents a user's score on a scoreboard
 type Score struct {
 	ID           uint16    `db:"id"`
 	UserID       uint16    `db:"user_id"`
@@ -22,6 +23,7 @@ type Score struct {
 	DateCreated  time.Time `db:"date_created"`
 }
 
+// GetScoreByName returns the score value for a given username and scoreboard name
 func GetScoreByName(username, scoreboardName string) (float32, error) {
 	var score Score
 	userID, err := getUserIDByName(username)
@@ -43,6 +45,7 @@ func GetScoreByName(username, scoreboardName string) (float32, error) {
 	return score.Value, err
 }
 
+// AddToScoreByName increases the score value for a given username and scoreboard name
 func AddToScoreByName(username, scoreboardName string, scoreToAdd float32) error {
 	var score Score
 	userID, err := getUserIDByName(username)
@@ -99,7 +102,7 @@ func createScore(user_id, scoreboard_id uint16) (Score, error) {
 	}
 	err = tx.Commit()
 	if err != nil {
-		terrors.Log(err, "error commiting score change in DB")
+		terrors.Log(err, "error committing score change in DB")
 		return score, err
 	}
 	return findScore(user_id, scoreboard_id)
@@ -118,6 +121,7 @@ func (s Score) save() error {
 	return err
 }
 
+// getUserIDByName fetches the user ID for a given username
 func getUserIDByName(username string) (uint16, error) {
 	var userID uint16
 	query := `SELECT id FROM users WHERE username=$1`

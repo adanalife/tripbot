@@ -10,12 +10,14 @@ import (
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 )
 
+// Scoreboard represents a bucket of scores, and has a name to identify it
 type Scoreboard struct {
 	ID          uint16    `db:"id"`
 	Name        string    `db:"name"`
 	DateCreated time.Time `db:"date_created"`
 }
 
+// findOrCreateScoreboard will find a Scoreboard in the DB or create one
 func findOrCreateScoreboard(name string) (Scoreboard, error) {
 	scoreboard, err := findScoreboard(name)
 	if err != nil {
@@ -53,7 +55,7 @@ func createScoreboard(name string) (Scoreboard, error) {
 	}
 	err = tx.Commit()
 	if err != nil {
-		terrors.Log(err, "error commiting scoreboard change in DB")
+		terrors.Log(err, "error committing scoreboard change in DB")
 		return scoreboard, err
 	}
 	return findScoreboard(name)
