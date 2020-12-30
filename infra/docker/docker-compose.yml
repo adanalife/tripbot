@@ -84,3 +84,15 @@ services:
       "up"
     ]
     restart: on-failure
+
+  seed:
+    image: adanalife/tripbot
+    env_file:
+      - infra/docker/env.docker
+    depends_on:
+      - migrate
+    entrypoint: bash -c "infra/docker/bin/seed-db.sh"
+    #TODO: this can be removed once the script is baked into the image
+    volumes:
+      - .:/go/src/github.com/adanalife/tripbot
+    restart: on-failure
