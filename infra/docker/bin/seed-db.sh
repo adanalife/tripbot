@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -eix
+set -ex
 
 apt update
 apt install -y postgresql
