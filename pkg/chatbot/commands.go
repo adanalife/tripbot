@@ -150,12 +150,12 @@ func milesCmd(user *users.User, params []string) {
 		monthlyMiles = u.CurrentMonthlyMiles()
 	}
 
-	msg := "@%s has %.2f miles this month"
+	msg := "@%s has %.2fmi this month"
 	msg = fmt.Sprintf(msg, username, monthlyMiles)
 
 	// add total miles if they have been around for more than one month
 	if lifetimeMiles > monthlyMiles {
-		msg += " (%d total)."
+		msg += " (%vmi total)."
 		msg = fmt.Sprintf(msg, math.Round(float64(lifetimeMiles)))
 	} else {
 		msg += "."

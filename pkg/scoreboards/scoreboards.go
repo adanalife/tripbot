@@ -18,12 +18,14 @@ type Scoreboard struct {
 
 func findOrCreateScoreboard(name string) (Scoreboard, error) {
 	scoreboard, err := findScoreboard(name)
-	if err == sql.ErrNoRows {
-		// create a new scoreboard if none found
-		scoreboard, err = createScoreboard(name)
-	} else {
-		// it was some other error
-		terrors.Log(err, "error getting scoreboard from db")
+	if err != nil {
+		if err == sql.ErrNoRows {
+			// create a new scoreboard if none found
+			scoreboard, err = createScoreboard(name)
+		} else {
+			// it was some other error
+			terrors.Log(err, "error getting scoreboard from db")
+		}
 	}
 	return scoreboard, err
 }
