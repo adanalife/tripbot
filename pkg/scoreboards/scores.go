@@ -8,7 +8,6 @@ import (
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
-	"github.com/davecgh/go-spew/spew"
 )
 
 // Score represents a user's score on a scoreboard
@@ -30,12 +29,11 @@ func GetScoreByName(username, scoreboardName string) (float32, error) {
 	}
 	scoreboard, err := findOrCreateScoreboard(scoreboardName)
 	if err != nil {
-		//TODO
+		terrors.Log(err, "error finding or creating scoreboard")
+		return -1.0, err
 	}
 	score, err = findOrCreateScore(userID, scoreboard.ID)
-
 	if err != nil {
-		spew.Dump(err)
 		terrors.Log(err, "error finding score")
 		return -1.0, err
 	}
@@ -47,15 +45,15 @@ func AddToScoreByName(username, scoreboardName string, scoreToAdd float32) error
 	var score Score
 	userID, err := getUserIDByName(username)
 	if err != nil {
-		//TODO
+		terrors.Log(err, "error getting userID for user")
 		return err
 	}
 	scoreboard, err := findOrCreateScoreboard(scoreboardName)
 	if err != nil {
-		//TODO
+		terrors.Log(err, "error finding or creating scoreboard")
+		return err
 	}
 	score, err = findOrCreateScore(userID, scoreboard.ID)
-	spew.Dump(score)
 	if err != nil {
 		terrors.Log(err, "error finding score")
 		return err
@@ -123,7 +121,6 @@ func getUserIDByName(username string) (uint16, error) {
 	var userID uint16
 	query := `SELECT id FROM users WHERE username=$1`
 	row := database.Connection().QueryRow(query, username)
-	// spew.Dump(row)
 	err := row.Scan(&userID)
 	if err != nil {
 		terrors.Log(err, "error scanning row")
