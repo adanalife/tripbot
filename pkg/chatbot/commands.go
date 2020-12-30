@@ -33,6 +33,8 @@ var currentVersion string
 // this is the scoreboard name used for counting correct guesses
 const guessScoreboard = "guess_state_total"
 
+//TODO: incorrect guess scoreboard?
+
 func helpCmd(user *users.User) {
 	log.Println(user.Username, "ran !help")
 	msg := fmt.Sprintf("%s (%d of %d)", help(), helpIndex+1, len(c.HelpMessages))
