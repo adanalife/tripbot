@@ -149,9 +149,7 @@ func (u *User) HasCommandAvailable() bool {
 }
 
 func (u User) GuessCooldownRemaining() time.Duration {
-	// spew.Dump(time.Now, u.lastLocation)
 	return u.lastLocation.Sub(time.Now().Add(-guessCooldown))
-	// return time.Now().Sub(u.lastLocation.Add(-guessCooldown))
 }
 
 func (u *User) HasGuessCommandAvailable(lastTimewarpTime time.Time) bool {
@@ -162,13 +160,6 @@ func (u *User) HasGuessCommandAvailable(lastTimewarpTime time.Time) bool {
 
 	// check if they ran a location command recently
 	now := time.Now()
-
-	// spew.Dump(now, u.lastLocation)
-	// spew.Config.ContinueOnMethod = true
-	// spew.Config.MaxDepth = 2
-	// spew.Dump(u)                    // this is wrong
-	// spew.Dump(LoggedIn[u.Username]) // this is right
-
 	if now.After(u.lastLocation.Add(guessCooldown)) {
 		log.Println("letting", u, "run guess command")
 		// update their lastLocation time
