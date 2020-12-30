@@ -6,6 +6,7 @@ import (
 
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
+	"github.com/adanalife/tripbot/pkg/scoreboards"
 	"github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/logrusorgru/aurora"
@@ -70,6 +71,10 @@ func (u User) BonusMiles() float32 {
 		return sessionMiles * 0.05
 	}
 	return 0.0
+}
+
+func (u User) CurrentMonthlyMiles() float32 {
+	return u.GetScore(scoreboards.CurrentMilesScoreboard()) + u.sessionMiles()
 }
 
 // User.save() will take the given user and store it in the DB

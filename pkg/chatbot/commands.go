@@ -3,6 +3,7 @@ package chatbot
 import (
 	"fmt"
 	"log"
+	"math"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -128,12 +129,13 @@ func uptimeCmd(user *users.User) {
 func milesCmd(user *users.User, params []string) {
 	log.Println(user.Username, "ran !miles")
 	var username string
-	var miles float32
+	var lifetimeMiles, monthlyMiles float32
 
 	// check to see if an arg was provided
 	if len(params) == 0 {
 		username = user.Username
-		miles = user.CurrentMiles()
+		lifetimeMiles = user.CurrentMiles()
+		monthlyMiles = user.CurrentMonthlyMiles()
 	} else {
 		username = helpers.StripAtSign(params[0])
 		u := users.Find(username)
@@ -144,19 +146,31 @@ func milesCmd(user *users.User, params []string) {
 			return
 		}
 
-		miles = u.CurrentMiles()
+		lifetimeMiles = u.CurrentMiles()
+		monthlyMiles = u.CurrentMonthlyMiles()
 	}
 
-	msg := "@%s has %.2f miles."
-	msg = fmt.Sprintf(msg, username, miles)
-	if len(params) == 0 {
-		if miles < 0.1 {
-			msg += " You'll earn more miles the longer you watch the stream."
-		}
-		if miles == 0.0 {
-			msg += " (Sometimes it takes a bit for me to notice you. You should be good now!)"
+	msg := "@%s has %.2f miles this month"
+	msg = fmt.Sprintf(msg, username, monthlyMiles)
+
+	// add total miles if they have been around for more than one month
+	if lifetimeMiles > monthlyMiles {
+		msg += " (%d total)."
+		msg = fmt.Sprintf(msg, math.Round(float64(lifetimeMiles)))
+	} else {
+		msg += "."
+
+		// add helpful messages for new folks
+		if len(params) == 0 {
+			if monthlyMiles < 0.2 {
+				msg += " You'll earn more miles the longer you watch the stream."
+			}
+			if monthlyMiles == 0.0 {
+				msg += " (Sometimes it takes a bit for me to notice you. You should be good now!)"
+			}
 		}
 	}
+
 	Say(msg)
 }
 
