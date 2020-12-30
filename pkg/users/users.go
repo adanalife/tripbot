@@ -8,7 +8,6 @@ import (
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/scoreboards"
 	"github.com/adanalife/tripbot/pkg/twitch"
-	"github.com/davecgh/go-spew/spew"
 	"github.com/logrusorgru/aurora"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
@@ -161,7 +160,6 @@ func (u User) GuessCooldownRemaining() time.Duration {
 	cooldownExpiry := u.lastLocation.Add(guessCooldown)
 
 	if u.lastLocation.Add(guessCooldown).After(now) {
-		spew.Dump(cooldownExpiry.Sub(now))
 		return cooldownExpiry.Sub(now)
 	}
 	return 0 * time.Minute
