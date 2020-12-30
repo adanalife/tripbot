@@ -19,7 +19,7 @@ func incChatCommandCounter(command string) {
 	}
 }
 
-func runCommand(user users.User, message string) {
+func runCommand(user *users.User, message string) {
 	var err error
 	var params []string
 
@@ -43,96 +43,96 @@ func runCommand(user users.User, message string) {
 	switch command {
 	case "!help":
 		incChatCommandCounter("!help")
-		helpCmd(&user)
+		helpCmd(user)
 	case "hello", "hi", "hey", "hallo":
 		incChatCommandCounter("hello")
-		helloCmd(&user, params)
+		helloCmd(user, params)
 	case "!flag":
 		incChatCommandCounter("!flag")
-		flagCmd(&user)
+		flagCmd(user)
 	case "!version":
 		incChatCommandCounter("!version")
-		versionCmd(&user)
+		versionCmd(user)
 	case "!song", "!currentsong", "!music", "!currentmusic":
-		songCmd(&user)
+		songCmd(user)
 	case "!uptime":
-		uptimeCmd(&user)
+		uptimeCmd(user)
 	case "!timewarp", "!tw":
 		if user.HasCommandAvailable() {
-			timewarpCmd(&user)
+			timewarpCmd(user)
 		} else {
 			Say(followerMsg)
 		}
 	case "!goto", "!jump":
 		if user.HasCommandAvailable() {
-			jumpCmd(&user, params)
+			jumpCmd(user, params)
 		} else {
 			Say(followerMsg)
 		}
 	case "!skip":
 		if user.HasCommandAvailable() {
-			skipCmd(&user, params)
+			skipCmd(user, params)
 		} else {
 			Say(followerMsg)
 		}
 	case "!back":
 		if user.HasCommandAvailable() {
-			backCmd(&user, params)
+			backCmd(user, params)
 		} else {
 			Say(followerMsg)
 		}
 	case "!shutdown":
-		shutdownCmd(&user)
+		shutdownCmd(user)
 	case "!restartmusic":
-		restartMusicCmd(&user)
+		restartMusicCmd(user)
 	case "!socialmedia":
 		Say("Find me outside of Twitch: !twitter, !instagram, !facebook, !youtube")
 	case "!commands", "!controls":
 		Say("You can try: !location, !guess, !date, !state, !sunset, !timewarp, !miles, !leaderboard, and many other hidden commands!")
 	case "!bonusmiles":
 		if user.IsSubscriber() {
-			bonusMilesCmd(&user)
+			bonusMilesCmd(user)
 		} else {
 			Say(subscriberMsg)
 		}
 	case "!sunset":
 		if user.HasCommandAvailable() {
-			sunsetCmd(&user)
+			sunsetCmd(user)
 		} else {
 			Say(followerMsg)
 		}
 	case "!time":
 		if user.HasCommandAvailable() {
-			timeCmd(&user)
+			timeCmd(user)
 		} else {
 			Say(followerMsg)
 		}
 	case "!date":
 		if user.HasCommandAvailable() {
-			dateCmd(&user)
+			dateCmd(user)
 		} else {
 			Say(followerMsg)
 		}
 	case "!guess":
 		if user.HasCommandAvailable() {
-			guessCmd(&user, params)
+			guessCmd(user, params)
 		} else {
 			Say(followerMsg)
 		}
 	case "!state":
 		if user.HasCommandAvailable() {
-			stateCmd(&user)
+			stateCmd(user)
 		} else {
 			Say(followerMsg)
 		}
 	case "!secretinfo":
-		secretInfoCmd(&user)
+		secretInfoCmd(user)
 	case "!middle":
-		middleCmd(&user, params)
+		middleCmd(user, params)
 		// any of these should trigger the miles command
 	case "!miles", "!points":
 		if user.HasCommandAvailable() {
-			milesCmd(&user, params)
+			milesCmd(user, params)
 		} else {
 			Say(followerMsg)
 		}
@@ -140,7 +140,7 @@ func runCommand(user users.User, message string) {
 		// any of these should trigger the kilometres command
 	case "!km", "!kilometres", "!kilometers":
 		if user.HasCommandAvailable() {
-			kilometresCmd(&user)
+			kilometresCmd(user)
 		} else {
 			Say(followerMsg)
 		}
@@ -149,7 +149,7 @@ func runCommand(user users.User, message string) {
 		//TODO: add support for: "where is this", "where are we", "where are you"
 	case "!tripbot", "!location", "!locton", "!locaton", "!locatoion", "1location", "!city", "!town":
 		if user.HasCommandAvailable() {
-			locationCmd(&user)
+			locationCmd(user)
 		} else {
 			Say(followerMsg)
 		}
@@ -157,7 +157,7 @@ func runCommand(user users.User, message string) {
 		// any of these should trigger the leaderboard command
 	case "!leaderboard", "!newleaderboard":
 		if user.HasCommandAvailable() {
-			leaderboardCmd(&user)
+			leaderboardCmd(user)
 		} else {
 			Say(followerMsg)
 		}
@@ -166,7 +166,7 @@ func runCommand(user users.User, message string) {
 		//TODO: probably want to allow people to run this more than once?
 	case "!report", "no audio", "no sound", "no music", "frozen":
 		if user.HasCommandAvailable() {
-			reportCmd(&user, params)
+			reportCmd(user, params)
 		} else {
 			Say(followerMsg)
 		}
@@ -199,7 +199,7 @@ func PrivateMessage(msg twitch.PrivateMessage) {
 	// log in the user
 	user := users.LoginIfNecessary(username)
 
-	runCommand(*user, message)
+	runCommand(user, message)
 }
 
 // this event fires when a user joins the channel

@@ -119,9 +119,6 @@ func Find(username string) User {
 	var user User
 	query := `SELECT * FROM users WHERE username=$1`
 	err := database.Connection().Get(&user, query, username)
-	// spew.Config.ContinueOnMethod = true
-	// spew.Config.MaxDepth = 2
-	// spew.Dump(user)
 	if err != nil {
 		//TODO: is there a better way to do this?
 		return User{ID: 0}
@@ -150,15 +147,22 @@ func (u *User) HasCommandAvailable() bool {
 
 func (u *User) HasGuessCommandAvailable(lastTimewarpTime time.Time) bool {
 	// let the user run if there has been a timewarp recently
-	if u.lastCmd.Before(lastTimewarpTime) {
+	if u.lastLocation.Before(lastTimewarpTime) {
 		return true
 	}
 
+	// this is how long they have before they can guess again
 	threshold := 3 * time.Minute
 	// check if they ran a location command recently
 	now := time.Now()
 
-	if now.Sub(u.lastCmd) > threshold {
+	// spew.Dump(now, u.lastLocation)
+	// spew.Config.ContinueOnMethod = true
+	// spew.Config.MaxDepth = 2
+	// spew.Dump(u)                    // this is wrong
+	// spew.Dump(LoggedIn[u.Username]) // this is right
+
+	if now.After(u.lastLocation.Add(threshold)) {
 		log.Println("letting", u, "run guess command")
 		// update their lastLocation time
 		u.lastLocation = now
