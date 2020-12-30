@@ -121,7 +121,7 @@ func (u User) logout() {
 		loggedInDur := time.Now().Sub(u.LoggedIn)
 		prettyDur := durafmt.ParseShort(loggedInDur)
 		dur := fmt.Sprintf("(%s)", aurora.Green(prettyDur))
-		miles := fmt.Sprintf("(%1.2f miles)", aurora.Yellow(sessionMiles))
+		miles := fmt.Sprintf("(%1.2fmi)", aurora.Yellow(sessionMiles))
 		log.Println("logging out", u, dur, miles)
 	}
 

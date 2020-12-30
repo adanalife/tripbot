@@ -17,7 +17,6 @@ func (u User) GetScore(scoreboardName string) float32 {
 func (u User) AddToScore(scoreboardName string, valueToAdd float32) {
 	err := scoreboards.AddToScoreByName(u.Username, scoreboardName, valueToAdd)
 	if err != nil {
-		//TODO: do something here
 		terrors.Log(err, "error setting score for user")
 	}
 }

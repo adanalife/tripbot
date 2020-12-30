@@ -154,34 +154,20 @@ func (u *User) HasCommandAvailable() bool {
 	return false
 }
 
+// GuessCooldownRemaining returns the amount of time a user needs to
+// wait before they can guess again
 func (u User) GuessCooldownRemaining() time.Duration {
-
-	// time.Now().Sub(u.lastLocation) = 24h
-	// if lastLocation > 24hr
-	// 24h if just logged in
-	// <3m if ran recently
-
 	now := time.Now()
-
-	spew.Dump(&u)
-	spew.Dump(u.lastLocation)
 	cooldownExpiry := u.lastLocation.Add(guessCooldown)
-
-	spew.Dump(cooldownExpiry)
 
 	if u.lastLocation.Add(guessCooldown).After(now) {
 		spew.Dump(cooldownExpiry.Sub(now))
 		return cooldownExpiry.Sub(now)
 	}
 	return 0 * time.Minute
-
-	// spew.Dump(u.lastLocation)
-	// spew.Dump(time.Now().Add(-guessCooldown))
-	// spew.Dump(u.lastLocation.Sub(time.Now().Add(-guessCooldown)))
-	// spew.Dump(u.lastLocation.Add(-guessCooldown).Sub(time.Now()))
-	// return u.lastLocation.Add(-guessCooldown).Sub(time.Now())
 }
 
+// HasGuessCommandAvailable returns true if the user is allowed to use the guess command
 func (u *User) HasGuessCommandAvailable(lastTimewarpTime time.Time) bool {
 	// let the user run if there has been a timewarp recently
 	if u.lastLocation.Before(lastTimewarpTime) {
@@ -191,8 +177,6 @@ func (u *User) HasGuessCommandAvailable(lastTimewarpTime time.Time) bool {
 	// check if they ran a location command recently
 	if u.GuessCooldownRemaining() <= 0 {
 		log.Println("letting", u, "run guess command")
-		// update their lastLocation time
-		// u.SetLastLocationTime()
 		return true
 	}
 	return false
