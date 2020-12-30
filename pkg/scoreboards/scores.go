@@ -11,9 +11,6 @@ import (
 	"github.com/davecgh/go-spew/spew"
 )
 
-//TODO: change underscores to camelCase
-//TODO: change Score.score to value
-
 // Score represents a user's score on a scoreboard
 type Score struct {
 	ID           uint16    `db:"id"`
@@ -68,11 +65,11 @@ func AddToScoreByName(username, scoreboardName string, scoreToAdd float32) error
 }
 
 // findOrCreateScore will look up the username in the DB, and return a Score if possible
-func findOrCreateScore(user_id, scoreboard_id uint16) (Score, error) {
-	score, err := findScore(user_id, scoreboard_id)
+func findOrCreateScore(userID, scoreboardID uint16) (Score, error) {
+	score, err := findScore(userID, scoreboardID)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			score, err = createScore(user_id, scoreboard_id)
+			score, err = createScore(userID, scoreboardID)
 		} else {
 			// it was some other error
 			terrors.Log(err, "error getting score from db")
@@ -82,20 +79,20 @@ func findOrCreateScore(user_id, scoreboard_id uint16) (Score, error) {
 }
 
 // findScore will look up the username in the DB, and return a Score if possible
-func findScore(user_id, scoreboard_id uint16) (Score, error) {
+func findScore(userID, scoreboardID uint16) (Score, error) {
 	var score Score
 	query := `SELECT * FROM scores WHERE user_id=$1 AND scoreboard_id=$2`
-	err := database.Connection().Get(&score, query, user_id, scoreboard_id)
+	err := database.Connection().Get(&score, query, userID, scoreboardID)
 	return score, err
 }
 
 // createScore() will actually create the DB record
-func createScore(user_id, scoreboard_id uint16) (Score, error) {
+func createScore(userID, scoreboardID uint16) (Score, error) {
 	var score Score
-	log.Printf("creating score user_id:%d, scoreboard_id:%d", user_id, scoreboard_id)
+	log.Printf("creating score user_id:%d, scoreboard_id:%d", userID, scoreboardID)
 	tx := database.Connection().MustBegin()
 	// create a new row using default value
-	_, err := tx.Exec("INSERT INTO scores (user_id, scoreboard_id) VALUES ($1, $2)", user_id, scoreboard_id)
+	_, err := tx.Exec("INSERT INTO scores (user_id, scoreboard_id) VALUES ($1, $2)", userID, scoreboardID)
 	if err != nil {
 		terrors.Log(err, "error inserting score in DB")
 		return score, err
@@ -105,7 +102,7 @@ func createScore(user_id, scoreboard_id uint16) (Score, error) {
 		terrors.Log(err, "error committing score change in DB")
 		return score, err
 	}
-	return findScore(user_id, scoreboard_id)
+	return findScore(userID, scoreboardID)
 }
 
 // User.save() will take the given score and store it in the DB
