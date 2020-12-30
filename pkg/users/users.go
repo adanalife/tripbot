@@ -28,6 +28,9 @@ type User struct {
 	lastLocation time.Time
 }
 
+// this is how long they have before they can guess again
+var guessCooldown = 3 * time.Minute
+
 func (u User) loggedInDur() time.Duration {
 	// exit early if they're not logged in
 	if !isLoggedIn(u.Username) {
@@ -145,14 +148,18 @@ func (u *User) HasCommandAvailable() bool {
 	return false
 }
 
+func (u User) GuessCooldownRemaining() time.Duration {
+	// spew.Dump(time.Now, u.lastLocation)
+	return u.lastLocation.Sub(time.Now().Add(-guessCooldown))
+	// return time.Now().Sub(u.lastLocation.Add(-guessCooldown))
+}
+
 func (u *User) HasGuessCommandAvailable(lastTimewarpTime time.Time) bool {
 	// let the user run if there has been a timewarp recently
 	if u.lastLocation.Before(lastTimewarpTime) {
 		return true
 	}
 
-	// this is how long they have before they can guess again
-	threshold := 3 * time.Minute
 	// check if they ran a location command recently
 	now := time.Now()
 
@@ -162,7 +169,7 @@ func (u *User) HasGuessCommandAvailable(lastTimewarpTime time.Time) bool {
 	// spew.Dump(u)                    // this is wrong
 	// spew.Dump(LoggedIn[u.Username]) // this is right
 
-	if now.After(u.lastLocation.Add(threshold)) {
+	if now.After(u.lastLocation.Add(guessCooldown)) {
 		log.Println("letting", u, "run guess command")
 		// update their lastLocation time
 		u.lastLocation = now
