@@ -62,7 +62,7 @@ func Initialize() *twitch.Client {
 	client.OnUserJoinMessage(UserJoin)
 	client.OnUserPartMessage(UserPart)
 	// client.OnUserNoticeMessage(chatbot.UserNotice)
-	client.OnWhisperMessage(Whisper)
+	client.OnWhisperMessage(GetWhisper)
 	client.OnPrivateMessage(PrivateMessage)
 
 	return client
@@ -79,6 +79,16 @@ func Say(msg string) {
 	}
 	// say the message to chat
 	client.Say(speakTo, msg)
+}
+
+// Whisper will whisper a message to a user
+func Whisper(username, msg string) {
+	//TODO: include whispers in log
+	// include the message in the log
+	// mylog.ChatMsg(c.Conf.BotUsername, msg)
+	log.Println("sending whisper to", username, ":", msg)
+	// say the message to chat
+	client.Whisper(username, msg)
 }
 
 // Chatter is designed to most a randomized message on a timer

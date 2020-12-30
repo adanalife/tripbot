@@ -3,6 +3,7 @@ package chatbot
 import (
 	"fmt"
 	"log"
+	"math"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -13,6 +14,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/audio"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
+	"github.com/adanalife/tripbot/pkg/scoreboards"
 
 	"github.com/adanalife/tripbot/pkg/background"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
@@ -28,6 +30,11 @@ import (
 var lastHelloTime time.Time = time.Now()
 
 var currentVersion string
+
+// this is the scoreboard name used for counting correct guesses
+const guessScoreboard = "guess_state_total"
+
+//TODO: incorrect guess scoreboard?
 
 func helpCmd(user *users.User) {
 	log.Println(user.Username, "ran !help")
@@ -122,12 +129,13 @@ func uptimeCmd(user *users.User) {
 func milesCmd(user *users.User, params []string) {
 	log.Println(user.Username, "ran !miles")
 	var username string
-	var miles float32
+	var lifetimeMiles, monthlyMiles float32
 
 	// check to see if an arg was provided
 	if len(params) == 0 {
 		username = user.Username
-		miles = user.CurrentMiles()
+		lifetimeMiles = user.CurrentMiles()
+		monthlyMiles = user.CurrentMonthlyMiles()
 	} else {
 		username = helpers.StripAtSign(params[0])
 		u := users.Find(username)
@@ -138,19 +146,31 @@ func milesCmd(user *users.User, params []string) {
 			return
 		}
 
-		miles = u.CurrentMiles()
+		lifetimeMiles = u.CurrentMiles()
+		monthlyMiles = u.CurrentMonthlyMiles()
 	}
 
-	msg := "@%s has %.2f miles."
-	msg = fmt.Sprintf(msg, username, miles)
-	if len(params) == 0 {
-		if miles < 0.1 {
-			msg += " You'll earn more miles the longer you watch the stream."
-		}
-		if miles == 0.0 {
-			msg += " (Sometimes it takes a bit for me to notice you. You should be good now!)"
+	msg := "@%s has %.2fmi this month"
+	msg = fmt.Sprintf(msg, username, monthlyMiles)
+
+	// add total miles if they have been around for more than one month
+	if lifetimeMiles > monthlyMiles {
+		msg += " (%vmi total)."
+		msg = fmt.Sprintf(msg, math.Round(float64(lifetimeMiles)))
+	} else {
+		msg += "."
+
+		// add helpful messages for new folks
+		if len(params) == 0 {
+			if monthlyMiles < 0.2 {
+				msg += " You'll earn more miles the longer you watch the stream."
+			}
+			if monthlyMiles == 0.0 {
+				msg += " (Sometimes it takes a bit for me to notice you. You should be good now!)"
+			}
 		}
 	}
+
 	Say(msg)
 }
 
@@ -194,7 +214,10 @@ func locationCmd(user *users.User) {
 	// generate a google maps url
 	url := helpers.GoogleMapsURL(lat, lng)
 	msg := fmt.Sprintf("%s %s", address, url)
-	Say(msg)
+	// record that they know the location now
+	user.SetLastLocationTime()
+	Say("Sending the location in a whisper... shh!")
+	Whisper(user.Username, msg)
 }
 
 func leaderboardCmd(user *users.User) {
@@ -272,6 +295,15 @@ func guessCmd(user *users.User, params []string) {
 		return
 	}
 
+	// don't let people guess if they already know the answer
+	if !user.HasGuessCommandAvailable(lastTimewarpTime) {
+		prettyDur := durafmt.ParseShort(user.GuessCooldownRemaining())
+		msg = "I recently told you the answer! Try again in %s."
+		msg = fmt.Sprintf(msg, prettyDur)
+		Say(msg)
+		return
+	}
+
 	// get the arg from the command
 	guess := strings.Join(params, " ")
 
@@ -292,6 +324,11 @@ func guessCmd(user *users.User, params []string) {
 		msg = fmt.Sprintf("@%s got it! We're in %s", user.Username, vid.State)
 		// show the flag for the state
 		onscreensClient.ShowFlag(10 * time.Second)
+		// increase their guess score
+		user.AddToScore(guessScoreboard, 1.0)
+		user.AddToScore(scoreboards.CurrentGuessScoreboard(), 1.0)
+		// do a timewarp
+		timewarp()
 	} else {
 		msg = "Try again! EarthDay"
 	}
@@ -309,7 +346,10 @@ func stateCmd(user *users.User) {
 	msg := fmt.Sprintf("We're in %s", vid.State)
 	// show the flag for the state
 	onscreensClient.ShowFlag(10 * time.Second)
-	Say(msg)
+	// record that they know the location now
+	user.SetLastLocationTime()
+	Say("Sending the state in a whisper... shh!")
+	Whisper(user.Username, msg)
 }
 
 //TODO: maybe there could be a !cancel command or something

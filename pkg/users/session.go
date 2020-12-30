@@ -10,6 +10,7 @@ import (
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/events"
+	"github.com/adanalife/tripbot/pkg/scoreboards"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/hako/durafmt"
 
@@ -86,6 +87,8 @@ func login(username string) *User {
 	user.LastSeen = now
 	// set their last command date yesterday
 	user.lastCmd = now.AddDate(0, 0, -1)
+	// set their last !location date to yesterday
+	user.lastLocation = now.AddDate(0, 0, -1)
 	user.save()
 
 	// raise an error if a user is supposed to be a bot
@@ -111,22 +114,26 @@ func login(username string) *User {
 // User.logout() removes the user from the list of currently-logged in users,
 // and updates the DB with their most up-to-date values
 func (u User) logout() {
+	sessionMiles := u.sessionMiles()
 
 	// print logout message if they're human
 	if !u.IsBot {
 		loggedInDur := time.Now().Sub(u.LoggedIn)
 		prettyDur := durafmt.ParseShort(loggedInDur)
 		dur := fmt.Sprintf("(%s)", aurora.Green(prettyDur))
-		log.Println("logging out", u, dur)
+		miles := fmt.Sprintf("(%1.2fmi)", aurora.Yellow(sessionMiles))
+		log.Println("logging out", u, dur, miles)
 	}
 
-	now := time.Now()
 	// update miles
 	u.Miles = u.CurrentMiles()
 	// update the last seen date
-	u.LastSeen = now
+	u.LastSeen = time.Now()
 	// store the user in the db
 	u.save()
+
+	// update the monthly scoreboard
+	u.AddToScore(scoreboards.CurrentMilesScoreboard(), sessionMiles)
 
 	// create a login event as well
 	events.Logout(u.Username)

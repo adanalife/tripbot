@@ -1,0 +1,5 @@
+CREATE TABLE scoreboards (
+  id           SERIAL PRIMARY KEY,
+  name         VARCHAR(64) UNIQUE NOT NULL,
+  date_created TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);

@@ -19,7 +19,24 @@ import (
 
 // lastTimewarpTime is used to rate-limit users so they cant
 // over-do the time-skip features (including !skip and !back)
+// plus it's also used to reset peoples lastLocation time
 var lastTimewarpTime time.Time
+
+// timewarp jumps the playhead to a random video in the loop
+func timewarp() {
+	// show timewarp onscreen
+	onscreensClient.ShowTimewarp()
+
+	// shuffle to a new video
+	err := vlcClient.PlayRandom()
+	if err != nil {
+		terrors.Log(err, "error from VLC client")
+	}
+	// update the currently-playing video
+	video.GetCurrentlyPlaying()
+	// update our record of last time it ran
+	lastTimewarpTime = time.Now()
+}
 
 func timewarpCmd(user *users.User) {
 	log.Println(user.Username, "ran !timewarp")
@@ -38,23 +55,13 @@ func timewarpCmd(user *users.User) {
 		}
 	}
 
-	// show timewarp onscreen
-	onscreensClient.ShowTimewarp()
-
 	// only say this if the caller is not me
 	if !c.UserIsAdmin(user.Username) {
 		Say("Here we go...!")
 	}
 
-	// shuffle to a new video
-	err := vlcClient.PlayRandom()
-	if err != nil {
-		terrors.Log(err, "error from VLC client")
-	}
-	// update the currently-playing video
-	video.GetCurrentlyPlaying()
-	// update our record of last time it ran
-	lastTimewarpTime = time.Now()
+	// do the timewarp
+	timewarp()
 }
 
 func jumpCmd(user *users.User, params []string) {
