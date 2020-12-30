@@ -7,6 +7,7 @@ import (
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/twitch"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/logrusorgru/aurora"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
@@ -149,6 +150,9 @@ func (u *User) HasCommandAvailable() bool {
 }
 
 func (u User) GuessCooldownRemaining() time.Duration {
+	spew.Dump(u.lastLocation)
+	spew.Dump(time.Now().Add(-guessCooldown))
+	spew.Dump(u.lastLocation.Sub(time.Now().Add(-guessCooldown)))
 	return u.lastLocation.Sub(time.Now().Add(-guessCooldown))
 }
 
@@ -159,11 +163,10 @@ func (u *User) HasGuessCommandAvailable(lastTimewarpTime time.Time) bool {
 	}
 
 	// check if they ran a location command recently
-	now := time.Now()
-	if now.After(u.lastLocation.Add(guessCooldown)) {
+	if u.GuessCooldownRemaining() <= guessCooldown {
 		log.Println("letting", u, "run guess command")
 		// update their lastLocation time
-		u.lastLocation = now
+		u.SetLastLocationTime()
 		return true
 	}
 	return false
