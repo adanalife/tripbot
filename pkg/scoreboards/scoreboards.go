@@ -4,12 +4,12 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
-	"github.com/davecgh/go-spew/spew"
 	"github.com/jmoiron/sqlx"
 )
 
@@ -23,8 +23,7 @@ type Scoreboard struct {
 func TopUsers(scoreboardName string, size int) [][]string {
 	var leaderboard [][]string
 
-	// ignoredUsers := append(c.IgnoredUsers, strings.ToLower(c.Conf.ChannelName))
-	ignoredUsers := []string{"foobar"}
+	ignoredUsers := append(c.IgnoredUsers, strings.ToLower(c.Conf.ChannelName))
 
 	// we use MySQL-style ? bindvars instead of postgres ones here
 	// because that's what sqlx wants for In()
@@ -33,11 +32,9 @@ func TopUsers(scoreboardName string, size int) [][]string {
 	if err != nil {
 		terrors.Log(err, "error generating query")
 	}
-	spew.Dump(query)
 
 	// Rebind will convert the query to postgres syntax
 	query = database.Connection().Rebind(query)
-	spew.Dump(query)
 	rows, err := database.Connection().Query(query, args...)
 	if err != nil {
 		terrors.Log(err, "error running query")
@@ -55,8 +52,6 @@ func TopUsers(scoreboardName string, size int) [][]string {
 		pair := []string{username, valueAsString}
 		leaderboard = append(leaderboard, pair)
 	}
-
-	spew.Dump(leaderboard)
 
 	return leaderboard
 }
