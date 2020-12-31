@@ -77,6 +77,7 @@ var IgnoredUsers = []string{
 	"mathgaming",
 	"maybeilookoutofhiswindow",
 	"mrreflector",
+	"minion619",
 	"mslenity",
 	"n3td3v",
 	"nightbot",
