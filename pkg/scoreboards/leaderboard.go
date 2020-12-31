@@ -1,11 +1,9 @@
-package scoreboards
+package users
 
 import (
 	"fmt"
 	"strconv"
 	"strings"
-
-	"github.com/adanalife/tripbot/pkg/users"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
@@ -20,7 +18,7 @@ var maxLeaderboardSize = 50
 
 // Leaderboard creates a leaderboard
 func InitLeaderboard() {
-	topUsers := []users.User{}
+	users := []User{}
 
 	ignoredUsers := append(c.IgnoredUsers, strings.ToLower(c.Conf.ChannelName))
 	// we use MySQL-style ? bindvars instead of postgres ones here
@@ -31,12 +29,12 @@ func InitLeaderboard() {
 		terrors.Log(err, "error generating query")
 	}
 	query = database.Connection().Rebind(query)
-	err = database.Connection().Select(&topUsers, query, args...)
+	err = database.Connection().Select(&users, query, args...)
 	if err != nil {
 		terrors.Log(err, "error generating query")
 	}
 
-	for _, user := range topUsers {
+	for _, user := range users {
 		miles := fmt.Sprintf("%.1f", user.Miles)
 		pair := []string{user.Username, miles}
 		Leaderboard = append(Leaderboard, pair)
@@ -44,7 +42,7 @@ func InitLeaderboard() {
 }
 
 func UpdateLeaderboard() {
-	for _, user := range users.LoggedIn {
+	for _, user := range LoggedIn {
 		// skip adding this user if they're a bot or ignored
 		if user.IsBot || c.UserIsIgnored(user.Username) || c.UserIsAdmin(user.Username) {
 			continue
@@ -67,7 +65,7 @@ func strToFloat32(str string) float32 {
 	return float32(value)
 }
 
-func insertIntoLeaderboard(user users.User) {
+func insertIntoLeaderboard(user User) {
 	// first we remove this user from the board
 	removeFromLeaderboard(user.Username)
 

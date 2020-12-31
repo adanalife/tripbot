@@ -2,7 +2,6 @@ package onscreensClient
 
 import (
 	"fmt"
-	"github.com/adanalife/tripbot/pkg/scoreboards"
 	"io/ioutil"
 	"net/http"
 	"time"
@@ -10,6 +9,7 @@ import (
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
+	"github.com/adanalife/tripbot/pkg/users"
 )
 
 var onscreensServerURL = "http://" + c.Conf.VlcServerHost
@@ -35,7 +35,7 @@ func ShowMiddleText(msg string) error {
 }
 
 func ShowLeaderboard() error {
-	content := scoreboards.LeaderboardContent()
+	content := users.LeaderboardContent()
 	url := onscreensServerURL + "/onscreens/leaderboard/show"
 	url = fmt.Sprintf("%s?content=%s", url, helpers.Base64Encode(content))
 	_, err := getUrl(url)
