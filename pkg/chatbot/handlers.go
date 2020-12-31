@@ -157,7 +157,23 @@ func runCommand(user *users.User, message string) {
 		// trigger the leaderboard command
 	case "!leaderboard":
 		if user.HasCommandAvailable() {
-			monthlyMilesLeaderboard(user)
+			monthlyMilesLeaderboardCmd(user)
+		} else {
+			Say(followerMsg)
+		}
+
+		// trigger the lifetime leaderboard command
+	case "!totalleaderboard":
+		if user.HasCommandAvailable() {
+			lifetimeMilesLeaderboardCmd(user)
+		} else {
+			Say(followerMsg)
+		}
+
+		// trigger the lifetime leaderboard command
+	case "!guessleaderboard":
+		if user.HasCommandAvailable() {
+			monthlyGuessLeaderboardCmd(user)
 		} else {
 			Say(followerMsg)
 		}

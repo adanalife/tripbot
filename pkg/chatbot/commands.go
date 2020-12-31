@@ -220,7 +220,7 @@ func locationCmd(user *users.User) {
 	Whisper(user.Username, msg)
 }
 
-func monthlyMilesLeaderboard(user *users.User) {
+func monthlyMilesLeaderboardCmd(user *users.User) {
 	log.Println(user.Username, "ran !leaderboard")
 
 	// select users to show in leaderboard
@@ -237,7 +237,7 @@ func monthlyMilesLeaderboard(user *users.User) {
 	// build a message to send to chat
 	msg := fmt.Sprintf("Top %d miles this month: ", size)
 	for i, leaderPair := range leaderboard {
-		msg += fmt.Sprintf("%d. %s (%s)", i+1, leaderPair[0], leaderPair[1])
+		msg += fmt.Sprintf("%d. %s (%smi)", i+1, leaderPair[0], leaderPair[1])
 		if i+1 != len(leaderboard) {
 			msg += ", "
 		}
@@ -245,12 +245,8 @@ func monthlyMilesLeaderboard(user *users.User) {
 	Say(msg)
 }
 
-//TODO: better name
-func totalMilesLeaderboardCmd(user *users.User) {
-	log.Println(user.Username, "ran !totalmilesleaderboard")
-
-	// display leaderboard on screen
-	onscreensClient.ShowLeaderboard("Total Miles")
+func lifetimeMilesLeaderboardCmd(user *users.User) {
+	log.Println(user.Username, "ran !totalleaderboard")
 
 	// select users to show in leaderboard
 	size := 10
@@ -259,11 +255,46 @@ func totalMilesLeaderboardCmd(user *users.User) {
 	}
 	leaderboard := users.LifetimeMilesLeaderboard[:size]
 
+	// display leaderboard on screen
+	onscreensClient.ShowLeaderboard("Total Miles", leaderboard)
+
 	// build a message to send to chat
-	msg := fmt.Sprintf("Top %d miles (total): ", size)
+	msg := fmt.Sprintf("Top %d lifetime miles: ", size)
 	for i, leaderPair := range leaderboard {
-		msg += fmt.Sprintf("%d. %s (%s)", i+1, leaderPair[0], leaderPair[1])
+		msg += fmt.Sprintf("%d. %s (%smi)", i+1, leaderPair[0], leaderPair[1])
 		if i+1 != len(leaderboard) {
+			msg += ", "
+		}
+	}
+	Say(msg)
+}
+
+func monthlyGuessLeaderboardCmd(user *users.User) {
+	log.Println(user.Username, "ran !guessleaderboard")
+
+	// select users to show in leaderboard
+	size := 10
+	leaderboard := scoreboards.TopUsers(scoreboards.CurrentGuessScoreboard(), size)
+	if size > len(leaderboard) {
+		size = len(leaderboard)
+	}
+	leaderboard = leaderboard[:size]
+
+	var intLeaderboard [][]string
+	for _, leaderPair := range leaderboard {
+		// guesses are ints not floats, so remove the decimal place
+		intVersion := strings.Split(leaderPair[1], ".")[0]
+		intLeaderboard = append(intLeaderboard, []string{leaderPair[0], intVersion})
+	}
+
+	// display leaderboard on screen
+	onscreensClient.ShowLeaderboard("Correct Guesses This Month", intLeaderboard)
+
+	// build a message to send to chat
+	msg := fmt.Sprintf("Top %d correct guesses this month: ", size)
+	for i, leaderPair := range intLeaderboard {
+		msg += fmt.Sprintf("%d. %s (%s)", i+1, leaderPair[0], leaderPair[1])
+		if i+1 != len(intLeaderboard) {
 			msg += ", "
 		}
 	}
