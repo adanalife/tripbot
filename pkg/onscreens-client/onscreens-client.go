@@ -81,13 +81,14 @@ func ShowTimewarp() error {
 }
 
 func ShowFlag(dur time.Duration) error {
-	url := onscreensServerURL + "/onscreens/flag/show"
-	url = fmt.Sprintf("%s?duration=%s", url, helpers.Base64Encode(string(rune(dur))))
-	_, err := getUrl(url)
-	if err != nil {
-		terrors.Log(err, "error showing flag onscreen")
-		return err
-	}
+	//TODO: bring this back
+	// url := onscreensServerURL + "/onscreens/flag/show"
+	// url = fmt.Sprintf("%s?duration=%s", url, helpers.Base64Encode(string(rune(dur))))
+	// _, err := getUrl(url)
+	// if err != nil {
+	// 	terrors.Log(err, "error showing flag onscreen")
+	// 	return err
+	// }
 	return nil
 }
 
