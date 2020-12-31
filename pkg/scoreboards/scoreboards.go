@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
-	"strings"
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
@@ -28,7 +27,8 @@ func TopUsers(scoreboardName string) [][]string {
 	// users := []User{}
 	var leaderboard [][]string
 
-	ignoredUsers := append(c.IgnoredUsers, strings.ToLower(c.Conf.ChannelName))
+	// ignoredUsers := append(c.IgnoredUsers, strings.ToLower(c.Conf.ChannelName))
+	ignoredUsers := []string{"foobar"}
 	// we use MySQL-style ? bindvars instead of postgres ones here
 	// because that's what sqlx wants for In()
 	q := `SELECT users.username, scores.value FROM scoreboards, scores, users WHERE scoreboards.name = ? AND scores.user_id = users.id AND scores.scoreboard_id = scoreboards.id AND users.username NOT IN (?) ORDER BY scores.value DESC LIMIT ?;`
@@ -37,6 +37,8 @@ func TopUsers(scoreboardName string) [][]string {
 		terrors.Log(err, "error generating query")
 	}
 	spew.Dump(query)
+
+	// Rebind will convert the query to postgres syntax
 	query = database.Connection().Rebind(query)
 	spew.Dump(query)
 	rows, err := database.Connection().Query(query, args...)
