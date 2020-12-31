@@ -108,9 +108,9 @@ func printLeaderboard() {
 }
 
 // LeaderboardContent creates the content for the leaderboard onscreen
-func LeaderboardContent(pluralUnit string, leaderboard [][]string) string {
+func LeaderboardContent(title string, leaderboard [][]string) string {
 	var output string
-	output = strings.Title(pluralUnit) + "\n"
+	output = strings.Title(title) + "\n"
 
 	size := 5
 	if len(leaderboard) < size {
@@ -119,7 +119,7 @@ func LeaderboardContent(pluralUnit string, leaderboard [][]string) string {
 	leaderboard = leaderboard[:size]
 
 	for _, score := range leaderboard {
-		output = output + fmt.Sprintf("%s %s: %s\n", score[1], pluralUnit, score[0])
+		output = output + fmt.Sprintf("%s (%s)\n", score[1], score[0])
 	}
 
 	return output

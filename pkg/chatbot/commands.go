@@ -232,7 +232,7 @@ func monthlyMilesLeaderboard(user *users.User) {
 	leaderboard = leaderboard[:size]
 
 	// display leaderboard on screen
-	onscreensClient.ShowLeaderboard("miles", leaderboard)
+	onscreensClient.ShowLeaderboard("Monthly Miles", leaderboard)
 
 	// build a message to send to chat
 	msg := fmt.Sprintf("Top %d miles this month: ", size)
@@ -249,8 +249,8 @@ func monthlyMilesLeaderboard(user *users.User) {
 func totalMilesLeaderboardCmd(user *users.User) {
 	log.Println(user.Username, "ran !totalmilesleaderboard")
 
-	// // display leaderboard on screen
-	// onscreensClient.ShowLeaderboard()
+	// display leaderboard on screen
+	onscreensClient.ShowLeaderboard("Total Miles")
 
 	// select users to show in leaderboard
 	size := 10
@@ -260,7 +260,7 @@ func totalMilesLeaderboardCmd(user *users.User) {
 	leaderboard := users.LifetimeMilesLeaderboard[:size]
 
 	// build a message to send to chat
-	msg := fmt.Sprintf("Top %d miles: ", size)
+	msg := fmt.Sprintf("Top %d miles (total): ", size)
 	for i, leaderPair := range leaderboard {
 		msg += fmt.Sprintf("%d. %s (%s)", i+1, leaderPair[0], leaderPair[1])
 		if i+1 != len(leaderboard) {

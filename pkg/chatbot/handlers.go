@@ -157,7 +157,7 @@ func runCommand(user *users.User, message string) {
 		// trigger the leaderboard command
 	case "!leaderboard":
 		if user.HasCommandAvailable() {
-			leaderboardCmd(user)
+			monthlyMilesLeaderboard(user)
 		} else {
 			Say(followerMsg)
 		}

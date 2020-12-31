@@ -10,6 +10,7 @@ import (
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/users"
+	"github.com/davecgh/go-spew/spew"
 )
 
 var onscreensServerURL = "http://" + c.Conf.VlcServerHost
@@ -34,10 +35,16 @@ func ShowMiddleText(msg string) error {
 	return err
 }
 
-func ShowLeaderboard(pluralUnit string, leaderboard [][]string) error {
-	content := users.LeaderboardContent(pluralUnit, leaderboard)
+func ShowLeaderboard(title string, leaderboard [][]string) error {
+	content := users.LeaderboardContent(title, leaderboard)
+
+	spew.Dump(content)
+
 	url := onscreensServerURL + "/onscreens/leaderboard/show"
 	url = fmt.Sprintf("%s?content=%s", url, helpers.Base64Encode(content))
+
+	spew.Dump(url)
+
 	_, err := getUrl(url)
 	if err != nil {
 		terrors.Log(err, "error showing leaderboard onscreen")
