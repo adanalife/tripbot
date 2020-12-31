@@ -155,7 +155,7 @@ func runCommand(user *users.User, message string) {
 		}
 
 		// trigger the leaderboard command
-	case "!leaderboard":
+	case "!leaderboard", "!monthlyleaderboard", "!lb", "!mlb":
 		if user.HasCommandAvailable() {
 			monthlyMilesLeaderboardCmd(user)
 		} else {
@@ -163,7 +163,7 @@ func runCommand(user *users.User, message string) {
 		}
 
 		// trigger the lifetime leaderboard command
-	case "!totalleaderboard":
+	case "!totalleaderboard", "!lifetimeleaderboard", "!tlb", "!llb":
 		if user.HasCommandAvailable() {
 			lifetimeMilesLeaderboardCmd(user)
 		} else {
@@ -171,7 +171,7 @@ func runCommand(user *users.User, message string) {
 		}
 
 		// trigger the lifetime leaderboard command
-	case "!guessleaderboard":
+	case "!guessleaderboard", "!glb":
 		if user.HasCommandAvailable() {
 			monthlyGuessLeaderboardCmd(user)
 		} else {

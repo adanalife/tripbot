@@ -45,8 +45,8 @@ func TopUsers(scoreboardName string, size int) [][]string {
 		var value float32
 		err = rows.Scan(&username, &value)
 		if err != nil {
-			//TODO
-			// terrors.Log(err, "error running query")
+			terrors.Log(err, "error scanning row")
+			continue
 		}
 		valueAsString := fmt.Sprintf("%.1f", value)
 		pair := []string{username, valueAsString}
