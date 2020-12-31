@@ -16,10 +16,12 @@ import (
 	"github.com/adanalife/tripbot/pkg/database"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
+	"github.com/adanalife/tripbot/pkg/scoreboards"
 	"github.com/adanalife/tripbot/pkg/server"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/adanalife/tripbot/pkg/video"
+	"github.com/davecgh/go-spew/spew"
 	_ "github.com/dimiro1/banner/autoload"
 	"github.com/gempir/go-twitch-irc/v2"
 	"github.com/getsentry/sentry-go"
@@ -36,12 +38,14 @@ func main() {
 	startHttpServer()
 	findInitialVideo()
 	users.InitLeaderboard()
-	startCron()
-	setUpTwitchClient() // required for the below
-	updateSubscribers()
-	getCurrentUsers()
-	updateWebhookSubscriptions()
-	connectToTwitch()
+	s := scoreboards.TopUsers(scoreboards.CurrentMilesScoreboard())
+	spew.Dump(s)
+	// startCron()
+	// setUpTwitchClient() // required for the below
+	// updateSubscribers()
+	// getCurrentUsers()
+	// updateWebhookSubscriptions()
+	// connectToTwitch()
 }
 
 // createRandomSeed ensures that random numbers will be random
