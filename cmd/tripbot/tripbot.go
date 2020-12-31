@@ -37,8 +37,8 @@ func main() {
 	startHttpServer()
 	findInitialVideo()
 	users.InitLeaderboard()
-	scoreboards.TopUsers(scoreboards.CurrentMilesScoreboard())
-	scoreboards.TopUsers(scoreboards.CurrentGuessScoreboard())
+	scoreboards.TopUsers(scoreboards.CurrentMilesScoreboard(), 10)
+	scoreboards.TopUsers(scoreboards.CurrentGuessScoreboard(), 10)
 	startCron()
 	setUpTwitchClient() // required for the below
 	updateSubscribers()

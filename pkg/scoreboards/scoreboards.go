@@ -20,19 +20,16 @@ type Scoreboard struct {
 	DateCreated time.Time `db:"date_created"`
 }
 
-//TODO: get this from elsewhere
-var initLeaderboardSize = 25
-
-func TopUsers(scoreboardName string) [][]string {
-	// users := []User{}
+func TopUsers(scoreboardName string, size int) [][]string {
 	var leaderboard [][]string
 
 	// ignoredUsers := append(c.IgnoredUsers, strings.ToLower(c.Conf.ChannelName))
 	ignoredUsers := []string{"foobar"}
+
 	// we use MySQL-style ? bindvars instead of postgres ones here
 	// because that's what sqlx wants for In()
 	q := `SELECT users.username, scores.value FROM scoreboards, scores, users WHERE scoreboards.name = ? AND scores.user_id = users.id AND scores.scoreboard_id = scoreboards.id AND users.username NOT IN (?) ORDER BY scores.value DESC LIMIT ?;`
-	query, args, err := sqlx.In(q, scoreboardName, ignoredUsers, initLeaderboardSize)
+	query, args, err := sqlx.In(q, scoreboardName, ignoredUsers, size)
 	if err != nil {
 		terrors.Log(err, "error generating query")
 	}
@@ -51,6 +48,7 @@ func TopUsers(scoreboardName string) [][]string {
 		var value float32
 		err = rows.Scan(&username, &value)
 		if err != nil {
+			//TODO
 			// terrors.Log(err, "error running query")
 		}
 		valueAsString := fmt.Sprintf("%.1f", value)
@@ -101,7 +99,7 @@ func createScoreboard(name string) (Scoreboard, error) {
 	}
 	err = tx.Commit()
 	if err != nil {
-		terrors.Log(err, "error committing scoreboard change in DB")
+		terrors.Log(err, "error committing new scoreboard in DB")
 		return scoreboard, err
 	}
 	return findScoreboard(name)
