@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/adanalife/tripbot/pkg/scoreboards"
 	"log"
 	"math/rand"
 	"os"
@@ -35,7 +36,7 @@ func main() {
 	initializeErrorLogger()
 	startHttpServer()
 	findInitialVideo()
-	users.InitLeaderboard()
+	scoreboards.InitLeaderboard()
 	startCron()
 	setUpTwitchClient() // required for the below
 	updateSubscribers()
