@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strings"
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
+	"github.com/adanalife/tripbot/pkg/scoreboards"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/davecgh/go-spew/spew"
 )
@@ -51,6 +53,29 @@ func ShowLeaderboard(title string, leaderboard [][]string) error {
 		return err
 	}
 	return nil
+}
+
+//TODO: this is taken right from the !guessleaderboard command, DRY it?
+func ShowGuessLeaderboard() {
+	// select users to show in leaderboard
+	size := 10
+	leaderboard := scoreboards.TopUsers(scoreboards.CurrentGuessScoreboard(), size)
+	if size > len(leaderboard) {
+		size = len(leaderboard)
+	}
+	leaderboard = leaderboard[:size]
+
+	var intLeaderboard [][]string
+	for _, leaderPair := range leaderboard {
+		// guesses are ints not floats, so remove the decimal place
+		intVersion := strings.Split(leaderPair[1], ".")[0]
+		intLeaderboard = append(intLeaderboard, []string{leaderPair[0], intVersion})
+	}
+
+	// display leaderboard on screen
+	ShowLeaderboard("Correct Guesses This Month", intLeaderboard)
+	spew.Dump("showing guess leaderboard onscreen")
+	spew.Dump(intLeaderboard)
 }
 
 func ShowTimewarp() error {

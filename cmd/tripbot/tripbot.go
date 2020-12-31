@@ -16,7 +16,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/database"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
-	"github.com/adanalife/tripbot/pkg/scoreboards"
+	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
 	"github.com/adanalife/tripbot/pkg/server"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/users"
@@ -37,8 +37,6 @@ func main() {
 	startHttpServer()
 	findInitialVideo()
 	users.InitLeaderboard()
-	scoreboards.TopUsers(scoreboards.CurrentMilesScoreboard(), 10)
-	scoreboards.TopUsers(scoreboards.CurrentGuessScoreboard(), 10)
 	startCron()
 	setUpTwitchClient() // required for the below
 	updateSubscribers()
@@ -169,7 +167,8 @@ func scheduleBackgroundJobs() {
 	// use this to keep the connection to MPD running
 	err = background.Cron.AddFunc("@every 60s", audio.RefreshClient)
 	err = background.Cron.AddFunc("@every 61s", users.UpdateSession)
-	// err = background.Cron.AddFunc("@every 62s", users.UpdateLeaderboard)
+	err = background.Cron.AddFunc("@every 62s", users.UpdateLeaderboard)
+	err = background.Cron.AddFunc("@every 3m", onscreensClient.ShowGuessLeaderboard)
 	err = background.Cron.AddFunc("@every 5m", users.PrintCurrentSession)
 	err = background.Cron.AddFunc("@every 15m", mytwitch.GetSubscribers)
 	err = background.Cron.AddFunc("@every 1h", mytwitch.RefreshUserAccessToken)
