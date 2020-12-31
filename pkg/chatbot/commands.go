@@ -226,10 +226,10 @@ func leaderboardCmd(user *users.User) {
 	// // display leaderboard on screen
 	// onscreensClient.ShowLeaderboard()
 	// size := 10
-	// if size > len(users.Leaderboard) {
-	// 	size = len(users.Leaderboard)
+	// if size > len(users.LifetimeMilesLeaderboard) {
+	// 	size = len(users.LifetimeMilesLeaderboard)
 	// }
-	// leaderboard := users.Leaderboard[:size]
+	// leaderboard := users.LifetimeMilesLeaderboard[:size]
 	// msg := fmt.Sprintf("Top %d miles: ", size)
 	// for i, leaderPair := range leaderboard {
 	// 	msg += fmt.Sprintf("%d. %s (%s)", i+1, leaderPair[0], leaderPair[1])
