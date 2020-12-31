@@ -222,22 +222,24 @@ func locationCmd(user *users.User) {
 
 func leaderboardCmd(user *users.User) {
 	log.Println(user.Username, "ran !leaderboard")
-	Say("This command is disabled... for now!")
-	// // display leaderboard on screen
-	// onscreensClient.ShowLeaderboard()
-	// size := 10
-	// if size > len(users.Leaderboard) {
-	// 	size = len(users.Leaderboard)
-	// }
-	// leaderboard := users.Leaderboard[:size]
-	// msg := fmt.Sprintf("Top %d miles: ", size)
-	// for i, leaderPair := range leaderboard {
-	// 	msg += fmt.Sprintf("%d. %s (%s)", i+1, leaderPair[0], leaderPair[1])
-	// 	if i+1 != len(leaderboard) {
-	// 		msg += ", "
-	// 	}
-	// }
-	// Say(msg)
+	size := 10
+	if size > len(scoreboards.Leaderboard) {
+		size = len(scoreboards.Leaderboard)
+	}
+	leaderboard := scoreboards.Leaderboard[:size]
+
+	// display leaderboard on screen
+	onscreensClient.ShowLeaderboard()
+
+	// build a message to send to chat
+	msg := fmt.Sprintf("Top %d miles: ", size)
+	for i, leaderPair := range leaderboard {
+		msg += fmt.Sprintf("%d. %s (%s)", i+1, leaderPair[0], leaderPair[1])
+		if i+1 != len(leaderboard) {
+			msg += ", "
+		}
+	}
+	Say(msg)
 }
 
 func timeCmd(user *users.User) {
