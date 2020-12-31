@@ -216,8 +216,9 @@ func locationCmd(user *users.User) {
 	msg := fmt.Sprintf("%s %s", address, url)
 	// record that they know the location now
 	user.SetLastLocationTime()
-	Say("Sending the location in a whisper... shh!")
-	Whisper(user.Username, msg)
+	// Say("Sending the location in a whisper... shh!")
+	// Whisper(user.Username, msg)
+	Say(msg)
 }
 
 func monthlyMilesLeaderboardCmd(user *users.User) {
@@ -409,8 +410,9 @@ func stateCmd(user *users.User) {
 	onscreensClient.ShowFlag(10 * time.Second)
 	// record that they know the location now
 	user.SetLastLocationTime()
-	Say("Sending the state in a whisper... shh!")
-	Whisper(user.Username, msg)
+	// Say("Sending the state in a whisper... shh!")
+	// Whisper(user.Username, msg)
+	Say(msg)
 }
 
 //TODO: maybe there could be a !cancel command or something
