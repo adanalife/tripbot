@@ -34,8 +34,8 @@ func ShowMiddleText(msg string) error {
 	return err
 }
 
-func ShowLeaderboard() error {
-	content := users.LeaderboardContent()
+func ShowLeaderboard(pluralUnit string, leaderboard [][]string) error {
+	content := users.LeaderboardContent(pluralUnit, leaderboard)
 	url := onscreensServerURL + "/onscreens/leaderboard/show"
 	url = fmt.Sprintf("%s?content=%s", url, helpers.Base64Encode(content))
 	_, err := getUrl(url)

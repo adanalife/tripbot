@@ -220,11 +220,37 @@ func locationCmd(user *users.User) {
 	Whisper(user.Username, msg)
 }
 
-func leaderboardCmd(user *users.User) {
+func monthlyMilesLeaderboard(user *users.User) {
 	log.Println(user.Username, "ran !leaderboard")
 
+	// select users to show in leaderboard
+	size := 10
+	leaderboard := scoreboards.TopUsers(scoreboards.CurrentMilesScoreboard(), size)
+	if size > len(leaderboard) {
+		size = len(leaderboard)
+	}
+	leaderboard = leaderboard[:size]
+
 	// display leaderboard on screen
-	onscreensClient.ShowLeaderboard()
+	onscreensClient.ShowLeaderboard("miles", leaderboard)
+
+	// build a message to send to chat
+	msg := fmt.Sprintf("Top %d miles this month: ", size)
+	for i, leaderPair := range leaderboard {
+		msg += fmt.Sprintf("%d. %s (%s)", i+1, leaderPair[0], leaderPair[1])
+		if i+1 != len(leaderboard) {
+			msg += ", "
+		}
+	}
+	Say(msg)
+}
+
+//TODO: better name
+func totalMilesLeaderboardCmd(user *users.User) {
+	log.Println(user.Username, "ran !totalmilesleaderboard")
+
+	// // display leaderboard on screen
+	// onscreensClient.ShowLeaderboard()
 
 	// select users to show in leaderboard
 	size := 10

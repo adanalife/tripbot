@@ -108,18 +108,18 @@ func printLeaderboard() {
 }
 
 // LeaderboardContent creates the content for the leaderboard onscreen
-func LeaderboardContent() string {
+func LeaderboardContent(pluralUnit string, leaderboard [][]string) string {
 	var output string
-	output = "Odometer LifetimeMilesLeaderboard\n"
+	output = strings.Title(pluralUnit) + "\n"
 
 	size := 5
-	if len(LifetimeMilesLeaderboard) < size {
-		size = len(LifetimeMilesLeaderboard)
+	if len(leaderboard) < size {
+		size = len(leaderboard)
 	}
-	leaderboard := LifetimeMilesLeaderboard[:size]
+	leaderboard = leaderboard[:size]
 
 	for _, score := range leaderboard {
-		output = output + fmt.Sprintf("%s miles: %s\n", score[1], score[0])
+		output = output + fmt.Sprintf("%s %s: %s\n", score[1], pluralUnit, score[0])
 	}
 
 	return output

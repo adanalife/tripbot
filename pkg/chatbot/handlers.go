@@ -154,8 +154,8 @@ func runCommand(user *users.User, message string) {
 			Say(followerMsg)
 		}
 
-		// any of these should trigger the leaderboard command
-	case "!leaderboard", "!newleaderboard":
+		// trigger the leaderboard command
+	case "!leaderboard":
 		if user.HasCommandAvailable() {
 			leaderboardCmd(user)
 		} else {
@@ -164,6 +164,7 @@ func runCommand(user *users.User, message string) {
 
 		// any of these should trigger the report command
 		//TODO: probably want to allow people to run this more than once?
+		//TODO: the two-word ones dont work
 	case "!report", "no audio", "no sound", "no music", "frozen":
 		if user.HasCommandAvailable() {
 			reportCmd(user, params)
