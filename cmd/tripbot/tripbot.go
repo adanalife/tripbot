@@ -9,7 +9,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/adanalife/tripbot/pkg/audio"
 	"github.com/adanalife/tripbot/pkg/background"
 	"github.com/adanalife/tripbot/pkg/chatbot"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
@@ -151,7 +150,6 @@ func gracefulShutdown() {
 		terrors.Log(err, "error closing DB connection")
 	}
 	background.StopCron()
-	audio.Shutdown()
 	sentry.Flush(time.Second * 5)
 	os.Exit(1)
 }
@@ -173,13 +171,6 @@ func scheduleBackgroundJobs() {
 	err = background.Cron.AddFunc("@every 1h", mytwitch.RefreshUserAccessToken)
 	err = background.Cron.AddFunc("@every 2h57m30s", chatbot.Chatter)
 	err = background.Cron.AddFunc("@every 12h", mytwitch.UpdateWebhookSubscriptions)
-	// use this to keep the connection to MPD running
-	if !c.Conf.DisableMusic {
-		err = background.Cron.AddFunc("@every 60s", audio.RefreshClient)
-		if helpers.RunningOnDarwin() {
-			err = background.Cron.AddFunc("@every 6h", audio.RestartItunes)
-		}
-	}
 	if !helpers.RunningOnWindows() {
 		err = background.Cron.AddFunc("@every 12h", mytwitch.SetStreamTags)
 	}

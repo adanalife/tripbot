@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/adanalife/tripbot/pkg/audio"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
 	"github.com/adanalife/tripbot/pkg/scoreboards"
@@ -98,25 +97,6 @@ func versionCmd(user *users.User) {
 	}
 
 	Say("Current version is " + currentVersion)
-}
-
-func songCmd(user *users.User) {
-	log.Println(user.Username, "ran !song")
-	currentSong := audio.CurrentlyPlaying()
-
-	//TODO: what are the other possible player states?
-	if currentSong == "stop" {
-		Say("Player is currently stopped")
-		return
-	}
-
-	// just print the link to somaFM if there's an issue
-	if currentSong == "error" {
-		Say("https://somafm.com/groovesalad/songhistory.html")
-		return
-	}
-	msg := fmt.Sprintf("We're listening to %s", currentSong)
-	Say(msg)
 }
 
 func uptimeCmd(user *users.User) {
@@ -463,24 +443,8 @@ func shutdownCmd(user *users.User) {
 	if err != nil {
 		log.Println(err)
 	}
-	audio.Shutdown()
 	sentry.Flush(time.Second * 5)
 	os.Exit(0)
-}
-
-func restartMusicCmd(user *users.User) {
-	log.Println(user.Username, "ran !restartmusic")
-	if !c.UserIsAdmin(user.Username) {
-		Say("You can't do that, but please !report any stream issues")
-		return
-	}
-
-	Say("Restarting music player...")
-	if helpers.RunningOnDarwin() {
-		audio.RestartItunes()
-	} else {
-		audio.PlayGrooveSalad()
-	}
 }
 
 //TODO: this will always be lower case, find out why
