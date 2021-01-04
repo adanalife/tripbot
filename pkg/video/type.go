@@ -79,18 +79,6 @@ func (v Video) toDate() time.Time {
 	return t
 }
 
-//TODO: re-enable this so it's not a dependency of vlc-server
-// ocrCoords will use OCR to read the coordinates from a screenshot (seriously)
-// func (v Video) ocrCoords() (float64, float64, error) {
-// 	for _, timestamp := range c.Conf.TimestampsToTry {
-// 		lat, lng, err := ocr.CoordsFromImage(v.screencap(timestamp))
-// 		if err == nil {
-// 			return lat, lng, err
-// 		}
-// 	}
-// 	return 0, 0, errors.New("none of the screencaps had valid coords")
-// }
-
 // slug strips the path and extension off the file
 func slug(file string) string {
 	fileName := path.Base(file)

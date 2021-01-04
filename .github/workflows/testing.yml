@@ -34,6 +34,6 @@ jobs:
           ${{ runner.os }}-go-
     - name: Install Dependencies (linux)
       if: matrix.platform == 'ubuntu-latest'
-      run: sudo apt update && sudo apt install -y --no-install-recommends tesseract-ocr libtesseract-dev libvlc-dev
+      run: sudo apt update && sudo apt install -y --no-install-recommends libvlc-dev
     - name: Run Go Tests
       run: go test ./...
