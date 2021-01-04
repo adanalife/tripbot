@@ -20,6 +20,7 @@ type Score struct {
 }
 
 // GetScoreByName returns the score value for a given username and scoreboard name
+//TODO: this could be achieved with a single query
 func GetScoreByName(username, scoreboardName string) (float32, error) {
 	var score Score
 	userID, err := getUserIDByName(username)
@@ -41,6 +42,7 @@ func GetScoreByName(username, scoreboardName string) (float32, error) {
 }
 
 // AddToScoreByName increases the score value for a given username and scoreboard name
+//TODO: this could be achieved with less queries
 func AddToScoreByName(username, scoreboardName string, scoreToAdd float32) error {
 	var score Score
 	userID, err := getUserIDByName(username)
@@ -77,6 +79,7 @@ func findOrCreateScore(userID, scoreboardID uint16) (Score, error) {
 }
 
 // findScore will look up the username in the DB, and return a Score if possible
+//TODO: this shouldn't be necessary, join the tables instead
 func findScore(userID, scoreboardID uint16) (Score, error) {
 	var score Score
 	query := `SELECT * FROM scores WHERE user_id=$1 AND scoreboard_id=$2`
@@ -117,6 +120,7 @@ func (s Score) save() error {
 }
 
 // getUserIDByName fetches the user ID for a given username
+//TODO: this shouldn't be necessary, join the tables instead
 func getUserIDByName(username string) (uint16, error) {
 	var userID uint16
 	query := `SELECT id FROM users WHERE username=$1`

@@ -16,6 +16,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/database"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
+	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
 	"github.com/adanalife/tripbot/pkg/server"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/users"
@@ -163,17 +164,21 @@ func scheduleBackgroundJobs() {
 
 	// schedule these functions
 	err = background.Cron.AddFunc("@every 60s", video.GetCurrentlyPlaying)
-	// use this to keep the connection to MPD running
-	err = background.Cron.AddFunc("@every 60s", audio.RefreshClient)
 	err = background.Cron.AddFunc("@every 61s", users.UpdateSession)
-	// err = background.Cron.AddFunc("@every 62s", users.UpdateLeaderboard)
+	err = background.Cron.AddFunc("@every 62s", users.UpdateLeaderboard)
+	// keep the guess leaderboard on screen
+	err = background.Cron.AddFunc("@every 3m", onscreensClient.ShowGuessLeaderboard)
 	err = background.Cron.AddFunc("@every 5m", users.PrintCurrentSession)
 	err = background.Cron.AddFunc("@every 15m", mytwitch.GetSubscribers)
 	err = background.Cron.AddFunc("@every 1h", mytwitch.RefreshUserAccessToken)
 	err = background.Cron.AddFunc("@every 2h57m30s", chatbot.Chatter)
 	err = background.Cron.AddFunc("@every 12h", mytwitch.UpdateWebhookSubscriptions)
-	if helpers.RunningOnDarwin() {
-		err = background.Cron.AddFunc("@every 6h", audio.RestartItunes)
+	// use this to keep the connection to MPD running
+	if !c.Conf.DisableMusic {
+		err = background.Cron.AddFunc("@every 60s", audio.RefreshClient)
+		if helpers.RunningOnDarwin() {
+			err = background.Cron.AddFunc("@every 6h", audio.RestartItunes)
+		}
 	}
 	if !helpers.RunningOnWindows() {
 		err = background.Cron.AddFunc("@every 12h", mytwitch.SetStreamTags)

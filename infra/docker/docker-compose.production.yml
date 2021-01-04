@@ -17,3 +17,4 @@ services:
       - "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/screencaps:/opt/data/screencaps:ro"
       - "/Volumes/Leeroy/Dana's Photos/blackbox/cropped-corners:/opt/data/cropped-corners:ro"
     depends_on: {}
+    restart: always

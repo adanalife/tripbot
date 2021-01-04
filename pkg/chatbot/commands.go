@@ -216,28 +216,90 @@ func locationCmd(user *users.User) {
 	msg := fmt.Sprintf("%s %s", address, url)
 	// record that they know the location now
 	user.SetLastLocationTime()
-	Say("Sending the location in a whisper... shh!")
-	Whisper(user.Username, msg)
+	// Say("Sending the location in a whisper... shh!")
+	// Whisper(user.Username, msg)
+	Say(msg)
 }
 
-func leaderboardCmd(user *users.User) {
+func monthlyMilesLeaderboardCmd(user *users.User) {
 	log.Println(user.Username, "ran !leaderboard")
-	Say("This command is disabled... for now!")
-	// // display leaderboard on screen
-	// onscreensClient.ShowLeaderboard()
-	// size := 10
-	// if size > len(users.Leaderboard) {
-	// 	size = len(users.Leaderboard)
-	// }
-	// leaderboard := users.Leaderboard[:size]
-	// msg := fmt.Sprintf("Top %d miles: ", size)
-	// for i, leaderPair := range leaderboard {
-	// 	msg += fmt.Sprintf("%d. %s (%s)", i+1, leaderPair[0], leaderPair[1])
-	// 	if i+1 != len(leaderboard) {
-	// 		msg += ", "
-	// 	}
-	// }
-	// Say(msg)
+
+	// select users to show in leaderboard
+	size := 10
+	leaderboard := scoreboards.TopUsers(scoreboards.CurrentMilesScoreboard(), size)
+	if size > len(leaderboard) {
+		size = len(leaderboard)
+	}
+	leaderboard = leaderboard[:size]
+
+	// display leaderboard on screen
+	onscreensClient.ShowLeaderboard("Monthly Miles", leaderboard)
+
+	// build a message to send to chat
+	msg := fmt.Sprintf("Top %d miles this month: ", size)
+	for i, leaderPair := range leaderboard {
+		msg += fmt.Sprintf("%d. %s (%smi)", i+1, leaderPair[0], leaderPair[1])
+		if i+1 != len(leaderboard) {
+			msg += ", "
+		}
+	}
+	Say(msg)
+}
+
+func lifetimeMilesLeaderboardCmd(user *users.User) {
+	log.Println(user.Username, "ran !totalleaderboard")
+
+	// select users to show in leaderboard
+	size := 10
+	if size > len(users.LifetimeMilesLeaderboard) {
+		size = len(users.LifetimeMilesLeaderboard)
+	}
+	leaderboard := users.LifetimeMilesLeaderboard[:size]
+
+	// display leaderboard on screen
+	onscreensClient.ShowLeaderboard("Total Miles", leaderboard)
+
+	// build a message to send to chat
+	msg := fmt.Sprintf("Top %d lifetime miles: ", size)
+	for i, leaderPair := range leaderboard {
+		msg += fmt.Sprintf("%d. %s (%smi)", i+1, leaderPair[0], leaderPair[1])
+		if i+1 != len(leaderboard) {
+			msg += ", "
+		}
+	}
+	Say(msg)
+}
+
+func monthlyGuessLeaderboardCmd(user *users.User) {
+	log.Println(user.Username, "ran !guessleaderboard")
+
+	// select users to show in leaderboard
+	size := 10
+	leaderboard := scoreboards.TopUsers(scoreboards.CurrentGuessScoreboard(), size)
+	if size > len(leaderboard) {
+		size = len(leaderboard)
+	}
+	leaderboard = leaderboard[:size]
+
+	var intLeaderboard [][]string
+	for _, leaderPair := range leaderboard {
+		// guesses are ints not floats, so remove the decimal place
+		intVersion := strings.Split(leaderPair[1], ".")[0]
+		intLeaderboard = append(intLeaderboard, []string{leaderPair[0], intVersion})
+	}
+
+	// display leaderboard on screen
+	onscreensClient.ShowLeaderboard("Correct Guesses This Month", intLeaderboard)
+
+	// build a message to send to chat
+	msg := fmt.Sprintf("Top %d correct guesses this month: ", size)
+	for i, leaderPair := range intLeaderboard {
+		msg += fmt.Sprintf("%d. %s (%s)", i+1, leaderPair[0], leaderPair[1])
+		if i+1 != len(intLeaderboard) {
+			msg += ", "
+		}
+	}
+	Say(msg)
 }
 
 func timeCmd(user *users.User) {
@@ -348,8 +410,9 @@ func stateCmd(user *users.User) {
 	onscreensClient.ShowFlag(10 * time.Second)
 	// record that they know the location now
 	user.SetLastLocationTime()
-	Say("Sending the state in a whisper... shh!")
-	Whisper(user.Username, msg)
+	// Say("Sending the state in a whisper... shh!")
+	// Whisper(user.Username, msg)
+	Say(msg)
 }
 
 //TODO: maybe there could be a !cancel command or something

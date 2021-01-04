@@ -154,16 +154,33 @@ func runCommand(user *users.User, message string) {
 			Say(followerMsg)
 		}
 
-		// any of these should trigger the leaderboard command
-	case "!leaderboard", "!newleaderboard":
+		// trigger the leaderboard command
+	case "!leaderboard", "!monthlyleaderboard", "!lb", "!mlb":
 		if user.HasCommandAvailable() {
-			leaderboardCmd(user)
+			monthlyMilesLeaderboardCmd(user)
+		} else {
+			Say(followerMsg)
+		}
+
+		// trigger the lifetime leaderboard command
+	case "!totalleaderboard", "!lifetimeleaderboard", "!tlb", "!llb":
+		if user.HasCommandAvailable() {
+			lifetimeMilesLeaderboardCmd(user)
+		} else {
+			Say(followerMsg)
+		}
+
+		// trigger the lifetime leaderboard command
+	case "!guessleaderboard", "!glb":
+		if user.HasCommandAvailable() {
+			monthlyGuessLeaderboardCmd(user)
 		} else {
 			Say(followerMsg)
 		}
 
 		// any of these should trigger the report command
 		//TODO: probably want to allow people to run this more than once?
+		//TODO: the two-word ones dont work
 	case "!report", "no audio", "no sound", "no music", "frozen":
 		if user.HasCommandAvailable() {
 			reportCmd(user, params)

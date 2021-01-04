@@ -12,11 +12,11 @@ import (
 	"github.com/logrusorgru/aurora"
 )
 
-var Leaderboard [][]string
+var LifetimeMilesLeaderboard [][]string
 var initLeaderboardSize = 25
 var maxLeaderboardSize = 50
 
-// Leaderboard creates a leaderboard
+// LifetimeMilesLeaderboard creates a leaderboard
 func InitLeaderboard() {
 	users := []User{}
 
@@ -37,7 +37,7 @@ func InitLeaderboard() {
 	for _, user := range users {
 		miles := fmt.Sprintf("%.1f", user.Miles)
 		pair := []string{user.Username, miles}
-		Leaderboard = append(Leaderboard, pair)
+		LifetimeMilesLeaderboard = append(LifetimeMilesLeaderboard, pair)
 	}
 }
 
@@ -49,9 +49,9 @@ func UpdateLeaderboard() {
 		}
 		insertIntoLeaderboard(*user)
 	}
-	// truncate Leaderboard if it gets too big
-	if len(Leaderboard) > maxLeaderboardSize {
-		Leaderboard = Leaderboard[:maxLeaderboardSize]
+	// truncate LifetimeMilesLeaderboard if it gets too big
+	if len(LifetimeMilesLeaderboard) > maxLeaderboardSize {
+		LifetimeMilesLeaderboard = LifetimeMilesLeaderboard[:maxLeaderboardSize]
 	}
 }
 
@@ -72,29 +72,29 @@ func insertIntoLeaderboard(user User) {
 	// get the current miles as a float
 	miles := user.CurrentMiles()
 
-	for i, pair := range Leaderboard {
+	for i, pair := range LifetimeMilesLeaderboard {
 		val := strToFloat32(pair[1])
 		// see if our miles are higher
 		if miles >= val {
 			milesStr := fmt.Sprintf("%.1f", miles)
 			newPair := []string{user.Username, milesStr}
 
-			// insert into Leaderboard
+			// insert into LifetimeMilesLeaderboard
 			// https://github.com/golang/go/wiki/SliceTricks#insert
-			Leaderboard = append(Leaderboard[:i], append([][]string{newPair}, Leaderboard[i:]...)...)
+			LifetimeMilesLeaderboard = append(LifetimeMilesLeaderboard[:i], append([][]string{newPair}, LifetimeMilesLeaderboard[i:]...)...)
 			return
 		}
 	}
 }
 
-// removeFromLeaderboard searches the Leaderboard for
+// removeFromLeaderboard searches the LifetimeMilesLeaderboard for
 // a username and removes it
 func removeFromLeaderboard(username string) {
-	for i, pair := range Leaderboard {
+	for i, pair := range LifetimeMilesLeaderboard {
 		if pair[0] == username {
-			// delete from Leaderboard
+			// delete from LifetimeMilesLeaderboard
 			// https://github.com/golang/go/wiki/SliceTricks#delete
-			Leaderboard = append(Leaderboard[:i], Leaderboard[i+1:]...)
+			LifetimeMilesLeaderboard = append(LifetimeMilesLeaderboard[:i], LifetimeMilesLeaderboard[i+1:]...)
 			return
 		}
 	}
@@ -102,24 +102,24 @@ func removeFromLeaderboard(username string) {
 
 // this was used for development
 func printLeaderboard() {
-	for i, pair := range Leaderboard {
+	for i, pair := range LifetimeMilesLeaderboard {
 		fmt.Printf("%d: %s - %s\n", i+1, pair[1], aurora.Magenta(pair[0]))
 	}
 }
 
 // LeaderboardContent creates the content for the leaderboard onscreen
-func LeaderboardContent() string {
+func LeaderboardContent(title string, leaderboard [][]string) string {
 	var output string
-	output = "Odometer Leaderboard\n"
+	output = strings.Title(title) + "\n"
 
 	size := 5
-	if len(Leaderboard) < size {
-		size = len(Leaderboard)
+	if len(leaderboard) < size {
+		size = len(leaderboard)
 	}
-	leaderboard := Leaderboard[:size]
+	leaderboard = leaderboard[:size]
 
 	for _, score := range leaderboard {
-		output = output + fmt.Sprintf("%s miles: %s\n", score[1], score[0])
+		output = output + fmt.Sprintf("%s (%s)\n", score[1], score[0])
 	}
 
 	return output
