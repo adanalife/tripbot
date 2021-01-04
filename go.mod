@@ -10,7 +10,6 @@ require (
 	github.com/davecgh/go-spew v1.1.1
 	github.com/dimiro1/banner v1.0.0
 	github.com/disintegration/imaging v1.6.2
-	github.com/fhs/gompd v2.0.0+incompatible
 	github.com/gempir/go-twitch-irc/v2 v2.5.0
 	github.com/getsentry/sentry-go v0.8.0
 	github.com/go-sql-driver/mysql v1.5.0 // indirect
