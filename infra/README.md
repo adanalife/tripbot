@@ -106,7 +106,6 @@ apt install xsel # pbcopy/pbpaste
 
 # install golang
 sudo snap install go --classic
-# sudo apt install tesseract-ocr libtesseract-dev
 
 # if you started with ubuntu-server…
 sudo apt-get install --no-install-recommends ubuntu-desktop

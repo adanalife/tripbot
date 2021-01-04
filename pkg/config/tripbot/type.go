@@ -26,8 +26,6 @@ type TripbotConfig struct {
 	// ScreencapDir is where we store full screenshots from the videos
 	ScreencapDir string `default:"/opt/data/screencaps" envconfig:"SCREENCAP_DIR"`
 
-	// CroppedCornersDir is where we store the cropped versions of screencaps (to OCR them)
-	CroppedCornersDir string `default:"/opt/data/cropped-corner" envconfig:"CROPPED_CORNERS_DIR"`
 	// MapsOutputDir is where generated maps will be stored
 	MapsOutputDir string `default:"/opt/data/maps" envconfig:"MAPS_OUTPUT_DIR"`
 
