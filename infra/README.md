@@ -102,13 +102,6 @@ apt install xsel # pbcopy/pbpaste
 # install xfce4-terminal
 # install postgresql
 # start it, set up db
-#install mopidy, mopidy-somafm, mopidy-scrobbler
-# configure mopidy
-sudo python -m pip install Mopidy-API-Explorer
-# install gmpc (music player)
-
-configure pulseaudio
-https://docs.mopidy.com/en/latest/running/service/#system-service-and-pulseaudio
 
 
 # install golang
