@@ -43,5 +43,4 @@ type TripbotConfig struct {
 	TripbotServerPort string `default:"8080" envconfig:"TRIPBOT_SERVER_PORT"`
 	// VlcServerHost is used to specify the host for the VLC webserver
 	VlcServerHost string `required:"true" envconfig:"VLC_SERVER_HOST"`
-	MpdServerHost string `required:"true" envconfig:"MPD_SERVER_HOST"`
 }
