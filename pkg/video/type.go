@@ -85,12 +85,6 @@ func slug(file string) string {
 	return removeFileExtension(fileName)
 }
 
-// timestamp is something like 000, 030, 100, etc
-func (v Video) screencap(timestamp string) string {
-	screencapFile := fmt.Sprintf("%s-%s.png", v.DashStr(), timestamp)
-	return filepath.Join(c.Conf.ScreencapDir, screencapFile)
-}
-
 func removeFileExtension(filename string) string {
 	ext := path.Ext(filename)
 	return filename[0 : len(filename)-len(ext)]

@@ -23,8 +23,6 @@ type TripbotConfig struct {
 
 	// VideoDir is where the videos live
 	VideoDir string `default:"/opt/data/Dashcam/_all" envconfig:"VIDEO_DIR"`
-	// ScreencapDir is where we store full screenshots from the videos
-	ScreencapDir string `default:"/opt/data/screencaps" envconfig:"SCREENCAP_DIR"`
 
 	// MapsOutputDir is where generated maps will be stored
 	MapsOutputDir string `default:"/opt/data/maps" envconfig:"MAPS_OUTPUT_DIR"`
