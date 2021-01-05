@@ -6,6 +6,7 @@ import (
 	"log"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
@@ -23,7 +24,7 @@ import (
 
 // LoggedIn is a map that contains all the currently logged-in users,
 // mapping their username to a User
-var LoggedIn = make(map[string]*User)
+var LoggedIn sync.Map
 
 // UpdateSession will use the data from the Twitch API to maintain a list
 // of currently-logged-in users
