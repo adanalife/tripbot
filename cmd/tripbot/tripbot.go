@@ -166,8 +166,7 @@ func scheduleBackgroundJobs() {
 	err = background.Cron.AddFunc("@every 60s", video.GetCurrentlyPlaying)
 	err = background.Cron.AddFunc("@every 61s", users.UpdateSession)
 	err = background.Cron.AddFunc("@every 62s", users.UpdateLeaderboard)
-	// keep the guess leaderboard on screen
-	err = background.Cron.AddFunc("@every 3m", onscreensClient.ShowGuessLeaderboard)
+	err = background.Cron.AddFunc("@every 15m", onscreensClient.ShowGuessLeaderboard)
 	err = background.Cron.AddFunc("@every 5m", users.PrintCurrentSession)
 	err = background.Cron.AddFunc("@every 15m", mytwitch.GetSubscribers)
 	err = background.Cron.AddFunc("@every 1h", mytwitch.RefreshUserAccessToken)
