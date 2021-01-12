@@ -93,6 +93,7 @@ var IgnoredUsers = []string{
 	"sad_grl",
 	"saddestkitty",
 	"sillygnome225",
+	"ildelara",
 	"slocool",
 	"streamlabs",
 	"talkingrobble",
