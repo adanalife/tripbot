@@ -23,6 +23,8 @@ jobs:
           workdir: cmd/tripbot
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install dependencies
+        run: sudo apt update && sudo apt install -y --no-install-recommends libvlc-dev
       - name: release-vlc-server
         uses: goreleaser/goreleaser-action@v2
         with:
