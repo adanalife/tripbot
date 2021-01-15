@@ -1,0 +1,17 @@
+on:
+  issue_comment:
+    types: [created]
+
+name: Update PR
+jobs:
+  update-branch:
+    name: update-branch
+    if: github.event.issue.pull_request != '' && contains(github.event.comment.body, '/update')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the latest code
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - name: Automatic Update
+        uses: ankitvgupta/pr-updater@v1.4.0
