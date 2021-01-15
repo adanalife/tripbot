@@ -40,8 +40,10 @@ jobs:
       continue-on-error: true
       with:
         lfs: true
-    - name: Build docker-compose stack
-      run: docker-compose --project-directory . -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.testing.yml -f infra/docker/docker-compose.github.yml build
+    - name: Build tripbot
+      run: docker-compose --project-directory . -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.testing.yml -f infra/docker/docker-compose.github.yml build tripbot
+    - name: Build obs
+      run: docker-compose --project-directory . -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.testing.yml -f infra/docker/docker-compose.github.yml build obs
     - name: Start the docker-compose stack
       run: docker-compose --project-directory . --env-file infra/docker/env.docker -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.testing.yml -f infra/docker/docker-compose.github.yml up -d
     - run: sleep 10
@@ -53,6 +55,10 @@ jobs:
       run: docker logs tripbot_tripbot_1
     - name: Check running containers
       run: docker ps -a
+    - name: Stop containers
+      run: docker-compose down
+      if: always() # run this even if previous steps fail
+      continue-on-error: true
 
     #TODO: consider taking a screenshot:
     # docker exec -e DISPLAY=:0.0 -w /tmp tripbot_obs_1 scrot -z -t 20 -e 'cat $m && rm $f $m' > screenshot.png
