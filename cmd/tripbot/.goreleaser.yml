@@ -27,7 +27,3 @@ checksum:
   name_template: 'checksums.txt'
 changelog:
   sort: asc
-release:
-  # If set to true, will not auto-publish the release.
-  # Default is false.
-  draft: true
