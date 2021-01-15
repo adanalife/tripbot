@@ -9,7 +9,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    #TODO: these are being set on all steps and that's overkill
     env:
       # enable BuildKit
       # https://www.docker.com/blog/faster-builds-in-compose-thanks-to-buildkit-support/

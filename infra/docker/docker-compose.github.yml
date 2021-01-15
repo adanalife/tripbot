@@ -12,9 +12,11 @@ services:
       - TWITCH_CLIENT_SECRET
     build:
       # pull down cache layers from repo
-      cache_from: adanalife/tripbot
+      cache_from:
+        - adanalife/tripbot
 
   obs:
     build:
       # pull down cache layers from repo
-      cache_from: adanalife/obs
+      cache_from:
+        - adanalife/obs
