@@ -27,16 +27,3 @@ changelog:
     exclude:
       - '^docs:'
       - '^test:'
-dockers:
-  - dockerfile: ../../infra/docker/tripbot/Dockerfile
-    image_templates:
-    - "adanalife/tripbot:{{ .Tag }}"
-    - "adanalife/tripbot:v{{ .Major }}"
-    - "adanalife/tripbot:v{{ .Major }}.{{ .Minor }}"
-    - "adanalife/tripbot:latest"
-    build_flag_templates:
-    - "--pull"
-    - "--label=org.opencontainers.image.created={{.Date}}"
-    - "--label=org.opencontainers.image.title={{.ProjectName}}"
-    - "--label=org.opencontainers.image.revision={{.FullCommit}}"
-    - "--label=org.opencontainers.image.version={{.Version}}"
