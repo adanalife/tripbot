@@ -40,9 +40,9 @@ jobs:
         version: ${{ steps.bump-version.outputs.tag }}
         projects: tripbot vlc-server
 
-	- name: Post Discord notification
-	  env:
-            DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-	  uses: Ilshidur/action-discord@0.3.0
-	  with:
-            args: 'New release for {{ EVENT_PAYLOAD.repository.full_name }}: {{ steps.get-version.outputs.version }} '
+    - name: Post Discord notification
+      env:
+        DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+      uses: Ilshidur/action-discord@0.3.0
+      with:
+        args: 'New release for {{ EVENT_PAYLOAD.repository.full_name }}: {{ steps.get-version.outputs.version }} '
