@@ -8,6 +8,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+    - id: get-version
+      uses: battila7/get-version-action@v2
     - uses: actions/checkout@v2
       with:
         fetch-depth: '0'
@@ -37,3 +39,10 @@ jobs:
         environment: production
         version: ${{ steps.bump-version.outputs.tag }}
         projects: tripbot vlc-server
+
+	- name: Post Discord notification
+	  env:
+            DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+	  uses: Ilshidur/action-discord@0.3.0
+	  with:
+            args: 'New release for {{ EVENT_PAYLOAD.repository.full_name }}: {{ steps.get-version.outputs.version }} '
