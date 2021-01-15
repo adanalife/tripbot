@@ -58,7 +58,7 @@ jobs:
     - name: Check running containers
       run: docker ps -a
     - name: Stop containers
-      run: docker-compose down
+      run: docker-compose --project-directory . -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.testing.yml -f infra/docker/docker-compose.github.yml down
       if: always() # run this even if previous steps fail
       continue-on-error: true
 
