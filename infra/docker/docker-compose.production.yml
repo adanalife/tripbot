@@ -10,7 +10,5 @@ services:
       - "8080:8080"
     env_file:
       - ./.env.production
-    entrypoint: bash
-    command: -c "go run cmd/tripbot/tripbot.go 2>&1"
     depends_on: {}
     restart: always
