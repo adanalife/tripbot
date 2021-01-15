@@ -60,3 +60,29 @@ jobs:
     #   run: curl -v https://tripbot:8080/health
     # - name: Run test suite
     #   run: docker exec tripbot go test ./...
+      - name: push-tagged-version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          source Makefile.env
+          docker tag $CPU_IMAGE $REPO_URI/$REVERIE_REPO:$CPU_IMAGE-$VERSION_TAG
+          docker push $REPO_URI/$REVERIE_REPO:$CPU_IMAGE-$VERSION_TAG
+          docker tag $SERVER_IMAGE $REPO_URI/$REVERIE_REPO:$SERVER_IMAGE-$VERSION_TAG
+          docker push $REPO_URI/$REVERIE_REPO:$SERVER_IMAGE-$VERSION_TAG
+
+  push:
+    name: Push Docker images
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    steps:
+      #TODO: do I need this?
+      - id: get-ref
+        uses: ankitvgupta/ref-to-tag-action@master
+        with:
+          ref: ${{ github.ref }}
+          head_ref: ${{ github.head_ref }}
+      - name: Push Docker images
+        env:
+          VERSION_TAG: ${{ steps.get-ref.outputs.tag }}
+        run: |
+          docker-compose --project-directory . --env-file infra/docker/env.docker -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.testing.yml -f infra/docker/docker-compose.github.yml push
