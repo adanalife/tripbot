@@ -2,15 +2,16 @@ package vlcServer
 
 import (
 	"fmt"
+	"log"
+	"net/http"
+	"strconv"
+
 	c "github.com/adanalife/tripbot/pkg/config/vlc-server"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	onscreensServer "github.com/adanalife/tripbot/pkg/onscreens-server"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/gorilla/mux"
-	"log"
-	"net/http"
-	"strconv"
 )
 
 // healthcheck URL, for tools to verify the stream is alive
@@ -209,7 +210,7 @@ func onscreensLeaderboardHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		onscreensServer.Leaderboard.Show(content)
+		onscreensServer.ShowLeaderboard(content)
 		fmt.Fprintf(w, "OK")
 	case "hide":
 		onscreensServer.Leaderboard.Hide()
