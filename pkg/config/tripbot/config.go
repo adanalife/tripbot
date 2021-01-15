@@ -2,7 +2,6 @@ package config
 
 import (
 	"log"
-	"os"
 
 	"github.com/adanalife/tripbot/pkg/config"
 	"github.com/davecgh/go-spew/spew"
@@ -35,40 +34,5 @@ func init() {
 	// give helpful reminders when things are disabled
 	if Conf.DisableTwitchWebhooks {
 		log.Println(aurora.Yellow("Disabling Twitch webhooks"))
-	}
-
-	// these dirs will get created on boot if necessary
-	dirsToCreate := []string{
-		Conf.ScreencapDir,
-		// Conf.CroppedCornersDir,
-	}
-	for _, d := range dirsToCreate {
-		// we cant use helpers.FileExists() here due to import loop
-		_, err := os.Stat(d)
-		if err != nil {
-			if os.IsNotExist(err) {
-				log.Println("Creating directory", d)
-				err = os.MkdirAll(d, 0755)
-				if err != nil {
-					log.Fatalf("Error creating directory %s: %s", d, err)
-				}
-			}
-		}
-	}
-
-	// check that the paths exist
-	requiredDirs := []string{
-		Conf.ScreencapDir,
-		// Conf.VideoDir,
-		// Conf.CroppedCornersDir,
-	}
-	for _, d := range requiredDirs {
-		// we cant use helpers.FileExists() here due to import loop
-		_, err := os.Stat(d)
-		if err != nil {
-			if os.IsNotExist(err) {
-				log.Fatalf("Directory %s does not exist", d)
-			}
-		}
 	}
 }

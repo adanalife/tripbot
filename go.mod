@@ -9,7 +9,6 @@ require (
 	github.com/bradfitz/latlong v0.0.0-20170410180902-f3db6d0dff40
 	github.com/davecgh/go-spew v1.1.1
 	github.com/dimiro1/banner v1.0.0
-	github.com/disintegration/imaging v1.6.2
 	github.com/gempir/go-twitch-irc/v2 v2.5.0
 	github.com/getsentry/sentry-go v0.8.0
 	github.com/go-sql-driver/mysql v1.5.0 // indirect
@@ -28,9 +27,6 @@ require (
 	github.com/mitchellh/go-ps v1.0.0
 	github.com/nathan-osman/go-sunrise v0.0.0-20201029015502-9a83cd1a5746
 	github.com/nicklaw5/helix v1.4.0
-	github.com/otiai10/gosseract v2.2.1+incompatible
-	github.com/otiai10/mint v1.3.0 // indirect
-	github.com/pierrec/lz4 v2.0.5+incompatible // indirect
 	github.com/prometheus/client_golang v1.8.0
 	github.com/prometheus/common v0.15.0 // indirect
 	github.com/robfig/cron v1.2.0
