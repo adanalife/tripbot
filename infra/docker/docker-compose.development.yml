@@ -13,8 +13,9 @@ services:
     #TODO: add dir in this repo with scripts intended to be run in docker
     command: -c "go run cmd/tripbot/tripbot.go 2>&1"
     volumes:
+      - /Users/dmerrick/adanalife/tripbot/screencaps:/opt/data/screencaps:ro
       # - /home/dmerrick/Videos/Dashcam/screencaps:/opt/data/screencaps:ro
-      - "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/screencaps:/opt/data/screencaps:ro"
+      # - "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/screencaps:/opt/data/screencaps:ro"
 
   obs:
     environment:
