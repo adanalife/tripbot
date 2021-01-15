@@ -1,3 +1,4 @@
+project_name: tripbot
 before:
   hooks:
     - go mod download
@@ -17,13 +18,12 @@ archives:
       windows: Windows
       386: i386
       amd64: x86_64
+# include a checksum file with the release
 checksum:
   name_template: 'checksums.txt'
-snapshot:
-  name_template: "{{ .Tag }}-next"
 changelog:
   sort: asc
-  filters:
-    exclude:
-      - '^docs:'
-      - '^test:'
+release:
+  # If set to true, will not auto-publish the release.
+  # Default is false.
+  draft: true
