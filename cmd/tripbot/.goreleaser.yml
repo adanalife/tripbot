@@ -4,6 +4,7 @@ before:
 builds:
   - env:
       # goreleaser does not support CGO
+      # https://github.com/goreleaser/goreleaser/issues/708
       - CGO_ENABLED=0
     goos:
       - linux
@@ -27,7 +28,7 @@ changelog:
       - '^docs:'
       - '^test:'
 dockers:
-  - dockerfile: infra/docker/tripbot/Dockerfile
+  - dockerfile: ../../infra/docker/tripbot/Dockerfile
     image_templates:
     - "adanalife/tripbot:{{ .Tag }}"
     - "adanalife/tripbot:v{{ .Major }}"
