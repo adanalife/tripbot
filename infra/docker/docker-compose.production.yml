@@ -6,7 +6,6 @@ services:
       ENV: production
       GOOGLE_APPLICATION_CREDENTIALS: /opt/tripbot/infra/google/tripbot-prod.json
       DISABLE_TWITCH_WEBHOOKS: "false"
-      DISABLE_MUSIC: "true"
     ports:
       - "8080:8080"
     env_file:

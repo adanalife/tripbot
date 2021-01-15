@@ -21,8 +21,6 @@ var possibleLeftMessages = []string{
 	"Want to help the stream? Fill out the !survey",
 	// "Twitch Prime subs keep us on air :D",
 	"Earn miles for every minute you watch (!miles)",
-	// "I won't be offended if you play your own music",
-	// "Music by Soma.fm (!song)",
 	"Use !report to report stream issues",
 	"Try and !guess what state we're in",
 	"Where are we? (!location)",

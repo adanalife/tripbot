@@ -36,11 +36,6 @@ type TripbotConfig struct {
 
 	// DisableTwitchWebhooks disables receiving webhooks from Twitch (new followers for instance)
 	DisableTwitchWebhooks bool `default:"false" envconfig:"DISABLE_TWITCH_WEBHOOKS"`
-	// DisableMusic disables MPD completely
-	//TODO: rename to disable_audio
-	DisableMusic bool `default:"false" envconfig:"DISABLE_MUSIC"`
-	// DisableMusicAutoplay disables the auto-play for MPD
-	DisableMusicAutoplay bool `default:"false" envconfig:"DISABLE_MUSIC_AUTOPLAY"`
 
 	// TripbotHttpAuth is used to authenticate users to the HTTP server
 	TripbotHttpAuth string `required:"true" envconfig:"TRIPBOT_HTTP_AUTH"`
@@ -48,5 +43,4 @@ type TripbotConfig struct {
 	TripbotServerPort string `default:"8080" envconfig:"TRIPBOT_SERVER_PORT"`
 	// VlcServerHost is used to specify the host for the VLC webserver
 	VlcServerHost string `required:"true" envconfig:"VLC_SERVER_HOST"`
-	MpdServerHost string `required:"true" envconfig:"MPD_SERVER_HOST"`
 }

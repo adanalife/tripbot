@@ -29,8 +29,6 @@ services:
     build:
       context: .
       dockerfile: infra/docker/obs/Dockerfile
-    # depends_on:
-    #   - mpd
     ports:
       # this should match the VLC_SERVER_HOST env var
       - "8080"
@@ -58,19 +56,6 @@ services:
     # volumes:
     #   - ./infra/docker/init.sql:/docker-entrypoint-initdb.d/init.sql
     #   - ./tmp/data:/var/lib/postgresql/data
-
-  mpd:
-    image: wernight/mopidy
-    ports:
-      - "6600:6601"
-    volumes:
-      - ./infra/mopidy.conf:/config/mopidy.conf
-    # devices:
-    #   - /dev/snd
-    restart: unless-stopped
-    # hide output
-    logging:
-      driver: none
 
   migrate:
     image: migrate/migrate

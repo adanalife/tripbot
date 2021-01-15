@@ -36,12 +36,6 @@ func init() {
 	if Conf.DisableTwitchWebhooks {
 		log.Println(aurora.Yellow("Disabling Twitch webhooks"))
 	}
-	if Conf.DisableMusic {
-		log.Println(aurora.Yellow("Disabling music"))
-	}
-	if Conf.DisableMusicAutoplay {
-		log.Println(aurora.Yellow("Disabling music autoplay"))
-	}
 
 	// these dirs will get created on boot if necessary
 	dirsToCreate := []string{

@@ -1,5 +1,7 @@
 package errors
 
+//TODO: RunningOnDarwinError
+
 type NoFootageForStateError struct {
 	Msg string
 }

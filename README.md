@@ -24,8 +24,6 @@ The general flow of information looks like this:
 
 ![A diagram showing the different components](assets/infra-diagram.png)
 
-*Not pictured: a relational database, an MPD-based audio server, and a NAS.*
-
 For more detail, check out [Tripbot, the Adventure Robot](https://dana.lol/2020/04/15/tripbot-the-adventure-robot/).
 
 

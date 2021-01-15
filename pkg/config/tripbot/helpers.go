@@ -122,7 +122,6 @@ var HelpMessages = []string{
 	"!sunset: Get time until sunset (on the day of filming)",
 	"!survey: Fill out a survey and help the stream",
 	"!timewarp: Magically warp to a new moment in time",
-	// "!song: Get the current music",
 }
 
 var GoogleMapsStyle = []string{

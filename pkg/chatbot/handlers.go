@@ -53,8 +53,6 @@ func runCommand(user *users.User, message string) {
 	case "!version":
 		incChatCommandCounter("!version")
 		versionCmd(user)
-	case "!song", "!currentsong", "!music", "!currentmusic":
-		songCmd(user)
 	case "!uptime":
 		uptimeCmd(user)
 	case "!timewarp", "!tw":
@@ -83,8 +81,6 @@ func runCommand(user *users.User, message string) {
 		}
 	case "!shutdown":
 		shutdownCmd(user)
-	case "!restartmusic":
-		restartMusicCmd(user)
 	case "!socialmedia":
 		Say("Find me outside of Twitch: !twitter, !instagram, !facebook, !youtube")
 	case "!commands", "!controls":
