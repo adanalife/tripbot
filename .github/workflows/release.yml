@@ -1,13 +1,15 @@
 name: Create Release
 
 on:
+  # create a "snapshot" release for PRs
   pull_request:
+  # create a version release when new tags are created
   push:
     tags:
       - v*
 
 jobs:
-  goreleaser:
+  release-tripbot:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -16,20 +18,10 @@ jobs:
       - uses: actions/setup-go@v2.1.3
         with:
           go-version: 1.15
-      - name: release-tripbot
+      - name: Release Tripbot
         uses: goreleaser/goreleaser-action@v2
         with:
           args: release --rm-dist
           workdir: cmd/tripbot
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      # - name: Install dependencies
-      #   run: sudo apt update && sudo apt install -y --no-install-recommends libvlc-dev
-      # - name: release-vlc-server
-      #   uses: goreleaser/goreleaser-action@v2
-      #   with:
-      #     args: release --rm-dist
-      #     workdir: cmd/vlc-server
-      #   env:
-      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      #     CGO_ENABLED: 1
