@@ -31,6 +31,7 @@ require (
 	github.com/nicklaw5/helix v1.4.0
 	github.com/otiai10/gosseract v2.2.1+incompatible
 	github.com/otiai10/mint v1.3.0 // indirect
+	github.com/pierrec/lz4 v2.0.5+incompatible // indirect
 	github.com/prometheus/client_golang v1.8.0
 	github.com/prometheus/common v0.15.0 // indirect
 	github.com/robfig/cron v1.2.0
