@@ -43,6 +43,7 @@ jobs:
     - name: Post Discord notification
       env:
         DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        VERSION_TAG: ${{ steps.get-version.outputs.version }}
       uses: Ilshidur/action-discord@0.3.0
       with:
-        args: 'New release for {{ EVENT_PAYLOAD.repository.full_name }}: {{ steps.get-version.outputs.version }} '
+        args: 'New release for {{ EVENT_PAYLOAD.repository.full_name }}: {{ VERSION_TAG }} '
