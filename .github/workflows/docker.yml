@@ -89,3 +89,11 @@ jobs:
         docker push adanalife/obs:latest
         docker tag adanalife/tripbot adanalife/obs:$VERSION_TAG
         docker push adanalife/obs:$VERSION_TAG
+
+    - name: Post Discord notification
+      env:
+        DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        VERSION_TAG: ${{ steps.get-version.outputs.version }}
+      uses: Ilshidur/action-discord@0.3.0
+      with:
+        args: 'New Docker image created for {{ EVENT_PAYLOAD.repository.full_name }}: {{ VERSION_TAG }} '
