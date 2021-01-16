@@ -90,10 +90,12 @@ jobs:
         docker tag adanalife/tripbot adanalife/obs:$VERSION_TAG
         docker push adanalife/obs:$VERSION_TAG
 
+    #TODO: move this to a deploy.yml and announce deploys
     - name: Post Discord notification
+      if: startsWith(github.ref, 'refs/tags/v')
       env:
         DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         VERSION_TAG: ${{ steps.get-version.outputs.version }}
       uses: Ilshidur/action-discord@0.3.0
       with:
-        args: 'New Docker image created for {{ EVENT_PAYLOAD.repository.full_name }}: {{ VERSION_TAG }} '
+        args: 'New Docker image created for [{{ EVENT_PAYLOAD.repository.full_name }}]({{ EVENT_PAYLOAD.repository.html_url }}): [{{ VERSION_TAG }}]({{ EVENT_PAYLOAD.push.compare }})'
