@@ -89,15 +89,25 @@ jobs:
       if: startsWith(github.ref, 'refs/tags/v')
       env:
         VERSION_TAG: ${{ steps.get-version.outputs.version }}
+        MAJOR: ${{ steps.get-version.outputs.version }}
+        MINOR: ${{ steps.get-version.outputs.version }}
       run: |
         # push tripbot
         docker push adanalife/tripbot:latest
         docker tag adanalife/tripbot adanalife/tripbot:$VERSION_TAG
         docker push adanalife/tripbot:$VERSION_TAG
+        docker tag adanalife/tripbot adanalife/tripbot:v$MAJOR
+        docker push adanalife/tripbot:v$MAJOR
+        docker tag adanalife/tripbot adanalife/tripbot:v$MAJOR.$MINOR
+        docker push adanalife/tripbot:v$MAJOR.$MINOR
         # push obs
         docker push adanalife/obs:latest
         docker tag adanalife/tripbot adanalife/obs:$VERSION_TAG
         docker push adanalife/obs:$VERSION_TAG
+        docker tag adanalife/tripbot adanalife/obs:v$MAJOR
+        docker push adanalife/obs:v$MAJOR
+        docker tag adanalife/tripbot adanalife/obs:v$MAJOR.$MINOR
+        docker push adanalife/obs:v$MAJOR.$MINOR
 
     #TODO: move this to a deploy.yml and announce deploys
     - name: Post Discord notification
