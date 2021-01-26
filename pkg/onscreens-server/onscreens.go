@@ -50,7 +50,7 @@ func NewImage(imageFile string) *Onscreen {
 }
 
 // backgroundLoop will loop forever, hiding the Onscreen if needed
-//TODO: do we need a way to close out this loop?
+//TODO: add signal to end the loop
 func (osc *Onscreen) backgroundLoop() {
 	for { // forever
 		if osc.IsShowing && osc.isExpired() {

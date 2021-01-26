@@ -102,11 +102,11 @@ jobs:
         docker push adanalife/tripbot:v$MAJOR.$MINOR
         # push obs
         docker push adanalife/obs:latest
-        docker tag adanalife/tripbot adanalife/obs:$VERSION_TAG
+        docker tag adanalife/obs adanalife/obs:$VERSION_TAG
         docker push adanalife/obs:$VERSION_TAG
-        docker tag adanalife/tripbot adanalife/obs:v$MAJOR
+        docker tag adanalife/obs adanalife/obs:v$MAJOR
         docker push adanalife/obs:v$MAJOR
-        docker tag adanalife/tripbot adanalife/obs:v$MAJOR.$MINOR
+        docker tag adanalife/obs adanalife/obs:v$MAJOR.$MINOR
         docker push adanalife/obs:v$MAJOR.$MINOR
 
     #TODO: move this to a deploy.yml and announce deploys
