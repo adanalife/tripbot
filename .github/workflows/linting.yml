@@ -8,6 +8,26 @@ on:
       - v*
 jobs:
 
+  golangci-lint:
+    name: golangci-lint-all
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install Dependencies
+        run: sudo apt update && sudo apt install -y --no-install-recommends tesseract-ocr libtesseract-dev libvlc-dev
+      - name: Restore Cache
+        uses: actions/cache@v1
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+      - name: golint
+        uses: reviewdog/action-golangci-lint@v1
+        with:
+          github_token: ${{ secrets.github_token }}
+          golangci_lint_flags: "--enable-all"
+
   golint:
     name: golint
     runs-on: ubuntu-latest
