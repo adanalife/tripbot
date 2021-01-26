@@ -89,8 +89,8 @@ jobs:
       if: startsWith(github.ref, 'refs/tags/v')
       env:
         VERSION_TAG: ${{ steps.get-version.outputs.version }}
-        MAJOR: ${{ steps.get-version.outputs.version }}
-        MINOR: ${{ steps.get-version.outputs.version }}
+        MAJOR: ${{ steps.get-version.outputs.major }}
+        MINOR: ${{ steps.get-version.outputs.minor }}
       run: |
         # push tripbot
         docker push adanalife/tripbot:latest
