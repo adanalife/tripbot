@@ -3,8 +3,7 @@ module github.com/adanalife/tripbot
 go 1.15
 
 require (
-	cloud.google.com/go v0.73.0 // indirect
-	cloud.google.com/go/logging v1.1.2
+	cloud.google.com/go/logging v1.2.0
 	github.com/adrg/libvlc-go/v3 v3.0.9
 	github.com/bradfitz/latlong v0.0.0-20170410180902-f3db6d0dff40
 	github.com/davecgh/go-spew v1.1.1
@@ -35,11 +34,6 @@ require (
 	github.com/unrolled/secure v1.0.8
 	github.com/urfave/negroni v1.0.0
 	golang.org/x/image v0.0.0-20200927104501-e162460cd6b5 // indirect
-	golang.org/x/net v0.0.0-20201202161906-c7110b5ffcbb // indirect
-	golang.org/x/oauth2 v0.0.0-20201203001011-0b49973bad19 // indirect
 	golang.org/x/time v0.0.0-20200630173020-3af7569d3a1e // indirect
-	golang.org/x/tools v0.0.0-20201204222352-654352759326 // indirect
-	google.golang.org/genproto v0.0.0-20201204160425-06b3db808446 // indirect
-	google.golang.org/grpc v1.34.0 // indirect
 	googlemaps.github.io/maps v1.3.1
 )
