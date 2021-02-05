@@ -1,5 +1,5 @@
 # buster is the debian release, c.p. https://askubuntu.com/a/445496
-FROM golang:1.15.6-buster
+FROM golang:1.15.8-buster
 
 WORKDIR /go/src/github.com/adanalife/tripbot
 
