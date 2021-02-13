@@ -28,7 +28,7 @@ func Start() {
 	r := mux.NewRouter()
 
 	// healthcheck endpoints
-	hp := r.PathPrefix("/health").Methods("GET").Subrouter()
+	hp := r.PathPrefix("/health").Methods("GET", "HEAD").Subrouter()
 	hp.HandleFunc("/live", healthHandler)
 	hp.HandleFunc("/ready", healthHandler)
 
