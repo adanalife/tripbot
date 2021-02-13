@@ -54,3 +54,9 @@ devenv up seed
 \copy videos FROM 'db/seed/videos.csv' DELIMITER ',' CSV HEADER;
 ```
 
+#### Other
+
+Get leaderboard winners
+```sql
+select users.username, scores.value from scoreboards, scores, users where scoreboards.name = 'guess_state_2021_01' and scores.user_id = users.id and scores.scoreboard_id = scoreboards.id ORDER BY scores.value DESC LIMIT 10;
+```
