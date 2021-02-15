@@ -6,7 +6,7 @@
 #
 #
 
-FROM    nvidia/cuda:10.2-devel-ubuntu18.04 AS devel-base
+FROM    nvidia/cuda:11.2.1-devel-ubuntu18.04 AS devel-base
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
@@ -19,7 +19,7 @@ RUN     apt-get -yqq update && \
         apt-get clean -y && \
         rm -rf /var/lib/apt/lists/*
 
-FROM        nvidia/cuda:10.2-runtime-ubuntu18.04 AS runtime-base
+FROM        nvidia/cuda:11.2.1-devel-ubuntu18.04 AS runtime-base
 
 ENV	    NVIDIA_DRIVER_CAPABILITIES compute,utility,video
 WORKDIR     /tmp/workdir
