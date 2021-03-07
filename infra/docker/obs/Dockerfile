@@ -101,7 +101,7 @@ ENV VNC_PASSWD=123456
 
 WORKDIR /tmp
 
-ENV OBS_VERSION=26.0.2
+ENV OBS_VERSION=26.1.2
 
 # install obs and the obs-browser plugin
 #TODO: re-enable browser plugin
