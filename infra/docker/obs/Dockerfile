@@ -101,16 +101,19 @@ ENV VNC_PASSWD=123456
 
 WORKDIR /tmp
 
+ENV OBS_VERSION=26.1.2
+
 # install obs and the obs-browser plugin
-RUN git clone https://github.com/obsproject/obs-studio \
+#TODO: re-enable browser plugin
+RUN git clone --depth 1 --branch $OBS_VERSION https://github.com/obsproject/obs-studio \
   && cd obs-studio \
   && wget https://cdn-fastly.obsproject.com/downloads/cef_binary_3770_linux64.tar.bz2 \
   && tar xjf cef_binary_3770_linux64.tar.bz2 \
   && rm cef_binary_3770_linux64.tar.bz2 \
-  && git clone https://github.com/obsproject/obs-browser ./plugins/obs-browser \
+  && git clone --depth 1 https://github.com/obsproject/obs-browser ./plugins/obs-browser \
   && mkdir -p build \
   && cd build \
-  && cmake -DUNIX_STRUCTURE=1 -DBUILD_BROWSER=ON -DCEF_ROOT_DIR="../cef_binary_3770_linux64" .. \
+  && cmake -DUNIX_STRUCTURE=1 -DBUILD_BROWSER=OFF -DCEF_ROOT_DIR="../cef_binary_3770_linux64" .. \
   && make -j2 \
   && make install
   #TODO: possibly add obs-vst?
