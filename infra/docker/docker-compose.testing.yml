@@ -5,6 +5,6 @@ services:
     environment:
       ENV: testing
 
-  obs:
+  vlc-server:
     environment:
       ENV: testing
