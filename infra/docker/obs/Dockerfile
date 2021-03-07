@@ -101,8 +101,10 @@ ENV VNC_PASSWD=123456
 
 WORKDIR /tmp
 
+ENV OBS_VERSION=26.1.2
+
 # install obs and the obs-browser plugin
-RUN git clone https://github.com/obsproject/obs-studio \
+RUN git clone --depth 1 --branch $OBS_VERSION https://github.com/obsproject/obs-studio \
   && cd obs-studio \
   && wget https://cdn-fastly.obsproject.com/downloads/cef_binary_3770_linux64.tar.bz2 \
   && tar xjf cef_binary_3770_linux64.tar.bz2 \
