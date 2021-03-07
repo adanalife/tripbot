@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: run-linters
-        uses: github/super-linter@v3
+        uses: github/super-linter@v3.15.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # disabled because it's not working with C libs
@@ -24,3 +24,5 @@ jobs:
           VALIDATE_DOCKERFILE_HADOLINT: false
           # disabled cause they dont support CRDs rn
           VALIDATE_KUBERNETES_KUBEVAL: false
+          # disabled until we go through and fix the dupe code issues
+          VALIDATE_JSCPD: false
