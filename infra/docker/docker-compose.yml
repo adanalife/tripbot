@@ -22,15 +22,15 @@ services:
     command: -c "go run cmd/tripbot/tripbot.go 2>&1"
     restart: unless-stopped
 
-  obs:
+  vlc-server:
     privileged: true
-    image: adanalife/obs
-    hostname: obs
+    image: adanalife/vlc-server
+    hostname: vlc-server
     env_file:
       - infra/docker/env.docker
     build:
       context: .
-      dockerfile: infra/docker/obs/Dockerfile
+      dockerfile: infra/docker/vlc-server/Dockerfile
     ports:
       # this should match the VLC_SERVER_HOST env var
       - "8080"
@@ -45,6 +45,12 @@ services:
       - .:/go/src/github.com/adanalife/tripbot
       - ./assets/video:/opt/data/Dashcam/_all:ro
     restart: unless-stopped
+
+  obs:
+    image: adanalife/obs
+    build:
+      context: .
+      dockerfile: infra/docker/obs/Dockerfile
 
   db:
     image: postgres:12
