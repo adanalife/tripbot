@@ -36,5 +36,5 @@ jobs:
       if: matrix.platform == 'ubuntu-latest'
       run: sudo apt update && sudo apt install -y --no-install-recommends libvlc-dev
     - name: Run Go Tests
-      #TODO: do something with coverage.out
-      run: go test -race -coverprofile=coverage.out ./...
+      #TODO: do something with coverage.html
+      run: go test -race -coverprofile=coverage.out ./... && go tool cover -html coverage.out -o coverage.html
