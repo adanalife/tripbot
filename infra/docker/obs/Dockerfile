@@ -10,15 +10,11 @@ RUN export DEBIAN_FRONTEND=noninteractive \
   && unset LD_LIBRARY_PATH \
   && apt-get update \
   && apt-get install -y --no-install-suggests \
-    ack-grep \
     build-essential \
     checkinstall \
     cmake \
-    fluxbox \
     git \
-    golang-go \
     grc \
-    htop \
     libasound2-dev \
     libavcodec-dev \
     libavdevice-dev \
@@ -54,22 +50,12 @@ RUN export DEBIAN_FRONTEND=noninteractive \
     libxcb1-dev \
     libxcomposite-dev \
     libxinerama-dev \
-    net-tools \
     pkg-config \
     python3-dev \
     qtbase5-dev \
-    scrot \
-    software-properties-common \
-    supervisor \
     swig \
-    syslog-ng \
-    tigervnc-standalone-server \
     ubuntu-drivers-common \
-    vim \
-    vlc \
-    vlc-plugin-base \
     wget \
-    xterm \
     zlib1g-dev \
   && apt-get clean -y \
   && rm -rf /var/lib/apt/lists/*

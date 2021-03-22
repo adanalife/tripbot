@@ -3,6 +3,34 @@
 # this comes from Dockerfile.nvidia
 FROM adanalife/obs:v26.1.2
 
+<<<<<<< Updated upstream
+=======
+# install dependencies
+# most of these come from the obs-studio
+# install from source instructions
+RUN export DEBIAN_FRONTEND=noninteractive \
+  && unset LD_LIBRARY_PATH \
+  && apt-get update \
+  && apt-get install -y --no-install-suggests \
+    ack-grep \
+    golang-go \
+    htop \
+    fluxbox \
+    net-tools \
+    scrot \
+    software-properties-common \
+    supervisor \
+    syslog-ng \
+    tigervnc-standalone-server \
+    vim \
+    vlc \
+    vlc-plugin-base \
+    wget \
+    xterm \
+  && apt-get clean -y \
+  && rm -rf /var/lib/apt/lists/*
+
+>>>>>>> Stashed changes
 # install golang
 RUN export DEBIAN_FRONTEND=noninteractive \
   && add-apt-repository ppa:longsleep/golang-backports \
