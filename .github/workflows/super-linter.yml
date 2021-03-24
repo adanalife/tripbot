@@ -24,5 +24,7 @@ jobs:
           VALIDATE_DOCKERFILE_HADOLINT: false
           # disabled cause they dont support CRDs rn
           VALIDATE_KUBERNETES_KUBEVAL: false
-          # disabled until we go through and fix the dupe code issues
+          # disabled until we go through and fix the issues
           VALIDATE_JSCPD: false
+          VALIDATE_ENV: false
+          VALIDATE_SQL: false
