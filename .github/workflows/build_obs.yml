@@ -1,0 +1,32 @@
+name: Build OBS
+on:
+  pull_request:
+  push:
+    tags:
+      - v*
+    paths:
+      - .github/workflows/build_obs.yml
+      - infra/docker/obs
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      # enable BuildKit
+      # https://www.docker.com/blog/faster-builds-in-compose-thanks-to-buildkit-support/
+      COMPOSE_DOCKER_CLI_BUILD: 1
+      DOCKER_BUILDKIT: 1
+
+    steps:
+    - id: get-version
+      uses: battila7/get-version-action@v2
+    # logging in is necessary to use cache-from in builds and pushes
+    - name: Login to DockerHub
+      uses: docker/login-action@v1
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+    - name: Checkout
+      uses: actions/checkout@v1
+    - name: Build obs
+      run: docker-compose --project-directory . -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.testing.yml -f infra/docker/docker-compose.github.yml build obs

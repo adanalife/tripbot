@@ -1,5 +1,4 @@
-# no need to include system-specific
-# ruby stuff
+# no need to include system-specific ruby stuff
 .ruby-gemset
 .ruby-version
 
@@ -15,6 +14,9 @@ configs/OBS/Twitch
 
 # the temporary files managed by the app
 run
+*.pid
+tmp
+vendor
 
 # ignore SSL certs
 infra/certs
@@ -24,8 +26,10 @@ infra/**/google
 infra/k8s/**/secrets.yml
 
 # compiled binaries
+*.exe
 bin/tripbot
 bin/vlc-server
+cmd/tripbot/dist/
 
 # env files shouldn't get checked in
 # because they have secrets
@@ -36,17 +40,8 @@ bin/vlc-server
 # this will differ on different computers
 .bash_history.remote
 
-# pidfiles are temporary
-*.pid
-
 # logs and DB dumps don't need to be checked in
 *.log
 *.db
 db/*.sql
 db/*.gz
-
-# temporary files
-tmp
-vendor
-
-*.exe

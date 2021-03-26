@@ -15,8 +15,8 @@ services:
       cache_from:
         - adanalife/tripbot
 
-  obs:
+  vlc-server:
     build:
       # pull down cache layers from repo
       cache_from:
-        - adanalife/obs
+        - adanalife/vlc-server
