@@ -25,7 +25,7 @@ var Uptime time.Time
 
 // used to determine which help message to display
 // randomized so it starts with a new one every restart
-var helpIndex = rand.Intn(len(c.HelpMessages))
+var helpIndex = rand.Int(len(c.HelpMessages))
 
 const followerMsg = "Follow the stream to run unlimited commands :)"
 const subscriberMsg = "You must be a subscriber to run that command :)"
