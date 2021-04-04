@@ -37,7 +37,7 @@ jobs:
       if: matrix.platform == 'ubuntu-latest'
       run: sudo apt update && sudo apt install -y --no-install-recommends libvlc-dev
     - name: Run Go Tests
-      run: go test -v -race -covermode=count -coverprofile=coverage.out
+      run: go test -v -race -coverprofile=coverage.out
       # run: go test -v -race -covermode=count -coverprofile=coverage.out ./... && go tool cover -html coverage.out -o coverage.html
     - name: Convert coverage.out to coverage.lcov
       uses: jandelgado/gcov2lcov-action@v1.0.6
