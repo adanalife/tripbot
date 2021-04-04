@@ -10,5 +10,13 @@ services:
       - TWITCH_AUTH_TOKEN
       - TWITCH_CLIENT_ID
       - TWITCH_CLIENT_SECRET
-    entrypoint: bash
-    command: -c "go run cmd/tripbot/tripbot.go 2>&1"
+    build:
+      # pull down cache layers from repo
+      cache_from:
+        - adanalife/tripbot
+
+  obs:
+    build:
+      # pull down cache layers from repo
+      cache_from:
+        - adanalife/obs

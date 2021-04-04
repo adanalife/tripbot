@@ -6,15 +6,9 @@ services:
       ENV: production
       GOOGLE_APPLICATION_CREDENTIALS: /opt/tripbot/infra/google/tripbot-prod.json
       DISABLE_TWITCH_WEBHOOKS: "false"
-      DISABLE_MUSIC: "true"
     ports:
       - "8080:8080"
     env_file:
       - ./.env.production
-    entrypoint: bash
-    command: -c "go run cmd/tripbot/tripbot.go 2>&1"
-    volumes:
-      - "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/screencaps:/opt/data/screencaps:ro"
-      - "/Volumes/Leeroy/Dana's Photos/blackbox/cropped-corners:/opt/data/cropped-corners:ro"
     depends_on: {}
     restart: always

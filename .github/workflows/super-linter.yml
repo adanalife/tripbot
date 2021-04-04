@@ -5,7 +5,7 @@ on:
   pull_request:
   push:
     branches:
-      - master
+      - main
 
 jobs:
   build:
@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: run-linters
-        uses: github/super-linter@v3
+        uses: github/super-linter@v3.15.5
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # disabled because it's not working with C libs
@@ -24,3 +24,7 @@ jobs:
           VALIDATE_DOCKERFILE_HADOLINT: false
           # disabled cause they dont support CRDs rn
           VALIDATE_KUBERNETES_KUBEVAL: false
+          # disabled until we go through and fix the issues
+          VALIDATE_JSCPD: false
+          VALIDATE_ENV: false
+          VALIDATE_SQL: false

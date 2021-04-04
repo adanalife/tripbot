@@ -24,8 +24,6 @@ The general flow of information looks like this:
 
 ![A diagram showing the different components](assets/infra-diagram.png)
 
-*Not pictured: a relational database, an MPD-based audio server, and a NAS.*
-
 For more detail, check out [Tripbot, the Adventure Robot](https://dana.lol/2020/04/15/tripbot-the-adventure-robot/).
 
 
@@ -33,7 +31,7 @@ For more detail, check out [Tripbot, the Adventure Robot](https://dana.lol/2020/
 
 You can use `docker-compose` to run tripbot on your own machine.
 It is configured to spin up all of the dependencies for the project.
-A helper script ([`bin/devenv`](https://github.com/adanalife/tripbot/blob/master/bin/devenv)) has been created to make the process a little easier.
+A helper script ([`bin/devenv`](https://github.com/adanalife/tripbot/blob/main/bin/devenv)) has been created to make the process a little easier.
 For example:
 
 ```bash
