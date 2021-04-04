@@ -1,8 +1,8 @@
 package onscreensServer
 
 import (
+	"crypto/rand"
 	"log"
-	"math/rand"
 	"path/filepath"
 	"time"
 
@@ -48,7 +48,7 @@ func leftRotatorContent() string {
 	var output string
 
 	// show a special, very rare message
-	if rand.Intn(10000) == 0 {
+	if rand.Int(10000) == 0 {
 		return "You found the rare message! Make a clip for a prize!"
 	}
 

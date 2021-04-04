@@ -1,8 +1,8 @@
 package main
 
 import (
+	"crypto/rand"
 	"log"
-	"math/rand"
 	"os"
 	"os/signal"
 	"syscall"
