@@ -6,6 +6,11 @@ WORKDIR /go/src/github.com/adanalife/tripbot
 # create app user
 # RUN adduser --system --group --disabled-password --no-create-home danalol
 
+# add Tini (simple init)
+ENV TINI_VERSION v0.19.0
+ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini /tini
+RUN chmod +x /tini
+
 # copy over project
 #TODO: maybe just copy pkg, cmd, internal, etc?
 COPY . .
@@ -28,4 +33,5 @@ RUN go build -o bin/tripbot cmd/tripbot/tripbot.go
 
 EXPOSE 8080
 
+ENTRYPOINT ["/tini", "--"]
 CMD ["./bin/tripbot"]
