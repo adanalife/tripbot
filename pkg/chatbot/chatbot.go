@@ -1,9 +1,9 @@
 package chatbot
 
 import (
+	"crypto/rand"
 	"fmt"
 	"log"
-	"math/rand"
 	"time"
 
 	mylog "github.com/adanalife/tripbot/pkg/chatbot/log"
