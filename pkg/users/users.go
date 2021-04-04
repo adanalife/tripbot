@@ -76,6 +76,16 @@ func (u User) CurrentMonthlyMiles() float32 {
 	return u.GetScore(scoreboards.CurrentMilesScoreboard()) + u.sessionMiles()
 }
 
+func (u User) CurrentScore() float32 {
+	//TODO: update to Score (not miles)
+	return u.Miles + u.sessionMiles()
+}
+
+func (u User) CurrentMonthlyScore() float32 {
+	//TODO: update to Score (not miles)
+	return u.GetScore(scoreboards.CurrentMilesScoreboard()) + u.sessionMiles()
+}
+
 // User.save() will take the given user and store it in the DB
 func (u User) save() {
 	if c.Conf.Verbose {
