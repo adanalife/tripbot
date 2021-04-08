@@ -10,12 +10,11 @@ require (
 	github.com/dimiro1/banner v1.1.0
 	github.com/gempir/go-twitch-irc/v2 v2.5.0
 	github.com/getsentry/sentry-go v0.10.0
-	github.com/go-sql-driver/mysql v1.5.0 // indirect
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0 // indirect
 	github.com/gorilla/mux v1.8.0
 	github.com/gorilla/schema v1.2.0 // indirect
 	github.com/hako/durafmt v0.0.0-20200710122514-c0fb7b4da026
-	github.com/jmoiron/sqlx v1.2.0
+	github.com/jmoiron/sqlx v1.3.3
 	github.com/joho/godotenv v1.3.0
 	github.com/jonas-p/go-shp v0.1.1 // indirect
 	github.com/kelseyhightower/envconfig v1.4.0
