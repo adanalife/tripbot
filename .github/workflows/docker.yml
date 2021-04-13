@@ -35,7 +35,7 @@ jobs:
       uses: actions/checkout@v1
     - name: Fetch videos from cache
       id: restore-videos
-      uses: actions/cache@v2.1.4
+      uses: actions/cache@v2.1.5
       with:
         path: assets/video
         key: ${{ runner.os }}-video-${{ hashFiles('assets/video/manifest.txt') }}
