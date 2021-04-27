@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: run-linters
-        uses: github/super-linter@v3.15.5
+        uses: github/super-linter@v3.16.1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # disabled because it's not working with C libs
