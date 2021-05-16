@@ -81,7 +81,7 @@ func runCommand(user *users.User, message string) {
 		}
 	case "!shutdown":
 		shutdownCmd(user)
-	case "!socialmedia":
+	case "!socialmedia", "!social", "!socials":
 		Say("Find me outside of Twitch: !twitter, !instagram, !facebook, !youtube")
 	case "!commands", "!controls":
 		Say("You can try: !location, !guess, !date, !state, !sunset, !timewarp, !miles, !leaderboard, and many other hidden commands!")
