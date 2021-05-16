@@ -3,7 +3,7 @@ module github.com/adanalife/tripbot
 go 1.15
 
 require (
-	cloud.google.com/go/logging v1.3.0
+	cloud.google.com/go/logging v1.4.1
 	github.com/adrg/libvlc-go/v3 v3.1.2
 	github.com/bradfitz/latlong v0.0.0-20170410180902-f3db6d0dff40
 	github.com/davecgh/go-spew v1.1.1
@@ -20,7 +20,7 @@ require (
 	github.com/jonas-p/go-shp v0.1.1 // indirect
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/kelvins/geocoder v0.0.0-20200113010004-f579500e9e27
-	github.com/lib/pq v1.10.0
+	github.com/lib/pq v1.10.1
 	github.com/logrusorgru/aurora v2.0.3+incompatible
 	github.com/mattn/go-colorable v0.1.8 // indirect
 	github.com/mitchellh/go-ps v1.0.0
