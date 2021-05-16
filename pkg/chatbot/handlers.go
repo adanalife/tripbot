@@ -143,25 +143,7 @@ func runCommand(user *users.User, message string) {
 
 		// any of these should trigger the location command
 		//TODO: add support for: "where is this", "where are we", "where are you"
-		// foo := []string{
-		// 	"!tripbot",
-		// 	"!location",
-		// 	"!city",
-		// 	"!town",
-		// 	"!where",
-		// 	"!loacation",
-		// 	"!loation",
-		// 	"!loc",
-		// 	"!locatioin"
-		// 	"!locatoion",
-		// 	"!locaton",
-		// 	"!loclistion",
-		// 	"!locton",
-		// 	"1location",
-		// 	"¡location",
-		// }
-		// spew.Dump(foo)
-	case "!tripbot", "!location", "!locton", "!locaton", "!locatoion", "!loation", "1location", "!city", "!town":
+	case "!tripbot", "!location", "!city", "!town", "!where", "!loacation", "!loation", "!loc", "!locatioin" "!locatoion", "!locaton", "!loclistion", "!locton", "1location", "¡location":
 		if user.HasCommandAvailable() {
 			locationCmd(user)
 		} else {
