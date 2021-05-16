@@ -14,6 +14,15 @@ on:
       - infra/docker
 
 jobs:
+  # cancel any existing runs of this workflow on this branch
+  cancel-currently-running:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: rokroskar/workflow-run-cleanup-action@v0.3.2
+        env:
+          GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+
   build:
     runs-on: ubuntu-latest
     env:
