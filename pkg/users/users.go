@@ -25,12 +25,16 @@ type User struct {
 	LastSeen     time.Time `db:"last_seen"`
 	DateCreated  time.Time `db:"date_created"`
 	LoggedIn     time.Time
-	lastCmd      time.Time
 	lastLocation time.Time
+	lastCmd      time.Time
+	freeCmds     int
 }
 
 // this is how long they have before they can guess again
 var guessCooldown = 3 * time.Minute
+
+// this is how many free commands a non-follower gets
+var maxFreeCmds = 3
 
 func (u User) loggedInDur() time.Duration {
 	// exit early if they're not logged in
@@ -142,15 +146,28 @@ func (u *User) HasCommandAvailable() bool {
 	if u.IsFollower() {
 		return true
 	}
-	// check if they ran a command in the last 24 hrs
+
 	now := time.Now()
 	if now.Sub(u.lastCmd) > 24*time.Hour {
+		// the user hasn't run a command in over 24hours
 		log.Println("letting", u, "run a command")
-		// update their lastCmd time
 		u.lastCmd = now
+		u.freeCmds = maxFreeCmds - 1
 		return true
+	} else {
+		// they have run command in the last 24 hours
+		if u.freeCmds > 0 {
+			log.Println("letting", u, "run a command")
+			// take one free command away
+			u.freeCmds = u.freeCmds - 1
+			return true
+		}
 	}
 	return false
+}
+
+func (u User) FreeCommandsAvailable() int {
+	return u.freeCmds
 }
 
 // GuessCooldownRemaining returns the amount of time a user needs to
