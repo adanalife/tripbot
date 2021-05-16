@@ -27,7 +27,7 @@ var Uptime time.Time
 // randomized so it starts with a new one every restart
 var helpIndex = rand.Intn(len(c.HelpMessages))
 
-const followerMsg = "Only followers of the channel can run unlimited commands :)"
+const followerMsg = "If you follow the channel you can run unlimited commands."
 const subscriberMsg = "You must be a subscriber to run that command :)"
 
 func Initialize() *twitch.Client {
