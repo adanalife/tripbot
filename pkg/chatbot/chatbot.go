@@ -27,9 +27,10 @@ var Uptime time.Time
 // randomized so it starts with a new one every restart
 var helpIndex = rand.Intn(len(c.HelpMessages))
 
-const followerMsg = "Follow the stream to run unlimited commands :)"
+const followerMsg = "Only followers of the channel can run unlimited commands :)"
 const subscriberMsg = "You must be a subscriber to run that command :)"
 
+// Initialize returns a Twitch client struct with all of the various configuration in place.
 func Initialize() *twitch.Client {
 	var err error
 	Uptime = time.Now()
@@ -91,10 +92,9 @@ func Whisper(username, msg string) {
 	client.Whisper(username, msg)
 }
 
-// Chatter is designed to most a randomized message on a timer
-// right now it just posts random "help messages"
+// Chatter is designed to post a randomized message on a timer.
+// Right now it just posts random "help messages."
 func Chatter() {
-	// rand.Intn(len(config.HelpMessages))
 	// use twitch emote feature to add some color
 	Say("/me " + help())
 }
@@ -106,6 +106,7 @@ func help() string {
 	return text
 }
 
+// AnnounceNewFollower makes a post in chat that a user follows the channel
 func AnnounceNewFollower(username string) {
 	msg := fmt.Sprintf("Thank you for the follow, @%s", username)
 	Say(msg)

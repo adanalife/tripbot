@@ -35,5 +35,5 @@ require (
 	github.com/urfave/negroni v1.0.0
 	golang.org/x/image v0.0.0-20200927104501-e162460cd6b5 // indirect
 	golang.org/x/time v0.0.0-20200630173020-3af7569d3a1e // indirect
-	googlemaps.github.io/maps v1.3.1
+	googlemaps.github.io/maps v1.3.2
 )
