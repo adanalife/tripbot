@@ -106,6 +106,54 @@ func uptimeCmd(user *users.User) {
 	Say(msg)
 }
 
+func scoreCmd(user *users.User, params []string) {
+	log.Println(user.Username, "ran !score")
+	var username string
+	var lifetimeScore, monthlyScore float32
+
+	// check to see if an arg was provided
+	if len(params) == 0 {
+		username = user.Username
+		lifetimeScore = user.CurrentScore()
+		monthlyScore = user.CurrentMonthlyScore()
+	} else {
+		username = helpers.StripAtSign(params[0])
+		u := users.Find(username)
+
+		// check to see if they are in our DB
+		if u.ID == 0 {
+			Say("I don't know them, sorry!")
+			return
+		}
+
+		lifetimeScore = u.CurrentScore()
+		monthlyScore = u.CurrentMonthlyScore()
+	}
+
+	msg := "@%s has %.2f points this month"
+	msg = fmt.Sprintf(msg, username, monthlyScore)
+
+	// add total miles if they have been around for more than one month
+	if lifetimeScore > monthlyScore {
+		msg += " (%vmi total)."
+		msg = fmt.Sprintf(msg, math.Round(float64(lifetimeScore)))
+	} else {
+		msg += "."
+
+		// add helpful messages for new folks
+		if len(params) == 0 {
+			if monthlyScore < 0.2 {
+				msg += " You'll earn more miles the longer you watch the stream."
+			}
+			if monthlyScore == 0.0 {
+				msg += " (Sometimes it takes a bit for me to notice you. You should be good now!)"
+			}
+		}
+	}
+
+	Say(msg)
+}
+
 func milesCmd(user *users.User, params []string) {
 	log.Println(user.Username, "ran !miles")
 	var username string
