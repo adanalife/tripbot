@@ -20,7 +20,7 @@ require (
 	github.com/jonas-p/go-shp v0.1.1 // indirect
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/kelvins/geocoder v0.0.0-20200113010004-f579500e9e27
-	github.com/lib/pq v1.10.0
+	github.com/lib/pq v1.10.1
 	github.com/logrusorgru/aurora v2.0.3+incompatible
 	github.com/mattn/go-colorable v0.1.8 // indirect
 	github.com/mitchellh/go-ps v1.0.0
