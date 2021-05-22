@@ -44,7 +44,7 @@ func runCommand(user *users.User, message string) {
 	case "!help":
 		incChatCommandCounter("!help")
 		helpCmd(user)
-	case "hello", "hi", "hey", "hallo":
+	case "hello", "hi", "hey", "hallo", "!bot":
 		incChatCommandCounter("hello")
 		helloCmd(user, params)
 	case "!flag":
@@ -55,7 +55,7 @@ func runCommand(user *users.User, message string) {
 		versionCmd(user)
 	case "!uptime":
 		uptimeCmd(user)
-	case "!timewarp", "!tw":
+	case "!timewarp", "!timewrap", "!timeskip", "!tw", "!timewqrp", "!warp":
 		if user.HasCommandAvailable() {
 			timewarpCmd(user)
 		} else {
@@ -83,7 +83,7 @@ func runCommand(user *users.User, message string) {
 		shutdownCmd(user)
 	case "!socialmedia", "!social", "!socials":
 		Say("Find me outside of Twitch: !twitter, !instagram, !facebook, !youtube")
-	case "!commands", "!controls":
+	case "!commands", "!command", "¡command", "¡commands", "!commads", "!controls", "!commande":
 		Say("You can try: !location, !guess, !date, !state, !sunset, !timewarp, !miles, !leaderboard, and many other hidden commands!")
 	case "!bonusmiles":
 		if user.IsSubscriber() {
@@ -91,25 +91,25 @@ func runCommand(user *users.User, message string) {
 		} else {
 			Say(subscriberMsg)
 		}
-	case "!sunset":
+	case "!sunset", "!sunet":
 		if user.HasCommandAvailable() {
 			sunsetCmd(user)
 		} else {
 			Say(followerMsg)
 		}
-	case "!time":
+	case "!time", "!timr":
 		if user.HasCommandAvailable() {
 			timeCmd(user)
 		} else {
 			Say(followerMsg)
 		}
-	case "!date":
+	case "!date", "!datw":
 		if user.HasCommandAvailable() {
 			dateCmd(user)
 		} else {
 			Say(followerMsg)
 		}
-	case "!guess":
+	case "!guess", "!guss", "guess", "!gusss", "!guees", "!gues", "!quess", "!guis":
 		if user.HasCommandAvailable() {
 			guessCmd(user, params)
 		} else {
@@ -143,7 +143,7 @@ func runCommand(user *users.User, message string) {
 
 		// any of these should trigger the location command
 		//TODO: add support for: "where is this", "where are we", "where are you"
-	case "!tripbot", "!location", "!locton", "!locaton", "!locatoion", "1location", "!city", "!town":
+	case "!tripbot", "!location", "!city", "!town", "!where", "!loacation", "!loation", "!loc", "!locatioin", "!locatoion", "!locaton", "!loclistion", "!locton", "1location", "¡location", "!locatiom", "!location!", "!locatio":
 		if user.HasCommandAvailable() {
 			locationCmd(user)
 		} else {
@@ -151,7 +151,7 @@ func runCommand(user *users.User, message string) {
 		}
 
 		// trigger the leaderboard command
-	case "!leaderboard", "!monthlyleaderboard", "!lb", "!mlb":
+	case "!leaderboard", "!monthlyleaderboard", "!lb", "!mlb", "!leaderbord", "!ldb", "!ldbd":
 		if user.HasCommandAvailable() {
 			monthlyMilesLeaderboardCmd(user)
 		} else {
