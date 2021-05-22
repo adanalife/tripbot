@@ -83,7 +83,7 @@ func runCommand(user *users.User, message string) {
 		shutdownCmd(user)
 	case "!socialmedia", "!social", "!socials":
 		Say("Find me outside of Twitch: !twitter, !instagram, !facebook, !youtube")
-	case "!commands", "!controls":
+	case "!commands", "!command", "¡command", "!commands", "!controls":
 		Say("You can try: !location, !guess, !date, !state, !sunset, !timewarp, !miles, !leaderboard, and many other hidden commands!")
 	case "!bonusmiles":
 		if user.IsSubscriber() {
@@ -97,7 +97,7 @@ func runCommand(user *users.User, message string) {
 		} else {
 			Say(followerMsg)
 		}
-	case "!time":
+	case "!time", "!timr":
 		if user.HasCommandAvailable() {
 			timeCmd(user)
 		} else {
@@ -109,7 +109,7 @@ func runCommand(user *users.User, message string) {
 		} else {
 			Say(followerMsg)
 		}
-	case "!guess":
+	case "!guess", "!guss", "guess", "!gusss":
 		if user.HasCommandAvailable() {
 			guessCmd(user, params)
 		} else {
@@ -143,7 +143,7 @@ func runCommand(user *users.User, message string) {
 
 		// any of these should trigger the location command
 		//TODO: add support for: "where is this", "where are we", "where are you"
-	case "!tripbot", "!location", "!city", "!town", "!where", "!loacation", "!loation", "!loc", "!locatioin" "!locatoion", "!locaton", "!loclistion", "!locton", "1location", "¡location":
+	case "!tripbot", "!location", "!city", "!town", "!where", "!loacation", "!loation", "!loc", "!locatioin", "!locatoion", "!locaton", "!loclistion", "!locton", "1location", "¡location":
 		if user.HasCommandAvailable() {
 			locationCmd(user)
 		} else {
