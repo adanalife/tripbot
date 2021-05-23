@@ -28,7 +28,7 @@ func Start() {
 
 	// healthcheck endpoints
 	//TODO: handle HEAD requests here too
-	hp := r.PathPrefix("/health").Methods("GET").Subrouter()
+	hp := r.PathPrefix("/health").Methods("GET", "HEAD").Subrouter()
 	hp.HandleFunc("/", healthHandler)
 	hp.HandleFunc("/live", healthHandler)
 	hp.HandleFunc("/ready", healthHandler)

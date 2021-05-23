@@ -4,8 +4,8 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/adanalife/tripbot)](https://goreportcard.com/report/github.com/adanalife/tripbot)
 [![GitHub Super-Linter](https://github.com/adanalife/tripbot/workflows/Super%20Linter/badge.svg)](https://github.com/marketplace/actions/super-linter)
 [![Version](https://img.shields.io/github/v/release/adanalife/tripbot?sort=semver&include_prereleases)](https://github.com/adanalife/tripbot/releases)
-[![Build Status](https://img.shields.io/endpoint.svg?url=https%3A%2F%2Factions-badge.atrox.dev%2Fadanalife%2Ftripbot%2Fbadge&style=flat)](https://actions-badge.atrox.dev/adanalife/tripbot/goto)
-[![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
+![Build Status](https://img.shields.io/github/checks-status/adanalife/tripbot/master)
+[![License](https://img.shields.io/github/license/adanalife/tripbot)](https://tldrlegal.com/license/mit-license)
 
 This is the source code to [whereisdana.today](http://whereisdana.today), a 24/7 interactive [slow-tv](https://en.wikipedia.org/wiki/Slow_television) art project.
 
@@ -31,7 +31,7 @@ For more detail, check out [Tripbot, the Adventure Robot](https://dana.lol/2020/
 
 You can use `docker-compose` to run tripbot on your own machine.
 It is configured to spin up all of the dependencies for the project.
-A helper script ([`bin/devenv`](https://github.com/adanalife/tripbot/blob/master/bin/devenv)) has been created to make the process a little easier.
+A helper script ([`bin/devenv`](https://github.com/adanalife/tripbot/blob/main/bin/devenv)) has been created to make the process a little easier.
 For example:
 
 ```bash

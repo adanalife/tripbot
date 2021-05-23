@@ -3,7 +3,7 @@ on:
   pull_request:
   push:
     branches:
-      - master
+      - main
     tags:
       - v*
 jobs:
@@ -30,7 +30,6 @@ jobs:
         with:
           github_token: ${{ secrets.github_token }}
           golangci_lint_flags: "--disable-all -E errcheck"
-          level: info
 
   misspell:
     name: misspell
@@ -42,4 +41,5 @@ jobs:
         with:
           github_token: ${{ secrets.github_token }}
           locale: "US"
-          level: info
+          # ignore the chat handlers file cause it has many typos
+          exclude: pkg/chatbot/handlers.go
