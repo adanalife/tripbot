@@ -130,6 +130,8 @@ func runCommand(user *users.User, message string) {
 		}
 	case "!secretinfo":
 		secretInfoCmd(user)
+	case "!gas", "!fuel", "!petrol":
+		Say("About full, thanks for asking")
 	case "!middle":
 		middleCmd(user, params)
 		// any of these should trigger the miles command
