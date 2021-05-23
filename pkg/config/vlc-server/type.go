@@ -1,7 +1,7 @@
 package config
 
 type VlcServerConfig struct {
-	Environment string `required:"true" envconfig:"ENV"`
+	environment string `required:"true" envconfig:"ENV"`
 	ServerType  string `default:"vlc_server"`
 
 	// Verbose determines output verbosity

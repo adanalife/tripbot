@@ -17,6 +17,7 @@ func Initialize(c config.Config) {
 	sentry.Init(sentry.ClientOptions{
 		// enable tracing
 		TracesSampleRate: 0.2,
+		Environment:      c.Environment(),
 	})
 
 	conf = c

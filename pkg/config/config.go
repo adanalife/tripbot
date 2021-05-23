@@ -11,6 +11,7 @@ import (
 // into some functions that need it
 type Config interface {
 	IsProduction() bool
+	Environment() string
 }
 
 // SetEnvironment loads in the ENV vars from a dotenv file
