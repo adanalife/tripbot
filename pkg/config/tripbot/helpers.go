@@ -41,6 +41,7 @@ func UserIsIgnored(user string) bool {
 // https://twitchinsights.net/bots
 var IgnoredUsers = []string{
 	"0_applebadapple_0",
+	"1174",
 	"2020",
 	"abbottcostello",
 	"angeloflight",
@@ -61,6 +62,7 @@ var IgnoredUsers = []string{
 	"communityshowcase",
 	"cristianepre",
 	"cyclemotion",
+	"d4rk_5how",
 	"d4rk_5ky",
 	"discord_for_streamers",
 	"droopdoggg",
@@ -72,6 +74,7 @@ var IgnoredUsers = []string{
 	"feuerwehr",
 	"flaskcopy",
 	"freddyybot",
+	"frw33d",
 	"ftopayr",
 	"ghrly",
 	"gingerne",
