@@ -3,7 +3,7 @@ module github.com/adanalife/tripbot
 go 1.15
 
 require (
-	cloud.google.com/go/logging v1.3.0
+	cloud.google.com/go/logging v1.4.2
 	github.com/adrg/libvlc-go/v3 v3.1.2
 	github.com/bradfitz/latlong v0.0.0-20170410180902-f3db6d0dff40
 	github.com/davecgh/go-spew v1.1.1
