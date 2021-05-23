@@ -9,7 +9,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1
 	github.com/dimiro1/banner v1.1.0
 	github.com/gempir/go-twitch-irc/v2 v2.5.0
-	github.com/getsentry/sentry-go v0.10.0
+	github.com/getsentry/sentry-go v0.11.0
 	github.com/go-sql-driver/mysql v1.5.0 // indirect
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0 // indirect
 	github.com/gorilla/mux v1.8.0
@@ -31,7 +31,7 @@ require (
 	github.com/sfreiberg/gotwilio v0.0.0-20200916182813-169c4cd5c691
 	github.com/skratchdot/open-golang v0.0.0-20200116055534-eef842397966
 	github.com/slok/go-http-metrics v0.9.0
-	github.com/unrolled/secure v1.0.8
+	github.com/unrolled/secure v1.0.9
 	github.com/urfave/negroni v1.0.0
 	golang.org/x/image v0.0.0-20200927104501-e162460cd6b5 // indirect
 	golang.org/x/time v0.0.0-20200630173020-3af7569d3a1e // indirect
