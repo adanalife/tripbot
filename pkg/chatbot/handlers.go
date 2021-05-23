@@ -40,6 +40,13 @@ func runCommand(user *users.User, message string) {
 		}
 	}
 
+	// handle case where people add a space (like "! location")
+	if command == "!" {
+		command = command + params[0]
+		// remove the first element from the params
+		params = params[1:]
+	}
+
 	switch command {
 	case "!help":
 		incChatCommandCounter("!help")
