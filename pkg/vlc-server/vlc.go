@@ -1,19 +1,14 @@
 package vlcServer
 
 import (
-	"fmt"
 	"log"
 	"os"
 	"path/filepath"
 
-	"github.com/adanalife/tripbot/pkg/config"
+	c "github.com/adanalife/tripbot/pkg/config/vlc-server"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	libvlc "github.com/adrg/libvlc-go/v3"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/davecgh/go-spew/spew"
 )
 
 var player *libvlc.Player
@@ -27,13 +22,9 @@ var videoFiles []string
 var vlcCmdFlags = []string{
 	"--ignore-config", // ignore any config files that might get loaded
 	"--fullscreen",    // start fullscreened
-	"--vout", "x11",   // use X11 (and skip vdpau)
-	"--no-audio", // none of the videos have audio
+	"--no-audio",      // none of the videos have audio
 	// "--network-caching", "500", // network cache (in ms)
 	"--file-caching", "1111", // file cache (in ms)
-	// can be none, vdpau_avcodec, or cuda
-	"--avcodec-hw", "vdpau_avcodec",
-	// "--avcodec-dr", "0",
 	"--width", "1920",
 	"--height", "1080",
 	"--canvas-width", "1920",
@@ -41,19 +32,30 @@ var vlcCmdFlags = []string{
 	// "--aspect-ratio", "16:9",
 }
 
+var vlcLinuxSpecificFlags = []string{
+	"--vout", "x11", // use X11 (and skip vdpau, improves performance)
+	"--avcodec-hw", "vdpau_avcodec", // can be none, vdpau_avcodec, or cuda
+	// "--avcodec-dr", "0",
+
+}
+
+var vlcWindowsSpecificFlags = []string{
+	// we do this so the window is always visible, otherwise
+	// when you minimize, it hides the video in OBS
+	"--video-wallpaper",
+}
+
 // these get added if verbose flag is NOT set
 var vlcNotVerboseFlags = []string{
-	"--syslog", // log to syslog
-	"--quiet",  // reduce terminal output
+	"--quiet", // reduce terminal output
 }
 
 // these add a lot more output
 var vlcVerboseFlags = []string{
-	"-vv",            // be very verbose (used for debugging)
-	"--syslog-debug", // post debug output to syslog
+	"-vv", // be very verbose (used for debugging)
 }
 
-// Init creates a VLC player and sets up a playlist
+// InitPlayer creates a VLC player and sets up a playlist
 func InitPlayer() {
 	startVLC()
 	createPlayer()
@@ -96,15 +98,33 @@ func currentlyPlaying() string {
 		terrors.Log(err, "error fetching currently-playing media")
 	}
 
-	return path
+	// strip the path off and just return the filename
+	return filepath.Base(path)
 }
 
 func startVLC() {
 	// set command line flags
-	if config.VlcVerbose {
+	if c.Conf.VlcVerbose {
 		vlcCmdFlags = append(vlcCmdFlags, vlcVerboseFlags...)
+		// we use syslog on linux
+		if helpers.RunningOnLinux() {
+			// post debug output to syslog
+			vlcCmdFlags = append(vlcCmdFlags, "--syslog-debug")
+		}
 	} else {
 		vlcCmdFlags = append(vlcCmdFlags, vlcNotVerboseFlags...)
+		if helpers.RunningOnLinux() {
+			// log to syslog
+			vlcCmdFlags = append(vlcCmdFlags, "--syslog")
+		}
+	}
+
+	if helpers.RunningOnLinux() {
+		vlcCmdFlags = append(vlcCmdFlags, vlcLinuxSpecificFlags...)
+	}
+
+	if helpers.RunningOnWindows() {
+		vlcCmdFlags = append(vlcCmdFlags, vlcWindowsSpecificFlags...)
 	}
 
 	// start up VLC with given command flags
@@ -150,11 +170,7 @@ func setToLoop() {
 }
 
 func loadMedia() {
-	if config.DashcamBucket == "" {
-		loadLocalMedia()
-	} else {
-		loadS3Media(config.DashcamBucket)
-	}
+	loadLocalMedia()
 }
 
 // loadLocalMedia walks the VideoDir and adds all videos to
@@ -162,9 +178,9 @@ func loadMedia() {
 func loadLocalMedia() {
 	var filePaths []string
 	// add all files from the VideoDir to the medialist
-	err := filepath.Walk(config.VideoDir, func(path string, info os.FileInfo, err error) error {
+	err := filepath.Walk(c.Conf.VideoDir, func(path string, info os.FileInfo, err error) error {
 		// skip the dir itself
-		if path == config.VideoDir {
+		if path == c.Conf.VideoDir {
 			return nil
 		}
 		// skip non-video files
@@ -186,39 +202,6 @@ func loadLocalMedia() {
 	for _, file := range filePaths {
 		// add the media to VLC
 		err = mediaList.AddMediaFromPath(file)
-		if err != nil {
-			terrors.Fatal(err, "error adding files to VLC media list")
-		}
-	}
-}
-
-func loadS3Media(bucket string) {
-	sess, err := session.NewSession(&aws.Config{})
-
-	// Create S3 service client
-	svc := s3.New(sess)
-
-	// Get the list of items
-	resp, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{Bucket: aws.String(bucket)})
-	if err != nil {
-		terrors.Fatal(err, "Unable to list items in bucket")
-	}
-
-	// for _, item := range resp.Contents {
-	// 	fmt.Println("Name:         ", *item.Key)
-	// 	fmt.Println("Last modified:", *item.LastModified)
-	// 	fmt.Println("Size:         ", *item.Size)
-	// 	fmt.Println("Storage class:", *item.StorageClass)
-	// 	fmt.Println("")
-	// }
-
-	// loop over the bucket items and add their paths to VLC
-	for _, item := range resp.Contents {
-		video_filename := *item.Key
-		s3_path := fmt.Sprintf("s3://%s/%s", bucket, video_filename)
-		spew.Dump(s3_path)
-		// add the media to VLC
-		err = mediaList.AddMediaFromPath(s3_path)
 		if err != nil {
 			terrors.Fatal(err, "error adding files to VLC media list")
 		}

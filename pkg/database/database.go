@@ -7,7 +7,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/adanalife/tripbot/pkg/config"
+	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/jmoiron/sqlx"
 	"github.com/joho/godotenv"
@@ -21,7 +21,7 @@ var dbConnection *sqlx.DB
 func init() {
 	var err error
 
-	err = godotenv.Load(".env." + config.Environment)
+	err = godotenv.Load(".env." + c.Conf.Environment)
 	if err != nil {
 		log.Println("Error loading .env file:", err)
 		log.Println("Continuing anyway...")
@@ -44,6 +44,7 @@ func init() {
 func connectToDB() *sqlx.DB {
 	dbConnection, err := sqlx.Connect("postgres", connStr())
 	if err != nil {
+		//TODO: print the current external IP and the DB details
 		// we don't use terrors here cause it might spam
 		log.Println(aurora.Red("connection to DB failed:"), err.Error())
 		return nil

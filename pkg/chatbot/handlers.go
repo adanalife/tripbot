@@ -5,10 +5,10 @@ import (
 	"log"
 	"strings"
 
+	mylog "github.com/adanalife/tripbot/pkg/chatbot/log"
+	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
-	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
-	mylog "github.com/adanalife/tripbot/pkg/log"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/gempir/go-twitch-irc/v2"
 )
@@ -19,119 +19,116 @@ func incChatCommandCounter(command string) {
 	}
 }
 
-func runCommand(user users.User, message string) {
+func runCommand(user *users.User, message string) {
 	var err error
+	var params []string
 
-	split := strings.Split(message, " ")
+	msg := strings.TrimSpace(message)
+	split := strings.Split(msg, " ")
+
+	// the command is the first part
 	command := split[0]
-	params := split[1:]
+
+	if len(split) > 1 {
+		// the params are the second part
+		params = split[1:]
+
+		// this invalid unicode character shows up when you run the same command twice
+		// (it may be specific to Chatterino as a twitch client?)
+		if params[len(params)-1] == "\U000e0000" {
+			params = params[:len(params)-1]
+		}
+	}
 
 	switch command {
 	case "!help":
 		incChatCommandCounter("!help")
-		helpCmd(&user)
+		helpCmd(user)
 	case "hello", "hi", "hey", "hallo":
 		incChatCommandCounter("hello")
-		helloCmd(&user, params)
+		helloCmd(user, params)
 	case "!flag":
 		incChatCommandCounter("!flag")
-		flagCmd(&user)
+		flagCmd(user)
 	case "!version":
 		incChatCommandCounter("!version")
-		versionCmd(&user)
-	case "!song", "!currentsong", "!music", "!currentmusic":
-		songCmd(&user)
+		versionCmd(user)
 	case "!uptime":
-		uptimeCmd(&user)
-		//TODO: remove this
-	case "!oldmiles":
-		if user.HasCommandAvailable() {
-			oldMilesCmd(&user)
-		} else {
-			Say(followerMsg)
-		}
+		uptimeCmd(user)
 	case "!timewarp", "!tw":
 		if user.HasCommandAvailable() {
-			timewarpCmd(&user)
+			timewarpCmd(user)
 		} else {
 			Say(followerMsg)
 		}
 	case "!goto", "!jump":
 		if user.HasCommandAvailable() {
-			jumpCmd(&user, params)
+			jumpCmd(user, params)
 		} else {
 			Say(followerMsg)
 		}
 	case "!skip":
 		if user.HasCommandAvailable() {
-			skipCmd(&user, params)
+			skipCmd(user, params)
 		} else {
 			Say(followerMsg)
 		}
 	case "!back":
 		if user.HasCommandAvailable() {
-			backCmd(&user, params)
+			backCmd(user, params)
 		} else {
 			Say(followerMsg)
 		}
 	case "!shutdown":
-		shutdownCmd(&user)
-	case "!restartmusic":
-		restartMusicCmd(&user)
+		shutdownCmd(user)
 	case "!socialmedia":
 		Say("Find me outside of Twitch: !twitter, !instagram, !facebook, !youtube")
 	case "!commands", "!controls":
 		Say("You can try: !location, !guess, !date, !state, !sunset, !timewarp, !miles, !leaderboard, and many other hidden commands!")
 	case "!bonusmiles":
 		if user.IsSubscriber() {
-			bonusMilesCmd(&user)
+			bonusMilesCmd(user)
 		} else {
 			Say(subscriberMsg)
 		}
 	case "!sunset":
 		if user.HasCommandAvailable() {
-			sunsetCmd(&user)
-		} else {
-			Say(followerMsg)
-		}
-	case "!oldleaderboard":
-		if user.HasCommandAvailable() {
-			oldLeaderboardCmd(&user)
+			sunsetCmd(user)
 		} else {
 			Say(followerMsg)
 		}
 	case "!time":
 		if user.HasCommandAvailable() {
-			timeCmd(&user)
+			timeCmd(user)
 		} else {
 			Say(followerMsg)
 		}
 	case "!date":
 		if user.HasCommandAvailable() {
-			dateCmd(&user)
+			dateCmd(user)
 		} else {
 			Say(followerMsg)
 		}
 	case "!guess":
 		if user.HasCommandAvailable() {
-			guessCmd(&user, params)
+			guessCmd(user, params)
 		} else {
 			Say(followerMsg)
 		}
 	case "!state":
 		if user.HasCommandAvailable() {
-			stateCmd(&user)
+			stateCmd(user)
 		} else {
 			Say(followerMsg)
 		}
 	case "!secretinfo":
-		secretInfoCmd(&user)
+		secretInfoCmd(user)
 	case "!middle":
-		middleCmd(&user, params)
+		middleCmd(user, params)
 		// any of these should trigger the miles command
 	case "!miles", "!points":
 		if user.HasCommandAvailable() {
-			milesCmd(&user)
+			milesCmd(user, params)
 		} else {
 			Say(followerMsg)
 		}
@@ -139,7 +136,7 @@ func runCommand(user users.User, message string) {
 		// any of these should trigger the kilometres command
 	case "!km", "!kilometres", "!kilometers":
 		if user.HasCommandAvailable() {
-			kilometresCmd(&user)
+			kilometresCmd(user)
 		} else {
 			Say(followerMsg)
 		}
@@ -148,24 +145,41 @@ func runCommand(user users.User, message string) {
 		//TODO: add support for: "where is this", "where are we", "where are you"
 	case "!tripbot", "!location", "!locton", "!locaton", "!locatoion", "1location", "!city", "!town":
 		if user.HasCommandAvailable() {
-			locationCmd(&user)
+			locationCmd(user)
 		} else {
 			Say(followerMsg)
 		}
 
-		// any of these should trigger the leaderboard command
-	case "!leaderboard", "!newleaderboard":
+		// trigger the leaderboard command
+	case "!leaderboard", "!monthlyleaderboard", "!lb", "!mlb":
 		if user.HasCommandAvailable() {
-			leaderboardCmd(&user)
+			monthlyMilesLeaderboardCmd(user)
+		} else {
+			Say(followerMsg)
+		}
+
+		// trigger the lifetime leaderboard command
+	case "!totalleaderboard", "!lifetimeleaderboard", "!tlb", "!llb":
+		if user.HasCommandAvailable() {
+			lifetimeMilesLeaderboardCmd(user)
+		} else {
+			Say(followerMsg)
+		}
+
+		// trigger the lifetime leaderboard command
+	case "!guessleaderboard", "!glb":
+		if user.HasCommandAvailable() {
+			monthlyGuessLeaderboardCmd(user)
 		} else {
 			Say(followerMsg)
 		}
 
 		// any of these should trigger the report command
 		//TODO: probably want to allow people to run this more than once?
+		//TODO: the two-word ones dont work
 	case "!report", "no audio", "no sound", "no music", "frozen":
 		if user.HasCommandAvailable() {
-			reportCmd(&user, params)
+			reportCmd(user, params)
 		} else {
 			Say(followerMsg)
 		}
@@ -198,7 +212,7 @@ func PrivateMessage(msg twitch.PrivateMessage) {
 	// log in the user
 	user := users.LoginIfNecessary(username)
 
-	runCommand(*user, message)
+	runCommand(user, message)
 }
 
 // this event fires when a user joins the channel
@@ -219,9 +233,9 @@ func UserPart(partMessage twitch.UserPartMessage) {
 
 // if the message comes from me, then post the message to chat
 //TODO: log to stackdriver
-func Whisper(message twitch.WhisperMessage) {
+func GetWhisper(message twitch.WhisperMessage) {
 	log.Println("whisper from", message.User.Name, ":", message.Message)
-	if helpers.UserIsAdmin(message.User.Name) {
+	if c.UserIsAdmin(message.User.Name) {
 		Say(message.Message)
 	}
 }

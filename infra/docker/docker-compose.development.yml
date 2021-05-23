@@ -4,14 +4,13 @@ services:
   tripbot:
     environment:
       ENV: development
+      DISABLE_WEBHOOKS: "true"
       GOOGLE_APPLICATION_CREDENTIALS: /opt/tripbot/infra/google/tripbot-stage.json
     env_file:
       - ./.env.development
-    entrypoint: bash
-    command: -c "go run cmd/tripbot/tripbot.go 2>&1"
-    volumes:
-      # - /home/dmerrick/Videos/Dashcam/screencaps:/opt/data/screencaps:ro
-      - "/Volumes/Leeroy/Dana's Photos/Dashcam Scratchpad/Dashcam/screencaps:/opt/data/screencaps:ro"
+    #TODO: add apt update, apt install -y postgresql vim
+    #TODO: add dir in this repo with scripts intended to be run in docker
+    # command: -c "go run cmd/tripbot/tripbot.go 2>&1"
 
   obs:
     environment:
@@ -33,10 +32,6 @@ services:
     command: -c "cd /opt/tripbot && rm -f bin/vlc-server && script/container_startup.sh"
     volumes:
       - .bash_history.remote:/root/.bash_history
-      - /Volumes/Leeroy/Dana\'s\ Photos/Dashcam\ Scratchpad/Dashcam/screencaps:/opt/data/screencaps:ro
-      - /Volumes/Leeroy/Dana\'s\ Photos/Dashcam\ Scratchpad/Dashcam/_all:/opt/data/Dashcam/_all:ro
-      # - /home/dmerrick/Videos/Dashcam/screencaps:/opt/data/screencaps:ro
-      # - /home/dmerrick/Videos/Dashcam/_all:/opt/data/Dashcam/_all:ro
 
   vlc:
     privileged: true
@@ -59,14 +54,15 @@ services:
       # hack to make fontconfig happy
       FONTCONFIG_PATH: "/etc/fonts"
       STREAM_KEY: "${STREAM_KEY}"
-    command: -c "cd /opt/tripbot && rm -f bin/vlc-server && script/container_startup.sh"
+    # command: -c "cd /opt/tripbot && rm -f bin/vlc-server && script/container_startup.sh"
+    command: -c "go run cmd/vlc-server/vlc-server.go 2>&1"
     volumes:
       - .bash_history.remote:/root/.bash_history
       - .:/go/src/github.com/adanalife/tripbot
-      - /Volumes/Leeroy/Dana\'s\ Photos/Dashcam\ Scratchpad/Dashcam/screencaps:/opt/data/screencaps:ro
-      - /Volumes/Leeroy/Dana\'s\ Photos/Dashcam\ Scratchpad/Dashcam/_all:/opt/data/Dashcam/_all:ro
     restart: unless-stopped
 
   db:
     volumes:
       - ./tmp/postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"

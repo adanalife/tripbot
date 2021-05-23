@@ -3,9 +3,10 @@ package twitch
 import (
 	"log"
 
-	"github.com/davecgh/go-spew/spew"
-	"github.com/adanalife/tripbot/pkg/config"
+	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
+	"github.com/davecgh/go-spew/spew"
+	"github.com/logrusorgru/aurora"
 	"github.com/nicklaw5/helix"
 )
 
@@ -20,9 +21,12 @@ var subsTopic = []string{
 
 // UpdateWebhookSubscriptions will create new webhook subscriptions
 func UpdateWebhookSubscriptions() {
+	if c.Conf.DisableTwitchWebhooks {
+		return
+	}
 	subscribeToWebhook(followsTopic)
 	// since the staging account isn't an affiliate, don't bother
-	if config.IsProduction() {
+	if c.Conf.IsProduction() {
 		subscribeToWebhook(subsTopic)
 	}
 	getWebookSubscriptions()
@@ -36,7 +40,7 @@ func subscribeToWebhook(pair []string) {
 	_, err := currentTwitchClient.PostWebhookSubscription(&helix.WebhookSubscriptionPayload{
 		Mode:         "subscribe",
 		Topic:        topic,
-		Callback:     config.ExternalURL + endpoint,
+		Callback:     c.Conf.ExternalURL + endpoint,
 		LeaseSeconds: 24 * 60 * 60, // 24h is the max allowed
 	})
 
@@ -54,10 +58,10 @@ func getWebookSubscriptions() {
 	}
 
 	if resp.Data.Total > 0 {
-		if config.Verbose {
+		if c.Conf.Verbose {
 			spew.Dump(resp.Data.WebhookSubscriptions)
 		}
 	} else {
-		log.Println("no webhooks found")
+		log.Println(aurora.Red("no webhooks found"))
 	}
 }

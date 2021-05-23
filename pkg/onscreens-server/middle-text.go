@@ -2,12 +2,12 @@ package onscreensServer
 
 import (
 	"log"
-	"path"
+	"path/filepath"
 
-	"github.com/adanalife/tripbot/pkg/config"
+	c "github.com/adanalife/tripbot/pkg/config/vlc-server"
 )
 
-var middleTextFile = path.Join(config.RunDir, "middle-text.txt")
+var middleTextFile = filepath.Join(c.Conf.RunDir, "middle-text.txt")
 
 var MiddleText *Onscreen
 

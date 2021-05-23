@@ -120,12 +120,9 @@ func (v Video) save() error {
 	state := v.State
 
 	if lat == 0 || lng == 0 {
-		// try to get at least one good coords pair
-		lat, lng, err = v.ocrCoords()
-		if err != nil {
-			terrors.Log(err, "error OCRing coords")
-			flagged = true
-		}
+		//TODO: this is where we used to run ocrCoords()
+		terrors.Log(nil, "OCRing coords skipped!")
+		flagged = true
 	}
 
 	if !flagged {
@@ -137,7 +134,8 @@ func (v Video) save() error {
 	}
 
 	tx := database.Connection().MustBegin()
-	tx.MustExec(
+	//TODO: do something with result var here?
+	_, err = tx.Exec(
 		"INSERT INTO videos (slug, lat, lng, date_filmed, flagged, prev_vid, next_vid, state) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
 		v.Slug,
 		lat,
@@ -148,6 +146,9 @@ func (v Video) save() error {
 		v.NextVid,
 		state,
 	)
+	if err != nil {
+		return err
+	}
 	return tx.Commit()
 }
 

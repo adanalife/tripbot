@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
-	"path"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -16,7 +15,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/adanalife/tripbot/pkg/config"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/bradfitz/latlong"
 	"github.com/davecgh/go-spew/spew"
@@ -58,24 +56,15 @@ func StateFromCoords(lat, lon float64) (string, error) {
 func ProjectRoot() string {
 	_, b, _, _ := runtime.Caller(0)
 	helperPath := filepath.Dir(b)
-	projectRoot := path.Join(helperPath, "../..")
-	return path.Clean(projectRoot)
+	projectRoot := filepath.Join(helperPath, "..", "..")
+	absolutePath, _ := filepath.Abs(projectRoot)
+	return absolutePath
 }
 
 // DurationToMiles converts Durations to miles
 func DurationToMiles(dur time.Duration) float32 {
 	// 0.1mi every 3 minutes
 	return float32(0.1 * dur.Minutes() / 3.0)
-}
-
-// UserIsIgnored returns true if a given user should be ignored
-func UserIsIgnored(user string) bool {
-	for _, ignored := range config.IgnoredUsers {
-		if user == ignored {
-			return true
-		}
-	}
-	return false
 }
 
 // GoogleMapsURL returns a google maps link to the coords provided
@@ -210,10 +199,14 @@ func RunningOnDarwin() bool {
 	return runtime.GOOS == "darwin"
 }
 
-// UserIsAdmin returns true if a given user runs the channel
-// it's used to restrict admin features
-func UserIsAdmin(username string) bool {
-	return strings.ToLower(username) == strings.ToLower(config.ChannelName)
+// RunningOnWindows returns true if we're on windows
+func RunningOnWindows() bool {
+	return runtime.GOOS == "windows"
+}
+
+// RunningOnLinux returns true if we're on linux
+func RunningOnLinux() bool {
+	return runtime.GOOS == "linux"
 }
 
 // this nastiness taken from:
@@ -293,4 +286,12 @@ func Base64Decode(str string) (string, error) {
 		return "", err
 	}
 	return string(data), nil
+}
+
+func StripAtSign(username string) string {
+	if username[0] == []byte("@")[0] {
+		// strip the @ sign
+		username = username[1:]
+	}
+	return username
 }

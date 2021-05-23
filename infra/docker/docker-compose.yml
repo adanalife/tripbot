@@ -18,6 +18,8 @@ services:
       - .:/go/src/github.com/adanalife/tripbot
       #TODO: do we even need this?
       - ./assets/video:/opt/data/Dashcam/_all:ro
+    entrypoint: bash
+    command: -c "go run cmd/tripbot/tripbot.go 2>&1"
     restart: unless-stopped
 
   obs:
@@ -29,8 +31,6 @@ services:
     build:
       context: .
       dockerfile: infra/docker/obs/Dockerfile
-    # depends_on:
-    #   - mpd
     ports:
       # this should match the VLC_SERVER_HOST env var
       - "8080"
@@ -59,19 +59,6 @@ services:
     #   - ./infra/docker/init.sql:/docker-entrypoint-initdb.d/init.sql
     #   - ./tmp/data:/var/lib/postgresql/data
 
-  mpd:
-    image: wernight/mopidy
-    ports:
-      - "6600:6601"
-    volumes:
-      - ./infra/mopidy.conf:/config/mopidy.conf
-    # devices:
-    #   - /dev/snd
-    restart: unless-stopped
-    # hide output
-    logging:
-      driver: none
-
   migrate:
     image: migrate/migrate
     depends_on:
@@ -83,4 +70,16 @@ services:
       "-database",  "postgres://${DATABASE_USER}:${DATABASE_PASS}@${DATABASE_HOST}:5432/${DATABASE_DB}?sslmode=disable",
       "up"
     ]
+    restart: on-failure
+
+  seed:
+    image: adanalife/tripbot
+    env_file:
+      - infra/docker/env.docker
+    depends_on:
+      - migrate
+    entrypoint: bash -c "infra/docker/bin/seed-db.sh"
+    #TODO: this can be removed once the script is baked into the image
+    volumes:
+      - .:/go/src/github.com/adanalife/tripbot
     restart: on-failure

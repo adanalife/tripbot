@@ -6,56 +6,79 @@ import (
 
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
+	"github.com/adanalife/tripbot/pkg/scoreboards"
 	"github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/logrusorgru/aurora"
 
-	"github.com/adanalife/tripbot/pkg/config"
+	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
 )
 
 type User struct {
-	ID          uint16    `db:"id"`
-	Username    string    `db:"username"`
-	Miles       float32   `db:"miles"`
-	NumVisits   uint16    `db:"num_visits"`
-	HasDonated  bool      `db:"has_donated"`
-	IsBot       bool      `db:"is_bot"`
-	FirstSeen   time.Time `db:"first_seen"`
-	LastSeen    time.Time `db:"last_seen"`
-	DateCreated time.Time `db:"date_created"`
-	LoggedIn    time.Time
-	lastCmd     time.Time
+	ID           uint16    `db:"id"`
+	Username     string    `db:"username"`
+	Miles        float32   `db:"miles"`
+	NumVisits    uint16    `db:"num_visits"`
+	HasDonated   bool      `db:"has_donated"`
+	IsBot        bool      `db:"is_bot"`
+	FirstSeen    time.Time `db:"first_seen"`
+	LastSeen     time.Time `db:"last_seen"`
+	DateCreated  time.Time `db:"date_created"`
+	LoggedIn     time.Time
+	lastCmd      time.Time
+	lastLocation time.Time
+}
+
+// this is how long they have before they can guess again
+var guessCooldown = 3 * time.Minute
+
+func (u User) loggedInDur() time.Duration {
+	// exit early if they're not logged in
+	if !isLoggedIn(u.Username) {
+		return 0 * time.Second
+	}
+	// lookup the user in the session so the LoggedIn value is current
+	return time.Now().Sub(LoggedIn[u.Username].LoggedIn)
+}
+
+func (u User) sessionMiles() float32 {
+	// exit early if they're not logged in
+	if !isLoggedIn(u.Username) {
+		return 0.0
+	}
+	loggedInDur := u.loggedInDur()
+	sessionMiles := helpers.DurationToMiles(loggedInDur)
+	// give subscribers a miles bonus
+	if u.IsSubscriber() {
+		bonusMiles := u.BonusMiles()
+		if c.Conf.Verbose {
+			log.Println(u.String(), "will get", aurora.Green(bonusMiles), "bonus miles")
+		}
+		sessionMiles += bonusMiles
+	}
+	return sessionMiles
 }
 
 func (u User) CurrentMiles() float32 {
-	if isLoggedIn(u.Username) {
-		loggedInDur := time.Now().Sub(u.LoggedIn)
-		sessionMiles := helpers.DurationToMiles(loggedInDur)
-		// give subscribers a miles bonus
-		if u.IsSubscriber() {
-			bonusMiles := u.BonusMiles()
-			if config.Verbose {
-				log.Println(u.String(), "will get", aurora.Green(bonusMiles), "bonus miles")
-			}
-			return u.Miles + sessionMiles + bonusMiles
-		}
-		return u.Miles + sessionMiles
-	}
-	return u.Miles
+	return u.Miles + u.sessionMiles()
 }
 
 func (u User) BonusMiles() float32 {
 	if isLoggedIn(u.Username) {
-		loggedInDur := time.Now().Sub(u.LoggedIn)
+		loggedInDur := u.loggedInDur()
 		sessionMiles := helpers.DurationToMiles(loggedInDur)
 		return sessionMiles * 0.05
 	}
 	return 0.0
 }
 
+func (u User) CurrentMonthlyMiles() float32 {
+	return u.GetScore(scoreboards.CurrentMilesScoreboard()) + u.sessionMiles()
+}
+
 // User.save() will take the given user and store it in the DB
 func (u User) save() {
-	if config.Verbose {
+	if c.Conf.Verbose {
 		log.Println("saving user", u)
 	}
 	query := `UPDATE users SET last_seen=:last_seen, num_visits=:num_visits, miles=:miles WHERE id = :id`
@@ -80,7 +103,7 @@ func (u User) String() string {
 	if u.IsBot {
 		return aurora.Gray(15, u.Username).String()
 	}
-	if helpers.UserIsAdmin(u.Username) {
+	if c.UserIsAdmin(u.Username) {
 		return aurora.Gray(11, u.Username).String()
 	}
 	return aurora.Magenta(u.Username).String()
@@ -88,7 +111,7 @@ func (u User) String() string {
 
 // FindOrCreate will try to find the user in the DB, otherwise it will create a new user
 func FindOrCreate(username string) User {
-	if config.Verbose {
+	if c.Conf.Verbose {
 		log.Printf("FindOrCreate(%s)", username)
 	}
 	user := Find(username)
@@ -104,9 +127,6 @@ func Find(username string) User {
 	var user User
 	query := `SELECT * FROM users WHERE username=$1`
 	err := database.Connection().Get(&user, query, username)
-	// spew.Config.ContinueOnMethod = true
-	// spew.Config.MaxDepth = 2
-	// spew.Dump(user)
 	if err != nil {
 		//TODO: is there a better way to do this?
 		return User{ID: 0}
@@ -133,13 +153,45 @@ func (u *User) HasCommandAvailable() bool {
 	return false
 }
 
+// GuessCooldownRemaining returns the amount of time a user needs to
+// wait before they can guess again
+func (u User) GuessCooldownRemaining() time.Duration {
+	now := time.Now()
+	cooldownExpiry := u.lastLocation.Add(guessCooldown)
+
+	if u.lastLocation.Add(guessCooldown).After(now) {
+		return cooldownExpiry.Sub(now)
+	}
+	return 0 * time.Minute
+}
+
+// HasGuessCommandAvailable returns true if the user is allowed to use the guess command
+func (u *User) HasGuessCommandAvailable(lastTimewarpTime time.Time) bool {
+	// let the user run if there has been a timewarp recently
+	if u.lastLocation.Before(lastTimewarpTime) {
+		return true
+	}
+
+	// check if they ran a location command recently
+	if u.GuessCooldownRemaining() <= 0 {
+		log.Println("letting", u, "run guess command")
+		return true
+	}
+	return false
+}
+
+func (u *User) SetLastLocationTime() {
+	u.lastLocation = time.Now()
+}
+
 //TODO: maybe return an err here?
 // create() will actually create the DB record
 func create(username string) User {
 	log.Println("creating user", username)
 	tx := database.Connection().MustBegin()
 	// create a new row, using default vals and creating a single visit
-	tx.MustExec("INSERT INTO users (username, num_visits) VALUES ($1, $2)", username, 1)
+	//TODO: do something with results, error returned here
+	tx.Exec("INSERT INTO users (username, num_visits) VALUES ($1, $2)", username, 1)
 	tx.Commit()
 	return Find(username)
 }

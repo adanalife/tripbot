@@ -9,7 +9,7 @@ import (
 	"os/signal"
 	"time"
 
-	"github.com/adanalife/tripbot/pkg/config"
+	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	sentrynegroni "github.com/getsentry/sentry-go/negroni"
@@ -26,7 +26,7 @@ var server *http.Server
 
 // Start starts the web server
 func Start() {
-	log.Println("Starting web server on port", config.TripbotServerPort)
+	log.Println("Starting web server on port", c.Conf.TripbotServerPort)
 
 	r := mux.NewRouter()
 
@@ -56,7 +56,9 @@ func Start() {
 	// catch everything else
 	r.HandleFunc("/", catchAllHandler)
 
-	helpers.PrintAllRoutes(r)
+	if c.Conf.Verbose {
+		helpers.PrintAllRoutes(r)
+	}
 
 	// negroni classic adds panic recovery, logger, and static file middlewares
 	// c.p. https://github.com/urfave/negroni
@@ -65,14 +67,14 @@ func Start() {
 	// attach http-metrics (prometheus) middleware
 	metricsMw := middleware.New(middleware.Config{
 		Recorder: metrics.NewRecorder(metrics.Config{}),
-		Service:  config.ServerType,
+		Service:  c.Conf.ServerType,
 	})
 	app.Use(negronimiddleware.Handler("", metricsMw))
 
 	// attach security middleware
 	secureMw := secure.New(secure.Options{
 		FrameDeny:     true,
-		IsDevelopment: config.IsDevelopment(),
+		IsDevelopment: c.Conf.IsDevelopment(),
 	})
 	app.Use(negroni.HandlerFunc(secureMw.HandlerFuncWithNext))
 
@@ -83,7 +85,7 @@ func Start() {
 	app.UseHandler(r)
 
 	srv := &http.Server{
-		Addr: fmt.Sprintf("0.0.0.0:%s", config.TripbotServerPort),
+		Addr: fmt.Sprintf("0.0.0.0:%s", c.Conf.TripbotServerPort),
 		// Good practice to set timeouts to avoid Slowloris attacks.
 		WriteTimeout:   time.Second * 15,
 		ReadTimeout:    time.Second * 15,
@@ -127,5 +129,5 @@ func Start() {
 
 // isValidSecret returns true if the given secret matches the configured one
 func isValidSecret(secret string) bool {
-	return len(secret) < 1 || secret != config.TripbotHttpAuth
+	return len(secret) < 1 || secret != c.Conf.TripbotHttpAuth
 }

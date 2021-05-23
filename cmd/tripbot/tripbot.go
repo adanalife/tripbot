@@ -9,13 +9,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/adanalife/tripbot/pkg/audio"
 	"github.com/adanalife/tripbot/pkg/background"
 	"github.com/adanalife/tripbot/pkg/chatbot"
-	"github.com/adanalife/tripbot/pkg/config"
+	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
+	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
 	"github.com/adanalife/tripbot/pkg/server"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/users"
@@ -32,6 +32,7 @@ var client *twitch.Client
 func main() {
 	createRandomSeed()
 	listenForShutdown()
+	initializeErrorLogger()
 	startHttpServer()
 	findInitialVideo()
 	users.InitLeaderboard()
@@ -51,15 +52,19 @@ func createRandomSeed() {
 
 // listenForShutdown creates a background job that listens for a graceful shutdown request
 func listenForShutdown() {
-	helpers.WritePidFile(config.TripbotPidFile)
+	helpers.WritePidFile(c.Conf.TripbotPidFile)
 	// start the graceful shutdown listener
 	go gracefulShutdown()
+}
+
+// initializeErrorLogger makes sure the logger is configured
+func initializeErrorLogger() {
+	terrors.Initialize(c.Conf)
 }
 
 // startHttpServer starts a webserver, which is
 // used for admin tools and receiving webhooks
 func startHttpServer() {
-	config.SetServerType("tripbot")
 	// start the HTTP server
 	go server.Start()
 }
@@ -110,9 +115,9 @@ func updateWebhookSubscriptions() {
 
 // connectToTwitch joins Twitch chat and starts listening
 func connectToTwitch() {
-	client.Join(config.ChannelName)
-	log.Println("Joined channel", config.ChannelName)
-	log.Printf("URL: %s", aurora.Blue(fmt.Sprintf("https://twitch.tv/%s", config.ChannelName)).Underline())
+	client.Join(c.Conf.ChannelName)
+	log.Println("Joined channel", c.Conf.ChannelName)
+	log.Printf("URL: %s", aurora.Blue(fmt.Sprintf("https://twitch.tv/%s", c.Conf.ChannelName)).Underline())
 
 	// actually connect to Twitch
 	// wrapped in a loop in case twitch goes down
@@ -145,7 +150,6 @@ func gracefulShutdown() {
 		terrors.Log(err, "error closing DB connection")
 	}
 	background.StopCron()
-	audio.Shutdown()
 	sentry.Flush(time.Second * 5)
 	os.Exit(1)
 }
@@ -158,18 +162,16 @@ func scheduleBackgroundJobs() {
 
 	// schedule these functions
 	err = background.Cron.AddFunc("@every 60s", video.GetCurrentlyPlaying)
-	// use this to keep the connection to MPD running
-	err = background.Cron.AddFunc("@every 60s", audio.RefreshClient)
 	err = background.Cron.AddFunc("@every 61s", users.UpdateSession)
 	err = background.Cron.AddFunc("@every 62s", users.UpdateLeaderboard)
+	err = background.Cron.AddFunc("@every 5m", onscreensClient.ShowGuessLeaderboard)
 	err = background.Cron.AddFunc("@every 5m", users.PrintCurrentSession)
-	err = background.Cron.AddFunc("@every 15m", mytwitch.GetSubscribers)
+	err = background.Cron.AddFunc("@every 5m", mytwitch.GetSubscribers)
 	err = background.Cron.AddFunc("@every 1h", mytwitch.RefreshUserAccessToken)
 	err = background.Cron.AddFunc("@every 2h57m30s", chatbot.Chatter)
-	err = background.Cron.AddFunc("@every 12h", mytwitch.SetStreamTags)
 	err = background.Cron.AddFunc("@every 12h", mytwitch.UpdateWebhookSubscriptions)
-	if helpers.RunningOnDarwin() {
-		err = background.Cron.AddFunc("@every 6h", audio.RestartItunes)
+	if !helpers.RunningOnWindows() {
+		err = background.Cron.AddFunc("@every 12h", mytwitch.SetStreamTags)
 	}
 
 	if err != nil {

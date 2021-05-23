@@ -1,7 +1,6 @@
 package onscreensServer
 
 import (
-	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
@@ -51,7 +50,7 @@ func NewImage(imageFile string) *Onscreen {
 }
 
 // backgroundLoop will loop forever, hiding the Onscreen if needed
-//TODO: do we need a way to close out this loop?
+//TODO: add signal to end the loop
 func (osc *Onscreen) backgroundLoop() {
 	for { // forever
 		if osc.IsShowing && osc.isExpired() {
@@ -174,5 +173,5 @@ func (osc Onscreen) hideImage() {
 // liveImage adds a suffix to the end of the file
 // which is the file that OBS will be configured to look at
 func (osc Onscreen) liveImage() string {
-	return fmt.Sprintf("%s%s", osc.outputFile, imageSuffix)
+	return osc.outputFile + imageSuffix
 }

@@ -15,6 +15,5 @@ data:
     SENTRY_ENVIRONMENT="staging"
 
     DISABLE_TWITCH_WEBHOOKS="true"
-    DISABLE_MUSIC_AUTOPLAY="true"
     READ_ONLY="false"
     VERBOSE="false"

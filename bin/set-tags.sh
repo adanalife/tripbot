@@ -11,7 +11,7 @@
 # 89e105c9-2c45-42a9-a5f0-fc1ea6e7ba8b outdoors
 
 if [[ $# -eq 0 ]] ; then
-  echo "Usage: $0 [server-url]"
+  echo "Usage: $0 [tripbot-server-url]"
   exit 0
 fi
 

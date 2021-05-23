@@ -3,22 +3,22 @@ package chatbot
 import (
 	"fmt"
 	"log"
+	"math"
 	"math/rand"
 	"os"
 	"os/exec"
-	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/adanalife/tripbot/pkg/audio"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
+	"github.com/adanalife/tripbot/pkg/scoreboards"
 
 	"github.com/adanalife/tripbot/pkg/background"
-	"github.com/adanalife/tripbot/pkg/config"
+	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
 	"github.com/adanalife/tripbot/pkg/helpers"
-	"github.com/adanalife/tripbot/pkg/miles"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/adanalife/tripbot/pkg/video"
 	"github.com/getsentry/sentry-go"
@@ -30,9 +30,14 @@ var lastHelloTime time.Time = time.Now()
 
 var currentVersion string
 
+// this is the scoreboard name used for counting correct guesses
+const guessScoreboard = "guess_state_total"
+
+//TODO: incorrect guess scoreboard?
+
 func helpCmd(user *users.User) {
 	log.Println(user.Username, "ran !help")
-	msg := fmt.Sprintf("%s (%d of %d)", help(), helpIndex+1, len(config.HelpMessages))
+	msg := fmt.Sprintf("%s (%d of %d)", help(), helpIndex+1, len(c.HelpMessages))
 	Say(msg)
 }
 
@@ -73,10 +78,15 @@ func flagCmd(user *users.User) {
 func versionCmd(user *users.User) {
 	log.Println(user.Username, "ran !version")
 
+	if helpers.RunningOnWindows() {
+		Say("Sorry, I can't answer that right now")
+		return
+	}
+
 	// check if we already know the version
 	if currentVersion == "" {
 		// run the shell script to get current tripbot version
-		scriptPath := path.Join(helpers.ProjectRoot(), "bin/current-version.sh")
+		scriptPath := filepath.Join(helpers.ProjectRoot(), "bin", "current-version.sh")
 		out, err := exec.Command(scriptPath).Output()
 		if err != nil {
 			terrors.Log(err, "failed to get current version")
@@ -89,25 +99,6 @@ func versionCmd(user *users.User) {
 	Say("Current version is " + currentVersion)
 }
 
-func songCmd(user *users.User) {
-	log.Println(user.Username, "ran !song")
-	currentSong := audio.CurrentlyPlaying()
-
-	//TODO: what are the other possible player states?
-	if currentSong == "stop" {
-		Say("Player is currently stopped")
-		return
-	}
-
-	// just print the link to somaFM if there's an issue
-	if currentSong == "error" {
-		Say("https://somafm.com/groovesalad/songhistory.html")
-		return
-	}
-	msg := fmt.Sprintf("We're listening to %s", currentSong)
-	Say(msg)
-}
-
 func uptimeCmd(user *users.User) {
 	log.Println(user.Username, "ran !uptime")
 	dur := time.Now().Sub(Uptime)
@@ -115,17 +106,51 @@ func uptimeCmd(user *users.User) {
 	Say(msg)
 }
 
-func milesCmd(user *users.User) {
+func milesCmd(user *users.User, params []string) {
 	log.Println(user.Username, "ran !miles")
-	miles := user.CurrentMiles()
-	msg := "@%s has %.2f miles."
-	msg = fmt.Sprintf(msg, user.Username, miles)
-	if miles < 0.1 {
-		msg += " You'll earn more miles the longer you watch the stream."
+	var username string
+	var lifetimeMiles, monthlyMiles float32
+
+	// check to see if an arg was provided
+	if len(params) == 0 {
+		username = user.Username
+		lifetimeMiles = user.CurrentMiles()
+		monthlyMiles = user.CurrentMonthlyMiles()
+	} else {
+		username = helpers.StripAtSign(params[0])
+		u := users.Find(username)
+
+		// check to see if they are in our DB
+		if u.ID == 0 {
+			Say("I don't know them, sorry!")
+			return
+		}
+
+		lifetimeMiles = u.CurrentMiles()
+		monthlyMiles = u.CurrentMonthlyMiles()
 	}
-	if miles == 0.0 {
-		msg += " (Sometimes it takes a bit for me to notice you. You should be good now!)"
+
+	msg := "@%s has %.2fmi this month"
+	msg = fmt.Sprintf(msg, username, monthlyMiles)
+
+	// add total miles if they have been around for more than one month
+	if lifetimeMiles > monthlyMiles {
+		msg += " (%vmi total)."
+		msg = fmt.Sprintf(msg, math.Round(float64(lifetimeMiles)))
+	} else {
+		msg += "."
+
+		// add helpful messages for new folks
+		if len(params) == 0 {
+			if monthlyMiles < 0.2 {
+				msg += " You'll earn more miles the longer you watch the stream."
+			}
+			if monthlyMiles == 0.0 {
+				msg += " (Sometimes it takes a bit for me to notice you. You should be good now!)"
+			}
+		}
 	}
+
 	Say(msg)
 }
 
@@ -134,26 +159,6 @@ func kilometresCmd(user *users.User) {
 	km := user.CurrentMiles() * 1.609344
 	msg := "@%s has %.2f kilometres."
 	msg = fmt.Sprintf(msg, user.Username, km)
-	Say(msg)
-}
-
-func oldMilesCmd(user *users.User) {
-	log.Println(user.Username, "ran !oldmiles")
-	miles := miles.ForUser(user.Username)
-	msg := ""
-	switch {
-	case miles == 1:
-		msg = "@%s has only %.1f mile."
-	case miles >= 250:
-		msg = "Holy crap! @%s has %.1f miles!"
-	default:
-		msg = "@%s has %.1f miles."
-	}
-	// add the other part randomly
-	if rand.Intn(3) == 0 {
-		msg = fmt.Sprintf("%s Earn miles for every minute you watch the stream!", msg)
-	}
-	msg = fmt.Sprintf(msg, user.Username, miles)
 	Say(msg)
 }
 
@@ -189,37 +194,88 @@ func locationCmd(user *users.User) {
 	// generate a google maps url
 	url := helpers.GoogleMapsURL(lat, lng)
 	msg := fmt.Sprintf("%s %s", address, url)
+	// record that they know the location now
+	user.SetLastLocationTime()
+	// Say("Sending the location in a whisper... shh!")
+	// Whisper(user.Username, msg)
 	Say(msg)
 }
 
-func leaderboardCmd(user *users.User) {
+func monthlyMilesLeaderboardCmd(user *users.User) {
 	log.Println(user.Username, "ran !leaderboard")
-	Say("This command is disabled... for now!")
-	// // display leaderboard on screen
-	// onscreensClient.ShowLeaderboard()
-	// size := 10
-	// if size > len(users.Leaderboard) {
-	// 	size = len(users.Leaderboard)
-	// }
-	// leaderboard := users.Leaderboard[:size]
-	// msg := fmt.Sprintf("Top %d miles: ", size)
-	// for i, leaderPair := range leaderboard {
-	// 	msg += fmt.Sprintf("%d. %s (%s)", i+1, leaderPair[0], leaderPair[1])
-	// 	if i+1 != len(leaderboard) {
-	// 		msg += ", "
-	// 	}
-	// }
-	// Say(msg)
+
+	// select users to show in leaderboard
+	size := 10
+	leaderboard := scoreboards.TopUsers(scoreboards.CurrentMilesScoreboard(), size)
+	if size > len(leaderboard) {
+		size = len(leaderboard)
+	}
+	leaderboard = leaderboard[:size]
+
+	// display leaderboard on screen
+	onscreensClient.ShowLeaderboard("Monthly Miles", leaderboard)
+
+	// build a message to send to chat
+	msg := fmt.Sprintf("Top %d miles this month: ", size)
+	for i, leaderPair := range leaderboard {
+		msg += fmt.Sprintf("%d. %s (%smi)", i+1, leaderPair[0], leaderPair[1])
+		if i+1 != len(leaderboard) {
+			msg += ", "
+		}
+	}
+	Say(msg)
 }
 
-func oldLeaderboardCmd(user *users.User) {
-	log.Println(user.Username, "ran !oldleaderboard")
+func lifetimeMilesLeaderboardCmd(user *users.User) {
+	log.Println(user.Username, "ran !totalleaderboard")
+
+	// select users to show in leaderboard
 	size := 10
-	userList := miles.TopUsers(size)
-	msg := fmt.Sprintf("Top %d miles: ", size)
-	for i, leaderPair := range userList {
+	if size > len(users.LifetimeMilesLeaderboard) {
+		size = len(users.LifetimeMilesLeaderboard)
+	}
+	leaderboard := users.LifetimeMilesLeaderboard[:size]
+
+	// display leaderboard on screen
+	onscreensClient.ShowLeaderboard("Total Miles", leaderboard)
+
+	// build a message to send to chat
+	msg := fmt.Sprintf("Top %d lifetime miles: ", size)
+	for i, leaderPair := range leaderboard {
+		msg += fmt.Sprintf("%d. %s (%smi)", i+1, leaderPair[0], leaderPair[1])
+		if i+1 != len(leaderboard) {
+			msg += ", "
+		}
+	}
+	Say(msg)
+}
+
+func monthlyGuessLeaderboardCmd(user *users.User) {
+	log.Println(user.Username, "ran !guessleaderboard")
+
+	// select users to show in leaderboard
+	size := 10
+	leaderboard := scoreboards.TopUsers(scoreboards.CurrentGuessScoreboard(), size)
+	if size > len(leaderboard) {
+		size = len(leaderboard)
+	}
+	leaderboard = leaderboard[:size]
+
+	var intLeaderboard [][]string
+	for _, leaderPair := range leaderboard {
+		// guesses are ints not floats, so remove the decimal place
+		intVersion := strings.Split(leaderPair[1], ".")[0]
+		intLeaderboard = append(intLeaderboard, []string{leaderPair[0], intVersion})
+	}
+
+	// display leaderboard on screen
+	onscreensClient.ShowLeaderboard("Correct Guesses This Month", intLeaderboard)
+
+	// build a message to send to chat
+	msg := fmt.Sprintf("Top %d correct guesses this month: ", size)
+	for i, leaderPair := range intLeaderboard {
 		msg += fmt.Sprintf("%d. %s (%s)", i+1, leaderPair[0], leaderPair[1])
-		if i+1 != size {
+		if i+1 != len(intLeaderboard) {
 			msg += ", "
 		}
 	}
@@ -281,6 +337,15 @@ func guessCmd(user *users.User, params []string) {
 		return
 	}
 
+	// don't let people guess if they already know the answer
+	if !user.HasGuessCommandAvailable(lastTimewarpTime) {
+		prettyDur := durafmt.ParseShort(user.GuessCooldownRemaining())
+		msg = "I recently told you the answer! Try again in %s."
+		msg = fmt.Sprintf(msg, prettyDur)
+		Say(msg)
+		return
+	}
+
 	// get the arg from the command
 	guess := strings.Join(params, " ")
 
@@ -301,6 +366,11 @@ func guessCmd(user *users.User, params []string) {
 		msg = fmt.Sprintf("@%s got it! We're in %s", user.Username, vid.State)
 		// show the flag for the state
 		onscreensClient.ShowFlag(10 * time.Second)
+		// increase their guess score
+		user.AddToScore(guessScoreboard, 1.0)
+		user.AddToScore(scoreboards.CurrentGuessScoreboard(), 1.0)
+		// do a timewarp
+		timewarp()
 	} else {
 		msg = "Try again! EarthDay"
 	}
@@ -318,6 +388,10 @@ func stateCmd(user *users.User) {
 	msg := fmt.Sprintf("We're in %s", vid.State)
 	// show the flag for the state
 	onscreensClient.ShowFlag(10 * time.Second)
+	// record that they know the location now
+	user.SetLastLocationTime()
+	// Say("Sending the state in a whisper... shh!")
+	// Whisper(user.Username, msg)
 	Say(msg)
 }
 
@@ -340,7 +414,7 @@ func bonusMilesCmd(user *users.User) {
 
 func secretInfoCmd(user *users.User) {
 	log.Println(user.Username, "ran !secretinfo")
-	if !helpers.UserIsAdmin(user.Username) {
+	if !c.UserIsAdmin(user.Username) {
 		return
 	}
 	vid := video.CurrentlyPlaying
@@ -357,7 +431,7 @@ func secretInfoCmd(user *users.User) {
 
 func shutdownCmd(user *users.User) {
 	log.Println(user.Username, "ran !shutdown")
-	if !helpers.UserIsAdmin(user.Username) {
+	if !c.UserIsAdmin(user.Username) {
 		Say("Nice try bucko")
 		return
 	}
@@ -369,24 +443,8 @@ func shutdownCmd(user *users.User) {
 	if err != nil {
 		log.Println(err)
 	}
-	audio.Shutdown()
 	sentry.Flush(time.Second * 5)
 	os.Exit(0)
-}
-
-func restartMusicCmd(user *users.User) {
-	log.Println(user.Username, "ran !restartmusic")
-	if !helpers.UserIsAdmin(user.Username) {
-		Say("You can't do that, but please !report any stream issues")
-		return
-	}
-
-	Say("Restarting music player...")
-	if helpers.RunningOnDarwin() {
-		audio.RestartItunes()
-	} else {
-		audio.PlayGrooveSalad()
-	}
 }
 
 //TODO: this will always be lower case, find out why
@@ -394,7 +452,7 @@ func restartMusicCmd(user *users.User) {
 func middleCmd(user *users.User, params []string) {
 	log.Println(user.Username, "ran !middle")
 	// don't let strangers run this
-	if !helpers.UserIsAdmin(user.Username) {
+	if !c.UserIsAdmin(user.Username) {
 		return
 	}
 

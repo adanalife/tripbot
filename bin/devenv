@@ -13,8 +13,10 @@ export DOCKER_BUILDKIT=1
 #fi
 
 # pre-populate the bash_history
-echo "supervisorctl status" >> .bash_history.remote
-echo "vim /var/log/syslog" >> .bash_history.remote
+if [ ! -f .bash_history.remote ]; then
+  echo "supervisorctl status" >> .bash_history.remote
+  echo "vim /var/log/syslog" >> .bash_history.remote
+fi
 
 docker-compose \
   --project-directory . \

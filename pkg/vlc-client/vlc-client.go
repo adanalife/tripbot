@@ -5,12 +5,12 @@ import (
 	"io/ioutil"
 	"net/http"
 
-	"github.com/adanalife/tripbot/pkg/config"
+	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 )
 
 //TODO: eventually support HTTPS
-var vlcServerURL = "http://" + config.VlcServerHost
+var vlcServerURL = "http://" + c.Conf.VlcServerHost
 
 // CurrentlyPlaying finds the currently-playing video path
 func CurrentlyPlaying() string {
@@ -34,8 +34,7 @@ func PlayRandom() error {
 
 // PlayFileInPlaylist plays a given file
 func PlayFileInPlaylist(filename string) error {
-	url := vlcServerURL + "/vlc/play"
-	url = fmt.Sprintf("%s?video=%s", url, filename)
+	url := vlcServerURL + "/vlc/play/" + filename
 	_, err := getUrl(url)
 	if err != nil {
 		terrors.Log(err, "error playing file")
@@ -47,8 +46,7 @@ func PlayFileInPlaylist(filename string) error {
 func Skip(n int) error {
 	url := vlcServerURL + "/vlc/skip"
 	if n > 0 {
-		// add a request param
-		url = fmt.Sprintf("%s?n=%d", url, n)
+		url = fmt.Sprintf("%s/%d", url, n)
 	}
 	_, err := getUrl(url)
 	if err != nil {
@@ -61,8 +59,7 @@ func Skip(n int) error {
 func Back(n int) error {
 	url := vlcServerURL + "/vlc/back"
 	if n > 0 {
-		// add a request param
-		url = fmt.Sprintf("%s?n=%d", url, n)
+		url = fmt.Sprintf("%s/%d", url, n)
 	}
 	_, err := getUrl(url)
 	if err != nil {

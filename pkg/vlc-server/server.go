@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/adanalife/tripbot/pkg/config"
+	c "github.com/adanalife/tripbot/pkg/config/vlc-server"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
 <<<<<<< HEAD
@@ -200,7 +200,7 @@ func catchAllHandler(w http.ResponseWriter, r *http.Request) {
 >>>>>>> origin/master
 // Start starts the web server
 func Start() {
-	log.Println("Starting VLC web server on host", config.VlcServerHost)
+	log.Println("Starting VLC web server on host", c.Conf.VlcServerHost)
 
 	r := mux.NewRouter()
 <<<<<<< HEAD
@@ -242,27 +242,32 @@ func Start() {
 =======
 
 	// healthcheck endpoints
+	//TODO: handle HEAD requests here too
 	hp := r.PathPrefix("/health").Methods("GET").Subrouter()
+	hp.HandleFunc("/", healthHandler)
 	hp.HandleFunc("/live", healthHandler)
 	hp.HandleFunc("/ready", healthHandler)
 
 	// vlc endpoints
 	vlc := r.PathPrefix("/vlc").Methods("GET").Subrouter()
 	vlc.HandleFunc("/current", vlcCurrentHandler)
-	vlc.HandleFunc("/play", vlcPlayHandler)
-	vlc.HandleFunc("/back", vlcBackHandler)
-	vlc.HandleFunc("/skip", vlcSkipHandler)
+	vlc.HandleFunc("/play/{video}", vlcPlayHandler)
 	vlc.HandleFunc("/random", vlcRandomHandler)
+	vlc.HandleFunc("/back", vlcBackHandler)
+	vlc.HandleFunc("/back/{n}", vlcBackHandler)
+	vlc.HandleFunc("/skip", vlcSkipHandler)
+	vlc.HandleFunc("/skip/{n}", vlcSkipHandler)
 
 	// onscreen endpoints
 	osc := r.PathPrefix("/onscreens").Methods("GET").Subrouter()
-	osc.HandleFunc("/flag/show", onscreensFlagShowHandler)
-	osc.HandleFunc("/gps/hide", onscreensGpsHideHandler)
-	osc.HandleFunc("/gps/show", onscreensGpsShowHandler)
-	osc.HandleFunc("/timewarp/show", onscreensTimewarpShowHandler)
-	osc.HandleFunc("/leaderboard/show", onscreensLeaderboardShowHandler)
-	osc.HandleFunc("/middle/hide", onscreensMiddleHideHandler)
-	osc.HandleFunc("/middle/show", onscreensMiddleShowHandler)
+	//TODO: add state variable
+	osc.HandleFunc("/flag/{action}", onscreensFlagHandler)
+	osc.HandleFunc("/gps/{action}", onscreensGpsHandler)
+	osc.HandleFunc("/gps/{action}", onscreensGpsHandler)
+	osc.HandleFunc("/leaderboard/{action}", onscreensLeaderboardHandler)
+	osc.HandleFunc("/middle/{action}", onscreensMiddleHandler)
+	osc.HandleFunc("/middle/{action}", onscreensMiddleHandler)
+	osc.HandleFunc("/timewarp/{action}", onscreensTimewarpHandler)
 
 	// prometheus metrics endpoint
 	r.Path("/metrics").Handler(promhttp.Handler())
@@ -273,7 +278,9 @@ func Start() {
 	// catch everything else
 	r.HandleFunc("/", catchAllHandler)
 
-	helpers.PrintAllRoutes(r)
+	if c.Conf.Verbose {
+		helpers.PrintAllRoutes(r)
+	}
 
 	// negroni classic adds panic recovery, logger, and static file middlewares
 	// c.p. https://github.com/urfave/negroni
@@ -283,14 +290,14 @@ func Start() {
 	// attach http-metrics (prometheus) middleware
 	metricsMw := middleware.New(middleware.Config{
 		Recorder: metrics.NewRecorder(metrics.Config{}),
-		Service:  config.ServerType,
+		Service:  c.Conf.ServerType,
 	})
 	app.Use(negronimiddleware.Handler("", metricsMw))
 
 	// attach security middleware
 	secureMw := secure.New(secure.Options{
 		FrameDeny:     true,
-		IsDevelopment: config.IsDevelopment(),
+		IsDevelopment: c.Conf.IsDevelopment(),
 	})
 	app.Use(negroni.HandlerFunc(secureMw.HandlerFuncWithNext))
 
@@ -302,7 +309,7 @@ func Start() {
 
 >>>>>>> origin/master
 	//TODO: error if there's no colon to split on
-	port := strings.Split(config.VlcServerHost, ":")[1]
+	port := strings.Split(c.Conf.VlcServerHost, ":")[1]
 
 	srv := &http.Server{
 		Addr: fmt.Sprintf("0.0.0.0:%s", port),

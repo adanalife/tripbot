@@ -1,19 +1,3 @@
-## Running kubernetes locally
-
-```bash
-brew install k3d
-# expose the container's port 80 to localhost:8081
-# and mount assets/video to the container's /video
-#TODO: pass in rancher/k3s:v1.18.6-k3s1 ??
-k3d cluster create adanalife-dev -p 8081:80@loadbalancer --volume $(pwd)/assets/video:/video
-# set up kubectl to use this cluster
-export KUBECONFIG="$(k3d kubeconfig merge adanalife-dev)"
-# create local tripbot deployment
-kubectl apply -k infra/k8s/tripbot/stage-1/
-curl localhost:8081
-```
-
-
 ## Common Tasks
 
 ### Tag a release version
@@ -102,18 +86,10 @@ apt install xsel # pbcopy/pbpaste
 # install xfce4-terminal
 # install postgresql
 # start it, set up db
-#install mopidy, mopidy-somafm, mopidy-scrobbler
-# configure mopidy
-sudo python -m pip install Mopidy-API-Explorer
-# install gmpc (music player)
-
-configure pulseaudio
-https://docs.mopidy.com/en/latest/running/service/#system-service-and-pulseaudio
 
 
 # install golang
 sudo snap install go --classic
-# sudo apt install tesseract-ocr libtesseract-dev
 
 # if you started with ubuntu-server…
 sudo apt-get install --no-install-recommends ubuntu-desktop

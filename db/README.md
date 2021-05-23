@@ -40,7 +40,17 @@ Migrations are run using [go-migrate](https://github.com/golang-migrate/migrate)
 
 ## Import from seed
 
+### Via devenv
+
+```bash
+# the docker-compose file has a seed container set up
+devenv up seed
+```
+
+
+### Via psql
+
 ```sql
-\copy videos FROM 'db/seed/videos.csv'  DELIMITER ',' CSV HEADER;
+\copy videos FROM 'db/seed/videos.csv' DELIMITER ',' CSV HEADER;
 ```
 

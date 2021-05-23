@@ -1,17 +1,14 @@
 module github.com/adanalife/tripbot
 
-go 1.12
+go 1.15
 
 require (
 	cloud.google.com/go v0.73.0 // indirect
 	cloud.google.com/go/logging v1.1.2
-	github.com/adrg/libvlc-go/v3 v3.0.6
-	github.com/aws/aws-sdk-go v1.36.2
+	github.com/adrg/libvlc-go/v3 v3.0.7
 	github.com/bradfitz/latlong v0.0.0-20170410180902-f3db6d0dff40
 	github.com/davecgh/go-spew v1.1.1
 	github.com/dimiro1/banner v1.0.0
-	github.com/disintegration/imaging v1.6.2
-	github.com/fhs/gompd v2.0.0+incompatible
 	github.com/gempir/go-twitch-irc/v2 v2.5.0
 	github.com/getsentry/sentry-go v0.8.0
 	github.com/go-sql-driver/mysql v1.5.0 // indirect
@@ -22,6 +19,7 @@ require (
 	github.com/jmoiron/sqlx v1.2.0
 	github.com/joho/godotenv v1.3.0
 	github.com/jonas-p/go-shp v0.1.1 // indirect
+	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/kelvins/geocoder v0.0.0-20200113010004-f579500e9e27
 	github.com/lib/pq v1.9.0
 	github.com/logrusorgru/aurora v2.0.3+incompatible
@@ -29,8 +27,6 @@ require (
 	github.com/mitchellh/go-ps v1.0.0
 	github.com/nathan-osman/go-sunrise v0.0.0-20201029015502-9a83cd1a5746
 	github.com/nicklaw5/helix v1.4.0
-	github.com/otiai10/gosseract v2.2.1+incompatible
-	github.com/otiai10/mint v1.3.0 // indirect
 	github.com/prometheus/client_golang v1.8.0
 	github.com/prometheus/common v0.15.0 // indirect
 	github.com/robfig/cron v1.2.0
@@ -39,7 +35,6 @@ require (
 	github.com/slok/go-http-metrics v0.9.0
 	github.com/unrolled/secure v1.0.8
 	github.com/urfave/negroni v1.0.0
-	golang.org/x/crypto v0.0.0-20201203163018-be400aefbc4c
 	golang.org/x/image v0.0.0-20200927104501-e162460cd6b5 // indirect
 	golang.org/x/net v0.0.0-20201202161906-c7110b5ffcbb // indirect
 	golang.org/x/oauth2 v0.0.0-20201203001011-0b49973bad19 // indirect

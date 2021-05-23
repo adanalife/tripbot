@@ -5,7 +5,7 @@ import (
 	"log"
 
 	"cloud.google.com/go/logging"
-	"github.com/adanalife/tripbot/pkg/config"
+	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 )
 
 var client *logging.Client
@@ -15,14 +15,14 @@ func init() {
 	var err error
 
 	// don't bother with this if we're in a test environment
-	if config.IsTesting() || config.IsDevelopment() {
+	if c.Conf.IsTesting() || c.Conf.IsDevelopment() {
 		return
 	}
 
 	ctx := context.Background()
 
 	// Sets your Google Cloud Platform project ID.
-	projectID := config.GoogleProjectID
+	projectID := c.Conf.GoogleProjectID
 
 	// Creates a stackdriver logging client.
 	client, err = logging.NewClient(ctx, projectID)
@@ -37,7 +37,7 @@ func init() {
 }
 
 func ChatMsg(username, msg string) {
-	if config.IsTesting() || config.IsDevelopment() {
+	if c.Conf.IsTesting() || c.Conf.IsDevelopment() {
 		return
 	}
 	chatLogger.Printf("%s: %s", username, msg)

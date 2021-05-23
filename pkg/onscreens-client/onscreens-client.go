@@ -4,15 +4,17 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strings"
 	"time"
 
-	"github.com/adanalife/tripbot/pkg/config"
+	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
+	"github.com/adanalife/tripbot/pkg/scoreboards"
 	"github.com/adanalife/tripbot/pkg/users"
 )
 
-var onscreensServerURL = "http://" + config.VlcServerHost
+var onscreensServerURL = "http://" + c.Conf.VlcServerHost
 
 func HideMiddleText() error {
 	_, err := getUrl(onscreensServerURL + "/onscreens/middle/hide")
@@ -34,16 +36,39 @@ func ShowMiddleText(msg string) error {
 	return err
 }
 
-func ShowLeaderboard() error {
-	content := users.LeaderboardContent()
+func ShowLeaderboard(title string, leaderboard [][]string) error {
+	content := users.LeaderboardContent(title, leaderboard)
+
 	url := onscreensServerURL + "/onscreens/leaderboard/show"
 	url = fmt.Sprintf("%s?content=%s", url, helpers.Base64Encode(content))
+
 	_, err := getUrl(url)
 	if err != nil {
 		terrors.Log(err, "error showing leaderboard onscreen")
 		return err
 	}
 	return nil
+}
+
+//TODO: this is taken right from the !guessleaderboard command, DRY it?
+func ShowGuessLeaderboard() {
+	// select users to show in leaderboard
+	size := 10
+	leaderboard := scoreboards.TopUsers(scoreboards.CurrentGuessScoreboard(), size)
+	if size > len(leaderboard) {
+		size = len(leaderboard)
+	}
+	leaderboard = leaderboard[:size]
+
+	var intLeaderboard [][]string
+	for _, leaderPair := range leaderboard {
+		// guesses are ints not floats, so remove the decimal place
+		intVersion := strings.Split(leaderPair[1], ".")[0]
+		intLeaderboard = append(intLeaderboard, []string{leaderPair[0], intVersion})
+	}
+
+	// display leaderboard on screen
+	ShowLeaderboard("Correct Guesses This Month", intLeaderboard)
 }
 
 func ShowTimewarp() error {
@@ -56,19 +81,20 @@ func ShowTimewarp() error {
 }
 
 func ShowFlag(dur time.Duration) error {
-	url := onscreensServerURL + "/onscreens/flag/show"
-	url = fmt.Sprintf("%s?duration=%s", url, helpers.Base64Encode(string(dur)))
-	_, err := getUrl(url)
-	if err != nil {
-		terrors.Log(err, "error showing flag onscreen")
-		return err
-	}
+	//TODO: bring this back
+	// url := onscreensServerURL + "/onscreens/flag/show"
+	// url = fmt.Sprintf("%s?duration=%s", url, helpers.Base64Encode(string(rune(dur))))
+	// _, err := getUrl(url)
+	// if err != nil {
+	// 	terrors.Log(err, "error showing flag onscreen")
+	// 	return err
+	// }
 	return nil
 }
 
 func ShowGPSImage(dur time.Duration) error {
 	url := onscreensServerURL + "/onscreens/gps/show"
-	url = fmt.Sprintf("%s?duration=%s", url, helpers.Base64Encode(string(dur)))
+	url = fmt.Sprintf("%s?duration=%s", url, helpers.Base64Encode(string(rune(dur))))
 	_, err := getUrl(url)
 	if err != nil {
 		terrors.Log(err, "error showing gps onscreen")

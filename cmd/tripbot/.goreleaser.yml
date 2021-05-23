@@ -1,0 +1,29 @@
+project_name: tripbot
+before:
+  hooks:
+    - go mod download
+builds:
+  - env:
+      # goreleaser does not support CGO
+      # https://github.com/goreleaser/goreleaser/issues/708
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+archives:
+  - replacements:
+      darwin: Darwin
+      linux: Linux
+      windows: Windows
+      386: i386
+      amd64: x86_64
+    # generate a zip for windows
+    format_overrides:
+      - goos: windows
+        format: zip
+# include a checksum file with the release
+checksum:
+  name_template: 'checksums.txt'
+changelog:
+  sort: asc

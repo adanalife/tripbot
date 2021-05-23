@@ -3,17 +3,17 @@ package onscreensServer
 import (
 	"log"
 	"math/rand"
-	"path"
+	"path/filepath"
 	"time"
 
-	"github.com/adanalife/tripbot/pkg/config"
+	c "github.com/adanalife/tripbot/pkg/config/vlc-server"
 )
 
 var RightRotator *Onscreen
 
 var rightRotatorUpdateFrequency = time.Duration(90 * time.Second)
 
-var rightRotatorFile = path.Join(config.RunDir, "right-message.txt")
+var rightRotatorFile = filepath.Join(c.Conf.RunDir, "right-message.txt")
 
 var possibleRightMessages = []string{
 	"Don't forget to follow :)",
