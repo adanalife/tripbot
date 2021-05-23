@@ -101,20 +101,28 @@ ENV VNC_PASSWD=123456
 
 WORKDIR /tmp
 
+ENV OBS_VERSION=26.1.2
+ENV TINI_VERSION v0.19.0
+
 # install obs and the obs-browser plugin
-RUN git clone https://github.com/obsproject/obs-studio \
+#TODO: re-enable browser plugin
+RUN git clone --depth 1 --branch $OBS_VERSION https://github.com/obsproject/obs-studio \
   && cd obs-studio \
   && wget https://cdn-fastly.obsproject.com/downloads/cef_binary_3770_linux64.tar.bz2 \
   && tar xjf cef_binary_3770_linux64.tar.bz2 \
   && rm cef_binary_3770_linux64.tar.bz2 \
-  && git clone https://github.com/obsproject/obs-browser ./plugins/obs-browser \
+  && git clone --depth 1 https://github.com/obsproject/obs-browser ./plugins/obs-browser \
   && mkdir -p build \
   && cd build \
-  && cmake -DUNIX_STRUCTURE=1 -DBUILD_BROWSER=ON -DCEF_ROOT_DIR="../cef_binary_3770_linux64" .. \
+  && cmake -DUNIX_STRUCTURE=1 -DBUILD_BROWSER=OFF -DCEF_ROOT_DIR="../cef_binary_3770_linux64" .. \
   && make -j2 \
   && make install
   #TODO: possibly add obs-vst?
   # && git clone https://github.com/obsproject/obs-vst ./plugins/obs-vst \
+
+# add Tini (simple init)
+ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini /tini
+RUN chmod +x /tini
 
 # add menu entries for fluxbox
 RUN echo "?package(bash):needs=\"X11\" section=\"ADanaLife\" title=\"OBS Screencast\" command=\"obs\"" >> /usr/share/menu/danalol \
@@ -143,4 +151,5 @@ RUN ln -s /go/src/github.com/adanalife/tripbot /opt/tripbot \
 WORKDIR /opt/tripbot
 RUN go build -o bin/vlc-server cmd/vlc-server/vlc-server.go
 
-ENTRYPOINT ["/opt/tripbot/script/container_startup.sh"]
+ENTRYPOINT ["/tini", "--"]
+CMD ["/opt/tripbot/script/container_startup.sh"]
