@@ -2,6 +2,7 @@ package errors
 
 import (
 	"errors"
+	"fmt"
 	"log"
 
 	"github.com/adanalife/tripbot/pkg/config"
@@ -14,10 +15,13 @@ var conf config.Config
 // Initialize takes a Config interface and sets up a logger
 func Initialize(c config.Config) {
 	// sentry options are picked up through ENV vars
-	sentry.Init(sentry.ClientOptions{
+	err := sentry.Init(sentry.ClientOptions{
 		// enable tracing
 		TracesSampleRate: 0.2,
 	})
+	if err != nil {
+		fmt.Println(err)
+	}
 
 	conf = c
 }
