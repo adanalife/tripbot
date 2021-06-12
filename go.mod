@@ -4,7 +4,7 @@ go 1.15
 
 require (
 	cloud.google.com/go/logging v1.4.2
-	github.com/adrg/libvlc-go/v3 v3.1.2
+	github.com/adrg/libvlc-go/v3 v3.1.4
 	github.com/bradfitz/latlong v0.0.0-20170410180902-f3db6d0dff40
 	github.com/davecgh/go-spew v1.1.1
 	github.com/dimiro1/banner v1.1.0
@@ -25,7 +25,7 @@ require (
 	github.com/mattn/go-colorable v0.1.8 // indirect
 	github.com/mitchellh/go-ps v1.0.0
 	github.com/nathan-osman/go-sunrise v0.0.0-20201029015502-9a83cd1a5746
-	github.com/nicklaw5/helix v1.16.0
+	github.com/nicklaw5/helix v1.20.0
 	github.com/prometheus/client_golang v1.10.0
 	github.com/robfig/cron v1.2.0
 	github.com/sfreiberg/gotwilio v0.0.0-20200916182813-169c4cd5c691
