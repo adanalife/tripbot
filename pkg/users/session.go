@@ -1,7 +1,6 @@
 package users
 
 import (
-	"errors"
 	"fmt"
 	"log"
 	"sort"
@@ -89,12 +88,12 @@ func login(username string) *User {
 	user.lastCmd = now.AddDate(0, 0, -1)
 	// set their last !location date to yesterday
 	user.lastLocation = now.AddDate(0, 0, -1)
-	user.save()
-
-	// raise an error if a user is supposed to be a bot
-	if c.UserIsIgnored(username) && !user.IsBot {
-		log.Println(aurora.Red(username), errors.New("user should be bot"))
+	// mark the user as a bot
+	if c.UserIsIgnored(username) && !user.IsBot && username != "mathgaming" {
+		log.Println(aurora.Yellow(username), "flagging user as bot")
+		user.IsBot = true
 	}
+	user.save()
 
 	// just a silly message to confirm subscriber feature is working
 	if mytwitch.UserIsSubscriber(username) {
