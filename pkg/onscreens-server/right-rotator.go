@@ -1,8 +1,8 @@
 package onscreensServer
 
 import (
+	"crypto/rand"
 	"log"
-	"math/rand"
 	"path/filepath"
 	"time"
 

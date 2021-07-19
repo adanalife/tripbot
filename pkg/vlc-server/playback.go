@@ -1,8 +1,8 @@
 package vlcServer
 
 import (
+	"crypto/rand"
 	"errors"
-	"math/rand"
 	"path/filepath"
 
 	terrors "github.com/adanalife/tripbot/pkg/errors"

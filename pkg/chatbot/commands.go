@@ -1,10 +1,10 @@
 package chatbot
 
 import (
+	"crypto/rand"
 	"fmt"
 	"log"
 	"math"
-	"math/rand"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -57,8 +57,8 @@ func helloCmd(user *users.User, params []string) {
 	// say a random greeting back, with random punctuation
 	greetings := []string{"Hello", "Hey", "Hi"}
 	punctuation := []string{"!", ".", ".", "."}
-	msg := greetings[rand.Intn(len(greetings))]
-	msg += punctuation[rand.Intn(len(punctuation))]
+	msg := greetings[rand.Int(len(greetings))]
+	msg += punctuation[rand.Int(len(punctuation))]
 
 	// give a little help message if the user is new
 	if user.CurrentMiles() < 2.0 {

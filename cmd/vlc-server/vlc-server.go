@@ -2,7 +2,6 @@ package main
 
 import (
 	"log"
-	"math/rand"
 	"os"
 	"os/signal"
 	"syscall"
@@ -23,9 +22,6 @@ func main() {
 	if helpers.RunningOnDarwin() {
 		log.Fatal("This doesn't yet work on darwin")
 	}
-
-	// create a brand new random seed
-	rand.Seed(time.Now().UnixNano())
 
 	// write the current pid to a pidfile
 	helpers.WritePidFile(c.Conf.VLCPidFile)

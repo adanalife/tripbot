@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"math/rand"
 	"os"
 	"os/signal"
 	"syscall"
@@ -30,7 +29,6 @@ var client *twitch.Client
 
 // main performs the various steps to get the bot running
 func main() {
-	createRandomSeed()
 	listenForShutdown()
 	initializeErrorLogger()
 	startHttpServer()
@@ -42,12 +40,6 @@ func main() {
 	getCurrentUsers()
 	updateWebhookSubscriptions()
 	connectToTwitch()
-}
-
-// createRandomSeed ensures that random numbers will be random
-func createRandomSeed() {
-	// create a brand new random seed
-	rand.Seed(time.Now().UnixNano())
 }
 
 // listenForShutdown creates a background job that listens for a graceful shutdown request
