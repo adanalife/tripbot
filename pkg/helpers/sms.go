@@ -11,7 +11,7 @@ var twilioFromNum, twilioToNum string
 var twilioClient *gotwilio.Twilio
 
 // set up Twilio (for text messages)
-func init() {
+func initTwilio() {
 	requiredVars := []string{
 		"TWILIO_ACCT_SID",
 		"TWILIO_AUTH_TOKEN",

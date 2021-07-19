@@ -1,6 +1,32 @@
 package helpers
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/davecgh/go-spew/spew"
+)
+
+var allStates []string
+var allStateAbbrevs []string
+
+//TODO: move this function elsewhere?
+func init() {
+	allStates = make([]string, 0, len(stateAbbrevs))
+	for k := range stateAbbrevs {
+		allStates = append(allStates, k)
+	}
+	allStateAbbrevs = make([]string, 0, len(stateAbbrevs))
+
+	for _, v := range stateAbbrevs {
+		allStateAbbrevs = append(allStateAbbrevs, v)
+	}
+
+	spew.Dump(allStates)
+	spew.Dump(allStateAbbrevs)
+
+	// set up Twilio
+	initTwilio()
+}
 
 func StateAbbrevToState(abbrev string) string {
 	val, ok := stateAbbrevs[strings.ToUpper(abbrev)]
