@@ -4,20 +4,24 @@ import (
 	"strings"
 )
 
+func (c TripbotConfig) Environment() string {
+	return c.environment
+}
+
 func (c TripbotConfig) IsProduction() bool {
-	return c.Environment == "production"
+	return c.environment == "production"
 }
 
 func (c TripbotConfig) IsStaging() bool {
-	return c.Environment == "staging"
+	return c.environment == "staging"
 }
 
 func (c TripbotConfig) IsDevelopment() bool {
-	return c.Environment == "development"
+	return c.environment == "development"
 }
 
 func (c TripbotConfig) IsTesting() bool {
-	return c.Environment == "testing"
+	return c.environment == "testing"
 }
 
 // UserIsAdmin returns true if a given user runs the channel

@@ -1,17 +1,21 @@
 package config
 
+func (c VlcServerConfig) Environment() string {
+	return c.environment
+}
+
 func (c VlcServerConfig) IsProduction() bool {
-	return c.Environment == "production"
+	return c.environment == "production"
 }
 
 func (c VlcServerConfig) IsStaging() bool {
-	return c.Environment == "staging"
+	return c.environment == "staging"
 }
 
 func (c VlcServerConfig) IsDevelopment() bool {
-	return c.Environment == "development"
+	return c.environment == "development"
 }
 
 func (c VlcServerConfig) IsTesting() bool {
-	return c.Environment == "testing"
+	return c.environment == "testing"
 }

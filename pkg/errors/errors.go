@@ -18,6 +18,7 @@ func Initialize(c config.Config) {
 	err := sentry.Init(sentry.ClientOptions{
 		// enable tracing
 		TracesSampleRate: 0.2,
+		Environment:      c.Environment(),
 	})
 	if err != nil {
 		fmt.Println(err)

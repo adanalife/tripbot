@@ -1,7 +1,7 @@
 package config
 
 type TripbotConfig struct {
-	Environment string `required:"true" envconfig:"ENV"`
+	environment string `required:"true" envconfig:"ENV"`
 	ServerType  string `default:"tripbot"`
 
 	// ChannelName is the username of the stream
