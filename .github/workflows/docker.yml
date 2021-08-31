@@ -44,7 +44,7 @@ jobs:
       uses: actions/checkout@v1
     - name: Fetch videos from cache
       id: restore-videos
-      uses: actions/cache@v2.1.5
+      uses: actions/cache@v2.1.6
       with:
         path: assets/video
         key: ${{ runner.os }}-video-${{ hashFiles('assets/video/manifest.txt') }}
@@ -122,6 +122,6 @@ jobs:
       env:
         DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         VERSION_TAG: ${{ steps.get-version.outputs.version }}
-      uses: Ilshidur/action-discord@0.3.0
+      uses: Ilshidur/action-discord@0.3.2
       with:
         args: 'New Docker image created for [{{ EVENT_PAYLOAD.repository.full_name }}]({{ EVENT_PAYLOAD.repository.html_url }}): [{{ VERSION_TAG }}]({{ EVENT_PAYLOAD.compare }})'
