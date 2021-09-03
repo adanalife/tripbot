@@ -21,7 +21,7 @@ var dbConnection *sqlx.DB
 func init() {
 	var err error
 
-	err = godotenv.Load(".env." + c.Conf.Environment)
+	err = godotenv.Load(".env." + c.Conf.Environment())
 	if err != nil {
 		log.Println("Error loading .env file:", err)
 		log.Println("Continuing anyway...")
