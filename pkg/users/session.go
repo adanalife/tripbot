@@ -122,6 +122,8 @@ func (u User) logout() {
 		prettyDur := durafmt.ParseShort(loggedInDur)
 		dur := fmt.Sprintf("(%s)", aurora.Green(prettyDur))
 		miles := fmt.Sprintf("(%1.2fmi)", aurora.Yellow(sessionMiles))
+		//TODO: add their total guess score value
+		//TODO: add their monthly miles
 		log.Println("logging out", u, dur, miles)
 	}
 
