@@ -8,7 +8,7 @@ require (
 	github.com/bradfitz/latlong v0.0.0-20170410180902-f3db6d0dff40
 	github.com/davecgh/go-spew v1.1.1
 	github.com/dimiro1/banner v1.1.0
-	github.com/gempir/go-twitch-irc/v2 v2.6.0
+	github.com/gempir/go-twitch-irc/v2 v2.7.0
 	github.com/getsentry/sentry-go v0.11.0
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0 // indirect
 	github.com/gorilla/mux v1.8.0
