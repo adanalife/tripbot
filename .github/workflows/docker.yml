@@ -41,7 +41,7 @@ jobs:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
     - name: Checkout (without LFS)
-      uses: actions/checkout@v1
+      uses: actions/checkout@v2
     - name: Fetch videos from cache
       id: restore-videos
       uses: actions/cache@v2.1.6
@@ -53,7 +53,7 @@ jobs:
     # use git-lfs to download big video file(s)
     # (but only if the cache hit missed)
     - name: Checkout (with LFS)
-      uses: actions/checkout@v1
+      uses: actions/checkout@v2
       if: steps.restore-videos.outputs.cache-hit != 'true'
       continue-on-error: true
       with:
