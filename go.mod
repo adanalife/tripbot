@@ -15,7 +15,7 @@ require (
 	github.com/gorilla/schema v1.2.0 // indirect
 	github.com/hako/durafmt v0.0.0-20200710122514-c0fb7b4da026
 	github.com/jmoiron/sqlx v1.3.4
-	github.com/joho/godotenv v1.3.0
+	github.com/joho/godotenv v1.4.0
 	github.com/jonas-p/go-shp v0.1.1 // indirect
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/kelvins/geocoder v0.0.0-20200113010004-f579500e9e27
