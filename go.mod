@@ -24,7 +24,7 @@ require (
 	github.com/mattn/go-colorable v0.1.8 // indirect
 	github.com/mitchellh/go-ps v1.0.0
 	github.com/nathan-osman/go-sunrise v0.0.0-20201029015502-9a83cd1a5746
-	github.com/nicklaw5/helix v1.24.4
+	github.com/nicklaw5/helix v1.25.0
 	github.com/prometheus/client_golang v1.11.0
 	github.com/robfig/cron v1.2.0
 	github.com/sfreiberg/gotwilio v0.0.0-20200916182813-169c4cd5c691
