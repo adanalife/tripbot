@@ -21,7 +21,6 @@ require (
 	github.com/kelvins/geocoder v0.0.0-20200113010004-f579500e9e27
 	github.com/lib/pq v1.10.4
 	github.com/logrusorgru/aurora v2.0.3+incompatible
-	github.com/mattn/go-colorable v0.1.8 // indirect
 	github.com/mitchellh/go-ps v1.0.0
 	github.com/nathan-osman/go-sunrise v0.0.0-20201029015502-9a83cd1a5746
 	github.com/nicklaw5/helix v1.24.4
@@ -29,10 +28,9 @@ require (
 	github.com/robfig/cron v1.2.0
 	github.com/sfreiberg/gotwilio v0.0.0-20200916182813-169c4cd5c691
 	github.com/skratchdot/open-golang v0.0.0-20200116055534-eef842397966
-	github.com/slok/go-http-metrics v0.9.0
+	github.com/slok/go-http-metrics v0.10.0
 	github.com/unrolled/secure v1.0.9
 	github.com/urfave/negroni v1.0.0
 	golang.org/x/image v0.0.0-20200927104501-e162460cd6b5 // indirect
-	golang.org/x/time v0.0.0-20200630173020-3af7569d3a1e // indirect
 	googlemaps.github.io/maps v1.3.2
 )
