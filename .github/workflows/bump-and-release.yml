@@ -18,7 +18,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.CI_PERSONAL_ACCESS_TOKEN }}
         DEFAULT_BUMP: patch
         WITH_V: true
-    - uses: actions/setup-go@v2.1.5
+    - uses: actions/setup-go@v3.1.0
       with:
         go-version: 1.15
     - name: Create a Tripbot release
