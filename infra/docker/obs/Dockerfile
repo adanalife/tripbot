@@ -3,6 +3,8 @@
 # this comes from Dockerfile.nvidia
 FROM adanalife/ffmpeg:v4.2.3
 
+RUN apt-key adv --fetch-keys http://developer.download.nvidia.com/compute/cuda/repos/ubuntu1604/x86_64/3bf863cc.pub
+
 # install dependencies
 # most of these come from the obs-studio
 # install from source instructions
