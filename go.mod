@@ -28,7 +28,7 @@ require (
 	github.com/sfreiberg/gotwilio v0.0.0-20200916182813-169c4cd5c691
 	github.com/skratchdot/open-golang v0.0.0-20200116055534-eef842397966
 	github.com/slok/go-http-metrics v0.9.0
-	github.com/unrolled/secure v1.0.9
+	github.com/unrolled/secure v1.17.0
 	github.com/urfave/negroni v1.0.0
 	googlemaps.github.io/maps v1.3.2
 )
