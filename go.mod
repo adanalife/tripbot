@@ -5,7 +5,7 @@ go 1.21
 toolchain go1.21.13
 
 require (
-	cloud.google.com/go/logging v1.4.2
+	cloud.google.com/go/logging v1.7.0
 	github.com/adrg/libvlc-go/v3 v3.1.5
 	github.com/bradfitz/latlong v0.0.0-20170410180902-f3db6d0dff40
 	github.com/davecgh/go-spew v1.1.1
@@ -23,7 +23,7 @@ require (
 	github.com/mitchellh/go-ps v1.0.0
 	github.com/nathan-osman/go-sunrise v0.0.0-20201029015502-9a83cd1a5746
 	github.com/nicklaw5/helix v1.24.4
-	github.com/prometheus/client_golang v1.11.0
+	github.com/prometheus/client_golang v1.21.0
 	github.com/robfig/cron v1.2.0
 	github.com/sfreiberg/gotwilio v0.0.0-20200916182813-169c4cd5c691
 	github.com/skratchdot/open-golang v0.0.0-20200116055534-eef842397966
