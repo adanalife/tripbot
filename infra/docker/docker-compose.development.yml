@@ -34,31 +34,12 @@ services:
       - .bash_history.remote:/root/.bash_history
 
   vlc:
-    privileged: true
-    image: adanalife/vlc
-    hostname: obs
-    env_file:
-      - infra/docker/env.docker
-      - ./.env.development
-    build:
-      context: .
-      dockerfile: infra/docker/vlc/Dockerfile
-    ports:
-      # this should match the VLC_SERVER_HOST env var
-      - "8080"
-      - "5902:5900"
     environment:
-      DISABLE_OBS: "true"
       ENV: development
-      DISPLAY: ":0.0"
-      XDG_RUNTIME_DIR: "/root/.cache/xdgr"
-      # hack to make fontconfig happy
-      FONTCONFIG_PATH: "/etc/fonts"
+    env_file:
+      - ./.env.development
     volumes:
       - .bash_history.remote:/root/.bash_history
-      - .:/go/src/github.com/adanalife/tripbot
-      - ./assets/video:/opt/data/Dashcam/_all:ro
-    restart: unless-stopped
 
   db:
     volumes:

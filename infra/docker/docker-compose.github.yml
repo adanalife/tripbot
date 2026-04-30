@@ -20,3 +20,7 @@ services:
       # pull down cache layers from repo
       cache_from:
         - adanalife/obs
+
+  vlc:
+    ports:
+      - "8080:8080"

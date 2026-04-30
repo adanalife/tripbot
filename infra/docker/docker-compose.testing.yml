@@ -8,3 +8,7 @@ services:
   obs:
     environment:
       ENV: testing
+
+  vlc:
+    environment:
+      ENV: testing
