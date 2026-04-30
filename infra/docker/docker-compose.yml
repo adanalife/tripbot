@@ -46,6 +46,30 @@ services:
       - ./assets/video:/opt/data/Dashcam/_all:ro
     restart: unless-stopped
 
+  vlc:
+    privileged: true
+    image: adanalife/vlc
+    hostname: obs
+    env_file:
+      - infra/docker/env.docker
+    build:
+      context: .
+      dockerfile: infra/docker/vlc/Dockerfile
+    ports:
+      # this should match the VLC_SERVER_HOST env var
+      - "8080"
+      - "5903:5900"
+    environment:
+      DISABLE_OBS: "true"
+      DISPLAY: ":0.0"
+      XDG_RUNTIME_DIR: "/root/.cache/xdgr"
+      # hack to make fontconfig happy
+      FONTCONFIG_PATH: "/etc/fonts"
+    volumes:
+      - .:/go/src/github.com/adanalife/tripbot
+      - ./assets/video:/opt/data/Dashcam/_all:ro
+    restart: unless-stopped
+
   db:
     image: postgres:13
     restart: always

@@ -18,7 +18,7 @@ if [ ! -f .bash_history.remote ]; then
   echo "vim /var/log/syslog" >> .bash_history.remote
 fi
 
-docker-compose \
+docker compose \
   --project-directory . \
   --env-file infra/docker/env.docker \
   -f infra/docker/docker-compose.yml \

@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 
-# start VNC server (Uses VNC_PASSWD Docker ENV variable)
-mkdir -p "$HOME/.vnc" \
-  && echo "$VNC_PASSWD" | vncpasswd -f > "$HOME/.vnc/passwd"
+# Start X virtual framebuffer + window manager + VNC server
+# Password is set via VNC_PASSWD env var (default: 123456)
 
-vncserver "$DISPLAY" -fg -Log '*:syslog:100' -localhost no -nolisten -passwd "$HOME/.vnc/passwd" -geometry 1920x1200
+Xvfb "$DISPLAY" -screen 0 1920x1200x24 &
+sleep 1
+
+fluxbox &
+sleep 1
+
+exec x11vnc -display "$DISPLAY" -forever -shared -rfbport 5900 -passwd "${VNC_PASSWD:-123456}"
