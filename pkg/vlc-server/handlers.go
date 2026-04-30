@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 
 	c "github.com/adanalife/tripbot/pkg/config/vlc-server"
@@ -16,7 +17,7 @@ import (
 
 // healthcheck URL, for tools to verify the stream is alive
 func healthHandler(w http.ResponseWriter, r *http.Request) {
-	if !helpers.RunningOnWindows() {
+	if !helpers.RunningOnWindows() && os.Getenv("DISABLE_OBS") != "true" {
 		obsPid := helpers.ReadPidFile(c.Conf.OBSPidFile)
 		pidRunning, err := helpers.PidExists(obsPid)
 		if err != nil {
