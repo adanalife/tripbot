@@ -58,7 +58,7 @@ services:
     ports:
       # this should match the VLC_SERVER_HOST env var
       - "8080"
-      - "5902:5900"
+      - "5903:5900"
     environment:
       DISABLE_OBS: "true"
       DISPLAY: ":0.0"
