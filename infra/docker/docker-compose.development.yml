@@ -35,13 +35,14 @@ services:
 
   vlc:
     privileged: true
-    image: adanalife/obs
+    image: adanalife/vlc
     hostname: obs
     env_file:
       - infra/docker/env.docker
+      - ./.env.development
     build:
       context: .
-      dockerfile: infra/docker/obs/Dockerfile
+      dockerfile: infra/docker/vlc/Dockerfile
     ports:
       # this should match the VLC_SERVER_HOST env var
       - "8080"
@@ -51,14 +52,11 @@ services:
       ENV: development
       DISPLAY: ":0.0"
       XDG_RUNTIME_DIR: "/root/.cache/xdgr"
-      # hack to make fontconfig happy
       FONTCONFIG_PATH: "/etc/fonts"
-      STREAM_KEY: "${STREAM_KEY}"
-    # command: -c "cd /opt/tripbot && rm -f bin/vlc-server && script/container_startup.sh"
-    command: -c "go run cmd/vlc-server/vlc-server.go 2>&1"
     volumes:
       - .bash_history.remote:/root/.bash_history
       - .:/go/src/github.com/adanalife/tripbot
+      - ./assets/video:/opt/data/Dashcam/_all:ro
     restart: unless-stopped
 
   db:
