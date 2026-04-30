@@ -74,12 +74,12 @@ jobs:
       run: docker compose --project-directory . --env-file infra/docker/env.docker -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.testing.yml -f infra/docker/docker-compose.github.yml up -d
     - run: sleep 10
     - name: Check logs (migrate)
-      run: docker logs tripbot_migrate_1
+      run: docker logs tripbot-migrate-1
     # TODO: re-enable once obs Dockerfile is fixed
     # - name: Check logs (obs)
-    #   run: docker logs tripbot_obs_1
-    - name: Check logs (tripbot) 🤖
-      run: docker logs tripbot_tripbot_1
+    #   run: docker logs tripbot-obs-1
+    - name: Check logs (tripbot)
+      run: docker logs tripbot-tripbot-1
     - name: Check running containers
       run: docker ps -a
     - name: Stop containers
