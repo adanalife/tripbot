@@ -42,7 +42,7 @@ jobs:
     - name: Wait for healthcheck
       run: |
         for i in $(seq 1 30); do
-          if curl -sf http://localhost:8080/ready; then
+          if curl -sf http://localhost:8080/health/ready; then
             echo ""
             echo "VLC server is ready!"
             exit 0
