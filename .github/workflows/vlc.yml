@@ -26,7 +26,7 @@ jobs:
         docker run -d \
           --name vlc \
           -e VLC_SERVER_HOST=obs:8080 \
-          -e VLC_SERVER_ENV=testing \
+          -e ENV=testing \
           -e DISABLE_OBS=true \
           -e DISPLAY=:0.0 \
           -e XDG_RUNTIME_DIR=/root/.cache/xdgr \
