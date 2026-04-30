@@ -1,0 +1,60 @@
+name: VLC Container
+on:
+  pull_request:
+  push:
+    branches:
+      - develop
+    tags:
+      - v*
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      COMPOSE_DOCKER_CLI_BUILD: 1
+      DOCKER_BUILDKIT: 1
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Build VLC container 🤖
+      run: docker build -t adanalife/vlc -f infra/docker/vlc/Dockerfile .
+
+    - name: Start VLC container
+      run: |
+        docker run -d \
+          --name vlc \
+          -e VLC_SERVER_HOST=obs:8080 \
+          -e VLC_SERVER_ENV=testing \
+          -e DISABLE_OBS=true \
+          -e DISPLAY=:0.0 \
+          -e XDG_RUNTIME_DIR=/root/.cache/xdgr \
+          -e FONTCONFIG_PATH=/etc/fonts \
+          -p 8080:8080 \
+          adanalife/vlc
+
+    - name: Wait for healthcheck
+      run: |
+        for i in $(seq 1 30); do
+          if curl -sf http://localhost:8080/ready; then
+            echo ""
+            echo "VLC server is ready!"
+            exit 0
+          fi
+          echo "Waiting for VLC server... ($i/30)"
+          sleep 2
+        done
+        echo "VLC server failed to become ready"
+        exit 1
+
+    - name: Check VLC current video
+      run: curl -v http://localhost:8080/vlc/current
+
+    - name: Check container logs
+      run: docker logs vlc
+      if: always()
+
+    - name: Stop container
+      run: docker stop vlc
+      if: always()
