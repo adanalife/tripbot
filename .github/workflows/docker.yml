@@ -41,10 +41,10 @@ jobs:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
     - name: Checkout (without LFS)
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
     - name: Fetch videos from cache
       id: restore-videos
-      uses: actions/cache@v2.1.7
+      uses: actions/cache@v4
       with:
         path: assets/video
         key: ${{ runner.os }}-video-${{ hashFiles('assets/video/manifest.txt') }}
@@ -53,15 +53,15 @@ jobs:
     # use git-lfs to download big video file(s)
     # (but only if the cache hit missed)
     - name: Checkout (with LFS)
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
       if: steps.restore-videos.outputs.cache-hit != 'true'
       continue-on-error: true
       with:
         lfs: true
     - name: Build tripbot
-      run: docker-compose --project-directory . -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.testing.yml -f infra/docker/docker-compose.github.yml build tripbot
+      run: docker compose --project-directory . -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.testing.yml -f infra/docker/docker-compose.github.yml build tripbot
     - name: Build obs
-      run: docker-compose --project-directory . -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.testing.yml -f infra/docker/docker-compose.github.yml build obs
+      run: docker compose --project-directory . -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.testing.yml -f infra/docker/docker-compose.github.yml build obs
     - name: Start the docker-compose stack
       env:
         # pass these into tripbot
@@ -70,7 +70,7 @@ jobs:
         TWITCH_AUTH_TOKEN: ${{ secrets.TWITCH_AUTH_TOKEN }}
         TWITCH_CLIENT_ID: ${{ secrets.TWITCH_CLIENT_ID }}
         TWITCH_CLIENT_SECRET: ${{ secrets.TWITCH_CLIENT_SECRET }}
-      run: docker-compose --project-directory . --env-file infra/docker/env.docker -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.testing.yml -f infra/docker/docker-compose.github.yml up -d
+      run: docker compose --project-directory . --env-file infra/docker/env.docker -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.testing.yml -f infra/docker/docker-compose.github.yml up -d
     - run: sleep 10
     - name: Check logs (migrate)
       run: docker logs tripbot_migrate_1
@@ -81,7 +81,7 @@ jobs:
     - name: Check running containers
       run: docker ps -a
     - name: Stop containers
-      run: docker-compose --project-directory . -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.testing.yml -f infra/docker/docker-compose.github.yml down
+      run: docker compose --project-directory . -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.testing.yml -f infra/docker/docker-compose.github.yml down
       if: always() # run this even if previous steps fail
       continue-on-error: true
 
