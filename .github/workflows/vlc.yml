@@ -19,15 +19,35 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Build VLC container 🤖
-      run: docker compose --project-directory . -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.testing.yml -f infra/docker/docker-compose.github.yml build vlc
+      run: |
+        docker compose \
+          -f infra/docker/docker-compose.yml \
+          -f infra/docker/docker-compose.testing.yml \
+          -f infra/docker/docker-compose.github.yml \
+          build vlc
 
     - name: Start VLC container
-      run: docker compose --project-directory . --env-file infra/docker/env.docker -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.testing.yml -f infra/docker/docker-compose.github.yml up -d vlc
+      run: |
+        docker compose \
+          --env-file infra/docker/env.docker \
+          -f infra/docker/docker-compose.yml \
+          -f infra/docker/docker-compose.testing.yml \
+          -f infra/docker/docker-compose.github.yml \
+          up -d vlc
+
+    - name: Discover VLC port
+      run: |
+        PORT=$(docker compose \
+          -f infra/docker/docker-compose.yml \
+          -f infra/docker/docker-compose.testing.yml \
+          -f infra/docker/docker-compose.github.yml \
+          port vlc 8080 | cut -d: -f2)
+        echo "VLC_PORT=$PORT" >> $GITHUB_ENV
 
     - name: Wait for healthcheck
       run: |
         for i in $(seq 1 30); do
-          if curl -sf http://localhost:8080/health/ready; then
+          if curl -sf http://localhost:$VLC_PORT/health/ready; then
             echo ""
             echo "VLC server is ready!"
             exit 0
@@ -39,13 +59,23 @@ jobs:
         exit 1
 
     - name: Check VLC current video
-      run: curl -v http://localhost:8080/vlc/current
+      run: curl -v http://localhost:$VLC_PORT/vlc/current
 
     - name: Check container logs
-      run: docker compose --project-directory . -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.testing.yml -f infra/docker/docker-compose.github.yml logs vlc
+      run: |
+        docker compose \
+          -f infra/docker/docker-compose.yml \
+          -f infra/docker/docker-compose.testing.yml \
+          -f infra/docker/docker-compose.github.yml \
+          logs vlc
       if: always()
 
     - name: Stop containers
-      run: docker compose --project-directory . -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.testing.yml -f infra/docker/docker-compose.github.yml down
+      run: |
+        docker compose \
+          -f infra/docker/docker-compose.yml \
+          -f infra/docker/docker-compose.testing.yml \
+          -f infra/docker/docker-compose.github.yml \
+          down
       if: always()
       continue-on-error: true
