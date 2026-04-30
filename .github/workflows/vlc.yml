@@ -19,21 +19,10 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Build VLC container 🤖
-      run: docker build -t adanalife/vlc -f infra/docker/vlc/Dockerfile .
+      run: docker compose --project-directory . -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.testing.yml -f infra/docker/docker-compose.github.yml build vlc
 
     - name: Start VLC container
-      run: |
-        docker run -d \
-          --name vlc \
-          --env-file infra/docker/env.docker \
-          -e ENV=testing \
-          -e DISABLE_OBS=true \
-          -e DISPLAY=:0.0 \
-          -e XDG_RUNTIME_DIR=/root/.cache/xdgr \
-          -e FONTCONFIG_PATH=/etc/fonts \
-          -v ${{ github.workspace }}/assets/video:/opt/data/Dashcam/_all:ro \
-          -p 8080:8080 \
-          adanalife/vlc
+      run: docker compose --project-directory . --env-file infra/docker/env.docker -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.testing.yml -f infra/docker/docker-compose.github.yml up -d vlc
 
     - name: Wait for healthcheck
       run: |
@@ -53,9 +42,10 @@ jobs:
       run: curl -v http://localhost:8080/vlc/current
 
     - name: Check container logs
-      run: docker logs vlc
+      run: docker compose --project-directory . -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.testing.yml -f infra/docker/docker-compose.github.yml logs vlc
       if: always()
 
-    - name: Stop container
-      run: docker stop vlc
+    - name: Stop containers
+      run: docker compose --project-directory . -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.testing.yml -f infra/docker/docker-compose.github.yml down
       if: always()
+      continue-on-error: true
