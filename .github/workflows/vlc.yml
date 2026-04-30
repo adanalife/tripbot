@@ -21,6 +21,7 @@ jobs:
     - name: Build VLC container 🤖
       run: |
         docker compose \
+          --project-directory . \
           -f infra/docker/docker-compose.yml \
           -f infra/docker/docker-compose.testing.yml \
           -f infra/docker/docker-compose.github.yml \
@@ -29,6 +30,7 @@ jobs:
     - name: Start VLC container
       run: |
         docker compose \
+          --project-directory . \
           --env-file infra/docker/env.docker \
           -f infra/docker/docker-compose.yml \
           -f infra/docker/docker-compose.testing.yml \
@@ -38,6 +40,7 @@ jobs:
     - name: Discover VLC port
       run: |
         PORT=$(docker compose \
+          --project-directory . \
           -f infra/docker/docker-compose.yml \
           -f infra/docker/docker-compose.testing.yml \
           -f infra/docker/docker-compose.github.yml \
@@ -64,6 +67,7 @@ jobs:
     - name: Check container logs
       run: |
         docker compose \
+          --project-directory . \
           -f infra/docker/docker-compose.yml \
           -f infra/docker/docker-compose.testing.yml \
           -f infra/docker/docker-compose.github.yml \
@@ -73,6 +77,7 @@ jobs:
     - name: Stop containers
       run: |
         docker compose \
+          --project-directory . \
           -f infra/docker/docker-compose.yml \
           -f infra/docker/docker-compose.testing.yml \
           -f infra/docker/docker-compose.github.yml \
