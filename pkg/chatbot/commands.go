@@ -256,6 +256,14 @@ func monthlyGuessLeaderboardCmd(user *users.User) {
 	// select users to show in leaderboard
 	size := 10
 	leaderboard := scoreboards.TopUsers(scoreboards.CurrentGuessScoreboard(), size)
+
+	// special message if the leaderboard is empty
+	if len(leaderboard) == 0 {
+		Say("No one is on that leaderboard yet!")
+		return
+	}
+
+	// truncate the leaderboard if necessary
 	if size > len(leaderboard) {
 		size = len(leaderboard)
 	}

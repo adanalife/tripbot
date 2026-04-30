@@ -47,7 +47,7 @@ services:
     restart: unless-stopped
 
   db:
-    image: postgres:12
+    image: postgres:13
     restart: always
     ports:
       - "5432"

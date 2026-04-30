@@ -16,7 +16,7 @@
         "monitoring_type": 0,
         "muted": true,
         "name": "Mic/Aux",
-        "prev_ver": 436207618,
+        "prev_ver": 436273153,
         "private_settings": {
             "mixer_hidden": true
         },
@@ -46,9 +46,9 @@
         "id": "wasapi_output_capture",
         "mixers": 255,
         "monitoring_type": 0,
-        "muted": false,
+        "muted": true,
         "name": "Desktop Audio",
-        "prev_ver": 436207618,
+        "prev_ver": 436273153,
         "private_settings": {},
         "push-to-mute": false,
         "push-to-mute-delay": 0,
@@ -62,7 +62,7 @@
         "volume": 0.78617960214614868
     },
     "current_program_scene": "Dashcam",
-    "current_scene": "Full Screen",
+    "current_scene": "Dashcam",
     "current_transition": "Fade",
     "groups": [
         {
@@ -82,7 +82,7 @@
             "monitoring_type": 0,
             "muted": false,
             "name": "Backup",
-            "prev_ver": 436207618,
+            "prev_ver": 436273153,
             "private_settings": {},
             "push-to-mute": false,
             "push-to-mute-delay": 0,
@@ -175,7 +175,7 @@
             "monitoring_type": 0,
             "muted": false,
             "name": "Webcam 2 2",
-            "prev_ver": 436207618,
+            "prev_ver": 436273153,
             "private_settings": {},
             "push-to-mute": false,
             "push-to-mute-delay": 0,
@@ -260,15 +260,17 @@
             "hotkeys": {
                 "libobs.hide_scene_item.Stream Raiders Countdown": [],
                 "libobs.hide_scene_item.Stream Raiders Game": [],
+                "libobs.hide_scene_item.Stream Raiders Overlay": [],
                 "libobs.show_scene_item.Stream Raiders Countdown": [],
-                "libobs.show_scene_item.Stream Raiders Game": []
+                "libobs.show_scene_item.Stream Raiders Game": [],
+                "libobs.show_scene_item.Stream Raiders Overlay": []
             },
             "id": "group",
             "mixers": 0,
             "monitoring_type": 0,
             "muted": false,
             "name": "Stream Raiders 2",
-            "prev_ver": 436207618,
+            "prev_ver": 436273153,
             "private_settings": {},
             "push-to-mute": false,
             "push-to-mute-delay": 0,
@@ -303,7 +305,7 @@
                         "private_settings": {},
                         "rot": 0.0,
                         "scale": {
-                            "x": 0.6050000786781311,
+                            "x": 0.60500019788742065,
                             "y": 0.6050000786781311
                         },
                         "scale_filter": "disable",
@@ -333,7 +335,7 @@
                         "rot": 0.0,
                         "scale": {
                             "x": 0.25156250596046448,
-                            "y": 0.25138890743255615
+                            "y": 0.25138893723487854
                         },
                         "scale_filter": "disable",
                         "visible": true
@@ -356,7 +358,7 @@
                         "name": "Stream Raiders Overlay",
                         "pos": {
                             "x": 189.0,
-                            "y": 60.0
+                            "y": 60.000022888183594
                         },
                         "private_settings": {},
                         "rot": 0.0,
@@ -390,7 +392,7 @@
             "monitoring_type": 0,
             "muted": false,
             "name": "Stream Raiders",
-            "prev_ver": 436207618,
+            "prev_ver": 436273153,
             "private_settings": {},
             "push-to-mute": false,
             "push-to-mute-delay": 0,
@@ -483,7 +485,7 @@
             "monitoring_type": 0,
             "muted": false,
             "name": "Webcam 2",
-            "prev_ver": 436207618,
+            "prev_ver": 436273153,
             "private_settings": {},
             "push-to-mute": false,
             "push-to-mute-delay": 0,
@@ -570,17 +572,19 @@
                 "libobs.hide_scene_item.Bottom Overlay": [],
                 "libobs.hide_scene_item.Fuel Gauge 100": [],
                 "libobs.hide_scene_item.Middle Text": [],
+                "libobs.hide_scene_item.Timewarp Onscreen": [],
                 "libobs.show_scene_item.Bottom Left Rotator": [],
                 "libobs.show_scene_item.Bottom Overlay": [],
                 "libobs.show_scene_item.Fuel Gauge 100": [],
-                "libobs.show_scene_item.Middle Text": []
+                "libobs.show_scene_item.Middle Text": [],
+                "libobs.show_scene_item.Timewarp Onscreen": []
             },
             "id": "group",
             "mixers": 0,
             "monitoring_type": 0,
             "muted": false,
             "name": "ADL Overlays",
-            "prev_ver": 436207618,
+            "prev_ver": 436273153,
             "private_settings": {},
             "push-to-mute": false,
             "push-to-mute-delay": 0,
@@ -787,6 +791,9 @@
             "provider": "mssapi",
             "source": ""
         },
+        "decklink_captions": {
+            "source": ""
+        },
         "output-timer": {
             "autoStartRecordTimer": false,
             "autoStartStreamTimer": false,
@@ -873,12 +880,45 @@
             "enabled": true,
             "flags": 0,
             "hotkeys": {},
+            "id": "text_gdiplus",
+            "mixers": 0,
+            "monitoring_type": 0,
+            "muted": false,
+            "name": "Leaderboard",
+            "prev_ver": 436273153,
+            "private_settings": {},
+            "push-to-mute": false,
+            "push-to-mute-delay": 0,
+            "push-to-talk": false,
+            "push-to-talk-delay": 0,
+            "settings": {
+                "file": "C:/tripbot/run/leaderboard.txt",
+                "font": {
+                    "face": "Raleway Black",
+                    "flags": 1,
+                    "size": 36,
+                    "style": "Black"
+                },
+                "read_from_file": true,
+                "valign": "bottom"
+            },
+            "sync": 0,
+            "versioned_id": "text_gdiplus_v2",
+            "volume": 1.0
+        },
+        {
+            "balance": 0.5,
+            "deinterlace_field_order": 0,
+            "deinterlace_mode": 0,
+            "enabled": true,
+            "flags": 0,
+            "hotkeys": {},
             "id": "image_source",
             "mixers": 0,
             "monitoring_type": 0,
             "muted": false,
             "name": "GPS Onscreen",
-            "prev_ver": 436207618,
+            "prev_ver": 436273153,
             "private_settings": {},
             "push-to-mute": false,
             "push-to-mute-delay": 0,
@@ -910,7 +950,7 @@
             "monitoring_type": 0,
             "muted": false,
             "name": "Stream Raiders Overlay",
-            "prev_ver": 436207618,
+            "prev_ver": 436273153,
             "private_settings": {},
             "push-to-mute": false,
             "push-to-mute-delay": 0,
@@ -947,7 +987,7 @@
             "monitoring_type": 0,
             "muted": false,
             "name": "Desktop",
-            "prev_ver": 436207618,
+            "prev_ver": 436273153,
             "private_settings": {},
             "push-to-mute": false,
             "push-to-mute-delay": 0,
@@ -1357,14 +1397,12 @@
                 "libobs.hide_scene_item.H5": [],
                 "libobs.hide_scene_item.PuTTY": [],
                 "libobs.hide_scene_item.Stream Raiders": [],
-                "libobs.hide_scene_item.Timewarp Onscreen": [],
                 "libobs.hide_scene_item.Webcam 2": [],
                 "libobs.show_scene_item.ADL Overlays": [],
                 "libobs.show_scene_item.Car Sounds": [],
                 "libobs.show_scene_item.H5": [],
                 "libobs.show_scene_item.PuTTY": [],
                 "libobs.show_scene_item.Stream Raiders": [],
-                "libobs.show_scene_item.Timewarp Onscreen": [],
                 "libobs.show_scene_item.Webcam 2": []
             },
             "id": "scene",
@@ -1372,7 +1410,7 @@
             "monitoring_type": 0,
             "muted": false,
             "name": "Desktop w/ Cam",
-            "prev_ver": 436207618,
+            "prev_ver": 436273153,
             "private_settings": {},
             "push-to-mute": false,
             "push-to-mute-delay": 0,
@@ -1870,7 +1908,7 @@
             "monitoring_type": 0,
             "muted": false,
             "name": "PuTTY",
-            "prev_ver": 436207618,
+            "prev_ver": 436273153,
             "private_settings": {},
             "push-to-mute": false,
             "push-to-mute-delay": 0,
@@ -1895,7 +1933,7 @@
             "monitoring_type": 0,
             "muted": false,
             "name": "GoLand",
-            "prev_ver": 436207618,
+            "prev_ver": 436273153,
             "private_settings": {},
             "push-to-mute": false,
             "push-to-mute-delay": 0,
@@ -1936,7 +1974,7 @@
             "monitoring_type": 0,
             "muted": false,
             "name": "Coding w/ Cam",
-            "prev_ver": 436207618,
+            "prev_ver": 436273153,
             "private_settings": {},
             "push-to-mute": false,
             "push-to-mute-delay": 0,
@@ -2227,7 +2265,7 @@
             "monitoring_type": 0,
             "muted": false,
             "name": "Timewarp Onscreen",
-            "prev_ver": 436207618,
+            "prev_ver": 436273153,
             "private_settings": {},
             "push-to-mute": false,
             "push-to-mute-delay": 0,
@@ -2271,7 +2309,7 @@
             "monitoring_type": 0,
             "muted": false,
             "name": "Game Capture",
-            "prev_ver": 436207618,
+            "prev_ver": 436273153,
             "private_settings": {},
             "push-to-mute": false,
             "push-to-mute-delay": 0,
@@ -2316,7 +2354,7 @@
             "monitoring_type": 0,
             "muted": false,
             "name": "Full Screen w/ Cam",
-            "prev_ver": 436207618,
+            "prev_ver": 436273153,
             "private_settings": {},
             "push-to-mute": false,
             "push-to-mute-delay": 0,
@@ -2637,7 +2675,6 @@
                 "libobs.hide_scene_item.H5": [],
                 "libobs.hide_scene_item.PuTTY": [],
                 "libobs.hide_scene_item.Stream Raiders": [],
-                "libobs.hide_scene_item.Timewarp Onscreen": [],
                 "libobs.hide_scene_item.Webcam 2": [],
                 "libobs.hide_scene_item.vlc-server": [],
                 "libobs.show_scene_item.ADL Overlays": [],
@@ -2645,7 +2682,6 @@
                 "libobs.show_scene_item.H5": [],
                 "libobs.show_scene_item.PuTTY": [],
                 "libobs.show_scene_item.Stream Raiders": [],
-                "libobs.show_scene_item.Timewarp Onscreen": [],
                 "libobs.show_scene_item.Webcam 2": [],
                 "libobs.show_scene_item.vlc-server": []
             },
@@ -2654,7 +2690,7 @@
             "monitoring_type": 0,
             "muted": false,
             "name": "Dashcam w/ Cam",
-            "prev_ver": 436207618,
+            "prev_ver": 436273153,
             "private_settings": {},
             "push-to-mute": false,
             "push-to-mute-delay": 0,
@@ -3182,8 +3218,8 @@
                 "libobs.hide_scene_item.Car Sounds": [],
                 "libobs.hide_scene_item.GPS Onscreen": [],
                 "libobs.hide_scene_item.H5": [],
+                "libobs.hide_scene_item.Leaderboard": [],
                 "libobs.hide_scene_item.Stream Raiders 2": [],
-                "libobs.hide_scene_item.Stream Raiders Overlay": [],
                 "libobs.hide_scene_item.Timewarp Onscreen": [],
                 "libobs.hide_scene_item.vlc-server": [],
                 "libobs.show_scene_item.ADL Overlays": [],
@@ -3191,8 +3227,8 @@
                 "libobs.show_scene_item.Car Sounds": [],
                 "libobs.show_scene_item.GPS Onscreen": [],
                 "libobs.show_scene_item.H5": [],
+                "libobs.show_scene_item.Leaderboard": [],
                 "libobs.show_scene_item.Stream Raiders 2": [],
-                "libobs.show_scene_item.Stream Raiders Overlay": [],
                 "libobs.show_scene_item.Timewarp Onscreen": [],
                 "libobs.show_scene_item.vlc-server": []
             },
@@ -3201,7 +3237,7 @@
             "monitoring_type": 0,
             "muted": false,
             "name": "Dashcam",
-            "prev_ver": 436207618,
+            "prev_ver": 436273153,
             "private_settings": {},
             "push-to-mute": false,
             "push-to-mute-delay": 0,
@@ -3209,7 +3245,7 @@
             "push-to-talk-delay": 0,
             "settings": {
                 "custom_size": false,
-                "id_counter": 18,
+                "id_counter": 19,
                 "items": [
                     {
                         "align": 5,
@@ -3464,7 +3500,7 @@
                             "y": 0.0
                         },
                         "private_settings": {
-                            "collapsed": true
+                            "collapsed": false
                         },
                         "rot": 0.0,
                         "scale": {
@@ -3497,7 +3533,7 @@
                         "private_settings": {},
                         "rot": 0.0,
                         "scale": {
-                            "x": 1.381250262260437,
+                            "x": 1.3812505006790161,
                             "y": 1.3816667795181274
                         },
                         "scale_filter": "disable",
@@ -3527,7 +3563,7 @@
                         "rot": 0.0,
                         "scale": {
                             "x": 0.57433176040649414,
-                            "y": 0.5741085410118103
+                            "y": 0.57410860061645508
                         },
                         "scale_filter": "disable",
                         "visible": true
@@ -3550,7 +3586,7 @@
                         "name": "Stream Raiders Overlay",
                         "pos": {
                             "x": 772.4979248046875,
-                            "y": 248.02479553222656
+                            "y": 248.02484130859375
                         },
                         "private_settings": {},
                         "rot": 0.0,
@@ -3591,6 +3627,35 @@
                         },
                         "scale_filter": "disable",
                         "visible": false
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 354.0,
+                            "y": 181.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 2,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": false,
+                        "id": 19,
+                        "locked": false,
+                        "name": "Leaderboard",
+                        "pos": {
+                            "x": 13.0,
+                            "y": 843.0
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 1.0,
+                            "y": 1.0
+                        },
+                        "scale_filter": "disable",
+                        "visible": true
                     },
                     {
                         "align": 5,
@@ -3737,7 +3802,7 @@
                             "y": 1.0
                         },
                         "scale_filter": "disable",
-                        "visible": true
+                        "visible": false
                     },
                     {
                         "align": 5,
@@ -3789,7 +3854,7 @@
             "monitoring_type": 0,
             "muted": false,
             "name": "Stream Raiders Game",
-            "prev_ver": 436207618,
+            "prev_ver": 436273153,
             "private_settings": {},
             "push-to-mute": false,
             "push-to-mute-delay": 0,
@@ -3821,7 +3886,7 @@
             "monitoring_type": 0,
             "muted": false,
             "name": "Stream Raiders Countdown",
-            "prev_ver": 436207618,
+            "prev_ver": 436273153,
             "private_settings": {},
             "push-to-mute": false,
             "push-to-mute-delay": 0,
@@ -3846,7 +3911,7 @@
             "monitoring_type": 0,
             "muted": false,
             "name": "Middle Text",
-            "prev_ver": 436207618,
+            "prev_ver": 436273153,
             "private_settings": {},
             "push-to-mute": false,
             "push-to-mute-delay": 0,
@@ -3887,7 +3952,7 @@
             "monitoring_type": 0,
             "muted": false,
             "name": "Fuel Gauge 100",
-            "prev_ver": 436207618,
+            "prev_ver": 436273153,
             "private_settings": {
                 "mixer_hidden": true
             },
@@ -3921,7 +3986,7 @@
             "monitoring_type": 0,
             "muted": false,
             "name": "Overwatch",
-            "prev_ver": 436207618,
+            "prev_ver": 436273153,
             "private_settings": {},
             "push-to-mute": false,
             "push-to-mute-delay": 0,
@@ -3953,7 +4018,7 @@
             "monitoring_type": 0,
             "muted": false,
             "name": "Intermission Camera",
-            "prev_ver": 436207618,
+            "prev_ver": 436273153,
             "private_settings": {},
             "push-to-mute": false,
             "push-to-mute-delay": 0,
@@ -3993,7 +4058,7 @@
             "monitoring_type": 0,
             "muted": false,
             "name": "Intermission Screen",
-            "prev_ver": 436207618,
+            "prev_ver": 436273153,
             "private_settings": {},
             "push-to-mute": false,
             "push-to-mute-delay": 0,
@@ -4028,7 +4093,7 @@
             "monitoring_type": 0,
             "muted": false,
             "name": "Intermission",
-            "prev_ver": 436207618,
+            "prev_ver": 436273153,
             "private_settings": {},
             "push-to-mute": false,
             "push-to-mute-delay": 0,
@@ -4152,7 +4217,7 @@
             "monitoring_type": 0,
             "muted": false,
             "name": "Ending Screen",
-            "prev_ver": 436207618,
+            "prev_ver": 436273153,
             "private_settings": {},
             "push-to-mute": false,
             "push-to-mute-delay": 0,
@@ -4185,7 +4250,7 @@
             "monitoring_type": 0,
             "muted": false,
             "name": "Ending",
-            "prev_ver": 436207618,
+            "prev_ver": 436273153,
             "private_settings": {},
             "push-to-mute": false,
             "push-to-mute-delay": 0,
@@ -4280,7 +4345,7 @@
             "monitoring_type": 0,
             "muted": false,
             "name": "Starting Soon Screen",
-            "prev_ver": 436207618,
+            "prev_ver": 436273153,
             "private_settings": {},
             "push-to-mute": false,
             "push-to-mute-delay": 0,
@@ -4313,7 +4378,7 @@
             "monitoring_type": 0,
             "muted": false,
             "name": "Starting Soon",
-            "prev_ver": 436207618,
+            "prev_ver": 436273153,
             "private_settings": {},
             "push-to-mute": false,
             "push-to-mute-delay": 0,
@@ -4408,7 +4473,7 @@
             "monitoring_type": 0,
             "muted": false,
             "name": "BRB Screen",
-            "prev_ver": 436207618,
+            "prev_ver": 436273153,
             "private_settings": {},
             "push-to-mute": false,
             "push-to-mute-delay": 0,
@@ -4441,7 +4506,7 @@
             "monitoring_type": 0,
             "muted": false,
             "name": "BRB",
-            "prev_ver": 436207618,
+            "prev_ver": 436273153,
             "private_settings": {},
             "push-to-mute": false,
             "push-to-mute-delay": 0,
@@ -4536,7 +4601,7 @@
             "monitoring_type": 0,
             "muted": false,
             "name": "Overlay",
-            "prev_ver": 436207618,
+            "prev_ver": 436273153,
             "private_settings": {},
             "push-to-mute": false,
             "push-to-mute-delay": 0,
@@ -4571,7 +4636,7 @@
                     "monitoring_type": 0,
                     "muted": false,
                     "name": "Chroma Key",
-                    "prev_ver": 436207618,
+                    "prev_ver": 436273153,
                     "private_settings": {},
                     "push-to-mute": false,
                     "push-to-mute-delay": 0,
@@ -4595,7 +4660,7 @@
             "monitoring_type": 0,
             "muted": true,
             "name": "Camera",
-            "prev_ver": 436207618,
+            "prev_ver": 436273153,
             "private_settings": {},
             "push-to-mute": false,
             "push-to-mute-delay": 0,
@@ -4626,7 +4691,7 @@
             "monitoring_type": 0,
             "muted": false,
             "name": "Display Capture",
-            "prev_ver": 436207618,
+            "prev_ver": 436273153,
             "private_settings": {},
             "push-to-mute": false,
             "push-to-mute-delay": 0,
@@ -4655,7 +4720,7 @@
                     "monitoring_type": 0,
                     "muted": false,
                     "name": "Noise Suppression",
-                    "prev_ver": 436207618,
+                    "prev_ver": 436273153,
                     "private_settings": {},
                     "push-to-mute": false,
                     "push-to-mute-delay": 0,
@@ -4678,7 +4743,7 @@
                     "monitoring_type": 0,
                     "muted": false,
                     "name": "Compressor",
-                    "prev_ver": 436207618,
+                    "prev_ver": 436273153,
                     "private_settings": {},
                     "push-to-mute": false,
                     "push-to-mute-delay": 0,
@@ -4708,7 +4773,7 @@
                     "monitoring_type": 0,
                     "muted": false,
                     "name": "Noise Gate",
-                    "prev_ver": 436207618,
+                    "prev_ver": 436273153,
                     "private_settings": {},
                     "push-to-mute": false,
                     "push-to-mute-delay": 0,
@@ -4735,7 +4800,7 @@
             "monitoring_type": 0,
             "muted": true,
             "name": "H5",
-            "prev_ver": 436207618,
+            "prev_ver": 436273153,
             "private_settings": {},
             "push-to-mute": false,
             "push-to-mute-delay": 0,
@@ -4772,7 +4837,7 @@
             "monitoring_type": 0,
             "muted": false,
             "name": "Full Screen",
-            "prev_ver": 436207618,
+            "prev_ver": 436273153,
             "private_settings": {},
             "push-to-mute": false,
             "push-to-mute-delay": 0,
@@ -4912,17 +4977,17 @@
                         "crop_top": 0,
                         "group_item_backup": false,
                         "id": 15,
-                        "locked": false,
+                        "locked": true,
                         "name": "Dashcam",
                         "pos": {
-                            "x": 1444.0,
-                            "y": 812.0
+                            "x": 1436.0,
+                            "y": 808.0
                         },
                         "private_settings": {},
                         "rot": 0.0,
                         "scale": {
-                            "x": 0.24791666865348816,
-                            "y": 0.24814814329147339
+                            "x": 0.25208333134651184,
+                            "y": 0.25185185670852661
                         },
                         "scale_filter": "disable",
                         "visible": true
@@ -4948,7 +5013,7 @@
             "monitoring_type": 0,
             "muted": false,
             "name": "vlc-server",
-            "prev_ver": 436207618,
+            "prev_ver": 436273153,
             "private_settings": {},
             "push-to-mute": false,
             "push-to-mute-delay": 0,
@@ -4960,7 +5025,7 @@
                 "capture_mode": "window",
                 "limit_framerate": true,
                 "priority": 2,
-                "window": "VLC (Direct3D11 output):VLC video main 000001A960E233C0:___2vlc_server_prod.exe"
+                "window": "VLC (Direct3D11 output):VLC video main 000002966F5856F0:vlc-server.exe"
             },
             "sync": 0,
             "versioned_id": "game_capture",
@@ -4987,7 +5052,7 @@
             "monitoring_type": 0,
             "muted": false,
             "name": "Bottom Overlay",
-            "prev_ver": 436207618,
+            "prev_ver": 436273153,
             "private_settings": {
                 "mixer_hidden": true
             },
@@ -5019,7 +5084,7 @@
             "monitoring_type": 0,
             "muted": false,
             "name": "Bottom Left Rotator",
-            "prev_ver": 436207618,
+            "prev_ver": 436273153,
             "private_settings": {},
             "push-to-mute": false,
             "push-to-mute-delay": 0,
@@ -5061,7 +5126,7 @@
             "monitoring_type": 0,
             "muted": false,
             "name": "Car Sounds",
-            "prev_ver": 436207618,
+            "prev_ver": 436273153,
             "private_settings": {},
             "push-to-mute": false,
             "push-to-mute-delay": 0,

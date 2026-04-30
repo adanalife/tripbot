@@ -2,8 +2,6 @@ name: Docker
 on:
   pull_request:
   push:
-    branches:
-      - master
     tags:
       - v*
     paths:
@@ -16,6 +14,15 @@ on:
       - infra/docker
 
 jobs:
+  # cancel any existing runs of this workflow on this branch
+  cancel-currently-running:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: rokroskar/workflow-run-cleanup-action@v0.3.3
+        env:
+          GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+
   build:
     runs-on: ubuntu-latest
     env:
@@ -34,7 +41,7 @@ jobs:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
     - name: Checkout (without LFS)
-      uses: actions/checkout@v1
+      uses: actions/checkout@v2
     - name: Fetch videos from cache
       id: restore-videos
       uses: actions/cache@v4
@@ -46,7 +53,7 @@ jobs:
     # use git-lfs to download big video file(s)
     # (but only if the cache hit missed)
     - name: Checkout (with LFS)
-      uses: actions/checkout@v1
+      uses: actions/checkout@v2
       if: steps.restore-videos.outputs.cache-hit != 'true'
       continue-on-error: true
       with:
@@ -115,6 +122,6 @@ jobs:
       env:
         DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         VERSION_TAG: ${{ steps.get-version.outputs.version }}
-      uses: Ilshidur/action-discord@0.3.0
+      uses: Ilshidur/action-discord@0.3.2
       with:
         args: 'New Docker image created for [{{ EVENT_PAYLOAD.repository.full_name }}]({{ EVENT_PAYLOAD.repository.html_url }}): [{{ VERSION_TAG }}]({{ EVENT_PAYLOAD.compare }})'
