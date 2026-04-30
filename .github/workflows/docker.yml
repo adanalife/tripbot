@@ -60,8 +60,9 @@ jobs:
         lfs: true
     - name: Build tripbot
       run: docker compose --project-directory . -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.testing.yml -f infra/docker/docker-compose.github.yml build tripbot
-    - name: Build obs
-      run: docker compose --project-directory . -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.testing.yml -f infra/docker/docker-compose.github.yml build obs
+    # TODO: re-enable once obs Dockerfile is fixed (broken base image)
+    # - name: Build obs
+    #   run: docker compose --project-directory . -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.testing.yml -f infra/docker/docker-compose.github.yml build obs
     - name: Start the docker-compose stack
       env:
         # pass these into tripbot
@@ -74,8 +75,9 @@ jobs:
     - run: sleep 10
     - name: Check logs (migrate)
       run: docker logs tripbot_migrate_1
-    - name: Check logs (obs)
-      run: docker logs tripbot_obs_1
+    # TODO: re-enable once obs Dockerfile is fixed
+    # - name: Check logs (obs)
+    #   run: docker logs tripbot_obs_1
     - name: Check logs (tripbot) 🤖
       run: docker logs tripbot_tripbot_1
     - name: Check running containers
@@ -107,14 +109,14 @@ jobs:
         docker push adanalife/tripbot:v$MAJOR
         docker tag adanalife/tripbot adanalife/tripbot:v$MAJOR.$MINOR
         docker push adanalife/tripbot:v$MAJOR.$MINOR
-        # push obs
-        docker push adanalife/obs:latest
-        docker tag adanalife/obs adanalife/obs:$VERSION_TAG
-        docker push adanalife/obs:$VERSION_TAG
-        docker tag adanalife/obs adanalife/obs:v$MAJOR
-        docker push adanalife/obs:v$MAJOR
-        docker tag adanalife/obs adanalife/obs:v$MAJOR.$MINOR
-        docker push adanalife/obs:v$MAJOR.$MINOR
+        # TODO: re-enable once obs Dockerfile is fixed
+        # docker push adanalife/obs:latest
+        # docker tag adanalife/obs adanalife/obs:$VERSION_TAG
+        # docker push adanalife/obs:$VERSION_TAG
+        # docker tag adanalife/obs adanalife/obs:v$MAJOR
+        # docker push adanalife/obs:v$MAJOR
+        # docker tag adanalife/obs adanalife/obs:v$MAJOR.$MINOR
+        # docker push adanalife/obs:v$MAJOR.$MINOR
 
     #TODO: move this to a deploy.yml and announce deploys
     - name: Post Discord notification
