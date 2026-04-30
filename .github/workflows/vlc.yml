@@ -31,6 +31,10 @@ jobs:
           -e DISPLAY=:0.0 \
           -e XDG_RUNTIME_DIR=/root/.cache/xdgr \
           -e FONTCONFIG_PATH=/etc/fonts \
+          -e TWILIO_ACCT_SID=dummy \
+          -e TWILIO_AUTH_TOKEN=dummy \
+          -e TWILIO_FROM_NUM=dummy \
+          -e TWILIO_TO_NUM=dummy \
           -v ${{ github.workspace }}/assets/video:/opt/data/Dashcam/_all:ro \
           -p 8080:8080 \
           adanalife/vlc
