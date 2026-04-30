@@ -78,7 +78,7 @@ jobs:
     # TODO: re-enable once obs Dockerfile is fixed
     # - name: Check logs (obs)
     #   run: docker logs tripbot-obs-1
-    - name: Check logs (tripbot)
+    - name: Check logs (tripbot) 🤖
       run: docker logs tripbot-tripbot-1
     - name: Check running containers
       run: docker ps -a
