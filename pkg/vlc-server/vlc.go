@@ -30,6 +30,12 @@ var vlcCmdFlags = []string{
 	"--canvas-width", "1920",
 	"--canvas-height", "1080",
 	// "--aspect-ratio", "16:9",
+	// duplicate playback to RTSP so the OBS container can pull it
+	// (rtsp://vlc:8554/dashcam). `display` keeps the on-screen window;
+	// `--sout-keep` preserves the chain across playlist transitions
+	// so OBS doesn't see EOF every time the next clip starts.
+	"--sout", "#duplicate{dst=display,dst=rtp{sdp=rtsp://:8554/dashcam}}",
+	"--sout-keep",
 }
 
 var vlcLinuxSpecificFlags = []string{
