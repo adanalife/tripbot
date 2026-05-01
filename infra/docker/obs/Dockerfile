@@ -17,9 +17,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
-COPY infra/docker/obs/config/ /opt/obs/config/
-COPY infra/docker/obs/entrypoint.sh /opt/obs/entrypoint.sh
-COPY infra/docker/obs/healthcheck.sh /opt/obs/healthcheck.sh
+COPY configs/obs-studio/docker/ /opt/obs/
 RUN chmod +x /opt/obs/entrypoint.sh /opt/obs/healthcheck.sh
 
 EXPOSE 5900
