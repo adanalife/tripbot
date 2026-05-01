@@ -27,7 +27,7 @@ jobs:
           -f infra/docker/docker-compose.github.yml \
           build obs
 
-    - name: Start VLC container (Phase 2 RTSP source)
+    - name: Start VLC container (RTSP source)
       run: |
         docker compose \
           --project-directory . \
