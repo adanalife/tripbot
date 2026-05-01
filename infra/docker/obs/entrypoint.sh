@@ -6,7 +6,7 @@ mkdir -p "$OBS_HOME/basic/profiles/Untitled" "$OBS_HOME/basic/scenes"
 
 cp /opt/obs/config/global.ini "$OBS_HOME/global.ini"
 cp /opt/obs/config/basic.ini  "$OBS_HOME/basic/profiles/Untitled/basic.ini"
-cp /opt/obs/config/Tripbot.json "$OBS_HOME/basic/scenes/Tripbot.json"
+envsubst < /opt/obs/config/Tripbot.json.tmpl > "$OBS_HOME/basic/scenes/Tripbot.json"
 
 obs_args=(--disable-shutdown-check --collection 'Tripbot' --profile 'Untitled' --scene 'Test')
 
