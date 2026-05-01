@@ -31,6 +31,8 @@ services:
     build:
       context: .
       dockerfile: infra/docker/obs/Dockerfile
+    depends_on:
+      - vlc                                  # vlc must be up so RTSP source resolves
     ports:
       # - "8080"                             # OBS container has no HTTP API in Phase 1
       - "5902:5900"
@@ -39,6 +41,7 @@ services:
       # XDG_RUNTIME_DIR: "/root/.cache/xdgr"
       # FONTCONFIG_PATH: "/etc/fonts"
       STREAM_KEY: "${STREAM_KEY:-}"
+      DASHCAM_RTSP_URL: "${DASHCAM_RTSP_URL:-rtsp://vlc:8554/dashcam}"
     # volumes:                               # image is self-contained
     #   - .:/go/src/github.com/adanalife/tripbot
     #   - ./assets/video:/opt/data/Dashcam/_all:ro
@@ -47,7 +50,7 @@ services:
   vlc:
     privileged: true
     image: adanalife/vlc
-    hostname: obs
+    hostname: vlc
     env_file:
       - infra/docker/env.docker
     build:
@@ -57,6 +60,7 @@ services:
       # this should match the VLC_SERVER_HOST env var
       - "8080"
       - "5903:5900"
+      - "8554:8554"
     environment:
       DISABLE_OBS: "true"
       DISPLAY: ":0.0"

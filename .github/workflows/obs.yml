@@ -27,6 +27,35 @@ jobs:
           -f infra/docker/docker-compose.github.yml \
           build obs
 
+    - name: Start VLC container (RTSP source)
+      run: |
+        docker compose \
+          --project-directory . \
+          --env-file infra/docker/env.docker \
+          -f infra/docker/docker-compose.yml \
+          -f infra/docker/docker-compose.testing.yml \
+          -f infra/docker/docker-compose.github.yml \
+          up -d vlc
+
+    - name: Wait for VLC to be ready
+      run: |
+        cid=$(docker compose \
+          --project-directory . \
+          -f infra/docker/docker-compose.yml \
+          -f infra/docker/docker-compose.testing.yml \
+          -f infra/docker/docker-compose.github.yml \
+          ps -q vlc)
+        for i in $(seq 1 30); do
+          if docker exec "$cid" curl -sf http://localhost:8080/health/ready >/dev/null; then
+            echo "VLC is ready"
+            exit 0
+          fi
+          echo "Waiting for VLC... ($i/30)"
+          sleep 2
+        done
+        echo "VLC failed to become ready" >&2
+        exit 1
+
     - name: Start OBS container (no STREAM_KEY)
       run: |
         docker compose \
@@ -53,6 +82,16 @@ jobs:
         done
         echo "OBS failed to become healthy" >&2
         exit 1
+
+    - name: Check VLC container logs
+      if: always()
+      run: |
+        docker compose \
+          --project-directory . \
+          -f infra/docker/docker-compose.yml \
+          -f infra/docker/docker-compose.testing.yml \
+          -f infra/docker/docker-compose.github.yml \
+          logs vlc
 
     - name: Check container logs
       if: always()

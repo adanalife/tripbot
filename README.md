@@ -17,8 +17,7 @@ Thanks for watching!
 
 ### How it all works
 
-There are two main components: the chatbot itself, which listens for user commands, and a VLC-based video server, which manages the currently-playing video.
-They can be run on separate computers.
+There are three main components, each running in its own container: the chatbot itself, which listens for user commands; a VLC-based video server, which manages the currently-playing video; and an OBS container, which composes the scene and streams it to Twitch. OBS pulls the VLC output over RTSP, so the bot and video server can still be split across machines.
 
 The general flow of information looks like this:
 
