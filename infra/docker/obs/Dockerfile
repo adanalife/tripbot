@@ -24,6 +24,6 @@ RUN chmod +x /opt/obs/entrypoint.sh /opt/obs/healthcheck.sh
 
 EXPOSE 5900
 
-HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=3 CMD /opt/obs/healthcheck.sh
+HEALTHCHECK --interval=10s --timeout=3s --retries=3 CMD /opt/obs/healthcheck.sh
 
 ENTRYPOINT ["/usr/bin/tini", "--", "/opt/obs/entrypoint.sh"]
