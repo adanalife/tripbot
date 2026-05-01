@@ -1,0 +1,76 @@
+name: OBS Container
+on:
+  pull_request:
+  push:
+    branches:
+      - develop
+    tags:
+      - v*
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      COMPOSE_DOCKER_CLI_BUILD: 1
+      DOCKER_BUILDKIT: 1
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Build OBS container
+      run: |
+        docker compose \
+          --project-directory . \
+          -f infra/docker/docker-compose.yml \
+          -f infra/docker/docker-compose.testing.yml \
+          -f infra/docker/docker-compose.github.yml \
+          build obs
+
+    - name: Start OBS container (no STREAM_KEY)
+      run: |
+        docker compose \
+          --project-directory . \
+          --env-file infra/docker/env.docker \
+          -f infra/docker/docker-compose.yml \
+          -f infra/docker/docker-compose.testing.yml \
+          -f infra/docker/docker-compose.github.yml \
+          up -d obs
+
+    - name: Wait for healthcheck
+      run: |
+        cid=$(docker compose \
+          --project-directory . \
+          -f infra/docker/docker-compose.yml \
+          -f infra/docker/docker-compose.testing.yml \
+          -f infra/docker/docker-compose.github.yml \
+          ps -q obs)
+        for i in $(seq 1 30); do
+          state=$(docker inspect -f '{{.State.Health.Status}}' "$cid")
+          echo "OBS health: $state ($i/30)"
+          [[ "$state" == "healthy" ]] && exit 0
+          sleep 2
+        done
+        echo "OBS failed to become healthy" >&2
+        exit 1
+
+    - name: Check container logs
+      if: always()
+      run: |
+        docker compose \
+          --project-directory . \
+          -f infra/docker/docker-compose.yml \
+          -f infra/docker/docker-compose.testing.yml \
+          -f infra/docker/docker-compose.github.yml \
+          logs obs
+
+    - name: Stop containers
+      if: always()
+      continue-on-error: true
+      run: |
+        docker compose \
+          --project-directory . \
+          -f infra/docker/docker-compose.yml \
+          -f infra/docker/docker-compose.testing.yml \
+          -f infra/docker/docker-compose.github.yml \
+          down

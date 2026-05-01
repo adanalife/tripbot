@@ -1,4 +1,5 @@
 .env.*
 infra
+!infra/docker/obs
 assets/video
 log
