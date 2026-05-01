@@ -30,12 +30,17 @@ var vlcCmdFlags = []string{
 	"--canvas-width", "1920",
 	"--canvas-height", "1080",
 	// "--aspect-ratio", "16:9",
-	// duplicate playback to RTSP so the OBS container can pull it
-	// (rtsp://vlc:8554/dashcam). `display` keeps the on-screen window;
-	// `--sout-keep` preserves the chain across playlist transitions
-	// so OBS doesn't see EOF every time the next clip starts.
-	"--sout", "#duplicate{dst=display,dst=rtp{sdp=rtsp://:8554/dashcam}}",
-	"--sout-keep",
+}
+
+// mediaOptions are applied per-Media (not as libvlc init flags).
+// libvlc's --sout takes effect only when set on the media object itself —
+// passing --sout to libvlc.Init does NOT activate the stream-out chain.
+// `display` keeps the on-screen render; `rtp{sdp=rtsp://...}` opens an RTSP
+// listener that the OBS container pulls. `sout-keep` preserves the chain
+// across playlist transitions so OBS doesn't see EOF on every clip change.
+var mediaOptions = []string{
+	":sout=#duplicate{dst=display,dst=rtp{sdp=rtsp://:8554/dashcam}}",
+	":sout-keep",
 }
 
 var vlcLinuxSpecificFlags = []string{
@@ -206,9 +211,14 @@ func loadLocalMedia() {
 
 	// loop over the files and add their paths to VLC
 	for _, file := range filePaths {
-		// add the media to VLC
-		err = mediaList.AddMediaFromPath(file)
+		media, err := libvlc.NewMediaFromPath(file)
 		if err != nil {
+			terrors.Fatal(err, "error creating media from path")
+		}
+		if err := media.AddOptions(mediaOptions...); err != nil {
+			terrors.Fatal(err, "error setting media options")
+		}
+		if err := mediaList.AddMedia(media); err != nil {
 			terrors.Fatal(err, "error adding files to VLC media list")
 		}
 	}
