@@ -23,27 +23,25 @@ services:
     restart: unless-stopped
 
   obs:
-    privileged: true
+    # privileged: true                       # not needed without GPU passthrough
     image: adanalife/obs
     hostname: obs
-    env_file:
-      - infra/docker/env.docker
+    # env_file:                              # entrypoint reads only STREAM_KEY directly
+    #   - infra/docker/env.docker
     build:
       context: .
       dockerfile: infra/docker/obs/Dockerfile
     ports:
-      # this should match the VLC_SERVER_HOST env var
-      - "8080"
+      # - "8080"                             # OBS container has no HTTP API in Phase 1
       - "5902:5900"
     environment:
-      DISPLAY: ":0.0"
-      XDG_RUNTIME_DIR: "/root/.cache/xdgr"
-      # hack to make fontconfig happy
-      FONTCONFIG_PATH: "/etc/fonts"
-      STREAM_KEY: "${STREAM_KEY}"
-    volumes:
-      - .:/go/src/github.com/adanalife/tripbot
-      - ./assets/video:/opt/data/Dashcam/_all:ro
+      # DISPLAY: ":0.0"                      # entrypoint sets DISPLAY internally
+      # XDG_RUNTIME_DIR: "/root/.cache/xdgr"
+      # FONTCONFIG_PATH: "/etc/fonts"
+      STREAM_KEY: "${STREAM_KEY:-}"
+    # volumes:                               # image is self-contained
+    #   - .:/go/src/github.com/adanalife/tripbot
+    #   - ./assets/video:/opt/data/Dashcam/_all:ro
     restart: unless-stopped
 
   vlc:
