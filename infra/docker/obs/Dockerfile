@@ -23,7 +23,6 @@ RUN chmod +x /opt/obs/entrypoint.sh
 
 EXPOSE 5900
 
-HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=3 \
-  CMD pgrep -x obs >/dev/null && DISPLAY=:0 xdpyinfo >/dev/null 2>&1 || exit 1
+HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=3 CMD pgrep -x obs >/dev/null && DISPLAY=:0 xdpyinfo >/dev/null 2>&1 || exit 1
 
 ENTRYPOINT ["/usr/bin/tini", "--", "/opt/obs/entrypoint.sh"]

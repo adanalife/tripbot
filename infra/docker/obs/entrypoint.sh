@@ -21,7 +21,7 @@ fi
 
 export DISPLAY=:0
 Xvfb :0 -screen 0 1920x1080x24 -nolisten tcp &
-for i in {1..30}; do [[ -S /tmp/.X11-unix/X0 ]] && break; sleep 0.2; done
+for _ in {1..30}; do [[ -S /tmp/.X11-unix/X0 ]] && break; sleep 0.2; done
 
 fluxbox >/dev/null 2>&1 &
 x11vnc -display :0 -forever -shared -nopw -rfbport 5900 -quiet >/dev/null 2>&1 &
