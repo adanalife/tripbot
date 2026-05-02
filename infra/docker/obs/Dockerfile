@@ -22,6 +22,9 @@ COPY infra/docker/obs/entrypoint.sh /opt/obs/entrypoint.sh
 COPY infra/docker/obs/healthcheck.sh /opt/obs/healthcheck.sh
 RUN chmod +x /opt/obs/entrypoint.sh /opt/obs/healthcheck.sh
 
+COPY assets/twitch-overlay-left.png assets/twitch-overlay-right.png /opt/tripbot/assets/
+COPY infra/docker/obs/dummy-onscreens/ /opt/data/run/
+
 EXPOSE 5900
 
 ENV VNC_PASSWD=123456
