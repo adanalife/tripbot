@@ -28,8 +28,6 @@ services:
     # set this to true to disable the OBS container
     #entrypoint: "true"
     restart: on-failure
-    entrypoint: bash
-    command: -c "cd /opt/tripbot && rm -f bin/vlc-server && script/container_startup.sh"
     volumes:
       - .bash_history.remote:/root/.bash_history
 
