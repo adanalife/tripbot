@@ -15,8 +15,7 @@ services:
 
   # `test` is a one-shot Go toolchain container for running `go test`
   # outside the running stack. Invoked via `ENV=testing bin/devenv
-  # run --rm test ...` (see Taskfile.yml). The image bakes in libvlc-dev
-  # so every test run doesn't reinstall it.
+  # run --rm test ...` (see Taskfile.yml).
   test:
     image: adanalife/tripbot-test
     build:

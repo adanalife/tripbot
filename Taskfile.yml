@@ -1,9 +1,8 @@
 version: '3'
 
 # All targets shell into the `test` service defined in
-# infra/docker/docker-compose.testing.yml via bin/devenv. The image
-# (infra/docker/test/Dockerfile) bakes libvlc-dev in, env vars come
-# from .env.testing, and module/build caches live in named volumes.
+# infra/docker/docker-compose.testing.yml via bin/devenv. Env vars
+# come from .env.testing; module/build caches live in named volumes.
 
 tasks:
   default:
@@ -33,7 +32,7 @@ tasks:
       - ENV=testing bin/devenv run --rm test go test -race ./...
 
   shell:
-    desc: Open an interactive Go-toolchain shell with libvlc-dev installed
+    desc: Open an interactive Go-toolchain shell inside the test container
     interactive: true
     cmds:
       - ENV=testing bin/devenv run --rm test bash
