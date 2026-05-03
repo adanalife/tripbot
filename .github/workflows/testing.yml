@@ -8,7 +8,30 @@ on:
       - v*
 
 env:
-  ENV: test
+  # `testing` (not `test`) — TripbotConfig.IsTesting() compares against the
+  # full word, so packages with init() shortcuts won't bail otherwise.
+  ENV: testing
+  # Required by package init() functions; values are placeholders so the
+  # binaries can boot in CI without reaching real services.
+  TWILIO_ACCT_SID: test
+  TWILIO_AUTH_TOKEN: test
+  TWILIO_FROM_NUM: test
+  TWILIO_TO_NUM: test
+  CHANNEL_NAME: test
+  BOT_USERNAME: test
+  EXTERNAL_URL: http://localhost
+  GOOGLE_APPS_PROJECT_ID: test
+  GOOGLE_MAPS_API_KEY: test
+  TRIPBOT_HTTP_AUTH: test
+  VLC_SERVER_HOST: http://localhost:8081
+  VIDEO_DIR: /tmp
+  RUN_DIR: /tmp
+  DATABASE_USER: test
+  DATABASE_DB: test
+  DATABASE_HOST: localhost
+  TWITCH_AUTH_TOKEN: test
+  TWITCH_CLIENT_ID: test
+  TWITCH_CLIENT_SECRET: test
 jobs:
   test:
     strategy:
@@ -36,3 +59,8 @@ jobs:
       run: sudo apt update && sudo apt install -y --no-install-recommends libvlc-dev
     - name: Run Go Tests
       run: go test ./...
+    - name: Coverage Summary
+      run: |
+        go test -coverprofile=coverage.out ./...
+        echo "## Coverage" >> "$GITHUB_STEP_SUMMARY"
+        go tool cover -func=coverage.out | tail -1 | tee -a "$GITHUB_STEP_SUMMARY"
