@@ -15,11 +15,8 @@ services:
       # this should match the TRIPBOT_SERVER_PORT env var
       - "8080"
     volumes:
-      - .:/go/src/github.com/adanalife/tripbot
       #TODO: do we even need this?
       - ./assets/video:/opt/data/Dashcam/_all:ro
-    entrypoint: bash
-    command: -c "go run cmd/tripbot/tripbot.go 2>&1"
     restart: unless-stopped
 
   obs:
@@ -42,9 +39,11 @@ services:
       # FONTCONFIG_PATH: "/etc/fonts"
       STREAM_KEY: "${STREAM_KEY:-}"
       DASHCAM_RTSP_URL: "${DASHCAM_RTSP_URL:-rtsp://vlc:8554/dashcam}"
-    # volumes:                               # image is self-contained
-    #   - .:/go/src/github.com/adanalife/tripbot
-    #   - ./assets/video:/opt/data/Dashcam/_all:ro
+    volumes:
+      # vlc-server writes onscreen state files; OBS reads them. Tripbot
+      # speaks HTTP to vlc-server and never touches this path. The OBS
+      # entrypoint seeds this from /opt/obs-dummy-defaults/ when empty.
+      - onscreens:/opt/data/run/
     restart: unless-stopped
 
   vlc:
@@ -70,6 +69,8 @@ services:
     volumes:
       - .:/go/src/github.com/adanalife/tripbot
       - ./assets/video:/opt/data/Dashcam/_all:ro
+      # paired with the obs service mount; vlc-server writes here, obs reads
+      - onscreens:/opt/data/run/
     restart: unless-stopped
 
   db:
@@ -108,3 +109,6 @@ services:
     volumes:
       - .:/go/src/github.com/adanalife/tripbot
     restart: on-failure
+
+volumes:
+  onscreens:
