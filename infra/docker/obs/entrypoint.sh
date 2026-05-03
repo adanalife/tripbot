@@ -1,6 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Seed /opt/data/run/ from baked defaults only when the named onscreens
+# volume is empty, so vlc-server's writes persist across restarts.
+RUN_DIR=/opt/data/run
+mkdir -p "$RUN_DIR"
+if [[ "${INCLUDE_DUMMY_ONSCREENS:-false}" == "true" && -d /opt/obs-dummy-defaults ]]; then
+  if [[ -z "$(ls -A "$RUN_DIR" 2>/dev/null)" ]]; then
+    echo "Seeding $RUN_DIR from /opt/obs-dummy-defaults"
+    cp -r /opt/obs-dummy-defaults/. "$RUN_DIR/"
+  fi
+fi
+
 OBS_HOME="${HOME:-/root}/.config/obs-studio"
 mkdir -p "$OBS_HOME/basic/profiles/Untitled" "$OBS_HOME/basic/scenes"
 
