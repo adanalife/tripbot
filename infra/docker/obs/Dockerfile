@@ -26,8 +26,10 @@ COPY assets/twitch-overlay-left.png assets/twitch-overlay-right.png /opt/tripbot
 
 # Bake dummy onscreens into a defaults dir so the runtime named volume mount
 # at /opt/data/run/ doesn't shadow them. The entrypoint seeds the volume from
-# here on first boot when INCLUDE_DUMMY_ONSCREENS is true.
-ARG INCLUDE_DUMMY_ONSCREENS=true
+# here on first boot when INCLUDE_DUMMY_ONSCREENS is true. Off by default;
+# enable for debugging OBS without a live bot:
+#   docker compose build --build-arg INCLUDE_DUMMY_ONSCREENS=true obs
+ARG INCLUDE_DUMMY_ONSCREENS=false
 ENV INCLUDE_DUMMY_ONSCREENS=${INCLUDE_DUMMY_ONSCREENS}
 COPY infra/docker/obs/dummy-onscreens/ /opt/obs-dummy-defaults-src/
 RUN if [ "${INCLUDE_DUMMY_ONSCREENS}" = "true" ]; then \
