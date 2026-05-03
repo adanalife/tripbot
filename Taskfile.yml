@@ -14,26 +14,26 @@ tasks:
   test:
     desc: Run all unit tests
     cmds:
-      - DEVENV_OVERLAY=testing bin/devenv run --rm test bash -c 'apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq libvlc-dev >/dev/null 2>&1 && go test ./...'
+      - ENV=testing bin/devenv run --rm test bash -c 'apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq libvlc-dev >/dev/null 2>&1 && go test ./...'
 
   test:cover:
     desc: Run tests with coverage; prints per-function and total coverage
     cmds:
-      - DEVENV_OVERLAY=testing bin/devenv run --rm test bash -c 'apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq libvlc-dev >/dev/null 2>&1 && go test -coverprofile=coverage.out ./... && go tool cover -func=coverage.out'
+      - ENV=testing bin/devenv run --rm test bash -c 'apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq libvlc-dev >/dev/null 2>&1 && go test -coverprofile=coverage.out ./... && go tool cover -func=coverage.out'
 
   test:cover:html:
     desc: Generate HTML coverage report at coverage.html
     cmds:
-      - DEVENV_OVERLAY=testing bin/devenv run --rm test bash -c 'apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq libvlc-dev >/dev/null 2>&1 && go test -coverprofile=coverage.out ./... && go tool cover -html=coverage.out -o coverage.html'
+      - ENV=testing bin/devenv run --rm test bash -c 'apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq libvlc-dev >/dev/null 2>&1 && go test -coverprofile=coverage.out ./... && go tool cover -html=coverage.out -o coverage.html'
       - 'echo "Open coverage.html in your browser"'
 
   test:race:
     desc: Run tests with the race detector (slower; surfaces data races)
     cmds:
-      - DEVENV_OVERLAY=testing bin/devenv run --rm test bash -c 'apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq libvlc-dev >/dev/null 2>&1 && go test -race ./...'
+      - ENV=testing bin/devenv run --rm test bash -c 'apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq libvlc-dev >/dev/null 2>&1 && go test -race ./...'
 
   shell:
     desc: Open an interactive Go-toolchain shell with libvlc-dev installed
     interactive: true
     cmds:
-      - DEVENV_OVERLAY=testing bin/devenv run --rm test bash -c 'apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq libvlc-dev >/dev/null 2>&1 && bash'
+      - ENV=testing bin/devenv run --rm test bash -c 'apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq libvlc-dev >/dev/null 2>&1 && bash'
