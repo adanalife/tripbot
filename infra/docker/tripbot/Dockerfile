@@ -1,37 +1,29 @@
-# buster is the debian release, c.p. https://askubuntu.com/a/445496
-FROM golang:1.17.5-buster
+# Builder: produce a static-ish tripbot binary with Go 1.21
+FROM golang:1.21-bookworm AS builder
 
-WORKDIR /go/src/github.com/adanalife/tripbot
+WORKDIR /src
 
-# create app user
-# RUN adduser --system --group --disabled-password --no-create-home danalol
+COPY go.mod go.sum ./
+RUN go mod download
 
-# add Tini (simple init)
-ENV TINI_VERSION v0.19.0
-ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini /tini
-RUN chmod +x /tini
-
-# copy over project
-#TODO: maybe just copy pkg, cmd, internal, etc?
 COPY . .
-# COPY --chown=danalol:danalol . .
+RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /out/tripbot ./cmd/tripbot
 
-# create symlink to /opt/tripbot and give user permissions on it
-RUN ln -s /go/src/github.com/adanalife/tripbot /opt/tripbot \
-  && mkdir /opt/data #\
-  # && chown danalol:danalol /opt/tripbot /opt/data
+# Runtime: minimal Ubuntu 24.04 matching the VLC/OBS containers
+FROM ubuntu:24.04
 
-# set home dir for app user
-# RUN usermod --home /opt/tripbot danalol
+RUN apt-get update \
+  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    tini \
+    ca-certificates \
+    tzdata \
+    curl \
+  && rm -rf /var/lib/apt/lists/*
 
-# switch to the app user
-# USER danalol
-
-# build the binary
-WORKDIR /opt/tripbot
-RUN go build -o bin/tripbot cmd/tripbot/tripbot.go
+COPY --from=builder /out/tripbot /usr/local/bin/tripbot
 
 EXPOSE 8080
 
-ENTRYPOINT ["/tini", "--"]
-CMD ["./bin/tripbot"]
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD curl -fsS http://localhost:8080/health/live
+
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/tripbot"]
