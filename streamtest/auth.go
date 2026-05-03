@@ -17,8 +17,14 @@ const (
 	twitchDeviceURL   = "https://id.twitch.tv/oauth2/device"
 	twitchTokenURL    = "https://id.twitch.tv/oauth2/token"
 	twitchValidateURL = "https://id.twitch.tv/oauth2/validate"
-	twitchScopes      = "chat:read chat:edit"
 )
+
+var twitchScopes = []string{
+	"chat:read",
+	"chat:edit",
+	"user:read:follows",
+	"user:read:subscriptions",
+}
 
 type Auth struct {
 	AccessToken  string   `json:"access_token"`
@@ -35,7 +41,7 @@ func (a *Auth) IRCToken() string {
 
 func Authorize(clientID, cachePath string) (*Auth, error) {
 	if a, err := loadAuth(cachePath); err == nil && a != nil && a.ClientID == clientID {
-		if err := validateAuth(a); err == nil {
+		if err := validateAuth(a); err == nil && hasAllScopes(a.Scopes, twitchScopes) {
 			return a, nil
 		}
 	}
@@ -47,6 +53,19 @@ func Authorize(clientID, cachePath string) (*Auth, error) {
 		fmt.Fprintf(os.Stderr, "warning: could not cache token to %s: %v\n", cachePath, err)
 	}
 	return a, nil
+}
+
+func hasAllScopes(have, need []string) bool {
+	set := map[string]struct{}{}
+	for _, s := range have {
+		set[s] = struct{}{}
+	}
+	for _, n := range need {
+		if _, ok := set[n]; !ok {
+			return false
+		}
+	}
+	return true
 }
 
 type deviceCodeResponse struct {
@@ -116,7 +135,7 @@ func deviceFlow(clientID string) (*Auth, error) {
 func requestDeviceCode(clientID string) (*deviceCodeResponse, error) {
 	form := url.Values{
 		"client_id": {clientID},
-		"scopes":    {twitchScopes},
+		"scopes":    {strings.Join(twitchScopes, " ")},
 	}
 	resp, err := http.PostForm(twitchDeviceURL, form)
 	if err != nil {

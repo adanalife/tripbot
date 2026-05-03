@@ -41,6 +41,7 @@ type Model struct {
 	login     string
 	sessionID string
 	version   string
+	roles     Roles
 
 	notesBuf    string
 	commentMode bool
@@ -51,7 +52,7 @@ type Model struct {
 	width, height int
 }
 
-func NewModel(runner *Runner, log *Log, prior []Result, channel, bot, login, sessionID, version string) *Model {
+func NewModel(runner *Runner, log *Log, prior []Result, channel, bot, login, sessionID, version string, roles Roles) *Model {
 	m := &Model{
 		cmds:      Catalog,
 		included:  make([]bool, len(Catalog)),
@@ -63,6 +64,7 @@ func NewModel(runner *Runner, log *Log, prior []Result, channel, bot, login, ses
 		login:     login,
 		sessionID: sessionID,
 		version:   version,
+		roles:     roles,
 		state:     viewList,
 	}
 	for i := range m.included {
@@ -269,7 +271,28 @@ func (m *Model) stamp(r Result) Result {
 	if r.Version == "" {
 		r.Version = m.version
 	}
+	r.Admin = m.roles.Admin
+	r.Follower = m.roles.Follower
+	r.Subscriber = m.roles.Subscriber
 	return r
+}
+
+func (m *Model) rolesBadge() string {
+	flag := func(label string, on, known bool) string {
+		switch {
+		case !known:
+			return styleManual.Render(label + "?")
+		case on:
+			return stylePass.Render(label)
+		default:
+			return styleDim.Render(label)
+		}
+	}
+	return strings.Join([]string{
+		flag("admin", m.roles.Admin, true),
+		flag("follower", m.roles.Follower, m.roles.FollowerKnown),
+		flag("subscriber", m.roles.Subscriber, m.roles.SubscriberKnown),
+	}, " · ")
 }
 
 func (m *Model) indexOf(trigger string) int {
@@ -324,6 +347,8 @@ func (m *Model) viewList() string {
 	b.WriteString(styleHeader.Render("streamtest — tripbot command coverage"))
 	b.WriteString("\n")
 	b.WriteString(styleDim.Render(fmt.Sprintf("as %s in #%s · listening for %s", m.login, m.channel, m.bot)))
+	b.WriteString("\n")
+	b.WriteString("roles: " + m.rolesBadge())
 	b.WriteString("\n\n")
 	for i, cmd := range m.cmds {
 		mark := " "

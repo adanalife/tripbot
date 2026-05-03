@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime/debug"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -34,6 +35,8 @@ func main() {
 		log.Fatalf("twitch oauth: %v", err)
 	}
 
+	roles := lookupRoles(auth, *clientID, *channel)
+
 	prior, err := LoadResults(*logPath)
 	if err != nil {
 		log.Fatalf("read existing log %s: %v", *logPath, err)
@@ -50,10 +53,43 @@ func main() {
 	}
 	defer runner.Close()
 
-	model := NewModel(runner, sessionLog, prior, *channel, *botUser, auth.Login, newSessionID(), buildVersion())
+	model := NewModel(runner, sessionLog, prior, *channel, *botUser, auth.Login, newSessionID(), buildVersion(), roles)
 	if _, err := tea.NewProgram(model, tea.WithAltScreen()).Run(); err != nil {
 		log.Fatalf("tui: %v", err)
 	}
+}
+
+type Roles struct {
+	Admin             bool
+	Follower          bool
+	Subscriber        bool
+	FollowerKnown     bool
+	SubscriberKnown   bool
+}
+
+func lookupRoles(auth *Auth, clientID, channel string) Roles {
+	r := Roles{
+		Admin: strings.EqualFold(auth.Login, channel),
+	}
+	hx := &helixClient{clientID: clientID, accessToken: auth.AccessToken}
+	broadcasterID, err := hx.UserID(channel)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not resolve broadcaster id for %q: %v\n", channel, err)
+		return r
+	}
+	if isF, err := hx.IsFollower(auth.UserID, broadcasterID); err == nil {
+		r.Follower = isF
+		r.FollowerKnown = true
+	} else {
+		fmt.Fprintf(os.Stderr, "warning: follower check failed: %v\n", err)
+	}
+	if isS, err := hx.IsSubscriber(auth.UserID, broadcasterID); err == nil {
+		r.Subscriber = isS
+		r.SubscriberKnown = true
+	} else {
+		fmt.Fprintf(os.Stderr, "warning: subscriber check failed: %v\n", err)
+	}
+	return r
 }
 
 func envOr(key, fallback string) string {

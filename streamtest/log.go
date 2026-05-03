@@ -19,10 +19,13 @@ type Result struct {
 	BotReply  string    `json:"bot_reply,omitempty"`
 	Notes     string    `json:"notes,omitempty"`
 	LatencyMs int64     `json:"latency_ms,omitempty"`
-	Login     string    `json:"login,omitempty"`
-	Channel   string    `json:"channel,omitempty"`
-	Bot       string    `json:"bot,omitempty"`
-	Version   string    `json:"streamtest_version,omitempty"`
+	Login      string `json:"login,omitempty"`
+	Channel    string `json:"channel,omitempty"`
+	Bot        string `json:"bot,omitempty"`
+	Version    string `json:"streamtest_version,omitempty"`
+	Admin      bool   `json:"admin,omitempty"`
+	Follower   bool   `json:"follower,omitempty"`
+	Subscriber bool   `json:"subscriber,omitempty"`
 }
 
 type Log struct {
