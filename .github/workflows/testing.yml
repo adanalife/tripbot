@@ -7,31 +7,6 @@ on:
     tags:
       - v*
 
-env:
-  # `testing` (not `test`) — TripbotConfig.IsTesting() compares against the
-  # full word, so packages with init() shortcuts won't bail otherwise.
-  ENV: testing
-  # Required by package init() functions; values are placeholders so the
-  # binaries can boot in CI without reaching real services.
-  TWILIO_ACCT_SID: test
-  TWILIO_AUTH_TOKEN: test
-  TWILIO_FROM_NUM: test
-  TWILIO_TO_NUM: test
-  CHANNEL_NAME: test
-  BOT_USERNAME: test
-  EXTERNAL_URL: http://localhost
-  GOOGLE_APPS_PROJECT_ID: test
-  GOOGLE_MAPS_API_KEY: test
-  TRIPBOT_HTTP_AUTH: test
-  VLC_SERVER_HOST: http://localhost:8081
-  VIDEO_DIR: /tmp
-  RUN_DIR: /tmp
-  DATABASE_USER: test
-  DATABASE_DB: test
-  DATABASE_HOST: localhost
-  TWITCH_AUTH_TOKEN: test
-  TWITCH_CLIENT_ID: test
-  TWITCH_CLIENT_SECRET: test
 jobs:
   test:
     strategy:
@@ -42,11 +17,11 @@ jobs:
     runs-on: ${{ matrix.platform }}
 
     steps:
+    - uses: actions/checkout@v4
     - name: Install Golang
       uses: actions/setup-go@v5
       with:
         go-version: ${{ matrix.go-version }}
-    - uses: actions/checkout@v4
     - name: Restore Cache
       uses: actions/cache@v4
       with:
@@ -57,6 +32,10 @@ jobs:
     - name: Install Dependencies (linux)
       if: matrix.platform == 'ubuntu-latest'
       run: sudo apt update && sudo apt install -y --no-install-recommends libvlc-dev
+    # Source the same .env.testing that bin/devenv-test loads locally,
+    # so package init() functions don't log.Fatalf on missing vars.
+    - name: Load .env.testing
+      run: grep -E '^[A-Z][A-Z0-9_]*=' .env.testing >> "$GITHUB_ENV"
     - name: Run Go Tests
       run: go test ./...
     - name: Coverage Summary

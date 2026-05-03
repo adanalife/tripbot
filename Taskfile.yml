@@ -1,16 +1,9 @@
 version: '3'
 
-vars:
-  GO_IMAGE: golang:1.21-bookworm
-  DOCKER_RUN: >-
-    docker run --rm
-    -v {{.ROOT_DIR}}:/src
-    -v tripbot-gomod-cache:/go/pkg/mod
-    -v tripbot-gobuild-cache:/root/.cache/go-build
-    --env-file {{.ROOT_DIR}}/script/test.env
-    -w /src
-    {{.GO_IMAGE}}
-  DOCKER_BOOT: 'apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq libvlc-dev >/dev/null 2>&1'
+# All targets shell into the `test` service defined in
+# infra/docker/docker-compose.testing.yml via bin/devenv-test, which
+# loads .env.testing automatically. libvlc-dev is installed at startup
+# of each run; module/build caches are persisted in named volumes.
 
 tasks:
   default:
@@ -18,40 +11,29 @@ tasks:
     cmds:
       - task --list
 
-  cache:init:
-    desc: Create the persistent docker volumes used to cache Go module/build output
-    cmds:
-      - docker volume create tripbot-gomod-cache
-      - docker volume create tripbot-gobuild-cache
-
   test:
-    desc: Run all unit tests in Docker (libvlc-dev required)
+    desc: Run all unit tests
     cmds:
-      - "{{.DOCKER_RUN}} bash -c '{{.DOCKER_BOOT}} && go test ./...'"
+      - bin/devenv-test run --rm test bash -c 'apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq libvlc-dev >/dev/null 2>&1 && go test ./...'
 
   test:cover:
     desc: Run tests with coverage; prints per-function and total coverage
     cmds:
-      - "{{.DOCKER_RUN}} bash -c '{{.DOCKER_BOOT}} && go test -coverprofile=coverage.out ./... && go tool cover -func=coverage.out'"
+      - bin/devenv-test run --rm test bash -c 'apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq libvlc-dev >/dev/null 2>&1 && go test -coverprofile=coverage.out ./... && go tool cover -func=coverage.out'
 
   test:cover:html:
     desc: Generate HTML coverage report at coverage.html
     cmds:
-      - "{{.DOCKER_RUN}} bash -c '{{.DOCKER_BOOT}} && go test -coverprofile=coverage.out ./... && go tool cover -html=coverage.out -o coverage.html'"
+      - bin/devenv-test run --rm test bash -c 'apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq libvlc-dev >/dev/null 2>&1 && go test -coverprofile=coverage.out ./... && go tool cover -html=coverage.out -o coverage.html'
       - 'echo "Open coverage.html in your browser"'
 
   test:race:
     desc: Run tests with the race detector (slower; surfaces data races)
     cmds:
-      - "{{.DOCKER_RUN}} bash -c '{{.DOCKER_BOOT}} && go test -race ./...'"
-
-  build:
-    desc: Build both binaries inside the Docker image (CGO_ENABLED=0)
-    cmds:
-      - "{{.DOCKER_RUN}} bash -c '{{.DOCKER_BOOT}} && CGO_ENABLED=0 go build -o /tmp/tripbot ./cmd/tripbot && CGO_ENABLED=0 go build -o /tmp/vlc-server ./cmd/vlc-server'"
+      - bin/devenv-test run --rm test bash -c 'apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq libvlc-dev >/dev/null 2>&1 && go test -race ./...'
 
   shell:
     desc: Open an interactive Go-toolchain shell with libvlc-dev installed
     interactive: true
     cmds:
-      - "docker run --rm -it -v {{.ROOT_DIR}}:/src -v tripbot-gomod-cache:/go/pkg/mod -v tripbot-gobuild-cache:/root/.cache/go-build --env-file {{.ROOT_DIR}}/script/test.env -w /src {{.GO_IMAGE}} bash -c '{{.DOCKER_BOOT}} && bash'"
+      - bin/devenv-test run --rm test bash -c 'apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq libvlc-dev >/dev/null 2>&1 && bash'

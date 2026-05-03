@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+
+# bin/devenv-test mirrors bin/devenv but layers the testing compose
+# override (which adds a `test` service running golang:1.21-bookworm).
+# Used by Taskfile.yml; can also be invoked directly:
+#
+#   bin/devenv-test run --rm test bash -c 'go test ./...'
+#   bin/devenv-test run --rm test bash -c 'go test -race ./...'
+
+# enable buildkit
+export COMPOSE_DOCKER_CLI_BUILD=1
+export DOCKER_BUILDKIT=1
+
+docker compose \
+  --project-directory . \
+  --env-file infra/docker/env.docker \
+  -f infra/docker/docker-compose.yml \
+  -f infra/docker/docker-compose.testing.yml \
+  "$@"
