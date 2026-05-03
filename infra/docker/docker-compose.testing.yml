@@ -14,9 +14,10 @@ services:
       ENV: testing
 
   # `test` is a one-shot Go toolchain container for running `go test`
-  # outside the running stack. Invoked via `bin/devenv-test run --rm test ...`
-  # (see Taskfile.yml). libvlc-dev is installed at runtime to match the
-  # image used by .github/workflows/testing.yml.
+  # outside the running stack. Invoked via `DEVENV_OVERLAY=testing
+  # bin/devenv run --rm test ...` (see Taskfile.yml). libvlc-dev is
+  # installed at runtime to match the image used by
+  # .github/workflows/testing.yml.
   test:
     image: golang:1.21-bookworm
     working_dir: /src

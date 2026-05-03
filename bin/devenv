@@ -1,5 +1,13 @@
 #!/usr/bin/env bash
 
+# bin/devenv wraps `docker compose` with the project-level overrides.
+# By default it layers docker-compose.development.yml; set
+# DEVENV_OVERLAY=testing to layer docker-compose.testing.yml instead
+# (used by Taskfile.yml to invoke the `test` service).
+#
+#   bin/devenv up --daemon
+#   DEVENV_OVERLAY=testing bin/devenv run --rm test bash -c 'go test ./...'
+
 # enable buildkit
 # https://www.docker.com/blog/faster-builds-in-compose-thanks-to-buildkit-support/
 export COMPOSE_DOCKER_CLI_BUILD=1
@@ -12,8 +20,11 @@ export DOCKER_BUILDKIT=1
 #  open -a Docker
 #fi
 
-# pre-populate the bash_history
-if [ ! -f .bash_history.remote ]; then
+OVERLAY="${DEVENV_OVERLAY:-development}"
+
+# pre-populate the bash_history (only useful for the dev stack's
+# long-lived containers; skip for one-shot test runs)
+if [ "$OVERLAY" = "development" ] && [ ! -f .bash_history.remote ]; then
   echo "supervisorctl status" >> .bash_history.remote
   echo "vim /var/log/syslog" >> .bash_history.remote
 fi
@@ -22,5 +33,5 @@ docker compose \
   --project-directory . \
   --env-file infra/docker/env.docker \
   -f infra/docker/docker-compose.yml \
-  -f infra/docker/docker-compose.development.yml \
+  -f "infra/docker/docker-compose.${OVERLAY}.yml" \
   "$@"
