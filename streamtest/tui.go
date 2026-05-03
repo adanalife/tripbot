@@ -23,8 +23,6 @@ type runDoneMsg struct {
 	result Result
 }
 
-type runStartMsg struct{}
-
 type Model struct {
 	cmds     []Command
 	included []bool
@@ -32,9 +30,6 @@ type Model struct {
 	cursor   int
 	state    viewState
 	prevView viewState
-
-	queue   []int
-	queuePos int
 
 	promptIdx int
 
@@ -44,6 +39,9 @@ type Model struct {
 	channel string
 	bot     string
 	login   string
+
+	notesBuf    string
+	commentMode bool
 
 	status string
 	err    error
@@ -81,8 +79,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case tea.KeyMsg:
 		return m.handleKey(msg)
-	case runStartMsg:
-		return m, m.runNext()
 	case runDoneMsg:
 		return m.handleRunDone(msg.result)
 	}
@@ -137,25 +133,19 @@ func (m *Model) keyList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		for i := range m.included {
 			m.included[i] = false
 		}
-	case "enter":
-		m.queue = m.queue[:0]
-		for i := m.cursor; i < len(m.cmds); i++ {
-			if m.included[i] {
-				m.queue = append(m.queue, i)
-			}
-		}
-		if len(m.queue) == 0 {
-			m.status = "nothing to run from cursor"
+	case "enter", "r":
+		if !m.included[m.cursor] {
+			m.status = "row not included; press space to include"
 			return m, nil
 		}
-		m.queuePos = 0
+		m.status = ""
+		m.notesBuf = ""
+		m.commentMode = false
 		m.state = viewRunning
-		return m, func() tea.Msg { return runStartMsg{} }
-	case "r":
-		m.queue = []int{m.cursor}
-		m.queuePos = 0
-		m.state = viewRunning
-		return m, func() tea.Msg { return runStartMsg{} }
+		return m, m.runIdx(m.cursor)
+	case "tab":
+		m.prevView = viewList
+		m.state = viewSummary
 	case "?":
 		m.prevView = viewList
 		m.state = viewHelp
@@ -164,52 +154,81 @@ func (m *Model) keyList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) keyPrompt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	cmd := m.cmds[m.promptIdx]
-	prior, ok := m.results[cmd.Trigger]
-	if !ok {
-		prior = Result{Trigger: cmd.Trigger}
-	}
-	switch msg.String() {
-	case "y":
-		prior.Status = "manual-pass"
-	case "n":
-		prior.Status = "manual-fail"
-	case "s":
-		prior.Status = "skip"
-	case "r":
-		m.state = viewRunning
-		return m, m.runIdx(m.promptIdx)
-	default:
+	if m.commentMode {
+		switch msg.Type {
+		case tea.KeyEsc, tea.KeyEnter:
+			m.commentMode = false
+		case tea.KeyBackspace, tea.KeyDelete:
+			if r := []rune(m.notesBuf); len(r) > 0 {
+				m.notesBuf = string(r[:len(r)-1])
+			}
+		case tea.KeySpace:
+			m.notesBuf += " "
+		case tea.KeyRunes:
+			m.notesBuf += string(msg.Runes)
+		}
 		return m, nil
 	}
-	m.results[cmd.Trigger] = prior
-	if m.log != nil {
-		_ = m.log.Append(prior)
+
+	cmd := m.cmds[m.promptIdx]
+	res, ok := m.results[cmd.Trigger]
+	if !ok {
+		res = Result{Trigger: cmd.Trigger}
 	}
-	m.queuePos++
-	m.state = viewRunning
-	return m, m.runNext()
+	finalize := func(status string) (tea.Model, tea.Cmd) {
+		res.Status = status
+		res.Notes = strings.TrimSpace(m.notesBuf)
+		m.results[cmd.Trigger] = res
+		if m.log != nil {
+			_ = m.log.Append(res)
+		}
+		m.notesBuf = ""
+		m.commentMode = false
+		m.advanceCursor()
+		m.state = viewList
+		return m, nil
+	}
+
+	switch msg.String() {
+	case "y":
+		return finalize("manual-pass")
+	case "n":
+		return finalize("manual-fail")
+	case "s":
+		return finalize("skip")
+	case "enter":
+		return finalize(res.Status)
+	case "r":
+		m.notesBuf = ""
+		m.commentMode = false
+		m.state = viewRunning
+		return m, m.runIdx(m.promptIdx)
+	case "c":
+		m.commentMode = true
+	case "esc":
+		m.notesBuf = ""
+		m.commentMode = false
+		m.state = viewList
+	case "q":
+		return m, tea.Quit
+	case "?":
+		m.prevView = viewPrompt
+		m.state = viewHelp
+	}
+	return m, nil
 }
 
 func (m *Model) keySummary(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "q", "enter", "esc":
+	case "q":
 		return m, tea.Quit
-	case "l":
+	case "esc", "l", "tab", "enter":
 		m.state = viewList
 	case "?":
 		m.prevView = viewSummary
 		m.state = viewHelp
 	}
 	return m, nil
-}
-
-func (m *Model) runNext() tea.Cmd {
-	if m.queuePos >= len(m.queue) {
-		m.state = viewSummary
-		return nil
-	}
-	return m.runIdx(m.queue[m.queuePos])
 }
 
 func (m *Model) runIdx(idx int) tea.Cmd {
@@ -221,28 +240,21 @@ func (m *Model) runIdx(idx int) tea.Cmd {
 }
 
 func (m *Model) handleRunDone(res Result) (tea.Model, tea.Cmd) {
-	cmd := m.findCmd(res.Trigger)
 	m.results[res.Trigger] = res
-	if m.log != nil {
-		_ = m.log.Append(res)
-	}
-	needsManual := res.Status == "pending-manual" || (cmd != nil && cmd.OnscreenEffect != "" && res.Status == "pass")
-	if needsManual {
-		m.promptIdx = m.indexOf(res.Trigger)
-		m.state = viewPrompt
-		return m, nil
-	}
-	m.queuePos++
-	return m, m.runNext()
+	m.promptIdx = m.indexOf(res.Trigger)
+	m.notesBuf = ""
+	m.commentMode = false
+	m.state = viewPrompt
+	return m, nil
 }
 
-func (m *Model) findCmd(trigger string) *Command {
-	for i := range m.cmds {
-		if m.cmds[i].Trigger == trigger {
-			return &m.cmds[i]
+func (m *Model) advanceCursor() {
+	for i := m.cursor + 1; i < len(m.cmds); i++ {
+		if m.included[i] {
+			m.cursor = i
+			return
 		}
 	}
-	return nil
 }
 
 func (m *Model) indexOf(trigger string) int {
@@ -320,14 +332,11 @@ func (m *Model) viewList() string {
 		b.WriteString("\n")
 	}
 	b.WriteString("\n")
-	switch m.state {
-	case viewRunning:
-		if m.queuePos < len(m.queue) {
-			cur := m.cmds[m.queue[m.queuePos]]
-			b.WriteString(styleManual.Render(fmt.Sprintf("running %s (%d/%d)…", cur.Trigger, m.queuePos+1, len(m.queue))))
-		}
-	default:
-		b.WriteString(styleDim.Render("↑/↓ move · space toggle · enter run from cursor · r run focused · a all · n none · ? help · q quit"))
+	if m.state == viewRunning {
+		cur := m.cmds[m.cursor]
+		b.WriteString(styleManual.Render(fmt.Sprintf("running %s …", cur.Trigger)))
+	} else {
+		b.WriteString(styleDim.Render("↑/↓ move · space toggle · enter run focused · a all · n none · tab summary · ? help · q quit"))
 	}
 	if m.status != "" {
 		b.WriteString("\n" + styleDim.Render(m.status))
@@ -339,18 +348,29 @@ func (m *Model) viewPrompt() string {
 	cmd := m.cmds[m.promptIdx]
 	res := m.results[cmd.Trigger]
 	var b strings.Builder
-	b.WriteString(styleHeader.Render(fmt.Sprintf("manual check: %s", cmd.Trigger)))
+	b.WriteString(styleHeader.Render(fmt.Sprintf("review: %s", cmd.Trigger)))
 	b.WriteString("\n\n")
+	b.WriteString(fmt.Sprintf("auto status: %s %s\n", statusGlyph(res.Status), styleDim.Render(res.Status)))
 	if cmd.OnscreenEffect != "" {
 		b.WriteString(fmt.Sprintf("expected onscreen effect: %s\n", styleManual.Render(cmd.OnscreenEffect)))
 	}
 	if res.BotReply != "" {
 		b.WriteString(fmt.Sprintf("bot replied: %q\n", res.BotReply))
 	} else {
-		b.WriteString(styleDim.Render("(no chat reply within timeout)\n"))
+		b.WriteString(styleDim.Render("(no chat reply within timeout)") + "\n")
 	}
-	b.WriteString("\nlook at OBS / VNC. did the effect render correctly?\n")
-	b.WriteString(styleDim.Render("y = pass · n = fail · s = skip · r = re-run"))
+	b.WriteString("\n")
+	if m.commentMode {
+		b.WriteString(styleManual.Render("notes (typing)") + ": " + m.notesBuf + "_\n")
+		b.WriteString("\n" + styleDim.Render("type to edit · esc/enter exit comment mode"))
+	} else {
+		notesShown := m.notesBuf
+		if notesShown == "" {
+			notesShown = styleDim.Render("(none — press c to add)")
+		}
+		b.WriteString(styleDim.Render("notes") + ": " + notesShown + "\n")
+		b.WriteString("\n" + styleDim.Render("enter accept · y pass · n fail · s skip · c comment · r re-run · esc back · q quit"))
+	}
 	return b.String()
 }
 
@@ -399,28 +419,35 @@ func (m *Model) viewSummary() string {
 			styleDim.Render("--"), bk.missing,
 		))
 	}
-	b.WriteString("\n" + styleDim.Render("l back to list · q quit · ? help"))
+	b.WriteString("\n" + styleDim.Render("esc/l/tab/enter back to list · q quit · ? help"))
 	return b.String()
 }
 
 func (m *Model) viewHelp() string {
 	help := []string{
-		"keys",
+		"list view",
 		"  ↑/k, ↓/j     move cursor",
 		"  g / G        first / last",
 		"  space        toggle include for row",
 		"  a / n        include all / none",
-		"  enter        run included rows from cursor",
-		"  r            run only the focused row",
+		"  enter, r     run focused row",
+		"  tab          jump to summary",
 		"  ?            help",
 		"  q, ctrl+c    quit",
 		"",
-		"manual prompt",
-		"  y / n        pass / fail",
+		"review screen (after each run)",
+		"  enter        accept auto status, advance",
+		"  y / n        override as pass / fail",
 		"  s            skip",
-		"  r            re-run",
+		"  c            edit notes (type, esc/enter to exit)",
+		"  r            re-run this command",
+		"  esc          back to list without saving",
 		"",
-		"any key returns to previous screen.",
+		"summary view",
+		"  esc / l / tab / enter   back to list",
+		"  q                       quit",
+		"",
+		"any key returns to previous screen from help.",
 	}
 	return styleHeader.Render("help") + "\n\n" + strings.Join(help, "\n")
 }
