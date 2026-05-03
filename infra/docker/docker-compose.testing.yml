@@ -15,10 +15,13 @@ services:
 
   # `test` is a one-shot Go toolchain container for running `go test`
   # outside the running stack. Invoked via `ENV=testing bin/devenv
-  # run --rm test ...` (see Taskfile.yml). libvlc-dev is installed at
-  # runtime to match the image used by .github/workflows/testing.yml.
+  # run --rm test ...` (see Taskfile.yml). The image bakes in libvlc-dev
+  # so every test run doesn't reinstall it.
   test:
-    image: golang:1.21-bookworm
+    image: adanalife/tripbot-test
+    build:
+      context: .
+      dockerfile: infra/docker/test/Dockerfile
     working_dir: /src
     env_file:
       - ./.env.testing
@@ -26,10 +29,9 @@ services:
       - .:/src
       - tripbot-gomod-cache:/go/pkg/mod
       - tripbot-gobuild-cache:/root/.cache/go-build
-    # Default: install libvlc-dev (needed at link time) then run all tests.
-    # Overridable via `bin/devenv-test run --rm test <cmd>` — the Taskfile
-    # uses that to swap in -coverprofile / -race variants.
-    command: bash -c 'apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq libvlc-dev >/dev/null 2>&1 && go test ./...'
+    # Overridable via `ENV=testing bin/devenv run --rm test <cmd>` —
+    # the Taskfile uses that to swap in -coverprofile / -race variants.
+    command: go test ./...
 
 volumes:
   tripbot-gomod-cache:
