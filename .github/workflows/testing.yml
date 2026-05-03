@@ -7,32 +7,20 @@ on:
     tags:
       - v*
 
-env:
-  ENV: test
 jobs:
   test:
-    strategy:
-      matrix:
-        go-version:
-          - 1.21.x
-        platform: [ubuntu-latest]
-    runs-on: ${{ matrix.platform }}
-
+    runs-on: ubuntu-latest
     steps:
-    - name: Install Golang
-      uses: actions/setup-go@v5
-      with:
-        go-version: ${{ matrix.go-version }}
     - uses: actions/checkout@v4
-    - name: Restore Cache
-      uses: actions/cache@v4
+    - uses: arduino/setup-task@v2
       with:
-        path: ~/go/pkg/mod
-        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-go-
-    - name: Install Dependencies (linux)
-      if: matrix.platform == 'ubuntu-latest'
-      run: sudo apt update && sudo apt install -y --no-install-recommends libvlc-dev
-    - name: Run Go Tests
-      run: go test ./...
+        version: 3.x
+    # `task test:cover` runs the test service from
+    # infra/docker/docker-compose.testing.yml — same path used locally,
+    # so CI doesn't need its own Go toolchain or libvlc-dev install.
+    - name: Run tests with coverage
+      run: task test:cover | tee coverage.txt
+    - name: Coverage summary
+      run: |
+        echo "## Coverage" >> "$GITHUB_STEP_SUMMARY"
+        tail -1 coverage.txt >> "$GITHUB_STEP_SUMMARY"
