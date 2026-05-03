@@ -133,7 +133,7 @@ func connectToTwitch() {
 
 // gracefulShutdown catches CTRL-C and cleans up
 func gracefulShutdown() {
-	ctrlC := make(chan os.Signal)
+	ctrlC := make(chan os.Signal, 1)
 	signal.Notify(ctrlC, os.Interrupt, syscall.SIGTERM)
 
 	// wait for signal
