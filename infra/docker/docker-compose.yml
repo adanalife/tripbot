@@ -40,9 +40,13 @@ services:
       STREAM_KEY: "${STREAM_KEY:-}"
       DASHCAM_RTSP_URL: "${DASHCAM_RTSP_URL:-rtsp://vlc:8554/dashcam}"
     volumes:
-      # vlc-server writes onscreen state files; OBS reads them. Tripbot
-      # speaks HTTP to vlc-server and never touches this path. The OBS
-      # entrypoint seeds this from /opt/obs-dummy-defaults/ when empty.
+      # HACK: temporary workaround for OBS/VLC decoupling. Pre-split,
+      # vlc-server ran inside the OBS container and wrote onscreen state
+      # files (middle-text.txt, leaderboard.txt, etc.) to a local path
+      # OBS read directly. Now they're separate services, so we share a
+      # named volume to bridge the gap. The proper fix is to have OBS
+      # pull this state from vlc-server over HTTP instead of from disk —
+      # tracked in the tripbot vault TODO.
       - onscreens:/opt/data/run/
     restart: unless-stopped
 
@@ -69,7 +73,8 @@ services:
     volumes:
       - .:/go/src/github.com/adanalife/tripbot
       - ./assets/video:/opt/data/Dashcam/_all:ro
-      # paired with the obs service mount; vlc-server writes here, obs reads
+      # HACK: paired with the obs service mount above — see comment there.
+      # Bridges vlc-server's writes to OBS's reads after the container split.
       - onscreens:/opt/data/run/
     restart: unless-stopped
 
