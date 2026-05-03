@@ -12,11 +12,17 @@ import (
 
 type Result struct {
 	Timestamp time.Time `json:"ts"`
+	SessionID string    `json:"session_id,omitempty"`
 	Trigger   string    `json:"trigger"`
 	Params    string    `json:"params,omitempty"`
 	Status    string    `json:"status"`
 	BotReply  string    `json:"bot_reply,omitempty"`
 	Notes     string    `json:"notes,omitempty"`
+	LatencyMs int64     `json:"latency_ms,omitempty"`
+	Login     string    `json:"login,omitempty"`
+	Channel   string    `json:"channel,omitempty"`
+	Bot       string    `json:"bot,omitempty"`
+	Version   string    `json:"streamtest_version,omitempty"`
 }
 
 type Log struct {

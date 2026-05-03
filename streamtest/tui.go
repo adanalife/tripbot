@@ -36,9 +36,11 @@ type Model struct {
 	runner *Runner
 	log    *Log
 
-	channel string
-	bot     string
-	login   string
+	channel   string
+	bot       string
+	login     string
+	sessionID string
+	version   string
 
 	notesBuf    string
 	commentMode bool
@@ -49,17 +51,19 @@ type Model struct {
 	width, height int
 }
 
-func NewModel(runner *Runner, log *Log, prior []Result, channel, bot, login string) *Model {
+func NewModel(runner *Runner, log *Log, prior []Result, channel, bot, login, sessionID, version string) *Model {
 	m := &Model{
-		cmds:     Catalog,
-		included: make([]bool, len(Catalog)),
-		results:  map[string]Result{},
-		runner:   runner,
-		log:      log,
-		channel:  channel,
-		bot:      bot,
-		login:    login,
-		state:    viewList,
+		cmds:      Catalog,
+		included:  make([]bool, len(Catalog)),
+		results:   map[string]Result{},
+		runner:    runner,
+		log:       log,
+		channel:   channel,
+		bot:       bot,
+		login:     login,
+		sessionID: sessionID,
+		version:   version,
+		state:     viewList,
 	}
 	for i := range m.included {
 		m.included[i] = true
@@ -180,7 +184,7 @@ func (m *Model) keyPrompt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		res.Notes = strings.TrimSpace(m.notesBuf)
 		m.results[cmd.Trigger] = res
 		if m.log != nil {
-			_ = m.log.Append(res)
+			_ = m.log.Append(m.stamp(res))
 		}
 		m.notesBuf = ""
 		m.commentMode = false
@@ -255,6 +259,17 @@ func (m *Model) advanceCursor() {
 			return
 		}
 	}
+}
+
+func (m *Model) stamp(r Result) Result {
+	r.SessionID = m.sessionID
+	r.Login = m.login
+	r.Channel = m.channel
+	r.Bot = m.bot
+	if r.Version == "" {
+		r.Version = m.version
+	}
+	return r
 }
 
 func (m *Model) indexOf(trigger string) int {

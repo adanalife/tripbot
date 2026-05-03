@@ -84,6 +84,7 @@ func (r *Runner) Run(cmd Command, params string) Result {
 	}()
 
 	res := Result{Trigger: cmd.Trigger, Params: params}
+	start := time.Now()
 	r.client.Say(r.channel, line)
 
 	timer := time.NewTimer(r.timeout)
@@ -92,6 +93,7 @@ func (r *Runner) Run(cmd Command, params string) Result {
 	case msg := <-ch:
 		res.Status = "pass"
 		res.BotReply = msg.Message
+		res.LatencyMs = time.Since(start).Milliseconds()
 	case <-timer.C:
 		if cmd.ExpectsBotReply {
 			res.Status = "timeout"
