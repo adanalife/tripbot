@@ -73,7 +73,7 @@ services:
     restart: unless-stopped
 
   db:
-    image: postgres:13
+    image: postgres:16-alpine
     restart: always
     ports:
       - "5432"
@@ -81,9 +81,8 @@ services:
       POSTGRES_PASSWORD: "${DATABASE_PASS}"
       POSTGRES_USER: "${DATABASE_USER}"
       POSTGRES_DB: "${DATABASE_DB}"
-    # volumes:
-    #   - ./infra/docker/init.sql:/docker-entrypoint-initdb.d/init.sql
-    #   - ./tmp/data:/var/lib/postgresql/data
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
 
   migrate:
     image: migrate/migrate
@@ -104,8 +103,12 @@ services:
       - infra/docker/env.docker
     depends_on:
       - migrate
+    working_dir: /go/src/github.com/adanalife/tripbot
     entrypoint: bash -c "infra/docker/bin/seed-db.sh"
     #TODO: this can be removed once the script is baked into the image
     volumes:
       - .:/go/src/github.com/adanalife/tripbot
     restart: on-failure
+
+volumes:
+  postgres_data:
