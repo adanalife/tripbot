@@ -36,13 +36,17 @@ var possibleLeftMessages = []string{
 func InitLeftRotator() {
 	log.Println("Creating left rotator onscreen")
 	LeftRotator = New(leftRotatorFile)
+	// Show a first message synchronously so the OBS browser source has
+	// content to render the moment it polls — otherwise there's a brief
+	// race where the rotator is empty until the goroutine schedules.
+	LeftRotator.Show(leftRotatorContent())
 	go leftRotatorLoop()
 }
 
 func leftRotatorLoop() {
 	for { // forever
-		LeftRotator.Show(leftRotatorContent())
 		time.Sleep(time.Duration(leftRotatorUpdateFrequency))
+		LeftRotator.Show(leftRotatorContent())
 	}
 }
 
