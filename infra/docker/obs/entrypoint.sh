@@ -36,6 +36,13 @@ rm -f /tmp/.X11-unix/X0 /tmp/.X0-lock
 Xvfb "$DISPLAY" -screen 0 1920x1200x24 &
 sleep 1
 
+mkdir -p "$HOME/.fluxbox"
+cat > "$HOME/.fluxbox/apps" <<'EOF'
+[app] (class=obs)
+  [Position] (CENTER)	{0 0}
+[end]
+EOF
+
 fluxbox &
 sleep 1
 
