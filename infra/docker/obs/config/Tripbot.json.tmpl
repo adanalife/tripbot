@@ -404,7 +404,7 @@
       "enabled": true,
       "flags": 0,
       "hotkeys": {},
-      "id": "image_source",
+      "id": "browser_source",
       "mixers": 0,
       "monitoring_type": 0,
       "muted": false,
@@ -416,11 +416,17 @@
       "push-to-talk": false,
       "push-to-talk-delay": 0,
       "settings": {
-        "file": "/opt/data/run/GPS.png-live",
-        "unload": false
+        "url": "${ONSCREENS_URL_BASE}/onscreens/render/gps",
+        "width": 256,
+        "height": 256,
+        "fps_custom": false,
+        "reroute_audio": false,
+        "shutdown": false,
+        "restart_when_active": false,
+        "css": ""
       },
       "sync": 0,
-      "versioned_id": "image_source",
+      "versioned_id": "browser_source",
       "volume": 1
     },
     {
@@ -430,7 +436,7 @@
       "enabled": true,
       "flags": 0,
       "hotkeys": {},
-      "id": "image_source",
+      "id": "browser_source",
       "mixers": 0,
       "monitoring_type": 0,
       "muted": false,
@@ -442,11 +448,17 @@
       "push-to-talk": false,
       "push-to-talk-delay": 0,
       "settings": {
-        "file": "/opt/data/run/flag.png-live",
-        "unload": true
+        "url": "${ONSCREENS_URL_BASE}/onscreens/render/flag",
+        "width": 300,
+        "height": 200,
+        "fps_custom": false,
+        "reroute_audio": false,
+        "shutdown": false,
+        "restart_when_active": false,
+        "css": ""
       },
       "sync": 0,
-      "versioned_id": "image_source",
+      "versioned_id": "browser_source",
       "volume": 1
     },
     {
@@ -456,7 +468,7 @@
       "enabled": true,
       "flags": 0,
       "hotkeys": {},
-      "id": "text_ft2_source",
+      "id": "browser_source",
       "mixers": 0,
       "monitoring_type": 0,
       "muted": false,
@@ -468,24 +480,17 @@
       "push-to-talk": false,
       "push-to-talk-delay": 0,
       "settings": {
-        "color1": 4294967295,
-        "color2": 4288059030,
-        "custom_width": 10,
-        "drop_shadow": false,
-        "font": {
-          "face": "Trebuchet MS",
-          "flags": 0,
-          "size": 28,
-          "style": "Regular"
-        },
-        "from_file": true,
-        "outline": false,
-        "text": "Don't forget to follow :)",
-        "text_file": "/opt/data/run/right-message.txt",
-        "word_wrap": true
+        "url": "${ONSCREENS_URL_BASE}/onscreens/render/right-message",
+        "width": 800,
+        "height": 40,
+        "fps_custom": false,
+        "reroute_audio": false,
+        "shutdown": false,
+        "restart_when_active": false,
+        "css": ""
       },
       "sync": 0,
-      "versioned_id": "text_ft2_source_v2",
+      "versioned_id": "browser_source",
       "volume": 1
     },
     {
@@ -495,7 +500,7 @@
       "enabled": true,
       "flags": 0,
       "hotkeys": {},
-      "id": "text_ft2_source",
+      "id": "browser_source",
       "mixers": 0,
       "monitoring_type": 0,
       "muted": false,
@@ -507,21 +512,17 @@
       "push-to-talk": false,
       "push-to-talk-delay": 0,
       "settings": {
-        "color1": 4294967295,
-        "color2": 4288059030,
-        "font": {
-          "face": "Trebuchet MS",
-          "flags": 0,
-          "size": 28,
-          "style": "Regular"
-        },
-        "from_file": true,
-        "outline": false,
-        "text": "",
-        "text_file": "/opt/data/run/left-message.txt"
+        "url": "${ONSCREENS_URL_BASE}/onscreens/render/left-message",
+        "width": 800,
+        "height": 40,
+        "fps_custom": false,
+        "reroute_audio": false,
+        "shutdown": false,
+        "restart_when_active": false,
+        "css": ""
       },
       "sync": 0,
-      "versioned_id": "text_ft2_source_v2",
+      "versioned_id": "browser_source",
       "volume": 1
     },
     {
@@ -531,7 +532,7 @@
       "enabled": true,
       "flags": 0,
       "hotkeys": {},
-      "id": "text_ft2_source",
+      "id": "browser_source",
       "mixers": 0,
       "monitoring_type": 0,
       "muted": false,
@@ -543,22 +544,17 @@
       "push-to-talk": false,
       "push-to-talk-delay": 0,
       "settings": {
-        "color1": 4294967295,
-        "color2": 4288059030,
-        "drop_shadow": false,
-        "font": {
-          "face": "Trebuchet MS",
-          "flags": 0,
-          "size": 18,
-          "style": "Regular"
-        },
-        "from_file": true,
-        "outline": false,
-        "text": "",
-        "text_file": "/opt/data/run/leaderboard.txt"
+        "url": "${ONSCREENS_URL_BASE}/onscreens/render/leaderboard",
+        "width": 400,
+        "height": 320,
+        "fps_custom": false,
+        "reroute_audio": false,
+        "shutdown": false,
+        "restart_when_active": false,
+        "css": ""
       },
       "sync": 0,
-      "versioned_id": "text_ft2_source_v2",
+      "versioned_id": "browser_source",
       "volume": 1
     },
     {
@@ -568,7 +564,7 @@
       "enabled": true,
       "flags": 0,
       "hotkeys": {},
-      "id": "text_ft2_source",
+      "id": "browser_source",
       "mixers": 0,
       "monitoring_type": 0,
       "muted": false,
@@ -580,22 +576,17 @@
       "push-to-talk": false,
       "push-to-talk-delay": 0,
       "settings": {
-        "color1": 4294967295,
-        "color2": 4288059030,
-        "drop_shadow": false,
-        "font": {
-          "face": "Trebuchet MS",
-          "flags": 0,
-          "size": 18,
-          "style": "Regular"
-        },
-        "from_file": true,
-        "outline": false,
-        "text": "",
-        "text_file": "/opt/data/run/middle-text.txt"
+        "url": "${ONSCREENS_URL_BASE}/onscreens/render/middle-text",
+        "width": 1000,
+        "height": 60,
+        "fps_custom": false,
+        "reroute_audio": false,
+        "shutdown": false,
+        "restart_when_active": false,
+        "css": ""
       },
       "sync": 0,
-      "versioned_id": "text_ft2_source_v2",
+      "versioned_id": "browser_source",
       "volume": 1
     },
     {
@@ -605,7 +596,7 @@
       "enabled": true,
       "flags": 0,
       "hotkeys": {},
-      "id": "text_ft2_source",
+      "id": "browser_source",
       "mixers": 0,
       "monitoring_type": 0,
       "muted": false,
@@ -617,22 +608,17 @@
       "push-to-talk": false,
       "push-to-talk-delay": 0,
       "settings": {
-        "color1": 4294967295,
-        "color2": 4288059030,
-        "drop_shadow": true,
-        "font": {
-          "face": "Sans Serif",
-          "flags": 0,
-          "size": 72,
-          "style": ""
-        },
-        "from_file": true,
-        "outline": false,
-        "text": "",
-        "text_file": "/opt/data/run/timewarp.txt"
+        "url": "${ONSCREENS_URL_BASE}/onscreens/render/timewarp",
+        "width": 1000,
+        "height": 120,
+        "fps_custom": false,
+        "reroute_audio": false,
+        "shutdown": false,
+        "restart_when_active": false,
+        "css": ""
       },
       "sync": 0,
-      "versioned_id": "text_ft2_source_v2",
+      "versioned_id": "browser_source",
       "volume": 1
     },
     {
