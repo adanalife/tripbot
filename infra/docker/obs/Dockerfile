@@ -127,6 +127,13 @@ RUN echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula sele
 COPY --from=builder /opt/obs-install/ /usr/local/
 RUN ldconfig
 
+# CEF's chrome-sandbox helper has to be SUID-root so the obs-browser render
+# process can spawn its sandboxed renderer; cmake --install strips the SUID
+# bit on its way to /opt/obs-install. Without this, every browser_source
+# crashes at first navigation with TerminationStatus::LAUNCH_FAILED
+# (logged by OBS as `Webpage has crashed unexpectedly! Reason: '9'`).
+RUN find /usr/local -name chrome-sandbox -exec chmod 4755 {} +
+
 COPY infra/docker/obs/config/ /opt/obs/config/
 COPY infra/docker/obs/entrypoint.sh /opt/obs/entrypoint.sh
 COPY infra/docker/obs/healthcheck.sh /opt/obs/healthcheck.sh
