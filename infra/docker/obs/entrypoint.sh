@@ -36,6 +36,17 @@ rm -f /tmp/.X11-unix/X0 /tmp/.X0-lock
 Xvfb "$DISPLAY" -screen 0 1920x1200x24 &
 sleep 1
 
+# Pin the OBS main window to the center of the 1920x1200 Xvfb display via
+# fluxbox's apps file. Without this rule OBS opens at fluxbox's default
+# top-left corner, leaving most of the framebuffer empty in VNC. Match by
+# WM_CLASS=obs (stable across version/profile/scene title changes).
+mkdir -p "$HOME/.fluxbox"
+cat > "$HOME/.fluxbox/apps" <<'EOF'
+[app] (class=obs)
+  [Position] (CENTER)	{0 0}
+[end]
+EOF
+
 fluxbox &
 sleep 1
 
