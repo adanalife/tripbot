@@ -86,7 +86,7 @@ RUN cmake --install build_ubuntu --prefix /opt/obs-install
 
 
 # =============================================================================
-# Runtime: minimal Ubuntu 24.04 with the artefacts copied over from builder.
+# Runtime: minimal Ubuntu 24.04 with the artifacts copied over from builder.
 # =============================================================================
 FROM ubuntu:24.04
 
