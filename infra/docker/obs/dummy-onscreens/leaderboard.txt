@@ -1,6 +1,0 @@
-guess leaderboard
-1. dana       42
-2. tripbot    37
-3. someone    21
-4. anon       12
-5. lurker      4

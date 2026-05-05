@@ -27,13 +27,17 @@ var possibleRightMessages = []string{
 func InitRightRotator() {
 	log.Println("Creating right rotator onscreen")
 	RightRotator = New(rightRotatorFile)
+	// Show a first message synchronously so the OBS browser source has
+	// content to render the moment it polls — otherwise there's a brief
+	// race where the rotator is empty until the goroutine schedules.
+	RightRotator.Show(rightRotatorContent())
 	go rightRotatorLoop()
 }
 
 func rightRotatorLoop() {
 	for { // forever
-		RightRotator.Show(rightRotatorContent())
 		time.Sleep(time.Duration(rightRotatorUpdateFrequency))
+		RightRotator.Show(rightRotatorContent())
 	}
 }
 

@@ -1,21 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Seed /opt/data/run/ from baked defaults only when the named onscreens
-# volume is empty, so vlc-server's writes persist across restarts.
-RUN_DIR=/opt/data/run
-mkdir -p "$RUN_DIR"
-if [[ "${INCLUDE_DUMMY_ONSCREENS:-false}" == "true" && -d /opt/obs-dummy-defaults ]]; then
-  if [[ -z "$(ls -A "$RUN_DIR" 2>/dev/null)" ]]; then
-    echo "Seeding $RUN_DIR from /opt/obs-dummy-defaults"
-    cp -r /opt/obs-dummy-defaults/. "$RUN_DIR/"
-  fi
-fi
-
 OBS_HOME="${HOME:-/root}/.config/obs-studio"
 mkdir -p "$OBS_HOME/basic/profiles/Untitled" "$OBS_HOME/basic/scenes"
 
+# OBS 32 split the legacy global.ini in two: app-level settings stayed in
+# global.ini (BrowserHWAccel etc.) and user-preference settings moved to
+# user.ini. Seed both so OBS sees a complete config and never prompts about
+# migration.
 cp /opt/obs/config/global.ini "$OBS_HOME/global.ini"
+cp /opt/obs/config/user.ini   "$OBS_HOME/user.ini"
 cp /opt/obs/config/basic.ini  "$OBS_HOME/basic/profiles/Untitled/basic.ini"
 envsubst < /opt/obs/config/Tripbot.json.tmpl > "$OBS_HOME/basic/scenes/Tripbot.json"
 

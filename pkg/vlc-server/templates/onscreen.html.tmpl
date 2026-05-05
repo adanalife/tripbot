@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>onscreen / {{.Name}}</title>
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; width: 100%; background: transparent; overflow: hidden; }
+  body {
+    font-family: {{.FontCSS}};
+    font-size: {{.FontSizePx}}px;
+    color: {{.ColorCSS}};
+    {{if .DropShadow}}text-shadow: 2px 2px 4px rgba(0,0,0,0.7);{{end}}
+  }
+  #root.hidden { visibility: hidden; }
+  #root.text {
+    width: 100%; height: 100%;
+    display: flex; align-items: center; justify-content: center;
+    text-align: center; padding: 0 16px; box-sizing: border-box;
+    white-space: pre-wrap; word-wrap: break-word;
+  }
+  #root.image { width: 100%; height: 100%; }
+  #root.image img { width: 100%; height: 100%; object-fit: contain; display: block; }
+</style>
+</head>
+<body>
+{{if .IsImage}}
+<div id="root" class="image hidden" data-name="{{.Name}}" data-image="true"><img src="/onscreens/asset/{{.Name}}" alt=""></div>
+{{else}}
+<div id="root" class="text hidden" data-name="{{.Name}}" data-image="false"></div>
+{{end}}
+<script>
+(function () {
+  var root = document.getElementById('root');
+  var name = root.dataset.name;
+  var isImage = root.dataset.image === 'true';
+
+  function apply(snap) {
+    if (!snap || !snap.showing) {
+      root.classList.add('hidden');
+      return;
+    }
+    root.classList.remove('hidden');
+    if (!isImage) {
+      root.textContent = snap.content || '';
+    }
+  }
+
+  async function tick() {
+    try {
+      var r = await fetch('/onscreens/state.json', { cache: 'no-store' });
+      if (!r.ok) return;
+      var data = await r.json();
+      apply(data[name]);
+    } catch (e) {
+      // network blip — keep last state, retry on the next tick
+    }
+  }
+
+  tick();
+  setInterval(tick, 500);
+})();
+</script>
+</body>
+</html>

@@ -48,11 +48,15 @@ func Start() {
 	//TODO: add state variable
 	osc.HandleFunc("/flag/{action}", onscreensFlagHandler)
 	osc.HandleFunc("/gps/{action}", onscreensGpsHandler)
-	osc.HandleFunc("/gps/{action}", onscreensGpsHandler)
 	osc.HandleFunc("/leaderboard/{action}", onscreensLeaderboardHandler)
 	osc.HandleFunc("/middle/{action}", onscreensMiddleHandler)
-	osc.HandleFunc("/middle/{action}", onscreensMiddleHandler)
 	osc.HandleFunc("/timewarp/{action}", onscreensTimewarpHandler)
+	// browser-source feeds: state JSON, per-onscreen HTML pages, and image assets.
+	// These back the OBS browser_source entries in Tripbot.json.tmpl after the
+	// vlc<->obs file-share decoupling.
+	osc.HandleFunc("/state.json", onscreensStateHandler)
+	osc.HandleFunc("/render/{name}", onscreensRenderHandler)
+	osc.HandleFunc("/asset/{name}", onscreensAssetHandler)
 
 	// prometheus metrics endpoint
 	r.Path("/metrics").Handler(promhttp.Handler())
