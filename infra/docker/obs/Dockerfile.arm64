@@ -1,0 +1,144 @@
+# =============================================================================
+# Builder: compile obs-studio from source with CEF for arm64 browser_source.
+#
+# Why from source on arm64: Ubuntu 24.04 universe ships obs-studio without
+# CEF (the +dfsg suffix marks the DFSG-stripped build), so browser_source
+# registers as "Source ID not found" at scene load. The OBS PPA bundles CEF
+# but publishes amd64 only — no arm64 across any Ubuntu release. Building
+# from source against the official aarch64 CEF tarball is the only path to
+# browser sources on arm64. amd64 stays on the PPA build (see Dockerfile).
+#
+# References:
+#   - Build wiki: https://github.com/obsproject/obs-studio/wiki/Build-Instructions-For-Linux
+#   - aarch64 CEF: https://cdn-fastly.obsproject.com/downloads/cef_binary_6533_linux_aarch64_v6.tar.xz
+# =============================================================================
+FROM ubuntu:24.04 AS builder
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+ARG OBS_VERSION=32.1.2
+ARG CEF_VERSION=6533
+
+# Build-system + OBS dependencies, mirroring the Debian-based section of the
+# OBS Build-Instructions-For-Linux wiki page.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      cmake extra-cmake-modules ninja-build pkg-config \
+      clang clang-format build-essential curl ccache git ca-certificates \
+      xz-utils \
+      libavcodec-dev libavdevice-dev libavfilter-dev libavformat-dev libavutil-dev \
+      libswresample-dev libswscale-dev libx264-dev \
+      libcurl4-openssl-dev libmbedtls-dev \
+      libgl1-mesa-dev libjansson-dev \
+      libluajit-5.1-dev python3-dev \
+      libx11-dev libxcb-randr0-dev libxcb-shm0-dev libxcb-xinerama0-dev \
+      libxcb-composite0-dev libxcomposite-dev libxinerama-dev libxcb1-dev \
+      libx11-xcb-dev libxcb-xfixes0-dev \
+      swig libcmocka-dev libxss-dev libglvnd-dev libgles2-mesa-dev \
+      libwayland-dev librist-dev libsrt-openssl-dev \
+      libpci-dev libpipewire-0.3-dev libqrcodegencpp-dev \
+      uthash-dev libsimde-dev \
+      qt6-base-dev qt6-base-private-dev qt6-svg-dev qt6-wayland qt6-image-formats-plugins \
+      libasound2-dev libfdk-aac-dev libfontconfig-dev libfreetype-dev \
+      libjack-jackd2-dev libpulse-dev libsndio-dev libspeexdsp-dev \
+      libudev-dev libv4l-dev libva-dev libvlc-dev libdrm-dev \
+      nlohmann-json3-dev libwebsocketpp-dev libasio-dev \
+      # CEF link-time deps (chromium pulls in NSS, ATK, AT-SPI2, XDamage, etc.) \
+      libnss3-dev libatk1.0-dev libatk-bridge2.0-dev libatspi2.0-dev \
+      libxdamage-dev libxkbcommon-dev libcups2-dev libpango1.0-dev \
+      libxshmfence-dev libnspr4-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# CEF tarball pinned to aarch64; amd64 builds use the PPA in Dockerfile.
+WORKDIR /opt
+RUN curl -fsSL -o /tmp/cef.tar.xz \
+         "https://cdn-fastly.obsproject.com/downloads/cef_binary_${CEF_VERSION}_linux_aarch64_v6.tar.xz" \
+    && mkdir -p /opt/cef \
+    && tar xf /tmp/cef.tar.xz -C /opt/cef --strip-components=1 \
+    && rm /tmp/cef.tar.xz
+
+# OBS source must be cloned with submodules — the GitHub source tarball is
+# missing required files (per the build wiki).
+WORKDIR /src
+RUN git clone --depth=1 --branch="${OBS_VERSION}" --recurse-submodules --shallow-submodules \
+      https://github.com/obsproject/obs-studio.git \
+    && cd obs-studio && git log --oneline -1
+
+WORKDIR /src/obs-studio
+RUN cmake --preset ubuntu \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_INSTALL_PREFIX=/usr/local \
+    -DENABLE_BROWSER=ON \
+    -DCEF_ROOT_DIR=/opt/cef \
+    -DENABLE_AJA=OFF \
+    -DENABLE_NVENC=OFF \
+    -DENABLE_QSV11=OFF \
+    -DOBS_COMPILE_DEPRECATION_AS_WARNING=ON
+
+RUN cmake --build build_ubuntu --parallel
+RUN cmake --install build_ubuntu --prefix /opt/obs-install
+
+
+# =============================================================================
+# Runtime: minimal Ubuntu 24.04 with the artifacts copied over from builder.
+# =============================================================================
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# msttcorefonts wants EULA pre-acceptance for unattended install. Trebuchet MS
+# is used by some onscreen text scene-sources.
+RUN echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true" \
+      | debconf-set-selections \
+    && apt-get update && apt-get install -y --no-install-recommends \
+      xvfb x11vnc fluxbox tini gettext-base procps x11-utils \
+      ca-certificates dbus-x11 libgl1-mesa-dri \
+      fonts-dejavu-core ttf-mscorefonts-installer \
+      # OBS runtime deps (mirrors the build deps with -dev stripped) \
+      libavcodec60 libavdevice60 libavfilter9 libavformat60 libavutil58 \
+      libswresample4 libswscale7 libx264-164 \
+      libcurl4 libmbedtls14t64 libjansson4 \
+      libluajit-5.1-2 \
+      libpython3.12 \
+      libx11-6 libxcb1 libxcb-randr0 libxcb-shm0 libxcb-xinerama0 \
+      libxcb-composite0 libxcomposite1 libxinerama1 libxcb-xfixes0 \
+      libxss1 libglvnd0 libgles2 libwayland-client0 libwayland-egl1 \
+      librist4 libsrt1.5-openssl libpci3 libpipewire-0.3-0t64 \
+      libqrcodegencpp1 \
+      libqt6core6t64 libqt6gui6t64 libqt6widgets6t64 libqt6svg6 libqt6network6t64 \
+      libqt6dbus6t64 libqt6xml6t64 libqt6concurrent6t64 \
+      qt6-image-formats-plugins qt6-wayland \
+      libasound2t64 libfdk-aac2 libfontconfig1 libfreetype6 \
+      libjack-jackd2-0 libpulse0 libsndio7.0 libspeexdsp1 libudev1 \
+      libv4l-0t64 libva2 libvlc5 libdrm2 \
+      # CEF runtime deps (chromium needs these even headless) \
+      libnss3 libgbm1 libatk1.0-0t64 libatk-bridge2.0-0t64 libatspi2.0-0t64 \
+      libcups2t64 libxdamage1 libxkbcommon0 libxkbfile1 libexpat1 libpango-1.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy the compiled OBS install tree from the builder. cmake --install lays
+# out OBS + plugins under /opt/obs-install (mapped to /usr/local on the
+# runtime side). CEF runtime files are placed by obs-browser's install step.
+COPY --from=builder /opt/obs-install/ /usr/local/
+RUN ldconfig
+
+# CEF's chrome-sandbox helper has to be SUID-root so the obs-browser render
+# process can spawn its sandboxed renderer; cmake --install strips the SUID
+# bit on its way to /opt/obs-install. Without this, every browser_source
+# crashes at first navigation with TerminationStatus::LAUNCH_FAILED
+# (logged by OBS as `Webpage has crashed unexpectedly! Reason: '9'`).
+RUN find /usr/local -name chrome-sandbox -exec chmod 4755 {} +
+
+COPY infra/docker/obs/config/ /opt/obs/config/
+COPY infra/docker/obs/entrypoint.sh /opt/obs/entrypoint.sh
+COPY infra/docker/obs/healthcheck.sh /opt/obs/healthcheck.sh
+RUN chmod +x /opt/obs/entrypoint.sh /opt/obs/healthcheck.sh
+
+COPY assets/twitch-overlay-left.png assets/twitch-overlay-right.png /opt/tripbot/assets/
+
+EXPOSE 5900
+
+ENV VNC_PASSWD=123456
+
+HEALTHCHECK --interval=10s --timeout=3s --retries=3 CMD /opt/obs/healthcheck.sh
+
+ENTRYPOINT ["/usr/bin/tini", "--", "/opt/obs/entrypoint.sh"]

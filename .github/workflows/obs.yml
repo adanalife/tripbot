@@ -9,7 +9,22 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    name: build (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # amd64 uses the apt+PPA build (Dockerfile). Fast — install only.
+          - arch: amd64
+            runner: ubuntu-latest
+            arch_compose: ""
+          # arm64 uses the from-source build (Dockerfile.arm64). Slow —
+          # CEF download + cmake/ninja compile + install. Slot 60 minutes.
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            arch_compose: "-f infra/docker/docker-compose.arm64.yml"
     env:
       COMPOSE_DOCKER_CLI_BUILD: 1
       DOCKER_BUILDKIT: 1
@@ -23,6 +38,7 @@ jobs:
         docker compose \
           --project-directory . \
           -f infra/docker/docker-compose.yml \
+          ${{ matrix.arch_compose }} \
           -f infra/docker/docker-compose.testing.yml \
           -f infra/docker/docker-compose.github.yml \
           build obs
@@ -33,6 +49,7 @@ jobs:
           --project-directory . \
           --env-file infra/docker/env.docker \
           -f infra/docker/docker-compose.yml \
+          ${{ matrix.arch_compose }} \
           -f infra/docker/docker-compose.testing.yml \
           -f infra/docker/docker-compose.github.yml \
           up -d vlc
@@ -42,6 +59,7 @@ jobs:
         cid=$(docker compose \
           --project-directory . \
           -f infra/docker/docker-compose.yml \
+          ${{ matrix.arch_compose }} \
           -f infra/docker/docker-compose.testing.yml \
           -f infra/docker/docker-compose.github.yml \
           ps -q vlc)
@@ -62,6 +80,7 @@ jobs:
           --project-directory . \
           --env-file infra/docker/env.docker \
           -f infra/docker/docker-compose.yml \
+          ${{ matrix.arch_compose }} \
           -f infra/docker/docker-compose.testing.yml \
           -f infra/docker/docker-compose.github.yml \
           up -d obs
@@ -71,6 +90,7 @@ jobs:
         cid=$(docker compose \
           --project-directory . \
           -f infra/docker/docker-compose.yml \
+          ${{ matrix.arch_compose }} \
           -f infra/docker/docker-compose.testing.yml \
           -f infra/docker/docker-compose.github.yml \
           ps -q obs)
@@ -89,6 +109,7 @@ jobs:
         docker compose \
           --project-directory . \
           -f infra/docker/docker-compose.yml \
+          ${{ matrix.arch_compose }} \
           -f infra/docker/docker-compose.testing.yml \
           -f infra/docker/docker-compose.github.yml \
           logs vlc
@@ -99,6 +120,7 @@ jobs:
         docker compose \
           --project-directory . \
           -f infra/docker/docker-compose.yml \
+          ${{ matrix.arch_compose }} \
           -f infra/docker/docker-compose.testing.yml \
           -f infra/docker/docker-compose.github.yml \
           logs obs
@@ -110,6 +132,7 @@ jobs:
         docker compose \
           --project-directory . \
           -f infra/docker/docker-compose.yml \
+          ${{ matrix.arch_compose }} \
           -f infra/docker/docker-compose.testing.yml \
           -f infra/docker/docker-compose.github.yml \
           down
