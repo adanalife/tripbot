@@ -31,6 +31,27 @@ type Onscreen struct {
 	outputFile    string
 }
 
+// Snapshot is the JSON-serialisable view of an Onscreen used by the
+// browser-source render endpoints in pkg/vlc-server.
+type Snapshot struct {
+	Content   string `json:"content"`
+	IsShowing bool   `json:"showing"`
+	IsImage   bool   `json:"image"`
+}
+
+// Snapshot returns a point-in-time view of the Onscreen. Safe to call
+// even when the Onscreen pointer is nil (returns the zero Snapshot).
+func (osc *Onscreen) Snapshot() Snapshot {
+	if osc == nil {
+		return Snapshot{}
+	}
+	return Snapshot{
+		Content:   osc.Content,
+		IsShowing: osc.IsShowing,
+		IsImage:   osc.isImage,
+	}
+}
+
 func New(outputFile string) *Onscreen {
 	newOnscreen := &Onscreen{}
 	newOnscreen.Content = ""
