@@ -18,14 +18,18 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
     - name: Build VLC container 🤖
-      run: |
-        docker compose \
-          --project-directory . \
-          -f infra/docker/docker-compose.yml \
-          -f infra/docker/docker-compose.testing.yml \
-          -f infra/docker/docker-compose.github.yml \
-          build vlc
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: infra/docker/vlc/Dockerfile
+        tags: adanalife/vlc:latest
+        load: true
+        cache-from: type=gha,scope=vlc
+        cache-to: type=gha,mode=max,scope=vlc
 
     - name: Start VLC container
       run: |
