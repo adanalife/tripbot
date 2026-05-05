@@ -1,0 +1,85 @@
+name: Tripbot
+on:
+  pull_request:
+  push:
+    branches:
+      - develop
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      COMPOSE_DOCKER_CLI_BUILD: 1
+      DOCKER_BUILDKIT: 1
+
+    steps:
+      - name: Checkout (without LFS)
+        uses: actions/checkout@v4
+
+      - name: Fetch videos from cache
+        id: restore-videos
+        uses: actions/cache@v4
+        with:
+          path: assets/video
+          key: ${{ runner.os }}-video-${{ hashFiles('assets/video/manifest.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-video-
+
+      - name: Checkout (with LFS)
+        uses: actions/checkout@v4
+        if: steps.restore-videos.outputs.cache-hit != 'true'
+        continue-on-error: true
+        with:
+          lfs: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build tripbot image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: infra/docker/tripbot/Dockerfile
+          tags: adanalife/tripbot:latest
+          load: true
+          push: false
+          cache-from: type=gha,scope=tripbot
+          cache-to: type=gha,mode=max,scope=tripbot
+
+      - name: Bring up the stack (db + migrate + tripbot)
+        env:
+          CHANNEL_NAME: ${{ secrets.CHANNEL_NAME }}
+          BOT_USERNAME: ${{ secrets.BOT_USERNAME }}
+          TWITCH_AUTH_TOKEN: ${{ secrets.TWITCH_AUTH_TOKEN }}
+          TWITCH_CLIENT_ID: ${{ secrets.TWITCH_CLIENT_ID }}
+          TWITCH_CLIENT_SECRET: ${{ secrets.TWITCH_CLIENT_SECRET }}
+        run: |
+          docker compose \
+            --project-directory . \
+            --env-file infra/docker/env.docker \
+            -f infra/docker/docker-compose.yml \
+            -f infra/docker/docker-compose.testing.yml \
+            -f infra/docker/docker-compose.github.yml \
+            up -d db migrate tripbot
+
+      - run: sleep 10
+
+      - name: Check logs (migrate)
+        run: docker logs tripbot-migrate-1
+
+      - name: Check logs (tripbot)
+        run: docker logs tripbot-tripbot-1
+
+      - name: Check running containers
+        run: docker ps -a
+
+      - name: Stop containers
+        if: always()
+        continue-on-error: true
+        run: |
+          docker compose \
+            --project-directory . \
+            -f infra/docker/docker-compose.yml \
+            -f infra/docker/docker-compose.testing.yml \
+            -f infra/docker/docker-compose.github.yml \
+            down
