@@ -16,30 +16,37 @@ var leftRotatorUpdateFrequency = time.Duration(45 * time.Second)
 var leftRotatorFile = filepath.Join(c.Conf.RunDir, "left-message.txt")
 
 var possibleLeftMessages = []string{
-	// "Looking for artist for emotes and more",
-	"Want to help the stream? Fill out the !survey",
-	"Want to help the stream? Fill out the !survey",
-	// "Twitch Prime subs keep us on air :D",
-	"Earn miles for every minute you watch (!miles)",
-	"Use !report to report stream issues",
-	"Try and !guess what state we're in",
-	"Where are we? (!location)",
 	"Crave something new? Try !timewarp",
-	"Talk to me on !socialmedia",
-	"New here? Use !commands to interact with the bot",
+	"Earn miles for every minute you watch (!miles)",
+	"Follow the project elsewhere on !socialmedia",
+	"Join us on !discord",
+	"Join us on !discord",
+	"Try and !guess what state we're in",
+	"Use !commands to interact with the bot",
+	"Use !commands to interact with the bot",
+	"Want to help the project? Fill out the !survey",
+	"Want to help the project? Fill out the !survey",
+	"Where are we? (!location)",
 	// "LEADER",
+	// "Looking for artist for emotes and more",
+	// "Twitch Prime subs keep us on air :D",
+	// "Use !report to report stream issues",
 }
 
 func InitLeftRotator() {
 	log.Println("Creating left rotator onscreen")
 	LeftRotator = New(leftRotatorFile)
+	// Show a first message synchronously so the OBS browser source has
+	// content to render the moment it polls — otherwise there's a brief
+	// race where the rotator is empty until the goroutine schedules.
+	LeftRotator.Show(leftRotatorContent())
 	go leftRotatorLoop()
 }
 
 func leftRotatorLoop() {
 	for { // forever
-		LeftRotator.Show(leftRotatorContent())
 		time.Sleep(time.Duration(leftRotatorUpdateFrequency))
+		LeftRotator.Show(leftRotatorContent())
 	}
 }
 

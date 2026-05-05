@@ -8,3 +8,30 @@ services:
   obs:
     environment:
       ENV: testing
+
+  vlc:
+    environment:
+      ENV: testing
+
+  # `test` is a one-shot Go toolchain container for running `go test`
+  # outside the running stack. Invoked via `ENV=testing bin/devenv
+  # run --rm test ...` (see Taskfile.yml).
+  test:
+    image: adanalife/tripbot-test
+    build:
+      context: .
+      dockerfile: infra/docker/test/Dockerfile
+    working_dir: /src
+    env_file:
+      - ./.env.testing
+    volumes:
+      - .:/src
+      - tripbot-gomod-cache:/go/pkg/mod
+      - tripbot-gobuild-cache:/root/.cache/go-build
+    # Overridable via `ENV=testing bin/devenv run --rm test <cmd>` —
+    # the Taskfile uses that to swap in -coverprofile / -race variants.
+    command: go test ./...
+
+volumes:
+  tripbot-gomod-cache:
+  tripbot-gobuild-cache:

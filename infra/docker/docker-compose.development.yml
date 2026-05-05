@@ -28,41 +28,22 @@ services:
     # set this to true to disable the OBS container
     #entrypoint: "true"
     restart: on-failure
-    entrypoint: bash
-    command: -c "cd /opt/tripbot && rm -f bin/vlc-server && script/container_startup.sh"
     volumes:
       - .bash_history.remote:/root/.bash_history
 
   vlc:
-    privileged: true
-    image: adanalife/obs
-    hostname: obs
-    env_file:
-      - infra/docker/env.docker
-    build:
-      context: .
-      dockerfile: infra/docker/obs/Dockerfile
-    ports:
-      # this should match the VLC_SERVER_HOST env var
-      - "8080"
-      - "5902:5900"
     environment:
-      DISABLE_OBS: "true"
       ENV: development
-      DISPLAY: ":0.0"
-      XDG_RUNTIME_DIR: "/root/.cache/xdgr"
-      # hack to make fontconfig happy
-      FONTCONFIG_PATH: "/etc/fonts"
-      STREAM_KEY: "${STREAM_KEY}"
-    # command: -c "cd /opt/tripbot && rm -f bin/vlc-server && script/container_startup.sh"
-    command: -c "go run cmd/vlc-server/vlc-server.go 2>&1"
+    env_file:
+      - ./.env.development
     volumes:
       - .bash_history.remote:/root/.bash_history
-      - .:/go/src/github.com/adanalife/tripbot
-    restart: unless-stopped
 
   db:
     volumes:
-      - ./tmp/postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
+
+volumes:
+  postgres_data:

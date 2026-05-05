@@ -1,0 +1,182 @@
+name: OBS Container
+on:
+  pull_request:
+  push:
+    branches:
+      - develop
+    tags:
+      - v*
+
+jobs:
+  # Detect whether this PR touches OBS image inputs. arm64 is the slow
+  # lane (CEF compile, ~30+ min); skipping it on PRs that only touch Go
+  # code or unrelated files saves ~30 min of GHA runtime per PR. amd64
+  # is cheap (apt install) and always runs as a smoke test.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            obs:
+              - 'infra/docker/obs/**'
+              - 'infra/docker/docker-compose*.yml'
+              - '.github/workflows/obs.yml'
+      - id: set-matrix
+        env:
+          OBS_CHANGED: ${{ steps.filter.outputs.obs }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          AMD64='{"arch":"amd64","runner":"ubuntu-latest","arch_compose":""}'
+          ARM64='{"arch":"arm64","runner":"ubuntu-24.04-arm","arch_compose":"-f infra/docker/docker-compose.arm64.yml"}'
+          # Always run both arches for non-PR events (push to develop, tags).
+          # On PRs, run arm64 only when OBS image inputs actually changed.
+          if [[ "$EVENT" != "pull_request" || "$OBS_CHANGED" == "true" ]]; then
+            echo "matrix={\"include\":[$AMD64,$ARM64]}" >> "$GITHUB_OUTPUT"
+          else
+            echo "matrix={\"include\":[$AMD64]}" >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    needs: changes
+    name: build (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.changes.outputs.matrix) }}
+    env:
+      COMPOSE_DOCKER_CLI_BUILD: 1
+      DOCKER_BUILDKIT: 1
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    # Cached buildx path for amd64. arm64 keeps `docker compose build` —
+    # the CEF compile dominates wall time and isn't helped meaningfully
+    # by layer cache, plus buildx's GHA backend has been flaky on the
+    # ubuntu-24.04-arm runners.
+    - name: Set up Docker Buildx (amd64)
+      if: matrix.arch == 'amd64'
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build OBS container (amd64, cached)
+      if: matrix.arch == 'amd64'
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: infra/docker/obs/Dockerfile
+        tags: adanalife/obs:latest
+        load: true
+        cache-from: type=gha,scope=obs-amd64
+        cache-to: type=gha,mode=max,scope=obs-amd64
+
+    - name: Build OBS container (arm64)
+      if: matrix.arch == 'arm64'
+      run: |
+        docker compose \
+          --project-directory . \
+          -f infra/docker/docker-compose.yml \
+          ${{ matrix.arch_compose }} \
+          -f infra/docker/docker-compose.testing.yml \
+          -f infra/docker/docker-compose.github.yml \
+          build obs
+
+    - name: Start VLC container (RTSP source)
+      run: |
+        docker compose \
+          --project-directory . \
+          --env-file infra/docker/env.docker \
+          -f infra/docker/docker-compose.yml \
+          ${{ matrix.arch_compose }} \
+          -f infra/docker/docker-compose.testing.yml \
+          -f infra/docker/docker-compose.github.yml \
+          up -d vlc
+
+    - name: Wait for VLC to be ready
+      run: |
+        cid=$(docker compose \
+          --project-directory . \
+          -f infra/docker/docker-compose.yml \
+          ${{ matrix.arch_compose }} \
+          -f infra/docker/docker-compose.testing.yml \
+          -f infra/docker/docker-compose.github.yml \
+          ps -q vlc)
+        for i in $(seq 1 30); do
+          if docker exec "$cid" curl -sf http://localhost:8080/health/ready >/dev/null; then
+            echo "VLC is ready"
+            exit 0
+          fi
+          echo "Waiting for VLC... ($i/30)"
+          sleep 2
+        done
+        echo "VLC failed to become ready" >&2
+        exit 1
+
+    - name: Start OBS container (no STREAM_KEY)
+      run: |
+        docker compose \
+          --project-directory . \
+          --env-file infra/docker/env.docker \
+          -f infra/docker/docker-compose.yml \
+          ${{ matrix.arch_compose }} \
+          -f infra/docker/docker-compose.testing.yml \
+          -f infra/docker/docker-compose.github.yml \
+          up -d obs
+
+    - name: Wait for healthcheck
+      run: |
+        cid=$(docker compose \
+          --project-directory . \
+          -f infra/docker/docker-compose.yml \
+          ${{ matrix.arch_compose }} \
+          -f infra/docker/docker-compose.testing.yml \
+          -f infra/docker/docker-compose.github.yml \
+          ps -q obs)
+        for i in $(seq 1 30); do
+          state=$(docker inspect -f '{{.State.Health.Status}}' "$cid")
+          echo "OBS health: $state ($i/30)"
+          [[ "$state" == "healthy" ]] && exit 0
+          sleep 2
+        done
+        echo "OBS failed to become healthy" >&2
+        exit 1
+
+    - name: Check VLC container logs
+      if: always()
+      run: |
+        docker compose \
+          --project-directory . \
+          -f infra/docker/docker-compose.yml \
+          ${{ matrix.arch_compose }} \
+          -f infra/docker/docker-compose.testing.yml \
+          -f infra/docker/docker-compose.github.yml \
+          logs vlc
+
+    - name: Check container logs
+      if: always()
+      run: |
+        docker compose \
+          --project-directory . \
+          -f infra/docker/docker-compose.yml \
+          ${{ matrix.arch_compose }} \
+          -f infra/docker/docker-compose.testing.yml \
+          -f infra/docker/docker-compose.github.yml \
+          logs obs
+
+    - name: Stop containers
+      if: always()
+      continue-on-error: true
+      run: |
+        docker compose \
+          --project-directory . \
+          -f infra/docker/docker-compose.yml \
+          ${{ matrix.arch_compose }} \
+          -f infra/docker/docker-compose.testing.yml \
+          -f infra/docker/docker-compose.github.yml \
+          down

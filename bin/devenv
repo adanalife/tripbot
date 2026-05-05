@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
 
+# bin/devenv wraps `docker compose` with the project-level overrides.
+# The ENV environment variable selects which overlay is layered on top
+# of the base docker-compose.yml — defaults to "development".
+#
+#   bin/devenv up --daemon                          # dev stack
+#   ENV=testing bin/devenv run --rm test bash       # one-shot test runner
+
 # enable buildkit
 # https://www.docker.com/blog/faster-builds-in-compose-thanks-to-buildkit-support/
 export COMPOSE_DOCKER_CLI_BUILD=1
@@ -12,15 +19,27 @@ export DOCKER_BUILDKIT=1
 #  open -a Docker
 #fi
 
-# pre-populate the bash_history
-if [ ! -f .bash_history.remote ]; then
+OVERLAY="${ENV:-development}"
+
+# Warn loudly if ENV is something other than the two overlays we
+# routinely use locally. Production/staging overlays exist for other
+# tooling — if you're invoking them through bin/devenv you probably
+# meant to.
+case "$OVERLAY" in
+  development|testing) ;;
+  *) echo "warning: bin/devenv with ENV=$OVERLAY (expected development or testing)" >&2 ;;
+esac
+
+# pre-populate the bash_history (only useful for the dev stack's
+# long-lived containers; skip for one-shot test runs)
+if [ "$OVERLAY" = "development" ] && [ ! -f .bash_history.remote ]; then
   echo "supervisorctl status" >> .bash_history.remote
   echo "vim /var/log/syslog" >> .bash_history.remote
 fi
 
-docker-compose \
+docker compose \
   --project-directory . \
   --env-file infra/docker/env.docker \
   -f infra/docker/docker-compose.yml \
-  -f infra/docker/docker-compose.development.yml \
+  -f "infra/docker/docker-compose.${OVERLAY}.yml" \
   "$@"

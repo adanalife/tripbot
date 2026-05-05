@@ -23,22 +23,27 @@ func playVideoFile(vidStr string) error {
 	return playAtIndex(index)
 }
 
+// nextIndex computes a wrapped playlist position. Pure function so it can
+// be unit-tested without libvlc. Negative offsets wrap to the back of the list.
+func nextIndex(current, offset, length int) int {
+	if length <= 0 {
+		return 0
+	}
+	idx := (current + offset) % length
+	if idx < 0 {
+		idx += length
+	}
+	return idx
+}
+
 // skip plays the video n items forward in the playlist,
 func skip(n int) error {
-	index := currentIndex() + n
-	index = index % len(videoFiles)
-	return playAtIndex(index)
+	return playAtIndex(nextIndex(currentIndex(), n, len(videoFiles)))
 }
 
 // back plays the video n items backward in the playlist,
 func back(n int) error {
-	index := currentIndex() - n
-	index = index % len(videoFiles)
-	if index < 0 {
-		// if we're negative, we have to find our spot at the back of the list
-		index = len(videoFiles) + index
-	}
-	return playAtIndex(index)
+	return playAtIndex(nextIndex(currentIndex(), -n, len(videoFiles)))
 }
 
 // PlayRandom plays a random file from the playlist

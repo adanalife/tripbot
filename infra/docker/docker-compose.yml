@@ -15,39 +15,61 @@ services:
       # this should match the TRIPBOT_SERVER_PORT env var
       - "8080"
     volumes:
-      - .:/go/src/github.com/adanalife/tripbot
       #TODO: do we even need this?
       - ./assets/video:/opt/data/Dashcam/_all:ro
-    entrypoint: bash
-    command: -c "go run cmd/tripbot/tripbot.go 2>&1"
     restart: unless-stopped
 
   obs:
-    privileged: true
+    # privileged: true                       # not needed without GPU passthrough
     image: adanalife/obs
     hostname: obs
+    # env_file:                              # entrypoint reads only STREAM_KEY directly
+    #   - infra/docker/env.docker
+    build:
+      context: .
+      dockerfile: infra/docker/obs/Dockerfile
+    depends_on:
+      - vlc                                  # vlc must be up so RTSP source resolves
+    ports:
+      # - "8080"                             # OBS container has no HTTP API in Phase 1
+      - "5902:5900"
+    environment:
+      # DISPLAY: ":0.0"                      # entrypoint sets DISPLAY internally
+      # XDG_RUNTIME_DIR: "/root/.cache/xdgr"
+      # FONTCONFIG_PATH: "/etc/fonts"
+      STREAM_KEY: "${STREAM_KEY:-}"
+      DASHCAM_RTSP_URL: "${DASHCAM_RTSP_URL:-rtsp://vlc:8554/dashcam}"
+      # OBS browser sources fetch onscreen state from vlc-server's HTTP API.
+      ONSCREENS_URL_BASE: "${ONSCREENS_URL_BASE:-http://vlc:8080}"
+    restart: unless-stopped
+
+  vlc:
+    privileged: true
+    image: adanalife/vlc
+    hostname: vlc
     env_file:
       - infra/docker/env.docker
     build:
       context: .
-      dockerfile: infra/docker/obs/Dockerfile
+      dockerfile: infra/docker/vlc/Dockerfile
     ports:
       # this should match the VLC_SERVER_HOST env var
       - "8080"
-      - "5902:5900"
+      - "5903:5900"
+      - "8554:8554"
     environment:
+      DISABLE_OBS: "true"
       DISPLAY: ":0.0"
       XDG_RUNTIME_DIR: "/root/.cache/xdgr"
       # hack to make fontconfig happy
       FONTCONFIG_PATH: "/etc/fonts"
-      STREAM_KEY: "${STREAM_KEY}"
     volumes:
       - .:/go/src/github.com/adanalife/tripbot
       - ./assets/video:/opt/data/Dashcam/_all:ro
     restart: unless-stopped
 
   db:
-    image: postgres:12
+    image: postgres:16-alpine
     restart: always
     ports:
       - "5432"
@@ -55,9 +77,7 @@ services:
       POSTGRES_PASSWORD: "${DATABASE_PASS}"
       POSTGRES_USER: "${DATABASE_USER}"
       POSTGRES_DB: "${DATABASE_DB}"
-    # volumes:
-    #   - ./infra/docker/init.sql:/docker-entrypoint-initdb.d/init.sql
-    #   - ./tmp/data:/var/lib/postgresql/data
+    # data persistence is opt-in per environment (see docker-compose.development.yml)
 
   migrate:
     image: migrate/migrate
@@ -78,6 +98,7 @@ services:
       - infra/docker/env.docker
     depends_on:
       - migrate
+    working_dir: /go/src/github.com/adanalife/tripbot
     entrypoint: bash -c "infra/docker/bin/seed-db.sh"
     #TODO: this can be removed once the script is baked into the image
     volumes:

@@ -2,8 +2,7 @@
 
 ### Tag a release version
 
-All merges to master will bump the semantic version and create a new tag automatically.
-By default it will be a patch release, but if you include `#minor` or `#major` in a commit message, it will bump those.
+PRs land on `develop`. Promote `develop` → `master` via PR; pushes to `master` trigger `auto-tag.yml`, which creates a new semver tag (default patch bump; include `#minor` or `#major` in a commit message to override). The tag push then fires `release.yml`, which builds and pushes the `tripbot`, `vlc`, and multi-arch `obs` images to Docker Hub.
 
 ### Backup logs
 

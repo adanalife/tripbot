@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 
 	c "github.com/adanalife/tripbot/pkg/config/vlc-server"
@@ -16,7 +17,7 @@ import (
 
 // healthcheck URL, for tools to verify the stream is alive
 func healthHandler(w http.ResponseWriter, r *http.Request) {
-	if !helpers.RunningOnWindows() {
+	if !helpers.RunningOnWindows() && os.Getenv("DISABLE_OBS") != "true" {
 		obsPid := helpers.ReadPidFile(c.Conf.OBSPidFile)
 		pidRunning, err := helpers.PidExists(obsPid)
 		if err != nil {
@@ -202,7 +203,6 @@ func onscreensLeaderboardHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "417 expectation failed", http.StatusExpectationFailed)
 			return
 		}
-		spew.Dump(base64content[0])
 		content, err := helpers.Base64Decode(base64content[0])
 		if err != nil {
 			terrors.Log(err, "unable to decode string")
