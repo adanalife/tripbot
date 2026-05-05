@@ -4,13 +4,13 @@ set -euo pipefail
 OBS_HOME="${HOME:-/root}/.config/obs-studio"
 mkdir -p "$OBS_HOME/basic/profiles/Untitled" "$OBS_HOME/basic/scenes"
 
-# OBS 32 renamed the global config from global.ini to user.ini and prompts
-# about migration if it sees a pre-31 global.ini. We seed user.ini directly
-# and explicitly delete any stale global.ini to keep the migration path
-# unambiguous when an older container's config dir survives a rebuild.
-rm -f "$OBS_HOME/global.ini"
-cp /opt/obs/config/user.ini  "$OBS_HOME/user.ini"
-cp /opt/obs/config/basic.ini "$OBS_HOME/basic/profiles/Untitled/basic.ini"
+# OBS 32 split the legacy global.ini in two: app-level settings stayed in
+# global.ini (BrowserHWAccel etc.) and user-preference settings moved to
+# user.ini. Seed both so OBS sees a complete config and never prompts about
+# migration.
+cp /opt/obs/config/global.ini "$OBS_HOME/global.ini"
+cp /opt/obs/config/user.ini   "$OBS_HOME/user.ini"
+cp /opt/obs/config/basic.ini  "$OBS_HOME/basic/profiles/Untitled/basic.ini"
 envsubst < /opt/obs/config/Tripbot.json.tmpl > "$OBS_HOME/basic/scenes/Tripbot.json"
 
 obs_args=(--disable-shutdown-check --collection 'Tripbot' --profile 'Untitled' --scene 'Main')
