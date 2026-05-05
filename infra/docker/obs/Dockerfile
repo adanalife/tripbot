@@ -79,6 +79,7 @@ RUN cmake --preset ubuntu \
     -DCEF_ROOT_DIR=/opt/cef \
     -DENABLE_AJA=OFF \
     -DENABLE_NVENC=OFF \
+    -DENABLE_QSV11=OFF \
     -DOBS_COMPILE_DEPRECATION_AS_WARNING=ON
 
 RUN cmake --build build_ubuntu --parallel
