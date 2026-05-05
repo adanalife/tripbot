@@ -78,6 +78,8 @@ RUN cmake --preset ubuntu \
     -DENABLE_BROWSER=ON \
     -DCEF_ROOT_DIR=/opt/cef \
     -DENABLE_AJA=OFF \
+    -DENABLE_NVENC=OFF \
+    -DENABLE_QSV11=OFF \
     -DOBS_COMPILE_DEPRECATION_AS_WARNING=ON
 
 RUN cmake --build build_ubuntu --parallel
@@ -85,7 +87,7 @@ RUN cmake --install build_ubuntu --prefix /opt/obs-install
 
 
 # =============================================================================
-# Runtime: minimal Ubuntu 24.04 with the artefacts copied over from builder.
+# Runtime: minimal Ubuntu 24.04 with the artifacts copied over from builder.
 # =============================================================================
 FROM ubuntu:24.04
 
