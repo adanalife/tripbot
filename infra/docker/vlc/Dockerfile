@@ -35,6 +35,9 @@ EXPOSE 8080
 ENV VNC_PASSWD=123456
 
 WORKDIR /go/src/github.com/adanalife/tripbot
+COPY go.mod go.sum ./
+RUN go mod download
+
 COPY . .
 
 RUN ln -s /go/src/github.com/adanalife/tripbot /opt/tripbot \
