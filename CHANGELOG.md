@@ -47,18 +47,16 @@ The "back online" release. After roughly four years of dormancy, the entire cont
 - **OBS scenes + overlays ported** from the pre-rewrite collection into `infra/docker/obs/config/Tripbot.json.tmpl`, with dummy onscreen fixtures so the scene renders in dev without the bot writing state. ([#371])
 - **Multi-arch OBS image.** amd64 uses the OBS PPA (`ppa:obsproject/obs-studio`); arm64 builds OBS from source against the official aarch64 CEF tarball — the PPA has no arm64 channel and Ubuntu universe ships obs-studio with CEF stripped. Both variants ship `obs-browser.so` and load browser sources cleanly. ([#377])
 - **CEF launch defects fixed:** `chmod 4755 chrome-sandbox` in the runtime stage so render processes can launch under their own namespace; `BrowserHWAccel=false` seeded in `user.ini` so CEF avoids the failing arm64 swiftshader-webgl path. ([#377])
-- **OBS-32 first-run handling** — defensive `rm -f global.ini` before copying the seeded `user.ini`, plus `FirstRun=true` in the seed to skip the auto-config wizard.
 - **OBS window centered** in the Xvfb display via fluxbox `apps` rule. ([#378])
 
-### Dashcam pipeline
+### VLC server
 
 - **VLC container introduced** to serve the dashcam stream (Go-based `vlc-server` binary plus apt VLC + RTSP plugin). ([#366])
 - **VLC → OBS over RTSP.** OBS consumes `rtsp://vlc-server:8554/dashcam` via an `ffmpeg_source`, replacing the old window-capture-of-VLC approach. ([#370])
-- **Shared `onscreens` volume** between vlc and obs, with the compose wiring fixed so onscreen state files reach both containers. ([#373])
 
 ### Onscreens architecture
 
-- **Browser-source onscreens** replace the old docker-compose named-volume HACK between vlc-server and OBS. vlc-server now serves a per-onscreen HTML page and a `state.json` polling endpoint; each onscreen is an OBS `browser_source`. ([#379])
+- **Browser-source onscreens.** vlc-server serves a per-onscreen HTML page and a `state.json` polling endpoint; each onscreen renders as an OBS `browser_source`, so content updates flow over HTTP instead of through shared container state. ([#379])
 - **`/onscreens/{name}/{show,hide}` HTTP API** on vlc-server for the bot to drive content updates.
 
 ### CI and release pipeline
