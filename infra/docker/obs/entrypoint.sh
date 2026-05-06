@@ -2,7 +2,7 @@
 set -euo pipefail
 
 OBS_HOME="${HOME:-/root}/.config/obs-studio"
-mkdir -p "$OBS_HOME/basic/profiles/Untitled" "$OBS_HOME/basic/scenes"
+mkdir -p "$OBS_HOME/basic/profiles/ADanaLife" "$OBS_HOME/basic/scenes"
 
 # OBS 32 split the legacy global.ini in two: app-level settings stayed in
 # global.ini (BrowserHWAccel etc.) and user-preference settings moved to
@@ -10,15 +10,15 @@ mkdir -p "$OBS_HOME/basic/profiles/Untitled" "$OBS_HOME/basic/scenes"
 # migration.
 cp /opt/obs/config/global.ini "$OBS_HOME/global.ini"
 cp /opt/obs/config/user.ini   "$OBS_HOME/user.ini"
-cp /opt/obs/config/basic.ini  "$OBS_HOME/basic/profiles/Untitled/basic.ini"
+cp /opt/obs/config/basic.ini  "$OBS_HOME/basic/profiles/ADanaLife/basic.ini"
 envsubst < /opt/obs/config/Tripbot.json.tmpl > "$OBS_HOME/basic/scenes/Tripbot.json"
 
-obs_args=(--disable-shutdown-check --collection 'Tripbot' --profile 'Untitled' --scene 'Main')
+obs_args=(--disable-shutdown-check --collection 'Tripbot' --profile 'ADanaLife' --scene 'Main')
 
 if [[ -n "${STREAM_KEY:-}" ]]; then
   echo "STREAM_KEY set; configuring Twitch and starting stream."
   envsubst < /opt/obs/config/service.json.tmpl \
-    > "$OBS_HOME/basic/profiles/Untitled/service.json"
+    > "$OBS_HOME/basic/profiles/ADanaLife/service.json"
   obs_args+=(--startstreaming)
 else
   echo "STREAM_KEY not set; OBS will start idle. VNC into :5902 to inspect."
