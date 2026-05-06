@@ -20,7 +20,7 @@ jobs:
       # downstream workflows, so release.yml wouldn't trigger on the
       # auto-created tag. The PAT inherits the token owner's perms.
       - name: Bump version and push tag
-        uses: anothrNick/github-tag-action@1.71.0
+        uses: anothrNick/github-tag-action@1
         env:
           GITHUB_TOKEN: ${{ secrets.CI_PERSONAL_ACCESS_TOKEN }}
           DEFAULT_BUMP: patch
