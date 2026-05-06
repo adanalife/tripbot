@@ -5,6 +5,7 @@ All notable changes to TripBot. Format follows [Keep a Changelog](https://keepac
 ## [v2.0.1] — 2026-05-05
 
 ### Added
+
 - **Multi-arch tripbot and vlc images.** v2.0.0 only published amd64 manifests for these two; v2.0.1 ships native arm64 builds alongside, completing the stage-1 arm64 deploy story. ([#385])
 
 ## [v2.0.0] — 2026-05-05
