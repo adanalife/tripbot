@@ -3,15 +3,18 @@ package helpers
 import (
 	"log"
 	"os"
+	"sync"
 
 	"github.com/sfreiberg/gotwilio"
 )
 
-var twilioFromNum, twilioToNum string
-var twilioClient *gotwilio.Twilio
+var (
+	twilioFromNum, twilioToNum string
+	twilioClient               *gotwilio.Twilio
+	twilioOnce                 sync.Once
+)
 
-// set up Twilio (for text messages)
-func init() {
+func initTwilio() {
 	requiredVars := []string{
 		"TWILIO_ACCT_SID",
 		"TWILIO_AUTH_TOKEN",
@@ -19,20 +22,20 @@ func init() {
 		"TWILIO_TO_NUM",
 	}
 	for _, v := range requiredVars {
-		_, ok := os.LookupEnv(v)
-		if !ok {
+		if _, ok := os.LookupEnv(v); !ok {
 			log.Fatalf("You must set %s", v)
 		}
 	}
-	twilioAccountSid := os.Getenv("TWILIO_ACCT_SID")
-	twilioAuthToken := os.Getenv("TWILIO_AUTH_TOKEN")
 	twilioFromNum = os.Getenv("TWILIO_FROM_NUM")
 	twilioToNum = os.Getenv("TWILIO_TO_NUM")
-
-	twilioClient = gotwilio.NewTwilioClient(twilioAccountSid, twilioAuthToken)
+	twilioClient = gotwilio.NewTwilioClient(
+		os.Getenv("TWILIO_ACCT_SID"),
+		os.Getenv("TWILIO_AUTH_TOKEN"),
+	)
 }
 
 // sends an SMS (to myself)
 func SendSMS(message string) {
+	twilioOnce.Do(initTwilio)
 	twilioClient.SendSMS(twilioFromNum, twilioToNum, message, "", "")
 }
