@@ -23,6 +23,9 @@ jobs:
         uses: super-linter/super-linter@v8.6.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # don't post a "Super-linter summary" comment on every PR run
+          # (the Actions step summary tab still gets the same content)
+          ENABLE_GITHUB_PULL_REQUEST_SUMMARY_COMMENT: false
           # disabled because it's not working with C libs
           VALIDATE_GO: false
           # disabled — none of the in-tree Dockerfiles have been
