@@ -20,8 +20,6 @@ jobs:
         with:
           fetch-depth: 0
       - name: run-linters
-        # Pinned explicitly per the #397 lesson — the action also
-        # moved orgs from github/super-linter in v7.
         uses: super-linter/super-linter@v8.6.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -31,16 +29,13 @@ jobs:
           # audited against hadolint yet.
           VALIDATE_DOCKERFILE_HADOLINT: false
           # disabled cause they dont support CRDs rn
-          # (kubeval was renamed to kubeconform in v5)
           VALIDATE_KUBERNETES_KUBECONFORM: false
           # disabled until we go through and fix the issues
           VALIDATE_JSCPD: false
           VALIDATE_ENV: false
           # Linters newly enabled by default in super-linter v5+ that
           # surfaced pre-existing issues. Turning them off here preserves
-          # v4 behavior parity so the version bump is surgical; the
-          # "audit super-linter config" TODO covers actually enabling
-          # the ones we want.
+          # v4 behavior parity so the version bump is surgical.
           VALIDATE_BIOME_FORMAT: false           # JS formatter; we have no JS
           VALIDATE_CHECKOV: false                # IaC security scanner
           VALIDATE_GITHUB_ACTIONS: false         # actionlint — real issues to fix later
