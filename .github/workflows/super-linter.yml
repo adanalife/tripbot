@@ -13,7 +13,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # fetch-depth: 0 is required by super-linter v6+: it diffs against
+      # the default branch (develop) to figure out which files changed,
+      # which means develop has to be present in the local checkout.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: run-linters
         # Pinned explicitly per the #397 lesson — the action also
         # moved orgs from github/super-linter in v7.
