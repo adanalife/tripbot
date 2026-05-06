@@ -16,8 +16,6 @@ type VlcServerConfig struct {
 
 	// VLCPidFile is where the vlc-server PID file lives
 	VLCPidFile string `default:"/opt/data/run/vlc-server.pid" envconfig:"VLC_PIDFILE"`
-	// OBSPidFile is where the OBS PID file lives
-	OBSPidFile string `default:"/opt/data/run/OBS.pid" envconfig:"OBS_PIDFILE"`
 
 	// VlcServerHost is used to specify the host for the VLC webserver
 	VlcServerHost string `required:"true" envconfig:"VLC_SERVER_HOST"`
