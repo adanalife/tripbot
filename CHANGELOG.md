@@ -2,6 +2,27 @@
 
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
+## [v2.0.2] — 2026-05-06
+
+Maintenance release. Dead-code cleanup, OBS profile + scene polish, and a sweep through stale GitHub Actions versions. No behavior changes for the bot or the stream.
+
+### Cleanup
+
+- **Dead `DISABLE_OBS` plumbing removed.** The env var was masking pre-#373 supervisord/OBS-PID code in the VLC container that no longer made sense after the vlc/obs split. Drops the `[program:obs]` block from `script/container_startup.sh`, the OBS-PID branch from vlc-server's `/health`, the `DISABLE_OBS` pass-throughs in compose, the orphaned `script/x11/start-obs.sh`, and the pre-revival `Dashcam_Scenes.docker.json` (already ported in #371). ([#388])
+
+### OBS
+
+- **Profile renamed `Untitled` → `ADanaLife`** in the seeded profile dir + `--profile` flag, so the OBS profile dropdown shows the brand instead of the placeholder. ([#389])
+- **`feh` installed** so fluxbox's `fbsetbg` stops logging "I can't find an app to set the wallpaper with..." every boot. OBS owns the framebuffer; this is pure log-noise hygiene. ([#393])
+- **Test scene background** switched from a muddy brown to Twitch chat dark (`#18181B`). Only affects the Test fallback scene — Main hides the background behind dashcam + overlays. ([#394])
+
+### CI
+
+- **`actions/checkout` v2 → v4** across `codeql-analysis`, `linting`, `super-linter`, `update-pr` (v2 was on Node 12 EOL). ([#395])
+- **`github/codeql-action` v1 → v3** in `codeql-analysis` (v1 was Node 12 EOL). ([#396])
+- **Trivially-bumpable action versions** across `.github/workflows/`: `actions/cache` v4 → v5, `docker/build-push-action` v5 → v7, `docker/login-action` v3 → v4, `docker/metadata-action` v5 → v6, `docker/setup-buildx-action` v3 → v4, `dorny/paths-filter` v3 → v4, `Ilshidur/action-discord` 0.3.2 → 0.4.0, `anothrNick/github-tag-action` 1.71.0 → `1` (floating major). All Node-runtime upgrades with no input/output API changes for our usage. ([#397])
+- **`super-linter` v4.5.1 → v8.6.0** — four-major jump pinned explicitly to v8.6.0. Org rename `github/super-linter` → `super-linter/super-linter`; `VALIDATE_KUBERNETES_KUBEVAL` → `VALIDATE_KUBERNETES_KUBECONFORM`; removed `VALIDATE_SQL` (sql-lint deleted upstream). v6+ diff-mode requires `fetch-depth: 0` on the checkout step. v5+-newly-enabled linters disabled to keep v4 behavior parity (re-audit tracked separately). ([#399])
+
 ## [v2.0.1] — 2026-05-05
 
 ### Added
@@ -72,6 +93,7 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 - **2022–2026** — Dormant. Dependabot kept Go modules, action versions, and the Go base image bumped, and the now-retired auto-bump workflow tagged `v1.9.0` and `v1.9.1` along the way without a substantive feature delta.
 - **2026** — Full revival starting with [#366]. See v2.0.0 above.
 
+[v2.0.2]: https://github.com/adanalife/tripbot/releases/tag/v2.0.2
 [v2.0.1]: https://github.com/adanalife/tripbot/releases/tag/v2.0.1
 [v2.0.0]: https://github.com/adanalife/tripbot/releases/tag/v2.0.0
 
@@ -93,3 +115,11 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#382]: https://github.com/adanalife/tripbot/pull/382
 [#383]: https://github.com/adanalife/tripbot/pull/383
 [#385]: https://github.com/adanalife/tripbot/pull/385
+[#388]: https://github.com/adanalife/tripbot/pull/388
+[#389]: https://github.com/adanalife/tripbot/pull/389
+[#393]: https://github.com/adanalife/tripbot/pull/393
+[#394]: https://github.com/adanalife/tripbot/pull/394
+[#395]: https://github.com/adanalife/tripbot/pull/395
+[#396]: https://github.com/adanalife/tripbot/pull/396
+[#397]: https://github.com/adanalife/tripbot/pull/397
+[#399]: https://github.com/adanalife/tripbot/pull/399
