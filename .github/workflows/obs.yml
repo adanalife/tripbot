@@ -18,7 +18,7 @@ jobs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
       - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
+      - uses: dorny/paths-filter@v4
         id: filter
         with:
           filters: |
@@ -63,11 +63,11 @@ jobs:
     # ubuntu-24.04-arm runners.
     - name: Set up Docker Buildx (amd64)
       if: matrix.arch == 'amd64'
-      uses: docker/setup-buildx-action@v3
+      uses: docker/setup-buildx-action@v4
 
     - name: Build OBS container (amd64, cached)
       if: matrix.arch == 'amd64'
-      uses: docker/build-push-action@v5
+      uses: docker/build-push-action@v7
       with:
         context: .
         file: infra/docker/obs/Dockerfile
