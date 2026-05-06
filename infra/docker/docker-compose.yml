@@ -58,7 +58,6 @@ services:
       - "5903:5900"
       - "8554:8554"
     environment:
-      DISABLE_OBS: "true"
       DISPLAY: ":0.0"
       XDG_RUNTIME_DIR: "/root/.cache/xdgr"
       # hack to make fontconfig happy

@@ -4,10 +4,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"strconv"
 
-	c "github.com/adanalife/tripbot/pkg/config/vlc-server"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	onscreensServer "github.com/adanalife/tripbot/pkg/onscreens-server"
@@ -17,19 +15,6 @@ import (
 
 // healthcheck URL, for tools to verify the stream is alive
 func healthHandler(w http.ResponseWriter, r *http.Request) {
-	if !helpers.RunningOnWindows() && os.Getenv("DISABLE_OBS") != "true" {
-		obsPid := helpers.ReadPidFile(c.Conf.OBSPidFile)
-		pidRunning, err := helpers.PidExists(obsPid)
-		if err != nil {
-			terrors.Log(err, "error fetching OBS pid")
-			http.Error(w, "error fetching OBS pid", http.StatusFailedDependency)
-			return
-		}
-		if !pidRunning {
-			http.Error(w, "OBS not running", http.StatusFailedDependency)
-			return
-		}
-	}
 	fmt.Fprintf(w, "OK")
 }
 
