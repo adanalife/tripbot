@@ -36,3 +36,22 @@ jobs:
           # disabled until we go through and fix the issues
           VALIDATE_JSCPD: false
           VALIDATE_ENV: false
+          # Linters newly enabled by default in super-linter v5+ that
+          # surfaced pre-existing issues. Turning them off here preserves
+          # v4 behavior parity so the version bump is surgical; the
+          # "audit super-linter config" TODO covers actually enabling
+          # the ones we want.
+          VALIDATE_BIOME_FORMAT: false           # JS formatter; we have no JS
+          VALIDATE_CHECKOV: false                # IaC security scanner
+          VALIDATE_GITHUB_ACTIONS: false         # actionlint — real issues to fix later
+          VALIDATE_GITHUB_ACTIONS_ZIZMOR: false  # action-security scanner
+          VALIDATE_GO_MODULES: false             # paired with VALIDATE_GO
+          VALIDATE_GO_RELEASER: false            # we don't use goreleaser
+          VALIDATE_JSON_PRETTIER: false          # opinionated JSON formatting
+          VALIDATE_MARKDOWN_PRETTIER: false      # opinionated MD formatting
+          VALIDATE_NATURAL_LANGUAGE: false       # textlint prose checker
+          VALIDATE_SHELL_SHFMT: false            # shfmt formatting
+          VALIDATE_SPELL_CODESPELL: false        # spell-check; revisit in audit
+          VALIDATE_SQLFLUFF: false               # SQL formatter
+          VALIDATE_TRIVY: false                  # vuln scanner; needs separate triage
+          VALIDATE_YAML_PRETTIER: false          # opinionated YAML formatting
