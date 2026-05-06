@@ -104,7 +104,6 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#370]: https://github.com/adanalife/tripbot/pull/370
 [#371]: https://github.com/adanalife/tripbot/pull/371
 [#372]: https://github.com/adanalife/tripbot/pull/372
-[#373]: https://github.com/adanalife/tripbot/pull/373
 [#376]: https://github.com/adanalife/tripbot/pull/376
 [#377]: https://github.com/adanalife/tripbot/pull/377
 [#378]: https://github.com/adanalife/tripbot/pull/378
