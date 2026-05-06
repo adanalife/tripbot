@@ -8,16 +8,23 @@ on:
       - v*
 jobs:
 
-  golint:
-    name: golint
+  revive:
+    name: revive
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: golint
-        uses: reviewdog/action-golangci-lint@v2.0.3
+      - name: revive
+        uses: reviewdog/action-golangci-lint@v2
         with:
           github_token: ${{ secrets.github_token }}
-          golangci_lint_flags: "--disable-all -E golint"
+          # Pin golangci_lint_version explicitly: the action's default of
+          # `latest` floats and broke us once already (PR #397) when v2
+          # renamed flags + removed deprecated linters.
+          golangci_lint_version: v2.12.1
+          # golangci-lint v2 dropped golint (deprecated upstream); revive
+          # is its successor. Flag syntax: --disable-all → --default=none,
+          # -E NAME → --enable=NAME.
+          golangci_lint_flags: "--default=none --enable=revive"
           level: warning # GitHub Status Check won't become failure with this level.
 
   errcheck:
@@ -26,10 +33,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: errcheck
-        uses: reviewdog/action-golangci-lint@v2.0.3
+        uses: reviewdog/action-golangci-lint@v2
         with:
           github_token: ${{ secrets.github_token }}
-          golangci_lint_flags: "--disable-all -E errcheck"
+          golangci_lint_version: v2.12.1
+          golangci_lint_flags: "--default=none --enable=errcheck"
 
   misspell:
     name: misspell
