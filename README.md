@@ -21,7 +21,20 @@ There are three main components, each running in its own container: the chatbot 
 
 The general flow of information looks like this:
 
-![A diagram showing the different components](assets/infra-diagram.png)
+```mermaid
+flowchart LR
+    twitch((Twitch))
+    tripbot[Tripbot]
+    vlc[VLC server]
+    obs[OBS]
+
+    twitch -->|chat commands| tripbot
+    tripbot -->|bot response| twitch
+    tripbot -->|playback controls| vlc
+    vlc -->|media information| tripbot
+    vlc -->|currently-playing video| obs
+    obs -->|RTMP stream| twitch
+```
 
 For more detail, check out [Tripbot, the Adventure Robot](https://dana.lol/2020/04/15/tripbot-the-adventure-robot/).
 
