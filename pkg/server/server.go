@@ -97,7 +97,8 @@ func Start() {
 	}
 }
 
-// isValidSecret returns true if the given secret matches the configured one
-func isValidSecret(secret string) bool {
+// isInvalidSecret returns true if the given secret is empty or doesn't match
+// the configured one.
+func isInvalidSecret(secret string) bool {
 	return len(secret) < 1 || secret != c.Conf.TripbotHttpAuth
 }

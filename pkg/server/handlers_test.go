@@ -70,13 +70,7 @@ func TestWebhooksTwitchHandlerMissingChallengeReturns404(t *testing.T) {
 	}
 }
 
-// FIXME(security): authTwitchHandler currently lets *wrong* non-empty secrets
-// through with a 200. The check `!ok || !isValidSecret(secret[0])` is broken
-// because isValidSecret returns true when the secret is *invalid*, so the
-// double-negation passes invalid-but-non-empty secrets. This test pins the
-// current (broken) behavior so any fix flips it intentionally; do not treat
-// the 200 here as expected/correct.
-func TestAuthTwitchHandlerInvalidSecretFallsThroughBuggy(t *testing.T) {
+func TestAuthTwitchHandlerInvalidSecretReturns404(t *testing.T) {
 	saved := c.Conf.TripbotHttpAuth
 	defer func() { c.Conf.TripbotHttpAuth = saved }()
 	c.Conf.TripbotHttpAuth = "secret"
@@ -86,8 +80,8 @@ func TestAuthTwitchHandlerInvalidSecretFallsThroughBuggy(t *testing.T) {
 
 	authTwitchHandler(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected current (buggy) 200 fall-through, got %d — auth check may have been fixed; flip this assertion to 404", rec.Code)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("got status %d, want %d", rec.Code, http.StatusNotFound)
 	}
 }
 

@@ -99,7 +99,7 @@ func webhooksTwitchSubscriptionsEventsHandler(w http.ResponseWriter, r *http.Req
 // this endpoint returns private twitch access tokens
 func authTwitchHandler(w http.ResponseWriter, r *http.Request) {
 	secret, ok := r.URL.Query()["auth"]
-	if !ok || !isValidSecret(secret[0]) {
+	if !ok || isInvalidSecret(secret[0]) {
 		http.Error(w, "404 not found", http.StatusNotFound)
 		return
 	}
