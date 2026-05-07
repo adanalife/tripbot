@@ -82,9 +82,9 @@ var onscreenRegistry = map[string]onscreenStyle{
 // onscreensStateHandler returns a JSON snapshot of every onscreen's current
 // state. The OBS browser-source HTML pages poll this endpoint and re-render.
 func onscreensStateHandler(w http.ResponseWriter, r *http.Request) {
-	out := make(map[string]onscreensServer.Snapshot, len(onscreenRegistry))
+	out := make(map[string]*onscreensServer.Onscreen, len(onscreenRegistry))
 	for name, style := range onscreenRegistry {
-		out[name] = style.get().Snapshot()
+		out[name] = style.get()
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")

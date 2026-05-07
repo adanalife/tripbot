@@ -12,31 +12,15 @@ import (
 // defaultSleepInterval is how often onscreens refresh themselves
 const defaultSleepInterval = time.Duration(5 * time.Second)
 
+// Onscreen is also the JSON wire format served by the browser-source
+// state endpoint in pkg/vlc-server, so Content/IsShowing carry json
+// tags and the bookkeeping fields are skipped.
 type Onscreen struct {
-	Content       string
-	Expires       time.Time
-	DontExpire    bool
-	SleepInterval time.Duration
-	IsShowing     bool
-}
-
-// Snapshot is the JSON-serialisable view of an Onscreen used by the
-// browser-source render endpoints in pkg/vlc-server.
-type Snapshot struct {
-	Content   string `json:"content"`
-	IsShowing bool   `json:"showing"`
-}
-
-// Snapshot returns a point-in-time view of the Onscreen. Safe to call
-// even when the Onscreen pointer is nil (returns the zero Snapshot).
-func (osc *Onscreen) Snapshot() Snapshot {
-	if osc == nil {
-		return Snapshot{}
-	}
-	return Snapshot{
-		Content:   osc.Content,
-		IsShowing: osc.IsShowing,
-	}
+	Content       string        `json:"content"`
+	IsShowing     bool          `json:"showing"`
+	Expires       time.Time     `json:"-"`
+	DontExpire    bool          `json:"-"`
+	SleepInterval time.Duration `json:"-"`
 }
 
 func New() *Onscreen {
