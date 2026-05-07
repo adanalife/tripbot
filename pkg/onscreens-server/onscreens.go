@@ -1,22 +1,13 @@
 package onscreensServer
 
 import (
-	"io/ioutil"
-	"log"
-	"os"
 	"time"
-
-	terrors "github.com/adanalife/tripbot/pkg/errors"
-	"github.com/adanalife/tripbot/pkg/helpers"
 )
 
 //TODO: these live in the background package and could/should
 // be moved into this package
 //TODO: we don't always need SleepInterval/Expires... some
 // of these run forever (maybe refactor into ShowFor()?)
-
-// imageSuffix is added to the end of image files to make the "live"
-const imageSuffix = "-live"
 
 // defaultSleepInterval is how often onscreens refresh themselves
 const defaultSleepInterval = time.Duration(5 * time.Second)
@@ -27,8 +18,6 @@ type Onscreen struct {
 	DontExpire    bool
 	SleepInterval time.Duration
 	IsShowing     bool
-	isImage       bool
-	outputFile    string
 }
 
 // Snapshot is the JSON-serialisable view of an Onscreen used by the
@@ -36,7 +25,6 @@ type Onscreen struct {
 type Snapshot struct {
 	Content   string `json:"content"`
 	IsShowing bool   `json:"showing"`
-	IsImage   bool   `json:"image"`
 }
 
 // Snapshot returns a point-in-time view of the Onscreen. Safe to call
@@ -48,26 +36,18 @@ func (osc *Onscreen) Snapshot() Snapshot {
 	return Snapshot{
 		Content:   osc.Content,
 		IsShowing: osc.IsShowing,
-		IsImage:   osc.isImage,
 	}
 }
 
-func New(outputFile string) *Onscreen {
+func New() *Onscreen {
 	newOnscreen := &Onscreen{}
 	newOnscreen.Content = ""
 	newOnscreen.Expires = time.Now()
 	newOnscreen.DontExpire = false
 	newOnscreen.SleepInterval = time.Duration(defaultSleepInterval)
-	newOnscreen.outputFile = outputFile
 	// start the background loop
 	go newOnscreen.backgroundLoop()
 	return newOnscreen
-}
-
-func NewImage(imageFile string) *Onscreen {
-	osc := New(imageFile)
-	osc.isImage = true
-	return osc
 }
 
 // backgroundLoop will loop forever, hiding the Onscreen if needed
@@ -102,97 +82,24 @@ func (osc *Onscreen) Extend(dur time.Duration) {
 
 // Show makes an onscreen visible until hidden
 func (osc *Onscreen) Show(content string) {
-	// set it to never expire
 	osc.DontExpire = true
-	// make visible with the content
-	osc.show(content)
+	osc.IsShowing = true
+	osc.Content = content
 }
 
 // ShowFor makes an Onscreen visible for a duration of time
 func (osc *Onscreen) ShowFor(content string, dur time.Duration) {
-	// if it was set to not expire, running this
-	// means we changed our mind
 	osc.DontExpire = false
-	// add the duration to the expiry time
 	osc.Extend(dur)
-	// make visible with the content
-	osc.show(content)
+	osc.IsShowing = true
+	osc.Content = content
 }
 
 // Hide will remove an onscreen from the screen
 func (osc *Onscreen) Hide() {
 	osc.IsShowing = false
-	if osc.isImage {
-		osc.hideImage()
-	} else {
-		osc.hideText()
-	}
 }
 
 func (osc *Onscreen) SetContent(content string) {
 	osc.Content = content
-}
-
-// show is what makes an Onscreen visible
-func (osc *Onscreen) show(content string) {
-	// mark it as visible
-	osc.IsShowing = true
-	// set the content
-	osc.Content = content
-	if osc.isImage {
-		osc.showImage()
-	} else {
-		osc.showText()
-	}
-}
-
-// showText will write the Content to the outputFile
-func (osc Onscreen) showText() {
-	b := []byte(osc.Content)
-	err := ioutil.WriteFile(osc.outputFile, b, 0644)
-	if err != nil {
-		terrors.Log(err, "error writing to file")
-	}
-}
-
-// showImage will create a new "live" image file
-func (osc Onscreen) showImage() {
-	// copy the image to the live location
-	err := os.Link(osc.outputFile, osc.liveImage())
-	if err != nil {
-		// cast to LinkError so we can unwrap the error message
-		linkErr := err.(*os.LinkError)
-		if linkErr.Unwrap().Error() == "file exists" {
-			// print friendly message
-			log.Println(osc.outputFile, "is already present")
-		} else {
-			// something more serious went wrong
-			terrors.Log(linkErr, "error creating image")
-		}
-	}
-}
-
-// hideText will truncate the outputFile (hiding the text)
-func (osc Onscreen) hideText() {
-	b := []byte("") // empty file
-	err := ioutil.WriteFile(osc.outputFile, b, 0644)
-	if err != nil {
-		terrors.Log(err, "error emptying to file")
-	}
-}
-
-// hideImage will remove the "live" version of an image file
-func (osc Onscreen) hideImage() {
-	if helpers.FileExists(osc.liveImage()) {
-		err := os.Remove(osc.liveImage())
-		if err != nil {
-			terrors.Log(err, "error removing image")
-		}
-	}
-}
-
-// liveImage adds a suffix to the end of the file
-// which is the file that OBS will be configured to look at
-func (osc Onscreen) liveImage() string {
-	return osc.outputFile + imageSuffix
 }
