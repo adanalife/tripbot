@@ -12,9 +12,9 @@ jobs:
     name: revive
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: revive
-        uses: reviewdog/action-golangci-lint@v2
+      - uses: actions/checkout@v6
+      - name: golint
+        uses: reviewdog/action-golangci-lint@v2.0.3
         with:
           github_token: ${{ secrets.github_token }}
           # Pin golangci_lint_version explicitly: the action's default of
@@ -31,7 +31,7 @@ jobs:
     name: errcheck
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: errcheck
         uses: reviewdog/action-golangci-lint@v2
         with:
@@ -43,7 +43,7 @@ jobs:
     name: misspell
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: misspell
         uses: reviewdog/action-misspell@v1
         with:

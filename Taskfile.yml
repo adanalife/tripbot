@@ -36,3 +36,47 @@ tasks:
     interactive: true
     cmds:
       - ENV=testing bin/devenv run --rm test bash
+
+  # Release smoke flow — see vault/tripbot/release-checklist.md.
+  # Targets the local k3d cluster running the stage-1 overlay
+  # (cloudflared tunnel + apps).
+
+  release:verify-images:
+    desc: Verify multi-arch manifests for a release version (VERSION=v2.0.2 or 2.0.2)
+    requires:
+      vars: [VERSION]
+    vars:
+      # docker/metadata-action strips the leading "v" — Docker tags are
+      # bare semver. Accept either VERSION=v2.0.2 or VERSION=2.0.2.
+      TAG: '{{trimPrefix "v" .VERSION}}'
+    cmds:
+      - docker buildx imagetools inspect adanalife/tripbot:{{.TAG}}
+      - docker buildx imagetools inspect adanalife/vlc:{{.TAG}}
+      - docker buildx imagetools inspect adanalife/obs:{{.TAG}}
+
+  release:smoke:whalecore:
+    desc: Smoke-check tripbot.whalecore.com (requires allowlisted IP). Blocks on failure.
+    cmds:
+      - curl -sfS --max-time 10 https://tripbot.whalecore.com/health/live > /dev/null
+      - 'echo "✓ tripbot.whalecore.com/health/live"'
+
+  release:smoke:local:
+    desc: Smoke-check in-cluster tripbot+vlc-server health via kubectl port-forward.
+    cmds:
+      - bin/release-smoke-local
+
+  release:smoke:stage-1:
+    desc: Deploy stage-1 to local k3d, wait for rollouts, smoke-test public+local.
+    cmds:
+      - task -d {{.HOME}}/adanalife/infra k8s-apply-stage-1
+      - kubectl rollout status deploy/tripbot     --timeout=120s
+      - kubectl rollout status deploy/vlc-server  --timeout=120s
+      - kubectl rollout status deploy/obs         --timeout=120s
+      - kubectl rollout status deploy/cloudflared --timeout=60s
+      - task: release:smoke:local
+      - task: release:smoke:whalecore
+
+  release:smoke:
+    desc: Alias for release:smoke:stage-1
+    cmds:
+      - task: release:smoke:stage-1

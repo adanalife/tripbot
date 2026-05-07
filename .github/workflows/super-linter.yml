@@ -13,18 +13,41 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      # fetch-depth: 0 is required by super-linter v6+: it diffs against
+      # the default branch (develop) to figure out which files changed,
+      # which means develop has to be present in the local checkout.
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - name: run-linters
-        uses: github/super-linter@v4.5.1
+        uses: super-linter/super-linter@v8.6.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # don't post a "Super-linter summary" comment on every PR run
+          # (the Actions step summary tab still gets the same content)
+          ENABLE_GITHUB_PULL_REQUEST_SUMMARY_COMMENT: false
           # disabled because it's not working with C libs
           VALIDATE_GO: false
-          # disabled cause there are lots to change in Dockerfile.nvidia
+          # disabled — none of the in-tree Dockerfiles have been
+          # audited against hadolint yet.
           VALIDATE_DOCKERFILE_HADOLINT: false
           # disabled cause they dont support CRDs rn
-          VALIDATE_KUBERNETES_KUBEVAL: false
+          VALIDATE_KUBERNETES_KUBECONFORM: false
           # disabled until we go through and fix the issues
           VALIDATE_JSCPD: false
           VALIDATE_ENV: false
-          VALIDATE_SQL: false
+          # disabled until we can resolve their issues
+          VALIDATE_BIOME_FORMAT: false
+          VALIDATE_CHECKOV: false
+          VALIDATE_GITHUB_ACTIONS: false
+          VALIDATE_GITHUB_ACTIONS_ZIZMOR: false
+          VALIDATE_GO_MODULES: false
+          VALIDATE_GO_RELEASER: false
+          VALIDATE_JSON_PRETTIER: false
+          VALIDATE_MARKDOWN_PRETTIER: false
+          VALIDATE_NATURAL_LANGUAGE: false
+          VALIDATE_SHELL_SHFMT: false
+          VALIDATE_SPELL_CODESPELL: false
+          VALIDATE_SQLFLUFF: false
+          VALIDATE_TRIVY: false
+          VALIDATE_YAML_PRETTIER: false

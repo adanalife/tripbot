@@ -21,6 +21,7 @@ RUN echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula sele
          xvfb \
          x11vnc \
          fluxbox \
+         feh \
          tini \
          gettext-base \
          procps \
