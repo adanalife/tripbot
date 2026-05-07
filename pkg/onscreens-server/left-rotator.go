@@ -3,17 +3,12 @@ package onscreensServer
 import (
 	"log"
 	"math/rand"
-	"path/filepath"
 	"time"
-
-	c "github.com/adanalife/tripbot/pkg/config/vlc-server"
 )
 
 var LeftRotator *Onscreen
 
 var leftRotatorUpdateFrequency = time.Duration(45 * time.Second)
-
-var leftRotatorFile = filepath.Join(c.Conf.RunDir, "left-message.txt")
 
 var possibleLeftMessages = []string{
 	"Crave something new? Try !timewarp",
@@ -35,7 +30,7 @@ var possibleLeftMessages = []string{
 
 func InitLeftRotator() {
 	log.Println("Creating left rotator onscreen")
-	LeftRotator = New(leftRotatorFile)
+	LeftRotator = New()
 	// Show a first message synchronously so the OBS browser source has
 	// content to render the moment it polls — otherwise there's a brief
 	// race where the rotator is empty until the goroutine schedules.
