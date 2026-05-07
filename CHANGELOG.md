@@ -1,5 +1,8 @@
 # Changelog
 
+<!-- markdownlint-disable MD024 -->
+<!-- Duplicate sibling headings (Cleanup, OBS, CI, etc.) are intentional — same section names recur per release entry. Keep-a-Changelog convention. -->
+
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
 ## [v2.1.0] — 2026-05-07
