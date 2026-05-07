@@ -2,6 +2,32 @@
 
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
+## [v2.1.0] — 2026-05-07
+
+Closes a `/auth/twitch` token-leak (wrong non-empty secrets falling through to a 200 with the JSON tokens), adds stage-1 release Taskfile targets so deploy + smoke happen via one command, surfaces OBS crash-dialog state to k8s healthchecks, and drops vestigial onscreens disk-write code. Plus a CI hygiene sweep.
+
+### Security
+
+- **`/auth/twitch` no longer 200s on a wrong non-empty secret.** `isValidSecret` was misnamed and had inverted semantics — for any non-empty wrong `auth=`, the guard fell through and the endpoint returned the JSON-encoded Twitch tokens. Empty/missing `auth=` was correctly 404'd, masking the bug. Renamed to `isInvalidSecret`, dropped the `!` at the call site, flipped the test that pinned the bug. ([#391])
+
+### Cleanup
+
+- **Onscreens disk-write code removed.** With the post-#373 vlc/obs split, OBS renders via browser sources against `vlc-server`'s HTTP endpoints and no longer reads files out of `/opt/data/run/`. Drops the `Snapshot` type, the disk-write paths in `onscreens-server`, the embedded flag-placeholder write, and the unread `*_DIR` env vars from the docker-compose. Lets `infra` drop the `onscreens` PVC + `podAffinity` blocks (separate PR). ([#409])
+
+### OBS
+
+- **Crash-dialog state surfaces in the healthcheck.** When OBS hits the safe-mode crash dialog (e.g. after an unclean shutdown), the process is technically up but the canvas is frozen on a modal. The healthcheck now detects the dialog and reports unhealthy so k8s can restart the pod. ([#380])
+
+### Release
+
+- **`task release:smoke:stage-1`** — combined Taskfile target that applies `k8s/overlays/stage-1`, waits for the four rollouts (tripbot, vlc-server, obs, cloudflared), then hits both local-cluster and `tripbot.whalecore.com` health endpoints. Plus split-out `release:smoke:whalecore` and `release:smoke:local` for re-running just the public or in-cluster checks. Used by Phase 4 of the release checklist. ([#402])
+
+### CI
+
+- **`actions/checkout` v4 → v6** across remaining workflows. ([#404])
+- **`linting.yml` rewritten for `golangci-lint` v2.** v1 was EOL'd upstream; v2 changed config schema (`linters.enable` → `linters.default`), output format flags, and `--timeout` semantics. ([#398])
+- **`vlc.yml` PR runs filtered to VLC-impacting paths.** Avoids spending CI minutes rebuilding the VLC image on PRs that only touch `pkg/server/`, the OBS container, or docs. ([#390])
+
 ## [v2.0.2] — 2026-05-06
 
 Maintenance release. Dead-code cleanup, OBS profile + scene polish, and a sweep through stale GitHub Actions versions. No behavior changes for the bot or the stream.
@@ -91,6 +117,7 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 - **2022–2026** — Dormant. Dependabot kept Go modules, action versions, and the Go base image bumped, and the now-retired auto-bump workflow tagged `v1.9.0` and `v1.9.1` along the way without a substantive feature delta.
 - **2026** — Full revival starting with [#366]. See v2.0.0 above.
 
+[v2.1.0]: https://github.com/adanalife/tripbot/releases/tag/v2.1.0
 [v2.0.2]: https://github.com/adanalife/tripbot/releases/tag/v2.0.2
 [v2.0.1]: https://github.com/adanalife/tripbot/releases/tag/v2.0.1
 [v2.0.0]: https://github.com/adanalife/tripbot/releases/tag/v2.0.0
@@ -120,3 +147,10 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#396]: https://github.com/adanalife/tripbot/pull/396
 [#397]: https://github.com/adanalife/tripbot/pull/397
 [#399]: https://github.com/adanalife/tripbot/pull/399
+[#380]: https://github.com/adanalife/tripbot/pull/380
+[#390]: https://github.com/adanalife/tripbot/pull/390
+[#391]: https://github.com/adanalife/tripbot/pull/391
+[#398]: https://github.com/adanalife/tripbot/pull/398
+[#402]: https://github.com/adanalife/tripbot/pull/402
+[#404]: https://github.com/adanalife/tripbot/pull/404
+[#409]: https://github.com/adanalife/tripbot/pull/409
