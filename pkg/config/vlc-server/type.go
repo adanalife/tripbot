@@ -11,10 +11,8 @@ type VlcServerConfig struct {
 
 	// VideoDir is where the videos live
 	VideoDir string `default:"/opt/data/Dashcam/_all" envconfig:"VIDEO_DIR"`
-	// RunDir is where temporary-but-important runtime files live (the
-	// vlc-server pidfile, today). Onscreen state used to live here too
-	// before the OBS browser-source migration; the directory is now
-	// pidfile-only and works fine on an EmptyDir / tmpfs in k8s.
+	// RunDir is where temporary-but-important runtime files (the
+	// vlc-server pidfile) live. EmptyDir / tmpfs is sufficient in k8s.
 	RunDir string `default:"/opt/data/run" envconfig:"RUN_DIR"`
 
 	// VLCPidFile is where the vlc-server PID file lives
