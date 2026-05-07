@@ -7,12 +7,28 @@ import (
 	"net/http"
 	"path/filepath"
 
-	c "github.com/adanalife/tripbot/pkg/config/vlc-server"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	onscreensServer "github.com/adanalife/tripbot/pkg/onscreens-server"
 	"github.com/gorilla/mux"
 )
+
+// flagPlaceholderPNG is a 1×1 transparent PNG served by the flag asset
+// endpoint while the state-driven flag swap is disabled (see
+// onscreens-server/flag.go's TODO). The browser source's <img> tag
+// fetches this URL even when the onscreen is hidden, so we serve a
+// valid PNG to keep the request quiet rather than 404.
+var flagPlaceholderPNG = []byte{
+	0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+	0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+	0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+	0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4,
+	0x89, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x44, 0x41,
+	0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00,
+	0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00,
+	0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae,
+	0x42, 0x60, 0x82,
+}
 
 //go:embed templates/onscreen.html.tmpl
 var onscreenTemplates embed.FS
@@ -66,9 +82,9 @@ var onscreenRegistry = map[string]onscreenStyle{
 // onscreensStateHandler returns a JSON snapshot of every onscreen's current
 // state. The OBS browser-source HTML pages poll this endpoint and re-render.
 func onscreensStateHandler(w http.ResponseWriter, r *http.Request) {
-	out := make(map[string]onscreensServer.Snapshot, len(onscreenRegistry))
+	out := make(map[string]*onscreensServer.Onscreen, len(onscreenRegistry))
 	for name, style := range onscreenRegistry {
-		out[name] = style.get().Snapshot()
+		out[name] = style.get()
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
@@ -95,14 +111,18 @@ func onscreensRenderHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // onscreensAssetHandler serves the raw image bytes for image-type onscreens.
-// Today only `gps` and `flag` resolve; both pull from the on-disk source the
-// onscreens-server package already manages.
+// `gps` resolves to the checked-in GPS overlay; `flag` returns a 1×1
+// transparent placeholder while the state-driven flag swap is offline.
 func onscreensAssetHandler(w http.ResponseWriter, r *http.Request) {
 	switch mux.Vars(r)["name"] {
 	case "gps":
 		http.ServeFile(w, r, filepath.Join(helpers.ProjectRoot(), "assets", "GPS.png"))
 	case "flag":
-		http.ServeFile(w, r, filepath.Join(c.Conf.RunDir, "flag.png"))
+		w.Header().Set("Content-Type", "image/png")
+		w.Header().Set("Cache-Control", "no-store")
+		if _, err := w.Write(flagPlaceholderPNG); err != nil {
+			terrors.Log(err, "writing flag placeholder")
+		}
 	default:
 		http.NotFound(w, r)
 	}
