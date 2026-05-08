@@ -12,9 +12,14 @@ import (
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/scoreboards"
 	"github.com/adanalife/tripbot/pkg/users"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 var onscreensServerURL = "http://" + c.Conf.VlcServerHost
+
+// httpClient wraps the default transport with OpenTelemetry instrumentation
+// so outbound calls produce spans. See pkg/vlc-client for the same pattern.
+var httpClient = &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)}
 
 func HideMiddleText() error {
 	_, err := getUrl(onscreensServerURL + "/onscreens/middle/hide")
@@ -114,7 +119,7 @@ func HideGPSImage() error {
 
 //TODO: move this to a common location
 func getUrl(url string) (string, error) {
-	response, err := http.Get(url)
+	response, err := httpClient.Get(url)
 	if err != nil {
 		terrors.Log(err, "error connecting to VLC server")
 		return "", err

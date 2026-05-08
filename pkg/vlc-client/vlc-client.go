@@ -7,10 +7,17 @@ import (
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 //TODO: eventually support HTTPS
 var vlcServerURL = "http://" + c.Conf.VlcServerHost
+
+// httpClient wraps the default transport with OpenTelemetry instrumentation
+// so outbound calls produce spans. Most callers here are cron/IRC-driven
+// (no inbound HTTP context), so traceparent propagation is best-effort
+// until ctx-threaded variants of these helpers exist.
+var httpClient = &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)}
 
 // CurrentlyPlaying finds the currently-playing video path
 func CurrentlyPlaying() string {
@@ -71,7 +78,7 @@ func Back(n int) error {
 
 //TODO: move this to a common location
 func getUrl(url string) (string, error) {
-	response, err := http.Get(url)
+	response, err := httpClient.Get(url)
 	if err != nil {
 		terrors.Log(err, "error connecting to VLC server")
 		return "", err
