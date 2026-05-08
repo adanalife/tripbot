@@ -5,6 +5,19 @@
 
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
+## [v2.2.2] — 2026-05-08
+
+Stage-1 verification of v2.2.1 surfaced two cosmetic-but-correctness-bearing follow-ups; this release picks them up.
+
+### Observability
+
+- **`vlc-server`'s `/version` now populates `sha` and `built_at`.** The vlc Dockerfile was building from a single-file path (`cmd/vlc-server/vlc-server.go`), which bypasses Go's automatic `-buildvcs` VCS metadata embedding. Switched to the package path (`./cmd/vlc-server`) — same form `tripbot` was already using. `/etc/tripbot/sha` is unaffected (that's plumbed via the `SHA` build-arg). ([#423])
+- **`/version` no longer returns a `dirty` field.** `runtime/debug.ReadBuildInfo()`'s `vcs.modified` read `true` even on a build of the clean tagged v2.2.1 commit (likely an `actions/checkout@v6` LFS-materialization artifact). Until the root cause is understood, a perpetually-true `dirty` field is misleading; remove from the JSON shape on both Go services. Restoring is tracked as a follow-up. ([#423])
+
+### CI
+
+- **`ankitvgupta/pr-updater` bumped 1.4.0 → 1.4.1.** Dependabot. ([#415])
+
 ## [v2.2.1] — 2026-05-08
 
 Re-ship of v2.2.0 with corrected version stamping. v2.2.0's `release.yml` run failed at the new `Verify version stamping` gate on every per-arch build leg, so the multi-arch `:2.2.0` and `:latest` manifests were never assembled — only broken per-arch tags reached Docker Hub. v2.2.1 publishes those manifests correctly.
@@ -187,3 +200,5 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#417]: https://github.com/adanalife/tripbot/pull/417
 [#419]: https://github.com/adanalife/tripbot/pull/419
 [#421]: https://github.com/adanalife/tripbot/pull/421
+[#415]: https://github.com/adanalife/tripbot/pull/415
+[#423]: https://github.com/adanalife/tripbot/pull/423
