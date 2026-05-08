@@ -43,7 +43,9 @@ COPY . .
 RUN ln -s /go/src/github.com/adanalife/tripbot /opt/tripbot \
   && mkdir -p /opt/data
 
+ARG VERSION=dev
+
 WORKDIR /opt/tripbot
-RUN go build -o bin/vlc-server cmd/vlc-server/vlc-server.go
+RUN go build -ldflags="-X main.version=${VERSION}" -o bin/vlc-server cmd/vlc-server/vlc-server.go
 
 ENTRYPOINT ["/opt/tripbot/script/container_startup.sh"]
