@@ -37,7 +37,7 @@ func webhooksTwitchHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Println("returning challenge")
-	fmt.Fprintf(w, string(challenge[0]))
+	fmt.Fprint(w, string(challenge[0]))
 }
 
 // user webhooks are received via POST at this url
@@ -105,7 +105,7 @@ func authTwitchHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	fmt.Fprintf(w, twitchAuthJSON())
+	fmt.Fprint(w, twitchAuthJSON())
 }
 
 // oauth callback URL, requests come from Twitch and have a special code

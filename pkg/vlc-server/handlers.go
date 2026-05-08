@@ -20,7 +20,7 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 
 func vlcCurrentHandler(w http.ResponseWriter, r *http.Request) {
 	// return the currently-playing file
-	fmt.Fprintf(w, currentlyPlaying())
+	fmt.Fprint(w, currentlyPlaying())
 }
 
 func vlcPlayHandler(w http.ResponseWriter, r *http.Request) {
