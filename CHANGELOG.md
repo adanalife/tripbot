@@ -5,6 +5,24 @@
 
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
+## [v2.2.0] — 2026-05-08
+
+Ships first-class build-version exposure across all three containers (HTTP `/version`, `/etc/tripbot/{version,sha}`, startup log lines) and the Go-side of OpenTelemetry instrumentation — `service.version` now reads as the real release tag in Grafana instead of `dev`. Pairs with the infra-side Grafana Cloud OTLP wiring landing separately. Plus a Go toolchain bump.
+
+### Observability
+
+- **OpenTelemetry tracing, metrics, and logging.** New `pkg/telemetry` brings up OTel SDK providers from `OTEL_*` env vars, no-ops cleanly when `OTEL_SDK_DISABLED=true` or no endpoint is set. Both `tripbot` and `vlc-server` mains pass their `version` string into `telemetry.Init(...)` for `service.version` resource attribution; the HTTP servers wrap their handlers with `otelhttp.NewHandler` for trace propagation. Grafana Cloud OTLP creds are injected via the `grafana-cloud-otlp` Secret on stage-1 (see infra side). ([#411])
+- **Build version surfaces on every container.** Three new ways to read what's deployed: HTTP `GET/HEAD /version` on the Go services returning JSON `{tag, sha, built_at, dirty}`; `/etc/tripbot/version` + `/etc/tripbot/sha` baked into all three images at build time; container startup logs include the version on the first line. The Go `tag` ldflag and `runtime/debug.ReadBuildInfo()` populate the JSON together. ([#419])
+
+### CI
+
+- **`release.yml` gates on version stamping.** New `.github/scripts/verify-stamped-image.sh` runs after each per-arch build/push, pulls the image, and asserts `/etc/tripbot/{version,sha}` match the release tag and `github.sha`. Fails the workflow if any image reads `version=dev` so a regression in the build-args plumbing can't ship a tagged release with placeholder values. ([#419])
+- **PR-time CI verifies version files.** `tripbot.yml` / `vlc.yml` / `obs.yml` each `docker exec test -s /etc/tripbot/{version,sha}` after bring-up; the Go containers also curl `/version` to confirm the endpoint serves. Catches Dockerfile-level regressions at PR time. ([#419])
+
+### Tooling
+
+- **Go 1.26.3.** Bumps the Go toolchain pin (test-image base + `go.mod`) to keep us on a current release. ([#417])
+
 ## [v2.1.0] — 2026-05-07
 
 Closes a `/auth/twitch` token-leak (wrong non-empty secrets falling through to a 200 with the JSON tokens), adds stage-1 release Taskfile targets so deploy + smoke happen via one command, surfaces OBS crash-dialog state to k8s healthchecks, and drops vestigial onscreens disk-write code. Plus a CI hygiene sweep.
@@ -157,3 +175,6 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#402]: https://github.com/adanalife/tripbot/pull/402
 [#404]: https://github.com/adanalife/tripbot/pull/404
 [#409]: https://github.com/adanalife/tripbot/pull/409
+[#411]: https://github.com/adanalife/tripbot/pull/411
+[#417]: https://github.com/adanalife/tripbot/pull/417
+[#419]: https://github.com/adanalife/tripbot/pull/419
