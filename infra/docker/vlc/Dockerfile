@@ -47,7 +47,7 @@ ARG VERSION=dev
 ARG SHA=unknown
 
 WORKDIR /opt/tripbot
-RUN go build -ldflags="-X main.version=${VERSION}" -o bin/vlc-server cmd/vlc-server/vlc-server.go
+RUN go build -ldflags="-X main.version=${VERSION}" -o bin/vlc-server ./cmd/vlc-server
 
 RUN mkdir -p /etc/tripbot \
   && echo "${VERSION}" > /etc/tripbot/version \

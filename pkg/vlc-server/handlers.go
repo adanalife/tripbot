@@ -40,7 +40,6 @@ func versionHandler(w http.ResponseWriter, r *http.Request) {
 		Tag     string `json:"tag"`
 		Sha     string `json:"sha"`
 		BuiltAt string `json:"built_at"`
-		Dirty   bool   `json:"dirty"`
 	}{Tag: versionTag}
 
 	if info, ok := debug.ReadBuildInfo(); ok {
@@ -50,8 +49,6 @@ func versionHandler(w http.ResponseWriter, r *http.Request) {
 				resp.Sha = s.Value
 			case "vcs.time":
 				resp.BuiltAt = s.Value
-			case "vcs.modified":
-				resp.Dirty = s.Value == "true"
 			}
 		}
 	}
