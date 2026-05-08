@@ -76,6 +76,22 @@ jobs:
     - name: Check VLC current video
       run: curl -v http://localhost:$VLC_PORT/vlc/current
 
+    - name: Verify version files baked into image
+      run: |
+        cid=$(docker compose \
+          --project-directory . \
+          -f infra/docker/docker-compose.yml \
+          -f infra/docker/docker-compose.testing.yml \
+          -f infra/docker/docker-compose.github.yml \
+          ps -q vlc)
+        docker exec "$cid" test -s /etc/tripbot/version
+        docker exec "$cid" test -s /etc/tripbot/sha
+        echo "version: $(docker exec "$cid" cat /etc/tripbot/version)"
+        echo "sha:     $(docker exec "$cid" cat /etc/tripbot/sha)"
+
+    - name: Verify /version HTTP endpoint
+      run: curl -fsS http://localhost:$VLC_PORT/version
+
     - name: Check container logs
       run: |
         docker compose \

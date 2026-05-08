@@ -6,8 +6,10 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 
+ARG VERSION=dev
+
 COPY . .
-RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /out/tripbot ./cmd/tripbot
+RUN CGO_ENABLED=0 go build -ldflags="-s -w -X main.version=${VERSION}" -o /out/tripbot ./cmd/tripbot
 
 # Runtime: minimal Ubuntu 24.04 matching the VLC/OBS containers
 FROM ubuntu:24.04
@@ -21,6 +23,12 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /out/tripbot /usr/local/bin/tripbot
+
+ARG VERSION=dev
+ARG SHA=unknown
+RUN mkdir -p /etc/tripbot \
+  && echo "${VERSION}" > /etc/tripbot/version \
+  && echo "${SHA}" > /etc/tripbot/sha
 
 EXPOSE 8080
 

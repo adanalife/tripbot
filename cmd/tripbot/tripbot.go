@@ -37,10 +37,12 @@ var telemetryShutdown telemetry.ShutdownFunc
 
 // main performs the various steps to get the bot running
 func main() {
+	log.Println(aurora.Cyan(fmt.Sprintf("tripbot version %s", version)))
 	createRandomSeed()
 	listenForShutdown()
 	initializeTelemetry()
 	initializeErrorLogger()
+	server.SetVersion(version)
 	startHttpServer()
 	findInitialVideo()
 	users.InitLeaderboard()

@@ -34,6 +34,9 @@ func Start() {
 	hp.HandleFunc("/live", healthHandler)
 	hp.HandleFunc("/ready", healthHandler)
 
+	// version endpoint — returns build metadata as JSON
+	r.HandleFunc("/version", versionHandler).Methods("GET", "HEAD")
+
 	// vlc endpoints
 	vlc := r.PathPrefix("/vlc").Methods("GET").Subrouter()
 	vlc.HandleFunc("/current", vlcCurrentHandler)

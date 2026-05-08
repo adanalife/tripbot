@@ -27,6 +27,8 @@ var version = "dev"
 var telemetryShutdown telemetry.ShutdownFunc
 
 func main() {
+	log.Println(aurora.Cyan(fmt.Sprintf("vlc-server version %s", version)))
+
 	// we don't yet support libvlc on darwin
 	if helpers.RunningOnDarwin() {
 		log.Fatal("This doesn't yet work on darwin")
@@ -55,6 +57,7 @@ func main() {
 	vlcServer.PlayRandom() // play a random video
 
 	// start the webserver
+	vlcServer.SetVersion(version)
 	vlcServer.Start()
 
 	// listen for termination signals and gracefully shutdown
