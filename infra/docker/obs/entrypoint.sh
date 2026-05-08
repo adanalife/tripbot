@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "OBS container, tripbot version $(cat /etc/tripbot-version 2>/dev/null || echo dev)"
+echo "OBS container, tripbot version $(cat /etc/tripbot/version 2>/dev/null || echo dev) (sha: $(cat /etc/tripbot/sha 2>/dev/null || echo unknown))"
 
 OBS_HOME="${HOME:-/root}/.config/obs-studio"
 mkdir -p "$OBS_HOME/basic/profiles/ADanaLife" "$OBS_HOME/basic/scenes"

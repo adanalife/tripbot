@@ -24,6 +24,12 @@ RUN apt-get update \
 
 COPY --from=builder /out/tripbot /usr/local/bin/tripbot
 
+ARG VERSION=dev
+ARG SHA=unknown
+RUN mkdir -p /etc/tripbot \
+  && echo "${VERSION}" > /etc/tripbot/version \
+  && echo "${SHA}" > /etc/tripbot/sha
+
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD curl -fsS http://localhost:8080/health/live
