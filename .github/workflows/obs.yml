@@ -147,6 +147,20 @@ jobs:
         echo "OBS failed to become healthy" >&2
         exit 1
 
+    - name: Verify version files baked into image
+      run: |
+        cid=$(docker compose \
+          --project-directory . \
+          -f infra/docker/docker-compose.yml \
+          ${{ matrix.arch_compose }} \
+          -f infra/docker/docker-compose.testing.yml \
+          -f infra/docker/docker-compose.github.yml \
+          ps -q obs)
+        docker exec "$cid" test -s /etc/tripbot/version
+        docker exec "$cid" test -s /etc/tripbot/sha
+        echo "version: $(docker exec "$cid" cat /etc/tripbot/version)"
+        echo "sha:     $(docker exec "$cid" cat /etc/tripbot/sha)"
+
     - name: Check VLC container logs
       if: always()
       run: |

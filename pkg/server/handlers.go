@@ -1,10 +1,12 @@
 package server
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"net/http"
+	"runtime/debug"
 
 	"github.com/adanalife/tripbot/pkg/chatbot"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
@@ -14,10 +16,52 @@ import (
 	"github.com/logrusorgru/aurora"
 )
 
+// versionTag is set by main via SetVersion; overridden at build time
+// through `-ldflags "-X main.version=..."`.
+var versionTag = "dev"
+
+// SetVersion lets cmd/tripbot inject its build-time version string
+// before the HTTP server starts.
+func SetVersion(v string) {
+	if v != "" {
+		versionTag = v
+	}
+}
+
 //TODO: write real healthchecks for ready vs live
 // healthcheck URL, for tools to verify the bot is alive
 func healthHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "OK")
+}
+
+// versionHandler returns build metadata as JSON. The tag comes from the
+// build-time ldflag; sha + built_at are read from the binary's embedded
+// VCS info (Go's automatic -buildvcs).
+func versionHandler(w http.ResponseWriter, r *http.Request) {
+	resp := struct {
+		Tag      string `json:"tag"`
+		Sha      string `json:"sha"`
+		BuiltAt  string `json:"built_at"`
+		Dirty    bool   `json:"dirty"`
+	}{Tag: versionTag}
+
+	if info, ok := debug.ReadBuildInfo(); ok {
+		for _, s := range info.Settings {
+			switch s.Key {
+			case "vcs.revision":
+				resp.Sha = s.Value
+			case "vcs.time":
+				resp.BuiltAt = s.Value
+			case "vcs.modified":
+				resp.Dirty = s.Value == "true"
+			}
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		terrors.Log(err, "couldn't encode version response")
+	}
 }
 
 // twitch issues a request here when creating a new webhook subscription
@@ -37,7 +81,7 @@ func webhooksTwitchHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Println("returning challenge")
-	fmt.Fprintf(w, string(challenge[0]))
+	fmt.Fprint(w, string(challenge[0]))
 }
 
 // user webhooks are received via POST at this url
@@ -105,7 +149,7 @@ func authTwitchHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	fmt.Fprintf(w, twitchAuthJSON())
+	fmt.Fprint(w, twitchAuthJSON())
 }
 
 // oauth callback URL, requests come from Twitch and have a special code

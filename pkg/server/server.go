@@ -17,6 +17,7 @@ import (
 	negronimiddleware "github.com/slok/go-http-metrics/middleware/negroni"
 	"github.com/unrolled/secure"
 	"github.com/urfave/negroni"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 var server *http.Server
@@ -31,6 +32,9 @@ func Start() {
 	hp := r.PathPrefix("/health").Methods("GET", "HEAD").Subrouter()
 	hp.HandleFunc("/live", healthHandler)
 	hp.HandleFunc("/ready", healthHandler)
+
+	// version endpoint — returns build metadata as JSON
+	r.HandleFunc("/version", versionHandler).Methods("GET", "HEAD")
 
 	// webhooks endpoints
 	// note that these can be both GET and POST requests
@@ -88,7 +92,7 @@ func Start() {
 		ReadTimeout:    time.Second * 15,
 		IdleTimeout:    time.Second * 60,
 		MaxHeaderBytes: 1 << 20, // 1 MB
-		Handler:        app,     // Pass our instance of negroni in
+		Handler:        otelhttp.NewHandler(app, c.Conf.ServerType),
 	}
 
 	//TODO: add graceful shutdown

@@ -51,8 +51,17 @@ jobs:
           file: infra/docker/tripbot/Dockerfile
           tags: ${{ steps.meta.outputs.tags }}
           push: true
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
+            SHA=${{ github.sha }}
           cache-from: type=gha,scope=tripbot-${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=tripbot-${{ matrix.arch }}
+
+      - name: Verify version stamping
+        run: |
+          IMAGE="adanalife/tripbot:${{ steps.meta.outputs.version }}-${{ matrix.arch }}"
+          .github/scripts/verify-stamped-image.sh "$IMAGE" \
+            "${{ steps.meta.outputs.version }}" "${{ github.sha }}"
 
   tripbot-manifest:
     needs: tripbot-build
@@ -130,8 +139,17 @@ jobs:
           file: infra/docker/vlc/Dockerfile
           tags: ${{ steps.meta.outputs.tags }}
           push: true
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
+            SHA=${{ github.sha }}
           cache-from: type=gha,scope=vlc-${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=vlc-${{ matrix.arch }}
+
+      - name: Verify version stamping
+        run: |
+          IMAGE="adanalife/vlc:${{ steps.meta.outputs.version }}-${{ matrix.arch }}"
+          .github/scripts/verify-stamped-image.sh "$IMAGE" \
+            "${{ steps.meta.outputs.version }}" "${{ github.sha }}"
 
   vlc-manifest:
     needs: vlc-build
@@ -216,8 +234,17 @@ jobs:
           file: ${{ matrix.dockerfile }}
           tags: ${{ steps.meta.outputs.tags }}
           push: true
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
+            SHA=${{ github.sha }}
           cache-from: type=gha,scope=obs-${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=obs-${{ matrix.arch }}
+
+      - name: Verify version stamping
+        run: |
+          IMAGE="adanalife/obs:${{ steps.meta.outputs.version }}-${{ matrix.arch }}"
+          .github/scripts/verify-stamped-image.sh "$IMAGE" \
+            "${{ steps.meta.outputs.version }}" "${{ github.sha }}"
 
   obs-manifest:
     needs: obs-build

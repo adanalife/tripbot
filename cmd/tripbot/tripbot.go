@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"math/rand"
@@ -17,6 +18,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/helpers"
 	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
 	"github.com/adanalife/tripbot/pkg/server"
+	"github.com/adanalife/tripbot/pkg/telemetry"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/adanalife/tripbot/pkg/video"
@@ -26,13 +28,21 @@ import (
 	"github.com/logrusorgru/aurora"
 )
 
+// version is overridable at build time via -ldflags "-X main.version=...".
+var version = "dev"
+
 var client *twitch.Client
+
+var telemetryShutdown telemetry.ShutdownFunc
 
 // main performs the various steps to get the bot running
 func main() {
+	log.Println(aurora.Cyan(fmt.Sprintf("tripbot version %s", version)))
 	createRandomSeed()
 	listenForShutdown()
+	initializeTelemetry()
 	initializeErrorLogger()
+	server.SetVersion(version)
 	startHttpServer()
 	findInitialVideo()
 	users.InitLeaderboard()
@@ -55,6 +65,18 @@ func listenForShutdown() {
 	helpers.WritePidFile(c.Conf.TripbotPidFile)
 	// start the graceful shutdown listener
 	go gracefulShutdown()
+}
+
+// initializeTelemetry brings up OpenTelemetry providers (traces, metrics,
+// logs). No-ops cleanly if OTEL_SDK_DISABLED is set or no OTLP endpoint
+// is configured — see pkg/telemetry.
+func initializeTelemetry() {
+	shutdown, err := telemetry.Init(context.Background(), "tripbot", version)
+	if err != nil {
+		// telemetry init failure shouldn't crash the bot — log and continue.
+		log.Println(aurora.Yellow(fmt.Sprintf("telemetry init: %v", err)))
+	}
+	telemetryShutdown = shutdown
 }
 
 // initializeErrorLogger makes sure the logger is configured
@@ -151,6 +173,13 @@ func gracefulShutdown() {
 	}
 	background.StopCron()
 	sentry.Flush(time.Second * 5)
+	if telemetryShutdown != nil {
+		flushCtx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+		if err := telemetryShutdown(flushCtx); err != nil {
+			log.Printf("telemetry shutdown: %v", err)
+		}
+		cancel()
+	}
 	os.Exit(1)
 }
 
