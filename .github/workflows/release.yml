@@ -51,6 +51,8 @@ jobs:
           file: infra/docker/tripbot/Dockerfile
           tags: ${{ steps.meta.outputs.tags }}
           push: true
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
           cache-from: type=gha,scope=tripbot-${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=tripbot-${{ matrix.arch }}
 
@@ -130,6 +132,8 @@ jobs:
           file: infra/docker/vlc/Dockerfile
           tags: ${{ steps.meta.outputs.tags }}
           push: true
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
           cache-from: type=gha,scope=vlc-${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=vlc-${{ matrix.arch }}
 
@@ -216,6 +220,8 @@ jobs:
           file: ${{ matrix.dockerfile }}
           tags: ${{ steps.meta.outputs.tags }}
           push: true
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
           cache-from: type=gha,scope=obs-${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=obs-${{ matrix.arch }}
 
