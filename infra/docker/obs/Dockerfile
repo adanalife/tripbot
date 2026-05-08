@@ -39,6 +39,9 @@ RUN chmod +x /opt/obs/entrypoint.sh /opt/obs/healthcheck.sh
 
 COPY assets/twitch-overlay-left.png assets/twitch-overlay-right.png /opt/tripbot/assets/
 
+ARG VERSION=dev
+RUN echo "${VERSION}" > /etc/tripbot-version
+
 EXPOSE 5900
 
 ENV VNC_PASSWD=123456
