@@ -5,6 +5,14 @@
 
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
+## [v2.2.1] — 2026-05-08
+
+Re-ship of v2.2.0 with corrected version stamping. v2.2.0's `release.yml` run failed at the new `Verify version stamping` gate on every per-arch build leg, so the multi-arch `:2.2.0` and `:latest` manifests were never assembled — only broken per-arch tags reached Docker Hub. v2.2.1 publishes those manifests correctly.
+
+### CI
+
+- **Use bare semver for the `VERSION` build-arg and the verify step's image name.** `docker/metadata-action`'s `outputs.version` reflects the per-arch `flavor: suffix=-${arch}`, so it carried the arch suffix already. Plumbing it as the `VERSION` build-arg stamped binaries with `service.version=2.2.0-amd64` (defeating the v2.2.0 release's clean version-stamping); the verify step then double-applied the arch suffix and tried to pull `:2.2.0-amd64-amd64`, which doesn't exist. New `Resolve bare version` step per build job exposes `${GITHUB_REF_NAME#v}` (e.g., `2.2.0`) for both consumers; the matrix arch only goes onto the published per-arch tag. ([#421])
+
 ## [v2.2.0] — 2026-05-08
 
 Ships first-class build-version exposure across all three containers (HTTP `/version`, `/etc/tripbot/{version,sha}`, startup log lines) and the Go-side of OpenTelemetry instrumentation — `service.version` now reads as the real release tag in Grafana instead of `dev`. Pairs with the infra-side Grafana Cloud OTLP wiring landing separately. Plus a Go toolchain bump.
@@ -178,3 +186,4 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#411]: https://github.com/adanalife/tripbot/pull/411
 [#417]: https://github.com/adanalife/tripbot/pull/417
 [#419]: https://github.com/adanalife/tripbot/pull/419
+[#421]: https://github.com/adanalife/tripbot/pull/421
