@@ -33,6 +33,9 @@ func Start() {
 	hp.HandleFunc("/live", healthHandler)
 	hp.HandleFunc("/ready", healthHandler)
 
+	// version endpoint — returns build metadata as JSON
+	r.HandleFunc("/version", versionHandler).Methods("GET", "HEAD")
+
 	// webhooks endpoints
 	// note that these can be both GET and POST requests
 	wh := r.PathPrefix("/webhooks").Subrouter()
