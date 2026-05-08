@@ -5,7 +5,7 @@
 # this), and vlc/Dockerfile does have it but is heavyweight (X server,
 # supervisor, the VLC daemon itself). Easier to keep tests on a small
 # purpose-built image.
-FROM golang:1.21-bookworm
+FROM golang:1.26-bookworm
 
 RUN apt-get update \
   && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \

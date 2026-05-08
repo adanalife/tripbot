@@ -1,5 +1,5 @@
-# Builder: produce a static-ish tripbot binary with Go 1.21
-FROM golang:1.21-bookworm AS builder
+# Builder: produce a static-ish tripbot binary with Go 1.26
+FROM golang:1.26-bookworm AS builder
 
 WORKDIR /src
 
