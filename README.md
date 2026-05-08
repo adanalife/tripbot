@@ -50,6 +50,25 @@ devenv down
 ```
 
 
+### Finding the deployed build version
+
+Each release stamps its tag and commit SHA into the published images so you can confirm what's running in stage / prod / locally. Three surfaces, in order of preference:
+
+1. **HTTP `/version`** (tripbot bot, vlc-server) — returns JSON `{tag, sha, built_at, dirty}`.
+   ```bash
+   curl http://<host>:8080/version
+   ```
+2. **`/etc/tripbot/version` and `/etc/tripbot/sha`** (all three containers) — plain-text files baked in at build time. Useful when HTTP isn't reachable, or for the OBS container which has no HTTP server.
+   ```bash
+   docker exec <container> cat /etc/tripbot/version
+   docker exec <container> cat /etc/tripbot/sha
+   ```
+3. **Container startup logs** — each container logs its version on the first line of output (`docker logs <container> | head -1`).
+
+The Go binaries also expose `service.version` via OpenTelemetry, so the same value is queryable in Grafana on any traced span / metric / log.
+
+Manual `docker build` invocations default `VERSION=dev` and `SHA=unknown`; only release-tag builds via `.github/workflows/release.yml` populate the real values.
+
 ### Other Useful Docs
 
 #### Infra
