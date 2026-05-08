@@ -1,8 +1,6 @@
 module github.com/adanalife/tripbot
 
-go 1.21
-
-toolchain go1.21.13
+go 1.26.3
 
 require (
 	cloud.google.com/go/logging v1.4.2
