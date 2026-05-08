@@ -44,7 +44,6 @@ func TestVersionHandlerReturnsInjectedTag(t *testing.T) {
 		Tag     string `json:"tag"`
 		Sha     string `json:"sha"`
 		BuiltAt string `json:"built_at"`
-		Dirty   bool   `json:"dirty"`
 	}
 	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
 		t.Fatalf("couldn't decode response: %v", err)
