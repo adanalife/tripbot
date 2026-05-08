@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"fmt"
 	"log"
 	"math/rand"
 	"os"
@@ -13,10 +15,16 @@ import (
 	c "github.com/adanalife/tripbot/pkg/config/vlc-server"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	onscreensServer "github.com/adanalife/tripbot/pkg/onscreens-server"
+	"github.com/adanalife/tripbot/pkg/telemetry"
 	vlcServer "github.com/adanalife/tripbot/pkg/vlc-server"
 	"github.com/getsentry/sentry-go"
 	"github.com/logrusorgru/aurora"
 )
+
+// version is overridable at build time via -ldflags "-X main.version=...".
+var version = "dev"
+
+var telemetryShutdown telemetry.ShutdownFunc
 
 func main() {
 	// we don't yet support libvlc on darwin
@@ -35,6 +43,9 @@ func main() {
 
 	// await graceful shutdown signal
 	listenForShutdown()
+
+	// set up telemetry (no-op if OTEL_SDK_DISABLED)
+	initializeTelemetry()
 
 	// set up error logging
 	initializeErrorLogger()
@@ -60,6 +71,17 @@ func createOnscreens() {
 	onscreensServer.InitTimewarp()
 	onscreensServer.InitLeaderboard()
 	onscreensServer.InitFlagImage()
+}
+
+// initializeTelemetry brings up OpenTelemetry providers (traces, metrics,
+// logs). No-ops cleanly if OTEL_SDK_DISABLED is set or no OTLP endpoint
+// is configured — see pkg/telemetry.
+func initializeTelemetry() {
+	shutdown, err := telemetry.Init(context.Background(), "vlc-server", version)
+	if err != nil {
+		log.Println(aurora.Yellow(fmt.Sprintf("telemetry init: %v", err)))
+	}
+	telemetryShutdown = shutdown
 }
 
 // initializeErrorLogger makes sure the logger is configured
@@ -91,5 +113,12 @@ func gracefulShutdown() {
 	vlcServer.Shutdown()
 	//TODO: stop cron here
 	sentry.Flush(time.Second * 5)
+	if telemetryShutdown != nil {
+		flushCtx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+		if err := telemetryShutdown(flushCtx); err != nil {
+			log.Printf("telemetry shutdown: %v", err)
+		}
+		cancel()
+	}
 	os.Exit(1)
 }
