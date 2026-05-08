@@ -22,6 +22,10 @@ jobs:
         with:
           lfs: true
 
+      - name: Resolve bare version
+        id: ver
+        run: echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
@@ -52,16 +56,16 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           push: true
           build-args: |
-            VERSION=${{ steps.meta.outputs.version }}
+            VERSION=${{ steps.ver.outputs.value }}
             SHA=${{ github.sha }}
           cache-from: type=gha,scope=tripbot-${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=tripbot-${{ matrix.arch }}
 
       - name: Verify version stamping
         run: |
-          IMAGE="adanalife/tripbot:${{ steps.meta.outputs.version }}-${{ matrix.arch }}"
+          IMAGE="adanalife/tripbot:${{ steps.ver.outputs.value }}-${{ matrix.arch }}"
           .github/scripts/verify-stamped-image.sh "$IMAGE" \
-            "${{ steps.meta.outputs.version }}" "${{ github.sha }}"
+            "${{ steps.ver.outputs.value }}" "${{ github.sha }}"
 
   tripbot-manifest:
     needs: tripbot-build
@@ -110,6 +114,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Resolve bare version
+        id: ver
+        run: echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
@@ -140,16 +148,16 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           push: true
           build-args: |
-            VERSION=${{ steps.meta.outputs.version }}
+            VERSION=${{ steps.ver.outputs.value }}
             SHA=${{ github.sha }}
           cache-from: type=gha,scope=vlc-${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=vlc-${{ matrix.arch }}
 
       - name: Verify version stamping
         run: |
-          IMAGE="adanalife/vlc:${{ steps.meta.outputs.version }}-${{ matrix.arch }}"
+          IMAGE="adanalife/vlc:${{ steps.ver.outputs.value }}-${{ matrix.arch }}"
           .github/scripts/verify-stamped-image.sh "$IMAGE" \
-            "${{ steps.meta.outputs.version }}" "${{ github.sha }}"
+            "${{ steps.ver.outputs.value }}" "${{ github.sha }}"
 
   vlc-manifest:
     needs: vlc-build
@@ -201,6 +209,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Resolve bare version
+        id: ver
+        run: echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
@@ -235,16 +247,16 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           push: true
           build-args: |
-            VERSION=${{ steps.meta.outputs.version }}
+            VERSION=${{ steps.ver.outputs.value }}
             SHA=${{ github.sha }}
           cache-from: type=gha,scope=obs-${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=obs-${{ matrix.arch }}
 
       - name: Verify version stamping
         run: |
-          IMAGE="adanalife/obs:${{ steps.meta.outputs.version }}-${{ matrix.arch }}"
+          IMAGE="adanalife/obs:${{ steps.ver.outputs.value }}-${{ matrix.arch }}"
           .github/scripts/verify-stamped-image.sh "$IMAGE" \
-            "${{ steps.meta.outputs.version }}" "${{ github.sha }}"
+            "${{ steps.ver.outputs.value }}" "${{ github.sha }}"
 
   obs-manifest:
     needs: obs-build
