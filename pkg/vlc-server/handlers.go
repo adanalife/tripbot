@@ -1,9 +1,11 @@
 package vlcServer
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
+	"runtime/debug"
 	"strconv"
 
 	terrors "github.com/adanalife/tripbot/pkg/errors"
@@ -13,14 +15,53 @@ import (
 	"github.com/gorilla/mux"
 )
 
+// versionTag is set by main via SetVersion; overridden at build time
+// through `-ldflags "-X main.version=..."`.
+var versionTag = "dev"
+
+// SetVersion lets cmd/vlc-server inject its build-time version string
+// before the HTTP server starts.
+func SetVersion(v string) {
+	if v != "" {
+		versionTag = v
+	}
+}
+
 // healthcheck URL, for tools to verify the stream is alive
 func healthHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "OK")
 }
 
+// versionHandler returns build metadata as JSON. The tag comes from the
+// build-time ldflag; sha + built_at are read from the binary's embedded
+// VCS info (Go's automatic -buildvcs).
+func versionHandler(w http.ResponseWriter, r *http.Request) {
+	resp := struct {
+		Tag     string `json:"tag"`
+		Sha     string `json:"sha"`
+		BuiltAt string `json:"built_at"`
+	}{Tag: versionTag}
+
+	if info, ok := debug.ReadBuildInfo(); ok {
+		for _, s := range info.Settings {
+			switch s.Key {
+			case "vcs.revision":
+				resp.Sha = s.Value
+			case "vcs.time":
+				resp.BuiltAt = s.Value
+			}
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		terrors.Log(err, "couldn't encode version response")
+	}
+}
+
 func vlcCurrentHandler(w http.ResponseWriter, r *http.Request) {
 	// return the currently-playing file
-	fmt.Fprintf(w, currentlyPlaying())
+	fmt.Fprint(w, currentlyPlaying())
 }
 
 func vlcPlayHandler(w http.ResponseWriter, r *http.Request) {

@@ -14,9 +14,7 @@ import (
 )
 
 func incChatCommandCounter(command string) {
-	if cnt, err := instrumentation.ChatCommands.GetMetricWithLabelValues(command); err == nil {
-		cnt.Add(1)
-	}
+	instrumentation.ChatCommands.Inc(command)
 }
 
 func runCommand(user *users.User, message string) {

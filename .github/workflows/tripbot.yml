@@ -73,6 +73,17 @@ jobs:
       - name: Check running containers
         run: docker ps -a
 
+      - name: Verify version files baked into image
+        run: |
+          docker exec tripbot-tripbot-1 test -s /etc/tripbot/version
+          docker exec tripbot-tripbot-1 test -s /etc/tripbot/sha
+          echo "version: $(docker exec tripbot-tripbot-1 cat /etc/tripbot/version)"
+          echo "sha:     $(docker exec tripbot-tripbot-1 cat /etc/tripbot/sha)"
+
+      - name: Verify /version HTTP endpoint
+        run: |
+          docker exec tripbot-tripbot-1 curl -fsS http://localhost:8080/version
+
       - name: Stop containers
         if: always()
         continue-on-error: true

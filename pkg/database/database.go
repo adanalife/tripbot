@@ -7,12 +7,14 @@ import (
 	"os"
 	"time"
 
+	"github.com/XSAM/otelsql"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/jmoiron/sqlx"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 	"github.com/logrusorgru/aurora"
+	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 )
 
 // this is how we will share the DB connection
@@ -42,14 +44,25 @@ func init() {
 }
 
 func connectToDB() *sqlx.DB {
-	dbConnection, err := sqlx.Connect("postgres", connStr())
+	// otelsql.Open instruments the postgres driver so every query becomes
+	// a span; the returned *sql.DB is wrapped into sqlx as usual.
+	db, err := otelsql.Open("postgres", connStr(),
+		otelsql.WithAttributes(semconv.DBSystemPostgreSQL),
+	)
 	if err != nil {
-		//TODO: print the current external IP and the DB details
-		// we don't use terrors here cause it might spam
 		log.Println(aurora.Red("connection to DB failed:"), err.Error())
 		return nil
 	}
-	return dbConnection
+	if err := db.Ping(); err != nil {
+		log.Println(aurora.Red("connection to DB failed:"), err.Error())
+		return nil
+	}
+	if _, err := otelsql.RegisterDBStatsMetrics(db,
+		otelsql.WithAttributes(semconv.DBSystemPostgreSQL),
+	); err != nil {
+		log.Println(aurora.Yellow("could not register DB stats metrics:"), err.Error())
+	}
+	return sqlx.NewDb(db, "postgres")
 }
 
 func Connection() *sqlx.DB {

@@ -17,6 +17,9 @@ import (
 	negronimiddleware "github.com/slok/go-http-metrics/middleware/negroni"
 	"github.com/unrolled/secure"
 	"github.com/urfave/negroni"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
+	"go.opentelemetry.io/otel/trace"
 )
 
 var server *http.Server
@@ -29,29 +32,32 @@ func Start() {
 
 	// healthcheck endpoints
 	hp := r.PathPrefix("/health").Methods("GET", "HEAD").Subrouter()
-	hp.HandleFunc("/live", healthHandler)
-	hp.HandleFunc("/ready", healthHandler)
+	hp.Handle("/live", tagged("/health/live", healthHandler))
+	hp.Handle("/ready", tagged("/health/ready", healthHandler))
+
+	// version endpoint — returns build metadata as JSON
+	r.Handle("/version", tagged("/version", versionHandler)).Methods("GET", "HEAD")
 
 	// webhooks endpoints
 	// note that these can be both GET and POST requests
 	wh := r.PathPrefix("/webhooks").Subrouter()
-	wh.HandleFunc("/twitch", webhooksTwitchHandler).Methods("GET")
-	wh.HandleFunc("/twitch/users/follows", webhooksTwitchUsersFollowsHandler).Methods("POST")
-	wh.HandleFunc("/twitch/subscriptions/events", webhooksTwitchSubscriptionsEventsHandler).Methods("POST")
+	wh.Handle("/twitch", tagged("/webhooks/twitch", webhooksTwitchHandler)).Methods("GET")
+	wh.Handle("/twitch/users/follows", tagged("/webhooks/twitch/users/follows", webhooksTwitchUsersFollowsHandler)).Methods("POST")
+	wh.Handle("/twitch/subscriptions/events", tagged("/webhooks/twitch/subscriptions/events", webhooksTwitchSubscriptionsEventsHandler)).Methods("POST")
 
 	// auth endpoints
 	auth := r.PathPrefix("/auth").Methods("GET").Subrouter()
-	auth.HandleFunc("/twitch", authTwitchHandler)
-	auth.HandleFunc("/callback", authCallbackHandler)
+	auth.Handle("/twitch", tagged("/auth/twitch", authTwitchHandler))
+	auth.Handle("/callback", tagged("/auth/callback", authCallbackHandler))
 
 	// static assets
-	r.HandleFunc("/favicon.ico", faviconHandler).Methods("GET")
+	r.Handle("/favicon.ico", tagged("/favicon.ico", faviconHandler)).Methods("GET")
 
 	// prometheus metrics endpoint
-	r.Path("/metrics").Handler(promhttp.Handler())
+	r.Path("/metrics").Handler(tagged("/metrics", promhttp.Handler().ServeHTTP))
 
 	// catch everything else
-	r.HandleFunc("/", catchAllHandler)
+	r.Handle("/", tagged("/", catchAllHandler))
 
 	if c.Conf.Verbose {
 		helpers.PrintAllRoutes(r)
@@ -88,7 +94,7 @@ func Start() {
 		ReadTimeout:    time.Second * 15,
 		IdleTimeout:    time.Second * 60,
 		MaxHeaderBytes: 1 << 20, // 1 MB
-		Handler:        app,     // Pass our instance of negroni in
+		Handler:        otelhttp.NewHandler(app, c.Conf.ServerType),
 	}
 
 	//TODO: add graceful shutdown
@@ -101,4 +107,20 @@ func Start() {
 // the configured one.
 func isInvalidSecret(secret string) bool {
 	return len(secret) < 1 || secret != c.Conf.TripbotHttpAuth
+}
+
+// tagged wraps a HandlerFunc so the http.route attribute is set on metrics
+// (via otelhttp.Labeler) and traces (via the active span). Negroni doesn't
+// surface the underlying mux route template to the otelhttp middleware, so
+// each registration declares it.
+func tagged(route string, h http.HandlerFunc) http.Handler {
+	attr := semconv.HTTPRoute(route)
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		ctx := req.Context()
+		if labeler, ok := otelhttp.LabelerFromContext(ctx); ok {
+			labeler.Add(attr)
+		}
+		trace.SpanFromContext(ctx).SetAttributes(attr)
+		h(w, req)
+	})
 }

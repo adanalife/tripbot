@@ -15,6 +15,6 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.CI_PERSONAL_ACCESS_TOKEN }}
       - name: Automatic Update
-        uses: ankitvgupta/pr-updater@v1.4.0
+        uses: ankitvgupta/pr-updater@v1.4.1
         env:
           GITHUB_TOKEN: ${{ secrets.CI_PERSONAL_ACCESS_TOKEN }}
