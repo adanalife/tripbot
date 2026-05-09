@@ -17,8 +17,10 @@ import (
 	"log/slog"
 	"os"
 	"strings"
+	"time"
 
 	"go.opentelemetry.io/contrib/bridges/otelslog"
+	otelruntime "go.opentelemetry.io/contrib/instrumentation/runtime"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
@@ -86,6 +88,10 @@ func Init(ctx context.Context, serviceName, serviceVersion string) (ShutdownFunc
 		sdkmetric.WithResource(res),
 	)
 	otel.SetMeterProvider(mp)
+
+	if err := otelruntime.Start(otelruntime.WithMinimumReadMemStatsInterval(15 * time.Second)); err != nil {
+		return noopShutdown, fmt.Errorf("runtime instrumentation: %w", err)
+	}
 
 	logExp, err := otlploghttp.New(ctx)
 	if err != nil {
@@ -161,6 +167,9 @@ func initPromOnlyMeter(ctx context.Context, name, version string) error {
 		sdkmetric.WithResource(res),
 	)
 	otel.SetMeterProvider(mp)
+	if err := otelruntime.Start(otelruntime.WithMinimumReadMemStatsInterval(15 * time.Second)); err != nil {
+		return fmt.Errorf("runtime instrumentation: %w", err)
+	}
 	return nil
 }
 

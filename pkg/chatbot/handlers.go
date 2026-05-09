@@ -1,6 +1,7 @@
 package chatbot
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"strings"
@@ -11,13 +12,18 @@ import (
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/gempir/go-twitch-irc/v2"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
+
+var tracer = otel.Tracer("github.com/adanalife/tripbot/pkg/chatbot")
 
 func incChatCommandCounter(command string) {
 	instrumentation.ChatCommands.Inc(command)
 }
 
-func runCommand(user *users.User, message string) {
+func runCommand(ctx context.Context, user *users.User, message string) {
 	var err error
 	var params []string
 
@@ -43,6 +49,13 @@ func runCommand(user *users.User, message string) {
 		command = command + params[0]
 		// remove the first element from the params
 		params = params[1:]
+	}
+
+	// Tag the active span with the parsed command. Bare-word triggers
+	// (e.g. "hello") aren't included to keep the attribute's cardinality
+	// bounded to the bot's actual command surface (and typos thereof).
+	if strings.HasPrefix(command, "!") {
+		trace.SpanFromContext(ctx).SetAttributes(attribute.String("twitch.command", command))
 	}
 
 	switch command {
@@ -205,6 +218,10 @@ func runCommand(user *users.User, message string) {
 func PrivateMessage(msg twitch.PrivateMessage) {
 	username := msg.User.Name
 
+	ctx, span := tracer.Start(context.Background(), "chatbot.handle_message",
+		trace.WithAttributes(attribute.String("twitch.user", username)))
+	defer span.End()
+
 	// increment the Prometheus counter
 	instrumentation.ChatMessages.Inc()
 
@@ -219,7 +236,7 @@ func PrivateMessage(msg twitch.PrivateMessage) {
 	// log in the user
 	user := users.LoginIfNecessary(username)
 
-	runCommand(user, message)
+	runCommand(ctx, user, message)
 }
 
 // this event fires when a user joins the channel

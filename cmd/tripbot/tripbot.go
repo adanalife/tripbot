@@ -26,7 +26,25 @@ import (
 	"github.com/gempir/go-twitch-irc/v2"
 	"github.com/getsentry/sentry-go"
 	"github.com/logrusorgru/aurora"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
+
+var cronTracer = otel.Tracer("github.com/adanalife/tripbot/cmd/tripbot/cron")
+
+// tracedJob wraps a cron callback in a span so each tick shows up as its
+// own trace. Slow or failing jobs become visible in Grafana traces without
+// having to thread context through the underlying functions (the cron
+// library only accepts func()).
+func tracedJob(name string, fn func()) func() {
+	return func() {
+		_, span := cronTracer.Start(context.Background(), "cron."+name,
+			trace.WithAttributes(attribute.String("cron.job", name)))
+		defer span.End()
+		fn()
+	}
+}
 
 // version is overridable at build time via -ldflags "-X main.version=...".
 var version = "dev"
@@ -190,17 +208,17 @@ func scheduleBackgroundJobs() {
 	var err error
 
 	// schedule these functions
-	err = background.Cron.AddFunc("@every 60s", video.GetCurrentlyPlaying)
-	err = background.Cron.AddFunc("@every 61s", users.UpdateSession)
-	err = background.Cron.AddFunc("@every 62s", users.UpdateLeaderboard)
-	err = background.Cron.AddFunc("@every 5m", onscreensClient.ShowGuessLeaderboard)
-	err = background.Cron.AddFunc("@every 5m", users.PrintCurrentSession)
-	err = background.Cron.AddFunc("@every 5m", mytwitch.GetSubscribers)
-	err = background.Cron.AddFunc("@every 1h", mytwitch.RefreshUserAccessToken)
-	err = background.Cron.AddFunc("@every 2h57m30s", chatbot.Chatter)
-	err = background.Cron.AddFunc("@every 12h", mytwitch.UpdateWebhookSubscriptions)
+	err = background.Cron.AddFunc("@every 60s", tracedJob("video.GetCurrentlyPlaying", video.GetCurrentlyPlaying))
+	err = background.Cron.AddFunc("@every 61s", tracedJob("users.UpdateSession", users.UpdateSession))
+	err = background.Cron.AddFunc("@every 62s", tracedJob("users.UpdateLeaderboard", users.UpdateLeaderboard))
+	err = background.Cron.AddFunc("@every 5m", tracedJob("onscreens.ShowGuessLeaderboard", onscreensClient.ShowGuessLeaderboard))
+	err = background.Cron.AddFunc("@every 5m", tracedJob("users.PrintCurrentSession", users.PrintCurrentSession))
+	err = background.Cron.AddFunc("@every 5m", tracedJob("twitch.GetSubscribers", mytwitch.GetSubscribers))
+	err = background.Cron.AddFunc("@every 1h", tracedJob("twitch.RefreshUserAccessToken", mytwitch.RefreshUserAccessToken))
+	err = background.Cron.AddFunc("@every 2h57m30s", tracedJob("chatbot.Chatter", chatbot.Chatter))
+	err = background.Cron.AddFunc("@every 12h", tracedJob("twitch.UpdateWebhookSubscriptions", mytwitch.UpdateWebhookSubscriptions))
 	if !helpers.RunningOnWindows() {
-		err = background.Cron.AddFunc("@every 12h", mytwitch.SetStreamTags)
+		err = background.Cron.AddFunc("@every 12h", tracedJob("twitch.SetStreamTags", mytwitch.SetStreamTags))
 	}
 
 	if err != nil {
