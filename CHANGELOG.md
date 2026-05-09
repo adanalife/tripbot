@@ -5,6 +5,20 @@
 
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
+## [v2.2.3] — 2026-05-09
+
+Patch release. Three observability follow-ups to v2.2.0's OpenTelemetry wiring, plus one Dependabot bump.
+
+### Observability
+
+- **Go runtime metrics flow through OTLP.** `runtime.Start()` from `go.opentelemetry.io/contrib/instrumentation/runtime` is now wired into `pkg/telemetry/Init` so `process.runtime.go.{goroutines,gc.*,mem.heap.*}` reach Grafana Cloud. Previously the runtime collectors lived in Prometheus's default registry — scraped via `/metrics` but never sent over OTLP — so the Go-runtime dashboard shipped on the infra side was a placeholder. ([#427])
+- **`http.route` populated on metrics and traces.** Every `pkg/server` and `pkg/vlc-server` route now sets `http.route` via `otelhttp.Labeler` and the active span, using mux's `{var}` syntax to keep cardinality bounded. Negroni doesn't surface the underlying mux template to `otelhttp.NewHandler`, so the label was empty before this; the HTTP Routes Explorer dashboard can now group by `http_route` for proper per-endpoint breakdowns. ([#428])
+- **Drop dangling `vlc_server_http_duration` histogram.** `pkg/instrumentation/common.go` declared an OTel histogram that was never `Record`ed; the live HTTP duration metric comes from the `slok/go-http-metrics` Negroni middleware in `pkg/server`. Removing the dead declaration leaves nothing of substance in `common.go`, so the file goes too. ([#429])
+
+### CI
+
+- **`github/codeql-action` bumped 3 → 4.** Dependabot. ([#414])
+
 ## [v2.2.2] — 2026-05-08
 
 Stage-1 verification of v2.2.1 surfaced two cosmetic-but-correctness-bearing follow-ups; this release picks them up.
@@ -202,3 +216,7 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#421]: https://github.com/adanalife/tripbot/pull/421
 [#415]: https://github.com/adanalife/tripbot/pull/415
 [#423]: https://github.com/adanalife/tripbot/pull/423
+[#414]: https://github.com/adanalife/tripbot/pull/414
+[#427]: https://github.com/adanalife/tripbot/pull/427
+[#428]: https://github.com/adanalife/tripbot/pull/428
+[#429]: https://github.com/adanalife/tripbot/pull/429
