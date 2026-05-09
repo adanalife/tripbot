@@ -24,7 +24,7 @@ RUN export DEBIAN_FRONTEND=noninteractive \
   && rm -rf /var/lib/apt/lists/*
 
 ARG TARGETARCH
-RUN curl -fsSL https://go.dev/dl/go1.21.13.linux-${TARGETARCH}.tar.gz \
+RUN curl -fsSL https://go.dev/dl/go1.26.3.linux-${TARGETARCH}.tar.gz \
   | tar -C /usr/local -xz
 ENV PATH="/usr/local/go/bin:/go/bin:${PATH}"
 ENV GOPATH="/go"
