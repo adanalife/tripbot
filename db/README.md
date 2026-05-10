@@ -21,9 +21,23 @@ You might need to add `?sslmode=disable` for local development servers.
 
 ## To run a migration
 
-Migrations are run using [go-migrate](https://github.com/golang-migrate/migrate).
+Migrations are run using [golang-migrate](https://github.com/golang-migrate/migrate). Install with `brew install golang-migrate` on macOS.
+
+Apply all pending migrations:
+
+`migrate -database <postgres://url> -source file://./db/migrate up`
+
+Apply a specific number of pending migrations:
 
 `migrate -database <postgres://url> -source file://./db/migrate up <migration_number>`
+
+Roll back the most recent migration:
+
+`migrate -database <postgres://url> -source file://./db/migrate down 1`
+
+Show the current schema version:
+
+`migrate -database <postgres://url> -source file://./db/migrate version`
 
 ## To create a new migration
 
