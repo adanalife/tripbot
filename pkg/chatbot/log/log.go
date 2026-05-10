@@ -15,7 +15,7 @@ func init() {
 	var err error
 
 	// don't bother with this if we're in a test environment
-	if c.Conf.IsTesting() || c.Conf.IsDevelopment() {
+	if c.Conf.IsTesting() || c.Conf.IsDevelopment() || c.Conf.IsStaging() {
 		return
 	}
 
@@ -37,7 +37,7 @@ func init() {
 }
 
 func ChatMsg(username, msg string) {
-	if c.Conf.IsTesting() || c.Conf.IsDevelopment() {
+	if c.Conf.IsTesting() || c.Conf.IsDevelopment() || c.Conf.IsStaging() {
 		return
 	}
 	chatLogger.Printf("%s: %s", username, msg)
