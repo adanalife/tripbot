@@ -1,5 +1,6 @@
 .env.*
 infra
 !infra/docker/obs
+!infra/docker/vlc/config
 assets/video
 log
