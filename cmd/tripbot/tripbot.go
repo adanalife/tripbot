@@ -57,11 +57,17 @@ var telemetryShutdown telemetry.ShutdownFunc
 func main() {
 	log.Println(aurora.Cyan(fmt.Sprintf("tripbot version %s", version)))
 	createRandomSeed()
+	// shutdownCtx is cancelled on SIGINT/SIGTERM; the HTTP server uses it
+	// to trigger a graceful shutdown so in-flight requests aren't cut.
+	// listenForShutdown's gracefulShutdown goroutine handles the rest of
+	// the app cleanup off the same signals.
+	shutdownCtx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stopSignals()
 	listenForShutdown()
 	initializeTelemetry()
 	initializeErrorLogger()
 	server.SetVersion(version)
-	startHttpServer()
+	startHttpServer(shutdownCtx)
 	findInitialVideo()
 	users.InitLeaderboard()
 	startCron()
@@ -103,10 +109,13 @@ func initializeErrorLogger() {
 }
 
 // startHttpServer starts a webserver, which is
-// used for admin tools and receiving webhooks
-func startHttpServer() {
+// used for admin tools and receiving webhooks. The passed context is
+// honoured by the server for graceful shutdown — when it's cancelled,
+// the server stops accepting new connections and drains in-flight
+// requests up to its shutdown timeout.
+func startHttpServer(ctx context.Context) {
 	// start the HTTP server
-	go server.Start()
+	go server.Start(ctx)
 }
 
 // findInitialVideo will determin the vido that is currently-playing
