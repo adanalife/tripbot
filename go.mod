@@ -4,6 +4,7 @@ go 1.26.3
 
 require (
 	cloud.google.com/go/logging v1.4.2
+	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/XSAM/otelsql v0.42.0
 	github.com/adrg/libvlc-go/v3 v3.1.5
 	github.com/bradfitz/latlong v0.0.0-20170410180902-f3db6d0dff40
