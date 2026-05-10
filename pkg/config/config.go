@@ -45,4 +45,12 @@ func SetEnvironment() {
 		log.Println("Error loading .env file:", err)
 		log.Println("Continuing anyway...")
 	}
+
+	// Also load the docker env file as a base layer; docker-compose layers
+	// this in via `--env-file infra/docker/env.docker`, but host-side runs
+	// (e.g. cmd/auth-bootstrap) don't go through compose. godotenv.Load
+	// doesn't overwrite existing values, so shell-env and .env.<env> stay
+	// authoritative. Silent no-op in containers without this file present
+	// (e.g. the cluster pod).
+	_ = godotenv.Load("infra/docker/env.docker")
 }
