@@ -1,7 +1,6 @@
 package users
 
 import (
-	"errors"
 	"fmt"
 	"log"
 	"sort"
@@ -91,9 +90,13 @@ func login(username string) *User {
 	user.lastLocation = now.AddDate(0, 0, -1)
 	user.save()
 
-	// raise an error if a user is supposed to be a bot
+	// auto-flag known bots: if a user is on the ignore-list but not yet
+	// marked IsBot, set the flag and persist so we don't keep flagging them
+	// on every login
 	if c.UserIsIgnored(username) && !user.IsBot {
-		log.Println(aurora.Red(username), errors.New("user should be bot"))
+		log.Println(aurora.Yellow(username), "is on the ignore-list; auto-flagging as bot")
+		user.IsBot = true
+		user.save()
 	}
 
 	// just a silly message to confirm subscriber feature is working
