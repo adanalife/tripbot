@@ -5,6 +5,22 @@
 
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
+## [v2.2.5] — 2026-05-10
+
+Patch release. One observability gate broaden completing the staging-Sentry pipeline started in v2.2.4, plus a CI improvement and a vlc-server config refactor.
+
+### Observability
+
+- **`pkg/chatbot/log` skips Stackdriver chat logging on staging too.** Both gates (`init()` at `:18` and `ChatMsg()` at `:40`) now early-return on `IsTesting() || IsDevelopment() || IsStaging()`. Pairs with the [adanalife/infra#427](https://github.com/adanalife/infra/pull/427) overlay flip — without this, `ENV=staging` would activate `logging.NewClient` against an empty `GOOGLE_APPLICATION_CREDENTIALS` and `log.Fatalf` at init. Mirrors v2.2.4's launch-plan framing: staging counts for what we explicitly opt in (Sentry), dev-like for everything else. ([#435])
+
+### CI
+
+- **Race detector + coveralls.io coverage publishing.** `testing.yml` now runs `go test -v -race -covermode=atomic -coverprofile=coverage.out ./...` and publishes via `jandelgado/gcov2lcov-action` + `coverallsapp/github-action`. Salvaged from closed PR [#126](https://github.com/adanalife/tripbot/pull/126); pairs with the in-progress unit-testing improvements tracked in `vault/tripbot/TODO.md`. ([#438])
+
+### Cleanup
+
+- **vlc-server tuning flags now optional env vars.** `VLC_FILE_CACHING`, `VLC_AVCODEC_HW`, `VLC_VOUT`, `VLC_CANVAS_WIDTH`, `VLC_CANVAS_HEIGHT` move from hardcoded values to env-var overrides; all default to today's values, so this is a pure refactor. Resolves the `//TODO: break some of these into ENV vars` comment in `pkg/vlc-server/vlc.go`. ([#445])
+
 ## [v2.2.4] — 2026-05-09
 
 Patch release. Sentry SDK gets a long-overdue bump and the error-reporting gate broadens to fire from staging too — pairs with infra-side ESO wiring that delivers per-app DSNs into stage-1. Plus one Dockerfile cleanup.
@@ -237,3 +253,6 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#431]: https://github.com/adanalife/tripbot/pull/431
 [#432]: https://github.com/adanalife/tripbot/pull/432
 [#433]: https://github.com/adanalife/tripbot/pull/433
+[#435]: https://github.com/adanalife/tripbot/pull/435
+[#438]: https://github.com/adanalife/tripbot/pull/438
+[#445]: https://github.com/adanalife/tripbot/pull/445
