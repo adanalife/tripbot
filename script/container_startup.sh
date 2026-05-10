@@ -2,6 +2,10 @@
 
 # this script is the container entrypoint for the VLC container.
 # OBS runs in its own container with its own entrypoint (see infra/docker/obs/entrypoint.sh).
+#
+# Static config files (supervisord program defs, fluxbox startup) are baked
+# into the image at build time — see infra/docker/vlc/config/ and the COPY
+# directives in infra/docker/vlc/Dockerfile.
 
 #TODO: set background in /etc/X11/fluxbox/overlay
 
@@ -13,52 +17,6 @@ chmod 0700 "$XDG_RUNTIME_DIR"
 
 mkdir -p /opt/data/run
 touch /opt/data/run/{left,right}-message.txt
-
-mkdir -p /root/.fluxbox
-cat << EOF > /root/.fluxbox/startup
-#!/bin/sh
-
-#TODO: not 100% sure what this does
-# Change your keymap:
-xmodmap "/root/.Xmodmap"
-
-# set the resolution
-xrandr -s 1920x1200 -r 60
-
-exec fluxbox | logger -t fluxbox
-EOF
-chmod +x /root/.fluxbox/startup
-
-cat << EOF > /etc/supervisor/conf.d/syslog.conf
-[program:syslog]
-command=/usr/sbin/syslog-ng -F
-priority=1
-autostart=true
-autorestart=true
-stdout_logfile=/var/log/syslog
-stderr_logfile=/var/log/syslog
-EOF
-
-cat << EOF > /etc/supervisor/conf.d/vnc.conf
-[program:vnc]
-directory=/opt/tripbot
-command=script/x11/start-vnc.sh
-autostart=true
-autorestart=true
-stdout_logfile=syslog
-stderr_logfile=syslog
-EOF
-
-cat << EOF > /etc/supervisor/conf.d/vlc.conf
-[program:vlc]
-directory=/opt/tripbot
-command=script/x11/start-vlc.sh
-autostart=true
-autorestart=true
-stdout_logfile=syslog
-stderr_logfile=syslog
-startsecs=2
-EOF
 
 cleanup() {
   echo "Gracefully stopping supervisor"
