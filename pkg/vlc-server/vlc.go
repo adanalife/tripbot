@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	c "github.com/adanalife/tripbot/pkg/config/vlc-server"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
@@ -18,19 +19,22 @@ var videoFiles []string
 
 //TODO: figure out if vdpau_avcodec can be better than none
 //TODO: there are a ton of potentially-useful avcodec flags
-//TODO: break some of these into ENV vars
-var vlcCmdFlags = []string{
+
+// platform-invariant flags that never need per-host tuning
+var vlcStaticFlags = []string{
 	"--ignore-config", // ignore any config files that might get loaded
 	"--fullscreen",    // start fullscreened
 	"--no-audio",      // none of the videos have audio
 	// "--network-caching", "500", // network cache (in ms)
-	"--file-caching", "1111", // file cache (in ms)
-	"--width", "1920",
-	"--height", "1080",
-	"--canvas-width", "1920",
-	"--canvas-height", "1080",
 	// "--aspect-ratio", "16:9",
 }
+
+// vlcCmdFlags is built lazily in startVLC() from vlcStaticFlags +
+// per-host tuning values pulled from config (VLC_FILE_CACHING,
+// VLC_CANVAS_WIDTH, VLC_CANVAS_HEIGHT). Defaults match what was
+// previously hardcoded here, so this is a no-op refactor unless an
+// env var is explicitly set.
+var vlcCmdFlags []string
 
 // mediaOptions are applied per-Media (not as libvlc init flags).
 // libvlc's --sout takes effect only when set on the media object itself —
@@ -43,11 +47,16 @@ var mediaOptions = []string{
 	":sout-keep",
 }
 
-var vlcLinuxSpecificFlags = []string{
-	"--vout", "x11", // use X11 (and skip vdpau, improves performance)
-	"--avcodec-hw", "vdpau_avcodec", // can be none, vdpau_avcodec, or cuda
-	// "--avcodec-dr", "0",
-
+// linuxSpecificFlags returns the Linux-only VLC flags, sourced from
+// config (VLC_VOUT, VLC_AVCODEC_HW). Defaults match today's hardcoded
+// values: --vout x11 (skip vdpau, improves performance) and
+// --avcodec-hw vdpau_avcodec (can be none, vdpau_avcodec, or cuda).
+func linuxSpecificFlags() []string {
+	return []string{
+		"--vout", c.Conf.VlcVout,
+		"--avcodec-hw", c.Conf.VlcAvcodecHw,
+		// "--avcodec-dr", "0",
+	}
 }
 
 var vlcWindowsSpecificFlags = []string{
@@ -114,6 +123,20 @@ func currentlyPlaying() string {
 }
 
 func startVLC() {
+	// build the base flag set from the static list + config-driven tuning
+	// values. Defaults in pkg/config/vlc-server reproduce what used to be
+	// hardcoded here, so unset env vars yield identical behavior.
+	canvasW := strconv.Itoa(c.Conf.VlcCanvasWidth)
+	canvasH := strconv.Itoa(c.Conf.VlcCanvasHeight)
+	vlcCmdFlags = append([]string{}, vlcStaticFlags...)
+	vlcCmdFlags = append(vlcCmdFlags,
+		"--file-caching", strconv.Itoa(c.Conf.VlcFileCaching),
+		"--width", canvasW,
+		"--height", canvasH,
+		"--canvas-width", canvasW,
+		"--canvas-height", canvasH,
+	)
+
 	// set command line flags
 	if c.Conf.VlcVerbose {
 		vlcCmdFlags = append(vlcCmdFlags, vlcVerboseFlags...)
@@ -131,7 +154,7 @@ func startVLC() {
 	}
 
 	if helpers.RunningOnLinux() {
-		vlcCmdFlags = append(vlcCmdFlags, vlcLinuxSpecificFlags...)
+		vlcCmdFlags = append(vlcCmdFlags, linuxSpecificFlags()...)
 	}
 
 	if helpers.RunningOnWindows() {
