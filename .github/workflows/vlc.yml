@@ -14,6 +14,14 @@ on:
       - develop
     tags:
       - v*
+    paths:
+      - 'pkg/vlc-server/**'
+      - 'pkg/vlc-client/**'
+      - 'infra/docker/vlc/**'
+      - 'infra/docker/docker-compose*.yml'
+      - '.github/workflows/vlc.yml'
+      - 'go.mod'
+      - 'go.sum'
 
 jobs:
   build:
