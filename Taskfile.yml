@@ -16,9 +16,9 @@ tasks:
       - ENV=testing bin/devenv run --rm test go test ./...
 
   test:cover:
-    desc: Run tests with coverage; prints per-function and total coverage
+    desc: Run tests with coverage + race detector; prints per-function and total coverage
     cmds:
-      - ENV=testing bin/devenv run --rm test bash -c 'go test -coverprofile=coverage.out ./... && go tool cover -func=coverage.out'
+      - ENV=testing bin/devenv run --rm test bash -c 'go test -v -race -covermode=atomic -coverprofile=coverage.out ./... && go tool cover -func=coverage.out'
 
   test:cover:html:
     desc: Generate HTML coverage report at coverage.html
