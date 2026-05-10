@@ -10,7 +10,8 @@ require (
 	github.com/davecgh/go-spew v1.1.1
 	github.com/dimiro1/banner v1.1.0
 	github.com/gempir/go-twitch-irc/v2 v2.8.1
-	github.com/getsentry/sentry-go v0.11.0
+	github.com/getsentry/sentry-go v0.46.2
+	github.com/getsentry/sentry-go/negroni v0.46.2
 	github.com/gorilla/mux v1.8.0
 	github.com/hako/durafmt v0.0.0-20200710122514-c0fb7b4da026
 	github.com/jmoiron/sqlx v1.3.4
@@ -73,6 +74,7 @@ require (
 	github.com/prometheus/common v0.67.5 // indirect
 	github.com/prometheus/otlptranslator v1.0.0 // indirect
 	github.com/prometheus/procfs v0.20.1 // indirect
+	github.com/urfave/negroni/v3 v3.1.1 // indirect
 	go.opencensus.io v0.23.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.43.0 // indirect

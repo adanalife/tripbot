@@ -5,6 +5,19 @@
 
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
+## [v2.2.4] — 2026-05-09
+
+Patch release. Sentry SDK gets a long-overdue bump and the error-reporting gate broadens to fire from staging too — pairs with infra-side ESO wiring that delivers per-app DSNs into stage-1. Plus one Dockerfile cleanup.
+
+### Observability
+
+- **Sentry reports from staging too.** `pkg/errors` was gated to `IsProduction()` only, so the launch-plan staging soak would have silently lost exceptions. Broadened to `IsProduction() || IsStaging()`; `IsStaging()` is added to the `Config` interface (both `TripbotConfig` and `VlcServerConfig` already implement it). ([#433])
+- **`getsentry/sentry-go` bumped 0.11.0 → 0.46.2.** Five years of upstream. The negroni middleware was split into its own submodule (`getsentry/sentry-go/negroni`), pulling in `urfave/negroni/v3` as indirect; existing call sites — `Init`, `AddBreadcrumb`, `CaptureException`, `Flush`, `sentrynegroni.New` — compile unchanged. Supersedes Dependabot bump #361 (which only went to v0.29.1). ([#433])
+
+### Cleanup
+
+- **`infra/docker/vlc/Dockerfile` Go bump 1.21.13 → 1.26.3.** Last stale `1.21` reference in the repo; the vlc image curl-installs Go separately because its Ubuntu 24.04 base needs system `libvlc-dev` and can't ride the `golang:1.26-bookworm` image like tripbot/test do. ([#432])
+
 ## [v2.2.3] — 2026-05-09
 
 Patch release. Four observability follow-ups to v2.2.0's OpenTelemetry wiring, plus one Dependabot bump.
@@ -222,3 +235,5 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#428]: https://github.com/adanalife/tripbot/pull/428
 [#429]: https://github.com/adanalife/tripbot/pull/429
 [#431]: https://github.com/adanalife/tripbot/pull/431
+[#432]: https://github.com/adanalife/tripbot/pull/432
+[#433]: https://github.com/adanalife/tripbot/pull/433
