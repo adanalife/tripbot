@@ -5,6 +5,18 @@
 
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
+## [v2.2.6] — 2026-05-10
+
+Patch release. One small UX addition and one CI hygiene step.
+
+### Chatbot
+
+- **Accept `¡` (U+00A1) as an alternate command prefix.** Spanish-keyboard users can run commands like `¡miles` or `¡location` without switching layouts. A new `normalizeCommandPrefix` helper rewrites a leading `¡` to `!` at the entrance of `runCommand`; the existing `!` path is untouched. Rune-aware (`strings.HasPrefix`/`TrimPrefix`) because `¡` is two bytes in UTF-8 and byte-indexing would mangle it. ([#453])
+
+### CI
+
+- **Super-linter: re-enable `VALIDATE_GITHUB_ACTIONS` (actionlint).** Fixes 4 SC2086 quoting nits in `.github/workflows/vlc.yml` (`$VLC_PORT`, `$GITHUB_ENV`) in a separate prep commit. `VALIDATE_GO_MODULES` was also attempted but reverted — the underlying `golangci-lint` analyzer compiles the module and trips on `vlc/vlc.h: No such file or directory` (same root cause as `VALIDATE_GO` being disabled). The PR body documents the remaining disabled validators with rationale for each, so future re-enables have a starting point. ([#449])
+
 ## [v2.2.5] — 2026-05-10
 
 Patch release. One observability gate broaden completing the staging-Sentry pipeline started in v2.2.4, plus a CI improvement and a vlc-server config refactor.
@@ -256,3 +268,5 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#435]: https://github.com/adanalife/tripbot/pull/435
 [#438]: https://github.com/adanalife/tripbot/pull/438
 [#445]: https://github.com/adanalife/tripbot/pull/445
+[#449]: https://github.com/adanalife/tripbot/pull/449
+[#453]: https://github.com/adanalife/tripbot/pull/453
