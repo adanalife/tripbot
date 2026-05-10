@@ -30,6 +30,9 @@ RUN echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula sele
          libgl1-mesa-dri \
          fonts-dejavu-core \
          ttf-mscorefonts-installer \
+         imagemagick \
+         xdotool \
+         scrot \
     && rm -rf /var/lib/apt/lists/*
 
 COPY infra/docker/obs/config/ /opt/obs/config/
