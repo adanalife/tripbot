@@ -1,6 +1,9 @@
 package chatbot
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestParseSkipParams(t *testing.T) {
 	tests := []struct {
@@ -27,6 +30,35 @@ func TestParseSkipParams(t *testing.T) {
 			}
 			if ok && n != tc.wantN {
 				t.Errorf("parseSkipParams(%v, %d) n = %d, want %d", tc.params, tc.defaultN, n, tc.wantN)
+			}
+		})
+	}
+}
+
+func TestFormatSkipReply(t *testing.T) {
+	tests := []struct {
+		name    string
+		count   int
+		forward bool
+		want    string
+	}{
+		{"single forward", 1, true, "Skipped 1 video forward!"},
+		{"single back", 1, false, "Skipped 1 video back!"},
+		{"plural forward", 5, true, "Skipped 5 videos forward!"},
+		{"plural back", 3, false, "Skipped 3 videos back!"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := formatSkipReply(tc.count, tc.forward)
+			if got != tc.want {
+				t.Errorf("formatSkipReply(%d, %v) = %q, want %q", tc.count, tc.forward, got, tc.want)
+			}
+			// concise enough for Twitch's 500-char limit (with headroom)
+			if len(got) > 100 {
+				t.Errorf("reply too long for chat: %d chars", len(got))
+			}
+			if !strings.HasPrefix(got, "Skipped ") {
+				t.Errorf("reply does not start with 'Skipped ': %q", got)
 			}
 		})
 	}

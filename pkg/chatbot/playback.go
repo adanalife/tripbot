@@ -140,6 +140,22 @@ func parseSkipParams(params []string, defaultN int) (int, bool) {
 	return n, true
 }
 
+// formatSkipReply renders the chat reply for !skip / !back. forward is
+// the direction the playhead actually moved (after any negative-input
+// rewriting); count is the magnitude. Both !skip 3 and !back -3 result
+// in (count=3, forward=true) and read identically in chat.
+func formatSkipReply(count int, forward bool) string {
+	noun := "videos"
+	if count == 1 {
+		noun = "video"
+	}
+	direction := "back"
+	if forward {
+		direction = "forward"
+	}
+	return fmt.Sprintf("Skipped %d %s %s!", count, noun, direction)
+}
+
 func skipCmd(user *users.User, params []string) {
 	var err error
 	log.Println(user.Username, "ran !skip")
@@ -166,10 +182,18 @@ func skipCmd(user *users.User, params []string) {
 
 	// negative skip is equivalent to going back; route through Back
 	// so the underlying client serializes the offset correctly
-	if n < 0 {
-		err = vlcClient.Back(-n)
+	forward := n >= 0
+	count := n
+	if count < 0 {
+		count = -count
+	}
+	if count == 0 {
+		count = 1
+	}
+	if forward {
+		err = vlcClient.Skip(count)
 	} else {
-		err = vlcClient.Skip(n)
+		err = vlcClient.Back(count)
 	}
 	if err != nil {
 		terrors.Log(err, "error from VLC client")
@@ -178,6 +202,8 @@ func skipCmd(user *users.User, params []string) {
 	video.GetCurrentlyPlaying()
 	// update our record of last time it ran
 	lastTimewarpTime = time.Now()
+	// confirm what just happened in chat
+	Say(formatSkipReply(count, forward))
 }
 
 func backCmd(user *users.User, params []string) {
@@ -206,10 +232,18 @@ func backCmd(user *users.User, params []string) {
 
 	// negative back is equivalent to skipping forward; route through Skip
 	// so the underlying client serializes the offset correctly
-	if n < 0 {
-		err = vlcClient.Skip(-n)
+	forward := n < 0
+	count := n
+	if count < 0 {
+		count = -count
+	}
+	if count == 0 {
+		count = 1
+	}
+	if forward {
+		err = vlcClient.Skip(count)
 	} else {
-		err = vlcClient.Back(n)
+		err = vlcClient.Back(count)
 	}
 	if err != nil {
 		terrors.Log(err, "error from VLC client")
@@ -218,4 +252,6 @@ func backCmd(user *users.User, params []string) {
 	video.GetCurrentlyPlaying()
 	// update our record of last time it ran
 	lastTimewarpTime = time.Now()
+	// confirm what just happened in chat
+	Say(formatSkipReply(count, forward))
 }
