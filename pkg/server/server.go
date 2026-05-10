@@ -32,7 +32,7 @@ var server *http.Server
 // handler doesn't block process exit indefinitely.
 const shutdownTimeout = 15 * time.Second
 
-// Start starts the web server. When ctx is cancelled (e.g. SIGINT/SIGTERM
+// Start starts the web server. When ctx is canceled (e.g. SIGINT/SIGTERM
 // via signal.NotifyContext) the server stops accepting new connections and
 // waits up to shutdownTimeout for in-flight requests to complete before
 // returning.
