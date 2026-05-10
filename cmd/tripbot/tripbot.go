@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"math/rand"
@@ -65,6 +66,7 @@ func main() {
 	findInitialVideo()
 	users.InitLeaderboard()
 	startCron()
+	loadTwitchToken()   // must precede chatbot.Initialize — provides the IRC token
 	setUpTwitchClient() // required for the below
 	updateSubscribers()
 	getCurrentUsers()
@@ -125,6 +127,18 @@ func startCron() {
 	// start cron and attach cronjobs
 	background.StartCron()
 	scheduleBackgroundJobs()
+}
+
+// loadTwitchToken pulls the bot's OAuth row from the oauth_tokens table.
+// Refuses to start if the row is missing — pointing at the bootstrap CLI
+// is louder than running IRC-less.
+func loadTwitchToken() {
+	if err := mytwitch.LoadFromDB(); err != nil {
+		if errors.Is(err, mytwitch.ErrNoToken) {
+			log.Fatalf("no oauth_tokens row for %q — run `task tripbot:auth:bootstrap` against the cluster DB (port-forward via `task tripbot:db:up` in infra)", c.Conf.BotUsername)
+		}
+		terrors.Fatal(err, "failed to load Twitch token from DB")
+	}
 }
 
 // setUpTwitchClient sets up the Twitch client,
