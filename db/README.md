@@ -29,6 +29,10 @@ Migrations are run using [go-migrate](https://github.com/golang-migrate/migrate)
 
 `migrate create -ext sql -seq -digits 3 -dir db/migrate <migration_name>`
 
+## Migrations of note
+
+- `010_create_oauth_tokens` — stores Twitch OAuth refresh + access tokens for the bot account. Populate via `task tripbot:auth:bootstrap` (one-time, local). The bot reads the row at boot and refreshes hourly.
+
 ## To take a backup
 
 `pg_dump <postgres://url> > db_dump.$(date "+%Y%m%d").sql`
