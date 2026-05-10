@@ -12,6 +12,7 @@ require (
 	github.com/gempir/go-twitch-irc/v2 v2.8.1
 	github.com/getsentry/sentry-go v0.46.2
 	github.com/getsentry/sentry-go/negroni v0.46.2
+	github.com/go-co-op/gocron/v2 v2.21.1
 	github.com/gorilla/mux v1.8.0
 	github.com/hako/durafmt v0.0.0-20200710122514-c0fb7b4da026
 	github.com/jmoiron/sqlx v1.3.4
@@ -24,7 +25,6 @@ require (
 	github.com/nathan-osman/go-sunrise v0.0.0-20201029015502-9a83cd1a5746
 	github.com/nicklaw5/helix v1.24.4
 	github.com/prometheus/client_golang v1.23.2
-	github.com/robfig/cron v1.2.0
 	github.com/sfreiberg/gotwilio v0.0.0-20200916182813-169c4cd5c691
 	github.com/skratchdot/open-golang v0.0.0-20200116055534-eef842397966
 	github.com/slok/go-http-metrics v0.9.0
@@ -66,6 +66,7 @@ require (
 	github.com/gorilla/schema v1.2.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.28.0 // indirect
 	github.com/jonas-p/go-shp v0.1.1 // indirect
+	github.com/jonboulle/clockwork v0.5.0 // indirect
 	github.com/jstemmer/go-junit-report v0.9.1 // indirect
 	github.com/mattn/go-colorable v0.1.8 // indirect
 	github.com/mattn/go-isatty v0.0.12 // indirect
@@ -74,6 +75,7 @@ require (
 	github.com/prometheus/common v0.67.5 // indirect
 	github.com/prometheus/otlptranslator v1.0.0 // indirect
 	github.com/prometheus/procfs v0.20.1 // indirect
+	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/urfave/negroni/v3 v3.1.1 // indirect
 	go.opencensus.io v0.23.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
