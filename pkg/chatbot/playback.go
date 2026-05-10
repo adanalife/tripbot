@@ -1,6 +1,7 @@
 package chatbot
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"strconv"
@@ -33,7 +34,7 @@ func timewarp() {
 		terrors.Log(err, "error from VLC client")
 	}
 	// update the currently-playing video
-	video.GetCurrentlyPlaying()
+	video.GetCurrentlyPlaying(context.Background())
 	// update our record of last time it ran
 	lastTimewarpTime = time.Now()
 }
@@ -115,7 +116,7 @@ func jumpCmd(user *users.User, params []string) {
 	}
 	Say(fmt.Sprintf("Jumping to %s...!", titlecaseState))
 	// update the currently-playing video
-	video.GetCurrentlyPlaying()
+	video.GetCurrentlyPlaying(context.Background())
 	// show the flag for the state
 	onscreensClient.ShowFlag(10 * time.Second)
 	// update our record of last time it ran
@@ -162,7 +163,7 @@ func skipCmd(user *users.User, params []string) {
 		terrors.Log(err, "error from VLC client")
 	}
 	// update the currently-playing video
-	video.GetCurrentlyPlaying()
+	video.GetCurrentlyPlaying(context.Background())
 	// update our record of last time it ran
 	lastTimewarpTime = time.Now()
 }
@@ -207,7 +208,7 @@ func backCmd(user *users.User, params []string) {
 		terrors.Log(err, "error from VLC client")
 	}
 	// update the currently-playing video
-	video.GetCurrentlyPlaying()
+	video.GetCurrentlyPlaying(context.Background())
 	// update our record of last time it ran
 	lastTimewarpTime = time.Now()
 }
