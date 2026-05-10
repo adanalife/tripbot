@@ -25,6 +25,7 @@ import (
 	_ "github.com/dimiro1/banner/autoload"
 	"github.com/gempir/go-twitch-irc/v2"
 	"github.com/getsentry/sentry-go"
+	"github.com/go-co-op/gocron/v2"
 	"github.com/logrusorgru/aurora"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -34,15 +35,15 @@ import (
 var cronTracer = otel.Tracer("github.com/adanalife/tripbot/cmd/tripbot/cron")
 
 // tracedJob wraps a cron callback in a span so each tick shows up as its
-// own trace. Slow or failing jobs become visible in Grafana traces without
-// having to thread context through the underlying functions (the cron
-// library only accepts func()).
-func tracedJob(name string, fn func()) func() {
-	return func() {
-		_, span := cronTracer.Start(context.Background(), "cron."+name,
+// own trace. Slow or failing jobs become visible in Grafana traces, and
+// the span ctx is threaded into the underlying function so child spans
+// (otelsql DB queries, otelhttp client calls) auto-link to the cron parent.
+func tracedJob(name string, fn func(context.Context)) func(context.Context) {
+	return func(ctx context.Context) {
+		ctx, span := cronTracer.Start(ctx, "cron."+name,
 			trace.WithAttributes(attribute.String("cron.job", name)))
 		defer span.End()
-		fn()
+		fn(ctx)
 	}
 }
 
@@ -112,7 +113,7 @@ func startHttpServer() {
 // findInitialVideo will determin the vido that is currently-playing
 // we want to run this early, otherwise it will be unset until the first cron job runs
 func findInitialVideo() {
-	video.GetCurrentlyPlaying()
+	video.GetCurrentlyPlaying(context.Background())
 	v := video.CurrentlyPlaying
 	_, err := video.LoadOrCreate(v.String())
 	if err != nil {
@@ -137,20 +138,20 @@ func setUpTwitchClient() {
 // updateSubscribers gets the list of current subscribers
 func updateSubscribers() {
 	// update subscribers list
-	mytwitch.GetSubscribers()
+	mytwitch.GetSubscribers(context.Background())
 }
 
 // getCurrentUsers gets the users watching the stream
 func getCurrentUsers() {
 	// fetch initial session
-	users.UpdateSession()
-	users.PrintCurrentSession()
+	users.UpdateSession(context.Background())
+	users.PrintCurrentSession(context.Background())
 }
 
 //updateWebhookSubscriptions makes sure webhooks are being sent to the bot
 func updateWebhookSubscriptions() {
 	// create webhook subscriptions
-	mytwitch.UpdateWebhookSubscriptions()
+	mytwitch.UpdateWebhookSubscriptions(context.Background())
 }
 
 // connectToTwitch joins Twitch chat and starts listening
@@ -205,23 +206,28 @@ func gracefulShutdown() {
 // the reason we put this is in this package is because adding this to background
 // would cause circular dependencies
 func scheduleBackgroundJobs() {
-	var err error
-
-	// schedule these functions
-	err = background.Cron.AddFunc("@every 60s", tracedJob("video.GetCurrentlyPlaying", video.GetCurrentlyPlaying))
-	err = background.Cron.AddFunc("@every 61s", tracedJob("users.UpdateSession", users.UpdateSession))
-	err = background.Cron.AddFunc("@every 62s", tracedJob("users.UpdateLeaderboard", users.UpdateLeaderboard))
-	err = background.Cron.AddFunc("@every 5m", tracedJob("onscreens.ShowGuessLeaderboard", onscreensClient.ShowGuessLeaderboard))
-	err = background.Cron.AddFunc("@every 5m", tracedJob("users.PrintCurrentSession", users.PrintCurrentSession))
-	err = background.Cron.AddFunc("@every 5m", tracedJob("twitch.GetSubscribers", mytwitch.GetSubscribers))
-	err = background.Cron.AddFunc("@every 1h", tracedJob("twitch.RefreshUserAccessToken", mytwitch.RefreshUserAccessToken))
-	err = background.Cron.AddFunc("@every 2h57m30s", tracedJob("chatbot.Chatter", chatbot.Chatter))
-	err = background.Cron.AddFunc("@every 12h", tracedJob("twitch.UpdateWebhookSubscriptions", mytwitch.UpdateWebhookSubscriptions))
-	if !helpers.RunningOnWindows() {
-		err = background.Cron.AddFunc("@every 12h", tracedJob("twitch.SetStreamTags", mytwitch.SetStreamTags))
+	addJob := func(d time.Duration, name string, fn func(context.Context)) {
+		_, err := background.Scheduler.NewJob(
+			gocron.DurationJob(d),
+			gocron.NewTask(tracedJob(name, fn)),
+			gocron.WithName(name),
+		)
+		if err != nil {
+			terrors.Log(err, "error adding background job: "+name)
+		}
 	}
 
-	if err != nil {
-		terrors.Log(err, "error adding at least one background job!")
+	// schedule these functions
+	addJob(60*time.Second, "video.GetCurrentlyPlaying", video.GetCurrentlyPlaying)
+	addJob(61*time.Second, "users.UpdateSession", users.UpdateSession)
+	addJob(62*time.Second, "users.UpdateLeaderboard", users.UpdateLeaderboard)
+	addJob(5*time.Minute, "onscreens.ShowGuessLeaderboard", onscreensClient.ShowGuessLeaderboard)
+	addJob(5*time.Minute, "users.PrintCurrentSession", users.PrintCurrentSession)
+	addJob(5*time.Minute, "twitch.GetSubscribers", mytwitch.GetSubscribers)
+	addJob(1*time.Hour, "twitch.RefreshUserAccessToken", mytwitch.RefreshUserAccessToken)
+	addJob(2*time.Hour+57*time.Minute+30*time.Second, "chatbot.Chatter", chatbot.Chatter)
+	addJob(12*time.Hour, "twitch.UpdateWebhookSubscriptions", mytwitch.UpdateWebhookSubscriptions)
+	if !helpers.RunningOnWindows() {
+		addJob(12*time.Hour, "twitch.SetStreamTags", mytwitch.SetStreamTags)
 	}
 }
