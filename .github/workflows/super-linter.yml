@@ -20,7 +20,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: run-linters
-        uses: super-linter/super-linter@v8.6.0
+        uses: super-linter/super-linter@v8
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # don't post a "Super-linter summary" comment on every PR run
