@@ -14,7 +14,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: golint
-        uses: reviewdog/action-golangci-lint@v2.0.3
+        uses: reviewdog/action-golangci-lint@v2
         with:
           github_token: ${{ secrets.github_token }}
           # Pin golangci_lint_version explicitly: the action's default of
