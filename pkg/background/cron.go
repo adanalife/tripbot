@@ -25,7 +25,7 @@ func StartCron() {
 }
 
 // StopCron shuts down the scheduler. In-flight jobs have their contexts
-// cancelled (vs. robfig/cron's behavior of letting jobs finish on shutdown).
+// canceled (vs. robfig/cron's behavior of letting jobs finish on shutdown).
 func StopCron() {
 	log.Println("Stopping cron")
 	if Scheduler == nil {
