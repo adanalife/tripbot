@@ -23,11 +23,22 @@ func incChatCommandCounter(command string) {
 	instrumentation.ChatCommands.Inc(command)
 }
 
+// normalizeCommandPrefix rewrites a leading Spanish inverted exclamation mark
+// `¡` (U+00A1, two bytes in UTF-8: 0xC2 0xA1) to a regular `!` so that
+// Spanish-keyboard users (who type `¡` where US keyboards type `!`) can run
+// commands without switching layouts. e.g. `¡miles` -> `!miles`.
+func normalizeCommandPrefix(msg string) string {
+	if strings.HasPrefix(msg, "¡") {
+		return "!" + strings.TrimPrefix(msg, "¡")
+	}
+	return msg
+}
+
 func runCommand(ctx context.Context, user *users.User, message string) {
 	var err error
 	var params []string
 
-	msg := strings.TrimSpace(message)
+	msg := normalizeCommandPrefix(strings.TrimSpace(message))
 	split := strings.Split(msg, " ")
 
 	// the command is the first part
