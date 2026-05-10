@@ -1,6 +1,7 @@
 package users
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -41,7 +42,11 @@ func InitLeaderboard() {
 	}
 }
 
-func UpdateLeaderboard() {
+// UpdateLeaderboard rebuilds the in-memory lifetime-miles leaderboard from
+// the currently-logged-in users.
+//
+// The ctx is accepted for trace propagation; internal logic doesn't need it yet.
+func UpdateLeaderboard(_ context.Context) {
 	for _, user := range LoggedIn {
 		// skip adding this user if they're a bot or ignored
 		if user.IsBot || c.UserIsIgnored(user.Username) || c.UserIsAdmin(user.Username) {

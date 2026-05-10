@@ -1,6 +1,7 @@
 package onscreensClient
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -55,8 +56,12 @@ func ShowLeaderboard(title string, leaderboard [][]string) error {
 	return nil
 }
 
+// ShowGuessLeaderboard renders the monthly correct-guesses leaderboard onscreen.
+// The ctx is accepted for trace propagation; the underlying HTTP call uses
+// the package-level otelhttp-instrumented client.
+//
 //TODO: this is taken right from the !guessleaderboard command, DRY it?
-func ShowGuessLeaderboard() {
+func ShowGuessLeaderboard(_ context.Context) {
 	// select users to show in leaderboard
 	size := 10
 	leaderboard := scoreboards.TopUsers(scoreboards.CurrentGuessScoreboard(), size)

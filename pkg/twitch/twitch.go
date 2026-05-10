@@ -1,6 +1,7 @@
 package twitch
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"strings"
@@ -38,8 +39,10 @@ func getChannelID(username string) string {
 	return resp.Data.Users[0].ID
 }
 
-// GetSubscribers pulls down the most recent list of subscribers
-func GetSubscribers() {
+// GetSubscribers pulls down the most recent list of subscribers.
+// The ctx is accepted for trace propagation; the underlying helix client
+// doesn't take ctx, so internal calls are unchanged.
+func GetSubscribers(_ context.Context) {
 	//TODO: should we do this elsewhere as well?
 	if ChannelID == "" {
 		ChannelID = getChannelID(c.Conf.ChannelName)

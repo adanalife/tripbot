@@ -1,6 +1,7 @@
 package users
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -26,8 +27,12 @@ import (
 var LoggedIn = make(map[string]*User)
 
 // UpdateSession will use the data from the Twitch API to maintain a list
-// of currently-logged-in users
-func UpdateSession() {
+// of currently-logged-in users.
+//
+// The ctx is accepted so callers can propagate trace context (cron parent
+// span, HTTP handler ctx, etc.) through downstream calls; not all internals
+// take ctx yet, so this is forward-compat plumbing.
+func UpdateSession(_ context.Context) {
 	// fetch the latest chatters from Twitch
 	twitch.UpdateChatters()
 	currentChatters := twitch.Chatters()
@@ -226,8 +231,9 @@ func countBots() int {
 	return len(bots())
 }
 
-// PrintCurrentSession simply prints info about the current session
-func PrintCurrentSession() {
+// PrintCurrentSession simply prints info about the current session.
+// The ctx is accepted for trace propagation; internal logic doesn't need it yet.
+func PrintCurrentSession(_ context.Context) {
 	usernames := sortedUsernameList()
 	coloredUsernames := colorizeUsernames(usernames)
 

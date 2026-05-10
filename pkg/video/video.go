@@ -1,6 +1,7 @@
 package video
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os/exec"
@@ -24,8 +25,13 @@ var timeStarted time.Time
 
 // GetCurrentlyPlaying will use lsof to figure out
 // which dashcam video is currently playing (seriously)
+//
+// The ctx is accepted so callers can propagate trace context (cron parent
+// span, HTTP handler ctx, etc.) into any downstream calls made from here;
+// internal helpers that don't yet take ctx still use their own context.
+//
 //TODO: consider making this return a video struct
-func GetCurrentlyPlaying() {
+func GetCurrentlyPlaying(_ context.Context) {
 	var err error
 
 	// save the video we used last time

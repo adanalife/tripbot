@@ -1,6 +1,7 @@
 package twitch
 
 import (
+	"context"
 	"log"
 	"os"
 
@@ -95,7 +96,10 @@ func GenerateUserAccessToken(code string) {
 // RefreshUserAccessToken makes a call to Twitch to generate a
 // fresh user access token. It requires a UserRefreshToken to be
 // set already.
-func RefreshUserAccessToken() {
+//
+// The ctx is accepted for trace propagation; the underlying helix client
+// doesn't take ctx, so internal calls are unchanged.
+func RefreshUserAccessToken(_ context.Context) {
 	// check to see if we have the required tokens to work with
 	if UserRefreshToken == "" || UserAccessToken == "" {
 		log.Println("no user access token was present, did you log in with OAuth?")

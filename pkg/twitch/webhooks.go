@@ -1,6 +1,7 @@
 package twitch
 
 import (
+	"context"
 	"log"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
@@ -19,8 +20,10 @@ var subsTopic = []string{
 	"/webhooks/twitch/subscriptions/events",
 }
 
-// UpdateWebhookSubscriptions will create new webhook subscriptions
-func UpdateWebhookSubscriptions() {
+// UpdateWebhookSubscriptions will create new webhook subscriptions.
+// The ctx is accepted for trace propagation; the underlying helix client
+// doesn't take ctx, so internal calls are unchanged.
+func UpdateWebhookSubscriptions(_ context.Context) {
 	if c.Conf.DisableTwitchWebhooks {
 		return
 	}
