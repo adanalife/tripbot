@@ -20,7 +20,7 @@ func StateToStateAbbrev(state string) string {
 	return val
 }
 
-//TODO: this doesnt handle the case where the state is invalid
+//TODO: this doesn't handle the case where the state is invalid
 func TitlecaseState(state string) string {
 	if len(state) == 2 {
 		state = StateAbbrevToState(state)

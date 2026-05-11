@@ -31,12 +31,12 @@ func init() {
 
 	//TODO: consider using strings.ToLower() on channel name here and removing elsewhere
 
-	// thes dirs will get created on boot if necessary
+	// these dirs will get created on boot if necessary
 	dirsToCreate := []string{
 		Conf.RunDir,
 	}
 	for _, d := range dirsToCreate {
-		// we cant use helpers.FileExists() here due to import loop
+		// we can't use helpers.FileExists() here due to import loop
 		_, err := os.Stat(d)
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -55,7 +55,7 @@ func init() {
 		Conf.RunDir,
 	}
 	for _, d := range requiredDirs {
-		// we cant use helpers.FileExists() here due to import loop
+		// we can't use helpers.FileExists() here due to import loop
 		_, err := os.Stat(d)
 		if err != nil {
 			if os.IsNotExist(err) {

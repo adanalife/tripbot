@@ -27,6 +27,11 @@ jobs:
           # don't post a "Super-linter summary" comment on every PR run
           # (the Actions step summary tab still gets the same content)
           ENABLE_GITHUB_PULL_REQUEST_SUMMARY_COMMENT: false
+          # go.sum's module hashes contain random base64 substrings that
+          # codespell mistakes for typos. Skip the file globally — nothing
+          # else lints it either. handlers.go's intentional misspellings
+          # are allowlisted by word in .codespellrc instead.
+          FILTER_REGEX_EXCLUDE: '.*(^|/)go\.sum$'
           # disabled because it's not working with C libs
           VALIDATE_GO: false
           # disabled — none of the in-tree Dockerfiles have been
@@ -47,7 +52,6 @@ jobs:
           VALIDATE_MARKDOWN_PRETTIER: false
           VALIDATE_NATURAL_LANGUAGE: false
           VALIDATE_SHELL_SHFMT: false
-          VALIDATE_SPELL_CODESPELL: false
           VALIDATE_SQLFLUFF: false
           VALIDATE_TRIVY: false
           VALIDATE_YAML_PRETTIER: false

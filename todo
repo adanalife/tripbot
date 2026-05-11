@@ -29,7 +29,7 @@ bonus pool for miles
 silly extra data like poll data
 historical gas prices?
 save in db the error status
-ask user to translate coords if we cant read them
+ask user to translate coords if we can't read them
 
 NOT SURE
 !location gives more accuracy based on miles
@@ -47,7 +47,7 @@ implement a way to "refetch" coords that are not accurate
 test having a disappearing png on obs
 make a meme?
 game where people have to find a frame and run a command during that vid
-tripbot has restarted. say hi so he knows youre in here
+tripbot has restarted. say hi so he knows you're in here
 https://nationalparktypeface.com/
 !prime that explains twitch prime
 
@@ -62,7 +62,7 @@ sub goal
 donation goal
 recent events?
 map overlay
-dashboard look with guages?
+dashboard look with gauges?
 
 EVENTUALLY
 alerts for certain users
@@ -102,7 +102,7 @@ page me on these:
 
 
 BUGS
-there is a bug where if lastVid is "" it will never updat
+there is a bug where if lastVid is "" it will never update
 
 REVISIT
 dont do fatal and quit the bot
@@ -119,7 +119,7 @@ https://streamlabs.com/dashboard#/widgets
 
 
 IN CHAT
-"why turkish people cant drive like a human ?"
+"why turkish people can't drive like a human ?"
 
 
 GOLANG STUFF
