@@ -17,7 +17,7 @@ import (
 	vlcClient "github.com/adanalife/tripbot/pkg/vlc-client"
 )
 
-// lastTimewarpTime is used to rate-limit users so they cant
+// lastTimewarpTime is used to rate-limit users so they can't
 // over-do the time-skip features (including !skip and !back)
 // plus it's also used to reset peoples lastLocation time
 var lastTimewarpTime time.Time

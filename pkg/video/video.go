@@ -31,7 +31,7 @@ func GetCurrentlyPlaying() {
 	// save the video we used last time
 	preVid = curVid
 
-	// figure out whats currently playing
+	// figure out what's currently playing
 	if helpers.RunningOnDarwin() {
 		curVid = figureOutCurrentVideo()
 	} else {

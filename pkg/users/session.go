@@ -32,7 +32,7 @@ func UpdateSession() {
 	twitch.UpdateChatters()
 	currentChatters := twitch.Chatters()
 
-	// log out the people who arent present
+	// log out the people who aren't present
 	for username, user := range LoggedIn {
 		if _, ok := currentChatters[username]; ok {
 			// they're logged in and a current chatter, do nothing
