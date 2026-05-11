@@ -5,6 +5,15 @@
 
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
+## [v2.3.2] — 2026-05-11
+
+Patch release. CI-only — no runtime behavior change. Pre-bakes the OBS arm64 CEF compile into a base image (skipping ~25 min off every OBS PR) and fixes four workflow triggers that pointed at a non-existent `main` branch (Testing/super-linter/linting/CodeQL), restoring Coveralls base-build uploads on `develop` and adding `pull_request` scanning to CodeQL.
+
+### CI
+
+- **OBS arm64 base image (`adanalife/obs-cef-base:arm64-*`).** New `infra/docker/obs/Dockerfile.arm64-base` compiles OBS-from-source against the aarch64 CEF tarball and ships a slim image carrying just `/opt/obs-install/`. New `obs-base.yml` workflow builds and pushes the base on demand. `infra/docker/obs/Dockerfile.arm64` now `FROM`s the base, so the arm64 leg of `obs.yml` drops from ~30 min to ~2 min. Bumping OBS/CEF becomes: edit the base Dockerfile's ARG defaults, push, then bump the `FROM` tag. ([#461])
+- **Workflow `push` triggers fixed: `main` → `develop` + `master`.** Testing, super-linter, linting, and CodeQL all listed `main` in their push trigger, but the repo uses `develop` → `master` — so push events on the integration branches never fired these workflows. The visible win: Coveralls now receives a base build on `develop` and PR comments stop reporting "No base build found for commit X on develop." CodeQL additionally gains a `pull_request:` trigger so PRs are scanned (previously only the weekly Thursday cron caught anything). ([#462])
+
 ## [v2.3.1] — 2026-05-11
 
 Patch release. Tooling-only — bundles the `migrate` CLI and `db/migrate/*.sql` into the runtime image so a cluster k8s Job can run schema migrations without a sibling image. No behavior change at runtime.
@@ -301,3 +310,5 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#454]: https://github.com/adanalife/tripbot/pull/454
 [#455]: https://github.com/adanalife/tripbot/pull/455
 [#458]: https://github.com/adanalife/tripbot/pull/458
+[#461]: https://github.com/adanalife/tripbot/pull/461
+[#462]: https://github.com/adanalife/tripbot/pull/462
