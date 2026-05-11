@@ -5,6 +5,14 @@
 
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
+## [v2.3.1] — 2026-05-11
+
+Patch release. Tooling-only — bundles the `migrate` CLI and `db/migrate/*.sql` into the runtime image so a cluster k8s Job can run schema migrations without a sibling image. No behavior change at runtime.
+
+### Docker
+
+- **Bundle `migrate/migrate:4` binary + `db/migrate/*.sql` into the tripbot image.** The local-k3d stage-1 cluster has never run schema migrations — the original 2026-05-03 cluster work explicitly noted *"nothing in the cluster is durable yet."* Pre-v2.3.0 tripbot tolerated missing schema (logged at INFO and ran degraded); v2.3.0's `LoadFromDB` boot check makes that an exit-1, so a cluster migration step is now load-bearing. Bundling rather than shipping a sibling `tripbot-migrations` image keeps schema-code version skew impossible by construction (same git SHA → same image), avoids new CI surface, and adds ~10MB binary + 20KB SQL to the runtime image (rounding error). Follow-up infra PR wires a k8s Job using `adanalife/tripbot:v2.3.1`. ([#458])
+
 ## [v2.3.0] — 2026-05-10
 
 Minor release. Replaces the static `TWITCH_AUTH_TOKEN` env var (sourced from a third-party token generator) with a self-owned OAuth Authorization Code flow against tripbot's own Twitch dev app. The bot's IRC refresh token now lives in Postgres and rotates hourly via a `pg_try_advisory_lock`-fenced cron job; one-time bootstrap via a new `cmd/auth-bootstrap` CLI. Plus two CI trigger-path filters.
@@ -292,3 +300,4 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#452]: https://github.com/adanalife/tripbot/pull/452
 [#454]: https://github.com/adanalife/tripbot/pull/454
 [#455]: https://github.com/adanalife/tripbot/pull/455
+[#458]: https://github.com/adanalife/tripbot/pull/458
