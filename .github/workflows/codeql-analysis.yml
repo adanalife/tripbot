@@ -1,8 +1,9 @@
 name: "CodeQL"
 
 on:
+  pull_request:
   push:
-    branches: [ main ]
+    branches: [ develop, master ]
   schedule:
     #         ┌───────────── minute (0 - 59)
     #         │  ┌───────────── hour (0 - 23)
