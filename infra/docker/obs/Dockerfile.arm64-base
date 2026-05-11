@@ -1,0 +1,86 @@
+# =============================================================================
+# OBS-from-source builder for arm64. Output: an image carrying just the OBS
+# install tree at /opt/obs-install. Consumed by Dockerfile.arm64 via
+# `FROM adanalife/obs-cef-base:arm64-<OBS>-<CEF> AS builder` so per-PR builds
+# skip the ~25 min CEF/OBS compile.
+#
+# Re-bake when OBS_VERSION or CEF_VERSION changes (publish via the
+# obs-base.yml workflow), then bump the FROM tag in Dockerfile.arm64.
+#
+# References:
+#   - Build wiki: https://github.com/obsproject/obs-studio/wiki/Build-Instructions-For-Linux
+#   - aarch64 CEF: https://cdn-fastly.obsproject.com/downloads/cef_binary_6533_linux_aarch64_v6.tar.xz
+# =============================================================================
+FROM ubuntu:24.04 AS builder
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+ARG OBS_VERSION=32.1.2
+ARG CEF_VERSION=6533
+
+# Build-system + OBS dependencies, mirroring the Debian-based section of the
+# OBS Build-Instructions-For-Linux wiki page.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      cmake extra-cmake-modules ninja-build pkg-config \
+      clang clang-format build-essential curl ccache git ca-certificates \
+      xz-utils \
+      libavcodec-dev libavdevice-dev libavfilter-dev libavformat-dev libavutil-dev \
+      libswresample-dev libswscale-dev libx264-dev \
+      libcurl4-openssl-dev libmbedtls-dev \
+      libgl1-mesa-dev libjansson-dev \
+      libluajit-5.1-dev python3-dev \
+      libx11-dev libxcb-randr0-dev libxcb-shm0-dev libxcb-xinerama0-dev \
+      libxcb-composite0-dev libxcomposite-dev libxinerama-dev libxcb1-dev \
+      libx11-xcb-dev libxcb-xfixes0-dev \
+      swig libcmocka-dev libxss-dev libglvnd-dev libgles2-mesa-dev \
+      libwayland-dev librist-dev libsrt-openssl-dev \
+      libpci-dev libpipewire-0.3-dev libqrcodegencpp-dev \
+      uthash-dev libsimde-dev \
+      qt6-base-dev qt6-base-private-dev qt6-svg-dev qt6-wayland qt6-image-formats-plugins \
+      libasound2-dev libfdk-aac-dev libfontconfig-dev libfreetype-dev \
+      libjack-jackd2-dev libpulse-dev libsndio-dev libspeexdsp-dev \
+      libudev-dev libv4l-dev libva-dev libvlc-dev libdrm-dev \
+      nlohmann-json3-dev libwebsocketpp-dev libasio-dev \
+      # CEF link-time deps (chromium pulls in NSS, ATK, AT-SPI2, XDamage, etc.) \
+      libnss3-dev libatk1.0-dev libatk-bridge2.0-dev libatspi2.0-dev \
+      libxdamage-dev libxkbcommon-dev libcups2-dev libpango1.0-dev \
+      libxshmfence-dev libnspr4-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# CEF tarball pinned to aarch64; amd64 builds use the PPA in Dockerfile.
+WORKDIR /opt
+RUN curl -fsSL -o /tmp/cef.tar.xz \
+         "https://cdn-fastly.obsproject.com/downloads/cef_binary_${CEF_VERSION}_linux_aarch64_v6.tar.xz" \
+    && mkdir -p /opt/cef \
+    && tar xf /tmp/cef.tar.xz -C /opt/cef --strip-components=1 \
+    && rm /tmp/cef.tar.xz
+
+# OBS source must be cloned with submodules — the GitHub source tarball is
+# missing required files (per the build wiki).
+WORKDIR /src
+RUN git clone --depth=1 --branch="${OBS_VERSION}" --recurse-submodules --shallow-submodules \
+      https://github.com/obsproject/obs-studio.git \
+    && cd obs-studio && git log --oneline -1
+
+WORKDIR /src/obs-studio
+RUN cmake --preset ubuntu \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_INSTALL_PREFIX=/usr/local \
+    -DENABLE_BROWSER=ON \
+    -DCEF_ROOT_DIR=/opt/cef \
+    -DENABLE_AJA=OFF \
+    -DENABLE_NVENC=OFF \
+    -DENABLE_QSV11=OFF \
+    -DOBS_COMPILE_DEPRECATION_AS_WARNING=ON
+
+RUN cmake --build build_ubuntu --parallel
+RUN cmake --install build_ubuntu --prefix /opt/obs-install
+
+
+# =============================================================================
+# Final stage: ship only the install tree. Downstream `Dockerfile.arm64` will
+# `COPY --from=builder /opt/obs-install/ /usr/local/` and apt-install the
+# runtime dependencies on top of its own ubuntu:24.04 base.
+# =============================================================================
+FROM scratch
+COPY --from=builder /opt/obs-install/ /opt/obs-install/
