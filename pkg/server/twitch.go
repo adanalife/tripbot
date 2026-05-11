@@ -28,7 +28,7 @@ func twitchAuthJSON() string {
 	var jsonData []byte
 	auth := TwitchAuthentication{
 		ChannelID:       mytwitch.ChannelID,
-		UserAccessToken: mytwitch.UserAccessToken,
+		UserAccessToken: mytwitch.CurrentUserAccessToken(),
 		ClientID:        mytwitch.ClientID,
 		AppAccessToken:  mytwitch.AppAccessToken,
 	}

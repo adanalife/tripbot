@@ -5,6 +5,23 @@
 
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
+## [v2.3.0] — 2026-05-10
+
+Minor release. Replaces the static `TWITCH_AUTH_TOKEN` env var (sourced from a third-party token generator) with a self-owned OAuth Authorization Code flow against tripbot's own Twitch dev app. The bot's IRC refresh token now lives in Postgres and rotates hourly via a `pg_try_advisory_lock`-fenced cron job; one-time bootstrap via a new `cmd/auth-bootstrap` CLI. Plus two CI trigger-path filters.
+
+### Authentication
+
+- **`oauth_tokens` table + `pkg/oauthtokens` storage package.** Migration `010_create_oauth_tokens` introduces the table (keyed by `(provider, username)`, stores refresh + access tokens, scopes, expiry, fail counter). The Go-side package wraps it with sqlx queries plus `pg_try_advisory_lock`-backed `TryRefreshLock` so a local-dev tripbot and a cluster pod sharing the same Twitch account can't both rotate the refresh token simultaneously. The lock-id is SHA-256-hashed for a wider key space than `hashtext()`'s 32 bits. ([#452], [#454])
+- **`pkg/twitch/authentication.go` rewired off the static env-var token.** `TWITCH_AUTH_TOKEN` env var is no longer required. New `LoadFromDB()` reads the bot's row at boot; missing row → `log.Fatal` with hint pointing at the bootstrap CLI. `IRCAuthToken()` accessor replaces the dropped `AuthToken` global. `RefreshUserAccessToken` uses helix to mint a rotated pair and writes both back to the table; on terminal failure (revoked refresh token) it blanks in-memory state + sends SMS so the bot crashes loudly. Scopes consolidated to a `Scopes` package var (drops `openid`, adds `chat:read` + `chat:edit`). The pre-existing browser-opening block in `chatbot.go` is deleted — `cmd/auth-bootstrap` owns that flow now. ([#455])
+- **`/auth/callback` hardened with CSRF state validation + HTML success page.** New `pkg/server/oauthstate` (5-minute TTL, single-use, crypto/rand) generates state at the redirect-initiating side and the callback handler validates it. New `/auth/init` route generates state + 302s to Twitch — provides a cloud-based emergency re-bootstrap path when no laptop is handy. ([#455])
+- **New `cmd/auth-bootstrap` CLI + `task auth:bootstrap`.** One-time interactive bootstrap; signs in to Twitch on Dana's laptop, exchanges the code for tokens, derives the username from `helix.GetUsers` (so the row is account-agnostic — bootstrapping the broadcaster account later works identically without an env-var dance), Upserts to the cluster DB via port-forward. After this, all pod restarts and cluster rebuilds are headless. ([#455])
+- **`pkg/config` layers `infra/docker/env.docker` after `.env.<env>` for host-side runs.** `docker-compose` does this via `--env-file` inside containers, but host-side binaries (the new bootstrap CLI, host-side cmd/tripbot) previously missed it and failed envconfig for vars that only live in the docker env file (e.g. `TRIPBOT_HTTP_AUTH`). Silent no-op in cluster pods (file not in the image). ([#455])
+
+### CI
+
+- **`obs.yml` PR trigger filtered to OBS-impacting paths.** Skips wasted runs on docs-only / unrelated PRs. The push trigger (develop / `v*` tags) stays unfiltered intentionally — `release.yml` owns the actual release builds and the develop-push smoke test stays useful as a build-soundness check. ([#448])
+- **`vlc.yml` push trigger filtered to VLC-impacting paths.** Pairs with [#390](https://github.com/adanalife/tripbot/pull/390)'s PR-side filter; brings develop-push + release-tag pushes in line. ([#447])
+
 ## [v2.2.6] — 2026-05-10
 
 Patch release. One small UX addition and one CI hygiene step.
@@ -270,3 +287,8 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#445]: https://github.com/adanalife/tripbot/pull/445
 [#449]: https://github.com/adanalife/tripbot/pull/449
 [#453]: https://github.com/adanalife/tripbot/pull/453
+[#447]: https://github.com/adanalife/tripbot/pull/447
+[#448]: https://github.com/adanalife/tripbot/pull/448
+[#452]: https://github.com/adanalife/tripbot/pull/452
+[#454]: https://github.com/adanalife/tripbot/pull/454
+[#455]: https://github.com/adanalife/tripbot/pull/455

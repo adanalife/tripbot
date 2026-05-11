@@ -46,7 +46,7 @@ jobs:
           cache-from: type=gha,scope=tripbot
           cache-to: type=gha,mode=max,scope=tripbot
 
-      - name: Bring up the stack (db + migrate + tripbot)
+      - name: Bring up db + migrate
         env:
           CHANNEL_NAME: ${{ secrets.CHANNEL_NAME }}
           BOT_USERNAME: ${{ secrets.BOT_USERNAME }}
@@ -60,12 +60,54 @@ jobs:
             -f infra/docker/docker-compose.yml \
             -f infra/docker/docker-compose.testing.yml \
             -f infra/docker/docker-compose.github.yml \
-            up -d db migrate tripbot
+            up -d db migrate
 
-      - run: sleep 10
+      - run: sleep 5
 
       - name: Check logs (migrate)
         run: docker logs tripbot-migrate-1
+
+      # tripbot's LoadFromDB at boot refuses to start without an oauth_tokens
+      # row (cluster contract: bootstrap-or-fatal). CI has no real Twitch
+      # creds to bootstrap with, so seed a syntactically-valid placeholder row
+      # so cmd/tripbot can boot far enough to verify version files + /version.
+      - name: Seed placeholder oauth_tokens row for build-stack tripbot
+        env:
+          BOT_USERNAME: ${{ secrets.BOT_USERNAME }}
+        run: |
+          docker exec -i tripbot-db-1 \
+            psql -U tripbot_docker -d tripbot_docker \
+              -v ON_ERROR_STOP=1 \
+              -v BOT_USERNAME="$BOT_USERNAME" <<'SQL'
+          INSERT INTO oauth_tokens
+            (provider, username, access_token, refresh_token, expires_at, scopes)
+          VALUES
+            ('twitch', :'BOT_USERNAME', 'ci-placeholder-access',
+             'ci-placeholder-refresh', NOW() + INTERVAL '1 hour',
+             'chat:read chat:edit')
+          ON CONFLICT (provider, username) DO UPDATE
+            SET access_token = EXCLUDED.access_token,
+                refresh_token = EXCLUDED.refresh_token,
+                expires_at    = EXCLUDED.expires_at;
+          SQL
+
+      - name: Bring up tripbot
+        env:
+          CHANNEL_NAME: ${{ secrets.CHANNEL_NAME }}
+          BOT_USERNAME: ${{ secrets.BOT_USERNAME }}
+          TWITCH_AUTH_TOKEN: ${{ secrets.TWITCH_AUTH_TOKEN }}
+          TWITCH_CLIENT_ID: ${{ secrets.TWITCH_CLIENT_ID }}
+          TWITCH_CLIENT_SECRET: ${{ secrets.TWITCH_CLIENT_SECRET }}
+        run: |
+          docker compose \
+            --project-directory . \
+            --env-file infra/docker/env.docker \
+            -f infra/docker/docker-compose.yml \
+            -f infra/docker/docker-compose.testing.yml \
+            -f infra/docker/docker-compose.github.yml \
+            up -d tripbot
+
+      - run: sleep 10
 
       - name: Check logs (tripbot)
         run: docker logs tripbot-tripbot-1
