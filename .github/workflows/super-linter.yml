@@ -27,8 +27,8 @@ jobs:
           # don't post a "Super-linter summary" comment on every PR run
           # (the Actions step summary tab still gets the same content)
           ENABLE_GITHUB_PULL_REQUEST_SUMMARY_COMMENT: false
-          # chat-command typo aliases (!commads, !quess, !loacation, ...)
-          # are intentional; ./todo is a stale 2018-era brainstorm file.
+          # pkg/chatbot/handlers.go: intentional misspelled command aliases
+          # ./todo: stale 2018-era brainstorm file
           SPELL_CODESPELL_FILTER_REGEX_EXCLUDE: '(^|/)(pkg/chatbot/handlers\.go|todo)$'
           # disabled because it's not working with C libs
           VALIDATE_GO: false
