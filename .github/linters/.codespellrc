@@ -1,3 +1,2 @@
 [codespell]
-skip = ./vendor,./node_modules,./.git,./_assets,./bin,./.devbox,./db/migrate,./pkg/chatbot/handlers.go,./todo,*.sum,*.lock
 ignore-words-list = caf,nd,abitrate,copys
