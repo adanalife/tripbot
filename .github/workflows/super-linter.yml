@@ -27,12 +27,11 @@ jobs:
           # don't post a "Super-linter summary" comment on every PR run
           # (the Actions step summary tab still gets the same content)
           ENABLE_GITHUB_PULL_REQUEST_SUMMARY_COMMENT: false
-          # go.sum: random tokens in module hashes look like typos
-          # ./todo: stale 2018-era brainstorm file
-          # (handlers.go's intentional misspellings live in .codespellrc's
-          # ignore-words-list — those tokens are unique enough that
-          # word-level allowing is safer than file-level skipping.)
-          SPELL_CODESPELL_FILTER_REGEX_EXCLUDE: '.*(^|/)(go\.sum|todo)$'
+          # go.sum has random base64 tokens in module hashes (mOT, fO,
+          # etc.) that look like typos. Skip the file globally — nothing
+          # else lints it either. handlers.go's intentional misspellings
+          # are allowlisted by word in .codespellrc instead.
+          FILTER_REGEX_EXCLUDE: '.*(^|/)go\.sum$'
           # disabled because it's not working with C libs
           VALIDATE_GO: false
           # disabled — none of the in-tree Dockerfiles have been
