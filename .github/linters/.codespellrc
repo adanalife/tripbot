@@ -1,2 +1,3 @@
 [codespell]
 ignore-words-list = caf,nd,abitrate,copys,commads,quess,loacation,lcoation
+skip = ./CHANGELOG.md
