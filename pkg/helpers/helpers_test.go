@@ -118,18 +118,18 @@ func TestSplitOnRegex(t *testing.T) {
 	tests := []struct {
 		name      string
 		text      string
-		delimeter string
+		delimiter string
 		want      []string
 	}{
 		{"simple comma split", "a,b,c", ",", []string{"a", "b", "c"}},
 		{"empty input", "", ",", []string{""}},
 		{"no matches", "abc", ",", []string{"abc"}},
-		{"trailing delimeter yields empty tail", "a,b,", ",", []string{"a", "b", ""}},
+		{"trailing delimiter yields empty tail", "a,b,", ",", []string{"a", "b", ""}},
 		{"regex char class", "a1b2c3d", "[0-9]", []string{"a", "b", "c", "d"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := SplitOnRegex(tt.text, tt.delimeter)
+			got := SplitOnRegex(tt.text, tt.delimiter)
 			if len(got) != len(tt.want) {
 				t.Fatalf("got %v (len=%d), want %v (len=%d)", got, len(got), tt.want, len(tt.want))
 			}

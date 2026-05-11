@@ -111,7 +111,7 @@ func startHttpServer() {
 	go server.Start()
 }
 
-// findInitialVideo will determin the vido that is currently-playing
+// findInitialVideo will determine the vido that is currently-playing
 // we want to run this early, otherwise it will be unset until the first cron job runs
 func findInitialVideo() {
 	video.GetCurrentlyPlaying()
@@ -194,7 +194,7 @@ func gracefulShutdown() {
 	<-ctrlC
 
 	log.Println(aurora.Red("caught CTRL-C"))
-	// anything below this probably wont be executed
+	// anything below this probably won't be executed
 	// try and use !shutdown instead
 	//TODO: print different message if CurrentlyPlaying is ""
 	log.Printf("Last played video: %s", aurora.Yellow(video.CurrentlyPlaying.File()))

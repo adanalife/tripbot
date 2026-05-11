@@ -3,7 +3,8 @@ on:
   pull_request:
   push:
     branches:
-      - main
+      - develop
+      - master
     tags:
       - v*
 jobs:
@@ -14,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: golint
-        uses: reviewdog/action-golangci-lint@v2.0.3
+        uses: reviewdog/action-golangci-lint@v2
         with:
           github_token: ${{ secrets.github_token }}
           # Pin golangci_lint_version explicitly: the action's default of
@@ -38,16 +39,3 @@ jobs:
           github_token: ${{ secrets.github_token }}
           golangci_lint_version: v2.12.1
           golangci_lint_flags: "--default=none --enable=errcheck"
-
-  misspell:
-    name: misspell
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - name: misspell
-        uses: reviewdog/action-misspell@v1
-        with:
-          github_token: ${{ secrets.github_token }}
-          locale: "US"
-          # ignore the chat handlers file cause it has many typos
-          exclude: pkg/chatbot/handlers.go

@@ -5,6 +5,25 @@
 
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
+## [v2.3.2] — 2026-05-11
+
+Patch release. Pre-bakes the OBS arm64 CEF compile into a base image (skipping ~25 min off every OBS PR), fixes four workflow triggers that pointed at a non-existent `main` branch (restoring Coveralls base-build uploads on `develop` and adding `pull_request` scanning to CodeQL), normalizes the OBS scene's seven `browser_source` on-screens to a clean thirds layout (fixes longstanding middle-text clipping), plus a small CI/env hygiene sweep.
+
+### CI
+
+- **OBS arm64 base image (`adanalife/obs-cef-base:arm64-*`).** New `infra/docker/obs/Dockerfile.arm64-base` compiles OBS-from-source against the aarch64 CEF tarball and ships a slim image carrying just `/opt/obs-install/`. New `obs-base.yml` workflow builds and pushes the base on demand. `infra/docker/obs/Dockerfile.arm64` now `FROM`s the base, so the arm64 leg of `obs.yml` drops from ~30 min to ~2 min. Bumping OBS/CEF becomes: edit the base Dockerfile's ARG defaults, push, then bump the `FROM` tag. ([#461])
+- **Workflow `push` triggers fixed: `main` → `develop` + `master`.** Testing, super-linter, linting, and CodeQL all listed `main` in their push trigger, but the repo uses `develop` → `master` — so push events on the integration branches never fired these workflows. The visible win: Coveralls now receives a base build on `develop` and PR comments stop reporting "No base build found for commit X on develop." CodeQL additionally gains a `pull_request:` trigger so PRs are scanned (previously only the weekly Thursday cron caught anything). ([#462])
+- **`misspell` → `codespell` via super-linter.** Drops the standalone reviewdog `misspell` job from `linting.yml` in favor of super-linter's `SPELL_CODESPELL`; unblocks the v2.3.2 release whose misspell check was failing on pre-existing British "kilometres" usages. New `.codespellrc` ignore list keeps the intentional chat-command typo aliases (`commads`, `quess`, `loacation`, `lcoation`) plus a few project-specific words (`caf`, `nd`, `abitrate`). Bundled with ~20 small typo fixes across 14 files — mostly missing apostrophes in code comments (`can't` / `won't` / `doesn't`), plus a `delimiter` spelling fix in `pkg/helpers/helpers.go` with the in-package caller updated. ([#466])
+- **Action-version hygiene sweep.** Floats `reviewdog/action-golangci-lint` `v2.0.3` → `v2` (revive job; the errcheck job in the same file already used the floating major) and `super-linter/super-linter` `v8.6.0` → `v8`. Other workflow pins were checked against latest stable and are already current. No-op today; future v2.x / v8.x releases now flow in automatically. ([#436])
+
+### OBS
+
+- **Browser-source on-screens normalized to thirds layout.** Geometry pass on the seven `browser_source` on-screens in `infra/docker/obs/config/Tripbot.json.tmpl`. Left rotator, middle-text, and right rotator each take one 640×47 third of the 1920×1080 canvas in the same y-band as the baked grey overlay boxes (`y=1033..1079`). Leaderboard normalized to 400×400 at (1500, 60). Timewarp banner to 1200×200 at (360, 440). `MIDDLE` group container flattened from a pathological 23×67 internal canvas (item scale 3.72 / group scale 0.488) to a flat 1920×1080, matching `LEFT CORNER` / `RIGHT CORNER`. All affected sources now follow the convention **viewport == on-canvas footprint, scale = 1.0, bounds_type = 0** — removes the implicit "effective size = source × scale" math. Fixes the longstanding bug where middle-text clipped 8 px below the canvas bottom edge. Step 1 of 2; per-onscreen CSS styling (inner `<div>` widths matching the underlying grey-box dimensions, padding, drop-shadows, fade transitions) is queued as a follow-up. ([#467])
+
+### Cleanup
+
+- **Drop unused `TWITCH_AUTH_TOKEN` from env files.** v2.3.0 moved the IRC token from a static env var to a DB-backed OAuth refresh flow; the var is no longer read anywhere in the Go source. Removed from `.env.example`, `.env.development.example`, `.env.testing`, and `infra/docker/env.docker`. Surrounding comments tightened to clarify the new local-vs-cluster split for `TWITCH_CLIENT_ID` / `TWITCH_CLIENT_SECRET` (local dev populates them for `task auth:bootstrap`; cluster pulls from ESO + SM `k8s/tripbot/twitch-creds`). Pairs with [adanalife/infra#438](https://github.com/adanalife/infra/pull/438). ([#465])
+
 ## [v2.3.1] — 2026-05-11
 
 Patch release. Tooling-only — bundles the `migrate` CLI and `db/migrate/*.sql` into the runtime image so a cluster k8s Job can run schema migrations without a sibling image. No behavior change at runtime.
@@ -301,3 +320,9 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#454]: https://github.com/adanalife/tripbot/pull/454
 [#455]: https://github.com/adanalife/tripbot/pull/455
 [#458]: https://github.com/adanalife/tripbot/pull/458
+[#461]: https://github.com/adanalife/tripbot/pull/461
+[#462]: https://github.com/adanalife/tripbot/pull/462
+[#436]: https://github.com/adanalife/tripbot/pull/436
+[#465]: https://github.com/adanalife/tripbot/pull/465
+[#466]: https://github.com/adanalife/tripbot/pull/466
+[#467]: https://github.com/adanalife/tripbot/pull/467
