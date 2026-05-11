@@ -22,20 +22,23 @@ import (
 // at the bootstrap CLI.
 var ErrNoToken = errors.New("oauthtokens: no row for (provider, username); run task tripbot:auth:bootstrap")
 
-// Token mirrors the oauth_tokens row.
+// Token mirrors the oauth_tokens row. TwitchUserID + LastRefreshAt are
+// nullable in the schema; the bootstrap CLI populates twitch_user_id from
+// helix.GetUsers, but any out-of-band INSERT (CI seed, ad-hoc psql) may
+// leave it unset, so sqlx scans must handle NULL.
 type Token struct {
-	ID               int          `db:"id"`
-	Provider         string       `db:"provider"`
-	Username         string       `db:"username"`
-	TwitchUserID     string       `db:"twitch_user_id"`
-	AccessToken      string       `db:"access_token"`
-	RefreshToken     string       `db:"refresh_token"`
-	ExpiresAt        time.Time    `db:"expires_at"`
-	Scopes           string       `db:"scopes"` // space-joined
-	RefreshFailCount int          `db:"refresh_fail_count"`
-	LastRefreshAt    sql.NullTime `db:"last_refresh_at"`
-	DateCreated      time.Time    `db:"date_created"`
-	DateUpdated      time.Time    `db:"date_updated"`
+	ID               int            `db:"id"`
+	Provider         string         `db:"provider"`
+	Username         string         `db:"username"`
+	TwitchUserID     sql.NullString `db:"twitch_user_id"`
+	AccessToken      string         `db:"access_token"`
+	RefreshToken     string         `db:"refresh_token"`
+	ExpiresAt        time.Time      `db:"expires_at"`
+	Scopes           string         `db:"scopes"` // space-joined
+	RefreshFailCount int            `db:"refresh_fail_count"`
+	LastRefreshAt    sql.NullTime   `db:"last_refresh_at"`
+	DateCreated      time.Time      `db:"date_created"`
+	DateUpdated      time.Time      `db:"date_updated"`
 }
 
 // Get returns the row for (provider, username) or ErrNoToken if missing.

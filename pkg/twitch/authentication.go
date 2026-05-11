@@ -1,6 +1,7 @@
 package twitch
 
 import (
+	"database/sql"
 	"errors"
 	"log"
 	"os"
@@ -176,7 +177,7 @@ func GenerateUserAccessToken(code string) error {
 	tok := oauthtokens.Token{
 		Provider:     "twitch",
 		Username:     u.Login,
-		TwitchUserID: u.ID,
+		TwitchUserID: sql.NullString{String: u.ID, Valid: u.ID != ""},
 		AccessToken:  resp.Data.AccessToken,
 		RefreshToken: resp.Data.RefreshToken,
 		ExpiresAt:    time.Now().Add(time.Duration(resp.Data.ExpiresIn) * time.Second),

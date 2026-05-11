@@ -26,7 +26,7 @@ func sampleToken() Token {
 	return Token{
 		Provider:     "twitch",
 		Username:     "tripbot4000",
-		TwitchUserID: "12345",
+		TwitchUserID: sql.NullString{String: "12345", Valid: true},
 		AccessToken:  "access-abc",
 		RefreshToken: "refresh-xyz",
 		ExpiresAt:    time.Date(2026, 5, 11, 0, 0, 0, 0, time.UTC),
