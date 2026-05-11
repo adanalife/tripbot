@@ -3,7 +3,8 @@ on:
   pull_request:
   push:
     branches:
-      - main
+      - develop
+      - master
     tags:
       - v*
 
@@ -24,3 +25,14 @@ jobs:
       run: |
         echo "## Coverage" >> "$GITHUB_STEP_SUMMARY"
         tail -1 coverage.txt >> "$GITHUB_STEP_SUMMARY"
+    # Convert Go's coverage.out to lcov so coveralls.io can ingest it.
+    - name: Convert coverage to lcov
+      uses: jandelgado/gcov2lcov-action@v1.2.0
+      with:
+        infile: coverage.out
+        outfile: coverage.lcov
+    - name: Upload coverage to Coveralls
+      uses: coverallsapp/github-action@v2.3.6
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        path-to-lcov: coverage.lcov

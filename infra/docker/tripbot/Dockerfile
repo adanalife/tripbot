@@ -24,6 +24,10 @@ RUN apt-get update \
 
 COPY --from=builder /out/tripbot /usr/local/bin/tripbot
 
+# Bundle the migrate CLI + db/migrate so this image can run schema migrations.
+COPY --from=migrate/migrate:4 /usr/local/bin/migrate /usr/local/bin/migrate
+COPY db/migrate /migrations
+
 ARG VERSION=dev
 ARG SHA=unknown
 RUN mkdir -p /etc/tripbot \

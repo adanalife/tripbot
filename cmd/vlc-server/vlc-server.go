@@ -112,7 +112,7 @@ func gracefulShutdown() {
 	<-ctrlC
 
 	log.Println(aurora.Red("caught CTRL-C"))
-	// anything below this probably wont be executed
+	// anything below this probably won't be executed
 	vlcServer.Shutdown()
 	//TODO: stop cron here
 	sentry.Flush(time.Second * 5)

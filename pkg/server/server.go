@@ -48,6 +48,7 @@ func Start() {
 	// auth endpoints
 	auth := r.PathPrefix("/auth").Methods("GET").Subrouter()
 	auth.Handle("/twitch", tagged("/auth/twitch", authTwitchHandler))
+	auth.Handle("/init", tagged("/auth/init", authInitHandler))
 	auth.Handle("/callback", tagged("/auth/callback", authCallbackHandler))
 
 	// static assets
