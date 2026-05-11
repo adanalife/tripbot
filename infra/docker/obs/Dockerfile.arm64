@@ -1,81 +1,17 @@
 # =============================================================================
-# Builder: compile obs-studio from source with CEF for arm64 browser_source.
+# Runtime image for arm64. The OBS install tree (compiled from source against
+# the aarch64 CEF tarball) is pulled from the pre-baked obs-cef-base image —
+# see infra/docker/obs/Dockerfile.arm64-base and .github/workflows/obs-base.yml.
+# Bumping OBS_VERSION/CEF_VERSION = re-bake the base, then bump the FROM tag
+# below.
 #
 # Why from source on arm64: Ubuntu 24.04 universe ships obs-studio without
 # CEF (the +dfsg suffix marks the DFSG-stripped build), so browser_source
 # registers as "Source ID not found" at scene load. The OBS PPA bundles CEF
-# but publishes amd64 only — no arm64 across any Ubuntu release. Building
-# from source against the official aarch64 CEF tarball is the only path to
-# browser sources on arm64. amd64 stays on the PPA build (see Dockerfile).
-#
-# References:
-#   - Build wiki: https://github.com/obsproject/obs-studio/wiki/Build-Instructions-For-Linux
-#   - aarch64 CEF: https://cdn-fastly.obsproject.com/downloads/cef_binary_6533_linux_aarch64_v6.tar.xz
+# but publishes amd64 only — no arm64 across any Ubuntu release. amd64 stays
+# on the PPA build (see Dockerfile).
 # =============================================================================
-FROM ubuntu:24.04 AS builder
-
-ENV DEBIAN_FRONTEND=noninteractive
-
-ARG OBS_VERSION=32.1.2
-ARG CEF_VERSION=6533
-
-# Build-system + OBS dependencies, mirroring the Debian-based section of the
-# OBS Build-Instructions-For-Linux wiki page.
-RUN apt-get update && apt-get install -y --no-install-recommends \
-      cmake extra-cmake-modules ninja-build pkg-config \
-      clang clang-format build-essential curl ccache git ca-certificates \
-      xz-utils \
-      libavcodec-dev libavdevice-dev libavfilter-dev libavformat-dev libavutil-dev \
-      libswresample-dev libswscale-dev libx264-dev \
-      libcurl4-openssl-dev libmbedtls-dev \
-      libgl1-mesa-dev libjansson-dev \
-      libluajit-5.1-dev python3-dev \
-      libx11-dev libxcb-randr0-dev libxcb-shm0-dev libxcb-xinerama0-dev \
-      libxcb-composite0-dev libxcomposite-dev libxinerama-dev libxcb1-dev \
-      libx11-xcb-dev libxcb-xfixes0-dev \
-      swig libcmocka-dev libxss-dev libglvnd-dev libgles2-mesa-dev \
-      libwayland-dev librist-dev libsrt-openssl-dev \
-      libpci-dev libpipewire-0.3-dev libqrcodegencpp-dev \
-      uthash-dev libsimde-dev \
-      qt6-base-dev qt6-base-private-dev qt6-svg-dev qt6-wayland qt6-image-formats-plugins \
-      libasound2-dev libfdk-aac-dev libfontconfig-dev libfreetype-dev \
-      libjack-jackd2-dev libpulse-dev libsndio-dev libspeexdsp-dev \
-      libudev-dev libv4l-dev libva-dev libvlc-dev libdrm-dev \
-      nlohmann-json3-dev libwebsocketpp-dev libasio-dev \
-      # CEF link-time deps (chromium pulls in NSS, ATK, AT-SPI2, XDamage, etc.) \
-      libnss3-dev libatk1.0-dev libatk-bridge2.0-dev libatspi2.0-dev \
-      libxdamage-dev libxkbcommon-dev libcups2-dev libpango1.0-dev \
-      libxshmfence-dev libnspr4-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-# CEF tarball pinned to aarch64; amd64 builds use the PPA in Dockerfile.
-WORKDIR /opt
-RUN curl -fsSL -o /tmp/cef.tar.xz \
-         "https://cdn-fastly.obsproject.com/downloads/cef_binary_${CEF_VERSION}_linux_aarch64_v6.tar.xz" \
-    && mkdir -p /opt/cef \
-    && tar xf /tmp/cef.tar.xz -C /opt/cef --strip-components=1 \
-    && rm /tmp/cef.tar.xz
-
-# OBS source must be cloned with submodules — the GitHub source tarball is
-# missing required files (per the build wiki).
-WORKDIR /src
-RUN git clone --depth=1 --branch="${OBS_VERSION}" --recurse-submodules --shallow-submodules \
-      https://github.com/obsproject/obs-studio.git \
-    && cd obs-studio && git log --oneline -1
-
-WORKDIR /src/obs-studio
-RUN cmake --preset ubuntu \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_INSTALL_PREFIX=/usr/local \
-    -DENABLE_BROWSER=ON \
-    -DCEF_ROOT_DIR=/opt/cef \
-    -DENABLE_AJA=OFF \
-    -DENABLE_NVENC=OFF \
-    -DENABLE_QSV11=OFF \
-    -DOBS_COMPILE_DEPRECATION_AS_WARNING=ON
-
-RUN cmake --build build_ubuntu --parallel
-RUN cmake --install build_ubuntu --prefix /opt/obs-install
+FROM adanalife/obs-cef-base:arm64-32.1.2-6533 AS builder
 
 
 # =============================================================================
@@ -115,9 +51,9 @@ RUN echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula sele
       libcups2t64 libxdamage1 libxkbcommon0 libxkbfile1 libexpat1 libpango-1.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy the compiled OBS install tree from the builder. cmake --install lays
-# out OBS + plugins under /opt/obs-install (mapped to /usr/local on the
-# runtime side). CEF runtime files are placed by obs-browser's install step.
+# Copy the compiled OBS install tree from the pre-baked base image. cmake
+# --install laid the tree out under /opt/obs-install (mapped to /usr/local on
+# the runtime side); CEF runtime files are placed by obs-browser's install step.
 COPY --from=builder /opt/obs-install/ /usr/local/
 RUN ldconfig
 
