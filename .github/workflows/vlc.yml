@@ -6,7 +6,9 @@ on:
       - 'pkg/vlc-client/**'
       - 'infra/docker/vlc/**'
       - 'infra/docker/docker-compose*.yml'
+      - 'infra/docker/env.docker'
       - '.github/workflows/vlc.yml'
+      - '.dockerignore'
       - 'go.mod'
       - 'go.sum'
   push:
@@ -19,7 +21,9 @@ on:
       - 'pkg/vlc-client/**'
       - 'infra/docker/vlc/**'
       - 'infra/docker/docker-compose*.yml'
+      - 'infra/docker/env.docker'
       - '.github/workflows/vlc.yml'
+      - '.dockerignore'
       - 'go.mod'
       - 'go.sum'
 
