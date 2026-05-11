@@ -24,9 +24,7 @@ RUN apt-get update \
 
 COPY --from=builder /out/tripbot /usr/local/bin/tripbot
 
-# Bundle the migrate CLI + schema files so a cluster Job can run
-# migrations using the same image — keeps SQL alongside the code that
-# uses it without needing a sibling image.
+# Bundle the migrate CLI + db/migrate so this image can run schema migrations.
 COPY --from=migrate/migrate:4 /usr/local/bin/migrate /usr/local/bin/migrate
 COPY db/migrate /migrations
 
