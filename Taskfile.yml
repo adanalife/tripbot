@@ -49,6 +49,24 @@ tasks:
       # non-interactive subshell (where ~/.zshrc isn't sourced).
       - mise exec -- go run ./cmd/auth-bootstrap
 
+  auth:bootstrap:cluster:
+    desc: Like auth:bootstrap but pulls TWITCH_CLIENT_ID/SECRET from SM so you don't need them in .env.development. Requires `task tripbot:db:up` (infra) for the cluster DB port-forward.
+    vars:
+      # Pull the SM JSON once and stash it in a task var so we only call
+      # aws secretsmanager once even though we need two fields from it.
+      SM_JSON:
+        sh: aws-vault exec adanalife-stage -- aws secretsmanager get-secret-value --secret-id k8s/tripbot/twitch-creds --query SecretString --output text
+    env:
+      TWITCH_CLIENT_ID:
+        sh: echo '{{.SM_JSON}}' | jq -r .TWITCH_CLIENT_ID
+      TWITCH_CLIENT_SECRET:
+        sh: echo '{{.SM_JSON}}' | jq -r .TWITCH_CLIENT_SECRET
+      ENV: development
+      DATABASE_HOST: localhost
+      EXTERNAL_URL: "http://localhost:8080"
+    cmds:
+      - mise exec -- go run ./cmd/auth-bootstrap
+
   # Release smoke flow — see vault/tripbot/release-checklist.md.
   # Targets the local k3d cluster running the stage-1 overlay
   # (cloudflared tunnel + apps).
