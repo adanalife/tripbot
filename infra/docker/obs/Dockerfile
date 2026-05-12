@@ -10,6 +10,12 @@ ENV DEBIAN_FRONTEND=noninteractive
 #
 # msttcorefonts wants EULA pre-acceptance for unattended install. Trebuchet
 # MS is referenced by onscreen text sources.
+#
+# intel-media-va-driver-non-free + vainfo enable hardware H.264/H.265
+# encode via VAAPI on Intel iGPU hosts (Gen 11+ Iris Xe / UHD 770).
+# Requires /dev/dri device passthrough at runtime; OBS scenes select
+# "FFmpeg VAAPI" as the output encoder. Software x264 is the fallback
+# when no iGPU is exposed.
 RUN echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true" \
       | debconf-set-selections \
     && apt-get update \
@@ -28,6 +34,8 @@ RUN echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula sele
          x11-utils \
          dbus-x11 \
          libgl1-mesa-dri \
+         intel-media-va-driver-non-free \
+         vainfo \
          fonts-dejavu-core \
          ttf-mscorefonts-installer \
     && rm -rf /var/lib/apt/lists/*
