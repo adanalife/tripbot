@@ -2,7 +2,7 @@
 
 set -ex
 
-apt-get install -y --no-install-recommends postgresql-client
+apt-get update && apt-get install -y --no-install-recommends postgresql-client
 
 DSN="postgres://$DATABASE_USER:$DATABASE_PASS@$DATABASE_HOST/$DATABASE_DB"
 

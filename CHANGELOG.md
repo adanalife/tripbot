@@ -5,6 +5,14 @@
 
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
+## [v2.4.2] — 2026-05-12
+
+Patch release. Fixes the k8s seed Job failing with `E: Unable to locate package postgresql-client` by adding `apt-get update` before the install in `seed-db.sh`.
+
+### Build
+
+- **`apt-get update` before `postgresql-client` install in `seed-db.sh`.** The prior release removed the original `apt update` alongside the full `postgresql` package but forgot to keep it for the leaner `postgresql-client` install, causing the seed Job to fail on a stale package index.
+
 ## [v2.4.1] — 2026-05-12
 
 Patch release. Prepares the tripbot image for the k8s one-shot DB seed Job: bakes `db/seed/` and `seed-db.sh` into the image, installs `postgresql-client` on-demand at seed time (rather than in the base image), and un-excludes `infra/docker/bin` from `.dockerignore` so the `COPY` in the Dockerfile resolves correctly in CI.
