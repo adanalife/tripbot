@@ -180,6 +180,14 @@ func connectToTwitch() {
 		err := client.Connect()
 		if err != nil {
 			terrors.Log(err, "unable to connect to twitch")
+			if errors.Is(err, twitch.ErrLoginAuthenticationFailed) {
+				// The IRC client holds a stale token. Sync it with the
+				// in-memory token (kept fresh by the hourly refresh cron)
+				// so the next Connect attempt uses the current credentials.
+				if tok := mytwitch.IRCAuthToken(); tok != "" {
+					client.SetIRCToken(tok)
+				}
+			}
 			time.Sleep(time.Minute)
 		}
 	}
@@ -228,7 +236,15 @@ func scheduleBackgroundJobs() {
 	err = background.Cron.AddFunc("@every 5m", tracedJob("onscreens.ShowGuessLeaderboard", onscreensClient.ShowGuessLeaderboard))
 	err = background.Cron.AddFunc("@every 5m", tracedJob("users.PrintCurrentSession", users.PrintCurrentSession))
 	err = background.Cron.AddFunc("@every 5m", tracedJob("twitch.GetSubscribers", mytwitch.GetSubscribers))
-	err = background.Cron.AddFunc("@every 1h", tracedJob("twitch.RefreshUserAccessToken", mytwitch.RefreshUserAccessToken))
+	err = background.Cron.AddFunc("@every 1h", tracedJob("twitch.RefreshUserAccessToken", func() {
+		mytwitch.RefreshUserAccessToken()
+		// Keep the IRC client's stored token in sync with the rotated credentials.
+		// go-twitch-irc captures the token at construction; without this, any
+		// reconnect after the first rotation replays the original boot-time token.
+		if tok := mytwitch.IRCAuthToken(); tok != "" {
+			client.SetIRCToken(tok)
+		}
+	}))
 	err = background.Cron.AddFunc("@every 2h57m30s", tracedJob("chatbot.Chatter", chatbot.Chatter))
 	err = background.Cron.AddFunc("@every 12h", tracedJob("twitch.UpdateWebhookSubscriptions", mytwitch.UpdateWebhookSubscriptions))
 	if err != nil {

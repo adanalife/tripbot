@@ -5,6 +5,18 @@
 
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
+## [v2.4.3] — 2026-05-13
+
+Patch release. Fixes a long-running IRC disconnect bug where the Twitch connection would fail to re-authenticate after the first token rotation, and adds the `auth-bootstrap` binary to the tripbot image for use by the new k8s bootstrap Job.
+
+### Fixed
+
+- **IRC reconnects no longer fail after the first OAuth token rotation.** `go-twitch-irc` stores the token passed to `NewClient` at construction and replays it on every reconnect. The hourly refresh cron kept tokens fresh in memory and in Postgres, but never updated the IRC client — so any connection drop after the first rotation (~4h post-boot) caused a permanent `login authentication failed` loop. Fix: call `client.SetIRCToken` after each successful refresh (proactive) and on `ErrLoginAuthenticationFailed` in the reconnect loop (recovery).
+
+### Build
+
+- **`auth-bootstrap` binary baked into the tripbot image.** Enables the `task tripbot:auth:bootstrap` k8s Job (infra#450) to run the interactive Twitch OAuth bootstrap in-cluster with direct Postgres access, eliminating the need for a separate DB port-forward.
+
 ## [v2.4.2] — 2026-05-12
 
 Patch release. Fixes the k8s seed Job failing with `E: Unable to locate package postgresql-client` by adding `apt-get update` before the install in `seed-db.sh`.
