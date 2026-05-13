@@ -23,6 +23,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"runtime"
 	"time"
 
 	_ "github.com/adanalife/tripbot/pkg/config/tripbot" // env loader via package init
@@ -98,9 +100,12 @@ func main() {
 	}()
 
 	log.Println(aurora.Cyan("Opening browser for Twitch sign-in..."))
-	log.Println("If your browser doesn't open automatically, visit:")
+	log.Println("Visit:")
 	log.Println(aurora.Blue(authURL).Underline())
-	helpers.OpenInBrowser(authURL)
+	// Skip browser open in headless environments (e.g. the k8s Job).
+	if os.Getenv("DISPLAY") != "" || os.Getenv("WAYLAND_DISPLAY") != "" || runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
+		helpers.OpenInBrowser(authURL)
+	}
 
 	select {
 	case err := <-done:
