@@ -263,7 +263,7 @@ func catchAllHandler(w http.ResponseWriter, r *http.Request) {
 
 	// someone tried a PUT or a DELETE or something
 	default:
-		//TODO: theres an http error class for this
+		//TODO: there's an http error class for this
 		fmt.Fprintf(w, "Only GET methods are supported.\n")
 	}
 }

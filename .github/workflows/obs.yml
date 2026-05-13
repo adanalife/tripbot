@@ -1,6 +1,10 @@
 name: OBS Container
 on:
   pull_request:
+    paths:
+      - 'infra/docker/obs/**'
+      - 'infra/docker/docker-compose*.yml'
+      - '.github/workflows/obs.yml'
   push:
     branches:
       - develop

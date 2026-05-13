@@ -7,7 +7,7 @@ import (
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/logrusorgru/aurora"
-	"github.com/nicklaw5/helix"
+	"github.com/nicklaw5/helix/v2"
 )
 
 var followsTopic = []string{
@@ -51,7 +51,7 @@ func subscribeToWebhook(pair []string) {
 
 func getWebookSubscriptions() {
 	// talk to twitch and see what the current webhooks are
-	//TODO: this doesnt seem to work, like at all
+	//TODO: this doesn't seem to work, like at all
 	resp, err := currentTwitchClient.GetWebhookSubscriptions(&helix.WebhookSubscriptionsParams{})
 	if err != nil {
 		terrors.Log(err, "failed to get webhook subscriptions")

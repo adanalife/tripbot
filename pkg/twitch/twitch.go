@@ -7,7 +7,7 @@ import (
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
-	"github.com/nicklaw5/helix"
+	"github.com/nicklaw5/helix/v2"
 )
 
 // ChannelID contains the twitch-internal user ID
@@ -88,9 +88,9 @@ func UserIsFollower(username string) bool {
 	// get the channel ID for the given user
 	userID := getChannelID(username)
 
-	resp, err := currentTwitchClient.GetUsersFollows(&helix.UsersFollowsParams{
-		ToID:   ChannelID,
-		FromID: userID,
+	resp, err := currentTwitchClient.GetChannelFollows(&helix.GetChannelFollowsParams{
+		BroadcasterID: ChannelID,
+		UserID:        userID,
 	})
 	if err != nil {
 		terrors.Log(err, "error getting user follows")

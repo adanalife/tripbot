@@ -6,7 +6,9 @@ on:
       - 'pkg/vlc-client/**'
       - 'infra/docker/vlc/**'
       - 'infra/docker/docker-compose*.yml'
+      - 'infra/docker/env.docker'
       - '.github/workflows/vlc.yml'
+      - '.dockerignore'
       - 'go.mod'
       - 'go.sum'
   push:
@@ -14,6 +16,16 @@ on:
       - develop
     tags:
       - v*
+    paths:
+      - 'pkg/vlc-server/**'
+      - 'pkg/vlc-client/**'
+      - 'infra/docker/vlc/**'
+      - 'infra/docker/docker-compose*.yml'
+      - 'infra/docker/env.docker'
+      - '.github/workflows/vlc.yml'
+      - '.dockerignore'
+      - 'go.mod'
+      - 'go.sum'
 
 jobs:
   build:
@@ -57,12 +69,12 @@ jobs:
           -f infra/docker/docker-compose.testing.yml \
           -f infra/docker/docker-compose.github.yml \
           port vlc 8080 | cut -d: -f2)
-        echo "VLC_PORT=$PORT" >> $GITHUB_ENV
+        echo "VLC_PORT=$PORT" >> "$GITHUB_ENV"
 
     - name: Wait for healthcheck
       run: |
         for i in $(seq 1 30); do
-          if curl -sf http://localhost:$VLC_PORT/health/ready; then
+          if curl -sf "http://localhost:$VLC_PORT/health/ready"; then
             echo ""
             echo "VLC server is ready!"
             exit 0
@@ -74,7 +86,7 @@ jobs:
         exit 1
 
     - name: Check VLC current video
-      run: curl -v http://localhost:$VLC_PORT/vlc/current
+      run: curl -v "http://localhost:$VLC_PORT/vlc/current"
 
     - name: Verify version files baked into image
       run: |
@@ -90,7 +102,7 @@ jobs:
         echo "sha:     $(docker exec "$cid" cat /etc/tripbot/sha)"
 
     - name: Verify /version HTTP endpoint
-      run: curl -fsS http://localhost:$VLC_PORT/version
+      run: curl -fsS "http://localhost:$VLC_PORT/version"
 
     - name: Check container logs
       run: |

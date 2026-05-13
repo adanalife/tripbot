@@ -10,7 +10,7 @@ import (
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/davecgh/go-spew/spew"
-	"github.com/nicklaw5/helix"
+	"github.com/nicklaw5/helix/v2"
 )
 
 // TwitchAuthentication is sensitive internal twitch access tokens,
@@ -28,7 +28,7 @@ func twitchAuthJSON() string {
 	var jsonData []byte
 	auth := TwitchAuthentication{
 		ChannelID:       mytwitch.ChannelID,
-		UserAccessToken: mytwitch.UserAccessToken,
+		UserAccessToken: mytwitch.CurrentUserAccessToken(),
 		ClientID:        mytwitch.ClientID,
 		AppAccessToken:  mytwitch.AppAccessToken,
 	}
@@ -90,7 +90,7 @@ func decodeFollowWebhookResponse(r *http.Request) (*helix.UsersFollowsResponse, 
 func decodeSubscriptionWebhookResponse(r *http.Request) (*SubscriptionWebhook, error) {
 	log.Println("decoding subscription webhook")
 
-	// we use a custom struct because the 3rd party lib doesnt support webhooks yet
+	// we use a custom struct because the 3rd party lib doesn't support webhooks yet
 	resp := &SubscriptionWebhook{}
 	bodyBytes, err := ioutil.ReadAll(r.Body)
 	if err != nil {

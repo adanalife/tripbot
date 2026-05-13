@@ -37,6 +37,26 @@ tasks:
     cmds:
       - ENV=testing bin/devenv run --rm test bash
 
+  auth:bootstrap:
+    desc: One-time Twitch OAuth bootstrap; writes refresh token to oauth_tokens. Run on host (needs a browser); bring up Postgres first (`bin/devenv up -d db migrate` locally, or `task tripbot:db:up` in infra for cluster DB).
+    env:
+      # Local-bootstrap defaults. Override at the shell to point elsewhere.
+      ENV: '{{.ENV | default "development"}}'
+      DATABASE_HOST: '{{.DATABASE_HOST | default "localhost"}}'
+      EXTERNAL_URL: '{{.EXTERNAL_URL | default "http://localhost:8080"}}'
+    cmds:
+      # Pull Twitch app credentials from SM so they never live in env.docker.
+      # `mise exec --` activates the pinned Go toolchain in task's
+      # non-interactive subshell (where ~/.zshrc isn't sourced).
+      - |
+        secret=$(aws-vault exec adanalife-stage -- \
+          aws secretsmanager get-secret-value \
+          --secret-id k8s/tripbot/twitch-creds \
+          --query SecretString --output text)
+        export TWITCH_CLIENT_ID=$(echo "$secret" | jq -r .TWITCH_CLIENT_ID)
+        export TWITCH_CLIENT_SECRET=$(echo "$secret" | jq -r .TWITCH_CLIENT_SECRET)
+        mise exec -- go run ./cmd/auth-bootstrap
+
   # Release smoke flow — see vault/tripbot/release-checklist.md.
   # Targets the local k3d cluster running the stage-1 overlay
   # (cloudflared tunnel + apps).
