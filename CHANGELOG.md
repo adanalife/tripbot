@@ -5,6 +5,16 @@
 
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
+## [v2.4.1] — 2026-05-12
+
+Patch release. Prepares the tripbot image for the k8s one-shot DB seed Job: bakes `db/seed/` and `seed-db.sh` into the image, installs `postgresql-client` on-demand at seed time (rather than in the base image), and un-excludes `infra/docker/bin` from `.dockerignore` so the `COPY` in the Dockerfile resolves correctly in CI.
+
+### Build
+
+- **Bake seed data + script into the tripbot image.** `COPY db/seed /seed` and `COPY infra/docker/bin/seed-db.sh /usr/local/bin/seed-db` added to the Dockerfile so the k8s seed Job is self-contained without a volume mount. The companion infra PR wires up the Job and `task tripbot:db:seed`. ([#473])
+- **Install `postgresql-client` on-demand in `seed-db.sh`.** Keeps the base image lean — `psql` is only needed for the one-time seed Job, so the script installs `postgresql-client --no-install-recommends` at runtime rather than baking it into every container. ([#473])
+- **Un-exclude `infra/docker/bin` from `.dockerignore`.** The ignore file excluded all of `infra/` except `infra/docker/obs`; `infra/docker/bin/seed-db.sh` was invisible to the build context and caused a CI build failure. ([#473])
+
 ## [v2.4.0] — 2026-05-12
 
 Minor release. Migrates chatters and follower lookups off deprecated Twitch endpoints onto Helix v2, upgrades the `nicklaw5/helix` dependency from v1 to v2, removes the broken stream-tags shell-script cron (Twitch removed the automated tags API in 2023), pre-bakes Intel VAAPI support into the amd64 OBS image for the incoming mini-PC host, and kills unnecessary LFS fetches in CI that were burning through the 10 GB/mo bandwidth quota.

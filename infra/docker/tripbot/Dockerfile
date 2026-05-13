@@ -28,6 +28,10 @@ COPY --from=builder /out/tripbot /usr/local/bin/tripbot
 COPY --from=migrate/migrate:4 /usr/local/bin/migrate /usr/local/bin/migrate
 COPY db/migrate /migrations
 
+# Bundle seed script + data so the k8s seed Job is self-contained.
+COPY infra/docker/bin/seed-db.sh /usr/local/bin/seed-db
+COPY db/seed /seed
+
 ARG VERSION=dev
 ARG SHA=unknown
 RUN mkdir -p /etc/tripbot \
