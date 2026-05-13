@@ -20,6 +20,7 @@ RUN apt-get update \
     ca-certificates \
     tzdata \
     curl \
+    postgresql-client \
   && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /out/tripbot /usr/local/bin/tripbot
@@ -27,6 +28,10 @@ COPY --from=builder /out/tripbot /usr/local/bin/tripbot
 # Bundle the migrate CLI + db/migrate so this image can run schema migrations.
 COPY --from=migrate/migrate:4 /usr/local/bin/migrate /usr/local/bin/migrate
 COPY db/migrate /migrations
+
+# Bundle seed script + data so the k8s seed Job is self-contained.
+COPY infra/docker/bin/seed-db.sh /usr/local/bin/seed-db
+COPY db/seed /seed
 
 ARG VERSION=dev
 ARG SHA=unknown
