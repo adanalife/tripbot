@@ -2,6 +2,8 @@
 
 set -ex
 
+apt-get install -y --no-install-recommends postgresql-client
+
 DSN="postgres://$DATABASE_USER:$DATABASE_PASS@$DATABASE_HOST/$DATABASE_DB"
 
 COUNT=$(psql "$DSN" -tAc "SELECT COUNT(*) FROM videos;")

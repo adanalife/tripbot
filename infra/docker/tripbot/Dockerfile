@@ -20,7 +20,6 @@ RUN apt-get update \
     ca-certificates \
     tzdata \
     curl \
-    postgresql-client \
   && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /out/tripbot /usr/local/bin/tripbot
