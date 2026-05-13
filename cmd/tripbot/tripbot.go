@@ -231,10 +231,6 @@ func scheduleBackgroundJobs() {
 	err = background.Cron.AddFunc("@every 1h", tracedJob("twitch.RefreshUserAccessToken", mytwitch.RefreshUserAccessToken))
 	err = background.Cron.AddFunc("@every 2h57m30s", tracedJob("chatbot.Chatter", chatbot.Chatter))
 	err = background.Cron.AddFunc("@every 12h", tracedJob("twitch.UpdateWebhookSubscriptions", mytwitch.UpdateWebhookSubscriptions))
-	if !helpers.RunningOnWindows() {
-		err = background.Cron.AddFunc("@every 12h", tracedJob("twitch.SetStreamTags", mytwitch.SetStreamTags))
-	}
-
 	if err != nil {
 		terrors.Log(err, "error adding at least one background job!")
 	}

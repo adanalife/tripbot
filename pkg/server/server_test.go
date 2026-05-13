@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
-	"github.com/nicklaw5/helix"
+	"github.com/nicklaw5/helix/v2"
 )
 
 func TestIsInvalidSecret(t *testing.T) {

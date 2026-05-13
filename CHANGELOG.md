@@ -5,6 +5,25 @@
 
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
+## [v2.4.0] — 2026-05-12
+
+Minor release. Migrates chatters and follower lookups off deprecated Twitch endpoints onto Helix v2, upgrades the `nicklaw5/helix` dependency from v1 to v2, removes the broken stream-tags shell-script cron (Twitch removed the automated tags API in 2023), pre-bakes Intel VAAPI support into the amd64 OBS image for the incoming mini-PC host, and kills unnecessary LFS fetches in CI that were burning through the 10 GB/mo bandwidth quota.
+
+### Twitch / Authentication
+
+- **Migrate chatters from deprecated TMI endpoint to Helix `GetChannelChatChatters`.** `tmi.twitch.tv/group/user/.../chatters` was the source of the noisiest Sentry errors (2,000+ JSON parse events + 192 timeout events) — the endpoint is defunct and returned garbage or timed out on every call. `pkg/twitch/viewers.go` is now a thin wrapper around `helix.GetChannelChatChatters`; the old raw HTTP client + bespoke JSON struct are gone. `BotID` is lazy-initialized alongside `ChannelID` and used as the `moderator_id`. Two new scopes added to the bot's OAuth token: `moderator:read:chatters` + `moderator:read:followers`. Re-auth bootstrap required on first deploy. ([#471])
+- **Migrate follower check from deprecated `GetUsersFollows` to `GetChannelFollows`.** `UserIsFollower` in `twitch.go` called `GetUsersFollows` (removed from the Helix API); replaced with `GetChannelFollows` (`/channels/followers`, scoped by `BroadcasterID` + `UserID`). ([#471])
+- **Upgrade `nicklaw5/helix` v1.24.4 → `helix/v2` v2.34.0.** Import path change (`helix` → `helix/v2`) across six files. All existing calls (`GetUsers`, `GetSubscriptions`, `NewClient`, `RequestAppAccessToken`, etc.) have identical signatures in v2. ([#471])
+- **Remove stream tags cron + `SetStreamTags` + `bin/set-tags.sh`.** Twitch decommissioned the automated stream tags API on 2023-07-13 in favour of free-form broadcaster-set tags. The 12h cron that shelled out to `set-tags.sh` was causing Sentry errors (`set-tags.sh: no such file or directory`) and doing nothing useful. All three artefacts deleted. ([#471])
+
+### OBS
+
+- **Intel VAAPI driver + `vainfo` added to the amd64 OBS image.** Installs `intel-media-va-driver-non-free` (iHD driver for Gen 11+ iGPUs, Iris Xe / UHD 770) and `vainfo` in preparation for moving OBS to a 12th-gen mini-PC where QuickSync H.264/H.265 encode dramatically reduces CPU vs. software x264. `obs.yml` adds a smoke-test step that runs `vainfo --display drm` in CI to confirm the package set installs cleanly (GHA runners are virtualized and have no real iGPU; `vaInitialize` is expected to fail). arm64 image unchanged. Runtime hookup (device passthrough in the pod spec, encoder flip in OBS scene config) lands in infra when the hardware arrives. ([#469])
+
+### CI
+
+- **Stop pulling Git LFS in CI workflows.** Two workflows were fetching LFS objects unnecessarily: `release.yml` pulled ~432 MB of MP4 per tag on both arches even though `.dockerignore` excludes `assets/video` from the build context; `tripbot.yml` fetched LFS on every PR/push despite the smoke test never touching the dashcam path. Removing both cuts LFS bandwidth usage from ~90% of the 10 GB/mo quota to near zero. Runtime video continues to arrive via the k3d hostpath mount (`infra/k8s/apps/vlc-server/overlays/local/dashcam-hostpath.yaml`). `.gitattributes` `*.MP4` filter-lfs guard preserved for future commits. ([#468])
+
 ## [v2.3.2] — 2026-05-11
 
 Patch release. Pre-bakes the OBS arm64 CEF compile into a base image (skipping ~25 min off every OBS PR), fixes four workflow triggers that pointed at a non-existent `main` branch (restoring Coveralls base-build uploads on `develop` and adding `pull_request` scanning to CodeQL), normalizes the OBS scene's seven `browser_source` on-screens to a clean thirds layout (fixes longstanding middle-text clipping), plus a small CI/env hygiene sweep.

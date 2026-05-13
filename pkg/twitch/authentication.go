@@ -14,7 +14,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/oauthtokens"
 	"github.com/logrusorgru/aurora"
-	"github.com/nicklaw5/helix"
+	"github.com/nicklaw5/helix/v2"
 )
 
 // Scopes is the OAuth scope set requested for the bot account. Single source
@@ -29,6 +29,8 @@ var Scopes = []string{
 	"chat:edit",
 	"channel:read:subscriptions",
 	"user:edit:broadcast",
+	"moderator:read:chatters",
+	"moderator:read:followers",
 }
 
 // ErrNoToken signals "no oauth_tokens row for the bot account; run the

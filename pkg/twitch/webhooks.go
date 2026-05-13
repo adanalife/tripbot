@@ -7,7 +7,7 @@ import (
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/logrusorgru/aurora"
-	"github.com/nicklaw5/helix"
+	"github.com/nicklaw5/helix/v2"
 )
 
 var followsTopic = []string{

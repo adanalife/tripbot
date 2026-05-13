@@ -10,7 +10,7 @@ import (
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/davecgh/go-spew/spew"
-	"github.com/nicklaw5/helix"
+	"github.com/nicklaw5/helix/v2"
 )
 
 // TwitchAuthentication is sensitive internal twitch access tokens,
