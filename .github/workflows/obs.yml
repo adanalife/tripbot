@@ -165,30 +165,6 @@ jobs:
         echo "version: $(docker exec "$cid" cat /etc/tripbot/version)"
         echo "sha:     $(docker exec "$cid" cat /etc/tripbot/sha)"
 
-    # GHA runners have no real Intel iGPU, so vaInitialize will fail
-    # ("device not found" or similar). That's expected — the test only
-    # verifies the package set installs cleanly and the binary runs.
-    # Real hw-encode validation happens on the deploy host (e.g., MS-01)
-    # where /dev/dri exposes a real iGPU.
-    - name: Verify VAAPI tooling (amd64)
-      if: matrix.arch == 'amd64'
-      run: |
-        cid=$(docker compose \
-          --project-directory . \
-          -f infra/docker/docker-compose.yml \
-          ${{ matrix.arch_compose }} \
-          -f infra/docker/docker-compose.testing.yml \
-          -f infra/docker/docker-compose.github.yml \
-          ps -q obs)
-        echo "=== which vainfo ==="
-        docker exec "$cid" which vainfo
-        echo "=== libva / intel-media packages installed ==="
-        docker exec "$cid" sh -c "dpkg -l | grep -iE 'libva|intel-media|vainfo' || true"
-        echo "=== vainfo output (vaInitialize will fail without a real iGPU; that's expected on GHA) ==="
-        docker exec "$cid" vainfo --display drm 2>&1 || true
-        echo "=== /dev/dri presence inside container ==="
-        docker exec "$cid" sh -c "ls -la /dev/dri 2>&1 || echo '(no /dev/dri inside container — expected on GHA)'"
-
     - name: Check VLC container logs
       if: always()
       run: |
