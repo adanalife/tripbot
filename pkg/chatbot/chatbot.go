@@ -14,7 +14,7 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/gempir/go-twitch-irc/v2"
 	"github.com/kelvins/geocoder"
-	"github.com/nicklaw5/helix"
+	"github.com/nicklaw5/helix/v2"
 )
 
 var googleMapsAPIKey string
