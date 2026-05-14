@@ -3,6 +3,8 @@ on:
   pull_request:
     paths:
       - 'infra/docker/obs/**'
+      - 'infra/docker/vlc/**'
+      - 'script/container_startup.sh'
       - 'infra/docker/docker-compose*.yml'
       - '.github/workflows/obs.yml'
   push:
@@ -90,6 +92,28 @@ jobs:
           -f infra/docker/docker-compose.testing.yml \
           -f infra/docker/docker-compose.github.yml \
           build obs
+
+    - name: Build VLC container (amd64, cached)
+      if: matrix.arch == 'amd64'
+      uses: docker/build-push-action@v7
+      with:
+        context: .
+        file: infra/docker/vlc/Dockerfile
+        tags: adanalife/vlc:latest
+        load: true
+        cache-from: type=gha,scope=vlc-amd64
+        cache-to: type=gha,mode=max,scope=vlc-amd64
+
+    - name: Build VLC container (arm64)
+      if: matrix.arch == 'arm64'
+      run: |
+        docker compose \
+          --project-directory . \
+          -f infra/docker/docker-compose.yml \
+          ${{ matrix.arch_compose }} \
+          -f infra/docker/docker-compose.testing.yml \
+          -f infra/docker/docker-compose.github.yml \
+          build vlc
 
     - name: Start VLC container (RTSP source)
       run: |
