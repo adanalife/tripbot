@@ -1,0 +1,16 @@
+[General]
+Name=ADanaLife
+[Video]
+BaseCX=1920
+BaseCY=1080
+OutputCX=${OBS_OUTPUT_WIDTH}
+OutputCY=${OBS_OUTPUT_HEIGHT}
+FPSCommon=${OBS_FPS_COMMON}
+ScaleType=lanczos
+[Output]
+Mode=Simple
+[SimpleOutput]
+StreamEncoder=x264
+VBitrate=${OBS_VIDEO_BITRATE}
+ABitrate=${OBS_AUDIO_BITRATE}
+Preset=${OBS_ENCODER_PRESET}
