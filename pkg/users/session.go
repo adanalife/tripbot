@@ -16,7 +16,7 @@ import (
 
 	"github.com/adanalife/tripbot/pkg/twitch"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
-	"github.com/logrusorgru/aurora"
+	"github.com/logrusorgru/aurora/v3"
 )
 
 //TODO: consider moving this whole thing elsewhere (to background perhaps?)

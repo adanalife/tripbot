@@ -18,7 +18,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/telemetry"
 	vlcServer "github.com/adanalife/tripbot/pkg/vlc-server"
 	"github.com/getsentry/sentry-go"
-	"github.com/logrusorgru/aurora"
+	"github.com/logrusorgru/aurora/v3"
 )
 
 // version is overridable at build time via -ldflags "-X main.version=...".
