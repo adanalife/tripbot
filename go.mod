@@ -10,7 +10,7 @@ require (
 	github.com/bradfitz/latlong v0.0.0-20170410180902-f3db6d0dff40
 	github.com/davecgh/go-spew v1.1.1
 	github.com/dimiro1/banner v1.1.0
-	github.com/gempir/go-twitch-irc/v2 v2.8.1
+	github.com/gempir/go-twitch-irc/v4 v4.4.1
 	github.com/getsentry/sentry-go v0.46.2
 	github.com/getsentry/sentry-go/negroni v0.46.2
 	github.com/gorilla/mux v1.8.1

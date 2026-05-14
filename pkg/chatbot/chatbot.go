@@ -12,7 +12,7 @@ import (
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/davecgh/go-spew/spew"
-	"github.com/gempir/go-twitch-irc/v2"
+	"github.com/gempir/go-twitch-irc/v4"
 	"github.com/kelvins/geocoder"
 	"github.com/nicklaw5/helix/v2"
 )
@@ -70,13 +70,15 @@ func Say(msg string) {
 }
 
 // Whisper will whisper a message to a user
+// Note: go-twitch-irc v4 removed the Whisper() send method; we replicate the
+// v2 behavior by sending the raw IRC /w command via PRIVMSG on the bot's own channel.
 func Whisper(username, msg string) {
 	//TODO: include whispers in log
 	// include the message in the log
 	// mylog.ChatMsg(c.Conf.BotUsername, msg)
 	log.Println("sending whisper to", username, ":", msg)
 	// say the message to chat
-	client.Whisper(username, msg)
+	client.Say(c.Conf.BotUsername, fmt.Sprintf("/w %s %s", username, msg))
 }
 
 // Chatter is designed to post a randomized message on a timer.

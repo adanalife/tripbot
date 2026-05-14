@@ -24,7 +24,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/adanalife/tripbot/pkg/video"
 	_ "github.com/dimiro1/banner/autoload"
-	"github.com/gempir/go-twitch-irc/v2"
+	"github.com/gempir/go-twitch-irc/v4"
 	"github.com/getsentry/sentry-go"
 	"github.com/logrusorgru/aurora/v3"
 	"go.opentelemetry.io/otel"
