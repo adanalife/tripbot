@@ -104,32 +104,6 @@ func TestWebhooksTwitchHandlerMissingChallengeReturns404(t *testing.T) {
 	}
 }
 
-func TestAuthTwitchHandlerInvalidSecretReturns404(t *testing.T) {
-	saved := c.Conf.TripbotHttpAuth
-	defer func() { c.Conf.TripbotHttpAuth = saved }()
-	c.Conf.TripbotHttpAuth = "secret"
-
-	req := httptest.NewRequest(http.MethodGet, "/auth/twitch?auth=wrong", nil)
-	rec := httptest.NewRecorder()
-
-	authTwitchHandler(rec, req)
-
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("got status %d, want %d", rec.Code, http.StatusNotFound)
-	}
-}
-
-func TestAuthTwitchHandlerMissingSecretReturns404(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/auth/twitch", nil)
-	rec := httptest.NewRecorder()
-
-	authTwitchHandler(rec, req)
-
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("got status %d, want %d", rec.Code, http.StatusNotFound)
-	}
-}
-
 // withStubGenerateUserAccessToken swaps the package-level generator so the
 // /auth/callback handler can be tested without round-tripping to Twitch.
 func withStubGenerateUserAccessToken(t *testing.T, stub func(string) error) {

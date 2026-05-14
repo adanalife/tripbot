@@ -148,18 +148,6 @@ func webhooksTwitchSubscriptionsEventsHandler(w http.ResponseWriter, r *http.Req
 	fmt.Fprintf(w, "OK")
 }
 
-// this endpoint returns private twitch access tokens
-func authTwitchHandler(w http.ResponseWriter, r *http.Request) {
-	secret, ok := r.URL.Query()["auth"]
-	if !ok || isInvalidSecret(secret[0]) {
-		http.Error(w, "404 not found", http.StatusNotFound)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	fmt.Fprint(w, twitchAuthJSON())
-}
-
 // authCallbackHandler completes the OAuth Authorization Code flow. Validates
 // the CSRF state, exchanges the code for an access+refresh token via helix,
 // and persists the row (mytwitch.GenerateUserAccessToken handles the helix
