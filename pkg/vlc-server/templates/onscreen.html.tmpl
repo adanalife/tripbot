@@ -12,12 +12,32 @@
     {{if .DropShadow}}text-shadow: 2px 2px 4px rgba(0,0,0,0.7);{{end}}
   }
   #root.hidden { visibility: hidden; }
+  {{if and (not .IsImage) (gt .FitWidthPx 0)}}
+  /* Anchored mode: the browser-source viewport overhangs a smaller on-canvas
+     overlay (the bottom-strip rotators' grey-box). Text centers on AnchorXPx
+     within the viewport and shrinks to fit FitWidthPx. */
+  #root.text {
+    position: relative;
+    width: 100%; height: 100%;
+  }
+  #root.text .content {
+    position: absolute;
+    top: 50%;
+    left: {{.AnchorXPx}}px;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    max-width: {{.FitWidthPx}}px;
+    white-space: nowrap;
+    word-wrap: break-word;
+  }
+  {{else}}
   #root.text {
     width: 100%; height: 100%;
     display: flex; align-items: center; justify-content: center;
     text-align: center; padding: 0 16px; box-sizing: border-box;
     white-space: pre-wrap; word-wrap: break-word;
   }
+  {{end}}
   #root.image { width: 100%; height: 100%; }
   #root.image img { width: 100%; height: 100%; object-fit: contain; display: block; }
 </style>
@@ -25,6 +45,8 @@
 <body>
 {{if .IsImage}}
 <div id="root" class="image hidden" data-name="{{.Name}}" data-image="true"><img src="/onscreens/asset/{{.Name}}" alt=""></div>
+{{else if gt .FitWidthPx 0}}
+<div id="root" class="text hidden" data-name="{{.Name}}" data-image="false" data-anchored="true"><span class="content"></span></div>
 {{else}}
 <div id="root" class="text hidden" data-name="{{.Name}}" data-image="false"></div>
 {{end}}
@@ -33,6 +55,29 @@
   var root = document.getElementById('root');
   var name = root.dataset.name;
   var isImage = root.dataset.image === 'true';
+  var isAnchored = root.dataset.anchored === 'true';
+  var content = isAnchored ? root.querySelector('.content') : root;
+
+  var MAX_FONT_PX = {{.FontSizePx}};
+  var MIN_FONT_PX = {{.MinFontSizePx}};
+  var FIT_WIDTH_PX = {{.FitWidthPx}};
+
+  // Shrink-to-fit on anchored text onscreens: start at MAX_FONT_PX, decrement
+  // 1px at a time until single-line width fits FIT_WIDTH_PX. If the floor is
+  // hit and text still overflows, flip to pre-wrap so a 2nd line shows.
+  function fitText() {
+    if (!isAnchored || !MIN_FONT_PX || !FIT_WIDTH_PX) return;
+    content.style.whiteSpace = 'nowrap';
+    var size = MAX_FONT_PX;
+    root.style.fontSize = size + 'px';
+    while (content.scrollWidth > FIT_WIDTH_PX && size > MIN_FONT_PX) {
+      size -= 1;
+      root.style.fontSize = size + 'px';
+    }
+    if (content.scrollWidth > FIT_WIDTH_PX) {
+      content.style.whiteSpace = 'pre-wrap';
+    }
+  }
 
   function apply(snap) {
     if (!snap || !snap.showing) {
@@ -41,7 +86,8 @@
     }
     root.classList.remove('hidden');
     if (!isImage) {
-      root.textContent = snap.content || '';
+      content.textContent = snap.content || '';
+      fitText();
     }
   }
 

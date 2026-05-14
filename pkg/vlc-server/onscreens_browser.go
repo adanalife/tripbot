@@ -38,14 +38,26 @@ var onscreenTmpl = template.Must(template.ParseFS(onscreenTemplates, "templates/
 // onscreenStyle controls how a single onscreen renders in its OBS browser source.
 // Keep these in sync with the dimensions / fonts that the previous text_ft2_source
 // and image_source entries in infra/docker/obs/config/Tripbot.json.tmpl used.
+//
+// For text onscreens whose browser-source viewport overhangs a smaller on-canvas
+// overlay box (the bottom-strip rotators sit on a 640px third but their grey-box
+// underlay is narrower — 564px for left, 369px for right), AnchorXPx + FitWidthPx
+// describe the desired "centering window" within the viewport. When both are set,
+// the template switches to an anchored layout and runs a shrink-to-fit pass in JS:
+// content renders at FontSizePx and shrinks down to MinFontSizePx (1px steps) until
+// it fits inside FitWidthPx on a single line, then falls back to wrapping if the
+// floor doesn't fit.
 type onscreenStyle struct {
-	Name       string       // URL slug; matches the key in /onscreens/state.json
-	IsImage    bool         // image vs. text source
-	FontCSS    template.CSS // CSS font-family (only meaningful for text)
-	FontSizePx int          // CSS font-size in px (only meaningful for text)
-	ColorCSS   template.CSS // CSS color (only meaningful for text)
-	DropShadow bool         // text-shadow on/off
-	get        func() *onscreensServer.Onscreen
+	Name          string       // URL slug; matches the key in /onscreens/state.json
+	IsImage       bool         // image vs. text source
+	FontCSS       template.CSS // CSS font-family (only meaningful for text)
+	FontSizePx    int          // default / max font-size in px (only meaningful for text)
+	MinFontSizePx int          // shrink-to-fit floor (only used when FitWidthPx > 0)
+	ColorCSS      template.CSS // CSS color (only meaningful for text)
+	DropShadow    bool         // text-shadow on/off
+	AnchorXPx     int          // center-x within the browser-source viewport (0 = use flex-center fallback)
+	FitWidthPx    int          // single-line width budget for shrink-to-fit (0 = no fit pass)
+	get           func() *onscreensServer.Onscreen
 }
 
 var onscreenRegistry = map[string]onscreenStyle{
@@ -58,11 +70,13 @@ var onscreenRegistry = map[string]onscreenStyle{
 		get: func() *onscreensServer.Onscreen { return onscreensServer.Leaderboard },
 	},
 	"left-message": {
-		Name: "left-message", FontCSS: `"Trebuchet MS", sans-serif`, FontSizePx: 28, ColorCSS: "#ffffff",
+		Name: "left-message", FontCSS: `"Trebuchet MS", sans-serif`, FontSizePx: 28, MinFontSizePx: 18, ColorCSS: "#ffffff",
+		AnchorXPx: 282, FitWidthPx: 564,
 		get: func() *onscreensServer.Onscreen { return onscreensServer.LeftRotator },
 	},
 	"right-message": {
-		Name: "right-message", FontCSS: `"Trebuchet MS", sans-serif`, FontSizePx: 28, ColorCSS: "#ffffff",
+		Name: "right-message", FontCSS: `"Trebuchet MS", sans-serif`, FontSizePx: 28, MinFontSizePx: 18, ColorCSS: "#ffffff",
+		AnchorXPx: 456, FitWidthPx: 369,
 		get: func() *onscreensServer.Onscreen { return onscreensServer.RightRotator },
 	},
 	"timewarp": {
