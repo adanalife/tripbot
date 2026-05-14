@@ -20,7 +20,7 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/hako/durafmt"
 	"github.com/kelvins/geocoder"
-	"github.com/logrusorgru/aurora"
+	"github.com/logrusorgru/aurora/v3"
 	"github.com/nathan-osman/go-sunrise"
 	"github.com/skratchdot/open-golang/open"
 )
