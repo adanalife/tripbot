@@ -1,0 +1,11 @@
+{
+  "alerts": {
+    "connect": false,
+    "disconnect": false,
+    "update": false
+  },
+  "authentication_enabled": false,
+  "server_enabled": true,
+  "server_password": "",
+  "server_port": 4455
+}

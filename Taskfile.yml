@@ -100,3 +100,8 @@ tasks:
     desc: Alias for release:smoke:stage-1
     cmds:
       - task: release:smoke:stage-1
+
+  obs:browser:refresh:
+    desc: Refresh all OBS browser sources via websocket (docker-compose; OBS must be running)
+    cmds:
+      - uv run --with obsws-python bin/obs-browser-refresh

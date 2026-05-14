@@ -54,6 +54,7 @@ RUN mkdir -p /etc/tripbot \
   && echo "${SHA}" > /etc/tripbot/sha
 
 EXPOSE 5900
+EXPOSE 4455
 
 ENV VNC_PASSWD=123456
 
