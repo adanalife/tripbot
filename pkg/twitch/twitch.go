@@ -7,6 +7,7 @@ import (
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
+	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"github.com/nicklaw5/helix/v2"
 )
 
@@ -61,11 +62,29 @@ func GetSubscribers() {
 		subscribers = append(subscribers, strings.ToLower(sub.UserName))
 	}
 
+	instrumentation.TwitchAudience.SetSubscribers(int64(len(subscribers)))
+
 	if len(subscribers) > 0 {
 		log.Println("subscribers:", strings.Join(subscribers, ", "))
 	} else {
 		log.Println(c.Conf.ChannelName, "has no subscribers :(")
 	}
+}
+
+// GetFollowerCount fetches the current total follower count for the channel.
+func GetFollowerCount() {
+	if ChannelID == "" {
+		ChannelID = getChannelID(c.Conf.ChannelName)
+	}
+	resp, err := currentTwitchClient.GetChannelFollows(&helix.GetChannelFollowsParams{
+		BroadcasterID: ChannelID,
+	})
+	if err != nil {
+		terrors.Log(err, "error getting follower count from twitch")
+		return
+	}
+	instrumentation.TwitchAudience.SetFollowers(int64(resp.Data.Total))
+	log.Printf("%s has %d followers", c.Conf.ChannelName, resp.Data.Total)
 }
 
 // UserIsSubscriber returns true if the user subscribes to the channel
