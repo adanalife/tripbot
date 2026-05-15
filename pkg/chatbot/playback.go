@@ -122,9 +122,42 @@ func jumpCmd(user *users.User, params []string) {
 	lastTimewarpTime = time.Now()
 }
 
+// parseSkipParams extracts the integer offset from chat-command params.
+// Returns (n, ok). If ok is false, the caller should bail with a usage
+// message — params were malformed (non-numeric, too many args, or empty
+// string). An empty params list is valid and yields the supplied default.
+func parseSkipParams(params []string, defaultN int) (int, bool) {
+	if len(params) == 0 {
+		return defaultN, true
+	}
+	if len(params) > 1 {
+		return 0, false
+	}
+	n, err := strconv.Atoi(params[0])
+	if err != nil {
+		return 0, false
+	}
+	return n, true
+}
+
+// formatSkipReply renders the chat reply for !skip / !back. forward is
+// the direction the playhead actually moved (after any negative-input
+// rewriting); count is the magnitude. Both !skip 3 and !back -3 result
+// in (count=3, forward=true) and read identically in chat.
+func formatSkipReply(count int, forward bool) string {
+	noun := "videos"
+	if count == 1 {
+		noun = "video"
+	}
+	direction := "back"
+	if forward {
+		direction = "forward"
+	}
+	return fmt.Sprintf("Skipped %d %s %s!", count, noun, direction)
+}
+
 func skipCmd(user *users.User, params []string) {
 	var err error
-	var n int
 	log.Println(user.Username, "ran !skip")
 
 	// exit early if we're on OS X
@@ -141,23 +174,27 @@ func skipCmd(user *users.User, params []string) {
 		}
 	}
 
-	// first we count the given params
-	if len(params) == 0 {
-		// just skip once if no params
-		n = 1
-	} else {
-		// we were given args
-		// try and convert their input to a number
-		n, err = strconv.Atoi(params[0])
-		// if conversion fails or they give too many args
-		if err != nil || len(params) > 1 {
-			Say("Usage: !skip [num]")
-			return
-		}
+	n, ok := parseSkipParams(params, 1)
+	if !ok {
+		Say("Usage: !skip [num]")
+		return
 	}
 
-	// skip to a new video
-	err = vlcClient.Skip(n)
+	// negative skip is equivalent to going back; route through Back
+	// so the underlying client serializes the offset correctly
+	forward := n >= 0
+	count := n
+	if count < 0 {
+		count = -count
+	}
+	if count == 0 {
+		count = 1
+	}
+	if forward {
+		err = vlcClient.Skip(count)
+	} else {
+		err = vlcClient.Back(count)
+	}
 	if err != nil {
 		terrors.Log(err, "error from VLC client")
 	}
@@ -165,11 +202,12 @@ func skipCmd(user *users.User, params []string) {
 	video.GetCurrentlyPlaying()
 	// update our record of last time it ran
 	lastTimewarpTime = time.Now()
+	// confirm what just happened in chat
+	Say(formatSkipReply(count, forward))
 }
 
 func backCmd(user *users.User, params []string) {
 	var err error
-	var n int
 	log.Println(user.Username, "ran !back")
 
 	// exit early if we're on OS X
@@ -186,23 +224,27 @@ func backCmd(user *users.User, params []string) {
 		}
 	}
 
-	// first we count the given params
-	if len(params) == 0 {
-		// just back once if no params
-		n = 1
-	} else {
-		// we were given args
-		// try and convert their input to a number
-		n, err = strconv.Atoi(params[0])
-		// if conversion fails or they give too many args
-		if err != nil || len(params) > 1 {
-			Say("Usage: !back [num]")
-			return
-		}
+	n, ok := parseSkipParams(params, 1)
+	if !ok {
+		Say("Usage: !back [num]")
+		return
 	}
 
-	// back to an old video
-	err = vlcClient.Back(n)
+	// negative back is equivalent to skipping forward; route through Skip
+	// so the underlying client serializes the offset correctly
+	forward := n < 0
+	count := n
+	if count < 0 {
+		count = -count
+	}
+	if count == 0 {
+		count = 1
+	}
+	if forward {
+		err = vlcClient.Skip(count)
+	} else {
+		err = vlcClient.Back(count)
+	}
 	if err != nil {
 		terrors.Log(err, "error from VLC client")
 	}
@@ -210,4 +252,6 @@ func backCmd(user *users.User, params []string) {
 	video.GetCurrentlyPlaying()
 	// update our record of last time it ran
 	lastTimewarpTime = time.Now()
+	// confirm what just happened in chat
+	Say(formatSkipReply(count, forward))
 }
