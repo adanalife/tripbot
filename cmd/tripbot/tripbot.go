@@ -143,7 +143,8 @@ func startOBSPolling() {
 func loadTwitchToken() {
 	if err := mytwitch.LoadFromDB(); err != nil {
 		if errors.Is(err, mytwitch.ErrNoToken) {
-			log.Fatalf("no oauth_tokens row for %q — run `task tripbot:auth:bootstrap` against the cluster DB (port-forward via `task tripbot:db:up` in infra)", c.Conf.BotUsername)
+			log.Printf("refusing to start: no oauth_tokens row for %q — tripbot will not run without a Twitch IRC connection", c.Conf.BotUsername)
+			log.Fatal("to fix: run `task tripbot:auth:bootstrap` from the infra directory")
 		}
 		terrors.Fatal(err, "failed to load Twitch token from DB")
 	}
