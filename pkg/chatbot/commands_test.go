@@ -126,3 +126,42 @@ func TestHelloCmd_IgnoresMessageWithParams(t *testing.T) {
 		t.Errorf("expected silence for greeting with params, got %q", out())
 	}
 }
+
+// --- kilometresCmd ---
+
+func TestKilometresCmd_ConvertsCorrectly(t *testing.T) {
+	out, restore := captureSay(t)
+	defer restore()
+
+	user := &users.User{Username: "viewer1", Miles: 10}
+	kilometresCmd(user, nil)
+
+	// 10 miles * 1.609344 = 16.09344, formatted as "16.09"
+	if !strings.Contains(out(), "16.09") {
+		t.Errorf("expected km conversion in output, got %q", out())
+	}
+}
+
+func TestKilometresCmd_IncludesUsername(t *testing.T) {
+	out, restore := captureSay(t)
+	defer restore()
+
+	user := &users.User{Username: "testviewer", Miles: 5}
+	kilometresCmd(user, nil)
+
+	if !strings.Contains(out(), "@testviewer") {
+		t.Errorf("expected @username in output, got %q", out())
+	}
+}
+
+func TestKilometresCmd_ZeroMiles(t *testing.T) {
+	out, restore := captureSay(t)
+	defer restore()
+
+	user := &users.User{Username: "newbie", Miles: 0}
+	kilometresCmd(user, nil)
+
+	if !strings.Contains(out(), "0.00") {
+		t.Errorf("expected zero km in output, got %q", out())
+	}
+}
