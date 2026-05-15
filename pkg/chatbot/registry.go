@@ -68,6 +68,12 @@ func (a *App) buildRegistry() []Command {
 			},
 		},
 		{
+			Trigger: "!discord",
+			Handler: func(_ *users.User, _ []string) {
+				sayFn("Join us on Discord: https://discord.gg/Bk9EuGdMX")
+			},
+		},
+		{
 			Trigger: "!commands",
 			Aliases: []string{"!command", "¡command", "¡commands", "!commads", "!controls", "!commande"},
 			Handler: func(_ *users.User, _ []string) {
