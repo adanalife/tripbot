@@ -245,6 +245,7 @@ func scheduleBackgroundJobs() {
 	err = background.Cron.AddFunc("@every 5m", tracedJob("onscreens.ShowGuessLeaderboard", onscreensClient.ShowGuessLeaderboard))
 	err = background.Cron.AddFunc("@every 5m", tracedJob("users.PrintCurrentSession", users.PrintCurrentSession))
 	err = background.Cron.AddFunc("@every 5m", tracedJob("twitch.GetSubscribers", mytwitch.GetSubscribers))
+	err = background.Cron.AddFunc("@every 5m", tracedJob("twitch.GetFollowerCount", mytwitch.GetFollowerCount))
 	err = background.Cron.AddFunc("@every 1h", tracedJob("twitch.RefreshUserAccessToken", func() {
 		mytwitch.RefreshUserAccessToken()
 		// Keep the IRC client's stored token in sync with the rotated credentials.
