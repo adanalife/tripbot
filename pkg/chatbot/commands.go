@@ -1,6 +1,7 @@
 package chatbot
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"math"
@@ -34,13 +35,13 @@ const guessScoreboard = "guess_state_total"
 
 //TODO: incorrect guess scoreboard?
 
-func (a *App) helpCmd(user *users.User, _ []string) {
+func (a *App) helpCmd(ctx context.Context, user *users.User, _ []string) {
 	log.Println(user.Username, "ran !help")
 	msg := fmt.Sprintf("%s (%d of %d)", help(), helpIndex+1, len(c.HelpMessages))
 	sayFn(msg)
 }
 
-func (a *App) helloCmd(user *users.User, params []string) {
+func (a *App) helloCmd(ctx context.Context, user *users.User, params []string) {
 	log.Println(user.Username, "said hello")
 
 	// check if it was just a one-word hello
@@ -69,12 +70,12 @@ func (a *App) helloCmd(user *users.User, params []string) {
 	lastHelloTime = time.Now()
 }
 
-func (a *App) flagCmd(user *users.User, _ []string) {
+func (a *App) flagCmd(ctx context.Context, user *users.User, _ []string) {
 	log.Println(user.Username, "ran !flag")
 	a.Onscreens.ShowFlag(10 * time.Second)
 }
 
-func (a *App) versionCmd(user *users.User, _ []string) {
+func (a *App) versionCmd(ctx context.Context, user *users.User, _ []string) {
 	log.Println(user.Username, "ran !version")
 
 	if helpers.RunningOnWindows() {
@@ -98,14 +99,14 @@ func (a *App) versionCmd(user *users.User, _ []string) {
 	sayFn("Current version is " + currentVersion)
 }
 
-func (a *App) uptimeCmd(user *users.User, _ []string) {
+func (a *App) uptimeCmd(ctx context.Context, user *users.User, _ []string) {
 	log.Println(user.Username, "ran !uptime")
 	dur := time.Now().Sub(Uptime)
 	msg := fmt.Sprintf("I have been running for %s", durafmt.Parse(dur))
 	sayFn(msg)
 }
 
-func (a *App) milesCmd(user *users.User, params []string) {
+func (a *App) milesCmd(ctx context.Context, user *users.User, params []string) {
 	log.Println(user.Username, "ran !miles")
 	var username string
 	var lifetimeMiles, monthlyMiles float32
@@ -114,10 +115,10 @@ func (a *App) milesCmd(user *users.User, params []string) {
 	if len(params) == 0 {
 		username = user.Username
 		lifetimeMiles = user.CurrentMiles()
-		monthlyMiles = user.CurrentMonthlyMiles()
+		monthlyMiles = user.CurrentMonthlyMiles(ctx)
 	} else {
 		username = helpers.StripAtSign(params[0])
-		u := users.Find(username)
+		u := users.Find(ctx, username)
 
 		// check to see if they are in our DB
 		if u.ID == 0 {
@@ -126,7 +127,7 @@ func (a *App) milesCmd(user *users.User, params []string) {
 		}
 
 		lifetimeMiles = u.CurrentMiles()
-		monthlyMiles = u.CurrentMonthlyMiles()
+		monthlyMiles = u.CurrentMonthlyMiles(ctx)
 	}
 
 	msg := "@%s has %.2fmi this month"
@@ -153,7 +154,7 @@ func (a *App) milesCmd(user *users.User, params []string) {
 	sayFn(msg)
 }
 
-func (a *App) kilometresCmd(user *users.User, _ []string) {
+func (a *App) kilometresCmd(ctx context.Context, user *users.User, _ []string) {
 	log.Println(user.Username, "ran !kilometres")
 	km := user.CurrentMiles() * 1.609344
 	msg := "@%s has %.2f kilometres."
@@ -161,7 +162,7 @@ func (a *App) kilometresCmd(user *users.User, _ []string) {
 	sayFn(msg)
 }
 
-func (a *App) sunsetCmd(user *users.User, _ []string) {
+func (a *App) sunsetCmd(ctx context.Context, user *users.User, _ []string) {
 	log.Println(user.Username, "ran !sunset")
 	vid := a.CurrentVideo()
 	if vid.Flagged {
@@ -172,7 +173,7 @@ func (a *App) sunsetCmd(user *users.User, _ []string) {
 	sayFn(helpers.SunsetStr(vid.DateFilmed, lat, lng))
 }
 
-func (a *App) locationCmd(user *users.User, _ []string) {
+func (a *App) locationCmd(ctx context.Context, user *users.User, _ []string) {
 	log.Println(user.Username, "ran !location (or similar)")
 	vid := a.CurrentVideo()
 	if vid.Flagged {
@@ -196,12 +197,12 @@ func (a *App) locationCmd(user *users.User, _ []string) {
 	sayFn(msg)
 }
 
-func (a *App) monthlyMilesLeaderboardCmd(user *users.User, _ []string) {
+func (a *App) monthlyMilesLeaderboardCmd(ctx context.Context, user *users.User, _ []string) {
 	log.Println(user.Username, "ran !leaderboard")
 
 	// select users to show in leaderboard
 	size := 10
-	leaderboard := scoreboards.TopUsers(scoreboards.CurrentMilesScoreboard(), size)
+	leaderboard := scoreboards.TopUsers(ctx, scoreboards.CurrentMilesScoreboard(), size)
 	if size > len(leaderboard) {
 		size = len(leaderboard)
 	}
@@ -221,7 +222,7 @@ func (a *App) monthlyMilesLeaderboardCmd(user *users.User, _ []string) {
 	sayFn(msg)
 }
 
-func (a *App) lifetimeMilesLeaderboardCmd(user *users.User, _ []string) {
+func (a *App) lifetimeMilesLeaderboardCmd(ctx context.Context, user *users.User, _ []string) {
 	log.Println(user.Username, "ran !totalleaderboard")
 
 	// select users to show in leaderboard
@@ -245,12 +246,12 @@ func (a *App) lifetimeMilesLeaderboardCmd(user *users.User, _ []string) {
 	sayFn(msg)
 }
 
-func (a *App) monthlyGuessLeaderboardCmd(user *users.User, _ []string) {
+func (a *App) monthlyGuessLeaderboardCmd(ctx context.Context, user *users.User, _ []string) {
 	log.Println(user.Username, "ran !guessleaderboard")
 
 	// select users to show in leaderboard
 	size := 10
-	leaderboard := scoreboards.TopUsers(scoreboards.CurrentGuessScoreboard(), size)
+	leaderboard := scoreboards.TopUsers(ctx, scoreboards.CurrentGuessScoreboard(), size)
 
 	// special message if the leaderboard is empty
 	if len(leaderboard) == 0 {
@@ -285,7 +286,7 @@ func (a *App) monthlyGuessLeaderboardCmd(user *users.User, _ []string) {
 	sayFn(msg)
 }
 
-func (a *App) timeCmd(user *users.User, _ []string) {
+func (a *App) timeCmd(ctx context.Context, user *users.User, _ []string) {
 	log.Println(user.Username, "ran !time")
 	var err error
 	var lat, lng float64
@@ -304,7 +305,7 @@ func (a *App) timeCmd(user *users.User, _ []string) {
 	}
 }
 
-func (a *App) dateCmd(user *users.User, _ []string) {
+func (a *App) dateCmd(ctx context.Context, user *users.User, _ []string) {
 	log.Println(user.Username, "ran !date")
 	var err error
 	var lat, lng float64
@@ -324,7 +325,7 @@ func (a *App) dateCmd(user *users.User, _ []string) {
 }
 
 //TODO: refactor to use golang '...' syntax
-func (a *App) guessCmd(user *users.User, params []string) {
+func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 	log.Println(user.Username, "ran !guess")
 	var msg string
 
@@ -363,8 +364,8 @@ func (a *App) guessCmd(user *users.User, params []string) {
 		// show the flag for the state
 		a.Onscreens.ShowFlag(10 * time.Second)
 		// increase their guess score
-		user.AddToScore(guessScoreboard, 1.0)
-		user.AddToScore(scoreboards.CurrentGuessScoreboard(), 1.0)
+		user.AddToScore(ctx, guessScoreboard, 1.0)
+		user.AddToScore(ctx, scoreboards.CurrentGuessScoreboard(), 1.0)
 		// do a timewarp
 		a.timewarp()
 	} else {
@@ -373,7 +374,7 @@ func (a *App) guessCmd(user *users.User, params []string) {
 	sayFn(msg)
 }
 
-func (a *App) stateCmd(user *users.User, _ []string) {
+func (a *App) stateCmd(ctx context.Context, user *users.User, _ []string) {
 	log.Println(user.Username, "ran !state")
 	vid := a.CurrentVideo()
 	if vid.Flagged {
@@ -390,7 +391,7 @@ func (a *App) stateCmd(user *users.User, _ []string) {
 
 //TODO: maybe there could be a !cancel command or something
 //TODO: use fancy golang ... syntax?
-func (a *App) reportCmd(user *users.User, params []string) {
+func (a *App) reportCmd(ctx context.Context, user *users.User, params []string) {
 	log.Println(user.Username, "ran !report")
 	message := strings.Join(params, " ")
 	// Route the report through Sentry so it lands somewhere visible.
@@ -400,14 +401,14 @@ func (a *App) reportCmd(user *users.User, params []string) {
 	sayFn("Thank you, I will look into this ASAP!")
 }
 
-func (a *App) bonusMilesCmd(user *users.User, _ []string) {
+func (a *App) bonusMilesCmd(ctx context.Context, user *users.User, _ []string) {
 	log.Println(user.Username, "ran !bonusmiles")
 	bonus := user.BonusMiles()
 	msg := fmt.Sprintf("%s has earned %.4f bonus miles this session", user.Username, bonus)
 	sayFn(msg)
 }
 
-func (a *App) secretInfoCmd(user *users.User, _ []string) {
+func (a *App) secretInfoCmd(ctx context.Context, user *users.User, _ []string) {
 	log.Println(user.Username, "ran !secretinfo")
 	if !c.UserIsAdmin(user.Username) {
 		return
@@ -424,7 +425,7 @@ func (a *App) secretInfoCmd(user *users.User, _ []string) {
 	sayFn(msg)
 }
 
-func (a *App) shutdownCmd(user *users.User, _ []string) {
+func (a *App) shutdownCmd(ctx context.Context, user *users.User, _ []string) {
 	log.Println(user.Username, "ran !shutdown")
 	if !c.UserIsAdmin(user.Username) {
 		sayFn("Nice try bucko")
@@ -433,7 +434,7 @@ func (a *App) shutdownCmd(user *users.User, _ []string) {
 	sayFn("Shutting down...")
 	log.Printf("currently playing: %s", a.CurrentVideo())
 	background.StopCron()
-	users.Shutdown()
+	users.Shutdown(ctx)
 	err := database.Connection().Close()
 	if err != nil {
 		log.Println(err)
@@ -444,7 +445,7 @@ func (a *App) shutdownCmd(user *users.User, _ []string) {
 
 //TODO: this will always be lower case, find out why
 // middleCmd sets the text at the bottom-middle of the stream
-func (a *App) middleCmd(user *users.User, params []string) {
+func (a *App) middleCmd(ctx context.Context, user *users.User, params []string) {
 	log.Println(user.Username, "ran !middle")
 	// don't let strangers run this
 	if !c.UserIsAdmin(user.Username) {

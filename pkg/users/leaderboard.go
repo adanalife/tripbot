@@ -1,6 +1,7 @@
 package users
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -16,11 +17,11 @@ var initLeaderboardSize = 25
 var maxLeaderboardSize = 50
 
 // InitLeaderboard creates the initial leaderboard
-func InitLeaderboard() {
+func InitLeaderboard(ctx context.Context) {
 	var users []User
 
 	ignoredUsers := append(c.IgnoredUsers, strings.ToLower(c.Conf.ChannelName))
-	result := database.GormDB().
+	result := database.GormDB().WithContext(ctx).
 		Where("miles != 0 AND is_bot = false AND username NOT IN ?", ignoredUsers).
 		Order("miles DESC").
 		Limit(initLeaderboardSize).

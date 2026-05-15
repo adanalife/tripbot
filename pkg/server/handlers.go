@@ -111,7 +111,7 @@ func webhooksTwitchUsersFollowsHandler(w http.ResponseWriter, r *http.Request) {
 	for _, follower := range resp.Data.Follows {
 		username := follower.FromName
 		log.Println("got webhook for new follower:", username)
-		users.LoginIfNecessary(username)
+		users.LoginIfNecessary(r.Context(), username)
 		// announce new follower in chat
 		chatbot.AnnounceNewFollower(username)
 	}
@@ -137,7 +137,7 @@ func webhooksTwitchSubscriptionsEventsHandler(w http.ResponseWriter, r *http.Req
 	for _, event := range resp.Data.Events {
 		username := event.Subscription.UserName
 		log.Println("got webhook for new sub:", username)
-		users.LoginIfNecessary(username)
+		users.LoginIfNecessary(r.Context(), username)
 		// announce new sub in chat
 		chatbot.AnnounceSubscriber(event.Subscription)
 	}

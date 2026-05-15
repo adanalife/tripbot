@@ -1,6 +1,7 @@
 package scoreboards
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"strings"
@@ -23,13 +24,13 @@ type topUserResult struct {
 	Value    float32
 }
 
-func TopUsers(scoreboardName string, size int) [][]string {
+func TopUsers(ctx context.Context, scoreboardName string, size int) [][]string {
 	var leaderboard [][]string
 
 	ignoredUsers := append(c.IgnoredUsers, strings.ToLower(c.Conf.ChannelName))
 
 	var results []topUserResult
-	result := database.GormDB().
+	result := database.GormDB().WithContext(ctx).
 		Table("scores").
 		Select("users.username, scores.value").
 		Joins("JOIN scoreboards ON scores.scoreboard_id = scoreboards.id").
@@ -51,18 +52,18 @@ func TopUsers(scoreboardName string, size int) [][]string {
 }
 
 // findOrCreateScoreboard will find a Scoreboard in the DB or create one
-func findOrCreateScoreboard(name string) (Scoreboard, error) {
+func findOrCreateScoreboard(ctx context.Context, name string) (Scoreboard, error) {
 	var scoreboard Scoreboard
-	result := database.GormDB().Where(Scoreboard{Name: name}).FirstOrCreate(&scoreboard)
+	result := database.GormDB().WithContext(ctx).Where(Scoreboard{Name: name}).FirstOrCreate(&scoreboard)
 	return scoreboard, result.Error
 }
 
 // createScoreboard() will actually create the DB record
-func createScoreboard(name string) (Scoreboard, error) {
+func createScoreboard(ctx context.Context, name string) (Scoreboard, error) {
 	if c.Conf.Verbose {
 		log.Println("creating scoreboard", name)
 	}
 	scoreboard := Scoreboard{Name: name}
-	result := database.GormDB().Create(&scoreboard)
+	result := database.GormDB().WithContext(ctx).Create(&scoreboard)
 	return scoreboard, result.Error
 }
