@@ -21,6 +21,10 @@ Patch release. Adds Twitch audience gauges (subscribers + followers) and an OBS 
 
 - **Pre-commit framework + ruff hygiene baseline.** Adds `.pre-commit-config.yaml` covering ruff (Python lint + format), standard pre-commit hooks (trailing whitespace, EOF newline, mixed line endings, AWS-credential / private-key detection), Terraform fmt, and Dockerfile lint. New CI job runs the same set on every PR. ([#511])
 
+### Database
+
+- **Seed-DB skip predicate now ignores tripbot's placeholder rows.** On a fresh cluster, tripbot's `LoadOrCreate` could insert a `flagged=true` placeholder row before the seed Job's init container finished retrying postgres DNS, causing the old `COUNT(*) > 0` skip predicate to false-skip the 4406-row CSV. The script now counts only unflagged rows (`COUNT(*) WHERE NOT flagged`) and `TRUNCATE`s before `\copy` to clear any race-loss placeholders. Pairs with [adanalife/infra#467](https://github.com/adanalife/infra/pull/467). ([#513])
+
 ### Internal
 
 - **`go-twitch-irc` v2 → v4.** Major version bump of the Twitch IRC client; import paths updated. ([#485])
