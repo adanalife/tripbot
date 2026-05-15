@@ -12,6 +12,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/events"
 	"github.com/adanalife/tripbot/pkg/scoreboards"
 	"github.com/davecgh/go-spew/spew"
+	"github.com/google/uuid"
 	"github.com/hako/durafmt"
 
 	"github.com/adanalife/tripbot/pkg/twitch"
@@ -83,6 +84,8 @@ func login(username string) *User {
 	user.NumVisits = user.NumVisits + 1
 	// set the login time
 	user.LoggedIn = now
+	// assign a session ID to link this login with its eventual logout
+	user.sessionID = uuid.New()
 	// update the last seen date
 	user.LastSeen = now
 	// set their last command date yesterday
@@ -106,7 +109,7 @@ func login(username string) *User {
 	LoggedIn[username] = &user
 
 	// create a login event as well
-	events.Login(username)
+	events.Login(username, user.sessionID)
 
 	return &user
 }
@@ -137,8 +140,7 @@ func (u User) logout() {
 	// update the monthly scoreboard
 	u.AddToScore(scoreboards.CurrentMilesScoreboard(), sessionMiles)
 
-	// create a login event as well
-	events.Logout(u.Username)
+	events.Logout(u.Username, u.sessionID)
 
 	// remove them from the session
 	delete(LoggedIn, u.Username)

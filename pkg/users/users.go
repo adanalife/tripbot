@@ -8,6 +8,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/scoreboards"
 	"github.com/adanalife/tripbot/pkg/twitch"
+	"github.com/google/uuid"
 	"github.com/logrusorgru/aurora/v3"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
@@ -25,6 +26,7 @@ type User struct {
 	LastSeen     time.Time `db:"last_seen"`
 	DateCreated  time.Time `db:"date_created"`
 	LoggedIn     time.Time
+	sessionID    uuid.UUID
 	lastCmd      time.Time
 	lastLocation time.Time
 }
