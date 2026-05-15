@@ -23,10 +23,17 @@ type VlcServerConfig struct {
 	// Windows/Darwin (matches today's platform-specific flag layering).
 	VlcAvcodecHw string `default:"vdpau_avcodec" envconfig:"VLC_AVCODEC_HW"`
 	// VlcVout is the libvlc --vout value (Linux-only). Defaults to dummy
-	// (headless); the container no longer ships an X server. Set to x11
-	// on a non-containerized host if local on-screen render is wanted.
-	// Only applied on Linux hosts; ignored on Windows/Darwin.
+	// (headless container, no X server). For local-display modes on
+	// Linux, set VLC_VOUT=x11. Only applied on Linux hosts; ignored on
+	// Windows/Darwin (libvlc picks the platform default vout).
 	VlcVout string `default:"dummy" envconfig:"VLC_VOUT"`
+	// VlcOutput selects what vlc-server emits frames to:
+	//   rtsp   — RTSP listener only, no local window (the container default).
+	//   window — local libvlc window only, no RTSP listener.
+	//   both   — duplicate to both window and RTSP listener.
+	// `window` and `both` need a vout module that can actually open a
+	// window (Linux: VLC_VOUT=x11; Windows: libvlc default).
+	VlcOutput string `default:"rtsp" envconfig:"VLC_OUTPUT"`
 	// VlcCanvasWidth / VlcCanvasHeight set both the libvlc --width/--height
 	// and --canvas-width/--canvas-height. Defaults are today's hardcoded
 	// 1920x1080.
