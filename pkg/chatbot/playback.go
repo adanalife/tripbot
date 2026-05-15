@@ -38,7 +38,7 @@ func timewarp() {
 	lastTimewarpTime = time.Now()
 }
 
-func timewarpCmd(user *users.User) {
+func timewarpCmd(user *users.User, _ []string) {
 	log.Println(user.Username, "ran !timewarp")
 
 	// exit early if we're on OS X
