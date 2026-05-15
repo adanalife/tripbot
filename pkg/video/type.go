@@ -14,16 +14,16 @@ import (
 
 // Videos represent a video file containing dashcam footage
 type Video struct {
-	Id          int           `db:"id"`
-	Slug        string        `db:"slug"`
-	Lat         float64       `db:"lat"`
-	Lng         float64       `db:"lng"`
-	NextVid     sql.NullInt64 `db:"next_vid"`
-	PrevVid     sql.NullInt64 `db:"prev_vid"`
-	Flagged     bool          `db:"flagged"`
-	State       string        `db:"state"`
-	DateFilmed  time.Time     `db:"date_filmed"`
-	DateCreated time.Time     `db:"date_created"`
+	ID          int           `gorm:"primaryKey"`
+	Slug        string
+	Lat         float64
+	Lng         float64
+	NextVid     sql.NullInt64
+	PrevVid     sql.NullInt64
+	Flagged     bool
+	State       string
+	DateFilmed  time.Time
+	DateCreated time.Time
 }
 
 // Location returns a lat/lng pair
