@@ -110,7 +110,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("open db: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			log.Printf("close db: %v", err)
+		}
+	}()
 	if err := db.Ping(); err != nil {
 		log.Fatalf("ping db: %v", err)
 	}
@@ -119,7 +123,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("query: %v", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Printf("close rows: %v", err)
+		}
+	}()
 
 	var results []row
 	for rows.Next() {
