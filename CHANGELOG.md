@@ -5,6 +5,14 @@
 
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
+## [v2.6.3] — 2026-05-15
+
+Patch release. Fixes a `\copy` syntax bug in the seed-DB script introduced by #513 in v2.6.2 that caused the seed Job to error before truncating or importing.
+
+### Database
+
+- **Seed-DB `TRUNCATE; \copy` syntax fix.** The combined line shipped in #513 errored with `syntax error at or near "\"` because `\copy` is a psql meta-command and can't share a `-c` string with SQL. Use a heredoc with `--single-transaction` so the two statements run atomically — a failed `\copy` rolls the TRUNCATE back instead of leaving the table empty. Pairs with [adanalife/infra#468](https://github.com/adanalife/infra/pull/468) (wait-for-postgres initContainer in the seed Job manifest). ([#514])
+
 ## [v2.6.2] — 2026-05-15
 
 Patch release. Adds Twitch audience gauges (subscribers + followers) and an OBS media-restart helper for reconnecting dropped RTSP sources via WebSocket. Introduces a pre-commit hygiene baseline (ruff + standard fixers). Internal: bumps `go-twitch-irc` to v4, `urfave/negroni` to v3, and `cloud.google.com/go/logging` to v1.18.0.
