@@ -17,4 +17,10 @@ if [ "$REAL" -gt 0 ]; then
   exit 0
 fi
 
-psql "$DSN" -c "TRUNCATE videos RESTART IDENTITY CASCADE; \copy videos FROM '/seed/videos.csv' DELIMITER ',' CSV HEADER;"
+# Heredoc rather than -c because \copy is a psql meta-command and can't
+# share a -c string with SQL. --single-transaction so a failed COPY rolls
+# the TRUNCATE back instead of leaving the table empty.
+psql "$DSN" --single-transaction <<'EOF'
+TRUNCATE videos RESTART IDENTITY CASCADE;
+\copy videos FROM '/seed/videos.csv' DELIMITER ',' CSV HEADER;
+EOF
