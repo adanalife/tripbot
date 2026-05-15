@@ -14,11 +14,15 @@ import (
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 	"github.com/logrusorgru/aurora/v3"
+	"github.com/uptrace/opentelemetry-go-extra/otelgorm"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 )
 
 // this is how we will share the DB connection
 var dbConnection *sqlx.DB
+var gormConn *gorm.DB
 
 func init() {
 	var err error
@@ -93,6 +97,28 @@ func isAlive() bool {
 		return false
 	}
 	return true
+}
+
+// GormDB returns a singleton *gorm.DB that wraps the same otelsql-instrumented
+// *sql.DB used by Connection(), adding GORM-level span metadata via otelgorm.
+func GormDB() *gorm.DB {
+	if gormConn == nil {
+		gormConn = connectGorm()
+	}
+	return gormConn
+}
+
+func connectGorm() *gorm.DB {
+	// Reuse the otelsql-instrumented *sql.DB so both layers share one connection pool.
+	sqlDB := Connection().DB
+	gdb, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{})
+	if err != nil {
+		log.Fatal("GORM init failed:", err)
+	}
+	if err := gdb.Use(otelgorm.NewPlugin()); err != nil {
+		log.Println(aurora.Yellow("otelgorm plugin:"), err)
+	}
+	return gdb
 }
 
 // returns a valid postgres:// url
