@@ -11,6 +11,7 @@ import (
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/users"
+	"github.com/adanalife/tripbot/pkg/video"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/gempir/go-twitch-irc/v2"
 	"github.com/kelvins/geocoder"
@@ -20,6 +21,16 @@ import (
 var googleMapsAPIKey string
 var client *twitch.Client
 var Uptime time.Time
+
+// App holds injectable dependencies for the chatbot.
+// Tests instantiate it directly with fakes; production uses defaultApp.
+type App struct {
+	CurrentVideo func() video.Video
+}
+
+var defaultApp = &App{
+	CurrentVideo: func() video.Video { return video.CurrentlyPlaying },
+}
 
 // used to determine which help message to display
 // randomized so it starts with a new one every restart

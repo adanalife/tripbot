@@ -38,7 +38,7 @@ func timewarp() {
 	lastTimewarpTime = time.Now()
 }
 
-func timewarpCmd(user *users.User, _ []string) {
+func (a *App) timewarpCmd(user *users.User, _ []string) {
 	log.Println(user.Username, "ran !timewarp")
 
 	// exit early if we're on OS X
@@ -64,7 +64,7 @@ func timewarpCmd(user *users.User, _ []string) {
 	timewarp()
 }
 
-func jumpCmd(user *users.User, params []string) {
+func (a *App) jumpCmd(user *users.User, params []string) {
 	var err error
 	log.Println(user.Username, "ran !jump")
 
@@ -122,7 +122,7 @@ func jumpCmd(user *users.User, params []string) {
 	lastTimewarpTime = time.Now()
 }
 
-func skipCmd(user *users.User, params []string) {
+func (a *App) skipCmd(user *users.User, params []string) {
 	var err error
 	var n int
 	log.Println(user.Username, "ran !skip")
@@ -167,7 +167,7 @@ func skipCmd(user *users.User, params []string) {
 	lastTimewarpTime = time.Now()
 }
 
-func backCmd(user *users.User, params []string) {
+func (a *App) backCmd(user *users.User, params []string) {
 	var err error
 	var n int
 	log.Println(user.Username, "ran !back")
