@@ -355,3 +355,33 @@ func TestGuessCmd_WrongGuess_SaysTryAgain(t *testing.T) {
 		t.Errorf("expected try-again in output, got %q", out())
 	}
 }
+
+// --- middleCmd ---
+
+// adminUser matches CHANNEL_NAME in .env.testing, satisfying c.UserIsAdmin.
+const adminUser = "test"
+
+func TestMiddleCmd_NonAdminIsSilent(t *testing.T) {
+	app := newTestApp(video.Video{})
+	out, restore := captureSay(t)
+	defer restore()
+
+	app.middleCmd(newTestUser("viewer1"), []string{"hello"})
+
+	if out() != "" {
+		t.Errorf("expected silence for non-admin, got %q", out())
+	}
+}
+
+func TestMiddleCmd_NoParams_PromptsForText(t *testing.T) {
+	app := newTestApp(video.Video{})
+	out, restore := captureSay(t)
+	defer restore()
+
+	app.middleCmd(newTestUser(adminUser), nil)
+
+	if !strings.Contains(out(), "What do you want to say") {
+		t.Errorf("expected prompt, got %q", out())
+	}
+}
+
