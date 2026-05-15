@@ -89,7 +89,7 @@ func initializeTelemetry() {
 
 // initializeErrorLogger makes sure the logger is configured
 func initializeErrorLogger() {
-	terrors.Initialize(c.Conf)
+	terrors.Initialize(c.Conf, version)
 }
 
 // listenForShutdown creates a background job that listens for a graceful shutdown request

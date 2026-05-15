@@ -103,7 +103,7 @@ func initializeTelemetry() {
 
 // initializeErrorLogger makes sure the logger is configured
 func initializeErrorLogger() {
-	terrors.Initialize(c.Conf)
+	terrors.Initialize(c.Conf, version)
 }
 
 // startHttpServer starts a webserver, which is
