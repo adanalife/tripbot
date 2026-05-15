@@ -6,7 +6,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/config"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/kelseyhightower/envconfig"
-	"github.com/logrusorgru/aurora"
+	"github.com/logrusorgru/aurora/v3"
 )
 
 var Conf *TripbotConfig

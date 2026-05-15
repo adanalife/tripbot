@@ -5,6 +5,28 @@
 
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
+## [v2.5.0] — 2026-05-15
+
+Minor release. Enables the OBS WebSocket control plane and adds a `task obs:browser:refresh` command for programmatically refreshing browser sources without VNCing in. Deletes the legacy `/auth/twitch` token-vending HTTP endpoint. Adds `OBS_QUALITY_PRESET` for switching between stream quality profiles, and logs monthly mileage and guess score on user session logout.
+
+### OBS
+
+- **OBS WebSocket server enabled.** The obs-websocket plugin (built into OBS 32) is now seeded at container startup via `plugin_config/obs-websocket/config.json`, with authentication enabled (`OBS_WEBSOCKET_PASSWD`, consistent with `VNC_PASSWD` naming). Port 4455 is exposed in docker-compose and the k8s Service. Unblocks websocket-based healthchecks and streaming-active metrics. ([#491])
+- **`task obs:browser:refresh` added.** `bin/obs-browser-refresh` connects to the OBS WebSocket, enumerates all `browser_source` inputs, and calls `PressInputPropertiesButton(refreshnocache)` on each — the programmatic equivalent of right-clicking "Refresh cache of current page" in OBS. Run via `uv run --with obsws-python`; no local install required. ([#491])
+- **`OBS_QUALITY_PRESET` env var.** Set to `low` (720p30, 1500 kbps) for dev/staging or `high` (1080p60, 6000 kbps, default) for production. Entrypoint expands the preset into individual encoder params before envsubst. ([#489])
+
+### Users / Sessions
+
+- **Monthly miles and guess score logged on logout.** `users/session` now records each session's `monthly_miles` and `guess_score` to the DB on logout, surfacing per-session contribution data for leaderboards and analytics. ([#443])
+
+### Removed
+
+- **`/auth/twitch` token-vending HTTP endpoint removed.** The endpoint handed out short-lived Twitch tokens over HTTP — replaced by the k8s `auth-bootstrap` Job added in v2.4.3. ([#490])
+
+### Internal
+
+- **`aurora` import migrated from v2 to v3.** ([#486])
+
 ## [v2.4.4] — 2026-05-14
 
 Patch release. Centers onscreen rotator text on its grey-box overlay with shrink-to-fit sizing, bakes VLC container configs into the image as discrete files, fixes a noisy `xdg-open` error in headless auth-bootstrap pods, bumps all directly-pinned Go modules to latest compatible versions, and fixes the `obs.yml` CI workflow to build the VLC container from source instead of pulling a stale Docker Hub image.

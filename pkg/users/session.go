@@ -16,7 +16,7 @@ import (
 
 	"github.com/adanalife/tripbot/pkg/twitch"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
-	"github.com/logrusorgru/aurora"
+	"github.com/logrusorgru/aurora/v3"
 )
 
 //TODO: consider moving this whole thing elsewhere (to background perhaps?)
@@ -122,7 +122,9 @@ func (u User) logout() {
 		prettyDur := durafmt.ParseShort(loggedInDur)
 		dur := fmt.Sprintf("(%s)", aurora.Green(prettyDur))
 		miles := fmt.Sprintf("(%1.2fmi)", aurora.Yellow(sessionMiles))
-		log.Println("logging out", u, dur, miles)
+		monthlyMiles := fmt.Sprintf("(%1.2fmi this month)", aurora.Yellow(u.CurrentMonthlyMiles()))
+		guessScore := fmt.Sprintf("(%1.0f guesses)", aurora.Cyan(u.GetScore(scoreboards.CurrentGuessScoreboard())))
+		log.Println("logging out", u, dur, miles, monthlyMiles, guessScore)
 	}
 
 	// update miles

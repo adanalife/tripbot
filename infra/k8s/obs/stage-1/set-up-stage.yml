@@ -21,6 +21,8 @@ spec:
         env:
          - name: ENV
            value: "stage"
+         - name: OBS_QUALITY_PRESET
+           value: "low"
          - name: VLC_SERVER_HOST
            value: "http://localhost"
          # - name: VNC_PASSWORD
