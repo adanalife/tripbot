@@ -12,10 +12,18 @@ import (
 
 var conf config.Config
 
-// Initialize takes a Config interface and sets up a logger
-func Initialize(c config.Config) {
-	// sentry options are picked up through ENV vars
+// Initialize takes a Config interface and sets up a logger.
+//
+// version is the build-time version string (typically set via -ldflags
+// "-X main.version=..." in cmd/tripbot and cmd/vlc-server). It's passed
+// to sentry as the Release tag so Sentry can group issues by release
+// and surface "this regression started in vX.Y.Z."
+func Initialize(c config.Config, version string) {
+	// Most sentry options (DSN, environment) are picked up through ENV
+	// vars; Release is wired in explicitly so it tracks the same
+	// build-time value the /version endpoint exposes.
 	err := sentry.Init(sentry.ClientOptions{
+		Release: version,
 		// enable tracing
 		TracesSampleRate: 0.2,
 	})
