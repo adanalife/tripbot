@@ -393,8 +393,10 @@ func (a *App) stateCmd(user *users.User, _ []string) {
 func (a *App) reportCmd(user *users.User, params []string) {
 	log.Println(user.Username, "ran !report")
 	message := strings.Join(params, " ")
-	message = fmt.Sprintf("Report from Twitch Chat: %s", message)
-	helpers.SendSMS(message)
+	// Route the report through Sentry so it lands somewhere visible.
+	// Followup tracked: wire !report to a real notification surface
+	// (Discord webhook / push) so Dana actually sees it.
+	terrors.Log(fmt.Errorf("viewer report from %s: %s", user.Username, message), "!report")
 	sayFn("Thank you, I will look into this ASAP!")
 }
 

@@ -11,7 +11,6 @@ import (
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
-	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/oauthtokens"
 	"github.com/logrusorgru/aurora/v3"
 	"github.com/nicklaw5/helix/v2"
@@ -254,12 +253,11 @@ func RefreshUserAccessToken() {
 	if resp == nil || resp.Data.AccessToken == "" {
 		// Empty body typically means invalid_grant (refresh token revoked).
 		// Treat as terminal — blank in-memory so IRC reconnect fails loudly,
-		// SMS so Dana sees it on his phone.
+		// and Sentry surfaces the failure for re-bootstrap.
 		_ = oauthtokens.IncrementFailCount("twitch", botUser)
 		tokenMu.Lock()
 		currentUserToken.AccessToken = ""
 		tokenMu.Unlock()
-		helpers.SendSMS(botUser + " oauth refresh failed; run task tripbot:auth:bootstrap")
 		terrors.Log(errors.New("empty access token in refresh response"), "oauth refresh failed; need re-bootstrap")
 		return
 	}

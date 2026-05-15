@@ -87,11 +87,6 @@ spec:
              secretKeyRef:
                name: tripbot-secrets
                key: SENTRY_DSN
-         - name: TWILIO_AUTH_TOKEN
-           valueFrom:
-             secretKeyRef:
-               name: tripbot-secrets
-               key: TWILIO_AUTH_TOKEN
 
         volumeMounts:
         # mount dashcam folder

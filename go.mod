@@ -28,7 +28,6 @@ require (
 	github.com/nicklaw5/helix/v2 v2.34.0
 	github.com/prometheus/client_golang v1.23.2
 	github.com/robfig/cron v1.2.0
-	github.com/sfreiberg/gotwilio v1.0.0
 	github.com/skratchdot/open-golang v0.0.0-20200116055534-eef842397966
 	github.com/slok/go-http-metrics v0.13.0
 	github.com/unrolled/secure v1.17.0
@@ -67,14 +66,11 @@ require (
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
-	github.com/golang-jwt/jwt v3.2.2+incompatible // indirect
 	github.com/golang-jwt/jwt/v4 v4.5.2 // indirect
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0 // indirect
-	github.com/google/go-querystring v1.0.0 // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.14 // indirect
 	github.com/googleapis/gax-go/v2 v2.21.0 // indirect
-	github.com/gorilla/schema v1.2.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.28.0 // indirect
 	github.com/hashicorp/logutils v1.0.0 // indirect
