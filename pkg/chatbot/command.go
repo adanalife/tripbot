@@ -12,5 +12,4 @@ type Command struct {
 	Handler            HandlerFunc
 	RequiresFollow     bool
 	RequiresSubscriber bool
-	Category           string
 }
