@@ -29,6 +29,7 @@ RUN echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula sele
       xvfb x11vnc fluxbox feh tini gettext-base procps x11-utils \
       ca-certificates dbus-x11 libgl1-mesa-dri \
       fonts-dejavu-core ttf-mscorefonts-installer \
+      imagemagick xdotool scrot \
       # OBS runtime deps (mirrors the build deps with -dev stripped) \
       libavcodec60 libavdevice60 libavfilter9 libavformat60 libavutil58 \
       libswresample4 libswscale7 libx264-164 \
