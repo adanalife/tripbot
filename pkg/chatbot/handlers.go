@@ -56,7 +56,7 @@ func (cmd *Command) checkAccess(user chatUser, sayFn func(string)) bool {
 
 func dispatch(cmd *Command, user *users.User, params []string) {
 	incChatCommandCounter(cmd.Trigger)
-	if !cmd.checkAccess(user, Say) {
+	if !cmd.checkAccess(user, sayFn) {
 		return
 	}
 	cmd.Handler(user, params)
