@@ -160,7 +160,6 @@ var HelpMessages = []string{
 	"!report: Report a stream issue (frozen, no audio, etc)",
 	"!state: Get the state we are currently in",
 	"!sunset: Get time until sunset (on the day of filming)",
-	"!survey: Fill out a survey and help the stream",
 	"!timewarp: Magically warp to a new moment in time",
 }
 
