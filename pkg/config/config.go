@@ -41,7 +41,10 @@ func SetEnvironment() {
 	// load ENV vars from .env file
 	err = godotenv.Load(".env." + env)
 
-	if err != nil {
+	// In cluster contexts (staging/production) the .env file is not shipped —
+	// env values come from envconfig instead — so the missing-file error is
+	// expected and noise. Only surface it for local-dev workflows.
+	if err != nil && (env == "development" || env == "testing") {
 		log.Println("Error loading .env file:", err)
 		log.Println("Continuing anyway...")
 	}
