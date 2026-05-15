@@ -8,6 +8,7 @@ import (
 
 	mylog "github.com/adanalife/tripbot/pkg/chatbot/log"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
+	"github.com/adanalife/tripbot/pkg/database"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/users"
@@ -16,6 +17,7 @@ import (
 	"github.com/gempir/go-twitch-irc/v4"
 	"github.com/kelvins/geocoder"
 	"github.com/nicklaw5/helix/v2"
+	"gorm.io/gorm"
 )
 
 var googleMapsAPIKey string
@@ -26,10 +28,29 @@ var Uptime time.Time
 // Tests instantiate it directly with fakes; production uses defaultApp.
 type App struct {
 	CurrentVideo func() video.Video
+	// DB is the GORM handle used by commands that need to read or write the
+	// database. nil in tests that don't exercise the DB; otherwise either the
+	// real database.GormDB() or a sqlmock-backed gorm.DB.
+	DB *gorm.DB
+	// Onscreens drives the OBS browser-source overlays for chat-triggered
+	// effects (leaderboards, flags, middle-text). Tests inject a no-op fake.
+	Onscreens Onscreens
+}
+
+// db returns the DB handle the App should use. Prefers an explicit a.DB
+// (which tests set to a sqlmock-backed gorm.DB), otherwise falls back to the
+// process-wide singleton. Lazy so package init never touches the DB.
+func (a *App) db() *gorm.DB {
+	if a.DB != nil {
+		return a.DB
+	}
+	return database.GormDB()
 }
 
 var defaultApp = &App{
 	CurrentVideo: func() video.Video { return video.CurrentlyPlaying },
+	// DB stays nil; commands use a.db() which falls back to database.GormDB().
+	Onscreens: realOnscreens{},
 }
 
 // used to determine which help message to display

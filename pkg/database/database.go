@@ -111,6 +111,17 @@ func GormDB() *gorm.DB {
 	return gormConn
 }
 
+// SetGormDB swaps the singleton *gorm.DB for tests. Pair it with a sqlmock-
+// backed gorm.DB to assert on the SQL emitted by package-level callers (e.g.
+// users.Find, scoreboards.TopUsers) without needing a live postgres. Restore
+// to nil in test teardown so other tests don't inherit the mock.
+//
+// Not safe for parallel tests in the same package — run with t.Setenv-style
+// per-test setup and avoid t.Parallel() when using this.
+func SetGormDB(db *gorm.DB) {
+	gormConn = db
+}
+
 func connectGorm() *gorm.DB {
 	// Reuse the otelsql-instrumented *sql.DB so both layers share one connection pool.
 	sqlDB := Connection().DB

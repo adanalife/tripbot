@@ -35,10 +35,15 @@ func newTestVideo(state string, lat, lng float64, date time.Time) video.Video {
 	return video.Video{State: state, Lat: lat, Lng: lng, DateFilmed: date}
 }
 
-// newTestApp returns an App with CurrentVideo returning vid.
-// For commands that don't use CurrentVideo, pass a zero-value video.Video.
+// newTestApp returns an App with CurrentVideo returning vid and a no-op
+// Onscreens fake. For commands that don't use CurrentVideo, pass a zero-value
+// video.Video. To assert on Onscreens calls, replace app.Onscreens with a
+// recording fake (see fakeOnscreens in onscreens_test.go).
 func newTestApp(vid video.Video) *App {
-	return &App{CurrentVideo: func() video.Video { return vid }}
+	return &App{
+		CurrentVideo: func() video.Video { return vid },
+		Onscreens:    noopOnscreens{},
+	}
 }
 
 // --- helpCmd ---
