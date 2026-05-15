@@ -33,8 +33,6 @@ type TripbotConfig struct {
 	// DisableTwitchWebhooks disables receiving webhooks from Twitch (new followers for instance)
 	DisableTwitchWebhooks bool `default:"false" envconfig:"DISABLE_TWITCH_WEBHOOKS"`
 
-	// TripbotHttpAuth is used to authenticate users to the HTTP server
-	TripbotHttpAuth string `required:"true" envconfig:"TRIPBOT_HTTP_AUTH"`
 	// TripbotServerPort is used to specify the port on which the webserver runs
 	TripbotServerPort string `default:"8080" envconfig:"TRIPBOT_SERVER_PORT"`
 	// VlcServerHost is used to specify the host for the VLC webserver

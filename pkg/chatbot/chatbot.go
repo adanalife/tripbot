@@ -11,6 +11,7 @@ import (
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/users"
+	"github.com/adanalife/tripbot/pkg/video"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/gempir/go-twitch-irc/v2"
 	"github.com/kelvins/geocoder"
@@ -20,6 +21,16 @@ import (
 var googleMapsAPIKey string
 var client *twitch.Client
 var Uptime time.Time
+
+// App holds injectable dependencies for the chatbot.
+// Tests instantiate it directly with fakes; production uses defaultApp.
+type App struct {
+	CurrentVideo func() video.Video
+}
+
+var defaultApp = &App{
+	CurrentVideo: func() video.Video { return video.CurrentlyPlaying },
+}
 
 // used to determine which help message to display
 // randomized so it starts with a new one every restart
@@ -69,6 +80,9 @@ func Say(msg string) {
 	client.Say(speakTo, msg)
 }
 
+// sayFn is the internal send implementation; tests override it to capture output.
+var sayFn func(string) = Say
+
 // Whisper will whisper a message to a user
 func Whisper(username, msg string) {
 	//TODO: include whispers in log
@@ -83,7 +97,7 @@ func Whisper(username, msg string) {
 // Right now it just posts random "help messages."
 func Chatter() {
 	// use twitch emote feature to add some color
-	Say("/me " + help())
+	sayFn("/me " + help())
 }
 
 func help() string {
@@ -96,7 +110,7 @@ func help() string {
 // AnnounceNewFollower makes a post in chat that a user follows the channel
 func AnnounceNewFollower(username string) {
 	msg := fmt.Sprintf("Thank you for the follow, @%s", username)
-	Say(msg)
+	sayFn(msg)
 }
 
 // AnnounceSubscriber makes a post in chat that a user has subscribed
@@ -105,9 +119,9 @@ func AnnounceSubscriber(sub helix.Subscription) {
 	spew.Dump(sub)
 	username := sub.UserName
 	msg := fmt.Sprintf("Thank you for the sub, @%s; enjoy your !bonusmiles bleedPurple", username)
-	Say(msg)
+	sayFn(msg)
 	// give everyone a bonus mile
 	users.GiveEveryoneMiles(1.0)
 	msg = fmt.Sprintf("The %d current viewers have been given a bonus mile, too HolidayPresent", len(users.LoggedIn))
-	Say(msg)
+	sayFn(msg)
 }

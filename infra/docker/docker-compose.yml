@@ -31,8 +31,8 @@ services:
     depends_on:
       - vlc                                  # vlc must be up so RTSP source resolves
     ports:
-      # - "8080"                             # OBS container has no HTTP API in Phase 1
       - "5902:5900"
+      - "4455:4455"                          # obs-websocket control plane
     environment:
       # DISPLAY: ":0.0"                      # entrypoint sets DISPLAY internally
       # XDG_RUNTIME_DIR: "/root/.cache/xdgr"
@@ -41,6 +41,7 @@ services:
       DASHCAM_RTSP_URL: "${DASHCAM_RTSP_URL:-rtsp://vlc:8554/dashcam}"
       # OBS browser sources fetch onscreen state from vlc-server's HTTP API.
       ONSCREENS_URL_BASE: "${ONSCREENS_URL_BASE:-http://vlc:8080}"
+      OBS_WEBSOCKET_PASSWD: "${OBS_WEBSOCKET_PASSWD:-adanalife}"
     restart: unless-stopped
 
   vlc:
