@@ -10,8 +10,10 @@ import (
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/events"
+	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/scoreboards"
 	"github.com/davecgh/go-spew/spew"
+	"github.com/google/uuid"
 	"github.com/hako/durafmt"
 
 	"github.com/adanalife/tripbot/pkg/twitch"
@@ -83,6 +85,8 @@ func login(username string) *User {
 	user.NumVisits = user.NumVisits + 1
 	// set the login time
 	user.LoggedIn = now
+	// assign a session ID to link this login with its eventual logout
+	user.sessionID = uuid.New()
 	// update the last seen date
 	user.LastSeen = now
 	// set their last command date yesterday
@@ -105,8 +109,9 @@ func login(username string) *User {
 	// add them to the session
 	LoggedIn[username] = &user
 
-	// create a login event as well
-	events.Login(username)
+	if err := events.Login(username, user.sessionID); err != nil {
+		terrors.Log(err, "error creating login event")
+	}
 
 	return &user
 }
@@ -137,8 +142,9 @@ func (u User) logout() {
 	// update the monthly scoreboard
 	u.AddToScore(scoreboards.CurrentMilesScoreboard(), sessionMiles)
 
-	// create a login event as well
-	events.Logout(u.Username)
+	if err := events.Logout(u.Username, u.sessionID); err != nil {
+		terrors.Log(err, "error creating logout event")
+	}
 
 	// remove them from the session
 	delete(LoggedIn, u.Username)
