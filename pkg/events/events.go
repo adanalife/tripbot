@@ -12,11 +12,11 @@ import (
 )
 
 type Event struct {
-	ID          int       `db:"id"`
-	Username    string    `db:"username"`
-	Event       string    `db:"event"`
-	SessionID   uuid.UUID `db:"session_id"`
-	DateCreated time.Time `db:"date_created"`
+	ID          int `gorm:"primaryKey"`
+	Username    string
+	Event       string
+	SessionID   uuid.UUID
+	DateCreated time.Time
 }
 
 func Login(user string, sessionID uuid.UUID) error {
@@ -24,12 +24,7 @@ func Login(user string, sessionID uuid.UUID) error {
 		log.Printf("Not logging in %s because we're in read-only mode", aurora.Magenta(user))
 		return &terrors.ReadOnlyError{Msg: "read-only mode"}
 	}
-	tx := database.Connection().MustBegin()
-	_, err := tx.Exec("INSERT INTO events (username, event, session_id) VALUES ($1, $2, $3)", user, "login", sessionID)
-	if err != nil {
-		return err
-	}
-	return tx.Commit()
+	return database.GormDB().Create(&Event{Username: user, Event: "login", SessionID: sessionID}).Error
 }
 
 func Logout(user string, sessionID uuid.UUID) error {
@@ -37,10 +32,5 @@ func Logout(user string, sessionID uuid.UUID) error {
 		log.Printf("Not logging out %s because we're in read-only mode", aurora.Magenta(user))
 		return &terrors.ReadOnlyError{Msg: "read-only mode"}
 	}
-	tx := database.Connection().MustBegin()
-	_, err := tx.Exec("INSERT INTO events (username, event, session_id) VALUES ($1, $2, $3)", user, "logout", sessionID)
-	if err != nil {
-		return err
-	}
-	return tx.Commit()
+	return database.GormDB().Create(&Event{Username: user, Event: "logout", SessionID: sessionID}).Error
 }
