@@ -34,18 +34,27 @@ func normalizeCommandPrefix(msg string) string {
 	return msg
 }
 
-func runCommand(ctx context.Context, user *users.User, message string) {
-	var err error
-	var params []string
+func dispatch(cmd *Command, user *users.User, params []string) {
+	incChatCommandCounter(cmd.Trigger)
+	if cmd.RequiresFollow && !user.HasCommandAvailable() {
+		Say(followerMsg)
+		return
+	}
+	if cmd.RequiresSubscriber && !user.IsSubscriber() {
+		Say(subscriberMsg)
+		return
+	}
+	cmd.Handler(user, params)
+}
 
+func runCommand(ctx context.Context, user *users.User, message string) {
 	msg := normalizeCommandPrefix(strings.TrimSpace(message))
 	split := strings.Split(msg, " ")
 
-	// the command is the first part
 	command := split[0]
+	var params []string
 
 	if len(split) > 1 {
-		// the params are the second part
 		params = split[1:]
 
 		// this invalid unicode character shows up when you run the same command twice
@@ -58,7 +67,6 @@ func runCommand(ctx context.Context, user *users.User, message string) {
 	// handle case where people add a space (like "! location")
 	if command == "!" {
 		command = command + params[0]
-		// remove the first element from the params
 		params = params[1:]
 	}
 
@@ -69,158 +77,27 @@ func runCommand(ctx context.Context, user *users.User, message string) {
 		trace.SpanFromContext(ctx).SetAttributes(attribute.String("twitch.command", command))
 	}
 
-	switch command {
-	case "!help":
-		incChatCommandCounter("!help")
-		helpCmd(user)
-	case "hello", "hi", "hey", "hallo", "!bot":
-		incChatCommandCounter("hello")
-		helloCmd(user, params)
-	case "!flag":
-		incChatCommandCounter("!flag")
-		flagCmd(user)
-	case "!version":
-		incChatCommandCounter("!version")
-		versionCmd(user)
-	case "!uptime":
-		uptimeCmd(user)
-	case "!timewarp", "!timewrap", "!timeskip", "!tw", "!timewqrp", "!warp":
-		if user.HasCommandAvailable() {
-			timewarpCmd(user)
-		} else {
-			Say(followerMsg)
-		}
-	case "!goto", "!jump":
-		if user.HasCommandAvailable() {
-			jumpCmd(user, params)
-		} else {
-			Say(followerMsg)
-		}
-	case "!skip":
-		if user.HasCommandAvailable() {
-			skipCmd(user, params)
-		} else {
-			Say(followerMsg)
-		}
-	case "!back":
-		if user.HasCommandAvailable() {
-			backCmd(user, params)
-		} else {
-			Say(followerMsg)
-		}
-	case "!shutdown":
-		shutdownCmd(user)
-	case "!socialmedia", "!social", "!socials":
-		Say("Find me outside of Twitch: !twitter, !instagram, !facebook, !youtube")
-	case "!commands", "!command", "¡command", "¡commands", "!commads", "!controls", "!commande":
-		Say("You can try: !location, !guess, !date, !state, !sunset, !timewarp, !miles, !leaderboard, and many other hidden commands!")
-	case "!bonusmiles":
-		if user.IsSubscriber() {
-			bonusMilesCmd(user)
-		} else {
-			Say(subscriberMsg)
-		}
-	case "!sunset", "!sunet":
-		if user.HasCommandAvailable() {
-			sunsetCmd(user)
-		} else {
-			Say(followerMsg)
-		}
-	case "!time", "!timr":
-		if user.HasCommandAvailable() {
-			timeCmd(user)
-		} else {
-			Say(followerMsg)
-		}
-	case "!date", "!datw":
-		if user.HasCommandAvailable() {
-			dateCmd(user)
-		} else {
-			Say(followerMsg)
-		}
-	case "!guess", "!guss", "guess", "!gusss", "!guees", "!gues", "!quess", "!guis":
-		if user.HasCommandAvailable() {
-			guessCmd(user, params)
-		} else {
-			Say(followerMsg)
-		}
-	case "!state":
-		if user.HasCommandAvailable() {
-			stateCmd(user)
-		} else {
-			Say(followerMsg)
-		}
-	case "!secretinfo":
-		secretInfoCmd(user)
-	case "!gas", "!fuel", "!petrol":
-		Say("About full, thanks for asking")
-	case "!middle":
-		middleCmd(user, params)
-		// any of these should trigger the miles command
-	case "!miles", "!points":
-		if user.HasCommandAvailable() {
-			milesCmd(user, params)
-		} else {
-			Say(followerMsg)
-		}
-
-		// any of these should trigger the kilometres command
-	case "!km", "!kilometres", "!kilometers":
-		if user.HasCommandAvailable() {
-			kilometresCmd(user)
-		} else {
-			Say(followerMsg)
-		}
-
-		// any of these should trigger the location command
-		//TODO: add support for: "where is this", "where are we", "where are you"
-	case "!tripbot", "!location", "!city", "!town", "!where", "!loacation", "!loation", "!loc", "!locatioin", "!locatoion", "!locaton", "!loclistion", "!locton", "1location", "¡location", "!locatiom", "!location!", "!locatio", "!lcoation":
-		if user.HasCommandAvailable() {
-			locationCmd(user)
-		} else {
-			Say(followerMsg)
-		}
-
-		// trigger the leaderboard command
-	case "!leaderboard", "!monthlyleaderboard", "!lb", "!mlb", "!leaderbord", "!ldb", "!ldbd":
-		if user.HasCommandAvailable() {
-			monthlyMilesLeaderboardCmd(user)
-		} else {
-			Say(followerMsg)
-		}
-
-		// trigger the lifetime leaderboard command
-	case "!totalleaderboard", "!lifetimeleaderboard", "!tlb", "!llb":
-		if user.HasCommandAvailable() {
-			lifetimeMilesLeaderboardCmd(user)
-		} else {
-			Say(followerMsg)
-		}
-
-		// trigger the lifetime leaderboard command
-	case "!guessleaderboard", "!glb":
-		if user.HasCommandAvailable() {
-			monthlyGuessLeaderboardCmd(user)
-		} else {
-			Say(followerMsg)
-		}
-
-		// any of these should trigger the report command
-		//TODO: probably want to allow people to run this more than once?
-		//TODO: the two-word ones dont work
-	case "!report", "no audio", "no sound", "no music", "frozen":
-		if user.HasCommandAvailable() {
-			reportCmd(user, params)
-		} else {
-			Say(followerMsg)
-		}
-	default:
-		if strings.HasPrefix(command, "!") {
-			// log the command as an error so we can implement it in the future
-			err = fmt.Errorf("command %s not found", command)
+	// multi-word alias lookup (e.g. "no audio", "no sound")
+	for alias, cmd := range multiWordLookup {
+		if msg == alias || strings.HasPrefix(msg, alias+" ") {
+			remainder := strings.TrimSpace(strings.TrimPrefix(msg, alias))
+			var mwParams []string
+			if remainder != "" {
+				mwParams = strings.Split(remainder, " ")
+			}
+			dispatch(cmd, user, mwParams)
+			return
 		}
 	}
-	if err != nil {
+
+	// single-word lookup
+	if cmd, ok := singleWordLookup[command]; ok {
+		dispatch(cmd, user, params)
+		return
+	}
+
+	if strings.HasPrefix(command, "!") {
+		err := fmt.Errorf("command %s not found", command)
 		terrors.Log(err, "error running command")
 	}
 }
