@@ -6,167 +6,170 @@ import (
 	"github.com/adanalife/tripbot/pkg/users"
 )
 
-var commands = []Command{
-	{
-		Trigger: "!help",
-		Handler: helpCmd,
-	},
-	{
-		Trigger: "hello",
-		Aliases: []string{"hi", "hey", "hallo", "!bot"},
-		Handler: helloCmd,
-	},
-	{
-		Trigger: "!flag",
-		Handler: flagCmd,
-	},
-	{
-		Trigger: "!version",
-		Handler: versionCmd,
-	},
-	{
-		Trigger: "!uptime",
-		Handler: uptimeCmd,
-	},
-	{
-		Trigger:        "!timewarp",
-		Aliases:        []string{"!timewrap", "!timeskip", "!tw", "!timewqrp", "!warp"},
-		Handler:        timewarpCmd,
-		RequiresFollow: true,
-	},
-	{
-		Trigger:        "!goto",
-		Aliases:        []string{"!jump"},
-		Handler:        jumpCmd,
-		RequiresFollow: true,
-	},
-	{
-		Trigger:        "!skip",
-		Handler:        skipCmd,
-		RequiresFollow: true,
-	},
-	{
-		Trigger:        "!back",
-		Handler:        backCmd,
-		RequiresFollow: true,
-	},
-	{
-		Trigger: "!shutdown",
-		Handler: shutdownCmd,
-	},
-	{
-		Trigger: "!socialmedia",
-		Aliases: []string{"!social", "!socials"},
-		Handler: func(_ *users.User, _ []string) {
-			Say("Find me outside of Twitch: !twitter, !instagram, !facebook, !youtube")
-		},
-	},
-	{
-		Trigger: "!commands",
-		Aliases: []string{"!command", "¡command", "¡commands", "!commads", "!controls", "!commande"},
-		Handler: func(_ *users.User, _ []string) {
-			Say("You can try: !location, !guess, !date, !state, !sunset, !timewarp, !miles, !leaderboard, and many other hidden commands!")
-		},
-	},
-	{
-		Trigger:            "!bonusmiles",
-		Handler:            bonusMilesCmd,
-		RequiresSubscriber: true,
-	},
-	{
-		Trigger:        "!sunset",
-		Aliases:        []string{"!sunet"},
-		Handler:        sunsetCmd,
-		RequiresFollow: true,
-	},
-	{
-		Trigger:        "!time",
-		Aliases:        []string{"!timr"},
-		Handler:        timeCmd,
-		RequiresFollow: true,
-	},
-	{
-		Trigger:        "!date",
-		Aliases:        []string{"!datw"},
-		Handler:        dateCmd,
-		RequiresFollow: true,
-	},
-	{
-		Trigger:        "!guess",
-		Aliases:        []string{"!guss", "guess", "!gusss", "!guees", "!gues", "!quess", "!guis"},
-		Handler:        guessCmd,
-		RequiresFollow: true,
-	},
-	{
-		Trigger:        "!state",
-		Handler:        stateCmd,
-		RequiresFollow: true,
-	},
-	{
-		Trigger: "!secretinfo",
-		Handler: secretInfoCmd,
-	},
-	{
-		Trigger: "!gas",
-		Aliases: []string{"!fuel", "!petrol"},
-		Handler: func(_ *users.User, _ []string) {
-			Say("About full, thanks for asking")
-		},
-	},
-	{
-		Trigger: "!middle",
-		Handler: middleCmd,
-	},
-	{
-		Trigger:        "!miles",
-		Aliases:        []string{"!points"},
-		Handler:        milesCmd,
-		RequiresFollow: true,
-	},
-	{
-		Trigger:        "!km",
-		Aliases:        []string{"!kilometres", "!kilometers"},
-		Handler:        kilometresCmd,
-		RequiresFollow: true,
-	},
-	{
-		Trigger:        "!location",
-		Aliases:        []string{"!tripbot", "!city", "!town", "!where", "!loacation", "!loation", "!loc", "!locatioin", "!locatoion", "!locaton", "!loclistion", "!locton", "1location", "¡location", "!locatiom", "!location!", "!locatio", "!lcoation"},
-		Handler:        locationCmd,
-		RequiresFollow: true,
-	},
-	{
-		Trigger:        "!leaderboard",
-		Aliases:        []string{"!monthlyleaderboard", "!lb", "!mlb", "!leaderbord", "!ldb", "!ldbd"},
-		Handler:        monthlyMilesLeaderboardCmd,
-		RequiresFollow: true,
-	},
-	{
-		Trigger:        "!totalleaderboard",
-		Aliases:        []string{"!lifetimeleaderboard", "!tlb", "!llb"},
-		Handler:        lifetimeMilesLeaderboardCmd,
-		RequiresFollow: true,
-	},
-	{
-		Trigger:        "!guessleaderboard",
-		Aliases:        []string{"!glb"},
-		Handler:        monthlyGuessLeaderboardCmd,
-		RequiresFollow: true,
-	},
-	{
-		Trigger:        "!report",
-		Aliases:        []string{"no audio", "no sound", "no music", "frozen"},
-		Handler:        reportCmd,
-		RequiresFollow: true,
-	},
-}
-
-// singleWordLookup maps single-word triggers and aliases to their Command.
-// multiWordLookup maps space-containing triggers and aliases to their Command.
+var commands []Command
 var singleWordLookup map[string]*Command
 var multiWordLookup map[string]*Command
 
+// buildRegistry constructs the command slice with handlers bound to a.
+func (a *App) buildRegistry() []Command {
+	return []Command{
+		{
+			Trigger: "!help",
+			Handler: a.helpCmd,
+		},
+		{
+			Trigger: "hello",
+			Aliases: []string{"hi", "hey", "hallo", "!bot"},
+			Handler: a.helloCmd,
+		},
+		{
+			Trigger: "!flag",
+			Handler: a.flagCmd,
+		},
+		{
+			Trigger: "!version",
+			Handler: a.versionCmd,
+		},
+		{
+			Trigger: "!uptime",
+			Handler: a.uptimeCmd,
+		},
+		{
+			Trigger:        "!timewarp",
+			Aliases:        []string{"!timewrap", "!timeskip", "!tw", "!timewqrp", "!warp"},
+			Handler:        a.timewarpCmd,
+			RequiresFollow: true,
+		},
+		{
+			Trigger:        "!goto",
+			Aliases:        []string{"!jump"},
+			Handler:        a.jumpCmd,
+			RequiresFollow: true,
+		},
+		{
+			Trigger:        "!skip",
+			Handler:        a.skipCmd,
+			RequiresFollow: true,
+		},
+		{
+			Trigger:        "!back",
+			Handler:        a.backCmd,
+			RequiresFollow: true,
+		},
+		{
+			Trigger: "!shutdown",
+			Handler: a.shutdownCmd,
+		},
+		{
+			Trigger: "!socialmedia",
+			Aliases: []string{"!social", "!socials"},
+			Handler: func(_ *users.User, _ []string) {
+				sayFn("Find me outside of Twitch: !twitter, !instagram, !facebook, !youtube")
+			},
+		},
+		{
+			Trigger: "!commands",
+			Aliases: []string{"!command", "¡command", "¡commands", "!commads", "!controls", "!commande"},
+			Handler: func(_ *users.User, _ []string) {
+				sayFn("You can try: !location, !guess, !date, !state, !sunset, !timewarp, !miles, !leaderboard, and many other hidden commands!")
+			},
+		},
+		{
+			Trigger:            "!bonusmiles",
+			Handler:            a.bonusMilesCmd,
+			RequiresSubscriber: true,
+		},
+		{
+			Trigger:        "!sunset",
+			Aliases:        []string{"!sunet"},
+			Handler:        a.sunsetCmd,
+			RequiresFollow: true,
+		},
+		{
+			Trigger:        "!time",
+			Aliases:        []string{"!timr"},
+			Handler:        a.timeCmd,
+			RequiresFollow: true,
+		},
+		{
+			Trigger:        "!date",
+			Aliases:        []string{"!datw"},
+			Handler:        a.dateCmd,
+			RequiresFollow: true,
+		},
+		{
+			Trigger:        "!guess",
+			Aliases:        []string{"!guss", "guess", "!gusss", "!guees", "!gues", "!quess", "!guis"},
+			Handler:        a.guessCmd,
+			RequiresFollow: true,
+		},
+		{
+			Trigger:        "!state",
+			Handler:        a.stateCmd,
+			RequiresFollow: true,
+		},
+		{
+			Trigger: "!secretinfo",
+			Handler: a.secretInfoCmd,
+		},
+		{
+			Trigger: "!gas",
+			Aliases: []string{"!fuel", "!petrol"},
+			Handler: func(_ *users.User, _ []string) {
+				sayFn("About full, thanks for asking")
+			},
+		},
+		{
+			Trigger: "!middle",
+			Handler: a.middleCmd,
+		},
+		{
+			Trigger:        "!miles",
+			Aliases:        []string{"!points"},
+			Handler:        a.milesCmd,
+			RequiresFollow: true,
+		},
+		{
+			Trigger:        "!km",
+			Aliases:        []string{"!kilometres", "!kilometers"},
+			Handler:        a.kilometresCmd,
+			RequiresFollow: true,
+		},
+		{
+			Trigger:        "!location",
+			Aliases:        []string{"!tripbot", "!city", "!town", "!where", "!loacation", "!loation", "!loc", "!locatioin", "!locatoion", "!locaton", "!loclistion", "!locton", "1location", "¡location", "!locatiom", "!location!", "!locatio", "!lcoation"},
+			Handler:        a.locationCmd,
+			RequiresFollow: true,
+		},
+		{
+			Trigger:        "!leaderboard",
+			Aliases:        []string{"!monthlyleaderboard", "!lb", "!mlb", "!leaderbord", "!ldb", "!ldbd"},
+			Handler:        a.monthlyMilesLeaderboardCmd,
+			RequiresFollow: true,
+		},
+		{
+			Trigger:        "!totalleaderboard",
+			Aliases:        []string{"!lifetimeleaderboard", "!tlb", "!llb"},
+			Handler:        a.lifetimeMilesLeaderboardCmd,
+			RequiresFollow: true,
+		},
+		{
+			Trigger:        "!guessleaderboard",
+			Aliases:        []string{"!glb"},
+			Handler:        a.monthlyGuessLeaderboardCmd,
+			RequiresFollow: true,
+		},
+		{
+			Trigger:        "!report",
+			Aliases:        []string{"no audio", "no sound", "no music", "frozen"},
+			Handler:        a.reportCmd,
+			RequiresFollow: true,
+		},
+	}
+}
+
 func init() {
+	commands = defaultApp.buildRegistry()
 	singleWordLookup = make(map[string]*Command)
 	multiWordLookup = make(map[string]*Command)
 	for i := range commands {

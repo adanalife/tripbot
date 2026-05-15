@@ -5,6 +5,19 @@
 
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
+## [v2.6.1] — 2026-05-15
+
+Patch release. Adds an `obs_streaming_active` OTel gauge tracking live streaming state via WebSocket polling, extends chatbot test coverage to the `App` struct and `middleCmd`, and improves the startup failure message when no Twitch OAuth token is present.
+
+### OBS
+
+- **`obs_streaming_active` OTel gauge.** Polls OBS via WebSocket and emits a gauge reflecting whether the stream is currently live. ([#498])
+
+### Internal
+
+- **Chatbot `App` struct and Tier 2 command tests.** Test coverage extended to the `App` struct, plus handler tests for `middleCmd`. ([#506], [#507])
+- **Clearer log when startup is refused due to missing OAuth token.** The single `log.Fatalf` is split into two lines: one stating the bot is deliberately refusing to start (not crashing), the other giving the exact remediation command. ([#505])
+
 ## [v2.6.0] — 2026-05-15
 
 Minor release. Internal improvements only: events table gets an index and a session UUID column (plus a backfill tool for correcting understated historical miles), the chatbot command dispatcher is refactored from a switch statement to a registry map, and the first meaningful test coverage lands for the chatbot package.
