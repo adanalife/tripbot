@@ -1,3 +1,8 @@
+# Skip LFS-tracked binaries — CI doesn't pull LFS, so the MP4 checkout
+# is a permission-denied pointer rather than the real file, and
+# end-of-file-fixer chokes trying to read it.
+exclude: '^assets/video/'
+
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
