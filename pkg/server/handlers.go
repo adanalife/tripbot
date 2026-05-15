@@ -14,7 +14,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/server/oauthstate"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/users"
-	"github.com/logrusorgru/aurora"
+	"github.com/logrusorgru/aurora/v3"
 	"github.com/nicklaw5/helix/v2"
 )
 
@@ -146,18 +146,6 @@ func webhooksTwitchSubscriptionsEventsHandler(w http.ResponseWriter, r *http.Req
 	mytwitch.GetSubscribers()
 
 	fmt.Fprintf(w, "OK")
-}
-
-// this endpoint returns private twitch access tokens
-func authTwitchHandler(w http.ResponseWriter, r *http.Request) {
-	secret, ok := r.URL.Query()["auth"]
-	if !ok || isInvalidSecret(secret[0]) {
-		http.Error(w, "404 not found", http.StatusNotFound)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	fmt.Fprint(w, twitchAuthJSON())
 }
 
 // authCallbackHandler completes the OAuth Authorization Code flow. Validates

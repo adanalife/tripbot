@@ -8,7 +8,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/scoreboards"
 	"github.com/adanalife/tripbot/pkg/twitch"
-	"github.com/logrusorgru/aurora"
+	"github.com/logrusorgru/aurora/v3"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"

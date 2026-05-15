@@ -5,6 +5,30 @@
 
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
+## [v2.4.4] — 2026-05-14
+
+Patch release. Centers onscreen rotator text on its grey-box overlay with shrink-to-fit sizing, bakes VLC container configs into the image as discrete files, fixes a noisy `xdg-open` error in headless auth-bootstrap pods, bumps all directly-pinned Go modules to latest compatible versions, and fixes the `obs.yml` CI workflow to build the VLC container from source instead of pulling a stale Docker Hub image.
+
+### Onscreens
+
+- **Rotator text now centers on and fits within its grey-box overlay.** The left and right rotators were centering on the viewport midpoint, causing text to drift over the dashcam footage. `onscreenStyle` gains `AnchorXPx` / `FitWidthPx` / `MinFontSizePx` fields; when `FitWidthPx` is set, text anchors to the grey-box midpoint and shrinks 1px at a time (28→18px floor) until it fits the box width. Left rotator: anchor 282 / fit 564. Right rotator: anchor 456 / fit 369. ([#480])
+
+### VLC Container
+
+- **Static VLC container configs baked into the image.** The four config files (syslog, VNC, VLC supervisord conf, fluxbox startup) are now checked in under `infra/docker/vlc/config/` and `COPY`'d into the image, mirroring the OBS container's pattern. `script/container_startup.sh` slims down to a thin entrypoint. Configs are reviewable as discrete files instead of heredoc strings. ([#442])
+
+### Fixed
+
+- **`auth-bootstrap` no longer errors on `xdg-open` in headless pods.** `OpenInBrowser` is skipped when neither `DISPLAY` nor `WAYLAND_DISPLAY` is set on Linux. The OAuth URL is still printed to stdout so the `task tripbot:auth:bootstrap` port-forward flow works correctly. ([#479])
+
+### CI
+
+- **`obs.yml` now builds the VLC container from source before starting it.** Previously the workflow pulled `adanalife/vlc:latest` from Docker Hub directly. After #442 baked supervisord configs into the image (removing the runtime heredoc writes from `container_startup.sh`), the stale Docker Hub image had no conf.d configs and the thin startup script didn't write them — supervisord launched with no programs, so VLC server never came up. Fix mirrors the OBS build pattern (buildx + GHA cache for amd64, `docker compose build` for arm64). Also adds `infra/docker/vlc/**` and `script/container_startup.sh` to the PR paths trigger so VLC changes fire this workflow on future PRs. ([#487])
+
+### Dependencies
+
+- **Go module bumps (all directly-pinned, API-compatible).** `adrg/libvlc-go/v3` → v3.1.6, `gorilla/mux` → v1.8.1, `jmoiron/sqlx` → v1.4.0, `joho/godotenv` → v1.5.1, `lib/pq` → v1.12.3, `googlemaps/maps` → v1.7.0, `nathan-osman/go-sunrise` → v1.1.0, `sfreiberg/gotwilio` → v1.0.0, `slok/go-http-metrics` → v0.13.0, `unrolled/secure` → v1.17.0. Notable side-effect: deprecated `dgrijalva/jwt-go` replaced by `golang-jwt/jwt` via the gotwilio bump. ([#481])
+
 ## [v2.4.3] — 2026-05-13
 
 Patch release. Fixes a long-running IRC disconnect bug where the Twitch connection would fail to re-authenticate after the first token rotation, and adds the `auth-bootstrap` binary to the tripbot image for use by the new k8s bootstrap Job.

@@ -20,7 +20,7 @@ require (
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/kelvins/geocoder v0.0.0-20231112130812-98d82c75e49b
 	github.com/lib/pq v1.12.3
-	github.com/logrusorgru/aurora v2.0.3+incompatible
+	github.com/logrusorgru/aurora/v3 v3.0.0
 	github.com/mitchellh/go-ps v1.0.0
 	github.com/nathan-osman/go-sunrise v1.1.0
 	github.com/nicklaw5/helix/v2 v2.34.0
