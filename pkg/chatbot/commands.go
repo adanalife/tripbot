@@ -38,7 +38,7 @@ const guessScoreboard = "guess_state_total"
 func helpCmd(user *users.User, _ []string) {
 	log.Println(user.Username, "ran !help")
 	msg := fmt.Sprintf("%s (%d of %d)", help(), helpIndex+1, len(c.HelpMessages))
-	Say(msg)
+	sayFn(msg)
 }
 
 func helloCmd(user *users.User, params []string) {
@@ -65,7 +65,7 @@ func helloCmd(user *users.User, params []string) {
 		msg += " I'm Tripbot, your adventure companion. Try using !commands to interact with me."
 	}
 
-	Say(msg)
+	sayFn(msg)
 	// update our record of last time it ran
 	lastHelloTime = time.Now()
 }
@@ -79,7 +79,7 @@ func versionCmd(user *users.User, _ []string) {
 	log.Println(user.Username, "ran !version")
 
 	if helpers.RunningOnWindows() {
-		Say("Sorry, I can't answer that right now")
+		sayFn("Sorry, I can't answer that right now")
 		return
 	}
 
@@ -90,20 +90,20 @@ func versionCmd(user *users.User, _ []string) {
 		out, err := exec.Command(scriptPath).Output()
 		if err != nil {
 			terrors.Log(err, "failed to get current version")
-			Say("Failed to get current version :(")
+			sayFn("Failed to get current version :(")
 			return
 		}
 		currentVersion = strings.TrimSpace(string(out))
 	}
 
-	Say("Current version is " + currentVersion)
+	sayFn("Current version is " + currentVersion)
 }
 
 func uptimeCmd(user *users.User, _ []string) {
 	log.Println(user.Username, "ran !uptime")
 	dur := time.Now().Sub(Uptime)
 	msg := fmt.Sprintf("I have been running for %s", durafmt.Parse(dur))
-	Say(msg)
+	sayFn(msg)
 }
 
 func milesCmd(user *users.User, params []string) {
@@ -122,7 +122,7 @@ func milesCmd(user *users.User, params []string) {
 
 		// check to see if they are in our DB
 		if u.ID == 0 {
-			Say("I don't know them, sorry!")
+			sayFn("I don't know them, sorry!")
 			return
 		}
 
@@ -151,7 +151,7 @@ func milesCmd(user *users.User, params []string) {
 		}
 	}
 
-	Say(msg)
+	sayFn(msg)
 }
 
 func kilometresCmd(user *users.User, _ []string) {
@@ -159,7 +159,7 @@ func kilometresCmd(user *users.User, _ []string) {
 	km := user.CurrentMiles() * 1.609344
 	msg := "@%s has %.2f kilometres."
 	msg = fmt.Sprintf(msg, user.Username, km)
-	Say(msg)
+	sayFn(msg)
 }
 
 func sunsetCmd(user *users.User, _ []string) {
@@ -167,11 +167,11 @@ func sunsetCmd(user *users.User, _ []string) {
 	// get the currently-playing video
 	vid := video.CurrentlyPlaying
 	if vid.Flagged {
-		Say("I couldn't figure out current GPS coords, using next closest...")
+		sayFn("I couldn't figure out current GPS coords, using next closest...")
 		vid = vid.Next()
 	}
 	lat, lng, _ := vid.Location()
-	Say(helpers.SunsetStr(vid.DateFilmed, lat, lng))
+	sayFn(helpers.SunsetStr(vid.DateFilmed, lat, lng))
 }
 
 func locationCmd(user *users.User, _ []string) {
@@ -179,7 +179,7 @@ func locationCmd(user *users.User, _ []string) {
 	// get the currently-playing video
 	vid := video.CurrentlyPlaying
 	if vid.Flagged {
-		Say("I couldn't figure out current GPS coords, using next closest...")
+		sayFn("I couldn't figure out current GPS coords, using next closest...")
 		//TODO: write something like vid.FindClosest() that
 		// chooses whether or not to use Next() vs Prev()
 		vid = vid.Next()
@@ -196,9 +196,9 @@ func locationCmd(user *users.User, _ []string) {
 	msg := fmt.Sprintf("%s %s", address, url)
 	// record that they know the location now
 	user.SetLastLocationTime()
-	// Say("Sending the location in a whisper... shh!")
+	// sayFn("Sending the location in a whisper... shh!")
 	// Whisper(user.Username, msg)
-	Say(msg)
+	sayFn(msg)
 }
 
 func monthlyMilesLeaderboardCmd(user *users.User, _ []string) {
@@ -223,7 +223,7 @@ func monthlyMilesLeaderboardCmd(user *users.User, _ []string) {
 			msg += ", "
 		}
 	}
-	Say(msg)
+	sayFn(msg)
 }
 
 func lifetimeMilesLeaderboardCmd(user *users.User, _ []string) {
@@ -247,7 +247,7 @@ func lifetimeMilesLeaderboardCmd(user *users.User, _ []string) {
 			msg += ", "
 		}
 	}
-	Say(msg)
+	sayFn(msg)
 }
 
 func monthlyGuessLeaderboardCmd(user *users.User, _ []string) {
@@ -259,7 +259,7 @@ func monthlyGuessLeaderboardCmd(user *users.User, _ []string) {
 
 	// special message if the leaderboard is empty
 	if len(leaderboard) == 0 {
-		Say("No one is on that leaderboard yet!")
+		sayFn("No one is on that leaderboard yet!")
 		return
 	}
 
@@ -287,7 +287,7 @@ func monthlyGuessLeaderboardCmd(user *users.User, _ []string) {
 			msg += ", "
 		}
 	}
-	Say(msg)
+	sayFn(msg)
 }
 
 func timeCmd(user *users.User, _ []string) {
@@ -304,11 +304,11 @@ func timeCmd(user *users.User, _ []string) {
 	}
 	if err != nil {
 		// why would we get in here?
-		Say("I couldn't figure out current GPS coords, sorry!")
+		sayFn("I couldn't figure out current GPS coords, sorry!")
 	} else {
 		realDate := helpers.ActualDate(vid.DateFilmed, lat, lng)
 		fmtTime := realDate.Format("3:04pm MST")
-		Say(fmt.Sprintf("This moment was %s", fmtTime))
+		sayFn(fmt.Sprintf("This moment was %s", fmtTime))
 	}
 }
 
@@ -326,11 +326,11 @@ func dateCmd(user *users.User, _ []string) {
 	}
 	if err != nil {
 		// why would we get in here?
-		Say("I couldn't figure out current GPS coords, sorry!")
+		sayFn("I couldn't figure out current GPS coords, sorry!")
 	} else {
 		realDate := helpers.ActualDate(vid.DateFilmed, lat, lng)
 		fmtDate := realDate.Format("Monday January 2, 2006")
-		Say(fmt.Sprintf("This moment was %s", fmtDate))
+		sayFn(fmt.Sprintf("This moment was %s", fmtDate))
 	}
 }
 
@@ -341,7 +341,7 @@ func guessCmd(user *users.User, params []string) {
 
 	if len(params) == 0 {
 		msg = "Try and guess what state we're in! For example: !guess CA"
-		Say(msg)
+		sayFn(msg)
 		return
 	}
 
@@ -350,7 +350,7 @@ func guessCmd(user *users.User, params []string) {
 		prettyDur := durafmt.ParseShort(user.GuessCooldownRemaining())
 		msg = "I recently told you the answer! Try again in %s."
 		msg = fmt.Sprintf(msg, prettyDur)
-		Say(msg)
+		sayFn(msg)
 		return
 	}
 
@@ -366,7 +366,7 @@ func guessCmd(user *users.User, params []string) {
 	// get the currently-playing video
 	vid := video.CurrentlyPlaying
 	if vid.Flagged {
-		Say("I couldn't figure out current GPS coords, using next closest...")
+		sayFn("I couldn't figure out current GPS coords, using next closest...")
 		vid = vid.Next()
 	}
 
@@ -382,7 +382,7 @@ func guessCmd(user *users.User, params []string) {
 	} else {
 		msg = "Try again! EarthDay"
 	}
-	Say(msg)
+	sayFn(msg)
 }
 
 func stateCmd(user *users.User, _ []string) {
@@ -390,7 +390,7 @@ func stateCmd(user *users.User, _ []string) {
 	// get the currently-playing video
 	vid := video.CurrentlyPlaying
 	if vid.Flagged {
-		Say("I couldn't figure out current GPS coords, using next closest...")
+		sayFn("I couldn't figure out current GPS coords, using next closest...")
 		vid = vid.Next()
 	}
 	msg := fmt.Sprintf("We're in %s", vid.State)
@@ -398,9 +398,9 @@ func stateCmd(user *users.User, _ []string) {
 	onscreensClient.ShowFlag(10 * time.Second)
 	// record that they know the location now
 	user.SetLastLocationTime()
-	// Say("Sending the state in a whisper... shh!")
+	// sayFn("Sending the state in a whisper... shh!")
 	// Whisper(user.Username, msg)
-	Say(msg)
+	sayFn(msg)
 }
 
 //TODO: maybe there could be a !cancel command or something
@@ -410,14 +410,14 @@ func reportCmd(user *users.User, params []string) {
 	message := strings.Join(params, " ")
 	message = fmt.Sprintf("Report from Twitch Chat: %s", message)
 	helpers.SendSMS(message)
-	Say("Thank you, I will look into this ASAP!")
+	sayFn("Thank you, I will look into this ASAP!")
 }
 
 func bonusMilesCmd(user *users.User, _ []string) {
 	log.Println(user.Username, "ran !bonusmiles")
 	bonus := user.BonusMiles()
 	msg := fmt.Sprintf("%s has earned %.4f bonus miles this session", user.Username, bonus)
-	Say(msg)
+	sayFn(msg)
 }
 
 func secretInfoCmd(user *users.User, _ []string) {
@@ -434,16 +434,16 @@ func secretInfoCmd(user *users.User, _ []string) {
 		msg = fmt.Sprintf("%s, lat: %f, lng: %f", msg, lat, lng)
 	}
 	log.Println(msg)
-	Say(msg)
+	sayFn(msg)
 }
 
 func shutdownCmd(user *users.User, _ []string) {
 	log.Println(user.Username, "ran !shutdown")
 	if !c.UserIsAdmin(user.Username) {
-		Say("Nice try bucko")
+		sayFn("Nice try bucko")
 		return
 	}
-	Say("Shutting down...")
+	sayFn("Shutting down...")
 	log.Printf("currently playing: %s", video.CurrentlyPlaying)
 	background.StopCron()
 	users.Shutdown()
@@ -466,13 +466,13 @@ func middleCmd(user *users.User, params []string) {
 
 	// don't do anything if empty
 	if len(params) == 0 {
-		Say("What do you want to say?")
+		sayFn("What do you want to say?")
 		return
 	}
 
 	// if the arg was "hide", hide the text from view
 	if len(params) == 1 && strings.ToLower(params[0]) == "hide" {
-		Say("Got it! Hiding the message.")
+		sayFn("Got it! Hiding the message.")
 		onscreensClient.HideMiddleText()
 		return
 	}
