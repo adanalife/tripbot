@@ -1,10 +1,8 @@
 package vlcServer
 
 import (
-	"fmt"
 	"log"
 	"net/http"
-	"strings"
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/vlc-server"
@@ -25,7 +23,7 @@ import (
 
 // Start starts the web server
 func Start() {
-	log.Println("Starting VLC web server on host", c.Conf.VlcServerHost)
+	log.Println("Starting VLC web server on", c.Conf.VlcServerBindAddress)
 
 	r := mux.NewRouter()
 
@@ -102,11 +100,8 @@ func Start() {
 	// attaching routes to handler happens last
 	app.UseHandler(r)
 
-	//TODO: error if there's no colon to split on
-	port := strings.Split(c.Conf.VlcServerHost, ":")[1]
-
 	srv := &http.Server{
-		Addr: fmt.Sprintf("0.0.0.0:%s", port),
+		Addr: c.Conf.VlcServerBindAddress,
 		// Good practice to set timeouts to avoid Slowloris attacks.
 		WriteTimeout:   time.Second * 15,
 		ReadTimeout:    time.Second * 15,

@@ -43,6 +43,9 @@ type VlcServerConfig struct {
 	// VLCPidFile is where the vlc-server PID file lives
 	VLCPidFile string `default:"/opt/data/run/vlc-server.pid" envconfig:"VLC_PIDFILE"`
 
-	// VlcServerHost is used to specify the host for the VLC webserver
-	VlcServerHost string `required:"true" envconfig:"VLC_SERVER_HOST"`
+	// VlcServerBindAddress is the address (host:port or :port) the
+	// vlc-server HTTP listener binds to. Defaults to :8080 so the pod
+	// boots without being told its own address; override when running
+	// multiple instances on one host or to pin to a specific interface.
+	VlcServerBindAddress string `default:":8080" envconfig:"VLC_SERVER_BIND_ADDRESS"`
 }
