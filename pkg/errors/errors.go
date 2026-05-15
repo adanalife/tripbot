@@ -39,8 +39,9 @@ func Log(e error, msg string) {
 	if e == nil {
 		e = errors.New(msg)
 	}
-	// only log to sentry on production or staging
-	if conf.IsProduction() || conf.IsStaging() {
+	// only log to sentry on production or staging; conf is nil in tests and
+	// any binary that didn't call Initialize, so guard before the method call.
+	if conf != nil && (conf.IsProduction() || conf.IsStaging()) {
 		sentry.AddBreadcrumb(&sentry.Breadcrumb{
 			Message: msg,
 		})
@@ -53,8 +54,9 @@ func Fatal(e error, msg string) {
 	if e == nil {
 		e = errors.New(msg)
 	}
-	// only log to sentry on production or staging
-	if conf.IsProduction() || conf.IsStaging() {
+	// only log to sentry on production or staging; conf is nil in tests and
+	// any binary that didn't call Initialize, so guard before the method call.
+	if conf != nil && (conf.IsProduction() || conf.IsStaging()) {
 		sentry.AddBreadcrumb(&sentry.Breadcrumb{
 			Message: msg,
 		})

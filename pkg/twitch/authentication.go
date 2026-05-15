@@ -3,6 +3,7 @@ package twitch
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"strings"
@@ -170,7 +171,13 @@ func GenerateUserAccessToken(code string) error {
 	if err != nil {
 		return err
 	}
-	if usersResp == nil || len(usersResp.Data.Users) == 0 {
+	if usersResp == nil {
+		return errors.New("twitch: nil response from GetUsers")
+	}
+	if checkHelixResp("GetUsers", &usersResp.ResponseCommon) {
+		return fmt.Errorf("twitch: GetUsers returned %d during bootstrap", usersResp.StatusCode)
+	}
+	if len(usersResp.Data.Users) == 0 {
 		return errors.New("twitch: GetUsers returned no users")
 	}
 	u := usersResp.Data.Users[0]
