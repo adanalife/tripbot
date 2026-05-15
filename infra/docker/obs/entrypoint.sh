@@ -40,7 +40,7 @@ envsubst < /opt/obs/config/basic.ini.tmpl > "$OBS_HOME/basic/profiles/ADanaLife/
 envsubst < /opt/obs/config/Tripbot.json.tmpl > "$OBS_HOME/basic/scenes/Tripbot.json"
 
 mkdir -p "$OBS_HOME/plugin_config/obs-websocket"
-cp /opt/obs/config/obs-websocket.json "$OBS_HOME/plugin_config/obs-websocket/config.json"
+envsubst < /opt/obs/config/obs-websocket.json.tmpl > "$OBS_HOME/plugin_config/obs-websocket/config.json"
 
 obs_args=(--disable-shutdown-check --collection 'Tripbot' --profile 'ADanaLife' --scene 'Main')
 

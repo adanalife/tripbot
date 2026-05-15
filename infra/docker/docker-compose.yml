@@ -41,6 +41,7 @@ services:
       DASHCAM_RTSP_URL: "${DASHCAM_RTSP_URL:-rtsp://vlc:8554/dashcam}"
       # OBS browser sources fetch onscreen state from vlc-server's HTTP API.
       ONSCREENS_URL_BASE: "${ONSCREENS_URL_BASE:-http://vlc:8080}"
+      OBS_WEBSOCKET_PASSWD: "${OBS_WEBSOCKET_PASSWD:-adanalife}"
     restart: unless-stopped
 
   vlc:

@@ -12,7 +12,7 @@ except ImportError:
 
 host     = os.environ.get("OBS_WEBSOCKET_HOST", "localhost")
 port     = int(os.environ.get("OBS_WEBSOCKET_PORT", "4455"))
-password = os.environ.get("OBS_WEBSOCKET_PASSWORD", "")
+password = os.environ.get("OBS_WEBSOCKET_PASSWD", "")
 
 try:
     with obs.ReqClient(host=host, port=port, password=password, timeout=10) as client:

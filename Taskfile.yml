@@ -103,5 +103,7 @@ tasks:
 
   obs:browser:refresh:
     desc: Refresh all OBS browser sources via websocket (docker-compose; OBS must be running)
+    env:
+      OBS_WEBSOCKET_PASSWD: '{{.OBS_WEBSOCKET_PASSWD | default "adanalife"}}'
     cmds:
       - uv run --with obsws-python bin/obs-browser-refresh
