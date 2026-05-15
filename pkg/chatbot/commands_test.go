@@ -384,4 +384,3 @@ func TestMiddleCmd_NoParams_PromptsForText(t *testing.T) {
 		t.Errorf("expected prompt, got %q", out())
 	}
 }
-

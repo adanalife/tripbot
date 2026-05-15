@@ -15,6 +15,7 @@ var (
 	chatCommands      = mustCounter("tripbot_chat_commands", "The total number of chat commands")
 	twitchSubscribers = mustGauge("twitch_subscribers_total", "Current number of Twitch channel subscribers")
 	twitchFollowers   = mustGauge("twitch_followers_total", "Current number of Twitch channel followers")
+	obsStreamingGauge = mustGauge("obs_streaming_active", "1 if OBS is actively streaming, 0 otherwise")
 )
 
 // ChatMessages exposes the chat-message counter through a tiny stable API
@@ -27,6 +28,9 @@ var ChatCommands = chatCommandCounterIface{counter: chatCommands}
 
 // TwitchAudience exposes subscriber and follower gauge recording.
 var TwitchAudience = twitchAudienceIface{subscribers: twitchSubscribers, followers: twitchFollowers}
+
+// OBSStreaming exposes the streaming-active gauge.
+var OBSStreaming = obsStreamingIface{g: obsStreamingGauge}
 
 type chatCounterIface struct{ counter metric.Int64Counter }
 
@@ -51,6 +55,16 @@ func (a twitchAudienceIface) SetSubscribers(n int64) {
 
 func (a twitchAudienceIface) SetFollowers(n int64) {
 	a.followers.Record(context.Background(), n)
+}
+
+type obsStreamingIface struct{ g metric.Int64Gauge }
+
+func (o obsStreamingIface) Set(active bool) {
+	v := int64(0)
+	if active {
+		v = 1
+	}
+	o.g.Record(context.Background(), v)
 }
 
 func mustCounter(name, desc string) metric.Int64Counter {
