@@ -11,7 +11,7 @@ import (
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"github.com/adanalife/tripbot/pkg/users"
-	"github.com/gempir/go-twitch-irc/v2"
+	"github.com/gempir/go-twitch-irc/v4"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"

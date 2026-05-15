@@ -1,6 +1,7 @@
 package vlcServer
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -23,7 +24,7 @@ var videoFiles []string
 // platform-invariant flags that never need per-host tuning
 var vlcStaticFlags = []string{
 	"--ignore-config", // ignore any config files that might get loaded
-	"--fullscreen",    // start fullscreened
+	"--fullscreen",    // start fullscreened (only matters when VLC_OUTPUT renders a window; no-op headless)
 	"--no-audio",      // none of the videos have audio
 	// "--network-caching", "500", // network cache (in ms)
 	// "--aspect-ratio", "16:9",
@@ -36,21 +37,42 @@ var vlcStaticFlags = []string{
 // env var is explicitly set.
 var vlcCmdFlags []string
 
-// mediaOptions are applied per-Media (not as libvlc init flags).
+// mediaOptions returns the per-Media options driven by VLC_OUTPUT.
 // libvlc's --sout takes effect only when set on the media object itself —
 // passing --sout to libvlc.Init does NOT activate the stream-out chain.
-// `display` keeps the on-screen render; `rtp{sdp=rtsp://...}` opens an RTSP
-// listener that the OBS container pulls. `sout-keep` preserves the chain
-// across playlist transitions so OBS doesn't see EOF on every clip change.
-var mediaOptions = []string{
-	":sout=#duplicate{dst=display,dst=rtp{sdp=rtsp://:8554/dashcam}}",
-	":sout-keep",
+// `sout-keep` preserves the chain across playlist transitions so OBS
+// doesn't see EOF on every clip change.
+//
+//   rtsp   — RTSP listener only (container default).
+//   window — no sout; libvlc plays to its native window via --vout.
+//   both   — duplicate to a local display target and the RTSP listener.
+func mediaOptions() []string {
+	const rtspChain = "rtp{sdp=rtsp://:8554/dashcam}"
+	switch c.Conf.VlcOutput {
+	case "window":
+		return nil
+	case "both":
+		return []string{
+			":sout=#duplicate{dst=display,dst=" + rtspChain + "}",
+			":sout-keep",
+		}
+	case "rtsp":
+		return []string{
+			":sout=#" + rtspChain,
+			":sout-keep",
+		}
+	default:
+		terrors.Fatal(fmt.Errorf("unrecognized VLC_OUTPUT=%q (want rtsp|window|both)", c.Conf.VlcOutput), "")
+		return nil // unreachable
+	}
 }
 
 // linuxSpecificFlags returns the Linux-only VLC flags, sourced from
-// config (VLC_VOUT, VLC_AVCODEC_HW). Defaults match today's hardcoded
-// values: --vout x11 (skip vdpau, improves performance) and
-// --avcodec-hw vdpau_avcodec (can be none, vdpau_avcodec, or cuda).
+// config (VLC_VOUT, VLC_AVCODEC_HW). Defaults: --vout dummy (headless;
+// the container no longer ships an X server) and --avcodec-hw
+// vdpau_avcodec (can be none, vdpau_avcodec, or cuda). On a Linux dev
+// host where you want a preview window, set VLC_VOUT=x11 and
+// VLC_OUTPUT=window (or both).
 func linuxSpecificFlags() []string {
 	return []string{
 		"--vout", c.Conf.VlcVout,
@@ -238,7 +260,7 @@ func loadLocalMedia() {
 		if err != nil {
 			terrors.Fatal(err, "error creating media from path")
 		}
-		if err := media.AddOptions(mediaOptions...); err != nil {
+		if err := media.AddOptions(mediaOptions()...); err != nil {
 			terrors.Fatal(err, "error setting media options")
 		}
 		if err := mediaList.AddMedia(media); err != nil {

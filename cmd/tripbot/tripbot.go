@@ -25,7 +25,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/adanalife/tripbot/pkg/video"
 	_ "github.com/dimiro1/banner/autoload"
-	"github.com/gempir/go-twitch-irc/v2"
+	"github.com/gempir/go-twitch-irc/v4"
 	"github.com/getsentry/sentry-go"
 	"github.com/logrusorgru/aurora/v3"
 	"go.opentelemetry.io/otel"
@@ -103,7 +103,7 @@ func initializeTelemetry() {
 
 // initializeErrorLogger makes sure the logger is configured
 func initializeErrorLogger() {
-	terrors.Initialize(c.Conf)
+	terrors.Initialize(c.Conf, version)
 }
 
 // startHttpServer starts a webserver, which is
@@ -245,6 +245,7 @@ func scheduleBackgroundJobs() {
 	err = background.Cron.AddFunc("@every 5m", tracedJob("onscreens.ShowGuessLeaderboard", onscreensClient.ShowGuessLeaderboard))
 	err = background.Cron.AddFunc("@every 5m", tracedJob("users.PrintCurrentSession", users.PrintCurrentSession))
 	err = background.Cron.AddFunc("@every 5m", tracedJob("twitch.GetSubscribers", mytwitch.GetSubscribers))
+	err = background.Cron.AddFunc("@every 5m", tracedJob("twitch.GetFollowerCount", mytwitch.GetFollowerCount))
 	err = background.Cron.AddFunc("@every 1h", tracedJob("twitch.RefreshUserAccessToken", func() {
 		mytwitch.RefreshUserAccessToken()
 		// Keep the IRC client's stored token in sync with the rotated credentials.

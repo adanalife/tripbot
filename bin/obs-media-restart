@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 # pylint: disable=invalid-name,duplicate-code
-"""Refresh all OBS browser sources via obs-websocket.
+"""Restart all OBS media sources (ffmpeg_source / vlc_source) via obs-websocket.
 
-Usage: OBS_WEBSOCKET_HOST=localhost OBS_WEBSOCKET_PORT=4455 ./bin/obs-browser-refresh
+Useful after a vlc-server restart to force OBS to reconnect to the RTSP
+stream rather than waiting for its own retry timer.
+
+Usage: OBS_WEBSOCKET_HOST=localhost OBS_WEBSOCKET_PORT=4455 ./bin/obs-media-restart
 """
 
 import os
@@ -12,10 +15,12 @@ try:
     import obsws_python as obs
 except ImportError:
     print(
-        "obsws-python not found — run via: uv run --with obsws-python bin/obs-browser-refresh",
+        "obsws-python not found — run via: uv run --with obsws-python bin/obs-media-restart",
         file=sys.stderr,
     )
     sys.exit(1)
+
+MEDIA_KINDS = {"ffmpeg_source", "vlc_source"}
 
 host = os.environ.get("OBS_WEBSOCKET_HOST", "localhost")
 port = int(os.environ.get("OBS_WEBSOCKET_PORT", "4455"))
@@ -24,15 +29,17 @@ password = os.environ.get("OBS_WEBSOCKET_PASSWD", "")
 try:
     with obs.ReqClient(host=host, port=port, password=password, timeout=10) as client:
         result = client.get_input_list()
-        sources = [i for i in result.inputs if i["inputKind"] == "browser_source"]
+        sources = [i for i in result.inputs if i["inputKind"] in MEDIA_KINDS]
         if not sources:
-            print("No browser sources found in OBS.")
+            print("No media sources found in OBS.")
             sys.exit(0)
         for source in sources:
             name = source["inputName"]
-            client.press_input_properties_button(name, "refreshnocache")
-            print(f"Refreshed: {name}")
-        print(f"Done — refreshed {len(sources)} browser source(s).")
+            client.trigger_media_input_action(
+                name, "OBS_WEBSOCKET_MEDIA_INPUT_ACTION_RESTART"
+            )
+            print(f"Restarted: {name}")
+        print(f"Done — restarted {len(sources)} media source(s).")
 except ConnectionRefusedError:
     print(
         f"Could not connect to OBS WebSocket at {host}:{port} — is OBS running?",

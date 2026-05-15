@@ -6,7 +6,6 @@ RUN export DEBIAN_FRONTEND=noninteractive \
     build-essential \
     ca-certificates \
     curl \
-    fluxbox \
     git \
     grc \
     libvlc-dev \
@@ -14,13 +13,8 @@ RUN export DEBIAN_FRONTEND=noninteractive \
     pkg-config \
     supervisor \
     syslog-ng \
-    x11vnc \
-    xvfb \
     vim \
-    vlc \
     vlc-plugin-base \
-    x11-xserver-utils \
-    xterm \
   && rm -rf /var/lib/apt/lists/*
 
 ARG TARGETARCH
@@ -29,18 +23,12 @@ RUN curl -fsSL https://go.dev/dl/go1.26.3.linux-${TARGETARCH}.tar.gz \
 ENV PATH="/usr/local/go/bin:/go/bin:${PATH}"
 ENV GOPATH="/go"
 
-EXPOSE 5900
 EXPOSE 8080
-
-ENV VNC_PASSWD=123456
 
 # Static configs baked into the image; the entrypoint no longer regenerates
 # these via heredocs at boot.
 COPY infra/docker/vlc/config/syslog.conf /etc/supervisor/conf.d/syslog.conf
-COPY infra/docker/vlc/config/vnc.conf /etc/supervisor/conf.d/vnc.conf
 COPY infra/docker/vlc/config/vlc.conf /etc/supervisor/conf.d/vlc.conf
-COPY infra/docker/vlc/config/fluxbox-startup /root/.fluxbox/startup
-RUN chmod +x /root/.fluxbox/startup
 
 WORKDIR /go/src/github.com/adanalife/tripbot
 COPY go.mod go.sum ./
