@@ -60,6 +60,16 @@ func dispatch(cmd *Command, user *users.User, params []string) {
 	if !cmd.checkAccess(user, sayFn) {
 		return
 	}
+	// Wrap the handler in a span so each chat command shows up as a trace
+	// in Tempo. SQL queries (via otelsql) and outbound HTTP (via otelhttp)
+	// will nest under this once the HandlerFunc signature grows a
+	// context.Context — until then they stay as sibling traces, but the
+	// command-level span alone is already useful for "which command is slow"
+	// and for cross-referencing the tripbot_command_duration_seconds metric.
+	_, span := tracer.Start(context.Background(), "chat.command",
+		trace.WithAttributes(attribute.String("command", cmd.Trigger)))
+	defer span.End()
+
 	start := time.Now()
 	cmd.Handler(user, params)
 	instrumentation.ChatCommandDuration.Observe(cmd.Trigger, time.Since(start).Seconds())
