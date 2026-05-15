@@ -39,6 +39,9 @@ cp /opt/obs/config/user.ini   "$OBS_HOME/user.ini"
 envsubst < /opt/obs/config/basic.ini.tmpl > "$OBS_HOME/basic/profiles/ADanaLife/basic.ini"
 envsubst < /opt/obs/config/Tripbot.json.tmpl > "$OBS_HOME/basic/scenes/Tripbot.json"
 
+mkdir -p "$OBS_HOME/plugin_config/obs-websocket"
+envsubst < /opt/obs/config/obs-websocket.json.tmpl > "$OBS_HOME/plugin_config/obs-websocket/config.json"
+
 obs_args=(--disable-shutdown-check --collection 'Tripbot' --profile 'ADanaLife' --scene 'Main')
 
 if [[ -n "${STREAM_KEY:-}" ]]; then
