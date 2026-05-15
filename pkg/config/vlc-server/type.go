@@ -22,9 +22,11 @@ type VlcServerConfig struct {
 	// none, vdpau_avcodec, cuda. Only applied on Linux hosts; ignored on
 	// Windows/Darwin (matches today's platform-specific flag layering).
 	VlcAvcodecHw string `default:"vdpau_avcodec" envconfig:"VLC_AVCODEC_HW"`
-	// VlcVout is the libvlc --vout value (Linux-only). e.g. x11, xcb_x11.
+	// VlcVout is the libvlc --vout value (Linux-only). Defaults to dummy
+	// (headless); the container no longer ships an X server. Set to x11
+	// on a non-containerized host if local on-screen render is wanted.
 	// Only applied on Linux hosts; ignored on Windows/Darwin.
-	VlcVout string `default:"x11" envconfig:"VLC_VOUT"`
+	VlcVout string `default:"dummy" envconfig:"VLC_VOUT"`
 	// VlcCanvasWidth / VlcCanvasHeight set both the libvlc --width/--height
 	// and --canvas-width/--canvas-height. Defaults are today's hardcoded
 	// 1920x1080.

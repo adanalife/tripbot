@@ -23,7 +23,6 @@ var videoFiles []string
 // platform-invariant flags that never need per-host tuning
 var vlcStaticFlags = []string{
 	"--ignore-config", // ignore any config files that might get loaded
-	"--fullscreen",    // start fullscreened
 	"--no-audio",      // none of the videos have audio
 	// "--network-caching", "500", // network cache (in ms)
 	// "--aspect-ratio", "16:9",
@@ -39,18 +38,19 @@ var vlcCmdFlags []string
 // mediaOptions are applied per-Media (not as libvlc init flags).
 // libvlc's --sout takes effect only when set on the media object itself —
 // passing --sout to libvlc.Init does NOT activate the stream-out chain.
-// `display` keeps the on-screen render; `rtp{sdp=rtsp://...}` opens an RTSP
-// listener that the OBS container pulls. `sout-keep` preserves the chain
-// across playlist transitions so OBS doesn't see EOF on every clip change.
+// `rtp{sdp=rtsp://...}` opens an RTSP listener that the OBS container
+// pulls. `sout-keep` preserves the chain across playlist transitions so
+// OBS doesn't see EOF on every clip change.
 var mediaOptions = []string{
-	":sout=#duplicate{dst=display,dst=rtp{sdp=rtsp://:8554/dashcam}}",
+	":sout=#rtp{sdp=rtsp://:8554/dashcam}",
 	":sout-keep",
 }
 
 // linuxSpecificFlags returns the Linux-only VLC flags, sourced from
-// config (VLC_VOUT, VLC_AVCODEC_HW). Defaults match today's hardcoded
-// values: --vout x11 (skip vdpau, improves performance) and
-// --avcodec-hw vdpau_avcodec (can be none, vdpau_avcodec, or cuda).
+// config (VLC_VOUT, VLC_AVCODEC_HW). Defaults: --vout dummy (headless;
+// the container no longer ships an X server) and --avcodec-hw
+// vdpau_avcodec (can be none, vdpau_avcodec, or cuda). Set VLC_VOUT=x11
+// on a non-containerized host if local on-screen render is wanted.
 func linuxSpecificFlags() []string {
 	return []string{
 		"--vout", c.Conf.VlcVout,
