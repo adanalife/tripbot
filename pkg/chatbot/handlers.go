@@ -34,20 +34,37 @@ func normalizeCommandPrefix(msg string) string {
 	return msg
 }
 
-func dispatch(cmd *Command, user *users.User, params []string) {
-	incChatCommandCounter(cmd.Trigger)
+// chatUser is the subset of *users.User that dispatch needs for access checks.
+type chatUser interface {
+	HasCommandAvailable() bool
+	IsSubscriber() bool
+}
+
+// checkAccess returns true when the user is allowed to run cmd.
+// It calls sayFn with the appropriate denial message when access is denied.
+func (cmd *Command) checkAccess(user chatUser, sayFn func(string)) bool {
 	if cmd.RequiresFollow && !user.HasCommandAvailable() {
-		Say(followerMsg)
-		return
+		sayFn(followerMsg)
+		return false
 	}
 	if cmd.RequiresSubscriber && !user.IsSubscriber() {
-		Say(subscriberMsg)
+		sayFn(subscriberMsg)
+		return false
+	}
+	return true
+}
+
+func dispatch(cmd *Command, user *users.User, params []string) {
+	incChatCommandCounter(cmd.Trigger)
+	if !cmd.checkAccess(user, Say) {
 		return
 	}
 	cmd.Handler(user, params)
 }
 
-func runCommand(ctx context.Context, user *users.User, message string) {
+// findCommand parses message and returns the matching Command and params.
+// Returns nil if no command matches.
+func findCommand(message string) (*Command, []string) {
 	msg := normalizeCommandPrefix(strings.TrimSpace(message))
 	split := strings.Split(msg, " ")
 
@@ -65,16 +82,9 @@ func runCommand(ctx context.Context, user *users.User, message string) {
 	}
 
 	// handle case where people add a space (like "! location")
-	if command == "!" {
+	if command == "!" && len(params) > 0 {
 		command = command + params[0]
 		params = params[1:]
-	}
-
-	// Tag the active span with the parsed command. Bare-word triggers
-	// (e.g. "hello") aren't included to keep the attribute's cardinality
-	// bounded to the bot's actual command surface (and typos thereof).
-	if strings.HasPrefix(command, "!") {
-		trace.SpanFromContext(ctx).SetAttributes(attribute.String("twitch.command", command))
 	}
 
 	// multi-word alias lookup (e.g. "no audio", "no sound")
@@ -85,13 +95,34 @@ func runCommand(ctx context.Context, user *users.User, message string) {
 			if remainder != "" {
 				mwParams = strings.Split(remainder, " ")
 			}
-			dispatch(cmd, user, mwParams)
-			return
+			return cmd, mwParams
 		}
 	}
 
 	// single-word lookup
 	if cmd, ok := singleWordLookup[command]; ok {
+		return cmd, params
+	}
+	return nil, nil
+}
+
+func runCommand(ctx context.Context, user *users.User, message string) {
+	// parse for otel span attribute (only set for !-prefixed commands)
+	msg := normalizeCommandPrefix(strings.TrimSpace(message))
+	split := strings.Split(msg, " ")
+	command := split[0]
+	if command == "!" && len(split) > 1 {
+		command = "!" + split[1]
+	}
+	// Tag the active span with the parsed command. Bare-word triggers
+	// (e.g. "hello") aren't included to keep the attribute's cardinality
+	// bounded to the bot's actual command surface (and typos thereof).
+	if strings.HasPrefix(command, "!") {
+		trace.SpanFromContext(ctx).SetAttributes(attribute.String("twitch.command", command))
+	}
+
+	cmd, params := findCommand(message)
+	if cmd != nil {
 		dispatch(cmd, user, params)
 		return
 	}
