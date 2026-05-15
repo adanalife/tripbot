@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	mylog "github.com/adanalife/tripbot/pkg/chatbot/log"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
@@ -59,7 +60,9 @@ func dispatch(cmd *Command, user *users.User, params []string) {
 	if !cmd.checkAccess(user, sayFn) {
 		return
 	}
+	start := time.Now()
 	cmd.Handler(user, params)
+	instrumentation.ChatCommandDuration.Observe(cmd.Trigger, time.Since(start).Seconds())
 }
 
 // findCommand parses message and returns the matching Command and params.

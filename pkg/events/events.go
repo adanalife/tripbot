@@ -7,6 +7,7 @@ import (
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
+	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"github.com/google/uuid"
 	"github.com/logrusorgru/aurora/v3"
 )
@@ -24,7 +25,11 @@ func Login(user string, sessionID uuid.UUID) error {
 		log.Printf("Not logging in %s because we're in read-only mode", aurora.Magenta(user))
 		return &terrors.ReadOnlyError{Msg: "read-only mode"}
 	}
-	return database.GormDB().Create(&Event{Username: user, Event: "login", SessionID: sessionID}).Error
+	if err := database.GormDB().Create(&Event{Username: user, Event: "login", SessionID: sessionID}).Error; err != nil {
+		return err
+	}
+	instrumentation.Events.Inc("login")
+	return nil
 }
 
 func Logout(user string, sessionID uuid.UUID) error {
@@ -32,5 +37,9 @@ func Logout(user string, sessionID uuid.UUID) error {
 		log.Printf("Not logging out %s because we're in read-only mode", aurora.Magenta(user))
 		return &terrors.ReadOnlyError{Msg: "read-only mode"}
 	}
-	return database.GormDB().Create(&Event{Username: user, Event: "logout", SessionID: sessionID}).Error
+	if err := database.GormDB().Create(&Event{Username: user, Event: "logout", SessionID: sessionID}).Error; err != nil {
+		return err
+	}
+	instrumentation.Events.Inc("logout")
+	return nil
 }
