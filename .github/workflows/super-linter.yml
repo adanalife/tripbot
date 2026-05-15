@@ -55,7 +55,17 @@ jobs:
           VALIDATE_SQLFLUFF: false
           VALIDATE_TRIVY: false
           VALIDATE_YAML_PRETTIER: false
-          # disabled — Ruff handles Python formatting (and lint). Super-linter
-          # warns when both Black and Ruff are enabled because the two
-          # occasionally disagree on edge cases.
+          # Python formatting + lint live in .pre-commit-config.yaml (Ruff).
+          # Disable the super-linter Python formatters/checkers that overlap
+          # with that pre-commit job:
+          #   - BLACK: dueling-formatter problem with Ruff
+          #   - RUFF_FORMAT: same Ruff version disagrees with our local Ruff
+          #     for reasons we haven't tracked down — pre-commit catches
+          #     format issues before they hit CI, so the duplicate gate isn't
+          #     buying us anything
+          #   - MYPY: only Python in the repo is two standalone bin/ scripts
+          #     (no importable package, no type-check value); mypy also
+          #     complains they both register as `__main__`
           VALIDATE_PYTHON_BLACK: false
+          VALIDATE_PYTHON_RUFF_FORMAT: false
+          VALIDATE_PYTHON_MYPY: false
