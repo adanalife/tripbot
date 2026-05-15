@@ -83,7 +83,7 @@ func (u User) save() {
 	if c.Conf.Verbose {
 		log.Println("saving user", u)
 	}
-	query := `UPDATE users SET last_seen=:last_seen, num_visits=:num_visits, miles=:miles WHERE id = :id`
+	query := `UPDATE users SET last_seen=:last_seen, num_visits=:num_visits, miles=:miles, is_bot=:is_bot WHERE id = :id`
 	_, err := database.Connection().NamedExec(query, u)
 	if err != nil {
 		terrors.Log(err, "error saving user")
