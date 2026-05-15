@@ -1,6 +1,7 @@
 package users
 
 import (
+	"errors"
 	"log"
 	"time"
 
@@ -10,25 +11,27 @@ import (
 	"github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/google/uuid"
 	"github.com/logrusorgru/aurora/v3"
+	"gorm.io/gorm"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
 )
 
 type User struct {
-	ID           uint16    `db:"id"`
-	Username     string    `db:"username"`
-	Miles        float32   `db:"miles"`
-	NumVisits    uint16    `db:"num_visits"`
-	HasDonated   bool      `db:"has_donated"`
-	IsBot        bool      `db:"is_bot"`
-	FirstSeen    time.Time `db:"first_seen"`
-	LastSeen     time.Time `db:"last_seen"`
-	DateCreated  time.Time `db:"date_created"`
-	LoggedIn     time.Time
-	sessionID    uuid.UUID
-	lastCmd      time.Time
-	lastLocation time.Time
+	ID          uint16    `gorm:"primaryKey"`
+	Username    string
+	Miles       float32
+	NumVisits   uint16
+	HasDonated  bool
+	IsBot       bool
+	FirstSeen   time.Time
+	LastSeen    time.Time
+	DateCreated time.Time
+	// in-memory session fields, not stored in DB
+	LoggedIn     time.Time `gorm:"-"`
+	sessionID    uuid.UUID `gorm:"-"`
+	lastCmd      time.Time `gorm:"-"`
+	lastLocation time.Time `gorm:"-"`
 }
 
 // this is how long they have before they can guess again
@@ -83,8 +86,11 @@ func (u User) save() {
 	if c.Conf.Verbose {
 		log.Println("saving user", u)
 	}
-	query := `UPDATE users SET last_seen=:last_seen, num_visits=:num_visits, miles=:miles WHERE id = :id`
-	_, err := database.Connection().NamedExec(query, u)
+	err := database.GormDB().Model(&u).Updates(map[string]any{
+		"last_seen":  u.LastSeen,
+		"num_visits": u.NumVisits,
+		"miles":      u.Miles,
+	}).Error
 	if err != nil {
 		terrors.Log(err, "error saving user")
 	}
@@ -127,10 +133,13 @@ func FindOrCreate(username string) User {
 // Find will look up the username in the DB, and return a User if possible
 func Find(username string) User {
 	var user User
-	query := `SELECT * FROM users WHERE username=$1`
-	err := database.Connection().Get(&user, query, username)
-	if err != nil {
+	result := database.GormDB().Where("username = ?", username).First(&user)
+	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 		//TODO: is there a better way to do this?
+		return User{ID: 0}
+	}
+	if result.Error != nil {
+		terrors.Log(result.Error, "error finding user")
 		return User{ID: 0}
 	}
 	return user
@@ -190,10 +199,10 @@ func (u *User) SetLastLocationTime() {
 // create() will actually create the DB record
 func create(username string) User {
 	log.Println("creating user", username)
-	tx := database.Connection().MustBegin()
 	// create a new row, using default vals and creating a single visit
-	//TODO: do something with results, error returned here
-	tx.Exec("INSERT INTO users (username, num_visits) VALUES ($1, $2)", username, 1)
-	tx.Commit()
+	newUser := User{Username: username, NumVisits: 1}
+	if err := database.GormDB().Create(&newUser).Error; err != nil {
+		terrors.Log(err, "error creating user")
+	}
 	return Find(username)
 }
