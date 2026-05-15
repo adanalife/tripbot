@@ -35,7 +35,7 @@ const guessScoreboard = "guess_state_total"
 
 //TODO: incorrect guess scoreboard?
 
-func helpCmd(user *users.User) {
+func helpCmd(user *users.User, _ []string) {
 	log.Println(user.Username, "ran !help")
 	msg := fmt.Sprintf("%s (%d of %d)", help(), helpIndex+1, len(c.HelpMessages))
 	Say(msg)
@@ -70,12 +70,12 @@ func helloCmd(user *users.User, params []string) {
 	lastHelloTime = time.Now()
 }
 
-func flagCmd(user *users.User) {
+func flagCmd(user *users.User, _ []string) {
 	log.Println(user.Username, "ran !flag")
 	onscreensClient.ShowFlag(10 * time.Second)
 }
 
-func versionCmd(user *users.User) {
+func versionCmd(user *users.User, _ []string) {
 	log.Println(user.Username, "ran !version")
 
 	if helpers.RunningOnWindows() {
@@ -99,7 +99,7 @@ func versionCmd(user *users.User) {
 	Say("Current version is " + currentVersion)
 }
 
-func uptimeCmd(user *users.User) {
+func uptimeCmd(user *users.User, _ []string) {
 	log.Println(user.Username, "ran !uptime")
 	dur := time.Now().Sub(Uptime)
 	msg := fmt.Sprintf("I have been running for %s", durafmt.Parse(dur))
@@ -154,7 +154,7 @@ func milesCmd(user *users.User, params []string) {
 	Say(msg)
 }
 
-func kilometresCmd(user *users.User) {
+func kilometresCmd(user *users.User, _ []string) {
 	log.Println(user.Username, "ran !kilometres")
 	km := user.CurrentMiles() * 1.609344
 	msg := "@%s has %.2f kilometres."
@@ -162,7 +162,7 @@ func kilometresCmd(user *users.User) {
 	Say(msg)
 }
 
-func sunsetCmd(user *users.User) {
+func sunsetCmd(user *users.User, _ []string) {
 	log.Println(user.Username, "ran !sunset")
 	// get the currently-playing video
 	vid := video.CurrentlyPlaying
@@ -174,7 +174,7 @@ func sunsetCmd(user *users.User) {
 	Say(helpers.SunsetStr(vid.DateFilmed, lat, lng))
 }
 
-func locationCmd(user *users.User) {
+func locationCmd(user *users.User, _ []string) {
 	log.Println(user.Username, "ran !location (or similar)")
 	// get the currently-playing video
 	vid := video.CurrentlyPlaying
@@ -201,7 +201,7 @@ func locationCmd(user *users.User) {
 	Say(msg)
 }
 
-func monthlyMilesLeaderboardCmd(user *users.User) {
+func monthlyMilesLeaderboardCmd(user *users.User, _ []string) {
 	log.Println(user.Username, "ran !leaderboard")
 
 	// select users to show in leaderboard
@@ -226,7 +226,7 @@ func monthlyMilesLeaderboardCmd(user *users.User) {
 	Say(msg)
 }
 
-func lifetimeMilesLeaderboardCmd(user *users.User) {
+func lifetimeMilesLeaderboardCmd(user *users.User, _ []string) {
 	log.Println(user.Username, "ran !totalleaderboard")
 
 	// select users to show in leaderboard
@@ -250,7 +250,7 @@ func lifetimeMilesLeaderboardCmd(user *users.User) {
 	Say(msg)
 }
 
-func monthlyGuessLeaderboardCmd(user *users.User) {
+func monthlyGuessLeaderboardCmd(user *users.User, _ []string) {
 	log.Println(user.Username, "ran !guessleaderboard")
 
 	// select users to show in leaderboard
@@ -290,7 +290,7 @@ func monthlyGuessLeaderboardCmd(user *users.User) {
 	Say(msg)
 }
 
-func timeCmd(user *users.User) {
+func timeCmd(user *users.User, _ []string) {
 	log.Println(user.Username, "ran !time")
 	var err error
 	var lat, lng float64
@@ -312,7 +312,7 @@ func timeCmd(user *users.User) {
 	}
 }
 
-func dateCmd(user *users.User) {
+func dateCmd(user *users.User, _ []string) {
 	log.Println(user.Username, "ran !date")
 	var err error
 	var lat, lng float64
@@ -385,7 +385,7 @@ func guessCmd(user *users.User, params []string) {
 	Say(msg)
 }
 
-func stateCmd(user *users.User) {
+func stateCmd(user *users.User, _ []string) {
 	log.Println(user.Username, "ran !state")
 	// get the currently-playing video
 	vid := video.CurrentlyPlaying
@@ -413,14 +413,14 @@ func reportCmd(user *users.User, params []string) {
 	Say("Thank you, I will look into this ASAP!")
 }
 
-func bonusMilesCmd(user *users.User) {
+func bonusMilesCmd(user *users.User, _ []string) {
 	log.Println(user.Username, "ran !bonusmiles")
 	bonus := user.BonusMiles()
 	msg := fmt.Sprintf("%s has earned %.4f bonus miles this session", user.Username, bonus)
 	Say(msg)
 }
 
-func secretInfoCmd(user *users.User) {
+func secretInfoCmd(user *users.User, _ []string) {
 	log.Println(user.Username, "ran !secretinfo")
 	if !c.UserIsAdmin(user.Username) {
 		return
@@ -437,7 +437,7 @@ func secretInfoCmd(user *users.User) {
 	Say(msg)
 }
 
-func shutdownCmd(user *users.User) {
+func shutdownCmd(user *users.User, _ []string) {
 	log.Println(user.Username, "ran !shutdown")
 	if !c.UserIsAdmin(user.Username) {
 		Say("Nice try bucko")
