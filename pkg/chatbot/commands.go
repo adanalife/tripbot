@@ -12,7 +12,6 @@ import (
 	"time"
 
 	terrors "github.com/adanalife/tripbot/pkg/errors"
-	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
 	"github.com/adanalife/tripbot/pkg/scoreboards"
 
 	"github.com/adanalife/tripbot/pkg/background"
@@ -72,7 +71,7 @@ func (a *App) helloCmd(user *users.User, params []string) {
 
 func (a *App) flagCmd(user *users.User, _ []string) {
 	log.Println(user.Username, "ran !flag")
-	onscreensClient.ShowFlag(10 * time.Second)
+	a.Onscreens.ShowFlag(10 * time.Second)
 }
 
 func (a *App) versionCmd(user *users.User, _ []string) {
@@ -209,7 +208,7 @@ func (a *App) monthlyMilesLeaderboardCmd(user *users.User, _ []string) {
 	leaderboard = leaderboard[:size]
 
 	// display leaderboard on screen
-	onscreensClient.ShowLeaderboard("Monthly Miles", leaderboard)
+	a.Onscreens.ShowLeaderboard("Monthly Miles", leaderboard)
 
 	// build a message to send to chat
 	msg := fmt.Sprintf("Top %d miles this month: ", size)
@@ -233,7 +232,7 @@ func (a *App) lifetimeMilesLeaderboardCmd(user *users.User, _ []string) {
 	leaderboard := users.LifetimeMilesLeaderboard[:size]
 
 	// display leaderboard on screen
-	onscreensClient.ShowLeaderboard("Total Miles", leaderboard)
+	a.Onscreens.ShowLeaderboard("Total Miles", leaderboard)
 
 	// build a message to send to chat
 	msg := fmt.Sprintf("Top %d lifetime miles: ", size)
@@ -273,7 +272,7 @@ func (a *App) monthlyGuessLeaderboardCmd(user *users.User, _ []string) {
 	}
 
 	// display leaderboard on screen
-	onscreensClient.ShowLeaderboard("Correct Guesses This Month", intLeaderboard)
+	a.Onscreens.ShowLeaderboard("Correct Guesses This Month", intLeaderboard)
 
 	// build a message to send to chat
 	msg := fmt.Sprintf("Top %d correct guesses this month: ", size)
@@ -362,12 +361,12 @@ func (a *App) guessCmd(user *users.User, params []string) {
 	if strings.ToLower(guess) == strings.ToLower(vid.State) {
 		msg = fmt.Sprintf("@%s got it! We're in %s", user.Username, vid.State)
 		// show the flag for the state
-		onscreensClient.ShowFlag(10 * time.Second)
+		a.Onscreens.ShowFlag(10 * time.Second)
 		// increase their guess score
 		user.AddToScore(guessScoreboard, 1.0)
 		user.AddToScore(scoreboards.CurrentGuessScoreboard(), 1.0)
 		// do a timewarp
-		timewarp()
+		a.timewarp()
 	} else {
 		msg = "Try again! EarthDay"
 	}
@@ -383,7 +382,7 @@ func (a *App) stateCmd(user *users.User, _ []string) {
 	}
 	msg := fmt.Sprintf("We're in %s", vid.State)
 	// show the flag for the state
-	onscreensClient.ShowFlag(10 * time.Second)
+	a.Onscreens.ShowFlag(10 * time.Second)
 	// record that they know the location now
 	user.SetLastLocationTime()
 	sayFn(msg)
@@ -459,7 +458,7 @@ func (a *App) middleCmd(user *users.User, params []string) {
 	// if the arg was "hide", hide the text from view
 	if len(params) == 1 && strings.ToLower(params[0]) == "hide" {
 		sayFn("Got it! Hiding the message.")
-		onscreensClient.HideMiddleText()
+		a.Onscreens.HideMiddleText()
 		return
 	}
 
@@ -469,5 +468,5 @@ func (a *App) middleCmd(user *users.User, params []string) {
 	// just to help debug
 	log.Printf("setting middle text to: %s", text)
 
-	onscreensClient.ShowMiddleText(text)
+	a.Onscreens.ShowMiddleText(text)
 }
