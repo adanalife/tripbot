@@ -36,7 +36,7 @@ func newTestVideo(state string, lat, lng float64, date time.Time) video.Video {
 }
 
 // newTestApp returns an App with CurrentVideo returning vid.
-// For Tier 1 commands that don't use CurrentVideo, pass a zero-value video.Video.
+// For commands that don't use CurrentVideo, pass a zero-value video.Video.
 func newTestApp(vid video.Video) *App {
 	return &App{CurrentVideo: func() video.Video { return vid }}
 }
@@ -220,7 +220,7 @@ func TestVersionCmd_MessageFormat(t *testing.T) {
 	}
 }
 
-// --- stateCmd (Tier 2) ---
+// --- stateCmd ---
 
 func TestStateCmd_SaysCurrentState(t *testing.T) {
 	vid := newTestVideo("Colorado", 39.5, -105.0, time.Now())
@@ -248,7 +248,7 @@ func TestStateCmd_MessageFormat(t *testing.T) {
 	}
 }
 
-// --- dateCmd (Tier 2) ---
+// --- dateCmd ---
 
 func TestDateCmd_SaysThisMomentWas(t *testing.T) {
 	date := time.Date(2019, 6, 15, 18, 30, 0, 0, time.UTC)
@@ -279,7 +279,7 @@ func TestDateCmd_IncludesYear(t *testing.T) {
 	}
 }
 
-// --- timeCmd (Tier 2) ---
+// --- timeCmd ---
 
 func TestTimeCmd_SaysThisMomentWas(t *testing.T) {
 	date := time.Date(2019, 6, 15, 18, 30, 0, 0, time.UTC)
@@ -310,7 +310,7 @@ func TestTimeCmd_IncludesAMPM(t *testing.T) {
 	}
 }
 
-// --- sunsetCmd (Tier 2) ---
+// --- sunsetCmd ---
 
 func TestSunsetCmd_SaysSunset(t *testing.T) {
 	// 2pm UTC in Colorado — sunset hasn't happened yet
@@ -327,7 +327,7 @@ func TestSunsetCmd_SaysSunset(t *testing.T) {
 	}
 }
 
-// --- guessCmd (Tier 2) ---
+// --- guessCmd ---
 
 func TestGuessCmd_NoParams_PromptsGuess(t *testing.T) {
 	vid := newTestVideo("Colorado", 39.5, -105.0, time.Now())
