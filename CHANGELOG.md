@@ -5,6 +5,80 @@
 
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
+## [v2.7.0] — 2026-05-15
+
+Minor release. Adds an `obs_streaming_active` OTel gauge tracking live streaming state via WebSocket polling, extends chatbot test coverage to the `App` struct and `middleCmd`, and improves the startup failure message when no Twitch OAuth token is present.
+
+### OBS
+
+- **`obs_streaming_active` OTel gauge.** Polls OBS via WebSocket and emits a gauge reflecting whether the stream is currently live. ([#498])
+
+### Internal
+
+- **Chatbot `App` struct and Tier 2 command tests.** Test coverage extended to the `App` struct, plus handler tests for `middleCmd`. ([#506], [#507])
+- **Clearer log when startup is refused due to missing OAuth token.** The single `log.Fatalf` is split into two lines: one stating the bot is deliberately refusing to start (not crashing), the other giving the exact remediation command. ([#505])
+
+## [v2.6.0] — 2026-05-15
+
+Minor release. Internal improvements only: events table gets an index and a session UUID column (plus a backfill tool for correcting understated historical miles), the chatbot command dispatcher is refactored from a switch statement to a registry map, and the first meaningful test coverage lands for the chatbot package.
+
+### Database
+
+- **`events_username_date` index added.** Covers `(username, date_created)` on the events table; per-user window queries were scanning the full table without it. ([#495])
+- **`session_id` UUID column added to `events`.** Login and logout rows for the same session now share a UUID, making session pairs directly queryable rather than inferred by row-number pairing. ([#495])
+- **`cmd/backfill-miles` tool added.** Dry-run/apply tool that recomputes historically correct miles from the events ledger and corrects `users.miles` for any user where the stored value is lower than what the event log derives. Found 1,600 understated users in the 2021 prod dump. ([#495])
+
+### Internal
+
+- **Chatbot command dispatch refactored to a registry.** `Command` struct introduced with `Trigger`, `Aliases`, `RequiresFollow`, and `RequiresSubscriber` fields. The `switch` statement in `runCommand` is replaced by two lookup maps (`singleWordLookup`, `multiWordLookup`) built at init time. Routing extracted into `findCommand`; gating logic extracted into `Command.checkAccess` with an injectable `sayFn` for testability. ([#494], [#501])
+- **Chatbot package test coverage added.** Registry integrity, `findCommand` routing (single-word, alias, multi-word, inverted-bang, space-separated bang), `checkAccess` gating (follower/subscriber gates with a fake `chatUser`), and command handler tests for `helpCmd`, `uptimeCmd`, `helloCmd`, `kilometresCmd`, and `versionCmd`. ([#500], [#501], [#502], [#503])
+
+## [v2.5.0] — 2026-05-15
+
+Minor release. Enables the OBS WebSocket control plane and adds a `task obs:browser:refresh` command for programmatically refreshing browser sources without VNCing in. Deletes the legacy `/auth/twitch` token-vending HTTP endpoint. Adds `OBS_QUALITY_PRESET` for switching between stream quality profiles, and logs monthly mileage and guess score on user session logout.
+
+### OBS
+
+- **OBS WebSocket server enabled.** The obs-websocket plugin (built into OBS 32) is now seeded at container startup via `plugin_config/obs-websocket/config.json`, with authentication enabled (`OBS_WEBSOCKET_PASSWD`, consistent with `VNC_PASSWD` naming). Port 4455 is exposed in docker-compose and the k8s Service. Unblocks websocket-based healthchecks and streaming-active metrics. ([#491])
+- **`task obs:browser:refresh` added.** `bin/obs-browser-refresh` connects to the OBS WebSocket, enumerates all `browser_source` inputs, and calls `PressInputPropertiesButton(refreshnocache)` on each — the programmatic equivalent of right-clicking "Refresh cache of current page" in OBS. Run via `uv run --with obsws-python`; no local install required. ([#491])
+- **`OBS_QUALITY_PRESET` env var.** Set to `low` (720p30, 1500 kbps) for dev/staging or `high` (1080p60, 6000 kbps, default) for production. Entrypoint expands the preset into individual encoder params before envsubst. ([#489])
+
+### Users / Sessions
+
+- **Monthly miles and guess score logged on logout.** `users/session` now records each session's `monthly_miles` and `guess_score` to the DB on logout, surfacing per-session contribution data for leaderboards and analytics. ([#443])
+
+### Removed
+
+- **`/auth/twitch` token-vending HTTP endpoint removed.** The endpoint handed out short-lived Twitch tokens over HTTP — replaced by the k8s `auth-bootstrap` Job added in v2.4.3. ([#490])
+
+### Internal
+
+- **`aurora` import migrated from v2 to v3.** ([#486])
+
+## [v2.4.4] — 2026-05-14
+
+Patch release. Centers onscreen rotator text on its grey-box overlay with shrink-to-fit sizing, bakes VLC container configs into the image as discrete files, fixes a noisy `xdg-open` error in headless auth-bootstrap pods, bumps all directly-pinned Go modules to latest compatible versions, and fixes the `obs.yml` CI workflow to build the VLC container from source instead of pulling a stale Docker Hub image.
+
+### Onscreens
+
+- **Rotator text now centers on and fits within its grey-box overlay.** The left and right rotators were centering on the viewport midpoint, causing text to drift over the dashcam footage. `onscreenStyle` gains `AnchorXPx` / `FitWidthPx` / `MinFontSizePx` fields; when `FitWidthPx` is set, text anchors to the grey-box midpoint and shrinks 1px at a time (28→18px floor) until it fits the box width. Left rotator: anchor 282 / fit 564. Right rotator: anchor 456 / fit 369. ([#480])
+
+### VLC Container
+
+- **Static VLC container configs baked into the image.** The four config files (syslog, VNC, VLC supervisord conf, fluxbox startup) are now checked in under `infra/docker/vlc/config/` and `COPY`'d into the image, mirroring the OBS container's pattern. `script/container_startup.sh` slims down to a thin entrypoint. Configs are reviewable as discrete files instead of heredoc strings. ([#442])
+
+### Fixed
+
+- **`auth-bootstrap` no longer errors on `xdg-open` in headless pods.** `OpenInBrowser` is skipped when neither `DISPLAY` nor `WAYLAND_DISPLAY` is set on Linux. The OAuth URL is still printed to stdout so the `task tripbot:auth:bootstrap` port-forward flow works correctly. ([#479])
+
+### CI
+
+- **`obs.yml` now builds the VLC container from source before starting it.** Previously the workflow pulled `adanalife/vlc:latest` from Docker Hub directly. After #442 baked supervisord configs into the image (removing the runtime heredoc writes from `container_startup.sh`), the stale Docker Hub image had no conf.d configs and the thin startup script didn't write them — supervisord launched with no programs, so VLC server never came up. Fix mirrors the OBS build pattern (buildx + GHA cache for amd64, `docker compose build` for arm64). Also adds `infra/docker/vlc/**` and `script/container_startup.sh` to the PR paths trigger so VLC changes fire this workflow on future PRs. ([#487])
+
+### Dependencies
+
+- **Go module bumps (all directly-pinned, API-compatible).** `adrg/libvlc-go/v3` → v3.1.6, `gorilla/mux` → v1.8.1, `jmoiron/sqlx` → v1.4.0, `joho/godotenv` → v1.5.1, `lib/pq` → v1.12.3, `googlemaps/maps` → v1.7.0, `nathan-osman/go-sunrise` → v1.1.0, `sfreiberg/gotwilio` → v1.0.0, `slok/go-http-metrics` → v0.13.0, `unrolled/secure` → v1.17.0. Notable side-effect: deprecated `dgrijalva/jwt-go` replaced by `golang-jwt/jwt` via the gotwilio bump. ([#481])
+
 ## [v2.4.3] — 2026-05-13
 
 Patch release. Fixes a long-running IRC disconnect bug where the Twitch connection would fail to re-authenticate after the first token rotation, and adds the `auth-bootstrap` binary to the tripbot image for use by the new k8s bootstrap Job.

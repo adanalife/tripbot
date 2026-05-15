@@ -18,6 +18,7 @@ import (
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
+	"github.com/adanalife/tripbot/pkg/obs"
 	"github.com/adanalife/tripbot/pkg/server"
 	"github.com/adanalife/tripbot/pkg/telemetry"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
@@ -66,6 +67,7 @@ func main() {
 	findInitialVideo()
 	users.InitLeaderboard()
 	startCron()
+	startOBSPolling()
 	loadTwitchToken()   // must precede chatbot.Initialize — provides the IRC token
 	setUpTwitchClient() // required for the below
 	updateSubscribers()
@@ -129,13 +131,20 @@ func startCron() {
 	scheduleBackgroundJobs()
 }
 
+// startOBSPolling starts the background goroutine that polls OBS WebSocket
+// for streaming state and updates the obs_streaming_active gauge.
+func startOBSPolling() {
+	go obs.PollStreamingActive(context.Background(), 30*time.Second)
+}
+
 // loadTwitchToken pulls the bot's OAuth row from the oauth_tokens table.
 // Refuses to start if the row is missing — pointing at the bootstrap CLI
 // is louder than running IRC-less.
 func loadTwitchToken() {
 	if err := mytwitch.LoadFromDB(); err != nil {
 		if errors.Is(err, mytwitch.ErrNoToken) {
-			log.Fatalf("no oauth_tokens row for %q — run `task tripbot:auth:bootstrap` against the cluster DB (port-forward via `task tripbot:db:up` in infra)", c.Conf.BotUsername)
+			log.Printf("refusing to start: no oauth_tokens row for %q — tripbot will not run without a Twitch IRC connection", c.Conf.BotUsername)
+			log.Fatal("to fix: run `task tripbot:auth:bootstrap` from the infra directory")
 		}
 		terrors.Fatal(err, "failed to load Twitch token from DB")
 	}
