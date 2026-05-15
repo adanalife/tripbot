@@ -4,6 +4,7 @@
 
 Usage: OBS_WEBSOCKET_HOST=localhost OBS_WEBSOCKET_PORT=4455 ./bin/obs-browser-refresh
 """
+
 import os
 import sys
 
