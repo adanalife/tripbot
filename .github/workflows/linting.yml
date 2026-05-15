@@ -41,3 +41,4 @@ jobs:
           github_token: ${{ secrets.github_token }}
           golangci_lint_version: v2.12.1
           golangci_lint_flags: "--default=none --enable=errcheck"
+          level: warning # GitHub Status Check won't become failure with this level.

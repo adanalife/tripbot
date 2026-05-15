@@ -3,6 +3,7 @@ package twitch
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"strings"
@@ -11,7 +12,6 @@ import (
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
-	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/oauthtokens"
 	"github.com/logrusorgru/aurora/v3"
 	"github.com/nicklaw5/helix/v2"
@@ -171,7 +171,13 @@ func GenerateUserAccessToken(code string) error {
 	if err != nil {
 		return err
 	}
-	if usersResp == nil || len(usersResp.Data.Users) == 0 {
+	if usersResp == nil {
+		return errors.New("twitch: nil response from GetUsers")
+	}
+	if checkHelixResp("GetUsers", &usersResp.ResponseCommon) {
+		return fmt.Errorf("twitch: GetUsers returned %d during bootstrap", usersResp.StatusCode)
+	}
+	if len(usersResp.Data.Users) == 0 {
 		return errors.New("twitch: GetUsers returned no users")
 	}
 	u := usersResp.Data.Users[0]
@@ -254,12 +260,11 @@ func RefreshUserAccessToken() {
 	if resp == nil || resp.Data.AccessToken == "" {
 		// Empty body typically means invalid_grant (refresh token revoked).
 		// Treat as terminal — blank in-memory so IRC reconnect fails loudly,
-		// SMS so Dana sees it on his phone.
+		// and Sentry surfaces the failure for re-bootstrap.
 		_ = oauthtokens.IncrementFailCount("twitch", botUser)
 		tokenMu.Lock()
 		currentUserToken.AccessToken = ""
 		tokenMu.Unlock()
-		helpers.SendSMS(botUser + " oauth refresh failed; run task tripbot:auth:bootstrap")
 		terrors.Log(errors.New("empty access token in refresh response"), "oauth refresh failed; need re-bootstrap")
 		return
 	}

@@ -7,16 +7,17 @@ import (
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
+	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"github.com/google/uuid"
 	"github.com/logrusorgru/aurora/v3"
 )
 
 type Event struct {
-	ID          int       `db:"id"`
-	Username    string    `db:"username"`
-	Event       string    `db:"event"`
-	SessionID   uuid.UUID `db:"session_id"`
-	DateCreated time.Time `db:"date_created"`
+	ID          int `gorm:"primaryKey"`
+	Username    string
+	Event       string
+	SessionID   uuid.UUID
+	DateCreated time.Time
 }
 
 func Login(user string, sessionID uuid.UUID) error {
@@ -24,12 +25,11 @@ func Login(user string, sessionID uuid.UUID) error {
 		log.Printf("Not logging in %s because we're in read-only mode", aurora.Magenta(user))
 		return &terrors.ReadOnlyError{Msg: "read-only mode"}
 	}
-	tx := database.Connection().MustBegin()
-	_, err := tx.Exec("INSERT INTO events (username, event, session_id) VALUES ($1, $2, $3)", user, "login", sessionID)
-	if err != nil {
+	if err := database.GormDB().Create(&Event{Username: user, Event: "login", SessionID: sessionID}).Error; err != nil {
 		return err
 	}
-	return tx.Commit()
+	instrumentation.Events.Inc("login")
+	return nil
 }
 
 func Logout(user string, sessionID uuid.UUID) error {
@@ -37,10 +37,9 @@ func Logout(user string, sessionID uuid.UUID) error {
 		log.Printf("Not logging out %s because we're in read-only mode", aurora.Magenta(user))
 		return &terrors.ReadOnlyError{Msg: "read-only mode"}
 	}
-	tx := database.Connection().MustBegin()
-	_, err := tx.Exec("INSERT INTO events (username, event, session_id) VALUES ($1, $2, $3)", user, "logout", sessionID)
-	if err != nil {
+	if err := database.GormDB().Create(&Event{Username: user, Event: "logout", SessionID: sessionID}).Error; err != nil {
 		return err
 	}
-	return tx.Commit()
+	instrumentation.Events.Inc("logout")
+	return nil
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/database"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
+	"gorm.io/gorm"
 )
 
 // LoadOrCreate() will look up the video in the DB,
@@ -28,44 +29,22 @@ func LoadOrCreate(path string) (Video, error) {
 
 // load() fetches a Video from the DB
 func load(slug string) (Video, error) {
-	//TODO: consider replacing this with a &Video{},
-	// perhaps Video{ID:0}?
-	var newVid Video
-	// try to find the slug in the DB
-	videos := []Video{}
-	query := `SELECT * FROM videos WHERE slug=$1`
-	err := database.Connection().Select(&videos, query, slug)
-	if err != nil {
-		terrors.Log(err, "error fetching vid from DB")
-		return newVid, err
+	var vid Video
+	result := database.GormDB().Where("slug = ?", slug).First(&vid)
+	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+		return Video{}, errors.New("no matches found")
 	}
-
-	// did we find anything in the DB?
-	if len(videos) == 0 {
-		err = errors.New("no matches found")
-		return newVid, err
-	}
-	return videos[0], nil
+	return vid, result.Error
 }
 
 //TODO: combine this with load()?
 func loadById(id int64) (Video, error) {
-	var newVid Video
-	// try to find the slug in the DB
-	videos := []Video{}
-	query := `SELECT * FROM videos WHERE id=$1`
-	err := database.Connection().Select(&videos, query, id)
-	if err != nil {
-		terrors.Log(err, "error fetching vid from DB")
-		return newVid, err
+	var vid Video
+	result := database.GormDB().First(&vid, id)
+	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+		return Video{}, errors.New("no matches found")
 	}
-
-	// did we find anything in the DB?
-	if len(videos) == 0 {
-		err = errors.New("no matches found")
-		return newVid, err
-	}
-	return videos[0], nil
+	return vid, result.Error
 }
 
 // create will create a new Video from a slug
@@ -133,23 +112,18 @@ func (v Video) save() error {
 		}
 	}
 
-	tx := database.Connection().MustBegin()
-	//TODO: do something with result var here?
-	_, err = tx.Exec(
-		"INSERT INTO videos (slug, lat, lng, date_filmed, flagged, prev_vid, next_vid, state) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
-		v.Slug,
-		lat,
-		lng,
-		v.toDate(),
-		flagged,
-		v.PrevVid,
-		v.NextVid,
-		state,
-	)
-	if err != nil {
-		return err
+	insert := Video{
+		Slug:        v.Slug,
+		Lat:         lat,
+		Lng:         lng,
+		DateFilmed:  v.toDate(),
+		Flagged:     flagged,
+		PrevVid:     v.PrevVid,
+		NextVid:     v.NextVid,
+		State:       state,
+		DateCreated: v.DateCreated,
 	}
-	return tx.Commit()
+	return database.GormDB().Create(&insert).Error
 }
 
 // Next() finds the next unflagged video
@@ -168,12 +142,7 @@ func (v Video) Next() Video {
 }
 
 func (v Video) SetNextVid(nextVid Video) error {
-	_, err := database.Connection().NamedExec(`UPDATE videos SET next_vid=:next WHERE id = :id`,
-		map[string]interface{}{
-			"next": nextVid.Id,
-			"id":   v.Id,
-		})
-	return err
+	return database.GormDB().Model(&v).Update("next_vid", nextVid.ID).Error
 }
 
 func validate(dashStr string) error {
@@ -195,31 +164,26 @@ func validate(dashStr string) error {
 }
 
 func FindRandomByState(state string) (Video, error) {
-	var newVid Video
+	var vid Video
 
 	// convert to long form
 	if len(state) == 2 {
 		state = helpers.StateAbbrevToState(state)
 		if state == "" {
-			return newVid, fmt.Errorf("unable to parse state abbrev")
+			return vid, fmt.Errorf("unable to parse state abbrev")
 		}
 	}
 	// title-case the state (it's stored in the DB like that)
 	state = helpers.TitlecaseState(state)
 
-	// try to find the slug in the DB
-	videos := []Video{}
 	//TODO: ORDER BY random() will eventually get too slow
-	query := `SELECT * FROM videos WHERE state=$1 ORDER BY random() LIMIT 1`
-	err := database.Connection().Select(&videos, query, state)
-	if err != nil {
-		terrors.Log(err, "error fetching vid from DB")
-		return newVid, err
+	result := database.GormDB().Where("state = ?", state).Order("random()").Limit(1).First(&vid)
+	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+		return vid, &terrors.NoFootageForStateError{Msg: "no matches found"}
 	}
-
-	// did we find anything in the DB?
-	if len(videos) == 0 {
-		return newVid, &terrors.NoFootageForStateError{Msg: "no matches found"}
+	if result.Error != nil {
+		terrors.Log(result.Error, "error fetching vid from DB")
+		return vid, result.Error
 	}
-	return videos[0], nil
+	return vid, nil
 }

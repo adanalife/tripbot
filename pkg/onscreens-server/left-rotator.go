@@ -19,8 +19,6 @@ var possibleLeftMessages = []string{
 	"Try and !guess what state we're in",
 	"Use !commands to interact with the bot",
 	"Use !commands to interact with the bot",
-	"Want to help the project? Fill out the !survey",
-	"Want to help the project? Fill out the !survey",
 	"Where are we? (!location)",
 	// "LEADER",
 	// "Looking for artist for emotes and more",

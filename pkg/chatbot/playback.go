@@ -11,7 +11,6 @@ import (
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/helpers"
-	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/adanalife/tripbot/pkg/video"
 	vlcClient "github.com/adanalife/tripbot/pkg/vlc-client"
@@ -23,9 +22,9 @@ import (
 var lastTimewarpTime time.Time
 
 // timewarp jumps the playhead to a random video in the loop
-func timewarp() {
+func (a *App) timewarp() {
 	// show timewarp onscreen
-	onscreensClient.ShowTimewarp()
+	a.Onscreens.ShowTimewarp()
 
 	// shuffle to a new video
 	err := vlcClient.PlayRandom()
@@ -61,7 +60,7 @@ func (a *App) timewarpCmd(user *users.User, _ []string) {
 	}
 
 	// do the timewarp
-	timewarp()
+	a.timewarp()
 }
 
 func (a *App) jumpCmd(user *users.User, params []string) {
@@ -117,7 +116,7 @@ func (a *App) jumpCmd(user *users.User, params []string) {
 	// update the currently-playing video
 	video.GetCurrentlyPlaying()
 	// show the flag for the state
-	onscreensClient.ShowFlag(10 * time.Second)
+	a.Onscreens.ShowFlag(10 * time.Second)
 	// update our record of last time it ran
 	lastTimewarpTime = time.Now()
 }

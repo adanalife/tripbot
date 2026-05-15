@@ -50,6 +50,12 @@ func UpdateChatters() {
 		terrors.Log(err, "error getting chatters from twitch")
 		return
 	}
+	if checkHelixResp("GetChannelChatChatters", &resp.ResponseCommon) {
+		// don't overwrite cached chatter state with an empty response —
+		// 4xx here means the bot lost a scope or moderator role and the
+		// next call probably succeeds once that's fixed.
+		return
+	}
 
 	currentChatters = resp.Data.Chatters
 	chatterCount = resp.Data.Total
