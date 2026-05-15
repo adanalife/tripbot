@@ -25,10 +25,13 @@ func getChannelID(username string) string {
 	})
 	if err != nil {
 		terrors.Log(err, "error getting user info from twitch")
+		return ""
 	}
-
 	if resp == nil {
-		terrors.Log(err, "empty response from twitch")
+		terrors.Log(nil, "empty response from twitch")
+		return ""
+	}
+	if checkHelixResp("GetUsers", &resp.ResponseCommon) {
 		return ""
 	}
 
@@ -50,6 +53,11 @@ func GetSubscribers() {
 	})
 	if err != nil {
 		terrors.Log(err, "error getting subscriptions from twitch")
+		return
+	}
+	if checkHelixResp("GetSubscriptions", &resp.ResponseCommon) {
+		// keep the prior subscriber list rather than zeroing it out
+		return
 	}
 
 	// spew.Dump(resp)
@@ -83,6 +91,9 @@ func GetFollowerCount() {
 		terrors.Log(err, "error getting follower count from twitch")
 		return
 	}
+	if checkHelixResp("GetChannelFollows", &resp.ResponseCommon) {
+		return
+	}
 	instrumentation.TwitchAudience.SetFollowers(int64(resp.Data.Total))
 	log.Printf("%s has %d followers", c.Conf.ChannelName, resp.Data.Total)
 }
@@ -113,6 +124,10 @@ func UserIsFollower(username string) bool {
 	})
 	if err != nil {
 		terrors.Log(err, "error getting user follows")
+		return false
+	}
+	if checkHelixResp("GetChannelFollows", &resp.ResponseCommon) {
+		// fail closed: when we can't verify follow status, treat as non-follower
 		return false
 	}
 

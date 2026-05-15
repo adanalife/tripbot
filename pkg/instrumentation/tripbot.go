@@ -15,6 +15,7 @@ var (
 	chatCommands      = mustCounter("tripbot_chat_commands", "The total number of chat commands")
 	twitchSubscribers = mustGauge("twitch_subscribers_total", "Current number of Twitch channel subscribers")
 	twitchFollowers   = mustGauge("twitch_followers_total", "Current number of Twitch channel followers")
+	twitchHelixErrors = mustCounter("twitch_helix_errors_total", "Total non-2xx responses from the Twitch Helix API, labeled by endpoint and status_code")
 	obsStreamingGauge = mustGauge("obs_streaming_active", "1 if OBS is actively streaming, 0 otherwise")
 )
 
@@ -28,6 +29,11 @@ var ChatCommands = chatCommandCounterIface{counter: chatCommands}
 
 // TwitchAudience exposes subscriber and follower gauge recording.
 var TwitchAudience = twitchAudienceIface{subscribers: twitchSubscribers, followers: twitchFollowers}
+
+// TwitchHelixErrors exposes the helix-error counter; record by calling
+// TwitchHelixErrors.Inc(endpoint, statusCode). Endpoint is a short label
+// like "GetUsers"; statusCode is the HTTP status reported by Twitch.
+var TwitchHelixErrors = twitchHelixErrorsIface{counter: twitchHelixErrors}
 
 // OBSStreaming exposes the streaming-active gauge.
 var OBSStreaming = obsStreamingIface{g: obsStreamingGauge}
@@ -55,6 +61,15 @@ func (a twitchAudienceIface) SetSubscribers(n int64) {
 
 func (a twitchAudienceIface) SetFollowers(n int64) {
 	a.followers.Record(context.Background(), n)
+}
+
+type twitchHelixErrorsIface struct{ counter metric.Int64Counter }
+
+func (h twitchHelixErrorsIface) Inc(endpoint string, statusCode int) {
+	h.counter.Add(context.Background(), 1, metric.WithAttributes(
+		attribute.String("endpoint", endpoint),
+		attribute.Int("status_code", statusCode),
+	))
 }
 
 type obsStreamingIface struct{ g metric.Int64Gauge }
