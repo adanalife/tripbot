@@ -55,3 +55,7 @@ jobs:
           VALIDATE_SQLFLUFF: false
           VALIDATE_TRIVY: false
           VALIDATE_YAML_PRETTIER: false
+          # disabled — Ruff handles Python formatting (and lint). Super-linter
+          # warns when both Black and Ruff are enabled because the two
+          # occasionally disagree on edge cases.
+          VALIDATE_PYTHON_BLACK: false
