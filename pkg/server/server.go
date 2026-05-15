@@ -16,7 +16,7 @@ import (
 	"github.com/slok/go-http-metrics/middleware"
 	negronimiddleware "github.com/slok/go-http-metrics/middleware/negroni"
 	"github.com/unrolled/secure"
-	"github.com/urfave/negroni"
+	"github.com/urfave/negroni/v3"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 	"go.opentelemetry.io/otel/trace"
