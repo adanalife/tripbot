@@ -5,6 +5,34 @@
 
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
+## [v2.7.0] — 2026-05-15
+
+Minor release. Adds an `obs_streaming_active` OTel gauge tracking live streaming state via WebSocket polling, extends chatbot test coverage to the `App` struct and `middleCmd`, and improves the startup failure message when no Twitch OAuth token is present.
+
+### OBS
+
+- **`obs_streaming_active` OTel gauge.** Polls OBS via WebSocket and emits a gauge reflecting whether the stream is currently live. ([#498])
+
+### Internal
+
+- **Chatbot `App` struct and Tier 2 command tests.** Test coverage extended to the `App` struct, plus handler tests for `middleCmd`. ([#506], [#507])
+- **Clearer log when startup is refused due to missing OAuth token.** The single `log.Fatalf` is split into two lines: one stating the bot is deliberately refusing to start (not crashing), the other giving the exact remediation command. ([#505])
+
+## [v2.6.0] — 2026-05-15
+
+Minor release. Internal improvements only: events table gets an index and a session UUID column (plus a backfill tool for correcting understated historical miles), the chatbot command dispatcher is refactored from a switch statement to a registry map, and the first meaningful test coverage lands for the chatbot package.
+
+### Database
+
+- **`events_username_date` index added.** Covers `(username, date_created)` on the events table; per-user window queries were scanning the full table without it. ([#495])
+- **`session_id` UUID column added to `events`.** Login and logout rows for the same session now share a UUID, making session pairs directly queryable rather than inferred by row-number pairing. ([#495])
+- **`cmd/backfill-miles` tool added.** Dry-run/apply tool that recomputes historically correct miles from the events ledger and corrects `users.miles` for any user where the stored value is lower than what the event log derives. Found 1,600 understated users in the 2021 prod dump. ([#495])
+
+### Internal
+
+- **Chatbot command dispatch refactored to a registry.** `Command` struct introduced with `Trigger`, `Aliases`, `RequiresFollow`, and `RequiresSubscriber` fields. The `switch` statement in `runCommand` is replaced by two lookup maps (`singleWordLookup`, `multiWordLookup`) built at init time. Routing extracted into `findCommand`; gating logic extracted into `Command.checkAccess` with an injectable `sayFn` for testability. ([#494], [#501])
+- **Chatbot package test coverage added.** Registry integrity, `findCommand` routing (single-word, alias, multi-word, inverted-bang, space-separated bang), `checkAccess` gating (follower/subscriber gates with a fake `chatUser`), and command handler tests for `helpCmd`, `uptimeCmd`, `helloCmd`, `kilometresCmd`, and `versionCmd`. ([#500], [#501], [#502], [#503])
+
 ## [v2.5.0] — 2026-05-15
 
 Minor release. Enables the OBS WebSocket control plane and adds a `task obs:browser:refresh` command for programmatically refreshing browser sources without VNCing in. Deletes the legacy `/auth/twitch` token-vending HTTP endpoint. Adds `OBS_QUALITY_PRESET` for switching between stream quality profiles, and logs monthly mileage and guess score on user session logout.
