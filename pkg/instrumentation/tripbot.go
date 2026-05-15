@@ -13,6 +13,8 @@ var meter = otel.Meter("github.com/adanalife/tripbot")
 var (
 	chatMessages      = mustCounter("tripbot_chat_messages", "The total number of chat messages")
 	chatCommands      = mustCounter("tripbot_chat_commands", "The total number of chat commands")
+	twitchSubscribers = mustGauge("twitch_subscribers_total", "Current number of Twitch channel subscribers")
+	twitchFollowers   = mustGauge("twitch_followers_total", "Current number of Twitch channel followers")
 	obsStreamingGauge = mustGauge("obs_streaming_active", "1 if OBS is actively streaming, 0 otherwise")
 )
 
@@ -23,6 +25,9 @@ var ChatMessages = chatCounterIface{counter: chatMessages}
 // ChatCommands exposes the chat-command counter; record by calling
 // ChatCommands.Inc(commandName).
 var ChatCommands = chatCommandCounterIface{counter: chatCommands}
+
+// TwitchAudience exposes subscriber and follower gauge recording.
+var TwitchAudience = twitchAudienceIface{subscribers: twitchSubscribers, followers: twitchFollowers}
 
 // OBSStreaming exposes the streaming-active gauge.
 var OBSStreaming = obsStreamingIface{g: obsStreamingGauge}
@@ -37,6 +42,19 @@ type chatCommandCounterIface struct{ counter metric.Int64Counter }
 
 func (c chatCommandCounterIface) Inc(command string) {
 	c.counter.Add(context.Background(), 1, metric.WithAttributes(attribute.String("command", command)))
+}
+
+type twitchAudienceIface struct {
+	subscribers metric.Int64Gauge
+	followers   metric.Int64Gauge
+}
+
+func (a twitchAudienceIface) SetSubscribers(n int64) {
+	a.subscribers.Record(context.Background(), n)
+}
+
+func (a twitchAudienceIface) SetFollowers(n int64) {
+	a.followers.Record(context.Background(), n)
 }
 
 type obsStreamingIface struct{ g metric.Int64Gauge }

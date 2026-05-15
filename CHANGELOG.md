@@ -5,6 +5,32 @@
 
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
+## [v2.6.2] — 2026-05-15
+
+Patch release. Adds Twitch audience gauges (subscribers + followers) and an OBS media-restart helper for reconnecting dropped RTSP sources via WebSocket. Introduces a pre-commit hygiene baseline (ruff + standard fixers). Internal: bumps `go-twitch-irc` to v4, `urfave/negroni` to v3, and `cloud.google.com/go/logging` to v1.18.0.
+
+### Twitch
+
+- **`twitch_subscribers_total` and `twitch_followers_total` OTel gauges.** Emits current channel subscriber and follower counts polled from the Helix API; exposed through the existing OTel meter. ([#497])
+
+### OBS
+
+- **`obs-media-restart` script.** New tool that connects to the OBS WebSocket and reconnects RTSP source inputs — useful when an upstream RTSP stream drops and OBS holds the dead connection. ([#510])
+
+### CI
+
+- **Pre-commit framework + ruff hygiene baseline.** Adds `.pre-commit-config.yaml` covering ruff (Python lint + format), standard pre-commit hooks (trailing whitespace, EOF newline, mixed line endings, AWS-credential / private-key detection), Terraform fmt, and Dockerfile lint. New CI job runs the same set on every PR. ([#511])
+
+### Database
+
+- **Seed-DB skip predicate now ignores tripbot's placeholder rows.** On a fresh cluster, tripbot's `LoadOrCreate` could insert a `flagged=true` placeholder row before the seed Job's init container finished retrying postgres DNS, causing the old `COUNT(*) > 0` skip predicate to false-skip the 4406-row CSV. The script now counts only unflagged rows (`COUNT(*) WHERE NOT flagged`) and `TRUNCATE`s before `\copy` to clear any race-loss placeholders. Pairs with [adanalife/infra#467](https://github.com/adanalife/infra/pull/467). ([#513])
+
+### Internal
+
+- **`go-twitch-irc` v2 → v4.** Major version bump of the Twitch IRC client; import paths updated. ([#485])
+- **`urfave/negroni` v1 → v3.** Major version bump of the HTTP middleware library; import paths updated. ([#482])
+- **`cloud.google.com/go/logging` v1.4.2 → v1.18.0.** Brings the GCP logging client current; pulls in updated transitive `cloud.google.com/go`, `auth`, `oauth2adapt`, `compute/metadata`, `longrunning`, `s2a-go`, `gax-go/v2`. ([#484])
+
 ## [v2.6.1] — 2026-05-15
 
 Patch release. Adds an `obs_streaming_active` OTel gauge tracking live streaming state via WebSocket polling, extends chatbot test coverage to the `App` struct and `middleCmd`, and improves the startup failure message when no Twitch OAuth token is present.
