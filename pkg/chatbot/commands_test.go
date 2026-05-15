@@ -165,3 +165,33 @@ func TestKilometresCmd_ZeroMiles(t *testing.T) {
 		t.Errorf("expected zero km in output, got %q", out())
 	}
 }
+
+// --- versionCmd ---
+
+func TestVersionCmd_UsesCachedVersion(t *testing.T) {
+	currentVersion = "v1.2.3-test"
+	defer func() { currentVersion = "" }()
+
+	out, restore := captureSay(t)
+	defer restore()
+
+	versionCmd(newTestUser("viewer1"), nil)
+
+	if !strings.Contains(out(), "v1.2.3-test") {
+		t.Errorf("expected cached version in output, got %q", out())
+	}
+}
+
+func TestVersionCmd_MessageFormat(t *testing.T) {
+	currentVersion = "v1.2.3-test"
+	defer func() { currentVersion = "" }()
+
+	out, restore := captureSay(t)
+	defer restore()
+
+	versionCmd(newTestUser("viewer1"), nil)
+
+	if !strings.HasPrefix(out(), "Current version is ") {
+		t.Errorf("unexpected message format: %q", out())
+	}
+}
