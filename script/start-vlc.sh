@@ -1,15 +1,10 @@
 #!/usr/bin/env bash
 
-# this script is executed as part of the x11 startup process
+# Entrypoint for the vlc-server supervisord program. Runs the compiled
+# Go binary; libvlc handles playback headlessly (--vout dummy) and
+# streams RTSP for OBS to consume.
 
 set -x
-
-# check if X is running before starting
-if ! xset q &>/dev/null; then
-  echo "No X server at \$DISPLAY [$DISPLAY]" >&2
-  sleep 1
-  exit 1
-fi
 
 cleanup() {
   echo "Passing SIGTERM to vlc-server"
@@ -17,10 +12,6 @@ cleanup() {
 }
 
 trap cleanup SIGTERM
-
-# hack VLC so we can run it as root
-# c.p. https://unix.stackexchange.com/a/199422/202812
-sed -i 's/geteuid/getppid/' /usr/bin/vlc
 
 cd /opt/tripbot || exit 2
 
