@@ -5,6 +5,18 @@
 
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
+## [v2.6.4] — 2026-05-15
+
+Patch release. Makes the VLC and OBS containers do less. VLC ditches the local display + X server stack and now streams RTSP only by default; a new `VLC_OUTPUT` env var (`rtsp` | `window` | `both`) keeps the local-window mode available for developers compiling `vlc-server` directly. OBS disables the program preview pane — source rendering happens for the encoder regardless, so the in-app preview was an extra composite onto an Xvfb framebuffer no one watches.
+
+### VLC
+
+- **VLC container runs libvlc headless.** Drops the unused `dst=display` branch from the sout chain (OBS only consumes the RTSP listener) and removes `fluxbox`, `x11vnc`, `xvfb`, `x11-xserver-utils`, `xterm`, and the `vlc` GUI package from the Dockerfile. New `VLC_OUTPUT` env var (`rtsp` | `window` | `both`) lets a developer compile `vlc-server` and run it locally with a preview window. Default `VLC_VOUT` flips from `x11` to `dummy`. ([#516])
+
+### OBS
+
+- **Program preview disabled by default.** Flips `PreviewEnabled` in `user.ini` from `true` to `false`. Source rendering still happens for the stream output regardless; the preview was just an extra composite+blit onto the Xvfb framebuffer. VNC into `:5900` still works for inspecting the OBS UI when debugging. ([#517])
+
 ## [v2.6.3] — 2026-05-15
 
 Patch release. Fixes a `\copy` syntax bug in the seed-DB script introduced by #513 in v2.6.2 that caused the seed Job to error before truncating or importing.
@@ -483,3 +495,5 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#465]: https://github.com/adanalife/tripbot/pull/465
 [#466]: https://github.com/adanalife/tripbot/pull/466
 [#467]: https://github.com/adanalife/tripbot/pull/467
+[#516]: https://github.com/adanalife/tripbot/pull/516
+[#517]: https://github.com/adanalife/tripbot/pull/517
