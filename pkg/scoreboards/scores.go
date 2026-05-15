@@ -8,6 +8,7 @@ import (
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
+	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"gorm.io/gorm"
 )
 
@@ -60,7 +61,11 @@ func AddToScoreByName(username, scoreboardName string, scoreToAdd float32) error
 		return err
 	}
 	score.Value += scoreToAdd
-	return score.save()
+	if err := score.save(); err != nil {
+		return err
+	}
+	instrumentation.ScoreboardWrites.Inc(scoreboardName)
+	return nil
 }
 
 // findOrCreateScore will look up the username in the DB, and return a Score if possible
