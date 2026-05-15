@@ -5,7 +5,6 @@ import (
 	"os"
 
 	"github.com/adanalife/tripbot/pkg/config"
-	"github.com/davecgh/go-spew/spew"
 	"github.com/kelseyhightower/envconfig"
 )
 
@@ -26,8 +25,6 @@ func init() {
 	config.SetEnvironment()
 
 	Conf = LoadVlcServerConfig()
-
-	spew.Dump(Conf)
 
 	//TODO: consider using strings.ToLower() on channel name here and removing elsewhere
 
