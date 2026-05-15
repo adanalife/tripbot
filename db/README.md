@@ -21,13 +21,31 @@ You might need to add `?sslmode=disable` for local development servers.
 
 ## To run a migration
 
-Migrations are run using [go-migrate](https://github.com/golang-migrate/migrate).
+Migrations are run using [golang-migrate](https://github.com/golang-migrate/migrate). Install with `brew install golang-migrate` on macOS.
+
+Apply all pending migrations:
+
+`migrate -database <postgres://url> -source file://./db/migrate up`
+
+Apply a specific number of pending migrations:
 
 `migrate -database <postgres://url> -source file://./db/migrate up <migration_number>`
+
+Roll back the most recent migration:
+
+`migrate -database <postgres://url> -source file://./db/migrate down 1`
+
+Show the current schema version:
+
+`migrate -database <postgres://url> -source file://./db/migrate version`
 
 ## To create a new migration
 
 `migrate create -ext sql -seq -digits 3 -dir db/migrate <migration_name>`
+
+## Migrations of note
+
+- `010_create_oauth_tokens` — stores Twitch OAuth refresh + access tokens for the bot account. Populate via `task tripbot:auth:bootstrap` (one-time, local). The bot reads the row at boot and refreshes hourly.
 
 ## To take a backup
 

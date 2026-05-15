@@ -11,10 +11,21 @@ import (
 	"github.com/adanalife/tripbot/pkg/chatbot"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
+	"github.com/adanalife/tripbot/pkg/server/oauthstate"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/users"
-	"github.com/logrusorgru/aurora"
+	"github.com/logrusorgru/aurora/v3"
+	"github.com/nicklaw5/helix/v2"
 )
+
+// generateUserAccessToken is overridable in tests so the /auth/callback
+// happy path can be exercised without round-tripping to Twitch.
+var generateUserAccessToken = mytwitch.GenerateUserAccessToken
+
+// helixClient is overridable in tests so /auth/init's URL-construction can be
+// exercised without triggering mytwitch.Client()'s lazy network init (which
+// would request a real App Access Token from Twitch).
+var helixClient = mytwitch.Client
 
 // versionTag is set by main via SetVersion; overridden at build time
 // through `-ldflags "-X main.version=..."`.
@@ -137,39 +148,66 @@ func webhooksTwitchSubscriptionsEventsHandler(w http.ResponseWriter, r *http.Req
 	fmt.Fprintf(w, "OK")
 }
 
-// this endpoint returns private twitch access tokens
-func authTwitchHandler(w http.ResponseWriter, r *http.Request) {
-	secret, ok := r.URL.Query()["auth"]
-	if !ok || isInvalidSecret(secret[0]) {
-		http.Error(w, "404 not found", http.StatusNotFound)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	fmt.Fprint(w, twitchAuthJSON())
-}
-
-// oauth callback URL, requests come from Twitch and have a special code
-// we then use that code to generate a User Access Token
+// authCallbackHandler completes the OAuth Authorization Code flow. Validates
+// the CSRF state, exchanges the code for an access+refresh token via helix,
+// and persists the row (mytwitch.GenerateUserAccessToken handles the helix
+// call + Upsert).
 func authCallbackHandler(w http.ResponseWriter, r *http.Request) {
-	codes, ok := r.URL.Query()["code"]
-
-	if !ok || len(codes[0]) < 1 {
-		msg := "no code in response from twitch"
-		terrors.Log(errors.New("code missing"), msg)
-		//TODO: better error than StatusNotFound (404)
-		http.Error(w, msg, http.StatusNotFound)
+	state := r.URL.Query().Get("state")
+	if !oauthstate.Validate(state) {
+		http.Error(w, "invalid or expired state", http.StatusBadRequest)
 		return
 	}
-	code := string(codes[0])
+
+	code := r.URL.Query().Get("code")
+	if code == "" {
+		terrors.Log(errors.New("code missing"), "no code in response from twitch")
+		http.Error(w, "no code in response from twitch", http.StatusBadRequest)
+		return
+	}
+
+	if err := generateUserAccessToken(code); err != nil {
+		terrors.Log(err, "GenerateUserAccessToken failed")
+		http.Error(w, "failed to exchange code: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
 
 	log.Println(aurora.Cyan("successfully received token from twitch!"))
-	// use the code to generate an access token
-	mytwitch.GenerateUserAccessToken(code)
-
-	//TODO: return a pretty HTML page here (black background, logo, etc)
-	fmt.Fprintf(w, "Success!")
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	fmt.Fprint(w, authSuccessHTML)
 }
+
+// authInitHandler kicks off an OAuth Authorization Code flow from a browser.
+// Generates a state, redirects (302) to Twitch's authorize URL with the
+// configured Scopes. The cluster pod serves this for emergency re-bootstrap
+// when Dana isn't near a laptop; locally cmd/auth-bootstrap does its own
+// equivalent without going through the public Ingress.
+func authInitHandler(w http.ResponseWriter, r *http.Request) {
+	client, err := helixClient()
+	if err != nil {
+		terrors.Log(err, "helix client unavailable for /auth/init")
+		http.Error(w, "auth unavailable", http.StatusInternalServerError)
+		return
+	}
+	state := oauthstate.New()
+	authURL := client.GetAuthorizationURL(&helix.AuthorizationURLParams{
+		Scopes:       mytwitch.Scopes,
+		ResponseType: "code",
+		State:        state,
+	})
+	http.Redirect(w, r, authURL, http.StatusFound)
+}
+
+// authSuccessHTML is the body returned after a successful code exchange.
+// Inline so the handler doesn't depend on a template file; if this needs
+// styling beyond a few lines, move to an embed.FS template.
+const authSuccessHTML = `<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>tripbot — auth success</title>
+<style>body{background:#0a0a0a;color:#eee;font:14px/1.5 -apple-system,monospace;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}</style>
+</head>
+<body><div><h1>Success</h1><p>You may close this tab.</p></div></body>
+</html>`
 
 // return a favicon if anyone asks for one
 func faviconHandler(w http.ResponseWriter, r *http.Request) {

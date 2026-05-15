@@ -9,14 +9,12 @@ import (
 	mylog "github.com/adanalife/tripbot/pkg/chatbot/log"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
-	"github.com/adanalife/tripbot/pkg/helpers"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/gempir/go-twitch-irc/v2"
 	"github.com/kelvins/geocoder"
-	"github.com/logrusorgru/aurora"
-	"github.com/nicklaw5/helix"
+	"github.com/nicklaw5/helix/v2"
 )
 
 var googleMapsAPIKey string
@@ -39,25 +37,14 @@ func Initialize() *twitch.Client {
 	geocoder.ApiKey = c.Conf.GoogleMapsAPIKey
 
 	// initialize the twitch API client
-	myClient, err := mytwitch.Client()
+	_, err = mytwitch.Client()
 	if err != nil {
 		terrors.Fatal(err, "unable to create twitch API client")
 	}
 
-	if !c.Conf.DisableTwitchWebhooks {
-		//TODO: actually use the security features provided here
-		authURL := myClient.GetAuthorizationURL(&helix.AuthorizationURLParams{
-			//TODO: move to configs lib
-			//TODO: revisit that we need all of these
-			Scopes:       []string{"openid", "user:edit:broadcast", "channel:read:subscriptions"},
-			ResponseType: "code",
-		})
-		log.Println("if your browser doesn't open automatically:")
-		log.Println(aurora.Blue(authURL).Underline())
-		helpers.OpenInBrowser(authURL)
-	}
-
-	client = twitch.NewClient(c.Conf.BotUsername, mytwitch.AuthToken)
+	// The IRC token comes from the DB-backed oauth_tokens row populated by
+	// cmd/auth-bootstrap; cmd/tripbot calls mytwitch.LoadFromDB before this.
+	client = twitch.NewClient(c.Conf.BotUsername, mytwitch.IRCAuthToken())
 
 	// attach handlers
 	client.OnUserJoinMessage(UserJoin)

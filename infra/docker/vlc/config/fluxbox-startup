@@ -1,0 +1,10 @@
+#!/bin/sh
+
+#TODO: not 100% sure what this does
+# Change your keymap:
+xmodmap "/root/.Xmodmap"
+
+# set the resolution
+xrandr -s 1920x1200 -r 60
+
+exec fluxbox | logger -t fluxbox

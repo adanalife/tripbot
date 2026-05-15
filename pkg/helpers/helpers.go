@@ -20,7 +20,7 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/hako/durafmt"
 	"github.com/kelvins/geocoder"
-	"github.com/logrusorgru/aurora"
+	"github.com/logrusorgru/aurora/v3"
 	"github.com/nathan-osman/go-sunrise"
 	"github.com/skratchdot/open-golang/open"
 )
@@ -115,8 +115,8 @@ func ParseLatLng(ocrStr string) (float64, float64, error) {
 }
 
 // SplitOnRegex will is the equivalent of str.split(/regex/)
-func SplitOnRegex(text string, delimeter string) []string {
-	reg := regexp.MustCompile(delimeter)
+func SplitOnRegex(text string, delimiter string) []string {
+	reg := regexp.MustCompile(delimiter)
 	indexes := reg.FindAllStringIndex(text, -1)
 	laststart := 0
 	result := make([]string, len(indexes)+1)

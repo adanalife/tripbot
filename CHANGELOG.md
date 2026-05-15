@@ -5,6 +5,173 @@
 
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
+## [v2.5.0] — 2026-05-15
+
+Minor release. Enables the OBS WebSocket control plane and adds a `task obs:browser:refresh` command for programmatically refreshing browser sources without VNCing in. Deletes the legacy `/auth/twitch` token-vending HTTP endpoint. Adds `OBS_QUALITY_PRESET` for switching between stream quality profiles, and logs monthly mileage and guess score on user session logout.
+
+### OBS
+
+- **OBS WebSocket server enabled.** The obs-websocket plugin (built into OBS 32) is now seeded at container startup via `plugin_config/obs-websocket/config.json`, with authentication enabled (`OBS_WEBSOCKET_PASSWD`, consistent with `VNC_PASSWD` naming). Port 4455 is exposed in docker-compose and the k8s Service. Unblocks websocket-based healthchecks and streaming-active metrics. ([#491])
+- **`task obs:browser:refresh` added.** `bin/obs-browser-refresh` connects to the OBS WebSocket, enumerates all `browser_source` inputs, and calls `PressInputPropertiesButton(refreshnocache)` on each — the programmatic equivalent of right-clicking "Refresh cache of current page" in OBS. Run via `uv run --with obsws-python`; no local install required. ([#491])
+- **`OBS_QUALITY_PRESET` env var.** Set to `low` (720p30, 1500 kbps) for dev/staging or `high` (1080p60, 6000 kbps, default) for production. Entrypoint expands the preset into individual encoder params before envsubst. ([#489])
+
+### Users / Sessions
+
+- **Monthly miles and guess score logged on logout.** `users/session` now records each session's `monthly_miles` and `guess_score` to the DB on logout, surfacing per-session contribution data for leaderboards and analytics. ([#443])
+
+### Removed
+
+- **`/auth/twitch` token-vending HTTP endpoint removed.** The endpoint handed out short-lived Twitch tokens over HTTP — replaced by the k8s `auth-bootstrap` Job added in v2.4.3. ([#490])
+
+### Internal
+
+- **`aurora` import migrated from v2 to v3.** ([#486])
+
+## [v2.4.4] — 2026-05-14
+
+Patch release. Centers onscreen rotator text on its grey-box overlay with shrink-to-fit sizing, bakes VLC container configs into the image as discrete files, fixes a noisy `xdg-open` error in headless auth-bootstrap pods, bumps all directly-pinned Go modules to latest compatible versions, and fixes the `obs.yml` CI workflow to build the VLC container from source instead of pulling a stale Docker Hub image.
+
+### Onscreens
+
+- **Rotator text now centers on and fits within its grey-box overlay.** The left and right rotators were centering on the viewport midpoint, causing text to drift over the dashcam footage. `onscreenStyle` gains `AnchorXPx` / `FitWidthPx` / `MinFontSizePx` fields; when `FitWidthPx` is set, text anchors to the grey-box midpoint and shrinks 1px at a time (28→18px floor) until it fits the box width. Left rotator: anchor 282 / fit 564. Right rotator: anchor 456 / fit 369. ([#480])
+
+### VLC Container
+
+- **Static VLC container configs baked into the image.** The four config files (syslog, VNC, VLC supervisord conf, fluxbox startup) are now checked in under `infra/docker/vlc/config/` and `COPY`'d into the image, mirroring the OBS container's pattern. `script/container_startup.sh` slims down to a thin entrypoint. Configs are reviewable as discrete files instead of heredoc strings. ([#442])
+
+### Fixed
+
+- **`auth-bootstrap` no longer errors on `xdg-open` in headless pods.** `OpenInBrowser` is skipped when neither `DISPLAY` nor `WAYLAND_DISPLAY` is set on Linux. The OAuth URL is still printed to stdout so the `task tripbot:auth:bootstrap` port-forward flow works correctly. ([#479])
+
+### CI
+
+- **`obs.yml` now builds the VLC container from source before starting it.** Previously the workflow pulled `adanalife/vlc:latest` from Docker Hub directly. After #442 baked supervisord configs into the image (removing the runtime heredoc writes from `container_startup.sh`), the stale Docker Hub image had no conf.d configs and the thin startup script didn't write them — supervisord launched with no programs, so VLC server never came up. Fix mirrors the OBS build pattern (buildx + GHA cache for amd64, `docker compose build` for arm64). Also adds `infra/docker/vlc/**` and `script/container_startup.sh` to the PR paths trigger so VLC changes fire this workflow on future PRs. ([#487])
+
+### Dependencies
+
+- **Go module bumps (all directly-pinned, API-compatible).** `adrg/libvlc-go/v3` → v3.1.6, `gorilla/mux` → v1.8.1, `jmoiron/sqlx` → v1.4.0, `joho/godotenv` → v1.5.1, `lib/pq` → v1.12.3, `googlemaps/maps` → v1.7.0, `nathan-osman/go-sunrise` → v1.1.0, `sfreiberg/gotwilio` → v1.0.0, `slok/go-http-metrics` → v0.13.0, `unrolled/secure` → v1.17.0. Notable side-effect: deprecated `dgrijalva/jwt-go` replaced by `golang-jwt/jwt` via the gotwilio bump. ([#481])
+
+## [v2.4.3] — 2026-05-13
+
+Patch release. Fixes a long-running IRC disconnect bug where the Twitch connection would fail to re-authenticate after the first token rotation, and adds the `auth-bootstrap` binary to the tripbot image for use by the new k8s bootstrap Job.
+
+### Fixed
+
+- **IRC reconnects no longer fail after the first OAuth token rotation.** `go-twitch-irc` stores the token passed to `NewClient` at construction and replays it on every reconnect. The hourly refresh cron kept tokens fresh in memory and in Postgres, but never updated the IRC client — so any connection drop after the first rotation (~4h post-boot) caused a permanent `login authentication failed` loop. Fix: call `client.SetIRCToken` after each successful refresh (proactive) and on `ErrLoginAuthenticationFailed` in the reconnect loop (recovery).
+
+### Build
+
+- **`auth-bootstrap` binary baked into the tripbot image.** Enables the `task tripbot:auth:bootstrap` k8s Job (infra#450) to run the interactive Twitch OAuth bootstrap in-cluster with direct Postgres access, eliminating the need for a separate DB port-forward.
+
+## [v2.4.2] — 2026-05-12
+
+Patch release. Fixes the k8s seed Job failing with `E: Unable to locate package postgresql-client` by adding `apt-get update` before the install in `seed-db.sh`.
+
+### Build
+
+- **`apt-get update` before `postgresql-client` install in `seed-db.sh`.** The prior release removed the original `apt update` alongside the full `postgresql` package but forgot to keep it for the leaner `postgresql-client` install, causing the seed Job to fail on a stale package index.
+
+## [v2.4.1] — 2026-05-12
+
+Patch release. Prepares the tripbot image for the k8s one-shot DB seed Job: bakes `db/seed/` and `seed-db.sh` into the image, installs `postgresql-client` on-demand at seed time (rather than in the base image), and un-excludes `infra/docker/bin` from `.dockerignore` so the `COPY` in the Dockerfile resolves correctly in CI.
+
+### Build
+
+- **Bake seed data + script into the tripbot image.** `COPY db/seed /seed` and `COPY infra/docker/bin/seed-db.sh /usr/local/bin/seed-db` added to the Dockerfile so the k8s seed Job is self-contained without a volume mount. The companion infra PR wires up the Job and `task tripbot:db:seed`. ([#473])
+- **Install `postgresql-client` on-demand in `seed-db.sh`.** Keeps the base image lean — `psql` is only needed for the one-time seed Job, so the script installs `postgresql-client --no-install-recommends` at runtime rather than baking it into every container. ([#473])
+- **Un-exclude `infra/docker/bin` from `.dockerignore`.** The ignore file excluded all of `infra/` except `infra/docker/obs`; `infra/docker/bin/seed-db.sh` was invisible to the build context and caused a CI build failure. ([#473])
+
+## [v2.4.0] — 2026-05-12
+
+Minor release. Migrates chatters and follower lookups off deprecated Twitch endpoints onto Helix v2, upgrades the `nicklaw5/helix` dependency from v1 to v2, removes the broken stream-tags shell-script cron (Twitch removed the automated tags API in 2023), pre-bakes Intel VAAPI support into the amd64 OBS image for the incoming mini-PC host, and kills unnecessary LFS fetches in CI that were burning through the 10 GB/mo bandwidth quota.
+
+### Twitch / Authentication
+
+- **Migrate chatters from deprecated TMI endpoint to Helix `GetChannelChatChatters`.** `tmi.twitch.tv/group/user/.../chatters` was the source of the noisiest Sentry errors (2,000+ JSON parse events + 192 timeout events) — the endpoint is defunct and returned garbage or timed out on every call. `pkg/twitch/viewers.go` is now a thin wrapper around `helix.GetChannelChatChatters`; the old raw HTTP client + bespoke JSON struct are gone. `BotID` is lazy-initialized alongside `ChannelID` and used as the `moderator_id`. Two new scopes added to the bot's OAuth token: `moderator:read:chatters` + `moderator:read:followers`. Re-auth bootstrap required on first deploy. ([#471])
+- **Migrate follower check from deprecated `GetUsersFollows` to `GetChannelFollows`.** `UserIsFollower` in `twitch.go` called `GetUsersFollows` (removed from the Helix API); replaced with `GetChannelFollows` (`/channels/followers`, scoped by `BroadcasterID` + `UserID`). ([#471])
+- **Upgrade `nicklaw5/helix` v1.24.4 → `helix/v2` v2.34.0.** Import path change (`helix` → `helix/v2`) across six files. All existing calls (`GetUsers`, `GetSubscriptions`, `NewClient`, `RequestAppAccessToken`, etc.) have identical signatures in v2. ([#471])
+- **Remove stream tags cron + `SetStreamTags` + `bin/set-tags.sh`.** Twitch decommissioned the automated stream tags API on 2023-07-13 in favour of free-form broadcaster-set tags. The 12h cron that shelled out to `set-tags.sh` was causing Sentry errors (`set-tags.sh: no such file or directory`) and doing nothing useful. All three artefacts deleted. ([#471])
+
+### OBS
+
+- **Intel VAAPI driver + `vainfo` added to the amd64 OBS image.** Installs `intel-media-va-driver-non-free` (iHD driver for Gen 11+ iGPUs, Iris Xe / UHD 770) and `vainfo` in preparation for moving OBS to a 12th-gen mini-PC where QuickSync H.264/H.265 encode dramatically reduces CPU vs. software x264. `obs.yml` adds a smoke-test step that runs `vainfo --display drm` in CI to confirm the package set installs cleanly (GHA runners are virtualized and have no real iGPU; `vaInitialize` is expected to fail). arm64 image unchanged. Runtime hookup (device passthrough in the pod spec, encoder flip in OBS scene config) lands in infra when the hardware arrives. ([#469])
+
+### CI
+
+- **Stop pulling Git LFS in CI workflows.** Two workflows were fetching LFS objects unnecessarily: `release.yml` pulled ~432 MB of MP4 per tag on both arches even though `.dockerignore` excludes `assets/video` from the build context; `tripbot.yml` fetched LFS on every PR/push despite the smoke test never touching the dashcam path. Removing both cuts LFS bandwidth usage from ~90% of the 10 GB/mo quota to near zero. Runtime video continues to arrive via the k3d hostpath mount (`infra/k8s/apps/vlc-server/overlays/local/dashcam-hostpath.yaml`). `.gitattributes` `*.MP4` filter-lfs guard preserved for future commits. ([#468])
+
+## [v2.3.2] — 2026-05-11
+
+Patch release. Pre-bakes the OBS arm64 CEF compile into a base image (skipping ~25 min off every OBS PR), fixes four workflow triggers that pointed at a non-existent `main` branch (restoring Coveralls base-build uploads on `develop` and adding `pull_request` scanning to CodeQL), normalizes the OBS scene's seven `browser_source` on-screens to a clean thirds layout (fixes longstanding middle-text clipping), plus a small CI/env hygiene sweep.
+
+### CI
+
+- **OBS arm64 base image (`adanalife/obs-cef-base:arm64-*`).** New `infra/docker/obs/Dockerfile.arm64-base` compiles OBS-from-source against the aarch64 CEF tarball and ships a slim image carrying just `/opt/obs-install/`. New `obs-base.yml` workflow builds and pushes the base on demand. `infra/docker/obs/Dockerfile.arm64` now `FROM`s the base, so the arm64 leg of `obs.yml` drops from ~30 min to ~2 min. Bumping OBS/CEF becomes: edit the base Dockerfile's ARG defaults, push, then bump the `FROM` tag. ([#461])
+- **Workflow `push` triggers fixed: `main` → `develop` + `master`.** Testing, super-linter, linting, and CodeQL all listed `main` in their push trigger, but the repo uses `develop` → `master` — so push events on the integration branches never fired these workflows. The visible win: Coveralls now receives a base build on `develop` and PR comments stop reporting "No base build found for commit X on develop." CodeQL additionally gains a `pull_request:` trigger so PRs are scanned (previously only the weekly Thursday cron caught anything). ([#462])
+- **`misspell` → `codespell` via super-linter.** Drops the standalone reviewdog `misspell` job from `linting.yml` in favor of super-linter's `SPELL_CODESPELL`; unblocks the v2.3.2 release whose misspell check was failing on pre-existing British "kilometres" usages. New `.codespellrc` ignore list keeps the intentional chat-command typo aliases (`commads`, `quess`, `loacation`, `lcoation`) plus a few project-specific words (`caf`, `nd`, `abitrate`). Bundled with ~20 small typo fixes across 14 files — mostly missing apostrophes in code comments (`can't` / `won't` / `doesn't`), plus a `delimiter` spelling fix in `pkg/helpers/helpers.go` with the in-package caller updated. ([#466])
+- **Action-version hygiene sweep.** Floats `reviewdog/action-golangci-lint` `v2.0.3` → `v2` (revive job; the errcheck job in the same file already used the floating major) and `super-linter/super-linter` `v8.6.0` → `v8`. Other workflow pins were checked against latest stable and are already current. No-op today; future v2.x / v8.x releases now flow in automatically. ([#436])
+
+### OBS
+
+- **Browser-source on-screens normalized to thirds layout.** Geometry pass on the seven `browser_source` on-screens in `infra/docker/obs/config/Tripbot.json.tmpl`. Left rotator, middle-text, and right rotator each take one 640×47 third of the 1920×1080 canvas in the same y-band as the baked grey overlay boxes (`y=1033..1079`). Leaderboard normalized to 400×400 at (1500, 60). Timewarp banner to 1200×200 at (360, 440). `MIDDLE` group container flattened from a pathological 23×67 internal canvas (item scale 3.72 / group scale 0.488) to a flat 1920×1080, matching `LEFT CORNER` / `RIGHT CORNER`. All affected sources now follow the convention **viewport == on-canvas footprint, scale = 1.0, bounds_type = 0** — removes the implicit "effective size = source × scale" math. Fixes the longstanding bug where middle-text clipped 8 px below the canvas bottom edge. Step 1 of 2; per-onscreen CSS styling (inner `<div>` widths matching the underlying grey-box dimensions, padding, drop-shadows, fade transitions) is queued as a follow-up. ([#467])
+
+### Cleanup
+
+- **Drop unused `TWITCH_AUTH_TOKEN` from env files.** v2.3.0 moved the IRC token from a static env var to a DB-backed OAuth refresh flow; the var is no longer read anywhere in the Go source. Removed from `.env.example`, `.env.development.example`, `.env.testing`, and `infra/docker/env.docker`. Surrounding comments tightened to clarify the new local-vs-cluster split for `TWITCH_CLIENT_ID` / `TWITCH_CLIENT_SECRET` (local dev populates them for `task auth:bootstrap`; cluster pulls from ESO + SM `k8s/tripbot/twitch-creds`). Pairs with [adanalife/infra#438](https://github.com/adanalife/infra/pull/438). ([#465])
+
+## [v2.3.1] — 2026-05-11
+
+Patch release. Tooling-only — bundles the `migrate` CLI and `db/migrate/*.sql` into the runtime image so a cluster k8s Job can run schema migrations without a sibling image. No behavior change at runtime.
+
+### Docker
+
+- **Bundle `migrate/migrate:4` binary + `db/migrate/*.sql` into the tripbot image.** The local-k3d stage-1 cluster has never run schema migrations — the original 2026-05-03 cluster work explicitly noted *"nothing in the cluster is durable yet."* Pre-v2.3.0 tripbot tolerated missing schema (logged at INFO and ran degraded); v2.3.0's `LoadFromDB` boot check makes that an exit-1, so a cluster migration step is now load-bearing. Bundling rather than shipping a sibling `tripbot-migrations` image keeps schema-code version skew impossible by construction (same git SHA → same image), avoids new CI surface, and adds ~10MB binary + 20KB SQL to the runtime image (rounding error). Follow-up infra PR wires a k8s Job using `adanalife/tripbot:v2.3.1`. ([#458])
+
+## [v2.3.0] — 2026-05-10
+
+Minor release. Replaces the static `TWITCH_AUTH_TOKEN` env var (sourced from a third-party token generator) with a self-owned OAuth Authorization Code flow against tripbot's own Twitch dev app. The bot's IRC refresh token now lives in Postgres and rotates hourly via a `pg_try_advisory_lock`-fenced cron job; one-time bootstrap via a new `cmd/auth-bootstrap` CLI. Plus two CI trigger-path filters.
+
+### Authentication
+
+- **`oauth_tokens` table + `pkg/oauthtokens` storage package.** Migration `010_create_oauth_tokens` introduces the table (keyed by `(provider, username)`, stores refresh + access tokens, scopes, expiry, fail counter). The Go-side package wraps it with sqlx queries plus `pg_try_advisory_lock`-backed `TryRefreshLock` so a local-dev tripbot and a cluster pod sharing the same Twitch account can't both rotate the refresh token simultaneously. The lock-id is SHA-256-hashed for a wider key space than `hashtext()`'s 32 bits. ([#452], [#454])
+- **`pkg/twitch/authentication.go` rewired off the static env-var token.** `TWITCH_AUTH_TOKEN` env var is no longer required. New `LoadFromDB()` reads the bot's row at boot; missing row → `log.Fatal` with hint pointing at the bootstrap CLI. `IRCAuthToken()` accessor replaces the dropped `AuthToken` global. `RefreshUserAccessToken` uses helix to mint a rotated pair and writes both back to the table; on terminal failure (revoked refresh token) it blanks in-memory state + sends SMS so the bot crashes loudly. Scopes consolidated to a `Scopes` package var (drops `openid`, adds `chat:read` + `chat:edit`). The pre-existing browser-opening block in `chatbot.go` is deleted — `cmd/auth-bootstrap` owns that flow now. ([#455])
+- **`/auth/callback` hardened with CSRF state validation + HTML success page.** New `pkg/server/oauthstate` (5-minute TTL, single-use, crypto/rand) generates state at the redirect-initiating side and the callback handler validates it. New `/auth/init` route generates state + 302s to Twitch — provides a cloud-based emergency re-bootstrap path when no laptop is handy. ([#455])
+- **New `cmd/auth-bootstrap` CLI + `task auth:bootstrap`.** One-time interactive bootstrap; signs in to Twitch on Dana's laptop, exchanges the code for tokens, derives the username from `helix.GetUsers` (so the row is account-agnostic — bootstrapping the broadcaster account later works identically without an env-var dance), Upserts to the cluster DB via port-forward. After this, all pod restarts and cluster rebuilds are headless. ([#455])
+- **`pkg/config` layers `infra/docker/env.docker` after `.env.<env>` for host-side runs.** `docker-compose` does this via `--env-file` inside containers, but host-side binaries (the new bootstrap CLI, host-side cmd/tripbot) previously missed it and failed envconfig for vars that only live in the docker env file (e.g. `TRIPBOT_HTTP_AUTH`). Silent no-op in cluster pods (file not in the image). ([#455])
+
+### CI
+
+- **`obs.yml` PR trigger filtered to OBS-impacting paths.** Skips wasted runs on docs-only / unrelated PRs. The push trigger (develop / `v*` tags) stays unfiltered intentionally — `release.yml` owns the actual release builds and the develop-push smoke test stays useful as a build-soundness check. ([#448])
+- **`vlc.yml` push trigger filtered to VLC-impacting paths.** Pairs with [#390](https://github.com/adanalife/tripbot/pull/390)'s PR-side filter; brings develop-push + release-tag pushes in line. ([#447])
+
+## [v2.2.6] — 2026-05-10
+
+Patch release. One small UX addition and one CI hygiene step.
+
+### Chatbot
+
+- **Accept `¡` (U+00A1) as an alternate command prefix.** Spanish-keyboard users can run commands like `¡miles` or `¡location` without switching layouts. A new `normalizeCommandPrefix` helper rewrites a leading `¡` to `!` at the entrance of `runCommand`; the existing `!` path is untouched. Rune-aware (`strings.HasPrefix`/`TrimPrefix`) because `¡` is two bytes in UTF-8 and byte-indexing would mangle it. ([#453])
+
+### CI
+
+- **Super-linter: re-enable `VALIDATE_GITHUB_ACTIONS` (actionlint).** Fixes 4 SC2086 quoting nits in `.github/workflows/vlc.yml` (`$VLC_PORT`, `$GITHUB_ENV`) in a separate prep commit. `VALIDATE_GO_MODULES` was also attempted but reverted — the underlying `golangci-lint` analyzer compiles the module and trips on `vlc/vlc.h: No such file or directory` (same root cause as `VALIDATE_GO` being disabled). The PR body documents the remaining disabled validators with rationale for each, so future re-enables have a starting point. ([#449])
+
+## [v2.2.5] — 2026-05-10
+
+Patch release. One observability gate broaden completing the staging-Sentry pipeline started in v2.2.4, plus a CI improvement and a vlc-server config refactor.
+
+### Observability
+
+- **`pkg/chatbot/log` skips Stackdriver chat logging on staging too.** Both gates (`init()` at `:18` and `ChatMsg()` at `:40`) now early-return on `IsTesting() || IsDevelopment() || IsStaging()`. Pairs with the [adanalife/infra#427](https://github.com/adanalife/infra/pull/427) overlay flip — without this, `ENV=staging` would activate `logging.NewClient` against an empty `GOOGLE_APPLICATION_CREDENTIALS` and `log.Fatalf` at init. Mirrors v2.2.4's launch-plan framing: staging counts for what we explicitly opt in (Sentry), dev-like for everything else. ([#435])
+
+### CI
+
+- **Race detector + coveralls.io coverage publishing.** `testing.yml` now runs `go test -v -race -covermode=atomic -coverprofile=coverage.out ./...` and publishes via `jandelgado/gcov2lcov-action` + `coverallsapp/github-action`. Salvaged from closed PR [#126](https://github.com/adanalife/tripbot/pull/126); pairs with the in-progress unit-testing improvements tracked in `vault/tripbot/TODO.md`. ([#438])
+
+### Cleanup
+
+- **vlc-server tuning flags now optional env vars.** `VLC_FILE_CACHING`, `VLC_AVCODEC_HW`, `VLC_VOUT`, `VLC_CANVAS_WIDTH`, `VLC_CANVAS_HEIGHT` move from hardcoded values to env-var overrides; all default to today's values, so this is a pure refactor. Resolves the `//TODO: break some of these into ENV vars` comment in `pkg/vlc-server/vlc.go`. ([#445])
+
 ## [v2.2.4] — 2026-05-09
 
 Patch release. Sentry SDK gets a long-overdue bump and the error-reporting gate broadens to fire from staging too — pairs with infra-side ESO wiring that delivers per-app DSNs into stage-1. Plus one Dockerfile cleanup.
@@ -237,3 +404,20 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#431]: https://github.com/adanalife/tripbot/pull/431
 [#432]: https://github.com/adanalife/tripbot/pull/432
 [#433]: https://github.com/adanalife/tripbot/pull/433
+[#435]: https://github.com/adanalife/tripbot/pull/435
+[#438]: https://github.com/adanalife/tripbot/pull/438
+[#445]: https://github.com/adanalife/tripbot/pull/445
+[#449]: https://github.com/adanalife/tripbot/pull/449
+[#453]: https://github.com/adanalife/tripbot/pull/453
+[#447]: https://github.com/adanalife/tripbot/pull/447
+[#448]: https://github.com/adanalife/tripbot/pull/448
+[#452]: https://github.com/adanalife/tripbot/pull/452
+[#454]: https://github.com/adanalife/tripbot/pull/454
+[#455]: https://github.com/adanalife/tripbot/pull/455
+[#458]: https://github.com/adanalife/tripbot/pull/458
+[#461]: https://github.com/adanalife/tripbot/pull/461
+[#462]: https://github.com/adanalife/tripbot/pull/462
+[#436]: https://github.com/adanalife/tripbot/pull/436
+[#465]: https://github.com/adanalife/tripbot/pull/465
+[#466]: https://github.com/adanalife/tripbot/pull/466
+[#467]: https://github.com/adanalife/tripbot/pull/467

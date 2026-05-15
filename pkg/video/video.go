@@ -12,7 +12,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/helpers"
 	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
 	vlcClient "github.com/adanalife/tripbot/pkg/vlc-client"
-	"github.com/logrusorgru/aurora"
+	"github.com/logrusorgru/aurora/v3"
 )
 
 // CurrentlyPlaying is the video that is currently playing
@@ -31,7 +31,7 @@ func GetCurrentlyPlaying() {
 	// save the video we used last time
 	preVid = curVid
 
-	// figure out whats currently playing
+	// figure out what's currently playing
 	if helpers.RunningOnDarwin() {
 		curVid = figureOutCurrentVideo()
 	} else {

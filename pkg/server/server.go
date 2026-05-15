@@ -58,7 +58,7 @@ func Start(ctx context.Context) {
 
 	// auth endpoints
 	auth := r.PathPrefix("/auth").Methods("GET").Subrouter()
-	auth.Handle("/twitch", tagged("/auth/twitch", authTwitchHandler))
+	auth.Handle("/init", tagged("/auth/init", authInitHandler))
 	auth.Handle("/callback", tagged("/auth/callback", authCallbackHandler))
 
 	// static assets
@@ -132,12 +132,6 @@ func Start(ctx context.Context) {
 			terrors.Log(err, "error during web server shutdown")
 		}
 	}
-}
-
-// isInvalidSecret returns true if the given secret is empty or doesn't match
-// the configured one.
-func isInvalidSecret(secret string) bool {
-	return len(secret) < 1 || secret != c.Conf.TripbotHttpAuth
 }
 
 // tagged wraps a HandlerFunc so the http.route attribute is set on metrics

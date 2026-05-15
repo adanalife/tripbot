@@ -16,9 +16,9 @@ tasks:
       - ENV=testing bin/devenv run --rm test go test ./...
 
   test:cover:
-    desc: Run tests with coverage; prints per-function and total coverage
+    desc: Run tests with coverage + race detector; prints per-function and total coverage
     cmds:
-      - ENV=testing bin/devenv run --rm test bash -c 'go test -coverprofile=coverage.out ./... && go tool cover -func=coverage.out'
+      - ENV=testing bin/devenv run --rm test bash -c 'go test -v -race -covermode=atomic -coverprofile=coverage.out ./... && go tool cover -func=coverage.out'
 
   test:cover:html:
     desc: Generate HTML coverage report at coverage.html
@@ -36,6 +36,26 @@ tasks:
     interactive: true
     cmds:
       - ENV=testing bin/devenv run --rm test bash
+
+  auth:bootstrap:
+    desc: One-time Twitch OAuth bootstrap; writes refresh token to oauth_tokens. Run on host (needs a browser); bring up Postgres first (`bin/devenv up -d db migrate` locally, or `task tripbot:db:up` in infra for cluster DB).
+    env:
+      # Local-bootstrap defaults. Override at the shell to point elsewhere.
+      ENV: '{{.ENV | default "development"}}'
+      DATABASE_HOST: '{{.DATABASE_HOST | default "localhost"}}'
+      EXTERNAL_URL: '{{.EXTERNAL_URL | default "http://localhost:8080"}}'
+    cmds:
+      # Pull Twitch app credentials from SM so they never live in env.docker.
+      # `mise exec --` activates the pinned Go toolchain in task's
+      # non-interactive subshell (where ~/.zshrc isn't sourced).
+      - |
+        secret=$(aws-vault exec adanalife-stage -- \
+          aws secretsmanager get-secret-value \
+          --secret-id k8s/tripbot/twitch-creds \
+          --query SecretString --output text)
+        export TWITCH_CLIENT_ID=$(echo "$secret" | jq -r .TWITCH_CLIENT_ID)
+        export TWITCH_CLIENT_SECRET=$(echo "$secret" | jq -r .TWITCH_CLIENT_SECRET)
+        mise exec -- go run ./cmd/auth-bootstrap
 
   # Release smoke flow — see vault/tripbot/release-checklist.md.
   # Targets the local k3d cluster running the stage-1 overlay
@@ -80,3 +100,10 @@ tasks:
     desc: Alias for release:smoke:stage-1
     cmds:
       - task: release:smoke:stage-1
+
+  obs:browser:refresh:
+    desc: Refresh all OBS browser sources via websocket (docker-compose; OBS must be running)
+    env:
+      OBS_WEBSOCKET_PASSWD: '{{.OBS_WEBSOCKET_PASSWD | default "adanalife"}}'
+    cmds:
+      - uv run --with obsws-python bin/obs-browser-refresh

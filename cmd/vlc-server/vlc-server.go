@@ -18,7 +18,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/telemetry"
 	vlcServer "github.com/adanalife/tripbot/pkg/vlc-server"
 	"github.com/getsentry/sentry-go"
-	"github.com/logrusorgru/aurora"
+	"github.com/logrusorgru/aurora/v3"
 )
 
 // version is overridable at build time via -ldflags "-X main.version=...".
@@ -112,7 +112,7 @@ func gracefulShutdown() {
 	<-ctrlC
 
 	log.Println(aurora.Red("caught CTRL-C"))
-	// anything below this probably wont be executed
+	// anything below this probably won't be executed
 	vlcServer.Shutdown()
 	//TODO: stop cron here
 	sentry.Flush(time.Second * 5)

@@ -7,7 +7,7 @@ import (
 
 	"github.com/adanalife/tripbot/pkg/config"
 	"github.com/getsentry/sentry-go"
-	"github.com/logrusorgru/aurora"
+	"github.com/logrusorgru/aurora/v3"
 )
 
 var conf config.Config

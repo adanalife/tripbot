@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"math/rand"
@@ -25,7 +26,7 @@ import (
 	_ "github.com/dimiro1/banner/autoload"
 	"github.com/gempir/go-twitch-irc/v2"
 	"github.com/getsentry/sentry-go"
-	"github.com/logrusorgru/aurora"
+	"github.com/logrusorgru/aurora/v3"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -71,6 +72,7 @@ func main() {
 	findInitialVideo()
 	users.InitLeaderboard()
 	startCron()
+	loadTwitchToken()   // must precede chatbot.Initialize — provides the IRC token
 	setUpTwitchClient() // required for the below
 	updateSubscribers()
 	getCurrentUsers()
@@ -118,7 +120,7 @@ func startHttpServer(ctx context.Context) {
 	go server.Start(ctx)
 }
 
-// findInitialVideo will determin the vido that is currently-playing
+// findInitialVideo will determine the vido that is currently-playing
 // we want to run this early, otherwise it will be unset until the first cron job runs
 func findInitialVideo() {
 	video.GetCurrentlyPlaying()
@@ -134,6 +136,18 @@ func startCron() {
 	// start cron and attach cronjobs
 	background.StartCron()
 	scheduleBackgroundJobs()
+}
+
+// loadTwitchToken pulls the bot's OAuth row from the oauth_tokens table.
+// Refuses to start if the row is missing — pointing at the bootstrap CLI
+// is louder than running IRC-less.
+func loadTwitchToken() {
+	if err := mytwitch.LoadFromDB(); err != nil {
+		if errors.Is(err, mytwitch.ErrNoToken) {
+			log.Fatalf("no oauth_tokens row for %q — run `task tripbot:auth:bootstrap` against the cluster DB (port-forward via `task tripbot:db:up` in infra)", c.Conf.BotUsername)
+		}
+		terrors.Fatal(err, "failed to load Twitch token from DB")
+	}
 }
 
 // setUpTwitchClient sets up the Twitch client,
@@ -175,6 +189,14 @@ func connectToTwitch() {
 		err := client.Connect()
 		if err != nil {
 			terrors.Log(err, "unable to connect to twitch")
+			if errors.Is(err, twitch.ErrLoginAuthenticationFailed) {
+				// The IRC client holds a stale token. Sync it with the
+				// in-memory token (kept fresh by the hourly refresh cron)
+				// so the next Connect attempt uses the current credentials.
+				if tok := mytwitch.IRCAuthToken(); tok != "" {
+					client.SetIRCToken(tok)
+				}
+			}
 			time.Sleep(time.Minute)
 		}
 	}
@@ -189,7 +211,7 @@ func gracefulShutdown() {
 	<-ctrlC
 
 	log.Println(aurora.Red("caught CTRL-C"))
-	// anything below this probably wont be executed
+	// anything below this probably won't be executed
 	// try and use !shutdown instead
 	//TODO: print different message if CurrentlyPlaying is ""
 	log.Printf("Last played video: %s", aurora.Yellow(video.CurrentlyPlaying.File()))
@@ -223,13 +245,17 @@ func scheduleBackgroundJobs() {
 	err = background.Cron.AddFunc("@every 5m", tracedJob("onscreens.ShowGuessLeaderboard", onscreensClient.ShowGuessLeaderboard))
 	err = background.Cron.AddFunc("@every 5m", tracedJob("users.PrintCurrentSession", users.PrintCurrentSession))
 	err = background.Cron.AddFunc("@every 5m", tracedJob("twitch.GetSubscribers", mytwitch.GetSubscribers))
-	err = background.Cron.AddFunc("@every 1h", tracedJob("twitch.RefreshUserAccessToken", mytwitch.RefreshUserAccessToken))
+	err = background.Cron.AddFunc("@every 1h", tracedJob("twitch.RefreshUserAccessToken", func() {
+		mytwitch.RefreshUserAccessToken()
+		// Keep the IRC client's stored token in sync with the rotated credentials.
+		// go-twitch-irc captures the token at construction; without this, any
+		// reconnect after the first rotation replays the original boot-time token.
+		if tok := mytwitch.IRCAuthToken(); tok != "" {
+			client.SetIRCToken(tok)
+		}
+	}))
 	err = background.Cron.AddFunc("@every 2h57m30s", tracedJob("chatbot.Chatter", chatbot.Chatter))
 	err = background.Cron.AddFunc("@every 12h", tracedJob("twitch.UpdateWebhookSubscriptions", mytwitch.UpdateWebhookSubscriptions))
-	if !helpers.RunningOnWindows() {
-		err = background.Cron.AddFunc("@every 12h", tracedJob("twitch.SetStreamTags", mytwitch.SetStreamTags))
-	}
-
 	if err != nil {
 		terrors.Log(err, "error adding at least one background job!")
 	}

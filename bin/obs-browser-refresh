@@ -1,0 +1,44 @@
+#!/usr/bin/env python3
+# pylint: disable=invalid-name
+"""Refresh all OBS browser sources via obs-websocket.
+
+Usage: OBS_WEBSOCKET_HOST=localhost OBS_WEBSOCKET_PORT=4455 ./bin/obs-browser-refresh
+"""
+
+import os
+import sys
+
+try:
+    import obsws_python as obs
+except ImportError:
+    print(
+        "obsws-python not found — run via: uv run --with obsws-python bin/obs-browser-refresh",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+host = os.environ.get("OBS_WEBSOCKET_HOST", "localhost")
+port = int(os.environ.get("OBS_WEBSOCKET_PORT", "4455"))
+password = os.environ.get("OBS_WEBSOCKET_PASSWD", "")
+
+try:
+    with obs.ReqClient(host=host, port=port, password=password, timeout=10) as client:
+        result = client.get_input_list()
+        sources = [i for i in result.inputs if i["inputKind"] == "browser_source"]
+        if not sources:
+            print("No browser sources found in OBS.")
+            sys.exit(0)
+        for source in sources:
+            name = source["inputName"]
+            client.press_input_properties_button(name, "refreshnocache")
+            print(f"Refreshed: {name}")
+        print(f"Done — refreshed {len(sources)} browser source(s).")
+except ConnectionRefusedError:
+    print(
+        f"Could not connect to OBS WebSocket at {host}:{port} — is OBS running?",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+except Exception as e:  # pylint: disable=broad-except
+    print(f"Error: {e}", file=sys.stderr)
+    sys.exit(1)

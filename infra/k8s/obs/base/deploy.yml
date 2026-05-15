@@ -87,11 +87,6 @@ spec:
              secretKeyRef:
                name: tripbot-secrets
                key: SENTRY_DSN
-         - name: TRIPBOT_HTTP_AUTH
-           valueFrom:
-             secretKeyRef:
-               name: tripbot-secrets
-               key: TRIPBOT_HTTP_AUTH
          - name: TWILIO_AUTH_TOKEN
            valueFrom:
              secretKeyRef:
@@ -115,7 +110,7 @@ spec:
         ports:
         - containerPort: 80
         volumeMounts:
-        - mountPath: /etc/nginx # mount nginx-conf volumn to /etc/nginx
+        - mountPath: /etc/nginx # mount nginx-conf volume to /etc/nginx
           readOnly: true
           name: nginx-conf
         - mountPath: /var/log/nginx
