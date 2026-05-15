@@ -31,6 +31,7 @@ require (
 	github.com/skratchdot/open-golang v0.0.0-20200116055534-eef842397966
 	github.com/slok/go-http-metrics v0.13.0
 	github.com/unrolled/secure v1.17.0
+	github.com/uptrace/opentelemetry-go-extra/otelgorm v0.3.2
 	github.com/urfave/negroni v1.0.0
 	go.opentelemetry.io/contrib/bridges/otelslog v0.18.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.68.0
@@ -47,6 +48,8 @@ require (
 	go.opentelemetry.io/otel/sdk/metric v1.43.0
 	go.opentelemetry.io/otel/trace v1.43.0
 	googlemaps.github.io/maps v1.7.0
+	gorm.io/driver/postgres v1.6.0
+	gorm.io/gorm v1.31.1
 )
 
 require (
@@ -82,7 +85,6 @@ require (
 	github.com/prometheus/common v0.67.5 // indirect
 	github.com/prometheus/otlptranslator v1.0.0 // indirect
 	github.com/prometheus/procfs v0.20.1 // indirect
-	github.com/uptrace/opentelemetry-go-extra/otelgorm v0.3.2 // indirect
 	github.com/uptrace/opentelemetry-go-extra/otelsql v0.3.2 // indirect
 	github.com/urfave/negroni/v3 v3.1.1 // indirect
 	go.opencensus.io v0.24.0 // indirect
@@ -107,6 +109,4 @@ require (
 	google.golang.org/genproto v0.0.0-20210517163617-5e0236093d7a // indirect
 	google.golang.org/grpc v1.80.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
-	gorm.io/driver/postgres v1.6.0 // indirect
-	gorm.io/gorm v1.31.1 // indirect
 )
