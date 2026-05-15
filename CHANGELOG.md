@@ -5,9 +5,9 @@
 
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
-## [v2.7.0] — 2026-05-15
+## [v2.6.1] — 2026-05-15
 
-Minor release. Adds an `obs_streaming_active` OTel gauge tracking live streaming state via WebSocket polling, extends chatbot test coverage to the `App` struct and `middleCmd`, and improves the startup failure message when no Twitch OAuth token is present.
+Patch release. Adds an `obs_streaming_active` OTel gauge tracking live streaming state via WebSocket polling, extends chatbot test coverage to the `App` struct and `middleCmd`, and improves the startup failure message when no Twitch OAuth token is present.
 
 ### OBS
 
