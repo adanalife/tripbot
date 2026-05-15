@@ -47,7 +47,11 @@ func poll(ctx context.Context, addr, passwd string, interval time.Duration) {
 		instrumentation.OBSStreaming.Set(false)
 		return
 	}
-	defer client.Disconnect()
+	defer func() {
+		if err := client.Disconnect(); err != nil {
+			log.Printf("obs: disconnect: %v", err)
+		}
+	}()
 
 	log.Printf("obs: connected to websocket at %s", addr)
 
