@@ -254,6 +254,51 @@ func TestStateCmd_MessageFormat(t *testing.T) {
 	}
 }
 
+func TestStateCmd_DrivesShowFlagOverlay(t *testing.T) {
+	vid := newTestVideo("Wyoming", 43.0, -107.0, time.Now())
+	app := newTestApp(vid)
+	rec := &recordingOnscreens{}
+	app.Onscreens = rec
+
+	_, restore := captureSay(t)
+	defer restore()
+
+	app.stateCmd(newTestUser("viewer1"), nil)
+
+	if len(rec.Calls) != 1 || !strings.HasPrefix(rec.Calls[0], "ShowFlag(") {
+		t.Errorf("expected one ShowFlag overlay call, got %v", rec.Calls)
+	}
+}
+
+// --- flagCmd ---
+
+func TestFlagCmd_DrivesShowFlagOverlay(t *testing.T) {
+	app := newTestApp(video.Video{})
+	rec := &recordingOnscreens{}
+	app.Onscreens = rec
+
+	_, restore := captureSay(t)
+	defer restore()
+
+	app.flagCmd(newTestUser("viewer1"), nil)
+
+	if len(rec.Calls) != 1 || rec.Calls[0] != "ShowFlag(10s)" {
+		t.Errorf("expected ShowFlag(10s) overlay call, got %v", rec.Calls)
+	}
+}
+
+func TestFlagCmd_DoesNotSayInChat(t *testing.T) {
+	app := newTestApp(video.Video{})
+	out, restore := captureSay(t)
+	defer restore()
+
+	app.flagCmd(newTestUser("viewer1"), nil)
+
+	if out() != "" {
+		t.Errorf("expected flagCmd to be silent in chat, got %q", out())
+	}
+}
+
 // --- dateCmd ---
 
 func TestDateCmd_SaysThisMomentWas(t *testing.T) {
@@ -388,6 +433,73 @@ func TestMiddleCmd_NoParams_PromptsForText(t *testing.T) {
 
 	if !strings.Contains(out(), "What do you want to say") {
 		t.Errorf("expected prompt, got %q", out())
+	}
+}
+
+func TestMiddleCmd_Hide_DrivesHideOverlay(t *testing.T) {
+	app := newTestApp(video.Video{})
+	rec := &recordingOnscreens{}
+	app.Onscreens = rec
+
+	out, restore := captureSay(t)
+	defer restore()
+
+	app.middleCmd(newTestUser(adminUser), []string{"hide"})
+
+	if !strings.Contains(out(), "Hiding the message") {
+		t.Errorf("expected hide confirmation in chat, got %q", out())
+	}
+	if len(rec.Calls) != 1 || rec.Calls[0] != "HideMiddleText()" {
+		t.Errorf("expected one HideMiddleText overlay call, got %v", rec.Calls)
+	}
+}
+
+func TestMiddleCmd_Hide_CaseInsensitive(t *testing.T) {
+	// "HIDE" should be normalized to lowercase before the branch check.
+	app := newTestApp(video.Video{})
+	rec := &recordingOnscreens{}
+	app.Onscreens = rec
+
+	_, restore := captureSay(t)
+	defer restore()
+
+	app.middleCmd(newTestUser(adminUser), []string{"HIDE"})
+
+	if len(rec.Calls) != 1 || rec.Calls[0] != "HideMiddleText()" {
+		t.Errorf("expected one HideMiddleText overlay call for 'HIDE', got %v", rec.Calls)
+	}
+}
+
+func TestMiddleCmd_Text_DrivesShowOverlay(t *testing.T) {
+	app := newTestApp(video.Video{})
+	rec := &recordingOnscreens{}
+	app.Onscreens = rec
+
+	_, restore := captureSay(t)
+	defer restore()
+
+	// Multiple words get joined with a space into the overlay text.
+	app.middleCmd(newTestUser(adminUser), []string{"hello", "everyone"})
+
+	if len(rec.Calls) != 1 || rec.Calls[0] != `ShowMiddleText("hello everyone")` {
+		t.Errorf("expected ShowMiddleText with joined text, got %v", rec.Calls)
+	}
+}
+
+func TestMiddleCmd_NonAdmin_DoesNotDriveOverlay(t *testing.T) {
+	app := newTestApp(video.Video{})
+	rec := &recordingOnscreens{}
+	app.Onscreens = rec
+
+	_, restore := captureSay(t)
+	defer restore()
+
+	// A non-admin's params should be ignored — no chat, no overlay call.
+	app.middleCmd(newTestUser("viewer1"), []string{"hide"})
+	app.middleCmd(newTestUser("viewer1"), []string{"hello"})
+
+	if len(rec.Calls) != 0 {
+		t.Errorf("expected no overlay calls for non-admin, got %v", rec.Calls)
 	}
 }
 
