@@ -27,6 +27,7 @@ import (
 	_ "github.com/dimiro1/banner/autoload"
 	"github.com/gempir/go-twitch-irc/v4"
 	"github.com/getsentry/sentry-go"
+	"github.com/go-co-op/gocron/v2"
 	"github.com/logrusorgru/aurora/v3"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -36,25 +37,12 @@ import (
 var cronTracer = otel.Tracer("github.com/adanalife/tripbot/cmd/tripbot/cron")
 
 // tracedJob wraps a cron callback in a span so each tick shows up as its
-// own trace. Slow or failing jobs become visible in Grafana traces without
-// having to thread context through the underlying functions (the cron
-// library only accepts func()).
-func tracedJob(name string, fn func()) func() {
-	return func() {
-		_, span := cronTracer.Start(context.Background(), "cron."+name,
-			trace.WithAttributes(attribute.String("cron.job", name)))
-		defer span.End()
-		fn()
-	}
-}
-
-// tracedJobCtx is the ctx-aware variant of tracedJob. The span's ctx is
-// threaded into fn so DB queries (otelsql) and outbound HTTP (otelhttp)
-// nest under cron.<name> in Tempo, giving each cron tick a tree of children
-// rather than orphan spans.
-func tracedJobCtx(name string, fn func(context.Context)) func() {
-	return func() {
-		ctx, span := cronTracer.Start(context.Background(), "cron."+name,
+// own trace. The scheduler's job ctx is the span's parent and is threaded
+// into fn, so DB queries (otelsql) and outbound HTTP (otelhttp) nest under
+// cron.<name> in Tempo as children of the cron tick.
+func tracedJob(name string, fn func(context.Context)) func(context.Context) {
+	return func(ctx context.Context) {
+		ctx, span := cronTracer.Start(ctx, "cron."+name,
 			trace.WithAttributes(attribute.String("cron.job", name)))
 		defer span.End()
 		fn(ctx)
@@ -254,21 +242,21 @@ func gracefulShutdown() {
 	os.Exit(1)
 }
 
-// scheduleBackgroundJobs schedules the various background jobs
-// the reason we put this is in this package is because adding this to background
-// would cause circular dependencies
+// scheduleBackgroundJobs schedules the various background jobs.
+// Lives in this package (not pkg/background) to avoid circular deps with
+// the job-target packages.
 func scheduleBackgroundJobs() {
-	var err error
-
-	// schedule these functions
-	err = background.Cron.AddFunc("@every 60s", tracedJob("video.GetCurrentlyPlaying", video.GetCurrentlyPlaying))
-	err = background.Cron.AddFunc("@every 61s", tracedJobCtx("users.UpdateSession", users.UpdateSession))
-	err = background.Cron.AddFunc("@every 62s", tracedJob("users.UpdateLeaderboard", users.UpdateLeaderboard))
-	err = background.Cron.AddFunc("@every 5m", tracedJobCtx("onscreens.ShowGuessLeaderboard", onscreensClient.ShowGuessLeaderboard))
-	err = background.Cron.AddFunc("@every 5m", tracedJob("users.PrintCurrentSession", users.PrintCurrentSession))
-	err = background.Cron.AddFunc("@every 5m", tracedJob("twitch.GetSubscribers", mytwitch.GetSubscribers))
-	err = background.Cron.AddFunc("@every 5m", tracedJob("twitch.GetFollowerCount", mytwitch.GetFollowerCount))
-	err = background.Cron.AddFunc("@every 1h", tracedJob("twitch.RefreshUserAccessToken", func() {
+	// Functions that haven't been ctx-threaded yet get adapter closures
+	// (func(_ context.Context) { fn() }) — they still get a parent span via
+	// tracedJob but no ctx-aware child linking until threaded.
+	addJob(60*time.Second, "video.GetCurrentlyPlaying", func(_ context.Context) { video.GetCurrentlyPlaying() })
+	addJob(61*time.Second, "users.UpdateSession", users.UpdateSession)
+	addJob(62*time.Second, "users.UpdateLeaderboard", func(_ context.Context) { users.UpdateLeaderboard() })
+	addJob(5*time.Minute, "onscreens.ShowGuessLeaderboard", onscreensClient.ShowGuessLeaderboard)
+	addJob(5*time.Minute, "users.PrintCurrentSession", func(_ context.Context) { users.PrintCurrentSession() })
+	addJob(5*time.Minute, "twitch.GetSubscribers", func(_ context.Context) { mytwitch.GetSubscribers() })
+	addJob(5*time.Minute, "twitch.GetFollowerCount", func(_ context.Context) { mytwitch.GetFollowerCount() })
+	addJob(1*time.Hour, "twitch.RefreshUserAccessToken", func(_ context.Context) {
 		mytwitch.RefreshUserAccessToken()
 		// Keep the IRC client's stored token in sync with the rotated credentials.
 		// go-twitch-irc captures the token at construction; without this, any
@@ -276,10 +264,19 @@ func scheduleBackgroundJobs() {
 		if tok := mytwitch.IRCAuthToken(); tok != "" {
 			client.SetIRCToken(tok)
 		}
-	}))
-	err = background.Cron.AddFunc("@every 2h57m30s", tracedJob("chatbot.Chatter", chatbot.Chatter))
-	err = background.Cron.AddFunc("@every 12h", tracedJob("twitch.UpdateWebhookSubscriptions", mytwitch.UpdateWebhookSubscriptions))
+	})
+	addJob(2*time.Hour+57*time.Minute+30*time.Second, "chatbot.Chatter", func(_ context.Context) { chatbot.Chatter() })
+	addJob(12*time.Hour, "twitch.UpdateWebhookSubscriptions", func(_ context.Context) { mytwitch.UpdateWebhookSubscriptions() })
+}
+
+// addJob registers a gocron job at the given interval, wrapping fn with
+// tracedJob so each tick opens a span and centralising the error logging.
+func addJob(interval time.Duration, name string, fn func(context.Context)) {
+	_, err := background.Scheduler.NewJob(
+		gocron.DurationJob(interval),
+		gocron.NewTask(tracedJob(name, fn)),
+	)
 	if err != nil {
-		terrors.Log(err, "error adding at least one background job!")
+		terrors.Log(err, "error adding background job: "+name)
 	}
 }
