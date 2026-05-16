@@ -36,14 +36,15 @@ func newTestVideo(state string, lat, lng float64, date time.Time) video.Video {
 	return video.Video{State: state, Lat: lat, Lng: lng, DateFilmed: date}
 }
 
-// newTestApp returns an App with CurrentVideo returning vid and a no-op
-// Onscreens fake. For commands that don't use CurrentVideo, pass a zero-value
-// video.Video. To assert on Onscreens calls, replace app.Onscreens with a
-// recording fake (see fakeOnscreens in onscreens_test.go).
+// newTestApp returns an App with CurrentVideo returning vid, plus no-op
+// Onscreens and VLC fakes. For commands that don't use CurrentVideo, pass a
+// zero-value video.Video. To assert on Onscreens or VLC calls, replace
+// app.Onscreens / app.VLC with a recordingOnscreens / recordingVLC.
 func newTestApp(vid video.Video) *App {
 	return &App{
 		CurrentVideo: func() video.Video { return vid },
 		Onscreens:    noopOnscreens{},
+		VLC:          noopVLC{},
 	}
 }
 
@@ -404,6 +405,113 @@ func TestGuessCmd_WrongGuess_SaysTryAgain(t *testing.T) {
 
 	if !strings.Contains(out(), "Try again") {
 		t.Errorf("expected try-again in output, got %q", out())
+	}
+}
+
+// expectAddToScoreChain queues sqlmock expectations for one user.AddToScore
+// call: getUserIDByName + findOrCreateScoreboard + findOrCreateScore + the
+// UPDATE on Score.save. AddToScore fires twice on a correct guess (once for
+// the lifetime "guess_state_total" scoreboard, once for the monthly one), so
+// callers queue it twice.
+func expectAddToScoreChain(mock sqlmock.Sqlmock) {
+	mock.ExpectQuery(`SELECT id FROM users WHERE username = `).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(42))
+	mock.ExpectQuery(`SELECT \* FROM "scoreboards" WHERE`).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(7, "guess_sb"))
+	mock.ExpectQuery(`SELECT \* FROM "scores" WHERE`).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "scoreboard_id", "value"}).
+			AddRow(99, 42, 7, 5.0))
+	mock.ExpectExec(`UPDATE "scores" SET`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+}
+
+func TestGuessCmd_CorrectGuess_DrivesOverlayAndPlayback(t *testing.T) {
+	mock := installMockDB(t)
+	vid := newTestVideo("Colorado", 39.5, -105.0, time.Now())
+	app := newTestApp(vid)
+	recOverlay := &recordingOnscreens{}
+	recVLC := &recordingVLC{}
+	app.Onscreens = recOverlay
+	app.VLC = recVLC
+
+	// Two AddToScore calls — lifetime ("guess_state_total") + monthly.
+	expectAddToScoreChain(mock)
+	expectAddToScoreChain(mock)
+
+	out, restore := captureSay(t)
+	defer restore()
+
+	app.guessCmd(newTestUser("viewer1"), []string{"Colorado"})
+
+	msg := out()
+	if !strings.Contains(msg, "@viewer1 got it") || !strings.Contains(msg, "Colorado") {
+		t.Errorf("expected correct-guess chat message, got %q", msg)
+	}
+
+	// Overlay sequence: ShowFlag (state flag) then ShowTimewarp (from a.timewarp()).
+	wantOverlay := []string{"ShowFlag(10s)", "ShowTimewarp()"}
+	if len(recOverlay.Calls) != len(wantOverlay) {
+		t.Fatalf("expected %d overlay calls, got %d: %v", len(wantOverlay), len(recOverlay.Calls), recOverlay.Calls)
+	}
+	for i, want := range wantOverlay {
+		if recOverlay.Calls[i] != want {
+			t.Errorf("overlay call %d: want %q, got %q", i, want, recOverlay.Calls[i])
+		}
+	}
+
+	// VLC: PlayRandom fires inside a.timewarp().
+	if len(recVLC.Calls) != 1 || recVLC.Calls[0] != "PlayRandom()" {
+		t.Errorf("expected single PlayRandom call, got %v", recVLC.Calls)
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestGuessCmd_CorrectGuess_FullStateName(t *testing.T) {
+	// guessCmd converts 2-letter codes to long-form before comparing; pass
+	// the long form directly to confirm the equality branch works without
+	// the abbrev lookup.
+	mock := installMockDB(t)
+	vid := newTestVideo("Massachusetts", 42.3, -71.0, time.Now())
+	app := newTestApp(vid)
+
+	expectAddToScoreChain(mock)
+	expectAddToScoreChain(mock)
+
+	out, restore := captureSay(t)
+	defer restore()
+
+	app.guessCmd(newTestUser("viewer1"), []string{"Massachusetts"})
+
+	if !strings.Contains(out(), "got it") {
+		t.Errorf("expected correct-guess msg, got %q", out())
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestGuessCmd_CorrectGuess_TwoLetterCode(t *testing.T) {
+	// Two-letter codes get expanded via helpers.StateAbbrevToState.
+	mock := installMockDB(t)
+	vid := newTestVideo("California", 36.7, -119.4, time.Now())
+	app := newTestApp(vid)
+
+	expectAddToScoreChain(mock)
+	expectAddToScoreChain(mock)
+
+	out, restore := captureSay(t)
+	defer restore()
+
+	app.guessCmd(newTestUser("viewer1"), []string{"CA"})
+
+	if !strings.Contains(out(), "got it") {
+		t.Errorf("expected correct-guess msg from CA, got %q", out())
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Error(err)
 	}
 }
 

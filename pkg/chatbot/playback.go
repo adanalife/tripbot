@@ -13,7 +13,6 @@ import (
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/adanalife/tripbot/pkg/video"
-	vlcClient "github.com/adanalife/tripbot/pkg/vlc-client"
 )
 
 // lastTimewarpTime is used to rate-limit users so they can't
@@ -27,7 +26,7 @@ func (a *App) timewarp() {
 	a.Onscreens.ShowTimewarp()
 
 	// shuffle to a new video
-	err := vlcClient.PlayRandom()
+	err := a.VLC.PlayRandom()
 	if err != nil {
 		terrors.Log(err, "error from VLC client")
 	}
@@ -106,7 +105,7 @@ func (a *App) jumpCmd(user *users.User, params []string) {
 		return
 	}
 	// tell VLC to play it
-	err = vlcClient.PlayFileInPlaylist(randomVid.File())
+	err = a.VLC.PlayFileInPlaylist(randomVid.File())
 	if err != nil {
 		terrors.Log(err, "error from VLC client")
 		Say("Usage: !jump [state]")
@@ -156,7 +155,7 @@ func (a *App) skipCmd(user *users.User, params []string) {
 	}
 
 	// skip to a new video
-	err = vlcClient.Skip(n)
+	err = a.VLC.Skip(n)
 	if err != nil {
 		terrors.Log(err, "error from VLC client")
 	}
@@ -201,7 +200,7 @@ func (a *App) backCmd(user *users.User, params []string) {
 	}
 
 	// back to an old video
-	err = vlcClient.Back(n)
+	err = a.VLC.Back(n)
 	if err != nil {
 		terrors.Log(err, "error from VLC client")
 	}
