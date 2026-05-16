@@ -5,6 +5,15 @@
 
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
+## [v2.8.1] — 2026-05-16
+
+Patch release. Stops OBS from OOM-killing itself overnight. The seven onscreen browser sources were rendering at the 60 fps canvas rate even though their content only updates twice a second; CEF leaks a small amount per composited frame, so the per-frame waste compounded to ~10 MB/min of process RSS and tipped the pod over its 3 Gi limit after ~4 h. Caps the render rate at 2 fps and adds an hourly browser-source refresh inside the OBS container entrypoint to drop accumulated CEF state on a fixed cycle, so RSS stays bounded across multi-day uptimes.
+
+### OBS
+
+- **Browser sources pinned to 2 fps.** All seven on-screen browser sources (`GPS`, `Flag`, left/right rotating messages, `leaderboard`, middle text, timewarp) were inheriting the canvas FPS via `fps_custom: false`. The page JS only repolls state every 500 ms, so anything above 2 fps was just rendering identical frames — and CEF leaks per composited frame, so the waste compounded. Observed ~10 MB/min → projected ~0.3 MB/min. ([#555])
+- **Hourly browser-source refresh from the entrypoint.** Background `while sleep 3600` loop in `entrypoint.sh` runs `bin/obs-browser-refresh` against the local obs-websocket once an hour, wrapped in `timeout 60` so a wedged call can't stall the cycle. Each refresh reloads the CEF child process per source, dropping accumulated render state and bounding RSS regardless of how long the stream runs. python3 + an `obsws-python` venv added to both `Dockerfile` and `Dockerfile.arm64` (~50 MB image growth). ([#556])
+
 ## [v2.8.0] — 2026-05-16
 
 Minor release. Wraps up the chatbot `App` injection pattern (Video, IRC, Sessions now alongside the existing Onscreens / VLC / DB), modernizes the cron scheduler (`robfig/cron` → `gocron/v2`), completes the stdlib `log` → `slog` migration with structured fields, retires the last Stackdriver code path in favor of Loki via OTel, drops Sentry's own tracing (OTel is now the single source of truth — Sentry events link out to Tempo via the SDK's OTel integration), bulk-bumps Go module dependencies, and threads `ctx` through cron-target functions so cron-tick traces nest cleanly.
@@ -622,3 +631,5 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#550]: https://github.com/adanalife/tripbot/pull/550
 [#551]: https://github.com/adanalife/tripbot/pull/551
 [#552]: https://github.com/adanalife/tripbot/pull/552
+[#555]: https://github.com/adanalife/tripbot/pull/555
+[#556]: https://github.com/adanalife/tripbot/pull/556

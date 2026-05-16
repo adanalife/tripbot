@@ -75,4 +75,17 @@ sleep 1
 
 x11vnc -display "$DISPLAY" -forever -shared -rfbport 5900 -passwd "${VNC_PASSWD:-123456}" &
 
+# Hourly refresh of every browser source via the local obs-websocket port,
+# working around the CEF per-frame memory leak that otherwise OOMs OBS at
+# the 3Gi pod limit overnight. PR #555 capped browser-source render rate
+# to slow the bleed; this loop drops accumulated render state on a fixed
+# cycle so RSS stays bounded across multi-day uptimes.
+(
+  while sleep 3600; do
+    OBS_WEBSOCKET_HOST=localhost OBS_WEBSOCKET_PORT=4455 \
+      timeout 60 /opt/obs/venv/bin/python /opt/obs/bin/obs-browser-refresh \
+      || echo "[browser-refresh] failed (will retry next cycle)" >&2
+  done
+) &
+
 exec obs "${obs_args[@]}"
