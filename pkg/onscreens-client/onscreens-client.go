@@ -1,6 +1,7 @@
 package onscreensClient
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -56,10 +57,10 @@ func ShowLeaderboard(title string, leaderboard [][]string) error {
 }
 
 //TODO: this is taken right from the !guessleaderboard command, DRY it?
-func ShowGuessLeaderboard() {
+func ShowGuessLeaderboard(ctx context.Context) {
 	// select users to show in leaderboard
 	size := 10
-	leaderboard := scoreboards.TopUsers(scoreboards.CurrentGuessScoreboard(), size)
+	leaderboard := scoreboards.TopUsers(ctx, scoreboards.CurrentGuessScoreboard(), size)
 	if size > len(leaderboard) {
 		size = len(leaderboard)
 	}

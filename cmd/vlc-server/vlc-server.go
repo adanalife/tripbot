@@ -56,6 +56,10 @@ func main() {
 	vlcServer.InitPlayer()
 	vlcServer.PlayRandom() // play a random video
 
+	// poll libvlc for playback stats (FPS, bitrate, dropped frames) and
+	// surface them as OTel gauges. No-op when telemetry is disabled.
+	vlcServer.StartStatsPoller(context.Background(), 5*time.Second)
+
 	// start the webserver
 	vlcServer.SetVersion(version)
 	vlcServer.Start()
@@ -89,7 +93,7 @@ func initializeTelemetry() {
 
 // initializeErrorLogger makes sure the logger is configured
 func initializeErrorLogger() {
-	terrors.Initialize(c.Conf)
+	terrors.Initialize(c.Conf, version)
 }
 
 // listenForShutdown creates a background job that listens for a graceful shutdown request

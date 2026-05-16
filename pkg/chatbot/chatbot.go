@@ -8,18 +8,54 @@ import (
 
 	mylog "github.com/adanalife/tripbot/pkg/chatbot/log"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
+	"github.com/adanalife/tripbot/pkg/database"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/users"
+	"github.com/adanalife/tripbot/pkg/video"
 	"github.com/davecgh/go-spew/spew"
-	"github.com/gempir/go-twitch-irc/v2"
+	"github.com/gempir/go-twitch-irc/v4"
 	"github.com/kelvins/geocoder"
 	"github.com/nicklaw5/helix/v2"
+	"gorm.io/gorm"
 )
 
 var googleMapsAPIKey string
 var client *twitch.Client
 var Uptime time.Time
+
+// App holds injectable dependencies for the chatbot.
+// Tests instantiate it directly with fakes; production uses defaultApp.
+type App struct {
+	CurrentVideo func() video.Video
+	// DB is the GORM handle used by commands that need to read or write the
+	// database. nil in tests that don't exercise the DB; otherwise either the
+	// real database.GormDB() or a sqlmock-backed gorm.DB.
+	DB *gorm.DB
+	// Onscreens drives the OBS browser-source overlays for chat-triggered
+	// effects (leaderboards, flags, middle-text). Tests inject a no-op fake.
+	Onscreens Onscreens
+	// VLC drives playback operations (timewarp, jump, skip, back). Tests
+	// inject a no-op fake; production uses the realVLC adapter.
+	VLC VLC
+}
+
+// db returns the DB handle the App should use. Prefers an explicit a.DB
+// (which tests set to a sqlmock-backed gorm.DB), otherwise falls back to the
+// process-wide singleton. Lazy so package init never touches the DB.
+func (a *App) db() *gorm.DB {
+	if a.DB != nil {
+		return a.DB
+	}
+	return database.GormDB()
+}
+
+var defaultApp = &App{
+	CurrentVideo: func() video.Video { return video.CurrentlyPlaying },
+	// DB stays nil; commands use a.db() which falls back to database.GormDB().
+	Onscreens: realOnscreens{},
+	VLC:       realVLC{},
+}
 
 // used to determine which help message to display
 // randomized so it starts with a new one every restart
@@ -69,21 +105,26 @@ func Say(msg string) {
 	client.Say(speakTo, msg)
 }
 
+// sayFn is the internal send implementation; tests override it to capture output.
+var sayFn func(string) = Say
+
 // Whisper will whisper a message to a user
+// Note: go-twitch-irc v4 removed the Whisper() send method; we replicate the
+// v2 behavior by sending the raw IRC /w command via PRIVMSG on the bot's own channel.
 func Whisper(username, msg string) {
 	//TODO: include whispers in log
 	// include the message in the log
 	// mylog.ChatMsg(c.Conf.BotUsername, msg)
 	log.Println("sending whisper to", username, ":", msg)
 	// say the message to chat
-	client.Whisper(username, msg)
+	client.Say(c.Conf.BotUsername, fmt.Sprintf("/w %s %s", username, msg))
 }
 
 // Chatter is designed to post a randomized message on a timer.
 // Right now it just posts random "help messages."
 func Chatter() {
 	// use twitch emote feature to add some color
-	Say("/me " + help())
+	sayFn("/me " + help())
 }
 
 func help() string {
@@ -96,7 +137,7 @@ func help() string {
 // AnnounceNewFollower makes a post in chat that a user follows the channel
 func AnnounceNewFollower(username string) {
 	msg := fmt.Sprintf("Thank you for the follow, @%s", username)
-	Say(msg)
+	sayFn(msg)
 }
 
 // AnnounceSubscriber makes a post in chat that a user has subscribed
@@ -105,9 +146,9 @@ func AnnounceSubscriber(sub helix.Subscription) {
 	spew.Dump(sub)
 	username := sub.UserName
 	msg := fmt.Sprintf("Thank you for the sub, @%s; enjoy your !bonusmiles bleedPurple", username)
-	Say(msg)
+	sayFn(msg)
 	// give everyone a bonus mile
 	users.GiveEveryoneMiles(1.0)
 	msg = fmt.Sprintf("The %d current viewers have been given a bonus mile, too HolidayPresent", len(users.LoggedIn))
-	Say(msg)
+	sayFn(msg)
 }

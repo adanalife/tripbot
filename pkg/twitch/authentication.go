@@ -3,7 +3,9 @@ package twitch
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"strings"
 	"sync"
@@ -11,11 +13,18 @@ import (
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
-	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/oauthtokens"
 	"github.com/logrusorgru/aurora/v3"
 	"github.com/nicklaw5/helix/v2"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
+
+// helixHTTPClient is the otelhttp-instrumented HTTP client passed to every
+// helix.NewClient call. Without this, outbound Twitch Helix requests leave
+// no trail in Tempo; with it, each helix.GetUsers / GetSubscriptions / etc.
+// shows up as a span. Pairs with the otelhttp transports already used by
+// pkg/vlc-client and pkg/onscreens-client.
+var helixHTTPClient = &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)}
 
 // Scopes is the OAuth scope set requested for the bot account. Single source
 // of truth — referenced by Client() (App Access Token request),
@@ -84,6 +93,7 @@ func Client() (*helix.Client, error) {
 		// Registered at https://dev.twitch.tv/console/apps; matched by
 		// cmd/auth-bootstrap's local HTTP listener.
 		RedirectURI: c.Conf.ExternalURL + "/auth/callback",
+		HTTPClient:  helixHTTPClient,
 	})
 	if err != nil {
 		terrors.Log(err, "error creating client")
@@ -171,7 +181,13 @@ func GenerateUserAccessToken(code string) error {
 	if err != nil {
 		return err
 	}
-	if usersResp == nil || len(usersResp.Data.Users) == 0 {
+	if usersResp == nil {
+		return errors.New("twitch: nil response from GetUsers")
+	}
+	if checkHelixResp("GetUsers", &usersResp.ResponseCommon) {
+		return fmt.Errorf("twitch: GetUsers returned %d during bootstrap", usersResp.StatusCode)
+	}
+	if len(usersResp.Data.Users) == 0 {
 		return errors.New("twitch: GetUsers returned no users")
 	}
 	u := usersResp.Data.Users[0]
@@ -254,12 +270,11 @@ func RefreshUserAccessToken() {
 	if resp == nil || resp.Data.AccessToken == "" {
 		// Empty body typically means invalid_grant (refresh token revoked).
 		// Treat as terminal — blank in-memory so IRC reconnect fails loudly,
-		// SMS so Dana sees it on his phone.
+		// and Sentry surfaces the failure for re-bootstrap.
 		_ = oauthtokens.IncrementFailCount("twitch", botUser)
 		tokenMu.Lock()
 		currentUserToken.AccessToken = ""
 		tokenMu.Unlock()
-		helpers.SendSMS(botUser + " oauth refresh failed; run task tripbot:auth:bootstrap")
 		terrors.Log(errors.New("empty access token in refresh response"), "oauth refresh failed; need re-bootstrap")
 		return
 	}

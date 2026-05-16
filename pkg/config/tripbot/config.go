@@ -4,7 +4,6 @@ import (
 	"log"
 
 	"github.com/adanalife/tripbot/pkg/config"
-	"github.com/davecgh/go-spew/spew"
 	"github.com/kelseyhightower/envconfig"
 	"github.com/logrusorgru/aurora/v3"
 )
@@ -26,8 +25,6 @@ func init() {
 	config.SetEnvironment()
 
 	Conf = LoadTripbotConfig()
-
-	spew.Dump(Conf)
 
 	//TODO: consider using strings.ToLower() on channel name here and removing elsewhere
 

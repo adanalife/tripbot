@@ -1,6 +1,7 @@
 package chatbot
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"strconv"
@@ -11,10 +12,8 @@ import (
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/helpers"
-	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/adanalife/tripbot/pkg/video"
-	vlcClient "github.com/adanalife/tripbot/pkg/vlc-client"
 )
 
 // lastTimewarpTime is used to rate-limit users so they can't
@@ -23,12 +22,12 @@ import (
 var lastTimewarpTime time.Time
 
 // timewarp jumps the playhead to a random video in the loop
-func timewarp() {
+func (a *App) timewarp() {
 	// show timewarp onscreen
-	onscreensClient.ShowTimewarp()
+	a.Onscreens.ShowTimewarp()
 
 	// shuffle to a new video
-	err := vlcClient.PlayRandom()
+	err := a.VLC.PlayRandom()
 	if err != nil {
 		terrors.Log(err, "error from VLC client")
 	}
@@ -38,7 +37,7 @@ func timewarp() {
 	lastTimewarpTime = time.Now()
 }
 
-func timewarpCmd(user *users.User) {
+func (a *App) timewarpCmd(ctx context.Context, user *users.User, _ []string) {
 	log.Println(user.Username, "ran !timewarp")
 
 	// exit early if we're on OS X
@@ -61,10 +60,10 @@ func timewarpCmd(user *users.User) {
 	}
 
 	// do the timewarp
-	timewarp()
+	a.timewarp()
 }
 
-func jumpCmd(user *users.User, params []string) {
+func (a *App) jumpCmd(ctx context.Context, user *users.User, params []string) {
 	var err error
 	log.Println(user.Username, "ran !jump")
 
@@ -107,7 +106,7 @@ func jumpCmd(user *users.User, params []string) {
 		return
 	}
 	// tell VLC to play it
-	err = vlcClient.PlayFileInPlaylist(randomVid.File())
+	err = a.VLC.PlayFileInPlaylist(randomVid.File())
 	if err != nil {
 		terrors.Log(err, "error from VLC client")
 		Say("Usage: !jump [state]")
@@ -117,12 +116,12 @@ func jumpCmd(user *users.User, params []string) {
 	// update the currently-playing video
 	video.GetCurrentlyPlaying()
 	// show the flag for the state
-	onscreensClient.ShowFlag(10 * time.Second)
+	a.Onscreens.ShowFlag(10 * time.Second)
 	// update our record of last time it ran
 	lastTimewarpTime = time.Now()
 }
 
-func skipCmd(user *users.User, params []string) {
+func (a *App) skipCmd(ctx context.Context, user *users.User, params []string) {
 	var err error
 	var n int
 	log.Println(user.Username, "ran !skip")
@@ -157,7 +156,7 @@ func skipCmd(user *users.User, params []string) {
 	}
 
 	// skip to a new video
-	err = vlcClient.Skip(n)
+	err = a.VLC.Skip(n)
 	if err != nil {
 		terrors.Log(err, "error from VLC client")
 	}
@@ -167,7 +166,7 @@ func skipCmd(user *users.User, params []string) {
 	lastTimewarpTime = time.Now()
 }
 
-func backCmd(user *users.User, params []string) {
+func (a *App) backCmd(ctx context.Context, user *users.User, params []string) {
 	var err error
 	var n int
 	log.Println(user.Username, "ran !back")
@@ -202,7 +201,7 @@ func backCmd(user *users.User, params []string) {
 	}
 
 	// back to an old video
-	err = vlcClient.Back(n)
+	err = a.VLC.Back(n)
 	if err != nil {
 		terrors.Log(err, "error from VLC client")
 	}

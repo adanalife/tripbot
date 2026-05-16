@@ -14,17 +14,24 @@ import (
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 	"github.com/logrusorgru/aurora/v3"
+	"github.com/uptrace/opentelemetry-go-extra/otelgorm"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 )
 
 // this is how we will share the DB connection
 var dbConnection *sqlx.DB
+var gormConn *gorm.DB
 
 func init() {
 	var err error
 
 	err = godotenv.Load(".env." + c.Conf.Environment)
-	if err != nil {
+	// In cluster contexts (staging/production) the .env file is not shipped —
+	// env values come from envconfig instead — so the missing-file error is
+	// expected and noise. Only surface it for local-dev workflows.
+	if err != nil && (c.Conf.Environment == "development" || c.Conf.Environment == "testing") {
 		log.Println("Error loading .env file:", err)
 		log.Println("Continuing anyway...")
 	}
@@ -93,6 +100,39 @@ func isAlive() bool {
 		return false
 	}
 	return true
+}
+
+// GormDB returns a singleton *gorm.DB that wraps the same otelsql-instrumented
+// *sql.DB used by Connection(), adding GORM-level span metadata via otelgorm.
+func GormDB() *gorm.DB {
+	if gormConn == nil {
+		gormConn = connectGorm()
+	}
+	return gormConn
+}
+
+// SetGormDB swaps the singleton *gorm.DB for tests. Pair it with a sqlmock-
+// backed gorm.DB to assert on the SQL emitted by package-level callers (e.g.
+// users.Find, scoreboards.TopUsers) without needing a live postgres. Restore
+// to nil in test teardown so other tests don't inherit the mock.
+//
+// Not safe for parallel tests in the same package — run with t.Setenv-style
+// per-test setup and avoid t.Parallel() when using this.
+func SetGormDB(db *gorm.DB) {
+	gormConn = db
+}
+
+func connectGorm() *gorm.DB {
+	// Reuse the otelsql-instrumented *sql.DB so both layers share one connection pool.
+	sqlDB := Connection().DB
+	gdb, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{})
+	if err != nil {
+		log.Fatal("GORM init failed:", err)
+	}
+	if err := gdb.Use(otelgorm.NewPlugin()); err != nil {
+		log.Println(aurora.Yellow("otelgorm plugin:"), err)
+	}
+	return gdb
 }
 
 // returns a valid postgres:// url

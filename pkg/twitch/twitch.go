@@ -7,6 +7,7 @@ import (
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
+	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"github.com/nicklaw5/helix/v2"
 )
 
@@ -24,10 +25,13 @@ func getChannelID(username string) string {
 	})
 	if err != nil {
 		terrors.Log(err, "error getting user info from twitch")
+		return ""
 	}
-
 	if resp == nil {
-		terrors.Log(err, "empty response from twitch")
+		terrors.Log(nil, "empty response from twitch")
+		return ""
+	}
+	if checkHelixResp("GetUsers", &resp.ResponseCommon) {
 		return ""
 	}
 
@@ -49,6 +53,11 @@ func GetSubscribers() {
 	})
 	if err != nil {
 		terrors.Log(err, "error getting subscriptions from twitch")
+		return
+	}
+	if checkHelixResp("GetSubscriptions", &resp.ResponseCommon) {
+		// keep the prior subscriber list rather than zeroing it out
+		return
 	}
 
 	// spew.Dump(resp)
@@ -61,11 +70,32 @@ func GetSubscribers() {
 		subscribers = append(subscribers, strings.ToLower(sub.UserName))
 	}
 
+	instrumentation.TwitchAudience.SetSubscribers(int64(len(subscribers)))
+
 	if len(subscribers) > 0 {
 		log.Println("subscribers:", strings.Join(subscribers, ", "))
 	} else {
 		log.Println(c.Conf.ChannelName, "has no subscribers :(")
 	}
+}
+
+// GetFollowerCount fetches the current total follower count for the channel.
+func GetFollowerCount() {
+	if ChannelID == "" {
+		ChannelID = getChannelID(c.Conf.ChannelName)
+	}
+	resp, err := currentTwitchClient.GetChannelFollows(&helix.GetChannelFollowsParams{
+		BroadcasterID: ChannelID,
+	})
+	if err != nil {
+		terrors.Log(err, "error getting follower count from twitch")
+		return
+	}
+	if checkHelixResp("GetChannelFollows", &resp.ResponseCommon) {
+		return
+	}
+	instrumentation.TwitchAudience.SetFollowers(int64(resp.Data.Total))
+	log.Printf("%s has %d followers", c.Conf.ChannelName, resp.Data.Total)
 }
 
 // UserIsSubscriber returns true if the user subscribes to the channel
@@ -94,6 +124,10 @@ func UserIsFollower(username string) bool {
 	})
 	if err != nil {
 		terrors.Log(err, "error getting user follows")
+		return false
+	}
+	if checkHelixResp("GetChannelFollows", &resp.ResponseCommon) {
+		// fail closed: when we can't verify follow status, treat as non-follower
 		return false
 	}
 

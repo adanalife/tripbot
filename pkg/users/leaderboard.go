@@ -1,6 +1,7 @@
 package users
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -8,7 +9,6 @@ import (
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
-	"github.com/jmoiron/sqlx"
 	"github.com/logrusorgru/aurora/v3"
 )
 
@@ -16,22 +16,18 @@ var LifetimeMilesLeaderboard [][]string
 var initLeaderboardSize = 25
 var maxLeaderboardSize = 50
 
-// LifetimeMilesLeaderboard creates a leaderboard
-func InitLeaderboard() {
-	users := []User{}
+// InitLeaderboard creates the initial leaderboard
+func InitLeaderboard(ctx context.Context) {
+	var users []User
 
 	ignoredUsers := append(c.IgnoredUsers, strings.ToLower(c.Conf.ChannelName))
-	// we use MySQL-style ? bindvars instead of postgres ones here
-	// because that's what sqlx wants for In()
-	q := `SELECT * FROM users WHERE miles != 0 AND is_bot = false AND username NOT IN (?) ORDER BY miles DESC LIMIT ?`
-	query, args, err := sqlx.In(q, ignoredUsers, initLeaderboardSize)
-	if err != nil {
-		terrors.Log(err, "error generating query")
-	}
-	query = database.Connection().Rebind(query)
-	err = database.Connection().Select(&users, query, args...)
-	if err != nil {
-		terrors.Log(err, "error generating query")
+	result := database.GormDB().WithContext(ctx).
+		Where("miles != 0 AND is_bot = false AND username NOT IN ?", ignoredUsers).
+		Order("miles DESC").
+		Limit(initLeaderboardSize).
+		Find(&users)
+	if result.Error != nil {
+		terrors.Log(result.Error, "error fetching leaderboard")
 	}
 
 	for _, user := range users {

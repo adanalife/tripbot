@@ -9,5 +9,5 @@ import (
 // config.Config interface that's nil until Initialize is called — without
 // this, any handler test that walks an error path NPEs in the logger.
 func init() {
-	terrors.Initialize(*c.Conf)
+	terrors.Initialize(*c.Conf, "test")
 }

@@ -18,13 +18,14 @@ import (
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
+	"github.com/adanalife/tripbot/pkg/obs"
 	"github.com/adanalife/tripbot/pkg/server"
 	"github.com/adanalife/tripbot/pkg/telemetry"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/adanalife/tripbot/pkg/video"
 	_ "github.com/dimiro1/banner/autoload"
-	"github.com/gempir/go-twitch-irc/v2"
+	"github.com/gempir/go-twitch-irc/v4"
 	"github.com/getsentry/sentry-go"
 	"github.com/logrusorgru/aurora/v3"
 	"go.opentelemetry.io/otel"
@@ -44,6 +45,19 @@ func tracedJob(name string, fn func()) func() {
 			trace.WithAttributes(attribute.String("cron.job", name)))
 		defer span.End()
 		fn()
+	}
+}
+
+// tracedJobCtx is the ctx-aware variant of tracedJob. The span's ctx is
+// threaded into fn so DB queries (otelsql) and outbound HTTP (otelhttp)
+// nest under cron.<name> in Tempo, giving each cron tick a tree of children
+// rather than orphan spans.
+func tracedJobCtx(name string, fn func(context.Context)) func() {
+	return func() {
+		ctx, span := cronTracer.Start(context.Background(), "cron."+name,
+			trace.WithAttributes(attribute.String("cron.job", name)))
+		defer span.End()
+		fn(ctx)
 	}
 }
 
@@ -70,8 +84,9 @@ func main() {
 	server.SetVersion(version)
 	startHttpServer(shutdownCtx)
 	findInitialVideo()
-	users.InitLeaderboard()
+	users.InitLeaderboard(context.Background())
 	startCron()
+	startOBSPolling()
 	loadTwitchToken()   // must precede chatbot.Initialize — provides the IRC token
 	setUpTwitchClient() // required for the below
 	updateSubscribers()
@@ -107,7 +122,7 @@ func initializeTelemetry() {
 
 // initializeErrorLogger makes sure the logger is configured
 func initializeErrorLogger() {
-	terrors.Initialize(c.Conf)
+	terrors.Initialize(c.Conf, version)
 }
 
 // startHttpServer starts a webserver, which is
@@ -138,13 +153,20 @@ func startCron() {
 	scheduleBackgroundJobs()
 }
 
+// startOBSPolling starts the background goroutine that polls OBS WebSocket
+// for streaming state and updates the obs_streaming_active gauge.
+func startOBSPolling() {
+	go obs.PollStreamingActive(context.Background(), 30*time.Second)
+}
+
 // loadTwitchToken pulls the bot's OAuth row from the oauth_tokens table.
 // Refuses to start if the row is missing — pointing at the bootstrap CLI
 // is louder than running IRC-less.
 func loadTwitchToken() {
 	if err := mytwitch.LoadFromDB(); err != nil {
 		if errors.Is(err, mytwitch.ErrNoToken) {
-			log.Fatalf("no oauth_tokens row for %q — run `task tripbot:auth:bootstrap` against the cluster DB (port-forward via `task tripbot:db:up` in infra)", c.Conf.BotUsername)
+			log.Printf("refusing to start: no oauth_tokens row for %q — tripbot will not run without a Twitch IRC connection", c.Conf.BotUsername)
+			log.Fatal("to fix: run `task tripbot:auth:bootstrap` from the infra directory")
 		}
 		terrors.Fatal(err, "failed to load Twitch token from DB")
 	}
@@ -166,7 +188,7 @@ func updateSubscribers() {
 // getCurrentUsers gets the users watching the stream
 func getCurrentUsers() {
 	// fetch initial session
-	users.UpdateSession()
+	users.UpdateSession(context.Background())
 	users.PrintCurrentSession()
 }
 
@@ -215,7 +237,7 @@ func gracefulShutdown() {
 	// try and use !shutdown instead
 	//TODO: print different message if CurrentlyPlaying is ""
 	log.Printf("Last played video: %s", aurora.Yellow(video.CurrentlyPlaying.File()))
-	users.Shutdown()
+	users.Shutdown(context.Background())
 	err := database.Connection().Close()
 	if err != nil {
 		terrors.Log(err, "error closing DB connection")
@@ -240,11 +262,12 @@ func scheduleBackgroundJobs() {
 
 	// schedule these functions
 	err = background.Cron.AddFunc("@every 60s", tracedJob("video.GetCurrentlyPlaying", video.GetCurrentlyPlaying))
-	err = background.Cron.AddFunc("@every 61s", tracedJob("users.UpdateSession", users.UpdateSession))
+	err = background.Cron.AddFunc("@every 61s", tracedJobCtx("users.UpdateSession", users.UpdateSession))
 	err = background.Cron.AddFunc("@every 62s", tracedJob("users.UpdateLeaderboard", users.UpdateLeaderboard))
-	err = background.Cron.AddFunc("@every 5m", tracedJob("onscreens.ShowGuessLeaderboard", onscreensClient.ShowGuessLeaderboard))
+	err = background.Cron.AddFunc("@every 5m", tracedJobCtx("onscreens.ShowGuessLeaderboard", onscreensClient.ShowGuessLeaderboard))
 	err = background.Cron.AddFunc("@every 5m", tracedJob("users.PrintCurrentSession", users.PrintCurrentSession))
 	err = background.Cron.AddFunc("@every 5m", tracedJob("twitch.GetSubscribers", mytwitch.GetSubscribers))
+	err = background.Cron.AddFunc("@every 5m", tracedJob("twitch.GetFollowerCount", mytwitch.GetFollowerCount))
 	err = background.Cron.AddFunc("@every 1h", tracedJob("twitch.RefreshUserAccessToken", func() {
 		mytwitch.RefreshUserAccessToken()
 		// Keep the IRC client's stored token in sync with the rotated credentials.

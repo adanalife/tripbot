@@ -12,10 +12,18 @@ import (
 
 var conf config.Config
 
-// Initialize takes a Config interface and sets up a logger
-func Initialize(c config.Config) {
-	// sentry options are picked up through ENV vars
+// Initialize takes a Config interface and sets up a logger.
+//
+// version is the build-time version string (typically set via -ldflags
+// "-X main.version=..." in cmd/tripbot and cmd/vlc-server). It's passed
+// to sentry as the Release tag so Sentry can group issues by release
+// and surface "this regression started in vX.Y.Z."
+func Initialize(c config.Config, version string) {
+	// Most sentry options (DSN, environment) are picked up through ENV
+	// vars; Release is wired in explicitly so it tracks the same
+	// build-time value the /version endpoint exposes.
 	err := sentry.Init(sentry.ClientOptions{
+		Release: version,
 		// enable tracing
 		TracesSampleRate: 0.2,
 	})
@@ -31,8 +39,9 @@ func Log(e error, msg string) {
 	if e == nil {
 		e = errors.New(msg)
 	}
-	// only log to sentry on production or staging
-	if conf.IsProduction() || conf.IsStaging() {
+	// only log to sentry on production or staging; conf is nil in tests and
+	// any binary that didn't call Initialize, so guard before the method call.
+	if conf != nil && (conf.IsProduction() || conf.IsStaging()) {
 		sentry.AddBreadcrumb(&sentry.Breadcrumb{
 			Message: msg,
 		})
@@ -45,8 +54,9 @@ func Fatal(e error, msg string) {
 	if e == nil {
 		e = errors.New(msg)
 	}
-	// only log to sentry on production or staging
-	if conf.IsProduction() || conf.IsStaging() {
+	// only log to sentry on production or staging; conf is nil in tests and
+	// any binary that didn't call Initialize, so guard before the method call.
+	if conf != nil && (conf.IsProduction() || conf.IsStaging()) {
 		sentry.AddBreadcrumb(&sentry.Breadcrumb{
 			Message: msg,
 		})
