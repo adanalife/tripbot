@@ -4,7 +4,6 @@ services:
   tripbot:
     environment:
       ENV: production
-      GOOGLE_APPLICATION_CREDENTIALS: /opt/tripbot/infra/google/tripbot-prod.json
       DISABLE_TWITCH_WEBHOOKS: "false"
     ports:
       # matching the port in the twitch oauth app
