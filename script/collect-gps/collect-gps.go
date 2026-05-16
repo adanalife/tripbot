@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
@@ -40,7 +41,7 @@ func main() {
 			log.Fatal("you cannot use -current and -file at the same time")
 		}
 		// preload the currently-playing vid
-		video.GetCurrentlyPlaying()
+		video.GetCurrentlyPlaying(context.Background())
 		videoFile = video.CurrentlyPlaying.String()
 	}
 

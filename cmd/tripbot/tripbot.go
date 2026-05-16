@@ -126,7 +126,7 @@ func startHttpServer(ctx context.Context) {
 // findInitialVideo will determine the vido that is currently-playing
 // we want to run this early, otherwise it will be unset until the first cron job runs
 func findInitialVideo() {
-	video.GetCurrentlyPlaying()
+	video.GetCurrentlyPlaying(context.Background())
 	v := video.CurrentlyPlaying
 	_, err := video.LoadOrCreate(v.String())
 	if err != nil {
@@ -249,7 +249,7 @@ func scheduleBackgroundJobs() {
 	// Functions that haven't been ctx-threaded yet get adapter closures
 	// (func(_ context.Context) { fn() }) — they still get a parent span via
 	// tracedJob but no ctx-aware child linking until threaded.
-	addJob(60*time.Second, "video.GetCurrentlyPlaying", func(_ context.Context) { video.GetCurrentlyPlaying() })
+	addJob(60*time.Second, "video.GetCurrentlyPlaying", video.GetCurrentlyPlaying)
 	addJob(61*time.Second, "users.UpdateSession", users.UpdateSession)
 	addJob(62*time.Second, "users.UpdateLeaderboard", func(_ context.Context) { users.UpdateLeaderboard() })
 	addJob(5*time.Minute, "onscreens.ShowGuessLeaderboard", onscreensClient.ShowGuessLeaderboard)
