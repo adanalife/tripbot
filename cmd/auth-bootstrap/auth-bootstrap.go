@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"runtime"
@@ -32,7 +33,6 @@ import (
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/server/oauthstate"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
-	"github.com/logrusorgru/aurora/v3"
 	"github.com/nicklaw5/helix/v2"
 )
 
@@ -99,9 +99,8 @@ func main() {
 		_ = srv.Shutdown(ctx)
 	}()
 
-	log.Println(aurora.Cyan("Opening browser for Twitch sign-in..."))
-	log.Println("Visit:")
-	log.Println(aurora.Blue(authURL).Underline())
+	slog.Info("opening browser for Twitch sign-in")
+	slog.Info("visit URL", "url", authURL)
 	// Skip browser open in headless environments (e.g. the k8s Job).
 	if os.Getenv("DISPLAY") != "" || os.Getenv("WAYLAND_DISPLAY") != "" || runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
 		helpers.OpenInBrowser(authURL)
@@ -112,7 +111,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("bootstrap failed: %v", err)
 		}
-		log.Println(aurora.Green("bootstrap successful — refresh token persisted to oauth_tokens"))
+		slog.Info("bootstrap successful, refresh token persisted to oauth_tokens")
 	case <-time.After(flowTimeout):
 		log.Fatalf("timed out after %s waiting for Twitch callback", flowTimeout)
 	}
