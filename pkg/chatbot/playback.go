@@ -32,7 +32,7 @@ func (a *App) timewarp() {
 		terrors.Log(err, "error from VLC client")
 	}
 	// update the currently-playing video
-	video.GetCurrentlyPlaying()
+	a.Video.GetCurrentlyPlaying()
 	// update our record of last time it ran
 	lastTimewarpTime = time.Now()
 }
@@ -114,7 +114,7 @@ func (a *App) jumpCmd(ctx context.Context, user *users.User, params []string) {
 	}
 	Say(fmt.Sprintf("Jumping to %s...!", titlecaseState))
 	// update the currently-playing video
-	video.GetCurrentlyPlaying()
+	a.Video.GetCurrentlyPlaying()
 	// show the flag for the state
 	a.Onscreens.ShowFlag(10 * time.Second)
 	// update our record of last time it ran
@@ -161,7 +161,7 @@ func (a *App) skipCmd(ctx context.Context, user *users.User, params []string) {
 		terrors.Log(err, "error from VLC client")
 	}
 	// update the currently-playing video
-	video.GetCurrentlyPlaying()
+	a.Video.GetCurrentlyPlaying()
 	// update our record of last time it ran
 	lastTimewarpTime = time.Now()
 }
@@ -206,7 +206,7 @@ func (a *App) backCmd(ctx context.Context, user *users.User, params []string) {
 		terrors.Log(err, "error from VLC client")
 	}
 	// update the currently-playing video
-	video.GetCurrentlyPlaying()
+	a.Video.GetCurrentlyPlaying()
 	// update our record of last time it ran
 	lastTimewarpTime = time.Now()
 }

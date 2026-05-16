@@ -38,14 +38,16 @@ func newTestVideo(state string, lat, lng float64, date time.Time) video.Video {
 }
 
 // newTestApp returns an App with CurrentVideo returning vid, plus no-op
-// Onscreens and VLC fakes. For commands that don't use CurrentVideo, pass a
-// zero-value video.Video. To assert on Onscreens or VLC calls, replace
-// app.Onscreens / app.VLC with a recordingOnscreens / recordingVLC.
+// Onscreens, VLC, and Video fakes. For commands that don't use CurrentVideo,
+// pass a zero-value video.Video. To assert on Onscreens / VLC / Video calls,
+// replace app.Onscreens / app.VLC / app.Video with a recordingOnscreens /
+// recordingVLC / recordingVideo.
 func newTestApp(vid video.Video) *App {
 	return &App{
 		CurrentVideo: func() video.Video { return vid },
 		Onscreens:    noopOnscreens{},
 		VLC:          noopVLC{},
+		Video:        noopVideo{},
 	}
 }
 
@@ -442,7 +444,7 @@ func TestGuessCmd_CorrectGuess_DrivesOverlayAndPlayback(t *testing.T) {
 	out, restore := captureSay(t)
 	defer restore()
 
-	app.guessCmd(newTestUser("viewer1"), []string{"Colorado"})
+	app.guessCmd(context.Background(), newTestUser("viewer1"), []string{"Colorado"})
 
 	msg := out()
 	if !strings.Contains(msg, "@viewer1 got it") || !strings.Contains(msg, "Colorado") {
@@ -484,7 +486,7 @@ func TestGuessCmd_CorrectGuess_FullStateName(t *testing.T) {
 	out, restore := captureSay(t)
 	defer restore()
 
-	app.guessCmd(newTestUser("viewer1"), []string{"Massachusetts"})
+	app.guessCmd(context.Background(), newTestUser("viewer1"), []string{"Massachusetts"})
 
 	if !strings.Contains(out(), "got it") {
 		t.Errorf("expected correct-guess msg, got %q", out())
@@ -506,7 +508,7 @@ func TestGuessCmd_CorrectGuess_TwoLetterCode(t *testing.T) {
 	out, restore := captureSay(t)
 	defer restore()
 
-	app.guessCmd(newTestUser("viewer1"), []string{"CA"})
+	app.guessCmd(context.Background(), newTestUser("viewer1"), []string{"CA"})
 
 	if !strings.Contains(out(), "got it") {
 		t.Errorf("expected correct-guess msg from CA, got %q", out())

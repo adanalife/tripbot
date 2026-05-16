@@ -38,6 +38,11 @@ type App struct {
 	// VLC drives playback operations (timewarp, jump, skip, back). Tests
 	// inject a no-op fake; production uses the realVLC adapter.
 	VLC VLC
+	// Video reads / refreshes the currently-playing dashcam video. Tests
+	// inject a no-op fake; production uses the realVideo adapter.
+	// CurrentVideo (above) is the older closure-based seam; both live on
+	// App for now and a follow-up will subsume CurrentVideo into Video.
+	Video Video
 }
 
 // db returns the DB handle the App should use. Prefers an explicit a.DB
@@ -55,6 +60,7 @@ var defaultApp = &App{
 	// DB stays nil; commands use a.db() which falls back to database.GormDB().
 	Onscreens: realOnscreens{},
 	VLC:       realVLC{},
+	Video:     realVideo{},
 }
 
 // used to determine which help message to display
