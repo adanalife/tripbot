@@ -1,12 +1,11 @@
 package twitch
 
 import (
-	"log"
+	"log/slog"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/davecgh/go-spew/spew"
-	"github.com/logrusorgru/aurora/v3"
 	"github.com/nicklaw5/helix/v2"
 )
 
@@ -62,6 +61,6 @@ func getWebookSubscriptions() {
 			spew.Dump(resp.Data.WebhookSubscriptions)
 		}
 	} else {
-		log.Println(aurora.Red("no webhooks found"))
+		slog.Warn("no webhooks found")
 	}
 }

@@ -2,7 +2,7 @@ package twitch
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
@@ -73,9 +73,9 @@ func GetSubscribers() {
 	instrumentation.TwitchAudience.SetSubscribers(int64(len(subscribers)))
 
 	if len(subscribers) > 0 {
-		log.Println("subscribers:", strings.Join(subscribers, ", "))
+		slog.Info("subscribers", "count", len(subscribers), "names", strings.Join(subscribers, ", "))
 	} else {
-		log.Println(c.Conf.ChannelName, "has no subscribers :(")
+		slog.Info("no subscribers", "channel", c.Conf.ChannelName)
 	}
 }
 
@@ -95,7 +95,7 @@ func GetFollowerCount() {
 		return
 	}
 	instrumentation.TwitchAudience.SetFollowers(int64(resp.Data.Total))
-	log.Printf("%s has %d followers", c.Conf.ChannelName, resp.Data.Total)
+	slog.Info("follower count", "channel", c.Conf.ChannelName, "total", resp.Data.Total)
 }
 
 // UserIsSubscriber returns true if the user subscribes to the channel
