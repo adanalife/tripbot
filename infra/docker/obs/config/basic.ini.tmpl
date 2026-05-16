@@ -6,7 +6,13 @@ BaseCY=1080
 OutputCX=${OBS_OUTPUT_WIDTH}
 OutputCY=${OBS_OUTPUT_HEIGHT}
 FPSCommon=${OBS_FPS_COMMON}
-ScaleType=lanczos
+; bilinear is OBS's default and what we implicitly had before #489
+; introduced the templatized Output dims. lanczos here costs ~5-10x more
+; CPU per scaled frame than bilinear and tips the (software-only, no
+; GPU passthrough) compositor over its frame budget on stage, which in
+; turn causes per-frame render buffers to backlog and grow OBS RSS by
+; ~10 MB/min until the pod OOMs. Quality delta is invisible on motion.
+ScaleType=bilinear
 [Output]
 Mode=Simple
 [SimpleOutput]
