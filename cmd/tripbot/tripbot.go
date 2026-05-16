@@ -265,7 +265,7 @@ func scheduleBackgroundJobs() {
 			client.SetIRCToken(tok)
 		}
 	})
-	addJob(2*time.Hour+57*time.Minute+30*time.Second, "chatbot.Chatter", func(_ context.Context) { chatbot.Chatter() })
+	addJob(2*time.Hour+57*time.Minute+30*time.Second, "chatbot.Chatter", chatbot.Chatter)
 	addJob(12*time.Hour, "twitch.UpdateWebhookSubscriptions", mytwitch.UpdateWebhookSubscriptions)
 }
 
