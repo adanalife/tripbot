@@ -22,7 +22,12 @@ func SetEnvironment() {
 
 	envVar, ok := os.LookupEnv("ENV")
 	if !ok {
-		log.Fatalln("You must set ENV")
+		envVar = "development"
+		slog.Warn("ENV not set, defaulting to development")
+		// envconfig.Process reads from the process env; the defaulted
+		// value has to be visible to the required:"true" field on
+		// TripbotConfig.Environment / VlcServerConfig.Environment.
+		os.Setenv("ENV", envVar)
 	}
 
 	// standardize the ENV to the long name
