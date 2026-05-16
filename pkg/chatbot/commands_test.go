@@ -38,16 +38,76 @@ func newTestVideo(state string, lat, lng float64, date time.Time) video.Video {
 }
 
 // newTestApp returns an App with CurrentVideo returning vid, plus no-op
-// Onscreens, VLC, and Video fakes. For commands that don't use CurrentVideo,
-// pass a zero-value video.Video. To assert on Onscreens / VLC / Video calls,
-// replace app.Onscreens / app.VLC / app.Video with a recordingOnscreens /
-// recordingVLC / recordingVideo.
+// Onscreens, VLC, Video, and IRC fakes. For commands that don't use
+// CurrentVideo, pass a zero-value video.Video. To assert on any of those
+// surfaces, replace the corresponding field with a recording fake
+// (recordingOnscreens / recordingVLC / recordingVideo / recordingIRC).
 func newTestApp(vid video.Video) *App {
 	return &App{
 		CurrentVideo: func() video.Video { return vid },
 		Onscreens:    noopOnscreens{},
 		VLC:          noopVLC{},
 		Video:        noopVideo{},
+		IRC:          noopIRC{},
+	}
+}
+
+// --- App.IRC seam ---
+//
+// These tests exercise the new App.IRC injection point introduced alongside
+// the legacy sayFn-based captureSay() helper. Pick a command that's been
+// migrated to a.IRC.Say(...) and assert via a recordingIRC. Once all command
+// callsites flow through a.IRC, the captureSay()-based tests above can be
+// rewritten in this shape and the global Say()/sayFn collapsed.
+
+func TestHelpCmd_SaysSomething_ViaIRC(t *testing.T) {
+	app := newTestApp(video.Video{})
+	rec := &recordingIRC{}
+	app.IRC = rec
+
+	app.helpCmd(context.Background(), newTestUser("viewer1"), nil)
+
+	if len(rec.Says) == 0 {
+		t.Fatal("expected a help message via IRC, got none")
+	}
+	if !strings.Contains(rec.Says[0], " of ") {
+		t.Errorf("expected count like '(N of M)' in help message, got %q", rec.Says[0])
+	}
+}
+
+func TestUptimeCmd_SaysRunningFor_ViaIRC(t *testing.T) {
+	app := newTestApp(video.Video{})
+	rec := &recordingIRC{}
+	app.IRC = rec
+	Uptime = time.Now().Add(-5 * time.Minute)
+
+	app.uptimeCmd(context.Background(), newTestUser("viewer1"), nil)
+
+	if len(rec.Says) != 1 {
+		t.Fatalf("expected exactly one Say() call, got %d: %v", len(rec.Says), rec.Says)
+	}
+	if !strings.HasPrefix(rec.Says[0], "I have been running for") {
+		t.Errorf("unexpected uptime message via IRC: %q", rec.Says[0])
+	}
+}
+
+func TestKilometresCmd_SaysViaIRC(t *testing.T) {
+	app := newTestApp(video.Video{})
+	rec := &recordingIRC{}
+	app.IRC = rec
+
+	user := &users.User{Username: "viewer1", Miles: 10}
+	app.kilometresCmd(context.Background(), user, nil)
+
+	if len(rec.Says) != 1 {
+		t.Fatalf("expected exactly one Say() call, got %d: %v", len(rec.Says), rec.Says)
+	}
+	// 10 miles * 1.609344 = 16.09344, formatted as "16.09"
+	if !strings.Contains(rec.Says[0], "16.09") {
+		t.Errorf("expected km conversion in IRC output, got %q", rec.Says[0])
+	}
+	if !strings.Contains(rec.Says[0], "@viewer1") {
+		t.Errorf("expected @username in IRC output, got %q", rec.Says[0])
 	}
 }
 
