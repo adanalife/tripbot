@@ -33,6 +33,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"log/slog"
 	"math"
 	"os"
 
@@ -112,7 +113,7 @@ func main() {
 	}
 	defer func() {
 		if err := db.Close(); err != nil {
-			log.Printf("close db: %v", err)
+			slog.Warn("close db", "err", err)
 		}
 	}()
 	if err := db.Ping(); err != nil {
@@ -125,7 +126,7 @@ func main() {
 	}
 	defer func() {
 		if err := rows.Close(); err != nil {
-			log.Printf("close rows: %v", err)
+			slog.Warn("close rows", "err", err)
 		}
 	}()
 
@@ -177,7 +178,7 @@ func main() {
 
 		if *apply && willUpdate {
 			if _, err := db.Exec(updateMilesSQL, r.computed, r.id); err != nil {
-				log.Printf("ERROR updating %s (id=%d): %v", r.username, r.id, err)
+				slog.Error("updating user miles failed", "username", r.username, "id", r.id, "err", err)
 			} else {
 				updateCount++
 			}

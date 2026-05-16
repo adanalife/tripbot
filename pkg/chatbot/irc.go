@@ -2,7 +2,7 @@ package chatbot
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 
 	mylog "github.com/adanalife/tripbot/pkg/chatbot/log"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
@@ -34,7 +34,7 @@ func (realIRC) Say(msg string) {
 
 func (realIRC) Whisper(username, msg string) {
 	//TODO: include whispers in log
-	log.Println("sending whisper to", username, ":", msg)
+	slog.Info("sending whisper", "to", username, "msg", msg)
 	// go-twitch-irc v4 removed the Whisper() send method; replicate the
 	// v2 behavior by sending the raw IRC /w command via PRIVMSG on the
 	// bot's own channel.

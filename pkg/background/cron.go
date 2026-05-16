@@ -2,6 +2,7 @@ package background
 
 import (
 	"log"
+	"log/slog"
 
 	"github.com/go-co-op/gocron/v2"
 )
@@ -9,7 +10,7 @@ import (
 var Scheduler gocron.Scheduler
 
 func StartCron() {
-	log.Println("Starting cron")
+	slog.Info("starting cron")
 	s, err := gocron.NewScheduler()
 	if err != nil {
 		log.Fatalf("error creating gocron scheduler: %v", err)
@@ -23,11 +24,11 @@ func StartCron() {
 // completion. Cron jobs here are short idempotent ticks that retry on the
 // next interval, so losing an in-flight execution is fine.
 func StopCron() {
-	log.Println("Stopping cron")
+	slog.Info("stopping cron")
 	if Scheduler == nil {
 		return
 	}
 	if err := Scheduler.Shutdown(); err != nil {
-		log.Printf("error shutting down gocron scheduler: %v", err)
+		slog.Error("error shutting down gocron scheduler", "err", err)
 	}
 }

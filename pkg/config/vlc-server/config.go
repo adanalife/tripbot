@@ -2,6 +2,7 @@ package config
 
 import (
 	"log"
+	"log/slog"
 	"os"
 
 	"github.com/adanalife/tripbot/pkg/config"
@@ -37,7 +38,7 @@ func init() {
 		_, err := os.Stat(d)
 		if err != nil {
 			if os.IsNotExist(err) {
-				log.Println("Creating directory", d)
+				slog.Info("creating directory", "dir", d)
 				err = os.MkdirAll(d, 0755)
 				if err != nil {
 					log.Fatalf("Error creating directory %s: %s", d, err)

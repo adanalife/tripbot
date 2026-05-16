@@ -3,7 +3,7 @@ package obs
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"os"
 	"time"
 
@@ -43,17 +43,17 @@ func PollStreamingActive(ctx context.Context, interval time.Duration) {
 func poll(ctx context.Context, addr, passwd string, interval time.Duration) {
 	client, err := goobs.New(addr, goobs.WithPassword(passwd))
 	if err != nil {
-		log.Printf("obs: websocket connect to %s failed: %v", addr, err)
+		slog.ErrorContext(ctx, "obs websocket connect failed", "addr", addr, "err", err)
 		instrumentation.OBSStreaming.Set(false)
 		return
 	}
 	defer func() {
 		if err := client.Disconnect(); err != nil {
-			log.Printf("obs: disconnect: %v", err)
+			slog.WarnContext(ctx, "obs disconnect", "err", err)
 		}
 	}()
 
-	log.Printf("obs: connected to websocket at %s", addr)
+	slog.InfoContext(ctx, "obs websocket connected", "addr", addr)
 
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -65,7 +65,7 @@ func poll(ctx context.Context, addr, passwd string, interval time.Duration) {
 		case <-ticker.C:
 			resp, err := client.Stream.GetStreamStatus()
 			if err != nil {
-				log.Printf("obs: GetStreamStatus error: %v", err)
+				slog.ErrorContext(ctx, "obs GetStreamStatus error", "err", err)
 				instrumentation.OBSStreaming.Set(false)
 				return // trigger reconnect
 			}
@@ -83,7 +83,7 @@ func poll(ctx context.Context, addr, passwd string, interval time.Duration) {
 			if err != nil {
 				// Non-fatal — keep the connection alive; stream-side
 				// gauges already published this tick.
-				log.Printf("obs: GetStats error: %v", err)
+				slog.WarnContext(ctx, "obs GetStats error", "err", err)
 				continue
 			}
 			instrumentation.OBSStats.Update(instrumentation.OBSStatsSnapshot{

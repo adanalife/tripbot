@@ -3,7 +3,7 @@ package chatbot
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"math/rand"
 	"time"
 
@@ -133,7 +133,7 @@ func Whisper(username, msg string) {
 	//TODO: include whispers in log
 	// include the message in the log
 	// mylog.ChatMsg(c.Conf.BotUsername, msg)
-	log.Println("sending whisper to", username, ":", msg)
+	slog.Info("sending whisper", "to", username, "msg", msg)
 	// say the message to chat
 	client.Say(c.Conf.BotUsername, fmt.Sprintf("/w %s %s", username, msg))
 }

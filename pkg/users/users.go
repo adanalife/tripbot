@@ -3,7 +3,7 @@ package users
 import (
 	"context"
 	"errors"
-	"log"
+	"log/slog"
 	"time"
 
 	terrors "github.com/adanalife/tripbot/pkg/errors"
@@ -58,7 +58,7 @@ func (u User) sessionMiles() float32 {
 	if u.IsSubscriber() {
 		bonusMiles := u.BonusMiles()
 		if c.Conf.Verbose {
-			log.Println(u.String(), "will get", aurora.Green(bonusMiles), "bonus miles")
+			slog.Info("subscriber will get bonus miles", "username", u.Username, "bonus_miles", bonusMiles)
 		}
 		sessionMiles += bonusMiles
 	}
@@ -85,7 +85,7 @@ func (u User) CurrentMonthlyMiles(ctx context.Context) float32 {
 // User.save() will take the given user and store it in the DB
 func (u User) save(ctx context.Context) {
 	if c.Conf.Verbose {
-		log.Println("saving user", u)
+		slog.InfoContext(ctx, "saving user", "username", u.Username)
 	}
 	err := database.GormDB().WithContext(ctx).Model(&u).Updates(map[string]any{
 		"last_seen":  u.LastSeen,
@@ -121,7 +121,7 @@ func (u User) String() string {
 // FindOrCreate will try to find the user in the DB, otherwise it will create a new user
 func FindOrCreate(ctx context.Context, username string) User {
 	if c.Conf.Verbose {
-		log.Printf("FindOrCreate(%s)", username)
+		slog.InfoContext(ctx, "FindOrCreate", "username", username)
 	}
 	user := Find(ctx, username)
 	if user.ID != 0 {
@@ -157,7 +157,7 @@ func (u *User) HasCommandAvailable() bool {
 	// check if they ran a command in the last 24 hrs
 	now := time.Now()
 	if now.Sub(u.lastCmd) > 24*time.Hour {
-		log.Println("letting", u, "run a command")
+		slog.Info("letting user run a command", "username", u.Username)
 		// update their lastCmd time
 		u.lastCmd = now
 		return true
@@ -186,7 +186,7 @@ func (u *User) HasGuessCommandAvailable(lastTimewarpTime time.Time) bool {
 
 	// check if they ran a location command recently
 	if u.GuessCooldownRemaining() <= 0 {
-		log.Println("letting", u, "run guess command")
+		slog.Info("letting user run guess command", "username", u.Username)
 		return true
 	}
 	return false
@@ -199,7 +199,7 @@ func (u *User) SetLastLocationTime() {
 //TODO: maybe return an err here?
 // create() will actually create the DB record
 func create(ctx context.Context, username string) User {
-	log.Println("creating user", username)
+	slog.InfoContext(ctx, "creating user", "username", username)
 	// create a new row, using default vals and creating a single visit
 	newUser := User{Username: username, NumVisits: 1}
 	if err := database.GormDB().WithContext(ctx).Create(&newUser).Error; err != nil {

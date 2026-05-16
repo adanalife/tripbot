@@ -1,7 +1,7 @@
 package onscreensServer
 
 import (
-	"log"
+	"log/slog"
 	"math/rand"
 	"time"
 )
@@ -20,7 +20,7 @@ var possibleRightMessages = []string{
 }
 
 func InitRightRotator() {
-	log.Println("Creating right rotator onscreen")
+	slog.Info("creating onscreen", "kind", "right-rotator")
 	RightRotator = New()
 	// Show a first message synchronously so the OBS browser source has
 	// content to render the moment it polls — otherwise there's a brief

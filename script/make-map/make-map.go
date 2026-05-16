@@ -6,6 +6,7 @@ import (
 	"image"
 	"image/png"
 	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -55,7 +56,7 @@ func main() {
 
 			vid, err := video.LoadOrCreate(path)
 			if err != nil {
-				log.Println("unable to create video:", err)
+				slog.Error("unable to create video", "err", err, "path", path)
 				return nil
 			}
 
@@ -128,7 +129,7 @@ func main() {
 
 	// something went wrong walking the directory
 	if err != nil {
-		log.Println(err)
+		slog.Error("directory walk failed", "err", err)
 	}
 
 }
@@ -137,14 +138,14 @@ func main() {
 func saveImage(img image.Image, imgPath string) error {
 	f, err := os.Create(imgPath)
 	if err != nil {
-		log.Println(err)
+		slog.Error("could not create image file", "err", err, "path", imgPath)
 		return err
 	}
 	defer f.Close()
 
 	err = png.Encode(f, img)
 	if err != nil {
-		log.Println(err)
+		slog.Error("png encode failed", "err", err, "path", imgPath)
 	}
 	return err
 }
