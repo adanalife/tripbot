@@ -7,6 +7,7 @@ import (
 
 	"github.com/adanalife/tripbot/pkg/config"
 	"github.com/getsentry/sentry-go"
+	sentryotel "github.com/getsentry/sentry-go/otel"
 	"github.com/logrusorgru/aurora/v3"
 )
 
@@ -24,8 +25,14 @@ func Initialize(c config.Config, version string) {
 	// build-time value the /version endpoint exposes.
 	err := sentry.Init(sentry.ClientOptions{
 		Release: version,
-		// enable tracing
-		TracesSampleRate: 0.2,
+		// OTel is the source of truth for tracing (otelhttp + otelsql + manual
+		// spans → OTLP → Tempo). Sentry's own tracer is left at the default
+		// off-state to avoid double-tracking; the linking integration below
+		// stamps the active OTel trace_id onto captured Sentry events so
+		// errors clickthrough to their Tempo trace.
+		Integrations: func(integrations []sentry.Integration) []sentry.Integration {
+			return append(integrations, sentryotel.NewOtelIntegration())
+		},
 	})
 	if err != nil {
 		fmt.Println(err)

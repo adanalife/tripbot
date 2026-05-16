@@ -43,6 +43,8 @@ github.com/getsentry/sentry-go v0.46.2 h1:1jhYwrKGa3sIpo/y5iDNXS5wDoT7I1KNzMHrnK
 github.com/getsentry/sentry-go v0.46.2/go.mod h1:evVbw2qotNUdYG8KxXbAdjOQWWvWIwKxpjdZZIvcIPw=
 github.com/getsentry/sentry-go/negroni v0.46.2 h1:fE4hZv1TH9r2oN+2gBvlDFF3vSpd5m6vy6qTxdnJz3M=
 github.com/getsentry/sentry-go/negroni v0.46.2/go.mod h1:kuxP9EffSbcFHXEUIdB0tH8OQmPhinbmN906fpVCELE=
+github.com/getsentry/sentry-go/otel v0.46.2 h1:HRrTS2neFXRPzGFDV4T6qqjnSeKsaBeCfBn0nbRPHmk=
+github.com/getsentry/sentry-go/otel v0.46.2/go.mod h1:S5zULL1K9SLjY/l3/0v8IRZ9rBUQFS8l50nWLl/TS5E=
 github.com/go-co-op/gocron/v2 v2.21.2 h1:bD8/YwkojYHgXFr3iEulL148KBdTbKVxUZzFKpXcdbY=
 github.com/go-co-op/gocron/v2 v2.21.2/go.mod h1:5lEiCKk1oVJV39Zg7/YG10OnaVrDAV5GGR6O0663k6U=
 github.com/go-errors/errors v1.4.2 h1:J6MZopCL4uSllY1OfXM374weqZFFItUbrImctkmUxIA=
