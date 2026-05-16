@@ -3,7 +3,7 @@ package vlcServer
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"runtime/debug"
 	"strconv"
@@ -258,7 +258,7 @@ func catchAllHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
 		http.Error(w, "404 not found", http.StatusNotFound)
-		log.Println("someone tried hitting", r.URL.Path)
+		slog.InfoContext(r.Context(), "404 GET", "path", r.URL.Path)
 		return
 
 	// someone tried a PUT or a DELETE or something

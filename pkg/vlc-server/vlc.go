@@ -2,7 +2,7 @@ package vlcServer
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -109,7 +109,7 @@ func InitPlayer() {
 //TODO: are there more things to close gracefully?
 func Shutdown() {
 	if helpers.RunningOnDarwin() {
-		log.Println("not stopping VLC cause we're on darwin")
+		slog.Info("not stopping VLC on darwin")
 		return
 	}
 	err := player.Stop()
