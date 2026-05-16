@@ -42,21 +42,21 @@ func (a *App) timewarpCmd(ctx context.Context, user *users.User, _ []string) {
 
 	// exit early if we're on OS X
 	if helpers.RunningOnDarwin() {
-		Say("Sorry, timewarp isn't available right now")
+		a.IRC.Say("Sorry, timewarp isn't available right now")
 		return
 	}
 
 	// rate-limit the number of times this can run
 	if !c.UserIsAdmin(user.Username) {
 		if time.Now().Sub(lastTimewarpTime) < 20*time.Second {
-			Say("Not yet; enjoy the moment!")
+			a.IRC.Say("Not yet; enjoy the moment!")
 			return
 		}
 	}
 
 	// only say this if the caller is not me
 	if !c.UserIsAdmin(user.Username) {
-		Say("Here we go...!")
+		a.IRC.Say("Here we go...!")
 	}
 
 	// do the timewarp
@@ -69,21 +69,21 @@ func (a *App) jumpCmd(ctx context.Context, user *users.User, params []string) {
 
 	// exit early if we're on OS X
 	if helpers.RunningOnDarwin() {
-		Say("Sorry, jump isn't available right now")
+		a.IRC.Say("Sorry, jump isn't available right now")
 		return
 	}
 
 	// rate-limit the number of times this can run
 	if !c.UserIsAdmin(user.Username) {
 		if time.Now().Sub(lastTimewarpTime) < 20*time.Second {
-			Say("Not yet; enjoy the moment!")
+			a.IRC.Say("Not yet; enjoy the moment!")
 			return
 		}
 	}
 
 	// exit if the user gave no args or too many
 	if len(params) == 0 || len(params) > 2 {
-		Say("Usage: !jump [state]")
+		a.IRC.Say("Usage: !jump [state]")
 		return
 	}
 
@@ -96,23 +96,23 @@ func (a *App) jumpCmd(ctx context.Context, user *users.User, params []string) {
 	// check to see if we even have footage for this state
 	if _, ok := err.(*terrors.NoFootageForStateError); ok {
 		msg := fmt.Sprintf("No footage for %s... yet! ;)", titlecaseState)
-		Say(msg)
+		a.IRC.Say(msg)
 		return
 	}
 	// check to see if there was an error finding a candidate video
 	if err != nil {
 		terrors.Log(err, "error from finding random video for state")
-		Say("Usage: !jump [state]")
+		a.IRC.Say("Usage: !jump [state]")
 		return
 	}
 	// tell VLC to play it
 	err = a.VLC.PlayFileInPlaylist(randomVid.File())
 	if err != nil {
 		terrors.Log(err, "error from VLC client")
-		Say("Usage: !jump [state]")
+		a.IRC.Say("Usage: !jump [state]")
 		return
 	}
-	Say(fmt.Sprintf("Jumping to %s...!", titlecaseState))
+	a.IRC.Say(fmt.Sprintf("Jumping to %s...!", titlecaseState))
 	// update the currently-playing video
 	a.Video.GetCurrentlyPlaying()
 	// show the flag for the state
@@ -128,14 +128,14 @@ func (a *App) skipCmd(ctx context.Context, user *users.User, params []string) {
 
 	// exit early if we're on OS X
 	if helpers.RunningOnDarwin() {
-		Say("Sorry, skip isn't available right now")
+		a.IRC.Say("Sorry, skip isn't available right now")
 		return
 	}
 
 	// rate-limit the number of times this can run
 	if !c.UserIsAdmin(user.Username) {
 		if time.Now().Sub(lastTimewarpTime) < 20*time.Second {
-			Say("Not yet; enjoy the moment!")
+			a.IRC.Say("Not yet; enjoy the moment!")
 			return
 		}
 	}
@@ -150,7 +150,7 @@ func (a *App) skipCmd(ctx context.Context, user *users.User, params []string) {
 		n, err = strconv.Atoi(params[0])
 		// if conversion fails or they give too many args
 		if err != nil || len(params) > 1 {
-			Say("Usage: !skip [num]")
+			a.IRC.Say("Usage: !skip [num]")
 			return
 		}
 	}
@@ -173,14 +173,14 @@ func (a *App) backCmd(ctx context.Context, user *users.User, params []string) {
 
 	// exit early if we're on OS X
 	if helpers.RunningOnDarwin() {
-		Say("Sorry, back isn't available right now")
+		a.IRC.Say("Sorry, back isn't available right now")
 		return
 	}
 
 	// rate-limit the number of times this can run
 	if !c.UserIsAdmin(user.Username) {
 		if time.Now().Sub(lastTimewarpTime) < 20*time.Second {
-			Say("Not yet; enjoy the moment!")
+			a.IRC.Say("Not yet; enjoy the moment!")
 			return
 		}
 	}
@@ -195,7 +195,7 @@ func (a *App) backCmd(ctx context.Context, user *users.User, params []string) {
 		n, err = strconv.Atoi(params[0])
 		// if conversion fails or they give too many args
 		if err != nil || len(params) > 1 {
-			Say("Usage: !back [num]")
+			a.IRC.Say("Usage: !back [num]")
 			return
 		}
 	}
