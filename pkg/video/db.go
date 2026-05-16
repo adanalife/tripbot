@@ -107,7 +107,9 @@ func (v Video) save() error {
 	if !flagged {
 		// figure out which state we're in
 		state, err = helpers.StateFromCoords(lat, lng)
-		if err != nil {
+		// ErrMapsDisabled is the expected steady-state when no Maps key
+		// is configured; don't spam Sentry on every video import.
+		if err != nil && !errors.Is(err, helpers.ErrMapsDisabled) {
 			terrors.Log(err, "error geocoding coords")
 		}
 	}
