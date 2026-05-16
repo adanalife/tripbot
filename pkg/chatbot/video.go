@@ -17,6 +17,9 @@ type Video interface {
 	// playing (an HTTP call to vlc-server in production), updates the
 	// package-level state, and returns the resulting Video.
 	GetCurrentlyPlaying() video.Video
+	// FindRandomByState returns a random video filmed in the given US state.
+	// Returns *terrors.NoFootageForStateError when no rows match.
+	FindRandomByState(state string) (video.Video, error)
 }
 
 // realVideo delegates to pkg/video.
@@ -29,4 +32,7 @@ func (realVideo) GetCurrentlyPlaying() video.Video {
 	// grows ctx-aware methods.
 	video.GetCurrentlyPlaying(context.Background())
 	return video.CurrentlyPlaying
+}
+func (realVideo) FindRandomByState(state string) (video.Video, error) {
+	return video.FindRandomByState(state)
 }
