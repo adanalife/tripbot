@@ -3,7 +3,7 @@ package chatbot
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"math"
 	"math/rand"
 	"os"
@@ -36,13 +36,13 @@ const guessScoreboard = "guess_state_total"
 //TODO: incorrect guess scoreboard?
 
 func (a *App) helpCmd(ctx context.Context, user *users.User, _ []string) {
-	log.Println(user.Username, "ran !help")
+	slog.InfoContext(ctx, "ran !help", "username", user.Username)
 	msg := fmt.Sprintf("%s (%d of %d)", help(), helpIndex+1, len(c.HelpMessages))
 	sayFn(msg)
 }
 
 func (a *App) helloCmd(ctx context.Context, user *users.User, params []string) {
-	log.Println(user.Username, "said hello")
+	slog.InfoContext(ctx, "user said hello", "username", user.Username)
 
 	// check if it was just a one-word hello
 	if len(params) > 0 {
@@ -71,12 +71,12 @@ func (a *App) helloCmd(ctx context.Context, user *users.User, params []string) {
 }
 
 func (a *App) flagCmd(ctx context.Context, user *users.User, _ []string) {
-	log.Println(user.Username, "ran !flag")
+	slog.InfoContext(ctx, "ran !flag", "username", user.Username)
 	a.Onscreens.ShowFlag(10 * time.Second)
 }
 
 func (a *App) versionCmd(ctx context.Context, user *users.User, _ []string) {
-	log.Println(user.Username, "ran !version")
+	slog.InfoContext(ctx, "ran !version", "username", user.Username)
 
 	if helpers.RunningOnWindows() {
 		sayFn("Sorry, I can't answer that right now")
@@ -100,14 +100,14 @@ func (a *App) versionCmd(ctx context.Context, user *users.User, _ []string) {
 }
 
 func (a *App) uptimeCmd(ctx context.Context, user *users.User, _ []string) {
-	log.Println(user.Username, "ran !uptime")
+	slog.InfoContext(ctx, "ran !uptime", "username", user.Username)
 	dur := time.Now().Sub(Uptime)
 	msg := fmt.Sprintf("I have been running for %s", durafmt.Parse(dur))
 	sayFn(msg)
 }
 
 func (a *App) milesCmd(ctx context.Context, user *users.User, params []string) {
-	log.Println(user.Username, "ran !miles")
+	slog.InfoContext(ctx, "ran !miles", "username", user.Username)
 	var username string
 	var lifetimeMiles, monthlyMiles float32
 
@@ -155,7 +155,7 @@ func (a *App) milesCmd(ctx context.Context, user *users.User, params []string) {
 }
 
 func (a *App) kilometresCmd(ctx context.Context, user *users.User, _ []string) {
-	log.Println(user.Username, "ran !kilometres")
+	slog.InfoContext(ctx, "ran !kilometres", "username", user.Username)
 	km := user.CurrentMiles() * 1.609344
 	msg := "@%s has %.2f kilometres."
 	msg = fmt.Sprintf(msg, user.Username, km)
@@ -163,7 +163,7 @@ func (a *App) kilometresCmd(ctx context.Context, user *users.User, _ []string) {
 }
 
 func (a *App) sunsetCmd(ctx context.Context, user *users.User, _ []string) {
-	log.Println(user.Username, "ran !sunset")
+	slog.InfoContext(ctx, "ran !sunset", "username", user.Username)
 	vid := a.CurrentVideo()
 	if vid.Flagged {
 		sayFn("I couldn't figure out current GPS coords, using next closest...")
@@ -174,7 +174,7 @@ func (a *App) sunsetCmd(ctx context.Context, user *users.User, _ []string) {
 }
 
 func (a *App) locationCmd(ctx context.Context, user *users.User, _ []string) {
-	log.Println(user.Username, "ran !location (or similar)")
+	slog.InfoContext(ctx, "ran !location (or similar)", "username", user.Username)
 	vid := a.CurrentVideo()
 	if vid.Flagged {
 		sayFn("I couldn't figure out current GPS coords, using next closest...")
@@ -198,7 +198,7 @@ func (a *App) locationCmd(ctx context.Context, user *users.User, _ []string) {
 }
 
 func (a *App) monthlyMilesLeaderboardCmd(ctx context.Context, user *users.User, _ []string) {
-	log.Println(user.Username, "ran !leaderboard")
+	slog.InfoContext(ctx, "ran !leaderboard", "username", user.Username)
 
 	// select users to show in leaderboard
 	size := 10
@@ -223,7 +223,7 @@ func (a *App) monthlyMilesLeaderboardCmd(ctx context.Context, user *users.User, 
 }
 
 func (a *App) lifetimeMilesLeaderboardCmd(ctx context.Context, user *users.User, _ []string) {
-	log.Println(user.Username, "ran !totalleaderboard")
+	slog.InfoContext(ctx, "ran !totalleaderboard", "username", user.Username)
 
 	// select users to show in leaderboard
 	size := 10
@@ -247,7 +247,7 @@ func (a *App) lifetimeMilesLeaderboardCmd(ctx context.Context, user *users.User,
 }
 
 func (a *App) monthlyGuessLeaderboardCmd(ctx context.Context, user *users.User, _ []string) {
-	log.Println(user.Username, "ran !guessleaderboard")
+	slog.InfoContext(ctx, "ran !guessleaderboard", "username", user.Username)
 
 	// select users to show in leaderboard
 	size := 10
@@ -287,7 +287,7 @@ func (a *App) monthlyGuessLeaderboardCmd(ctx context.Context, user *users.User, 
 }
 
 func (a *App) timeCmd(ctx context.Context, user *users.User, _ []string) {
-	log.Println(user.Username, "ran !time")
+	slog.InfoContext(ctx, "ran !time", "username", user.Username)
 	var err error
 	var lat, lng float64
 	vid := a.CurrentVideo()
@@ -306,7 +306,7 @@ func (a *App) timeCmd(ctx context.Context, user *users.User, _ []string) {
 }
 
 func (a *App) dateCmd(ctx context.Context, user *users.User, _ []string) {
-	log.Println(user.Username, "ran !date")
+	slog.InfoContext(ctx, "ran !date", "username", user.Username)
 	var err error
 	var lat, lng float64
 	vid := a.CurrentVideo()
@@ -326,7 +326,7 @@ func (a *App) dateCmd(ctx context.Context, user *users.User, _ []string) {
 
 //TODO: refactor to use golang '...' syntax
 func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
-	log.Println(user.Username, "ran !guess")
+	slog.InfoContext(ctx, "ran !guess", "username", user.Username)
 	var msg string
 
 	if len(params) == 0 {
@@ -375,7 +375,7 @@ func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 }
 
 func (a *App) stateCmd(ctx context.Context, user *users.User, _ []string) {
-	log.Println(user.Username, "ran !state")
+	slog.InfoContext(ctx, "ran !state", "username", user.Username)
 	vid := a.CurrentVideo()
 	if vid.Flagged {
 		sayFn("I couldn't figure out current GPS coords, using next closest...")
@@ -392,7 +392,7 @@ func (a *App) stateCmd(ctx context.Context, user *users.User, _ []string) {
 //TODO: maybe there could be a !cancel command or something
 //TODO: use fancy golang ... syntax?
 func (a *App) reportCmd(ctx context.Context, user *users.User, params []string) {
-	log.Println(user.Username, "ran !report")
+	slog.InfoContext(ctx, "ran !report", "username", user.Username)
 	message := strings.Join(params, " ")
 	// Route the report through Sentry so it lands somewhere visible.
 	// Followup tracked: wire !report to a real notification surface
@@ -402,14 +402,14 @@ func (a *App) reportCmd(ctx context.Context, user *users.User, params []string) 
 }
 
 func (a *App) bonusMilesCmd(ctx context.Context, user *users.User, _ []string) {
-	log.Println(user.Username, "ran !bonusmiles")
+	slog.InfoContext(ctx, "ran !bonusmiles", "username", user.Username)
 	bonus := user.BonusMiles()
 	msg := fmt.Sprintf("%s has earned %.4f bonus miles this session", user.Username, bonus)
 	sayFn(msg)
 }
 
 func (a *App) secretInfoCmd(ctx context.Context, user *users.User, _ []string) {
-	log.Println(user.Username, "ran !secretinfo")
+	slog.InfoContext(ctx, "ran !secretinfo", "username", user.Username)
 	if !c.UserIsAdmin(user.Username) {
 		return
 	}
@@ -421,23 +421,23 @@ func (a *App) secretInfoCmd(ctx context.Context, user *users.User, _ []string) {
 	} else {
 		msg = fmt.Sprintf("%s, lat: %f, lng: %f", msg, lat, lng)
 	}
-	log.Println(msg)
+	slog.InfoContext(ctx, "secretinfo output", "msg", msg)
 	sayFn(msg)
 }
 
 func (a *App) shutdownCmd(ctx context.Context, user *users.User, _ []string) {
-	log.Println(user.Username, "ran !shutdown")
+	slog.InfoContext(ctx, "ran !shutdown", "username", user.Username)
 	if !c.UserIsAdmin(user.Username) {
 		sayFn("Nice try bucko")
 		return
 	}
 	sayFn("Shutting down...")
-	log.Printf("currently playing: %s", a.CurrentVideo())
+	slog.InfoContext(ctx, "shutdown: currently playing", "video", a.CurrentVideo())
 	background.StopCron()
 	users.Shutdown(ctx)
 	err := database.Connection().Close()
 	if err != nil {
-		log.Println(err)
+		slog.ErrorContext(ctx, "DB close failed during shutdown", "err", err)
 	}
 	sentry.Flush(time.Second * 5)
 	os.Exit(0)
@@ -446,7 +446,7 @@ func (a *App) shutdownCmd(ctx context.Context, user *users.User, _ []string) {
 //TODO: this will always be lower case, find out why
 // middleCmd sets the text at the bottom-middle of the stream
 func (a *App) middleCmd(ctx context.Context, user *users.User, params []string) {
-	log.Println(user.Username, "ran !middle")
+	slog.InfoContext(ctx, "ran !middle", "username", user.Username)
 	// don't let strangers run this
 	if !c.UserIsAdmin(user.Username) {
 		return
@@ -468,8 +468,7 @@ func (a *App) middleCmd(ctx context.Context, user *users.User, params []string) 
 	// use the params as the text
 	text := strings.Join(params, " ")
 
-	// just to help debug
-	log.Printf("setting middle text to: %s", text)
+	slog.InfoContext(ctx, "setting middle text", "text", text)
 
 	a.Onscreens.ShowMiddleText(text)
 }

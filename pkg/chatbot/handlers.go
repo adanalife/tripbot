@@ -3,7 +3,7 @@ package chatbot
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -186,10 +186,9 @@ func UserPart(partMessage twitch.UserPartMessage) {
 // }
 
 // if the message comes from me, then post the message to chat.
-// log.Println above already flows to OTel via the slog redirect, and an
-// admin whisper that triggers Say() is logged again as a chat line.
+// An admin whisper that triggers Say() is logged again as a chat line.
 func GetWhisper(message twitch.WhisperMessage) {
-	log.Println("whisper from", message.User.Name, ":", message.Message)
+	slog.Info("whisper received", "from", message.User.Name, "msg", message.Message)
 	if c.UserIsAdmin(message.User.Name) {
 		Say(message.Message)
 	}
