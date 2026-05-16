@@ -246,9 +246,6 @@ func gracefulShutdown() {
 // Lives in this package (not pkg/background) to avoid circular deps with
 // the job-target packages.
 func scheduleBackgroundJobs() {
-	// Functions that haven't been ctx-threaded yet get adapter closures
-	// (func(_ context.Context) { fn() }) — they still get a parent span via
-	// tracedJob but no ctx-aware child linking until threaded.
 	addJob(60*time.Second, "video.GetCurrentlyPlaying", video.GetCurrentlyPlaying)
 	addJob(61*time.Second, "users.UpdateSession", users.UpdateSession)
 	addJob(62*time.Second, "users.UpdateLeaderboard", users.UpdateLeaderboard)
