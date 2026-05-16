@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"strings"
 	"sync"
@@ -15,7 +16,15 @@ import (
 	"github.com/adanalife/tripbot/pkg/oauthtokens"
 	"github.com/logrusorgru/aurora/v3"
 	"github.com/nicklaw5/helix/v2"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
+
+// helixHTTPClient is the otelhttp-instrumented HTTP client passed to every
+// helix.NewClient call. Without this, outbound Twitch Helix requests leave
+// no trail in Tempo; with it, each helix.GetUsers / GetSubscriptions / etc.
+// shows up as a span. Pairs with the otelhttp transports already used by
+// pkg/vlc-client and pkg/onscreens-client.
+var helixHTTPClient = &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)}
 
 // Scopes is the OAuth scope set requested for the bot account. Single source
 // of truth — referenced by Client() (App Access Token request),
@@ -84,6 +93,7 @@ func Client() (*helix.Client, error) {
 		// Registered at https://dev.twitch.tv/console/apps; matched by
 		// cmd/auth-bootstrap's local HTTP listener.
 		RedirectURI: c.Conf.ExternalURL + "/auth/callback",
+		HTTPClient:  helixHTTPClient,
 	})
 	if err != nil {
 		terrors.Log(err, "error creating client")
