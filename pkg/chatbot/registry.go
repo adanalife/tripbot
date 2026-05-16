@@ -1,6 +1,7 @@
 package chatbot
 
 import (
+	"context"
 	"strings"
 
 	"github.com/adanalife/tripbot/pkg/users"
@@ -63,20 +64,20 @@ func (a *App) buildRegistry() []Command {
 		{
 			Trigger: "!socialmedia",
 			Aliases: []string{"!social", "!socials"},
-			Handler: func(_ *users.User, _ []string) {
+			Handler: func(_ context.Context, _ *users.User, _ []string) {
 				sayFn("Find me outside of Twitch: !twitter, !instagram, !facebook, !youtube")
 			},
 		},
 		{
 			Trigger: "!discord",
-			Handler: func(_ *users.User, _ []string) {
+			Handler: func(_ context.Context, _ *users.User, _ []string) {
 				sayFn("Join us on Discord: https://discord.gg/Bk9EuGdMX")
 			},
 		},
 		{
 			Trigger: "!commands",
 			Aliases: []string{"!command", "¡command", "¡commands", "!commads", "!controls", "!commande"},
-			Handler: func(_ *users.User, _ []string) {
+			Handler: func(_ context.Context, _ *users.User, _ []string) {
 				sayFn("You can try: !location, !guess, !date, !state, !sunset, !timewarp, !miles, !leaderboard, and many other hidden commands!")
 			},
 		},
@@ -121,7 +122,7 @@ func (a *App) buildRegistry() []Command {
 		{
 			Trigger: "!gas",
 			Aliases: []string{"!fuel", "!petrol"},
-			Handler: func(_ *users.User, _ []string) {
+			Handler: func(_ context.Context, _ *users.User, _ []string) {
 				sayFn("About full, thanks for asking")
 			},
 		},

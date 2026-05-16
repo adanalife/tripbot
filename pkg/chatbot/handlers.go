@@ -55,13 +55,21 @@ func (cmd *Command) checkAccess(user chatUser, sayFn func(string)) bool {
 	return true
 }
 
-func dispatch(cmd *Command, user *users.User, params []string) {
+func dispatch(ctx context.Context, cmd *Command, user *users.User, params []string) {
 	incChatCommandCounter(cmd.Trigger)
 	if !cmd.checkAccess(user, sayFn) {
 		return
 	}
+	// Start a child span under the chatbot.handle_message span from
+	// PrivateMessage. SQL queries (via otelsql) and outbound HTTP (via
+	// otelhttp) nest under chat.command in Tempo, so a single !miles
+	// shows up as one trace with all 4 GetScore-chain SQL spans nested.
+	ctx, span := tracer.Start(ctx, "chat.command",
+		trace.WithAttributes(attribute.String("command", cmd.Trigger)))
+	defer span.End()
+
 	start := time.Now()
-	cmd.Handler(user, params)
+	cmd.Handler(ctx, user, params)
 	instrumentation.ChatCommandDuration.Observe(cmd.Trigger, time.Since(start).Seconds())
 }
 
@@ -126,7 +134,7 @@ func runCommand(ctx context.Context, user *users.User, message string) {
 
 	cmd, params := findCommand(message)
 	if cmd != nil {
-		dispatch(cmd, user, params)
+		dispatch(ctx, cmd, user, params)
 		return
 	}
 
@@ -156,19 +164,19 @@ func PrivateMessage(msg twitch.PrivateMessage) {
 	// check to see if the message is a command
 	//TODO: also include ones prefixed with whitespace?
 	// log in the user
-	user := users.LoginIfNecessary(username)
+	user := users.LoginIfNecessary(ctx, username)
 
 	runCommand(ctx, user, message)
 }
 
 // this event fires when a user joins the channel
 func UserJoin(joinMessage twitch.UserJoinMessage) {
-	users.LoginIfNecessary(joinMessage.User)
+	users.LoginIfNecessary(context.Background(), joinMessage.User)
 }
 
 // this event fires when a user leaves the channel
 func UserPart(partMessage twitch.UserPartMessage) {
-	users.LogoutIfNecessary(partMessage.User)
+	users.LogoutIfNecessary(context.Background(), partMessage.User)
 }
 
 // send message to chat if someone subs

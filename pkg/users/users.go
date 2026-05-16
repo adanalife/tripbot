@@ -1,6 +1,7 @@
 package users
 
 import (
+	"context"
 	"errors"
 	"log"
 	"time"
@@ -77,16 +78,16 @@ func (u User) BonusMiles() float32 {
 	return 0.0
 }
 
-func (u User) CurrentMonthlyMiles() float32 {
-	return u.GetScore(scoreboards.CurrentMilesScoreboard()) + u.sessionMiles()
+func (u User) CurrentMonthlyMiles(ctx context.Context) float32 {
+	return u.GetScore(ctx, scoreboards.CurrentMilesScoreboard()) + u.sessionMiles()
 }
 
 // User.save() will take the given user and store it in the DB
-func (u User) save() {
+func (u User) save(ctx context.Context) {
 	if c.Conf.Verbose {
 		log.Println("saving user", u)
 	}
-	err := database.GormDB().Model(&u).Updates(map[string]any{
+	err := database.GormDB().WithContext(ctx).Model(&u).Updates(map[string]any{
 		"last_seen":  u.LastSeen,
 		"num_visits": u.NumVisits,
 		"miles":      u.Miles,
@@ -118,22 +119,22 @@ func (u User) String() string {
 }
 
 // FindOrCreate will try to find the user in the DB, otherwise it will create a new user
-func FindOrCreate(username string) User {
+func FindOrCreate(ctx context.Context, username string) User {
 	if c.Conf.Verbose {
 		log.Printf("FindOrCreate(%s)", username)
 	}
-	user := Find(username)
+	user := Find(ctx, username)
 	if user.ID != 0 {
 		return user
 	}
 	// create the user in the DB
-	return create(username)
+	return create(ctx, username)
 }
 
 // Find will look up the username in the DB, and return a User if possible
-func Find(username string) User {
+func Find(ctx context.Context, username string) User {
 	var user User
-	result := database.GormDB().Where("username = ?", username).First(&user)
+	result := database.GormDB().WithContext(ctx).Where("username = ?", username).First(&user)
 	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 		//TODO: is there a better way to do this?
 		return User{ID: 0}
@@ -197,12 +198,12 @@ func (u *User) SetLastLocationTime() {
 
 //TODO: maybe return an err here?
 // create() will actually create the DB record
-func create(username string) User {
+func create(ctx context.Context, username string) User {
 	log.Println("creating user", username)
 	// create a new row, using default vals and creating a single visit
 	newUser := User{Username: username, NumVisits: 1}
-	if err := database.GormDB().Create(&newUser).Error; err != nil {
+	if err := database.GormDB().WithContext(ctx).Create(&newUser).Error; err != nil {
 		terrors.Log(err, "error creating user")
 	}
-	return Find(username)
+	return Find(ctx, username)
 }
