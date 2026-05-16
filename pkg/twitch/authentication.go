@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"strings"
@@ -15,7 +16,6 @@ import (
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/oauthtokens"
-	"github.com/logrusorgru/aurora/v3"
 	"github.com/nicklaw5/helix/v2"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
@@ -299,5 +299,5 @@ func RefreshUserAccessToken(_ context.Context) {
 	tokenMu.Unlock()
 	client.SetUserAccessToken(rotated.AccessToken)
 
-	log.Println(aurora.Cyan("successfully refreshed user access token"))
+	slog.Info("refreshed user access token")
 }
