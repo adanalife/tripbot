@@ -1,6 +1,8 @@
 package server
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -24,8 +26,17 @@ import (
 
 var server *http.Server
 
-// Start starts the web server
-func Start() {
+// shutdownTimeout is how long Shutdown waits for in-flight requests to
+// finish before forcing connections closed. 15s is the typical sweet spot:
+// long enough that healthy requests complete, short enough that a stuck
+// handler doesn't block process exit indefinitely.
+const shutdownTimeout = 15 * time.Second
+
+// Start starts the web server. When ctx is canceled (e.g. SIGINT/SIGTERM
+// via signal.NotifyContext) the server stops accepting new connections and
+// waits up to shutdownTimeout for in-flight requests to complete before
+// returning.
+func Start(ctx context.Context) {
 	log.Println("Starting web server on port", c.Conf.TripbotServerPort)
 
 	r := mux.NewRouter()
@@ -97,9 +108,29 @@ func Start() {
 		Handler:        otelhttp.NewHandler(app, c.Conf.ServerType),
 	}
 
-	//TODO: add graceful shutdown
-	if err := srv.ListenAndServe(); err != nil {
-		terrors.Fatal(err, "couldn't start server")
+	// Run ListenAndServe in a goroutine so we can block on ctx.Done() and
+	// trigger a graceful shutdown when a signal arrives. ErrServerClosed is
+	// the expected return after Shutdown is called and is not an error.
+	serverErr := make(chan error, 1)
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serverErr <- err
+		}
+		close(serverErr)
+	}()
+
+	select {
+	case err := <-serverErr:
+		if err != nil {
+			terrors.Fatal(err, "couldn't start server")
+		}
+	case <-ctx.Done():
+		log.Println("shutting down web server")
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		defer cancel()
+		if err := srv.Shutdown(shutdownCtx); err != nil {
+			terrors.Log(err, "error during web server shutdown")
+		}
 	}
 }
 
