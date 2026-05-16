@@ -113,6 +113,94 @@ func TestKilometresCmd_SaysViaIRC(t *testing.T) {
 	}
 }
 
+func TestHelloCmd_GreetsNewViewer_ViaIRC(t *testing.T) {
+	app := newTestApp(video.Video{})
+	rec := &recordingIRC{}
+	app.IRC = rec
+	lastHelloTime = time.Time{} // clear rate limiter
+
+	app.helloCmd(context.Background(), newTestUser("newviewer"), nil)
+
+	if len(rec.Says) != 1 {
+		t.Fatalf("expected exactly one greeting via IRC, got %d: %v", len(rec.Says), rec.Says)
+	}
+	// a fresh user with 0 miles gets the newcomer hint appended
+	if !strings.Contains(rec.Says[0], "Tripbot") {
+		t.Errorf("expected newcomer hint in greeting via IRC, got %q", rec.Says[0])
+	}
+}
+
+func TestDateCmd_SaysViaIRC(t *testing.T) {
+	date := time.Date(2019, 6, 15, 18, 30, 0, 0, time.UTC)
+	vid := newTestVideo("Colorado", 39.5, -105.0, date)
+	app := newTestApp(vid)
+	rec := &recordingIRC{}
+	app.IRC = rec
+
+	app.dateCmd(context.Background(), newTestUser("viewer1"), nil)
+
+	if len(rec.Says) != 1 {
+		t.Fatalf("expected exactly one Say() call, got %d: %v", len(rec.Says), rec.Says)
+	}
+	if !strings.HasPrefix(rec.Says[0], "This moment was") {
+		t.Errorf("unexpected date message via IRC: %q", rec.Says[0])
+	}
+	if !strings.Contains(rec.Says[0], "2019") {
+		t.Errorf("expected year 2019 in IRC output, got %q", rec.Says[0])
+	}
+}
+
+func TestTimeCmd_SaysViaIRC(t *testing.T) {
+	date := time.Date(2019, 6, 15, 18, 30, 0, 0, time.UTC)
+	vid := newTestVideo("Colorado", 39.5, -105.0, date)
+	app := newTestApp(vid)
+	rec := &recordingIRC{}
+	app.IRC = rec
+
+	app.timeCmd(context.Background(), newTestUser("viewer1"), nil)
+
+	if len(rec.Says) != 1 {
+		t.Fatalf("expected exactly one Say() call, got %d: %v", len(rec.Says), rec.Says)
+	}
+	if !strings.HasPrefix(rec.Says[0], "This moment was") {
+		t.Errorf("unexpected time message via IRC: %q", rec.Says[0])
+	}
+}
+
+func TestReportCmd_AcksViaIRC(t *testing.T) {
+	app := newTestApp(video.Video{})
+	rec := &recordingIRC{}
+	app.IRC = rec
+
+	app.reportCmd(context.Background(), newTestUser("viewer1"), []string{"the", "bot", "is", "broken"})
+
+	if len(rec.Says) != 1 {
+		t.Fatalf("expected exactly one ack via IRC, got %d: %v", len(rec.Says), rec.Says)
+	}
+	if !strings.Contains(rec.Says[0], "Thank you") {
+		t.Errorf("expected ack message via IRC, got %q", rec.Says[0])
+	}
+}
+
+func TestBonusMilesCmd_SaysViaIRC(t *testing.T) {
+	app := newTestApp(video.Video{})
+	rec := &recordingIRC{}
+	app.IRC = rec
+
+	// BonusMiles is computed from user state; a zero user yields a stable string.
+	app.bonusMilesCmd(context.Background(), newTestUser("viewer1"), nil)
+
+	if len(rec.Says) != 1 {
+		t.Fatalf("expected exactly one Say() call, got %d: %v", len(rec.Says), rec.Says)
+	}
+	if !strings.Contains(rec.Says[0], "viewer1") {
+		t.Errorf("expected username in bonusmiles output via IRC, got %q", rec.Says[0])
+	}
+	if !strings.Contains(rec.Says[0], "bonus miles") {
+		t.Errorf("expected 'bonus miles' phrasing in IRC output, got %q", rec.Says[0])
+	}
+}
+
 // --- App.Sessions seam ---
 //
 // These tests exercise the new App.Sessions injection point. Pick a command

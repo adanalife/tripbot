@@ -122,7 +122,7 @@ func (a *App) milesCmd(ctx context.Context, user *users.User, params []string) {
 
 		// check to see if they are in our DB
 		if u.ID == 0 {
-			sayFn("I don't know them, sorry!")
+			a.IRC.Say("I don't know them, sorry!")
 			return
 		}
 
@@ -151,7 +151,7 @@ func (a *App) milesCmd(ctx context.Context, user *users.User, params []string) {
 		}
 	}
 
-	sayFn(msg)
+	a.IRC.Say(msg)
 }
 
 func (a *App) kilometresCmd(ctx context.Context, user *users.User, _ []string) {
@@ -166,18 +166,18 @@ func (a *App) sunsetCmd(ctx context.Context, user *users.User, _ []string) {
 	log.Println(user.Username, "ran !sunset")
 	vid := a.CurrentVideo()
 	if vid.Flagged {
-		sayFn("I couldn't figure out current GPS coords, using next closest...")
+		a.IRC.Say("I couldn't figure out current GPS coords, using next closest...")
 		vid = vid.Next()
 	}
 	lat, lng, _ := vid.Location()
-	sayFn(helpers.SunsetStr(vid.DateFilmed, lat, lng))
+	a.IRC.Say(helpers.SunsetStr(vid.DateFilmed, lat, lng))
 }
 
 func (a *App) locationCmd(ctx context.Context, user *users.User, _ []string) {
 	log.Println(user.Username, "ran !location (or similar)")
 	vid := a.CurrentVideo()
 	if vid.Flagged {
-		sayFn("I couldn't figure out current GPS coords, using next closest...")
+		a.IRC.Say("I couldn't figure out current GPS coords, using next closest...")
 		//TODO: write something like vid.FindClosest() that
 		// chooses whether or not to use Next() vs Prev()
 		vid = vid.Next()
@@ -194,7 +194,7 @@ func (a *App) locationCmd(ctx context.Context, user *users.User, _ []string) {
 	msg := fmt.Sprintf("%s %s", address, url)
 	// record that they know the location now
 	user.SetLastLocationTime()
-	sayFn(msg)
+	a.IRC.Say(msg)
 }
 
 func (a *App) monthlyMilesLeaderboardCmd(ctx context.Context, user *users.User, _ []string) {
@@ -219,7 +219,7 @@ func (a *App) monthlyMilesLeaderboardCmd(ctx context.Context, user *users.User, 
 			msg += ", "
 		}
 	}
-	sayFn(msg)
+	a.IRC.Say(msg)
 }
 
 func (a *App) lifetimeMilesLeaderboardCmd(ctx context.Context, user *users.User, _ []string) {
@@ -244,7 +244,7 @@ func (a *App) lifetimeMilesLeaderboardCmd(ctx context.Context, user *users.User,
 			msg += ", "
 		}
 	}
-	sayFn(msg)
+	a.IRC.Say(msg)
 }
 
 func (a *App) monthlyGuessLeaderboardCmd(ctx context.Context, user *users.User, _ []string) {
@@ -256,7 +256,7 @@ func (a *App) monthlyGuessLeaderboardCmd(ctx context.Context, user *users.User, 
 
 	// special message if the leaderboard is empty
 	if len(leaderboard) == 0 {
-		sayFn("No one is on that leaderboard yet!")
+		a.IRC.Say("No one is on that leaderboard yet!")
 		return
 	}
 
@@ -284,7 +284,7 @@ func (a *App) monthlyGuessLeaderboardCmd(ctx context.Context, user *users.User, 
 			msg += ", "
 		}
 	}
-	sayFn(msg)
+	a.IRC.Say(msg)
 }
 
 func (a *App) timeCmd(ctx context.Context, user *users.User, _ []string) {
@@ -298,11 +298,11 @@ func (a *App) timeCmd(ctx context.Context, user *users.User, _ []string) {
 		lat, lng, err = vid.Location()
 	}
 	if err != nil {
-		sayFn("I couldn't figure out current GPS coords, sorry!")
+		a.IRC.Say("I couldn't figure out current GPS coords, sorry!")
 	} else {
 		realDate := helpers.ActualDate(vid.DateFilmed, lat, lng)
 		fmtTime := realDate.Format("3:04pm MST")
-		sayFn(fmt.Sprintf("This moment was %s", fmtTime))
+		a.IRC.Say(fmt.Sprintf("This moment was %s", fmtTime))
 	}
 }
 
@@ -317,11 +317,11 @@ func (a *App) dateCmd(ctx context.Context, user *users.User, _ []string) {
 		lat, lng, err = vid.Location()
 	}
 	if err != nil {
-		sayFn("I couldn't figure out current GPS coords, sorry!")
+		a.IRC.Say("I couldn't figure out current GPS coords, sorry!")
 	} else {
 		realDate := helpers.ActualDate(vid.DateFilmed, lat, lng)
 		fmtDate := realDate.Format("Monday January 2, 2006")
-		sayFn(fmt.Sprintf("This moment was %s", fmtDate))
+		a.IRC.Say(fmt.Sprintf("This moment was %s", fmtDate))
 	}
 }
 
@@ -332,7 +332,7 @@ func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 
 	if len(params) == 0 {
 		msg = "Try and guess what state we're in! For example: !guess CA"
-		sayFn(msg)
+		a.IRC.Say(msg)
 		return
 	}
 
@@ -341,7 +341,7 @@ func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 		prettyDur := durafmt.ParseShort(user.GuessCooldownRemaining())
 		msg = "I recently told you the answer! Try again in %s."
 		msg = fmt.Sprintf(msg, prettyDur)
-		sayFn(msg)
+		a.IRC.Say(msg)
 		return
 	}
 
@@ -356,7 +356,7 @@ func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 
 	vid := a.CurrentVideo()
 	if vid.Flagged {
-		sayFn("I couldn't figure out current GPS coords, using next closest...")
+		a.IRC.Say("I couldn't figure out current GPS coords, using next closest...")
 		vid = vid.Next()
 	}
 
@@ -372,7 +372,7 @@ func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 	} else {
 		msg = "Try again! EarthDay"
 	}
-	sayFn(msg)
+	a.IRC.Say(msg)
 }
 
 func (a *App) stateCmd(ctx context.Context, user *users.User, _ []string) {
@@ -399,14 +399,14 @@ func (a *App) reportCmd(ctx context.Context, user *users.User, params []string) 
 	// Followup tracked: wire !report to a real notification surface
 	// (Discord webhook / push) so Dana actually sees it.
 	terrors.Log(fmt.Errorf("viewer report from %s: %s", user.Username, message), "!report")
-	sayFn("Thank you, I will look into this ASAP!")
+	a.IRC.Say("Thank you, I will look into this ASAP!")
 }
 
 func (a *App) bonusMilesCmd(ctx context.Context, user *users.User, _ []string) {
 	log.Println(user.Username, "ran !bonusmiles")
 	bonus := user.BonusMiles()
 	msg := fmt.Sprintf("%s has earned %.4f bonus miles this session", user.Username, bonus)
-	sayFn(msg)
+	a.IRC.Say(msg)
 }
 
 func (a *App) secretInfoCmd(ctx context.Context, user *users.User, _ []string) {
@@ -423,16 +423,16 @@ func (a *App) secretInfoCmd(ctx context.Context, user *users.User, _ []string) {
 		msg = fmt.Sprintf("%s, lat: %f, lng: %f", msg, lat, lng)
 	}
 	log.Println(msg)
-	sayFn(msg)
+	a.IRC.Say(msg)
 }
 
 func (a *App) shutdownCmd(ctx context.Context, user *users.User, _ []string) {
 	log.Println(user.Username, "ran !shutdown")
 	if !c.UserIsAdmin(user.Username) {
-		sayFn("Nice try bucko")
+		a.IRC.Say("Nice try bucko")
 		return
 	}
-	sayFn("Shutting down...")
+	a.IRC.Say("Shutting down...")
 	log.Printf("currently playing: %s", a.CurrentVideo())
 	background.StopCron()
 	a.Sessions.Shutdown(ctx)
@@ -455,13 +455,13 @@ func (a *App) middleCmd(ctx context.Context, user *users.User, params []string) 
 
 	// don't do anything if empty
 	if len(params) == 0 {
-		sayFn("What do you want to say?")
+		a.IRC.Say("What do you want to say?")
 		return
 	}
 
 	// if the arg was "hide", hide the text from view
 	if len(params) == 1 && strings.ToLower(params[0]) == "hide" {
-		sayFn("Got it! Hiding the message.")
+		a.IRC.Say("Got it! Hiding the message.")
 		a.Onscreens.HideMiddleText()
 		return
 	}
