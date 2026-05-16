@@ -442,7 +442,7 @@ func TestGuessCmd_CorrectGuess_DrivesOverlayAndPlayback(t *testing.T) {
 	out, restore := captureSay(t)
 	defer restore()
 
-	app.guessCmd(newTestUser("viewer1"), []string{"Colorado"})
+	app.guessCmd(context.Background(), newTestUser("viewer1"), []string{"Colorado"})
 
 	msg := out()
 	if !strings.Contains(msg, "@viewer1 got it") || !strings.Contains(msg, "Colorado") {
@@ -484,7 +484,7 @@ func TestGuessCmd_CorrectGuess_FullStateName(t *testing.T) {
 	out, restore := captureSay(t)
 	defer restore()
 
-	app.guessCmd(newTestUser("viewer1"), []string{"Massachusetts"})
+	app.guessCmd(context.Background(), newTestUser("viewer1"), []string{"Massachusetts"})
 
 	if !strings.Contains(out(), "got it") {
 		t.Errorf("expected correct-guess msg, got %q", out())
@@ -506,7 +506,7 @@ func TestGuessCmd_CorrectGuess_TwoLetterCode(t *testing.T) {
 	out, restore := captureSay(t)
 	defer restore()
 
-	app.guessCmd(newTestUser("viewer1"), []string{"CA"})
+	app.guessCmd(context.Background(), newTestUser("viewer1"), []string{"CA"})
 
 	if !strings.Contains(out(), "got it") {
 		t.Errorf("expected correct-guess msg from CA, got %q", out())
