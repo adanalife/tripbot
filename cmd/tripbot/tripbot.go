@@ -48,6 +48,19 @@ func tracedJob(name string, fn func()) func() {
 	}
 }
 
+// tracedJobCtx is the ctx-aware variant of tracedJob. The span's ctx is
+// threaded into fn so DB queries (otelsql) and outbound HTTP (otelhttp)
+// nest under cron.<name> in Tempo, giving each cron tick a tree of children
+// rather than orphan spans.
+func tracedJobCtx(name string, fn func(context.Context)) func() {
+	return func() {
+		ctx, span := cronTracer.Start(context.Background(), "cron."+name,
+			trace.WithAttributes(attribute.String("cron.job", name)))
+		defer span.End()
+		fn(ctx)
+	}
+}
+
 // version is overridable at build time via -ldflags "-X main.version=...".
 var version = "dev"
 
@@ -65,7 +78,7 @@ func main() {
 	server.SetVersion(version)
 	startHttpServer()
 	findInitialVideo()
-	users.InitLeaderboard()
+	users.InitLeaderboard(context.Background())
 	startCron()
 	startOBSPolling()
 	loadTwitchToken()   // must precede chatbot.Initialize — provides the IRC token
@@ -166,7 +179,7 @@ func updateSubscribers() {
 // getCurrentUsers gets the users watching the stream
 func getCurrentUsers() {
 	// fetch initial session
-	users.UpdateSession()
+	users.UpdateSession(context.Background())
 	users.PrintCurrentSession()
 }
 
@@ -215,7 +228,7 @@ func gracefulShutdown() {
 	// try and use !shutdown instead
 	//TODO: print different message if CurrentlyPlaying is ""
 	log.Printf("Last played video: %s", aurora.Yellow(video.CurrentlyPlaying.File()))
-	users.Shutdown()
+	users.Shutdown(context.Background())
 	err := database.Connection().Close()
 	if err != nil {
 		terrors.Log(err, "error closing DB connection")
@@ -240,9 +253,9 @@ func scheduleBackgroundJobs() {
 
 	// schedule these functions
 	err = background.Cron.AddFunc("@every 60s", tracedJob("video.GetCurrentlyPlaying", video.GetCurrentlyPlaying))
-	err = background.Cron.AddFunc("@every 61s", tracedJob("users.UpdateSession", users.UpdateSession))
+	err = background.Cron.AddFunc("@every 61s", tracedJobCtx("users.UpdateSession", users.UpdateSession))
 	err = background.Cron.AddFunc("@every 62s", tracedJob("users.UpdateLeaderboard", users.UpdateLeaderboard))
-	err = background.Cron.AddFunc("@every 5m", tracedJob("onscreens.ShowGuessLeaderboard", onscreensClient.ShowGuessLeaderboard))
+	err = background.Cron.AddFunc("@every 5m", tracedJobCtx("onscreens.ShowGuessLeaderboard", onscreensClient.ShowGuessLeaderboard))
 	err = background.Cron.AddFunc("@every 5m", tracedJob("users.PrintCurrentSession", users.PrintCurrentSession))
 	err = background.Cron.AddFunc("@every 5m", tracedJob("twitch.GetSubscribers", mytwitch.GetSubscribers))
 	err = background.Cron.AddFunc("@every 5m", tracedJob("twitch.GetFollowerCount", mytwitch.GetFollowerCount))

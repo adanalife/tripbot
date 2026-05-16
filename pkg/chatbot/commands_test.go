@@ -1,6 +1,7 @@
 package chatbot
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
@@ -54,7 +55,7 @@ func TestHelpCmd_SaysSomething(t *testing.T) {
 	out, restore := captureSay(t)
 	defer restore()
 
-	app.helpCmd(newTestUser("viewer1"), nil)
+	app.helpCmd(context.Background(), newTestUser("viewer1"), nil)
 
 	if out() == "" {
 		t.Fatal("expected a help message, got empty output")
@@ -66,7 +67,7 @@ func TestHelpCmd_MessageContainsCount(t *testing.T) {
 	out, restore := captureSay(t)
 	defer restore()
 
-	app.helpCmd(newTestUser("viewer1"), nil)
+	app.helpCmd(context.Background(), newTestUser("viewer1"), nil)
 
 	// message format: "<help text> (N of M)"
 	if !strings.Contains(out(), " of ") {
@@ -79,10 +80,10 @@ func TestHelpCmd_AdvancesIndex(t *testing.T) {
 	out, restore := captureSay(t)
 	defer restore()
 
-	app.helpCmd(newTestUser("viewer1"), nil)
+	app.helpCmd(context.Background(), newTestUser("viewer1"), nil)
 	first := out()
 
-	app.helpCmd(newTestUser("viewer1"), nil)
+	app.helpCmd(context.Background(), newTestUser("viewer1"), nil)
 	second := out()
 
 	if first == second {
@@ -98,7 +99,7 @@ func TestUptimeCmd_SaysRunningFor(t *testing.T) {
 	out, restore := captureSay(t)
 	defer restore()
 
-	app.uptimeCmd(newTestUser("viewer1"), nil)
+	app.uptimeCmd(context.Background(), newTestUser("viewer1"), nil)
 
 	if !strings.HasPrefix(out(), "I have been running for") {
 		t.Errorf("unexpected uptime message: %q", out())
@@ -114,7 +115,7 @@ func TestHelloCmd_GreetsNewViewer(t *testing.T) {
 	defer restore()
 
 	// a fresh user with 0 miles gets the newcomer hint appended
-	app.helloCmd(newTestUser("newviewer"), nil)
+	app.helloCmd(context.Background(), newTestUser("newviewer"), nil)
 
 	msg := out()
 	if msg == "" {
@@ -131,7 +132,7 @@ func TestHelloCmd_RateLimitSilencesSecondCall(t *testing.T) {
 	out, restore := captureSay(t)
 	defer restore()
 
-	app.helloCmd(newTestUser("viewer1"), nil)
+	app.helloCmd(context.Background(), newTestUser("viewer1"), nil)
 
 	if out() != "" {
 		t.Errorf("expected silence due to rate limit, got %q", out())
@@ -145,7 +146,7 @@ func TestHelloCmd_IgnoresMessageWithParams(t *testing.T) {
 	defer restore()
 
 	// "hello world" — has params so the bot stays quiet
-	app.helloCmd(newTestUser("viewer1"), []string{"world"})
+	app.helloCmd(context.Background(), newTestUser("viewer1"), []string{"world"})
 
 	if out() != "" {
 		t.Errorf("expected silence for greeting with params, got %q", out())
@@ -160,7 +161,7 @@ func TestKilometresCmd_ConvertsCorrectly(t *testing.T) {
 	defer restore()
 
 	user := &users.User{Username: "viewer1", Miles: 10}
-	app.kilometresCmd(user, nil)
+	app.kilometresCmd(context.Background(), user, nil)
 
 	// 10 miles * 1.609344 = 16.09344, formatted as "16.09"
 	if !strings.Contains(out(), "16.09") {
@@ -174,7 +175,7 @@ func TestKilometresCmd_IncludesUsername(t *testing.T) {
 	defer restore()
 
 	user := &users.User{Username: "testviewer", Miles: 5}
-	app.kilometresCmd(user, nil)
+	app.kilometresCmd(context.Background(), user, nil)
 
 	if !strings.Contains(out(), "@testviewer") {
 		t.Errorf("expected @username in output, got %q", out())
@@ -187,7 +188,7 @@ func TestKilometresCmd_ZeroMiles(t *testing.T) {
 	defer restore()
 
 	user := &users.User{Username: "newbie", Miles: 0}
-	app.kilometresCmd(user, nil)
+	app.kilometresCmd(context.Background(), user, nil)
 
 	if !strings.Contains(out(), "0.00") {
 		t.Errorf("expected zero km in output, got %q", out())
@@ -204,7 +205,7 @@ func TestVersionCmd_UsesCachedVersion(t *testing.T) {
 	out, restore := captureSay(t)
 	defer restore()
 
-	app.versionCmd(newTestUser("viewer1"), nil)
+	app.versionCmd(context.Background(), newTestUser("viewer1"), nil)
 
 	if !strings.Contains(out(), "v1.2.3-test") {
 		t.Errorf("expected cached version in output, got %q", out())
@@ -219,7 +220,7 @@ func TestVersionCmd_MessageFormat(t *testing.T) {
 	out, restore := captureSay(t)
 	defer restore()
 
-	app.versionCmd(newTestUser("viewer1"), nil)
+	app.versionCmd(context.Background(), newTestUser("viewer1"), nil)
 
 	if !strings.HasPrefix(out(), "Current version is ") {
 		t.Errorf("unexpected message format: %q", out())
@@ -234,7 +235,7 @@ func TestStateCmd_SaysCurrentState(t *testing.T) {
 	out, restore := captureSay(t)
 	defer restore()
 
-	app.stateCmd(newTestUser("viewer1"), nil)
+	app.stateCmd(context.Background(), newTestUser("viewer1"), nil)
 
 	if !strings.Contains(out(), "Colorado") {
 		t.Errorf("expected state name in output, got %q", out())
@@ -247,7 +248,7 @@ func TestStateCmd_MessageFormat(t *testing.T) {
 	out, restore := captureSay(t)
 	defer restore()
 
-	app.stateCmd(newTestUser("viewer1"), nil)
+	app.stateCmd(context.Background(), newTestUser("viewer1"), nil)
 
 	if !strings.HasPrefix(out(), "We're in ") {
 		t.Errorf("unexpected state message format: %q", out())
@@ -263,7 +264,7 @@ func TestStateCmd_DrivesShowFlagOverlay(t *testing.T) {
 	_, restore := captureSay(t)
 	defer restore()
 
-	app.stateCmd(newTestUser("viewer1"), nil)
+	app.stateCmd(context.Background(), newTestUser("viewer1"), nil)
 
 	if len(rec.Calls) != 1 || !strings.HasPrefix(rec.Calls[0], "ShowFlag(") {
 		t.Errorf("expected one ShowFlag overlay call, got %v", rec.Calls)
@@ -280,7 +281,7 @@ func TestFlagCmd_DrivesShowFlagOverlay(t *testing.T) {
 	_, restore := captureSay(t)
 	defer restore()
 
-	app.flagCmd(newTestUser("viewer1"), nil)
+	app.flagCmd(context.Background(), newTestUser("viewer1"), nil)
 
 	if len(rec.Calls) != 1 || rec.Calls[0] != "ShowFlag(10s)" {
 		t.Errorf("expected ShowFlag(10s) overlay call, got %v", rec.Calls)
@@ -292,7 +293,7 @@ func TestFlagCmd_DoesNotSayInChat(t *testing.T) {
 	out, restore := captureSay(t)
 	defer restore()
 
-	app.flagCmd(newTestUser("viewer1"), nil)
+	app.flagCmd(context.Background(), newTestUser("viewer1"), nil)
 
 	if out() != "" {
 		t.Errorf("expected flagCmd to be silent in chat, got %q", out())
@@ -308,7 +309,7 @@ func TestDateCmd_SaysThisMomentWas(t *testing.T) {
 	out, restore := captureSay(t)
 	defer restore()
 
-	app.dateCmd(newTestUser("viewer1"), nil)
+	app.dateCmd(context.Background(), newTestUser("viewer1"), nil)
 
 	msg := out()
 	if !strings.HasPrefix(msg, "This moment was") {
@@ -323,7 +324,7 @@ func TestDateCmd_IncludesYear(t *testing.T) {
 	out, restore := captureSay(t)
 	defer restore()
 
-	app.dateCmd(newTestUser("viewer1"), nil)
+	app.dateCmd(context.Background(), newTestUser("viewer1"), nil)
 
 	if !strings.Contains(out(), "2019") {
 		t.Errorf("expected year 2019 in output, got %q", out())
@@ -339,7 +340,7 @@ func TestTimeCmd_SaysThisMomentWas(t *testing.T) {
 	out, restore := captureSay(t)
 	defer restore()
 
-	app.timeCmd(newTestUser("viewer1"), nil)
+	app.timeCmd(context.Background(), newTestUser("viewer1"), nil)
 
 	if !strings.HasPrefix(out(), "This moment was") {
 		t.Errorf("unexpected time message: %q", out())
@@ -353,7 +354,7 @@ func TestTimeCmd_IncludesAMPM(t *testing.T) {
 	out, restore := captureSay(t)
 	defer restore()
 
-	app.timeCmd(newTestUser("viewer1"), nil)
+	app.timeCmd(context.Background(), newTestUser("viewer1"), nil)
 
 	msg := out()
 	if !strings.Contains(msg, "am") && !strings.Contains(msg, "pm") {
@@ -371,7 +372,7 @@ func TestSunsetCmd_SaysSunset(t *testing.T) {
 	out, restore := captureSay(t)
 	defer restore()
 
-	app.sunsetCmd(newTestUser("viewer1"), nil)
+	app.sunsetCmd(context.Background(), newTestUser("viewer1"), nil)
 
 	if !strings.Contains(out(), "Sunset on this day") {
 		t.Errorf("unexpected sunset message: %q", out())
@@ -386,7 +387,7 @@ func TestGuessCmd_NoParams_PromptsGuess(t *testing.T) {
 	out, restore := captureSay(t)
 	defer restore()
 
-	app.guessCmd(newTestUser("viewer1"), nil)
+	app.guessCmd(context.Background(), newTestUser("viewer1"), nil)
 
 	if !strings.Contains(out(), "guess") {
 		t.Errorf("expected guess prompt in output, got %q", out())
@@ -400,7 +401,7 @@ func TestGuessCmd_WrongGuess_SaysTryAgain(t *testing.T) {
 	defer restore()
 
 	// Wyoming != Colorado
-	app.guessCmd(newTestUser("viewer1"), []string{"Wyoming"})
+	app.guessCmd(context.Background(), newTestUser("viewer1"), []string{"Wyoming"})
 
 	if !strings.Contains(out(), "Try again") {
 		t.Errorf("expected try-again in output, got %q", out())
@@ -417,7 +418,7 @@ func TestMiddleCmd_NonAdminIsSilent(t *testing.T) {
 	out, restore := captureSay(t)
 	defer restore()
 
-	app.middleCmd(newTestUser("viewer1"), []string{"hello"})
+	app.middleCmd(context.Background(), newTestUser("viewer1"), []string{"hello"})
 
 	if out() != "" {
 		t.Errorf("expected silence for non-admin, got %q", out())
@@ -429,7 +430,7 @@ func TestMiddleCmd_NoParams_PromptsForText(t *testing.T) {
 	out, restore := captureSay(t)
 	defer restore()
 
-	app.middleCmd(newTestUser(adminUser), nil)
+	app.middleCmd(context.Background(), newTestUser(adminUser), nil)
 
 	if !strings.Contains(out(), "What do you want to say") {
 		t.Errorf("expected prompt, got %q", out())
@@ -444,7 +445,7 @@ func TestMiddleCmd_Hide_DrivesHideOverlay(t *testing.T) {
 	out, restore := captureSay(t)
 	defer restore()
 
-	app.middleCmd(newTestUser(adminUser), []string{"hide"})
+	app.middleCmd(context.Background(), newTestUser(adminUser), []string{"hide"})
 
 	if !strings.Contains(out(), "Hiding the message") {
 		t.Errorf("expected hide confirmation in chat, got %q", out())
@@ -463,7 +464,7 @@ func TestMiddleCmd_Hide_CaseInsensitive(t *testing.T) {
 	_, restore := captureSay(t)
 	defer restore()
 
-	app.middleCmd(newTestUser(adminUser), []string{"HIDE"})
+	app.middleCmd(context.Background(), newTestUser(adminUser), []string{"HIDE"})
 
 	if len(rec.Calls) != 1 || rec.Calls[0] != "HideMiddleText()" {
 		t.Errorf("expected one HideMiddleText overlay call for 'HIDE', got %v", rec.Calls)
@@ -479,7 +480,7 @@ func TestMiddleCmd_Text_DrivesShowOverlay(t *testing.T) {
 	defer restore()
 
 	// Multiple words get joined with a space into the overlay text.
-	app.middleCmd(newTestUser(adminUser), []string{"hello", "everyone"})
+	app.middleCmd(context.Background(), newTestUser(adminUser), []string{"hello", "everyone"})
 
 	if len(rec.Calls) != 1 || rec.Calls[0] != `ShowMiddleText("hello everyone")` {
 		t.Errorf("expected ShowMiddleText with joined text, got %v", rec.Calls)
@@ -495,8 +496,8 @@ func TestMiddleCmd_NonAdmin_DoesNotDriveOverlay(t *testing.T) {
 	defer restore()
 
 	// A non-admin's params should be ignored — no chat, no overlay call.
-	app.middleCmd(newTestUser("viewer1"), []string{"hide"})
-	app.middleCmd(newTestUser("viewer1"), []string{"hello"})
+	app.middleCmd(context.Background(), newTestUser("viewer1"), []string{"hide"})
+	app.middleCmd(context.Background(), newTestUser("viewer1"), []string{"hello"})
 
 	if len(rec.Calls) != 0 {
 		t.Errorf("expected no overlay calls for non-admin, got %v", rec.Calls)
@@ -517,7 +518,7 @@ func TestLifetimeMilesLeaderboardCmd_Empty(t *testing.T) {
 	out, restore := captureSay(t)
 	defer restore()
 
-	app.lifetimeMilesLeaderboardCmd(newTestUser("viewer1"), nil)
+	app.lifetimeMilesLeaderboardCmd(context.Background(), newTestUser("viewer1"), nil)
 
 	msg := out()
 	if !strings.Contains(msg, "Top 0 lifetime miles") {
@@ -539,7 +540,7 @@ func TestLifetimeMilesLeaderboardCmd_WithUsers(t *testing.T) {
 	out, restore := captureSay(t)
 	defer restore()
 
-	app.lifetimeMilesLeaderboardCmd(newTestUser("caller"), nil)
+	app.lifetimeMilesLeaderboardCmd(context.Background(), newTestUser("caller"), nil)
 
 	msg := out()
 	if !strings.Contains(msg, "viewer1") || !strings.Contains(msg, "200.0mi") {
@@ -575,7 +576,7 @@ func TestMonthlyMilesLeaderboardCmd_RendersTopUsers(t *testing.T) {
 	out, restore := captureSay(t)
 	defer restore()
 
-	app.monthlyMilesLeaderboardCmd(newTestUser("caller"), nil)
+	app.monthlyMilesLeaderboardCmd(context.Background(), newTestUser("caller"), nil)
 
 	msg := out()
 	if !strings.Contains(msg, "viewer1") || !strings.Contains(msg, "42.5") {
@@ -608,7 +609,7 @@ func TestMonthlyGuessLeaderboardCmd_Empty_SaysNoneYet(t *testing.T) {
 	out, restore := captureSay(t)
 	defer restore()
 
-	app.monthlyGuessLeaderboardCmd(newTestUser("caller"), nil)
+	app.monthlyGuessLeaderboardCmd(context.Background(), newTestUser("caller"), nil)
 
 	if !strings.Contains(out(), "No one is on that leaderboard yet") {
 		t.Errorf("expected empty-leaderboard message, got %q", out())
@@ -636,7 +637,7 @@ func TestMonthlyGuessLeaderboardCmd_WithGuesses_StripsDecimals(t *testing.T) {
 	out, restore := captureSay(t)
 	defer restore()
 
-	app.monthlyGuessLeaderboardCmd(newTestUser("caller"), nil)
+	app.monthlyGuessLeaderboardCmd(context.Background(), newTestUser("caller"), nil)
 
 	msg := out()
 	// guess scores are formatted as integers in the chat message
@@ -671,7 +672,7 @@ func TestMilesCmd_OtherUser_NotInDB(t *testing.T) {
 	out, restore := captureSay(t)
 	defer restore()
 
-	app.milesCmd(newTestUser("caller"), []string{"ghost"})
+	app.milesCmd(context.Background(), newTestUser("caller"), []string{"ghost"})
 
 	if !strings.Contains(out(), "I don't know them") {
 		t.Errorf("expected unknown-user message, got %q", out())
@@ -698,7 +699,7 @@ func TestMilesCmd_Self_WithMiles(t *testing.T) {
 	defer restore()
 
 	user := &users.User{Username: "viewer1", Miles: 50.0}
-	app.milesCmd(user, nil)
+	app.milesCmd(context.Background(), user, nil)
 
 	msg := out()
 	if !strings.Contains(msg, "@viewer1 has 8.00mi this month") {
@@ -730,7 +731,7 @@ func TestMilesCmd_Self_NewcomerHint(t *testing.T) {
 	defer restore()
 
 	user := &users.User{Username: "newbie", Miles: 0.0}
-	app.milesCmd(user, nil)
+	app.milesCmd(context.Background(), user, nil)
 
 	msg := out()
 	if !strings.Contains(msg, "You'll earn more miles") {
@@ -771,7 +772,7 @@ func TestMilesCmd_OtherUser_Found(t *testing.T) {
 	out, restore := captureSay(t)
 	defer restore()
 
-	app.milesCmd(newTestUser("caller"), []string{"viewer1"})
+	app.milesCmd(context.Background(), newTestUser("caller"), []string{"viewer1"})
 
 	msg := out()
 	// monthly is 15.5, lifetime 120 → both should appear (rounded to int for total)
@@ -798,7 +799,7 @@ func TestMilesCmd_OtherUser_StripsAtSign(t *testing.T) {
 	defer restore()
 
 	// "@ghost" should be normalized to "ghost" before the lookup
-	app.milesCmd(newTestUser("caller"), []string{"@ghost"})
+	app.milesCmd(context.Background(), newTestUser("caller"), []string{"@ghost"})
 
 	if !strings.Contains(out(), "I don't know them") {
 		t.Errorf("expected unknown-user message, got %q", out())

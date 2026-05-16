@@ -1,6 +1,7 @@
 package chatbot
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"strconv"
@@ -37,7 +38,7 @@ func (a *App) timewarp() {
 	lastTimewarpTime = time.Now()
 }
 
-func (a *App) timewarpCmd(user *users.User, _ []string) {
+func (a *App) timewarpCmd(ctx context.Context, user *users.User, _ []string) {
 	log.Println(user.Username, "ran !timewarp")
 
 	// exit early if we're on OS X
@@ -63,7 +64,7 @@ func (a *App) timewarpCmd(user *users.User, _ []string) {
 	a.timewarp()
 }
 
-func (a *App) jumpCmd(user *users.User, params []string) {
+func (a *App) jumpCmd(ctx context.Context, user *users.User, params []string) {
 	var err error
 	log.Println(user.Username, "ran !jump")
 
@@ -121,7 +122,7 @@ func (a *App) jumpCmd(user *users.User, params []string) {
 	lastTimewarpTime = time.Now()
 }
 
-func (a *App) skipCmd(user *users.User, params []string) {
+func (a *App) skipCmd(ctx context.Context, user *users.User, params []string) {
 	var err error
 	var n int
 	log.Println(user.Username, "ran !skip")
@@ -166,7 +167,7 @@ func (a *App) skipCmd(user *users.User, params []string) {
 	lastTimewarpTime = time.Now()
 }
 
-func (a *App) backCmd(user *users.User, params []string) {
+func (a *App) backCmd(ctx context.Context, user *users.User, params []string) {
 	var err error
 	var n int
 	log.Println(user.Username, "ran !back")
