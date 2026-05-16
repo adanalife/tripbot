@@ -13,7 +13,6 @@ import (
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/users"
-	"github.com/adanalife/tripbot/pkg/video"
 )
 
 // lastTimewarpTime is used to rate-limit users so they can't
@@ -92,7 +91,7 @@ func (a *App) jumpCmd(ctx context.Context, user *users.User, params []string) {
 	// sanitize the input
 	state = helpers.RemoveNonLetters(state)
 	titlecaseState := helpers.TitlecaseState(state)
-	randomVid, err := video.FindRandomByState(state)
+	randomVid, err := a.Video.FindRandomByState(state)
 	// check to see if we even have footage for this state
 	if _, ok := err.(*terrors.NoFootageForStateError); ok {
 		msg := fmt.Sprintf("No footage for %s... yet! ;)", titlecaseState)
