@@ -1,7 +1,7 @@
 package vlcServer
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -23,7 +23,7 @@ import (
 
 // Start starts the web server
 func Start() {
-	log.Println("Starting VLC web server on", c.Conf.VlcServerBindAddress)
+	slog.Info("starting VLC web server", "bind", c.Conf.VlcServerBindAddress)
 
 	r := mux.NewRouter()
 
