@@ -38,7 +38,7 @@ const guessScoreboard = "guess_state_total"
 func (a *App) helpCmd(ctx context.Context, user *users.User, _ []string) {
 	log.Println(user.Username, "ran !help")
 	msg := fmt.Sprintf("%s (%d of %d)", help(), helpIndex+1, len(c.HelpMessages))
-	sayFn(msg)
+	a.IRC.Say(msg)
 }
 
 func (a *App) helloCmd(ctx context.Context, user *users.User, params []string) {
@@ -65,7 +65,7 @@ func (a *App) helloCmd(ctx context.Context, user *users.User, params []string) {
 		msg += " I'm Tripbot, your adventure companion. Try using !commands to interact with me."
 	}
 
-	sayFn(msg)
+	a.IRC.Say(msg)
 	// update our record of last time it ran
 	lastHelloTime = time.Now()
 }
@@ -79,7 +79,7 @@ func (a *App) versionCmd(ctx context.Context, user *users.User, _ []string) {
 	log.Println(user.Username, "ran !version")
 
 	if helpers.RunningOnWindows() {
-		sayFn("Sorry, I can't answer that right now")
+		a.IRC.Say("Sorry, I can't answer that right now")
 		return
 	}
 
@@ -90,20 +90,20 @@ func (a *App) versionCmd(ctx context.Context, user *users.User, _ []string) {
 		out, err := exec.Command(scriptPath).Output()
 		if err != nil {
 			terrors.Log(err, "failed to get current version")
-			sayFn("Failed to get current version :(")
+			a.IRC.Say("Failed to get current version :(")
 			return
 		}
 		currentVersion = strings.TrimSpace(string(out))
 	}
 
-	sayFn("Current version is " + currentVersion)
+	a.IRC.Say("Current version is " + currentVersion)
 }
 
 func (a *App) uptimeCmd(ctx context.Context, user *users.User, _ []string) {
 	log.Println(user.Username, "ran !uptime")
 	dur := time.Now().Sub(Uptime)
 	msg := fmt.Sprintf("I have been running for %s", durafmt.Parse(dur))
-	sayFn(msg)
+	a.IRC.Say(msg)
 }
 
 func (a *App) milesCmd(ctx context.Context, user *users.User, params []string) {
@@ -159,7 +159,7 @@ func (a *App) kilometresCmd(ctx context.Context, user *users.User, _ []string) {
 	km := user.CurrentMiles() * 1.609344
 	msg := "@%s has %.2f kilometres."
 	msg = fmt.Sprintf(msg, user.Username, km)
-	sayFn(msg)
+	a.IRC.Say(msg)
 }
 
 func (a *App) sunsetCmd(ctx context.Context, user *users.User, _ []string) {
@@ -378,7 +378,7 @@ func (a *App) stateCmd(ctx context.Context, user *users.User, _ []string) {
 	log.Println(user.Username, "ran !state")
 	vid := a.CurrentVideo()
 	if vid.Flagged {
-		sayFn("I couldn't figure out current GPS coords, using next closest...")
+		a.IRC.Say("I couldn't figure out current GPS coords, using next closest...")
 		vid = vid.Next()
 	}
 	msg := fmt.Sprintf("We're in %s", vid.State)
@@ -386,7 +386,7 @@ func (a *App) stateCmd(ctx context.Context, user *users.User, _ []string) {
 	a.Onscreens.ShowFlag(10 * time.Second)
 	// record that they know the location now
 	user.SetLastLocationTime()
-	sayFn(msg)
+	a.IRC.Say(msg)
 }
 
 //TODO: maybe there could be a !cancel command or something

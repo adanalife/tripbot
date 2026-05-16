@@ -43,6 +43,10 @@ type App struct {
 	// CurrentVideo (above) is the older closure-based seam; both live on
 	// App for now and a follow-up will subsume CurrentVideo into Video.
 	Video Video
+	// IRC sends chat output (Say, Whisper). Tests inject a recordingIRC
+	// to assert on chat messages; production uses the realIRC adapter
+	// which delegates to the package-level twitch client.
+	IRC IRC
 }
 
 // db returns the DB handle the App should use. Prefers an explicit a.DB
@@ -61,6 +65,7 @@ var defaultApp = &App{
 	Onscreens: realOnscreens{},
 	VLC:       realVLC{},
 	Video:     realVideo{},
+	IRC:       realIRC{},
 }
 
 // used to determine which help message to display
