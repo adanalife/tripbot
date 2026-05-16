@@ -1,44 +1,34 @@
+// Package log emits Twitch chat messages as OTel log records so they
+// flow to Grafana Cloud Loki alongside the rest of tripbot's telemetry.
+// Querying:
+//
+//	{service_name="tripbot", scope_name="twitch-chat"}
+//
+// twitch.user and twitch.channel land as OTel attributes; the message
+// text is the log Body. When OTLP is disabled (OTEL_SDK_DISABLED=true
+// or no endpoint), the global LoggerProvider is the SDK's noop, so
+// Emit is a no-op — chat lines stay off the wire and off the console.
 package log
 
 import (
 	"context"
-	"log"
 
-	"cloud.google.com/go/logging"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
+	otellog "go.opentelemetry.io/otel/log"
+	logglobal "go.opentelemetry.io/otel/log/global"
 )
 
-var client *logging.Client
-var chatLogger *log.Logger
-
-func init() {
-	var err error
-
-	// don't bother with this if we're in a test environment
-	if c.Conf.IsTesting() || c.Conf.IsDevelopment() || c.Conf.IsStaging() {
-		return
-	}
-
-	ctx := context.Background()
-
-	// Sets your Google Cloud Platform project ID.
-	projectID := c.Conf.GoogleProjectID
-
-	// Creates a stackdriver logging client.
-	client, err = logging.NewClient(ctx, projectID)
-	if err != nil {
-		log.Fatalf("Failed to create stackdriver client: %v", err)
-	}
-	// defer client.Close()
-
-	// this will include all Twitch chat messages
-	chatLogger = client.Logger("twitch-chat").StandardLogger(logging.Info)
-
-}
+const scopeName = "twitch-chat"
 
 func ChatMsg(username, msg string) {
-	if c.Conf.IsTesting() || c.Conf.IsDevelopment() || c.Conf.IsStaging() {
-		return
-	}
-	chatLogger.Printf("%s: %s", username, msg)
+	logger := logglobal.GetLoggerProvider().Logger(scopeName)
+
+	var rec otellog.Record
+	rec.SetBody(otellog.StringValue(msg))
+	rec.SetSeverity(otellog.SeverityInfo)
+	rec.AddAttributes(
+		otellog.String("twitch.user", username),
+		otellog.String("twitch.channel", c.Conf.ChannelName),
+	)
+	logger.Emit(context.Background(), rec)
 }
