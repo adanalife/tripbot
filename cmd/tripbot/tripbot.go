@@ -48,6 +48,19 @@ func tracedJob(name string, fn func()) func() {
 	}
 }
 
+// tracedJobCtx is the ctx-aware variant of tracedJob. The span's ctx is
+// threaded into fn so DB queries (otelsql) and outbound HTTP (otelhttp)
+// nest under cron.<name> in Tempo, giving each cron tick a tree of children
+// rather than orphan spans.
+func tracedJobCtx(name string, fn func(context.Context)) func() {
+	return func() {
+		ctx, span := cronTracer.Start(context.Background(), "cron."+name,
+			trace.WithAttributes(attribute.String("cron.job", name)))
+		defer span.End()
+		fn(ctx)
+	}
+}
+
 // version is overridable at build time via -ldflags "-X main.version=...".
 var version = "dev"
 
@@ -59,13 +72,19 @@ var telemetryShutdown telemetry.ShutdownFunc
 func main() {
 	log.Println(aurora.Cyan(fmt.Sprintf("tripbot version %s", version)))
 	createRandomSeed()
+	// shutdownCtx is canceled on SIGINT/SIGTERM; the HTTP server uses it
+	// to trigger a graceful shutdown so in-flight requests aren't cut.
+	// listenForShutdown's gracefulShutdown goroutine handles the rest of
+	// the app cleanup off the same signals.
+	shutdownCtx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stopSignals()
 	listenForShutdown()
 	initializeTelemetry()
 	initializeErrorLogger()
 	server.SetVersion(version)
-	startHttpServer()
+	startHttpServer(shutdownCtx)
 	findInitialVideo()
-	users.InitLeaderboard()
+	users.InitLeaderboard(context.Background())
 	startCron()
 	startOBSPolling()
 	loadTwitchToken()   // must precede chatbot.Initialize — provides the IRC token
@@ -107,10 +126,13 @@ func initializeErrorLogger() {
 }
 
 // startHttpServer starts a webserver, which is
-// used for admin tools and receiving webhooks
-func startHttpServer() {
+// used for admin tools and receiving webhooks. The passed context is
+// honored by the server for graceful shutdown — when it's canceled,
+// the server stops accepting new connections and drains in-flight
+// requests up to its shutdown timeout.
+func startHttpServer(ctx context.Context) {
 	// start the HTTP server
-	go server.Start()
+	go server.Start(ctx)
 }
 
 // findInitialVideo will determine the vido that is currently-playing
@@ -166,7 +188,7 @@ func updateSubscribers() {
 // getCurrentUsers gets the users watching the stream
 func getCurrentUsers() {
 	// fetch initial session
-	users.UpdateSession()
+	users.UpdateSession(context.Background())
 	users.PrintCurrentSession()
 }
 
@@ -215,7 +237,7 @@ func gracefulShutdown() {
 	// try and use !shutdown instead
 	//TODO: print different message if CurrentlyPlaying is ""
 	log.Printf("Last played video: %s", aurora.Yellow(video.CurrentlyPlaying.File()))
-	users.Shutdown()
+	users.Shutdown(context.Background())
 	err := database.Connection().Close()
 	if err != nil {
 		terrors.Log(err, "error closing DB connection")
@@ -240,9 +262,9 @@ func scheduleBackgroundJobs() {
 
 	// schedule these functions
 	err = background.Cron.AddFunc("@every 60s", tracedJob("video.GetCurrentlyPlaying", video.GetCurrentlyPlaying))
-	err = background.Cron.AddFunc("@every 61s", tracedJob("users.UpdateSession", users.UpdateSession))
+	err = background.Cron.AddFunc("@every 61s", tracedJobCtx("users.UpdateSession", users.UpdateSession))
 	err = background.Cron.AddFunc("@every 62s", tracedJob("users.UpdateLeaderboard", users.UpdateLeaderboard))
-	err = background.Cron.AddFunc("@every 5m", tracedJob("onscreens.ShowGuessLeaderboard", onscreensClient.ShowGuessLeaderboard))
+	err = background.Cron.AddFunc("@every 5m", tracedJobCtx("onscreens.ShowGuessLeaderboard", onscreensClient.ShowGuessLeaderboard))
 	err = background.Cron.AddFunc("@every 5m", tracedJob("users.PrintCurrentSession", users.PrintCurrentSession))
 	err = background.Cron.AddFunc("@every 5m", tracedJob("twitch.GetSubscribers", mytwitch.GetSubscribers))
 	err = background.Cron.AddFunc("@every 5m", tracedJob("twitch.GetFollowerCount", mytwitch.GetFollowerCount))

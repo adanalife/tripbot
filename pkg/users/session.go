@@ -1,6 +1,7 @@
 package users
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -29,7 +30,7 @@ var LoggedIn = make(map[string]*User)
 
 // UpdateSession will use the data from the Twitch API to maintain a list
 // of currently-logged-in users
-func UpdateSession() {
+func UpdateSession(ctx context.Context) {
 	// fetch the latest chatters from Twitch
 	twitch.UpdateChatters()
 	currentChatters := twitch.Chatters()
@@ -41,7 +42,7 @@ func UpdateSession() {
 			continue
 		} else {
 			// they're logged in and NOT a current chatter, so log them out
-			user.logout()
+			user.logout(ctx)
 			continue
 		}
 	}
@@ -49,7 +50,7 @@ func UpdateSession() {
 	// log in everybody else
 	//TODO: this could get slow, maybe make a list of users that need to be logged in?
 	for chatter, _ := range currentChatters {
-		LoginIfNecessary(chatter)
+		LoginIfNecessary(ctx, chatter)
 	}
 
 	// PrintCurrentSession()
@@ -58,29 +59,29 @@ func UpdateSession() {
 
 // LoginIfNecessary checks the list of currently-logged in users and will
 // run login() if this user isn't currently logged in
-func LoginIfNecessary(username string) *User {
+func LoginIfNecessary(ctx context.Context, username string) *User {
 	// check if the user is currently logged in
 	if isLoggedIn(username) {
 		return LoggedIn[username]
 	}
 	// they weren't logged in, so note in the DB
-	return login(username)
+	return login(ctx, username)
 }
 
 // LogoutIfNecessary will log out the user if it finds them in the session
-func LogoutIfNecessary(username string) {
+func LogoutIfNecessary(ctx context.Context, username string) {
 	if isLoggedIn(username) {
 		user := *LoggedIn[username]
-		user.logout()
+		user.logout(ctx)
 	}
 }
 
 // login will record the users presence in the DB
 //TODO: do we want to make a DB update here? we could do it on logout()
-func login(username string) *User {
+func login(ctx context.Context, username string) *User {
 	now := time.Now()
 
-	user := FindOrCreate(username)
+	user := FindOrCreate(ctx, username)
 	// increment the number of visits
 	user.NumVisits = user.NumVisits + 1
 	// set the login time
@@ -93,7 +94,7 @@ func login(username string) *User {
 	user.lastCmd = now.AddDate(0, 0, -1)
 	// set their last !location date to yesterday
 	user.lastLocation = now.AddDate(0, 0, -1)
-	user.save()
+	user.save(ctx)
 
 	// raise an error if a user is supposed to be a bot
 	if c.UserIsIgnored(username) && !user.IsBot {
@@ -109,7 +110,7 @@ func login(username string) *User {
 	// add them to the session
 	LoggedIn[username] = &user
 
-	if err := events.Login(username, user.sessionID); err != nil {
+	if err := events.Login(ctx, username, user.sessionID); err != nil {
 		terrors.Log(err, "error creating login event")
 	}
 
@@ -118,7 +119,7 @@ func login(username string) *User {
 
 // User.logout() removes the user from the list of currently-logged in users,
 // and updates the DB with their most up-to-date values
-func (u User) logout() {
+func (u User) logout(ctx context.Context) {
 	sessionMiles := u.sessionMiles()
 
 	// print logout message if they're human
@@ -127,8 +128,8 @@ func (u User) logout() {
 		prettyDur := durafmt.ParseShort(loggedInDur)
 		dur := fmt.Sprintf("(%s)", aurora.Green(prettyDur))
 		miles := fmt.Sprintf("(%1.2fmi)", aurora.Yellow(sessionMiles))
-		monthlyMiles := fmt.Sprintf("(%1.2fmi this month)", aurora.Yellow(u.CurrentMonthlyMiles()))
-		guessScore := fmt.Sprintf("(%1.0f guesses)", aurora.Cyan(u.GetScore(scoreboards.CurrentGuessScoreboard())))
+		monthlyMiles := fmt.Sprintf("(%1.2fmi this month)", aurora.Yellow(u.CurrentMonthlyMiles(ctx)))
+		guessScore := fmt.Sprintf("(%1.0f guesses)", aurora.Cyan(u.GetScore(ctx, scoreboards.CurrentGuessScoreboard())))
 		log.Println("logging out", u, dur, miles, monthlyMiles, guessScore)
 	}
 
@@ -137,12 +138,12 @@ func (u User) logout() {
 	// update the last seen date
 	u.LastSeen = time.Now()
 	// store the user in the db
-	u.save()
+	u.save(ctx)
 
 	// update the monthly scoreboard
-	u.AddToScore(scoreboards.CurrentMilesScoreboard(), sessionMiles)
+	u.AddToScore(ctx, scoreboards.CurrentMilesScoreboard(), sessionMiles)
 
-	if err := events.Logout(u.Username, u.sessionID); err != nil {
+	if err := events.Logout(ctx, u.Username, u.sessionID); err != nil {
 		terrors.Log(err, "error creating logout event")
 	}
 
@@ -159,13 +160,13 @@ func isLoggedIn(username string) bool {
 }
 
 // ShutDown loops through all of the logged-in users and logs them out
-func Shutdown() {
+func Shutdown(ctx context.Context) {
 	if c.Conf.Verbose {
 		log.Println("these were the logged-in users")
 		spew.Dump(LoggedIn)
 	}
 	for _, user := range LoggedIn {
-		user.logout()
+		user.logout(ctx)
 	}
 }
 

@@ -70,6 +70,32 @@ func poll(ctx context.Context, addr, passwd string, interval time.Duration) {
 				return // trigger reconnect
 			}
 			instrumentation.OBSStreaming.Set(resp.OutputActive)
+			instrumentation.OBSStats.UpdateStream(instrumentation.OBSStreamSnapshot{
+				OutputBytes:      resp.OutputBytes,
+				OutputDurationMS: resp.OutputDuration,
+				OutputCongestion: resp.OutputCongestion,
+				Reconnecting:     resp.OutputReconnecting,
+				SkippedFrames:    resp.OutputSkippedFrames,
+				TotalFrames:      resp.OutputTotalFrames,
+			})
+
+			stats, err := client.General.GetStats()
+			if err != nil {
+				// Non-fatal — keep the connection alive; stream-side
+				// gauges already published this tick.
+				log.Printf("obs: GetStats error: %v", err)
+				continue
+			}
+			instrumentation.OBSStats.Update(instrumentation.OBSStatsSnapshot{
+				ActiveFPS:              stats.ActiveFps,
+				AverageFrameRenderTime: stats.AverageFrameRenderTime,
+				CPUUsage:               stats.CpuUsage,
+				MemoryUsage:            stats.MemoryUsage,
+				RenderSkippedFrames:    stats.RenderSkippedFrames,
+				RenderTotalFrames:      stats.RenderTotalFrames,
+				OutputSkippedFrames:    stats.OutputSkippedFrames,
+				OutputTotalFrames:      stats.OutputTotalFrames,
+			})
 		}
 	}
 }

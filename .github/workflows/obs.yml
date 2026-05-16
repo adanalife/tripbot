@@ -3,8 +3,6 @@ on:
   pull_request:
     paths:
       - 'infra/docker/obs/**'
-      - 'infra/docker/vlc/**'
-      - 'script/container_startup.sh'
       - 'infra/docker/docker-compose*.yml'
       - '.github/workflows/obs.yml'
   push:
@@ -93,59 +91,13 @@ jobs:
           -f infra/docker/docker-compose.github.yml \
           build obs
 
-    - name: Build VLC container (amd64, cached)
-      if: matrix.arch == 'amd64'
-      uses: docker/build-push-action@v7
-      with:
-        context: .
-        file: infra/docker/vlc/Dockerfile
-        tags: adanalife/vlc:latest
-        load: true
-        cache-from: type=gha,scope=vlc-amd64
-        cache-to: type=gha,mode=max,scope=vlc-amd64
-
-    - name: Build VLC container (arm64)
-      if: matrix.arch == 'arm64'
-      run: |
-        docker compose \
-          --project-directory . \
-          -f infra/docker/docker-compose.yml \
-          ${{ matrix.arch_compose }} \
-          -f infra/docker/docker-compose.testing.yml \
-          -f infra/docker/docker-compose.github.yml \
-          build vlc
-
-    - name: Start VLC container (RTSP source)
-      run: |
-        docker compose \
-          --project-directory . \
-          --env-file infra/docker/env.docker \
-          -f infra/docker/docker-compose.yml \
-          ${{ matrix.arch_compose }} \
-          -f infra/docker/docker-compose.testing.yml \
-          -f infra/docker/docker-compose.github.yml \
-          up -d vlc
-
-    - name: Wait for VLC to be ready
-      run: |
-        cid=$(docker compose \
-          --project-directory . \
-          -f infra/docker/docker-compose.yml \
-          ${{ matrix.arch_compose }} \
-          -f infra/docker/docker-compose.testing.yml \
-          -f infra/docker/docker-compose.github.yml \
-          ps -q vlc)
-        for i in $(seq 1 30); do
-          if docker exec "$cid" curl -sf http://localhost:8080/health/ready >/dev/null; then
-            echo "VLC is ready"
-            exit 0
-          fi
-          echo "Waiting for VLC... ($i/30)"
-          sleep 2
-        done
-        echo "VLC failed to become ready" >&2
-        exit 1
-
+    # OBS doesn't need VLC to start or pass its healthcheck — the
+    # healthcheck (infra/docker/obs/healthcheck.sh) only verifies the
+    # OBS process, X server, and absence of the safe-mode crash modal.
+    # RTSP and browser sources retry on missing peers without crashing
+    # OBS. VLC has its own dedicated workflow (vlc.yml) that exercises
+    # it end-to-end. `--no-deps` keeps the compose `depends_on: vlc`
+    # (load-bearing for local dev) from dragging VLC into this job.
     - name: Start OBS container (no STREAM_KEY)
       run: |
         docker compose \
@@ -155,7 +107,7 @@ jobs:
           ${{ matrix.arch_compose }} \
           -f infra/docker/docker-compose.testing.yml \
           -f infra/docker/docker-compose.github.yml \
-          up -d obs
+          up -d --no-deps obs
 
     - name: Wait for healthcheck
       run: |
@@ -188,17 +140,6 @@ jobs:
         docker exec "$cid" test -s /etc/tripbot/sha
         echo "version: $(docker exec "$cid" cat /etc/tripbot/version)"
         echo "sha:     $(docker exec "$cid" cat /etc/tripbot/sha)"
-
-    - name: Check VLC container logs
-      if: always()
-      run: |
-        docker compose \
-          --project-directory . \
-          -f infra/docker/docker-compose.yml \
-          ${{ matrix.arch_compose }} \
-          -f infra/docker/docker-compose.testing.yml \
-          -f infra/docker/docker-compose.github.yml \
-          logs vlc
 
     - name: Check container logs
       if: always()

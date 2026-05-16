@@ -5,6 +5,31 @@
 
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
+## [v2.7.1] — 2026-05-15
+
+Patch release. End-to-end runtime visibility lands on both ends of the dashcam pipeline (vlc-server + OBS publish OTel gauges to Grafana Cloud), and the chat-command path becomes a single trace tree in Tempo — `chat.command` spans wrap the dispatcher, child SQL queries from GORM and outbound Twitch Helix calls nest underneath. Chatbot picks up an injectable `VLC` dependency, the HTTP server now shuts down gracefully on SIGTERM instead of cutting in-flight requests, and the OBS CI workflow stops building/booting VLC since OBS doesn't actually depend on it for health.
+
+### Observability
+
+- **Pipeline stats: vlc-server and OBS runtime gauges.** vlc-server polls `player.Media().Stats()` every 5s and publishes `vlc_player_input_bitrate` / `demux_bitrate` / `displayed_fps` / `decoded_video_frames` / `displayed_pictures` / `lost_pictures` / `demux_corrupted` / `demux_discontinuity`. OBS's existing WebSocket poll now also calls `General.GetStats` and publishes `obs_active_fps`, `obs_average_frame_render_time_ms`, `obs_cpu_usage_percent`, `obs_memory_usage_mb`, render/output skipped+total frame counters, and stream-side bytes/duration/congestion/reconnecting gauges. Dashboards + alerts in [adanalife/infra#474](https://github.com/adanalife/infra/pull/474). ([#538])
+
+### Tracing
+
+- **`chat.command` span wraps chat-command dispatch; Twitch Helix client gets `otelhttp` transport.** Each IRC message that resolves to a known command now shows up as a span (`command={trigger}` attribute), searchable in Tempo. Helix calls (`GetUsers`, `GetSubscriptions`, `GetChannelFollows`, `GetChannelChatChatters`) now emit outbound HTTP spans, matching the existing `otelhttp` wiring in `pkg/vlc-client` and `pkg/onscreens-client`. ([#533])
+- **Thread `context.Context` through `HandlerFunc` and DB helpers.** Builds on #533 so SQL queries (`otelsql`) and outbound HTTP spans nest *under* the `chat.command` span instead of trailing as siblings. `HandlerFunc` grows `ctx`; every `(a *App).xxxCmd` method picks it up; all DB-touching helpers in `pkg/users` / `pkg/scoreboards` / `pkg/events` / `pkg/onscreens-client` grow `ctx` and call `.WithContext(ctx)` on their GORM ops. Server webhook handlers pass `r.Context()`; cron jobs that propagate ctx use a new `tracedJobCtx` wrapper. A single `!miles` is now one tree in Tempo. ([#535])
+
+### Chatbot
+
+- **Inject `VLC` on `App` for testability.** Mirrors the Onscreens injection pattern from #526 — `VLC` interface in `pkg/chatbot/vlc.go` covers the four playback methods chatbot commands use (`PlayRandom`, `PlayFileInPlaylist`, `Skip`, `Back`); `realVLC` delegates to `pkg/vlc-client`. Unlocks the deferred `guessCmd` correct-guess test from #528 — three new tests assert overlay + playback behavior on right-answer / cooldown / new-round transitions via `recordingVLC` + `recordingOnscreens`. ([#536])
+
+### Server
+
+- **Graceful HTTP shutdown via signal-derived context.** `pkg/server/server.go` runs `ListenAndServe` in a goroutine, waits on a context derived from `signal.NotifyContext` on SIGINT/SIGTERM, then calls `srv.Shutdown(ctx)` with a 15s timeout so in-flight requests complete instead of being cut. Resolves the `//TODO: add graceful shutdown` comment that's been there since closed PR #46 (2020). `pkg/vlc-server/server.go` has the same gap and is left as a follow-up. ([#440])
+
+### CI
+
+- **Drop VLC build/start steps from `obs.yml`.** OBS's healthcheck (`pgrep obs`, `xdpyinfo`, safe-mode-modal check) and entrypoint never touch VLC, and RTSP/browser sources retry on missing peers without crashing OBS. Strips the per-arch VLC build, the `up -d vlc`, and the readiness wait; adds `--no-deps` to `up -d obs`. Net `-67/+8` lines, drops ~30s of CI wall time per arch. `docker-compose.yml`'s `depends_on: vlc` is kept so `bin/devenv up obs` still pulls VLC up locally. ([#537])
+
 ## [v2.7.0] — 2026-05-15
 
 Minor release. Big one. The database layer migrates from raw `sqlx` to GORM across most packages, Twilio comes out entirely, and three new business metrics land alongside surfaced visibility on non-2xx Twitch Helix responses. Chatbot gains injectable `Onscreens` and `DB` dependencies, unlocking two more rounds of test coverage. Sentry events now carry the build-time version as their `Release` tag, a startup-time `spew.Dump` that was leaking secrets to stdout is gone, and the rotator retires `!survey` while picking up `!discord`.
@@ -547,3 +572,9 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#530]: https://github.com/adanalife/tripbot/pull/530
 [#531]: https://github.com/adanalife/tripbot/pull/531
 [#532]: https://github.com/adanalife/tripbot/pull/532
+[#440]: https://github.com/adanalife/tripbot/pull/440
+[#533]: https://github.com/adanalife/tripbot/pull/533
+[#535]: https://github.com/adanalife/tripbot/pull/535
+[#536]: https://github.com/adanalife/tripbot/pull/536
+[#537]: https://github.com/adanalife/tripbot/pull/537
+[#538]: https://github.com/adanalife/tripbot/pull/538
