@@ -3,8 +3,7 @@ package users
 import (
 	"context"
 	"errors"
-	"fmt"
-	"log"
+	"log/slog"
 	"sort"
 	"strings"
 	"time"
@@ -19,7 +18,6 @@ import (
 
 	"github.com/adanalife/tripbot/pkg/twitch"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
-	"github.com/logrusorgru/aurora/v3"
 )
 
 //TODO: consider moving this whole thing elsewhere (to background perhaps?)
@@ -98,13 +96,12 @@ func login(ctx context.Context, username string) *User {
 
 	// raise an error if a user is supposed to be a bot
 	if c.UserIsIgnored(username) && !user.IsBot {
-		log.Println(aurora.Red(username), errors.New("user should be bot"))
+		slog.WarnContext(ctx, "user should be marked as bot", "username", username, "err", errors.New("user should be bot"))
 	}
 
 	// just a silly message to confirm subscriber feature is working
 	if mytwitch.UserIsSubscriber(username) {
-		msg := fmt.Sprintf("subscriber %s logged in!", username)
-		log.Println(aurora.Magenta(msg))
+		slog.InfoContext(ctx, "subscriber logged in", "username", username)
 	}
 
 	// add them to the session
@@ -125,12 +122,13 @@ func (u User) logout(ctx context.Context) {
 	// print logout message if they're human
 	if !u.IsBot {
 		loggedInDur := time.Now().Sub(u.LoggedIn)
-		prettyDur := durafmt.ParseShort(loggedInDur)
-		dur := fmt.Sprintf("(%s)", aurora.Green(prettyDur))
-		miles := fmt.Sprintf("(%1.2fmi)", aurora.Yellow(sessionMiles))
-		monthlyMiles := fmt.Sprintf("(%1.2fmi this month)", aurora.Yellow(u.CurrentMonthlyMiles(ctx)))
-		guessScore := fmt.Sprintf("(%1.0f guesses)", aurora.Cyan(u.GetScore(ctx, scoreboards.CurrentGuessScoreboard())))
-		log.Println("logging out", u, dur, miles, monthlyMiles, guessScore)
+		slog.InfoContext(ctx, "logging out user",
+			"user", u.String(),
+			"duration", durafmt.ParseShort(loggedInDur).String(),
+			"session_miles", sessionMiles,
+			"monthly_miles", u.CurrentMonthlyMiles(ctx),
+			"guess_score", u.GetScore(ctx, scoreboards.CurrentGuessScoreboard()),
+		)
 	}
 
 	// update miles
@@ -162,7 +160,7 @@ func isLoggedIn(username string) bool {
 // ShutDown loops through all of the logged-in users and logs them out
 func Shutdown(ctx context.Context) {
 	if c.Conf.Verbose {
-		log.Println("these were the logged-in users")
+		slog.InfoContext(ctx, "logged-in users at shutdown")
 		spew.Dump(LoggedIn)
 	}
 	for _, user := range LoggedIn {
@@ -172,7 +170,7 @@ func Shutdown(ctx context.Context) {
 
 // GiveEveryoneMiles gives all logged-in users miles
 func GiveEveryoneMiles(gift float32) {
-	log.Println(aurora.Green("giving all logged-in users gift miles"))
+	slog.Info("giving all logged-in users gift miles", "gift", gift)
 	for _, user := range LoggedIn {
 		user.Miles += gift
 	}
@@ -235,16 +233,17 @@ func countBots() int {
 	return len(bots())
 }
 
-// PrintCurrentSession simply prints info about the current session
-func PrintCurrentSession() {
+// PrintCurrentSession simply prints info about the current session.
+// ctx is forward-compat plumbing — twitch.ChatterCount doesn't take ctx
+// yet, so the parameter is currently unused.
+func PrintCurrentSession(_ context.Context) {
 	usernames := sortedUsernameList()
 	coloredUsernames := colorizeUsernames(usernames)
 
-	log.Println("there are",
-		twitch.ChatterCount(), "users in chat,",
-		aurora.Cyan(countHumans()), "humans, and",
-		aurora.Gray(15, countBots()), "bots",
+	slog.Info("session snapshot",
+		"chatters", twitch.ChatterCount(),
+		"humans", countHumans(),
+		"bots", countBots(),
+		"logged_in", strings.Join(coloredUsernames, ", "),
 	)
-
-	log.Printf("Currently logged in: %s", strings.Join(coloredUsernames, ", "))
 }

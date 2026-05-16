@@ -1,8 +1,9 @@
 package chatbot
 
 import (
+	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"math/rand"
 	"time"
 
@@ -38,6 +39,20 @@ type App struct {
 	// VLC drives playback operations (timewarp, jump, skip, back). Tests
 	// inject a no-op fake; production uses the realVLC adapter.
 	VLC VLC
+	// Video reads / refreshes the currently-playing dashcam video. Tests
+	// inject a no-op fake; production uses the realVideo adapter.
+	// CurrentVideo (above) is the older closure-based seam; both live on
+	// App for now and a follow-up will subsume CurrentVideo into Video.
+	Video Video
+	// IRC sends chat output (Say, Whisper). Tests inject a recordingIRC
+	// to assert on chat messages; production uses the realIRC adapter
+	// which delegates to the package-level twitch client.
+	IRC IRC
+	// Sessions wraps the user-lookup / lifetime-leaderboard / shutdown
+	// surface of pkg/users for command-time queries. Tests inject a
+	// recordingSessions to assert lookups and stage results; production
+	// uses the realSessions adapter.
+	Sessions Sessions
 }
 
 // db returns the DB handle the App should use. Prefers an explicit a.DB
@@ -55,6 +70,9 @@ var defaultApp = &App{
 	// DB stays nil; commands use a.db() which falls back to database.GormDB().
 	Onscreens: realOnscreens{},
 	VLC:       realVLC{},
+	Video:     realVideo{},
+	IRC:       realIRC{},
+	Sessions:  realSessions{},
 }
 
 // used to determine which help message to display
@@ -115,14 +133,17 @@ func Whisper(username, msg string) {
 	//TODO: include whispers in log
 	// include the message in the log
 	// mylog.ChatMsg(c.Conf.BotUsername, msg)
-	log.Println("sending whisper to", username, ":", msg)
+	slog.Info("sending whisper", "to", username, "msg", msg)
 	// say the message to chat
 	client.Say(c.Conf.BotUsername, fmt.Sprintf("/w %s %s", username, msg))
 }
 
 // Chatter is designed to post a randomized message on a timer.
 // Right now it just posts random "help messages."
-func Chatter() {
+// ctx is forward-compat plumbing — sayFn (the package-level chat-send
+// indirection) doesn't take ctx yet, so it's not propagated into the IRC
+// write.
+func Chatter(_ context.Context) {
 	// use twitch emote feature to add some color
 	sayFn("/me " + help())
 }

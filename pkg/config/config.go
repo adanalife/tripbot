@@ -2,6 +2,7 @@ package config
 
 import (
 	"log"
+	"log/slog"
 	"os"
 
 	"github.com/joho/godotenv"
@@ -45,8 +46,7 @@ func SetEnvironment() {
 	// env values come from envconfig instead — so the missing-file error is
 	// expected and noise. Only surface it for local-dev workflows.
 	if err != nil && (env == "development" || env == "testing") {
-		log.Println("Error loading .env file:", err)
-		log.Println("Continuing anyway...")
+		slog.Warn("error loading .env file, continuing anyway", "err", err, "env", env)
 	}
 
 	// Also load the docker env file as a base layer; docker-compose layers

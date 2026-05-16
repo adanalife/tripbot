@@ -4,6 +4,7 @@ package database
 import (
 	"fmt"
 	"log"
+	"log/slog"
 	"os"
 	"time"
 
@@ -13,7 +14,6 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
-	"github.com/logrusorgru/aurora/v3"
 	"github.com/uptrace/opentelemetry-go-extra/otelgorm"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -32,8 +32,7 @@ func init() {
 	// env values come from envconfig instead — so the missing-file error is
 	// expected and noise. Only surface it for local-dev workflows.
 	if err != nil && (c.Conf.Environment == "development" || c.Conf.Environment == "testing") {
-		log.Println("Error loading .env file:", err)
-		log.Println("Continuing anyway...")
+		slog.Warn("error loading .env file, continuing anyway", "err", err)
 	}
 
 	// first we have to check we have all of the right ENV vars
@@ -57,17 +56,17 @@ func connectToDB() *sqlx.DB {
 		otelsql.WithAttributes(semconv.DBSystemPostgreSQL),
 	)
 	if err != nil {
-		log.Println(aurora.Red("connection to DB failed:"), err.Error())
+		slog.Error("DB connection failed", "err", err)
 		return nil
 	}
 	if err := db.Ping(); err != nil {
-		log.Println(aurora.Red("connection to DB failed:"), err.Error())
+		slog.Error("DB connection failed", "err", err)
 		return nil
 	}
 	if _, err := otelsql.RegisterDBStatsMetrics(db,
 		otelsql.WithAttributes(semconv.DBSystemPostgreSQL),
 	); err != nil {
-		log.Println(aurora.Yellow("could not register DB stats metrics:"), err.Error())
+		slog.Warn("could not register DB stats metrics", "err", err)
 	}
 	return sqlx.NewDb(db, "postgres")
 }
@@ -79,12 +78,12 @@ func Connection() *sqlx.DB {
 	}
 	connected := isAlive()
 	for connected != true { // reconnect if we lost connection
-		log.Print("Connection to DB was lost. Waiting...")
+		slog.Warn("connection to DB was lost, waiting to reconnect")
 		time.Sleep(5 * time.Second)
 		dbConnection = connectToDB()
 		connected = isAlive()
 		if connected {
-			log.Println(aurora.Green("connection made!"))
+			slog.Info("DB connection made")
 		}
 	}
 	return dbConnection
@@ -130,7 +129,7 @@ func connectGorm() *gorm.DB {
 		log.Fatal("GORM init failed:", err)
 	}
 	if err := gdb.Use(otelgorm.NewPlugin()); err != nil {
-		log.Println(aurora.Yellow("otelgorm plugin:"), err)
+		slog.Warn("otelgorm plugin install failed", "err", err)
 	}
 	return gdb
 }

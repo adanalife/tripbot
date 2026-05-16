@@ -47,7 +47,7 @@ var noopShutdown ShutdownFunc = func(context.Context) error { return nil }
 // returns a non-nil ShutdownFunc — safe to defer unconditionally.
 func Init(ctx context.Context, serviceName, serviceVersion string) (ShutdownFunc, error) {
 	if disabled() {
-		log.Println("[telemetry] OTLP exporters disabled; only Prometheus /metrics will be populated")
+		slog.Info("telemetry: OTLP exporters disabled, only Prometheus /metrics will be populated")
 		if err := initPromOnlyMeter(ctx, serviceName, serviceVersion); err != nil {
 			return noopShutdown, fmt.Errorf("prom-only meter: %w", err)
 		}

@@ -38,14 +38,231 @@ func newTestVideo(state string, lat, lng float64, date time.Time) video.Video {
 }
 
 // newTestApp returns an App with CurrentVideo returning vid, plus no-op
-// Onscreens and VLC fakes. For commands that don't use CurrentVideo, pass a
-// zero-value video.Video. To assert on Onscreens or VLC calls, replace
-// app.Onscreens / app.VLC with a recordingOnscreens / recordingVLC.
+// Onscreens, VLC, Video, IRC, and Sessions fakes. For commands that
+// don't use CurrentVideo, pass a zero-value video.Video. To assert on
+// any of those surfaces, replace the corresponding field with a
+// recording fake (recordingOnscreens / recordingVLC / recordingVideo /
+// recordingIRC / recordingSessions).
 func newTestApp(vid video.Video) *App {
 	return &App{
 		CurrentVideo: func() video.Video { return vid },
 		Onscreens:    noopOnscreens{},
 		VLC:          noopVLC{},
+		Video:        noopVideo{},
+		IRC:          noopIRC{},
+		Sessions:     noopSessions{},
+	}
+}
+
+// --- App.IRC seam ---
+//
+// These tests exercise the new App.IRC injection point introduced alongside
+// the legacy sayFn-based captureSay() helper. Pick a command that's been
+// migrated to a.IRC.Say(...) and assert via a recordingIRC. Once all command
+// callsites flow through a.IRC, the captureSay()-based tests above can be
+// rewritten in this shape and the global Say()/sayFn collapsed.
+
+func TestHelpCmd_SaysSomething_ViaIRC(t *testing.T) {
+	app := newTestApp(video.Video{})
+	rec := &recordingIRC{}
+	app.IRC = rec
+
+	app.helpCmd(context.Background(), newTestUser("viewer1"), nil)
+
+	if len(rec.Says) == 0 {
+		t.Fatal("expected a help message via IRC, got none")
+	}
+	if !strings.Contains(rec.Says[0], " of ") {
+		t.Errorf("expected count like '(N of M)' in help message, got %q", rec.Says[0])
+	}
+}
+
+func TestUptimeCmd_SaysRunningFor_ViaIRC(t *testing.T) {
+	app := newTestApp(video.Video{})
+	rec := &recordingIRC{}
+	app.IRC = rec
+	Uptime = time.Now().Add(-5 * time.Minute)
+
+	app.uptimeCmd(context.Background(), newTestUser("viewer1"), nil)
+
+	if len(rec.Says) != 1 {
+		t.Fatalf("expected exactly one Say() call, got %d: %v", len(rec.Says), rec.Says)
+	}
+	if !strings.HasPrefix(rec.Says[0], "I have been running for") {
+		t.Errorf("unexpected uptime message via IRC: %q", rec.Says[0])
+	}
+}
+
+func TestKilometresCmd_SaysViaIRC(t *testing.T) {
+	app := newTestApp(video.Video{})
+	rec := &recordingIRC{}
+	app.IRC = rec
+
+	user := &users.User{Username: "viewer1", Miles: 10}
+	app.kilometresCmd(context.Background(), user, nil)
+
+	if len(rec.Says) != 1 {
+		t.Fatalf("expected exactly one Say() call, got %d: %v", len(rec.Says), rec.Says)
+	}
+	// 10 miles * 1.609344 = 16.09344, formatted as "16.09"
+	if !strings.Contains(rec.Says[0], "16.09") {
+		t.Errorf("expected km conversion in IRC output, got %q", rec.Says[0])
+	}
+	if !strings.Contains(rec.Says[0], "@viewer1") {
+		t.Errorf("expected @username in IRC output, got %q", rec.Says[0])
+	}
+}
+
+func TestHelloCmd_GreetsNewViewer_ViaIRC(t *testing.T) {
+	app := newTestApp(video.Video{})
+	rec := &recordingIRC{}
+	app.IRC = rec
+	lastHelloTime = time.Time{} // clear rate limiter
+
+	app.helloCmd(context.Background(), newTestUser("newviewer"), nil)
+
+	if len(rec.Says) != 1 {
+		t.Fatalf("expected exactly one greeting via IRC, got %d: %v", len(rec.Says), rec.Says)
+	}
+	// a fresh user with 0 miles gets the newcomer hint appended
+	if !strings.Contains(rec.Says[0], "Tripbot") {
+		t.Errorf("expected newcomer hint in greeting via IRC, got %q", rec.Says[0])
+	}
+}
+
+func TestDateCmd_SaysViaIRC(t *testing.T) {
+	date := time.Date(2019, 6, 15, 18, 30, 0, 0, time.UTC)
+	vid := newTestVideo("Colorado", 39.5, -105.0, date)
+	app := newTestApp(vid)
+	rec := &recordingIRC{}
+	app.IRC = rec
+
+	app.dateCmd(context.Background(), newTestUser("viewer1"), nil)
+
+	if len(rec.Says) != 1 {
+		t.Fatalf("expected exactly one Say() call, got %d: %v", len(rec.Says), rec.Says)
+	}
+	if !strings.HasPrefix(rec.Says[0], "This moment was") {
+		t.Errorf("unexpected date message via IRC: %q", rec.Says[0])
+	}
+	if !strings.Contains(rec.Says[0], "2019") {
+		t.Errorf("expected year 2019 in IRC output, got %q", rec.Says[0])
+	}
+}
+
+func TestTimeCmd_SaysViaIRC(t *testing.T) {
+	date := time.Date(2019, 6, 15, 18, 30, 0, 0, time.UTC)
+	vid := newTestVideo("Colorado", 39.5, -105.0, date)
+	app := newTestApp(vid)
+	rec := &recordingIRC{}
+	app.IRC = rec
+
+	app.timeCmd(context.Background(), newTestUser("viewer1"), nil)
+
+	if len(rec.Says) != 1 {
+		t.Fatalf("expected exactly one Say() call, got %d: %v", len(rec.Says), rec.Says)
+	}
+	if !strings.HasPrefix(rec.Says[0], "This moment was") {
+		t.Errorf("unexpected time message via IRC: %q", rec.Says[0])
+	}
+}
+
+func TestReportCmd_AcksViaIRC(t *testing.T) {
+	app := newTestApp(video.Video{})
+	rec := &recordingIRC{}
+	app.IRC = rec
+
+	app.reportCmd(context.Background(), newTestUser("viewer1"), []string{"the", "bot", "is", "broken"})
+
+	if len(rec.Says) != 1 {
+		t.Fatalf("expected exactly one ack via IRC, got %d: %v", len(rec.Says), rec.Says)
+	}
+	if !strings.Contains(rec.Says[0], "Thank you") {
+		t.Errorf("expected ack message via IRC, got %q", rec.Says[0])
+	}
+}
+
+func TestBonusMilesCmd_SaysViaIRC(t *testing.T) {
+	app := newTestApp(video.Video{})
+	rec := &recordingIRC{}
+	app.IRC = rec
+
+	// BonusMiles is computed from user state; a zero user yields a stable string.
+	app.bonusMilesCmd(context.Background(), newTestUser("viewer1"), nil)
+
+	if len(rec.Says) != 1 {
+		t.Fatalf("expected exactly one Say() call, got %d: %v", len(rec.Says), rec.Says)
+	}
+	if !strings.Contains(rec.Says[0], "viewer1") {
+		t.Errorf("expected username in bonusmiles output via IRC, got %q", rec.Says[0])
+	}
+	if !strings.Contains(rec.Says[0], "bonus miles") {
+		t.Errorf("expected 'bonus miles' phrasing in IRC output, got %q", rec.Says[0])
+	}
+}
+
+// --- App.Sessions seam ---
+//
+// These tests exercise the new App.Sessions injection point. Pick a command
+// that calls a.Sessions.<method>(...) and assert via a recordingSessions.
+// The DB-backed chain that follows a successful Find lookup (the GetScore
+// query trio) is still exercised via sqlmock in the broader miles tests
+// below — these tests focus on the Sessions surface itself.
+
+func TestMilesCmd_OtherUser_QueriesSessionsFind(t *testing.T) {
+	// Confirm a.Sessions.Find is the lookup path for the !miles <user> form.
+	// Stage an unknown user (default FindResult is User{ID: 0}) so the
+	// command short-circuits before any DB-backed score chain — keeps the
+	// test focused on the Sessions seam itself.
+	app := newTestApp(video.Video{})
+	rec := &recordingSessions{}
+	app.Sessions = rec
+
+	_, restore := captureSay(t)
+	defer restore()
+
+	app.milesCmd(context.Background(), newTestUser("caller"), []string{"viewer1"})
+
+	if len(rec.Calls) != 1 || rec.Calls[0] != `Find("viewer1")` {
+		t.Errorf("expected single Find(\"viewer1\") via Sessions, got %v", rec.Calls)
+	}
+}
+
+func TestLifetimeMilesLeaderboardCmd_ReadsSessions(t *testing.T) {
+	// Confirm lifetimeMilesLeaderboardCmd reads Sessions.LifetimeLeaderboard
+	// (not the global users.LifetimeMilesLeaderboard package var).
+	app := newTestApp(video.Video{})
+	rec := &recordingSessions{
+		Leaderboard: [][]string{{"alice", "300.0"}, {"bob", "100.0"}},
+	}
+	app.Sessions = rec
+
+	out, restore := captureSay(t)
+	defer restore()
+
+	app.lifetimeMilesLeaderboardCmd(context.Background(), newTestUser("caller"), nil)
+
+	if len(rec.Calls) != 1 || rec.Calls[0] != "LifetimeLeaderboard()" {
+		t.Errorf("expected single LifetimeLeaderboard() via Sessions, got %v", rec.Calls)
+	}
+	msg := out()
+	if !strings.Contains(msg, "alice") || !strings.Contains(msg, "300.0mi") {
+		t.Errorf("expected staged leaderboard data in chat output, got %q", msg)
+	}
+}
+
+// shutdownCmd ultimately calls os.Exit(0), so we can't drive the whole
+// command end-to-end in a unit test. The Sessions.Shutdown wiring is
+// covered indirectly: realSessions.Shutdown is a thin adapter, and the
+// recordingSessions implementation is exercised here as a contract check
+// so future refactors of !shutdown can pivot to it without re-deriving
+// the call shape.
+func TestRecordingSessions_ShutdownIsRecorded(t *testing.T) {
+	rec := &recordingSessions{}
+	rec.Shutdown(context.Background())
+
+	if len(rec.Calls) != 1 || rec.Calls[0] != "Shutdown()" {
+		t.Errorf("expected single Shutdown() recording, got %v", rec.Calls)
 	}
 }
 
@@ -442,7 +659,7 @@ func TestGuessCmd_CorrectGuess_DrivesOverlayAndPlayback(t *testing.T) {
 	out, restore := captureSay(t)
 	defer restore()
 
-	app.guessCmd(newTestUser("viewer1"), []string{"Colorado"})
+	app.guessCmd(context.Background(), newTestUser("viewer1"), []string{"Colorado"})
 
 	msg := out()
 	if !strings.Contains(msg, "@viewer1 got it") || !strings.Contains(msg, "Colorado") {
@@ -484,7 +701,7 @@ func TestGuessCmd_CorrectGuess_FullStateName(t *testing.T) {
 	out, restore := captureSay(t)
 	defer restore()
 
-	app.guessCmd(newTestUser("viewer1"), []string{"Massachusetts"})
+	app.guessCmd(context.Background(), newTestUser("viewer1"), []string{"Massachusetts"})
 
 	if !strings.Contains(out(), "got it") {
 		t.Errorf("expected correct-guess msg, got %q", out())
@@ -506,7 +723,7 @@ func TestGuessCmd_CorrectGuess_TwoLetterCode(t *testing.T) {
 	out, restore := captureSay(t)
 	defer restore()
 
-	app.guessCmd(newTestUser("viewer1"), []string{"CA"})
+	app.guessCmd(context.Background(), newTestUser("viewer1"), []string{"CA"})
 
 	if !strings.Contains(out(), "got it") {
 		t.Errorf("expected correct-guess msg from CA, got %q", out())
@@ -614,14 +831,16 @@ func TestMiddleCmd_NonAdmin_DoesNotDriveOverlay(t *testing.T) {
 
 // --- lifetimeMilesLeaderboardCmd ---
 //
-// Reads users.LifetimeMilesLeaderboard, which is a package-level [][]string
-// hydrated at startup by users.InitLeaderboard. No DB on the read path.
+// Reads the lifetime-miles leaderboard via Sessions.LifetimeLeaderboard().
+// In production realSessions returns users.LifetimeMilesLeaderboard (the
+// package-level [][]string hydrated at startup by users.InitLeaderboard);
+// in tests recordingSessions.Leaderboard stages whatever data the test
+// wants. No DB on the read path.
 
 func TestLifetimeMilesLeaderboardCmd_Empty(t *testing.T) {
 	app := newTestApp(video.Video{})
-	prev := users.LifetimeMilesLeaderboard
-	users.LifetimeMilesLeaderboard = nil
-	defer func() { users.LifetimeMilesLeaderboard = prev }()
+	// noopSessions's LifetimeLeaderboard returns nil — the test asserts
+	// the empty-leaderboard header still renders cleanly.
 
 	out, restore := captureSay(t)
 	defer restore()
@@ -636,14 +855,16 @@ func TestLifetimeMilesLeaderboardCmd_Empty(t *testing.T) {
 
 func TestLifetimeMilesLeaderboardCmd_WithUsers(t *testing.T) {
 	app := newTestApp(video.Video{})
-	rec := &recordingOnscreens{}
-	app.Onscreens = rec
+	recOverlay := &recordingOnscreens{}
+	app.Onscreens = recOverlay
 
-	prev := users.LifetimeMilesLeaderboard
-	users.LifetimeMilesLeaderboard = [][]string{
-		{"viewer1", "200.0"}, {"viewer2", "150.5"}, {"viewer3", "10.0"},
+	// Stage the leaderboard via Sessions instead of mutating the package var.
+	recSessions := &recordingSessions{
+		Leaderboard: [][]string{
+			{"viewer1", "200.0"}, {"viewer2", "150.5"}, {"viewer3", "10.0"},
+		},
 	}
-	defer func() { users.LifetimeMilesLeaderboard = prev }()
+	app.Sessions = recSessions
 
 	out, restore := captureSay(t)
 	defer restore()
@@ -658,9 +879,14 @@ func TestLifetimeMilesLeaderboardCmd_WithUsers(t *testing.T) {
 		t.Errorf("expected 'Top 3 lifetime miles' header, got %q", msg)
 	}
 
+	// confirm Sessions.LifetimeLeaderboard was the source
+	if len(recSessions.Calls) != 1 || recSessions.Calls[0] != "LifetimeLeaderboard()" {
+		t.Errorf("expected single LifetimeLeaderboard() call, got %v", recSessions.Calls)
+	}
+
 	// confirm the overlay surface was driven with the same title + row count
-	if len(rec.Calls) != 1 || !strings.Contains(rec.Calls[0], `ShowLeaderboard("Total Miles", 3 rows)`) {
-		t.Errorf("expected single ShowLeaderboard overlay call, got %v", rec.Calls)
+	if len(recOverlay.Calls) != 1 || !strings.Contains(recOverlay.Calls[0], `ShowLeaderboard("Total Miles", 3 rows)`) {
+		t.Errorf("expected single ShowLeaderboard overlay call, got %v", recOverlay.Calls)
 	}
 }
 
@@ -765,17 +991,15 @@ func TestMonthlyGuessLeaderboardCmd_WithGuesses_StripsDecimals(t *testing.T) {
 // Self-lookup (no params) and other-user lookup (with params) both end up
 // calling user.CurrentMonthlyMiles, which runs the 3-query GetScore chain
 // (getUserIDByName → findOrCreateScoreboard → findOrCreateScore). The
-// other-user path adds a users.Find on top.
+// other-user path adds a Sessions.Find on top — staged via recordingSessions.
 
 func TestMilesCmd_OtherUser_NotInDB(t *testing.T) {
-	mock := installMockDB(t)
 	app := newTestApp(video.Video{})
 
-	// users.Find runs a SELECT; returning no rows triggers gorm.ErrRecordNotFound
-	// which Find translates into User{ID: 0}.
-	mock.ExpectQuery(`SELECT \* FROM "users" WHERE username = `).
-		WithArgs("ghost", 1). // GORM appends the LIMIT 1 arg
-		WillReturnRows(sqlmock.NewRows([]string{"id", "username"}))
+	// recordingSessions.FindResult defaults to users.User{} (ID == 0),
+	// which mirrors pkg/users.Find's "not found" contract.
+	rec := &recordingSessions{}
+	app.Sessions = rec
 
 	out, restore := captureSay(t)
 	defer restore()
@@ -785,8 +1009,8 @@ func TestMilesCmd_OtherUser_NotInDB(t *testing.T) {
 	if !strings.Contains(out(), "I don't know them") {
 		t.Errorf("expected unknown-user message, got %q", out())
 	}
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Error(err)
+	if len(rec.Calls) != 1 || rec.Calls[0] != `Find("ghost")` {
+		t.Errorf("expected Sessions.Find(\"ghost\") call, got %v", rec.Calls)
 	}
 }
 
@@ -857,22 +1081,23 @@ func TestMilesCmd_OtherUser_Found(t *testing.T) {
 	mock := installMockDB(t)
 	app := newTestApp(video.Video{})
 
-	// 1. users.Find — returns one row with miles=120
-	mock.ExpectQuery(`SELECT \* FROM "users" WHERE username = `).
-		WithArgs("viewer1", 1).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "miles"}).
-			AddRow(42, "viewer1", 120.0))
+	// Stage Sessions.Find to return a known user (replaces the old
+	// sqlmock SELECT * FROM users expectation).
+	rec := &recordingSessions{
+		FindResult: users.User{ID: 42, Username: "viewer1", Miles: 120.0},
+	}
+	app.Sessions = rec
 
-	// 2. scoreboards.getUserIDByName — raw SELECT id by username
+	// 1. scoreboards.getUserIDByName — raw SELECT id by username
 	mock.ExpectQuery(`SELECT id FROM users WHERE username = `).
 		WithArgs("viewer1").
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(42))
 
-	// 3. scoreboards.findOrCreateScoreboard — FirstOrCreate SELECT
+	// 2. scoreboards.findOrCreateScoreboard — FirstOrCreate SELECT
 	mock.ExpectQuery(`SELECT \* FROM "scoreboards" WHERE`).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(7, "miles_2026_05"))
 
-	// 4. scoreboards.findOrCreateScore — FirstOrCreate SELECT for the score row
+	// 3. scoreboards.findOrCreateScore — FirstOrCreate SELECT for the score row
 	mock.ExpectQuery(`SELECT \* FROM "scores" WHERE`).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "scoreboard_id", "value"}).
 			AddRow(99, 42, 7, 15.5))
@@ -890,29 +1115,31 @@ func TestMilesCmd_OtherUser_Found(t *testing.T) {
 	if !strings.Contains(msg, "(120mi total)") {
 		t.Errorf("expected lifetime miles in parens, got %q", msg)
 	}
+	if len(rec.Calls) != 1 || rec.Calls[0] != `Find("viewer1")` {
+		t.Errorf("expected Sessions.Find(\"viewer1\") call, got %v", rec.Calls)
+	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Error(err)
 	}
 }
 
 func TestMilesCmd_OtherUser_StripsAtSign(t *testing.T) {
-	mock := installMockDB(t)
 	app := newTestApp(video.Video{})
 
-	mock.ExpectQuery(`SELECT \* FROM "users" WHERE username = `).
-		WithArgs("ghost", 1).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "username"}))
+	// recordingSessions.FindResult defaults to User{} (ID == 0) — the
+	// "@ghost" arg should be normalized to "ghost" before the Find call.
+	rec := &recordingSessions{}
+	app.Sessions = rec
 
 	out, restore := captureSay(t)
 	defer restore()
 
-	// "@ghost" should be normalized to "ghost" before the lookup
 	app.milesCmd(context.Background(), newTestUser("caller"), []string{"@ghost"})
 
 	if !strings.Contains(out(), "I don't know them") {
 		t.Errorf("expected unknown-user message, got %q", out())
 	}
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Error(err)
+	if len(rec.Calls) != 1 || rec.Calls[0] != `Find("ghost")` {
+		t.Errorf("expected Sessions.Find(\"ghost\") with @ stripped, got %v", rec.Calls)
 	}
 }

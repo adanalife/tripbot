@@ -1,12 +1,12 @@
 package twitch
 
 import (
-	"log"
+	"context"
+	"log/slog"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/davecgh/go-spew/spew"
-	"github.com/logrusorgru/aurora/v3"
 	"github.com/nicklaw5/helix/v2"
 )
 
@@ -19,8 +19,9 @@ var subsTopic = []string{
 	"/webhooks/twitch/subscriptions/events",
 }
 
-// UpdateWebhookSubscriptions will create new webhook subscriptions
-func UpdateWebhookSubscriptions() {
+// UpdateWebhookSubscriptions will create new webhook subscriptions.
+// ctx is forward-compat plumbing (see GetSubscribers).
+func UpdateWebhookSubscriptions(_ context.Context) {
 	if c.Conf.DisableTwitchWebhooks {
 		return
 	}
@@ -62,6 +63,6 @@ func getWebookSubscriptions() {
 			spew.Dump(resp.Data.WebhookSubscriptions)
 		}
 	} else {
-		log.Println(aurora.Red("no webhooks found"))
+		slog.Warn("no webhooks found")
 	}
 }

@@ -1,8 +1,9 @@
 package video
 
 import (
+	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -12,7 +13,6 @@ import (
 	"github.com/adanalife/tripbot/pkg/helpers"
 	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
 	vlcClient "github.com/adanalife/tripbot/pkg/vlc-client"
-	"github.com/logrusorgru/aurora/v3"
 )
 
 // CurrentlyPlaying is the video that is currently playing
@@ -23,9 +23,13 @@ var curVid, preVid string
 var timeStarted time.Time
 
 // GetCurrentlyPlaying will use lsof to figure out
-// which dashcam video is currently playing (seriously)
+// which dashcam video is currently playing (seriously).
+// ctx is forward-compat plumbing — vlc-client and onscreens-client don't
+// take ctx yet, so it's not propagated into their HTTP calls. Once they do,
+// trace spans for cron.video.GetCurrentlyPlaying ticks will nest the
+// underlying VLC poll and GPS-image toggles as children.
 //TODO: consider making this return a video struct
-func GetCurrentlyPlaying() {
+func GetCurrentlyPlaying(_ context.Context) {
 	var err error
 
 	// save the video we used last time
@@ -49,9 +53,9 @@ func GetCurrentlyPlaying() {
 			terrors.Log(err, fmt.Sprintf("unable to create Video from %s", curVid))
 		}
 
-		log.Printf("now playing %s - %s",
-			aurora.Yellow(CurrentlyPlaying.File()),
-			aurora.Green(helpers.StateToStateAbbrev(CurrentlyPlaying.State)),
+		slog.Info("now playing",
+			"file", CurrentlyPlaying.File(),
+			"state", helpers.StateToStateAbbrev(CurrentlyPlaying.State),
 		)
 
 		// show the no-GPS image
@@ -80,7 +84,7 @@ func figureOutCurrentVideo() string {
 	out, err := exec.Command(scriptPath).Output()
 	outString := strings.TrimSpace(string(out))
 	if err != nil {
-		log.Println(outString)
+		slog.Error("figureOutCurrentVideo script failed", "err", err, "output", outString)
 		return ""
 	}
 	return outString

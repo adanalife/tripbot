@@ -1,7 +1,7 @@
 package onscreensServer
 
 import (
-	"log"
+	"log/slog"
 	"math/rand"
 	"time"
 )
@@ -27,7 +27,7 @@ var possibleLeftMessages = []string{
 }
 
 func InitLeftRotator() {
-	log.Println("Creating left rotator onscreen")
+	slog.Info("creating onscreen", "kind", "left-rotator")
 	LeftRotator = New()
 	// Show a first message synchronously so the OBS browser source has
 	// content to render the moment it polls — otherwise there's a brief

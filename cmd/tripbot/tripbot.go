@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"math/rand"
 	"os"
 	"os/signal"
@@ -27,7 +27,7 @@ import (
 	_ "github.com/dimiro1/banner/autoload"
 	"github.com/gempir/go-twitch-irc/v4"
 	"github.com/getsentry/sentry-go"
-	"github.com/logrusorgru/aurora/v3"
+	"github.com/go-co-op/gocron/v2"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -36,25 +36,12 @@ import (
 var cronTracer = otel.Tracer("github.com/adanalife/tripbot/cmd/tripbot/cron")
 
 // tracedJob wraps a cron callback in a span so each tick shows up as its
-// own trace. Slow or failing jobs become visible in Grafana traces without
-// having to thread context through the underlying functions (the cron
-// library only accepts func()).
-func tracedJob(name string, fn func()) func() {
-	return func() {
-		_, span := cronTracer.Start(context.Background(), "cron."+name,
-			trace.WithAttributes(attribute.String("cron.job", name)))
-		defer span.End()
-		fn()
-	}
-}
-
-// tracedJobCtx is the ctx-aware variant of tracedJob. The span's ctx is
-// threaded into fn so DB queries (otelsql) and outbound HTTP (otelhttp)
-// nest under cron.<name> in Tempo, giving each cron tick a tree of children
-// rather than orphan spans.
-func tracedJobCtx(name string, fn func(context.Context)) func() {
-	return func() {
-		ctx, span := cronTracer.Start(context.Background(), "cron."+name,
+// own trace. The scheduler's job ctx is the span's parent and is threaded
+// into fn, so DB queries (otelsql) and outbound HTTP (otelhttp) nest under
+// cron.<name> in Tempo as children of the cron tick.
+func tracedJob(name string, fn func(context.Context)) func(context.Context) {
+	return func(ctx context.Context) {
+		ctx, span := cronTracer.Start(ctx, "cron."+name,
 			trace.WithAttributes(attribute.String("cron.job", name)))
 		defer span.End()
 		fn(ctx)
@@ -70,7 +57,7 @@ var telemetryShutdown telemetry.ShutdownFunc
 
 // main performs the various steps to get the bot running
 func main() {
-	log.Println(aurora.Cyan(fmt.Sprintf("tripbot version %s", version)))
+	slog.Info("tripbot starting", "version", version)
 	createRandomSeed()
 	// shutdownCtx is canceled on SIGINT/SIGTERM; the HTTP server uses it
 	// to trigger a graceful shutdown so in-flight requests aren't cut.
@@ -115,7 +102,7 @@ func initializeTelemetry() {
 	shutdown, err := telemetry.Init(context.Background(), "tripbot", version)
 	if err != nil {
 		// telemetry init failure shouldn't crash the bot — log and continue.
-		log.Println(aurora.Yellow(fmt.Sprintf("telemetry init: %v", err)))
+		slog.Warn("telemetry init failed", "err", err)
 	}
 	telemetryShutdown = shutdown
 }
@@ -138,7 +125,7 @@ func startHttpServer(ctx context.Context) {
 // findInitialVideo will determine the vido that is currently-playing
 // we want to run this early, otherwise it will be unset until the first cron job runs
 func findInitialVideo() {
-	video.GetCurrentlyPlaying()
+	video.GetCurrentlyPlaying(context.Background())
 	v := video.CurrentlyPlaying
 	_, err := video.LoadOrCreate(v.String())
 	if err != nil {
@@ -165,8 +152,8 @@ func startOBSPolling() {
 func loadTwitchToken() {
 	if err := mytwitch.LoadFromDB(); err != nil {
 		if errors.Is(err, mytwitch.ErrNoToken) {
-			log.Printf("refusing to start: no oauth_tokens row for %q — tripbot will not run without a Twitch IRC connection", c.Conf.BotUsername)
-			log.Fatal("to fix: run `task tripbot:auth:bootstrap` from the infra directory")
+			slog.Error("refusing to start: no oauth_tokens row for bot", "bot_username", c.Conf.BotUsername, "fix", "task tripbot:auth:bootstrap")
+			os.Exit(1)
 		}
 		terrors.Fatal(err, "failed to load Twitch token from DB")
 	}
@@ -182,32 +169,31 @@ func setUpTwitchClient() {
 // updateSubscribers gets the list of current subscribers
 func updateSubscribers() {
 	// update subscribers list
-	mytwitch.GetSubscribers()
+	mytwitch.GetSubscribers(context.Background())
 }
 
 // getCurrentUsers gets the users watching the stream
 func getCurrentUsers() {
 	// fetch initial session
 	users.UpdateSession(context.Background())
-	users.PrintCurrentSession()
+	users.PrintCurrentSession(context.Background())
 }
 
 //updateWebhookSubscriptions makes sure webhooks are being sent to the bot
 func updateWebhookSubscriptions() {
 	// create webhook subscriptions
-	mytwitch.UpdateWebhookSubscriptions()
+	mytwitch.UpdateWebhookSubscriptions(context.Background())
 }
 
 // connectToTwitch joins Twitch chat and starts listening
 func connectToTwitch() {
 	client.Join(c.Conf.ChannelName)
-	log.Println("Joined channel", c.Conf.ChannelName)
-	log.Printf("URL: %s", aurora.Blue(fmt.Sprintf("https://twitch.tv/%s", c.Conf.ChannelName)).Underline())
+	slog.Info("joined channel", "channel", c.Conf.ChannelName, "url", fmt.Sprintf("https://twitch.tv/%s", c.Conf.ChannelName))
 
 	// actually connect to Twitch
 	// wrapped in a loop in case twitch goes down
 	for {
-		log.Println(aurora.Magenta("Initializing connection to Twitch"))
+		slog.Info("initializing connection to Twitch")
 		err := client.Connect()
 		if err != nil {
 			terrors.Log(err, "unable to connect to twitch")
@@ -232,11 +218,11 @@ func gracefulShutdown() {
 	// wait for signal
 	<-ctrlC
 
-	log.Println(aurora.Red("caught CTRL-C"))
+	slog.Warn("caught CTRL-C, shutting down")
 	// anything below this probably won't be executed
 	// try and use !shutdown instead
 	//TODO: print different message if CurrentlyPlaying is ""
-	log.Printf("Last played video: %s", aurora.Yellow(video.CurrentlyPlaying.File()))
+	slog.Info("last played video", "file", video.CurrentlyPlaying.File())
 	users.Shutdown(context.Background())
 	err := database.Connection().Close()
 	if err != nil {
@@ -247,39 +233,45 @@ func gracefulShutdown() {
 	if telemetryShutdown != nil {
 		flushCtx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 		if err := telemetryShutdown(flushCtx); err != nil {
-			log.Printf("telemetry shutdown: %v", err)
+			slog.Error("telemetry shutdown failed", "err", err)
 		}
 		cancel()
 	}
 	os.Exit(1)
 }
 
-// scheduleBackgroundJobs schedules the various background jobs
-// the reason we put this is in this package is because adding this to background
-// would cause circular dependencies
+// scheduleBackgroundJobs schedules the various background jobs.
+// Lives in this package (not pkg/background) to avoid circular deps with
+// the job-target packages.
 func scheduleBackgroundJobs() {
-	var err error
-
-	// schedule these functions
-	err = background.Cron.AddFunc("@every 60s", tracedJob("video.GetCurrentlyPlaying", video.GetCurrentlyPlaying))
-	err = background.Cron.AddFunc("@every 61s", tracedJobCtx("users.UpdateSession", users.UpdateSession))
-	err = background.Cron.AddFunc("@every 62s", tracedJob("users.UpdateLeaderboard", users.UpdateLeaderboard))
-	err = background.Cron.AddFunc("@every 5m", tracedJobCtx("onscreens.ShowGuessLeaderboard", onscreensClient.ShowGuessLeaderboard))
-	err = background.Cron.AddFunc("@every 5m", tracedJob("users.PrintCurrentSession", users.PrintCurrentSession))
-	err = background.Cron.AddFunc("@every 5m", tracedJob("twitch.GetSubscribers", mytwitch.GetSubscribers))
-	err = background.Cron.AddFunc("@every 5m", tracedJob("twitch.GetFollowerCount", mytwitch.GetFollowerCount))
-	err = background.Cron.AddFunc("@every 1h", tracedJob("twitch.RefreshUserAccessToken", func() {
-		mytwitch.RefreshUserAccessToken()
+	addJob(60*time.Second, "video.GetCurrentlyPlaying", video.GetCurrentlyPlaying)
+	addJob(61*time.Second, "users.UpdateSession", users.UpdateSession)
+	addJob(62*time.Second, "users.UpdateLeaderboard", users.UpdateLeaderboard)
+	addJob(5*time.Minute, "onscreens.ShowGuessLeaderboard", onscreensClient.ShowGuessLeaderboard)
+	addJob(5*time.Minute, "users.PrintCurrentSession", users.PrintCurrentSession)
+	addJob(5*time.Minute, "twitch.GetSubscribers", mytwitch.GetSubscribers)
+	addJob(5*time.Minute, "twitch.GetFollowerCount", mytwitch.GetFollowerCount)
+	addJob(1*time.Hour, "twitch.RefreshUserAccessToken", func(ctx context.Context) {
+		mytwitch.RefreshUserAccessToken(ctx)
 		// Keep the IRC client's stored token in sync with the rotated credentials.
 		// go-twitch-irc captures the token at construction; without this, any
 		// reconnect after the first rotation replays the original boot-time token.
 		if tok := mytwitch.IRCAuthToken(); tok != "" {
 			client.SetIRCToken(tok)
 		}
-	}))
-	err = background.Cron.AddFunc("@every 2h57m30s", tracedJob("chatbot.Chatter", chatbot.Chatter))
-	err = background.Cron.AddFunc("@every 12h", tracedJob("twitch.UpdateWebhookSubscriptions", mytwitch.UpdateWebhookSubscriptions))
+	})
+	addJob(2*time.Hour+57*time.Minute+30*time.Second, "chatbot.Chatter", chatbot.Chatter)
+	addJob(12*time.Hour, "twitch.UpdateWebhookSubscriptions", mytwitch.UpdateWebhookSubscriptions)
+}
+
+// addJob registers a gocron job at the given interval, wrapping fn with
+// tracedJob so each tick opens a span and centralising the error logging.
+func addJob(interval time.Duration, name string, fn func(context.Context)) {
+	_, err := background.Scheduler.NewJob(
+		gocron.DurationJob(interval),
+		gocron.NewTask(tracedJob(name, fn)),
+	)
 	if err != nil {
-		terrors.Log(err, "error adding at least one background job!")
+		terrors.Log(err, "error adding background job: "+name)
 	}
 }

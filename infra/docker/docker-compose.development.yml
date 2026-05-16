@@ -5,7 +5,6 @@ services:
     environment:
       ENV: development
       DISABLE_WEBHOOKS: "true"
-      GOOGLE_APPLICATION_CREDENTIALS: /opt/tripbot/infra/google/tripbot-stage.json
     env_file:
       - ./.env.development
     #TODO: add apt update, apt install -y postgresql vim

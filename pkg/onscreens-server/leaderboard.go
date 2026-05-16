@@ -1,7 +1,7 @@
 package onscreensServer
 
 import (
-	"log"
+	"log/slog"
 	"time"
 )
 
@@ -10,7 +10,7 @@ var leaderboardDuration = time.Duration(20 * time.Second)
 var Leaderboard *Onscreen
 
 func InitLeaderboard() {
-	log.Println("Creating leaderboard onscreen")
+	slog.Info("creating onscreen", "kind", "leaderboard")
 	Leaderboard = New()
 }
 

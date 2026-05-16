@@ -1,7 +1,7 @@
 package onscreensServer
 
 import (
-	"log"
+	"log/slog"
 	"time"
 )
 
@@ -10,7 +10,7 @@ var GPSImage *Onscreen
 var gpsDuration = time.Duration(150 * time.Second)
 
 func InitGPSImage() {
-	log.Println("Creating GPS image onscreen")
+	slog.Info("creating onscreen", "kind", "gps")
 	GPSImage = New()
 }
 

@@ -3,7 +3,7 @@ package chatbot
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -158,7 +158,7 @@ func PrivateMessage(msg twitch.PrivateMessage) {
 	//TODO: we lose capitalization here, is that okay?
 	message := strings.ToLower(msg.Message)
 
-	// log to stackdriver
+	// emit chat line to Loki via OTel
 	mylog.ChatMsg(username, msg.Message)
 
 	// check to see if the message is a command
@@ -185,10 +185,10 @@ func UserPart(partMessage twitch.UserPartMessage) {
 // 	mytwitch.GetSubscribers()
 // }
 
-// if the message comes from me, then post the message to chat
-//TODO: log to stackdriver
+// if the message comes from me, then post the message to chat.
+// An admin whisper that triggers Say() is logged again as a chat line.
 func GetWhisper(message twitch.WhisperMessage) {
-	log.Println("whisper from", message.User.Name, ":", message.Message)
+	slog.Info("whisper received", "from", message.User.Name, "msg", message.Message)
 	if c.UserIsAdmin(message.User.Name) {
 		Say(message.Message)
 	}

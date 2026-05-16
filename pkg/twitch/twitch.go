@@ -1,8 +1,9 @@
 package twitch
 
 import (
+	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
@@ -42,8 +43,12 @@ func getChannelID(username string) string {
 	return resp.Data.Users[0].ID
 }
 
-// GetSubscribers pulls down the most recent list of subscribers
-func GetSubscribers() {
+// GetSubscribers pulls down the most recent list of subscribers.
+// ctx is forward-compat plumbing — the helix client doesn't accept ctx
+// yet, so the Helix HTTP call isn't currently linked under the parent
+// cron span. Threading it now lets future ctx-aware helix wrappers nest
+// automatically.
+func GetSubscribers(_ context.Context) {
 	//TODO: should we do this elsewhere as well?
 	if ChannelID == "" {
 		ChannelID = getChannelID(c.Conf.ChannelName)
@@ -73,14 +78,15 @@ func GetSubscribers() {
 	instrumentation.TwitchAudience.SetSubscribers(int64(len(subscribers)))
 
 	if len(subscribers) > 0 {
-		log.Println("subscribers:", strings.Join(subscribers, ", "))
+		slog.Info("subscribers", "count", len(subscribers), "names", strings.Join(subscribers, ", "))
 	} else {
-		log.Println(c.Conf.ChannelName, "has no subscribers :(")
+		slog.Info("no subscribers", "channel", c.Conf.ChannelName)
 	}
 }
 
-// GetFollowerCount fetches the current total follower count for the channel.
-func GetFollowerCount() {
+// GetFollowerCount fetches the current total follower count for the
+// channel. ctx is forward-compat plumbing (see GetSubscribers).
+func GetFollowerCount(_ context.Context) {
 	if ChannelID == "" {
 		ChannelID = getChannelID(c.Conf.ChannelName)
 	}
@@ -95,7 +101,7 @@ func GetFollowerCount() {
 		return
 	}
 	instrumentation.TwitchAudience.SetFollowers(int64(resp.Data.Total))
-	log.Printf("%s has %d followers", c.Conf.ChannelName, resp.Data.Total)
+	slog.Info("follower count", "channel", c.Conf.ChannelName, "total", resp.Data.Total)
 }
 
 // UserIsSubscriber returns true if the user subscribes to the channel

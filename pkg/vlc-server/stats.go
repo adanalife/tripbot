@@ -2,7 +2,7 @@ package vlcServer
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/instrumentation"
@@ -76,6 +76,6 @@ func PollStats(ctx context.Context, interval time.Duration) {
 // StartStatsPoller is a tiny launcher wrapper so cmd/vlc-server can `go
 // vlcServer.StartStatsPoller(...)` without juggling its own goroutine.
 func StartStatsPoller(ctx context.Context, interval time.Duration) {
-	log.Printf("vlc-server: starting libvlc stats poller, interval=%s", interval)
+	slog.InfoContext(ctx, "starting libvlc stats poller", "interval", interval)
 	go PollStats(ctx, interval)
 }

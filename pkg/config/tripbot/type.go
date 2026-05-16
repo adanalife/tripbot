@@ -12,8 +12,6 @@ type TripbotConfig struct {
 	BotUsername string `required:"true" envconfig:"BOT_USERNAME"`
 	// ExternalURL is the where the bot's HTTP server can be reached
 	ExternalURL string `required:"true" envconfig:"EXTERNAL_URL"`
-	// GoogleProjectID is the Google Cloud project ID
-	GoogleProjectID string `required:"true" envconfig:"GOOGLE_APPS_PROJECT_ID"`
 	// GoogleMapsAPIKey is the API key with which we access Google Maps
 	GoogleMapsAPIKey string `required:"true" envconfig:"GOOGLE_MAPS_API_KEY"`
 	// ReadOnly is used to prevent writing some things to the DB
