@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
+	"log/slog"
 	"net/http"
 
 	terrors "github.com/adanalife/tripbot/pkg/errors"
@@ -29,7 +29,7 @@ type Event struct {
 }
 
 func decodeFollowWebhookResponse(r *http.Request) (*helix.UsersFollowsResponse, error) {
-	log.Println("decoding user webhook")
+	slog.InfoContext(r.Context(), "decoding user webhook")
 	// resp := &helix.Response{}
 
 	resp := &helix.UsersFollowsResponse{}
@@ -61,7 +61,7 @@ func decodeFollowWebhookResponse(r *http.Request) (*helix.UsersFollowsResponse, 
 }
 
 func decodeSubscriptionWebhookResponse(r *http.Request) (*SubscriptionWebhook, error) {
-	log.Println("decoding subscription webhook")
+	slog.InfoContext(r.Context(), "decoding subscription webhook")
 
 	// we use a custom struct because the 3rd party lib doesn't support webhooks yet
 	resp := &SubscriptionWebhook{}

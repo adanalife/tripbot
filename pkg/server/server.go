@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -37,7 +37,7 @@ const shutdownTimeout = 15 * time.Second
 // waits up to shutdownTimeout for in-flight requests to complete before
 // returning.
 func Start(ctx context.Context) {
-	log.Println("Starting web server on port", c.Conf.TripbotServerPort)
+	slog.InfoContext(ctx, "starting web server", "port", c.Conf.TripbotServerPort)
 
 	r := mux.NewRouter()
 
@@ -125,7 +125,7 @@ func Start(ctx context.Context) {
 			terrors.Fatal(err, "couldn't start server")
 		}
 	case <-ctx.Done():
-		log.Println("shutting down web server")
+		slog.InfoContext(ctx, "shutting down web server")
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
 		if err := srv.Shutdown(shutdownCtx); err != nil {

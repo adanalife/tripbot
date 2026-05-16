@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"runtime/debug"
 
@@ -14,7 +14,6 @@ import (
 	"github.com/adanalife/tripbot/pkg/server/oauthstate"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/users"
-	"github.com/logrusorgru/aurora/v3"
 	"github.com/nicklaw5/helix/v2"
 )
 
@@ -74,7 +73,8 @@ func versionHandler(w http.ResponseWriter, r *http.Request) {
 
 // twitch issues a request here when creating a new webhook subscription
 func webhooksTwitchHandler(w http.ResponseWriter, r *http.Request) {
-	log.Println("got webhook challenge request at", r.URL.Path)
+	ctx := r.Context()
+	slog.InfoContext(ctx, "received webhook challenge request", "path", r.URL.Path)
 	// exit early if we've disabled webhooks
 	if c.Conf.DisableTwitchWebhooks {
 		http.Error(w, "501 not implemented", http.StatusNotImplemented)
@@ -84,11 +84,11 @@ func webhooksTwitchHandler(w http.ResponseWriter, r *http.Request) {
 	challenge, ok := r.URL.Query()["hub.challenge"]
 	if !ok || len(challenge[0]) < 1 {
 		terrors.Log(nil, "something went wrong with the challenge")
-		log.Printf("%#v", r.URL.Query())
+		slog.WarnContext(ctx, "webhook challenge missing hub.challenge", "query", fmt.Sprintf("%#v", r.URL.Query()))
 		http.Error(w, "404 not found", http.StatusNotFound)
 		return
 	}
-	log.Println("returning challenge")
+	slog.InfoContext(ctx, "returning webhook challenge")
 	fmt.Fprint(w, string(challenge[0]))
 }
 
@@ -110,7 +110,7 @@ func webhooksTwitchUsersFollowsHandler(w http.ResponseWriter, r *http.Request) {
 
 	for _, follower := range resp.Data.Follows {
 		username := follower.FromName
-		log.Println("got webhook for new follower:", username)
+		slog.InfoContext(r.Context(), "received webhook: new follower", "username", username)
 		users.LoginIfNecessary(r.Context(), username)
 		// announce new follower in chat
 		chatbot.AnnounceNewFollower(username)
@@ -136,7 +136,7 @@ func webhooksTwitchSubscriptionsEventsHandler(w http.ResponseWriter, r *http.Req
 
 	for _, event := range resp.Data.Events {
 		username := event.Subscription.UserName
-		log.Println("got webhook for new sub:", username)
+		slog.InfoContext(r.Context(), "received webhook: new sub", "username", username)
 		users.LoginIfNecessary(r.Context(), username)
 		// announce new sub in chat
 		chatbot.AnnounceSubscriber(event.Subscription)
@@ -172,7 +172,7 @@ func authCallbackHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Println(aurora.Cyan("successfully received token from twitch!"))
+	slog.InfoContext(r.Context(), "received token from twitch via auth callback")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	fmt.Fprint(w, authSuccessHTML)
 }
@@ -218,13 +218,13 @@ func catchAllHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
 		http.Error(w, "404 not found", http.StatusNotFound)
-		log.Println("someone tried hitting", r.URL.Path)
+		slog.InfoContext(r.Context(), "404 GET", "path", r.URL.Path)
 		return
 
 	case "POST":
 		// someone tried to make a post and we dont know what to do with it
 		http.Error(w, "404 not found", http.StatusNotFound)
-		log.Println("someone tried posting to", r.URL.Path)
+		slog.InfoContext(r.Context(), "404 POST", "path", r.URL.Path)
 		return
 	// someone tried a PUT or a DELETE or something
 	default:
