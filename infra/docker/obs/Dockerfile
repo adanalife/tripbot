@@ -38,12 +38,21 @@ RUN echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula sele
          vainfo \
          fonts-dejavu-core \
          ttf-mscorefonts-installer \
+         python3 \
+         python3-venv \
     && rm -rf /var/lib/apt/lists/*
+
+# obsws-python (in a venv to stay clear of PEP 668 system-managed python)
+# powers the hourly browser-source refresh that the entrypoint kicks off
+# as a workaround for CEF's per-frame memory leak.
+RUN python3 -m venv /opt/obs/venv \
+    && /opt/obs/venv/bin/pip install --no-cache-dir obsws-python
 
 COPY infra/docker/obs/config/ /opt/obs/config/
 COPY infra/docker/obs/entrypoint.sh /opt/obs/entrypoint.sh
 COPY infra/docker/obs/healthcheck.sh /opt/obs/healthcheck.sh
-RUN chmod +x /opt/obs/entrypoint.sh /opt/obs/healthcheck.sh
+COPY bin/obs-browser-refresh /opt/obs/bin/obs-browser-refresh
+RUN chmod +x /opt/obs/entrypoint.sh /opt/obs/healthcheck.sh /opt/obs/bin/obs-browser-refresh
 
 COPY assets/twitch-overlay-left.png assets/twitch-overlay-right.png /opt/tripbot/assets/
 
