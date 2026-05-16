@@ -13,6 +13,7 @@ require (
 	github.com/gempir/go-twitch-irc/v4 v4.4.1
 	github.com/getsentry/sentry-go v0.46.2
 	github.com/getsentry/sentry-go/negroni v0.46.2
+	github.com/getsentry/sentry-go/otel v0.46.2
 	github.com/go-co-op/gocron/v2 v2.21.2
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
