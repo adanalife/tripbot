@@ -37,7 +37,11 @@ func InitLeaderboard(ctx context.Context) {
 	}
 }
 
-func UpdateLeaderboard() {
+// UpdateLeaderboard rebuilds the lifetime-miles leaderboard from the
+// LoggedIn map. ctx is forward-compat plumbing — the work is in-memory
+// and CurrentMiles doesn't take ctx yet; once it does the cron-tick span
+// will nest the DB reads as children.
+func UpdateLeaderboard(_ context.Context) {
 	for _, user := range LoggedIn {
 		// skip adding this user if they're a bot or ignored
 		if user.IsBot || c.UserIsIgnored(user.Username) || c.UserIsAdmin(user.Username) {

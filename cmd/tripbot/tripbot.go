@@ -177,7 +177,7 @@ func updateSubscribers() {
 func getCurrentUsers() {
 	// fetch initial session
 	users.UpdateSession(context.Background())
-	users.PrintCurrentSession()
+	users.PrintCurrentSession(context.Background())
 }
 
 //updateWebhookSubscriptions makes sure webhooks are being sent to the bot
@@ -251,9 +251,9 @@ func scheduleBackgroundJobs() {
 	// tracedJob but no ctx-aware child linking until threaded.
 	addJob(60*time.Second, "video.GetCurrentlyPlaying", video.GetCurrentlyPlaying)
 	addJob(61*time.Second, "users.UpdateSession", users.UpdateSession)
-	addJob(62*time.Second, "users.UpdateLeaderboard", func(_ context.Context) { users.UpdateLeaderboard() })
+	addJob(62*time.Second, "users.UpdateLeaderboard", users.UpdateLeaderboard)
 	addJob(5*time.Minute, "onscreens.ShowGuessLeaderboard", onscreensClient.ShowGuessLeaderboard)
-	addJob(5*time.Minute, "users.PrintCurrentSession", func(_ context.Context) { users.PrintCurrentSession() })
+	addJob(5*time.Minute, "users.PrintCurrentSession", users.PrintCurrentSession)
 	addJob(5*time.Minute, "twitch.GetSubscribers", func(_ context.Context) { mytwitch.GetSubscribers() })
 	addJob(5*time.Minute, "twitch.GetFollowerCount", func(_ context.Context) { mytwitch.GetFollowerCount() })
 	addJob(1*time.Hour, "twitch.RefreshUserAccessToken", func(_ context.Context) {
