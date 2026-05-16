@@ -151,3 +151,11 @@ func mustHistogram(name, desc string, buckets ...float64) metric.Float64Histogra
 	}
 	return h
 }
+
+func mustFloat64Gauge(name, desc string) metric.Float64Gauge {
+	g, err := meter.Float64Gauge(name, metric.WithDescription(desc))
+	if err != nil {
+		panic(err)
+	}
+	return g
+}
