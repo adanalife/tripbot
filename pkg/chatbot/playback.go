@@ -3,7 +3,7 @@ package chatbot
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"strconv"
 	"strings"
 	"time"
@@ -38,7 +38,7 @@ func (a *App) timewarp() {
 }
 
 func (a *App) timewarpCmd(ctx context.Context, user *users.User, _ []string) {
-	log.Println(user.Username, "ran !timewarp")
+	slog.InfoContext(ctx, "ran !timewarp", "username", user.Username)
 
 	// exit early if we're on OS X
 	if helpers.RunningOnDarwin() {
@@ -65,7 +65,7 @@ func (a *App) timewarpCmd(ctx context.Context, user *users.User, _ []string) {
 
 func (a *App) jumpCmd(ctx context.Context, user *users.User, params []string) {
 	var err error
-	log.Println(user.Username, "ran !jump")
+	slog.InfoContext(ctx, "ran !jump", "username", user.Username)
 
 	// exit early if we're on OS X
 	if helpers.RunningOnDarwin() {
@@ -124,7 +124,7 @@ func (a *App) jumpCmd(ctx context.Context, user *users.User, params []string) {
 func (a *App) skipCmd(ctx context.Context, user *users.User, params []string) {
 	var err error
 	var n int
-	log.Println(user.Username, "ran !skip")
+	slog.InfoContext(ctx, "ran !skip", "username", user.Username)
 
 	// exit early if we're on OS X
 	if helpers.RunningOnDarwin() {
@@ -169,7 +169,7 @@ func (a *App) skipCmd(ctx context.Context, user *users.User, params []string) {
 func (a *App) backCmd(ctx context.Context, user *users.User, params []string) {
 	var err error
 	var n int
-	log.Println(user.Username, "ran !back")
+	slog.InfoContext(ctx, "ran !back", "username", user.Username)
 
 	// exit early if we're on OS X
 	if helpers.RunningOnDarwin() {
