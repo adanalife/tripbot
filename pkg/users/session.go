@@ -235,8 +235,10 @@ func countBots() int {
 	return len(bots())
 }
 
-// PrintCurrentSession simply prints info about the current session
-func PrintCurrentSession() {
+// PrintCurrentSession simply prints info about the current session.
+// ctx is forward-compat plumbing — twitch.ChatterCount doesn't take ctx
+// yet, so the parameter is currently unused.
+func PrintCurrentSession(_ context.Context) {
 	usernames := sortedUsernameList()
 	coloredUsernames := colorizeUsernames(usernames)
 

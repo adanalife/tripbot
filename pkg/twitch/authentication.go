@@ -1,6 +1,7 @@
 package twitch
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -222,7 +223,7 @@ func GenerateUserAccessToken(code string) error {
 //
 // TODO: helix client surface should move behind an interface so this
 // function can be unit-tested without a real Twitch round-trip.
-func RefreshUserAccessToken() {
+func RefreshUserAccessToken(_ context.Context) {
 	botUser := c.Conf.BotUsername
 
 	acquired, release, err := oauthtokens.TryRefreshLock("twitch", botUser)

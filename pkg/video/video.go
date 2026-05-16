@@ -1,6 +1,7 @@
 package video
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os/exec"
@@ -23,9 +24,13 @@ var curVid, preVid string
 var timeStarted time.Time
 
 // GetCurrentlyPlaying will use lsof to figure out
-// which dashcam video is currently playing (seriously)
+// which dashcam video is currently playing (seriously).
+// ctx is forward-compat plumbing — vlc-client and onscreens-client don't
+// take ctx yet, so it's not propagated into their HTTP calls. Once they do,
+// trace spans for cron.video.GetCurrentlyPlaying ticks will nest the
+// underlying VLC poll and GPS-image toggles as children.
 //TODO: consider making this return a video struct
-func GetCurrentlyPlaying() {
+func GetCurrentlyPlaying(_ context.Context) {
 	var err error
 
 	// save the video we used last time

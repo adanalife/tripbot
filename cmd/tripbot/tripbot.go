@@ -126,7 +126,7 @@ func startHttpServer(ctx context.Context) {
 // findInitialVideo will determine the vido that is currently-playing
 // we want to run this early, otherwise it will be unset until the first cron job runs
 func findInitialVideo() {
-	video.GetCurrentlyPlaying()
+	video.GetCurrentlyPlaying(context.Background())
 	v := video.CurrentlyPlaying
 	_, err := video.LoadOrCreate(v.String())
 	if err != nil {
@@ -170,20 +170,20 @@ func setUpTwitchClient() {
 // updateSubscribers gets the list of current subscribers
 func updateSubscribers() {
 	// update subscribers list
-	mytwitch.GetSubscribers()
+	mytwitch.GetSubscribers(context.Background())
 }
 
 // getCurrentUsers gets the users watching the stream
 func getCurrentUsers() {
 	// fetch initial session
 	users.UpdateSession(context.Background())
-	users.PrintCurrentSession()
+	users.PrintCurrentSession(context.Background())
 }
 
 //updateWebhookSubscriptions makes sure webhooks are being sent to the bot
 func updateWebhookSubscriptions() {
 	// create webhook subscriptions
-	mytwitch.UpdateWebhookSubscriptions()
+	mytwitch.UpdateWebhookSubscriptions(context.Background())
 }
 
 // connectToTwitch joins Twitch chat and starts listening
@@ -246,18 +246,15 @@ func gracefulShutdown() {
 // Lives in this package (not pkg/background) to avoid circular deps with
 // the job-target packages.
 func scheduleBackgroundJobs() {
-	// Functions that haven't been ctx-threaded yet get adapter closures
-	// (func(_ context.Context) { fn() }) — they still get a parent span via
-	// tracedJob but no ctx-aware child linking until threaded.
-	addJob(60*time.Second, "video.GetCurrentlyPlaying", func(_ context.Context) { video.GetCurrentlyPlaying() })
+	addJob(60*time.Second, "video.GetCurrentlyPlaying", video.GetCurrentlyPlaying)
 	addJob(61*time.Second, "users.UpdateSession", users.UpdateSession)
-	addJob(62*time.Second, "users.UpdateLeaderboard", func(_ context.Context) { users.UpdateLeaderboard() })
+	addJob(62*time.Second, "users.UpdateLeaderboard", users.UpdateLeaderboard)
 	addJob(5*time.Minute, "onscreens.ShowGuessLeaderboard", onscreensClient.ShowGuessLeaderboard)
-	addJob(5*time.Minute, "users.PrintCurrentSession", func(_ context.Context) { users.PrintCurrentSession() })
-	addJob(5*time.Minute, "twitch.GetSubscribers", func(_ context.Context) { mytwitch.GetSubscribers() })
-	addJob(5*time.Minute, "twitch.GetFollowerCount", func(_ context.Context) { mytwitch.GetFollowerCount() })
-	addJob(1*time.Hour, "twitch.RefreshUserAccessToken", func(_ context.Context) {
-		mytwitch.RefreshUserAccessToken()
+	addJob(5*time.Minute, "users.PrintCurrentSession", users.PrintCurrentSession)
+	addJob(5*time.Minute, "twitch.GetSubscribers", mytwitch.GetSubscribers)
+	addJob(5*time.Minute, "twitch.GetFollowerCount", mytwitch.GetFollowerCount)
+	addJob(1*time.Hour, "twitch.RefreshUserAccessToken", func(ctx context.Context) {
+		mytwitch.RefreshUserAccessToken(ctx)
 		// Keep the IRC client's stored token in sync with the rotated credentials.
 		// go-twitch-irc captures the token at construction; without this, any
 		// reconnect after the first rotation replays the original boot-time token.
@@ -265,8 +262,8 @@ func scheduleBackgroundJobs() {
 			client.SetIRCToken(tok)
 		}
 	})
-	addJob(2*time.Hour+57*time.Minute+30*time.Second, "chatbot.Chatter", func(_ context.Context) { chatbot.Chatter() })
-	addJob(12*time.Hour, "twitch.UpdateWebhookSubscriptions", func(_ context.Context) { mytwitch.UpdateWebhookSubscriptions() })
+	addJob(2*time.Hour+57*time.Minute+30*time.Second, "chatbot.Chatter", chatbot.Chatter)
+	addJob(12*time.Hour, "twitch.UpdateWebhookSubscriptions", mytwitch.UpdateWebhookSubscriptions)
 }
 
 // addJob registers a gocron job at the given interval, wrapping fn with
