@@ -35,6 +35,9 @@ type App struct {
 	// Onscreens drives the OBS browser-source overlays for chat-triggered
 	// effects (leaderboards, flags, middle-text). Tests inject a no-op fake.
 	Onscreens Onscreens
+	// VLC drives playback operations (timewarp, jump, skip, back). Tests
+	// inject a no-op fake; production uses the realVLC adapter.
+	VLC VLC
 }
 
 // db returns the DB handle the App should use. Prefers an explicit a.DB
@@ -51,6 +54,7 @@ var defaultApp = &App{
 	CurrentVideo: func() video.Video { return video.CurrentlyPlaying },
 	// DB stays nil; commands use a.db() which falls back to database.GormDB().
 	Onscreens: realOnscreens{},
+	VLC:       realVLC{},
 }
 
 // used to determine which help message to display
