@@ -1,6 +1,7 @@
 package chatbot
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"math/rand"
@@ -139,7 +140,10 @@ func Whisper(username, msg string) {
 
 // Chatter is designed to post a randomized message on a timer.
 // Right now it just posts random "help messages."
-func Chatter() {
+// ctx is forward-compat plumbing — sayFn (the package-level chat-send
+// indirection) doesn't take ctx yet, so it's not propagated into the IRC
+// write.
+func Chatter(_ context.Context) {
 	// use twitch emote feature to add some color
 	sayFn("/me " + help())
 }

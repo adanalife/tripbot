@@ -1,6 +1,8 @@
 package chatbot
 
 import (
+	"context"
+
 	"github.com/adanalife/tripbot/pkg/video"
 )
 
@@ -22,6 +24,9 @@ type realVideo struct{}
 
 func (realVideo) Current() video.Video { return video.CurrentlyPlaying }
 func (realVideo) GetCurrentlyPlaying() video.Video {
-	video.GetCurrentlyPlaying()
+	// chat-command callers don't currently propagate ctx through the
+	// chatbot.Video interface — Background is fine until that interface
+	// grows ctx-aware methods.
+	video.GetCurrentlyPlaying(context.Background())
 	return video.CurrentlyPlaying
 }

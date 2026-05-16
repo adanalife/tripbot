@@ -143,7 +143,7 @@ func webhooksTwitchSubscriptionsEventsHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// update the internal subscribers list
-	mytwitch.GetSubscribers()
+	mytwitch.GetSubscribers(r.Context())
 
 	fmt.Fprintf(w, "OK")
 }

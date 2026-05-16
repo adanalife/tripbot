@@ -55,6 +55,7 @@ tasks:
           --query SecretString --output text)
         export TWITCH_CLIENT_ID=$(echo "$secret" | jq -r .TWITCH_CLIENT_ID)
         export TWITCH_CLIENT_SECRET=$(echo "$secret" | jq -r .TWITCH_CLIENT_SECRET)
+        printf '\a'
         mise exec -- go run ./cmd/auth-bootstrap
 
   # Release smoke flow — see vault/tripbot/release-checklist.md.
