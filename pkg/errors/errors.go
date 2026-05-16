@@ -3,11 +3,11 @@ package errors
 import (
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
+	"os"
 
 	"github.com/adanalife/tripbot/pkg/config"
 	"github.com/getsentry/sentry-go"
-	"github.com/logrusorgru/aurora/v3"
 )
 
 var conf config.Config
@@ -47,7 +47,7 @@ func Log(e error, msg string) {
 		})
 		sentry.CaptureException(e)
 	}
-	log.Printf("%s: %s", aurora.Red(msg), e)
+	slog.Error(msg, "err", e)
 }
 
 func Fatal(e error, msg string) {
@@ -62,5 +62,6 @@ func Fatal(e error, msg string) {
 		})
 		sentry.CaptureException(e)
 	}
-	log.Fatalf("%s: %s", aurora.Red(msg), e)
+	slog.Error(msg, "err", e)
+	os.Exit(1)
 }
