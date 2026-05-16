@@ -83,7 +83,7 @@ x11vnc -display "$DISPLAY" -forever -shared -rfbport 5900 -passwd "${VNC_PASSWD:
 (
   while sleep 3600; do
     OBS_WEBSOCKET_HOST=localhost OBS_WEBSOCKET_PORT=4455 \
-      /opt/obs/venv/bin/python /opt/obs/bin/obs-browser-refresh \
+      timeout 60 /opt/obs/venv/bin/python /opt/obs/bin/obs-browser-refresh \
       || echo "[browser-refresh] failed (will retry next cycle)" >&2
   done
 ) &
