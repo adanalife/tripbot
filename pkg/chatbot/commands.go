@@ -118,7 +118,7 @@ func (a *App) milesCmd(ctx context.Context, user *users.User, params []string) {
 		monthlyMiles = user.CurrentMonthlyMiles(ctx)
 	} else {
 		username = helpers.StripAtSign(params[0])
-		u := users.Find(ctx, username)
+		u := a.Sessions.Find(ctx, username)
 
 		// check to see if they are in our DB
 		if u.ID == 0 {
@@ -227,10 +227,11 @@ func (a *App) lifetimeMilesLeaderboardCmd(ctx context.Context, user *users.User,
 
 	// select users to show in leaderboard
 	size := 10
-	if size > len(users.LifetimeMilesLeaderboard) {
-		size = len(users.LifetimeMilesLeaderboard)
+	lifetime := a.Sessions.LifetimeLeaderboard()
+	if size > len(lifetime) {
+		size = len(lifetime)
 	}
-	leaderboard := users.LifetimeMilesLeaderboard[:size]
+	leaderboard := lifetime[:size]
 
 	// display leaderboard on screen
 	a.Onscreens.ShowLeaderboard("Total Miles", leaderboard)
@@ -434,7 +435,7 @@ func (a *App) shutdownCmd(ctx context.Context, user *users.User, _ []string) {
 	sayFn("Shutting down...")
 	log.Printf("currently playing: %s", a.CurrentVideo())
 	background.StopCron()
-	users.Shutdown(ctx)
+	a.Sessions.Shutdown(ctx)
 	err := database.Connection().Close()
 	if err != nil {
 		log.Println(err)

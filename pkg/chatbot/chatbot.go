@@ -47,6 +47,11 @@ type App struct {
 	// to assert on chat messages; production uses the realIRC adapter
 	// which delegates to the package-level twitch client.
 	IRC IRC
+	// Sessions wraps the user-lookup / lifetime-leaderboard / shutdown
+	// surface of pkg/users for command-time queries. Tests inject a
+	// recordingSessions to assert lookups and stage results; production
+	// uses the realSessions adapter.
+	Sessions Sessions
 }
 
 // db returns the DB handle the App should use. Prefers an explicit a.DB
@@ -66,6 +71,7 @@ var defaultApp = &App{
 	VLC:       realVLC{},
 	Video:     realVideo{},
 	IRC:       realIRC{},
+	Sessions:  realSessions{},
 }
 
 // used to determine which help message to display
