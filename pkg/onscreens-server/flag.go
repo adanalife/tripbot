@@ -1,14 +1,14 @@
 package onscreensServer
 
 import (
-	"log"
+	"log/slog"
 	"time"
 )
 
 var FlagImage *Onscreen
 
 func InitFlagImage() {
-	log.Println("Creating flag image onscreen")
+	slog.Info("creating onscreen", "kind", "flag")
 	FlagImage = New()
 }
 

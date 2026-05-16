@@ -1,7 +1,7 @@
 package onscreensServer
 
 import (
-	"log"
+	"log/slog"
 	"time"
 )
 
@@ -10,7 +10,7 @@ var Timewarp *Onscreen
 var timewarpDuration = time.Duration(2 * time.Second)
 
 func InitTimewarp() {
-	log.Println("Creating timewarp onscreen")
+	slog.Info("creating onscreen", "kind", "timewarp")
 	Timewarp = New()
 }
 

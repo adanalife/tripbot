@@ -1,13 +1,13 @@
 package onscreensServer
 
 import (
-	"log"
+	"log/slog"
 )
 
 var MiddleText *Onscreen
 
 func InitMiddleText() {
-	log.Println("Creating middle text onscreen")
+	slog.Info("creating onscreen", "kind", "middle-text")
 	MiddleText = New()
 	// this is a permanent onscreen
 	MiddleText.DontExpire = true
