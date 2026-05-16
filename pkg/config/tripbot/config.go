@@ -2,10 +2,10 @@ package config
 
 import (
 	"log"
+	"log/slog"
 
 	"github.com/adanalife/tripbot/pkg/config"
 	"github.com/kelseyhightower/envconfig"
-	"github.com/logrusorgru/aurora/v3"
 )
 
 var Conf *TripbotConfig
@@ -30,6 +30,6 @@ func init() {
 
 	// give helpful reminders when things are disabled
 	if Conf.DisableTwitchWebhooks {
-		log.Println(aurora.Yellow("Disabling Twitch webhooks"))
+		slog.Warn("Twitch webhooks disabled")
 	}
 }

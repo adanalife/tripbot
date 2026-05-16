@@ -3,7 +3,7 @@ package video
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -13,7 +13,6 @@ import (
 	"github.com/adanalife/tripbot/pkg/helpers"
 	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
 	vlcClient "github.com/adanalife/tripbot/pkg/vlc-client"
-	"github.com/logrusorgru/aurora/v3"
 )
 
 // CurrentlyPlaying is the video that is currently playing
@@ -54,9 +53,9 @@ func GetCurrentlyPlaying(_ context.Context) {
 			terrors.Log(err, fmt.Sprintf("unable to create Video from %s", curVid))
 		}
 
-		log.Printf("now playing %s - %s",
-			aurora.Yellow(CurrentlyPlaying.File()),
-			aurora.Green(helpers.StateToStateAbbrev(CurrentlyPlaying.State)),
+		slog.Info("now playing",
+			"file", CurrentlyPlaying.File(),
+			"state", helpers.StateToStateAbbrev(CurrentlyPlaying.State),
 		)
 
 		// show the no-GPS image
@@ -85,7 +84,7 @@ func figureOutCurrentVideo() string {
 	out, err := exec.Command(scriptPath).Output()
 	outString := strings.TrimSpace(string(out))
 	if err != nil {
-		log.Println(outString)
+		slog.Error("figureOutCurrentVideo script failed", "err", err, "output", outString)
 		return ""
 	}
 	return outString

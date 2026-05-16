@@ -2,7 +2,7 @@ package events
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
@@ -10,7 +10,6 @@ import (
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"github.com/google/uuid"
-	"github.com/logrusorgru/aurora/v3"
 )
 
 type Event struct {
@@ -23,7 +22,7 @@ type Event struct {
 
 func Login(ctx context.Context, user string, sessionID uuid.UUID) error {
 	if c.Conf.ReadOnly && c.Conf.Verbose {
-		log.Printf("Not logging in %s because we're in read-only mode", aurora.Magenta(user))
+		slog.InfoContext(ctx, "skipping login event: read-only mode", "user", user)
 		return &terrors.ReadOnlyError{Msg: "read-only mode"}
 	}
 	if err := database.GormDB().WithContext(ctx).Create(&Event{Username: user, Event: "login", SessionID: sessionID}).Error; err != nil {
@@ -35,7 +34,7 @@ func Login(ctx context.Context, user string, sessionID uuid.UUID) error {
 
 func Logout(ctx context.Context, user string, sessionID uuid.UUID) error {
 	if c.Conf.ReadOnly && c.Conf.Verbose {
-		log.Printf("Not logging out %s because we're in read-only mode", aurora.Magenta(user))
+		slog.InfoContext(ctx, "skipping logout event: read-only mode", "user", user)
 		return &terrors.ReadOnlyError{Msg: "read-only mode"}
 	}
 	if err := database.GormDB().WithContext(ctx).Create(&Event{Username: user, Event: "logout", SessionID: sessionID}).Error; err != nil {

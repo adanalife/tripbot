@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -20,7 +20,6 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/hako/durafmt"
 	"github.com/kelvins/geocoder"
-	"github.com/logrusorgru/aurora/v3"
 	"github.com/nathan-osman/go-sunrise"
 	"github.com/skratchdot/open-golang/open"
 )
@@ -186,10 +185,10 @@ func sunriseSunset(utcDate time.Time, lat, long float64) (time.Time, time.Time) 
 
 //TODO: text the admin if it errors opening browser?
 func OpenInBrowser(url string) {
-	log.Println("opening url")
+	slog.Info("opening url in browser", "url", url)
 	err := open.Run(url)
 	if err != nil {
-		log.Println(aurora.Red("error opening browser"), err)
+		slog.Error("error opening browser", "err", err)
 	}
 }
 
