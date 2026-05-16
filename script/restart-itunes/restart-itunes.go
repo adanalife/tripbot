@@ -1,7 +1,7 @@
 package main
 
 import (
-	"log"
+	"log/slog"
 	"syscall"
 
 	"github.com/davecgh/go-spew/spew"
@@ -19,7 +19,7 @@ func stopiTunes() {
 
 	processes, err := ps.Processes()
 	if err != nil {
-		log.Println("error getting pids", err)
+		slog.Error("error getting pids", "err", err)
 	}
 
 	//spew.Dump(processes)
@@ -35,15 +35,15 @@ func stopiTunes() {
 	}
 
 	if itunesProcess != nil {
-		log.Printf("pid for iTunes is %d, killing it...", itunesProcess.Pid())
+		slog.Info("killing iTunes", "pid", itunesProcess.Pid())
 		err = syscall.Kill(itunesProcess.Pid(), syscall.SIGKILL)
 		if err != nil {
-			log.Println("error killing pid", err)
+			slog.Error("error killing pid", "err", err)
 		}
 	}
 }
 
 func startiTunes() {
-	log.Println("opening iTunes")
+	slog.Info("opening iTunes")
 	open.RunWith("http://somafm.com/groovesalad256.pls", "iTunes")
 }

@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"math/rand"
 	"os"
 	"os/signal"
@@ -28,7 +28,6 @@ import (
 	"github.com/gempir/go-twitch-irc/v4"
 	"github.com/getsentry/sentry-go"
 	"github.com/go-co-op/gocron/v2"
-	"github.com/logrusorgru/aurora/v3"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -58,7 +57,7 @@ var telemetryShutdown telemetry.ShutdownFunc
 
 // main performs the various steps to get the bot running
 func main() {
-	log.Println(aurora.Cyan(fmt.Sprintf("tripbot version %s", version)))
+	slog.Info("tripbot starting", "version", version)
 	createRandomSeed()
 	// shutdownCtx is canceled on SIGINT/SIGTERM; the HTTP server uses it
 	// to trigger a graceful shutdown so in-flight requests aren't cut.
@@ -103,7 +102,7 @@ func initializeTelemetry() {
 	shutdown, err := telemetry.Init(context.Background(), "tripbot", version)
 	if err != nil {
 		// telemetry init failure shouldn't crash the bot — log and continue.
-		log.Println(aurora.Yellow(fmt.Sprintf("telemetry init: %v", err)))
+		slog.Warn("telemetry init failed", "err", err)
 	}
 	telemetryShutdown = shutdown
 }
@@ -153,8 +152,8 @@ func startOBSPolling() {
 func loadTwitchToken() {
 	if err := mytwitch.LoadFromDB(); err != nil {
 		if errors.Is(err, mytwitch.ErrNoToken) {
-			log.Printf("refusing to start: no oauth_tokens row for %q — tripbot will not run without a Twitch IRC connection", c.Conf.BotUsername)
-			log.Fatal("to fix: run `task tripbot:auth:bootstrap` from the infra directory")
+			slog.Error("refusing to start: no oauth_tokens row for bot", "bot_username", c.Conf.BotUsername, "fix", "task tripbot:auth:bootstrap")
+			os.Exit(1)
 		}
 		terrors.Fatal(err, "failed to load Twitch token from DB")
 	}
@@ -189,13 +188,12 @@ func updateWebhookSubscriptions() {
 // connectToTwitch joins Twitch chat and starts listening
 func connectToTwitch() {
 	client.Join(c.Conf.ChannelName)
-	log.Println("Joined channel", c.Conf.ChannelName)
-	log.Printf("URL: %s", aurora.Blue(fmt.Sprintf("https://twitch.tv/%s", c.Conf.ChannelName)).Underline())
+	slog.Info("joined channel", "channel", c.Conf.ChannelName, "url", fmt.Sprintf("https://twitch.tv/%s", c.Conf.ChannelName))
 
 	// actually connect to Twitch
 	// wrapped in a loop in case twitch goes down
 	for {
-		log.Println(aurora.Magenta("Initializing connection to Twitch"))
+		slog.Info("initializing connection to Twitch")
 		err := client.Connect()
 		if err != nil {
 			terrors.Log(err, "unable to connect to twitch")
@@ -220,11 +218,11 @@ func gracefulShutdown() {
 	// wait for signal
 	<-ctrlC
 
-	log.Println(aurora.Red("caught CTRL-C"))
+	slog.Warn("caught CTRL-C, shutting down")
 	// anything below this probably won't be executed
 	// try and use !shutdown instead
 	//TODO: print different message if CurrentlyPlaying is ""
-	log.Printf("Last played video: %s", aurora.Yellow(video.CurrentlyPlaying.File()))
+	slog.Info("last played video", "file", video.CurrentlyPlaying.File())
 	users.Shutdown(context.Background())
 	err := database.Connection().Close()
 	if err != nil {
@@ -235,7 +233,7 @@ func gracefulShutdown() {
 	if telemetryShutdown != nil {
 		flushCtx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 		if err := telemetryShutdown(flushCtx); err != nil {
-			log.Printf("telemetry shutdown: %v", err)
+			slog.Error("telemetry shutdown failed", "err", err)
 		}
 		cancel()
 	}

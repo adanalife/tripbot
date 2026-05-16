@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -48,7 +49,7 @@ func main() {
 	if videoFile != "" {
 		vid, err := video.LoadOrCreate(videoFile)
 		if err != nil {
-			log.Println("unable to create video:", err)
+			slog.Error("unable to create video", "err", err, "file", videoFile)
 		}
 		lat, lon, err := vid.Location()
 		if err != nil {
@@ -73,12 +74,12 @@ func main() {
 				// actually process the image
 				vid, err := video.LoadOrCreate(path)
 				if err != nil {
-					log.Println("unable to create video:", err)
+					slog.Error("unable to create video", "err", err, "path", path)
 					return nil
 				}
 				lat, lon, err := vid.Location()
 				if err != nil {
-					log.Printf("failed to process video: %v", err)
+					slog.Error("failed to process video", "err", err, "path", path)
 					return nil
 				}
 				url := helpers.GoogleMapsURL(lat, lon)
@@ -87,7 +88,7 @@ func main() {
 			})
 		// something went wrong walking the directory
 		if err != nil {
-			log.Println(err)
+			slog.Error("directory walk failed", "err", err)
 		}
 	}
 

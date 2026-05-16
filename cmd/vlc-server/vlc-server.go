@@ -2,8 +2,8 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
+	"log/slog"
 	"math/rand"
 	"os"
 	"os/signal"
@@ -18,7 +18,6 @@ import (
 	"github.com/adanalife/tripbot/pkg/telemetry"
 	vlcServer "github.com/adanalife/tripbot/pkg/vlc-server"
 	"github.com/getsentry/sentry-go"
-	"github.com/logrusorgru/aurora/v3"
 )
 
 // version is overridable at build time via -ldflags "-X main.version=...".
@@ -27,7 +26,7 @@ var version = "dev"
 var telemetryShutdown telemetry.ShutdownFunc
 
 func main() {
-	log.Println(aurora.Cyan(fmt.Sprintf("vlc-server version %s", version)))
+	slog.Info("vlc-server starting", "version", version)
 
 	// we don't yet support libvlc on darwin
 	if helpers.RunningOnDarwin() {
@@ -86,7 +85,7 @@ func createOnscreens() {
 func initializeTelemetry() {
 	shutdown, err := telemetry.Init(context.Background(), "vlc-server", version)
 	if err != nil {
-		log.Println(aurora.Yellow(fmt.Sprintf("telemetry init: %v", err)))
+		slog.Warn("telemetry init failed", "err", err)
 	}
 	telemetryShutdown = shutdown
 }
@@ -115,7 +114,7 @@ func gracefulShutdown() {
 	// wait for signal
 	<-ctrlC
 
-	log.Println(aurora.Red("caught CTRL-C"))
+	slog.Warn("caught CTRL-C, shutting down")
 	// anything below this probably won't be executed
 	vlcServer.Shutdown()
 	//TODO: stop cron here
@@ -123,7 +122,7 @@ func gracefulShutdown() {
 	if telemetryShutdown != nil {
 		flushCtx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 		if err := telemetryShutdown(flushCtx); err != nil {
-			log.Printf("telemetry shutdown: %v", err)
+			slog.Error("telemetry shutdown failed", "err", err)
 		}
 		cancel()
 	}
