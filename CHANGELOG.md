@@ -5,6 +5,37 @@
 
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
+## [v2.8.0] — 2026-05-16
+
+Minor release. Wraps up the chatbot `App` injection pattern (Video, IRC, Sessions now alongside the existing Onscreens / VLC / DB), modernizes the cron scheduler (`robfig/cron` → `gocron/v2`), completes the stdlib `log` → `slog` migration with structured fields, retires the last Stackdriver code path in favor of Loki via OTel, drops Sentry's own tracing (OTel is now the single source of truth — Sentry events link out to Tempo via the SDK's OTel integration), bulk-bumps Go module dependencies, and threads `ctx` through cron-target functions so cron-tick traces nest cleanly.
+
+### Chatbot
+
+- **App injection completed: Video, IRC, Sessions.** Following the pattern documented in [`vault/decisions/chatbot-app-injection-pattern.md`](https://github.com/adanalife/vault), `App` now carries injectable interface fields for the remaining external surfaces — `Video` for playback queries, `IRC` for chat output (replacing the `Say()` / `sayFn` indirection), and `Sessions` for user-session bookkeeping. Production wires real implementations via `defaultApp`; tests inject recording/no-op fakes. Unblocks the `jumpCmd` correct-guess test gap that had been deferred from earlier rounds. ([#543], [#544], [#549], [#551])
+
+### Observability
+
+- **`log` → `slog` migration complete.** All ~165 stdlib `log.Println` / `log.Printf` call sites across 44 files migrated to `log/slog` with structured fields (filterable in Grafana Loki), proper levels (warn/error where the message warrants), and `slog.InfoContext` at sites where ctx is already in scope (HTTP handlers, chatbot commands, ctx-aware cron jobs). `aurora` color-wrappers stripped from log calls — ANSI escapes don't belong in structured payloads. `log.Fatal*` kept stdlib (preserves `os.Exit(1)` semantics; still flows through `slogWriter` to OTel). ([#545], [#552])
+- **Stackdriver chat-logging retired.** The last GCP Stackdriver code path in `pkg/chatbot/log` now ships chat messages to Loki via OTel logs instead. One fewer GCP dependency; consolidates observability on the OTel stack. ([#540])
+- **Sentry tracing dropped; errors link to OTel traces.** Sentry's own tracer is disabled — OTel (otelhttp + otelsql + manual spans → OTLP → Tempo) is the single source of truth for traces. The `sentry-go/otel` integration stamps the active OTel `trace_id` onto captured Sentry events, so error pages link out to their Tempo trace for full request context. ([#550])
+
+### Internal
+
+- **Cron scheduler migrated to `gocron/v2`.** Replaces `robfig/cron@v1.2.0` (untouched since 2021). `gocron/v2`'s `NewTask` accepts `func(context.Context)`, so the scheduler's job ctx is the parent of each tick's span — no more fabricated `context.Background()` in `tracedJob`. Graceful shutdown cancels in-flight job contexts before sentry/telemetry flush. ([#541])
+- **Thread `ctx` through cron-target functions.** Follow-up to #541. The eight cron-target functions that took no ctx now accept one; their callers update in step. Cron-tick traces in Tempo now show DB queries (otelsql) and outbound HTTP (otelhttp) nested under the `cron.<name>` span instead of trailing as siblings. ([#547])
+
+### Dependencies
+
+- **Bulk-bump Go modules via `go get -u ./...`.** Refreshes the direct-dep floor without API changes — keeps the upgrade frontier close so the next bump is a smaller round-trip. ([#548])
+
+### DX
+
+- **`task tripbot:auth:bootstrap` rings the console bell before waiting for the Twitch callback.** Audible cue when the flow is ready for the browser sign-in step, so it's harder to miss a paused bootstrap when switching windows. ([#546])
+
+### Cleanup
+
+- **Removed three vestigial files** — `pkg/moments/viewings.go` (never wired up; design preserved as a vault TODO for per-user moments-watched tracking), plus two other unused files. ([#542])
+
 ## [v2.7.1] — 2026-05-15
 
 Patch release. End-to-end runtime visibility lands on both ends of the dashcam pipeline (vlc-server + OBS publish OTel gauges to Grafana Cloud), and the chat-command path becomes a single trace tree in Tempo — `chat.command` spans wrap the dispatcher, child SQL queries from GORM and outbound Twitch Helix calls nest underneath. Chatbot picks up an injectable `VLC` dependency, the HTTP server now shuts down gracefully on SIGTERM instead of cutting in-flight requests, and the OBS CI workflow stops building/booting VLC since OBS doesn't actually depend on it for health.
@@ -578,3 +609,16 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#536]: https://github.com/adanalife/tripbot/pull/536
 [#537]: https://github.com/adanalife/tripbot/pull/537
 [#538]: https://github.com/adanalife/tripbot/pull/538
+[#540]: https://github.com/adanalife/tripbot/pull/540
+[#541]: https://github.com/adanalife/tripbot/pull/541
+[#542]: https://github.com/adanalife/tripbot/pull/542
+[#543]: https://github.com/adanalife/tripbot/pull/543
+[#544]: https://github.com/adanalife/tripbot/pull/544
+[#545]: https://github.com/adanalife/tripbot/pull/545
+[#546]: https://github.com/adanalife/tripbot/pull/546
+[#547]: https://github.com/adanalife/tripbot/pull/547
+[#548]: https://github.com/adanalife/tripbot/pull/548
+[#549]: https://github.com/adanalife/tripbot/pull/549
+[#550]: https://github.com/adanalife/tripbot/pull/550
+[#551]: https://github.com/adanalife/tripbot/pull/551
+[#552]: https://github.com/adanalife/tripbot/pull/552
