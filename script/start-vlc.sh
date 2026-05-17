@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
-
-# Entrypoint for the vlc-server supervisord program. Runs the compiled
-# Go binary; libvlc handles playback headlessly (--vout dummy) and
-# streams RTSP for OBS to consume.
+# Called by infra/docker/vlc/config/vlc.conf (supervisord [program:vlc]):
+# runs the compiled vlc-server Go binary; libvlc handles playback
+# headlessly (--vout dummy) and streams RTSP for OBS to consume.
 
 set -x
 
