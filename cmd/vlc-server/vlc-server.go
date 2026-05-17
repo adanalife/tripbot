@@ -14,6 +14,7 @@ import (
 
 	c "github.com/adanalife/tripbot/pkg/config/vlc-server"
 	"github.com/adanalife/tripbot/pkg/helpers"
+	"github.com/adanalife/tripbot/pkg/obs"
 	onscreensServer "github.com/adanalife/tripbot/pkg/onscreens-server"
 	"github.com/adanalife/tripbot/pkg/telemetry"
 	vlcServer "github.com/adanalife/tripbot/pkg/vlc-server"
@@ -58,6 +59,9 @@ func main() {
 	// poll libvlc for playback stats (FPS, bitrate, dropped frames) and
 	// surface them as OTel gauges. No-op when telemetry is disabled.
 	vlcServer.StartStatsPoller(context.Background(), 5*time.Second)
+
+	// poll the OBS WebSocket for streaming state + render/output stats.
+	go obs.PollStreamingActive(context.Background(), 30*time.Second)
 
 	// start the webserver
 	vlcServer.SetVersion(version)
