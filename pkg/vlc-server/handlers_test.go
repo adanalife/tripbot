@@ -5,8 +5,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
-	"github.com/gorilla/mux"
 )
 
 func TestVersionHandlerReturnsInjectedTag(t *testing.T) {
@@ -61,66 +59,6 @@ func TestVlcBackHandlerInvalidIntReturns422(t *testing.T) {
 
 	if rec.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("got status %d, want %d", rec.Code, http.StatusUnprocessableEntity)
-	}
-}
-
-func TestOnscreensMiddleHandlerInvalidBase64Returns422(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/onscreens/middle/show?msg=!!!not-base64!!!", nil)
-	req = mux.SetURLVars(req, map[string]string{"action": "show"})
-	rec := httptest.NewRecorder()
-
-	onscreensMiddleHandler(rec, req)
-
-	if rec.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("got status %d, want %d", rec.Code, http.StatusUnprocessableEntity)
-	}
-}
-
-func TestOnscreensMiddleHandlerMissingMsgReturns417(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/onscreens/middle/show", nil)
-	req = mux.SetURLVars(req, map[string]string{"action": "show"})
-	rec := httptest.NewRecorder()
-
-	onscreensMiddleHandler(rec, req)
-
-	if rec.Code != http.StatusExpectationFailed {
-		t.Fatalf("got status %d, want %d", rec.Code, http.StatusExpectationFailed)
-	}
-}
-
-func TestOnscreensMiddleHandlerUnknownActionReturns417(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/onscreens/middle/explode", nil)
-	req = mux.SetURLVars(req, map[string]string{"action": "explode"})
-	rec := httptest.NewRecorder()
-
-	onscreensMiddleHandler(rec, req)
-
-	if rec.Code != http.StatusExpectationFailed {
-		t.Fatalf("got status %d, want %d", rec.Code, http.StatusExpectationFailed)
-	}
-}
-
-func TestOnscreensLeaderboardHandlerInvalidBase64Returns422(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/onscreens/leaderboard/show?content=!!!", nil)
-	req = mux.SetURLVars(req, map[string]string{"action": "show"})
-	rec := httptest.NewRecorder()
-
-	onscreensLeaderboardHandler(rec, req)
-
-	if rec.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("got status %d, want %d", rec.Code, http.StatusUnprocessableEntity)
-	}
-}
-
-func TestOnscreensFlagHandlerUnknownActionReturns417(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/onscreens/flag/explode", nil)
-	req = mux.SetURLVars(req, map[string]string{"action": "explode"})
-	rec := httptest.NewRecorder()
-
-	onscreensFlagHandler(rec, req)
-
-	if rec.Code != http.StatusExpectationFailed {
-		t.Fatalf("got status %d, want %d", rec.Code, http.StatusExpectationFailed)
 	}
 }
 

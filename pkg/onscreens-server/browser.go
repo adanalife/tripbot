@@ -1,4 +1,4 @@
-package vlcServer
+package onscreensServer
 
 import (
 	"embed"
@@ -9,15 +9,14 @@ import (
 
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
-	onscreensServer "github.com/adanalife/tripbot/pkg/onscreens-server"
 	"github.com/gorilla/mux"
 )
 
 // flagPlaceholderPNG is a 1×1 transparent PNG served by the flag asset
-// endpoint while the state-driven flag swap is disabled (see
-// onscreens-server/flag.go's TODO). The browser source's <img> tag
-// fetches this URL even when the onscreen is hidden, so we serve a
-// valid PNG to keep the request quiet rather than 404.
+// endpoint while the state-driven flag swap is disabled (see flag.go's
+// TODO). The browser source's <img> tag fetches this URL even when the
+// onscreen is hidden, so we serve a valid PNG to keep the request quiet
+// rather than 404.
 var flagPlaceholderPNG = []byte{
 	0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
 	0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
@@ -48,7 +47,7 @@ var onscreenTmpl = template.Must(template.ParseFS(onscreenTemplates, "templates/
 // it fits inside FitWidthPx on a single line, then falls back to wrapping if the
 // floor doesn't fit.
 type onscreenStyle struct {
-	Name          string       // URL slug; matches a Slug constant in onscreens-server
+	Name          string       // URL slug; matches a Slug constant in this package
 	IsImage       bool         // image vs. text source
 	FontCSS       template.CSS // CSS font-family (only meaningful for text)
 	FontSizePx    int          // default / max font-size in px (only meaningful for text)
@@ -60,28 +59,28 @@ type onscreenStyle struct {
 }
 
 var onscreenRegistry = map[string]onscreenStyle{
-	onscreensServer.SlugMiddleText: {
-		Name: onscreensServer.SlugMiddleText, FontCSS: `"Trebuchet MS", sans-serif`, FontSizePx: 18, ColorCSS: "#ffffff",
+	SlugMiddleText: {
+		Name: SlugMiddleText, FontCSS: `"Trebuchet MS", sans-serif`, FontSizePx: 18, ColorCSS: "#ffffff",
 	},
-	onscreensServer.SlugLeaderboard: {
-		Name: onscreensServer.SlugLeaderboard, FontCSS: `"Trebuchet MS", sans-serif`, FontSizePx: 18, ColorCSS: "#ffffff",
+	SlugLeaderboard: {
+		Name: SlugLeaderboard, FontCSS: `"Trebuchet MS", sans-serif`, FontSizePx: 18, ColorCSS: "#ffffff",
 	},
-	onscreensServer.SlugLeftMessage: {
-		Name: onscreensServer.SlugLeftMessage, FontCSS: `"Trebuchet MS", sans-serif`, FontSizePx: 28, MinFontSizePx: 18, ColorCSS: "#ffffff",
+	SlugLeftMessage: {
+		Name: SlugLeftMessage, FontCSS: `"Trebuchet MS", sans-serif`, FontSizePx: 28, MinFontSizePx: 18, ColorCSS: "#ffffff",
 		AnchorXPx: 282, FitWidthPx: 564,
 	},
-	onscreensServer.SlugRightMessage: {
-		Name: onscreensServer.SlugRightMessage, FontCSS: `"Trebuchet MS", sans-serif`, FontSizePx: 28, MinFontSizePx: 18, ColorCSS: "#ffffff",
+	SlugRightMessage: {
+		Name: SlugRightMessage, FontCSS: `"Trebuchet MS", sans-serif`, FontSizePx: 28, MinFontSizePx: 18, ColorCSS: "#ffffff",
 		AnchorXPx: 456, FitWidthPx: 369,
 	},
-	onscreensServer.SlugTimewarp: {
-		Name: onscreensServer.SlugTimewarp, FontCSS: `sans-serif`, FontSizePx: 72, ColorCSS: "#ffffff", DropShadow: true,
+	SlugTimewarp: {
+		Name: SlugTimewarp, FontCSS: `sans-serif`, FontSizePx: 72, ColorCSS: "#ffffff", DropShadow: true,
 	},
-	onscreensServer.SlugGPS: {
-		Name: onscreensServer.SlugGPS, IsImage: true,
+	SlugGPS: {
+		Name: SlugGPS, IsImage: true,
 	},
-	onscreensServer.SlugFlag: {
-		Name: onscreensServer.SlugFlag, IsImage: true,
+	SlugFlag: {
+		Name: SlugFlag, IsImage: true,
 	},
 }
 
@@ -90,7 +89,7 @@ var onscreenRegistry = map[string]onscreenStyle{
 func onscreensStateHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
-	if err := json.NewEncoder(w).Encode(onscreensServer.Snapshot()); err != nil {
+	if err := json.NewEncoder(w).Encode(Snapshot()); err != nil {
 		terrors.Log(err, "encoding onscreens state")
 	}
 }
@@ -117,9 +116,9 @@ func onscreensRenderHandler(w http.ResponseWriter, r *http.Request) {
 // transparent placeholder while the state-driven flag swap is offline.
 func onscreensAssetHandler(w http.ResponseWriter, r *http.Request) {
 	switch mux.Vars(r)["name"] {
-	case onscreensServer.SlugGPS:
+	case SlugGPS:
 		http.ServeFile(w, r, filepath.Join(helpers.ProjectRoot(), "assets", "GPS.png"))
-	case onscreensServer.SlugFlag:
+	case SlugFlag:
 		w.Header().Set("Content-Type", "image/png")
 		w.Header().Set("Cache-Control", "no-store")
 		if _, err := w.Write(flagPlaceholderPNG); err != nil {
