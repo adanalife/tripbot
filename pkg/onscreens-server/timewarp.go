@@ -5,15 +5,15 @@ import (
 	"time"
 )
 
-var Timewarp *Onscreen
+var timewarp *Onscreen
 
 var timewarpDuration = time.Duration(2 * time.Second)
 
 func InitTimewarp() {
 	slog.Info("creating onscreen", "kind", "timewarp")
-	Timewarp = New()
+	timewarp = New()
 }
 
 func ShowTimewarp() {
-	Timewarp.ShowFor("Timewarp!", timewarpDuration)
+	timewarp.ShowFor("Timewarp!", timewarpDuration)
 }

@@ -29,12 +29,12 @@ func Snapshot() map[string]*Onscreen {
 
 func all() map[string]*Onscreen {
 	return map[string]*Onscreen{
-		SlugMiddleText:   MiddleText,
-		SlugLeaderboard:  Leaderboard,
-		SlugLeftMessage:  LeftRotator,
-		SlugRightMessage: RightRotator,
-		SlugTimewarp:     Timewarp,
-		SlugGPS:          GPSImage,
-		SlugFlag:         FlagImage,
+		SlugMiddleText:   middleText,
+		SlugLeaderboard:  leaderboard,
+		SlugLeftMessage:  leftRotator,
+		SlugRightMessage: rightRotator,
+		SlugTimewarp:     timewarp,
+		SlugGPS:          gpsImage,
+		SlugFlag:         flagImage,
 	}
 }

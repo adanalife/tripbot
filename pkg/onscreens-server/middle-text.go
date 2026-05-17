@@ -4,13 +4,13 @@ import (
 	"log/slog"
 )
 
-var MiddleText *Onscreen
+var middleText *Onscreen
 
 func InitMiddleText() {
 	slog.Info("creating onscreen", "kind", "middle-text")
-	MiddleText = New()
+	middleText = New()
 	// this is a permanent onscreen
-	MiddleText.DontExpire = true
+	middleText.DontExpire = true
 	// keep the same text from before the bot started
-	MiddleText.IsShowing = true
+	middleText.IsShowing = true
 }
