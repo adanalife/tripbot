@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-
-# this script finds the currently-playing video file
+# Called by pkg/video/video.go (figureOutCurrentVideo): finds the currently-playing video file.
 
 #TODO: better explain why we use VLC here
 if [[ "$OSTYPE" == "linux-gnu" ]]; then
