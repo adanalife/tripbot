@@ -42,6 +42,13 @@ func main() {
 	// initialize the onscreen elements
 	createOnscreens()
 
+	// shutdownCtx is canceled on SIGINT/SIGTERM; the HTTP server uses it
+	// to trigger a graceful shutdown so in-flight requests aren't cut.
+	// listenForShutdown's gracefulShutdown goroutine handles the rest of
+	// the app cleanup off the same signals.
+	shutdownCtx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stopSignals()
+
 	// await graceful shutdown signal
 	listenForShutdown()
 
@@ -61,7 +68,7 @@ func main() {
 
 	// start the webserver
 	vlcServer.SetVersion(version)
-	vlcServer.Start()
+	vlcServer.Start(shutdownCtx)
 
 	// listen for termination signals and gracefully shutdown
 	defer vlcServer.Shutdown()
