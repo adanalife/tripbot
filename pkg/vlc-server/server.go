@@ -47,20 +47,9 @@ func Start() {
 	vlc.Handle("/skip", tagged("/vlc/skip", vlcSkipHandler))
 	vlc.Handle("/skip/{n}", tagged("/vlc/skip/{n}", vlcSkipHandler))
 
-	// onscreen endpoints
-	osc := r.PathPrefix("/onscreens").Methods("GET").Subrouter()
-	//TODO: add state variable
-	osc.Handle("/flag/{action}", tagged("/onscreens/flag/{action}", onscreensFlagHandler))
-	osc.Handle("/gps/{action}", tagged("/onscreens/gps/{action}", onscreensGpsHandler))
-	osc.Handle("/leaderboard/{action}", tagged("/onscreens/leaderboard/{action}", onscreensLeaderboardHandler))
-	osc.Handle("/middle/{action}", tagged("/onscreens/middle/{action}", onscreensMiddleHandler))
-	osc.Handle("/timewarp/{action}", tagged("/onscreens/timewarp/{action}", onscreensTimewarpHandler))
-	// browser-source feeds: state JSON, per-onscreen HTML pages, and image assets.
-	// These back the OBS browser_source entries in Tripbot.json.tmpl after the
-	// vlc<->obs file-share decoupling.
-	osc.Handle("/state.json", tagged("/onscreens/state.json", onscreensStateHandler))
-	osc.Handle("/render/{name}", tagged("/onscreens/render/{name}", onscreensRenderHandler))
-	osc.Handle("/asset/{name}", tagged("/onscreens/asset/{name}", onscreensAssetHandler))
+	// onscreen endpoints now live in cmd/onscreens-server (separate binary,
+	// separate port). vlc-server no longer serves /onscreens/* — clients
+	// (chatbot, OBS browser sources) hit ONSCREENS_SERVER_HOST directly.
 
 	// prometheus metrics endpoint
 	r.Path("/metrics").Handler(tagged("/metrics", promhttp.Handler().ServeHTTP))
