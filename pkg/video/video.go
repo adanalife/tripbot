@@ -29,7 +29,7 @@ var timeStarted time.Time
 // trace spans for cron.video.GetCurrentlyPlaying ticks will nest the
 // underlying VLC poll and GPS-image toggles as children.
 //TODO: consider making this return a video struct
-func GetCurrentlyPlaying(_ context.Context) {
+func GetCurrentlyPlaying(ctx context.Context) {
 	var err error
 
 	// save the video we used last time
@@ -37,7 +37,7 @@ func GetCurrentlyPlaying(_ context.Context) {
 
 	// figure out what's currently playing
 	if helpers.RunningOnDarwin() {
-		curVid = figureOutCurrentVideo()
+		curVid = figureOutCurrentVideo(ctx)
 	} else {
 		curVid = vlcClient.CurrentlyPlaying()
 	}
@@ -53,7 +53,7 @@ func GetCurrentlyPlaying(_ context.Context) {
 			terrors.Log(err, fmt.Sprintf("unable to create Video from %s", curVid))
 		}
 
-		slog.Info("now playing",
+		slog.InfoContext(ctx, "now playing",
 			"file", CurrentlyPlaying.File(),
 			"state", helpers.StateToStateAbbrev(CurrentlyPlaying.State),
 		)
@@ -74,7 +74,7 @@ func CurrentProgress() time.Duration {
 	return time.Since(timeStarted)
 }
 
-func figureOutCurrentVideo() string {
+func figureOutCurrentVideo(ctx context.Context) string {
 	if helpers.RunningOnWindows() {
 		terrors.Log(nil, "can't run script on windows")
 		return ""
@@ -84,7 +84,7 @@ func figureOutCurrentVideo() string {
 	out, err := exec.Command(scriptPath).Output()
 	outString := strings.TrimSpace(string(out))
 	if err != nil {
-		slog.Error("figureOutCurrentVideo script failed", "err", err, "output", outString)
+		slog.ErrorContext(ctx, "figureOutCurrentVideo script failed", "err", err, "output", outString)
 		return ""
 	}
 	return outString

@@ -21,19 +21,19 @@ var subsTopic = []string{
 
 // UpdateWebhookSubscriptions will create new webhook subscriptions.
 // ctx is forward-compat plumbing (see GetSubscribers).
-func UpdateWebhookSubscriptions(_ context.Context) {
+func UpdateWebhookSubscriptions(ctx context.Context) {
 	if c.Conf.DisableTwitchWebhooks {
 		return
 	}
-	subscribeToWebhook(followsTopic)
+	subscribeToWebhook(ctx, followsTopic)
 	// since the staging account isn't an affiliate, don't bother
 	if c.Conf.IsProduction() {
-		subscribeToWebhook(subsTopic)
+		subscribeToWebhook(ctx, subsTopic)
 	}
-	getWebookSubscriptions()
+	getWebookSubscriptions(ctx)
 }
 
-func subscribeToWebhook(pair []string) {
+func subscribeToWebhook(_ context.Context, pair []string) {
 	topic := pair[0]
 	endpoint := pair[1]
 
@@ -50,7 +50,7 @@ func subscribeToWebhook(pair []string) {
 	}
 }
 
-func getWebookSubscriptions() {
+func getWebookSubscriptions(ctx context.Context) {
 	// talk to twitch and see what the current webhooks are
 	//TODO: this doesn't seem to work, like at all
 	resp, err := currentTwitchClient.GetWebhookSubscriptions(&helix.WebhookSubscriptionsParams{})
@@ -63,6 +63,6 @@ func getWebookSubscriptions() {
 			spew.Dump(resp.Data.WebhookSubscriptions)
 		}
 	} else {
-		slog.Warn("no webhooks found")
+		slog.WarnContext(ctx, "no webhooks found")
 	}
 }
