@@ -5,11 +5,11 @@ import (
 	"time"
 )
 
-var FlagImage *Onscreen
+var flagImage *Onscreen
 
 func InitFlagImage() {
 	slog.Info("creating onscreen", "kind", "flag")
-	FlagImage = New()
+	flagImage = New()
 }
 
 //TODO: this should probably return an error
@@ -19,5 +19,5 @@ func InitFlagImage() {
 // re-implementing the per-state image picker (was flagSourceFile +
 // updateFlagFile, removed in the disk-write cleanup).
 func ShowFlag(dur time.Duration) {
-	FlagImage.ShowFor("", 10*time.Second)
+	flagImage.ShowFor("", 10*time.Second)
 }
