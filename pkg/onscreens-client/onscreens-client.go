@@ -16,7 +16,7 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
-var onscreensServerURL = "http://" + c.Conf.VlcServerHost
+var onscreensServerURL = "http://" + c.Conf.OnscreensServerHost
 
 // httpClient wraps the default transport with OpenTelemetry instrumentation
 // so outbound calls produce spans. See pkg/vlc-client for the same pattern.
