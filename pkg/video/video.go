@@ -2,14 +2,12 @@ package video
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
 
-	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
 	vlcClient "github.com/adanalife/tripbot/pkg/vlc-client"
@@ -50,7 +48,7 @@ func GetCurrentlyPlaying(ctx context.Context) {
 		// share the Video with the system
 		CurrentlyPlaying, err = LoadOrCreate(curVid)
 		if err != nil {
-			terrors.Log(err, fmt.Sprintf("unable to create Video from %s", curVid))
+			slog.ErrorContext(ctx, "unable to create Video", "err", err, "file", curVid)
 		}
 
 		slog.InfoContext(ctx, "now playing",
@@ -76,7 +74,7 @@ func CurrentProgress() time.Duration {
 
 func figureOutCurrentVideo(ctx context.Context) string {
 	if helpers.RunningOnWindows() {
-		terrors.Log(nil, "can't run script on windows")
+		slog.ErrorContext(ctx, "can't run script on windows")
 		return ""
 	}
 	// run the shell script to get currently-playing video
