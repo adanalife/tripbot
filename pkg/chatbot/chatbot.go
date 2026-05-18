@@ -12,12 +12,9 @@ import (
 	"github.com/adanalife/tripbot/pkg/database"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
-	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/adanalife/tripbot/pkg/video"
-	"github.com/davecgh/go-spew/spew"
 	"github.com/gempir/go-twitch-irc/v4"
 	"github.com/kelvins/geocoder"
-	"github.com/nicklaw5/helix/v2"
 	"gorm.io/gorm"
 )
 
@@ -153,23 +150,4 @@ func help() string {
 	// bump the index
 	helpIndex = (helpIndex + 1) % len(c.HelpMessages)
 	return text
-}
-
-// AnnounceNewFollower makes a post in chat that a user follows the channel
-func AnnounceNewFollower(username string) {
-	msg := fmt.Sprintf("Thank you for the follow, @%s", username)
-	sayFn(msg)
-}
-
-// AnnounceSubscriber makes a post in chat that a user has subscribed
-func AnnounceSubscriber(sub helix.Subscription) {
-	//TODO: do more with the Subscription... IsGift, Tier, PlanName, etc.
-	spew.Dump(sub)
-	username := sub.UserName
-	msg := fmt.Sprintf("Thank you for the sub, @%s; enjoy your !bonusmiles bleedPurple", username)
-	sayFn(msg)
-	// give everyone a bonus mile
-	users.GiveEveryoneMiles(1.0)
-	msg = fmt.Sprintf("The %d current viewers have been given a bonus mile, too HolidayPresent", len(users.LoggedIn))
-	sayFn(msg)
 }
