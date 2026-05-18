@@ -49,13 +49,6 @@ func Start(ctx context.Context) {
 	// version endpoint — returns build metadata as JSON
 	r.Handle("/version", tagged("/version", versionHandler)).Methods("GET", "HEAD")
 
-	// webhooks endpoints
-	// note that these can be both GET and POST requests
-	wh := r.PathPrefix("/webhooks").Subrouter()
-	wh.Handle("/twitch", tagged("/webhooks/twitch", webhooksTwitchHandler)).Methods("GET")
-	wh.Handle("/twitch/users/follows", tagged("/webhooks/twitch/users/follows", webhooksTwitchUsersFollowsHandler)).Methods("POST")
-	wh.Handle("/twitch/subscriptions/events", tagged("/webhooks/twitch/subscriptions/events", webhooksTwitchSubscriptionsEventsHandler)).Methods("POST")
-
 	// auth endpoints
 	auth := r.PathPrefix("/auth").Methods("GET").Subrouter()
 	auth.Handle("/init", tagged("/auth/init", authInitHandler))

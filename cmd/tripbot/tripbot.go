@@ -76,7 +76,6 @@ func main() {
 	setUpTwitchClient() // required for the below
 	updateSubscribers()
 	getCurrentUsers()
-	updateWebhookSubscriptions()
 	connectToTwitch()
 }
 
@@ -172,12 +171,6 @@ func getCurrentUsers() {
 	users.PrintCurrentSession(context.Background())
 }
 
-//updateWebhookSubscriptions makes sure webhooks are being sent to the bot
-func updateWebhookSubscriptions() {
-	// create webhook subscriptions
-	mytwitch.UpdateWebhookSubscriptions(context.Background())
-}
-
 // connectToTwitch joins Twitch chat and starts listening
 func connectToTwitch() {
 	client.Join(c.Conf.ChannelName)
@@ -254,7 +247,6 @@ func scheduleBackgroundJobs() {
 		}
 	})
 	addJob(2*time.Hour+57*time.Minute+30*time.Second, "chatbot.Chatter", chatbot.Chatter)
-	addJob(12*time.Hour, "twitch.UpdateWebhookSubscriptions", mytwitch.UpdateWebhookSubscriptions)
 }
 
 // addJob registers a gocron job at the given interval, wrapping fn with

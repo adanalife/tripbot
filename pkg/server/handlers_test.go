@@ -8,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/server/oauthstate"
 )
 
@@ -53,54 +52,6 @@ func TestVersionHandlerReturnsInjectedTag(t *testing.T) {
 	}
 	if body.Tag != "v9.9.9-test" {
 		t.Fatalf("got tag %q, want %q", body.Tag, "v9.9.9-test")
-	}
-}
-
-func TestWebhooksTwitchHandlerEchoesChallenge(t *testing.T) {
-	saved := c.Conf.DisableTwitchWebhooks
-	defer func() { c.Conf.DisableTwitchWebhooks = saved }()
-	c.Conf.DisableTwitchWebhooks = false
-
-	req := httptest.NewRequest(http.MethodGet, "/webhooks/twitch?hub.challenge=hello-world", nil)
-	rec := httptest.NewRecorder()
-
-	webhooksTwitchHandler(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("got status %d, want %d", rec.Code, http.StatusOK)
-	}
-	if rec.Body.String() != "hello-world" {
-		t.Fatalf("got body %q, want %q", rec.Body.String(), "hello-world")
-	}
-}
-
-func TestWebhooksTwitchHandlerDisabledReturns501(t *testing.T) {
-	saved := c.Conf.DisableTwitchWebhooks
-	defer func() { c.Conf.DisableTwitchWebhooks = saved }()
-	c.Conf.DisableTwitchWebhooks = true
-
-	req := httptest.NewRequest(http.MethodGet, "/webhooks/twitch?hub.challenge=anything", nil)
-	rec := httptest.NewRecorder()
-
-	webhooksTwitchHandler(rec, req)
-
-	if rec.Code != http.StatusNotImplemented {
-		t.Fatalf("got status %d, want %d", rec.Code, http.StatusNotImplemented)
-	}
-}
-
-func TestWebhooksTwitchHandlerMissingChallengeReturns404(t *testing.T) {
-	saved := c.Conf.DisableTwitchWebhooks
-	defer func() { c.Conf.DisableTwitchWebhooks = saved }()
-	c.Conf.DisableTwitchWebhooks = false
-
-	req := httptest.NewRequest(http.MethodGet, "/webhooks/twitch", nil)
-	rec := httptest.NewRecorder()
-
-	webhooksTwitchHandler(rec, req)
-
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("got status %d, want %d", rec.Code, http.StatusNotFound)
 	}
 }
 

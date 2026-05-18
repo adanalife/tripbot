@@ -8,11 +8,8 @@ import (
 	"net/http"
 	"runtime/debug"
 
-	"github.com/adanalife/tripbot/pkg/chatbot"
-	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/server/oauthstate"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
-	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/nicklaw5/helix/v2"
 )
 
@@ -68,83 +65,6 @@ func versionHandler(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		slog.ErrorContext(r.Context(), "couldn't encode version response", "err", err)
 	}
-}
-
-// twitch issues a request here when creating a new webhook subscription
-func webhooksTwitchHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	slog.InfoContext(ctx, "received webhook challenge request", "path", r.URL.Path)
-	// exit early if we've disabled webhooks
-	if c.Conf.DisableTwitchWebhooks {
-		http.Error(w, "501 not implemented", http.StatusNotImplemented)
-		return
-	}
-
-	challenge, ok := r.URL.Query()["hub.challenge"]
-	if !ok || len(challenge[0]) < 1 {
-		slog.ErrorContext(ctx, "something went wrong with the challenge")
-		slog.WarnContext(ctx, "webhook challenge missing hub.challenge", "query", fmt.Sprintf("%#v", r.URL.Query()))
-		http.Error(w, "404 not found", http.StatusNotFound)
-		return
-	}
-	slog.InfoContext(ctx, "returning webhook challenge")
-	fmt.Fprint(w, string(challenge[0]))
-}
-
-// user webhooks are received via POST at this url
-//TODO: we can use helix.GetWebhookTopicFromRequest() and share a webhooks URL
-func webhooksTwitchUsersFollowsHandler(w http.ResponseWriter, r *http.Request) {
-	if c.Conf.DisableTwitchWebhooks {
-		http.Error(w, "501 not implemented", http.StatusNotImplemented)
-		return
-	}
-
-	resp, err := decodeFollowWebhookResponse(r)
-	if err != nil {
-		slog.ErrorContext(r.Context(), "error decoding follow webhook", "err", err)
-		//TODO: better error
-		http.Error(w, "404 not found", http.StatusNotFound)
-		return
-	}
-
-	for _, follower := range resp.Data.Follows {
-		username := follower.FromName
-		slog.InfoContext(r.Context(), "received webhook: new follower", "username", username)
-		users.LoginIfNecessary(r.Context(), username)
-		// announce new follower in chat
-		chatbot.AnnounceNewFollower(username)
-	}
-
-	fmt.Fprintf(w, "OK")
-}
-
-// these are sent when users subscribe
-func webhooksTwitchSubscriptionsEventsHandler(w http.ResponseWriter, r *http.Request) {
-	if c.Conf.DisableTwitchWebhooks {
-		http.Error(w, "501 not implemented", http.StatusNotImplemented)
-		return
-	}
-
-	resp, err := decodeSubscriptionWebhookResponse(r)
-	if err != nil {
-		slog.ErrorContext(r.Context(), "error decoding subscription webhook", "err", err)
-		//TODO: better error
-		http.Error(w, "404 not found", http.StatusNotFound)
-		return
-	}
-
-	for _, event := range resp.Data.Events {
-		username := event.Subscription.UserName
-		slog.InfoContext(r.Context(), "received webhook: new sub", "username", username)
-		users.LoginIfNecessary(r.Context(), username)
-		// announce new sub in chat
-		chatbot.AnnounceSubscriber(event.Subscription)
-	}
-
-	// update the internal subscribers list
-	mytwitch.GetSubscribers(r.Context())
-
-	fmt.Fprintf(w, "OK")
 }
 
 // authCallbackHandler completes the OAuth Authorization Code flow. Validates
