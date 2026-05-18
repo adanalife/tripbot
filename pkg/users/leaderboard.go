@@ -3,12 +3,12 @@ package users
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
-	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/logrusorgru/aurora/v3"
 )
 
@@ -27,7 +27,7 @@ func InitLeaderboard(ctx context.Context) {
 		Limit(initLeaderboardSize).
 		Find(&users)
 	if result.Error != nil {
-		terrors.Log(result.Error, "error fetching leaderboard")
+		slog.ErrorContext(ctx, "error fetching leaderboard", "err", result.Error)
 	}
 
 	for _, user := range users {
@@ -55,10 +55,10 @@ func UpdateLeaderboard(ctx context.Context) {
 }
 
 // convert the string to a float32
-func strToFloat32(str string) float32 {
+func strToFloat32(ctx context.Context, str string) float32 {
 	value, err := strconv.ParseFloat(str, 32)
 	if err != nil {
-		terrors.Log(err, "error parsing float")
+		slog.ErrorContext(ctx, "error parsing float", "err", err)
 		return 0.0
 	}
 	return float32(value)
@@ -72,7 +72,7 @@ func insertIntoLeaderboard(ctx context.Context, user User) {
 	miles := user.CurrentMiles(ctx)
 
 	for i, pair := range LifetimeMilesLeaderboard {
-		val := strToFloat32(pair[1])
+		val := strToFloat32(ctx, pair[1])
 		// see if our miles are higher
 		if miles >= val {
 			milesStr := fmt.Sprintf("%.1f", miles)
