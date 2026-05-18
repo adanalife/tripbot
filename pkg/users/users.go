@@ -47,7 +47,7 @@ func (u User) loggedInDur() time.Duration {
 	return time.Now().Sub(LoggedIn[u.Username].LoggedIn)
 }
 
-func (u User) sessionMiles() float32 {
+func (u User) sessionMiles(ctx context.Context) float32 {
 	// exit early if they're not logged in
 	if !isLoggedIn(u.Username) {
 		return 0.0
@@ -58,15 +58,15 @@ func (u User) sessionMiles() float32 {
 	if u.IsSubscriber() {
 		bonusMiles := u.BonusMiles()
 		if c.Conf.Verbose {
-			slog.Info("subscriber will get bonus miles", "username", u.Username, "bonus_miles", bonusMiles)
+			slog.InfoContext(ctx, "subscriber will get bonus miles", "username", u.Username, "bonus_miles", bonusMiles)
 		}
 		sessionMiles += bonusMiles
 	}
 	return sessionMiles
 }
 
-func (u User) CurrentMiles() float32 {
-	return u.Miles + u.sessionMiles()
+func (u User) CurrentMiles(ctx context.Context) float32 {
+	return u.Miles + u.sessionMiles(ctx)
 }
 
 func (u User) BonusMiles() float32 {
@@ -79,7 +79,7 @@ func (u User) BonusMiles() float32 {
 }
 
 func (u User) CurrentMonthlyMiles(ctx context.Context) float32 {
-	return u.GetScore(ctx, scoreboards.CurrentMilesScoreboard()) + u.sessionMiles()
+	return u.GetScore(ctx, scoreboards.CurrentMilesScoreboard()) + u.sessionMiles(ctx)
 }
 
 // User.save() will take the given user and store it in the DB
@@ -149,7 +149,7 @@ func Find(ctx context.Context, username string) User {
 // HasCommandAvailable lets users run a command once a day,
 // unless they are a follower in which case they can run
 // as many as they like
-func (u *User) HasCommandAvailable() bool {
+func (u *User) HasCommandAvailable(ctx context.Context) bool {
 	// followers get unlimited commands
 	if u.IsFollower() {
 		return true
@@ -157,7 +157,7 @@ func (u *User) HasCommandAvailable() bool {
 	// check if they ran a command in the last 24 hrs
 	now := time.Now()
 	if now.Sub(u.lastCmd) > 24*time.Hour {
-		slog.Info("letting user run a command", "username", u.Username)
+		slog.InfoContext(ctx, "letting user run a command", "username", u.Username)
 		// update their lastCmd time
 		u.lastCmd = now
 		return true
@@ -178,7 +178,7 @@ func (u User) GuessCooldownRemaining() time.Duration {
 }
 
 // HasGuessCommandAvailable returns true if the user is allowed to use the guess command
-func (u *User) HasGuessCommandAvailable(lastTimewarpTime time.Time) bool {
+func (u *User) HasGuessCommandAvailable(ctx context.Context, lastTimewarpTime time.Time) bool {
 	// let the user run if there has been a timewarp recently
 	if u.lastLocation.Before(lastTimewarpTime) {
 		return true
@@ -186,7 +186,7 @@ func (u *User) HasGuessCommandAvailable(lastTimewarpTime time.Time) bool {
 
 	// check if they ran a location command recently
 	if u.GuessCooldownRemaining() <= 0 {
-		slog.Info("letting user run guess command", "username", u.Username)
+		slog.InfoContext(ctx, "letting user run guess command", "username", u.Username)
 		return true
 	}
 	return false
