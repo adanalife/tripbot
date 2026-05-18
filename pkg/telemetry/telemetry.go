@@ -243,13 +243,36 @@ func (m multiHandler) WithGroup(name string) slog.Handler {
 // the Sentry event arrives with the preceding log trail attached.
 // Error+ is skipped — samber/slog-sentry already turns those into
 // full Sentry events with their own captured attribute set.
+//
+// Sentry caps breadcrumbs at 100 per scope; high-volume routine logs
+// (per-command "ran !X", per-cron-tick "session snapshot", etc.) would
+// quickly evict the recent, useful records before an error fires. The
+// noisy-prefix list below names the messages we know fire on every
+// command or every minute via cron; they stay in Loki but skip the
+// breadcrumb pipeline.
 type breadcrumbHandler struct{}
+
+// breadcrumbSkipPrefixes lists slog message prefixes that fire frequently
+// enough to drown out other context if all routed to Sentry breadcrumbs.
+var breadcrumbSkipPrefixes = []string{
+	"ran !",            // every chat command (chatbot/commands.go + playback.go)
+	"now playing",      // per video transition via cron.video.GetCurrentlyPlaying
+	"session snapshot", // every 5min via cron.users.PrintCurrentSession
+	"subscribers",      // every 5min via cron.twitch.GetSubscribers
+	"no subscribers",   // ditto
+	"follower count",   // every 5min via cron.twitch.GetFollowerCount
+}
 
 func (breadcrumbHandler) Enabled(_ context.Context, level slog.Level) bool {
 	return level >= slog.LevelInfo && level < slog.LevelError
 }
 
 func (breadcrumbHandler) Handle(ctx context.Context, r slog.Record) error {
+	for _, p := range breadcrumbSkipPrefixes {
+		if strings.HasPrefix(r.Message, p) {
+			return nil
+		}
+	}
 	hub := sentry.CurrentHub()
 	if fromCtx := sentry.GetHubFromContext(ctx); fromCtx != nil {
 		hub = fromCtx
