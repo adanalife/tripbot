@@ -31,7 +31,7 @@ func (a *App) timewarp(ctx context.Context) {
 		slog.ErrorContext(ctx, "error from VLC client", "err", err)
 	}
 	// update the currently-playing video
-	a.Video.GetCurrentlyPlaying()
+	a.Video.GetCurrentlyPlaying(ctx)
 	// update our record of last time it ran
 	lastTimewarpTime = time.Now()
 }
@@ -91,7 +91,7 @@ func (a *App) jumpCmd(ctx context.Context, user *users.User, params []string) {
 	// sanitize the input
 	state = helpers.RemoveNonLetters(state)
 	titlecaseState := helpers.TitlecaseState(state)
-	randomVid, err := a.Video.FindRandomByState(state)
+	randomVid, err := a.Video.FindRandomByState(ctx, state)
 	// check to see if we even have footage for this state
 	if _, ok := err.(*terrors.NoFootageForStateError); ok {
 		msg := fmt.Sprintf("No footage for %s... yet! ;)", titlecaseState)
@@ -113,7 +113,7 @@ func (a *App) jumpCmd(ctx context.Context, user *users.User, params []string) {
 	}
 	a.IRC.Say(fmt.Sprintf("Jumping to %s...!", titlecaseState))
 	// update the currently-playing video
-	a.Video.GetCurrentlyPlaying()
+	a.Video.GetCurrentlyPlaying(ctx)
 	// show the flag for the state
 	a.Onscreens.ShowFlag(10 * time.Second)
 	// update our record of last time it ran
@@ -160,7 +160,7 @@ func (a *App) skipCmd(ctx context.Context, user *users.User, params []string) {
 		slog.ErrorContext(ctx, "error from VLC client", "err", err)
 	}
 	// update the currently-playing video
-	a.Video.GetCurrentlyPlaying()
+	a.Video.GetCurrentlyPlaying(ctx)
 	// update our record of last time it ran
 	lastTimewarpTime = time.Now()
 }
@@ -205,7 +205,7 @@ func (a *App) backCmd(ctx context.Context, user *users.User, params []string) {
 		slog.ErrorContext(ctx, "error from VLC client", "err", err)
 	}
 	// update the currently-playing video
-	a.Video.GetCurrentlyPlaying()
+	a.Video.GetCurrentlyPlaying(ctx)
 	// update our record of last time it ran
 	lastTimewarpTime = time.Now()
 }

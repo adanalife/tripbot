@@ -46,7 +46,7 @@ func GetCurrentlyPlaying(ctx context.Context) {
 		timeStarted = time.Now()
 
 		// share the Video with the system
-		CurrentlyPlaying, err = LoadOrCreate(curVid)
+		CurrentlyPlaying, err = LoadOrCreate(ctx, curVid)
 		if err != nil {
 			slog.ErrorContext(ctx, "unable to create Video", "err", err, "file", curVid)
 		}
