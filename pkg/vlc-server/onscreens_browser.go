@@ -91,7 +91,7 @@ func onscreensStateHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	if err := json.NewEncoder(w).Encode(onscreensServer.Snapshot()); err != nil {
-		terrors.Log(err, "encoding onscreens state")
+		terrors.LogContext(r.Context(), err, "encoding onscreens state")
 	}
 }
 
@@ -108,7 +108,7 @@ func onscreensRenderHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	if err := onscreenTmpl.Execute(w, style); err != nil {
-		terrors.Log(err, "rendering onscreen template")
+		terrors.LogContext(r.Context(), err, "rendering onscreen template")
 	}
 }
 
@@ -123,7 +123,7 @@ func onscreensAssetHandler(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "image/png")
 		w.Header().Set("Cache-Control", "no-store")
 		if _, err := w.Write(flagPlaceholderPNG); err != nil {
-			terrors.Log(err, "writing flag placeholder")
+			terrors.LogContext(r.Context(), err, "writing flag placeholder")
 		}
 	default:
 		http.NotFound(w, r)

@@ -135,14 +135,14 @@ func Start(ctx context.Context) {
 	select {
 	case err := <-serverErr:
 		if err != nil {
-			terrors.Fatal(err, "couldn't start server")
+			terrors.FatalContext(ctx, err, "couldn't start server")
 		}
 	case <-ctx.Done():
 		slog.InfoContext(ctx, "shutting down VLC web server")
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
 		if err := srv.Shutdown(shutdownCtx); err != nil {
-			terrors.Log(err, "error during VLC web server shutdown")
+			terrors.LogContext(shutdownCtx, err, "error during VLC web server shutdown")
 		}
 	}
 }

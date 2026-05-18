@@ -55,7 +55,7 @@ func versionHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		terrors.Log(err, "couldn't encode version response")
+		terrors.LogContext(r.Context(), err, "couldn't encode version response")
 	}
 }
 
@@ -85,7 +85,7 @@ func vlcBackHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	i, err := strconv.Atoi(num[0])
 	if err != nil {
-		terrors.Log(err, "couldn't convert input to int")
+		terrors.LogContext(r.Context(), err, "couldn't convert input to int")
 		http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
 		return
 	}
@@ -105,7 +105,7 @@ func vlcSkipHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	i, err := strconv.Atoi(num[0])
 	if err != nil {
-		terrors.Log(err, "couldn't convert input to int")
+		terrors.LogContext(r.Context(), err, "couldn't convert input to int")
 		http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
 		return
 	}
@@ -188,7 +188,7 @@ func onscreensMiddleHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		msg, err := helpers.Base64Decode(base64content[0])
 		if err != nil {
-			terrors.Log(err, "unable to decode string")
+			terrors.LogContext(r.Context(), err, "unable to decode string")
 			http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
 			return
 		}
@@ -231,7 +231,7 @@ func onscreensLeaderboardHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		content, err := helpers.Base64Decode(base64content[0])
 		if err != nil {
-			terrors.Log(err, "unable to decode string")
+			terrors.LogContext(r.Context(), err, "unable to decode string")
 			http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
 			return
 		}
