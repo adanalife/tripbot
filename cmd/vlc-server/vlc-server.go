@@ -83,9 +83,10 @@ func createOnscreens() {
 // logs). No-ops cleanly if OTEL_SDK_DISABLED is set or no OTLP endpoint
 // is configured — see pkg/telemetry.
 func initializeTelemetry() {
-	shutdown, err := telemetry.Init(context.Background(), "vlc-server", version)
+	ctx := context.Background()
+	shutdown, err := telemetry.Init(ctx, "vlc-server", version)
 	if err != nil {
-		slog.Warn("telemetry init failed", "err", err)
+		slog.WarnContext(ctx, "telemetry init failed", "err", err)
 	}
 	telemetryShutdown = shutdown
 }
@@ -122,7 +123,7 @@ func gracefulShutdown() {
 	if telemetryShutdown != nil {
 		flushCtx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 		if err := telemetryShutdown(flushCtx); err != nil {
-			slog.Error("telemetry shutdown failed", "err", err)
+			slog.ErrorContext(flushCtx, "telemetry shutdown failed", "err", err)
 		}
 		cancel()
 	}
