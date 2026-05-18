@@ -50,7 +50,7 @@ func GetCurrentlyPlaying(ctx context.Context) {
 		// share the Video with the system
 		CurrentlyPlaying, err = LoadOrCreate(curVid)
 		if err != nil {
-			terrors.Log(err, fmt.Sprintf("unable to create Video from %s", curVid))
+			terrors.LogContext(ctx, err, fmt.Sprintf("unable to create Video from %s", curVid))
 		}
 
 		slog.InfoContext(ctx, "now playing",
@@ -76,7 +76,7 @@ func CurrentProgress() time.Duration {
 
 func figureOutCurrentVideo(ctx context.Context) string {
 	if helpers.RunningOnWindows() {
-		terrors.Log(nil, "can't run script on windows")
+		terrors.LogContext(ctx, nil, "can't run script on windows")
 		return ""
 	}
 	// run the shell script to get currently-playing video
