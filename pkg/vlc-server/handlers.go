@@ -153,7 +153,7 @@ func onscreensFlagHandler(w http.ResponseWriter, r *http.Request) {
 		//onscreensServer.ShowFlag(dur)
 		//fmt.Fprintf(w, "OK")
 	case "hide":
-		onscreensServer.FlagImage.Hide()
+		onscreensServer.Lookup(onscreensServer.SlugFlag).Hide()
 		fmt.Fprintf(w, "OK")
 	default:
 		http.Error(w, "417 expectation failed", http.StatusExpectationFailed)
@@ -192,10 +192,10 @@ func onscreensMiddleHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
 			return
 		}
-		onscreensServer.MiddleText.Show(msg)
+		onscreensServer.Lookup(onscreensServer.SlugMiddleText).Show(msg)
 		fmt.Fprintf(w, "OK")
 	case "hide":
-		onscreensServer.MiddleText.Hide()
+		onscreensServer.Lookup(onscreensServer.SlugMiddleText).Hide()
 		fmt.Fprintf(w, "OK")
 	default:
 		http.Error(w, "417 expectation failed", http.StatusExpectationFailed)
@@ -211,7 +211,7 @@ func onscreensTimewarpHandler(w http.ResponseWriter, r *http.Request) {
 		onscreensServer.ShowTimewarp()
 		fmt.Fprintf(w, "OK")
 	case "hide":
-		onscreensServer.Timewarp.Hide()
+		onscreensServer.Lookup(onscreensServer.SlugTimewarp).Hide()
 		fmt.Fprintf(w, "OK")
 	default:
 		http.Error(w, "417 expectation failed", http.StatusExpectationFailed)
@@ -239,7 +239,7 @@ func onscreensLeaderboardHandler(w http.ResponseWriter, r *http.Request) {
 		onscreensServer.ShowLeaderboard(content)
 		fmt.Fprintf(w, "OK")
 	case "hide":
-		onscreensServer.Leaderboard.Hide()
+		onscreensServer.Lookup(onscreensServer.SlugLeaderboard).Hide()
 		fmt.Fprintf(w, "OK")
 	default:
 		http.Error(w, "417 expectation failed", http.StatusExpectationFailed)

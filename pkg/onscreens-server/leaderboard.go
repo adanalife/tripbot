@@ -7,13 +7,13 @@ import (
 
 var leaderboardDuration = time.Duration(20 * time.Second)
 
-var Leaderboard *Onscreen
+var leaderboard *Onscreen
 
 func InitLeaderboard() {
 	slog.Info("creating onscreen", "kind", "leaderboard")
-	Leaderboard = New()
+	leaderboard = New()
 }
 
 func ShowLeaderboard(content string) {
-	Leaderboard.ShowFor(content, leaderboardDuration)
+	leaderboard.ShowFor(content, leaderboardDuration)
 }
