@@ -1,4 +1,4 @@
-package vlcServer
+package onscreensServer
 
 import (
 	"embed"
@@ -9,15 +9,14 @@ import (
 
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
-	onscreensServer "github.com/adanalife/tripbot/pkg/onscreens-server"
 	"github.com/gorilla/mux"
 )
 
 // flagPlaceholderPNG is a 1×1 transparent PNG served by the flag asset
-// endpoint while the state-driven flag swap is disabled (see
-// onscreens-server/flag.go's TODO). The browser source's <img> tag
-// fetches this URL even when the onscreen is hidden, so we serve a
-// valid PNG to keep the request quiet rather than 404.
+// endpoint while the state-driven flag swap is disabled (see flag.go's
+// TODO). The browser source's <img> tag fetches this URL even when the
+// onscreen is hidden, so we serve a valid PNG to keep the request quiet
+// rather than 404.
 var flagPlaceholderPNG = []byte{
 	0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
 	0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
@@ -48,7 +47,7 @@ var onscreenTmpl = template.Must(template.ParseFS(onscreenTemplates, "templates/
 // it fits inside FitWidthPx on a single line, then falls back to wrapping if the
 // floor doesn't fit.
 type onscreenStyle struct {
-	Name          string       // URL slug; matches the key in /onscreens/state.json
+	Name          string       // URL slug; matches a Slug constant in this package
 	IsImage       bool         // image vs. text source
 	FontCSS       template.CSS // CSS font-family (only meaningful for text)
 	FontSizePx    int          // default / max font-size in px (only meaningful for text)
@@ -57,52 +56,40 @@ type onscreenStyle struct {
 	DropShadow    bool         // text-shadow on/off
 	AnchorXPx     int          // center-x within the browser-source viewport (0 = use flex-center fallback)
 	FitWidthPx    int          // single-line width budget for shrink-to-fit (0 = no fit pass)
-	get           func() *onscreensServer.Onscreen
 }
 
 var onscreenRegistry = map[string]onscreenStyle{
-	"middle-text": {
-		Name: "middle-text", FontCSS: `"Trebuchet MS", sans-serif`, FontSizePx: 18, ColorCSS: "#ffffff",
-		get: func() *onscreensServer.Onscreen { return onscreensServer.MiddleText },
+	SlugMiddleText: {
+		Name: SlugMiddleText, FontCSS: `"Trebuchet MS", sans-serif`, FontSizePx: 18, ColorCSS: "#ffffff",
 	},
-	"leaderboard": {
-		Name: "leaderboard", FontCSS: `"Trebuchet MS", sans-serif`, FontSizePx: 18, ColorCSS: "#ffffff",
-		get: func() *onscreensServer.Onscreen { return onscreensServer.Leaderboard },
+	SlugLeaderboard: {
+		Name: SlugLeaderboard, FontCSS: `"Trebuchet MS", sans-serif`, FontSizePx: 18, ColorCSS: "#ffffff",
 	},
-	"left-message": {
-		Name: "left-message", FontCSS: `"Trebuchet MS", sans-serif`, FontSizePx: 28, MinFontSizePx: 18, ColorCSS: "#ffffff",
+	SlugLeftMessage: {
+		Name: SlugLeftMessage, FontCSS: `"Trebuchet MS", sans-serif`, FontSizePx: 28, MinFontSizePx: 18, ColorCSS: "#ffffff",
 		AnchorXPx: 282, FitWidthPx: 564,
-		get: func() *onscreensServer.Onscreen { return onscreensServer.LeftRotator },
 	},
-	"right-message": {
-		Name: "right-message", FontCSS: `"Trebuchet MS", sans-serif`, FontSizePx: 28, MinFontSizePx: 18, ColorCSS: "#ffffff",
+	SlugRightMessage: {
+		Name: SlugRightMessage, FontCSS: `"Trebuchet MS", sans-serif`, FontSizePx: 28, MinFontSizePx: 18, ColorCSS: "#ffffff",
 		AnchorXPx: 456, FitWidthPx: 369,
-		get: func() *onscreensServer.Onscreen { return onscreensServer.RightRotator },
 	},
-	"timewarp": {
-		Name: "timewarp", FontCSS: `sans-serif`, FontSizePx: 72, ColorCSS: "#ffffff", DropShadow: true,
-		get: func() *onscreensServer.Onscreen { return onscreensServer.Timewarp },
+	SlugTimewarp: {
+		Name: SlugTimewarp, FontCSS: `sans-serif`, FontSizePx: 72, ColorCSS: "#ffffff", DropShadow: true,
 	},
-	"gps": {
-		Name: "gps", IsImage: true,
-		get: func() *onscreensServer.Onscreen { return onscreensServer.GPSImage },
+	SlugGPS: {
+		Name: SlugGPS, IsImage: true,
 	},
-	"flag": {
-		Name: "flag", IsImage: true,
-		get: func() *onscreensServer.Onscreen { return onscreensServer.FlagImage },
+	SlugFlag: {
+		Name: SlugFlag, IsImage: true,
 	},
 }
 
 // onscreensStateHandler returns a JSON snapshot of every onscreen's current
 // state. The OBS browser-source HTML pages poll this endpoint and re-render.
 func onscreensStateHandler(w http.ResponseWriter, r *http.Request) {
-	out := make(map[string]*onscreensServer.Onscreen, len(onscreenRegistry))
-	for name, style := range onscreenRegistry {
-		out[name] = style.get()
-	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
-	if err := json.NewEncoder(w).Encode(out); err != nil {
+	if err := json.NewEncoder(w).Encode(Snapshot()); err != nil {
 		terrors.Log(err, "encoding onscreens state")
 	}
 }
@@ -129,9 +116,9 @@ func onscreensRenderHandler(w http.ResponseWriter, r *http.Request) {
 // transparent placeholder while the state-driven flag swap is offline.
 func onscreensAssetHandler(w http.ResponseWriter, r *http.Request) {
 	switch mux.Vars(r)["name"] {
-	case "gps":
+	case SlugGPS:
 		http.ServeFile(w, r, filepath.Join(helpers.ProjectRoot(), "assets", "GPS.png"))
-	case "flag":
+	case SlugFlag:
 		w.Header().Set("Content-Type", "image/png")
 		w.Header().Set("Cache-Control", "no-store")
 		if _, err := w.Write(flagPlaceholderPNG); err != nil {

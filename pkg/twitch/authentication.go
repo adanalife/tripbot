@@ -223,7 +223,7 @@ func GenerateUserAccessToken(code string) error {
 //
 // TODO: helix client surface should move behind an interface so this
 // function can be unit-tested without a real Twitch round-trip.
-func RefreshUserAccessToken(_ context.Context) {
+func RefreshUserAccessToken(ctx context.Context) {
 	botUser := c.Conf.BotUsername
 
 	acquired, release, err := oauthtokens.TryRefreshLock("twitch", botUser)
@@ -299,5 +299,5 @@ func RefreshUserAccessToken(_ context.Context) {
 	tokenMu.Unlock()
 	client.SetUserAccessToken(rotated.AccessToken)
 
-	slog.Info("refreshed user access token")
+	slog.InfoContext(ctx, "refreshed user access token")
 }

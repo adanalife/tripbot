@@ -234,13 +234,13 @@ func countBots() int {
 }
 
 // PrintCurrentSession simply prints info about the current session.
-// ctx is forward-compat plumbing — twitch.ChatterCount doesn't take ctx
-// yet, so the parameter is currently unused.
-func PrintCurrentSession(_ context.Context) {
+// ctx links the snapshot log line to the parent cron-tick span;
+// twitch.ChatterCount doesn't take ctx yet.
+func PrintCurrentSession(ctx context.Context) {
 	usernames := sortedUsernameList()
 	coloredUsernames := colorizeUsernames(usernames)
 
-	slog.Info("session snapshot",
+	slog.InfoContext(ctx, "session snapshot",
 		"chatters", twitch.ChatterCount(),
 		"humans", countHumans(),
 		"bots", countBots(),

@@ -5,21 +5,21 @@ import (
 	"time"
 )
 
-var GPSImage *Onscreen
+var gpsImage *Onscreen
 
 var gpsDuration = time.Duration(150 * time.Second)
 
 func InitGPSImage() {
 	slog.Info("creating onscreen", "kind", "gps")
-	GPSImage = New()
+	gpsImage = New()
 }
 
 //TODO: this should probably return an error
 func ShowGPSImage() {
-	GPSImage.Show("")
+	gpsImage.Show("")
 }
 
 //TODO: this should probably return an error
 func HideGPSImage() {
-	GPSImage.Hide()
+	gpsImage.Hide()
 }

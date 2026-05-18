@@ -18,7 +18,6 @@ import (
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
-	"github.com/adanalife/tripbot/pkg/obs"
 	"github.com/adanalife/tripbot/pkg/server"
 	"github.com/adanalife/tripbot/pkg/telemetry"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
@@ -73,7 +72,6 @@ func main() {
 	findInitialVideo()
 	users.InitLeaderboard(context.Background())
 	startCron()
-	startOBSPolling()
 	loadTwitchToken()   // must precede chatbot.Initialize — provides the IRC token
 	setUpTwitchClient() // required for the below
 	updateSubscribers()
@@ -99,10 +97,11 @@ func listenForShutdown() {
 // logs). No-ops cleanly if OTEL_SDK_DISABLED is set or no OTLP endpoint
 // is configured — see pkg/telemetry.
 func initializeTelemetry() {
-	shutdown, err := telemetry.Init(context.Background(), "tripbot", version)
+	ctx := context.Background()
+	shutdown, err := telemetry.Init(ctx, "tripbot", version)
 	if err != nil {
 		// telemetry init failure shouldn't crash the bot — log and continue.
-		slog.Warn("telemetry init failed", "err", err)
+		slog.WarnContext(ctx, "telemetry init failed", "err", err)
 	}
 	telemetryShutdown = shutdown
 }
@@ -138,12 +137,6 @@ func startCron() {
 	// start cron and attach cronjobs
 	background.StartCron()
 	scheduleBackgroundJobs()
-}
-
-// startOBSPolling starts the background goroutine that polls OBS WebSocket
-// for streaming state and updates the obs_streaming_active gauge.
-func startOBSPolling() {
-	go obs.PollStreamingActive(context.Background(), 30*time.Second)
 }
 
 // loadTwitchToken pulls the bot's OAuth row from the oauth_tokens table.
@@ -233,7 +226,7 @@ func gracefulShutdown() {
 	if telemetryShutdown != nil {
 		flushCtx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 		if err := telemetryShutdown(flushCtx); err != nil {
-			slog.Error("telemetry shutdown failed", "err", err)
+			slog.ErrorContext(flushCtx, "telemetry shutdown failed", "err", err)
 		}
 		cancel()
 	}

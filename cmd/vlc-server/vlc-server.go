@@ -14,7 +14,7 @@ import (
 
 	c "github.com/adanalife/tripbot/pkg/config/vlc-server"
 	"github.com/adanalife/tripbot/pkg/helpers"
-	onscreensServer "github.com/adanalife/tripbot/pkg/onscreens-server"
+	"github.com/adanalife/tripbot/pkg/obs"
 	"github.com/adanalife/tripbot/pkg/telemetry"
 	vlcServer "github.com/adanalife/tripbot/pkg/vlc-server"
 	"github.com/getsentry/sentry-go"
@@ -39,8 +39,12 @@ func main() {
 	// write the current pid to a pidfile
 	helpers.WritePidFile(c.Conf.VLCPidFile)
 
-	// initialize the onscreen elements
-	createOnscreens()
+	// shutdownCtx is canceled on SIGINT/SIGTERM; the HTTP server uses it
+	// to trigger a graceful shutdown so in-flight requests aren't cut.
+	// listenForShutdown's gracefulShutdown goroutine handles the rest of
+	// the app cleanup off the same signals.
+	shutdownCtx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stopSignals()
 
 	// await graceful shutdown signal
 	listenForShutdown()
@@ -59,33 +63,25 @@ func main() {
 	// surface them as OTel gauges. No-op when telemetry is disabled.
 	vlcServer.StartStatsPoller(context.Background(), 5*time.Second)
 
+	// poll the OBS WebSocket for streaming state + render/output stats.
+	go obs.PollStreamingActive(context.Background(), 30*time.Second)
+
 	// start the webserver
 	vlcServer.SetVersion(version)
-	vlcServer.Start()
+	vlcServer.Start(shutdownCtx)
 
 	// listen for termination signals and gracefully shutdown
 	defer vlcServer.Shutdown()
-}
-
-// createOnscreens starts the various onscreen elements
-// (like the chat boxes in the corners)
-func createOnscreens() {
-	onscreensServer.InitGPSImage()
-	onscreensServer.InitLeftRotator()
-	onscreensServer.InitRightRotator()
-	onscreensServer.InitMiddleText()
-	onscreensServer.InitTimewarp()
-	onscreensServer.InitLeaderboard()
-	onscreensServer.InitFlagImage()
 }
 
 // initializeTelemetry brings up OpenTelemetry providers (traces, metrics,
 // logs). No-ops cleanly if OTEL_SDK_DISABLED is set or no OTLP endpoint
 // is configured — see pkg/telemetry.
 func initializeTelemetry() {
-	shutdown, err := telemetry.Init(context.Background(), "vlc-server", version)
+	ctx := context.Background()
+	shutdown, err := telemetry.Init(ctx, "vlc-server", version)
 	if err != nil {
-		slog.Warn("telemetry init failed", "err", err)
+		slog.WarnContext(ctx, "telemetry init failed", "err", err)
 	}
 	telemetryShutdown = shutdown
 }
@@ -122,7 +118,7 @@ func gracefulShutdown() {
 	if telemetryShutdown != nil {
 		flushCtx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 		if err := telemetryShutdown(flushCtx); err != nil {
-			slog.Error("telemetry shutdown failed", "err", err)
+			slog.ErrorContext(flushCtx, "telemetry shutdown failed", "err", err)
 		}
 		cancel()
 	}

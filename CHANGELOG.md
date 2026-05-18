@@ -5,6 +5,46 @@
 
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
+## [v2.9.0] — 2026-05-18
+
+Minor release. `onscreens-server` lifts out of `vlc-server` into its own binary (still co-located in the vlc container via supervisord for now), with a clean `Lookup` / `Snapshot` boundary that makes a future container split a single-PR change. OBS-websocket polling moves from `tripbot` to `vlc-server` where the rest of the OBS data-plane code lives; the `obs_*` gauges' `service.name` flips accordingly. Three conditionally-shown OBS browser sources now shut down CEF when hidden, freeing ~150-250 MB each. `vlc-server` gets graceful HTTP shutdown matching v2.7.1's tripbot-server shape. Optional env vars (`ENV`, `GOOGLE_MAPS_API_KEY`) soft-disable instead of hard-fataling at startup, so local-dev runs work without cluster secrets. Pairs with [adanalife/infra#484](https://github.com/adanalife/infra/pull/484) (k8s Service exposes onscreens-server :8081) and [adanalife/infra#483](https://github.com/adanalife/infra/pull/483) (Grafana stream-health alerts re-labelled for the new `service.name=vlc-server` on OBS metrics).
+
+### Onscreens
+
+- **`onscreens-server` split into its own binary.** Both `vlc-server` and `onscreens-server` run in the same vlc container via supervisord for now; the process split is the boundary that makes a future container split a single-PR change. Onscreens-related HTTP route metrics now carry `service.name=onscreens-server` (same metric names). New `ONSCREENS_SERVER_HOST` env var configures the onscreens-client. ([#568])
+- **Clean package boundary via `Lookup` + `Snapshot`.** `pkg/vlc-server` no longer reaches into seven exported singletons inside `pkg/onscreens-server`; the cross-package surface is now `Lookup(slug)`, `Snapshot()`, typed `SlugX` constants, and the existing `Show*` / `Hide*` wrappers. The seven singletons are unexported. ([#567])
+
+### OBS
+
+- **CEF shutdown on conditionally-shown browser sources.** Flag, Middle Text, and Timewarp sources flip `"shutdown": true`, so CEF unloads the child process when they go hidden — frees ~150-250 MB per source. Always-shown sources (leaderboard, both rotators, GPS) keep CEF resident to avoid cold-start delays. Easy-win complement to v2.8.1's FPS cap and hourly refresh. ([#559])
+- **OBS-websocket polling moved from tripbot to vlc-server.** `obs_*` gauges keep their names but their `service.name` resource attribute flips from `tripbot` to `vlc-server` — vlc-server already lives on OBS's data plane (RTSP, onscreens HTTP) and is the natural home for OBS-facing integration. Pairs with infra #483 which re-labels the stream-health alerts. ([#564])
+
+### VLC server
+
+- **Graceful HTTP shutdown via signal-derived context.** SIGTERM now waits for in-flight `/onscreens/*`, `/health/*`, `/state.json` requests to finish via `srv.Shutdown(ctx)` with a 15s timeout instead of cutting the connection. Mirrors v2.7.1's tripbot-server shape; resolves the `//TODO: add graceful shutdown` left by [#440]. ([#560])
+
+### DX
+
+- **`vlc-server:{vet,build}:macos` Taskfile targets.** Wraps the macOS libvlc CGO env (`CGO_CFLAGS` / `CGO_LDFLAGS` pointed at `/Applications/VLC.app`, plus the `-Wno-error=incompatible-function-pointer-types` workaround needed by libvlc-go/v3@v3.1.5) so local builds Just Work without per-shell setup. ([#565])
+
+### Config
+
+- **`ENV` defaults to `development`.** Local-dev runs no longer crash with `You must set ENV`. Cluster pods get the value from k8s manifests, so deployed behavior is unchanged. ([#554])
+- **`GOOGLE_MAPS_API_KEY` is now optional.** When unset, `helpers.CityFromCoords` / `StateFromCoords` short-circuit with a new `ErrMapsDisabled` sentinel (no failed HTTP, no Sentry noise), the video-import path treats it as steady-state, and `!location` still emits the Google Maps URL (with a blank address). Boot prints a yellow warn alongside the existing webhook-disabled reminder. ([#554])
+
+### Chatbot
+
+- **`!report` ungated.** Flips `RequiresFollow` from true to false on the `!report` Command entry. First-time viewers and lurkers can now use `!report <message>` without first following the channel — report-a-problem shouldn't have a follower gate. ([#561])
+
+### Cleanup
+
+- **Drop stale `infra/k8s/` tree.** Superseded by [adanalife/infra](https://github.com/adanalife/infra). ([#562])
+- **Shell-script audit pass.** Documented live callers, removed dead scripts. ([#563])
+
+### Internal
+
+- **More `slog.*Context` migrations.** Twitch helpers (`GetSubscribers`, `GetFollowerCount`, `RefreshUserAccessToken`, subscribe webhook), `users/session.PrintCurrentSession`, `video.GetCurrentlyPlaying`, telemetry init, and cmd-level telemetry shutdown messages all now carry `trace_id` linking Loki records to Tempo spans. Follow-up to v2.8.0's stdlib-log migration ([#552]) and the trace-ctx threading in [#535] / [#547]. ([#566])
+
 ## [v2.8.1] — 2026-05-16
 
 Patch release. Stops OBS from OOM-killing itself overnight. The seven onscreen browser sources were rendering at the 60 fps canvas rate even though their content only updates twice a second; CEF leaks a small amount per composited frame, so the per-frame waste compounded to ~10 MB/min of process RSS and tipped the pod over its 3 Gi limit after ~4 h. Caps the render rate at 2 fps and adds an hourly browser-source refresh inside the OBS container entrypoint to drop accumulated CEF state on a fixed cycle, so RSS stays bounded across multi-day uptimes.
@@ -633,3 +673,13 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#552]: https://github.com/adanalife/tripbot/pull/552
 [#555]: https://github.com/adanalife/tripbot/pull/555
 [#556]: https://github.com/adanalife/tripbot/pull/556
+[#559]: https://github.com/adanalife/tripbot/pull/559
+[#560]: https://github.com/adanalife/tripbot/pull/560
+[#561]: https://github.com/adanalife/tripbot/pull/561
+[#562]: https://github.com/adanalife/tripbot/pull/562
+[#563]: https://github.com/adanalife/tripbot/pull/563
+[#564]: https://github.com/adanalife/tripbot/pull/564
+[#565]: https://github.com/adanalife/tripbot/pull/565
+[#566]: https://github.com/adanalife/tripbot/pull/566
+[#567]: https://github.com/adanalife/tripbot/pull/567
+[#568]: https://github.com/adanalife/tripbot/pull/568

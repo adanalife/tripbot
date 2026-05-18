@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Called by infra/docker/obs/Dockerfile{,.arm64} (ENTRYPOINT via tini):
+# OBS container entrypoint — seeds OBS config, starts Xvfb/fluxbox/x11vnc,
+# launches OBS, and runs the hourly browser-source refresh loop.
 set -euo pipefail
 
 echo "OBS container, tripbot version $(cat /etc/tripbot/version 2>/dev/null || echo dev) (sha: $(cat /etc/tripbot/sha 2>/dev/null || echo unknown))"

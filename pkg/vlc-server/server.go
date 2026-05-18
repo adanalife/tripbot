@@ -1,6 +1,8 @@
 package vlcServer
 
 import (
+	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"time"
@@ -21,9 +23,18 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-// Start starts the web server
-func Start() {
-	slog.Info("starting VLC web server", "bind", c.Conf.VlcServerBindAddress)
+// shutdownTimeout is how long Shutdown waits for in-flight requests to
+// finish before forcing connections closed. 15s is the typical sweet spot:
+// long enough that healthy requests complete, short enough that a stuck
+// handler doesn't block process exit indefinitely.
+const shutdownTimeout = 15 * time.Second
+
+// Start starts the web server. When ctx is canceled (e.g. SIGINT/SIGTERM
+// via signal.NotifyContext) the server stops accepting new connections and
+// waits up to shutdownTimeout for in-flight requests to complete before
+// returning.
+func Start(ctx context.Context) {
+	slog.InfoContext(ctx, "starting VLC web server", "bind", c.Conf.VlcServerBindAddress)
 
 	r := mux.NewRouter()
 
@@ -47,20 +58,9 @@ func Start() {
 	vlc.Handle("/skip", tagged("/vlc/skip", vlcSkipHandler))
 	vlc.Handle("/skip/{n}", tagged("/vlc/skip/{n}", vlcSkipHandler))
 
-	// onscreen endpoints
-	osc := r.PathPrefix("/onscreens").Methods("GET").Subrouter()
-	//TODO: add state variable
-	osc.Handle("/flag/{action}", tagged("/onscreens/flag/{action}", onscreensFlagHandler))
-	osc.Handle("/gps/{action}", tagged("/onscreens/gps/{action}", onscreensGpsHandler))
-	osc.Handle("/leaderboard/{action}", tagged("/onscreens/leaderboard/{action}", onscreensLeaderboardHandler))
-	osc.Handle("/middle/{action}", tagged("/onscreens/middle/{action}", onscreensMiddleHandler))
-	osc.Handle("/timewarp/{action}", tagged("/onscreens/timewarp/{action}", onscreensTimewarpHandler))
-	// browser-source feeds: state JSON, per-onscreen HTML pages, and image assets.
-	// These back the OBS browser_source entries in Tripbot.json.tmpl after the
-	// vlc<->obs file-share decoupling.
-	osc.Handle("/state.json", tagged("/onscreens/state.json", onscreensStateHandler))
-	osc.Handle("/render/{name}", tagged("/onscreens/render/{name}", onscreensRenderHandler))
-	osc.Handle("/asset/{name}", tagged("/onscreens/asset/{name}", onscreensAssetHandler))
+	// onscreen endpoints now live in cmd/onscreens-server (separate binary,
+	// separate port). vlc-server no longer serves /onscreens/* — clients
+	// (chatbot, OBS browser sources) hit ONSCREENS_SERVER_HOST directly.
 
 	// prometheus metrics endpoint
 	r.Path("/metrics").Handler(tagged("/metrics", promhttp.Handler().ServeHTTP))
@@ -110,9 +110,29 @@ func Start() {
 		Handler:        otelhttp.NewHandler(app, c.Conf.ServerType),
 	}
 
-	//TODO: add graceful shutdown
-	if err := srv.ListenAndServe(); err != nil {
-		terrors.Fatal(err, "couldn't start server")
+	// Run ListenAndServe in a goroutine so we can block on ctx.Done() and
+	// trigger a graceful shutdown when a signal arrives. ErrServerClosed is
+	// the expected return after Shutdown is called and is not an error.
+	serverErr := make(chan error, 1)
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serverErr <- err
+		}
+		close(serverErr)
+	}()
+
+	select {
+	case err := <-serverErr:
+		if err != nil {
+			terrors.Fatal(err, "couldn't start server")
+		}
+	case <-ctx.Done():
+		slog.InfoContext(ctx, "shutting down VLC web server")
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		defer cancel()
+		if err := srv.Shutdown(shutdownCtx); err != nil {
+			terrors.Log(err, "error during VLC web server shutdown")
+		}
 	}
 }
 

@@ -1,6 +1,5 @@
 #!/bin/bash
-
-# this script is the container entrypoint for the VLC container.
+# Called by infra/docker/vlc/Dockerfile (ENTRYPOINT): VLC container entrypoint.
 # OBS runs in its own container with its own entrypoint (see infra/docker/obs/entrypoint.sh).
 #
 # Static config files (supervisord program defs, fluxbox startup) are baked
