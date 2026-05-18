@@ -170,7 +170,7 @@ func (a *App) buildRegistry() []Command {
 			Trigger:        "!report",
 			Aliases:        []string{"no audio", "no sound", "no music", "frozen"},
 			Handler:        a.reportCmd,
-			RequiresFollow: true,
+			RequiresFollow: false,
 		},
 	}
 }
