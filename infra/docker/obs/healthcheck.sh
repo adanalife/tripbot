@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Called by infra/docker/obs/Dockerfile{,.arm64} (HEALTHCHECK CMD).
 # Healthy when:
 #   - the obs process is alive
 #   - the X server responds

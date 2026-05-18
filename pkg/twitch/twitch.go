@@ -44,11 +44,10 @@ func getChannelID(username string) string {
 }
 
 // GetSubscribers pulls down the most recent list of subscribers.
-// ctx is forward-compat plumbing — the helix client doesn't accept ctx
-// yet, so the Helix HTTP call isn't currently linked under the parent
-// cron span. Threading it now lets future ctx-aware helix wrappers nest
-// automatically.
-func GetSubscribers(_ context.Context) {
+// ctx is forward-compat plumbing for nesting helix HTTP under the parent
+// cron span; the helix client doesn't accept ctx yet, but the log lines
+// get a trace_id link via slog.InfoContext.
+func GetSubscribers(ctx context.Context) {
 	//TODO: should we do this elsewhere as well?
 	if ChannelID == "" {
 		ChannelID = getChannelID(c.Conf.ChannelName)
@@ -78,15 +77,15 @@ func GetSubscribers(_ context.Context) {
 	instrumentation.TwitchAudience.SetSubscribers(int64(len(subscribers)))
 
 	if len(subscribers) > 0 {
-		slog.Info("subscribers", "count", len(subscribers), "names", strings.Join(subscribers, ", "))
+		slog.InfoContext(ctx, "subscribers", "count", len(subscribers), "names", strings.Join(subscribers, ", "))
 	} else {
-		slog.Info("no subscribers", "channel", c.Conf.ChannelName)
+		slog.InfoContext(ctx, "no subscribers", "channel", c.Conf.ChannelName)
 	}
 }
 
 // GetFollowerCount fetches the current total follower count for the
 // channel. ctx is forward-compat plumbing (see GetSubscribers).
-func GetFollowerCount(_ context.Context) {
+func GetFollowerCount(ctx context.Context) {
 	if ChannelID == "" {
 		ChannelID = getChannelID(c.Conf.ChannelName)
 	}
@@ -101,7 +100,7 @@ func GetFollowerCount(_ context.Context) {
 		return
 	}
 	instrumentation.TwitchAudience.SetFollowers(int64(resp.Data.Total))
-	slog.Info("follower count", "channel", c.Conf.ChannelName, "total", resp.Data.Total)
+	slog.InfoContext(ctx, "follower count", "channel", c.Conf.ChannelName, "total", resp.Data.Total)
 }
 
 // UserIsSubscriber returns true if the user subscribes to the channel

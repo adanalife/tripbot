@@ -2,6 +2,7 @@ package config
 
 import (
 	"log"
+	"log/slog"
 
 	"github.com/adanalife/tripbot/pkg/config"
 	"github.com/kelseyhightower/envconfig"
@@ -26,4 +27,9 @@ func init() {
 	Conf = LoadTripbotConfig()
 
 	//TODO: consider using strings.ToLower() on channel name here and removing elsewhere
+
+	// give helpful reminders when things are disabled
+	if Conf.GoogleMapsAPIKey == "" {
+		slog.Warn("GOOGLE_MAPS_API_KEY not set — geocoder + static-map features disabled")
+	}
 }
