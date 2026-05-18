@@ -39,8 +39,8 @@ services:
       # FONTCONFIG_PATH: "/etc/fonts"
       STREAM_KEY: "${STREAM_KEY:-}"
       DASHCAM_RTSP_URL: "${DASHCAM_RTSP_URL:-rtsp://vlc:8554/dashcam}"
-      # OBS browser sources fetch onscreen state from vlc-server's HTTP API.
-      ONSCREENS_URL_BASE: "${ONSCREENS_URL_BASE:-http://vlc:8080}"
+      # OBS browser sources fetch onscreen state from onscreens-server's HTTP API.
+      ONSCREENS_URL_BASE: "${ONSCREENS_URL_BASE:-http://vlc:8081}"
       OBS_WEBSOCKET_PASSWD: "${OBS_WEBSOCKET_PASSWD:-adanalife}"
     restart: unless-stopped
 
@@ -56,6 +56,8 @@ services:
     ports:
       # this should match the VLC_SERVER_HOST env var
       - "8080"
+      # onscreens-server (second binary in the same container)
+      - "8081"
       - "8554:8554"
     environment:
       XDG_RUNTIME_DIR: "/root/.cache/xdgr"
