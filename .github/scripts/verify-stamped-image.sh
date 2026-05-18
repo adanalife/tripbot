@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Verify that a just-pushed release image has the expected version + SHA
-# stamped into /etc/tripbot/{version,sha}. Pulls the image, runs `cat` via
+# Called by .github/workflows/release.yml (after each per-arch build/push):
+# verifies a just-pushed release image has the expected version + SHA stamped
+# into /etc/tripbot/{version,sha}. Pulls the image, runs `cat` via
 # --entrypoint (overriding the image's tini/entrypoint.sh), and compares
 # the contents against expected values.
 #
