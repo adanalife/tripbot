@@ -4,10 +4,10 @@ import (
 	"embed"
 	"encoding/json"
 	"html/template"
+	"log/slog"
 	"net/http"
 	"path/filepath"
 
-	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/gorilla/mux"
 )
@@ -90,7 +90,7 @@ func onscreensStateHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	if err := json.NewEncoder(w).Encode(Snapshot()); err != nil {
-		terrors.Log(err, "encoding onscreens state")
+		slog.ErrorContext(r.Context(), "encoding onscreens state", "err", err)
 	}
 }
 
@@ -107,7 +107,7 @@ func onscreensRenderHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	if err := onscreenTmpl.Execute(w, style); err != nil {
-		terrors.Log(err, "rendering onscreen template")
+		slog.ErrorContext(r.Context(), "rendering onscreen template", "err", err)
 	}
 }
 
@@ -122,7 +122,7 @@ func onscreensAssetHandler(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "image/png")
 		w.Header().Set("Cache-Control", "no-store")
 		if _, err := w.Write(flagPlaceholderPNG); err != nil {
-			terrors.Log(err, "writing flag placeholder")
+			slog.ErrorContext(r.Context(), "writing flag placeholder", "err", err)
 		}
 	default:
 		http.NotFound(w, r)
