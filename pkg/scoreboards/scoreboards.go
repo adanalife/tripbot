@@ -41,7 +41,7 @@ func TopUsers(ctx context.Context, scoreboardName string, size int) [][]string {
 		Limit(size).
 		Scan(&results)
 	if result.Error != nil {
-		terrors.Log(result.Error, "error fetching top users")
+		terrors.LogContext(ctx, result.Error, "error fetching top users")
 	}
 
 	for _, r := range results {

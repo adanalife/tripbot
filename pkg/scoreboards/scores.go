@@ -27,17 +27,17 @@ type Score struct {
 func GetScoreByName(ctx context.Context, username, scoreboardName string) (float32, error) {
 	userID, err := getUserIDByName(ctx, username)
 	if err != nil {
-		terrors.Log(err, "error getting user ID")
+		terrors.LogContext(ctx, err, "error getting user ID")
 		return -1.0, err
 	}
 	scoreboard, err := findOrCreateScoreboard(ctx, scoreboardName)
 	if err != nil {
-		terrors.Log(err, "error finding or creating scoreboard")
+		terrors.LogContext(ctx, err, "error finding or creating scoreboard")
 		return -1.0, err
 	}
 	score, err := findOrCreateScore(ctx, userID, scoreboard.ID)
 	if err != nil {
-		terrors.Log(err, "error finding score")
+		terrors.LogContext(ctx, err, "error finding score")
 		return -1.0, err
 	}
 	return score.Value, err
@@ -48,17 +48,17 @@ func GetScoreByName(ctx context.Context, username, scoreboardName string) (float
 func AddToScoreByName(ctx context.Context, username, scoreboardName string, scoreToAdd float32) error {
 	userID, err := getUserIDByName(ctx, username)
 	if err != nil {
-		terrors.Log(err, "error getting userID for user")
+		terrors.LogContext(ctx, err, "error getting userID for user")
 		return err
 	}
 	scoreboard, err := findOrCreateScoreboard(ctx, scoreboardName)
 	if err != nil {
-		terrors.Log(err, "error finding or creating scoreboard")
+		terrors.LogContext(ctx, err, "error finding or creating scoreboard")
 		return err
 	}
 	score, err := findOrCreateScore(ctx, userID, scoreboard.ID)
 	if err != nil {
-		terrors.Log(err, "error finding score")
+		terrors.LogContext(ctx, err, "error finding score")
 		return err
 	}
 	score.Value += scoreToAdd
@@ -106,7 +106,7 @@ func (s Score) save(ctx context.Context) error {
 	}
 	err := database.GormDB().WithContext(ctx).Model(&s).Update("value", s.Value).Error
 	if err != nil {
-		terrors.Log(err, "error saving score")
+		terrors.LogContext(ctx, err, "error saving score")
 	}
 	return err
 }
@@ -117,7 +117,7 @@ func getUserIDByName(ctx context.Context, username string) (uint16, error) {
 	var result struct{ ID uint16 }
 	err := database.GormDB().WithContext(ctx).Raw("SELECT id FROM users WHERE username = ?", username).Scan(&result).Error
 	if err != nil {
-		terrors.Log(err, "error fetching user ID")
+		terrors.LogContext(ctx, err, "error fetching user ID")
 	}
 	return result.ID, err
 }
