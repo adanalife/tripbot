@@ -421,7 +421,7 @@ func (a *App) secretInfoCmd(ctx context.Context, user *users.User, _ []string) {
 	} else {
 		msg = fmt.Sprintf("%s, lat: %f, lng: %f", msg, lat, lng)
 	}
-	slog.InfoContext(ctx, "secretinfo output", "msg", msg)
+	slog.InfoContext(ctx, "secretinfo output", "text", msg)
 	a.IRC.Say(msg)
 }
 
