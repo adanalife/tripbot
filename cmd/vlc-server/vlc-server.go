@@ -15,7 +15,6 @@ import (
 	c "github.com/adanalife/tripbot/pkg/config/vlc-server"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/obs"
-	onscreensServer "github.com/adanalife/tripbot/pkg/onscreens-server"
 	"github.com/adanalife/tripbot/pkg/telemetry"
 	vlcServer "github.com/adanalife/tripbot/pkg/vlc-server"
 	"github.com/getsentry/sentry-go"
@@ -39,9 +38,6 @@ func main() {
 
 	// write the current pid to a pidfile
 	helpers.WritePidFile(c.Conf.VLCPidFile)
-
-	// initialize the onscreen elements
-	createOnscreens()
 
 	// shutdownCtx is canceled on SIGINT/SIGTERM; the HTTP server uses it
 	// to trigger a graceful shutdown so in-flight requests aren't cut.
@@ -76,18 +72,6 @@ func main() {
 
 	// listen for termination signals and gracefully shutdown
 	defer vlcServer.Shutdown()
-}
-
-// createOnscreens starts the various onscreen elements
-// (like the chat boxes in the corners)
-func createOnscreens() {
-	onscreensServer.InitGPSImage()
-	onscreensServer.InitLeftRotator()
-	onscreensServer.InitRightRotator()
-	onscreensServer.InitMiddleText()
-	onscreensServer.InitTimewarp()
-	onscreensServer.InitLeaderboard()
-	onscreensServer.InitFlagImage()
 }
 
 // initializeTelemetry brings up OpenTelemetry providers (traces, metrics,
