@@ -127,7 +127,7 @@ func findInitialVideo() {
 	v := video.CurrentlyPlaying
 	_, err := video.LoadOrCreate(v.String())
 	if err != nil {
-		terrors.Log(err, "error loading initial video, is there a video playing?")
+		slog.Error("error loading initial video, is there a video playing?", "err", err)
 	}
 }
 
@@ -182,7 +182,7 @@ func connectToTwitch() {
 		slog.Info("initializing connection to Twitch")
 		err := client.Connect()
 		if err != nil {
-			terrors.Log(err, "unable to connect to twitch")
+			slog.Error("unable to connect to twitch", "err", err)
 			if errors.Is(err, twitch.ErrLoginAuthenticationFailed) {
 				// The IRC client holds a stale token. Sync it with the
 				// in-memory token (kept fresh by the hourly refresh cron)
@@ -212,7 +212,7 @@ func gracefulShutdown() {
 	users.Shutdown(context.Background())
 	err := database.Connection().Close()
 	if err != nil {
-		terrors.Log(err, "error closing DB connection")
+		slog.Error("error closing DB connection", "err", err)
 	}
 	background.StopCron()
 	sentry.Flush(time.Second * 5)
@@ -257,6 +257,6 @@ func addJob(interval time.Duration, name string, fn func(context.Context)) {
 		gocron.NewTask(tracedJob(name, fn)),
 	)
 	if err != nil {
-		terrors.Log(err, "error adding background job: "+name)
+		slog.Error("error adding background job: "+name, "err", err)
 	}
 }

@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"time"
 
-	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/scoreboards"
 	"github.com/adanalife/tripbot/pkg/twitch"
@@ -93,7 +92,7 @@ func (u User) save(ctx context.Context) {
 		"miles":      u.Miles,
 	}).Error
 	if err != nil {
-		terrors.Log(err, "error saving user")
+		slog.ErrorContext(ctx, "error saving user", "err", err)
 	}
 }
 
@@ -140,7 +139,7 @@ func Find(ctx context.Context, username string) User {
 		return User{ID: 0}
 	}
 	if result.Error != nil {
-		terrors.Log(result.Error, "error finding user")
+		slog.ErrorContext(ctx, "error finding user", "err", result.Error)
 		return User{ID: 0}
 	}
 	return user
@@ -203,7 +202,7 @@ func create(ctx context.Context, username string) User {
 	// create a new row, using default vals and creating a single visit
 	newUser := User{Username: username, NumVisits: 1}
 	if err := database.GormDB().WithContext(ctx).Create(&newUser).Error; err != nil {
-		terrors.Log(err, "error creating user")
+		slog.ErrorContext(ctx, "error creating user", "err", err)
 	}
 	return Find(ctx, username)
 }

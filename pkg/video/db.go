@@ -1,6 +1,7 @@
 package video
 
 import (
+	"log/slog"
 	"errors"
 	"fmt"
 	"regexp"
@@ -79,7 +80,7 @@ func create(file string) (Video, error) {
 	// store the video in the DB
 	err = newVid.save()
 	if err != nil {
-		terrors.Log(err, "error saving to DB")
+		slog.Error("error saving to DB", "err", err)
 	}
 
 	// now fetch it from the DB
@@ -100,7 +101,7 @@ func (v Video) save() error {
 
 	if lat == 0 || lng == 0 {
 		//TODO: this is where we used to run ocrCoords()
-		terrors.Log(nil, "OCRing coords skipped!")
+		slog.Error("OCRing coords skipped!")
 		flagged = true
 	}
 
@@ -110,7 +111,7 @@ func (v Video) save() error {
 		// ErrMapsDisabled is the expected steady-state when no Maps key
 		// is configured; don't spam Sentry on every video import.
 		if err != nil && !errors.Is(err, helpers.ErrMapsDisabled) {
-			terrors.Log(err, "error geocoding coords")
+			slog.Error("error geocoding coords", "err", err)
 		}
 	}
 
@@ -184,7 +185,7 @@ func FindRandomByState(state string) (Video, error) {
 		return vid, &terrors.NoFootageForStateError{Msg: "no matches found"}
 	}
 	if result.Error != nil {
-		terrors.Log(result.Error, "error fetching vid from DB")
+		slog.Error("error fetching vid from DB", "err", result.Error)
 		return vid, result.Error
 	}
 	return vid, nil

@@ -15,7 +15,6 @@ import (
 	"syscall"
 	"time"
 
-	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/bradfitz/latlong"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/hako/durafmt"
@@ -141,7 +140,7 @@ func SplitOnRegex(text string, delimiter string) []string {
 func RemoveNonLetters(input string) string {
 	reg, err := regexp.Compile("[^a-zA-Z]+")
 	if err != nil {
-		terrors.Log(err, "error compiling regex")
+		slog.Error("error compiling regex", "err", err)
 	}
 	return reg.ReplaceAllString(input, "")
 }

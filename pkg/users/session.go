@@ -10,7 +10,6 @@ import (
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/events"
-	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/scoreboards"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/google/uuid"
@@ -108,7 +107,7 @@ func login(ctx context.Context, username string) *User {
 	LoggedIn[username] = &user
 
 	if err := events.Login(ctx, username, user.sessionID); err != nil {
-		terrors.Log(err, "error creating login event")
+		slog.ErrorContext(ctx, "error creating login event", "err", err)
 	}
 
 	return &user
@@ -142,7 +141,7 @@ func (u User) logout(ctx context.Context) {
 	u.AddToScore(ctx, scoreboards.CurrentMilesScoreboard(), sessionMiles)
 
 	if err := events.Logout(ctx, u.Username, u.sessionID); err != nil {
-		terrors.Log(err, "error creating logout event")
+		slog.ErrorContext(ctx, "error creating logout event", "err", err)
 	}
 
 	// remove them from the session

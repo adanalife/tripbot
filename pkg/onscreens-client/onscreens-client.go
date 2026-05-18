@@ -1,6 +1,7 @@
 package onscreensClient
 
 import (
+	"log/slog"
 	"context"
 	"fmt"
 	"io/ioutil"
@@ -9,7 +10,6 @@ import (
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
-	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/scoreboards"
 	"github.com/adanalife/tripbot/pkg/users"
@@ -25,7 +25,7 @@ var httpClient = &http.Client{Transport: otelhttp.NewTransport(http.DefaultTrans
 func HideMiddleText() error {
 	_, err := getUrl(onscreensServerURL + "/onscreens/middle/hide")
 	if err != nil {
-		terrors.Log(err, "error showing leaderboard onscreen")
+		slog.Error("error showing leaderboard onscreen", "err", err)
 		return err
 	}
 	return nil
@@ -36,7 +36,7 @@ func ShowMiddleText(msg string) error {
 	url = fmt.Sprintf("%s?msg=%s", url, helpers.Base64Encode(msg))
 	_, err := getUrl(url)
 	if err != nil {
-		terrors.Log(err, "error showing middle onscreen")
+		slog.Error("error showing middle onscreen", "err", err)
 		return err
 	}
 	return err
@@ -50,7 +50,7 @@ func ShowLeaderboard(title string, leaderboard [][]string) error {
 
 	_, err := getUrl(url)
 	if err != nil {
-		terrors.Log(err, "error showing leaderboard onscreen")
+		slog.Error("error showing leaderboard onscreen", "err", err)
 		return err
 	}
 	return nil
@@ -80,7 +80,7 @@ func ShowGuessLeaderboard(ctx context.Context) {
 func ShowTimewarp() error {
 	_, err := getUrl(onscreensServerURL + "/onscreens/timewarp/show")
 	if err != nil {
-		terrors.Log(err, "error showing timewarp onscreen")
+		slog.Error("error showing timewarp onscreen", "err", err)
 		return err
 	}
 	return nil
@@ -92,7 +92,7 @@ func ShowFlag(dur time.Duration) error {
 	// url = fmt.Sprintf("%s?duration=%s", url, helpers.Base64Encode(string(rune(dur))))
 	// _, err := getUrl(url)
 	// if err != nil {
-	// 	terrors.Log(err, "error showing flag onscreen")
+	// 	slog.Error("error showing flag onscreen", "err", err)
 	// 	return err
 	// }
 	return nil
@@ -103,7 +103,7 @@ func ShowGPSImage(dur time.Duration) error {
 	url = fmt.Sprintf("%s?duration=%s", url, helpers.Base64Encode(string(rune(dur))))
 	_, err := getUrl(url)
 	if err != nil {
-		terrors.Log(err, "error showing gps onscreen")
+		slog.Error("error showing gps onscreen", "err", err)
 		return err
 	}
 	return nil
@@ -112,7 +112,7 @@ func ShowGPSImage(dur time.Duration) error {
 func HideGPSImage() error {
 	_, err := getUrl(onscreensServerURL + "/onscreens/gps/hide")
 	if err != nil {
-		terrors.Log(err, "error hiding gps onscreen")
+		slog.Error("error hiding gps onscreen", "err", err)
 		return err
 	}
 	return nil
@@ -122,18 +122,18 @@ func HideGPSImage() error {
 func getUrl(url string) (string, error) {
 	response, err := httpClient.Get(url)
 	if err != nil {
-		terrors.Log(err, "error connecting to VLC server")
+		slog.Error("error connecting to VLC server", "err", err)
 		return "", err
 	} else {
 		defer response.Body.Close()
 		contents, err := ioutil.ReadAll(response.Body)
 		if err != nil {
-			terrors.Log(err, "error reading response from VLC server")
+			slog.Error("error reading response from VLC server", "err", err)
 			return "", err
 		}
 		// make note of non-200 status codes
 		if response.StatusCode != 200 {
-			terrors.Log(nil, fmt.Sprintf("non-200 response from server (%d)", response.StatusCode))
+			slog.Error(fmt.Sprintf("non-200 response from server (%d)", response.StatusCode))
 		}
 		return string(contents), nil
 	}

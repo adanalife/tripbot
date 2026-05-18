@@ -128,7 +128,7 @@ func versionHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		terrors.Log(err, "couldn't encode version response")
+		slog.ErrorContext(r.Context(), "couldn't encode version response", "err", err)
 	}
 }
 

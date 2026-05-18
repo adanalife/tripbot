@@ -2,15 +2,15 @@ package users
 
 import (
 	"context"
+	"log/slog"
 
-	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/scoreboards"
 )
 
 func (u User) GetScore(ctx context.Context, scoreboardName string) float32 {
 	value, err := scoreboards.GetScoreByName(ctx, u.Username, scoreboardName)
 	if err != nil {
-		terrors.Log(err, "error getting score for user")
+		slog.ErrorContext(ctx, "error getting score for user", "err", err)
 		return -1.0
 	}
 	return value
@@ -19,6 +19,6 @@ func (u User) GetScore(ctx context.Context, scoreboardName string) float32 {
 func (u User) AddToScore(ctx context.Context, scoreboardName string, valueToAdd float32) {
 	err := scoreboards.AddToScoreByName(ctx, u.Username, scoreboardName, valueToAdd)
 	if err != nil {
-		terrors.Log(err, "error setting score for user")
+		slog.ErrorContext(ctx, "error setting score for user", "err", err)
 	}
 }

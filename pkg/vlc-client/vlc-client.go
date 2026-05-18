@@ -1,12 +1,12 @@
 package vlcClient
 
 import (
+	"log/slog"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
-	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
@@ -23,7 +23,7 @@ var httpClient = &http.Client{Transport: otelhttp.NewTransport(http.DefaultTrans
 func CurrentlyPlaying() string {
 	response, err := getUrl(vlcServerURL + "/vlc/current")
 	if err != nil {
-		terrors.Log(err, "unable to determine current video")
+		slog.Error("unable to determine current video", "err", err)
 		return ""
 	}
 	return response
@@ -33,7 +33,7 @@ func CurrentlyPlaying() string {
 func PlayRandom() error {
 	_, err := getUrl(vlcServerURL + "/vlc/random")
 	if err != nil {
-		terrors.Log(err, "error playing random video")
+		slog.Error("error playing random video", "err", err)
 		return err
 	}
 	return nil
@@ -44,7 +44,7 @@ func PlayFileInPlaylist(filename string) error {
 	url := vlcServerURL + "/vlc/play/" + filename
 	_, err := getUrl(url)
 	if err != nil {
-		terrors.Log(err, "error playing file")
+		slog.Error("error playing file", "err", err)
 		return err
 	}
 	return nil
@@ -57,7 +57,7 @@ func Skip(n int) error {
 	}
 	_, err := getUrl(url)
 	if err != nil {
-		terrors.Log(err, "error skipping video")
+		slog.Error("error skipping video", "err", err)
 		return err
 	}
 	return nil
@@ -70,7 +70,7 @@ func Back(n int) error {
 	}
 	_, err := getUrl(url)
 	if err != nil {
-		terrors.Log(err, "error going back to a video")
+		slog.Error("error going back to a video", "err", err)
 		return err
 	}
 	return nil
@@ -80,13 +80,13 @@ func Back(n int) error {
 func getUrl(url string) (string, error) {
 	response, err := httpClient.Get(url)
 	if err != nil {
-		terrors.Log(err, "error connecting to VLC server")
+		slog.Error("error connecting to VLC server", "err", err)
 		return "", err
 	} else {
 		defer response.Body.Close()
 		contents, err := ioutil.ReadAll(response.Body)
 		if err != nil {
-			terrors.Log(err, "error reading response from VLC server")
+			slog.Error("error reading response from VLC server", "err", err)
 			return "", err
 		}
 		return string(contents), nil

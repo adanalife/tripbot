@@ -10,7 +10,6 @@ import (
 
 	"github.com/XSAM/otelsql"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
-	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/jmoiron/sqlx"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
@@ -95,7 +94,7 @@ func isAlive() bool {
 	}
 	err := dbConnection.Ping()
 	if err != nil {
-		terrors.Log(err, "error connecting to DB")
+		slog.Error("error connecting to DB", "err", err)
 		return false
 	}
 	return true

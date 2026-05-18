@@ -18,7 +18,7 @@ func TestStrToFloat32Valid(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.in, func(t *testing.T) {
-			got := strToFloat32(tt.in)
+			got := strToFloat32(context.Background(), tt.in)
 			if got != tt.want {
 				t.Fatalf("got %v, want %v", got, tt.want)
 			}

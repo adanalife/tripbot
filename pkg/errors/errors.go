@@ -1,19 +1,36 @@
+// Package errors initializes Sentry and exposes thin Fatal helpers.
+//
+// Error capture flows through slog: log emitters call slog.Error /
+// slog.ErrorContext; pkg/telemetry installs samber/slog-sentry as a
+// handler so every slog Error becomes a Sentry event automatically.
+// The BeforeSend hook below throttles Sentry traffic to stay within
+// the free-tier 5k events/month budget.
 package errors
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
 	"os"
+	"sync"
+	"time"
 
 	"github.com/adanalife/tripbot/pkg/config"
 	"github.com/getsentry/sentry-go"
 	sentryotel "github.com/getsentry/sentry-go/otel"
 )
 
-var conf config.Config
+// Throttle settings. The free-tier budget is 5k events/month; flapping
+// errors (OBS poll, video-script cron) can easily blow that in days
+// without a cap. fingerprintCooldown collapses repeats of the same
+// message; hourlyCap is an absolute belt-and-suspenders limit.
+const (
+	fingerprintCooldown = 15 * time.Minute
+	hourlyCap           = 20
+)
 
-// Initialize takes a Config interface and sets up a logger.
+// Initialize takes a Config interface and brings up Sentry.
 //
 // version is the build-time version string (typically set via -ldflags
 // "-X main.version=..." in cmd/tripbot and cmd/vlc-server). It's passed
@@ -33,42 +50,65 @@ func Initialize(c config.Config, version string) {
 		Integrations: func(integrations []sentry.Integration) []sentry.Integration {
 			return append(integrations, sentryotel.NewOtelIntegration())
 		},
+		BeforeSend: throttle(c),
 	})
 	if err != nil {
 		fmt.Println(err)
 	}
-
-	conf = c
 }
 
-//TODO: go through calls to this, find places we create a new Error, and change to nil
-func Log(e error, msg string) {
-	if e == nil {
-		e = errors.New(msg)
+// throttle returns a BeforeSend hook. In dev / testing it drops every
+// event so local runs never reach the prod Sentry project. In prod /
+// staging it enforces per-fingerprint cooldown + absolute hourly cap.
+//
+// Events dropped here still reach Loki via the OTel slog handler — Loki
+// has the complete record; Sentry receives a deduplicated sample.
+func throttle(c config.Config) func(event *sentry.Event, hint *sentry.EventHint) *sentry.Event {
+	if c == nil || (!c.IsProduction() && !c.IsStaging()) {
+		return func(*sentry.Event, *sentry.EventHint) *sentry.Event { return nil }
 	}
-	// only log to sentry on production or staging; conf is nil in tests and
-	// any binary that didn't call Initialize, so guard before the method call.
-	if conf != nil && (conf.IsProduction() || conf.IsStaging()) {
-		sentry.AddBreadcrumb(&sentry.Breadcrumb{
-			Message: msg,
-		})
-		sentry.CaptureException(e)
+	var (
+		mu          sync.Mutex
+		lastSent    = make(map[string]time.Time)
+		windowStart = time.Now()
+		windowCount int
+	)
+	return func(event *sentry.Event, _ *sentry.EventHint) *sentry.Event {
+		mu.Lock()
+		defer mu.Unlock()
+		now := time.Now()
+		if now.Sub(windowStart) > time.Hour {
+			windowStart = now
+			windowCount = 0
+		}
+		if windowCount >= hourlyCap {
+			return nil
+		}
+		// event.Message is the slog record's Message field when sent via
+		// samber/slog-sentry. Group by it so repeats of the same error
+		// collapse to one event per cooldown window.
+		fp := event.Message
+		if t, ok := lastSent[fp]; ok && now.Sub(t) < fingerprintCooldown {
+			return nil
+		}
+		lastSent[fp] = now
+		windowCount++
+		return event
 	}
-	slog.Error(msg, "err", e)
 }
 
+// Fatal logs msg + err at Error level (which reaches Sentry via the
+// slog handler) and exits with status 1. The ctx-less form is for
+// startup / shutdown paths where no parent span exists.
 func Fatal(e error, msg string) {
+	FatalContext(context.Background(), e, msg)
+}
+
+// FatalContext is the trace-aware sibling of Fatal.
+func FatalContext(ctx context.Context, e error, msg string) {
 	if e == nil {
 		e = errors.New(msg)
 	}
-	// only log to sentry on production or staging; conf is nil in tests and
-	// any binary that didn't call Initialize, so guard before the method call.
-	if conf != nil && (conf.IsProduction() || conf.IsStaging()) {
-		sentry.AddBreadcrumb(&sentry.Breadcrumb{
-			Message: msg,
-		})
-		sentry.CaptureException(e)
-	}
-	slog.Error(msg, "err", e)
+	slog.ErrorContext(ctx, msg, "err", e)
 	os.Exit(1)
 }

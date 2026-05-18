@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"runtime/debug"
 
-	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/server/oauthstate"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/nicklaw5/helix/v2"
@@ -64,7 +63,7 @@ func versionHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		terrors.Log(err, "couldn't encode version response")
+		slog.ErrorContext(r.Context(), "couldn't encode version response", "err", err)
 	}
 }
 
@@ -81,13 +80,13 @@ func authCallbackHandler(w http.ResponseWriter, r *http.Request) {
 
 	code := r.URL.Query().Get("code")
 	if code == "" {
-		terrors.Log(errors.New("code missing"), "no code in response from twitch")
+		slog.ErrorContext(r.Context(), "no code in response from twitch", "err", errors.New("code missing"))
 		http.Error(w, "no code in response from twitch", http.StatusBadRequest)
 		return
 	}
 
 	if err := generateUserAccessToken(code); err != nil {
-		terrors.Log(err, "GenerateUserAccessToken failed")
+		slog.ErrorContext(r.Context(), "GenerateUserAccessToken failed", "err", err)
 		http.Error(w, "failed to exchange code: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -105,7 +104,7 @@ func authCallbackHandler(w http.ResponseWriter, r *http.Request) {
 func authInitHandler(w http.ResponseWriter, r *http.Request) {
 	client, err := helixClient()
 	if err != nil {
-		terrors.Log(err, "helix client unavailable for /auth/init")
+		slog.ErrorContext(r.Context(), "helix client unavailable for /auth/init", "err", err)
 		http.Error(w, "auth unavailable", http.StatusInternalServerError)
 		return
 	}
