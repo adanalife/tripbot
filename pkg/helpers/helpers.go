@@ -24,7 +24,15 @@ import (
 	"github.com/skratchdot/open-golang/open"
 )
 
+// ErrMapsDisabled is returned by City/StateFromCoords when no Google Maps
+// API key is configured. Callers can treat it as a soft-disable signal
+// (skip the lookup, fall back to an empty result) rather than a real error.
+var ErrMapsDisabled = errors.New("maps API disabled: no GOOGLE_MAPS_API_KEY set")
+
 func CityFromCoords(lat, lon float64) (string, error) {
+	if geocoder.ApiKey == "" {
+		return "", ErrMapsDisabled
+	}
 	location := geocoder.Location{Latitude: lat, Longitude: lon}
 
 	addresses, err := geocoder.GeocodingReverse(location)
@@ -41,6 +49,9 @@ func CityFromCoords(lat, lon float64) (string, error) {
 }
 
 func StateFromCoords(lat, lon float64) (string, error) {
+	if geocoder.ApiKey == "" {
+		return "", ErrMapsDisabled
+	}
 	location := geocoder.Location{Latitude: lat, Longitude: lon}
 
 	addresses, err := geocoder.GeocodingReverse(location)
