@@ -38,4 +38,8 @@ type TripbotConfig struct {
 	TripbotServerPort string `default:"8080" envconfig:"TRIPBOT_SERVER_PORT"`
 	// VlcServerHost is used to specify the host for the VLC webserver
 	VlcServerHost string `required:"true" envconfig:"VLC_SERVER_HOST"`
+	// OnscreensServerHost is the host:port for the onscreens-server HTTP
+	// API (state.json, render/, asset/, plus the show/hide endpoints the
+	// chatbot drives).
+	OnscreensServerHost string `required:"true" envconfig:"ONSCREENS_SERVER_HOST"`
 }
