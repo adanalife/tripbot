@@ -56,7 +56,7 @@ func GetSubscribers(ctx context.Context) {
 		BroadcasterID: ChannelID,
 	})
 	if err != nil {
-		terrors.Log(err, "error getting subscriptions from twitch")
+		slog.ErrorContext(ctx, "error getting subscriptions from twitch", "err", err)
 		return
 	}
 	if checkHelixResp("GetSubscriptions", &resp.ResponseCommon) {
@@ -93,7 +93,7 @@ func GetFollowerCount(ctx context.Context) {
 		BroadcasterID: ChannelID,
 	})
 	if err != nil {
-		terrors.Log(err, "error getting follower count from twitch")
+		slog.ErrorContext(ctx, "error getting follower count from twitch", "err", err)
 		return
 	}
 	if checkHelixResp("GetChannelFollows", &resp.ResponseCommon) {
