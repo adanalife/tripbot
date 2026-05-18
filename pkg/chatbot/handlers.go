@@ -187,7 +187,7 @@ func UserPart(partMessage twitch.UserPartMessage) {
 // if the message comes from me, then post the message to chat.
 // An admin whisper that triggers Say() is logged again as a chat line.
 func GetWhisper(message twitch.WhisperMessage) {
-	slog.Info("whisper received", "from", message.User.Name, "msg", message.Message)
+	slog.Info("whisper received", "from", message.User.Name, "text", message.Message)
 	if c.UserIsAdmin(message.User.Name) {
 		Say(message.Message)
 	}

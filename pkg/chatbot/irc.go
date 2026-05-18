@@ -34,7 +34,7 @@ func (realIRC) Say(msg string) {
 
 func (realIRC) Whisper(username, msg string) {
 	//TODO: include whispers in log
-	slog.Info("sending whisper", "to", username, "msg", msg)
+	slog.Info("sending whisper", "to", username, "text", msg)
 	// go-twitch-irc v4 removed the Whisper() send method; replicate the
 	// v2 behavior by sending the raw IRC /w command via PRIVMSG on the
 	// bot's own channel.
