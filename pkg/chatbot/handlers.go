@@ -9,7 +9,6 @@ import (
 
 	mylog "github.com/adanalife/tripbot/pkg/chatbot/log"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
-	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/gempir/go-twitch-irc/v4"
@@ -140,7 +139,7 @@ func runCommand(ctx context.Context, user *users.User, message string) {
 
 	if strings.HasPrefix(command, "!") {
 		err := fmt.Errorf("command %s not found", command)
-		terrors.Log(err, "error running command")
+		slog.ErrorContext(ctx, "error running command", "err", err)
 	}
 }
 
