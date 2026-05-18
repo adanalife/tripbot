@@ -108,3 +108,30 @@ tasks:
       OBS_WEBSOCKET_PASSWD: '{{.OBS_WEBSOCKET_PASSWD | default "adanalife"}}'
     cmds:
       - uv run --with obsws-python bin/obs-browser-refresh
+
+  # vlc-server native macOS build — links against the libvlc bundled
+  # inside VLC.app. Saves recreating the CGO incantation from memory.
+  # See vault/tripbot/vlc-server/gotchas.md for the full story; key bits:
+  #   * rpath is required for `go test` / `go run`, not just `go build` —
+  #     otherwise `dyld: Library not loaded: @rpath/libvlc.dylib`.
+  #   * Do NOT add `-lvlc` to LDFLAGS — libvlc-go's own #cgo LDFLAGS
+  #     directive already does it; duplicating triggers a linker warning.
+  #   * `-Wno-error=incompatible-function-pointer-types` mutes a
+  #     libvlc-go/v3 vs Apple-clang fatal that's harmless at runtime.
+
+  vlc-server:vet:macos:
+    desc: Run `go vet` on vlc-server against VLC.app's libvlc headers (no link)
+    platforms: [darwin]
+    env:
+      CGO_CFLAGS: -I/Applications/VLC.app/Contents/MacOS/include
+    cmds:
+      - mise exec -- go vet ./pkg/vlc-server/...
+
+  vlc-server:build:macos:
+    desc: Build vlc-server natively on macOS against VLC.app's libvlc
+    platforms: [darwin]
+    env:
+      CGO_CFLAGS: -I/Applications/VLC.app/Contents/MacOS/include
+      CGO_LDFLAGS: -L/Applications/VLC.app/Contents/MacOS/lib -Wl,-rpath,/Applications/VLC.app/Contents/MacOS/lib -Wno-error=incompatible-function-pointer-types
+    cmds:
+      - mise exec -- go build -o bin/vlc-server ./cmd/vlc-server
