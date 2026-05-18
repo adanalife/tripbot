@@ -33,7 +33,7 @@ func UpdateWebhookSubscriptions(ctx context.Context) {
 	getWebookSubscriptions(ctx)
 }
 
-func subscribeToWebhook(_ context.Context, pair []string) {
+func subscribeToWebhook(ctx context.Context, pair []string) {
 	topic := pair[0]
 	endpoint := pair[1]
 
@@ -46,7 +46,7 @@ func subscribeToWebhook(_ context.Context, pair []string) {
 	})
 
 	if err != nil {
-		terrors.Log(err, "failed to create webhook subscription for "+endpoint)
+		terrors.LogContext(ctx, err, "failed to create webhook subscription for "+endpoint)
 	}
 }
 
@@ -55,7 +55,7 @@ func getWebookSubscriptions(ctx context.Context) {
 	//TODO: this doesn't seem to work, like at all
 	resp, err := currentTwitchClient.GetWebhookSubscriptions(&helix.WebhookSubscriptionsParams{})
 	if err != nil {
-		terrors.Log(err, "failed to get webhook subscriptions")
+		terrors.LogContext(ctx, err, "failed to get webhook subscriptions")
 	}
 
 	if resp.Data.Total > 0 {

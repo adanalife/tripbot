@@ -228,7 +228,7 @@ func RefreshUserAccessToken(ctx context.Context) {
 
 	acquired, release, err := oauthtokens.TryRefreshLock("twitch", botUser)
 	if err != nil {
-		terrors.Log(err, "oauth refresh lock acquisition failed")
+		terrors.LogContext(ctx, err, "oauth refresh lock acquisition failed")
 		return
 	}
 	if !acquired {
@@ -237,7 +237,7 @@ func RefreshUserAccessToken(ctx context.Context) {
 		time.Sleep(2 * time.Second)
 		t, gerr := oauthtokens.Get("twitch", botUser)
 		if gerr != nil {
-			terrors.Log(gerr, "post-contention re-read failed")
+			terrors.LogContext(ctx, gerr, "post-contention re-read failed")
 			return
 		}
 		tokenMu.Lock()
@@ -249,7 +249,7 @@ func RefreshUserAccessToken(ctx context.Context) {
 
 	t, err := oauthtokens.Get("twitch", botUser)
 	if err != nil {
-		terrors.Log(err, "no oauth_tokens row to refresh")
+		terrors.LogContext(ctx, err, "no oauth_tokens row to refresh")
 		return
 	}
 
@@ -259,13 +259,13 @@ func RefreshUserAccessToken(ctx context.Context) {
 
 	client, err := Client()
 	if err != nil {
-		terrors.Log(err, "helix client unavailable for refresh")
+		terrors.LogContext(ctx, err, "helix client unavailable for refresh")
 		return
 	}
 	resp, err := client.RefreshUserAccessToken(t.RefreshToken)
 	if err != nil {
 		_ = oauthtokens.IncrementFailCount("twitch", botUser)
-		terrors.Log(err, "twitch refresh API failed")
+		terrors.LogContext(ctx, err, "twitch refresh API failed")
 		return
 	}
 	if resp == nil || resp.Data.AccessToken == "" {
@@ -276,7 +276,7 @@ func RefreshUserAccessToken(ctx context.Context) {
 		tokenMu.Lock()
 		currentUserToken.AccessToken = ""
 		tokenMu.Unlock()
-		terrors.Log(errors.New("empty access token in refresh response"), "oauth refresh failed; need re-bootstrap")
+		terrors.LogContext(ctx, errors.New("empty access token in refresh response"), "oauth refresh failed; need re-bootstrap")
 		return
 	}
 
@@ -290,7 +290,7 @@ func RefreshUserAccessToken(ctx context.Context) {
 		Scopes:       strings.Join(resp.Data.Scopes, " "),
 	}
 	if err := oauthtokens.Upsert(rotated); err != nil {
-		terrors.Log(err, "post-refresh Upsert failed")
+		terrors.LogContext(ctx, err, "post-refresh Upsert failed")
 		return
 	}
 
