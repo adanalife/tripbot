@@ -21,14 +21,14 @@ import (
 var lastTimewarpTime time.Time
 
 // timewarp jumps the playhead to a random video in the loop
-func (a *App) timewarp() {
+func (a *App) timewarp(ctx context.Context) {
 	// show timewarp onscreen
 	a.Onscreens.ShowTimewarp()
 
 	// shuffle to a new video
 	err := a.VLC.PlayRandom()
 	if err != nil {
-		terrors.Log(err, "error from VLC client")
+		terrors.LogContext(ctx, err, "error from VLC client")
 	}
 	// update the currently-playing video
 	a.Video.GetCurrentlyPlaying()
@@ -59,7 +59,7 @@ func (a *App) timewarpCmd(ctx context.Context, user *users.User, _ []string) {
 	}
 
 	// do the timewarp
-	a.timewarp()
+	a.timewarp(ctx)
 }
 
 func (a *App) jumpCmd(ctx context.Context, user *users.User, params []string) {
@@ -100,14 +100,14 @@ func (a *App) jumpCmd(ctx context.Context, user *users.User, params []string) {
 	}
 	// check to see if there was an error finding a candidate video
 	if err != nil {
-		terrors.Log(err, "error from finding random video for state")
+		terrors.LogContext(ctx, err, "error from finding random video for state")
 		a.IRC.Say("Usage: !jump [state]")
 		return
 	}
 	// tell VLC to play it
 	err = a.VLC.PlayFileInPlaylist(randomVid.File())
 	if err != nil {
-		terrors.Log(err, "error from VLC client")
+		terrors.LogContext(ctx, err, "error from VLC client")
 		a.IRC.Say("Usage: !jump [state]")
 		return
 	}
@@ -157,7 +157,7 @@ func (a *App) skipCmd(ctx context.Context, user *users.User, params []string) {
 	// skip to a new video
 	err = a.VLC.Skip(n)
 	if err != nil {
-		terrors.Log(err, "error from VLC client")
+		terrors.LogContext(ctx, err, "error from VLC client")
 	}
 	// update the currently-playing video
 	a.Video.GetCurrentlyPlaying()
@@ -202,7 +202,7 @@ func (a *App) backCmd(ctx context.Context, user *users.User, params []string) {
 	// back to an old video
 	err = a.VLC.Back(n)
 	if err != nil {
-		terrors.Log(err, "error from VLC client")
+		terrors.LogContext(ctx, err, "error from VLC client")
 	}
 	// update the currently-playing video
 	a.Video.GetCurrentlyPlaying()

@@ -140,7 +140,7 @@ func runCommand(ctx context.Context, user *users.User, message string) {
 
 	if strings.HasPrefix(command, "!") {
 		err := fmt.Errorf("command %s not found", command)
-		terrors.Log(err, "error running command")
+		terrors.LogContext(ctx, err, "error running command")
 	}
 }
 

@@ -89,7 +89,7 @@ func (a *App) versionCmd(ctx context.Context, user *users.User, _ []string) {
 		scriptPath := filepath.Join(helpers.ProjectRoot(), "bin", "current-version.sh")
 		out, err := exec.Command(scriptPath).Output()
 		if err != nil {
-			terrors.Log(err, "failed to get current version")
+			terrors.LogContext(ctx, err, "failed to get current version")
 			a.IRC.Say("Failed to get current version :(")
 			return
 		}
@@ -187,7 +187,7 @@ func (a *App) locationCmd(ctx context.Context, user *users.User, _ []string) {
 	// geocode the location
 	address, _ := helpers.CityFromCoords(lat, lng)
 	if err != nil {
-		terrors.Log(err, "geocoding error")
+		terrors.LogContext(ctx, err, "geocoding error")
 	}
 	// generate a google maps url
 	url := helpers.GoogleMapsURL(lat, lng)
@@ -368,7 +368,7 @@ func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 		user.AddToScore(ctx, guessScoreboard, 1.0)
 		user.AddToScore(ctx, scoreboards.CurrentGuessScoreboard(), 1.0)
 		// do a timewarp
-		a.timewarp()
+		a.timewarp(ctx)
 	} else {
 		msg = "Try again! EarthDay"
 	}
@@ -398,7 +398,7 @@ func (a *App) reportCmd(ctx context.Context, user *users.User, params []string) 
 	// Route the report through Sentry so it lands somewhere visible.
 	// Followup tracked: wire !report to a real notification surface
 	// (Discord webhook / push) so Dana actually sees it.
-	terrors.Log(fmt.Errorf("viewer report from %s: %s", user.Username, message), "!report")
+	terrors.LogContext(ctx, fmt.Errorf("viewer report from %s: %s", user.Username, message), "!report")
 	a.IRC.Say("Thank you, I will look into this ASAP!")
 }
 
