@@ -1,6 +1,7 @@
 package errors
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -41,8 +42,12 @@ func Initialize(c config.Config, version string) {
 	conf = c
 }
 
-//TODO: go through calls to this, find places we create a new Error, and change to nil
-func Log(e error, msg string) {
+// LogContext records an error to sentry (production/staging only) and emits
+// it as a slog Error with the supplied ctx so the record carries trace_id.
+// Callers that have ctx in scope should prefer this over Log.
+//
+//TODO: go through calls to Log, find places we create a new Error, and change to nil
+func LogContext(ctx context.Context, e error, msg string) {
 	if e == nil {
 		e = errors.New(msg)
 	}
@@ -54,21 +59,24 @@ func Log(e error, msg string) {
 		})
 		sentry.CaptureException(e)
 	}
-	slog.Error(msg, "err", e)
+	slog.ErrorContext(ctx, msg, "err", e)
+}
+
+// Log is the ctx-less form for callers in init(), main(), or other code
+// paths where no parent span exists. Internally delegates to LogContext
+// with context.Background() — the slog otel bridge falls back to no
+// trace correlation when the context has no active span.
+func Log(e error, msg string) {
+	LogContext(context.Background(), e, msg)
+}
+
+// FatalContext is the trace-aware sibling of Fatal: same sentry +
+// slog.Error path, then os.Exit(1).
+func FatalContext(ctx context.Context, e error, msg string) {
+	LogContext(ctx, e, msg)
+	os.Exit(1)
 }
 
 func Fatal(e error, msg string) {
-	if e == nil {
-		e = errors.New(msg)
-	}
-	// only log to sentry on production or staging; conf is nil in tests and
-	// any binary that didn't call Initialize, so guard before the method call.
-	if conf != nil && (conf.IsProduction() || conf.IsStaging()) {
-		sentry.AddBreadcrumb(&sentry.Breadcrumb{
-			Message: msg,
-		})
-		sentry.CaptureException(e)
-	}
-	slog.Error(msg, "err", e)
-	os.Exit(1)
+	FatalContext(context.Background(), e, msg)
 }
