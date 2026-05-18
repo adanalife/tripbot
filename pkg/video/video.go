@@ -37,7 +37,7 @@ func GetCurrentlyPlaying(ctx context.Context) {
 	if helpers.RunningOnDarwin() {
 		curVid = figureOutCurrentVideo(ctx)
 	} else {
-		curVid = vlcClient.CurrentlyPlaying()
+		curVid = vlcClient.CurrentlyPlaying(ctx)
 	}
 
 	// if the currently-playing video has changed
@@ -59,9 +59,9 @@ func GetCurrentlyPlaying(ctx context.Context) {
 		// show the no-GPS image
 		if CurrentlyPlaying.Flagged {
 			//TODO: kinda cludgy that we hardcode 60s here
-			onscreensClient.ShowGPSImage(60 * time.Second)
+			onscreensClient.ShowGPSImage(ctx, 60 * time.Second)
 		} else {
-			onscreensClient.HideGPSImage()
+			onscreensClient.HideGPSImage(ctx)
 		}
 	}
 }
