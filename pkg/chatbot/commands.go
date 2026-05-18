@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/scoreboards"
 
 	"github.com/adanalife/tripbot/pkg/background"
@@ -61,7 +60,7 @@ func (a *App) helloCmd(ctx context.Context, user *users.User, params []string) {
 	msg += punctuation[rand.Intn(len(punctuation))]
 
 	// give a little help message if the user is new
-	if user.CurrentMiles() < 2.0 {
+	if user.CurrentMiles(ctx) < 2.0 {
 		msg += " I'm Tripbot, your adventure companion. Try using !commands to interact with me."
 	}
 
@@ -89,7 +88,7 @@ func (a *App) versionCmd(ctx context.Context, user *users.User, _ []string) {
 		scriptPath := filepath.Join(helpers.ProjectRoot(), "bin", "current-version.sh")
 		out, err := exec.Command(scriptPath).Output()
 		if err != nil {
-			terrors.Log(err, "failed to get current version")
+			slog.ErrorContext(ctx, "failed to get current version", "err", err)
 			a.IRC.Say("Failed to get current version :(")
 			return
 		}
@@ -114,7 +113,7 @@ func (a *App) milesCmd(ctx context.Context, user *users.User, params []string) {
 	// check to see if an arg was provided
 	if len(params) == 0 {
 		username = user.Username
-		lifetimeMiles = user.CurrentMiles()
+		lifetimeMiles = user.CurrentMiles(ctx)
 		monthlyMiles = user.CurrentMonthlyMiles(ctx)
 	} else {
 		username = helpers.StripAtSign(params[0])
@@ -126,7 +125,7 @@ func (a *App) milesCmd(ctx context.Context, user *users.User, params []string) {
 			return
 		}
 
-		lifetimeMiles = u.CurrentMiles()
+		lifetimeMiles = u.CurrentMiles(ctx)
 		monthlyMiles = u.CurrentMonthlyMiles(ctx)
 	}
 
@@ -156,7 +155,7 @@ func (a *App) milesCmd(ctx context.Context, user *users.User, params []string) {
 
 func (a *App) kilometresCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !kilometres", "username", user.Username)
-	km := user.CurrentMiles() * 1.609344
+	km := user.CurrentMiles(ctx) * 1.609344
 	msg := "@%s has %.2f kilometres."
 	msg = fmt.Sprintf(msg, user.Username, km)
 	a.IRC.Say(msg)
@@ -187,7 +186,7 @@ func (a *App) locationCmd(ctx context.Context, user *users.User, _ []string) {
 	// geocode the location
 	address, _ := helpers.CityFromCoords(lat, lng)
 	if err != nil {
-		terrors.Log(err, "geocoding error")
+		slog.ErrorContext(ctx, "geocoding error", "err", err)
 	}
 	// generate a google maps url
 	url := helpers.GoogleMapsURL(lat, lng)
@@ -337,7 +336,7 @@ func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 	}
 
 	// don't let people guess if they already know the answer
-	if !user.HasGuessCommandAvailable(lastTimewarpTime) {
+	if !user.HasGuessCommandAvailable(ctx, lastTimewarpTime) {
 		prettyDur := durafmt.ParseShort(user.GuessCooldownRemaining())
 		msg = "I recently told you the answer! Try again in %s."
 		msg = fmt.Sprintf(msg, prettyDur)
@@ -368,7 +367,7 @@ func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 		user.AddToScore(ctx, guessScoreboard, 1.0)
 		user.AddToScore(ctx, scoreboards.CurrentGuessScoreboard(), 1.0)
 		// do a timewarp
-		a.timewarp()
+		a.timewarp(ctx)
 	} else {
 		msg = "Try again! EarthDay"
 	}
@@ -398,7 +397,7 @@ func (a *App) reportCmd(ctx context.Context, user *users.User, params []string) 
 	// Route the report through Sentry so it lands somewhere visible.
 	// Followup tracked: wire !report to a real notification surface
 	// (Discord webhook / push) so Dana actually sees it.
-	terrors.Log(fmt.Errorf("viewer report from %s: %s", user.Username, message), "!report")
+	slog.ErrorContext(ctx, "!report", "err", fmt.Errorf("viewer report from %s: %s", user.Username, message))
 	a.IRC.Say("Thank you, I will look into this ASAP!")
 }
 

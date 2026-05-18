@@ -1,8 +1,8 @@
 package twitch
 
 import (
+	"log/slog"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
-	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/nicklaw5/helix/v2"
 )
 
@@ -47,7 +47,7 @@ func UpdateChatters() {
 		ModeratorID:   BotID,
 	})
 	if err != nil {
-		terrors.Log(err, "error getting chatters from twitch")
+		slog.Error("error getting chatters from twitch", "err", err)
 		return
 	}
 	if checkHelixResp("GetChannelChatChatters", &resp.ResponseCommon) {

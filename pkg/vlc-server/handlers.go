@@ -8,7 +8,6 @@ import (
 	"runtime/debug"
 	"strconv"
 
-	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/gorilla/mux"
 )
@@ -53,7 +52,7 @@ func versionHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		terrors.Log(err, "couldn't encode version response")
+		slog.ErrorContext(r.Context(), "couldn't encode version response", "err", err)
 	}
 }
 
@@ -83,7 +82,7 @@ func vlcBackHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	i, err := strconv.Atoi(num[0])
 	if err != nil {
-		terrors.Log(err, "couldn't convert input to int")
+		slog.ErrorContext(r.Context(), "couldn't convert input to int", "err", err)
 		http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
 		return
 	}
@@ -103,7 +102,7 @@ func vlcSkipHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	i, err := strconv.Atoi(num[0])
 	if err != nil {
-		terrors.Log(err, "couldn't convert input to int")
+		slog.ErrorContext(r.Context(), "couldn't convert input to int", "err", err)
 		http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
 		return
 	}

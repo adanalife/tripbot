@@ -9,7 +9,6 @@ import (
 
 	mylog "github.com/adanalife/tripbot/pkg/chatbot/log"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
-	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/gempir/go-twitch-irc/v4"
@@ -37,14 +36,14 @@ func normalizeCommandPrefix(msg string) string {
 
 // chatUser is the subset of *users.User that dispatch needs for access checks.
 type chatUser interface {
-	HasCommandAvailable() bool
+	HasCommandAvailable(ctx context.Context) bool
 	IsSubscriber() bool
 }
 
 // checkAccess returns true when the user is allowed to run cmd.
 // It calls sayFn with the appropriate denial message when access is denied.
-func (cmd *Command) checkAccess(user chatUser, sayFn func(string)) bool {
-	if cmd.RequiresFollow && !user.HasCommandAvailable() {
+func (cmd *Command) checkAccess(ctx context.Context, user chatUser, sayFn func(string)) bool {
+	if cmd.RequiresFollow && !user.HasCommandAvailable(ctx) {
 		sayFn(followerMsg)
 		return false
 	}
@@ -57,7 +56,7 @@ func (cmd *Command) checkAccess(user chatUser, sayFn func(string)) bool {
 
 func dispatch(ctx context.Context, cmd *Command, user *users.User, params []string) {
 	incChatCommandCounter(cmd.Trigger)
-	if !cmd.checkAccess(user, sayFn) {
+	if !cmd.checkAccess(ctx, user, sayFn) {
 		return
 	}
 	// Start a child span under the chatbot.handle_message span from
@@ -140,7 +139,7 @@ func runCommand(ctx context.Context, user *users.User, message string) {
 
 	if strings.HasPrefix(command, "!") {
 		err := fmt.Errorf("command %s not found", command)
-		terrors.Log(err, "error running command")
+		slog.ErrorContext(ctx, "error running command", "err", err)
 	}
 }
 

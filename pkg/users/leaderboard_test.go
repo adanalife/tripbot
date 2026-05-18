@@ -1,6 +1,7 @@
 package users
 
 import (
+	"context"
 	"strings"
 	"testing"
 )
@@ -17,7 +18,7 @@ func TestStrToFloat32Valid(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.in, func(t *testing.T) {
-			got := strToFloat32(tt.in)
+			got := strToFloat32(context.Background(), tt.in)
 			if got != tt.want {
 				t.Fatalf("got %v, want %v", got, tt.want)
 			}
@@ -148,7 +149,7 @@ func TestInsertIntoLeaderboardOrdersByMilesDesc(t *testing.T) {
 
 	// Miles=75 from User.Miles directly (no session bonus, since not in LoggedIn).
 	u := User{Username: "newcomer", Miles: 75}
-	insertIntoLeaderboard(u)
+	insertIntoLeaderboard(context.Background(), u)
 
 	if len(LifetimeMilesLeaderboard) != 4 {
 		t.Fatalf("expected 4 entries after insert, got %d: %v",
@@ -172,7 +173,7 @@ func TestInsertIntoLeaderboardReplacesExistingUser(t *testing.T) {
 
 	// Bob's miles increased to 200 — should jump above alice and replace his old row.
 	u := User{Username: "bob", Miles: 200}
-	insertIntoLeaderboard(u)
+	insertIntoLeaderboard(context.Background(), u)
 
 	if len(LifetimeMilesLeaderboard) != 2 {
 		t.Fatalf("expected length unchanged after replace, got %d: %v",

@@ -5,6 +5,19 @@
 
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
+## [v2.9.1] — 2026-05-18
+
+Patch release. Unifies the error-capture pipeline on `slog` so direct `slog.Error` calls (telemetry init, OBS adapter, etc.) reach Sentry alongside the existing `terrors.Log` sites, with a per-fingerprint cooldown + hourly cap to stay under the free tier. Threads `ctx` through a few more chatbot/users helpers so the per-command gating decisions and miles-math log lines carry `trace_id` linking back to their `chat.command` span. Retires the dead Twitch Helix Webhooks code path — the upstream API was deprecated by Twitch in 2021 and the receive/subscribe surface has been gated off via `DISABLE_TWITCH_WEBHOOKS=true` since the platform cutover; the only behavior actually lost is the live new-follower / new-sub chat shout, queued for re-introduction via EventSub. Pairs with [adanalife/infra#485](https://github.com/adanalife/infra/pull/485) (drops the `DISABLE_TWITCH_WEBHOOKS` env var from the kustomizations).
+
+### Observability
+
+- **Sentry capture routed through a `slog` handler; `terrors.Log` retired in favor of `slog.ErrorContext`.** Adds `sentryEventHandler` + `breadcrumbHandler` to the multiHandler fan-out in `pkg/telemetry`, so every `slog.Error*` reaches Sentry (and lower-severity records arrive as breadcrumbs, zero quota cost so the next event has context attached). `pkg/errors` gains a `BeforeSend` quota guard: dev/testing drop entirely, prod/staging applies a 15-minute per-fingerprint cooldown plus an absolute hourly cap of 20 — worst-case ~96/day per flapping fingerprint, comfortably under Sentry's 5k/month free cap. `terrors.Log` / `terrors.LogContext` remain as thin slog wrappers during the migration; `scoreboards` + `users` already swept to direct `slog.ErrorContext`. Trace correlation continues to flow via the existing `sentry-go/otel` integration. ([#573])
+- **`ctx` threaded through chatUser gating + miles math.** `chatUser.HasCommandAvailable` / `HasGuessCommandAvailable` / `Command.checkAccess` / `(User).CurrentMiles` / `sessionMiles` / `insertIntoLeaderboard` / `UpdateLeaderboard` now accept `context.Context`, so the per-command "letting user run..." and "subscriber will get bonus miles" log lines carry `trace_id` linking back to whichever `chat.command` span or cron tick triggered them. Mechanical follow-up to v2.9.0's broader slog-ctx pass. ([#570])
+
+### Cleanup
+
+- **Retire dead Twitch Helix Webhooks code.** The legacy Helix Webhooks API was deprecated by Twitch in 2021 and the subscription endpoint shut down shortly after; the receive + subscribe code in this repo has been gated off via `DISABLE_TWITCH_WEBHOOKS=true` in the kustomization since the platform cutover, so the path has been unreachable. Deletes `pkg/twitch/webhooks.go`, `pkg/server/twitch.go` (+ its tests), the three webhook HTTP handlers + their routes in `pkg/server/handlers.go` / `pkg/server/server.go` (+ their tests), the now-orphaned `AnnounceNewFollower` / `AnnounceSubscriber` helpers in `pkg/chatbot/chatbot.go`, the startup call + 12h cron + helper in `cmd/tripbot/tripbot.go`, and the `DisableTwitchWebhooks` config field + warn block. Sub-list freshness is unaffected — `mytwitch.GetSubscribers` already runs on a 5-minute cron. The matching kustomization-side cleanup lives in [adanalife/infra#485](https://github.com/adanalife/infra/pull/485). Bringing live new-follow / new-sub alerts back via EventSub is queued in the vault TODO. ([#569])
+
 ## [v2.9.0] — 2026-05-18
 
 Minor release. `onscreens-server` lifts out of `vlc-server` into its own binary (still co-located in the vlc container via supervisord for now), with a clean `Lookup` / `Snapshot` boundary that makes a future container split a single-PR change. OBS-websocket polling moves from `tripbot` to `vlc-server` where the rest of the OBS data-plane code lives; the `obs_*` gauges' `service.name` flips accordingly. Three conditionally-shown OBS browser sources now shut down CEF when hidden, freeing ~150-250 MB each. `vlc-server` gets graceful HTTP shutdown matching v2.7.1's tripbot-server shape. Optional env vars (`ENV`, `GOOGLE_MAPS_API_KEY`) soft-disable instead of hard-fataling at startup, so local-dev runs work without cluster secrets. Pairs with [adanalife/infra#484](https://github.com/adanalife/infra/pull/484) (k8s Service exposes onscreens-server :8081) and [adanalife/infra#483](https://github.com/adanalife/infra/pull/483) (Grafana stream-health alerts re-labelled for the new `service.name=vlc-server` on OBS metrics).
@@ -683,3 +696,6 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#566]: https://github.com/adanalife/tripbot/pull/566
 [#567]: https://github.com/adanalife/tripbot/pull/567
 [#568]: https://github.com/adanalife/tripbot/pull/568
+[#569]: https://github.com/adanalife/tripbot/pull/569
+[#570]: https://github.com/adanalife/tripbot/pull/570
+[#573]: https://github.com/adanalife/tripbot/pull/573

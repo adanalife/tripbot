@@ -1,11 +1,11 @@
 package vlcServer
 
 import (
+	"log/slog"
 	"errors"
 	"math/rand"
 	"path/filepath"
 
-	terrors "github.com/adanalife/tripbot/pkg/errors"
 )
 
 //TODO: should we handle the case where index is outside range?
@@ -50,12 +50,12 @@ func back(n int) error {
 func PlayRandom() error {
 	count, err := mediaList.Count()
 	if err != nil {
-		terrors.Log(err, "error counting media in VLC media list")
+		slog.Error("error counting media in VLC media list", "err", err)
 	}
 
 	if count < 1 {
 		err = errors.New("missing media")
-		terrors.Log(err, "no media was found to play")
+		slog.Error("no media was found to play", "err", err)
 		return err
 	}
 

@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
-	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"github.com/nicklaw5/helix/v2"
 )
@@ -25,11 +24,11 @@ func getChannelID(username string) string {
 		Logins: []string{username},
 	})
 	if err != nil {
-		terrors.Log(err, "error getting user info from twitch")
+		slog.Error("error getting user info from twitch", "err", err)
 		return ""
 	}
 	if resp == nil {
-		terrors.Log(nil, "empty response from twitch")
+		slog.Error("empty response from twitch")
 		return ""
 	}
 	if checkHelixResp("GetUsers", &resp.ResponseCommon) {
@@ -37,7 +36,7 @@ func getChannelID(username string) string {
 	}
 
 	if len(resp.Data.Users) < 1 {
-		terrors.Log(fmt.Errorf("missing data"), "no user in response from twitch")
+		slog.Error("no user in response from twitch", "err", fmt.Errorf("missing data"))
 		return ""
 	}
 	return resp.Data.Users[0].ID
@@ -56,7 +55,7 @@ func GetSubscribers(ctx context.Context) {
 		BroadcasterID: ChannelID,
 	})
 	if err != nil {
-		terrors.Log(err, "error getting subscriptions from twitch")
+		slog.ErrorContext(ctx, "error getting subscriptions from twitch", "err", err)
 		return
 	}
 	if checkHelixResp("GetSubscriptions", &resp.ResponseCommon) {
@@ -93,7 +92,7 @@ func GetFollowerCount(ctx context.Context) {
 		BroadcasterID: ChannelID,
 	})
 	if err != nil {
-		terrors.Log(err, "error getting follower count from twitch")
+		slog.ErrorContext(ctx, "error getting follower count from twitch", "err", err)
 		return
 	}
 	if checkHelixResp("GetChannelFollows", &resp.ResponseCommon) {
@@ -128,7 +127,7 @@ func UserIsFollower(username string) bool {
 		UserID:        userID,
 	})
 	if err != nil {
-		terrors.Log(err, "error getting user follows")
+		slog.Error("error getting user follows", "err", err)
 		return false
 	}
 	if checkHelixResp("GetChannelFollows", &resp.ResponseCommon) {

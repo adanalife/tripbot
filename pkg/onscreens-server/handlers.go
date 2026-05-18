@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"net/http"
 
-	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/gorilla/mux"
@@ -27,7 +26,7 @@ func onscreensFlagHandler(w http.ResponseWriter, r *http.Request) {
 		return
 		//durStr, err := helpers.Base64Decode(base64content[0])
 		//if err != nil {
-		//	terrors.Log(err, "unable to decode string")
+		//	slog.ErrorContext(r.Context(), "unable to decode string", "err", err)
 		//	http.Error(w, "422 unable to decode string", http.StatusUnprocessableEntity)
 		//	return
 		//}
@@ -74,7 +73,7 @@ func onscreensMiddleHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		msg, err := helpers.Base64Decode(base64content[0])
 		if err != nil {
-			terrors.Log(err, "unable to decode string")
+			slog.ErrorContext(r.Context(), "unable to decode string", "err", err)
 			http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
 			return
 		}
@@ -116,7 +115,7 @@ func onscreensLeaderboardHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		content, err := helpers.Base64Decode(base64content[0])
 		if err != nil {
-			terrors.Log(err, "unable to decode string")
+			slog.ErrorContext(r.Context(), "unable to decode string", "err", err)
 			http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
 			return
 		}

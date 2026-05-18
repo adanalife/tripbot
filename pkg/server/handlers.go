@@ -8,12 +8,8 @@ import (
 	"net/http"
 	"runtime/debug"
 
-	"github.com/adanalife/tripbot/pkg/chatbot"
-	c "github.com/adanalife/tripbot/pkg/config/tripbot"
-	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/server/oauthstate"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
-	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/nicklaw5/helix/v2"
 )
 
@@ -67,85 +63,8 @@ func versionHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		terrors.Log(err, "couldn't encode version response")
+		slog.ErrorContext(r.Context(), "couldn't encode version response", "err", err)
 	}
-}
-
-// twitch issues a request here when creating a new webhook subscription
-func webhooksTwitchHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	slog.InfoContext(ctx, "received webhook challenge request", "path", r.URL.Path)
-	// exit early if we've disabled webhooks
-	if c.Conf.DisableTwitchWebhooks {
-		http.Error(w, "501 not implemented", http.StatusNotImplemented)
-		return
-	}
-
-	challenge, ok := r.URL.Query()["hub.challenge"]
-	if !ok || len(challenge[0]) < 1 {
-		terrors.Log(nil, "something went wrong with the challenge")
-		slog.WarnContext(ctx, "webhook challenge missing hub.challenge", "query", fmt.Sprintf("%#v", r.URL.Query()))
-		http.Error(w, "404 not found", http.StatusNotFound)
-		return
-	}
-	slog.InfoContext(ctx, "returning webhook challenge")
-	fmt.Fprint(w, string(challenge[0]))
-}
-
-// user webhooks are received via POST at this url
-//TODO: we can use helix.GetWebhookTopicFromRequest() and share a webhooks URL
-func webhooksTwitchUsersFollowsHandler(w http.ResponseWriter, r *http.Request) {
-	if c.Conf.DisableTwitchWebhooks {
-		http.Error(w, "501 not implemented", http.StatusNotImplemented)
-		return
-	}
-
-	resp, err := decodeFollowWebhookResponse(r)
-	if err != nil {
-		terrors.Log(err, "error decoding follow webhook")
-		//TODO: better error
-		http.Error(w, "404 not found", http.StatusNotFound)
-		return
-	}
-
-	for _, follower := range resp.Data.Follows {
-		username := follower.FromName
-		slog.InfoContext(r.Context(), "received webhook: new follower", "username", username)
-		users.LoginIfNecessary(r.Context(), username)
-		// announce new follower in chat
-		chatbot.AnnounceNewFollower(username)
-	}
-
-	fmt.Fprintf(w, "OK")
-}
-
-// these are sent when users subscribe
-func webhooksTwitchSubscriptionsEventsHandler(w http.ResponseWriter, r *http.Request) {
-	if c.Conf.DisableTwitchWebhooks {
-		http.Error(w, "501 not implemented", http.StatusNotImplemented)
-		return
-	}
-
-	resp, err := decodeSubscriptionWebhookResponse(r)
-	if err != nil {
-		terrors.Log(err, "error decoding subscription webhook")
-		//TODO: better error
-		http.Error(w, "404 not found", http.StatusNotFound)
-		return
-	}
-
-	for _, event := range resp.Data.Events {
-		username := event.Subscription.UserName
-		slog.InfoContext(r.Context(), "received webhook: new sub", "username", username)
-		users.LoginIfNecessary(r.Context(), username)
-		// announce new sub in chat
-		chatbot.AnnounceSubscriber(event.Subscription)
-	}
-
-	// update the internal subscribers list
-	mytwitch.GetSubscribers(r.Context())
-
-	fmt.Fprintf(w, "OK")
 }
 
 // authCallbackHandler completes the OAuth Authorization Code flow. Validates
@@ -161,13 +80,13 @@ func authCallbackHandler(w http.ResponseWriter, r *http.Request) {
 
 	code := r.URL.Query().Get("code")
 	if code == "" {
-		terrors.Log(errors.New("code missing"), "no code in response from twitch")
+		slog.ErrorContext(r.Context(), "no code in response from twitch", "err", errors.New("code missing"))
 		http.Error(w, "no code in response from twitch", http.StatusBadRequest)
 		return
 	}
 
 	if err := generateUserAccessToken(code); err != nil {
-		terrors.Log(err, "GenerateUserAccessToken failed")
+		slog.ErrorContext(r.Context(), "GenerateUserAccessToken failed", "err", err)
 		http.Error(w, "failed to exchange code: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -185,7 +104,7 @@ func authCallbackHandler(w http.ResponseWriter, r *http.Request) {
 func authInitHandler(w http.ResponseWriter, r *http.Request) {
 	client, err := helixClient()
 	if err != nil {
-		terrors.Log(err, "helix client unavailable for /auth/init")
+		slog.ErrorContext(r.Context(), "helix client unavailable for /auth/init", "err", err)
 		http.Error(w, "auth unavailable", http.StatusInternalServerError)
 		return
 	}

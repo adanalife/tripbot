@@ -14,7 +14,6 @@ import (
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
-	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/oauthtokens"
 	"github.com/nicklaw5/helix/v2"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
@@ -97,12 +96,12 @@ func Client() (*helix.Client, error) {
 		HTTPClient:  helixHTTPClient,
 	})
 	if err != nil {
-		terrors.Log(err, "error creating client")
+		slog.Error("error creating client", "err", err)
 	}
 
 	resp, err := client.RequestAppAccessToken(Scopes)
 	if err != nil {
-		terrors.Log(err, "error getting app access token from twitch")
+		slog.Error("error getting app access token from twitch", "err", err)
 	}
 	AppAccessToken = resp.Data.AccessToken
 	client.SetAppAccessToken(AppAccessToken)
@@ -228,7 +227,7 @@ func RefreshUserAccessToken(ctx context.Context) {
 
 	acquired, release, err := oauthtokens.TryRefreshLock("twitch", botUser)
 	if err != nil {
-		terrors.Log(err, "oauth refresh lock acquisition failed")
+		slog.ErrorContext(ctx, "oauth refresh lock acquisition failed", "err", err)
 		return
 	}
 	if !acquired {
@@ -237,7 +236,7 @@ func RefreshUserAccessToken(ctx context.Context) {
 		time.Sleep(2 * time.Second)
 		t, gerr := oauthtokens.Get("twitch", botUser)
 		if gerr != nil {
-			terrors.Log(gerr, "post-contention re-read failed")
+			slog.ErrorContext(ctx, "post-contention re-read failed", "err", gerr)
 			return
 		}
 		tokenMu.Lock()
@@ -249,7 +248,7 @@ func RefreshUserAccessToken(ctx context.Context) {
 
 	t, err := oauthtokens.Get("twitch", botUser)
 	if err != nil {
-		terrors.Log(err, "no oauth_tokens row to refresh")
+		slog.ErrorContext(ctx, "no oauth_tokens row to refresh", "err", err)
 		return
 	}
 
@@ -259,13 +258,13 @@ func RefreshUserAccessToken(ctx context.Context) {
 
 	client, err := Client()
 	if err != nil {
-		terrors.Log(err, "helix client unavailable for refresh")
+		slog.ErrorContext(ctx, "helix client unavailable for refresh", "err", err)
 		return
 	}
 	resp, err := client.RefreshUserAccessToken(t.RefreshToken)
 	if err != nil {
 		_ = oauthtokens.IncrementFailCount("twitch", botUser)
-		terrors.Log(err, "twitch refresh API failed")
+		slog.ErrorContext(ctx, "twitch refresh API failed", "err", err)
 		return
 	}
 	if resp == nil || resp.Data.AccessToken == "" {
@@ -276,7 +275,7 @@ func RefreshUserAccessToken(ctx context.Context) {
 		tokenMu.Lock()
 		currentUserToken.AccessToken = ""
 		tokenMu.Unlock()
-		terrors.Log(errors.New("empty access token in refresh response"), "oauth refresh failed; need re-bootstrap")
+		slog.ErrorContext(ctx, "oauth refresh failed; need re-bootstrap", "err", errors.New("empty access token in refresh response"))
 		return
 	}
 
@@ -290,7 +289,7 @@ func RefreshUserAccessToken(ctx context.Context) {
 		Scopes:       strings.Join(resp.Data.Scopes, " "),
 	}
 	if err := oauthtokens.Upsert(rotated); err != nil {
-		terrors.Log(err, "post-refresh Upsert failed")
+		slog.ErrorContext(ctx, "post-refresh Upsert failed", "err", err)
 		return
 	}
 

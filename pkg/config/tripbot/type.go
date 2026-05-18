@@ -31,9 +31,6 @@ type TripbotConfig struct {
 	// TripbotPidFile is where the tripbot PID is written
 	TripbotPidFile string `default:"/opt/data/run/tripbot.pid" envconfig:"TRIPBOT_PIDFILE"`
 
-	// DisableTwitchWebhooks disables receiving webhooks from Twitch (new followers for instance)
-	DisableTwitchWebhooks bool `default:"false" envconfig:"DISABLE_TWITCH_WEBHOOKS"`
-
 	// TripbotServerPort is used to specify the port on which the webserver runs
 	TripbotServerPort string `default:"8080" envconfig:"TRIPBOT_SERVER_PORT"`
 	// VlcServerHost is used to specify the host for the VLC webserver

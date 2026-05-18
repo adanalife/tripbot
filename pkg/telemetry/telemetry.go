@@ -19,6 +19,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/getsentry/sentry-go"
+	sentryslog "github.com/samber/slog-sentry/v2"
 	"go.opentelemetry.io/contrib/bridges/otelslog"
 	otelruntime "go.opentelemetry.io/contrib/instrumentation/runtime"
 	"go.opentelemetry.io/otel"
@@ -105,7 +107,20 @@ func Init(ctx context.Context, serviceName, serviceVersion string) (ShutdownFunc
 
 	consoleHandler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})
 	otelHandler := otelslog.NewHandler(serviceName, otelslog.WithLoggerProvider(lp))
-	slog.SetDefault(slog.New(multiHandler{handlers: []slog.Handler{consoleHandler, otelHandler}}))
+	// Sentry handler chain. Error+ becomes a captured event (subject to
+	// the BeforeSend throttle in pkg/errors); Info/Warn becomes a
+	// breadcrumb that attaches to the next event for context, no quota
+	// cost. pkg/errors must call sentry.Init before any slog.Error fires
+	// or events drop silently — cmd/* honors that ordering by calling
+	// errors.Initialize right after telemetry.Init returns.
+	sentryEventHandler := sentryslog.Option{
+		Level:     slog.LevelError,
+		AddSource: true,
+	}.NewSentryHandler()
+	sentryBreadcrumbHandler := breadcrumbHandler{}
+	slog.SetDefault(slog.New(multiHandler{handlers: []slog.Handler{
+		consoleHandler, otelHandler, sentryEventHandler, sentryBreadcrumbHandler,
+	}}))
 
 	// Redirect stdlib log.* through slog so existing call sites flow
 	// through both the console and the OTel logger without rewriting them.
@@ -221,4 +236,46 @@ func (m multiHandler) WithGroup(name string) slog.Handler {
 		hs[i] = h.WithGroup(name)
 	}
 	return multiHandler{handlers: hs}
+}
+
+// breadcrumbHandler captures Info / Warn slog records as Sentry
+// breadcrumbs (zero quota cost) so that when an Error fires later,
+// the Sentry event arrives with the preceding log trail attached.
+// Error+ is skipped — samber/slog-sentry already turns those into
+// full Sentry events with their own captured attribute set.
+type breadcrumbHandler struct{}
+
+func (breadcrumbHandler) Enabled(_ context.Context, level slog.Level) bool {
+	return level >= slog.LevelInfo && level < slog.LevelError
+}
+
+func (breadcrumbHandler) Handle(ctx context.Context, r slog.Record) error {
+	hub := sentry.CurrentHub()
+	if fromCtx := sentry.GetHubFromContext(ctx); fromCtx != nil {
+		hub = fromCtx
+	}
+	hub.AddBreadcrumb(&sentry.Breadcrumb{
+		Type:      "default",
+		Category:  strings.ToLower(r.Level.String()),
+		Message:   r.Message,
+		Level:     sentryLevelFor(r.Level),
+		Timestamp: r.Time,
+	}, nil)
+	return nil
+}
+
+func (h breadcrumbHandler) WithAttrs(_ []slog.Attr) slog.Handler { return h }
+func (h breadcrumbHandler) WithGroup(_ string) slog.Handler      { return h }
+
+func sentryLevelFor(l slog.Level) sentry.Level {
+	switch {
+	case l >= slog.LevelError:
+		return sentry.LevelError
+	case l >= slog.LevelWarn:
+		return sentry.LevelWarning
+	case l >= slog.LevelInfo:
+		return sentry.LevelInfo
+	default:
+		return sentry.LevelDebug
+	}
 }
