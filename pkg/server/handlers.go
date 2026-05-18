@@ -67,7 +67,7 @@ func versionHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		terrors.Log(err, "couldn't encode version response")
+		terrors.LogContext(r.Context(), err, "couldn't encode version response")
 	}
 }
 
@@ -83,7 +83,7 @@ func webhooksTwitchHandler(w http.ResponseWriter, r *http.Request) {
 
 	challenge, ok := r.URL.Query()["hub.challenge"]
 	if !ok || len(challenge[0]) < 1 {
-		terrors.Log(nil, "something went wrong with the challenge")
+		terrors.LogContext(ctx, nil, "something went wrong with the challenge")
 		slog.WarnContext(ctx, "webhook challenge missing hub.challenge", "query", fmt.Sprintf("%#v", r.URL.Query()))
 		http.Error(w, "404 not found", http.StatusNotFound)
 		return
@@ -102,7 +102,7 @@ func webhooksTwitchUsersFollowsHandler(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := decodeFollowWebhookResponse(r)
 	if err != nil {
-		terrors.Log(err, "error decoding follow webhook")
+		terrors.LogContext(r.Context(), err, "error decoding follow webhook")
 		//TODO: better error
 		http.Error(w, "404 not found", http.StatusNotFound)
 		return
@@ -128,7 +128,7 @@ func webhooksTwitchSubscriptionsEventsHandler(w http.ResponseWriter, r *http.Req
 
 	resp, err := decodeSubscriptionWebhookResponse(r)
 	if err != nil {
-		terrors.Log(err, "error decoding subscription webhook")
+		terrors.LogContext(r.Context(), err, "error decoding subscription webhook")
 		//TODO: better error
 		http.Error(w, "404 not found", http.StatusNotFound)
 		return
@@ -161,13 +161,13 @@ func authCallbackHandler(w http.ResponseWriter, r *http.Request) {
 
 	code := r.URL.Query().Get("code")
 	if code == "" {
-		terrors.Log(errors.New("code missing"), "no code in response from twitch")
+		terrors.LogContext(r.Context(), errors.New("code missing"), "no code in response from twitch")
 		http.Error(w, "no code in response from twitch", http.StatusBadRequest)
 		return
 	}
 
 	if err := generateUserAccessToken(code); err != nil {
-		terrors.Log(err, "GenerateUserAccessToken failed")
+		terrors.LogContext(r.Context(), err, "GenerateUserAccessToken failed")
 		http.Error(w, "failed to exchange code: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -185,7 +185,7 @@ func authCallbackHandler(w http.ResponseWriter, r *http.Request) {
 func authInitHandler(w http.ResponseWriter, r *http.Request) {
 	client, err := helixClient()
 	if err != nil {
-		terrors.Log(err, "helix client unavailable for /auth/init")
+		terrors.LogContext(r.Context(), err, "helix client unavailable for /auth/init")
 		http.Error(w, "auth unavailable", http.StatusInternalServerError)
 		return
 	}

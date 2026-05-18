@@ -35,7 +35,7 @@ func decodeFollowWebhookResponse(r *http.Request) (*helix.UsersFollowsResponse, 
 	resp := &helix.UsersFollowsResponse{}
 	bodyBytes, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		terrors.Log(err, "failed to read request body")
+		terrors.LogContext(r.Context(), err, "failed to read request body")
 		return resp, err
 	}
 
@@ -54,7 +54,7 @@ func decodeFollowWebhookResponse(r *http.Request) (*helix.UsersFollowsResponse, 
 		}
 
 		if err != nil {
-			terrors.Log(err, "failed to decode API response")
+			terrors.LogContext(r.Context(), err, "failed to decode API response")
 		}
 	}
 	return resp, err
@@ -67,7 +67,7 @@ func decodeSubscriptionWebhookResponse(r *http.Request) (*SubscriptionWebhook, e
 	resp := &SubscriptionWebhook{}
 	bodyBytes, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		terrors.Log(err, "failed to read request body")
+		terrors.LogContext(r.Context(), err, "failed to read request body")
 		return resp, err
 	}
 
@@ -86,7 +86,7 @@ func decodeSubscriptionWebhookResponse(r *http.Request) (*SubscriptionWebhook, e
 		}
 
 		if err != nil {
-			terrors.Log(err, "failed to decode API response")
+			terrors.LogContext(r.Context(), err, "failed to decode API response")
 		}
 	}
 
