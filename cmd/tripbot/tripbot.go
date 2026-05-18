@@ -125,7 +125,7 @@ func startHttpServer(ctx context.Context) {
 func findInitialVideo() {
 	video.GetCurrentlyPlaying(context.Background())
 	v := video.CurrentlyPlaying
-	_, err := video.LoadOrCreate(v.String())
+	_, err := video.LoadOrCreate(context.Background(), v.String())
 	if err != nil {
 		slog.Error("error loading initial video, is there a video playing?", "err", err)
 	}

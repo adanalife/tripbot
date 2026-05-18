@@ -166,7 +166,7 @@ func (a *App) sunsetCmd(ctx context.Context, user *users.User, _ []string) {
 	vid := a.CurrentVideo()
 	if vid.Flagged {
 		a.IRC.Say("I couldn't figure out current GPS coords, using next closest...")
-		vid = vid.Next()
+		vid = vid.Next(ctx)
 	}
 	lat, lng, _ := vid.Location()
 	a.IRC.Say(helpers.SunsetStr(vid.DateFilmed, lat, lng))
@@ -179,7 +179,7 @@ func (a *App) locationCmd(ctx context.Context, user *users.User, _ []string) {
 		a.IRC.Say("I couldn't figure out current GPS coords, using next closest...")
 		//TODO: write something like vid.FindClosest() that
 		// chooses whether or not to use Next() vs Prev()
-		vid = vid.Next()
+		vid = vid.Next(ctx)
 	}
 	// extract the coordinates
 	lat, lng, err := vid.Location()
@@ -292,7 +292,7 @@ func (a *App) timeCmd(ctx context.Context, user *users.User, _ []string) {
 	var lat, lng float64
 	vid := a.CurrentVideo()
 	if vid.Flagged {
-		lat, lng, err = vid.Next().Location()
+		lat, lng, err = vid.Next(ctx).Location()
 	} else {
 		lat, lng, err = vid.Location()
 	}
@@ -311,7 +311,7 @@ func (a *App) dateCmd(ctx context.Context, user *users.User, _ []string) {
 	var lat, lng float64
 	vid := a.CurrentVideo()
 	if vid.Flagged {
-		lat, lng, err = vid.Next().Location()
+		lat, lng, err = vid.Next(ctx).Location()
 	} else {
 		lat, lng, err = vid.Location()
 	}
@@ -356,7 +356,7 @@ func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 	vid := a.CurrentVideo()
 	if vid.Flagged {
 		a.IRC.Say("I couldn't figure out current GPS coords, using next closest...")
-		vid = vid.Next()
+		vid = vid.Next(ctx)
 	}
 
 	if strings.ToLower(guess) == strings.ToLower(vid.State) {
@@ -379,7 +379,7 @@ func (a *App) stateCmd(ctx context.Context, user *users.User, _ []string) {
 	vid := a.CurrentVideo()
 	if vid.Flagged {
 		a.IRC.Say("I couldn't figure out current GPS coords, using next closest...")
-		vid = vid.Next()
+		vid = vid.Next(ctx)
 	}
 	msg := fmt.Sprintf("We're in %s", vid.State)
 	// show the flag for the state
