@@ -14,7 +14,6 @@ import (
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
-	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/oauthtokens"
 	"github.com/nicklaw5/helix/v2"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
@@ -97,12 +96,12 @@ func Client() (*helix.Client, error) {
 		HTTPClient:  helixHTTPClient,
 	})
 	if err != nil {
-		terrors.Log(err, "error creating client")
+		slog.Error("error creating client", "err", err)
 	}
 
 	resp, err := client.RequestAppAccessToken(Scopes)
 	if err != nil {
-		terrors.Log(err, "error getting app access token from twitch")
+		slog.Error("error getting app access token from twitch", "err", err)
 	}
 	AppAccessToken = resp.Data.AccessToken
 	client.SetAppAccessToken(AppAccessToken)

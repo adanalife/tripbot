@@ -97,26 +97,6 @@ func throttle(c config.Config) func(event *sentry.Event, hint *sentry.EventHint)
 	}
 }
 
-// Log routes msg + err to slog.Error. Sentry capture happens via the
-// slog handler installed in pkg/telemetry, throttled by the BeforeSend
-// hook above.
-//
-// Deprecated: call slog.Error / slog.ErrorContext directly. Kept as a
-// transitional shim while existing callsites are migrated.
-func Log(e error, msg string) {
-	LogContext(context.Background(), e, msg)
-}
-
-// LogContext is the trace-aware sibling of Log.
-//
-// Deprecated: call slog.ErrorContext directly.
-func LogContext(ctx context.Context, e error, msg string) {
-	if e == nil {
-		e = errors.New(msg)
-	}
-	slog.ErrorContext(ctx, msg, "err", e)
-}
-
 // Fatal logs msg + err at Error level (which reaches Sentry via the
 // slog handler) and exits with status 1. The ctx-less form is for
 // startup / shutdown paths where no parent span exists.

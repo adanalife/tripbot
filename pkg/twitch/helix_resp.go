@@ -1,9 +1,9 @@
 package twitch
 
 import (
+	"log/slog"
 	"fmt"
 
-	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"github.com/nicklaw5/helix/v2"
 )
@@ -26,7 +26,7 @@ func checkHelixResp(endpoint string, resp *helix.ResponseCommon) bool {
 	if resp == nil || resp.StatusCode < 400 {
 		return false
 	}
-	terrors.Log(nil, fmt.Sprintf("helix %s returned %d: %s", endpoint, resp.StatusCode, resp.ErrorMessage))
+	slog.Error(fmt.Sprintf("helix %s returned %d: %s", endpoint, resp.StatusCode, resp.ErrorMessage))
 	instrumentation.TwitchHelixErrors.Inc(endpoint, resp.StatusCode)
 	return true
 }

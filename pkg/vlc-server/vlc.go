@@ -114,15 +114,15 @@ func Shutdown() {
 	}
 	err := player.Stop()
 	if err != nil {
-		terrors.Log(err, "error stopping player")
+		slog.Error("error stopping player", "err", err)
 	}
 	err = player.Release()
 	if err != nil {
-		terrors.Log(err, "error releasing player")
+		slog.Error("error releasing player", "err", err)
 	}
 	err = libvlc.Release()
 	if err != nil {
-		terrors.Log(err, "error releasing libvlc")
+		slog.Error("error releasing libvlc", "err", err)
 	}
 }
 
@@ -131,13 +131,13 @@ func Shutdown() {
 func currentlyPlaying() string {
 	cur, err := player.Media()
 	if err != nil {
-		terrors.Log(err, "error fetching currently-playing media")
+		slog.Error("error fetching currently-playing media", "err", err)
 	}
 
 	// get media path
 	path, err := cur.Location()
 	if err != nil {
-		terrors.Log(err, "error fetching currently-playing media")
+		slog.Error("error fetching currently-playing media", "err", err)
 	}
 
 	// strip the path off and just return the filename
