@@ -1,6 +1,8 @@
 package chatbot
 
 import (
+	"context"
+
 	vlcClient "github.com/adanalife/tripbot/pkg/vlc-client"
 )
 
@@ -9,16 +11,20 @@ import (
 // package-backed realVLC adapter wired in defaultApp. Mirrors the Onscreens
 // injection pattern.
 type VLC interface {
-	PlayRandom() error
-	PlayFileInPlaylist(filename string) error
-	Skip(n int) error
-	Back(n int) error
+	PlayRandom(ctx context.Context) error
+	PlayFileInPlaylist(ctx context.Context, filename string) error
+	Skip(ctx context.Context, n int) error
+	Back(ctx context.Context, n int) error
 }
 
 // realVLC delegates to pkg/vlc-client.
 type realVLC struct{}
 
-func (realVLC) PlayRandom() error                     { return vlcClient.PlayRandom() }
-func (realVLC) PlayFileInPlaylist(filename string) error { return vlcClient.PlayFileInPlaylist(filename) }
-func (realVLC) Skip(n int) error                      { return vlcClient.Skip(n) }
-func (realVLC) Back(n int) error                      { return vlcClient.Back(n) }
+func (realVLC) PlayRandom(ctx context.Context) error {
+	return vlcClient.PlayRandom(ctx)
+}
+func (realVLC) PlayFileInPlaylist(ctx context.Context, filename string) error {
+	return vlcClient.PlayFileInPlaylist(ctx, filename)
+}
+func (realVLC) Skip(ctx context.Context, n int) error { return vlcClient.Skip(ctx, n) }
+func (realVLC) Back(ctx context.Context, n int) error { return vlcClient.Back(ctx, n) }

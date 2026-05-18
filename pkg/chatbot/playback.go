@@ -23,10 +23,10 @@ var lastTimewarpTime time.Time
 // timewarp jumps the playhead to a random video in the loop
 func (a *App) timewarp(ctx context.Context) {
 	// show timewarp onscreen
-	a.Onscreens.ShowTimewarp()
+	a.Onscreens.ShowTimewarp(ctx)
 
 	// shuffle to a new video
-	err := a.VLC.PlayRandom()
+	err := a.VLC.PlayRandom(ctx)
 	if err != nil {
 		slog.ErrorContext(ctx, "error from VLC client", "err", err)
 	}
@@ -105,7 +105,7 @@ func (a *App) jumpCmd(ctx context.Context, user *users.User, params []string) {
 		return
 	}
 	// tell VLC to play it
-	err = a.VLC.PlayFileInPlaylist(randomVid.File())
+	err = a.VLC.PlayFileInPlaylist(ctx, randomVid.File())
 	if err != nil {
 		slog.ErrorContext(ctx, "error from VLC client", "err", err)
 		a.IRC.Say("Usage: !jump [state]")
@@ -115,7 +115,7 @@ func (a *App) jumpCmd(ctx context.Context, user *users.User, params []string) {
 	// update the currently-playing video
 	a.Video.GetCurrentlyPlaying()
 	// show the flag for the state
-	a.Onscreens.ShowFlag(10 * time.Second)
+	a.Onscreens.ShowFlag(ctx, 10 * time.Second)
 	// update our record of last time it ran
 	lastTimewarpTime = time.Now()
 }
@@ -155,7 +155,7 @@ func (a *App) skipCmd(ctx context.Context, user *users.User, params []string) {
 	}
 
 	// skip to a new video
-	err = a.VLC.Skip(n)
+	err = a.VLC.Skip(ctx, n)
 	if err != nil {
 		slog.ErrorContext(ctx, "error from VLC client", "err", err)
 	}
@@ -200,7 +200,7 @@ func (a *App) backCmd(ctx context.Context, user *users.User, params []string) {
 	}
 
 	// back to an old video
-	err = a.VLC.Back(n)
+	err = a.VLC.Back(ctx, n)
 	if err != nil {
 		slog.ErrorContext(ctx, "error from VLC client", "err", err)
 	}
