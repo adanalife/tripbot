@@ -337,7 +337,7 @@ func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 	}
 
 	// don't let people guess if they already know the answer
-	if !user.HasGuessCommandAvailable(lastTimewarpTime) {
+	if !user.HasGuessCommandAvailable(ctx, lastTimewarpTime) {
 		prettyDur := durafmt.ParseShort(user.GuessCooldownRemaining())
 		msg = "I recently told you the answer! Try again in %s."
 		msg = fmt.Sprintf(msg, prettyDur)
