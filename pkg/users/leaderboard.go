@@ -38,16 +38,15 @@ func InitLeaderboard(ctx context.Context) {
 }
 
 // UpdateLeaderboard rebuilds the lifetime-miles leaderboard from the
-// LoggedIn map. ctx is forward-compat plumbing — the work is in-memory
-// and CurrentMiles doesn't take ctx yet; once it does the cron-tick span
-// will nest the DB reads as children.
-func UpdateLeaderboard(_ context.Context) {
+// LoggedIn map. The work is in-memory (no DB hits), so ctx only carries
+// the cron-tick span for log correlation.
+func UpdateLeaderboard(ctx context.Context) {
 	for _, user := range LoggedIn {
 		// skip adding this user if they're a bot or ignored
 		if user.IsBot || c.UserIsIgnored(user.Username) || c.UserIsAdmin(user.Username) {
 			continue
 		}
-		insertIntoLeaderboard(*user)
+		insertIntoLeaderboard(ctx, *user)
 	}
 	// truncate LifetimeMilesLeaderboard if it gets too big
 	if len(LifetimeMilesLeaderboard) > maxLeaderboardSize {
@@ -65,12 +64,12 @@ func strToFloat32(str string) float32 {
 	return float32(value)
 }
 
-func insertIntoLeaderboard(user User) {
+func insertIntoLeaderboard(ctx context.Context, user User) {
 	// first we remove this user from the board
 	removeFromLeaderboard(user.Username)
 
 	// get the current miles as a float
-	miles := user.CurrentMiles()
+	miles := user.CurrentMiles(ctx)
 
 	for i, pair := range LifetimeMilesLeaderboard {
 		val := strToFloat32(pair[1])

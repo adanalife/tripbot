@@ -117,7 +117,7 @@ func login(ctx context.Context, username string) *User {
 // User.logout() removes the user from the list of currently-logged in users,
 // and updates the DB with their most up-to-date values
 func (u User) logout(ctx context.Context) {
-	sessionMiles := u.sessionMiles()
+	sessionMiles := u.sessionMiles(ctx)
 
 	// print logout message if they're human
 	if !u.IsBot {
@@ -132,7 +132,7 @@ func (u User) logout(ctx context.Context) {
 	}
 
 	// update miles
-	u.Miles = u.CurrentMiles()
+	u.Miles = u.CurrentMiles(ctx)
 	// update the last seen date
 	u.LastSeen = time.Now()
 	// store the user in the db

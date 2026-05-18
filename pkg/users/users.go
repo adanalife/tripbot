@@ -47,7 +47,7 @@ func (u User) loggedInDur() time.Duration {
 	return time.Now().Sub(LoggedIn[u.Username].LoggedIn)
 }
 
-func (u User) sessionMiles() float32 {
+func (u User) sessionMiles(ctx context.Context) float32 {
 	// exit early if they're not logged in
 	if !isLoggedIn(u.Username) {
 		return 0.0
@@ -58,15 +58,15 @@ func (u User) sessionMiles() float32 {
 	if u.IsSubscriber() {
 		bonusMiles := u.BonusMiles()
 		if c.Conf.Verbose {
-			slog.Info("subscriber will get bonus miles", "username", u.Username, "bonus_miles", bonusMiles)
+			slog.InfoContext(ctx, "subscriber will get bonus miles", "username", u.Username, "bonus_miles", bonusMiles)
 		}
 		sessionMiles += bonusMiles
 	}
 	return sessionMiles
 }
 
-func (u User) CurrentMiles() float32 {
-	return u.Miles + u.sessionMiles()
+func (u User) CurrentMiles(ctx context.Context) float32 {
+	return u.Miles + u.sessionMiles(ctx)
 }
 
 func (u User) BonusMiles() float32 {
@@ -79,7 +79,7 @@ func (u User) BonusMiles() float32 {
 }
 
 func (u User) CurrentMonthlyMiles(ctx context.Context) float32 {
-	return u.GetScore(ctx, scoreboards.CurrentMilesScoreboard()) + u.sessionMiles()
+	return u.GetScore(ctx, scoreboards.CurrentMilesScoreboard()) + u.sessionMiles(ctx)
 }
 
 // User.save() will take the given user and store it in the DB
