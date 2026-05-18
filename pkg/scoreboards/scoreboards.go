@@ -9,7 +9,6 @@ import (
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
-	terrors "github.com/adanalife/tripbot/pkg/errors"
 )
 
 // Scoreboard represents a bucket of scores, and has a name to identify it
@@ -41,7 +40,7 @@ func TopUsers(ctx context.Context, scoreboardName string, size int) [][]string {
 		Limit(size).
 		Scan(&results)
 	if result.Error != nil {
-		terrors.Log(result.Error, "error fetching top users")
+		slog.ErrorContext(ctx, "error fetching top users", "err", result.Error)
 	}
 
 	for _, r := range results {

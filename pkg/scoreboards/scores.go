@@ -8,7 +8,6 @@ import (
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
-	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"gorm.io/gorm"
 )
@@ -27,17 +26,17 @@ type Score struct {
 func GetScoreByName(ctx context.Context, username, scoreboardName string) (float32, error) {
 	userID, err := getUserIDByName(ctx, username)
 	if err != nil {
-		terrors.Log(err, "error getting user ID")
+		slog.ErrorContext(ctx, "error getting user ID", "err", err)
 		return -1.0, err
 	}
 	scoreboard, err := findOrCreateScoreboard(ctx, scoreboardName)
 	if err != nil {
-		terrors.Log(err, "error finding or creating scoreboard")
+		slog.ErrorContext(ctx, "error finding or creating scoreboard", "err", err)
 		return -1.0, err
 	}
 	score, err := findOrCreateScore(ctx, userID, scoreboard.ID)
 	if err != nil {
-		terrors.Log(err, "error finding score")
+		slog.ErrorContext(ctx, "error finding score", "err", err)
 		return -1.0, err
 	}
 	return score.Value, err
@@ -48,17 +47,17 @@ func GetScoreByName(ctx context.Context, username, scoreboardName string) (float
 func AddToScoreByName(ctx context.Context, username, scoreboardName string, scoreToAdd float32) error {
 	userID, err := getUserIDByName(ctx, username)
 	if err != nil {
-		terrors.Log(err, "error getting userID for user")
+		slog.ErrorContext(ctx, "error getting userID for user", "err", err)
 		return err
 	}
 	scoreboard, err := findOrCreateScoreboard(ctx, scoreboardName)
 	if err != nil {
-		terrors.Log(err, "error finding or creating scoreboard")
+		slog.ErrorContext(ctx, "error finding or creating scoreboard", "err", err)
 		return err
 	}
 	score, err := findOrCreateScore(ctx, userID, scoreboard.ID)
 	if err != nil {
-		terrors.Log(err, "error finding score")
+		slog.ErrorContext(ctx, "error finding score", "err", err)
 		return err
 	}
 	score.Value += scoreToAdd
@@ -106,7 +105,7 @@ func (s Score) save(ctx context.Context) error {
 	}
 	err := database.GormDB().WithContext(ctx).Model(&s).Update("value", s.Value).Error
 	if err != nil {
-		terrors.Log(err, "error saving score")
+		slog.ErrorContext(ctx, "error saving score", "err", err)
 	}
 	return err
 }
@@ -117,7 +116,7 @@ func getUserIDByName(ctx context.Context, username string) (uint16, error) {
 	var result struct{ ID uint16 }
 	err := database.GormDB().WithContext(ctx).Raw("SELECT id FROM users WHERE username = ?", username).Scan(&result).Error
 	if err != nil {
-		terrors.Log(err, "error fetching user ID")
+		slog.ErrorContext(ctx, "error fetching user ID", "err", err)
 	}
 	return result.ID, err
 }
