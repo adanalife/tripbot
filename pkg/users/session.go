@@ -108,7 +108,7 @@ func login(ctx context.Context, username string) *User {
 	LoggedIn[username] = &user
 
 	if err := events.Login(ctx, username, user.sessionID); err != nil {
-		terrors.Log(err, "error creating login event")
+		terrors.LogContext(ctx, err, "error creating login event")
 	}
 
 	return &user
@@ -142,7 +142,7 @@ func (u User) logout(ctx context.Context) {
 	u.AddToScore(ctx, scoreboards.CurrentMilesScoreboard(), sessionMiles)
 
 	if err := events.Logout(ctx, u.Username, u.sessionID); err != nil {
-		terrors.Log(err, "error creating logout event")
+		terrors.LogContext(ctx, err, "error creating logout event")
 	}
 
 	// remove them from the session

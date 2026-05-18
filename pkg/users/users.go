@@ -93,7 +93,7 @@ func (u User) save(ctx context.Context) {
 		"miles":      u.Miles,
 	}).Error
 	if err != nil {
-		terrors.Log(err, "error saving user")
+		terrors.LogContext(ctx, err, "error saving user")
 	}
 }
 
@@ -140,7 +140,7 @@ func Find(ctx context.Context, username string) User {
 		return User{ID: 0}
 	}
 	if result.Error != nil {
-		terrors.Log(result.Error, "error finding user")
+		terrors.LogContext(ctx, result.Error, "error finding user")
 		return User{ID: 0}
 	}
 	return user
@@ -203,7 +203,7 @@ func create(ctx context.Context, username string) User {
 	// create a new row, using default vals and creating a single visit
 	newUser := User{Username: username, NumVisits: 1}
 	if err := database.GormDB().WithContext(ctx).Create(&newUser).Error; err != nil {
-		terrors.Log(err, "error creating user")
+		terrors.LogContext(ctx, err, "error creating user")
 	}
 	return Find(ctx, username)
 }

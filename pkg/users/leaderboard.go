@@ -27,7 +27,7 @@ func InitLeaderboard(ctx context.Context) {
 		Limit(initLeaderboardSize).
 		Find(&users)
 	if result.Error != nil {
-		terrors.Log(result.Error, "error fetching leaderboard")
+		terrors.LogContext(ctx, result.Error, "error fetching leaderboard")
 	}
 
 	for _, user := range users {
@@ -55,10 +55,10 @@ func UpdateLeaderboard(ctx context.Context) {
 }
 
 // convert the string to a float32
-func strToFloat32(str string) float32 {
+func strToFloat32(ctx context.Context, str string) float32 {
 	value, err := strconv.ParseFloat(str, 32)
 	if err != nil {
-		terrors.Log(err, "error parsing float")
+		terrors.LogContext(ctx, err, "error parsing float")
 		return 0.0
 	}
 	return float32(value)
@@ -72,7 +72,7 @@ func insertIntoLeaderboard(ctx context.Context, user User) {
 	miles := user.CurrentMiles(ctx)
 
 	for i, pair := range LifetimeMilesLeaderboard {
-		val := strToFloat32(pair[1])
+		val := strToFloat32(ctx, pair[1])
 		// see if our miles are higher
 		if miles >= val {
 			milesStr := fmt.Sprintf("%.1f", miles)
