@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/config"
+	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"github.com/getsentry/sentry-go"
 	sentryotel "github.com/getsentry/sentry-go/otel"
 )
@@ -65,7 +66,10 @@ func Initialize(c config.Config, version string) {
 // has the complete record; Sentry receives a deduplicated sample.
 func throttle(c config.Config) func(event *sentry.Event, hint *sentry.EventHint) *sentry.Event {
 	if c == nil || (!c.IsProduction() && !c.IsStaging()) {
-		return func(*sentry.Event, *sentry.EventHint) *sentry.Event { return nil }
+		return func(*sentry.Event, *sentry.EventHint) *sentry.Event {
+			instrumentation.SentryEventsDropped.Inc("disabled")
+			return nil
+		}
 	}
 	var (
 		mu          sync.Mutex
@@ -82,6 +86,7 @@ func throttle(c config.Config) func(event *sentry.Event, hint *sentry.EventHint)
 			windowCount = 0
 		}
 		if windowCount >= hourlyCap {
+			instrumentation.SentryEventsDropped.Inc("cap")
 			return nil
 		}
 		// event.Message is the slog record's Message field when sent via
@@ -89,6 +94,7 @@ func throttle(c config.Config) func(event *sentry.Event, hint *sentry.EventHint)
 		// collapse to one event per cooldown window.
 		fp := event.Message
 		if t, ok := lastSent[fp]; ok && now.Sub(t) < fingerprintCooldown {
+			instrumentation.SentryEventsDropped.Inc("cooldown")
 			return nil
 		}
 		lastSent[fp] = now

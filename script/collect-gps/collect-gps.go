@@ -48,7 +48,7 @@ func main() {
 
 	// a file was passed in via the CLI
 	if videoFile != "" {
-		vid, err := video.LoadOrCreate(videoFile)
+		vid, err := video.LoadOrCreate(context.Background(), videoFile)
 		if err != nil {
 			slog.Error("unable to create video", "err", err, "file", videoFile)
 		}
@@ -73,7 +73,7 @@ func main() {
 				}
 
 				// actually process the image
-				vid, err := video.LoadOrCreate(path)
+				vid, err := video.LoadOrCreate(context.Background(), path)
 				if err != nil {
 					slog.Error("unable to create video", "err", err, "path", path)
 					return nil

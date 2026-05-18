@@ -71,7 +71,7 @@ func (a *App) helloCmd(ctx context.Context, user *users.User, params []string) {
 
 func (a *App) flagCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !flag", "username", user.Username)
-	a.Onscreens.ShowFlag(10 * time.Second)
+	a.Onscreens.ShowFlag(ctx, 10 * time.Second)
 }
 
 func (a *App) versionCmd(ctx context.Context, user *users.User, _ []string) {
@@ -166,7 +166,7 @@ func (a *App) sunsetCmd(ctx context.Context, user *users.User, _ []string) {
 	vid := a.CurrentVideo()
 	if vid.Flagged {
 		a.IRC.Say("I couldn't figure out current GPS coords, using next closest...")
-		vid = vid.Next()
+		vid = vid.Next(ctx)
 	}
 	lat, lng, _ := vid.Location()
 	a.IRC.Say(helpers.SunsetStr(vid.DateFilmed, lat, lng))
@@ -179,7 +179,7 @@ func (a *App) locationCmd(ctx context.Context, user *users.User, _ []string) {
 		a.IRC.Say("I couldn't figure out current GPS coords, using next closest...")
 		//TODO: write something like vid.FindClosest() that
 		// chooses whether or not to use Next() vs Prev()
-		vid = vid.Next()
+		vid = vid.Next(ctx)
 	}
 	// extract the coordinates
 	lat, lng, err := vid.Location()
@@ -208,7 +208,7 @@ func (a *App) monthlyMilesLeaderboardCmd(ctx context.Context, user *users.User, 
 	leaderboard = leaderboard[:size]
 
 	// display leaderboard on screen
-	a.Onscreens.ShowLeaderboard("Monthly Miles", leaderboard)
+	a.Onscreens.ShowLeaderboard(ctx, "Monthly Miles", leaderboard)
 
 	// build a message to send to chat
 	msg := fmt.Sprintf("Top %d miles this month: ", size)
@@ -233,7 +233,7 @@ func (a *App) lifetimeMilesLeaderboardCmd(ctx context.Context, user *users.User,
 	leaderboard := lifetime[:size]
 
 	// display leaderboard on screen
-	a.Onscreens.ShowLeaderboard("Total Miles", leaderboard)
+	a.Onscreens.ShowLeaderboard(ctx, "Total Miles", leaderboard)
 
 	// build a message to send to chat
 	msg := fmt.Sprintf("Top %d lifetime miles: ", size)
@@ -273,7 +273,7 @@ func (a *App) monthlyGuessLeaderboardCmd(ctx context.Context, user *users.User, 
 	}
 
 	// display leaderboard on screen
-	a.Onscreens.ShowLeaderboard("Correct Guesses This Month", intLeaderboard)
+	a.Onscreens.ShowLeaderboard(ctx, "Correct Guesses This Month", intLeaderboard)
 
 	// build a message to send to chat
 	msg := fmt.Sprintf("Top %d correct guesses this month: ", size)
@@ -292,7 +292,7 @@ func (a *App) timeCmd(ctx context.Context, user *users.User, _ []string) {
 	var lat, lng float64
 	vid := a.CurrentVideo()
 	if vid.Flagged {
-		lat, lng, err = vid.Next().Location()
+		lat, lng, err = vid.Next(ctx).Location()
 	} else {
 		lat, lng, err = vid.Location()
 	}
@@ -311,7 +311,7 @@ func (a *App) dateCmd(ctx context.Context, user *users.User, _ []string) {
 	var lat, lng float64
 	vid := a.CurrentVideo()
 	if vid.Flagged {
-		lat, lng, err = vid.Next().Location()
+		lat, lng, err = vid.Next(ctx).Location()
 	} else {
 		lat, lng, err = vid.Location()
 	}
@@ -356,13 +356,13 @@ func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 	vid := a.CurrentVideo()
 	if vid.Flagged {
 		a.IRC.Say("I couldn't figure out current GPS coords, using next closest...")
-		vid = vid.Next()
+		vid = vid.Next(ctx)
 	}
 
 	if strings.ToLower(guess) == strings.ToLower(vid.State) {
 		msg = fmt.Sprintf("@%s got it! We're in %s", user.Username, vid.State)
 		// show the flag for the state
-		a.Onscreens.ShowFlag(10 * time.Second)
+		a.Onscreens.ShowFlag(ctx, 10 * time.Second)
 		// increase their guess score
 		user.AddToScore(ctx, guessScoreboard, 1.0)
 		user.AddToScore(ctx, scoreboards.CurrentGuessScoreboard(), 1.0)
@@ -379,11 +379,11 @@ func (a *App) stateCmd(ctx context.Context, user *users.User, _ []string) {
 	vid := a.CurrentVideo()
 	if vid.Flagged {
 		a.IRC.Say("I couldn't figure out current GPS coords, using next closest...")
-		vid = vid.Next()
+		vid = vid.Next(ctx)
 	}
 	msg := fmt.Sprintf("We're in %s", vid.State)
 	// show the flag for the state
-	a.Onscreens.ShowFlag(10 * time.Second)
+	a.Onscreens.ShowFlag(ctx, 10 * time.Second)
 	// record that they know the location now
 	user.SetLastLocationTime()
 	a.IRC.Say(msg)
@@ -461,7 +461,7 @@ func (a *App) middleCmd(ctx context.Context, user *users.User, params []string) 
 	// if the arg was "hide", hide the text from view
 	if len(params) == 1 && strings.ToLower(params[0]) == "hide" {
 		a.IRC.Say("Got it! Hiding the message.")
-		a.Onscreens.HideMiddleText()
+		a.Onscreens.HideMiddleText(ctx)
 		return
 	}
 
@@ -470,5 +470,5 @@ func (a *App) middleCmd(ctx context.Context, user *users.User, params []string) 
 
 	slog.InfoContext(ctx, "setting middle text", "text", text)
 
-	a.Onscreens.ShowMiddleText(text)
+	a.Onscreens.ShowMiddleText(ctx, text)
 }

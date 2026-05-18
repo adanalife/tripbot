@@ -1,6 +1,7 @@
 package chatbot
 
 import (
+	"context"
 	"fmt"
 	"time"
 )
@@ -9,11 +10,11 @@ import (
 // overlay surface — it just swallows every call.
 type noopOnscreens struct{}
 
-func (noopOnscreens) ShowFlag(_ time.Duration) error                      { return nil }
-func (noopOnscreens) ShowLeaderboard(_ string, _ [][]string) error        { return nil }
-func (noopOnscreens) HideMiddleText() error                               { return nil }
-func (noopOnscreens) ShowMiddleText(_ string) error                       { return nil }
-func (noopOnscreens) ShowTimewarp() error                                 { return nil }
+func (noopOnscreens) ShowFlag(_ context.Context, _ time.Duration) error                      { return nil }
+func (noopOnscreens) ShowLeaderboard(_ context.Context, _ string, _ [][]string) error        { return nil }
+func (noopOnscreens) HideMiddleText(_ context.Context) error                                 { return nil }
+func (noopOnscreens) ShowMiddleText(_ context.Context, _ string) error                       { return nil }
+func (noopOnscreens) ShowTimewarp(_ context.Context) error                                   { return nil }
 
 // recordingOnscreens captures every call made to it so tests can assert
 // the chatbot invoked the expected overlay method with the expected args.
@@ -22,23 +23,23 @@ type recordingOnscreens struct {
 	Calls []string
 }
 
-func (r *recordingOnscreens) ShowFlag(dur time.Duration) error {
+func (r *recordingOnscreens) ShowFlag(_ context.Context, dur time.Duration) error {
 	r.Calls = append(r.Calls, fmt.Sprintf("ShowFlag(%s)", dur))
 	return nil
 }
-func (r *recordingOnscreens) ShowLeaderboard(title string, lb [][]string) error {
+func (r *recordingOnscreens) ShowLeaderboard(_ context.Context, title string, lb [][]string) error {
 	r.Calls = append(r.Calls, fmt.Sprintf("ShowLeaderboard(%q, %d rows)", title, len(lb)))
 	return nil
 }
-func (r *recordingOnscreens) HideMiddleText() error {
+func (r *recordingOnscreens) HideMiddleText(_ context.Context) error {
 	r.Calls = append(r.Calls, "HideMiddleText()")
 	return nil
 }
-func (r *recordingOnscreens) ShowMiddleText(msg string) error {
+func (r *recordingOnscreens) ShowMiddleText(_ context.Context, msg string) error {
 	r.Calls = append(r.Calls, fmt.Sprintf("ShowMiddleText(%q)", msg))
 	return nil
 }
-func (r *recordingOnscreens) ShowTimewarp() error {
+func (r *recordingOnscreens) ShowTimewarp(_ context.Context) error {
 	r.Calls = append(r.Calls, "ShowTimewarp()")
 	return nil
 }
