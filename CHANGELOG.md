@@ -5,6 +5,32 @@
 
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
+## [v2.11.0] — 2026-05-19
+
+Minor release. Finishes the no-globals refactor across the three remaining packages: `pkg/video` lifts into `*Player`, `pkg/onscreens-client` / `pkg/vlc-client` lift into `*Client`, and post-refactor polish lands on `vlc-server` / `onscreens-server` (real `Health()`, graceful shutdown ctx, per-test isolation). OBS's display stack swaps from Xvfb + fluxbox + x11vnc to Sway (headless Wayland) + wayvnc + Qt6 Wayland, supervised by supervisord — gets the 1080p60 composite off Mesa llvmpipe (~14 CPU cores) and onto the iGPU's render engine, and unblocks the `_tex` zero-copy variant of the VAAPI encoder. The `!version` chatbot command stops shelling out and reads `/etc/tripbot/version` directly.
+
+### Streaming
+
+- **OBS display stack on Sway headless + wayvnc.** Out: `xvfb x11vnc fluxbox dbus-x11 x11-utils`. In: `sway wayvnc xwayland qt6-wayland supervisor`. New `sway-headless.conf` (one virtual 1920x1200@60Hz output, fullscreen OBS, no decorations), per-service supervisord declarations (sway → wayvnc → obs → browser-refresh, with Wayland-socket-wait logic for the dependents), `entrypoint.sh` keeps the template-rendering responsibilities but `exec`s supervisord instead of launching Xvfb/fluxbox/x11vnc by hand. `healthcheck.sh` ports from `xprop` / `xdpyinfo` to `swaymsg get_tree`. Background: after v2.10.0's VAAPI work, prod-1 measurement showed OBS CPU only dropped 1579% → 1487%; thread breakdown revealed 19 `llvmpipe-*` threads at 65-82% CPU doing the composite in software because Xvfb has no DRI3 / GLX hardware path. `BrowserHWAccel=false` stays for the initial rollout. ([#597])
+
+### Internals
+
+- **`pkg/video`: `*Player` struct, `NewPlayer(onscreens, vlc)`.** Owns the previously package-scoped state (`curVid`, `preVid`, `timeStarted`, `CurrentlyPlaying`) plus its two HTTP clients. `video.CurrentlyPlaying` (var read) becomes `video.CurrentlyPlaying()` (func call) at 6 callsites. `GetCurrentlyPlaying(ctx)` and `CurrentProgress()` keep their existing shapes as thin shims around `defaultPlayer.X()`. ([#600])
+- **`pkg/onscreens-client` and `pkg/vlc-client`: `*Client` structs, `New(host) *Client`.** Globals collapse from 2 per package (URL + `httpClient`) to 1 (`defaultClient`) initially, then to 0 once #600 migrates the last callers. Chatbot's `realOnscreens` / `realVLC` adapters hold a constructed `*Client`, wired in `defaultApp`. ([#596], [#600])
+- **`pkg/vlc-server` post-refactor polish.** `New()` either returns a fully-constructed `*Server` or `(nil, err)` — never partial. `(s *Server) Health() error` reflects libvlc player state; `/health/ready` returns 503 with the error message when the player isn't running. Shutdown ctx plumbed into `Shutdown()` and `StartStatsPoller`; `main()`'s graceful-shutdown path drains in-flight HTTP requests with a 5s timeout. ([#594])
+- **`pkg/onscreens-server` post-refactor polish.** Tests construct a fresh `*Server` per test via `newTestServer(t)`; the `sync.Once` shared-state helper is gone. Shutdown ctx plumbed through `(s *Server) Start(ctx)` → `Shutdown(ctx)` → `http.Server.Shutdown(ctx)`; `gracefulShutdown` drains in-flight HTTP requests with a 5s timeout. ([#595])
+
+### Chatbot
+
+- **`!version` reads `/etc/tripbot/version` directly, drops the shell-out.** Ports `bin/current-version.sh` to native Go in `pkg/chatbot/versionCmd`. The version file is already baked at build time (per #419), so the per-invocation `git remote update` + `git describe` round-trip was wasted work. Falls back to `"dev"` (matching the ldflag default the `/version` HTTP handler uses) when the file is missing. ([#598])
+
+[#594]: https://github.com/adanalife/tripbot/pull/594
+[#595]: https://github.com/adanalife/tripbot/pull/595
+[#596]: https://github.com/adanalife/tripbot/pull/596
+[#597]: https://github.com/adanalife/tripbot/pull/597
+[#598]: https://github.com/adanalife/tripbot/pull/598
+[#600]: https://github.com/adanalife/tripbot/pull/600
+
 ## [v2.10.0] — 2026-05-19
 
 Minor release. Two `pkg/` binaries (onscreens-server, vlc-server) finish their no-globals refactor — each now constructs via `New(Config)` with explicit dependencies, eliminating package-level state and making both binaries unit-testable. OBS flips to Advanced Output mode for VAAPI encode (v2.9.3's VAAPI work shipped via Simple Output, which has no VAAPI branch in OBS 32's `StreamEncoder` switch — silent fallback to x264 under the hood). Test infrastructure: `.env.testing` was missing `ONSCREENS_SERVER_HOST` since #568, blocking 146 test functions across 7 packages in CI; restoring the var lifts coverage from FAIL (0%) to 59.7% in `pkg/chatbot`, 76.0% in `pkg/oauthtokens`, 41.1% in `pkg/server`, and meaningful coverage in `pkg/users`, `pkg/twitch`, `pkg/video`, `pkg/scoreboards`.
