@@ -38,16 +38,18 @@ tasks:
       - ENV=testing bin/devenv run --rm test bash
 
   auth:bootstrap:
-    desc: One-time Twitch OAuth bootstrap; writes refresh token to oauth_tokens. Run on host (needs a browser); bring up Postgres first (`bin/devenv up -d db migrate` locally, or `task tripbot:db:up` in infra for cluster DB).
+    desc: Bootstrap BOTH Twitch OAuth identities (bot + broadcaster) back-to-back. Run on host (needs a browser); bring up Postgres first (`bin/devenv up -d db migrate` locally, or `task tripbot:db:up` in infra for cluster DB). Sign in as the bot account when the first browser tab opens, then as the broadcaster on the second.
+    cmds:
+      - task: auth:bootstrap:bot
+      - task: auth:bootstrap:broadcaster
+
+  auth:bootstrap:bot:
+    desc: Bootstrap the bot's Twitch OAuth token (chat:read/edit etc.). Writes the row to oauth_tokens keyed by BOT_USERNAME.
     env:
-      # Local-bootstrap defaults. Override at the shell to point elsewhere.
       ENV: '{{.ENV | default "development"}}'
       DATABASE_HOST: '{{.DATABASE_HOST | default "localhost"}}'
       EXTERNAL_URL: '{{.EXTERNAL_URL | default "http://localhost:8080"}}'
     cmds:
-      # Pull Twitch app credentials from SM so they never live in env.docker.
-      # `mise exec --` activates the pinned Go toolchain in task's
-      # non-interactive subshell (where ~/.zshrc isn't sourced).
       - |
         secret=$(aws-vault exec adanalife-stage -- \
           aws secretsmanager get-secret-value \
@@ -56,7 +58,24 @@ tasks:
         export TWITCH_CLIENT_ID=$(echo "$secret" | jq -r .TWITCH_CLIENT_ID)
         export TWITCH_CLIENT_SECRET=$(echo "$secret" | jq -r .TWITCH_CLIENT_SECRET)
         printf '\a'
-        mise exec -- go run ./cmd/auth-bootstrap
+        mise exec -- go run ./cmd/auth-bootstrap --account=bot
+
+  auth:bootstrap:broadcaster:
+    desc: Bootstrap the broadcaster's Twitch OAuth token (channel:read:subscriptions, moderator:read:followers, user:edit:broadcast). Writes the row to oauth_tokens keyed by CHANNEL_NAME. Required for subscriber/follower polling.
+    env:
+      ENV: '{{.ENV | default "development"}}'
+      DATABASE_HOST: '{{.DATABASE_HOST | default "localhost"}}'
+      EXTERNAL_URL: '{{.EXTERNAL_URL | default "http://localhost:8080"}}'
+    cmds:
+      - |
+        secret=$(aws-vault exec adanalife-stage -- \
+          aws secretsmanager get-secret-value \
+          --secret-id k8s/tripbot/twitch-creds \
+          --query SecretString --output text)
+        export TWITCH_CLIENT_ID=$(echo "$secret" | jq -r .TWITCH_CLIENT_ID)
+        export TWITCH_CLIENT_SECRET=$(echo "$secret" | jq -r .TWITCH_CLIENT_SECRET)
+        printf '\a'
+        mise exec -- go run ./cmd/auth-bootstrap --account=broadcaster
 
   # Release smoke flow — see vault/tripbot/release-checklist.md.
   # Targets the local k3d cluster running the stage-1 overlay
