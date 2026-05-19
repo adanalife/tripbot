@@ -115,11 +115,11 @@ export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp/runtime-root}"
 mkdir -p "$XDG_RUNTIME_DIR"
 chmod 0700 "$XDG_RUNTIME_DIR"
 
-# Self-signed cert for wayvnc's VeNCrypt (TLS-wrapped VNC). macOS Screen
-# Sharing.app refuses to connect to a VNC server that offers only the
-# legacy "None" security type — VeNCrypt is the encrypted option it
-# prefers. Cert is throwaway (regenerated per pod start, used only over
-# port-forward'd cluster-internal traffic) so a 10-year self-signed
+# Self-signed cert for wayvnc's encrypted security types (VeNCrypt for
+# TigerVNC/RealVNC, Apple Diffie-Hellman for macOS Screen Sharing.app).
+# macOS Screen Sharing refuses VNC servers that offer only the legacy
+# "None" type. Cert is throwaway (regenerated per pod start, used only
+# over port-forward'd cluster-internal traffic) so a 10-year self-signed
 # RSA-2048 cert with no CN validation is fine.
 if [[ ! -f "$XDG_RUNTIME_DIR/wayvnc.crt" ]]; then
   openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
@@ -129,6 +129,16 @@ if [[ ! -f "$XDG_RUNTIME_DIR/wayvnc.crt" ]]; then
     2>/dev/null
   chmod 0600 "$XDG_RUNTIME_DIR/wayvnc.key"
 fi
+
+# Render the wayvnc cfg from its template. enable_auth=true (the actual
+# load-bearing toggle for TLS — without it the cert paths are ignored)
+# requires a username + password, so we env-substitute both into the
+# rendered cfg. Defaults live here in entrypoint rather than as
+# Dockerfile ENV directives so they don't end up baked into image
+# metadata visible via `docker inspect`.
+export VNC_USERNAME="${VNC_USERNAME:-adanalife}"
+export VNC_PASSWD="${VNC_PASSWD:-123456}"
+envsubst < /opt/obs/config/wayvnc.cfg.tmpl > "$XDG_RUNTIME_DIR/wayvnc.cfg"
 
 # Hand off to supervisord. It manages sway, wayvnc, obs, and the hourly
 # browser-source refresh (with each program's start order + Wayland-socket
