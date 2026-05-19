@@ -1,6 +1,7 @@
 package onscreensServer
 
 import (
+	"sync"
 	"time"
 )
 
@@ -21,32 +22,65 @@ type Onscreen struct {
 	Expires       time.Time     `json:"-"`
 	DontExpire    bool          `json:"-"`
 	SleepInterval time.Duration `json:"-"`
+
+	// stop is closed by shutdown() to signal background goroutines
+	// (the expiry sweeper plus the optional rotator loop) to exit. wg
+	// is incremented for each goroutine spawned against this onscreen
+	// so shutdown() can block until they've all returned. Both are
+	// zero-value-usable; newOnscreen makes them explicit.
+	stop chan struct{}
+	wg   sync.WaitGroup
+
+	// stopOnce guards shutdown() so multiple closes don't panic — the
+	// Server calls shutdown on every onscreen on every Shutdown() call,
+	// and tests sometimes Shutdown twice for cleanup.
+	stopOnce sync.Once
 }
 
 // newOnscreen returns a freshly-initialized *Onscreen with the default
 // sleep interval and an expiry pinned to "now" (i.e. ready to be shown
 // for some duration). It also kicks off the background loop that hides
-// expired onscreens.
+// expired onscreens; that loop exits when shutdown() is called.
 func newOnscreen() *Onscreen {
-	osc := &Onscreen{}
-	osc.Content = ""
-	osc.Expires = time.Now()
-	osc.DontExpire = false
-	osc.SleepInterval = time.Duration(defaultSleepInterval)
+	osc := &Onscreen{
+		Content:       "",
+		Expires:       time.Now(),
+		DontExpire:    false,
+		SleepInterval: time.Duration(defaultSleepInterval),
+		stop:          make(chan struct{}),
+	}
 	// start the background loop
+	osc.wg.Add(1)
 	go osc.backgroundLoop()
 	return osc
 }
 
-// backgroundLoop will loop forever, hiding the Onscreen if needed
-//TODO: add signal to end the loop
+// backgroundLoop hides expired onscreens on a fixed cadence. It exits
+// when osc.stop is closed by shutdown(). Sleep is implemented via a
+// select-on-timer so the goroutine can react to stop without waiting
+// out a full SleepInterval.
 func (osc *Onscreen) backgroundLoop() {
-	for { // forever
+	defer osc.wg.Done()
+	for {
 		if osc.IsShowing && osc.isExpired() {
 			osc.Hide()
 		}
-		time.Sleep(osc.SleepInterval)
+		t := time.NewTimer(osc.SleepInterval)
+		select {
+		case <-osc.stop:
+			t.Stop()
+			return
+		case <-t.C:
+		}
 	}
+}
+
+// signalStop closes osc.stop so background goroutines see the signal.
+// Idempotent — guarded by stopOnce so repeated calls don't panic.
+func (osc *Onscreen) signalStop() {
+	osc.stopOnce.Do(func() {
+		close(osc.stop)
+	})
 }
 
 func (osc *Onscreen) isExpired() bool {
