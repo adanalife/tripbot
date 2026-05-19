@@ -2,6 +2,8 @@
 package database
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"log"
 	"log/slog"
@@ -86,6 +88,17 @@ func Connection() *sqlx.DB {
 		}
 	}
 	return dbConnection
+}
+
+// Ping reports whether the DB connection is currently reachable. Unlike
+// Connection(), it does NOT enter the 5-second reconnect loop on failure —
+// transient outages surface as errors immediately. Suitable for readiness
+// probes that need to fail fast.
+func Ping(ctx context.Context) error {
+	if dbConnection == nil {
+		return errors.New("database: connection not initialized")
+	}
+	return dbConnection.PingContext(ctx)
 }
 
 func isAlive() bool {
