@@ -1,6 +1,7 @@
 package vlcServer
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -139,17 +140,28 @@ func (s *Server) Health() error {
 	}
 }
 
-// Shutdown cleans up VLC as best it can. The release order (player.Stop →
-// player.Release → libvlc.Release) is order-sensitive — releasing the
-// libvlc instance before the player segfaults. Preserve verbatim.
+// Shutdown drains the HTTP server (bounded by ctx) then cleans up libvlc.
+// The libvlc release order (player.Stop → player.Release → libvlc.Release)
+// is order-sensitive — releasing the libvlc instance before the player
+// segfaults. Preserve verbatim.
 //
 // New guarantees that on success s.Player is non-nil; on failure New
 // releases any partially-allocated libvlc resources itself and returns
 // (nil, err). Callers that hold a non-nil *Server therefore never observe
 // a nil Player, so this method assumes both fields are valid.
 //
+// s.http may be nil if Shutdown is called before Start populated it; in
+// that case there's nothing to drain and we skip straight to libvlc
+// cleanup.
+//
 //TODO: are there more things to close gracefully?
-func (s *Server) Shutdown() {
+func (s *Server) Shutdown(ctx context.Context) {
+	if s.http != nil {
+		slog.InfoContext(ctx, "shutting down VLC web server")
+		if err := s.http.Shutdown(ctx); err != nil {
+			slog.ErrorContext(ctx, "error during VLC web server shutdown", "err", err)
+		}
+	}
 	if helpers.RunningOnDarwin() {
 		slog.Info("not stopping VLC on darwin")
 		return

@@ -26,12 +26,6 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-// shutdownTimeout is how long Shutdown waits for in-flight requests to
-// finish before forcing connections closed. 15s is the typical sweet spot:
-// long enough that healthy requests complete, short enough that a stuck
-// handler doesn't block process exit indefinitely.
-const shutdownTimeout = 15 * time.Second
-
 // Config is the construction-time configuration passed to New. It carries
 // only the runtime knobs the binary needs to inject at startup; everything
 // else flows in via the package-level c.Conf read from env.
@@ -89,9 +83,9 @@ func (s *Server) releasePartial() {
 }
 
 // Start starts the web server. When ctx is canceled (e.g. SIGINT/SIGTERM
-// via signal.NotifyContext) the server stops accepting new connections and
-// waits up to shutdownTimeout for in-flight requests to complete before
-// returning.
+// via signal.NotifyContext) it returns so the caller can invoke
+// Shutdown(ctx) to drain in-flight HTTP requests with a bounded ctx and
+// release libvlc.
 func (s *Server) Start(ctx context.Context) {
 	slog.InfoContext(ctx, "starting VLC web server", "bind", c.Conf.VlcServerBindAddress)
 
@@ -193,12 +187,9 @@ func (s *Server) Start(ctx context.Context) {
 			terrors.FatalContext(ctx, err, "couldn't start server")
 		}
 	case <-ctx.Done():
-		slog.InfoContext(ctx, "shutting down VLC web server")
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
-		defer cancel()
-		if err := s.http.Shutdown(shutdownCtx); err != nil {
-			slog.ErrorContext(shutdownCtx, "error during VLC web server shutdown", "err", err)
-		}
+		// Return so the caller can run Shutdown(ctx) with a bounded ctx;
+		// that's where http.Server.Shutdown is invoked.
+		slog.InfoContext(ctx, "VLC web server ctx canceled, returning to let caller shut down")
 	}
 }
 
