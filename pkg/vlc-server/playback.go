@@ -1,26 +1,25 @@
 package vlcServer
 
 import (
-	"log/slog"
 	"errors"
+	"log/slog"
 	"math/rand"
 	"path/filepath"
-
 )
 
 //TODO: should we handle the case where index is outside range?
 // or just explicitly pass in what we get here?
-func playAtIndex(index int) error {
+func (s *Server) playAtIndex(index int) error {
 	// start playing the media
-	return playlist.PlayAtIndex(uint(index))
+	return s.Playlist.PlayAtIndex(uint(index))
 }
 
 // playVideoFile plays a video file in the playlist
-func playVideoFile(vidStr string) error {
+func (s *Server) playVideoFile(vidStr string) error {
 	// extract just the filename
 	videoFile := filepath.Base(vidStr)
-	index := getIndex(videoFile)
-	return playAtIndex(index)
+	index := s.getIndex(videoFile)
+	return s.playAtIndex(index)
 }
 
 // nextIndex computes a wrapped playlist position. Pure function so it can
@@ -37,18 +36,18 @@ func nextIndex(current, offset, length int) int {
 }
 
 // skip plays the video n items forward in the playlist,
-func skip(n int) error {
-	return playAtIndex(nextIndex(currentIndex(), n, len(videoFiles)))
+func (s *Server) skip(n int) error {
+	return s.playAtIndex(nextIndex(s.currentIndex(), n, len(s.VideoFiles)))
 }
 
 // back plays the video n items backward in the playlist,
-func back(n int) error {
-	return playAtIndex(nextIndex(currentIndex(), -n, len(videoFiles)))
+func (s *Server) back(n int) error {
+	return s.playAtIndex(nextIndex(s.currentIndex(), -n, len(s.VideoFiles)))
 }
 
 // PlayRandom plays a random file from the playlist
-func PlayRandom() error {
-	count, err := mediaList.Count()
+func (s *Server) PlayRandom() error {
+	count, err := s.MediaList.Count()
 	if err != nil {
 		slog.Error("error counting media in VLC media list", "err", err)
 	}
@@ -62,11 +61,11 @@ func PlayRandom() error {
 	random := rand.Intn(count)
 
 	// start playing the media
-	return playAtIndex(random)
+	return s.playAtIndex(random)
 }
 
-func getIndex(vidStr string) int {
-	for i, file := range videoFiles {
+func (s *Server) getIndex(vidStr string) int {
+	for i, file := range s.VideoFiles {
 		if file == vidStr {
 			return i
 		}
@@ -74,8 +73,8 @@ func getIndex(vidStr string) int {
 	return -1
 }
 
-func currentIndex() int {
+func (s *Server) currentIndex() int {
 	// extract just the filename
-	videoFile := filepath.Base(currentlyPlaying())
-	return getIndex(videoFile)
+	videoFile := filepath.Base(s.currentlyPlaying())
+	return s.getIndex(videoFile)
 }

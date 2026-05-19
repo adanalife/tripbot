@@ -13,15 +13,12 @@ import (
 	libvlc "github.com/adrg/libvlc-go/v3"
 )
 
-var player *libvlc.Player
-var playlist *libvlc.ListPlayer
-var mediaList *libvlc.MediaList
-var videoFiles []string
-
 //TODO: figure out if vdpau_avcodec can be better than none
 //TODO: there are a ton of potentially-useful avcodec flags
 
-// platform-invariant flags that never need per-host tuning
+// platform-invariant flags that never need per-host tuning.
+// Stays package-level: immutable build-time configuration; cgo init order
+// depends on these being package-scoped, not struct fields.
 var vlcStaticFlags = []string{
 	"--ignore-config", // ignore any config files that might get loaded
 	"--fullscreen",    // start fullscreened (only matters when VLC_OUTPUT renders a window; no-op headless)
@@ -97,39 +94,50 @@ var vlcVerboseFlags = []string{
 	"-vv", // be very verbose (used for debugging)
 }
 
-// InitPlayer creates a VLC player and sets up a playlist
-func InitPlayer() {
-	startVLC()
-	createPlayer()
-	setToLoop()
-	loadMedia()
+// initPlayer creates a VLC player and sets up a playlist. Order is
+// load-bearing: libvlc.Init must happen before any *libvlc* object can be
+// created, and the media list must be attached to the playlist before
+// media is added to it. Preserve this sequence verbatim.
+func (s *Server) initPlayer() error {
+	if err := startVLC(); err != nil {
+		return err
+	}
+	if err := s.createPlayer(); err != nil {
+		return err
+	}
+	if err := s.setToLoop(); err != nil {
+		return err
+	}
+	return s.loadMedia()
 }
 
-// Shutdown cleans up VLC as best it can
+// Shutdown cleans up VLC as best it can. The release order (player.Stop →
+// player.Release → libvlc.Release) is order-sensitive — releasing the
+// libvlc instance before the player segfaults. Preserve verbatim.
+//
 //TODO: are there more things to close gracefully?
-func Shutdown() {
+func (s *Server) Shutdown() {
 	if helpers.RunningOnDarwin() {
 		slog.Info("not stopping VLC on darwin")
 		return
 	}
-	err := player.Stop()
-	if err != nil {
-		slog.Error("error stopping player", "err", err)
+	if s.Player != nil {
+		if err := s.Player.Stop(); err != nil {
+			slog.Error("error stopping player", "err", err)
+		}
+		if err := s.Player.Release(); err != nil {
+			slog.Error("error releasing player", "err", err)
+		}
 	}
-	err = player.Release()
-	if err != nil {
-		slog.Error("error releasing player", "err", err)
-	}
-	err = libvlc.Release()
-	if err != nil {
+	if err := libvlc.Release(); err != nil {
 		slog.Error("error releasing libvlc", "err", err)
 	}
 }
 
 // currentlyPlaying finds the currently-playing video path
 // (it's pretty hacky right now)
-func currentlyPlaying() string {
-	cur, err := player.Media()
+func (s *Server) currentlyPlaying() string {
+	cur, err := s.Player.Media()
 	if err != nil {
 		slog.Error("error fetching currently-playing media", "err", err)
 	}
@@ -144,7 +152,7 @@ func currentlyPlaying() string {
 	return filepath.Base(path)
 }
 
-func startVLC() {
+func startVLC() error {
 	// build the base flag set from the static list + config-driven tuning
 	// values. Defaults in pkg/config/vlc-server reproduce what used to be
 	// hardcoded here, so unset env vars yield identical behavior.
@@ -185,53 +193,55 @@ func startVLC() {
 
 	// start up VLC with given command flags
 	if err := libvlc.Init(vlcCmdFlags...); err != nil {
-		terrors.Fatal(err, "error initializing VLC")
+		return fmt.Errorf("error initializing VLC: %w", err)
 	}
+	return nil
 }
 
-func createPlayer() {
-	var err error
-
+func (s *Server) createPlayer() error {
 	// create a new playlist-player
-	playlist, err = libvlc.NewListPlayer()
+	playlist, err := libvlc.NewListPlayer()
 	if err != nil {
-		terrors.Fatal(err, "error creating VLC playlist player")
+		return fmt.Errorf("error creating VLC playlist player: %w", err)
 	}
+	s.Playlist = playlist
 
 	// save the player so we can use it later
-	player, err = playlist.Player()
+	player, err := playlist.Player()
 	if err != nil {
-		terrors.Fatal(err, "error fetching VLC player")
+		return fmt.Errorf("error fetching VLC player: %w", err)
 	}
+	s.Player = player
 
 	// this will store all of our videos
-	mediaList, err = libvlc.NewMediaList()
+	mediaList, err := libvlc.NewMediaList()
 	if err != nil {
-		terrors.Fatal(err, "error creating VLC media list")
+		return fmt.Errorf("error creating VLC media list: %w", err)
 	}
+	s.MediaList = mediaList
 
 	// plug our medialist into the player
-	err = playlist.SetMediaList(mediaList)
-	if err != nil {
-		terrors.Fatal(err, "error setting VLC media list")
+	if err := playlist.SetMediaList(mediaList); err != nil {
+		return fmt.Errorf("error setting VLC media list: %w", err)
 	}
+	return nil
 }
 
-func setToLoop() {
+func (s *Server) setToLoop() error {
 	// set the player to loop forever
-	err := playlist.SetPlaybackMode(libvlc.Loop)
-	if err != nil {
-		terrors.Fatal(err, "error setting VLC playback mode")
+	if err := s.Playlist.SetPlaybackMode(libvlc.Loop); err != nil {
+		return fmt.Errorf("error setting VLC playback mode: %w", err)
 	}
+	return nil
 }
 
-func loadMedia() {
-	loadLocalMedia()
+func (s *Server) loadMedia() error {
+	return s.loadLocalMedia()
 }
 
 // loadLocalMedia walks the VideoDir and adds all videos to
 // the playlist.
-func loadLocalMedia() {
+func (s *Server) loadLocalMedia() error {
 	var filePaths []string
 	// add all files from the VideoDir to the medialist
 	err := filepath.Walk(c.Conf.VideoDir, func(path string, info os.FileInfo, err error) error {
@@ -247,24 +257,25 @@ func loadLocalMedia() {
 		filePaths = append(filePaths, path)
 		// add the video filename to videoFiles list
 		videoFile := filepath.Base(path)
-		videoFiles = append(videoFiles, videoFile)
+		s.VideoFiles = append(s.VideoFiles, videoFile)
 		return nil
 	})
 	if err != nil {
-		terrors.Fatal(err, "error walking VideoDir")
+		return fmt.Errorf("error walking VideoDir: %w", err)
 	}
 
 	// loop over the files and add their paths to VLC
 	for _, file := range filePaths {
 		media, err := libvlc.NewMediaFromPath(file)
 		if err != nil {
-			terrors.Fatal(err, "error creating media from path")
+			return fmt.Errorf("error creating media from path: %w", err)
 		}
 		if err := media.AddOptions(mediaOptions()...); err != nil {
-			terrors.Fatal(err, "error setting media options")
+			return fmt.Errorf("error setting media options: %w", err)
 		}
-		if err := mediaList.AddMedia(media); err != nil {
-			terrors.Fatal(err, "error adding files to VLC media list")
+		if err := s.MediaList.AddMedia(media); err != nil {
+			return fmt.Errorf("error adding files to VLC media list: %w", err)
 		}
 	}
+	return nil
 }

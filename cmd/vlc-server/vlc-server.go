@@ -25,6 +25,10 @@ var version = "dev"
 
 var telemetryShutdown telemetry.ShutdownFunc
 
+// srv is the running vlc-server, captured in main so gracefulShutdown can
+// reach it from its signal-handler goroutine.
+var srv *vlcServer.Server
+
 func main() {
 	slog.Info("vlc-server starting", "version", version)
 
@@ -55,23 +59,26 @@ func main() {
 	// set up error logging
 	initializeErrorLogger()
 
-	// start VLC
-	vlcServer.InitPlayer()
-	vlcServer.PlayRandom() // play a random video
+	// start VLC + load media; surfaces libvlc init errors instead of
+	// fatalling-during-init from inside the package.
+	var err error
+	srv, err = vlcServer.New(vlcServer.Config{Version: version})
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer srv.Shutdown()
+
+	srv.PlayRandom() // play a random video
 
 	// poll libvlc for playback stats (FPS, bitrate, dropped frames) and
 	// surface them as OTel gauges. No-op when telemetry is disabled.
-	vlcServer.StartStatsPoller(context.Background(), 5*time.Second)
+	srv.StartStatsPoller(context.Background(), 5*time.Second)
 
 	// poll the OBS WebSocket for streaming state + render/output stats.
 	go obs.PollStreamingActive(context.Background(), 30*time.Second)
 
 	// start the webserver
-	vlcServer.SetVersion(version)
-	vlcServer.Start(shutdownCtx)
-
-	// listen for termination signals and gracefully shutdown
-	defer vlcServer.Shutdown()
+	srv.Start(shutdownCtx)
 }
 
 // initializeTelemetry brings up OpenTelemetry providers (traces, metrics,
@@ -112,7 +119,9 @@ func gracefulShutdown() {
 
 	slog.Warn("caught CTRL-C, shutting down")
 	// anything below this probably won't be executed
-	vlcServer.Shutdown()
+	if srv != nil {
+		srv.Shutdown()
+	}
 	//TODO: stop cron here
 	sentry.Flush(time.Second * 5)
 	if telemetryShutdown != nil {
