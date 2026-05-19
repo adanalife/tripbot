@@ -1,7 +1,7 @@
 package onscreensServer
 
 import (
-	"sync"
+	"testing"
 
 	c "github.com/adanalife/tripbot/pkg/config/onscreens-server"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
@@ -14,20 +14,16 @@ func init() {
 	terrors.Initialize(*c.Conf, "test")
 }
 
-// testServer constructs a *Server once per test binary and reuses it
-// across tests. Constructing fresh per test would be cleaner but each
-// New() call spawns the seven background goroutines (rotator loops +
-// expiry sweepers); the current tests are read-only against handler
-// validation paths so the shared instance is fine and saves the
-// goroutine churn.
-var (
-	testServerOnce sync.Once
-	testServerInst *Server
-)
-
-func testServer() *Server {
-	testServerOnce.Do(func() {
-		testServerInst = New(Config{Version: "test"})
-	})
-	return testServerInst
+// newTestServer constructs a fresh *Server for the calling test, giving
+// each test real state isolation rather than the cross-test sharing the
+// old sync.Once helper provided.
+//
+// New() spawns the seven onscreens' background goroutines (rotator loops +
+// expiry sweepers). They have no stop hook today, so each test leaks its
+// goroutines for the duration of the test process. That's fine for state
+// isolation — every *Server has its own onscreen singletons, and the
+// leaked goroutines only touch the *Server that spawned them.
+func newTestServer(t *testing.T) *Server {
+	t.Helper()
+	return New(Config{Version: "test"})
 }
