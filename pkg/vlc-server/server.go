@@ -97,12 +97,15 @@ func (s *Server) Start(ctx context.Context) {
 
 	r := mux.NewRouter()
 
-	// healthcheck endpoints
+	// healthcheck endpoints. /health/ + /health/live answer process-alive
+	// (shallow); /health/ready consults libvlc player state via Health()
+	// so K8s readiness probes pull the pod out of rotation if the player
+	// stalls (without restarting the process).
 	//TODO: handle HEAD requests here too
 	hp := r.PathPrefix("/health").Methods("GET", "HEAD").Subrouter()
-	hp.Handle("/", tagged("/health/", s.healthHandler))
-	hp.Handle("/live", tagged("/health/live", s.healthHandler))
-	hp.Handle("/ready", tagged("/health/ready", s.healthHandler))
+	hp.Handle("/", tagged("/health/", s.livenessHandler))
+	hp.Handle("/live", tagged("/health/live", s.livenessHandler))
+	hp.Handle("/ready", tagged("/health/ready", s.readinessHandler))
 
 	// version endpoint — returns build metadata as JSON
 	r.Handle("/version", tagged("/version", s.versionHandler)).Methods("GET", "HEAD")

@@ -1,6 +1,7 @@
 package vlcServer
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -109,6 +110,33 @@ func (s *Server) initPlayer() error {
 		return err
 	}
 	return s.loadMedia()
+}
+
+// Health returns nil when the server is ready to serve a viewer, or an
+// error describing why it isn't. Used by /health/ready (readinessHandler)
+// so K8s readiness probes reflect libvlc player state.
+//
+// Healthy means s.Player is non-nil AND its libvlc MediaState is one of
+// the "active" states: Opening, Buffering, Playing, Paused. Stopped,
+// Ended, Error, and NothingSpecial are treated as unhealthy — Ended is
+// excluded conservatively because while a looping playlist passes
+// through it between clips, a sustained Ended generally indicates a
+// stalled player (the loop logic isn't advancing), and we'd rather fail
+// readiness too eagerly than too lazily.
+func (s *Server) Health() error {
+	if s.Player == nil {
+		return errors.New("player not initialized")
+	}
+	state, err := s.Player.MediaState()
+	if err != nil {
+		return fmt.Errorf("reading player state: %w", err)
+	}
+	switch state {
+	case libvlc.MediaOpening, libvlc.MediaBuffering, libvlc.MediaPlaying, libvlc.MediaPaused:
+		return nil
+	default:
+		return fmt.Errorf("player not running (state=%v)", state)
+	}
 }
 
 // Shutdown cleans up VLC as best it can. The release order (player.Stop →
