@@ -5,6 +5,28 @@
 
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
+## [v2.11.1] — 2026-05-19
+
+Patch release. Fixes the two loose ends from v2.11.0's Wayland refactor: OBS's iGPU acceleration didn't actually engage (wlroots rejected `WLR_RENDER_DRM_DEVICE=/dev/dri/card0` as a primary node and silently fell back to pixman + llvmpipe), and Screen Sharing.app on macOS couldn't connect to wayvnc because wayvnc 0.7 doesn't offer legacy VNC Authentication and Screen Sharing.app refuses connections without an encrypted security type. Also drops the transitional `CurrentVideo` closure on the chatbot `App` now that `Video.Current()` covers it, and adds the first test file for `pkg/video` (0% → 36% statement coverage).
+
+### Streaming
+
+- **`WLR_RENDER_DRM_DEVICE` points at the render node, not card0.** `/dev/dri/card0` → `/dev/dri/renderD128` in `start-sway.sh`. wlroots requires a DRM render node; card0 is the primary (KMS scanout) node, so wlroots rejected it and sway fell back to the pixman software renderer, which cascaded into Mesa EGL on the OBS client failing to create a DRI2 screen and OBS loading llvmpipe. After this fix, sway gets a real DRM device handle, the OBS client picks up the `iris` driver, and the zero-copy `_tex` VAAPI path engages. Mac-dev / stage-1 fallback is preserved — if `/dev/dri/renderD128` doesn't exist, sway uses pixman the same as before. ([#608])
+- **wayvnc serves a self-signed TLS cert so Screen Sharing.app can connect.** New `infra/docker/obs/config/wayvnc.cfg` configures wayvnc with `private_key_file` + `certificate_file` paths in `$XDG_RUNTIME_DIR` and `relax_encryption=true`; `entrypoint.sh` generates a 10-year self-signed RSA-2048 cert at pod start (regenerated per pod — debug-only VNC, never reaches the internet); `start-wayvnc.sh` switches from positional args to `--config=`. `openssl` added explicitly to both Dockerfiles. With the cert, wayvnc offers VeNCrypt (the encrypted security type Screen Sharing.app prefers); `relax_encryption=true` keeps the "None" path available for simpler VNC clients. ([#609])
+
+### Chatbot
+
+- **Drop the `CurrentVideo func() video.Video` closure on `App`.** The closure was a transitional seam introduced alongside the `Video` interface and slated for removal once `Video` covered the same surface — `Video.Current()` already does exactly what `CurrentVideo()` did. Migrates the eight `a.CurrentVideo()` callsites in `commands.go` to `a.Video.Current()`; `newTestApp(vid)` now wires `&recordingVideo{Vid: vid}` for `Video` instead of also stashing a separate `CurrentVideo` closure. Net: one fewer field on `App`, one fewer thing for test fixtures to wire up, a single interface seam for "the currently-playing video." ([#602])
+
+### Internals
+
+- **First test file for `pkg/video`.** Now that `*Player` is constructable (per v2.11.0 #600), its `GetCurrentlyPlaying` state machine — vid-transition detection, `timeStarted` reset on transition, GPS-image toggle based on the new vid's `Flagged` field — can be exercised against `httptest`-backed `*Client` instances and a sqlmock-backed `gorm.DB`. Coverage on `pkg/video` goes from 0% → 36% of statements. ([#607])
+
+[#602]: https://github.com/adanalife/tripbot/pull/602
+[#607]: https://github.com/adanalife/tripbot/pull/607
+[#608]: https://github.com/adanalife/tripbot/pull/608
+[#609]: https://github.com/adanalife/tripbot/pull/609
+
 ## [v2.11.0] — 2026-05-19
 
 Minor release. Finishes the no-globals refactor across the three remaining packages: `pkg/video` lifts into `*Player`, `pkg/onscreens-client` / `pkg/vlc-client` lift into `*Client`, and post-refactor polish lands on `vlc-server` / `onscreens-server` (real `Health()`, graceful shutdown ctx, per-test isolation). OBS's display stack swaps from Xvfb + fluxbox + x11vnc to Sway (headless Wayland) + wayvnc + Qt6 Wayland, supervised by supervisord — gets the 1080p60 composite off Mesa llvmpipe (~14 CPU cores) and onto the iGPU's render engine, and unblocks the `_tex` zero-copy variant of the VAAPI encoder. The `!version` chatbot command stops shelling out and reads `/etc/tripbot/version` directly.
