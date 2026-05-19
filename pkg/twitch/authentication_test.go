@@ -18,6 +18,17 @@ func resetToken(t *testing.T) {
 	})
 }
 
+// resetBroadcasterToken restores currentBroadcasterToken after a mutation.
+func resetBroadcasterToken(t *testing.T) {
+	t.Helper()
+	saved := currentBroadcasterToken
+	t.Cleanup(func() {
+		tokenMu.Lock()
+		currentBroadcasterToken = saved
+		tokenMu.Unlock()
+	})
+}
+
 func TestIRCAuthToken_PrefixesOauth(t *testing.T) {
 	resetToken(t)
 	tokenMu.Lock()
@@ -82,6 +93,55 @@ func TestBotScopes_DropsOpenID(t *testing.T) {
 		if s == "openid" {
 			t.Errorf("BotScopes still includes openid; expected drop")
 		}
+	}
+}
+
+func TestBroadcasterScopes_IncludesSubscriptionsAndFollowers(t *testing.T) {
+	required := []string{"channel:read:subscriptions", "moderator:read:followers"}
+	have := map[string]bool{}
+	for _, s := range BroadcasterScopes {
+		have[s] = true
+	}
+	for _, r := range required {
+		if !have[r] {
+			t.Errorf("BroadcasterScopes missing required scope %q (have %v)", r, BroadcasterScopes)
+		}
+	}
+}
+
+func TestBroadcasterScopes_DisjointFromBotScopes(t *testing.T) {
+	// The two scope sets serve different identities; if a scope appears in
+	// both it suggests confusion about which token authorizes which call.
+	bot := map[string]bool{}
+	for _, s := range BotScopes {
+		bot[s] = true
+	}
+	for _, s := range BroadcasterScopes {
+		if bot[s] {
+			t.Errorf("scope %q appears in both BotScopes and BroadcasterScopes", s)
+		}
+	}
+}
+
+func TestBroadcasterTokenLoaded_FalseWhenEmpty(t *testing.T) {
+	resetBroadcasterToken(t)
+	tokenMu.Lock()
+	currentBroadcasterToken = oauthtokens.Token{}
+	tokenMu.Unlock()
+
+	if broadcasterTokenLoaded() {
+		t.Error("broadcasterTokenLoaded() = true with empty token; want false")
+	}
+}
+
+func TestBroadcasterTokenLoaded_TrueWhenSet(t *testing.T) {
+	resetBroadcasterToken(t)
+	tokenMu.Lock()
+	currentBroadcasterToken = oauthtokens.Token{AccessToken: "broadcaster-tok"}
+	tokenMu.Unlock()
+
+	if !broadcasterTokenLoaded() {
+		t.Error("broadcasterTokenLoaded() = false with token set; want true")
 	}
 }
 
