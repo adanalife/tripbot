@@ -175,16 +175,53 @@ func (s *Server) Start(ctx context.Context) error {
 }
 
 // Shutdown gracefully stops the HTTP listener, allowing in-flight
-// requests up to ctx's deadline to complete before closing connections.
-// Returns the error from http.Server.Shutdown so callers can log or act
-// on a timeout. Safe to call once Start has returned (or concurrently
-// while Start is blocked on ctx.Done()); calling on a zero-value Server
-// (Start never ran) is a no-op.
+// requests up to ctx's deadline to complete before closing connections,
+// then signals every onscreen's background goroutines (the expiry
+// sweepers plus the two rotator loops) to exit and waits for them to
+// return. Returns the error from http.Server.Shutdown so callers can
+// log or act on an HTTP-drain timeout. Safe to call once Start has
+// returned (or concurrently while Start is blocked on ctx.Done()), and
+// safe to call more than once; calling on a zero-value Server (Start
+// never ran) skips the HTTP drain but still stops the onscreen loops.
+//
+// The onscreen-loop wait runs against ctx, so a caller that's already
+// past its deadline returns immediately rather than blocking on
+// goroutines that should be exiting any moment. The goroutines select
+// on a closed stop channel and exit on the next loop iteration, which
+// in the worst case is one SleepInterval (5s for the expiry sweeper)
+// or one rotator interval (45s/90s) away — well inside the 5s HTTP
+// shutdown deadline cmd/onscreens-server passes, but the ctx-aware
+// wait keeps Shutdown bounded regardless.
 func (s *Server) Shutdown(ctx context.Context) error {
-	if s.http == nil {
-		return nil
+	var httpErr error
+	if s.http != nil {
+		httpErr = s.http.Shutdown(ctx)
 	}
-	return s.http.Shutdown(ctx)
+	s.shutdownOnscreens(ctx)
+	return httpErr
+}
+
+// shutdownOnscreens closes each onscreen's stop channel and waits for
+// every spawned goroutine to exit, bounded by ctx. Called from
+// Shutdown; split out so the wait can be expressed as a single
+// select-on-ctx without further nesting Shutdown's logic.
+func (s *Server) shutdownOnscreens(ctx context.Context) {
+	all := s.all()
+	// Signal everyone first so the waits overlap.
+	for _, osc := range all {
+		osc.signalStop()
+	}
+	done := make(chan struct{})
+	go func() {
+		for _, osc := range all {
+			osc.wg.Wait()
+		}
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-ctx.Done():
+	}
 }
 
 // versionHandler returns build metadata as JSON. The tag comes from the

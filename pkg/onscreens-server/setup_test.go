@@ -1,7 +1,9 @@
 package onscreensServer
 
 import (
+	"context"
 	"testing"
+	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/onscreens-server"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
@@ -16,14 +18,16 @@ func init() {
 
 // newTestServer constructs a fresh *Server for the calling test, giving
 // each test real state isolation rather than the cross-test sharing the
-// old sync.Once helper provided.
-//
-// New() spawns the seven onscreens' background goroutines (rotator loops +
-// expiry sweepers). They have no stop hook today, so each test leaks its
-// goroutines for the duration of the test process. That's fine for state
-// isolation — every *Server has its own onscreen singletons, and the
-// leaked goroutines only touch the *Server that spawned them.
+// old sync.Once helper provided. A t.Cleanup hook calls Shutdown so the
+// per-onscreen background goroutines (expiry sweepers + rotator loops)
+// don't accumulate across the test process.
 func newTestServer(t *testing.T) *Server {
 	t.Helper()
-	return New(Config{Version: "test"})
+	srv := New(Config{Version: "test"})
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		_ = srv.Shutdown(ctx)
+	})
+	return srv
 }
