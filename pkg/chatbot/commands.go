@@ -7,8 +7,6 @@ import (
 	"math"
 	"math/rand"
 	"os"
-	"os/exec"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -28,6 +26,12 @@ import (
 var lastHelloTime time.Time = time.Now()
 
 var currentVersion string
+
+// versionFilePath is the build-time-baked version file path. Released
+// container images write the tag here (see infra/docker/*/Dockerfile);
+// outside a container the file won't exist and versionCmd falls back to
+// "dev". Overridable in tests.
+var versionFilePath = "/etc/tripbot/version"
 
 // this is the scoreboard name used for counting correct guesses
 const guessScoreboard = "guess_state_total"
@@ -77,25 +81,30 @@ func (a *App) flagCmd(ctx context.Context, user *users.User, _ []string) {
 func (a *App) versionCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !version", "username", user.Username)
 
-	if helpers.RunningOnWindows() {
-		a.IRC.Say("Sorry, I can't answer that right now")
-		return
-	}
-
-	// check if we already know the version
+	// Cache the lookup — the file is baked at image build time, so its
+	// contents don't change for the lifetime of the process.
 	if currentVersion == "" {
-		// run the shell script to get current tripbot version
-		scriptPath := filepath.Join(helpers.ProjectRoot(), "bin", "current-version.sh")
-		out, err := exec.Command(scriptPath).Output()
-		if err != nil {
-			slog.ErrorContext(ctx, "failed to get current version", "err", err)
-			a.IRC.Say("Failed to get current version :(")
-			return
-		}
-		currentVersion = strings.TrimSpace(string(out))
+		currentVersion = readBuildVersion(ctx)
 	}
 
 	a.IRC.Say("Current version is " + currentVersion)
+}
+
+// readBuildVersion reads the build-time-baked tag from versionFilePath
+// (written by the release Dockerfiles). When the file is missing or
+// empty — i.e. local `go run` outside a container — returns "dev" to
+// match the ldflag default used by the /version HTTP handler.
+func readBuildVersion(ctx context.Context) string {
+	raw, err := os.ReadFile(versionFilePath)
+	if err != nil {
+		slog.DebugContext(ctx, "version file not present, falling back to dev", "err", err, "file", versionFilePath)
+		return "dev"
+	}
+	v := strings.TrimSpace(string(raw))
+	if v == "" {
+		return "dev"
+	}
+	return v
 }
 
 func (a *App) uptimeCmd(ctx context.Context, user *users.User, _ []string) {

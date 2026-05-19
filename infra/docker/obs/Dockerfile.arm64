@@ -23,11 +23,18 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # msttcorefonts wants EULA pre-acceptance for unattended install. Trebuchet MS
 # is used by some onscreen text scene-sources.
+#
+# Display stack: sway (headless Wayland compositor) + wayvnc (Wayland VNC
+# server). Replaces the previous Xvfb / fluxbox / x11vnc trio so OBS's
+# OpenGL hits the iGPU instead of falling back to Mesa llvmpipe. supervisor
+# manages sway/wayvnc/obs/browser-refresh as separate programs with
+# Wayland-socket-wait dependency on sway. See Dockerfile (amd64) for the
+# longer comment.
 RUN echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true" \
       | debconf-set-selections \
     && apt-get update && apt-get install -y --no-install-recommends \
-      xvfb x11vnc fluxbox feh tini gettext-base procps x11-utils \
-      ca-certificates dbus-x11 libgl1-mesa-dri \
+      sway wayvnc xwayland supervisor feh tini gettext-base procps \
+      ca-certificates libgl1-mesa-dri \
       fonts-dejavu-core ttf-mscorefonts-installer \
       # OBS runtime deps (mirrors the build deps with -dev stripped) \
       libavcodec60 libavdevice60 libavfilter9 libavformat60 libavutil58 \
@@ -73,10 +80,16 @@ RUN ldconfig
 RUN find /usr/local -name chrome-sandbox -exec chmod 4755 {} +
 
 COPY infra/docker/obs/config/ /opt/obs/config/
+COPY infra/docker/obs/script/ /opt/obs/script/
 COPY infra/docker/obs/entrypoint.sh /opt/obs/entrypoint.sh
 COPY infra/docker/obs/healthcheck.sh /opt/obs/healthcheck.sh
 COPY bin/obs-browser-refresh /opt/obs/bin/obs-browser-refresh
-RUN chmod +x /opt/obs/entrypoint.sh /opt/obs/healthcheck.sh /opt/obs/bin/obs-browser-refresh
+RUN chmod +x /opt/obs/entrypoint.sh /opt/obs/healthcheck.sh \
+             /opt/obs/bin/obs-browser-refresh /opt/obs/script/*.sh
+
+# Per-program supervisor configs live in /etc/supervisor/conf.d/. The
+# default supervisord.conf from the package globs *.conf out of that dir.
+COPY infra/docker/obs/supervisor/ /etc/supervisor/conf.d/
 
 COPY assets/twitch-overlay-left.png assets/twitch-overlay-right.png /opt/tripbot/assets/
 
