@@ -172,7 +172,7 @@ func (a *App) kilometresCmd(ctx context.Context, user *users.User, _ []string) {
 
 func (a *App) sunsetCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !sunset", "username", user.Username)
-	vid := a.CurrentVideo()
+	vid := a.Video.Current()
 	if vid.Flagged {
 		a.IRC.Say("I couldn't figure out current GPS coords, using next closest...")
 		vid = vid.Next(ctx)
@@ -183,7 +183,7 @@ func (a *App) sunsetCmd(ctx context.Context, user *users.User, _ []string) {
 
 func (a *App) locationCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !location (or similar)", "username", user.Username)
-	vid := a.CurrentVideo()
+	vid := a.Video.Current()
 	if vid.Flagged {
 		a.IRC.Say("I couldn't figure out current GPS coords, using next closest...")
 		//TODO: write something like vid.FindClosest() that
@@ -299,7 +299,7 @@ func (a *App) timeCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !time", "username", user.Username)
 	var err error
 	var lat, lng float64
-	vid := a.CurrentVideo()
+	vid := a.Video.Current()
 	if vid.Flagged {
 		lat, lng, err = vid.Next(ctx).Location()
 	} else {
@@ -318,7 +318,7 @@ func (a *App) dateCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !date", "username", user.Username)
 	var err error
 	var lat, lng float64
-	vid := a.CurrentVideo()
+	vid := a.Video.Current()
 	if vid.Flagged {
 		lat, lng, err = vid.Next(ctx).Location()
 	} else {
@@ -362,7 +362,7 @@ func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 		guess = helpers.StateAbbrevToState(guess)
 	}
 
-	vid := a.CurrentVideo()
+	vid := a.Video.Current()
 	if vid.Flagged {
 		a.IRC.Say("I couldn't figure out current GPS coords, using next closest...")
 		vid = vid.Next(ctx)
@@ -385,7 +385,7 @@ func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 
 func (a *App) stateCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !state", "username", user.Username)
-	vid := a.CurrentVideo()
+	vid := a.Video.Current()
 	if vid.Flagged {
 		a.IRC.Say("I couldn't figure out current GPS coords, using next closest...")
 		vid = vid.Next(ctx)
@@ -422,7 +422,7 @@ func (a *App) secretInfoCmd(ctx context.Context, user *users.User, _ []string) {
 	if !c.UserIsAdmin(user.Username) {
 		return
 	}
-	vid := a.CurrentVideo()
+	vid := a.Video.Current()
 	msg := fmt.Sprintf("currently playing: %s, playtime: %s", vid, video.CurrentProgress())
 	lat, lng, err := vid.Location()
 	if err != nil {
@@ -441,7 +441,7 @@ func (a *App) shutdownCmd(ctx context.Context, user *users.User, _ []string) {
 		return
 	}
 	a.IRC.Say("Shutting down...")
-	slog.InfoContext(ctx, "shutdown: currently playing", "video", a.CurrentVideo())
+	slog.InfoContext(ctx, "shutdown: currently playing", "video", a.Video.Current())
 	background.StopCron()
 	a.Sessions.Shutdown(ctx)
 	err := database.Connection().Close()

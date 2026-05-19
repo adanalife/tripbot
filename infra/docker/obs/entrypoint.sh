@@ -112,6 +112,23 @@ fi
 # Shared Wayland runtime dir. start-sway.sh creates it with 0700; export
 # it here so any debugging exec'd in the container picks it up too.
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp/runtime-root}"
+mkdir -p "$XDG_RUNTIME_DIR"
+chmod 0700 "$XDG_RUNTIME_DIR"
+
+# Self-signed cert for wayvnc's VeNCrypt (TLS-wrapped VNC). macOS Screen
+# Sharing.app refuses to connect to a VNC server that offers only the
+# legacy "None" security type — VeNCrypt is the encrypted option it
+# prefers. Cert is throwaway (regenerated per pod start, used only over
+# port-forward'd cluster-internal traffic) so a 10-year self-signed
+# RSA-2048 cert with no CN validation is fine.
+if [[ ! -f "$XDG_RUNTIME_DIR/wayvnc.crt" ]]; then
+  openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
+    -subj "/CN=wayvnc" \
+    -keyout "$XDG_RUNTIME_DIR/wayvnc.key" \
+    -out "$XDG_RUNTIME_DIR/wayvnc.crt" \
+    2>/dev/null
+  chmod 0600 "$XDG_RUNTIME_DIR/wayvnc.key"
+fi
 
 # Hand off to supervisord. It manages sway, wayvnc, obs, and the hourly
 # browser-source refresh (with each program's start order + Wayland-socket
