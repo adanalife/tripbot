@@ -12,7 +12,7 @@ import (
 // input before reaching the onscreen singletons.
 
 func TestOnscreensMiddleHandlerInvalidBase64Returns422(t *testing.T) {
-	s := testServer()
+	s := newTestServer(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/onscreens/middle/show?msg=!!!not-base64!!!", nil)
 	req = mux.SetURLVars(req, map[string]string{"action": "show"})
@@ -26,7 +26,7 @@ func TestOnscreensMiddleHandlerInvalidBase64Returns422(t *testing.T) {
 }
 
 func TestOnscreensMiddleHandlerMissingMsgReturns417(t *testing.T) {
-	s := testServer()
+	s := newTestServer(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/onscreens/middle/show", nil)
 	req = mux.SetURLVars(req, map[string]string{"action": "show"})
@@ -40,7 +40,7 @@ func TestOnscreensMiddleHandlerMissingMsgReturns417(t *testing.T) {
 }
 
 func TestOnscreensMiddleHandlerUnknownActionReturns417(t *testing.T) {
-	s := testServer()
+	s := newTestServer(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/onscreens/middle/explode", nil)
 	req = mux.SetURLVars(req, map[string]string{"action": "explode"})
@@ -54,7 +54,7 @@ func TestOnscreensMiddleHandlerUnknownActionReturns417(t *testing.T) {
 }
 
 func TestOnscreensLeaderboardHandlerInvalidBase64Returns422(t *testing.T) {
-	s := testServer()
+	s := newTestServer(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/onscreens/leaderboard/show?content=!!!", nil)
 	req = mux.SetURLVars(req, map[string]string{"action": "show"})
@@ -68,7 +68,7 @@ func TestOnscreensLeaderboardHandlerInvalidBase64Returns422(t *testing.T) {
 }
 
 func TestOnscreensFlagHandlerUnknownActionReturns417(t *testing.T) {
-	s := testServer()
+	s := newTestServer(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/onscreens/flag/explode", nil)
 	req = mux.SetURLVars(req, map[string]string{"action": "explode"})
