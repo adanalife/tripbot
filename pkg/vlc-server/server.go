@@ -10,6 +10,7 @@ import (
 	c "github.com/adanalife/tripbot/pkg/config/vlc-server"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
+	"github.com/adanalife/tripbot/pkg/httpmw"
 	sentrynegroni "github.com/getsentry/sentry-go/negroni"
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -75,10 +76,11 @@ func Start(ctx context.Context) {
 		helpers.PrintAllRoutes(r)
 	}
 
-	// negroni classic adds panic recovery, logger, and static file middlewares
-	// c.p. https://github.com/urfave/negroni
+	// negroni.New + explicit middleware so we can swap negroni's stdlib
+	// logger for an slog-based one — see pkg/httpmw.SlogLogger. The static
+	// middleware from negroni.Classic is dropped (no public/ directory).
 	//TODO: consider adding HTMLPanicFormatter
-	app := negroni.Classic()
+	app := negroni.New(negroni.NewRecovery(), httpmw.NewSlogLogger())
 
 	// attach http-metrics (prometheus) middleware
 	metricsMw := middleware.New(middleware.Config{

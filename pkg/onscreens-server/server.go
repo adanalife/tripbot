@@ -9,6 +9,7 @@ import (
 	c "github.com/adanalife/tripbot/pkg/config/onscreens-server"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
+	"github.com/adanalife/tripbot/pkg/httpmw"
 	sentrynegroni "github.com/getsentry/sentry-go/negroni"
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -73,7 +74,10 @@ func Start() {
 		helpers.PrintAllRoutes(r)
 	}
 
-	app := negroni.Classic()
+	// negroni.New + explicit middleware so we can swap negroni's stdlib
+	// logger for an slog-based one — see pkg/httpmw.SlogLogger. The static
+	// middleware from negroni.Classic is dropped (no public/ directory).
+	app := negroni.New(negroni.NewRecovery(), httpmw.NewSlogLogger())
 
 	metricsMw := middleware.New(middleware.Config{
 		Recorder: metrics.NewRecorder(metrics.Config{}),
