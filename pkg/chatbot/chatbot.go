@@ -65,7 +65,7 @@ func (a *App) db() *gorm.DB {
 }
 
 var defaultApp = &App{
-	CurrentVideo: func() video.Video { return video.CurrentlyPlaying },
+	CurrentVideo: func() video.Video { return video.CurrentlyPlaying() },
 	// DB stays nil; commands use a.db() which falls back to database.GormDB().
 	Onscreens: realOnscreens{c: onscreensClient.New(c.Conf.OnscreensServerHost)},
 	VLC:       realVLC{c: vlcClient.New(c.Conf.VlcServerHost)},
