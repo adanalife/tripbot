@@ -16,10 +16,10 @@ port=5900
 enable_auth=true
 
 # Credentials live in the rendered cfg (envsubst'd from VNC_USERNAME +
-# VNC_PASSWD). Plain-text in a root-owned file inside the pod — same
-# posture as the previous x11vnc -passwd setup. Override at deploy
-# time via the OBS Deployment's env (today VNC_PASSWD defaults to
-# 123456 via the Dockerfile ENV).
+# VNC_PASSWD). Plain-text in a root-owned file inside $XDG_RUNTIME_DIR
+# (tmpfs at /tmp, no persistence) — same posture as the previous
+# x11vnc -passwd setup. Defaults set in entrypoint.sh; override at
+# deploy time by setting the env vars on the OBS Deployment.
 username=${VNC_USERNAME}
 password=${VNC_PASSWD}
 

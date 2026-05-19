@@ -133,10 +133,11 @@ fi
 # Render the wayvnc cfg from its template. enable_auth=true (the actual
 # load-bearing toggle for TLS — without it the cert paths are ignored)
 # requires a username + password, so we env-substitute both into the
-# rendered cfg. VNC_USERNAME defaults to "adanalife"; VNC_PASSWD defaults
-# to "123456" via the Dockerfile ENV but can be overridden by the OBS
-# Deployment env (matches the previous x11vnc setup's posture).
+# rendered cfg. Defaults live here in entrypoint rather than as
+# Dockerfile ENV directives so they don't end up baked into image
+# metadata visible via `docker inspect`.
 export VNC_USERNAME="${VNC_USERNAME:-adanalife}"
+export VNC_PASSWD="${VNC_PASSWD:-123456}"
 envsubst < /opt/obs/config/wayvnc.cfg.tmpl > "$XDG_RUNTIME_DIR/wayvnc.cfg"
 
 # Hand off to supervisord. It manages sway, wayvnc, obs, and the hourly
