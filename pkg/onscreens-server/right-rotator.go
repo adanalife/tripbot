@@ -6,8 +6,6 @@ import (
 	"time"
 )
 
-var rightRotator *Onscreen
-
 var rightRotatorUpdateFrequency = time.Duration(90 * time.Second)
 
 var possibleRightMessages = []string{
@@ -17,10 +15,6 @@ var possibleRightMessages = []string{
 	"Try running !location",
 	"Try running !timewarp",
 	"Streaming 24 hours a day",
-}
-
-func InitRightRotator() {
-	rightRotator = newRightRotator()
 }
 
 // newRightRotator constructs the right-rotator *Onscreen, primes it with

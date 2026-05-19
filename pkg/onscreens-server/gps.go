@@ -5,28 +5,14 @@ import (
 	"time"
 )
 
-var gpsImage *Onscreen
-
+// gpsDuration is the canonical "how long should the GPS overlay stay
+// visible" tunable. Currently unused — the handler uses bare Show() and
+// the chatbot side hides explicitly — but kept here so a future
+// auto-expiry path doesn't have to re-derive a value.
 var gpsDuration = time.Duration(150 * time.Second)
 
-func InitGPSImage() {
-	gpsImage = newGPSOnscreen()
-}
-
-// newGPSOnscreen constructs the GPS *Onscreen and emits the matching
-// "creating onscreen" slog line for parity with the legacy InitX free
-// functions.
+// newGPSOnscreen constructs the GPS *Onscreen.
 func newGPSOnscreen() *Onscreen {
 	slog.Info("creating onscreen", "kind", "gps")
 	return newOnscreen()
-}
-
-//TODO: this should probably return an error
-func ShowGPSImage() {
-	gpsImage.Show("")
-}
-
-//TODO: this should probably return an error
-func HideGPSImage() {
-	gpsImage.Hide()
 }

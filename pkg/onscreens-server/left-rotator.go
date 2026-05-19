@@ -6,8 +6,6 @@ import (
 	"time"
 )
 
-var leftRotator *Onscreen
-
 var leftRotatorUpdateFrequency = time.Duration(45 * time.Second)
 
 var possibleLeftMessages = []string{
@@ -24,10 +22,6 @@ var possibleLeftMessages = []string{
 	// "Looking for artist for emotes and more",
 	// "Twitch Prime subs keep us on air :D",
 	// "Use !report to report stream issues",
-}
-
-func InitLeftRotator() {
-	leftRotator = newLeftRotator()
 }
 
 // newLeftRotator constructs the left-rotator *Onscreen, primes it with a

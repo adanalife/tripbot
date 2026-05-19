@@ -4,12 +4,6 @@ import (
 	"log/slog"
 )
 
-var middleText *Onscreen
-
-func InitMiddleText() {
-	middleText = newMiddleText()
-}
-
 // newMiddleText constructs the middle-text *Onscreen. Unlike the other
 // onscreens this one is permanent (DontExpire = true) and starts in the
 // "showing" state so the OBS browser source keeps rendering whatever
