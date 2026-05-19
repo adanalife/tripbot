@@ -1,6 +1,7 @@
 package onscreensServer
 
 import (
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"runtime/debug"
@@ -22,8 +23,54 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 	"go.opentelemetry.io/otel/trace"
-	"encoding/json"
 )
+
+// Config bundles the runtime knobs cmd/onscreens-server passes into New.
+// Build-time configuration (bind address, server type, etc.) still flows
+// through the package-level config.Conf var imported as `c` — Config is
+// only for the handful of values that vary per process invocation.
+type Config struct {
+	// Version is the build-time tag returned by /version. Typically set
+	// from cmd/onscreens-server's `main.version` var, which is overridden
+	// via `-ldflags "-X main.version=..."`.
+	Version string
+}
+
+// Server owns the onscreen singletons and the HTTP listener that serves
+// them. Construct via New; call Start to block on the HTTP listener.
+type Server struct {
+	Version string
+
+	Flag         *Onscreen
+	GPS          *Onscreen
+	Leaderboard  *Onscreen
+	LeftRotator  *Onscreen
+	MiddleText   *Onscreen
+	RightRotator *Onscreen
+	Timewarp     *Onscreen
+
+	http *http.Server
+}
+
+// New constructs a *Server with all seven onscreens initialised and
+// their background loops (rotators, expiry sweepers) running. It does
+// not bind any sockets — Start does that.
+func New(cfg Config) *Server {
+	version := cfg.Version
+	if version == "" {
+		version = "dev"
+	}
+	return &Server{
+		Version:      version,
+		Flag:         newFlagOnscreen(),
+		GPS:          newGPSOnscreen(),
+		Leaderboard:  newLeaderboardOnscreen(),
+		LeftRotator:  newLeftRotator(),
+		MiddleText:   newMiddleText(),
+		RightRotator: newRightRotator(),
+		Timewarp:     newTimewarp(),
+	}
+}
 
 // versionTag is set by main via SetVersion; overridden at build time
 // through `-ldflags "-X main.version=..."`.
@@ -36,6 +83,7 @@ func SetVersion(v string) {
 		versionTag = v
 	}
 }
+
 
 // Start brings up the HTTP listener serving all /onscreens/* routes plus
 // the standard /health, /version, /metrics surface.

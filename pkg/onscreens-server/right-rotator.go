@@ -20,19 +20,26 @@ var possibleRightMessages = []string{
 }
 
 func InitRightRotator() {
-	slog.Info("creating onscreen", "kind", "right-rotator")
-	rightRotator = New()
-	// Show a first message synchronously so the OBS browser source has
-	// content to render the moment it polls — otherwise there's a brief
-	// race where the rotator is empty until the goroutine schedules.
-	rightRotator.Show(rightRotatorContent())
-	go rightRotatorLoop()
+	rightRotator = newRightRotator()
 }
 
-func rightRotatorLoop() {
+// newRightRotator constructs the right-rotator *Onscreen, primes it with
+// a first message synchronously (so the OBS browser source has content
+// to render the moment it polls — otherwise there's a brief race where
+// the rotator is empty until the goroutine schedules), and kicks off the
+// background loop that rotates the message every rightRotatorUpdateFrequency.
+func newRightRotator() *Onscreen {
+	slog.Info("creating onscreen", "kind", "right-rotator")
+	osc := newOnscreen()
+	osc.Show(rightRotatorContent())
+	go rightRotatorLoop(osc)
+	return osc
+}
+
+func rightRotatorLoop(osc *Onscreen) {
 	for { // forever
 		time.Sleep(time.Duration(rightRotatorUpdateFrequency))
-		rightRotator.Show(rightRotatorContent())
+		osc.Show(rightRotatorContent())
 	}
 }
 

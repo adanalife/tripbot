@@ -8,8 +8,15 @@ import (
 var flagImage *Onscreen
 
 func InitFlagImage() {
+	flagImage = newFlagOnscreen()
+}
+
+// newFlagOnscreen constructs the flag *Onscreen and emits the matching
+// "creating onscreen" slog line for parity with the legacy InitX free
+// functions.
+func newFlagOnscreen() *Onscreen {
 	slog.Info("creating onscreen", "kind", "flag")
-	flagImage = New()
+	return newOnscreen()
 }
 
 //TODO: this should probably return an error
