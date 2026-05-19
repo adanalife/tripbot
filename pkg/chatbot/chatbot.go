@@ -11,8 +11,10 @@ import (
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
+	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/video"
+	vlcClient "github.com/adanalife/tripbot/pkg/vlc-client"
 	"github.com/gempir/go-twitch-irc/v4"
 	"github.com/kelvins/geocoder"
 	"gorm.io/gorm"
@@ -63,10 +65,10 @@ func (a *App) db() *gorm.DB {
 }
 
 var defaultApp = &App{
-	CurrentVideo: func() video.Video { return video.CurrentlyPlaying },
+	CurrentVideo: func() video.Video { return video.CurrentlyPlaying() },
 	// DB stays nil; commands use a.db() which falls back to database.GormDB().
-	Onscreens: realOnscreens{},
-	VLC:       realVLC{},
+	Onscreens: realOnscreens{c: onscreensClient.New(c.Conf.OnscreensServerHost)},
+	VLC:       realVLC{c: vlcClient.New(c.Conf.VlcServerHost)},
 	Video:     realVideo{},
 	IRC:       realIRC{},
 	Sessions:  realSessions{},

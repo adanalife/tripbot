@@ -25,10 +25,10 @@ type Video interface {
 // realVideo delegates to pkg/video.
 type realVideo struct{}
 
-func (realVideo) Current() video.Video { return video.CurrentlyPlaying }
+func (realVideo) Current() video.Video { return video.CurrentlyPlaying() }
 func (realVideo) GetCurrentlyPlaying(ctx context.Context) video.Video {
 	video.GetCurrentlyPlaying(ctx)
-	return video.CurrentlyPlaying
+	return video.CurrentlyPlaying()
 }
 func (realVideo) FindRandomByState(ctx context.Context, state string) (video.Video, error) {
 	return video.FindRandomByState(ctx, state)

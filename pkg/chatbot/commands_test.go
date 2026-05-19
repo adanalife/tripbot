@@ -2,6 +2,8 @@ package chatbot
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -442,6 +444,81 @@ func TestVersionCmd_MessageFormat(t *testing.T) {
 
 	if !strings.HasPrefix(out(), "Current version is ") {
 		t.Errorf("unexpected message format: %q", out())
+	}
+}
+
+func TestVersionCmd_ReadsFromVersionFile(t *testing.T) {
+	app := newTestApp(video.Video{})
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "version")
+	if err := os.WriteFile(path, []byte("v9.9.9-from-file\n"), 0o644); err != nil {
+		t.Fatalf("seed version file: %v", err)
+	}
+
+	origPath := versionFilePath
+	versionFilePath = path
+	currentVersion = ""
+	defer func() {
+		versionFilePath = origPath
+		currentVersion = ""
+	}()
+
+	out, restore := captureSay(t)
+	defer restore()
+
+	app.versionCmd(context.Background(), newTestUser("viewer1"), nil)
+
+	if !strings.Contains(out(), "v9.9.9-from-file") {
+		t.Errorf("expected version read from file, got %q", out())
+	}
+}
+
+func TestVersionCmd_FallsBackToDevWhenFileMissing(t *testing.T) {
+	app := newTestApp(video.Video{})
+
+	origPath := versionFilePath
+	versionFilePath = filepath.Join(t.TempDir(), "does-not-exist")
+	currentVersion = ""
+	defer func() {
+		versionFilePath = origPath
+		currentVersion = ""
+	}()
+
+	out, restore := captureSay(t)
+	defer restore()
+
+	app.versionCmd(context.Background(), newTestUser("viewer1"), nil)
+
+	if !strings.Contains(out(), "dev") {
+		t.Errorf("expected 'dev' fallback in output, got %q", out())
+	}
+}
+
+func TestVersionCmd_FallsBackToDevWhenFileEmpty(t *testing.T) {
+	app := newTestApp(video.Video{})
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "version")
+	if err := os.WriteFile(path, []byte("   \n"), 0o644); err != nil {
+		t.Fatalf("seed empty version file: %v", err)
+	}
+
+	origPath := versionFilePath
+	versionFilePath = path
+	currentVersion = ""
+	defer func() {
+		versionFilePath = origPath
+		currentVersion = ""
+	}()
+
+	out, restore := captureSay(t)
+	defer restore()
+
+	app.versionCmd(context.Background(), newTestUser("viewer1"), nil)
+
+	if !strings.Contains(out(), "dev") {
+		t.Errorf("expected 'dev' fallback for whitespace-only file, got %q", out())
 	}
 }
 
