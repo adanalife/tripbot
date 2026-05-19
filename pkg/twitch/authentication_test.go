@@ -52,35 +52,35 @@ func TestCurrentUserAccessToken_ReturnsRaw(t *testing.T) {
 	}
 }
 
-func TestScopes_IncludesIRCScopes(t *testing.T) {
+func TestBotScopes_IncludesIRCBotScopes(t *testing.T) {
 	required := []string{"chat:read", "chat:edit"}
 	have := map[string]bool{}
-	for _, s := range Scopes {
+	for _, s := range BotScopes {
 		have[s] = true
 	}
 	for _, r := range required {
 		if !have[r] {
-			t.Errorf("Scopes missing required IRC scope %q (have %v)", r, Scopes)
+			t.Errorf("BotScopes missing required IRC scope %q (have %v)", r, BotScopes)
 		}
 	}
 }
 
-func TestScopes_NoDuplicates(t *testing.T) {
+func TestBotScopes_NoDuplicates(t *testing.T) {
 	seen := map[string]bool{}
-	for _, s := range Scopes {
+	for _, s := range BotScopes {
 		if seen[s] {
-			t.Errorf("duplicate scope %q in Scopes", s)
+			t.Errorf("duplicate scope %q in BotScopes", s)
 		}
 		seen[s] = true
 	}
 }
 
-func TestScopes_DropsOpenID(t *testing.T) {
+func TestBotScopes_DropsOpenID(t *testing.T) {
 	// openid was in the previous scope set but the bot doesn't read ID
 	// claims; dropping it shrinks the consent screen and reduces surface.
-	for _, s := range Scopes {
+	for _, s := range BotScopes {
 		if s == "openid" {
-			t.Errorf("Scopes still includes openid; expected drop")
+			t.Errorf("BotScopes still includes openid; expected drop")
 		}
 	}
 }

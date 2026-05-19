@@ -61,22 +61,33 @@ var BroadcasterScopes = []string{
 // bootstrap CLI." Re-exported from oauthtokens for caller convenience.
 var ErrNoToken = oauthtokens.ErrNoToken
 
-// currentTwitchClient is the lazy-initialized helix client.
+// currentTwitchClient is the lazy-initialized bot helix client. IRC auth +
+// any Helix endpoint authorized against the bot's identity goes through this.
 var currentTwitchClient *helix.Client
 
+// broadcasterTwitchClient is the lazy-initialized broadcaster helix client.
+// Endpoints that authorize against the channel-owner identity (GetSubscriptions,
+// GetChannelFollows total, channel.update, mod actions) go through this — the
+// bot client would 401 since the user-access-token's identity matters, not
+// just its scope set.
+var broadcasterTwitchClient *helix.Client
+
 // ClientID, ClientSecret are set from env at init.
-// AppAccessToken is set in Client() (Client Credentials grant).
+// AppAccessToken is set in Client() (Client Credentials grant) and shared by
+// both helix clients.
 var (
 	ClientID       string
 	ClientSecret   string
 	AppAccessToken string
 )
 
-// tokenMu guards currentUserToken. RWMutex because reads (IRCAuthToken,
-// CurrentUserAccessToken) outnumber writes (LoadFromDB, refresh).
+// tokenMu guards both currentUserToken (bot) and currentBroadcasterToken.
+// RWMutex because reads (IRCAuthToken, CurrentUserAccessToken) outnumber
+// writes (LoadFromDB, refresh).
 var (
-	tokenMu          sync.RWMutex
-	currentUserToken oauthtokens.Token
+	tokenMu                 sync.RWMutex
+	currentUserToken        oauthtokens.Token
+	currentBroadcasterToken oauthtokens.Token
 )
 
 // init requires the static credentials needed to build a helix client.
@@ -125,23 +136,82 @@ func Client() (*helix.Client, error) {
 	return client, err
 }
 
-// LoadFromDB pulls the row for the configured bot account into in-memory
-// state. cmd/tripbot calls this once at boot before chatbot.Initialize; the
-// returned error is checked for ErrNoToken so the cold-start message points
-// at the bootstrap CLI.
+// BroadcasterClient returns the helix client that carries the broadcaster's
+// user-access-token, lazy-building it on first call. Calls authorizing
+// against the channel-owner identity (GetSubscriptions, GetChannelFollows
+// total, channel.update) must go through this client; the bot client would
+// 401 on those endpoints.
+//
+// The App Access Token is reused from Client(); each helix.Client only needs
+// the per-identity user-access-token to differ.
+func BroadcasterClient() (*helix.Client, error) {
+	if broadcasterTwitchClient != nil {
+		return broadcasterTwitchClient, nil
+	}
+	// Ensure Client() ran so AppAccessToken is set.
+	if _, err := Client(); err != nil {
+		return nil, err
+	}
+	client, err := helix.NewClient(&helix.Options{
+		ClientID:     ClientID,
+		ClientSecret: ClientSecret,
+		RedirectURI:  c.Conf.ExternalURL + "/auth/callback",
+		HTTPClient:   helixHTTPClient,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("twitch: building broadcaster client: %w", err)
+	}
+	if AppAccessToken != "" {
+		client.SetAppAccessToken(AppAccessToken)
+	}
+	tokenMu.RLock()
+	if currentBroadcasterToken.AccessToken != "" {
+		client.SetUserAccessToken(currentBroadcasterToken.AccessToken)
+	}
+	tokenMu.RUnlock()
+	broadcasterTwitchClient = client
+	return client, nil
+}
+
+// LoadFromDB loads both the bot row and the broadcaster row from oauth_tokens.
+// The bot row is required (no IRC without it). The broadcaster row is
+// optional — when missing, broadcaster-gated Helix calls skip until it's
+// seeded via `task tripbot:auth:bootstrap:broadcaster`.
+//
+// Returns ErrNoToken only when the bot row is missing.
 func LoadFromDB() error {
-	t, err := oauthtokens.Get("twitch", c.Conf.BotUsername)
+	botUser := c.Conf.BotUsername
+	broadcasterUser := c.Conf.ChannelName
+
+	t, err := oauthtokens.Get("twitch", botUser)
 	if err != nil {
 		return err
 	}
 	tokenMu.Lock()
 	currentUserToken = t
 	tokenMu.Unlock()
-
-	// If the helix client is already built, prime its user-access-token so
-	// follow-up Helix calls that need user-scoped permissions work.
 	if currentTwitchClient != nil {
 		currentTwitchClient.SetUserAccessToken(t.AccessToken)
+	}
+
+	if broadcasterUser == "" || broadcasterUser == botUser {
+		return nil
+	}
+	bt, berr := oauthtokens.Get("twitch", broadcasterUser)
+	if berr != nil {
+		if errors.Is(berr, oauthtokens.ErrNoToken) {
+			slog.Warn("no broadcaster oauth_tokens row; subscriber/follower polling will skip until `task tripbot:auth:bootstrap:broadcaster` seeds it",
+				"broadcaster", broadcasterUser)
+			return nil
+		}
+		slog.Error("failed to load broadcaster oauth_tokens row", "err", berr, "broadcaster", broadcasterUser)
+		return nil
+	}
+	tokenMu.Lock()
+	currentBroadcasterToken = bt
+	tokenMu.Unlock()
+	if broadcasterTwitchClient != nil {
+		broadcasterTwitchClient.SetUserAccessToken(bt.AccessToken)
 	}
 	return nil
 }
