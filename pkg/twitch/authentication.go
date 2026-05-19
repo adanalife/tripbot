@@ -239,18 +239,36 @@ func CurrentUserAccessToken() string {
 // GenerateUserAccessToken exchanges a code for an access+refresh token,
 // derives the authenticated username via helix.GetUsers (so bootstrap is
 // account-agnostic — the row is keyed by whoever signed in at consent),
-// and Upserts. If the resulting row matches BOT_USERNAME, also primes the
-// in-memory state so the running bot picks up the rotated token.
+// and Upserts. When the discovered identity matches the bot or the
+// broadcaster, the matching in-memory slot + helix client is also primed
+// so the running pod picks up the rotated token without a restart.
+//
+// Uses a one-shot helix client for the code exchange + GetUsers discovery
+// so the shared bot client's user-access-token is never clobbered by the
+// bootstrap of an unrelated identity.
 //
 // Returns error (no longer swallows). Callers: /auth/callback handler,
 // cmd/auth-bootstrap.
 func GenerateUserAccessToken(code string) error {
-	client, err := Client()
-	if err != nil {
+	// Ensure App Access Token is set so the one-shot client can fall back
+	// for endpoints that allow app auth.
+	if _, err := Client(); err != nil {
 		return err
 	}
+	bootstrapClient, err := helix.NewClient(&helix.Options{
+		ClientID:     ClientID,
+		ClientSecret: ClientSecret,
+		RedirectURI:  c.Conf.ExternalURL + "/auth/callback",
+		HTTPClient:   helixHTTPClient,
+	})
+	if err != nil {
+		return fmt.Errorf("twitch: building bootstrap client: %w", err)
+	}
+	if AppAccessToken != "" {
+		bootstrapClient.SetAppAccessToken(AppAccessToken)
+	}
 
-	resp, err := client.RequestUserAccessToken(code)
+	resp, err := bootstrapClient.RequestUserAccessToken(code)
 	if err != nil {
 		return err
 	}
@@ -261,8 +279,8 @@ func GenerateUserAccessToken(code string) error {
 	// Set the access token so GetUsers identifies the caller from the
 	// Authorization header (helix.UsersParams without IDs/Logins returns
 	// the authenticated user).
-	client.SetUserAccessToken(resp.Data.AccessToken)
-	usersResp, err := client.GetUsers(&helix.UsersParams{})
+	bootstrapClient.SetUserAccessToken(resp.Data.AccessToken)
+	usersResp, err := bootstrapClient.GetUsers(&helix.UsersParams{})
 	if err != nil {
 		return err
 	}
@@ -290,50 +308,99 @@ func GenerateUserAccessToken(code string) error {
 		return err
 	}
 
-	// Bootstrapping a non-bot account (e.g. the broadcaster) writes the row
-	// but doesn't change the running bot's IRC session.
-	if u.Login == c.Conf.BotUsername {
+	// Route the rotated token into the right in-memory slot. Unknown identity
+	// = row written but in-memory unchanged (logged so the operator notices).
+	switch u.Login {
+	case c.Conf.BotUsername:
 		tokenMu.Lock()
 		currentUserToken = tok
 		tokenMu.Unlock()
+		if currentTwitchClient != nil {
+			currentTwitchClient.SetUserAccessToken(tok.AccessToken)
+		}
+	case c.Conf.ChannelName:
+		tokenMu.Lock()
+		currentBroadcasterToken = tok
+		tokenMu.Unlock()
+		if broadcasterTwitchClient != nil {
+			broadcasterTwitchClient.SetUserAccessToken(tok.AccessToken)
+		}
+	default:
+		slog.Warn("OAuth bootstrap completed for unknown identity; oauth_tokens row written but in-memory state unchanged",
+			"login", u.Login, "bot", c.Conf.BotUsername, "broadcaster", c.Conf.ChannelName)
 	}
 	return nil
 }
 
-// RefreshUserAccessToken is the hourly cron entry point. Reads the bot's row,
-// refreshes if within 30 minutes of expiry, and writes the rotated tokens
-// back. A Postgres advisory lock fences concurrent rotation between local
-// dev and a cluster pod sharing the same Twitch account.
+// RefreshUserAccessToken is the hourly cron entry point. Rotates both the
+// bot's and the broadcaster's user-access-tokens if either is within 30
+// minutes of expiry. Each leg uses its own Postgres advisory lock so two
+// running tripbots (local dev + cluster pod) sharing the same account can't
+// race the rotation.
+func RefreshUserAccessToken(ctx context.Context) {
+	botUser := c.Conf.BotUsername
+	broadcasterUser := c.Conf.ChannelName
+
+	refreshOne(ctx, botUser, applyBotToken)
+
+	if broadcasterUser != "" && broadcasterUser != botUser {
+		refreshOne(ctx, broadcasterUser, applyBroadcasterToken)
+	}
+}
+
+// applyBotToken writes the rotated token into the bot slot + primes the
+// bot helix client. Passed to refreshOne so the per-identity slot logic
+// stays out of the refresh dance itself.
+func applyBotToken(tok oauthtokens.Token) {
+	tokenMu.Lock()
+	currentUserToken = tok
+	tokenMu.Unlock()
+	if currentTwitchClient != nil {
+		currentTwitchClient.SetUserAccessToken(tok.AccessToken)
+	}
+}
+
+// applyBroadcasterToken writes the rotated token into the broadcaster slot
+// + primes the broadcaster helix client.
+func applyBroadcasterToken(tok oauthtokens.Token) {
+	tokenMu.Lock()
+	currentBroadcasterToken = tok
+	tokenMu.Unlock()
+	if broadcasterTwitchClient != nil {
+		broadcasterTwitchClient.SetUserAccessToken(tok.AccessToken)
+	}
+}
+
+// refreshOne rotates a single (provider="twitch", username) row if within
+// 30 minutes of expiry. applyInMemory writes the rotated token into the
+// matching in-memory slot — also called on the empty-token path so the
+// caller's slot gets blanked (forcing reconnect / re-bootstrap signalling).
 //
 // TODO: helix client surface should move behind an interface so this
 // function can be unit-tested without a real Twitch round-trip.
-func RefreshUserAccessToken(ctx context.Context) {
-	botUser := c.Conf.BotUsername
-
-	acquired, release, err := oauthtokens.TryRefreshLock("twitch", botUser)
+func refreshOne(ctx context.Context, username string, applyInMemory func(oauthtokens.Token)) {
+	acquired, release, err := oauthtokens.TryRefreshLock("twitch", username)
 	if err != nil {
-		slog.ErrorContext(ctx, "oauth refresh lock acquisition failed", "err", err)
+		slog.ErrorContext(ctx, "oauth refresh lock acquisition failed", "err", err, "username", username)
 		return
 	}
 	if !acquired {
 		// Another process is rotating. Wait briefly, re-read the rotated
 		// row, sync in-memory.
 		time.Sleep(2 * time.Second)
-		t, gerr := oauthtokens.Get("twitch", botUser)
+		t, gerr := oauthtokens.Get("twitch", username)
 		if gerr != nil {
-			slog.ErrorContext(ctx, "post-contention re-read failed", "err", gerr)
+			slog.ErrorContext(ctx, "post-contention re-read failed", "err", gerr, "username", username)
 			return
 		}
-		tokenMu.Lock()
-		currentUserToken = t
-		tokenMu.Unlock()
+		applyInMemory(t)
 		return
 	}
 	defer release()
 
-	t, err := oauthtokens.Get("twitch", botUser)
+	t, err := oauthtokens.Get("twitch", username)
 	if err != nil {
-		slog.ErrorContext(ctx, "no oauth_tokens row to refresh", "err", err)
+		slog.ErrorContext(ctx, "no oauth_tokens row to refresh", "err", err, "username", username)
 		return
 	}
 
@@ -343,24 +410,22 @@ func RefreshUserAccessToken(ctx context.Context) {
 
 	client, err := Client()
 	if err != nil {
-		slog.ErrorContext(ctx, "helix client unavailable for refresh", "err", err)
+		slog.ErrorContext(ctx, "helix client unavailable for refresh", "err", err, "username", username)
 		return
 	}
 	resp, err := client.RefreshUserAccessToken(t.RefreshToken)
 	if err != nil {
-		_ = oauthtokens.IncrementFailCount("twitch", botUser)
-		slog.ErrorContext(ctx, "twitch refresh API failed", "err", err)
+		_ = oauthtokens.IncrementFailCount("twitch", username)
+		slog.ErrorContext(ctx, "twitch refresh API failed", "err", err, "username", username)
 		return
 	}
 	if resp == nil || resp.Data.AccessToken == "" {
 		// Empty body typically means invalid_grant (refresh token revoked).
-		// Treat as terminal — blank in-memory so IRC reconnect fails loudly,
-		// and Sentry surfaces the failure for re-bootstrap.
-		_ = oauthtokens.IncrementFailCount("twitch", botUser)
-		tokenMu.Lock()
-		currentUserToken.AccessToken = ""
-		tokenMu.Unlock()
-		slog.ErrorContext(ctx, "oauth refresh failed; need re-bootstrap", "err", errors.New("empty access token in refresh response"))
+		// Treat as terminal — blank in-memory so callers fail loudly, and
+		// Sentry surfaces the failure for re-bootstrap.
+		_ = oauthtokens.IncrementFailCount("twitch", username)
+		applyInMemory(oauthtokens.Token{})
+		slog.ErrorContext(ctx, "oauth refresh failed; need re-bootstrap", "err", errors.New("empty access token in refresh response"), "username", username)
 		return
 	}
 
@@ -374,14 +439,10 @@ func RefreshUserAccessToken(ctx context.Context) {
 		Scopes:       strings.Join(resp.Data.Scopes, " "),
 	}
 	if err := oauthtokens.Upsert(rotated); err != nil {
-		slog.ErrorContext(ctx, "post-refresh Upsert failed", "err", err)
+		slog.ErrorContext(ctx, "post-refresh Upsert failed", "err", err, "username", username)
 		return
 	}
 
-	tokenMu.Lock()
-	currentUserToken = rotated
-	tokenMu.Unlock()
-	client.SetUserAccessToken(rotated.AccessToken)
-
-	slog.InfoContext(ctx, "refreshed user access token")
+	applyInMemory(rotated)
+	slog.InfoContext(ctx, "refreshed user access token", "username", username)
 }
