@@ -5,6 +5,32 @@
 
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
+## [v2.9.3] — 2026-05-19
+
+Patch release. Wires up a meaningful production-side observability surface: cron jobs now emit run-count / duration / last-run-timestamp metrics and recover panics so a single failing job doesn't kill the scheduler goroutine; HTTP handlers count panics per service so a flapping endpoint becomes alertable instead of just log-shaped; the Helix client surfaces its `Ratelimit-*` response headers as gauges so the per-bearer 800-req/min quota is visible before a 429 fires. Kubelet liveness/readiness probes drop to `slog.LevelDebug` to keep the default Info stream usable. VAAPI hardware acceleration lands on both the OBS encode path and the VLC decode path. Inter-clip transitions in the dashcam stream get smoothed. The `!discord` chatbot command stops handing out invites that expire.
+
+### Observability
+
+- **Cron run counts, duration, last-run timestamps, and panic recovery.** `cmd/tripbot/tripbot.go`'s `tracedJob` wrapper now records `tripbot_cron_runs_total{job}`, `tripbot_cron_duration_seconds{job}` (histogram), and `tripbot_cron_last_run_timestamp_seconds{job}` on every completion — enabling alerts like "no successful run in 3× interval" without changing the (no-return-value) cron callback signature. A `defer recover()` also catches panics, logs the stack via slog, increments `tripbot_cron_panics_total{job}`, and marks the span as Error. Previously a panicking job would crash the scheduler goroutine and silently stop running thereafter. ([#586])
+- **`tripbot_http_panics_total{service}` counter via a slog-native recovery middleware.** Replaces `negroni.NewRecovery` with `pkg/httpmw.Recovery` across all three web servers (tripbot, vlc-server, onscreens-server). Recovers panics, logs the stack via slog (so it reaches OTel/Loki and Sentry breadcrumbs/events via the existing handler chain), increments the counter, then writes a 500. `sentrynegroni` continues to capture panics on its inner defer before the outer recovery handles cleanup. ([#586])
+- **`twitch_helix_rate_limit_remaining` / `_total` gauges.** Wraps the `otelhttp` transport with a `rateLimitRecorder` that reads `Ratelimit-Remaining` and `Ratelimit-Limit` off every Helix response. The 800-req/min per-bearer quota is shared across all calls from the bot's App Access Token, so a single gauge is the right shape — dashboards / alerts see headroom before 429s land. ([#586])
+- **`/health/live` and `/health/ready` log at `slog.LevelDebug`.** Adds `pkg/httpmw.SlogLogger`, an slog-native request logger emitting one structured record per HTTP request (method/path/status/bytes/duration/remote) that replaces `negroni.Logger`'s stdlib log output across all three servers. Health-check probes log at Debug instead of Info so kubelet's frequent liveness/readiness polling stops dominating the default log stream; everything else stays at Info. ([#583])
+
+### Streaming
+
+- **VAAPI hardware acceleration on OBS encode + VLC decode.** OBS now uses `libva` for H.264 encoding (offloading from the CPU); VLC defaults `VLC_AVCODEC_HW` from `vdpau_avcodec` to `any` so libvlc picks VAAPI when the Intel `i915` device is reachable. The matching K8s wiring (Intel device plugin, `gpu.intel.com/i915` resource request on both pods) lives in [adanalife/infra#499](https://github.com/adanalife/infra/pull/499). ([#584])
+- **Smooth inter-clip transitions in the dashcam stream.** Reduces the visible cut between dashcam clips so the loop reads as a continuous drive rather than a slideshow of segments. ([#582])
+
+### Chatbot
+
+- **`!discord` points at the non-expiring invite.** Previously the chat command handed out invites with TTL, so the link in the chat scrollback would silently 404 after a while. ([#581])
+
+[#581]: https://github.com/adanalife/tripbot/pull/581
+[#582]: https://github.com/adanalife/tripbot/pull/582
+[#583]: https://github.com/adanalife/tripbot/pull/583
+[#584]: https://github.com/adanalife/tripbot/pull/584
+[#586]: https://github.com/adanalife/tripbot/pull/586
+
 ## [v2.9.1] — 2026-05-18
 
 Patch release. Unifies the error-capture pipeline on `slog` so direct `slog.Error` calls (telemetry init, OBS adapter, etc.) reach Sentry alongside the existing `terrors.Log` sites, with a per-fingerprint cooldown + hourly cap to stay under the free tier. Threads `ctx` through a few more chatbot/users helpers so the per-command gating decisions and miles-math log lines carry `trace_id` linking back to their `chat.command` span. Retires the dead Twitch Helix Webhooks code path — the upstream API was deprecated by Twitch in 2021 and the receive/subscribe surface has been gated off via `DISABLE_TWITCH_WEBHOOKS=true` since the platform cutover; the only behavior actually lost is the live new-follower / new-sub chat shout, queued for re-introduction via EventSub. Pairs with [adanalife/infra#485](https://github.com/adanalife/infra/pull/485) (drops the `DISABLE_TWITCH_WEBHOOKS` env var from the kustomizations).
