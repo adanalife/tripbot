@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 # Called by infra/docker/obs/Dockerfile{,.arm64} (ENTRYPOINT via tini):
-# OBS container entrypoint — seeds OBS config, starts Xvfb/fluxbox/x11vnc,
-# launches OBS, and runs the hourly browser-source refresh loop.
+# OBS container entrypoint — seeds OBS config from templates, then hands off
+# to supervisor which manages sway/wayvnc/obs/browser-refresh.
+#
+# Display stack: sway (headless Wayland compositor on /dev/dri/card0) +
+# wayvnc (VNC server, attaches to sway) + OBS as a Wayland-native Qt6
+# client. Replaces the previous Xvfb+fluxbox+x11vnc trio so OBS's OpenGL
+# composite hits the iGPU instead of Mesa llvmpipe.
 set -euo pipefail
 
 echo "OBS container, tripbot version $(cat /etc/tripbot/version 2>/dev/null || echo dev) (sha: $(cat /etc/tripbot/sha 2>/dev/null || echo unknown))"
@@ -93,50 +98,22 @@ esac
 mkdir -p "$OBS_HOME/plugin_config/obs-websocket"
 envsubst < /opt/obs/config/obs-websocket.json.tmpl > "$OBS_HOME/plugin_config/obs-websocket/config.json"
 
-obs_args=(--disable-shutdown-check --collection 'Tripbot' --profile 'ADanaLife' --scene 'Main')
-
+# Render service.json only when STREAM_KEY is set. start-obs.sh keys off
+# this file's existence to decide whether to pass --startstreaming.
 if [[ -n "${STREAM_KEY:-}" ]]; then
   echo "STREAM_KEY set; configuring Twitch and starting stream."
   envsubst < /opt/obs/config/service.json.tmpl \
     > "$OBS_HOME/basic/profiles/ADanaLife/service.json"
-  obs_args+=(--startstreaming)
 else
-  echo "STREAM_KEY not set; OBS will start idle. VNC into :5902 to inspect."
+  echo "STREAM_KEY not set; OBS will start idle. VNC into :5900 to inspect."
+  rm -f "$OBS_HOME/basic/profiles/ADanaLife/service.json"
 fi
 
-export DISPLAY=:0
+# Shared Wayland runtime dir. start-sway.sh creates it with 0700; export
+# it here so any debugging exec'd in the container picks it up too.
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp/runtime-root}"
 
-rm -f /tmp/.X11-unix/X0 /tmp/.X0-lock
-Xvfb "$DISPLAY" -screen 0 1920x1200x24 &
-sleep 1
-
-# Pin the OBS main window to the center of the 1920x1200 Xvfb display via
-# fluxbox's apps file. Without this rule OBS opens at fluxbox's default
-# top-left corner, leaving most of the framebuffer empty in VNC. Match by
-# WM_CLASS=obs (stable across version/profile/scene title changes).
-mkdir -p "$HOME/.fluxbox"
-cat > "$HOME/.fluxbox/apps" <<'EOF'
-[app] (class=obs)
-  [Position] (CENTER)	{0 0}
-[end]
-EOF
-
-fluxbox &
-sleep 1
-
-x11vnc -display "$DISPLAY" -forever -shared -rfbport 5900 -passwd "${VNC_PASSWD:-123456}" &
-
-# Hourly refresh of every browser source via the local obs-websocket port,
-# working around the CEF per-frame memory leak that otherwise OOMs OBS at
-# the 3Gi pod limit overnight. PR #555 capped browser-source render rate
-# to slow the bleed; this loop drops accumulated render state on a fixed
-# cycle so RSS stays bounded across multi-day uptimes.
-(
-  while sleep 3600; do
-    OBS_WEBSOCKET_HOST=localhost OBS_WEBSOCKET_PORT=4455 \
-      timeout 60 /opt/obs/venv/bin/python /opt/obs/bin/obs-browser-refresh \
-      || echo "[browser-refresh] failed (will retry next cycle)" >&2
-  done
-) &
-
-exec obs "${obs_args[@]}"
+# Hand off to supervisord. It manages sway, wayvnc, obs, and the hourly
+# browser-source refresh (with each program's start order + Wayland-socket
+# dependency handled in script/start-*.sh).
+exec supervisord -n -c /etc/supervisor/supervisord.conf
