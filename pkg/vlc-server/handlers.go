@@ -12,40 +12,33 @@ import (
 	"github.com/gorilla/mux"
 )
 
-// versionTag is set by main via SetVersion; overridden at build time
-// through `-ldflags "-X main.version=..."`.
-var versionTag = "dev"
-
-// SetVersion lets cmd/vlc-server inject its build-time version string
-// before the HTTP server starts.
-func SetVersion(v string) {
-	if v != "" {
-		versionTag = v
-	}
-}
-
 // healthcheck URL, for tools to verify the stream is alive
-func healthHandler(w http.ResponseWriter, r *http.Request) {
+func (s *Server) healthHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "OK")
 }
 
-// versionHandler returns build metadata as JSON. The tag comes from the
-// build-time ldflag; sha + built_at are read from the binary's embedded
-// VCS info (Go's automatic -buildvcs).
-func versionHandler(w http.ResponseWriter, r *http.Request) {
+// versionHandler returns build metadata as JSON. The tag comes from
+// Server.Version (injected via Config at construction time); sha +
+// built_at are read from the binary's embedded VCS info (Go's automatic
+// -buildvcs).
+func (s *Server) versionHandler(w http.ResponseWriter, r *http.Request) {
+	tag := s.Version
+	if tag == "" {
+		tag = "dev"
+	}
 	resp := struct {
 		Tag     string `json:"tag"`
 		Sha     string `json:"sha"`
 		BuiltAt string `json:"built_at"`
-	}{Tag: versionTag}
+	}{Tag: tag}
 
 	if info, ok := debug.ReadBuildInfo(); ok {
-		for _, s := range info.Settings {
-			switch s.Key {
+		for _, st := range info.Settings {
+			switch st.Key {
 			case "vcs.revision":
-				resp.Sha = s.Value
+				resp.Sha = st.Value
 			case "vcs.time":
-				resp.BuiltAt = s.Value
+				resp.BuiltAt = st.Value
 			}
 		}
 	}
@@ -56,28 +49,28 @@ func versionHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func vlcCurrentHandler(w http.ResponseWriter, r *http.Request) {
+func (s *Server) vlcCurrentHandler(w http.ResponseWriter, r *http.Request) {
 	// return the currently-playing file
-	fmt.Fprint(w, currentlyPlaying())
+	fmt.Fprint(w, s.currentlyPlaying())
 }
 
-func vlcPlayHandler(w http.ResponseWriter, r *http.Request) {
+func (s *Server) vlcPlayHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	spew.Dump(vars)
 
 	videoFile := vars["video"]
 
 	spew.Dump(videoFile)
-	playVideoFile(videoFile)
+	s.playVideoFile(videoFile)
 
 	//TODO: better response
 	fmt.Fprintf(w, "OK")
 }
 
-func vlcBackHandler(w http.ResponseWriter, r *http.Request) {
+func (s *Server) vlcBackHandler(w http.ResponseWriter, r *http.Request) {
 	num, ok := r.URL.Query()["n"]
 	if !ok || len(num) > 1 {
-		back(1)
+		s.back(1)
 		return
 	}
 	i, err := strconv.Atoi(num[0])
@@ -87,17 +80,17 @@ func vlcBackHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	back(i)
+	s.back(i)
 
 	//TODO: better response
 	fmt.Fprintf(w, "OK")
 
 }
 
-func vlcSkipHandler(w http.ResponseWriter, r *http.Request) {
+func (s *Server) vlcSkipHandler(w http.ResponseWriter, r *http.Request) {
 	num, ok := r.URL.Query()["n"]
 	if !ok || len(num) > 1 {
-		skip(1)
+		s.skip(1)
 		return
 	}
 	i, err := strconv.Atoi(num[0])
@@ -107,29 +100,29 @@ func vlcSkipHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	skip(i)
+	s.skip(i)
 
 	//TODO: better response
 	fmt.Fprintf(w, "OK")
 }
 
-func vlcRandomHandler(w http.ResponseWriter, r *http.Request) {
+func (s *Server) vlcRandomHandler(w http.ResponseWriter, r *http.Request) {
 	// play a random file
-	err := PlayRandom()
+	err := s.PlayRandom()
 	if err != nil {
 		http.Error(w, "error playing random", http.StatusInternalServerError)
 	}
 	fmt.Fprintf(w, "OK")
 }
 
-func faviconHandler(w http.ResponseWriter, r *http.Request) {
+func (s *Server) faviconHandler(w http.ResponseWriter, r *http.Request) {
 	//	// return a favicon if anyone asks for one
 	//} else if r.URL.Path == "/favicon.ico" {
 	http.ServeFile(w, r, "assets/favicon.ico")
 }
 
 //TODO: use more StatusExpectationFailed instead of http.StatusUnprocessableEntity
-func catchAllHandler(w http.ResponseWriter, r *http.Request) {
+func (s *Server) catchAllHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
 		http.Error(w, "404 not found", http.StatusNotFound)

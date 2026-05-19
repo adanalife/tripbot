@@ -8,14 +8,12 @@ import (
 )
 
 func TestVersionHandlerReturnsInjectedTag(t *testing.T) {
-	saved := versionTag
-	defer func() { versionTag = saved }()
-	SetVersion("v9.9.9-test")
+	s := &Server{Version: "v9.9.9-test"}
 
 	req := httptest.NewRequest(http.MethodGet, "/version", nil)
 	rec := httptest.NewRecorder()
 
-	versionHandler(rec, req)
+	s.versionHandler(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("got status %d, want %d", rec.Code, http.StatusOK)
@@ -41,10 +39,11 @@ func TestVersionHandlerReturnsInjectedTag(t *testing.T) {
 // input before reaching libvlc, so we never touch the real player.
 
 func TestVlcSkipHandlerInvalidIntReturns422(t *testing.T) {
+	s := &Server{}
 	req := httptest.NewRequest(http.MethodGet, "/vlc/skip?n=notanumber", nil)
 	rec := httptest.NewRecorder()
 
-	vlcSkipHandler(rec, req)
+	s.vlcSkipHandler(rec, req)
 
 	if rec.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("got status %d, want %d", rec.Code, http.StatusUnprocessableEntity)
@@ -52,10 +51,11 @@ func TestVlcSkipHandlerInvalidIntReturns422(t *testing.T) {
 }
 
 func TestVlcBackHandlerInvalidIntReturns422(t *testing.T) {
+	s := &Server{}
 	req := httptest.NewRequest(http.MethodGet, "/vlc/back?n=notanumber", nil)
 	rec := httptest.NewRecorder()
 
-	vlcBackHandler(rec, req)
+	s.vlcBackHandler(rec, req)
 
 	if rec.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("got status %d, want %d", rec.Code, http.StatusUnprocessableEntity)
@@ -63,10 +63,11 @@ func TestVlcBackHandlerInvalidIntReturns422(t *testing.T) {
 }
 
 func TestCatchAllHandlerNonGet(t *testing.T) {
+	s := &Server{}
 	req := httptest.NewRequest(http.MethodPost, "/anything", nil)
 	rec := httptest.NewRecorder()
 
-	catchAllHandler(rec, req)
+	s.catchAllHandler(rec, req)
 
 	body := rec.Body.String()
 	if body == "" {
@@ -75,10 +76,11 @@ func TestCatchAllHandlerNonGet(t *testing.T) {
 }
 
 func TestCatchAllHandlerGet404(t *testing.T) {
+	s := &Server{}
 	req := httptest.NewRequest(http.MethodGet, "/missing", nil)
 	rec := httptest.NewRecorder()
 
-	catchAllHandler(rec, req)
+	s.catchAllHandler(rec, req)
 
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("got status %d, want %d", rec.Code, http.StatusNotFound)
