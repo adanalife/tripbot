@@ -24,7 +24,11 @@ import (
 // no trail in Tempo; with it, each helix.GetUsers / GetSubscriptions / etc.
 // shows up as a span. Pairs with the otelhttp transports already used by
 // pkg/vlc-client and pkg/onscreens-client.
-var helixHTTPClient = &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)}
+//
+// The rateLimitRecorder wraps the otelhttp transport so every Helix
+// response also updates the twitch_helix_rate_limit_* gauges — dashboards
+// can see remaining headroom without waiting for a 429.
+var helixHTTPClient = &http.Client{Transport: rateLimitRecorder{next: otelhttp.NewTransport(http.DefaultTransport)}}
 
 // Scopes is the OAuth scope set requested for the bot account. Single source
 // of truth — referenced by Client() (App Access Token request),
