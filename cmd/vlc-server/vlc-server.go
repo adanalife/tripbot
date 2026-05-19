@@ -66,13 +66,24 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer srv.Shutdown()
+	// On normal exit (Start returns when shutdownCtx is canceled), drain
+	// the HTTP server with a bounded ctx and release libvlc. The
+	// gracefulShutdown goroutine below also calls Shutdown for the
+	// os.Exit path — Shutdown tolerates being invoked twice (libvlc
+	// Release is a no-op when the instance is already released).
+	defer func() {
+		drainCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		srv.Shutdown(drainCtx)
+	}()
 
 	srv.PlayRandom() // play a random video
 
 	// poll libvlc for playback stats (FPS, bitrate, dropped frames) and
 	// surface them as OTel gauges. No-op when telemetry is disabled.
-	srv.StartStatsPoller(context.Background(), 5*time.Second)
+	// Tied to shutdownCtx so the poller goroutine exits cleanly on
+	// SIGINT/SIGTERM.
+	srv.StartStatsPoller(shutdownCtx, 5*time.Second)
 
 	// poll the OBS WebSocket for streaming state + render/output stats.
 	go obs.PollStreamingActive(context.Background(), 30*time.Second)
@@ -120,7 +131,9 @@ func gracefulShutdown() {
 	slog.Warn("caught CTRL-C, shutting down")
 	// anything below this probably won't be executed
 	if srv != nil {
-		srv.Shutdown()
+		drainCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		srv.Shutdown(drainCtx)
+		cancel()
 	}
 	//TODO: stop cron here
 	sentry.Flush(time.Second * 5)

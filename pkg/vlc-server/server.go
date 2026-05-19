@@ -26,12 +26,6 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-// shutdownTimeout is how long Shutdown waits for in-flight requests to
-// finish before forcing connections closed. 15s is the typical sweet spot:
-// long enough that healthy requests complete, short enough that a stuck
-// handler doesn't block process exit indefinitely.
-const shutdownTimeout = 15 * time.Second
-
 // Config is the construction-time configuration passed to New. It carries
 // only the runtime knobs the binary needs to inject at startup; everything
 // else flows in via the package-level c.Conf read from env.
@@ -54,30 +48,58 @@ type Server struct {
 }
 
 // New constructs a Server, initializing libvlc and loading media off disk.
-// Returns an error if libvlc init or media loading fails.
+// Returns a fully-initialized *Server on success, or (nil, err) on failure
+// with any libvlc resources already allocated released before returning so
+// the caller never has to clean up after a partial init.
 func New(cfg Config) (*Server, error) {
 	s := &Server{Version: cfg.Version}
 	if err := s.initPlayer(); err != nil {
+		s.releasePartial()
 		return nil, err
 	}
 	return s, nil
 }
 
+// releasePartial releases any libvlc resources allocated before an init
+// failure inside New. Mirrors Shutdown's release order (Player.Stop →
+// Player.Release → libvlc.Release) and tolerates fields being nil because
+// the failure may have happened before each was set.
+func (s *Server) releasePartial() {
+	if s.Player != nil {
+		if err := s.Player.Stop(); err != nil {
+			slog.Error("error stopping player during partial-init cleanup", "err", err)
+		}
+		if err := s.Player.Release(); err != nil {
+			slog.Error("error releasing player during partial-init cleanup", "err", err)
+		}
+	}
+	// libvlc.Release is safe to call even if startVLC failed before
+	// libvlc.Init returned successfully — the underlying C ref-count
+	// gate handles the no-op case. Always call it so that the libvlc
+	// instance allocated in startVLC doesn't leak.
+	if err := libvlc.Release(); err != nil {
+		slog.Error("error releasing libvlc during partial-init cleanup", "err", err)
+	}
+}
+
 // Start starts the web server. When ctx is canceled (e.g. SIGINT/SIGTERM
-// via signal.NotifyContext) the server stops accepting new connections and
-// waits up to shutdownTimeout for in-flight requests to complete before
-// returning.
+// via signal.NotifyContext) it returns so the caller can invoke
+// Shutdown(ctx) to drain in-flight HTTP requests with a bounded ctx and
+// release libvlc.
 func (s *Server) Start(ctx context.Context) {
 	slog.InfoContext(ctx, "starting VLC web server", "bind", c.Conf.VlcServerBindAddress)
 
 	r := mux.NewRouter()
 
-	// healthcheck endpoints
+	// healthcheck endpoints. /health/ + /health/live answer process-alive
+	// (shallow); /health/ready consults libvlc player state via Health()
+	// so K8s readiness probes pull the pod out of rotation if the player
+	// stalls (without restarting the process).
 	//TODO: handle HEAD requests here too
 	hp := r.PathPrefix("/health").Methods("GET", "HEAD").Subrouter()
-	hp.Handle("/", tagged("/health/", s.healthHandler))
-	hp.Handle("/live", tagged("/health/live", s.healthHandler))
-	hp.Handle("/ready", tagged("/health/ready", s.healthHandler))
+	hp.Handle("/", tagged("/health/", s.livenessHandler))
+	hp.Handle("/live", tagged("/health/live", s.livenessHandler))
+	hp.Handle("/ready", tagged("/health/ready", s.readinessHandler))
 
 	// version endpoint — returns build metadata as JSON
 	r.Handle("/version", tagged("/version", s.versionHandler)).Methods("GET", "HEAD")
@@ -165,12 +187,9 @@ func (s *Server) Start(ctx context.Context) {
 			terrors.FatalContext(ctx, err, "couldn't start server")
 		}
 	case <-ctx.Done():
-		slog.InfoContext(ctx, "shutting down VLC web server")
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
-		defer cancel()
-		if err := s.http.Shutdown(shutdownCtx); err != nil {
-			slog.ErrorContext(shutdownCtx, "error during VLC web server shutdown", "err", err)
-		}
+		// Return so the caller can run Shutdown(ctx) with a bounded ctx;
+		// that's where http.Server.Shutdown is invoked.
+		slog.InfoContext(ctx, "VLC web server ctx canceled, returning to let caller shut down")
 	}
 }
 

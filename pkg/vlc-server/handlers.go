@@ -12,8 +12,24 @@ import (
 	"github.com/gorilla/mux"
 )
 
-// healthcheck URL, for tools to verify the stream is alive
-func (s *Server) healthHandler(w http.ResponseWriter, r *http.Request) {
+// livenessHandler answers /health/ and /health/live. Liveness is a
+// process-is-alive signal — if this handler runs at all, the answer is
+// yes. Don't consult libvlc here; deeper checks belong on /health/ready
+// (a stuck player should fail readiness, not get the pod restarted).
+func (s *Server) livenessHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "OK")
+}
+
+// readinessHandler answers /health/ready by consulting Server.Health(),
+// which reflects libvlc player state. Returns 503 with the error message
+// when the player isn't in a state that can serve a viewer, so K8s
+// readiness probes will pull the pod out of rotation while the player
+// recovers (vs. liveness, which would restart the process).
+func (s *Server) readinessHandler(w http.ResponseWriter, r *http.Request) {
+	if err := s.Health(); err != nil {
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
+	}
 	fmt.Fprintf(w, "OK")
 }
 
