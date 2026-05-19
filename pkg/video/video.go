@@ -3,9 +3,6 @@ package video
 import (
 	"context"
 	"log/slog"
-	"os/exec"
-	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/helpers"
@@ -74,16 +71,13 @@ func CurrentProgress() time.Duration {
 
 func figureOutCurrentVideo(ctx context.Context) string {
 	if helpers.RunningOnWindows() {
-		slog.ErrorContext(ctx, "can't run script on windows")
+		slog.ErrorContext(ctx, "can't find current video on windows")
 		return ""
 	}
-	// run the shell script to get currently-playing video
-	scriptPath := filepath.Join(helpers.ProjectRoot(), "bin", "current-file.sh")
-	out, err := exec.Command(scriptPath).Output()
-	outString := strings.TrimSpace(string(out))
+	file, err := currentVideoFile()
 	if err != nil {
-		slog.ErrorContext(ctx, "figureOutCurrentVideo script failed", "err", err, "output", outString)
+		slog.ErrorContext(ctx, "figureOutCurrentVideo failed", "err", err)
 		return ""
 	}
-	return outString
+	return file
 }
