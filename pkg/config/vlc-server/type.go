@@ -16,12 +16,24 @@ type VlcServerConfig struct {
 	RunDir string `default:"/opt/data/run" envconfig:"RUN_DIR"`
 
 	// VlcFileCaching is the libvlc --file-caching value in milliseconds.
-	// Defaults to today's hardcoded value; tune per-host without recompiling.
-	VlcFileCaching int `default:"1111" envconfig:"VLC_FILE_CACHING"`
+	// Tune per-host without recompiling. Lower = faster between-clip
+	// startup (smaller frame gap that OBS's ffmpeg_source has to ride
+	// out before disconnect/reconnect kicks in); higher = more headroom
+	// for bursty disk/NFS read latency. 300ms is a working baseline for
+	// local-NFS-backed playback; the prior 1111 was unscientific tuning
+	// from years ago that left a >1s frame gap on each clip transition.
+	VlcFileCaching int `default:"300" envconfig:"VLC_FILE_CACHING"`
 	// VlcAvcodecHw is the libvlc --avcodec-hw value (Linux-only). One of
-	// none, vdpau_avcodec, cuda. Only applied on Linux hosts; ignored on
-	// Windows/Darwin (matches today's platform-specific flag layering).
-	VlcAvcodecHw string `default:"vdpau_avcodec" envconfig:"VLC_AVCODEC_HW"`
+	// any, none, vaapi, vdpau_avcodec, cuda. "any" lets libvlc pick the
+	// best available backend based on the host hardware: VAAPI on Intel
+	// iGPUs (the prod-1 minipc path, /dev/dri/renderD128 exposed via
+	// hostPath mount), VDPAU on NVIDIA hosts, none if no acceleration
+	// is reachable. The prior "vdpau_avcodec" default was NVIDIA-specific
+	// and silently fell back to software decode on Intel — undocumented
+	// performance loss on every adanalife host. Only applied on Linux
+	// hosts; ignored on Windows/Darwin (matches today's platform-specific
+	// flag layering).
+	VlcAvcodecHw string `default:"any" envconfig:"VLC_AVCODEC_HW"`
 	// VlcVout is the libvlc --vout value (Linux-only). Defaults to dummy
 	// (headless container, no X server). For local-display modes on
 	// Linux, set VLC_VOUT=x11. Only applied on Linux hosts; ignored on

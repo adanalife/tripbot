@@ -33,6 +33,14 @@ case "${OBS_QUALITY_PRESET:-high}" in
     ;;
 esac
 
+# Stream encoder selection. Default x264 (software) keeps stage-1 /
+# local dev / Mac k3d working without /dev/dri exposed. Override via
+# OBS_STREAM_ENCODER=ffmpeg_vaapi (k8s configmap in prod-1) to use
+# the host's Intel iGPU for hardware H.264 encode, dropping x264's
+# 15-25% P-core cost at 1080p60.
+export OBS_STREAM_ENCODER="${OBS_STREAM_ENCODER:-x264}"
+echo "OBS stream encoder: ${OBS_STREAM_ENCODER}"
+
 # OBS 32 split the legacy global.ini in two: app-level settings stayed in
 # global.ini (BrowserHWAccel etc.) and user-preference settings moved to
 # user.ini. Seed both so OBS sees a complete config and never prompts about
