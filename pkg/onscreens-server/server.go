@@ -74,12 +74,16 @@ func New(cfg Config) *Server {
 }
 
 // Start brings up the HTTP listener serving all /onscreens/* routes plus
-// the standard /health, /version, /metrics surface. It blocks until the
-// listener returns; callers typically fatal on a non-nil error.
+// the standard /health, /version, /metrics surface. It blocks until either
+// ListenAndServe returns an error or ctx is canceled (typically by the
+// process-level signal handler in cmd/onscreens-server). Callers should
+// fatal on a non-nil error.
 //
-// ctx is currently only used to feed graceful-shutdown plumbing for
-// future use; the listener itself is shut down by the process-level
-// signal handler in cmd/onscreens-server.
+// When ctx is canceled Start returns nil; the caller is responsible for
+// invoking Shutdown with its own deadline so in-flight requests get a
+// chance to drain. The split keeps Start's return contract simple
+// (listener-error vs. clean-stop) and lets the signal handler control
+// the shutdown deadline.
 func (s *Server) Start(ctx context.Context) error {
 	slog.InfoContext(ctx, "starting onscreens-server web server", "bind", c.Conf.OnscreensServerBindAddress)
 
@@ -149,10 +153,38 @@ func (s *Server) Start(ctx context.Context) error {
 		Handler:        otelhttp.NewHandler(app, c.Conf.ServerType),
 	}
 
-	if err := s.http.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+	// Run ListenAndServe in a goroutine so Start can block on ctx.Done()
+	// and return cleanly when the signal handler cancels the context. The
+	// caller calls Shutdown after Start returns to drain in-flight
+	// requests with its chosen deadline. ErrServerClosed is the expected
+	// return after Shutdown is called and is not surfaced as an error.
+	serverErr := make(chan error, 1)
+	go func() {
+		if err := s.http.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serverErr <- err
+		}
+		close(serverErr)
+	}()
+
+	select {
+	case err := <-serverErr:
 		return err
+	case <-ctx.Done():
+		return nil
 	}
-	return nil
+}
+
+// Shutdown gracefully stops the HTTP listener, allowing in-flight
+// requests up to ctx's deadline to complete before closing connections.
+// Returns the error from http.Server.Shutdown so callers can log or act
+// on a timeout. Safe to call once Start has returned (or concurrently
+// while Start is blocked on ctx.Done()); calling on a zero-value Server
+// (Start never ran) is a no-op.
+func (s *Server) Shutdown(ctx context.Context) error {
+	if s.http == nil {
+		return nil
+	}
+	return s.http.Shutdown(ctx)
 }
 
 // versionHandler returns build metadata as JSON. The tag comes from the

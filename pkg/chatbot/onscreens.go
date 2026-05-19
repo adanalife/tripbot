@@ -8,7 +8,7 @@ import (
 )
 
 // Onscreens is the subset of the onscreens-client surface that chatbot
-// commands depend on. Tests inject a fake; production uses the package-backed
+// commands depend on. Tests inject a fake; production uses the
 // realOnscreens adapter wired in defaultApp.
 type Onscreens interface {
 	ShowFlag(ctx context.Context, dur time.Duration) error
@@ -18,21 +18,25 @@ type Onscreens interface {
 	ShowTimewarp(ctx context.Context) error
 }
 
-// realOnscreens delegates to pkg/onscreens-client.
-type realOnscreens struct{}
+// realOnscreens delegates to a constructed *onscreensClient.Client. The
+// concrete Client instance is owned by the App (wired up in defaultApp),
+// not read off a package-level global in pkg/onscreens-client.
+type realOnscreens struct {
+	c *onscreensClient.Client
+}
 
-func (realOnscreens) ShowFlag(ctx context.Context, dur time.Duration) error {
-	return onscreensClient.ShowFlag(ctx, dur)
+func (r realOnscreens) ShowFlag(ctx context.Context, dur time.Duration) error {
+	return r.c.ShowFlag(ctx, dur)
 }
-func (realOnscreens) ShowLeaderboard(ctx context.Context, title string, lb [][]string) error {
-	return onscreensClient.ShowLeaderboard(ctx, title, lb)
+func (r realOnscreens) ShowLeaderboard(ctx context.Context, title string, lb [][]string) error {
+	return r.c.ShowLeaderboard(ctx, title, lb)
 }
-func (realOnscreens) HideMiddleText(ctx context.Context) error {
-	return onscreensClient.HideMiddleText(ctx)
+func (r realOnscreens) HideMiddleText(ctx context.Context) error {
+	return r.c.HideMiddleText(ctx)
 }
-func (realOnscreens) ShowMiddleText(ctx context.Context, msg string) error {
-	return onscreensClient.ShowMiddleText(ctx, msg)
+func (r realOnscreens) ShowMiddleText(ctx context.Context, msg string) error {
+	return r.c.ShowMiddleText(ctx, msg)
 }
-func (realOnscreens) ShowTimewarp(ctx context.Context) error {
-	return onscreensClient.ShowTimewarp(ctx)
+func (r realOnscreens) ShowTimewarp(ctx context.Context) error {
+	return r.c.ShowTimewarp(ctx)
 }

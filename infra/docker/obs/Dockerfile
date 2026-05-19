@@ -13,9 +13,19 @@ ENV DEBIAN_FRONTEND=noninteractive
 #
 # intel-media-va-driver-non-free + vainfo enable hardware H.264/H.265
 # encode via VAAPI on Intel iGPU hosts (Gen 11+ Iris Xe / UHD 770).
-# Requires /dev/dri device passthrough at runtime; OBS scenes select
-# "FFmpeg VAAPI" as the output encoder. Software x264 is the fallback
-# when no iGPU is exposed.
+# OBS connects to the iGPU's render engine for OpenGL composite via the
+# sway Wayland compositor (WLR_BACKENDS=headless), so /dev/dri/card0 must
+# be mounted at runtime — provided by the Intel device plugin's
+# gpu.intel.com/i915 resource grant in the prod-1 overlay.
+#
+# Display stack: sway (headless Wayland compositor) + wayvnc (Wayland VNC
+# server) + qt6-wayland (Qt's Wayland QPA plugin for OBS's UI). Replaces
+# the previous Xvfb / fluxbox / x11vnc trio so OBS's OpenGL hits the iGPU
+# instead of falling back to Mesa llvmpipe (CPU rasterizer).
+#
+# supervisor manages the three (+ the browser-refresh loop) so each has
+# its own restart policy and dependency-on-Wayland-socket logic; matches
+# the VLC container's structure.
 RUN echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true" \
       | debconf-set-selections \
     && apt-get update \
@@ -24,15 +34,15 @@ RUN echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula sele
     && add-apt-repository -y ppa:obsproject/obs-studio \
     && apt-get install -y --no-install-recommends \
          obs-studio \
-         xvfb \
-         x11vnc \
-         fluxbox \
+         sway \
+         wayvnc \
+         xwayland \
+         qt6-wayland \
+         supervisor \
          feh \
          tini \
          gettext-base \
          procps \
-         x11-utils \
-         dbus-x11 \
          libgl1-mesa-dri \
          intel-media-va-driver-non-free \
          vainfo \
@@ -49,10 +59,16 @@ RUN python3 -m venv /opt/obs/venv \
     && /opt/obs/venv/bin/pip install --no-cache-dir obsws-python
 
 COPY infra/docker/obs/config/ /opt/obs/config/
+COPY infra/docker/obs/script/ /opt/obs/script/
 COPY infra/docker/obs/entrypoint.sh /opt/obs/entrypoint.sh
 COPY infra/docker/obs/healthcheck.sh /opt/obs/healthcheck.sh
 COPY bin/obs-browser-refresh /opt/obs/bin/obs-browser-refresh
-RUN chmod +x /opt/obs/entrypoint.sh /opt/obs/healthcheck.sh /opt/obs/bin/obs-browser-refresh
+RUN chmod +x /opt/obs/entrypoint.sh /opt/obs/healthcheck.sh \
+             /opt/obs/bin/obs-browser-refresh /opt/obs/script/*.sh
+
+# Per-program supervisor configs live in /etc/supervisor/conf.d/. The
+# default supervisord.conf from the package globs *.conf out of that dir.
+COPY infra/docker/obs/supervisor/ /etc/supervisor/conf.d/
 
 COPY assets/twitch-overlay-left.png assets/twitch-overlay-right.png /opt/tripbot/assets/
 

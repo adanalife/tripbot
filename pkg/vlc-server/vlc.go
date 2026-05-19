@@ -1,6 +1,8 @@
 package vlcServer
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -111,23 +113,64 @@ func (s *Server) initPlayer() error {
 	return s.loadMedia()
 }
 
-// Shutdown cleans up VLC as best it can. The release order (player.Stop →
-// player.Release → libvlc.Release) is order-sensitive — releasing the
-// libvlc instance before the player segfaults. Preserve verbatim.
+// Health returns nil when the server is ready to serve a viewer, or an
+// error describing why it isn't. Used by /health/ready (readinessHandler)
+// so K8s readiness probes reflect libvlc player state.
+//
+// Healthy means s.Player is non-nil AND its libvlc MediaState is one of
+// the "active" states: Opening, Buffering, Playing, Paused. Stopped,
+// Ended, Error, and NothingSpecial are treated as unhealthy — Ended is
+// excluded conservatively because while a looping playlist passes
+// through it between clips, a sustained Ended generally indicates a
+// stalled player (the loop logic isn't advancing), and we'd rather fail
+// readiness too eagerly than too lazily.
+func (s *Server) Health() error {
+	if s.Player == nil {
+		return errors.New("player not initialized")
+	}
+	state, err := s.Player.MediaState()
+	if err != nil {
+		return fmt.Errorf("reading player state: %w", err)
+	}
+	switch state {
+	case libvlc.MediaOpening, libvlc.MediaBuffering, libvlc.MediaPlaying, libvlc.MediaPaused:
+		return nil
+	default:
+		return fmt.Errorf("player not running (state=%v)", state)
+	}
+}
+
+// Shutdown drains the HTTP server (bounded by ctx) then cleans up libvlc.
+// The libvlc release order (player.Stop → player.Release → libvlc.Release)
+// is order-sensitive — releasing the libvlc instance before the player
+// segfaults. Preserve verbatim.
+//
+// New guarantees that on success s.Player is non-nil; on failure New
+// releases any partially-allocated libvlc resources itself and returns
+// (nil, err). Callers that hold a non-nil *Server therefore never observe
+// a nil Player, so this method assumes both fields are valid.
+//
+// s.http may be nil if Shutdown is called before Start populated it; in
+// that case there's nothing to drain and we skip straight to libvlc
+// cleanup.
 //
 //TODO: are there more things to close gracefully?
-func (s *Server) Shutdown() {
+func (s *Server) Shutdown(ctx context.Context) {
+	if s.http != nil {
+		slog.InfoContext(ctx, "shutting down VLC web server")
+		if err := s.http.Shutdown(ctx); err != nil {
+			slog.ErrorContext(ctx, "error during VLC web server shutdown", "err", err)
+		}
+	}
 	if helpers.RunningOnDarwin() {
 		slog.Info("not stopping VLC on darwin")
 		return
 	}
-	if s.Player != nil {
-		if err := s.Player.Stop(); err != nil {
-			slog.Error("error stopping player", "err", err)
-		}
-		if err := s.Player.Release(); err != nil {
-			slog.Error("error releasing player", "err", err)
-		}
+	if err := s.Player.Stop(); err != nil {
+		slog.Error("error stopping player", "err", err)
+	}
+	if err := s.Player.Release(); err != nil {
+		slog.Error("error releasing player", "err", err)
 	}
 	if err := libvlc.Release(); err != nil {
 		slog.Error("error releasing libvlc", "err", err)
