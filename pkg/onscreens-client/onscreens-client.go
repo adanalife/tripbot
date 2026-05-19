@@ -16,15 +16,32 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
-var onscreensServerURL = "http://" + c.Conf.OnscreensServerHost
+// Client talks to the onscreens-server HTTP API. Construct via New(host); the
+// package-level defaultClient is wired up at init for callers that still hit
+// the free-function shims below.
+type Client struct {
+	serverURL  string
+	httpClient *http.Client
+}
 
-// httpClient wraps the default transport with OpenTelemetry instrumentation
-// so outbound calls produce spans and propagate W3C tracecontext headers.
-// See pkg/vlc-client for the same pattern.
-var httpClient = &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)}
+// New returns a Client pointed at the given onscreens-server host. The HTTP
+// transport is OTel-instrumented so outbound calls produce spans and
+// propagate W3C tracecontext headers.
+func New(host string) *Client {
+	return &Client{
+		serverURL:  "http://" + host,
+		httpClient: &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)},
+	}
+}
 
-func HideMiddleText(ctx context.Context) error {
-	_, err := getUrl(ctx, onscreensServerURL+"/onscreens/middle/hide")
+// defaultClient is the package-level Client used by the free-function shims
+// below. It exists so callers that haven't been migrated yet (pkg/video,
+// cmd/tripbot's cron registration) keep working. New consumers should
+// construct their own *Client via New().
+var defaultClient = New(c.Conf.OnscreensServerHost)
+
+func (c *Client) HideMiddleText(ctx context.Context) error {
+	_, err := c.get(ctx, c.serverURL+"/onscreens/middle/hide")
 	if err != nil {
 		slog.ErrorContext(ctx, "error hiding middle onscreen", "err", err)
 		return err
@@ -32,10 +49,10 @@ func HideMiddleText(ctx context.Context) error {
 	return nil
 }
 
-func ShowMiddleText(ctx context.Context, msg string) error {
-	url := onscreensServerURL + "/onscreens/middle/show"
+func (c *Client) ShowMiddleText(ctx context.Context, msg string) error {
+	url := c.serverURL + "/onscreens/middle/show"
 	url = fmt.Sprintf("%s?msg=%s", url, helpers.Base64Encode(msg))
-	_, err := getUrl(ctx, url)
+	_, err := c.get(ctx, url)
 	if err != nil {
 		slog.ErrorContext(ctx, "error showing middle onscreen", "err", err)
 		return err
@@ -43,13 +60,13 @@ func ShowMiddleText(ctx context.Context, msg string) error {
 	return err
 }
 
-func ShowLeaderboard(ctx context.Context, title string, leaderboard [][]string) error {
+func (c *Client) ShowLeaderboard(ctx context.Context, title string, leaderboard [][]string) error {
 	content := users.LeaderboardContent(title, leaderboard)
 
-	url := onscreensServerURL + "/onscreens/leaderboard/show"
+	url := c.serverURL + "/onscreens/leaderboard/show"
 	url = fmt.Sprintf("%s?content=%s", url, helpers.Base64Encode(content))
 
-	_, err := getUrl(ctx, url)
+	_, err := c.get(ctx, url)
 	if err != nil {
 		slog.ErrorContext(ctx, "error showing leaderboard onscreen", "err", err)
 		return err
@@ -58,7 +75,7 @@ func ShowLeaderboard(ctx context.Context, title string, leaderboard [][]string) 
 }
 
 //TODO: this is taken right from the !guessleaderboard command, DRY it?
-func ShowGuessLeaderboard(ctx context.Context) {
+func (c *Client) ShowGuessLeaderboard(ctx context.Context) {
 	// select users to show in leaderboard
 	size := 10
 	leaderboard := scoreboards.TopUsers(ctx, scoreboards.CurrentGuessScoreboard(), size)
@@ -75,11 +92,11 @@ func ShowGuessLeaderboard(ctx context.Context) {
 	}
 
 	// display leaderboard on screen
-	ShowLeaderboard(ctx, "Correct Guesses This Month", intLeaderboard)
+	c.ShowLeaderboard(ctx, "Correct Guesses This Month", intLeaderboard)
 }
 
-func ShowTimewarp(ctx context.Context) error {
-	_, err := getUrl(ctx, onscreensServerURL+"/onscreens/timewarp/show")
+func (c *Client) ShowTimewarp(ctx context.Context) error {
+	_, err := c.get(ctx, c.serverURL+"/onscreens/timewarp/show")
 	if err != nil {
 		slog.ErrorContext(ctx, "error showing timewarp onscreen", "err", err)
 		return err
@@ -87,11 +104,11 @@ func ShowTimewarp(ctx context.Context) error {
 	return nil
 }
 
-func ShowFlag(ctx context.Context, dur time.Duration) error {
+func (c *Client) ShowFlag(ctx context.Context, dur time.Duration) error {
 	//TODO: bring this back
-	// url := onscreensServerURL + "/onscreens/flag/show"
+	// url := c.serverURL + "/onscreens/flag/show"
 	// url = fmt.Sprintf("%s?duration=%s", url, helpers.Base64Encode(string(rune(dur))))
-	// _, err := getUrl(ctx, url)
+	// _, err := c.get(ctx, url)
 	// if err != nil {
 	// 	slog.ErrorContext(ctx, "error showing flag onscreen", "err", err)
 	// 	return err
@@ -99,10 +116,10 @@ func ShowFlag(ctx context.Context, dur time.Duration) error {
 	return nil
 }
 
-func ShowGPSImage(ctx context.Context, dur time.Duration) error {
-	url := onscreensServerURL + "/onscreens/gps/show"
+func (c *Client) ShowGPSImage(ctx context.Context, dur time.Duration) error {
+	url := c.serverURL + "/onscreens/gps/show"
 	url = fmt.Sprintf("%s?duration=%s", url, helpers.Base64Encode(string(rune(dur))))
-	_, err := getUrl(ctx, url)
+	_, err := c.get(ctx, url)
 	if err != nil {
 		slog.ErrorContext(ctx, "error showing gps onscreen", "err", err)
 		return err
@@ -110,8 +127,8 @@ func ShowGPSImage(ctx context.Context, dur time.Duration) error {
 	return nil
 }
 
-func HideGPSImage(ctx context.Context) error {
-	_, err := getUrl(ctx, onscreensServerURL+"/onscreens/gps/hide")
+func (c *Client) HideGPSImage(ctx context.Context) error {
+	_, err := c.get(ctx, c.serverURL+"/onscreens/gps/hide")
 	if err != nil {
 		slog.ErrorContext(ctx, "error hiding gps onscreen", "err", err)
 		return err
@@ -120,13 +137,13 @@ func HideGPSImage(ctx context.Context) error {
 }
 
 //TODO: move this to a common location
-func getUrl(ctx context.Context, url string) (string, error) {
+func (c *Client) get(ctx context.Context, url string) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		slog.ErrorContext(ctx, "error building request to onscreens server", "err", err)
 		return "", err
 	}
-	response, err := httpClient.Do(req)
+	response, err := c.httpClient.Do(req)
 	if err != nil {
 		slog.ErrorContext(ctx, "error connecting to onscreens server", "err", err)
 		return "", err
@@ -143,3 +160,19 @@ func getUrl(ctx context.Context, url string) (string, error) {
 	}
 	return string(contents), nil
 }
+
+// ---- package-level shims (transitional) ----
+// Each free function calls the corresponding method on defaultClient. These
+// preserve the existing public surface for unmigrated callers (pkg/video,
+// cmd/tripbot). New consumers should construct their own *Client via New().
+
+func HideMiddleText(ctx context.Context) error                { return defaultClient.HideMiddleText(ctx) }
+func ShowMiddleText(ctx context.Context, msg string) error    { return defaultClient.ShowMiddleText(ctx, msg) }
+func ShowLeaderboard(ctx context.Context, title string, leaderboard [][]string) error {
+	return defaultClient.ShowLeaderboard(ctx, title, leaderboard)
+}
+func ShowGuessLeaderboard(ctx context.Context)                  { defaultClient.ShowGuessLeaderboard(ctx) }
+func ShowTimewarp(ctx context.Context) error                    { return defaultClient.ShowTimewarp(ctx) }
+func ShowFlag(ctx context.Context, dur time.Duration) error     { return defaultClient.ShowFlag(ctx, dur) }
+func ShowGPSImage(ctx context.Context, dur time.Duration) error { return defaultClient.ShowGPSImage(ctx, dur) }
+func HideGPSImage(ctx context.Context) error                    { return defaultClient.HideGPSImage(ctx) }
