@@ -236,20 +236,38 @@ func CurrentUserAccessToken() string {
 	return currentUserToken.AccessToken
 }
 
+// ErrIdentityMismatch is returned by GenerateUserAccessToken when the
+// discovered identity (via helix.GetUsers) doesn't match expectedLogin.
+// Callers should surface it with retry guidance; the wrong-identity row is
+// NOT written to oauth_tokens — the check runs before Upsert.
+type ErrIdentityMismatch struct {
+	Expected  string
+	Got       string
+	AccountID string // "bot" or "broadcaster" — for the retry hint
+}
+
+func (e *ErrIdentityMismatch) Error() string {
+	return fmt.Sprintf("twitch: bootstrap identity mismatch — expected %q (%s) but signed in as %q. Sign out of Twitch in this browser and retry, making sure to authenticate as %q.",
+		e.Expected, e.AccountID, e.Got, e.Expected)
+}
+
 // GenerateUserAccessToken exchanges a code for an access+refresh token,
-// derives the authenticated username via helix.GetUsers (so bootstrap is
-// account-agnostic — the row is keyed by whoever signed in at consent),
-// and Upserts. When the discovered identity matches the bot or the
-// broadcaster, the matching in-memory slot + helix client is also primed
-// so the running pod picks up the rotated token without a restart.
+// derives the authenticated username via helix.GetUsers, sanity-checks it
+// against expectedLogin (when non-empty), then Upserts. When the discovered
+// identity matches the bot or the broadcaster, the matching in-memory slot +
+// helix client is also primed so the running pod picks up the rotated token
+// without a restart.
+//
+// The expectedLogin check runs BEFORE Upsert so a wrong-identity sign-in
+// doesn't pollute oauth_tokens. Pass "" to skip the check (legacy callers).
 //
 // Uses a one-shot helix client for the code exchange + GetUsers discovery
 // so the shared bot client's user-access-token is never clobbered by the
 // bootstrap of an unrelated identity.
 //
-// Returns error (no longer swallows). Callers: /auth/callback handler,
-// cmd/auth-bootstrap.
-func GenerateUserAccessToken(code string) error {
+// Returns error (no longer swallows); ErrIdentityMismatch on identity check
+// failure. Callers: /auth/callback handler, cmd/auth-bootstrap.
+func GenerateUserAccessToken(code string, expectedLogin string) error {
 	// Ensure App Access Token is set so the one-shot client can fall back
 	// for endpoints that allow app auth.
 	if _, err := Client(); err != nil {
@@ -294,6 +312,18 @@ func GenerateUserAccessToken(code string) error {
 		return errors.New("twitch: GetUsers returned no users")
 	}
 	u := usersResp.Data.Users[0]
+
+	// Sanity check: the discovered identity must match what the caller
+	// initiated the flow for. Catches the "clicked the bot link with the
+	// wrong browser already signed in as broadcaster" case BEFORE the row
+	// gets written.
+	if expectedLogin != "" && u.Login != expectedLogin {
+		hint := "bot"
+		if expectedLogin == c.Conf.ChannelName {
+			hint = "broadcaster"
+		}
+		return &ErrIdentityMismatch{Expected: expectedLogin, Got: u.Login, AccountID: hint}
+	}
 
 	tok := oauthtokens.Token{
 		Provider:     "twitch",

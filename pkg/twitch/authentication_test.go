@@ -1,6 +1,8 @@
 package twitch
 
 import (
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -142,6 +144,27 @@ func TestBroadcasterTokenLoaded_TrueWhenSet(t *testing.T) {
 
 	if !broadcasterTokenLoaded() {
 		t.Error("broadcasterTokenLoaded() = false with token set; want true")
+	}
+}
+
+func TestErrIdentityMismatch_MessageNamesBoth(t *testing.T) {
+	err := &ErrIdentityMismatch{Expected: "tripbot4000", Got: "adanalife_", AccountID: "bot"}
+	msg := err.Error()
+	for _, want := range []string{"tripbot4000", "adanalife_", "bot"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("ErrIdentityMismatch.Error() = %q; missing %q", msg, want)
+		}
+	}
+}
+
+func TestErrIdentityMismatch_ErrorsAs(t *testing.T) {
+	var orig error = &ErrIdentityMismatch{Expected: "x", Got: "y", AccountID: "broadcaster"}
+	var target *ErrIdentityMismatch
+	if !errors.As(orig, &target) {
+		t.Fatal("errors.As did not extract *ErrIdentityMismatch")
+	}
+	if target.Expected != "x" || target.Got != "y" || target.AccountID != "broadcaster" {
+		t.Errorf("extracted: %+v", target)
 	}
 }
 

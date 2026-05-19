@@ -36,7 +36,7 @@ import (
 	"runtime"
 	"time"
 
-	_ "github.com/adanalife/tripbot/pkg/config/tripbot" // env loader via package init
+	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/server/oauthstate"
@@ -45,23 +45,34 @@ import (
 )
 
 const (
-	listenAddr     = "localhost:8080"
-	callbackPath   = "/auth/callback"
-	flowTimeout    = 5 * time.Minute
-	shutdownGrace  = 5 * time.Second
-	successHTML    = `<!doctype html><html><head><meta charset="utf-8"><title>tripbot — bootstrap success</title><style>body{background:#0a0a0a;color:#eee;font:14px/1.5 -apple-system,monospace;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}</style></head><body><div><h1>Success</h1><p>Refresh token persisted. You may close this tab.</p></div></body></html>`
+	listenAddr    = "localhost:8080"
+	callbackPath  = "/auth/callback"
+	flowTimeout   = 5 * time.Minute
+	shutdownGrace = 5 * time.Second
+	// %s = expectedLogin, %s = --account flag value
+	successHTML = `<!doctype html><html><head><meta charset="utf-8"><title>tripbot — bootstrap success</title><style>body{background:#0a0a0a;color:#eee;font:14px/1.5 -apple-system,monospace;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}</style></head><body><div><h1>Success</h1><p>Refresh token persisted for <strong>%s</strong> (%s account). You may close this tab.</p></div></body></html>`
+	// %s = got login, %s = expected login, %s = expected account ("bot"/"broadcaster")
+	mismatchHTML = `<!doctype html><html><head><meta charset="utf-8"><title>tripbot — wrong account</title><style>body{background:#3a0000;color:#fff;font:14px/1.5 -apple-system,monospace;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}div{max-width:520px}code{background:#000;padding:2px 5px;border-radius:3px}</style></head><body><div><h1>Wrong account</h1><p>You signed in as <code>%s</code>, but this leg expected <code>%s</code> (the <strong>%s</strong> account).</p><p>No token was written. Sign out of Twitch in this browser (or open an incognito window), then re-run the bootstrap task.</p></div></body></html>`
 )
 
 func main() {
 	account := flag.String("account", "bot", "which account to bootstrap: bot (chat:read/edit, etc.) or broadcaster (channel:read:subscriptions, moderator:read:followers, etc.)")
 	flag.Parse()
 
-	var scopes []string
+	var (
+		scopes        []string
+		expectedLogin string
+		stateAccount  oauthstate.Account
+	)
 	switch *account {
 	case "bot":
 		scopes = mytwitch.BotScopes
+		expectedLogin = c.Conf.BotUsername
+		stateAccount = oauthstate.AccountBot
 	case "broadcaster":
 		scopes = mytwitch.BroadcasterScopes
+		expectedLogin = c.Conf.ChannelName
+		stateAccount = oauthstate.AccountBroadcaster
 	default:
 		log.Fatalf("--account must be 'bot' or 'broadcaster', got %q", *account)
 	}
@@ -77,7 +88,7 @@ func main() {
 		log.Fatalf("could not build Twitch client: %v", err)
 	}
 
-	state := oauthstate.New()
+	state := oauthstate.New(stateAccount)
 	authURL := client.GetAuthorizationURL(&helix.AuthorizationURLParams{
 		Scopes:       scopes,
 		ResponseType: "code",
@@ -92,7 +103,7 @@ func main() {
 	done := make(chan error, 1)
 	mux := http.NewServeMux()
 	mux.HandleFunc(callbackPath, func(w http.ResponseWriter, r *http.Request) {
-		if !oauthstate.Validate(r.URL.Query().Get("state")) {
+		if _, ok := oauthstate.Validate(r.URL.Query().Get("state")); !ok {
 			http.Error(w, "invalid or expired state", http.StatusBadRequest)
 			done <- errors.New("state validation failed")
 			return
@@ -103,13 +114,21 @@ func main() {
 			done <- errors.New("no code")
 			return
 		}
-		if err := mytwitch.GenerateUserAccessToken(code); err != nil {
-			http.Error(w, "code exchange failed: "+err.Error(), http.StatusInternalServerError)
+		if err := mytwitch.GenerateUserAccessToken(code, expectedLogin); err != nil {
+			var mismatch *mytwitch.ErrIdentityMismatch
+			if errors.As(err, &mismatch) {
+				// Friendly browser page; no row was written.
+				w.Header().Set("Content-Type", "text/html; charset=utf-8")
+				w.WriteHeader(http.StatusBadRequest)
+				fmt.Fprintf(w, mismatchHTML, mismatch.Got, mismatch.Expected, mismatch.AccountID)
+			} else {
+				http.Error(w, "code exchange failed: "+err.Error(), http.StatusInternalServerError)
+			}
 			done <- err
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		fmt.Fprint(w, successHTML)
+		fmt.Fprintf(w, successHTML, expectedLogin, *account)
 		done <- nil
 	})
 
@@ -135,9 +154,13 @@ func main() {
 	select {
 	case err := <-done:
 		if err != nil {
+			var mismatch *mytwitch.ErrIdentityMismatch
+			if errors.As(err, &mismatch) {
+				log.Fatalf("bootstrap failed: %s\nNo token was written. Sign out of Twitch (or use a fresh incognito browser) and re-run `task auth:bootstrap:%s`.", mismatch.Error(), *account)
+			}
 			log.Fatalf("bootstrap failed: %v", err)
 		}
-		slog.Info("bootstrap successful, refresh token persisted to oauth_tokens")
+		slog.Info("bootstrap successful, refresh token persisted to oauth_tokens", "login", expectedLogin, "account", *account)
 	case <-time.After(flowTimeout):
 		log.Fatalf("timed out after %s waiting for Twitch callback", flowTimeout)
 	}
