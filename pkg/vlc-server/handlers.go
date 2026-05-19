@@ -24,11 +24,6 @@ func SetVersion(v string) {
 	}
 }
 
-// healthcheck URL, for tools to verify the stream is alive
-func healthHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "OK")
-}
-
 // versionHandler returns build metadata as JSON. The tag comes from the
 // build-time ldflag; sha + built_at are read from the binary's embedded
 // VCS info (Go's automatic -buildvcs).

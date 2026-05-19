@@ -11,20 +11,6 @@ import (
 	"github.com/adanalife/tripbot/pkg/server/oauthstate"
 )
 
-func TestHealthHandler(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/health/live", nil)
-	rec := httptest.NewRecorder()
-
-	healthHandler(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("got status %d, want %d", rec.Code, http.StatusOK)
-	}
-	if rec.Body.String() != "OK" {
-		t.Fatalf("got body %q, want %q", rec.Body.String(), "OK")
-	}
-}
-
 func TestVersionHandlerReturnsInjectedTag(t *testing.T) {
 	saved := versionTag
 	defer func() { versionTag = saved }()

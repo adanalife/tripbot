@@ -9,6 +9,7 @@ import (
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
+	"github.com/adanalife/tripbot/pkg/database"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/httpmw"
@@ -42,10 +43,14 @@ func Start(ctx context.Context) {
 
 	r := mux.NewRouter()
 
-	// healthcheck endpoints
+	// healthcheck endpoints. /live is a trivial 200 (kubelet uses it to
+	// decide whether to restart the pod); /ready runs real checks (DB
+	// reachability) so kubelet only routes traffic once deps are up.
 	hp := r.PathPrefix("/health").Methods("GET", "HEAD").Subrouter()
-	hp.Handle("/live", tagged("/health/live", healthHandler))
-	hp.Handle("/ready", tagged("/health/ready", healthHandler))
+	hp.Handle("/live", tagged("/health/live", httpmw.LivenessHandler()))
+	hp.Handle("/ready", tagged("/health/ready", httpmw.ReadinessHandler(
+		httpmw.ReadyCheck{Name: "database", Fn: database.Ping},
+	)))
 
 	// version endpoint — returns build metadata as JSON
 	r.Handle("/version", tagged("/version", versionHandler)).Methods("GET", "HEAD")

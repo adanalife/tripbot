@@ -39,12 +39,16 @@ func Start(ctx context.Context) {
 
 	r := mux.NewRouter()
 
-	// healthcheck endpoints
-	//TODO: handle HEAD requests here too
+	// healthcheck endpoints. /live is a trivial 200 (kubelet uses it to
+	// decide whether to restart the pod); /ready confirms libvlc is up
+	// and video is loaded so kubelet only routes traffic once the player
+	// is actually capable of serving the RTSP stream.
 	hp := r.PathPrefix("/health").Methods("GET", "HEAD").Subrouter()
-	hp.Handle("/", tagged("/health/", healthHandler))
-	hp.Handle("/live", tagged("/health/live", healthHandler))
-	hp.Handle("/ready", tagged("/health/ready", healthHandler))
+	hp.Handle("/", tagged("/health/", httpmw.LivenessHandler()))
+	hp.Handle("/live", tagged("/health/live", httpmw.LivenessHandler()))
+	hp.Handle("/ready", tagged("/health/ready", httpmw.ReadinessHandler(
+		httpmw.ReadyCheck{Name: "vlc", Fn: func(_ context.Context) error { return Ready() }},
+	)))
 
 	// version endpoint — returns build metadata as JSON
 	r.Handle("/version", tagged("/version", versionHandler)).Methods("GET", "HEAD")

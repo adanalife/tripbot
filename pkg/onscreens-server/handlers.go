@@ -131,11 +131,6 @@ func onscreensLeaderboardHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// healthHandler is the liveness probe target.
-func healthHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "OK")
-}
-
 // catchAllHandler 404s unknown routes for visibility.
 func catchAllHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {

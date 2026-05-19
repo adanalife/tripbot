@@ -43,11 +43,14 @@ func Start() {
 
 	r := mux.NewRouter()
 
-	// healthcheck endpoints
+	// healthcheck endpoints. /live is a trivial 200; /ready has no deps
+	// to check today (the server is stateless apart from per-process
+	// rotator state) so it also returns 200 — same shape as the other
+	// servers so future deps can plug in here.
 	hp := r.PathPrefix("/health").Methods("GET", "HEAD").Subrouter()
-	hp.Handle("/", tagged("/health/", healthHandler))
-	hp.Handle("/live", tagged("/health/live", healthHandler))
-	hp.Handle("/ready", tagged("/health/ready", healthHandler))
+	hp.Handle("/", tagged("/health/", httpmw.LivenessHandler()))
+	hp.Handle("/live", tagged("/health/live", httpmw.LivenessHandler()))
+	hp.Handle("/ready", tagged("/health/ready", httpmw.ReadinessHandler()))
 
 	// version endpoint — returns build metadata as JSON
 	r.Handle("/version", tagged("/version", versionHandler)).Methods("GET", "HEAD")
