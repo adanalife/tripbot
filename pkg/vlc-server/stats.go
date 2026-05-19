@@ -8,14 +8,14 @@ import (
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 )
 
-// PollStats polls libvlc for playback statistics every interval and pushes
+// pollStats polls libvlc for playback statistics every interval and pushes
 // them through pkg/instrumentation. Intended to run as a long-lived
-// goroutine started after InitPlayer.
+// goroutine started after New.
 //
 // libvlc resets these counters when the current Media changes; we detect
 // that by watching for a negative delta in DisplayedPictures and skip the
 // FPS sample on that tick to avoid a phantom dip.
-func PollStats(ctx context.Context, interval time.Duration) {
+func (s *Server) pollStats(ctx context.Context, interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
@@ -30,10 +30,10 @@ func PollStats(ctx context.Context, interval time.Duration) {
 		case <-ctx.Done():
 			return
 		case now := <-ticker.C:
-			if player == nil {
+			if s.Player == nil {
 				continue
 			}
-			media, err := player.Media()
+			media, err := s.Player.Media()
 			if err != nil || media == nil {
 				havePrev = false
 				continue
@@ -73,9 +73,9 @@ func PollStats(ctx context.Context, interval time.Duration) {
 	}
 }
 
-// StartStatsPoller is a tiny launcher wrapper so cmd/vlc-server can `go
-// vlcServer.StartStatsPoller(...)` without juggling its own goroutine.
-func StartStatsPoller(ctx context.Context, interval time.Duration) {
+// StartStatsPoller is a tiny launcher wrapper so cmd/vlc-server can
+// `srv.StartStatsPoller(...)` without juggling its own goroutine.
+func (s *Server) StartStatsPoller(ctx context.Context, interval time.Duration) {
 	slog.InfoContext(ctx, "starting libvlc stats poller", "interval", interval)
-	go PollStats(ctx, interval)
+	go s.pollStats(ctx, interval)
 }
