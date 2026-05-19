@@ -16,8 +16,13 @@ type VlcServerConfig struct {
 	RunDir string `default:"/opt/data/run" envconfig:"RUN_DIR"`
 
 	// VlcFileCaching is the libvlc --file-caching value in milliseconds.
-	// Defaults to today's hardcoded value; tune per-host without recompiling.
-	VlcFileCaching int `default:"1111" envconfig:"VLC_FILE_CACHING"`
+	// Tune per-host without recompiling. Lower = faster between-clip
+	// startup (smaller frame gap that OBS's ffmpeg_source has to ride
+	// out before disconnect/reconnect kicks in); higher = more headroom
+	// for bursty disk/NFS read latency. 300ms is a working baseline for
+	// local-NFS-backed playback; the prior 1111 was unscientific tuning
+	// from years ago that left a >1s frame gap on each clip transition.
+	VlcFileCaching int `default:"300" envconfig:"VLC_FILE_CACHING"`
 	// VlcAvcodecHw is the libvlc --avcodec-hw value (Linux-only). One of
 	// any, none, vaapi, vdpau_avcodec, cuda. "any" lets libvlc pick the
 	// best available backend based on the host hardware: VAAPI on Intel
