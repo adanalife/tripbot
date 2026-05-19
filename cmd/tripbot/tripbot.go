@@ -17,6 +17,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/database"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
+	"github.com/adanalife/tripbot/pkg/instrumentation"
 	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
 	"github.com/adanalife/tripbot/pkg/server"
 	"github.com/adanalife/tripbot/pkg/telemetry"
@@ -29,20 +30,37 @@ import (
 	"github.com/go-co-op/gocron/v2"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
+	"runtime/debug"
 )
 
 var cronTracer = otel.Tracer("github.com/adanalife/tripbot/cmd/tripbot/cron")
 
 // tracedJob wraps a cron callback in a span so each tick shows up as its
-// own trace. The scheduler's job ctx is the span's parent and is threaded
-// into fn, so DB queries (otelsql) and outbound HTTP (otelhttp) nest under
-// cron.<name> in Tempo as children of the cron tick.
+// own trace, records run-count / duration / last-run-timestamp metrics
+// per job, and recovers panics so a single failing job doesn't kill the
+// scheduler goroutine. The scheduler's job ctx is the span's parent and
+// is threaded into fn, so DB queries (otelsql) and outbound HTTP
+// (otelhttp) nest under cron.<name> in Tempo as children of the cron tick.
 func tracedJob(name string, fn func(context.Context)) func(context.Context) {
 	return func(ctx context.Context) {
+		start := time.Now()
 		ctx, span := cronTracer.Start(ctx, "cron."+name,
 			trace.WithAttributes(attribute.String("cron.job", name)))
 		defer span.End()
+		defer func() {
+			if r := recover(); r != nil {
+				slog.ErrorContext(ctx, "cron panic recovered",
+					"job", name,
+					"err", fmt.Sprintf("%v", r),
+					"stack", string(debug.Stack()),
+				)
+				instrumentation.Cron.Panic(name)
+				span.SetStatus(codes.Error, fmt.Sprintf("panic: %v", r))
+			}
+			instrumentation.Cron.Observe(name, time.Since(start).Seconds(), time.Now().Unix())
+		}()
 		fn(ctx)
 	}
 }
