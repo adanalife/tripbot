@@ -71,7 +71,7 @@ func (a *App) buildRegistry() []Command {
 		{
 			Trigger: "!discord",
 			Handler: func(_ context.Context, _ *users.User, _ []string) {
-				sayFn("Join us on Discord: https://discord.gg/Bk9EuGdMX")
+				sayFn("Join us on Discord: https://discord.gg/hKvNgZrk52")
 			},
 		},
 		{
