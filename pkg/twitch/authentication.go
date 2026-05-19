@@ -30,20 +30,31 @@ import (
 // can see remaining headroom without waiting for a 429.
 var helixHTTPClient = &http.Client{Transport: rateLimitRecorder{next: otelhttp.NewTransport(http.DefaultTransport)}}
 
-// Scopes is the OAuth scope set requested for the bot account. Single source
-// of truth — referenced by Client() (App Access Token request),
-// GenerateUserAccessToken (initial user-token exchange), and any code that
-// builds an authorize URL (cmd/auth-bootstrap, /auth/init).
+// BotScopes is the OAuth scope set requested for the bot account
+// (c.Conf.BotUsername — `tripbot4000` in prod). chat:read + chat:edit are
+// required for IRC; moderator:read:chatters lets the bot read the viewer
+// list on a channel where it is a moderator.
 //
-// chat:read + chat:edit are required for IRC. The remaining scopes preserve
-// the broadcast + subscription Helix calls the bot already made.
-var Scopes = []string{
+// Broadcaster-gated endpoints (GetSubscriptions, GetChannelFollows total)
+// authorize against the broadcaster identity, not the bot — those live in
+// BroadcasterScopes. See [[../decisions/...]] / vault/tripbot/tripbot/TODO.md
+// "Subscriber/follower data" item for the identity-vs-scope distinction.
+var BotScopes = []string{
 	"chat:read",
 	"chat:edit",
-	"channel:read:subscriptions",
-	"user:edit:broadcast",
 	"moderator:read:chatters",
+}
+
+// BroadcasterScopes is the OAuth scope set requested for the broadcaster
+// account (c.Conf.ChannelName — `adanalife_` in prod). These are the
+// Helix scopes that authorize against the channel owner's identity:
+// channel:read:subscriptions for GetSubscriptions, moderator:read:followers
+// for GetChannelFollows total, user:edit:broadcast for channel.update
+// (title/category changes).
+var BroadcasterScopes = []string{
+	"channel:read:subscriptions",
 	"moderator:read:followers",
+	"user:edit:broadcast",
 }
 
 // ErrNoToken signals "no oauth_tokens row for the bot account; run the
@@ -103,7 +114,7 @@ func Client() (*helix.Client, error) {
 		slog.Error("error creating client", "err", err)
 	}
 
-	resp, err := client.RequestAppAccessToken(Scopes)
+	resp, err := client.RequestAppAccessToken(append(append([]string{}, BotScopes...), BroadcasterScopes...))
 	if err != nil {
 		slog.Error("error getting app access token from twitch", "err", err)
 	}

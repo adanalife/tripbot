@@ -5,7 +5,8 @@
 //
 // Flow:
 //   1. Verify DB reachable.
-//   2. Generate CSRF state, build authorize URL with mytwitch.Scopes.
+//   2. Generate CSRF state, build authorize URL with mytwitch.BotScopes
+//      (or mytwitch.BroadcasterScopes via --account=broadcaster).
 //   3. Spin up a tiny localhost:8080 HTTP listener for the OAuth callback.
 //   4. Open the browser to the authorize URL. Dana signs in as tripbot4000.
 //   5. Twitch redirects to localhost:8080/auth/callback. The handler validates
@@ -58,7 +59,7 @@ func main() {
 
 	state := oauthstate.New()
 	authURL := client.GetAuthorizationURL(&helix.AuthorizationURLParams{
-		Scopes:       mytwitch.Scopes,
+		Scopes:       mytwitch.BotScopes,
 		ResponseType: "code",
 		State:        state,
 	})

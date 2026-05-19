@@ -110,7 +110,7 @@ func authInitHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	state := oauthstate.New()
 	authURL := client.GetAuthorizationURL(&helix.AuthorizationURLParams{
-		Scopes:       mytwitch.Scopes,
+		Scopes:       mytwitch.BotScopes,
 		ResponseType: "code",
 		State:        state,
 	})
