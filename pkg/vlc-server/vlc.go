@@ -115,19 +115,22 @@ func (s *Server) initPlayer() error {
 // player.Release → libvlc.Release) is order-sensitive — releasing the
 // libvlc instance before the player segfaults. Preserve verbatim.
 //
+// New guarantees that on success s.Player is non-nil; on failure New
+// releases any partially-allocated libvlc resources itself and returns
+// (nil, err). Callers that hold a non-nil *Server therefore never observe
+// a nil Player, so this method assumes both fields are valid.
+//
 //TODO: are there more things to close gracefully?
 func (s *Server) Shutdown() {
 	if helpers.RunningOnDarwin() {
 		slog.Info("not stopping VLC on darwin")
 		return
 	}
-	if s.Player != nil {
-		if err := s.Player.Stop(); err != nil {
-			slog.Error("error stopping player", "err", err)
-		}
-		if err := s.Player.Release(); err != nil {
-			slog.Error("error releasing player", "err", err)
-		}
+	if err := s.Player.Stop(); err != nil {
+		slog.Error("error stopping player", "err", err)
+	}
+	if err := s.Player.Release(); err != nil {
+		slog.Error("error releasing player", "err", err)
 	}
 	if err := libvlc.Release(); err != nil {
 		slog.Error("error releasing libvlc", "err", err)

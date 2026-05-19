@@ -54,13 +54,38 @@ type Server struct {
 }
 
 // New constructs a Server, initializing libvlc and loading media off disk.
-// Returns an error if libvlc init or media loading fails.
+// Returns a fully-initialized *Server on success, or (nil, err) on failure
+// with any libvlc resources already allocated released before returning so
+// the caller never has to clean up after a partial init.
 func New(cfg Config) (*Server, error) {
 	s := &Server{Version: cfg.Version}
 	if err := s.initPlayer(); err != nil {
+		s.releasePartial()
 		return nil, err
 	}
 	return s, nil
+}
+
+// releasePartial releases any libvlc resources allocated before an init
+// failure inside New. Mirrors Shutdown's release order (Player.Stop →
+// Player.Release → libvlc.Release) and tolerates fields being nil because
+// the failure may have happened before each was set.
+func (s *Server) releasePartial() {
+	if s.Player != nil {
+		if err := s.Player.Stop(); err != nil {
+			slog.Error("error stopping player during partial-init cleanup", "err", err)
+		}
+		if err := s.Player.Release(); err != nil {
+			slog.Error("error releasing player during partial-init cleanup", "err", err)
+		}
+	}
+	// libvlc.Release is safe to call even if startVLC failed before
+	// libvlc.Init returned successfully — the underlying C ref-count
+	// gate handles the no-op case. Always call it so that the libvlc
+	// instance allocated in startVLC doesn't leak.
+	if err := libvlc.Release(); err != nil {
+		slog.Error("error releasing libvlc during partial-init cleanup", "err", err)
+	}
 }
 
 // Start starts the web server. When ctx is canceled (e.g. SIGINT/SIGTERM
