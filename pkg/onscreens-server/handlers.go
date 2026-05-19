@@ -10,7 +10,7 @@ import (
 	"github.com/gorilla/mux"
 )
 
-func onscreensFlagHandler(w http.ResponseWriter, r *http.Request) {
+func (s *Server) onscreensFlagHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	spew.Dump(vars)
 
@@ -35,10 +35,10 @@ func onscreensFlagHandler(w http.ResponseWriter, r *http.Request) {
 		//	http.Error(w, "422 unable to parse duration", http.StatusUnprocessableEntity)
 		//	return
 		//}
-		//ShowFlag(dur)
+		//s.Flag.ShowFor("", dur)
 		//fmt.Fprintf(w, "OK")
 	case "hide":
-		Lookup(SlugFlag).Hide()
+		s.Flag.Hide()
 		fmt.Fprintf(w, "OK")
 	default:
 		http.Error(w, "417 expectation failed", http.StatusExpectationFailed)
@@ -46,15 +46,15 @@ func onscreensFlagHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func onscreensGpsHandler(w http.ResponseWriter, r *http.Request) {
+func (s *Server) onscreensGpsHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 
 	switch vars["action"] {
 	case "show":
-		ShowGPSImage()
+		s.GPS.Show("")
 		fmt.Fprintf(w, "OK")
 	case "hide":
-		HideGPSImage()
+		s.GPS.Hide()
 		fmt.Fprintf(w, "OK")
 	default:
 		http.Error(w, "417 expectation failed", http.StatusExpectationFailed)
@@ -62,7 +62,7 @@ func onscreensGpsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func onscreensMiddleHandler(w http.ResponseWriter, r *http.Request) {
+func (s *Server) onscreensMiddleHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	switch vars["action"] {
 	case "show":
@@ -77,10 +77,10 @@ func onscreensMiddleHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
 			return
 		}
-		Lookup(SlugMiddleText).Show(msg)
+		s.MiddleText.Show(msg)
 		fmt.Fprintf(w, "OK")
 	case "hide":
-		Lookup(SlugMiddleText).Hide()
+		s.MiddleText.Hide()
 		fmt.Fprintf(w, "OK")
 	default:
 		http.Error(w, "417 expectation failed", http.StatusExpectationFailed)
@@ -88,14 +88,14 @@ func onscreensMiddleHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func onscreensTimewarpHandler(w http.ResponseWriter, r *http.Request) {
+func (s *Server) onscreensTimewarpHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	switch vars["action"] {
 	case "show":
-		ShowTimewarp()
+		s.Timewarp.ShowFor("Timewarp!", timewarpDuration)
 		fmt.Fprintf(w, "OK")
 	case "hide":
-		Lookup(SlugTimewarp).Hide()
+		s.Timewarp.Hide()
 		fmt.Fprintf(w, "OK")
 	default:
 		http.Error(w, "417 expectation failed", http.StatusExpectationFailed)
@@ -103,7 +103,7 @@ func onscreensTimewarpHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func onscreensLeaderboardHandler(w http.ResponseWriter, r *http.Request) {
+func (s *Server) onscreensLeaderboardHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 
 	switch vars["action"] {
@@ -120,10 +120,10 @@ func onscreensLeaderboardHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		ShowLeaderboard(content)
+		s.Leaderboard.ShowFor(content, leaderboardDuration)
 		fmt.Fprintf(w, "OK")
 	case "hide":
-		Lookup(SlugLeaderboard).Hide()
+		s.Leaderboard.Hide()
 		fmt.Fprintf(w, "OK")
 	default:
 		http.Error(w, "417 expectation failed", http.StatusExpectationFailed)
