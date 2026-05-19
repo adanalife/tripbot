@@ -1,6 +1,7 @@
 package vlcServer
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -12,6 +13,19 @@ import (
 	"github.com/adanalife/tripbot/pkg/helpers"
 	libvlc "github.com/adrg/libvlc-go/v3"
 )
+
+// Ready reports whether vlc-server is in a state to serve traffic — libvlc
+// is initialized and at least one video file is loaded. Used by the
+// /health/ready handler; failure means kubelet won't route to the pod.
+func Ready() error {
+	if player == nil {
+		return errors.New("vlc-server: libvlc player not initialized")
+	}
+	if len(videoFiles) == 0 {
+		return errors.New("vlc-server: no video files loaded")
+	}
+	return nil
+}
 
 var player *libvlc.Player
 var playlist *libvlc.ListPlayer
