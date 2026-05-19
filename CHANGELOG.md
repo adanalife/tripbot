@@ -5,6 +5,28 @@
 
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
+## [v2.10.0] — 2026-05-19
+
+Minor release. Two `pkg/` binaries (onscreens-server, vlc-server) finish their no-globals refactor — each now constructs via `New(Config)` with explicit dependencies, eliminating package-level state and making both binaries unit-testable. OBS flips to Advanced Output mode for VAAPI encode (v2.9.3's VAAPI work shipped via Simple Output, which has no VAAPI branch in OBS 32's `StreamEncoder` switch — silent fallback to x264 under the hood). Test infrastructure: `.env.testing` was missing `ONSCREENS_SERVER_HOST` since #568, blocking 146 test functions across 7 packages in CI; restoring the var lifts coverage from FAIL (0%) to 59.7% in `pkg/chatbot`, 76.0% in `pkg/oauthtokens`, 41.1% in `pkg/server`, and meaningful coverage in `pkg/users`, `pkg/twitch`, `pkg/video`, `pkg/scoreboards`.
+
+### Streaming
+
+- **OBS Advanced Output mode for VAAPI encode.** Flips `infra/docker/obs/config/basic.ini.tmpl` from Simple to Advanced Output, and adds a per-encoder `streamEncoder.json` rendered by `entrypoint.sh` so VAAPI gets the right keys (`vaapi_device`, integer `profile=100` for H264 High, `rate_control=CBR`); x264 keeps its string-shaped profile. OBS 32's Simple Output mode has no VAAPI branch in its `StreamEncoder` switch (verified against [obs-studio v32.1.2](https://github.com/obsproject/obs-studio/blob/32.1.2/frontend/utility/SimpleOutput.cpp)), so `StreamEncoder=ffmpeg_vaapi_tex` silently fell back to x264 under Simple mode — Advanced mode is the actual switch that makes VAAPI engage. ([#589])
+
+### Internals
+
+- **`pkg/onscreens-server`: `New(Config) *Server`, no package globals.** The 7 onscreen singletons become struct fields; handlers become methods; `cmd/onscreens-server` collapses its `Init*` chain into a single `New()`. ([#591])
+- **`pkg/vlc-server`: `New(Config) (*Server, error)`, no package globals.** The libvlc handles (`Player`, `Playlist`, `MediaList`, `VideoFiles`) become struct fields; `PlayRandom` / `Shutdown` / `Start` / `StartStatsPoller` and the HTTP handlers become methods; `cmd/vlc-server` collapses its setup chain into a single `New()` plus method calls. ([#592])
+
+### Testing
+
+- **`.env.testing` was missing `ONSCREENS_SERVER_HOST`, silently blocking 146 tests in CI.** `OnscreensServerHost` was added with `required:"true"` in #568, but `.env.testing` wasn't updated; 7 test packages crashed at config init before running any tests. Restoring the placeholder unlocks the suite — per-package coverage now: `pkg/chatbot` 59.7%, `pkg/oauthtokens` 76.0%, `pkg/server` 41.1%, `pkg/users` 20.6%, `pkg/video` 18.3%, `pkg/twitch` 11.3%, `pkg/scoreboards` 2.7%. Also adds a `skipIfDarwin(t)` guard to 7 playback tests so local `go test` on a Mac no-ops them cleanly (the `*Cmd` handlers under test early-return on Darwin via `helpers.RunningOnDarwin()`). ([#590])
+
+[#589]: https://github.com/adanalife/tripbot/pull/589
+[#590]: https://github.com/adanalife/tripbot/pull/590
+[#591]: https://github.com/adanalife/tripbot/pull/591
+[#592]: https://github.com/adanalife/tripbot/pull/592
+
 ## [v2.9.3] — 2026-05-19
 
 Patch release. Wires up a meaningful production-side observability surface: cron jobs now emit run-count / duration / last-run-timestamp metrics and recover panics so a single failing job doesn't kill the scheduler goroutine; HTTP handlers count panics per service so a flapping endpoint becomes alertable instead of just log-shaped; the Helix client surfaces its `Ratelimit-*` response headers as gauges so the per-bearer 800-req/min quota is visible before a 429 fires. Kubelet liveness/readiness probes drop to `slog.LevelDebug` to keep the default Info stream usable. VAAPI hardware acceleration lands on both the OBS encode path and the VLC decode path. Inter-clip transitions in the dashcam stream get smoothed. The `!discord` chatbot command stops handing out invites that expire.

@@ -33,12 +33,18 @@ case "${OBS_QUALITY_PRESET:-high}" in
     ;;
 esac
 
-# Stream encoder selection. Default x264 (software) keeps stage-1 /
+# Stream encoder selection. Default obs_x264 (software) keeps stage-1 /
 # local dev / Mac k3d working without /dev/dri exposed. Override via
-# OBS_STREAM_ENCODER=ffmpeg_vaapi (k8s configmap in prod-1) to use
-# the host's Intel iGPU for hardware H.264 encode, dropping x264's
-# 15-25% P-core cost at 1080p60.
-export OBS_STREAM_ENCODER="${OBS_STREAM_ENCODER:-x264}"
+# OBS_STREAM_ENCODER=ffmpeg_vaapi_tex (k8s configmap in prod-1) to use
+# the host's Intel iGPU for hardware H.264 encode. OBS Simple Output
+# mode silently falls back to x264 for VAAPI encoder values, so we run
+# in Advanced Output mode (basic.ini.tmpl) and ship a per-encoder
+# streamEncoder.json profile below.
+#
+# Note: Advanced Output's [AdvOut] Encoder field reads the literal
+# encoder ID — no friendly-name aliases like Simple Output had. The
+# x264 plugin registers as "obs_x264", so that's the string we write.
+export OBS_STREAM_ENCODER="${OBS_STREAM_ENCODER:-obs_x264}"
 echo "OBS stream encoder: ${OBS_STREAM_ENCODER}"
 
 # OBS 32 split the legacy global.ini in two: app-level settings stayed in
@@ -49,6 +55,40 @@ cp /opt/obs/config/global.ini "$OBS_HOME/global.ini"
 cp /opt/obs/config/user.ini   "$OBS_HOME/user.ini"
 envsubst < /opt/obs/config/basic.ini.tmpl > "$OBS_HOME/basic/profiles/ADanaLife/basic.ini"
 envsubst < /opt/obs/config/Tripbot.json.tmpl > "$OBS_HOME/basic/scenes/Tripbot.json"
+
+# Advanced Output mode reads encoder-specific settings from streamEncoder.json
+# in the profile dir. VAAPI's keys (vaapi_device, integer profile) don't
+# overlap with x264's, so we case on OBS_STREAM_ENCODER to ship the right
+# shape. Keep Twitch-friendly defaults: CBR, 2s keyframe interval, no B-frames.
+case "${OBS_STREAM_ENCODER}" in
+  ffmpeg_vaapi_tex)
+    # profile=100 == AV_PROFILE_H264_HIGH (libavcodec). vaapi_device picks the
+    # iGPU's renderD128 node — the only DRM node the Intel device plugin
+    # exposes inside the pod.
+    cat > "$OBS_HOME/basic/profiles/ADanaLife/streamEncoder.json" <<EOF
+{
+    "bf": 0,
+    "bitrate": ${OBS_VIDEO_BITRATE},
+    "keyint_sec": 2,
+    "profile": 100,
+    "rate_control": "CBR",
+    "vaapi_device": "/dev/dri/renderD128"
+}
+EOF
+    ;;
+  *)
+    # x264 (and any other software encoders) — profile is a string here.
+    cat > "$OBS_HOME/basic/profiles/ADanaLife/streamEncoder.json" <<EOF
+{
+    "bitrate": ${OBS_VIDEO_BITRATE},
+    "keyint_sec": 2,
+    "preset": "${OBS_ENCODER_PRESET}",
+    "profile": "high",
+    "rate_control": "CBR"
+}
+EOF
+    ;;
+esac
 
 mkdir -p "$OBS_HOME/plugin_config/obs-websocket"
 envsubst < /opt/obs/config/obs-websocket.json.tmpl > "$OBS_HOME/plugin_config/obs-websocket/config.json"

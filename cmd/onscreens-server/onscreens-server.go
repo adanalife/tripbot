@@ -27,8 +27,10 @@ func main() {
 	// write the current pid to a pidfile
 	helpers.WritePidFile(c.Conf.OnscreensPidFile)
 
-	// initialize the onscreen elements (singletons + their background loops)
-	createOnscreens()
+	// construct the server — runs all per-onscreen init (singletons +
+	// background loops) up front so the HTTP routes have everything to
+	// read by the time the listener accepts.
+	srv := onscreensServer.New(onscreensServer.Config{Version: version})
 
 	// await graceful shutdown signal
 	listenForShutdown()
@@ -39,21 +41,10 @@ func main() {
 	// set up error logging
 	initializeErrorLogger()
 
-	// start the webserver
-	onscreensServer.SetVersion(version)
-	onscreensServer.Start()
-}
-
-// createOnscreens starts the various onscreen elements
-// (like the chat boxes in the corners)
-func createOnscreens() {
-	onscreensServer.InitGPSImage()
-	onscreensServer.InitLeftRotator()
-	onscreensServer.InitRightRotator()
-	onscreensServer.InitMiddleText()
-	onscreensServer.InitTimewarp()
-	onscreensServer.InitLeaderboard()
-	onscreensServer.InitFlagImage()
+	// start the webserver — blocks until ListenAndServe returns
+	if err := srv.Start(context.Background()); err != nil {
+		terrors.Fatal(err, "couldn't start server")
+	}
 }
 
 // initializeTelemetry brings up OpenTelemetry providers (traces, metrics,

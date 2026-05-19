@@ -12,6 +12,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/httpmw"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
+	libvlc "github.com/adrg/libvlc-go/v3"
 	sentrynegroni "github.com/getsentry/sentry-go/negroni"
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -31,11 +32,42 @@ import (
 // handler doesn't block process exit indefinitely.
 const shutdownTimeout = 15 * time.Second
 
+// Config is the construction-time configuration passed to New. It carries
+// only the runtime knobs the binary needs to inject at startup; everything
+// else flows in via the package-level c.Conf read from env.
+type Config struct {
+	// Version is the build-time version string, surfaced via /version.
+	Version string
+}
+
+// Server is the vlc-server runtime: libvlc handles plus the embedded HTTP
+// server. Constructed via New so libvlc init failures surface as errors
+// instead of fatal-during-init side effects.
+type Server struct {
+	Version    string
+	Player     *libvlc.Player
+	Playlist   *libvlc.ListPlayer
+	MediaList  *libvlc.MediaList
+	VideoFiles []string
+
+	http *http.Server
+}
+
+// New constructs a Server, initializing libvlc and loading media off disk.
+// Returns an error if libvlc init or media loading fails.
+func New(cfg Config) (*Server, error) {
+	s := &Server{Version: cfg.Version}
+	if err := s.initPlayer(); err != nil {
+		return nil, err
+	}
+	return s, nil
+}
+
 // Start starts the web server. When ctx is canceled (e.g. SIGINT/SIGTERM
 // via signal.NotifyContext) the server stops accepting new connections and
 // waits up to shutdownTimeout for in-flight requests to complete before
 // returning.
-func Start(ctx context.Context) {
+func (s *Server) Start(ctx context.Context) {
 	slog.InfoContext(ctx, "starting VLC web server", "bind", c.Conf.VlcServerBindAddress)
 
 	r := mux.NewRouter()
@@ -43,22 +75,22 @@ func Start(ctx context.Context) {
 	// healthcheck endpoints
 	//TODO: handle HEAD requests here too
 	hp := r.PathPrefix("/health").Methods("GET", "HEAD").Subrouter()
-	hp.Handle("/", tagged("/health/", healthHandler))
-	hp.Handle("/live", tagged("/health/live", healthHandler))
-	hp.Handle("/ready", tagged("/health/ready", healthHandler))
+	hp.Handle("/", tagged("/health/", s.healthHandler))
+	hp.Handle("/live", tagged("/health/live", s.healthHandler))
+	hp.Handle("/ready", tagged("/health/ready", s.healthHandler))
 
 	// version endpoint — returns build metadata as JSON
-	r.Handle("/version", tagged("/version", versionHandler)).Methods("GET", "HEAD")
+	r.Handle("/version", tagged("/version", s.versionHandler)).Methods("GET", "HEAD")
 
 	// vlc endpoints
 	vlc := r.PathPrefix("/vlc").Methods("GET").Subrouter()
-	vlc.Handle("/current", tagged("/vlc/current", vlcCurrentHandler))
-	vlc.Handle("/play/{video}", tagged("/vlc/play/{video}", vlcPlayHandler))
-	vlc.Handle("/random", tagged("/vlc/random", vlcRandomHandler))
-	vlc.Handle("/back", tagged("/vlc/back", vlcBackHandler))
-	vlc.Handle("/back/{n}", tagged("/vlc/back/{n}", vlcBackHandler))
-	vlc.Handle("/skip", tagged("/vlc/skip", vlcSkipHandler))
-	vlc.Handle("/skip/{n}", tagged("/vlc/skip/{n}", vlcSkipHandler))
+	vlc.Handle("/current", tagged("/vlc/current", s.vlcCurrentHandler))
+	vlc.Handle("/play/{video}", tagged("/vlc/play/{video}", s.vlcPlayHandler))
+	vlc.Handle("/random", tagged("/vlc/random", s.vlcRandomHandler))
+	vlc.Handle("/back", tagged("/vlc/back", s.vlcBackHandler))
+	vlc.Handle("/back/{n}", tagged("/vlc/back/{n}", s.vlcBackHandler))
+	vlc.Handle("/skip", tagged("/vlc/skip", s.vlcSkipHandler))
+	vlc.Handle("/skip/{n}", tagged("/vlc/skip/{n}", s.vlcSkipHandler))
 
 	// onscreen endpoints now live in cmd/onscreens-server (separate binary,
 	// separate port). vlc-server no longer serves /onscreens/* — clients
@@ -68,10 +100,10 @@ func Start(ctx context.Context) {
 	r.Path("/metrics").Handler(tagged("/metrics", promhttp.Handler().ServeHTTP))
 
 	// static assets
-	r.Handle("/favicon.ico", tagged("/favicon.ico", faviconHandler)).Methods("GET")
+	r.Handle("/favicon.ico", tagged("/favicon.ico", s.faviconHandler)).Methods("GET")
 
 	// catch everything else
-	r.Handle("/", tagged("/", catchAllHandler))
+	r.Handle("/", tagged("/", s.catchAllHandler))
 
 	if c.Conf.Verbose {
 		helpers.PrintAllRoutes(r)
@@ -106,7 +138,7 @@ func Start(ctx context.Context) {
 	// attaching routes to handler happens last
 	app.UseHandler(r)
 
-	srv := &http.Server{
+	s.http = &http.Server{
 		Addr: c.Conf.VlcServerBindAddress,
 		// Good practice to set timeouts to avoid Slowloris attacks.
 		WriteTimeout:   time.Second * 15,
@@ -121,7 +153,7 @@ func Start(ctx context.Context) {
 	// the expected return after Shutdown is called and is not an error.
 	serverErr := make(chan error, 1)
 	go func() {
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := s.http.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			serverErr <- err
 		}
 		close(serverErr)
@@ -136,7 +168,7 @@ func Start(ctx context.Context) {
 		slog.InfoContext(ctx, "shutting down VLC web server")
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
-		if err := srv.Shutdown(shutdownCtx); err != nil {
+		if err := s.http.Shutdown(shutdownCtx); err != nil {
 			slog.ErrorContext(shutdownCtx, "error during VLC web server shutdown", "err", err)
 		}
 	}

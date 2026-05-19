@@ -1,13 +1,15 @@
 package onscreensServer
 
 import (
+	"context"
+	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"runtime/debug"
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/onscreens-server"
-	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/httpmw"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
@@ -22,25 +24,64 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 	"go.opentelemetry.io/otel/trace"
-	"encoding/json"
 )
 
-// versionTag is set by main via SetVersion; overridden at build time
-// through `-ldflags "-X main.version=..."`.
-var versionTag = "dev"
+// Config bundles the runtime knobs cmd/onscreens-server passes into New.
+// Build-time configuration (bind address, server type, etc.) still flows
+// through the package-level config.Conf var imported as `c` — Config is
+// only for the handful of values that vary per process invocation.
+type Config struct {
+	// Version is the build-time tag returned by /version. Typically set
+	// from cmd/onscreens-server's `main.version` var, which is overridden
+	// via `-ldflags "-X main.version=..."`.
+	Version string
+}
 
-// SetVersion lets cmd/onscreens-server inject its build-time version
-// string before the HTTP server starts.
-func SetVersion(v string) {
-	if v != "" {
-		versionTag = v
+// Server owns the onscreen singletons and the HTTP listener that serves
+// them. Construct via New; call Start to block on the HTTP listener.
+type Server struct {
+	Version string
+
+	Flag         *Onscreen
+	GPS          *Onscreen
+	Leaderboard  *Onscreen
+	LeftRotator  *Onscreen
+	MiddleText   *Onscreen
+	RightRotator *Onscreen
+	Timewarp     *Onscreen
+
+	http *http.Server
+}
+
+// New constructs a *Server with all seven onscreens initialised and
+// their background loops (rotators, expiry sweepers) running. It does
+// not bind any sockets — Start does that.
+func New(cfg Config) *Server {
+	version := cfg.Version
+	if version == "" {
+		version = "dev"
+	}
+	return &Server{
+		Version:      version,
+		Flag:         newFlagOnscreen(),
+		GPS:          newGPSOnscreen(),
+		Leaderboard:  newLeaderboardOnscreen(),
+		LeftRotator:  newLeftRotator(),
+		MiddleText:   newMiddleText(),
+		RightRotator: newRightRotator(),
+		Timewarp:     newTimewarp(),
 	}
 }
 
 // Start brings up the HTTP listener serving all /onscreens/* routes plus
-// the standard /health, /version, /metrics surface.
-func Start() {
-	slog.Info("starting onscreens-server web server", "bind", c.Conf.OnscreensServerBindAddress)
+// the standard /health, /version, /metrics surface. It blocks until the
+// listener returns; callers typically fatal on a non-nil error.
+//
+// ctx is currently only used to feed graceful-shutdown plumbing for
+// future use; the listener itself is shut down by the process-level
+// signal handler in cmd/onscreens-server.
+func (s *Server) Start(ctx context.Context) error {
+	slog.InfoContext(ctx, "starting onscreens-server web server", "bind", c.Conf.OnscreensServerBindAddress)
 
 	r := mux.NewRouter()
 
@@ -51,19 +92,19 @@ func Start() {
 	hp.Handle("/ready", tagged("/health/ready", healthHandler))
 
 	// version endpoint — returns build metadata as JSON
-	r.Handle("/version", tagged("/version", versionHandler)).Methods("GET", "HEAD")
+	r.Handle("/version", tagged("/version", s.versionHandler)).Methods("GET", "HEAD")
 
 	// onscreen endpoints
 	osc := r.PathPrefix("/onscreens").Methods("GET").Subrouter()
-	osc.Handle("/flag/{action}", tagged("/onscreens/flag/{action}", onscreensFlagHandler))
-	osc.Handle("/gps/{action}", tagged("/onscreens/gps/{action}", onscreensGpsHandler))
-	osc.Handle("/leaderboard/{action}", tagged("/onscreens/leaderboard/{action}", onscreensLeaderboardHandler))
-	osc.Handle("/middle/{action}", tagged("/onscreens/middle/{action}", onscreensMiddleHandler))
-	osc.Handle("/timewarp/{action}", tagged("/onscreens/timewarp/{action}", onscreensTimewarpHandler))
+	osc.Handle("/flag/{action}", tagged("/onscreens/flag/{action}", s.onscreensFlagHandler))
+	osc.Handle("/gps/{action}", tagged("/onscreens/gps/{action}", s.onscreensGpsHandler))
+	osc.Handle("/leaderboard/{action}", tagged("/onscreens/leaderboard/{action}", s.onscreensLeaderboardHandler))
+	osc.Handle("/middle/{action}", tagged("/onscreens/middle/{action}", s.onscreensMiddleHandler))
+	osc.Handle("/timewarp/{action}", tagged("/onscreens/timewarp/{action}", s.onscreensTimewarpHandler))
 	// browser-source feeds: state JSON, per-onscreen HTML pages, and image assets.
-	osc.Handle("/state.json", tagged("/onscreens/state.json", onscreensStateHandler))
-	osc.Handle("/render/{name}", tagged("/onscreens/render/{name}", onscreensRenderHandler))
-	osc.Handle("/asset/{name}", tagged("/onscreens/asset/{name}", onscreensAssetHandler))
+	osc.Handle("/state.json", tagged("/onscreens/state.json", s.onscreensStateHandler))
+	osc.Handle("/render/{name}", tagged("/onscreens/render/{name}", s.onscreensRenderHandler))
+	osc.Handle("/asset/{name}", tagged("/onscreens/asset/{name}", s.onscreensAssetHandler))
 
 	// prometheus metrics endpoint
 	r.Path("/metrics").Handler(tagged("/metrics", promhttp.Handler().ServeHTTP))
@@ -99,7 +140,7 @@ func Start() {
 
 	app.UseHandler(r)
 
-	srv := &http.Server{
+	s.http = &http.Server{
 		Addr:           c.Conf.OnscreensServerBindAddress,
 		WriteTimeout:   time.Second * 15,
 		ReadTimeout:    time.Second * 15,
@@ -108,28 +149,30 @@ func Start() {
 		Handler:        otelhttp.NewHandler(app, c.Conf.ServerType),
 	}
 
-	if err := srv.ListenAndServe(); err != nil {
-		terrors.Fatal(err, "couldn't start server")
+	if err := s.http.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		return err
 	}
+	return nil
 }
 
 // versionHandler returns build metadata as JSON. The tag comes from the
-// build-time ldflag; sha + built_at are read from the binary's embedded
-// VCS info (Go's automatic -buildvcs).
-func versionHandler(w http.ResponseWriter, r *http.Request) {
+// build-time ldflag (threaded through Config{Version} into the Server);
+// sha + built_at are read from the binary's embedded VCS info (Go's
+// automatic -buildvcs).
+func (s *Server) versionHandler(w http.ResponseWriter, r *http.Request) {
 	resp := struct {
 		Tag     string `json:"tag"`
 		Sha     string `json:"sha"`
 		BuiltAt string `json:"built_at"`
-	}{Tag: versionTag}
+	}{Tag: s.Version}
 
 	if info, ok := debug.ReadBuildInfo(); ok {
-		for _, s := range info.Settings {
-			switch s.Key {
+		for _, set := range info.Settings {
+			switch set.Key {
 			case "vcs.revision":
-				resp.Sha = s.Value
+				resp.Sha = set.Value
 			case "vcs.time":
-				resp.BuiltAt = s.Value
+				resp.BuiltAt = set.Value
 			}
 		}
 	}
