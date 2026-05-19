@@ -5,6 +5,23 @@
 
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
+## [v2.11.2] — 2026-05-19
+
+Patch release. Adds a second OAuth flow that consents the broadcaster account, so subscriber/follower polling stops 401'ing on prod-1 — `GetSubscriptions` authorizes against the broadcaster identity, not the bot, so granting `channel:read:subscriptions` to `tripbot4000` was a no-op. Closes the two loose ends from v2.11.1's OBS rollout: `BrowserHWAccel=true` is safe to flip now that GL is on the iGPU (CEF's shared-texture path can hand DRM-PRIME buffers to OBS), and wayvnc's TLS cert paths from #609 finally engage now that `enable_auth=true` is set — Screen Sharing.app gets RFB security types 19 (VeNCrypt) and 30 (Apple-DH) offered instead of just type 1 (None).
+
+### Twitch
+
+- **Broadcaster-token OAuth flow.** Splits `Scopes` into `BotScopes` + `BroadcasterScopes`, adds a second `*helix.Client` + in-memory token slot for the broadcaster, and routes `GetSubscribers` / `GetFollowerCount` / `UserIsFollower` through it. `cmd/auth-bootstrap` gains an `--account=bot|broadcaster` flag (with `ForceVerify: true` so Twitch re-prompts between runs), and the Taskfile target runs both legs back-to-back. `RefreshUserAccessToken` cron rotates both rows. Surfaced when prod-1's freshly-bootstrapped tripbot logged `helix GetSubscriptions returned 401: Missing scope: channel:read:subscriptions or channel_subscriptions` — the scope was granted on the bot's token, but the API authorizes against the broadcaster identity. ([#604])
+
+### Streaming
+
+- **`BrowserHWAccel=true` in OBS.** Two-character flip in `infra/docker/obs/config/global.ini`. Originally disabled to work around a Mesa-llvmpipe + arm64-CEF interaction where obs-browser advertised the GL shared-texture path to CEF, CEF inspected shared-context availability, saw llvmpipe (no real device), and early-returned under `sharing_available` in `OnPaint` — dropping every frame. With the v2.11.0/v2.11.1 Wayland + iGPU work in place, OBS's GL is on the iris driver and the shared-texture handoff has real GL on both ends (same DRM-PRIME buffer-sharing ring VAAPI's `_tex` encoder uses). Expected wins: lower CPU per browser source (no more software-paint readback), more consistent 2fps for the 11 browser sources, one fewer CPU↔GPU copy per browser-source frame on the composite hot path. ([#611])
+- **wayvnc `enable_auth=true` so the TLS cert from #609 actually engages.** Follow-up: #609 set up the cert/key files and listed them in `wayvnc.cfg` but missed `enable_auth=true`, which the wayvnc(5) man page calls out as the gate for `certificate_file` — without it, wayvnc reads the cfg, sees the cert/key paths, and quietly ignores them. Live RFB probe on the v2.11.1 image still showed only security type 1 (None) offered. This PR renames `wayvnc.cfg` → `wayvnc.cfg.tmpl`, envsubsts it into `$XDG_RUNTIME_DIR/wayvnc.cfg` at pod start, sets `enable_auth=true`, and adds `username`/`password` defaults (`adanalife` / `123456`, mirroring the previous x11vnc setup) since `enable_auth` requires them. `relax_encryption=true` is what actually enables Apple-DH (security type 30) — earlier comment framing was wrong; corrected. ([#612])
+
+[#604]: https://github.com/adanalife/tripbot/pull/604
+[#611]: https://github.com/adanalife/tripbot/pull/611
+[#612]: https://github.com/adanalife/tripbot/pull/612
+
 ## [v2.11.1] — 2026-05-19
 
 Patch release. Fixes the two loose ends from v2.11.0's Wayland refactor: OBS's iGPU acceleration didn't actually engage (wlroots rejected `WLR_RENDER_DRM_DEVICE=/dev/dri/card0` as a primary node and silently fell back to pixman + llvmpipe), and Screen Sharing.app on macOS couldn't connect to wayvnc because wayvnc 0.7 doesn't offer legacy VNC Authentication and Screen Sharing.app refuses connections without an encrypted security type. Also drops the transitional `CurrentVideo` closure on the chatbot `App` now that `Video.Current()` covers it, and adds the first test file for `pkg/video` (0% → 36% statement coverage).
