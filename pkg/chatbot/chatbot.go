@@ -13,7 +13,6 @@ import (
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
-	"github.com/adanalife/tripbot/pkg/video"
 	vlcClient "github.com/adanalife/tripbot/pkg/vlc-client"
 	"github.com/gempir/go-twitch-irc/v4"
 	"github.com/kelvins/geocoder"
@@ -27,7 +26,6 @@ var Uptime time.Time
 // App holds injectable dependencies for the chatbot.
 // Tests instantiate it directly with fakes; production uses defaultApp.
 type App struct {
-	CurrentVideo func() video.Video
 	// DB is the GORM handle used by commands that need to read or write the
 	// database. nil in tests that don't exercise the DB; otherwise either the
 	// real database.GormDB() or a sqlmock-backed gorm.DB.
@@ -40,8 +38,6 @@ type App struct {
 	VLC VLC
 	// Video reads / refreshes the currently-playing dashcam video. Tests
 	// inject a no-op fake; production uses the realVideo adapter.
-	// CurrentVideo (above) is the older closure-based seam; both live on
-	// App for now and a follow-up will subsume CurrentVideo into Video.
 	Video Video
 	// IRC sends chat output (Say, Whisper). Tests inject a recordingIRC
 	// to assert on chat messages; production uses the realIRC adapter
@@ -65,7 +61,6 @@ func (a *App) db() *gorm.DB {
 }
 
 var defaultApp = &App{
-	CurrentVideo: func() video.Video { return video.CurrentlyPlaying() },
 	// DB stays nil; commands use a.db() which falls back to database.GormDB().
 	Onscreens: realOnscreens{c: onscreensClient.New(c.Conf.OnscreensServerHost)},
 	VLC:       realVLC{c: vlcClient.New(c.Conf.VlcServerHost)},

@@ -39,20 +39,19 @@ func newTestVideo(state string, lat, lng float64, date time.Time) video.Video {
 	return video.Video{State: state, Lat: lat, Lng: lng, DateFilmed: date}
 }
 
-// newTestApp returns an App with CurrentVideo returning vid, plus no-op
-// Onscreens, VLC, Video, IRC, and Sessions fakes. For commands that
-// don't use CurrentVideo, pass a zero-value video.Video. To assert on
-// any of those surfaces, replace the corresponding field with a
-// recording fake (recordingOnscreens / recordingVLC / recordingVideo /
-// recordingIRC / recordingSessions).
+// newTestApp returns an App whose Video reports vid as the currently-playing
+// video, plus no-op Onscreens, VLC, IRC, and Sessions fakes. For commands
+// that don't read Video, pass a zero-value video.Video. To assert on any of
+// those surfaces, replace the corresponding field with a recording fake
+// (recordingOnscreens / recordingVLC / recordingVideo / recordingIRC /
+// recordingSessions).
 func newTestApp(vid video.Video) *App {
 	return &App{
-		CurrentVideo: func() video.Video { return vid },
-		Onscreens:    noopOnscreens{},
-		VLC:          noopVLC{},
-		Video:        noopVideo{},
-		IRC:          noopIRC{},
-		Sessions:     noopSessions{},
+		Onscreens: noopOnscreens{},
+		VLC:       noopVLC{},
+		Video:     &recordingVideo{Vid: vid},
+		IRC:       noopIRC{},
+		Sessions:  noopSessions{},
 	}
 }
 
