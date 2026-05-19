@@ -98,10 +98,22 @@ func authCallbackHandler(w http.ResponseWriter, r *http.Request) {
 
 // authInitHandler kicks off an OAuth Authorization Code flow from a browser.
 // Generates a state, redirects (302) to Twitch's authorize URL with the
-// configured Scopes. The cluster pod serves this for emergency re-bootstrap
-// when Dana isn't near a laptop; locally cmd/auth-bootstrap does its own
-// equivalent without going through the public Ingress.
+// scope set for the requested account (?account=bot|broadcaster, default bot).
+// ForceVerify=true so Twitch re-prompts which account to sign in as instead
+// of silently reusing the session cookie. The cluster pod serves this for
+// emergency re-bootstrap when Dana isn't near a laptop; locally
+// cmd/auth-bootstrap does its own equivalent without going through Ingress.
 func authInitHandler(w http.ResponseWriter, r *http.Request) {
+	scopes := mytwitch.BotScopes
+	switch r.URL.Query().Get("account") {
+	case "", "bot":
+		// default
+	case "broadcaster":
+		scopes = mytwitch.BroadcasterScopes
+	default:
+		http.Error(w, "account must be 'bot' or 'broadcaster'", http.StatusBadRequest)
+		return
+	}
 	client, err := helixClient()
 	if err != nil {
 		slog.ErrorContext(r.Context(), "helix client unavailable for /auth/init", "err", err)
@@ -110,8 +122,9 @@ func authInitHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	state := oauthstate.New()
 	authURL := client.GetAuthorizationURL(&helix.AuthorizationURLParams{
-		Scopes:       mytwitch.BotScopes,
+		Scopes:       scopes,
 		ResponseType: "code",
+		ForceVerify:  true,
 		State:        state,
 	})
 	http.Redirect(w, r, authURL, http.StatusFound)

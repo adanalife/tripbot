@@ -1,17 +1,23 @@
-// cmd/auth-bootstrap is the one-time interactive Twitch OAuth bootstrap.
+// cmd/auth-bootstrap is the interactive Twitch OAuth bootstrap.
 // Runs locally (on Dana's laptop) against the cluster Postgres via port-forward
-// to populate the oauth_tokens row that the cluster tripbot pod consumes at
-// boot.
+// to populate oauth_tokens rows that the cluster tripbot pod consumes at boot.
+//
+// Two identities need separate consent — the bot (chat:read/edit IRC) and
+// the broadcaster (channel:read:subscriptions etc.). Pick one per run via
+// --account=bot|broadcaster.
 //
 // Flow:
 //   1. Verify DB reachable.
-//   2. Generate CSRF state, build authorize URL with mytwitch.BotScopes
-//      (or mytwitch.BroadcasterScopes via --account=broadcaster).
+//   2. Generate CSRF state, build authorize URL with BotScopes or
+//      BroadcasterScopes per --account. ForceVerify=true so Twitch re-prompts
+//      which account to sign in as (instead of silently reusing the session
+//      cookie from the previous leg).
 //   3. Spin up a tiny localhost:8080 HTTP listener for the OAuth callback.
-//   4. Open the browser to the authorize URL. Dana signs in as tripbot4000.
+//   4. Open the browser to the authorize URL. Sign in as the matching account.
 //   5. Twitch redirects to localhost:8080/auth/callback. The handler validates
 //      state, exchanges the code via mytwitch.GenerateUserAccessToken (which
-//      Upserts the row), and signals completion.
+//      Upserts the row keyed by whichever account signed in), and signals
+//      completion.
 //   6. Exit cleanly.
 //
 // The Twitch app's registered redirect URI is http://localhost:8080/auth/callback;
@@ -21,6 +27,7 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"log"
 	"log/slog"
@@ -46,6 +53,19 @@ const (
 )
 
 func main() {
+	account := flag.String("account", "bot", "which account to bootstrap: bot (chat:read/edit, etc.) or broadcaster (channel:read:subscriptions, moderator:read:followers, etc.)")
+	flag.Parse()
+
+	var scopes []string
+	switch *account {
+	case "bot":
+		scopes = mytwitch.BotScopes
+	case "broadcaster":
+		scopes = mytwitch.BroadcasterScopes
+	default:
+		log.Fatalf("--account must be 'bot' or 'broadcaster', got %q", *account)
+	}
+
 	// Verify the DB is reachable before any user-facing work; if the
 	// port-forward isn't up this is where it surfaces.
 	if database.Connection() == nil {
@@ -59,9 +79,14 @@ func main() {
 
 	state := oauthstate.New()
 	authURL := client.GetAuthorizationURL(&helix.AuthorizationURLParams{
-		Scopes:       mytwitch.BotScopes,
+		Scopes:       scopes,
 		ResponseType: "code",
-		State:        state,
+		// Force-verify makes Twitch re-prompt which account to sign in as,
+		// rather than silently reusing the session cookie from a prior leg.
+		// Without this, running bot then broadcaster back-to-back would just
+		// re-bootstrap whichever account Twitch's session is on.
+		ForceVerify: true,
+		State:       state,
 	})
 
 	done := make(chan error, 1)
@@ -100,7 +125,7 @@ func main() {
 		_ = srv.Shutdown(ctx)
 	}()
 
-	slog.Info("opening browser for Twitch sign-in")
+	slog.Info("opening browser for Twitch sign-in", "account", *account)
 	slog.Info("visit URL", "url", authURL)
 	// Skip browser open in headless environments (e.g. the k8s Job).
 	if os.Getenv("DISPLAY") != "" || os.Getenv("WAYLAND_DISPLAY") != "" || runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
