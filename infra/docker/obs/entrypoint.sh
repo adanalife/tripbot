@@ -33,14 +33,18 @@ case "${OBS_QUALITY_PRESET:-high}" in
     ;;
 esac
 
-# Stream encoder selection. Default x264 (software) keeps stage-1 /
+# Stream encoder selection. Default obs_x264 (software) keeps stage-1 /
 # local dev / Mac k3d working without /dev/dri exposed. Override via
 # OBS_STREAM_ENCODER=ffmpeg_vaapi_tex (k8s configmap in prod-1) to use
 # the host's Intel iGPU for hardware H.264 encode. OBS Simple Output
 # mode silently falls back to x264 for VAAPI encoder values, so we run
 # in Advanced Output mode (basic.ini.tmpl) and ship a per-encoder
 # streamEncoder.json profile below.
-export OBS_STREAM_ENCODER="${OBS_STREAM_ENCODER:-x264}"
+#
+# Note: Advanced Output's [AdvOut] Encoder field reads the literal
+# encoder ID — no friendly-name aliases like Simple Output had. The
+# x264 plugin registers as "obs_x264", so that's the string we write.
+export OBS_STREAM_ENCODER="${OBS_STREAM_ENCODER:-obs_x264}"
 echo "OBS stream encoder: ${OBS_STREAM_ENCODER}"
 
 # OBS 32 split the legacy global.ini in two: app-level settings stayed in
