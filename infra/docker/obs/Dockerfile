@@ -69,7 +69,7 @@ ARG NOVNC_VERSION=1.7.0
 RUN curl -fsSL "https://github.com/novnc/noVNC/archive/refs/tags/v${NOVNC_VERSION}.tar.gz" \
       | tar -xz -C /opt \
     && mv "/opt/noVNC-${NOVNC_VERSION}" /opt/novnc \
-    && ln -sf /opt/novnc/vnc.html /opt/novnc/index.html
+    && printf '%s\n' '<!doctype html><title>OBS noVNC</title><meta http-equiv="refresh" content="0; url=vnc.html?resize=scale&amp;autoconnect=true&amp;reconnect=true">' > /opt/novnc/index.html
 
 COPY infra/docker/obs/config/ /opt/obs/config/
 COPY infra/docker/obs/script/ /opt/obs/script/
