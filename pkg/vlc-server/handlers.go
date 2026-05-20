@@ -123,8 +123,9 @@ func (s *Server) vlcSkipHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) vlcRandomHandler(w http.ResponseWriter, r *http.Request) {
-	// play a random file
-	err := s.PlayRandom()
+	// play a random file, preferring the pre-warmed index so !timewarp
+	// jumps to an already-cached clip instead of a cold NAS open.
+	err := s.PlayWarmRandom()
 	if err != nil {
 		http.Error(w, "error playing random", http.StatusInternalServerError)
 	}

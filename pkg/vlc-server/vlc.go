@@ -307,6 +307,9 @@ func (s *Server) loadLocalMedia() error {
 		return fmt.Errorf("error walking VideoDir: %w", err)
 	}
 
+	// keep full paths parallel to VideoFiles so the primer can warm them.
+	s.VideoPaths = filePaths
+
 	// loop over the files and add their paths to VLC
 	for _, file := range filePaths {
 		media, err := libvlc.NewMediaFromPath(file)
