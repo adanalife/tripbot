@@ -115,29 +115,12 @@ export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp/runtime-root}"
 mkdir -p "$XDG_RUNTIME_DIR"
 chmod 0700 "$XDG_RUNTIME_DIR"
 
-# Self-signed cert for wayvnc's encrypted security types (VeNCrypt for
-# TigerVNC/RealVNC, Apple Diffie-Hellman for macOS Screen Sharing.app).
-# macOS Screen Sharing refuses VNC servers that offer only the legacy
-# "None" type. Cert is throwaway (regenerated per pod start, used only
-# over port-forward'd cluster-internal traffic) so a 10-year self-signed
-# RSA-2048 cert with no CN validation is fine.
-if [[ ! -f "$XDG_RUNTIME_DIR/wayvnc.crt" ]]; then
-  openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
-    -subj "/CN=wayvnc" \
-    -keyout "$XDG_RUNTIME_DIR/wayvnc.key" \
-    -out "$XDG_RUNTIME_DIR/wayvnc.crt" \
-    2>/dev/null
-  chmod 0600 "$XDG_RUNTIME_DIR/wayvnc.key"
-fi
-
-# Render the wayvnc cfg from its template. enable_auth=true (the actual
-# load-bearing toggle for TLS — without it the cert paths are ignored)
-# requires a username + password, so we env-substitute both into the
-# rendered cfg. Defaults live here in entrypoint rather than as
-# Dockerfile ENV directives so they don't end up baked into image
-# metadata visible via `docker inspect`.
-export VNC_USERNAME="${VNC_USERNAME:-adanalife}"
-export VNC_PASSWD="${VNC_PASSWD:-123456}"
+# Render the wayvnc cfg into the per-pod tmpfs runtime dir. The template has
+# no env vars to substitute — auth is off (wayvnc offers RFB "None" bound to
+# the pod's localhost; access control lives at the traefik Ingress in front
+# of noVNC), so the cert generation and VNC_USERNAME/VNC_PASSWD that used to
+# render here are gone. envsubst is a passthrough copy now, kept so the cfg
+# lands at the same spot as the rest of the per-pod runtime config.
 envsubst < /opt/obs/config/wayvnc.cfg.tmpl > "$XDG_RUNTIME_DIR/wayvnc.cfg"
 
 # Hand off to supervisord. It manages sway, wayvnc, obs, and the hourly

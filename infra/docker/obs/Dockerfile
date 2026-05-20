@@ -42,7 +42,6 @@ RUN echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula sele
          feh \
          tini \
          gettext-base \
-         openssl \
          procps \
          libgl1-mesa-dri \
          intel-media-va-driver-non-free \
