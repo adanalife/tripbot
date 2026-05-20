@@ -33,8 +33,8 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true" \
       | debconf-set-selections \
     && apt-get update && apt-get install -y --no-install-recommends \
-      sway wayvnc xwayland supervisor feh tini gettext-base openssl procps \
-      ca-certificates libgl1-mesa-dri \
+      sway wayvnc xwayland supervisor feh tini gettext-base procps \
+      ca-certificates curl libgl1-mesa-dri \
       fonts-dejavu-core ttf-mscorefonts-installer \
       # OBS runtime deps (mirrors the build deps with -dev stripped) \
       libavcodec60 libavdevice60 libavfilter9 libavformat60 libavutil58 \
@@ -62,9 +62,22 @@ RUN echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula sele
 
 # obsws-python (in a venv to stay clear of PEP 668 system-managed python)
 # powers the hourly browser-source refresh that the entrypoint kicks off
-# as a workaround for CEF's per-frame memory leak.
+# as a workaround for CEF's per-frame memory leak. websockify rides in the
+# same venv — it bridges the browser's WebSocket to wayvnc's TCP :5900 for
+# the noVNC client.
 RUN python3 -m venv /opt/obs/venv \
-    && /opt/obs/venv/bin/pip install --no-cache-dir obsws-python
+    && /opt/obs/venv/bin/pip install --no-cache-dir obsws-python 'websockify==0.13.0'
+
+# noVNC: the static browser VNC client websockify serves on :6080. Reached
+# through the obs Ingress (traefik), so VNC works in a browser with no
+# native client — which also sidesteps macOS Screen Sharing.app's RFB
+# 003.889 incompatibility with neatvnc (it rejects Apple's version
+# string before any security type is negotiated).
+ARG NOVNC_VERSION=1.7.0
+RUN curl -fsSL "https://github.com/novnc/noVNC/archive/refs/tags/v${NOVNC_VERSION}.tar.gz" \
+      | tar -xz -C /opt \
+    && mv "/opt/noVNC-${NOVNC_VERSION}" /opt/novnc \
+    && ln -sf /opt/novnc/vnc.html /opt/novnc/index.html
 
 # Copy the compiled OBS install tree from the pre-baked base image. cmake
 # --install laid the tree out under /opt/obs-install (mapped to /usr/local on
@@ -101,6 +114,7 @@ RUN mkdir -p /etc/tripbot \
 
 EXPOSE 5900
 EXPOSE 4455
+EXPOSE 6080
 
 HEALTHCHECK --interval=10s --timeout=3s --retries=3 CMD /opt/obs/healthcheck.sh
 
