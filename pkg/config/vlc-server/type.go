@@ -46,6 +46,16 @@ type VlcServerConfig struct {
 	// `window` and `both` need a vout module that can actually open a
 	// window (Linux: VLC_VOUT=x11; Windows: libvlc default).
 	VlcOutput string `default:"rtsp" envconfig:"VLC_OUTPUT"`
+	// VlcSoutTranscode inserts a VAAPI transcode stage before the RTP
+	// packetizer. With :sout-keep, the encoder + RTSP listener stay warm
+	// across libvlc playlist transitions, so OBS sees a steady output
+	// stream rather than an EOS / reconnect cycle on every clip change.
+	// Requires a VAAPI-capable iGPU reachable to libvlc (Intel iHD via
+	// /dev/dri/renderD128 — prod-1 minipc); leave false on hosts without
+	// that path (stage-1, local hostPath) since libavcodec's h264_vaapi
+	// encoder will fail to initialize. Pair with VLC_AVCODEC_HW=vaapi
+	// to keep decode + encode on the same hardware pipeline.
+	VlcSoutTranscode bool `default:"false" envconfig:"VLC_SOUT_TRANSCODE"`
 	// VlcCanvasWidth / VlcCanvasHeight set both the libvlc --width/--height
 	// and --canvas-width/--canvas-height. Defaults are today's hardcoded
 	// 1920x1080.
