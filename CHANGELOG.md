@@ -5,6 +5,25 @@
 
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
+## [v2.12.0] — 2026-05-19
+
+Minor release. OBS VNC moves into the browser via noVNC, replacing the native-client path that never actually worked with macOS Screen Sharing.app. On the streaming side, the inter-clip flash gets its load-bearing fix (page-cache priming) after the VAAPI-transcode approach from v2.11.3 was backed out.
+
+### OBS
+
+- **Browser VNC via noVNC + websockify.** The image now bundles websockify (in the existing obsws-python venv) and the noVNC v1.7.0 static client on `:6080`, supervised as a fifth program that bridges the browser's WebSocket to wayvnc's `:5900`. Reached through a traefik Ingress (companion [adanalife/infra#520]) rather than a native VNC client. This also retires the v2.11.3 wayvnc `enable_auth=true` work: macOS Screen Sharing.app could never connect to neatvnc regardless, because neatvnc 0.7.1 rejects Apple's `RFB 003.889` version handshake *before* any security type is negotiated (confirmed with a debug wayvnc log + raw RFB probe). wayvnc now runs auth-off (RFB "None", bound to the pod's localhost); the per-pod TLS cert + `VNC_USERNAME`/`VNC_PASSWD` machinery and the unused `openssl` package are removed, and access control moves to the Ingress. ([#618])
+
+### Streaming
+
+- **vlc-server page-cache priming to close the inter-clip flash.** A background primer pre-reads upcoming clips into the kernel page cache so libvlc's next-file open hits warm pages instead of a cold NAS round-trip — the latency that left OBS's `ffmpeg_source` briefly disconnected and flashed the broken-video overlay. Two primers off one 5s poll: sequential (warms the next playlist file once the current clip passes `VLC_PRIME_POSITION_THRESHOLD`, default 0.5) and random (keeps one warmed index ready so `!timewarp` lands on a cached clip). Tunable via `VLC_PRIME_ENABLED` / `VLC_PRIME_POSITION_THRESHOLD` / `VLC_PRIME_BYTES`; on by default, cheap on fast local disks. The load-bearing fix of the flash-fix-v2 pass. ([#619])
+- **Revert the v2.11.3 VAAPI transcode stage.** VLC's VAAPI module is decode-only — `venc=avcodec{codec=h264_vaapi}` fails to open without a VAAPI device + hw_frames_ctx VLC doesn't wire up, so on prod-1 the sout chain failed to initialize, VLC's RTSP server returned `DESCRIBE 500`, and OBS couldn't pull the dashcam at all. Backs out the inert config + sout-chain code; flash work continues at the OBS-buffering / page-cache layer instead. Companion infra revert [adanalife/infra#519]. ([#617])
+
+[#617]: https://github.com/adanalife/tripbot/pull/617
+[#618]: https://github.com/adanalife/tripbot/pull/618
+[#619]: https://github.com/adanalife/tripbot/pull/619
+[adanalife/infra#519]: https://github.com/adanalife/infra/pull/519
+[adanalife/infra#520]: https://github.com/adanalife/infra/pull/520
+
 ## [v2.11.3] — 2026-05-19
 
 Patch release. Real-time follow/sub chat shouts return via an EventSub WebSocket listener (no public ingress needed), replacing the v2.9.1-deleted Helix-Webhooks path. vlc-server gains an optional VAAPI transcode stage that keeps the encoder + RTSP listener warm across clip changes, so OBS stops seeing a disconnect/reconnect cycle at clip boundaries. Also ships the two OBS changes that were documented under v2.11.2 but didn't make that build (a stale-branch slip): `BrowserHWAccel=true` and the wayvnc `enable_auth=true` fix.

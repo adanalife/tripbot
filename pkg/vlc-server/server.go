@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"sync"
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/vlc-server"
@@ -43,8 +44,21 @@ type Server struct {
 	Playlist   *libvlc.ListPlayer
 	MediaList  *libvlc.MediaList
 	VideoFiles []string
+	// VideoPaths holds the full filesystem path for each entry in
+	// VideoFiles (same order / index). The primer reads these to warm the
+	// page cache; VideoFiles stays basename-only for the existing
+	// index/lookup logic.
+	VideoPaths []string
 
 	http *http.Server
+
+	// primer state. warmRandomIdx is a pre-picked, cache-warmed random
+	// index kept ready so !timewarp jumps to an already-warm file instead
+	// of a cold NAS open; -1 means none ready. primeCtx scopes the
+	// fire-and-forget warm goroutines to the server lifecycle.
+	primeMu       sync.Mutex
+	warmRandomIdx int
+	primeCtx      context.Context
 }
 
 // New constructs a Server, initializing libvlc and loading media off disk.
@@ -52,7 +66,7 @@ type Server struct {
 // with any libvlc resources already allocated released before returning so
 // the caller never has to clean up after a partial init.
 func New(cfg Config) (*Server, error) {
-	s := &Server{Version: cfg.Version}
+	s := &Server{Version: cfg.Version, warmRandomIdx: -1}
 	if err := s.initPlayer(); err != nil {
 		s.releasePartial()
 		return nil, err

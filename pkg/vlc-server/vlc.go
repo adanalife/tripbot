@@ -45,34 +45,19 @@ var vlcCmdFlags []string
 //   rtsp   — RTSP listener only (container default).
 //   window — no sout; libvlc plays to its native window via --vout.
 //   both   — duplicate to a local display target and the RTSP listener.
-//
-// When VLC_SOUT_TRANSCODE is set, the RTP leg is wrapped in a libavcodec
-// VAAPI transcode stage. Together with :sout-keep, that keeps the encoder
-// pipeline warm across input changes — shrinking the visible gap when
-// libvlc swaps clips (natural EOS, !skip/!back, !timewarp, !jump). The
-// transcode is rtsp-only; the `window` display leg in `both` mode stays
-// passthrough (a dev preview doesn't need the re-encode round-trip).
 func mediaOptions() []string {
 	const rtspChain = "rtp{sdp=rtsp://:8554/dashcam}"
-	rtspLeg := rtspChain
-	if c.Conf.VlcSoutTranscode {
-		// venc=avcodec{codec=h264_vaapi} routes encoding through
-		// libavcodec's VAAPI backend; vb is kbps; keyint matches a 2s
-		// GOP at 30fps so OBS recovers quickly if it ever does fall
-		// off the stream.
-		rtspLeg = "transcode{vcodec=h264,venc=avcodec{codec=h264_vaapi,strict=-2},vb=4000,fps=30,width=1920,height=1080,keyint=60}:" + rtspChain
-	}
 	switch c.Conf.VlcOutput {
 	case "window":
 		return nil
 	case "both":
 		return []string{
-			":sout=#duplicate{dst=display,dst=" + rtspLeg + "}",
+			":sout=#duplicate{dst=display,dst=" + rtspChain + "}",
 			":sout-keep",
 		}
 	case "rtsp":
 		return []string{
-			":sout=#" + rtspLeg,
+			":sout=#" + rtspChain,
 			":sout-keep",
 		}
 	default:
@@ -321,6 +306,9 @@ func (s *Server) loadLocalMedia() error {
 	if err != nil {
 		return fmt.Errorf("error walking VideoDir: %w", err)
 	}
+
+	// keep full paths parallel to VideoFiles so the primer can warm them.
+	s.VideoPaths = filePaths
 
 	// loop over the files and add their paths to VLC
 	for _, file := range filePaths {

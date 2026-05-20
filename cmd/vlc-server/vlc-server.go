@@ -85,6 +85,11 @@ func main() {
 	// SIGINT/SIGTERM.
 	srv.StartStatsPoller(shutdownCtx, 5*time.Second)
 
+	// pre-warm upcoming clips into the page cache so libvlc's next-file
+	// open hits warm pages instead of a cold NAS round-trip — collapses
+	// the inter-clip gap that flashes the scene background in OBS.
+	srv.StartPrimer(shutdownCtx, 5*time.Second)
+
 	// poll the OBS WebSocket for streaming state + render/output stats.
 	go obs.PollStreamingActive(context.Background(), 30*time.Second)
 
