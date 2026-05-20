@@ -82,8 +82,6 @@ RUN mkdir -p /etc/tripbot \
 EXPOSE 5900
 EXPOSE 4455
 
-ENV VNC_PASSWD=123456
-
 HEALTHCHECK --interval=10s --timeout=3s --retries=3 CMD /opt/obs/healthcheck.sh
 
 ENTRYPOINT ["/usr/bin/tini", "--", "/opt/obs/entrypoint.sh"]
