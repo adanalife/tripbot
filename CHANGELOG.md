@@ -5,22 +5,34 @@
 
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
+## [v2.11.3] — 2026-05-19
+
+Patch release. Real-time follow/sub chat shouts return via an EventSub WebSocket listener (no public ingress needed), replacing the v2.9.1-deleted Helix-Webhooks path. vlc-server gains an optional VAAPI transcode stage that keeps the encoder + RTSP listener warm across clip changes, so OBS stops seeing a disconnect/reconnect cycle at clip boundaries. Also ships the two OBS changes that were documented under v2.11.2 but didn't make that build (a stale-branch slip): `BrowserHWAccel=true` and the wayvnc `enable_auth=true` fix.
+
+### Twitch
+
+- **EventSub WebSocket listener for real-time follow + subscribe events.** New `pkg/eventsub` wraps [joeyak/go-twitch-eventsub/v3](https://github.com/joeyak/go-twitch-eventsub) — `Run(ctx, Config, Handlers)` dials the WS, subscribes, and blocks until ctx done (the library handles `session_reconnect` transparently). `channel.follow` v2 and `channel.subscribe` fire chat shouts; the +1-mile-for-everyone bonus on new subs is preserved from the v2.9.1 helpers. Restores `AnnounceNewFollower` / `AnnounceSubscriber` (deleted in #569), adds `mytwitch.BroadcasterUserAccessToken()`, and `cmd/tripbot.startEventSub(ctx)` kicks it off in a goroutine after the Twitch client is up — skips with a warn (not fatal) if the broadcaster row isn't loaded, so the bot still runs without real-time alerts. First of a 5-PR EventSub series. ([#614])
+
+### Streaming
+
+- **Optional VAAPI transcode stage in vlc-server's sout chain.** New `VLC_SOUT_TRANSCODE` (default `false`) wraps the rtp output in a libavcodec `h264_vaapi` transcode stage; combined with the existing `:sout-keep` it keeps the encoder + RTSP listener warm across libvlc input changes, so OBS's `ffmpeg_source` no longer sees a clip-boundary disconnect/reconnect. Off by default so stage-1 / local hostPath envs (no iGPU) keep the passthrough path; prod-1 flips it on via the overlay env. First of a 3-PR flash-fix-v2 pass (output side here; input-side file-open latency follows). Companion [adanalife/infra#518](https://github.com/adanalife/infra/pull/518) sets `VLC_SOUT_TRANSCODE=true` + pins `VLC_AVCODEC_HW=vaapi` on prod-1. ([#615])
+- **`BrowserHWAccel=true` in OBS.** Two-character flip in `infra/docker/obs/config/global.ini`. Originally disabled to work around a Mesa-llvmpipe + arm64-CEF interaction where obs-browser advertised the GL shared-texture path to CEF, CEF inspected shared-context availability, saw llvmpipe (no real device), and early-returned under `sharing_available` in `OnPaint` — dropping every frame. With the v2.11.0/v2.11.1 Wayland + iGPU work in place, OBS's GL is on the iris driver and the shared-texture handoff has real GL on both ends (same DRM-PRIME buffer-sharing ring VAAPI's `_tex` encoder uses). Expected wins: lower CPU per browser source (no more software-paint readback), more consistent 2fps for the 11 browser sources, one fewer CPU↔GPU copy per browser-source frame on the composite hot path. ([#611])
+- **wayvnc `enable_auth=true` so the TLS cert from #609 actually engages.** Follow-up: #609 set up the cert/key files and listed them in `wayvnc.cfg` but missed `enable_auth=true`, which the wayvnc(5) man page calls out as the gate for `certificate_file` — without it, wayvnc reads the cfg, sees the cert/key paths, and quietly ignores them. Live RFB probe on the v2.11.1 image still showed only security type 1 (None) offered. This PR renames `wayvnc.cfg` → `wayvnc.cfg.tmpl`, envsubsts it into `$XDG_RUNTIME_DIR/wayvnc.cfg` at pod start, sets `enable_auth=true`, and adds `username`/`password` defaults (`adanalife` / `123456`, mirroring the previous x11vnc setup) since `enable_auth` requires them. `relax_encryption=true` is what actually enables Apple-DH (security type 30) — earlier comment framing was wrong; corrected. ([#612])
+
+[#611]: https://github.com/adanalife/tripbot/pull/611
+[#612]: https://github.com/adanalife/tripbot/pull/612
+[#614]: https://github.com/adanalife/tripbot/pull/614
+[#615]: https://github.com/adanalife/tripbot/pull/615
+
 ## [v2.11.2] — 2026-05-19
 
-Patch release. Adds a second OAuth flow that consents the broadcaster account, so subscriber/follower polling stops 401'ing on prod-1 — `GetSubscriptions` authorizes against the broadcaster identity, not the bot, so granting `channel:read:subscriptions` to `tripbot4000` was a no-op. Closes the two loose ends from v2.11.1's OBS rollout: `BrowserHWAccel=true` is safe to flip now that GL is on the iGPU (CEF's shared-texture path can hand DRM-PRIME buffers to OBS), and wayvnc's TLS cert paths from #609 finally engage now that `enable_auth=true` is set — Screen Sharing.app gets RFB security types 19 (VeNCrypt) and 30 (Apple-DH) offered instead of just type 1 (None).
+Patch release. Adds a second OAuth flow that consents the broadcaster account, so subscriber/follower polling stops 401'ing on prod-1 — `GetSubscriptions` authorizes against the broadcaster identity, not the bot, so granting `channel:read:subscriptions` to `tripbot4000` was a no-op.
 
 ### Twitch
 
 - **Broadcaster-token OAuth flow.** Splits `Scopes` into `BotScopes` + `BroadcasterScopes`, adds a second `*helix.Client` + in-memory token slot for the broadcaster, and routes `GetSubscribers` / `GetFollowerCount` / `UserIsFollower` through it. `cmd/auth-bootstrap` gains an `--account=bot|broadcaster` flag (with `ForceVerify: true` so Twitch re-prompts between runs), and the Taskfile target runs both legs back-to-back. `RefreshUserAccessToken` cron rotates both rows. Surfaced when prod-1's freshly-bootstrapped tripbot logged `helix GetSubscriptions returned 401: Missing scope: channel:read:subscriptions or channel_subscriptions` — the scope was granted on the bot's token, but the API authorizes against the broadcaster identity. ([#604])
 
-### Streaming
-
-- **`BrowserHWAccel=true` in OBS.** Two-character flip in `infra/docker/obs/config/global.ini`. Originally disabled to work around a Mesa-llvmpipe + arm64-CEF interaction where obs-browser advertised the GL shared-texture path to CEF, CEF inspected shared-context availability, saw llvmpipe (no real device), and early-returned under `sharing_available` in `OnPaint` — dropping every frame. With the v2.11.0/v2.11.1 Wayland + iGPU work in place, OBS's GL is on the iris driver and the shared-texture handoff has real GL on both ends (same DRM-PRIME buffer-sharing ring VAAPI's `_tex` encoder uses). Expected wins: lower CPU per browser source (no more software-paint readback), more consistent 2fps for the 11 browser sources, one fewer CPU↔GPU copy per browser-source frame on the composite hot path. ([#611])
-- **wayvnc `enable_auth=true` so the TLS cert from #609 actually engages.** Follow-up: #609 set up the cert/key files and listed them in `wayvnc.cfg` but missed `enable_auth=true`, which the wayvnc(5) man page calls out as the gate for `certificate_file` — without it, wayvnc reads the cfg, sees the cert/key paths, and quietly ignores them. Live RFB probe on the v2.11.1 image still showed only security type 1 (None) offered. This PR renames `wayvnc.cfg` → `wayvnc.cfg.tmpl`, envsubsts it into `$XDG_RUNTIME_DIR/wayvnc.cfg` at pod start, sets `enable_auth=true`, and adds `username`/`password` defaults (`adanalife` / `123456`, mirroring the previous x11vnc setup) since `enable_auth` requires them. `relax_encryption=true` is what actually enables Apple-DH (security type 30) — earlier comment framing was wrong; corrected. ([#612])
-
 [#604]: https://github.com/adanalife/tripbot/pull/604
-[#611]: https://github.com/adanalife/tripbot/pull/611
-[#612]: https://github.com/adanalife/tripbot/pull/612
 
 ## [v2.11.1] — 2026-05-19
 
