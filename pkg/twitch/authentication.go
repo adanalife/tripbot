@@ -236,6 +236,15 @@ func CurrentUserAccessToken() string {
 	return currentUserToken.AccessToken
 }
 
+// BroadcasterUserAccessToken returns the broadcaster's raw access token
+// (no oauth: prefix), or "" if no broadcaster row has been loaded.
+// Consumed by pkg/eventsub when subscribing to broadcaster-gated events.
+func BroadcasterUserAccessToken() string {
+	tokenMu.RLock()
+	defer tokenMu.RUnlock()
+	return currentBroadcasterToken.AccessToken
+}
+
 // ErrIdentityMismatch is returned by GenerateUserAccessToken when the
 // discovered identity (via helix.GetUsers) doesn't match expectedLogin.
 // Callers should surface it with retry guidance; the wrong-identity row is

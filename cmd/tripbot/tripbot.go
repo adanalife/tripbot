@@ -16,6 +16,7 @@ import (
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
+	"github.com/adanalife/tripbot/pkg/eventsub"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
@@ -94,7 +95,40 @@ func main() {
 	setUpTwitchClient() // required for the below
 	updateSubscribers()
 	getCurrentUsers()
+	startEventSub(shutdownCtx)
 	connectToTwitch()
+}
+
+// startEventSub kicks off the EventSub WebSocket listener in a goroutine
+// so real-time follow/subscribe events fire chat shouts without a 5min
+// polling delay. Skipped (logged, not fatal) when the broadcaster row
+// isn't loaded — the bot still runs without real-time alerts.
+func startEventSub(ctx context.Context) {
+	token := mytwitch.BroadcasterUserAccessToken()
+	if token == "" {
+		slog.WarnContext(ctx, "skipping eventsub: no broadcaster oauth_tokens row; bootstrap with `task tripbot:auth:bootstrap:broadcaster`")
+		return
+	}
+	if mytwitch.ChannelID == "" {
+		// getChannelID is lazy on first call; calling GetSubscribers /
+		// GetFollowerCount typically populates it. updateSubscribers()
+		// above already ran, so this is belt-and-suspenders.
+		slog.WarnContext(ctx, "skipping eventsub: ChannelID not yet resolved")
+		return
+	}
+	go func() {
+		err := eventsub.Run(ctx, eventsub.Config{
+			ClientID:          mytwitch.ClientID,
+			BroadcasterToken:  token,
+			BroadcasterUserID: mytwitch.ChannelID,
+		}, eventsub.Handlers{
+			OnFollow:    chatbot.AnnounceNewFollower,
+			OnSubscribe: chatbot.AnnounceSubscriber,
+		})
+		if err != nil && !errors.Is(err, context.Canceled) {
+			slog.ErrorContext(ctx, "eventsub run terminated", "err", err)
+		}
+	}()
 }
 
 // createRandomSeed ensures that random numbers will be random
