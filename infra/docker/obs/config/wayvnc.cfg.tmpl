@@ -9,9 +9,9 @@
 # The encrypted security types (VeNCrypt / RSA-AES / Apple-DH) and the
 # per-pod TLS cert that used to live here existed only to coax macOS Screen
 # Sharing.app into connecting. That was a dead end: neatvnc rejects Apple's
-# RFB 003.889 version handshake before any security type is negotiated (see
-# vault tripbot/obs gotchas), so the crypto never bought working Screen
-# Sharing.app and is gone. The browser noVNC client speaks standard RFB.
+# RFB 003.889 version handshake before any security type is negotiated, so
+# the crypto never bought working Screen Sharing.app and is gone. The
+# browser noVNC client speaks standard RFB.
 #
 # If the obs Ingress is ever exposed beyond the LAN, add auth at traefik
 # (basic-auth middleware) — not here.

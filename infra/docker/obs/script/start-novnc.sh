@@ -6,8 +6,8 @@
 # websockify itself stays unencrypted in-pod. This is the access path that
 # replaces port-forwarding a native VNC client — and it works with macOS
 # Screen Sharing.app's blind spot, because noVNC speaks standard RFB rather
-# than Apple's RFB 003.889 (which neatvnc rejects). See vault tripbot/obs
-# gotchas for the 003.889 story.
+# than Apple's RFB 003.889 (which neatvnc rejects at the version handshake,
+# before any security type is negotiated).
 set -euo pipefail
 
 # Block until wayvnc is accepting on :5900 — websockify's target must be live

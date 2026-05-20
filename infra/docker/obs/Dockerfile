@@ -63,7 +63,8 @@ RUN python3 -m venv /opt/obs/venv \
 # noVNC: the static browser VNC client websockify serves on :6080. Reached
 # through the obs Ingress (traefik), so VNC works in a browser with no
 # native client — which also sidesteps macOS Screen Sharing.app's RFB
-# 003.889 incompatibility with neatvnc (see vault tripbot/obs gotchas).
+# 003.889 incompatibility with neatvnc (it rejects Apple's version
+# string before any security type is negotiated).
 ARG NOVNC_VERSION=1.7.0
 RUN curl -fsSL "https://github.com/novnc/noVNC/archive/refs/tags/v${NOVNC_VERSION}.tar.gz" \
       | tar -xz -C /opt \
