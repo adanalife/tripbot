@@ -31,6 +31,23 @@ tasks:
     cmds:
       - ENV=testing bin/devenv run --rm test go test -race ./...
 
+  # Native macOS test runner — host mise + VLC.app's bundled libvlc, no
+  # docker. Mirrors vlc-server:build:macos's CGO incantation (rpath is
+  # required for `go test` too, per vault/tripbot/vlc-server/gotchas.md).
+  # `dotenv` injects .env.testing's keys as real env vars so the config
+  # loader resolves them from the environment — `go test` runs each package
+  # from its own dir, so the .env.testing file itself isn't on the path.
+  test:macos:
+    desc: Run all unit tests natively on macOS (host mise, no docker)
+    platforms: [darwin]
+    dotenv: ['.env.testing']
+    env:
+      ENV: testing
+      CGO_CFLAGS: -I/Applications/VLC.app/Contents/MacOS/include
+      CGO_LDFLAGS: -L/Applications/VLC.app/Contents/MacOS/lib -Wl,-rpath,/Applications/VLC.app/Contents/MacOS/lib -Wno-error=incompatible-function-pointer-types
+    cmds:
+      - mise exec -- go test ./...
+
   shell:
     desc: Open an interactive Go-toolchain shell inside the test container
     interactive: true
