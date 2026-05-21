@@ -222,7 +222,7 @@ func pollForTwitchToken(ctx context.Context) {
 	// logged the reauth link once, so re-surfacing it every 15s is just noise.
 	const (
 		interval = 15 * time.Second
-		logEvery = 5 * time.Minute
+		logEvery = 15 * time.Minute
 	)
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
