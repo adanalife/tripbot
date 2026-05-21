@@ -100,6 +100,7 @@ func landingHandler(w http.ResponseWriter, r *http.Request) {
 		vlcVer = fetchVersion(r.Context(), c.Conf.VlcServerHost)
 	}
 
+	sha := buildSHA()
 	data := landingData{
 		Channel:  c.Conf.ChannelName,
 		Env:      c.Conf.Environment,
@@ -108,9 +109,9 @@ func landingHandler(w http.ResponseWriter, r *http.Request) {
 		Chatters: chatterCount(),
 		Services: gatherStatus(vlcOK, vlcVer),
 		Now:      currentVideo(vlcOK),
-		Links:    gatherLinks(),
+		Links:    gatherLinks(sha),
 	}
-	if sha := buildSHA(); sha != "" {
+	if sha != "" {
 		data.SHA = sha[:min(7, len(sha))]
 		data.CommitURL = commitURL(sha)
 	}
@@ -220,9 +221,9 @@ func pingHealthy(ctx context.Context, rawURL string) bool {
 
 // gatherLinks builds the external-link list: OBS's Ingress (derived from this
 // bot's own EXTERNAL_URL by swapping the leading subdomain label), the Grafana
-// dashboards, the Twitch channel, and the GitHub source repo. Entries whose
-// URL can't be derived are dropped rather than rendered broken.
-func gatherLinks() []navLink {
+// dashboards, the Twitch channel, and the changelog as of the deployed commit.
+// Entries whose URL can't be derived are dropped rather than rendered broken.
+func gatherLinks(sha string) []navLink {
 	links := []navLink{}
 	if obs := siblingURL(c.Conf.ExternalURL, "obs"); obs != "" {
 		links = append(links, navLink{Label: "OBS (noVNC)", URL: obs})
@@ -231,8 +232,19 @@ func gatherLinks() []navLink {
 	if c.Conf.ChannelName != "" {
 		links = append(links, navLink{Label: "Twitch channel", URL: "https://twitch.tv/" + c.Conf.ChannelName})
 	}
-	links = append(links, navLink{Label: "GitHub (source)", URL: githubURL})
+	links = append(links, navLink{Label: "Changelog", URL: changelogURL(sha)})
 	return links
+}
+
+// changelogURL links to CHANGELOG.md as of the deployed commit, so it shows the
+// changelog for exactly what's running. Falls back to the default branch when
+// the sha is unknown (e.g. a build without embedded VCS info).
+func changelogURL(sha string) string {
+	ref := "master"
+	if sha != "" {
+		ref = sha
+	}
+	return githubURL + "/blob/" + ref + "/CHANGELOG.md"
 }
 
 // siblingURL rewrites externalURL's leading hostname label to service, e.g.

@@ -27,6 +27,15 @@ func TestSiblingURL(t *testing.T) {
 	}
 }
 
+func TestChangelogURL(t *testing.T) {
+	if got, want := changelogURL("deadbeef"), githubURL+"/blob/deadbeef/CHANGELOG.md"; got != want {
+		t.Errorf("changelogURL(sha) = %q, want %q", got, want)
+	}
+	if got, want := changelogURL(""), githubURL+"/blob/master/CHANGELOG.md"; got != want {
+		t.Errorf("changelogURL(\"\") = %q, want %q", got, want)
+	}
+}
+
 func TestLandingHandler_RendersReadyStatusAndLinks(t *testing.T) {
 	defer SetReady(false)
 	SetReady(true)
@@ -79,7 +88,8 @@ func TestLandingHandler_RendersReadyStatusAndLinks(t *testing.T) {
 		"https://obs.prod.whereisdana.today", // derived OBS link
 		grafanaURL,                           // grafana link
 		"https://twitch.tv/adanalife",        // twitch link
-		githubURL,                            // github link
+		githubURL + "/blob/",                 // changelog link...
+		"/CHANGELOG.md",                      // ...to the CHANGELOG file
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body missing %q", want)
