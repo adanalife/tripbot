@@ -10,9 +10,9 @@ import (
 	mylog "github.com/adanalife/tripbot/pkg/chatbot/log"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
-	terrors "github.com/adanalife/tripbot/pkg/errors"
+	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
-	"github.com/adanalife/tripbot/pkg/video"
+	vlcClient "github.com/adanalife/tripbot/pkg/vlc-client"
 	"github.com/gempir/go-twitch-irc/v4"
 	"github.com/kelvins/geocoder"
 	"gorm.io/gorm"
@@ -25,7 +25,6 @@ var Uptime time.Time
 // App holds injectable dependencies for the chatbot.
 // Tests instantiate it directly with fakes; production uses defaultApp.
 type App struct {
-	CurrentVideo func() video.Video
 	// DB is the GORM handle used by commands that need to read or write the
 	// database. nil in tests that don't exercise the DB; otherwise either the
 	// real database.GormDB() or a sqlmock-backed gorm.DB.
@@ -38,8 +37,6 @@ type App struct {
 	VLC VLC
 	// Video reads / refreshes the currently-playing dashcam video. Tests
 	// inject a no-op fake; production uses the realVideo adapter.
-	// CurrentVideo (above) is the older closure-based seam; both live on
-	// App for now and a follow-up will subsume CurrentVideo into Video.
 	Video Video
 	// IRC sends chat output (Say, Whisper). Tests inject a recordingIRC
 	// to assert on chat messages; production uses the realIRC adapter
@@ -63,10 +60,9 @@ func (a *App) db() *gorm.DB {
 }
 
 var defaultApp = &App{
-	CurrentVideo: func() video.Video { return video.CurrentlyPlaying },
 	// DB stays nil; commands use a.db() which falls back to database.GormDB().
-	Onscreens: realOnscreens{},
-	VLC:       realVLC{},
+	Onscreens: realOnscreens{c: onscreensClient.New(c.Conf.OnscreensServerHost)},
+	VLC:       realVLC{c: vlcClient.New(c.Conf.VlcServerHost)},
 	Video:     realVideo{},
 	IRC:       realIRC{},
 	Sessions:  realSessions{},
@@ -87,10 +83,12 @@ func Initialize() *twitch.Client {
 	// set up geocoder (for translating coords to places)
 	geocoder.ApiKey = c.Conf.GoogleMapsAPIKey
 
-	// initialize the twitch API client
-	_, err = mytwitch.Client()
-	if err != nil {
-		terrors.Fatal(err, "unable to create twitch API client")
+	// initialize the twitch API client. Non-fatal: if Twitch is unreachable
+	// at boot, log and continue so the process stays up (readiness reports
+	// not-ready until the IRC connection lands). mytwitch.Client() doesn't
+	// cache on failure, so callers retry once Twitch is back.
+	if _, err = mytwitch.Client(); err != nil {
+		slog.Error("twitch API client unavailable at startup; continuing", "err", err)
 	}
 
 	// The IRC token comes from the DB-backed oauth_tokens row populated by

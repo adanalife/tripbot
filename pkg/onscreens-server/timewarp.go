@@ -5,15 +5,12 @@ import (
 	"time"
 )
 
-var timewarp *Onscreen
-
+// timewarpDuration controls how long a !timewarp render stays on screen
+// before the background expiry sweeper hides it.
 var timewarpDuration = time.Duration(2 * time.Second)
 
-func InitTimewarp() {
+// newTimewarp constructs the timewarp *Onscreen.
+func newTimewarp() *Onscreen {
 	slog.Info("creating onscreen", "kind", "timewarp")
-	timewarp = New()
-}
-
-func ShowTimewarp() {
-	timewarp.ShowFor("Timewarp!", timewarpDuration)
+	return newOnscreen()
 }

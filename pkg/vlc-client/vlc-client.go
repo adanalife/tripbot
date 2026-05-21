@@ -7,23 +7,33 @@ import (
 	"log/slog"
 	"net/http"
 
-	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
-//TODO: eventually support HTTPS
-var vlcServerURL = "http://" + c.Conf.VlcServerHost
+// Client talks to the vlc-server HTTP API. Construct via New(host).
+type Client struct {
+	serverURL  string
+	httpClient *http.Client
+}
 
-// httpClient wraps the default transport with OpenTelemetry instrumentation
-// so outbound calls produce spans and propagate W3C tracecontext headers.
-// Callers must pass ctx so the propagation has an active span to attach to —
-// passing context.Background() will still send the request, just without a
-// parent span linking it to the caller's trace.
-var httpClient = &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)}
+// New returns a Client pointed at the given vlc-server host. The HTTP
+// transport is OTel-instrumented so outbound calls produce spans and
+// propagate W3C tracecontext headers. Callers must pass ctx so the
+// propagation has an active span to attach to — passing context.Background()
+// will still send the request, just without a parent span linking it to the
+// caller's trace.
+//
+//TODO: eventually support HTTPS
+func New(host string) *Client {
+	return &Client{
+		serverURL:  "http://" + host,
+		httpClient: &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)},
+	}
+}
 
 // CurrentlyPlaying finds the currently-playing video path
-func CurrentlyPlaying(ctx context.Context) string {
-	response, err := getUrl(ctx, vlcServerURL+"/vlc/current")
+func (c *Client) CurrentlyPlaying(ctx context.Context) string {
+	response, err := c.get(ctx, c.serverURL+"/vlc/current")
 	if err != nil {
 		slog.ErrorContext(ctx, "unable to determine current video", "err", err)
 		return ""
@@ -32,8 +42,8 @@ func CurrentlyPlaying(ctx context.Context) string {
 }
 
 // PlayRandom plays a random file from the playlist
-func PlayRandom(ctx context.Context) error {
-	_, err := getUrl(ctx, vlcServerURL+"/vlc/random")
+func (c *Client) PlayRandom(ctx context.Context) error {
+	_, err := c.get(ctx, c.serverURL+"/vlc/random")
 	if err != nil {
 		slog.ErrorContext(ctx, "error playing random video", "err", err)
 		return err
@@ -42,9 +52,9 @@ func PlayRandom(ctx context.Context) error {
 }
 
 // PlayFileInPlaylist plays a given file
-func PlayFileInPlaylist(ctx context.Context, filename string) error {
-	url := vlcServerURL + "/vlc/play/" + filename
-	_, err := getUrl(ctx, url)
+func (c *Client) PlayFileInPlaylist(ctx context.Context, filename string) error {
+	url := c.serverURL + "/vlc/play/" + filename
+	_, err := c.get(ctx, url)
 	if err != nil {
 		slog.ErrorContext(ctx, "error playing file", "err", err)
 		return err
@@ -52,12 +62,12 @@ func PlayFileInPlaylist(ctx context.Context, filename string) error {
 	return nil
 }
 
-func Skip(ctx context.Context, n int) error {
-	url := vlcServerURL + "/vlc/skip"
+func (c *Client) Skip(ctx context.Context, n int) error {
+	url := c.serverURL + "/vlc/skip"
 	if n > 0 {
 		url = fmt.Sprintf("%s/%d", url, n)
 	}
-	_, err := getUrl(ctx, url)
+	_, err := c.get(ctx, url)
 	if err != nil {
 		slog.ErrorContext(ctx, "error skipping video", "err", err)
 		return err
@@ -65,12 +75,12 @@ func Skip(ctx context.Context, n int) error {
 	return nil
 }
 
-func Back(ctx context.Context, n int) error {
-	url := vlcServerURL + "/vlc/back"
+func (c *Client) Back(ctx context.Context, n int) error {
+	url := c.serverURL + "/vlc/back"
 	if n > 0 {
 		url = fmt.Sprintf("%s/%d", url, n)
 	}
-	_, err := getUrl(ctx, url)
+	_, err := c.get(ctx, url)
 	if err != nil {
 		slog.ErrorContext(ctx, "error going back to a video", "err", err)
 		return err
@@ -79,13 +89,13 @@ func Back(ctx context.Context, n int) error {
 }
 
 //TODO: move this to a common location
-func getUrl(ctx context.Context, url string) (string, error) {
+func (c *Client) get(ctx context.Context, url string) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		slog.ErrorContext(ctx, "error building request to VLC server", "err", err)
 		return "", err
 	}
-	response, err := httpClient.Do(req)
+	response, err := c.httpClient.Do(req)
 	if err != nil {
 		slog.ErrorContext(ctx, "error connecting to VLC server", "err", err)
 		return "", err

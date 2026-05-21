@@ -86,10 +86,10 @@ var onscreenRegistry = map[string]onscreenStyle{
 
 // onscreensStateHandler returns a JSON snapshot of every onscreen's current
 // state. The OBS browser-source HTML pages poll this endpoint and re-render.
-func onscreensStateHandler(w http.ResponseWriter, r *http.Request) {
+func (s *Server) onscreensStateHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
-	if err := json.NewEncoder(w).Encode(Snapshot()); err != nil {
+	if err := json.NewEncoder(w).Encode(s.Snapshot()); err != nil {
 		slog.ErrorContext(r.Context(), "encoding onscreens state", "err", err)
 	}
 }
@@ -97,7 +97,7 @@ func onscreensStateHandler(w http.ResponseWriter, r *http.Request) {
 // onscreensRenderHandler returns the HTML page that an OBS browser source
 // loads for a single onscreen. The page polls /onscreens/state.json and
 // updates its DOM in place.
-func onscreensRenderHandler(w http.ResponseWriter, r *http.Request) {
+func (s *Server) onscreensRenderHandler(w http.ResponseWriter, r *http.Request) {
 	name := mux.Vars(r)["name"]
 	style, ok := onscreenRegistry[name]
 	if !ok {
@@ -114,7 +114,7 @@ func onscreensRenderHandler(w http.ResponseWriter, r *http.Request) {
 // onscreensAssetHandler serves the raw image bytes for image-type onscreens.
 // `gps` resolves to the checked-in GPS overlay; `flag` returns a 1×1
 // transparent placeholder while the state-driven flag swap is offline.
-func onscreensAssetHandler(w http.ResponseWriter, r *http.Request) {
+func (s *Server) onscreensAssetHandler(w http.ResponseWriter, r *http.Request) {
 	switch mux.Vars(r)["name"] {
 	case SlugGPS:
 		http.ServeFile(w, r, filepath.Join(helpers.ProjectRoot(), "assets", "GPS.png"))

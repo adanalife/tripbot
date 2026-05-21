@@ -43,7 +43,7 @@ func main() {
 		}
 		// preload the currently-playing vid
 		video.GetCurrentlyPlaying(context.Background())
-		videoFile = video.CurrentlyPlaying.String()
+		videoFile = video.CurrentlyPlaying().String()
 	}
 
 	// a file was passed in via the CLI

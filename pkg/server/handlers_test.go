@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -10,6 +11,22 @@ import (
 
 	"github.com/adanalife/tripbot/pkg/server/oauthstate"
 )
+
+func TestTwitchIRCReady(t *testing.T) {
+	defer SetReady(false) // reset package state for other tests
+
+	// not ready by default: the check reports an error
+	SetReady(false)
+	if err := twitchIRCReady(context.Background()); err == nil {
+		t.Fatal("not-ready: got nil error, want non-nil")
+	}
+
+	// ready once the Twitch IRC connection is established: nil error
+	SetReady(true)
+	if err := twitchIRCReady(context.Background()); err != nil {
+		t.Fatalf("ready: got error %v, want nil", err)
+	}
+}
 
 func TestVersionHandlerReturnsInjectedTag(t *testing.T) {
 	saved := versionTag
@@ -43,7 +60,7 @@ func TestVersionHandlerReturnsInjectedTag(t *testing.T) {
 
 // withStubGenerateUserAccessToken swaps the package-level generator so the
 // /auth/callback handler can be tested without round-tripping to Twitch.
-func withStubGenerateUserAccessToken(t *testing.T, stub func(string) error) {
+func withStubGenerateUserAccessToken(t *testing.T, stub func(string, string) error) {
 	t.Helper()
 	saved := generateUserAccessToken
 	generateUserAccessToken = stub
@@ -51,7 +68,7 @@ func withStubGenerateUserAccessToken(t *testing.T, stub func(string) error) {
 }
 
 func TestAuthCallbackHandler_NoStateReturns400(t *testing.T) {
-	withStubGenerateUserAccessToken(t, func(string) error {
+	withStubGenerateUserAccessToken(t, func(string, string) error {
 		t.Fatal("generator should not be called when state is missing")
 		return nil
 	})
@@ -66,7 +83,7 @@ func TestAuthCallbackHandler_NoStateReturns400(t *testing.T) {
 }
 
 func TestAuthCallbackHandler_BadStateReturns400(t *testing.T) {
-	withStubGenerateUserAccessToken(t, func(string) error {
+	withStubGenerateUserAccessToken(t, func(string, string) error {
 		t.Fatal("generator should not be called when state is invalid")
 		return nil
 	})
@@ -81,8 +98,8 @@ func TestAuthCallbackHandler_BadStateReturns400(t *testing.T) {
 }
 
 func TestAuthCallbackHandler_NoCodeReturns400(t *testing.T) {
-	state := oauthstate.New()
-	withStubGenerateUserAccessToken(t, func(string) error {
+	state := oauthstate.New(oauthstate.AccountBot)
+	withStubGenerateUserAccessToken(t, func(string, string) error {
 		t.Fatal("generator should not be called when code is missing")
 		return nil
 	})
@@ -97,10 +114,11 @@ func TestAuthCallbackHandler_NoCodeReturns400(t *testing.T) {
 }
 
 func TestAuthCallbackHandler_HappyPath(t *testing.T) {
-	state := oauthstate.New()
-	var gotCode string
-	withStubGenerateUserAccessToken(t, func(code string) error {
+	state := oauthstate.New(oauthstate.AccountBot)
+	var gotCode, gotExpected string
+	withStubGenerateUserAccessToken(t, func(code, expected string) error {
 		gotCode = code
+		gotExpected = expected
 		return nil
 	})
 
@@ -114,6 +132,11 @@ func TestAuthCallbackHandler_HappyPath(t *testing.T) {
 	if gotCode != "the-code" {
 		t.Errorf("generator got code %q, want %q", gotCode, "the-code")
 	}
+	// expected login should be BotUsername (from c.Conf) since the state
+	// stashed AccountBot. Empty string here means the routing didn't fire.
+	if gotExpected == "" {
+		t.Errorf("generator got empty expected login; want BotUsername-derived value")
+	}
 	if !strings.Contains(rec.Header().Get("Content-Type"), "text/html") {
 		t.Errorf("Content-Type %q is not html", rec.Header().Get("Content-Type"))
 	}
@@ -123,8 +146,8 @@ func TestAuthCallbackHandler_HappyPath(t *testing.T) {
 }
 
 func TestAuthCallbackHandler_GeneratorErrorReturns500(t *testing.T) {
-	state := oauthstate.New()
-	withStubGenerateUserAccessToken(t, func(string) error {
+	state := oauthstate.New(oauthstate.AccountBot)
+	withStubGenerateUserAccessToken(t, func(string, string) error {
 		return errors.New("twitch broke")
 	})
 
@@ -138,8 +161,8 @@ func TestAuthCallbackHandler_GeneratorErrorReturns500(t *testing.T) {
 }
 
 func TestAuthCallbackHandler_StateIsSingleUse(t *testing.T) {
-	state := oauthstate.New()
-	withStubGenerateUserAccessToken(t, func(string) error { return nil })
+	state := oauthstate.New(oauthstate.AccountBot)
+	withStubGenerateUserAccessToken(t, func(string, string) error { return nil })
 
 	// First call consumes the state and succeeds.
 	req1 := httptest.NewRequest(http.MethodGet, "/auth/callback?state="+state+"&code=x", nil)

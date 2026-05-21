@@ -25,6 +25,10 @@ var version = "dev"
 
 var telemetryShutdown telemetry.ShutdownFunc
 
+// srv is the running vlc-server, captured in main so gracefulShutdown can
+// reach it from its signal-handler goroutine.
+var srv *vlcServer.Server
+
 func main() {
 	slog.Info("vlc-server starting", "version", version)
 
@@ -55,23 +59,37 @@ func main() {
 	// set up error logging
 	initializeErrorLogger()
 
-	// start VLC
-	vlcServer.InitPlayer()
-	vlcServer.PlayRandom() // play a random video
+	// start VLC + load media; surfaces libvlc init errors instead of
+	// fatalling-during-init from inside the package.
+	var err error
+	srv, err = vlcServer.New(vlcServer.Config{Version: version})
+	if err != nil {
+		log.Fatal(err)
+	}
+	// On normal exit (Start returns when shutdownCtx is canceled), drain
+	// the HTTP server with a bounded ctx and release libvlc. The
+	// gracefulShutdown goroutine below also calls Shutdown for the
+	// os.Exit path — Shutdown tolerates being invoked twice (libvlc
+	// Release is a no-op when the instance is already released).
+	defer func() {
+		drainCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		srv.Shutdown(drainCtx)
+	}()
+
+	srv.PlayRandom() // play a random video
 
 	// poll libvlc for playback stats (FPS, bitrate, dropped frames) and
 	// surface them as OTel gauges. No-op when telemetry is disabled.
-	vlcServer.StartStatsPoller(context.Background(), 5*time.Second)
+	// Tied to shutdownCtx so the poller goroutine exits cleanly on
+	// SIGINT/SIGTERM.
+	srv.StartStatsPoller(shutdownCtx, 5*time.Second)
 
 	// poll the OBS WebSocket for streaming state + render/output stats.
 	go obs.PollStreamingActive(context.Background(), 30*time.Second)
 
 	// start the webserver
-	vlcServer.SetVersion(version)
-	vlcServer.Start(shutdownCtx)
-
-	// listen for termination signals and gracefully shutdown
-	defer vlcServer.Shutdown()
+	srv.Start(shutdownCtx)
 }
 
 // initializeTelemetry brings up OpenTelemetry providers (traces, metrics,
@@ -112,7 +130,11 @@ func gracefulShutdown() {
 
 	slog.Warn("caught CTRL-C, shutting down")
 	// anything below this probably won't be executed
-	vlcServer.Shutdown()
+	if srv != nil {
+		drainCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		srv.Shutdown(drainCtx)
+		cancel()
+	}
 	//TODO: stop cron here
 	sentry.Flush(time.Second * 5)
 	if telemetryShutdown != nil {

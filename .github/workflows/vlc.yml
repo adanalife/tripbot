@@ -73,16 +73,20 @@ jobs:
 
     - name: Wait for healthcheck
       run: |
+        # /health/live is the process-alive probe; /health/ready now
+        # consults libvlc player state, which won't reach a "running"
+        # status in CI because the container has no video files mounted
+        # (the smoke test only verifies the server started).
         for i in $(seq 1 30); do
-          if curl -sf "http://localhost:$VLC_PORT/health/ready"; then
+          if curl -sf "http://localhost:$VLC_PORT/health/live"; then
             echo ""
-            echo "VLC server is ready!"
+            echo "VLC server is alive!"
             exit 0
           fi
           echo "Waiting for VLC server... ($i/30)"
           sleep 2
         done
-        echo "VLC server failed to become ready"
+        echo "VLC server failed to come up"
         exit 1
 
     - name: Check VLC current video

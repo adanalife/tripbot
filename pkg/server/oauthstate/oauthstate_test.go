@@ -10,12 +10,12 @@ func resetStore(t *testing.T) {
 	savedNow := now
 	t.Cleanup(func() {
 		mu.Lock()
-		store = map[string]time.Time{}
+		store = map[string]entry{}
 		mu.Unlock()
 		now = savedNow
 	})
 	mu.Lock()
-	store = map[string]time.Time{}
+	store = map[string]entry{}
 	mu.Unlock()
 }
 
@@ -23,7 +23,7 @@ func TestNew_GeneratesUniqueStates(t *testing.T) {
 	resetStore(t)
 	seen := map[string]struct{}{}
 	for i := 0; i < 100; i++ {
-		s := New()
+		s := New(AccountUnchecked)
 		if s == "" {
 			t.Fatal("New returned empty state")
 		}
@@ -36,19 +36,31 @@ func TestNew_GeneratesUniqueStates(t *testing.T) {
 
 func TestValidate_Hit(t *testing.T) {
 	resetStore(t)
-	s := New()
-	if !Validate(s) {
+	s := New(AccountUnchecked)
+	if _, ok := Validate(s); !ok {
 		t.Fatal("expected Validate(New()) to return true")
+	}
+}
+
+func TestValidate_RoundTripsAccount(t *testing.T) {
+	resetStore(t)
+	s := New(AccountBroadcaster)
+	got, ok := Validate(s)
+	if !ok {
+		t.Fatal("expected Validate to succeed")
+	}
+	if got != AccountBroadcaster {
+		t.Errorf("Validate returned account %q, want %q", got, AccountBroadcaster)
 	}
 }
 
 func TestValidate_DoubleUseRejected(t *testing.T) {
 	resetStore(t)
-	s := New()
-	if !Validate(s) {
+	s := New(AccountBot)
+	if _, ok := Validate(s); !ok {
 		t.Fatal("first Validate should succeed")
 	}
-	if Validate(s) {
+	if _, ok := Validate(s); ok {
 		t.Fatal("second Validate of same state should fail (single-use)")
 	}
 }
@@ -57,24 +69,24 @@ func TestValidate_ExpiredRejected(t *testing.T) {
 	resetStore(t)
 	t0 := time.Date(2026, 5, 10, 12, 0, 0, 0, time.UTC)
 	now = func() time.Time { return t0 }
-	s := New()
+	s := New(AccountBot)
 	// advance past TTL
 	now = func() time.Time { return t0.Add(TTL + time.Second) }
-	if Validate(s) {
+	if _, ok := Validate(s); ok {
 		t.Fatal("expired state should not validate")
 	}
 }
 
 func TestValidate_UnknownRejected(t *testing.T) {
 	resetStore(t)
-	if Validate("not-a-real-state") {
+	if _, ok := Validate("not-a-real-state"); ok {
 		t.Fatal("unknown state should not validate")
 	}
 }
 
 func TestValidate_EmptyStringRejected(t *testing.T) {
 	resetStore(t)
-	if Validate("") {
+	if _, ok := Validate(""); ok {
 		t.Fatal("empty state should not validate")
 	}
 }
@@ -85,7 +97,7 @@ func TestSweepClearsExpiredEntries(t *testing.T) {
 	now = func() time.Time { return t0 }
 	// generate several states that will expire
 	for i := 0; i < 5; i++ {
-		New()
+		New(AccountUnchecked)
 	}
 	mu.Lock()
 	beforeSweep := len(store)

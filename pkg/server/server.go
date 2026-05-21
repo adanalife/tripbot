@@ -13,6 +13,7 @@ import (
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/httpmw"
+	"github.com/adanalife/tripbot/pkg/instrumentation"
 	sentrynegroni "github.com/getsentry/sentry-go/negroni"
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -44,12 +45,15 @@ func Start(ctx context.Context) {
 	r := mux.NewRouter()
 
 	// healthcheck endpoints. /live is a trivial 200 (kubelet uses it to
-	// decide whether to restart the pod); /ready runs real checks (DB
-	// reachability) so kubelet only routes traffic once deps are up.
+	// decide whether to restart the pod); /ready runs real checks so the
+	// pod reports not-ready until its deps are up: the DB is reachable and
+	// the Twitch IRC connection is established (the latter keeps the pod
+	// from crashlooping while Twitch is unavailable — see cmd/tripbot).
 	hp := r.PathPrefix("/health").Methods("GET", "HEAD").Subrouter()
 	hp.Handle("/live", tagged("/health/live", httpmw.LivenessHandler()))
 	hp.Handle("/ready", tagged("/health/ready", httpmw.ReadinessHandler(
 		httpmw.ReadyCheck{Name: "database", Fn: database.Ping},
+		httpmw.ReadyCheck{Name: "twitch_irc", Fn: twitchIRCReady},
 	)))
 
 	// version endpoint — returns build metadata as JSON
@@ -76,7 +80,10 @@ func Start(ctx context.Context) {
 	// negroni.New + explicit middleware so we can swap negroni's stdlib
 	// logger for an slog-based one — see pkg/httpmw.SlogLogger. The static
 	// middleware from negroni.Classic is dropped (no public/ directory).
-	app := negroni.New(negroni.NewRecovery(), httpmw.NewSlogLogger())
+	app := negroni.New(
+		httpmw.NewRecovery(func(any) { instrumentation.HTTPPanics.Inc(c.Conf.ServerType) }),
+		httpmw.NewSlogLogger(),
+	)
 
 	// attach http-metrics (prometheus) middleware
 	metricsMw := middleware.New(middleware.Config{

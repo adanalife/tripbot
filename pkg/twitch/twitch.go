@@ -20,7 +20,12 @@ var subscribers []string
 
 // getChannelID makes a request to twitch to get the user ID for the channel
 func getChannelID(username string) string {
-	resp, err := currentTwitchClient.GetUsers(&helix.UsersParams{
+	client, err := Client()
+	if err != nil {
+		slog.Error("twitch API client unavailable", "err", err)
+		return ""
+	}
+	resp, err := client.GetUsers(&helix.UsersParams{
 		Logins: []string{username},
 	})
 	if err != nil {
@@ -43,15 +48,26 @@ func getChannelID(username string) string {
 }
 
 // GetSubscribers pulls down the most recent list of subscribers.
+// Authorizes against the broadcaster identity — the bot's user-access-token
+// can't read the channel owner's subs no matter what scopes it has.
 // ctx is forward-compat plumbing for nesting helix HTTP under the parent
 // cron span; the helix client doesn't accept ctx yet, but the log lines
 // get a trace_id link via slog.InfoContext.
 func GetSubscribers(ctx context.Context) {
+	if !broadcasterTokenLoaded() {
+		slog.InfoContext(ctx, "skipping GetSubscribers: no broadcaster oauth_tokens row")
+		return
+	}
+	bclient, err := BroadcasterClient()
+	if err != nil {
+		slog.ErrorContext(ctx, "broadcaster helix client unavailable", "err", err)
+		return
+	}
 	//TODO: should we do this elsewhere as well?
 	if ChannelID == "" {
 		ChannelID = getChannelID(c.Conf.ChannelName)
 	}
-	resp, err := currentTwitchClient.GetSubscriptions(&helix.SubscriptionsParams{
+	resp, err := bclient.GetSubscriptions(&helix.SubscriptionsParams{
 		BroadcasterID: ChannelID,
 	})
 	if err != nil {
@@ -62,8 +78,6 @@ func GetSubscribers(ctx context.Context) {
 		// keep the prior subscriber list rather than zeroing it out
 		return
 	}
-
-	// spew.Dump(resp)
 
 	// reset the current subscriber list
 	subscribers = []string{}
@@ -83,12 +97,22 @@ func GetSubscribers(ctx context.Context) {
 }
 
 // GetFollowerCount fetches the current total follower count for the
-// channel. ctx is forward-compat plumbing (see GetSubscribers).
+// channel. Authorizes against the broadcaster identity (moderator:read:followers
+// on the channel-owner token). ctx is forward-compat plumbing (see GetSubscribers).
 func GetFollowerCount(ctx context.Context) {
+	if !broadcasterTokenLoaded() {
+		slog.InfoContext(ctx, "skipping GetFollowerCount: no broadcaster oauth_tokens row")
+		return
+	}
+	bclient, err := BroadcasterClient()
+	if err != nil {
+		slog.ErrorContext(ctx, "broadcaster helix client unavailable", "err", err)
+		return
+	}
 	if ChannelID == "" {
 		ChannelID = getChannelID(c.Conf.ChannelName)
 	}
-	resp, err := currentTwitchClient.GetChannelFollows(&helix.GetChannelFollowsParams{
+	resp, err := bclient.GetChannelFollows(&helix.GetChannelFollowsParams{
 		BroadcasterID: ChannelID,
 	})
 	if err != nil {
@@ -112,17 +136,28 @@ func UserIsSubscriber(username string) bool {
 	return false
 }
 
-// UserIsFollower returns true if the user follows the channel
+// UserIsFollower returns true if the user follows the channel.
+// Authorizes against the broadcaster identity (moderator:read:followers).
+// When the broadcaster token isn't loaded yet, fail closed.
 func UserIsFollower(username string) bool {
 	// I can't follow myself so just do this
 	if c.UserIsAdmin(username) {
 		return true
 	}
 
+	if !broadcasterTokenLoaded() {
+		return false
+	}
+	bclient, err := BroadcasterClient()
+	if err != nil {
+		slog.Error("broadcaster helix client unavailable", "err", err)
+		return false
+	}
+
 	// get the channel ID for the given user
 	userID := getChannelID(username)
 
-	resp, err := currentTwitchClient.GetChannelFollows(&helix.GetChannelFollowsParams{
+	resp, err := bclient.GetChannelFollows(&helix.GetChannelFollowsParams{
 		BroadcasterID: ChannelID,
 		UserID:        userID,
 	})
@@ -140,4 +175,13 @@ func UserIsFollower(username string) bool {
 	}
 	return true
 
+}
+
+// broadcasterTokenLoaded reports whether the broadcaster's user-access-token
+// has been populated. Cheaper than building the helix client just to discover
+// the user-token slot is empty.
+func broadcasterTokenLoaded() bool {
+	tokenMu.RLock()
+	defer tokenMu.RUnlock()
+	return currentBroadcasterToken.AccessToken != ""
 }
