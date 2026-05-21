@@ -10,7 +10,6 @@ import (
 	mylog "github.com/adanalife/tripbot/pkg/chatbot/log"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
-	terrors "github.com/adanalife/tripbot/pkg/errors"
 	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	vlcClient "github.com/adanalife/tripbot/pkg/vlc-client"
@@ -84,10 +83,12 @@ func Initialize() *twitch.Client {
 	// set up geocoder (for translating coords to places)
 	geocoder.ApiKey = c.Conf.GoogleMapsAPIKey
 
-	// initialize the twitch API client
-	_, err = mytwitch.Client()
-	if err != nil {
-		terrors.Fatal(err, "unable to create twitch API client")
+	// initialize the twitch API client. Non-fatal: if Twitch is unreachable
+	// at boot, log and continue so the process stays up (readiness reports
+	// not-ready until the IRC connection lands). mytwitch.Client() doesn't
+	// cache on failure, so callers retry once Twitch is back.
+	if _, err = mytwitch.Client(); err != nil {
+		slog.Error("twitch API client unavailable at startup; continuing", "err", err)
 	}
 
 	// The IRC token comes from the DB-backed oauth_tokens row populated by
