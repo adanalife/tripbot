@@ -45,9 +45,17 @@ const (
 
 // serviceStatus is one row in the landing page's status table.
 type serviceStatus struct {
-	Name   string
-	OK     bool
-	Detail string
+	Name       string
+	OK         bool
+	Detail     string
+	Version    string // optional build tag (e.g. vlc-server's, from /version)
+	VersionURL string // commit link for Version, when the sha is known
+}
+
+// versionInfo is the subset of a service's /version JSON the page uses.
+type versionInfo struct {
+	Tag string `json:"tag"`
+	Sha string `json:"sha"`
 }
 
 // nowPlaying is the current-video summary shown when vlc-server is healthy.
@@ -86,10 +94,10 @@ func landingHandler(w http.ResponseWriter, r *http.Request) {
 	vlcOK := c.Conf.VlcServerHost != "" &&
 		pingHealthy(r.Context(), "http://"+c.Conf.VlcServerHost+"/health/ready")
 
-	// vlc-server's build tag — one extra in-cluster GET, only when it's up.
-	vlcVersion := ""
+	// vlc-server's build info — one extra in-cluster GET, only when it's up.
+	var vlcVer versionInfo
 	if vlcOK {
-		vlcVersion = fetchVersion(r.Context(), c.Conf.VlcServerHost)
+		vlcVer = fetchVersion(r.Context(), c.Conf.VlcServerHost)
 	}
 
 	data := landingData{
@@ -98,13 +106,13 @@ func landingHandler(w http.ResponseWriter, r *http.Request) {
 		Uptime:   time.Since(startedAt).Round(time.Second).String(),
 		Version:  versionTag,
 		Chatters: chatterCount(),
-		Services: gatherStatus(vlcOK, vlcVersion),
+		Services: gatherStatus(vlcOK, vlcVer),
 		Now:      currentVideo(vlcOK),
 		Links:    gatherLinks(),
 	}
 	if sha := buildSHA(); sha != "" {
 		data.SHA = sha[:min(7, len(sha))]
-		data.CommitURL = githubURL + "/commit/" + sha
+		data.CommitURL = commitURL(sha)
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -117,7 +125,7 @@ func landingHandler(w http.ResponseWriter, r *http.Request) {
 // the already-computed vlc-server health (with its build tag when reachable).
 // The vlc ping is best-effort: any failure (DNS, timeout, non-2xx) renders as
 // not-OK rather than erroring the page.
-func gatherStatus(vlcOK bool, vlcVersion string) []serviceStatus {
+func gatherStatus(vlcOK bool, vlcVer versionInfo) []serviceStatus {
 	tripbot := serviceStatus{Name: "tripbot", OK: ready.Load()}
 	if tripbot.OK {
 		tripbot.Detail = "ready"
@@ -128,12 +136,19 @@ func gatherStatus(vlcOK bool, vlcVersion string) []serviceStatus {
 	vlc := serviceStatus{Name: "vlc-server", OK: vlcOK, Detail: "unreachable"}
 	if vlcOK {
 		vlc.Detail = "healthy"
-		if vlcVersion != "" {
-			vlc.Detail = "healthy · " + vlcVersion
-		}
+		vlc.Version = vlcVer.Tag
+		vlc.VersionURL = commitURL(vlcVer.Sha) // same repo as tripbot
 	}
 
 	return []serviceStatus{tripbot, vlc}
+}
+
+// commitURL links a git sha to its commit on GitHub, or "" when sha is empty.
+func commitURL(sha string) string {
+	if sha == "" {
+		return ""
+	}
+	return githubURL + "/commit/" + sha
 }
 
 // currentVideo summarizes the currently-playing video for the page, but only
@@ -168,25 +183,24 @@ func buildSHA() string {
 	return ""
 }
 
-// fetchVersion GETs a sibling service's /version endpoint and returns its tag,
-// or "" on any error. Uses the same short-timeout client as the health ping.
-func fetchVersion(ctx context.Context, host string) string {
+// fetchVersion GETs a sibling service's /version endpoint and returns its build
+// tag + sha, or a zero versionInfo on any error. Uses the same short-timeout
+// client as the health ping.
+func fetchVersion(ctx context.Context, host string) versionInfo {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+host+"/version", nil)
 	if err != nil {
-		return ""
+		return versionInfo{}
 	}
 	resp, err := healthClient.Do(req)
 	if err != nil {
-		return ""
+		return versionInfo{}
 	}
 	defer resp.Body.Close()
-	var v struct {
-		Tag string `json:"tag"`
-	}
+	var v versionInfo
 	if err := json.NewDecoder(resp.Body).Decode(&v); err != nil {
-		return ""
+		return versionInfo{}
 	}
-	return v.Tag
+	return v
 }
 
 // pingHealthy GETs a readiness URL and reports whether it answered 2xx within
@@ -250,7 +264,6 @@ var landingTmpl = template.Must(template.New("landing").Parse(`<!doctype html>
   main { width:min(92vw,420px); padding:32px; }
   h1 { font-size:20px; margin:0 0 2px; letter-spacing:.02em; }
   .ver { color:#666; margin:0 0 10px; font-size:12px; }
-  .ver a { display:inline; padding:0; border:0; }
   .meta { color:#888; margin:0 0 24px; font-size:13px; }
   h2 { font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:#888; margin:24px 0 8px; }
   ul { list-style:none; margin:0; padding:0; }
@@ -263,15 +276,16 @@ var landingTmpl = template.Must(template.New("landing").Parse(`<!doctype html>
   .now { margin:0; padding:6px 0; }
   .now .file { word-break:break-all; }
   .now .state { color:#888; }
-  a { color:#58a6ff; text-decoration:none; display:block; padding:6px 0; border-bottom:1px solid #1c1c1c; }
+  a { color:#58a6ff; text-decoration:none; }
   a:hover { color:#9cf; }
+  .links a { display:block; padding:6px 0; border-bottom:1px solid #1c1c1c; }
 </style>
 </head>
 <body>
 <main>
   <h1>tripbot</h1>
   {{if .Version}}<p class="ver">{{.Version}}{{if .SHA}} · <a href="{{.CommitURL}}">{{.SHA}}</a>{{end}}</p>{{end}}
-  <p class="meta">channel <strong>{{.Channel}}</strong> · env {{.Env}} · up {{.Uptime}} · {{.Chatters}} in chat</p>
+  <p class="meta">channel <strong><a href="https://twitch.tv/{{.Channel}}">{{.Channel}}</a></strong> · env {{.Env}} · up {{.Uptime}} · {{.Chatters}} in chat</p>
 
   <h2>status</h2>
   <ul>
@@ -279,7 +293,7 @@ var landingTmpl = template.Must(template.New("landing").Parse(`<!doctype html>
     <li class="svc">
       <span class="dot {{if .OK}}up{{else}}down{{end}}"></span>
       <span class="name">{{.Name}}</span>
-      <span class="detail">{{.Detail}}</span>
+      <span class="detail">{{.Detail}}{{if .Version}} · {{if .VersionURL}}<a href="{{.VersionURL}}">{{.Version}}</a>{{else}}{{.Version}}{{end}}{{end}}</span>
     </li>
     {{end}}
   </ul>
@@ -294,7 +308,7 @@ var landingTmpl = template.Must(template.New("landing").Parse(`<!doctype html>
   {{end}}
 
   <h2>links</h2>
-  <ul>
+  <ul class="links">
     {{range .Links}}
     <li><a href="{{.URL}}">{{.Label}} →</a></li>
     {{end}}

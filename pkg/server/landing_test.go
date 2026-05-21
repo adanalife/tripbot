@@ -38,7 +38,7 @@ func TestLandingHandler_RendersReadyStatusAndLinks(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 		case "/version":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"tag":"v9.9.9-vlc"}`))
+			_, _ = w.Write([]byte(`{"tag":"v9.9.9-vlc","sha":"deadbeefcafe"}`))
 		default:
 			t.Errorf("unexpected vlc request %q", r.URL.Path)
 		}
@@ -66,10 +66,11 @@ func TestLandingHandler_RendersReadyStatusAndLinks(t *testing.T) {
 	}
 	body := rec.Body.String()
 	for _, want := range []string{
-		"adanalife",                          // channel
-		"v1.2.3",                             // tripbot build tag
-		"ready",                              // tripbot status
-		"healthy · v9.9.9-vlc",               // vlc status + fetched version tag
+		`<a href="https://twitch.tv/adanalife">adanalife</a>`, // clickable channel
+		"v1.2.3",  // tripbot build tag
+		"ready",   // tripbot status
+		"healthy", // vlc status
+		`<a href="https://github.com/adanalife/tripbot/commit/deadbeefcafe">v9.9.9-vlc</a>`, // vlc version → commit
 		"12 in chat",                         // chatter count
 		"now playing",                        // now-playing section shown when vlc healthy
 		"wy_0042.MP4",                        // current video file
