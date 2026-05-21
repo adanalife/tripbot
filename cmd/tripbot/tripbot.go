@@ -217,18 +217,30 @@ func loadTwitchToken(ctx context.Context) {
 // connectToTwitch's reconnect loop authenticates on its next attempt. Started
 // only when the token was missing at boot; stops on shutdown.
 func pollForTwitchToken(ctx context.Context) {
-	const interval = 15 * time.Second
+	// Check often so the token is picked up promptly once it lands, but log
+	// the "still waiting" warning at a much slower cadence — boot already
+	// logged the reauth link once, so re-surfacing it every 15s is just noise.
+	const (
+		interval = 15 * time.Second
+		logEvery = 15 * time.Minute
+	)
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
+	// Suppress the first poll-failure log: loadTwitchToken just logged the
+	// same warning at boot. The next one waits a full logEvery.
+	lastLogged := time.Now()
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
 			if err := mytwitch.LoadFromDB(); err != nil {
-				slog.WarnContext(ctx, "still waiting for Twitch token",
-					"login_as", c.Conf.BotUsername,
-					"reauth_url", mytwitch.AuthInitURL("bot"), "err", err)
+				if time.Since(lastLogged) >= logEvery {
+					slog.WarnContext(ctx, "still waiting for Twitch token",
+						"login_as", c.Conf.BotUsername,
+						"reauth_url", mytwitch.AuthInitURL("bot"), "err", err)
+					lastLogged = time.Now()
+				}
 				continue
 			}
 			slog.InfoContext(ctx, "Twitch token loaded; bot will connect on next attempt")
