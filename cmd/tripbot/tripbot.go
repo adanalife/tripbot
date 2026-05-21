@@ -228,11 +228,23 @@ func connectToTwitch() {
 	client.Join(c.Conf.ChannelName)
 	slog.Info("joined channel", "channel", c.Conf.ChannelName, "url", fmt.Sprintf("https://twitch.tv/%s", c.Conf.ChannelName))
 
+	// Flip readiness on once the IRC connection is established so the
+	// readiness probe (/health/ready) reports live. Until then — and after
+	// any disconnect below — the pod stays up but not-ready.
+	client.OnConnect(func() {
+		slog.Info("connected to Twitch chat")
+		server.SetReady(true)
+	})
+
 	// actually connect to Twitch
 	// wrapped in a loop in case twitch goes down
 	for {
 		slog.Info("initializing connection to Twitch")
+		// Connect blocks while connected and returns when the connection
+		// drops; mark not-ready so the probe reflects the gap until the
+		// next OnConnect fires.
 		err := client.Connect()
+		server.SetReady(false)
 		if err != nil {
 			slog.Error("unable to connect to twitch", "err", err)
 			if errors.Is(err, twitch.ErrLoginAuthenticationFailed) {

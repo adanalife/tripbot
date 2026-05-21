@@ -35,6 +35,11 @@ func Chatters() map[string]struct{} {
 // endpoint and updates the in-memory state. Requires the bot account to be a
 // moderator of the channel (moderator:read:chatters scope).
 func UpdateChatters() {
+	client, err := Client()
+	if err != nil {
+		slog.Error("twitch API client unavailable", "err", err)
+		return
+	}
 	if ChannelID == "" {
 		ChannelID = getChannelID(c.Conf.ChannelName)
 	}
@@ -42,7 +47,7 @@ func UpdateChatters() {
 		BotID = getChannelID(c.Conf.BotUsername)
 	}
 
-	resp, err := currentTwitchClient.GetChannelChatChatters(&helix.GetChatChattersParams{
+	resp, err := client.GetChannelChatChatters(&helix.GetChatChattersParams{
 		BroadcasterID: ChannelID,
 		ModeratorID:   BotID,
 	})

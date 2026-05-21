@@ -122,18 +122,24 @@ func Client() (*helix.Client, error) {
 		HTTPClient:  helixHTTPClient,
 	})
 	if err != nil {
-		slog.Error("error creating client", "err", err)
+		slog.Error("error creating twitch API client", "err", err)
+		return nil, err
 	}
 
 	resp, err := client.RequestAppAccessToken(append(append([]string{}, BotScopes...), BroadcasterScopes...))
 	if err != nil {
+		// Twitch unreachable: RequestAppAccessToken returns a nil resp, so
+		// don't touch resp.Data here (it would panic). Leave currentTwitchClient
+		// uncached so the next call retries once Twitch is back — caching a
+		// tokenless client would pin an empty App Access Token forever.
 		slog.Error("error getting app access token from twitch", "err", err)
+		return nil, err
 	}
 	AppAccessToken = resp.Data.AccessToken
 	client.SetAppAccessToken(AppAccessToken)
 
 	currentTwitchClient = client
-	return client, err
+	return client, nil
 }
 
 // BroadcasterClient returns the helix client that carries the broadcaster's
