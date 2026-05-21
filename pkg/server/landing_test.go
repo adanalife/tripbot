@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/video"
@@ -30,12 +31,17 @@ func TestLandingHandler_RendersReadyStatusAndLinks(t *testing.T) {
 	defer SetReady(false)
 	SetReady(true)
 
-	// stand in for vlc-server's readiness endpoint
+	// stand in for vlc-server: readiness ping + version endpoint
 	vlc := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/health/ready" {
-			t.Errorf("vlc ping hit %q, want /health/ready", r.URL.Path)
+		switch r.URL.Path {
+		case "/health/ready":
+			w.WriteHeader(http.StatusOK)
+		case "/version":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"tag":"v9.9.9-vlc"}`))
+		default:
+			t.Errorf("unexpected vlc request %q", r.URL.Path)
 		}
-		w.WriteHeader(http.StatusOK)
 	}))
 	defer vlc.Close()
 
@@ -45,7 +51,12 @@ func TestLandingHandler_RendersReadyStatusAndLinks(t *testing.T) {
 		c.Conf.ExternalURL = "https://tripbot.prod.whereisdana.today"
 		c.Conf.Environment = "production"
 	})
-	withCurrentlyPlaying(t, video.Video{Slug: "wy_0042", State: "Wyoming"})
+	withCurrentlyPlaying(t, video.Video{Slug: "wy_0042", State: "Wyoming"}, 3*time.Minute+12*time.Second)
+	withChatterCount(t, 12)
+
+	saved := versionTag
+	defer func() { versionTag = saved }()
+	SetVersion("v1.2.3")
 
 	rec := httptest.NewRecorder()
 	landingHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
@@ -56,14 +67,18 @@ func TestLandingHandler_RendersReadyStatusAndLinks(t *testing.T) {
 	body := rec.Body.String()
 	for _, want := range []string{
 		"adanalife",                          // channel
+		"v1.2.3",                             // tripbot build tag
 		"ready",                              // tripbot status
-		"healthy",                            // vlc status (ping succeeded)
+		"healthy · v9.9.9-vlc",               // vlc status + fetched version tag
+		"12 in chat",                         // chatter count
 		"now playing",                        // now-playing section shown when vlc healthy
 		"wy_0042.MP4",                        // current video file
 		"Wyoming",                            // current video state
+		"3m12s",                              // clip progress
 		"https://obs.prod.whereisdana.today", // derived OBS link
 		grafanaURL,                           // grafana link
 		"https://twitch.tv/adanalife",        // twitch link
+		githubURL,                            // github link
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body missing %q", want)
@@ -83,7 +98,7 @@ func TestLandingHandler_DegradedAndVlcUnreachable(t *testing.T) {
 	})
 	// even with a video loaded, an unhealthy vlc hides "now playing" rather
 	// than showing a possibly-stale value.
-	withCurrentlyPlaying(t, video.Video{Slug: "wy_0042", State: "Wyoming"})
+	withCurrentlyPlaying(t, video.Video{Slug: "wy_0042", State: "Wyoming"}, time.Minute)
 
 	rec := httptest.NewRecorder()
 	landingHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
@@ -119,11 +134,20 @@ func withConf(t *testing.T, set func()) {
 	set()
 }
 
-// withCurrentlyPlaying swaps the package-level currentlyPlaying seam so the
-// landing handler sees a fixed video without driving pkg/video's player.
-func withCurrentlyPlaying(t *testing.T, v video.Video) {
+// withCurrentlyPlaying swaps the currentlyPlaying / currentProgress seams so
+// the landing handler sees a fixed video + progress without driving the player.
+func withCurrentlyPlaying(t *testing.T, v video.Video, progress time.Duration) {
 	t.Helper()
-	saved := currentlyPlaying
+	savedV, savedP := currentlyPlaying, currentProgress
 	currentlyPlaying = func() video.Video { return v }
-	t.Cleanup(func() { currentlyPlaying = saved })
+	currentProgress = func() time.Duration { return progress }
+	t.Cleanup(func() { currentlyPlaying, currentProgress = savedV, savedP })
+}
+
+// withChatterCount swaps the chatterCount seam to a fixed value.
+func withChatterCount(t *testing.T, n int) {
+	t.Helper()
+	saved := chatterCount
+	chatterCount = func() int { return n }
+	t.Cleanup(func() { chatterCount = saved })
 }

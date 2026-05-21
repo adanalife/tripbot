@@ -2,14 +2,17 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"html/template"
 	"log/slog"
 	"net/http"
 	"net/url"
+	"runtime/debug"
 	"strings"
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
+	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/video"
 )
 
@@ -21,14 +24,24 @@ var startedAt = time.Now()
 // ping. 2s keeps a slow or hung vlc-server from stalling the landing render.
 var healthClient = &http.Client{Timeout: 2 * time.Second}
 
-// currentlyPlaying is overridable in tests; by default it reads pkg/video's
-// in-process notion of the current video (refreshed by a 60s cron tick), so
-// the landing page costs nothing to show "now playing".
-var currentlyPlaying = video.CurrentlyPlaying
+// currentlyPlaying / currentProgress are overridable in tests; by default they
+// read pkg/video's in-process state (refreshed by a 60s cron tick), so the
+// landing page costs nothing to show "now playing".
+var (
+	currentlyPlaying = video.CurrentlyPlaying
+	currentProgress  = video.CurrentProgress
+	// chatterCount is the in-memory count of users in chat, refreshed ~60s by
+	// the UpdateSession cron. Overridable in tests.
+	chatterCount = mytwitch.ChatterCount
+)
 
-// grafanaURL points at the Grafana Cloud dashboards list (the TripBot folder
-// lives there). Fixed — the org URL doesn't vary by environment.
-const grafanaURL = "https://adanalife.grafana.net/dashboards"
+const (
+	// grafanaURL points at the Grafana Cloud dashboards list (the TripBot
+	// folder lives there). Fixed — the org URL doesn't vary by environment.
+	grafanaURL = "https://adanalife.grafana.net/dashboards"
+	// githubURL is the tripbot source repo (vlc-server + obs live here too).
+	githubURL = "https://github.com/adanalife/tripbot"
+)
 
 // serviceStatus is one row in the landing page's status table.
 type serviceStatus struct {
@@ -37,26 +50,31 @@ type serviceStatus struct {
 	Detail string
 }
 
+// nowPlaying is the current-video summary shown when vlc-server is healthy.
+type nowPlaying struct {
+	File     string
+	State    string
+	Progress string
+}
+
 // navLink is one entry in the landing page's links list.
 type navLink struct {
 	Label string
 	URL   string
 }
 
-// nowPlaying is the current-video summary shown when vlc-server is healthy.
-type nowPlaying struct {
-	File  string
-	State string
-}
-
 // landingData is the template payload.
 type landingData struct {
-	Channel  string
-	Env      string
-	Uptime   string
-	Services []serviceStatus
-	Now      *nowPlaying // nil when vlc is unhealthy or nothing is playing
-	Links    []navLink
+	Channel   string
+	Env       string
+	Uptime    string
+	Version   string // tripbot's own build tag
+	SHA       string // short git sha
+	CommitURL string // link to the build's commit on GitHub (empty if no sha)
+	Chatters  int    // users currently in chat
+	Services  []serviceStatus
+	Now       *nowPlaying // nil when vlc is unhealthy or nothing is playing
+	Links     []navLink
 }
 
 // landingHandler serves the human-facing root page on the tripbot Ingress: a
@@ -68,13 +86,25 @@ func landingHandler(w http.ResponseWriter, r *http.Request) {
 	vlcOK := c.Conf.VlcServerHost != "" &&
 		pingHealthy(r.Context(), "http://"+c.Conf.VlcServerHost+"/health/ready")
 
+	// vlc-server's build tag — one extra in-cluster GET, only when it's up.
+	vlcVersion := ""
+	if vlcOK {
+		vlcVersion = fetchVersion(r.Context(), c.Conf.VlcServerHost)
+	}
+
 	data := landingData{
 		Channel:  c.Conf.ChannelName,
 		Env:      c.Conf.Environment,
 		Uptime:   time.Since(startedAt).Round(time.Second).String(),
-		Services: gatherStatus(vlcOK),
+		Version:  versionTag,
+		Chatters: chatterCount(),
+		Services: gatherStatus(vlcOK, vlcVersion),
 		Now:      currentVideo(vlcOK),
 		Links:    gatherLinks(),
+	}
+	if sha := buildSHA(); sha != "" {
+		data.SHA = sha[:min(7, len(sha))]
+		data.CommitURL = githubURL + "/commit/" + sha
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -84,10 +114,10 @@ func landingHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // gatherStatus reports tripbot's own readiness (in-memory, free) and folds in
-// the already-computed vlc-server health. The vlc ping is best-effort: any
-// failure (DNS, timeout, non-2xx) renders as not-OK rather than erroring the
-// page.
-func gatherStatus(vlcOK bool) []serviceStatus {
+// the already-computed vlc-server health (with its build tag when reachable).
+// The vlc ping is best-effort: any failure (DNS, timeout, non-2xx) renders as
+// not-OK rather than erroring the page.
+func gatherStatus(vlcOK bool, vlcVersion string) []serviceStatus {
 	tripbot := serviceStatus{Name: "tripbot", OK: ready.Load()}
 	if tripbot.OK {
 		tripbot.Detail = "ready"
@@ -98,6 +128,9 @@ func gatherStatus(vlcOK bool) []serviceStatus {
 	vlc := serviceStatus{Name: "vlc-server", OK: vlcOK, Detail: "unreachable"}
 	if vlcOK {
 		vlc.Detail = "healthy"
+		if vlcVersion != "" {
+			vlc.Detail = "healthy · " + vlcVersion
+		}
 	}
 
 	return []serviceStatus{tripbot, vlc}
@@ -115,7 +148,45 @@ func currentVideo(vlcOK bool) *nowPlaying {
 	if v.Slug == "" {
 		return nil
 	}
-	return &nowPlaying{File: v.File(), State: v.State}
+	return &nowPlaying{
+		File:     v.File(),
+		State:    v.State,
+		Progress: currentProgress().Round(time.Second).String(),
+	}
+}
+
+// buildSHA returns the binary's embedded VCS revision (via Go's -buildvcs), or
+// "" for builds without it (e.g. `go test`). Same source versionHandler uses.
+func buildSHA() string {
+	if info, ok := debug.ReadBuildInfo(); ok {
+		for _, s := range info.Settings {
+			if s.Key == "vcs.revision" {
+				return s.Value
+			}
+		}
+	}
+	return ""
+}
+
+// fetchVersion GETs a sibling service's /version endpoint and returns its tag,
+// or "" on any error. Uses the same short-timeout client as the health ping.
+func fetchVersion(ctx context.Context, host string) string {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+host+"/version", nil)
+	if err != nil {
+		return ""
+	}
+	resp, err := healthClient.Do(req)
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+	var v struct {
+		Tag string `json:"tag"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&v); err != nil {
+		return ""
+	}
+	return v.Tag
 }
 
 // pingHealthy GETs a readiness URL and reports whether it answered 2xx within
@@ -135,8 +206,8 @@ func pingHealthy(ctx context.Context, rawURL string) bool {
 
 // gatherLinks builds the external-link list: OBS's Ingress (derived from this
 // bot's own EXTERNAL_URL by swapping the leading subdomain label), the Grafana
-// dashboards, and the Twitch channel. Entries whose URL can't be derived are
-// dropped rather than rendered broken.
+// dashboards, the Twitch channel, and the GitHub source repo. Entries whose
+// URL can't be derived are dropped rather than rendered broken.
 func gatherLinks() []navLink {
 	links := []navLink{}
 	if obs := siblingURL(c.Conf.ExternalURL, "obs"); obs != "" {
@@ -146,6 +217,7 @@ func gatherLinks() []navLink {
 	if c.Conf.ChannelName != "" {
 		links = append(links, navLink{Label: "Twitch channel", URL: "https://twitch.tv/" + c.Conf.ChannelName})
 	}
+	links = append(links, navLink{Label: "GitHub (source)", URL: githubURL})
 	return links
 }
 
@@ -176,7 +248,9 @@ var landingTmpl = template.Must(template.New("landing").Parse(`<!doctype html>
   :root { color-scheme: dark; }
   body { background:#0a0a0a; color:#eee; font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",monospace; margin:0; display:flex; min-height:100vh; align-items:center; justify-content:center; }
   main { width:min(92vw,420px); padding:32px; }
-  h1 { font-size:20px; margin:0 0 4px; letter-spacing:.02em; }
+  h1 { font-size:20px; margin:0 0 2px; letter-spacing:.02em; }
+  .ver { color:#666; margin:0 0 10px; font-size:12px; }
+  .ver a { display:inline; padding:0; border:0; }
   .meta { color:#888; margin:0 0 24px; font-size:13px; }
   h2 { font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:#888; margin:24px 0 8px; }
   ul { list-style:none; margin:0; padding:0; }
@@ -196,7 +270,8 @@ var landingTmpl = template.Must(template.New("landing").Parse(`<!doctype html>
 <body>
 <main>
   <h1>tripbot</h1>
-  <p class="meta">channel <strong>{{.Channel}}</strong> · env {{.Env}} · up {{.Uptime}}</p>
+  {{if .Version}}<p class="ver">{{.Version}}{{if .SHA}} · <a href="{{.CommitURL}}">{{.SHA}}</a>{{end}}</p>{{end}}
+  <p class="meta">channel <strong>{{.Channel}}</strong> · env {{.Env}} · up {{.Uptime}} · {{.Chatters}} in chat</p>
 
   <h2>status</h2>
   <ul>
@@ -214,6 +289,7 @@ var landingTmpl = template.Must(template.New("landing").Parse(`<!doctype html>
   <p class="now">
     <span class="file">{{.File}}</span>
     {{if .State}}<span class="state">· {{.State}}</span>{{end}}
+    {{if .Progress}}<span class="state">· {{.Progress}}</span>{{end}}
   </p>
   {{end}}
 
