@@ -41,6 +41,11 @@ const (
 	grafanaURL = "https://adanalife.grafana.net/dashboards"
 	// githubURL is the tripbot source repo (vlc-server + obs live here too).
 	githubURL = "https://github.com/adanalife/tripbot"
+	// traefikURL / hubbleURL are the cluster's platform dashboards. They live
+	// in kube-system as a single prod-zone install shared across envs, so
+	// (unlike OBS) they aren't derived per-environment.
+	traefikURL = "https://traefik.prod.whereisdana.today"
+	hubbleURL  = "https://hubble.prod.whereisdana.today"
 )
 
 // serviceStatus is one row in the landing page's status table.
@@ -221,14 +226,19 @@ func pingHealthy(ctx context.Context, rawURL string) bool {
 
 // gatherLinks builds the external-link list: OBS's Ingress (derived from this
 // bot's own EXTERNAL_URL by swapping the leading subdomain label), the Grafana
-// dashboards, the Twitch channel, and the changelog as of the deployed commit.
-// Entries whose URL can't be derived are dropped rather than rendered broken.
+// dashboards, the Traefik + Hubble platform dashboards, the Twitch channel, and
+// the changelog as of the deployed commit. Entries whose URL can't be derived
+// are dropped rather than rendered broken.
 func gatherLinks(sha string) []navLink {
 	links := []navLink{}
 	if obs := siblingURL(c.Conf.ExternalURL, "obs"); obs != "" {
 		links = append(links, navLink{Label: "OBS (noVNC)", URL: obs})
 	}
-	links = append(links, navLink{Label: "Grafana dashboards", URL: grafanaURL})
+	links = append(links,
+		navLink{Label: "Grafana dashboards", URL: grafanaURL},
+		navLink{Label: "Traefik dashboard", URL: traefikURL},
+		navLink{Label: "Hubble UI", URL: hubbleURL},
+	)
 	if c.Conf.ChannelName != "" {
 		links = append(links, navLink{Label: "Twitch channel", URL: "https://twitch.tv/" + c.Conf.ChannelName})
 	}

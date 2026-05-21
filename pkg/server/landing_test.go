@@ -87,6 +87,8 @@ func TestLandingHandler_RendersReadyStatusAndLinks(t *testing.T) {
 		"3m12s",                              // clip progress
 		"https://obs.prod.whereisdana.today", // derived OBS link
 		grafanaURL,                           // grafana link
+		traefikURL,                           // traefik dashboard link
+		hubbleURL,                            // hubble UI link
 		"https://twitch.tv/adanalife",        // twitch link
 		githubURL + "/blob/",                 // changelog link...
 		"/CHANGELOG.md",                      // ...to the CHANGELOG file
