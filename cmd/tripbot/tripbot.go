@@ -106,7 +106,9 @@ func main() {
 func startEventSub(ctx context.Context) {
 	token := mytwitch.BroadcasterUserAccessToken()
 	if token == "" {
-		slog.WarnContext(ctx, "skipping eventsub: no broadcaster oauth_tokens row; bootstrap with `task tripbot:auth:bootstrap:broadcaster`")
+		slog.WarnContext(ctx, "skipping eventsub: no broadcaster oauth_tokens row; bootstrap with `task tripbot:auth:bootstrap:broadcaster`",
+			"login_as", c.Conf.ChannelName,
+			"reauth_url", mytwitch.AuthInitURL("broadcaster"))
 		return
 	}
 	if mytwitch.ChannelID == "" {
@@ -202,7 +204,7 @@ func startCron() {
 func loadTwitchToken(ctx context.Context) {
 	if err := mytwitch.LoadFromDB(); err != nil {
 		slog.WarnContext(ctx, "no usable Twitch token at boot; starting not-ready and polling",
-			"bot_username", c.Conf.BotUsername,
+			"login_as", c.Conf.BotUsername,
 			"fix", "task tripbot:auth:bootstrap",
 			"reauth_url", mytwitch.AuthInitURL("bot"),
 			"err", err)
@@ -225,6 +227,7 @@ func pollForTwitchToken(ctx context.Context) {
 		case <-ticker.C:
 			if err := mytwitch.LoadFromDB(); err != nil {
 				slog.WarnContext(ctx, "still waiting for Twitch token",
+					"login_as", c.Conf.BotUsername,
 					"reauth_url", mytwitch.AuthInitURL("bot"), "err", err)
 				continue
 			}
@@ -294,7 +297,7 @@ func connectToTwitch() {
 					// No valid in-memory token to fall back on — the refresh
 					// cron blanked it (revoked/invalid_grant). Surface the
 					// re-bootstrap link so re-auth is a click, not a task run.
-					slog.Error("IRC auth failed and no valid token to retry with; re-bootstrap needed", "bot_username", c.Conf.BotUsername, "reauth_url", mytwitch.AuthInitURL("bot"))
+					slog.Error("IRC auth failed and no valid token to retry with; re-bootstrap needed", "login_as", c.Conf.BotUsername, "reauth_url", mytwitch.AuthInitURL("bot"))
 				}
 			}
 			time.Sleep(time.Minute)

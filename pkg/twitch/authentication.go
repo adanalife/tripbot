@@ -233,7 +233,8 @@ func LoadFromDB() error {
 	if berr != nil {
 		if errors.Is(berr, oauthtokens.ErrNoToken) {
 			slog.Warn("no broadcaster oauth_tokens row; subscriber/follower polling will skip until `task tripbot:auth:bootstrap:broadcaster` seeds it",
-				"broadcaster", broadcasterUser)
+				"login_as", broadcasterUser,
+				"reauth_url", AuthInitURL("broadcaster"))
 			return nil
 		}
 		slog.Error("failed to load broadcaster oauth_tokens row", "err", berr, "broadcaster", broadcasterUser)
@@ -496,7 +497,7 @@ func refreshOne(ctx context.Context, username string, applyInMemory func(oauthto
 		// Sentry surfaces the failure for re-bootstrap.
 		_ = oauthtokens.IncrementFailCount("twitch", username)
 		applyInMemory(oauthtokens.Token{})
-		slog.ErrorContext(ctx, "oauth refresh failed; need re-bootstrap", "err", errors.New("empty access token in refresh response"), "username", username, "reauth_url", AuthInitURL(accountLabel(username)))
+		slog.ErrorContext(ctx, "oauth refresh failed; need re-bootstrap", "err", errors.New("empty access token in refresh response"), "login_as", username, "reauth_url", AuthInitURL(accountLabel(username)))
 		return
 	}
 

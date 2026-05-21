@@ -182,6 +182,14 @@ func TestAuthInitURL_BuildsInitPath(t *testing.T) {
 	}
 }
 
+func TestAuthInitURL_BroadcasterAccount(t *testing.T) {
+	got := AuthInitURL("broadcaster")
+	want := c.Conf.ExternalURL + "/auth/init?account=broadcaster"
+	if got != want {
+		t.Errorf("AuthInitURL(\"broadcaster\") = %q, want %q", got, want)
+	}
+}
+
 func TestAccountLabel_BotUsernameIsBot(t *testing.T) {
 	if got := accountLabel(c.Conf.BotUsername); got != "bot" {
 		t.Errorf("accountLabel(bot username) = %q, want \"bot\"", got)
