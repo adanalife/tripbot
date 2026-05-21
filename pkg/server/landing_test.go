@@ -56,7 +56,8 @@ func TestLandingHandler_RendersReadyStatusAndLinks(t *testing.T) {
 
 	withConf(t, func() {
 		c.Conf.VlcServerHost = strings.TrimPrefix(vlc.URL, "http://")
-		c.Conf.ChannelName = "adanalife"
+		c.Conf.ChannelName = "adanalife_"
+		c.Conf.BotUsername = "tripbot4000"
 		c.Conf.ExternalURL = "https://tripbot.prod.whereisdana.today"
 		c.Conf.Environment = "production"
 	})
@@ -75,23 +76,22 @@ func TestLandingHandler_RendersReadyStatusAndLinks(t *testing.T) {
 	}
 	body := rec.Body.String()
 	for _, want := range []string{
-		`<a href="https://twitch.tv/adanalife">adanalife</a>`, // clickable channel
+		`<a href="https://twitch.tv/adanalife_">adanalife_</a>`,   // broadcaster profile
+		`<a href="https://twitch.tv/tripbot4000">tripbot4000</a>`, // bot profile
 		"v1.2.3",  // tripbot build tag
 		"ready",   // tripbot status
 		"healthy", // vlc status
-		`<a href="https://github.com/adanalife/tripbot/commit/deadbeefcafe">v9.9.9-vlc</a>`, // vlc version → commit
-		"12 in chat",                         // chatter count
-		"now playing",                        // now-playing section shown when vlc healthy
-		"wy_0042.MP4",                        // current video file
-		"Wyoming",                            // current video state
-		"3m12s",                              // clip progress
-		"https://obs.prod.whereisdana.today", // derived OBS link
-		grafanaURL,                           // grafana link
-		traefikURL,                           // traefik dashboard link
-		hubbleURL,                            // hubble UI link
-		"https://twitch.tv/adanalife",        // twitch link
-		githubURL + "/blob/",                 // changelog link...
-		"/CHANGELOG.md",                      // ...to the CHANGELOG file
+		`<a href="https://github.com/adanalife/tripbot/blob/deadbeefcafe/CHANGELOG.md">v9.9.9-vlc</a>`, // vlc version → changelog@sha
+		"12 in chat",                          // chatter count
+		`<code class="env">production</code>`, // env in monospace chip
+		"now playing",                         // now-playing section shown when vlc healthy
+		"wy_0042.MP4",                         // current video file
+		"Wyoming",                             // current video state
+		"3m12s",                               // clip progress
+		"https://obs.prod.whereisdana.today",  // derived OBS link
+		grafanaURL,                            // grafana link
+		traefikURL,                            // traefik dashboard link
+		hubbleURL,                             // hubble UI link
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body missing %q", want)
@@ -135,12 +135,13 @@ func TestLandingHandler_DegradedAndVlcUnreachable(t *testing.T) {
 // mutate them for the test, and restores them afterward.
 func withConf(t *testing.T, set func()) {
 	t.Helper()
-	saved := struct{ vlc, channel, external, env string }{
-		c.Conf.VlcServerHost, c.Conf.ChannelName, c.Conf.ExternalURL, c.Conf.Environment,
+	saved := struct{ vlc, channel, bot, external, env string }{
+		c.Conf.VlcServerHost, c.Conf.ChannelName, c.Conf.BotUsername, c.Conf.ExternalURL, c.Conf.Environment,
 	}
 	t.Cleanup(func() {
 		c.Conf.VlcServerHost = saved.vlc
 		c.Conf.ChannelName = saved.channel
+		c.Conf.BotUsername = saved.bot
 		c.Conf.ExternalURL = saved.external
 		c.Conf.Environment = saved.env
 	})

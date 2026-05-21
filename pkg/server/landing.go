@@ -54,7 +54,7 @@ type serviceStatus struct {
 	OK         bool
 	Detail     string
 	Version    string // optional build tag (e.g. vlc-server's, from /version)
-	VersionURL string // commit link for Version, when the sha is known
+	VersionURL string // changelog link (at the build's sha) for Version
 }
 
 // versionInfo is the subset of a service's /version JSON the page uses.
@@ -78,23 +78,24 @@ type navLink struct {
 
 // landingData is the template payload.
 type landingData struct {
-	Channel   string
-	Env       string
-	Uptime    string
-	Version   string // tripbot's own build tag
-	SHA       string // short git sha
-	CommitURL string // link to the build's commit on GitHub (empty if no sha)
-	Chatters  int    // users currently in chat
-	Services  []serviceStatus
-	Now       *nowPlaying // nil when vlc is unhealthy or nothing is playing
-	Links     []navLink
+	Channel      string // broadcaster Twitch username
+	Bot          string // bot Twitch username
+	Env          string
+	Uptime       string
+	Version      string // tripbot's own build tag
+	SHA          string // short git sha
+	ChangelogURL string // link to CHANGELOG.md at the build's sha
+	Chatters     int    // users currently in chat
+	Services     []serviceStatus
+	Now          *nowPlaying // nil when vlc is unhealthy or nothing is playing
+	Links        []navLink
 }
 
 // landingHandler serves the human-facing root page on the tripbot Ingress: a
 // lightweight status overview (tripbot's own readiness + a live vlc-server
-// ping), the currently-playing video when vlc is up, and links out to OBS,
-// Grafana, and the Twitch channel. Replaces the bare 404 that used to sit on
-// "/".
+// ping, each version linking to its changelog), the currently-playing video
+// when vlc is up, the broadcaster/bot accounts, and links to the OBS / Grafana
+// / Traefik / Hubble dashboards. Replaces the bare 404 that used to sit on "/".
 func landingHandler(w http.ResponseWriter, r *http.Request) {
 	vlcOK := c.Conf.VlcServerHost != "" &&
 		pingHealthy(r.Context(), "http://"+c.Conf.VlcServerHost+"/health/ready")
@@ -107,18 +108,19 @@ func landingHandler(w http.ResponseWriter, r *http.Request) {
 
 	sha := buildSHA()
 	data := landingData{
-		Channel:  c.Conf.ChannelName,
-		Env:      c.Conf.Environment,
-		Uptime:   time.Since(startedAt).Round(time.Second).String(),
-		Version:  versionTag,
-		Chatters: chatterCount(),
-		Services: gatherStatus(vlcOK, vlcVer),
-		Now:      currentVideo(vlcOK),
-		Links:    gatherLinks(sha),
+		Channel:      c.Conf.ChannelName,
+		Bot:          c.Conf.BotUsername,
+		Env:          c.Conf.Environment,
+		Uptime:       time.Since(startedAt).Round(time.Second).String(),
+		Version:      versionTag,
+		ChangelogURL: changelogURL(sha),
+		Chatters:     chatterCount(),
+		Services:     gatherStatus(vlcOK, vlcVer),
+		Now:          currentVideo(vlcOK),
+		Links:        gatherLinks(),
 	}
 	if sha != "" {
 		data.SHA = sha[:min(7, len(sha))]
-		data.CommitURL = commitURL(sha)
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -143,18 +145,10 @@ func gatherStatus(vlcOK bool, vlcVer versionInfo) []serviceStatus {
 	if vlcOK {
 		vlc.Detail = "healthy"
 		vlc.Version = vlcVer.Tag
-		vlc.VersionURL = commitURL(vlcVer.Sha) // same repo as tripbot
+		vlc.VersionURL = changelogURL(vlcVer.Sha) // same repo as tripbot
 	}
 
 	return []serviceStatus{tripbot, vlc}
-}
-
-// commitURL links a git sha to its commit on GitHub, or "" when sha is empty.
-func commitURL(sha string) string {
-	if sha == "" {
-		return ""
-	}
-	return githubURL + "/commit/" + sha
 }
 
 // currentVideo summarizes the currently-playing video for the page, but only
@@ -224,12 +218,12 @@ func pingHealthy(ctx context.Context, rawURL string) bool {
 	return resp.StatusCode >= 200 && resp.StatusCode < 300
 }
 
-// gatherLinks builds the external-link list: OBS's Ingress (derived from this
-// bot's own EXTERNAL_URL by swapping the leading subdomain label), the Grafana
-// dashboards, the Traefik + Hubble platform dashboards, the Twitch channel, and
-// the changelog as of the deployed commit. Entries whose URL can't be derived
-// are dropped rather than rendered broken.
-func gatherLinks(sha string) []navLink {
+// gatherLinks builds the dashboard-link list: OBS's Ingress (derived from this
+// bot's own EXTERNAL_URL by swapping the leading subdomain label), plus the
+// Grafana / Traefik / Hubble platform dashboards. Twitch profiles are rendered
+// in the accounts section and the changelog hangs off the version tags, so
+// neither appears here. Entries whose URL can't be derived are dropped.
+func gatherLinks() []navLink {
 	links := []navLink{}
 	if obs := siblingURL(c.Conf.ExternalURL, "obs"); obs != "" {
 		links = append(links, navLink{Label: "OBS (noVNC)", URL: obs})
@@ -239,10 +233,6 @@ func gatherLinks(sha string) []navLink {
 		navLink{Label: "Traefik dashboard", URL: traefikURL},
 		navLink{Label: "Hubble UI", URL: hubbleURL},
 	)
-	if c.Conf.ChannelName != "" {
-		links = append(links, navLink{Label: "Twitch channel", URL: "https://twitch.tv/" + c.Conf.ChannelName})
-	}
-	links = append(links, navLink{Label: "Changelog", URL: changelogURL(sha)})
 	return links
 }
 
@@ -286,28 +276,29 @@ var landingTmpl = template.Must(template.New("landing").Parse(`<!doctype html>
 <link rel="icon" type="image/png" sizes="16x16" href="https://www.dana.lol/assets/favicon-16x16.png">
 <link rel="apple-touch-icon" sizes="180x180" href="https://www.dana.lol/assets/apple-touch-icon.png">
 <style>
-  :root { color-scheme: dark; }
-  body { background:#0a0a0a; color:#eee; font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",monospace; margin:0; display:flex; min-height:100vh; align-items:center; justify-content:center; }
-  main { width:min(92vw,420px); padding:32px; }
+  :root { color-scheme: dark; --mono: ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
+  body { background:#0a0a0a; color:#eee; font:clamp(14px,0.5vw + 11px,18px)/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; margin:0; display:flex; min-height:100vh; align-items:center; justify-content:center; }
+  main { width:min(92vw,520px); padding:clamp(24px,4vw,48px); }
   /* logo is the monochrome black mark; invert to white on the dark bg */
-  .logo { width:44px; height:44px; filter:invert(1); opacity:.92; display:block; margin:0 0 14px; }
-  h1 { font-size:20px; margin:0 0 2px; letter-spacing:.02em; }
-  .ver { color:#666; margin:0 0 10px; font-size:12px; }
-  .meta { color:#888; margin:0 0 24px; font-size:13px; }
-  h2 { font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:#888; margin:24px 0 8px; }
+  .logo { width:clamp(44px,5vw,60px); height:auto; filter:invert(1); opacity:.92; display:block; margin:0 0 16px; }
+  h1 { font-size:clamp(20px,1.2vw + 15px,28px); margin:0 0 2px; letter-spacing:.02em; }
+  .ver { color:#666; margin:0 0 12px; font-size:.85em; }
+  .meta { color:#888; margin:0 0 28px; font-size:.92em; }
+  .env { font-family:var(--mono); background:#1a1a1a; border:1px solid #262626; color:#cdd; padding:1px 7px; border-radius:5px; font-size:.92em; }
+  h2 { font-size:.8em; text-transform:uppercase; letter-spacing:.08em; color:#888; margin:26px 0 8px; }
   ul { list-style:none; margin:0; padding:0; }
-  .svc { display:flex; align-items:center; gap:10px; padding:6px 0; border-bottom:1px solid #1c1c1c; }
-  .svc .name { flex:1; }
-  .svc .detail { color:#888; font-size:13px; }
+  .row { display:flex; align-items:center; gap:10px; padding:7px 0; border-bottom:1px solid #1c1c1c; }
+  .row .name { flex:1; }
+  .row .detail { color:#888; font-size:.92em; text-align:right; }
   .dot { width:9px; height:9px; border-radius:50%; flex:0 0 auto; }
   .up { background:#3fb950; box-shadow:0 0 6px #3fb95080; }
   .down { background:#f85149; box-shadow:0 0 6px #f8514980; }
-  .now { margin:0; padding:6px 0; }
-  .now .file { word-break:break-all; }
+  .now { margin:0; padding:7px 0; }
+  .now .file { font-family:var(--mono); word-break:break-all; }
   .now .state { color:#888; }
   a { color:#58a6ff; text-decoration:none; }
   a:hover { color:#9cf; }
-  .links a { display:block; padding:6px 0; border-bottom:1px solid #1c1c1c; }
+  .links a { display:block; padding:7px 0; border-bottom:1px solid #1c1c1c; }
 </style>
 </head>
 <body>
@@ -316,13 +307,13 @@ var landingTmpl = template.Must(template.New("landing").Parse(`<!doctype html>
        assets) rather than copied in — see vault general/logo.md. -->
   <img class="logo" src="https://www.dana.lol/assets/logo.png" alt="A Dana Life" width="44" height="44">
   <h1>tripbot</h1>
-  {{if .Version}}<p class="ver">{{.Version}}{{if .SHA}} · <a href="{{.CommitURL}}">{{.SHA}}</a>{{end}}</p>{{end}}
-  <p class="meta">channel <strong><a href="https://twitch.tv/{{.Channel}}">{{.Channel}}</a></strong> · env {{.Env}} · up {{.Uptime}} · {{.Chatters}} in chat</p>
+  {{if .Version}}<p class="ver"><a href="{{.ChangelogURL}}">{{.Version}}</a>{{if .SHA}} · {{.SHA}}{{end}}</p>{{end}}
+  <p class="meta">env <code class="env">{{.Env}}</code> · up {{.Uptime}} · {{.Chatters}} in chat</p>
 
   <h2>status</h2>
   <ul>
     {{range .Services}}
-    <li class="svc">
+    <li class="row">
       <span class="dot {{if .OK}}up{{else}}down{{end}}"></span>
       <span class="name">{{.Name}}</span>
       <span class="detail">{{.Detail}}{{if .Version}} · {{if .VersionURL}}<a href="{{.VersionURL}}">{{.Version}}</a>{{else}}{{.Version}}{{end}}{{end}}</span>
@@ -338,6 +329,12 @@ var landingTmpl = template.Must(template.New("landing").Parse(`<!doctype html>
     {{if .Progress}}<span class="state">· {{.Progress}}</span>{{end}}
   </p>
   {{end}}
+
+  <h2>accounts</h2>
+  <ul>
+    <li class="row"><span class="name">broadcaster</span><span class="detail"><a href="https://twitch.tv/{{.Channel}}">{{.Channel}}</a></span></li>
+    <li class="row"><span class="name">bot</span><span class="detail"><a href="https://twitch.tv/{{.Bot}}">{{.Bot}}</a></span></li>
+  </ul>
 
   <h2>links</h2>
   <ul class="links">
