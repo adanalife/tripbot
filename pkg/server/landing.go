@@ -36,9 +36,9 @@ var (
 )
 
 const (
-	// grafanaURL points at the Grafana Cloud dashboards list (the TripBot
-	// folder lives there). Fixed — the org URL doesn't vary by environment.
-	grafanaURL = "https://adanalife.grafana.net/dashboards"
+	// grafanaURL points at the TripBot dashboards folder in Grafana Cloud.
+	// Fixed — the org URL doesn't vary by environment.
+	grafanaURL = "https://adanalife.grafana.net/dashboards/f/fflhs4m586io0e"
 	// githubURL is the tripbot source repo (vlc-server + obs live here too).
 	githubURL = "https://github.com/adanalife/tripbot"
 	// traefikURL / hubbleURL are the cluster's platform dashboards. They live
