@@ -171,7 +171,7 @@ func TestErrIdentityMismatch_ErrorsAs(t *testing.T) {
 
 func TestAuthInitURL_BuildsInitPath(t *testing.T) {
 	got := AuthInitURL("bot")
-	want := c.Conf.ExternalURL + "/auth/init?account=bot"
+	want := c.Conf.ExternalURL + "/auth/init?account=bot&login_as=" + c.Conf.BotUsername
 	if got != want {
 		t.Errorf("AuthInitURL(\"bot\") = %q, want %q", got, want)
 	}
@@ -184,7 +184,7 @@ func TestAuthInitURL_BuildsInitPath(t *testing.T) {
 
 func TestAuthInitURL_BroadcasterAccount(t *testing.T) {
 	got := AuthInitURL("broadcaster")
-	want := c.Conf.ExternalURL + "/auth/init?account=broadcaster"
+	want := c.Conf.ExternalURL + "/auth/init?account=broadcaster&login_as=" + c.Conf.ChannelName
 	if got != want {
 		t.Errorf("AuthInitURL(\"broadcaster\") = %q, want %q", got, want)
 	}

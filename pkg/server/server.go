@@ -62,8 +62,11 @@ func Start(ctx context.Context) {
 	// prometheus metrics endpoint
 	r.Path("/metrics").Handler(tagged("/metrics", promhttp.Handler().ServeHTTP))
 
+	// landing page (status overview + links) on the root path
+	r.Handle("/", tagged("/", landingHandler)).Methods("GET", "HEAD")
+
 	// catch everything else
-	r.Handle("/", tagged("/", catchAllHandler))
+	r.NotFoundHandler = tagged("/", catchAllHandler)
 
 	if c.Conf.Verbose {
 		helpers.PrintAllRoutes(r)
