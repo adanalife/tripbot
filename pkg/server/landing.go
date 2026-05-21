@@ -280,15 +280,17 @@ var landingTmpl = template.Must(template.New("landing").Parse(`<!doctype html>
   /* logo is the monochrome black mark; invert to white on the dark bg */
   .logo { width:clamp(44px,5vw,60px); height:auto; filter:invert(1); opacity:.92; display:block; margin:0 0 16px; }
   h1 { font-size:clamp(20px,1.2vw + 15px,28px); margin:0 0 4px; letter-spacing:.02em; }
+  .env { font-family:var(--mono); background:#1a1a1a; border:1px solid #262626; color:#cdd; padding:2px 7px; border-radius:5px; font-size:.5em; font-weight:normal; letter-spacing:0; vertical-align:middle; }
   .meta { color:#888; margin:0 0 2px; font-size:.92em; }
-  .env { font-family:var(--mono); background:#1a1a1a; border:1px solid #262626; color:#cdd; padding:1px 7px; border-radius:5px; font-size:.92em; }
   .accounts { color:#666; margin:0 0 24px; font-size:.85em; }
   h2 { font-size:.8em; text-transform:uppercase; letter-spacing:.08em; color:#888; margin:24px 0 8px; }
   ul { list-style:none; margin:0; padding:0; }
   .row { display:flex; align-items:center; gap:12px; padding:7px 0; border-bottom:1px solid #1c1c1c; }
   .row .name { flex:1; }
-  .row .detail { color:#888; font-size:.92em; }
   .row .ver { font-family:var(--mono); font-size:.85em; color:#777; }
+  /* status hugs the far right and right-aligns so it forms a clean column,
+     aligned whether or not the row carries a version */
+  .row .status { color:#888; font-size:.92em; text-align:right; min-width:5.5em; }
   .dot { width:9px; height:9px; border-radius:50%; flex:0 0 auto; }
   .up { background:#3fb950; box-shadow:0 0 6px #3fb95080; }
   .down { background:#f85149; box-shadow:0 0 6px #f8514980; }
@@ -305,8 +307,8 @@ var landingTmpl = template.Must(template.New("landing").Parse(`<!doctype html>
   <!-- A Dana Life mark, referenced from the website (the single owner of brand
        assets) rather than copied in — see vault general/logo.md. -->
   <img class="logo" src="https://www.dana.lol/assets/logo.png" alt="A Dana Life" width="44" height="44">
-  <h1>tripbot</h1>
-  <p class="meta">env <code class="env">{{.Env}}</code> · up {{.Uptime}} · {{.Chatters}} in chat</p>
+  <h1>tripbot <code class="env">{{.Env}}</code></h1>
+  <p class="meta">up {{.Uptime}} · {{.Chatters}} in chat</p>
   <p class="accounts">broadcaster <a href="https://twitch.tv/{{.Channel}}">{{.Channel}}</a> · bot <a href="https://twitch.tv/{{.Bot}}">{{.Bot}}</a></p>
 
   <h2>status</h2>
@@ -315,8 +317,8 @@ var landingTmpl = template.Must(template.New("landing").Parse(`<!doctype html>
     <li class="row">
       <span class="dot {{if .OK}}up{{else}}down{{end}}"></span>
       <span class="name">{{.Name}}</span>
-      <span class="detail">{{.Detail}}</span>
       {{if .Version}}<span class="ver">{{if .VersionURL}}<a href="{{.VersionURL}}">{{.Version}}</a>{{else}}{{.Version}}{{end}}</span>{{end}}
+      <span class="status">{{.Detail}}</span>
     </li>
     {{end}}
   </ul>
@@ -330,7 +332,7 @@ var landingTmpl = template.Must(template.New("landing").Parse(`<!doctype html>
   </p>
   {{end}}
 
-  <h2>links</h2>
+  <h2>dashboards</h2>
   <nav class="links">
     {{range .Links}}<a href="{{.URL}}">{{.Label}}</a>{{end}}
   </nav>
