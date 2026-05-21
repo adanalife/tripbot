@@ -61,6 +61,32 @@ var BroadcasterScopes = []string{
 // bootstrap CLI." Re-exported from oauthtokens for caller convenience.
 var ErrNoToken = oauthtokens.ErrNoToken
 
+// AuthInitURL returns the operator-facing re-bootstrap URL for the given
+// account ("bot" or "broadcaster"). Visiting it kicks off the OAuth flow —
+// pkg/server's /auth/init handler mints a fresh CSRF state and 302-redirects to
+// Twitch — so re-auth is a click from any browser instead of running the
+// bootstrap CLI from a laptop.
+//
+// We deliberately surface THIS URL in logs (the "token missing/expired" sites)
+// rather than the fully-formed Twitch authorize URL. The latter embeds a
+// single-use CSRF state with a 5-minute TTL (oauthstate.TTL) — it would be
+// stale by the time anyone read the log — and that state would ship to
+// Loki/Sentry. /auth/init carries no secret: client_id isn't sensitive, and no
+// state exists until the redirect is generated server-side on click.
+func AuthInitURL(account string) string {
+	return c.Conf.ExternalURL + "/auth/init?account=" + account
+}
+
+// accountLabel maps an oauth_tokens username to the /auth/init account
+// selector ("bot" or "broadcaster"). The broadcaster identity only exists
+// when ChannelName differs from BotUsername; everything else is the bot.
+func accountLabel(username string) string {
+	if username == c.Conf.ChannelName && username != c.Conf.BotUsername {
+		return "broadcaster"
+	}
+	return "bot"
+}
+
 // currentTwitchClient is the lazy-initialized bot helix client. IRC auth +
 // any Helix endpoint authorized against the bot's identity goes through this.
 var currentTwitchClient *helix.Client
@@ -207,7 +233,8 @@ func LoadFromDB() error {
 	if berr != nil {
 		if errors.Is(berr, oauthtokens.ErrNoToken) {
 			slog.Warn("no broadcaster oauth_tokens row; subscriber/follower polling will skip until `task tripbot:auth:bootstrap:broadcaster` seeds it",
-				"broadcaster", broadcasterUser)
+				"login_as", broadcasterUser,
+				"reauth_url", AuthInitURL("broadcaster"))
 			return nil
 		}
 		slog.Error("failed to load broadcaster oauth_tokens row", "err", berr, "broadcaster", broadcasterUser)
@@ -470,7 +497,7 @@ func refreshOne(ctx context.Context, username string, applyInMemory func(oauthto
 		// Sentry surfaces the failure for re-bootstrap.
 		_ = oauthtokens.IncrementFailCount("twitch", username)
 		applyInMemory(oauthtokens.Token{})
-		slog.ErrorContext(ctx, "oauth refresh failed; need re-bootstrap", "err", errors.New("empty access token in refresh response"), "username", username)
+		slog.ErrorContext(ctx, "oauth refresh failed; need re-bootstrap", "err", errors.New("empty access token in refresh response"), "login_as", username, "reauth_url", AuthInitURL(accountLabel(username)))
 		return
 	}
 

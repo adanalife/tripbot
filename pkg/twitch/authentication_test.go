@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/oauthtokens"
 )
 
@@ -165,6 +166,39 @@ func TestErrIdentityMismatch_ErrorsAs(t *testing.T) {
 	}
 	if target.Expected != "x" || target.Got != "y" || target.AccountID != "broadcaster" {
 		t.Errorf("extracted: %+v", target)
+	}
+}
+
+func TestAuthInitURL_BuildsInitPath(t *testing.T) {
+	got := AuthInitURL("bot")
+	want := c.Conf.ExternalURL + "/auth/init?account=bot"
+	if got != want {
+		t.Errorf("AuthInitURL(\"bot\") = %q, want %q", got, want)
+	}
+	// No CSRF state / secret should ever leak into the logged URL — it's the
+	// indirection path, not the fully-formed Twitch authorize URL.
+	if strings.Contains(got, "state=") || strings.Contains(got, "client_id=") {
+		t.Errorf("AuthInitURL leaked a sensitive query param: %q", got)
+	}
+}
+
+func TestAuthInitURL_BroadcasterAccount(t *testing.T) {
+	got := AuthInitURL("broadcaster")
+	want := c.Conf.ExternalURL + "/auth/init?account=broadcaster"
+	if got != want {
+		t.Errorf("AuthInitURL(\"broadcaster\") = %q, want %q", got, want)
+	}
+}
+
+func TestAccountLabel_BotUsernameIsBot(t *testing.T) {
+	if got := accountLabel(c.Conf.BotUsername); got != "bot" {
+		t.Errorf("accountLabel(bot username) = %q, want \"bot\"", got)
+	}
+}
+
+func TestAccountLabel_UnknownDefaultsToBot(t *testing.T) {
+	if got := accountLabel("some-unrelated-login"); got != "bot" {
+		t.Errorf("accountLabel(unknown) = %q, want \"bot\"", got)
 	}
 }
 

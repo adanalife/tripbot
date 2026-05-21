@@ -144,8 +144,12 @@ func main() {
 		_ = srv.Shutdown(ctx)
 	}()
 
-	slog.Info("opening browser for Twitch sign-in", "account", *account)
-	slog.Info("visit URL", "url", authURL)
+	// Make the target identity unmistakable up front — with three envs and up
+	// to six bot/broadcaster accounts, "which login do I pick?" is the easy
+	// mistake. expectedLogin is the exact Twitch account to sign in as; a
+	// mismatch is caught at the callback and writes no token.
+	slog.Info("SIGN IN TO TWITCH AS THIS ACCOUNT", "login_as", expectedLogin, "account", *account)
+	slog.Info("opening browser for Twitch sign-in", "url", authURL)
 	// Skip browser open in headless environments (e.g. the k8s Job).
 	if os.Getenv("DISPLAY") != "" || os.Getenv("WAYLAND_DISPLAY") != "" || runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
 		helpers.OpenInBrowser(authURL)
