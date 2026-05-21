@@ -20,10 +20,19 @@ import (
 // plus it's also used to reset peoples lastLocation time
 var lastTimewarpTime time.Time
 
+// timewarpCoverDelay is how long we wait after triggering the full-screen warp
+// overlay before actually jumping the playhead. The overlay is driven by a
+// browser source that polls for state, so it needs a beat to bring the opaque
+// cover up; the jump is a hard cut that makes OBS clear the dashcam layer, and
+// the cover has to be in place to mask that gap.
+var timewarpCoverDelay = 800 * time.Millisecond
+
 // timewarp jumps the playhead to a random video in the loop
 func (a *App) timewarp(ctx context.Context) {
-	// show timewarp onscreen
+	// bring up the full-screen warp overlay, then give the browser source a
+	// beat to render the opaque cover before we hard-cut to a new clip
 	a.Onscreens.ShowTimewarp(ctx)
+	time.Sleep(timewarpCoverDelay)
 
 	// shuffle to a new video
 	err := a.VLC.PlayRandom(ctx)

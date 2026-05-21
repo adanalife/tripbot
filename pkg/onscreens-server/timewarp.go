@@ -5,12 +5,19 @@ import (
 	"time"
 )
 
-// timewarpDuration controls how long a !timewarp render stays on screen
-// before the background expiry sweeper hides it.
-var timewarpDuration = time.Duration(2 * time.Second)
+// timewarpDuration controls how long a !timewarp render stays "showing" before
+// the background expiry sweeper hides it. It spans the full-screen warp
+// animation in the browser source (~3.4s) with a little headroom so the cover
+// is still up while the new clip's first frames decode.
+var timewarpDuration = time.Duration(4 * time.Second)
 
-// newTimewarp constructs the timewarp *Onscreen.
+// newTimewarp constructs the timewarp *Onscreen. It checks for expiry more
+// often than the default so the onscreen flips back to hidden soon after the
+// animation finishes, re-arming the browser source's showing rising-edge for
+// the next run.
 func newTimewarp() *Onscreen {
 	slog.Info("creating onscreen", "kind", "timewarp")
-	return newOnscreen()
+	osc := newOnscreen()
+	osc.SleepInterval = time.Second
+	return osc
 }
