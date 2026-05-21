@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
+	"github.com/adanalife/tripbot/pkg/video"
 )
 
 func TestSiblingURL(t *testing.T) {
@@ -44,6 +45,7 @@ func TestLandingHandler_RendersReadyStatusAndLinks(t *testing.T) {
 		c.Conf.ExternalURL = "https://tripbot.prod.whereisdana.today"
 		c.Conf.Environment = "production"
 	})
+	withCurrentlyPlaying(t, video.Video{Slug: "wy_0042", State: "Wyoming"})
 
 	rec := httptest.NewRecorder()
 	landingHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
@@ -53,12 +55,15 @@ func TestLandingHandler_RendersReadyStatusAndLinks(t *testing.T) {
 	}
 	body := rec.Body.String()
 	for _, want := range []string{
-		"adanalife",                           // channel
-		"ready",                               // tripbot status
-		"healthy",                             // vlc status (ping succeeded)
-		"https://obs.prod.whereisdana.today",  // derived OBS link
-		grafanaURL,                            // grafana link
-		"https://twitch.tv/adanalife",         // twitch link
+		"adanalife",                          // channel
+		"ready",                              // tripbot status
+		"healthy",                            // vlc status (ping succeeded)
+		"now playing",                        // now-playing section shown when vlc healthy
+		"wy_0042.MP4",                        // current video file
+		"Wyoming",                            // current video state
+		"https://obs.prod.whereisdana.today", // derived OBS link
+		grafanaURL,                           // grafana link
+		"https://twitch.tv/adanalife",        // twitch link
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body missing %q", want)
@@ -76,6 +81,9 @@ func TestLandingHandler_DegradedAndVlcUnreachable(t *testing.T) {
 		c.Conf.ChannelName = "adanalife"
 		c.Conf.ExternalURL = "https://tripbot.prod.whereisdana.today"
 	})
+	// even with a video loaded, an unhealthy vlc hides "now playing" rather
+	// than showing a possibly-stale value.
+	withCurrentlyPlaying(t, video.Video{Slug: "wy_0042", State: "Wyoming"})
 
 	rec := httptest.NewRecorder()
 	landingHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
@@ -89,6 +97,9 @@ func TestLandingHandler_DegradedAndVlcUnreachable(t *testing.T) {
 	}
 	if !strings.Contains(body, "unreachable") {
 		t.Errorf("body should report vlc unreachable; got %q", body)
+	}
+	if strings.Contains(body, "now playing") {
+		t.Errorf("now-playing should be hidden when vlc is unhealthy; got %q", body)
 	}
 }
 
@@ -106,4 +117,13 @@ func withConf(t *testing.T, set func()) {
 		c.Conf.Environment = saved.env
 	})
 	set()
+}
+
+// withCurrentlyPlaying swaps the package-level currentlyPlaying seam so the
+// landing handler sees a fixed video without driving pkg/video's player.
+func withCurrentlyPlaying(t *testing.T, v video.Video) {
+	t.Helper()
+	saved := currentlyPlaying
+	currentlyPlaying = func() video.Video { return v }
+	t.Cleanup(func() { currentlyPlaying = saved })
 }

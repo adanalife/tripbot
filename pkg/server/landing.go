@@ -10,6 +10,7 @@ import (
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
+	"github.com/adanalife/tripbot/pkg/video"
 )
 
 // startedAt marks process start so the landing page can report uptime. Set at
@@ -19,6 +20,11 @@ var startedAt = time.Now()
 // healthClient is the short-timeout client used for the sibling-service status
 // ping. 2s keeps a slow or hung vlc-server from stalling the landing render.
 var healthClient = &http.Client{Timeout: 2 * time.Second}
+
+// currentlyPlaying is overridable in tests; by default it reads pkg/video's
+// in-process notion of the current video (refreshed by a 60s cron tick), so
+// the landing page costs nothing to show "now playing".
+var currentlyPlaying = video.CurrentlyPlaying
 
 // grafanaURL points at the Grafana Cloud dashboards list (the TripBot folder
 // lives there). Fixed — the org URL doesn't vary by environment.
@@ -37,25 +43,37 @@ type navLink struct {
 	URL   string
 }
 
+// nowPlaying is the current-video summary shown when vlc-server is healthy.
+type nowPlaying struct {
+	File  string
+	State string
+}
+
 // landingData is the template payload.
 type landingData struct {
 	Channel  string
 	Env      string
 	Uptime   string
 	Services []serviceStatus
+	Now      *nowPlaying // nil when vlc is unhealthy or nothing is playing
 	Links    []navLink
 }
 
 // landingHandler serves the human-facing root page on the tripbot Ingress: a
 // lightweight status overview (tripbot's own readiness + a live vlc-server
-// ping) plus links out to OBS, Grafana, and the Twitch channel. Replaces the
-// bare 404 that used to sit on "/".
+// ping), the currently-playing video when vlc is up, and links out to OBS,
+// Grafana, and the Twitch channel. Replaces the bare 404 that used to sit on
+// "/".
 func landingHandler(w http.ResponseWriter, r *http.Request) {
+	vlcOK := c.Conf.VlcServerHost != "" &&
+		pingHealthy(r.Context(), "http://"+c.Conf.VlcServerHost+"/health/ready")
+
 	data := landingData{
 		Channel:  c.Conf.ChannelName,
 		Env:      c.Conf.Environment,
 		Uptime:   time.Since(startedAt).Round(time.Second).String(),
-		Services: gatherStatus(r.Context()),
+		Services: gatherStatus(vlcOK),
+		Now:      currentVideo(vlcOK),
 		Links:    gatherLinks(),
 	}
 
@@ -65,11 +83,11 @@ func landingHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// gatherStatus reports tripbot's own readiness (in-memory, free) and pings
-// vlc-server's readiness endpoint over the in-cluster Service DNS. The ping is
-// best-effort: any failure (DNS, timeout, non-2xx) renders as not-OK rather
-// than erroring the page.
-func gatherStatus(ctx context.Context) []serviceStatus {
+// gatherStatus reports tripbot's own readiness (in-memory, free) and folds in
+// the already-computed vlc-server health. The vlc ping is best-effort: any
+// failure (DNS, timeout, non-2xx) renders as not-OK rather than erroring the
+// page.
+func gatherStatus(vlcOK bool) []serviceStatus {
 	tripbot := serviceStatus{Name: "tripbot", OK: ready.Load()}
 	if tripbot.OK {
 		tripbot.Detail = "ready"
@@ -77,17 +95,27 @@ func gatherStatus(ctx context.Context) []serviceStatus {
 		tripbot.Detail = "degraded (awaiting Twitch)"
 	}
 
-	vlc := serviceStatus{Name: "vlc-server"}
-	if c.Conf.VlcServerHost != "" {
-		vlc.OK = pingHealthy(ctx, "http://"+c.Conf.VlcServerHost+"/health/ready")
-	}
-	if vlc.OK {
+	vlc := serviceStatus{Name: "vlc-server", OK: vlcOK, Detail: "unreachable"}
+	if vlcOK {
 		vlc.Detail = "healthy"
-	} else {
-		vlc.Detail = "unreachable"
 	}
 
 	return []serviceStatus{tripbot, vlc}
+}
+
+// currentVideo summarizes the currently-playing video for the page, but only
+// when vlc is healthy (a stale value while vlc is down would be misleading).
+// Reads pkg/video's in-process value — no extra call. Returns nil when nothing
+// is playing yet (empty slug).
+func currentVideo(vlcOK bool) *nowPlaying {
+	if !vlcOK {
+		return nil
+	}
+	v := currentlyPlaying()
+	if v.Slug == "" {
+		return nil
+	}
+	return &nowPlaying{File: v.File(), State: v.State}
 }
 
 // pingHealthy GETs a readiness URL and reports whether it answered 2xx within
@@ -158,6 +186,9 @@ var landingTmpl = template.Must(template.New("landing").Parse(`<!doctype html>
   .dot { width:9px; height:9px; border-radius:50%; flex:0 0 auto; }
   .up { background:#3fb950; box-shadow:0 0 6px #3fb95080; }
   .down { background:#f85149; box-shadow:0 0 6px #f8514980; }
+  .now { margin:0; padding:6px 0; }
+  .now .file { word-break:break-all; }
+  .now .state { color:#888; }
   a { color:#58a6ff; text-decoration:none; display:block; padding:6px 0; border-bottom:1px solid #1c1c1c; }
   a:hover { color:#9cf; }
 </style>
@@ -177,6 +208,14 @@ var landingTmpl = template.Must(template.New("landing").Parse(`<!doctype html>
     </li>
     {{end}}
   </ul>
+
+  {{with .Now}}
+  <h2>now playing</h2>
+  <p class="now">
+    <span class="file">{{.File}}</span>
+    {{if .State}}<span class="state">· {{.State}}</span>{{end}}
+  </p>
+  {{end}}
 
   <h2>links</h2>
   <ul>
