@@ -8,6 +8,7 @@ import (
 	"log"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -73,8 +74,18 @@ var ErrNoToken = oauthtokens.ErrNoToken
 // stale by the time anyone read the log — and that state would ship to
 // Loki/Sentry. /auth/init carries no secret: client_id isn't sensitive, and no
 // state exists until the redirect is generated server-side on click.
+//
+// We also append login_as=<username> — the exact Twitch account to sign in
+// as. The /auth/init handler ignores it (it keys off account=bot|broadcaster);
+// it's purely so the username is visible in the browser's address bar, matching
+// the login_as attribute in the logs.
 func AuthInitURL(account string) string {
-	return c.Conf.ExternalURL + "/auth/init?account=" + account
+	login := c.Conf.BotUsername
+	if account == "broadcaster" {
+		login = c.Conf.ChannelName
+	}
+	return c.Conf.ExternalURL + "/auth/init?account=" + account +
+		"&login_as=" + url.QueryEscape(login)
 }
 
 // accountLabel maps an oauth_tokens username to the /auth/init account
