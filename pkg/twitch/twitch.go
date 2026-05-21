@@ -20,7 +20,12 @@ var subscribers []string
 
 // getChannelID makes a request to twitch to get the user ID for the channel
 func getChannelID(username string) string {
-	resp, err := currentTwitchClient.GetUsers(&helix.UsersParams{
+	client, err := Client()
+	if err != nil {
+		slog.Error("twitch API client unavailable", "err", err)
+		return ""
+	}
+	resp, err := client.GetUsers(&helix.UsersParams{
 		Logins: []string{username},
 	})
 	if err != nil {

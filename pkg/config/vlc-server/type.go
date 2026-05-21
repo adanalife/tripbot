@@ -52,25 +52,6 @@ type VlcServerConfig struct {
 	VlcCanvasWidth  int `default:"1920" envconfig:"VLC_CANVAS_WIDTH"`
 	VlcCanvasHeight int `default:"1080" envconfig:"VLC_CANVAS_HEIGHT"`
 
-	// VlcPrimeEnabled turns on page-cache priming: a background goroutine
-	// pre-reads upcoming clips into the kernel page cache so libvlc's file
-	// open hits warm pages instead of a cold NAS round-trip. That collapses
-	// the inter-clip frame gap that makes OBS's ffmpeg_source briefly
-	// disconnect — revealing the scene background + "broken video" overlay
-	// — on clip transitions and !timewarp. Safe to leave on everywhere; on
-	// a fast local disk the warm read is cheap and the gap is already small.
-	VlcPrimeEnabled bool `default:"true" envconfig:"VLC_PRIME_ENABLED"`
-	// VlcPrimePositionThreshold is how far (0..1) into the current clip the
-	// primer waits before warming the next sequential file. 0.5 = halfway;
-	// clips run minutes, so this leaves ample lead time before EOS while
-	// avoiding warming a file we might never reach if a jump intervenes.
-	VlcPrimePositionThreshold float64 `default:"0.5" envconfig:"VLC_PRIME_POSITION_THRESHOLD"`
-	// VlcPrimeBytes caps how many bytes of each file the primer reads into
-	// cache. 0 = whole file (safest: covers both the MP4 moov atom wherever
-	// it sits and the initial GOPs libvlc decodes at open). Set a cap only
-	// if cache memory or NAS bandwidth ever becomes a concern.
-	VlcPrimeBytes int64 `default:"0" envconfig:"VLC_PRIME_BYTES"`
-
 	// VLCPidFile is where the vlc-server PID file lives
 	VLCPidFile string `default:"/opt/data/run/vlc-server.pid" envconfig:"VLC_PIDFILE"`
 

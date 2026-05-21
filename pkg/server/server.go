@@ -45,8 +45,8 @@ func Start(ctx context.Context) {
 
 	// healthcheck endpoints
 	hp := r.PathPrefix("/health").Methods("GET", "HEAD").Subrouter()
-	hp.Handle("/live", tagged("/health/live", healthHandler))
-	hp.Handle("/ready", tagged("/health/ready", healthHandler))
+	hp.Handle("/live", tagged("/health/live", liveHandler))
+	hp.Handle("/ready", tagged("/health/ready", readyHandler))
 
 	// version endpoint — returns build metadata as JSON
 	r.Handle("/version", tagged("/version", versionHandler)).Methods("GET", "HEAD")

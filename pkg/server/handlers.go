@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"runtime/debug"
+	"sync/atomic"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/server/oauthstate"
@@ -35,9 +36,32 @@ func SetVersion(v string) {
 	}
 }
 
-//TODO: write real healthchecks for ready vs live
-// healthcheck URL, for tools to verify the bot is alive
-func healthHandler(w http.ResponseWriter, r *http.Request) {
+// ready reports whether the bot has established its Twitch IRC connection.
+// /health/ready returns 503 until it flips true, so the orchestrator keeps
+// the pod running (no crashloop) but marks it not-live until Twitch is
+// reachable. cmd/tripbot flips it via SetReady on IRC connect / disconnect.
+var ready atomic.Bool
+
+// SetReady updates the readiness state reported by /health/ready.
+func SetReady(r bool) {
+	ready.Store(r)
+}
+
+// liveHandler is the liveness probe: the process is up and serving HTTP.
+// Always 200 — a failing liveness probe restarts the pod, which is exactly
+// what we want to avoid while waiting on Twitch.
+func liveHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "OK")
+}
+
+// readyHandler is the readiness probe: 200 once the Twitch IRC connection is
+// established, 503 otherwise. Keeps the pod up but not-live until Twitch is
+// reachable, and recovers on its own once the connection lands.
+func readyHandler(w http.ResponseWriter, r *http.Request) {
+	if !ready.Load() {
+		http.Error(w, "not ready: awaiting Twitch connection", http.StatusServiceUnavailable)
+		return
+	}
 	fmt.Fprintf(w, "OK")
 }
 

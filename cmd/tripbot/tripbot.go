@@ -91,8 +91,8 @@ func main() {
 	findInitialVideo()
 	users.InitLeaderboard(context.Background())
 	startCron()
-	loadTwitchToken()   // must precede chatbot.Initialize — provides the IRC token
-	setUpTwitchClient() // required for the below
+	loadTwitchToken(shutdownCtx) // must precede chatbot.Initialize — provides the IRC token
+	setUpTwitchClient()          // required for the below
 	updateSubscribers()
 	getCurrentUsers()
 	startEventSub(shutdownCtx)
@@ -106,7 +106,9 @@ func main() {
 func startEventSub(ctx context.Context) {
 	token := mytwitch.BroadcasterUserAccessToken()
 	if token == "" {
-		slog.WarnContext(ctx, "skipping eventsub: no broadcaster oauth_tokens row; bootstrap with `task tripbot:auth:bootstrap:broadcaster`")
+		slog.WarnContext(ctx, "skipping eventsub: no broadcaster oauth_tokens row; bootstrap with `task tripbot:auth:bootstrap:broadcaster`",
+			"login_as", c.Conf.ChannelName,
+			"reauth_url", mytwitch.AuthInitURL("broadcaster"))
 		return
 	}
 	if mytwitch.ChannelID == "" {
@@ -191,15 +193,53 @@ func startCron() {
 }
 
 // loadTwitchToken pulls the bot's OAuth row from the oauth_tokens table.
-// Refuses to start if the row is missing — pointing at the bootstrap CLI
-// is louder than running IRC-less.
-func loadTwitchToken() {
+// Non-fatal: when the row is missing (e.g. auth-bootstrap hasn't run yet
+// against a freshly-restored DB) or the DB is briefly unreachable, the bot
+// comes up with limited functionality and reports not-ready, polling in the
+// background until the token lands — rather than crashlooping. A crashing pod
+// after a wipe also raced the DB restore's migrate init (see the 2026-05-20
+// convergence-wipe notes); staying up-but-not-ready avoids that. Readiness,
+// not a process crash, is what keeps the bot out of service until it can talk
+// to Twitch.
+func loadTwitchToken(ctx context.Context) {
 	if err := mytwitch.LoadFromDB(); err != nil {
-		if errors.Is(err, mytwitch.ErrNoToken) {
-			slog.Error("refusing to start: no oauth_tokens row for bot", "bot_username", c.Conf.BotUsername, "fix", "task tripbot:auth:bootstrap")
-			os.Exit(1)
+		slog.WarnContext(ctx, "no usable Twitch token at boot; starting not-ready and polling",
+			"login_as", c.Conf.BotUsername,
+			"fix", "task tripbot:auth:bootstrap",
+			"reauth_url", mytwitch.AuthInitURL("bot"),
+			"err", err)
+		go pollForTwitchToken(ctx)
+	}
+}
+
+// pollForTwitchToken retries LoadFromDB until the bot's oauth_tokens row is
+// available, then syncs the freshly-loaded IRC token into the client so
+// connectToTwitch's reconnect loop authenticates on its next attempt. Started
+// only when the token was missing at boot; stops on shutdown.
+func pollForTwitchToken(ctx context.Context) {
+	const interval = 15 * time.Second
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if err := mytwitch.LoadFromDB(); err != nil {
+				slog.WarnContext(ctx, "still waiting for Twitch token",
+					"login_as", c.Conf.BotUsername,
+					"reauth_url", mytwitch.AuthInitURL("bot"), "err", err)
+				continue
+			}
+			slog.InfoContext(ctx, "Twitch token loaded; bot will connect on next attempt")
+			// Push the freshly-loaded token into the (already-constructed)
+			// IRC client so the connect loop's next try uses it instead of
+			// the empty token captured at chatbot.Initialize.
+			if tok := mytwitch.IRCAuthToken(); tok != "" && client != nil {
+				client.SetIRCToken(tok)
+			}
+			return
 		}
-		terrors.Fatal(err, "failed to load Twitch token from DB")
 	}
 }
 
@@ -228,11 +268,23 @@ func connectToTwitch() {
 	client.Join(c.Conf.ChannelName)
 	slog.Info("joined channel", "channel", c.Conf.ChannelName, "url", fmt.Sprintf("https://twitch.tv/%s", c.Conf.ChannelName))
 
+	// Flip readiness on once the IRC connection is established so the
+	// readiness probe (/health/ready) reports live. Until then — and after
+	// any disconnect below — the pod stays up but not-ready.
+	client.OnConnect(func() {
+		slog.Info("connected to Twitch chat")
+		server.SetReady(true)
+	})
+
 	// actually connect to Twitch
 	// wrapped in a loop in case twitch goes down
 	for {
 		slog.Info("initializing connection to Twitch")
+		// Connect blocks while connected and returns when the connection
+		// drops; mark not-ready so the probe reflects the gap until the
+		// next OnConnect fires.
 		err := client.Connect()
+		server.SetReady(false)
 		if err != nil {
 			slog.Error("unable to connect to twitch", "err", err)
 			if errors.Is(err, twitch.ErrLoginAuthenticationFailed) {
@@ -241,6 +293,11 @@ func connectToTwitch() {
 				// so the next Connect attempt uses the current credentials.
 				if tok := mytwitch.IRCAuthToken(); tok != "" {
 					client.SetIRCToken(tok)
+				} else {
+					// No valid in-memory token to fall back on — the refresh
+					// cron blanked it (revoked/invalid_grant). Surface the
+					// re-bootstrap link so re-auth is a click, not a task run.
+					slog.Error("IRC auth failed and no valid token to retry with; re-bootstrap needed", "login_as", c.Conf.BotUsername, "reauth_url", mytwitch.AuthInitURL("bot"))
 				}
 			}
 			time.Sleep(time.Minute)

@@ -5,6 +5,31 @@
 
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
+## [v2.13.0] — 2026-05-21
+
+Minor release. tripbot now boots degraded instead of crashlooping when Twitch or its OAuth token is unavailable, and surfaces a clickable re-auth link in the logs so recovery is a click rather than a CLI run. On the streaming side, the inter-clip-flash chase concludes: page-cache priming is reverted (didn't move the metric — the gap is libvlc pausing RTP, not file-open latency), and `!timewarp` instead masks the gap with a full-screen warp animation.
+
+### Resilience
+
+- **Start degraded instead of crashlooping when Twitch/token is unavailable.** Two crash paths fixed so the bot comes up with limited functionality and reports *not-ready* rather than dying. (1) When Twitch is unreachable, helix's `RequestAppAccessToken` returns a nil response that `mytwitch.Client()` dereferenced — now guarded, and the tokenless client isn't cached so callers retry once Twitch returns. (2) After a cluster wipe the `oauth_tokens` row is absent; `loadTwitchToken` no longer `os.Exit(1)`s — the bot starts (HTTP, cron, DB-backed features), reports not-ready, and polls `LoadFromDB` in the background until the row lands, then pushes the token into the IRC client. `/health/ready` returns 503 until the IRC connection is established (flipping via the `OnConnect` callback); `/health/live` stays always-200 so the orchestrator doesn't restart the pod while it waits. tripbot is outbound-only, so readiness is a rollout/status signal, not traffic gating. Also adds `task test:macos`, a host-based (mise, no docker) test runner per the `golang-development-with-mise` ADR. ([#624])
+- **Surface the OAuth re-auth URL in the logs when the token is missing/expired.** The boot warning, the 15s "still waiting" poll log, the hourly refresh-failure path, and the IRC `ErrLoginAuthenticationFailed` path all now carry a `reauth_url` attribute pointing at `/auth/init`, plus a `login_as` attribute naming the exact account to sign in as (bot vs broadcaster) — so re-auth across three envs and up to six accounts is a click, not a guess. New `mytwitch.AuthInitURL(account)` helper; the auth-bootstrap CLI logs `login_as` up front too. We log the `/auth/init` indirection URL (no `state`, no secret — asserted by test), not the fully-formed Twitch authorize URL whose CSRF `state` would be stale and would land in Loki/Sentry. Clickable from any on-LAN browser via the Ingress `EXTERNAL_URL` set in [adanalife/infra#557]. ([#625])
+
+### Streaming
+
+- **`!timewarp` masks the inter-clip gap with a full-screen warp animation.** The hard cut to a random clip triggers an OBS H.264 discontinuity that briefly clears the dashcam layer — the flash we'd been chasing at the pipeline level. Rather than fix the pipeline, the reworked `!timewarp` overlay (was a small "Timewarp!" text box) slams up a full-screen opaque charcoal warp tunnel with center-burst speed-lines and bold **TIME WARP** text, *physically covering* the gap, then fades onto the new clip — thematically on-point. Timeline ~3.4s: cover slams opaque (~0.4s) → holds through the jump (~2s) → fades to reveal (~0.6s). chatbot waits 800ms after `ShowTimewarp()` before `PlayRandom()` so the cover is up before the cut; the timewarp browser source goes full-canvas at the profile fps. Every other onscreen's render path is byte-for-byte unchanged. ([#623])
+- **Revert vlc-server page-cache priming ([#619]).** Priming did not fix the inter-clip flash. Packet analysis showed the gap is libvlc's `PlayAtIndex` pausing RTP emission during the media switch (RTP-over-TCP on 8554 goes idle, no disconnect) — *not* file-open latency, which is what priming addressed; with the file already warm the gap was unchanged. Removed per the "keep only proven changes" principle (primer goroutine, warm-random pool, config knobs all gone). ([#622])
+
+### OBS
+
+- **Default noVNC to local scaling + autoconnect.** The noVNC `index.html` symlink becomes a redirect to `vnc.html?resize=scale&autoconnect=true&reconnect=true`, so opening the OBS VNC URL scales the 1920×1080 canvas to fit the browser window and connects without a manual click. `resize=scale` (not `remote`) keeps the sway output and OBS composition at 1920×1080 — only the client view scales. ([#621])
+
+[#621]: https://github.com/adanalife/tripbot/pull/621
+[#622]: https://github.com/adanalife/tripbot/pull/622
+[#623]: https://github.com/adanalife/tripbot/pull/623
+[#624]: https://github.com/adanalife/tripbot/pull/624
+[#625]: https://github.com/adanalife/tripbot/pull/625
+[adanalife/infra#557]: https://github.com/adanalife/infra/pull/557
+
 ## [v2.12.0] — 2026-05-19
 
 Minor release. OBS VNC moves into the browser via noVNC, replacing the native-client path that never actually worked with macOS Screen Sharing.app. On the streaming side, the inter-clip flash gets its load-bearing fix (page-cache priming) after the VAAPI-transcode approach from v2.11.3 was backed out.
