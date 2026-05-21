@@ -280,10 +280,17 @@ var landingTmpl = template.Must(template.New("landing").Parse(`<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>tripbot — {{.Channel}}</title>
+<!-- favicons referenced from the website (single owner of brand assets) — see
+     vault general/logo.md; apple-touch-icon gives a home-screen icon on phones -->
+<link rel="icon" type="image/png" sizes="32x32" href="https://www.dana.lol/assets/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="https://www.dana.lol/assets/favicon-16x16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="https://www.dana.lol/assets/apple-touch-icon.png">
 <style>
   :root { color-scheme: dark; }
   body { background:#0a0a0a; color:#eee; font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",monospace; margin:0; display:flex; min-height:100vh; align-items:center; justify-content:center; }
   main { width:min(92vw,420px); padding:32px; }
+  /* logo is the monochrome black mark; invert to white on the dark bg */
+  .logo { width:44px; height:44px; filter:invert(1); opacity:.92; display:block; margin:0 0 14px; }
   h1 { font-size:20px; margin:0 0 2px; letter-spacing:.02em; }
   .ver { color:#666; margin:0 0 10px; font-size:12px; }
   .meta { color:#888; margin:0 0 24px; font-size:13px; }
@@ -305,6 +312,9 @@ var landingTmpl = template.Must(template.New("landing").Parse(`<!doctype html>
 </head>
 <body>
 <main>
+  <!-- A Dana Life mark, referenced from the website (the single owner of brand
+       assets) rather than copied in — see vault general/logo.md. -->
+  <img class="logo" src="https://www.dana.lol/assets/logo.png" alt="A Dana Life" width="44" height="44">
   <h1>tripbot</h1>
   {{if .Version}}<p class="ver">{{.Version}}{{if .SHA}} · <a href="{{.CommitURL}}">{{.SHA}}</a>{{end}}</p>{{end}}
   <p class="meta">channel <strong><a href="https://twitch.tv/{{.Channel}}">{{.Channel}}</a></strong> · env {{.Env}} · up {{.Uptime}} · {{.Chatters}} in chat</p>
