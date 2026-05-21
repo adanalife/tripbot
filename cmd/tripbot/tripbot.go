@@ -204,6 +204,7 @@ func loadTwitchToken(ctx context.Context) {
 		slog.WarnContext(ctx, "no usable Twitch token at boot; starting not-ready and polling",
 			"bot_username", c.Conf.BotUsername,
 			"fix", "task tripbot:auth:bootstrap",
+			"reauth_url", mytwitch.AuthInitURL("bot"),
 			"err", err)
 		go pollForTwitchToken(ctx)
 	}
@@ -223,7 +224,8 @@ func pollForTwitchToken(ctx context.Context) {
 			return
 		case <-ticker.C:
 			if err := mytwitch.LoadFromDB(); err != nil {
-				slog.WarnContext(ctx, "still waiting for Twitch token", "err", err)
+				slog.WarnContext(ctx, "still waiting for Twitch token",
+					"reauth_url", mytwitch.AuthInitURL("bot"), "err", err)
 				continue
 			}
 			slog.InfoContext(ctx, "Twitch token loaded; bot will connect on next attempt")
@@ -288,6 +290,11 @@ func connectToTwitch() {
 				// so the next Connect attempt uses the current credentials.
 				if tok := mytwitch.IRCAuthToken(); tok != "" {
 					client.SetIRCToken(tok)
+				} else {
+					// No valid in-memory token to fall back on — the refresh
+					// cron blanked it (revoked/invalid_grant). Surface the
+					// re-bootstrap link so re-auth is a click, not a task run.
+					slog.Error("IRC auth failed and no valid token to retry with; re-bootstrap needed", "bot_username", c.Conf.BotUsername, "reauth_url", mytwitch.AuthInitURL("bot"))
 				}
 			}
 			time.Sleep(time.Minute)
