@@ -5,6 +5,21 @@
 
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
+## [v2.13.1] — 2026-05-21
+
+Patch release. tripbot's Ingress root — previously a bare 404 — now serves a lightweight landing-page dashboard (mostly a phone bookmark): a status overview, the currently-playing clip, the broadcaster/bot accounts, and links to the OBS / Grafana / Traefik / Hubble dashboards. Also throttles the token-poll warning that spammed the logs while a pod waits on re-auth.
+
+### tripbot
+
+- **Landing-page dashboard on the Ingress root.** `/` used to 404; it now renders a small dark status page served by `pkg/server` (the old `catchAllHandler` moves to the router's `NotFoundHandler`, so unknown paths still 404). Shows a status overview — tripbot's own readiness (in-memory) plus a live in-cluster ping of vlc-server's `/health/ready` — with each service's build tag in a far-right column linking to that build's `CHANGELOG.md` at its sha (tripbot's own; vlc-server's fetched from its `/version`). When vlc is healthy it also shows the currently-playing clip (file · state · elapsed, read from `pkg/video`'s in-process value — no extra call) and the in-chat count. The header carries the environment; below it the broadcaster + bot Twitch profiles, then a row of dashboard links (OBS noVNC derived from `EXTERNAL_URL`, plus the prod-zone Grafana / Traefik / Hubble UIs). Logo + favicon are referenced from the website's published assets, not copied in. Sibling pings use a 2s-timeout client so a hung vlc-server can't stall the render. ([#628])
+
+### Logging
+
+- **Throttle the "still waiting for Twitch token" poll warning.** `pollForTwitchToken` still checks `LoadFromDB` every 15s (so a freshly-landed token is picked up promptly), but the WARN now logs at most every 15m instead of on every check (~240/hr → ~4/hr while a pod waits on re-auth); the first poll-failure log is suppressed since boot already logged the re-auth link once. Also appends `login_as=<username>` to the logged reauth URL so it names the exact account to sign in as. ([#627])
+
+[#627]: https://github.com/adanalife/tripbot/pull/627
+[#628]: https://github.com/adanalife/tripbot/pull/628
+
 ## [v2.13.0] — 2026-05-21
 
 Minor release. tripbot now boots degraded instead of crashlooping when Twitch or its OAuth token is unavailable, and surfaces a clickable re-auth link in the logs so recovery is a click rather than a CLI run. On the streaming side, the inter-clip-flash chase concludes: page-cache priming is reverted (didn't move the metric — the gap is libvlc pausing RTP, not file-open latency), and `!timewarp` instead masks the gap with a full-screen warp animation.
