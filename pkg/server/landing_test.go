@@ -78,9 +78,9 @@ func TestLandingHandler_RendersReadyStatusAndLinks(t *testing.T) {
 	for _, want := range []string{
 		`<a href="https://twitch.tv/adanalife_">adanalife_</a>`,   // broadcaster profile
 		`<a href="https://twitch.tv/tripbot4000">tripbot4000</a>`, // bot profile
-		"v1.2.3",  // tripbot build tag
-		"ready",   // tripbot status
-		"healthy", // vlc status
+		"ready",                     // tripbot status
+		"healthy",                   // vlc status
+		`/CHANGELOG.md">v1.2.3</a>`, // tripbot version tag → changelog (ref is sha or master)
 		`<a href="https://github.com/adanalife/tripbot/blob/deadbeefcafe/CHANGELOG.md">v9.9.9-vlc</a>`, // vlc version → changelog@sha
 		"12 in chat",                          // chatter count
 		`<code class="env">production</code>`, // env in monospace chip
@@ -88,10 +88,14 @@ func TestLandingHandler_RendersReadyStatusAndLinks(t *testing.T) {
 		"wy_0042.MP4",                         // current video file
 		"Wyoming",                             // current video state
 		"3m12s",                               // clip progress
-		"https://obs.prod.whereisdana.today",  // derived OBS link
-		grafanaURL,                            // grafana link
-		traefikURL,                            // traefik dashboard link
-		hubbleURL,                             // hubble UI link
+		`>obs</a>`,                            // one-word OBS link
+		`>grafana</a>`,                        // one-word grafana link
+		`>traefik</a>`,                        // one-word traefik link
+		`>hubble</a>`,                         // one-word hubble link
+		"https://obs.prod.whereisdana.today",  // derived OBS href
+		grafanaURL,                            // grafana href
+		traefikURL,                            // traefik href
+		hubbleURL,                             // hubble href
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body missing %q", want)

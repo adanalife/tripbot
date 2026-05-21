@@ -78,17 +78,14 @@ type navLink struct {
 
 // landingData is the template payload.
 type landingData struct {
-	Channel      string // broadcaster Twitch username
-	Bot          string // bot Twitch username
-	Env          string
-	Uptime       string
-	Version      string // tripbot's own build tag
-	SHA          string // short git sha
-	ChangelogURL string // link to CHANGELOG.md at the build's sha
-	Chatters     int    // users currently in chat
-	Services     []serviceStatus
-	Now          *nowPlaying // nil when vlc is unhealthy or nothing is playing
-	Links        []navLink
+	Channel  string // broadcaster Twitch username
+	Bot      string // bot Twitch username
+	Env      string
+	Uptime   string
+	Chatters int // users currently in chat
+	Services []serviceStatus
+	Now      *nowPlaying // nil when vlc is unhealthy or nothing is playing
+	Links    []navLink
 }
 
 // landingHandler serves the human-facing root page on the tripbot Ingress: a
@@ -106,21 +103,15 @@ func landingHandler(w http.ResponseWriter, r *http.Request) {
 		vlcVer = fetchVersion(r.Context(), c.Conf.VlcServerHost)
 	}
 
-	sha := buildSHA()
 	data := landingData{
-		Channel:      c.Conf.ChannelName,
-		Bot:          c.Conf.BotUsername,
-		Env:          c.Conf.Environment,
-		Uptime:       time.Since(startedAt).Round(time.Second).String(),
-		Version:      versionTag,
-		ChangelogURL: changelogURL(sha),
-		Chatters:     chatterCount(),
-		Services:     gatherStatus(vlcOK, vlcVer),
-		Now:          currentVideo(vlcOK),
-		Links:        gatherLinks(),
-	}
-	if sha != "" {
-		data.SHA = sha[:min(7, len(sha))]
+		Channel:  c.Conf.ChannelName,
+		Bot:      c.Conf.BotUsername,
+		Env:      c.Conf.Environment,
+		Uptime:   time.Since(startedAt).Round(time.Second).String(),
+		Chatters: chatterCount(),
+		Services: gatherStatus(vlcOK, vlcVer, buildSHA()),
+		Now:      currentVideo(vlcOK),
+		Links:    gatherLinks(),
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -130,11 +121,18 @@ func landingHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // gatherStatus reports tripbot's own readiness (in-memory, free) and folds in
-// the already-computed vlc-server health (with its build tag when reachable).
-// The vlc ping is best-effort: any failure (DNS, timeout, non-2xx) renders as
-// not-OK rather than erroring the page.
-func gatherStatus(vlcOK bool, vlcVer versionInfo) []serviceStatus {
-	tripbot := serviceStatus{Name: "tripbot", OK: ready.Load()}
+// the already-computed vlc-server health. Each row carries its build tag in a
+// version column linking to that build's changelog: tripbot's own tag (at sha,
+// the running binary's VCS revision) and vlc-server's (from its /version). The
+// vlc ping is best-effort: any failure (DNS, timeout, non-2xx) renders as not-OK
+// rather than erroring the page.
+func gatherStatus(vlcOK bool, vlcVer versionInfo, sha string) []serviceStatus {
+	tripbot := serviceStatus{
+		Name:       "tripbot",
+		OK:         ready.Load(),
+		Version:    versionTag,
+		VersionURL: changelogURL(sha),
+	}
 	if tripbot.OK {
 		tripbot.Detail = "ready"
 	} else {
@@ -226,12 +224,12 @@ func pingHealthy(ctx context.Context, rawURL string) bool {
 func gatherLinks() []navLink {
 	links := []navLink{}
 	if obs := siblingURL(c.Conf.ExternalURL, "obs"); obs != "" {
-		links = append(links, navLink{Label: "OBS (noVNC)", URL: obs})
+		links = append(links, navLink{Label: "obs", URL: obs})
 	}
 	links = append(links,
-		navLink{Label: "Grafana dashboards", URL: grafanaURL},
-		navLink{Label: "Traefik dashboard", URL: traefikURL},
-		navLink{Label: "Hubble UI", URL: hubbleURL},
+		navLink{Label: "grafana", URL: grafanaURL},
+		navLink{Label: "traefik", URL: traefikURL},
+		navLink{Label: "hubble", URL: hubbleURL},
 	)
 	return links
 }
@@ -281,15 +279,16 @@ var landingTmpl = template.Must(template.New("landing").Parse(`<!doctype html>
   main { width:min(92vw,520px); padding:clamp(24px,4vw,48px); }
   /* logo is the monochrome black mark; invert to white on the dark bg */
   .logo { width:clamp(44px,5vw,60px); height:auto; filter:invert(1); opacity:.92; display:block; margin:0 0 16px; }
-  h1 { font-size:clamp(20px,1.2vw + 15px,28px); margin:0 0 2px; letter-spacing:.02em; }
-  .ver { color:#666; margin:0 0 12px; font-size:.85em; }
-  .meta { color:#888; margin:0 0 28px; font-size:.92em; }
+  h1 { font-size:clamp(20px,1.2vw + 15px,28px); margin:0 0 4px; letter-spacing:.02em; }
+  .meta { color:#888; margin:0 0 2px; font-size:.92em; }
   .env { font-family:var(--mono); background:#1a1a1a; border:1px solid #262626; color:#cdd; padding:1px 7px; border-radius:5px; font-size:.92em; }
-  h2 { font-size:.8em; text-transform:uppercase; letter-spacing:.08em; color:#888; margin:26px 0 8px; }
+  .accounts { color:#666; margin:0 0 24px; font-size:.85em; }
+  h2 { font-size:.8em; text-transform:uppercase; letter-spacing:.08em; color:#888; margin:24px 0 8px; }
   ul { list-style:none; margin:0; padding:0; }
-  .row { display:flex; align-items:center; gap:10px; padding:7px 0; border-bottom:1px solid #1c1c1c; }
+  .row { display:flex; align-items:center; gap:12px; padding:7px 0; border-bottom:1px solid #1c1c1c; }
   .row .name { flex:1; }
-  .row .detail { color:#888; font-size:.92em; text-align:right; }
+  .row .detail { color:#888; font-size:.92em; }
+  .row .ver { font-family:var(--mono); font-size:.85em; color:#777; }
   .dot { width:9px; height:9px; border-radius:50%; flex:0 0 auto; }
   .up { background:#3fb950; box-shadow:0 0 6px #3fb95080; }
   .down { background:#f85149; box-shadow:0 0 6px #f8514980; }
@@ -298,7 +297,7 @@ var landingTmpl = template.Must(template.New("landing").Parse(`<!doctype html>
   .now .state { color:#888; }
   a { color:#58a6ff; text-decoration:none; }
   a:hover { color:#9cf; }
-  .links a { display:block; padding:7px 0; border-bottom:1px solid #1c1c1c; }
+  .links { display:flex; flex-wrap:wrap; gap:18px; margin-top:10px; }
 </style>
 </head>
 <body>
@@ -307,8 +306,8 @@ var landingTmpl = template.Must(template.New("landing").Parse(`<!doctype html>
        assets) rather than copied in — see vault general/logo.md. -->
   <img class="logo" src="https://www.dana.lol/assets/logo.png" alt="A Dana Life" width="44" height="44">
   <h1>tripbot</h1>
-  {{if .Version}}<p class="ver"><a href="{{.ChangelogURL}}">{{.Version}}</a>{{if .SHA}} · {{.SHA}}{{end}}</p>{{end}}
   <p class="meta">env <code class="env">{{.Env}}</code> · up {{.Uptime}} · {{.Chatters}} in chat</p>
+  <p class="accounts">broadcaster <a href="https://twitch.tv/{{.Channel}}">{{.Channel}}</a> · bot <a href="https://twitch.tv/{{.Bot}}">{{.Bot}}</a></p>
 
   <h2>status</h2>
   <ul>
@@ -316,7 +315,8 @@ var landingTmpl = template.Must(template.New("landing").Parse(`<!doctype html>
     <li class="row">
       <span class="dot {{if .OK}}up{{else}}down{{end}}"></span>
       <span class="name">{{.Name}}</span>
-      <span class="detail">{{.Detail}}{{if .Version}} · {{if .VersionURL}}<a href="{{.VersionURL}}">{{.Version}}</a>{{else}}{{.Version}}{{end}}{{end}}</span>
+      <span class="detail">{{.Detail}}</span>
+      {{if .Version}}<span class="ver">{{if .VersionURL}}<a href="{{.VersionURL}}">{{.Version}}</a>{{else}}{{.Version}}{{end}}</span>{{end}}
     </li>
     {{end}}
   </ul>
@@ -330,18 +330,10 @@ var landingTmpl = template.Must(template.New("landing").Parse(`<!doctype html>
   </p>
   {{end}}
 
-  <h2>accounts</h2>
-  <ul>
-    <li class="row"><span class="name">broadcaster</span><span class="detail"><a href="https://twitch.tv/{{.Channel}}">{{.Channel}}</a></span></li>
-    <li class="row"><span class="name">bot</span><span class="detail"><a href="https://twitch.tv/{{.Bot}}">{{.Bot}}</a></span></li>
-  </ul>
-
   <h2>links</h2>
-  <ul class="links">
-    {{range .Links}}
-    <li><a href="{{.URL}}">{{.Label}} →</a></li>
-    {{end}}
-  </ul>
+  <nav class="links">
+    {{range .Links}}<a href="{{.URL}}">{{.Label}}</a>{{end}}
+  </nav>
 </main>
 </body>
 </html>`))
