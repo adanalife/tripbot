@@ -58,6 +58,14 @@ func poll(ctx context.Context, addr, passwd string, interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
+	// Track the active program scene across ticks so we can count scene
+	// transitions. Reset per connection (poll is called fresh on reconnect),
+	// so the first observation after connecting never counts as a transition.
+	var (
+		prevScene     string
+		havePrevScene bool
+	)
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -96,6 +104,19 @@ func poll(ctx context.Context, addr, passwd string, interval time.Duration) {
 				OutputSkippedFrames:    stats.OutputSkippedFrames,
 				OutputTotalFrames:      stats.OutputTotalFrames,
 			})
+
+			// Count program-scene transitions. Non-fatal — a lookup error
+			// keeps the connection alive (the stats above already published).
+			scene, err := client.Scenes.GetCurrentProgramScene()
+			if err != nil {
+				slog.WarnContext(ctx, "obs GetCurrentProgramScene error", "err", err)
+				continue
+			}
+			if havePrevScene && scene.CurrentProgramSceneName != prevScene {
+				instrumentation.OBSSceneTransitions.Inc(scene.CurrentProgramSceneName)
+			}
+			prevScene = scene.CurrentProgramSceneName
+			havePrevScene = true
 		}
 	}
 }

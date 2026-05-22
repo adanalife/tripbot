@@ -3,6 +3,7 @@ package instrumentation
 import (
 	"context"
 
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 )
 
@@ -31,6 +32,9 @@ var (
 	obsStreamReconnecting     = mustGauge("obs_stream_output_reconnecting", "1 if the stream output is currently reconnecting, 0 otherwise")
 	obsStreamSkippedFrames    = mustFloat64Gauge("obs_stream_output_skipped_frames", "Stream-output skipped frames since stream start")
 	obsStreamTotalFrames      = mustFloat64Gauge("obs_stream_output_total_frames", "Stream-output total frames since stream start")
+
+	vlcStateTransitions = mustCounter("vlc_state_transitions_total", "Total libvlc player-state transitions, labeled by the new state")
+	obsSceneTransitions = mustCounter("obs_scene_transitions_total", "Total OBS program-scene transitions, labeled by the new scene")
 )
 
 // VLCPlayerStatsSnapshot is the shape vlc-server hands to instrumentation
@@ -80,6 +84,27 @@ func (v vlcPlayerStatsIface) Update(s VLCPlayerStatsSnapshot) {
 	v.lostPictures.Record(ctx, s.LostPictures)
 	v.demuxCorrupted.Record(ctx, s.DemuxCorrupted)
 	v.demuxDiscontinuity.Record(ctx, s.DemuxDiscontinuity)
+}
+
+// VLCStateTransitions counts libvlc player-state changes (playing, paused,
+// buffering, …). Call Inc with the new state's label only when the state
+// actually changes, so the counter tracks transitions, not poll ticks.
+var VLCStateTransitions = vlcStateTransitionsIface{counter: vlcStateTransitions}
+
+type vlcStateTransitionsIface struct{ counter metric.Int64Counter }
+
+func (v vlcStateTransitionsIface) Inc(state string) {
+	v.counter.Add(context.Background(), 1, metric.WithAttributes(attribute.String("state", state)))
+}
+
+// OBSSceneTransitions counts OBS program-scene changes. Call Inc with the new
+// scene's name only when the active scene actually changes.
+var OBSSceneTransitions = obsSceneTransitionsIface{counter: obsSceneTransitions}
+
+type obsSceneTransitionsIface struct{ counter metric.Int64Counter }
+
+func (o obsSceneTransitionsIface) Inc(scene string) {
+	o.counter.Add(context.Background(), 1, metric.WithAttributes(attribute.String("scene", scene)))
 }
 
 // OBSStreaming exposes the streaming-active gauge.
