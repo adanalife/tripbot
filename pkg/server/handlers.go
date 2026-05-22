@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
+	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"github.com/adanalife/tripbot/pkg/server/oauthstate"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/nicklaw5/helix/v2"
@@ -36,33 +37,28 @@ func SetVersion(v string) {
 	}
 }
 
-// ready reports whether the bot has established its Twitch IRC connection.
-// /health/ready returns 503 until it flips true, so the orchestrator keeps
-// the pod running (no crashloop) but marks it not-live until Twitch is
-// reachable. cmd/tripbot flips it via SetReady on IRC connect / disconnect.
-var ready atomic.Bool
+// twitchConnected reports whether the bot currently has its Twitch IRC
+// connection. It deliberately does NOT gate the readiness probe: /health/ready
+// is always 200 once the HTTP server is up (see httpmw.ReadinessHandler), so
+// the landing page, /auth/init and /auth/callback stay reachable through the
+// Ingress even when the bot is offline — otherwise the very page used to
+// re-auth a disconnected bot would 503. Instead this flag drives the
+// landing-page status row and the tripbot_twitch_connected gauge, so "up but
+// not in chat" is surfaced without pulling the pod out of the Service.
+// cmd/tripbot flips it via SetTwitchConnected on IRC connect / disconnect.
+var twitchConnected atomic.Bool
 
-// SetReady updates the readiness state reported by /health/ready.
-func SetReady(r bool) {
-	ready.Store(r)
+// SetTwitchConnected updates the chat-connection signal: the in-memory flag
+// the landing page reads and the tripbot_twitch_connected gauge.
+func SetTwitchConnected(connected bool) {
+	twitchConnected.Store(connected)
+	instrumentation.TwitchConnection.Set(connected)
 }
 
-// liveHandler is the liveness probe: the process is up and serving HTTP.
-// Always 200 — a failing liveness probe restarts the pod, which is exactly
-// what we want to avoid while waiting on Twitch.
-func liveHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "OK")
-}
-
-// readyHandler is the readiness probe: 200 once the Twitch IRC connection is
-// established, 503 otherwise. Keeps the pod up but not-live until Twitch is
-// reachable, and recovers on its own once the connection lands.
-func readyHandler(w http.ResponseWriter, r *http.Request) {
-	if !ready.Load() {
-		http.Error(w, "not ready: awaiting Twitch connection", http.StatusServiceUnavailable)
-		return
-	}
-	fmt.Fprintf(w, "OK")
+// TwitchConnected reports the last-known chat-connection state, for the
+// landing page's status row.
+func TwitchConnected() bool {
+	return twitchConnected.Load()
 }
 
 // versionHandler returns build metadata as JSON. The tag comes from the
