@@ -302,16 +302,20 @@ func connectToTwitch() {
 		if err != nil {
 			slog.Error("unable to connect to twitch", "err", err)
 			if errors.Is(err, twitch.ErrLoginAuthenticationFailed) {
-				// The IRC client holds a stale token. Sync it with the
-				// in-memory token (kept fresh by the hourly refresh cron)
-				// so the next Connect attempt uses the current credentials.
+				// The IRC client's token was rejected. Re-establish the bot
+				// token from the DB (forced refresh, then re-read the row) so a
+				// token just written by auth-bootstrap is picked up without a
+				// restart — the common case after a DB restore carries a stale
+				// row. Then sync whatever's now in memory into the IRC client
+				// for the next Connect attempt.
+				mytwitch.Reauth(context.Background(), "bot")
 				if tok := mytwitch.IRCAuthToken(); tok != "" {
 					client.SetIRCToken(tok)
 				} else {
-					// No valid in-memory token to fall back on — the refresh
-					// cron blanked it (revoked/invalid_grant). Surface the
-					// re-bootstrap link so re-auth is a click, not a task run.
-					slog.Error("IRC auth failed and no valid token to retry with; re-bootstrap needed", "login_as", c.Conf.BotUsername, "reauth_url", mytwitch.AuthInitURL("bot"))
+					// Reauth couldn't produce a token (refresh_token revoked and
+					// no fresh row in the DB yet). Surface the re-bootstrap link
+					// so re-auth is a click; the landing page shows it too.
+					slog.Error("IRC auth failed and no valid token after reauth; re-bootstrap needed", "login_as", c.Conf.BotUsername, "reauth_url", mytwitch.AuthInitURL("bot"))
 				}
 			}
 			time.Sleep(time.Minute)
