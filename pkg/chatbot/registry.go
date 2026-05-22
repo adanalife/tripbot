@@ -100,7 +100,7 @@ func (a *App) buildRegistry() []Command {
 		},
 		{
 			Trigger:        "!date",
-			Aliases:        []string{"!datw"},
+			Aliases:        []string{"!datw", "is this live", "is this live?"},
 			Handler:        a.dateCmd,
 			RequiresFollow: true,
 		},
