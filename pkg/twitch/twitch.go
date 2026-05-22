@@ -205,7 +205,7 @@ func FollowedAt(username string) (time.Time, bool) {
 		slog.Error("error getting user follows", "err", err)
 		return time.Time{}, false
 	}
-	if checkHelixResp("GetChannelFollows", &resp.ResponseCommon) {
+	if checkHelixResp(context.Background(), "GetChannelFollows", "broadcaster", &resp.ResponseCommon) {
 		return time.Time{}, false
 	}
 
