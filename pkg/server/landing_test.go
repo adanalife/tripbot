@@ -37,8 +37,8 @@ func TestChangelogURL(t *testing.T) {
 }
 
 func TestLandingHandler_RendersReadyStatusAndLinks(t *testing.T) {
-	defer SetReady(false)
-	SetReady(true)
+	defer SetTwitchConnected(false)
+	SetTwitchConnected(true)
 
 	// stand in for vlc-server: readiness ping + version endpoint
 	vlc := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -78,7 +78,7 @@ func TestLandingHandler_RendersReadyStatusAndLinks(t *testing.T) {
 	for _, want := range []string{
 		`<a href="https://twitch.tv/adanalife_">adanalife_</a>`,   // broadcaster profile
 		`<a href="https://twitch.tv/tripbot4000">tripbot4000</a>`, // bot profile
-		"ready",                     // tripbot status
+		"in chat",                   // tripbot chat-connection status
 		"healthy",                   // vlc status
 		`/CHANGELOG.md">v1.2.3</a>`, // tripbot version tag → changelog (ref is sha or master)
 		`<a href="https://github.com/adanalife/tripbot/blob/deadbeefcafe/CHANGELOG.md">v9.9.9-vlc</a>`, // vlc version → changelog@sha
@@ -104,8 +104,8 @@ func TestLandingHandler_RendersReadyStatusAndLinks(t *testing.T) {
 }
 
 func TestLandingHandler_DegradedAndVlcUnreachable(t *testing.T) {
-	defer SetReady(false)
-	SetReady(false)
+	defer SetTwitchConnected(false)
+	SetTwitchConnected(false)
 
 	withConf(t, func() {
 		// unroutable host → ping fails fast / times out → vlc shown unreachable
@@ -124,8 +124,8 @@ func TestLandingHandler_DegradedAndVlcUnreachable(t *testing.T) {
 		t.Fatalf("got status %d, want %d", rec.Code, http.StatusOK)
 	}
 	body := rec.Body.String()
-	if !strings.Contains(body, "degraded") {
-		t.Errorf("body should report tripbot degraded; got %q", body)
+	if !strings.Contains(body, "not in chat") {
+		t.Errorf("body should report tripbot not in chat; got %q", body)
 	}
 	if !strings.Contains(body, "unreachable") {
 		t.Errorf("body should report vlc unreachable; got %q", body)

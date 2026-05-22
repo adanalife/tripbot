@@ -45,8 +45,12 @@ func Start(ctx context.Context) {
 
 	// healthcheck endpoints
 	hp := r.PathPrefix("/health").Methods("GET", "HEAD").Subrouter()
-	hp.Handle("/live", tagged("/health/live", liveHandler))
-	hp.Handle("/ready", tagged("/health/ready", readyHandler))
+	hp.Handle("/live", tagged("/health/live", httpmw.LivenessHandler()))
+	// /ready runs no checks: tripbot's HTTP surface (landing page, /auth/init,
+	// /auth/callback, /metrics) doesn't depend on the Twitch connection, so the
+	// pod must stay routable even when the bot is offline. Chat-connection is
+	// surfaced via the landing page + the tripbot_twitch_connected gauge.
+	hp.Handle("/ready", tagged("/health/ready", httpmw.ReadinessHandler()))
 
 	// version endpoint — returns build metadata as JSON
 	r.Handle("/version", tagged("/version", versionHandler)).Methods("GET", "HEAD")

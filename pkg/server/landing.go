@@ -129,14 +129,18 @@ func landingHandler(w http.ResponseWriter, r *http.Request) {
 func gatherStatus(vlcOK bool, vlcVer versionInfo, sha string) []serviceStatus {
 	tripbot := serviceStatus{
 		Name:       "tripbot",
-		OK:         ready.Load(),
+		OK:         twitchConnected.Load(),
 		Version:    versionTag,
 		VersionURL: changelogURL(sha),
 	}
 	if tripbot.OK {
-		tripbot.Detail = "ready"
+		tripbot.Detail = "in chat"
 	} else {
-		tripbot.Detail = "degraded (awaiting Twitch)"
+		// The pod is up and serving this page — readiness no longer gates on
+		// the Twitch connection — but the bot isn't connected to chat. The red
+		// dot + this label is how that's surfaced; the re-auth links below
+		// cover the common cause (a missing/expired token).
+		tripbot.Detail = "not in chat"
 	}
 
 	vlc := serviceStatus{Name: "vlc-server", OK: vlcOK, Detail: "unreachable"}
