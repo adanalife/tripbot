@@ -65,6 +65,20 @@ func Run(ctx context.Context, cfg Config, h Handlers) error {
 			"type", msg.Payload.Subscription.Type, "status", msg.Payload.Subscription.Status)
 	})
 
+	// Log every notification we receive, regardless of whether a typed
+	// handler above is registered for it. Cheap observability: shows in Loki
+	// what's actually firing in prod (and, by its absence, what isn't) so the
+	// per-event chat-shout treatment can be designed from real data later. The
+	// raw event JSON goes in the body, not a label — `type` is the only
+	// (low-cardinality) key worth filtering on.
+	client.OnRawEvent(func(event string, metadata twitch.MessageMetadata, subscription twitch.PayloadSubscription) {
+		slog.InfoContext(ctx, "eventsub event",
+			"type", string(subscription.Type),
+			"message_id", metadata.MessageID,
+			"payload", event,
+		)
+	})
+
 	if h.OnFollow != nil {
 		client.OnEventChannelFollow(func(e twitch.EventChannelFollow) {
 			h.OnFollow(e.UserName)
