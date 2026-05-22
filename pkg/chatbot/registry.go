@@ -36,6 +36,11 @@ func (a *App) buildRegistry() []Command {
 			Handler: a.uptimeCmd,
 		},
 		{
+			Trigger: "!followage",
+			Aliases: []string{"!followtime"},
+			Handler: a.followageCmd,
+		},
+		{
 			Trigger:        "!timewarp",
 			Aliases:        []string{"!timewrap", "!timeskip", "!tw", "!timewqrp", "!warp"},
 			Handler:        a.timewarpCmd,

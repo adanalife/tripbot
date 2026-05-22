@@ -16,6 +16,7 @@ import (
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
 	"github.com/adanalife/tripbot/pkg/helpers"
+	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/adanalife/tripbot/pkg/video"
 	"github.com/getsentry/sentry-go"
@@ -112,6 +113,34 @@ func (a *App) uptimeCmd(ctx context.Context, user *users.User, _ []string) {
 	dur := time.Now().Sub(Uptime)
 	msg := fmt.Sprintf("I have been running for %s", durafmt.Parse(dur))
 	a.IRC.Say(msg)
+}
+
+func (a *App) followageCmd(ctx context.Context, user *users.User, params []string) {
+	slog.InfoContext(ctx, "ran !followage", "username", user.Username)
+
+	// bare !followage = the caller; !followage @user looks up someone else
+	username := user.Username
+	other := len(params) > 0
+	if other {
+		username = helpers.StripAtSign(params[0])
+	}
+
+	followedAt, ok := mytwitch.FollowedAt(username)
+	if !ok {
+		if other {
+			a.IRC.Say(fmt.Sprintf("@%s isn't following the channel.", username))
+		} else {
+			a.IRC.Say("You're not following yet — hit that follow button!")
+		}
+		return
+	}
+
+	dur := durafmt.Parse(time.Since(followedAt)).LimitFirstN(2)
+	if other {
+		a.IRC.Say(fmt.Sprintf("@%s has been following for %s.", username, dur))
+	} else {
+		a.IRC.Say(fmt.Sprintf("@%s, you've been following for %s. Thanks!", username, dur))
+	}
 }
 
 func (a *App) milesCmd(ctx context.Context, user *users.User, params []string) {
