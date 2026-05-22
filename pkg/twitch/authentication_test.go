@@ -234,3 +234,76 @@ func TestIRCAuthToken_ConcurrentReads(t *testing.T) {
 		}
 	}
 }
+
+// withReauthConf sets the bot/broadcaster identities AccountsNeedingReauth
+// reads and restores them afterward.
+func withReauthConf(t *testing.T, bot, channel string) {
+	t.Helper()
+	savedBot, savedChan := c.Conf.BotUsername, c.Conf.ChannelName
+	c.Conf.BotUsername, c.Conf.ChannelName = bot, channel
+	t.Cleanup(func() { c.Conf.BotUsername, c.Conf.ChannelName = savedBot, savedChan })
+}
+
+func setTokens(t *testing.T, bot, bcast oauthtokens.Token) {
+	t.Helper()
+	resetToken(t)
+	resetBroadcasterToken(t)
+	tokenMu.Lock()
+	currentUserToken, currentBroadcasterToken = bot, bcast
+	tokenMu.Unlock()
+}
+
+func TestAccountsNeedingReauth_AllHealthy(t *testing.T) {
+	withReauthConf(t, "tripbot4000", "adanalife_")
+	future := oauthtokens.Token{AccessToken: "good", ExpiresAt: time.Now().Add(time.Hour)}
+	setTokens(t, future, future)
+
+	if got := AccountsNeedingReauth(); got != nil {
+		t.Fatalf("AccountsNeedingReauth() = %+v, want nil when both tokens are healthy", got)
+	}
+}
+
+func TestAccountsNeedingReauth_BotMissing(t *testing.T) {
+	withReauthConf(t, "tripbot4000", "adanalife_")
+	healthy := oauthtokens.Token{AccessToken: "good", ExpiresAt: time.Now().Add(time.Hour)}
+	setTokens(t, oauthtokens.Token{}, healthy) // bot blank → missing
+
+	got := AccountsNeedingReauth()
+	if len(got) != 1 {
+		t.Fatalf("got %d accounts, want 1: %+v", len(got), got)
+	}
+	if got[0].Account != "bot" || got[0].Reason != "missing" || got[0].LoginAs != "tripbot4000" {
+		t.Errorf("entry = %+v, want bot/missing/tripbot4000", got[0])
+	}
+	if !strings.Contains(got[0].InitURL, "account=bot") {
+		t.Errorf("InitURL %q should target the bot account", got[0].InitURL)
+	}
+}
+
+func TestAccountsNeedingReauth_BroadcasterExpired(t *testing.T) {
+	withReauthConf(t, "tripbot4000", "adanalife_")
+	healthy := oauthtokens.Token{AccessToken: "good", ExpiresAt: time.Now().Add(time.Hour)}
+	expired := oauthtokens.Token{AccessToken: "stale", ExpiresAt: time.Now().Add(-time.Hour)}
+	setTokens(t, healthy, expired)
+
+	got := AccountsNeedingReauth()
+	if len(got) != 1 {
+		t.Fatalf("got %d accounts, want 1: %+v", len(got), got)
+	}
+	if got[0].Account != "broadcaster" || got[0].Reason != "expired" {
+		t.Errorf("entry = %+v, want broadcaster/expired", got[0])
+	}
+}
+
+// When the bot and broadcaster are the same account, there's no separate
+// broadcaster row — a blank broadcaster slot must not produce a phantom
+// re-auth prompt.
+func TestAccountsNeedingReauth_NoSeparateBroadcaster(t *testing.T) {
+	withReauthConf(t, "tripbot4000", "tripbot4000")
+	healthy := oauthtokens.Token{AccessToken: "good", ExpiresAt: time.Now().Add(time.Hour)}
+	setTokens(t, healthy, oauthtokens.Token{}) // broadcaster slot blank, but irrelevant
+
+	if got := AccountsNeedingReauth(); got != nil {
+		t.Fatalf("AccountsNeedingReauth() = %+v, want nil when no distinct broadcaster identity", got)
+	}
+}
