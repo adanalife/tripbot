@@ -49,7 +49,10 @@ const (
 	// in kube-system as a single prod-zone install shared across envs, so
 	// (unlike OBS) they aren't derived per-environment.
 	traefikURL = "https://traefik.prod.whereisdana.today"
-	hubbleURL  = "https://hubble.prod.whereisdana.today"
+	// hubbleURL carries ?namespace=prod-1 so the link lands straight in prod-1's
+	// flow view instead of Hubble's "choose a namespace" page. (Single prod-zone
+	// install, so the namespace is fixed, not per-env.)
+	hubbleURL = "https://hubble.prod.whereisdana.today/?namespace=prod-1"
 )
 
 // serviceStatus is one row in the landing page's status table.
