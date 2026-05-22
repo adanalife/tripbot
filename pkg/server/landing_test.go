@@ -28,6 +28,22 @@ func TestSiblingURL(t *testing.T) {
 	}
 }
 
+func TestHubbleNamespace(t *testing.T) {
+	saved := c.Conf.Environment
+	t.Cleanup(func() { c.Conf.Environment = saved })
+	cases := map[string]string{
+		"production":  "prod-1",
+		"staging":     "stage-1",
+		"development": "stage-1", // shares ENV=staging; link is moot on its cluster
+	}
+	for env, want := range cases {
+		c.Conf.Environment = env
+		if got := hubbleNamespace(); got != want {
+			t.Errorf("hubbleNamespace() with ENV=%q = %q, want %q", env, got, want)
+		}
+	}
+}
+
 func TestChangelogURL(t *testing.T) {
 	if got, want := changelogURL("deadbeef"), githubURL+"/blob/deadbeef/CHANGELOG.md"; got != want {
 		t.Errorf("changelogURL(sha) = %q, want %q", got, want)
@@ -97,7 +113,8 @@ func TestLandingHandler_RendersReadyStatusAndLinks(t *testing.T) {
 		"https://obs.prod.whereisdana.today",  // derived OBS href
 		grafanaURL,                            // grafana href
 		traefikURL,                            // traefik href
-		hubbleURL,                             // hubble href
+		// Environment is "production" above → hubble link carries ?namespace=prod-1
+		"https://hubble.prod.whereisdana.today/?namespace=prod-1",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body missing %q", want)
