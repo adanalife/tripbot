@@ -5,6 +5,34 @@
 
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
+## [v2.14.0] — 2026-05-22
+
+Minor release. tripbot's readiness probe is decoupled from the Twitch connection: the pod stays in the Service — and the landing page + OAuth endpoints stay reachable — even when the bot is offline, so the page used to re-auth a disconnected bot is no longer 503'd by the very outage it fixes. The landing page now surfaces re-auth links when a token is missing/expired, and stale tokens self-heal — on an IRC/Helix auth failure the bot re-reads `oauth_tokens` from the DB, so a freshly bootstrapped token is picked up without a restart. Also ships a `!followage` command, an "is this live" alias, and full EventSub event logging.
+
+### tripbot
+
+- **Readiness decoupled from the Twitch connection.** `/health/ready` now returns 200 as soon as the HTTP server is up (via shared `pkg/httpmw` `LivenessHandler` / `ReadinessHandler` / `ReadyCheck` helpers, run with no checks for tripbot). Previously it gated on the Twitch IRC connection, so a disconnected single-replica pod was pulled from the Service and traefik 503'd every route — including the landing page and `/auth/init`. Chat-connection is now a non-gating signal: a `tripbot_twitch_connected` gauge (1/0) plus the landing-page status row ("in chat" / "not in chat"), so "up but not in chat" is surfaced without taking the pod out of rotation. ([#634])
+- **OAuth re-auth links on the landing page.** When the bot or broadcaster token is missing or expired, the landing page renders an "action needed: re-authenticate" callout with a "Sign in as `<login>`" button per account, linking to `/auth/init`. `pkg/twitch.AccountsNeedingReauth` reports which accounts need it (broadcaster only when it's a distinct identity), read under the token lock with no DB/network call. Reachable over the internal Ingress (and Tailscale off-LAN); the logged `reauth_url` stays as a backup. ([#635])
+- **Hubble dashboard link opens straight to the prod-1 namespace.** Appends `?namespace=prod-1` to the landing page's Hubble link so it lands in the flow view instead of the namespace picker (the Hubble UI is a single prod-zone install shared across envs). ([#630])
+
+### Twitch
+
+- **Self-heal stale tokens by re-reading the DB on auth failure.** Tokens were read once at boot and never re-read, so after a DB restore (stale `oauth_tokens` row) the pod 401'd indefinitely until a manual `rollout restart`. Now `twitch.Reauth(ctx, account)` forces a refresh via the stored `refresh_token` (skipping the 30-minute pre-expiry window) then re-reads the row, treating the DB as source of truth. The IRC connect loop calls it on `ErrLoginAuthenticationFailed`, and `checkHelixResp` calls it on a 401 (with `account=""` opting out the app-token and mid-bootstrap calls; 403 scope-loss is unaffected). A token written by `auth:bootstrap` — or by the landing-page re-auth click — is now picked up within one retry cycle, no restart. ([#636])
+- **Log every received EventSub event via `OnRawEvent`.** A catch-all handler in `pkg/eventsub` logs every received notification (`type` + `message_id` + raw payload), whether or not a typed handler is wired for it — an observability-first step toward designing per-event chat shouts from real Loki data. Typed events (follow, subscribe) get both the raw log line and their handler. ([#633])
+
+### chatbot
+
+- **`!followage` command** (alias `!followtime`). Reports how long a viewer has followed the channel; bare `!followage` = the caller, `!followage @user` looks someone else up. New `twitch.FollowedAt` reads `followed_at` from Helix `GetChannelFollows` on the existing broadcaster-token path; duration rendered with `durafmt` (2 units, matching `!uptime`). Not follower-gated; non-followers get a friendly nudge. ([#632])
+- **"is this live" aliased to `!date`.** The natural-language question now routes to the command that answers it (multi-word non-`!` aliases were already supported). ([#631])
+
+[#630]: https://github.com/adanalife/tripbot/pull/630
+[#631]: https://github.com/adanalife/tripbot/pull/631
+[#632]: https://github.com/adanalife/tripbot/pull/632
+[#633]: https://github.com/adanalife/tripbot/pull/633
+[#634]: https://github.com/adanalife/tripbot/pull/634
+[#635]: https://github.com/adanalife/tripbot/pull/635
+[#636]: https://github.com/adanalife/tripbot/pull/636
+
 ## [v2.13.1] — 2026-05-21
 
 Patch release. tripbot's Ingress root — previously a bare 404 — now serves a lightweight landing-page dashboard (mostly a phone bookmark): a status overview, the currently-playing clip, the broadcaster/bot accounts, and links to the OBS / Grafana / Traefik / Hubble dashboards. Also throttles the token-poll warning that spammed the logs while a pod waits on re-auth.

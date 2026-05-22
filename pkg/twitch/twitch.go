@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
@@ -36,7 +37,9 @@ func getChannelID(username string) string {
 		slog.Error("empty response from twitch")
 		return ""
 	}
-	if checkHelixResp("GetUsers", &resp.ResponseCommon) {
+	// account="" — GetUsers here authorizes against the app-access-token, not a
+	// user token, so re-reading a user token wouldn't fix a 401.
+	if checkHelixResp(context.Background(), "GetUsers", "", &resp.ResponseCommon) {
 		return ""
 	}
 
@@ -74,7 +77,7 @@ func GetSubscribers(ctx context.Context) {
 		slog.ErrorContext(ctx, "error getting subscriptions from twitch", "err", err)
 		return
 	}
-	if checkHelixResp("GetSubscriptions", &resp.ResponseCommon) {
+	if checkHelixResp(ctx, "GetSubscriptions", "broadcaster", &resp.ResponseCommon) {
 		// keep the prior subscriber list rather than zeroing it out
 		return
 	}
@@ -119,7 +122,7 @@ func GetFollowerCount(ctx context.Context) {
 		slog.ErrorContext(ctx, "error getting follower count from twitch", "err", err)
 		return
 	}
-	if checkHelixResp("GetChannelFollows", &resp.ResponseCommon) {
+	if checkHelixResp(ctx, "GetChannelFollows", "broadcaster", &resp.ResponseCommon) {
 		return
 	}
 	instrumentation.TwitchAudience.SetFollowers(int64(resp.Data.Total))
@@ -165,7 +168,7 @@ func UserIsFollower(username string) bool {
 		slog.Error("error getting user follows", "err", err)
 		return false
 	}
-	if checkHelixResp("GetChannelFollows", &resp.ResponseCommon) {
+	if checkHelixResp(context.Background(), "GetChannelFollows", "broadcaster", &resp.ResponseCommon) {
 		// fail closed: when we can't verify follow status, treat as non-follower
 		return false
 	}
@@ -175,6 +178,41 @@ func UserIsFollower(username string) bool {
 	}
 	return true
 
+}
+
+// FollowedAt returns when username started following the channel, and whether
+// they follow at all. Like UserIsFollower, it authorizes against the
+// broadcaster identity (moderator:read:followers) and fails closed: ok=false
+// when the broadcaster token isn't loaded, the lookup errors, or the user
+// doesn't follow.
+func FollowedAt(username string) (time.Time, bool) {
+	if !broadcasterTokenLoaded() {
+		return time.Time{}, false
+	}
+	bclient, err := BroadcasterClient()
+	if err != nil {
+		slog.Error("broadcaster helix client unavailable", "err", err)
+		return time.Time{}, false
+	}
+
+	userID := getChannelID(username)
+
+	resp, err := bclient.GetChannelFollows(&helix.GetChannelFollowsParams{
+		BroadcasterID: ChannelID,
+		UserID:        userID,
+	})
+	if err != nil {
+		slog.Error("error getting user follows", "err", err)
+		return time.Time{}, false
+	}
+	if checkHelixResp(context.Background(), "GetChannelFollows", "broadcaster", &resp.ResponseCommon) {
+		return time.Time{}, false
+	}
+
+	if resp.Data.Total < 1 || len(resp.Data.Channels) < 1 {
+		return time.Time{}, false
+	}
+	return resp.Data.Channels[0].Followed.Time, true
 }
 
 // broadcasterTokenLoaded reports whether the broadcaster's user-access-token

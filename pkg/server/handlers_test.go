@@ -11,41 +11,21 @@ import (
 	"github.com/adanalife/tripbot/pkg/server/oauthstate"
 )
 
-func TestLiveHandler(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/health/live", nil)
-	rec := httptest.NewRecorder()
+// TestTwitchConnectedSignal pins the behavior split this PR introduces: the
+// chat-connection signal round-trips, but it's decoupled from the readiness
+// probe. The probe itself (httpmw.ReadinessHandler with no checks → always
+// 200) is covered in pkg/httpmw; here we just guard the signal accessors.
+func TestTwitchConnectedSignal(t *testing.T) {
+	defer SetTwitchConnected(false) // reset package state for other tests
 
-	liveHandler(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("got status %d, want %d", rec.Code, http.StatusOK)
-	}
-	if rec.Body.String() != "OK" {
-		t.Fatalf("got body %q, want %q", rec.Body.String(), "OK")
-	}
-}
-
-func TestReadyHandler(t *testing.T) {
-	defer SetReady(false) // reset package state for other tests
-
-	// not ready by default: 503
-	SetReady(false)
-	req := httptest.NewRequest(http.MethodGet, "/health/ready", nil)
-	rec := httptest.NewRecorder()
-	readyHandler(rec, req)
-	if rec.Code != http.StatusServiceUnavailable {
-		t.Fatalf("not-ready: got status %d, want %d", rec.Code, http.StatusServiceUnavailable)
+	SetTwitchConnected(false)
+	if TwitchConnected() {
+		t.Fatalf("after SetTwitchConnected(false), TwitchConnected() = true, want false")
 	}
 
-	// ready once Twitch connection is established: 200
-	SetReady(true)
-	rec = httptest.NewRecorder()
-	readyHandler(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("ready: got status %d, want %d", rec.Code, http.StatusOK)
-	}
-	if rec.Body.String() != "OK" {
-		t.Fatalf("ready: got body %q, want %q", rec.Body.String(), "OK")
+	SetTwitchConnected(true)
+	if !TwitchConnected() {
+		t.Fatalf("after SetTwitchConnected(true), TwitchConnected() = false, want true")
 	}
 }
 
