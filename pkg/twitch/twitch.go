@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
@@ -177,6 +178,41 @@ func UserIsFollower(username string) bool {
 	}
 	return true
 
+}
+
+// FollowedAt returns when username started following the channel, and whether
+// they follow at all. Like UserIsFollower, it authorizes against the
+// broadcaster identity (moderator:read:followers) and fails closed: ok=false
+// when the broadcaster token isn't loaded, the lookup errors, or the user
+// doesn't follow.
+func FollowedAt(username string) (time.Time, bool) {
+	if !broadcasterTokenLoaded() {
+		return time.Time{}, false
+	}
+	bclient, err := BroadcasterClient()
+	if err != nil {
+		slog.Error("broadcaster helix client unavailable", "err", err)
+		return time.Time{}, false
+	}
+
+	userID := getChannelID(username)
+
+	resp, err := bclient.GetChannelFollows(&helix.GetChannelFollowsParams{
+		BroadcasterID: ChannelID,
+		UserID:        userID,
+	})
+	if err != nil {
+		slog.Error("error getting user follows", "err", err)
+		return time.Time{}, false
+	}
+	if checkHelixResp("GetChannelFollows", &resp.ResponseCommon) {
+		return time.Time{}, false
+	}
+
+	if resp.Data.Total < 1 || len(resp.Data.Channels) < 1 {
+		return time.Time{}, false
+	}
+	return resp.Data.Channels[0].Followed.Time, true
 }
 
 // broadcasterTokenLoaded reports whether the broadcaster's user-access-token
