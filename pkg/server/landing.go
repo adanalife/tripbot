@@ -33,6 +33,10 @@ var (
 	// chatterCount is the in-memory count of users in chat, refreshed ~60s by
 	// the UpdateSession cron. Overridable in tests.
 	chatterCount = mytwitch.ChatterCount
+	// accountsNeedingReauth reports which Twitch accounts have a missing/expired
+	// token; the landing page renders a re-auth prompt for each. Overridable in
+	// tests. Reads in-memory token state — no DB or network call.
+	accountsNeedingReauth = mytwitch.AccountsNeedingReauth
 )
 
 const (
@@ -86,6 +90,7 @@ type landingData struct {
 	Services []serviceStatus
 	Now      *nowPlaying // nil when vlc is unhealthy or nothing is playing
 	Links    []navLink
+	Reauth   []mytwitch.AccountReauth // accounts whose token needs re-auth; empty when healthy
 }
 
 // landingHandler serves the human-facing root page on the tripbot Ingress: a
@@ -112,6 +117,7 @@ func landingHandler(w http.ResponseWriter, r *http.Request) {
 		Services: gatherStatus(vlcOK, vlcVer, buildSHA()),
 		Now:      currentVideo(vlcOK),
 		Links:    gatherLinks(),
+		Reauth:   accountsNeedingReauth(),
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -304,6 +310,14 @@ var landingTmpl = template.Must(template.New("landing").Parse(`<!doctype html>
   a { color:#58a6ff; text-decoration:none; }
   a:hover { color:#9cf; }
   .links { display:flex; flex-wrap:wrap; gap:18px; margin-top:10px; }
+  /* re-auth callout: only rendered when a token is missing/expired */
+  .reauth { background:#3a1d00; border:1px solid #6b3b00; border-radius:8px; padding:14px 16px; margin:0 0 24px; }
+  .reauth h2 { margin:0 0 8px; color:#ffb454; }
+  .reauth p { margin:0 0 10px; color:#e8c89a; font-size:.9em; }
+  .reauth .btns { display:flex; flex-wrap:wrap; gap:10px; }
+  .reauth a.btn { display:inline-block; background:#ffb454; color:#1a1100; font-weight:600; padding:8px 14px; border-radius:6px; }
+  .reauth a.btn:hover { background:#ffc578; color:#1a1100; }
+  .reauth .why { font-family:var(--mono); font-size:.85em; opacity:.85; }
 </style>
 </head>
 <body>
@@ -314,6 +328,16 @@ var landingTmpl = template.Must(template.New("landing").Parse(`<!doctype html>
   <h1>tripbot <code class="env">{{.Env}}</code></h1>
   <p class="meta">up {{.Uptime}} · {{.Chatters}} in chat</p>
   <p class="accounts">broadcaster <a href="https://twitch.tv/{{.Channel}}">{{.Channel}}</a> · bot <a href="https://twitch.tv/{{.Bot}}">{{.Bot}}</a></p>
+
+  {{if .Reauth}}
+  <div class="reauth">
+    <h2>action needed: re-authenticate</h2>
+    <p>tripbot can't talk to Twitch until these accounts are re-authorized. Sign in as the named account on each — the flow re-prompts which account to use, so sign out of Twitch (or use a private window) if it grabs the wrong one.</p>
+    <div class="btns">
+      {{range .Reauth}}<a class="btn" href="{{.InitURL}}">Sign in as {{.LoginAs}} <span class="why">({{.Account}} · {{.Reason}})</span></a>{{end}}
+    </div>
+  </div>
+  {{end}}
 
   <h2>status</h2>
   <ul>

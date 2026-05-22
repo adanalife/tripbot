@@ -289,6 +289,61 @@ func BroadcasterUserAccessToken() string {
 	return currentBroadcasterToken.AccessToken
 }
 
+// AccountReauth describes an account whose in-memory token is missing or
+// expired and therefore needs operator re-auth. The landing page renders one
+// "Sign in as <LoginAs>" link per entry, pointing at InitURL.
+type AccountReauth struct {
+	Account string // "bot" | "broadcaster" — the /auth/init account selector
+	LoginAs string // the exact Twitch username to sign in as
+	Reason  string // "missing" | "expired" — why re-auth is needed
+	InitURL string // /auth/init URL for this account
+}
+
+// tokenReason classifies a loaded token: "" when usable, else "missing"
+// (never loaded, or blanked by a failed refresh / invalid_grant) or
+// "expired" (loaded but past ExpiresAt — a narrow window, since the refresh
+// cron normally rotates 30m ahead).
+func tokenReason(t oauthtokens.Token) string {
+	if t.AccessToken == "" {
+		return "missing"
+	}
+	if !t.ExpiresAt.IsZero() && time.Now().After(t.ExpiresAt) {
+		return "expired"
+	}
+	return ""
+}
+
+// AccountsNeedingReauth returns the bot and/or broadcaster accounts whose
+// in-memory token is missing or expired, so the landing page can prompt for
+// re-auth. Returns nil when everything's healthy. The broadcaster is only
+// considered when a distinct broadcaster identity exists (ChannelName set and
+// != BotUsername) — otherwise there's no separate row to re-auth.
+func AccountsNeedingReauth() []AccountReauth {
+	tokenMu.RLock()
+	botReason := tokenReason(currentUserToken)
+	bcastReason := tokenReason(currentBroadcasterToken)
+	tokenMu.RUnlock()
+
+	var out []AccountReauth
+	if botReason != "" {
+		out = append(out, AccountReauth{
+			Account: "bot",
+			LoginAs: c.Conf.BotUsername,
+			Reason:  botReason,
+			InitURL: AuthInitURL("bot"),
+		})
+	}
+	if c.Conf.ChannelName != "" && c.Conf.ChannelName != c.Conf.BotUsername && bcastReason != "" {
+		out = append(out, AccountReauth{
+			Account: "broadcaster",
+			LoginAs: c.Conf.ChannelName,
+			Reason:  bcastReason,
+			InitURL: AuthInitURL("broadcaster"),
+		})
+	}
+	return out
+}
+
 // ErrIdentityMismatch is returned by GenerateUserAccessToken when the
 // discovered identity (via helix.GetUsers) doesn't match expectedLogin.
 // Callers should surface it with retry guidance; the wrong-identity row is
