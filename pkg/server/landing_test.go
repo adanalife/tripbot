@@ -8,6 +8,7 @@ import (
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
+	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/video"
 )
 
@@ -37,8 +38,9 @@ func TestChangelogURL(t *testing.T) {
 }
 
 func TestLandingHandler_RendersReadyStatusAndLinks(t *testing.T) {
-	defer SetReady(false)
-	SetReady(true)
+	defer SetTwitchConnected(false)
+	SetTwitchConnected(true)
+	withReauth(t, nil) // healthy tokens — no re-auth callout
 
 	// stand in for vlc-server: readiness ping + version endpoint
 	vlc := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -78,7 +80,7 @@ func TestLandingHandler_RendersReadyStatusAndLinks(t *testing.T) {
 	for _, want := range []string{
 		`<a href="https://twitch.tv/adanalife_">adanalife_</a>`,   // broadcaster profile
 		`<a href="https://twitch.tv/tripbot4000">tripbot4000</a>`, // bot profile
-		"ready",                     // tripbot status
+		"in chat",                   // tripbot chat-connection status
 		"healthy",                   // vlc status
 		`/CHANGELOG.md">v1.2.3</a>`, // tripbot version tag → changelog (ref is sha or master)
 		`<a href="https://github.com/adanalife/tripbot/blob/deadbeefcafe/CHANGELOG.md">v9.9.9-vlc</a>`, // vlc version → changelog@sha
@@ -104,8 +106,9 @@ func TestLandingHandler_RendersReadyStatusAndLinks(t *testing.T) {
 }
 
 func TestLandingHandler_DegradedAndVlcUnreachable(t *testing.T) {
-	defer SetReady(false)
-	SetReady(false)
+	defer SetTwitchConnected(false)
+	SetTwitchConnected(false)
+	withReauth(t, nil)
 
 	withConf(t, func() {
 		// unroutable host → ping fails fast / times out → vlc shown unreachable
@@ -124,8 +127,8 @@ func TestLandingHandler_DegradedAndVlcUnreachable(t *testing.T) {
 		t.Fatalf("got status %d, want %d", rec.Code, http.StatusOK)
 	}
 	body := rec.Body.String()
-	if !strings.Contains(body, "degraded") {
-		t.Errorf("body should report tripbot degraded; got %q", body)
+	if !strings.Contains(body, "not in chat") {
+		t.Errorf("body should report tripbot not in chat; got %q", body)
 	}
 	if !strings.Contains(body, "unreachable") {
 		t.Errorf("body should report vlc unreachable; got %q", body)
@@ -168,4 +171,63 @@ func withChatterCount(t *testing.T, n int) {
 	saved := chatterCount
 	chatterCount = func() int { return n }
 	t.Cleanup(func() { chatterCount = saved })
+}
+
+// withReauth swaps the accountsNeedingReauth seam so the landing handler sees a
+// fixed re-auth list without depending on global in-memory token state.
+func withReauth(t *testing.T, accounts []mytwitch.AccountReauth) {
+	t.Helper()
+	saved := accountsNeedingReauth
+	accountsNeedingReauth = func() []mytwitch.AccountReauth { return accounts }
+	t.Cleanup(func() { accountsNeedingReauth = saved })
+}
+
+func TestLandingHandler_RendersReauthPrompt(t *testing.T) {
+	defer SetTwitchConnected(false)
+	SetTwitchConnected(false)
+
+	withConf(t, func() {
+		c.Conf.VlcServerHost = "" // skip the vlc ping
+		c.Conf.ChannelName = "adanalife_"
+		c.Conf.BotUsername = "tripbot4000"
+		c.Conf.ExternalURL = "https://tripbot.prod.whereisdana.today"
+	})
+	withReauth(t, []mytwitch.AccountReauth{
+		{Account: "bot", LoginAs: "tripbot4000", Reason: "missing", InitURL: "https://tripbot.prod.whereisdana.today/auth/init?account=bot&login_as=tripbot4000"},
+		{Account: "broadcaster", LoginAs: "adanalife_", Reason: "expired", InitURL: "https://tripbot.prod.whereisdana.today/auth/init?account=broadcaster&login_as=adanalife_"},
+	})
+
+	rec := httptest.NewRecorder()
+	landingHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+
+	body := rec.Body.String()
+	for _, want := range []string{
+		"action needed: re-authenticate",
+		// html/template escapes & as &amp; in attribute values (valid HTML).
+		`href="https://tripbot.prod.whereisdana.today/auth/init?account=bot&amp;login_as=tripbot4000"`,
+		"Sign in as tripbot4000",
+		"(bot · missing)",
+		`href="https://tripbot.prod.whereisdana.today/auth/init?account=broadcaster&amp;login_as=adanalife_"`,
+		"Sign in as adanalife_",
+		"(broadcaster · expired)",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body missing %q", want)
+		}
+	}
+}
+
+func TestLandingHandler_NoReauthPromptWhenHealthy(t *testing.T) {
+	defer SetTwitchConnected(false)
+	SetTwitchConnected(true)
+
+	withConf(t, func() { c.Conf.VlcServerHost = "" })
+	withReauth(t, nil) // all tokens healthy
+
+	rec := httptest.NewRecorder()
+	landingHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+
+	if strings.Contains(rec.Body.String(), "re-authenticate") {
+		t.Errorf("re-auth prompt should be hidden when no account needs re-auth")
+	}
 }

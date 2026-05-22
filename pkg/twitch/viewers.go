@@ -1,7 +1,9 @@
 package twitch
 
 import (
+	"context"
 	"log/slog"
+
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/nicklaw5/helix/v2"
 )
@@ -55,7 +57,7 @@ func UpdateChatters() {
 		slog.Error("error getting chatters from twitch", "err", err)
 		return
 	}
-	if checkHelixResp("GetChannelChatChatters", &resp.ResponseCommon) {
+	if checkHelixResp(context.Background(), "GetChannelChatChatters", "bot", &resp.ResponseCommon) {
 		// don't overwrite cached chatter state with an empty response —
 		// 4xx here means the bot lost a scope or moderator role and the
 		// next call probably succeeds once that's fixed.

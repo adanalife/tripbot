@@ -289,6 +289,61 @@ func BroadcasterUserAccessToken() string {
 	return currentBroadcasterToken.AccessToken
 }
 
+// AccountReauth describes an account whose in-memory token is missing or
+// expired and therefore needs operator re-auth. The landing page renders one
+// "Sign in as <LoginAs>" link per entry, pointing at InitURL.
+type AccountReauth struct {
+	Account string // "bot" | "broadcaster" — the /auth/init account selector
+	LoginAs string // the exact Twitch username to sign in as
+	Reason  string // "missing" | "expired" — why re-auth is needed
+	InitURL string // /auth/init URL for this account
+}
+
+// tokenReason classifies a loaded token: "" when usable, else "missing"
+// (never loaded, or blanked by a failed refresh / invalid_grant) or
+// "expired" (loaded but past ExpiresAt — a narrow window, since the refresh
+// cron normally rotates 30m ahead).
+func tokenReason(t oauthtokens.Token) string {
+	if t.AccessToken == "" {
+		return "missing"
+	}
+	if !t.ExpiresAt.IsZero() && time.Now().After(t.ExpiresAt) {
+		return "expired"
+	}
+	return ""
+}
+
+// AccountsNeedingReauth returns the bot and/or broadcaster accounts whose
+// in-memory token is missing or expired, so the landing page can prompt for
+// re-auth. Returns nil when everything's healthy. The broadcaster is only
+// considered when a distinct broadcaster identity exists (ChannelName set and
+// != BotUsername) — otherwise there's no separate row to re-auth.
+func AccountsNeedingReauth() []AccountReauth {
+	tokenMu.RLock()
+	botReason := tokenReason(currentUserToken)
+	bcastReason := tokenReason(currentBroadcasterToken)
+	tokenMu.RUnlock()
+
+	var out []AccountReauth
+	if botReason != "" {
+		out = append(out, AccountReauth{
+			Account: "bot",
+			LoginAs: c.Conf.BotUsername,
+			Reason:  botReason,
+			InitURL: AuthInitURL("bot"),
+		})
+	}
+	if c.Conf.ChannelName != "" && c.Conf.ChannelName != c.Conf.BotUsername && bcastReason != "" {
+		out = append(out, AccountReauth{
+			Account: "broadcaster",
+			LoginAs: c.Conf.ChannelName,
+			Reason:  bcastReason,
+			InitURL: AuthInitURL("broadcaster"),
+		})
+	}
+	return out
+}
+
 // ErrIdentityMismatch is returned by GenerateUserAccessToken when the
 // discovered identity (via helix.GetUsers) doesn't match expectedLogin.
 // Callers should surface it with retry guidance; the wrong-identity row is
@@ -358,7 +413,9 @@ func GenerateUserAccessToken(code string, expectedLogin string) error {
 	if usersResp == nil {
 		return errors.New("twitch: nil response from GetUsers")
 	}
-	if checkHelixResp("GetUsers", &usersResp.ResponseCommon) {
+	// account="" — mid-bootstrap, re-reading the (not-yet-written) token would
+	// be wrong; surface the failure to the caller instead.
+	if checkHelixResp(context.Background(), "GetUsers", "", &usersResp.ResponseCommon) {
 		return fmt.Errorf("twitch: GetUsers returned %d during bootstrap", usersResp.StatusCode)
 	}
 	if len(usersResp.Data.Users) == 0 {
@@ -424,10 +481,36 @@ func RefreshUserAccessToken(ctx context.Context) {
 	botUser := c.Conf.BotUsername
 	broadcasterUser := c.Conf.ChannelName
 
-	refreshOne(ctx, botUser, applyBotToken)
+	refreshOne(ctx, botUser, applyBotToken, false)
 
 	if broadcasterUser != "" && broadcasterUser != botUser {
-		refreshOne(ctx, broadcasterUser, applyBroadcasterToken)
+		refreshOne(ctx, broadcasterUser, applyBroadcasterToken, false)
+	}
+}
+
+// Reauth re-establishes a usable user-access-token for the given account
+// ("bot" | "broadcaster") after an auth failure — an IRC login rejection or a
+// Helix 401. It forces a refresh via the stored refresh_token (skipping the
+// normal 30-minute pre-expiry window), then re-reads the row from the DB. The
+// DB is the source of truth: this picks up a token just written by the
+// auth-bootstrap flow (or by another tripbot's refresh) without a process
+// restart. When neither yields a usable token — e.g. a DB-restored row whose
+// refresh_token is also revoked — the in-memory slot is left blanked and the
+// reauth link is logged; the landing page's re-auth prompt then covers it.
+func Reauth(ctx context.Context, account string) {
+	username := c.Conf.BotUsername
+	apply := applyBotToken
+	if account == "broadcaster" {
+		username = c.Conf.ChannelName
+		apply = applyBroadcasterToken
+	}
+	refreshOne(ctx, username, apply, true)
+	// Re-read regardless of the refresh outcome: a concurrent auth-bootstrap
+	// may have written a fresh token that a refresh with the (also-stale)
+	// refresh_token couldn't produce.
+	if err := LoadFromDB(); err != nil {
+		slog.WarnContext(ctx, "reauth: no usable token after refresh + DB re-read",
+			"err", err, "login_as", username, "reauth_url", AuthInitURL(account))
 	}
 }
 
@@ -459,9 +542,15 @@ func applyBroadcasterToken(tok oauthtokens.Token) {
 // matching in-memory slot — also called on the empty-token path so the
 // caller's slot gets blanked (forcing reconnect / re-bootstrap signalling).
 //
+// force skips the 30-minute pre-expiry window: the hourly cron passes false
+// (only rotate when close to expiry), while Reauth passes true to rotate
+// immediately after an auth failure regardless of the stored ExpiresAt (which
+// is unreliable after a DB restore — the dump's expiry says "valid" but Twitch
+// has already invalidated the token).
+//
 // TODO: helix client surface should move behind an interface so this
 // function can be unit-tested without a real Twitch round-trip.
-func refreshOne(ctx context.Context, username string, applyInMemory func(oauthtokens.Token)) {
+func refreshOne(ctx context.Context, username string, applyInMemory func(oauthtokens.Token), force bool) {
 	acquired, release, err := oauthtokens.TryRefreshLock("twitch", username)
 	if err != nil {
 		slog.ErrorContext(ctx, "oauth refresh lock acquisition failed", "err", err, "username", username)
@@ -487,7 +576,7 @@ func refreshOne(ctx context.Context, username string, applyInMemory func(oauthto
 		return
 	}
 
-	if time.Until(t.ExpiresAt) > 30*time.Minute {
+	if !force && time.Until(t.ExpiresAt) > 30*time.Minute {
 		return
 	}
 

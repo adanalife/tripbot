@@ -36,7 +36,9 @@ func getChannelID(username string) string {
 		slog.Error("empty response from twitch")
 		return ""
 	}
-	if checkHelixResp("GetUsers", &resp.ResponseCommon) {
+	// account="" — GetUsers here authorizes against the app-access-token, not a
+	// user token, so re-reading a user token wouldn't fix a 401.
+	if checkHelixResp(context.Background(), "GetUsers", "", &resp.ResponseCommon) {
 		return ""
 	}
 
@@ -74,7 +76,7 @@ func GetSubscribers(ctx context.Context) {
 		slog.ErrorContext(ctx, "error getting subscriptions from twitch", "err", err)
 		return
 	}
-	if checkHelixResp("GetSubscriptions", &resp.ResponseCommon) {
+	if checkHelixResp(ctx, "GetSubscriptions", "broadcaster", &resp.ResponseCommon) {
 		// keep the prior subscriber list rather than zeroing it out
 		return
 	}
@@ -119,7 +121,7 @@ func GetFollowerCount(ctx context.Context) {
 		slog.ErrorContext(ctx, "error getting follower count from twitch", "err", err)
 		return
 	}
-	if checkHelixResp("GetChannelFollows", &resp.ResponseCommon) {
+	if checkHelixResp(ctx, "GetChannelFollows", "broadcaster", &resp.ResponseCommon) {
 		return
 	}
 	instrumentation.TwitchAudience.SetFollowers(int64(resp.Data.Total))
@@ -165,7 +167,7 @@ func UserIsFollower(username string) bool {
 		slog.Error("error getting user follows", "err", err)
 		return false
 	}
-	if checkHelixResp("GetChannelFollows", &resp.ResponseCommon) {
+	if checkHelixResp(context.Background(), "GetChannelFollows", "broadcaster", &resp.ResponseCommon) {
 		// fail closed: when we can't verify follow status, treat as non-follower
 		return false
 	}
