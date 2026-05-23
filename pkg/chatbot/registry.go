@@ -80,6 +80,33 @@ func (a *App) buildRegistry() []Command {
 			},
 		},
 		{
+			Trigger: "!twitter",
+			Handler: func(_ context.Context, _ *users.User, _ []string) {
+				sayFn("Follow on Twitter: https://twitter.com/adanalife_")
+			},
+		},
+		{
+			Trigger: "!instagram",
+			Aliases: []string{"!ig", "!insta"},
+			Handler: func(_ context.Context, _ *users.User, _ []string) {
+				sayFn("Follow on Instagram: https://instagram.com/adanalife_")
+			},
+		},
+		{
+			Trigger: "!facebook",
+			Aliases: []string{"!fb"},
+			Handler: func(_ context.Context, _ *users.User, _ []string) {
+				sayFn("Follow on Facebook: https://www.facebook.com/adanalifeblog")
+			},
+		},
+		{
+			Trigger: "!youtube",
+			Aliases: []string{"!yt"},
+			Handler: func(_ context.Context, _ *users.User, _ []string) {
+				sayFn("Subscribe on YouTube: https://www.youtube.com/channel/UC8Q7uFC1Xyr2ZnTWOk9Aizg")
+			},
+		},
+		{
 			Trigger: "!commands",
 			Aliases: []string{"!command", "¡command", "¡commands", "!commads", "!controls", "!commande"},
 			Handler: func(_ context.Context, _ *users.User, _ []string) {
