@@ -1,11 +1,12 @@
-"""Tiny admin-shim for the OBS container.
+"""obs-server: tiny HTTP listener bridging OBS to the admin panel.
 
 OBS itself doesn't expose an HTTP surface (only obs-websocket on :4455).
-The admin panel needs three things from OBS that the other Go services
-expose natively via their own HTTP listeners — health, version, and a
-shutdown endpoint that triggers a pod restart. This shim provides them
-in the same shape so the admin panel can treat OBS like any other
-service in the status table.
+The admin panel needs three things from OBS that vlc-server and
+onscreens-server expose natively via their own HTTP listeners — health,
+version, and a shutdown endpoint that triggers a pod restart. obs-server
+provides them in the same shape, so the admin panel can treat OBS like
+its sibling backend services in the status table. Named for symmetry
+with vlc-server / onscreens-server.
 
 Flask was picked over stdlib http.server because the route DSL reads
 obvious and we already have a Python venv in the image for obsws-python

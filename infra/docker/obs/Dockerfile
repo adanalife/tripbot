@@ -94,11 +94,11 @@ RUN mkdir -p /etc/tripbot \
 EXPOSE 5900
 EXPOSE 4455
 EXPOSE 6080
-# admin-shim: Flask app exposing /health/ready, /version, POST /admin/shutdown
-# so the admin panel can treat OBS like any other service. Port 8080 matches
-# the "primary HTTP listener" convention from tripbot and vlc-server (the OBS
-# pod has no other Go HTTP server, so 8080 is free here). Lives in the shared
-# /opt/obs/venv; supervised by admin-shim.conf.
+# obs-server: Flask app exposing /health/ready, /version, POST /admin/shutdown
+# so the admin panel can treat OBS like vlc-server / onscreens-server. Port
+# 8080 matches their "primary HTTP listener" convention (the OBS pod has no
+# other Go HTTP server, so 8080 is free here). Lives in the shared
+# /opt/obs/venv; supervised by obs-server.conf.
 EXPOSE 8080
 
 HEALTHCHECK --interval=10s --timeout=3s --retries=3 CMD /opt/obs/healthcheck.sh
