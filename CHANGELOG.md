@@ -14,6 +14,7 @@ Patch release. The landing page graduates into an admin panel: renamed throughou
 - **Rename "landing page" → "admin panel" throughout.** File `pkg/server/landing.go` → `admin.go` (paired test file too), Go symbols (`landingHandler`/`landingTmpl`/`landingData` → `admin*`), test names, and comment references across server / httpmw / instrumentation / cmd / twitch. URL route stays `/`. First sub-step of repurposing the page from a passive status surface into an admin/ops panel — actual admin features land in this release too (see below). ([#651])
 - **Logo is a refresh button.** Wraps the A Dana Life mark in `<a href="/">` so clicking it reloads the page. Cheap dynamic-feel UX since the panel refreshes its data per request anyway. ([#650])
 - **Per-service uptime pills.** Each row on the status table now carries an "up Xh" pill between name and version. Powered by a new `started_at` (RFC3339) field on each binary's `/version` response — tripbot, vlc-server, and onscreens-server — that callers can derive uptime from locally. ([#654])
+- **onscreens-server in the status table.** Third row alongside tripbot and vlc-server, probed via the existing `ONSCREENS_SERVER_HOST` env var (same `/health/ready` + `/version` shape vlc uses). Refactor extracts a `siblingStatus(name, host)` helper so future services drop in as one line. ([#656])
 - **Sentry env-link.** Sentry joins the dashboard link strip, pre-filtered to this env's issues via `?environment=<SENTRY_ENVIRONMENT>` (the same tag the sentry-go SDK already stamps on every event). ([#654])
 - **OBS stream on/off toggle with molly-switch confirm.** New "stream" section on the panel with a single button reflecting the inverse of OBS's current state: red "stop stream" when active, green "start stream" when idle, "OBS unreachable" when OBS is down. **Molly switch:** first click arms the button (relabel + redden, 5s timer); second click within the window submits. Click-away or timeout disarms. ~20 lines of vanilla JS, no deps. `POST /admin/obs/stream/{start,stop}` calls into the new `pkg/obs` control surface directly — no HTTP hop through vlc-server. Tailnet-only by virtue of the Ingress; no app-layer auth gate. ([#654])
 
@@ -36,6 +37,7 @@ Patch release. The landing page graduates into an admin panel: renamed throughou
 [#651]: https://github.com/adanalife/tripbot/pull/651
 [#652]: https://github.com/adanalife/tripbot/pull/652
 [#654]: https://github.com/adanalife/tripbot/pull/654
+[#656]: https://github.com/adanalife/tripbot/pull/656
 
 ## [v2.15.1] — 2026-05-24
 
