@@ -190,13 +190,15 @@ func (s *Server) Shutdown(ctx context.Context) error {
 // versionHandler returns build metadata as JSON. The tag comes from the
 // build-time ldflag (threaded through Config{Version} into the Server);
 // sha + built_at are read from the binary's embedded VCS info (Go's
-// automatic -buildvcs).
+// automatic -buildvcs). started_at is when the process began so callers
+// can derive uptime themselves.
 func (s *Server) versionHandler(w http.ResponseWriter, r *http.Request) {
 	resp := struct {
-		Tag     string `json:"tag"`
-		Sha     string `json:"sha"`
-		BuiltAt string `json:"built_at"`
-	}{Tag: s.Version}
+		Tag       string `json:"tag"`
+		Sha       string `json:"sha"`
+		BuiltAt   string `json:"built_at"`
+		StartedAt string `json:"started_at"`
+	}{Tag: s.Version, StartedAt: startedAt.UTC().Format(time.RFC3339)}
 
 	if info, ok := debug.ReadBuildInfo(); ok {
 		for _, set := range info.Settings {
@@ -214,6 +216,10 @@ func (s *Server) versionHandler(w http.ResponseWriter, r *http.Request) {
 		slog.ErrorContext(r.Context(), "couldn't encode version response", "err", err)
 	}
 }
+
+// startedAt marks process start so /version can report uptime. Set at
+// package load; close enough to process start for a human-readable "up Xh".
+var startedAt = time.Now()
 
 // tagged wraps a HandlerFunc so the http.route attribute is set on metrics
 // (via otelhttp.Labeler) and traces (via the active span), and overrides

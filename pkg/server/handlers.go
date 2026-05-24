@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"runtime/debug"
 	"sync/atomic"
+	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
@@ -63,13 +64,15 @@ func TwitchConnected() bool {
 
 // versionHandler returns build metadata as JSON. The tag comes from the
 // build-time ldflag; sha + built_at are read from the binary's embedded
-// VCS info (Go's automatic -buildvcs).
+// VCS info (Go's automatic -buildvcs). started_at is when the process
+// began (admin.startedAt) so callers can derive uptime themselves.
 func versionHandler(w http.ResponseWriter, r *http.Request) {
 	resp := struct {
-		Tag     string `json:"tag"`
-		Sha     string `json:"sha"`
-		BuiltAt string `json:"built_at"`
-	}{Tag: versionTag}
+		Tag       string `json:"tag"`
+		Sha       string `json:"sha"`
+		BuiltAt   string `json:"built_at"`
+		StartedAt string `json:"started_at"`
+	}{Tag: versionTag, StartedAt: startedAt.UTC().Format(time.RFC3339)}
 
 	if info, ok := debug.ReadBuildInfo(); ok {
 		for _, s := range info.Settings {
