@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"runtime/debug"
 	"strconv"
+	"time"
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/gorilla/mux"
@@ -49,17 +50,19 @@ func (s *Server) rtspHealthHandler(w http.ResponseWriter, r *http.Request) {
 // versionHandler returns build metadata as JSON. The tag comes from
 // Server.Version (injected via Config at construction time); sha +
 // built_at are read from the binary's embedded VCS info (Go's automatic
-// -buildvcs).
+// -buildvcs). started_at is when the process began so callers can derive
+// uptime themselves.
 func (s *Server) versionHandler(w http.ResponseWriter, r *http.Request) {
 	tag := s.Version
 	if tag == "" {
 		tag = "dev"
 	}
 	resp := struct {
-		Tag     string `json:"tag"`
-		Sha     string `json:"sha"`
-		BuiltAt string `json:"built_at"`
-	}{Tag: tag}
+		Tag       string `json:"tag"`
+		Sha       string `json:"sha"`
+		BuiltAt   string `json:"built_at"`
+		StartedAt string `json:"started_at"`
+	}{Tag: tag, StartedAt: startedAt.UTC().Format(time.RFC3339)}
 
 	if info, ok := debug.ReadBuildInfo(); ok {
 		for _, st := range info.Settings {
@@ -77,6 +80,10 @@ func (s *Server) versionHandler(w http.ResponseWriter, r *http.Request) {
 		slog.ErrorContext(r.Context(), "couldn't encode version response", "err", err)
 	}
 }
+
+// startedAt marks process start so /version can report uptime. Set at
+// package load; close enough to process start for a human-readable "up Xh".
+var startedAt = time.Now()
 
 func (s *Server) vlcCurrentHandler(w http.ResponseWriter, r *http.Request) {
 	// return the currently-playing file
