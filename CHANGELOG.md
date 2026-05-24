@@ -5,6 +5,29 @@
 
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
+## [v2.15.0] — 2026-05-23
+
+Minor release. Stream audio comes alive: SomaFM's Groove Salad Classic now feeds the OBS Main scene as background music, and `!song` / `!music` chat commands report the currently-playing track. Three more advertised-but-unwired chat commands (`!twitter`, `!instagram`, `!facebook`, `!youtube` plus short aliases) get registered — `!socialmedia` had been telling viewers about commands that silently did nothing. Smaller polish: the `!timewarp` cover holds long enough to span the inter-clip cut, and the landing page's Hubble link picks the right namespace per environment.
+
+### chatbot
+
+- **`!song` / `!music` commands.** Reports the track currently streaming on the OBS background-audio source. Polls `https://somafm.com/songs/gsclassic.json` with a 30s cache and a stale-fallback on fetch failure; wired through a new `App.NowPlaying` interface so tests don't touch the network. ([#643])
+- **`!twitter`, `!instagram`, `!facebook`, `!youtube`.** Inline handlers matching the `!discord` shape; URLs sourced from `website/source/_redirects`. Adds short aliases: `!ig` / `!insta` for Instagram, `!fb` for Facebook, `!yt` for YouTube. Closes a gap surfaced by a pre-launch audit — `!socialmedia` had been advertising these without them being registered. ([#641])
+
+### OBS
+
+- **Groove Salad Classic as the stream's background audio.** New `ffmpeg_source` in the OBS scene template points at SomaFM's mp3-128 Icecast mirror, routed to audio Track 1 (Twitch's track) and referenced by the Main scene so it plays whenever the scene is live. ([#643])
+- **`!timewarp` cover spans the inter-clip cut.** Bumped the cover animation 3.4s → 3.8s with a longer opaque hold so it stays opaque through the H.264 discontinuity instead of fading before the next clip's first frames decode. Server-side hide timer raised to 4.4s to match. On-screen text renamed "TIME WARP" → "TIMEWARP" to match the chat command spelling. ([#642])
+
+### tripbot
+
+- **Landing page Hubble link picks the namespace per environment.** Previously hardcoded to `?namespace=prod-1`; now derived from `ENV` (production → prod-1, staging → stage-1) so the stage-1 landing page deep-links into stage-1's flow view. ([#639])
+
+[#639]: https://github.com/adanalife/tripbot/pull/639
+[#641]: https://github.com/adanalife/tripbot/pull/641
+[#642]: https://github.com/adanalife/tripbot/pull/642
+[#643]: https://github.com/adanalife/tripbot/pull/643
+
 ## [v2.14.0] — 2026-05-22
 
 Minor release. tripbot's readiness probe is decoupled from the Twitch connection: the pod stays in the Service — and the landing page + OAuth endpoints stay reachable — even when the bot is offline, so the page used to re-auth a disconnected bot is no longer 503'd by the very outage it fixes. The landing page now surfaces re-auth links when a token is missing/expired, and stale tokens self-heal — on an IRC/Helix auth failure the bot re-reads `oauth_tokens` from the DB, so a freshly bootstrapped token is picked up without a restart. Also ships a `!followage` command, an "is this live" alias, and full EventSub event logging.
