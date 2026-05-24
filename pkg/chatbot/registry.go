@@ -110,7 +110,7 @@ func (a *App) buildRegistry() []Command {
 			Trigger: "!commands",
 			Aliases: []string{"!command", "¡command", "¡commands", "!commads", "!controls", "!commande"},
 			Handler: func(_ context.Context, _ *users.User, _ []string) {
-				sayFn("You can try: !location, !guess, !date, !state, !sunset, !timewarp, !miles, !leaderboard, and many other hidden commands!")
+				sayFn("You can try: !location, !guess, !date, !state, !sunset, !timewarp, !miles, !leaderboard, !song, and many other hidden commands!")
 			},
 		},
 		{
@@ -203,6 +203,11 @@ func (a *App) buildRegistry() []Command {
 			Aliases:        []string{"no audio", "no sound", "no music", "frozen"},
 			Handler:        a.reportCmd,
 			RequiresFollow: false,
+		},
+		{
+			Trigger: "!song",
+			Aliases: []string{"!music"},
+			Handler: a.songCmd,
 		},
 	}
 }

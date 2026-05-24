@@ -47,6 +47,10 @@ type App struct {
 	// recordingSessions to assert lookups and stage results; production
 	// uses the realSessions adapter.
 	Sessions Sessions
+	// NowPlaying reports the currently-playing track on the stream's
+	// background audio source. Tests inject a fake; production uses
+	// realNowPlaying which polls SomaFM.
+	NowPlaying NowPlaying
 }
 
 // db returns the DB handle the App should use. Prefers an explicit a.DB
@@ -61,11 +65,12 @@ func (a *App) db() *gorm.DB {
 
 var defaultApp = &App{
 	// DB stays nil; commands use a.db() which falls back to database.GormDB().
-	Onscreens: realOnscreens{c: onscreensClient.New(c.Conf.OnscreensServerHost)},
-	VLC:       realVLC{c: vlcClient.New(c.Conf.VlcServerHost)},
-	Video:     realVideo{},
-	IRC:       realIRC{},
-	Sessions:  realSessions{},
+	Onscreens:  realOnscreens{c: onscreensClient.New(c.Conf.OnscreensServerHost)},
+	VLC:        realVLC{c: vlcClient.New(c.Conf.VlcServerHost)},
+	Video:      realVideo{},
+	IRC:        realIRC{},
+	Sessions:   realSessions{},
+	NowPlaying: newRealNowPlaying(),
 }
 
 // used to determine which help message to display
