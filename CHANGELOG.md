@@ -5,6 +5,146 @@
 
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
+## [v2.15.2] — 2026-05-24
+
+Patch release. The landing page graduates into an admin panel: renamed throughout, with a clickable logo, per-service uptime pills, an env-aware Sentry deep-link, and a stream on/off toggle with a two-click molly switch. Small chatbot + onscreens polish on the side: `!song` no longer attributes SomaFM as the source (Twitch policy hedge), `!somafm` credit command added, and the `!timewarp` cover now reliably spans the inter-clip cut.
+
+### admin panel (formerly "landing page")
+
+- **Rename "landing page" → "admin panel" throughout.** File `pkg/server/landing.go` → `admin.go` (paired test file too), Go symbols (`landingHandler`/`landingTmpl`/`landingData` → `admin*`), test names, and comment references across server / httpmw / instrumentation / cmd / twitch. URL route stays `/`. First sub-step of repurposing the page from a passive status surface into an admin/ops panel — actual admin features land in this release too (see below). ([#651])
+- **Logo is a refresh button.** Wraps the A Dana Life mark in `<a href="/">` so clicking it reloads the page. Cheap dynamic-feel UX since the panel refreshes its data per request anyway. ([#650])
+- **Per-service uptime pills.** Each row on the status table now carries an "up Xh" pill between name and version. Powered by a new `started_at` (RFC3339) field on each binary's `/version` response — tripbot, vlc-server, and onscreens-server — that callers can derive uptime from locally. ([#654])
+- **onscreens-server in the status table.** Third row alongside tripbot and vlc-server, probed via the existing `ONSCREENS_SERVER_HOST` env var (same `/health/ready` + `/version` shape vlc uses). Refactor extracts a `siblingStatus(name, host)` helper so future services drop in as one line. ([#656])
+- **Sentry env-link.** Sentry joins the dashboard link strip, pre-filtered to this env's issues via `?environment=<SENTRY_ENVIRONMENT>` (the same tag the sentry-go SDK already stamps on every event). ([#654])
+- **OBS stream on/off toggle with molly-switch confirm.** New "stream" section on the panel with a single button reflecting the inverse of OBS's current state: red "stop stream" when active, green "start stream" when idle, "OBS unreachable" when OBS is down. **Molly switch:** first click arms the button (relabel + redden, 5s timer); second click within the window submits. Click-away or timeout disarms. ~20 lines of vanilla JS, no deps. `POST /admin/obs/stream/{start,stop}` calls into the new `pkg/obs` control surface directly — no HTTP hop through vlc-server. Tailnet-only by virtue of the Ingress; no app-layer auth gate. ([#654])
+
+### chatbot
+
+- **`!song` drops the SomaFM/Groove Salad attribution.** Replies with just the track now ("&lt;artist&gt; — &lt;title&gt;") instead of naming the source service — keeps the Twitch music-policy surface smaller while VOD-free playback continues. Adds a separate `!somafm` command that responds with a SomaFM credit + link, so the attribution stays available on demand. ([#648])
+
+### onscreens
+
+- **`!timewarp` cover spans the cut.** Bumped the cover animation another 200ms so it stays opaque through the H.264 discontinuity reliably, not just usually. Server-side hide timer bumped to match. ([#649])
+
+### obs / pkg
+
+- **`pkg/obs` gets a control surface.** New `obs.StartStream(ctx)`, `obs.StopStream(ctx)`, `obs.GetStreamStatus(ctx) (active bool, err error)` package-level functions that each open + close a fresh OBS WebSocket connection. Toggle clicks are rare, so a long-lived shared client isn't worth the coordination cost; `PollStreamingActive`'s existing connection stays as-is for the metrics path. `obs.ErrUnreachable` distinguishes "OBS down" from "OBS replied 'not streaming'", so the admin panel can render a different UX for each. ([#654])
+- **`obs.GetStreamStatus` transient errors demoted to `slog.Warn`.** Polling failures that recover within the reconnect window were spamming the error log + Sentry; warn-level keeps them in Loki without the noise. ([#652])
+
+[#648]: https://github.com/adanalife/tripbot/pull/648
+[#649]: https://github.com/adanalife/tripbot/pull/649
+[#650]: https://github.com/adanalife/tripbot/pull/650
+[#651]: https://github.com/adanalife/tripbot/pull/651
+[#652]: https://github.com/adanalife/tripbot/pull/652
+[#654]: https://github.com/adanalife/tripbot/pull/654
+[#656]: https://github.com/adanalife/tripbot/pull/656
+
+## [v2.15.1] — 2026-05-24
+
+Patch release. Closes two operational gaps surfaced in the launch cutover: viewer `!report` chat reports now POST to a Discord webhook (with the existing slog/Sentry path kept as audit trail), and vlc-server gains an in-process RTSP DESCRIBE watchdog that self-heals the silent "OPTIONS 200 / DESCRIBE 500 / OBS sees nothing" failure mode confirmed on both stage-1 and prod-1 over the past few days.
+
+### chatbot
+
+- **`!report` POSTs to a Discord webhook.** New optional `DISCORD_ALERTS_WEBHOOK` env var; when set, `!report` payloads (`**!report** from @user: <message>`) get a goroutined HTTP POST with a 5s timeout so the chat-handler path doesn't block on Discord latency. The existing `slog.ErrorContext` audit line (→ stderr + Sentry via the slog→Sentry handler) stays as the durable trail. Companion to the infra-side webhook plumbing ([adanalife/infra#571](https://github.com/adanalife/infra/pull/571/changes)). ([#645])
+
+### vlc-server
+
+- **RTSP DESCRIBE self-heal watchdog with resume-from-marker.** An in-process watchdog probes `localhost:8554` with an RTSP DESCRIBE every 30s; after 3 consecutive failures (~90s) it persists a resume marker with the currently-playing filename and SIGTERMs the process so supervisord respawns vlc-server. The next process reads the marker and resumes from that file — onscreens-server keeps serving throughout (separate supervisord program, no cycle). Also exposes the same signal as `/health/rtsp` for ad-hoc debugging. Closes a silent failure confirmed on both `stage-1` and `prod-1`: libvlc's RTSP listener answered OPTIONS (200) while DESCRIBE returned 500, `/health/ready` stayed green, but the sout chain was gone and OBS saw nothing for ~2 days. ([#646])
+
+[#645]: https://github.com/adanalife/tripbot/pull/645
+[#646]: https://github.com/adanalife/tripbot/pull/646
+
+## [v2.15.0] — 2026-05-23
+
+Minor release. Stream audio comes alive: SomaFM's Groove Salad Classic now feeds the OBS Main scene as background music, and `!song` / `!music` chat commands report the currently-playing track. Three more advertised-but-unwired chat commands (`!twitter`, `!instagram`, `!facebook`, `!youtube` plus short aliases) get registered — `!socialmedia` had been telling viewers about commands that silently did nothing. Smaller polish: the `!timewarp` cover holds long enough to span the inter-clip cut, and the landing page's Hubble link picks the right namespace per environment.
+
+### chatbot
+
+- **`!song` / `!music` commands.** Reports the track currently streaming on the OBS background-audio source. Polls `https://somafm.com/songs/gsclassic.json` with a 30s cache and a stale-fallback on fetch failure; wired through a new `App.NowPlaying` interface so tests don't touch the network. ([#643])
+- **`!twitter`, `!instagram`, `!facebook`, `!youtube`.** Inline handlers matching the `!discord` shape; URLs sourced from `website/source/_redirects`. Adds short aliases: `!ig` / `!insta` for Instagram, `!fb` for Facebook, `!yt` for YouTube. Closes a gap surfaced by a pre-launch audit — `!socialmedia` had been advertising these without them being registered. ([#641])
+
+### OBS
+
+- **Groove Salad Classic as the stream's background audio.** New `ffmpeg_source` in the OBS scene template points at SomaFM's mp3-128 Icecast mirror, routed to audio Track 1 (Twitch's track) and referenced by the Main scene so it plays whenever the scene is live. ([#643])
+- **`!timewarp` cover spans the inter-clip cut.** Bumped the cover animation 3.4s → 3.8s with a longer opaque hold so it stays opaque through the H.264 discontinuity instead of fading before the next clip's first frames decode. Server-side hide timer raised to 4.4s to match. On-screen text renamed "TIME WARP" → "TIMEWARP" to match the chat command spelling. ([#642])
+
+### tripbot
+
+- **Landing page Hubble link picks the namespace per environment.** Previously hardcoded to `?namespace=prod-1`; now derived from `ENV` (production → prod-1, staging → stage-1) so the stage-1 landing page deep-links into stage-1's flow view. ([#639])
+
+[#639]: https://github.com/adanalife/tripbot/pull/639
+[#641]: https://github.com/adanalife/tripbot/pull/641
+[#642]: https://github.com/adanalife/tripbot/pull/642
+[#643]: https://github.com/adanalife/tripbot/pull/643
+
+## [v2.14.0] — 2026-05-22
+
+Minor release. tripbot's readiness probe is decoupled from the Twitch connection: the pod stays in the Service — and the landing page + OAuth endpoints stay reachable — even when the bot is offline, so the page used to re-auth a disconnected bot is no longer 503'd by the very outage it fixes. The landing page now surfaces re-auth links when a token is missing/expired, and stale tokens self-heal — on an IRC/Helix auth failure the bot re-reads `oauth_tokens` from the DB, so a freshly bootstrapped token is picked up without a restart. Also ships a `!followage` command, an "is this live" alias, and full EventSub event logging.
+
+### tripbot
+
+- **Readiness decoupled from the Twitch connection.** `/health/ready` now returns 200 as soon as the HTTP server is up (via shared `pkg/httpmw` `LivenessHandler` / `ReadinessHandler` / `ReadyCheck` helpers, run with no checks for tripbot). Previously it gated on the Twitch IRC connection, so a disconnected single-replica pod was pulled from the Service and traefik 503'd every route — including the landing page and `/auth/init`. Chat-connection is now a non-gating signal: a `tripbot_twitch_connected` gauge (1/0) plus the landing-page status row ("in chat" / "not in chat"), so "up but not in chat" is surfaced without taking the pod out of rotation. ([#634])
+- **OAuth re-auth links on the landing page.** When the bot or broadcaster token is missing or expired, the landing page renders an "action needed: re-authenticate" callout with a "Sign in as `<login>`" button per account, linking to `/auth/init`. `pkg/twitch.AccountsNeedingReauth` reports which accounts need it (broadcaster only when it's a distinct identity), read under the token lock with no DB/network call. Reachable over the internal Ingress (and Tailscale off-LAN); the logged `reauth_url` stays as a backup. ([#635])
+- **Hubble dashboard link opens straight to the prod-1 namespace.** Appends `?namespace=prod-1` to the landing page's Hubble link so it lands in the flow view instead of the namespace picker (the Hubble UI is a single prod-zone install shared across envs). ([#630])
+
+### Twitch
+
+- **Self-heal stale tokens by re-reading the DB on auth failure.** Tokens were read once at boot and never re-read, so after a DB restore (stale `oauth_tokens` row) the pod 401'd indefinitely until a manual `rollout restart`. Now `twitch.Reauth(ctx, account)` forces a refresh via the stored `refresh_token` (skipping the 30-minute pre-expiry window) then re-reads the row, treating the DB as source of truth. The IRC connect loop calls it on `ErrLoginAuthenticationFailed`, and `checkHelixResp` calls it on a 401 (with `account=""` opting out the app-token and mid-bootstrap calls; 403 scope-loss is unaffected). A token written by `auth:bootstrap` — or by the landing-page re-auth click — is now picked up within one retry cycle, no restart. ([#636])
+- **Log every received EventSub event via `OnRawEvent`.** A catch-all handler in `pkg/eventsub` logs every received notification (`type` + `message_id` + raw payload), whether or not a typed handler is wired for it — an observability-first step toward designing per-event chat shouts from real Loki data. Typed events (follow, subscribe) get both the raw log line and their handler. ([#633])
+
+### chatbot
+
+- **`!followage` command** (alias `!followtime`). Reports how long a viewer has followed the channel; bare `!followage` = the caller, `!followage @user` looks someone else up. New `twitch.FollowedAt` reads `followed_at` from Helix `GetChannelFollows` on the existing broadcaster-token path; duration rendered with `durafmt` (2 units, matching `!uptime`). Not follower-gated; non-followers get a friendly nudge. ([#632])
+- **"is this live" aliased to `!date`.** The natural-language question now routes to the command that answers it (multi-word non-`!` aliases were already supported). ([#631])
+
+[#630]: https://github.com/adanalife/tripbot/pull/630
+[#631]: https://github.com/adanalife/tripbot/pull/631
+[#632]: https://github.com/adanalife/tripbot/pull/632
+[#633]: https://github.com/adanalife/tripbot/pull/633
+[#634]: https://github.com/adanalife/tripbot/pull/634
+[#635]: https://github.com/adanalife/tripbot/pull/635
+[#636]: https://github.com/adanalife/tripbot/pull/636
+
+## [v2.13.1] — 2026-05-21
+
+Patch release. tripbot's Ingress root — previously a bare 404 — now serves a lightweight landing-page dashboard (mostly a phone bookmark): a status overview, the currently-playing clip, the broadcaster/bot accounts, and links to the OBS / Grafana / Traefik / Hubble dashboards. Also throttles the token-poll warning that spammed the logs while a pod waits on re-auth.
+
+### tripbot
+
+- **Landing-page dashboard on the Ingress root.** `/` used to 404; it now renders a small dark status page served by `pkg/server` (the old `catchAllHandler` moves to the router's `NotFoundHandler`, so unknown paths still 404). Shows a status overview — tripbot's own readiness (in-memory) plus a live in-cluster ping of vlc-server's `/health/ready` — with each service's build tag in a far-right column linking to that build's `CHANGELOG.md` at its sha (tripbot's own; vlc-server's fetched from its `/version`). When vlc is healthy it also shows the currently-playing clip (file · state · elapsed, read from `pkg/video`'s in-process value — no extra call) and the in-chat count. The header carries the environment; below it the broadcaster + bot Twitch profiles, then a row of dashboard links (OBS noVNC derived from `EXTERNAL_URL`, plus the prod-zone Grafana / Traefik / Hubble UIs). Logo + favicon are referenced from the website's published assets, not copied in. Sibling pings use a 2s-timeout client so a hung vlc-server can't stall the render. ([#628])
+
+### Logging
+
+- **Throttle the "still waiting for Twitch token" poll warning.** `pollForTwitchToken` still checks `LoadFromDB` every 15s (so a freshly-landed token is picked up promptly), but the WARN now logs at most every 15m instead of on every check (~240/hr → ~4/hr while a pod waits on re-auth); the first poll-failure log is suppressed since boot already logged the re-auth link once. Also appends `login_as=<username>` to the logged reauth URL so it names the exact account to sign in as. ([#627])
+
+[#627]: https://github.com/adanalife/tripbot/pull/627
+[#628]: https://github.com/adanalife/tripbot/pull/628
+
+## [v2.13.0] — 2026-05-21
+
+Minor release. tripbot now boots degraded instead of crashlooping when Twitch or its OAuth token is unavailable, and surfaces a clickable re-auth link in the logs so recovery is a click rather than a CLI run. On the streaming side, the inter-clip-flash chase concludes: page-cache priming is reverted (didn't move the metric — the gap is libvlc pausing RTP, not file-open latency), and `!timewarp` instead masks the gap with a full-screen warp animation.
+
+### Resilience
+
+- **Start degraded instead of crashlooping when Twitch/token is unavailable.** Two crash paths fixed so the bot comes up with limited functionality and reports *not-ready* rather than dying. (1) When Twitch is unreachable, helix's `RequestAppAccessToken` returns a nil response that `mytwitch.Client()` dereferenced — now guarded, and the tokenless client isn't cached so callers retry once Twitch returns. (2) After a cluster wipe the `oauth_tokens` row is absent; `loadTwitchToken` no longer `os.Exit(1)`s — the bot starts (HTTP, cron, DB-backed features), reports not-ready, and polls `LoadFromDB` in the background until the row lands, then pushes the token into the IRC client. `/health/ready` returns 503 until the IRC connection is established (flipping via the `OnConnect` callback); `/health/live` stays always-200 so the orchestrator doesn't restart the pod while it waits. tripbot is outbound-only, so readiness is a rollout/status signal, not traffic gating. Also adds `task test:macos`, a host-based (mise, no docker) test runner per the `golang-development-with-mise` ADR. ([#624])
+- **Surface the OAuth re-auth URL in the logs when the token is missing/expired.** The boot warning, the 15s "still waiting" poll log, the hourly refresh-failure path, and the IRC `ErrLoginAuthenticationFailed` path all now carry a `reauth_url` attribute pointing at `/auth/init`, plus a `login_as` attribute naming the exact account to sign in as (bot vs broadcaster) — so re-auth across three envs and up to six accounts is a click, not a guess. New `mytwitch.AuthInitURL(account)` helper; the auth-bootstrap CLI logs `login_as` up front too. We log the `/auth/init` indirection URL (no `state`, no secret — asserted by test), not the fully-formed Twitch authorize URL whose CSRF `state` would be stale and would land in Loki/Sentry. Clickable from any on-LAN browser via the Ingress `EXTERNAL_URL` set in [adanalife/infra#557]. ([#625])
+
+### Streaming
+
+- **`!timewarp` masks the inter-clip gap with a full-screen warp animation.** The hard cut to a random clip triggers an OBS H.264 discontinuity that briefly clears the dashcam layer — the flash we'd been chasing at the pipeline level. Rather than fix the pipeline, the reworked `!timewarp` overlay (was a small "Timewarp!" text box) slams up a full-screen opaque charcoal warp tunnel with center-burst speed-lines and bold **TIME WARP** text, *physically covering* the gap, then fades onto the new clip — thematically on-point. Timeline ~3.4s: cover slams opaque (~0.4s) → holds through the jump (~2s) → fades to reveal (~0.6s). chatbot waits 800ms after `ShowTimewarp()` before `PlayRandom()` so the cover is up before the cut; the timewarp browser source goes full-canvas at the profile fps. Every other onscreen's render path is byte-for-byte unchanged. ([#623])
+- **Revert vlc-server page-cache priming ([#619]).** Priming did not fix the inter-clip flash. Packet analysis showed the gap is libvlc's `PlayAtIndex` pausing RTP emission during the media switch (RTP-over-TCP on 8554 goes idle, no disconnect) — *not* file-open latency, which is what priming addressed; with the file already warm the gap was unchanged. Removed per the "keep only proven changes" principle (primer goroutine, warm-random pool, config knobs all gone). ([#622])
+
+### OBS
+
+- **Default noVNC to local scaling + autoconnect.** The noVNC `index.html` symlink becomes a redirect to `vnc.html?resize=scale&autoconnect=true&reconnect=true`, so opening the OBS VNC URL scales the 1920×1080 canvas to fit the browser window and connects without a manual click. `resize=scale` (not `remote`) keeps the sway output and OBS composition at 1920×1080 — only the client view scales. ([#621])
+
+[#621]: https://github.com/adanalife/tripbot/pull/621
+[#622]: https://github.com/adanalife/tripbot/pull/622
+[#623]: https://github.com/adanalife/tripbot/pull/623
+[#624]: https://github.com/adanalife/tripbot/pull/624
+[#625]: https://github.com/adanalife/tripbot/pull/625
+[adanalife/infra#557]: https://github.com/adanalife/infra/pull/557
+
 ## [v2.12.0] — 2026-05-19
 
 Minor release. OBS VNC moves into the browser via noVNC, replacing the native-client path that never actually worked with macOS Screen Sharing.app. On the streaming side, the inter-clip flash gets its load-bearing fix (page-cache priming) after the VAAPI-transcode approach from v2.11.3 was backed out.
