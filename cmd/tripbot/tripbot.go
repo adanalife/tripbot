@@ -199,8 +199,8 @@ func startCron() {
 // token lands — rather than crashlooping. A crashing pod after a wipe also
 // raced the DB restore's migrate init (see the 2026-05-20 convergence-wipe
 // notes); staying up avoids that. The pod stays Ready throughout (readiness
-// no longer gates on Twitch) so the landing page + /auth/init are reachable
-// to re-auth; "not in chat" is surfaced via the landing page + the
+// no longer gates on Twitch) so the admin panel + /auth/init are reachable
+// to re-auth; "not in chat" is surfaced via the admin panel + the
 // tripbot_twitch_connected gauge instead.
 func loadTwitchToken(ctx context.Context) {
 	if err := mytwitch.LoadFromDB(); err != nil {
@@ -282,9 +282,9 @@ func connectToTwitch() {
 	slog.Info("joined channel", "channel", c.Conf.ChannelName, "url", fmt.Sprintf("https://twitch.tv/%s", c.Conf.ChannelName))
 
 	// Mark the bot connected to chat once the IRC connection is established.
-	// This drives the landing-page status row + the tripbot_twitch_connected
+	// This drives the admin-panel status row + the tripbot_twitch_connected
 	// gauge — it does NOT gate /health/ready, which stays 200 so the pod keeps
-	// serving the landing page + /auth/* even while the bot is offline.
+	// serving the admin panel + /auth/* even while the bot is offline.
 	client.OnConnect(func() {
 		slog.Info("connected to Twitch chat")
 		server.SetTwitchConnected(true)
@@ -295,7 +295,7 @@ func connectToTwitch() {
 	for {
 		slog.Info("initializing connection to Twitch")
 		// Connect blocks while connected and returns when the connection
-		// drops; mark not-in-chat so the landing page + gauge reflect the gap
+		// drops; mark not-in-chat so the admin panel + gauge reflect the gap
 		// until the next OnConnect fires.
 		err := client.Connect()
 		server.SetTwitchConnected(false)
@@ -314,7 +314,7 @@ func connectToTwitch() {
 				} else {
 					// Reauth couldn't produce a token (refresh_token revoked and
 					// no fresh row in the DB yet). Surface the re-bootstrap link
-					// so re-auth is a click; the landing page shows it too.
+					// so re-auth is a click; the admin panel shows it too.
 					slog.Error("IRC auth failed and no valid token after reauth; re-bootstrap needed", "login_as", c.Conf.BotUsername, "reauth_url", mytwitch.AuthInitURL("bot"))
 				}
 			}

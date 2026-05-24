@@ -53,7 +53,7 @@ func TestChangelogURL(t *testing.T) {
 	}
 }
 
-func TestLandingHandler_RendersReadyStatusAndLinks(t *testing.T) {
+func TestAdminHandler_RendersReadyStatusAndLinks(t *testing.T) {
 	defer SetTwitchConnected(false)
 	SetTwitchConnected(true)
 	withReauth(t, nil) // healthy tokens — no re-auth callout
@@ -87,7 +87,7 @@ func TestLandingHandler_RendersReadyStatusAndLinks(t *testing.T) {
 	SetVersion("v1.2.3")
 
 	rec := httptest.NewRecorder()
-	landingHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	adminHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("got status %d, want %d", rec.Code, http.StatusOK)
@@ -122,7 +122,7 @@ func TestLandingHandler_RendersReadyStatusAndLinks(t *testing.T) {
 	}
 }
 
-func TestLandingHandler_DegradedAndVlcUnreachable(t *testing.T) {
+func TestAdminHandler_DegradedAndVlcUnreachable(t *testing.T) {
 	defer SetTwitchConnected(false)
 	SetTwitchConnected(false)
 	withReauth(t, nil)
@@ -138,7 +138,7 @@ func TestLandingHandler_DegradedAndVlcUnreachable(t *testing.T) {
 	withCurrentlyPlaying(t, video.Video{Slug: "wy_0042", State: "Wyoming"}, time.Minute)
 
 	rec := httptest.NewRecorder()
-	landingHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	adminHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("got status %d, want %d", rec.Code, http.StatusOK)
@@ -155,7 +155,7 @@ func TestLandingHandler_DegradedAndVlcUnreachable(t *testing.T) {
 	}
 }
 
-// withConf snapshots the config fields the landing handler reads, runs set to
+// withConf snapshots the config fields the admin handler reads, runs set to
 // mutate them for the test, and restores them afterward.
 func withConf(t *testing.T, set func()) {
 	t.Helper()
@@ -173,7 +173,7 @@ func withConf(t *testing.T, set func()) {
 }
 
 // withCurrentlyPlaying swaps the currentlyPlaying / currentProgress seams so
-// the landing handler sees a fixed video + progress without driving the player.
+// the admin handler sees a fixed video + progress without driving the player.
 func withCurrentlyPlaying(t *testing.T, v video.Video, progress time.Duration) {
 	t.Helper()
 	savedV, savedP := currentlyPlaying, currentProgress
@@ -190,7 +190,7 @@ func withChatterCount(t *testing.T, n int) {
 	t.Cleanup(func() { chatterCount = saved })
 }
 
-// withReauth swaps the accountsNeedingReauth seam so the landing handler sees a
+// withReauth swaps the accountsNeedingReauth seam so the admin handler sees a
 // fixed re-auth list without depending on global in-memory token state.
 func withReauth(t *testing.T, accounts []mytwitch.AccountReauth) {
 	t.Helper()
@@ -199,7 +199,7 @@ func withReauth(t *testing.T, accounts []mytwitch.AccountReauth) {
 	t.Cleanup(func() { accountsNeedingReauth = saved })
 }
 
-func TestLandingHandler_RendersReauthPrompt(t *testing.T) {
+func TestAdminHandler_RendersReauthPrompt(t *testing.T) {
 	defer SetTwitchConnected(false)
 	SetTwitchConnected(false)
 
@@ -215,7 +215,7 @@ func TestLandingHandler_RendersReauthPrompt(t *testing.T) {
 	})
 
 	rec := httptest.NewRecorder()
-	landingHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	adminHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 
 	body := rec.Body.String()
 	for _, want := range []string{
@@ -234,7 +234,7 @@ func TestLandingHandler_RendersReauthPrompt(t *testing.T) {
 	}
 }
 
-func TestLandingHandler_NoReauthPromptWhenHealthy(t *testing.T) {
+func TestAdminHandler_NoReauthPromptWhenHealthy(t *testing.T) {
 	defer SetTwitchConnected(false)
 	SetTwitchConnected(true)
 
@@ -242,7 +242,7 @@ func TestLandingHandler_NoReauthPromptWhenHealthy(t *testing.T) {
 	withReauth(t, nil) // all tokens healthy
 
 	rec := httptest.NewRecorder()
-	landingHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	adminHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 
 	if strings.Contains(rec.Body.String(), "re-authenticate") {
 		t.Errorf("re-auth prompt should be hidden when no account needs re-auth")

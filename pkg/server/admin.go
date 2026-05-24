@@ -16,17 +16,17 @@ import (
 	"github.com/adanalife/tripbot/pkg/video"
 )
 
-// startedAt marks process start so the landing page can report uptime. Set at
+// startedAt marks process start so the admin panel can report uptime. Set at
 // package load; close enough to process start for a human-readable "up Xh".
 var startedAt = time.Now()
 
 // healthClient is the short-timeout client used for the sibling-service status
-// ping. 2s keeps a slow or hung vlc-server from stalling the landing render.
+// ping. 2s keeps a slow or hung vlc-server from stalling the panel render.
 var healthClient = &http.Client{Timeout: 2 * time.Second}
 
 // currentlyPlaying / currentProgress are overridable in tests; by default they
 // read pkg/video's in-process state (refreshed by a 60s cron tick), so the
-// landing page costs nothing to show "now playing".
+// admin panel costs nothing to show "now playing".
 var (
 	currentlyPlaying = video.CurrentlyPlaying
 	currentProgress  = video.CurrentProgress
@@ -34,7 +34,7 @@ var (
 	// the UpdateSession cron. Overridable in tests.
 	chatterCount = mytwitch.ChatterCount
 	// accountsNeedingReauth reports which Twitch accounts have a missing/expired
-	// token; the landing page renders a re-auth prompt for each. Overridable in
+	// token; the admin panel renders a re-auth prompt for each. Overridable in
 	// tests. Reads in-memory token state — no DB or network call.
 	accountsNeedingReauth = mytwitch.AccountsNeedingReauth
 )
@@ -56,7 +56,7 @@ const (
 	hubbleBaseURL = "https://hubble.prod.whereisdana.today/"
 )
 
-// serviceStatus is one row in the landing page's status table.
+// serviceStatus is one row in the admin panel's status table.
 type serviceStatus struct {
 	Name       string
 	OK         bool
@@ -78,14 +78,14 @@ type nowPlaying struct {
 	Progress string
 }
 
-// navLink is one entry in the landing page's links list.
+// navLink is one entry in the admin panel's links list.
 type navLink struct {
 	Label string
 	URL   string
 }
 
-// landingData is the template payload.
-type landingData struct {
+// adminData is the template payload.
+type adminData struct {
 	Channel  string // broadcaster Twitch username
 	Bot      string // bot Twitch username
 	Env      string
@@ -97,12 +97,12 @@ type landingData struct {
 	Reauth   []mytwitch.AccountReauth // accounts whose token needs re-auth; empty when healthy
 }
 
-// landingHandler serves the human-facing root page on the tripbot Ingress: a
+// adminHandler serves the human-facing root page on the tripbot Ingress: a
 // lightweight status overview (tripbot's own readiness + a live vlc-server
 // ping, each version linking to its changelog), the currently-playing video
 // when vlc is up, the broadcaster/bot accounts, and links to the OBS / Grafana
 // / Traefik / Hubble dashboards. Replaces the bare 404 that used to sit on "/".
-func landingHandler(w http.ResponseWriter, r *http.Request) {
+func adminHandler(w http.ResponseWriter, r *http.Request) {
 	vlcOK := c.Conf.VlcServerHost != "" &&
 		pingHealthy(r.Context(), "http://"+c.Conf.VlcServerHost+"/health/ready")
 
@@ -112,7 +112,7 @@ func landingHandler(w http.ResponseWriter, r *http.Request) {
 		vlcVer = fetchVersion(r.Context(), c.Conf.VlcServerHost)
 	}
 
-	data := landingData{
+	data := adminData{
 		Channel:  c.Conf.ChannelName,
 		Bot:      c.Conf.BotUsername,
 		Env:      c.Conf.Environment,
@@ -125,8 +125,8 @@ func landingHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := landingTmpl.Execute(w, data); err != nil {
-		slog.ErrorContext(r.Context(), "couldn't render landing page", "err", err)
+	if err := adminTmpl.Execute(w, data); err != nil {
+		slog.ErrorContext(r.Context(), "couldn't render admin panel", "err", err)
 	}
 }
 
@@ -289,7 +289,7 @@ func siblingURL(externalURL, service string) string {
 	return u.String()
 }
 
-var landingTmpl = template.Must(template.New("landing").Parse(`<!doctype html>
+var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
