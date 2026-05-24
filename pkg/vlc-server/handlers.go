@@ -77,7 +77,11 @@ func (s *Server) vlcPlayHandler(w http.ResponseWriter, r *http.Request) {
 	videoFile := vars["video"]
 
 	spew.Dump(videoFile)
-	s.playVideoFile(videoFile)
+	if err := s.PlayVideoFile(videoFile); err != nil {
+		slog.ErrorContext(r.Context(), "couldn't play requested video", "err", err, "video", videoFile)
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
 
 	//TODO: better response
 	fmt.Fprintf(w, "OK")
