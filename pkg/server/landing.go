@@ -306,6 +306,8 @@ var landingTmpl = template.Must(template.New("landing").Parse(`<!doctype html>
   main { width:min(92vw,520px); padding:clamp(24px,4vw,48px); }
   /* logo is the monochrome black mark; invert to white on the dark bg */
   .logo { width:clamp(44px,5vw,60px); height:auto; filter:invert(1); opacity:.92; display:block; margin:0 0 16px; }
+  .logo-link { display:inline-block; }
+  .logo-link:hover .logo { opacity:1; }
   h1 { font-size:clamp(20px,1.2vw + 15px,28px); margin:0 0 4px; letter-spacing:.02em; }
   .env { font-family:var(--mono); background:#1a1a1a; border:1px solid #262626; color:#cdd; padding:2px 7px; border-radius:5px; font-size:.5em; font-weight:normal; letter-spacing:0; vertical-align:middle; }
   .meta { color:#888; margin:0 0 2px; font-size:.92em; }
@@ -340,8 +342,9 @@ var landingTmpl = template.Must(template.New("landing").Parse(`<!doctype html>
 <body>
 <main>
   <!-- A Dana Life mark, referenced from the website (the single owner of brand
-       assets) rather than copied in — see vault general/logo.md. -->
-  <img class="logo" src="https://www.dana.lol/assets/logo.png" alt="A Dana Life" width="44" height="44">
+       assets) rather than copied in — see vault general/logo.md. The anchor
+       wraps the mark so clicking it refreshes the page. -->
+  <a class="logo-link" href="/" title="refresh"><img class="logo" src="https://www.dana.lol/assets/logo.png" alt="A Dana Life" width="44" height="44"></a>
   <h1>tripbot <code class="env">{{.Env}}</code></h1>
   <p class="meta">up {{.Uptime}} · {{.Chatters}} in chat</p>
   <p class="accounts">broadcaster <a href="https://twitch.tv/{{.Channel}}">{{.Channel}}</a> · bot <a href="https://twitch.tv/{{.Bot}}">{{.Bot}}</a></p>
