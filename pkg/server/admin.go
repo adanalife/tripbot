@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"os"
 	"runtime/debug"
 	"strings"
 	"time"
@@ -54,6 +55,9 @@ const (
 	// lands straight in that namespace's flow view instead of Hubble's "choose
 	// a namespace" page — see hubbleNamespace.
 	hubbleBaseURL = "https://hubble.prod.whereisdana.today/"
+	// sentryURL is the org's issue list. gatherLinks appends ?environment=<env>
+	// so the link lands pre-filtered to this env's issues — see sentryEnv.
+	sentryURL = "https://a-dana-life.sentry.io/issues/"
 )
 
 // serviceStatus is one row in the admin panel's status table.
@@ -63,12 +67,14 @@ type serviceStatus struct {
 	Detail     string
 	Version    string // optional build tag (e.g. vlc-server's, from /version)
 	VersionURL string // changelog link (at the build's sha) for Version
+	Uptime     string // human-readable "up Xh"; empty when the service is unreachable
 }
 
 // versionInfo is the subset of a service's /version JSON the page uses.
 type versionInfo struct {
-	Tag string `json:"tag"`
-	Sha string `json:"sha"`
+	Tag       string `json:"tag"`
+	Sha       string `json:"sha"`
+	StartedAt string `json:"started_at"` // RFC3339; used to derive uptime locally
 }
 
 // nowPlaying is the current-video summary shown when vlc-server is healthy.
@@ -142,6 +148,7 @@ func gatherStatus(vlcOK bool, vlcVer versionInfo, sha string) []serviceStatus {
 		OK:         twitchConnected.Load(),
 		Version:    versionTag,
 		VersionURL: changelogURL(sha),
+		Uptime:     uptimeSince(startedAt),
 	}
 	if tripbot.OK {
 		tripbot.Detail = "in chat"
@@ -158,9 +165,18 @@ func gatherStatus(vlcOK bool, vlcVer versionInfo, sha string) []serviceStatus {
 		vlc.Detail = "healthy"
 		vlc.Version = vlcVer.Tag
 		vlc.VersionURL = changelogURL(vlcVer.Sha) // same repo as tripbot
+		if t, err := time.Parse(time.RFC3339, vlcVer.StartedAt); err == nil {
+			vlc.Uptime = uptimeSince(t)
+		}
 	}
 
 	return []serviceStatus{tripbot, vlc}
+}
+
+// uptimeSince formats a "since" duration as the short Go duration string
+// rounded to the second — matches the meta-line uptime format.
+func uptimeSince(t time.Time) string {
+	return time.Since(t).Round(time.Second).String()
 }
 
 // currentVideo summarizes the currently-playing video for the page, but only
@@ -244,8 +260,21 @@ func gatherLinks() []navLink {
 		navLink{Label: "grafana", URL: grafanaURL},
 		navLink{Label: "traefik", URL: traefikURL},
 		navLink{Label: "hubble", URL: hubbleBaseURL + "?namespace=" + hubbleNamespace()},
+		navLink{Label: "sentry", URL: sentryURL + "?environment=" + sentryEnv()},
 	)
 	return links
+}
+
+// sentryEnv returns the environment tag Sentry events carry, so the admin
+// panel's "sentry" link lands pre-filtered to this env's issues. Reads
+// SENTRY_ENVIRONMENT (what the sentry-go SDK uses) so the link tag stays
+// in sync with the events. Falls back to ENV for cases (tests, unset envs)
+// where SENTRY_ENVIRONMENT isn't set.
+func sentryEnv() string {
+	if v := os.Getenv("SENTRY_ENVIRONMENT"); v != "" {
+		return v
+	}
+	return c.Conf.Environment
 }
 
 // hubbleNamespace returns the Kubernetes namespace to deep-link the Hubble flow
@@ -316,6 +345,7 @@ var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
   ul { list-style:none; margin:0; padding:0; }
   .row { display:flex; align-items:center; gap:12px; padding:7px 0; border-bottom:1px solid #1c1c1c; }
   .row .name { flex:1; }
+  .row .uptime { font-size:.85em; color:#666; }
   .row .ver { font-family:var(--mono); font-size:.85em; color:#777; }
   /* status hugs the far right and right-aligns so it forms a clean column,
      aligned whether or not the row carries a version */
@@ -365,6 +395,7 @@ var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
     <li class="row">
       <span class="dot {{if .OK}}up{{else}}down{{end}}"></span>
       <span class="name">{{.Name}}</span>
+      {{if .Uptime}}<span class="uptime">up {{.Uptime}}</span>{{end}}
       {{if .Version}}<span class="ver">{{if .VersionURL}}<a href="{{.VersionURL}}">{{.Version}}</a>{{else}}{{.Version}}{{end}}</span>{{end}}
       <span class="status">{{.Detail}}</span>
     </li>
