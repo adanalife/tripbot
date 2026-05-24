@@ -5,6 +5,38 @@
 
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
+## [v2.15.2] — 2026-05-24
+
+Patch release. The landing page graduates into an admin panel: renamed throughout, with a clickable logo, per-service uptime pills, an env-aware Sentry deep-link, and a stream on/off toggle with a two-click molly switch. Small chatbot + onscreens polish on the side: `!song` no longer attributes SomaFM as the source (Twitch policy hedge), `!somafm` credit command added, and the `!timewarp` cover now reliably spans the inter-clip cut.
+
+### admin panel (formerly "landing page")
+
+- **Rename "landing page" → "admin panel" throughout.** File `pkg/server/landing.go` → `admin.go` (paired test file too), Go symbols (`landingHandler`/`landingTmpl`/`landingData` → `admin*`), test names, and comment references across server / httpmw / instrumentation / cmd / twitch. URL route stays `/`. First sub-step of repurposing the page from a passive status surface into an admin/ops panel — actual admin features land in this release too (see below). ([#651])
+- **Logo is a refresh button.** Wraps the A Dana Life mark in `<a href="/">` so clicking it reloads the page. Cheap dynamic-feel UX since the panel refreshes its data per request anyway. ([#650])
+- **Per-service uptime pills.** Each row on the status table now carries an "up Xh" pill between name and version. Powered by a new `started_at` (RFC3339) field on each binary's `/version` response — tripbot, vlc-server, and onscreens-server — that callers can derive uptime from locally. ([#654])
+- **Sentry env-link.** Sentry joins the dashboard link strip, pre-filtered to this env's issues via `?environment=<SENTRY_ENVIRONMENT>` (the same tag the sentry-go SDK already stamps on every event). ([#654])
+- **OBS stream on/off toggle with molly-switch confirm.** New "stream" section on the panel with a single button reflecting the inverse of OBS's current state: red "stop stream" when active, green "start stream" when idle, "OBS unreachable" when OBS is down. **Molly switch:** first click arms the button (relabel + redden, 5s timer); second click within the window submits. Click-away or timeout disarms. ~20 lines of vanilla JS, no deps. `POST /admin/obs/stream/{start,stop}` calls into the new `pkg/obs` control surface directly — no HTTP hop through vlc-server. Tailnet-only by virtue of the Ingress; no app-layer auth gate. ([#654])
+
+### chatbot
+
+- **`!song` drops the SomaFM/Groove Salad attribution.** Replies with just the track now ("&lt;artist&gt; — &lt;title&gt;") instead of naming the source service — keeps the Twitch music-policy surface smaller while VOD-free playback continues. Adds a separate `!somafm` command that responds with a SomaFM credit + link, so the attribution stays available on demand. ([#648])
+
+### onscreens
+
+- **`!timewarp` cover spans the cut.** Bumped the cover animation another 200ms so it stays opaque through the H.264 discontinuity reliably, not just usually. Server-side hide timer bumped to match. ([#649])
+
+### obs / pkg
+
+- **`pkg/obs` gets a control surface.** New `obs.StartStream(ctx)`, `obs.StopStream(ctx)`, `obs.GetStreamStatus(ctx) (active bool, err error)` package-level functions that each open + close a fresh OBS WebSocket connection. Toggle clicks are rare, so a long-lived shared client isn't worth the coordination cost; `PollStreamingActive`'s existing connection stays as-is for the metrics path. `obs.ErrUnreachable` distinguishes "OBS down" from "OBS replied 'not streaming'", so the admin panel can render a different UX for each. ([#654])
+- **`obs.GetStreamStatus` transient errors demoted to `slog.Warn`.** Polling failures that recover within the reconnect window were spamming the error log + Sentry; warn-level keeps them in Loki without the noise. ([#652])
+
+[#648]: https://github.com/adanalife/tripbot/pull/648
+[#649]: https://github.com/adanalife/tripbot/pull/649
+[#650]: https://github.com/adanalife/tripbot/pull/650
+[#651]: https://github.com/adanalife/tripbot/pull/651
+[#652]: https://github.com/adanalife/tripbot/pull/652
+[#654]: https://github.com/adanalife/tripbot/pull/654
+
 ## [v2.15.1] — 2026-05-24
 
 Patch release. Closes two operational gaps surfaced in the launch cutover: viewer `!report` chat reports now POST to a Discord webhook (with the existing slog/Sentry path kept as audit trail), and vlc-server gains an in-process RTSP DESCRIBE watchdog that self-heals the silent "OPTIONS 200 / DESCRIBE 500 / OBS sees nothing" failure mode confirmed on both stage-1 and prod-1 over the past few days.
