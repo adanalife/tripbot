@@ -209,6 +209,12 @@ func (a *App) buildRegistry() []Command {
 			Aliases: []string{"!music"},
 			Handler: a.songCmd,
 		},
+		{
+			Trigger: "!somafm",
+			Handler: func(_ context.Context, _ *users.User, _ []string) {
+				sayFn("Stream music by SomaFM — https://somafm.com")
+			},
+		},
 	}
 }
 
