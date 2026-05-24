@@ -7,4 +7,4 @@
 # Lives in the shared /opt/obs/venv (obsws-python + websockify + flask).
 set -euo pipefail
 
-exec /opt/obs/venv/bin/python /opt/obs/script/admin-shim.py
+exec /opt/obs/venv/bin/python /opt/obs/script/admin_shim.py
