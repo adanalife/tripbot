@@ -69,6 +69,11 @@ func Start(ctx context.Context) {
 	// admin panel (status overview + links) on the root path
 	r.Handle("/", tagged("/", adminHandler)).Methods("GET", "HEAD")
 
+	// admin actions — tailnet-only by virtue of where the Ingress is
+	// exposed; no app-layer auth gate (see CLAUDE.md / vault decisions).
+	admin := r.PathPrefix("/admin").Methods("POST").Subrouter()
+	admin.Handle("/obs/stream/{action}", tagged("/admin/obs/stream/{action}", obsStreamActionHandler))
+
 	// catch everything else
 	r.NotFoundHandler = tagged("/", catchAllHandler)
 
