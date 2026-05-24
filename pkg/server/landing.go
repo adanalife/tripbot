@@ -49,10 +49,11 @@ const (
 	// in kube-system as a single prod-zone install shared across envs, so
 	// (unlike OBS) they aren't derived per-environment.
 	traefikURL = "https://traefik.prod.whereisdana.today"
-	// hubbleURL carries ?namespace=prod-1 so the link lands straight in prod-1's
-	// flow view instead of Hubble's "choose a namespace" page. (Single prod-zone
-	// install, so the namespace is fixed, not per-env.)
-	hubbleURL = "https://hubble.prod.whereisdana.today/?namespace=prod-1"
+	// hubbleBaseURL is the single prod-zone Hubble install on the mini-PC
+	// cluster. gatherLinks appends ?namespace=<env's namespace> so the link
+	// lands straight in that namespace's flow view instead of Hubble's "choose
+	// a namespace" page — see hubbleNamespace.
+	hubbleBaseURL = "https://hubble.prod.whereisdana.today/"
 )
 
 // serviceStatus is one row in the landing page's status table.
@@ -242,9 +243,22 @@ func gatherLinks() []navLink {
 	links = append(links,
 		navLink{Label: "grafana", URL: grafanaURL},
 		navLink{Label: "traefik", URL: traefikURL},
-		navLink{Label: "hubble", URL: hubbleURL},
+		navLink{Label: "hubble", URL: hubbleBaseURL + "?namespace=" + hubbleNamespace()},
 	)
 	return links
+}
+
+// hubbleNamespace returns the Kubernetes namespace to deep-link the Hubble flow
+// view at. Hubble is a single prod-zone install on the mini-PC cluster where
+// stage-1 and prod-1 co-tenant — the only namespaces it shows — and ENV
+// distinguishes them: production → prod-1, staging → stage-1. dev/local also
+// report ENV=staging (so they resolve to stage-1), but they run on a separate
+// cluster Hubble doesn't cover, so their link is moot regardless.
+func hubbleNamespace() string {
+	if c.Conf.IsProduction() {
+		return "prod-1"
+	}
+	return "stage-1"
 }
 
 // changelogURL links to CHANGELOG.md as of the deployed commit, so it shows the
