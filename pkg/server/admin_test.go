@@ -1,6 +1,8 @@
 package server
 
 import (
+	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -10,6 +12,7 @@ import (
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/video"
+	"github.com/gorilla/mux"
 )
 
 func TestSiblingURL(t *testing.T) {
@@ -53,7 +56,97 @@ func TestChangelogURL(t *testing.T) {
 	}
 }
 
-func TestLandingHandler_RendersReadyStatusAndLinks(t *testing.T) {
+// withObsStream swaps the obsStartStream / obsStopStream / obsStreamStatus
+// seams to test fakes so we can exercise the handler without an OBS
+// WebSocket. Returns the captured invocation counts.
+func withObsStream(t *testing.T, startErr, stopErr error) (started, stopped *int) {
+	t.Helper()
+	savedStart, savedStop := obsStartStream, obsStopStream
+	t.Cleanup(func() { obsStartStream, obsStopStream = savedStart, savedStop })
+	started, stopped = new(int), new(int)
+	obsStartStream = func(context.Context) error { *started++; return startErr }
+	obsStopStream = func(context.Context) error { *stopped++; return stopErr }
+	return started, stopped
+}
+
+func TestObsStreamActionHandler_StartRedirectsAndCalls(t *testing.T) {
+	started, _ := withObsStream(t, nil, nil)
+
+	r := mux.NewRouter()
+	r.Handle("/admin/obs/stream/{action}", http.HandlerFunc(obsStreamActionHandler)).Methods("POST")
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/obs/stream/start", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("got status %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if got := rec.Header().Get("Location"); got != "/" {
+		t.Fatalf("got Location %q, want /", got)
+	}
+	if *started != 1 {
+		t.Fatalf("obsStartStream called %d times, want 1", *started)
+	}
+}
+
+func TestObsStreamActionHandler_StopRedirectsAndCalls(t *testing.T) {
+	_, stopped := withObsStream(t, nil, nil)
+
+	r := mux.NewRouter()
+	r.Handle("/admin/obs/stream/{action}", http.HandlerFunc(obsStreamActionHandler)).Methods("POST")
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/obs/stream/stop", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("got status %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if *stopped != 1 {
+		t.Fatalf("obsStopStream called %d times, want 1", *stopped)
+	}
+}
+
+func TestObsStreamActionHandler_UnknownActionIs400(t *testing.T) {
+	withObsStream(t, nil, nil)
+
+	r := mux.NewRouter()
+	r.Handle("/admin/obs/stream/{action}", http.HandlerFunc(obsStreamActionHandler)).Methods("POST")
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/obs/stream/bogus", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("got status %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestObsStreamActionHandler_RedirectsEvenOnError(t *testing.T) {
+	// State is the source of truth — refreshed panel will show the actual
+	// state. Surfacing the error in flash UI isn't worth the complexity for
+	// a tailnet-only solo-operator panel.
+	started, _ := withObsStream(t, errFakeOBS, nil)
+
+	r := mux.NewRouter()
+	r.Handle("/admin/obs/stream/{action}", http.HandlerFunc(obsStreamActionHandler)).Methods("POST")
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/obs/stream/start", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("got status %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if *started != 1 {
+		t.Fatalf("obsStartStream called %d times, want 1", *started)
+	}
+}
+
+var errFakeOBS = errors.New("fake OBS error")
+
+func TestAdminHandler_RendersReadyStatusAndLinks(t *testing.T) {
 	defer SetTwitchConnected(false)
 	SetTwitchConnected(true)
 	withReauth(t, nil) // healthy tokens — no re-auth callout
@@ -72,8 +165,23 @@ func TestLandingHandler_RendersReadyStatusAndLinks(t *testing.T) {
 	}))
 	defer vlc.Close()
 
+	// stand in for onscreens-server: same /health/ready + /version surface
+	onscreens := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/health/ready":
+			w.WriteHeader(http.StatusOK)
+		case "/version":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"tag":"v8.8.8-osc","sha":"feedfacecafe"}`))
+		default:
+			t.Errorf("unexpected onscreens request %q", r.URL.Path)
+		}
+	}))
+	defer onscreens.Close()
+
 	withConf(t, func() {
 		c.Conf.VlcServerHost = strings.TrimPrefix(vlc.URL, "http://")
+		c.Conf.OnscreensServerHost = strings.TrimPrefix(onscreens.URL, "http://")
 		c.Conf.ChannelName = "adanalife_"
 		c.Conf.BotUsername = "tripbot4000"
 		c.Conf.ExternalURL = "https://tripbot.prod.whereisdana.today"
@@ -87,7 +195,7 @@ func TestLandingHandler_RendersReadyStatusAndLinks(t *testing.T) {
 	SetVersion("v1.2.3")
 
 	rec := httptest.NewRecorder()
-	landingHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	adminHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("got status %d, want %d", rec.Code, http.StatusOK)
@@ -97,9 +205,12 @@ func TestLandingHandler_RendersReadyStatusAndLinks(t *testing.T) {
 		`<a href="https://twitch.tv/adanalife_">adanalife_</a>`,   // broadcaster profile
 		`<a href="https://twitch.tv/tripbot4000">tripbot4000</a>`, // bot profile
 		"in chat",                   // tripbot chat-connection status
-		"healthy",                   // vlc status
+		"healthy",                   // vlc status (onscreens row also asserts "healthy" via the version-link check below)
 		`/CHANGELOG.md">v1.2.3</a>`, // tripbot version tag → changelog (ref is sha or master)
 		`<a href="https://github.com/adanalife/tripbot/blob/deadbeefcafe/CHANGELOG.md">v9.9.9-vlc</a>`, // vlc version → changelog@sha
+		`<a href="https://github.com/adanalife/tripbot/blob/feedfacecafe/CHANGELOG.md">v8.8.8-osc</a>`, // onscreens version → changelog@sha
+		">vlc-server<",       // vlc row label
+		">onscreens-server<", // onscreens row label
 		"12 in chat",                          // chatter count
 		`<code class="env">production</code>`, // env in monospace chip
 		"now playing",                         // now-playing section shown when vlc healthy
@@ -122,7 +233,7 @@ func TestLandingHandler_RendersReadyStatusAndLinks(t *testing.T) {
 	}
 }
 
-func TestLandingHandler_DegradedAndVlcUnreachable(t *testing.T) {
+func TestAdminHandler_DegradedAndVlcUnreachable(t *testing.T) {
 	defer SetTwitchConnected(false)
 	SetTwitchConnected(false)
 	withReauth(t, nil)
@@ -138,7 +249,7 @@ func TestLandingHandler_DegradedAndVlcUnreachable(t *testing.T) {
 	withCurrentlyPlaying(t, video.Video{Slug: "wy_0042", State: "Wyoming"}, time.Minute)
 
 	rec := httptest.NewRecorder()
-	landingHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	adminHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("got status %d, want %d", rec.Code, http.StatusOK)
@@ -155,15 +266,16 @@ func TestLandingHandler_DegradedAndVlcUnreachable(t *testing.T) {
 	}
 }
 
-// withConf snapshots the config fields the landing handler reads, runs set to
+// withConf snapshots the config fields the admin handler reads, runs set to
 // mutate them for the test, and restores them afterward.
 func withConf(t *testing.T, set func()) {
 	t.Helper()
-	saved := struct{ vlc, channel, bot, external, env string }{
-		c.Conf.VlcServerHost, c.Conf.ChannelName, c.Conf.BotUsername, c.Conf.ExternalURL, c.Conf.Environment,
+	saved := struct{ vlc, onscreens, channel, bot, external, env string }{
+		c.Conf.VlcServerHost, c.Conf.OnscreensServerHost, c.Conf.ChannelName, c.Conf.BotUsername, c.Conf.ExternalURL, c.Conf.Environment,
 	}
 	t.Cleanup(func() {
 		c.Conf.VlcServerHost = saved.vlc
+		c.Conf.OnscreensServerHost = saved.onscreens
 		c.Conf.ChannelName = saved.channel
 		c.Conf.BotUsername = saved.bot
 		c.Conf.ExternalURL = saved.external
@@ -173,7 +285,7 @@ func withConf(t *testing.T, set func()) {
 }
 
 // withCurrentlyPlaying swaps the currentlyPlaying / currentProgress seams so
-// the landing handler sees a fixed video + progress without driving the player.
+// the admin handler sees a fixed video + progress without driving the player.
 func withCurrentlyPlaying(t *testing.T, v video.Video, progress time.Duration) {
 	t.Helper()
 	savedV, savedP := currentlyPlaying, currentProgress
@@ -190,7 +302,7 @@ func withChatterCount(t *testing.T, n int) {
 	t.Cleanup(func() { chatterCount = saved })
 }
 
-// withReauth swaps the accountsNeedingReauth seam so the landing handler sees a
+// withReauth swaps the accountsNeedingReauth seam so the admin handler sees a
 // fixed re-auth list without depending on global in-memory token state.
 func withReauth(t *testing.T, accounts []mytwitch.AccountReauth) {
 	t.Helper()
@@ -199,7 +311,7 @@ func withReauth(t *testing.T, accounts []mytwitch.AccountReauth) {
 	t.Cleanup(func() { accountsNeedingReauth = saved })
 }
 
-func TestLandingHandler_RendersReauthPrompt(t *testing.T) {
+func TestAdminHandler_RendersReauthPrompt(t *testing.T) {
 	defer SetTwitchConnected(false)
 	SetTwitchConnected(false)
 
@@ -215,7 +327,7 @@ func TestLandingHandler_RendersReauthPrompt(t *testing.T) {
 	})
 
 	rec := httptest.NewRecorder()
-	landingHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	adminHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 
 	body := rec.Body.String()
 	for _, want := range []string{
@@ -234,7 +346,7 @@ func TestLandingHandler_RendersReauthPrompt(t *testing.T) {
 	}
 }
 
-func TestLandingHandler_NoReauthPromptWhenHealthy(t *testing.T) {
+func TestAdminHandler_NoReauthPromptWhenHealthy(t *testing.T) {
 	defer SetTwitchConnected(false)
 	SetTwitchConnected(true)
 
@@ -242,7 +354,7 @@ func TestLandingHandler_NoReauthPromptWhenHealthy(t *testing.T) {
 	withReauth(t, nil) // all tokens healthy
 
 	rec := httptest.NewRecorder()
-	landingHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	adminHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 
 	if strings.Contains(rec.Body.String(), "re-authenticate") {
 		t.Errorf("re-auth prompt should be hidden when no account needs re-auth")

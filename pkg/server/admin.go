@@ -7,26 +7,29 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"os"
 	"runtime/debug"
 	"strings"
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
+	"github.com/adanalife/tripbot/pkg/obs"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/video"
+	"github.com/gorilla/mux"
 )
 
-// startedAt marks process start so the landing page can report uptime. Set at
+// startedAt marks process start so the admin panel can report uptime. Set at
 // package load; close enough to process start for a human-readable "up Xh".
 var startedAt = time.Now()
 
 // healthClient is the short-timeout client used for the sibling-service status
-// ping. 2s keeps a slow or hung vlc-server from stalling the landing render.
+// ping. 2s keeps a slow or hung vlc-server from stalling the panel render.
 var healthClient = &http.Client{Timeout: 2 * time.Second}
 
 // currentlyPlaying / currentProgress are overridable in tests; by default they
 // read pkg/video's in-process state (refreshed by a 60s cron tick), so the
-// landing page costs nothing to show "now playing".
+// admin panel costs nothing to show "now playing".
 var (
 	currentlyPlaying = video.CurrentlyPlaying
 	currentProgress  = video.CurrentProgress
@@ -34,9 +37,17 @@ var (
 	// the UpdateSession cron. Overridable in tests.
 	chatterCount = mytwitch.ChatterCount
 	// accountsNeedingReauth reports which Twitch accounts have a missing/expired
-	// token; the landing page renders a re-auth prompt for each. Overridable in
+	// token; the admin panel renders a re-auth prompt for each. Overridable in
 	// tests. Reads in-memory token state — no DB or network call.
 	accountsNeedingReauth = mytwitch.AccountsNeedingReauth
+	// obsStreamStatus reports whether OBS is currently streaming. Function-seam
+	// so handler tests can stub without opening a real OBS WebSocket. Default
+	// hits OBS via pkg/obs (fresh connection per call — see obs.GetStreamStatus).
+	obsStreamStatus = obs.GetStreamStatus
+	// obsStartStream / obsStopStream send the toggle commands to OBS. Function
+	// seams for the same reason. Default to pkg/obs.
+	obsStartStream = obs.StartStream
+	obsStopStream  = obs.StopStream
 )
 
 const (
@@ -54,21 +65,26 @@ const (
 	// lands straight in that namespace's flow view instead of Hubble's "choose
 	// a namespace" page — see hubbleNamespace.
 	hubbleBaseURL = "https://hubble.prod.whereisdana.today/"
+	// sentryURL is the org's issue list. gatherLinks appends ?environment=<env>
+	// so the link lands pre-filtered to this env's issues — see sentryEnv.
+	sentryURL = "https://a-dana-life.sentry.io/issues/"
 )
 
-// serviceStatus is one row in the landing page's status table.
+// serviceStatus is one row in the admin panel's status table.
 type serviceStatus struct {
 	Name       string
 	OK         bool
 	Detail     string
 	Version    string // optional build tag (e.g. vlc-server's, from /version)
 	VersionURL string // changelog link (at the build's sha) for Version
+	Uptime     string // human-readable "up Xh"; empty when the service is unreachable
 }
 
 // versionInfo is the subset of a service's /version JSON the page uses.
 type versionInfo struct {
-	Tag string `json:"tag"`
-	Sha string `json:"sha"`
+	Tag       string `json:"tag"`
+	Sha       string `json:"sha"`
+	StartedAt string `json:"started_at"` // RFC3339; used to derive uptime locally
 }
 
 // nowPlaying is the current-video summary shown when vlc-server is healthy.
@@ -78,14 +94,24 @@ type nowPlaying struct {
 	Progress string
 }
 
-// navLink is one entry in the landing page's links list.
+// streamControl drives the OBS stream toggle widget. Reachable=false hides
+// the action button (we don't want to offer "Start" when OBS is unreachable
+// — the click would just fail). When Reachable=true, Active selects the
+// button label/style: "Stop stream" (red) when active, "Start stream"
+// (green) when idle.
+type streamControl struct {
+	Reachable bool
+	Active    bool
+}
+
+// navLink is one entry in the admin panel's links list.
 type navLink struct {
 	Label string
 	URL   string
 }
 
-// landingData is the template payload.
-type landingData struct {
+// adminData is the template payload.
+type adminData struct {
 	Channel  string // broadcaster Twitch username
 	Bot      string // bot Twitch username
 	Env      string
@@ -93,55 +119,49 @@ type landingData struct {
 	Chatters int // users currently in chat
 	Services []serviceStatus
 	Now      *nowPlaying // nil when vlc is unhealthy or nothing is playing
+	Stream   streamControl
 	Links    []navLink
 	Reauth   []mytwitch.AccountReauth // accounts whose token needs re-auth; empty when healthy
 }
 
-// landingHandler serves the human-facing root page on the tripbot Ingress: a
-// lightweight status overview (tripbot's own readiness + a live vlc-server
-// ping, each version linking to its changelog), the currently-playing video
+// adminHandler serves the human-facing root page on the tripbot Ingress: a
+// lightweight status overview (tripbot's own readiness + live sibling-service
+// pings, each version linking to its changelog), the currently-playing video
 // when vlc is up, the broadcaster/bot accounts, and links to the OBS / Grafana
 // / Traefik / Hubble dashboards. Replaces the bare 404 that used to sit on "/".
-func landingHandler(w http.ResponseWriter, r *http.Request) {
-	vlcOK := c.Conf.VlcServerHost != "" &&
-		pingHealthy(r.Context(), "http://"+c.Conf.VlcServerHost+"/health/ready")
+func adminHandler(w http.ResponseWriter, r *http.Request) {
+	vlc := siblingStatus(r.Context(), "vlc-server", c.Conf.VlcServerHost)
+	onscreens := siblingStatus(r.Context(), "onscreens-server", c.Conf.OnscreensServerHost)
 
-	// vlc-server's build info — one extra in-cluster GET, only when it's up.
-	var vlcVer versionInfo
-	if vlcOK {
-		vlcVer = fetchVersion(r.Context(), c.Conf.VlcServerHost)
-	}
-
-	data := landingData{
+	data := adminData{
 		Channel:  c.Conf.ChannelName,
 		Bot:      c.Conf.BotUsername,
 		Env:      c.Conf.Environment,
 		Uptime:   time.Since(startedAt).Round(time.Second).String(),
 		Chatters: chatterCount(),
-		Services: gatherStatus(vlcOK, vlcVer, buildSHA()),
-		Now:      currentVideo(vlcOK),
+		Services: gatherStatus(buildSHA(), vlc, onscreens),
+		Now:      currentVideo(vlc.OK),
+		Stream:   gatherStream(r.Context()),
 		Links:    gatherLinks(),
 		Reauth:   accountsNeedingReauth(),
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := landingTmpl.Execute(w, data); err != nil {
-		slog.ErrorContext(r.Context(), "couldn't render landing page", "err", err)
+	if err := adminTmpl.Execute(w, data); err != nil {
+		slog.ErrorContext(r.Context(), "couldn't render admin panel", "err", err)
 	}
 }
 
 // gatherStatus reports tripbot's own readiness (in-memory, free) and folds in
-// the already-computed vlc-server health. Each row carries its build tag in a
-// version column linking to that build's changelog: tripbot's own tag (at sha,
-// the running binary's VCS revision) and vlc-server's (from its /version). The
-// vlc ping is best-effort: any failure (DNS, timeout, non-2xx) renders as not-OK
-// rather than erroring the page.
-func gatherStatus(vlcOK bool, vlcVer versionInfo, sha string) []serviceStatus {
+// the already-probed sibling-service rows. Each row carries its build tag in a
+// version column linking to that build's changelog at the deployed sha.
+func gatherStatus(sha string, siblings ...serviceStatus) []serviceStatus {
 	tripbot := serviceStatus{
 		Name:       "tripbot",
 		OK:         twitchConnected.Load(),
 		Version:    versionTag,
 		VersionURL: changelogURL(sha),
+		Uptime:     uptimeSince(startedAt),
 	}
 	if tripbot.OK {
 		tripbot.Detail = "in chat"
@@ -153,14 +173,75 @@ func gatherStatus(vlcOK bool, vlcVer versionInfo, sha string) []serviceStatus {
 		tripbot.Detail = "not in chat"
 	}
 
-	vlc := serviceStatus{Name: "vlc-server", OK: vlcOK, Detail: "unreachable"}
-	if vlcOK {
-		vlc.Detail = "healthy"
-		vlc.Version = vlcVer.Tag
-		vlc.VersionURL = changelogURL(vlcVer.Sha) // same repo as tripbot
-	}
+	return append([]serviceStatus{tripbot}, siblings...)
+}
 
-	return []serviceStatus{tripbot, vlc}
+// siblingStatus probes a sibling HTTP service (vlc-server, onscreens-server)
+// and returns its row for the status table. Best-effort: an empty host or any
+// readiness failure (DNS, timeout, non-2xx) renders as unreachable rather than
+// erroring the page. When the probe succeeds, also fetches /version to fill in
+// the build tag (linked to its changelog at the deployed sha) and uptime.
+func siblingStatus(ctx context.Context, name, host string) serviceStatus {
+	s := serviceStatus{Name: name, Detail: "unreachable"}
+	if host == "" {
+		return s
+	}
+	if !pingHealthy(ctx, "http://"+host+"/health/ready") {
+		return s
+	}
+	s.OK = true
+	s.Detail = "healthy"
+	ver := fetchVersion(ctx, host)
+	s.Version = ver.Tag
+	s.VersionURL = changelogURL(ver.Sha) // same repo as tripbot
+	if t, err := time.Parse(time.RFC3339, ver.StartedAt); err == nil {
+		s.Uptime = uptimeSince(t)
+	}
+	return s
+}
+
+// uptimeSince formats a "since" duration as the short Go duration string
+// rounded to the second — matches the meta-line uptime format.
+func uptimeSince(t time.Time) string {
+	return time.Since(t).Round(time.Second).String()
+}
+
+// gatherStream asks OBS for the current streaming state. A reachability
+// failure (OBS down, password wrong) returns Reachable=false so the panel
+// hides the toggle button rather than offering an action that would just
+// fail. The OBS WebSocket connection is opened + closed inside obs.GetStreamStatus.
+func gatherStream(ctx context.Context) streamControl {
+	active, err := obsStreamStatus(ctx)
+	if err != nil {
+		// Reachability failure is a normal "OBS not running" condition on
+		// dev clusters — log at debug, render as unreachable, move on.
+		slog.DebugContext(ctx, "obs stream status unavailable", "err", err)
+		return streamControl{Reachable: false}
+	}
+	return streamControl{Reachable: true, Active: active}
+}
+
+// obsStreamActionHandler handles POST /admin/obs/stream/{action} (action =
+// "start" or "stop") from the admin panel's toggle form. Calls into pkg/obs
+// to flip OBS's streaming state, then 303-redirects to "/" so the panel
+// reflects the new state on reload. Errors log + still redirect — the
+// refreshed panel will show the actual state, which is the source of truth.
+func obsStreamActionHandler(w http.ResponseWriter, r *http.Request) {
+	action := mux.Vars(r)["action"]
+	var err error
+	switch action {
+	case "start":
+		err = obsStartStream(r.Context())
+	case "stop":
+		err = obsStopStream(r.Context())
+	default:
+		http.Error(w, "unknown action", http.StatusBadRequest)
+		return
+	}
+	if err != nil {
+		slog.ErrorContext(r.Context(), "obs stream toggle failed", "action", action, "err", err)
+	}
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 // currentVideo summarizes the currently-playing video for the page, but only
@@ -244,8 +325,21 @@ func gatherLinks() []navLink {
 		navLink{Label: "grafana", URL: grafanaURL},
 		navLink{Label: "traefik", URL: traefikURL},
 		navLink{Label: "hubble", URL: hubbleBaseURL + "?namespace=" + hubbleNamespace()},
+		navLink{Label: "sentry", URL: sentryURL + "?environment=" + sentryEnv()},
 	)
 	return links
+}
+
+// sentryEnv returns the environment tag Sentry events carry, so the admin
+// panel's "sentry" link lands pre-filtered to this env's issues. Reads
+// SENTRY_ENVIRONMENT (what the sentry-go SDK uses) so the link tag stays
+// in sync with the events. Falls back to ENV for cases (tests, unset envs)
+// where SENTRY_ENVIRONMENT isn't set.
+func sentryEnv() string {
+	if v := os.Getenv("SENTRY_ENVIRONMENT"); v != "" {
+		return v
+	}
+	return c.Conf.Environment
 }
 
 // hubbleNamespace returns the Kubernetes namespace to deep-link the Hubble flow
@@ -289,7 +383,7 @@ func siblingURL(externalURL, service string) string {
 	return u.String()
 }
 
-var landingTmpl = template.Must(template.New("landing").Parse(`<!doctype html>
+var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -306,6 +400,8 @@ var landingTmpl = template.Must(template.New("landing").Parse(`<!doctype html>
   main { width:min(92vw,520px); padding:clamp(24px,4vw,48px); }
   /* logo is the monochrome black mark; invert to white on the dark bg */
   .logo { width:clamp(44px,5vw,60px); height:auto; filter:invert(1); opacity:.92; display:block; margin:0 0 16px; }
+  .logo-link { display:inline-block; }
+  .logo-link:hover .logo { opacity:1; }
   h1 { font-size:clamp(20px,1.2vw + 15px,28px); margin:0 0 4px; letter-spacing:.02em; }
   .env { font-family:var(--mono); background:#1a1a1a; border:1px solid #262626; color:#cdd; padding:2px 7px; border-radius:5px; font-size:.5em; font-weight:normal; letter-spacing:0; vertical-align:middle; }
   .meta { color:#888; margin:0 0 2px; font-size:.92em; }
@@ -314,6 +410,7 @@ var landingTmpl = template.Must(template.New("landing").Parse(`<!doctype html>
   ul { list-style:none; margin:0; padding:0; }
   .row { display:flex; align-items:center; gap:12px; padding:7px 0; border-bottom:1px solid #1c1c1c; }
   .row .name { flex:1; }
+  .row .uptime { font-size:.85em; color:#666; }
   .row .ver { font-family:var(--mono); font-size:.85em; color:#777; }
   /* status hugs the far right and right-aligns so it forms a clean column,
      aligned whether or not the row carries a version */
@@ -335,13 +432,24 @@ var landingTmpl = template.Must(template.New("landing").Parse(`<!doctype html>
   .reauth a.btn { display:inline-block; background:#ffb454; color:#1a1100; font-weight:600; padding:8px 14px; border-radius:6px; }
   .reauth a.btn:hover { background:#ffc578; color:#1a1100; }
   .reauth .why { font-family:var(--mono); font-size:.85em; opacity:.85; }
+  /* stream toggle — start (green) or stop (red), with a molly-switch two-click confirm */
+  .stream-form { margin:8px 0 12px; }
+  button.stream { font:inherit; font-weight:600; padding:9px 18px; border-radius:6px; border:none; cursor:pointer; transition:background .15s, color .15s; }
+  button.stream.start { background:#1f6f3e; color:#e8f7ec; }
+  button.stream.start:hover { background:#2a8a4d; }
+  button.stream.stop  { background:#6a1e1e; color:#fbe6e6; }
+  button.stream.stop:hover  { background:#852828; }
+  /* armed = first click landed; second click within 5s actually fires */
+  button.stream.armed { background:#f85149; color:#fff; box-shadow:0 0 0 2px #f8514980; }
+  .stream-unreachable { color:#666; font-size:.9em; font-style:italic; margin:6px 0 0; }
 </style>
 </head>
 <body>
 <main>
   <!-- A Dana Life mark, referenced from the website (the single owner of brand
-       assets) rather than copied in — see vault general/logo.md. -->
-  <img class="logo" src="https://www.dana.lol/assets/logo.png" alt="A Dana Life" width="44" height="44">
+       assets) rather than copied in — see vault general/logo.md. The anchor
+       wraps the mark so clicking it refreshes the page. -->
+  <a class="logo-link" href="/" title="refresh"><img class="logo" src="https://www.dana.lol/assets/logo.png" alt="A Dana Life" width="44" height="44"></a>
   <h1>tripbot <code class="env">{{.Env}}</code></h1>
   <p class="meta">up {{.Uptime}} · {{.Chatters}} in chat</p>
   <p class="accounts">broadcaster <a href="https://twitch.tv/{{.Channel}}">{{.Channel}}</a> · bot <a href="https://twitch.tv/{{.Bot}}">{{.Bot}}</a></p>
@@ -362,11 +470,27 @@ var landingTmpl = template.Must(template.New("landing").Parse(`<!doctype html>
     <li class="row">
       <span class="dot {{if .OK}}up{{else}}down{{end}}"></span>
       <span class="name">{{.Name}}</span>
+      {{if .Uptime}}<span class="uptime">up {{.Uptime}}</span>{{end}}
       {{if .Version}}<span class="ver">{{if .VersionURL}}<a href="{{.VersionURL}}">{{.Version}}</a>{{else}}{{.Version}}{{end}}</span>{{end}}
       <span class="status">{{.Detail}}</span>
     </li>
     {{end}}
   </ul>
+
+  <h2>stream</h2>
+  {{if .Stream.Reachable}}
+    {{if .Stream.Active}}
+    <form class="stream-form" method="post" action="/admin/obs/stream/stop">
+      <button type="submit" class="stream stop" data-arm-label="click again to confirm stop" data-original-label="stop stream" onclick="return armStream(this)">stop stream</button>
+    </form>
+    {{else}}
+    <form class="stream-form" method="post" action="/admin/obs/stream/start">
+      <button type="submit" class="stream start" data-arm-label="click again to confirm start" data-original-label="start stream" onclick="return armStream(this)">start stream</button>
+    </form>
+    {{end}}
+  {{else}}
+  <p class="stream-unreachable">OBS unreachable</p>
+  {{end}}
 
   {{with .Now}}
   <h2>now playing</h2>
@@ -382,5 +506,29 @@ var landingTmpl = template.Must(template.New("landing").Parse(`<!doctype html>
     {{range .Links}}<a href="{{.URL}}">{{.Label}}</a>{{end}}
   </nav>
 </main>
+<script>
+// Molly switch: first click arms the button (relabel + redden, 5s window);
+// second click within the window lets the form submit. Click-away or timeout
+// disarms. No deps — vanilla DOM only.
+function armStream(btn) {
+  if (btn.dataset.armed === '1') {
+    return true; // confirm — let the form submit
+  }
+  btn.dataset.armed = '1';
+  btn.classList.add('armed');
+  btn.textContent = btn.dataset.armLabel;
+  const disarm = () => {
+    btn.dataset.armed = '';
+    btn.classList.remove('armed');
+    btn.textContent = btn.dataset.originalLabel;
+    document.removeEventListener('click', outsideClick, true);
+  };
+  const outsideClick = (e) => { if (e.target !== btn) disarm(); };
+  setTimeout(disarm, 5000);
+  // capture-phase listener so clicks anywhere else disarm before they bubble
+  setTimeout(() => document.addEventListener('click', outsideClick, true), 0);
+  return false; // suppress this submit
+}
+</script>
 </body>
 </html>`))
