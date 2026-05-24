@@ -46,10 +46,10 @@ func Start(ctx context.Context) {
 	// healthcheck endpoints
 	hp := r.PathPrefix("/health").Methods("GET", "HEAD").Subrouter()
 	hp.Handle("/live", tagged("/health/live", httpmw.LivenessHandler()))
-	// /ready runs no checks: tripbot's HTTP surface (landing page, /auth/init,
+	// /ready runs no checks: tripbot's HTTP surface (admin panel, /auth/init,
 	// /auth/callback, /metrics) doesn't depend on the Twitch connection, so the
 	// pod must stay routable even when the bot is offline. Chat-connection is
-	// surfaced via the landing page + the tripbot_twitch_connected gauge.
+	// surfaced via the admin panel + the tripbot_twitch_connected gauge.
 	hp.Handle("/ready", tagged("/health/ready", httpmw.ReadinessHandler()))
 
 	// version endpoint — returns build metadata as JSON
@@ -66,8 +66,8 @@ func Start(ctx context.Context) {
 	// prometheus metrics endpoint
 	r.Path("/metrics").Handler(tagged("/metrics", promhttp.Handler().ServeHTTP))
 
-	// landing page (status overview + links) on the root path
-	r.Handle("/", tagged("/", landingHandler)).Methods("GET", "HEAD")
+	// admin panel (status overview + links) on the root path
+	r.Handle("/", tagged("/", adminHandler)).Methods("GET", "HEAD")
 
 	// catch everything else
 	r.NotFoundHandler = tagged("/", catchAllHandler)
