@@ -5,6 +5,21 @@
 
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
+## [v2.15.1] — 2026-05-24
+
+Patch release. Closes two operational gaps surfaced in the launch cutover: viewer `!report` chat reports now POST to a Discord webhook (with the existing slog/Sentry path kept as audit trail), and vlc-server gains an in-process RTSP DESCRIBE watchdog that self-heals the silent "OPTIONS 200 / DESCRIBE 500 / OBS sees nothing" failure mode confirmed on both stage-1 and prod-1 over the past few days.
+
+### chatbot
+
+- **`!report` POSTs to a Discord webhook.** New optional `DISCORD_ALERTS_WEBHOOK` env var; when set, `!report` payloads (`**!report** from @user: <message>`) get a goroutined HTTP POST with a 5s timeout so the chat-handler path doesn't block on Discord latency. The existing `slog.ErrorContext` audit line (→ stderr + Sentry via the slog→Sentry handler) stays as the durable trail. Companion to the infra-side webhook plumbing ([adanalife/infra#571](https://github.com/adanalife/infra/pull/571/changes)). ([#645])
+
+### vlc-server
+
+- **RTSP DESCRIBE self-heal watchdog with resume-from-marker.** An in-process watchdog probes `localhost:8554` with an RTSP DESCRIBE every 30s; after 3 consecutive failures (~90s) it persists a resume marker with the currently-playing filename and SIGTERMs the process so supervisord respawns vlc-server. The next process reads the marker and resumes from that file — onscreens-server keeps serving throughout (separate supervisord program, no cycle). Also exposes the same signal as `/health/rtsp` for ad-hoc debugging. Closes a silent failure confirmed on both `stage-1` and `prod-1`: libvlc's RTSP listener answered OPTIONS (200) while DESCRIBE returned 500, `/health/ready` stayed green, but the sout chain was gone and OBS saw nothing for ~2 days. ([#646])
+
+[#645]: https://github.com/adanalife/tripbot/pull/645
+[#646]: https://github.com/adanalife/tripbot/pull/646
+
 ## [v2.15.0] — 2026-05-23
 
 Minor release. Stream audio comes alive: SomaFM's Groove Salad Classic now feeds the OBS Main scene as background music, and `!song` / `!music` chat commands report the currently-playing track. Three more advertised-but-unwired chat commands (`!twitter`, `!instagram`, `!facebook`, `!youtube` plus short aliases) get registered — `!socialmedia` had been telling viewers about commands that silently did nothing. Smaller polish: the `!timewarp` cover holds long enough to span the inter-clip cut, and the landing page's Hubble link picks the right namespace per environment.

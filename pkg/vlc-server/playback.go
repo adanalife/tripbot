@@ -2,6 +2,7 @@ package vlcServer
 
 import (
 	"errors"
+	"fmt"
 	"log/slog"
 	"math/rand"
 	"path/filepath"
@@ -14,11 +15,15 @@ func (s *Server) playAtIndex(index int) error {
 	return s.Playlist.PlayAtIndex(uint(index))
 }
 
-// playVideoFile plays a video file in the playlist
-func (s *Server) playVideoFile(vidStr string) error {
-	// extract just the filename
+// PlayVideoFile plays a video file in the playlist by basename. Returns
+// an error if the file isn't in the loaded playlist. Exported so cmd
+// callers (resume-from-marker on startup) can drive playback.
+func (s *Server) PlayVideoFile(vidStr string) error {
 	videoFile := filepath.Base(vidStr)
 	index := s.getIndex(videoFile)
+	if index < 0 {
+		return fmt.Errorf("video file not in playlist: %s", videoFile)
+	}
 	return s.playAtIndex(index)
 }
 
