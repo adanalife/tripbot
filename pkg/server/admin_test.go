@@ -165,8 +165,23 @@ func TestAdminHandler_RendersReadyStatusAndLinks(t *testing.T) {
 	}))
 	defer vlc.Close()
 
+	// stand in for onscreens-server: same /health/ready + /version surface
+	onscreens := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/health/ready":
+			w.WriteHeader(http.StatusOK)
+		case "/version":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"tag":"v8.8.8-osc","sha":"feedfacecafe"}`))
+		default:
+			t.Errorf("unexpected onscreens request %q", r.URL.Path)
+		}
+	}))
+	defer onscreens.Close()
+
 	withConf(t, func() {
 		c.Conf.VlcServerHost = strings.TrimPrefix(vlc.URL, "http://")
+		c.Conf.OnscreensServerHost = strings.TrimPrefix(onscreens.URL, "http://")
 		c.Conf.ChannelName = "adanalife_"
 		c.Conf.BotUsername = "tripbot4000"
 		c.Conf.ExternalURL = "https://tripbot.prod.whereisdana.today"
@@ -190,9 +205,12 @@ func TestAdminHandler_RendersReadyStatusAndLinks(t *testing.T) {
 		`<a href="https://twitch.tv/adanalife_">adanalife_</a>`,   // broadcaster profile
 		`<a href="https://twitch.tv/tripbot4000">tripbot4000</a>`, // bot profile
 		"in chat",                   // tripbot chat-connection status
-		"healthy",                   // vlc status
+		"healthy",                   // vlc status (onscreens row also asserts "healthy" via the version-link check below)
 		`/CHANGELOG.md">v1.2.3</a>`, // tripbot version tag → changelog (ref is sha or master)
 		`<a href="https://github.com/adanalife/tripbot/blob/deadbeefcafe/CHANGELOG.md">v9.9.9-vlc</a>`, // vlc version → changelog@sha
+		`<a href="https://github.com/adanalife/tripbot/blob/feedfacecafe/CHANGELOG.md">v8.8.8-osc</a>`, // onscreens version → changelog@sha
+		">vlc-server<",       // vlc row label
+		">onscreens-server<", // onscreens row label
 		"12 in chat",                          // chatter count
 		`<code class="env">production</code>`, // env in monospace chip
 		"now playing",                         // now-playing section shown when vlc healthy
@@ -252,11 +270,12 @@ func TestAdminHandler_DegradedAndVlcUnreachable(t *testing.T) {
 // mutate them for the test, and restores them afterward.
 func withConf(t *testing.T, set func()) {
 	t.Helper()
-	saved := struct{ vlc, channel, bot, external, env string }{
-		c.Conf.VlcServerHost, c.Conf.ChannelName, c.Conf.BotUsername, c.Conf.ExternalURL, c.Conf.Environment,
+	saved := struct{ vlc, onscreens, channel, bot, external, env string }{
+		c.Conf.VlcServerHost, c.Conf.OnscreensServerHost, c.Conf.ChannelName, c.Conf.BotUsername, c.Conf.ExternalURL, c.Conf.Environment,
 	}
 	t.Cleanup(func() {
 		c.Conf.VlcServerHost = saved.vlc
+		c.Conf.OnscreensServerHost = saved.onscreens
 		c.Conf.ChannelName = saved.channel
 		c.Conf.BotUsername = saved.bot
 		c.Conf.ExternalURL = saved.external
