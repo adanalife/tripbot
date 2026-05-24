@@ -32,10 +32,10 @@
     text-shadow: 0 0 22px rgba(180, 200, 230, 0.55), 0 4px 14px rgba(0, 0, 0, 0.6);
   }
   /* the .play class (added on the showing rising-edge) drives all the timing */
-  #warp.play .cover     { animation: tw-cover 3.8s ease-in-out forwards; }
+  #warp.play .cover     { animation: tw-cover 4.0s ease-in-out forwards; }
   #warp.play .streaks i { animation: tw-streak 1s linear infinite; }
-  #warp.play .tw        { animation: tw-text 3.8s cubic-bezier(.16, .8, .3, 1) forwards; }
-  /* cover: slam opaque (0->0.4s), hold through the gap, fade out to reveal (~3.05-3.7s) */
+  #warp.play .tw        { animation: tw-text 4.0s cubic-bezier(.16, .8, .3, 1) forwards; }
+  /* cover: slam opaque (0->0.44s), hold through the gap, fade out to reveal (~3.2-3.88s) */
   @keyframes tw-cover { 0% { opacity: 0; } 11% { opacity: 1; } 80% { opacity: 1; } 97% { opacity: 0; } 100% { opacity: 0; } }
   @keyframes tw-streak {
     0%   { transform: rotate(var(--a)) translateY(0) scaleY(0.15); opacity: 0; }
