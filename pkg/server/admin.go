@@ -7,13 +7,16 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"os"
 	"runtime/debug"
 	"strings"
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
+	"github.com/adanalife/tripbot/pkg/obs"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/video"
+	"github.com/gorilla/mux"
 )
 
 // startedAt marks process start so the admin panel can report uptime. Set at
@@ -37,6 +40,14 @@ var (
 	// token; the admin panel renders a re-auth prompt for each. Overridable in
 	// tests. Reads in-memory token state — no DB or network call.
 	accountsNeedingReauth = mytwitch.AccountsNeedingReauth
+	// obsStreamStatus reports whether OBS is currently streaming. Function-seam
+	// so handler tests can stub without opening a real OBS WebSocket. Default
+	// hits OBS via pkg/obs (fresh connection per call — see obs.GetStreamStatus).
+	obsStreamStatus = obs.GetStreamStatus
+	// obsStartStream / obsStopStream send the toggle commands to OBS. Function
+	// seams for the same reason. Default to pkg/obs.
+	obsStartStream = obs.StartStream
+	obsStopStream  = obs.StopStream
 )
 
 const (
@@ -54,6 +65,9 @@ const (
 	// lands straight in that namespace's flow view instead of Hubble's "choose
 	// a namespace" page — see hubbleNamespace.
 	hubbleBaseURL = "https://hubble.prod.whereisdana.today/"
+	// sentryURL is the org's issue list. gatherLinks appends ?environment=<env>
+	// so the link lands pre-filtered to this env's issues — see sentryEnv.
+	sentryURL = "https://a-dana-life.sentry.io/issues/"
 )
 
 // serviceStatus is one row in the admin panel's status table.
@@ -63,12 +77,14 @@ type serviceStatus struct {
 	Detail     string
 	Version    string // optional build tag (e.g. vlc-server's, from /version)
 	VersionURL string // changelog link (at the build's sha) for Version
+	Uptime     string // human-readable "up Xh"; empty when the service is unreachable
 }
 
 // versionInfo is the subset of a service's /version JSON the page uses.
 type versionInfo struct {
-	Tag string `json:"tag"`
-	Sha string `json:"sha"`
+	Tag       string `json:"tag"`
+	Sha       string `json:"sha"`
+	StartedAt string `json:"started_at"` // RFC3339; used to derive uptime locally
 }
 
 // nowPlaying is the current-video summary shown when vlc-server is healthy.
@@ -76,6 +92,16 @@ type nowPlaying struct {
 	File     string
 	State    string
 	Progress string
+}
+
+// streamControl drives the OBS stream toggle widget. Reachable=false hides
+// the action button (we don't want to offer "Start" when OBS is unreachable
+// — the click would just fail). When Reachable=true, Active selects the
+// button label/style: "Stop stream" (red) when active, "Start stream"
+// (green) when idle.
+type streamControl struct {
+	Reachable bool
+	Active    bool
 }
 
 // navLink is one entry in the admin panel's links list.
@@ -93,6 +119,7 @@ type adminData struct {
 	Chatters int // users currently in chat
 	Services []serviceStatus
 	Now      *nowPlaying // nil when vlc is unhealthy or nothing is playing
+	Stream   streamControl
 	Links    []navLink
 	Reauth   []mytwitch.AccountReauth // accounts whose token needs re-auth; empty when healthy
 }
@@ -120,6 +147,7 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 		Chatters: chatterCount(),
 		Services: gatherStatus(vlcOK, vlcVer, buildSHA()),
 		Now:      currentVideo(vlcOK),
+		Stream:   gatherStream(r.Context()),
 		Links:    gatherLinks(),
 		Reauth:   accountsNeedingReauth(),
 	}
@@ -142,6 +170,7 @@ func gatherStatus(vlcOK bool, vlcVer versionInfo, sha string) []serviceStatus {
 		OK:         twitchConnected.Load(),
 		Version:    versionTag,
 		VersionURL: changelogURL(sha),
+		Uptime:     uptimeSince(startedAt),
 	}
 	if tripbot.OK {
 		tripbot.Detail = "in chat"
@@ -158,9 +187,56 @@ func gatherStatus(vlcOK bool, vlcVer versionInfo, sha string) []serviceStatus {
 		vlc.Detail = "healthy"
 		vlc.Version = vlcVer.Tag
 		vlc.VersionURL = changelogURL(vlcVer.Sha) // same repo as tripbot
+		if t, err := time.Parse(time.RFC3339, vlcVer.StartedAt); err == nil {
+			vlc.Uptime = uptimeSince(t)
+		}
 	}
 
 	return []serviceStatus{tripbot, vlc}
+}
+
+// uptimeSince formats a "since" duration as the short Go duration string
+// rounded to the second — matches the meta-line uptime format.
+func uptimeSince(t time.Time) string {
+	return time.Since(t).Round(time.Second).String()
+}
+
+// gatherStream asks OBS for the current streaming state. A reachability
+// failure (OBS down, password wrong) returns Reachable=false so the panel
+// hides the toggle button rather than offering an action that would just
+// fail. The OBS WebSocket connection is opened + closed inside obs.GetStreamStatus.
+func gatherStream(ctx context.Context) streamControl {
+	active, err := obsStreamStatus(ctx)
+	if err != nil {
+		// Reachability failure is a normal "OBS not running" condition on
+		// dev clusters — log at debug, render as unreachable, move on.
+		slog.DebugContext(ctx, "obs stream status unavailable", "err", err)
+		return streamControl{Reachable: false}
+	}
+	return streamControl{Reachable: true, Active: active}
+}
+
+// obsStreamActionHandler handles POST /admin/obs/stream/{action} (action =
+// "start" or "stop") from the admin panel's toggle form. Calls into pkg/obs
+// to flip OBS's streaming state, then 303-redirects to "/" so the panel
+// reflects the new state on reload. Errors log + still redirect — the
+// refreshed panel will show the actual state, which is the source of truth.
+func obsStreamActionHandler(w http.ResponseWriter, r *http.Request) {
+	action := mux.Vars(r)["action"]
+	var err error
+	switch action {
+	case "start":
+		err = obsStartStream(r.Context())
+	case "stop":
+		err = obsStopStream(r.Context())
+	default:
+		http.Error(w, "unknown action", http.StatusBadRequest)
+		return
+	}
+	if err != nil {
+		slog.ErrorContext(r.Context(), "obs stream toggle failed", "action", action, "err", err)
+	}
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 // currentVideo summarizes the currently-playing video for the page, but only
@@ -244,8 +320,21 @@ func gatherLinks() []navLink {
 		navLink{Label: "grafana", URL: grafanaURL},
 		navLink{Label: "traefik", URL: traefikURL},
 		navLink{Label: "hubble", URL: hubbleBaseURL + "?namespace=" + hubbleNamespace()},
+		navLink{Label: "sentry", URL: sentryURL + "?environment=" + sentryEnv()},
 	)
 	return links
+}
+
+// sentryEnv returns the environment tag Sentry events carry, so the admin
+// panel's "sentry" link lands pre-filtered to this env's issues. Reads
+// SENTRY_ENVIRONMENT (what the sentry-go SDK uses) so the link tag stays
+// in sync with the events. Falls back to ENV for cases (tests, unset envs)
+// where SENTRY_ENVIRONMENT isn't set.
+func sentryEnv() string {
+	if v := os.Getenv("SENTRY_ENVIRONMENT"); v != "" {
+		return v
+	}
+	return c.Conf.Environment
 }
 
 // hubbleNamespace returns the Kubernetes namespace to deep-link the Hubble flow
@@ -316,6 +405,7 @@ var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
   ul { list-style:none; margin:0; padding:0; }
   .row { display:flex; align-items:center; gap:12px; padding:7px 0; border-bottom:1px solid #1c1c1c; }
   .row .name { flex:1; }
+  .row .uptime { font-size:.85em; color:#666; }
   .row .ver { font-family:var(--mono); font-size:.85em; color:#777; }
   /* status hugs the far right and right-aligns so it forms a clean column,
      aligned whether or not the row carries a version */
@@ -337,6 +427,16 @@ var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
   .reauth a.btn { display:inline-block; background:#ffb454; color:#1a1100; font-weight:600; padding:8px 14px; border-radius:6px; }
   .reauth a.btn:hover { background:#ffc578; color:#1a1100; }
   .reauth .why { font-family:var(--mono); font-size:.85em; opacity:.85; }
+  /* stream toggle — start (green) or stop (red), with a molly-switch two-click confirm */
+  .stream-form { margin:8px 0 12px; }
+  button.stream { font:inherit; font-weight:600; padding:9px 18px; border-radius:6px; border:none; cursor:pointer; transition:background .15s, color .15s; }
+  button.stream.start { background:#1f6f3e; color:#e8f7ec; }
+  button.stream.start:hover { background:#2a8a4d; }
+  button.stream.stop  { background:#6a1e1e; color:#fbe6e6; }
+  button.stream.stop:hover  { background:#852828; }
+  /* armed = first click landed; second click within 5s actually fires */
+  button.stream.armed { background:#f85149; color:#fff; box-shadow:0 0 0 2px #f8514980; }
+  .stream-unreachable { color:#666; font-size:.9em; font-style:italic; margin:6px 0 0; }
 </style>
 </head>
 <body>
@@ -365,11 +465,27 @@ var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
     <li class="row">
       <span class="dot {{if .OK}}up{{else}}down{{end}}"></span>
       <span class="name">{{.Name}}</span>
+      {{if .Uptime}}<span class="uptime">up {{.Uptime}}</span>{{end}}
       {{if .Version}}<span class="ver">{{if .VersionURL}}<a href="{{.VersionURL}}">{{.Version}}</a>{{else}}{{.Version}}{{end}}</span>{{end}}
       <span class="status">{{.Detail}}</span>
     </li>
     {{end}}
   </ul>
+
+  <h2>stream</h2>
+  {{if .Stream.Reachable}}
+    {{if .Stream.Active}}
+    <form class="stream-form" method="post" action="/admin/obs/stream/stop">
+      <button type="submit" class="stream stop" data-arm-label="click again to confirm stop" data-original-label="stop stream" onclick="return armStream(this)">stop stream</button>
+    </form>
+    {{else}}
+    <form class="stream-form" method="post" action="/admin/obs/stream/start">
+      <button type="submit" class="stream start" data-arm-label="click again to confirm start" data-original-label="start stream" onclick="return armStream(this)">start stream</button>
+    </form>
+    {{end}}
+  {{else}}
+  <p class="stream-unreachable">OBS unreachable</p>
+  {{end}}
 
   {{with .Now}}
   <h2>now playing</h2>
@@ -385,5 +501,29 @@ var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
     {{range .Links}}<a href="{{.URL}}">{{.Label}}</a>{{end}}
   </nav>
 </main>
+<script>
+// Molly switch: first click arms the button (relabel + redden, 5s window);
+// second click within the window lets the form submit. Click-away or timeout
+// disarms. No deps — vanilla DOM only.
+function armStream(btn) {
+  if (btn.dataset.armed === '1') {
+    return true; // confirm — let the form submit
+  }
+  btn.dataset.armed = '1';
+  btn.classList.add('armed');
+  btn.textContent = btn.dataset.armLabel;
+  const disarm = () => {
+    btn.dataset.armed = '';
+    btn.classList.remove('armed');
+    btn.textContent = btn.dataset.originalLabel;
+    document.removeEventListener('click', outsideClick, true);
+  };
+  const outsideClick = (e) => { if (e.target !== btn) disarm(); };
+  setTimeout(disarm, 5000);
+  // capture-phase listener so clicks anywhere else disarm before they bubble
+  setTimeout(() => document.addEventListener('click', outsideClick, true), 0);
+  return false; // suppress this submit
+}
+</script>
 </body>
 </html>`))

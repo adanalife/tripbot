@@ -1,6 +1,8 @@
 package server
 
 import (
+	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -10,6 +12,7 @@ import (
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/video"
+	"github.com/gorilla/mux"
 )
 
 func TestSiblingURL(t *testing.T) {
@@ -52,6 +55,96 @@ func TestChangelogURL(t *testing.T) {
 		t.Errorf("changelogURL(\"\") = %q, want %q", got, want)
 	}
 }
+
+// withObsStream swaps the obsStartStream / obsStopStream / obsStreamStatus
+// seams to test fakes so we can exercise the handler without an OBS
+// WebSocket. Returns the captured invocation counts.
+func withObsStream(t *testing.T, startErr, stopErr error) (started, stopped *int) {
+	t.Helper()
+	savedStart, savedStop := obsStartStream, obsStopStream
+	t.Cleanup(func() { obsStartStream, obsStopStream = savedStart, savedStop })
+	started, stopped = new(int), new(int)
+	obsStartStream = func(context.Context) error { *started++; return startErr }
+	obsStopStream = func(context.Context) error { *stopped++; return stopErr }
+	return started, stopped
+}
+
+func TestObsStreamActionHandler_StartRedirectsAndCalls(t *testing.T) {
+	started, _ := withObsStream(t, nil, nil)
+
+	r := mux.NewRouter()
+	r.Handle("/admin/obs/stream/{action}", http.HandlerFunc(obsStreamActionHandler)).Methods("POST")
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/obs/stream/start", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("got status %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if got := rec.Header().Get("Location"); got != "/" {
+		t.Fatalf("got Location %q, want /", got)
+	}
+	if *started != 1 {
+		t.Fatalf("obsStartStream called %d times, want 1", *started)
+	}
+}
+
+func TestObsStreamActionHandler_StopRedirectsAndCalls(t *testing.T) {
+	_, stopped := withObsStream(t, nil, nil)
+
+	r := mux.NewRouter()
+	r.Handle("/admin/obs/stream/{action}", http.HandlerFunc(obsStreamActionHandler)).Methods("POST")
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/obs/stream/stop", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("got status %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if *stopped != 1 {
+		t.Fatalf("obsStopStream called %d times, want 1", *stopped)
+	}
+}
+
+func TestObsStreamActionHandler_UnknownActionIs400(t *testing.T) {
+	withObsStream(t, nil, nil)
+
+	r := mux.NewRouter()
+	r.Handle("/admin/obs/stream/{action}", http.HandlerFunc(obsStreamActionHandler)).Methods("POST")
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/obs/stream/bogus", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("got status %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestObsStreamActionHandler_RedirectsEvenOnError(t *testing.T) {
+	// State is the source of truth — refreshed panel will show the actual
+	// state. Surfacing the error in flash UI isn't worth the complexity for
+	// a tailnet-only solo-operator panel.
+	started, _ := withObsStream(t, errFakeOBS, nil)
+
+	r := mux.NewRouter()
+	r.Handle("/admin/obs/stream/{action}", http.HandlerFunc(obsStreamActionHandler)).Methods("POST")
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/obs/stream/start", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("got status %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if *started != 1 {
+		t.Fatalf("obsStartStream called %d times, want 1", *started)
+	}
+}
+
+var errFakeOBS = errors.New("fake OBS error")
 
 func TestAdminHandler_RendersReadyStatusAndLinks(t *testing.T) {
 	defer SetTwitchConnected(false)
