@@ -74,6 +74,7 @@ func Start(ctx context.Context) {
 	admin := r.PathPrefix("/admin").Methods("POST").Subrouter()
 	admin.Handle("/obs/stream/{action}", tagged("/admin/obs/stream/{action}", obsStreamActionHandler))
 	admin.Handle("/shutdown", tagged("/admin/shutdown", httpmw.ShutdownHandler()))
+	admin.Handle("/restart/{service}", tagged("/admin/restart/{service}", restartActionHandler))
 
 	// catch everything else
 	r.NotFoundHandler = tagged("/", catchAllHandler)
