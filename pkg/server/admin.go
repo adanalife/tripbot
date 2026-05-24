@@ -125,19 +125,13 @@ type adminData struct {
 }
 
 // adminHandler serves the human-facing root page on the tripbot Ingress: a
-// lightweight status overview (tripbot's own readiness + a live vlc-server
-// ping, each version linking to its changelog), the currently-playing video
+// lightweight status overview (tripbot's own readiness + live sibling-service
+// pings, each version linking to its changelog), the currently-playing video
 // when vlc is up, the broadcaster/bot accounts, and links to the OBS / Grafana
 // / Traefik / Hubble dashboards. Replaces the bare 404 that used to sit on "/".
 func adminHandler(w http.ResponseWriter, r *http.Request) {
-	vlcOK := c.Conf.VlcServerHost != "" &&
-		pingHealthy(r.Context(), "http://"+c.Conf.VlcServerHost+"/health/ready")
-
-	// vlc-server's build info — one extra in-cluster GET, only when it's up.
-	var vlcVer versionInfo
-	if vlcOK {
-		vlcVer = fetchVersion(r.Context(), c.Conf.VlcServerHost)
-	}
+	vlc := siblingStatus(r.Context(), "vlc-server", c.Conf.VlcServerHost)
+	onscreens := siblingStatus(r.Context(), "onscreens-server", c.Conf.OnscreensServerHost)
 
 	data := adminData{
 		Channel:  c.Conf.ChannelName,
@@ -145,8 +139,8 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 		Env:      c.Conf.Environment,
 		Uptime:   time.Since(startedAt).Round(time.Second).String(),
 		Chatters: chatterCount(),
-		Services: gatherStatus(vlcOK, vlcVer, buildSHA()),
-		Now:      currentVideo(vlcOK),
+		Services: gatherStatus(buildSHA(), vlc, onscreens),
+		Now:      currentVideo(vlc.OK),
 		Stream:   gatherStream(r.Context()),
 		Links:    gatherLinks(),
 		Reauth:   accountsNeedingReauth(),
@@ -159,12 +153,9 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // gatherStatus reports tripbot's own readiness (in-memory, free) and folds in
-// the already-computed vlc-server health. Each row carries its build tag in a
-// version column linking to that build's changelog: tripbot's own tag (at sha,
-// the running binary's VCS revision) and vlc-server's (from its /version). The
-// vlc ping is best-effort: any failure (DNS, timeout, non-2xx) renders as not-OK
-// rather than erroring the page.
-func gatherStatus(vlcOK bool, vlcVer versionInfo, sha string) []serviceStatus {
+// the already-probed sibling-service rows. Each row carries its build tag in a
+// version column linking to that build's changelog at the deployed sha.
+func gatherStatus(sha string, siblings ...serviceStatus) []serviceStatus {
 	tripbot := serviceStatus{
 		Name:       "tripbot",
 		OK:         twitchConnected.Load(),
@@ -182,17 +173,31 @@ func gatherStatus(vlcOK bool, vlcVer versionInfo, sha string) []serviceStatus {
 		tripbot.Detail = "not in chat"
 	}
 
-	vlc := serviceStatus{Name: "vlc-server", OK: vlcOK, Detail: "unreachable"}
-	if vlcOK {
-		vlc.Detail = "healthy"
-		vlc.Version = vlcVer.Tag
-		vlc.VersionURL = changelogURL(vlcVer.Sha) // same repo as tripbot
-		if t, err := time.Parse(time.RFC3339, vlcVer.StartedAt); err == nil {
-			vlc.Uptime = uptimeSince(t)
-		}
-	}
+	return append([]serviceStatus{tripbot}, siblings...)
+}
 
-	return []serviceStatus{tripbot, vlc}
+// siblingStatus probes a sibling HTTP service (vlc-server, onscreens-server)
+// and returns its row for the status table. Best-effort: an empty host or any
+// readiness failure (DNS, timeout, non-2xx) renders as unreachable rather than
+// erroring the page. When the probe succeeds, also fetches /version to fill in
+// the build tag (linked to its changelog at the deployed sha) and uptime.
+func siblingStatus(ctx context.Context, name, host string) serviceStatus {
+	s := serviceStatus{Name: name, Detail: "unreachable"}
+	if host == "" {
+		return s
+	}
+	if !pingHealthy(ctx, "http://"+host+"/health/ready") {
+		return s
+	}
+	s.OK = true
+	s.Detail = "healthy"
+	ver := fetchVersion(ctx, host)
+	s.Version = ver.Tag
+	s.VersionURL = changelogURL(ver.Sha) // same repo as tripbot
+	if t, err := time.Parse(time.RFC3339, ver.StartedAt); err == nil {
+		s.Uptime = uptimeSince(t)
+	}
+	return s
 }
 
 // uptimeSince formats a "since" duration as the short Go duration string
