@@ -39,4 +39,9 @@ type TripbotConfig struct {
 	// API (state.json, render/, asset/, plus the show/hide endpoints the
 	// chatbot drives).
 	OnscreensServerHost string `required:"true" envconfig:"ONSCREENS_SERVER_HOST"`
+
+	// DiscordAlertsWebhook is the Discord webhook URL that !report posts
+	// viewer reports to. Optional — when unset, !report falls through to
+	// slog/Sentry only and the bot keeps running.
+	DiscordAlertsWebhook string `envconfig:"DISCORD_ALERTS_WEBHOOK"`
 }

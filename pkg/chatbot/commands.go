@@ -1,11 +1,14 @@
 package chatbot
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"math"
 	"math/rand"
+	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -432,11 +435,48 @@ func (a *App) stateCmd(ctx context.Context, user *users.User, _ []string) {
 func (a *App) reportCmd(ctx context.Context, user *users.User, params []string) {
 	slog.InfoContext(ctx, "ran !report", "username", user.Username)
 	message := strings.Join(params, " ")
-	// Route the report through Sentry so it lands somewhere visible.
-	// Followup tracked: wire !report to a real notification surface
-	// (Discord webhook / push) so Dana actually sees it.
+	// Always log to slog (→ stderr + Sentry via the slog→Sentry handler)
+	// as the durable audit trail.
 	slog.ErrorContext(ctx, "!report", "err", fmt.Errorf("viewer report from %s: %s", user.Username, message))
+	// Fire-and-forget to Discord for real-time notification. Skipped
+	// silently when DISCORD_ALERTS_WEBHOOK is unset (e.g. local dev) —
+	// the slog/Sentry path still fires so nothing is lost.
+	if webhook := c.Conf.DiscordAlertsWebhook; webhook != "" {
+		go postReportToDiscord(webhook, user.Username, message)
+	}
 	a.IRC.Say("Thank you, I will look into this ASAP!")
+}
+
+// postReportToDiscord POSTs a viewer report to a Discord webhook.
+// Runs in a goroutine off the chat-handler path so chat doesn't block on
+// Discord latency; uses a fresh ctx with a 5s timeout because the
+// caller's ctx is already detached.
+func postReportToDiscord(webhookURL, username, message string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	payload, err := json.Marshal(map[string]string{
+		"content": fmt.Sprintf("**!report** from @%s: %s", username, message),
+	})
+	if err != nil {
+		slog.ErrorContext(ctx, "discord webhook payload marshal", "err", err)
+		return
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, webhookURL, bytes.NewReader(payload))
+	if err != nil {
+		slog.ErrorContext(ctx, "discord webhook request build", "err", err)
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		slog.ErrorContext(ctx, "discord webhook POST", "err", err)
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		slog.ErrorContext(ctx, "discord webhook non-2xx", "status", resp.StatusCode)
+	}
 }
 
 func (a *App) bonusMilesCmd(ctx context.Context, user *users.User, _ []string) {
