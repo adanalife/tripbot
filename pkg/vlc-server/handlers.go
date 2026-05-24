@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"runtime/debug"
 	"strconv"
+	"time"
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/gorilla/mux"
@@ -33,20 +34,35 @@ func (s *Server) readinessHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "OK")
 }
 
+// rtspHealthHandler answers /health/rtsp by sending a local RTSP DESCRIBE
+// against the libvlc listener. Returns 200 OK on a 200 response, 503 with
+// the failure detail otherwise. Surfaces the same signal the self-heal
+// watchdog uses so operators can probe it manually without waiting on the
+// failure threshold.
+func (s *Server) rtspHealthHandler(w http.ResponseWriter, r *http.Request) {
+	if err := probeRTSPDescribe(); err != nil {
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+	fmt.Fprintf(w, "OK")
+}
+
 // versionHandler returns build metadata as JSON. The tag comes from
 // Server.Version (injected via Config at construction time); sha +
 // built_at are read from the binary's embedded VCS info (Go's automatic
-// -buildvcs).
+// -buildvcs). started_at is when the process began so callers can derive
+// uptime themselves.
 func (s *Server) versionHandler(w http.ResponseWriter, r *http.Request) {
 	tag := s.Version
 	if tag == "" {
 		tag = "dev"
 	}
 	resp := struct {
-		Tag     string `json:"tag"`
-		Sha     string `json:"sha"`
-		BuiltAt string `json:"built_at"`
-	}{Tag: tag}
+		Tag       string `json:"tag"`
+		Sha       string `json:"sha"`
+		BuiltAt   string `json:"built_at"`
+		StartedAt string `json:"started_at"`
+	}{Tag: tag, StartedAt: startedAt.UTC().Format(time.RFC3339)}
 
 	if info, ok := debug.ReadBuildInfo(); ok {
 		for _, st := range info.Settings {
@@ -65,6 +81,10 @@ func (s *Server) versionHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// startedAt marks process start so /version can report uptime. Set at
+// package load; close enough to process start for a human-readable "up Xh".
+var startedAt = time.Now()
+
 func (s *Server) vlcCurrentHandler(w http.ResponseWriter, r *http.Request) {
 	// return the currently-playing file
 	fmt.Fprint(w, s.currentlyPlaying())
@@ -77,7 +97,11 @@ func (s *Server) vlcPlayHandler(w http.ResponseWriter, r *http.Request) {
 	videoFile := vars["video"]
 
 	spew.Dump(videoFile)
-	s.playVideoFile(videoFile)
+	if err := s.PlayVideoFile(videoFile); err != nil {
+		slog.ErrorContext(r.Context(), "couldn't play requested video", "err", err, "video", videoFile)
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
 
 	//TODO: better response
 	fmt.Fprintf(w, "OK")
