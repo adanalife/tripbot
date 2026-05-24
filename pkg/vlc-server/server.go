@@ -100,6 +100,7 @@ func (s *Server) Start(ctx context.Context) {
 	hp.Handle("/", tagged("/health/", s.livenessHandler))
 	hp.Handle("/live", tagged("/health/live", s.livenessHandler))
 	hp.Handle("/ready", tagged("/health/ready", s.readinessHandler))
+	hp.Handle("/rtsp", tagged("/health/rtsp", s.rtspHealthHandler))
 
 	// version endpoint — returns build metadata as JSON
 	r.Handle("/version", tagged("/version", s.versionHandler)).Methods("GET", "HEAD")

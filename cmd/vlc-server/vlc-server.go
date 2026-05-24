@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -77,7 +78,7 @@ func main() {
 		srv.Shutdown(drainCtx)
 	}()
 
-	srv.PlayRandom() // play a random video
+	resumeFromMarker(srv)
 
 	// poll libvlc for playback stats (FPS, bitrate, dropped frames) and
 	// surface them as OTel gauges. No-op when telemetry is disabled.
@@ -88,8 +89,42 @@ func main() {
 	// poll the OBS WebSocket for streaming state + render/output stats.
 	go obs.PollStreamingActive(context.Background(), 30*time.Second)
 
+	// Self-heal watchdog: probes the local RTSP listener; after 3
+	// consecutive DESCRIBE failures (90s of sustained badness with the
+	// 30s interval), writes a resume marker and signals SIGTERM so
+	// supervisord respawns vlc-server. See pkg/vlc-server/watchdog.go.
+	srv.StartRTSPWatchdog(shutdownCtx, 30*time.Second, 3, 30*time.Second)
+
 	// start the webserver
 	srv.Start(shutdownCtx)
+}
+
+// resumeFromMarker picks the startup video. If the self-heal watchdog
+// wrote a resume marker on its previous exit, play that file; otherwise
+// start fresh with a random pick. The marker is consumed on read so a
+// crash-loop doesn't pin playback to the same broken clip forever.
+func resumeFromMarker(srv *vlcServer.Server) {
+	marker := vlcServer.ResumeMarkerPath()
+	data, err := os.ReadFile(marker)
+	if err != nil {
+		srv.PlayRandom()
+		return
+	}
+	// Remove the marker immediately so any subsequent crash falls back to
+	// PlayRandom rather than retrying the same file.
+	if rmErr := os.Remove(marker); rmErr != nil {
+		slog.Warn("failed to remove resume marker", "err", rmErr, "marker", marker)
+	}
+	basename := strings.TrimSpace(string(data))
+	if basename == "" {
+		srv.PlayRandom()
+		return
+	}
+	slog.Info("resuming playback from watchdog marker", "video", basename, "marker", marker)
+	if err := srv.PlayVideoFile(basename); err != nil {
+		slog.Error("resume failed; falling back to PlayRandom", "err", err, "video", basename)
+		srv.PlayRandom()
+	}
 }
 
 // initializeTelemetry brings up OpenTelemetry providers (traces, metrics,
