@@ -102,7 +102,7 @@ func (v Video) save(ctx context.Context) error {
 
 	if lat == 0 || lng == 0 {
 		//TODO: this is where we used to run ocrCoords()
-		slog.ErrorContext(ctx, "OCRing coords skipped!")
+		slog.DebugContext(ctx, "OCRing coords skipped!")
 		flagged = true
 	}
 
