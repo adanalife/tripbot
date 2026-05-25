@@ -39,4 +39,16 @@ type TripbotConfig struct {
 	// API (state.json, render/, asset/, plus the show/hide endpoints the
 	// chatbot drives).
 	OnscreensServerHost string `required:"true" envconfig:"ONSCREENS_SERVER_HOST"`
+	// ObsServerHost is the host:port of obs-server — the Flask process
+	// baked into the OBS image that exposes /health/ready, /version,
+	// and POST /admin/shutdown on the same shape the Go services use.
+	// Named for symmetry with vlc-server / onscreens-server. The admin
+	// panel probes it for the OBS row + posts to its /admin/shutdown
+	// for the "restart obs" button. Optional — blank skips the OBS row.
+	ObsServerHost string `envconfig:"OBS_SERVER_HOST"`
+
+	// DiscordAlertsWebhook is the Discord webhook URL that !report posts
+	// viewer reports to. Optional — when unset, !report falls through to
+	// slog/Sentry only and the bot keeps running.
+	DiscordAlertsWebhook string `envconfig:"DISCORD_ALERTS_WEBHOOK"`
 }

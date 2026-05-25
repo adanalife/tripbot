@@ -5,6 +5,53 @@
 <title>onscreen / {{.Name}}</title>
 <style>
   html, body { margin: 0; padding: 0; height: 100%; width: 100%; background: transparent; overflow: hidden; }
+{{if eq .Name "timewarp"}}
+  /* Timewarp is a full-screen, opaque "warp" transition rather than a text
+     overlay. It plays once each time the onscreen flips to showing, and it
+     deliberately covers the whole canvas for ~2s: the !timewarp jump is a hard
+     cut that makes OBS clear the dashcam layer (an H.264 discontinuity), so the
+     opaque cover masks that gap and the new clip is revealed once it's playing. */
+  #warp { position: fixed; inset: 0; }
+  #warp .cover {
+    position: absolute; inset: 0; opacity: 0;
+    background: radial-gradient(circle at 50% 50%, #24242c 0%, #141418 45%, #0a0a0d 100%);
+  }
+  #warp .streaks { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
+  #warp .streaks i {
+    position: absolute; left: 0; top: 0; width: 3px; height: 26vw;
+    transform-origin: top center; opacity: 0;
+    background: linear-gradient(to bottom, #c2c8d2 0%, transparent 100%);
+  }
+  #warp .tw {
+    position: absolute; left: 50%; top: 50%;
+    transform: translate(-50%, -50%) scale(0.25);
+    font-family: Impact, "Arial Narrow Bold", sans-serif; font-weight: 900;
+    letter-spacing: 0.05em; text-transform: uppercase; text-align: center;
+    line-height: 0.9; white-space: nowrap; opacity: 0; color: #eef0f4;
+    font-size: 12vw;
+    text-shadow: 0 0 22px rgba(180, 200, 230, 0.55), 0 4px 14px rgba(0, 0, 0, 0.6);
+  }
+  /* the .play class (added on the showing rising-edge) drives all the timing */
+  #warp.play .cover     { animation: tw-cover 4.0s ease-in-out forwards; }
+  #warp.play .streaks i { animation: tw-streak 1s linear infinite; }
+  #warp.play .tw        { animation: tw-text 4.0s cubic-bezier(.16, .8, .3, 1) forwards; }
+  /* cover: slam opaque (0->0.44s), hold through the gap, fade out to reveal (~3.2-3.88s) */
+  @keyframes tw-cover { 0% { opacity: 0; } 11% { opacity: 1; } 80% { opacity: 1; } 97% { opacity: 0; } 100% { opacity: 0; } }
+  @keyframes tw-streak {
+    0%   { transform: rotate(var(--a)) translateY(0) scaleY(0.15); opacity: 0; }
+    15%  { opacity: 0.9; }
+    100% { transform: rotate(var(--a)) translateY(95vw) scaleY(3); opacity: 0; }
+  }
+  @keyframes tw-text {
+    0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.25); filter: blur(10px); }
+    9%   { opacity: 1; filter: blur(0); }
+    13%  { transform: translate(-50%, -50%) scale(1.06); }
+    20%  { transform: translate(-50%, -50%) scale(1); }
+    76%  { opacity: 1; transform: translate(-50%, -50%) scale(1); filter: blur(0); }
+    91%  { opacity: 0; transform: translate(-50%, -50%) scale(1.4); filter: blur(4px); }
+    100% { opacity: 0; }
+  }
+{{else}}
   body {
     font-family: {{.FontCSS}};
     font-size: {{.FontSizePx}}px;
@@ -40,9 +87,61 @@
   {{end}}
   #root.image { width: 100%; height: 100%; }
   #root.image img { width: 100%; height: 100%; object-fit: contain; display: block; }
+{{end}}
 </style>
 </head>
 <body>
+{{if eq .Name "timewarp"}}
+<div id="warp">
+  <div class="cover"><div class="streaks" id="tw-streaks"></div></div>
+  <div class="tw">TIMEWARP</div>
+</div>
+<script>
+(function () {
+  var name = "timewarp";
+  var warp = document.getElementById('warp');
+  var streaks = document.getElementById('tw-streaks');
+
+  // build the radial speed-lines once; negative delays stagger them so the
+  // field is already in motion the instant the cover slams in.
+  var N = 44;
+  for (var i = 0; i < N; i++) {
+    var s = document.createElement('i');
+    var a = (360 / N) * i + (Math.random() * 5 - 2.5);
+    s.style.setProperty('--a', a + 'deg');
+    s.style.animationDelay = (-Math.random()).toFixed(3) + 's';
+    streaks.appendChild(s);
+  }
+
+  var wasShowing = false;
+  function play() {
+    warp.classList.remove('play');
+    void warp.offsetWidth; // force reflow so the CSS animations restart from 0
+    warp.classList.add('play');
+  }
+
+  async function tick() {
+    try {
+      var r = await fetch('/onscreens/state.json', { cache: 'no-store' });
+      if (!r.ok) return;
+      var data = await r.json();
+      var snap = data[name];
+      var showing = !!(snap && snap.showing);
+      if (showing && !wasShowing) play();
+      else if (!showing && wasShowing) warp.classList.remove('play');
+      wasShowing = showing;
+    } catch (e) {
+      // network blip — keep last state, retry on the next tick
+    }
+  }
+
+  // poll faster than the other onscreens so the cover is up promptly after
+  // the command fires (the chatbot also waits briefly before the hard cut).
+  tick();
+  setInterval(tick, 250);
+})();
+</script>
+{{else}}
 {{if .IsImage}}
 <div id="root" class="image hidden" data-name="{{.Name}}" data-image="true"><img src="/onscreens/asset/{{.Name}}" alt=""></div>
 {{else if gt .FitWidthPx 0}}
@@ -106,5 +205,6 @@
   setInterval(tick, 500);
 })();
 </script>
+{{end}}
 </body>
 </html>
