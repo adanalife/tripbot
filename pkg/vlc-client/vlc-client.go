@@ -7,13 +7,10 @@ import (
 	"log/slog"
 	"net/http"
 
-	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
-// Client talks to the vlc-server HTTP API. Construct via New(host); the
-// package-level defaultClient is wired up at init for callers that still hit
-// the free-function shims below.
+// Client talks to the vlc-server HTTP API. Construct via New(host).
 type Client struct {
 	serverURL  string
 	httpClient *http.Client
@@ -33,11 +30,6 @@ func New(host string) *Client {
 		httpClient: &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)},
 	}
 }
-
-// defaultClient is the package-level Client used by the free-function shims
-// below. It exists so callers that haven't been migrated yet (pkg/video)
-// keep working. New consumers should construct their own *Client via New().
-var defaultClient = New(c.Conf.VlcServerHost)
 
 // CurrentlyPlaying finds the currently-playing video path
 func (c *Client) CurrentlyPlaying(ctx context.Context) string {
@@ -116,16 +108,3 @@ func (c *Client) get(ctx context.Context, url string) (string, error) {
 	}
 	return string(contents), nil
 }
-
-// ---- package-level shims (transitional) ----
-// Each free function calls the corresponding method on defaultClient. These
-// preserve the existing public surface for unmigrated callers (pkg/video).
-// New consumers should construct their own *Client via New().
-
-func CurrentlyPlaying(ctx context.Context) string         { return defaultClient.CurrentlyPlaying(ctx) }
-func PlayRandom(ctx context.Context) error                { return defaultClient.PlayRandom(ctx) }
-func PlayFileInPlaylist(ctx context.Context, filename string) error {
-	return defaultClient.PlayFileInPlaylist(ctx, filename)
-}
-func Skip(ctx context.Context, n int) error { return defaultClient.Skip(ctx, n) }
-func Back(ctx context.Context, n int) error { return defaultClient.Back(ctx, n) }

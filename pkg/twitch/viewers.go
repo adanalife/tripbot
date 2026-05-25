@@ -1,7 +1,9 @@
 package twitch
 
 import (
+	"context"
 	"log/slog"
+
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/nicklaw5/helix/v2"
 )
@@ -35,6 +37,11 @@ func Chatters() map[string]struct{} {
 // endpoint and updates the in-memory state. Requires the bot account to be a
 // moderator of the channel (moderator:read:chatters scope).
 func UpdateChatters() {
+	client, err := Client()
+	if err != nil {
+		slog.Error("twitch API client unavailable", "err", err)
+		return
+	}
 	if ChannelID == "" {
 		ChannelID = getChannelID(c.Conf.ChannelName)
 	}
@@ -42,7 +49,7 @@ func UpdateChatters() {
 		BotID = getChannelID(c.Conf.BotUsername)
 	}
 
-	resp, err := currentTwitchClient.GetChannelChatChatters(&helix.GetChatChattersParams{
+	resp, err := client.GetChannelChatChatters(&helix.GetChatChattersParams{
 		BroadcasterID: ChannelID,
 		ModeratorID:   BotID,
 	})
@@ -50,7 +57,7 @@ func UpdateChatters() {
 		slog.Error("error getting chatters from twitch", "err", err)
 		return
 	}
-	if checkHelixResp("GetChannelChatChatters", &resp.ResponseCommon) {
+	if checkHelixResp(context.Background(), "GetChannelChatChatters", "bot", &resp.ResponseCommon) {
 		// don't overwrite cached chatter state with an empty response —
 		// 4xx here means the bot lost a scope or moderator role and the
 		// next call probably succeeds once that's fixed.

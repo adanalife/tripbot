@@ -1,8 +1,10 @@
 package twitch
 
 import (
-	"log/slog"
+	"context"
 	"fmt"
+	"log/slog"
+	"net/http"
 
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"github.com/nicklaw5/helix/v2"
@@ -22,11 +24,20 @@ import (
 // When this returns true, callers should log + early-return rather than
 // trust resp.Data. endpoint is a short label used as the metric attribute
 // (e.g. "GetUsers"); it should match the helix client method name.
-func checkHelixResp(endpoint string, resp *helix.ResponseCommon) bool {
+//
+// account names the identity the call authorized against ("bot" |
+// "broadcaster"); on a 401 it triggers Reauth so the stale user-access-token
+// is re-established from the DB and the next call uses a fresh one. Pass ""
+// to opt out — for app-access-token calls (getChannelID's GetUsers) and the
+// mid-bootstrap GetUsers, where re-reading a user token wouldn't help.
+func checkHelixResp(ctx context.Context, endpoint, account string, resp *helix.ResponseCommon) bool {
 	if resp == nil || resp.StatusCode < 400 {
 		return false
 	}
-	slog.Error(fmt.Sprintf("helix %s returned %d: %s", endpoint, resp.StatusCode, resp.ErrorMessage))
+	slog.ErrorContext(ctx, fmt.Sprintf("helix %s returned %d: %s", endpoint, resp.StatusCode, resp.ErrorMessage))
 	instrumentation.TwitchHelixErrors.Inc(endpoint, resp.StatusCode)
+	if resp.StatusCode == http.StatusUnauthorized && account != "" {
+		Reauth(ctx, account)
+	}
 	return true
 }

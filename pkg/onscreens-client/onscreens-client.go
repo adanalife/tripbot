@@ -9,16 +9,13 @@ import (
 	"strings"
 	"time"
 
-	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/scoreboards"
 	"github.com/adanalife/tripbot/pkg/users"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
-// Client talks to the onscreens-server HTTP API. Construct via New(host); the
-// package-level defaultClient is wired up at init for callers that still hit
-// the free-function shims below.
+// Client talks to the onscreens-server HTTP API. Construct via New(host).
 type Client struct {
 	serverURL  string
 	httpClient *http.Client
@@ -33,12 +30,6 @@ func New(host string) *Client {
 		httpClient: &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)},
 	}
 }
-
-// defaultClient is the package-level Client used by the free-function shims
-// below. It exists so callers that haven't been migrated yet (pkg/video,
-// cmd/tripbot's cron registration) keep working. New consumers should
-// construct their own *Client via New().
-var defaultClient = New(c.Conf.OnscreensServerHost)
 
 func (c *Client) HideMiddleText(ctx context.Context) error {
 	_, err := c.get(ctx, c.serverURL+"/onscreens/middle/hide")
@@ -160,19 +151,3 @@ func (c *Client) get(ctx context.Context, url string) (string, error) {
 	}
 	return string(contents), nil
 }
-
-// ---- package-level shims (transitional) ----
-// Each free function calls the corresponding method on defaultClient. These
-// preserve the existing public surface for unmigrated callers (pkg/video,
-// cmd/tripbot). New consumers should construct their own *Client via New().
-
-func HideMiddleText(ctx context.Context) error                { return defaultClient.HideMiddleText(ctx) }
-func ShowMiddleText(ctx context.Context, msg string) error    { return defaultClient.ShowMiddleText(ctx, msg) }
-func ShowLeaderboard(ctx context.Context, title string, leaderboard [][]string) error {
-	return defaultClient.ShowLeaderboard(ctx, title, leaderboard)
-}
-func ShowGuessLeaderboard(ctx context.Context)                  { defaultClient.ShowGuessLeaderboard(ctx) }
-func ShowTimewarp(ctx context.Context) error                    { return defaultClient.ShowTimewarp(ctx) }
-func ShowFlag(ctx context.Context, dur time.Duration) error     { return defaultClient.ShowFlag(ctx, dur) }
-func ShowGPSImage(ctx context.Context, dur time.Duration) error { return defaultClient.ShowGPSImage(ctx, dur) }
-func HideGPSImage(ctx context.Context) error                    { return defaultClient.HideGPSImage(ctx) }
