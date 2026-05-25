@@ -1,0 +1,21 @@
+name: govulncheck
+on:
+  pull_request:
+  push:
+    branches:
+      - develop
+      - master
+
+jobs:
+  govulncheck:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      # libvlc-dev is required because pkg/vlc-{client,server} pull in
+      # libvlc-go/v3 (cgo); govulncheck has to build the package graph
+      # to do its symbolic call-site analysis.
+      - run: sudo apt-get update -qq && sudo apt-get install -y libvlc-dev
+      - uses: golang/govulncheck-action@v1
+        with:
+          go-version-file: go.mod
