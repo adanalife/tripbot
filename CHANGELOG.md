@@ -5,6 +5,21 @@
 
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
+## [v2.15.5] — 2026-05-25
+
+Patch release. More admin-panel polish on top of v2.15.4, plus a temporary hack for the prod stream-preview so it shows something live until the broadcasting cutover.
+
+### admin panel
+
+- **Panel layout polish.** Four small changes shipped as one PR: drop the "Groove Salad Classic on SomaFM" link from the audio line (wrapped awkwardly when artist + title was long); wrap "now playing" in a collapsed `<details>` matching the controls / stream-preview shape; move the theme toggle to a new panel footer at the bottom (was crowding the env chip); add an "expand/collapse all" button next to the theme toggle in that footer. ([#671])
+
+### temporary
+
+- **prod-1's stream-preview embeds `adanalife_staging` until the broadcasting cutover.** `previewChannel()` returns `adanalife_staging` when `c.Conf.IsProduction()`, else `ChannelName`. Pure code-side hack — no infra/env-var change. The broadcaster link in the accounts line still uses `Channel` (= `adanalife_`) so click-through goes to the right Twitch page; only the iframe diverges. **Revert at cutover** by deleting the if-block in `pkg/server/admin.go`'s `previewChannel()`. ([#672])
+
+[#671]: https://github.com/adanalife/tripbot/pull/671
+[#672]: https://github.com/adanalife/tripbot/pull/672
+
 ## [v2.15.4] — 2026-05-25
 
 Patch release. Admin panel polish — the page grows a collapsible stream-preview, picks up system-aware light/dark, learns to refresh itself on iOS Home Screen reopens, and shows what's playing on the SomaFM background-audio source. Also fixes a real bug: obs-server's `POST /admin/shutdown` was returning 500 because Flask's worker-thread request handlers can't call `signal.setitimer()` — the "restart OBS" button now actually works.
