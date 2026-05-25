@@ -119,6 +119,13 @@ func (s *Server) Start(ctx context.Context) {
 	// separate port). vlc-server no longer serves /onscreens/* — clients
 	// (chatbot, OBS browser sources) hit ONSCREENS_SERVER_HOST directly.
 
+	// admin actions — tailnet-only by virtue of where the Ingress is exposed;
+	// no app-layer auth gate. /admin/shutdown is the admin panel's "restart
+	// vlc-server" surface; the shared handler SIGTERMs the process and k8s
+	// restartPolicy: Always brings the pod back.
+	admin := r.PathPrefix("/admin").Methods("POST").Subrouter()
+	admin.Handle("/shutdown", tagged("/admin/shutdown", httpmw.ShutdownHandler()))
+
 	// prometheus metrics endpoint
 	r.Path("/metrics").Handler(tagged("/metrics", promhttp.Handler().ServeHTTP))
 

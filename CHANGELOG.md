@@ -5,6 +5,30 @@
 
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
+## [v2.15.3] — 2026-05-24
+
+Patch release. The admin panel grows a restart surface: every backend service exposes `POST /admin/shutdown` that gracefully exits the process so k8s respawns the pod, and the panel itself learns a "restart" button per service with a molly-switch two-click confirm. OBS joins the panel's status table for the first time — a tiny Flask process named `obs-server` (paired with `vlc-server` / `onscreens-server`) runs alongside OBS in the same pod and exposes the same `/health/ready` + `/version` + `/admin/shutdown` shape the Go services use. Small chatbot polish on the side: `!timewarp` gets a 500ms lead-in before the overlay fires so the cover starts opaque on the right frame.
+
+### admin panel
+
+- **`POST /admin/shutdown` across all three Go servers.** Shared `httpmw.ShutdownHandler()` in `pkg/httpmw` alongside the existing `LivenessHandler` / `ReadinessHandler`. Each server registers it under its admin subrouter with one line. Handler responds 202, then asynchronously SIGTERMs the process; the existing graceful-shutdown chain (HTTP drain, telemetry flush, Sentry flush) runs and k8s `restartPolicy: Always` brings the pod back. No kube-API, no ServiceAccount, no client-go — and the same endpoint works whether the admin console is in-tripbot or external. ([#658])
+- **OBS in the status table + per-service restart buttons.** Status table now lists all four services (tripbot, vlc-server, onscreens-server, obs). Small "restart" button at the end of every row, molly switch via shared inline JS (renamed `armStream` → `armConfirm` so it reads right for both the stream toggle and restart). `POST /admin/restart/{service}` proxies to that service's `/admin/shutdown`; tripbot is the special case — self-restart triggers an in-process shutdown via `httpmw.ShutdownSignal` directly. New `OBS_SERVER_HOST` env points the panel at obs-server. ([#660])
+
+### obs
+
+- **obs-server: Flask process exposing health + version + shutdown.** OBS itself has no HTTP surface (only obs-websocket on :4455), so this small Flask app runs alongside OBS in the same pod and exposes `/health/ready` + `/version` + `POST /admin/shutdown` on :8080 in the same shape the Go services use. POST /admin/shutdown SIGTERMs supervisord (pid 1) so the container exits and k8s respawns. Flask was picked because the image already had a Python venv (obsws-python + websockify); flask==3.1.0 joins the same venv. ([#659], [#661])
+- **Renamed admin-shim → obs-server.** Initial PR landed under "admin-shim" naming; renamed for symmetry with `vlc-server` / `onscreens-server` and to stop overloading the `/admin/*` route prefix that's already used as the per-server operator-actions namespace. File / supervisor unit / port name / env var / config field all swept. ([#661])
+
+### chatbot
+
+- **`!timewarp` lead-in.** The cover overlay now starts 500ms before the playback discontinuity so the opaque frame lands on the right side of the cut, not just usually. ([#657])
+
+[#657]: https://github.com/adanalife/tripbot/pull/657
+[#658]: https://github.com/adanalife/tripbot/pull/658
+[#659]: https://github.com/adanalife/tripbot/pull/659
+[#660]: https://github.com/adanalife/tripbot/pull/660
+[#661]: https://github.com/adanalife/tripbot/pull/661
+
 ## [v2.15.2] — 2026-05-24
 
 Patch release. The landing page graduates into an admin panel: renamed throughout, with a clickable logo, per-service uptime pills, an env-aware Sentry deep-link, and a stream on/off toggle with a two-click molly switch. Small chatbot + onscreens polish on the side: `!song` no longer attributes SomaFM as the source (Twitch policy hedge), `!somafm` credit command added, and the `!timewarp` cover now reliably spans the inter-clip cut.

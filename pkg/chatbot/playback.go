@@ -20,6 +20,12 @@ import (
 // plus it's also used to reset peoples lastLocation time
 var lastTimewarpTime time.Time
 
+// timewarpOverlayLeadIn is how long we wait after the "Here we go...!" chat
+// message before bringing up the warp overlay. Lets the audience register the
+// chat beat before the cover slams in, so the takeover feels intentional
+// rather than instantaneous.
+var timewarpOverlayLeadIn = 500 * time.Millisecond
+
 // timewarpCoverDelay is how long we wait after triggering the full-screen warp
 // overlay before actually jumping the playhead. The overlay is driven by a
 // browser source that polls for state, so it needs a beat to bring the opaque
@@ -29,6 +35,9 @@ var timewarpCoverDelay = 800 * time.Millisecond
 
 // timewarp jumps the playhead to a random video in the loop
 func (a *App) timewarp(ctx context.Context) {
+	// give the chat message a beat to land before the visual takeover
+	time.Sleep(timewarpOverlayLeadIn)
+
 	// bring up the full-screen warp overlay, then give the browser source a
 	// beat to render the opaque cover before we hard-cut to a new clip
 	a.Onscreens.ShowTimewarp(ctx)

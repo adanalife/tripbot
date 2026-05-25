@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"html/template"
 	"log/slog"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
+	"github.com/adanalife/tripbot/pkg/httpmw"
 	"github.com/adanalife/tripbot/pkg/obs"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/video"
@@ -132,6 +134,7 @@ type adminData struct {
 func adminHandler(w http.ResponseWriter, r *http.Request) {
 	vlc := siblingStatus(r.Context(), "vlc-server", c.Conf.VlcServerHost)
 	onscreens := siblingStatus(r.Context(), "onscreens-server", c.Conf.OnscreensServerHost)
+	obs := siblingStatus(r.Context(), "obs", c.Conf.ObsServerHost)
 
 	data := adminData{
 		Channel:  c.Conf.ChannelName,
@@ -139,7 +142,7 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 		Env:      c.Conf.Environment,
 		Uptime:   time.Since(startedAt).Round(time.Second).String(),
 		Chatters: chatterCount(),
-		Services: gatherStatus(buildSHA(), vlc, onscreens),
+		Services: gatherStatus(buildSHA(), vlc, onscreens, obs),
 		Now:      currentVideo(vlc.OK),
 		Stream:   gatherStream(r.Context()),
 		Links:    gatherLinks(),
@@ -219,6 +222,73 @@ func gatherStream(ctx context.Context) streamControl {
 		return streamControl{Reachable: false}
 	}
 	return streamControl{Reachable: true, Active: active}
+}
+
+// restartHosts maps the {service} path variable to the host:port of that
+// service's admin-shutdown endpoint. "tripbot" is the special case: routing
+// to localhost would hit the SAME server, so we call httpmw.ShutdownHandler's
+// signal seam directly (in-process) — no HTTP hop. Function-pointer seams
+// for the proxy + in-process paths so tests don't open real sockets.
+var (
+	restartProxyShutdown = func(ctx context.Context, host string) error {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "http://"+host+"/admin/shutdown", nil)
+		if err != nil {
+			return err
+		}
+		resp, err := healthClient.Do(req)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			return fmt.Errorf("shutdown returned %d", resp.StatusCode)
+		}
+		return nil
+	}
+	// restartSelf SIGTERMs tripbot itself by reusing httpmw's shared signal
+	// seam. Same path the local /admin/shutdown handler uses — the only
+	// difference is the trigger came from a button on the same page.
+	restartSelf = func() error {
+		go func() {
+			time.Sleep(httpmw.ShutdownDelay)
+			if err := httpmw.ShutdownSignal(); err != nil {
+				slog.Error("admin restart-self signal failed", "err", err)
+			}
+		}()
+		return nil
+	}
+)
+
+// restartActionHandler handles POST /admin/restart/{service}. For tripbot it
+// triggers an in-process self-shutdown (same shape as /admin/shutdown — the
+// existing signal handler chain runs). For sibling services it proxies to
+// their /admin/shutdown endpoint. Always 303-redirects to "/" so the panel
+// reflects the new state on reload (tripbot's self-restart redirect resolves
+// once the new pod is serving; until then the browser sees a brief gap).
+func restartActionHandler(w http.ResponseWriter, r *http.Request) {
+	service := mux.Vars(r)["service"]
+	var err error
+	switch service {
+	case "tripbot":
+		err = restartSelf()
+	case "vlc-server":
+		err = restartProxyShutdown(r.Context(), c.Conf.VlcServerHost)
+	case "onscreens-server":
+		err = restartProxyShutdown(r.Context(), c.Conf.OnscreensServerHost)
+	case "obs":
+		if c.Conf.ObsServerHost == "" {
+			http.Error(w, "OBS_SERVER_HOST not configured", http.StatusBadRequest)
+			return
+		}
+		err = restartProxyShutdown(r.Context(), c.Conf.ObsServerHost)
+	default:
+		http.Error(w, "unknown service", http.StatusBadRequest)
+		return
+	}
+	if err != nil {
+		slog.ErrorContext(r.Context(), "admin restart failed", "service", service, "err", err)
+	}
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 // obsStreamActionHandler handles POST /admin/obs/stream/{action} (action =
@@ -442,6 +512,11 @@ var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
   /* armed = first click landed; second click within 5s actually fires */
   button.stream.armed { background:#f85149; color:#fff; box-shadow:0 0 0 2px #f8514980; }
   .stream-unreachable { color:#666; font-size:.9em; font-style:italic; margin:6px 0 0; }
+  /* per-service restart — small, unobtrusive, lives at the end of each row */
+  .row .restart-form { margin:0; }
+  button.restart { font:inherit; font-size:.8em; padding:3px 9px; border-radius:4px; border:1px solid #2a2a2a; background:#1a1a1a; color:#888; cursor:pointer; transition:background .15s, color .15s, border-color .15s; }
+  button.restart:hover { background:#252525; color:#ccc; border-color:#3a3a3a; }
+  button.restart.armed { background:#f85149; color:#fff; border-color:#f85149; box-shadow:0 0 0 2px #f8514980; }
 </style>
 </head>
 <body>
@@ -473,6 +548,9 @@ var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
       {{if .Uptime}}<span class="uptime">up {{.Uptime}}</span>{{end}}
       {{if .Version}}<span class="ver">{{if .VersionURL}}<a href="{{.VersionURL}}">{{.Version}}</a>{{else}}{{.Version}}{{end}}</span>{{end}}
       <span class="status">{{.Detail}}</span>
+      <form class="restart-form" method="post" action="/admin/restart/{{.Name}}">
+        <button type="submit" class="restart" data-arm-label="confirm restart" data-original-label="restart" onclick="return armConfirm(this)">restart</button>
+      </form>
     </li>
     {{end}}
   </ul>
@@ -481,11 +559,11 @@ var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
   {{if .Stream.Reachable}}
     {{if .Stream.Active}}
     <form class="stream-form" method="post" action="/admin/obs/stream/stop">
-      <button type="submit" class="stream stop" data-arm-label="click again to confirm stop" data-original-label="stop stream" onclick="return armStream(this)">stop stream</button>
+      <button type="submit" class="stream stop" data-arm-label="click again to confirm stop" data-original-label="stop stream" onclick="return armConfirm(this)">stop stream</button>
     </form>
     {{else}}
     <form class="stream-form" method="post" action="/admin/obs/stream/start">
-      <button type="submit" class="stream start" data-arm-label="click again to confirm start" data-original-label="start stream" onclick="return armStream(this)">start stream</button>
+      <button type="submit" class="stream start" data-arm-label="click again to confirm start" data-original-label="start stream" onclick="return armConfirm(this)">start stream</button>
     </form>
     {{end}}
   {{else}}
@@ -510,7 +588,7 @@ var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
 // Molly switch: first click arms the button (relabel + redden, 5s window);
 // second click within the window lets the form submit. Click-away or timeout
 // disarms. No deps — vanilla DOM only.
-function armStream(btn) {
+function armConfirm(btn) {
   if (btn.dataset.armed === '1') {
     return true; // confirm — let the form submit
   }

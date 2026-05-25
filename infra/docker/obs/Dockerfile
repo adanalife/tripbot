@@ -58,7 +58,7 @@ RUN echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula sele
 # same venv — it bridges the browser's WebSocket to wayvnc's TCP :5900 for
 # the noVNC client.
 RUN python3 -m venv /opt/obs/venv \
-    && /opt/obs/venv/bin/pip install --no-cache-dir obsws-python 'websockify==0.13.0'
+    && /opt/obs/venv/bin/pip install --no-cache-dir obsws-python 'websockify==0.13.0' 'flask==3.1.0'
 
 # noVNC: the static browser VNC client websockify serves on :6080. Reached
 # through the obs Ingress (traefik), so VNC works in a browser with no
@@ -94,6 +94,12 @@ RUN mkdir -p /etc/tripbot \
 EXPOSE 5900
 EXPOSE 4455
 EXPOSE 6080
+# obs-server: Flask app exposing /health/ready, /version, POST /admin/shutdown
+# so the admin panel can treat OBS like vlc-server / onscreens-server. Port
+# 8080 matches their "primary HTTP listener" convention (the OBS pod has no
+# other Go HTTP server, so 8080 is free here). Lives in the shared
+# /opt/obs/venv; supervised by obs-server.conf.
+EXPOSE 8080
 
 HEALTHCHECK --interval=10s --timeout=3s --retries=3 CMD /opt/obs/healthcheck.sh
 
