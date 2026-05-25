@@ -15,6 +15,25 @@ import (
 	"github.com/gorilla/mux"
 )
 
+func TestPanelHost(t *testing.T) {
+	cases := []struct {
+		host, want string
+	}{
+		{"tripbot.prod.whereisdana.today", "tripbot.prod.whereisdana.today"},
+		{"tripbot.prod.whereisdana.today:8080", "tripbot.prod.whereisdana.today"},
+		{"localhost:8080", "localhost"},
+		{"adanalife-minipc.tail020deb.ts.net", "adanalife-minipc.tail020deb.ts.net"},
+		{"", ""},
+	}
+	for _, tc := range cases {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.Host = tc.host
+		if got := panelHost(req); got != tc.want {
+			t.Errorf("panelHost(Host=%q) = %q, want %q", tc.host, got, tc.want)
+		}
+	}
+}
+
 func TestSiblingURL(t *testing.T) {
 	cases := []struct {
 		in, service, want string
@@ -146,10 +165,102 @@ func TestObsStreamActionHandler_RedirectsEvenOnError(t *testing.T) {
 
 var errFakeOBS = errors.New("fake OBS error")
 
+// withRestart swaps the restart seams so handler tests don't open real
+// sockets or SIGTERM the test process. Returns the captured invocation
+// records for assertion.
+func withRestart(t *testing.T) (selfCalls *int, proxyHosts *[]string) {
+	t.Helper()
+	savedSelf, savedProxy := restartSelf, restartProxyShutdown
+	t.Cleanup(func() { restartSelf, restartProxyShutdown = savedSelf, savedProxy })
+
+	selfCalls, proxyHosts = new(int), new([]string)
+	restartSelf = func() error { *selfCalls++; return nil }
+	restartProxyShutdown = func(_ context.Context, host string) error {
+		*proxyHosts = append(*proxyHosts, host)
+		return nil
+	}
+	return selfCalls, proxyHosts
+}
+
+func TestRestartActionHandler_TripbotCallsSelf(t *testing.T) {
+	selfCalls, proxyHosts := withRestart(t)
+
+	r := mux.NewRouter()
+	r.Handle("/admin/restart/{service}", http.HandlerFunc(restartActionHandler)).Methods("POST")
+	req := httptest.NewRequest(http.MethodPost, "/admin/restart/tripbot", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("got status %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if *selfCalls != 1 {
+		t.Fatalf("restartSelf called %d times, want 1", *selfCalls)
+	}
+	if len(*proxyHosts) != 0 {
+		t.Fatalf("expected no proxy calls, got %v", *proxyHosts)
+	}
+}
+
+func TestRestartActionHandler_VlcProxiesToVlcServerHost(t *testing.T) {
+	savedHost := c.Conf.VlcServerHost
+	t.Cleanup(func() { c.Conf.VlcServerHost = savedHost })
+	c.Conf.VlcServerHost = "vlc-server.example:8080"
+	selfCalls, proxyHosts := withRestart(t)
+
+	r := mux.NewRouter()
+	r.Handle("/admin/restart/{service}", http.HandlerFunc(restartActionHandler)).Methods("POST")
+	req := httptest.NewRequest(http.MethodPost, "/admin/restart/vlc-server", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("got status %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if *selfCalls != 0 {
+		t.Fatalf("restartSelf called %d times, want 0", *selfCalls)
+	}
+	if got, want := *proxyHosts, []string{"vlc-server.example:8080"}; len(got) != 1 || got[0] != want[0] {
+		t.Fatalf("got proxy hosts %v, want %v", got, want)
+	}
+}
+
+func TestRestartActionHandler_ObsRequiresAdminHost(t *testing.T) {
+	savedHost := c.Conf.ObsServerHost
+	t.Cleanup(func() { c.Conf.ObsServerHost = savedHost })
+	c.Conf.ObsServerHost = "" // not configured
+	withRestart(t)
+
+	r := mux.NewRouter()
+	r.Handle("/admin/restart/{service}", http.HandlerFunc(restartActionHandler)).Methods("POST")
+	req := httptest.NewRequest(http.MethodPost, "/admin/restart/obs", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("got status %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestRestartActionHandler_UnknownServiceIs400(t *testing.T) {
+	withRestart(t)
+
+	r := mux.NewRouter()
+	r.Handle("/admin/restart/{service}", http.HandlerFunc(restartActionHandler)).Methods("POST")
+	req := httptest.NewRequest(http.MethodPost, "/admin/restart/bogus", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("got status %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
 func TestAdminHandler_RendersReadyStatusAndLinks(t *testing.T) {
 	defer SetTwitchConnected(false)
 	SetTwitchConnected(true)
 	withReauth(t, nil) // healthy tokens — no re-auth callout
+	withNowPlaying(t, nowPlayingTrack{Artist: "Test Artist", Title: "Test Track"})
 
 	// stand in for vlc-server: readiness ping + version endpoint
 	vlc := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -234,6 +345,7 @@ func TestAdminHandler_RendersReadyStatusAndLinks(t *testing.T) {
 }
 
 func TestAdminHandler_DegradedAndVlcUnreachable(t *testing.T) {
+	withNowPlaying(t, nowPlayingTrack{}) // no audio info — keeps assertion on "now playing" absence valid
 	defer SetTwitchConnected(false)
 	SetTwitchConnected(false)
 	withReauth(t, nil)
@@ -311,9 +423,20 @@ func withReauth(t *testing.T, accounts []mytwitch.AccountReauth) {
 	t.Cleanup(func() { accountsNeedingReauth = saved })
 }
 
+// withNowPlaying swaps the SomaFM fetcher so the admin handler sees a fixed
+// audio track (or empty for "no audio info") without hitting somafm.com from
+// a test.
+func withNowPlaying(t *testing.T, track nowPlayingTrack) {
+	t.Helper()
+	saved := nowPlayingFetcher
+	nowPlayingFetcher = func(context.Context) nowPlayingTrack { return track }
+	t.Cleanup(func() { nowPlayingFetcher = saved })
+}
+
 func TestAdminHandler_RendersReauthPrompt(t *testing.T) {
 	defer SetTwitchConnected(false)
 	SetTwitchConnected(false)
+	withNowPlaying(t, nowPlayingTrack{})
 
 	withConf(t, func() {
 		c.Conf.VlcServerHost = "" // skip the vlc ping
@@ -347,6 +470,7 @@ func TestAdminHandler_RendersReauthPrompt(t *testing.T) {
 }
 
 func TestAdminHandler_NoReauthPromptWhenHealthy(t *testing.T) {
+	withNowPlaying(t, nowPlayingTrack{})
 	defer SetTwitchConnected(false)
 	SetTwitchConnected(true)
 

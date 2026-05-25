@@ -3,8 +3,10 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"html/template"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -13,6 +15,7 @@ import (
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
+	"github.com/adanalife/tripbot/pkg/httpmw"
 	"github.com/adanalife/tripbot/pkg/obs"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/video"
@@ -112,16 +115,19 @@ type navLink struct {
 
 // adminData is the template payload.
 type adminData struct {
-	Channel  string // broadcaster Twitch username
-	Bot      string // bot Twitch username
-	Env      string
-	Uptime   string
-	Chatters int // users currently in chat
-	Services []serviceStatus
-	Now      *nowPlaying // nil when vlc is unhealthy or nothing is playing
-	Stream   streamControl
-	Links    []navLink
-	Reauth   []mytwitch.AccountReauth // accounts whose token needs re-auth; empty when healthy
+	Channel        string // broadcaster Twitch username; renders as text + broadcaster link
+	PreviewChannel string // Twitch channel the stream-preview embed loads; usually == Channel
+	Bot            string // bot Twitch username
+	Env            string
+	Uptime         string
+	Chatters       int // users currently in chat
+	Services       []serviceStatus
+	Now            *nowPlaying // nil when vlc is unhealthy or nothing is playing
+	Audio          nowPlayingTrack // current SomaFM track; empty Title hides the line
+	Stream         streamControl
+	PanelHost      string // host the panel was reached at; the Twitch embed needs it as parent=
+	Links          []navLink
+	Reauth         []mytwitch.AccountReauth // accounts whose token needs re-auth; empty when healthy
 }
 
 // adminHandler serves the human-facing root page on the tripbot Ingress: a
@@ -132,21 +138,31 @@ type adminData struct {
 func adminHandler(w http.ResponseWriter, r *http.Request) {
 	vlc := siblingStatus(r.Context(), "vlc-server", c.Conf.VlcServerHost)
 	onscreens := siblingStatus(r.Context(), "onscreens-server", c.Conf.OnscreensServerHost)
+	obs := siblingStatus(r.Context(), "obs", c.Conf.ObsServerHost)
 
 	data := adminData{
-		Channel:  c.Conf.ChannelName,
-		Bot:      c.Conf.BotUsername,
+		Channel:        c.Conf.ChannelName,
+		PreviewChannel: previewChannel(),
+		Bot:            c.Conf.BotUsername,
 		Env:      c.Conf.Environment,
 		Uptime:   time.Since(startedAt).Round(time.Second).String(),
 		Chatters: chatterCount(),
-		Services: gatherStatus(buildSHA(), vlc, onscreens),
+		Services: gatherStatus(buildSHA(), vlc, onscreens, obs),
 		Now:      currentVideo(vlc.OK),
+		Audio:    nowPlayingFetcher(r.Context()),
 		Stream:   gatherStream(r.Context()),
+		PanelHost: panelHost(r),
 		Links:    gatherLinks(),
 		Reauth:   accountsNeedingReauth(),
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	// iOS Safari aggressively caches pages saved as Home Screen apps —
+	// without this, reopening the icon shows stale state until the user
+	// hard-refreshes. no-store forces a fresh fetch every time; the
+	// page is tiny so the cost is trivial.
+	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+	w.Header().Set("Pragma", "no-cache")
 	if err := adminTmpl.Execute(w, data); err != nil {
 		slog.ErrorContext(r.Context(), "couldn't render admin panel", "err", err)
 	}
@@ -219,6 +235,73 @@ func gatherStream(ctx context.Context) streamControl {
 		return streamControl{Reachable: false}
 	}
 	return streamControl{Reachable: true, Active: active}
+}
+
+// restartHosts maps the {service} path variable to the host:port of that
+// service's admin-shutdown endpoint. "tripbot" is the special case: routing
+// to localhost would hit the SAME server, so we call httpmw.ShutdownHandler's
+// signal seam directly (in-process) — no HTTP hop. Function-pointer seams
+// for the proxy + in-process paths so tests don't open real sockets.
+var (
+	restartProxyShutdown = func(ctx context.Context, host string) error {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "http://"+host+"/admin/shutdown", nil)
+		if err != nil {
+			return err
+		}
+		resp, err := healthClient.Do(req)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			return fmt.Errorf("shutdown returned %d", resp.StatusCode)
+		}
+		return nil
+	}
+	// restartSelf SIGTERMs tripbot itself by reusing httpmw's shared signal
+	// seam. Same path the local /admin/shutdown handler uses — the only
+	// difference is the trigger came from a button on the same page.
+	restartSelf = func() error {
+		go func() {
+			time.Sleep(httpmw.ShutdownDelay)
+			if err := httpmw.ShutdownSignal(); err != nil {
+				slog.Error("admin restart-self signal failed", "err", err)
+			}
+		}()
+		return nil
+	}
+)
+
+// restartActionHandler handles POST /admin/restart/{service}. For tripbot it
+// triggers an in-process self-shutdown (same shape as /admin/shutdown — the
+// existing signal handler chain runs). For sibling services it proxies to
+// their /admin/shutdown endpoint. Always 303-redirects to "/" so the panel
+// reflects the new state on reload (tripbot's self-restart redirect resolves
+// once the new pod is serving; until then the browser sees a brief gap).
+func restartActionHandler(w http.ResponseWriter, r *http.Request) {
+	service := mux.Vars(r)["service"]
+	var err error
+	switch service {
+	case "tripbot":
+		err = restartSelf()
+	case "vlc-server":
+		err = restartProxyShutdown(r.Context(), c.Conf.VlcServerHost)
+	case "onscreens-server":
+		err = restartProxyShutdown(r.Context(), c.Conf.OnscreensServerHost)
+	case "obs":
+		if c.Conf.ObsServerHost == "" {
+			http.Error(w, "OBS_SERVER_HOST not configured", http.StatusBadRequest)
+			return
+		}
+		err = restartProxyShutdown(r.Context(), c.Conf.ObsServerHost)
+	default:
+		http.Error(w, "unknown service", http.StatusBadRequest)
+		return
+	}
+	if err != nil {
+		slog.ErrorContext(r.Context(), "admin restart failed", "service", service, "err", err)
+	}
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 // obsStreamActionHandler handles POST /admin/obs/stream/{action} (action =
@@ -383,6 +466,36 @@ func siblingURL(externalURL, service string) string {
 	return u.String()
 }
 
+// previewChannel returns the Twitch channel name the stream-preview embed
+// should load. Normally == ChannelName, but on prod-1 we temporarily point
+// it at adanalife_staging because prod isn't broadcasting yet — the embed
+// would render a "stream offline" placeholder otherwise. REVERT THIS at the
+// streaming cutover: just delete the if-block so the prod panel embeds
+// adanalife_ like every other env.
+func previewChannel() string {
+	if c.Conf.IsProduction() {
+		return "adanalife_staging"
+	}
+	return c.Conf.ChannelName
+}
+
+// panelHost returns the hostname the panel was reached at, for use as the
+// Twitch embed's parent= parameter. Read from r.Host (the request's Host
+// header) so it matches whatever the browser used — Tailscale's tail*.ts.net
+// hostname when the panel is reached via the operator's tailnet, the public
+// FQDN when reached through the Ingress. Strips any port suffix. Returns ""
+// when r.Host is empty (unusual; template hides the stream-preview block).
+func panelHost(r *http.Request) string {
+	h := r.Host
+	if h == "" {
+		return ""
+	}
+	if host, _, err := net.SplitHostPort(h); err == nil {
+		return host
+	}
+	return h
+}
+
 var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
 <html lang="en">
 <head>
@@ -395,34 +508,77 @@ var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
 <link rel="icon" type="image/png" sizes="16x16" href="https://www.dana.lol/assets/favicon-16x16.png">
 <link rel="apple-touch-icon" sizes="180x180" href="https://www.dana.lol/assets/apple-touch-icon.png">
 <style>
-  :root { color-scheme: dark; --mono: ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
-  body { background:#0a0a0a; color:#eee; font:clamp(14px,0.5vw + 11px,18px)/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; margin:0; display:flex; min-height:100vh; align-items:center; justify-content:center; }
+  :root {
+    color-scheme: dark light;
+    --mono: ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    /* Dark palette (default + user-override) */
+    --bg:#0a0a0a; --fg:#eee; --muted:#888; --dim:#666; --faint:#cdd;
+    --chip-bg:#1a1a1a; --chip-border:#262626;
+    --divider:#1c1c1c; --logo-invert:1;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      color-scheme: light;
+      --bg:#fafaf7; --fg:#111; --muted:#666; --dim:#888; --faint:#444;
+      --chip-bg:#ececea; --chip-border:#d8d8d4;
+      --divider:#e2e2de; --logo-invert:0;
+    }
+  }
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --bg:#fafaf7; --fg:#111; --muted:#666; --dim:#888; --faint:#444;
+    --chip-bg:#ececea; --chip-border:#d8d8d4;
+    --divider:#e2e2de; --logo-invert:0;
+  }
+  body { background:var(--bg); color:var(--fg); font:clamp(14px,0.5vw + 11px,18px)/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; margin:0; display:flex; min-height:100vh; align-items:center; justify-content:center; }
   main { width:min(92vw,520px); padding:clamp(24px,4vw,48px); }
-  /* logo is the monochrome black mark; invert to white on the dark bg */
-  .logo { width:clamp(44px,5vw,60px); height:auto; filter:invert(1); opacity:.92; display:block; margin:0 0 16px; }
+  /* logo is the monochrome black mark; invert to white on dark bg, leave as-is on light */
+  .logo { width:clamp(44px,5vw,60px); height:auto; filter:invert(var(--logo-invert)); opacity:.92; display:block; margin:0 0 16px; }
   .logo-link { display:inline-block; }
   .logo-link:hover .logo { opacity:1; }
   h1 { font-size:clamp(20px,1.2vw + 15px,28px); margin:0 0 4px; letter-spacing:.02em; }
-  .env { font-family:var(--mono); background:#1a1a1a; border:1px solid #262626; color:#cdd; padding:2px 7px; border-radius:5px; font-size:.5em; font-weight:normal; letter-spacing:0; vertical-align:middle; }
-  .meta { color:#888; margin:0 0 2px; font-size:.92em; }
-  .accounts { color:#666; margin:0 0 24px; font-size:.85em; }
-  h2 { font-size:.8em; text-transform:uppercase; letter-spacing:.08em; color:#888; margin:24px 0 8px; }
+  .env { font-family:var(--mono); background:var(--chip-bg); border:1px solid var(--chip-border); color:var(--faint); padding:2px 7px; border-radius:5px; font-size:.5em; font-weight:normal; letter-spacing:0; vertical-align:middle; }
+  .meta { color:var(--muted); margin:0 0 2px; font-size:.92em; }
+  .accounts { color:var(--dim); margin:0 0 24px; font-size:.85em; }
+  h2 { font-size:.8em; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin:24px 0 8px; }
   ul { list-style:none; margin:0; padding:0; }
-  .row { display:flex; align-items:center; gap:12px; padding:7px 0; border-bottom:1px solid #1c1c1c; }
+  .row { display:flex; align-items:center; gap:12px; padding:7px 0; border-bottom:1px solid var(--divider); }
   .row .name { flex:1; }
-  .row .uptime { font-size:.85em; color:#666; }
-  .row .ver { font-family:var(--mono); font-size:.85em; color:#777; }
+  .row .uptime { font-size:.85em; color:var(--dim); }
+  .row .ver { font-family:var(--mono); font-size:.85em; color:var(--dim); }
   /* status hugs the far right and right-aligns so it forms a clean column,
      aligned whether or not the row carries a version */
-  .row .status { color:#888; font-size:.92em; text-align:right; min-width:5.5em; }
+  .row .status { color:var(--muted); font-size:.92em; text-align:right; min-width:5.5em; }
   .dot { width:9px; height:9px; border-radius:50%; flex:0 0 auto; }
   .up { background:#3fb950; box-shadow:0 0 6px #3fb95080; }
   .down { background:#f85149; box-shadow:0 0 6px #f8514980; }
   .now { margin:0; padding:7px 0; }
   .now .file { font-family:var(--mono); word-break:break-all; }
-  .now .state { color:#888; }
+  .now .state { color:var(--muted); }
+  /* audio = the SomaFM background track from gsclassic.json */
+  .audio { margin:0; padding:7px 0; }
+  .audio .track { color:var(--fg); opacity:.85; }
+  .audio .state { color:var(--muted); }
+  /* stream-preview disclosure — same shape as .controls, just a different
+     summary label. iframe is lazy-loaded by the inline JS so the ~2MB
+     Twitch player isn't fetched on every panel render. */
+  /* Shared disclosure-row styling — controls / now-playing / stream-preview
+     all default closed and reveal on click. Same look, just different
+     summary labels. */
+  details.stream-preview, details.now-playing { margin:24px 0 0; }
+  details.stream-preview > summary, details.now-playing > summary { font-size:.8em; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); cursor:pointer; padding:8px 0; border-top:1px solid var(--divider); list-style:none; }
+  details.stream-preview > summary::-webkit-details-marker, details.now-playing > summary::-webkit-details-marker { display:none; }
+  details.stream-preview > summary::before, details.now-playing > summary::before { content:"▸ "; color:var(--dim); display:inline-block; }
+  details.stream-preview[open] > summary::before, details.now-playing[open] > summary::before { content:"▾ "; }
+  details.stream-preview > summary:hover, details.now-playing > summary:hover { color:var(--fg); }
+  .stream-frame { aspect-ratio:16 / 9; width:100%; margin-top:10px; background:#000; border-radius:6px; overflow:hidden; }
+  .stream-frame iframe { width:100%; height:100%; border:none; display:block; }
   a { color:#58a6ff; text-decoration:none; }
   a:hover { color:#9cf; }
+  /* theme toggle — text-only, sits to the right of the env chip */
+  .panel-footer { margin-top:32px; padding-top:14px; border-top:1px solid var(--divider); display:flex; gap:10px; align-items:center; }
+  .theme-toggle { background:none; border:none; color:var(--dim); font:inherit; font-size:.85em; cursor:pointer; padding:2px 6px; }
+  .theme-toggle:hover { color:var(--fg); }
   .links { display:flex; flex-wrap:wrap; gap:18px; margin-top:10px; }
   /* re-auth callout: only rendered when a token is missing/expired */
   .reauth { background:#3a1d00; border:1px solid #6b3b00; border-radius:8px; padding:14px 16px; margin:0 0 24px; }
@@ -434,14 +590,30 @@ var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
   .reauth .why { font-family:var(--mono); font-size:.85em; opacity:.85; }
   /* stream toggle — start (green) or stop (red), with a molly-switch two-click confirm */
   .stream-form { margin:8px 0 12px; }
-  button.stream { font:inherit; font-weight:600; padding:9px 18px; border-radius:6px; border:none; cursor:pointer; transition:background .15s, color .15s; }
-  button.stream.start { background:#1f6f3e; color:#e8f7ec; }
+  button.stream { font:inherit; font-size:.9em; padding:6px 14px; border-radius:5px; border:none; cursor:pointer; transition:background .15s, color .15s; }
+  button.stream.start { background:#1f6f3e; color:#e8f7ec; font-weight:600; }
   button.stream.start:hover { background:#2a8a4d; }
-  button.stream.stop  { background:#6a1e1e; color:#fbe6e6; }
-  button.stream.stop:hover  { background:#852828; }
+  /* "stop stream" is the less-likely-correct click — render it muted so
+     it doesn't dominate. The molly-switch arms it red on first click. */
+  button.stream.stop  { background:#2a1a1a; color:#c89696; border:1px solid #4a2a2a; }
+  button.stream.stop:hover  { background:#3a2020; color:#e8b0b0; }
   /* armed = first click landed; second click within 5s actually fires */
   button.stream.armed { background:#f85149; color:#fff; box-shadow:0 0 0 2px #f8514980; }
   .stream-unreachable { color:#666; font-size:.9em; font-style:italic; margin:6px 0 0; }
+  /* Collapsible "controls" disclosure — defaults closed so the page stays
+     calm; click "controls" to reveal stream toggle + future control widgets. */
+  details.controls { margin:24px 0 0; }
+  details.controls > summary { font-size:.8em; text-transform:uppercase; letter-spacing:.08em; color:#888; cursor:pointer; padding:8px 0; border-top:1px solid #1c1c1c; list-style:none; }
+  details.controls > summary::-webkit-details-marker { display:none; }
+  details.controls > summary::before { content:"▸ "; color:#666; transition:transform .15s ease; display:inline-block; }
+  details.controls[open] > summary::before { content:"▾ "; }
+  details.controls > summary:hover { color:#ccc; }
+  details.controls h3 { font-size:.8em; text-transform:uppercase; letter-spacing:.08em; color:#888; margin:14px 0 6px; }
+  /* per-service restart — small, unobtrusive, lives at the end of each row */
+  .row .restart-form { margin:0; }
+  button.restart { font:inherit; font-size:.8em; padding:3px 9px; border-radius:4px; border:1px solid #2a2a2a; background:#1a1a1a; color:#888; cursor:pointer; transition:background .15s, color .15s, border-color .15s; }
+  button.restart:hover { background:#252525; color:#ccc; border-color:#3a3a3a; }
+  button.restart.armed { background:#f85149; color:#fff; border-color:#f85149; box-shadow:0 0 0 2px #f8514980; }
 </style>
 </head>
 <body>
@@ -473,44 +645,149 @@ var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
       {{if .Uptime}}<span class="uptime">up {{.Uptime}}</span>{{end}}
       {{if .Version}}<span class="ver">{{if .VersionURL}}<a href="{{.VersionURL}}">{{.Version}}</a>{{else}}{{.Version}}{{end}}</span>{{end}}
       <span class="status">{{.Detail}}</span>
+      <form class="restart-form" method="post" action="/admin/restart/{{.Name}}">
+        <button type="submit" class="restart" data-arm-label="confirm restart" data-original-label="restart" onclick="return armConfirm(this)">restart</button>
+      </form>
     </li>
     {{end}}
   </ul>
 
-  <h2>stream</h2>
-  {{if .Stream.Reachable}}
-    {{if .Stream.Active}}
-    <form class="stream-form" method="post" action="/admin/obs/stream/stop">
-      <button type="submit" class="stream stop" data-arm-label="click again to confirm stop" data-original-label="stop stream" onclick="return armStream(this)">stop stream</button>
-    </form>
+  <details class="controls">
+    <summary>controls</summary>
+    <h3>stream</h3>
+    {{if .Stream.Reachable}}
+      {{if .Stream.Active}}
+      <form class="stream-form" method="post" action="/admin/obs/stream/stop">
+        <button type="submit" class="stream stop" data-arm-label="click again to confirm stop" data-original-label="stop stream" onclick="return armConfirm(this)">stop stream</button>
+      </form>
+      {{else}}
+      <form class="stream-form" method="post" action="/admin/obs/stream/start">
+        <button type="submit" class="stream start" data-arm-label="click again to confirm start" data-original-label="start stream" onclick="return armConfirm(this)">start stream</button>
+      </form>
+      {{end}}
     {{else}}
-    <form class="stream-form" method="post" action="/admin/obs/stream/start">
-      <button type="submit" class="stream start" data-arm-label="click again to confirm start" data-original-label="start stream" onclick="return armStream(this)">start stream</button>
-    </form>
+    <p class="stream-unreachable">OBS unreachable</p>
     {{end}}
-  {{else}}
-  <p class="stream-unreachable">OBS unreachable</p>
+  </details>
+
+  {{if or .Now .Audio.Title}}
+  <details class="now-playing">
+    <summary>now playing</summary>
+    {{with .Now}}
+    <p class="now">
+      <span class="file">{{.File}}</span>
+      {{if .State}}<span class="state">· {{.State}}</span>{{end}}
+      {{if .Progress}}<span class="state">· {{.Progress}}</span>{{end}}
+    </p>
+    {{end}}
+    {{if .Audio.Title}}
+    <p class="audio">
+      <span class="track">{{.Audio.Artist}} — {{.Audio.Title}}</span>
+    </p>
+    {{end}}
+  </details>
   {{end}}
 
-  {{with .Now}}
-  <h2>now playing</h2>
-  <p class="now">
-    <span class="file">{{.File}}</span>
-    {{if .State}}<span class="state">· {{.State}}</span>{{end}}
-    {{if .Progress}}<span class="state">· {{.Progress}}</span>{{end}}
-  </p>
+  {{if and .PreviewChannel .PanelHost}}
+  <details class="stream-preview" id="stream-preview">
+    <summary>stream preview</summary>
+    <div class="stream-frame">
+      <iframe data-src="https://player.twitch.tv/?channel={{.PreviewChannel}}&parent={{.PanelHost}}&muted=true&autoplay=true"
+              allowfullscreen
+              title="Twitch stream preview"></iframe>
+    </div>
+  </details>
   {{end}}
 
   <h2>dashboards</h2>
   <nav class="links">
     {{range .Links}}<a href="{{.URL}}">{{.Label}}</a>{{end}}
   </nav>
+
+  <div class="panel-footer">
+    <button id="toggle-all" class="theme-toggle" type="button" title="expand or collapse all sections">▾ expand all</button>
+    <button id="theme-toggle" class="theme-toggle" type="button" title="toggle theme">◐ theme</button>
+  </div>
 </main>
 <script>
+// Stream-preview lazy-load. The Twitch player iframe is ~2MB; we don't want
+// to fetch it on every panel render, only when the operator actually expands
+// the disclosure. On collapse we point it at about:blank so the player stops
+// (otherwise audio + bandwidth keep going even when the section's hidden).
+(function() {
+  const details = document.getElementById('stream-preview');
+  if (!details) return;
+  const iframe = details.querySelector('iframe');
+  if (!iframe) return;
+  details.addEventListener('toggle', () => {
+    if (details.open) {
+      iframe.src = iframe.dataset.src;
+    } else {
+      iframe.src = 'about:blank';
+    }
+  });
+})();
+
+// Expand/collapse all <details> on the page. If any section is closed, the
+// click opens them all; if all are already open, it closes them all. Button
+// label flips to match the next action. The stream-preview's toggle listener
+// (see above) lazy-loads/unloads the iframe on each open/close, so this
+// reuses that path correctly.
+(function() {
+  const btn = document.getElementById('toggle-all');
+  if (!btn) return;
+  const sync = () => {
+    const all = document.querySelectorAll('main details');
+    const anyClosed = Array.from(all).some(d => !d.open);
+    btn.textContent = anyClosed ? '▾ expand all' : '▸ collapse all';
+  };
+  btn.addEventListener('click', () => {
+    const all = document.querySelectorAll('main details');
+    const anyClosed = Array.from(all).some(d => !d.open);
+    all.forEach(d => { d.open = anyClosed; });
+    sync();
+  });
+  // Keep the label honest if the operator toggles individual sections.
+  document.querySelectorAll('main details').forEach(d => d.addEventListener('toggle', sync));
+  sync();
+})();
+
+// Theme toggle. Reads localStorage for an explicit user override; otherwise
+// the @media(prefers-color-scheme: light) CSS rule applies. Setting
+// data-theme on <html> overrides the media query in either direction.
+(function() {
+  const root = document.documentElement;
+  const saved = localStorage.getItem('admin-theme'); // "light" | "dark" | null
+  if (saved) root.setAttribute('data-theme', saved);
+  const btn = document.getElementById('theme-toggle');
+  if (btn) btn.addEventListener('click', () => {
+    // Effective theme: the resolved color-scheme (after CSS + override).
+    const cur = getComputedStyle(root).colorScheme.includes('light') ? 'light' : 'dark';
+    const next = cur === 'light' ? 'dark' : 'light';
+    root.setAttribute('data-theme', next);
+    localStorage.setItem('admin-theme', next);
+  });
+})();
+
+// iOS Home Screen apps return to a stale cached page on reopen — even with
+// no-store headers, Safari sometimes serves the old paint. Reload when the
+// tab becomes visible after being hidden ≥10s, so quick app-switches don't
+// reload-spam but a return-from-Home-Screen does.
+(function() {
+  let hiddenAt = 0;
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      hiddenAt = Date.now();
+    } else if (hiddenAt && Date.now() - hiddenAt >= 10000) {
+      location.reload();
+    }
+  });
+})();
+
 // Molly switch: first click arms the button (relabel + redden, 5s window);
 // second click within the window lets the form submit. Click-away or timeout
 // disarms. No deps — vanilla DOM only.
-function armStream(btn) {
+function armConfirm(btn) {
   if (btn.dataset.armed === '1') {
     return true; // confirm — let the form submit
   }
