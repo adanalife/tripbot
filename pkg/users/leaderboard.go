@@ -20,9 +20,8 @@ var maxLeaderboardSize = 50
 func InitLeaderboard(ctx context.Context) {
 	var users []User
 
-	ignoredUsers := append(c.IgnoredUsers, strings.ToLower(c.Conf.ChannelName))
 	result := database.GormDB().WithContext(ctx).
-		Where("miles != 0 AND is_bot = false AND username NOT IN ?", ignoredUsers).
+		Where("miles != 0 AND is_bot = false AND username != ?", strings.ToLower(c.Conf.ChannelName)).
 		Order("miles DESC").
 		Limit(initLeaderboardSize).
 		Find(&users)
@@ -42,8 +41,8 @@ func InitLeaderboard(ctx context.Context) {
 // the cron-tick span for log correlation.
 func UpdateLeaderboard(ctx context.Context) {
 	for _, user := range LoggedIn {
-		// skip adding this user if they're a bot or ignored
-		if user.IsBot || c.UserIsIgnored(user.Username) || c.UserIsAdmin(user.Username) {
+		// skip adding this user if they're a bot or the channel owner
+		if user.IsBot || c.UserIsAdmin(user.Username) {
 			continue
 		}
 		insertIntoLeaderboard(ctx, *user)
