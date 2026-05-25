@@ -121,6 +121,7 @@ type adminData struct {
 	Chatters int // users currently in chat
 	Services []serviceStatus
 	Now      *nowPlaying // nil when vlc is unhealthy or nothing is playing
+	Audio    nowPlayingTrack // current SomaFM track; empty Title hides the line
 	Stream   streamControl
 	Links    []navLink
 	Reauth   []mytwitch.AccountReauth // accounts whose token needs re-auth; empty when healthy
@@ -144,6 +145,7 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 		Chatters: chatterCount(),
 		Services: gatherStatus(buildSHA(), vlc, onscreens, obs),
 		Now:      currentVideo(vlc.OK),
+		Audio:    nowPlayingFetcher(r.Context()),
 		Stream:   gatherStream(r.Context()),
 		Links:    gatherLinks(),
 		Reauth:   accountsNeedingReauth(),
@@ -512,6 +514,10 @@ var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
   .now { margin:0; padding:7px 0; }
   .now .file { font-family:var(--mono); word-break:break-all; }
   .now .state { color:var(--muted); }
+  /* audio = the SomaFM background track from gsclassic.json */
+  .audio { margin:0; padding:7px 0; }
+  .audio .track { color:var(--fg); opacity:.85; }
+  .audio .state { color:var(--muted); }
   a { color:#58a6ff; text-decoration:none; }
   a:hover { color:#9cf; }
   /* theme toggle — text-only, sits to the right of the env chip */
@@ -608,12 +614,18 @@ var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
     {{end}}
   </details>
 
+  {{if or .Now .Audio.Title}}<h2>now playing</h2>{{end}}
   {{with .Now}}
-  <h2>now playing</h2>
   <p class="now">
     <span class="file">{{.File}}</span>
     {{if .State}}<span class="state">· {{.State}}</span>{{end}}
     {{if .Progress}}<span class="state">· {{.Progress}}</span>{{end}}
+  </p>
+  {{end}}
+  {{if .Audio.Title}}
+  <p class="audio">
+    <span class="track">{{.Audio.Artist}} — {{.Audio.Title}}</span>
+    <span class="state">· <a href="https://somafm.com/gsclassic/">Groove Salad Classic</a> on SomaFM</span>
   </p>
   {{end}}
 
