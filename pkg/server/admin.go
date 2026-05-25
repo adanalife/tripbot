@@ -465,34 +465,58 @@ var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
 <link rel="icon" type="image/png" sizes="16x16" href="https://www.dana.lol/assets/favicon-16x16.png">
 <link rel="apple-touch-icon" sizes="180x180" href="https://www.dana.lol/assets/apple-touch-icon.png">
 <style>
-  :root { color-scheme: dark; --mono: ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
-  body { background:#0a0a0a; color:#eee; font:clamp(14px,0.5vw + 11px,18px)/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; margin:0; display:flex; min-height:100vh; align-items:center; justify-content:center; }
+  :root {
+    color-scheme: dark light;
+    --mono: ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    /* Dark palette (default + user-override) */
+    --bg:#0a0a0a; --fg:#eee; --muted:#888; --dim:#666; --faint:#cdd;
+    --chip-bg:#1a1a1a; --chip-border:#262626;
+    --divider:#1c1c1c; --logo-invert:1;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      color-scheme: light;
+      --bg:#fafaf7; --fg:#111; --muted:#666; --dim:#888; --faint:#444;
+      --chip-bg:#ececea; --chip-border:#d8d8d4;
+      --divider:#e2e2de; --logo-invert:0;
+    }
+  }
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --bg:#fafaf7; --fg:#111; --muted:#666; --dim:#888; --faint:#444;
+    --chip-bg:#ececea; --chip-border:#d8d8d4;
+    --divider:#e2e2de; --logo-invert:0;
+  }
+  body { background:var(--bg); color:var(--fg); font:clamp(14px,0.5vw + 11px,18px)/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; margin:0; display:flex; min-height:100vh; align-items:center; justify-content:center; }
   main { width:min(92vw,520px); padding:clamp(24px,4vw,48px); }
-  /* logo is the monochrome black mark; invert to white on the dark bg */
-  .logo { width:clamp(44px,5vw,60px); height:auto; filter:invert(1); opacity:.92; display:block; margin:0 0 16px; }
+  /* logo is the monochrome black mark; invert to white on dark bg, leave as-is on light */
+  .logo { width:clamp(44px,5vw,60px); height:auto; filter:invert(var(--logo-invert)); opacity:.92; display:block; margin:0 0 16px; }
   .logo-link { display:inline-block; }
   .logo-link:hover .logo { opacity:1; }
   h1 { font-size:clamp(20px,1.2vw + 15px,28px); margin:0 0 4px; letter-spacing:.02em; }
-  .env { font-family:var(--mono); background:#1a1a1a; border:1px solid #262626; color:#cdd; padding:2px 7px; border-radius:5px; font-size:.5em; font-weight:normal; letter-spacing:0; vertical-align:middle; }
-  .meta { color:#888; margin:0 0 2px; font-size:.92em; }
-  .accounts { color:#666; margin:0 0 24px; font-size:.85em; }
-  h2 { font-size:.8em; text-transform:uppercase; letter-spacing:.08em; color:#888; margin:24px 0 8px; }
+  .env { font-family:var(--mono); background:var(--chip-bg); border:1px solid var(--chip-border); color:var(--faint); padding:2px 7px; border-radius:5px; font-size:.5em; font-weight:normal; letter-spacing:0; vertical-align:middle; }
+  .meta { color:var(--muted); margin:0 0 2px; font-size:.92em; }
+  .accounts { color:var(--dim); margin:0 0 24px; font-size:.85em; }
+  h2 { font-size:.8em; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin:24px 0 8px; }
   ul { list-style:none; margin:0; padding:0; }
-  .row { display:flex; align-items:center; gap:12px; padding:7px 0; border-bottom:1px solid #1c1c1c; }
+  .row { display:flex; align-items:center; gap:12px; padding:7px 0; border-bottom:1px solid var(--divider); }
   .row .name { flex:1; }
-  .row .uptime { font-size:.85em; color:#666; }
-  .row .ver { font-family:var(--mono); font-size:.85em; color:#777; }
+  .row .uptime { font-size:.85em; color:var(--dim); }
+  .row .ver { font-family:var(--mono); font-size:.85em; color:var(--dim); }
   /* status hugs the far right and right-aligns so it forms a clean column,
      aligned whether or not the row carries a version */
-  .row .status { color:#888; font-size:.92em; text-align:right; min-width:5.5em; }
+  .row .status { color:var(--muted); font-size:.92em; text-align:right; min-width:5.5em; }
   .dot { width:9px; height:9px; border-radius:50%; flex:0 0 auto; }
   .up { background:#3fb950; box-shadow:0 0 6px #3fb95080; }
   .down { background:#f85149; box-shadow:0 0 6px #f8514980; }
   .now { margin:0; padding:7px 0; }
   .now .file { font-family:var(--mono); word-break:break-all; }
-  .now .state { color:#888; }
+  .now .state { color:var(--muted); }
   a { color:#58a6ff; text-decoration:none; }
   a:hover { color:#9cf; }
+  /* theme toggle — text-only, sits to the right of the env chip */
+  .theme-toggle { background:none; border:none; color:var(--dim); font:inherit; font-size:.85em; cursor:pointer; padding:2px 6px; margin-left:6px; vertical-align:middle; }
+  .theme-toggle:hover { color:var(--fg); }
   .links { display:flex; flex-wrap:wrap; gap:18px; margin-top:10px; }
   /* re-auth callout: only rendered when a token is missing/expired */
   .reauth { background:#3a1d00; border:1px solid #6b3b00; border-radius:8px; padding:14px 16px; margin:0 0 24px; }
@@ -525,7 +549,7 @@ var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
        assets) rather than copied in — see vault general/logo.md. The anchor
        wraps the mark so clicking it refreshes the page. -->
   <a class="logo-link" href="/" title="refresh"><img class="logo" src="https://www.dana.lol/assets/logo.png" alt="A Dana Life" width="44" height="44"></a>
-  <h1>tripbot <code class="env">{{.Env}}</code></h1>
+  <h1>tripbot <code class="env">{{.Env}}</code><button id="theme-toggle" class="theme-toggle" type="button" title="toggle theme">◐</button></h1>
   <p class="meta">up {{.Uptime}} · {{.Chatters}} in chat</p>
   <p class="accounts">broadcaster <a href="https://twitch.tv/{{.Channel}}">{{.Channel}}</a> · bot <a href="https://twitch.tv/{{.Bot}}">{{.Bot}}</a></p>
 
@@ -585,6 +609,23 @@ var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
   </nav>
 </main>
 <script>
+// Theme toggle. Reads localStorage for an explicit user override; otherwise
+// the @media(prefers-color-scheme: light) CSS rule applies. Setting
+// data-theme on <html> overrides the media query in either direction.
+(function() {
+  const root = document.documentElement;
+  const saved = localStorage.getItem('admin-theme'); // "light" | "dark" | null
+  if (saved) root.setAttribute('data-theme', saved);
+  const btn = document.getElementById('theme-toggle');
+  if (btn) btn.addEventListener('click', () => {
+    // Effective theme: the resolved color-scheme (after CSS + override).
+    const cur = getComputedStyle(root).colorScheme.includes('light') ? 'light' : 'dark';
+    const next = cur === 'light' ? 'dark' : 'light';
+    root.setAttribute('data-theme', next);
+    localStorage.setItem('admin-theme', next);
+  });
+})();
+
 // Molly switch: first click arms the button (relabel + redden, 5s window);
 // second click within the window lets the form submit. Click-away or timeout
 // disarms. No deps — vanilla DOM only.
