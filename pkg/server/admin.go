@@ -690,6 +690,7 @@ var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
   </nav>
 
   <div class="panel-footer">
+    <button id="toggle-all" class="theme-toggle" type="button" title="expand or collapse all sections">▾ expand all</button>
     <button id="theme-toggle" class="theme-toggle" type="button" title="toggle theme">◐ theme</button>
   </div>
 </main>
@@ -710,6 +711,30 @@ var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
       iframe.src = 'about:blank';
     }
   });
+})();
+
+// Expand/collapse all <details> on the page. If any section is closed, the
+// click opens them all; if all are already open, it closes them all. Button
+// label flips to match the next action. The stream-preview's toggle listener
+// (see above) lazy-loads/unloads the iframe on each open/close, so this
+// reuses that path correctly.
+(function() {
+  const btn = document.getElementById('toggle-all');
+  if (!btn) return;
+  const sync = () => {
+    const all = document.querySelectorAll('main details');
+    const anyClosed = Array.from(all).some(d => !d.open);
+    btn.textContent = anyClosed ? '▾ expand all' : '▸ collapse all';
+  };
+  btn.addEventListener('click', () => {
+    const all = document.querySelectorAll('main details');
+    const anyClosed = Array.from(all).some(d => !d.open);
+    all.forEach(d => { d.open = anyClosed; });
+    sync();
+  });
+  // Keep the label honest if the operator toggles individual sections.
+  document.querySelectorAll('main details').forEach(d => d.addEventListener('toggle', sync));
+  sync();
 })();
 
 // Theme toggle. Reads localStorage for an explicit user override; otherwise
