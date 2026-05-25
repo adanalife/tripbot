@@ -128,21 +128,26 @@ func (c *Client) HideGPSImage(ctx context.Context) error {
 }
 
 //TODO: move this to a common location
+//
+// Transport-layer errors log at Debug, not Error: each wrapper above this
+// (HideMiddleText, ShowGPSImage, …) logs the operation-specific failure at
+// Error with the same underlying err. Logging here too would double-count
+// every onscreens outage in Loki and Sentry.
 func (c *Client) get(ctx context.Context, url string) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		slog.ErrorContext(ctx, "error building request to onscreens server", "err", err)
+		slog.DebugContext(ctx, "error building request to onscreens server", "err", err)
 		return "", err
 	}
 	response, err := c.httpClient.Do(req)
 	if err != nil {
-		slog.ErrorContext(ctx, "error connecting to onscreens server", "err", err)
+		slog.DebugContext(ctx, "error connecting to onscreens server", "err", err)
 		return "", err
 	}
 	defer response.Body.Close()
 	contents, err := ioutil.ReadAll(response.Body)
 	if err != nil {
-		slog.ErrorContext(ctx, "error reading response from onscreens server", "err", err)
+		slog.DebugContext(ctx, "error reading response from onscreens server", "err", err)
 		return "", err
 	}
 	// make note of non-200 status codes
