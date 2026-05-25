@@ -68,7 +68,10 @@ func (p *Player) GetCurrentlyPlaying(ctx context.Context) {
 		// share the Video with the system
 		p.CurrentlyPlaying, err = LoadOrCreate(ctx, p.curVid)
 		if err != nil {
-			slog.ErrorContext(ctx, "unable to create Video", "err", err, "file", p.curVid)
+			// Downstream of vlc.CurrentlyPlaying; the wrapper there already
+			// logged the root cause at Error. Debug-level keeps the breadcrumb
+			// without double-counting in Sentry.
+			slog.DebugContext(ctx, "unable to create Video", "err", err, "file", p.curVid)
 		}
 
 		slog.InfoContext(ctx, "now playing",
