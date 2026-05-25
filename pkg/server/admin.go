@@ -512,6 +512,15 @@ var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
   /* armed = first click landed; second click within 5s actually fires */
   button.stream.armed { background:#f85149; color:#fff; box-shadow:0 0 0 2px #f8514980; }
   .stream-unreachable { color:#666; font-size:.9em; font-style:italic; margin:6px 0 0; }
+  /* Collapsible "controls" disclosure — defaults closed so the page stays
+     calm; click "controls" to reveal stream toggle + future control widgets. */
+  details.controls { margin:24px 0 0; }
+  details.controls > summary { font-size:.8em; text-transform:uppercase; letter-spacing:.08em; color:#888; cursor:pointer; padding:8px 0; border-top:1px solid #1c1c1c; list-style:none; }
+  details.controls > summary::-webkit-details-marker { display:none; }
+  details.controls > summary::before { content:"▸ "; color:#666; transition:transform .15s ease; display:inline-block; }
+  details.controls[open] > summary::before { content:"▾ "; }
+  details.controls > summary:hover { color:#ccc; }
+  details.controls h3 { font-size:.8em; text-transform:uppercase; letter-spacing:.08em; color:#888; margin:14px 0 6px; }
   /* per-service restart — small, unobtrusive, lives at the end of each row */
   .row .restart-form { margin:0; }
   button.restart { font:inherit; font-size:.8em; padding:3px 9px; border-radius:4px; border:1px solid #2a2a2a; background:#1a1a1a; color:#888; cursor:pointer; transition:background .15s, color .15s, border-color .15s; }
@@ -555,20 +564,23 @@ var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
     {{end}}
   </ul>
 
-  <h2>stream</h2>
-  {{if .Stream.Reachable}}
-    {{if .Stream.Active}}
-    <form class="stream-form" method="post" action="/admin/obs/stream/stop">
-      <button type="submit" class="stream stop" data-arm-label="click again to confirm stop" data-original-label="stop stream" onclick="return armConfirm(this)">stop stream</button>
-    </form>
+  <details class="controls">
+    <summary>controls</summary>
+    <h3>stream</h3>
+    {{if .Stream.Reachable}}
+      {{if .Stream.Active}}
+      <form class="stream-form" method="post" action="/admin/obs/stream/stop">
+        <button type="submit" class="stream stop" data-arm-label="click again to confirm stop" data-original-label="stop stream" onclick="return armConfirm(this)">stop stream</button>
+      </form>
+      {{else}}
+      <form class="stream-form" method="post" action="/admin/obs/stream/start">
+        <button type="submit" class="stream start" data-arm-label="click again to confirm start" data-original-label="start stream" onclick="return armConfirm(this)">start stream</button>
+      </form>
+      {{end}}
     {{else}}
-    <form class="stream-form" method="post" action="/admin/obs/stream/start">
-      <button type="submit" class="stream start" data-arm-label="click again to confirm start" data-original-label="start stream" onclick="return armConfirm(this)">start stream</button>
-    </form>
+    <p class="stream-unreachable">OBS unreachable</p>
     {{end}}
-  {{else}}
-  <p class="stream-unreachable">OBS unreachable</p>
-  {{end}}
+  </details>
 
   {{with .Now}}
   <h2>now playing</h2>
