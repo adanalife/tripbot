@@ -163,6 +163,14 @@ func (a *App) buildRegistry() []Command {
 			Handler: a.middleCmd,
 		},
 		{
+			Trigger: "!makebot",
+			Handler: a.makeBotCmd,
+		},
+		{
+			Trigger: "!unbot",
+			Handler: a.unBotCmd,
+		},
+		{
 			Trigger:        "!miles",
 			Aliases:        []string{"!points"},
 			Handler:        a.milesCmd,
