@@ -15,6 +15,25 @@ import (
 	"github.com/gorilla/mux"
 )
 
+func TestPanelHost(t *testing.T) {
+	cases := []struct {
+		host, want string
+	}{
+		{"tripbot.prod.whereisdana.today", "tripbot.prod.whereisdana.today"},
+		{"tripbot.prod.whereisdana.today:8080", "tripbot.prod.whereisdana.today"},
+		{"localhost:8080", "localhost"},
+		{"adanalife-minipc.tail020deb.ts.net", "adanalife-minipc.tail020deb.ts.net"},
+		{"", ""},
+	}
+	for _, tc := range cases {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.Host = tc.host
+		if got := panelHost(req); got != tc.want {
+			t.Errorf("panelHost(Host=%q) = %q, want %q", tc.host, got, tc.want)
+		}
+	}
+}
+
 func TestSiblingURL(t *testing.T) {
 	cases := []struct {
 		in, service, want string
