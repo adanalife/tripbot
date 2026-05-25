@@ -150,6 +150,12 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	// iOS Safari aggressively caches pages saved as Home Screen apps —
+	// without this, reopening the icon shows stale state until the user
+	// hard-refreshes. no-store forces a fresh fetch every time; the
+	// page is tiny so the cost is trivial.
+	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+	w.Header().Set("Pragma", "no-cache")
 	if err := adminTmpl.Execute(w, data); err != nil {
 		slog.ErrorContext(r.Context(), "couldn't render admin panel", "err", err)
 	}
@@ -637,6 +643,21 @@ var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
     const next = cur === 'light' ? 'dark' : 'light';
     root.setAttribute('data-theme', next);
     localStorage.setItem('admin-theme', next);
+  });
+})();
+
+// iOS Home Screen apps return to a stale cached page on reopen — even with
+// no-store headers, Safari sometimes serves the old paint. Reload when the
+// tab becomes visible after being hidden ≥10s, so quick app-switches don't
+// reload-spam but a return-from-Home-Screen does.
+(function() {
+  let hiddenAt = 0;
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      hiddenAt = Date.now();
+    } else if (hiddenAt && Date.now() - hiddenAt >= 10000) {
+      location.reload();
+    }
   });
 })();
 
