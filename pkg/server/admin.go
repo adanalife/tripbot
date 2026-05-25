@@ -115,18 +115,19 @@ type navLink struct {
 
 // adminData is the template payload.
 type adminData struct {
-	Channel   string // broadcaster Twitch username
-	Bot       string // bot Twitch username
-	Env       string
-	Uptime    string
-	Chatters  int // users currently in chat
-	Services  []serviceStatus
-	Now       *nowPlaying // nil when vlc is unhealthy or nothing is playing
-	Audio     nowPlayingTrack // current SomaFM track; empty Title hides the line
-	Stream    streamControl
-	PanelHost string // host the panel was reached at; the Twitch embed needs it as parent=
-	Links     []navLink
-	Reauth    []mytwitch.AccountReauth // accounts whose token needs re-auth; empty when healthy
+	Channel        string // broadcaster Twitch username; renders as text + broadcaster link
+	PreviewChannel string // Twitch channel the stream-preview embed loads; usually == Channel
+	Bot            string // bot Twitch username
+	Env            string
+	Uptime         string
+	Chatters       int // users currently in chat
+	Services       []serviceStatus
+	Now            *nowPlaying // nil when vlc is unhealthy or nothing is playing
+	Audio          nowPlayingTrack // current SomaFM track; empty Title hides the line
+	Stream         streamControl
+	PanelHost      string // host the panel was reached at; the Twitch embed needs it as parent=
+	Links          []navLink
+	Reauth         []mytwitch.AccountReauth // accounts whose token needs re-auth; empty when healthy
 }
 
 // adminHandler serves the human-facing root page on the tripbot Ingress: a
@@ -140,8 +141,9 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 	obs := siblingStatus(r.Context(), "obs", c.Conf.ObsServerHost)
 
 	data := adminData{
-		Channel:  c.Conf.ChannelName,
-		Bot:      c.Conf.BotUsername,
+		Channel:        c.Conf.ChannelName,
+		PreviewChannel: previewChannel(),
+		Bot:            c.Conf.BotUsername,
 		Env:      c.Conf.Environment,
 		Uptime:   time.Since(startedAt).Round(time.Second).String(),
 		Chatters: chatterCount(),
@@ -464,6 +466,19 @@ func siblingURL(externalURL, service string) string {
 	return u.String()
 }
 
+// previewChannel returns the Twitch channel name the stream-preview embed
+// should load. Normally == ChannelName, but on prod-1 we temporarily point
+// it at adanalife_staging because prod isn't broadcasting yet — the embed
+// would render a "stream offline" placeholder otherwise. REVERT THIS at the
+// streaming cutover: just delete the if-block so the prod panel embeds
+// adanalife_ like every other env.
+func previewChannel() string {
+	if c.Conf.IsProduction() {
+		return "adanalife_staging"
+	}
+	return c.Conf.ChannelName
+}
+
 // panelHost returns the hostname the panel was reached at, for use as the
 // Twitch embed's parent= parameter. Read from r.Host (the request's Host
 // header) so it matches whatever the browser used — Tailscale's tail*.ts.net
@@ -666,11 +681,11 @@ var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
   </p>
   {{end}}
 
-  {{if and .Channel .PanelHost}}
+  {{if and .PreviewChannel .PanelHost}}
   <details class="stream-preview" id="stream-preview">
     <summary>stream preview</summary>
     <div class="stream-frame">
-      <iframe data-src="https://player.twitch.tv/?channel={{.Channel}}&parent={{.PanelHost}}&muted=true&autoplay=true"
+      <iframe data-src="https://player.twitch.tv/?channel={{.PreviewChannel}}&parent={{.PanelHost}}&muted=true&autoplay=true"
               allowfullscreen
               title="Twitch stream preview"></iframe>
     </div>
