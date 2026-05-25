@@ -662,7 +662,6 @@ var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
   {{if .Audio.Title}}
   <p class="audio">
     <span class="track">{{.Audio.Artist}} — {{.Audio.Title}}</span>
-    <span class="state">· <a href="https://somafm.com/gsclassic/">Groove Salad Classic</a> on SomaFM</span>
   </p>
   {{end}}
 
