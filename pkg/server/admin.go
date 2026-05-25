@@ -547,12 +547,15 @@ var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
   /* stream-preview disclosure — same shape as .controls, just a different
      summary label. iframe is lazy-loaded by the inline JS so the ~2MB
      Twitch player isn't fetched on every panel render. */
-  details.stream-preview { margin:24px 0 0; }
-  details.stream-preview > summary { font-size:.8em; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); cursor:pointer; padding:8px 0; border-top:1px solid var(--divider); list-style:none; }
-  details.stream-preview > summary::-webkit-details-marker { display:none; }
-  details.stream-preview > summary::before { content:"▸ "; color:var(--dim); display:inline-block; }
-  details.stream-preview[open] > summary::before { content:"▾ "; }
-  details.stream-preview > summary:hover { color:var(--fg); }
+  /* Shared disclosure-row styling — controls / now-playing / stream-preview
+     all default closed and reveal on click. Same look, just different
+     summary labels. */
+  details.stream-preview, details.now-playing { margin:24px 0 0; }
+  details.stream-preview > summary, details.now-playing > summary { font-size:.8em; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); cursor:pointer; padding:8px 0; border-top:1px solid var(--divider); list-style:none; }
+  details.stream-preview > summary::-webkit-details-marker, details.now-playing > summary::-webkit-details-marker { display:none; }
+  details.stream-preview > summary::before, details.now-playing > summary::before { content:"▸ "; color:var(--dim); display:inline-block; }
+  details.stream-preview[open] > summary::before, details.now-playing[open] > summary::before { content:"▾ "; }
+  details.stream-preview > summary:hover, details.now-playing > summary:hover { color:var(--fg); }
   .stream-frame { aspect-ratio:16 / 9; width:100%; margin-top:10px; background:#000; border-radius:6px; overflow:hidden; }
   .stream-frame iframe { width:100%; height:100%; border:none; display:block; }
   a { color:#58a6ff; text-decoration:none; }
@@ -651,18 +654,22 @@ var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
     {{end}}
   </details>
 
-  {{if or .Now .Audio.Title}}<h2>now playing</h2>{{end}}
-  {{with .Now}}
-  <p class="now">
-    <span class="file">{{.File}}</span>
-    {{if .State}}<span class="state">· {{.State}}</span>{{end}}
-    {{if .Progress}}<span class="state">· {{.Progress}}</span>{{end}}
-  </p>
-  {{end}}
-  {{if .Audio.Title}}
-  <p class="audio">
-    <span class="track">{{.Audio.Artist}} — {{.Audio.Title}}</span>
-  </p>
+  {{if or .Now .Audio.Title}}
+  <details class="now-playing">
+    <summary>now playing</summary>
+    {{with .Now}}
+    <p class="now">
+      <span class="file">{{.File}}</span>
+      {{if .State}}<span class="state">· {{.State}}</span>{{end}}
+      {{if .Progress}}<span class="state">· {{.Progress}}</span>{{end}}
+    </p>
+    {{end}}
+    {{if .Audio.Title}}
+    <p class="audio">
+      <span class="track">{{.Audio.Artist}} — {{.Audio.Title}}</span>
+    </p>
+    {{end}}
+  </details>
   {{end}}
 
   {{if and .Channel .PanelHost}}
