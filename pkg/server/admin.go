@@ -504,11 +504,13 @@ var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
   .reauth .why { font-family:var(--mono); font-size:.85em; opacity:.85; }
   /* stream toggle — start (green) or stop (red), with a molly-switch two-click confirm */
   .stream-form { margin:8px 0 12px; }
-  button.stream { font:inherit; font-weight:600; padding:9px 18px; border-radius:6px; border:none; cursor:pointer; transition:background .15s, color .15s; }
-  button.stream.start { background:#1f6f3e; color:#e8f7ec; }
+  button.stream { font:inherit; font-size:.9em; padding:6px 14px; border-radius:5px; border:none; cursor:pointer; transition:background .15s, color .15s; }
+  button.stream.start { background:#1f6f3e; color:#e8f7ec; font-weight:600; }
   button.stream.start:hover { background:#2a8a4d; }
-  button.stream.stop  { background:#6a1e1e; color:#fbe6e6; }
-  button.stream.stop:hover  { background:#852828; }
+  /* "stop stream" is the less-likely-correct click — render it muted so
+     it doesn't dominate. The molly-switch arms it red on first click. */
+  button.stream.stop  { background:#2a1a1a; color:#c89696; border:1px solid #4a2a2a; }
+  button.stream.stop:hover  { background:#3a2020; color:#e8b0b0; }
   /* armed = first click landed; second click within 5s actually fires */
   button.stream.armed { background:#f85149; color:#fff; box-shadow:0 0 0 2px #f8514980; }
   .stream-unreachable { color:#666; font-size:.9em; font-style:italic; margin:6px 0 0; }
