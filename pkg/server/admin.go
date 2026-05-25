@@ -652,23 +652,16 @@ var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
     {{end}}
   </ul>
 
-  <details class="controls">
-    <summary>controls</summary>
-    <h3>stream</h3>
-    {{if .Stream.Reachable}}
-      {{if .Stream.Active}}
-      <form class="stream-form" method="post" action="/admin/obs/stream/stop">
-        <button type="submit" class="stream stop" data-arm-label="click again to confirm stop" data-original-label="stop stream" onclick="return armConfirm(this)">stop stream</button>
-      </form>
-      {{else}}
-      <form class="stream-form" method="post" action="/admin/obs/stream/start">
-        <button type="submit" class="stream start" data-arm-label="click again to confirm start" data-original-label="start stream" onclick="return armConfirm(this)">start stream</button>
-      </form>
-      {{end}}
-    {{else}}
-    <p class="stream-unreachable">OBS unreachable</p>
-    {{end}}
+  {{if and .PreviewChannel .PanelHost}}
+  <details class="stream-preview" id="stream-preview">
+    <summary>stream preview</summary>
+    <div class="stream-frame">
+      <iframe data-src="https://player.twitch.tv/?channel={{.PreviewChannel}}&parent={{.PanelHost}}&muted=true&autoplay=true"
+              allowfullscreen
+              title="Twitch stream preview"></iframe>
+    </div>
   </details>
+  {{end}}
 
   {{if or .Now .Audio.Title}}
   <details class="now-playing">
@@ -688,16 +681,23 @@ var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
   </details>
   {{end}}
 
-  {{if and .PreviewChannel .PanelHost}}
-  <details class="stream-preview" id="stream-preview">
-    <summary>stream preview</summary>
-    <div class="stream-frame">
-      <iframe data-src="https://player.twitch.tv/?channel={{.PreviewChannel}}&parent={{.PanelHost}}&muted=true&autoplay=true"
-              allowfullscreen
-              title="Twitch stream preview"></iframe>
-    </div>
+  <details class="controls">
+    <summary>controls</summary>
+    <h3>stream</h3>
+    {{if .Stream.Reachable}}
+      {{if .Stream.Active}}
+      <form class="stream-form" method="post" action="/admin/obs/stream/stop">
+        <button type="submit" class="stream stop" data-arm-label="click again to confirm stop" data-original-label="stop stream" onclick="return armConfirm(this)">stop stream</button>
+      </form>
+      {{else}}
+      <form class="stream-form" method="post" action="/admin/obs/stream/start">
+        <button type="submit" class="stream start" data-arm-label="click again to confirm start" data-original-label="start stream" onclick="return armConfirm(this)">start stream</button>
+      </form>
+      {{end}}
+    {{else}}
+    <p class="stream-unreachable">OBS unreachable</p>
+    {{end}}
   </details>
-  {{end}}
 
   <h2>dashboards</h2>
   <nav class="links">
