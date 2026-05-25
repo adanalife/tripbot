@@ -467,15 +467,8 @@ func siblingURL(externalURL, service string) string {
 }
 
 // previewChannel returns the Twitch channel name the stream-preview embed
-// should load. Normally == ChannelName, but on prod-1 we temporarily point
-// it at adanalife_staging because prod isn't broadcasting yet — the embed
-// would render a "stream offline" placeholder otherwise. REVERT THIS at the
-// streaming cutover: just delete the if-block so the prod panel embeds
-// adanalife_ like every other env.
+// should load.
 func previewChannel() string {
-	if c.Conf.IsProduction() {
-		return "adanalife_staging"
-	}
 	return c.Conf.ChannelName
 }
 
