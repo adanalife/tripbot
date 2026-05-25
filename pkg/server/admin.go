@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"html/template"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -114,17 +115,18 @@ type navLink struct {
 
 // adminData is the template payload.
 type adminData struct {
-	Channel  string // broadcaster Twitch username
-	Bot      string // bot Twitch username
-	Env      string
-	Uptime   string
-	Chatters int // users currently in chat
-	Services []serviceStatus
-	Now      *nowPlaying // nil when vlc is unhealthy or nothing is playing
-	Audio    nowPlayingTrack // current SomaFM track; empty Title hides the line
-	Stream   streamControl
-	Links    []navLink
-	Reauth   []mytwitch.AccountReauth // accounts whose token needs re-auth; empty when healthy
+	Channel   string // broadcaster Twitch username
+	Bot       string // bot Twitch username
+	Env       string
+	Uptime    string
+	Chatters  int // users currently in chat
+	Services  []serviceStatus
+	Now       *nowPlaying // nil when vlc is unhealthy or nothing is playing
+	Audio     nowPlayingTrack // current SomaFM track; empty Title hides the line
+	Stream    streamControl
+	PanelHost string // host the panel was reached at; the Twitch embed needs it as parent=
+	Links     []navLink
+	Reauth    []mytwitch.AccountReauth // accounts whose token needs re-auth; empty when healthy
 }
 
 // adminHandler serves the human-facing root page on the tripbot Ingress: a
@@ -147,6 +149,7 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 		Now:      currentVideo(vlc.OK),
 		Audio:    nowPlayingFetcher(r.Context()),
 		Stream:   gatherStream(r.Context()),
+		PanelHost: panelHost(r),
 		Links:    gatherLinks(),
 		Reauth:   accountsNeedingReauth(),
 	}
@@ -461,6 +464,23 @@ func siblingURL(externalURL, service string) string {
 	return u.String()
 }
 
+// panelHost returns the hostname the panel was reached at, for use as the
+// Twitch embed's parent= parameter. Read from r.Host (the request's Host
+// header) so it matches whatever the browser used — Tailscale's tail*.ts.net
+// hostname when the panel is reached via the operator's tailnet, the public
+// FQDN when reached through the Ingress. Strips any port suffix. Returns ""
+// when r.Host is empty (unusual; template hides the stream-preview block).
+func panelHost(r *http.Request) string {
+	h := r.Host
+	if h == "" {
+		return ""
+	}
+	if host, _, err := net.SplitHostPort(h); err == nil {
+		return host
+	}
+	return h
+}
+
 var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
 <html lang="en">
 <head>
@@ -524,6 +544,17 @@ var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
   .audio { margin:0; padding:7px 0; }
   .audio .track { color:var(--fg); opacity:.85; }
   .audio .state { color:var(--muted); }
+  /* stream-preview disclosure — same shape as .controls, just a different
+     summary label. iframe is lazy-loaded by the inline JS so the ~2MB
+     Twitch player isn't fetched on every panel render. */
+  details.stream-preview { margin:24px 0 0; }
+  details.stream-preview > summary { font-size:.8em; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); cursor:pointer; padding:8px 0; border-top:1px solid var(--divider); list-style:none; }
+  details.stream-preview > summary::-webkit-details-marker { display:none; }
+  details.stream-preview > summary::before { content:"▸ "; color:var(--dim); display:inline-block; }
+  details.stream-preview[open] > summary::before { content:"▾ "; }
+  details.stream-preview > summary:hover { color:var(--fg); }
+  .stream-frame { aspect-ratio:16 / 9; width:100%; margin-top:10px; background:#000; border-radius:6px; overflow:hidden; }
+  .stream-frame iframe { width:100%; height:100%; border:none; display:block; }
   a { color:#58a6ff; text-decoration:none; }
   a:hover { color:#9cf; }
   /* theme toggle — text-only, sits to the right of the env chip */
@@ -635,12 +666,41 @@ var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
   </p>
   {{end}}
 
+  {{if and .Channel .PanelHost}}
+  <details class="stream-preview" id="stream-preview">
+    <summary>stream preview</summary>
+    <div class="stream-frame">
+      <iframe data-src="https://player.twitch.tv/?channel={{.Channel}}&parent={{.PanelHost}}&muted=true&autoplay=true"
+              allowfullscreen
+              title="Twitch stream preview"></iframe>
+    </div>
+  </details>
+  {{end}}
+
   <h2>dashboards</h2>
   <nav class="links">
     {{range .Links}}<a href="{{.URL}}">{{.Label}}</a>{{end}}
   </nav>
 </main>
 <script>
+// Stream-preview lazy-load. The Twitch player iframe is ~2MB; we don't want
+// to fetch it on every panel render, only when the operator actually expands
+// the disclosure. On collapse we point it at about:blank so the player stops
+// (otherwise audio + bandwidth keep going even when the section's hidden).
+(function() {
+  const details = document.getElementById('stream-preview');
+  if (!details) return;
+  const iframe = details.querySelector('iframe');
+  if (!iframe) return;
+  details.addEventListener('toggle', () => {
+    if (details.open) {
+      iframe.src = iframe.dataset.src;
+    } else {
+      iframe.src = 'about:blank';
+    }
+  });
+})();
+
 // Theme toggle. Reads localStorage for an explicit user override; otherwise
 // the @media(prefers-color-scheme: light) CSS rule applies. Setting
 // data-theme on <html> overrides the media query in either direction.
