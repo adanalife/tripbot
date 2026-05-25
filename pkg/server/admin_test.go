@@ -34,18 +34,22 @@ func TestPanelHost(t *testing.T) {
 	}
 }
 
-func TestSiblingURL(t *testing.T) {
+func TestTailnetServiceURL(t *testing.T) {
+	saved := c.Conf.Environment
+	t.Cleanup(func() { c.Conf.Environment = saved })
 	cases := []struct {
-		in, service, want string
+		env, service, want string
 	}{
-		{"https://tripbot.prod.whereisdana.today", "obs", "https://obs.prod.whereisdana.today"},
-		{"https://tripbot.stage.whereisdana.today", "obs", "https://obs.stage.whereisdana.today"},
-		{"http://localhost:8080", "obs", ""}, // not an FQDN — no sibling Ingress
-		{"", "obs", ""},
+		{"production", "obs", "https://obs-prod.tail020deb.ts.net"},
+		{"production", "vlc-server", "https://vlc-server-prod.tail020deb.ts.net"},
+		{"staging", "obs", "https://obs-stage.tail020deb.ts.net"},
+		{"development", "obs", ""}, // not served by the operator
+		{"testing", "obs", ""},
 	}
 	for _, tc := range cases {
-		if got := siblingURL(tc.in, tc.service); got != tc.want {
-			t.Errorf("siblingURL(%q, %q) = %q, want %q", tc.in, tc.service, got, tc.want)
+		c.Conf.Environment = tc.env
+		if got := tailnetServiceURL(tc.service); got != tc.want {
+			t.Errorf("tailnetServiceURL(%q) with ENV=%q = %q, want %q", tc.service, tc.env, got, tc.want)
 		}
 	}
 }
@@ -332,11 +336,11 @@ func TestAdminHandler_RendersReadyStatusAndLinks(t *testing.T) {
 		`>grafana</a>`,                        // one-word grafana link
 		`>traefik</a>`,                        // one-word traefik link
 		`>hubble</a>`,                         // one-word hubble link
-		"https://obs.prod.whereisdana.today",  // derived OBS href
+		"https://obs-prod.tail020deb.ts.net",  // tailnet OBS href
 		grafanaURL,                            // grafana href
 		traefikURL,                            // traefik href
 		// Environment is "production" above → hubble link carries ?namespace=prod-1
-		"https://hubble.prod.whereisdana.today/?namespace=prod-1",
+		"https://hubble-prod.tail020deb.ts.net/?namespace=prod-1",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body missing %q", want)
