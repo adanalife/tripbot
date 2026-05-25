@@ -561,7 +561,8 @@ var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
   a { color:#58a6ff; text-decoration:none; }
   a:hover { color:#9cf; }
   /* theme toggle — text-only, sits to the right of the env chip */
-  .theme-toggle { background:none; border:none; color:var(--dim); font:inherit; font-size:.85em; cursor:pointer; padding:2px 6px; margin-left:6px; vertical-align:middle; }
+  .panel-footer { margin-top:32px; padding-top:14px; border-top:1px solid var(--divider); display:flex; gap:10px; align-items:center; }
+  .theme-toggle { background:none; border:none; color:var(--dim); font:inherit; font-size:.85em; cursor:pointer; padding:2px 6px; }
   .theme-toggle:hover { color:var(--fg); }
   .links { display:flex; flex-wrap:wrap; gap:18px; margin-top:10px; }
   /* re-auth callout: only rendered when a token is missing/expired */
@@ -606,7 +607,7 @@ var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
        assets) rather than copied in — see vault general/logo.md. The anchor
        wraps the mark so clicking it refreshes the page. -->
   <a class="logo-link" href="/" title="refresh"><img class="logo" src="https://www.dana.lol/assets/logo.png" alt="A Dana Life" width="44" height="44"></a>
-  <h1>tripbot <code class="env">{{.Env}}</code><button id="theme-toggle" class="theme-toggle" type="button" title="toggle theme">◐</button></h1>
+  <h1>tripbot <code class="env">{{.Env}}</code></h1>
   <p class="meta">up {{.Uptime}} · {{.Chatters}} in chat</p>
   <p class="accounts">broadcaster <a href="https://twitch.tv/{{.Channel}}">{{.Channel}}</a> · bot <a href="https://twitch.tv/{{.Bot}}">{{.Bot}}</a></p>
 
@@ -687,6 +688,10 @@ var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
   <nav class="links">
     {{range .Links}}<a href="{{.URL}}">{{.Label}}</a>{{end}}
   </nav>
+
+  <div class="panel-footer">
+    <button id="theme-toggle" class="theme-toggle" type="button" title="toggle theme">◐ theme</button>
+  </div>
 </main>
 <script>
 // Stream-preview lazy-load. The Twitch player iframe is ~2MB; we don't want
