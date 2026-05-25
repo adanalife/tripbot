@@ -23,8 +23,16 @@ if [[ ! -S "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" ]]; then
   exit 1
 fi
 
-# Listen on all interfaces, port 5900 (matches the EXPOSE in the
-# Dockerfile and the Service definition in k8s/apps/obs/base/). Auth
-# stays off — the Service is cluster-internal and reached via
-# `task obs:vnc:up` port-forward, mirroring the previous x11vnc setup.
-exec wayvnc 0.0.0.0 5900
+# Listen on all interfaces, port 5900 — pulled from the rendered
+# wayvnc.cfg in $XDG_RUNTIME_DIR. entrypoint.sh envsubsts the template
+# from /opt/obs/config/wayvnc.cfg.tmpl with VNC_USERNAME + VNC_PASSWD
+# before supervisord starts this program. Cert + key are also generated
+# by entrypoint.sh at the paths the cfg points at.
+#
+# enable_auth=true in the cfg unlocks the encrypted security types
+# (VeNCrypt for TigerVNC/RealVNC, Apple Diffie-Hellman for macOS Screen
+# Sharing.app via relax_encryption=true) that wayvnc's default config
+# leaves off — without enable_auth the cert paths are read-but-ignored
+# and wayvnc only offers RFB "None" (security type 1), which Screen
+# Sharing.app refuses with "Unable to communicate with localhost".
+exec wayvnc --config="$XDG_RUNTIME_DIR/wayvnc.cfg"

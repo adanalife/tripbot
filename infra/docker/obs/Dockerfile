@@ -30,7 +30,7 @@ RUN echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula sele
       | debconf-set-selections \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
-         software-properties-common ca-certificates gnupg \
+         software-properties-common ca-certificates gnupg curl \
     && add-apt-repository -y ppa:obsproject/obs-studio \
     && apt-get install -y --no-install-recommends \
          obs-studio \
@@ -54,9 +54,22 @@ RUN echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula sele
 
 # obsws-python (in a venv to stay clear of PEP 668 system-managed python)
 # powers the hourly browser-source refresh that the entrypoint kicks off
-# as a workaround for CEF's per-frame memory leak.
+# as a workaround for CEF's per-frame memory leak. websockify rides in the
+# same venv — it bridges the browser's WebSocket to wayvnc's TCP :5900 for
+# the noVNC client.
 RUN python3 -m venv /opt/obs/venv \
-    && /opt/obs/venv/bin/pip install --no-cache-dir obsws-python
+    && /opt/obs/venv/bin/pip install --no-cache-dir obsws-python 'websockify==0.13.0' 'flask==3.1.0'
+
+# noVNC: the static browser VNC client websockify serves on :6080. Reached
+# through the obs Ingress (traefik), so VNC works in a browser with no
+# native client — which also sidesteps macOS Screen Sharing.app's RFB
+# 003.889 incompatibility with neatvnc (it rejects Apple's version
+# string before any security type is negotiated).
+ARG NOVNC_VERSION=1.7.0
+RUN curl -fsSL "https://github.com/novnc/noVNC/archive/refs/tags/v${NOVNC_VERSION}.tar.gz" \
+      | tar -xz -C /opt \
+    && mv "/opt/noVNC-${NOVNC_VERSION}" /opt/novnc \
+    && printf '%s\n' '<!doctype html><title>OBS noVNC</title><meta http-equiv="refresh" content="0; url=vnc.html?resize=scale&amp;autoconnect=true&amp;reconnect=true">' > /opt/novnc/index.html
 
 COPY infra/docker/obs/config/ /opt/obs/config/
 COPY infra/docker/obs/script/ /opt/obs/script/
@@ -80,8 +93,13 @@ RUN mkdir -p /etc/tripbot \
 
 EXPOSE 5900
 EXPOSE 4455
-
-ENV VNC_PASSWD=123456
+EXPOSE 6080
+# obs-server: Flask app exposing /health/ready, /version, POST /admin/shutdown
+# so the admin panel can treat OBS like vlc-server / onscreens-server. Port
+# 8080 matches their "primary HTTP listener" convention (the OBS pod has no
+# other Go HTTP server, so 8080 is free here). Lives in the shared
+# /opt/obs/venv; supervised by obs-server.conf.
+EXPOSE 8080
 
 HEALTHCHECK --interval=10s --timeout=3s --retries=3 CMD /opt/obs/healthcheck.sh
 

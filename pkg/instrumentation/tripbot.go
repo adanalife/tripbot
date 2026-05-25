@@ -25,6 +25,7 @@ var (
 	scoreboardWrites  = mustCounter("tripbot_scoreboard_writes_total", "Total successful scoreboard score writes, labeled by scoreboard")
 	twitchSubscribers = mustGauge("twitch_subscribers_total", "Current number of Twitch channel subscribers")
 	twitchFollowers   = mustGauge("twitch_followers_total", "Current number of Twitch channel followers")
+	twitchConnected   = mustGauge("tripbot_twitch_connected", "1 when the bot is connected to Twitch chat (IRC), 0 otherwise")
 	twitchHelixErrors = mustCounter("twitch_helix_errors_total", "Total non-2xx responses from the Twitch Helix API, labeled by endpoint and status_code")
 
 	twitchHelixRateRemaining = mustGauge("twitch_helix_rate_limit_remaining", "Last-seen Ratelimit-Remaining header from Twitch Helix responses (per app-access bearer)")
@@ -66,6 +67,13 @@ var ScoreboardWrites = scoreboardWritesIface{counter: scoreboardWrites}
 
 // TwitchAudience exposes subscriber and follower gauge recording.
 var TwitchAudience = twitchAudienceIface{subscribers: twitchSubscribers, followers: twitchFollowers}
+
+// TwitchConnection exposes the chat-connection gauge. Set(true) on IRC
+// connect, Set(false) on disconnect. Readiness no longer gates on the Twitch
+// connection (the pod stays in the Service so the re-auth page is reachable),
+// so this gauge — alongside the admin-panel status row — is what surfaces
+// "up but not in chat" to dashboards and alerts.
+var TwitchConnection = twitchConnectionIface{gauge: twitchConnected}
 
 // TwitchHelixErrors exposes the helix-error counter; record by calling
 // TwitchHelixErrors.Inc(endpoint, statusCode). Endpoint is a short label
@@ -129,6 +137,16 @@ func (a twitchAudienceIface) SetSubscribers(n int64) {
 
 func (a twitchAudienceIface) SetFollowers(n int64) {
 	a.followers.Record(context.Background(), n)
+}
+
+type twitchConnectionIface struct{ gauge metric.Int64Gauge }
+
+func (t twitchConnectionIface) Set(connected bool) {
+	var v int64
+	if connected {
+		v = 1
+	}
+	t.gauge.Record(context.Background(), v)
 }
 
 type twitchHelixErrorsIface struct{ counter metric.Int64Counter }

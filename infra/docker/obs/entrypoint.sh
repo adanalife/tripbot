@@ -112,6 +112,16 @@ fi
 # Shared Wayland runtime dir. start-sway.sh creates it with 0700; export
 # it here so any debugging exec'd in the container picks it up too.
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp/runtime-root}"
+mkdir -p "$XDG_RUNTIME_DIR"
+chmod 0700 "$XDG_RUNTIME_DIR"
+
+# Render the wayvnc cfg into the per-pod tmpfs runtime dir. The template has
+# no env vars to substitute — auth is off (wayvnc offers RFB "None" bound to
+# the pod's localhost; access control lives at the traefik Ingress in front
+# of noVNC), so the cert generation and VNC_USERNAME/VNC_PASSWD that used to
+# render here are gone. envsubst is a passthrough copy now, kept so the cfg
+# lands at the same spot as the rest of the per-pod runtime config.
+envsubst < /opt/obs/config/wayvnc.cfg.tmpl > "$XDG_RUNTIME_DIR/wayvnc.cfg"
 
 # Hand off to supervisord. It manages sway, wayvnc, obs, and the hourly
 # browser-source refresh (with each program's start order + Wayland-socket

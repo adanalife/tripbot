@@ -100,6 +100,7 @@ func (s *Server) Start(ctx context.Context) {
 	hp.Handle("/", tagged("/health/", s.livenessHandler))
 	hp.Handle("/live", tagged("/health/live", s.livenessHandler))
 	hp.Handle("/ready", tagged("/health/ready", s.readinessHandler))
+	hp.Handle("/rtsp", tagged("/health/rtsp", s.rtspHealthHandler))
 
 	// version endpoint — returns build metadata as JSON
 	r.Handle("/version", tagged("/version", s.versionHandler)).Methods("GET", "HEAD")
@@ -117,6 +118,13 @@ func (s *Server) Start(ctx context.Context) {
 	// onscreen endpoints now live in cmd/onscreens-server (separate binary,
 	// separate port). vlc-server no longer serves /onscreens/* — clients
 	// (chatbot, OBS browser sources) hit ONSCREENS_SERVER_HOST directly.
+
+	// admin actions — tailnet-only by virtue of where the Ingress is exposed;
+	// no app-layer auth gate. /admin/shutdown is the admin panel's "restart
+	// vlc-server" surface; the shared handler SIGTERMs the process and k8s
+	// restartPolicy: Always brings the pod back.
+	admin := r.PathPrefix("/admin").Methods("POST").Subrouter()
+	admin.Handle("/shutdown", tagged("/admin/shutdown", httpmw.ShutdownHandler()))
 
 	// prometheus metrics endpoint
 	r.Path("/metrics").Handler(tagged("/metrics", promhttp.Handler().ServeHTTP))

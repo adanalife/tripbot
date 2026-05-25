@@ -1,0 +1,21 @@
+# wayvnc config. Rendered by entrypoint.sh into $XDG_RUNTIME_DIR/wayvnc.cfg
+# (per-pod, on tmpfs) where start-wayvnc.sh reads it.
+#
+# Auth is OFF. wayvnc binds 0.0.0.0:5900 inside the pod and offers RFB
+# "None" — nothing outside the pod connects to it directly. The browser
+# reaches it through noVNC + websockify (:6080) behind the traefik Ingress,
+# and that Ingress is the access-control boundary.
+#
+# The encrypted security types (VeNCrypt / RSA-AES / Apple-DH) and the
+# per-pod TLS cert that used to live here existed only to coax macOS Screen
+# Sharing.app into connecting. That was a dead end: neatvnc rejects Apple's
+# RFB 003.889 version handshake before any security type is negotiated, so
+# the crypto never bought working Screen Sharing.app and is gone. The
+# browser noVNC client speaks standard RFB.
+#
+# If the obs Ingress is ever exposed beyond the LAN, add auth at traefik
+# (basic-auth middleware) — not here.
+
+address=0.0.0.0
+port=5900
+enable_auth=false
