@@ -21,14 +21,34 @@ var version = "dev"
 
 var telemetryShutdown telemetry.ShutdownFunc
 
+// srv is the running onscreens-server, captured in main so
+// gracefulShutdown can reach it from its signal-handler goroutine.
+var srv *onscreensServer.Server
+
+// httpShutdownTimeout is how long gracefulShutdown waits for in-flight
+// requests to finish before forcing connections closed. 5s matches the
+// telemetry/sentry flush deadlines used below — the whole shutdown path
+// should complete in well under 15s so process supervisors don't SIGKILL
+// us mid-drain.
+const httpShutdownTimeout = 5 * time.Second
+
 func main() {
 	slog.Info("onscreens-server starting", "version", version)
 
 	// write the current pid to a pidfile
 	helpers.WritePidFile(c.Conf.OnscreensPidFile)
 
-	// initialize the onscreen elements (singletons + their background loops)
-	createOnscreens()
+	// shutdownCtx is canceled on SIGINT/SIGTERM; the HTTP server uses it
+	// to trigger a graceful shutdown so in-flight requests aren't cut.
+	// listenForShutdown's gracefulShutdown goroutine handles the rest of
+	// the app cleanup off the same signals.
+	shutdownCtx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stopSignals()
+
+	// construct the server — runs all per-onscreen init (singletons +
+	// background loops) up front so the HTTP routes have everything to
+	// read by the time the listener accepts.
+	srv = onscreensServer.New(onscreensServer.Config{Version: version})
 
 	// await graceful shutdown signal
 	listenForShutdown()
@@ -39,21 +59,11 @@ func main() {
 	// set up error logging
 	initializeErrorLogger()
 
-	// start the webserver
-	onscreensServer.SetVersion(version)
-	onscreensServer.Start()
-}
-
-// createOnscreens starts the various onscreen elements
-// (like the chat boxes in the corners)
-func createOnscreens() {
-	onscreensServer.InitGPSImage()
-	onscreensServer.InitLeftRotator()
-	onscreensServer.InitRightRotator()
-	onscreensServer.InitMiddleText()
-	onscreensServer.InitTimewarp()
-	onscreensServer.InitLeaderboard()
-	onscreensServer.InitFlagImage()
+	// start the webserver — blocks until ListenAndServe returns or the
+	// signal handler cancels shutdownCtx
+	if err := srv.Start(shutdownCtx); err != nil {
+		terrors.Fatal(err, "couldn't start server")
+	}
 }
 
 // initializeTelemetry brings up OpenTelemetry providers (traces, metrics,
@@ -77,7 +87,9 @@ func listenForShutdown() {
 	go gracefulShutdown()
 }
 
-// gracefulShutdown catches CTRL-C and cleans up
+// gracefulShutdown catches CTRL-C and cleans up. Drains the HTTP server
+// first (so in-flight onscreens-render requests don't get cut), then
+// flushes Sentry + telemetry exporters before exiting.
 func gracefulShutdown() {
 	ctrlC := make(chan os.Signal, 1)
 	signal.Notify(ctrlC,
@@ -90,6 +102,15 @@ func gracefulShutdown() {
 	<-ctrlC
 
 	slog.Warn("caught CTRL-C, shutting down")
+
+	if srv != nil {
+		httpCtx, cancel := context.WithTimeout(context.Background(), httpShutdownTimeout)
+		if err := srv.Shutdown(httpCtx); err != nil {
+			slog.Error("error during onscreens-server HTTP shutdown", "err", err)
+		}
+		cancel()
+	}
+
 	sentry.Flush(time.Second * 5)
 	if telemetryShutdown != nil {
 		flushCtx, cancel := context.WithTimeout(context.Background(), time.Second*5)

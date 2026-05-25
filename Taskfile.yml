@@ -31,6 +31,23 @@ tasks:
     cmds:
       - ENV=testing bin/devenv run --rm test go test -race ./...
 
+  # Native macOS test runner — host mise + VLC.app's bundled libvlc, no
+  # docker. Mirrors vlc-server:build:macos's CGO incantation (rpath is
+  # required for `go test` too, per vault/tripbot/vlc-server/gotchas.md).
+  # `dotenv` injects .env.testing's keys as real env vars so the config
+  # loader resolves them from the environment — `go test` runs each package
+  # from its own dir, so the .env.testing file itself isn't on the path.
+  test:macos:
+    desc: Run all unit tests natively on macOS (host mise, no docker)
+    platforms: [darwin]
+    dotenv: ['.env.testing']
+    env:
+      ENV: testing
+      CGO_CFLAGS: -I/Applications/VLC.app/Contents/MacOS/include
+      CGO_LDFLAGS: -L/Applications/VLC.app/Contents/MacOS/lib -Wl,-rpath,/Applications/VLC.app/Contents/MacOS/lib -Wno-error=incompatible-function-pointer-types
+    cmds:
+      - mise exec -- go test ./...
+
   shell:
     desc: Open an interactive Go-toolchain shell inside the test container
     interactive: true
@@ -38,16 +55,18 @@ tasks:
       - ENV=testing bin/devenv run --rm test bash
 
   auth:bootstrap:
-    desc: One-time Twitch OAuth bootstrap; writes refresh token to oauth_tokens. Run on host (needs a browser); bring up Postgres first (`bin/devenv up -d db migrate` locally, or `task tripbot:db:up` in infra for cluster DB).
+    desc: Bootstrap BOTH Twitch OAuth identities (bot + broadcaster) back-to-back. Run on host (needs a browser); bring up Postgres first (`bin/devenv up -d db migrate` locally, or `task tripbot:db:up` in infra for cluster DB). Sign in as the bot account when the first browser tab opens, then as the broadcaster on the second.
+    cmds:
+      - task: auth:bootstrap:bot
+      - task: auth:bootstrap:broadcaster
+
+  auth:bootstrap:bot:
+    desc: Bootstrap the bot's Twitch OAuth token (chat:read/edit etc.). Writes the row to oauth_tokens keyed by BOT_USERNAME.
     env:
-      # Local-bootstrap defaults. Override at the shell to point elsewhere.
       ENV: '{{.ENV | default "development"}}'
       DATABASE_HOST: '{{.DATABASE_HOST | default "localhost"}}'
       EXTERNAL_URL: '{{.EXTERNAL_URL | default "http://localhost:8080"}}'
     cmds:
-      # Pull Twitch app credentials from SM so they never live in env.docker.
-      # `mise exec --` activates the pinned Go toolchain in task's
-      # non-interactive subshell (where ~/.zshrc isn't sourced).
       - |
         secret=$(aws-vault exec adanalife-stage -- \
           aws secretsmanager get-secret-value \
@@ -56,7 +75,24 @@ tasks:
         export TWITCH_CLIENT_ID=$(echo "$secret" | jq -r .TWITCH_CLIENT_ID)
         export TWITCH_CLIENT_SECRET=$(echo "$secret" | jq -r .TWITCH_CLIENT_SECRET)
         printf '\a'
-        mise exec -- go run ./cmd/auth-bootstrap
+        mise exec -- go run ./cmd/auth-bootstrap --account=bot
+
+  auth:bootstrap:broadcaster:
+    desc: Bootstrap the broadcaster's Twitch OAuth token (channel:read:subscriptions, moderator:read:followers, user:edit:broadcast). Writes the row to oauth_tokens keyed by CHANNEL_NAME. Required for subscriber/follower polling.
+    env:
+      ENV: '{{.ENV | default "development"}}'
+      DATABASE_HOST: '{{.DATABASE_HOST | default "localhost"}}'
+      EXTERNAL_URL: '{{.EXTERNAL_URL | default "http://localhost:8080"}}'
+    cmds:
+      - |
+        secret=$(aws-vault exec adanalife-stage -- \
+          aws secretsmanager get-secret-value \
+          --secret-id k8s/tripbot/twitch-creds \
+          --query SecretString --output text)
+        export TWITCH_CLIENT_ID=$(echo "$secret" | jq -r .TWITCH_CLIENT_ID)
+        export TWITCH_CLIENT_SECRET=$(echo "$secret" | jq -r .TWITCH_CLIENT_SECRET)
+        printf '\a'
+        mise exec -- go run ./cmd/auth-bootstrap --account=broadcaster
 
   # Release smoke flow — see vault/tripbot/release-checklist.md.
   # Targets the local k3d cluster running the stage-1 overlay

@@ -2,6 +2,8 @@ package chatbot
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -37,20 +39,20 @@ func newTestVideo(state string, lat, lng float64, date time.Time) video.Video {
 	return video.Video{State: state, Lat: lat, Lng: lng, DateFilmed: date}
 }
 
-// newTestApp returns an App with CurrentVideo returning vid, plus no-op
-// Onscreens, VLC, Video, IRC, and Sessions fakes. For commands that
-// don't use CurrentVideo, pass a zero-value video.Video. To assert on
-// any of those surfaces, replace the corresponding field with a
-// recording fake (recordingOnscreens / recordingVLC / recordingVideo /
-// recordingIRC / recordingSessions).
+// newTestApp returns an App whose Video reports vid as the currently-playing
+// video, plus no-op Onscreens, VLC, IRC, and Sessions fakes. For commands
+// that don't read Video, pass a zero-value video.Video. To assert on any of
+// those surfaces, replace the corresponding field with a recording fake
+// (recordingOnscreens / recordingVLC / recordingVideo / recordingIRC /
+// recordingSessions).
 func newTestApp(vid video.Video) *App {
 	return &App{
-		CurrentVideo: func() video.Video { return vid },
-		Onscreens:    noopOnscreens{},
-		VLC:          noopVLC{},
-		Video:        noopVideo{},
-		IRC:          noopIRC{},
-		Sessions:     noopSessions{},
+		Onscreens:  noopOnscreens{},
+		VLC:        noopVLC{},
+		Video:      &recordingVideo{Vid: vid},
+		IRC:        noopIRC{},
+		Sessions:   noopSessions{},
+		NowPlaying: noopNowPlaying{},
 	}
 }
 
@@ -442,6 +444,81 @@ func TestVersionCmd_MessageFormat(t *testing.T) {
 
 	if !strings.HasPrefix(out(), "Current version is ") {
 		t.Errorf("unexpected message format: %q", out())
+	}
+}
+
+func TestVersionCmd_ReadsFromVersionFile(t *testing.T) {
+	app := newTestApp(video.Video{})
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "version")
+	if err := os.WriteFile(path, []byte("v9.9.9-from-file\n"), 0o644); err != nil {
+		t.Fatalf("seed version file: %v", err)
+	}
+
+	origPath := versionFilePath
+	versionFilePath = path
+	currentVersion = ""
+	defer func() {
+		versionFilePath = origPath
+		currentVersion = ""
+	}()
+
+	out, restore := captureSay(t)
+	defer restore()
+
+	app.versionCmd(context.Background(), newTestUser("viewer1"), nil)
+
+	if !strings.Contains(out(), "v9.9.9-from-file") {
+		t.Errorf("expected version read from file, got %q", out())
+	}
+}
+
+func TestVersionCmd_FallsBackToDevWhenFileMissing(t *testing.T) {
+	app := newTestApp(video.Video{})
+
+	origPath := versionFilePath
+	versionFilePath = filepath.Join(t.TempDir(), "does-not-exist")
+	currentVersion = ""
+	defer func() {
+		versionFilePath = origPath
+		currentVersion = ""
+	}()
+
+	out, restore := captureSay(t)
+	defer restore()
+
+	app.versionCmd(context.Background(), newTestUser("viewer1"), nil)
+
+	if !strings.Contains(out(), "dev") {
+		t.Errorf("expected 'dev' fallback in output, got %q", out())
+	}
+}
+
+func TestVersionCmd_FallsBackToDevWhenFileEmpty(t *testing.T) {
+	app := newTestApp(video.Video{})
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "version")
+	if err := os.WriteFile(path, []byte("   \n"), 0o644); err != nil {
+		t.Fatalf("seed empty version file: %v", err)
+	}
+
+	origPath := versionFilePath
+	versionFilePath = path
+	currentVersion = ""
+	defer func() {
+		versionFilePath = origPath
+		currentVersion = ""
+	}()
+
+	out, restore := captureSay(t)
+	defer restore()
+
+	app.versionCmd(context.Background(), newTestUser("viewer1"), nil)
+
+	if !strings.Contains(out(), "dev") {
+		t.Errorf("expected 'dev' fallback for whitespace-only file, got %q", out())
 	}
 }
 

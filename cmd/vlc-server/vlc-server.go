@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -24,6 +25,10 @@ import (
 var version = "dev"
 
 var telemetryShutdown telemetry.ShutdownFunc
+
+// srv is the running vlc-server, captured in main so gracefulShutdown can
+// reach it from its signal-handler goroutine.
+var srv *vlcServer.Server
 
 func main() {
 	slog.Info("vlc-server starting", "version", version)
@@ -55,23 +60,71 @@ func main() {
 	// set up error logging
 	initializeErrorLogger()
 
-	// start VLC
-	vlcServer.InitPlayer()
-	vlcServer.PlayRandom() // play a random video
+	// start VLC + load media; surfaces libvlc init errors instead of
+	// fatalling-during-init from inside the package.
+	var err error
+	srv, err = vlcServer.New(vlcServer.Config{Version: version})
+	if err != nil {
+		log.Fatal(err)
+	}
+	// On normal exit (Start returns when shutdownCtx is canceled), drain
+	// the HTTP server with a bounded ctx and release libvlc. The
+	// gracefulShutdown goroutine below also calls Shutdown for the
+	// os.Exit path — Shutdown tolerates being invoked twice (libvlc
+	// Release is a no-op when the instance is already released).
+	defer func() {
+		drainCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		srv.Shutdown(drainCtx)
+	}()
+
+	resumeFromMarker(srv)
 
 	// poll libvlc for playback stats (FPS, bitrate, dropped frames) and
 	// surface them as OTel gauges. No-op when telemetry is disabled.
-	vlcServer.StartStatsPoller(context.Background(), 5*time.Second)
+	// Tied to shutdownCtx so the poller goroutine exits cleanly on
+	// SIGINT/SIGTERM.
+	srv.StartStatsPoller(shutdownCtx, 5*time.Second)
 
 	// poll the OBS WebSocket for streaming state + render/output stats.
 	go obs.PollStreamingActive(context.Background(), 30*time.Second)
 
-	// start the webserver
-	vlcServer.SetVersion(version)
-	vlcServer.Start(shutdownCtx)
+	// Self-heal watchdog: probes the local RTSP listener; after 3
+	// consecutive DESCRIBE failures (90s of sustained badness with the
+	// 30s interval), writes a resume marker and signals SIGTERM so
+	// supervisord respawns vlc-server. See pkg/vlc-server/watchdog.go.
+	srv.StartRTSPWatchdog(shutdownCtx, 30*time.Second, 3, 30*time.Second)
 
-	// listen for termination signals and gracefully shutdown
-	defer vlcServer.Shutdown()
+	// start the webserver
+	srv.Start(shutdownCtx)
+}
+
+// resumeFromMarker picks the startup video. If the self-heal watchdog
+// wrote a resume marker on its previous exit, play that file; otherwise
+// start fresh with a random pick. The marker is consumed on read so a
+// crash-loop doesn't pin playback to the same broken clip forever.
+func resumeFromMarker(srv *vlcServer.Server) {
+	marker := vlcServer.ResumeMarkerPath()
+	data, err := os.ReadFile(marker)
+	if err != nil {
+		srv.PlayRandom()
+		return
+	}
+	// Remove the marker immediately so any subsequent crash falls back to
+	// PlayRandom rather than retrying the same file.
+	if rmErr := os.Remove(marker); rmErr != nil {
+		slog.Warn("failed to remove resume marker", "err", rmErr, "marker", marker)
+	}
+	basename := strings.TrimSpace(string(data))
+	if basename == "" {
+		srv.PlayRandom()
+		return
+	}
+	slog.Info("resuming playback from watchdog marker", "video", basename, "marker", marker)
+	if err := srv.PlayVideoFile(basename); err != nil {
+		slog.Error("resume failed; falling back to PlayRandom", "err", err, "video", basename)
+		srv.PlayRandom()
+	}
 }
 
 // initializeTelemetry brings up OpenTelemetry providers (traces, metrics,
@@ -112,7 +165,11 @@ func gracefulShutdown() {
 
 	slog.Warn("caught CTRL-C, shutting down")
 	// anything below this probably won't be executed
-	vlcServer.Shutdown()
+	if srv != nil {
+		drainCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		srv.Shutdown(drainCtx)
+		cancel()
+	}
 	//TODO: stop cron here
 	sentry.Flush(time.Second * 5)
 	if telemetryShutdown != nil {

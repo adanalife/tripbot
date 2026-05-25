@@ -12,6 +12,7 @@ import (
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/httpmw"
+	"github.com/adanalife/tripbot/pkg/instrumentation"
 	sentrynegroni "github.com/getsentry/sentry-go/negroni"
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -44,8 +45,12 @@ func Start(ctx context.Context) {
 
 	// healthcheck endpoints
 	hp := r.PathPrefix("/health").Methods("GET", "HEAD").Subrouter()
-	hp.Handle("/live", tagged("/health/live", healthHandler))
-	hp.Handle("/ready", tagged("/health/ready", healthHandler))
+	hp.Handle("/live", tagged("/health/live", httpmw.LivenessHandler()))
+	// /ready runs no checks: tripbot's HTTP surface (admin panel, /auth/init,
+	// /auth/callback, /metrics) doesn't depend on the Twitch connection, so the
+	// pod must stay routable even when the bot is offline. Chat-connection is
+	// surfaced via the admin panel + the tripbot_twitch_connected gauge.
+	hp.Handle("/ready", tagged("/health/ready", httpmw.ReadinessHandler()))
 
 	// version endpoint — returns build metadata as JSON
 	r.Handle("/version", tagged("/version", versionHandler)).Methods("GET", "HEAD")
@@ -61,8 +66,18 @@ func Start(ctx context.Context) {
 	// prometheus metrics endpoint
 	r.Path("/metrics").Handler(tagged("/metrics", promhttp.Handler().ServeHTTP))
 
+	// admin panel (status overview + links) on the root path
+	r.Handle("/", tagged("/", adminHandler)).Methods("GET", "HEAD")
+
+	// admin actions — tailnet-only by virtue of where the Ingress is
+	// exposed; no app-layer auth gate (see CLAUDE.md / vault decisions).
+	admin := r.PathPrefix("/admin").Methods("POST").Subrouter()
+	admin.Handle("/obs/stream/{action}", tagged("/admin/obs/stream/{action}", obsStreamActionHandler))
+	admin.Handle("/shutdown", tagged("/admin/shutdown", httpmw.ShutdownHandler()))
+	admin.Handle("/restart/{service}", tagged("/admin/restart/{service}", restartActionHandler))
+
 	// catch everything else
-	r.Handle("/", tagged("/", catchAllHandler))
+	r.NotFoundHandler = tagged("/", catchAllHandler)
 
 	if c.Conf.Verbose {
 		helpers.PrintAllRoutes(r)
@@ -71,7 +86,10 @@ func Start(ctx context.Context) {
 	// negroni.New + explicit middleware so we can swap negroni's stdlib
 	// logger for an slog-based one — see pkg/httpmw.SlogLogger. The static
 	// middleware from negroni.Classic is dropped (no public/ directory).
-	app := negroni.New(negroni.NewRecovery(), httpmw.NewSlogLogger())
+	app := negroni.New(
+		httpmw.NewRecovery(func(any) { instrumentation.HTTPPanics.Inc(c.Conf.ServerType) }),
+		httpmw.NewSlogLogger(),
+	)
 
 	// attach http-metrics (prometheus) middleware
 	metricsMw := middleware.New(middleware.Config{

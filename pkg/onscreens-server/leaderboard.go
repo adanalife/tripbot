@@ -5,15 +5,12 @@ import (
 	"time"
 )
 
+// leaderboardDuration controls how long a !leaderboard render stays on
+// screen before the background expiry sweeper hides it.
 var leaderboardDuration = time.Duration(20 * time.Second)
 
-var leaderboard *Onscreen
-
-func InitLeaderboard() {
+// newLeaderboardOnscreen constructs the leaderboard *Onscreen.
+func newLeaderboardOnscreen() *Onscreen {
 	slog.Info("creating onscreen", "kind", "leaderboard")
-	leaderboard = New()
-}
-
-func ShowLeaderboard(content string) {
-	leaderboard.ShowFor(content, leaderboardDuration)
+	return newOnscreen()
 }

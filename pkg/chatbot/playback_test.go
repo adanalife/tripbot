@@ -2,6 +2,7 @@ package chatbot
 
 import (
 	"context"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -15,13 +16,22 @@ import (
 // the refresh was an unobserved package-level call into video.GetCurrentlyPlaying
 // (which in turn hit vlc-server over HTTP). Now we can assert it fires.
 //
-// The *Cmd handlers early-return on Darwin via helpers.RunningOnDarwin(); the
-// canonical test invocation is `task test` (Linux container, ENV=testing), so
-// the Darwin branch is not exercised here.
+// The *Cmd handlers early-return on Darwin via helpers.RunningOnDarwin(), so
+// each test calls skipIfDarwin to no-op when running `go test` locally on a Mac.
+// The canonical test invocation is `task test` (Linux container, ENV=testing).
+
+// skipIfDarwin no-ops the test when GOOS=darwin. The *Cmd handlers under test
+// short-circuit on Darwin via helpers.RunningOnDarwin(), so the assertions below
+// would never see the recording fakes get called.
+func skipIfDarwin(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "darwin" {
+		t.Skip("playback *Cmd handlers early-return on darwin; covered in CI (linux)")
+	}
+}
 
 // runAsAdmin runs fn with lastTimewarpTime cleared so rate limiting is not a
-// concern, plus captureSay's restore wired up automatically. The admin
-// shortcut still goes through helpers.RunningOnDarwin, but in CI that's false.
+// concern, plus captureSay's restore wired up automatically.
 func runAsAdmin(t *testing.T, fn func()) {
 	t.Helper()
 	lastTimewarpTime = time.Time{}
@@ -33,6 +43,7 @@ func runAsAdmin(t *testing.T, fn func()) {
 // --- timewarpCmd ---
 
 func TestTimewarpCmd_AdminDrivesPlaybackChain(t *testing.T) {
+	skipIfDarwin(t)
 	app := newTestApp(video.Video{})
 	recOverlay := &recordingOnscreens{}
 	recVLC := &recordingVLC{}
@@ -62,6 +73,7 @@ func TestTimewarpCmd_AdminDrivesPlaybackChain(t *testing.T) {
 // --- skipCmd ---
 
 func TestSkipCmd_AdminDrivesPlaybackChain(t *testing.T) {
+	skipIfDarwin(t)
 	app := newTestApp(video.Video{})
 	recVLC := &recordingVLC{}
 	recVideo := &recordingVideo{}
@@ -82,6 +94,7 @@ func TestSkipCmd_AdminDrivesPlaybackChain(t *testing.T) {
 }
 
 func TestSkipCmd_AdminPassesParamCountThrough(t *testing.T) {
+	skipIfDarwin(t)
 	app := newTestApp(video.Video{})
 	recVLC := &recordingVLC{}
 	recVideo := &recordingVideo{}
@@ -103,6 +116,7 @@ func TestSkipCmd_AdminPassesParamCountThrough(t *testing.T) {
 // --- backCmd ---
 
 func TestBackCmd_AdminDrivesPlaybackChain(t *testing.T) {
+	skipIfDarwin(t)
 	app := newTestApp(video.Video{})
 	recVLC := &recordingVLC{}
 	recVideo := &recordingVideo{}
@@ -132,7 +146,7 @@ func TestGuessCmd_CorrectGuess_RefreshesVideoAfterTimewarp(t *testing.T) {
 	mock := installMockDB(t)
 	vid := newTestVideo("Colorado", 39.5, -105.0, time.Now())
 	app := newTestApp(vid)
-	recVideo := &recordingVideo{}
+	recVideo := &recordingVideo{Vid: vid}
 	app.Video = recVideo
 
 	expectAddToScoreChain(mock)
@@ -143,8 +157,12 @@ func TestGuessCmd_CorrectGuess_RefreshesVideoAfterTimewarp(t *testing.T) {
 
 	app.guessCmd(context.Background(), newTestUser("viewer1"), []string{"Colorado"})
 
-	if len(recVideo.Calls) != 1 || recVideo.Calls[0] != "GetCurrentlyPlaying()" {
-		t.Errorf("expected timewarp to refresh Video via GetCurrentlyPlaying, got %v", recVideo.Calls)
+	// guessCmd first reads the current vid (Current), then the correct-guess
+	// path runs a.timewarp() which refreshes via GetCurrentlyPlaying.
+	wantCalls := []string{"Current()", "GetCurrentlyPlaying()"}
+	if len(recVideo.Calls) != len(wantCalls) ||
+		recVideo.Calls[0] != wantCalls[0] || recVideo.Calls[1] != wantCalls[1] {
+		t.Errorf("expected calls %v, got %v", wantCalls, recVideo.Calls)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Error(err)
@@ -159,6 +177,7 @@ func TestGuessCmd_CorrectGuess_RefreshesVideoAfterTimewarp(t *testing.T) {
 // three branches: success, no-footage-for-state, and bad input.
 
 func TestJumpCmd_AdminPlaysRandomFromState(t *testing.T) {
+	skipIfDarwin(t)
 	app := newTestApp(video.Video{})
 	recOverlay := &recordingOnscreens{}
 	recVLC := &recordingVLC{}
@@ -206,6 +225,7 @@ func TestJumpCmd_AdminPlaysRandomFromState(t *testing.T) {
 }
 
 func TestJumpCmd_NoFootageForState(t *testing.T) {
+	skipIfDarwin(t)
 	app := newTestApp(video.Video{})
 	recOverlay := &recordingOnscreens{}
 	recVLC := &recordingVLC{}
@@ -242,6 +262,7 @@ func TestJumpCmd_NoFootageForState(t *testing.T) {
 }
 
 func TestJumpCmd_RejectsBadInput(t *testing.T) {
+	skipIfDarwin(t)
 	app := newTestApp(video.Video{})
 	recVLC := &recordingVLC{}
 	recVideo := &recordingVideo{}

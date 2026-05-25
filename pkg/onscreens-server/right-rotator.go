@@ -6,8 +6,6 @@ import (
 	"time"
 )
 
-var rightRotator *Onscreen
-
 var rightRotatorUpdateFrequency = time.Duration(90 * time.Second)
 
 var possibleRightMessages = []string{
@@ -19,20 +17,23 @@ var possibleRightMessages = []string{
 	"Streaming 24 hours a day",
 }
 
-func InitRightRotator() {
+// newRightRotator constructs the right-rotator *Onscreen, primes it with
+// a first message synchronously (so the OBS browser source has content
+// to render the moment it polls — otherwise there's a brief race where
+// the rotator is empty until the goroutine schedules), and kicks off the
+// background loop that rotates the message every rightRotatorUpdateFrequency.
+func newRightRotator() *Onscreen {
 	slog.Info("creating onscreen", "kind", "right-rotator")
-	rightRotator = New()
-	// Show a first message synchronously so the OBS browser source has
-	// content to render the moment it polls — otherwise there's a brief
-	// race where the rotator is empty until the goroutine schedules.
-	rightRotator.Show(rightRotatorContent())
-	go rightRotatorLoop()
+	osc := newOnscreen()
+	osc.Show(rightRotatorContent())
+	go rightRotatorLoop(osc)
+	return osc
 }
 
-func rightRotatorLoop() {
+func rightRotatorLoop(osc *Onscreen) {
 	for { // forever
 		time.Sleep(time.Duration(rightRotatorUpdateFrequency))
-		rightRotator.Show(rightRotatorContent())
+		osc.Show(rightRotatorContent())
 	}
 }
 

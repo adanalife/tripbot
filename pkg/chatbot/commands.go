@@ -1,14 +1,15 @@
 package chatbot
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"math"
 	"math/rand"
+	"net/http"
 	"os"
-	"os/exec"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
 	"github.com/adanalife/tripbot/pkg/helpers"
+	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/adanalife/tripbot/pkg/video"
 	"github.com/getsentry/sentry-go"
@@ -28,6 +30,12 @@ import (
 var lastHelloTime time.Time = time.Now()
 
 var currentVersion string
+
+// versionFilePath is the build-time-baked version file path. Released
+// container images write the tag here (see infra/docker/*/Dockerfile);
+// outside a container the file won't exist and versionCmd falls back to
+// "dev". Overridable in tests.
+var versionFilePath = "/etc/tripbot/version"
 
 // this is the scoreboard name used for counting correct guesses
 const guessScoreboard = "guess_state_total"
@@ -77,25 +85,30 @@ func (a *App) flagCmd(ctx context.Context, user *users.User, _ []string) {
 func (a *App) versionCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !version", "username", user.Username)
 
-	if helpers.RunningOnWindows() {
-		a.IRC.Say("Sorry, I can't answer that right now")
-		return
-	}
-
-	// check if we already know the version
+	// Cache the lookup — the file is baked at image build time, so its
+	// contents don't change for the lifetime of the process.
 	if currentVersion == "" {
-		// run the shell script to get current tripbot version
-		scriptPath := filepath.Join(helpers.ProjectRoot(), "bin", "current-version.sh")
-		out, err := exec.Command(scriptPath).Output()
-		if err != nil {
-			slog.ErrorContext(ctx, "failed to get current version", "err", err)
-			a.IRC.Say("Failed to get current version :(")
-			return
-		}
-		currentVersion = strings.TrimSpace(string(out))
+		currentVersion = readBuildVersion(ctx)
 	}
 
 	a.IRC.Say("Current version is " + currentVersion)
+}
+
+// readBuildVersion reads the build-time-baked tag from versionFilePath
+// (written by the release Dockerfiles). When the file is missing or
+// empty — i.e. local `go run` outside a container — returns "dev" to
+// match the ldflag default used by the /version HTTP handler.
+func readBuildVersion(ctx context.Context) string {
+	raw, err := os.ReadFile(versionFilePath)
+	if err != nil {
+		slog.DebugContext(ctx, "version file not present, falling back to dev", "err", err, "file", versionFilePath)
+		return "dev"
+	}
+	v := strings.TrimSpace(string(raw))
+	if v == "" {
+		return "dev"
+	}
+	return v
 }
 
 func (a *App) uptimeCmd(ctx context.Context, user *users.User, _ []string) {
@@ -103,6 +116,34 @@ func (a *App) uptimeCmd(ctx context.Context, user *users.User, _ []string) {
 	dur := time.Now().Sub(Uptime)
 	msg := fmt.Sprintf("I have been running for %s", durafmt.Parse(dur))
 	a.IRC.Say(msg)
+}
+
+func (a *App) followageCmd(ctx context.Context, user *users.User, params []string) {
+	slog.InfoContext(ctx, "ran !followage", "username", user.Username)
+
+	// bare !followage = the caller; !followage @user looks up someone else
+	username := user.Username
+	other := len(params) > 0
+	if other {
+		username = helpers.StripAtSign(params[0])
+	}
+
+	followedAt, ok := mytwitch.FollowedAt(username)
+	if !ok {
+		if other {
+			a.IRC.Say(fmt.Sprintf("@%s isn't following the channel.", username))
+		} else {
+			a.IRC.Say("You're not following yet — hit that follow button!")
+		}
+		return
+	}
+
+	dur := durafmt.Parse(time.Since(followedAt)).LimitFirstN(2)
+	if other {
+		a.IRC.Say(fmt.Sprintf("@%s has been following for %s.", username, dur))
+	} else {
+		a.IRC.Say(fmt.Sprintf("@%s, you've been following for %s. Thanks!", username, dur))
+	}
 }
 
 func (a *App) milesCmd(ctx context.Context, user *users.User, params []string) {
@@ -163,7 +204,7 @@ func (a *App) kilometresCmd(ctx context.Context, user *users.User, _ []string) {
 
 func (a *App) sunsetCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !sunset", "username", user.Username)
-	vid := a.CurrentVideo()
+	vid := a.Video.Current()
 	if vid.Flagged {
 		a.IRC.Say("I couldn't figure out current GPS coords, using next closest...")
 		vid = vid.Next(ctx)
@@ -174,7 +215,7 @@ func (a *App) sunsetCmd(ctx context.Context, user *users.User, _ []string) {
 
 func (a *App) locationCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !location (or similar)", "username", user.Username)
-	vid := a.CurrentVideo()
+	vid := a.Video.Current()
 	if vid.Flagged {
 		a.IRC.Say("I couldn't figure out current GPS coords, using next closest...")
 		//TODO: write something like vid.FindClosest() that
@@ -290,7 +331,7 @@ func (a *App) timeCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !time", "username", user.Username)
 	var err error
 	var lat, lng float64
-	vid := a.CurrentVideo()
+	vid := a.Video.Current()
 	if vid.Flagged {
 		lat, lng, err = vid.Next(ctx).Location()
 	} else {
@@ -309,7 +350,7 @@ func (a *App) dateCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !date", "username", user.Username)
 	var err error
 	var lat, lng float64
-	vid := a.CurrentVideo()
+	vid := a.Video.Current()
 	if vid.Flagged {
 		lat, lng, err = vid.Next(ctx).Location()
 	} else {
@@ -353,7 +394,7 @@ func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 		guess = helpers.StateAbbrevToState(guess)
 	}
 
-	vid := a.CurrentVideo()
+	vid := a.Video.Current()
 	if vid.Flagged {
 		a.IRC.Say("I couldn't figure out current GPS coords, using next closest...")
 		vid = vid.Next(ctx)
@@ -376,7 +417,7 @@ func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 
 func (a *App) stateCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !state", "username", user.Username)
-	vid := a.CurrentVideo()
+	vid := a.Video.Current()
 	if vid.Flagged {
 		a.IRC.Say("I couldn't figure out current GPS coords, using next closest...")
 		vid = vid.Next(ctx)
@@ -394,11 +435,48 @@ func (a *App) stateCmd(ctx context.Context, user *users.User, _ []string) {
 func (a *App) reportCmd(ctx context.Context, user *users.User, params []string) {
 	slog.InfoContext(ctx, "ran !report", "username", user.Username)
 	message := strings.Join(params, " ")
-	// Route the report through Sentry so it lands somewhere visible.
-	// Followup tracked: wire !report to a real notification surface
-	// (Discord webhook / push) so Dana actually sees it.
+	// Always log to slog (→ stderr + Sentry via the slog→Sentry handler)
+	// as the durable audit trail.
 	slog.ErrorContext(ctx, "!report", "err", fmt.Errorf("viewer report from %s: %s", user.Username, message))
+	// Fire-and-forget to Discord for real-time notification. Skipped
+	// silently when DISCORD_ALERTS_WEBHOOK is unset (e.g. local dev) —
+	// the slog/Sentry path still fires so nothing is lost.
+	if webhook := c.Conf.DiscordAlertsWebhook; webhook != "" {
+		go postReportToDiscord(webhook, user.Username, message)
+	}
 	a.IRC.Say("Thank you, I will look into this ASAP!")
+}
+
+// postReportToDiscord POSTs a viewer report to a Discord webhook.
+// Runs in a goroutine off the chat-handler path so chat doesn't block on
+// Discord latency; uses a fresh ctx with a 5s timeout because the
+// caller's ctx is already detached.
+func postReportToDiscord(webhookURL, username, message string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	payload, err := json.Marshal(map[string]string{
+		"content": fmt.Sprintf("**!report** from @%s: %s", username, message),
+	})
+	if err != nil {
+		slog.ErrorContext(ctx, "discord webhook payload marshal", "err", err)
+		return
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, webhookURL, bytes.NewReader(payload))
+	if err != nil {
+		slog.ErrorContext(ctx, "discord webhook request build", "err", err)
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		slog.ErrorContext(ctx, "discord webhook POST", "err", err)
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		slog.ErrorContext(ctx, "discord webhook non-2xx", "status", resp.StatusCode)
+	}
 }
 
 func (a *App) bonusMilesCmd(ctx context.Context, user *users.User, _ []string) {
@@ -413,7 +491,7 @@ func (a *App) secretInfoCmd(ctx context.Context, user *users.User, _ []string) {
 	if !c.UserIsAdmin(user.Username) {
 		return
 	}
-	vid := a.CurrentVideo()
+	vid := a.Video.Current()
 	msg := fmt.Sprintf("currently playing: %s, playtime: %s", vid, video.CurrentProgress())
 	lat, lng, err := vid.Location()
 	if err != nil {
@@ -432,7 +510,7 @@ func (a *App) shutdownCmd(ctx context.Context, user *users.User, _ []string) {
 		return
 	}
 	a.IRC.Say("Shutting down...")
-	slog.InfoContext(ctx, "shutdown: currently playing", "video", a.CurrentVideo())
+	slog.InfoContext(ctx, "shutdown: currently playing", "video", a.Video.Current())
 	background.StopCron()
 	a.Sessions.Shutdown(ctx)
 	err := database.Connection().Close()
