@@ -43,7 +43,7 @@ type chatUser interface {
 // checkAccess returns true when the user is allowed to run cmd.
 // It calls sayFn with the appropriate denial message when access is denied.
 func (cmd *Command) checkAccess(ctx context.Context, user chatUser, sayFn func(string)) bool {
-	if cmd.RequiresFollow && !user.HasCommandAvailable(ctx) {
+	if followerGatingEnabled && cmd.RequiresFollow && !user.HasCommandAvailable(ctx) {
 		sayFn(followerMsg)
 		return false
 	}

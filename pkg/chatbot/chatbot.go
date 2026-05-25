@@ -80,6 +80,11 @@ var helpIndex = rand.Intn(len(c.HelpMessages))
 const followerMsg = "Right now only followers of the channel can run unlimited commands :)"
 const subscriberMsg = "You must be a subscriber to run that command :)"
 
+// followerGatingEnabled toggles the RequiresFollow access check in
+// checkAccess. Disabled for launch so first-time viewers aren't told to
+// follow before they can try commands. Flip back to true to re-enable.
+var followerGatingEnabled = false
+
 // Initialize returns a Twitch client struct with all of the various configuration in place.
 func Initialize() *twitch.Client {
 	var err error
