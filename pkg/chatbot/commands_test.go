@@ -47,11 +47,12 @@ func newTestVideo(state string, lat, lng float64, date time.Time) video.Video {
 // recordingSessions).
 func newTestApp(vid video.Video) *App {
 	return &App{
-		Onscreens: noopOnscreens{},
-		VLC:       noopVLC{},
-		Video:     &recordingVideo{Vid: vid},
-		IRC:       noopIRC{},
-		Sessions:  noopSessions{},
+		Onscreens:  noopOnscreens{},
+		VLC:        noopVLC{},
+		Video:      &recordingVideo{Vid: vid},
+		IRC:        noopIRC{},
+		Sessions:   noopSessions{},
+		NowPlaying: noopNowPlaying{},
 	}
 }
 

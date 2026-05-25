@@ -32,11 +32,11 @@
     text-shadow: 0 0 22px rgba(180, 200, 230, 0.55), 0 4px 14px rgba(0, 0, 0, 0.6);
   }
   /* the .play class (added on the showing rising-edge) drives all the timing */
-  #warp.play .cover     { animation: tw-cover 3.4s ease-in-out forwards; }
+  #warp.play .cover     { animation: tw-cover 4.0s ease-in-out forwards; }
   #warp.play .streaks i { animation: tw-streak 1s linear infinite; }
-  #warp.play .tw        { animation: tw-text 3.4s cubic-bezier(.16, .8, .3, 1) forwards; }
-  /* cover: slam opaque (0->0.4s), hold through the gap, fade out to reveal (~2.6-3.3s) */
-  @keyframes tw-cover { 0% { opacity: 0; } 12% { opacity: 1; } 76% { opacity: 1; } 96% { opacity: 0; } 100% { opacity: 0; } }
+  #warp.play .tw        { animation: tw-text 4.0s cubic-bezier(.16, .8, .3, 1) forwards; }
+  /* cover: slam opaque (0->0.44s), hold through the gap, fade out to reveal (~3.2-3.88s) */
+  @keyframes tw-cover { 0% { opacity: 0; } 11% { opacity: 1; } 80% { opacity: 1; } 97% { opacity: 0; } 100% { opacity: 0; } }
   @keyframes tw-streak {
     0%   { transform: rotate(var(--a)) translateY(0) scaleY(0.15); opacity: 0; }
     15%  { opacity: 0.9; }
@@ -44,11 +44,11 @@
   }
   @keyframes tw-text {
     0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.25); filter: blur(10px); }
-    10%  { opacity: 1; filter: blur(0); }
-    15%  { transform: translate(-50%, -50%) scale(1.06); }
-    22%  { transform: translate(-50%, -50%) scale(1); }
-    72%  { opacity: 1; transform: translate(-50%, -50%) scale(1); filter: blur(0); }
-    90%  { opacity: 0; transform: translate(-50%, -50%) scale(1.4); filter: blur(4px); }
+    9%   { opacity: 1; filter: blur(0); }
+    13%  { transform: translate(-50%, -50%) scale(1.06); }
+    20%  { transform: translate(-50%, -50%) scale(1); }
+    76%  { opacity: 1; transform: translate(-50%, -50%) scale(1); filter: blur(0); }
+    91%  { opacity: 0; transform: translate(-50%, -50%) scale(1.4); filter: blur(4px); }
     100% { opacity: 0; }
   }
 {{else}}
@@ -94,7 +94,7 @@
 {{if eq .Name "timewarp"}}
 <div id="warp">
   <div class="cover"><div class="streaks" id="tw-streaks"></div></div>
-  <div class="tw">TIME&nbsp;WARP</div>
+  <div class="tw">TIMEWARP</div>
 </div>
 <script>
 (function () {

@@ -73,7 +73,10 @@ func poll(ctx context.Context, addr, passwd string, interval time.Duration) {
 		case <-ticker.C:
 			resp, err := client.Stream.GetStreamStatus()
 			if err != nil {
-				slog.ErrorContext(ctx, "obs GetStreamStatus error", "err", err)
+				// Transient: OBS pod restart, network blip, websocket drop.
+				// The outer loop reconnects after 10s and OBSStreaming
+				// is the alertable signal — keep this off Sentry.
+				slog.WarnContext(ctx, "obs GetStreamStatus error", "err", err)
 				instrumentation.OBSStreaming.Set(false)
 				return // trigger reconnect
 			}

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"runtime/debug"
 	"sync/atomic"
+	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
@@ -40,36 +41,38 @@ func SetVersion(v string) {
 // twitchConnected reports whether the bot currently has its Twitch IRC
 // connection. It deliberately does NOT gate the readiness probe: /health/ready
 // is always 200 once the HTTP server is up (see httpmw.ReadinessHandler), so
-// the landing page, /auth/init and /auth/callback stay reachable through the
+// the admin panel, /auth/init and /auth/callback stay reachable through the
 // Ingress even when the bot is offline — otherwise the very page used to
 // re-auth a disconnected bot would 503. Instead this flag drives the
-// landing-page status row and the tripbot_twitch_connected gauge, so "up but
+// admin-panel status row and the tripbot_twitch_connected gauge, so "up but
 // not in chat" is surfaced without pulling the pod out of the Service.
 // cmd/tripbot flips it via SetTwitchConnected on IRC connect / disconnect.
 var twitchConnected atomic.Bool
 
 // SetTwitchConnected updates the chat-connection signal: the in-memory flag
-// the landing page reads and the tripbot_twitch_connected gauge.
+// the admin panel reads and the tripbot_twitch_connected gauge.
 func SetTwitchConnected(connected bool) {
 	twitchConnected.Store(connected)
 	instrumentation.TwitchConnection.Set(connected)
 }
 
 // TwitchConnected reports the last-known chat-connection state, for the
-// landing page's status row.
+// admin panel's status row.
 func TwitchConnected() bool {
 	return twitchConnected.Load()
 }
 
 // versionHandler returns build metadata as JSON. The tag comes from the
 // build-time ldflag; sha + built_at are read from the binary's embedded
-// VCS info (Go's automatic -buildvcs).
+// VCS info (Go's automatic -buildvcs). started_at is when the process
+// began (admin.startedAt) so callers can derive uptime themselves.
 func versionHandler(w http.ResponseWriter, r *http.Request) {
 	resp := struct {
-		Tag     string `json:"tag"`
-		Sha     string `json:"sha"`
-		BuiltAt string `json:"built_at"`
-	}{Tag: versionTag}
+		Tag       string `json:"tag"`
+		Sha       string `json:"sha"`
+		BuiltAt   string `json:"built_at"`
+		StartedAt string `json:"started_at"`
+	}{Tag: versionTag, StartedAt: startedAt.UTC().Format(time.RFC3339)}
 
 	if info, ok := debug.ReadBuildInfo(); ok {
 		for _, s := range info.Settings {

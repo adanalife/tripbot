@@ -290,7 +290,7 @@ func BroadcasterUserAccessToken() string {
 }
 
 // AccountReauth describes an account whose in-memory token is missing or
-// expired and therefore needs operator re-auth. The landing page renders one
+// expired and therefore needs operator re-auth. The admin panel renders one
 // "Sign in as <LoginAs>" link per entry, pointing at InitURL.
 type AccountReauth struct {
 	Account string // "bot" | "broadcaster" — the /auth/init account selector
@@ -314,7 +314,7 @@ func tokenReason(t oauthtokens.Token) string {
 }
 
 // AccountsNeedingReauth returns the bot and/or broadcaster accounts whose
-// in-memory token is missing or expired, so the landing page can prompt for
+// in-memory token is missing or expired, so the admin panel can prompt for
 // re-auth. Returns nil when everything's healthy. The broadcaster is only
 // considered when a distinct broadcaster identity exists (ChannelName set and
 // != BotUsername) — otherwise there's no separate row to re-auth.
@@ -496,7 +496,7 @@ func RefreshUserAccessToken(ctx context.Context) {
 // auth-bootstrap flow (or by another tripbot's refresh) without a process
 // restart. When neither yields a usable token — e.g. a DB-restored row whose
 // refresh_token is also revoked — the in-memory slot is left blanked and the
-// reauth link is logged; the landing page's re-auth prompt then covers it.
+// reauth link is logged; the admin panel's re-auth prompt then covers it.
 func Reauth(ctx context.Context, account string) {
 	username := c.Conf.BotUsername
 	apply := applyBotToken
