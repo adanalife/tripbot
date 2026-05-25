@@ -298,9 +298,5 @@ func Base64Decode(str string) (string, error) {
 }
 
 func StripAtSign(username string) string {
-	if username[0] == []byte("@")[0] {
-		// strip the @ sign
-		username = username[1:]
-	}
-	return username
+	return strings.TrimPrefix(username, "@")
 }
