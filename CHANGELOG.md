@@ -5,6 +5,31 @@
 
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
+## [v2.15.4] — 2026-05-25
+
+Patch release. Admin panel polish — the page grows a collapsible stream-preview, picks up system-aware light/dark, learns to refresh itself on iOS Home Screen reopens, and shows what's playing on the SomaFM background-audio source. Also fixes a real bug: obs-server's `POST /admin/shutdown` was returning 500 because Flask's worker-thread request handlers can't call `signal.setitimer()` — the "restart OBS" button now actually works.
+
+### admin panel
+
+- **Collapsible stream-preview with lazy-loaded Twitch embed.** New `<details>` between "now playing" and "dashboards", default closed. On expand, an iframe loads the Twitch player muted; on collapse, the iframe points at `about:blank` so the player stops and bandwidth doesn't keep flowing. The embed's `parent=` parameter is derived from `r.Host` so it matches whichever way the operator reached the panel (public Ingress FQDN or tail*.ts.net via the tailnet). ([#669])
+- **Light/dark mode toggle.** CSS custom properties for the foundational palette; `@media (prefers-color-scheme: light)` activates a Tufte-ish off-white palette automatically for OS-light users. A small "◐" text button next to the env chip flips between light/dark and persists the choice in localStorage. Semantic colors (re-auth amber, stream green/red, restart muted, dot up/down) stay hardcoded — they're status signals that should read the same in either theme. ([#667])
+- **Collapsible "controls" disclosure (default closed).** The stream toggle moves into a `<details>` element so the page reads calm at-a-glance and the action surfaces hide behind one click. Native browser element, no JS. Restart buttons stay inline in service rows for now; if row clutter grows, they can move into the disclosure later. ([#665])
+- **Stop-stream button shrunk + muted.** The old big-red button was sized to dominate when the dangerous action is rarely the right click. Renders muted by default — dark-red background, small border, less padding — and the molly-switch arms it bright red on first click, which is when the visual weight should peak. ([#666])
+- **"now playing" audio line.** Below the existing video block, the panel now shows the current track from the SomaFM Groove Salad Classic stream (the OBS background audio source) + a link to the station. Best-effort fetch with a short timeout; quietly omits when SomaFM is slow/down. ([#668])
+- **Refresh when iOS Home Screen app returns to focus.** Two-part fix for Dana's stale-on-reopen frustration: `Cache-Control: no-store` headers so Safari doesn't serve a cached page, plus a `visibilitychange` JS listener that reloads when the tab transitions hidden → visible after ≥10s (avoids reload-spam on quick app-switches). ([#664])
+
+### obs
+
+- **obs-server: fix `POST /admin/shutdown` 500.** Confirmed live on prod-1 after v2.15.3 rolled. Flask's dev server runs request handlers in worker threads, and Python's `signal.signal()` / `signal.setitimer()` raise `ValueError` from any thread that isn't the main interpreter thread — so the SIGALRM-based shutdown schedule blew up before sending the kill. Swap to `threading.Timer`: runs in a background thread, fires after the delay, SIGTERMs supervisord. The "restart OBS" button in the admin panel now actually works. ([#663])
+
+[#663]: https://github.com/adanalife/tripbot/pull/663
+[#664]: https://github.com/adanalife/tripbot/pull/664
+[#665]: https://github.com/adanalife/tripbot/pull/665
+[#666]: https://github.com/adanalife/tripbot/pull/666
+[#667]: https://github.com/adanalife/tripbot/pull/667
+[#668]: https://github.com/adanalife/tripbot/pull/668
+[#669]: https://github.com/adanalife/tripbot/pull/669
+
 ## [v2.15.3] — 2026-05-24
 
 Patch release. The admin panel grows a restart surface: every backend service exposes `POST /admin/shutdown` that gracefully exits the process so k8s respawns the pod, and the panel itself learns a "restart" button per service with a molly-switch two-click confirm. OBS joins the panel's status table for the first time — a tiny Flask process named `obs-server` (paired with `vlc-server` / `onscreens-server`) runs alongside OBS in the same pod and exposes the same `/health/ready` + `/version` + `/admin/shutdown` shape the Go services use. Small chatbot polish on the side: `!timewarp` gets a 500ms lead-in before the overlay fires so the cover starts opaque on the right frame.
