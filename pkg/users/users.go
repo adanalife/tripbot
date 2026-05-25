@@ -90,10 +90,26 @@ func (u User) save(ctx context.Context) {
 		"last_seen":  u.LastSeen,
 		"num_visits": u.NumVisits,
 		"miles":      u.Miles,
+		"is_bot":     u.IsBot,
 	}).Error
 	if err != nil {
 		slog.ErrorContext(ctx, "error saving user", "err", err)
 	}
+}
+
+// SetBot flips users.is_bot for a username. Returns gorm.ErrRecordNotFound
+// if the user doesn't exist in the DB.
+func SetBot(ctx context.Context, username string, isBot bool) error {
+	user := Find(ctx, username)
+	if user.ID == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	user.IsBot = isBot
+	user.save(ctx)
+	if loggedIn, ok := LoggedIn[username]; ok {
+		loggedIn.IsBot = isBot
+	}
+	return nil
 }
 
 // IsFollower returns true if the user is a follower
