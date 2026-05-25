@@ -15,6 +15,25 @@ import (
 	"github.com/gorilla/mux"
 )
 
+func TestPanelHost(t *testing.T) {
+	cases := []struct {
+		host, want string
+	}{
+		{"tripbot.prod.whereisdana.today", "tripbot.prod.whereisdana.today"},
+		{"tripbot.prod.whereisdana.today:8080", "tripbot.prod.whereisdana.today"},
+		{"localhost:8080", "localhost"},
+		{"adanalife-minipc.tail020deb.ts.net", "adanalife-minipc.tail020deb.ts.net"},
+		{"", ""},
+	}
+	for _, tc := range cases {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.Host = tc.host
+		if got := panelHost(req); got != tc.want {
+			t.Errorf("panelHost(Host=%q) = %q, want %q", tc.host, got, tc.want)
+		}
+	}
+}
+
 func TestSiblingURL(t *testing.T) {
 	cases := []struct {
 		in, service, want string
@@ -241,6 +260,7 @@ func TestAdminHandler_RendersReadyStatusAndLinks(t *testing.T) {
 	defer SetTwitchConnected(false)
 	SetTwitchConnected(true)
 	withReauth(t, nil) // healthy tokens — no re-auth callout
+	withNowPlaying(t, nowPlayingTrack{Artist: "Test Artist", Title: "Test Track"})
 
 	// stand in for vlc-server: readiness ping + version endpoint
 	vlc := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -325,6 +345,7 @@ func TestAdminHandler_RendersReadyStatusAndLinks(t *testing.T) {
 }
 
 func TestAdminHandler_DegradedAndVlcUnreachable(t *testing.T) {
+	withNowPlaying(t, nowPlayingTrack{}) // no audio info — keeps assertion on "now playing" absence valid
 	defer SetTwitchConnected(false)
 	SetTwitchConnected(false)
 	withReauth(t, nil)
@@ -402,9 +423,20 @@ func withReauth(t *testing.T, accounts []mytwitch.AccountReauth) {
 	t.Cleanup(func() { accountsNeedingReauth = saved })
 }
 
+// withNowPlaying swaps the SomaFM fetcher so the admin handler sees a fixed
+// audio track (or empty for "no audio info") without hitting somafm.com from
+// a test.
+func withNowPlaying(t *testing.T, track nowPlayingTrack) {
+	t.Helper()
+	saved := nowPlayingFetcher
+	nowPlayingFetcher = func(context.Context) nowPlayingTrack { return track }
+	t.Cleanup(func() { nowPlayingFetcher = saved })
+}
+
 func TestAdminHandler_RendersReauthPrompt(t *testing.T) {
 	defer SetTwitchConnected(false)
 	SetTwitchConnected(false)
+	withNowPlaying(t, nowPlayingTrack{})
 
 	withConf(t, func() {
 		c.Conf.VlcServerHost = "" // skip the vlc ping
@@ -438,6 +470,7 @@ func TestAdminHandler_RendersReauthPrompt(t *testing.T) {
 }
 
 func TestAdminHandler_NoReauthPromptWhenHealthy(t *testing.T) {
+	withNowPlaying(t, nowPlayingTrack{})
 	defer SetTwitchConnected(false)
 	SetTwitchConnected(true)
 

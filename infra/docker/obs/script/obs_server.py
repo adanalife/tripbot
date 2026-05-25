@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import os
 import signal
+import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -100,22 +101,22 @@ def shutdown():
     shutdown brings down all children, container exits, k8s respawns
     the pod.
 
-    Flask's built-in scheduler is hand-rolled; we use signal.setitimer
-    to fire SIGALRM after the delay, then handle it by SIGTERMing pid 1.
-    This avoids spawning a threading.Timer in the request path (cleaner
-    teardown — the in-flight response finishes, then the timer fires).
+    threading.Timer (not signal.setitimer + SIGALRM): Flask's dev server
+    is multi-threaded, so request handlers don't run in the main thread —
+    and Python's signal.* APIs raise from non-main threads. A Timer runs
+    in a background thread, fires after the delay, and SIGTERMs pid 1
+    without that constraint.
     """
     app.logger.warning(
         "admin shutdown requested — SIGTERMing supervisord (pid %d) in %.1fs",
         SUPERVISORD_PID,
         SHUTDOWN_DELAY_SECONDS,
     )
-    signal.signal(signal.SIGALRM, _fire_shutdown)
-    signal.setitimer(signal.ITIMER_REAL, SHUTDOWN_DELAY_SECONDS)
+    threading.Timer(SHUTDOWN_DELAY_SECONDS, _fire_shutdown).start()
     return make_response(("shutting down\n", 202))
 
 
-def _fire_shutdown(_signum, _frame):
+def _fire_shutdown():
     try:
         os.kill(SUPERVISORD_PID, signal.SIGTERM)
     except OSError as exc:  # supervisord already dead, or PID mapping odd
