@@ -115,18 +115,19 @@ type navLink struct {
 
 // adminData is the template payload.
 type adminData struct {
-	Channel   string // broadcaster Twitch username
-	Bot       string // bot Twitch username
-	Env       string
-	Uptime    string
-	Chatters  int // users currently in chat
-	Services  []serviceStatus
-	Now       *nowPlaying // nil when vlc is unhealthy or nothing is playing
-	Audio     nowPlayingTrack // current SomaFM track; empty Title hides the line
-	Stream    streamControl
-	PanelHost string // host the panel was reached at; the Twitch embed needs it as parent=
-	Links     []navLink
-	Reauth    []mytwitch.AccountReauth // accounts whose token needs re-auth; empty when healthy
+	Channel        string // broadcaster Twitch username; renders as text + broadcaster link
+	PreviewChannel string // Twitch channel the stream-preview embed loads; usually == Channel
+	Bot            string // bot Twitch username
+	Env            string
+	Uptime         string
+	Chatters       int // users currently in chat
+	Services       []serviceStatus
+	Now            *nowPlaying // nil when vlc is unhealthy or nothing is playing
+	Audio          nowPlayingTrack // current SomaFM track; empty Title hides the line
+	Stream         streamControl
+	PanelHost      string // host the panel was reached at; the Twitch embed needs it as parent=
+	Links          []navLink
+	Reauth         []mytwitch.AccountReauth // accounts whose token needs re-auth; empty when healthy
 }
 
 // adminHandler serves the human-facing root page on the tripbot Ingress: a
@@ -140,8 +141,9 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 	obs := siblingStatus(r.Context(), "obs", c.Conf.ObsServerHost)
 
 	data := adminData{
-		Channel:  c.Conf.ChannelName,
-		Bot:      c.Conf.BotUsername,
+		Channel:        c.Conf.ChannelName,
+		PreviewChannel: previewChannel(),
+		Bot:            c.Conf.BotUsername,
 		Env:      c.Conf.Environment,
 		Uptime:   time.Since(startedAt).Round(time.Second).String(),
 		Chatters: chatterCount(),
@@ -464,6 +466,19 @@ func siblingURL(externalURL, service string) string {
 	return u.String()
 }
 
+// previewChannel returns the Twitch channel name the stream-preview embed
+// should load. Normally == ChannelName, but on prod-1 we temporarily point
+// it at adanalife_staging because prod isn't broadcasting yet — the embed
+// would render a "stream offline" placeholder otherwise. REVERT THIS at the
+// streaming cutover: just delete the if-block so the prod panel embeds
+// adanalife_ like every other env.
+func previewChannel() string {
+	if c.Conf.IsProduction() {
+		return "adanalife_staging"
+	}
+	return c.Conf.ChannelName
+}
+
 // panelHost returns the hostname the panel was reached at, for use as the
 // Twitch embed's parent= parameter. Read from r.Host (the request's Host
 // header) so it matches whatever the browser used — Tailscale's tail*.ts.net
@@ -547,18 +562,22 @@ var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
   /* stream-preview disclosure — same shape as .controls, just a different
      summary label. iframe is lazy-loaded by the inline JS so the ~2MB
      Twitch player isn't fetched on every panel render. */
-  details.stream-preview { margin:24px 0 0; }
-  details.stream-preview > summary { font-size:.8em; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); cursor:pointer; padding:8px 0; border-top:1px solid var(--divider); list-style:none; }
-  details.stream-preview > summary::-webkit-details-marker { display:none; }
-  details.stream-preview > summary::before { content:"▸ "; color:var(--dim); display:inline-block; }
-  details.stream-preview[open] > summary::before { content:"▾ "; }
-  details.stream-preview > summary:hover { color:var(--fg); }
+  /* Shared disclosure-row styling — controls / now-playing / stream-preview
+     all default closed and reveal on click. Same look, just different
+     summary labels. */
+  details.stream-preview, details.now-playing { margin:24px 0 0; }
+  details.stream-preview > summary, details.now-playing > summary { font-size:.8em; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); cursor:pointer; padding:8px 0; border-top:1px solid var(--divider); list-style:none; }
+  details.stream-preview > summary::-webkit-details-marker, details.now-playing > summary::-webkit-details-marker { display:none; }
+  details.stream-preview > summary::before, details.now-playing > summary::before { content:"▸ "; color:var(--dim); display:inline-block; }
+  details.stream-preview[open] > summary::before, details.now-playing[open] > summary::before { content:"▾ "; }
+  details.stream-preview > summary:hover, details.now-playing > summary:hover { color:var(--fg); }
   .stream-frame { aspect-ratio:16 / 9; width:100%; margin-top:10px; background:#000; border-radius:6px; overflow:hidden; }
   .stream-frame iframe { width:100%; height:100%; border:none; display:block; }
   a { color:#58a6ff; text-decoration:none; }
   a:hover { color:#9cf; }
   /* theme toggle — text-only, sits to the right of the env chip */
-  .theme-toggle { background:none; border:none; color:var(--dim); font:inherit; font-size:.85em; cursor:pointer; padding:2px 6px; margin-left:6px; vertical-align:middle; }
+  .panel-footer { margin-top:32px; padding-top:14px; border-top:1px solid var(--divider); display:flex; gap:10px; align-items:center; }
+  .theme-toggle { background:none; border:none; color:var(--dim); font:inherit; font-size:.85em; cursor:pointer; padding:2px 6px; }
   .theme-toggle:hover { color:var(--fg); }
   .links { display:flex; flex-wrap:wrap; gap:18px; margin-top:10px; }
   /* re-auth callout: only rendered when a token is missing/expired */
@@ -603,7 +622,7 @@ var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
        assets) rather than copied in — see vault general/logo.md. The anchor
        wraps the mark so clicking it refreshes the page. -->
   <a class="logo-link" href="/" title="refresh"><img class="logo" src="https://www.dana.lol/assets/logo.png" alt="A Dana Life" width="44" height="44"></a>
-  <h1>tripbot <code class="env">{{.Env}}</code><button id="theme-toggle" class="theme-toggle" type="button" title="toggle theme">◐</button></h1>
+  <h1>tripbot <code class="env">{{.Env}}</code></h1>
   <p class="meta">up {{.Uptime}} · {{.Chatters}} in chat</p>
   <p class="accounts">broadcaster <a href="https://twitch.tv/{{.Channel}}">{{.Channel}}</a> · bot <a href="https://twitch.tv/{{.Bot}}">{{.Bot}}</a></p>
 
@@ -651,26 +670,29 @@ var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
     {{end}}
   </details>
 
-  {{if or .Now .Audio.Title}}<h2>now playing</h2>{{end}}
-  {{with .Now}}
-  <p class="now">
-    <span class="file">{{.File}}</span>
-    {{if .State}}<span class="state">· {{.State}}</span>{{end}}
-    {{if .Progress}}<span class="state">· {{.Progress}}</span>{{end}}
-  </p>
-  {{end}}
-  {{if .Audio.Title}}
-  <p class="audio">
-    <span class="track">{{.Audio.Artist}} — {{.Audio.Title}}</span>
-    <span class="state">· <a href="https://somafm.com/gsclassic/">Groove Salad Classic</a> on SomaFM</span>
-  </p>
+  {{if or .Now .Audio.Title}}
+  <details class="now-playing">
+    <summary>now playing</summary>
+    {{with .Now}}
+    <p class="now">
+      <span class="file">{{.File}}</span>
+      {{if .State}}<span class="state">· {{.State}}</span>{{end}}
+      {{if .Progress}}<span class="state">· {{.Progress}}</span>{{end}}
+    </p>
+    {{end}}
+    {{if .Audio.Title}}
+    <p class="audio">
+      <span class="track">{{.Audio.Artist}} — {{.Audio.Title}}</span>
+    </p>
+    {{end}}
+  </details>
   {{end}}
 
-  {{if and .Channel .PanelHost}}
+  {{if and .PreviewChannel .PanelHost}}
   <details class="stream-preview" id="stream-preview">
     <summary>stream preview</summary>
     <div class="stream-frame">
-      <iframe data-src="https://player.twitch.tv/?channel={{.Channel}}&parent={{.PanelHost}}&muted=true&autoplay=true"
+      <iframe data-src="https://player.twitch.tv/?channel={{.PreviewChannel}}&parent={{.PanelHost}}&muted=true&autoplay=true"
               allowfullscreen
               title="Twitch stream preview"></iframe>
     </div>
@@ -681,6 +703,11 @@ var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
   <nav class="links">
     {{range .Links}}<a href="{{.URL}}">{{.Label}}</a>{{end}}
   </nav>
+
+  <div class="panel-footer">
+    <button id="toggle-all" class="theme-toggle" type="button" title="expand or collapse all sections">▾ expand all</button>
+    <button id="theme-toggle" class="theme-toggle" type="button" title="toggle theme">◐ theme</button>
+  </div>
 </main>
 <script>
 // Stream-preview lazy-load. The Twitch player iframe is ~2MB; we don't want
@@ -699,6 +726,30 @@ var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
       iframe.src = 'about:blank';
     }
   });
+})();
+
+// Expand/collapse all <details> on the page. If any section is closed, the
+// click opens them all; if all are already open, it closes them all. Button
+// label flips to match the next action. The stream-preview's toggle listener
+// (see above) lazy-loads/unloads the iframe on each open/close, so this
+// reuses that path correctly.
+(function() {
+  const btn = document.getElementById('toggle-all');
+  if (!btn) return;
+  const sync = () => {
+    const all = document.querySelectorAll('main details');
+    const anyClosed = Array.from(all).some(d => !d.open);
+    btn.textContent = anyClosed ? '▾ expand all' : '▸ collapse all';
+  };
+  btn.addEventListener('click', () => {
+    const all = document.querySelectorAll('main details');
+    const anyClosed = Array.from(all).some(d => !d.open);
+    all.forEach(d => { d.open = anyClosed; });
+    sync();
+  });
+  // Keep the label honest if the operator toggles individual sections.
+  document.querySelectorAll('main details').forEach(d => d.addEventListener('toggle', sync));
+  sync();
 })();
 
 // Theme toggle. Reads localStorage for an explicit user override; otherwise
