@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"math"
@@ -24,6 +25,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/video"
 	"github.com/getsentry/sentry-go"
 	"github.com/hako/durafmt"
+	"gorm.io/gorm"
 )
 
 // lastHelloTime is used to rate-limit the hello command
@@ -549,4 +551,35 @@ func (a *App) middleCmd(ctx context.Context, user *users.User, params []string) 
 	slog.InfoContext(ctx, "setting middle text", "text", text)
 
 	a.Onscreens.ShowMiddleText(ctx, text)
+}
+
+func (a *App) makeBotCmd(ctx context.Context, user *users.User, params []string) {
+	a.setBotFlag(ctx, user, params, true, "!makebot")
+}
+
+func (a *App) unBotCmd(ctx context.Context, user *users.User, params []string) {
+	a.setBotFlag(ctx, user, params, false, "!unbot")
+}
+
+// setBotFlag is the shared body of !makebot and !unbot. Admin-only, silent
+// in chat, logs the outcome for ops visibility.
+func (a *App) setBotFlag(ctx context.Context, user *users.User, params []string, isBot bool, trigger string) {
+	slog.InfoContext(ctx, "ran "+trigger, "username", user.Username)
+	if !c.UserIsAdmin(user.Username) {
+		return
+	}
+	if len(params) == 0 {
+		slog.WarnContext(ctx, trigger+" called with no target", "username", user.Username)
+		return
+	}
+	target := strings.ToLower(strings.TrimPrefix(params[0], "@"))
+	if err := a.Sessions.SetBot(ctx, target, isBot); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			slog.WarnContext(ctx, trigger+": target user not found", "target", target)
+			return
+		}
+		slog.ErrorContext(ctx, trigger+" failed", "target", target, "err", err)
+		return
+	}
+	slog.InfoContext(ctx, trigger+": flipped is_bot", "target", target, "is_bot", isBot)
 }

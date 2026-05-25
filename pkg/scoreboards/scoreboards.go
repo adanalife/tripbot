@@ -26,8 +26,6 @@ type topUserResult struct {
 func TopUsers(ctx context.Context, scoreboardName string, size int) [][]string {
 	var leaderboard [][]string
 
-	ignoredUsers := append(c.IgnoredUsers, strings.ToLower(c.Conf.ChannelName))
-
 	var results []topUserResult
 	result := database.GormDB().WithContext(ctx).
 		Table("scores").
@@ -35,7 +33,7 @@ func TopUsers(ctx context.Context, scoreboardName string, size int) [][]string {
 		Joins("JOIN scoreboards ON scores.scoreboard_id = scoreboards.id").
 		Joins("JOIN users ON scores.user_id = users.id").
 		Where("scoreboards.name = ?", scoreboardName).
-		Where("users.username NOT IN ?", ignoredUsers).
+		Where("users.is_bot = false AND users.username != ?", strings.ToLower(c.Conf.ChannelName)).
 		Order("scores.value DESC").
 		Limit(size).
 		Scan(&results)

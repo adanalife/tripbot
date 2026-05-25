@@ -11,13 +11,16 @@ func StateAbbrevToState(abbrev string) string {
 }
 
 func StateToStateAbbrev(state string) string {
-	// capitalize the first letter of the state
-	state = strings.Title(strings.ToLower(state))
-	val, ok := InvertMap(stateAbbrevs)[state]
-	if !ok {
-		return ""
+	// Case-insensitive lookup so names like "district of columbia" still
+	// resolve. strings.Title was previously used but mis-capitalised the
+	// internal "of"/"and" words in multi-word names.
+	want := strings.ToLower(state)
+	for abbrev, name := range stateAbbrevs {
+		if strings.ToLower(name) == want {
+			return abbrev
+		}
 	}
-	return val
+	return ""
 }
 
 //TODO: this doesn't handle the case where the state is invalid

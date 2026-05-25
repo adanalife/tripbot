@@ -2,7 +2,6 @@ package users
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"sort"
 	"strings"
@@ -92,11 +91,6 @@ func login(ctx context.Context, username string) *User {
 	// set their last !location date to yesterday
 	user.lastLocation = now.AddDate(0, 0, -1)
 	user.save(ctx)
-
-	// raise an error if a user is supposed to be a bot
-	if c.UserIsIgnored(username) && !user.IsBot {
-		slog.WarnContext(ctx, "user should be marked as bot", "username", username, "err", errors.New("user should be bot"))
-	}
 
 	// just a silly message to confirm subscriber feature is working
 	if mytwitch.UserIsSubscriber(username) {

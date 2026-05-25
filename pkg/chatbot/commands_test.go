@@ -11,6 +11,7 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/adanalife/tripbot/pkg/video"
+	"gorm.io/gorm"
 )
 
 // captureSay swaps sayFn for a recorder and returns helpers to read the
@@ -1218,5 +1219,96 @@ func TestMilesCmd_OtherUser_StripsAtSign(t *testing.T) {
 	}
 	if len(rec.Calls) != 1 || rec.Calls[0] != `Find("ghost")` {
 		t.Errorf("expected Sessions.Find(\"ghost\") with @ stripped, got %v", rec.Calls)
+	}
+}
+
+// --- makeBotCmd / unBotCmd ---
+
+func TestMakeBotCmd_NonAdmin_DoesNotCallSetBot(t *testing.T) {
+	app := newTestApp(video.Video{})
+	rec := &recordingSessions{}
+	app.Sessions = rec
+
+	app.makeBotCmd(context.Background(), newTestUser("viewer1"), []string{"target"})
+
+	if len(rec.Calls) != 0 {
+		t.Errorf("expected no Sessions calls for non-admin, got %v", rec.Calls)
+	}
+}
+
+func TestMakeBotCmd_Admin_NoParams_DoesNotCallSetBot(t *testing.T) {
+	app := newTestApp(video.Video{})
+	rec := &recordingSessions{}
+	app.Sessions = rec
+
+	app.makeBotCmd(context.Background(), newTestUser(adminUser), nil)
+
+	if len(rec.Calls) != 0 {
+		t.Errorf("expected no Sessions calls without target, got %v", rec.Calls)
+	}
+}
+
+func TestMakeBotCmd_Admin_FlipsToTrue(t *testing.T) {
+	app := newTestApp(video.Video{})
+	rec := &recordingSessions{FindResult: users.User{ID: 7, Username: "tripbot4000"}}
+	app.Sessions = rec
+
+	app.makeBotCmd(context.Background(), newTestUser(adminUser), []string{"tripbot4000"})
+
+	want := `SetBot("tripbot4000", true)`
+	if len(rec.Calls) != 1 || rec.Calls[0] != want {
+		t.Errorf("expected %s, got %v", want, rec.Calls)
+	}
+}
+
+func TestMakeBotCmd_Admin_StripsAtAndLowercases(t *testing.T) {
+	app := newTestApp(video.Video{})
+	rec := &recordingSessions{}
+	app.Sessions = rec
+
+	app.makeBotCmd(context.Background(), newTestUser(adminUser), []string{"@TripBot4000"})
+
+	want := `SetBot("tripbot4000", true)`
+	if len(rec.Calls) != 1 || rec.Calls[0] != want {
+		t.Errorf("expected %s, got %v", want, rec.Calls)
+	}
+}
+
+func TestMakeBotCmd_UnknownUser_SwallowsError(t *testing.T) {
+	app := newTestApp(video.Video{})
+	rec := &recordingSessions{SetBotErr: gorm.ErrRecordNotFound}
+	app.Sessions = rec
+
+	// Must not panic — the handler logs and returns.
+	app.makeBotCmd(context.Background(), newTestUser(adminUser), []string{"ghost"})
+
+	want := `SetBot("ghost", true)`
+	if len(rec.Calls) != 1 || rec.Calls[0] != want {
+		t.Errorf("expected one SetBot call, got %v", rec.Calls)
+	}
+}
+
+func TestUnBotCmd_Admin_FlipsToFalse(t *testing.T) {
+	app := newTestApp(video.Video{})
+	rec := &recordingSessions{FindResult: users.User{ID: 7, Username: "innocent"}}
+	app.Sessions = rec
+
+	app.unBotCmd(context.Background(), newTestUser(adminUser), []string{"innocent"})
+
+	want := `SetBot("innocent", false)`
+	if len(rec.Calls) != 1 || rec.Calls[0] != want {
+		t.Errorf("expected %s, got %v", want, rec.Calls)
+	}
+}
+
+func TestUnBotCmd_NonAdmin_DoesNotCallSetBot(t *testing.T) {
+	app := newTestApp(video.Video{})
+	rec := &recordingSessions{}
+	app.Sessions = rec
+
+	app.unBotCmd(context.Background(), newTestUser("viewer1"), []string{"target"})
+
+	if len(rec.Calls) != 0 {
+		t.Errorf("expected no Sessions calls for non-admin, got %v", rec.Calls)
 	}
 }

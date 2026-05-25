@@ -8,10 +8,8 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"runtime/debug"
-	"strings"
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
@@ -59,15 +57,24 @@ const (
 	grafanaURL = "https://adanalife.grafana.net/dashboards/f/fflhs4m586io0e"
 	// githubURL is the tripbot source repo (vlc-server + obs live here too).
 	githubURL = "https://github.com/adanalife/tripbot"
-	// traefikURL / hubbleURL are the cluster's platform dashboards. They live
-	// in kube-system as a single prod-zone install shared across envs, so
-	// (unlike OBS) they aren't derived per-environment.
-	traefikURL = "https://traefik.prod.whereisdana.today"
-	// hubbleBaseURL is the single prod-zone Hubble install on the mini-PC
-	// cluster. gatherLinks appends ?namespace=<env's namespace> so the link
-	// lands straight in that namespace's flow view instead of Hubble's "choose
-	// a namespace" page — see hubbleNamespace.
-	hubbleBaseURL = "https://hubble.prod.whereisdana.today/"
+	// tailnetBase is Dana's tailnet MagicDNS suffix. App UIs are exposed by
+	// the Tailscale K8s operator at <service>-<env>.<tailnetBase>, e.g.
+	// tripbot-prod.tail020deb.ts.net. We prefer these over the LAN-IP-backed
+	// *.whereisdana.today URLs because the latter silently fail on client
+	// networks that share the home LAN's 192.168.1.0/24 range — the operator
+	// names are CGNAT (100.x), so they never collide. See vault
+	// decisions/tailscale-access-model.md.
+	tailnetBase = "tail020deb.ts.net"
+	// traefikURL / hubbleBaseURL are the cluster's platform dashboards. They
+	// live in kube-system as a single prod-zone install shared across envs
+	// (see vault decisions/stage-prod-cotenancy.md), so the host is always
+	// -prod regardless of which env's panel is rendering the link.
+	traefikURL = "https://traefik-prod." + tailnetBase
+	// hubbleBaseURL is the prod-zone Hubble install. gatherLinks appends
+	// ?namespace=<env's namespace> so the link lands straight in that
+	// namespace's flow view instead of Hubble's "choose a namespace" page —
+	// see hubbleNamespace.
+	hubbleBaseURL = "https://hubble-prod." + tailnetBase + "/"
 	// sentryURL is the org's issue list. gatherLinks appends ?environment=<env>
 	// so the link lands pre-filtered to this env's issues — see sentryEnv.
 	sentryURL = "https://a-dana-life.sentry.io/issues/"
@@ -401,7 +408,7 @@ func pingHealthy(ctx context.Context, rawURL string) bool {
 // neither appears here. Entries whose URL can't be derived are dropped.
 func gatherLinks() []navLink {
 	links := []navLink{}
-	if obs := siblingURL(c.Conf.ExternalURL, "obs"); obs != "" {
+	if obs := tailnetServiceURL("obs"); obs != "" {
 		links = append(links, navLink{Label: "obs", URL: obs})
 	}
 	links = append(links,
@@ -449,33 +456,30 @@ func changelogURL(sha string) string {
 	return githubURL + "/blob/" + ref + "/CHANGELOG.md"
 }
 
-// siblingURL rewrites externalURL's leading hostname label to service, e.g.
-// https://tripbot.prod.whereisdana.today -> https://obs.prod.whereisdana.today.
-// Returns "" when externalURL isn't a multi-label FQDN (e.g. localhost), since
-// there's no sibling Ingress to point at in that case.
-func siblingURL(externalURL, service string) string {
-	u, err := url.Parse(externalURL)
-	if err != nil || u.Hostname() == "" {
+// tailnetServiceURL returns the Tailscale K8s-operator URL for a sibling
+// service in this env's namespace, e.g. obs-prod.tail020deb.ts.net for
+// production. Tailnet (CGNAT 100.x) URLs are preferred over the LAN-IP-backed
+// *.whereisdana.today URLs because the latter silently fail on client
+// networks that overlap the home LAN's 192.168.1.0/24 range. Returns "" for
+// environments not served by the operator (dev/local/testing run on a
+// separate cluster), which hides the link rather than rendering one that
+// won't reach anything.
+func tailnetServiceURL(service string) string {
+	var env string
+	switch {
+	case c.Conf.IsProduction():
+		env = "prod"
+	case c.Conf.IsStaging():
+		env = "stage"
+	default:
 		return ""
 	}
-	_, rest, found := strings.Cut(u.Hostname(), ".")
-	if !found {
-		return ""
-	}
-	u.Host = service + "." + rest
-	return u.String()
+	return "https://" + service + "-" + env + "." + tailnetBase
 }
 
 // previewChannel returns the Twitch channel name the stream-preview embed
-// should load. Normally == ChannelName, but on prod-1 we temporarily point
-// it at adanalife_staging because prod isn't broadcasting yet — the embed
-// would render a "stream offline" placeholder otherwise. REVERT THIS at the
-// streaming cutover: just delete the if-block so the prod panel embeds
-// adanalife_ like every other env.
+// should load.
 func previewChannel() string {
-	if c.Conf.IsProduction() {
-		return "adanalife_staging"
-	}
 	return c.Conf.ChannelName
 }
 
@@ -652,23 +656,16 @@ var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
     {{end}}
   </ul>
 
-  <details class="controls">
-    <summary>controls</summary>
-    <h3>stream</h3>
-    {{if .Stream.Reachable}}
-      {{if .Stream.Active}}
-      <form class="stream-form" method="post" action="/admin/obs/stream/stop">
-        <button type="submit" class="stream stop" data-arm-label="click again to confirm stop" data-original-label="stop stream" onclick="return armConfirm(this)">stop stream</button>
-      </form>
-      {{else}}
-      <form class="stream-form" method="post" action="/admin/obs/stream/start">
-        <button type="submit" class="stream start" data-arm-label="click again to confirm start" data-original-label="start stream" onclick="return armConfirm(this)">start stream</button>
-      </form>
-      {{end}}
-    {{else}}
-    <p class="stream-unreachable">OBS unreachable</p>
-    {{end}}
+  {{if and .PreviewChannel .PanelHost}}
+  <details class="stream-preview" id="stream-preview">
+    <summary>stream preview</summary>
+    <div class="stream-frame">
+      <iframe data-src="https://player.twitch.tv/?channel={{.PreviewChannel}}&parent={{.PanelHost}}&muted=true&autoplay=true"
+              allowfullscreen
+              title="Twitch stream preview"></iframe>
+    </div>
   </details>
+  {{end}}
 
   {{if or .Now .Audio.Title}}
   <details class="now-playing">
@@ -688,16 +685,23 @@ var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
   </details>
   {{end}}
 
-  {{if and .PreviewChannel .PanelHost}}
-  <details class="stream-preview" id="stream-preview">
-    <summary>stream preview</summary>
-    <div class="stream-frame">
-      <iframe data-src="https://player.twitch.tv/?channel={{.PreviewChannel}}&parent={{.PanelHost}}&muted=true&autoplay=true"
-              allowfullscreen
-              title="Twitch stream preview"></iframe>
-    </div>
+  <details class="controls">
+    <summary>controls</summary>
+    <h3>stream</h3>
+    {{if .Stream.Reachable}}
+      {{if .Stream.Active}}
+      <form class="stream-form" method="post" action="/admin/obs/stream/stop">
+        <button type="submit" class="stream stop" data-arm-label="click again to confirm stop" data-original-label="stop stream" onclick="return armConfirm(this)">stop stream</button>
+      </form>
+      {{else}}
+      <form class="stream-form" method="post" action="/admin/obs/stream/start">
+        <button type="submit" class="stream start" data-arm-label="click again to confirm start" data-original-label="start stream" onclick="return armConfirm(this)">start stream</button>
+      </form>
+      {{end}}
+    {{else}}
+    <p class="stream-unreachable">OBS unreachable</p>
+    {{end}}
   </details>
-  {{end}}
 
   <h2>dashboards</h2>
   <nav class="links">

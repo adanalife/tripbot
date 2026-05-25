@@ -5,6 +5,55 @@
 
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
+## [v2.16.0] — 2026-05-25
+
+Minor release. The launch-day cut. Follower-gating goes off (kill-switch, default off) so any viewer can drive the bot during launch + soak. The prod admin-panel stream-preview hack from v2.15.5 reverts now that the cutover is in flight. New `!makebot` / `!unbot` admin commands on top of a deeper users-package cleanup — the hardcoded 107-entry ignore-list retires in favor of the persisted `is_bot` column as the single source of truth, and `TopUsers` picks up the bot filter it was missing. Telemetry pass drops three sources of recurring log/Sentry noise. Admin panel learns to route dashboard links over the tailnet so they stop dead-ending on LAN-conflicting client networks. CI gains govulncheck; tests grow Go fuzz targets that caught two parser bugs in their first minute.
+
+### chatbot
+
+- **Disable follower-gating for launch.** New `followerGatingEnabled` kill switch (default `false`) wraps the `RequiresFollow` check in `checkAccess`, so launch-day viewers can run any command without being told to follow first. The 17 `RequiresFollow:true` registry entries stay as-is — flip the var back to `true` to re-enable when soak is over. ([#679])
+- **`!makebot` / `!unbot` admin commands.** Manual curation surface for `users.is_bot`. Both are admin-only and silent in chat — outcome logged at slog Info for ops visibility. Usage: `!makebot <username>` / `!unbot <username>`. Leading `@` is stripped and the target is lowercased before lookup; unknown targets log a warn and return without panic. Goes through the new `App.Sessions.SetBot` seam with `recordingSessions` covering the path end-to-end. ([#675])
+
+### users
+
+- **Drop the hardcoded `IgnoredUsers` list; `is_bot` is the single source of truth.** The 107-entry slice in `pkg/config/tripbot/helpers.go` was a backstop for the leaderboard query — went stale, masked drift in `users.is_bot`, and required a PR to flag new bots. With the DB dump already correctly annotated the column alone is sufficient; channel owner is excluded separately via `UserIsAdmin()`. Side-effect: `pkg/scoreboards.TopUsers` had no `is_bot` filter — the hardcoded list was hiding that gap. Filter added here. ([#674])
+- **Persist `is_bot` in `save()`, add `SetBot` helper.** `save()` now includes `is_bot` in its UPDATE map (previously only `last_seen`, `num_visits`, `miles` — `IsBot` changes never reached the DB). New exported `SetBot(ctx, username, isBot)` flips the flag for any user, logged-in or not; also updates the `LoggedIn` map when the target is online so the change takes effect immediately. Prereq for `!makebot` / `!unbot`. ([#674])
+
+### admin panel
+
+- **Revert the pre-cutover stream-preview staging hack.** Drops the `IsProduction()` if-block in `previewChannel()` that was returning `"adanalife_staging"` on prod-1 so the panel embed showed the live staging stream until prod was actually broadcasting (originally landed in #672, shipped via v2.15.5). After cutover the panel embed shows whatever channel the env is configured for — `adanalife_` on prod, like every other env. Collapses to a one-liner returning `c.Conf.ChannelName`. ([#678])
+- **Route dashboard + sibling links over the tailnet.** Switch the dashboards links (traefik, hubble) and the derived OBS sibling link from `*.whereisdana.today` to the Tailscale K8s operator's `*-{prod,stage}.tail020deb.ts.net` names. The whereisdana hosts resolve to LAN IP `192.168.1.200`, which silently dead-ends on client networks sharing the `192.168.1.0/24` range; the operator names are CGNAT (100.x) and don't collide. New `tailnetServiceURL` derives `-prod` / `-stage` from `c.Conf` and returns `""` for dev/local/testing so the link hides on clusters the operator doesn't cover. Auth re-init URLs still use `c.Conf.ExternalURL` (Twitch OAuth `redirect_uri` host — moving them is a bigger change that needs the Twitch app's allowlist updated). ([#684])
+- **Reorder panel sections: preview → now playing → controls.** HTML reorder only; no CSS or test changes (`admin_test.go` asserts presence, not order). ([#680])
+
+### obs
+
+- **Shim `xdg-screensaver` to silence per-cycle warnings.** OBS calls `xdg-screensaver suspend` every 30s while streaming to inhibit the desktop screensaver. The freedesktop script can't find a backend in a headless container (`$DISPLAY` unset, no GNOME/KDE session) and exits 2 — OBS then logs `Failed to create xdg-screensaver: 2` at warn level. ~120 wasted fork+exec per pod per hour, all spamming Loki. Drop a no-op shim at `/usr/local/bin/xdg-screensaver` so OBS gets exit 0 and stops complaining. Cleaner than a Loki-side drop filter — the noise never enters the log stream and OBS does no work it doesn't need to. ([#683])
+
+### telemetry
+
+- **Quiet the VLC / onscreens client error cascade.** A single "no route to host" from vlc-server was producing 5 ERROR records (and 5 Sentry exceptions) on one `trace_id`: each HTTP client wrapper logged the operation-specific failure at Error, the transport helper logged it again with the same err, and the downstream `LoadOrCreate` caller logged a third symptom of the same root cause. Demote the transport-helper logs (`vlc-client.get`, `onscreens-client.get`) and the downstream "unable to create Video" to Debug. The wrappers above retain the meaningful "error doing X" Error logs. ([#682])
+- **Quiet "OCRing coords skipped!" log to debug.** Fires on every video save without coords (the expected steady state since `ocrCoords` was removed), so logging at Error level spammed Loki and sent a Sentry exception per save. ([#681])
+
+### ci
+
+- **govulncheck workflow.** Scans `go.mod` + the imported call graph against the Go vulnerability database. Tighter signal than CodeQL because it only flags vulns actually reachable from our code paths. Dry-run on develop is clean (0 reachable, 6 latent in `golang.org/x/net` that we don't call). The action bundles its own `actions/checkout` + `setup-go`, so the outer checkout was dropped to avoid a duplicate-Authorization 400. ([#677])
+
+### tests
+
+- **Go fuzz targets for chatbot + helpers parsers.** New fuzz targets for `StripAtSign`, `StateAbbrevToState`, `TitlecaseState`, `FindCommand`, plus per-command fuzzers (`Guess`, `Miles`, `Followage`, `Middle`, `SetBot`) on the existing `newTestApp` scaffolding (with a `recordingIRC` stand-in for `noopIRC`, since `noopIRC.Say` still delegates to the package-level `sayFn` during the App.IRC migration and that path nil-deref'd a Twitch client under fuzz load). Each target runs clean for 10s at ~50k–400k execs/sec. Two bugs surfaced in <1 min of fuzzing and got fixed in the same PR: `StripAtSign("")` panicked on empty input (length check was after the index), and `StateToStateAbbrev("District of Columbia")` returned `""` because `strings.Title` mis-capitalised "of". ([#676])
+
+[#674]: https://github.com/adanalife/tripbot/pull/674
+[#675]: https://github.com/adanalife/tripbot/pull/675
+[#676]: https://github.com/adanalife/tripbot/pull/676
+[#677]: https://github.com/adanalife/tripbot/pull/677
+[#678]: https://github.com/adanalife/tripbot/pull/678
+[#679]: https://github.com/adanalife/tripbot/pull/679
+[#680]: https://github.com/adanalife/tripbot/pull/680
+[#681]: https://github.com/adanalife/tripbot/pull/681
+[#682]: https://github.com/adanalife/tripbot/pull/682
+[#683]: https://github.com/adanalife/tripbot/pull/683
+[#684]: https://github.com/adanalife/tripbot/pull/684
+
 ## [v2.15.5] — 2026-05-25
 
 Patch release. More admin-panel polish on top of v2.15.4, plus a temporary hack for the prod stream-preview so it shows something live until the broadcasting cutover.
