@@ -83,3 +83,13 @@ func (s *Server) currentIndex() int {
 	videoFile := filepath.Base(s.currentlyPlaying())
 	return s.getIndex(videoFile)
 }
+
+// NextVideoFile returns the basename of the next video in the playlist
+// after the currently-playing one (with wrap). Pure helper for the
+// cover-frame refresher; doesn't touch libvlc.
+func (s *Server) NextVideoFile() string {
+	if len(s.VideoFiles) == 0 {
+		return ""
+	}
+	return s.VideoFiles[nextIndex(s.currentIndex(), +1, len(s.VideoFiles))]
+}

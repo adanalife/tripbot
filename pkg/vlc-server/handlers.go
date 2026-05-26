@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 	"runtime/debug"
 	"strconv"
 	"time"
@@ -154,6 +155,50 @@ func (s *Server) vlcRandomHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	fmt.Fprintf(w, "OK")
 }
+
+// nextFrameJPEGHandler serves the cached first-frame JPEG that the OBS
+// cover layer renders during the inter-clip gap. 404 when the cache
+// file is missing (e.g. vlc-server just started and the refresher
+// hasn't run yet) so the browser source falls back to whatever it had.
+// Cache-Control: no-store + a Last-Modified header lets CEF issue
+// conditional GETs and the server answer 304 when nothing changed
+// since the last 10s poll.
+func (s *Server) nextFrameJPEGHandler(w http.ResponseWriter, r *http.Request) {
+	path := NextFrameCachePath()
+	st, err := os.Stat(path)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "image/jpeg")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Last-Modified", st.ModTime().UTC().Format(http.TimeFormat))
+	http.ServeFile(w, r, path)
+}
+
+// nextFrameHTMLHandler serves a tiny wrapper page that the OBS browser
+// source loads. The page polls /next-frame.jpg every 10s with a
+// cache-bust timestamp, so vlc-server doesn't need to push refresh
+// signals via obs-websocket — the cover frame keeps itself current.
+func (s *Server) nextFrameHTMLHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	fmt.Fprint(w, nextFrameHTML)
+}
+
+const nextFrameHTML = `<!doctype html>
+<html><head><meta charset="utf-8"><style>
+html,body{margin:0;padding:0;height:100%;background:#000;overflow:hidden;}
+img{display:block;width:100%;height:100%;object-fit:cover;}
+</style></head><body>
+<img id="f" src="/next-frame.jpg">
+<script>
+setInterval(function(){
+  document.getElementById('f').src = '/next-frame.jpg?t=' + Date.now();
+}, 10000);
+</script>
+</body></html>
+`
 
 func (s *Server) faviconHandler(w http.ResponseWriter, r *http.Request) {
 	//	// return a favicon if anyone asks for one

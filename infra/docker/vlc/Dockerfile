@@ -12,6 +12,7 @@ RUN export DEBIAN_FRONTEND=noninteractive \
     build-essential \
     ca-certificates \
     curl \
+    ffmpeg \
     git \
     grc \
     libva-drm2 \
