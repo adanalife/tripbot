@@ -1,7 +1,14 @@
 .env.*
-infra
-!infra/docker/obs
-!infra/docker/vlc/config
-!infra/docker/bin
+
+# infra/: exclude the bits that have nothing to do with image builds.
+# Everything under infra/docker/{obs,vlc,bin,tripbot} is in by default;
+# the COPY directives in those Dockerfiles pull from there.
+infra/certs
+infra/windows
+infra/README.md
+infra/docker/docker-compose*.yml
+infra/docker/env.docker
+infra/docker/test
+
 assets/video
 log
