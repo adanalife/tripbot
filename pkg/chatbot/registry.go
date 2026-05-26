@@ -70,7 +70,7 @@ func (a *App) buildRegistry() []Command {
 			Trigger: "!socialmedia",
 			Aliases: []string{"!social", "!socials"},
 			Handler: func(_ context.Context, _ *users.User, _ []string) {
-				sayFn("Find me outside of Twitch: !twitter, !instagram, !facebook, !youtube")
+				sayFn("Find me outside of Twitch: !instagram, !youtube, !twitter, !facebook")
 			},
 		},
 		{
