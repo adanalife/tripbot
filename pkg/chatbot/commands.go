@@ -296,30 +296,35 @@ func (a *App) monthlyGuessLeaderboardCmd(ctx context.Context, user *users.User, 
 	size := 10
 	leaderboard := scoreboards.TopUsers(ctx, scoreboards.CurrentGuessScoreboard(), size)
 
-	// special message if the leaderboard is empty
-	if len(leaderboard) == 0 {
-		a.IRC.Say("No one is on that leaderboard yet!")
-		return
-	}
-
 	// truncate the leaderboard if necessary
 	if size > len(leaderboard) {
 		size = len(leaderboard)
 	}
 	leaderboard = leaderboard[:size]
 
+	// Filter zero-scorers (AddToScoreByName uses FirstOrCreate, so every
+	// user who's ever guessed has a row — many at 0 early in the month).
 	var intLeaderboard [][]string
 	for _, leaderPair := range leaderboard {
 		// guesses are ints not floats, so remove the decimal place
 		intVersion := strings.Split(leaderPair[1], ".")[0]
+		if intVersion == "0" || intVersion == "" {
+			continue
+		}
 		intLeaderboard = append(intLeaderboard, []string{leaderPair[0], intVersion})
+	}
+
+	// special message if no one has any correct guesses yet
+	if len(intLeaderboard) == 0 {
+		a.IRC.Say("No one is on that leaderboard yet!")
+		return
 	}
 
 	// display leaderboard on screen
 	a.Onscreens.ShowLeaderboard(ctx, "Correct Guesses This Month", intLeaderboard)
 
 	// build a message to send to chat
-	msg := fmt.Sprintf("Top %d correct guesses this month: ", size)
+	msg := fmt.Sprintf("Top %d correct guesses this month: ", len(intLeaderboard))
 	for i, leaderPair := range intLeaderboard {
 		msg += fmt.Sprintf("%d. %s (%s)", i+1, leaderPair[0], leaderPair[1])
 		if i+1 != len(intLeaderboard) {
