@@ -483,6 +483,24 @@ func previewChannel() string {
 	return c.Conf.ChannelName
 }
 
+// envColorClass returns the CSS modifier suffix for the env-badge chip,
+// keyed off c.Conf.Environment (same source OTLP's deployment.environment
+// reads). The empty string falls back to the neutral chip styling. Kept as
+// a template helper so the colour map lives next to the env-source lookup
+// rather than inside the inline-template string.
+func envColorClass(env string) string {
+	switch env {
+	case "production":
+		return "env-prod"
+	case "staging":
+		return "env-stage"
+	case "development":
+		return "env-dev"
+	default:
+		return ""
+	}
+}
+
 // panelHost returns the hostname the panel was reached at, for use as the
 // Twitch embed's parent= parameter. Read from r.Host (the request's Host
 // header) so it matches whatever the browser used — Tailscale's tail*.ts.net
@@ -500,12 +518,14 @@ func panelHost(r *http.Request) string {
 	return h
 }
 
-var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
+var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
+	"envColorClass": envColorClass,
+}).Parse(`<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>tripbot — {{.Channel}}</title>
+<title>tripbot — {{.Channel}} ({{.Env}})</title>
 <!-- favicons referenced from the website (single owner of brand assets) — see
      vault general/logo.md; apple-touch-icon gives a home-screen icon on phones -->
 <link rel="icon" type="image/png" sizes="32x32" href="https://www.dana.lol/assets/favicon-32x32.png">
@@ -542,6 +562,21 @@ var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
   .logo-link:hover .logo { opacity:1; }
   h1 { font-size:clamp(20px,1.2vw + 15px,28px); margin:0 0 4px; letter-spacing:.02em; }
   .env { font-family:var(--mono); background:var(--chip-bg); border:1px solid var(--chip-border); color:var(--faint); padding:2px 7px; border-radius:5px; font-size:.5em; font-weight:normal; letter-spacing:0; vertical-align:middle; }
+  /* env-badge colour variants — keyed off c.Conf.Environment (same source
+     OTLP's deployment.environment reads). Greens/yellows/blues are picked
+     to stay legible against both the dark and light --chip-bg defaults;
+     unknown envs fall through to the neutral chip styling above. */
+  .env.env-prod  { background:#0f3a1f; border-color:#1f6f3e; color:#a4e0b8; }
+  .env.env-stage { background:#3a2f0a; border-color:#7a5e1a; color:#f0d57d; }
+  .env.env-dev   { background:#0f2a45; border-color:#1f548a; color:#9ec7f0; }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) .env.env-prod  { background:#dff5e4; border-color:#7fc296; color:#15532a; }
+    :root:not([data-theme="dark"]) .env.env-stage { background:#fbf0c8; border-color:#d4b35a; color:#5a4310; }
+    :root:not([data-theme="dark"]) .env.env-dev   { background:#dbe9f7; border-color:#7aa6d1; color:#16365a; }
+  }
+  :root[data-theme="light"] .env.env-prod  { background:#dff5e4; border-color:#7fc296; color:#15532a; }
+  :root[data-theme="light"] .env.env-stage { background:#fbf0c8; border-color:#d4b35a; color:#5a4310; }
+  :root[data-theme="light"] .env.env-dev   { background:#dbe9f7; border-color:#7aa6d1; color:#16365a; }
   .meta { color:var(--muted); margin:0 0 2px; font-size:.92em; }
   .accounts { color:var(--dim); margin:0 0 24px; font-size:.85em; }
   h2 { font-size:.8em; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin:24px 0 8px; }
@@ -626,7 +661,7 @@ var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
        assets) rather than copied in — see vault general/logo.md. The anchor
        wraps the mark so clicking it refreshes the page. -->
   <a class="logo-link" href="/" title="refresh"><img class="logo" src="https://www.dana.lol/assets/logo.png" alt="A Dana Life" width="44" height="44"></a>
-  <h1>tripbot <code class="env">{{.Env}}</code></h1>
+  <h1>tripbot <code class="env {{envColorClass .Env}}">{{.Env}}</code></h1>
   <p class="meta">up {{.Uptime}} · {{.Chatters}} in chat</p>
   <p class="accounts">broadcaster <a href="https://twitch.tv/{{.Channel}}">{{.Channel}}</a> · bot <a href="https://twitch.tv/{{.Bot}}">{{.Bot}}</a></p>
 
