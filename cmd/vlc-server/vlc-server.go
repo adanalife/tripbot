@@ -95,6 +95,10 @@ func main() {
 	// supervisord respawns vlc-server. See pkg/vlc-server/watchdog.go.
 	srv.StartRTSPWatchdog(shutdownCtx, 30*time.Second, 3, 30*time.Second)
 
+	// Cover-frame refresher: re-extracts the next video's first frame
+	// whenever the playing video changes. See pkg/vlc-server/firstframe.go.
+	srv.StartNextFrameRefresher(shutdownCtx, 5*time.Second)
+
 	// start the webserver
 	srv.Start(shutdownCtx)
 }
