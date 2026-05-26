@@ -70,7 +70,7 @@ func (a *App) buildRegistry() []Command {
 			Trigger: "!socialmedia",
 			Aliases: []string{"!social", "!socials"},
 			Handler: func(_ context.Context, _ *users.User, _ []string) {
-				sayFn("Find me outside of Twitch: !twitter, !instagram, !facebook, !youtube")
+				sayFn("Find me outside of Twitch: !youtube, !tiktok, !instagram, !bluesky")
 			},
 		},
 		{
@@ -104,6 +104,19 @@ func (a *App) buildRegistry() []Command {
 			Aliases: []string{"!yt"},
 			Handler: func(_ context.Context, _ *users.User, _ []string) {
 				sayFn("Subscribe on YouTube: https://www.youtube.com/channel/UC8Q7uFC1Xyr2ZnTWOk9Aizg")
+			},
+		},
+		{
+			Trigger: "!tiktok",
+			Handler: func(_ context.Context, _ *users.User, _ []string) {
+				sayFn("Follow on TikTok: https://tiktok.com/@adanalife")
+			},
+		},
+		{
+			Trigger: "!bluesky",
+			Aliases: []string{"!bsky"},
+			Handler: func(_ context.Context, _ *users.User, _ []string) {
+				sayFn("Follow on Bluesky: https://bsky.app/profile/dana.lol")
 			},
 		},
 		{

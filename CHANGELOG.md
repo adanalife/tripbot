@@ -5,6 +5,54 @@
 
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
+## [v2.16.1] — 2026-05-26
+
+Patch release. First post-launch cut. The inter-clip gap now hides behind a still frame of the next clip's opening rather than the broken-video overlay (still + fix). New `release-development` CI workflow publishes `:develop` multi-arch images on every push to develop, so stage-1 can ride develop without manual rebuilds. Admin panel learns to colour its env badge and put the env in `<title>` so prod and stage tabs stop looking identical. Chatbot's social roster modernises (`!bluesky` + `!tiktok` added, `!socialmedia` listing follows). Scoreboards filter zero-score rows and align in a monospace column; the `/onscreens/state.json` access-log flood gets demoted to debug.
+
+### streaming
+
+- **Cover the inter-clip gap with the next clip's first frame.** vlc-server's poll goroutine (5s) shells out to `ffmpeg` whenever `currentlyPlaying()` changes and stashes a single-slot JPEG at `RunDir/next-frame.jpg`, served at `/next-frame.jpg` plus a self-polling HTML wrapper at `/next-frame.html`. OBS's Main scene gains a `Next-frame preview` browser source between `Broken video warning` and `Dashcam`, pointed at `vlc-server`'s `/next-frame.html` via the new `VLC_URL_BASE` envsubst (mirrors `ONSCREENS_URL_BASE`). Visible during the inter-clip gap when `Dashcam` clears, hidden under the dashcam video the rest of the time. The HTML wrapper refreshes the `<img>` every 10s with a cache-bust query so CEF tracks file changes without an obs-websocket push; the JPEG response carries `Last-Modified` so polls 304 when unchanged. `ffmpeg` joins the vlc container's apt list; no new Go deps. ([#695])
+- **Tell ffmpeg the output muxer for the first-frame extract.** Stage logs showed every extraction failing with `Error initializing the muxer for /opt/data/run/next-frame.jpg.tmp: Invalid argument` because `ffmpeg` infers the muxer from the file extension and `.tmp` isn't a known image format. Adds `-f image2 -update 1` to make the muxer + single-image semantics explicit, so the atomic-write tmp extension stops mattering. ([#696])
+
+### ci
+
+- **`release-development.yml` publishes `:develop` images on push to develop.** Tag-publish workflow mirroring `release.yml`'s matrix-on-native-runners + manifest-list shape per the multi-arch-release-pattern ADR. Per-image `dorny/paths-filter` gates the three builds — tripbot rebuilds on `cmd/tripbot/`, `pkg/`, `infra/docker/tripbot/`, `go.{mod,sum}`; vlc on `cmd/{vlc,onscreens}-server/`, `pkg/{vlc,onscreens}-{server,client}/`, `infra/docker/vlc/`, `go.{mod,sum}`; obs on `infra/docker/obs/`. The OBS filter is the load-bearing one (arm64 leg's CEF compile is ~30 min, so skipping it on Go-only merges is real CI savings). Tag scheme: per-arch `:develop-{amd64,arm64}` + manifest list `:develop`. No `latest=` flag — prod's `:latest` stays release-tag-driven. `VERSION` build-arg stamps as `develop-<short-sha>` so `/version` endpoints on stage identify the running commit. `verify-stamped-image.sh` runs per-arch as the corruption check, same as `release.yml`. ([#694])
+- **`.dockerignore` comment.** Documents the broad-ignore + re-include pattern (excludes `infra/`, re-adds `infra/docker/{obs,vlc/config,bin}`) so the next person who touches it knows the convention. An earlier rewrite to explicit subdir-ignores was considered and rolled back — the broad-ignore stays. ([#691])
+
+### admin panel
+
+- **Render env in `<title>` and colour the env badge.** When running prod + stage admin tabs side-by-side, the page titles were identical and easy to mix up. `<title>` now reads `tripbot — <channel> (<env>)`, and the env chip in the header takes on a colour per env: green for prod, yellow for stage, blue for dev, neutral for testing / unknown. Both themes get tuned chip colours so the badge stays legible in light + dark. `c.Conf.Environment` is the source of truth — same field OTLP's `deployment.environment` reads. ([#687])
+
+### chatbot
+
+- **`!bluesky` (+ `!bsky` alias) and `!tiktok` commands.** Both mirror the existing per-platform commands (`!twitter` / `!instagram` / `!facebook` / `!youtube`). `!tiktok` handle is bare `adanalife` per the branding ADR; `!bluesky` uses the custom domain `dana.lol`, with `!bsky` as an alias since that's the most common shortened form. ([#690])
+- **`!socialmedia` listing follows.** Twitter demoted in favour of Bluesky; Facebook drops from the summary. The `!twitter` and `!facebook` commands stay registered so anyone who types them still gets a response — they're just no longer in the digest. ([#690])
+
+### scoreboards
+
+- **Filter zero-scorers from the monthly guess leaderboard.** `AddToScoreByName` uses `FirstOrCreate`, so every user who's ever attempted a guess gets a row at `value=0` — noisy early in each month. Rows whose integer score parses as `0` or empty are filtered before render; if every row is filtered, the overlay skips entirely and the chat command falls back to its existing "No one is on that leaderboard yet!" message. ([#689])
+- **Left-align the score column in the leaderboard onscreen.** Mixed 1/2/3-digit guess counts (or 4/5/6-char miles values) jumped left/right between rows because the score field had no padding. `LeaderboardContent` now pads via `%-*s` to the longest score's width, and the leaderboard onscreen's font switches from `Trebuchet MS` to a monospace stack (`Menlo` / `Consolas` / `Courier New`) so space-widths align with digit-widths. Shared path, so monthly miles + lifetime miles leaderboards benefit too. ([#689])
+
+### obs
+
+- **Flatten the `MIDDLE` group so middle-text renders in bottom-center.** The `Middle Text Onscreen - Center` browser source was wrapped in a single-item `MIDDLE` group at canvas `(0, 0)` with the source positioned at `(640, 1033)` inside the group — but in the live scene that resolved to top-left rather than between the rotators (the group layer was swallowing the in-group position). The group did nothing useful (one child, no transforms), so it goes and the source promotes to a top-level scene item at the same `(640, 1033)`. Lands between the left rotator (x=0..640) and the right rotator (x=1280..1920) on the bottom strip where it belongs. ([#692])
+- **Lower default SomaFM volume to -18.3 dB.** Groove Salad was a touch too loud at full volume on first sound-check. Live-tweaked on launch night via the noVNC mixer to `-18.3 dB` (0.121619 mul) — peaks barely clipping into yellow, in the verification-runbook target zone of ~-20 to -10 dB. Bake the same value into the seed scene config so it survives pod restarts and image rebuilds. ([#693])
+
+### telemetry
+
+- **Demote `/onscreens/state.json` access log to debug.** OBS's CEF browser sources poll the endpoint at ~14 req/sec idle, flooding the default INFO stream. Extends the existing health-probe debug-path allowlist (#583) to cover it; renames `healthPaths` → `debugPaths` to reflect the broader purpose. ([#688])
+
+[#687]: https://github.com/adanalife/tripbot/pull/687
+[#688]: https://github.com/adanalife/tripbot/pull/688
+[#689]: https://github.com/adanalife/tripbot/pull/689
+[#690]: https://github.com/adanalife/tripbot/pull/690
+[#691]: https://github.com/adanalife/tripbot/pull/691
+[#692]: https://github.com/adanalife/tripbot/pull/692
+[#693]: https://github.com/adanalife/tripbot/pull/693
+[#694]: https://github.com/adanalife/tripbot/pull/694
+[#695]: https://github.com/adanalife/tripbot/pull/695
+[#696]: https://github.com/adanalife/tripbot/pull/696
+
 ## [v2.16.0] — 2026-05-25
 
 Minor release. The launch-day cut. Follower-gating goes off (kill-switch, default off) so any viewer can drive the bot during launch + soak. The prod admin-panel stream-preview hack from v2.15.5 reverts now that the cutover is in flight. New `!makebot` / `!unbot` admin commands on top of a deeper users-package cleanup — the hardcoded 107-entry ignore-list retires in favor of the persisted `is_bot` column as the single source of truth, and `TopUsers` picks up the bot filter it was missing. Telemetry pass drops three sources of recurring log/Sentry noise. Admin panel learns to route dashboard links over the tailnet so they stop dead-ending on LAN-conflicting client networks. CI gains govulncheck; tests grow Go fuzz targets that caught two parser bugs in their first minute.

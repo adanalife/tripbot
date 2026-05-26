@@ -105,7 +105,11 @@ func printLeaderboard() {
 	}
 }
 
-// LeaderboardContent creates the content for the leaderboard onscreen
+// LeaderboardContent creates the content for the leaderboard onscreen.
+// The score column is left-aligned to the width of the longest score so
+// usernames line up cleanly across rows with mixed 1/2/3-digit scores.
+// Requires a monospace font on the onscreen for the padding to render
+// as a true column — see onscreens-server's onscreenRegistry.
 func LeaderboardContent(title string, leaderboard [][]string) string {
 	var output string
 	output = strings.Title(title) + "\n"
@@ -116,8 +120,16 @@ func LeaderboardContent(title string, leaderboard [][]string) string {
 	}
 	leaderboard = leaderboard[:size]
 
+	// width of the longest score field, for left-aligning the score column
+	scoreWidth := 0
+	for _, pair := range leaderboard {
+		if len(pair[1]) > scoreWidth {
+			scoreWidth = len(pair[1])
+		}
+	}
+
 	for _, score := range leaderboard {
-		output = output + fmt.Sprintf("%s (%s)\n", score[1], score[0])
+		output = output + fmt.Sprintf("%-*s (%s)\n", scoreWidth, score[1], score[0])
 	}
 
 	return output

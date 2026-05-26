@@ -119,6 +119,13 @@ func (s *Server) Start(ctx context.Context) {
 	// separate port). vlc-server no longer serves /onscreens/* — clients
 	// (chatbot, OBS browser sources) hit ONSCREENS_SERVER_HOST directly.
 
+	// next-frame cover layer. OBS loads /next-frame.html as a browser
+	// source; the page self-refreshes /next-frame.jpg every 10s with a
+	// cache-bust query so the cover frame tracks playlist advances
+	// without an obs-websocket push.
+	r.Handle("/next-frame.jpg", tagged("/next-frame.jpg", s.nextFrameJPEGHandler)).Methods("GET", "HEAD")
+	r.Handle("/next-frame.html", tagged("/next-frame.html", s.nextFrameHTMLHandler)).Methods("GET", "HEAD")
+
 	// admin actions — tailnet-only by virtue of where the Ingress is exposed;
 	// no app-layer auth gate. /admin/shutdown is the admin panel's "restart
 	// vlc-server" surface; the shared handler SIGTERMs the process and k8s

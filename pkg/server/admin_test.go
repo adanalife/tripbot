@@ -70,6 +70,22 @@ func TestHubbleNamespace(t *testing.T) {
 	}
 }
 
+func TestEnvColorClass(t *testing.T) {
+	cases := map[string]string{
+		"production":  "env-prod",
+		"staging":     "env-stage",
+		"development": "env-dev",
+		"testing":     "", // neutral chip
+		"":            "", // unset env falls through to neutral
+		"weird":       "", // unknown env falls through to neutral
+	}
+	for env, want := range cases {
+		if got := envColorClass(env); got != want {
+			t.Errorf("envColorClass(%q) = %q, want %q", env, got, want)
+		}
+	}
+}
+
 func TestChangelogURL(t *testing.T) {
 	if got, want := changelogURL("deadbeef"), githubURL+"/blob/deadbeef/CHANGELOG.md"; got != want {
 		t.Errorf("changelogURL(sha) = %q, want %q", got, want)
@@ -327,7 +343,8 @@ func TestAdminHandler_RendersReadyStatusAndLinks(t *testing.T) {
 		">vlc-server<",       // vlc row label
 		">onscreens-server<", // onscreens row label
 		"12 in chat",                          // chatter count
-		`<code class="env">production</code>`, // env in monospace chip
+		`<code class="env env-prod">production</code>`,    // env in monospace chip, prod-coloured
+		`<title>tripbot — adanalife_ (production)</title>`, // env rendered in <title> for tab disambiguation
 		"now playing",                         // now-playing section shown when vlc healthy
 		"wy_0042.MP4",                         // current video file
 		"Wyoming",                             // current video state
