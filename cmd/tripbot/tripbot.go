@@ -91,8 +91,9 @@ func main() {
 	findInitialVideo()
 	users.InitLeaderboard(context.Background())
 	startCron()
-	loadTwitchToken(shutdownCtx) // must precede chatbot.Initialize — provides the IRC token
-	setUpTwitchClient()          // required for the below
+	loadTwitchToken(shutdownCtx)           // must precede chatbot.Initialize — provides the IRC token
+	refreshTokensIfNearExpiry(shutdownCtx) // closes the restart-desync gap with the hourly cron
+	setUpTwitchClient()                    // required for the below
 	updateSubscribers()
 	getCurrentUsers()
 	startEventSub(shutdownCtx)
@@ -254,6 +255,17 @@ func pollForTwitchToken(ctx context.Context) {
 			return
 		}
 	}
+}
+
+// refreshTokensIfNearExpiry runs the same refresh that the hourly cron does,
+// once, synchronously, at startup. gocron's DurationJob fires its first tick
+// one full interval after Scheduler.Start(), so a pod restart that lands
+// within the refresh window (or after expiry) would otherwise leave the
+// in-memory token stale until the cron catches up — up to an hour. refreshOne
+// early-returns when the stored token is healthy, so this is a no-op in the
+// common case.
+func refreshTokensIfNearExpiry(ctx context.Context) {
+	mytwitch.RefreshUserAccessToken(ctx)
 }
 
 // setUpTwitchClient sets up the Twitch client,
