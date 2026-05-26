@@ -107,6 +107,12 @@ func (a *App) buildRegistry() []Command {
 			},
 		},
 		{
+			Trigger: "!tiktok",
+			Handler: func(_ context.Context, _ *users.User, _ []string) {
+				sayFn("Follow on TikTok: https://tiktok.com/@adanalife")
+			},
+		},
+		{
 			Trigger: "!commands",
 			Aliases: []string{"!command", "¡command", "¡commands", "!commads", "!controls", "!commande"},
 			Handler: func(_ context.Context, _ *users.User, _ []string) {
