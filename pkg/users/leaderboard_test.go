@@ -82,6 +82,45 @@ func TestLeaderboardContentEmpty(t *testing.T) {
 	}
 }
 
+// Mixed 1/2/3-digit scores should pad to the longest width so the (username)
+// column starts at the same offset on every row — relies on a monospace font
+// on the leaderboard onscreen for the spacing to render visually.
+func TestLeaderboardContentLeftAlignsScores(t *testing.T) {
+	board := [][]string{
+		{"alice", "123"},
+		{"bob", "15"},
+		{"carol", "7"},
+	}
+	got := LeaderboardContent("guesses", board)
+
+	wantLines := []string{
+		"123 (alice)",
+		"15  (bob)",
+		"7   (carol)",
+	}
+	for _, line := range wantLines {
+		if !strings.Contains(got, line) {
+			t.Fatalf("expected line %q in output, got %q", line, got)
+		}
+	}
+}
+
+// Single-width score column should not introduce trailing padding spaces.
+func TestLeaderboardContentSingleWidthNoExcessPadding(t *testing.T) {
+	board := [][]string{
+		{"alice", "5"},
+		{"bob", "3"},
+	}
+	got := LeaderboardContent("guesses", board)
+
+	if !strings.Contains(got, "5 (alice)") {
+		t.Fatalf("expected '5 (alice)' (no padding), got %q", got)
+	}
+	if strings.Contains(got, "5  (alice)") {
+		t.Fatalf("did not expect double-space padding with uniform width, got %q", got)
+	}
+}
+
 // snapshotLeaderboard saves the global LifetimeMilesLeaderboard and returns a
 // restore func. Use with defer to keep tests from contaminating each other.
 func snapshotLeaderboard() func() {
