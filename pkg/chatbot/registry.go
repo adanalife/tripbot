@@ -113,6 +113,13 @@ func (a *App) buildRegistry() []Command {
 			},
 		},
 		{
+			Trigger: "!bluesky",
+			Aliases: []string{"!bsky"},
+			Handler: func(_ context.Context, _ *users.User, _ []string) {
+				sayFn("Follow on Bluesky: https://bsky.app/profile/dana.lol")
+			},
+		},
+		{
 			Trigger: "!commands",
 			Aliases: []string{"!command", "¡command", "¡commands", "!commads", "!controls", "!commande"},
 			Handler: func(_ context.Context, _ *users.User, _ []string) {
