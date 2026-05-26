@@ -63,7 +63,10 @@ var onscreenRegistry = map[string]onscreenStyle{
 		Name: SlugMiddleText, FontCSS: `"Trebuchet MS", sans-serif`, FontSizePx: 18, ColorCSS: "#ffffff",
 	},
 	SlugLeaderboard: {
-		Name: SlugLeaderboard, FontCSS: `"Trebuchet MS", sans-serif`, FontSizePx: 18, ColorCSS: "#ffffff",
+		// Monospace font so the space-padded score column in
+		// users.LeaderboardContent renders as a true visual column —
+		// proportional fonts make padding-space alignment unreliable.
+		Name: SlugLeaderboard, FontCSS: `"Menlo", "Consolas", "Courier New", monospace`, FontSizePx: 18, ColorCSS: "#ffffff",
 	},
 	SlugLeftMessage: {
 		Name: SlugLeftMessage, FontCSS: `"Trebuchet MS", sans-serif`, FontSizePx: 28, MinFontSizePx: 18, ColorCSS: "#ffffff",
