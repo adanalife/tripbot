@@ -38,7 +38,10 @@ func NextFrameCachePath() string {
 // -ss 0 before -i for fast seek; -frames:v 1 to grab one frame; -q:v 3
 // is a sane JPEG quality (2-5 range); -nostdin so a stalled ffmpeg can't
 // read from vlc-server's stdin; -y to overwrite the .tmp from any prior
-// interrupted extraction.
+// interrupted extraction. -f image2 -update 1 selects the muxer
+// explicitly and says "single image, not a sequence" so ffmpeg doesn't
+// try to infer the muxer from the .tmp file extension or treat the path
+// as a numbered-sequence pattern.
 func ExtractFirstFrame(ctx context.Context, videoPath, outPath string) error {
 	tmpPath := outPath + ".tmp"
 	defer os.Remove(tmpPath) // best-effort; harmless after a successful rename
@@ -50,6 +53,7 @@ func ExtractFirstFrame(ctx context.Context, videoPath, outPath string) error {
 		"ffmpeg", "-nostdin", "-y",
 		"-ss", "0", "-i", videoPath,
 		"-frames:v", "1", "-q:v", "3",
+		"-f", "image2", "-update", "1",
 		tmpPath,
 	)
 	if out, err := cmd.CombinedOutput(); err != nil {
