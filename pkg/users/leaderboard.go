@@ -3,6 +3,7 @@ package users
 import (
 	"context"
 	"fmt"
+	"html"
 	"log/slog"
 	"strconv"
 	"strings"
@@ -105,32 +106,29 @@ func printLeaderboard() {
 	}
 }
 
-// LeaderboardContent creates the content for the leaderboard onscreen.
-// The score column is left-aligned to the width of the longest score so
-// usernames line up cleanly across rows with mixed 1/2/3-digit scores.
-// Requires a monospace font on the onscreen for the padding to render
-// as a true column — see onscreens-server's onscreenRegistry.
+// LeaderboardContent renders the leaderboard onscreen as a CSS-grid HTML
+// fragment. The score column auto-sizes to the widest entry via
+// grid-template-columns, so digits line up across rows regardless of font.
+// The onscreen is registered with RenderAsHTML in onscreenRegistry so the
+// browser-source template injects this via innerHTML.
 func LeaderboardContent(title string, leaderboard [][]string) string {
-	var output string
-	output = strings.Title(title) + "\n"
-
 	size := 5
 	if len(leaderboard) < size {
 		size = len(leaderboard)
 	}
 	leaderboard = leaderboard[:size]
 
-	// width of the longest score field, for left-aligning the score column
-	scoreWidth := 0
-	for _, pair := range leaderboard {
-		if len(pair[1]) > scoreWidth {
-			scoreWidth = len(pair[1])
-		}
+	var b strings.Builder
+	b.WriteString(`<div class="lb-grid">`)
+	fmt.Fprintf(&b, `<div class="lb-title">%s</div>`, html.EscapeString(strings.Title(title)))
+	for _, row := range leaderboard {
+		fmt.Fprintf(
+			&b,
+			`<span class="lb-score">%s</span><span class="lb-user">(%s)</span>`,
+			html.EscapeString(row[1]),
+			html.EscapeString(row[0]),
+		)
 	}
-
-	for _, score := range leaderboard {
-		output = output + fmt.Sprintf("%-*s (%s)\n", scoreWidth, score[1], score[0])
-	}
-
-	return output
+	b.WriteString(`</div>`)
+	return b.String()
 }

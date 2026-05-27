@@ -56,6 +56,7 @@ type onscreenStyle struct {
 	DropShadow    bool         // text-shadow on/off
 	AnchorXPx     int          // center-x within the browser-source viewport (0 = use flex-center fallback)
 	FitWidthPx    int          // single-line width budget for shrink-to-fit (0 = no fit pass)
+	RenderAsHTML  bool         // inject content via innerHTML instead of textContent (server emits HTML for this onscreen)
 }
 
 var onscreenRegistry = map[string]onscreenStyle{
@@ -63,10 +64,11 @@ var onscreenRegistry = map[string]onscreenStyle{
 		Name: SlugMiddleText, FontCSS: `"Trebuchet MS", sans-serif`, FontSizePx: 18, ColorCSS: "#ffffff",
 	},
 	SlugLeaderboard: {
-		// Monospace font so the space-padded score column in
-		// users.LeaderboardContent renders as a true visual column —
-		// proportional fonts make padding-space alignment unreliable.
-		Name: SlugLeaderboard, FontCSS: `"Menlo", "Consolas", "Courier New", monospace`, FontSizePx: 18, ColorCSS: "#ffffff",
+		// Server emits an HTML grid (see users.LeaderboardContent) so the
+		// score column aligns via CSS rather than space-padding — any font
+		// works.
+		Name: SlugLeaderboard, FontCSS: `"Trebuchet MS", sans-serif`, FontSizePx: 18, ColorCSS: "#ffffff",
+		RenderAsHTML: true,
 	},
 	SlugLeftMessage: {
 		Name: SlugLeftMessage, FontCSS: `"Trebuchet MS", sans-serif`, FontSizePx: 28, MinFontSizePx: 18, ColorCSS: "#ffffff",
