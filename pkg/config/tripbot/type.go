@@ -51,4 +51,15 @@ type TripbotConfig struct {
 	// viewer reports to. Optional — when unset, !report falls through to
 	// slog/Sentry only and the bot keeps running.
 	DiscordAlertsWebhook string `envconfig:"DISCORD_ALERTS_WEBHOOK"`
+
+	// DiscordBotToken authenticates the live Discord bot session that
+	// serves slash commands. Optional — when unset, missing, or still at
+	// the AWS Secrets Manager placeholder value, pkg/discord skips
+	// session init entirely and the rest of the bot runs normally.
+	DiscordBotToken string `envconfig:"DISCORD_BOT_TOKEN"`
+	// DiscordGuildID is the Discord server snowflake the bot registers
+	// its slash commands against. Optional — leaving it empty in an
+	// env's ConfigMap is the supported way to keep the Discord session
+	// gated off without having to remove the token wiring.
+	DiscordGuildID string `envconfig:"DISCORD_GUILD_ID"`
 }

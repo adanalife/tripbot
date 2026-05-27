@@ -5,6 +5,12 @@
 
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
+## [Unreleased]
+
+### discord
+
+- **TripBot gets a live Discord bot session — first pass.** New `pkg/discord` opens a `bwmarrin/discordgo` gateway and registers four guild-scoped slash commands in ADanaLife: `/leaderboard` (monthly miles), `/totalleaderboard` (lifetime miles), `/guessleaderboard` (correct guesses this month), and a static ephemeral `/commands` listing the others. Names mirror the existing Twitch `!leaderboard` / `!totalleaderboard` / `!guessleaderboard` triggers so muscle memory transfers. Two new optional config fields (`DISCORD_BOT_TOKEN`, `DISCORD_GUILD_ID`); the bot stays disabled in any env where either is unset, empty, or still at the AWS Secrets Manager placeholder string — `pkg/discord.ShouldStart` is the single decision point that skips startup cleanly with one INFO log line. Every other failure path (auth failure, command-registration failure, gateway drop) is fail-open: tripbot's core IRC / EventSub paths are never blocked or crashed by Discord. Companion infra lands in `infra` (terraform SM containers + ESO + Deployment `envFrom`) and a setup runbook lives in the vault. Deferred to follow-up passes: OAuth Discord↔Twitch linking, `/miles <user>`, stream-state commands, retiring the existing `DISCORD_ALERTS_WEBHOOK`.
+
 ## [v2.16.1] — 2026-05-26
 
 Patch release. First post-launch cut. The inter-clip gap now hides behind a still frame of the next clip's opening rather than the broken-video overlay (still + fix). New `release-development` CI workflow publishes `:develop` multi-arch images on every push to develop, so stage-1 can ride develop without manual rebuilds. Admin panel learns to colour its env badge and put the env in `<title>` so prod and stage tabs stop looking identical. Chatbot's social roster modernises (`!bluesky` + `!tiktok` added, `!socialmedia` listing follows). Scoreboards filter zero-score rows and align in a monospace column; the `/onscreens/state.json` access-log flood gets demoted to debug.
