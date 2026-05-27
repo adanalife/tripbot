@@ -15,6 +15,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/chatbot"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
+	"github.com/adanalife/tripbot/pkg/discord"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/eventsub"
 	"github.com/adanalife/tripbot/pkg/helpers"
@@ -73,6 +74,11 @@ var client *twitch.Client
 
 var telemetryShutdown telemetry.ShutdownFunc
 
+// discordSession is set by startDiscord when the Discord bot is enabled
+// for this env; gracefulShutdown calls Stop on it to deregister the
+// per-guild slash commands. Nil when Discord stays gated off.
+var discordSession *discord.Session
+
 // main performs the various steps to get the bot running
 func main() {
 	slog.Info("tripbot starting", "version", version)
@@ -97,7 +103,29 @@ func main() {
 	updateSubscribers()
 	getCurrentUsers()
 	startEventSub(shutdownCtx)
+	startDiscord(shutdownCtx)
 	connectToTwitch()
+}
+
+// startDiscord brings up the bot's Discord slash-command session when
+// the env supplies the required config. Every failure path here logs
+// and returns so it can't block (or crash) tripbot startup — Discord
+// is additive to the core IRC / EventSub paths.
+func startDiscord(ctx context.Context) {
+	if ok, reason := discord.ShouldStart(c.Conf); !ok {
+		slog.InfoContext(ctx, "discord disabled", "reason", reason)
+		return
+	}
+	session, err := discord.New(c.Conf.DiscordBotToken, c.Conf.DiscordGuildID)
+	if err != nil {
+		slog.ErrorContext(ctx, "discord init failed", "err", err)
+		return
+	}
+	if err := session.Start(ctx); err != nil {
+		slog.ErrorContext(ctx, "discord start failed", "err", err)
+		return
+	}
+	discordSession = session
 }
 
 // startEventSub kicks off the EventSub WebSocket listener in a goroutine
@@ -348,6 +376,11 @@ func gracefulShutdown() {
 	// try and use !shutdown instead
 	//TODO: print different message if CurrentlyPlaying is ""
 	slog.Info("last played video", "file", video.CurrentlyPlaying().File())
+	if discordSession != nil {
+		if err := discordSession.Stop(); err != nil {
+			slog.Error("discord stop failed", "err", err)
+		}
+	}
 	users.Shutdown(context.Background())
 	err := database.Connection().Close()
 	if err != nil {
