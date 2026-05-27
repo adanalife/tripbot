@@ -547,11 +547,11 @@ func applyBroadcasterToken(tok oauthtokens.Token) {
 }
 
 // refreshOne rotates a single (provider="twitch", username) row if within
-// 30 minutes of expiry. applyInMemory writes the rotated token into the
+// 45 minutes of expiry. applyInMemory writes the rotated token into the
 // matching in-memory slot — also called on the empty-token path so the
 // caller's slot gets blanked (forcing reconnect / re-bootstrap signalling).
 //
-// force skips the 30-minute pre-expiry window: the hourly cron passes false
+// force skips the 45-minute pre-expiry window: the hourly cron passes false
 // (only rotate when close to expiry), while Reauth passes true to rotate
 // immediately after an auth failure regardless of the stored ExpiresAt (which
 // is unreliable after a DB restore — the dump's expiry says "valid" but Twitch
@@ -585,7 +585,12 @@ func refreshOne(ctx context.Context, username string, applyInMemory func(oauthto
 		return
 	}
 
-	if !force && time.Until(t.ExpiresAt) > 30*time.Minute {
+	// 45 min, not 30: Twitch's actual enforcement runs a few minutes early
+	// of the published ExpiresAt — the hourly cron at 30 min was missing the
+	// window and producing one self-healed 401 per 4h-ish token cycle (one
+	// Sentry event each). 45 min gives the cron 15 min of headroom before
+	// Twitch's variable enforcement kicks in.
+	if !force && time.Until(t.ExpiresAt) > 45*time.Minute {
 		return
 	}
 
