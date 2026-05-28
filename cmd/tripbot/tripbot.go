@@ -82,6 +82,12 @@ var telemetryShutdown telemetry.ShutdownFunc
 // per-guild slash commands. Nil when Discord stays gated off.
 var discordSession *discord.Session
 
+// flagClient is the process-wide feature flag evaluator. Initialised to an
+// empty in-memory client so unknown keys evaluate to false during the brief
+// startup window before startFeatureFlags swaps in the Postgres-backed
+// client — same fail-closed contract as pkg/feature.
+var flagClient feature.FlagClient = feature.NewInMemoryClient(nil)
+
 // main performs the various steps to get the bot running
 func main() {
 	slog.Info("tripbot starting", "version", version)
@@ -132,6 +138,7 @@ func startFeatureFlags(ctx context.Context) {
 			"err", err)
 		return
 	}
+	flagClient = fc
 	chatbot.SetFlagClient(fc)
 	go fc.Start(ctx)
 }
@@ -155,12 +162,17 @@ func startSilentDisconnectWatchdog(ctx context.Context) {
 }
 
 // startDiscord brings up the bot's Discord slash-command session when
-// the env supplies the required config. Every failure path here logs
-// and returns so it can't block (or crash) tripbot startup — Discord
-// is additive to the core IRC / EventSub paths.
+// the env supplies the required config and the discord.bot_enabled feature
+// flag is on. Every failure path here logs and returns so it can't block
+// (or crash) tripbot startup — Discord is additive to the core IRC /
+// EventSub paths.
 func startDiscord(ctx context.Context) {
 	if ok, reason := discord.ShouldStart(c.Conf); !ok {
 		slog.InfoContext(ctx, "discord disabled", "reason", reason)
+		return
+	}
+	if !flagClient.Bool(ctx, discord.FlagKey, feature.EvalContext{Env: c.Conf.Environment}) {
+		slog.InfoContext(ctx, "discord disabled by feature flag", "flag", discord.FlagKey)
 		return
 	}
 	session, err := discord.New(c.Conf.DiscordBotToken, c.Conf.DiscordGuildID)

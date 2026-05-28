@@ -16,6 +16,12 @@ import (
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 )
 
+// FlagKey is the feature flag that gates Discord bot startup. cmd/tripbot
+// evaluates it after the config-shaped ShouldStart check; when false (the
+// default until a row is inserted), startup is skipped and the bot stays
+// idle even in an env whose config is fully wired.
+const FlagKey = "discord.bot_enabled"
+
 // ShouldStart inspects the loaded config and returns whether to bring up
 // the Discord session. Returns (false, reason) for the three
 // intentionally-disabled cases (missing token, missing guild id,
