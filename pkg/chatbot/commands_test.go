@@ -54,6 +54,7 @@ func newTestApp(vid video.Video) *App {
 		IRC:        noopIRC{},
 		Sessions:   noopSessions{},
 		NowPlaying: noopNowPlaying{},
+		Flags:      noopFlags{},
 	}
 }
 

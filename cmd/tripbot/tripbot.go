@@ -18,6 +18,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/discord"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/eventsub"
+	"github.com/adanalife/tripbot/pkg/feature"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"github.com/adanalife/tripbot/pkg/obs"
@@ -98,6 +99,7 @@ func main() {
 	findInitialVideo()
 	users.InitLeaderboard(context.Background())
 	startCron()
+	startFeatureFlags(shutdownCtx)
 	loadTwitchToken(shutdownCtx)           // must precede chatbot.Initialize — provides the IRC token
 	refreshTokensIfNearExpiry(shutdownCtx) // closes the restart-desync gap with the hourly cron
 	setUpTwitchClient()                    // required for the below
@@ -107,6 +109,29 @@ func main() {
 	startDiscord(shutdownCtx)
 	startSilentDisconnectWatchdog(shutdownCtx)
 	connectToTwitch()
+}
+
+// featureFlagRefreshInterval is how often the Postgres-backed flag client
+// re-reads the feature_flags table. 30s is chat-acceptable lag for
+// dark-launches and kill-switches; revisit if a use case wants instant.
+const featureFlagRefreshInterval = 30 * time.Second
+
+// startFeatureFlags brings up the Postgres-backed feature flag client and
+// installs it into the chatbot package. Non-fatal: a startup failure (DB
+// hiccup, missing migration) logs loudly and leaves chatbot's package-level
+// empty in-memory client in place — every flag evaluates to its default
+// (false) until the next restart loads cleanly. Mirrors the loadTwitchToken
+// "stay up with limited functionality" pattern.
+func startFeatureFlags(ctx context.Context) {
+	fc, err := feature.NewPostgresClient(ctx, database.GormDB(), featureFlagRefreshInterval)
+	if err != nil {
+		slog.WarnContext(ctx, "feature flag client init failed; flags will default to off",
+			"fix", "ensure migration 013_create_feature_flags has run",
+			"err", err)
+		return
+	}
+	chatbot.SetFlagClient(fc)
+	go fc.Start(ctx)
 }
 
 // startSilentDisconnectWatchdog launches the goroutine that detects the

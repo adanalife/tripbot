@@ -10,6 +10,7 @@ import (
 	mylog "github.com/adanalife/tripbot/pkg/chatbot/log"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
+	"github.com/adanalife/tripbot/pkg/feature"
 	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	vlcClient "github.com/adanalife/tripbot/pkg/vlc-client"
@@ -51,6 +52,11 @@ type App struct {
 	// background audio source. Tests inject a fake; production uses
 	// realNowPlaying which polls SomaFM.
 	NowPlaying NowPlaying
+	// Flags evaluates feature flag values for command-time gating. Tests
+	// inject noopFlags{} (every key false); production uses realFlags which
+	// delegates to the Postgres-backed client cmd/tripbot installs via
+	// SetFlagClient once the DB connection is up.
+	Flags feature.FlagClient
 }
 
 // db returns the DB handle the App should use. Prefers an explicit a.DB
@@ -71,6 +77,7 @@ var defaultApp = &App{
 	IRC:        realIRC{},
 	Sessions:   realSessions{},
 	NowPlaying: newRealNowPlaying(),
+	Flags:      realFlags{},
 }
 
 // used to determine which help message to display
