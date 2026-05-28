@@ -20,6 +20,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/eventsub"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
+	"github.com/adanalife/tripbot/pkg/obs"
 	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
 	"github.com/adanalife/tripbot/pkg/server"
 	"github.com/adanalife/tripbot/pkg/telemetry"
@@ -104,7 +105,17 @@ func main() {
 	getCurrentUsers()
 	startEventSub(shutdownCtx)
 	startDiscord(shutdownCtx)
+	startSilentDisconnectWatchdog(shutdownCtx)
 	connectToTwitch()
+}
+
+// startSilentDisconnectWatchdog launches the goroutine that detects the
+// half-open RTMP state where OBS reports outputActive=true but Twitch's
+// API shows the channel offline, and force-restarts the stream after
+// 3 consecutive minute-spaced misalignments. First seen in prod on
+// 2026-05-27, ~30h into an OBS session.
+func startSilentDisconnectWatchdog(ctx context.Context) {
+	go obs.WatchSilentDisconnect(ctx, obs.DefaultWatchdogDeps(), 60*time.Second, 3, 10*time.Minute)
 }
 
 // startDiscord brings up the bot's Discord slash-command session when
