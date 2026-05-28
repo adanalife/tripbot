@@ -120,6 +120,16 @@ type navLink struct {
 	URL   string
 }
 
+// featureFlag is one row in the admin panel's "feature flags" section. Stripped
+// down from feature.Flag — the template only needs what it renders. The
+// target-removal date intentionally isn't displayed (the panel is phone-sized;
+// the date is still on feature.Flag for the future admin CRUD UI / audit job).
+type featureFlag struct {
+	Key         string
+	Enabled     bool
+	Description string
+}
+
 // adminData is the template payload.
 type adminData struct {
 	Channel        string // broadcaster Twitch username; renders as text + broadcaster link
@@ -134,6 +144,7 @@ type adminData struct {
 	Stream         streamControl
 	PanelHost      string // host the panel was reached at; the Twitch embed needs it as parent=
 	Links          []navLink
+	Flags          []featureFlag // feature flags + their state; empty hides the section
 	Reauth         []mytwitch.AccountReauth // accounts whose token needs re-auth; empty when healthy
 }
 
@@ -160,6 +171,7 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 		Stream:   gatherStream(r.Context()),
 		PanelHost: panelHost(r),
 		Links:    gatherLinks(),
+		Flags:    gatherFlags(r.Context()),
 		Reauth:   accountsNeedingReauth(),
 	}
 
@@ -227,6 +239,26 @@ func siblingStatus(ctx context.Context, name, host string) serviceStatus {
 // rounded to the second — matches the meta-line uptime format.
 func uptimeSince(t time.Time) string {
 	return time.Since(t).Round(time.Second).String()
+}
+
+// gatherFlags reads the FlagClient's last-known snapshot and shapes each
+// flag into the small display row the template renders. Returns nil when
+// no flags are loaded yet (startup window before SetFlagClient) so the
+// template's {{if .Flags}} hides the section cleanly.
+func gatherFlags(ctx context.Context) []featureFlag {
+	flags := flagSnapshot(ctx)
+	if len(flags) == 0 {
+		return nil
+	}
+	out := make([]featureFlag, 0, len(flags))
+	for _, f := range flags {
+		out = append(out, featureFlag{
+			Key:         f.Key,
+			Enabled:     f.Enabled,
+			Description: f.Description,
+		})
+	}
+	return out
 }
 
 // gatherStream asks OBS for the current streaming state. A reachability
@@ -604,12 +636,15 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
   /* Shared disclosure-row styling — controls / now-playing / stream-preview
      all default closed and reveal on click. Same look, just different
      summary labels. */
-  details.stream-preview, details.now-playing { margin:24px 0 0; }
-  details.stream-preview > summary, details.now-playing > summary { font-size:.8em; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); cursor:pointer; padding:8px 0; border-top:1px solid var(--divider); list-style:none; }
-  details.stream-preview > summary::-webkit-details-marker, details.now-playing > summary::-webkit-details-marker { display:none; }
-  details.stream-preview > summary::before, details.now-playing > summary::before { content:"▸ "; color:var(--dim); display:inline-block; }
-  details.stream-preview[open] > summary::before, details.now-playing[open] > summary::before { content:"▾ "; }
-  details.stream-preview > summary:hover, details.now-playing > summary:hover { color:var(--fg); }
+  details.stream-preview, details.now-playing, details.feature-flags { margin:24px 0 0; }
+  details.stream-preview > summary, details.now-playing > summary, details.feature-flags > summary { font-size:.8em; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); cursor:pointer; padding:8px 0; border-top:1px solid var(--divider); list-style:none; }
+  details.stream-preview > summary::-webkit-details-marker, details.now-playing > summary::-webkit-details-marker, details.feature-flags > summary::-webkit-details-marker { display:none; }
+  details.stream-preview > summary::before, details.now-playing > summary::before, details.feature-flags > summary::before { content:"▸ "; color:var(--dim); display:inline-block; }
+  details.stream-preview[open] > summary::before, details.now-playing[open] > summary::before, details.feature-flags[open] > summary::before { content:"▾ "; }
+  details.stream-preview > summary:hover, details.now-playing > summary:hover, details.feature-flags > summary:hover { color:var(--fg); }
+  /* feature-flags rows reuse .row but the name column carries the flag key
+     in monospace; description trails after a separator dot like elsewhere. */
+  .row.flag-row .name code { font-family:var(--mono); font-size:.95em; }
   .stream-frame { aspect-ratio:16 / 9; width:100%; margin-top:10px; background:#000; border-radius:6px; overflow:hidden; }
   .stream-frame iframe { width:100%; height:100%; border:none; display:block; }
   a { color:#58a6ff; text-decoration:none; }
@@ -699,6 +734,21 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
               allowfullscreen
               title="Twitch stream preview"></iframe>
     </div>
+  </details>
+  {{end}}
+
+  {{if .Flags}}
+  <details class="feature-flags">
+    <summary>feature flags</summary>
+    <ul class="flags">
+      {{range .Flags}}
+      <li class="row flag-row">
+        <span class="dot {{if .Enabled}}up{{else}}down{{end}}"></span>
+        <span class="name"><code>{{.Key}}</code>{{if .Description}}<span class="state"> · {{.Description}}</span>{{end}}</span>
+        <span class="status">{{if .Enabled}}on{{else}}off{{end}}</span>
+      </li>
+      {{end}}
+    </ul>
   </details>
   {{end}}
 

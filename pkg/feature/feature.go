@@ -8,15 +8,24 @@
 // the OpenFeature SDK is mechanical.
 package feature
 
-import "context"
+import (
+	"context"
+	"sort"
+	"time"
+)
 
 // FlagClient evaluates feature flag values for the application.
 //
 // Unknown flag keys evaluate to false — a flag-gated feature stays off until
 // the flag exists in the backing store. This is a safety property: a typo
 // in a key won't accidentally expose a feature.
+//
+// Snapshot returns the current set of known flags for admin / diagnostic
+// surfaces, sorted by key. It's distinct from the hot Bool path: Bool to
+// evaluate a single key, Snapshot to enumerate.
 type FlagClient interface {
 	Bool(ctx context.Context, key string, evalCtx EvalContext) bool
+	Snapshot(ctx context.Context) []Flag
 }
 
 // EvalContext carries the targeting attributes a flag is evaluated against.
@@ -30,12 +39,21 @@ type EvalContext struct {
 }
 
 // Flag is the resolved targeting shape for one flag, as held by clients in
-// their in-memory snapshot.
+// their in-memory snapshot. Description and TargetRemovalDate are loaded
+// for the admin-panel surface; evaluate ignores them.
 type Flag struct {
 	Key                 string
+	Description         string
 	Enabled             bool
 	EnabledForUsernames []string
 	EnabledForRoles     []string
+	TargetRemovalDate   time.Time
+}
+
+// sortFlags orders a slice of flags by key in place — stable order is what
+// the admin panel renders, and what tests assert against.
+func sortFlags(fs []Flag) {
+	sort.Slice(fs, func(i, j int) bool { return fs[i].Key < fs[j].Key })
 }
 
 // evaluate applies the v1 targeting rule:

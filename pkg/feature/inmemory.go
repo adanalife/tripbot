@@ -26,3 +26,13 @@ func (c *InMemoryClient) Bool(_ context.Context, key string, evalCtx EvalContext
 	}
 	return evaluate(f, evalCtx)
 }
+
+// Snapshot returns every flag in the in-memory map, sorted by key.
+func (c *InMemoryClient) Snapshot(_ context.Context) []Flag {
+	out := make([]Flag, 0, len(c.flags))
+	for _, f := range c.flags {
+		out = append(out, f)
+	}
+	sortFlags(out)
+	return out
+}

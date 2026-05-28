@@ -9,6 +9,7 @@ All notable changes to TripBot. Format follows [Keep a Changelog](https://keepac
 
 ### admin panel
 
+- **Feature flags section on the admin panel.** Read-only disclosure under "now playing" that lists every flag the `FlagClient` knows about — key (monospaced), description, and on/off dot. Hidden when no flags are loaded (during the startup window between the HTTP server starting and `startFeatureFlags` swapping in the Postgres-backed client). Reads `FlagClient.Snapshot(ctx)`, a new interface method added to `pkg/feature` and implemented on both the in-memory and Postgres clients; `Flag` grows `Description` + `TargetRemovalDate` fields (the `flagRow` GORM model already loaded them — see #710's note), though the date is held back from the render so the panel stays phone-sized. `cmd/tripbot` installs the Postgres-backed client into `pkg/server` via the same `SetFlagClient` pattern used for `chatbot.SetFlagClient`. Foundation for the planned `/admin/flags` CRUD endpoints (PR #4 in the #710 stack).
 - **Stream preview defaults to expanded.** The Twitch player disclosure now opens on page load instead of needing a click. Iframe wiring keeps the existing collapse-to-pause behaviour (collapse swaps `src` to `about:blank` so audio + bandwidth stop), and re-expanding restores the player from `data-src`. Initial render bootstraps `src` directly when the disclosure starts open since the `toggle` event only fires on user interaction.
 
 ### discord

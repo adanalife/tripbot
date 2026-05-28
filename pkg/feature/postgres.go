@@ -30,9 +30,11 @@ func (flagRow) TableName() string { return "feature_flags" }
 func (r flagRow) toFlag() Flag {
 	return Flag{
 		Key:                 r.Key,
+		Description:         r.Description,
 		Enabled:             r.Enabled,
 		EnabledForUsernames: []string(r.EnabledForUsernames),
 		EnabledForRoles:     []string(r.EnabledForRoles),
+		TargetRemovalDate:   r.TargetRemovalDate,
 	}
 }
 
@@ -129,4 +131,18 @@ func (c *PostgresClient) Bool(_ context.Context, key string, evalCtx EvalContext
 		return false
 	}
 	return evaluate(f, evalCtx)
+}
+
+// Snapshot returns every cached flag, sorted by key. Reads the in-memory
+// map under RLock — no DB hit. Reflects the most recent successful refresh;
+// during a transient DB outage this is still the last-known-good set.
+func (c *PostgresClient) Snapshot(_ context.Context) []Flag {
+	c.mu.RLock()
+	out := make([]Flag, 0, len(c.flags))
+	for _, f := range c.flags {
+		out = append(out, f)
+	}
+	c.mu.RUnlock()
+	sortFlags(out)
+	return out
 }

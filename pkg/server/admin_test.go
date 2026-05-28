@@ -10,6 +10,7 @@ import (
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
+	"github.com/adanalife/tripbot/pkg/feature"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/video"
 	"github.com/gorilla/mux"
@@ -503,5 +504,79 @@ func TestAdminHandler_NoReauthPromptWhenHealthy(t *testing.T) {
 
 	if strings.Contains(rec.Body.String(), "re-authenticate") {
 		t.Errorf("re-auth prompt should be hidden when no account needs re-auth")
+	}
+}
+
+func withFlags(t *testing.T, flags map[string]feature.Flag) {
+	t.Helper()
+	saved := flagClient
+	SetFlagClient(feature.NewInMemoryClient(flags))
+	t.Cleanup(func() {
+		flagMu.Lock()
+		flagClient = saved
+		flagMu.Unlock()
+	})
+}
+
+func TestAdminHandler_RendersFeatureFlagsWhenLoaded(t *testing.T) {
+	defer SetTwitchConnected(false)
+	SetTwitchConnected(true)
+	withNowPlaying(t, nowPlayingTrack{})
+	withReauth(t, nil)
+	withConf(t, func() { c.Conf.VlcServerHost = "" })
+	withFlags(t, map[string]feature.Flag{
+		"discord.bot_enabled": {
+			Key:               "discord.bot_enabled",
+			Description:       "Gates pkg/discord startup.",
+			Enabled:           true,
+			TargetRemovalDate: time.Date(2026, 11, 28, 0, 0, 0, 0, time.UTC),
+		},
+		"chatbot.experimental": {
+			Key:               "chatbot.experimental",
+			Description:       "Experimental chatbot path.",
+			Enabled:           false,
+			TargetRemovalDate: time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC),
+		},
+	})
+
+	rec := httptest.NewRecorder()
+	adminHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+
+	body := rec.Body.String()
+	for _, want := range []string{
+		"feature flags",                  // disclosure label
+		"<code>chatbot.experimental</code>", // monospace key
+		"<code>discord.bot_enabled</code>",
+		"Gates pkg/discord startup.",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body missing %q", want)
+		}
+	}
+	// Target-removal date is intentionally omitted from the panel render — it's
+	// metadata for the future audit job / admin CRUD UI, not for the read-only
+	// status surface — so it should never appear.
+	if strings.Contains(body, "remove by") || strings.Contains(body, "2026-11-28") {
+		t.Errorf("panel should not render target_removal_date")
+	}
+	// Sort order: keys ascend, so chatbot.experimental comes before discord.bot_enabled.
+	if i, j := strings.Index(body, "chatbot.experimental"), strings.Index(body, "discord.bot_enabled"); i < 0 || j < 0 || i > j {
+		t.Errorf("expected chatbot.experimental row before discord.bot_enabled; got positions %d, %d", i, j)
+	}
+}
+
+func TestAdminHandler_HidesFeatureFlagsSectionWhenEmpty(t *testing.T) {
+	defer SetTwitchConnected(false)
+	SetTwitchConnected(true)
+	withNowPlaying(t, nowPlayingTrack{})
+	withReauth(t, nil)
+	withConf(t, func() { c.Conf.VlcServerHost = "" })
+	withFlags(t, nil) // no flags loaded
+
+	rec := httptest.NewRecorder()
+	adminHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+
+	if strings.Contains(rec.Body.String(), "feature flags") {
+		t.Errorf("feature flags section should be hidden when no flags are loaded")
 	}
 }

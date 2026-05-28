@@ -20,6 +20,13 @@ func (realFlags) Bool(ctx context.Context, key string, evalCtx feature.EvalConte
 	return c.Bool(ctx, key, evalCtx)
 }
 
+func (realFlags) Snapshot(ctx context.Context) []feature.Flag {
+	flagMu.RLock()
+	c := flagClient
+	flagMu.RUnlock()
+	return c.Snapshot(ctx)
+}
+
 // flagClient is the FlagClient realFlags delegates to. Initialised to an
 // empty in-memory client so every key evaluates to false during the brief
 // startup window before cmd/tripbot swaps in the Postgres-backed client —
