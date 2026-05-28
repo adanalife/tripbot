@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 
@@ -143,6 +144,7 @@ func (s *Session) runCommands(ctx context.Context, i *discordgo.InteractionCreat
 		Description: body,
 		Color:       0xff7a00,
 	}
+	start := time.Now()
 	err := s.s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
@@ -150,9 +152,12 @@ func (s *Session) runCommands(ctx context.Context, i *discordgo.InteractionCreat
 			Flags:  discordgo.MessageFlagsEphemeral,
 		},
 	})
+	elapsed := time.Since(start)
 	if err != nil {
-		slog.ErrorContext(ctx, "discord /commands reply failed", "err", err)
+		slog.ErrorContext(ctx, "discord /commands reply failed", "err", err, "elapsed", elapsed.String())
+		return
 	}
+	slog.InfoContext(ctx, "discord /commands reply ok", "elapsed", elapsed.String())
 }
 
 // deferReply tells Discord "I'll respond shortly" — gives us the full
