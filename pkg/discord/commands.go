@@ -94,8 +94,7 @@ func (s *Session) runLeaderboard(
 	scoreboardFn func() string,
 	filterZeros bool,
 ) {
-	if err := s.deferReply(i); err != nil {
-		slog.ErrorContext(ctx, "discord defer reply failed", "err", err, "command", title)
+	if err := s.deferReply(ctx, i); err != nil {
 		return
 	}
 	entries := scoreboards.TopUsers(ctx, scoreboardFn(), leaderboardSize)
@@ -115,7 +114,7 @@ func (s *Session) runLeaderboard(
 // by the users.UpdateLeaderboard cron. No DB query needed at command
 // time.
 func (s *Session) runLifetimeLeaderboard(ctx context.Context, i *discordgo.InteractionCreate) {
-	if err := s.deferReply(i); err != nil {
+	if err := s.deferReply(ctx, i); err != nil {
 		slog.ErrorContext(ctx, "discord defer reply failed", "err", err, "command", "totalleaderboard")
 		return
 	}
@@ -164,23 +163,41 @@ func (s *Session) runCommands(ctx context.Context, i *discordgo.InteractionCreat
 // 15-minute interaction-token window instead of the 3-second initial
 // window. Use for any handler that hits the DB or otherwise might
 // exceed 3 seconds.
-func (s *Session) deferReply(i *discordgo.InteractionCreate) error {
-	return s.s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+func (s *Session) deferReply(ctx context.Context, i *discordgo.InteractionCreate) error {
+	start := time.Now()
+	err := s.s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
 	})
+	elapsed := time.Since(start)
+	if err != nil {
+		slog.ErrorContext(ctx, "discord defer reply failed", "err", err, "elapsed", elapsed.String())
+		return err
+	}
+	slog.InfoContext(ctx, "discord defer reply ok", "elapsed", elapsed.String())
+	return nil
 }
 
 func (s *Session) editReplyEmbed(ctx context.Context, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) {
 	embeds := []*discordgo.MessageEmbed{embed}
-	if _, err := s.s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Embeds: &embeds}); err != nil {
-		slog.ErrorContext(ctx, "discord edit embed reply failed", "err", err)
+	start := time.Now()
+	_, err := s.s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Embeds: &embeds})
+	elapsed := time.Since(start)
+	if err != nil {
+		slog.ErrorContext(ctx, "discord edit embed reply failed", "err", err, "elapsed", elapsed.String())
+		return
 	}
+	slog.InfoContext(ctx, "discord edit embed reply ok", "elapsed", elapsed.String())
 }
 
 func (s *Session) editReplyText(ctx context.Context, i *discordgo.InteractionCreate, text string) {
-	if _, err := s.s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: &text}); err != nil {
-		slog.ErrorContext(ctx, "discord edit text reply failed", "err", err)
+	start := time.Now()
+	_, err := s.s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: &text})
+	elapsed := time.Since(start)
+	if err != nil {
+		slog.ErrorContext(ctx, "discord edit text reply failed", "err", err, "elapsed", elapsed.String())
+		return
 	}
+	slog.InfoContext(ctx, "discord edit text reply ok", "elapsed", elapsed.String())
 }
 
 func (s *Session) replyEphemeral(ctx context.Context, i *discordgo.InteractionCreate, text string) {
