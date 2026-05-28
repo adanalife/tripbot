@@ -55,6 +55,7 @@ func newTestApp(vid video.Video) *App {
 		Sessions:   noopSessions{},
 		NowPlaying: noopNowPlaying{},
 		Flags:      noopFlags{},
+		NATS:       noopNATS{},
 	}
 }
 

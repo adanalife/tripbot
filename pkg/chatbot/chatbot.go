@@ -57,6 +57,11 @@ type App struct {
 	// delegates to the Postgres-backed client cmd/tripbot installs via
 	// SetFlagClient once the DB connection is up.
 	Flags feature.FlagClient
+	// NATS is the fire-and-forget pubsub surface. Tests inject a
+	// recordingNATS to assert on publishes; production uses realNATS
+	// which delegates to the pkg/natsclient singleton (no-op when
+	// NATS_URL is empty).
+	NATS NATS
 }
 
 // db returns the DB handle the App should use. Prefers an explicit a.DB
@@ -71,13 +76,14 @@ func (a *App) db() *gorm.DB {
 
 var defaultApp = &App{
 	// DB stays nil; commands use a.db() which falls back to database.GormDB().
-	Onscreens:  realOnscreens{c: onscreensClient.New(c.Conf.OnscreensServerHost)},
+	Onscreens:  realOnscreens{c: onscreensClient.New(c.Conf.OnscreensServerHost), nats: realNATS{}, env: c.Conf.Environment},
 	VLC:        realVLC{c: vlcClient.New(c.Conf.VlcServerHost)},
 	Video:      realVideo{},
 	IRC:        realIRC{},
 	Sessions:   realSessions{},
 	NowPlaying: newRealNowPlaying(),
 	Flags:      realFlags{},
+	NATS:       realNATS{},
 }
 
 // used to determine which help message to display
