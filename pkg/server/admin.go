@@ -727,7 +727,7 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
   </ul>
 
   {{if and .PreviewChannel .PanelHost}}
-  <details class="stream-preview" id="stream-preview">
+  <details class="stream-preview" id="stream-preview" open>
     <summary>stream preview</summary>
     <div class="stream-frame">
       <iframe data-src="https://player.twitch.tv/?channel={{.PreviewChannel}}&parent={{.PanelHost}}&muted=true&autoplay=true"
@@ -799,21 +799,20 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
   </div>
 </main>
 <script>
-// Stream-preview lazy-load. The Twitch player iframe is ~2MB; we don't want
-// to fetch it on every panel render, only when the operator actually expands
-// the disclosure. On collapse we point it at about:blank so the player stops
-// (otherwise audio + bandwidth keep going even when the section's hidden).
+// Stream-preview iframe wiring. The disclosure defaults to open so the
+// preview is visible on load — initial paint sets src from data-src.
+// Collapse swaps src to about:blank so the player stops cleanly (audio +
+// bandwidth would otherwise keep going), and re-expanding restores it.
 (function() {
   const details = document.getElementById('stream-preview');
   if (!details) return;
   const iframe = details.querySelector('iframe');
   if (!iframe) return;
+  const load = () => { iframe.src = iframe.dataset.src; };
+  const unload = () => { iframe.src = 'about:blank'; };
+  if (details.open) load();
   details.addEventListener('toggle', () => {
-    if (details.open) {
-      iframe.src = iframe.dataset.src;
-    } else {
-      iframe.src = 'about:blank';
-    }
+    if (details.open) load(); else unload();
   });
 })();
 
