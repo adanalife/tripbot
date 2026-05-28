@@ -22,9 +22,16 @@ type WatchdogDeps struct {
 
 // DefaultWatchdogDeps wires WatchSilentDisconnect's hooks to the real OBS
 // WebSocket + Helix client + StopStream/StartStream sequence.
+//
+// OBSActive uses GetStreamActiveSteady (not GetStreamStatus) so the
+// watchdog skips counting misses when OBS already knows the stream is
+// failing — outputReconnecting=true means OBS will handle recovery
+// itself, and a watchdog-forced restart there would just race OBS's
+// reconnect. Only the truly silent half-open (outputActive=true AND
+// outputReconnecting=false AND Twitch offline) needs intervention.
 func DefaultWatchdogDeps() WatchdogDeps {
 	return WatchdogDeps{
-		OBSActive: GetStreamStatus,
+		OBSActive: GetStreamActiveSteady,
 		TwitchLive: func(ctx context.Context) (bool, error) {
 			live, err := twitch.IsChannelLive(ctx, c.Conf.ChannelName)
 			if err == nil {
