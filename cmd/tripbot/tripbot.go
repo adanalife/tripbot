@@ -22,6 +22,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"github.com/adanalife/tripbot/pkg/obs"
+	"github.com/adanalife/tripbot/pkg/natsclient"
 	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
 	"github.com/adanalife/tripbot/pkg/server"
 	"github.com/adanalife/tripbot/pkg/telemetry"
@@ -106,6 +107,7 @@ func main() {
 	updateSubscribers()
 	getCurrentUsers()
 	startEventSub(shutdownCtx)
+	startNATS()
 	startDiscord(shutdownCtx)
 	startSilentDisconnectWatchdog(shutdownCtx)
 	connectToTwitch()
@@ -132,6 +134,15 @@ func startFeatureFlags(ctx context.Context) {
 	}
 	chatbot.SetFlagClient(fc)
 	go fc.Start(ctx)
+}
+
+// startNATS connects to the in-cluster NATS broker (phase 1 of the
+// pubsub migration). Optional — when NATS_URL is empty the connection
+// is skipped and publishes no-op silently; chatbot.realOnscreens.
+// ShowMiddleText still mirrors to NATS but the publish becomes a nil
+// check, leaving HTTP as the sole transport.
+func startNATS() {
+	natsclient.Connect(c.Conf.NatsURL, "tripbot")
 }
 
 // startSilentDisconnectWatchdog launches the goroutine that detects the
