@@ -15,10 +15,14 @@ import (
 	"github.com/adanalife/tripbot/pkg/chatbot"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
+	"github.com/adanalife/tripbot/pkg/discord"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/eventsub"
+	"github.com/adanalife/tripbot/pkg/feature"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
+	"github.com/adanalife/tripbot/pkg/obs"
+	"github.com/adanalife/tripbot/pkg/natsclient"
 	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
 	"github.com/adanalife/tripbot/pkg/server"
 	"github.com/adanalife/tripbot/pkg/telemetry"
@@ -73,6 +77,17 @@ var client *twitch.Client
 
 var telemetryShutdown telemetry.ShutdownFunc
 
+// discordSession is set by startDiscord when the Discord bot is enabled
+// for this env; gracefulShutdown calls Stop on it to deregister the
+// per-guild slash commands. Nil when Discord stays gated off.
+var discordSession *discord.Session
+
+// flagClient is the process-wide feature flag evaluator. Initialised to an
+// empty in-memory client so unknown keys evaluate to false during the brief
+// startup window before startFeatureFlags swaps in the Postgres-backed
+// client — same fail-closed contract as pkg/feature.
+var flagClient feature.FlagClient = feature.NewInMemoryClient(nil)
+
 // main performs the various steps to get the bot running
 func main() {
 	slog.Info("tripbot starting", "version", version)
@@ -91,12 +106,86 @@ func main() {
 	findInitialVideo()
 	users.InitLeaderboard(context.Background())
 	startCron()
-	loadTwitchToken(shutdownCtx) // must precede chatbot.Initialize — provides the IRC token
-	setUpTwitchClient()          // required for the below
+	startFeatureFlags(shutdownCtx)
+	loadTwitchToken(shutdownCtx)           // must precede chatbot.Initialize — provides the IRC token
+	refreshTokensIfNearExpiry(shutdownCtx) // closes the restart-desync gap with the hourly cron
+	setUpTwitchClient()                    // required for the below
 	updateSubscribers()
 	getCurrentUsers()
 	startEventSub(shutdownCtx)
+	startNATS()
+	startDiscord(shutdownCtx)
+	startSilentDisconnectWatchdog(shutdownCtx)
 	connectToTwitch()
+}
+
+// featureFlagRefreshInterval is how often the Postgres-backed flag client
+// re-reads the feature_flags table. 30s is chat-acceptable lag for
+// dark-launches and kill-switches; revisit if a use case wants instant.
+const featureFlagRefreshInterval = 30 * time.Second
+
+// startFeatureFlags brings up the Postgres-backed feature flag client and
+// installs it into the chatbot package. Non-fatal: a startup failure (DB
+// hiccup, missing migration) logs loudly and leaves chatbot's package-level
+// empty in-memory client in place — every flag evaluates to its default
+// (false) until the next restart loads cleanly. Mirrors the loadTwitchToken
+// "stay up with limited functionality" pattern.
+func startFeatureFlags(ctx context.Context) {
+	fc, err := feature.NewPostgresClient(ctx, database.GormDB(), featureFlagRefreshInterval)
+	if err != nil {
+		slog.WarnContext(ctx, "feature flag client init failed; flags will default to off",
+			"fix", "ensure migration 013_create_feature_flags has run",
+			"err", err)
+		return
+	}
+	flagClient = fc
+	chatbot.SetFlagClient(fc)
+	server.SetFlagClient(fc)
+	go fc.Start(ctx)
+}
+
+// startNATS connects to the in-cluster NATS broker (phase 1 of the
+// pubsub migration). Optional — when NATS_URL is empty the connection
+// is skipped and publishes no-op silently; chatbot.realOnscreens.
+// ShowMiddleText still mirrors to NATS but the publish becomes a nil
+// check, leaving HTTP as the sole transport.
+func startNATS() {
+	natsclient.Connect(c.Conf.NatsURL, "tripbot")
+}
+
+// startSilentDisconnectWatchdog launches the goroutine that detects the
+// half-open RTMP state where OBS reports outputActive=true but Twitch's
+// API shows the channel offline, and force-restarts the stream after
+// 3 consecutive minute-spaced misalignments. First seen in prod on
+// 2026-05-27, ~30h into an OBS session.
+func startSilentDisconnectWatchdog(ctx context.Context) {
+	go obs.WatchSilentDisconnect(ctx, obs.DefaultWatchdogDeps(), 60*time.Second, 3, 10*time.Minute)
+}
+
+// startDiscord brings up the bot's Discord slash-command session when
+// the env supplies the required config and the discord.bot_enabled feature
+// flag is on. Every failure path here logs and returns so it can't block
+// (or crash) tripbot startup — Discord is additive to the core IRC /
+// EventSub paths.
+func startDiscord(ctx context.Context) {
+	if ok, reason := discord.ShouldStart(c.Conf); !ok {
+		slog.InfoContext(ctx, "discord disabled", "reason", reason)
+		return
+	}
+	if !flagClient.Bool(ctx, discord.FlagKey, feature.EvalContext{Env: c.Conf.Environment}) {
+		slog.InfoContext(ctx, "discord disabled by feature flag", "flag", discord.FlagKey)
+		return
+	}
+	session, err := discord.New(c.Conf.DiscordBotToken, c.Conf.DiscordGuildID)
+	if err != nil {
+		slog.ErrorContext(ctx, "discord init failed", "err", err)
+		return
+	}
+	if err := session.Start(ctx); err != nil {
+		slog.ErrorContext(ctx, "discord start failed", "err", err)
+		return
+	}
+	discordSession = session
 }
 
 // startEventSub kicks off the EventSub WebSocket listener in a goroutine
@@ -256,6 +345,17 @@ func pollForTwitchToken(ctx context.Context) {
 	}
 }
 
+// refreshTokensIfNearExpiry runs the same refresh that the hourly cron does,
+// once, synchronously, at startup. gocron's DurationJob fires its first tick
+// one full interval after Scheduler.Start(), so a pod restart that lands
+// within the refresh window (or after expiry) would otherwise leave the
+// in-memory token stale until the cron catches up — up to an hour. refreshOne
+// early-returns when the stored token is healthy, so this is a no-op in the
+// common case.
+func refreshTokensIfNearExpiry(ctx context.Context) {
+	mytwitch.RefreshUserAccessToken(ctx)
+}
+
 // setUpTwitchClient sets up the Twitch client,
 // used by many bot features
 func setUpTwitchClient() {
@@ -336,6 +436,11 @@ func gracefulShutdown() {
 	// try and use !shutdown instead
 	//TODO: print different message if CurrentlyPlaying is ""
 	slog.Info("last played video", "file", video.CurrentlyPlaying().File())
+	if discordSession != nil {
+		if err := discordSession.Stop(); err != nil {
+			slog.Error("discord stop failed", "err", err)
+		}
+	}
 	users.Shutdown(context.Background())
 	err := database.Connection().Close()
 	if err != nil {

@@ -87,6 +87,10 @@ func New(cfg Config) *Server {
 func (s *Server) Start(ctx context.Context) error {
 	slog.InfoContext(ctx, "starting onscreens-server web server", "bind", c.Conf.OnscreensServerBindAddress)
 
+	// Attach NATS subscribers. No-op when the natsclient singleton is
+	// nil (NATS_URL unset); HTTP remains the sole transport in that case.
+	s.StartNATSSubscribers(ctx)
+
 	r := mux.NewRouter()
 
 	// healthcheck endpoints

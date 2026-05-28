@@ -15,6 +15,7 @@ import (
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
+	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"github.com/adanalife/tripbot/pkg/oauthtokens"
 	"github.com/nicklaw5/helix/v2"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
@@ -236,12 +237,16 @@ func LoadFromDB() error {
 	if currentTwitchClient != nil {
 		currentTwitchClient.SetUserAccessToken(t.AccessToken)
 	}
+	instrumentation.TwitchTokenExpiry.SetExpiresAt("bot", t.ExpiresAt)
 
 	if broadcasterUser == "" || broadcasterUser == botUser {
 		return nil
 	}
 	bt, berr := oauthtokens.Get("twitch", broadcasterUser)
 	if berr != nil {
+		// Broadcaster row absent / unreadable — surface as "no token" so the
+		// alert can fire instead of going silent on a missing series.
+		instrumentation.TwitchTokenExpiry.SetExpiresAt("broadcaster", time.Time{})
 		if errors.Is(berr, oauthtokens.ErrNoToken) {
 			slog.Warn("no broadcaster oauth_tokens row; subscriber/follower polling will skip until `task tripbot:auth:bootstrap:broadcaster` seeds it",
 				"login_as", broadcasterUser,
@@ -257,6 +262,7 @@ func LoadFromDB() error {
 	if broadcasterTwitchClient != nil {
 		broadcasterTwitchClient.SetUserAccessToken(bt.AccessToken)
 	}
+	instrumentation.TwitchTokenExpiry.SetExpiresAt("broadcaster", bt.ExpiresAt)
 	return nil
 }
 
@@ -516,7 +522,8 @@ func Reauth(ctx context.Context, account string) {
 
 // applyBotToken writes the rotated token into the bot slot + primes the
 // bot helix client. Passed to refreshOne so the per-identity slot logic
-// stays out of the refresh dance itself.
+// stays out of the refresh dance itself. A zero Token (the refresh-failed
+// signal) flows through naturally: the slot blanks and the gauge records 0.
 func applyBotToken(tok oauthtokens.Token) {
 	tokenMu.Lock()
 	currentUserToken = tok
@@ -524,6 +531,7 @@ func applyBotToken(tok oauthtokens.Token) {
 	if currentTwitchClient != nil {
 		currentTwitchClient.SetUserAccessToken(tok.AccessToken)
 	}
+	instrumentation.TwitchTokenExpiry.SetExpiresAt("bot", tok.ExpiresAt)
 }
 
 // applyBroadcasterToken writes the rotated token into the broadcaster slot
@@ -535,14 +543,15 @@ func applyBroadcasterToken(tok oauthtokens.Token) {
 	if broadcasterTwitchClient != nil {
 		broadcasterTwitchClient.SetUserAccessToken(tok.AccessToken)
 	}
+	instrumentation.TwitchTokenExpiry.SetExpiresAt("broadcaster", tok.ExpiresAt)
 }
 
 // refreshOne rotates a single (provider="twitch", username) row if within
-// 30 minutes of expiry. applyInMemory writes the rotated token into the
+// 45 minutes of expiry. applyInMemory writes the rotated token into the
 // matching in-memory slot — also called on the empty-token path so the
 // caller's slot gets blanked (forcing reconnect / re-bootstrap signalling).
 //
-// force skips the 30-minute pre-expiry window: the hourly cron passes false
+// force skips the 45-minute pre-expiry window: the hourly cron passes false
 // (only rotate when close to expiry), while Reauth passes true to rotate
 // immediately after an auth failure regardless of the stored ExpiresAt (which
 // is unreliable after a DB restore — the dump's expiry says "valid" but Twitch
@@ -576,7 +585,12 @@ func refreshOne(ctx context.Context, username string, applyInMemory func(oauthto
 		return
 	}
 
-	if !force && time.Until(t.ExpiresAt) > 30*time.Minute {
+	// 45 min, not 30: Twitch's actual enforcement runs a few minutes early
+	// of the published ExpiresAt — the hourly cron at 30 min was missing the
+	// window and producing one self-healed 401 per 4h-ish token cycle (one
+	// Sentry event each). 45 min gives the cron 15 min of headroom before
+	// Twitch's variable enforcement kicks in.
+	if !force && time.Until(t.ExpiresAt) > 45*time.Minute {
 		return
 	}
 
