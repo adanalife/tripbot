@@ -6,6 +6,7 @@ import (
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
+	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"github.com/adanalife/tripbot/pkg/twitch"
 )
 
@@ -25,7 +26,11 @@ func DefaultWatchdogDeps() WatchdogDeps {
 	return WatchdogDeps{
 		OBSActive: GetStreamStatus,
 		TwitchLive: func(ctx context.Context) (bool, error) {
-			return twitch.IsChannelLive(ctx, c.Conf.ChannelName)
+			live, err := twitch.IsChannelLive(ctx, c.Conf.ChannelName)
+			if err == nil {
+				instrumentation.TwitchChannelLive.Set(live)
+			}
+			return live, err
 		},
 		Restart: defaultRestart,
 	}
@@ -116,6 +121,7 @@ func WatchSilentDisconnect(ctx context.Context, deps WatchdogDeps, interval time
 				slog.ErrorContext(ctx, "watchdog: restart failed", "err", err)
 				continue
 			}
+			instrumentation.OBSSilentDisconnectRestarts.Inc()
 			lastRestart = time.Now()
 			misses = 0
 		}
