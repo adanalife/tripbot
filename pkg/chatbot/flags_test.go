@@ -16,6 +16,8 @@ func (noopFlags) Bool(_ context.Context, _ string, _ feature.EvalContext) bool {
 	return false
 }
 
+func (noopFlags) Snapshot(_ context.Context) []feature.Flag { return nil }
+
 // recordingFlags captures every Bool() call so tests can assert on which
 // flags a command evaluated. Set populates per-key return values; keys
 // absent from Set evaluate to false.
@@ -28,3 +30,5 @@ func (r *recordingFlags) Bool(_ context.Context, key string, _ feature.EvalConte
 	r.Evals = append(r.Evals, key)
 	return r.Set[key]
 }
+
+func (r *recordingFlags) Snapshot(_ context.Context) []feature.Flag { return nil }

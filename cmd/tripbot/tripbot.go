@@ -140,6 +140,7 @@ func startFeatureFlags(ctx context.Context) {
 	}
 	flagClient = fc
 	chatbot.SetFlagClient(fc)
+	server.SetFlagClient(fc)
 	go fc.Start(ctx)
 }
 
