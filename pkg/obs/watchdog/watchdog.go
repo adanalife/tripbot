@@ -1,4 +1,11 @@
-package obs
+// Package watchdog implements the silent-disconnect detector that
+// cross-checks OBS's outputActive state against Twitch's live status
+// and force-restarts the OBS stream on sustained divergence. Lives
+// here (not in the parent pkg/obs package) so binaries that only need
+// pkg/obs's WebSocket helpers — vlc-server in particular — don't drag
+// in pkg/config/tripbot or pkg/twitch transitively. cmd/tripbot is
+// the sole consumer.
+package watchdog
 
 import (
 	"context"
@@ -7,6 +14,7 @@ import (
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
+	"github.com/adanalife/tripbot/pkg/obs"
 	"github.com/adanalife/tripbot/pkg/twitch"
 )
 
@@ -31,7 +39,7 @@ type WatchdogDeps struct {
 // outputReconnecting=false AND Twitch offline) needs intervention.
 func DefaultWatchdogDeps() WatchdogDeps {
 	return WatchdogDeps{
-		OBSActive: GetStreamActiveSteady,
+		OBSActive: obs.GetStreamActiveSteady,
 		TwitchLive: func(ctx context.Context) (bool, error) {
 			live, err := twitch.IsChannelLive(ctx, c.Conf.ChannelName)
 			if err == nil {
@@ -48,7 +56,7 @@ func DefaultWatchdogDeps() WatchdogDeps {
 // the manual recovery sequence we ran by hand the first time the silent
 // half-open hit prod (see the 2026-05-27 incident).
 func defaultRestart(ctx context.Context) error {
-	if err := StopStream(ctx); err != nil {
+	if err := obs.StopStream(ctx); err != nil {
 		return err
 	}
 	select {
@@ -56,7 +64,7 @@ func defaultRestart(ctx context.Context) error {
 		return ctx.Err()
 	case <-time.After(3 * time.Second):
 	}
-	return StartStream(ctx)
+	return obs.StartStream(ctx)
 }
 
 // WatchSilentDisconnect detects the silent half-open RTMP state where OBS
