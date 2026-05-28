@@ -107,18 +107,19 @@ func (s *Session) Start(ctx context.Context) error {
 	return nil
 }
 
-// Stop deregisters the per-guild slash commands and closes the gateway
-// connection. Safe to call multiple times.
+// Stop closes the gateway connection. Safe to call multiple times.
+//
+// Deliberately does NOT deregister commands: ApplicationCommandBulkOverwrite
+// matches commands by name and updates them in-place, so the new pod's
+// registered command IDs are identical to the old pod's. Deleting on shutdown
+// would wipe out the just-registered commands of the incoming pod on every
+// rollout restart — leaving zero commands in Discord even though both pods
+// successfully called register. Commands persisting across pod cycles is the
+// correct shape; the next Start() reconciles them via BulkOverwrite.
 func (s *Session) Stop() error {
 	if s == nil || s.s == nil {
 		return nil
 	}
-	for _, cmd := range s.registeredCmds {
-		if err := s.s.ApplicationCommandDelete(s.s.State.User.ID, s.guildID, cmd.ID); err != nil {
-			slog.Warn("discord command deregister failed", "command", cmd.Name, "err", err)
-		}
-	}
-	s.registeredCmds = nil
 	if err := s.s.Close(); err != nil {
 		return fmt.Errorf("discord close: %w", err)
 	}
