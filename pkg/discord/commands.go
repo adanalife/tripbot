@@ -52,11 +52,20 @@ func commandDefinitions() []*discordgo.ApplicationCommand {
 // invocations. Unknown command names get an ephemeral reply rather
 // than silently no-op'ing.
 func (s *Session) handleInteraction(sess *discordgo.Session, i *discordgo.InteractionCreate) {
+	ctx := context.Background()
+	// Diagnostic breadcrumb — confirms the gateway is delivering
+	// INTERACTION_CREATE events to this handler. Logs every interaction
+	// regardless of type so we see ping/autocomplete/etc. too.
+	slog.InfoContext(ctx, "discord interaction received",
+		"interaction_type", int(i.Type),
+		"guild_id", i.GuildID,
+		"channel_id", i.ChannelID,
+	)
 	if i.Type != discordgo.InteractionApplicationCommand {
 		return
 	}
-	ctx := context.Background()
 	name := i.ApplicationCommandData().Name
+	slog.InfoContext(ctx, "discord command invoked", "command", name)
 
 	switch name {
 	case "leaderboard":

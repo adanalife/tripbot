@@ -56,6 +56,10 @@ func New(token, guildID string) (*Session, error) {
 	// Slash commands don't need any privileged intents, and we don't
 	// consume normal message events.
 	s.Identify.Intents = discordgo.IntentsNone
+	// Diagnostic: log gateway-level events so we can see whether
+	// INTERACTION_CREATE is reaching us. Bump to LogDebug if even
+	// informational chatter doesn't surface the interaction dispatch.
+	s.LogLevel = discordgo.LogInformational
 	return &Session{s: s, guildID: guildID}, nil
 }
 
