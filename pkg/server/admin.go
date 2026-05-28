@@ -121,12 +121,13 @@ type navLink struct {
 }
 
 // featureFlag is one row in the admin panel's "feature flags" section. Stripped
-// down from feature.Flag — the template only needs what it renders.
+// down from feature.Flag — the template only needs what it renders. The
+// target-removal date intentionally isn't displayed (the panel is phone-sized;
+// the date is still on feature.Flag for the future admin CRUD UI / audit job).
 type featureFlag struct {
-	Key               string
-	Enabled           bool
-	Description       string
-	TargetRemovalDate string // YYYY-MM-DD; empty when zero
+	Key         string
+	Enabled     bool
+	Description string
 }
 
 // adminData is the template payload.
@@ -251,15 +252,11 @@ func gatherFlags(ctx context.Context) []featureFlag {
 	}
 	out := make([]featureFlag, 0, len(flags))
 	for _, f := range flags {
-		row := featureFlag{
+		out = append(out, featureFlag{
 			Key:         f.Key,
 			Enabled:     f.Enabled,
 			Description: f.Description,
-		}
-		if !f.TargetRemovalDate.IsZero() {
-			row.TargetRemovalDate = f.TargetRemovalDate.Format("2006-01-02")
-		}
-		out = append(out, row)
+		})
 	}
 	return out
 }
@@ -748,7 +745,6 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
       <li class="row flag-row">
         <span class="dot {{if .Enabled}}up{{else}}down{{end}}"></span>
         <span class="name"><code>{{.Key}}</code>{{if .Description}}<span class="state"> · {{.Description}}</span>{{end}}</span>
-        {{if .TargetRemovalDate}}<span class="ver">remove by {{.TargetRemovalDate}}</span>{{end}}
         <span class="status">{{if .Enabled}}on{{else}}off{{end}}</span>
       </li>
       {{end}}

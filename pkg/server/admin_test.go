@@ -548,12 +548,16 @@ func TestAdminHandler_RendersFeatureFlagsWhenLoaded(t *testing.T) {
 		"<code>chatbot.experimental</code>", // monospace key
 		"<code>discord.bot_enabled</code>",
 		"Gates pkg/discord startup.",
-		"remove by 2026-11-28",
-		"remove by 2026-08-01",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body missing %q", want)
 		}
+	}
+	// Target-removal date is intentionally omitted from the panel render — it's
+	// metadata for the future audit job / admin CRUD UI, not for the read-only
+	// status surface — so it should never appear.
+	if strings.Contains(body, "remove by") || strings.Contains(body, "2026-11-28") {
+		t.Errorf("panel should not render target_removal_date")
 	}
 	// Sort order: keys ascend, so chatbot.experimental comes before discord.bot_enabled.
 	if i, j := strings.Index(body, "chatbot.experimental"), strings.Index(body, "discord.bot_enabled"); i < 0 || j < 0 || i > j {
