@@ -7,6 +7,18 @@ All notable changes to TripBot. Format follows [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+## [v2.17.1] — 2026-05-28
+
+Patch release. Hotfix for the v2.17.0 silent-disconnect watchdog's import chain — it dragged `pkg/config/tripbot` and `pkg/database` into vlc-server's binary at link time, so the vlc-server pod refused to boot in prod without 9 placeholder env vars stamped into its ConfigMap. Took prod's dashcam playback down for 13 minutes during the rollout. Detangled by moving the watchdog into its own subpackage; companion fix broadens the `release-development.yml` vlc paths-filter so shared-package edits like this one don't silently skip the vlc rebuild.
+
+### obs
+
+- **Move the silent-disconnect watchdog out of `pkg/obs` into `pkg/obs/watchdog`.** The watchdog file imported `pkg/config/tripbot` (for `ChannelName`) and `pkg/twitch` (for `IsChannelLive`) at the package level — and `pkg/twitch` transitively imports `pkg/oauthtokens` → `pkg/database`, whose `init()` `log.Fatalf`s on missing `DATABASE_USER` / `DATABASE_DB` / `DATABASE_HOST`. Because all files in a Go package compile together, anything importing `pkg/obs` inherited the whole chain. `cmd/vlc-server/vlc-server.go` has imported `pkg/obs` for ages for one call (`obs.PollStreamingActive`), so v2.17.0's vlc-server binary refused to boot without env vars for the 6 required `pkg/config/tripbot` keys + the 3 `pkg/database` checks — even though the watchdog never runs inside vlc-server. After the move, `pkg/obs` holds only `control.go` + `streaming.go` (zero tripbot-internal imports beyond `pkg/instrumentation`), and `cmd/tripbot` is the sole consumer of the new `pkg/obs/watchdog` subpackage. Verified: `go list -deps ./cmd/vlc-server` no longer includes `pkg/config/tripbot`, `pkg/database`, `pkg/twitch`, or `pkg/oauthtokens`. Same for `./cmd/onscreens-server`. ([#716])
+
+### ci
+
+- **Broaden the `release-development.yml` vlc paths-filter to `pkg/**`.** The narrow vlc filter (only `pkg/{vlc,onscreens}-{server,client}/`) meant any change to a shared package — `pkg/obs`, `pkg/instrumentation`, `pkg/telemetry`, etc. — silently skipped the vlc rebuild. `#716`'s detangle would have shipped a stale vlc `:develop` image on the first run; stage would have continued running the bug. The new filter matches the tripbot filter's shape — broad enough to never miss a transitive-dep change, at the cost of some unnecessary rebuilds (the native-runner vlc build is ~3-4 min, cheap insurance). ([#717])
+
 ## [v2.17.0] — 2026-05-28
 
 Minor release. TripBot gets a live Discord bot session (four slash commands mirroring the Twitch leaderboards), gated behind the first flag of a new Postgres-backed feature-flag system with a read-only admin-panel listing. NATS adoption begins with phase 1 — `ShowMiddleText` parallel-publishes to `tripbot.<env>.onscreens.middle.show` while HTTP stays the source of truth. A silent-disconnect watchdog auto-recovers from the prod failure mode where OBS's RTMP write socket goes half-open and frames keep streaming into the void while Twitch shows offline. Twitch token handling closes a cron-desync gap that bit prod on 2026-05-26 (refresh-on-startup + expiry-timestamp gauge, plus a 30→45 minute refresh window that spares the helix 401 self-heal from firing on the routine cycle). Leaderboard rendering swaps space-padded monospace for CSS grid alignment so scores line up under the regular Trebuchet stack.
@@ -1198,3 +1210,5 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#712]: https://github.com/adanalife/tripbot/pull/712
 [#713]: https://github.com/adanalife/tripbot/pull/713
 [#714]: https://github.com/adanalife/tripbot/pull/714
+[#716]: https://github.com/adanalife/tripbot/pull/716
+[#717]: https://github.com/adanalife/tripbot/pull/717
