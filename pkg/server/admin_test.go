@@ -281,6 +281,9 @@ func TestAdminHandler_RendersReadyStatusAndLinks(t *testing.T) {
 	defer SetTwitchConnected(false)
 	SetTwitchConnected(true)
 	withReauth(t, nil) // healthy tokens — no re-auth callout
+	withAuthStatuses(t, []mytwitch.AccountTokenStatus{
+		{Account: "bot", LoginAs: "tripbot4000", ExpiresAt: time.Date(2099, 1, 1, 0, 0, 0, 0, time.UTC)},
+	})
 	withNowPlaying(t, nowPlayingTrack{Artist: "Test Artist", Title: "Test Track"})
 
 	// stand in for vlc-server: readiness ping + version endpoint
@@ -349,6 +352,9 @@ func TestAdminHandler_RendersReadyStatusAndLinks(t *testing.T) {
 		`<title>tripbot — adanalife_ (production)</title>`, // env rendered in <title> for tab disambiguation
 		"now playing",                        // now-playing section shown when vlc healthy
 		`id="now-line" sse-swap="video"`,     // now-playing line wired for live video swaps
+		`id="auth-card" sse-swap="auth"`,     // live token-expiry card wired for SSE
+		`class="auth-expires" data-expires="4070908800"`, // bot expiry (2099-01-01) for the JS countdown
+		`id="reauth-card" sse-swap="reauth"`, // reauth callout container wired for live appear/clear
 		"wy_0042.MP4",                        // current video file
 		"Wyoming",                            // current video state
 		`class="now-elapsed" data-since=`,    // elapsed span the JS ticker counts up
@@ -448,6 +454,16 @@ func withReauth(t *testing.T, accounts []mytwitch.AccountReauth) {
 	t.Cleanup(func() { accountsNeedingReauth = saved })
 }
 
+// withAuthStatuses swaps the authStatuses seam so the admin handler sees a
+// fixed per-identity token state (for the live expiry-countdown card) without
+// depending on global in-memory token state.
+func withAuthStatuses(t *testing.T, statuses []mytwitch.AccountTokenStatus) {
+	t.Helper()
+	saved := authStatuses
+	authStatuses = func() []mytwitch.AccountTokenStatus { return statuses }
+	t.Cleanup(func() { authStatuses = saved })
+}
+
 // withNowPlaying swaps the SomaFM fetcher so the admin handler sees a fixed
 // audio track (or empty for "no audio info") without hitting somafm.com from
 // a test.
@@ -501,6 +517,9 @@ func TestAdminHandler_NoReauthPromptWhenHealthy(t *testing.T) {
 
 	withConf(t, func() { c.Conf.VlcServerHost = "" })
 	withReauth(t, nil) // all tokens healthy
+	withAuthStatuses(t, []mytwitch.AccountTokenStatus{
+		{Account: "bot", LoginAs: "tripbot4000", ExpiresAt: time.Date(2099, 1, 1, 0, 0, 0, 0, time.UTC)},
+	})
 
 	rec := httptest.NewRecorder()
 	adminHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))

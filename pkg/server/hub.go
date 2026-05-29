@@ -70,6 +70,10 @@ func NewHub() *Hub {
 // ctx.Done. No-op (logs + returns) when NATS is unconfigured, so local dev and
 // tests run fine with an empty console.
 func (h *Hub) Start(ctx context.Context) {
+	// Auth state is pull-based (not over NATS), so the countdown card works even
+	// when NATS is unconfigured — start it before the nil-conn bail-out.
+	go h.pollAuth(ctx)
+
 	conn := natsclient.Conn()
 	if conn == nil {
 		slog.InfoContext(ctx, "live-console hub: NATS unconfigured; console will be empty")
