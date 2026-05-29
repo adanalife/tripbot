@@ -20,15 +20,15 @@ func eventsHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	rc := http.NewResponseController(w)
 
-	// Ordinary handlers run under the server's 15s WriteTimeout; an SSE stream
-	// is long-lived, so clear the write deadline for this connection. This
-	// reaches the underlying writer through the negroni + otelhttp wrappers
-	// because each implements Unwrap() (do NOT type-assert http.Flusher —
-	// negroni's writer fails that assertion). Best-effort: if a wrapper doesn't
-	// support deadlines the connection still works, it just gets recycled at the
-	// 15s WriteTimeout — and the browser's EventSource auto-reconnects.
+	// Best-effort clear of any per-connection write deadline. The server runs
+	// with WriteTimeout=0 (see server.go) precisely because this doesn't work
+	// through the negroni + otelhttp HTTP/2 wrapper chain ("feature not
+	// supported") — so a failure here is expected and harmless, logged at debug
+	// only. On a stack that does support it, this self-heals if WriteTimeout is
+	// ever reinstated. (Do NOT type-assert http.Flusher — negroni's writer fails
+	// that assertion; use ResponseController.)
 	if err := rc.SetWriteDeadline(time.Time{}); err != nil {
-		slog.WarnContext(ctx, "sse: could not clear write deadline; stream will recycle at WriteTimeout", "err", err)
+		slog.DebugContext(ctx, "sse: write deadline not clearable on this stack (WriteTimeout=0 covers it)", "err", err)
 	}
 
 	w.Header().Set("Content-Type", "text/event-stream")
