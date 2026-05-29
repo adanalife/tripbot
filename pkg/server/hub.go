@@ -52,6 +52,12 @@ type Hub struct {
 	mu   sync.RWMutex
 	chat []ChatLine
 	subs map[chan sseEvent]struct{}
+
+	// viewers is the last chatter total seen; viewersKnown gates the very first
+	// value so it sets the baseline without flashing (we can't know a direction
+	// with nothing to compare against).
+	viewers      int
+	viewersKnown bool
 }
 
 // NewHub returns an unstarted hub. Safe to construct at package-init time — it
@@ -70,19 +76,34 @@ func (h *Hub) Start(ctx context.Context) {
 		return
 	}
 
-	subj := eventbus.ChatMessageSubject(c.Conf.Environment)
-	sub, err := conn.Subscribe(subj, func(m *nats.Msg) {
-		h.handleChat(ctx, m.Data)
-	})
-	if err != nil {
-		slog.ErrorContext(ctx, "live-console hub subscribe failed", "err", err, "subject", subj)
-		return
+	env := c.Conf.Environment
+	subscriptions := []struct {
+		subject string
+		handler func(context.Context, []byte)
+	}{
+		{eventbus.ChatMessageSubject(env), h.handleChat},
+		{eventbus.ViewerCountSubject(env), h.handleViewerCount},
 	}
-	slog.InfoContext(ctx, "live-console hub subscribed", "subject", subj)
+
+	var subs []*nats.Subscription
+	for _, s := range subscriptions {
+		handler := s.handler // capture per-iteration for the closure
+		sub, err := conn.Subscribe(s.subject, func(m *nats.Msg) {
+			handler(ctx, m.Data)
+		})
+		if err != nil {
+			slog.ErrorContext(ctx, "live-console hub subscribe failed", "err", err, "subject", s.subject)
+			continue
+		}
+		slog.InfoContext(ctx, "live-console hub subscribed", "subject", s.subject)
+		subs = append(subs, sub)
+	}
 
 	go func() {
 		<-ctx.Done()
-		_ = sub.Unsubscribe()
+		for _, sub := range subs {
+			_ = sub.Unsubscribe()
+		}
 		h.closeAll()
 	}()
 }
@@ -96,6 +117,38 @@ func (h *Hub) handleChat(ctx context.Context, data []byte) {
 	line := ChatLine{Username: ev.Username, Text: ev.Text, At: parseEmitted(ev.EmittedAt)}
 	h.appendChat(line)
 	h.broadcast(sseEvent{Name: "chat", Data: renderChatLine(line)})
+}
+
+// handleViewerCount updates the live "in chat" number. It compares the new
+// total to the last one seen so the panel can flash the count green (rising)
+// or red (falling); the first value seen just sets the baseline (no flash).
+func (h *Hub) handleViewerCount(ctx context.Context, data []byte) {
+	var ev eventbus.ViewerCount
+	if err := json.Unmarshal(data, &ev); err != nil {
+		slog.ErrorContext(ctx, "live-console hub: bad viewer-count payload", "err", err)
+		return
+	}
+	dir := h.updateViewers(ev.Count)
+	h.broadcast(sseEvent{Name: "viewers", Data: renderViewerCount(ev.Count, dir)})
+}
+
+// updateViewers records the new count and returns the flash direction relative
+// to the previous value: "up", "down", or "" (unchanged, or the first value).
+func (h *Hub) updateViewers(count int) string {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	dir := ""
+	if h.viewersKnown {
+		switch {
+		case count > h.viewers:
+			dir = "up"
+		case count < h.viewers:
+			dir = "down"
+		}
+	}
+	h.viewers = count
+	h.viewersKnown = true
+	return dir
 }
 
 // parseEmitted turns an event's emitted_at (RFC3339Nano UTC) into a time,
@@ -187,6 +240,25 @@ func renderChatLine(line ChatLine) string {
 	var sb strings.Builder
 	if err := chatLineTmpl.Execute(&sb, line); err != nil {
 		slog.Error("live-console hub: render chat line", "err", err)
+		return ""
+	}
+	return sb.String()
+}
+
+// viewerCountTmpl renders the inner chatter-count span. It's swapped into the
+// stable #chatters container (innerHTML), so a fresh element is inserted each
+// update — the flash-up/flash-down CSS animation re-triggers naturally on
+// insert, and the steady state (no flash class) has no animation.
+var viewerCountTmpl = template.Must(template.New("viewers").Parse(
+	`<span class="chatters-count{{if .Flash}} flash-{{.Flash}}{{end}}">{{.Count}}</span>`))
+
+func renderViewerCount(count int, dir string) string {
+	var sb strings.Builder
+	if err := viewerCountTmpl.Execute(&sb, struct {
+		Count int
+		Flash string
+	}{Count: count, Flash: dir}); err != nil {
+		slog.Error("live-console hub: render viewer count", "err", err)
 		return ""
 	}
 	return sb.String()

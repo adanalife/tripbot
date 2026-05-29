@@ -708,16 +708,29 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
   .chat-line .cu { color:#58a6ff; font-weight:600; }
   .chat-line .ct { color:var(--fg); }
   .chat-empty { color:var(--dim); font-style:italic; padding:6px 0; }
+  /* live viewer count — a subtle, quick colour flash on the number: green when
+     it rises, red when it falls. The inner .chatters-count span is re-inserted
+     on each SSE update so the animation re-triggers; with only a "from" keyframe
+     it animates back to the number's natural colour. Steady state is unstyled. */
+  @keyframes flash-up   { from { color:#3fb950; } }
+  @keyframes flash-down { from { color:#f85149; } }
+  .chatters-count.flash-up   { animation:flash-up .8s ease-out; }
+  .chatters-count.flash-down { animation:flash-down .8s ease-out; }
 </style>
 </head>
 <body>
-<main>
+<!-- hx-ext="sse" + sse-connect open ONE EventSource on /admin/events for the
+     whole panel; every live region below (chat, viewer count, …) is an
+     sse-swap target nested under it. -->
+<main hx-ext="sse" sse-connect="/admin/events">
   <!-- A Dana Life mark, referenced from the website (the single owner of brand
        assets) rather than copied in — see vault general/logo.md. The anchor
        wraps the mark so clicking it refreshes the page. -->
   <a class="logo-link" href="/" title="refresh"><img class="logo" src="https://www.dana.lol/assets/logo.png" alt="A Dana Life" width="44" height="44"></a>
   <h1>tripbot <code class="env {{envColorClass .Env}}">{{.Env}}</code></h1>
-  <p class="meta">up {{.Uptime}} · {{.Chatters}} in chat</p>
+  <!-- #chatters is the stable sse-swap target; the inner .chatters-count span is
+       replaced (innerHTML) on each "viewers" event so its flash animation re-fires. -->
+  <p class="meta">up {{.Uptime}} · <span id="chatters" sse-swap="viewers" hx-swap="innerHTML"><span class="chatters-count">{{.Chatters}}</span></span> in chat</p>
   <p class="accounts">broadcaster <a href="https://twitch.tv/{{.Channel}}">{{.Channel}}</a> · bot <a href="https://twitch.tv/{{.Bot}}">{{.Bot}}</a></p>
 
   {{if .Reauth}}
@@ -748,13 +761,11 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
 
   <details class="chat" open>
     <summary>chat</summary>
-    <!-- sse-connect opens /admin/events; #chat-log receives the "chat" event
-         and appends each rendered line. Recent history is rendered server-side
-         from the hub's ring buffer below; live lines stream in on top. -->
-    <div hx-ext="sse" sse-connect="/admin/events">
-      <div id="chat-log" class="chat-log" sse-swap="chat" hx-swap="beforeend scroll:bottom">
-        {{range .ChatHistory}}<div class="chat-line"><time class="ct-ts" datetime="{{.At.Format "2006-01-02T15:04:05Z07:00"}}">{{.At.Format "15:04"}}</time> <span class="cu">{{.Username}}</span> <span class="ct">{{.Text}}</span></div>{{else}}<div class="chat-empty">waiting for chat…</div>{{end}}
-      </div>
+    <!-- #chat-log receives the "chat" SSE event (the panel-wide sse-connect lives
+         on <main>) and appends each rendered line. Recent history is rendered
+         server-side from the hub's ring buffer; live lines stream in on top. -->
+    <div id="chat-log" class="chat-log" sse-swap="chat" hx-swap="beforeend scroll:bottom">
+      {{range .ChatHistory}}<div class="chat-line"><time class="ct-ts" datetime="{{.At.Format "2006-01-02T15:04:05Z07:00"}}">{{.At.Format "15:04"}}</time> <span class="cu">{{.Username}}</span> <span class="ct">{{.Text}}</span></div>{{else}}<div class="chat-empty">waiting for chat…</div>{{end}}
     </div>
   </details>
 

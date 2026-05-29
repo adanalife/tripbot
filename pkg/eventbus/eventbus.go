@@ -98,3 +98,26 @@ func EmitChatMessage(ctx context.Context, env, username, text string) {
 		EmittedAt: emittedAt(),
 	})
 }
+
+// --- viewers.count --------------------------------------------------------
+
+// ViewerCount is the wire format for tripbot.<env>.viewers.count — the
+// authoritative chatter total Twitch reports, published on each chatter-list
+// refresh so the admin panel's "in chat" number updates live.
+type ViewerCount struct {
+	Count     int    `json:"count"`
+	EmittedAt string `json:"emitted_at"`
+}
+
+// ViewerCountSubject returns the subscribe/publish subject for viewer-count
+// updates in env. The admin hub builds the same string to subscribe.
+func ViewerCountSubject(env string) string { return subject(env, "viewers", "count") }
+
+// EmitViewerCount publishes the current chatter total. The admin hub compares
+// it to the previous value to flash the count green (rising) or red (falling).
+func EmitViewerCount(ctx context.Context, env string, count int) {
+	emit(ctx, ViewerCountSubject(env), ViewerCount{
+		Count:     count,
+		EmittedAt: emittedAt(),
+	})
+}

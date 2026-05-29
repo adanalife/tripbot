@@ -343,7 +343,8 @@ func TestAdminHandler_RendersReadyStatusAndLinks(t *testing.T) {
 		`<a href="https://github.com/adanalife/tripbot/blob/feedfacecafe/CHANGELOG.md">v8.8.8-osc</a>`, // onscreens version → changelog@sha
 		">vlc-server<",       // vlc row label
 		">onscreens-server<", // onscreens row label
-		"12 in chat",         // chatter count
+		`<span class="chatters-count">12</span>`,            // initial chatter count (server-rendered, unflashed)
+		`id="chatters" sse-swap="viewers" hx-swap="innerHTML"`, // live count target wired for SSE updates
 		`<code class="env env-prod">production</code>`,     // env in monospace chip, prod-coloured
 		`<title>tripbot — adanalife_ (production)</title>`, // env rendered in <title> for tab disambiguation
 		"now playing",                        // now-playing section shown when vlc healthy
