@@ -175,6 +175,44 @@ func TestRenderViewerCount(t *testing.T) {
 	}
 }
 
+func TestHub_handleVideoChanged_broadcastsNowLine(t *testing.T) {
+	h := NewHub()
+	client := h.register()
+
+	since := time.Date(2026, 5, 29, 13, 5, 0, 0, time.UTC)
+	payload, _ := json.Marshal(eventbus.VideoChanged{
+		File: "wy_0042.MP4", State: "Wyoming", Flagged: false,
+		EmittedAt: since.Format(time.RFC3339Nano),
+	})
+	h.handleVideoChanged(context.Background(), payload)
+
+	ev := <-client
+	if ev.Name != "video" {
+		t.Errorf("event name = %q, want video", ev.Name)
+	}
+	if !strings.Contains(ev.Data, "wy_0042.MP4") || !strings.Contains(ev.Data, "Wyoming") {
+		t.Errorf("fragment %q missing file/state", ev.Data)
+	}
+	// elapsed span carries the clip start (emitted_at) as data-since so the JS
+	// ticker counts up from the right moment.
+	if !strings.Contains(ev.Data, `class="now-elapsed"`) ||
+		!strings.Contains(ev.Data, `data-since="`+itoa(int(since.Unix()))+`"`) {
+		t.Errorf("fragment %q missing now-elapsed with data-since=%d", ev.Data, since.Unix())
+	}
+}
+
+func TestHub_handleVideoChanged_badPayloadNoCrash(t *testing.T) {
+	h := NewHub()
+	h.handleVideoChanged(context.Background(), []byte("not json"))
+}
+
+func TestRenderVideoLine_escapesHTML(t *testing.T) {
+	got := renderVideoLine(eventbus.VideoChanged{File: "<script>x</script>", State: "Wyoming"})
+	if strings.Contains(got, "<script>") {
+		t.Errorf("file not escaped: %q", got)
+	}
+}
+
 func TestRenderChatLine_escapesHTML(t *testing.T) {
 	got := renderChatLine(ChatLine{Username: "evil", Text: "<script>alert(1)</script>"})
 	if strings.Contains(got, "<script>") {

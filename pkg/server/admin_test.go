@@ -348,9 +348,11 @@ func TestAdminHandler_RendersReadyStatusAndLinks(t *testing.T) {
 		`<code class="env env-prod">production</code>`,     // env in monospace chip, prod-coloured
 		`<title>tripbot — adanalife_ (production)</title>`, // env rendered in <title> for tab disambiguation
 		"now playing",                        // now-playing section shown when vlc healthy
+		`id="now-line" sse-swap="video"`,     // now-playing line wired for live video swaps
 		"wy_0042.MP4",                        // current video file
 		"Wyoming",                            // current video state
-		"3m12s",                              // clip progress
+		`class="now-elapsed" data-since=`,    // elapsed span the JS ticker counts up
+		"3m12s",                              // clip progress (initial server render)
 		`>obs</a>`,                           // one-word OBS link
 		`>grafana</a>`,                       // one-word grafana link
 		`>traefik</a>`,                       // one-word traefik link
