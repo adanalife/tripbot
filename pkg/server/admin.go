@@ -139,13 +139,14 @@ type adminData struct {
 	Uptime         string
 	Chatters       int // users currently in chat
 	Services       []serviceStatus
-	Now            *nowPlaying // nil when vlc is unhealthy or nothing is playing
+	Now            *nowPlaying     // nil when vlc is unhealthy or nothing is playing
 	Audio          nowPlayingTrack // current SomaFM track; empty Title hides the line
 	Stream         streamControl
 	PanelHost      string // host the panel was reached at; the Twitch embed needs it as parent=
 	Links          []navLink
-	Flags          []featureFlag // feature flags + their state; empty hides the section
+	Flags          []featureFlag            // feature flags + their state; empty hides the section
 	Reauth         []mytwitch.AccountReauth // accounts whose token needs re-auth; empty when healthy
+	ChatHistory    []ChatLine               // recent chat from the live-console hub; live lines stream in via SSE
 }
 
 // adminHandler serves the human-facing root page on the tripbot Ingress: a
@@ -162,17 +163,18 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 		Channel:        c.Conf.ChannelName,
 		PreviewChannel: previewChannel(),
 		Bot:            c.Conf.BotUsername,
-		Env:      c.Conf.Environment,
-		Uptime:   time.Since(startedAt).Round(time.Second).String(),
-		Chatters: chatterCount(),
-		Services: gatherStatus(buildSHA(), vlc, onscreens, obs),
-		Now:      currentVideo(vlc.OK),
-		Audio:    nowPlayingFetcher(r.Context()),
-		Stream:   gatherStream(r.Context()),
-		PanelHost: panelHost(r),
-		Links:    gatherLinks(),
-		Flags:    gatherFlags(r.Context()),
-		Reauth:   accountsNeedingReauth(),
+		Env:            c.Conf.Environment,
+		Uptime:         time.Since(startedAt).Round(time.Second).String(),
+		Chatters:       chatterCount(),
+		Services:       gatherStatus(buildSHA(), vlc, onscreens, obs),
+		Now:            currentVideo(vlc.OK),
+		Audio:          nowPlayingFetcher(r.Context()),
+		Stream:         gatherStream(r.Context()),
+		PanelHost:      panelHost(r),
+		Links:          gatherLinks(),
+		Flags:          gatherFlags(r.Context()),
+		Reauth:         accountsNeedingReauth(),
+		ChatHistory:    eventHub.snapshotChat(),
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -563,6 +565,10 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
 <link rel="icon" type="image/png" sizes="32x32" href="https://www.dana.lol/assets/favicon-32x32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="https://www.dana.lol/assets/favicon-16x16.png">
 <link rel="apple-touch-icon" sizes="180x180" href="https://www.dana.lol/assets/apple-touch-icon.png">
+<!-- htmx + its SSE extension, vendored + embedded (pkg/server/static) — drives
+     the live chat console: sse.js consumes /admin/events and swaps fragments. -->
+<script src="/static/htmx.min.js"></script>
+<script src="/static/sse.js"></script>
 <style>
   :root {
     color-scheme: dark light;
@@ -688,6 +694,20 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
   button.restart { font:inherit; font-size:.8em; padding:3px 9px; border-radius:4px; border:1px solid #2a2a2a; background:#1a1a1a; color:#888; cursor:pointer; transition:background .15s, color .15s, border-color .15s; }
   button.restart:hover { background:#252525; color:#ccc; border-color:#3a3a3a; }
   button.restart.armed { background:#f85149; color:#fff; border-color:#f85149; box-shadow:0 0 0 2px #f8514980; }
+  /* live chat console — recent history rendered server-side, live lines stream
+     in via SSE (sse-swap="chat", beforeend). Same disclosure look as the others. */
+  details.chat { margin:24px 0 0; }
+  details.chat > summary { font-size:.8em; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); cursor:pointer; padding:8px 0; border-top:1px solid var(--divider); list-style:none; }
+  details.chat > summary::-webkit-details-marker { display:none; }
+  details.chat > summary::before { content:"▸ "; color:var(--dim); display:inline-block; }
+  details.chat[open] > summary::before { content:"▾ "; }
+  details.chat > summary:hover { color:var(--fg); }
+  .chat-log { max-height:40vh; overflow-y:auto; margin-top:8px; font-size:.92em; line-height:1.5; overscroll-behavior:contain; }
+  .chat-line { padding:2px 0; word-break:break-word; }
+  .chat-line .ct-ts { color:var(--dim); font-family:var(--mono); font-size:.8em; margin-right:4px; }
+  .chat-line .cu { color:#58a6ff; font-weight:600; }
+  .chat-line .ct { color:var(--fg); }
+  .chat-empty { color:var(--dim); font-style:italic; padding:6px 0; }
 </style>
 </head>
 <body>
@@ -725,6 +745,18 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
     </li>
     {{end}}
   </ul>
+
+  <details class="chat" open>
+    <summary>chat</summary>
+    <!-- sse-connect opens /admin/events; #chat-log receives the "chat" event
+         and appends each rendered line. Recent history is rendered server-side
+         from the hub's ring buffer below; live lines stream in on top. -->
+    <div hx-ext="sse" sse-connect="/admin/events">
+      <div id="chat-log" class="chat-log" sse-swap="chat" hx-swap="beforeend scroll:bottom">
+        {{range .ChatHistory}}<div class="chat-line"><time class="ct-ts" datetime="{{.At.Format "2006-01-02T15:04:05Z07:00"}}">{{.At.Format "15:04"}}</time> <span class="cu">{{.Username}}</span> <span class="ct">{{.Text}}</span></div>{{else}}<div class="chat-empty">waiting for chat…</div>{{end}}
+      </div>
+    </div>
+  </details>
 
   {{if and .PreviewChannel .PanelHost}}
   <details class="stream-preview" id="stream-preview" open>
@@ -855,6 +887,44 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
     root.setAttribute('data-theme', next);
     localStorage.setItem('admin-theme', next);
   });
+})();
+
+// Live chat console: keep the pane pinned to the newest line, cap DOM nodes to
+// match the server-side ring buffer (200) so the page can't grow unbounded, and
+// drop the "waiting for chat…" placeholder once real lines arrive. htmx's sse
+// extension swaps each line into #chat-log (beforeend); we react on afterSwap.
+(function() {
+  const log = document.getElementById('chat-log');
+  if (!log) return;
+  const pin = () => { log.scrollTop = log.scrollHeight; };
+  // Times are emitted in UTC and rendered server-side as a fallback; show them
+  // in the viewer's local timezone instead.
+  const localize = (root) => root.querySelectorAll('time.ct-ts').forEach(t => {
+    const iso = t.getAttribute('datetime');
+    if (!iso) return;
+    const d = new Date(iso);
+    if (!isNaN(d.getTime())) t.textContent = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  });
+  // Give each username a stable color derived from a hash of the name, so the
+  // same chatter is always the same hue. L/S tuned to stay legible on both the
+  // dark and light panel themes.
+  const colorFor = (name) => {
+    let h = 0;
+    for (let i = 0; i < name.length; i++) h = (Math.imul(h, 31) + name.charCodeAt(i)) >>> 0;
+    return 'hsl(' + (h % 360) + ' 65% 60%)';
+  };
+  const colorize = (root) => root.querySelectorAll('.chat-line .cu').forEach(el => {
+    if (!el.dataset.colored) { el.style.color = colorFor(el.textContent); el.dataset.colored = '1'; }
+  });
+  const decorate = (root) => { localize(root); colorize(root); };
+  log.addEventListener('htmx:afterSwap', () => {
+    log.querySelectorAll('.chat-empty').forEach(el => el.remove());
+    while (log.childElementCount > 200) log.removeChild(log.firstElementChild);
+    decorate(log);
+    pin();
+  });
+  decorate(log); // localize times + color usernames in the server-rendered history
+  pin(); // pin on initial load (history rendered server-side)
 })();
 
 // iOS Home Screen apps return to a stale cached page on reopen — even with
