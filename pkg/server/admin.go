@@ -151,7 +151,7 @@ type adminData struct {
 	Stream         streamControl
 	PanelHost      string // host the panel was reached at; the Twitch embed needs it as parent=
 	Links          []navLink
-	Flags          []featureFlag            // feature flags + their state; empty hides the section
+	Flags          []featureFlag                 // feature flags + their state; empty hides the section
 	Reauth         []mytwitch.AccountReauth      // accounts whose token needs re-auth; empty when healthy
 	AuthStatuses   []mytwitch.AccountTokenStatus // every identity's token state; drives the live expiry-countdown card
 	ChatHistory    []ChatLine                    // recent chat from the live-console hub; live lines stream in via SSE
@@ -723,6 +723,12 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
   .chat-line .cu { color:#58a6ff; font-weight:600; }
   .chat-line .ct { color:var(--fg); }
   .chat-empty { color:var(--dim); font-style:italic; padding:6px 0; }
+  /* jump-to-latest pill — floats over the bottom of the chat-log, shown only
+     while scrolled up (the scrollback buffer). Tapping returns to the newest. */
+  .chat-wrap { position:relative; }
+  .chat-jump { position:absolute; left:50%; bottom:10px; transform:translateX(-50%); z-index:2; font:inherit; font-size:.8em; padding:4px 12px; border-radius:999px; border:1px solid var(--chip-border); background:var(--chip-bg); color:var(--fg); cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,.35); }
+  .chat-jump:hover { border-color:#58a6ff; color:#9cf; }
+  .chat-jump[hidden] { display:none; }
   /* live viewer count — a subtle, quick colour flash on the number: green when
      it rises, red when it falls. The inner .chatters-count span is re-inserted
      on each SSE update so the animation re-triggers; with only a "from" keyframe
@@ -790,8 +796,12 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
     <!-- #chat-log receives the "chat" SSE event (the panel-wide sse-connect lives
          on <main>) and appends each rendered line. Recent history is rendered
          server-side from the hub's ring buffer; live lines stream in on top. -->
-    <div id="chat-log" class="chat-log" sse-swap="chat" hx-swap="beforeend scroll:bottom">
-      {{range .ChatHistory}}<div class="chat-line"><time class="ct-ts" datetime="{{.At.Format "2006-01-02T15:04:05Z07:00"}}">{{.At.Format "15:04"}}</time> <span class="cu">{{.Username}}</span> <span class="ct">{{.Text}}</span></div>{{else}}<div class="chat-empty">waiting for chat…</div>{{end}}
+    <div class="chat-wrap">
+      <div id="chat-log" class="chat-log" sse-swap="chat" hx-swap="beforeend">
+        {{range .ChatHistory}}<div class="chat-line"><time class="ct-ts" datetime="{{.At.Format "2006-01-02T15:04:05Z07:00"}}">{{.At.Format "15:04"}}</time> <span class="cu">{{.Username}}</span> <span class="ct">{{.Text}}</span></div>{{else}}<div class="chat-empty">waiting for chat…</div>{{end}}
+      </div>
+      <!-- shown only while scrolled up (see JS): tapping jumps to the newest line -->
+      <button id="chat-jump" class="chat-jump" type="button" hidden>↓ new</button>
     </div>
   </details>
 
@@ -925,14 +935,34 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
   });
 })();
 
-// Live chat console: keep the pane pinned to the newest line, cap DOM nodes to
-// match the server-side ring buffer (200) so the page can't grow unbounded, and
-// drop the "waiting for chat…" placeholder once real lines arrive. htmx's sse
-// extension swaps each line into #chat-log (beforeend); we react on afterSwap.
+// Live chat console. New lines stream into #chat-log (htmx sse, beforeend).
+// Auto-scroll + trimming happen ONLY while the viewer is pinned to the bottom —
+// scrolling up to read history is never yanked back down and the older nodes
+// aren't trimmed out from under the viewport, which is what makes the scrollback
+// buffer usable. It re-follows + re-trims once the viewer returns to the bottom.
+// Also drops the "waiting for chat…" placeholder and decorates each line
+// (local-time + per-user color).
 (function() {
   const log = document.getElementById('chat-log');
   if (!log) return;
-  const pin = () => { log.scrollTop = log.scrollHeight; };
+  const CAP = 500; // scrollback depth; matches chatRingSize on the server
+  // pinned = the viewport is at (or near) the newest line.
+  let pinned = true;
+  const atBottom = () => log.scrollHeight - log.scrollTop - log.clientHeight < 40;
+  // Jump-to-latest pill: shown only while scrolled up, counting unread lines.
+  const jump = document.getElementById('chat-jump');
+  let unread = 0;
+  const refreshPill = () => {
+    if (!jump) return;
+    jump.textContent = '↓ ' + unread + ' new';
+    jump.hidden = unread === 0;
+  };
+  const toBottom = () => { log.scrollTop = log.scrollHeight; pinned = true; unread = 0; refreshPill(); };
+  if (jump) jump.addEventListener('click', toBottom);
+  log.addEventListener('scroll', () => {
+    pinned = atBottom();
+    if (pinned) { unread = 0; refreshPill(); }
+  });
   // Times are emitted in UTC and rendered server-side as a fallback; show them
   // in the viewer's local timezone instead.
   const localize = (root) => root.querySelectorAll('time.ct-ts').forEach(t => {
@@ -955,12 +985,17 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
   const decorate = (root) => { localize(root); colorize(root); };
   log.addEventListener('htmx:afterSwap', () => {
     log.querySelectorAll('.chat-empty').forEach(el => el.remove());
-    while (log.childElementCount > 200) log.removeChild(log.firstElementChild);
     decorate(log);
-    pin();
+    if (pinned) {
+      while (log.childElementCount > CAP) log.removeChild(log.firstElementChild);
+      log.scrollTop = log.scrollHeight;
+    } else {
+      unread++;
+      refreshPill();
+    }
   });
   decorate(log); // localize times + color usernames in the server-rendered history
-  pin(); // pin on initial load (history rendered server-side)
+  log.scrollTop = log.scrollHeight; // start at the newest message
 })();
 
 // "Now playing" elapsed timer. Each .now-elapsed span carries data-since (the

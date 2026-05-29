@@ -18,8 +18,9 @@ import (
 // chatRingSize bounds the in-memory recent-chat history the panel renders on
 // load. NATS core has no replay, so "recent history" is whatever has
 // accumulated since the hub subscribed — for a process that runs for days
-// that's effectively the whole recent stream.
-const chatRingSize = 200
+// that's effectively the whole recent stream. Doubles as the panel's scrollback
+// depth (the browser DOM cap matches this).
+const chatRingSize = 500
 
 // sseClientBuffer is the per-client channel depth. A browser that can't keep up
 // drops events (see broadcast) rather than stalling the NATS callback.
