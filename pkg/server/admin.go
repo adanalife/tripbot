@@ -905,13 +905,25 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
     const d = new Date(iso);
     if (!isNaN(d.getTime())) t.textContent = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   });
+  // Give each username a stable color derived from a hash of the name, so the
+  // same chatter is always the same hue. L/S tuned to stay legible on both the
+  // dark and light panel themes.
+  const colorFor = (name) => {
+    let h = 0;
+    for (let i = 0; i < name.length; i++) h = (Math.imul(h, 31) + name.charCodeAt(i)) >>> 0;
+    return 'hsl(' + (h % 360) + ' 65% 60%)';
+  };
+  const colorize = (root) => root.querySelectorAll('.chat-line .cu').forEach(el => {
+    if (!el.dataset.colored) { el.style.color = colorFor(el.textContent); el.dataset.colored = '1'; }
+  });
+  const decorate = (root) => { localize(root); colorize(root); };
   log.addEventListener('htmx:afterSwap', () => {
     log.querySelectorAll('.chat-empty').forEach(el => el.remove());
     while (log.childElementCount > 200) log.removeChild(log.firstElementChild);
-    localize(log);
+    decorate(log);
     pin();
   });
-  localize(log); // localize the server-rendered history
+  decorate(log); // localize times + color usernames in the server-rendered history
   pin(); // pin on initial load (history rendered server-side)
 })();
 
