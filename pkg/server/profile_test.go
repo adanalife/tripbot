@@ -14,12 +14,13 @@ import (
 
 // withProfileSeams stubs the DB-backed data reads so the handler renders without
 // a real database.
-func withProfileSeams(t *testing.T, u users.User, sessions int64) {
+func withProfileSeams(t *testing.T, u users.User, sessions int64, monthly float32) {
 	t.Helper()
-	savedFind, savedCount := findUser, sessionCount
-	t.Cleanup(func() { findUser, sessionCount = savedFind, savedCount })
+	savedFind, savedCount, savedMonthly := findUser, sessionCount, monthlyMiles
+	t.Cleanup(func() { findUser, sessionCount, monthlyMiles = savedFind, savedCount, savedMonthly })
 	findUser = func(context.Context, string) users.User { return u }
 	sessionCount = func(context.Context, string) int64 { return sessions }
+	monthlyMiles = func(context.Context, users.User) float32 { return monthly }
 }
 
 func renderProfile(t *testing.T, username string) string {
@@ -39,12 +40,13 @@ func TestUserProfileHandler_Found(t *testing.T) {
 		IsBot:       false,
 		DateCreated: time.Date(2019, 5, 1, 0, 0, 0, 0, time.UTC),
 		LastSeen:    time.Date(2026, 5, 29, 13, 5, 0, 0, time.UTC),
-	}, 87)
+	}, 87, 42.0)
 
 	body := renderProfile(t, "danalol")
 	for _, want := range []string{
 		"danalol",
-		"123.0",      // miles
+		"123.0",      // lifetime miles
+		"42.0",       // this month
 		">87<",       // sessions
 		"2019-05-01", // first seen
 		`href="https://twitch.tv/danalol"`,
@@ -59,7 +61,7 @@ func TestUserProfileHandler_Found(t *testing.T) {
 }
 
 func TestUserProfileHandler_NotFound(t *testing.T) {
-	withProfileSeams(t, users.User{ID: 0}, 0)
+	withProfileSeams(t, users.User{ID: 0}, 0, 0)
 
 	body := renderProfile(t, "ghost")
 	if !strings.Contains(body, "no record") {
@@ -71,8 +73,22 @@ func TestUserProfileHandler_NotFound(t *testing.T) {
 }
 
 func TestUserProfileHandler_BotBadge(t *testing.T) {
-	withProfileSeams(t, users.User{ID: 7, Username: "tripbot4000", IsBot: true}, 3)
+	withProfileSeams(t, users.User{ID: 7, Username: "tripbot4000", IsBot: true}, 3, 0)
 	if body := renderProfile(t, "tripbot4000"); !strings.Contains(body, "profile-bot") {
 		t.Errorf("expected bot badge, got %q", body)
+	}
+}
+
+// TestUserProfileHandler_UnknownDates covers a found user with no event history
+// (zero-value timestamps — e.g. a freshly-seeded account): show "unknown", not
+// Go's 0001-01-01 zero time.
+func TestUserProfileHandler_UnknownDates(t *testing.T) {
+	withProfileSeams(t, users.User{ID: 9, Username: "freshacct"}, 0, 0)
+	body := renderProfile(t, "freshacct")
+	if strings.Contains(body, "0001") {
+		t.Errorf("zero time should not render as 0001-...: %q", body)
+	}
+	if !strings.Contains(body, "unknown") {
+		t.Errorf("expected 'unknown' for zero-value seen dates: %q", body)
 	}
 }

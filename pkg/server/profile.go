@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"html/template"
 	"log/slog"
 	"net/http"
@@ -8,27 +9,34 @@ import (
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/events"
+	"github.com/adanalife/tripbot/pkg/scoreboards"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/gorilla/mux"
 )
 
-// findUser / sessionCount are the data seams the profile handler reads through,
-// overridable in tests so the handler renders without a real DB.
+// findUser / sessionCount / monthlyMiles are the data seams the profile handler
+// reads through, overridable in tests so the handler renders without a real DB.
+// Each is an operator-triggered read (one click), not a hot path, so the extra
+// monthly-score query is fine.
 var (
 	findUser     = users.Find
 	sessionCount = events.SessionCount
+	monthlyMiles = func(ctx context.Context, u users.User) float32 {
+		return u.GetScore(ctx, scoreboards.CurrentMilesScoreboard())
+	}
 )
 
 // userProfile is the chat-console popover payload — a small at-a-glance view of
 // a chatter, events-derived per the tripbot-events-table-design ADR.
 type userProfile struct {
-	Username  string
-	Found     bool
-	IsBot     bool
-	Miles     float32
-	Sessions  int64
-	FirstSeen time.Time
-	LastSeen  time.Time
+	Username     string
+	Found        bool
+	IsBot        bool
+	Miles        float32 // lifetime
+	MonthlyMiles float32 // current month
+	Sessions     int64
+	FirstSeen    time.Time
+	LastSeen     time.Time
 }
 
 // userProfileHandler serves GET /admin/user/{username}: the HTML fragment the
@@ -43,6 +51,7 @@ func userProfileHandler(w http.ResponseWriter, r *http.Request) {
 			prof.Found = true
 			prof.IsBot = u.IsBot
 			prof.Miles = u.Miles
+			prof.MonthlyMiles = monthlyMiles(r.Context(), u)
 			prof.FirstSeen = u.DateCreated
 			prof.LastSeen = u.LastSeen
 			prof.Sessions = sessionCount(r.Context(), username)
@@ -62,9 +71,10 @@ var userProfileTmpl = template.Must(template.New("profile").Parse(`<div class="p
   {{- if .Found}}
   <dl class="profile-stats">
     <dt>miles</dt><dd>{{printf "%.1f" .Miles}}</dd>
+    <dt>this month</dt><dd>{{printf "%.1f" .MonthlyMiles}}</dd>
     <dt>sessions</dt><dd>{{.Sessions}}</dd>
-    <dt>first seen</dt><dd>{{.FirstSeen.Format "2006-01-02"}}</dd>
-    <dt>last seen</dt><dd>{{.LastSeen.Format "2006-01-02 15:04"}}</dd>
+    <dt>first seen</dt><dd>{{if .FirstSeen.IsZero}}unknown{{else}}{{.FirstSeen.Format "2006-01-02"}}{{end}}</dd>
+    <dt>last seen</dt><dd>{{if .LastSeen.IsZero}}unknown{{else}}{{.LastSeen.Format "2006-01-02 15:04"}}{{end}}</dd>
   </dl>
   {{- else}}
   <p class="profile-empty">no record for this user yet</p>
