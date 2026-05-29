@@ -49,6 +49,39 @@ devenv logs tripbot
 devenv down
 ```
 
+### Local toolchain & tests (macOS)
+
+Go work (build/test) runs on the **host via [mise](https://mise.jdx.dev)**, not in
+Docker. `pkg/vlc-client` / `pkg/vlc-server` are cgo bindings against **libvlc**,
+which on macOS ships inside `VLC.app`. One-time setup:
+
+```bash
+brew install mise go-task/tap/go-task
+brew install --cask vlc          # provides libvlc (cgo dep of pkg/vlc-*)
+mise install                     # installs the pinned Go from .tool-versions
+```
+
+Run the unit tests natively — the `test:macos` task wires in the VLC.app libvlc
+cgo flags (`CGO_CFLAGS`/`CGO_LDFLAGS` + rpath) for you:
+
+```bash
+task test:macos
+```
+
+Full new-machine bootstrap (cluster access, local k3d, keybase/aws-vault) lives in
+the vault: `infra/dev-machine-setup.md`.
+
+### Deploying
+
+Feature PRs target `develop`. Merging to `develop` triggers the **Release
+Development** workflow, which builds + pushes the moving `adanalife/tripbot:develop`
+image. Stage tracks that tag, so shipping a merged change to stage is just a
+rollout (from `infra/`, with the mini-PC kube context current):
+
+```bash
+task k8s:stage:rollout:tripbot     # restart so it re-pulls :develop
+```
+
 
 ### Other Useful Docs
 
