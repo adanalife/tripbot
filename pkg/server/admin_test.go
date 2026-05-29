@@ -601,8 +601,8 @@ func TestAdminHandler_RendersChatHistoryAndSSEWiring(t *testing.T) {
 	withReauth(t, nil)
 	withConf(t, func() { c.Conf.VlcServerHost = "" })
 	withChatHistory(t, []ChatLine{
-		{Username: "alice", Text: "hello"},
-		{Username: "bob", Text: "<b>hi</b>"},
+		{Username: "alice", Text: "hello", At: time.Date(2026, 5, 29, 13, 5, 0, 0, time.UTC)},
+		{Username: "bob", Text: "<b>hi</b>", At: time.Date(2026, 5, 29, 13, 6, 0, 0, time.UTC)},
 	})
 
 	rec := httptest.NewRecorder()
@@ -615,6 +615,8 @@ func TestAdminHandler_RendersChatHistoryAndSSEWiring(t *testing.T) {
 		`/static/htmx.min.js`,         // vendored frontend loaded
 		"alice", "hello",              // seeded history rendered
 		"&lt;b&gt;hi&lt;/b&gt;", // chat text HTML-escaped
+		`<time class="ct-ts"`,   // per-line timestamp rendered
+		"13:05",                 // server-side UTC fallback (JS localizes)
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body missing %q", want)

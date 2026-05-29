@@ -704,6 +704,7 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
   details.chat > summary:hover { color:var(--fg); }
   .chat-log { max-height:40vh; overflow-y:auto; margin-top:8px; font-size:.92em; line-height:1.5; overscroll-behavior:contain; }
   .chat-line { padding:2px 0; word-break:break-word; }
+  .chat-line .ct-ts { color:var(--dim); font-family:var(--mono); font-size:.8em; margin-right:4px; }
   .chat-line .cu { color:#58a6ff; font-weight:600; }
   .chat-line .ct { color:var(--fg); }
   .chat-empty { color:var(--dim); font-style:italic; padding:6px 0; }
@@ -752,7 +753,7 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
          from the hub's ring buffer below; live lines stream in on top. -->
     <div hx-ext="sse" sse-connect="/admin/events">
       <div id="chat-log" class="chat-log" sse-swap="chat" hx-swap="beforeend scroll:bottom">
-        {{range .ChatHistory}}<div class="chat-line"><span class="cu">{{.Username}}</span> <span class="ct">{{.Text}}</span></div>{{else}}<div class="chat-empty">waiting for chat…</div>{{end}}
+        {{range .ChatHistory}}<div class="chat-line"><time class="ct-ts" datetime="{{.At.Format "2006-01-02T15:04:05Z07:00"}}">{{.At.Format "15:04"}}</time> <span class="cu">{{.Username}}</span> <span class="ct">{{.Text}}</span></div>{{else}}<div class="chat-empty">waiting for chat…</div>{{end}}
       </div>
     </div>
   </details>
@@ -896,11 +897,21 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
   const log = document.getElementById('chat-log');
   if (!log) return;
   const pin = () => { log.scrollTop = log.scrollHeight; };
+  // Times are emitted in UTC and rendered server-side as a fallback; show them
+  // in the viewer's local timezone instead.
+  const localize = (root) => root.querySelectorAll('time.ct-ts').forEach(t => {
+    const iso = t.getAttribute('datetime');
+    if (!iso) return;
+    const d = new Date(iso);
+    if (!isNaN(d.getTime())) t.textContent = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  });
   log.addEventListener('htmx:afterSwap', () => {
     log.querySelectorAll('.chat-empty').forEach(el => el.remove());
     while (log.childElementCount > 200) log.removeChild(log.firstElementChild);
+    localize(log);
     pin();
   });
+  localize(log); // localize the server-rendered history
   pin(); // pin on initial load (history rendered server-side)
 })();
 

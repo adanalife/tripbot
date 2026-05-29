@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/adanalife/tripbot/pkg/eventbus"
 )
@@ -74,21 +75,30 @@ func TestHub_handleChat_updatesRingAndBroadcasts(t *testing.T) {
 	h := NewHub()
 	client := h.register()
 
-	payload, _ := json.Marshal(eventbus.ChatMessage{Username: "DanaLol", Text: "hi there"})
+	emitted := time.Date(2026, 5, 29, 13, 5, 0, 0, time.UTC)
+	payload, _ := json.Marshal(eventbus.ChatMessage{
+		Username: "DanaLol", Text: "hi there", EmittedAt: emitted.Format(time.RFC3339Nano),
+	})
 	h.handleChat(context.Background(), payload)
 
-	// ring updated
+	// ring updated, timestamp parsed
 	snap := h.snapshotChat()
 	if len(snap) != 1 || snap[0].Username != "DanaLol" || snap[0].Text != "hi there" {
 		t.Fatalf("ring = %+v, want one DanaLol/hi there line", snap)
 	}
-	// client got a rendered fragment
+	if !snap[0].At.Equal(emitted) {
+		t.Errorf("ring line At = %v, want %v", snap[0].At, emitted)
+	}
+	// client got a rendered fragment with username, text, and a time element
 	ev := <-client
 	if ev.Name != "chat" {
 		t.Errorf("event name = %q, want chat", ev.Name)
 	}
 	if !strings.Contains(ev.Data, "DanaLol") || !strings.Contains(ev.Data, "hi there") {
 		t.Errorf("fragment %q missing username/text", ev.Data)
+	}
+	if !strings.Contains(ev.Data, `<time class="ct-ts"`) || !strings.Contains(ev.Data, "13:05") {
+		t.Errorf("fragment %q missing timestamp", ev.Data)
 	}
 }
 

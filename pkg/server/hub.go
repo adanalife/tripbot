@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"strings"
 	"sync"
+	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/eventbus"
@@ -24,10 +25,13 @@ const chatRingSize = 200
 // drops events (see broadcast) rather than stalling the NATS callback.
 const sseClientBuffer = 64
 
-// ChatLine is one rendered chat row held in the ring buffer.
+// ChatLine is one rendered chat row held in the ring buffer. At is the message
+// timestamp (UTC, from the event's emitted_at); the panel localizes it for
+// display.
 type ChatLine struct {
 	Username string
 	Text     string
+	At       time.Time
 }
 
 // sseEvent is one named Server-Sent Event: Name routes it to an HTMX sse-swap
@@ -89,9 +93,18 @@ func (h *Hub) handleChat(ctx context.Context, data []byte) {
 		slog.ErrorContext(ctx, "live-console hub: bad chat payload", "err", err)
 		return
 	}
-	line := ChatLine{Username: ev.Username, Text: ev.Text}
+	line := ChatLine{Username: ev.Username, Text: ev.Text, At: parseEmitted(ev.EmittedAt)}
 	h.appendChat(line)
 	h.broadcast(sseEvent{Name: "chat", Data: renderChatLine(line)})
+}
+
+// parseEmitted turns an event's emitted_at (RFC3339Nano UTC) into a time,
+// falling back to now so a malformed/empty value still gets a sensible stamp.
+func parseEmitted(s string) time.Time {
+	if t, err := time.Parse(time.RFC3339Nano, s); err == nil {
+		return t
+	}
+	return time.Now().UTC()
 }
 
 func (h *Hub) appendChat(line ChatLine) {
@@ -168,7 +181,7 @@ func (h *Hub) closeAll() {
 // chatLineTmpl renders one chat row as a single line (no newlines — SSE data
 // must not contain bare newlines). html/template escapes username + text.
 var chatLineTmpl = template.Must(template.New("chatline").Parse(
-	`<div class="chat-line"><span class="cu">{{.Username}}</span> <span class="ct">{{.Text}}</span></div>`))
+	`<div class="chat-line"><time class="ct-ts" datetime="{{.At.Format "2006-01-02T15:04:05Z07:00"}}">{{.At.Format "15:04"}}</time> <span class="cu">{{.Username}}</span> <span class="ct">{{.Text}}</span></div>`))
 
 func renderChatLine(line ChatLine) string {
 	var sb strings.Builder
