@@ -119,12 +119,20 @@ func Start(ctx context.Context) {
 
 	srv := &http.Server{
 		Addr: fmt.Sprintf("0.0.0.0:%s", c.Conf.TripbotServerPort),
-		// Good practice to set timeouts to avoid Slowloris attacks.
-		WriteTimeout:   time.Second * 15,
-		ReadTimeout:    time.Second * 15,
-		IdleTimeout:    time.Second * 60,
-		MaxHeaderBytes: 1 << 20, // 1 MB
-		Handler:        otelhttp.NewHandler(app, c.Conf.ServerType),
+		// WriteTimeout is 0 (disabled) because the admin panel's live console
+		// streams Server-Sent Events on /admin/events — a long-lived response a
+		// fixed write deadline would sever. The Go-idiomatic per-request
+		// http.ResponseController.SetWriteDeadline doesn't reach the underlying
+		// writer through the negroni + otelhttp (httpsnoop) HTTP/2 wrapper chain
+		// ("feature not supported"), so disabling it server-wide is the reliable
+		// fix. Slowloris protection is preserved by ReadHeaderTimeout (the header
+		// read is the attack vector WriteTimeout never really guarded anyway).
+		ReadTimeout:       time.Second * 15,
+		ReadHeaderTimeout: time.Second * 15,
+		WriteTimeout:      0,
+		IdleTimeout:       time.Second * 60,
+		MaxHeaderBytes:    1 << 20, // 1 MB
+		Handler:           otelhttp.NewHandler(app, c.Conf.ServerType),
 	}
 
 	// Run ListenAndServe in a goroutine so we can block on ctx.Done() and
