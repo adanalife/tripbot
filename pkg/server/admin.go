@@ -729,6 +729,18 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
   .chat-jump { position:absolute; left:50%; bottom:10px; transform:translateX(-50%); z-index:2; font:inherit; font-size:.8em; padding:4px 12px; border-radius:999px; border:1px solid var(--chip-border); background:var(--chip-bg); color:var(--fg); cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,.35); }
   .chat-jump:hover { border-color:#58a6ff; color:#9cf; }
   .chat-jump[hidden] { display:none; }
+  /* clickable chat usernames + the profile popover they open */
+  .chat-line .cu { cursor:pointer; }
+  .chat-line .cu:hover { text-decoration:underline; }
+  .user-popover { position:fixed; z-index:20; max-width:240px; background:var(--chip-bg); border:1px solid var(--chip-border); border-radius:8px; padding:12px 14px; box-shadow:0 6px 24px rgba(0,0,0,.45); font-size:.9em; }
+  .user-popover[hidden] { display:none; }
+  .profile-card .profile-name { font-weight:600; margin-bottom:8px; word-break:break-all; }
+  .profile-bot { font-size:.72em; color:var(--dim); border:1px solid var(--chip-border); border-radius:4px; padding:0 5px; vertical-align:middle; }
+  .profile-stats { display:grid; grid-template-columns:auto 1fr; gap:2px 14px; margin:0 0 8px; }
+  .profile-stats dt { color:var(--muted); }
+  .profile-stats dd { margin:0; text-align:right; font-variant-numeric:tabular-nums; }
+  .profile-empty { color:var(--dim); font-style:italic; margin:0 0 8px; }
+  .profile-link { font-size:.85em; }
   /* live viewer count — a subtle, quick colour flash on the number: green when
      it rises, red when it falls. The inner .chatters-count span is re-inserted
      on each SSE update so the animation re-triggers; with only a "from" keyframe
@@ -875,6 +887,10 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
     <button id="toggle-all" class="theme-toggle" type="button" title="expand or collapse all sections">▾ expand all</button>
     <button id="theme-toggle" class="theme-toggle" type="button" title="toggle theme">◐ theme</button>
   </div>
+
+  <!-- chat user-profile popover: filled by a fetch when a username in the chat
+       console is clicked (see the profile JS); position:fixed so it floats. -->
+  <div id="user-popover" class="user-popover" hidden></div>
 </main>
 <script>
 // Stream-preview iframe wiring. The disclosure defaults to open so the
@@ -1046,6 +1062,40 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
   };
   tick();
   setInterval(tick, 1000);
+})();
+
+// Chat user-profile popover. A delegated click on any chat username (.cu)
+// fetches /admin/user/<name> and floats the returned card near the click;
+// clicking outside or pressing Escape closes it. Delegation covers SSE-added
+// lines without per-line wiring.
+(function() {
+  const pop = document.getElementById('user-popover');
+  if (!pop) return;
+  let open = false;
+  const hide = () => { pop.hidden = true; open = false; };
+  document.addEventListener('click', (e) => {
+    const cu = e.target.closest('.cu');
+    if (cu) {
+      const name = cu.textContent.trim();
+      if (!name) return;
+      fetch('/admin/user/' + encodeURIComponent(name))
+        .then(r => r.ok ? r.text() : Promise.reject(r.status))
+        .then(html => {
+          pop.innerHTML = html;
+          pop.hidden = false; // unhide before measuring so offset* are real
+          open = true;
+          const pad = 8;
+          const x = Math.min(e.clientX, window.innerWidth - pop.offsetWidth - pad);
+          const y = Math.min(e.clientY + pad, window.innerHeight - pop.offsetHeight - pad);
+          pop.style.left = Math.max(pad, x) + 'px';
+          pop.style.top = Math.max(pad, y) + 'px';
+        })
+        .catch(() => {});
+      return;
+    }
+    if (open && !pop.contains(e.target)) hide();
+  });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hide(); });
 })();
 
 // iOS Home Screen apps return to a stale cached page on reopen — even with
