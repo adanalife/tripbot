@@ -110,6 +110,71 @@ func TestHub_handleChat_badPayloadNoCrash(t *testing.T) {
 	}
 }
 
+// TestHub_updateViewers_flashDirection walks the count through first-value,
+// rise, fall, and no-change to assert the flash direction the panel renders.
+func TestHub_updateViewers_flashDirection(t *testing.T) {
+	h := NewHub()
+	// First value sets the baseline — no flash (nothing to compare against).
+	if dir := h.updateViewers(10); dir != "" {
+		t.Errorf("first value: dir = %q, want \"\" (baseline, no flash)", dir)
+	}
+	if dir := h.updateViewers(12); dir != "up" {
+		t.Errorf("rise: dir = %q, want up", dir)
+	}
+	if dir := h.updateViewers(11); dir != "down" {
+		t.Errorf("fall: dir = %q, want down", dir)
+	}
+	if dir := h.updateViewers(11); dir != "" {
+		t.Errorf("unchanged: dir = %q, want \"\" (no flash)", dir)
+	}
+}
+
+func TestHub_handleViewerCount_broadcastsRenderedCount(t *testing.T) {
+	h := NewHub()
+	client := h.register()
+
+	payload, _ := json.Marshal(eventbus.ViewerCount{Count: 7, EmittedAt: "2026-05-29T13:05:00Z"})
+	h.handleViewerCount(context.Background(), payload)
+
+	ev := <-client
+	if ev.Name != "viewers" {
+		t.Errorf("event name = %q, want viewers", ev.Name)
+	}
+	// First value: no flash class, count present.
+	if !strings.Contains(ev.Data, `class="chatters-count"`) || !strings.Contains(ev.Data, ">7<") {
+		t.Errorf("fragment %q missing unflashed count 7", ev.Data)
+	}
+
+	// A rise should carry the flash-up class.
+	payload, _ = json.Marshal(eventbus.ViewerCount{Count: 9, EmittedAt: "2026-05-29T13:06:00Z"})
+	h.handleViewerCount(context.Background(), payload)
+	ev = <-client
+	if !strings.Contains(ev.Data, "flash-up") || !strings.Contains(ev.Data, ">9<") {
+		t.Errorf("fragment %q missing flash-up / count 9", ev.Data)
+	}
+}
+
+func TestHub_handleViewerCount_badPayloadNoCrash(t *testing.T) {
+	h := NewHub()
+	h.handleViewerCount(context.Background(), []byte("not json"))
+	// A bad payload must not flip viewersKnown or set a count.
+	if h.viewersKnown {
+		t.Errorf("bad payload should not establish a baseline")
+	}
+}
+
+func TestRenderViewerCount(t *testing.T) {
+	if got := renderViewerCount(5, ""); got != `<span class="chatters-count">5</span>` {
+		t.Errorf("unflashed = %q", got)
+	}
+	if got := renderViewerCount(5, "up"); !strings.Contains(got, "chatters-count flash-up") {
+		t.Errorf("up = %q, want flash-up class", got)
+	}
+	if got := renderViewerCount(5, "down"); !strings.Contains(got, "chatters-count flash-down") {
+		t.Errorf("down = %q, want flash-down class", got)
+	}
+}
+
 func TestRenderChatLine_escapesHTML(t *testing.T) {
 	got := renderChatLine(ChatLine{Username: "evil", Text: "<script>alert(1)</script>"})
 	if strings.Contains(got, "<script>") {

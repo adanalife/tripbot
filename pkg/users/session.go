@@ -9,6 +9,7 @@ import (
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/events"
+	"github.com/adanalife/tripbot/pkg/eventbus"
 	"github.com/adanalife/tripbot/pkg/scoreboards"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/google/uuid"
@@ -30,6 +31,10 @@ func UpdateSession(ctx context.Context) {
 	// fetch the latest chatters from Twitch
 	twitch.UpdateChatters()
 	currentChatters := twitch.Chatters()
+
+	// Publish the authoritative chatter total so the admin panel's live console
+	// updates the "in chat" number (and flashes it on a change) without a reload.
+	eventbus.EmitViewerCount(ctx, c.Conf.Environment, twitch.ChatterCount())
 
 	// log out the people who aren't present
 	for username, user := range LoggedIn {
