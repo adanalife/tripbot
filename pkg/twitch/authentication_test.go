@@ -295,6 +295,43 @@ func TestAccountsNeedingReauth_BroadcasterExpired(t *testing.T) {
 	}
 }
 
+func TestTokenStatuses_HealthyReportsExpiryForEveryIdentity(t *testing.T) {
+	withReauthConf(t, "tripbot4000", "adanalife_")
+	botExp := time.Now().Add(3 * time.Hour)
+	bcastExp := time.Now().Add(2 * time.Hour)
+	setTokens(t,
+		oauthtokens.Token{AccessToken: "good", ExpiresAt: botExp},
+		oauthtokens.Token{AccessToken: "good", ExpiresAt: bcastExp},
+	)
+
+	got := TokenStatuses()
+	if len(got) != 2 {
+		t.Fatalf("got %d statuses, want 2 (bot + broadcaster): %+v", len(got), got)
+	}
+	// Unlike AccountsNeedingReauth, healthy identities are still reported (with
+	// their expiry) so the panel can show a countdown.
+	if got[0].Account != "bot" || got[0].Reason != "" || !got[0].ExpiresAt.Equal(botExp) {
+		t.Errorf("bot status = %+v, want healthy with botExp", got[0])
+	}
+	if got[1].Account != "broadcaster" || got[1].Reason != "" || !got[1].ExpiresAt.Equal(bcastExp) {
+		t.Errorf("broadcaster status = %+v, want healthy with bcastExp", got[1])
+	}
+}
+
+func TestTokenStatuses_CarriesReauthReason(t *testing.T) {
+	withReauthConf(t, "tripbot4000", "adanalife_")
+	healthy := oauthtokens.Token{AccessToken: "good", ExpiresAt: time.Now().Add(time.Hour)}
+	setTokens(t, oauthtokens.Token{}, healthy) // bot blank → missing
+
+	got := TokenStatuses()
+	if len(got) != 2 || got[0].Account != "bot" || got[0].Reason != "missing" {
+		t.Fatalf("got %+v, want bot row with Reason=missing", got)
+	}
+	if !strings.Contains(got[0].InitURL, "account=bot") {
+		t.Errorf("InitURL %q should target the bot account", got[0].InitURL)
+	}
+}
+
 // When the bot and broadcaster are the same account, there's no separate
 // broadcaster row — a blank broadcaster slot must not produce a phantom
 // re-auth prompt.

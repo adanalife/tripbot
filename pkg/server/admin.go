@@ -41,6 +41,9 @@ var (
 	// token; the admin panel renders a re-auth prompt for each. Overridable in
 	// tests. Reads in-memory token state — no DB or network call.
 	accountsNeedingReauth = mytwitch.AccountsNeedingReauth
+	// authStatuses reports every identity's live token state (expiry +
+	// reauth reason) for the panel's countdown card. Overridable in tests.
+	authStatuses = mytwitch.TokenStatuses
 	// obsStreamStatus reports whether OBS is currently streaming. Function-seam
 	// so handler tests can stub without opening a real OBS WebSocket. Default
 	// hits OBS via pkg/obs (fresh connection per call — see obs.GetStreamStatus).
@@ -149,8 +152,9 @@ type adminData struct {
 	PanelHost      string // host the panel was reached at; the Twitch embed needs it as parent=
 	Links          []navLink
 	Flags          []featureFlag            // feature flags + their state; empty hides the section
-	Reauth         []mytwitch.AccountReauth // accounts whose token needs re-auth; empty when healthy
-	ChatHistory    []ChatLine               // recent chat from the live-console hub; live lines stream in via SSE
+	Reauth         []mytwitch.AccountReauth      // accounts whose token needs re-auth; empty when healthy
+	AuthStatuses   []mytwitch.AccountTokenStatus // every identity's token state; drives the live expiry-countdown card
+	ChatHistory    []ChatLine                    // recent chat from the live-console hub; live lines stream in via SSE
 }
 
 // adminHandler serves the human-facing root page on the tripbot Ingress: a
@@ -178,6 +182,7 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 		Links:          gatherLinks(),
 		Flags:          gatherFlags(r.Context()),
 		Reauth:         accountsNeedingReauth(),
+		AuthStatuses:   authStatuses(),
 		ChatHistory:    eventHub.snapshotChat(),
 	}
 
@@ -560,6 +565,10 @@ func panelHost(r *http.Request) string {
 
 var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
 	"envColorClass": envColorClass,
+	// authCard / reauthCallout render the same fragments the hub pushes live,
+	// so the initial server render and a later SSE swap are byte-identical.
+	"authCard":      func(s []mytwitch.AccountTokenStatus) template.HTML { return template.HTML(renderAuthCard(s)) },
+	"reauthCallout": func(r []mytwitch.AccountReauth) template.HTML { return template.HTML(renderReauthCallout(r)) },
 }).Parse(`<!doctype html>
 <html lang="en">
 <head>
@@ -722,6 +731,17 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
   @keyframes flash-down { from { color:#f85149; } }
   .chatters-count.flash-up   { animation:flash-up .8s ease-out; }
   .chatters-count.flash-down { animation:flash-down .8s ease-out; }
+  /* live auth/token card — compact muted line under the accounts line. Each
+     identity shows "expires in N" (JS-filled from data-expires); .auth-soon
+     reddens it under the threshold, .auth-expired once past, and .auth-warn
+     marks a missing/expired token whose row carries a re-auth link instead. */
+  .auth { color:var(--dim); margin:0 0 18px; font-size:.82em; }
+  .auth-row { margin-right:12px; white-space:nowrap; }
+  .auth-who { color:var(--muted); }
+  .auth-expires.auth-soon { color:#f0883e; font-weight:600; }
+  .auth-expires.auth-expired { color:#f85149; font-weight:600; }
+  .auth-row.auth-warn .auth-who { color:#f0883e; }
+  a.auth-reauth { color:#ffb454; font-weight:600; }
 </style>
 </head>
 <body>
@@ -738,16 +758,16 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
        replaced (innerHTML) on each "viewers" event so its flash animation re-fires. -->
   <p class="meta">up {{.Uptime}} · <span id="chatters" sse-swap="viewers" hx-swap="innerHTML"><span class="chatters-count">{{.Chatters}}</span></span> in chat</p>
   <p class="accounts">broadcaster <a href="https://twitch.tv/{{.Channel}}">{{.Channel}}</a> · bot <a href="https://twitch.tv/{{.Bot}}">{{.Bot}}</a></p>
+  <!-- live token-expiry card: per-identity "expires in N" countdown (the JS
+       ticker counts it down + reddens it near expiry), or a re-auth link when a
+       token is missing/expired. The hub's 30s poller OOB-swaps #auth-card;
+       authCard renders the same fragment here for the initial paint. -->
+  <p class="auth" id="auth-card" sse-swap="auth" hx-swap="innerHTML">{{authCard .AuthStatuses}}</p>
 
-  {{if .Reauth}}
-  <div class="reauth">
-    <h2>action needed: re-authenticate</h2>
-    <p>tripbot can't talk to Twitch until these accounts are re-authorized. Sign in as the named account on each — the flow re-prompts which account to use, so sign out of Twitch (or use a private window) if it grabs the wrong one.</p>
-    <div class="btns">
-      {{range .Reauth}}<a class="btn" href="{{.InitURL}}">Sign in as {{.LoginAs}} <span class="why">({{.Account}} · {{.Reason}})</span></a>{{end}}
-    </div>
-  </div>
-  {{end}}
+  <!-- #reauth-card fills (banner appears) or empties (banner disappears) live as
+       the hub's auth poller pushes "reauth" events; reauthCallout renders the
+       same markup for the initial paint. -->
+  <div id="reauth-card" sse-swap="reauth" hx-swap="innerHTML">{{reauthCallout .Reauth}}</div>
 
   <h2>status</h2>
   <ul>
@@ -958,6 +978,35 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
     document.querySelectorAll('.now-elapsed[data-since]').forEach(el => {
       const since = Number(el.dataset.since);
       if (since) el.textContent = fmt(now - since);
+    });
+  };
+  tick();
+  setInterval(tick, 1000);
+})();
+
+// Auth token countdown. Each .auth-expires carries data-expires (Unix seconds);
+// show "expires in N" counting down, redden it under 15 min (.auth-soon) and
+// once past (.auth-expired). The hub re-pushes the card every 30s, but this
+// keeps the displayed remaining fresh between pushes.
+(function() {
+  const SOON = 15 * 60; // seconds — redden threshold
+  const fmt = (s) => {
+    if (s <= 0) return 'expired';
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+    if (h) return 'expires in ' + h + 'h ' + m + 'm';
+    if (m) return 'expires in ' + m + 'm';
+    return 'expires in <1m';
+  };
+  const tick = () => {
+    const now = Date.now() / 1000;
+    document.querySelectorAll('.auth-expires[data-expires]').forEach(el => {
+      const exp = Number(el.dataset.expires);
+      // A zero/sentinel expiry (year-1 epoch) means "unknown" — don't show it as expired.
+      if (!exp || exp < 1e9) { el.textContent = 'expires —'; el.classList.remove('auth-soon', 'auth-expired'); return; }
+      const rem = exp - now;
+      el.textContent = fmt(rem);
+      el.classList.toggle('auth-soon', rem > 0 && rem < SOON);
+      el.classList.toggle('auth-expired', rem <= 0);
     });
   };
   tick();
