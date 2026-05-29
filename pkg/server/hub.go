@@ -83,6 +83,7 @@ func (h *Hub) Start(ctx context.Context) {
 	}{
 		{eventbus.ChatMessageSubject(env), h.handleChat},
 		{eventbus.ViewerCountSubject(env), h.handleViewerCount},
+		{eventbus.VideoChangedSubject(env), h.handleVideoChanged},
 	}
 
 	var subs []*nats.Subscription
@@ -149,6 +150,18 @@ func (h *Hub) updateViewers(count int) string {
 	h.viewers = count
 	h.viewersKnown = true
 	return dir
+}
+
+// handleVideoChanged forwards a video switch to the panel's "now playing"
+// card. There's no ring to keep — the page renders the current video on load
+// and this just refreshes it; the hub holds no video state.
+func (h *Hub) handleVideoChanged(ctx context.Context, data []byte) {
+	var ev eventbus.VideoChanged
+	if err := json.Unmarshal(data, &ev); err != nil {
+		slog.ErrorContext(ctx, "live-console hub: bad video payload", "err", err)
+		return
+	}
+	h.broadcast(sseEvent{Name: "video", Data: renderVideoLine(ev)})
 }
 
 // parseEmitted turns an event's emitted_at (RFC3339Nano UTC) into a time,
@@ -259,6 +272,32 @@ func renderViewerCount(count int, dir string) string {
 		Flash string
 	}{Count: count, Flash: dir}); err != nil {
 		slog.Error("live-console hub: render viewer count", "err", err)
+		return ""
+	}
+	return sb.String()
+}
+
+// videoLineTmpl renders the inner of the "now playing" line — file, state, and
+// an elapsed-time span the page's JS ticker counts up from data-since. Swapped
+// (innerHTML) into the stable #now-line target. The markup mirrors the
+// server-rendered version in admin.go's template (same duplication the chat
+// line uses) so a live swap looks identical to a fresh page render. A
+// just-switched clip starts at 0s; the ticker takes over within a second.
+var videoLineTmpl = template.Must(template.New("videoline").Parse(
+	`<span class="file">{{.File}}</span>{{if .State}} <span class="state">· {{.State}}</span>{{end}} <span class="state">· <span class="now-elapsed" data-since="{{.SinceUnix}}">{{.Progress}}</span></span>`))
+
+func renderVideoLine(ev eventbus.VideoChanged) string {
+	var sb strings.Builder
+	if err := videoLineTmpl.Execute(&sb, struct {
+		File, State, Progress string
+		SinceUnix             int64
+	}{
+		File:      ev.File,
+		State:     ev.State,
+		Progress:  "0s",
+		SinceUnix: parseEmitted(ev.EmittedAt).Unix(),
+	}); err != nil {
+		slog.Error("live-console hub: render video line", "err", err)
 		return ""
 	}
 	return sb.String()

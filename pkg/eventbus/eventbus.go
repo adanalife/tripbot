@@ -121,3 +121,31 @@ func EmitViewerCount(ctx context.Context, env string, count int) {
 		EmittedAt: emittedAt(),
 	})
 }
+
+// --- video.changed --------------------------------------------------------
+
+// VideoChanged is the wire format for tripbot.<env>.video.changed — published
+// when VLC switches to a new clip. State is the full state name (e.g.
+// "Wyoming"); Flagged marks a no-GPS clip. The admin panel's "now playing"
+// card updates from this without a reload.
+type VideoChanged struct {
+	File      string `json:"file"`
+	State     string `json:"state"`
+	Flagged   bool   `json:"flagged"`
+	EmittedAt string `json:"emitted_at"`
+}
+
+// VideoChangedSubject returns the subscribe/publish subject for video-change
+// events in env.
+func VideoChangedSubject(env string) string { return subject(env, "video", "changed") }
+
+// EmitVideoChanged publishes a video switch. The emitted_at doubles as the
+// clip's start time, so the panel can tick an elapsed timer from it.
+func EmitVideoChanged(ctx context.Context, env, file, state string, flagged bool) {
+	emit(ctx, VideoChangedSubject(env), VideoChanged{
+		File:      file,
+		State:     state,
+		Flagged:   flagged,
+		EmittedAt: emittedAt(),
+	})
+}

@@ -98,10 +98,14 @@ type versionInfo struct {
 }
 
 // nowPlaying is the current-video summary shown when vlc-server is healthy.
+// SinceUnix is the clip's start time as a Unix timestamp; the page's JS ticker
+// counts the elapsed display up from it (and resets it on each live video swap)
+// so progress keeps moving without a reload.
 type nowPlaying struct {
-	File     string
-	State    string
-	Progress string
+	File      string
+	State     string
+	Progress  string
+	SinceUnix int64
 }
 
 // streamControl drives the OBS stream toggle widget. Reachable=false hides
@@ -380,10 +384,12 @@ func currentVideo(vlcOK bool) *nowPlaying {
 	if v.Slug == "" {
 		return nil
 	}
+	progress := currentProgress()
 	return &nowPlaying{
-		File:     v.File(),
-		State:    v.State,
-		Progress: currentProgress().Round(time.Second).String(),
+		File:      v.File(),
+		State:     v.State,
+		Progress:  progress.Round(time.Second).String(),
+		SinceUnix: time.Now().Add(-progress).Unix(),
 	}
 }
 
@@ -798,12 +804,11 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
   {{if or .Now .Audio.Title}}
   <details class="now-playing">
     <summary>now playing</summary>
+    <!-- #now-line is the sse-swap target for "video" events; its inner markup
+         mirrors hub.go's videoLineTmpl so a live swap matches a fresh render.
+         The .now-elapsed span is counted up by the page's JS ticker. -->
     {{with .Now}}
-    <p class="now">
-      <span class="file">{{.File}}</span>
-      {{if .State}}<span class="state">· {{.State}}</span>{{end}}
-      {{if .Progress}}<span class="state">· {{.Progress}}</span>{{end}}
-    </p>
+    <p class="now" id="now-line" sse-swap="video" hx-swap="innerHTML"><span class="file">{{.File}}</span>{{if .State}} <span class="state">· {{.State}}</span>{{end}} <span class="state">· <span class="now-elapsed" data-since="{{.SinceUnix}}">{{.Progress}}</span></span></p>
     {{end}}
     {{if .Audio.Title}}
     <p class="audio">
@@ -936,6 +941,27 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
   });
   decorate(log); // localize times + color usernames in the server-rendered history
   pin(); // pin on initial load (history rendered server-side)
+})();
+
+// "Now playing" elapsed timer. Each .now-elapsed span carries data-since (the
+// clip's start as a Unix timestamp); tick it up once a second so the progress
+// keeps moving without a reload. A live "video" swap replaces the span with a
+// fresh data-since, so the count resets to the new clip automatically.
+(function() {
+  const fmt = (s) => {
+    s = Math.max(0, Math.floor(s));
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+    return (h ? h + 'h' : '') + (h || m ? m + 'm' : '') + sec + 's';
+  };
+  const tick = () => {
+    const now = Date.now() / 1000;
+    document.querySelectorAll('.now-elapsed[data-since]').forEach(el => {
+      const since = Number(el.dataset.since);
+      if (since) el.textContent = fmt(now - since);
+    });
+  };
+  tick();
+  setInterval(tick, 1000);
 })();
 
 // iOS Home Screen apps return to a stale cached page on reopen — even with

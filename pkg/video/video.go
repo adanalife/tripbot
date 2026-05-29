@@ -9,6 +9,7 @@ import (
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
+	"github.com/adanalife/tripbot/pkg/eventbus"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
 	vlcClient "github.com/adanalife/tripbot/pkg/vlc-client"
@@ -78,6 +79,12 @@ func (p *Player) GetCurrentlyPlaying(ctx context.Context) {
 			"file", p.CurrentlyPlaying.File(),
 			"state", helpers.StateToStateAbbrev(p.CurrentlyPlaying.State),
 		)
+
+		// Announce the switch so the admin panel's "now playing" card updates
+		// live (no-op when NATS is unconfigured). emitted_at doubles as the
+		// clip start time for the panel's elapsed ticker.
+		eventbus.EmitVideoChanged(ctx, c.Conf.Environment,
+			p.CurrentlyPlaying.File(), p.CurrentlyPlaying.State, p.CurrentlyPlaying.Flagged)
 
 		// show the no-GPS image
 		if p.CurrentlyPlaying.Flagged {
