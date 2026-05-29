@@ -343,20 +343,20 @@ func TestAdminHandler_RendersReadyStatusAndLinks(t *testing.T) {
 		`<a href="https://github.com/adanalife/tripbot/blob/feedfacecafe/CHANGELOG.md">v8.8.8-osc</a>`, // onscreens version → changelog@sha
 		">vlc-server<",       // vlc row label
 		">onscreens-server<", // onscreens row label
-		"12 in chat",                          // chatter count
-		`<code class="env env-prod">production</code>`,    // env in monospace chip, prod-coloured
+		"12 in chat",         // chatter count
+		`<code class="env env-prod">production</code>`,     // env in monospace chip, prod-coloured
 		`<title>tripbot — adanalife_ (production)</title>`, // env rendered in <title> for tab disambiguation
-		"now playing",                         // now-playing section shown when vlc healthy
-		"wy_0042.MP4",                         // current video file
-		"Wyoming",                             // current video state
-		"3m12s",                               // clip progress
-		`>obs</a>`,                            // one-word OBS link
-		`>grafana</a>`,                        // one-word grafana link
-		`>traefik</a>`,                        // one-word traefik link
-		`>hubble</a>`,                         // one-word hubble link
-		"https://obs-prod.tail020deb.ts.net",  // tailnet OBS href
-		grafanaURL,                            // grafana href
-		traefikURL,                            // traefik href
+		"now playing",                        // now-playing section shown when vlc healthy
+		"wy_0042.MP4",                        // current video file
+		"Wyoming",                            // current video state
+		"3m12s",                              // clip progress
+		`>obs</a>`,                           // one-word OBS link
+		`>grafana</a>`,                       // one-word grafana link
+		`>traefik</a>`,                       // one-word traefik link
+		`>hubble</a>`,                        // one-word hubble link
+		"https://obs-prod.tail020deb.ts.net", // tailnet OBS href
+		grafanaURL,                           // grafana href
+		traefikURL,                           // traefik href
 		// Environment is "production" above → hubble link carries ?namespace=prod-1
 		"https://hubble-prod.tail020deb.ts.net/?namespace=prod-1",
 	} {
@@ -544,7 +544,7 @@ func TestAdminHandler_RendersFeatureFlagsWhenLoaded(t *testing.T) {
 
 	body := rec.Body.String()
 	for _, want := range []string{
-		"feature flags",                  // disclosure label
+		"feature flags",                     // disclosure label
 		"<code>chatbot.experimental</code>", // monospace key
 		"<code>discord.bot_enabled</code>",
 		"Gates pkg/discord startup.",
@@ -578,5 +578,64 @@ func TestAdminHandler_HidesFeatureFlagsSectionWhenEmpty(t *testing.T) {
 
 	if strings.Contains(rec.Body.String(), "feature flags") {
 		t.Errorf("feature flags section should be hidden when no flags are loaded")
+	}
+}
+
+// withChatHistory swaps the package eventHub for a fresh one seeded with lines,
+// restoring the original after the test.
+func withChatHistory(t *testing.T, lines []ChatLine) {
+	t.Helper()
+	saved := eventHub
+	h := NewHub()
+	for _, l := range lines {
+		h.appendChat(l)
+	}
+	eventHub = h
+	t.Cleanup(func() { eventHub = saved })
+}
+
+func TestAdminHandler_RendersChatHistoryAndSSEWiring(t *testing.T) {
+	defer SetTwitchConnected(false)
+	SetTwitchConnected(true)
+	withNowPlaying(t, nowPlayingTrack{})
+	withReauth(t, nil)
+	withConf(t, func() { c.Conf.VlcServerHost = "" })
+	withChatHistory(t, []ChatLine{
+		{Username: "alice", Text: "hello", At: time.Date(2026, 5, 29, 13, 5, 0, 0, time.UTC)},
+		{Username: "bob", Text: "<b>hi</b>", At: time.Date(2026, 5, 29, 13, 6, 0, 0, time.UTC)},
+	})
+
+	rec := httptest.NewRecorder()
+	adminHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+
+	body := rec.Body.String()
+	for _, want := range []string{
+		`sse-connect="/admin/events"`, // SSE wiring present
+		`id="chat-log"`,               // live chat pane
+		`/static/htmx.min.js`,         // vendored frontend loaded
+		"alice", "hello",              // seeded history rendered
+		"&lt;b&gt;hi&lt;/b&gt;", // chat text HTML-escaped
+		`<time class="ct-ts"`,   // per-line timestamp rendered
+		"13:05",                 // server-side UTC fallback (JS localizes)
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body missing %q", want)
+		}
+	}
+}
+
+func TestAdminHandler_ChatEmptyPlaceholder(t *testing.T) {
+	defer SetTwitchConnected(false)
+	SetTwitchConnected(true)
+	withNowPlaying(t, nowPlayingTrack{})
+	withReauth(t, nil)
+	withConf(t, func() { c.Conf.VlcServerHost = "" })
+	withChatHistory(t, nil) // empty ring
+
+	rec := httptest.NewRecorder()
+	adminHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+
+	if !strings.Contains(rec.Body.String(), "waiting for chat") {
+		t.Errorf("expected empty-chat placeholder when no history")
 	}
 }

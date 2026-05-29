@@ -114,6 +114,7 @@ func main() {
 	getCurrentUsers()
 	startEventSub(shutdownCtx)
 	startNATS()
+	server.StartEventHub(shutdownCtx) // after startNATS: the hub subscribes to the live NATS conn
 	startDiscord(shutdownCtx)
 	startSilentDisconnectWatchdog(shutdownCtx)
 	connectToTwitch()

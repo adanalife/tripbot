@@ -1,7 +1,11 @@
-# Skip LFS-tracked binaries — CI doesn't pull LFS, so the MP4 checkout
-# is a permission-denied pointer rather than the real file, and
-# end-of-file-fixer chokes trying to read it.
-exclude: '^assets/video/'
+# Skip:
+#   - LFS-tracked binaries (assets/video/): CI doesn't pull LFS, so the
+#     MP4 checkout is a permission-denied pointer rather than the real
+#     file, and end-of-file-fixer chokes trying to read it.
+#   - vendored frontend assets (pkg/server/static/): third-party htmx +
+#     its SSE extension, kept byte-for-byte upstream — not ours to
+#     reformat (no trailing newline, minified, etc.).
+exclude: '^(assets/video/|pkg/server/static/)'
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
