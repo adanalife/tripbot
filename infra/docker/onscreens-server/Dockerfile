@@ -36,8 +36,12 @@ RUN mkdir -p /etc/tripbot \
   && echo "${VERSION}" > /etc/tripbot/version \
   && echo "${SHA}" > /etc/tripbot/sha
 
-EXPOSE 8081
+# This image always runs onscreens-server standalone (its own pod/IP), so it
+# binds the project-standard :8080 rather than the co-located :8081 default.
+ENV ONSCREENS_SERVER_BIND_ADDRESS=:8080
 
-HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD curl -fsS http://localhost:8081/health/live
+EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD curl -fsS http://localhost:8080/health/live
 
 ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/onscreens-server"]
