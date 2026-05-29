@@ -10,6 +10,7 @@ import (
 	mylog "github.com/adanalife/tripbot/pkg/chatbot/log"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
+	"github.com/adanalife/tripbot/pkg/eventbus"
 	"github.com/adanalife/tripbot/pkg/feature"
 	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
@@ -132,6 +133,11 @@ func Initialize() *twitch.Client {
 func Say(msg string) {
 	// include the message in the log
 	mylog.ChatMsg(c.Conf.BotUsername, msg)
+	// mirror the bot's own output onto the event bus so it shows in the admin
+	// live console — Twitch doesn't echo our sent messages back via
+	// PrivateMessage, so without this the console would miss everything the bot
+	// says. Fire-and-forget; no-op when NATS is unconfigured.
+	eventbus.EmitChatMessage(context.Background(), c.Conf.Environment, c.Conf.BotUsername, msg)
 	// figure out what channel to speak to
 	speakTo := c.Conf.ChannelName
 	if c.Conf.OutputChannel != "" {
