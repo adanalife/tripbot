@@ -73,6 +73,7 @@ func Start(ctx context.Context) {
 	// the vendored htmx assets it loads. The /admin POST subrouter below is
 	// POST-only, so the GET stream registers on r directly.
 	r.Handle("/admin/events", tagged("/admin/events", eventsHandler)).Methods("GET")
+	r.Handle("/admin/user/{username}", tagged("/admin/user/{username}", userProfileHandler)).Methods("GET")
 	r.PathPrefix("/static/").Handler(staticHandler())
 
 	// admin actions — tailnet-only by virtue of where the Ingress is
