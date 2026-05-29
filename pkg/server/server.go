@@ -69,6 +69,12 @@ func Start(ctx context.Context) {
 	// admin panel (status overview + links) on the root path
 	r.Handle("/", tagged("/", adminHandler)).Methods("GET", "HEAD")
 
+	// live console: SSE stream the panel subscribes to (GET, long-lived) +
+	// the vendored htmx assets it loads. The /admin POST subrouter below is
+	// POST-only, so the GET stream registers on r directly.
+	r.Handle("/admin/events", tagged("/admin/events", eventsHandler)).Methods("GET")
+	r.PathPrefix("/static/").Handler(staticHandler())
+
 	// admin actions — tailnet-only by virtue of where the Ingress is
 	// exposed; no app-layer auth gate (see CLAUDE.md / vault decisions).
 	admin := r.PathPrefix("/admin").Methods("POST").Subrouter()
