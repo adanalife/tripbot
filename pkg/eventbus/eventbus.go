@@ -129,10 +129,12 @@ func EmitViewerCount(ctx context.Context, env string, count int) {
 // "Wyoming"); Flagged marks a no-GPS clip. The admin panel's "now playing"
 // card updates from this without a reload.
 type VideoChanged struct {
-	File      string `json:"file"`
-	State     string `json:"state"`
-	Flagged   bool   `json:"flagged"`
-	EmittedAt string `json:"emitted_at"`
+	File      string  `json:"file"`
+	State     string  `json:"state"`
+	Flagged   bool    `json:"flagged"`
+	Lat       float64 `json:"lat"` // GPS of the clip; 0/0 + Flagged means no fix
+	Lng       float64 `json:"lng"`
+	EmittedAt string  `json:"emitted_at"`
 }
 
 // VideoChangedSubject returns the subscribe/publish subject for video-change
@@ -141,11 +143,13 @@ func VideoChangedSubject(env string) string { return subject(env, "video", "chan
 
 // EmitVideoChanged publishes a video switch. The emitted_at doubles as the
 // clip's start time, so the panel can tick an elapsed timer from it.
-func EmitVideoChanged(ctx context.Context, env, file, state string, flagged bool) {
+func EmitVideoChanged(ctx context.Context, env, file, state string, flagged bool, lat, lng float64) {
 	emit(ctx, VideoChangedSubject(env), VideoChanged{
 		File:      file,
 		State:     state,
 		Flagged:   flagged,
+		Lat:       lat,
+		Lng:       lng,
 		EmittedAt: emittedAt(),
 	})
 }

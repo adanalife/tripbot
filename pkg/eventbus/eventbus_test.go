@@ -132,7 +132,7 @@ func TestEmitVideoChanged(t *testing.T) {
 	nowFn = func() time.Time { return fixed }
 	t.Cleanup(func() { nowFn = func() time.Time { return time.Now().UTC() } })
 
-	EmitVideoChanged(context.Background(), "development", "wy_0042.MP4", "Wyoming", true)
+	EmitVideoChanged(context.Background(), "development", "wy_0042.MP4", "Wyoming", false, 41.5, -110.2)
 
 	if len(rec.Publishes) != 1 {
 		t.Fatalf("expected 1 publish, got %d", len(rec.Publishes))
@@ -146,8 +146,11 @@ func TestEmitVideoChanged(t *testing.T) {
 	if err := json.Unmarshal(pub.Payload, &ev); err != nil {
 		t.Fatalf("payload not valid JSON: %v", err)
 	}
-	if ev.File != "wy_0042.MP4" || ev.State != "Wyoming" || !ev.Flagged {
-		t.Errorf("envelope = %+v, want file=wy_0042.MP4 state=Wyoming flagged=true", ev)
+	if ev.File != "wy_0042.MP4" || ev.State != "Wyoming" || ev.Flagged {
+		t.Errorf("envelope = %+v, want file=wy_0042.MP4 state=Wyoming flagged=false", ev)
+	}
+	if ev.Lat != 41.5 || ev.Lng != -110.2 {
+		t.Errorf("coords = %v,%v want 41.5,-110.2", ev.Lat, ev.Lng)
 	}
 	if ev.EmittedAt != fixed.Format(time.RFC3339Nano) {
 		t.Errorf("emitted_at = %q, want %q", ev.EmittedAt, fixed.Format(time.RFC3339Nano))
