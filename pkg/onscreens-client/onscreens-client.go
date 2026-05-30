@@ -60,6 +60,7 @@ func (c *Client) publish(ctx context.Context, subject string, ev any) {
 }
 
 func (c *Client) HideMiddleText(ctx context.Context) error {
+	c.publish(ctx, oe.MiddleHideSubject(c.env), oe.Command{Envelope: oe.NewEnvelope()})
 	_, err := c.get(ctx, c.serverURL+"/onscreens/middle/hide")
 	if err != nil {
 		slog.ErrorContext(ctx, "error hiding middle onscreen", "err", err)
@@ -143,6 +144,7 @@ func (c *Client) ShowGuessLeaderboard(ctx context.Context) {
 }
 
 func (c *Client) ShowTimewarp(ctx context.Context) error {
+	c.publish(ctx, oe.TimewarpShowSubject(c.env), oe.Command{Envelope: oe.NewEnvelope()})
 	_, err := c.get(ctx, c.serverURL+"/onscreens/timewarp/show")
 	if err != nil {
 		slog.ErrorContext(ctx, "error showing timewarp onscreen", "err", err)
@@ -164,6 +166,9 @@ func (c *Client) ShowFlag(ctx context.Context, dur time.Duration) error {
 }
 
 func (c *Client) ShowGPSImage(ctx context.Context, dur time.Duration) error {
+	// dur isn't transported — the server owns the GPS overlay's duration
+	// (gpsDuration); the HTTP query param is vestigial and ignored there too.
+	c.publish(ctx, oe.GPSShowSubject(c.env), oe.Command{Envelope: oe.NewEnvelope()})
 	url := c.serverURL + "/onscreens/gps/show"
 	url = fmt.Sprintf("%s?duration=%s", url, helpers.Base64Encode(string(rune(dur))))
 	_, err := c.get(ctx, url)
@@ -175,6 +180,7 @@ func (c *Client) ShowGPSImage(ctx context.Context, dur time.Duration) error {
 }
 
 func (c *Client) HideGPSImage(ctx context.Context) error {
+	c.publish(ctx, oe.GPSHideSubject(c.env), oe.Command{Envelope: oe.NewEnvelope()})
 	_, err := c.get(ctx, c.serverURL+"/onscreens/gps/hide")
 	if err != nil {
 		slog.ErrorContext(ctx, "error hiding gps onscreen", "err", err)

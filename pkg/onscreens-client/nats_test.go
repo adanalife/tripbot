@@ -125,6 +125,58 @@ func TestShowLeaderboard_PublishesToNATS(t *testing.T) {
 	}
 }
 
+// TestEmptyPayloadCommandsPublish covers the mirror for the no-payload
+// commands: each fires exactly one publish on its subject with an envelope
+// that carries emitted_at.
+func TestEmptyPayloadCommandsPublish(t *testing.T) {
+	host := okServer(t)
+	cases := []struct {
+		name    string
+		call    func(c *Client) error
+		subject string
+	}{
+		{"middle.hide", func(c *Client) error { return c.HideMiddleText(context.Background()) }, "tripbot.stage.onscreens.middle.hide"},
+		{"timewarp.show", func(c *Client) error { return c.ShowTimewarp(context.Background()) }, "tripbot.stage.onscreens.timewarp.show"},
+		{"gps.show", func(c *Client) error { return c.ShowGPSImage(context.Background(), 60) }, "tripbot.stage.onscreens.gps.show"},
+		{"gps.hide", func(c *Client) error { return c.HideGPSImage(context.Background()) }, "tripbot.stage.onscreens.gps.hide"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := &recordingPublisher{}
+			c := New(host, rec, "stage")
+			if err := tc.call(c); err != nil {
+				t.Fatalf("call: %v", err)
+			}
+			if len(rec.Publishes) != 1 {
+				t.Fatalf("expected 1 publish, got %d", len(rec.Publishes))
+			}
+			if rec.Publishes[0].Subject != tc.subject {
+				t.Errorf("subject = %q, want %q", rec.Publishes[0].Subject, tc.subject)
+			}
+			var env oe.Command
+			if err := json.Unmarshal(rec.Publishes[0].Payload, &env); err != nil {
+				t.Fatalf("payload not valid JSON: %v", err)
+			}
+			if env.EmittedAt == "" {
+				t.Error("emitted_at empty")
+			}
+		})
+	}
+}
+
+// TestShowFlagDoesNotPublish asserts the disabled flag.show stays a no-op
+// (no subject in the taxonomy, so nothing is published).
+func TestShowFlagDoesNotPublish(t *testing.T) {
+	rec := &recordingPublisher{}
+	c := New(okServer(t), rec, "stage")
+	if err := c.ShowFlag(context.Background(), 10); err != nil {
+		t.Fatalf("ShowFlag: %v", err)
+	}
+	if len(rec.Publishes) != 0 {
+		t.Errorf("expected 0 publishes for disabled flag.show, got %d", len(rec.Publishes))
+	}
+}
+
 // TestNilPublisher_NoPublishNoPanic asserts a nil publisher disables the
 // mirror without panicking (the path used by HTTP-only test rigs).
 func TestNilPublisher_NoPublishNoPanic(t *testing.T) {
