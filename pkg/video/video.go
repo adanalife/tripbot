@@ -16,6 +16,15 @@ import (
 	vlcClient "github.com/adanalife/tripbot/pkg/vlc-client"
 )
 
+// onscreens is the subset of the onscreens-client surface the Player drives
+// (GPS overlay toggles on flagged-video transitions). Tests inject a
+// recording fake; production uses *onscreensClient.Client, which mirrors
+// each call to NATS + HTTP.
+type onscreens interface {
+	ShowGPSImage(ctx context.Context, dur time.Duration) error
+	HideGPSImage(ctx context.Context) error
+}
+
 // Player owns the state of "what's currently playing" and the clients that
 // drive the VLC playback + onscreens overlays. Construct via NewPlayer; the
 // package-level defaultPlayer is wired up at init for callers that still hit
@@ -24,12 +33,12 @@ type Player struct {
 	CurrentlyPlaying Video // exported because external callers used to read video.CurrentlyPlaying
 	curVid, preVid   string
 	timeStarted      time.Time
-	onscreens        *onscreensClient.Client
+	onscreens        onscreens
 	vlc              *vlcClient.Client
 }
 
 // NewPlayer returns a Player with its own Onscreens + VLC clients.
-func NewPlayer(onscreens *onscreensClient.Client, vlc *vlcClient.Client) *Player {
+func NewPlayer(onscreens onscreens, vlc *vlcClient.Client) *Player {
 	return &Player{onscreens: onscreens, vlc: vlc}
 }
 
