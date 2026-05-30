@@ -75,6 +75,12 @@ var version = "dev"
 
 var client *twitch.Client
 
+// scheduler is the background cron scheduler, constructed in startCron and
+// shared by scheduleBackgroundJobs (job registration) and gracefulShutdown
+// (Stop). Also installed into chatbot via chatbot.SetScheduler so !shutdown
+// can stop it.
+var scheduler *background.Scheduler
+
 var telemetryShutdown telemetry.ShutdownFunc
 
 // discordSession is set by startDiscord when the Discord bot is enabled
@@ -277,8 +283,15 @@ func findInitialVideo() {
 
 // startCron starts the background workers
 func startCron() {
-	// start cron and attach cronjobs
-	background.StartCron()
+	s, err := background.New()
+	if err != nil {
+		slog.Error("error creating background scheduler", "err", err)
+		os.Exit(1)
+	}
+	scheduler = s
+	scheduler.Start()
+	// let !shutdown stop the same scheduler instance
+	chatbot.SetScheduler(scheduler)
 	scheduleBackgroundJobs()
 }
 
@@ -447,7 +460,9 @@ func gracefulShutdown() {
 	if err != nil {
 		slog.Error("error closing DB connection", "err", err)
 	}
-	background.StopCron()
+	if err := scheduler.Stop(); err != nil {
+		slog.Error("error shutting down gocron scheduler", "err", err)
+	}
 	sentry.Flush(time.Second * 5)
 	if telemetryShutdown != nil {
 		flushCtx, cancel := context.WithTimeout(context.Background(), time.Second*5)
@@ -486,7 +501,7 @@ func scheduleBackgroundJobs() {
 // addJob registers a gocron job at the given interval, wrapping fn with
 // tracedJob so each tick opens a span and centralising the error logging.
 func addJob(interval time.Duration, name string, fn func(context.Context)) {
-	_, err := background.Scheduler.NewJob(
+	_, err := scheduler.NewJob(
 		gocron.DurationJob(interval),
 		gocron.NewTask(tracedJob(name, fn)),
 	)
