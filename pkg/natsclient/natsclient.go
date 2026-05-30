@@ -3,7 +3,9 @@
 // first Connect, no-op when the URL is empty, swappable for tests.
 //
 // Phase 1 (vault/tripbot/TODO.md "Adopt NATS as the inter-component
-// message bus"): fire-and-forget pubsub. JetStream lands later.
+// message bus"): fire-and-forget pubsub over core NATS. Phase 3 adds the
+// JetStream accessor below for durable, replayable streams — the admin
+// live console backfills its chat/map buffers from them on startup.
 package natsclient
 
 import (
@@ -11,6 +13,7 @@ import (
 	"sync"
 
 	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 )
 
 var (
@@ -59,4 +62,25 @@ func SetConn(c *nats.Conn) {
 	mu.Lock()
 	defer mu.Unlock()
 	conn = c
+}
+
+// JetStream returns a JetStream context over the singleton connection, or nil
+// when NATS is unconfigured (no Connect) or JetStream is unavailable on the
+// server. Callers MUST nil-check and fall back to core NATS behavior — a server
+// without JetStream enabled, or local dev with NATS_URL unset, both yield nil.
+//
+// jetstream.New only fails on a nil/closed conn (it does not round-trip to the
+// server), so a non-nil return here means "we have a JS handle to try"; whether
+// the account actually has JetStream surfaces on the first stream/consumer call.
+func JetStream() jetstream.JetStream {
+	c := Conn()
+	if c == nil {
+		return nil
+	}
+	js, err := jetstream.New(c)
+	if err != nil {
+		slog.Error("jetstream context init failed; durable streams disabled", "err", err)
+		return nil
+	}
+	return js
 }
