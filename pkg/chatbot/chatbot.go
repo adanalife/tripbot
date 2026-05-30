@@ -12,6 +12,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/database"
 	"github.com/adanalife/tripbot/pkg/eventbus"
 	"github.com/adanalife/tripbot/pkg/feature"
+	"github.com/adanalife/tripbot/pkg/natsclient"
 	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	vlcClient "github.com/adanalife/tripbot/pkg/vlc-client"
@@ -77,7 +78,7 @@ func (a *App) db() *gorm.DB {
 
 var defaultApp = &App{
 	// DB stays nil; commands use a.db() which falls back to database.GormDB().
-	Onscreens:  realOnscreens{c: onscreensClient.New(c.Conf.OnscreensServerHost), nats: realNATS{}, env: c.Conf.Environment},
+	Onscreens:  realOnscreens{c: onscreensClient.New(c.Conf.OnscreensServerHost, natsclient.DefaultPublisher(), c.Conf.Environment)},
 	VLC:        realVLC{c: vlcClient.New(c.Conf.VlcServerHost)},
 	Video:      realVideo{},
 	IRC:        realIRC{},

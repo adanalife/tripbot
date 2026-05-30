@@ -1,0 +1,104 @@
+package onscreensClient
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync"
+	"testing"
+
+	oe "github.com/adanalife/tripbot/pkg/onscreens-events"
+)
+
+// recordingPublisher captures every publish so tests can assert on the
+// subject + payload. Goroutine-safe. Satisfies natsclient.Publisher.
+type recordingPublisher struct {
+	mu        sync.Mutex
+	Publishes []recordedPublish
+}
+
+type recordedPublish struct {
+	Subject string
+	Payload []byte
+}
+
+func (r *recordingPublisher) Publish(_ context.Context, subject string, payload []byte) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	cp := make([]byte, len(payload))
+	copy(cp, payload)
+	r.Publishes = append(r.Publishes, recordedPublish{Subject: subject, Payload: cp})
+}
+
+// okServer stands up an httptest.Server that 200s everything, so the
+// client's HTTP path succeeds and tests can focus on the NATS mirror.
+func okServer(t *testing.T) string {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(srv.Close)
+	return strings.TrimPrefix(srv.URL, "http://")
+}
+
+// TestShowMiddleText_PublishesToNATS asserts the client fires the right
+// subject + envelope on every ShowMiddleText, alongside the HTTP call.
+func TestShowMiddleText_PublishesToNATS(t *testing.T) {
+	rec := &recordingPublisher{}
+	c := New(okServer(t), rec, "stage")
+
+	if err := c.ShowMiddleText(context.Background(), "hello world"); err != nil {
+		t.Fatalf("ShowMiddleText: %v", err)
+	}
+
+	if len(rec.Publishes) != 1 {
+		t.Fatalf("expected 1 publish, got %d", len(rec.Publishes))
+	}
+	pub := rec.Publishes[0]
+	if pub.Subject != "tripbot.stage.onscreens.middle.show" {
+		t.Errorf("subject = %q, want tripbot.stage.onscreens.middle.show", pub.Subject)
+	}
+
+	var ev oe.MiddleShow
+	if err := json.Unmarshal(pub.Payload, &ev); err != nil {
+		t.Fatalf("payload not valid JSON: %v", err)
+	}
+	if ev.Msg != "hello world" {
+		t.Errorf("msg = %q, want hello world", ev.Msg)
+	}
+	if ev.EmittedAt == "" {
+		t.Error("emitted_at empty")
+	}
+}
+
+// TestShowMiddleText_TopicReflectsEnv covers the subject scoping per env.
+func TestShowMiddleText_TopicReflectsEnv(t *testing.T) {
+	host := okServer(t)
+	for _, env := range []string{"prod", "development", "test"} {
+		t.Run(env, func(t *testing.T) {
+			rec := &recordingPublisher{}
+			c := New(host, rec, env)
+			if err := c.ShowMiddleText(context.Background(), "x"); err != nil {
+				t.Fatalf("ShowMiddleText: %v", err)
+			}
+			if len(rec.Publishes) != 1 {
+				t.Fatalf("expected 1 publish")
+			}
+			want := "tripbot." + env + ".onscreens.middle.show"
+			if rec.Publishes[0].Subject != want {
+				t.Errorf("subject = %q, want %q", rec.Publishes[0].Subject, want)
+			}
+		})
+	}
+}
+
+// TestNilPublisher_NoPublishNoPanic asserts a nil publisher disables the
+// mirror without panicking (the path used by HTTP-only test rigs).
+func TestNilPublisher_NoPublishNoPanic(t *testing.T) {
+	c := New(okServer(t), nil, "test")
+	if err := c.ShowMiddleText(context.Background(), "x"); err != nil {
+		t.Fatalf("ShowMiddleText: %v", err)
+	}
+}

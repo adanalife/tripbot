@@ -463,7 +463,7 @@ func gracefulShutdown() {
 // Lives in this package (not pkg/background) to avoid circular deps with
 // the job-target packages.
 func scheduleBackgroundJobs() {
-	onscreensCli := onscreensClient.New(c.Conf.OnscreensServerHost)
+	onscreensCli := onscreensClient.New(c.Conf.OnscreensServerHost, natsclient.DefaultPublisher(), c.Conf.Environment)
 	addJob(60*time.Second, "video.GetCurrentlyPlaying", video.GetCurrentlyPlaying)
 	addJob(61*time.Second, "users.UpdateSession", users.UpdateSession)
 	addJob(62*time.Second, "users.UpdateLeaderboard", users.UpdateLeaderboard)

@@ -87,7 +87,8 @@ func fakeOnscreensServer(t *testing.T) (*onscreensClient.Client, *recordedCalls)
 		w.WriteHeader(http.StatusOK)
 	}))
 	t.Cleanup(srv.Close)
-	return onscreensClient.New(strings.TrimPrefix(srv.URL, "http://")), rec
+	// nil publisher: this rig exercises the HTTP path only; NATS is off.
+	return onscreensClient.New(strings.TrimPrefix(srv.URL, "http://"), nil, "test"), rec
 }
 
 // expectLoadHit queues a sqlmock expectation for a successful load() — i.e.

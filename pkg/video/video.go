@@ -11,6 +11,7 @@ import (
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/eventbus"
 	"github.com/adanalife/tripbot/pkg/helpers"
+	"github.com/adanalife/tripbot/pkg/natsclient"
 	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
 	vlcClient "github.com/adanalife/tripbot/pkg/vlc-client"
 )
@@ -37,7 +38,7 @@ func NewPlayer(onscreens *onscreensClient.Client, vlc *vlcClient.Client) *Player
 // bootstrap, script/collect-gps) keep working. New consumers should construct
 // their own *Player via NewPlayer().
 var defaultPlayer = NewPlayer(
-	onscreensClient.New(c.Conf.OnscreensServerHost),
+	onscreensClient.New(c.Conf.OnscreensServerHost, natsclient.DefaultPublisher(), c.Conf.Environment),
 	vlcClient.New(c.Conf.VlcServerHost),
 )
 
