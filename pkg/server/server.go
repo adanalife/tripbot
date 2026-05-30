@@ -74,6 +74,7 @@ func Start(ctx context.Context) {
 	// POST-only, so the GET stream registers on r directly.
 	r.Handle("/admin/events", tagged("/admin/events", eventsHandler)).Methods("GET")
 	r.Handle("/admin/user/{username}", tagged("/admin/user/{username}", userProfileHandler)).Methods("GET")
+	r.Handle("/admin/map/corpus", tagged("/admin/map/corpus", mapCorpusHandler)).Methods("GET")
 	r.PathPrefix("/static/").Handler(staticHandler())
 
 	// admin actions — tailnet-only by virtue of where the Ingress is

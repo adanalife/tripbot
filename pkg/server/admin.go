@@ -758,6 +758,8 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
   .map-box { height:280px; margin-top:8px; border-radius:8px; overflow:hidden; background:var(--chip-bg); }
   .van-marker { font-size:22px; line-height:24px; text-align:center; }
   .map-box .leaflet-control-attribution { font-size:.65em; }
+  .map-toggle { margin-top:8px; background:none; border:none; color:var(--dim); font:inherit; font-size:.85em; cursor:pointer; padding:2px 6px; }
+  .map-toggle:hover { color:var(--fg); }
   /* live viewer count — a subtle, quick colour flash on the number: green when
      it rises, red when it falls. The inner .chatters-count span is re-inserted
      on each SSE update so the animation re-triggers; with only a "from" keyframe
@@ -883,6 +885,7 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
          #map-sink receives live "map" SSE points (read on afterSwap by the JS). -->
     <div id="map" class="map-box" data-trail="{{.MapTrailJSON}}"></div>
     <div id="map-sink" sse-swap="map" hx-swap="innerHTML" hidden></div>
+    <button id="corpus-toggle" class="map-toggle" type="button">show full route</button>
   </details>
 
   <details class="controls">
@@ -1163,6 +1166,30 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
     line.setLatLngs(trail);
     recenter(true);
   });
+
+  // "show full route" toggle: lazily fetch the whole-corpus route and draw it as
+  // a faint background line behind the live trail. Remembered in localStorage.
+  const corpusBtn = document.getElementById('corpus-toggle');
+  let corpusLine = null;
+  const renderCorpus = (fit) => {
+    fetch('/admin/map/corpus').then(r => r.ok ? r.json() : Promise.reject(r.status)).then(pts => {
+      corpusLine = L.polyline(pts, { color: '#888', weight: 1.5, opacity: 0.4 }).addTo(map);
+      corpusLine.bringToBack();
+      if (fit && pts.length) map.fitBounds(corpusLine.getBounds(), { padding: [20, 20] });
+    }).catch(() => {});
+  };
+  const setCorpus = (on, fit) => {
+    if (on) {
+      if (corpusLine) { corpusLine.addTo(map); if (fit) map.fitBounds(corpusLine.getBounds(), { padding: [20, 20] }); }
+      else renderCorpus(fit);
+    } else if (corpusLine) {
+      map.removeLayer(corpusLine);
+    }
+    if (corpusBtn) corpusBtn.textContent = on ? 'hide full route' : 'show full route';
+    localStorage.setItem('map-corpus', on ? '1' : '0');
+  };
+  if (corpusBtn) corpusBtn.addEventListener('click', () => setCorpus(!(corpusLine && map.hasLayer(corpusLine)), true));
+  setCorpus(localStorage.getItem('map-corpus') === '1', false);
 
   // The map sits in a <details>; Leaflet needs a size recalc when the container
   // is first laid out or revealed.

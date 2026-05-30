@@ -39,7 +39,7 @@ func load(ctx context.Context, slug string) (Video, error) {
 	return vid, result.Error
 }
 
-//TODO: combine this with load()?
+// TODO: combine this with load()?
 func loadById(ctx context.Context, id int64) (Video, error) {
 	var vid Video
 	result := database.GormDB().WithContext(ctx).First(&vid, id)
@@ -50,7 +50,7 @@ func loadById(ctx context.Context, id int64) (Video, error) {
 }
 
 // create will create a new Video from a slug
-//TODO: this is kinda weird, we create an empty Video
+// TODO: this is kinda weird, we create an empty Video
 // and then we save it to the DB... maybe we could just
 // save right to the DB? It would take some refactoring.
 func create(ctx context.Context, file string) (Video, error) {
@@ -92,7 +92,7 @@ func create(ctx context.Context, file string) (Video, error) {
 }
 
 // save() will store the video in the DB
-//TODO: I think this can be achieved much easier, c.p. user save
+// TODO: I think this can be achieved much easier, c.p. user save
 func (v Video) save(ctx context.Context) error {
 	var err error
 	flagged := v.Flagged
@@ -131,8 +131,8 @@ func (v Video) save(ctx context.Context) error {
 }
 
 // Next() finds the next unflagged video
-//TODO: should this be NextUnflagged?
-//TODO: handle errors in here?
+// TODO: should this be NextUnflagged?
+// TODO: handle errors in here?
 func (v Video) Next(ctx context.Context) Video {
 	vid := v
 	for { // ever
@@ -190,4 +190,31 @@ func FindRandomByState(ctx context.Context, state string) (Video, error) {
 		return vid, result.Error
 	}
 	return vid, nil
+}
+
+// CorpusRoute returns the GPS coordinates of every non-flagged dashcam clip,
+// ordered by film time — the full route the van drove. The admin map's
+// background-route overlay renders this. Flagged clips and 0/0 are excluded.
+// Returns [][2]float64 of {lat, lng}; nil on error.
+func CorpusRoute(ctx context.Context) [][2]float64 {
+	type coord struct {
+		Lat float64
+		Lng float64
+	}
+	var rows []coord
+	err := database.GormDB().WithContext(ctx).
+		Model(&Video{}).
+		Select("lat, lng").
+		Where("NOT flagged AND (lat != 0 OR lng != 0)").
+		Order("date_filmed").
+		Scan(&rows).Error
+	if err != nil {
+		slog.ErrorContext(ctx, "corpus route query failed", "err", err)
+		return nil
+	}
+	out := make([][2]float64, len(rows))
+	for i, r := range rows {
+		out[i] = [2]float64{r.Lat, r.Lng}
+	}
+	return out
 }
