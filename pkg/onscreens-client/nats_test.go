@@ -94,6 +94,37 @@ func TestShowMiddleText_TopicReflectsEnv(t *testing.T) {
 	}
 }
 
+// TestShowLeaderboard_PublishesStructured asserts the leaderboard publish
+// carries the structured {title, rows} payload (the server renders it).
+func TestShowLeaderboard_PublishesToNATS(t *testing.T) {
+	rec := &recordingPublisher{}
+	c := New(okServer(t), rec, "prod")
+
+	rows := [][]string{{"alice", "100"}, {"bob", "50"}}
+	if err := c.ShowLeaderboard(context.Background(), "Monthly Miles", rows); err != nil {
+		t.Fatalf("ShowLeaderboard: %v", err)
+	}
+
+	if len(rec.Publishes) != 1 {
+		t.Fatalf("expected 1 publish, got %d", len(rec.Publishes))
+	}
+	pub := rec.Publishes[0]
+	if pub.Subject != "tripbot.prod.onscreens.leaderboard.show" {
+		t.Errorf("subject = %q, want tripbot.prod.onscreens.leaderboard.show", pub.Subject)
+	}
+
+	var ev oe.LeaderboardShow
+	if err := json.Unmarshal(pub.Payload, &ev); err != nil {
+		t.Fatalf("payload not valid JSON: %v", err)
+	}
+	if ev.Title != "Monthly Miles" {
+		t.Errorf("title = %q, want Monthly Miles", ev.Title)
+	}
+	if len(ev.Rows) != 2 || ev.Rows[0][0] != "alice" || ev.Rows[1][1] != "50" {
+		t.Errorf("rows = %v, want [[alice 100] [bob 50]]", ev.Rows)
+	}
+}
+
 // TestNilPublisher_NoPublishNoPanic asserts a nil publisher disables the
 // mirror without panicking (the path used by HTTP-only test rigs).
 func TestNilPublisher_NoPublishNoPanic(t *testing.T) {

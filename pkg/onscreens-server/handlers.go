@@ -1,11 +1,13 @@
 package onscreensServer
 
 import (
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
 
 	"github.com/adanalife/tripbot/pkg/helpers"
+	oe "github.com/adanalife/tripbot/pkg/onscreens-events"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/gorilla/mux"
 )
@@ -113,14 +115,22 @@ func (s *Server) onscreensLeaderboardHandler(w http.ResponseWriter, r *http.Requ
 			http.Error(w, "417 expectation failed", http.StatusExpectationFailed)
 			return
 		}
-		content, err := helpers.Base64Decode(base64content[0])
+		raw, err := helpers.Base64Decode(base64content[0])
 		if err != nil {
 			slog.ErrorContext(r.Context(), "unable to decode string", "err", err)
 			http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
 			return
 		}
+		// content is base64(JSON {title, rows}); the server renders the HTML
+		// (same path the NATS leaderboard.show handler takes).
+		var ev oe.LeaderboardShow
+		if err := json.Unmarshal([]byte(raw), &ev); err != nil {
+			slog.ErrorContext(r.Context(), "unable to decode leaderboard payload", "err", err)
+			http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
+			return
+		}
 
-		s.Leaderboard.ShowFor(content, leaderboardDuration)
+		s.Leaderboard.ShowFor(renderLeaderboard(ev.Title, ev.Rows), leaderboardDuration)
 		fmt.Fprintf(w, "OK")
 	case "hide":
 		s.Leaderboard.Hide()

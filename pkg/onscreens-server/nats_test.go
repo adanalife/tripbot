@@ -1,6 +1,7 @@
 package onscreensServer
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/nats-io/nats.go"
@@ -73,6 +74,50 @@ func TestHandleMiddleHide(t *testing.T) {
 	s.handleMiddleHide(emptyMsg("tripbot.test.onscreens.middle.hide"))
 	if s.MiddleText.IsShowing {
 		t.Error("MiddleText.IsShowing = true, want false after hide")
+	}
+}
+
+func TestHandleLeaderboardShow(t *testing.T) {
+	s := &Server{Leaderboard: newLeaderboardOnscreen()}
+
+	msg := &nats.Msg{
+		Subject: "tripbot.test.onscreens.leaderboard.show",
+		Data:    []byte(`{"emitted_at":"2026-05-28T16:00:00Z","title":"monthly miles","rows":[["alice","100"]]}`),
+	}
+	s.handleLeaderboardShow(msg)
+
+	if !s.Leaderboard.IsShowing {
+		t.Error("Leaderboard.IsShowing = false, want true")
+	}
+	// Server renders the HTML from {title, rows}.
+	if !strings.Contains(s.Leaderboard.Content, `<div class="lb-title">Monthly Miles</div>`) {
+		t.Errorf("Leaderboard.Content missing rendered title, got %q", s.Leaderboard.Content)
+	}
+	if !strings.Contains(s.Leaderboard.Content, "(alice)") {
+		t.Errorf("Leaderboard.Content missing user, got %q", s.Leaderboard.Content)
+	}
+}
+
+func TestHandleLeaderboardShow_RejectsBadJSON(t *testing.T) {
+	s := &Server{Leaderboard: newLeaderboardOnscreen()}
+	s.Leaderboard.Content = "pre-existing"
+
+	s.handleLeaderboardShow(&nats.Msg{
+		Subject: "tripbot.test.onscreens.leaderboard.show",
+		Data:    []byte(`not json`),
+	})
+
+	if s.Leaderboard.Content != "pre-existing" {
+		t.Errorf("Leaderboard.Content = %q, want pre-existing (bad JSON should be a no-op)", s.Leaderboard.Content)
+	}
+}
+
+func TestHandleLeaderboardHide(t *testing.T) {
+	s := &Server{Leaderboard: newLeaderboardOnscreen()}
+	s.Leaderboard.ShowFor("x", leaderboardDuration)
+	s.handleLeaderboardHide(emptyMsg("tripbot.test.onscreens.leaderboard.hide"))
+	if s.Leaderboard.IsShowing {
+		t.Error("Leaderboard.IsShowing = true, want false after hide")
 	}
 }
 

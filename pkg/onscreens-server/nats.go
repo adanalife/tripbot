@@ -23,8 +23,6 @@ import (
 // in NATS delivery before peeling HTTP off. Subscribers are registered
 // explicitly (not via an onscreens.> wildcard) so each gets its own
 // subscribe log line and the dispatch stays readable.
-//
-// Leaderboard lands separately with its server-side render.
 func (s *Server) StartNATSSubscribers(ctx context.Context) {
 	conn := natsclient.Conn()
 	if conn == nil {
@@ -38,6 +36,8 @@ func (s *Server) StartNATSSubscribers(ctx context.Context) {
 	}{
 		{oe.MiddleShowSubject(env), s.handleMiddleShow},
 		{oe.MiddleHideSubject(env), s.handleMiddleHide},
+		{oe.LeaderboardShowSubject(env), s.handleLeaderboardShow},
+		{oe.LeaderboardHideSubject(env), s.handleLeaderboardHide},
 		{oe.TimewarpShowSubject(env), s.handleTimewarpShow},
 		{oe.TimewarpHideSubject(env), s.handleTimewarpHide},
 		{oe.GPSShowSubject(env), s.handleGPSShow},
@@ -69,10 +69,22 @@ func (s *Server) handleMiddleShow(m *nats.Msg) {
 	s.MiddleText.Show(ev.Msg)
 }
 
+// handleLeaderboardShow renders the {title, rows} payload server-side and
+// shows it for the standard duration — the same path the HTTP handler takes.
+func (s *Server) handleLeaderboardShow(m *nats.Msg) {
+	var ev oe.LeaderboardShow
+	if err := json.Unmarshal(m.Data, &ev); err != nil {
+		slog.Error("nats: decode leaderboard.show", "err", err, "subject", m.Subject)
+		return
+	}
+	s.Leaderboard.ShowFor(renderLeaderboard(ev.Title, ev.Rows), leaderboardDuration)
+}
+
 // The hide + empty-payload show handlers below take no data beyond the
 // envelope, so the body isn't inspected: the subject is the whole intent.
 // Hides are lenient by construction (nothing to reject).
-func (s *Server) handleMiddleHide(_ *nats.Msg)   { s.MiddleText.Hide() }
+func (s *Server) handleMiddleHide(_ *nats.Msg)      { s.MiddleText.Hide() }
+func (s *Server) handleLeaderboardHide(_ *nats.Msg) { s.Leaderboard.Hide() }
 func (s *Server) handleTimewarpShow(_ *nats.Msg) { s.Timewarp.ShowFor("Timewarp!", timewarpDuration) }
 func (s *Server) handleTimewarpHide(_ *nats.Msg) { s.Timewarp.Hide() }
 func (s *Server) handleGPSShow(_ *nats.Msg)      { s.GPS.Show("") }

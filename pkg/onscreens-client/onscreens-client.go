@@ -14,7 +14,6 @@ import (
 	"github.com/adanalife/tripbot/pkg/natsclient"
 	oe "github.com/adanalife/tripbot/pkg/onscreens-events"
 	"github.com/adanalife/tripbot/pkg/scoreboards"
-	"github.com/adanalife/tripbot/pkg/users"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
@@ -87,12 +86,25 @@ func (c *Client) ShowMiddleText(ctx context.Context, msg string) error {
 }
 
 func (c *Client) ShowLeaderboard(ctx context.Context, title string, leaderboard [][]string) error {
-	content := users.LeaderboardContent(title, leaderboard)
+	// onscreens-server renders the HTML now, so both transports carry the
+	// structured {title, rows} payload. Build it once and reuse it for the
+	// NATS publish and the base64-JSON HTTP query param.
+	ev := oe.LeaderboardShow{
+		Envelope: oe.NewEnvelope(),
+		Title:    title,
+		Rows:     leaderboard,
+	}
+	c.publish(ctx, oe.LeaderboardShowSubject(c.env), ev)
 
+	payload, err := json.Marshal(ev)
+	if err != nil {
+		slog.ErrorContext(ctx, "marshal leaderboard event", "err", err)
+		return err
+	}
 	url := c.serverURL + "/onscreens/leaderboard/show"
-	url = fmt.Sprintf("%s?content=%s", url, helpers.Base64Encode(content))
+	url = fmt.Sprintf("%s?content=%s", url, helpers.Base64Encode(string(payload)))
 
-	_, err := c.get(ctx, url)
+	_, err = c.get(ctx, url)
 	if err != nil {
 		slog.ErrorContext(ctx, "error showing leaderboard onscreen", "err", err)
 		return err
