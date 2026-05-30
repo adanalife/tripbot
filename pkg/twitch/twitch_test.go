@@ -3,10 +3,8 @@ package twitch
 import "testing"
 
 func TestUserIsSubscriber(t *testing.T) {
-	saved := subscribers
-	defer func() { subscribers = saved }()
-
-	subscribers = []string{"alice", "bob", "carol"}
+	cl := New()
+	cl.subscribers = []string{"alice", "bob", "carol"}
 
 	tests := []struct {
 		username string
@@ -21,7 +19,7 @@ func TestUserIsSubscriber(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.username, func(t *testing.T) {
-			if got := UserIsSubscriber(tt.username); got != tt.want {
+			if got := cl.UserIsSubscriber(tt.username); got != tt.want {
 				t.Fatalf("UserIsSubscriber(%q) = %v, want %v", tt.username, got, tt.want)
 			}
 		})
@@ -29,11 +27,8 @@ func TestUserIsSubscriber(t *testing.T) {
 }
 
 func TestUserIsSubscriberEmptyList(t *testing.T) {
-	saved := subscribers
-	defer func() { subscribers = saved }()
-
-	subscribers = nil
-	if UserIsSubscriber("anyone") {
+	cl := New() // subscribers nil
+	if cl.UserIsSubscriber("anyone") {
 		t.Fatal("expected false when subscribers is nil")
 	}
 }
