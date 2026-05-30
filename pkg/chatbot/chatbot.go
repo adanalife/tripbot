@@ -63,6 +63,11 @@ type App struct {
 	// which delegates to the pkg/natsclient singleton (no-op when
 	// NATS_URL is empty).
 	NATS NATS
+	// Cron stops the background scheduler during !shutdown. Tests inject
+	// noopCron{}; production uses realCron which delegates to the
+	// constructed *background.Scheduler cmd/tripbot installs via
+	// SetScheduler once cron has started.
+	Cron Cron
 }
 
 // db returns the DB handle the App should use. Prefers an explicit a.DB
@@ -85,6 +90,7 @@ var defaultApp = &App{
 	NowPlaying: newRealNowPlaying(),
 	Flags:      realFlags{},
 	NATS:       realNATS{},
+	Cron:       realCron{},
 }
 
 // used to determine which help message to display

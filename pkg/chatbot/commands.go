@@ -16,7 +16,6 @@ import (
 
 	"github.com/adanalife/tripbot/pkg/scoreboards"
 
-	"github.com/adanalife/tripbot/pkg/background"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
 	"github.com/adanalife/tripbot/pkg/helpers"
@@ -518,7 +517,9 @@ func (a *App) shutdownCmd(ctx context.Context, user *users.User, _ []string) {
 	}
 	a.IRC.Say("Shutting down...")
 	slog.InfoContext(ctx, "shutdown: currently playing", "video", a.Video.Current())
-	background.StopCron()
+	if err := a.Cron.Stop(); err != nil {
+		slog.ErrorContext(ctx, "cron shutdown failed during !shutdown", "err", err)
+	}
 	a.Sessions.Shutdown(ctx)
 	err := database.Connection().Close()
 	if err != nil {
