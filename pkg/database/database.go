@@ -1,4 +1,4 @@
-//TODO: this would be better as just 'db'
+// TODO: this would be better as just 'db'
 package database
 
 import (
@@ -14,9 +14,9 @@ import (
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 	"github.com/uptrace/opentelemetry-go-extra/otelgorm"
+	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 )
 
 // this is how we will share the DB connection
