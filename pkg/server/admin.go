@@ -759,7 +759,7 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
   </details>
 
   {{if and .PreviewChannel .PanelHost}}
-  <details class="stream-preview" id="stream-preview" open>
+  <details class="stream-preview" id="stream-preview" {{if .Stream.Active}}open{{end}}>
     <summary>stream preview</summary>
     <div class="stream-frame">
       <iframe data-src="https://player.twitch.tv/?channel={{.PreviewChannel}}&parent={{.PanelHost}}&muted=true&autoplay=true"
@@ -831,10 +831,11 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
   </div>
 </main>
 <script>
-// Stream-preview iframe wiring. The disclosure defaults to open so the
-// preview is visible on load — initial paint sets src from data-src.
-// Collapse swaps src to about:blank so the player stops cleanly (audio +
-// bandwidth would otherwise keep going), and re-expanding restores it.
+// Stream-preview iframe wiring. The disclosure starts open only when the
+// stream is live (collapsed when offline); the initial paint sets src from
+// data-src when open. Collapse swaps src to about:blank so the player stops
+// cleanly (audio + bandwidth would otherwise keep going), and re-expanding
+// restores it.
 (function() {
   const details = document.getElementById('stream-preview');
   if (!details) return;
