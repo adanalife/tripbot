@@ -58,6 +58,7 @@ func newTestApp(vid video.Video) *App {
 		NATS:       noopNATS{},
 		Cron:       noopCron{},
 		Geocoder:   noopGeocoder{},
+		Twitch:     noopTwitch{},
 	}
 }
 
