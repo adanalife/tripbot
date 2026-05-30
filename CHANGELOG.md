@@ -7,6 +7,10 @@ All notable changes to TripBot. Format follows [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+### CI
+
+- **`go test` finds the repo-root `.env.testing` from any directory.** `config.SetEnvironment` resolved the dotenv file with a cwd-relative `godotenv.Load`, so a package's test binary — which runs from its own dir — never found the checked-in `.env.testing` and either `log.Fatalf`'d in a config `init()` or required a manual `set -a; . ./.env.testing; set +a`. The lookup now anchors at the module root (nearest ancestor with `go.mod`), so `ENV=testing go test ./pkg/...` works with no sourcing, matching the `task test` / `task test:macos` paths. Deployed binaries with no `go.mod` ancestor fall back to the bare relative path, preserving cluster behavior. ([#743])
+
 ## [v2.17.0] — 2026-05-28
 
 Minor release. TripBot gets a live Discord bot session (four slash commands mirroring the Twitch leaderboards), gated behind the first flag of a new Postgres-backed feature-flag system with a read-only admin-panel listing. NATS adoption begins with phase 1 — `ShowMiddleText` parallel-publishes to `tripbot.<env>.onscreens.middle.show` while HTTP stays the source of truth. A silent-disconnect watchdog auto-recovers from the prod failure mode where OBS's RTMP write socket goes half-open and frames keep streaming into the void while Twitch shows offline. Twitch token handling closes a cron-desync gap that bit prod on 2026-05-26 (refresh-on-startup + expiry-timestamp gauge, plus a 30→45 minute refresh window that spares the helix 401 self-heal from firing on the routine cycle). Leaderboard rendering swaps space-padded monospace for CSS grid alignment so scores line up under the regular Trebuchet stack.
@@ -1198,3 +1202,4 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#712]: https://github.com/adanalife/tripbot/pull/712
 [#713]: https://github.com/adanalife/tripbot/pull/713
 [#714]: https://github.com/adanalife/tripbot/pull/714
+[#743]: https://github.com/adanalife/tripbot/pull/743
