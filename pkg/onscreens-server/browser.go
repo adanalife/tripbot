@@ -6,9 +6,7 @@ import (
 	"html/template"
 	"log/slog"
 	"net/http"
-	"path/filepath"
 
-	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/gorilla/mux"
 )
 
@@ -33,6 +31,14 @@ var flagPlaceholderPNG = []byte{
 var onscreenTemplates embed.FS
 
 var onscreenTmpl = template.Must(template.ParseFS(onscreenTemplates, "templates/onscreen.html.tmpl"))
+
+// gpsPNG is the GPS map overlay, embedded so the binary is self-contained and
+// has no runtime dependency on the source tree (helpers.ProjectRoot() resolves
+// to a compile-time path that doesn't exist in the slim runtime image). Kept in
+// sync with the canonical assets/GPS.png at the repo root.
+//
+//go:embed assets/GPS.png
+var gpsPNG []byte
 
 // onscreenStyle controls how a single onscreen renders in its OBS browser source.
 // Keep these in sync with the dimensions / fonts that the previous text_ft2_source
@@ -117,12 +123,16 @@ func (s *Server) onscreensRenderHandler(w http.ResponseWriter, r *http.Request) 
 }
 
 // onscreensAssetHandler serves the raw image bytes for image-type onscreens.
-// `gps` resolves to the checked-in GPS overlay; `flag` returns a 1×1
+// `gps` resolves to the embedded GPS overlay; `flag` returns a 1×1
 // transparent placeholder while the state-driven flag swap is offline.
 func (s *Server) onscreensAssetHandler(w http.ResponseWriter, r *http.Request) {
 	switch mux.Vars(r)["name"] {
 	case SlugGPS:
-		http.ServeFile(w, r, filepath.Join(helpers.ProjectRoot(), "assets", "GPS.png"))
+		w.Header().Set("Content-Type", "image/png")
+		w.Header().Set("Cache-Control", "no-store")
+		if _, err := w.Write(gpsPNG); err != nil {
+			slog.ErrorContext(r.Context(), "writing gps image", "err", err)
+		}
 	case SlugFlag:
 		w.Header().Set("Content-Type", "image/png")
 		w.Header().Set("Cache-Control", "no-store")
