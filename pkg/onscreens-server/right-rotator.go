@@ -22,17 +22,26 @@ var possibleRightMessages = []string{
 // to render the moment it polls — otherwise there's a brief race where
 // the rotator is empty until the goroutine schedules), and kicks off the
 // background loop that rotates the message every rightRotatorUpdateFrequency.
+// The rotator loop exits when the onscreen's shutdown() is called.
 func newRightRotator() *Onscreen {
 	slog.Info("creating onscreen", "kind", "right-rotator")
 	osc := newOnscreen()
 	osc.Show(rightRotatorContent())
+	osc.wg.Add(1)
 	go rightRotatorLoop(osc)
 	return osc
 }
 
 func rightRotatorLoop(osc *Onscreen) {
-	for { // forever
-		time.Sleep(time.Duration(rightRotatorUpdateFrequency))
+	defer osc.wg.Done()
+	for {
+		t := time.NewTimer(time.Duration(rightRotatorUpdateFrequency))
+		select {
+		case <-osc.stop:
+			t.Stop()
+			return
+		case <-t.C:
+		}
 		osc.Show(rightRotatorContent())
 	}
 }
