@@ -68,6 +68,11 @@ type App struct {
 	// constructed *background.Scheduler cmd/tripbot installs via
 	// SetScheduler once cron has started.
 	Cron Cron
+	// Twitch is the command-time Twitch Helix surface (follow lookups today).
+	// Tests inject a recordingTwitch; production uses realTwitch which
+	// delegates to the pkg/twitch client. The future swap point for an
+	// out-of-process Helix/auth service.
+	Twitch Twitch
 }
 
 // db returns the DB handle the App should use. Prefers an explicit a.DB
@@ -91,6 +96,7 @@ var defaultApp = &App{
 	Flags:      realFlags{},
 	NATS:       realNATS{},
 	Cron:       realCron{},
+	Twitch:     realTwitch{},
 }
 
 // used to determine which help message to display
