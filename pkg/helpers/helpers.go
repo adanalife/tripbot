@@ -16,50 +16,14 @@ import (
 	"time"
 
 	"github.com/bradfitz/latlong"
-	"github.com/davecgh/go-spew/spew"
 	"github.com/hako/durafmt"
-	"github.com/kelvins/geocoder"
 	"github.com/nathan-osman/go-sunrise"
 	"github.com/skratchdot/open-golang/open"
 )
 
-// ErrMapsDisabled is returned by City/StateFromCoords when no Google Maps
-// API key is configured. Callers can treat it as a soft-disable signal
-// (skip the lookup, fall back to an empty result) rather than a real error.
-var ErrMapsDisabled = errors.New("maps API disabled: no GOOGLE_MAPS_API_KEY set")
-
-func CityFromCoords(lat, lon float64) (string, error) {
-	if geocoder.ApiKey == "" {
-		return "", ErrMapsDisabled
-	}
-	location := geocoder.Location{Latitude: lat, Longitude: lon}
-
-	addresses, err := geocoder.GeocodingReverse(location)
-	if err != nil {
-		return "", err
-	}
-
-	address := addresses[0]
-	addStr := fmt.Sprintf("%s, %s", address.City, address.State)
-	if address.City == "" {
-		addStr = fmt.Sprintf("Somewhere in %s", address.State)
-	}
-	return addStr, err
-}
-
-func StateFromCoords(lat, lon float64) (string, error) {
-	if geocoder.ApiKey == "" {
-		return "", ErrMapsDisabled
-	}
-	location := geocoder.Location{Latitude: lat, Longitude: lon}
-
-	addresses, err := geocoder.GeocodingReverse(location)
-	if err != nil {
-		spew.Dump(err)
-		return "", err
-	}
-	return addresses[0].State, err
-}
+// Reverse geocoding (coords -> city/state) moved to pkg/geo, which wraps the
+// kelvins/geocoder SDK behind an injectable Geocoder interface. helpers stays
+// a pure, dependency-free utility package.
 
 // ProjectRoot returns the root directory of the project
 func ProjectRoot() string {
