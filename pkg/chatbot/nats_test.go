@@ -17,7 +17,7 @@ func (noopNATS) Publish(_ context.Context, _ string, _ []byte) {}
 // subject + payload pair. Goroutine-safe so concurrent commands don't
 // race the slice.
 type recordingNATS struct {
-	mu       sync.Mutex
+	mu        sync.Mutex
 	Publishes []recordedPublish
 }
 

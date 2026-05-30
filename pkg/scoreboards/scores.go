@@ -22,7 +22,7 @@ type Score struct {
 }
 
 // GetScoreByName returns the score value for a given username and scoreboard name
-//TODO: this could be achieved with a single query
+// TODO: this could be achieved with a single query
 func GetScoreByName(ctx context.Context, username, scoreboardName string) (float32, error) {
 	userID, err := getUserIDByName(ctx, username)
 	if err != nil {
@@ -43,7 +43,7 @@ func GetScoreByName(ctx context.Context, username, scoreboardName string) (float
 }
 
 // AddToScoreByName increases the score value for a given username and scoreboard name
-//TODO: this could be achieved with less queries
+// TODO: this could be achieved with less queries
 func AddToScoreByName(ctx context.Context, username, scoreboardName string, scoreToAdd float32) error {
 	userID, err := getUserIDByName(ctx, username)
 	if err != nil {
@@ -78,7 +78,7 @@ func findOrCreateScore(ctx context.Context, userID, scoreboardID uint16) (Score,
 }
 
 // findScore will look up the score in the DB
-//TODO: this shouldn't be necessary, join the tables instead
+// TODO: this shouldn't be necessary, join the tables instead
 func findScore(ctx context.Context, userID, scoreboardID uint16) (Score, error) {
 	var score Score
 	result := database.GormDB().WithContext(ctx).
@@ -111,7 +111,7 @@ func (s Score) save(ctx context.Context) error {
 }
 
 // getUserIDByName fetches the user ID for a given username
-//TODO: this shouldn't be necessary, join the tables instead
+// TODO: this shouldn't be necessary, join the tables instead
 func getUserIDByName(ctx context.Context, username string) (uint16, error) {
 	var result struct{ ID uint16 }
 	err := database.GormDB().WithContext(ctx).Raw("SELECT id FROM users WHERE username = ?", username).Scan(&result).Error

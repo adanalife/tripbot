@@ -39,7 +39,7 @@ func load(ctx context.Context, slug string) (Video, error) {
 	return vid, result.Error
 }
 
-//TODO: combine this with load()?
+// TODO: combine this with load()?
 func loadById(ctx context.Context, id int64) (Video, error) {
 	var vid Video
 	result := database.GormDB().WithContext(ctx).First(&vid, id)
@@ -50,7 +50,7 @@ func loadById(ctx context.Context, id int64) (Video, error) {
 }
 
 // create will create a new Video from a slug
-//TODO: this is kinda weird, we create an empty Video
+// TODO: this is kinda weird, we create an empty Video
 // and then we save it to the DB... maybe we could just
 // save right to the DB? It would take some refactoring.
 func create(ctx context.Context, file string) (Video, error) {
@@ -92,7 +92,7 @@ func create(ctx context.Context, file string) (Video, error) {
 }
 
 // save() will store the video in the DB
-//TODO: I think this can be achieved much easier, c.p. user save
+// TODO: I think this can be achieved much easier, c.p. user save
 func (v Video) save(ctx context.Context) error {
 	var err error
 	flagged := v.Flagged
@@ -131,8 +131,8 @@ func (v Video) save(ctx context.Context) error {
 }
 
 // Next() finds the next unflagged video
-//TODO: should this be NextUnflagged?
-//TODO: handle errors in here?
+// TODO: should this be NextUnflagged?
+// TODO: handle errors in here?
 func (v Video) Next(ctx context.Context) Video {
 	vid := v
 	for { // ever
