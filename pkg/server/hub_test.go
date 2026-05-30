@@ -245,3 +245,65 @@ func itoa(i int) string {
 	}
 	return string(b[pos:])
 }
+
+func TestHub_handleVideoChanged_dropsBreadcrumbWhenFix(t *testing.T) {
+	h := NewHub()
+	client := h.register()
+	payload, _ := json.Marshal(eventbus.VideoChanged{
+		File: "wy.MP4", State: "Wyoming", Flagged: false,
+		Lat: 41.5, Lng: -110.2, EmittedAt: "2026-05-29T13:05:00Z",
+	})
+	h.handleVideoChanged(context.Background(), payload)
+
+	// the now-line ("video") first, then the breadcrumb ("map")
+	if ev := <-client; ev.Name != "video" {
+		t.Fatalf("first event = %q, want video", ev.Name)
+	}
+	ev := <-client
+	if ev.Name != "map" {
+		t.Fatalf("second event = %q, want map", ev.Name)
+	}
+	if !strings.Contains(ev.Data, `data-lat="41.500000"`) || !strings.Contains(ev.Data, `data-lng="-110.200000"`) {
+		t.Errorf("map fragment %q missing coords", ev.Data)
+	}
+	if trail := h.snapshotMapTrail(); len(trail) != 1 || trail[0].Lat != 41.5 {
+		t.Errorf("trail = %+v, want one point at lat 41.5", trail)
+	}
+}
+
+func TestHub_handleVideoChanged_noBreadcrumbWhenNoFix(t *testing.T) {
+	h := NewHub()
+	client := h.register()
+
+	// flagged clip → no GPS fix
+	flagged, _ := json.Marshal(eventbus.VideoChanged{File: "x.MP4", Flagged: true, Lat: 41, Lng: -110})
+	h.handleVideoChanged(context.Background(), flagged)
+	if ev := <-client; ev.Name != "video" {
+		t.Fatalf("want video, got %q", ev.Name)
+	}
+	if n := len(h.snapshotMapTrail()); n != 0 {
+		t.Errorf("flagged clip added %d breadcrumbs, want 0", n)
+	}
+
+	// 0/0 (null island) → treated as no fix
+	zero, _ := json.Marshal(eventbus.VideoChanged{File: "y.MP4", Flagged: false, Lat: 0, Lng: 0})
+	h.handleVideoChanged(context.Background(), zero)
+	<-client // the "video" event
+	if n := len(h.snapshotMapTrail()); n != 0 {
+		t.Errorf("0/0 added %d breadcrumbs, want 0", n)
+	}
+}
+
+func TestHub_appendMapPoint_ringCap(t *testing.T) {
+	h := NewHub()
+	for i := 0; i < mapTrailSize+20; i++ {
+		h.appendMapPoint(mapPoint{Lat: float64(i), Lng: 1})
+	}
+	trail := h.snapshotMapTrail()
+	if len(trail) != mapTrailSize {
+		t.Fatalf("trail len = %d, want %d", len(trail), mapTrailSize)
+	}
+	if trail[0].Lat != 20 {
+		t.Errorf("oldest retained lat = %v, want 20 (first 20 evicted)", trail[0].Lat)
+	}
+}

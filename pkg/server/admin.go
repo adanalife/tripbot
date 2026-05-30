@@ -155,6 +155,7 @@ type adminData struct {
 	Reauth         []mytwitch.AccountReauth      // accounts whose token needs re-auth; empty when healthy
 	AuthStatuses   []mytwitch.AccountTokenStatus // every identity's token state; drives the live expiry-countdown card
 	ChatHistory    []ChatLine                    // recent chat from the live-console hub; live lines stream in via SSE
+	MapTrailJSON   string                        // recent GPS breadcrumbs as JSON [[lat,lng],…] for the live map (data attr)
 }
 
 // adminHandler serves the human-facing root page on the tripbot Ingress: a
@@ -184,6 +185,7 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 		Reauth:         accountsNeedingReauth(),
 		AuthStatuses:   authStatuses(),
 		ChatHistory:    eventHub.snapshotChat(),
+		MapTrailJSON:   mapTrailJSON(),
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -584,6 +586,11 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
      the live chat console: sse.js consumes /admin/events and swaps fragments. -->
 <script src="/static/htmx.min.js"></script>
 <script src="/static/sse.js"></script>
+<!-- Leaflet (vendored + embedded) for the live location map. Map tiles come
+     from OpenStreetMap at render time (no API key); the marker is an emoji
+     divIcon so no marker images are needed. -->
+<link rel="stylesheet" href="/static/leaflet.css">
+<script src="/static/leaflet.js"></script>
 <style>
   :root {
     color-scheme: dark light;
@@ -741,6 +748,16 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
   .profile-stats dd { margin:0; text-align:right; font-variant-numeric:tabular-nums; }
   .profile-empty { color:var(--dim); font-style:italic; margin:0 0 8px; }
   .profile-link { font-size:.85em; }
+  /* live location map (Leaflet) */
+  details.map { margin:24px 0 0; }
+  details.map > summary { font-size:.8em; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); cursor:pointer; padding:8px 0; border-top:1px solid var(--divider); list-style:none; }
+  details.map > summary::-webkit-details-marker { display:none; }
+  details.map > summary::before { content:"▸ "; color:var(--dim); display:inline-block; }
+  details.map[open] > summary::before { content:"▾ "; }
+  details.map > summary:hover { color:var(--fg); }
+  .map-box { height:280px; margin-top:8px; border-radius:8px; overflow:hidden; background:var(--chip-bg); }
+  .van-marker { font-size:22px; line-height:24px; text-align:center; }
+  .map-box .leaflet-control-attribution { font-size:.65em; }
   /* live viewer count — a subtle, quick colour flash on the number: green when
      it rises, red when it falls. The inner .chatters-count span is re-inserted
      on each SSE update so the animation re-triggers; with only a "from" keyframe
@@ -859,6 +876,14 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
     {{end}}
   </details>
   {{end}}
+
+  <details class="map" open>
+    <summary>map</summary>
+    <!-- data-trail seeds the breadcrumb polyline + 🚐 pin from the hub on load;
+         #map-sink receives live "map" SSE points (read on afterSwap by the JS). -->
+    <div id="map" class="map-box" data-trail="{{.MapTrailJSON}}"></div>
+    <div id="map-sink" sse-swap="map" hx-swap="innerHTML" hidden></div>
+  </details>
 
   <details class="controls">
     <summary>controls</summary>
@@ -1096,6 +1121,55 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
     if (open && !pop.contains(e.target)) hide();
   });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hide(); });
+})();
+
+// Live location map (Leaflet). Seeds a breadcrumb polyline + 🚐 pin from the
+// data-trail attribute, then extends it as "map" SSE points arrive — htmx swaps
+// each into #map-sink and we read its data-lat/lng on afterSwap. Tiles load from
+// OpenStreetMap. No-op if Leaflet didn't load.
+(function() {
+  const el = document.getElementById('map');
+  if (!el || typeof L === 'undefined') return;
+  let trail = [];
+  try { trail = JSON.parse(el.dataset.trail || '[]'); } catch (e) { trail = []; }
+
+  const map = L.map(el);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19, attribution: '© OpenStreetMap contributors',
+  }).addTo(map);
+
+  const van = L.divIcon({ className: 'van-marker', html: '🚐', iconSize: [24, 24], iconAnchor: [12, 12] });
+  const line = L.polyline(trail, { color: '#58a6ff', weight: 3, opacity: 0.75 }).addTo(map);
+  let marker = null;
+  let hasPoint = false;
+
+  const recenter = (animate) => {
+    const p = trail[trail.length - 1];
+    if (!p) { map.setView([39.5, -98.35], 4); return; } // continental US until a fix arrives
+    if (marker) marker.setLatLng(p); else marker = L.marker(p, { icon: van }).addTo(map);
+    if (!hasPoint) { map.setView(p, 7); hasPoint = true; } // zoom in on the first point
+    else { map.panTo(p, { animate: !!animate }); }         // later: follow, keep the user's zoom
+  };
+  recenter(false);
+
+  const sink = document.getElementById('map-sink');
+  if (sink) sink.addEventListener('htmx:afterSwap', () => {
+    const span = sink.querySelector('span[data-lat]');
+    if (!span) return;
+    const lat = parseFloat(span.dataset.lat), lng = parseFloat(span.dataset.lng);
+    if (isNaN(lat) || isNaN(lng)) return;
+    trail.push([lat, lng]);
+    if (trail.length > 100) trail.shift();
+    line.setLatLngs(trail);
+    recenter(true);
+  });
+
+  // The map sits in a <details>; Leaflet needs a size recalc when the container
+  // is first laid out or revealed.
+  const fix = () => map.invalidateSize();
+  const details = el.closest('details');
+  if (details) details.addEventListener('toggle', () => { if (details.open) setTimeout(fix, 50); });
+  setTimeout(fix, 100);
 })();
 
 // iOS Home Screen apps return to a stale cached page on reopen — even with

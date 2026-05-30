@@ -47,7 +47,7 @@ var defaultPlayer = NewPlayer(
 // take ctx yet, so it's not propagated into their HTTP calls. Once they do,
 // trace spans for cron.video.GetCurrentlyPlaying ticks will nest the
 // underlying VLC poll and GPS-image toggles as children.
-//TODO: consider making this return a video struct
+// TODO: consider making this return a video struct
 func (p *Player) GetCurrentlyPlaying(ctx context.Context) {
 	var err error
 
@@ -84,7 +84,8 @@ func (p *Player) GetCurrentlyPlaying(ctx context.Context) {
 		// live (no-op when NATS is unconfigured). emitted_at doubles as the
 		// clip start time for the panel's elapsed ticker.
 		eventbus.EmitVideoChanged(ctx, c.Conf.Environment,
-			p.CurrentlyPlaying.File(), p.CurrentlyPlaying.State, p.CurrentlyPlaying.Flagged)
+			p.CurrentlyPlaying.File(), p.CurrentlyPlaying.State, p.CurrentlyPlaying.Flagged,
+			p.CurrentlyPlaying.Lat, p.CurrentlyPlaying.Lng)
 
 		// show the no-GPS image
 		if p.CurrentlyPlaying.Flagged {
