@@ -41,6 +41,9 @@ var (
 	// token; the admin panel renders a re-auth prompt for each. Overridable in
 	// tests. Reads in-memory token state — no DB or network call.
 	accountsNeedingReauth = mytwitch.AccountsNeedingReauth
+	// authStatuses reports every identity's live token state (expiry +
+	// reauth reason) for the panel's countdown card. Overridable in tests.
+	authStatuses = mytwitch.TokenStatuses
 	// obsStreamStatus reports whether OBS is currently streaming. Function-seam
 	// so handler tests can stub without opening a real OBS WebSocket. Default
 	// hits OBS via pkg/obs (fresh connection per call — see obs.GetStreamStatus).
@@ -98,10 +101,14 @@ type versionInfo struct {
 }
 
 // nowPlaying is the current-video summary shown when vlc-server is healthy.
+// SinceUnix is the clip's start time as a Unix timestamp; the page's JS ticker
+// counts the elapsed display up from it (and resets it on each live video swap)
+// so progress keeps moving without a reload.
 type nowPlaying struct {
-	File     string
-	State    string
-	Progress string
+	File      string
+	State     string
+	Progress  string
+	SinceUnix int64
 }
 
 // streamControl drives the OBS stream toggle widget. Reachable=false hides
@@ -144,9 +151,11 @@ type adminData struct {
 	Stream         streamControl
 	PanelHost      string // host the panel was reached at; the Twitch embed needs it as parent=
 	Links          []navLink
-	Flags          []featureFlag            // feature flags + their state; empty hides the section
-	Reauth         []mytwitch.AccountReauth // accounts whose token needs re-auth; empty when healthy
-	ChatHistory    []ChatLine               // recent chat from the live-console hub; live lines stream in via SSE
+	Flags          []featureFlag                 // feature flags + their state; empty hides the section
+	Reauth         []mytwitch.AccountReauth      // accounts whose token needs re-auth; empty when healthy
+	AuthStatuses   []mytwitch.AccountTokenStatus // every identity's token state; drives the live expiry-countdown card
+	ChatHistory    []ChatLine                    // recent chat from the live-console hub; live lines stream in via SSE
+	MapTrailJSON   string                        // recent GPS breadcrumbs as JSON [[lat,lng],…] for the live map (data attr)
 }
 
 // adminHandler serves the human-facing root page on the tripbot Ingress: a
@@ -174,7 +183,9 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 		Links:          gatherLinks(),
 		Flags:          gatherFlags(r.Context()),
 		Reauth:         accountsNeedingReauth(),
+		AuthStatuses:   authStatuses(),
 		ChatHistory:    eventHub.snapshotChat(),
+		MapTrailJSON:   mapTrailJSON(),
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -380,10 +391,12 @@ func currentVideo(vlcOK bool) *nowPlaying {
 	if v.Slug == "" {
 		return nil
 	}
+	progress := currentProgress()
 	return &nowPlaying{
-		File:     v.File(),
-		State:    v.State,
-		Progress: currentProgress().Round(time.Second).String(),
+		File:      v.File(),
+		State:     v.State,
+		Progress:  progress.Round(time.Second).String(),
+		SinceUnix: time.Now().Add(-progress).Unix(),
 	}
 }
 
@@ -554,6 +567,10 @@ func panelHost(r *http.Request) string {
 
 var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
 	"envColorClass": envColorClass,
+	// authCard / reauthCallout render the same fragments the hub pushes live,
+	// so the initial server render and a later SSE swap are byte-identical.
+	"authCard":      func(s []mytwitch.AccountTokenStatus) template.HTML { return template.HTML(renderAuthCard(s)) },
+	"reauthCallout": func(r []mytwitch.AccountReauth) template.HTML { return template.HTML(renderReauthCallout(r)) },
 }).Parse(`<!doctype html>
 <html lang="en">
 <head>
@@ -569,6 +586,11 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
      the live chat console: sse.js consumes /admin/events and swaps fragments. -->
 <script src="/static/htmx.min.js"></script>
 <script src="/static/sse.js"></script>
+<!-- Leaflet (vendored + embedded) for the live location map. Map tiles come
+     from OpenStreetMap at render time (no API key); the marker is an emoji
+     divIcon so no marker images are needed. -->
+<link rel="stylesheet" href="/static/leaflet.css">
+<script src="/static/leaflet.js"></script>
 <style>
   :root {
     color-scheme: dark light;
@@ -708,27 +730,81 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
   .chat-line .cu { color:#58a6ff; font-weight:600; }
   .chat-line .ct { color:var(--fg); }
   .chat-empty { color:var(--dim); font-style:italic; padding:6px 0; }
+  /* jump-to-latest pill — floats over the bottom of the chat-log, shown only
+     while scrolled up (the scrollback buffer). Tapping returns to the newest. */
+  .chat-wrap { position:relative; }
+  .chat-jump { position:absolute; left:50%; bottom:10px; transform:translateX(-50%); z-index:2; font:inherit; font-size:.8em; padding:4px 12px; border-radius:999px; border:1px solid var(--chip-border); background:var(--chip-bg); color:var(--fg); cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,.35); }
+  .chat-jump:hover { border-color:#58a6ff; color:#9cf; }
+  .chat-jump[hidden] { display:none; }
+  /* clickable chat usernames + the profile popover they open */
+  .chat-line .cu { cursor:pointer; }
+  .chat-line .cu:hover { text-decoration:underline; }
+  .user-popover { position:fixed; z-index:20; max-width:240px; background:var(--chip-bg); border:1px solid var(--chip-border); border-radius:8px; padding:12px 14px; box-shadow:0 6px 24px rgba(0,0,0,.45); font-size:.9em; }
+  .user-popover[hidden] { display:none; }
+  .profile-card .profile-name { font-weight:600; margin-bottom:8px; word-break:break-all; }
+  .profile-bot { font-size:.72em; color:var(--dim); border:1px solid var(--chip-border); border-radius:4px; padding:0 5px; vertical-align:middle; }
+  .profile-stats { display:grid; grid-template-columns:auto 1fr; gap:2px 14px; margin:0 0 8px; }
+  .profile-stats dt { color:var(--muted); }
+  .profile-stats dd { margin:0; text-align:right; font-variant-numeric:tabular-nums; }
+  .profile-empty { color:var(--dim); font-style:italic; margin:0 0 8px; }
+  .profile-link { font-size:.85em; }
+  /* live location map (Leaflet) */
+  details.map { margin:24px 0 0; }
+  details.map > summary { font-size:.8em; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); cursor:pointer; padding:8px 0; border-top:1px solid var(--divider); list-style:none; }
+  details.map > summary::-webkit-details-marker { display:none; }
+  details.map > summary::before { content:"▸ "; color:var(--dim); display:inline-block; }
+  details.map[open] > summary::before { content:"▾ "; }
+  details.map > summary:hover { color:var(--fg); }
+  .map-box { height:280px; margin-top:8px; border-radius:8px; overflow:hidden; background:var(--chip-bg); }
+  .van-marker { font-size:22px; line-height:24px; text-align:center; }
+  .map-box .leaflet-control-attribution { font-size:.65em; }
+  .map-toggle { margin-top:8px; background:none; border:none; color:var(--dim); font:inherit; font-size:.85em; cursor:pointer; padding:2px 6px; }
+  .map-toggle:hover { color:var(--fg); }
+  /* live viewer count — a subtle, quick colour flash on the number: green when
+     it rises, red when it falls. The inner .chatters-count span is re-inserted
+     on each SSE update so the animation re-triggers; with only a "from" keyframe
+     it animates back to the number's natural colour. Steady state is unstyled. */
+  @keyframes flash-up   { from { color:#3fb950; } }
+  @keyframes flash-down { from { color:#f85149; } }
+  .chatters-count.flash-up   { animation:flash-up .8s ease-out; }
+  .chatters-count.flash-down { animation:flash-down .8s ease-out; }
+  /* live auth/token card — compact muted line under the accounts line. Each
+     identity shows "expires in N" (JS-filled from data-expires); .auth-soon
+     reddens it under the threshold, .auth-expired once past, and .auth-warn
+     marks a missing/expired token whose row carries a re-auth link instead. */
+  .auth { color:var(--dim); margin:0 0 18px; font-size:.82em; }
+  .auth-row { margin-right:12px; white-space:nowrap; }
+  .auth-who { color:var(--muted); }
+  .auth-expires.auth-soon { color:#f0883e; font-weight:600; }
+  .auth-expires.auth-expired { color:#f85149; font-weight:600; }
+  .auth-row.auth-warn .auth-who { color:#f0883e; }
+  a.auth-reauth { color:#ffb454; font-weight:600; }
 </style>
 </head>
 <body>
-<main>
+<!-- hx-ext="sse" + sse-connect open ONE EventSource on /admin/events for the
+     whole panel; every live region below (chat, viewer count, …) is an
+     sse-swap target nested under it. -->
+<main hx-ext="sse" sse-connect="/admin/events">
   <!-- A Dana Life mark, referenced from the website (the single owner of brand
        assets) rather than copied in — see vault general/logo.md. The anchor
        wraps the mark so clicking it refreshes the page. -->
   <a class="logo-link" href="/" title="refresh"><img class="logo" src="https://www.dana.lol/assets/logo.png" alt="A Dana Life" width="44" height="44"></a>
   <h1>tripbot <code class="env {{envColorClass .Env}}">{{.Env}}</code></h1>
-  <p class="meta">up {{.Uptime}} · {{.Chatters}} in chat</p>
+  <!-- #chatters is the stable sse-swap target; the inner .chatters-count span is
+       replaced (innerHTML) on each "viewers" event so its flash animation re-fires. -->
+  <p class="meta">up {{.Uptime}} · <span id="chatters" sse-swap="viewers" hx-swap="innerHTML"><span class="chatters-count">{{.Chatters}}</span></span> in chat</p>
   <p class="accounts">broadcaster <a href="https://twitch.tv/{{.Channel}}">{{.Channel}}</a> · bot <a href="https://twitch.tv/{{.Bot}}">{{.Bot}}</a></p>
+  <!-- live token-expiry card: per-identity "expires in N" countdown (the JS
+       ticker counts it down + reddens it near expiry), or a re-auth link when a
+       token is missing/expired. The hub's 30s poller OOB-swaps #auth-card;
+       authCard renders the same fragment here for the initial paint. -->
+  <p class="auth" id="auth-card" sse-swap="auth" hx-swap="innerHTML">{{authCard .AuthStatuses}}</p>
 
-  {{if .Reauth}}
-  <div class="reauth">
-    <h2>action needed: re-authenticate</h2>
-    <p>tripbot can't talk to Twitch until these accounts are re-authorized. Sign in as the named account on each — the flow re-prompts which account to use, so sign out of Twitch (or use a private window) if it grabs the wrong one.</p>
-    <div class="btns">
-      {{range .Reauth}}<a class="btn" href="{{.InitURL}}">Sign in as {{.LoginAs}} <span class="why">({{.Account}} · {{.Reason}})</span></a>{{end}}
-    </div>
-  </div>
-  {{end}}
+  <!-- #reauth-card fills (banner appears) or empties (banner disappears) live as
+       the hub's auth poller pushes "reauth" events; reauthCallout renders the
+       same markup for the initial paint. -->
+  <div id="reauth-card" sse-swap="reauth" hx-swap="innerHTML">{{reauthCallout .Reauth}}</div>
 
   <h2>status</h2>
   <ul>
@@ -748,13 +824,15 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
 
   <details class="chat" open>
     <summary>chat</summary>
-    <!-- sse-connect opens /admin/events; #chat-log receives the "chat" event
-         and appends each rendered line. Recent history is rendered server-side
-         from the hub's ring buffer below; live lines stream in on top. -->
-    <div hx-ext="sse" sse-connect="/admin/events">
-      <div id="chat-log" class="chat-log" sse-swap="chat" hx-swap="beforeend scroll:bottom">
+    <!-- #chat-log receives the "chat" SSE event (the panel-wide sse-connect lives
+         on <main>) and appends each rendered line. Recent history is rendered
+         server-side from the hub's ring buffer; live lines stream in on top. -->
+    <div class="chat-wrap">
+      <div id="chat-log" class="chat-log" sse-swap="chat" hx-swap="beforeend">
         {{range .ChatHistory}}<div class="chat-line"><time class="ct-ts" datetime="{{.At.Format "2006-01-02T15:04:05Z07:00"}}">{{.At.Format "15:04"}}</time> <span class="cu">{{.Username}}</span> <span class="ct">{{.Text}}</span></div>{{else}}<div class="chat-empty">waiting for chat…</div>{{end}}
       </div>
+      <!-- shown only while scrolled up (see JS): tapping jumps to the newest line -->
+      <button id="chat-jump" class="chat-jump" type="button" hidden>↓ new</button>
     </div>
   </details>
 
@@ -787,12 +865,11 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
   {{if or .Now .Audio.Title}}
   <details class="now-playing">
     <summary>now playing</summary>
+    <!-- #now-line is the sse-swap target for "video" events; its inner markup
+         mirrors hub.go's videoLineTmpl so a live swap matches a fresh render.
+         The .now-elapsed span is counted up by the page's JS ticker. -->
     {{with .Now}}
-    <p class="now">
-      <span class="file">{{.File}}</span>
-      {{if .State}}<span class="state">· {{.State}}</span>{{end}}
-      {{if .Progress}}<span class="state">· {{.Progress}}</span>{{end}}
-    </p>
+    <p class="now" id="now-line" sse-swap="video" hx-swap="innerHTML"><span class="file">{{.File}}</span>{{if .State}} <span class="state">· {{.State}}</span>{{end}} <span class="state">· <span class="now-elapsed" data-since="{{.SinceUnix}}">{{.Progress}}</span></span></p>
     {{end}}
     {{if .Audio.Title}}
     <p class="audio">
@@ -801,6 +878,15 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
     {{end}}
   </details>
   {{end}}
+
+  <details class="map" open>
+    <summary>map</summary>
+    <!-- data-trail seeds the breadcrumb polyline + 🚐 pin from the hub on load;
+         #map-sink receives live "map" SSE points (read on afterSwap by the JS). -->
+    <div id="map" class="map-box" data-trail="{{.MapTrailJSON}}"></div>
+    <div id="map-sink" sse-swap="map" hx-swap="innerHTML" hidden></div>
+    <button id="corpus-toggle" class="map-toggle" type="button">show full route</button>
+  </details>
 
   <details class="controls">
     <summary>controls</summary>
@@ -829,6 +915,10 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
     <button id="toggle-all" class="theme-toggle" type="button" title="expand or collapse all sections">▾ expand all</button>
     <button id="theme-toggle" class="theme-toggle" type="button" title="toggle theme">◐ theme</button>
   </div>
+
+  <!-- chat user-profile popover: filled by a fetch when a username in the chat
+       console is clicked (see the profile JS); position:fixed so it floats. -->
+  <div id="user-popover" class="user-popover" hidden></div>
 </main>
 <script>
 // Stream-preview iframe wiring. The disclosure defaults to open so the
@@ -889,14 +979,34 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
   });
 })();
 
-// Live chat console: keep the pane pinned to the newest line, cap DOM nodes to
-// match the server-side ring buffer (200) so the page can't grow unbounded, and
-// drop the "waiting for chat…" placeholder once real lines arrive. htmx's sse
-// extension swaps each line into #chat-log (beforeend); we react on afterSwap.
+// Live chat console. New lines stream into #chat-log (htmx sse, beforeend).
+// Auto-scroll + trimming happen ONLY while the viewer is pinned to the bottom —
+// scrolling up to read history is never yanked back down and the older nodes
+// aren't trimmed out from under the viewport, which is what makes the scrollback
+// buffer usable. It re-follows + re-trims once the viewer returns to the bottom.
+// Also drops the "waiting for chat…" placeholder and decorates each line
+// (local-time + per-user color).
 (function() {
   const log = document.getElementById('chat-log');
   if (!log) return;
-  const pin = () => { log.scrollTop = log.scrollHeight; };
+  const CAP = 500; // scrollback depth; matches chatRingSize on the server
+  // pinned = the viewport is at (or near) the newest line.
+  let pinned = true;
+  const atBottom = () => log.scrollHeight - log.scrollTop - log.clientHeight < 40;
+  // Jump-to-latest pill: shown only while scrolled up, counting unread lines.
+  const jump = document.getElementById('chat-jump');
+  let unread = 0;
+  const refreshPill = () => {
+    if (!jump) return;
+    jump.textContent = '↓ ' + unread + ' new';
+    jump.hidden = unread === 0;
+  };
+  const toBottom = () => { log.scrollTop = log.scrollHeight; pinned = true; unread = 0; refreshPill(); };
+  if (jump) jump.addEventListener('click', toBottom);
+  log.addEventListener('scroll', () => {
+    pinned = atBottom();
+    if (pinned) { unread = 0; refreshPill(); }
+  });
   // Times are emitted in UTC and rendered server-side as a fallback; show them
   // in the viewer's local timezone instead.
   const localize = (root) => root.querySelectorAll('time.ct-ts').forEach(t => {
@@ -919,12 +1029,174 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
   const decorate = (root) => { localize(root); colorize(root); };
   log.addEventListener('htmx:afterSwap', () => {
     log.querySelectorAll('.chat-empty').forEach(el => el.remove());
-    while (log.childElementCount > 200) log.removeChild(log.firstElementChild);
     decorate(log);
-    pin();
+    if (pinned) {
+      while (log.childElementCount > CAP) log.removeChild(log.firstElementChild);
+      log.scrollTop = log.scrollHeight;
+    } else {
+      unread++;
+      refreshPill();
+    }
   });
   decorate(log); // localize times + color usernames in the server-rendered history
-  pin(); // pin on initial load (history rendered server-side)
+  log.scrollTop = log.scrollHeight; // start at the newest message
+})();
+
+// "Now playing" elapsed timer. Each .now-elapsed span carries data-since (the
+// clip's start as a Unix timestamp); tick it up once a second so the progress
+// keeps moving without a reload. A live "video" swap replaces the span with a
+// fresh data-since, so the count resets to the new clip automatically.
+(function() {
+  const fmt = (s) => {
+    s = Math.max(0, Math.floor(s));
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+    return (h ? h + 'h' : '') + (h || m ? m + 'm' : '') + sec + 's';
+  };
+  const tick = () => {
+    const now = Date.now() / 1000;
+    document.querySelectorAll('.now-elapsed[data-since]').forEach(el => {
+      const since = Number(el.dataset.since);
+      if (since) el.textContent = fmt(now - since);
+    });
+  };
+  tick();
+  setInterval(tick, 1000);
+})();
+
+// Auth token countdown. Each .auth-expires carries data-expires (Unix seconds);
+// show "expires in N" counting down, redden it under 15 min (.auth-soon) and
+// once past (.auth-expired). The hub re-pushes the card every 30s, but this
+// keeps the displayed remaining fresh between pushes.
+(function() {
+  const SOON = 15 * 60; // seconds — redden threshold
+  const fmt = (s) => {
+    if (s <= 0) return 'expired';
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+    if (h) return 'expires in ' + h + 'h ' + m + 'm';
+    if (m) return 'expires in ' + m + 'm';
+    return 'expires in <1m';
+  };
+  const tick = () => {
+    const now = Date.now() / 1000;
+    document.querySelectorAll('.auth-expires[data-expires]').forEach(el => {
+      const exp = Number(el.dataset.expires);
+      // A zero/sentinel expiry (year-1 epoch) means "unknown" — don't show it as expired.
+      if (!exp || exp < 1e9) { el.textContent = 'expires —'; el.classList.remove('auth-soon', 'auth-expired'); return; }
+      const rem = exp - now;
+      el.textContent = fmt(rem);
+      el.classList.toggle('auth-soon', rem > 0 && rem < SOON);
+      el.classList.toggle('auth-expired', rem <= 0);
+    });
+  };
+  tick();
+  setInterval(tick, 1000);
+})();
+
+// Chat user-profile popover. A delegated click on any chat username (.cu)
+// fetches /admin/user/<name> and floats the returned card near the click;
+// clicking outside or pressing Escape closes it. Delegation covers SSE-added
+// lines without per-line wiring.
+(function() {
+  const pop = document.getElementById('user-popover');
+  if (!pop) return;
+  let open = false;
+  const hide = () => { pop.hidden = true; open = false; };
+  document.addEventListener('click', (e) => {
+    const cu = e.target.closest('.cu');
+    if (cu) {
+      const name = cu.textContent.trim();
+      if (!name) return;
+      fetch('/admin/user/' + encodeURIComponent(name))
+        .then(r => r.ok ? r.text() : Promise.reject(r.status))
+        .then(html => {
+          pop.innerHTML = html;
+          pop.hidden = false; // unhide before measuring so offset* are real
+          open = true;
+          const pad = 8;
+          const x = Math.min(e.clientX, window.innerWidth - pop.offsetWidth - pad);
+          const y = Math.min(e.clientY + pad, window.innerHeight - pop.offsetHeight - pad);
+          pop.style.left = Math.max(pad, x) + 'px';
+          pop.style.top = Math.max(pad, y) + 'px';
+        })
+        .catch(() => {});
+      return;
+    }
+    if (open && !pop.contains(e.target)) hide();
+  });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hide(); });
+})();
+
+// Live location map (Leaflet). Seeds a breadcrumb polyline + 🚐 pin from the
+// data-trail attribute, then extends it as "map" SSE points arrive — htmx swaps
+// each into #map-sink and we read its data-lat/lng on afterSwap. Tiles load from
+// OpenStreetMap. No-op if Leaflet didn't load.
+(function() {
+  const el = document.getElementById('map');
+  if (!el || typeof L === 'undefined') return;
+  let trail = [];
+  try { trail = JSON.parse(el.dataset.trail || '[]'); } catch (e) { trail = []; }
+
+  const map = L.map(el);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19, attribution: '© OpenStreetMap contributors',
+  }).addTo(map);
+
+  const van = L.divIcon({ className: 'van-marker', html: '🚐', iconSize: [24, 24], iconAnchor: [12, 12] });
+  const line = L.polyline(trail, { color: '#58a6ff', weight: 3, opacity: 0.75 }).addTo(map);
+  let marker = null;
+  let hasPoint = false;
+
+  const recenter = (animate) => {
+    const p = trail[trail.length - 1];
+    if (!p) { map.setView([39.5, -98.35], 4); return; } // continental US until a fix arrives
+    if (marker) marker.setLatLng(p); else marker = L.marker(p, { icon: van }).addTo(map);
+    if (!hasPoint) { map.setView(p, 7); hasPoint = true; } // zoom in on the first point
+    else { map.panTo(p, { animate: !!animate }); }         // later: follow, keep the user's zoom
+  };
+  recenter(false);
+
+  const sink = document.getElementById('map-sink');
+  if (sink) sink.addEventListener('htmx:afterSwap', () => {
+    const span = sink.querySelector('span[data-lat]');
+    if (!span) return;
+    const lat = parseFloat(span.dataset.lat), lng = parseFloat(span.dataset.lng);
+    if (isNaN(lat) || isNaN(lng)) return;
+    trail.push([lat, lng]);
+    if (trail.length > 100) trail.shift();
+    line.setLatLngs(trail);
+    recenter(true);
+  });
+
+  // "show full route" toggle: lazily fetch the whole-corpus route and draw it as
+  // a faint background line behind the live trail. Remembered in localStorage.
+  const corpusBtn = document.getElementById('corpus-toggle');
+  let corpusLine = null;
+  const renderCorpus = (fit) => {
+    fetch('/admin/map/corpus').then(r => r.ok ? r.json() : Promise.reject(r.status)).then(pts => {
+      corpusLine = L.polyline(pts, { color: '#888', weight: 1.5, opacity: 0.4 }).addTo(map);
+      corpusLine.bringToBack();
+      if (fit && pts.length) map.fitBounds(corpusLine.getBounds(), { padding: [20, 20] });
+    }).catch(() => {});
+  };
+  const setCorpus = (on, fit) => {
+    if (on) {
+      if (corpusLine) { corpusLine.addTo(map); if (fit) map.fitBounds(corpusLine.getBounds(), { padding: [20, 20] }); }
+      else renderCorpus(fit);
+    } else if (corpusLine) {
+      map.removeLayer(corpusLine);
+    }
+    if (corpusBtn) corpusBtn.textContent = on ? 'hide full route' : 'show full route';
+    localStorage.setItem('map-corpus', on ? '1' : '0');
+  };
+  if (corpusBtn) corpusBtn.addEventListener('click', () => setCorpus(!(corpusLine && map.hasLayer(corpusLine)), true));
+  setCorpus(localStorage.getItem('map-corpus') === '1', false);
+
+  // The map sits in a <details>; Leaflet needs a size recalc when the container
+  // is first laid out or revealed.
+  const fix = () => map.invalidateSize();
+  const details = el.closest('details');
+  if (details) details.addEventListener('toggle', () => { if (details.open) setTimeout(fix, 50); });
+  setTimeout(fix, 100);
 })();
 
 // iOS Home Screen apps return to a stale cached page on reopen — even with

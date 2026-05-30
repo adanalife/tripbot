@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 )
 
-//TODO: should we handle the case where index is outside range?
+// TODO: should we handle the case where index is outside range?
 // or just explicitly pass in what we get here?
 func (s *Server) playAtIndex(index int) error {
 	// start playing the media

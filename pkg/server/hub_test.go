@@ -110,6 +110,109 @@ func TestHub_handleChat_badPayloadNoCrash(t *testing.T) {
 	}
 }
 
+// TestHub_updateViewers_flashDirection walks the count through first-value,
+// rise, fall, and no-change to assert the flash direction the panel renders.
+func TestHub_updateViewers_flashDirection(t *testing.T) {
+	h := NewHub()
+	// First value sets the baseline — no flash (nothing to compare against).
+	if dir := h.updateViewers(10); dir != "" {
+		t.Errorf("first value: dir = %q, want \"\" (baseline, no flash)", dir)
+	}
+	if dir := h.updateViewers(12); dir != "up" {
+		t.Errorf("rise: dir = %q, want up", dir)
+	}
+	if dir := h.updateViewers(11); dir != "down" {
+		t.Errorf("fall: dir = %q, want down", dir)
+	}
+	if dir := h.updateViewers(11); dir != "" {
+		t.Errorf("unchanged: dir = %q, want \"\" (no flash)", dir)
+	}
+}
+
+func TestHub_handleViewerCount_broadcastsRenderedCount(t *testing.T) {
+	h := NewHub()
+	client := h.register()
+
+	payload, _ := json.Marshal(eventbus.ViewerCount{Count: 7, EmittedAt: "2026-05-29T13:05:00Z"})
+	h.handleViewerCount(context.Background(), payload)
+
+	ev := <-client
+	if ev.Name != "viewers" {
+		t.Errorf("event name = %q, want viewers", ev.Name)
+	}
+	// First value: no flash class, count present.
+	if !strings.Contains(ev.Data, `class="chatters-count"`) || !strings.Contains(ev.Data, ">7<") {
+		t.Errorf("fragment %q missing unflashed count 7", ev.Data)
+	}
+
+	// A rise should carry the flash-up class.
+	payload, _ = json.Marshal(eventbus.ViewerCount{Count: 9, EmittedAt: "2026-05-29T13:06:00Z"})
+	h.handleViewerCount(context.Background(), payload)
+	ev = <-client
+	if !strings.Contains(ev.Data, "flash-up") || !strings.Contains(ev.Data, ">9<") {
+		t.Errorf("fragment %q missing flash-up / count 9", ev.Data)
+	}
+}
+
+func TestHub_handleViewerCount_badPayloadNoCrash(t *testing.T) {
+	h := NewHub()
+	h.handleViewerCount(context.Background(), []byte("not json"))
+	// A bad payload must not flip viewersKnown or set a count.
+	if h.viewersKnown {
+		t.Errorf("bad payload should not establish a baseline")
+	}
+}
+
+func TestRenderViewerCount(t *testing.T) {
+	if got := renderViewerCount(5, ""); got != `<span class="chatters-count">5</span>` {
+		t.Errorf("unflashed = %q", got)
+	}
+	if got := renderViewerCount(5, "up"); !strings.Contains(got, "chatters-count flash-up") {
+		t.Errorf("up = %q, want flash-up class", got)
+	}
+	if got := renderViewerCount(5, "down"); !strings.Contains(got, "chatters-count flash-down") {
+		t.Errorf("down = %q, want flash-down class", got)
+	}
+}
+
+func TestHub_handleVideoChanged_broadcastsNowLine(t *testing.T) {
+	h := NewHub()
+	client := h.register()
+
+	since := time.Date(2026, 5, 29, 13, 5, 0, 0, time.UTC)
+	payload, _ := json.Marshal(eventbus.VideoChanged{
+		File: "wy_0042.MP4", State: "Wyoming", Flagged: false,
+		EmittedAt: since.Format(time.RFC3339Nano),
+	})
+	h.handleVideoChanged(context.Background(), payload)
+
+	ev := <-client
+	if ev.Name != "video" {
+		t.Errorf("event name = %q, want video", ev.Name)
+	}
+	if !strings.Contains(ev.Data, "wy_0042.MP4") || !strings.Contains(ev.Data, "Wyoming") {
+		t.Errorf("fragment %q missing file/state", ev.Data)
+	}
+	// elapsed span carries the clip start (emitted_at) as data-since so the JS
+	// ticker counts up from the right moment.
+	if !strings.Contains(ev.Data, `class="now-elapsed"`) ||
+		!strings.Contains(ev.Data, `data-since="`+itoa(int(since.Unix()))+`"`) {
+		t.Errorf("fragment %q missing now-elapsed with data-since=%d", ev.Data, since.Unix())
+	}
+}
+
+func TestHub_handleVideoChanged_badPayloadNoCrash(t *testing.T) {
+	h := NewHub()
+	h.handleVideoChanged(context.Background(), []byte("not json"))
+}
+
+func TestRenderVideoLine_escapesHTML(t *testing.T) {
+	got := renderVideoLine(eventbus.VideoChanged{File: "<script>x</script>", State: "Wyoming"})
+	if strings.Contains(got, "<script>") {
+		t.Errorf("file not escaped: %q", got)
+	}
+}
+
 func TestRenderChatLine_escapesHTML(t *testing.T) {
 	got := renderChatLine(ChatLine{Username: "evil", Text: "<script>alert(1)</script>"})
 	if strings.Contains(got, "<script>") {
@@ -141,4 +244,66 @@ func itoa(i int) string {
 		b[pos] = '-'
 	}
 	return string(b[pos:])
+}
+
+func TestHub_handleVideoChanged_dropsBreadcrumbWhenFix(t *testing.T) {
+	h := NewHub()
+	client := h.register()
+	payload, _ := json.Marshal(eventbus.VideoChanged{
+		File: "wy.MP4", State: "Wyoming", Flagged: false,
+		Lat: 41.5, Lng: -110.2, EmittedAt: "2026-05-29T13:05:00Z",
+	})
+	h.handleVideoChanged(context.Background(), payload)
+
+	// the now-line ("video") first, then the breadcrumb ("map")
+	if ev := <-client; ev.Name != "video" {
+		t.Fatalf("first event = %q, want video", ev.Name)
+	}
+	ev := <-client
+	if ev.Name != "map" {
+		t.Fatalf("second event = %q, want map", ev.Name)
+	}
+	if !strings.Contains(ev.Data, `data-lat="41.500000"`) || !strings.Contains(ev.Data, `data-lng="-110.200000"`) {
+		t.Errorf("map fragment %q missing coords", ev.Data)
+	}
+	if trail := h.snapshotMapTrail(); len(trail) != 1 || trail[0].Lat != 41.5 {
+		t.Errorf("trail = %+v, want one point at lat 41.5", trail)
+	}
+}
+
+func TestHub_handleVideoChanged_noBreadcrumbWhenNoFix(t *testing.T) {
+	h := NewHub()
+	client := h.register()
+
+	// flagged clip → no GPS fix
+	flagged, _ := json.Marshal(eventbus.VideoChanged{File: "x.MP4", Flagged: true, Lat: 41, Lng: -110})
+	h.handleVideoChanged(context.Background(), flagged)
+	if ev := <-client; ev.Name != "video" {
+		t.Fatalf("want video, got %q", ev.Name)
+	}
+	if n := len(h.snapshotMapTrail()); n != 0 {
+		t.Errorf("flagged clip added %d breadcrumbs, want 0", n)
+	}
+
+	// 0/0 (null island) → treated as no fix
+	zero, _ := json.Marshal(eventbus.VideoChanged{File: "y.MP4", Flagged: false, Lat: 0, Lng: 0})
+	h.handleVideoChanged(context.Background(), zero)
+	<-client // the "video" event
+	if n := len(h.snapshotMapTrail()); n != 0 {
+		t.Errorf("0/0 added %d breadcrumbs, want 0", n)
+	}
+}
+
+func TestHub_appendMapPoint_ringCap(t *testing.T) {
+	h := NewHub()
+	for i := 0; i < mapTrailSize+20; i++ {
+		h.appendMapPoint(mapPoint{Lat: float64(i), Lng: 1})
+	}
+	trail := h.snapshotMapTrail()
+	if len(trail) != mapTrailSize {
+		t.Fatalf("trail len = %d, want %d", len(trail), mapTrailSize)
+	}
+	if trail[0].Lat != 20 {
+		t.Errorf("oldest retained lat = %v, want 20 (first 20 evicted)", trail[0].Lat)
+	}
 }

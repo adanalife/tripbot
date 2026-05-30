@@ -281,6 +281,9 @@ func TestAdminHandler_RendersReadyStatusAndLinks(t *testing.T) {
 	defer SetTwitchConnected(false)
 	SetTwitchConnected(true)
 	withReauth(t, nil) // healthy tokens — no re-auth callout
+	withAuthStatuses(t, []mytwitch.AccountTokenStatus{
+		{Account: "bot", LoginAs: "tripbot4000", ExpiresAt: time.Date(2099, 1, 1, 0, 0, 0, 0, time.UTC)},
+	})
 	withNowPlaying(t, nowPlayingTrack{Artist: "Test Artist", Title: "Test Track"})
 
 	// stand in for vlc-server: readiness ping + version endpoint
@@ -341,22 +344,28 @@ func TestAdminHandler_RendersReadyStatusAndLinks(t *testing.T) {
 		`/CHANGELOG.md">v1.2.3</a>`, // tripbot version tag → changelog (ref is sha or master)
 		`<a href="https://github.com/adanalife/tripbot/blob/deadbeefcafe/CHANGELOG.md">v9.9.9-vlc</a>`, // vlc version → changelog@sha
 		`<a href="https://github.com/adanalife/tripbot/blob/feedfacecafe/CHANGELOG.md">v8.8.8-osc</a>`, // onscreens version → changelog@sha
-		">vlc-server<",       // vlc row label
-		">onscreens-server<", // onscreens row label
-		"12 in chat",         // chatter count
-		`<code class="env env-prod">production</code>`,     // env in monospace chip, prod-coloured
-		`<title>tripbot — adanalife_ (production)</title>`, // env rendered in <title> for tab disambiguation
-		"now playing",                        // now-playing section shown when vlc healthy
-		"wy_0042.MP4",                        // current video file
-		"Wyoming",                            // current video state
-		"3m12s",                              // clip progress
-		`>obs</a>`,                           // one-word OBS link
-		`>grafana</a>`,                       // one-word grafana link
-		`>traefik</a>`,                       // one-word traefik link
-		`>hubble</a>`,                        // one-word hubble link
-		"https://obs-prod.tail020deb.ts.net", // tailnet OBS href
-		grafanaURL,                           // grafana href
-		traefikURL,                           // traefik href
+		">vlc-server<",                                         // vlc row label
+		">onscreens-server<",                                   // onscreens row label
+		`<span class="chatters-count">12</span>`,               // initial chatter count (server-rendered, unflashed)
+		`id="chatters" sse-swap="viewers" hx-swap="innerHTML"`, // live count target wired for SSE updates
+		`<code class="env env-prod">production</code>`,         // env in monospace chip, prod-coloured
+		`<title>tripbot — adanalife_ (production)</title>`,     // env rendered in <title> for tab disambiguation
+		"now playing",                                    // now-playing section shown when vlc healthy
+		`id="now-line" sse-swap="video"`,                 // now-playing line wired for live video swaps
+		`id="auth-card" sse-swap="auth"`,                 // live token-expiry card wired for SSE
+		`class="auth-expires" data-expires="4070908800"`, // bot expiry (2099-01-01) for the JS countdown
+		`id="reauth-card" sse-swap="reauth"`,             // reauth callout container wired for live appear/clear
+		"wy_0042.MP4",                                    // current video file
+		"Wyoming",                                        // current video state
+		`class="now-elapsed" data-since=`,                // elapsed span the JS ticker counts up
+		"3m12s",                                          // clip progress (initial server render)
+		`>obs</a>`,                                       // one-word OBS link
+		`>grafana</a>`,                                   // one-word grafana link
+		`>traefik</a>`,                                   // one-word traefik link
+		`>hubble</a>`,                                    // one-word hubble link
+		"https://obs-prod.tail020deb.ts.net",             // tailnet OBS href
+		grafanaURL,                                       // grafana href
+		traefikURL,                                       // traefik href
 		// Environment is "production" above → hubble link carries ?namespace=prod-1
 		"https://hubble-prod.tail020deb.ts.net/?namespace=prod-1",
 	} {
@@ -445,6 +454,16 @@ func withReauth(t *testing.T, accounts []mytwitch.AccountReauth) {
 	t.Cleanup(func() { accountsNeedingReauth = saved })
 }
 
+// withAuthStatuses swaps the authStatuses seam so the admin handler sees a
+// fixed per-identity token state (for the live expiry-countdown card) without
+// depending on global in-memory token state.
+func withAuthStatuses(t *testing.T, statuses []mytwitch.AccountTokenStatus) {
+	t.Helper()
+	saved := authStatuses
+	authStatuses = func() []mytwitch.AccountTokenStatus { return statuses }
+	t.Cleanup(func() { authStatuses = saved })
+}
+
 // withNowPlaying swaps the SomaFM fetcher so the admin handler sees a fixed
 // audio track (or empty for "no audio info") without hitting somafm.com from
 // a test.
@@ -498,6 +517,9 @@ func TestAdminHandler_NoReauthPromptWhenHealthy(t *testing.T) {
 
 	withConf(t, func() { c.Conf.VlcServerHost = "" })
 	withReauth(t, nil) // all tokens healthy
+	withAuthStatuses(t, []mytwitch.AccountTokenStatus{
+		{Account: "bot", LoginAs: "tripbot4000", ExpiresAt: time.Date(2099, 1, 1, 0, 0, 0, 0, time.UTC)},
+	})
 
 	rec := httptest.NewRecorder()
 	adminHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))

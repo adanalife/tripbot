@@ -7,6 +7,31 @@ All notable changes to TripBot. Format follows [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+## [v2.18.0] — 2026-05-29
+
+Minor release. The admin panel's live console fills in around the chat pane shipped in v2.17.2: a live viewer count, a now-playing card that updates the instant the video changes, a token-expiry countdown, usable chat scrollback that only auto-scrolls when pinned to the bottom, a click-a-username profile popover (monthly miles + handling for 'unknown' dates), and a live location map with a breadcrumb trail and a 'show full route' corpus overlay. onscreens-server moves to its own standalone slim image with a multi-arch release pipeline. Internals: background jobs construct a `*Scheduler` instead of reaching for a package global, and the OpenTelemetry dependencies get bumped.
+
+### admin panel
+
+- **Live viewer count.** Current-viewer tally on the panel. ([#725])
+- **Now-playing card live-updates on video change.** The card refreshes when the playing clip changes instead of waiting for a page reload. ([#726])
+- **Live token-expiry countdown.** Shows time remaining on the Twitch token, driven by the `tripbot_twitch_token_expires_at_seconds` gauge added in v2.17.0. ([#727])
+- **Usable chat scrollback.** The live chat pane only auto-scrolls when you're pinned to the bottom, so scrolling up to read stays put. ([#730])
+- **Chat user-profile popover.** Click a username in the chat console to open a profile popover ([#731]); it shows the user's monthly miles and handles 'unknown' dates gracefully ([#732]).
+- **Live location map.** A map on the panel with a breadcrumb trail of recent positions ([#733]), plus a 'show full route' overlay that draws the whole corpus route ([#734]).
+
+### onscreens
+
+- **Standalone slim image + multi-arch release pipeline.** onscreens-server builds as its own slim image with a dedicated multi-arch (amd64 + arm64) release pipeline, rather than riding along in another image. ([#728])
+
+### refactor
+
+- **background: construct a `*Scheduler` instead of a package global.** Background jobs are wired through a constructed `*Scheduler`, removing the package-level global. ([#737])
+
+### deps
+
+- **OpenTelemetry bumps** — `otel/log` 0.20.0 ([#706]) and `contrib/bridges/otelslog` 0.19.0 ([#705]).
+
 ## [v2.17.2] — 2026-05-29
 
 Patch release. The admin panel gains a **live chat console** — recent chat history renders on load and new messages stream in real time over Server-Sent Events, fed by a new NATS observation-event bus (`pkg/eventbus`). It shows the bot's own output (Twitch doesn't echo sent messages back), per-message timestamps localized to the viewer, and a stable color per username. Shipped as a vertical slice (chat only) on the SSE+htmx foundation; live now-playing / viewer count / reauth cards are follow-ups.

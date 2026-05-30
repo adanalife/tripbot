@@ -39,7 +39,7 @@ func newOnscreen() *Onscreen {
 }
 
 // backgroundLoop will loop forever, hiding the Onscreen if needed
-//TODO: add signal to end the loop
+// TODO: add signal to end the loop
 func (osc *Onscreen) backgroundLoop() {
 	for { // forever
 		if osc.IsShowing && osc.isExpired() {
