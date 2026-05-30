@@ -14,6 +14,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/eventbus"
 	"github.com/adanalife/tripbot/pkg/natsclient"
 	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 )
 
 // chatRingSize bounds the in-memory recent-chat history the panel renders on
@@ -86,6 +87,13 @@ func NewHub() *Hub {
 // Start subscribes to the env's eventbus subjects and arranges teardown on
 // ctx.Done. No-op (logs + returns) when NATS is unconfigured, so local dev and
 // tests run fine with an empty console.
+//
+// Chat and video are backed by JetStream, so on startup the hub replays each
+// stream's bounded history (DeliverAll) to repopulate its chat ring and map
+// trail before continuing live — that's what makes the console survive a
+// tripbot reboot. viewers.count is momentary (nothing to replay) and stays on
+// plain core pub/sub. If JetStream or a stream is unavailable, each durable
+// subject falls back to a live-only core subscription (no backfill).
 func (h *Hub) Start(ctx context.Context) {
 	// Auth state is pull-based (not over NATS), so the countdown card works even
 	// when NATS is unconfigured — start it before the nil-conn bail-out.
@@ -98,36 +106,89 @@ func (h *Hub) Start(ctx context.Context) {
 	}
 
 	env := c.Conf.Environment
-	subscriptions := []struct {
+	js := natsclient.JetStream()
+
+	// stops collects every subscription teardown (core Unsubscribe or JetStream
+	// consumer Stop) to run on ctx.Done.
+	var stops []func()
+
+	// Durable subjects: replay-on-startup via JetStream, with a core fallback.
+	durable := []struct {
+		stream  string
 		subject string
 		handler func(context.Context, []byte)
 	}{
-		{eventbus.ChatMessageSubject(env), h.handleChat},
-		{eventbus.ViewerCountSubject(env), h.handleViewerCount},
-		{eventbus.VideoChangedSubject(env), h.handleVideoChanged},
+		{eventbus.ChatStreamName(), eventbus.ChatMessageSubject(env), h.handleChat},
+		{eventbus.VideoStreamName(), eventbus.VideoChangedSubject(env), h.handleVideoChanged},
 	}
-
-	var subs []*nats.Subscription
-	for _, s := range subscriptions {
-		handler := s.handler // capture per-iteration for the closure
-		sub, err := conn.Subscribe(s.subject, func(m *nats.Msg) {
-			handler(ctx, m.Data)
-		})
-		if err != nil {
-			slog.ErrorContext(ctx, "live-console hub subscribe failed", "err", err, "subject", s.subject)
+	for _, d := range durable {
+		if stop := h.subscribeDurable(ctx, js, d.stream, d.subject, d.handler); stop != nil {
+			stops = append(stops, stop)
 			continue
 		}
-		slog.InfoContext(ctx, "live-console hub subscribed", "subject", s.subject)
-		subs = append(subs, sub)
+		if stop := h.subscribeCore(ctx, conn, d.subject, d.handler); stop != nil {
+			stops = append(stops, stop)
+		}
+	}
+
+	// viewers.count: momentary value, plain core pub/sub (no replay).
+	if stop := h.subscribeCore(ctx, conn, eventbus.ViewerCountSubject(env), h.handleViewerCount); stop != nil {
+		stops = append(stops, stop)
 	}
 
 	go func() {
 		<-ctx.Done()
-		for _, sub := range subs {
-			_ = sub.Unsubscribe()
+		for _, stop := range stops {
+			stop()
 		}
 		h.closeAll()
 	}()
+}
+
+// subscribeCore wires a plain core-NATS subscription and returns its teardown
+// func (or nil on failure). Used for momentary subjects (viewers.count) and as
+// the JetStream fallback. Live-only: core NATS has no replay.
+func (h *Hub) subscribeCore(ctx context.Context, conn *nats.Conn, subject string, handler func(context.Context, []byte)) func() {
+	sub, err := conn.Subscribe(subject, func(m *nats.Msg) {
+		handler(ctx, m.Data)
+	})
+	if err != nil {
+		slog.ErrorContext(ctx, "live-console hub core subscribe failed", "err", err, "subject", subject)
+		return nil
+	}
+	slog.InfoContext(ctx, "live-console hub subscribed (core)", "subject", subject)
+	return func() { _ = sub.Unsubscribe() }
+}
+
+// subscribeDurable binds an ephemeral ordered JetStream consumer to stream with
+// DeliverAll, so the hub replays the stream's bounded history (repopulating its
+// ring/trail) on startup and then continues live. Returns a teardown func, or
+// nil when JetStream is unavailable or the stream doesn't exist yet — the caller
+// then falls back to a core subscription. Ordered consumers are push-based and
+// auto-ack, so the handler signature matches the core path exactly.
+func (h *Hub) subscribeDurable(ctx context.Context, js jetstream.JetStream, stream, subject string, handler func(context.Context, []byte)) func() {
+	if js == nil {
+		return nil
+	}
+	cons, err := js.OrderedConsumer(ctx, stream, jetstream.OrderedConsumerConfig{
+		FilterSubjects: []string{subject},
+		DeliverPolicy:  jetstream.DeliverAllPolicy,
+	})
+	if err != nil {
+		slog.WarnContext(ctx, "live-console hub: jetstream consumer unavailable; falling back to core",
+			"err", err, "stream", stream, "subject", subject)
+		return nil
+	}
+	cc, err := cons.Consume(func(m jetstream.Msg) {
+		handler(ctx, m.Data())
+	})
+	if err != nil {
+		slog.WarnContext(ctx, "live-console hub: jetstream consume failed; falling back to core",
+			"err", err, "stream", stream, "subject", subject)
+		return nil
+	}
+	slog.InfoContext(ctx, "live-console hub subscribed (jetstream)", "stream", stream, "subject", subject)
+	return cc.Stop
 }
 
 func (h *Hub) handleChat(ctx context.Context, data []byte) {
