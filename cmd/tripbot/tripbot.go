@@ -207,7 +207,7 @@ func startEventSub(ctx context.Context) {
 			"reauth_url", mytwitch.AuthInitURL("broadcaster"))
 		return
 	}
-	if mytwitch.ChannelID == "" {
+	if mytwitch.ChannelID() == "" {
 		// getChannelID is lazy on first call; calling GetSubscribers /
 		// GetFollowerCount typically populates it. updateSubscribers()
 		// above already ran, so this is belt-and-suspenders.
@@ -218,7 +218,7 @@ func startEventSub(ctx context.Context) {
 		err := eventsub.Run(ctx, eventsub.Config{
 			ClientID:          mytwitch.ClientID,
 			BroadcasterToken:  token,
-			BroadcasterUserID: mytwitch.ChannelID,
+			BroadcasterUserID: mytwitch.ChannelID(),
 		}, eventsub.Handlers{
 			OnFollow:    chatbot.AnnounceNewFollower,
 			OnSubscribe: chatbot.AnnounceSubscriber,
