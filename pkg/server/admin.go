@@ -155,8 +155,8 @@ type adminData struct {
 // when vlc is up, the broadcaster/bot accounts, and links to the OBS / Grafana
 // / Traefik / Hubble dashboards. Replaces the bare 404 that used to sit on "/".
 func adminHandler(w http.ResponseWriter, r *http.Request) {
-	vlc := siblingStatus(r.Context(), "vlc-server", c.Conf.VlcServerHost)
-	onscreens := siblingStatus(r.Context(), "onscreens-server", c.Conf.OnscreensServerHost)
+	vlc := siblingStatus(r.Context(), "vlc", c.Conf.VlcServerHost)
+	onscreens := siblingStatus(r.Context(), "onscreens", c.Conf.OnscreensServerHost)
 	obs := siblingStatus(r.Context(), "obs", c.Conf.ObsServerHost)
 
 	data := adminData{
@@ -325,9 +325,9 @@ func restartActionHandler(w http.ResponseWriter, r *http.Request) {
 	switch service {
 	case "tripbot":
 		err = restartSelf()
-	case "vlc-server":
+	case "vlc":
 		err = restartProxyShutdown(r.Context(), c.Conf.VlcServerHost)
-	case "onscreens-server":
+	case "onscreens":
 		err = restartProxyShutdown(r.Context(), c.Conf.OnscreensServerHost)
 	case "obs":
 		if c.Conf.ObsServerHost == "" {
