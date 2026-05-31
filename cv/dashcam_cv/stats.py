@@ -95,6 +95,27 @@ def db_size(conn: psycopg.Connection) -> dict:
     }
 
 
+def recent_rate(
+    conn: psycopg.Connection, model_id: str, window_hours: float = 1.0
+) -> tuple[int, int]:
+    """(videos, frames) embedded for `model_id` within the last `window_hours`.
+
+    Uses frame_embeddings.date_created — a recent-rate estimate for ETA, so it
+    reflects the current cadence rather than a lifetime average.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT count(DISTINCT video_id), count(*)
+            FROM frame_embeddings
+            WHERE model = %s AND date_created > now() - make_interval(secs => %s)
+            """,
+            (model_id, window_hours * 3600.0),
+        )
+        vids, frames = cur.fetchone()
+    return vids or 0, frames or 0
+
+
 def concept_scan(
     conn: psycopg.Connection,
     embedder: Embedder,

@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import sys
 import time
+from datetime import UTC, datetime, timedelta
 
 from rich.console import Console
 from rich.table import Table
@@ -35,8 +36,8 @@ def _format_ts(seconds: float) -> str:
     )
 
 
-def _embed_videos(conn, embedder, videos, interval, apply):
-    """Embed each video; return (frames, inserted, failed).
+def _embed_videos(conn, embedder, videos, interval, apply, dedup_threshold):
+    """Embed each video; return (frames, inserted, deduped, failed).
 
     One log line per video (no progress bar — a bar renders to nothing on a
     non-TTY, so a long batch looks hung; plain lines stream to kubectl logs with
@@ -46,12 +47,15 @@ def _embed_videos(conn, embedder, videos, interval, apply):
     """
     from .pipeline import embed_video
 
-    frames = inserted = failed = 0
+    frames = inserted = deduped = failed = 0
     total = len(videos)
     for i, v in enumerate(videos, 1):
         console.print(f"[{i}/{total}] embedding {v.slug} …")
         try:
-            res = embed_video(conn, embedder, v, interval_sec=interval, apply=apply)
+            res = embed_video(
+                conn, embedder, v, interval_sec=interval, apply=apply,
+                dedup_threshold=dedup_threshold,
+            )
         except Exception as e:  # noqa: BLE001  # pylint: disable=broad-exception-caught
             conn.rollback()
             failed += 1
@@ -59,9 +63,11 @@ def _embed_videos(conn, embedder, videos, interval, apply):
             continue
         frames += res.frames
         inserted += res.inserted
-        detail = f"{res.inserted} vectors written" if apply else "dry-run"
-        console.print(f"      ✓ {v.slug}: {res.frames} frames, {detail}")
-    return frames, inserted, failed
+        deduped += res.deduped
+        detail = f"{res.inserted} written" if apply else "dry-run"
+        dd = f", {res.deduped} dup-skipped" if res.deduped else ""
+        console.print(f"      ✓ {v.slug}: {res.frames} frames, {detail}{dd}")
+    return frames, inserted, deduped, failed
 
 
 def cmd_embed(args: argparse.Namespace) -> int:
@@ -106,8 +112,8 @@ def cmd_embed(args: argparse.Namespace) -> int:
     embedder.check_dim()
 
     started = time.perf_counter()
-    total_frames, total_inserted, failed = _embed_videos(
-        conn, embedder, videos, args.interval, args.apply
+    total_frames, total_inserted, total_deduped, failed = _embed_videos(
+        conn, embedder, videos, args.interval, args.apply, args.dedup_threshold
     )
     elapsed = time.perf_counter() - started
     conn.close()
@@ -116,7 +122,9 @@ def cmd_embed(args: argparse.Namespace) -> int:
     table.add_row("videos", str(len(videos)))
     if failed:
         table.add_row("failed (rolled back)", str(failed))
-    table.add_row("frames embedded", str(total_frames))
+    table.add_row("frames sampled", str(total_frames))
+    if total_deduped:
+        table.add_row("near-dupes skipped", str(total_deduped))
     table.add_row("vectors written", str(total_inserted) if args.apply else "0 (dry-run)")
     table.add_row("wall time", f"{elapsed:.1f}s")
     console.print(table)
@@ -161,15 +169,22 @@ def _human_bytes(n: float) -> str:
     return f"{n:.1f} PB"
 
 
+def _human_hours(h: float) -> str:
+    if h < 48:
+        return f"{h:.0f}h"
+    return f"{h / 24:.1f} days"
+
+
 def cmd_stats(args: argparse.Namespace) -> int:
     """Show embedding coverage, DB size, and (optionally) a concept scan."""
     from .embed import model_id_for
-    from .stats import coverage, db_size
+    from .stats import coverage, db_size, recent_rate
 
     conn = db.connect()
     mid = model_id_for(args.model)
     cov = coverage(conn, mid)
     size = db_size(conn)
+    vids_hr, _frames_hr = recent_rate(conn, mid)
 
     ct = Table(title="corpus coverage", show_header=False)
     ct.add_row("model", args.model)
@@ -177,6 +192,13 @@ def cmd_stats(args: argparse.Namespace) -> int:
     ct.add_row("videos remaining", str(cov.remaining))
     ct.add_row("frames (vectors)", f"{cov.frames:,}")
     ct.add_row("avg frames/video", f"{cov.frames_per_video:.0f}")
+    if vids_hr and cov.remaining:
+        eta_h = cov.remaining / vids_hr
+        finish = datetime.now(UTC) + timedelta(hours=eta_h)
+        ct.add_row("rate (last 1h)", f"{vids_hr} videos/hr")
+        ct.add_row("ETA (full corpus)", f"~{_human_hours(eta_h)}  (≈ {finish:%a %b %-d %H:%M} UTC)")
+    else:
+        ct.add_row("rate (last 1h)", f"{vids_hr} videos/hr")
     console.print(ct)
 
     st = Table(title="vector storage", show_header=False)
@@ -190,25 +212,30 @@ def cmd_stats(args: argparse.Namespace) -> int:
     console.print(st)
 
     if args.concepts:
-        from .embed import Embedder
-        from .stats import concept_scan
-
-        console.print("loading model for concept scan…")
-        embedder = Embedder(model_name=args.model)
-        hits = concept_scan(conn, embedder, mid, threshold=args.threshold)
-        peak = max((h.matches for h in hits), default=0) or 1
-        tbl = Table(title=f"concept scan (sim ≥ {args.threshold}, over {cov.frames:,} frames)")
-        tbl.add_column("concept")
-        tbl.add_column("matches", justify="right")
-        tbl.add_column("")
-        tbl.add_column("best", justify="right")
-        for h in hits:
-            meter = "█" * int(28 * h.matches / peak)
-            tbl.add_row(h.concept, f"{h.matches:,}", meter, f"{h.best_sim:.3f}")
-        console.print(tbl)
+        _render_concept_scan(conn, mid, args.model, args.threshold, cov.frames)
 
     conn.close()
     return 0
+
+
+def _render_concept_scan(conn, model_id, model_name, threshold, frames):
+    """Load the model, run the concept scan, and print the ranked table."""
+    from .embed import Embedder
+    from .stats import concept_scan
+
+    console.print("loading model for concept scan…")
+    embedder = Embedder(model_name=model_name)
+    hits = concept_scan(conn, embedder, model_id, threshold=threshold)
+    peak = max((h.matches for h in hits), default=0) or 1
+    tbl = Table(title=f"concept scan (sim ≥ {threshold}, over {frames:,} frames)")
+    tbl.add_column("concept")
+    tbl.add_column("matches", justify="right")
+    tbl.add_column("")
+    tbl.add_column("best", justify="right")
+    for h in hits:
+        meter = "█" * int(28 * h.matches / peak)
+        tbl.add_row(h.concept, f"{h.matches:,}", meter, f"{h.best_sim:.3f}")
+    console.print(tbl)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -217,6 +244,7 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
 
     from .embed import DEFAULT_MODEL
+    from .pipeline import DEFAULT_DEDUP_THRESHOLD
 
     def add_model_args(p: argparse.ArgumentParser) -> None:
         p.add_argument("--model", default=DEFAULT_MODEL, help="HuggingFace SigLIP2 checkpoint id")
@@ -241,6 +269,12 @@ def main(argv: list[str] | None = None) -> int:
         "--limit", type=int, default=None, help="cap number of videos (subset prototyping)"
     )
     p_embed.add_argument("--apply", action="store_true", help="persist vectors (default: dry-run)")
+    p_embed.add_argument(
+        "--dedup-threshold",
+        type=float,
+        default=DEFAULT_DEDUP_THRESHOLD,
+        help="skip frames with cosine > this vs the last kept frame (>=1.0 disables)",
+    )
     add_model_args(p_embed)
     p_embed.set_defaults(func=cmd_embed)
 

@@ -28,13 +28,23 @@ ON CONFLICT (video_id, ts_sec, model) DO NOTHING
 """
 
 
+# Skip a sampled frame whose embedding is at least this cosine-similar to the
+# last kept frame's. Slow-TV footage lingers on near-identical scenes (stopped
+# at a light, long straight road), so consecutive frames are often redundant;
+# dropping them shrinks the vector store and keeps search results diverse rather
+# than dominated by one near-static stretch. Conservative by default — only very
+# near-duplicates go. Set >= 1.0 to disable (no cosine exceeds 1.0).
+DEFAULT_DEDUP_THRESHOLD = 0.98
+
+
 @dataclass
 class EmbedResult:
-    """Per-video embedding tally: frames seen and vectors inserted."""
+    """Per-video embedding tally: frames sampled, vectors written, dupes skipped."""
 
     slug: str
     frames: int
     inserted: int
+    deduped: int
 
 
 def embed_video(
@@ -43,34 +53,40 @@ def embed_video(
     video: VideoRef,
     interval_sec: float = DEFAULT_INTERVAL_SEC,
     apply: bool = False,
+    dedup_threshold: float = DEFAULT_DEDUP_THRESHOLD,
 ) -> EmbedResult:
     """Embed every sampled frame of one video and upsert the vectors.
 
-    Dry-run (apply=False) decodes + embeds + counts but writes nothing — same
-    --apply discipline as cmd/backfill-miles.
+    Near-duplicate frames (cosine > dedup_threshold vs the last kept frame) are
+    skipped. Dry-run (apply=False) decodes + embeds + counts but writes nothing —
+    same --apply discipline as cmd/backfill-miles.
     """
     embedder.check_dim()
     model_id = embedder.model_id
 
     frames_seen = 0
     inserted = 0
+    deduped = 0
+    last_kept = None  # embedding of the last frame we kept (for dedup)
     pending_ts: list[float] = []
     pending_imgs: list = []
 
     def flush() -> None:
-        nonlocal inserted, pending_ts, pending_imgs
+        nonlocal inserted, deduped, last_kept, pending_ts, pending_imgs
         if not pending_imgs:
             return
         vecs = embedder.embed_images(pending_imgs)
-        if apply:
+        rows = []
+        for ts, vec in zip(pending_ts, vecs, strict=True):
+            # vecs are L2-normalized, so the dot product is cosine similarity.
+            if last_kept is not None and float(last_kept @ vec) > dedup_threshold:
+                deduped += 1
+                continue
+            rows.append((video.video_id, ts, vec, model_id))
+            last_kept = vec
+        if apply and rows:
             with conn.cursor() as cur:
-                cur.executemany(
-                    _INSERT_SQL,
-                    [
-                        (video.video_id, ts, vec, model_id)
-                        for ts, vec in zip(pending_ts, vecs, strict=True)
-                    ],
-                )
+                cur.executemany(_INSERT_SQL, rows)
                 inserted += cur.rowcount if cur.rowcount and cur.rowcount > 0 else 0
         pending_ts = []
         pending_imgs = []
@@ -91,4 +107,4 @@ def embed_video(
     if apply:
         conn.commit()
 
-    return EmbedResult(slug=video.slug, frames=frames_seen, inserted=inserted)
+    return EmbedResult(slug=video.slug, frames=frames_seen, inserted=inserted, deduped=deduped)

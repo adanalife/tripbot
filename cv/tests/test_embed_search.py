@@ -36,12 +36,14 @@ def test_embed_then_find(db_conn, embedder, video_id):
         )
     db_conn.commit()
 
-    result = embed_video(db_conn, embedder, ref, interval_sec=10.0, apply=True)
+    # dedup_threshold=2.0 disables near-dupe skipping so the counts are exact.
+    result = embed_video(db_conn, embedder, ref, interval_sec=10.0, apply=True, dedup_threshold=2.0)
     assert result.frames > 0
     assert result.inserted == result.frames
+    assert result.deduped == 0
 
     # Re-running is a no-op (ON CONFLICT DO NOTHING).
-    again = embed_video(db_conn, embedder, ref, interval_sec=10.0, apply=True)
+    again = embed_video(db_conn, embedder, ref, interval_sec=10.0, apply=True, dedup_threshold=2.0)
     assert again.inserted == 0
 
     hits = search(db_conn, embedder, "city street", k=5)
