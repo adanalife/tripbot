@@ -7,18 +7,18 @@
 // --account=bot|broadcaster.
 //
 // Flow:
-//   1. Verify DB reachable.
-//   2. Generate CSRF state, build authorize URL with BotScopes or
-//      BroadcasterScopes per --account. ForceVerify=true so Twitch re-prompts
-//      which account to sign in as (instead of silently reusing the session
-//      cookie from the previous leg).
-//   3. Spin up a tiny localhost:8080 HTTP listener for the OAuth callback.
-//   4. Open the browser to the authorize URL. Sign in as the matching account.
-//   5. Twitch redirects to localhost:8080/auth/callback. The handler validates
-//      state, exchanges the code via mytwitch.GenerateUserAccessToken (which
-//      Upserts the row keyed by whichever account signed in), and signals
-//      completion.
-//   6. Exit cleanly.
+//  1. Verify DB reachable.
+//  2. Generate CSRF state, build authorize URL with BotScopes or
+//     BroadcasterScopes per --account. ForceVerify=true so Twitch re-prompts
+//     which account to sign in as (instead of silently reusing the session
+//     cookie from the previous leg).
+//  3. Spin up a tiny localhost:8080 HTTP listener for the OAuth callback.
+//  4. Open the browser to the authorize URL. Sign in as the matching account.
+//  5. Twitch redirects to localhost:8080/auth/callback. The handler validates
+//     state, exchanges the code via mytwitch.GenerateUserAccessToken (which
+//     Upserts the row keyed by whichever account signed in), and signals
+//     completion.
+//  6. Exit cleanly.
 //
 // The Twitch app's registered redirect URI is http://localhost:8080/auth/callback;
 // this CLI relies on that registration matching what helix.Client sends.

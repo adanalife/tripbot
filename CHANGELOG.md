@@ -10,6 +10,60 @@ All notable changes to TripBot. Format follows [Keep a Changelog](https://keepac
 ### CI
 
 - **`go test` finds the repo-root `.env.testing` from any directory.** `config.SetEnvironment` resolved the dotenv file with a cwd-relative `godotenv.Load`, so a package's test binary — which runs from its own dir — never found the checked-in `.env.testing` and either `log.Fatalf`'d in a config `init()` or required a manual `set -a; . ./.env.testing; set +a`. The lookup now anchors at the module root (nearest ancestor with `go.mod`), so `ENV=testing go test ./pkg/...` works with no sourcing, matching the `task test` / `task test:macos` paths. Deployed binaries with no `go.mod` ancestor fall back to the bare relative path, preserving cluster behavior. ([#743])
+## [v2.18.0] — 2026-05-29
+
+Minor release. The admin panel's live console fills in around the chat pane shipped in v2.17.2: a live viewer count, a now-playing card that updates the instant the video changes, a token-expiry countdown, usable chat scrollback that only auto-scrolls when pinned to the bottom, a click-a-username profile popover (monthly miles + handling for 'unknown' dates), and a live location map with a breadcrumb trail and a 'show full route' corpus overlay. onscreens-server moves to its own standalone slim image with a multi-arch release pipeline. Internals: background jobs construct a `*Scheduler` instead of reaching for a package global, and the OpenTelemetry dependencies get bumped.
+
+### admin panel
+
+- **Live viewer count.** Current-viewer tally on the panel. ([#725])
+- **Now-playing card live-updates on video change.** The card refreshes when the playing clip changes instead of waiting for a page reload. ([#726])
+- **Live token-expiry countdown.** Shows time remaining on the Twitch token, driven by the `tripbot_twitch_token_expires_at_seconds` gauge added in v2.17.0. ([#727])
+- **Usable chat scrollback.** The live chat pane only auto-scrolls when you're pinned to the bottom, so scrolling up to read stays put. ([#730])
+- **Chat user-profile popover.** Click a username in the chat console to open a profile popover ([#731]); it shows the user's monthly miles and handles 'unknown' dates gracefully ([#732]).
+- **Live location map.** A map on the panel with a breadcrumb trail of recent positions ([#733]), plus a 'show full route' overlay that draws the whole corpus route ([#734]).
+
+### onscreens
+
+- **Standalone slim image + multi-arch release pipeline.** onscreens-server builds as its own slim image with a dedicated multi-arch (amd64 + arm64) release pipeline, rather than riding along in another image. ([#728])
+
+### refactor
+
+- **background: construct a `*Scheduler` instead of a package global.** Background jobs are wired through a constructed `*Scheduler`, removing the package-level global. ([#737])
+
+### deps
+
+- **OpenTelemetry bumps** — `otel/log` 0.20.0 ([#706]) and `contrib/bridges/otelslog` 0.19.0 ([#705]).
+
+## [v2.17.2] — 2026-05-29
+
+Patch release. The admin panel gains a **live chat console** — recent chat history renders on load and new messages stream in real time over Server-Sent Events, fed by a new NATS observation-event bus (`pkg/eventbus`). It shows the bot's own output (Twitch doesn't echo sent messages back), per-message timestamps localized to the viewer, and a stable color per username. Shipped as a vertical slice (chat only) on the SSE+htmx foundation; live now-playing / viewer count / reauth cards are follow-ups.
+
+### admin panel
+
+- **Live chat console (SSE + NATS).** New `pkg/eventbus` publishes fire-and-forget *observation* events (`tripbot.<env>.chat.message`, snake_case JSON + `emitted_at`) over the `pkg/natsclient` singleton — distinct from `pkg/events` (the Postgres session log) and from onscreens *commands*. A `pkg/server` hub subscribes, keeps a 200-line in-memory recent-history ring, and fans out to browser clients on `GET /admin/events` with non-blocking sends (a slow client drops events, never stalls the NATS callback). The panel renders recent history server-side and streams new lines via htmx's SSE extension (htmx 2.x + the SSE ext vendored + embedded so the binary stays self-contained). The hub starts after `startNATS()` and sources only from NATS, leaving the panel splittable into its own service later. See the admin-live-console decision. ([#719])
+- **Bot output in the console.** `chatbot.Say()` mirrors the bot's own output onto the event bus, and `realIRC` now delegates to the package `Say`/`Whisper` so command responses (which go through `a.IRC.Say`) flow through the same single emit path instead of a duplicated body that skipped it. ([#722], [#723])
+- **Per-message timestamps + per-user colors.** Each line shows its time (UTC rendered server-side as a fallback, localized to the viewer's timezone in JS) and a stable hue derived from a hash of the username — same chatter, same color every time, tuned to stay legible on both panel themes. ([#722])
+
+### fixes
+
+- **SSE stream no longer recycles every ~20s.** The HTTP server's 15s `WriteTimeout` severed the long-lived `/admin/events` response — and `http.ResponseController.SetWriteDeadline` returns "feature not supported" through the negroni + otelhttp (httpsnoop) HTTP/2 wrapper chain — so live chat only appeared on reload. Set `WriteTimeout: 0` + `ReadHeaderTimeout: 15s` (the real slowloris guard). ([#720])
+
+### ci
+
+- Vendored frontend assets (`pkg/server/static/`) excluded from the linters — pre-commit + super-linter path excludes, a `biome.json` ignore, and the redundant ESLint/Prettier-JS linters disabled (Biome covers JS; the only JS in the repo is the vendored htmx/sse). ([#719])
+
+## [v2.17.1] — 2026-05-28
+
+Patch release. Hotfix for the v2.17.0 silent-disconnect watchdog's import chain — it dragged `pkg/config/tripbot` and `pkg/database` into vlc-server's binary at link time, so the vlc-server pod refused to boot in prod without 9 placeholder env vars stamped into its ConfigMap. Took prod's dashcam playback down for 13 minutes during the rollout. Detangled by moving the watchdog into its own subpackage; companion fix broadens the `release-development.yml` vlc paths-filter so shared-package edits like this one don't silently skip the vlc rebuild.
+
+### obs
+
+- **Move the silent-disconnect watchdog out of `pkg/obs` into `pkg/obs/watchdog`.** The watchdog file imported `pkg/config/tripbot` (for `ChannelName`) and `pkg/twitch` (for `IsChannelLive`) at the package level — and `pkg/twitch` transitively imports `pkg/oauthtokens` → `pkg/database`, whose `init()` `log.Fatalf`s on missing `DATABASE_USER` / `DATABASE_DB` / `DATABASE_HOST`. Because all files in a Go package compile together, anything importing `pkg/obs` inherited the whole chain. `cmd/vlc-server/vlc-server.go` has imported `pkg/obs` for ages for one call (`obs.PollStreamingActive`), so v2.17.0's vlc-server binary refused to boot without env vars for the 6 required `pkg/config/tripbot` keys + the 3 `pkg/database` checks — even though the watchdog never runs inside vlc-server. After the move, `pkg/obs` holds only `control.go` + `streaming.go` (zero tripbot-internal imports beyond `pkg/instrumentation`), and `cmd/tripbot` is the sole consumer of the new `pkg/obs/watchdog` subpackage. Verified: `go list -deps ./cmd/vlc-server` no longer includes `pkg/config/tripbot`, `pkg/database`, `pkg/twitch`, or `pkg/oauthtokens`. Same for `./cmd/onscreens-server`. ([#716])
+
+### ci
+
+- **Broaden the `release-development.yml` vlc paths-filter to `pkg/**`.** The narrow vlc filter (only `pkg/{vlc,onscreens}-{server,client}/`) meant any change to a shared package — `pkg/obs`, `pkg/instrumentation`, `pkg/telemetry`, etc. — silently skipped the vlc rebuild. `#716`'s detangle would have shipped a stale vlc `:develop` image on the first run; stage would have continued running the bug. The new filter matches the tripbot filter's shape — broad enough to never miss a transitive-dep change, at the cost of some unnecessary rebuilds (the native-runner vlc build is ~3-4 min, cheap insurance). ([#717])
 
 ## [v2.17.0] — 2026-05-28
 
@@ -1203,3 +1257,9 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#713]: https://github.com/adanalife/tripbot/pull/713
 [#714]: https://github.com/adanalife/tripbot/pull/714
 [#743]: https://github.com/adanalife/tripbot/pull/743
+[#716]: https://github.com/adanalife/tripbot/pull/716
+[#717]: https://github.com/adanalife/tripbot/pull/717
+[#719]: https://github.com/adanalife/tripbot/pull/719
+[#720]: https://github.com/adanalife/tripbot/pull/720
+[#722]: https://github.com/adanalife/tripbot/pull/722
+[#723]: https://github.com/adanalife/tripbot/pull/723

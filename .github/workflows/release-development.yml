@@ -8,6 +8,15 @@ on:
     branches:
       - develop
 
+# Only build the newest develop merge. A push that lands while a prior run is
+# still building cancels that run, so rapid back-to-back merges don't fan out
+# into N parallel multi-arch builds all pulling base images from Docker Hub
+# (rate-limit avoidance). A superseded run's images would be immediately stale
+# anyway, since the next merge's HEAD is what stage deploys.
+concurrency:
+  group: release-development
+  cancel-in-progress: true
+
 jobs:
   # Per-image path filters. tripbot and vlc rebuild on any Go change to
   # their respective code surfaces; obs only rebuilds when its Dockerfile
