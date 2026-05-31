@@ -11,6 +11,7 @@ import (
 	c "github.com/adanalife/tripbot/pkg/config/onscreens-server"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
+	"github.com/adanalife/tripbot/pkg/natsclient"
 	onscreensServer "github.com/adanalife/tripbot/pkg/onscreens-server"
 	"github.com/adanalife/tripbot/pkg/telemetry"
 	"github.com/getsentry/sentry-go"
@@ -44,6 +45,11 @@ func main() {
 	// the app cleanup off the same signals.
 	shutdownCtx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stopSignals()
+
+	// Connect to NATS so Server.Start can attach subscribers. Optional —
+	// when NATS_URL is empty the conn is nil and the subscriber registration
+	// is skipped; HTTP remains the sole transport.
+	natsclient.Connect(c.Conf.NatsURL, "onscreens-server")
 
 	// construct the server — runs all per-onscreen init (singletons +
 	// background loops) up front so the HTTP routes have everything to

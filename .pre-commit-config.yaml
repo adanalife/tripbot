@@ -1,7 +1,11 @@
-# Skip LFS-tracked binaries — CI doesn't pull LFS, so the MP4 checkout
-# is a permission-denied pointer rather than the real file, and
-# end-of-file-fixer chokes trying to read it.
-exclude: '^assets/video/'
+# Skip:
+#   - LFS-tracked binaries (assets/video/): CI doesn't pull LFS, so the
+#     MP4 checkout is a permission-denied pointer rather than the real
+#     file, and end-of-file-fixer chokes trying to read it.
+#   - vendored frontend assets (pkg/server/static/): third-party htmx +
+#     its SSE extension, kept byte-for-byte upstream — not ours to
+#     reformat (no trailing newline, minified, etc.).
+exclude: '^(assets/video/|pkg/server/static/)'
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -19,6 +23,7 @@ repos:
       - id: trailing-whitespace
       - id: check-yaml
         args: [--allow-multiple-documents]
+      - id: check-json
       - id: check-executables-have-shebangs
 
       # Cross platform
@@ -30,6 +35,39 @@ repos:
       - id: detect-aws-credentials
         args: ['--allow-missing-credentials']
       - id: detect-private-key
+
+  # Secrets: broad scan layered on top of the narrow detect-aws-credentials
+  # / detect-private-key checks above. Sub-second.
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+
+  # GitHub Actions workflow linting — fast, and catches the kind of
+  # workflow breakage super-linter's actionlint pass would.
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.12
+    hooks:
+      - id: actionlint
+
+  # Shell script linting (bin/, script/).
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.11.0.1
+    hooks:
+      - id: shellcheck
+
+  # Go formatting — gofmt only (not full golangci-lint) to avoid the
+  # libvlc/cgo build issues that made super-linter disable Go. Auto-fixes
+  # and fails the run if any file needed reformatting; re-stage and commit.
+  # Needs the Go toolchain on PATH — CI provides it via mise (.tool-versions).
+  - repo: local
+    hooks:
+      - id: gofmt
+        name: gofmt
+        description: Format Go code with gofmt.
+        entry: gofmt -l -w
+        language: system
+        types: [go]
 
   # Python: ruff handles both lint and format. Matches super-linter's
   # PYTHON_RUFF + PYTHON_RUFF_FORMAT (PYTHON_BLACK is disabled there to

@@ -20,8 +20,8 @@ type NowPlaying interface {
 }
 
 const (
-	somaFMNowPlayingURL = "https://somafm.com/songs/gsclassic.json"
-	nowPlayingCacheTTL  = 30 * time.Second
+	somaFMNowPlayingURL   = "https://somafm.com/songs/gsclassic.json"
+	nowPlayingCacheTTL    = 30 * time.Second
 	nowPlayingHTTPTimeout = 5 * time.Second
 )
 

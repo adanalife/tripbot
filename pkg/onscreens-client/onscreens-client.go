@@ -65,7 +65,7 @@ func (c *Client) ShowLeaderboard(ctx context.Context, title string, leaderboard 
 	return nil
 }
 
-//TODO: this is taken right from the !guessleaderboard command, DRY it?
+// TODO: this is taken right from the !guessleaderboard command, DRY it?
 func (c *Client) ShowGuessLeaderboard(ctx context.Context) {
 	// select users to show in leaderboard
 	size := 10
@@ -75,11 +75,20 @@ func (c *Client) ShowGuessLeaderboard(ctx context.Context) {
 	}
 	leaderboard = leaderboard[:size]
 
+	// Filter zero-scorers (AddToScoreByName uses FirstOrCreate, so every
+	// user who's ever guessed has a row — many at 0 early in the month).
+	// If the filtered list is empty, skip the overlay entirely.
 	var intLeaderboard [][]string
 	for _, leaderPair := range leaderboard {
 		// guesses are ints not floats, so remove the decimal place
 		intVersion := strings.Split(leaderPair[1], ".")[0]
+		if intVersion == "0" || intVersion == "" {
+			continue
+		}
 		intLeaderboard = append(intLeaderboard, []string{leaderPair[0], intVersion})
+	}
+	if len(intLeaderboard) == 0 {
+		return
 	}
 
 	// display leaderboard on screen
@@ -127,22 +136,27 @@ func (c *Client) HideGPSImage(ctx context.Context) error {
 	return nil
 }
 
-//TODO: move this to a common location
+// TODO: move this to a common location
+//
+// Transport-layer errors log at Debug, not Error: each wrapper above this
+// (HideMiddleText, ShowGPSImage, …) logs the operation-specific failure at
+// Error with the same underlying err. Logging here too would double-count
+// every onscreens outage in Loki and Sentry.
 func (c *Client) get(ctx context.Context, url string) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		slog.ErrorContext(ctx, "error building request to onscreens server", "err", err)
+		slog.DebugContext(ctx, "error building request to onscreens server", "err", err)
 		return "", err
 	}
 	response, err := c.httpClient.Do(req)
 	if err != nil {
-		slog.ErrorContext(ctx, "error connecting to onscreens server", "err", err)
+		slog.DebugContext(ctx, "error connecting to onscreens server", "err", err)
 		return "", err
 	}
 	defer response.Body.Close()
 	contents, err := ioutil.ReadAll(response.Body)
 	if err != nil {
-		slog.ErrorContext(ctx, "error reading response from onscreens server", "err", err)
+		slog.DebugContext(ctx, "error reading response from onscreens server", "err", err)
 		return "", err
 	}
 	// make note of non-200 status codes

@@ -47,8 +47,26 @@ type TripbotConfig struct {
 	// for the "restart obs" button. Optional — blank skips the OBS row.
 	ObsServerHost string `envconfig:"OBS_SERVER_HOST"`
 
+	// NatsURL is the in-cluster NATS endpoint used for fire-and-forget
+	// inter-component events (phase 1: ShowMiddleText alongside HTTP).
+	// Format: nats://nats.<env-platform-ns>.svc.cluster.local:4222.
+	// Optional — when unset, NATS publishes no-op and the HTTP path is
+	// the sole transport. Lets local dev / tests skip NATS entirely.
+	NatsURL string `envconfig:"NATS_URL"`
+
 	// DiscordAlertsWebhook is the Discord webhook URL that !report posts
 	// viewer reports to. Optional — when unset, !report falls through to
 	// slog/Sentry only and the bot keeps running.
 	DiscordAlertsWebhook string `envconfig:"DISCORD_ALERTS_WEBHOOK"`
+
+	// DiscordBotToken authenticates the live Discord bot session that
+	// serves slash commands. Optional — when unset, missing, or still at
+	// the AWS Secrets Manager placeholder value, pkg/discord skips
+	// session init entirely and the rest of the bot runs normally.
+	DiscordBotToken string `envconfig:"DISCORD_BOT_TOKEN"`
+	// DiscordGuildID is the Discord server snowflake the bot registers
+	// its slash commands against. Optional — leaving it empty in an
+	// env's ConfigMap is the supported way to keep the Discord session
+	// gated off without having to remove the token wiring.
+	DiscordGuildID string `envconfig:"DISCORD_GUILD_ID"`
 }
