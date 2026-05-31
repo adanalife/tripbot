@@ -72,6 +72,11 @@ type App struct {
 	// a recordingGeocoder / noopGeocoder; production uses realGeocoder which
 	// delegates to the pkg/geo default configured in Initialize.
 	Geocoder Geocoder
+	// Twitch is the command-time Twitch Helix surface (follow lookups today).
+	// Tests inject a recordingTwitch; production uses realTwitch which
+	// delegates to the pkg/twitch client. The future swap point for an
+	// out-of-process Helix/auth service.
+	Twitch Twitch
 }
 
 // db returns the DB handle the App should use. Prefers an explicit a.DB
@@ -96,6 +101,7 @@ var defaultApp = &App{
 	NATS:       realNATS{},
 	Cron:       realCron{},
 	Geocoder:   realGeocoder{},
+	Twitch:     realTwitch{},
 }
 
 // used to determine which help message to display

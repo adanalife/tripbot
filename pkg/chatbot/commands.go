@@ -19,7 +19,6 @@ import (
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
 	"github.com/adanalife/tripbot/pkg/helpers"
-	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/adanalife/tripbot/pkg/video"
 	"github.com/getsentry/sentry-go"
@@ -129,7 +128,7 @@ func (a *App) followageCmd(ctx context.Context, user *users.User, params []strin
 		username = helpers.StripAtSign(params[0])
 	}
 
-	followedAt, ok := mytwitch.FollowedAt(username)
+	followedAt, ok := a.Twitch.FollowedAt(username)
 	if !ok {
 		if other {
 			a.IRC.Say(fmt.Sprintf("@%s isn't following the channel.", username))
