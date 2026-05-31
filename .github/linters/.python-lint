@@ -14,4 +14,4 @@ disable=import-outside-toplevel,too-few-public-methods,import-error
 [DESIGN]
 max-args=8
 max-positional-arguments=8
-max-locals=20
+max-locals=22

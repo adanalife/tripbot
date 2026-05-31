@@ -36,8 +36,8 @@ def _format_ts(seconds: float) -> str:
     )
 
 
-def _embed_videos(conn, embedder, videos, interval, apply, dedup_threshold):
-    """Embed each video; return (frames, inserted, deduped, failed).
+def _embed_videos(conn, embedder, videos, interval, apply, dedup_threshold, black_threshold):
+    """Embed each video; return (frames, inserted, deduped, dark, failed).
 
     One log line per video (no progress bar — a bar renders to nothing on a
     non-TTY, so a long batch looks hung; plain lines stream to kubectl logs with
@@ -47,14 +47,19 @@ def _embed_videos(conn, embedder, videos, interval, apply, dedup_threshold):
     """
     from .pipeline import embed_video
 
-    frames = inserted = deduped = failed = 0
+    frames = inserted = deduped = dark = failed = 0
     total = len(videos)
     for i, v in enumerate(videos, 1):
         console.print(f"[{i}/{total}] embedding {v.slug} …")
         try:
             res = embed_video(
-                conn, embedder, v, interval_sec=interval, apply=apply,
+                conn,
+                embedder,
+                v,
+                interval_sec=interval,
+                apply=apply,
                 dedup_threshold=dedup_threshold,
+                black_threshold=black_threshold,
             )
         except Exception as e:  # noqa: BLE001  # pylint: disable=broad-exception-caught
             conn.rollback()
@@ -64,10 +69,12 @@ def _embed_videos(conn, embedder, videos, interval, apply, dedup_threshold):
         frames += res.frames
         inserted += res.inserted
         deduped += res.deduped
+        dark += res.dark
+        skips = [s for s in (f"{res.deduped} dup", f"{res.dark} dark") if not s.startswith("0 ")]
+        suffix = f" — skipped {', '.join(skips)}" if skips else ""
         detail = f"{res.inserted} written" if apply else "dry-run"
-        dd = f", {res.deduped} dup-skipped" if res.deduped else ""
-        console.print(f"      ✓ {v.slug}: {res.frames} frames, {detail}{dd}")
-    return frames, inserted, deduped, failed
+        console.print(f"      ✓ {v.slug}: {res.frames} frames, {detail}{suffix}")
+    return frames, inserted, deduped, dark, failed
 
 
 def cmd_embed(args: argparse.Namespace) -> int:
@@ -112,8 +119,14 @@ def cmd_embed(args: argparse.Namespace) -> int:
     embedder.check_dim()
 
     started = time.perf_counter()
-    total_frames, total_inserted, total_deduped, failed = _embed_videos(
-        conn, embedder, videos, args.interval, args.apply, args.dedup_threshold
+    total_frames, total_inserted, total_deduped, total_dark, failed = _embed_videos(
+        conn,
+        embedder,
+        videos,
+        args.interval,
+        args.apply,
+        args.dedup_threshold,
+        args.black_threshold,
     )
     elapsed = time.perf_counter() - started
     conn.close()
@@ -123,6 +136,8 @@ def cmd_embed(args: argparse.Namespace) -> int:
     if failed:
         table.add_row("failed (rolled back)", str(failed))
     table.add_row("frames sampled", str(total_frames))
+    if total_dark:
+        table.add_row("dark frames skipped", str(total_dark))
     if total_deduped:
         table.add_row("near-dupes skipped", str(total_deduped))
     table.add_row("vectors written", str(total_inserted) if args.apply else "0 (dry-run)")
@@ -244,7 +259,7 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
 
     from .embed import DEFAULT_MODEL
-    from .pipeline import DEFAULT_DEDUP_THRESHOLD
+    from .pipeline import DEFAULT_BLACK_THRESHOLD, DEFAULT_DEDUP_THRESHOLD
 
     def add_model_args(p: argparse.ArgumentParser) -> None:
         p.add_argument("--model", default=DEFAULT_MODEL, help="HuggingFace SigLIP2 checkpoint id")
@@ -274,6 +289,12 @@ def main(argv: list[str] | None = None) -> int:
         type=float,
         default=DEFAULT_DEDUP_THRESHOLD,
         help="skip frames with cosine > this vs the last kept frame (>=1.0 disables)",
+    )
+    p_embed.add_argument(
+        "--black-threshold",
+        type=float,
+        default=DEFAULT_BLACK_THRESHOLD,
+        help="skip frames with mean luminance < this 0-255 value (0 disables)",
     )
     add_model_args(p_embed)
     p_embed.set_defaults(func=cmd_embed)

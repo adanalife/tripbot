@@ -12,9 +12,14 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import av
-from PIL import Image
+from PIL import Image, ImageStat
 
 DEFAULT_INTERVAL_SEC = 2.0
+
+
+def mean_luminance(img: Image.Image) -> float:
+    """Average pixel luminance (0-255). Cheap near-black detector."""
+    return ImageStat.Stat(img.convert("L")).mean[0]
 
 
 def sample_frames(

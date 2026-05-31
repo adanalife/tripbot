@@ -17,9 +17,15 @@ import psycopg
 
 from .corpus import VideoRef
 from .embed import Embedder
-from .frames import DEFAULT_INTERVAL_SEC, sample_frames
+from .frames import DEFAULT_INTERVAL_SEC, mean_luminance, sample_frames
 
 _BATCH = 32
+
+# Skip frames darker than this mean luminance (0-255). Tunnel mouths, camera
+# startup, and glitches produce near-black frames whose embeddings are noise;
+# dropping them before the model call saves compute and keeps junk out of
+# search. Set 0 to disable (nothing is < 0).
+DEFAULT_BLACK_THRESHOLD = 10.0
 
 _INSERT_SQL = """
 INSERT INTO frame_embeddings (video_id, ts_sec, embedding, model)
@@ -39,12 +45,13 @@ DEFAULT_DEDUP_THRESHOLD = 0.98
 
 @dataclass
 class EmbedResult:
-    """Per-video embedding tally: frames sampled, vectors written, dupes skipped."""
+    """Per-video tally: frames sampled, vectors written, dupes/dark skipped."""
 
     slug: str
     frames: int
     inserted: int
     deduped: int
+    dark: int
 
 
 def embed_video(
@@ -54,12 +61,14 @@ def embed_video(
     interval_sec: float = DEFAULT_INTERVAL_SEC,
     apply: bool = False,
     dedup_threshold: float = DEFAULT_DEDUP_THRESHOLD,
+    black_threshold: float = DEFAULT_BLACK_THRESHOLD,
 ) -> EmbedResult:
     """Embed every sampled frame of one video and upsert the vectors.
 
-    Near-duplicate frames (cosine > dedup_threshold vs the last kept frame) are
-    skipped. Dry-run (apply=False) decodes + embeds + counts but writes nothing —
-    same --apply discipline as cmd/backfill-miles.
+    Near-black frames (mean luminance < black_threshold) are dropped before the
+    model call; near-duplicate frames (cosine > dedup_threshold vs the last kept
+    frame) are dropped after. Dry-run (apply=False) decodes + embeds + counts but
+    writes nothing — same --apply discipline as cmd/backfill-miles.
     """
     embedder.check_dim()
     model_id = embedder.model_id
@@ -67,6 +76,7 @@ def embed_video(
     frames_seen = 0
     inserted = 0
     deduped = 0
+    dark = 0
     last_kept = None  # embedding of the last frame we kept (for dedup)
     pending_ts: list[float] = []
     pending_imgs: list = []
@@ -93,6 +103,10 @@ def embed_video(
 
     for ts, img in sample_frames(video.path, interval_sec):
         frames_seen += 1
+        # Drop near-black frames before embedding (saves the model call).
+        if black_threshold > 0 and mean_luminance(img) < black_threshold:
+            dark += 1
+            continue
         pending_ts.append(ts)
         pending_imgs.append(img)
         if len(pending_imgs) >= _BATCH:
@@ -107,4 +121,6 @@ def embed_video(
     if apply:
         conn.commit()
 
-    return EmbedResult(slug=video.slug, frames=frames_seen, inserted=inserted, deduped=deduped)
+    return EmbedResult(
+        slug=video.slug, frames=frames_seen, inserted=inserted, deduped=deduped, dark=dark
+    )
