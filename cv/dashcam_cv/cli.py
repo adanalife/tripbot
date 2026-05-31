@@ -233,21 +233,33 @@ def cmd_stats(args: argparse.Namespace) -> int:
     return 0
 
 
-def _render_concept_scan(conn, model_id, model_name, threshold, frames):
-    """Load the model, run the concept scan, and print the ranked table."""
+def _render_concept_scan(conn, model_id, model_name, threshold, frames, top_n=10):
+    """Run the concept scan; list the top_n compactly, then chart the rest.
+
+    The corpus is a road trip, so highway/road/clouds always dominate — the
+    interesting signal is the long tail, so we skip the top_n from the chart
+    (still listing them) and rescale the bars to the remaining concepts.
+    """
     from .embed import Embedder
     from .stats import concept_scan
 
     console.print("loading model for concept scan…")
     embedder = Embedder(model_name=model_name)
     hits = concept_scan(conn, embedder, model_id, threshold=threshold)
-    peak = max((h.matches for h in hits), default=0) or 1
-    tbl = Table(title=f"concept scan (sim ≥ {threshold}, over {frames:,} frames)")
+    top, rest = hits[:top_n], hits[top_n:]
+
+    if top:
+        summary = " · ".join(f"{h.concept} {h.matches:,}" for h in top)
+        console.print(f"[dim]top {len(top)} (off the chart): {summary}[/dim]")
+
+    peak = max((h.matches for h in rest), default=0) or 1
+    title = f"beyond top {top_n} (sim ≥ {threshold}, {frames:,} frames)"
+    tbl = Table(title=title)
     tbl.add_column("concept")
     tbl.add_column("matches", justify="right")
     tbl.add_column("")
     tbl.add_column("best", justify="right")
-    for h in hits:
+    for h in rest:
         meter = "█" * int(28 * h.matches / peak)
         tbl.add_row(h.concept, f"{h.matches:,}", meter, f"{h.best_sim:.3f}")
     console.print(tbl)
