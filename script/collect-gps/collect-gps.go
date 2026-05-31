@@ -10,9 +10,9 @@ import (
 	"path/filepath"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
+	"github.com/adanalife/tripbot/pkg/geo"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/video"
-	"github.com/kelvins/geocoder"
 )
 
 // this will hold the filename passed in via the CLI
@@ -26,7 +26,7 @@ func init() {
 	// 	log.Fatal("Error loading .env file")
 	// }
 
-	geocoder.ApiKey = c.Conf.GoogleMapsAPIKey
+	geo.SetDefault(geo.New(c.Conf.GoogleMapsAPIKey))
 
 	flag.StringVar(&videoFile, "file", "", "File to load")
 	flag.BoolVar(&current, "current", false, "Use currently-playing video")

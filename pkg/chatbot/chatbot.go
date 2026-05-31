@@ -12,11 +12,11 @@ import (
 	"github.com/adanalife/tripbot/pkg/database"
 	"github.com/adanalife/tripbot/pkg/eventbus"
 	"github.com/adanalife/tripbot/pkg/feature"
+	"github.com/adanalife/tripbot/pkg/geo"
 	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	vlcClient "github.com/adanalife/tripbot/pkg/vlc-client"
 	"github.com/gempir/go-twitch-irc/v4"
-	"github.com/kelvins/geocoder"
 	"gorm.io/gorm"
 )
 
@@ -68,6 +68,10 @@ type App struct {
 	// constructed *background.Scheduler cmd/tripbot installs via
 	// SetScheduler once cron has started.
 	Cron Cron
+	// Geocoder turns GPS coords into a place name for !location. Tests inject
+	// a recordingGeocoder / noopGeocoder; production uses realGeocoder which
+	// delegates to the pkg/geo default configured in Initialize.
+	Geocoder Geocoder
 }
 
 // db returns the DB handle the App should use. Prefers an explicit a.DB
@@ -91,6 +95,7 @@ var defaultApp = &App{
 	Flags:      realFlags{},
 	NATS:       realNATS{},
 	Cron:       realCron{},
+	Geocoder:   realGeocoder{},
 }
 
 // used to determine which help message to display
@@ -110,8 +115,9 @@ func Initialize() *twitch.Client {
 	var err error
 	Uptime = time.Now()
 
-	// set up geocoder (for translating coords to places)
-	geocoder.ApiKey = c.Conf.GoogleMapsAPIKey
+	// set up the process-wide geocoder (coords -> places). realGeocoder and
+	// pkg/video both route through this default.
+	geo.SetDefault(geo.New(c.Conf.GoogleMapsAPIKey))
 
 	// initialize the twitch API client. Non-fatal: if Twitch is unreachable
 	// at boot, log and continue so the process stays up (readiness reports

@@ -226,7 +226,7 @@ func (a *App) locationCmd(ctx context.Context, user *users.User, _ []string) {
 	// extract the coordinates
 	lat, lng, err := vid.Location()
 	// geocode the location
-	address, _ := helpers.CityFromCoords(lat, lng)
+	address, _ := a.Geocoder.City(lat, lng)
 	if err != nil {
 		slog.ErrorContext(ctx, "geocoding error", "err", err)
 	}
