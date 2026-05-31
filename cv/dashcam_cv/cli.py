@@ -187,8 +187,8 @@ def cmd_stats(args: argparse.Namespace) -> int:
         tbl.add_column("")
         tbl.add_column("best", justify="right")
         for h in hits:
-            bar = "█" * int(28 * h.matches / peak)
-            tbl.add_row(h.concept, f"{h.matches:,}", bar, f"{h.best_sim:.3f}")
+            meter = "█" * int(28 * h.matches / peak)
+            tbl.add_row(h.concept, f"{h.matches:,}", meter, f"{h.best_sim:.3f}")
         console.print(tbl)
 
     conn.close()
