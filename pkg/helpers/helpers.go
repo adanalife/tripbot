@@ -77,7 +77,7 @@ func DurationToMiles(dur time.Duration) float32 {
 }
 
 // GoogleMapsURL returns a google maps link to the coords provided
-//TODO find query param for zoom level
+// TODO find query param for zoom level
 func GoogleMapsURL(lat, long float64) string {
 	return fmt.Sprintf("https://maps.google.com/?q=%.5f%%2C%.5f&ll=%.5f%%2C%.5f&z=5", lat, long, lat, long)
 }
@@ -193,7 +193,7 @@ func sunriseSunset(utcDate time.Time, lat, long float64) (time.Time, time.Time) 
 	return ActualDate(rise, lat, long), ActualDate(set, lat, long)
 }
 
-//TODO: text the admin if it errors opening browser?
+// TODO: text the admin if it errors opening browser?
 func OpenInBrowser(url string) {
 	slog.Info("opening url in browser", "url", url)
 	err := open.Run(url)
@@ -202,7 +202,7 @@ func OpenInBrowser(url string) {
 	}
 }
 
-//TODO: remove this and all darwin-only support
+// TODO: remove this and all darwin-only support
 // RunningOnDarwin returns true if we're on darwin (OS X)
 func RunningOnDarwin() bool {
 	return runtime.GOOS == "darwin"
@@ -221,7 +221,7 @@ func RunningOnLinux() bool {
 // this nastiness taken from:
 // https://gist.github.com/davidnewhall/3627895a9fc8fa0affbd747183abca39
 // Write a pid file, but first make sure it doesn't exist with a running pid.
-//TODO: consider refactoring to use PidExists()
+// TODO: consider refactoring to use PidExists()
 func WritePidFile(pidFile string) error {
 	// Read in the pid file as a slice of bytes.
 	if piddata, err := ioutil.ReadFile(pidFile); err == nil {
@@ -286,11 +286,11 @@ func PidExists(pid int) (bool, error) {
 
 // https://stackoverflow.com/a/28672789
 func Base64Encode(str string) string {
-	return base64.StdEncoding.EncodeToString([]byte(str))
+	return base64.URLEncoding.EncodeToString([]byte(str))
 }
 
 func Base64Decode(str string) (string, error) {
-	data, err := base64.StdEncoding.DecodeString(str)
+	data, err := base64.URLEncoding.DecodeString(str)
 	if err != nil {
 		return "", err
 	}
@@ -298,9 +298,5 @@ func Base64Decode(str string) (string, error) {
 }
 
 func StripAtSign(username string) string {
-	if username[0] == []byte("@")[0] {
-		// strip the @ sign
-		username = username[1:]
-	}
-	return username
+	return strings.TrimPrefix(username, "@")
 }

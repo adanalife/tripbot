@@ -186,7 +186,7 @@ type fakeUser struct {
 }
 
 func (f *fakeUser) HasCommandAvailable(_ context.Context) bool { return f.follower }
-func (f *fakeUser) IsSubscriber() bool        { return f.subscriber }
+func (f *fakeUser) IsSubscriber() bool                         { return f.subscriber }
 
 // realUserAsChat wraps *users.User so it satisfies chatUser in tests
 // where we want to pass a struct with known field values.
@@ -204,6 +204,10 @@ func TestCheckAccess_NoRestrictions(t *testing.T) {
 }
 
 func TestCheckAccess_RequiresFollow_NonFollower(t *testing.T) {
+	prev := followerGatingEnabled
+	followerGatingEnabled = true
+	t.Cleanup(func() { followerGatingEnabled = prev })
+
 	cmd := &Command{Trigger: "!test", RequiresFollow: true}
 	var said string
 	if cmd.checkAccess(context.Background(), &fakeUser{follower: false}, func(msg string) { said = msg }) {
@@ -215,6 +219,10 @@ func TestCheckAccess_RequiresFollow_NonFollower(t *testing.T) {
 }
 
 func TestCheckAccess_RequiresFollow_Follower(t *testing.T) {
+	prev := followerGatingEnabled
+	followerGatingEnabled = true
+	t.Cleanup(func() { followerGatingEnabled = prev })
+
 	cmd := &Command{Trigger: "!test", RequiresFollow: true}
 	var said string
 	if !cmd.checkAccess(context.Background(), &fakeUser{follower: true}, func(msg string) { said = msg }) {
@@ -222,6 +230,21 @@ func TestCheckAccess_RequiresFollow_Follower(t *testing.T) {
 	}
 	if said != "" {
 		t.Errorf("expected no message, got %q", said)
+	}
+}
+
+func TestCheckAccess_RequiresFollow_GatingDisabled(t *testing.T) {
+	prev := followerGatingEnabled
+	followerGatingEnabled = false
+	t.Cleanup(func() { followerGatingEnabled = prev })
+
+	cmd := &Command{Trigger: "!test", RequiresFollow: true}
+	var said string
+	if !cmd.checkAccess(context.Background(), &fakeUser{follower: false}, func(msg string) { said = msg }) {
+		t.Error("expected true for non-follower when gating disabled")
+	}
+	if said != "" {
+		t.Errorf("expected no message when gating disabled, got %q", said)
 	}
 }
 

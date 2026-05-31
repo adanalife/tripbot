@@ -4,10 +4,10 @@ import "testing"
 
 func TestNextIndex(t *testing.T) {
 	tests := []struct {
-		name             string
-		current, offset  int
-		length           int
-		want             int
+		name            string
+		current, offset int
+		length          int
+		want            int
 	}{
 		{"forward in range", 2, 1, 10, 3},
 		{"forward wraps to start", 9, 1, 10, 0},

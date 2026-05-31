@@ -71,6 +71,16 @@ RUN curl -fsSL "https://github.com/novnc/noVNC/archive/refs/tags/v${NOVNC_VERSIO
     && mv "/opt/noVNC-${NOVNC_VERSION}" /opt/novnc \
     && printf '%s\n' '<!doctype html><title>OBS noVNC</title><meta http-equiv="refresh" content="0; url=vnc.html?resize=scale&amp;autoconnect=true&amp;reconnect=true">' > /opt/novnc/index.html
 
+# OBS calls `xdg-screensaver suspend` every 30s while streaming to inhibit
+# the desktop screensaver. In a headless container there is no supported
+# screensaver backend (no X11 $DISPLAY, no GNOME/KDE session), so the
+# freedesktop script exits 2 and OBS logs `Failed to create xdg-screensaver`
+# every cycle — ~120 wasted fork+exec per pod per hour, all spamming Loki at
+# warn level. Shim it to a no-op so OBS gets exit 0 and stops complaining.
+# /usr/local/bin is ahead of /usr/bin in PATH so this wins.
+RUN printf '#!/bin/sh\nexit 0\n' > /usr/local/bin/xdg-screensaver \
+    && chmod +x /usr/local/bin/xdg-screensaver
+
 COPY infra/docker/obs/config/ /opt/obs/config/
 COPY infra/docker/obs/script/ /opt/obs/script/
 COPY infra/docker/obs/entrypoint.sh /opt/obs/entrypoint.sh
