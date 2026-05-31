@@ -2,6 +2,7 @@ package instrumentation
 
 import (
 	"context"
+	"time"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -26,7 +27,11 @@ var (
 	twitchSubscribers = mustGauge("twitch_subscribers_total", "Current number of Twitch channel subscribers")
 	twitchFollowers   = mustGauge("twitch_followers_total", "Current number of Twitch channel followers")
 	twitchConnected   = mustGauge("tripbot_twitch_connected", "1 when the bot is connected to Twitch chat (IRC), 0 otherwise")
+	twitchTokenExpiry = mustGauge("tripbot_twitch_token_expires_at_seconds", "Unix timestamp of the in-memory Twitch user-access-token's ExpiresAt, labeled by account (bot|broadcaster). 0 when the account has no loaded token.")
 	twitchHelixErrors = mustCounter("twitch_helix_errors_total", "Total non-2xx responses from the Twitch Helix API, labeled by endpoint and status_code")
+	twitchChannelLive = mustGauge("tripbot_twitch_channel_live", "1 when Helix GetStreams reports the configured channel as live, 0 when offline. Driven by the OBS silent-disconnect watchdog's Helix poll.")
+
+	obsSilentDisconnectRestarts = mustCounter("tripbot_obs_silent_disconnect_restarts_total", "Total times the OBS silent-disconnect watchdog forced a StopStream+StartStream because OBS reported outputActive=true while Twitch reported the channel offline")
 
 	twitchHelixRateRemaining = mustGauge("twitch_helix_rate_limit_remaining", "Last-seen Ratelimit-Remaining header from Twitch Helix responses (per app-access bearer)")
 	twitchHelixRateLimit     = mustGauge("twitch_helix_rate_limit_total", "Last-seen Ratelimit-Limit header from Twitch Helix responses (per app-access bearer)")
@@ -75,10 +80,30 @@ var TwitchAudience = twitchAudienceIface{subscribers: twitchSubscribers, followe
 // "up but not in chat" to dashboards and alerts.
 var TwitchConnection = twitchConnectionIface{gauge: twitchConnected}
 
+// TwitchTokenExpiry exposes the per-account token-expiry timestamp gauge.
+// SetExpiresAt(account, t) records t.Unix(), or 0 if t is the zero Time —
+// the latter is how a blanked or never-loaded token shows up. Drives the
+// "tripbot needs reauth" alert (time() past the recorded expiry).
+var TwitchTokenExpiry = twitchTokenExpiryIface{gauge: twitchTokenExpiry}
+
 // TwitchHelixErrors exposes the helix-error counter; record by calling
 // TwitchHelixErrors.Inc(endpoint, statusCode). Endpoint is a short label
 // like "GetUsers"; statusCode is the HTTP status reported by Twitch.
 var TwitchHelixErrors = twitchHelixErrorsIface{counter: twitchHelixErrors}
+
+// TwitchChannelLive exposes the per-tick Twitch live-status gauge written
+// by the OBS silent-disconnect watchdog. Set(true) on every successful
+// Helix poll that reports the channel as live, Set(false) when GetStreams
+// returns empty. Paired with OBSStreaming in an alert: divergence
+// (OBS=1 / Twitch=0) is the silent half-open RTMP signal.
+var TwitchChannelLive = twitchChannelLiveIface{gauge: twitchChannelLive}
+
+// OBSSilentDisconnectRestarts exposes the watchdog's force-restart counter.
+// Inc() is called after a successful StopStream+StartStream sequence.
+// Any non-zero rate is alertable — the watchdog only fires after a
+// 3-minute debounce, so even one increment means we saw a real silent
+// disconnect in prod.
+var OBSSilentDisconnectRestarts = obsSilentDisconnectRestartsIface{counter: obsSilentDisconnectRestarts}
 
 // TwitchHelixRateLimit exposes the per-bearer Helix rate-budget gauges.
 // SetRemaining + SetLimit are called by the response-recording transport
@@ -149,6 +174,16 @@ func (t twitchConnectionIface) Set(connected bool) {
 	t.gauge.Record(context.Background(), v)
 }
 
+type twitchTokenExpiryIface struct{ gauge metric.Int64Gauge }
+
+func (t twitchTokenExpiryIface) SetExpiresAt(account string, expiresAt time.Time) {
+	var v int64
+	if !expiresAt.IsZero() {
+		v = expiresAt.Unix()
+	}
+	t.gauge.Record(context.Background(), v, metric.WithAttributes(attribute.String("account", account)))
+}
+
 type twitchHelixErrorsIface struct{ counter metric.Int64Counter }
 
 func (h twitchHelixErrorsIface) Inc(endpoint string, statusCode int) {
@@ -156,6 +191,22 @@ func (h twitchHelixErrorsIface) Inc(endpoint string, statusCode int) {
 		attribute.String("endpoint", endpoint),
 		attribute.Int("status_code", statusCode),
 	))
+}
+
+type twitchChannelLiveIface struct{ gauge metric.Int64Gauge }
+
+func (t twitchChannelLiveIface) Set(live bool) {
+	var v int64
+	if live {
+		v = 1
+	}
+	t.gauge.Record(context.Background(), v)
+}
+
+type obsSilentDisconnectRestartsIface struct{ counter metric.Int64Counter }
+
+func (o obsSilentDisconnectRestartsIface) Inc() {
+	o.counter.Add(context.Background(), 1)
 }
 
 type twitchHelixRateLimitIface struct {

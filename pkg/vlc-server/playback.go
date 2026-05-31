@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 )
 
-//TODO: should we handle the case where index is outside range?
+// TODO: should we handle the case where index is outside range?
 // or just explicitly pass in what we get here?
 func (s *Server) playAtIndex(index int) error {
 	// start playing the media
@@ -82,4 +82,14 @@ func (s *Server) currentIndex() int {
 	// extract just the filename
 	videoFile := filepath.Base(s.currentlyPlaying())
 	return s.getIndex(videoFile)
+}
+
+// NextVideoFile returns the basename of the next video in the playlist
+// after the currently-playing one (with wrap). Pure helper for the
+// cover-frame refresher; doesn't touch libvlc.
+func (s *Server) NextVideoFile() string {
+	if len(s.VideoFiles) == 0 {
+		return ""
+	}
+	return s.VideoFiles[nextIndex(s.currentIndex(), +1, len(s.VideoFiles))]
 }

@@ -14,7 +14,7 @@ import (
 
 // Videos represent a video file containing dashcam footage
 type Video struct {
-	ID          int           `gorm:"primaryKey"`
+	ID          int `gorm:"primaryKey"`
 	Slug        string
 	Lat         float64
 	Lng         float64
@@ -27,7 +27,7 @@ type Video struct {
 }
 
 // Location returns a lat/lng pair
-//TODO: refactor out the error return value
+// TODO: refactor out the error return value
 func (v Video) Location() (float64, float64, error) {
 	var err error
 	if v.Flagged {
@@ -36,8 +36,8 @@ func (v Video) Location() (float64, float64, error) {
 	return v.Lat, v.Lng, err
 }
 
-//TODO: add color, include location/state/lat/lng?
-//TODO: where else does this get used tho?
+// TODO: add color, include location/state/lat/lng?
+// TODO: where else does this get used tho?
 // ex: 2018_0514_224801_013_a_opt
 func (v Video) String() string {
 	return v.Slug

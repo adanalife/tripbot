@@ -43,3 +43,19 @@ func Logout(ctx context.Context, user string, sessionID uuid.UUID) error {
 	instrumentation.Events.Inc("logout")
 	return nil
 }
+
+// SessionCount returns how many sessions the user has started — i.e. their
+// count of "login" events. Cheap via the events_username_date index
+// (migration 011). Returns 0 on error. Bots are not special-cased here; callers
+// that exclude bots should check users.IsBot.
+func SessionCount(ctx context.Context, username string) int64 {
+	var n int64
+	if err := database.GormDB().WithContext(ctx).
+		Model(&Event{}).
+		Where("username = ? AND event = ?", username, "login").
+		Count(&n).Error; err != nil {
+		slog.ErrorContext(ctx, "session count failed", "err", err, "username", username)
+		return 0
+	}
+	return n
+}

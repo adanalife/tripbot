@@ -7,8 +7,8 @@ import (
 	"os"
 	"time"
 
-	goobs "github.com/andreykaipov/goobs"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
+	goobs "github.com/andreykaipov/goobs"
 )
 
 // PollStreamingActive connects to the OBS WebSocket and updates the

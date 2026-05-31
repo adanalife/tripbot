@@ -133,7 +133,7 @@ func (a *App) jumpCmd(ctx context.Context, user *users.User, params []string) {
 	// update the currently-playing video
 	a.Video.GetCurrentlyPlaying(ctx)
 	// show the flag for the state
-	a.Onscreens.ShowFlag(ctx, 10 * time.Second)
+	a.Onscreens.ShowFlag(ctx, 10*time.Second)
 	// update our record of last time it ran
 	lastTimewarpTime = time.Now()
 }
