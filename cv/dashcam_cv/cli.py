@@ -137,8 +137,66 @@ def cmd_find(args: argparse.Namespace) -> int:
     return 0
 
 
+def _human_bytes(n: float) -> str:
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if n < 1024:
+            return f"{n:.1f} {unit}"
+        n /= 1024
+    return f"{n:.1f} PB"
+
+
+def cmd_stats(args: argparse.Namespace) -> int:
+    """Show embedding coverage, DB size, and (optionally) a concept scan."""
+    from .embed import model_id_for
+    from .stats import coverage, db_size
+
+    conn = db.connect()
+    mid = model_id_for(args.model)
+    cov = coverage(conn, mid)
+    size = db_size(conn)
+
+    ct = Table(title="corpus coverage", show_header=False)
+    ct.add_row("model", args.model)
+    ct.add_row("videos embedded", f"{cov.embedded_videos} / {cov.total_videos}  ({cov.pct:.1f}%)")
+    ct.add_row("videos remaining", str(cov.remaining))
+    ct.add_row("frames (vectors)", f"{cov.frames:,}")
+    ct.add_row("avg frames/video", f"{cov.frames_per_video:.0f}")
+    console.print(ct)
+
+    st = Table(title="vector storage", show_header=False)
+    st.add_row("frame_embeddings", size["total_pretty"])
+    if cov.embedded_videos and cov.total_videos:
+        st.add_row(
+            "projected (full corpus)",
+            _human_bytes(size["total_bytes"] / cov.embedded_videos * cov.total_videos),
+        )
+        st.add_row("projected frames", f"~{int(cov.frames_per_video * cov.total_videos):,}")
+    console.print(st)
+
+    if args.concepts:
+        from .embed import Embedder
+        from .stats import concept_scan
+
+        console.print("loading model for concept scan…")
+        embedder = Embedder(model_name=args.model)
+        hits = concept_scan(conn, embedder, mid, threshold=args.threshold)
+        peak = max((h.matches for h in hits), default=0) or 1
+        tbl = Table(title=f"concept scan (sim ≥ {args.threshold}, over {cov.frames:,} frames)")
+        tbl.add_column("concept")
+        tbl.add_column("matches", justify="right")
+        tbl.add_column("")
+        tbl.add_column("best", justify="right")
+        for h in hits:
+            bar = "█" * int(28 * h.matches / peak)
+            tbl.add_row(h.concept, f"{h.matches:,}", bar, f"{h.best_sim:.3f}")
+        console.print(tbl)
+
+    conn.close()
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
-    """Parse args and dispatch to the embed / find subcommand."""
+    """Parse args and dispatch to the embed / find / stats subcommand."""
     parser = argparse.ArgumentParser(prog="dashcam-cv", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -176,6 +234,16 @@ def main(argv: list[str] | None = None) -> int:
     p_find.add_argument("--state", default=None, help="restrict to a US state (e.g. Nevada)")
     add_model_args(p_find)
     p_find.set_defaults(func=cmd_find)
+
+    p_stats = sub.add_parser("stats", help="embedding coverage, DB size, and concept scan")
+    p_stats.add_argument(
+        "--concepts", action="store_true", help="also run the concept scan (loads the model)"
+    )
+    p_stats.add_argument(
+        "--threshold", type=float, default=0.1, help="cosine similarity cutoff for concept matches"
+    )
+    add_model_args(p_stats)
+    p_stats.set_defaults(func=cmd_stats)
 
     args = parser.parse_args(argv)
     return args.func(args)
