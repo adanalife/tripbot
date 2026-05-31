@@ -231,7 +231,7 @@ func TestRestartActionHandler_VlcProxiesToVlcServerHost(t *testing.T) {
 
 	r := mux.NewRouter()
 	r.Handle("/admin/restart/{service}", http.HandlerFunc(restartActionHandler)).Methods("POST")
-	req := httptest.NewRequest(http.MethodPost, "/admin/restart/vlc-server", nil)
+	req := httptest.NewRequest(http.MethodPost, "/admin/restart/vlc", nil)
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -344,28 +344,28 @@ func TestAdminHandler_RendersReadyStatusAndLinks(t *testing.T) {
 		`/CHANGELOG.md">v1.2.3</a>`, // tripbot version tag → changelog (ref is sha or master)
 		`<a href="https://github.com/adanalife/tripbot/blob/deadbeefcafe/CHANGELOG.md">v9.9.9-vlc</a>`, // vlc version → changelog@sha
 		`<a href="https://github.com/adanalife/tripbot/blob/feedfacecafe/CHANGELOG.md">v8.8.8-osc</a>`, // onscreens version → changelog@sha
-		">vlc-server<",       // vlc row label
-		">onscreens-server<", // onscreens row label
-		`<span class="chatters-count">12</span>`,            // initial chatter count (server-rendered, unflashed)
+		">vlc<",                                  // vlc row label (shortened)
+		">onscreens<",                            // onscreens row label (shortened)
+		`<span class="chatters-count">12</span>`, // initial chatter count (server-rendered, unflashed)
 		`id="chatters" sse-swap="viewers" hx-swap="innerHTML"`, // live count target wired for SSE updates
-		`<code class="env env-prod">production</code>`,     // env in monospace chip, prod-coloured
-		`<title>tripbot — adanalife_ (production)</title>`, // env rendered in <title> for tab disambiguation
-		"now playing",                        // now-playing section shown when vlc healthy
-		`id="now-line" sse-swap="video"`,     // now-playing line wired for live video swaps
-		`id="auth-card" sse-swap="auth"`,     // live token-expiry card wired for SSE
+		`<code class="env env-prod">production</code>`,         // env in monospace chip, prod-coloured
+		`<title>tripbot — adanalife_ (production)</title>`,     // env rendered in <title> for tab disambiguation
+		"now playing",                                    // now-playing section shown when vlc healthy
+		`id="now-line" sse-swap="video"`,                 // now-playing line wired for live video swaps
+		`id="auth-card" sse-swap="auth"`,                 // live token-expiry card wired for SSE
 		`class="auth-expires" data-expires="4070908800"`, // bot expiry (2099-01-01) for the JS countdown
-		`id="reauth-card" sse-swap="reauth"`, // reauth callout container wired for live appear/clear
-		"wy_0042.MP4",                        // current video file
-		"Wyoming",                            // current video state
-		`class="now-elapsed" data-since=`,    // elapsed span the JS ticker counts up
-		"3m12s",                              // clip progress (initial server render)
-		`>obs</a>`,                           // one-word OBS link
-		`>grafana</a>`,                       // one-word grafana link
-		`>traefik</a>`,                       // one-word traefik link
-		`>hubble</a>`,                        // one-word hubble link
-		"https://obs-prod.tail020deb.ts.net", // tailnet OBS href
-		grafanaURL,                           // grafana href
-		traefikURL,                           // traefik href
+		`id="reauth-card" sse-swap="reauth"`,             // reauth callout container wired for live appear/clear
+		"wy_0042.MP4",                                    // current video file
+		"Wyoming",                                        // current video state
+		`class="now-elapsed" data-since=`,                // elapsed span the JS ticker counts up
+		"3m12s",                                          // clip progress (initial server render)
+		`>obs</a>`,                                       // one-word OBS link
+		`>grafana</a>`,                                   // one-word grafana link
+		`>traefik</a>`,                                   // one-word traefik link
+		`>hubble</a>`,                                    // one-word hubble link
+		"https://obs-prod.tail020deb.ts.net",             // tailnet OBS href
+		grafanaURL,                                       // grafana href
+		traefikURL,                                       // traefik href
 		// Environment is "production" above → hubble link carries ?namespace=prod-1
 		"https://hubble-prod.tail020deb.ts.net/?namespace=prod-1",
 	} {

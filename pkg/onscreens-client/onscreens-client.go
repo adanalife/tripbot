@@ -65,7 +65,7 @@ func (c *Client) ShowLeaderboard(ctx context.Context, title string, leaderboard 
 	return nil
 }
 
-//TODO: this is taken right from the !guessleaderboard command, DRY it?
+// TODO: this is taken right from the !guessleaderboard command, DRY it?
 func (c *Client) ShowGuessLeaderboard(ctx context.Context) {
 	// select users to show in leaderboard
 	size := 10
@@ -136,7 +136,7 @@ func (c *Client) HideGPSImage(ctx context.Context) error {
 	return nil
 }
 
-//TODO: move this to a common location
+// TODO: move this to a common location
 //
 // Transport-layer errors log at Debug, not Error: each wrapper above this
 // (HideMiddleText, ShowGPSImage, …) logs the operation-specific failure at

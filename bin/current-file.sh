@@ -9,12 +9,12 @@ elif [[ "$OSTYPE" == "darwin"* ]]; then
 fi
 
 #TODO: check for presence of file here
-if [ ! -f $PIDFILE ]; then
+if [ ! -f "$PIDFILE" ]; then
   echo "Pidfile not found. Is OBS(OS X)/VLC(linux) running??"
   exit 2
 fi
 
-output=$(lsof -p "$(cat $PIDFILE)" 2>/dev/null)
+output=$(lsof -p "$(cat "$PIDFILE")" 2>/dev/null)
 
 # shellcheck disable=SC2181
 if [ $? -eq 0 ]; then
