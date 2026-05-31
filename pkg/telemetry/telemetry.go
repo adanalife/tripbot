@@ -48,12 +48,25 @@ var noopShutdown ShutdownFunc = func(context.Context) error { return nil }
 // exporter so the existing /metrics endpoint keeps serving. Always
 // returns a non-nil ShutdownFunc — safe to defer unconditionally.
 func Init(ctx context.Context, serviceName, serviceVersion string) (ShutdownFunc, error) {
+	// Continuous profiling is independent of the OTLP exporters — it
+	// starts whenever PYROSCOPE_SERVER_ADDRESS is set, including in
+	// otherwise-disabled runs, so a profiling-only configuration is
+	// possible.
+	stopProfiler, profErr := startProfiler(serviceName, serviceVersion)
+	if profErr != nil {
+		slog.WarnContext(ctx, "telemetry: pyroscope init failed", "err", profErr)
+	}
+
 	if disabled() {
 		slog.InfoContext(ctx, "telemetry: OTLP exporters disabled, only Prometheus /metrics will be populated")
 		if err := initPromOnlyMeter(ctx, serviceName, serviceVersion); err != nil {
+			stopProfiler()
 			return noopShutdown, fmt.Errorf("prom-only meter: %w", err)
 		}
-		return noopShutdown, nil
+		return func(context.Context) error {
+			stopProfiler()
+			return nil
+		}, nil
 	}
 
 	res, err := newResource(ctx, serviceName, serviceVersion)
@@ -128,6 +141,7 @@ func Init(ctx context.Context, serviceName, serviceVersion string) (ShutdownFunc
 	log.SetOutput(slogWriter{level: slog.LevelInfo})
 
 	return func(shutdownCtx context.Context) error {
+		stopProfiler()
 		var errs []error
 		if err := tp.Shutdown(shutdownCtx); err != nil {
 			errs = append(errs, fmt.Errorf("tracer: %w", err))
