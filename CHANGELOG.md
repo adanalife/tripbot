@@ -7,6 +7,10 @@ All notable changes to TripBot. Format follows [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+### CI
+
+- **`go test` finds the repo-root `.env.testing` from any directory.** `config.SetEnvironment` resolved the dotenv file with a cwd-relative `godotenv.Load`, so a package's test binary — which runs from its own dir — never found the checked-in `.env.testing` and either `log.Fatalf`'d in a config `init()` or required a manual `set -a; . ./.env.testing; set +a`. The lookup now anchors at the module root (nearest ancestor with `go.mod`), so `ENV=testing go test ./pkg/...` works with no sourcing, matching the `task test` / `task test:macos` paths. Deployed binaries with no `go.mod` ancestor fall back to the bare relative path, preserving cluster behavior. ([#743])
+
 ## [v2.18.0] — 2026-05-29
 
 Minor release. The admin panel's live console fills in around the chat pane shipped in v2.17.2: a live viewer count, a now-playing card that updates the instant the video changes, a token-expiry countdown, usable chat scrollback that only auto-scrolls when pinned to the bottom, a click-a-username profile popover (monthly miles + handling for 'unknown' dates), and a live location map with a breadcrumb trail and a 'show full route' corpus overlay. onscreens-server moves to its own standalone slim image with a multi-arch release pipeline. Internals: background jobs construct a `*Scheduler` instead of reaching for a package global, and the OpenTelemetry dependencies get bumped.
@@ -1253,6 +1257,7 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#712]: https://github.com/adanalife/tripbot/pull/712
 [#713]: https://github.com/adanalife/tripbot/pull/713
 [#714]: https://github.com/adanalife/tripbot/pull/714
+[#743]: https://github.com/adanalife/tripbot/pull/743
 [#716]: https://github.com/adanalife/tripbot/pull/716
 [#717]: https://github.com/adanalife/tripbot/pull/717
 [#719]: https://github.com/adanalife/tripbot/pull/719
