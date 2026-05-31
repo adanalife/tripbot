@@ -4,6 +4,7 @@ Gated behind DASHCAM_CV_RUN_MODEL_TESTS=1 (needs the CLIP checkpoint + a live
 pgvector DB with the frame_embeddings schema migrated).
 """
 
+# pylint: disable=missing-function-docstring,redefined-outer-name
 from __future__ import annotations
 
 import pytest

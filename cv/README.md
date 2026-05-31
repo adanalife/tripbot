@@ -75,7 +75,7 @@ embeddings stay purely visual).
 ## Layout
 
 | file | role |
-|---|---|
+| --- | --- |
 | `db.py` | psycopg connection + pgvector registration (`DATABASE_*` env) |
 | `corpus.py` | walk the corpus dir, join files to `videos` rows by slug |
 | `frames.py` | sample frames at `--interval` (PyAV, in-memory) |

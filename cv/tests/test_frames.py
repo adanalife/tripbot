@@ -1,5 +1,6 @@
 """Frame sampling — needs the real LFS test clip (skipped in CI)."""
 
+# pylint: disable=missing-function-docstring
 from __future__ import annotations
 
 from PIL import Image

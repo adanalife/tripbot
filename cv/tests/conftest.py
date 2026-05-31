@@ -8,6 +8,7 @@ The CV tests fall in three tiers by what they need:
     opt in with DASHCAM_CV_RUN_MODEL_TESTS=1 so CI never downloads the model.
 """
 
+# pylint: disable=missing-function-docstring,broad-exception-caught
 from __future__ import annotations
 
 import os
