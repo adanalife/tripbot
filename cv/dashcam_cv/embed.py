@@ -84,6 +84,15 @@ class Embedder:
             self._dim = int(self.embed_text("dimension probe").shape[0])
         return self._dim
 
+    @staticmethod
+    def _pooled(out):
+        """The pooled embedding tensor.
+
+        transformers 5.x get_*_features returns a ModelOutput (pooler_output +
+        last_hidden_state); 4.x returned the pooled tensor directly. Normalize.
+        """
+        return getattr(out, "pooler_output", out)
+
     def check_dim(self) -> None:
         """Fail fast if the model's width doesn't match the DB column."""
         from .db import EMBED_DIM
@@ -105,7 +114,7 @@ class Embedder:
         inputs = self.processor(images=images, return_tensors="pt").to(self.device)
         if self.dtype != torch.float32:
             inputs["pixel_values"] = inputs["pixel_values"].to(self.dtype)
-        feats = self.model.get_image_features(**inputs).float()
+        feats = self._pooled(self.model.get_image_features(**inputs)).float()
         feats = feats / feats.norm(dim=-1, keepdim=True)
         return feats.cpu().numpy().astype(np.float32)
 
@@ -118,6 +127,6 @@ class Embedder:
             max_length=_TEXT_MAX_LEN,
             return_tensors="pt",
         ).to(self.device)
-        feats = self.model.get_text_features(**inputs).float()
+        feats = self._pooled(self.model.get_text_features(**inputs)).float()
         feats = feats / feats.norm(dim=-1, keepdim=True)
         return feats.cpu().numpy().astype(np.float32)[0]
