@@ -27,6 +27,9 @@ COPY dashcam_cv ./dashcam_cv
 RUN uv sync --frozen --no-dev
 
 ENV PATH="/opt/venv/bin:$PATH"
+# Unbuffered stdout so per-video embed lines stream to `kubectl logs` live
+# (placed after the deps layer to keep the torch install cached).
+ENV PYTHONUNBUFFERED=1
 
 # Bake the SigLIP2 NaFlex checkpoint into the image (so the batch Job needs no
 # network at runtime). Set --build-arg BAKE_MODEL=0 for fast dev/CI builds that

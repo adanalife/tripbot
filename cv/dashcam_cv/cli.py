@@ -16,7 +16,6 @@ import sys
 import time
 
 from rich.console import Console
-from rich.progress import BarColumn, Progress, TextColumn, TimeElapsedColumn
 from rich.table import Table
 
 from . import db
@@ -81,20 +80,17 @@ def cmd_embed(args: argparse.Namespace) -> int:
     total_frames = 0
     total_inserted = 0
     started = time.perf_counter()
-    with Progress(
-        TextColumn("[progress.description]{task.description}"),
-        BarColumn(),
-        TextColumn("{task.completed}/{task.total}"),
-        TimeElapsedColumn(),
-        console=console,
-    ) as progress:
-        task = progress.add_task("embedding", total=len(videos))
-        for v in videos:
-            progress.update(task, description=v.slug)
-            res = embed_video(conn, embedder, v, interval_sec=args.interval, apply=args.apply)
-            total_frames += res.frames
-            total_inserted += res.inserted
-            progress.advance(task)
+    # One line per video (not a progress bar): a bar renders to nothing on a
+    # non-TTY, so a long k8s batch looks hung. Plain lines stream to kubectl
+    # logs (with PYTHONUNBUFFERED set in the image).
+    n = len(videos)
+    for i, v in enumerate(videos, 1):
+        console.print(f"[{i}/{n}] embedding {v.slug} …")
+        res = embed_video(conn, embedder, v, interval_sec=args.interval, apply=args.apply)
+        total_frames += res.frames
+        total_inserted += res.inserted
+        detail = f"{res.inserted} vectors written" if args.apply else "dry-run"
+        console.print(f"      ✓ {v.slug}: {res.frames} frames, {detail}")
     elapsed = time.perf_counter() - started
     conn.close()
 
