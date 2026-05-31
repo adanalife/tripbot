@@ -149,19 +149,47 @@ def cmd_embed(args: argparse.Namespace) -> int:
 
 
 def cmd_find(args: argparse.Namespace) -> int:
-    """Embed the query and print the nearest frames."""
+    """Parse the natural-language query, then embed + filter the nearest frames.
+
+    The query is parsed into a visual residual + place/time filters (query.py),
+    so "construction in California" / "New England water" / "sunset in May" work
+    with no flags. An explicit --state overrides the parsed states.
+    """
     from .embed import Embedder
+    from .query import parse_query
     from .search import search
+
+    pq = parse_query(args.query)
+    states = [args.state] if args.state else pq.states
+    if not pq.visual.strip():
+        console.print(
+            "[yellow]tell me what to look for, not just where/when — "
+            'e.g. "sunset in California"[/yellow]'
+        )
+        return 2
+
+    # Show what was understood so a surprising result is explainable.
+    facets = list(pq.notes)
+    if args.state:
+        facets = [f"state={args.state} (override)"]
+    interp = f'looking for [bold]"{pq.visual}"[/bold]'
+    if facets:
+        interp += "  ·  filters: " + ", ".join(facets)
+    console.print(f"[dim]{interp}[/dim]")
 
     embedder = Embedder(model_name=args.model)
     conn = db.connect()
     try:
-        hits = search(conn, embedder, args.query, k=args.k, state=args.state)
+        hits = search(conn, embedder, pq.visual, k=args.k, states=states, months=pq.months)
     finally:
         conn.close()
 
     if not hits:
-        console.print("[yellow]no results — is frame_embeddings populated for this model?[/yellow]")
+        where = " / ".join(facets) if facets else "this model"
+        console.print(
+            f"[yellow]no results for [bold]{pq.visual}[/bold] in {where} — "
+            "the corpus may not be embedded there yet[/yellow]"
+        )
         return 1
 
     table = Table(title=f'find "{args.query}"')
@@ -170,8 +198,12 @@ def cmd_find(args: argparse.Namespace) -> int:
     table.add_column("video (slug)")
     table.add_column("at")
     table.add_column("state")
+    table.add_column("filmed")
     for i, h in enumerate(hits, 1):
-        table.add_row(str(i), f"{h.similarity:.3f}", h.slug, _format_ts(h.ts_sec), h.state or "")
+        filmed = f"{h.date_filmed:%Y-%m-%d}" if h.date_filmed else ""
+        table.add_row(
+            str(i), f"{h.similarity:.3f}", h.slug, _format_ts(h.ts_sec), h.state or "", filmed
+        )
     console.print(table)
     return 0
 
