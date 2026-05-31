@@ -48,8 +48,8 @@ func (r realOnscreens) HideMiddleText(ctx context.Context) error {
 // tripbot.<env>.onscreens.middle.show. Snake_case so a future protobuf
 // schema maps 1-1.
 type middleTextEvent struct {
-	Msg        string `json:"msg"`
-	EmittedAt  string `json:"emitted_at"`
+	Msg       string `json:"msg"`
+	EmittedAt string `json:"emitted_at"`
 }
 
 func (r realOnscreens) ShowMiddleText(ctx context.Context, msg string) error {
