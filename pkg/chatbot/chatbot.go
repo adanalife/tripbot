@@ -10,6 +10,8 @@ import (
 	mylog "github.com/adanalife/tripbot/pkg/chatbot/log"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
+	"github.com/adanalife/tripbot/pkg/eventbus"
+	"github.com/adanalife/tripbot/pkg/feature"
 	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	vlcClient "github.com/adanalife/tripbot/pkg/vlc-client"
@@ -51,6 +53,21 @@ type App struct {
 	// background audio source. Tests inject a fake; production uses
 	// realNowPlaying which polls SomaFM.
 	NowPlaying NowPlaying
+	// Flags evaluates feature flag values for command-time gating. Tests
+	// inject noopFlags{} (every key false); production uses realFlags which
+	// delegates to the Postgres-backed client cmd/tripbot installs via
+	// SetFlagClient once the DB connection is up.
+	Flags feature.FlagClient
+	// NATS is the fire-and-forget pubsub surface. Tests inject a
+	// recordingNATS to assert on publishes; production uses realNATS
+	// which delegates to the pkg/natsclient singleton (no-op when
+	// NATS_URL is empty).
+	NATS NATS
+	// Cron stops the background scheduler during !shutdown. Tests inject
+	// noopCron{}; production uses realCron which delegates to the
+	// constructed *background.Scheduler cmd/tripbot installs via
+	// SetScheduler once cron has started.
+	Cron Cron
 }
 
 // db returns the DB handle the App should use. Prefers an explicit a.DB
@@ -65,12 +82,15 @@ func (a *App) db() *gorm.DB {
 
 var defaultApp = &App{
 	// DB stays nil; commands use a.db() which falls back to database.GormDB().
-	Onscreens:  realOnscreens{c: onscreensClient.New(c.Conf.OnscreensServerHost)},
+	Onscreens:  realOnscreens{c: onscreensClient.New(c.Conf.OnscreensServerHost), nats: realNATS{}, env: c.Conf.Environment},
 	VLC:        realVLC{c: vlcClient.New(c.Conf.VlcServerHost)},
 	Video:      realVideo{},
 	IRC:        realIRC{},
 	Sessions:   realSessions{},
 	NowPlaying: newRealNowPlaying(),
+	Flags:      realFlags{},
+	NATS:       realNATS{},
+	Cron:       realCron{},
 }
 
 // used to determine which help message to display
@@ -119,6 +139,11 @@ func Initialize() *twitch.Client {
 func Say(msg string) {
 	// include the message in the log
 	mylog.ChatMsg(c.Conf.BotUsername, msg)
+	// mirror the bot's own output onto the event bus so it shows in the admin
+	// live console — Twitch doesn't echo our sent messages back via
+	// PrivateMessage, so without this the console would miss everything the bot
+	// says. Fire-and-forget; no-op when NATS is unconfigured.
+	eventbus.EmitChatMessage(context.Background(), c.Conf.Environment, c.Conf.BotUsername, msg)
 	// figure out what channel to speak to
 	speakTo := c.Conf.ChannelName
 	if c.Conf.OutputChannel != "" {

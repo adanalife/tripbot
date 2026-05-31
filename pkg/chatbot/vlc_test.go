@@ -9,10 +9,10 @@ import (
 // — it just swallows every call.
 type noopVLC struct{}
 
-func (noopVLC) PlayRandom(_ context.Context) error                       { return nil }
-func (noopVLC) PlayFileInPlaylist(_ context.Context, _ string) error     { return nil }
-func (noopVLC) Skip(_ context.Context, _ int) error                      { return nil }
-func (noopVLC) Back(_ context.Context, _ int) error                      { return nil }
+func (noopVLC) PlayRandom(_ context.Context) error                   { return nil }
+func (noopVLC) PlayFileInPlaylist(_ context.Context, _ string) error { return nil }
+func (noopVLC) Skip(_ context.Context, _ int) error                  { return nil }
+func (noopVLC) Back(_ context.Context, _ int) error                  { return nil }
 
 // recordingVLC captures every call made to it so tests can assert that
 // the chatbot drove playback as expected. All call records are appended

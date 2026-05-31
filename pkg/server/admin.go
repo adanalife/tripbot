@@ -8,10 +8,8 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"runtime/debug"
-	"strings"
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
@@ -43,6 +41,9 @@ var (
 	// token; the admin panel renders a re-auth prompt for each. Overridable in
 	// tests. Reads in-memory token state — no DB or network call.
 	accountsNeedingReauth = mytwitch.AccountsNeedingReauth
+	// authStatuses reports every identity's live token state (expiry +
+	// reauth reason) for the panel's countdown card. Overridable in tests.
+	authStatuses = mytwitch.TokenStatuses
 	// obsStreamStatus reports whether OBS is currently streaming. Function-seam
 	// so handler tests can stub without opening a real OBS WebSocket. Default
 	// hits OBS via pkg/obs (fresh connection per call — see obs.GetStreamStatus).
@@ -59,15 +60,24 @@ const (
 	grafanaURL = "https://adanalife.grafana.net/dashboards/f/fflhs4m586io0e"
 	// githubURL is the tripbot source repo (vlc-server + obs live here too).
 	githubURL = "https://github.com/adanalife/tripbot"
-	// traefikURL / hubbleURL are the cluster's platform dashboards. They live
-	// in kube-system as a single prod-zone install shared across envs, so
-	// (unlike OBS) they aren't derived per-environment.
-	traefikURL = "https://traefik.prod.whereisdana.today"
-	// hubbleBaseURL is the single prod-zone Hubble install on the mini-PC
-	// cluster. gatherLinks appends ?namespace=<env's namespace> so the link
-	// lands straight in that namespace's flow view instead of Hubble's "choose
-	// a namespace" page — see hubbleNamespace.
-	hubbleBaseURL = "https://hubble.prod.whereisdana.today/"
+	// tailnetBase is Dana's tailnet MagicDNS suffix. App UIs are exposed by
+	// the Tailscale K8s operator at <service>-<env>.<tailnetBase>, e.g.
+	// tripbot-prod.tail020deb.ts.net. We prefer these over the LAN-IP-backed
+	// *.whereisdana.today URLs because the latter silently fail on client
+	// networks that share the home LAN's 192.168.1.0/24 range — the operator
+	// names are CGNAT (100.x), so they never collide. See vault
+	// decisions/tailscale-access-model.md.
+	tailnetBase = "tail020deb.ts.net"
+	// traefikURL / hubbleBaseURL are the cluster's platform dashboards. They
+	// live in kube-system as a single prod-zone install shared across envs
+	// (see vault decisions/stage-prod-cotenancy.md), so the host is always
+	// -prod regardless of which env's panel is rendering the link.
+	traefikURL = "https://traefik-prod." + tailnetBase
+	// hubbleBaseURL is the prod-zone Hubble install. gatherLinks appends
+	// ?namespace=<env's namespace> so the link lands straight in that
+	// namespace's flow view instead of Hubble's "choose a namespace" page —
+	// see hubbleNamespace.
+	hubbleBaseURL = "https://hubble-prod." + tailnetBase + "/"
 	// sentryURL is the org's issue list. gatherLinks appends ?environment=<env>
 	// so the link lands pre-filtered to this env's issues — see sentryEnv.
 	sentryURL = "https://a-dana-life.sentry.io/issues/"
@@ -91,10 +101,14 @@ type versionInfo struct {
 }
 
 // nowPlaying is the current-video summary shown when vlc-server is healthy.
+// SinceUnix is the clip's start time as a Unix timestamp; the page's JS ticker
+// counts the elapsed display up from it (and resets it on each live video swap)
+// so progress keeps moving without a reload.
 type nowPlaying struct {
-	File     string
-	State    string
-	Progress string
+	File      string
+	State     string
+	Progress  string
+	SinceUnix int64
 }
 
 // streamControl drives the OBS stream toggle widget. Reachable=false hides
@@ -113,6 +127,16 @@ type navLink struct {
 	URL   string
 }
 
+// featureFlag is one row in the admin panel's "feature flags" section. Stripped
+// down from feature.Flag — the template only needs what it renders. The
+// target-removal date intentionally isn't displayed (the panel is phone-sized;
+// the date is still on feature.Flag for the future admin CRUD UI / audit job).
+type featureFlag struct {
+	Key         string
+	Enabled     bool
+	Description string
+}
+
 // adminData is the template payload.
 type adminData struct {
 	Channel        string // broadcaster Twitch username; renders as text + broadcaster link
@@ -122,12 +146,16 @@ type adminData struct {
 	Uptime         string
 	Chatters       int // users currently in chat
 	Services       []serviceStatus
-	Now            *nowPlaying // nil when vlc is unhealthy or nothing is playing
+	Now            *nowPlaying     // nil when vlc is unhealthy or nothing is playing
 	Audio          nowPlayingTrack // current SomaFM track; empty Title hides the line
 	Stream         streamControl
 	PanelHost      string // host the panel was reached at; the Twitch embed needs it as parent=
 	Links          []navLink
-	Reauth         []mytwitch.AccountReauth // accounts whose token needs re-auth; empty when healthy
+	Flags          []featureFlag                 // feature flags + their state; empty hides the section
+	Reauth         []mytwitch.AccountReauth      // accounts whose token needs re-auth; empty when healthy
+	AuthStatuses   []mytwitch.AccountTokenStatus // every identity's token state; drives the live expiry-countdown card
+	ChatHistory    []ChatLine                    // recent chat from the live-console hub; live lines stream in via SSE
+	MapTrailJSON   string                        // recent GPS breadcrumbs as JSON [[lat,lng],…] for the live map (data attr)
 }
 
 // adminHandler serves the human-facing root page on the tripbot Ingress: a
@@ -136,24 +164,28 @@ type adminData struct {
 // when vlc is up, the broadcaster/bot accounts, and links to the OBS / Grafana
 // / Traefik / Hubble dashboards. Replaces the bare 404 that used to sit on "/".
 func adminHandler(w http.ResponseWriter, r *http.Request) {
-	vlc := siblingStatus(r.Context(), "vlc-server", c.Conf.VlcServerHost)
-	onscreens := siblingStatus(r.Context(), "onscreens-server", c.Conf.OnscreensServerHost)
+	vlc := siblingStatus(r.Context(), "vlc", c.Conf.VlcServerHost)
+	onscreens := siblingStatus(r.Context(), "onscreens", c.Conf.OnscreensServerHost)
 	obs := siblingStatus(r.Context(), "obs", c.Conf.ObsServerHost)
 
 	data := adminData{
 		Channel:        c.Conf.ChannelName,
 		PreviewChannel: previewChannel(),
 		Bot:            c.Conf.BotUsername,
-		Env:      c.Conf.Environment,
-		Uptime:   time.Since(startedAt).Round(time.Second).String(),
-		Chatters: chatterCount(),
-		Services: gatherStatus(buildSHA(), vlc, onscreens, obs),
-		Now:      currentVideo(vlc.OK),
-		Audio:    nowPlayingFetcher(r.Context()),
-		Stream:   gatherStream(r.Context()),
-		PanelHost: panelHost(r),
-		Links:    gatherLinks(),
-		Reauth:   accountsNeedingReauth(),
+		Env:            c.Conf.Environment,
+		Uptime:         time.Since(startedAt).Round(time.Second).String(),
+		Chatters:       chatterCount(),
+		Services:       gatherStatus(buildSHA(), vlc, onscreens, obs),
+		Now:            currentVideo(vlc.OK),
+		Audio:          nowPlayingFetcher(r.Context()),
+		Stream:         gatherStream(r.Context()),
+		PanelHost:      panelHost(r),
+		Links:          gatherLinks(),
+		Flags:          gatherFlags(r.Context()),
+		Reauth:         accountsNeedingReauth(),
+		AuthStatuses:   authStatuses(),
+		ChatHistory:    eventHub.snapshotChat(),
+		MapTrailJSON:   mapTrailJSON(),
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -222,6 +254,26 @@ func uptimeSince(t time.Time) string {
 	return time.Since(t).Round(time.Second).String()
 }
 
+// gatherFlags reads the FlagClient's last-known snapshot and shapes each
+// flag into the small display row the template renders. Returns nil when
+// no flags are loaded yet (startup window before SetFlagClient) so the
+// template's {{if .Flags}} hides the section cleanly.
+func gatherFlags(ctx context.Context) []featureFlag {
+	flags := flagSnapshot(ctx)
+	if len(flags) == 0 {
+		return nil
+	}
+	out := make([]featureFlag, 0, len(flags))
+	for _, f := range flags {
+		out = append(out, featureFlag{
+			Key:         f.Key,
+			Enabled:     f.Enabled,
+			Description: f.Description,
+		})
+	}
+	return out
+}
+
 // gatherStream asks OBS for the current streaming state. A reachability
 // failure (OBS down, password wrong) returns Reachable=false so the panel
 // hides the toggle button rather than offering an action that would just
@@ -284,9 +336,9 @@ func restartActionHandler(w http.ResponseWriter, r *http.Request) {
 	switch service {
 	case "tripbot":
 		err = restartSelf()
-	case "vlc-server":
+	case "vlc":
 		err = restartProxyShutdown(r.Context(), c.Conf.VlcServerHost)
-	case "onscreens-server":
+	case "onscreens":
 		err = restartProxyShutdown(r.Context(), c.Conf.OnscreensServerHost)
 	case "obs":
 		if c.Conf.ObsServerHost == "" {
@@ -339,10 +391,12 @@ func currentVideo(vlcOK bool) *nowPlaying {
 	if v.Slug == "" {
 		return nil
 	}
+	progress := currentProgress()
 	return &nowPlaying{
-		File:     v.File(),
-		State:    v.State,
-		Progress: currentProgress().Round(time.Second).String(),
+		File:      v.File(),
+		State:     v.State,
+		Progress:  progress.Round(time.Second).String(),
+		SinceUnix: time.Now().Add(-progress).Unix(),
 	}
 }
 
@@ -401,7 +455,7 @@ func pingHealthy(ctx context.Context, rawURL string) bool {
 // neither appears here. Entries whose URL can't be derived are dropped.
 func gatherLinks() []navLink {
 	links := []navLink{}
-	if obs := siblingURL(c.Conf.ExternalURL, "obs"); obs != "" {
+	if obs := tailnetServiceURL("obs"); obs != "" {
 		links = append(links, navLink{Label: "obs", URL: obs})
 	}
 	links = append(links,
@@ -449,27 +503,49 @@ func changelogURL(sha string) string {
 	return githubURL + "/blob/" + ref + "/CHANGELOG.md"
 }
 
-// siblingURL rewrites externalURL's leading hostname label to service, e.g.
-// https://tripbot.prod.whereisdana.today -> https://obs.prod.whereisdana.today.
-// Returns "" when externalURL isn't a multi-label FQDN (e.g. localhost), since
-// there's no sibling Ingress to point at in that case.
-func siblingURL(externalURL, service string) string {
-	u, err := url.Parse(externalURL)
-	if err != nil || u.Hostname() == "" {
+// tailnetServiceURL returns the Tailscale K8s-operator URL for a sibling
+// service in this env's namespace, e.g. obs-prod.tail020deb.ts.net for
+// production. Tailnet (CGNAT 100.x) URLs are preferred over the LAN-IP-backed
+// *.whereisdana.today URLs because the latter silently fail on client
+// networks that overlap the home LAN's 192.168.1.0/24 range. Returns "" for
+// environments not served by the operator (dev/local/testing run on a
+// separate cluster), which hides the link rather than rendering one that
+// won't reach anything.
+func tailnetServiceURL(service string) string {
+	var env string
+	switch {
+	case c.Conf.IsProduction():
+		env = "prod"
+	case c.Conf.IsStaging():
+		env = "stage"
+	default:
 		return ""
 	}
-	_, rest, found := strings.Cut(u.Hostname(), ".")
-	if !found {
-		return ""
-	}
-	u.Host = service + "." + rest
-	return u.String()
+	return "https://" + service + "-" + env + "." + tailnetBase
 }
 
 // previewChannel returns the Twitch channel name the stream-preview embed
 // should load.
 func previewChannel() string {
 	return c.Conf.ChannelName
+}
+
+// envColorClass returns the CSS modifier suffix for the env-badge chip,
+// keyed off c.Conf.Environment (same source OTLP's deployment.environment
+// reads). The empty string falls back to the neutral chip styling. Kept as
+// a template helper so the colour map lives next to the env-source lookup
+// rather than inside the inline-template string.
+func envColorClass(env string) string {
+	switch env {
+	case "production":
+		return "env-prod"
+	case "staging":
+		return "env-stage"
+	case "development":
+		return "env-dev"
+	default:
+		return ""
+	}
 }
 
 // panelHost returns the hostname the panel was reached at, for use as the
@@ -489,17 +565,32 @@ func panelHost(r *http.Request) string {
 	return h
 }
 
-var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
+var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
+	"envColorClass": envColorClass,
+	// authCard / reauthCallout render the same fragments the hub pushes live,
+	// so the initial server render and a later SSE swap are byte-identical.
+	"authCard":      func(s []mytwitch.AccountTokenStatus) template.HTML { return template.HTML(renderAuthCard(s)) },
+	"reauthCallout": func(r []mytwitch.AccountReauth) template.HTML { return template.HTML(renderReauthCallout(r)) },
+}).Parse(`<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>tripbot — {{.Channel}}</title>
+<title>tripbot — {{.Channel}} ({{.Env}})</title>
 <!-- favicons referenced from the website (single owner of brand assets) — see
      vault general/logo.md; apple-touch-icon gives a home-screen icon on phones -->
 <link rel="icon" type="image/png" sizes="32x32" href="https://www.dana.lol/assets/favicon-32x32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="https://www.dana.lol/assets/favicon-16x16.png">
 <link rel="apple-touch-icon" sizes="180x180" href="https://www.dana.lol/assets/apple-touch-icon.png">
+<!-- htmx + its SSE extension, vendored + embedded (pkg/server/static) — drives
+     the live chat console: sse.js consumes /admin/events and swaps fragments. -->
+<script src="/static/htmx.min.js"></script>
+<script src="/static/sse.js"></script>
+<!-- Leaflet (vendored + embedded) for the live location map. Map tiles come
+     from OpenStreetMap at render time (no API key); the marker is an emoji
+     divIcon so no marker images are needed. -->
+<link rel="stylesheet" href="/static/leaflet.css">
+<script src="/static/leaflet.js"></script>
 <style>
   :root {
     color-scheme: dark light;
@@ -531,6 +622,21 @@ var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
   .logo-link:hover .logo { opacity:1; }
   h1 { font-size:clamp(20px,1.2vw + 15px,28px); margin:0 0 4px; letter-spacing:.02em; }
   .env { font-family:var(--mono); background:var(--chip-bg); border:1px solid var(--chip-border); color:var(--faint); padding:2px 7px; border-radius:5px; font-size:.5em; font-weight:normal; letter-spacing:0; vertical-align:middle; }
+  /* env-badge colour variants — keyed off c.Conf.Environment (same source
+     OTLP's deployment.environment reads). Greens/yellows/blues are picked
+     to stay legible against both the dark and light --chip-bg defaults;
+     unknown envs fall through to the neutral chip styling above. */
+  .env.env-prod  { background:#0f3a1f; border-color:#1f6f3e; color:#a4e0b8; }
+  .env.env-stage { background:#3a2f0a; border-color:#7a5e1a; color:#f0d57d; }
+  .env.env-dev   { background:#0f2a45; border-color:#1f548a; color:#9ec7f0; }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) .env.env-prod  { background:#dff5e4; border-color:#7fc296; color:#15532a; }
+    :root:not([data-theme="dark"]) .env.env-stage { background:#fbf0c8; border-color:#d4b35a; color:#5a4310; }
+    :root:not([data-theme="dark"]) .env.env-dev   { background:#dbe9f7; border-color:#7aa6d1; color:#16365a; }
+  }
+  :root[data-theme="light"] .env.env-prod  { background:#dff5e4; border-color:#7fc296; color:#15532a; }
+  :root[data-theme="light"] .env.env-stage { background:#fbf0c8; border-color:#d4b35a; color:#5a4310; }
+  :root[data-theme="light"] .env.env-dev   { background:#dbe9f7; border-color:#7aa6d1; color:#16365a; }
   .meta { color:var(--muted); margin:0 0 2px; font-size:.92em; }
   .accounts { color:var(--dim); margin:0 0 24px; font-size:.85em; }
   h2 { font-size:.8em; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin:24px 0 8px; }
@@ -558,12 +664,15 @@ var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
   /* Shared disclosure-row styling — controls / now-playing / stream-preview
      all default closed and reveal on click. Same look, just different
      summary labels. */
-  details.stream-preview, details.now-playing { margin:24px 0 0; }
-  details.stream-preview > summary, details.now-playing > summary { font-size:.8em; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); cursor:pointer; padding:8px 0; border-top:1px solid var(--divider); list-style:none; }
-  details.stream-preview > summary::-webkit-details-marker, details.now-playing > summary::-webkit-details-marker { display:none; }
-  details.stream-preview > summary::before, details.now-playing > summary::before { content:"▸ "; color:var(--dim); display:inline-block; }
-  details.stream-preview[open] > summary::before, details.now-playing[open] > summary::before { content:"▾ "; }
-  details.stream-preview > summary:hover, details.now-playing > summary:hover { color:var(--fg); }
+  details.stream-preview, details.now-playing, details.feature-flags { margin:24px 0 0; }
+  details.stream-preview > summary, details.now-playing > summary, details.feature-flags > summary { font-size:.8em; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); cursor:pointer; padding:8px 0; border-top:1px solid var(--divider); list-style:none; }
+  details.stream-preview > summary::-webkit-details-marker, details.now-playing > summary::-webkit-details-marker, details.feature-flags > summary::-webkit-details-marker { display:none; }
+  details.stream-preview > summary::before, details.now-playing > summary::before, details.feature-flags > summary::before { content:"▸ "; color:var(--dim); display:inline-block; }
+  details.stream-preview[open] > summary::before, details.now-playing[open] > summary::before, details.feature-flags[open] > summary::before { content:"▾ "; }
+  details.stream-preview > summary:hover, details.now-playing > summary:hover, details.feature-flags > summary:hover { color:var(--fg); }
+  /* feature-flags rows reuse .row but the name column carries the flag key
+     in monospace; description trails after a separator dot like elsewhere. */
+  .row.flag-row .name code { font-family:var(--mono); font-size:.95em; }
   .stream-frame { aspect-ratio:16 / 9; width:100%; margin-top:10px; background:#000; border-radius:6px; overflow:hidden; }
   .stream-frame iframe { width:100%; height:100%; border:none; display:block; }
   a { color:#58a6ff; text-decoration:none; }
@@ -607,27 +716,95 @@ var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
   button.restart { font:inherit; font-size:.8em; padding:3px 9px; border-radius:4px; border:1px solid #2a2a2a; background:#1a1a1a; color:#888; cursor:pointer; transition:background .15s, color .15s, border-color .15s; }
   button.restart:hover { background:#252525; color:#ccc; border-color:#3a3a3a; }
   button.restart.armed { background:#f85149; color:#fff; border-color:#f85149; box-shadow:0 0 0 2px #f8514980; }
+  /* live chat console — recent history rendered server-side, live lines stream
+     in via SSE (sse-swap="chat", beforeend). Same disclosure look as the others. */
+  details.chat { margin:24px 0 0; }
+  details.chat > summary { font-size:.8em; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); cursor:pointer; padding:8px 0; border-top:1px solid var(--divider); list-style:none; }
+  details.chat > summary::-webkit-details-marker { display:none; }
+  details.chat > summary::before { content:"▸ "; color:var(--dim); display:inline-block; }
+  details.chat[open] > summary::before { content:"▾ "; }
+  details.chat > summary:hover { color:var(--fg); }
+  .chat-log { max-height:40vh; overflow-y:auto; margin-top:8px; font-size:.92em; line-height:1.5; overscroll-behavior:contain; }
+  .chat-line { padding:2px 0; word-break:break-word; }
+  .chat-line .ct-ts { color:var(--dim); font-family:var(--mono); font-size:.8em; margin-right:4px; }
+  .chat-line .cu { color:#58a6ff; font-weight:600; }
+  .chat-line .ct { color:var(--fg); }
+  .chat-empty { color:var(--dim); font-style:italic; padding:6px 0; }
+  /* jump-to-latest pill — floats over the bottom of the chat-log, shown only
+     while scrolled up (the scrollback buffer). Tapping returns to the newest. */
+  .chat-wrap { position:relative; }
+  .chat-jump { position:absolute; left:50%; bottom:10px; transform:translateX(-50%); z-index:2; font:inherit; font-size:.8em; padding:4px 12px; border-radius:999px; border:1px solid var(--chip-border); background:var(--chip-bg); color:var(--fg); cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,.35); }
+  .chat-jump:hover { border-color:#58a6ff; color:#9cf; }
+  .chat-jump[hidden] { display:none; }
+  /* clickable chat usernames + the profile popover they open */
+  .chat-line .cu { cursor:pointer; }
+  .chat-line .cu:hover { text-decoration:underline; }
+  .user-popover { position:fixed; z-index:20; max-width:240px; background:var(--chip-bg); border:1px solid var(--chip-border); border-radius:8px; padding:12px 14px; box-shadow:0 6px 24px rgba(0,0,0,.45); font-size:.9em; }
+  .user-popover[hidden] { display:none; }
+  .profile-card .profile-name { font-weight:600; margin-bottom:8px; word-break:break-all; }
+  .profile-bot { font-size:.72em; color:var(--dim); border:1px solid var(--chip-border); border-radius:4px; padding:0 5px; vertical-align:middle; }
+  .profile-stats { display:grid; grid-template-columns:auto 1fr; gap:2px 14px; margin:0 0 8px; }
+  .profile-stats dt { color:var(--muted); }
+  .profile-stats dd { margin:0; text-align:right; font-variant-numeric:tabular-nums; }
+  .profile-empty { color:var(--dim); font-style:italic; margin:0 0 8px; }
+  .profile-link { font-size:.85em; }
+  /* live location map (Leaflet) */
+  details.map { margin:24px 0 0; }
+  details.map > summary { font-size:.8em; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); cursor:pointer; padding:8px 0; border-top:1px solid var(--divider); list-style:none; }
+  details.map > summary::-webkit-details-marker { display:none; }
+  details.map > summary::before { content:"▸ "; color:var(--dim); display:inline-block; }
+  details.map[open] > summary::before { content:"▾ "; }
+  details.map > summary:hover { color:var(--fg); }
+  .map-box { height:280px; margin-top:8px; border-radius:8px; overflow:hidden; background:var(--chip-bg); }
+  .van-marker { font-size:22px; line-height:24px; text-align:center; }
+  .map-box .leaflet-control-attribution { font-size:.65em; }
+  .map-toggle { margin-top:8px; background:none; border:none; color:var(--dim); font:inherit; font-size:.85em; cursor:pointer; padding:2px 6px; }
+  .map-toggle:hover { color:var(--fg); }
+  /* live viewer count — a subtle, quick colour flash on the number: green when
+     it rises, red when it falls. The inner .chatters-count span is re-inserted
+     on each SSE update so the animation re-triggers; with only a "from" keyframe
+     it animates back to the number's natural colour. Steady state is unstyled. */
+  @keyframes flash-up   { from { color:#3fb950; } }
+  @keyframes flash-down { from { color:#f85149; } }
+  .chatters-count.flash-up   { animation:flash-up .8s ease-out; }
+  .chatters-count.flash-down { animation:flash-down .8s ease-out; }
+  /* live auth/token card — compact muted line under the accounts line. Each
+     identity shows "expires in N" (JS-filled from data-expires); .auth-soon
+     reddens it under the threshold, .auth-expired once past, and .auth-warn
+     marks a missing/expired token whose row carries a re-auth link instead. */
+  .auth { color:var(--dim); margin:0 0 18px; font-size:.82em; }
+  .auth-row { margin-right:12px; white-space:nowrap; }
+  .auth-who { color:var(--muted); }
+  .auth-expires.auth-soon { color:#f0883e; font-weight:600; }
+  .auth-expires.auth-expired { color:#f85149; font-weight:600; }
+  .auth-row.auth-warn .auth-who { color:#f0883e; }
+  a.auth-reauth { color:#ffb454; font-weight:600; }
 </style>
 </head>
 <body>
-<main>
+<!-- hx-ext="sse" + sse-connect open ONE EventSource on /admin/events for the
+     whole panel; every live region below (chat, viewer count, …) is an
+     sse-swap target nested under it. -->
+<main hx-ext="sse" sse-connect="/admin/events">
   <!-- A Dana Life mark, referenced from the website (the single owner of brand
        assets) rather than copied in — see vault general/logo.md. The anchor
        wraps the mark so clicking it refreshes the page. -->
   <a class="logo-link" href="/" title="refresh"><img class="logo" src="https://www.dana.lol/assets/logo.png" alt="A Dana Life" width="44" height="44"></a>
-  <h1>tripbot <code class="env">{{.Env}}</code></h1>
-  <p class="meta">up {{.Uptime}} · {{.Chatters}} in chat</p>
+  <h1>tripbot <code class="env {{envColorClass .Env}}">{{.Env}}</code></h1>
+  <!-- #chatters is the stable sse-swap target; the inner .chatters-count span is
+       replaced (innerHTML) on each "viewers" event so its flash animation re-fires. -->
+  <p class="meta">up {{.Uptime}} · <span id="chatters" sse-swap="viewers" hx-swap="innerHTML"><span class="chatters-count">{{.Chatters}}</span></span> in chat</p>
   <p class="accounts">broadcaster <a href="https://twitch.tv/{{.Channel}}">{{.Channel}}</a> · bot <a href="https://twitch.tv/{{.Bot}}">{{.Bot}}</a></p>
+  <!-- live token-expiry card: per-identity "expires in N" countdown (the JS
+       ticker counts it down + reddens it near expiry), or a re-auth link when a
+       token is missing/expired. The hub's 30s poller OOB-swaps #auth-card;
+       authCard renders the same fragment here for the initial paint. -->
+  <p class="auth" id="auth-card" sse-swap="auth" hx-swap="innerHTML">{{authCard .AuthStatuses}}</p>
 
-  {{if .Reauth}}
-  <div class="reauth">
-    <h2>action needed: re-authenticate</h2>
-    <p>tripbot can't talk to Twitch until these accounts are re-authorized. Sign in as the named account on each — the flow re-prompts which account to use, so sign out of Twitch (or use a private window) if it grabs the wrong one.</p>
-    <div class="btns">
-      {{range .Reauth}}<a class="btn" href="{{.InitURL}}">Sign in as {{.LoginAs}} <span class="why">({{.Account}} · {{.Reason}})</span></a>{{end}}
-    </div>
-  </div>
-  {{end}}
+  <!-- #reauth-card fills (banner appears) or empties (banner disappears) live as
+       the hub's auth poller pushes "reauth" events; reauthCallout renders the
+       same markup for the initial paint. -->
+  <div id="reauth-card" sse-swap="reauth" hx-swap="innerHTML">{{reauthCallout .Reauth}}</div>
 
   <h2>status</h2>
   <ul>
@@ -645,8 +822,22 @@ var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
     {{end}}
   </ul>
 
+  <details class="chat" open>
+    <summary>chat</summary>
+    <!-- #chat-log receives the "chat" SSE event (the panel-wide sse-connect lives
+         on <main>) and appends each rendered line. Recent history is rendered
+         server-side from the hub's ring buffer; live lines stream in on top. -->
+    <div class="chat-wrap">
+      <div id="chat-log" class="chat-log" sse-swap="chat" hx-swap="beforeend">
+        {{range .ChatHistory}}<div class="chat-line"><time class="ct-ts" datetime="{{.At.Format "2006-01-02T15:04:05Z07:00"}}">{{.At.Format "15:04"}}</time> <span class="cu">{{.Username}}</span> <span class="ct">{{.Text}}</span></div>{{else}}<div class="chat-empty">waiting for chat…</div>{{end}}
+      </div>
+      <!-- shown only while scrolled up (see JS): tapping jumps to the newest line -->
+      <button id="chat-jump" class="chat-jump" type="button" hidden>↓ new</button>
+    </div>
+  </details>
+
   {{if and .PreviewChannel .PanelHost}}
-  <details class="stream-preview" id="stream-preview">
+  <details class="stream-preview" id="stream-preview" {{if .Stream.Active}}open{{end}}>
     <summary>stream preview</summary>
     <div class="stream-frame">
       <iframe data-src="https://player.twitch.tv/?channel={{.PreviewChannel}}&parent={{.PanelHost}}&muted=true&autoplay=true"
@@ -656,15 +847,29 @@ var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
   </details>
   {{end}}
 
+  {{if .Flags}}
+  <details class="feature-flags">
+    <summary>feature flags</summary>
+    <ul class="flags">
+      {{range .Flags}}
+      <li class="row flag-row">
+        <span class="dot {{if .Enabled}}up{{else}}down{{end}}"></span>
+        <span class="name"><code>{{.Key}}</code>{{if .Description}}<span class="state"> · {{.Description}}</span>{{end}}</span>
+        <span class="status">{{if .Enabled}}on{{else}}off{{end}}</span>
+      </li>
+      {{end}}
+    </ul>
+  </details>
+  {{end}}
+
   {{if or .Now .Audio.Title}}
   <details class="now-playing">
     <summary>now playing</summary>
+    <!-- #now-line is the sse-swap target for "video" events; its inner markup
+         mirrors hub.go's videoLineTmpl so a live swap matches a fresh render.
+         The .now-elapsed span is counted up by the page's JS ticker. -->
     {{with .Now}}
-    <p class="now">
-      <span class="file">{{.File}}</span>
-      {{if .State}}<span class="state">· {{.State}}</span>{{end}}
-      {{if .Progress}}<span class="state">· {{.Progress}}</span>{{end}}
-    </p>
+    <p class="now" id="now-line" sse-swap="video" hx-swap="innerHTML"><span class="file">{{.File}}</span>{{if .State}} <span class="state">· {{.State}}</span>{{end}} <span class="state">· <span class="now-elapsed" data-since="{{.SinceUnix}}">{{.Progress}}</span></span></p>
     {{end}}
     {{if .Audio.Title}}
     <p class="audio">
@@ -673,6 +878,15 @@ var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
     {{end}}
   </details>
   {{end}}
+
+  <details class="map" open>
+    <summary>map</summary>
+    <!-- data-trail seeds the breadcrumb polyline + 🚐 pin from the hub on load;
+         #map-sink receives live "map" SSE points (read on afterSwap by the JS). -->
+    <div id="map" class="map-box" data-trail="{{.MapTrailJSON}}"></div>
+    <div id="map-sink" sse-swap="map" hx-swap="innerHTML" hidden></div>
+    <button id="corpus-toggle" class="map-toggle" type="button">show full route</button>
+  </details>
 
   <details class="controls">
     <summary>controls</summary>
@@ -701,23 +915,27 @@ var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
     <button id="toggle-all" class="theme-toggle" type="button" title="expand or collapse all sections">▾ expand all</button>
     <button id="theme-toggle" class="theme-toggle" type="button" title="toggle theme">◐ theme</button>
   </div>
+
+  <!-- chat user-profile popover: filled by a fetch when a username in the chat
+       console is clicked (see the profile JS); position:fixed so it floats. -->
+  <div id="user-popover" class="user-popover" hidden></div>
 </main>
 <script>
-// Stream-preview lazy-load. The Twitch player iframe is ~2MB; we don't want
-// to fetch it on every panel render, only when the operator actually expands
-// the disclosure. On collapse we point it at about:blank so the player stops
-// (otherwise audio + bandwidth keep going even when the section's hidden).
+// Stream-preview iframe wiring. The disclosure starts open only when the
+// stream is live (collapsed when offline); the initial paint sets src from
+// data-src when open. Collapse swaps src to about:blank so the player stops
+// cleanly (audio + bandwidth would otherwise keep going), and re-expanding
+// restores it.
 (function() {
   const details = document.getElementById('stream-preview');
   if (!details) return;
   const iframe = details.querySelector('iframe');
   if (!iframe) return;
+  const load = () => { iframe.src = iframe.dataset.src; };
+  const unload = () => { iframe.src = 'about:blank'; };
+  if (details.open) load();
   details.addEventListener('toggle', () => {
-    if (details.open) {
-      iframe.src = iframe.dataset.src;
-    } else {
-      iframe.src = 'about:blank';
-    }
+    if (details.open) load(); else unload();
   });
 })();
 
@@ -760,6 +978,226 @@ var adminTmpl = template.Must(template.New("admin").Parse(`<!doctype html>
     root.setAttribute('data-theme', next);
     localStorage.setItem('admin-theme', next);
   });
+})();
+
+// Live chat console. New lines stream into #chat-log (htmx sse, beforeend).
+// Auto-scroll + trimming happen ONLY while the viewer is pinned to the bottom —
+// scrolling up to read history is never yanked back down and the older nodes
+// aren't trimmed out from under the viewport, which is what makes the scrollback
+// buffer usable. It re-follows + re-trims once the viewer returns to the bottom.
+// Also drops the "waiting for chat…" placeholder and decorates each line
+// (local-time + per-user color).
+(function() {
+  const log = document.getElementById('chat-log');
+  if (!log) return;
+  const CAP = 500; // scrollback depth; matches chatRingSize on the server
+  // pinned = the viewport is at (or near) the newest line.
+  let pinned = true;
+  const atBottom = () => log.scrollHeight - log.scrollTop - log.clientHeight < 40;
+  // Jump-to-latest pill: shown only while scrolled up, counting unread lines.
+  const jump = document.getElementById('chat-jump');
+  let unread = 0;
+  const refreshPill = () => {
+    if (!jump) return;
+    jump.textContent = '↓ ' + unread + ' new';
+    jump.hidden = unread === 0;
+  };
+  const toBottom = () => { log.scrollTop = log.scrollHeight; pinned = true; unread = 0; refreshPill(); };
+  if (jump) jump.addEventListener('click', toBottom);
+  log.addEventListener('scroll', () => {
+    pinned = atBottom();
+    if (pinned) { unread = 0; refreshPill(); }
+  });
+  // Times are emitted in UTC and rendered server-side as a fallback; show them
+  // in the viewer's local timezone instead.
+  const localize = (root) => root.querySelectorAll('time.ct-ts').forEach(t => {
+    const iso = t.getAttribute('datetime');
+    if (!iso) return;
+    const d = new Date(iso);
+    if (!isNaN(d.getTime())) t.textContent = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  });
+  // Give each username a stable color derived from a hash of the name, so the
+  // same chatter is always the same hue. L/S tuned to stay legible on both the
+  // dark and light panel themes.
+  const colorFor = (name) => {
+    let h = 0;
+    for (let i = 0; i < name.length; i++) h = (Math.imul(h, 31) + name.charCodeAt(i)) >>> 0;
+    return 'hsl(' + (h % 360) + ' 65% 60%)';
+  };
+  const colorize = (root) => root.querySelectorAll('.chat-line .cu').forEach(el => {
+    if (!el.dataset.colored) { el.style.color = colorFor(el.textContent); el.dataset.colored = '1'; }
+  });
+  const decorate = (root) => { localize(root); colorize(root); };
+  log.addEventListener('htmx:afterSwap', () => {
+    log.querySelectorAll('.chat-empty').forEach(el => el.remove());
+    decorate(log);
+    if (pinned) {
+      while (log.childElementCount > CAP) log.removeChild(log.firstElementChild);
+      log.scrollTop = log.scrollHeight;
+    } else {
+      unread++;
+      refreshPill();
+    }
+  });
+  decorate(log); // localize times + color usernames in the server-rendered history
+  log.scrollTop = log.scrollHeight; // start at the newest message
+})();
+
+// "Now playing" elapsed timer. Each .now-elapsed span carries data-since (the
+// clip's start as a Unix timestamp); tick it up once a second so the progress
+// keeps moving without a reload. A live "video" swap replaces the span with a
+// fresh data-since, so the count resets to the new clip automatically.
+(function() {
+  const fmt = (s) => {
+    s = Math.max(0, Math.floor(s));
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+    return (h ? h + 'h' : '') + (h || m ? m + 'm' : '') + sec + 's';
+  };
+  const tick = () => {
+    const now = Date.now() / 1000;
+    document.querySelectorAll('.now-elapsed[data-since]').forEach(el => {
+      const since = Number(el.dataset.since);
+      if (since) el.textContent = fmt(now - since);
+    });
+  };
+  tick();
+  setInterval(tick, 1000);
+})();
+
+// Auth token countdown. Each .auth-expires carries data-expires (Unix seconds);
+// show "expires in N" counting down, redden it under 15 min (.auth-soon) and
+// once past (.auth-expired). The hub re-pushes the card every 30s, but this
+// keeps the displayed remaining fresh between pushes.
+(function() {
+  const SOON = 15 * 60; // seconds — redden threshold
+  const fmt = (s) => {
+    if (s <= 0) return 'expired';
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+    if (h) return 'expires in ' + h + 'h ' + m + 'm';
+    if (m) return 'expires in ' + m + 'm';
+    return 'expires in <1m';
+  };
+  const tick = () => {
+    const now = Date.now() / 1000;
+    document.querySelectorAll('.auth-expires[data-expires]').forEach(el => {
+      const exp = Number(el.dataset.expires);
+      // A zero/sentinel expiry (year-1 epoch) means "unknown" — don't show it as expired.
+      if (!exp || exp < 1e9) { el.textContent = 'expires —'; el.classList.remove('auth-soon', 'auth-expired'); return; }
+      const rem = exp - now;
+      el.textContent = fmt(rem);
+      el.classList.toggle('auth-soon', rem > 0 && rem < SOON);
+      el.classList.toggle('auth-expired', rem <= 0);
+    });
+  };
+  tick();
+  setInterval(tick, 1000);
+})();
+
+// Chat user-profile popover. A delegated click on any chat username (.cu)
+// fetches /admin/user/<name> and floats the returned card near the click;
+// clicking outside or pressing Escape closes it. Delegation covers SSE-added
+// lines without per-line wiring.
+(function() {
+  const pop = document.getElementById('user-popover');
+  if (!pop) return;
+  let open = false;
+  const hide = () => { pop.hidden = true; open = false; };
+  document.addEventListener('click', (e) => {
+    const cu = e.target.closest('.cu');
+    if (cu) {
+      const name = cu.textContent.trim();
+      if (!name) return;
+      fetch('/admin/user/' + encodeURIComponent(name))
+        .then(r => r.ok ? r.text() : Promise.reject(r.status))
+        .then(html => {
+          pop.innerHTML = html;
+          pop.hidden = false; // unhide before measuring so offset* are real
+          open = true;
+          const pad = 8;
+          const x = Math.min(e.clientX, window.innerWidth - pop.offsetWidth - pad);
+          const y = Math.min(e.clientY + pad, window.innerHeight - pop.offsetHeight - pad);
+          pop.style.left = Math.max(pad, x) + 'px';
+          pop.style.top = Math.max(pad, y) + 'px';
+        })
+        .catch(() => {});
+      return;
+    }
+    if (open && !pop.contains(e.target)) hide();
+  });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hide(); });
+})();
+
+// Live location map (Leaflet). Seeds a breadcrumb polyline + 🚐 pin from the
+// data-trail attribute, then extends it as "map" SSE points arrive — htmx swaps
+// each into #map-sink and we read its data-lat/lng on afterSwap. Tiles load from
+// OpenStreetMap. No-op if Leaflet didn't load.
+(function() {
+  const el = document.getElementById('map');
+  if (!el || typeof L === 'undefined') return;
+  let trail = [];
+  try { trail = JSON.parse(el.dataset.trail || '[]'); } catch (e) { trail = []; }
+
+  const map = L.map(el);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19, attribution: '© OpenStreetMap contributors',
+  }).addTo(map);
+
+  const van = L.divIcon({ className: 'van-marker', html: '🚐', iconSize: [24, 24], iconAnchor: [12, 12] });
+  const line = L.polyline(trail, { color: '#58a6ff', weight: 3, opacity: 0.75 }).addTo(map);
+  let marker = null;
+  let hasPoint = false;
+
+  const recenter = (animate) => {
+    const p = trail[trail.length - 1];
+    if (!p) { map.setView([39.5, -98.35], 4); return; } // continental US until a fix arrives
+    if (marker) marker.setLatLng(p); else marker = L.marker(p, { icon: van }).addTo(map);
+    if (!hasPoint) { map.setView(p, 7); hasPoint = true; } // zoom in on the first point
+    else { map.panTo(p, { animate: !!animate }); }         // later: follow, keep the user's zoom
+  };
+  recenter(false);
+
+  const sink = document.getElementById('map-sink');
+  if (sink) sink.addEventListener('htmx:afterSwap', () => {
+    const span = sink.querySelector('span[data-lat]');
+    if (!span) return;
+    const lat = parseFloat(span.dataset.lat), lng = parseFloat(span.dataset.lng);
+    if (isNaN(lat) || isNaN(lng)) return;
+    trail.push([lat, lng]);
+    if (trail.length > 100) trail.shift();
+    line.setLatLngs(trail);
+    recenter(true);
+  });
+
+  // "show full route" toggle: lazily fetch the whole-corpus route and draw it as
+  // a faint background line behind the live trail. Remembered in localStorage.
+  const corpusBtn = document.getElementById('corpus-toggle');
+  let corpusLine = null;
+  const renderCorpus = (fit) => {
+    fetch('/admin/map/corpus').then(r => r.ok ? r.json() : Promise.reject(r.status)).then(pts => {
+      corpusLine = L.polyline(pts, { color: '#888', weight: 1.5, opacity: 0.4 }).addTo(map);
+      corpusLine.bringToBack();
+      if (fit && pts.length) map.fitBounds(corpusLine.getBounds(), { padding: [20, 20] });
+    }).catch(() => {});
+  };
+  const setCorpus = (on, fit) => {
+    if (on) {
+      if (corpusLine) { corpusLine.addTo(map); if (fit) map.fitBounds(corpusLine.getBounds(), { padding: [20, 20] }); }
+      else renderCorpus(fit);
+    } else if (corpusLine) {
+      map.removeLayer(corpusLine);
+    }
+    if (corpusBtn) corpusBtn.textContent = on ? 'hide full route' : 'show full route';
+    localStorage.setItem('map-corpus', on ? '1' : '0');
+  };
+  if (corpusBtn) corpusBtn.addEventListener('click', () => setCorpus(!(corpusLine && map.hasLayer(corpusLine)), true));
+  setCorpus(localStorage.getItem('map-corpus') === '1', false);
+
+  // The map sits in a <details>; Leaflet needs a size recalc when the container
+  // is first laid out or revealed.
+  const fix = () => map.invalidateSize();
+  const details = el.closest('details');
+  if (details) details.addEventListener('toggle', () => { if (details.open) setTimeout(fix, 50); });
+  setTimeout(fix, 100);
 })();
 
 // iOS Home Screen apps return to a stale cached page on reopen — even with

@@ -1,7 +1,12 @@
 .env.*
+
+# Exclude all of infra/ from the build context, then re-include the
+# specific subtrees Dockerfiles COPY from. Keeps the build context
+# minimal without enumerating every infra/ subdir we don't care about.
 infra
 !infra/docker/obs
 !infra/docker/vlc/config
 !infra/docker/bin
+
 assets/video
 log

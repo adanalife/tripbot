@@ -10,11 +10,11 @@ import (
 // overlay surface — it just swallows every call.
 type noopOnscreens struct{}
 
-func (noopOnscreens) ShowFlag(_ context.Context, _ time.Duration) error                      { return nil }
-func (noopOnscreens) ShowLeaderboard(_ context.Context, _ string, _ [][]string) error        { return nil }
-func (noopOnscreens) HideMiddleText(_ context.Context) error                                 { return nil }
-func (noopOnscreens) ShowMiddleText(_ context.Context, _ string) error                       { return nil }
-func (noopOnscreens) ShowTimewarp(_ context.Context) error                                   { return nil }
+func (noopOnscreens) ShowFlag(_ context.Context, _ time.Duration) error               { return nil }
+func (noopOnscreens) ShowLeaderboard(_ context.Context, _ string, _ [][]string) error { return nil }
+func (noopOnscreens) HideMiddleText(_ context.Context) error                          { return nil }
+func (noopOnscreens) ShowMiddleText(_ context.Context, _ string) error                { return nil }
+func (noopOnscreens) ShowTimewarp(_ context.Context) error                            { return nil }
 
 // recordingOnscreens captures every call made to it so tests can assert
 // the chatbot invoked the expected overlay method with the expected args.

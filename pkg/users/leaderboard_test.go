@@ -34,16 +34,16 @@ func TestLeaderboardContent(t *testing.T) {
 	}
 	got := LeaderboardContent("monthly miles", board)
 
-	if !strings.HasPrefix(got, "Monthly Miles\n") {
+	if !strings.Contains(got, `<div class="lb-title">Monthly Miles</div>`) {
 		t.Fatalf("expected title-cased header, got %q", got)
 	}
 	for _, name := range []string{"alice", "bob", "carol"} {
-		if !strings.Contains(got, name) {
-			t.Fatalf("expected %q in output, got %q", name, got)
+		if !strings.Contains(got, `<span class="lb-user">(`+name+`)</span>`) {
+			t.Fatalf("expected user span for %q, got %q", name, got)
 		}
 	}
-	if !strings.Contains(got, "100.5 (alice)") {
-		t.Fatalf("expected '100.5 (alice)' format, got %q", got)
+	if !strings.Contains(got, `<span class="lb-score">100.5</span><span class="lb-user">(alice)</span>`) {
+		t.Fatalf("expected adjacent score+user spans for alice, got %q", got)
 	}
 }
 
@@ -77,8 +77,50 @@ func TestLeaderboardContentSmallerThanFive(t *testing.T) {
 
 func TestLeaderboardContentEmpty(t *testing.T) {
 	got := LeaderboardContent("nobody", nil)
-	if got != "Nobody\n" {
-		t.Fatalf("got %q, want %q", got, "Nobody\n")
+	want := `<div class="lb-grid"><div class="lb-title">Nobody</div></div>`
+	if got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+// Scores render in their own span (no space-padding) so the CSS grid can
+// auto-size the column.
+func TestLeaderboardContentNoSpacePadding(t *testing.T) {
+	board := [][]string{
+		{"alice", "123"},
+		{"bob", "15"},
+		{"carol", "7"},
+	}
+	got := LeaderboardContent("guesses", board)
+
+	wantSpans := []string{
+		`<span class="lb-score">123</span><span class="lb-user">(alice)</span>`,
+		`<span class="lb-score">15</span><span class="lb-user">(bob)</span>`,
+		`<span class="lb-score">7</span><span class="lb-user">(carol)</span>`,
+	}
+	for _, want := range wantSpans {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in output, got %q", want, got)
+		}
+	}
+	// No padding spaces between score and user spans.
+	if strings.Contains(got, "</span> <span") {
+		t.Fatalf("did not expect padding space between score/user spans, got %q", got)
+	}
+}
+
+// Defensive: usernames are normally [a-zA-Z0-9_] from Twitch, but the
+// renderer escapes anything that would break out of the surrounding HTML.
+func TestLeaderboardContentEscapesHTML(t *testing.T) {
+	board := [][]string{
+		{"<script>", "1"},
+	}
+	got := LeaderboardContent("xss", board)
+	if strings.Contains(got, "<script>") {
+		t.Fatalf("expected HTML-escaped username, got %q", got)
+	}
+	if !strings.Contains(got, "&lt;script&gt;") {
+		t.Fatalf("expected &lt;script&gt; escape, got %q", got)
 	}
 }
 

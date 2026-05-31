@@ -16,7 +16,6 @@ import (
 
 	"github.com/adanalife/tripbot/pkg/scoreboards"
 
-	"github.com/adanalife/tripbot/pkg/background"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
 	"github.com/adanalife/tripbot/pkg/helpers"
@@ -81,7 +80,7 @@ func (a *App) helloCmd(ctx context.Context, user *users.User, params []string) {
 
 func (a *App) flagCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !flag", "username", user.Username)
-	a.Onscreens.ShowFlag(ctx, 10 * time.Second)
+	a.Onscreens.ShowFlag(ctx, 10*time.Second)
 }
 
 func (a *App) versionCmd(ctx context.Context, user *users.User, _ []string) {
@@ -296,30 +295,35 @@ func (a *App) monthlyGuessLeaderboardCmd(ctx context.Context, user *users.User, 
 	size := 10
 	leaderboard := scoreboards.TopUsers(ctx, scoreboards.CurrentGuessScoreboard(), size)
 
-	// special message if the leaderboard is empty
-	if len(leaderboard) == 0 {
-		a.IRC.Say("No one is on that leaderboard yet!")
-		return
-	}
-
 	// truncate the leaderboard if necessary
 	if size > len(leaderboard) {
 		size = len(leaderboard)
 	}
 	leaderboard = leaderboard[:size]
 
+	// Filter zero-scorers (AddToScoreByName uses FirstOrCreate, so every
+	// user who's ever guessed has a row — many at 0 early in the month).
 	var intLeaderboard [][]string
 	for _, leaderPair := range leaderboard {
 		// guesses are ints not floats, so remove the decimal place
 		intVersion := strings.Split(leaderPair[1], ".")[0]
+		if intVersion == "0" || intVersion == "" {
+			continue
+		}
 		intLeaderboard = append(intLeaderboard, []string{leaderPair[0], intVersion})
+	}
+
+	// special message if no one has any correct guesses yet
+	if len(intLeaderboard) == 0 {
+		a.IRC.Say("No one is on that leaderboard yet!")
+		return
 	}
 
 	// display leaderboard on screen
 	a.Onscreens.ShowLeaderboard(ctx, "Correct Guesses This Month", intLeaderboard)
 
 	// build a message to send to chat
-	msg := fmt.Sprintf("Top %d correct guesses this month: ", size)
+	msg := fmt.Sprintf("Top %d correct guesses this month: ", len(intLeaderboard))
 	for i, leaderPair := range intLeaderboard {
 		msg += fmt.Sprintf("%d. %s (%s)", i+1, leaderPair[0], leaderPair[1])
 		if i+1 != len(intLeaderboard) {
@@ -367,7 +371,7 @@ func (a *App) dateCmd(ctx context.Context, user *users.User, _ []string) {
 	}
 }
 
-//TODO: refactor to use golang '...' syntax
+// TODO: refactor to use golang '...' syntax
 func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 	slog.InfoContext(ctx, "ran !guess", "username", user.Username)
 	var msg string
@@ -405,7 +409,7 @@ func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 	if strings.ToLower(guess) == strings.ToLower(vid.State) {
 		msg = fmt.Sprintf("@%s got it! We're in %s", user.Username, vid.State)
 		// show the flag for the state
-		a.Onscreens.ShowFlag(ctx, 10 * time.Second)
+		a.Onscreens.ShowFlag(ctx, 10*time.Second)
 		// increase their guess score
 		user.AddToScore(ctx, guessScoreboard, 1.0)
 		user.AddToScore(ctx, scoreboards.CurrentGuessScoreboard(), 1.0)
@@ -426,14 +430,14 @@ func (a *App) stateCmd(ctx context.Context, user *users.User, _ []string) {
 	}
 	msg := fmt.Sprintf("We're in %s", vid.State)
 	// show the flag for the state
-	a.Onscreens.ShowFlag(ctx, 10 * time.Second)
+	a.Onscreens.ShowFlag(ctx, 10*time.Second)
 	// record that they know the location now
 	user.SetLastLocationTime()
 	a.IRC.Say(msg)
 }
 
-//TODO: maybe there could be a !cancel command or something
-//TODO: use fancy golang ... syntax?
+// TODO: maybe there could be a !cancel command or something
+// TODO: use fancy golang ... syntax?
 func (a *App) reportCmd(ctx context.Context, user *users.User, params []string) {
 	slog.InfoContext(ctx, "ran !report", "username", user.Username)
 	message := strings.Join(params, " ")
@@ -513,7 +517,9 @@ func (a *App) shutdownCmd(ctx context.Context, user *users.User, _ []string) {
 	}
 	a.IRC.Say("Shutting down...")
 	slog.InfoContext(ctx, "shutdown: currently playing", "video", a.Video.Current())
-	background.StopCron()
+	if err := a.Cron.Stop(); err != nil {
+		slog.ErrorContext(ctx, "cron shutdown failed during !shutdown", "err", err)
+	}
 	a.Sessions.Shutdown(ctx)
 	err := database.Connection().Close()
 	if err != nil {
@@ -523,7 +529,7 @@ func (a *App) shutdownCmd(ctx context.Context, user *users.User, _ []string) {
 	os.Exit(0)
 }
 
-//TODO: this will always be lower case, find out why
+// TODO: this will always be lower case, find out why
 // middleCmd sets the text at the bottom-middle of the stream
 func (a *App) middleCmd(ctx context.Context, user *users.User, params []string) {
 	slog.InfoContext(ctx, "ran !middle", "username", user.Username)

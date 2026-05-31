@@ -54,6 +54,9 @@ func newTestApp(vid video.Video) *App {
 		IRC:        noopIRC{},
 		Sessions:   noopSessions{},
 		NowPlaying: noopNowPlaying{},
+		Flags:      noopFlags{},
+		NATS:       noopNATS{},
+		Cron:       noopCron{},
 	}
 }
 
@@ -1058,6 +1061,76 @@ func TestMonthlyGuessLeaderboardCmd_WithGuesses_StripsDecimals(t *testing.T) {
 	}
 	if strings.Contains(msg, "7.0") {
 		t.Errorf("decimals should be stripped, but found '7.0' in %q", msg)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Error(err)
+	}
+}
+
+// Zero-scorers (rows present because AddToScoreByName FirstOrCreate seeds 0)
+// should be filtered out of both the overlay and the chat message.
+func TestMonthlyGuessLeaderboardCmd_FiltersZeroScorers(t *testing.T) {
+	mock := installMockDB(t)
+	app := newTestApp(video.Video{})
+	rec := &recordingOnscreens{}
+	app.Onscreens = rec
+
+	rows := sqlmock.NewRows([]string{"username", "value"}).
+		AddRow("viewer1", 5.0).
+		AddRow("viewer2", 0.0).
+		AddRow("viewer3", 2.0).
+		AddRow("viewer4", 0.0)
+	mock.ExpectQuery(`SELECT users\.username, scores\.value FROM "scores"`).
+		WillReturnRows(rows)
+
+	out, restore := captureSay(t)
+	defer restore()
+
+	app.monthlyGuessLeaderboardCmd(context.Background(), newTestUser("caller"), nil)
+
+	msg := out()
+	if strings.Contains(msg, "viewer2") || strings.Contains(msg, "viewer4") {
+		t.Errorf("expected zero-scorers filtered from chat message, got %q", msg)
+	}
+	if !strings.Contains(msg, "viewer1") || !strings.Contains(msg, "viewer3") {
+		t.Errorf("expected non-zero scorers retained, got %q", msg)
+	}
+	if !strings.Contains(msg, "Top 2 correct guesses") {
+		t.Errorf("expected count to reflect filtered length (2), got %q", msg)
+	}
+	if len(rec.Calls) != 1 {
+		t.Fatalf("expected one overlay call, got %v", rec.Calls)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Error(err)
+	}
+}
+
+// When every scoreboard row is a zero-scorer (start of a new month), the
+// command should fall back to the "no one yet" chat message and skip the
+// overlay entirely — same shape as the truly-empty query result.
+func TestMonthlyGuessLeaderboardCmd_AllZero_SaysNoneYetAndSkipsOverlay(t *testing.T) {
+	mock := installMockDB(t)
+	app := newTestApp(video.Video{})
+	rec := &recordingOnscreens{}
+	app.Onscreens = rec
+
+	rows := sqlmock.NewRows([]string{"username", "value"}).
+		AddRow("viewer1", 0.0).
+		AddRow("viewer2", 0.0)
+	mock.ExpectQuery(`SELECT users\.username, scores\.value FROM "scores"`).
+		WillReturnRows(rows)
+
+	out, restore := captureSay(t)
+	defer restore()
+
+	app.monthlyGuessLeaderboardCmd(context.Background(), newTestUser("caller"), nil)
+
+	if !strings.Contains(out(), "No one is on that leaderboard yet") {
+		t.Errorf("expected empty-leaderboard message when all zero, got %q", out())
+	}
+	if len(rec.Calls) != 0 {
+		t.Errorf("expected no overlay call when all zero, got %v", rec.Calls)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Error(err)

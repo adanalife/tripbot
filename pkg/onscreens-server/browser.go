@@ -6,9 +6,7 @@ import (
 	"html/template"
 	"log/slog"
 	"net/http"
-	"path/filepath"
 
-	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/gorilla/mux"
 )
 
@@ -34,6 +32,14 @@ var onscreenTemplates embed.FS
 
 var onscreenTmpl = template.Must(template.ParseFS(onscreenTemplates, "templates/onscreen.html.tmpl"))
 
+// gpsPNG is the GPS map overlay, embedded so the binary is self-contained and
+// has no runtime dependency on the source tree (helpers.ProjectRoot() resolves
+// to a compile-time path that doesn't exist in the slim runtime image). Kept in
+// sync with the canonical assets/GPS.png at the repo root.
+//
+//go:embed assets/GPS.png
+var gpsPNG []byte
+
 // onscreenStyle controls how a single onscreen renders in its OBS browser source.
 // Keep these in sync with the dimensions / fonts that the previous text_ft2_source
 // and image_source entries in infra/docker/obs/config/Tripbot.json.tmpl used.
@@ -56,6 +62,7 @@ type onscreenStyle struct {
 	DropShadow    bool         // text-shadow on/off
 	AnchorXPx     int          // center-x within the browser-source viewport (0 = use flex-center fallback)
 	FitWidthPx    int          // single-line width budget for shrink-to-fit (0 = no fit pass)
+	RenderAsHTML  bool         // inject content via innerHTML instead of textContent (server emits HTML for this onscreen)
 }
 
 var onscreenRegistry = map[string]onscreenStyle{
@@ -63,7 +70,11 @@ var onscreenRegistry = map[string]onscreenStyle{
 		Name: SlugMiddleText, FontCSS: `"Trebuchet MS", sans-serif`, FontSizePx: 18, ColorCSS: "#ffffff",
 	},
 	SlugLeaderboard: {
+		// Server emits an HTML grid (see users.LeaderboardContent) so the
+		// score column aligns via CSS rather than space-padding — any font
+		// works.
 		Name: SlugLeaderboard, FontCSS: `"Trebuchet MS", sans-serif`, FontSizePx: 18, ColorCSS: "#ffffff",
+		RenderAsHTML: true,
 	},
 	SlugLeftMessage: {
 		Name: SlugLeftMessage, FontCSS: `"Trebuchet MS", sans-serif`, FontSizePx: 28, MinFontSizePx: 18, ColorCSS: "#ffffff",
@@ -112,12 +123,16 @@ func (s *Server) onscreensRenderHandler(w http.ResponseWriter, r *http.Request) 
 }
 
 // onscreensAssetHandler serves the raw image bytes for image-type onscreens.
-// `gps` resolves to the checked-in GPS overlay; `flag` returns a 1×1
+// `gps` resolves to the embedded GPS overlay; `flag` returns a 1×1
 // transparent placeholder while the state-driven flag swap is offline.
 func (s *Server) onscreensAssetHandler(w http.ResponseWriter, r *http.Request) {
 	switch mux.Vars(r)["name"] {
 	case SlugGPS:
-		http.ServeFile(w, r, filepath.Join(helpers.ProjectRoot(), "assets", "GPS.png"))
+		w.Header().Set("Content-Type", "image/png")
+		w.Header().Set("Cache-Control", "no-store")
+		if _, err := w.Write(gpsPNG); err != nil {
+			slog.ErrorContext(r.Context(), "writing gps image", "err", err)
+		}
 	case SlugFlag:
 		w.Header().Set("Content-Type", "image/png")
 		w.Header().Set("Cache-Control", "no-store")

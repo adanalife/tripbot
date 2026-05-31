@@ -42,9 +42,9 @@ var vlcCmdFlags []string
 // `sout-keep` preserves the chain across playlist transitions so OBS
 // doesn't see EOF on every clip change.
 //
-//   rtsp   — RTSP listener only (container default).
-//   window — no sout; libvlc plays to its native window via --vout.
-//   both   — duplicate to a local display target and the RTSP listener.
+//	rtsp   — RTSP listener only (container default).
+//	window — no sout; libvlc plays to its native window via --vout.
+//	both   — duplicate to a local display target and the RTSP listener.
 func mediaOptions() []string {
 	const rtspChain = "rtp{sdp=rtsp://:8554/dashcam}"
 	switch c.Conf.VlcOutput {
@@ -154,7 +154,7 @@ func (s *Server) Health() error {
 // that case there's nothing to drain and we skip straight to libvlc
 // cleanup.
 //
-//TODO: are there more things to close gracefully?
+// TODO: are there more things to close gracefully?
 func (s *Server) Shutdown(ctx context.Context) {
 	if s.http != nil {
 		slog.InfoContext(ctx, "shutting down VLC web server")
