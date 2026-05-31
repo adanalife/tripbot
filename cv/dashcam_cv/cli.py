@@ -35,10 +35,38 @@ def _format_ts(seconds: float) -> str:
     )
 
 
+def _embed_videos(conn, embedder, videos, interval, apply):
+    """Embed each video; return (frames, inserted, failed).
+
+    One log line per video (no progress bar — a bar renders to nothing on a
+    non-TTY, so a long batch looks hung; plain lines stream to kubectl logs with
+    PYTHONUNBUFFERED set). A per-video error is rolled back, logged, and skipped
+    so one bad video doesn't abort the batch; embed_video commits per video so
+    that rollback (or an interrupt) leaves it cleanly un-embedded.
+    """
+    from .pipeline import embed_video
+
+    frames = inserted = failed = 0
+    total = len(videos)
+    for i, v in enumerate(videos, 1):
+        console.print(f"[{i}/{total}] embedding {v.slug} …")
+        try:
+            res = embed_video(conn, embedder, v, interval_sec=interval, apply=apply)
+        except Exception as e:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+            conn.rollback()
+            failed += 1
+            console.print(f"      ✗ {v.slug}: {type(e).__name__}: {e} — rolled back, skipping")
+            continue
+        frames += res.frames
+        inserted += res.inserted
+        detail = f"{res.inserted} vectors written" if apply else "dry-run"
+        console.print(f"      ✓ {v.slug}: {res.frames} frames, {detail}")
+    return frames, inserted, failed
+
+
 def cmd_embed(args: argparse.Namespace) -> int:
     """Embed frames for the selected videos into frame_embeddings."""
     from .embed import Embedder, model_id_for
-    from .pipeline import embed_video
 
     if not args.all and not args.slugs and not args.random:
         console.print("[red]give one or more slugs, or --all, or --random N[/red]")
@@ -77,29 +105,10 @@ def cmd_embed(args: argparse.Namespace) -> int:
     embedder = Embedder(model_name=args.model)
     embedder.check_dim()
 
-    total_frames = 0
-    total_inserted = 0
     started = time.perf_counter()
-    # One line per video (not a progress bar): a bar renders to nothing on a
-    # non-TTY, so a long k8s batch looks hung. Plain lines stream to kubectl
-    # logs (with PYTHONUNBUFFERED set in the image).
-    n = len(videos)
-    failed = 0
-    for i, v in enumerate(videos, 1):
-        console.print(f"[{i}/{n}] embedding {v.slug} …")
-        try:
-            res = embed_video(conn, embedder, v, interval_sec=args.interval, apply=args.apply)
-        except Exception as e:  # noqa: BLE001  # pylint: disable=broad-exception-caught
-            # Drop this video's partial rows so it stays un-embedded (and gets
-            # re-selected later); don't let one bad video kill the whole batch.
-            conn.rollback()
-            failed += 1
-            console.print(f"      ✗ {v.slug}: {type(e).__name__}: {e} — rolled back, skipping")
-            continue
-        total_frames += res.frames
-        total_inserted += res.inserted
-        detail = f"{res.inserted} vectors written" if args.apply else "dry-run"
-        console.print(f"      ✓ {v.slug}: {res.frames} frames, {detail}")
+    total_frames, total_inserted, failed = _embed_videos(
+        conn, embedder, videos, args.interval, args.apply
+    )
     elapsed = time.perf_counter() - started
     conn.close()
 
