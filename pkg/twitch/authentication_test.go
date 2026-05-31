@@ -10,59 +10,47 @@ import (
 	"github.com/adanalife/tripbot/pkg/oauthtokens"
 )
 
-// resetToken restores currentUserToken after a test mutation.
-func resetToken(t *testing.T) {
-	t.Helper()
-	saved := currentUserToken
-	t.Cleanup(func() {
-		tokenMu.Lock()
-		currentUserToken = saved
-		tokenMu.Unlock()
-	})
-}
-
-// resetBroadcasterToken restores currentBroadcasterToken after a mutation.
-func resetBroadcasterToken(t *testing.T) {
-	t.Helper()
-	saved := currentBroadcasterToken
-	t.Cleanup(func() {
-		tokenMu.Lock()
-		currentBroadcasterToken = saved
-		tokenMu.Unlock()
-	})
+// clientWithTokens builds a fresh *API seeded with the given bot +
+// broadcaster tokens. Each test gets its own isolated client — no shared
+// global to save/restore, no mutex dance for single-goroutine setup.
+func clientWithTokens(bot, bcast oauthtokens.Token) *API {
+	cl := New()
+	cl.currentUserToken = bot
+	cl.currentBroadcasterToken = bcast
+	return cl
 }
 
 func TestIRCAuthToken_PrefixesOauth(t *testing.T) {
-	resetToken(t)
-	tokenMu.Lock()
-	currentUserToken = oauthtokens.Token{AccessToken: "abc123"}
-	tokenMu.Unlock()
-
-	got := IRCAuthToken()
-	if got != "oauth:abc123" {
+	cl := clientWithTokens(oauthtokens.Token{AccessToken: "abc123"}, oauthtokens.Token{})
+	if got := cl.IRCAuthToken(); got != "oauth:abc123" {
 		t.Errorf("IRCAuthToken() = %q, want %q", got, "oauth:abc123")
 	}
 }
 
 func TestIRCAuthToken_EmptyWhenUnloaded(t *testing.T) {
-	resetToken(t)
-	tokenMu.Lock()
-	currentUserToken = oauthtokens.Token{}
-	tokenMu.Unlock()
-
-	if got := IRCAuthToken(); got != "" {
+	cl := clientWithTokens(oauthtokens.Token{}, oauthtokens.Token{})
+	if got := cl.IRCAuthToken(); got != "" {
 		t.Errorf("IRCAuthToken() with empty token = %q, want \"\"", got)
 	}
 }
 
 func TestCurrentUserAccessToken_ReturnsRaw(t *testing.T) {
-	resetToken(t)
-	tokenMu.Lock()
-	currentUserToken = oauthtokens.Token{AccessToken: "raw-no-prefix"}
-	tokenMu.Unlock()
-
-	if got := CurrentUserAccessToken(); got != "raw-no-prefix" {
+	cl := clientWithTokens(oauthtokens.Token{AccessToken: "raw-no-prefix"}, oauthtokens.Token{})
+	if got := cl.CurrentUserAccessToken(); got != "raw-no-prefix" {
 		t.Errorf("CurrentUserAccessToken() = %q, want %q", got, "raw-no-prefix")
+	}
+}
+
+// TestNew_IsolatedState confirms the new-shape payoff: two constructed clients
+// don't share token state the way the old package globals did.
+func TestNew_IsolatedState(t *testing.T) {
+	a := clientWithTokens(oauthtokens.Token{AccessToken: "a-tok"}, oauthtokens.Token{})
+	b := New()
+	if a.IRCAuthToken() == "" {
+		t.Fatal("client a should carry its seeded token")
+	}
+	if b.IRCAuthToken() != "" {
+		t.Errorf("client b should be empty; got %q — state leaked between instances", b.IRCAuthToken())
 	}
 }
 
@@ -127,23 +115,15 @@ func TestBroadcasterScopes_DisjointFromBotScopes(t *testing.T) {
 }
 
 func TestBroadcasterTokenLoaded_FalseWhenEmpty(t *testing.T) {
-	resetBroadcasterToken(t)
-	tokenMu.Lock()
-	currentBroadcasterToken = oauthtokens.Token{}
-	tokenMu.Unlock()
-
-	if broadcasterTokenLoaded() {
+	cl := clientWithTokens(oauthtokens.Token{}, oauthtokens.Token{})
+	if cl.broadcasterTokenLoaded() {
 		t.Error("broadcasterTokenLoaded() = true with empty token; want false")
 	}
 }
 
 func TestBroadcasterTokenLoaded_TrueWhenSet(t *testing.T) {
-	resetBroadcasterToken(t)
-	tokenMu.Lock()
-	currentBroadcasterToken = oauthtokens.Token{AccessToken: "broadcaster-tok"}
-	tokenMu.Unlock()
-
-	if !broadcasterTokenLoaded() {
+	cl := clientWithTokens(oauthtokens.Token{}, oauthtokens.Token{AccessToken: "broadcaster-tok"})
+	if !cl.broadcasterTokenLoaded() {
 		t.Error("broadcasterTokenLoaded() = false with token set; want true")
 	}
 }
@@ -211,16 +191,13 @@ func TestErrNoToken_AliasesOAuthTokens(t *testing.T) {
 // TestIRCAuthToken_ConcurrentReads is a smoke check that the RWMutex doesn't
 // deadlock under parallel reads while a writer takes the lock.
 func TestIRCAuthToken_ConcurrentReads(t *testing.T) {
-	resetToken(t)
-	tokenMu.Lock()
-	currentUserToken = oauthtokens.Token{AccessToken: "race-check"}
-	tokenMu.Unlock()
+	cl := clientWithTokens(oauthtokens.Token{AccessToken: "race-check"}, oauthtokens.Token{})
 
 	done := make(chan struct{})
 	for i := 0; i < 8; i++ {
 		go func() {
 			for j := 0; j < 100; j++ {
-				_ = IRCAuthToken()
+				_ = cl.IRCAuthToken()
 			}
 			done <- struct{}{}
 		}()
@@ -244,21 +221,12 @@ func withReauthConf(t *testing.T, bot, channel string) {
 	t.Cleanup(func() { c.Conf.BotUsername, c.Conf.ChannelName = savedBot, savedChan })
 }
 
-func setTokens(t *testing.T, bot, bcast oauthtokens.Token) {
-	t.Helper()
-	resetToken(t)
-	resetBroadcasterToken(t)
-	tokenMu.Lock()
-	currentUserToken, currentBroadcasterToken = bot, bcast
-	tokenMu.Unlock()
-}
-
 func TestAccountsNeedingReauth_AllHealthy(t *testing.T) {
 	withReauthConf(t, "tripbot4000", "adanalife_")
 	future := oauthtokens.Token{AccessToken: "good", ExpiresAt: time.Now().Add(time.Hour)}
-	setTokens(t, future, future)
+	cl := clientWithTokens(future, future)
 
-	if got := AccountsNeedingReauth(); got != nil {
+	if got := cl.AccountsNeedingReauth(); got != nil {
 		t.Fatalf("AccountsNeedingReauth() = %+v, want nil when both tokens are healthy", got)
 	}
 }
@@ -266,9 +234,9 @@ func TestAccountsNeedingReauth_AllHealthy(t *testing.T) {
 func TestAccountsNeedingReauth_BotMissing(t *testing.T) {
 	withReauthConf(t, "tripbot4000", "adanalife_")
 	healthy := oauthtokens.Token{AccessToken: "good", ExpiresAt: time.Now().Add(time.Hour)}
-	setTokens(t, oauthtokens.Token{}, healthy) // bot blank → missing
+	cl := clientWithTokens(oauthtokens.Token{}, healthy) // bot blank → missing
 
-	got := AccountsNeedingReauth()
+	got := cl.AccountsNeedingReauth()
 	if len(got) != 1 {
 		t.Fatalf("got %d accounts, want 1: %+v", len(got), got)
 	}
@@ -284,9 +252,9 @@ func TestAccountsNeedingReauth_BroadcasterExpired(t *testing.T) {
 	withReauthConf(t, "tripbot4000", "adanalife_")
 	healthy := oauthtokens.Token{AccessToken: "good", ExpiresAt: time.Now().Add(time.Hour)}
 	expired := oauthtokens.Token{AccessToken: "stale", ExpiresAt: time.Now().Add(-time.Hour)}
-	setTokens(t, healthy, expired)
+	cl := clientWithTokens(healthy, expired)
 
-	got := AccountsNeedingReauth()
+	got := cl.AccountsNeedingReauth()
 	if len(got) != 1 {
 		t.Fatalf("got %d accounts, want 1: %+v", len(got), got)
 	}
@@ -299,12 +267,12 @@ func TestTokenStatuses_HealthyReportsExpiryForEveryIdentity(t *testing.T) {
 	withReauthConf(t, "tripbot4000", "adanalife_")
 	botExp := time.Now().Add(3 * time.Hour)
 	bcastExp := time.Now().Add(2 * time.Hour)
-	setTokens(t,
+	cl := clientWithTokens(
 		oauthtokens.Token{AccessToken: "good", ExpiresAt: botExp},
 		oauthtokens.Token{AccessToken: "good", ExpiresAt: bcastExp},
 	)
 
-	got := TokenStatuses()
+	got := cl.TokenStatuses()
 	if len(got) != 2 {
 		t.Fatalf("got %d statuses, want 2 (bot + broadcaster): %+v", len(got), got)
 	}
@@ -321,9 +289,9 @@ func TestTokenStatuses_HealthyReportsExpiryForEveryIdentity(t *testing.T) {
 func TestTokenStatuses_CarriesReauthReason(t *testing.T) {
 	withReauthConf(t, "tripbot4000", "adanalife_")
 	healthy := oauthtokens.Token{AccessToken: "good", ExpiresAt: time.Now().Add(time.Hour)}
-	setTokens(t, oauthtokens.Token{}, healthy) // bot blank → missing
+	cl := clientWithTokens(oauthtokens.Token{}, healthy) // bot blank → missing
 
-	got := TokenStatuses()
+	got := cl.TokenStatuses()
 	if len(got) != 2 || got[0].Account != "bot" || got[0].Reason != "missing" {
 		t.Fatalf("got %+v, want bot row with Reason=missing", got)
 	}
@@ -338,9 +306,9 @@ func TestTokenStatuses_CarriesReauthReason(t *testing.T) {
 func TestAccountsNeedingReauth_NoSeparateBroadcaster(t *testing.T) {
 	withReauthConf(t, "tripbot4000", "tripbot4000")
 	healthy := oauthtokens.Token{AccessToken: "good", ExpiresAt: time.Now().Add(time.Hour)}
-	setTokens(t, healthy, oauthtokens.Token{}) // broadcaster slot blank, but irrelevant
+	cl := clientWithTokens(healthy, oauthtokens.Token{}) // broadcaster slot blank, but irrelevant
 
-	if got := AccountsNeedingReauth(); got != nil {
+	if got := cl.AccountsNeedingReauth(); got != nil {
 		t.Fatalf("AccountsNeedingReauth() = %+v, want nil when no distinct broadcaster identity", got)
 	}
 }
