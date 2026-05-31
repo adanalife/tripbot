@@ -1,0 +1,57 @@
+name: CV Release
+# Build + push adanalife/dashcam-cv, path-filtered on cv/**. amd64-only: both
+# prod-1 and stage-1 run on the amd64 MS-01 mini-PC (and the Mac mini worker is
+# amd64 too), so no multi-arch manifest is needed (cf
+# vault/decisions/multi-arch-release-pattern.md — single-arch is the right call
+# when every target host shares an arch).
+#
+# Lean image (BAKE_MODEL=0): the SigLIP2 so400m checkpoint (~4.4 GB) is too heavy
+# to bake into the image and push on every build, so it downloads once at runtime
+# into the model-cache PVC (infra k8s/apps/dashcam-cv). Stage tracks :develop.
+on:
+  push:
+    branches:
+      - develop
+    paths:
+      - 'cv/**'
+      - '.github/workflows/cv-release.yml'
+    tags:
+      - 'v*'
+
+concurrency:
+  group: cv-release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: docker/setup-buildx-action@v4
+      - name: Login to DockerHub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Generate tags
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: adanalife/dashcam-cv
+          flavor: latest=false
+          tags: |
+            type=raw,value=develop,enable=${{ github.ref == 'refs/heads/develop' }}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+      - name: Build & push
+        uses: docker/build-push-action@v7
+        with:
+          context: cv
+          file: cv/Dockerfile
+          platforms: linux/amd64
+          build-args: |
+            BAKE_MODEL=0
+          tags: ${{ steps.meta.outputs.tags }}
+          push: true
+          cache-from: type=gha,scope=dashcam-cv
+          cache-to: type=gha,mode=max,scope=dashcam-cv
