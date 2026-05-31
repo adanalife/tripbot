@@ -174,6 +174,7 @@ func TestStripAtSign(t *testing.T) {
 		{"without @ prefix", "dana", "dana"},
 		{"@ in middle is preserved", "da@na", "da@na"},
 		{"only @ sign", "@", ""},
+		{"empty string", "", ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
+	"github.com/adanalife/tripbot/pkg/eventbus"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
 	vlcClient "github.com/adanalife/tripbot/pkg/vlc-client"
@@ -46,7 +47,7 @@ var defaultPlayer = NewPlayer(
 // take ctx yet, so it's not propagated into their HTTP calls. Once they do,
 // trace spans for cron.video.GetCurrentlyPlaying ticks will nest the
 // underlying VLC poll and GPS-image toggles as children.
-//TODO: consider making this return a video struct
+// TODO: consider making this return a video struct
 func (p *Player) GetCurrentlyPlaying(ctx context.Context) {
 	var err error
 
@@ -68,13 +69,23 @@ func (p *Player) GetCurrentlyPlaying(ctx context.Context) {
 		// share the Video with the system
 		p.CurrentlyPlaying, err = LoadOrCreate(ctx, p.curVid)
 		if err != nil {
-			slog.ErrorContext(ctx, "unable to create Video", "err", err, "file", p.curVid)
+			// Downstream of vlc.CurrentlyPlaying; the wrapper there already
+			// logged the root cause at Error. Debug-level keeps the breadcrumb
+			// without double-counting in Sentry.
+			slog.DebugContext(ctx, "unable to create Video", "err", err, "file", p.curVid)
 		}
 
 		slog.InfoContext(ctx, "now playing",
 			"file", p.CurrentlyPlaying.File(),
 			"state", helpers.StateToStateAbbrev(p.CurrentlyPlaying.State),
 		)
+
+		// Announce the switch so the admin panel's "now playing" card updates
+		// live (no-op when NATS is unconfigured). emitted_at doubles as the
+		// clip start time for the panel's elapsed ticker.
+		eventbus.EmitVideoChanged(ctx, c.Conf.Environment,
+			p.CurrentlyPlaying.File(), p.CurrentlyPlaying.State, p.CurrentlyPlaying.Flagged,
+			p.CurrentlyPlaying.Lat, p.CurrentlyPlaying.Lng)
 
 		// show the no-GPS image
 		if p.CurrentlyPlaying.Flagged {

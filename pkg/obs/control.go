@@ -82,3 +82,29 @@ func GetStreamStatus(ctx context.Context) (bool, error) {
 	}
 	return resp.OutputActive, nil
 }
+
+// GetStreamActiveSteady reports whether OBS is in steady-state streaming —
+// outputActive=true AND outputReconnecting=false. The silent-disconnect
+// watchdog uses this rather than GetStreamStatus because OBS's known-
+// failure reconnect loop also reports outputActive=true; only the "OBS
+// doesn't know it failed" state (reconnecting=false) is the silent half-
+// open the watchdog exists to catch. Without this guard, an OBS-detected
+// disconnect that takes longer than the watchdog's debounce to recover
+// would also force a Stop+Start — harmless but redundant work that races
+// OBS's own reconnect.
+func GetStreamActiveSteady(ctx context.Context) (bool, error) {
+	client, err := dial(ctx)
+	if err != nil {
+		return false, errors.Join(ErrUnreachable, err)
+	}
+	defer func() {
+		if err := client.Disconnect(); err != nil {
+			slog.WarnContext(ctx, "obs disconnect", "err", err)
+		}
+	}()
+	resp, err := client.Stream.GetStreamStatus()
+	if err != nil {
+		return false, err
+	}
+	return resp.OutputActive && !resp.OutputReconnecting, nil
+}

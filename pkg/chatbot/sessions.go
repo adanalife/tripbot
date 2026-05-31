@@ -29,6 +29,9 @@ type Sessions interface {
 	// Shutdown logs out every in-memory session, flushing each user's
 	// state to the DB. Called by !shutdown before the process exits.
 	Shutdown(ctx context.Context)
+	// SetBot flips users.is_bot for a username. Returns
+	// gorm.ErrRecordNotFound if the user doesn't exist.
+	SetBot(ctx context.Context, username string, isBot bool) error
 }
 
 // realSessions delegates to pkg/users.
@@ -44,4 +47,8 @@ func (realSessions) LifetimeLeaderboard() [][]string {
 
 func (realSessions) Shutdown(ctx context.Context) {
 	users.Shutdown(ctx)
+}
+
+func (realSessions) SetBot(ctx context.Context, username string, isBot bool) error {
+	return users.SetBot(ctx, username, isBot)
 }

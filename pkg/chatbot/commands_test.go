@@ -11,6 +11,7 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/adanalife/tripbot/pkg/video"
+	"gorm.io/gorm"
 )
 
 // captureSay swaps sayFn for a recorder and returns helpers to read the
@@ -53,6 +54,9 @@ func newTestApp(vid video.Video) *App {
 		IRC:        noopIRC{},
 		Sessions:   noopSessions{},
 		NowPlaying: noopNowPlaying{},
+		Flags:      noopFlags{},
+		NATS:       noopNATS{},
+		Cron:       noopCron{},
 	}
 }
 
@@ -1063,6 +1067,76 @@ func TestMonthlyGuessLeaderboardCmd_WithGuesses_StripsDecimals(t *testing.T) {
 	}
 }
 
+// Zero-scorers (rows present because AddToScoreByName FirstOrCreate seeds 0)
+// should be filtered out of both the overlay and the chat message.
+func TestMonthlyGuessLeaderboardCmd_FiltersZeroScorers(t *testing.T) {
+	mock := installMockDB(t)
+	app := newTestApp(video.Video{})
+	rec := &recordingOnscreens{}
+	app.Onscreens = rec
+
+	rows := sqlmock.NewRows([]string{"username", "value"}).
+		AddRow("viewer1", 5.0).
+		AddRow("viewer2", 0.0).
+		AddRow("viewer3", 2.0).
+		AddRow("viewer4", 0.0)
+	mock.ExpectQuery(`SELECT users\.username, scores\.value FROM "scores"`).
+		WillReturnRows(rows)
+
+	out, restore := captureSay(t)
+	defer restore()
+
+	app.monthlyGuessLeaderboardCmd(context.Background(), newTestUser("caller"), nil)
+
+	msg := out()
+	if strings.Contains(msg, "viewer2") || strings.Contains(msg, "viewer4") {
+		t.Errorf("expected zero-scorers filtered from chat message, got %q", msg)
+	}
+	if !strings.Contains(msg, "viewer1") || !strings.Contains(msg, "viewer3") {
+		t.Errorf("expected non-zero scorers retained, got %q", msg)
+	}
+	if !strings.Contains(msg, "Top 2 correct guesses") {
+		t.Errorf("expected count to reflect filtered length (2), got %q", msg)
+	}
+	if len(rec.Calls) != 1 {
+		t.Fatalf("expected one overlay call, got %v", rec.Calls)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Error(err)
+	}
+}
+
+// When every scoreboard row is a zero-scorer (start of a new month), the
+// command should fall back to the "no one yet" chat message and skip the
+// overlay entirely — same shape as the truly-empty query result.
+func TestMonthlyGuessLeaderboardCmd_AllZero_SaysNoneYetAndSkipsOverlay(t *testing.T) {
+	mock := installMockDB(t)
+	app := newTestApp(video.Video{})
+	rec := &recordingOnscreens{}
+	app.Onscreens = rec
+
+	rows := sqlmock.NewRows([]string{"username", "value"}).
+		AddRow("viewer1", 0.0).
+		AddRow("viewer2", 0.0)
+	mock.ExpectQuery(`SELECT users\.username, scores\.value FROM "scores"`).
+		WillReturnRows(rows)
+
+	out, restore := captureSay(t)
+	defer restore()
+
+	app.monthlyGuessLeaderboardCmd(context.Background(), newTestUser("caller"), nil)
+
+	if !strings.Contains(out(), "No one is on that leaderboard yet") {
+		t.Errorf("expected empty-leaderboard message when all zero, got %q", out())
+	}
+	if len(rec.Calls) != 0 {
+		t.Errorf("expected no overlay call when all zero, got %v", rec.Calls)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Error(err)
+	}
+}
+
 // --- milesCmd ---
 //
 // Self-lookup (no params) and other-user lookup (with params) both end up
@@ -1218,5 +1292,96 @@ func TestMilesCmd_OtherUser_StripsAtSign(t *testing.T) {
 	}
 	if len(rec.Calls) != 1 || rec.Calls[0] != `Find("ghost")` {
 		t.Errorf("expected Sessions.Find(\"ghost\") with @ stripped, got %v", rec.Calls)
+	}
+}
+
+// --- makeBotCmd / unBotCmd ---
+
+func TestMakeBotCmd_NonAdmin_DoesNotCallSetBot(t *testing.T) {
+	app := newTestApp(video.Video{})
+	rec := &recordingSessions{}
+	app.Sessions = rec
+
+	app.makeBotCmd(context.Background(), newTestUser("viewer1"), []string{"target"})
+
+	if len(rec.Calls) != 0 {
+		t.Errorf("expected no Sessions calls for non-admin, got %v", rec.Calls)
+	}
+}
+
+func TestMakeBotCmd_Admin_NoParams_DoesNotCallSetBot(t *testing.T) {
+	app := newTestApp(video.Video{})
+	rec := &recordingSessions{}
+	app.Sessions = rec
+
+	app.makeBotCmd(context.Background(), newTestUser(adminUser), nil)
+
+	if len(rec.Calls) != 0 {
+		t.Errorf("expected no Sessions calls without target, got %v", rec.Calls)
+	}
+}
+
+func TestMakeBotCmd_Admin_FlipsToTrue(t *testing.T) {
+	app := newTestApp(video.Video{})
+	rec := &recordingSessions{FindResult: users.User{ID: 7, Username: "tripbot4000"}}
+	app.Sessions = rec
+
+	app.makeBotCmd(context.Background(), newTestUser(adminUser), []string{"tripbot4000"})
+
+	want := `SetBot("tripbot4000", true)`
+	if len(rec.Calls) != 1 || rec.Calls[0] != want {
+		t.Errorf("expected %s, got %v", want, rec.Calls)
+	}
+}
+
+func TestMakeBotCmd_Admin_StripsAtAndLowercases(t *testing.T) {
+	app := newTestApp(video.Video{})
+	rec := &recordingSessions{}
+	app.Sessions = rec
+
+	app.makeBotCmd(context.Background(), newTestUser(adminUser), []string{"@TripBot4000"})
+
+	want := `SetBot("tripbot4000", true)`
+	if len(rec.Calls) != 1 || rec.Calls[0] != want {
+		t.Errorf("expected %s, got %v", want, rec.Calls)
+	}
+}
+
+func TestMakeBotCmd_UnknownUser_SwallowsError(t *testing.T) {
+	app := newTestApp(video.Video{})
+	rec := &recordingSessions{SetBotErr: gorm.ErrRecordNotFound}
+	app.Sessions = rec
+
+	// Must not panic — the handler logs and returns.
+	app.makeBotCmd(context.Background(), newTestUser(adminUser), []string{"ghost"})
+
+	want := `SetBot("ghost", true)`
+	if len(rec.Calls) != 1 || rec.Calls[0] != want {
+		t.Errorf("expected one SetBot call, got %v", rec.Calls)
+	}
+}
+
+func TestUnBotCmd_Admin_FlipsToFalse(t *testing.T) {
+	app := newTestApp(video.Video{})
+	rec := &recordingSessions{FindResult: users.User{ID: 7, Username: "innocent"}}
+	app.Sessions = rec
+
+	app.unBotCmd(context.Background(), newTestUser(adminUser), []string{"innocent"})
+
+	want := `SetBot("innocent", false)`
+	if len(rec.Calls) != 1 || rec.Calls[0] != want {
+		t.Errorf("expected %s, got %v", want, rec.Calls)
+	}
+}
+
+func TestUnBotCmd_NonAdmin_DoesNotCallSetBot(t *testing.T) {
+	app := newTestApp(video.Video{})
+	rec := &recordingSessions{}
+	app.Sessions = rec
+
+	app.unBotCmd(context.Background(), newTestUser("viewer1"), []string{"target"})
+
+	if len(rec.Calls) != 0 {
+		t.Errorf("expected no Sessions calls for non-admin, got %v", rec.Calls)
 	}
 }

@@ -23,7 +23,7 @@ type Client struct {
 // will still send the request, just without a parent span linking it to the
 // caller's trace.
 //
-//TODO: eventually support HTTPS
+// TODO: eventually support HTTPS
 func New(host string) *Client {
 	return &Client{
 		serverURL:  "http://" + host,
@@ -88,22 +88,27 @@ func (c *Client) Back(ctx context.Context, n int) error {
 	return nil
 }
 
-//TODO: move this to a common location
+// TODO: move this to a common location
+//
+// Transport-layer errors log at Debug, not Error: each wrapper above this
+// (CurrentlyPlaying, PlayRandom, …) logs the operation-specific failure at
+// Error with the same underlying err. Logging here too would triple-count
+// every VLC outage in Loki and Sentry.
 func (c *Client) get(ctx context.Context, url string) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		slog.ErrorContext(ctx, "error building request to VLC server", "err", err)
+		slog.DebugContext(ctx, "error building request to VLC server", "err", err)
 		return "", err
 	}
 	response, err := c.httpClient.Do(req)
 	if err != nil {
-		slog.ErrorContext(ctx, "error connecting to VLC server", "err", err)
+		slog.DebugContext(ctx, "error connecting to VLC server", "err", err)
 		return "", err
 	}
 	defer response.Body.Close()
 	contents, err := ioutil.ReadAll(response.Body)
 	if err != nil {
-		slog.ErrorContext(ctx, "error reading response from VLC server", "err", err)
+		slog.DebugContext(ctx, "error reading response from VLC server", "err", err)
 		return "", err
 	}
 	return string(contents), nil
