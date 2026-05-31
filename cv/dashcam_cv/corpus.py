@@ -19,19 +19,23 @@ DEFAULT_CORPUS_DIR = "/opt/data/Dashcam/_all"
 
 @dataclass(frozen=True)
 class VideoRef:
+    """A corpus file matched to its videos row: (id, slug, on-disk path)."""
+
     video_id: int
     slug: str
     path: Path
 
 
 def corpus_dir() -> Path:
+    """Corpus root — DASHCAM_CV_CORPUS_DIR, or the cluster mount by default."""
     return Path(os.environ.get("DASHCAM_CV_CORPUS_DIR", DEFAULT_CORPUS_DIR))
 
 
 def _slug_to_id(conn: psycopg.Connection) -> dict[str, int]:
+    """Map every videos.slug to its id."""
     with conn.cursor() as cur:
         cur.execute("SELECT slug, id FROM videos")
-        return {slug: vid for slug, vid in cur.fetchall()}
+        return dict(cur.fetchall())
 
 
 def find_videos(

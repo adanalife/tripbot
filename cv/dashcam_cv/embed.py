@@ -26,8 +26,6 @@ import torch
 # lighter); a model whose width != the frame_embeddings column is rejected before
 # any DB write. The matching column width lives in db.EMBED_DIM.
 DEFAULT_MODEL = os.environ.get("DASHCAM_CV_MODEL", "google/siglip2-so400m-patch16-naflex")
-# Kept for CLI symmetry with a possible future open_clip backend; unused here.
-DEFAULT_PRETRAINED = os.environ.get("DASHCAM_CV_PRETRAINED", "")
 
 # SigLIP text towers use a fixed 64-token sequence (padding="max_length").
 _TEXT_MAX_LEN = 64
@@ -59,7 +57,6 @@ class Embedder:
     def __init__(
         self,
         model_name: str = DEFAULT_MODEL,
-        pretrained: str = DEFAULT_PRETRAINED,
         device: str = "cpu",
     ) -> None:
         from transformers import AutoModel, AutoProcessor
@@ -82,6 +79,7 @@ class Embedder:
 
     @property
     def dim(self) -> int:
+        """Embedding width, discovered once via a throwaway text embed."""
         if self._dim is None:
             self._dim = int(self.embed_text("dimension probe").shape[0])
         return self._dim

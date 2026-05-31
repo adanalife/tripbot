@@ -27,6 +27,7 @@ console = Console()
 
 
 def _format_ts(seconds: float) -> str:
+    """Seconds → m:ss (or h:mm:ss past an hour)."""
     s = int(seconds)
     return (
         f"{s // 3600:d}:{(s % 3600) // 60:02d}:{s % 60:02d}"
@@ -36,6 +37,7 @@ def _format_ts(seconds: float) -> str:
 
 
 def cmd_embed(args: argparse.Namespace) -> int:
+    """Embed frames for the selected videos into frame_embeddings."""
     from .embed import Embedder, model_id_for
     from .pipeline import embed_video
 
@@ -73,7 +75,7 @@ def cmd_embed(args: argparse.Namespace) -> int:
     )
 
     console.print("loading model…")
-    embedder = Embedder(model_name=args.model, pretrained=args.pretrained)
+    embedder = Embedder(model_name=args.model)
     embedder.check_dim()
 
     total_frames = 0
@@ -108,10 +110,11 @@ def cmd_embed(args: argparse.Namespace) -> int:
 
 
 def cmd_find(args: argparse.Namespace) -> int:
+    """Embed the query and print the nearest frames."""
     from .embed import Embedder
     from .search import search
 
-    embedder = Embedder(model_name=args.model, pretrained=args.pretrained)
+    embedder = Embedder(model_name=args.model)
     conn = db.connect()
     try:
         hits = search(conn, embedder, args.query, k=args.k, state=args.state)
@@ -135,14 +138,14 @@ def cmd_find(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Parse args and dispatch to the embed / find subcommand."""
     parser = argparse.ArgumentParser(prog="dashcam-cv", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
 
-    from .embed import DEFAULT_MODEL, DEFAULT_PRETRAINED
+    from .embed import DEFAULT_MODEL
 
     def add_model_args(p: argparse.ArgumentParser) -> None:
         p.add_argument("--model", default=DEFAULT_MODEL, help="HuggingFace SigLIP2 checkpoint id")
-        p.add_argument("--pretrained", default=DEFAULT_PRETRAINED, help=argparse.SUPPRESS)
 
     p_embed = sub.add_parser("embed", help="embed video frames into frame_embeddings")
     p_embed.add_argument("slugs", nargs="*", help="video slugs to embed (omit with --all)")

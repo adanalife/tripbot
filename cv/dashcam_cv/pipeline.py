@@ -30,6 +30,8 @@ ON CONFLICT (video_id, ts_sec, model) DO NOTHING
 
 @dataclass
 class EmbedResult:
+    """Per-video embedding tally: frames seen and vectors inserted."""
+
     slug: str
     frames: int
     inserted: int

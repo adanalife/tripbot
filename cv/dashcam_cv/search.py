@@ -24,6 +24,8 @@ LIMIT %(k)s
 
 @dataclass
 class SearchHit:
+    """One ranked search result: a frame, its video, and its distance."""
+
     video_id: int
     slug: str
     ts_sec: float
