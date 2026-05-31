@@ -38,14 +38,17 @@ class Coverage:
 
     @property
     def remaining(self) -> int:
+        """Videos not yet embedded."""
         return max(0, self.total_videos - self.embedded_videos)
 
     @property
     def pct(self) -> float:
+        """Percent of the corpus embedded."""
         return 100.0 * self.embedded_videos / self.total_videos if self.total_videos else 0.0
 
     @property
     def frames_per_video(self) -> float:
+        """Mean sampled frames per embedded video."""
         return self.frames / self.embedded_videos if self.embedded_videos else 0.0
 
 
