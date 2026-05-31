@@ -72,7 +72,6 @@ def embed_video(
                     ],
                 )
                 inserted += cur.rowcount if cur.rowcount and cur.rowcount > 0 else 0
-            conn.commit()
         pending_ts = []
         pending_imgs = []
 
@@ -83,5 +82,13 @@ def embed_video(
         if len(pending_imgs) >= _BATCH:
             flush()
     flush()
+
+    # Commit once per video, not per batch: a video is all-or-nothing. If the
+    # pod is interrupted mid-video (it runs at low priority and prod can preempt
+    # it), the uncommitted rows roll back, so find_unembedded re-selects the
+    # video next run and it gets fully embedded — rather than being left partial
+    # and skipped forever. ON CONFLICT DO NOTHING keeps the re-run idempotent.
+    if apply:
+        conn.commit()
 
     return EmbedResult(slug=video.slug, frames=frames_seen, inserted=inserted)

@@ -84,9 +84,18 @@ def cmd_embed(args: argparse.Namespace) -> int:
     # non-TTY, so a long k8s batch looks hung. Plain lines stream to kubectl
     # logs (with PYTHONUNBUFFERED set in the image).
     n = len(videos)
+    failed = 0
     for i, v in enumerate(videos, 1):
         console.print(f"[{i}/{n}] embedding {v.slug} …")
-        res = embed_video(conn, embedder, v, interval_sec=args.interval, apply=args.apply)
+        try:
+            res = embed_video(conn, embedder, v, interval_sec=args.interval, apply=args.apply)
+        except Exception as e:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+            # Drop this video's partial rows so it stays un-embedded (and gets
+            # re-selected later); don't let one bad video kill the whole batch.
+            conn.rollback()
+            failed += 1
+            console.print(f"      ✗ {v.slug}: {type(e).__name__}: {e} — rolled back, skipping")
+            continue
         total_frames += res.frames
         total_inserted += res.inserted
         detail = f"{res.inserted} vectors written" if args.apply else "dry-run"
@@ -96,6 +105,8 @@ def cmd_embed(args: argparse.Namespace) -> int:
 
     table = Table(title="embed summary", show_header=False)
     table.add_row("videos", str(len(videos)))
+    if failed:
+        table.add_row("failed (rolled back)", str(failed))
     table.add_row("frames embedded", str(total_frames))
     table.add_row("vectors written", str(total_inserted) if args.apply else "0 (dry-run)")
     table.add_row("wall time", f"{elapsed:.1f}s")
