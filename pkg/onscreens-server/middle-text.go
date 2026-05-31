@@ -4,13 +4,16 @@ import (
 	"log/slog"
 )
 
-var MiddleText *Onscreen
-
-func InitMiddleText() {
+// newMiddleText constructs the middle-text *Onscreen. Unlike the other
+// onscreens this one is permanent (DontExpire = true) and starts in the
+// "showing" state so the OBS browser source keeps rendering whatever
+// text was on screen before the bot restarted.
+func newMiddleText() *Onscreen {
 	slog.Info("creating onscreen", "kind", "middle-text")
-	MiddleText = New()
+	osc := newOnscreen()
 	// this is a permanent onscreen
-	MiddleText.DontExpire = true
+	osc.DontExpire = true
 	// keep the same text from before the bot started
-	MiddleText.IsShowing = true
+	osc.IsShowing = true
+	return osc
 }

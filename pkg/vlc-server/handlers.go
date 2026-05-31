@@ -5,256 +5,209 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 	"runtime/debug"
 	"strconv"
+	"time"
 
-	terrors "github.com/adanalife/tripbot/pkg/errors"
-	"github.com/adanalife/tripbot/pkg/helpers"
-	onscreensServer "github.com/adanalife/tripbot/pkg/onscreens-server"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/gorilla/mux"
 )
 
-// versionTag is set by main via SetVersion; overridden at build time
-// through `-ldflags "-X main.version=..."`.
-var versionTag = "dev"
-
-// SetVersion lets cmd/vlc-server inject its build-time version string
-// before the HTTP server starts.
-func SetVersion(v string) {
-	if v != "" {
-		versionTag = v
-	}
-}
-
-// healthcheck URL, for tools to verify the stream is alive
-func healthHandler(w http.ResponseWriter, r *http.Request) {
+// livenessHandler answers /health/ and /health/live. Liveness is a
+// process-is-alive signal — if this handler runs at all, the answer is
+// yes. Don't consult libvlc here; deeper checks belong on /health/ready
+// (a stuck player should fail readiness, not get the pod restarted).
+func (s *Server) livenessHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "OK")
 }
 
-// versionHandler returns build metadata as JSON. The tag comes from the
-// build-time ldflag; sha + built_at are read from the binary's embedded
-// VCS info (Go's automatic -buildvcs).
-func versionHandler(w http.ResponseWriter, r *http.Request) {
+// readinessHandler answers /health/ready by consulting Server.Health(),
+// which reflects libvlc player state. Returns 503 with the error message
+// when the player isn't in a state that can serve a viewer, so K8s
+// readiness probes will pull the pod out of rotation while the player
+// recovers (vs. liveness, which would restart the process).
+func (s *Server) readinessHandler(w http.ResponseWriter, r *http.Request) {
+	if err := s.Health(); err != nil {
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+	fmt.Fprintf(w, "OK")
+}
+
+// rtspHealthHandler answers /health/rtsp by sending a local RTSP DESCRIBE
+// against the libvlc listener. Returns 200 OK on a 200 response, 503 with
+// the failure detail otherwise. Surfaces the same signal the self-heal
+// watchdog uses so operators can probe it manually without waiting on the
+// failure threshold.
+func (s *Server) rtspHealthHandler(w http.ResponseWriter, r *http.Request) {
+	if err := probeRTSPDescribe(); err != nil {
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+	fmt.Fprintf(w, "OK")
+}
+
+// versionHandler returns build metadata as JSON. The tag comes from
+// Server.Version (injected via Config at construction time); sha +
+// built_at are read from the binary's embedded VCS info (Go's automatic
+// -buildvcs). started_at is when the process began so callers can derive
+// uptime themselves.
+func (s *Server) versionHandler(w http.ResponseWriter, r *http.Request) {
+	tag := s.Version
+	if tag == "" {
+		tag = "dev"
+	}
 	resp := struct {
-		Tag     string `json:"tag"`
-		Sha     string `json:"sha"`
-		BuiltAt string `json:"built_at"`
-	}{Tag: versionTag}
+		Tag       string `json:"tag"`
+		Sha       string `json:"sha"`
+		BuiltAt   string `json:"built_at"`
+		StartedAt string `json:"started_at"`
+	}{Tag: tag, StartedAt: startedAt.UTC().Format(time.RFC3339)}
 
 	if info, ok := debug.ReadBuildInfo(); ok {
-		for _, s := range info.Settings {
-			switch s.Key {
+		for _, st := range info.Settings {
+			switch st.Key {
 			case "vcs.revision":
-				resp.Sha = s.Value
+				resp.Sha = st.Value
 			case "vcs.time":
-				resp.BuiltAt = s.Value
+				resp.BuiltAt = st.Value
 			}
 		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		terrors.Log(err, "couldn't encode version response")
+		slog.ErrorContext(r.Context(), "couldn't encode version response", "err", err)
 	}
 }
 
-func vlcCurrentHandler(w http.ResponseWriter, r *http.Request) {
+// startedAt marks process start so /version can report uptime. Set at
+// package load; close enough to process start for a human-readable "up Xh".
+var startedAt = time.Now()
+
+func (s *Server) vlcCurrentHandler(w http.ResponseWriter, r *http.Request) {
 	// return the currently-playing file
-	fmt.Fprint(w, currentlyPlaying())
+	fmt.Fprint(w, s.currentlyPlaying())
 }
 
-func vlcPlayHandler(w http.ResponseWriter, r *http.Request) {
+func (s *Server) vlcPlayHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	spew.Dump(vars)
 
 	videoFile := vars["video"]
 
 	spew.Dump(videoFile)
-	playVideoFile(videoFile)
+	if err := s.PlayVideoFile(videoFile); err != nil {
+		slog.ErrorContext(r.Context(), "couldn't play requested video", "err", err, "video", videoFile)
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
 
 	//TODO: better response
 	fmt.Fprintf(w, "OK")
 }
 
-func vlcBackHandler(w http.ResponseWriter, r *http.Request) {
+func (s *Server) vlcBackHandler(w http.ResponseWriter, r *http.Request) {
 	num, ok := r.URL.Query()["n"]
 	if !ok || len(num) > 1 {
-		back(1)
+		s.back(1)
 		return
 	}
 	i, err := strconv.Atoi(num[0])
 	if err != nil {
-		terrors.Log(err, "couldn't convert input to int")
+		slog.ErrorContext(r.Context(), "couldn't convert input to int", "err", err)
 		http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
 		return
 	}
 
-	back(i)
+	s.back(i)
 
 	//TODO: better response
 	fmt.Fprintf(w, "OK")
 
 }
 
-func vlcSkipHandler(w http.ResponseWriter, r *http.Request) {
+func (s *Server) vlcSkipHandler(w http.ResponseWriter, r *http.Request) {
 	num, ok := r.URL.Query()["n"]
 	if !ok || len(num) > 1 {
-		skip(1)
+		s.skip(1)
 		return
 	}
 	i, err := strconv.Atoi(num[0])
 	if err != nil {
-		terrors.Log(err, "couldn't convert input to int")
+		slog.ErrorContext(r.Context(), "couldn't convert input to int", "err", err)
 		http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
 		return
 	}
 
-	skip(i)
+	s.skip(i)
 
 	//TODO: better response
 	fmt.Fprintf(w, "OK")
 }
 
-func vlcRandomHandler(w http.ResponseWriter, r *http.Request) {
+func (s *Server) vlcRandomHandler(w http.ResponseWriter, r *http.Request) {
 	// play a random file
-	err := PlayRandom()
+	err := s.PlayRandom()
 	if err != nil {
 		http.Error(w, "error playing random", http.StatusInternalServerError)
 	}
 	fmt.Fprintf(w, "OK")
 }
 
-func onscreensFlagHandler(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	spew.Dump(vars)
-
-	switch vars["action"] {
-	case "show":
-		base64content, ok := r.URL.Query()["duration"]
-		if !ok || len(base64content) > 1 {
-			http.Error(w, "417 expectation failed", http.StatusExpectationFailed)
-			return
-		}
-		//TODO: fix this
-		http.Error(w, "501 not implemented", http.StatusNotImplemented)
-		return
-		//durStr, err := helpers.Base64Decode(base64content[0])
-		//if err != nil {
-		//	terrors.Log(err, "unable to decode string")
-		//	http.Error(w, "422 unable to decode string", http.StatusUnprocessableEntity)
-		//	return
-		//}
-		//dur, err := time.ParseDuration(durStr)
-		//if err != nil {
-		//	http.Error(w, "422 unable to parse duration", http.StatusUnprocessableEntity)
-		//	return
-		//}
-		//onscreensServer.ShowFlag(dur)
-		//fmt.Fprintf(w, "OK")
-	case "hide":
-		onscreensServer.FlagImage.Hide()
-		fmt.Fprintf(w, "OK")
-	default:
-		http.Error(w, "417 expectation failed", http.StatusExpectationFailed)
+// nextFrameJPEGHandler serves the cached first-frame JPEG that the OBS
+// cover layer renders during the inter-clip gap. 404 when the cache
+// file is missing (e.g. vlc-server just started and the refresher
+// hasn't run yet) so the browser source falls back to whatever it had.
+// Cache-Control: no-store + a Last-Modified header lets CEF issue
+// conditional GETs and the server answer 304 when nothing changed
+// since the last 10s poll.
+func (s *Server) nextFrameJPEGHandler(w http.ResponseWriter, r *http.Request) {
+	path := NextFrameCachePath()
+	st, err := os.Stat(path)
+	if err != nil {
+		http.NotFound(w, r)
 		return
 	}
+	w.Header().Set("Content-Type", "image/jpeg")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Last-Modified", st.ModTime().UTC().Format(http.TimeFormat))
+	http.ServeFile(w, r, path)
 }
 
-func onscreensGpsHandler(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-
-	switch vars["action"] {
-	case "show":
-		onscreensServer.ShowGPSImage()
-		fmt.Fprintf(w, "OK")
-	case "hide":
-		onscreensServer.HideGPSImage()
-		fmt.Fprintf(w, "OK")
-	default:
-		http.Error(w, "417 expectation failed", http.StatusExpectationFailed)
-		return
-	}
+// nextFrameHTMLHandler serves a tiny wrapper page that the OBS browser
+// source loads. The page polls /next-frame.jpg every 10s with a
+// cache-bust timestamp, so vlc-server doesn't need to push refresh
+// signals via obs-websocket — the cover frame keeps itself current.
+func (s *Server) nextFrameHTMLHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	fmt.Fprint(w, nextFrameHTML)
 }
 
-func onscreensMiddleHandler(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	switch vars["action"] {
-	case "show":
-		base64content, ok := r.URL.Query()["msg"]
-		if !ok || len(base64content) > 1 {
-			http.Error(w, "417 expectation failed", http.StatusExpectationFailed)
-			return
-		}
-		msg, err := helpers.Base64Decode(base64content[0])
-		if err != nil {
-			terrors.Log(err, "unable to decode string")
-			http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
-			return
-		}
-		onscreensServer.MiddleText.Show(msg)
-		fmt.Fprintf(w, "OK")
-	case "hide":
-		onscreensServer.MiddleText.Hide()
-		fmt.Fprintf(w, "OK")
-	default:
-		http.Error(w, "417 expectation failed", http.StatusExpectationFailed)
-		return
-	}
-}
+const nextFrameHTML = `<!doctype html>
+<html><head><meta charset="utf-8"><style>
+html,body{margin:0;padding:0;height:100%;background:#000;overflow:hidden;}
+img{display:block;width:100%;height:100%;object-fit:cover;}
+</style></head><body>
+<img id="f" src="/next-frame.jpg">
+<script>
+setInterval(function(){
+  document.getElementById('f').src = '/next-frame.jpg?t=' + Date.now();
+}, 10000);
+</script>
+</body></html>
+`
 
-func onscreensTimewarpHandler(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	switch vars["action"] {
-	case "show":
-		//TODO: is this different from Timewarp.Show()?
-		onscreensServer.ShowTimewarp()
-		fmt.Fprintf(w, "OK")
-	case "hide":
-		onscreensServer.Timewarp.Hide()
-		fmt.Fprintf(w, "OK")
-	default:
-		http.Error(w, "417 expectation failed", http.StatusExpectationFailed)
-		return
-	}
-}
-
-func onscreensLeaderboardHandler(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-
-	switch vars["action"] {
-	case "show":
-		base64content, ok := r.URL.Query()["content"]
-		if !ok || len(base64content) > 1 {
-			http.Error(w, "417 expectation failed", http.StatusExpectationFailed)
-			return
-		}
-		content, err := helpers.Base64Decode(base64content[0])
-		if err != nil {
-			terrors.Log(err, "unable to decode string")
-			http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
-			return
-		}
-
-		onscreensServer.ShowLeaderboard(content)
-		fmt.Fprintf(w, "OK")
-	case "hide":
-		onscreensServer.Leaderboard.Hide()
-		fmt.Fprintf(w, "OK")
-	default:
-		http.Error(w, "417 expectation failed", http.StatusExpectationFailed)
-		return
-	}
-}
-
-func faviconHandler(w http.ResponseWriter, r *http.Request) {
+func (s *Server) faviconHandler(w http.ResponseWriter, r *http.Request) {
 	//	// return a favicon if anyone asks for one
 	//} else if r.URL.Path == "/favicon.ico" {
 	http.ServeFile(w, r, "assets/favicon.ico")
 }
 
-//TODO: use more StatusExpectationFailed instead of http.StatusUnprocessableEntity
-func catchAllHandler(w http.ResponseWriter, r *http.Request) {
+// TODO: use more StatusExpectationFailed instead of http.StatusUnprocessableEntity
+func (s *Server) catchAllHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
 		http.Error(w, "404 not found", http.StatusNotFound)

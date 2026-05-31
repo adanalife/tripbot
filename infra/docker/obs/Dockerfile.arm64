@@ -23,11 +23,18 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # msttcorefonts wants EULA pre-acceptance for unattended install. Trebuchet MS
 # is used by some onscreen text scene-sources.
+#
+# Display stack: sway (headless Wayland compositor) + wayvnc (Wayland VNC
+# server). Replaces the previous Xvfb / fluxbox / x11vnc trio so OBS's
+# OpenGL hits the iGPU instead of falling back to Mesa llvmpipe. supervisor
+# manages sway/wayvnc/obs/browser-refresh as separate programs with
+# Wayland-socket-wait dependency on sway. See Dockerfile (amd64) for the
+# longer comment.
 RUN echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true" \
       | debconf-set-selections \
     && apt-get update && apt-get install -y --no-install-recommends \
-      xvfb x11vnc fluxbox feh tini gettext-base procps x11-utils \
-      ca-certificates dbus-x11 libgl1-mesa-dri \
+      sway wayvnc xwayland supervisor feh tini gettext-base procps \
+      ca-certificates curl libgl1-mesa-dri \
       fonts-dejavu-core ttf-mscorefonts-installer \
       # OBS runtime deps (mirrors the build deps with -dev stripped) \
       libavcodec60 libavdevice60 libavfilter9 libavformat60 libavutil58 \
@@ -55,9 +62,22 @@ RUN echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula sele
 
 # obsws-python (in a venv to stay clear of PEP 668 system-managed python)
 # powers the hourly browser-source refresh that the entrypoint kicks off
-# as a workaround for CEF's per-frame memory leak.
+# as a workaround for CEF's per-frame memory leak. websockify rides in the
+# same venv — it bridges the browser's WebSocket to wayvnc's TCP :5900 for
+# the noVNC client.
 RUN python3 -m venv /opt/obs/venv \
-    && /opt/obs/venv/bin/pip install --no-cache-dir obsws-python
+    && /opt/obs/venv/bin/pip install --no-cache-dir obsws-python 'websockify==0.13.0'
+
+# noVNC: the static browser VNC client websockify serves on :6080. Reached
+# through the obs Ingress (traefik), so VNC works in a browser with no
+# native client — which also sidesteps macOS Screen Sharing.app's RFB
+# 003.889 incompatibility with neatvnc (it rejects Apple's version
+# string before any security type is negotiated).
+ARG NOVNC_VERSION=1.7.0
+RUN curl -fsSL "https://github.com/novnc/noVNC/archive/refs/tags/v${NOVNC_VERSION}.tar.gz" \
+      | tar -xz -C /opt \
+    && mv "/opt/noVNC-${NOVNC_VERSION}" /opt/novnc \
+    && printf '%s\n' '<!doctype html><title>OBS noVNC</title><meta http-equiv="refresh" content="0; url=vnc.html?resize=scale&amp;autoconnect=true&amp;reconnect=true">' > /opt/novnc/index.html
 
 # Copy the compiled OBS install tree from the pre-baked base image. cmake
 # --install laid the tree out under /opt/obs-install (mapped to /usr/local on
@@ -72,11 +92,27 @@ RUN ldconfig
 # (logged by OBS as `Webpage has crashed unexpectedly! Reason: '9'`).
 RUN find /usr/local -name chrome-sandbox -exec chmod 4755 {} +
 
+# OBS calls `xdg-screensaver suspend` every 30s while streaming to inhibit
+# the desktop screensaver. In a headless container there is no supported
+# screensaver backend (no X11 $DISPLAY, no GNOME/KDE session), so the
+# freedesktop script exits 2 and OBS logs `Failed to create xdg-screensaver`
+# every cycle — ~120 wasted fork+exec per pod per hour, all spamming Loki at
+# warn level. Shim it to a no-op so OBS gets exit 0 and stops complaining.
+# /usr/local/bin is ahead of /usr/bin in PATH so this wins.
+RUN printf '#!/bin/sh\nexit 0\n' > /usr/local/bin/xdg-screensaver \
+    && chmod +x /usr/local/bin/xdg-screensaver
+
 COPY infra/docker/obs/config/ /opt/obs/config/
+COPY infra/docker/obs/script/ /opt/obs/script/
 COPY infra/docker/obs/entrypoint.sh /opt/obs/entrypoint.sh
 COPY infra/docker/obs/healthcheck.sh /opt/obs/healthcheck.sh
 COPY bin/obs-browser-refresh /opt/obs/bin/obs-browser-refresh
-RUN chmod +x /opt/obs/entrypoint.sh /opt/obs/healthcheck.sh /opt/obs/bin/obs-browser-refresh
+RUN chmod +x /opt/obs/entrypoint.sh /opt/obs/healthcheck.sh \
+             /opt/obs/bin/obs-browser-refresh /opt/obs/script/*.sh
+
+# Per-program supervisor configs live in /etc/supervisor/conf.d/. The
+# default supervisord.conf from the package globs *.conf out of that dir.
+COPY infra/docker/obs/supervisor/ /etc/supervisor/conf.d/
 
 COPY assets/twitch-overlay-left.png assets/twitch-overlay-right.png /opt/tripbot/assets/
 
@@ -88,8 +124,7 @@ RUN mkdir -p /etc/tripbot \
 
 EXPOSE 5900
 EXPOSE 4455
-
-ENV VNC_PASSWD=123456
+EXPOSE 6080
 
 HEALTHCHECK --interval=10s --timeout=3s --retries=3 CMD /opt/obs/healthcheck.sh
 

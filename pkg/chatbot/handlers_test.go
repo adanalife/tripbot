@@ -1,6 +1,7 @@
 package chatbot
 
 import (
+	"context"
 	"testing"
 
 	"github.com/adanalife/tripbot/pkg/users"
@@ -184,8 +185,8 @@ type fakeUser struct {
 	subscriber bool
 }
 
-func (f *fakeUser) HasCommandAvailable() bool { return f.follower }
-func (f *fakeUser) IsSubscriber() bool        { return f.subscriber }
+func (f *fakeUser) HasCommandAvailable(_ context.Context) bool { return f.follower }
+func (f *fakeUser) IsSubscriber() bool                         { return f.subscriber }
 
 // realUserAsChat wraps *users.User so it satisfies chatUser in tests
 // where we want to pass a struct with known field values.
@@ -194,7 +195,7 @@ var _ chatUser = (*users.User)(nil)
 func TestCheckAccess_NoRestrictions(t *testing.T) {
 	cmd := &Command{Trigger: "!test"}
 	var said string
-	if !cmd.checkAccess(&fakeUser{}, func(msg string) { said = msg }) {
+	if !cmd.checkAccess(context.Background(), &fakeUser{}, func(msg string) { said = msg }) {
 		t.Error("expected true for unrestricted command")
 	}
 	if said != "" {
@@ -203,9 +204,13 @@ func TestCheckAccess_NoRestrictions(t *testing.T) {
 }
 
 func TestCheckAccess_RequiresFollow_NonFollower(t *testing.T) {
+	prev := followerGatingEnabled
+	followerGatingEnabled = true
+	t.Cleanup(func() { followerGatingEnabled = prev })
+
 	cmd := &Command{Trigger: "!test", RequiresFollow: true}
 	var said string
-	if cmd.checkAccess(&fakeUser{follower: false}, func(msg string) { said = msg }) {
+	if cmd.checkAccess(context.Background(), &fakeUser{follower: false}, func(msg string) { said = msg }) {
 		t.Error("expected false for non-follower")
 	}
 	if said != followerMsg {
@@ -214,9 +219,13 @@ func TestCheckAccess_RequiresFollow_NonFollower(t *testing.T) {
 }
 
 func TestCheckAccess_RequiresFollow_Follower(t *testing.T) {
+	prev := followerGatingEnabled
+	followerGatingEnabled = true
+	t.Cleanup(func() { followerGatingEnabled = prev })
+
 	cmd := &Command{Trigger: "!test", RequiresFollow: true}
 	var said string
-	if !cmd.checkAccess(&fakeUser{follower: true}, func(msg string) { said = msg }) {
+	if !cmd.checkAccess(context.Background(), &fakeUser{follower: true}, func(msg string) { said = msg }) {
 		t.Error("expected true for follower")
 	}
 	if said != "" {
@@ -224,10 +233,25 @@ func TestCheckAccess_RequiresFollow_Follower(t *testing.T) {
 	}
 }
 
+func TestCheckAccess_RequiresFollow_GatingDisabled(t *testing.T) {
+	prev := followerGatingEnabled
+	followerGatingEnabled = false
+	t.Cleanup(func() { followerGatingEnabled = prev })
+
+	cmd := &Command{Trigger: "!test", RequiresFollow: true}
+	var said string
+	if !cmd.checkAccess(context.Background(), &fakeUser{follower: false}, func(msg string) { said = msg }) {
+		t.Error("expected true for non-follower when gating disabled")
+	}
+	if said != "" {
+		t.Errorf("expected no message when gating disabled, got %q", said)
+	}
+}
+
 func TestCheckAccess_RequiresSubscriber_NonSubscriber(t *testing.T) {
 	cmd := &Command{Trigger: "!test", RequiresSubscriber: true}
 	var said string
-	if cmd.checkAccess(&fakeUser{subscriber: false}, func(msg string) { said = msg }) {
+	if cmd.checkAccess(context.Background(), &fakeUser{subscriber: false}, func(msg string) { said = msg }) {
 		t.Error("expected false for non-subscriber")
 	}
 	if said != subscriberMsg {
@@ -238,7 +262,7 @@ func TestCheckAccess_RequiresSubscriber_NonSubscriber(t *testing.T) {
 func TestCheckAccess_RequiresSubscriber_Subscriber(t *testing.T) {
 	cmd := &Command{Trigger: "!test", RequiresSubscriber: true}
 	var said string
-	if !cmd.checkAccess(&fakeUser{subscriber: true}, func(msg string) { said = msg }) {
+	if !cmd.checkAccess(context.Background(), &fakeUser{subscriber: true}, func(msg string) { said = msg }) {
 		t.Error("expected true for subscriber")
 	}
 	if said != "" {

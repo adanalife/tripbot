@@ -3,12 +3,13 @@ package users
 import (
 	"context"
 	"fmt"
+	"html"
+	"log/slog"
 	"strconv"
 	"strings"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
-	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/logrusorgru/aurora/v3"
 )
 
@@ -20,14 +21,13 @@ var maxLeaderboardSize = 50
 func InitLeaderboard(ctx context.Context) {
 	var users []User
 
-	ignoredUsers := append(c.IgnoredUsers, strings.ToLower(c.Conf.ChannelName))
 	result := database.GormDB().WithContext(ctx).
-		Where("miles != 0 AND is_bot = false AND username NOT IN ?", ignoredUsers).
+		Where("miles != 0 AND is_bot = false AND username != ?", strings.ToLower(c.Conf.ChannelName)).
 		Order("miles DESC").
 		Limit(initLeaderboardSize).
 		Find(&users)
 	if result.Error != nil {
-		terrors.Log(result.Error, "error fetching leaderboard")
+		slog.ErrorContext(ctx, "error fetching leaderboard", "err", result.Error)
 	}
 
 	for _, user := range users {
@@ -38,16 +38,15 @@ func InitLeaderboard(ctx context.Context) {
 }
 
 // UpdateLeaderboard rebuilds the lifetime-miles leaderboard from the
-// LoggedIn map. ctx is forward-compat plumbing — the work is in-memory
-// and CurrentMiles doesn't take ctx yet; once it does the cron-tick span
-// will nest the DB reads as children.
-func UpdateLeaderboard(_ context.Context) {
+// LoggedIn map. The work is in-memory (no DB hits), so ctx only carries
+// the cron-tick span for log correlation.
+func UpdateLeaderboard(ctx context.Context) {
 	for _, user := range LoggedIn {
-		// skip adding this user if they're a bot or ignored
-		if user.IsBot || c.UserIsIgnored(user.Username) || c.UserIsAdmin(user.Username) {
+		// skip adding this user if they're a bot or the channel owner
+		if user.IsBot || c.UserIsAdmin(user.Username) {
 			continue
 		}
-		insertIntoLeaderboard(*user)
+		insertIntoLeaderboard(ctx, *user)
 	}
 	// truncate LifetimeMilesLeaderboard if it gets too big
 	if len(LifetimeMilesLeaderboard) > maxLeaderboardSize {
@@ -56,24 +55,24 @@ func UpdateLeaderboard(_ context.Context) {
 }
 
 // convert the string to a float32
-func strToFloat32(str string) float32 {
+func strToFloat32(ctx context.Context, str string) float32 {
 	value, err := strconv.ParseFloat(str, 32)
 	if err != nil {
-		terrors.Log(err, "error parsing float")
+		slog.ErrorContext(ctx, "error parsing float", "err", err)
 		return 0.0
 	}
 	return float32(value)
 }
 
-func insertIntoLeaderboard(user User) {
+func insertIntoLeaderboard(ctx context.Context, user User) {
 	// first we remove this user from the board
 	removeFromLeaderboard(user.Username)
 
 	// get the current miles as a float
-	miles := user.CurrentMiles()
+	miles := user.CurrentMiles(ctx)
 
 	for i, pair := range LifetimeMilesLeaderboard {
-		val := strToFloat32(pair[1])
+		val := strToFloat32(ctx, pair[1])
 		// see if our miles are higher
 		if miles >= val {
 			milesStr := fmt.Sprintf("%.1f", miles)
@@ -107,20 +106,29 @@ func printLeaderboard() {
 	}
 }
 
-// LeaderboardContent creates the content for the leaderboard onscreen
+// LeaderboardContent renders the leaderboard onscreen as a CSS-grid HTML
+// fragment. The score column auto-sizes to the widest entry via
+// grid-template-columns, so digits line up across rows regardless of font.
+// The onscreen is registered with RenderAsHTML in onscreenRegistry so the
+// browser-source template injects this via innerHTML.
 func LeaderboardContent(title string, leaderboard [][]string) string {
-	var output string
-	output = strings.Title(title) + "\n"
-
 	size := 5
 	if len(leaderboard) < size {
 		size = len(leaderboard)
 	}
 	leaderboard = leaderboard[:size]
 
-	for _, score := range leaderboard {
-		output = output + fmt.Sprintf("%s (%s)\n", score[1], score[0])
+	var b strings.Builder
+	b.WriteString(`<div class="lb-grid">`)
+	fmt.Fprintf(&b, `<div class="lb-title">%s</div>`, html.EscapeString(strings.Title(title)))
+	for _, row := range leaderboard {
+		fmt.Fprintf(
+			&b,
+			`<span class="lb-score">%s</span><span class="lb-user">(%s)</span>`,
+			html.EscapeString(row[1]),
+			html.EscapeString(row[0]),
+		)
 	}
-
-	return output
+	b.WriteString(`</div>`)
+	return b.String()
 }

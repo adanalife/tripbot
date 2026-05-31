@@ -29,7 +29,7 @@ func init() {
 	//TODO: consider using strings.ToLower() on channel name here and removing elsewhere
 
 	// give helpful reminders when things are disabled
-	if Conf.DisableTwitchWebhooks {
-		slog.Warn("Twitch webhooks disabled")
+	if Conf.GoogleMapsAPIKey == "" {
+		slog.Warn("GOOGLE_MAPS_API_KEY not set — geocoder + static-map features disabled")
 	}
 }

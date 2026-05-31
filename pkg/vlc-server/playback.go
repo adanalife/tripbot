@@ -2,25 +2,29 @@ package vlcServer
 
 import (
 	"errors"
+	"fmt"
+	"log/slog"
 	"math/rand"
 	"path/filepath"
-
-	terrors "github.com/adanalife/tripbot/pkg/errors"
 )
 
-//TODO: should we handle the case where index is outside range?
+// TODO: should we handle the case where index is outside range?
 // or just explicitly pass in what we get here?
-func playAtIndex(index int) error {
+func (s *Server) playAtIndex(index int) error {
 	// start playing the media
-	return playlist.PlayAtIndex(uint(index))
+	return s.Playlist.PlayAtIndex(uint(index))
 }
 
-// playVideoFile plays a video file in the playlist
-func playVideoFile(vidStr string) error {
-	// extract just the filename
+// PlayVideoFile plays a video file in the playlist by basename. Returns
+// an error if the file isn't in the loaded playlist. Exported so cmd
+// callers (resume-from-marker on startup) can drive playback.
+func (s *Server) PlayVideoFile(vidStr string) error {
 	videoFile := filepath.Base(vidStr)
-	index := getIndex(videoFile)
-	return playAtIndex(index)
+	index := s.getIndex(videoFile)
+	if index < 0 {
+		return fmt.Errorf("video file not in playlist: %s", videoFile)
+	}
+	return s.playAtIndex(index)
 }
 
 // nextIndex computes a wrapped playlist position. Pure function so it can
@@ -37,36 +41,36 @@ func nextIndex(current, offset, length int) int {
 }
 
 // skip plays the video n items forward in the playlist,
-func skip(n int) error {
-	return playAtIndex(nextIndex(currentIndex(), n, len(videoFiles)))
+func (s *Server) skip(n int) error {
+	return s.playAtIndex(nextIndex(s.currentIndex(), n, len(s.VideoFiles)))
 }
 
 // back plays the video n items backward in the playlist,
-func back(n int) error {
-	return playAtIndex(nextIndex(currentIndex(), -n, len(videoFiles)))
+func (s *Server) back(n int) error {
+	return s.playAtIndex(nextIndex(s.currentIndex(), -n, len(s.VideoFiles)))
 }
 
 // PlayRandom plays a random file from the playlist
-func PlayRandom() error {
-	count, err := mediaList.Count()
+func (s *Server) PlayRandom() error {
+	count, err := s.MediaList.Count()
 	if err != nil {
-		terrors.Log(err, "error counting media in VLC media list")
+		slog.Error("error counting media in VLC media list", "err", err)
 	}
 
 	if count < 1 {
 		err = errors.New("missing media")
-		terrors.Log(err, "no media was found to play")
+		slog.Error("no media was found to play", "err", err)
 		return err
 	}
 
 	random := rand.Intn(count)
 
 	// start playing the media
-	return playAtIndex(random)
+	return s.playAtIndex(random)
 }
 
-func getIndex(vidStr string) int {
-	for i, file := range videoFiles {
+func (s *Server) getIndex(vidStr string) int {
+	for i, file := range s.VideoFiles {
 		if file == vidStr {
 			return i
 		}
@@ -74,8 +78,18 @@ func getIndex(vidStr string) int {
 	return -1
 }
 
-func currentIndex() int {
+func (s *Server) currentIndex() int {
 	// extract just the filename
-	videoFile := filepath.Base(currentlyPlaying())
-	return getIndex(videoFile)
+	videoFile := filepath.Base(s.currentlyPlaying())
+	return s.getIndex(videoFile)
+}
+
+// NextVideoFile returns the basename of the next video in the playlist
+// after the currently-playing one (with wrap). Pure helper for the
+// cover-frame refresher; doesn't touch libvlc.
+func (s *Server) NextVideoFile() string {
+	if len(s.VideoFiles) == 0 {
+		return ""
+	}
+	return s.VideoFiles[nextIndex(s.currentIndex(), +1, len(s.VideoFiles))]
 }

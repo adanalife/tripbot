@@ -1,19 +1,22 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"runtime/debug"
+	"sync"
+	"sync/atomic"
+	"time"
 
-	"github.com/adanalife/tripbot/pkg/chatbot"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
-	terrors "github.com/adanalife/tripbot/pkg/errors"
+	"github.com/adanalife/tripbot/pkg/feature"
+	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"github.com/adanalife/tripbot/pkg/server/oauthstate"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
-	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/nicklaw5/helix/v2"
 )
 
@@ -38,21 +41,66 @@ func SetVersion(v string) {
 	}
 }
 
-//TODO: write real healthchecks for ready vs live
-// healthcheck URL, for tools to verify the bot is alive
-func healthHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "OK")
+// twitchConnected reports whether the bot currently has its Twitch IRC
+// connection. It deliberately does NOT gate the readiness probe: /health/ready
+// is always 200 once the HTTP server is up (see httpmw.ReadinessHandler), so
+// the admin panel, /auth/init and /auth/callback stay reachable through the
+// Ingress even when the bot is offline — otherwise the very page used to
+// re-auth a disconnected bot would 503. Instead this flag drives the
+// admin-panel status row and the tripbot_twitch_connected gauge, so "up but
+// not in chat" is surfaced without pulling the pod out of the Service.
+// cmd/tripbot flips it via SetTwitchConnected on IRC connect / disconnect.
+var twitchConnected atomic.Bool
+
+// SetTwitchConnected updates the chat-connection signal: the in-memory flag
+// the admin panel reads and the tripbot_twitch_connected gauge.
+func SetTwitchConnected(connected bool) {
+	twitchConnected.Store(connected)
+	instrumentation.TwitchConnection.Set(connected)
+}
+
+// TwitchConnected reports the last-known chat-connection state, for the
+// admin panel's status row.
+func TwitchConnected() bool {
+	return twitchConnected.Load()
+}
+
+// flagClient is the FlagClient the admin panel enumerates for its "feature
+// flags" section. Defaults to an empty in-memory client so the panel
+// renders a blank section during the brief startup window between server
+// start and startFeatureFlags swapping in the Postgres-backed client.
+var (
+	flagMu     sync.RWMutex
+	flagClient feature.FlagClient = feature.NewInMemoryClient(nil)
+)
+
+// SetFlagClient lets cmd/tripbot install the Postgres-backed FlagClient
+// once startFeatureFlags has loaded the initial snapshot.
+func SetFlagClient(fc feature.FlagClient) {
+	flagMu.Lock()
+	flagClient = fc
+	flagMu.Unlock()
+}
+
+// flagSnapshot returns the current set of known flags for the admin panel.
+func flagSnapshot(ctx context.Context) []feature.Flag {
+	flagMu.RLock()
+	c := flagClient
+	flagMu.RUnlock()
+	return c.Snapshot(ctx)
 }
 
 // versionHandler returns build metadata as JSON. The tag comes from the
 // build-time ldflag; sha + built_at are read from the binary's embedded
-// VCS info (Go's automatic -buildvcs).
+// VCS info (Go's automatic -buildvcs). started_at is when the process
+// began (admin.startedAt) so callers can derive uptime themselves.
 func versionHandler(w http.ResponseWriter, r *http.Request) {
 	resp := struct {
-		Tag     string `json:"tag"`
-		Sha     string `json:"sha"`
-		BuiltAt string `json:"built_at"`
-	}{Tag: versionTag}
+		Tag       string `json:"tag"`
+		Sha       string `json:"sha"`
+		BuiltAt   string `json:"built_at"`
+		StartedAt string `json:"started_at"`
+	}{Tag: versionTag, StartedAt: startedAt.UTC().Format(time.RFC3339)}
 
 	if info, ok := debug.ReadBuildInfo(); ok {
 		for _, s := range info.Settings {
@@ -67,132 +115,89 @@ func versionHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		terrors.Log(err, "couldn't encode version response")
+		slog.ErrorContext(r.Context(), "couldn't encode version response", "err", err)
 	}
-}
-
-// twitch issues a request here when creating a new webhook subscription
-func webhooksTwitchHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	slog.InfoContext(ctx, "received webhook challenge request", "path", r.URL.Path)
-	// exit early if we've disabled webhooks
-	if c.Conf.DisableTwitchWebhooks {
-		http.Error(w, "501 not implemented", http.StatusNotImplemented)
-		return
-	}
-
-	challenge, ok := r.URL.Query()["hub.challenge"]
-	if !ok || len(challenge[0]) < 1 {
-		terrors.Log(nil, "something went wrong with the challenge")
-		slog.WarnContext(ctx, "webhook challenge missing hub.challenge", "query", fmt.Sprintf("%#v", r.URL.Query()))
-		http.Error(w, "404 not found", http.StatusNotFound)
-		return
-	}
-	slog.InfoContext(ctx, "returning webhook challenge")
-	fmt.Fprint(w, string(challenge[0]))
-}
-
-// user webhooks are received via POST at this url
-//TODO: we can use helix.GetWebhookTopicFromRequest() and share a webhooks URL
-func webhooksTwitchUsersFollowsHandler(w http.ResponseWriter, r *http.Request) {
-	if c.Conf.DisableTwitchWebhooks {
-		http.Error(w, "501 not implemented", http.StatusNotImplemented)
-		return
-	}
-
-	resp, err := decodeFollowWebhookResponse(r)
-	if err != nil {
-		terrors.Log(err, "error decoding follow webhook")
-		//TODO: better error
-		http.Error(w, "404 not found", http.StatusNotFound)
-		return
-	}
-
-	for _, follower := range resp.Data.Follows {
-		username := follower.FromName
-		slog.InfoContext(r.Context(), "received webhook: new follower", "username", username)
-		users.LoginIfNecessary(r.Context(), username)
-		// announce new follower in chat
-		chatbot.AnnounceNewFollower(username)
-	}
-
-	fmt.Fprintf(w, "OK")
-}
-
-// these are sent when users subscribe
-func webhooksTwitchSubscriptionsEventsHandler(w http.ResponseWriter, r *http.Request) {
-	if c.Conf.DisableTwitchWebhooks {
-		http.Error(w, "501 not implemented", http.StatusNotImplemented)
-		return
-	}
-
-	resp, err := decodeSubscriptionWebhookResponse(r)
-	if err != nil {
-		terrors.Log(err, "error decoding subscription webhook")
-		//TODO: better error
-		http.Error(w, "404 not found", http.StatusNotFound)
-		return
-	}
-
-	for _, event := range resp.Data.Events {
-		username := event.Subscription.UserName
-		slog.InfoContext(r.Context(), "received webhook: new sub", "username", username)
-		users.LoginIfNecessary(r.Context(), username)
-		// announce new sub in chat
-		chatbot.AnnounceSubscriber(event.Subscription)
-	}
-
-	// update the internal subscribers list
-	mytwitch.GetSubscribers(r.Context())
-
-	fmt.Fprintf(w, "OK")
 }
 
 // authCallbackHandler completes the OAuth Authorization Code flow. Validates
-// the CSRF state, exchanges the code for an access+refresh token via helix,
-// and persists the row (mytwitch.GenerateUserAccessToken handles the helix
-// call + Upsert).
+// the CSRF state (which round-trips the account selector from /auth/init),
+// derives the expected Twitch login from the account, exchanges the code via
+// helix, and persists the row (mytwitch.GenerateUserAccessToken handles the
+// helix call + identity-sanity-check + Upsert).
 func authCallbackHandler(w http.ResponseWriter, r *http.Request) {
 	state := r.URL.Query().Get("state")
-	if !oauthstate.Validate(state) {
+	account, ok := oauthstate.Validate(state)
+	if !ok {
 		http.Error(w, "invalid or expired state", http.StatusBadRequest)
 		return
 	}
 
 	code := r.URL.Query().Get("code")
 	if code == "" {
-		terrors.Log(errors.New("code missing"), "no code in response from twitch")
+		slog.ErrorContext(r.Context(), "no code in response from twitch", "err", errors.New("code missing"))
 		http.Error(w, "no code in response from twitch", http.StatusBadRequest)
 		return
 	}
 
-	if err := generateUserAccessToken(code); err != nil {
-		terrors.Log(err, "GenerateUserAccessToken failed")
+	expectedLogin := ""
+	switch account {
+	case oauthstate.AccountBot:
+		expectedLogin = c.Conf.BotUsername
+	case oauthstate.AccountBroadcaster:
+		expectedLogin = c.Conf.ChannelName
+	}
+
+	if err := generateUserAccessToken(code, expectedLogin); err != nil {
+		var mismatch *mytwitch.ErrIdentityMismatch
+		if errors.As(err, &mismatch) {
+			slog.WarnContext(r.Context(), "OAuth bootstrap identity mismatch; no row written",
+				"expected", mismatch.Expected, "got", mismatch.Got, "account", mismatch.AccountID)
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprintf(w, authMismatchHTML, mismatch.Got, mismatch.Expected, mismatch.AccountID, mismatch.AccountID)
+			return
+		}
+		slog.ErrorContext(r.Context(), "GenerateUserAccessToken failed", "err", err)
 		http.Error(w, "failed to exchange code: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	slog.InfoContext(r.Context(), "received token from twitch via auth callback")
+	slog.InfoContext(r.Context(), "received token from twitch via auth callback", "account", account, "login", expectedLogin)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	fmt.Fprint(w, authSuccessHTML)
+	fmt.Fprintf(w, authSuccessHTML, expectedLogin, string(account))
 }
 
 // authInitHandler kicks off an OAuth Authorization Code flow from a browser.
 // Generates a state, redirects (302) to Twitch's authorize URL with the
-// configured Scopes. The cluster pod serves this for emergency re-bootstrap
-// when Dana isn't near a laptop; locally cmd/auth-bootstrap does its own
-// equivalent without going through the public Ingress.
+// scope set for the requested account (?account=bot|broadcaster, default bot).
+// ForceVerify=true so Twitch re-prompts which account to sign in as instead
+// of silently reusing the session cookie. The cluster pod serves this for
+// emergency re-bootstrap when Dana isn't near a laptop; locally
+// cmd/auth-bootstrap does its own equivalent without going through Ingress.
 func authInitHandler(w http.ResponseWriter, r *http.Request) {
+	scopes := mytwitch.BotScopes
+	account := oauthstate.AccountBot
+	switch r.URL.Query().Get("account") {
+	case "", "bot":
+		// default
+	case "broadcaster":
+		scopes = mytwitch.BroadcasterScopes
+		account = oauthstate.AccountBroadcaster
+	default:
+		http.Error(w, "account must be 'bot' or 'broadcaster'", http.StatusBadRequest)
+		return
+	}
 	client, err := helixClient()
 	if err != nil {
-		terrors.Log(err, "helix client unavailable for /auth/init")
+		slog.ErrorContext(r.Context(), "helix client unavailable for /auth/init", "err", err)
 		http.Error(w, "auth unavailable", http.StatusInternalServerError)
 		return
 	}
-	state := oauthstate.New()
+	state := oauthstate.New(account)
 	authURL := client.GetAuthorizationURL(&helix.AuthorizationURLParams{
-		Scopes:       mytwitch.Scopes,
+		Scopes:       scopes,
 		ResponseType: "code",
+		ForceVerify:  true,
 		State:        state,
 	})
 	http.Redirect(w, r, authURL, http.StatusFound)
@@ -201,12 +206,25 @@ func authInitHandler(w http.ResponseWriter, r *http.Request) {
 // authSuccessHTML is the body returned after a successful code exchange.
 // Inline so the handler doesn't depend on a template file; if this needs
 // styling beyond a few lines, move to an embed.FS template.
+// %s = the discovered login, %s = the account ("bot"/"broadcaster").
 const authSuccessHTML = `<!doctype html>
 <html>
 <head><meta charset="utf-8"><title>tripbot — auth success</title>
 <style>body{background:#0a0a0a;color:#eee;font:14px/1.5 -apple-system,monospace;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}</style>
 </head>
-<body><div><h1>Success</h1><p>You may close this tab.</p></div></body>
+<body><div><h1>Success</h1><p>Refresh token persisted for <strong>%s</strong> (%s account). You may close this tab.</p></div></body>
+</html>`
+
+// authMismatchHTML is returned when the discovered Twitch login doesn't
+// match the expected identity for the flow. No row is written.
+// %s = got login, %s = expected login, %s = account ("bot"/"broadcaster"),
+// %s = account again (for the retry-link query param).
+const authMismatchHTML = `<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>tripbot — wrong account</title>
+<style>body{background:#3a0000;color:#fff;font:14px/1.5 -apple-system,monospace;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}div{max-width:540px}code{background:#000;padding:2px 5px;border-radius:3px}a{color:#9cf}</style>
+</head>
+<body><div><h1>Wrong account</h1><p>You signed in as <code>%s</code>, but this leg expected <code>%s</code> (the <strong>%s</strong> account).</p><p>No token was written. Sign out of Twitch in this browser (or open an incognito window), then <a href="/auth/init?account=%s">click here to retry</a>.</p></div></body>
 </html>`
 
 // return a favicon if anyone asks for one

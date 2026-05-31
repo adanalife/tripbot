@@ -2,6 +2,7 @@ package instrumentation
 
 import (
 	"context"
+	"time"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -25,23 +26,26 @@ var (
 	scoreboardWrites  = mustCounter("tripbot_scoreboard_writes_total", "Total successful scoreboard score writes, labeled by scoreboard")
 	twitchSubscribers = mustGauge("twitch_subscribers_total", "Current number of Twitch channel subscribers")
 	twitchFollowers   = mustGauge("twitch_followers_total", "Current number of Twitch channel followers")
+	twitchConnected   = mustGauge("tripbot_twitch_connected", "1 when the bot is connected to Twitch chat (IRC), 0 otherwise")
+	twitchTokenExpiry = mustGauge("tripbot_twitch_token_expires_at_seconds", "Unix timestamp of the in-memory Twitch user-access-token's ExpiresAt, labeled by account (bot|broadcaster). 0 when the account has no loaded token.")
 	twitchHelixErrors = mustCounter("twitch_helix_errors_total", "Total non-2xx responses from the Twitch Helix API, labeled by endpoint and status_code")
-	obsStreamingGauge = mustGauge("obs_streaming_active", "1 if OBS is actively streaming, 0 otherwise")
+	twitchChannelLive = mustGauge("tripbot_twitch_channel_live", "1 when Helix GetStreams reports the configured channel as live, 0 when offline. Driven by the OBS silent-disconnect watchdog's Helix poll.")
 
-	obsActiveFPS              = mustFloat64Gauge("obs_active_fps", "Current FPS being rendered by OBS")
-	obsAverageFrameRenderMS   = mustFloat64Gauge("obs_average_frame_render_time_ms", "Average time in milliseconds OBS spends rendering a frame")
-	obsCPUUsage               = mustFloat64Gauge("obs_cpu_usage_percent", "Current OBS CPU usage (percent)")
-	obsMemoryUsage            = mustFloat64Gauge("obs_memory_usage_mb", "Current OBS memory usage in MB")
-	obsRenderSkippedFrames    = mustFloat64Gauge("obs_render_skipped_frames", "Render-thread skipped frames since OBS started")
-	obsRenderTotalFrames      = mustFloat64Gauge("obs_render_total_frames", "Render-thread total frames since OBS started")
-	obsOutputSkippedFrames    = mustFloat64Gauge("obs_output_skipped_frames", "Output-thread skipped frames since OBS started")
-	obsOutputTotalFrames      = mustFloat64Gauge("obs_output_total_frames", "Output-thread total frames since OBS started")
-	obsStreamOutputBytes      = mustFloat64Gauge("obs_stream_output_bytes", "Bytes sent by the stream output (cumulative since stream start)")
-	obsStreamOutputDurationMS = mustFloat64Gauge("obs_stream_output_duration_ms", "Current stream output duration in milliseconds")
-	obsStreamCongestion       = mustFloat64Gauge("obs_stream_output_congestion", "Stream output congestion (0..1)")
-	obsStreamReconnecting     = mustGauge("obs_stream_output_reconnecting", "1 if the stream output is currently reconnecting, 0 otherwise")
-	obsStreamSkippedFrames    = mustFloat64Gauge("obs_stream_output_skipped_frames", "Stream-output skipped frames since stream start")
-	obsStreamTotalFrames      = mustFloat64Gauge("obs_stream_output_total_frames", "Stream-output total frames since stream start")
+	obsSilentDisconnectRestarts = mustCounter("tripbot_obs_silent_disconnect_restarts_total", "Total times the OBS silent-disconnect watchdog forced a StopStream+StartStream because OBS reported outputActive=true while Twitch reported the channel offline")
+
+	twitchHelixRateRemaining = mustGauge("twitch_helix_rate_limit_remaining", "Last-seen Ratelimit-Remaining header from Twitch Helix responses (per app-access bearer)")
+	twitchHelixRateLimit     = mustGauge("twitch_helix_rate_limit_total", "Last-seen Ratelimit-Limit header from Twitch Helix responses (per app-access bearer)")
+
+	cronRuns     = mustCounter("tripbot_cron_runs_total", "Total cron job invocations, labeled by job")
+	cronPanics   = mustCounter("tripbot_cron_panics_total", "Cron job panics recovered, labeled by job")
+	cronLastRun  = mustGauge("tripbot_cron_last_run_timestamp_seconds", "Unix timestamp of the most recent completion of each cron job, labeled by job")
+	cronDuration = mustHistogram(
+		"tripbot_cron_duration_seconds",
+		"Cron job duration in seconds, labeled by job",
+		0.01, 0.05, 0.1, 0.5, 1, 5, 10, 30, 60,
+	)
+
+	httpPanics = mustCounter("tripbot_http_panics_total", "HTTP handler panics recovered, labeled by service")
 )
 
 // ChatMessages exposes the chat-message counter through a tiny stable API
@@ -69,56 +73,53 @@ var ScoreboardWrites = scoreboardWritesIface{counter: scoreboardWrites}
 // TwitchAudience exposes subscriber and follower gauge recording.
 var TwitchAudience = twitchAudienceIface{subscribers: twitchSubscribers, followers: twitchFollowers}
 
+// TwitchConnection exposes the chat-connection gauge. Set(true) on IRC
+// connect, Set(false) on disconnect. Readiness no longer gates on the Twitch
+// connection (the pod stays in the Service so the re-auth page is reachable),
+// so this gauge — alongside the admin-panel status row — is what surfaces
+// "up but not in chat" to dashboards and alerts.
+var TwitchConnection = twitchConnectionIface{gauge: twitchConnected}
+
+// TwitchTokenExpiry exposes the per-account token-expiry timestamp gauge.
+// SetExpiresAt(account, t) records t.Unix(), or 0 if t is the zero Time —
+// the latter is how a blanked or never-loaded token shows up. Drives the
+// "tripbot needs reauth" alert (time() past the recorded expiry).
+var TwitchTokenExpiry = twitchTokenExpiryIface{gauge: twitchTokenExpiry}
+
 // TwitchHelixErrors exposes the helix-error counter; record by calling
 // TwitchHelixErrors.Inc(endpoint, statusCode). Endpoint is a short label
 // like "GetUsers"; statusCode is the HTTP status reported by Twitch.
 var TwitchHelixErrors = twitchHelixErrorsIface{counter: twitchHelixErrors}
 
-// OBSStreaming exposes the streaming-active gauge.
-var OBSStreaming = obsStreamingIface{g: obsStreamingGauge}
+// TwitchChannelLive exposes the per-tick Twitch live-status gauge written
+// by the OBS silent-disconnect watchdog. Set(true) on every successful
+// Helix poll that reports the channel as live, Set(false) when GetStreams
+// returns empty. Paired with OBSStreaming in an alert: divergence
+// (OBS=1 / Twitch=0) is the silent half-open RTMP signal.
+var TwitchChannelLive = twitchChannelLiveIface{gauge: twitchChannelLive}
 
-// OBSStatsSnapshot bundles OBS performance + stream-output stats so the
-// poller can publish in a single call without coupling instrumentation to
-// goobs types.
-type OBSStatsSnapshot struct {
-	ActiveFPS              float64
-	AverageFrameRenderTime float64 // ms
-	CPUUsage               float64 // percent
-	MemoryUsage            float64 // MB
-	RenderSkippedFrames    float64
-	RenderTotalFrames      float64
-	OutputSkippedFrames    float64
-	OutputTotalFrames      float64
-}
+// OBSSilentDisconnectRestarts exposes the watchdog's force-restart counter.
+// Inc() is called after a successful StopStream+StartStream sequence.
+// Any non-zero rate is alertable — the watchdog only fires after a
+// 3-minute debounce, so even one increment means we saw a real silent
+// disconnect in prod.
+var OBSSilentDisconnectRestarts = obsSilentDisconnectRestartsIface{counter: obsSilentDisconnectRestarts}
 
-// OBSStreamSnapshot is the stream-output side (only meaningful while
-// streaming, but always safe to publish — fields are zero when idle).
-type OBSStreamSnapshot struct {
-	OutputBytes       float64
-	OutputDurationMS  float64
-	OutputCongestion  float64
-	Reconnecting      bool
-	SkippedFrames     float64
-	TotalFrames       float64
-}
+// TwitchHelixRateLimit exposes the per-bearer Helix rate-budget gauges.
+// SetRemaining + SetLimit are called by the response-recording transport
+// on every Helix call so dashboards / alerts can see headroom without
+// waiting for a 429.
+var TwitchHelixRateLimit = twitchHelixRateLimitIface{remaining: twitchHelixRateRemaining, limit: twitchHelixRateLimit}
 
-// OBSStats exposes the OBS performance + stream-output gauges.
-var OBSStats = obsStatsIface{
-	activeFPS:           obsActiveFPS,
-	averageFrameRender:  obsAverageFrameRenderMS,
-	cpuUsage:            obsCPUUsage,
-	memoryUsage:         obsMemoryUsage,
-	renderSkippedFrames: obsRenderSkippedFrames,
-	renderTotalFrames:   obsRenderTotalFrames,
-	outputSkippedFrames: obsOutputSkippedFrames,
-	outputTotalFrames:   obsOutputTotalFrames,
-	streamBytes:         obsStreamOutputBytes,
-	streamDuration:      obsStreamOutputDurationMS,
-	streamCongestion:    obsStreamCongestion,
-	streamReconnecting:  obsStreamReconnecting,
-	streamSkipped:       obsStreamSkippedFrames,
-	streamTotal:         obsStreamTotalFrames,
-}
+// Cron exposes cron job metrics. Observe(job, seconds) is called on every
+// completion (success or recovered panic); Panic(job) is additionally
+// called when a recover() fires. Together they enable "stalled cron" and
+// "panicking cron" alerts.
+var Cron = cronIface{runs: cronRuns, panics: cronPanics, lastRun: cronLastRun, duration: cronDuration}
+
+// HTTPPanics exposes the HTTP-handler panic counter. Increment from a
+// recovery middleware that catches panics in the request goroutine.
+var HTTPPanics = httpPanicsIface{counter: httpPanics}
 
 type chatCounterIface struct{ counter metric.Int64Counter }
 
@@ -163,6 +164,26 @@ func (a twitchAudienceIface) SetFollowers(n int64) {
 	a.followers.Record(context.Background(), n)
 }
 
+type twitchConnectionIface struct{ gauge metric.Int64Gauge }
+
+func (t twitchConnectionIface) Set(connected bool) {
+	var v int64
+	if connected {
+		v = 1
+	}
+	t.gauge.Record(context.Background(), v)
+}
+
+type twitchTokenExpiryIface struct{ gauge metric.Int64Gauge }
+
+func (t twitchTokenExpiryIface) SetExpiresAt(account string, expiresAt time.Time) {
+	var v int64
+	if !expiresAt.IsZero() {
+		v = expiresAt.Unix()
+	}
+	t.gauge.Record(context.Background(), v, metric.WithAttributes(attribute.String("account", account)))
+}
+
 type twitchHelixErrorsIface struct{ counter metric.Int64Counter }
 
 func (h twitchHelixErrorsIface) Inc(endpoint string, statusCode int) {
@@ -172,57 +193,64 @@ func (h twitchHelixErrorsIface) Inc(endpoint string, statusCode int) {
 	))
 }
 
-type obsStreamingIface struct{ g metric.Int64Gauge }
+type twitchChannelLiveIface struct{ gauge metric.Int64Gauge }
 
-func (o obsStreamingIface) Set(active bool) {
-	v := int64(0)
-	if active {
+func (t twitchChannelLiveIface) Set(live bool) {
+	var v int64
+	if live {
 		v = 1
 	}
-	o.g.Record(context.Background(), v)
+	t.gauge.Record(context.Background(), v)
 }
 
-type obsStatsIface struct {
-	activeFPS           metric.Float64Gauge
-	averageFrameRender  metric.Float64Gauge
-	cpuUsage            metric.Float64Gauge
-	memoryUsage         metric.Float64Gauge
-	renderSkippedFrames metric.Float64Gauge
-	renderTotalFrames   metric.Float64Gauge
-	outputSkippedFrames metric.Float64Gauge
-	outputTotalFrames   metric.Float64Gauge
-	streamBytes         metric.Float64Gauge
-	streamDuration      metric.Float64Gauge
-	streamCongestion    metric.Float64Gauge
-	streamReconnecting  metric.Int64Gauge
-	streamSkipped       metric.Float64Gauge
-	streamTotal         metric.Float64Gauge
+type obsSilentDisconnectRestartsIface struct{ counter metric.Int64Counter }
+
+func (o obsSilentDisconnectRestartsIface) Inc() {
+	o.counter.Add(context.Background(), 1)
 }
 
-func (o obsStatsIface) Update(s OBSStatsSnapshot) {
-	ctx := context.Background()
-	o.activeFPS.Record(ctx, s.ActiveFPS)
-	o.averageFrameRender.Record(ctx, s.AverageFrameRenderTime)
-	o.cpuUsage.Record(ctx, s.CPUUsage)
-	o.memoryUsage.Record(ctx, s.MemoryUsage)
-	o.renderSkippedFrames.Record(ctx, s.RenderSkippedFrames)
-	o.renderTotalFrames.Record(ctx, s.RenderTotalFrames)
-	o.outputSkippedFrames.Record(ctx, s.OutputSkippedFrames)
-	o.outputTotalFrames.Record(ctx, s.OutputTotalFrames)
+type twitchHelixRateLimitIface struct {
+	remaining metric.Int64Gauge
+	limit     metric.Int64Gauge
 }
 
-func (o obsStatsIface) UpdateStream(s OBSStreamSnapshot) {
-	ctx := context.Background()
-	o.streamBytes.Record(ctx, s.OutputBytes)
-	o.streamDuration.Record(ctx, s.OutputDurationMS)
-	o.streamCongestion.Record(ctx, s.OutputCongestion)
-	v := int64(0)
-	if s.Reconnecting {
-		v = 1
-	}
-	o.streamReconnecting.Record(ctx, v)
-	o.streamSkipped.Record(ctx, s.SkippedFrames)
-	o.streamTotal.Record(ctx, s.TotalFrames)
+func (r twitchHelixRateLimitIface) SetRemaining(n int64) {
+	r.remaining.Record(context.Background(), n)
+}
+
+func (r twitchHelixRateLimitIface) SetLimit(n int64) {
+	r.limit.Record(context.Background(), n)
+}
+
+type cronIface struct {
+	runs     metric.Int64Counter
+	panics   metric.Int64Counter
+	lastRun  metric.Int64Gauge
+	duration metric.Float64Histogram
+}
+
+// Observe records a completed cron run: bumps the run counter, records the
+// duration, and updates the last-run timestamp. Call on every completion,
+// including when a panic was recovered, so "no successful run in 3× interval"
+// alerts still see activity from a panicking job.
+func (c cronIface) Observe(job string, seconds float64, now int64) {
+	attr := metric.WithAttributes(attribute.String("job", job))
+	c.runs.Add(context.Background(), 1, attr)
+	c.duration.Record(context.Background(), seconds, attr)
+	c.lastRun.Record(context.Background(), now, attr)
+}
+
+// Panic records a cron panic. Call from a recover() handler before Observe.
+func (c cronIface) Panic(job string) {
+	c.panics.Add(context.Background(), 1, metric.WithAttributes(attribute.String("job", job)))
+}
+
+type httpPanicsIface struct{ counter metric.Int64Counter }
+
+// Inc records one recovered HTTP-handler panic, labeled by service
+// (typically c.Conf.ServerType: "tripbot" / "vlc_server" / "onscreens_server").
+func (h httpPanicsIface) Inc(service string) {
+	h.counter.Add(context.Background(), 1, metric.WithAttributes(attribute.String("service", service)))
 }
 
 func mustCounter(name, desc string) metric.Int64Counter {

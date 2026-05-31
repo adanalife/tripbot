@@ -4,60 +4,69 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
 
-	c "github.com/adanalife/tripbot/pkg/config/tripbot"
-	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/scoreboards"
 	"github.com/adanalife/tripbot/pkg/users"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
-var onscreensServerURL = "http://" + c.Conf.VlcServerHost
+// Client talks to the onscreens-server HTTP API. Construct via New(host).
+type Client struct {
+	serverURL  string
+	httpClient *http.Client
+}
 
-// httpClient wraps the default transport with OpenTelemetry instrumentation
-// so outbound calls produce spans. See pkg/vlc-client for the same pattern.
-var httpClient = &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)}
+// New returns a Client pointed at the given onscreens-server host. The HTTP
+// transport is OTel-instrumented so outbound calls produce spans and
+// propagate W3C tracecontext headers.
+func New(host string) *Client {
+	return &Client{
+		serverURL:  "http://" + host,
+		httpClient: &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)},
+	}
+}
 
-func HideMiddleText() error {
-	_, err := getUrl(onscreensServerURL + "/onscreens/middle/hide")
+func (c *Client) HideMiddleText(ctx context.Context) error {
+	_, err := c.get(ctx, c.serverURL+"/onscreens/middle/hide")
 	if err != nil {
-		terrors.Log(err, "error showing leaderboard onscreen")
+		slog.ErrorContext(ctx, "error hiding middle onscreen", "err", err)
 		return err
 	}
 	return nil
 }
 
-func ShowMiddleText(msg string) error {
-	url := onscreensServerURL + "/onscreens/middle/show"
+func (c *Client) ShowMiddleText(ctx context.Context, msg string) error {
+	url := c.serverURL + "/onscreens/middle/show"
 	url = fmt.Sprintf("%s?msg=%s", url, helpers.Base64Encode(msg))
-	_, err := getUrl(url)
+	_, err := c.get(ctx, url)
 	if err != nil {
-		terrors.Log(err, "error showing middle onscreen")
+		slog.ErrorContext(ctx, "error showing middle onscreen", "err", err)
 		return err
 	}
 	return err
 }
 
-func ShowLeaderboard(title string, leaderboard [][]string) error {
+func (c *Client) ShowLeaderboard(ctx context.Context, title string, leaderboard [][]string) error {
 	content := users.LeaderboardContent(title, leaderboard)
 
-	url := onscreensServerURL + "/onscreens/leaderboard/show"
+	url := c.serverURL + "/onscreens/leaderboard/show"
 	url = fmt.Sprintf("%s?content=%s", url, helpers.Base64Encode(content))
 
-	_, err := getUrl(url)
+	_, err := c.get(ctx, url)
 	if err != nil {
-		terrors.Log(err, "error showing leaderboard onscreen")
+		slog.ErrorContext(ctx, "error showing leaderboard onscreen", "err", err)
 		return err
 	}
 	return nil
 }
 
-//TODO: this is taken right from the !guessleaderboard command, DRY it?
-func ShowGuessLeaderboard(ctx context.Context) {
+// TODO: this is taken right from the !guessleaderboard command, DRY it?
+func (c *Client) ShowGuessLeaderboard(ctx context.Context) {
 	// select users to show in leaderboard
 	size := 10
 	leaderboard := scoreboards.TopUsers(ctx, scoreboards.CurrentGuessScoreboard(), size)
@@ -66,75 +75,93 @@ func ShowGuessLeaderboard(ctx context.Context) {
 	}
 	leaderboard = leaderboard[:size]
 
+	// Filter zero-scorers (AddToScoreByName uses FirstOrCreate, so every
+	// user who's ever guessed has a row — many at 0 early in the month).
+	// If the filtered list is empty, skip the overlay entirely.
 	var intLeaderboard [][]string
 	for _, leaderPair := range leaderboard {
 		// guesses are ints not floats, so remove the decimal place
 		intVersion := strings.Split(leaderPair[1], ".")[0]
+		if intVersion == "0" || intVersion == "" {
+			continue
+		}
 		intLeaderboard = append(intLeaderboard, []string{leaderPair[0], intVersion})
+	}
+	if len(intLeaderboard) == 0 {
+		return
 	}
 
 	// display leaderboard on screen
-	ShowLeaderboard("Correct Guesses This Month", intLeaderboard)
+	c.ShowLeaderboard(ctx, "Correct Guesses This Month", intLeaderboard)
 }
 
-func ShowTimewarp() error {
-	_, err := getUrl(onscreensServerURL + "/onscreens/timewarp/show")
+func (c *Client) ShowTimewarp(ctx context.Context) error {
+	_, err := c.get(ctx, c.serverURL+"/onscreens/timewarp/show")
 	if err != nil {
-		terrors.Log(err, "error showing timewarp onscreen")
+		slog.ErrorContext(ctx, "error showing timewarp onscreen", "err", err)
 		return err
 	}
 	return nil
 }
 
-func ShowFlag(dur time.Duration) error {
+func (c *Client) ShowFlag(ctx context.Context, dur time.Duration) error {
 	//TODO: bring this back
-	// url := onscreensServerURL + "/onscreens/flag/show"
+	// url := c.serverURL + "/onscreens/flag/show"
 	// url = fmt.Sprintf("%s?duration=%s", url, helpers.Base64Encode(string(rune(dur))))
-	// _, err := getUrl(url)
+	// _, err := c.get(ctx, url)
 	// if err != nil {
-	// 	terrors.Log(err, "error showing flag onscreen")
+	// 	slog.ErrorContext(ctx, "error showing flag onscreen", "err", err)
 	// 	return err
 	// }
 	return nil
 }
 
-func ShowGPSImage(dur time.Duration) error {
-	url := onscreensServerURL + "/onscreens/gps/show"
+func (c *Client) ShowGPSImage(ctx context.Context, dur time.Duration) error {
+	url := c.serverURL + "/onscreens/gps/show"
 	url = fmt.Sprintf("%s?duration=%s", url, helpers.Base64Encode(string(rune(dur))))
-	_, err := getUrl(url)
+	_, err := c.get(ctx, url)
 	if err != nil {
-		terrors.Log(err, "error showing gps onscreen")
+		slog.ErrorContext(ctx, "error showing gps onscreen", "err", err)
 		return err
 	}
 	return nil
 }
 
-func HideGPSImage() error {
-	_, err := getUrl(onscreensServerURL + "/onscreens/gps/hide")
+func (c *Client) HideGPSImage(ctx context.Context) error {
+	_, err := c.get(ctx, c.serverURL+"/onscreens/gps/hide")
 	if err != nil {
-		terrors.Log(err, "error hiding gps onscreen")
+		slog.ErrorContext(ctx, "error hiding gps onscreen", "err", err)
 		return err
 	}
 	return nil
 }
 
-//TODO: move this to a common location
-func getUrl(url string) (string, error) {
-	response, err := httpClient.Get(url)
+// TODO: move this to a common location
+//
+// Transport-layer errors log at Debug, not Error: each wrapper above this
+// (HideMiddleText, ShowGPSImage, …) logs the operation-specific failure at
+// Error with the same underlying err. Logging here too would double-count
+// every onscreens outage in Loki and Sentry.
+func (c *Client) get(ctx context.Context, url string) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		terrors.Log(err, "error connecting to VLC server")
+		slog.DebugContext(ctx, "error building request to onscreens server", "err", err)
 		return "", err
-	} else {
-		defer response.Body.Close()
-		contents, err := ioutil.ReadAll(response.Body)
-		if err != nil {
-			terrors.Log(err, "error reading response from VLC server")
-			return "", err
-		}
-		// make note of non-200 status codes
-		if response.StatusCode != 200 {
-			terrors.Log(nil, fmt.Sprintf("non-200 response from server (%d)", response.StatusCode))
-		}
-		return string(contents), nil
 	}
+	response, err := c.httpClient.Do(req)
+	if err != nil {
+		slog.DebugContext(ctx, "error connecting to onscreens server", "err", err)
+		return "", err
+	}
+	defer response.Body.Close()
+	contents, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		slog.DebugContext(ctx, "error reading response from onscreens server", "err", err)
+		return "", err
+	}
+	// make note of non-200 status codes
+	if response.StatusCode != 200 {
+		slog.ErrorContext(ctx, "non-200 response from server", "status", response.StatusCode)
+	}
+	return string(contents), nil
 }

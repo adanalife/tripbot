@@ -10,14 +10,13 @@ import (
 	mylog "github.com/adanalife/tripbot/pkg/chatbot/log"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
-	terrors "github.com/adanalife/tripbot/pkg/errors"
+	"github.com/adanalife/tripbot/pkg/eventbus"
+	"github.com/adanalife/tripbot/pkg/feature"
+	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
-	"github.com/adanalife/tripbot/pkg/users"
-	"github.com/adanalife/tripbot/pkg/video"
-	"github.com/davecgh/go-spew/spew"
+	vlcClient "github.com/adanalife/tripbot/pkg/vlc-client"
 	"github.com/gempir/go-twitch-irc/v4"
 	"github.com/kelvins/geocoder"
-	"github.com/nicklaw5/helix/v2"
 	"gorm.io/gorm"
 )
 
@@ -28,7 +27,6 @@ var Uptime time.Time
 // App holds injectable dependencies for the chatbot.
 // Tests instantiate it directly with fakes; production uses defaultApp.
 type App struct {
-	CurrentVideo func() video.Video
 	// DB is the GORM handle used by commands that need to read or write the
 	// database. nil in tests that don't exercise the DB; otherwise either the
 	// real database.GormDB() or a sqlmock-backed gorm.DB.
@@ -41,8 +39,6 @@ type App struct {
 	VLC VLC
 	// Video reads / refreshes the currently-playing dashcam video. Tests
 	// inject a no-op fake; production uses the realVideo adapter.
-	// CurrentVideo (above) is the older closure-based seam; both live on
-	// App for now and a follow-up will subsume CurrentVideo into Video.
 	Video Video
 	// IRC sends chat output (Say, Whisper). Tests inject a recordingIRC
 	// to assert on chat messages; production uses the realIRC adapter
@@ -53,6 +49,25 @@ type App struct {
 	// recordingSessions to assert lookups and stage results; production
 	// uses the realSessions adapter.
 	Sessions Sessions
+	// NowPlaying reports the currently-playing track on the stream's
+	// background audio source. Tests inject a fake; production uses
+	// realNowPlaying which polls SomaFM.
+	NowPlaying NowPlaying
+	// Flags evaluates feature flag values for command-time gating. Tests
+	// inject noopFlags{} (every key false); production uses realFlags which
+	// delegates to the Postgres-backed client cmd/tripbot installs via
+	// SetFlagClient once the DB connection is up.
+	Flags feature.FlagClient
+	// NATS is the fire-and-forget pubsub surface. Tests inject a
+	// recordingNATS to assert on publishes; production uses realNATS
+	// which delegates to the pkg/natsclient singleton (no-op when
+	// NATS_URL is empty).
+	NATS NATS
+	// Cron stops the background scheduler during !shutdown. Tests inject
+	// noopCron{}; production uses realCron which delegates to the
+	// constructed *background.Scheduler cmd/tripbot installs via
+	// SetScheduler once cron has started.
+	Cron Cron
 }
 
 // db returns the DB handle the App should use. Prefers an explicit a.DB
@@ -66,13 +81,16 @@ func (a *App) db() *gorm.DB {
 }
 
 var defaultApp = &App{
-	CurrentVideo: func() video.Video { return video.CurrentlyPlaying },
 	// DB stays nil; commands use a.db() which falls back to database.GormDB().
-	Onscreens: realOnscreens{},
-	VLC:       realVLC{},
-	Video:     realVideo{},
-	IRC:       realIRC{},
-	Sessions:  realSessions{},
+	Onscreens:  realOnscreens{c: onscreensClient.New(c.Conf.OnscreensServerHost), nats: realNATS{}, env: c.Conf.Environment},
+	VLC:        realVLC{c: vlcClient.New(c.Conf.VlcServerHost)},
+	Video:      realVideo{},
+	IRC:        realIRC{},
+	Sessions:   realSessions{},
+	NowPlaying: newRealNowPlaying(),
+	Flags:      realFlags{},
+	NATS:       realNATS{},
+	Cron:       realCron{},
 }
 
 // used to determine which help message to display
@@ -82,6 +100,11 @@ var helpIndex = rand.Intn(len(c.HelpMessages))
 const followerMsg = "Right now only followers of the channel can run unlimited commands :)"
 const subscriberMsg = "You must be a subscriber to run that command :)"
 
+// followerGatingEnabled toggles the RequiresFollow access check in
+// checkAccess. Disabled for launch so first-time viewers aren't told to
+// follow before they can try commands. Flip back to true to re-enable.
+var followerGatingEnabled = false
+
 // Initialize returns a Twitch client struct with all of the various configuration in place.
 func Initialize() *twitch.Client {
 	var err error
@@ -90,10 +113,12 @@ func Initialize() *twitch.Client {
 	// set up geocoder (for translating coords to places)
 	geocoder.ApiKey = c.Conf.GoogleMapsAPIKey
 
-	// initialize the twitch API client
-	_, err = mytwitch.Client()
-	if err != nil {
-		terrors.Fatal(err, "unable to create twitch API client")
+	// initialize the twitch API client. Non-fatal: if Twitch is unreachable
+	// at boot, log and continue so the process stays up (readiness reports
+	// not-ready until the IRC connection lands). mytwitch.Client() doesn't
+	// cache on failure, so callers retry once Twitch is back.
+	if _, err = mytwitch.Client(); err != nil {
+		slog.Error("twitch API client unavailable at startup; continuing", "err", err)
 	}
 
 	// The IRC token comes from the DB-backed oauth_tokens row populated by
@@ -114,6 +139,11 @@ func Initialize() *twitch.Client {
 func Say(msg string) {
 	// include the message in the log
 	mylog.ChatMsg(c.Conf.BotUsername, msg)
+	// mirror the bot's own output onto the event bus so it shows in the admin
+	// live console — Twitch doesn't echo our sent messages back via
+	// PrivateMessage, so without this the console would miss everything the bot
+	// says. Fire-and-forget; no-op when NATS is unconfigured.
+	eventbus.EmitChatMessage(context.Background(), c.Conf.Environment, c.Conf.BotUsername, msg)
 	// figure out what channel to speak to
 	speakTo := c.Conf.ChannelName
 	if c.Conf.OutputChannel != "" {
@@ -133,7 +163,7 @@ func Whisper(username, msg string) {
 	//TODO: include whispers in log
 	// include the message in the log
 	// mylog.ChatMsg(c.Conf.BotUsername, msg)
-	slog.Info("sending whisper", "to", username, "msg", msg)
+	slog.Info("sending whisper", "to", username, "text", msg)
 	// say the message to chat
 	client.Say(c.Conf.BotUsername, fmt.Sprintf("/w %s %s", username, msg))
 }
@@ -153,23 +183,4 @@ func help() string {
 	// bump the index
 	helpIndex = (helpIndex + 1) % len(c.HelpMessages)
 	return text
-}
-
-// AnnounceNewFollower makes a post in chat that a user follows the channel
-func AnnounceNewFollower(username string) {
-	msg := fmt.Sprintf("Thank you for the follow, @%s", username)
-	sayFn(msg)
-}
-
-// AnnounceSubscriber makes a post in chat that a user has subscribed
-func AnnounceSubscriber(sub helix.Subscription) {
-	//TODO: do more with the Subscription... IsGift, Tier, PlanName, etc.
-	spew.Dump(sub)
-	username := sub.UserName
-	msg := fmt.Sprintf("Thank you for the sub, @%s; enjoy your !bonusmiles bleedPurple", username)
-	sayFn(msg)
-	// give everyone a bonus mile
-	users.GiveEveryoneMiles(1.0)
-	msg = fmt.Sprintf("The %d current viewers have been given a bonus mile, too HolidayPresent", len(users.LoggedIn))
-	sayFn(msg)
 }

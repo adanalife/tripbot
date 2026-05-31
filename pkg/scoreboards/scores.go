@@ -8,7 +8,6 @@ import (
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
-	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"gorm.io/gorm"
 )
@@ -23,42 +22,42 @@ type Score struct {
 }
 
 // GetScoreByName returns the score value for a given username and scoreboard name
-//TODO: this could be achieved with a single query
+// TODO: this could be achieved with a single query
 func GetScoreByName(ctx context.Context, username, scoreboardName string) (float32, error) {
 	userID, err := getUserIDByName(ctx, username)
 	if err != nil {
-		terrors.Log(err, "error getting user ID")
+		slog.ErrorContext(ctx, "error getting user ID", "err", err)
 		return -1.0, err
 	}
 	scoreboard, err := findOrCreateScoreboard(ctx, scoreboardName)
 	if err != nil {
-		terrors.Log(err, "error finding or creating scoreboard")
+		slog.ErrorContext(ctx, "error finding or creating scoreboard", "err", err)
 		return -1.0, err
 	}
 	score, err := findOrCreateScore(ctx, userID, scoreboard.ID)
 	if err != nil {
-		terrors.Log(err, "error finding score")
+		slog.ErrorContext(ctx, "error finding score", "err", err)
 		return -1.0, err
 	}
 	return score.Value, err
 }
 
 // AddToScoreByName increases the score value for a given username and scoreboard name
-//TODO: this could be achieved with less queries
+// TODO: this could be achieved with less queries
 func AddToScoreByName(ctx context.Context, username, scoreboardName string, scoreToAdd float32) error {
 	userID, err := getUserIDByName(ctx, username)
 	if err != nil {
-		terrors.Log(err, "error getting userID for user")
+		slog.ErrorContext(ctx, "error getting userID for user", "err", err)
 		return err
 	}
 	scoreboard, err := findOrCreateScoreboard(ctx, scoreboardName)
 	if err != nil {
-		terrors.Log(err, "error finding or creating scoreboard")
+		slog.ErrorContext(ctx, "error finding or creating scoreboard", "err", err)
 		return err
 	}
 	score, err := findOrCreateScore(ctx, userID, scoreboard.ID)
 	if err != nil {
-		terrors.Log(err, "error finding score")
+		slog.ErrorContext(ctx, "error finding score", "err", err)
 		return err
 	}
 	score.Value += scoreToAdd
@@ -79,7 +78,7 @@ func findOrCreateScore(ctx context.Context, userID, scoreboardID uint16) (Score,
 }
 
 // findScore will look up the score in the DB
-//TODO: this shouldn't be necessary, join the tables instead
+// TODO: this shouldn't be necessary, join the tables instead
 func findScore(ctx context.Context, userID, scoreboardID uint16) (Score, error) {
 	var score Score
 	result := database.GormDB().WithContext(ctx).
@@ -106,18 +105,18 @@ func (s Score) save(ctx context.Context) error {
 	}
 	err := database.GormDB().WithContext(ctx).Model(&s).Update("value", s.Value).Error
 	if err != nil {
-		terrors.Log(err, "error saving score")
+		slog.ErrorContext(ctx, "error saving score", "err", err)
 	}
 	return err
 }
 
 // getUserIDByName fetches the user ID for a given username
-//TODO: this shouldn't be necessary, join the tables instead
+// TODO: this shouldn't be necessary, join the tables instead
 func getUserIDByName(ctx context.Context, username string) (uint16, error) {
 	var result struct{ ID uint16 }
 	err := database.GormDB().WithContext(ctx).Raw("SELECT id FROM users WHERE username = ?", username).Scan(&result).Error
 	if err != nil {
-		terrors.Log(err, "error fetching user ID")
+		slog.ErrorContext(ctx, "error fetching user ID", "err", err)
 	}
 	return result.ID, err
 }

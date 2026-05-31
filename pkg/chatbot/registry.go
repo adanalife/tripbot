@@ -36,6 +36,11 @@ func (a *App) buildRegistry() []Command {
 			Handler: a.uptimeCmd,
 		},
 		{
+			Trigger: "!followage",
+			Aliases: []string{"!followtime"},
+			Handler: a.followageCmd,
+		},
+		{
 			Trigger:        "!timewarp",
 			Aliases:        []string{"!timewrap", "!timeskip", "!tw", "!timewqrp", "!warp"},
 			Handler:        a.timewarpCmd,
@@ -65,20 +70,60 @@ func (a *App) buildRegistry() []Command {
 			Trigger: "!socialmedia",
 			Aliases: []string{"!social", "!socials"},
 			Handler: func(_ context.Context, _ *users.User, _ []string) {
-				sayFn("Find me outside of Twitch: !twitter, !instagram, !facebook, !youtube")
+				sayFn("Find me outside of Twitch: !youtube, !tiktok, !instagram, !bluesky")
 			},
 		},
 		{
 			Trigger: "!discord",
 			Handler: func(_ context.Context, _ *users.User, _ []string) {
-				sayFn("Join us on Discord: https://discord.gg/Bk9EuGdMX")
+				sayFn("Join us on Discord: https://discord.gg/hKvNgZrk52")
+			},
+		},
+		{
+			Trigger: "!twitter",
+			Handler: func(_ context.Context, _ *users.User, _ []string) {
+				sayFn("Follow on Twitter: https://twitter.com/adanalife_")
+			},
+		},
+		{
+			Trigger: "!instagram",
+			Aliases: []string{"!ig", "!insta"},
+			Handler: func(_ context.Context, _ *users.User, _ []string) {
+				sayFn("Follow on Instagram: https://instagram.com/adanalife_")
+			},
+		},
+		{
+			Trigger: "!facebook",
+			Aliases: []string{"!fb"},
+			Handler: func(_ context.Context, _ *users.User, _ []string) {
+				sayFn("Follow on Facebook: https://www.facebook.com/adanalifeblog")
+			},
+		},
+		{
+			Trigger: "!youtube",
+			Aliases: []string{"!yt"},
+			Handler: func(_ context.Context, _ *users.User, _ []string) {
+				sayFn("Subscribe on YouTube: https://www.youtube.com/channel/UC8Q7uFC1Xyr2ZnTWOk9Aizg")
+			},
+		},
+		{
+			Trigger: "!tiktok",
+			Handler: func(_ context.Context, _ *users.User, _ []string) {
+				sayFn("Follow on TikTok: https://tiktok.com/@adanalife")
+			},
+		},
+		{
+			Trigger: "!bluesky",
+			Aliases: []string{"!bsky"},
+			Handler: func(_ context.Context, _ *users.User, _ []string) {
+				sayFn("Follow on Bluesky: https://bsky.app/profile/dana.lol")
 			},
 		},
 		{
 			Trigger: "!commands",
 			Aliases: []string{"!command", "¡command", "¡commands", "!commads", "!controls", "!commande"},
 			Handler: func(_ context.Context, _ *users.User, _ []string) {
-				sayFn("You can try: !location, !guess, !date, !state, !sunset, !timewarp, !miles, !leaderboard, and many other hidden commands!")
+				sayFn("You can try: !location, !guess, !date, !state, !sunset, !timewarp, !miles, !leaderboard, !song, and many other hidden commands!")
 			},
 		},
 		{
@@ -100,7 +145,7 @@ func (a *App) buildRegistry() []Command {
 		},
 		{
 			Trigger:        "!date",
-			Aliases:        []string{"!datw"},
+			Aliases:        []string{"!datw", "is this live", "is this live?"},
 			Handler:        a.dateCmd,
 			RequiresFollow: true,
 		},
@@ -129,6 +174,14 @@ func (a *App) buildRegistry() []Command {
 		{
 			Trigger: "!middle",
 			Handler: a.middleCmd,
+		},
+		{
+			Trigger: "!makebot",
+			Handler: a.makeBotCmd,
+		},
+		{
+			Trigger: "!unbot",
+			Handler: a.unBotCmd,
 		},
 		{
 			Trigger:        "!miles",
@@ -170,7 +223,18 @@ func (a *App) buildRegistry() []Command {
 			Trigger:        "!report",
 			Aliases:        []string{"no audio", "no sound", "no music", "frozen"},
 			Handler:        a.reportCmd,
-			RequiresFollow: true,
+			RequiresFollow: false,
+		},
+		{
+			Trigger: "!song",
+			Aliases: []string{"!music"},
+			Handler: a.songCmd,
+		},
+		{
+			Trigger: "!somafm",
+			Handler: func(_ context.Context, _ *users.User, _ []string) {
+				sayFn("Stream music by SomaFM — https://somafm.com")
+			},
 		},
 	}
 }

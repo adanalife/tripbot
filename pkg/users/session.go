@@ -2,15 +2,14 @@ package users
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"sort"
 	"strings"
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
+	"github.com/adanalife/tripbot/pkg/eventbus"
 	"github.com/adanalife/tripbot/pkg/events"
-	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/scoreboards"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/google/uuid"
@@ -32,6 +31,10 @@ func UpdateSession(ctx context.Context) {
 	// fetch the latest chatters from Twitch
 	twitch.UpdateChatters()
 	currentChatters := twitch.Chatters()
+
+	// Publish the authoritative chatter total so the admin panel's live console
+	// updates the "in chat" number (and flashes it on a change) without a reload.
+	eventbus.EmitViewerCount(ctx, c.Conf.Environment, twitch.ChatterCount())
 
 	// log out the people who aren't present
 	for username, user := range LoggedIn {
@@ -75,7 +78,7 @@ func LogoutIfNecessary(ctx context.Context, username string) {
 }
 
 // login will record the users presence in the DB
-//TODO: do we want to make a DB update here? we could do it on logout()
+// TODO: do we want to make a DB update here? we could do it on logout()
 func login(ctx context.Context, username string) *User {
 	now := time.Now()
 
@@ -94,11 +97,6 @@ func login(ctx context.Context, username string) *User {
 	user.lastLocation = now.AddDate(0, 0, -1)
 	user.save(ctx)
 
-	// raise an error if a user is supposed to be a bot
-	if c.UserIsIgnored(username) && !user.IsBot {
-		slog.WarnContext(ctx, "user should be marked as bot", "username", username, "err", errors.New("user should be bot"))
-	}
-
 	// just a silly message to confirm subscriber feature is working
 	if mytwitch.UserIsSubscriber(username) {
 		slog.InfoContext(ctx, "subscriber logged in", "username", username)
@@ -108,7 +106,7 @@ func login(ctx context.Context, username string) *User {
 	LoggedIn[username] = &user
 
 	if err := events.Login(ctx, username, user.sessionID); err != nil {
-		terrors.Log(err, "error creating login event")
+		slog.ErrorContext(ctx, "error creating login event", "err", err)
 	}
 
 	return &user
@@ -117,7 +115,7 @@ func login(ctx context.Context, username string) *User {
 // User.logout() removes the user from the list of currently-logged in users,
 // and updates the DB with their most up-to-date values
 func (u User) logout(ctx context.Context) {
-	sessionMiles := u.sessionMiles()
+	sessionMiles := u.sessionMiles(ctx)
 
 	// print logout message if they're human
 	if !u.IsBot {
@@ -132,7 +130,7 @@ func (u User) logout(ctx context.Context) {
 	}
 
 	// update miles
-	u.Miles = u.CurrentMiles()
+	u.Miles = u.CurrentMiles(ctx)
 	// update the last seen date
 	u.LastSeen = time.Now()
 	// store the user in the db
@@ -142,7 +140,7 @@ func (u User) logout(ctx context.Context) {
 	u.AddToScore(ctx, scoreboards.CurrentMilesScoreboard(), sessionMiles)
 
 	if err := events.Logout(ctx, u.Username, u.sessionID); err != nil {
-		terrors.Log(err, "error creating logout event")
+		slog.ErrorContext(ctx, "error creating logout event", "err", err)
 	}
 
 	// remove them from the session
@@ -234,13 +232,13 @@ func countBots() int {
 }
 
 // PrintCurrentSession simply prints info about the current session.
-// ctx is forward-compat plumbing — twitch.ChatterCount doesn't take ctx
-// yet, so the parameter is currently unused.
-func PrintCurrentSession(_ context.Context) {
+// ctx links the snapshot log line to the parent cron-tick span;
+// twitch.ChatterCount doesn't take ctx yet.
+func PrintCurrentSession(ctx context.Context) {
 	usernames := sortedUsernameList()
 	coloredUsernames := colorizeUsernames(usernames)
 
-	slog.Info("session snapshot",
+	slog.InfoContext(ctx, "session snapshot",
 		"chatters", twitch.ChatterCount(),
 		"humans", countHumans(),
 		"bots", countBots(),

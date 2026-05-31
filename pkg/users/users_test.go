@@ -1,6 +1,7 @@
 package users
 
 import (
+	"context"
 	"testing"
 	"time"
 )
@@ -35,21 +36,21 @@ func TestGuessCooldownRemaining(t *testing.T) {
 func TestHasGuessCommandAvailable(t *testing.T) {
 	t.Run("never guessed returns true", func(t *testing.T) {
 		u := User{}
-		if !u.HasGuessCommandAvailable(time.Time{}) {
+		if !u.HasGuessCommandAvailable(context.Background(), time.Time{}) {
 			t.Fatal("expected true for fresh user")
 		}
 	})
 
 	t.Run("recent guess on cooldown returns false", func(t *testing.T) {
 		u := User{lastLocation: time.Now()}
-		if u.HasGuessCommandAvailable(time.Time{}) {
+		if u.HasGuessCommandAvailable(context.Background(), time.Time{}) {
 			t.Fatal("expected false during cooldown")
 		}
 	})
 
 	t.Run("expired cooldown returns true", func(t *testing.T) {
 		u := User{lastLocation: time.Now().Add(-2 * guessCooldown)}
-		if !u.HasGuessCommandAvailable(time.Time{}) {
+		if !u.HasGuessCommandAvailable(context.Background(), time.Time{}) {
 			t.Fatal("expected true after cooldown expires")
 		}
 	})
@@ -58,7 +59,7 @@ func TestHasGuessCommandAvailable(t *testing.T) {
 		now := time.Now()
 		u := User{lastLocation: now.Add(-30 * time.Second)}
 		recentTimewarp := now.Add(-10 * time.Second)
-		if !u.HasGuessCommandAvailable(recentTimewarp) {
+		if !u.HasGuessCommandAvailable(context.Background(), recentTimewarp) {
 			t.Fatal("expected true when timewarp is more recent than lastLocation")
 		}
 	})

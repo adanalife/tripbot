@@ -1,4 +1,4 @@
-//TODO: this would be better as just 'db'
+// TODO: this would be better as just 'db'
 package database
 
 import (
@@ -10,14 +10,13 @@ import (
 
 	"github.com/XSAM/otelsql"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
-	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/jmoiron/sqlx"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 	"github.com/uptrace/opentelemetry-go-extra/otelgorm"
+	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 )
 
 // this is how we will share the DB connection
@@ -95,7 +94,7 @@ func isAlive() bool {
 	}
 	err := dbConnection.Ping()
 	if err != nil {
-		terrors.Log(err, "error connecting to DB")
+		slog.Error("error connecting to DB", "err", err)
 		return false
 	}
 	return true

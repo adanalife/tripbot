@@ -1,94 +1,115 @@
 package vlcClient
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
+	"log/slog"
 	"net/http"
 
-	c "github.com/adanalife/tripbot/pkg/config/tripbot"
-	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
-//TODO: eventually support HTTPS
-var vlcServerURL = "http://" + c.Conf.VlcServerHost
+// Client talks to the vlc-server HTTP API. Construct via New(host).
+type Client struct {
+	serverURL  string
+	httpClient *http.Client
+}
 
-// httpClient wraps the default transport with OpenTelemetry instrumentation
-// so outbound calls produce spans. Most callers here are cron/IRC-driven
-// (no inbound HTTP context), so traceparent propagation is best-effort
-// until ctx-threaded variants of these helpers exist.
-var httpClient = &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)}
+// New returns a Client pointed at the given vlc-server host. The HTTP
+// transport is OTel-instrumented so outbound calls produce spans and
+// propagate W3C tracecontext headers. Callers must pass ctx so the
+// propagation has an active span to attach to — passing context.Background()
+// will still send the request, just without a parent span linking it to the
+// caller's trace.
+//
+// TODO: eventually support HTTPS
+func New(host string) *Client {
+	return &Client{
+		serverURL:  "http://" + host,
+		httpClient: &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)},
+	}
+}
 
 // CurrentlyPlaying finds the currently-playing video path
-func CurrentlyPlaying() string {
-	response, err := getUrl(vlcServerURL + "/vlc/current")
+func (c *Client) CurrentlyPlaying(ctx context.Context) string {
+	response, err := c.get(ctx, c.serverURL+"/vlc/current")
 	if err != nil {
-		terrors.Log(err, "unable to determine current video")
+		slog.ErrorContext(ctx, "unable to determine current video", "err", err)
 		return ""
 	}
 	return response
 }
 
 // PlayRandom plays a random file from the playlist
-func PlayRandom() error {
-	_, err := getUrl(vlcServerURL + "/vlc/random")
+func (c *Client) PlayRandom(ctx context.Context) error {
+	_, err := c.get(ctx, c.serverURL+"/vlc/random")
 	if err != nil {
-		terrors.Log(err, "error playing random video")
+		slog.ErrorContext(ctx, "error playing random video", "err", err)
 		return err
 	}
 	return nil
 }
 
 // PlayFileInPlaylist plays a given file
-func PlayFileInPlaylist(filename string) error {
-	url := vlcServerURL + "/vlc/play/" + filename
-	_, err := getUrl(url)
+func (c *Client) PlayFileInPlaylist(ctx context.Context, filename string) error {
+	url := c.serverURL + "/vlc/play/" + filename
+	_, err := c.get(ctx, url)
 	if err != nil {
-		terrors.Log(err, "error playing file")
+		slog.ErrorContext(ctx, "error playing file", "err", err)
 		return err
 	}
 	return nil
 }
 
-func Skip(n int) error {
-	url := vlcServerURL + "/vlc/skip"
+func (c *Client) Skip(ctx context.Context, n int) error {
+	url := c.serverURL + "/vlc/skip"
 	if n > 0 {
 		url = fmt.Sprintf("%s/%d", url, n)
 	}
-	_, err := getUrl(url)
+	_, err := c.get(ctx, url)
 	if err != nil {
-		terrors.Log(err, "error skipping video")
+		slog.ErrorContext(ctx, "error skipping video", "err", err)
 		return err
 	}
 	return nil
 }
 
-func Back(n int) error {
-	url := vlcServerURL + "/vlc/back"
+func (c *Client) Back(ctx context.Context, n int) error {
+	url := c.serverURL + "/vlc/back"
 	if n > 0 {
 		url = fmt.Sprintf("%s/%d", url, n)
 	}
-	_, err := getUrl(url)
+	_, err := c.get(ctx, url)
 	if err != nil {
-		terrors.Log(err, "error going back to a video")
+		slog.ErrorContext(ctx, "error going back to a video", "err", err)
 		return err
 	}
 	return nil
 }
 
-//TODO: move this to a common location
-func getUrl(url string) (string, error) {
-	response, err := httpClient.Get(url)
+// TODO: move this to a common location
+//
+// Transport-layer errors log at Debug, not Error: each wrapper above this
+// (CurrentlyPlaying, PlayRandom, …) logs the operation-specific failure at
+// Error with the same underlying err. Logging here too would triple-count
+// every VLC outage in Loki and Sentry.
+func (c *Client) get(ctx context.Context, url string) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		terrors.Log(err, "error connecting to VLC server")
+		slog.DebugContext(ctx, "error building request to VLC server", "err", err)
 		return "", err
-	} else {
-		defer response.Body.Close()
-		contents, err := ioutil.ReadAll(response.Body)
-		if err != nil {
-			terrors.Log(err, "error reading response from VLC server")
-			return "", err
-		}
-		return string(contents), nil
 	}
+	response, err := c.httpClient.Do(req)
+	if err != nil {
+		slog.DebugContext(ctx, "error connecting to VLC server", "err", err)
+		return "", err
+	}
+	defer response.Body.Close()
+	contents, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		slog.DebugContext(ctx, "error reading response from VLC server", "err", err)
+		return "", err
+	}
+	return string(contents), nil
 }

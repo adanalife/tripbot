@@ -1,8 +1,10 @@
 package video
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"regexp"
 	"strings"
 	"time"
@@ -15,32 +17,32 @@ import (
 
 // LoadOrCreate() will look up the video in the DB,
 // or add it to the DB if it's not there yet
-func LoadOrCreate(path string) (Video, error) {
+func LoadOrCreate(ctx context.Context, path string) (Video, error) {
 	slug := slug(path)
 
-	vid, err := load(slug)
+	vid, err := load(ctx, slug)
 	if err != nil {
 		// create a new video
-		vid, err = create(slug)
+		vid, err = create(ctx, slug)
 	}
 
 	return vid, err
 }
 
 // load() fetches a Video from the DB
-func load(slug string) (Video, error) {
+func load(ctx context.Context, slug string) (Video, error) {
 	var vid Video
-	result := database.GormDB().Where("slug = ?", slug).First(&vid)
+	result := database.GormDB().WithContext(ctx).Where("slug = ?", slug).First(&vid)
 	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 		return Video{}, errors.New("no matches found")
 	}
 	return vid, result.Error
 }
 
-//TODO: combine this with load()?
-func loadById(id int64) (Video, error) {
+// TODO: combine this with load()?
+func loadById(ctx context.Context, id int64) (Video, error) {
 	var vid Video
-	result := database.GormDB().First(&vid, id)
+	result := database.GormDB().WithContext(ctx).First(&vid, id)
 	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 		return Video{}, errors.New("no matches found")
 	}
@@ -48,10 +50,10 @@ func loadById(id int64) (Video, error) {
 }
 
 // create will create a new Video from a slug
-//TODO: this is kinda weird, we create an empty Video
+// TODO: this is kinda weird, we create an empty Video
 // and then we save it to the DB... maybe we could just
 // save right to the DB? It would take some refactoring.
-func create(file string) (Video, error) {
+func create(ctx context.Context, file string) (Video, error) {
 	var newVid Video
 	var blankDate time.Time
 
@@ -77,21 +79,21 @@ func create(file string) (Video, error) {
 	}
 
 	// store the video in the DB
-	err = newVid.save()
+	err = newVid.save(ctx)
 	if err != nil {
-		terrors.Log(err, "error saving to DB")
+		slog.ErrorContext(ctx, "error saving to DB", "err", err)
 	}
 
 	// now fetch it from the DB
 	//TODO: this is an extra DB call, do we care?
-	dbVid, err := load(slug)
+	dbVid, err := load(ctx, slug)
 
 	return dbVid, err
 }
 
 // save() will store the video in the DB
-//TODO: I think this can be achieved much easier, c.p. user save
-func (v Video) save() error {
+// TODO: I think this can be achieved much easier, c.p. user save
+func (v Video) save(ctx context.Context) error {
 	var err error
 	flagged := v.Flagged
 	lat := v.Lat
@@ -100,15 +102,17 @@ func (v Video) save() error {
 
 	if lat == 0 || lng == 0 {
 		//TODO: this is where we used to run ocrCoords()
-		terrors.Log(nil, "OCRing coords skipped!")
+		slog.DebugContext(ctx, "OCRing coords skipped!")
 		flagged = true
 	}
 
 	if !flagged {
 		// figure out which state we're in
 		state, err = helpers.StateFromCoords(lat, lng)
-		if err != nil {
-			terrors.Log(err, "error geocoding coords")
+		// ErrMapsDisabled is the expected steady-state when no Maps key
+		// is configured; don't spam Sentry on every video import.
+		if err != nil && !errors.Is(err, helpers.ErrMapsDisabled) {
+			slog.ErrorContext(ctx, "error geocoding coords", "err", err)
 		}
 	}
 
@@ -123,16 +127,16 @@ func (v Video) save() error {
 		State:       state,
 		DateCreated: v.DateCreated,
 	}
-	return database.GormDB().Create(&insert).Error
+	return database.GormDB().WithContext(ctx).Create(&insert).Error
 }
 
 // Next() finds the next unflagged video
-//TODO: should this be NextUnflagged?
-//TODO: handle errors in here?
-func (v Video) Next() Video {
+// TODO: should this be NextUnflagged?
+// TODO: handle errors in here?
+func (v Video) Next(ctx context.Context) Video {
 	vid := v
 	for { // ever
-		vid, _ = loadById(vid.NextVid.Int64)
+		vid, _ = loadById(ctx, vid.NextVid.Int64)
 		// use the first unflagged video we find
 		if !vid.Flagged {
 			break
@@ -141,8 +145,8 @@ func (v Video) Next() Video {
 	return vid
 }
 
-func (v Video) SetNextVid(nextVid Video) error {
-	return database.GormDB().Model(&v).Update("next_vid", nextVid.ID).Error
+func (v Video) SetNextVid(ctx context.Context, nextVid Video) error {
+	return database.GormDB().WithContext(ctx).Model(&v).Update("next_vid", nextVid.ID).Error
 }
 
 func validate(dashStr string) error {
@@ -163,7 +167,7 @@ func validate(dashStr string) error {
 	return nil
 }
 
-func FindRandomByState(state string) (Video, error) {
+func FindRandomByState(ctx context.Context, state string) (Video, error) {
 	var vid Video
 
 	// convert to long form
@@ -177,13 +181,40 @@ func FindRandomByState(state string) (Video, error) {
 	state = helpers.TitlecaseState(state)
 
 	//TODO: ORDER BY random() will eventually get too slow
-	result := database.GormDB().Where("state = ?", state).Order("random()").Limit(1).First(&vid)
+	result := database.GormDB().WithContext(ctx).Where("state = ?", state).Order("random()").Limit(1).First(&vid)
 	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 		return vid, &terrors.NoFootageForStateError{Msg: "no matches found"}
 	}
 	if result.Error != nil {
-		terrors.Log(result.Error, "error fetching vid from DB")
+		slog.ErrorContext(ctx, "error fetching vid from DB", "err", result.Error)
 		return vid, result.Error
 	}
 	return vid, nil
+}
+
+// CorpusRoute returns the GPS coordinates of every non-flagged dashcam clip,
+// ordered by film time — the full route the van drove. The admin map's
+// background-route overlay renders this. Flagged clips and 0/0 are excluded.
+// Returns [][2]float64 of {lat, lng}; nil on error.
+func CorpusRoute(ctx context.Context) [][2]float64 {
+	type coord struct {
+		Lat float64
+		Lng float64
+	}
+	var rows []coord
+	err := database.GormDB().WithContext(ctx).
+		Model(&Video{}).
+		Select("lat, lng").
+		Where("NOT flagged AND (lat != 0 OR lng != 0)").
+		Order("date_filmed").
+		Scan(&rows).Error
+	if err != nil {
+		slog.ErrorContext(ctx, "corpus route query failed", "err", err)
+		return nil
+	}
+	out := make([][2]float64, len(rows))
+	for i, r := range rows {
+		out[i] = [2]float64{r.Lat, r.Lng}
+	}
+	return out
 }

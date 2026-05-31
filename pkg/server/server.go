@@ -11,6 +11,8 @@ import (
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/helpers"
+	"github.com/adanalife/tripbot/pkg/httpmw"
+	"github.com/adanalife/tripbot/pkg/instrumentation"
 	sentrynegroni "github.com/getsentry/sentry-go/negroni"
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -43,18 +45,15 @@ func Start(ctx context.Context) {
 
 	// healthcheck endpoints
 	hp := r.PathPrefix("/health").Methods("GET", "HEAD").Subrouter()
-	hp.Handle("/live", tagged("/health/live", healthHandler))
-	hp.Handle("/ready", tagged("/health/ready", healthHandler))
+	hp.Handle("/live", tagged("/health/live", httpmw.LivenessHandler()))
+	// /ready runs no checks: tripbot's HTTP surface (admin panel, /auth/init,
+	// /auth/callback, /metrics) doesn't depend on the Twitch connection, so the
+	// pod must stay routable even when the bot is offline. Chat-connection is
+	// surfaced via the admin panel + the tripbot_twitch_connected gauge.
+	hp.Handle("/ready", tagged("/health/ready", httpmw.ReadinessHandler()))
 
 	// version endpoint — returns build metadata as JSON
 	r.Handle("/version", tagged("/version", versionHandler)).Methods("GET", "HEAD")
-
-	// webhooks endpoints
-	// note that these can be both GET and POST requests
-	wh := r.PathPrefix("/webhooks").Subrouter()
-	wh.Handle("/twitch", tagged("/webhooks/twitch", webhooksTwitchHandler)).Methods("GET")
-	wh.Handle("/twitch/users/follows", tagged("/webhooks/twitch/users/follows", webhooksTwitchUsersFollowsHandler)).Methods("POST")
-	wh.Handle("/twitch/subscriptions/events", tagged("/webhooks/twitch/subscriptions/events", webhooksTwitchSubscriptionsEventsHandler)).Methods("POST")
 
 	// auth endpoints
 	auth := r.PathPrefix("/auth").Methods("GET").Subrouter()
@@ -67,16 +66,38 @@ func Start(ctx context.Context) {
 	// prometheus metrics endpoint
 	r.Path("/metrics").Handler(tagged("/metrics", promhttp.Handler().ServeHTTP))
 
+	// admin panel (status overview + links) on the root path
+	r.Handle("/", tagged("/", adminHandler)).Methods("GET", "HEAD")
+
+	// live console: SSE stream the panel subscribes to (GET, long-lived) +
+	// the vendored htmx assets it loads. The /admin POST subrouter below is
+	// POST-only, so the GET stream registers on r directly.
+	r.Handle("/admin/events", tagged("/admin/events", eventsHandler)).Methods("GET")
+	r.Handle("/admin/user/{username}", tagged("/admin/user/{username}", userProfileHandler)).Methods("GET")
+	r.Handle("/admin/map/corpus", tagged("/admin/map/corpus", mapCorpusHandler)).Methods("GET")
+	r.PathPrefix("/static/").Handler(staticHandler())
+
+	// admin actions — tailnet-only by virtue of where the Ingress is
+	// exposed; no app-layer auth gate (see CLAUDE.md / vault decisions).
+	admin := r.PathPrefix("/admin").Methods("POST").Subrouter()
+	admin.Handle("/obs/stream/{action}", tagged("/admin/obs/stream/{action}", obsStreamActionHandler))
+	admin.Handle("/shutdown", tagged("/admin/shutdown", httpmw.ShutdownHandler()))
+	admin.Handle("/restart/{service}", tagged("/admin/restart/{service}", restartActionHandler))
+
 	// catch everything else
-	r.Handle("/", tagged("/", catchAllHandler))
+	r.NotFoundHandler = tagged("/", catchAllHandler)
 
 	if c.Conf.Verbose {
 		helpers.PrintAllRoutes(r)
 	}
 
-	// negroni classic adds panic recovery, logger, and static file middlewares
-	// c.p. https://github.com/urfave/negroni
-	app := negroni.Classic()
+	// negroni.New + explicit middleware so we can swap negroni's stdlib
+	// logger for an slog-based one — see pkg/httpmw.SlogLogger. The static
+	// middleware from negroni.Classic is dropped (no public/ directory).
+	app := negroni.New(
+		httpmw.NewRecovery(func(any) { instrumentation.HTTPPanics.Inc(c.Conf.ServerType) }),
+		httpmw.NewSlogLogger(),
+	)
 
 	// attach http-metrics (prometheus) middleware
 	metricsMw := middleware.New(middleware.Config{
@@ -100,12 +121,20 @@ func Start(ctx context.Context) {
 
 	srv := &http.Server{
 		Addr: fmt.Sprintf("0.0.0.0:%s", c.Conf.TripbotServerPort),
-		// Good practice to set timeouts to avoid Slowloris attacks.
-		WriteTimeout:   time.Second * 15,
-		ReadTimeout:    time.Second * 15,
-		IdleTimeout:    time.Second * 60,
-		MaxHeaderBytes: 1 << 20, // 1 MB
-		Handler:        otelhttp.NewHandler(app, c.Conf.ServerType),
+		// WriteTimeout is 0 (disabled) because the admin panel's live console
+		// streams Server-Sent Events on /admin/events — a long-lived response a
+		// fixed write deadline would sever. The Go-idiomatic per-request
+		// http.ResponseController.SetWriteDeadline doesn't reach the underlying
+		// writer through the negroni + otelhttp (httpsnoop) HTTP/2 wrapper chain
+		// ("feature not supported"), so disabling it server-wide is the reliable
+		// fix. Slowloris protection is preserved by ReadHeaderTimeout (the header
+		// read is the attack vector WriteTimeout never really guarded anyway).
+		ReadTimeout:       time.Second * 15,
+		ReadHeaderTimeout: time.Second * 15,
+		WriteTimeout:      0,
+		IdleTimeout:       time.Second * 60,
+		MaxHeaderBytes:    1 << 20, // 1 MB
+		Handler:           otelhttp.NewHandler(app, c.Conf.ServerType),
 	}
 
 	// Run ListenAndServe in a goroutine so we can block on ctx.Done() and
@@ -122,22 +151,24 @@ func Start(ctx context.Context) {
 	select {
 	case err := <-serverErr:
 		if err != nil {
-			terrors.Fatal(err, "couldn't start server")
+			terrors.FatalContext(ctx, err, "couldn't start server")
 		}
 	case <-ctx.Done():
 		slog.InfoContext(ctx, "shutting down web server")
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
 		if err := srv.Shutdown(shutdownCtx); err != nil {
-			terrors.Log(err, "error during web server shutdown")
+			slog.ErrorContext(shutdownCtx, "error during web server shutdown", "err", err)
 		}
 	}
 }
 
 // tagged wraps a HandlerFunc so the http.route attribute is set on metrics
-// (via otelhttp.Labeler) and traces (via the active span). Negroni doesn't
-// surface the underlying mux route template to the otelhttp middleware, so
-// each registration declares it.
+// (via otelhttp.Labeler) and traces (via the active span), and overrides
+// the span name with the route template so spans group by route in Tempo
+// instead of all collapsing under the operation name passed to
+// otelhttp.NewHandler. Negroni doesn't surface the underlying mux route
+// template to the otelhttp middleware, so each registration declares it.
 func tagged(route string, h http.HandlerFunc) http.Handler {
 	attr := semconv.HTTPRoute(route)
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -145,7 +176,9 @@ func tagged(route string, h http.HandlerFunc) http.Handler {
 		if labeler, ok := otelhttp.LabelerFromContext(ctx); ok {
 			labeler.Add(attr)
 		}
-		trace.SpanFromContext(ctx).SetAttributes(attr)
+		span := trace.SpanFromContext(ctx)
+		span.SetAttributes(attr)
+		span.SetName(route)
 		h(w, req)
 	})
 }

@@ -12,8 +12,11 @@ type TripbotConfig struct {
 	BotUsername string `required:"true" envconfig:"BOT_USERNAME"`
 	// ExternalURL is the where the bot's HTTP server can be reached
 	ExternalURL string `required:"true" envconfig:"EXTERNAL_URL"`
-	// GoogleMapsAPIKey is the API key with which we access Google Maps
-	GoogleMapsAPIKey string `required:"true" envconfig:"GOOGLE_MAPS_API_KEY"`
+	// GoogleMapsAPIKey is the API key with which we access Google Maps.
+	// Optional — when unset, geocoder + static-map calls are skipped and
+	// callers fall back gracefully (no city/state lookups, no generated
+	// maps). The bot continues to run.
+	GoogleMapsAPIKey string `envconfig:"GOOGLE_MAPS_API_KEY"`
 	// ReadOnly is used to prevent writing some things to the DB
 	ReadOnly bool `default:"false" envconfig:"READ_ONLY"`
 	// Verbose determines output verbosity
@@ -28,11 +31,42 @@ type TripbotConfig struct {
 	// TripbotPidFile is where the tripbot PID is written
 	TripbotPidFile string `default:"/opt/data/run/tripbot.pid" envconfig:"TRIPBOT_PIDFILE"`
 
-	// DisableTwitchWebhooks disables receiving webhooks from Twitch (new followers for instance)
-	DisableTwitchWebhooks bool `default:"false" envconfig:"DISABLE_TWITCH_WEBHOOKS"`
-
 	// TripbotServerPort is used to specify the port on which the webserver runs
 	TripbotServerPort string `default:"8080" envconfig:"TRIPBOT_SERVER_PORT"`
 	// VlcServerHost is used to specify the host for the VLC webserver
 	VlcServerHost string `required:"true" envconfig:"VLC_SERVER_HOST"`
+	// OnscreensServerHost is the host:port for the onscreens-server HTTP
+	// API (state.json, render/, asset/, plus the show/hide endpoints the
+	// chatbot drives).
+	OnscreensServerHost string `required:"true" envconfig:"ONSCREENS_SERVER_HOST"`
+	// ObsServerHost is the host:port of obs-server — the Flask process
+	// baked into the OBS image that exposes /health/ready, /version,
+	// and POST /admin/shutdown on the same shape the Go services use.
+	// Named for symmetry with vlc-server / onscreens-server. The admin
+	// panel probes it for the OBS row + posts to its /admin/shutdown
+	// for the "restart obs" button. Optional — blank skips the OBS row.
+	ObsServerHost string `envconfig:"OBS_SERVER_HOST"`
+
+	// NatsURL is the in-cluster NATS endpoint used for fire-and-forget
+	// inter-component events (phase 1: ShowMiddleText alongside HTTP).
+	// Format: nats://nats.<env-platform-ns>.svc.cluster.local:4222.
+	// Optional — when unset, NATS publishes no-op and the HTTP path is
+	// the sole transport. Lets local dev / tests skip NATS entirely.
+	NatsURL string `envconfig:"NATS_URL"`
+
+	// DiscordAlertsWebhook is the Discord webhook URL that !report posts
+	// viewer reports to. Optional — when unset, !report falls through to
+	// slog/Sentry only and the bot keeps running.
+	DiscordAlertsWebhook string `envconfig:"DISCORD_ALERTS_WEBHOOK"`
+
+	// DiscordBotToken authenticates the live Discord bot session that
+	// serves slash commands. Optional — when unset, missing, or still at
+	// the AWS Secrets Manager placeholder value, pkg/discord skips
+	// session init entirely and the rest of the bot runs normally.
+	DiscordBotToken string `envconfig:"DISCORD_BOT_TOKEN"`
+	// DiscordGuildID is the Discord server snowflake the bot registers
+	// its slash commands against. Optional — leaving it empty in an
+	// env's ConfigMap is the supported way to keep the Discord session
+	// gated off without having to remove the token wiring.
+	DiscordGuildID string `envconfig:"DISCORD_GUILD_ID"`
 }

@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Called by infra/docker/docker-compose.yml (seed service entrypoint) and baked
+# into the tripbot image (infra/docker/tripbot/Dockerfile) as /usr/local/bin/seed
+# for the k8s one-shot DB seed Job. Idempotently loads db/seed/videos.csv.
 
 set -ex
 

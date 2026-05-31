@@ -54,7 +54,7 @@ func main() {
 				return nil
 			}
 
-			vid, err := video.LoadOrCreate(path)
+			vid, err := video.LoadOrCreate(context.Background(), path)
 			if err != nil {
 				slog.Error("unable to create video", "err", err, "path", path)
 				return nil

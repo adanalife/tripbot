@@ -16,23 +16,20 @@ type Video interface {
 	// GetCurrentlyPlaying refreshes pkg/video's notion of what's currently
 	// playing (an HTTP call to vlc-server in production), updates the
 	// package-level state, and returns the resulting Video.
-	GetCurrentlyPlaying() video.Video
+	GetCurrentlyPlaying(ctx context.Context) video.Video
 	// FindRandomByState returns a random video filmed in the given US state.
 	// Returns *terrors.NoFootageForStateError when no rows match.
-	FindRandomByState(state string) (video.Video, error)
+	FindRandomByState(ctx context.Context, state string) (video.Video, error)
 }
 
 // realVideo delegates to pkg/video.
 type realVideo struct{}
 
-func (realVideo) Current() video.Video { return video.CurrentlyPlaying }
-func (realVideo) GetCurrentlyPlaying() video.Video {
-	// chat-command callers don't currently propagate ctx through the
-	// chatbot.Video interface — Background is fine until that interface
-	// grows ctx-aware methods.
-	video.GetCurrentlyPlaying(context.Background())
-	return video.CurrentlyPlaying
+func (realVideo) Current() video.Video { return video.CurrentlyPlaying() }
+func (realVideo) GetCurrentlyPlaying(ctx context.Context) video.Video {
+	video.GetCurrentlyPlaying(ctx)
+	return video.CurrentlyPlaying()
 }
-func (realVideo) FindRandomByState(state string) (video.Video, error) {
-	return video.FindRandomByState(state)
+func (realVideo) FindRandomByState(ctx context.Context, state string) (video.Video, error) {
+	return video.FindRandomByState(ctx, state)
 }

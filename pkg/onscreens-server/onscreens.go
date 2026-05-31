@@ -23,19 +23,23 @@ type Onscreen struct {
 	SleepInterval time.Duration `json:"-"`
 }
 
-func New() *Onscreen {
-	newOnscreen := &Onscreen{}
-	newOnscreen.Content = ""
-	newOnscreen.Expires = time.Now()
-	newOnscreen.DontExpire = false
-	newOnscreen.SleepInterval = time.Duration(defaultSleepInterval)
+// newOnscreen returns a freshly-initialized *Onscreen with the default
+// sleep interval and an expiry pinned to "now" (i.e. ready to be shown
+// for some duration). It also kicks off the background loop that hides
+// expired onscreens.
+func newOnscreen() *Onscreen {
+	osc := &Onscreen{}
+	osc.Content = ""
+	osc.Expires = time.Now()
+	osc.DontExpire = false
+	osc.SleepInterval = time.Duration(defaultSleepInterval)
 	// start the background loop
-	go newOnscreen.backgroundLoop()
-	return newOnscreen
+	go osc.backgroundLoop()
+	return osc
 }
 
 // backgroundLoop will loop forever, hiding the Onscreen if needed
-//TODO: add signal to end the loop
+// TODO: add signal to end the loop
 func (osc *Onscreen) backgroundLoop() {
 	for { // forever
 		if osc.IsShowing && osc.isExpired() {
