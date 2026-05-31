@@ -10,6 +10,7 @@ import (
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
+	"github.com/adanalife/tripbot/pkg/feature"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/video"
 	"github.com/gorilla/mux"
@@ -34,18 +35,22 @@ func TestPanelHost(t *testing.T) {
 	}
 }
 
-func TestSiblingURL(t *testing.T) {
+func TestTailnetServiceURL(t *testing.T) {
+	saved := c.Conf.Environment
+	t.Cleanup(func() { c.Conf.Environment = saved })
 	cases := []struct {
-		in, service, want string
+		env, service, want string
 	}{
-		{"https://tripbot.prod.whereisdana.today", "obs", "https://obs.prod.whereisdana.today"},
-		{"https://tripbot.stage.whereisdana.today", "obs", "https://obs.stage.whereisdana.today"},
-		{"http://localhost:8080", "obs", ""}, // not an FQDN — no sibling Ingress
-		{"", "obs", ""},
+		{"production", "obs", "https://obs-prod.tail020deb.ts.net"},
+		{"production", "vlc-server", "https://vlc-server-prod.tail020deb.ts.net"},
+		{"staging", "obs", "https://obs-stage.tail020deb.ts.net"},
+		{"development", "obs", ""}, // not served by the operator
+		{"testing", "obs", ""},
 	}
 	for _, tc := range cases {
-		if got := siblingURL(tc.in, tc.service); got != tc.want {
-			t.Errorf("siblingURL(%q, %q) = %q, want %q", tc.in, tc.service, got, tc.want)
+		c.Conf.Environment = tc.env
+		if got := tailnetServiceURL(tc.service); got != tc.want {
+			t.Errorf("tailnetServiceURL(%q) with ENV=%q = %q, want %q", tc.service, tc.env, got, tc.want)
 		}
 	}
 }
@@ -62,6 +67,22 @@ func TestHubbleNamespace(t *testing.T) {
 		c.Conf.Environment = env
 		if got := hubbleNamespace(); got != want {
 			t.Errorf("hubbleNamespace() with ENV=%q = %q, want %q", env, got, want)
+		}
+	}
+}
+
+func TestEnvColorClass(t *testing.T) {
+	cases := map[string]string{
+		"production":  "env-prod",
+		"staging":     "env-stage",
+		"development": "env-dev",
+		"testing":     "", // neutral chip
+		"":            "", // unset env falls through to neutral
+		"weird":       "", // unknown env falls through to neutral
+	}
+	for env, want := range cases {
+		if got := envColorClass(env); got != want {
+			t.Errorf("envColorClass(%q) = %q, want %q", env, got, want)
 		}
 	}
 }
@@ -210,7 +231,7 @@ func TestRestartActionHandler_VlcProxiesToVlcServerHost(t *testing.T) {
 
 	r := mux.NewRouter()
 	r.Handle("/admin/restart/{service}", http.HandlerFunc(restartActionHandler)).Methods("POST")
-	req := httptest.NewRequest(http.MethodPost, "/admin/restart/vlc-server", nil)
+	req := httptest.NewRequest(http.MethodPost, "/admin/restart/vlc", nil)
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -260,6 +281,9 @@ func TestAdminHandler_RendersReadyStatusAndLinks(t *testing.T) {
 	defer SetTwitchConnected(false)
 	SetTwitchConnected(true)
 	withReauth(t, nil) // healthy tokens — no re-auth callout
+	withAuthStatuses(t, []mytwitch.AccountTokenStatus{
+		{Account: "bot", LoginAs: "tripbot4000", ExpiresAt: time.Date(2099, 1, 1, 0, 0, 0, 0, time.UTC)},
+	})
 	withNowPlaying(t, nowPlayingTrack{Artist: "Test Artist", Title: "Test Track"})
 
 	// stand in for vlc-server: readiness ping + version endpoint
@@ -320,23 +344,30 @@ func TestAdminHandler_RendersReadyStatusAndLinks(t *testing.T) {
 		`/CHANGELOG.md">v1.2.3</a>`, // tripbot version tag → changelog (ref is sha or master)
 		`<a href="https://github.com/adanalife/tripbot/blob/deadbeefcafe/CHANGELOG.md">v9.9.9-vlc</a>`, // vlc version → changelog@sha
 		`<a href="https://github.com/adanalife/tripbot/blob/feedfacecafe/CHANGELOG.md">v8.8.8-osc</a>`, // onscreens version → changelog@sha
-		">vlc-server<",       // vlc row label
-		">onscreens-server<", // onscreens row label
-		"12 in chat",                          // chatter count
-		`<code class="env">production</code>`, // env in monospace chip
-		"now playing",                         // now-playing section shown when vlc healthy
-		"wy_0042.MP4",                         // current video file
-		"Wyoming",                             // current video state
-		"3m12s",                               // clip progress
-		`>obs</a>`,                            // one-word OBS link
-		`>grafana</a>`,                        // one-word grafana link
-		`>traefik</a>`,                        // one-word traefik link
-		`>hubble</a>`,                         // one-word hubble link
-		"https://obs.prod.whereisdana.today",  // derived OBS href
-		grafanaURL,                            // grafana href
-		traefikURL,                            // traefik href
+		">vlc<",                                  // vlc row label (shortened)
+		">onscreens<",                            // onscreens row label (shortened)
+		`<span class="chatters-count">12</span>`, // initial chatter count (server-rendered, unflashed)
+		`id="chatters" sse-swap="viewers" hx-swap="innerHTML"`, // live count target wired for SSE updates
+		`<code class="env env-prod">production</code>`,         // env in monospace chip, prod-coloured
+		`<title>tripbot — adanalife_ (production)</title>`,     // env rendered in <title> for tab disambiguation
+		"now playing",                                    // now-playing section shown when vlc healthy
+		`id="now-line" sse-swap="video"`,                 // now-playing line wired for live video swaps
+		`id="auth-card" sse-swap="auth"`,                 // live token-expiry card wired for SSE
+		`class="auth-expires" data-expires="4070908800"`, // bot expiry (2099-01-01) for the JS countdown
+		`id="reauth-card" sse-swap="reauth"`,             // reauth callout container wired for live appear/clear
+		"wy_0042.MP4",                                    // current video file
+		"Wyoming",                                        // current video state
+		`class="now-elapsed" data-since=`,                // elapsed span the JS ticker counts up
+		"3m12s",                                          // clip progress (initial server render)
+		`>obs</a>`,                                       // one-word OBS link
+		`>grafana</a>`,                                   // one-word grafana link
+		`>traefik</a>`,                                   // one-word traefik link
+		`>hubble</a>`,                                    // one-word hubble link
+		"https://obs-prod.tail020deb.ts.net",             // tailnet OBS href
+		grafanaURL,                                       // grafana href
+		traefikURL,                                       // traefik href
 		// Environment is "production" above → hubble link carries ?namespace=prod-1
-		"https://hubble.prod.whereisdana.today/?namespace=prod-1",
+		"https://hubble-prod.tail020deb.ts.net/?namespace=prod-1",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body missing %q", want)
@@ -423,6 +454,16 @@ func withReauth(t *testing.T, accounts []mytwitch.AccountReauth) {
 	t.Cleanup(func() { accountsNeedingReauth = saved })
 }
 
+// withAuthStatuses swaps the authStatuses seam so the admin handler sees a
+// fixed per-identity token state (for the live expiry-countdown card) without
+// depending on global in-memory token state.
+func withAuthStatuses(t *testing.T, statuses []mytwitch.AccountTokenStatus) {
+	t.Helper()
+	saved := authStatuses
+	authStatuses = func() []mytwitch.AccountTokenStatus { return statuses }
+	t.Cleanup(func() { authStatuses = saved })
+}
+
 // withNowPlaying swaps the SomaFM fetcher so the admin handler sees a fixed
 // audio track (or empty for "no audio info") without hitting somafm.com from
 // a test.
@@ -476,11 +517,147 @@ func TestAdminHandler_NoReauthPromptWhenHealthy(t *testing.T) {
 
 	withConf(t, func() { c.Conf.VlcServerHost = "" })
 	withReauth(t, nil) // all tokens healthy
+	withAuthStatuses(t, []mytwitch.AccountTokenStatus{
+		{Account: "bot", LoginAs: "tripbot4000", ExpiresAt: time.Date(2099, 1, 1, 0, 0, 0, 0, time.UTC)},
+	})
 
 	rec := httptest.NewRecorder()
 	adminHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 
 	if strings.Contains(rec.Body.String(), "re-authenticate") {
 		t.Errorf("re-auth prompt should be hidden when no account needs re-auth")
+	}
+}
+
+func withFlags(t *testing.T, flags map[string]feature.Flag) {
+	t.Helper()
+	saved := flagClient
+	SetFlagClient(feature.NewInMemoryClient(flags))
+	t.Cleanup(func() {
+		flagMu.Lock()
+		flagClient = saved
+		flagMu.Unlock()
+	})
+}
+
+func TestAdminHandler_RendersFeatureFlagsWhenLoaded(t *testing.T) {
+	defer SetTwitchConnected(false)
+	SetTwitchConnected(true)
+	withNowPlaying(t, nowPlayingTrack{})
+	withReauth(t, nil)
+	withConf(t, func() { c.Conf.VlcServerHost = "" })
+	withFlags(t, map[string]feature.Flag{
+		"discord.bot_enabled": {
+			Key:               "discord.bot_enabled",
+			Description:       "Gates pkg/discord startup.",
+			Enabled:           true,
+			TargetRemovalDate: time.Date(2026, 11, 28, 0, 0, 0, 0, time.UTC),
+		},
+		"chatbot.experimental": {
+			Key:               "chatbot.experimental",
+			Description:       "Experimental chatbot path.",
+			Enabled:           false,
+			TargetRemovalDate: time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC),
+		},
+	})
+
+	rec := httptest.NewRecorder()
+	adminHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+
+	body := rec.Body.String()
+	for _, want := range []string{
+		"feature flags",                     // disclosure label
+		"<code>chatbot.experimental</code>", // monospace key
+		"<code>discord.bot_enabled</code>",
+		"Gates pkg/discord startup.",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body missing %q", want)
+		}
+	}
+	// Target-removal date is intentionally omitted from the panel render — it's
+	// metadata for the future audit job / admin CRUD UI, not for the read-only
+	// status surface — so it should never appear.
+	if strings.Contains(body, "remove by") || strings.Contains(body, "2026-11-28") {
+		t.Errorf("panel should not render target_removal_date")
+	}
+	// Sort order: keys ascend, so chatbot.experimental comes before discord.bot_enabled.
+	if i, j := strings.Index(body, "chatbot.experimental"), strings.Index(body, "discord.bot_enabled"); i < 0 || j < 0 || i > j {
+		t.Errorf("expected chatbot.experimental row before discord.bot_enabled; got positions %d, %d", i, j)
+	}
+}
+
+func TestAdminHandler_HidesFeatureFlagsSectionWhenEmpty(t *testing.T) {
+	defer SetTwitchConnected(false)
+	SetTwitchConnected(true)
+	withNowPlaying(t, nowPlayingTrack{})
+	withReauth(t, nil)
+	withConf(t, func() { c.Conf.VlcServerHost = "" })
+	withFlags(t, nil) // no flags loaded
+
+	rec := httptest.NewRecorder()
+	adminHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+
+	if strings.Contains(rec.Body.String(), "feature flags") {
+		t.Errorf("feature flags section should be hidden when no flags are loaded")
+	}
+}
+
+// withChatHistory swaps the package eventHub for a fresh one seeded with lines,
+// restoring the original after the test.
+func withChatHistory(t *testing.T, lines []ChatLine) {
+	t.Helper()
+	saved := eventHub
+	h := NewHub()
+	for _, l := range lines {
+		h.appendChat(l)
+	}
+	eventHub = h
+	t.Cleanup(func() { eventHub = saved })
+}
+
+func TestAdminHandler_RendersChatHistoryAndSSEWiring(t *testing.T) {
+	defer SetTwitchConnected(false)
+	SetTwitchConnected(true)
+	withNowPlaying(t, nowPlayingTrack{})
+	withReauth(t, nil)
+	withConf(t, func() { c.Conf.VlcServerHost = "" })
+	withChatHistory(t, []ChatLine{
+		{Username: "alice", Text: "hello", At: time.Date(2026, 5, 29, 13, 5, 0, 0, time.UTC)},
+		{Username: "bob", Text: "<b>hi</b>", At: time.Date(2026, 5, 29, 13, 6, 0, 0, time.UTC)},
+	})
+
+	rec := httptest.NewRecorder()
+	adminHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+
+	body := rec.Body.String()
+	for _, want := range []string{
+		`sse-connect="/admin/events"`, // SSE wiring present
+		`id="chat-log"`,               // live chat pane
+		`/static/htmx.min.js`,         // vendored frontend loaded
+		"alice", "hello",              // seeded history rendered
+		"&lt;b&gt;hi&lt;/b&gt;", // chat text HTML-escaped
+		`<time class="ct-ts"`,   // per-line timestamp rendered
+		"13:05",                 // server-side UTC fallback (JS localizes)
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body missing %q", want)
+		}
+	}
+}
+
+func TestAdminHandler_ChatEmptyPlaceholder(t *testing.T) {
+	defer SetTwitchConnected(false)
+	SetTwitchConnected(true)
+	withNowPlaying(t, nowPlayingTrack{})
+	withReauth(t, nil)
+	withConf(t, func() { c.Conf.VlcServerHost = "" })
+	withChatHistory(t, nil) // empty ring
+
+	rec := httptest.NewRecorder()
+	adminHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+
+	if !strings.Contains(rec.Body.String(), "waiting for chat") {
+		t.Errorf("expected empty-chat placeholder when no history")
 	}
 }

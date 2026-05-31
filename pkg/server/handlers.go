@@ -1,16 +1,19 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"runtime/debug"
+	"sync"
 	"sync/atomic"
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
+	"github.com/adanalife/tripbot/pkg/feature"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"github.com/adanalife/tripbot/pkg/server/oauthstate"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
@@ -60,6 +63,31 @@ func SetTwitchConnected(connected bool) {
 // admin panel's status row.
 func TwitchConnected() bool {
 	return twitchConnected.Load()
+}
+
+// flagClient is the FlagClient the admin panel enumerates for its "feature
+// flags" section. Defaults to an empty in-memory client so the panel
+// renders a blank section during the brief startup window between server
+// start and startFeatureFlags swapping in the Postgres-backed client.
+var (
+	flagMu     sync.RWMutex
+	flagClient feature.FlagClient = feature.NewInMemoryClient(nil)
+)
+
+// SetFlagClient lets cmd/tripbot install the Postgres-backed FlagClient
+// once startFeatureFlags has loaded the initial snapshot.
+func SetFlagClient(fc feature.FlagClient) {
+	flagMu.Lock()
+	flagClient = fc
+	flagMu.Unlock()
+}
+
+// flagSnapshot returns the current set of known flags for the admin panel.
+func flagSnapshot(ctx context.Context) []feature.Flag {
+	flagMu.RLock()
+	c := flagClient
+	flagMu.RUnlock()
+	return c.Snapshot(ctx)
 }
 
 // versionHandler returns build metadata as JSON. The tag comes from the

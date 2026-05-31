@@ -9,6 +9,7 @@ import (
 
 	mylog "github.com/adanalife/tripbot/pkg/chatbot/log"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
+	"github.com/adanalife/tripbot/pkg/eventbus"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/gempir/go-twitch-irc/v4"
@@ -43,7 +44,7 @@ type chatUser interface {
 // checkAccess returns true when the user is allowed to run cmd.
 // It calls sayFn with the appropriate denial message when access is denied.
 func (cmd *Command) checkAccess(ctx context.Context, user chatUser, sayFn func(string)) bool {
-	if cmd.RequiresFollow && !user.HasCommandAvailable(ctx) {
+	if followerGatingEnabled && cmd.RequiresFollow && !user.HasCommandAvailable(ctx) {
 		sayFn(followerMsg)
 		return false
 	}
@@ -159,6 +160,11 @@ func PrivateMessage(msg twitch.PrivateMessage) {
 
 	// emit chat line to Loki via OTel
 	mylog.ChatMsg(username, msg.Message)
+
+	// mirror the chat line onto the event bus so live consumers (the admin
+	// panel's chat pane) see it. Original-case username + text, matching the
+	// Loki line above; fire-and-forget, no-op when NATS is unconfigured.
+	eventbus.EmitChatMessage(ctx, c.Conf.Environment, msg.User.Name, msg.Message)
 
 	// check to see if the message is a command
 	//TODO: also include ones prefixed with whitespace?

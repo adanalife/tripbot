@@ -2,13 +2,13 @@ package users
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"sort"
 	"strings"
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
+	"github.com/adanalife/tripbot/pkg/eventbus"
 	"github.com/adanalife/tripbot/pkg/events"
 	"github.com/adanalife/tripbot/pkg/scoreboards"
 	"github.com/davecgh/go-spew/spew"
@@ -31,6 +31,10 @@ func UpdateSession(ctx context.Context) {
 	// fetch the latest chatters from Twitch
 	twitch.UpdateChatters()
 	currentChatters := twitch.Chatters()
+
+	// Publish the authoritative chatter total so the admin panel's live console
+	// updates the "in chat" number (and flashes it on a change) without a reload.
+	eventbus.EmitViewerCount(ctx, c.Conf.Environment, twitch.ChatterCount())
 
 	// log out the people who aren't present
 	for username, user := range LoggedIn {
@@ -74,7 +78,7 @@ func LogoutIfNecessary(ctx context.Context, username string) {
 }
 
 // login will record the users presence in the DB
-//TODO: do we want to make a DB update here? we could do it on logout()
+// TODO: do we want to make a DB update here? we could do it on logout()
 func login(ctx context.Context, username string) *User {
 	now := time.Now()
 
@@ -92,11 +96,6 @@ func login(ctx context.Context, username string) *User {
 	// set their last !location date to yesterday
 	user.lastLocation = now.AddDate(0, 0, -1)
 	user.save(ctx)
-
-	// raise an error if a user is supposed to be a bot
-	if c.UserIsIgnored(username) && !user.IsBot {
-		slog.WarnContext(ctx, "user should be marked as bot", "username", username, "err", errors.New("user should be bot"))
-	}
 
 	// just a silly message to confirm subscriber feature is working
 	if mytwitch.UserIsSubscriber(username) {
