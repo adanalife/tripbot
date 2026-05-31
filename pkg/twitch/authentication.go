@@ -350,6 +350,48 @@ func AccountsNeedingReauth() []AccountReauth {
 	return out
 }
 
+// AccountTokenStatus is the live token state for one identity, for the admin
+// panel's auth card. ExpiresAt drives a "expires in N" countdown; Reason is ""
+// when healthy, else "missing"/"expired" and the panel elevates InitURL.
+type AccountTokenStatus struct {
+	Account   string    // "bot" | "broadcaster" — the /auth/init account selector
+	LoginAs   string    // the exact Twitch username
+	ExpiresAt time.Time // zero when the expiry is unknown (e.g. a missing token)
+	Reason    string    // "" healthy, else "missing" | "expired"
+	InitURL   string    // /auth/init URL for this account
+}
+
+// TokenStatuses returns the live token state for each configured identity: the
+// bot always, and the broadcaster when a distinct broadcaster identity exists
+// (ChannelName set and != BotUsername). Unlike AccountsNeedingReauth — which
+// reports only the unhealthy accounts — this returns every identity so the
+// panel can show a per-identity expiry countdown even while healthy. Reads
+// in-memory token state; no DB or network call.
+func TokenStatuses() []AccountTokenStatus {
+	tokenMu.RLock()
+	bot := currentUserToken
+	bcast := currentBroadcasterToken
+	tokenMu.RUnlock()
+
+	out := []AccountTokenStatus{{
+		Account:   "bot",
+		LoginAs:   c.Conf.BotUsername,
+		ExpiresAt: bot.ExpiresAt,
+		Reason:    tokenReason(bot),
+		InitURL:   AuthInitURL("bot"),
+	}}
+	if c.Conf.ChannelName != "" && c.Conf.ChannelName != c.Conf.BotUsername {
+		out = append(out, AccountTokenStatus{
+			Account:   "broadcaster",
+			LoginAs:   c.Conf.ChannelName,
+			ExpiresAt: bcast.ExpiresAt,
+			Reason:    tokenReason(bcast),
+			InitURL:   AuthInitURL("broadcaster"),
+		})
+	}
+	return out
+}
+
 // ErrIdentityMismatch is returned by GenerateUserAccessToken when the
 // discovered identity (via helix.GetUsers) doesn't match expectedLogin.
 // Callers should surface it with retry guidance; the wrong-identity row is

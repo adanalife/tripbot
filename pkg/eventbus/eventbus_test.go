@@ -80,6 +80,83 @@ func TestEmitChatMessage(t *testing.T) {
 	}
 }
 
+func TestViewerCountSubject(t *testing.T) {
+	for _, env := range []string{"prod", "stage", "development"} {
+		if got, want := ViewerCountSubject(env), "tripbot."+env+".viewers.count"; got != want {
+			t.Errorf("ViewerCountSubject(%q) = %q, want %q", env, got, want)
+		}
+	}
+}
+
+func TestEmitViewerCount(t *testing.T) {
+	rec := withRecorder(t)
+
+	fixed := time.Date(2026, 5, 29, 12, 0, 0, 0, time.UTC)
+	nowFn = func() time.Time { return fixed }
+	t.Cleanup(func() { nowFn = func() time.Time { return time.Now().UTC() } })
+
+	EmitViewerCount(context.Background(), "development", 42)
+
+	if len(rec.Publishes) != 1 {
+		t.Fatalf("expected 1 publish, got %d", len(rec.Publishes))
+	}
+	pub := rec.Publishes[0]
+	if pub.Subject != "tripbot.development.viewers.count" {
+		t.Errorf("subject = %q, want tripbot.development.viewers.count", pub.Subject)
+	}
+
+	var ev ViewerCount
+	if err := json.Unmarshal(pub.Payload, &ev); err != nil {
+		t.Fatalf("payload not valid JSON: %v", err)
+	}
+	if ev.Count != 42 {
+		t.Errorf("count = %d, want 42", ev.Count)
+	}
+	if ev.EmittedAt != fixed.Format(time.RFC3339Nano) {
+		t.Errorf("emitted_at = %q, want %q", ev.EmittedAt, fixed.Format(time.RFC3339Nano))
+	}
+}
+
+func TestVideoChangedSubject(t *testing.T) {
+	for _, env := range []string{"prod", "stage", "development"} {
+		if got, want := VideoChangedSubject(env), "tripbot."+env+".video.changed"; got != want {
+			t.Errorf("VideoChangedSubject(%q) = %q, want %q", env, got, want)
+		}
+	}
+}
+
+func TestEmitVideoChanged(t *testing.T) {
+	rec := withRecorder(t)
+
+	fixed := time.Date(2026, 5, 29, 12, 0, 0, 0, time.UTC)
+	nowFn = func() time.Time { return fixed }
+	t.Cleanup(func() { nowFn = func() time.Time { return time.Now().UTC() } })
+
+	EmitVideoChanged(context.Background(), "development", "wy_0042.MP4", "Wyoming", false, 41.5, -110.2)
+
+	if len(rec.Publishes) != 1 {
+		t.Fatalf("expected 1 publish, got %d", len(rec.Publishes))
+	}
+	pub := rec.Publishes[0]
+	if pub.Subject != "tripbot.development.video.changed" {
+		t.Errorf("subject = %q, want tripbot.development.video.changed", pub.Subject)
+	}
+
+	var ev VideoChanged
+	if err := json.Unmarshal(pub.Payload, &ev); err != nil {
+		t.Fatalf("payload not valid JSON: %v", err)
+	}
+	if ev.File != "wy_0042.MP4" || ev.State != "Wyoming" || ev.Flagged {
+		t.Errorf("envelope = %+v, want file=wy_0042.MP4 state=Wyoming flagged=false", ev)
+	}
+	if ev.Lat != 41.5 || ev.Lng != -110.2 {
+		t.Errorf("coords = %v,%v want 41.5,-110.2", ev.Lat, ev.Lng)
+	}
+	if ev.EmittedAt != fixed.Format(time.RFC3339Nano) {
+		t.Errorf("emitted_at = %q, want %q", ev.EmittedAt, fixed.Format(time.RFC3339Nano))
+	}
+}
+
 // TestEmit_NoNATS_NoPanic asserts the production publisher is a silent no-op
 // when NATS is unconfigured (natsclient.Conn() is nil), so local dev / tests
 // that never call natsclient.Connect don't crash.

@@ -11,7 +11,7 @@ import (
 // playing video — it just returns the zero value for every call.
 type noopVideo struct{}
 
-func (noopVideo) Current() video.Video                           { return video.Video{} }
+func (noopVideo) Current() video.Video                              { return video.Video{} }
 func (noopVideo) GetCurrentlyPlaying(_ context.Context) video.Video { return video.Video{} }
 func (noopVideo) FindRandomByState(_ context.Context, _ string) (video.Video, error) {
 	return video.Video{}, nil

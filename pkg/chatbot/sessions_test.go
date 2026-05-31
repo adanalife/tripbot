@@ -12,10 +12,10 @@ import (
 // reads as empty, and Shutdown is a no-op.
 type noopSessions struct{}
 
-func (noopSessions) Find(_ context.Context, _ string) users.User           { return users.User{} }
-func (noopSessions) LifetimeLeaderboard() [][]string                       { return nil }
-func (noopSessions) Shutdown(_ context.Context)                            {}
-func (noopSessions) SetBot(_ context.Context, _ string, _ bool) error      { return nil }
+func (noopSessions) Find(_ context.Context, _ string) users.User      { return users.User{} }
+func (noopSessions) LifetimeLeaderboard() [][]string                  { return nil }
+func (noopSessions) Shutdown(_ context.Context)                       {}
+func (noopSessions) SetBot(_ context.Context, _ string, _ bool) error { return nil }
 
 // recordingSessions captures every call made to it so tests can assert
 // the chatbot queried the expected user / leaderboard surfaces.
