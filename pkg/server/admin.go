@@ -1143,7 +1143,46 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
   }).addTo(map);
 
   const van = L.divIcon({ className: 'van-marker', html: '🚐', iconSize: [24, 24], iconAnchor: [12, 12] });
-  const line = L.polyline(trail, { color: '#58a6ff', weight: 3, opacity: 0.75 }).addTo(map);
+
+  // Consecutive breadcrumbs farther apart than this are treated as a
+  // discontinuity (a timewarp clip or a bad GPS fix), not a driven path: the
+  // solid trail breaks and the gap is bridged with a faint dashed segment so the
+  // jump reads as "not real driving" rather than a straight slash across the map.
+  const JUMP_KM = 50;
+  const distKm = (a, b) => {
+    const R = 6371, rad = d => d * Math.PI / 180;
+    const dLat = rad(b[0] - a[0]), dLng = rad(b[1] - a[1]);
+    const s = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a[0])) * Math.cos(rad(b[0])) * Math.sin(dLng / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(s));
+  };
+  // Split the trail into solid runs (consecutive points within JUMP_KM) and the
+  // dashed bridge segments spanning each jump. Both are fed to Leaflet as
+  // multi-polylines (arrays of latlng arrays).
+  const splitTrail = (pts) => {
+    const runs = [], bridges = [];
+    if (!pts.length) return { runs, bridges };
+    let run = [pts[0]];
+    for (let i = 1; i < pts.length; i++) {
+      if (distKm(pts[i - 1], pts[i]) > JUMP_KM) {
+        runs.push(run);
+        bridges.push([pts[i - 1], pts[i]]);
+        run = [pts[i]];
+      } else {
+        run.push(pts[i]);
+      }
+    }
+    runs.push(run);
+    return { runs, bridges };
+  };
+
+  const solid = L.polyline([], { color: '#58a6ff', weight: 3, opacity: 0.75 }).addTo(map);
+  const dashed = L.polyline([], { color: '#58a6ff', weight: 2, opacity: 0.4, dashArray: '4 6' }).addTo(map);
+  const drawTrail = () => {
+    const { runs, bridges } = splitTrail(trail);
+    solid.setLatLngs(runs);
+    dashed.setLatLngs(bridges);
+  };
+  drawTrail();
   let marker = null;
   let hasPoint = false;
 
@@ -1164,7 +1203,7 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
     if (isNaN(lat) || isNaN(lng)) return;
     trail.push([lat, lng]);
     if (trail.length > 100) trail.shift();
-    line.setLatLngs(trail);
+    drawTrail();
     recenter(true);
   });
 
