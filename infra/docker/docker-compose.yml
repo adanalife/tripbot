@@ -69,7 +69,9 @@ services:
     restart: unless-stopped
 
   db:
-    image: postgres:16-alpine
+    # pgvector/pgvector:pg16 is a drop-in for postgres:16-alpine that adds the
+    # `vector` extension (used by frame_embeddings / dashcam-cv visual search).
+    image: pgvector/pgvector:pg16
     restart: always
     ports:
       - "5432"
