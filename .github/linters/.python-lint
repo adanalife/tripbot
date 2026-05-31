@@ -6,7 +6,10 @@
 #   (torch/transformers) inside functions on purpose, so CLI parsing and the
 #   non-model tests never load it. This is load-bearing, not an oversight.
 # too-few-public-methods: fires on dataclasses + the single-purpose Embedder.
-disable=import-outside-toplevel,too-few-public-methods
+# import-error: super-linter runs pylint without installing project deps, so
+#   every third-party import (torch, psycopg, rich, …) is unresolvable noise;
+#   ruff + the cv.yml test job catch real import problems.
+disable=import-outside-toplevel,too-few-public-methods,import-error
 
 [DESIGN]
 max-args=8
