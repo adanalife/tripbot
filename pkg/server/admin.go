@@ -164,8 +164,8 @@ type adminData struct {
 // when vlc is up, the broadcaster/bot accounts, and links to the OBS / Grafana
 // / Traefik / Hubble dashboards. Replaces the bare 404 that used to sit on "/".
 func adminHandler(w http.ResponseWriter, r *http.Request) {
-	vlc := siblingStatus(r.Context(), "vlc-server", c.Conf.VlcServerHost)
-	onscreens := siblingStatus(r.Context(), "onscreens-server", c.Conf.OnscreensServerHost)
+	vlc := siblingStatus(r.Context(), "vlc", c.Conf.VlcServerHost)
+	onscreens := siblingStatus(r.Context(), "onscreens", c.Conf.OnscreensServerHost)
 	obs := siblingStatus(r.Context(), "obs", c.Conf.ObsServerHost)
 
 	data := adminData{
@@ -336,9 +336,9 @@ func restartActionHandler(w http.ResponseWriter, r *http.Request) {
 	switch service {
 	case "tripbot":
 		err = restartSelf()
-	case "vlc-server":
+	case "vlc":
 		err = restartProxyShutdown(r.Context(), c.Conf.VlcServerHost)
-	case "onscreens-server":
+	case "onscreens":
 		err = restartProxyShutdown(r.Context(), c.Conf.OnscreensServerHost)
 	case "obs":
 		if c.Conf.ObsServerHost == "" {
@@ -837,7 +837,7 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
   </details>
 
   {{if and .PreviewChannel .PanelHost}}
-  <details class="stream-preview" id="stream-preview" open>
+  <details class="stream-preview" id="stream-preview" {{if .Stream.Active}}open{{end}}>
     <summary>stream preview</summary>
     <div class="stream-frame">
       <iframe data-src="https://player.twitch.tv/?channel={{.PreviewChannel}}&parent={{.PanelHost}}&muted=true&autoplay=true"
@@ -921,10 +921,11 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
   <div id="user-popover" class="user-popover" hidden></div>
 </main>
 <script>
-// Stream-preview iframe wiring. The disclosure defaults to open so the
-// preview is visible on load — initial paint sets src from data-src.
-// Collapse swaps src to about:blank so the player stops cleanly (audio +
-// bandwidth would otherwise keep going), and re-expanding restores it.
+// Stream-preview iframe wiring. The disclosure starts open only when the
+// stream is live (collapsed when offline); the initial paint sets src from
+// data-src when open. Collapse swaps src to about:blank so the player stops
+// cleanly (audio + bandwidth would otherwise keep going), and re-expanding
+// restores it.
 (function() {
   const details = document.getElementById('stream-preview');
   if (!details) return;

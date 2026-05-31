@@ -231,7 +231,7 @@ func TestRestartActionHandler_VlcProxiesToVlcServerHost(t *testing.T) {
 
 	r := mux.NewRouter()
 	r.Handle("/admin/restart/{service}", http.HandlerFunc(restartActionHandler)).Methods("POST")
-	req := httptest.NewRequest(http.MethodPost, "/admin/restart/vlc-server", nil)
+	req := httptest.NewRequest(http.MethodPost, "/admin/restart/vlc", nil)
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -344,9 +344,9 @@ func TestAdminHandler_RendersReadyStatusAndLinks(t *testing.T) {
 		`/CHANGELOG.md">v1.2.3</a>`, // tripbot version tag → changelog (ref is sha or master)
 		`<a href="https://github.com/adanalife/tripbot/blob/deadbeefcafe/CHANGELOG.md">v9.9.9-vlc</a>`, // vlc version → changelog@sha
 		`<a href="https://github.com/adanalife/tripbot/blob/feedfacecafe/CHANGELOG.md">v8.8.8-osc</a>`, // onscreens version → changelog@sha
-		">vlc-server<",                                         // vlc row label
-		">onscreens-server<",                                   // onscreens row label
-		`<span class="chatters-count">12</span>`,               // initial chatter count (server-rendered, unflashed)
+		">vlc<",                                  // vlc row label (shortened)
+		">onscreens<",                            // onscreens row label (shortened)
+		`<span class="chatters-count">12</span>`, // initial chatter count (server-rendered, unflashed)
 		`id="chatters" sse-swap="viewers" hx-swap="innerHTML"`, // live count target wired for SSE updates
 		`<code class="env env-prod">production</code>`,         // env in monospace chip, prod-coloured
 		`<title>tripbot — adanalife_ (production)</title>`,     // env rendered in <title> for tab disambiguation
