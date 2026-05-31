@@ -16,7 +16,7 @@ import (
 var ChannelID string
 
 // subscribers is a list of the usernames of the current subscribers
-//TODO: this could include tier and gift info if we wanted
+// TODO: this could include tier and gift info if we wanted
 var subscribers []string
 
 // getChannelID makes a request to twitch to get the user ID for the channel

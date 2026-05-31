@@ -18,7 +18,7 @@ import (
 )
 
 type User struct {
-	ID          uint16    `gorm:"primaryKey"`
+	ID          uint16 `gorm:"primaryKey"`
 	Username    string
 	Miles       float32
 	NumVisits   uint16
@@ -211,7 +211,7 @@ func (u *User) SetLastLocationTime() {
 	u.lastLocation = time.Now()
 }
 
-//TODO: maybe return an err here?
+// TODO: maybe return an err here?
 // create() will actually create the DB record
 func create(ctx context.Context, username string) User {
 	slog.InfoContext(ctx, "creating user", "username", username)

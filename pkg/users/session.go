@@ -8,8 +8,8 @@ import (
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
-	"github.com/adanalife/tripbot/pkg/events"
 	"github.com/adanalife/tripbot/pkg/eventbus"
+	"github.com/adanalife/tripbot/pkg/events"
 	"github.com/adanalife/tripbot/pkg/scoreboards"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/google/uuid"
@@ -78,7 +78,7 @@ func LogoutIfNecessary(ctx context.Context, username string) {
 }
 
 // login will record the users presence in the DB
-//TODO: do we want to make a DB update here? we could do it on logout()
+// TODO: do we want to make a DB update here? we could do it on logout()
 func login(ctx context.Context, username string) *User {
 	now := time.Now()
 
