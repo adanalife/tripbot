@@ -10,6 +10,7 @@ import (
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
+	"github.com/adanalife/tripbot/pkg/eventbus"
 	"github.com/adanalife/tripbot/pkg/feature"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/video"
@@ -405,7 +406,7 @@ func TestAdminHandler_RendersReadyStatusAndLinks(t *testing.T) {
 		c.Conf.ExternalURL = "https://tripbot.prod.whereisdana.today"
 		c.Conf.Environment = "production"
 	})
-	withCurrentlyPlaying(t, video.Video{Slug: "wy_0042", State: "Wyoming"}, 3*time.Minute+12*time.Second)
+	withCurrentlyPlaying(t, srv, video.Video{Slug: "wy_0042", State: "Wyoming"}, 3*time.Minute+12*time.Second)
 	withChatterCount(t, 12)
 
 	srv.SetVersion("v1.2.3")
@@ -470,7 +471,7 @@ func TestAdminHandler_DegradedAndVlcUnreachable(t *testing.T) {
 	})
 	// even with a video loaded, an unhealthy vlc hides "now playing" rather
 	// than showing a possibly-stale value.
-	withCurrentlyPlaying(t, video.Video{Slug: "wy_0042", State: "Wyoming"}, time.Minute)
+	withCurrentlyPlaying(t, srv, video.Video{Slug: "wy_0042", State: "Wyoming"}, time.Minute)
 
 	rec := httptest.NewRecorder()
 	srv.adminHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
@@ -508,14 +509,17 @@ func withConf(t *testing.T, set func()) {
 	set()
 }
 
-// withCurrentlyPlaying swaps the currentlyPlaying / currentProgress seams so
-// the admin handler sees a fixed video + progress without driving the player.
-func withCurrentlyPlaying(t *testing.T, v video.Video, progress time.Duration) {
+// withCurrentlyPlaying seeds srv's hub with a video.changed so the admin
+// handler renders a fixed "now playing" — mirroring how it reads now-playing
+// from the NATS hub cache in production. progress maps to the event's
+// emitted_at (clip start = now - progress).
+func withCurrentlyPlaying(t *testing.T, srv *Server, v video.Video, progress time.Duration) {
 	t.Helper()
-	savedV, savedP := currentlyPlaying, currentProgress
-	currentlyPlaying = func() video.Video { return v }
-	currentProgress = func() time.Duration { return progress }
-	t.Cleanup(func() { currentlyPlaying, currentProgress = savedV, savedP })
+	srv.hub.setNowPlaying(eventbus.VideoChanged{
+		File:      v.File(),
+		State:     v.State,
+		EmittedAt: time.Now().Add(-progress).Format(time.RFC3339Nano),
+	})
 }
 
 // withChatterCount swaps the chatterCount seam to a fixed value.

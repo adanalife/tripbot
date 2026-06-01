@@ -75,6 +75,13 @@ type Hub struct {
 	// mapTrail is the recent GPS breadcrumb trail (bounded by mapTrailSize),
 	// appended on each video.changed that carries a real fix.
 	mapTrail []mapPoint
+
+	// nowPlaying is the last video.changed seen, cached so the initial page
+	// render can show "now playing" from NATS instead of reaching into
+	// pkg/video in-process. nowPlayingKnown gates it (nothing seen yet → the
+	// panel hides the card). Populated by handleVideoChanged.
+	nowPlaying      eventbus.VideoChanged
+	nowPlayingKnown bool
 }
 
 // NewHub returns an unstarted hub. Safe to construct at package-init time — it
@@ -173,15 +180,16 @@ func (h *Hub) updateViewers(count int) string {
 	return dir
 }
 
-// handleVideoChanged forwards a video switch to the panel's "now playing"
-// card. There's no ring to keep — the page renders the current video on load
-// and this just refreshes it; the hub holds no video state.
+// handleVideoChanged caches the switch as the current "now playing" (so the
+// initial page render reads it from here instead of pkg/video in-process) and
+// forwards it to connected panels' "now playing" card.
 func (h *Hub) handleVideoChanged(ctx context.Context, data []byte) {
 	var ev eventbus.VideoChanged
 	if err := json.Unmarshal(data, &ev); err != nil {
 		slog.ErrorContext(ctx, "live-console hub: bad video payload", "err", err)
 		return
 	}
+	h.setNowPlaying(ev)
 	h.broadcast(sseEvent{Name: "video", Data: renderVideoLine(ev)})
 
 	// Drop a breadcrumb for the live map when the clip has a real GPS fix.
@@ -190,6 +198,22 @@ func (h *Hub) handleVideoChanged(ctx context.Context, data []byte) {
 		h.appendMapPoint(p)
 		h.broadcast(sseEvent{Name: "map", Data: renderMapPoint(p)})
 	}
+}
+
+// setNowPlaying caches the latest video.changed as the current clip.
+func (h *Hub) setNowPlaying(ev eventbus.VideoChanged) {
+	h.mu.Lock()
+	h.nowPlaying = ev
+	h.nowPlayingKnown = true
+	h.mu.Unlock()
+}
+
+// snapshotNowPlaying returns the last video.changed seen and whether one has
+// arrived yet, for the initial page render.
+func (h *Hub) snapshotNowPlaying() (eventbus.VideoChanged, bool) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.nowPlaying, h.nowPlayingKnown
 }
 
 // hasFix reports whether a video.changed carries usable coordinates — flagged

@@ -11,8 +11,6 @@ import (
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/eventbus"
 	"github.com/adanalife/tripbot/pkg/helpers"
-	"github.com/adanalife/tripbot/pkg/natsclient"
-	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
 	vlcClient "github.com/adanalife/tripbot/pkg/vlc-client"
 )
 
@@ -27,10 +25,9 @@ type onscreens interface {
 
 // Player owns the state of "what's currently playing" and the clients that
 // drive the VLC playback + onscreens overlays. Construct via NewPlayer; the
-// package-level defaultPlayer is wired up at init for callers that still hit
-// the free-function shims below.
+// single process-wide instance lives on cmd/tripbot's Tripbot struct.
 type Player struct {
-	CurrentlyPlaying Video // exported because external callers used to read video.CurrentlyPlaying
+	CurrentlyPlaying Video // exported because external callers read the current video off it
 	curVid, preVid   string
 	timeStarted      time.Time
 	onscreens        onscreens
@@ -41,15 +38,6 @@ type Player struct {
 func NewPlayer(onscreens onscreens, vlc *vlcClient.Client) *Player {
 	return &Player{onscreens: onscreens, vlc: vlc}
 }
-
-// defaultPlayer is the package-level Player used by the free-function shims
-// below. Exists so callers that aren't constructor-injected (cmd/tripbot
-// bootstrap, script/collect-gps) keep working. New consumers should construct
-// their own *Player via NewPlayer().
-var defaultPlayer = NewPlayer(
-	onscreensClient.New(c.Conf.OnscreensServerHost, natsclient.DefaultPublisher(), c.Conf.Environment),
-	vlcClient.New(c.Conf.VlcServerHost),
-)
 
 // GetCurrentlyPlaying will use lsof to figure out
 // which dashcam video is currently playing (seriously).
@@ -116,6 +104,21 @@ func (p *Player) CurrentProgress() time.Duration {
 // Current returns the currently-playing video.
 func (p *Player) Current() Video { return p.CurrentlyPlaying }
 
+// EmitCurrentVideo re-publishes the current clip as a video.changed without a
+// transition. cmd calls this once right after the live-console hub subscribes
+// to NATS, so a freshly-started hub shows "now playing" immediately instead of
+// waiting for the next clip change (NATS core has no replay). No-op when
+// nothing is playing yet. A periodic re-emit for a separately-started console
+// is the tripbot-console split's concern, not this.
+func (p *Player) EmitCurrentVideo(ctx context.Context) {
+	if p.CurrentlyPlaying.Slug == "" {
+		return
+	}
+	eventbus.EmitVideoChanged(ctx, c.Conf.Environment,
+		p.CurrentlyPlaying.File(), p.CurrentlyPlaying.State, p.CurrentlyPlaying.Flagged,
+		p.CurrentlyPlaying.Lat, p.CurrentlyPlaying.Lng)
+}
+
 func (p *Player) figureOutCurrentVideo(ctx context.Context) string {
 	if helpers.RunningOnWindows() {
 		slog.ErrorContext(ctx, "can't run script on windows")
@@ -131,12 +134,3 @@ func (p *Player) figureOutCurrentVideo(ctx context.Context) string {
 	}
 	return outString
 }
-
-// ---- package-level shims (transitional) ----
-// Each free function calls the corresponding method on defaultPlayer. These
-// preserve the existing public surface for unmigrated callers. New consumers
-// should construct their own *Player via NewPlayer().
-
-func GetCurrentlyPlaying(ctx context.Context) { defaultPlayer.GetCurrentlyPlaying(ctx) }
-func CurrentProgress() time.Duration          { return defaultPlayer.CurrentProgress() }
-func CurrentlyPlaying() Video                 { return defaultPlayer.Current() }
