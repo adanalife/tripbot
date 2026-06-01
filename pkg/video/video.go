@@ -11,9 +11,19 @@ import (
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/eventbus"
 	"github.com/adanalife/tripbot/pkg/helpers"
+	"github.com/adanalife/tripbot/pkg/natsclient"
 	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
 	vlcClient "github.com/adanalife/tripbot/pkg/vlc-client"
 )
+
+// onscreens is the subset of the onscreens-client surface the Player drives
+// (GPS overlay toggles on flagged-video transitions). Tests inject a
+// recording fake; production uses *onscreensClient.Client, which mirrors
+// each call to NATS + HTTP.
+type onscreens interface {
+	ShowGPSImage(ctx context.Context, dur time.Duration) error
+	HideGPSImage(ctx context.Context) error
+}
 
 // Player owns the state of "what's currently playing" and the clients that
 // drive the VLC playback + onscreens overlays. Construct via NewPlayer; the
@@ -23,12 +33,12 @@ type Player struct {
 	CurrentlyPlaying Video // exported because external callers used to read video.CurrentlyPlaying
 	curVid, preVid   string
 	timeStarted      time.Time
-	onscreens        *onscreensClient.Client
+	onscreens        onscreens
 	vlc              *vlcClient.Client
 }
 
 // NewPlayer returns a Player with its own Onscreens + VLC clients.
-func NewPlayer(onscreens *onscreensClient.Client, vlc *vlcClient.Client) *Player {
+func NewPlayer(onscreens onscreens, vlc *vlcClient.Client) *Player {
 	return &Player{onscreens: onscreens, vlc: vlc}
 }
 
@@ -37,7 +47,7 @@ func NewPlayer(onscreens *onscreensClient.Client, vlc *vlcClient.Client) *Player
 // bootstrap, script/collect-gps) keep working. New consumers should construct
 // their own *Player via NewPlayer().
 var defaultPlayer = NewPlayer(
-	onscreensClient.New(c.Conf.OnscreensServerHost),
+	onscreensClient.New(c.Conf.OnscreensServerHost, natsclient.DefaultPublisher(), c.Conf.Environment),
 	vlcClient.New(c.Conf.VlcServerHost),
 )
 

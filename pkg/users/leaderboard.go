@@ -3,7 +3,6 @@ package users
 import (
 	"context"
 	"fmt"
-	"html"
 	"log/slog"
 	"strconv"
 	"strings"
@@ -102,33 +101,6 @@ func (s *Sessions) printLeaderboard() {
 	for i, pair := range s.lifetimeLeaderboard {
 		fmt.Printf("%d: %s - %s\n", i+1, pair[1], aurora.Magenta(pair[0]))
 	}
-}
-
-// LeaderboardContent renders the leaderboard onscreen as a CSS-grid HTML
-// fragment. The score column auto-sizes to the widest entry via
-// grid-template-columns, so digits line up across rows regardless of font.
-// The onscreen is registered with RenderAsHTML in onscreenRegistry so the
-// browser-source template injects this via innerHTML.
-func LeaderboardContent(title string, leaderboard [][]string) string {
-	size := 5
-	if len(leaderboard) < size {
-		size = len(leaderboard)
-	}
-	leaderboard = leaderboard[:size]
-
-	var b strings.Builder
-	b.WriteString(`<div class="lb-grid">`)
-	fmt.Fprintf(&b, `<div class="lb-title">%s</div>`, html.EscapeString(strings.Title(title)))
-	for _, row := range leaderboard {
-		fmt.Fprintf(
-			&b,
-			`<span class="lb-score">%s</span><span class="lb-user">(%s)</span>`,
-			html.EscapeString(row[1]),
-			html.EscapeString(row[0]),
-		)
-	}
-	b.WriteString(`</div>`)
-	return b.String()
 }
 
 // LifetimeMilesLeaderboard returns the cached lifetime-miles leaderboard from

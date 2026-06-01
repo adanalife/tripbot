@@ -502,7 +502,7 @@ func (t *Tripbot) gracefulShutdown() {
 // Lives in this package (not pkg/background) to avoid circular deps with
 // the job-target packages.
 func (t *Tripbot) scheduleBackgroundJobs() {
-	onscreensCli := onscreensClient.New(c.Conf.OnscreensServerHost)
+	onscreensCli := onscreensClient.New(c.Conf.OnscreensServerHost, natsclient.DefaultPublisher(), c.Conf.Environment)
 	t.addJob(60*time.Second, "video.GetCurrentlyPlaying", video.GetCurrentlyPlaying)
 	t.addJob(61*time.Second, "users.UpdateSession", users.UpdateSession)
 	t.addJob(62*time.Second, "users.UpdateLeaderboard", users.UpdateLeaderboard)
