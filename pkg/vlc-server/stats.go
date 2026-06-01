@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/instrumentation"
+	libvlc "github.com/adrg/libvlc-go/v3"
 )
 
 // pollStats polls libvlc for playback statistics every interval and pushes
@@ -23,6 +24,9 @@ func (s *Server) pollStats(ctx context.Context, interval time.Duration) {
 		prevDisplayed float64
 		prevTime      time.Time
 		havePrev      bool
+
+		prevState     libvlc.MediaState
+		havePrevState bool
 	)
 
 	for {
@@ -33,6 +37,19 @@ func (s *Server) pollStats(ctx context.Context, interval time.Duration) {
 			if s.Player == nil {
 				continue
 			}
+
+			// Count player-state transitions (playing↔paused↔buffering↔…).
+			// Done before the media/stats fetch below so states with no
+			// media (stopped/ended/error) are still observed. Inc only on a
+			// genuine change, so the counter tracks transitions not ticks.
+			if state, err := s.Player.MediaState(); err == nil {
+				if havePrevState && state != prevState {
+					instrumentation.VLCStateTransitions.Inc(vlcStateLabel(state))
+				}
+				prevState = state
+				havePrevState = true
+			}
+
 			media, err := s.Player.Media()
 			if err != nil || media == nil {
 				havePrev = false
@@ -70,6 +87,31 @@ func (s *Server) pollStats(ctx context.Context, interval time.Duration) {
 				DemuxDiscontinuity: float64(stats.DemuxDiscontinuity),
 			})
 		}
+	}
+}
+
+// vlcStateLabel maps a libvlc MediaState to a stable, low-cardinality metric
+// label. libvlc.MediaState has no String(), so map it explicitly.
+func vlcStateLabel(state libvlc.MediaState) string {
+	switch state {
+	case libvlc.MediaNothingSpecial:
+		return "nothing_special"
+	case libvlc.MediaOpening:
+		return "opening"
+	case libvlc.MediaBuffering:
+		return "buffering"
+	case libvlc.MediaPlaying:
+		return "playing"
+	case libvlc.MediaPaused:
+		return "paused"
+	case libvlc.MediaStopped:
+		return "stopped"
+	case libvlc.MediaEnded:
+		return "ended"
+	case libvlc.MediaError:
+		return "error"
+	default:
+		return "unknown"
 	}
 }
 
