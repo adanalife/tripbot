@@ -42,14 +42,14 @@ type chatUser interface {
 }
 
 // checkAccess returns true when the user is allowed to run cmd.
-// It calls sayFn with the appropriate denial message when access is denied.
-func (cmd *Command) checkAccess(ctx context.Context, user chatUser, sayFn func(string)) bool {
+// It calls say with the appropriate denial message when access is denied.
+func (cmd *Command) checkAccess(ctx context.Context, user chatUser, say func(string)) bool {
 	if followerGatingEnabled && cmd.RequiresFollow && !user.HasCommandAvailable(ctx) {
-		sayFn(followerMsg)
+		say(followerMsg)
 		return false
 	}
 	if cmd.RequiresSubscriber && !user.IsSubscriber() {
-		sayFn(subscriberMsg)
+		say(subscriberMsg)
 		return false
 	}
 	return true
@@ -68,9 +68,9 @@ func (su sessionUser) HasCommandAvailable(ctx context.Context) bool {
 }
 func (su sessionUser) IsSubscriber() bool { return su.s.IsSubscriber(*su.u) }
 
-func dispatch(ctx context.Context, cmd *Command, user *users.User, params []string) {
+func (a *App) dispatch(ctx context.Context, cmd *Command, user *users.User, params []string) {
 	incChatCommandCounter(cmd.Trigger)
-	if !cmd.checkAccess(ctx, sessionUser{currentSessions(), user}, sayFn) {
+	if !cmd.checkAccess(ctx, sessionUser{currentSessions(), user}, a.IRC.Say) {
 		return
 	}
 	// Start a child span under the chatbot.handle_message span from
@@ -130,7 +130,7 @@ func findCommand(message string) (*Command, []string) {
 	return nil, nil
 }
 
-func runCommand(ctx context.Context, user *users.User, message string) {
+func (a *App) runCommand(ctx context.Context, user *users.User, message string) {
 	// parse for otel span attribute (only set for !-prefixed commands)
 	msg := normalizeCommandPrefix(strings.TrimSpace(message))
 	split := strings.Split(msg, " ")
@@ -147,7 +147,7 @@ func runCommand(ctx context.Context, user *users.User, message string) {
 
 	cmd, params := findCommand(message)
 	if cmd != nil {
-		dispatch(ctx, cmd, user, params)
+		a.dispatch(ctx, cmd, user, params)
 		return
 	}
 
@@ -184,7 +184,10 @@ func PrivateMessage(msg twitch.PrivateMessage) {
 	// log in the user
 	user := currentSessions().LoginIfNecessary(ctx, username)
 
-	runCommand(ctx, user, message)
+	// defaultApp is the package singleton; PrivateMessage is still a
+	// free-function Twitch callback (registered in Initialize). It becomes a
+	// thin adapter onto a cmd-constructed *App in the later Phase C steps.
+	defaultApp.runCommand(ctx, user, message)
 }
 
 // this event fires when a user joins the channel
