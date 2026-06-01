@@ -20,7 +20,6 @@ import (
 	"github.com/adanalife/tripbot/pkg/database"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/users"
-	"github.com/adanalife/tripbot/pkg/video"
 	"github.com/getsentry/sentry-go"
 	"github.com/hako/durafmt"
 	"gorm.io/gorm"
@@ -497,7 +496,7 @@ func (a *App) secretInfoCmd(ctx context.Context, user *users.User, _ []string) {
 		return
 	}
 	vid := a.Video.Current()
-	msg := fmt.Sprintf("currently playing: %s, playtime: %s", vid, video.CurrentProgress())
+	msg := fmt.Sprintf("currently playing: %s, playtime: %s", vid, a.Video.CurrentProgress())
 	lat, lng, err := vid.Location()
 	if err != nil {
 		msg = fmt.Sprintf("%s, err: %s", msg, err)

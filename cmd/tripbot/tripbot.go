@@ -29,6 +29,7 @@ import (
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/adanalife/tripbot/pkg/video"
+	vlcClient "github.com/adanalife/tripbot/pkg/vlc-client"
 	_ "github.com/dimiro1/banner/autoload"
 	"github.com/gempir/go-twitch-irc/v4"
 	"github.com/getsentry/sentry-go"
@@ -96,6 +97,13 @@ type Tripbot struct {
 	// the panel's handlers are methods on this instance.
 	srv *server.Server
 
+	// player owns "what's currently playing" — the single process-wide
+	// instance, constructed in NewTripbot. The 60s cron tick refreshes it
+	// (GetCurrentlyPlaying); findInitialVideo + gracefulShutdown read it; it's
+	// installed into chatbot (SetVideoPlayer) so commands read the same state,
+	// and it publishes video.changed to NATS for the admin panel.
+	player *video.Player
+
 	telemetryShutdown telemetry.ShutdownFunc
 
 	// discordSession is set by startDiscord when the Discord bot is enabled
@@ -115,8 +123,12 @@ type Tripbot struct {
 // Postgres-backed flag client) are filled in by the boot-sequence methods.
 func NewTripbot(version string) *Tripbot {
 	return &Tripbot{
-		version:    version,
-		srv:        server.New(),
+		version: version,
+		srv:     server.New(),
+		player: video.NewPlayer(
+			onscreensClient.New(c.Conf.OnscreensServerHost, natsclient.DefaultPublisher(), c.Conf.Environment),
+			vlcClient.New(c.Conf.VlcServerHost),
+		),
 		flagClient: feature.NewInMemoryClient(nil),
 	}
 }
@@ -141,6 +153,7 @@ func (t *Tripbot) Run() {
 	t.srv.SetVersion(t.version)
 	t.startHttpServer(shutdownCtx)
 	t.findInitialVideo()
+	chatbot.SetVideoPlayer(t.player) // commands read the same Player the cron refreshes
 	users.InitLeaderboard(context.Background())
 	t.startCron()
 	t.startFeatureFlags(shutdownCtx)
@@ -151,7 +164,8 @@ func (t *Tripbot) Run() {
 	t.getCurrentUsers()
 	t.startEventSub(shutdownCtx)
 	t.startNATS()
-	t.srv.StartEventHub(shutdownCtx) // after startNATS: the hub subscribes to the live NATS conn
+	t.srv.StartEventHub(shutdownCtx)       // after startNATS: the hub subscribes to the live NATS conn
+	t.player.EmitCurrentVideo(shutdownCtx) // after the hub subscribes: seed its now-playing cache (no NATS replay)
 	t.startDiscord(shutdownCtx)
 	t.startSilentDisconnectWatchdog(shutdownCtx)
 	t.connectToTwitch()
@@ -304,8 +318,8 @@ func (t *Tripbot) startHttpServer(ctx context.Context) {
 // findInitialVideo will determine the vido that is currently-playing
 // we want to run this early, otherwise it will be unset until the first cron job runs
 func (t *Tripbot) findInitialVideo() {
-	video.GetCurrentlyPlaying(context.Background())
-	v := video.CurrentlyPlaying()
+	t.player.GetCurrentlyPlaying(context.Background())
+	v := t.player.Current()
 	_, err := video.LoadOrCreate(context.Background(), v.String())
 	if err != nil {
 		slog.Error("error loading initial video, is there a video playing?", "err", err)
@@ -480,7 +494,7 @@ func (t *Tripbot) gracefulShutdown() {
 	// anything below this probably won't be executed
 	// try and use !shutdown instead
 	//TODO: print different message if CurrentlyPlaying is ""
-	slog.Info("last played video", "file", video.CurrentlyPlaying().File())
+	slog.Info("last played video", "file", t.player.Current().File())
 	if t.discordSession != nil {
 		if err := t.discordSession.Stop(); err != nil {
 			slog.Error("discord stop failed", "err", err)
@@ -510,7 +524,7 @@ func (t *Tripbot) gracefulShutdown() {
 // the job-target packages.
 func (t *Tripbot) scheduleBackgroundJobs() {
 	onscreensCli := onscreensClient.New(c.Conf.OnscreensServerHost, natsclient.DefaultPublisher(), c.Conf.Environment)
-	t.addJob(60*time.Second, "video.GetCurrentlyPlaying", video.GetCurrentlyPlaying)
+	t.addJob(60*time.Second, "video.GetCurrentlyPlaying", t.player.GetCurrentlyPlaying)
 	t.addJob(61*time.Second, "users.UpdateSession", users.UpdateSession)
 	t.addJob(62*time.Second, "users.UpdateLeaderboard", users.UpdateLeaderboard)
 	t.addJob(5*time.Minute, "onscreens.ShowGuessLeaderboard", onscreensCli.ShowGuessLeaderboard)
