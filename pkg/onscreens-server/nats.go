@@ -85,8 +85,8 @@ func (s *Server) handleLeaderboardShow(m *nats.Msg) {
 // Hides are lenient by construction (nothing to reject).
 func (s *Server) handleMiddleHide(_ *nats.Msg)      { s.MiddleText.Hide() }
 func (s *Server) handleLeaderboardHide(_ *nats.Msg) { s.Leaderboard.Hide() }
-func (s *Server) handleTimewarpShow(_ *nats.Msg) { s.Timewarp.ShowFor("Timewarp!", timewarpDuration) }
-func (s *Server) handleTimewarpHide(_ *nats.Msg) { s.Timewarp.Hide() }
-func (s *Server) handleGPSShow(_ *nats.Msg)      { s.GPS.Show("") }
-func (s *Server) handleGPSHide(_ *nats.Msg)      { s.GPS.Hide() }
-func (s *Server) handleFlagHide(_ *nats.Msg)     { s.Flag.Hide() }
+func (s *Server) handleTimewarpShow(_ *nats.Msg)    { s.Timewarp.ShowFor("Timewarp!", timewarpDuration) }
+func (s *Server) handleTimewarpHide(_ *nats.Msg)    { s.Timewarp.Hide() }
+func (s *Server) handleGPSShow(_ *nats.Msg)         { s.GPS.Show("") }
+func (s *Server) handleGPSHide(_ *nats.Msg)         { s.GPS.Hide() }
+func (s *Server) handleFlagHide(_ *nats.Msg)        { s.Flag.Hide() }
