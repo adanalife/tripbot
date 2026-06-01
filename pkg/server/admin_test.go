@@ -109,7 +109,7 @@ func withObsStream(t *testing.T, startErr, stopErr error) (started, stopped *int
 	return started, stopped
 }
 
-func TestObsStreamActionHandler_StartRedirectsAndCalls(t *testing.T) {
+func TestObsStreamActionHandler_StartSwapsInStopControl(t *testing.T) {
 	started, _ := withObsStream(t, nil, nil)
 
 	r := mux.NewRouter()
@@ -119,18 +119,27 @@ func TestObsStreamActionHandler_StartRedirectsAndCalls(t *testing.T) {
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusSeeOther {
-		t.Fatalf("got status %d, want %d", rec.Code, http.StatusSeeOther)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("got status %d, want %d", rec.Code, http.StatusOK)
 	}
-	if got := rec.Header().Get("Location"); got != "/" {
-		t.Fatalf("got Location %q, want /", got)
+	body := rec.Body.String()
+	// A successful start flips the widget to offer "stop".
+	if !strings.Contains(body, `id="stream-control"`) {
+		t.Errorf("response should be the stream-control fragment; got %q", body)
+	}
+	if !strings.Contains(body, `hx-post="/admin/obs/stream/stop"`) {
+		t.Errorf("swapped-in widget should now offer stop; got %q", body)
+	}
+	// HX-Trigger tells the page the stream is now active (opens the preview).
+	if got := rec.Header().Get("HX-Trigger"); !strings.Contains(got, `"active":true`) {
+		t.Errorf("HX-Trigger = %q, want stream-changed active:true", got)
 	}
 	if *started != 1 {
 		t.Fatalf("obsStartStream called %d times, want 1", *started)
 	}
 }
 
-func TestObsStreamActionHandler_StopRedirectsAndCalls(t *testing.T) {
+func TestObsStreamActionHandler_StopSwapsInStartControl(t *testing.T) {
 	_, stopped := withObsStream(t, nil, nil)
 
 	r := mux.NewRouter()
@@ -140,8 +149,15 @@ func TestObsStreamActionHandler_StopRedirectsAndCalls(t *testing.T) {
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusSeeOther {
-		t.Fatalf("got status %d, want %d", rec.Code, http.StatusSeeOther)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("got status %d, want %d", rec.Code, http.StatusOK)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `hx-post="/admin/obs/stream/start"`) {
+		t.Errorf("swapped-in widget should now offer start; got %q", body)
+	}
+	if got := rec.Header().Get("HX-Trigger"); !strings.Contains(got, `"active":false`) {
+		t.Errorf("HX-Trigger = %q, want stream-changed active:false", got)
 	}
 	if *stopped != 1 {
 		t.Fatalf("obsStopStream called %d times, want 1", *stopped)
@@ -163,10 +179,11 @@ func TestObsStreamActionHandler_UnknownActionIs400(t *testing.T) {
 	}
 }
 
-func TestObsStreamActionHandler_RedirectsEvenOnError(t *testing.T) {
-	// State is the source of truth — refreshed panel will show the actual
-	// state. Surfacing the error in flash UI isn't worth the complexity for
-	// a tailnet-only solo-operator panel.
+func TestObsStreamActionHandler_ErrorLeavesStateUnchanged(t *testing.T) {
+	// State is the source of truth — a failed toggle re-renders the previous
+	// state, so the swapped-in widget simply doesn't flip. Surfacing the error in
+	// flash UI isn't worth the complexity for a tailnet-only solo-operator panel;
+	// the periodic refresh reconciles actual OBS state.
 	started, _ := withObsStream(t, errFakeOBS, nil)
 
 	r := mux.NewRouter()
@@ -176,8 +193,16 @@ func TestObsStreamActionHandler_RedirectsEvenOnError(t *testing.T) {
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusSeeOther {
-		t.Fatalf("got status %d, want %d", rec.Code, http.StatusSeeOther)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("got status %d, want %d", rec.Code, http.StatusOK)
+	}
+	// Start failed → widget still offers start (didn't flip to stop).
+	body := rec.Body.String()
+	if !strings.Contains(body, `hx-post="/admin/obs/stream/start"`) {
+		t.Errorf("failed start should leave the widget offering start; got %q", body)
+	}
+	if got := rec.Header().Get("HX-Trigger"); !strings.Contains(got, `"active":false`) {
+		t.Errorf("HX-Trigger = %q, want stream-changed active:false", got)
 	}
 	if *started != 1 {
 		t.Fatalf("obsStartStream called %d times, want 1", *started)
@@ -212,8 +237,8 @@ func TestRestartActionHandler_TripbotCallsSelf(t *testing.T) {
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusSeeOther {
-		t.Fatalf("got status %d, want %d", rec.Code, http.StatusSeeOther)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("got status %d, want %d", rec.Code, http.StatusNoContent)
 	}
 	if *selfCalls != 1 {
 		t.Fatalf("restartSelf called %d times, want 1", *selfCalls)
@@ -235,8 +260,8 @@ func TestRestartActionHandler_VlcProxiesToVlcServerHost(t *testing.T) {
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusSeeOther {
-		t.Fatalf("got status %d, want %d", rec.Code, http.StatusSeeOther)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("got status %d, want %d", rec.Code, http.StatusNoContent)
 	}
 	if *selfCalls != 0 {
 		t.Fatalf("restartSelf called %d times, want 0", *selfCalls)
@@ -274,6 +299,64 @@ func TestRestartActionHandler_UnknownServiceIs400(t *testing.T) {
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("got status %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestRefreshHandler_RendersOOBStatusAndStreamControl(t *testing.T) {
+	defer SetTwitchConnected(false)
+	SetTwitchConnected(true)
+
+	// stream active → the OOB widget should offer "stop"
+	savedStatus := obsStreamStatus
+	obsStreamStatus = func(context.Context) (bool, error) { return true, nil }
+	t.Cleanup(func() { obsStreamStatus = savedStatus })
+
+	// ObsServerHost isn't covered by withConf — save/restore it here.
+	savedObs := c.Conf.ObsServerHost
+	t.Cleanup(func() { c.Conf.ObsServerHost = savedObs })
+
+	vlc := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/health/ready":
+			w.WriteHeader(http.StatusOK)
+		case "/version":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"tag":"v9.9.9-vlc","sha":"deadbeefcafe"}`))
+		default:
+			t.Errorf("unexpected vlc request %q", r.URL.Path)
+		}
+	}))
+	defer vlc.Close()
+
+	withConf(t, func() {
+		c.Conf.VlcServerHost = strings.TrimPrefix(vlc.URL, "http://")
+		c.Conf.OnscreensServerHost = "" // skip the onscreens ping
+	})
+	c.Conf.ObsServerHost = "" // skip the obs sibling ping
+
+	rec := httptest.NewRecorder()
+	refreshHandler(rec, httptest.NewRequest(http.MethodGet, "/admin/refresh", nil))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("got status %d, want %d", rec.Code, http.StatusOK)
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		`<ul id="status-list" hx-swap-oob="true">`, // status rows OOB target
+		"in chat",                          // tripbot connected
+		">vlc<",                            // vlc service row
+		`hx-post="/admin/restart/vlc"`,     // restart button rendered in the rows
+		`v9.9.9-vlc`,                       // vlc version pulled through
+		`id="stream-control"`,              // stream widget present
+		`hx-post="/admin/obs/stream/stop"`, // stream active → offers stop
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("refresh body missing %q", want)
+		}
+	}
+	// The stream widget must be OOB-tagged so it swaps without a target attr.
+	if !strings.Contains(body, `id="stream-control" class="stream-control" hx-swap-oob="true"`) {
+		t.Errorf("stream-control should be OOB-tagged; got %q", body)
 	}
 }
 
