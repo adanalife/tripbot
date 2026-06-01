@@ -16,7 +16,7 @@ const sseHeartbeat = 20 * time.Second
 // eventsHandler streams live-console events to the browser over Server-Sent
 // Events. HTMX's sse extension connects here (sse-connect="/admin/events") and
 // routes each named event to its sse-swap target.
-func eventsHandler(w http.ResponseWriter, r *http.Request) {
+func (s *Server) eventsHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	rc := http.NewResponseController(w)
 
@@ -41,8 +41,8 @@ func eventsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ch := defaultServer.hub.register()
-	defer defaultServer.hub.unregister(ch)
+	ch := s.hub.register()
+	defer s.hub.unregister(ch)
 
 	heartbeat := time.NewTicker(sseHeartbeat)
 	defer heartbeat.Stop()

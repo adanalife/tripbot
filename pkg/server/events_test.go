@@ -66,6 +66,7 @@ func waitFor(t *testing.T, cond func() bool) {
 }
 
 func TestEventsHandler_streamsChatEvent(t *testing.T) {
+	srv := New()
 	rec := newFlushRecorder()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -73,15 +74,15 @@ func TestEventsHandler_streamsChatEvent(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		eventsHandler(rec, req)
+		srv.eventsHandler(rec, req)
 		close(done)
 	}()
 
 	// Wait until the handler has registered with the hub, so our broadcast
 	// isn't dropped before the client channel exists.
-	waitFor(t, func() bool { return defaultServer.hub.numSubscribers() >= 1 })
+	waitFor(t, func() bool { return srv.hub.numSubscribers() >= 1 })
 
-	defaultServer.hub.broadcast(sseEvent{Name: "chat", Data: `<div class="chat-line">hi</div>`})
+	srv.hub.broadcast(sseEvent{Name: "chat", Data: `<div class="chat-line">hi</div>`})
 
 	select {
 	case <-rec.writes:
@@ -105,14 +106,15 @@ func TestEventsHandler_streamsChatEvent(t *testing.T) {
 	if cc := rec.Header().Get("Cache-Control"); cc != "no-store" {
 		t.Errorf("Cache-Control = %q, want no-store", cc)
 	}
-	if defaultServer.hub.numSubscribers() != 0 {
-		t.Errorf("subscriber not cleaned up after disconnect: %d", defaultServer.hub.numSubscribers())
+	if srv.hub.numSubscribers() != 0 {
+		t.Errorf("subscriber not cleaned up after disconnect: %d", srv.hub.numSubscribers())
 	}
 }
 
 // TestEventsHandler_flattensNewlines guards SSE framing: a data fragment with a
 // stray newline must not break the "event:/data:" framing.
 func TestEventsHandler_flattensNewlines(t *testing.T) {
+	srv := New()
 	rec := newFlushRecorder()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -120,12 +122,12 @@ func TestEventsHandler_flattensNewlines(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		eventsHandler(rec, req)
+		srv.eventsHandler(rec, req)
 		close(done)
 	}()
-	waitFor(t, func() bool { return defaultServer.hub.numSubscribers() >= 1 })
+	waitFor(t, func() bool { return srv.hub.numSubscribers() >= 1 })
 
-	defaultServer.hub.broadcast(sseEvent{Name: "chat", Data: "line1\nline2"})
+	srv.hub.broadcast(sseEvent{Name: "chat", Data: "line1\nline2"})
 	select {
 	case <-rec.writes:
 	case <-time.After(2 * time.Second):

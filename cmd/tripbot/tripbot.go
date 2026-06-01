@@ -90,6 +90,12 @@ type Tripbot struct {
 	// can stop it.
 	scheduler *background.Scheduler
 
+	// srv is the admin-panel / auth / metrics HTTP server, constructed in
+	// NewTripbot. cmd installs runtime state through it (SetVersion,
+	// SetFlagClient, SetTwitchConnected) and starts it (Start, StartEventHub);
+	// the panel's handlers are methods on this instance.
+	srv *server.Server
+
 	telemetryShutdown telemetry.ShutdownFunc
 
 	// discordSession is set by startDiscord when the Discord bot is enabled
@@ -110,6 +116,7 @@ type Tripbot struct {
 func NewTripbot(version string) *Tripbot {
 	return &Tripbot{
 		version:    version,
+		srv:        server.New(),
 		flagClient: feature.NewInMemoryClient(nil),
 	}
 }
@@ -131,7 +138,7 @@ func (t *Tripbot) Run() {
 	t.listenForShutdown()
 	t.initializeTelemetry()
 	t.initializeErrorLogger()
-	server.SetVersion(t.version)
+	t.srv.SetVersion(t.version)
 	t.startHttpServer(shutdownCtx)
 	t.findInitialVideo()
 	users.InitLeaderboard(context.Background())
@@ -144,7 +151,7 @@ func (t *Tripbot) Run() {
 	t.getCurrentUsers()
 	t.startEventSub(shutdownCtx)
 	t.startNATS()
-	server.StartEventHub(shutdownCtx) // after startNATS: the hub subscribes to the live NATS conn
+	t.srv.StartEventHub(shutdownCtx) // after startNATS: the hub subscribes to the live NATS conn
 	t.startDiscord(shutdownCtx)
 	t.startSilentDisconnectWatchdog(shutdownCtx)
 	t.connectToTwitch()
@@ -171,7 +178,7 @@ func (t *Tripbot) startFeatureFlags(ctx context.Context) {
 	}
 	t.flagClient = fc
 	chatbot.SetFlagClient(fc)
-	server.SetFlagClient(fc)
+	t.srv.SetFlagClient(fc)
 	go fc.Start(ctx)
 }
 
@@ -291,7 +298,7 @@ func (t *Tripbot) initializeErrorLogger() {
 // requests up to its shutdown timeout.
 func (t *Tripbot) startHttpServer(ctx context.Context) {
 	// start the HTTP server
-	go server.Start(ctx)
+	go t.srv.Start(ctx)
 }
 
 // findInitialVideo will determine the vido that is currently-playing
@@ -425,7 +432,7 @@ func (t *Tripbot) connectToTwitch() {
 	// serving the admin panel + /auth/* even while the bot is offline.
 	t.irc.OnConnect(func() {
 		slog.Info("connected to Twitch chat")
-		server.SetTwitchConnected(true)
+		t.srv.SetTwitchConnected(true)
 	})
 
 	// actually connect to Twitch
@@ -436,7 +443,7 @@ func (t *Tripbot) connectToTwitch() {
 		// drops; mark not-in-chat so the admin panel + gauge reflect the gap
 		// until the next OnConnect fires.
 		err := t.irc.Connect()
-		server.SetTwitchConnected(false)
+		t.srv.SetTwitchConnected(false)
 		if err != nil {
 			slog.Error("unable to connect to twitch", "err", err)
 			if errors.Is(err, twitch.ErrLoginAuthenticationFailed) {

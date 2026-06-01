@@ -222,7 +222,7 @@ type adminData struct {
 // pings, each version linking to its changelog), the currently-playing video
 // when vlc is up, the broadcaster/bot accounts, and links to the OBS / Grafana
 // / Traefik / Hubble dashboards. Replaces the bare 404 that used to sit on "/".
-func adminHandler(w http.ResponseWriter, r *http.Request) {
+func (s *Server) adminHandler(w http.ResponseWriter, r *http.Request) {
 	vlc := siblingStatus(r.Context(), "vlc", c.Conf.VlcServerHost)
 	onscreens := siblingStatus(r.Context(), "onscreens", c.Conf.OnscreensServerHost)
 	obs := siblingStatus(r.Context(), "obs", c.Conf.ObsServerHost)
@@ -234,17 +234,17 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 		Env:            c.Conf.Environment,
 		Uptime:         time.Since(startedAt).Round(time.Second).String(),
 		Chatters:       chatterCount(),
-		Services:       gatherStatus(buildSHA(), vlc, onscreens, obs),
+		Services:       s.gatherStatus(buildSHA(), vlc, onscreens, obs),
 		Now:            currentVideo(vlc.OK),
 		Audio:          nowPlayingFetcher(r.Context()),
 		Stream:         gatherStream(r.Context()),
 		PanelHost:      panelHost(r),
 		Links:          gatherLinks(),
-		Flags:          gatherFlags(r.Context()),
+		Flags:          s.gatherFlags(r.Context()),
 		Reauth:         accountsNeedingReauth(),
 		AuthStatuses:   authStatuses(),
-		ChatHistory:    defaultServer.hub.snapshotChat(),
-		MapTrailJSON:   mapTrailJSON(),
+		ChatHistory:    s.hub.snapshotChat(),
+		MapTrailJSON:   s.mapTrailJSON(),
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -264,11 +264,11 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 // gatherStatus reports tripbot's own readiness (in-memory, free) and folds in
 // the already-probed sibling-service rows. Each row carries its build tag in a
 // version column linking to that build's changelog at the deployed sha.
-func gatherStatus(sha string, siblings ...serviceStatus) []serviceStatus {
+func (s *Server) gatherStatus(sha string, siblings ...serviceStatus) []serviceStatus {
 	tripbot := serviceStatus{
 		Name:       "tripbot",
-		OK:         defaultServer.twitchConnected.Load(),
-		Version:    defaultServer.versionTag,
+		OK:         s.twitchConnected.Load(),
+		Version:    s.versionTag,
 		VersionURL: changelogURL(sha),
 		Uptime:     uptimeSince(startedAt),
 	}
@@ -319,8 +319,8 @@ func uptimeSince(t time.Time) string {
 // flag into the small display row the template renders. Returns nil when
 // no flags are loaded yet (startup window before SetFlagClient) so the
 // template's {{if .Flags}} hides the section cleanly.
-func gatherFlags(ctx context.Context) []featureFlag {
-	flags := defaultServer.flagSnapshot(ctx)
+func (s *Server) gatherFlags(ctx context.Context) []featureFlag {
+	flags := s.flagSnapshot(ctx)
 	if len(flags) == 0 {
 		return nil
 	}
@@ -464,7 +464,7 @@ func obsStreamActionHandler(w http.ResponseWriter, r *http.Request) {
 // in the DOM is fragile, and those values are low-volatility — they refresh on
 // the next full page load. Same sibling-ping cost as the root render; fine at
 // 15s for a single-operator panel.
-func refreshHandler(w http.ResponseWriter, r *http.Request) {
+func (s *Server) refreshHandler(w http.ResponseWriter, r *http.Request) {
 	vlc := siblingStatus(r.Context(), "vlc", c.Conf.VlcServerHost)
 	onscreens := siblingStatus(r.Context(), "onscreens", c.Conf.OnscreensServerHost)
 	obs := siblingStatus(r.Context(), "obs", c.Conf.ObsServerHost)
@@ -474,7 +474,7 @@ func refreshHandler(w http.ResponseWriter, r *http.Request) {
 
 	var sb strings.Builder
 	sb.WriteString(`<ul id="status-list" hx-swap-oob="true">`)
-	sb.WriteString(renderStatusRows(gatherStatus(buildSHA(), vlc, onscreens, obs)))
+	sb.WriteString(renderStatusRows(s.gatherStatus(buildSHA(), vlc, onscreens, obs)))
 	sb.WriteString(`</ul>`)
 	sb.WriteString(renderStreamControl(gatherStream(r.Context()), true))
 	if _, err := w.Write([]byte(sb.String())); err != nil {
