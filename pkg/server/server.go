@@ -73,6 +73,9 @@ func Start(ctx context.Context) {
 	// the vendored htmx assets it loads. The /admin POST subrouter below is
 	// POST-only, so the GET stream registers on r directly.
 	r.Handle("/admin/events", tagged("/admin/events", eventsHandler)).Methods("GET")
+	// live panel refresh: hidden poller OOB-swaps the always-present status rows
+	// + stream toggle so they stay current without a full reload.
+	r.Handle("/admin/refresh", tagged("/admin/refresh", refreshHandler)).Methods("GET")
 	r.Handle("/admin/user/{username}", tagged("/admin/user/{username}", userProfileHandler)).Methods("GET")
 	r.Handle("/admin/map/corpus", tagged("/admin/map/corpus", mapCorpusHandler)).Methods("GET")
 	r.PathPrefix("/static/").Handler(staticHandler())
