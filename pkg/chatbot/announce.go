@@ -6,8 +6,8 @@ import (
 
 // AnnounceNewFollower says a thank-you to a new follower in chat. Wired
 // from pkg/eventsub on channel.follow v2 events.
-func AnnounceNewFollower(username string) {
-	sayFn(fmt.Sprintf("Thank you for the follow, @%s", username))
+func (a *App) AnnounceNewFollower(username string) {
+	a.IRC.Say(fmt.Sprintf("Thank you for the follow, @%s", username))
 }
 
 // AnnounceSubscriber says a thank-you to a new subscriber, gives every
@@ -20,10 +20,19 @@ func AnnounceNewFollower(username string) {
 // resub-with-message handling (channel.subscription.message) are
 // separate event types — wire them through pkg/eventsub.Handlers as
 // they're added.
-func AnnounceSubscriber(username string, isGift bool, tier string) {
+func (a *App) AnnounceSubscriber(username string, isGift bool, tier string) {
 	_ = isGift
 	_ = tier
-	sayFn(fmt.Sprintf("Thank you for the sub, @%s; enjoy your !bonusmiles bleedPurple", username))
+	a.IRC.Say(fmt.Sprintf("Thank you for the sub, @%s; enjoy your !bonusmiles bleedPurple", username))
 	currentSessions().GiveEveryoneMiles(1.0)
-	sayFn(fmt.Sprintf("The %d current viewers have been given a bonus mile, too HolidayPresent", currentSessions().LoggedInCount()))
+	a.IRC.Say(fmt.Sprintf("The %d current viewers have been given a bonus mile, too HolidayPresent", currentSessions().LoggedInCount()))
+}
+
+// Package-level shims delegating to defaultApp, so cmd's eventsub wiring keeps
+// referencing chatbot.AnnounceNewFollower / chatbot.AnnounceSubscriber as
+// function values. They retire once cmd registers the App's methods directly
+// (later Phase C step).
+func AnnounceNewFollower(username string) { defaultApp.AnnounceNewFollower(username) }
+func AnnounceSubscriber(username string, isGift bool, tier string) {
+	defaultApp.AnnounceSubscriber(username, isGift, tier)
 }

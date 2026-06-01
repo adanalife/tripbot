@@ -183,13 +183,17 @@ func Whisper(username, msg string) {
 
 // Chatter is designed to post a randomized message on a timer.
 // Right now it just posts random "help messages."
-// ctx is forward-compat plumbing — sayFn (the package-level chat-send
-// indirection) doesn't take ctx yet, so it's not propagated into the IRC
-// write.
-func Chatter(_ context.Context) {
+// ctx is forward-compat plumbing — a.IRC.Say doesn't take ctx yet, so it's
+// not propagated into the IRC write.
+func (a *App) Chatter(_ context.Context) {
 	// use twitch emote feature to add some color
-	sayFn("/me " + help())
+	a.IRC.Say("/me " + help())
 }
+
+// Chatter shim delegating to defaultApp, so cmd's cron wiring keeps referencing
+// chatbot.Chatter as a function value. Retires once cmd registers the App's
+// method directly (later Phase C step).
+func Chatter(ctx context.Context) { defaultApp.Chatter(ctx) }
 
 func help() string {
 	text := c.HelpMessages[helpIndex]
