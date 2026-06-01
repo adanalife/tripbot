@@ -248,12 +248,14 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	// iOS Safari aggressively caches pages saved as Home Screen apps —
-	// without this, reopening the icon shows stale state until the user
-	// hard-refreshes. no-store forces a fresh fetch every time; the
-	// page is tiny so the cost is trivial.
-	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
-	w.Header().Set("Pragma", "no-cache")
+	// Cache the shell so revisiting (Home Screen reopen, tab return) repaints the
+	// last view instantly instead of a white blank while the page loads. The panel
+	// is live — SSE plus the 15s /admin/refresh poll reconcile any staleness within
+	// seconds — so an aggressive shell cache is safe here. Dropping the old
+	// no-store also lets the browser's back/forward cache restore the page (and
+	// resume its SSE connection) instantly on tab return; stale-while-revalidate
+	// keeps serving the cached paint while a fresh copy loads in the background.
+	w.Header().Set("Cache-Control", "max-age=30, stale-while-revalidate=86400")
 	if err := adminTmpl.Execute(w, data); err != nil {
 		slog.ErrorContext(r.Context(), "couldn't render admin panel", "err", err)
 	}
@@ -1329,20 +1331,11 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
   setTimeout(fix, 100);
 })();
 
-// iOS Home Screen apps return to a stale cached page on reopen — even with
-// no-store headers, Safari sometimes serves the old paint. Reload when the
-// tab becomes visible after being hidden ≥10s, so quick app-switches don't
-// reload-spam but a return-from-Home-Screen does.
-(function() {
-  let hiddenAt = 0;
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') {
-      hiddenAt = Date.now();
-    } else if (hiddenAt && Date.now() - hiddenAt >= 10000) {
-      location.reload();
-    }
-  });
-})();
+// No focus/visibility reload here anymore. The shell is cached for an instant
+// repaint and the panel is live (SSE + the 15s /admin/refresh poll), so
+// returning to the tab restores the last view (via the back/forward cache) and
+// self-updates within seconds — a hard reload would just reintroduce the white
+// flash on every return that we're trying to avoid.
 
 // Molly switch, integrated with htmx. Action buttons (restart / stream toggle)
 // carry data-arm-label: the first click arms the button (relabel + redden, 5s
