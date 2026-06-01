@@ -243,7 +243,7 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 		Flags:          gatherFlags(r.Context()),
 		Reauth:         accountsNeedingReauth(),
 		AuthStatuses:   authStatuses(),
-		ChatHistory:    eventHub.snapshotChat(),
+		ChatHistory:    defaultServer.hub.snapshotChat(),
 		MapTrailJSON:   mapTrailJSON(),
 	}
 
@@ -267,8 +267,8 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 func gatherStatus(sha string, siblings ...serviceStatus) []serviceStatus {
 	tripbot := serviceStatus{
 		Name:       "tripbot",
-		OK:         twitchConnected.Load(),
-		Version:    versionTag,
+		OK:         defaultServer.twitchConnected.Load(),
+		Version:    defaultServer.versionTag,
 		VersionURL: changelogURL(sha),
 		Uptime:     uptimeSince(startedAt),
 	}
@@ -320,7 +320,7 @@ func uptimeSince(t time.Time) string {
 // no flags are loaded yet (startup window before SetFlagClient) so the
 // template's {{if .Flags}} hides the section cleanly.
 func gatherFlags(ctx context.Context) []featureFlag {
-	flags := flagSnapshot(ctx)
+	flags := defaultServer.flagSnapshot(ctx)
 	if len(flags) == 0 {
 		return nil
 	}

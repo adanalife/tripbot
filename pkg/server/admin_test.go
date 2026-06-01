@@ -408,8 +408,8 @@ func TestAdminHandler_RendersReadyStatusAndLinks(t *testing.T) {
 	withCurrentlyPlaying(t, video.Video{Slug: "wy_0042", State: "Wyoming"}, 3*time.Minute+12*time.Second)
 	withChatterCount(t, 12)
 
-	saved := versionTag
-	defer func() { versionTag = saved }()
+	saved := defaultServer.versionTag
+	defer func() { defaultServer.versionTag = saved }()
 	SetVersion("v1.2.3")
 
 	rec := httptest.NewRecorder()
@@ -614,12 +614,12 @@ func TestAdminHandler_NoReauthPromptWhenHealthy(t *testing.T) {
 
 func withFlags(t *testing.T, flags map[string]feature.Flag) {
 	t.Helper()
-	saved := flagClient
+	saved := defaultServer.flagClient
 	SetFlagClient(feature.NewInMemoryClient(flags))
 	t.Cleanup(func() {
-		flagMu.Lock()
-		flagClient = saved
-		flagMu.Unlock()
+		defaultServer.flagMu.Lock()
+		defaultServer.flagClient = saved
+		defaultServer.flagMu.Unlock()
 	})
 }
 
@@ -686,17 +686,17 @@ func TestAdminHandler_HidesFeatureFlagsSectionWhenEmpty(t *testing.T) {
 	}
 }
 
-// withChatHistory swaps the package eventHub for a fresh one seeded with lines,
+// withChatHistory swaps the process hub for a fresh one seeded with lines,
 // restoring the original after the test.
 func withChatHistory(t *testing.T, lines []ChatLine) {
 	t.Helper()
-	saved := eventHub
+	saved := defaultServer.hub
 	h := NewHub()
 	for _, l := range lines {
 		h.appendChat(l)
 	}
-	eventHub = h
-	t.Cleanup(func() { eventHub = saved })
+	defaultServer.hub = h
+	t.Cleanup(func() { defaultServer.hub = saved })
 }
 
 func TestAdminHandler_RendersChatHistoryAndSSEWiring(t *testing.T) {

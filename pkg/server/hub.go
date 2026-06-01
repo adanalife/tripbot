@@ -228,7 +228,7 @@ func renderMapPoint(p mapPoint) string {
 // [[lat,lng],…] string for the page's map data attribute (empty "[]" when
 // there's no trail yet).
 func mapTrailJSON() string {
-	trail := eventHub.snapshotMapTrail()
+	trail := defaultServer.hub.snapshotMapTrail()
 	pts := make([][2]float64, len(trail))
 	for i, p := range trail {
 		pts[i] = [2]float64{p.Lat, p.Lng}
@@ -379,10 +379,11 @@ func renderVideoLine(ev eventbus.VideoChanged) string {
 	return sb.String()
 }
 
-// eventHub is the process-wide live-console hub. Constructed at package init
+// Server.hub is the process-wide live-console hub. Constructed in New()
 // (cheap, no I/O); its NATS subscription starts later via StartEventHub.
-var eventHub = NewHub()
 
 // StartEventHub begins the hub's NATS subscription. Call from main() AFTER
 // natsclient.Connect — at server.Start time NATS isn't connected yet.
-func StartEventHub(ctx context.Context) { eventHub.Start(ctx) }
+func StartEventHub(ctx context.Context) { defaultServer.StartEventHub(ctx) }
+
+func (s *Server) StartEventHub(ctx context.Context) { s.hub.Start(ctx) }
