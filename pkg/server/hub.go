@@ -224,11 +224,11 @@ func renderMapPoint(p mapPoint) string {
 	return fmt.Sprintf(`<span data-lat="%.6f" data-lng="%.6f"></span>`, p.Lat, p.Lng)
 }
 
-// mapTrailJSON returns the process hub's breadcrumb trail as a JSON
+// mapTrailJSON returns the server hub's breadcrumb trail as a JSON
 // [[lat,lng],…] string for the page's map data attribute (empty "[]" when
 // there's no trail yet).
-func mapTrailJSON() string {
-	trail := defaultServer.hub.snapshotMapTrail()
+func (s *Server) mapTrailJSON() string {
+	trail := s.hub.snapshotMapTrail()
 	pts := make([][2]float64, len(trail))
 	for i, p := range trail {
 		pts[i] = [2]float64{p.Lat, p.Lng}
@@ -384,6 +384,4 @@ func renderVideoLine(ev eventbus.VideoChanged) string {
 
 // StartEventHub begins the hub's NATS subscription. Call from main() AFTER
 // natsclient.Connect — at server.Start time NATS isn't connected yet.
-func StartEventHub(ctx context.Context) { defaultServer.StartEventHub(ctx) }
-
 func (s *Server) StartEventHub(ctx context.Context) { s.hub.Start(ctx) }

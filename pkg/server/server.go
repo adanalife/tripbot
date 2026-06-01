@@ -31,11 +31,10 @@ import (
 
 // Server holds the web server's mutable runtime state — the live-console hub,
 // the Twitch chat-connection flag, the build version tag, and the feature-flag
-// client the admin panel reads. cmd/tripbot installs values via the setter
-// methods (SetVersion / SetTwitchConnected / SetFlagClient) before and while
-// Start runs. The package-level functions below delegate to a process-wide
-// defaultServer so existing callers stay unchanged during the no-globals
-// transition.
+// client the admin panel reads. cmd/tripbot constructs one via New, installs
+// values through the setter methods (SetVersion / SetTwitchConnected /
+// SetFlagClient) before and while Start runs, and the HTTP handlers are
+// methods on it so the panel reads this instance's state — no package global.
 type Server struct {
 	hub             *Hub
 	twitchConnected atomic.Bool
@@ -56,18 +55,11 @@ func New() *Server {
 	}
 }
 
-// defaultServer is the process-wide Server backing the package-level shims and
-// the free-function HTTP handlers (which read defaultServer's fields).
-var defaultServer = New()
-
 // shutdownTimeout is how long Shutdown waits for in-flight requests to
 // finish before forcing connections closed. 15s is the typical sweet spot:
 // long enough that healthy requests complete, short enough that a stuck
 // handler doesn't block process exit indefinitely.
 const shutdownTimeout = 15 * time.Second
-
-// Start is the package-level shim delegating to defaultServer.
-func Start(ctx context.Context) { defaultServer.Start(ctx) }
 
 // Start starts the web server. When ctx is canceled (e.g. SIGINT/SIGTERM
 // via signal.NotifyContext) the server stops accepting new connections and
@@ -88,7 +80,7 @@ func (s *Server) Start(ctx context.Context) {
 	hp.Handle("/ready", tagged("/health/ready", httpmw.ReadinessHandler()))
 
 	// version endpoint — returns build metadata as JSON
-	r.Handle("/version", tagged("/version", versionHandler)).Methods("GET", "HEAD")
+	r.Handle("/version", tagged("/version", s.versionHandler)).Methods("GET", "HEAD")
 
 	// auth endpoints
 	auth := r.PathPrefix("/auth").Methods("GET").Subrouter()
@@ -102,15 +94,15 @@ func (s *Server) Start(ctx context.Context) {
 	r.Path("/metrics").Handler(tagged("/metrics", promhttp.Handler().ServeHTTP))
 
 	// admin panel (status overview + links) on the root path
-	r.Handle("/", tagged("/", adminHandler)).Methods("GET", "HEAD")
+	r.Handle("/", tagged("/", s.adminHandler)).Methods("GET", "HEAD")
 
 	// live console: SSE stream the panel subscribes to (GET, long-lived) +
 	// the vendored htmx assets it loads. The /admin POST subrouter below is
 	// POST-only, so the GET stream registers on r directly.
-	r.Handle("/admin/events", tagged("/admin/events", eventsHandler)).Methods("GET")
+	r.Handle("/admin/events", tagged("/admin/events", s.eventsHandler)).Methods("GET")
 	// live panel refresh: hidden poller OOB-swaps the always-present status rows
 	// + stream toggle so they stay current without a full reload.
-	r.Handle("/admin/refresh", tagged("/admin/refresh", refreshHandler)).Methods("GET")
+	r.Handle("/admin/refresh", tagged("/admin/refresh", s.refreshHandler)).Methods("GET")
 	r.Handle("/admin/user/{username}", tagged("/admin/user/{username}", userProfileHandler)).Methods("GET")
 	r.Handle("/admin/map/corpus", tagged("/admin/map/corpus", mapCorpusHandler)).Methods("GET")
 	r.PathPrefix("/static/").Handler(staticHandler())
