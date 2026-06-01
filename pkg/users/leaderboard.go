@@ -13,12 +13,11 @@ import (
 	"github.com/logrusorgru/aurora/v3"
 )
 
-var LifetimeMilesLeaderboard [][]string
 var initLeaderboardSize = 25
 var maxLeaderboardSize = 50
 
 // InitLeaderboard creates the initial leaderboard
-func InitLeaderboard(ctx context.Context) {
+func (s *Sessions) InitLeaderboard(ctx context.Context) {
 	var users []User
 
 	result := database.GormDB().WithContext(ctx).
@@ -33,24 +32,24 @@ func InitLeaderboard(ctx context.Context) {
 	for _, user := range users {
 		miles := fmt.Sprintf("%.1f", user.Miles)
 		pair := []string{user.Username, miles}
-		LifetimeMilesLeaderboard = append(LifetimeMilesLeaderboard, pair)
+		s.lifetimeLeaderboard = append(s.lifetimeLeaderboard, pair)
 	}
 }
 
 // UpdateLeaderboard rebuilds the lifetime-miles leaderboard from the
-// LoggedIn map. The work is in-memory (no DB hits), so ctx only carries
-// the cron-tick span for log correlation.
-func UpdateLeaderboard(ctx context.Context) {
-	for _, user := range LoggedIn {
+// session's logged-in users. The work is in-memory (no DB hits), so ctx
+// only carries the cron-tick span for log correlation.
+func (s *Sessions) UpdateLeaderboard(ctx context.Context) {
+	for _, user := range s.loggedIn {
 		// skip adding this user if they're a bot or the channel owner
 		if user.IsBot || c.UserIsAdmin(user.Username) {
 			continue
 		}
-		insertIntoLeaderboard(ctx, *user)
+		s.insertIntoLeaderboard(ctx, *user)
 	}
-	// truncate LifetimeMilesLeaderboard if it gets too big
-	if len(LifetimeMilesLeaderboard) > maxLeaderboardSize {
-		LifetimeMilesLeaderboard = LifetimeMilesLeaderboard[:maxLeaderboardSize]
+	// truncate the leaderboard if it gets too big
+	if len(s.lifetimeLeaderboard) > maxLeaderboardSize {
+		s.lifetimeLeaderboard = s.lifetimeLeaderboard[:maxLeaderboardSize]
 	}
 }
 
@@ -64,44 +63,43 @@ func strToFloat32(ctx context.Context, str string) float32 {
 	return float32(value)
 }
 
-func insertIntoLeaderboard(ctx context.Context, user User) {
+func (s *Sessions) insertIntoLeaderboard(ctx context.Context, user User) {
 	// first we remove this user from the board
-	removeFromLeaderboard(user.Username)
+	s.removeFromLeaderboard(user.Username)
 
 	// get the current miles as a float
 	miles := user.CurrentMiles(ctx)
 
-	for i, pair := range LifetimeMilesLeaderboard {
+	for i, pair := range s.lifetimeLeaderboard {
 		val := strToFloat32(ctx, pair[1])
 		// see if our miles are higher
 		if miles >= val {
 			milesStr := fmt.Sprintf("%.1f", miles)
 			newPair := []string{user.Username, milesStr}
 
-			// insert into LifetimeMilesLeaderboard
+			// insert into the leaderboard
 			// https://github.com/golang/go/wiki/SliceTricks#insert
-			LifetimeMilesLeaderboard = append(LifetimeMilesLeaderboard[:i], append([][]string{newPair}, LifetimeMilesLeaderboard[i:]...)...)
+			s.lifetimeLeaderboard = append(s.lifetimeLeaderboard[:i], append([][]string{newPair}, s.lifetimeLeaderboard[i:]...)...)
 			return
 		}
 	}
 }
 
-// removeFromLeaderboard searches the LifetimeMilesLeaderboard for
-// a username and removes it
-func removeFromLeaderboard(username string) {
-	for i, pair := range LifetimeMilesLeaderboard {
+// removeFromLeaderboard searches the leaderboard for a username and removes it
+func (s *Sessions) removeFromLeaderboard(username string) {
+	for i, pair := range s.lifetimeLeaderboard {
 		if pair[0] == username {
-			// delete from LifetimeMilesLeaderboard
+			// delete from the leaderboard
 			// https://github.com/golang/go/wiki/SliceTricks#delete
-			LifetimeMilesLeaderboard = append(LifetimeMilesLeaderboard[:i], LifetimeMilesLeaderboard[i+1:]...)
+			s.lifetimeLeaderboard = append(s.lifetimeLeaderboard[:i], s.lifetimeLeaderboard[i+1:]...)
 			return
 		}
 	}
 }
 
 // this was used for development
-func printLeaderboard() {
-	for i, pair := range LifetimeMilesLeaderboard {
+func (s *Sessions) printLeaderboard() {
+	for i, pair := range s.lifetimeLeaderboard {
 		fmt.Printf("%d: %s - %s\n", i+1, pair[1], aurora.Magenta(pair[0]))
 	}
 }
@@ -132,3 +130,12 @@ func LeaderboardContent(title string, leaderboard [][]string) string {
 	b.WriteString(`</div>`)
 	return b.String()
 }
+
+// LifetimeMilesLeaderboard returns the cached lifetime-miles leaderboard from
+// the default session. Was a package-level slice; now an accessor over the
+// session-owned state.
+func LifetimeMilesLeaderboard() [][]string { return defaultSessions.lifetimeLeaderboard }
+
+func InitLeaderboard(ctx context.Context) { defaultSessions.InitLeaderboard(ctx) }
+
+func UpdateLeaderboard(ctx context.Context) { defaultSessions.UpdateLeaderboard(ctx) }
