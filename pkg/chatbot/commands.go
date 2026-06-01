@@ -67,7 +67,7 @@ func (a *App) helloCmd(ctx context.Context, user *users.User, params []string) {
 	msg += punctuation[rand.Intn(len(punctuation))]
 
 	// give a little help message if the user is new
-	if user.CurrentMiles(ctx) < 2.0 {
+	if a.Sessions.CurrentMiles(ctx, *user) < 2.0 {
 		msg += " I'm Tripbot, your adventure companion. Try using !commands to interact with me."
 	}
 
@@ -153,8 +153,8 @@ func (a *App) milesCmd(ctx context.Context, user *users.User, params []string) {
 	// check to see if an arg was provided
 	if len(params) == 0 {
 		username = user.Username
-		lifetimeMiles = user.CurrentMiles(ctx)
-		monthlyMiles = user.CurrentMonthlyMiles(ctx)
+		lifetimeMiles = a.Sessions.CurrentMiles(ctx, *user)
+		monthlyMiles = a.Sessions.CurrentMonthlyMiles(ctx, *user)
 	} else {
 		username = helpers.StripAtSign(params[0])
 		u := a.Sessions.Find(ctx, username)
@@ -165,8 +165,8 @@ func (a *App) milesCmd(ctx context.Context, user *users.User, params []string) {
 			return
 		}
 
-		lifetimeMiles = u.CurrentMiles(ctx)
-		monthlyMiles = u.CurrentMonthlyMiles(ctx)
+		lifetimeMiles = a.Sessions.CurrentMiles(ctx, u)
+		monthlyMiles = a.Sessions.CurrentMonthlyMiles(ctx, u)
 	}
 
 	msg := "@%s has %.2fmi this month"
@@ -195,7 +195,7 @@ func (a *App) milesCmd(ctx context.Context, user *users.User, params []string) {
 
 func (a *App) kilometresCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !kilometres", "username", user.Username)
-	km := user.CurrentMiles(ctx) * 1.609344
+	km := a.Sessions.CurrentMiles(ctx, *user) * 1.609344
 	msg := "@%s has %.2f kilometres."
 	msg = fmt.Sprintf(msg, user.Username, km)
 	a.IRC.Say(msg)
@@ -485,7 +485,7 @@ func postReportToDiscord(webhookURL, username, message string) {
 
 func (a *App) bonusMilesCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !bonusmiles", "username", user.Username)
-	bonus := user.BonusMiles()
+	bonus := a.Sessions.BonusMiles(*user)
 	msg := fmt.Sprintf("%s has earned %.4f bonus miles this session", user.Username, bonus)
 	a.IRC.Say(msg)
 }

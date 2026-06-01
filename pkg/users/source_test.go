@@ -34,18 +34,17 @@ func (r *recordingChatterSource) IsFollower(username string) bool {
 	return r.followers[username]
 }
 
-// User.IsSubscriber routes through the injected ChatterSource — the seam a
-// future YouTube/TikTok adapter swaps into.
-func TestUserIsSubscriberUsesChatterSource(t *testing.T) {
-	prev := defaultSessions.source
-	defer func() { defaultSessions.source = prev }()
+// Sessions.IsSubscriber routes through the injected ChatterSource — the seam a
+// future YouTube/TikTok adapter swaps into (each provider gets its own
+// *Sessions + source).
+func TestSessionsIsSubscriberUsesChatterSource(t *testing.T) {
 	rec := &recordingChatterSource{subscribers: map[string]bool{"alice": true}}
-	defaultSessions.source = rec
+	s := New(rec)
 
-	if !(User{Username: "alice"}).IsSubscriber() {
+	if !s.IsSubscriber(User{Username: "alice"}) {
 		t.Fatal("expected alice to be a subscriber via the injected source")
 	}
-	if (User{Username: "bob"}).IsSubscriber() {
+	if s.IsSubscriber(User{Username: "bob"}) {
 		t.Fatal("expected bob not to be a subscriber")
 	}
 	if rec.subCalls != 2 {

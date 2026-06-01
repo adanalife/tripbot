@@ -55,9 +55,22 @@ func (cmd *Command) checkAccess(ctx context.Context, user chatUser, sayFn func(s
 	return true
 }
 
+// sessionUser adapts a *users.User plus the installed *Sessions to the
+// chatUser access-check seam — the follower/subscriber + command-availability
+// checks now live on Sessions (per-provider state), not on User.
+type sessionUser struct {
+	s *users.Sessions
+	u *users.User
+}
+
+func (su sessionUser) HasCommandAvailable(ctx context.Context) bool {
+	return su.s.HasCommandAvailable(ctx, su.u)
+}
+func (su sessionUser) IsSubscriber() bool { return su.s.IsSubscriber(*su.u) }
+
 func dispatch(ctx context.Context, cmd *Command, user *users.User, params []string) {
 	incChatCommandCounter(cmd.Trigger)
-	if !cmd.checkAccess(ctx, user, sayFn) {
+	if !cmd.checkAccess(ctx, sessionUser{currentSessions(), user}, sayFn) {
 		return
 	}
 	// Start a child span under the chatbot.handle_message span from
@@ -169,19 +182,19 @@ func PrivateMessage(msg twitch.PrivateMessage) {
 	// check to see if the message is a command
 	//TODO: also include ones prefixed with whitespace?
 	// log in the user
-	user := users.LoginIfNecessary(ctx, username)
+	user := currentSessions().LoginIfNecessary(ctx, username)
 
 	runCommand(ctx, user, message)
 }
 
 // this event fires when a user joins the channel
 func UserJoin(joinMessage twitch.UserJoinMessage) {
-	users.LoginIfNecessary(context.Background(), joinMessage.User)
+	currentSessions().LoginIfNecessary(context.Background(), joinMessage.User)
 }
 
 // this event fires when a user leaves the channel
 func UserPart(partMessage twitch.UserPartMessage) {
-	users.LogoutIfNecessary(context.Background(), partMessage.User)
+	currentSessions().LogoutIfNecessary(context.Background(), partMessage.User)
 }
 
 // send message to chat if someone subs

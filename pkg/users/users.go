@@ -36,25 +36,30 @@ type User struct {
 // this is how long they have before they can guess again
 var guessCooldown = 3 * time.Minute
 
-func (u User) loggedInDur() time.Duration {
+// The miles + follower/subscriber computations below are *Sessions methods
+// (not User methods) because they read the session's live login map + chatter
+// source. They take the User as a parameter so the session state and the
+// per-user data stay explicitly separate.
+
+func (s *Sessions) loggedInDur(u User) time.Duration {
 	// exit early if they're not logged in
-	if !defaultSessions.isLoggedIn(u.Username) {
+	if !s.isLoggedIn(u.Username) {
 		return 0 * time.Second
 	}
 	// lookup the user in the session so the LoggedIn value is current
-	return time.Now().Sub(defaultSessions.loggedIn[u.Username].LoggedIn)
+	return time.Now().Sub(s.loggedIn[u.Username].LoggedIn)
 }
 
-func (u User) sessionMiles(ctx context.Context) float32 {
+func (s *Sessions) sessionMiles(ctx context.Context, u User) float32 {
 	// exit early if they're not logged in
-	if !defaultSessions.isLoggedIn(u.Username) {
+	if !s.isLoggedIn(u.Username) {
 		return 0.0
 	}
-	loggedInDur := u.loggedInDur()
+	loggedInDur := s.loggedInDur(u)
 	sessionMiles := helpers.DurationToMiles(loggedInDur)
 	// give subscribers a miles bonus
-	if u.IsSubscriber() {
-		bonusMiles := u.BonusMiles()
+	if s.IsSubscriber(u) {
+		bonusMiles := s.BonusMiles(u)
 		if c.Conf.Verbose {
 			slog.InfoContext(ctx, "subscriber will get bonus miles", "username", u.Username, "bonus_miles", bonusMiles)
 		}
@@ -63,21 +68,21 @@ func (u User) sessionMiles(ctx context.Context) float32 {
 	return sessionMiles
 }
 
-func (u User) CurrentMiles(ctx context.Context) float32 {
-	return u.Miles + u.sessionMiles(ctx)
+func (s *Sessions) CurrentMiles(ctx context.Context, u User) float32 {
+	return u.Miles + s.sessionMiles(ctx, u)
 }
 
-func (u User) BonusMiles() float32 {
-	if defaultSessions.isLoggedIn(u.Username) {
-		loggedInDur := u.loggedInDur()
+func (s *Sessions) BonusMiles(u User) float32 {
+	if s.isLoggedIn(u.Username) {
+		loggedInDur := s.loggedInDur(u)
 		sessionMiles := helpers.DurationToMiles(loggedInDur)
 		return sessionMiles * 0.05
 	}
 	return 0.0
 }
 
-func (u User) CurrentMonthlyMiles(ctx context.Context) float32 {
-	return u.GetScore(ctx, scoreboards.CurrentMilesScoreboard()) + u.sessionMiles(ctx)
+func (s *Sessions) CurrentMonthlyMiles(ctx context.Context, u User) float32 {
+	return u.GetScore(ctx, scoreboards.CurrentMilesScoreboard()) + s.sessionMiles(ctx, u)
 }
 
 // User.save() will take the given user and store it in the DB
@@ -98,27 +103,27 @@ func (u User) save(ctx context.Context) {
 
 // SetBot flips users.is_bot for a username. Returns gorm.ErrRecordNotFound
 // if the user doesn't exist in the DB.
-func SetBot(ctx context.Context, username string, isBot bool) error {
+func (s *Sessions) SetBot(ctx context.Context, username string, isBot bool) error {
 	user := Find(ctx, username)
 	if user.ID == 0 {
 		return gorm.ErrRecordNotFound
 	}
 	user.IsBot = isBot
 	user.save(ctx)
-	if loggedIn, ok := defaultSessions.loggedIn[username]; ok {
+	if loggedIn, ok := s.loggedIn[username]; ok {
 		loggedIn.IsBot = isBot
 	}
 	return nil
 }
 
 // IsFollower returns true if the user is a follower
-func (u User) IsFollower() bool {
-	return defaultSessions.source.IsFollower(u.Username)
+func (s *Sessions) IsFollower(u User) bool {
+	return s.source.IsFollower(u.Username)
 }
 
 // IsSubscriber returns true if the user is a subscriber
-func (u User) IsSubscriber() bool {
-	return defaultSessions.source.IsSubscriber(u.Username)
+func (s *Sessions) IsSubscriber(u User) bool {
+	return s.source.IsSubscriber(u.Username)
 }
 
 // User.String prints a colored version of the user
@@ -163,9 +168,9 @@ func Find(ctx context.Context, username string) User {
 // HasCommandAvailable lets users run a command once a day,
 // unless they are a follower in which case they can run
 // as many as they like
-func (u *User) HasCommandAvailable(ctx context.Context) bool {
+func (s *Sessions) HasCommandAvailable(ctx context.Context, u *User) bool {
 	// followers get unlimited commands
-	if u.IsFollower() {
+	if s.IsFollower(*u) {
 		return true
 	}
 	// check if they ran a command in the last 24 hrs
