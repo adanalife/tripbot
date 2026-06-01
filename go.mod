@@ -25,6 +25,7 @@ require (
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/kelvins/geocoder v0.0.0-20231112130812-98d82c75e49b
 	github.com/lib/pq v1.12.3
+	github.com/lmittmann/tint v1.1.3
 	github.com/logrusorgru/aurora/v3 v3.0.0
 	github.com/nathan-osman/go-sunrise v1.1.0
 	github.com/nats-io/nats.go v1.52.0
@@ -50,6 +51,7 @@ require (
 	go.opentelemetry.io/otel/sdk/log v0.19.0
 	go.opentelemetry.io/otel/sdk/metric v1.44.0
 	go.opentelemetry.io/otel/trace v1.44.0
+	golang.org/x/term v0.43.0
 	googlemaps.github.io/maps v1.7.0
 	gorm.io/driver/postgres v1.6.0
 	gorm.io/gorm v1.31.1
