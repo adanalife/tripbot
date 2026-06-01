@@ -27,5 +27,5 @@ func AnnounceSubscriber(username string, isGift bool, tier string) {
 	_ = tier
 	sayFn(fmt.Sprintf("Thank you for the sub, @%s; enjoy your !bonusmiles bleedPurple", username))
 	users.GiveEveryoneMiles(1.0)
-	sayFn(fmt.Sprintf("The %d current viewers have been given a bonus mile, too HolidayPresent", len(users.LoggedIn)))
+	sayFn(fmt.Sprintf("The %d current viewers have been given a bonus mile, too HolidayPresent", users.LoggedInCount()))
 }

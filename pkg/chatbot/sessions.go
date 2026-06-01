@@ -42,7 +42,7 @@ func (realSessions) Find(ctx context.Context, username string) users.User {
 }
 
 func (realSessions) LifetimeLeaderboard() [][]string {
-	return users.LifetimeMilesLeaderboard
+	return users.LifetimeMilesLeaderboard()
 }
 
 func (realSessions) Shutdown(ctx context.Context) {

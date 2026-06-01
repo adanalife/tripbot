@@ -119,7 +119,7 @@ func (s *Session) runLifetimeLeaderboard(ctx context.Context, i *discordgo.Inter
 		slog.ErrorContext(ctx, "discord defer reply failed", "err", err, "command", "totalleaderboard")
 		return
 	}
-	entries := users.LifetimeMilesLeaderboard
+	entries := users.LifetimeMilesLeaderboard()
 	if len(entries) > leaderboardSize {
 		entries = entries[:leaderboardSize]
 	}
