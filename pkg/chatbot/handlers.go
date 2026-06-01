@@ -88,7 +88,7 @@ func (a *App) dispatch(ctx context.Context, cmd *Command, user *users.User, para
 
 // findCommand parses message and returns the matching Command and params.
 // Returns nil if no command matches.
-func findCommand(message string) (*Command, []string) {
+func (a *App) findCommand(message string) (*Command, []string) {
 	msg := normalizeCommandPrefix(strings.TrimSpace(message))
 	split := strings.Split(msg, " ")
 
@@ -112,7 +112,7 @@ func findCommand(message string) (*Command, []string) {
 	}
 
 	// multi-word alias lookup (e.g. "no audio", "no sound")
-	for alias, cmd := range multiWordLookup {
+	for alias, cmd := range a.multiWordLookup {
 		if msg == alias || strings.HasPrefix(msg, alias+" ") {
 			remainder := strings.TrimSpace(strings.TrimPrefix(msg, alias))
 			var mwParams []string
@@ -124,7 +124,7 @@ func findCommand(message string) (*Command, []string) {
 	}
 
 	// single-word lookup
-	if cmd, ok := singleWordLookup[command]; ok {
+	if cmd, ok := a.singleWordLookup[command]; ok {
 		return cmd, params
 	}
 	return nil, nil
@@ -145,7 +145,7 @@ func (a *App) runCommand(ctx context.Context, user *users.User, message string) 
 		trace.SpanFromContext(ctx).SetAttributes(attribute.String("twitch.command", command))
 	}
 
-	cmd, params := findCommand(message)
+	cmd, params := a.findCommand(message)
 	if cmd != nil {
 		a.dispatch(ctx, cmd, user, params)
 		return

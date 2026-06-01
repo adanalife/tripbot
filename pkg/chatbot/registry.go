@@ -7,10 +7,6 @@ import (
 	"github.com/adanalife/tripbot/pkg/users"
 )
 
-var commands []Command
-var singleWordLookup map[string]*Command
-var multiWordLookup map[string]*Command
-
 // buildRegistry constructs the command slice with handlers bound to a.
 func (a *App) buildRegistry() []Command {
 	return []Command{
@@ -239,23 +235,34 @@ func (a *App) buildRegistry() []Command {
 	}
 }
 
-func init() {
-	commands = defaultApp.buildRegistry()
-	singleWordLookup = make(map[string]*Command)
-	multiWordLookup = make(map[string]*Command)
-	for i := range commands {
-		cmd := &commands[i]
-		registerTrigger(cmd.Trigger, cmd)
+// indexCommands builds a.commands from a.buildRegistry() and indexes it into
+// a.singleWordLookup / a.multiWordLookup by trigger and alias. Call once after
+// the App is constructed (its deps don't need to be set — buildRegistry only
+// binds handler method values to a).
+func (a *App) indexCommands() {
+	a.commands = a.buildRegistry()
+	a.singleWordLookup = make(map[string]*Command)
+	a.multiWordLookup = make(map[string]*Command)
+	for i := range a.commands {
+		cmd := &a.commands[i]
+		a.registerTrigger(cmd.Trigger, cmd)
 		for _, alias := range cmd.Aliases {
-			registerTrigger(alias, cmd)
+			a.registerTrigger(alias, cmd)
 		}
 	}
 }
 
-func registerTrigger(trigger string, cmd *Command) {
+func (a *App) registerTrigger(trigger string, cmd *Command) {
 	if strings.Contains(trigger, " ") {
-		multiWordLookup[trigger] = cmd
+		a.multiWordLookup[trigger] = cmd
 	} else {
-		singleWordLookup[trigger] = cmd
+		a.singleWordLookup[trigger] = cmd
 	}
+}
+
+// init builds the package singleton's registry. Once cmd constructs the App and
+// hands it to the message path (later Phase C step), this moves into that
+// constructor and defaultApp goes away.
+func init() {
+	defaultApp.indexCommands()
 }
