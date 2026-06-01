@@ -228,7 +228,7 @@ func renderMapPoint(p mapPoint) string {
 // [[lat,lng],…] string for the page's map data attribute (empty "[]" when
 // there's no trail yet).
 func mapTrailJSON() string {
-	trail := eventHub.snapshotMapTrail()
+	trail := defaultServer.hub.snapshotMapTrail()
 	pts := make([][2]float64, len(trail))
 	for i, p := range trail {
 		pts[i] = [2]float64{p.Lat, p.Lng}
@@ -323,7 +323,7 @@ func (h *Hub) closeAll() {
 // chatLineTmpl renders one chat row as a single line (no newlines — SSE data
 // must not contain bare newlines). html/template escapes username + text.
 var chatLineTmpl = template.Must(template.New("chatline").Parse(
-	`<div class="chat-line"><time class="ct-ts" datetime="{{.At.Format "2006-01-02T15:04:05Z07:00"}}">{{.At.Format "15:04"}}</time> <span class="cu">{{.Username}}</span> <span class="ct">{{.Text}}</span></div>`))
+	`<div class="chat-line"><time class="ct-ts" datetime="{{.At.Format "2006-01-02T15:04:05Z07:00"}}">{{.At.Format "15:04"}}</time> <span class="cu" hx-get="/admin/user/{{.Username}}" hx-target="#user-popover" hx-swap="innerHTML" hx-trigger="click">{{.Username}}</span> <span class="ct">{{.Text}}</span></div>`))
 
 func renderChatLine(line ChatLine) string {
 	var sb strings.Builder
@@ -379,10 +379,11 @@ func renderVideoLine(ev eventbus.VideoChanged) string {
 	return sb.String()
 }
 
-// eventHub is the process-wide live-console hub. Constructed at package init
+// Server.hub is the process-wide live-console hub. Constructed in New()
 // (cheap, no I/O); its NATS subscription starts later via StartEventHub.
-var eventHub = NewHub()
 
 // StartEventHub begins the hub's NATS subscription. Call from main() AFTER
 // natsclient.Connect — at server.Start time NATS isn't connected yet.
-func StartEventHub(ctx context.Context) { eventHub.Start(ctx) }
+func StartEventHub(ctx context.Context) { defaultServer.StartEventHub(ctx) }
+
+func (s *Server) StartEventHub(ctx context.Context) { s.hub.Start(ctx) }

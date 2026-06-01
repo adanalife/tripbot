@@ -30,14 +30,14 @@ import (
 // is re-established from the DB and the next call uses a fresh one. Pass ""
 // to opt out — for app-access-token calls (getChannelID's GetUsers) and the
 // mid-bootstrap GetUsers, where re-reading a user token wouldn't help.
-func checkHelixResp(ctx context.Context, endpoint, account string, resp *helix.ResponseCommon) bool {
+func (cl *API) checkHelixResp(ctx context.Context, endpoint, account string, resp *helix.ResponseCommon) bool {
 	if resp == nil || resp.StatusCode < 400 {
 		return false
 	}
 	slog.ErrorContext(ctx, fmt.Sprintf("helix %s returned %d: %s", endpoint, resp.StatusCode, resp.ErrorMessage))
 	instrumentation.TwitchHelixErrors.Inc(endpoint, resp.StatusCode)
 	if resp.StatusCode == http.StatusUnauthorized && account != "" {
-		Reauth(ctx, account)
+		cl.Reauth(ctx, account)
 	}
 	return true
 }

@@ -11,7 +11,6 @@ import (
 	"net/url"
 	"os"
 	"strings"
-	"sync"
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
@@ -63,6 +62,16 @@ var BroadcasterScopes = []string{
 // bootstrap CLI." Re-exported from oauthtokens for caller convenience.
 var ErrNoToken = oauthtokens.ErrNoToken
 
+// ClientID, ClientSecret are the static app credentials, set from env in
+// init(). They are not per-instance mutable state, so they stay package-level
+// (read directly by cmd/tripbot's EventSub setup) rather than moving onto
+// Client. AppAccessToken — which IS mutable, set during Client() — lives on
+// the Client struct.
+var (
+	ClientID     string
+	ClientSecret string
+)
+
 // AuthInitURL returns the operator-facing re-bootstrap URL for the given
 // account ("bot" or "broadcaster"). Visiting it kicks off the OAuth flow —
 // pkg/server's /auth/init handler mints a fresh CSRF state and 302-redirects to
@@ -99,35 +108,6 @@ func accountLabel(username string) string {
 	return "bot"
 }
 
-// currentTwitchClient is the lazy-initialized bot helix client. IRC auth +
-// any Helix endpoint authorized against the bot's identity goes through this.
-var currentTwitchClient *helix.Client
-
-// broadcasterTwitchClient is the lazy-initialized broadcaster helix client.
-// Endpoints that authorize against the channel-owner identity (GetSubscriptions,
-// GetChannelFollows total, channel.update, mod actions) go through this — the
-// bot client would 401 since the user-access-token's identity matters, not
-// just its scope set.
-var broadcasterTwitchClient *helix.Client
-
-// ClientID, ClientSecret are set from env at init.
-// AppAccessToken is set in Client() (Client Credentials grant) and shared by
-// both helix clients.
-var (
-	ClientID       string
-	ClientSecret   string
-	AppAccessToken string
-)
-
-// tokenMu guards both currentUserToken (bot) and currentBroadcasterToken.
-// RWMutex because reads (IRCAuthToken, CurrentUserAccessToken) outnumber
-// writes (LoadFromDB, refresh).
-var (
-	tokenMu                 sync.RWMutex
-	currentUserToken        oauthtokens.Token
-	currentBroadcasterToken oauthtokens.Token
-)
-
 // init requires the static credentials needed to build a helix client.
 // TWITCH_AUTH_TOKEN is intentionally NOT required — the IRC token now lives
 // in the oauth_tokens table and is loaded via LoadFromDB at boot.
@@ -147,9 +127,9 @@ func init() {
 
 // Client returns the shared helix client, lazy-initializing on first call.
 // First-call side effect: requests an App Access Token (Client Credentials).
-func Client() (*helix.Client, error) {
-	if currentTwitchClient != nil {
-		return currentTwitchClient, nil
+func (cl *API) Client() (*helix.Client, error) {
+	if cl.currentTwitchClient != nil {
+		return cl.currentTwitchClient, nil
 	}
 	client, err := helix.NewClient(&helix.Options{
 		ClientID:     ClientID,
@@ -173,10 +153,10 @@ func Client() (*helix.Client, error) {
 		slog.Error("error getting app access token from twitch", "err", err)
 		return nil, err
 	}
-	AppAccessToken = resp.Data.AccessToken
-	client.SetAppAccessToken(AppAccessToken)
+	cl.appAccessToken = resp.Data.AccessToken
+	client.SetAppAccessToken(cl.appAccessToken)
 
-	currentTwitchClient = client
+	cl.currentTwitchClient = client
 	return client, nil
 }
 
@@ -188,12 +168,12 @@ func Client() (*helix.Client, error) {
 //
 // The App Access Token is reused from Client(); each helix.Client only needs
 // the per-identity user-access-token to differ.
-func BroadcasterClient() (*helix.Client, error) {
-	if broadcasterTwitchClient != nil {
-		return broadcasterTwitchClient, nil
+func (cl *API) BroadcasterClient() (*helix.Client, error) {
+	if cl.broadcasterTwitchClient != nil {
+		return cl.broadcasterTwitchClient, nil
 	}
-	// Ensure Client() ran so AppAccessToken is set.
-	if _, err := Client(); err != nil {
+	// Ensure Client() ran so appAccessToken is set.
+	if _, err := cl.Client(); err != nil {
 		return nil, err
 	}
 	client, err := helix.NewClient(&helix.Options{
@@ -205,15 +185,15 @@ func BroadcasterClient() (*helix.Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("twitch: building broadcaster client: %w", err)
 	}
-	if AppAccessToken != "" {
-		client.SetAppAccessToken(AppAccessToken)
+	if cl.appAccessToken != "" {
+		client.SetAppAccessToken(cl.appAccessToken)
 	}
-	tokenMu.RLock()
-	if currentBroadcasterToken.AccessToken != "" {
-		client.SetUserAccessToken(currentBroadcasterToken.AccessToken)
+	cl.tokenMu.RLock()
+	if cl.currentBroadcasterToken.AccessToken != "" {
+		client.SetUserAccessToken(cl.currentBroadcasterToken.AccessToken)
 	}
-	tokenMu.RUnlock()
-	broadcasterTwitchClient = client
+	cl.tokenMu.RUnlock()
+	cl.broadcasterTwitchClient = client
 	return client, nil
 }
 
@@ -223,7 +203,7 @@ func BroadcasterClient() (*helix.Client, error) {
 // seeded via `task tripbot:auth:bootstrap:broadcaster`.
 //
 // Returns ErrNoToken only when the bot row is missing.
-func LoadFromDB() error {
+func (cl *API) LoadFromDB() error {
 	botUser := c.Conf.BotUsername
 	broadcasterUser := c.Conf.ChannelName
 
@@ -231,11 +211,11 @@ func LoadFromDB() error {
 	if err != nil {
 		return err
 	}
-	tokenMu.Lock()
-	currentUserToken = t
-	tokenMu.Unlock()
-	if currentTwitchClient != nil {
-		currentTwitchClient.SetUserAccessToken(t.AccessToken)
+	cl.tokenMu.Lock()
+	cl.currentUserToken = t
+	cl.tokenMu.Unlock()
+	if cl.currentTwitchClient != nil {
+		cl.currentTwitchClient.SetUserAccessToken(t.AccessToken)
 	}
 	instrumentation.TwitchTokenExpiry.SetExpiresAt("bot", t.ExpiresAt)
 
@@ -256,11 +236,11 @@ func LoadFromDB() error {
 		slog.Error("failed to load broadcaster oauth_tokens row", "err", berr, "broadcaster", broadcasterUser)
 		return nil
 	}
-	tokenMu.Lock()
-	currentBroadcasterToken = bt
-	tokenMu.Unlock()
-	if broadcasterTwitchClient != nil {
-		broadcasterTwitchClient.SetUserAccessToken(bt.AccessToken)
+	cl.tokenMu.Lock()
+	cl.currentBroadcasterToken = bt
+	cl.tokenMu.Unlock()
+	if cl.broadcasterTwitchClient != nil {
+		cl.broadcasterTwitchClient.SetUserAccessToken(bt.AccessToken)
 	}
 	instrumentation.TwitchTokenExpiry.SetExpiresAt("broadcaster", bt.ExpiresAt)
 	return nil
@@ -268,31 +248,31 @@ func LoadFromDB() error {
 
 // IRCAuthToken returns the bot's IRC oauth: token, ready for
 // twitch.NewClient. Returns "" if no token has been loaded.
-func IRCAuthToken() string {
-	tokenMu.RLock()
-	defer tokenMu.RUnlock()
-	if currentUserToken.AccessToken == "" {
+func (cl *API) IRCAuthToken() string {
+	cl.tokenMu.RLock()
+	defer cl.tokenMu.RUnlock()
+	if cl.currentUserToken.AccessToken == "" {
 		return ""
 	}
-	return "oauth:" + currentUserToken.AccessToken
+	return "oauth:" + cl.currentUserToken.AccessToken
 }
 
 // CurrentUserAccessToken returns the raw access token (no oauth: prefix).
 // Used by pkg/server/twitch.go's /auth/twitch JSON endpoint until that
 // endpoint is deleted in a separate PR.
-func CurrentUserAccessToken() string {
-	tokenMu.RLock()
-	defer tokenMu.RUnlock()
-	return currentUserToken.AccessToken
+func (cl *API) CurrentUserAccessToken() string {
+	cl.tokenMu.RLock()
+	defer cl.tokenMu.RUnlock()
+	return cl.currentUserToken.AccessToken
 }
 
 // BroadcasterUserAccessToken returns the broadcaster's raw access token
 // (no oauth: prefix), or "" if no broadcaster row has been loaded.
 // Consumed by pkg/eventsub when subscribing to broadcaster-gated events.
-func BroadcasterUserAccessToken() string {
-	tokenMu.RLock()
-	defer tokenMu.RUnlock()
-	return currentBroadcasterToken.AccessToken
+func (cl *API) BroadcasterUserAccessToken() string {
+	cl.tokenMu.RLock()
+	defer cl.tokenMu.RUnlock()
+	return cl.currentBroadcasterToken.AccessToken
 }
 
 // AccountReauth describes an account whose in-memory token is missing or
@@ -324,11 +304,11 @@ func tokenReason(t oauthtokens.Token) string {
 // re-auth. Returns nil when everything's healthy. The broadcaster is only
 // considered when a distinct broadcaster identity exists (ChannelName set and
 // != BotUsername) — otherwise there's no separate row to re-auth.
-func AccountsNeedingReauth() []AccountReauth {
-	tokenMu.RLock()
-	botReason := tokenReason(currentUserToken)
-	bcastReason := tokenReason(currentBroadcasterToken)
-	tokenMu.RUnlock()
+func (cl *API) AccountsNeedingReauth() []AccountReauth {
+	cl.tokenMu.RLock()
+	botReason := tokenReason(cl.currentUserToken)
+	bcastReason := tokenReason(cl.currentBroadcasterToken)
+	cl.tokenMu.RUnlock()
 
 	var out []AccountReauth
 	if botReason != "" {
@@ -367,11 +347,11 @@ type AccountTokenStatus struct {
 // reports only the unhealthy accounts — this returns every identity so the
 // panel can show a per-identity expiry countdown even while healthy. Reads
 // in-memory token state; no DB or network call.
-func TokenStatuses() []AccountTokenStatus {
-	tokenMu.RLock()
-	bot := currentUserToken
-	bcast := currentBroadcasterToken
-	tokenMu.RUnlock()
+func (cl *API) TokenStatuses() []AccountTokenStatus {
+	cl.tokenMu.RLock()
+	bot := cl.currentUserToken
+	bcast := cl.currentBroadcasterToken
+	cl.tokenMu.RUnlock()
 
 	out := []AccountTokenStatus{{
 		Account:   "bot",
@@ -423,10 +403,10 @@ func (e *ErrIdentityMismatch) Error() string {
 //
 // Returns error (no longer swallows); ErrIdentityMismatch on identity check
 // failure. Callers: /auth/callback handler, cmd/auth-bootstrap.
-func GenerateUserAccessToken(code string, expectedLogin string) error {
+func (cl *API) GenerateUserAccessToken(code string, expectedLogin string) error {
 	// Ensure App Access Token is set so the one-shot client can fall back
 	// for endpoints that allow app auth.
-	if _, err := Client(); err != nil {
+	if _, err := cl.Client(); err != nil {
 		return err
 	}
 	bootstrapClient, err := helix.NewClient(&helix.Options{
@@ -438,8 +418,8 @@ func GenerateUserAccessToken(code string, expectedLogin string) error {
 	if err != nil {
 		return fmt.Errorf("twitch: building bootstrap client: %w", err)
 	}
-	if AppAccessToken != "" {
-		bootstrapClient.SetAppAccessToken(AppAccessToken)
+	if cl.appAccessToken != "" {
+		bootstrapClient.SetAppAccessToken(cl.appAccessToken)
 	}
 
 	resp, err := bootstrapClient.RequestUserAccessToken(code)
@@ -463,7 +443,7 @@ func GenerateUserAccessToken(code string, expectedLogin string) error {
 	}
 	// account="" — mid-bootstrap, re-reading the (not-yet-written) token would
 	// be wrong; surface the failure to the caller instead.
-	if checkHelixResp(context.Background(), "GetUsers", "", &usersResp.ResponseCommon) {
+	if cl.checkHelixResp(context.Background(), "GetUsers", "", &usersResp.ResponseCommon) {
 		return fmt.Errorf("twitch: GetUsers returned %d during bootstrap", usersResp.StatusCode)
 	}
 	if len(usersResp.Data.Users) == 0 {
@@ -500,18 +480,18 @@ func GenerateUserAccessToken(code string, expectedLogin string) error {
 	// = row written but in-memory unchanged (logged so the operator notices).
 	switch u.Login {
 	case c.Conf.BotUsername:
-		tokenMu.Lock()
-		currentUserToken = tok
-		tokenMu.Unlock()
-		if currentTwitchClient != nil {
-			currentTwitchClient.SetUserAccessToken(tok.AccessToken)
+		cl.tokenMu.Lock()
+		cl.currentUserToken = tok
+		cl.tokenMu.Unlock()
+		if cl.currentTwitchClient != nil {
+			cl.currentTwitchClient.SetUserAccessToken(tok.AccessToken)
 		}
 	case c.Conf.ChannelName:
-		tokenMu.Lock()
-		currentBroadcasterToken = tok
-		tokenMu.Unlock()
-		if broadcasterTwitchClient != nil {
-			broadcasterTwitchClient.SetUserAccessToken(tok.AccessToken)
+		cl.tokenMu.Lock()
+		cl.currentBroadcasterToken = tok
+		cl.tokenMu.Unlock()
+		if cl.broadcasterTwitchClient != nil {
+			cl.broadcasterTwitchClient.SetUserAccessToken(tok.AccessToken)
 		}
 	default:
 		slog.Warn("OAuth bootstrap completed for unknown identity; oauth_tokens row written but in-memory state unchanged",
@@ -525,14 +505,14 @@ func GenerateUserAccessToken(code string, expectedLogin string) error {
 // minutes of expiry. Each leg uses its own Postgres advisory lock so two
 // running tripbots (local dev + cluster pod) sharing the same account can't
 // race the rotation.
-func RefreshUserAccessToken(ctx context.Context) {
+func (cl *API) RefreshUserAccessToken(ctx context.Context) {
 	botUser := c.Conf.BotUsername
 	broadcasterUser := c.Conf.ChannelName
 
-	refreshOne(ctx, botUser, applyBotToken, false)
+	cl.refreshOne(ctx, botUser, cl.applyBotToken, false)
 
 	if broadcasterUser != "" && broadcasterUser != botUser {
-		refreshOne(ctx, broadcasterUser, applyBroadcasterToken, false)
+		cl.refreshOne(ctx, broadcasterUser, cl.applyBroadcasterToken, false)
 	}
 }
 
@@ -545,18 +525,18 @@ func RefreshUserAccessToken(ctx context.Context) {
 // restart. When neither yields a usable token — e.g. a DB-restored row whose
 // refresh_token is also revoked — the in-memory slot is left blanked and the
 // reauth link is logged; the admin panel's re-auth prompt then covers it.
-func Reauth(ctx context.Context, account string) {
+func (cl *API) Reauth(ctx context.Context, account string) {
 	username := c.Conf.BotUsername
-	apply := applyBotToken
+	apply := cl.applyBotToken
 	if account == "broadcaster" {
 		username = c.Conf.ChannelName
-		apply = applyBroadcasterToken
+		apply = cl.applyBroadcasterToken
 	}
-	refreshOne(ctx, username, apply, true)
+	cl.refreshOne(ctx, username, apply, true)
 	// Re-read regardless of the refresh outcome: a concurrent auth-bootstrap
 	// may have written a fresh token that a refresh with the (also-stale)
 	// refresh_token couldn't produce.
-	if err := LoadFromDB(); err != nil {
+	if err := cl.LoadFromDB(); err != nil {
 		slog.WarnContext(ctx, "reauth: no usable token after refresh + DB re-read",
 			"err", err, "login_as", username, "reauth_url", AuthInitURL(account))
 	}
@@ -566,24 +546,24 @@ func Reauth(ctx context.Context, account string) {
 // bot helix client. Passed to refreshOne so the per-identity slot logic
 // stays out of the refresh dance itself. A zero Token (the refresh-failed
 // signal) flows through naturally: the slot blanks and the gauge records 0.
-func applyBotToken(tok oauthtokens.Token) {
-	tokenMu.Lock()
-	currentUserToken = tok
-	tokenMu.Unlock()
-	if currentTwitchClient != nil {
-		currentTwitchClient.SetUserAccessToken(tok.AccessToken)
+func (cl *API) applyBotToken(tok oauthtokens.Token) {
+	cl.tokenMu.Lock()
+	cl.currentUserToken = tok
+	cl.tokenMu.Unlock()
+	if cl.currentTwitchClient != nil {
+		cl.currentTwitchClient.SetUserAccessToken(tok.AccessToken)
 	}
 	instrumentation.TwitchTokenExpiry.SetExpiresAt("bot", tok.ExpiresAt)
 }
 
 // applyBroadcasterToken writes the rotated token into the broadcaster slot
 // + primes the broadcaster helix client.
-func applyBroadcasterToken(tok oauthtokens.Token) {
-	tokenMu.Lock()
-	currentBroadcasterToken = tok
-	tokenMu.Unlock()
-	if broadcasterTwitchClient != nil {
-		broadcasterTwitchClient.SetUserAccessToken(tok.AccessToken)
+func (cl *API) applyBroadcasterToken(tok oauthtokens.Token) {
+	cl.tokenMu.Lock()
+	cl.currentBroadcasterToken = tok
+	cl.tokenMu.Unlock()
+	if cl.broadcasterTwitchClient != nil {
+		cl.broadcasterTwitchClient.SetUserAccessToken(tok.AccessToken)
 	}
 	instrumentation.TwitchTokenExpiry.SetExpiresAt("broadcaster", tok.ExpiresAt)
 }
@@ -601,7 +581,7 @@ func applyBroadcasterToken(tok oauthtokens.Token) {
 //
 // TODO: helix client surface should move behind an interface so this
 // function can be unit-tested without a real Twitch round-trip.
-func refreshOne(ctx context.Context, username string, applyInMemory func(oauthtokens.Token), force bool) {
+func (cl *API) refreshOne(ctx context.Context, username string, applyInMemory func(oauthtokens.Token), force bool) {
 	acquired, release, err := oauthtokens.TryRefreshLock("twitch", username)
 	if err != nil {
 		slog.ErrorContext(ctx, "oauth refresh lock acquisition failed", "err", err, "username", username)
@@ -636,7 +616,7 @@ func refreshOne(ctx context.Context, username string, applyInMemory func(oauthto
 		return
 	}
 
-	client, err := Client()
+	client, err := cl.Client()
 	if err != nil {
 		slog.ErrorContext(ctx, "helix client unavailable for refresh", "err", err, "username", username)
 		return
