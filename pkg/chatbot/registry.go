@@ -70,60 +70,60 @@ func (a *App) buildRegistry() []Command {
 			Trigger: "!socialmedia",
 			Aliases: []string{"!social", "!socials"},
 			Handler: func(_ context.Context, _ *users.User, _ []string) {
-				sayFn("Find me outside of Twitch: !youtube, !tiktok, !instagram, !bluesky")
+				a.IRC.Say("Find me outside of Twitch: !youtube, !tiktok, !instagram, !bluesky")
 			},
 		},
 		{
 			Trigger: "!discord",
 			Handler: func(_ context.Context, _ *users.User, _ []string) {
-				sayFn("Join us on Discord: https://discord.gg/hKvNgZrk52")
+				a.IRC.Say("Join us on Discord: https://discord.gg/hKvNgZrk52")
 			},
 		},
 		{
 			Trigger: "!twitter",
 			Handler: func(_ context.Context, _ *users.User, _ []string) {
-				sayFn("Follow on Twitter: https://twitter.com/adanalife_")
+				a.IRC.Say("Follow on Twitter: https://twitter.com/adanalife_")
 			},
 		},
 		{
 			Trigger: "!instagram",
 			Aliases: []string{"!ig", "!insta"},
 			Handler: func(_ context.Context, _ *users.User, _ []string) {
-				sayFn("Follow on Instagram: https://instagram.com/adanalife_")
+				a.IRC.Say("Follow on Instagram: https://instagram.com/adanalife_")
 			},
 		},
 		{
 			Trigger: "!facebook",
 			Aliases: []string{"!fb"},
 			Handler: func(_ context.Context, _ *users.User, _ []string) {
-				sayFn("Follow on Facebook: https://www.facebook.com/adanalifeblog")
+				a.IRC.Say("Follow on Facebook: https://www.facebook.com/adanalifeblog")
 			},
 		},
 		{
 			Trigger: "!youtube",
 			Aliases: []string{"!yt"},
 			Handler: func(_ context.Context, _ *users.User, _ []string) {
-				sayFn("Subscribe on YouTube: https://www.youtube.com/channel/UC8Q7uFC1Xyr2ZnTWOk9Aizg")
+				a.IRC.Say("Subscribe on YouTube: https://www.youtube.com/channel/UC8Q7uFC1Xyr2ZnTWOk9Aizg")
 			},
 		},
 		{
 			Trigger: "!tiktok",
 			Handler: func(_ context.Context, _ *users.User, _ []string) {
-				sayFn("Follow on TikTok: https://tiktok.com/@adanalife")
+				a.IRC.Say("Follow on TikTok: https://tiktok.com/@adanalife")
 			},
 		},
 		{
 			Trigger: "!bluesky",
 			Aliases: []string{"!bsky"},
 			Handler: func(_ context.Context, _ *users.User, _ []string) {
-				sayFn("Follow on Bluesky: https://bsky.app/profile/dana.lol")
+				a.IRC.Say("Follow on Bluesky: https://bsky.app/profile/dana.lol")
 			},
 		},
 		{
 			Trigger: "!commands",
 			Aliases: []string{"!command", "¡command", "¡commands", "!commads", "!controls", "!commande"},
 			Handler: func(_ context.Context, _ *users.User, _ []string) {
-				sayFn("You can try: !location, !guess, !date, !state, !sunset, !timewarp, !miles, !leaderboard, !song, and many other hidden commands!")
+				a.IRC.Say("You can try: !location, !guess, !date, !state, !sunset, !timewarp, !miles, !leaderboard, !song, and many other hidden commands!")
 			},
 		},
 		{
@@ -168,7 +168,7 @@ func (a *App) buildRegistry() []Command {
 			Trigger: "!gas",
 			Aliases: []string{"!fuel", "!petrol"},
 			Handler: func(_ context.Context, _ *users.User, _ []string) {
-				sayFn("About full, thanks for asking")
+				a.IRC.Say("About full, thanks for asking")
 			},
 		},
 		{
@@ -233,7 +233,7 @@ func (a *App) buildRegistry() []Command {
 		{
 			Trigger: "!somafm",
 			Handler: func(_ context.Context, _ *users.User, _ []string) {
-				sayFn("Stream music by SomaFM — https://somafm.com")
+				a.IRC.Say("Stream music by SomaFM — https://somafm.com")
 			},
 		},
 	}
