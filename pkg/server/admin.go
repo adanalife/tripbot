@@ -17,7 +17,6 @@ import (
 	"github.com/adanalife/tripbot/pkg/httpmw"
 	"github.com/adanalife/tripbot/pkg/obs"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
-	"github.com/adanalife/tripbot/pkg/video"
 	"github.com/gorilla/mux"
 )
 
@@ -29,12 +28,7 @@ var startedAt = time.Now()
 // ping. 2s keeps a slow or hung vlc-server from stalling the panel render.
 var healthClient = &http.Client{Timeout: 2 * time.Second}
 
-// currentlyPlaying / currentProgress are overridable in tests; by default they
-// read pkg/video's in-process state (refreshed by a 60s cron tick), so the
-// admin panel costs nothing to show "now playing".
 var (
-	currentlyPlaying = video.CurrentlyPlaying
-	currentProgress  = video.CurrentProgress
 	// chatterCount is the in-memory count of users in chat, refreshed ~60s by
 	// the UpdateSession cron. Overridable in tests.
 	chatterCount = mytwitch.ChatterCount
@@ -235,7 +229,7 @@ func (s *Server) adminHandler(w http.ResponseWriter, r *http.Request) {
 		Uptime:         time.Since(startedAt).Round(time.Second).String(),
 		Chatters:       chatterCount(),
 		Services:       s.gatherStatus(buildSHA(), vlc, onscreens, obs),
-		Now:            currentVideo(vlc.OK),
+		Now:            s.currentVideo(vlc.OK),
 		Audio:          nowPlayingFetcher(r.Context()),
 		Stream:         gatherStream(r.Context()),
 		PanelHost:      panelHost(r),
@@ -484,22 +478,24 @@ func (s *Server) refreshHandler(w http.ResponseWriter, r *http.Request) {
 
 // currentVideo summarizes the currently-playing video for the page, but only
 // when vlc is healthy (a stale value while vlc is down would be misleading).
-// Reads pkg/video's in-process value — no extra call. Returns nil when nothing
-// is playing yet (empty slug).
-func currentVideo(vlcOK bool) *nowPlaying {
+// Reads the last video.changed cached by the hub from NATS — no in-process
+// pkg/video dependency — so the panel can later be lifted into its own service.
+// Returns nil when no video.changed has arrived yet. Progress is derived from
+// the event's emitted_at (the clip start), matching the live SSE ticker.
+func (s *Server) currentVideo(vlcOK bool) *nowPlaying {
 	if !vlcOK {
 		return nil
 	}
-	v := currentlyPlaying()
-	if v.Slug == "" {
+	ev, ok := s.hub.snapshotNowPlaying()
+	if !ok || ev.File == "" {
 		return nil
 	}
-	progress := currentProgress()
+	started := parseEmitted(ev.EmittedAt)
 	return &nowPlaying{
-		File:      v.File(),
-		State:     v.State,
-		Progress:  progress.Round(time.Second).String(),
-		SinceUnix: time.Now().Add(-progress).Unix(),
+		File:      ev.File,
+		State:     ev.State,
+		Progress:  time.Since(started).Round(time.Second).String(),
+		SinceUnix: started.Unix(),
 	}
 }
 
