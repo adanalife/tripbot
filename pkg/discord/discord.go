@@ -14,6 +14,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
+	"github.com/adanalife/tripbot/pkg/users"
 )
 
 // FlagKey is the feature flag that gates Discord bot startup. cmd/tripbot
@@ -50,11 +51,14 @@ type Session struct {
 	s              *discordgo.Session
 	guildID        string
 	registeredCmds []*discordgo.ApplicationCommand
+	// sessions backs the /totalleaderboard command's in-memory read. Supplied
+	// by cmd/tripbot so discord shares the bot's one *users.Sessions instance.
+	sessions *users.Sessions
 }
 
 // New constructs the underlying discordgo session. Does not open the
 // gateway — call Start for that.
-func New(token, guildID string) (*Session, error) {
+func New(token, guildID string, sessions *users.Sessions) (*Session, error) {
 	s, err := discordgo.New("Bot " + token)
 	if err != nil {
 		return nil, fmt.Errorf("discordgo.New: %w", err)
@@ -66,7 +70,7 @@ func New(token, guildID string) (*Session, error) {
 	// INTERACTION_CREATE is reaching us. Bump to LogDebug if even
 	// informational chatter doesn't surface the interaction dispatch.
 	s.LogLevel = discordgo.LogInformational
-	return &Session{s: s, guildID: guildID}, nil
+	return &Session{s: s, guildID: guildID, sessions: sessions}, nil
 }
 
 // Start opens the gateway, registers the slash commands against the

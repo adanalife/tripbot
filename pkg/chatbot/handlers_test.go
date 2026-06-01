@@ -3,8 +3,6 @@ package chatbot
 import (
 	"context"
 	"testing"
-
-	"github.com/adanalife/tripbot/pkg/users"
 )
 
 func TestNormalizeCommandPrefix(t *testing.T) {
@@ -188,9 +186,9 @@ type fakeUser struct {
 func (f *fakeUser) HasCommandAvailable(_ context.Context) bool { return f.follower }
 func (f *fakeUser) IsSubscriber() bool                         { return f.subscriber }
 
-// realUserAsChat wraps *users.User so it satisfies chatUser in tests
-// where we want to pass a struct with known field values.
-var _ chatUser = (*users.User)(nil)
+// sessionUser (a *users.User + the installed *Sessions) is the production
+// chatUser; this asserts it satisfies the seam.
+var _ chatUser = sessionUser{}
 
 func TestCheckAccess_NoRestrictions(t *testing.T) {
 	cmd := &Command{Trigger: "!test"}

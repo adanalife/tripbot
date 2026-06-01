@@ -67,7 +67,7 @@ func (s *Sessions) insertIntoLeaderboard(ctx context.Context, user User) {
 	s.removeFromLeaderboard(user.Username)
 
 	// get the current miles as a float
-	miles := user.CurrentMiles(ctx)
+	miles := s.CurrentMiles(ctx, user)
 
 	for i, pair := range s.lifetimeLeaderboard {
 		val := strToFloat32(ctx, pair[1])
@@ -103,11 +103,7 @@ func (s *Sessions) printLeaderboard() {
 	}
 }
 
-// LifetimeMilesLeaderboard returns the cached lifetime-miles leaderboard from
-// the default session. Was a package-level slice; now an accessor over the
-// session-owned state.
-func LifetimeMilesLeaderboard() [][]string { return defaultSessions.lifetimeLeaderboard }
-
-func InitLeaderboard(ctx context.Context) { defaultSessions.InitLeaderboard(ctx) }
-
-func UpdateLeaderboard(ctx context.Context) { defaultSessions.UpdateLeaderboard(ctx) }
+// LifetimeLeaderboard returns the cached lifetime-miles leaderboard (a slice of
+// [username, miles] pairs), hydrated by InitLeaderboard and rebuilt by
+// UpdateLeaderboard.
+func (s *Sessions) LifetimeLeaderboard() [][]string { return s.lifetimeLeaderboard }

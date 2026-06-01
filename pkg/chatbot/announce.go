@@ -2,8 +2,6 @@ package chatbot
 
 import (
 	"fmt"
-
-	"github.com/adanalife/tripbot/pkg/users"
 )
 
 // AnnounceNewFollower says a thank-you to a new follower in chat. Wired
@@ -26,6 +24,6 @@ func AnnounceSubscriber(username string, isGift bool, tier string) {
 	_ = isGift
 	_ = tier
 	sayFn(fmt.Sprintf("Thank you for the sub, @%s; enjoy your !bonusmiles bleedPurple", username))
-	users.GiveEveryoneMiles(1.0)
-	sayFn(fmt.Sprintf("The %d current viewers have been given a bonus mile, too HolidayPresent", users.LoggedInCount()))
+	currentSessions().GiveEveryoneMiles(1.0)
+	sayFn(fmt.Sprintf("The %d current viewers have been given a bonus mile, too HolidayPresent", currentSessions().LoggedInCount()))
 }

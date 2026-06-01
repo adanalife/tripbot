@@ -41,10 +41,10 @@ func New(source ChatterSource) *Sessions {
 	}
 }
 
-// defaultSessions is the process-wide Sessions used by the package-level
-// shims below and by User value-method reads of session state. Production
-// wires it to the Twitch-backed source; tests build their own *Sessions.
-var defaultSessions = New(twitchSource{})
+// NewDefault constructs the production Sessions, wired to the Twitch-backed
+// chatter source. cmd/tripbot constructs one and threads it through the boot
+// sequence + into chatbot/discord; tests build their own *Sessions via New.
+func NewDefault() *Sessions { return New(twitchSource{}) }
 
 // UpdateSession uses the chatter source to maintain the list of
 // currently-logged-in users.
@@ -129,7 +129,7 @@ func (s *Sessions) login(ctx context.Context, username string) *User {
 // logout removes the user from the list of currently-logged in users,
 // and updates the DB with their most up-to-date values
 func (s *Sessions) logout(ctx context.Context, u *User) {
-	sessionMiles := u.sessionMiles(ctx)
+	sessionMiles := s.sessionMiles(ctx, *u)
 
 	// print logout message if they're human
 	if !u.IsBot {
@@ -138,13 +138,13 @@ func (s *Sessions) logout(ctx context.Context, u *User) {
 			"user", u.String(),
 			"duration", durafmt.ParseShort(loggedInDur).String(),
 			"session_miles", sessionMiles,
-			"monthly_miles", u.CurrentMonthlyMiles(ctx),
+			"monthly_miles", s.CurrentMonthlyMiles(ctx, *u),
 			"guess_score", u.GetScore(ctx, scoreboards.CurrentGuessScoreboard()),
 		)
 	}
 
 	// update miles
-	u.Miles = u.CurrentMiles(ctx)
+	u.Miles = s.CurrentMiles(ctx, *u)
 	// update the last seen date
 	u.LastSeen = time.Now()
 	// store the user in the db
@@ -257,26 +257,5 @@ func (s *Sessions) PrintCurrentSession(ctx context.Context) {
 	)
 }
 
-// Package-level shims delegate to defaultSessions so existing callers
-// (cmd/tripbot, pkg/chatbot, ...) stay unchanged while the package's session
-// state moves onto Sessions. Threading a constructed *Sessions through those
-// callers (and dropping these shims) is a later stage of the no-globals work.
-
-func UpdateSession(ctx context.Context) { defaultSessions.UpdateSession(ctx) }
-
-func LoginIfNecessary(ctx context.Context, username string) *User {
-	return defaultSessions.LoginIfNecessary(ctx, username)
-}
-
-func LogoutIfNecessary(ctx context.Context, username string) {
-	defaultSessions.LogoutIfNecessary(ctx, username)
-}
-
-func Shutdown(ctx context.Context) { defaultSessions.Shutdown(ctx) }
-
-func GiveEveryoneMiles(gift float32) { defaultSessions.GiveEveryoneMiles(gift) }
-
-func PrintCurrentSession(ctx context.Context) { defaultSessions.PrintCurrentSession(ctx) }
-
-// LoggedInCount returns the number of users currently in the default session.
-func LoggedInCount() int { return len(defaultSessions.loggedIn) }
+// LoggedInCount returns the number of users currently in chat.
+func (s *Sessions) LoggedInCount() int { return len(s.loggedIn) }

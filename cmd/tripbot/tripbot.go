@@ -104,6 +104,15 @@ type Tripbot struct {
 	// and it publishes video.changed to NATS for the admin panel.
 	player *video.Player
 
+	// sessions tracks who's currently in chat (the login map) + the
+	// lifetime-miles leaderboard — the single process-wide instance,
+	// constructed in NewTripbot. Cron jobs refresh it (UpdateSession /
+	// UpdateLeaderboard); boot hydrates it (InitLeaderboard); gracefulShutdown
+	// flushes it (Shutdown); installed into chatbot (SetSessions) + discord so
+	// they read the same state. One *Sessions per chat provider is the
+	// multi-provider seam.
+	sessions *users.Sessions
+
 	telemetryShutdown telemetry.ShutdownFunc
 
 	// discordSession is set by startDiscord when the Discord bot is enabled
@@ -129,6 +138,7 @@ func NewTripbot(version string) *Tripbot {
 			onscreensClient.New(c.Conf.OnscreensServerHost, natsclient.DefaultPublisher(), c.Conf.Environment),
 			vlcClient.New(c.Conf.VlcServerHost),
 		),
+		sessions:   users.NewDefault(),
 		flagClient: feature.NewInMemoryClient(nil),
 	}
 }
@@ -154,7 +164,8 @@ func (t *Tripbot) Run() {
 	t.startHttpServer(shutdownCtx)
 	t.findInitialVideo()
 	chatbot.SetVideoPlayer(t.player) // commands read the same Player the cron refreshes
-	users.InitLeaderboard(context.Background())
+	chatbot.SetSessions(t.sessions)  // commands + IRC handlers read the same session state
+	t.sessions.InitLeaderboard(context.Background())
 	t.startCron()
 	t.startFeatureFlags(shutdownCtx)
 	t.loadTwitchToken(shutdownCtx)           // must precede chatbot.Initialize — provides the IRC token
@@ -228,7 +239,7 @@ func (t *Tripbot) startDiscord(ctx context.Context) {
 		slog.InfoContext(ctx, "discord disabled by feature flag", "flag", discord.FlagKey)
 		return
 	}
-	session, err := discord.New(c.Conf.DiscordBotToken, c.Conf.DiscordGuildID)
+	session, err := discord.New(c.Conf.DiscordBotToken, c.Conf.DiscordGuildID, t.sessions)
 	if err != nil {
 		slog.ErrorContext(ctx, "discord init failed", "err", err)
 		return
@@ -431,8 +442,8 @@ func (t *Tripbot) updateSubscribers() {
 // getCurrentUsers gets the users watching the stream
 func (t *Tripbot) getCurrentUsers() {
 	// fetch initial session
-	users.UpdateSession(context.Background())
-	users.PrintCurrentSession(context.Background())
+	t.sessions.UpdateSession(context.Background())
+	t.sessions.PrintCurrentSession(context.Background())
 }
 
 // connectToTwitch joins Twitch chat and starts listening
@@ -500,7 +511,7 @@ func (t *Tripbot) gracefulShutdown() {
 			slog.Error("discord stop failed", "err", err)
 		}
 	}
-	users.Shutdown(context.Background())
+	t.sessions.Shutdown(context.Background())
 	err := database.Connection().Close()
 	if err != nil {
 		slog.Error("error closing DB connection", "err", err)
@@ -525,10 +536,10 @@ func (t *Tripbot) gracefulShutdown() {
 func (t *Tripbot) scheduleBackgroundJobs() {
 	onscreensCli := onscreensClient.New(c.Conf.OnscreensServerHost, natsclient.DefaultPublisher(), c.Conf.Environment)
 	t.addJob(60*time.Second, "video.GetCurrentlyPlaying", t.player.GetCurrentlyPlaying)
-	t.addJob(61*time.Second, "users.UpdateSession", users.UpdateSession)
-	t.addJob(62*time.Second, "users.UpdateLeaderboard", users.UpdateLeaderboard)
+	t.addJob(61*time.Second, "users.UpdateSession", t.sessions.UpdateSession)
+	t.addJob(62*time.Second, "users.UpdateLeaderboard", t.sessions.UpdateLeaderboard)
 	t.addJob(5*time.Minute, "onscreens.ShowGuessLeaderboard", onscreensCli.ShowGuessLeaderboard)
-	t.addJob(5*time.Minute, "users.PrintCurrentSession", users.PrintCurrentSession)
+	t.addJob(5*time.Minute, "users.PrintCurrentSession", t.sessions.PrintCurrentSession)
 	t.addJob(5*time.Minute, "twitch.GetSubscribers", mytwitch.GetSubscribers)
 	t.addJob(5*time.Minute, "twitch.GetFollowerCount", mytwitch.GetFollowerCount)
 	t.addJob(1*time.Hour, "twitch.RefreshUserAccessToken", func(ctx context.Context) {
