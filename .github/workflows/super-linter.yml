@@ -77,6 +77,10 @@ jobs:
           #   - MYPY: only Python in the repo is two standalone bin/ scripts
           #     (no importable package, no type-check value); mypy also
           #     complains they both register as `__main__`
+          #   - ISORT: Ruff's `I` rules already sort imports (cv/ + pre-commit);
+          #     standalone isort uses a different profile and fights Ruff —
+          #     the same dueling-tools problem as BLACK above.
           VALIDATE_PYTHON_BLACK: false
           VALIDATE_PYTHON_RUFF_FORMAT: false
           VALIDATE_PYTHON_MYPY: false
+          VALIDATE_PYTHON_ISORT: false

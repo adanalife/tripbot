@@ -1,0 +1,68 @@
+[project]
+name = "dashcam-cv"
+version = "0.1.0"
+description = "Visual search over the adanalife dashcam corpus (SigLIP2 embeddings + pgvector)"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "torch",
+    "numpy",
+    # SigLIP2 NaFlex (full-widescreen image tower + matching text tower) lives in
+    # HuggingFace transformers. The flagship so400m NaFlex checkpoint is non-gated.
+    "transformers",
+    "sentencepiece>=0.2",
+    "pillow>=10",
+    # PyAV bundles its own ffmpeg, so frame extraction needs no system ffmpeg.
+    "av>=12",
+    "psycopg[binary]>=3.1",
+    "pgvector>=0.3",
+    "rich>=13",
+]
+
+[project.scripts]
+dashcam-cv = "dashcam_cv.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+]
+
+# This runs in a linux container (and on Apple-Silicon Macs). Latest PyTorch
+# ships no macOS x86_64 wheel, so resolving for Intel macOS would fail; restrict
+# the lock to the environments we actually run. On an Intel Mac, develop via the
+# Docker image (see README) rather than a host `uv sync`.
+[tool.uv]
+environments = [
+    "sys_platform == 'linux'",
+    "sys_platform == 'darwin' and platform_machine == 'arm64'",
+]
+
+# CPU-only torch in the linux container: the default linux wheel bundles CUDA
+# (several GB we never use on a CPU batch job). Apple-Silicon resolves torch from
+# PyPI as usual (its wheels are CPU/MPS already).
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["dashcam_cv"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]

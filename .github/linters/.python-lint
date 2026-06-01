@@ -1,0 +1,17 @@
+# pylint config for super-linter (PYTHON_PYLINT). The repo's Python is the
+# dashcam-cv sub-tree, linted primarily by ruff (cv.yml + pre-commit); this
+# only relaxes the pylint checks that fight intentional patterns there.
+[MESSAGES CONTROL]
+# import-outside-toplevel: the CV tree lazy-imports the heavy ML stack
+#   (torch/transformers) inside functions on purpose, so CLI parsing and the
+#   non-model tests never load it. This is load-bearing, not an oversight.
+# too-few-public-methods: fires on dataclasses + the single-purpose Embedder.
+# import-error: super-linter runs pylint without installing project deps, so
+#   every third-party import (torch, psycopg, rich, …) is unresolvable noise;
+#   ruff + the cv.yml test job catch real import problems.
+disable=import-outside-toplevel,too-few-public-methods,import-error
+
+[DESIGN]
+max-args=8
+max-positional-arguments=8
+max-locals=22

@@ -1,0 +1,40 @@
+name: CV
+# Path-filtered: fires only on the Python sub-tree, kept separate from the Go
+# test job so the CV tree never entangles the libvlc/cgo build.
+on:
+  pull_request:
+    paths:
+      - 'cv/**'
+      - '.github/workflows/cv.yml'
+  push:
+    branches:
+      - develop
+      - master
+    paths:
+      - 'cv/**'
+      - '.github/workflows/cv.yml'
+
+jobs:
+  cv:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cv
+    steps:
+      - uses: actions/checkout@v6
+      # mise reads cv/.tool-versions (python + uv); honors the ADR's
+      # mise-everywhere convention.
+      - uses: jdx/mise-action@v2
+        with:
+          working_directory: cv
+      - name: Install deps
+        run: uv sync --frozen
+      - name: Lint (ruff)
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+      - name: Test (pytest)
+        # Model- and DB-backed tests skip unless their fixtures are present
+        # (see tests/conftest.py); this keeps CI from pulling a 1.7 GB CLIP
+        # checkpoint on every run.
+        run: uv run pytest
