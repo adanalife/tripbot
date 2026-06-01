@@ -13,7 +13,7 @@ RUN CGO_ENABLED=0 go build -ldflags="-s -w -X main.version=${VERSION}" -o /out/t
  && CGO_ENABLED=0 go build -ldflags="-s -w" -o /out/auth-bootstrap ./cmd/auth-bootstrap
 
 # Runtime: minimal Ubuntu 24.04 matching the VLC/OBS containers
-FROM ubuntu:24.04
+FROM ubuntu:26.04
 
 RUN apt-get update \
   && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
