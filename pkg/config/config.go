@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"testing"
 
 	"github.com/joho/godotenv"
 )
@@ -23,8 +24,18 @@ func SetEnvironment() {
 
 	envVar, ok := os.LookupEnv("ENV")
 	if !ok {
-		envVar = "development"
-		slog.Warn("ENV not set, defaulting to development")
+		// Host-side `go test ./pkg/...` runs with ENV unset; default those to
+		// testing so the repo-root .env.testing (located via resolveFromRepoRoot
+		// below) loads instead of the absent .env.development — the same env
+		// `task test` sets explicitly. testing.Testing() is true only in test
+		// binaries, so `go run` / production are unaffected. Everything else
+		// defaults to development.
+		if testing.Testing() {
+			envVar = "testing"
+		} else {
+			envVar = "development"
+			slog.Warn("ENV not set, defaulting to development")
+		}
 		// envconfig.Process reads from the process env; the defaulted
 		// value has to be visible to the required:"true" field on
 		// TripbotConfig.Environment / VlcServerConfig.Environment.

@@ -44,6 +44,28 @@ func TestResolveFromRepoRootFallsBackWithoutGoMod(t *testing.T) {
 	}
 }
 
+// With ENV unset under `go test`, SetEnvironment should default to testing (so
+// the repo-root .env.testing loads), not development — otherwise host-side
+// `go test ./pkg/...` fails on the absent .env.development + missing required
+// config keys.
+func TestSetEnvironmentDefaultsToTestingUnderGoTest(t *testing.T) {
+	orig, had := os.LookupEnv("ENV")
+	os.Unsetenv("ENV")
+	t.Cleanup(func() {
+		if had {
+			os.Setenv("ENV", orig)
+		} else {
+			os.Unsetenv("ENV")
+		}
+	})
+
+	SetEnvironment()
+
+	if got := os.Getenv("ENV"); got != "testing" {
+		t.Errorf("SetEnvironment() with ENV unset under go test: ENV=%q, want %q", got, "testing")
+	}
+}
+
 // chdir switches into dir for the duration of the test, restoring the original
 // working directory afterward. t.TempDir()s used here have no go.mod ancestor
 // outside themselves, so the resolver's walk terminates at the filesystem root.
