@@ -16,11 +16,9 @@ import (
 
 	"github.com/adanalife/tripbot/pkg/scoreboards"
 
-	"github.com/adanalife/tripbot/pkg/background"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
 	"github.com/adanalife/tripbot/pkg/helpers"
-	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/adanalife/tripbot/pkg/video"
 	"github.com/getsentry/sentry-go"
@@ -81,7 +79,7 @@ func (a *App) helloCmd(ctx context.Context, user *users.User, params []string) {
 
 func (a *App) flagCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !flag", "username", user.Username)
-	a.Onscreens.ShowFlag(ctx, 10 * time.Second)
+	a.Onscreens.ShowFlag(ctx, 10*time.Second)
 }
 
 func (a *App) versionCmd(ctx context.Context, user *users.User, _ []string) {
@@ -130,7 +128,7 @@ func (a *App) followageCmd(ctx context.Context, user *users.User, params []strin
 		username = helpers.StripAtSign(params[0])
 	}
 
-	followedAt, ok := mytwitch.FollowedAt(username)
+	followedAt, ok := a.Twitch.FollowedAt(username)
 	if !ok {
 		if other {
 			a.IRC.Say(fmt.Sprintf("@%s isn't following the channel.", username))
@@ -227,7 +225,7 @@ func (a *App) locationCmd(ctx context.Context, user *users.User, _ []string) {
 	// extract the coordinates
 	lat, lng, err := vid.Location()
 	// geocode the location
-	address, _ := helpers.CityFromCoords(lat, lng)
+	address, _ := a.Geocoder.City(lat, lng)
 	if err != nil {
 		slog.ErrorContext(ctx, "geocoding error", "err", err)
 	}
@@ -372,7 +370,7 @@ func (a *App) dateCmd(ctx context.Context, user *users.User, _ []string) {
 	}
 }
 
-//TODO: refactor to use golang '...' syntax
+// TODO: refactor to use golang '...' syntax
 func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 	slog.InfoContext(ctx, "ran !guess", "username", user.Username)
 	var msg string
@@ -410,7 +408,7 @@ func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 	if strings.ToLower(guess) == strings.ToLower(vid.State) {
 		msg = fmt.Sprintf("@%s got it! We're in %s", user.Username, vid.State)
 		// show the flag for the state
-		a.Onscreens.ShowFlag(ctx, 10 * time.Second)
+		a.Onscreens.ShowFlag(ctx, 10*time.Second)
 		// increase their guess score
 		user.AddToScore(ctx, guessScoreboard, 1.0)
 		user.AddToScore(ctx, scoreboards.CurrentGuessScoreboard(), 1.0)
@@ -431,14 +429,14 @@ func (a *App) stateCmd(ctx context.Context, user *users.User, _ []string) {
 	}
 	msg := fmt.Sprintf("We're in %s", vid.State)
 	// show the flag for the state
-	a.Onscreens.ShowFlag(ctx, 10 * time.Second)
+	a.Onscreens.ShowFlag(ctx, 10*time.Second)
 	// record that they know the location now
 	user.SetLastLocationTime()
 	a.IRC.Say(msg)
 }
 
-//TODO: maybe there could be a !cancel command or something
-//TODO: use fancy golang ... syntax?
+// TODO: maybe there could be a !cancel command or something
+// TODO: use fancy golang ... syntax?
 func (a *App) reportCmd(ctx context.Context, user *users.User, params []string) {
 	slog.InfoContext(ctx, "ran !report", "username", user.Username)
 	message := strings.Join(params, " ")
@@ -518,7 +516,9 @@ func (a *App) shutdownCmd(ctx context.Context, user *users.User, _ []string) {
 	}
 	a.IRC.Say("Shutting down...")
 	slog.InfoContext(ctx, "shutdown: currently playing", "video", a.Video.Current())
-	background.StopCron()
+	if err := a.Cron.Stop(); err != nil {
+		slog.ErrorContext(ctx, "cron shutdown failed during !shutdown", "err", err)
+	}
 	a.Sessions.Shutdown(ctx)
 	err := database.Connection().Close()
 	if err != nil {
@@ -528,7 +528,7 @@ func (a *App) shutdownCmd(ctx context.Context, user *users.User, _ []string) {
 	os.Exit(0)
 }
 
-//TODO: this will always be lower case, find out why
+// TODO: this will always be lower case, find out why
 // middleCmd sets the text at the bottom-middle of the stream
 func (a *App) middleCmd(ctx context.Context, user *users.User, params []string) {
 	slog.InfoContext(ctx, "ran !middle", "username", user.Username)

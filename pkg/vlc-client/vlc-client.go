@@ -23,7 +23,7 @@ type Client struct {
 // will still send the request, just without a parent span linking it to the
 // caller's trace.
 //
-//TODO: eventually support HTTPS
+// TODO: eventually support HTTPS
 func New(host string) *Client {
 	return &Client{
 		serverURL:  "http://" + host,
@@ -88,7 +88,7 @@ func (c *Client) Back(ctx context.Context, n int) error {
 	return nil
 }
 
-//TODO: move this to a common location
+// TODO: move this to a common location
 //
 // Transport-layer errors log at Debug, not Error: each wrapper above this
 // (CurrentlyPlaying, PlayRandom, …) logs the operation-specific failure at

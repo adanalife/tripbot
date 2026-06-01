@@ -6,10 +6,13 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
+	"github.com/adanalife/tripbot/pkg/feature"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/httpmw"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
@@ -26,7 +29,36 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-var server *http.Server
+// Server holds the web server's mutable runtime state — the live-console hub,
+// the Twitch chat-connection flag, the build version tag, and the feature-flag
+// client the admin panel reads. cmd/tripbot installs values via the setter
+// methods (SetVersion / SetTwitchConnected / SetFlagClient) before and while
+// Start runs. The package-level functions below delegate to a process-wide
+// defaultServer so existing callers stay unchanged during the no-globals
+// transition.
+type Server struct {
+	hub             *Hub
+	twitchConnected atomic.Bool
+	versionTag      string
+
+	flagMu     sync.RWMutex
+	flagClient feature.FlagClient
+}
+
+// New constructs a Server with default runtime state: a fresh hub, the "dev"
+// version tag (overridden by SetVersion), and an empty in-memory flag client
+// (swapped for the Postgres-backed one via SetFlagClient).
+func New() *Server {
+	return &Server{
+		hub:        NewHub(),
+		versionTag: "dev",
+		flagClient: feature.NewInMemoryClient(nil),
+	}
+}
+
+// defaultServer is the process-wide Server backing the package-level shims and
+// the free-function HTTP handlers (which read defaultServer's fields).
+var defaultServer = New()
 
 // shutdownTimeout is how long Shutdown waits for in-flight requests to
 // finish before forcing connections closed. 15s is the typical sweet spot:
@@ -34,11 +66,14 @@ var server *http.Server
 // handler doesn't block process exit indefinitely.
 const shutdownTimeout = 15 * time.Second
 
+// Start is the package-level shim delegating to defaultServer.
+func Start(ctx context.Context) { defaultServer.Start(ctx) }
+
 // Start starts the web server. When ctx is canceled (e.g. SIGINT/SIGTERM
 // via signal.NotifyContext) the server stops accepting new connections and
 // waits up to shutdownTimeout for in-flight requests to complete before
 // returning.
-func Start(ctx context.Context) {
+func (s *Server) Start(ctx context.Context) {
 	slog.InfoContext(ctx, "starting web server", "port", c.Conf.TripbotServerPort)
 
 	r := mux.NewRouter()
@@ -73,7 +108,11 @@ func Start(ctx context.Context) {
 	// the vendored htmx assets it loads. The /admin POST subrouter below is
 	// POST-only, so the GET stream registers on r directly.
 	r.Handle("/admin/events", tagged("/admin/events", eventsHandler)).Methods("GET")
+	// live panel refresh: hidden poller OOB-swaps the always-present status rows
+	// + stream toggle so they stay current without a full reload.
+	r.Handle("/admin/refresh", tagged("/admin/refresh", refreshHandler)).Methods("GET")
 	r.Handle("/admin/user/{username}", tagged("/admin/user/{username}", userProfileHandler)).Methods("GET")
+	r.Handle("/admin/map/corpus", tagged("/admin/map/corpus", mapCorpusHandler)).Methods("GET")
 	r.PathPrefix("/static/").Handler(staticHandler())
 
 	// admin actions — tailnet-only by virtue of where the Ingress is

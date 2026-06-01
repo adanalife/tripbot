@@ -41,8 +41,8 @@ func eventsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ch := eventHub.register()
-	defer eventHub.unregister(ch)
+	ch := defaultServer.hub.register()
+	defer defaultServer.hub.unregister(ch)
 
 	heartbeat := time.NewTicker(sseHeartbeat)
 	defer heartbeat.Stop()

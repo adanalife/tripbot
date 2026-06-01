@@ -79,9 +79,9 @@ func TestEventsHandler_streamsChatEvent(t *testing.T) {
 
 	// Wait until the handler has registered with the hub, so our broadcast
 	// isn't dropped before the client channel exists.
-	waitFor(t, func() bool { return eventHub.numSubscribers() >= 1 })
+	waitFor(t, func() bool { return defaultServer.hub.numSubscribers() >= 1 })
 
-	eventHub.broadcast(sseEvent{Name: "chat", Data: `<div class="chat-line">hi</div>`})
+	defaultServer.hub.broadcast(sseEvent{Name: "chat", Data: `<div class="chat-line">hi</div>`})
 
 	select {
 	case <-rec.writes:
@@ -105,8 +105,8 @@ func TestEventsHandler_streamsChatEvent(t *testing.T) {
 	if cc := rec.Header().Get("Cache-Control"); cc != "no-store" {
 		t.Errorf("Cache-Control = %q, want no-store", cc)
 	}
-	if eventHub.numSubscribers() != 0 {
-		t.Errorf("subscriber not cleaned up after disconnect: %d", eventHub.numSubscribers())
+	if defaultServer.hub.numSubscribers() != 0 {
+		t.Errorf("subscriber not cleaned up after disconnect: %d", defaultServer.hub.numSubscribers())
 	}
 }
 
@@ -123,9 +123,9 @@ func TestEventsHandler_flattensNewlines(t *testing.T) {
 		eventsHandler(rec, req)
 		close(done)
 	}()
-	waitFor(t, func() bool { return eventHub.numSubscribers() >= 1 })
+	waitFor(t, func() bool { return defaultServer.hub.numSubscribers() >= 1 })
 
-	eventHub.broadcast(sseEvent{Name: "chat", Data: "line1\nline2"})
+	defaultServer.hub.broadcast(sseEvent{Name: "chat", Data: "line1\nline2"})
 	select {
 	case <-rec.writes:
 	case <-time.After(2 * time.Second):

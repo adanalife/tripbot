@@ -8,7 +8,6 @@ import (
 
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/scoreboards"
-	"github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/google/uuid"
 	"github.com/logrusorgru/aurora/v3"
 	"gorm.io/gorm"
@@ -18,7 +17,7 @@ import (
 )
 
 type User struct {
-	ID          uint16    `gorm:"primaryKey"`
+	ID          uint16 `gorm:"primaryKey"`
 	Username    string
 	Miles       float32
 	NumVisits   uint16
@@ -39,16 +38,16 @@ var guessCooldown = 3 * time.Minute
 
 func (u User) loggedInDur() time.Duration {
 	// exit early if they're not logged in
-	if !isLoggedIn(u.Username) {
+	if !defaultSessions.isLoggedIn(u.Username) {
 		return 0 * time.Second
 	}
 	// lookup the user in the session so the LoggedIn value is current
-	return time.Now().Sub(LoggedIn[u.Username].LoggedIn)
+	return time.Now().Sub(defaultSessions.loggedIn[u.Username].LoggedIn)
 }
 
 func (u User) sessionMiles(ctx context.Context) float32 {
 	// exit early if they're not logged in
-	if !isLoggedIn(u.Username) {
+	if !defaultSessions.isLoggedIn(u.Username) {
 		return 0.0
 	}
 	loggedInDur := u.loggedInDur()
@@ -69,7 +68,7 @@ func (u User) CurrentMiles(ctx context.Context) float32 {
 }
 
 func (u User) BonusMiles() float32 {
-	if isLoggedIn(u.Username) {
+	if defaultSessions.isLoggedIn(u.Username) {
 		loggedInDur := u.loggedInDur()
 		sessionMiles := helpers.DurationToMiles(loggedInDur)
 		return sessionMiles * 0.05
@@ -106,7 +105,7 @@ func SetBot(ctx context.Context, username string, isBot bool) error {
 	}
 	user.IsBot = isBot
 	user.save(ctx)
-	if loggedIn, ok := LoggedIn[username]; ok {
+	if loggedIn, ok := defaultSessions.loggedIn[username]; ok {
 		loggedIn.IsBot = isBot
 	}
 	return nil
@@ -114,12 +113,12 @@ func SetBot(ctx context.Context, username string, isBot bool) error {
 
 // IsFollower returns true if the user is a follower
 func (u User) IsFollower() bool {
-	return twitch.UserIsFollower(u.Username)
+	return defaultSessions.source.IsFollower(u.Username)
 }
 
 // IsSubscriber returns true if the user is a subscriber
 func (u User) IsSubscriber() bool {
-	return twitch.UserIsSubscriber(u.Username)
+	return defaultSessions.source.IsSubscriber(u.Username)
 }
 
 // User.String prints a colored version of the user
@@ -211,7 +210,7 @@ func (u *User) SetLastLocationTime() {
 	u.lastLocation = time.Now()
 }
 
-//TODO: maybe return an err here?
+// TODO: maybe return an err here?
 // create() will actually create the DB record
 func create(ctx context.Context, username string) User {
 	slog.InfoContext(ctx, "creating user", "username", username)

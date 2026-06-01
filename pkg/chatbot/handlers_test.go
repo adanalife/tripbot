@@ -186,7 +186,7 @@ type fakeUser struct {
 }
 
 func (f *fakeUser) HasCommandAvailable(_ context.Context) bool { return f.follower }
-func (f *fakeUser) IsSubscriber() bool        { return f.subscriber }
+func (f *fakeUser) IsSubscriber() bool                         { return f.subscriber }
 
 // realUserAsChat wraps *users.User so it satisfies chatUser in tests
 // where we want to pass a struct with known field values.

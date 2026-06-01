@@ -30,8 +30,8 @@ func TestTwitchConnectedSignal(t *testing.T) {
 }
 
 func TestVersionHandlerReturnsInjectedTag(t *testing.T) {
-	saved := versionTag
-	defer func() { versionTag = saved }()
+	saved := defaultServer.versionTag
+	defer func() { defaultServer.versionTag = saved }()
 	SetVersion("v9.9.9-test")
 
 	req := httptest.NewRequest(http.MethodGet, "/version", nil)
