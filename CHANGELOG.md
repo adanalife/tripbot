@@ -7,9 +7,34 @@ All notable changes to TripBot. Format follows [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+## [v2.18.1] — 2026-06-01
+
+Patch release. Mostly internals: the Phase B no-globals refactor lands its final package conversions — `pkg/twitch` and `pkg/server` now construct a `*API` / `*Server` instead of mutating package-level globals — alongside extracting reverse-geocoding into an injectable `pkg/geo` and giving chatbot a `App.Twitch` injection seam. Admin-panel polish continues (htmx live updates replacing full-page reloads, a GPS-jump-aware map trail, and an offline-collapsed stream preview), plus dashcam-cv database groundwork (pgvector), a `go test` ergonomics fix, and an OpenTelemetry deps bump.
+
+### admin panel
+
+- **htmx live updates replace full-page reloads.** Restart and stream-toggle buttons `hx-post` and swap their widget in place instead of full-page POST + redirect (which reloaded the Twitch preview, re-initialized Leaflet, and lost chat scroll). Adds in-flight feedback (`hx-disabled-elt` + a dim/progress-cursor style) and a hidden 15s poller that OOB-swaps the service-status rows and stream toggle so they stay current without a reload. ([#752])
+- **Map trail breaks on GPS jumps.** The live map split the breadcrumb trail into solid runs of consecutive points within 50 km and renders each cross-jump gap as a faint dashed bridge, so a timewarp clip or bad GPS fix no longer slashes a straight line across the map. ([#749])
+- **Stream preview collapses when offline + shorter service labels.** The preview disclosure now defaults open only when OBS reports an active stream (was hardcoded open, always loading the Twitch player), and the status rows read `vlc` / `onscreens` instead of `vlc-server` / `onscreens-server`. ([#735])
+
+### dashcam-cv
+
+- **pgvector `frame_embeddings` table + `cv:stats` task.** Migration 015 adds a `vector(1152)` embeddings column (SigLIP2 so400m NaFlex) with HNSW cosine + unique indexes and `CREATE EXTENSION vector`; local dev Postgres moves to the `pgvector/pgvector:pg16` image. Migration 016 drops the dead `moments`/`viewings` tables. Adds a `cv:stats` task for coverage/size/rate via psql. ([#750])
+
+### refactor
+
+- **`pkg/twitch` → `*API`.** The package's mutable globals are encapsulated in a constructed `*API` with `New()`; existing exported functions keep thin shims delegating to a `defaultClient`, so external callers are unchanged. Marks the auth-core seam for the eventual standalone Helix service. ([#738])
+- **`pkg/server` → `*Server`.** The last Phase B conversion: `eventHub`, `twitchConnected`, `versionTag`, and the feature-flag client move onto a constructed `*Server` (package-level shims back a `defaultServer` singleton, so cmd/tripbot is unchanged). Deletes a dead `var server`. ([#754])
+- **reverse-geocoding extracted into `pkg/geo`.** `helpers.CityFromCoords` / `StateFromCoords` no longer reach into the geocoder SDK's package global from a pure utility package. New `pkg/geo` holds a `Geocoder` interface + `*Client` (API key as a field); `helpers` goes back to dependency-free. ([#747])
+- **chatbot: inject Twitch Helix surface as `App.Twitch`.** `followageCmd` calls `a.Twitch.FollowedAt(...)` through an injected interface instead of the `pkg/twitch` package global, continuing the chatbot-app-injection pattern and unlocking unit tests for the command. ([#751])
+
 ### CI
 
 - **`go test` finds the repo-root `.env.testing` from any directory.** `config.SetEnvironment` resolved the dotenv file with a cwd-relative `godotenv.Load`, so a package's test binary — which runs from its own dir — never found the checked-in `.env.testing` and either `log.Fatalf`'d in a config `init()` or required a manual `set -a; . ./.env.testing; set +a`. The lookup now anchors at the module root (nearest ancestor with `go.mod`), so `ENV=testing go test ./pkg/...` works with no sourcing, matching the `task test` / `task test:macos` paths. Deployed binaries with no `go.mod` ancestor fall back to the bare relative path, preserving cluster behavior. ([#743])
+
+### deps
+
+- **OpenTelemetry instrumentation bumps** — `contrib/instrumentation/net/http/otelhttp` and `contrib/instrumentation/runtime` 0.68.0 → 0.69.0 (with `otel/sdk` 1.43 → 1.44 to match core). ([#746])
 
 ## [v2.18.0] — 2026-05-29
 
@@ -1258,6 +1283,15 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#713]: https://github.com/adanalife/tripbot/pull/713
 [#714]: https://github.com/adanalife/tripbot/pull/714
 [#743]: https://github.com/adanalife/tripbot/pull/743
+[#735]: https://github.com/adanalife/tripbot/pull/735
+[#738]: https://github.com/adanalife/tripbot/pull/738
+[#746]: https://github.com/adanalife/tripbot/pull/746
+[#747]: https://github.com/adanalife/tripbot/pull/747
+[#749]: https://github.com/adanalife/tripbot/pull/749
+[#750]: https://github.com/adanalife/tripbot/pull/750
+[#751]: https://github.com/adanalife/tripbot/pull/751
+[#752]: https://github.com/adanalife/tripbot/pull/752
+[#754]: https://github.com/adanalife/tripbot/pull/754
 [#716]: https://github.com/adanalife/tripbot/pull/716
 [#717]: https://github.com/adanalife/tripbot/pull/717
 [#719]: https://github.com/adanalife/tripbot/pull/719
