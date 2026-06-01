@@ -323,7 +323,7 @@ func (h *Hub) closeAll() {
 // chatLineTmpl renders one chat row as a single line (no newlines — SSE data
 // must not contain bare newlines). html/template escapes username + text.
 var chatLineTmpl = template.Must(template.New("chatline").Parse(
-	`<div class="chat-line"><time class="ct-ts" datetime="{{.At.Format "2006-01-02T15:04:05Z07:00"}}">{{.At.Format "15:04"}}</time> <span class="cu">{{.Username}}</span> <span class="ct">{{.Text}}</span></div>`))
+	`<div class="chat-line"><time class="ct-ts" datetime="{{.At.Format "2006-01-02T15:04:05Z07:00"}}">{{.At.Format "15:04"}}</time> <span class="cu" hx-get="/admin/user/{{.Username}}" hx-target="#user-popover" hx-swap="innerHTML" hx-trigger="click">{{.Username}}</span> <span class="ct">{{.Text}}</span></div>`))
 
 func renderChatLine(line ChatLine) string {
 	var sb strings.Builder

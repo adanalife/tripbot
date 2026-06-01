@@ -930,7 +930,7 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
          server-side from the hub's ring buffer; live lines stream in on top. -->
     <div class="chat-wrap">
       <div id="chat-log" class="chat-log" sse-swap="chat" hx-swap="beforeend">
-        {{range .ChatHistory}}<div class="chat-line"><time class="ct-ts" datetime="{{.At.Format "2006-01-02T15:04:05Z07:00"}}">{{.At.Format "15:04"}}</time> <span class="cu">{{.Username}}</span> <span class="ct">{{.Text}}</span></div>{{else}}<div class="chat-empty">waiting for chat…</div>{{end}}
+        {{range .ChatHistory}}<div class="chat-line"><time class="ct-ts" datetime="{{.At.Format "2006-01-02T15:04:05Z07:00"}}">{{.At.Format "15:04"}}</time> <span class="cu" hx-get="/admin/user/{{.Username}}" hx-target="#user-popover" hx-swap="innerHTML" hx-trigger="click">{{.Username}}</span> <span class="ct">{{.Text}}</span></div>{{else}}<div class="chat-empty">waiting for chat…</div>{{end}}
       </div>
       <!-- shown only while scrolled up (see JS): tapping jumps to the newest line -->
       <button id="chat-jump" class="chat-jump" type="button" hidden>↓ new</button>
@@ -1191,38 +1191,30 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
   setInterval(tick, 1000);
 })();
 
-// Chat user-profile popover. A delegated click on any chat username (.cu)
-// fetches /admin/user/<name> and floats the returned card near the click;
-// clicking outside or pressing Escape closes it. Delegation covers SSE-added
-// lines without per-line wiring.
+// Chat user-profile popover. Each chat username (.cu) carries hx-get, so htmx
+// fetches /admin/user/<name> into #user-popover on click — including usernames
+// on SSE-added lines, since htmx processes swapped-in content (no delegation
+// needed). We only record where the click landed and, on htmx:afterSwap, reveal
+// + float the card near it; clicking outside or Escape closes it.
 (function() {
   const pop = document.getElementById('user-popover');
   if (!pop) return;
-  let open = false;
-  const hide = () => { pop.hidden = true; open = false; };
+  let lastXY = null, open = false;
   document.addEventListener('click', (e) => {
     const cu = e.target.closest('.cu');
-    if (cu) {
-      const name = cu.textContent.trim();
-      if (!name) return;
-      fetch('/admin/user/' + encodeURIComponent(name))
-        .then(r => r.ok ? r.text() : Promise.reject(r.status))
-        .then(html => {
-          pop.innerHTML = html;
-          pop.hidden = false; // unhide before measuring so offset* are real
-          open = true;
-          const pad = 8;
-          const x = Math.min(e.clientX, window.innerWidth - pop.offsetWidth - pad);
-          const y = Math.min(e.clientY + pad, window.innerHeight - pop.offsetHeight - pad);
-          pop.style.left = Math.max(pad, x) + 'px';
-          pop.style.top = Math.max(pad, y) + 'px';
-        })
-        .catch(() => {});
-      return;
-    }
-    if (open && !pop.contains(e.target)) hide();
+    if (cu) { lastXY = { x: e.clientX, y: e.clientY }; return; } // htmx issues the GET
+    if (open && !pop.contains(e.target)) { pop.hidden = true; open = false; }
   });
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hide(); });
+  pop.addEventListener('htmx:afterSwap', () => {
+    pop.hidden = false; // unhide before measuring so offset* are real
+    open = true;
+    const pad = 8, xy = lastXY || { x: pad, y: pad };
+    const x = Math.min(xy.x, window.innerWidth - pop.offsetWidth - pad);
+    const y = Math.min(xy.y + pad, window.innerHeight - pop.offsetHeight - pad);
+    pop.style.left = Math.max(pad, x) + 'px';
+    pop.style.top = Math.max(pad, y) + 'px';
+  });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { pop.hidden = true; open = false; } });
 })();
 
 // Live location map (Leaflet). Seeds a breadcrumb polyline + 🚐 pin from the
