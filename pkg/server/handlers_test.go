@@ -16,28 +16,27 @@ import (
 // probe. The probe itself (httpmw.ReadinessHandler with no checks → always
 // 200) is covered in pkg/httpmw; here we just guard the signal accessors.
 func TestTwitchConnectedSignal(t *testing.T) {
-	defer SetTwitchConnected(false) // reset package state for other tests
+	srv := New()
 
-	SetTwitchConnected(false)
-	if TwitchConnected() {
+	srv.SetTwitchConnected(false)
+	if srv.TwitchConnected() {
 		t.Fatalf("after SetTwitchConnected(false), TwitchConnected() = true, want false")
 	}
 
-	SetTwitchConnected(true)
-	if !TwitchConnected() {
+	srv.SetTwitchConnected(true)
+	if !srv.TwitchConnected() {
 		t.Fatalf("after SetTwitchConnected(true), TwitchConnected() = false, want true")
 	}
 }
 
 func TestVersionHandlerReturnsInjectedTag(t *testing.T) {
-	saved := versionTag
-	defer func() { versionTag = saved }()
-	SetVersion("v9.9.9-test")
+	srv := New()
+	srv.SetVersion("v9.9.9-test")
 
 	req := httptest.NewRequest(http.MethodGet, "/version", nil)
 	rec := httptest.NewRecorder()
 
-	versionHandler(rec, req)
+	srv.versionHandler(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("got status %d, want %d", rec.Code, http.StatusOK)

@@ -12,11 +12,13 @@ import (
 	"github.com/adanalife/tripbot/pkg/database"
 	"github.com/adanalife/tripbot/pkg/eventbus"
 	"github.com/adanalife/tripbot/pkg/feature"
+	"github.com/adanalife/tripbot/pkg/geo"
+	"github.com/adanalife/tripbot/pkg/natsclient"
 	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
+	"github.com/adanalife/tripbot/pkg/users"
 	vlcClient "github.com/adanalife/tripbot/pkg/vlc-client"
 	"github.com/gempir/go-twitch-irc/v4"
-	"github.com/kelvins/geocoder"
 	"gorm.io/gorm"
 )
 
@@ -47,27 +49,53 @@ type App struct {
 	// Sessions wraps the user-lookup / lifetime-leaderboard / shutdown
 	// surface of pkg/users for command-time queries. Tests inject a
 	// recordingSessions to assert lookups and stage results; production
-	// uses the realSessions adapter.
+	// uses the realSessions adapter built by NewSessionsAdapter.
 	Sessions Sessions
+	// UserSessions is the concrete process-wide session state the inbound IRC
+	// handlers (HandleMessage / Join / Part) and dispatch's access check use
+	// directly — the login/logout lifecycle + follower/subscriber + login-count
+	// reads that are intentionally off the narrow Sessions interface. cmd/tripbot
+	// assigns the same *users.Sessions it wraps into Sessions. nil in tests and
+	// the brief startup window before cmd assigns it.
+	UserSessions *users.Sessions
 	// NowPlaying reports the currently-playing track on the stream's
 	// background audio source. Tests inject a fake; production uses
 	// realNowPlaying which polls SomaFM.
 	NowPlaying NowPlaying
 	// Flags evaluates feature flag values for command-time gating. Tests
-	// inject noopFlags{} (every key false); production uses realFlags which
-	// delegates to the Postgres-backed client cmd/tripbot installs via
-	// SetFlagClient once the DB connection is up.
+	// inject noopFlags{} (every key false); New() defaults it to an empty
+	// in-memory client (same fail-closed contract) for the startup window +
+	// defaultApp, and cmd/tripbot assigns the Postgres-backed client once the
+	// DB connection is up.
 	Flags feature.FlagClient
 	// NATS is the fire-and-forget pubsub surface. Tests inject a
 	// recordingNATS to assert on publishes; production uses realNATS
 	// which delegates to the pkg/natsclient singleton (no-op when
 	// NATS_URL is empty).
 	NATS NATS
-	// Cron stops the background scheduler during !shutdown. Tests inject
-	// noopCron{}; production uses realCron which delegates to the
-	// constructed *background.Scheduler cmd/tripbot installs via
-	// SetScheduler once cron has started.
+	// Cron stops the background scheduler during !shutdown. Defaults to
+	// noopCron{} (set in New(), also what tests use); cmd/tripbot assigns the
+	// constructed *background.Scheduler — which satisfies Cron directly — once
+	// cron has started.
 	Cron Cron
+	// Geocoder turns GPS coords into a place name for !location. Tests inject
+	// a recordingGeocoder / noopGeocoder; production uses realGeocoder which
+	// delegates to the pkg/geo default configured in ConnectIRC.
+	Geocoder Geocoder
+	// Twitch is the command-time Twitch Helix surface (follow lookups today).
+	// Tests inject a recordingTwitch; production uses realTwitch which
+	// delegates to the pkg/twitch client. The future swap point for an
+	// out-of-process Helix/auth service.
+	Twitch Twitch
+
+	// commands is this App's command registry (built by buildRegistry);
+	// singleWordLookup / multiWordLookup index it by trigger + alias for
+	// dispatch. Built by indexCommands(), called from New() at construction.
+	// Replaces the former package-level globals so the registry travels with
+	// the App.
+	commands         []Command
+	singleWordLookup map[string]*Command
+	multiWordLookup  map[string]*Command
 }
 
 // db returns the DB handle the App should use. Prefers an explicit a.DB
@@ -80,18 +108,31 @@ func (a *App) db() *gorm.DB {
 	return database.GormDB()
 }
 
-var defaultApp = &App{
-	// DB stays nil; commands use a.db() which falls back to database.GormDB().
-	Onscreens:  realOnscreens{c: onscreensClient.New(c.Conf.OnscreensServerHost), nats: realNATS{}, env: c.Conf.Environment},
-	VLC:        realVLC{c: vlcClient.New(c.Conf.VlcServerHost)},
-	Video:      realVideo{},
-	IRC:        realIRC{},
-	Sessions:   realSessions{},
-	NowPlaying: newRealNowPlaying(),
-	Flags:      realFlags{},
-	NATS:       realNATS{},
-	Cron:       realCron{},
+// New constructs an App wired with the production (realX) dependency adapters,
+// with its command registry built and indexed. cmd builds the live App with
+// this; the package singleton defaultApp is built from it for the package-level
+// Twitch adapters / eventsub shims and the tests. Construction touches no
+// network or DB — the realX adapters are lazy.
+func New() *App {
+	a := &App{
+		// DB stays nil; commands use a.db() which falls back to database.GormDB().
+		Onscreens:  realOnscreens{c: onscreensClient.New(c.Conf.OnscreensServerHost, natsclient.DefaultPublisher(), c.Conf.Environment)},
+		VLC:        realVLC{c: vlcClient.New(c.Conf.VlcServerHost)},
+		Video:      realVideo{},
+		IRC:        realIRC{},
+		Sessions:   realSessions{},
+		NowPlaying: newRealNowPlaying(),
+		Flags:      feature.NewInMemoryClient(nil),
+		NATS:       realNATS{},
+		Cron:       noopCron{},
+		Geocoder:   realGeocoder{},
+		Twitch:     realTwitch{},
+	}
+	a.indexCommands()
+	return a
 }
+
+var defaultApp = New()
 
 // used to determine which help message to display
 // randomized so it starts with a new one every restart
@@ -105,19 +146,21 @@ const subscriberMsg = "You must be a subscriber to run that command :)"
 // follow before they can try commands. Flip back to true to re-enable.
 var followerGatingEnabled = false
 
-// Initialize returns a Twitch client struct with all of the various configuration in place.
-func Initialize() *twitch.Client {
-	var err error
+// ConnectIRC builds the Twitch IRC client, wires this App's inbound adapters to
+// it, and returns it. Also does the process-wide geocoder + Twitch-API warmup.
+// The returned client is connected by the caller (cmd/tripbot).
+func (a *App) ConnectIRC() *twitch.Client {
 	Uptime = time.Now()
 
-	// set up geocoder (for translating coords to places)
-	geocoder.ApiKey = c.Conf.GoogleMapsAPIKey
+	// set up the process-wide geocoder (coords -> places). realGeocoder and
+	// pkg/video both route through this default.
+	geo.SetDefault(geo.New(c.Conf.GoogleMapsAPIKey))
 
 	// initialize the twitch API client. Non-fatal: if Twitch is unreachable
 	// at boot, log and continue so the process stays up (readiness reports
 	// not-ready until the IRC connection lands). mytwitch.Client() doesn't
 	// cache on failure, so callers retry once Twitch is back.
-	if _, err = mytwitch.Client(); err != nil {
+	if _, err := mytwitch.Client(); err != nil {
 		slog.Error("twitch API client unavailable at startup; continuing", "err", err)
 	}
 
@@ -125,12 +168,12 @@ func Initialize() *twitch.Client {
 	// cmd/auth-bootstrap; cmd/tripbot calls mytwitch.LoadFromDB before this.
 	client = twitch.NewClient(c.Conf.BotUsername, mytwitch.IRCAuthToken())
 
-	// attach handlers
-	client.OnUserJoinMessage(UserJoin)
-	client.OnUserPartMessage(UserPart)
-	// client.OnUserNoticeMessage(chatbot.UserNotice)
-	client.OnWhisperMessage(GetWhisper)
-	client.OnPrivateMessage(PrivateMessage)
+	// attach this App's Twitch inbound adapters
+	client.OnUserJoinMessage(a.onTwitchJoin)
+	client.OnUserPartMessage(a.onTwitchPart)
+	// client.OnUserNoticeMessage(...)
+	client.OnWhisperMessage(a.onTwitchWhisper)
+	client.OnPrivateMessage(a.onTwitchMessage)
 
 	return client
 }
@@ -170,12 +213,11 @@ func Whisper(username, msg string) {
 
 // Chatter is designed to post a randomized message on a timer.
 // Right now it just posts random "help messages."
-// ctx is forward-compat plumbing — sayFn (the package-level chat-send
-// indirection) doesn't take ctx yet, so it's not propagated into the IRC
-// write.
-func Chatter(_ context.Context) {
+// ctx is forward-compat plumbing — a.IRC.Say doesn't take ctx yet, so it's
+// not propagated into the IRC write.
+func (a *App) Chatter(_ context.Context) {
 	// use twitch emote feature to add some color
-	sayFn("/me " + help())
+	a.IRC.Say("/me " + help())
 }
 
 func help() string {

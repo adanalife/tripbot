@@ -30,6 +30,7 @@ import (
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/adanalife/tripbot/pkg/video"
+	vlcClient "github.com/adanalife/tripbot/pkg/vlc-client"
 	_ "github.com/dimiro1/banner/autoload"
 	"github.com/gempir/go-twitch-irc/v4"
 	"github.com/getsentry/sentry-go"
@@ -74,30 +75,90 @@ func tracedJob(name string, fn func(context.Context)) func(context.Context) {
 // version is overridable at build time via -ldflags "-X main.version=...".
 var version = "dev"
 
-var client *twitch.Client
+// Tripbot holds the bot process's runtime dependencies and wiring. The boot
+// sequence (Run) and graceful shutdown are methods on it, so startup ordering
+// is explicit and the deps that used to be package-level globals are fields.
+type Tripbot struct {
+	version string
 
-// scheduler is the background cron scheduler, constructed in startCron and
-// shared by scheduleBackgroundJobs (job registration) and gracefulShutdown
-// (Stop). Also installed into chatbot via chatbot.SetScheduler so !shutdown
-// can stop it.
-var scheduler *background.Scheduler
+	// app is the chatbot App that owns the command registry and runs chat
+	// commands + inbound handlers. Constructed in NewTripbot; setUpTwitchClient
+	// wires its Twitch adapters to the IRC client (ConnectIRC), and eventsub /
+	// cron register its methods. Replaces the package-level defaultApp on the
+	// live path.
+	app *chatbot.App
 
-var telemetryShutdown telemetry.ShutdownFunc
+	// irc is the go-twitch-irc client, constructed by setUpTwitchClient
+	// (app.ConnectIRC) and shared by connectToTwitch, pollForTwitchToken
+	// and the token-refresh cron job (SetIRCToken).
+	irc *twitch.Client
 
-// discordSession is set by startDiscord when the Discord bot is enabled
-// for this env; gracefulShutdown calls Stop on it to deregister the
-// per-guild slash commands. Nil when Discord stays gated off.
-var discordSession *discord.Session
+	// scheduler is the background cron scheduler, constructed in startCron and
+	// shared by scheduleBackgroundJobs (job registration) and gracefulShutdown
+	// (Stop). Also assigned onto t.app.Cron so the !shutdown command can stop
+	// it.
+	scheduler *background.Scheduler
 
-// flagClient is the process-wide feature flag evaluator. Initialised to an
-// empty in-memory client so unknown keys evaluate to false during the brief
-// startup window before startFeatureFlags swaps in the Postgres-backed
-// client — same fail-closed contract as pkg/feature.
-var flagClient feature.FlagClient = feature.NewInMemoryClient(nil)
+	// srv is the admin-panel / auth / metrics HTTP server, constructed in
+	// NewTripbot. cmd installs runtime state through it (SetVersion,
+	// SetFlagClient, SetTwitchConnected) and starts it (Start, StartEventHub);
+	// the panel's handlers are methods on this instance.
+	srv *server.Server
 
-// main performs the various steps to get the bot running
+	// player owns "what's currently playing" — the single process-wide
+	// instance, constructed in NewTripbot. The 60s cron tick refreshes it
+	// (GetCurrentlyPlaying); findInitialVideo + gracefulShutdown read it; it's
+	// wrapped into the chatbot Video adapter (NewVideoAdapter) so commands read
+	// the same state, and it publishes video.changed to NATS for the admin panel.
+	player *video.Player
+
+	// sessions tracks who's currently in chat (the login map) + the
+	// lifetime-miles leaderboard — the single process-wide instance,
+	// constructed in NewTripbot. Cron jobs refresh it (UpdateSession /
+	// UpdateLeaderboard); boot hydrates it (InitLeaderboard); gracefulShutdown
+	// flushes it (Shutdown); assigned onto the chatbot App (Sessions adapter +
+	// UserSessions) and into discord so they read the same state. One *Sessions
+	// per chat provider is the multi-provider seam.
+	sessions *users.Sessions
+
+	telemetryShutdown telemetry.ShutdownFunc
+
+	// discordSession is set by startDiscord when the Discord bot is enabled
+	// for this env; gracefulShutdown calls Stop on it to deregister the
+	// per-guild slash commands. Nil when Discord stays gated off.
+	discordSession *discord.Session
+
+	// flagClient is the process-wide feature flag evaluator. Initialised to an
+	// empty in-memory client so unknown keys evaluate to false during the brief
+	// startup window before startFeatureFlags swaps in the Postgres-backed
+	// client — same fail-closed contract as pkg/feature.
+	flagClient feature.FlagClient
+}
+
+// NewTripbot constructs a Tripbot with default runtime state. Dependencies
+// that need I/O or ordering (the IRC client, scheduler, Discord session,
+// Postgres-backed flag client) are filled in by the boot-sequence methods.
+func NewTripbot(version string) *Tripbot {
+	return &Tripbot{
+		version: version,
+		app:     chatbot.New(),
+		srv:     server.New(),
+		player: video.NewPlayer(
+			onscreensClient.New(c.Conf.OnscreensServerHost, natsclient.DefaultPublisher(), c.Conf.Environment),
+			vlcClient.New(c.Conf.VlcServerHost),
+		),
+		sessions:   users.NewDefault(),
+		flagClient: feature.NewInMemoryClient(nil),
+	}
+}
+
 func main() {
-	slog.Info("tripbot starting", "version", version)
+	NewTripbot(version).Run()
+}
+
+// Run performs the various steps to get the bot running.
+func (t *Tripbot) Run() {
+	slog.Info("tripbot starting", "version", t.version)
 	createRandomSeed()
 	// shutdownCtx is canceled on SIGINT/SIGTERM; the HTTP server uses it
 	// to trigger a graceful shutdown so in-flight requests aren't cut.
@@ -105,26 +166,30 @@ func main() {
 	// the app cleanup off the same signals.
 	shutdownCtx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stopSignals()
-	listenForShutdown()
-	initializeTelemetry()
-	initializeErrorLogger()
-	server.SetVersion(version)
-	startHttpServer(shutdownCtx)
-	findInitialVideo()
-	users.InitLeaderboard(context.Background())
-	startCron()
-	startFeatureFlags(shutdownCtx)
-	loadTwitchToken(shutdownCtx)           // must precede chatbot.Initialize — provides the IRC token
-	refreshTokensIfNearExpiry(shutdownCtx) // closes the restart-desync gap with the hourly cron
-	setUpTwitchClient()                    // required for the below
-	updateSubscribers()
-	getCurrentUsers()
-	startEventSub(shutdownCtx)
-	startNATS(shutdownCtx)
-	server.StartEventHub(shutdownCtx) // after startNATS: the hub subscribes to the live NATS conn
-	startDiscord(shutdownCtx)
-	startSilentDisconnectWatchdog(shutdownCtx)
-	connectToTwitch()
+	t.listenForShutdown()
+	t.initializeTelemetry()
+	t.initializeErrorLogger()
+	t.srv.SetVersion(t.version)
+	t.startHttpServer(shutdownCtx)
+	t.findInitialVideo()
+	t.app.Video = chatbot.NewVideoAdapter(t.player)         // commands read the same Player the cron refreshes
+	t.app.Sessions = chatbot.NewSessionsAdapter(t.sessions) // command-time queries
+	t.app.UserSessions = t.sessions                         // inbound IRC handlers + access checks read the same session state
+	t.sessions.InitLeaderboard(context.Background())
+	t.startCron()
+	t.startFeatureFlags(shutdownCtx)
+	t.loadTwitchToken(shutdownCtx)           // must precede setUpTwitchClient — provides the IRC token
+	t.refreshTokensIfNearExpiry(shutdownCtx) // closes the restart-desync gap with the hourly cron
+	t.setUpTwitchClient()                    // required for the below
+	t.updateSubscribers()
+	t.getCurrentUsers()
+	t.startEventSub(shutdownCtx)
+	t.startNATS(shutdownCtx)
+	t.srv.StartEventHub(shutdownCtx)       // after startNATS: the hub subscribes to the live NATS conn
+	t.player.EmitCurrentVideo(shutdownCtx) // after the hub subscribes: seed its now-playing cache (no NATS replay)
+	t.startDiscord(shutdownCtx)
+	t.startSilentDisconnectWatchdog(shutdownCtx)
+	t.connectToTwitch()
 }
 
 // featureFlagRefreshInterval is how often the Postgres-backed flag client
@@ -138,7 +203,7 @@ const featureFlagRefreshInterval = 30 * time.Second
 // empty in-memory client in place — every flag evaluates to its default
 // (false) until the next restart loads cleanly. Mirrors the loadTwitchToken
 // "stay up with limited functionality" pattern.
-func startFeatureFlags(ctx context.Context) {
+func (t *Tripbot) startFeatureFlags(ctx context.Context) {
 	fc, err := feature.NewPostgresClient(ctx, database.GormDB(), featureFlagRefreshInterval)
 	if err != nil {
 		slog.WarnContext(ctx, "feature flag client init failed; flags will default to off",
@@ -146,9 +211,9 @@ func startFeatureFlags(ctx context.Context) {
 			"err", err)
 		return
 	}
-	flagClient = fc
-	chatbot.SetFlagClient(fc)
-	server.SetFlagClient(fc)
+	t.flagClient = fc
+	t.app.Flags = fc // command-time flag gating reads the same Postgres-backed client
+	t.srv.SetFlagClient(fc)
 	go fc.Start(ctx)
 }
 
@@ -163,7 +228,7 @@ func startFeatureFlags(ctx context.Context) {
 // binds its ordered consumers. It no-ops when JetStream is unavailable (NATS off
 // or a server without JetStream) — the hub then falls back to live-only core
 // subscriptions, so a stream-declare failure must not be fatal.
-func startNATS(ctx context.Context) {
+func (t *Tripbot) startNATS(ctx context.Context) {
 	natsclient.Connect(c.Conf.NatsURL, "tripbot")
 	if err := eventbus.EnsureStreams(ctx, natsclient.JetStream(), c.Conf.Environment); err != nil {
 		slog.WarnContext(ctx, "jetstream stream setup failed; live console will run without durable history",
@@ -176,7 +241,7 @@ func startNATS(ctx context.Context) {
 // API shows the channel offline, and force-restarts the stream after
 // 3 consecutive minute-spaced misalignments. First seen in prod on
 // 2026-05-27, ~30h into an OBS session.
-func startSilentDisconnectWatchdog(ctx context.Context) {
+func (t *Tripbot) startSilentDisconnectWatchdog(ctx context.Context) {
 	go watchdog.WatchSilentDisconnect(ctx, watchdog.DefaultWatchdogDeps(), 60*time.Second, 3, 10*time.Minute)
 }
 
@@ -185,16 +250,16 @@ func startSilentDisconnectWatchdog(ctx context.Context) {
 // flag is on. Every failure path here logs and returns so it can't block
 // (or crash) tripbot startup — Discord is additive to the core IRC /
 // EventSub paths.
-func startDiscord(ctx context.Context) {
+func (t *Tripbot) startDiscord(ctx context.Context) {
 	if ok, reason := discord.ShouldStart(c.Conf); !ok {
 		slog.InfoContext(ctx, "discord disabled", "reason", reason)
 		return
 	}
-	if !flagClient.Bool(ctx, discord.FlagKey, feature.EvalContext{Env: c.Conf.Environment}) {
+	if !t.flagClient.Bool(ctx, discord.FlagKey, feature.EvalContext{Env: c.Conf.Environment}) {
 		slog.InfoContext(ctx, "discord disabled by feature flag", "flag", discord.FlagKey)
 		return
 	}
-	session, err := discord.New(c.Conf.DiscordBotToken, c.Conf.DiscordGuildID)
+	session, err := discord.New(c.Conf.DiscordBotToken, c.Conf.DiscordGuildID, t.sessions)
 	if err != nil {
 		slog.ErrorContext(ctx, "discord init failed", "err", err)
 		return
@@ -203,14 +268,14 @@ func startDiscord(ctx context.Context) {
 		slog.ErrorContext(ctx, "discord start failed", "err", err)
 		return
 	}
-	discordSession = session
+	t.discordSession = session
 }
 
 // startEventSub kicks off the EventSub WebSocket listener in a goroutine
 // so real-time follow/subscribe events fire chat shouts without a 5min
 // polling delay. Skipped (logged, not fatal) when the broadcaster row
 // isn't loaded — the bot still runs without real-time alerts.
-func startEventSub(ctx context.Context) {
+func (t *Tripbot) startEventSub(ctx context.Context) {
 	token := mytwitch.BroadcasterUserAccessToken()
 	if token == "" {
 		slog.WarnContext(ctx, "skipping eventsub: no broadcaster oauth_tokens row; bootstrap with `task tripbot:auth:bootstrap:broadcaster`",
@@ -218,7 +283,7 @@ func startEventSub(ctx context.Context) {
 			"reauth_url", mytwitch.AuthInitURL("broadcaster"))
 		return
 	}
-	if mytwitch.ChannelID == "" {
+	if mytwitch.ChannelID() == "" {
 		// getChannelID is lazy on first call; calling GetSubscribers /
 		// GetFollowerCount typically populates it. updateSubscribers()
 		// above already ran, so this is belt-and-suspenders.
@@ -229,10 +294,10 @@ func startEventSub(ctx context.Context) {
 		err := eventsub.Run(ctx, eventsub.Config{
 			ClientID:          mytwitch.ClientID,
 			BroadcasterToken:  token,
-			BroadcasterUserID: mytwitch.ChannelID,
+			BroadcasterUserID: mytwitch.ChannelID(),
 		}, eventsub.Handlers{
-			OnFollow:    chatbot.AnnounceNewFollower,
-			OnSubscribe: chatbot.AnnounceSubscriber,
+			OnFollow:    t.app.AnnounceNewFollower,
+			OnSubscribe: t.app.AnnounceSubscriber,
 		})
 		if err != nil && !errors.Is(err, context.Canceled) {
 			slog.ErrorContext(ctx, "eventsub run terminated", "err", err)
@@ -247,28 +312,28 @@ func createRandomSeed() {
 }
 
 // listenForShutdown creates a background job that listens for a graceful shutdown request
-func listenForShutdown() {
+func (t *Tripbot) listenForShutdown() {
 	helpers.WritePidFile(c.Conf.TripbotPidFile)
 	// start the graceful shutdown listener
-	go gracefulShutdown()
+	go t.gracefulShutdown()
 }
 
 // initializeTelemetry brings up OpenTelemetry providers (traces, metrics,
 // logs). No-ops cleanly if OTEL_SDK_DISABLED is set or no OTLP endpoint
 // is configured — see pkg/telemetry.
-func initializeTelemetry() {
+func (t *Tripbot) initializeTelemetry() {
 	ctx := context.Background()
-	shutdown, err := telemetry.Init(ctx, "tripbot", version)
+	shutdown, err := telemetry.Init(ctx, "tripbot", t.version)
 	if err != nil {
 		// telemetry init failure shouldn't crash the bot — log and continue.
 		slog.WarnContext(ctx, "telemetry init failed", "err", err)
 	}
-	telemetryShutdown = shutdown
+	t.telemetryShutdown = shutdown
 }
 
 // initializeErrorLogger makes sure the logger is configured
-func initializeErrorLogger() {
-	terrors.Initialize(c.Conf, version)
+func (t *Tripbot) initializeErrorLogger() {
+	terrors.Initialize(c.Conf, t.version)
 }
 
 // startHttpServer starts a webserver, which is
@@ -276,16 +341,16 @@ func initializeErrorLogger() {
 // honored by the server for graceful shutdown — when it's canceled,
 // the server stops accepting new connections and drains in-flight
 // requests up to its shutdown timeout.
-func startHttpServer(ctx context.Context) {
+func (t *Tripbot) startHttpServer(ctx context.Context) {
 	// start the HTTP server
-	go server.Start(ctx)
+	go t.srv.Start(ctx)
 }
 
 // findInitialVideo will determine the vido that is currently-playing
 // we want to run this early, otherwise it will be unset until the first cron job runs
-func findInitialVideo() {
-	video.GetCurrentlyPlaying(context.Background())
-	v := video.CurrentlyPlaying()
+func (t *Tripbot) findInitialVideo() {
+	t.player.GetCurrentlyPlaying(context.Background())
+	v := t.player.Current()
 	_, err := video.LoadOrCreate(context.Background(), v.String())
 	if err != nil {
 		slog.Error("error loading initial video, is there a video playing?", "err", err)
@@ -293,17 +358,18 @@ func findInitialVideo() {
 }
 
 // startCron starts the background workers
-func startCron() {
+func (t *Tripbot) startCron() {
 	s, err := background.New()
 	if err != nil {
 		slog.Error("error creating background scheduler", "err", err)
 		os.Exit(1)
 	}
-	scheduler = s
-	scheduler.Start()
-	// let !shutdown stop the same scheduler instance
-	chatbot.SetScheduler(scheduler)
-	scheduleBackgroundJobs()
+	t.scheduler = s
+	t.scheduler.Start()
+	// let !shutdown stop the same scheduler instance (*background.Scheduler
+	// satisfies chatbot.Cron directly)
+	t.app.Cron = t.scheduler
+	t.scheduleBackgroundJobs()
 }
 
 // loadTwitchToken pulls the bot's OAuth row from the oauth_tokens table.
@@ -316,14 +382,14 @@ func startCron() {
 // no longer gates on Twitch) so the admin panel + /auth/init are reachable
 // to re-auth; "not in chat" is surfaced via the admin panel + the
 // tripbot_twitch_connected gauge instead.
-func loadTwitchToken(ctx context.Context) {
+func (t *Tripbot) loadTwitchToken(ctx context.Context) {
 	if err := mytwitch.LoadFromDB(); err != nil {
 		slog.WarnContext(ctx, "no usable Twitch token at boot; starting without a chat connection and polling",
 			"login_as", c.Conf.BotUsername,
 			"fix", "task tripbot:auth:bootstrap",
 			"reauth_url", mytwitch.AuthInitURL("bot"),
 			"err", err)
-		go pollForTwitchToken(ctx)
+		go t.pollForTwitchToken(ctx)
 	}
 }
 
@@ -331,7 +397,7 @@ func loadTwitchToken(ctx context.Context) {
 // available, then syncs the freshly-loaded IRC token into the client so
 // connectToTwitch's reconnect loop authenticates on its next attempt. Started
 // only when the token was missing at boot; stops on shutdown.
-func pollForTwitchToken(ctx context.Context) {
+func (t *Tripbot) pollForTwitchToken(ctx context.Context) {
 	// Check often so the token is picked up promptly once it lands, but log
 	// the "still waiting" warning at a much slower cadence — boot already
 	// logged the reauth link once, so re-surfacing it every 15s is just noise.
@@ -361,9 +427,9 @@ func pollForTwitchToken(ctx context.Context) {
 			slog.InfoContext(ctx, "Twitch token loaded; bot will connect on next attempt")
 			// Push the freshly-loaded token into the (already-constructed)
 			// IRC client so the connect loop's next try uses it instead of
-			// the empty token captured at chatbot.Initialize.
-			if tok := mytwitch.IRCAuthToken(); tok != "" && client != nil {
-				client.SetIRCToken(tok)
+			// the empty token captured at ConnectIRC.
+			if tok := mytwitch.IRCAuthToken(); tok != "" && t.irc != nil {
+				t.irc.SetIRCToken(tok)
 			}
 			return
 		}
@@ -377,42 +443,42 @@ func pollForTwitchToken(ctx context.Context) {
 // in-memory token stale until the cron catches up — up to an hour. refreshOne
 // early-returns when the stored token is healthy, so this is a no-op in the
 // common case.
-func refreshTokensIfNearExpiry(ctx context.Context) {
+func (t *Tripbot) refreshTokensIfNearExpiry(ctx context.Context) {
 	mytwitch.RefreshUserAccessToken(ctx)
 }
 
 // setUpTwitchClient sets up the Twitch client,
 // used by many bot features
-func setUpTwitchClient() {
-	// set up the Twitch client
-	client = chatbot.Initialize()
+func (t *Tripbot) setUpTwitchClient() {
+	// build the Twitch IRC client and wire the App's inbound adapters to it
+	t.irc = t.app.ConnectIRC()
 }
 
 // updateSubscribers gets the list of current subscribers
-func updateSubscribers() {
+func (t *Tripbot) updateSubscribers() {
 	// update subscribers list
 	mytwitch.GetSubscribers(context.Background())
 }
 
 // getCurrentUsers gets the users watching the stream
-func getCurrentUsers() {
+func (t *Tripbot) getCurrentUsers() {
 	// fetch initial session
-	users.UpdateSession(context.Background())
-	users.PrintCurrentSession(context.Background())
+	t.sessions.UpdateSession(context.Background())
+	t.sessions.PrintCurrentSession(context.Background())
 }
 
 // connectToTwitch joins Twitch chat and starts listening
-func connectToTwitch() {
-	client.Join(c.Conf.ChannelName)
+func (t *Tripbot) connectToTwitch() {
+	t.irc.Join(c.Conf.ChannelName)
 	slog.Info("joined channel", "channel", c.Conf.ChannelName, "url", fmt.Sprintf("https://twitch.tv/%s", c.Conf.ChannelName))
 
 	// Mark the bot connected to chat once the IRC connection is established.
 	// This drives the admin-panel status row + the tripbot_twitch_connected
 	// gauge — it does NOT gate /health/ready, which stays 200 so the pod keeps
 	// serving the admin panel + /auth/* even while the bot is offline.
-	client.OnConnect(func() {
+	t.irc.OnConnect(func() {
 		slog.Info("connected to Twitch chat")
-		server.SetTwitchConnected(true)
+		t.srv.SetTwitchConnected(true)
 	})
 
 	// actually connect to Twitch
@@ -422,8 +488,8 @@ func connectToTwitch() {
 		// Connect blocks while connected and returns when the connection
 		// drops; mark not-in-chat so the admin panel + gauge reflect the gap
 		// until the next OnConnect fires.
-		err := client.Connect()
-		server.SetTwitchConnected(false)
+		err := t.irc.Connect()
+		t.srv.SetTwitchConnected(false)
 		if err != nil {
 			slog.Error("unable to connect to twitch", "err", err)
 			if errors.Is(err, twitch.ErrLoginAuthenticationFailed) {
@@ -435,7 +501,7 @@ func connectToTwitch() {
 				// for the next Connect attempt.
 				mytwitch.Reauth(context.Background(), "bot")
 				if tok := mytwitch.IRCAuthToken(); tok != "" {
-					client.SetIRCToken(tok)
+					t.irc.SetIRCToken(tok)
 				} else {
 					// Reauth couldn't produce a token (refresh_token revoked and
 					// no fresh row in the DB yet). Surface the re-bootstrap link
@@ -449,7 +515,7 @@ func connectToTwitch() {
 }
 
 // gracefulShutdown catches CTRL-C and cleans up
-func gracefulShutdown() {
+func (t *Tripbot) gracefulShutdown() {
 	ctrlC := make(chan os.Signal, 1)
 	signal.Notify(ctrlC, os.Interrupt, syscall.SIGTERM)
 
@@ -460,24 +526,24 @@ func gracefulShutdown() {
 	// anything below this probably won't be executed
 	// try and use !shutdown instead
 	//TODO: print different message if CurrentlyPlaying is ""
-	slog.Info("last played video", "file", video.CurrentlyPlaying().File())
-	if discordSession != nil {
-		if err := discordSession.Stop(); err != nil {
+	slog.Info("last played video", "file", t.player.Current().File())
+	if t.discordSession != nil {
+		if err := t.discordSession.Stop(); err != nil {
 			slog.Error("discord stop failed", "err", err)
 		}
 	}
-	users.Shutdown(context.Background())
+	t.sessions.Shutdown(context.Background())
 	err := database.Connection().Close()
 	if err != nil {
 		slog.Error("error closing DB connection", "err", err)
 	}
-	if err := scheduler.Stop(); err != nil {
+	if err := t.scheduler.Stop(); err != nil {
 		slog.Error("error shutting down gocron scheduler", "err", err)
 	}
 	sentry.Flush(time.Second * 5)
-	if telemetryShutdown != nil {
+	if t.telemetryShutdown != nil {
 		flushCtx, cancel := context.WithTimeout(context.Background(), time.Second*5)
-		if err := telemetryShutdown(flushCtx); err != nil {
+		if err := t.telemetryShutdown(flushCtx); err != nil {
 			slog.ErrorContext(flushCtx, "telemetry shutdown failed", "err", err)
 		}
 		cancel()
@@ -488,31 +554,31 @@ func gracefulShutdown() {
 // scheduleBackgroundJobs schedules the various background jobs.
 // Lives in this package (not pkg/background) to avoid circular deps with
 // the job-target packages.
-func scheduleBackgroundJobs() {
-	onscreensCli := onscreensClient.New(c.Conf.OnscreensServerHost)
-	addJob(60*time.Second, "video.GetCurrentlyPlaying", video.GetCurrentlyPlaying)
-	addJob(61*time.Second, "users.UpdateSession", users.UpdateSession)
-	addJob(62*time.Second, "users.UpdateLeaderboard", users.UpdateLeaderboard)
-	addJob(5*time.Minute, "onscreens.ShowGuessLeaderboard", onscreensCli.ShowGuessLeaderboard)
-	addJob(5*time.Minute, "users.PrintCurrentSession", users.PrintCurrentSession)
-	addJob(5*time.Minute, "twitch.GetSubscribers", mytwitch.GetSubscribers)
-	addJob(5*time.Minute, "twitch.GetFollowerCount", mytwitch.GetFollowerCount)
-	addJob(1*time.Hour, "twitch.RefreshUserAccessToken", func(ctx context.Context) {
+func (t *Tripbot) scheduleBackgroundJobs() {
+	onscreensCli := onscreensClient.New(c.Conf.OnscreensServerHost, natsclient.DefaultPublisher(), c.Conf.Environment)
+	t.addJob(60*time.Second, "video.GetCurrentlyPlaying", t.player.GetCurrentlyPlaying)
+	t.addJob(61*time.Second, "users.UpdateSession", t.sessions.UpdateSession)
+	t.addJob(62*time.Second, "users.UpdateLeaderboard", t.sessions.UpdateLeaderboard)
+	t.addJob(5*time.Minute, "onscreens.ShowGuessLeaderboard", onscreensCli.ShowGuessLeaderboard)
+	t.addJob(5*time.Minute, "users.PrintCurrentSession", t.sessions.PrintCurrentSession)
+	t.addJob(5*time.Minute, "twitch.GetSubscribers", mytwitch.GetSubscribers)
+	t.addJob(5*time.Minute, "twitch.GetFollowerCount", mytwitch.GetFollowerCount)
+	t.addJob(1*time.Hour, "twitch.RefreshUserAccessToken", func(ctx context.Context) {
 		mytwitch.RefreshUserAccessToken(ctx)
 		// Keep the IRC client's stored token in sync with the rotated credentials.
 		// go-twitch-irc captures the token at construction; without this, any
 		// reconnect after the first rotation replays the original boot-time token.
 		if tok := mytwitch.IRCAuthToken(); tok != "" {
-			client.SetIRCToken(tok)
+			t.irc.SetIRCToken(tok)
 		}
 	})
-	addJob(2*time.Hour+57*time.Minute+30*time.Second, "chatbot.Chatter", chatbot.Chatter)
+	t.addJob(2*time.Hour+57*time.Minute+30*time.Second, "chatbot.Chatter", t.app.Chatter)
 }
 
 // addJob registers a gocron job at the given interval, wrapping fn with
 // tracedJob so each tick opens a span and centralising the error logging.
-func addJob(interval time.Duration, name string, fn func(context.Context)) {
-	_, err := scheduler.NewJob(
+func (t *Tripbot) addJob(interval time.Duration, name string, fn func(context.Context)) {
+	_, err := t.scheduler.NewJob(
 		gocron.DurationJob(interval),
 		gocron.NewTask(tracedJob(name, fn)),
 	)

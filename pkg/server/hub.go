@@ -76,6 +76,13 @@ type Hub struct {
 	// mapTrail is the recent GPS breadcrumb trail (bounded by mapTrailSize),
 	// appended on each video.changed that carries a real fix.
 	mapTrail []mapPoint
+
+	// nowPlaying is the last video.changed seen, cached so the initial page
+	// render can show "now playing" from NATS instead of reaching into
+	// pkg/video in-process. nowPlayingKnown gates it (nothing seen yet → the
+	// panel hides the card). Populated by handleVideoChanged.
+	nowPlaying      eventbus.VideoChanged
+	nowPlayingKnown bool
 }
 
 // NewHub returns an unstarted hub. Safe to construct at package-init time — it
@@ -234,15 +241,16 @@ func (h *Hub) updateViewers(count int) string {
 	return dir
 }
 
-// handleVideoChanged forwards a video switch to the panel's "now playing"
-// card. There's no ring to keep — the page renders the current video on load
-// and this just refreshes it; the hub holds no video state.
+// handleVideoChanged caches the switch as the current "now playing" (so the
+// initial page render reads it from here instead of pkg/video in-process) and
+// forwards it to connected panels' "now playing" card.
 func (h *Hub) handleVideoChanged(ctx context.Context, data []byte) {
 	var ev eventbus.VideoChanged
 	if err := json.Unmarshal(data, &ev); err != nil {
 		slog.ErrorContext(ctx, "live-console hub: bad video payload", "err", err)
 		return
 	}
+	h.setNowPlaying(ev)
 	h.broadcast(sseEvent{Name: "video", Data: renderVideoLine(ev)})
 
 	// Drop a breadcrumb for the live map when the clip has a real GPS fix.
@@ -251,6 +259,22 @@ func (h *Hub) handleVideoChanged(ctx context.Context, data []byte) {
 		h.appendMapPoint(p)
 		h.broadcast(sseEvent{Name: "map", Data: renderMapPoint(p)})
 	}
+}
+
+// setNowPlaying caches the latest video.changed as the current clip.
+func (h *Hub) setNowPlaying(ev eventbus.VideoChanged) {
+	h.mu.Lock()
+	h.nowPlaying = ev
+	h.nowPlayingKnown = true
+	h.mu.Unlock()
+}
+
+// snapshotNowPlaying returns the last video.changed seen and whether one has
+// arrived yet, for the initial page render.
+func (h *Hub) snapshotNowPlaying() (eventbus.VideoChanged, bool) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.nowPlaying, h.nowPlayingKnown
 }
 
 // hasFix reports whether a video.changed carries usable coordinates — flagged
@@ -285,11 +309,11 @@ func renderMapPoint(p mapPoint) string {
 	return fmt.Sprintf(`<span data-lat="%.6f" data-lng="%.6f"></span>`, p.Lat, p.Lng)
 }
 
-// mapTrailJSON returns the process hub's breadcrumb trail as a JSON
+// mapTrailJSON returns the server hub's breadcrumb trail as a JSON
 // [[lat,lng],…] string for the page's map data attribute (empty "[]" when
 // there's no trail yet).
-func mapTrailJSON() string {
-	trail := eventHub.snapshotMapTrail()
+func (s *Server) mapTrailJSON() string {
+	trail := s.hub.snapshotMapTrail()
 	pts := make([][2]float64, len(trail))
 	for i, p := range trail {
 		pts[i] = [2]float64{p.Lat, p.Lng}
@@ -384,7 +408,7 @@ func (h *Hub) closeAll() {
 // chatLineTmpl renders one chat row as a single line (no newlines — SSE data
 // must not contain bare newlines). html/template escapes username + text.
 var chatLineTmpl = template.Must(template.New("chatline").Parse(
-	`<div class="chat-line"><time class="ct-ts" datetime="{{.At.Format "2006-01-02T15:04:05Z07:00"}}">{{.At.Format "15:04"}}</time> <span class="cu">{{.Username}}</span> <span class="ct">{{.Text}}</span></div>`))
+	`<div class="chat-line"><time class="ct-ts" datetime="{{.At.Format "2006-01-02T15:04:05Z07:00"}}">{{.At.Format "15:04"}}</time> <span class="cu" hx-get="/admin/user/{{.Username}}" hx-target="#user-popover" hx-swap="innerHTML" hx-trigger="click">{{.Username}}</span> <span class="ct">{{.Text}}</span></div>`))
 
 func renderChatLine(line ChatLine) string {
 	var sb strings.Builder
@@ -440,10 +464,9 @@ func renderVideoLine(ev eventbus.VideoChanged) string {
 	return sb.String()
 }
 
-// eventHub is the process-wide live-console hub. Constructed at package init
+// Server.hub is the process-wide live-console hub. Constructed in New()
 // (cheap, no I/O); its NATS subscription starts later via StartEventHub.
-var eventHub = NewHub()
 
 // StartEventHub begins the hub's NATS subscription. Call from main() AFTER
 // natsclient.Connect — at server.Start time NATS isn't connected yet.
-func StartEventHub(ctx context.Context) { eventHub.Start(ctx) }
+func (s *Server) StartEventHub(ctx context.Context) { s.hub.Start(ctx) }

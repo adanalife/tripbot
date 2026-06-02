@@ -4,6 +4,8 @@ import (
 	"log"
 	"log/slog"
 	"os"
+	"path/filepath"
+	"testing"
 
 	"github.com/joho/godotenv"
 )
@@ -22,8 +24,18 @@ func SetEnvironment() {
 
 	envVar, ok := os.LookupEnv("ENV")
 	if !ok {
-		envVar = "development"
-		slog.Warn("ENV not set, defaulting to development")
+		// Host-side `go test ./pkg/...` runs with ENV unset; default those to
+		// testing so the repo-root .env.testing (located via resolveFromRepoRoot
+		// below) loads instead of the absent .env.development — the same env
+		// `task test` sets explicitly. testing.Testing() is true only in test
+		// binaries, so `go run` / production are unaffected. Everything else
+		// defaults to development.
+		if testing.Testing() {
+			envVar = "testing"
+		} else {
+			envVar = "development"
+			slog.Warn("ENV not set, defaulting to development")
+		}
 		// envconfig.Process reads from the process env; the defaulted
 		// value has to be visible to the required:"true" field on
 		// TripbotConfig.Environment / VlcServerConfig.Environment.
@@ -45,7 +57,12 @@ func SetEnvironment() {
 	}
 
 	// load ENV vars from .env file
-	err = godotenv.Load(".env." + env)
+	//
+	// resolveFromRepoRoot lets bare `go test ./pkg/foo` find the repo-root
+	// .env.testing: a package's test binary runs from its own dir, so a plain
+	// cwd-relative Load can't see the file. Walking up to go.mod makes the
+	// blessed `task test` paths and host-side `go test` behave identically.
+	err = godotenv.Load(resolveFromRepoRoot(".env." + env))
 
 	// In cluster contexts (staging/production) the .env file is not shipped —
 	// env values come from envconfig instead — so the missing-file error is
@@ -60,5 +77,31 @@ func SetEnvironment() {
 	// doesn't overwrite existing values, so shell-env and .env.<env> stay
 	// authoritative. Silent no-op in containers without this file present
 	// (e.g. the cluster pod).
-	_ = godotenv.Load("infra/docker/env.docker")
+	_ = godotenv.Load(resolveFromRepoRoot("infra/docker/env.docker"))
+}
+
+// resolveFromRepoRoot turns a repo-relative path into an absolute one anchored
+// at the module root (the nearest ancestor dir containing go.mod), so dotenv
+// files resolve regardless of the process's working directory. This is what
+// makes host-side `go test ./pkg/...` — whose test binaries run from each
+// package's own dir — load the same .env.testing that `task test` does.
+//
+// If no go.mod is found above cwd (e.g. a deployed binary in a container where
+// the dotenv files don't exist anyway), the bare relative path is returned and
+// godotenv.Load no-ops on the missing file, preserving the prior behavior.
+func resolveFromRepoRoot(rel string) string {
+	dir, err := os.Getwd()
+	if err != nil {
+		return rel
+	}
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return filepath.Join(dir, rel)
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return rel // reached filesystem root without finding go.mod
+		}
+		dir = parent
+	}
 }

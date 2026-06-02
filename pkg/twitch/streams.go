@@ -15,11 +15,11 @@ import (
 //
 // Authorizes against the app-access-token — GetStreams is public and does
 // not need a user token.
-func IsChannelLive(ctx context.Context, login string) (bool, error) {
+func (cl *API) IsChannelLive(ctx context.Context, login string) (bool, error) {
 	if login == "" {
 		return false, fmt.Errorf("IsChannelLive: empty login")
 	}
-	client, err := Client()
+	client, err := cl.Client()
 	if err != nil {
 		return false, fmt.Errorf("twitch API client unavailable: %w", err)
 	}
@@ -29,7 +29,7 @@ func IsChannelLive(ctx context.Context, login string) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("GetStreams: %w", err)
 	}
-	if checkHelixResp(ctx, "GetStreams", "", &resp.ResponseCommon) {
+	if cl.checkHelixResp(ctx, "GetStreams", "", &resp.ResponseCommon) {
 		return false, fmt.Errorf("GetStreams returned %d", resp.StatusCode)
 	}
 	live := len(resp.Data.Streams) > 0

@@ -11,6 +11,7 @@ import (
 
 	"github.com/adanalife/tripbot/pkg/database"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
+	"github.com/adanalife/tripbot/pkg/geo"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"gorm.io/gorm"
 )
@@ -108,10 +109,10 @@ func (v Video) save(ctx context.Context) error {
 
 	if !flagged {
 		// figure out which state we're in
-		state, err = helpers.StateFromCoords(lat, lng)
-		// ErrMapsDisabled is the expected steady-state when no Maps key
+		state, err = geo.State(lat, lng)
+		// ErrDisabled is the expected steady-state when no Maps key
 		// is configured; don't spam Sentry on every video import.
-		if err != nil && !errors.Is(err, helpers.ErrMapsDisabled) {
+		if err != nil && !errors.Is(err, geo.ErrDisabled) {
 			slog.ErrorContext(ctx, "error geocoding coords", "err", err)
 		}
 	}
