@@ -12,6 +12,11 @@ import (
 	ve "github.com/adanalife/tripbot/pkg/vlc-events"
 )
 
+// commandHost is handed to New for the command tests. The four commands are
+// NATS-only (no HTTP after the peel), so this host is never dialed — it just
+// satisfies New's signature.
+const commandHost = "vlc.invalid:0"
+
 // recordingPublisher captures every publish so tests can assert on the
 // subject + payload. Goroutine-safe. Satisfies natsclient.Publisher.
 type recordingPublisher struct {
@@ -32,9 +37,8 @@ func (r *recordingPublisher) Publish(_ context.Context, subject string, payload 
 	r.Publishes = append(r.Publishes, recordedPublish{Subject: subject, Payload: cp})
 }
 
-// okServer stands up an httptest.Server that 200s everything, so the client's
-// HTTP path succeeds (HTTP still fires during the mirror phase) and tests can
-// focus on the NATS mirror.
+// okServer stands up an httptest.Server that 200s everything, for the one
+// remaining HTTP path — CurrentlyPlaying (a read).
 func okServer(t *testing.T) string {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -46,7 +50,7 @@ func okServer(t *testing.T) string {
 
 func TestPlayRandom_PublishesToNATS(t *testing.T) {
 	rec := &recordingPublisher{}
-	c := New(okServer(t), rec, "stage")
+	c := New(commandHost, rec, "stage")
 
 	if err := c.PlayRandom(context.Background()); err != nil {
 		t.Fatalf("PlayRandom: %v", err)
@@ -69,7 +73,7 @@ func TestPlayRandom_PublishesToNATS(t *testing.T) {
 
 func TestPlayFileInPlaylist_PublishesFile(t *testing.T) {
 	rec := &recordingPublisher{}
-	c := New(okServer(t), rec, "prod")
+	c := New(commandHost, rec, "prod")
 
 	if err := c.PlayFileInPlaylist(context.Background(), "clip.mp4"); err != nil {
 		t.Fatalf("PlayFileInPlaylist: %v", err)
@@ -92,7 +96,6 @@ func TestPlayFileInPlaylist_PublishesFile(t *testing.T) {
 }
 
 func TestSkipAndBack_PublishN(t *testing.T) {
-	host := okServer(t)
 	cases := []struct {
 		name    string
 		call    func(c *Client) error
@@ -104,7 +107,7 @@ func TestSkipAndBack_PublishN(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			rec := &recordingPublisher{}
-			c := New(host, rec, "stage")
+			c := New(commandHost, rec, "stage")
 			if err := tc.call(c); err != nil {
 				t.Fatalf("call: %v", err)
 			}
@@ -143,11 +146,10 @@ func TestCurrentlyPlaying_DoesNotPublish(t *testing.T) {
 
 // TestTopicReflectsEnv covers subject scoping per env.
 func TestTopicReflectsEnv(t *testing.T) {
-	host := okServer(t)
 	for _, env := range []string{"prod", "development", "test"} {
 		t.Run(env, func(t *testing.T) {
 			rec := &recordingPublisher{}
-			c := New(host, rec, env)
+			c := New(commandHost, rec, env)
 			if err := c.Skip(context.Background(), 1); err != nil {
 				t.Fatalf("Skip: %v", err)
 			}
@@ -159,10 +161,10 @@ func TestTopicReflectsEnv(t *testing.T) {
 	}
 }
 
-// TestNilPublisher_NoPublishNoPanic asserts a nil publisher disables the
-// mirror without panicking (the HTTP-only path used by test rigs).
+// TestNilPublisher_NoPublishNoPanic asserts a nil publisher disables
+// publishing without panicking.
 func TestNilPublisher_NoPublishNoPanic(t *testing.T) {
-	c := New(okServer(t), nil, "test")
+	c := New(commandHost, nil, "test")
 	if err := c.Skip(context.Background(), 1); err != nil {
 		t.Fatalf("Skip: %v", err)
 	}
