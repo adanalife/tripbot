@@ -2,15 +2,15 @@ package chatbot
 
 import (
 	"context"
-	"sync"
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/video"
 )
 
 // Video is the subset of the pkg/video surface that chatbot commands depend
-// on. Tests inject a fake; production uses the realVideo adapter wired in
-// defaultApp. Mirrors the Onscreens/VLC injection pattern.
+// on. Tests inject a fake; production uses the realVideo adapter, which
+// cmd/tripbot builds around the process-wide *video.Player via NewVideoAdapter.
+// Mirrors the Onscreens/VLC injection pattern.
 type Video interface {
 	// Current returns the video the system believes is currently playing,
 	// without making any I/O calls.
@@ -25,60 +25,42 @@ type Video interface {
 	FindRandomByState(ctx context.Context, state string) (video.Video, error)
 }
 
-// videoPlayer is the *video.Player realVideo delegates to. cmd/tripbot installs
-// the single process-wide instance via SetVideoPlayer once it's constructed, so
-// commands read the same playback state the cron tick refreshes. nil until then
-// (brief startup window) and in tests, which inject their own Video fake rather
-// than realVideo — so the nil guards below only ever fire pre-install.
-var (
-	videoMu     sync.RWMutex
-	videoPlayer *video.Player
-)
+// realVideo delegates to its *video.Player (Current / GetCurrentlyPlaying /
+// CurrentProgress) and to pkg/video's standalone DB helper (FindRandomByState,
+// which is not Player state). cmd/tripbot installs the process-wide Player via
+// NewVideoAdapter so commands read the same playback state the cron tick
+// refreshes. player is nil in New()'s default adapter — the brief startup
+// window before cmd assigns App.Video, and the defaultApp test fixture — so the
+// nil guards below cover that. Tests inject their own Video fake rather than
+// realVideo, so the guards only ever fire pre-install.
+type realVideo struct{ player *video.Player }
 
-// SetVideoPlayer installs the Player that realVideo delegates to. Called from
-// cmd/tripbot once the Player is constructed.
-func SetVideoPlayer(p *video.Player) {
-	videoMu.Lock()
-	videoPlayer = p
-	videoMu.Unlock()
-}
+// NewVideoAdapter builds the production Video adapter around p. cmd/tripbot
+// assigns the result onto App.Video once the Player is constructed.
+func NewVideoAdapter(p *video.Player) Video { return realVideo{player: p} }
 
-func currentPlayer() *video.Player {
-	videoMu.RLock()
-	defer videoMu.RUnlock()
-	return videoPlayer
-}
-
-// realVideo delegates to the installed *video.Player (Current /
-// GetCurrentlyPlaying) and to pkg/video's standalone DB helper
-// (FindRandomByState, which is not Player state).
-type realVideo struct{}
-
-func (realVideo) Current() video.Video {
-	p := currentPlayer()
-	if p == nil {
+func (r realVideo) Current() video.Video {
+	if r.player == nil {
 		return video.Video{}
 	}
-	return p.Current()
+	return r.player.Current()
 }
 
-func (realVideo) GetCurrentlyPlaying(ctx context.Context) video.Video {
-	p := currentPlayer()
-	if p == nil {
+func (r realVideo) GetCurrentlyPlaying(ctx context.Context) video.Video {
+	if r.player == nil {
 		return video.Video{}
 	}
-	p.GetCurrentlyPlaying(ctx)
-	return p.Current()
+	r.player.GetCurrentlyPlaying(ctx)
+	return r.player.Current()
 }
 
-func (realVideo) CurrentProgress() time.Duration {
-	p := currentPlayer()
-	if p == nil {
+func (r realVideo) CurrentProgress() time.Duration {
+	if r.player == nil {
 		return 0
 	}
-	return p.CurrentProgress()
+	return r.player.CurrentProgress()
 }
 
-func (realVideo) FindRandomByState(ctx context.Context, state string) (video.Video, error) {
+func (r realVideo) FindRandomByState(ctx context.Context, state string) (video.Video, error) {
 	return video.FindRandomByState(ctx, state)
 }
