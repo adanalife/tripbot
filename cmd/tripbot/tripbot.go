@@ -115,9 +115,9 @@ type Tripbot struct {
 	// lifetime-miles leaderboard — the single process-wide instance,
 	// constructed in NewTripbot. Cron jobs refresh it (UpdateSession /
 	// UpdateLeaderboard); boot hydrates it (InitLeaderboard); gracefulShutdown
-	// flushes it (Shutdown); installed into chatbot (SetSessions) + discord so
-	// they read the same state. One *Sessions per chat provider is the
-	// multi-provider seam.
+	// flushes it (Shutdown); assigned onto the chatbot App (Sessions adapter +
+	// UserSessions) and into discord so they read the same state. One *Sessions
+	// per chat provider is the multi-provider seam.
 	sessions *users.Sessions
 
 	telemetryShutdown telemetry.ShutdownFunc
@@ -171,8 +171,9 @@ func (t *Tripbot) Run() {
 	t.srv.SetVersion(t.version)
 	t.startHttpServer(shutdownCtx)
 	t.findInitialVideo()
-	t.app.Video = chatbot.NewVideoAdapter(t.player) // commands read the same Player the cron refreshes
-	chatbot.SetSessions(t.sessions)                 // commands + IRC handlers read the same session state
+	t.app.Video = chatbot.NewVideoAdapter(t.player)         // commands read the same Player the cron refreshes
+	t.app.Sessions = chatbot.NewSessionsAdapter(t.sessions) // command-time queries
+	t.app.UserSessions = t.sessions                         // inbound IRC handlers + access checks read the same session state
 	t.sessions.InitLeaderboard(context.Background())
 	t.startCron()
 	t.startFeatureFlags(shutdownCtx)
