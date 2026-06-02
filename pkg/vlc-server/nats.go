@@ -13,16 +13,14 @@ import (
 
 // StartNATSSubscribers attaches the server's NATS subscriptions to the
 // package-singleton *nats.Conn (initialized by main via natsclient.Connect).
-// No-op when the conn is nil (NATS_URL unset); HTTP remains the sole
-// transport then.
+// No-op when the conn is nil (NATS_URL unset) — with the HTTP command path
+// peeled off, the server simply receives no commands in that case.
 //
-// OBSERVE-ONLY (mirror phase): vlc commands are not idempotent — acting on
-// both NATS and the mirrored HTTP call would double-execute (skip two videos,
-// two random jumps). So unlike the onscreens subscribers, these handlers
-// decode their payload and LOG what they would do; HTTP stays the sole actor.
-// This burns in NATS delivery + wire format end-to-end without touching
-// playback. The peel PR flips these to act (s.skip(n) etc.) and removes the
-// HTTP command path in the same change — never a window where both act.
+// NATS is the sole transport for the vlc command surface: each handler drives
+// the same playback method the old HTTP handler called. (The observe-only
+// mirror this burned in against, and the HTTP command path, have since been
+// peeled off.) The publish-only client no longer calls HTTP, so there's no
+// double-execution despite vlc commands not being idempotent.
 //
 // Subscribers are registered explicitly (not via a vlc.> wildcard) so each
 // gets its own subscribe log line and the dispatch stays readable.
@@ -52,12 +50,15 @@ func (s *Server) StartNATSSubscribers(ctx context.Context) {
 	}
 }
 
-// The handlers below are observe-only: they decode (validating the wire
-// format and delivery) and log, but do not drive playback — see the
-// StartNATSSubscribers doc. The "would" phrasing in the log is deliberate.
+// Each handler maps 1-1 to the playback method the old HTTP handler called.
+// play.file is strict (an empty filename is a publisher bug, dropped); skip /
+// back normalize a non-positive count to 1, matching the old HTTP handler's
+// default when no n was supplied.
 
 func (s *Server) handlePlayRandom(_ *nats.Msg) {
-	slog.Info("nats: vlc play.random (observe-only, HTTP still acts)")
+	if err := s.PlayRandom(); err != nil {
+		slog.Error("nats: vlc play.random failed", "err", err)
+	}
 }
 
 func (s *Server) handlePlayFile(m *nats.Msg) {
@@ -66,7 +67,13 @@ func (s *Server) handlePlayFile(m *nats.Msg) {
 		slog.Error("nats: decode vlc play.file", "err", err, "subject", m.Subject)
 		return
 	}
-	slog.Info("nats: vlc play.file (observe-only, HTTP still acts)", "file", ev.File)
+	if ev.File == "" {
+		slog.Warn("nats: vlc play.file missing file", "subject", m.Subject)
+		return
+	}
+	if err := s.PlayVideoFile(ev.File); err != nil {
+		slog.Error("nats: vlc play.file failed", "err", err, "file", ev.File)
+	}
 }
 
 func (s *Server) handleSkip(m *nats.Msg) {
@@ -75,7 +82,11 @@ func (s *Server) handleSkip(m *nats.Msg) {
 		slog.Error("nats: decode vlc skip", "err", err, "subject", m.Subject)
 		return
 	}
-	slog.Info("nats: vlc skip (observe-only, HTTP still acts)", "n", ev.N)
+	n := ev.N
+	if n <= 0 {
+		n = 1
+	}
+	s.skip(n)
 }
 
 func (s *Server) handleBack(m *nats.Msg) {
@@ -84,5 +95,9 @@ func (s *Server) handleBack(m *nats.Msg) {
 		slog.Error("nats: decode vlc back", "err", err, "subject", m.Subject)
 		return
 	}
-	slog.Info("nats: vlc back (observe-only, HTTP still acts)", "n", ev.N)
+	n := ev.N
+	if n <= 0 {
+		n = 1
+	}
+	s.back(n)
 }
