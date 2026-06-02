@@ -17,7 +17,6 @@ import (
 	"github.com/adanalife/tripbot/pkg/httpmw"
 	"github.com/adanalife/tripbot/pkg/obs"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
-	"github.com/adanalife/tripbot/pkg/video"
 	"github.com/gorilla/mux"
 )
 
@@ -29,12 +28,7 @@ var startedAt = time.Now()
 // ping. 2s keeps a slow or hung vlc-server from stalling the panel render.
 var healthClient = &http.Client{Timeout: 2 * time.Second}
 
-// currentlyPlaying / currentProgress are overridable in tests; by default they
-// read pkg/video's in-process state (refreshed by a 60s cron tick), so the
-// admin panel costs nothing to show "now playing".
 var (
-	currentlyPlaying = video.CurrentlyPlaying
-	currentProgress  = video.CurrentProgress
 	// chatterCount is the in-memory count of users in chat, refreshed ~60s by
 	// the UpdateSession cron. Overridable in tests.
 	chatterCount = mytwitch.ChatterCount
@@ -222,7 +216,7 @@ type adminData struct {
 // pings, each version linking to its changelog), the currently-playing video
 // when vlc is up, the broadcaster/bot accounts, and links to the OBS / Grafana
 // / Traefik / Hubble dashboards. Replaces the bare 404 that used to sit on "/".
-func adminHandler(w http.ResponseWriter, r *http.Request) {
+func (s *Server) adminHandler(w http.ResponseWriter, r *http.Request) {
 	vlc := siblingStatus(r.Context(), "vlc", c.Conf.VlcServerHost)
 	onscreens := siblingStatus(r.Context(), "onscreens", c.Conf.OnscreensServerHost)
 	obs := siblingStatus(r.Context(), "obs", c.Conf.ObsServerHost)
@@ -234,17 +228,17 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 		Env:            c.Conf.Environment,
 		Uptime:         time.Since(startedAt).Round(time.Second).String(),
 		Chatters:       chatterCount(),
-		Services:       gatherStatus(buildSHA(), vlc, onscreens, obs),
-		Now:            currentVideo(vlc.OK),
+		Services:       s.gatherStatus(buildSHA(), vlc, onscreens, obs),
+		Now:            s.currentVideo(vlc.OK),
 		Audio:          nowPlayingFetcher(r.Context()),
 		Stream:         gatherStream(r.Context()),
 		PanelHost:      panelHost(r),
 		Links:          gatherLinks(),
-		Flags:          gatherFlags(r.Context()),
+		Flags:          s.gatherFlags(r.Context()),
 		Reauth:         accountsNeedingReauth(),
 		AuthStatuses:   authStatuses(),
-		ChatHistory:    defaultServer.hub.snapshotChat(),
-		MapTrailJSON:   mapTrailJSON(),
+		ChatHistory:    s.hub.snapshotChat(),
+		MapTrailJSON:   s.mapTrailJSON(),
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -264,11 +258,11 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 // gatherStatus reports tripbot's own readiness (in-memory, free) and folds in
 // the already-probed sibling-service rows. Each row carries its build tag in a
 // version column linking to that build's changelog at the deployed sha.
-func gatherStatus(sha string, siblings ...serviceStatus) []serviceStatus {
+func (s *Server) gatherStatus(sha string, siblings ...serviceStatus) []serviceStatus {
 	tripbot := serviceStatus{
 		Name:       "tripbot",
-		OK:         defaultServer.twitchConnected.Load(),
-		Version:    defaultServer.versionTag,
+		OK:         s.twitchConnected.Load(),
+		Version:    s.versionTag,
 		VersionURL: changelogURL(sha),
 		Uptime:     uptimeSince(startedAt),
 	}
@@ -319,8 +313,8 @@ func uptimeSince(t time.Time) string {
 // flag into the small display row the template renders. Returns nil when
 // no flags are loaded yet (startup window before SetFlagClient) so the
 // template's {{if .Flags}} hides the section cleanly.
-func gatherFlags(ctx context.Context) []featureFlag {
-	flags := defaultServer.flagSnapshot(ctx)
+func (s *Server) gatherFlags(ctx context.Context) []featureFlag {
+	flags := s.flagSnapshot(ctx)
 	if len(flags) == 0 {
 		return nil
 	}
@@ -464,7 +458,7 @@ func obsStreamActionHandler(w http.ResponseWriter, r *http.Request) {
 // in the DOM is fragile, and those values are low-volatility — they refresh on
 // the next full page load. Same sibling-ping cost as the root render; fine at
 // 15s for a single-operator panel.
-func refreshHandler(w http.ResponseWriter, r *http.Request) {
+func (s *Server) refreshHandler(w http.ResponseWriter, r *http.Request) {
 	vlc := siblingStatus(r.Context(), "vlc", c.Conf.VlcServerHost)
 	onscreens := siblingStatus(r.Context(), "onscreens", c.Conf.OnscreensServerHost)
 	obs := siblingStatus(r.Context(), "obs", c.Conf.ObsServerHost)
@@ -474,7 +468,7 @@ func refreshHandler(w http.ResponseWriter, r *http.Request) {
 
 	var sb strings.Builder
 	sb.WriteString(`<ul id="status-list" hx-swap-oob="true">`)
-	sb.WriteString(renderStatusRows(gatherStatus(buildSHA(), vlc, onscreens, obs)))
+	sb.WriteString(renderStatusRows(s.gatherStatus(buildSHA(), vlc, onscreens, obs)))
 	sb.WriteString(`</ul>`)
 	sb.WriteString(renderStreamControl(gatherStream(r.Context()), true))
 	if _, err := w.Write([]byte(sb.String())); err != nil {
@@ -484,22 +478,24 @@ func refreshHandler(w http.ResponseWriter, r *http.Request) {
 
 // currentVideo summarizes the currently-playing video for the page, but only
 // when vlc is healthy (a stale value while vlc is down would be misleading).
-// Reads pkg/video's in-process value — no extra call. Returns nil when nothing
-// is playing yet (empty slug).
-func currentVideo(vlcOK bool) *nowPlaying {
+// Reads the last video.changed cached by the hub from NATS — no in-process
+// pkg/video dependency — so the panel can later be lifted into its own service.
+// Returns nil when no video.changed has arrived yet. Progress is derived from
+// the event's emitted_at (the clip start), matching the live SSE ticker.
+func (s *Server) currentVideo(vlcOK bool) *nowPlaying {
 	if !vlcOK {
 		return nil
 	}
-	v := currentlyPlaying()
-	if v.Slug == "" {
+	ev, ok := s.hub.snapshotNowPlaying()
+	if !ok || ev.File == "" {
 		return nil
 	}
-	progress := currentProgress()
+	started := parseEmitted(ev.EmittedAt)
 	return &nowPlaying{
-		File:      v.File(),
-		State:     v.State,
-		Progress:  progress.Round(time.Second).String(),
-		SinceUnix: time.Now().Add(-progress).Unix(),
+		File:      ev.File,
+		State:     ev.State,
+		Progress:  time.Since(started).Round(time.Second).String(),
+		SinceUnix: started.Unix(),
 	}
 }
 

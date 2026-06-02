@@ -13,6 +13,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/eventbus"
 	"github.com/adanalife/tripbot/pkg/feature"
 	"github.com/adanalife/tripbot/pkg/geo"
+	"github.com/adanalife/tripbot/pkg/natsclient"
 	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	vlcClient "github.com/adanalife/tripbot/pkg/vlc-client"
@@ -77,6 +78,15 @@ type App struct {
 	// delegates to the pkg/twitch client. The future swap point for an
 	// out-of-process Helix/auth service.
 	Twitch Twitch
+
+	// commands is this App's command registry (built by buildRegistry);
+	// singleWordLookup / multiWordLookup index it by trigger + alias for
+	// dispatch. Populated by indexCommands() — production builds defaultApp's
+	// in init(); tests build a test App's via newTestApp. Replaces the former
+	// package-level globals so the registry travels with the App.
+	commands         []Command
+	singleWordLookup map[string]*Command
+	multiWordLookup  map[string]*Command
 }
 
 // db returns the DB handle the App should use. Prefers an explicit a.DB
@@ -91,7 +101,7 @@ func (a *App) db() *gorm.DB {
 
 var defaultApp = &App{
 	// DB stays nil; commands use a.db() which falls back to database.GormDB().
-	Onscreens:  realOnscreens{c: onscreensClient.New(c.Conf.OnscreensServerHost), nats: realNATS{}, env: c.Conf.Environment},
+	Onscreens:  realOnscreens{c: onscreensClient.New(c.Conf.OnscreensServerHost, natsclient.DefaultPublisher(), c.Conf.Environment)},
 	VLC:        realVLC{c: vlcClient.New(c.Conf.VlcServerHost)},
 	Video:      realVideo{},
 	IRC:        realIRC{},
@@ -182,13 +192,17 @@ func Whisper(username, msg string) {
 
 // Chatter is designed to post a randomized message on a timer.
 // Right now it just posts random "help messages."
-// ctx is forward-compat plumbing — sayFn (the package-level chat-send
-// indirection) doesn't take ctx yet, so it's not propagated into the IRC
-// write.
-func Chatter(_ context.Context) {
+// ctx is forward-compat plumbing — a.IRC.Say doesn't take ctx yet, so it's
+// not propagated into the IRC write.
+func (a *App) Chatter(_ context.Context) {
 	// use twitch emote feature to add some color
-	sayFn("/me " + help())
+	a.IRC.Say("/me " + help())
 }
+
+// Chatter shim delegating to defaultApp, so cmd's cron wiring keeps referencing
+// chatbot.Chatter as a function value. Retires once cmd registers the App's
+// method directly (later Phase C step).
+func Chatter(ctx context.Context) { defaultApp.Chatter(ctx) }
 
 func help() string {
 	text := c.HelpMessages[helpIndex]

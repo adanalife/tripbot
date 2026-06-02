@@ -10,6 +10,7 @@ import (
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
+	"github.com/adanalife/tripbot/pkg/eventbus"
 	"github.com/adanalife/tripbot/pkg/feature"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/video"
@@ -303,8 +304,8 @@ func TestRestartActionHandler_UnknownServiceIs400(t *testing.T) {
 }
 
 func TestRefreshHandler_RendersOOBStatusAndStreamControl(t *testing.T) {
-	defer SetTwitchConnected(false)
-	SetTwitchConnected(true)
+	srv := New()
+	srv.SetTwitchConnected(true)
 
 	// stream active → the OOB widget should offer "stop"
 	savedStatus := obsStreamStatus
@@ -335,7 +336,7 @@ func TestRefreshHandler_RendersOOBStatusAndStreamControl(t *testing.T) {
 	c.Conf.ObsServerHost = "" // skip the obs sibling ping
 
 	rec := httptest.NewRecorder()
-	refreshHandler(rec, httptest.NewRequest(http.MethodGet, "/admin/refresh", nil))
+	srv.refreshHandler(rec, httptest.NewRequest(http.MethodGet, "/admin/refresh", nil))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("got status %d, want %d", rec.Code, http.StatusOK)
@@ -361,8 +362,8 @@ func TestRefreshHandler_RendersOOBStatusAndStreamControl(t *testing.T) {
 }
 
 func TestAdminHandler_RendersReadyStatusAndLinks(t *testing.T) {
-	defer SetTwitchConnected(false)
-	SetTwitchConnected(true)
+	srv := New()
+	srv.SetTwitchConnected(true)
 	withReauth(t, nil) // healthy tokens — no re-auth callout
 	withAuthStatuses(t, []mytwitch.AccountTokenStatus{
 		{Account: "bot", LoginAs: "tripbot4000", ExpiresAt: time.Date(2099, 1, 1, 0, 0, 0, 0, time.UTC)},
@@ -405,15 +406,13 @@ func TestAdminHandler_RendersReadyStatusAndLinks(t *testing.T) {
 		c.Conf.ExternalURL = "https://tripbot.prod.whereisdana.today"
 		c.Conf.Environment = "production"
 	})
-	withCurrentlyPlaying(t, video.Video{Slug: "wy_0042", State: "Wyoming"}, 3*time.Minute+12*time.Second)
+	withCurrentlyPlaying(t, srv, video.Video{Slug: "wy_0042", State: "Wyoming"}, 3*time.Minute+12*time.Second)
 	withChatterCount(t, 12)
 
-	saved := defaultServer.versionTag
-	defer func() { defaultServer.versionTag = saved }()
-	SetVersion("v1.2.3")
+	srv.SetVersion("v1.2.3")
 
 	rec := httptest.NewRecorder()
-	adminHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	srv.adminHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("got status %d, want %d", rec.Code, http.StatusOK)
@@ -460,8 +459,8 @@ func TestAdminHandler_RendersReadyStatusAndLinks(t *testing.T) {
 
 func TestAdminHandler_DegradedAndVlcUnreachable(t *testing.T) {
 	withNowPlaying(t, nowPlayingTrack{}) // no audio info — keeps assertion on "now playing" absence valid
-	defer SetTwitchConnected(false)
-	SetTwitchConnected(false)
+	srv := New()
+	srv.SetTwitchConnected(false)
 	withReauth(t, nil)
 
 	withConf(t, func() {
@@ -472,10 +471,10 @@ func TestAdminHandler_DegradedAndVlcUnreachable(t *testing.T) {
 	})
 	// even with a video loaded, an unhealthy vlc hides "now playing" rather
 	// than showing a possibly-stale value.
-	withCurrentlyPlaying(t, video.Video{Slug: "wy_0042", State: "Wyoming"}, time.Minute)
+	withCurrentlyPlaying(t, srv, video.Video{Slug: "wy_0042", State: "Wyoming"}, time.Minute)
 
 	rec := httptest.NewRecorder()
-	adminHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	srv.adminHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("got status %d, want %d", rec.Code, http.StatusOK)
@@ -510,14 +509,17 @@ func withConf(t *testing.T, set func()) {
 	set()
 }
 
-// withCurrentlyPlaying swaps the currentlyPlaying / currentProgress seams so
-// the admin handler sees a fixed video + progress without driving the player.
-func withCurrentlyPlaying(t *testing.T, v video.Video, progress time.Duration) {
+// withCurrentlyPlaying seeds srv's hub with a video.changed so the admin
+// handler renders a fixed "now playing" — mirroring how it reads now-playing
+// from the NATS hub cache in production. progress maps to the event's
+// emitted_at (clip start = now - progress).
+func withCurrentlyPlaying(t *testing.T, srv *Server, v video.Video, progress time.Duration) {
 	t.Helper()
-	savedV, savedP := currentlyPlaying, currentProgress
-	currentlyPlaying = func() video.Video { return v }
-	currentProgress = func() time.Duration { return progress }
-	t.Cleanup(func() { currentlyPlaying, currentProgress = savedV, savedP })
+	srv.hub.setNowPlaying(eventbus.VideoChanged{
+		File:      v.File(),
+		State:     v.State,
+		EmittedAt: time.Now().Add(-progress).Format(time.RFC3339Nano),
+	})
 }
 
 // withChatterCount swaps the chatterCount seam to a fixed value.
@@ -558,8 +560,8 @@ func withNowPlaying(t *testing.T, track nowPlayingTrack) {
 }
 
 func TestAdminHandler_RendersReauthPrompt(t *testing.T) {
-	defer SetTwitchConnected(false)
-	SetTwitchConnected(false)
+	srv := New()
+	srv.SetTwitchConnected(false)
 	withNowPlaying(t, nowPlayingTrack{})
 
 	withConf(t, func() {
@@ -574,7 +576,7 @@ func TestAdminHandler_RendersReauthPrompt(t *testing.T) {
 	})
 
 	rec := httptest.NewRecorder()
-	adminHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	srv.adminHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 
 	body := rec.Body.String()
 	for _, want := range []string{
@@ -595,8 +597,8 @@ func TestAdminHandler_RendersReauthPrompt(t *testing.T) {
 
 func TestAdminHandler_NoReauthPromptWhenHealthy(t *testing.T) {
 	withNowPlaying(t, nowPlayingTrack{})
-	defer SetTwitchConnected(false)
-	SetTwitchConnected(true)
+	srv := New()
+	srv.SetTwitchConnected(true)
 
 	withConf(t, func() { c.Conf.VlcServerHost = "" })
 	withReauth(t, nil) // all tokens healthy
@@ -605,31 +607,25 @@ func TestAdminHandler_NoReauthPromptWhenHealthy(t *testing.T) {
 	})
 
 	rec := httptest.NewRecorder()
-	adminHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	srv.adminHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 
 	if strings.Contains(rec.Body.String(), "re-authenticate") {
 		t.Errorf("re-auth prompt should be hidden when no account needs re-auth")
 	}
 }
 
-func withFlags(t *testing.T, flags map[string]feature.Flag) {
+func withFlags(t *testing.T, srv *Server, flags map[string]feature.Flag) {
 	t.Helper()
-	saved := defaultServer.flagClient
-	SetFlagClient(feature.NewInMemoryClient(flags))
-	t.Cleanup(func() {
-		defaultServer.flagMu.Lock()
-		defaultServer.flagClient = saved
-		defaultServer.flagMu.Unlock()
-	})
+	srv.SetFlagClient(feature.NewInMemoryClient(flags))
 }
 
 func TestAdminHandler_RendersFeatureFlagsWhenLoaded(t *testing.T) {
-	defer SetTwitchConnected(false)
-	SetTwitchConnected(true)
+	srv := New()
+	srv.SetTwitchConnected(true)
 	withNowPlaying(t, nowPlayingTrack{})
 	withReauth(t, nil)
 	withConf(t, func() { c.Conf.VlcServerHost = "" })
-	withFlags(t, map[string]feature.Flag{
+	withFlags(t, srv, map[string]feature.Flag{
 		"discord.bot_enabled": {
 			Key:               "discord.bot_enabled",
 			Description:       "Gates pkg/discord startup.",
@@ -645,7 +641,7 @@ func TestAdminHandler_RendersFeatureFlagsWhenLoaded(t *testing.T) {
 	})
 
 	rec := httptest.NewRecorder()
-	adminHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	srv.adminHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 
 	body := rec.Body.String()
 	for _, want := range []string{
@@ -671,47 +667,44 @@ func TestAdminHandler_RendersFeatureFlagsWhenLoaded(t *testing.T) {
 }
 
 func TestAdminHandler_HidesFeatureFlagsSectionWhenEmpty(t *testing.T) {
-	defer SetTwitchConnected(false)
-	SetTwitchConnected(true)
+	srv := New()
+	srv.SetTwitchConnected(true)
 	withNowPlaying(t, nowPlayingTrack{})
 	withReauth(t, nil)
 	withConf(t, func() { c.Conf.VlcServerHost = "" })
-	withFlags(t, nil) // no flags loaded
+	withFlags(t, srv, nil) // no flags loaded
 
 	rec := httptest.NewRecorder()
-	adminHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	srv.adminHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 
 	if strings.Contains(rec.Body.String(), "feature flags") {
 		t.Errorf("feature flags section should be hidden when no flags are loaded")
 	}
 }
 
-// withChatHistory swaps the process hub for a fresh one seeded with lines,
-// restoring the original after the test.
-func withChatHistory(t *testing.T, lines []ChatLine) {
+// withChatHistory seeds srv's hub with a fresh ring containing the given lines.
+func withChatHistory(t *testing.T, srv *Server, lines []ChatLine) {
 	t.Helper()
-	saved := defaultServer.hub
 	h := NewHub()
 	for _, l := range lines {
 		h.appendChat(l)
 	}
-	defaultServer.hub = h
-	t.Cleanup(func() { defaultServer.hub = saved })
+	srv.hub = h
 }
 
 func TestAdminHandler_RendersChatHistoryAndSSEWiring(t *testing.T) {
-	defer SetTwitchConnected(false)
-	SetTwitchConnected(true)
+	srv := New()
+	srv.SetTwitchConnected(true)
 	withNowPlaying(t, nowPlayingTrack{})
 	withReauth(t, nil)
 	withConf(t, func() { c.Conf.VlcServerHost = "" })
-	withChatHistory(t, []ChatLine{
+	withChatHistory(t, srv, []ChatLine{
 		{Username: "alice", Text: "hello", At: time.Date(2026, 5, 29, 13, 5, 0, 0, time.UTC)},
 		{Username: "bob", Text: "<b>hi</b>", At: time.Date(2026, 5, 29, 13, 6, 0, 0, time.UTC)},
 	})
 
 	rec := httptest.NewRecorder()
-	adminHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	srv.adminHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 
 	body := rec.Body.String()
 	for _, want := range []string{
@@ -730,15 +723,15 @@ func TestAdminHandler_RendersChatHistoryAndSSEWiring(t *testing.T) {
 }
 
 func TestAdminHandler_ChatEmptyPlaceholder(t *testing.T) {
-	defer SetTwitchConnected(false)
-	SetTwitchConnected(true)
+	srv := New()
+	srv.SetTwitchConnected(true)
 	withNowPlaying(t, nowPlayingTrack{})
 	withReauth(t, nil)
 	withConf(t, func() { c.Conf.VlcServerHost = "" })
-	withChatHistory(t, nil) // empty ring
+	withChatHistory(t, srv, nil) // empty ring
 
 	rec := httptest.NewRecorder()
-	adminHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	srv.adminHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 
 	if !strings.Contains(rec.Body.String(), "waiting for chat") {
 		t.Errorf("expected empty-chat placeholder when no history")
