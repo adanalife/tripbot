@@ -78,6 +78,15 @@ type App struct {
 	// delegates to the pkg/twitch client. The future swap point for an
 	// out-of-process Helix/auth service.
 	Twitch Twitch
+
+	// commands is this App's command registry (built by buildRegistry);
+	// singleWordLookup / multiWordLookup index it by trigger + alias for
+	// dispatch. Populated by indexCommands() — production builds defaultApp's
+	// in init(); tests build a test App's via newTestApp. Replaces the former
+	// package-level globals so the registry travels with the App.
+	commands         []Command
+	singleWordLookup map[string]*Command
+	multiWordLookup  map[string]*Command
 }
 
 // db returns the DB handle the App should use. Prefers an explicit a.DB

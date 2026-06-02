@@ -50,7 +50,7 @@ func FuzzFindCommand(f *testing.F) {
 		f.Add(s)
 	}
 	f.Fuzz(func(t *testing.T, s string) {
-		_, _ = findCommand(s)
+		_, _ = defaultApp.findCommand(s)
 	})
 }
 
