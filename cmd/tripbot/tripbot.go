@@ -94,8 +94,8 @@ type Tripbot struct {
 
 	// scheduler is the background cron scheduler, constructed in startCron and
 	// shared by scheduleBackgroundJobs (job registration) and gracefulShutdown
-	// (Stop). Also installed into chatbot via chatbot.SetScheduler so !shutdown
-	// can stop it.
+	// (Stop). Also assigned onto t.app.Cron so the !shutdown command can stop
+	// it.
 	scheduler *background.Scheduler
 
 	// srv is the admin-panel / auth / metrics HTTP server, constructed in
@@ -354,8 +354,9 @@ func (t *Tripbot) startCron() {
 	}
 	t.scheduler = s
 	t.scheduler.Start()
-	// let !shutdown stop the same scheduler instance
-	chatbot.SetScheduler(t.scheduler)
+	// let !shutdown stop the same scheduler instance (*background.Scheduler
+	// satisfies chatbot.Cron directly)
+	t.app.Cron = t.scheduler
 	t.scheduleBackgroundJobs()
 }
 
