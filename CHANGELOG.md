@@ -7,6 +7,18 @@ All notable changes to TripBot. Format follows [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+## [v2.18.3] — 2026-06-02
+
+Patch release. The headline is reboot-survival for the admin live console: its chat log and live map are now backed by JetStream, so a tripbot restart replays recent history instead of starting empty (NATS phase 3). The rest is the chatbot no-globals refactor (Phase C) reaching its conclusion — the `SetX` injection setters retire in favour of cmd assigning the App's dependencies directly, the package free-function shims are gone, and a `New()` constructor plus a platform-neutral inbound seam land as groundwork for multi-platform chat.
+
+### pubsub
+
+- **Live-console chat log + live map survive a reboot.** Both were in-memory ring buffers fed by core NATS, which has no replay — so every restart started the console empty until new messages arrived. They now bind ephemeral ordered JetStream consumers over two bounded file-backed streams (`TRIPBOT_CHAT` keeps 500, `TRIPBOT_VIDEO` keeps 200) and replay recent history into the buffers on startup. Publishers are unchanged; only the consumer side moved. Falls back to live-only core subscriptions when JetStream is unavailable (local dev, non-JetStream servers), so nothing breaks without it. Requires [infra #623] for file-backed JetStream + a PVC on the NATS deployment. (NATS phase 3, [#744])
+
+### refactor
+
+- **chatbot Phase C — retire the `SetX` setters; cmd owns the App.** The remaining package-level injection setters are removed in favour of `cmd/tripbot` assigning the App's dependencies directly: `App.Cron` ([#779]), `realVideo`'s own `Player` ([#780]), `App.Sessions` + `App.UserSessions` ([#781]), and `App.Flags` ([#782]). The package free-function shims retire with cmd taking ownership of the App ([#774]), preceded by a `New()` constructor + `ConnectIRC` method ([#773]) and a platform-neutral inbound seam (`IncomingMessage` + `Handle*` methods) that isolates the Twitch-specific entry points behind a transport-neutral interface ([#772]).
+
 ## [v2.18.2] — 2026-06-02
 
 Patch release, almost entirely internal. The no-globals refactor finishes Phase B and opens Phase C: the last per-package `defaultX` singletons (`pkg/server`, `pkg/video`, `pkg/users`) are retired in favour of constructed structs threaded from cmd, cmd's own globals move into a `Tripbot` struct, and the chatbot's command registry, dispatch path, and event handlers move onto the injectable `App`. NATS phase 2 moves the onscreens command surface (and the admin panel's now-playing) onto pub/sub. Rounded out by a logout-path crash-loop fix, the producer half of the tripbot↔infra anti-drift contract, a `go test` env-default fix, and a CI action bump.
@@ -1342,3 +1354,12 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#770]: https://github.com/adanalife/tripbot/pull/770
 [#777]: https://github.com/adanalife/tripbot/pull/777
 [#778]: https://github.com/adanalife/tripbot/pull/778
+[#772]: https://github.com/adanalife/tripbot/pull/772
+[#773]: https://github.com/adanalife/tripbot/pull/773
+[#774]: https://github.com/adanalife/tripbot/pull/774
+[#779]: https://github.com/adanalife/tripbot/pull/779
+[#780]: https://github.com/adanalife/tripbot/pull/780
+[#781]: https://github.com/adanalife/tripbot/pull/781
+[#782]: https://github.com/adanalife/tripbot/pull/782
+[#744]: https://github.com/adanalife/tripbot/pull/744
+[infra #623]: https://github.com/adanalife/infra/pull/623
