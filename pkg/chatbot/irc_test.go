@@ -2,14 +2,12 @@ package chatbot
 
 import "strings"
 
-// noopIRC satisfies IRC for tests that don't care about chat output.
-// Say() delegates to the package-level sayFn so the legacy captureSay()
-// helper still intercepts chat output from commands that have been
-// migrated to a.IRC.Say(...). Once all callsites flow through a.IRC and
-// captureSay is retired, this can collapse to a true no-op.
+// noopIRC satisfies IRC for tests that don't care about chat output — it
+// swallows everything. Tests that assert on output inject a recordingIRC
+// instead (see captureSay / the *_ViaIRC tests).
 type noopIRC struct{}
 
-func (noopIRC) Say(msg string)      { sayFn(msg) }
+func (noopIRC) Say(_ string)        {}
 func (noopIRC) Whisper(_, _ string) {}
 
 // recordingIRC captures every Say/Whisper call so tests can assert on
