@@ -70,7 +70,7 @@ func (su sessionUser) IsSubscriber() bool { return su.s.IsSubscriber(*su.u) }
 
 func (a *App) dispatch(ctx context.Context, cmd *Command, user *users.User, params []string) {
 	incChatCommandCounter(cmd.Trigger)
-	if !cmd.checkAccess(ctx, sessionUser{currentSessions(), user}, a.IRC.Say) {
+	if !cmd.checkAccess(ctx, sessionUser{a.UserSessions, user}, a.IRC.Say) {
 		return
 	}
 	// Start a child span under the chatbot.handle_message span from
@@ -189,18 +189,18 @@ func (a *App) HandleMessage(ctx context.Context, msg IncomingMessage) {
 	// log in the user, then run any command (lowercased for matching)
 	//TODO: we lose capitalization here, is that okay?
 	//TODO: also handle commands prefixed with whitespace?
-	user := currentSessions().LoginIfNecessary(ctx, msg.User)
+	user := a.UserSessions.LoginIfNecessary(ctx, msg.User)
 	a.runCommand(ctx, user, strings.ToLower(msg.Text))
 }
 
 // HandleJoin records that a user joined the channel.
 func (a *App) HandleJoin(username string) {
-	currentSessions().LoginIfNecessary(context.Background(), username)
+	a.UserSessions.LoginIfNecessary(context.Background(), username)
 }
 
 // HandlePart records that a user left the channel.
 func (a *App) HandlePart(username string) {
-	currentSessions().LogoutIfNecessary(context.Background(), username)
+	a.UserSessions.LogoutIfNecessary(context.Background(), username)
 }
 
 // HandleWhisper lets an admin remote-say into chat by whispering the bot.

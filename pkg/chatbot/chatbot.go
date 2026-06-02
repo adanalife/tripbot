@@ -16,6 +16,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/natsclient"
 	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
+	"github.com/adanalife/tripbot/pkg/users"
 	vlcClient "github.com/adanalife/tripbot/pkg/vlc-client"
 	"github.com/gempir/go-twitch-irc/v4"
 	"gorm.io/gorm"
@@ -48,8 +49,15 @@ type App struct {
 	// Sessions wraps the user-lookup / lifetime-leaderboard / shutdown
 	// surface of pkg/users for command-time queries. Tests inject a
 	// recordingSessions to assert lookups and stage results; production
-	// uses the realSessions adapter.
+	// uses the realSessions adapter built by NewSessionsAdapter.
 	Sessions Sessions
+	// UserSessions is the concrete process-wide session state the inbound IRC
+	// handlers (HandleMessage / Join / Part) and dispatch's access check use
+	// directly — the login/logout lifecycle + follower/subscriber + login-count
+	// reads that are intentionally off the narrow Sessions interface. cmd/tripbot
+	// assigns the same *users.Sessions it wraps into Sessions. nil in tests and
+	// the brief startup window before cmd assigns it.
+	UserSessions *users.Sessions
 	// NowPlaying reports the currently-playing track on the stream's
 	// background audio source. Tests inject a fake; production uses
 	// realNowPlaying which polls SomaFM.

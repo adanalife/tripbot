@@ -24,6 +24,6 @@ func (a *App) AnnounceSubscriber(username string, isGift bool, tier string) {
 	_ = isGift
 	_ = tier
 	a.IRC.Say(fmt.Sprintf("Thank you for the sub, @%s; enjoy your !bonusmiles bleedPurple", username))
-	currentSessions().GiveEveryoneMiles(1.0)
-	a.IRC.Say(fmt.Sprintf("The %d current viewers have been given a bonus mile, too HolidayPresent", currentSessions().LoggedInCount()))
+	a.UserSessions.GiveEveryoneMiles(1.0)
+	a.IRC.Say(fmt.Sprintf("The %d current viewers have been given a bonus mile, too HolidayPresent", a.UserSessions.LoggedInCount()))
 }
