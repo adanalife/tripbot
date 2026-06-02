@@ -42,11 +42,11 @@ func TestTailnetServiceURL(t *testing.T) {
 	cases := []struct {
 		env, service, want string
 	}{
-		{"production", "obs", "https://obs-prod.tail020deb.ts.net"},
+		{"production", "obs-twitch", "https://obs-twitch-prod.tail020deb.ts.net"},
 		{"production", "vlc-server", "https://vlc-server-prod.tail020deb.ts.net"},
-		{"staging", "obs", "https://obs-stage.tail020deb.ts.net"},
-		{"development", "obs", ""}, // not served by the operator
-		{"testing", "obs", ""},
+		{"staging", "obs-twitch", "https://obs-twitch-stage.tail020deb.ts.net"},
+		{"development", "obs-twitch", ""}, // not served by the operator
+		{"testing", "obs-twitch", ""},
 	}
 	for _, tc := range cases {
 		c.Conf.Environment = tc.env
@@ -441,11 +441,11 @@ func TestAdminHandler_RendersReadyStatusAndLinks(t *testing.T) {
 		"Wyoming",                                        // current video state
 		`class="now-elapsed" data-since=`,                // elapsed span the JS ticker counts up
 		"3m12s",                                          // clip progress (initial server render)
-		`>obs</a>`,                                       // one-word OBS link
+		`>obs-twitch</a>`,                                // one-word OBS link
 		`>grafana</a>`,                                   // one-word grafana link
 		`>traefik</a>`,                                   // one-word traefik link
 		`>hubble</a>`,                                    // one-word hubble link
-		"https://obs-prod.tail020deb.ts.net",             // tailnet OBS href
+		"https://obs-twitch-prod.tail020deb.ts.net",      // tailnet OBS href
 		grafanaURL,                                       // grafana href
 		traefikURL,                                       // traefik href
 		// Environment is "production" above → hubble link carries ?namespace=prod-1

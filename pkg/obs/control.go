@@ -16,7 +16,7 @@ import (
 func dial(_ context.Context) (*goobs.Client, error) {
 	addr := os.Getenv("OBS_WEBSOCKET_ADDR")
 	if addr == "" {
-		addr = "obs:4455"
+		addr = "obs-twitch:4455"
 	}
 	passwd := os.Getenv("OBS_WEBSOCKET_PASSWD")
 	if passwd == "" {

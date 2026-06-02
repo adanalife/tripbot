@@ -554,8 +554,8 @@ func pingHealthy(ctx context.Context, rawURL string) bool {
 // neither appears here. Entries whose URL can't be derived are dropped.
 func gatherLinks() []navLink {
 	links := []navLink{}
-	if obs := tailnetServiceURL("obs"); obs != "" {
-		links = append(links, navLink{Label: "obs", URL: obs})
+	if obs := tailnetServiceURL("obs-twitch"); obs != "" {
+		links = append(links, navLink{Label: "obs-twitch", URL: obs})
 	}
 	links = append(links,
 		navLink{Label: "grafana", URL: grafanaURL},
@@ -603,7 +603,7 @@ func changelogURL(sha string) string {
 }
 
 // tailnetServiceURL returns the Tailscale K8s-operator URL for a sibling
-// service in this env's namespace, e.g. obs-prod.tail020deb.ts.net for
+// service in this env's namespace, e.g. obs-twitch-prod.tail020deb.ts.net for
 // production. Tailnet (CGNAT 100.x) URLs are preferred over the LAN-IP-backed
 // *.whereisdana.today URLs because the latter silently fail on client
 // networks that overlap the home LAN's 192.168.1.0/24 range. Returns "" for
