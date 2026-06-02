@@ -7,6 +7,10 @@ All notable changes to TripBot. Format follows [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+### pubsub
+
+- **VLC command surface — observe-only NATS mirror.** Begins moving the VLC playback commands off direct HTTP onto NATS, following the onscreens template. The four fire-and-forget commands (`PlayRandom`, `PlayFileInPlaylist`, `Skip`, `Back`) now publish to `tripbot.<env>.vlc.<verb>` alongside their HTTP call, and vlc-server connects to NATS and subscribes — but **observe-only**: it logs what it would do without acting, because VLC commands aren't idempotent and acting on both transports would double-execute (skip two videos). HTTP stays the sole actor; this burns in delivery before the peel. `CurrentlyPlaying` is a read and stays HTTP-only. No-op where `NATS_URL` is unset; the peel + cdk8s `NATS_URL` wiring for vlc-server follow. ([#789])
+
 ## [v2.18.3] — 2026-06-02
 
 Patch release. The headline is reboot-survival for the admin live console: its chat log and live map are now backed by JetStream, so a tripbot restart replays recent history instead of starting empty (NATS phase 3). The rest is the chatbot no-globals refactor (Phase C) reaching its conclusion — the `SetX` injection setters retire in favour of cmd assigning the App's dependencies directly, the package free-function shims are gone, and a `New()` constructor plus a platform-neutral inbound seam land as groundwork for multi-platform chat.
@@ -1362,4 +1366,5 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#781]: https://github.com/adanalife/tripbot/pull/781
 [#782]: https://github.com/adanalife/tripbot/pull/782
 [#744]: https://github.com/adanalife/tripbot/pull/744
+[#789]: https://github.com/adanalife/tripbot/pull/789
 [infra #623]: https://github.com/adanalife/infra/pull/623
