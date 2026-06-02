@@ -145,7 +145,7 @@ func NewTripbot(version string) *Tripbot {
 		srv:     server.New(),
 		player: video.NewPlayer(
 			onscreensClient.New(c.Conf.OnscreensServerHost, natsclient.DefaultPublisher(), c.Conf.Environment),
-			vlcClient.New(c.Conf.VlcServerHost),
+			vlcClient.New(c.Conf.VlcServerHost, natsclient.DefaultPublisher(), c.Conf.Environment),
 		),
 		sessions:   users.NewDefault(),
 		flagClient: feature.NewInMemoryClient(nil),
