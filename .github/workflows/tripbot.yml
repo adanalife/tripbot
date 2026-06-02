@@ -5,6 +5,13 @@ on:
     branches:
       - develop
 
+# Supersede an in-flight run when new commits land on the same PR/branch —
+# a superseded build's image is immediately stale, and this keeps concurrent
+# Docker Hub traffic down (rate-limit avoidance).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest

@@ -11,6 +11,13 @@ on:
     tags:
       - v*
 
+# Supersede an in-flight run when new commits land on the same PR/branch —
+# a superseded build's image is immediately stale, and this keeps concurrent
+# Docker Hub traffic down (rate-limit avoidance).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # Detect whether this PR touches OBS image inputs. arm64 is the slow
   # lane (CEF compile, ~30+ min); skipping it on PRs that only touch Go
