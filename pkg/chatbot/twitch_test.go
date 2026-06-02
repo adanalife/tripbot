@@ -29,8 +29,8 @@ func (r *recordingTwitch) FollowedAt(username string) (time.Time, bool) {
 
 func TestFollowageCmd_Following_RepliesWithDuration(t *testing.T) {
 	app := newTestApp(video.Video{})
-	rec := &recordingIRC{}
-	app.IRC = rec
+	rec := &recordingChat{}
+	app.Chat = rec
 	app.Twitch = &recordingTwitch{Result: time.Now().Add(-48 * time.Hour), OK: true}
 
 	app.followageCmd(context.Background(), newTestUser("viewer1"), nil)
@@ -42,8 +42,8 @@ func TestFollowageCmd_Following_RepliesWithDuration(t *testing.T) {
 
 func TestFollowageCmd_NotFollowing_SelfPrompt(t *testing.T) {
 	app := newTestApp(video.Video{})
-	rec := &recordingIRC{}
-	app.IRC = rec
+	rec := &recordingChat{}
+	app.Chat = rec
 	app.Twitch = &recordingTwitch{OK: false}
 
 	app.followageCmd(context.Background(), newTestUser("viewer1"), nil)
@@ -55,8 +55,8 @@ func TestFollowageCmd_NotFollowing_SelfPrompt(t *testing.T) {
 
 func TestFollowageCmd_OtherUser_LooksUpStrippedName(t *testing.T) {
 	app := newTestApp(video.Video{})
-	rec := &recordingIRC{}
-	app.IRC = rec
+	rec := &recordingChat{}
+	app.Chat = rec
 	twitch := &recordingTwitch{OK: false}
 	app.Twitch = twitch
 

@@ -15,14 +15,14 @@ import (
 	"gorm.io/gorm"
 )
 
-// captureSay installs a recordingIRC on app and returns an output() accessor
+// captureSay installs a recordingChat on app and returns an output() accessor
 // with "messages since the last call, then reset" semantics, so multiple
 // output() calls within one test don't accumulate across rounds. It replaces
-// app.IRC, so construct the App first.
+// app.Chat, so construct the App first.
 func captureSay(t *testing.T, app *App) func() string {
 	t.Helper()
-	rec := &recordingIRC{}
-	app.IRC = rec
+	rec := &recordingChat{}
+	app.Chat = rec
 	last := 0
 	return func() string {
 		msgs := rec.Says[last:]
@@ -44,14 +44,14 @@ func newTestVideo(state string, lat, lng float64, date time.Time) video.Video {
 // video, plus no-op Onscreens, VLC, IRC, and Sessions fakes. For commands
 // that don't read Video, pass a zero-value video.Video. To assert on any of
 // those surfaces, replace the corresponding field with a recording fake
-// (recordingOnscreens / recordingVLC / recordingVideo / recordingIRC /
+// (recordingOnscreens / recordingVLC / recordingVideo / recordingChat /
 // recordingSessions).
 func newTestApp(vid video.Video) *App {
 	a := &App{
 		Onscreens:  noopOnscreens{},
 		VLC:        noopVLC{},
 		Video:      &recordingVideo{Vid: vid},
-		IRC:        noopIRC{},
+		Chat:       noopChat{},
 		Sessions:   noopSessions{},
 		NowPlaying: noopNowPlaying{},
 		Flags:      noopFlags{},
@@ -70,16 +70,16 @@ func newTestApp(vid video.Video) *App {
 // production defaultApp singleton those tests used to read.
 var builtTestApp = newTestApp(video.Video{})
 
-// --- App.IRC seam ---
+// --- App.Chat seam ---
 //
-// These tests assert on chat output through the App.IRC injection point by
-// installing a recordingIRC directly. captureSay() above is a thin wrapper over
+// These tests assert on chat output through the App.Chat injection point by
+// installing a recordingChat directly. captureSay() above is a thin wrapper over
 // the same seam for the common "read the output text" case.
 
 func TestHelpCmd_SaysSomething_ViaIRC(t *testing.T) {
 	app := newTestApp(video.Video{})
-	rec := &recordingIRC{}
-	app.IRC = rec
+	rec := &recordingChat{}
+	app.Chat = rec
 
 	app.helpCmd(context.Background(), newTestUser("viewer1"), nil)
 
@@ -93,8 +93,8 @@ func TestHelpCmd_SaysSomething_ViaIRC(t *testing.T) {
 
 func TestUptimeCmd_SaysRunningFor_ViaIRC(t *testing.T) {
 	app := newTestApp(video.Video{})
-	rec := &recordingIRC{}
-	app.IRC = rec
+	rec := &recordingChat{}
+	app.Chat = rec
 	Uptime = time.Now().Add(-5 * time.Minute)
 
 	app.uptimeCmd(context.Background(), newTestUser("viewer1"), nil)
@@ -109,8 +109,8 @@ func TestUptimeCmd_SaysRunningFor_ViaIRC(t *testing.T) {
 
 func TestKilometresCmd_SaysViaIRC(t *testing.T) {
 	app := newTestApp(video.Video{})
-	rec := &recordingIRC{}
-	app.IRC = rec
+	rec := &recordingChat{}
+	app.Chat = rec
 
 	user := &users.User{Username: "viewer1", Miles: 10}
 	app.kilometresCmd(context.Background(), user, nil)
@@ -129,8 +129,8 @@ func TestKilometresCmd_SaysViaIRC(t *testing.T) {
 
 func TestHelloCmd_GreetsNewViewer_ViaIRC(t *testing.T) {
 	app := newTestApp(video.Video{})
-	rec := &recordingIRC{}
-	app.IRC = rec
+	rec := &recordingChat{}
+	app.Chat = rec
 	lastHelloTime = time.Time{} // clear rate limiter
 
 	app.helloCmd(context.Background(), newTestUser("newviewer"), nil)
@@ -148,8 +148,8 @@ func TestDateCmd_SaysViaIRC(t *testing.T) {
 	date := time.Date(2019, 6, 15, 18, 30, 0, 0, time.UTC)
 	vid := newTestVideo("Colorado", 39.5, -105.0, date)
 	app := newTestApp(vid)
-	rec := &recordingIRC{}
-	app.IRC = rec
+	rec := &recordingChat{}
+	app.Chat = rec
 
 	app.dateCmd(context.Background(), newTestUser("viewer1"), nil)
 
@@ -168,8 +168,8 @@ func TestTimeCmd_SaysViaIRC(t *testing.T) {
 	date := time.Date(2019, 6, 15, 18, 30, 0, 0, time.UTC)
 	vid := newTestVideo("Colorado", 39.5, -105.0, date)
 	app := newTestApp(vid)
-	rec := &recordingIRC{}
-	app.IRC = rec
+	rec := &recordingChat{}
+	app.Chat = rec
 
 	app.timeCmd(context.Background(), newTestUser("viewer1"), nil)
 
@@ -183,8 +183,8 @@ func TestTimeCmd_SaysViaIRC(t *testing.T) {
 
 func TestReportCmd_AcksViaIRC(t *testing.T) {
 	app := newTestApp(video.Video{})
-	rec := &recordingIRC{}
-	app.IRC = rec
+	rec := &recordingChat{}
+	app.Chat = rec
 
 	app.reportCmd(context.Background(), newTestUser("viewer1"), []string{"the", "bot", "is", "broken"})
 
@@ -198,8 +198,8 @@ func TestReportCmd_AcksViaIRC(t *testing.T) {
 
 func TestBonusMilesCmd_SaysViaIRC(t *testing.T) {
 	app := newTestApp(video.Video{})
-	rec := &recordingIRC{}
-	app.IRC = rec
+	rec := &recordingChat{}
+	app.Chat = rec
 
 	// BonusMiles is computed from user state; a zero user yields a stable string.
 	app.bonusMilesCmd(context.Background(), newTestUser("viewer1"), nil)

@@ -7,7 +7,7 @@ import (
 // AnnounceNewFollower says a thank-you to a new follower in chat. Wired
 // from pkg/eventsub on channel.follow v2 events.
 func (a *App) AnnounceNewFollower(username string) {
-	a.IRC.Say(fmt.Sprintf("Thank you for the follow, @%s", username))
+	a.Chat.Say(fmt.Sprintf("Thank you for the follow, @%s", username))
 }
 
 // AnnounceSubscriber says a thank-you to a new subscriber, gives every
@@ -23,7 +23,7 @@ func (a *App) AnnounceNewFollower(username string) {
 func (a *App) AnnounceSubscriber(username string, isGift bool, tier string) {
 	_ = isGift
 	_ = tier
-	a.IRC.Say(fmt.Sprintf("Thank you for the sub, @%s; enjoy your !bonusmiles bleedPurple", username))
+	a.Chat.Say(fmt.Sprintf("Thank you for the sub, @%s; enjoy your !bonusmiles bleedPurple", username))
 	a.UserSessions.GiveEveryoneMiles(1.0)
-	a.IRC.Say(fmt.Sprintf("The %d current viewers have been given a bonus mile, too HolidayPresent", a.UserSessions.LoggedInCount()))
+	a.Chat.Say(fmt.Sprintf("The %d current viewers have been given a bonus mile, too HolidayPresent", a.UserSessions.LoggedInCount()))
 }
