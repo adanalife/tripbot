@@ -24,15 +24,6 @@ func (a *App) AnnounceSubscriber(username string, isGift bool, tier string) {
 	_ = isGift
 	_ = tier
 	a.IRC.Say(fmt.Sprintf("Thank you for the sub, @%s; enjoy your !bonusmiles bleedPurple", username))
-	currentSessions().GiveEveryoneMiles(1.0)
-	a.IRC.Say(fmt.Sprintf("The %d current viewers have been given a bonus mile, too HolidayPresent", currentSessions().LoggedInCount()))
-}
-
-// Package-level shims delegating to defaultApp, so cmd's eventsub wiring keeps
-// referencing chatbot.AnnounceNewFollower / chatbot.AnnounceSubscriber as
-// function values. They retire once cmd registers the App's methods directly
-// (later Phase C step).
-func AnnounceNewFollower(username string) { defaultApp.AnnounceNewFollower(username) }
-func AnnounceSubscriber(username string, isGift bool, tier string) {
-	defaultApp.AnnounceSubscriber(username, isGift, tier)
+	a.UserSessions.GiveEveryoneMiles(1.0)
+	a.IRC.Say(fmt.Sprintf("The %d current viewers have been given a bonus mile, too HolidayPresent", a.UserSessions.LoggedInCount()))
 }

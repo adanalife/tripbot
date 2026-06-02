@@ -2,7 +2,6 @@ package chatbot
 
 import (
 	"context"
-	"sync"
 
 	"github.com/adanalife/tripbot/pkg/users"
 )
@@ -10,15 +9,15 @@ import (
 // Sessions is the subset of the pkg/users surface that chatbot commands
 // depend on at command-time (user lookups, lifetime-leaderboard reads,
 // miles computations, graceful shutdown of in-memory session state). Tests
-// inject a fake; production uses the realSessions adapter wired in defaultApp.
-// Mirrors the Onscreens/VLC/Video/IRC injection pattern.
+// inject a fake; production uses the realSessions adapter built by
+// NewSessionsAdapter. Mirrors the Onscreens/VLC/Video/IRC injection pattern.
 //
 // The IRC-side session lifecycle (LoginIfNecessary / LogoutIfNecessary) and the
 // follower/subscriber + login-count reads are intentionally NOT on this
-// interface — they're called from the free-function handlers in handlers.go /
-// announce.go, which aren't App methods yet, so they reach the installed
-// *Sessions through currentSessions() directly. They'll move onto App (and onto
-// this interface) when those handlers do.
+// interface — they're called from the inbound handlers (HandleMessage / Join /
+// Part) and dispatch's access check, which reach the concrete *users.Sessions
+// through App.UserSessions directly. Keeping them off this interface keeps the
+// command-time fake surface (noopSessions / recordingSessions) minimal.
 type Sessions interface {
 	// Find looks up a user by username. Returns User{ID: 0} for an
 	// unknown user (mirrors pkg/users.Find's existing contract).
@@ -42,80 +41,61 @@ type Sessions interface {
 	SetBot(ctx context.Context, username string, isBot bool) error
 }
 
-// sessions is the *users.Sessions realSessions (and the free-function IRC
-// handlers) delegate to. cmd/tripbot installs the single process-wide instance
-// via SetSessions once it's constructed. nil until then (brief startup window)
-// and in tests, which inject their own Sessions fake rather than realSessions —
-// so the nil guards below only ever fire pre-install. Mirrors SetVideoPlayer.
-var (
-	sessionsMu sync.RWMutex
-	sessions   *users.Sessions
-)
+// realSessions delegates to its *users.Sessions, plus pkg/users' standalone DB
+// helper (Find, which is not session state). cmd/tripbot builds it around the
+// process-wide *users.Sessions via NewSessionsAdapter so commands read the same
+// session state the IRC handlers mutate. s is nil in New()'s default adapter —
+// the brief startup window before cmd assigns App.Sessions, and the defaultApp
+// test fixture — so the nil guards below cover that. Tests inject their own
+// Sessions fake rather than realSessions, so the guards only ever fire
+// pre-install.
+type realSessions struct{ s *users.Sessions }
 
-// SetSessions installs the Sessions that realSessions and the IRC handlers
-// delegate to. Called from cmd/tripbot once Sessions is constructed.
-func SetSessions(s *users.Sessions) {
-	sessionsMu.Lock()
-	sessions = s
-	sessionsMu.Unlock()
-}
+// NewSessionsAdapter builds the production Sessions adapter around s. cmd/tripbot
+// assigns the result onto App.Sessions once Sessions is constructed.
+func NewSessionsAdapter(s *users.Sessions) Sessions { return realSessions{s: s} }
 
-func currentSessions() *users.Sessions {
-	sessionsMu.RLock()
-	defer sessionsMu.RUnlock()
-	return sessions
-}
-
-// realSessions delegates to the installed *users.Sessions, plus pkg/users'
-// standalone DB helper (Find, which is not session state).
-type realSessions struct{}
-
-func (realSessions) Find(ctx context.Context, username string) users.User {
+func (r realSessions) Find(ctx context.Context, username string) users.User {
 	return users.Find(ctx, username)
 }
 
-func (realSessions) LifetimeLeaderboard() [][]string {
-	s := currentSessions()
-	if s == nil {
+func (r realSessions) LifetimeLeaderboard() [][]string {
+	if r.s == nil {
 		return nil
 	}
-	return s.LifetimeLeaderboard()
+	return r.s.LifetimeLeaderboard()
 }
 
-func (realSessions) CurrentMiles(ctx context.Context, u users.User) float32 {
-	s := currentSessions()
-	if s == nil {
+func (r realSessions) CurrentMiles(ctx context.Context, u users.User) float32 {
+	if r.s == nil {
 		return u.Miles
 	}
-	return s.CurrentMiles(ctx, u)
+	return r.s.CurrentMiles(ctx, u)
 }
 
-func (realSessions) CurrentMonthlyMiles(ctx context.Context, u users.User) float32 {
-	s := currentSessions()
-	if s == nil {
+func (r realSessions) CurrentMonthlyMiles(ctx context.Context, u users.User) float32 {
+	if r.s == nil {
 		return 0
 	}
-	return s.CurrentMonthlyMiles(ctx, u)
+	return r.s.CurrentMonthlyMiles(ctx, u)
 }
 
-func (realSessions) BonusMiles(u users.User) float32 {
-	s := currentSessions()
-	if s == nil {
+func (r realSessions) BonusMiles(u users.User) float32 {
+	if r.s == nil {
 		return 0
 	}
-	return s.BonusMiles(u)
+	return r.s.BonusMiles(u)
 }
 
-func (realSessions) Shutdown(ctx context.Context) {
-	if s := currentSessions(); s != nil {
-		s.Shutdown(ctx)
+func (r realSessions) Shutdown(ctx context.Context) {
+	if r.s != nil {
+		r.s.Shutdown(ctx)
 	}
 }
 
-func (realSessions) SetBot(ctx context.Context, username string, isBot bool) error {
-	s := currentSessions()
-	if s == nil {
+func (r realSessions) SetBot(ctx context.Context, username string, isBot bool) error {
+	if r.s == nil {
 		return nil
 	}
-	return s.SetBot(ctx, username, isBot)
+	return r.s.SetBot(ctx, username, isBot)
 }

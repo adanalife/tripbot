@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/natsclient"
+	"github.com/nats-io/nats.go/jetstream"
 )
 
 // Publisher is the fire-and-forget publish surface the Emit helpers use. Tests
@@ -153,3 +154,76 @@ func EmitVideoChanged(ctx context.Context, env, file, state string, flagged bool
 		EmittedAt: emittedAt(),
 	})
 }
+
+// --- JetStream streams (durable history) ----------------------------------
+//
+// Two subjects need to survive a tripbot reboot so the admin live console can
+// backfill on load: chat.message (the chat log) and video.changed (the
+// now-playing card + the live-map breadcrumb trail). Each gets its own stream
+// so its retention cap is independent — a stream's MaxMsgs is whole-stream, and
+// these two want different depths. Publishers are unchanged: a core publish to a
+// subject a stream covers is captured automatically. viewers.count is NOT
+// streamed — it's a momentary value with nothing to replay.
+
+const (
+	chatStreamName  = "TRIPBOT_CHAT"
+	videoStreamName = "TRIPBOT_VIDEO"
+)
+
+// Retention caps match the admin hub's in-memory buffer sizes (pkg/server:
+// chatRingSize=500, mapTrailSize=100) so a startup backfill exactly refills
+// them. Video keeps headroom over the 100-point trail since each video.changed
+// is one clip, not one breadcrumb (flagged/no-fix clips drop no breadcrumb).
+const (
+	chatStreamMaxMsgs  = 500
+	videoStreamMaxMsgs = 200
+)
+
+// EnsureStreams idempotently declares the JetStream streams backing the admin
+// live console's durable buffers. Both are file-backed and bounded to the most
+// recent N messages (DiscardOld), so the hub replays recent history after a
+// restart and JetStream evicts the oldest beyond the cap.
+//
+// No-op when js is nil (NATS off / JetStream unavailable) — the hub then falls
+// back to live-only core subscriptions. Safe on every startup:
+// CreateOrUpdateStream reconciles config in place, so changing a cap later just
+// updates the stream. Stream names are constant: each env runs its own NATS in
+// its own namespace, so there's no cross-env collision.
+func EnsureStreams(ctx context.Context, js jetstream.JetStream, env string) error {
+	if js == nil {
+		return nil
+	}
+	configs := []jetstream.StreamConfig{
+		{
+			Name:        chatStreamName,
+			Description: "Admin live-console chat history (bounded recent ring).",
+			Subjects:    []string{ChatMessageSubject(env)},
+			Storage:     jetstream.FileStorage,
+			Retention:   jetstream.LimitsPolicy,
+			Discard:     jetstream.DiscardOld,
+			MaxMsgs:     chatStreamMaxMsgs,
+		},
+		{
+			Name:        videoStreamName,
+			Description: "Admin live-console video.changed history (now-playing + map trail).",
+			Subjects:    []string{VideoChangedSubject(env)},
+			Storage:     jetstream.FileStorage,
+			Retention:   jetstream.LimitsPolicy,
+			Discard:     jetstream.DiscardOld,
+			MaxMsgs:     videoStreamMaxMsgs,
+		},
+	}
+	for _, cfg := range configs {
+		if _, err := js.CreateOrUpdateStream(ctx, cfg); err != nil {
+			return fmt.Errorf("ensure stream %s: %w", cfg.Name, err)
+		}
+	}
+	slog.InfoContext(ctx, "jetstream streams ensured", "streams", chatStreamName+","+videoStreamName, "env", env)
+	return nil
+}
+
+// ChatStreamName and VideoStreamName expose the stream names so consumers (the
+// admin hub) can bind ordered consumers to them without re-deriving the
+// constants.
+func ChatStreamName() string  { return chatStreamName }
+func VideoStreamName() string { return videoStreamName }
