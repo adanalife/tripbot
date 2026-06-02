@@ -157,60 +157,80 @@ func (a *App) runCommand(ctx context.Context, user *users.User, message string) 
 	}
 }
 
-// handles all chat messages
-func PrivateMessage(msg twitch.PrivateMessage) {
-	username := msg.User.Name
+// IncomingMessage is a platform-neutral inbound chat message. Platform
+// adapters (Twitch today; YouTube and others later) translate their native
+// event types into this shape before handing it to the App's Handle* methods,
+// so the command path stays platform-agnostic.
+type IncomingMessage struct {
+	User string // sender's platform username (Twitch sends display-case)
+	Text string // the message body, original case
+}
 
-	ctx, span := tracer.Start(context.Background(), "chatbot.handle_message",
-		trace.WithAttributes(attribute.String("twitch.user", username)))
+// HandleMessage processes one inbound chat message: records it (Loki + the
+// admin-console event bus), logs the user in, and runs any command it carries.
+func (a *App) HandleMessage(ctx context.Context, msg IncomingMessage) {
+	// span attribute kept as twitch.user for observability continuity; it
+	// generalizes to a platform-tagged key once a second platform lands.
+	ctx, span := tracer.Start(ctx, "chatbot.handle_message",
+		trace.WithAttributes(attribute.String("twitch.user", msg.User)))
 	defer span.End()
 
 	// increment the Prometheus counter
 	instrumentation.ChatMessages.Inc()
 
-	//TODO: we lose capitalization here, is that okay?
-	message := strings.ToLower(msg.Message)
-
 	// emit chat line to Loki via OTel
-	mylog.ChatMsg(username, msg.Message)
+	mylog.ChatMsg(msg.User, msg.Text)
 
 	// mirror the chat line onto the event bus so live consumers (the admin
 	// panel's chat pane) see it. Original-case username + text, matching the
 	// Loki line above; fire-and-forget, no-op when NATS is unconfigured.
-	eventbus.EmitChatMessage(ctx, c.Conf.Environment, msg.User.Name, msg.Message)
+	eventbus.EmitChatMessage(ctx, c.Conf.Environment, msg.User, msg.Text)
 
-	// check to see if the message is a command
-	//TODO: also include ones prefixed with whitespace?
-	// log in the user
-	user := currentSessions().LoginIfNecessary(ctx, username)
-
-	// defaultApp is the package singleton; PrivateMessage is still a
-	// free-function Twitch callback (registered in Initialize). It becomes a
-	// thin adapter onto a cmd-constructed *App in the later Phase C steps.
-	defaultApp.runCommand(ctx, user, message)
+	// log in the user, then run any command (lowercased for matching)
+	//TODO: we lose capitalization here, is that okay?
+	//TODO: also handle commands prefixed with whitespace?
+	user := currentSessions().LoginIfNecessary(ctx, msg.User)
+	a.runCommand(ctx, user, strings.ToLower(msg.Text))
 }
 
-// this event fires when a user joins the channel
-func UserJoin(joinMessage twitch.UserJoinMessage) {
-	currentSessions().LoginIfNecessary(context.Background(), joinMessage.User)
+// HandleJoin records that a user joined the channel.
+func (a *App) HandleJoin(username string) {
+	currentSessions().LoginIfNecessary(context.Background(), username)
 }
 
-// this event fires when a user leaves the channel
-func UserPart(partMessage twitch.UserPartMessage) {
-	currentSessions().LogoutIfNecessary(context.Background(), partMessage.User)
+// HandlePart records that a user left the channel.
+func (a *App) HandlePart(username string) {
+	currentSessions().LogoutIfNecessary(context.Background(), username)
 }
 
-// send message to chat if someone subs
-// func UserNotice(message twitch.UserNoticeMessage) {
-// 	// update the internal subscriber list
-// 	mytwitch.GetSubscribers()
-// }
-
-// if the message comes from me, then post the message to chat.
-// An admin whisper that triggers Say() is logged again as a chat line.
-func GetWhisper(message twitch.WhisperMessage) {
-	slog.Info("whisper received", "from", message.User.Name, "text", message.Message)
-	if c.UserIsAdmin(message.User.Name) {
-		Say(message.Message)
+// HandleWhisper lets an admin remote-say into chat by whispering the bot.
+// The resulting Say() is logged again as a chat line.
+func (a *App) HandleWhisper(msg IncomingMessage) {
+	slog.Info("whisper received", "from", msg.User, "text", msg.Text)
+	if c.UserIsAdmin(msg.User) {
+		a.IRC.Say(msg.Text)
 	}
+}
+
+// --- Twitch inbound adapters ---
+//
+// These translate go-twitch-irc event types into neutral Handle* calls on the
+// package singleton. They stay registered in Initialize until cmd constructs
+// the App and registers its methods directly (later Phase C step); a future
+// YouTube/etc. transport adds its own adapters feeding the same Handle* methods.
+
+func PrivateMessage(msg twitch.PrivateMessage) {
+	defaultApp.HandleMessage(context.Background(), IncomingMessage{User: msg.User.Name, Text: msg.Message})
+}
+
+func UserJoin(joinMessage twitch.UserJoinMessage) {
+	defaultApp.HandleJoin(joinMessage.User)
+}
+
+func UserPart(partMessage twitch.UserPartMessage) {
+	defaultApp.HandlePart(partMessage.User)
+}
+
+func GetWhisper(message twitch.WhisperMessage) {
+	defaultApp.HandleWhisper(IncomingMessage{User: message.User.Name, Text: message.Message})
 }
