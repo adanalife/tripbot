@@ -27,6 +27,7 @@ require (
 	github.com/lib/pq v1.12.3
 	github.com/logrusorgru/aurora/v3 v3.0.0
 	github.com/nathan-osman/go-sunrise v1.1.0
+	github.com/nats-io/nats-server/v2 v2.14.1
 	github.com/nats-io/nats.go v1.52.0
 	github.com/nicklaw5/helix/v2 v2.34.0
 	github.com/prometheus/client_golang v1.23.2
@@ -56,6 +57,7 @@ require (
 )
 
 require (
+	github.com/antithesishq/antithesis-sdk-go v0.7.0-default-no-op // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/buger/jsonparser v1.2.0 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
@@ -67,6 +69,7 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/golang-jwt/jwt/v4 v4.5.2 // indirect
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0 // indirect
+	github.com/google/go-tpm v0.9.8 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0 // indirect
 	github.com/hashicorp/logutils v1.0.0 // indirect
@@ -78,12 +81,14 @@ require (
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/jonas-p/go-shp v0.1.1 // indirect
 	github.com/jonboulle/clockwork v0.5.0 // indirect
-	github.com/klauspost/compress v1.18.5 // indirect
+	github.com/klauspost/compress v1.18.6 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.22 // indirect
+	github.com/minio/highwayhash v1.0.4 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/mmcloughlin/profile v0.1.1 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+	github.com/nats-io/jwt/v2 v2.8.1 // indirect
 	github.com/nats-io/nkeys v0.4.15 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/nu7hatch/gouuid v0.0.0-20131221200532-179d4d0c4d8d // indirect

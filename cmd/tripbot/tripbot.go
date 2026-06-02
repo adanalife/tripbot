@@ -17,6 +17,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/database"
 	"github.com/adanalife/tripbot/pkg/discord"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
+	"github.com/adanalife/tripbot/pkg/eventbus"
 	"github.com/adanalife/tripbot/pkg/eventsub"
 	"github.com/adanalife/tripbot/pkg/feature"
 	"github.com/adanalife/tripbot/pkg/helpers"
@@ -183,7 +184,7 @@ func (t *Tripbot) Run() {
 	t.updateSubscribers()
 	t.getCurrentUsers()
 	t.startEventSub(shutdownCtx)
-	t.startNATS()
+	t.startNATS(shutdownCtx)
 	t.srv.StartEventHub(shutdownCtx)       // after startNATS: the hub subscribes to the live NATS conn
 	t.player.EmitCurrentVideo(shutdownCtx) // after the hub subscribes: seed its now-playing cache (no NATS replay)
 	t.startDiscord(shutdownCtx)
@@ -216,13 +217,23 @@ func (t *Tripbot) startFeatureFlags(ctx context.Context) {
 	go fc.Start(ctx)
 }
 
-// startNATS connects to the in-cluster NATS broker (phase 1 of the
-// pubsub migration). Optional — when NATS_URL is empty the connection
-// is skipped and publishes no-op silently; chatbot.realOnscreens.
-// ShowMiddleText still mirrors to NATS but the publish becomes a nil
-// check, leaving HTTP as the sole transport.
-func (t *Tripbot) startNATS() {
+// startNATS connects to the in-cluster NATS broker and declares the JetStream
+// streams that back the admin live console's durable history (phase 1 + 3 of
+// the pubsub migration). Optional — when NATS_URL is empty the connection is
+// skipped and publishes no-op silently; chatbot.realOnscreens.ShowMiddleText
+// still mirrors to NATS but the publish becomes a nil check, leaving HTTP as
+// the sole transport.
+//
+// EnsureStreams must run before StartEventHub so the streams exist when the hub
+// binds its ordered consumers. It no-ops when JetStream is unavailable (NATS off
+// or a server without JetStream) — the hub then falls back to live-only core
+// subscriptions, so a stream-declare failure must not be fatal.
+func (t *Tripbot) startNATS(ctx context.Context) {
 	natsclient.Connect(c.Conf.NatsURL, "tripbot")
+	if err := eventbus.EnsureStreams(ctx, natsclient.JetStream(), c.Conf.Environment); err != nil {
+		slog.WarnContext(ctx, "jetstream stream setup failed; live console will run without durable history",
+			"err", err)
+	}
 }
 
 // startSilentDisconnectWatchdog launches the goroutine that detects the
