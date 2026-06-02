@@ -52,6 +52,25 @@ esac
 export OBS_STREAM_ENCODER="${OBS_STREAM_ENCODER:-obs_x264}"
 echo "OBS stream encoder: ${OBS_STREAM_ENCODER}"
 
+# Streaming target platform. Default `twitch` preserves the original
+# hardcoded behavior exactly (service "Twitch", server "auto" — OBS
+# resolves "auto" via Twitch's ingest API at connect time). Set
+# STREAM_PLATFORM=youtube (k8s configmap in the obs-youtube overlay) to
+# point the same canvas/encoder at YouTube's RTMPS ingest. service.json.tmpl
+# consumes OBS_STREAM_SERVICE / OBS_STREAM_SERVER via envsubst below.
+case "${STREAM_PLATFORM:-twitch}" in
+  youtube)
+    export OBS_STREAM_SERVICE="YouTube - RTMPS"
+    export OBS_STREAM_SERVER="rtmps://a.rtmps.youtube.com:443/live2"
+    echo "OBS stream platform: youtube (YouTube - RTMPS)"
+    ;;
+  *)
+    export OBS_STREAM_SERVICE="Twitch"
+    export OBS_STREAM_SERVER="auto"
+    echo "OBS stream platform: twitch (server auto)"
+    ;;
+esac
+
 # OBS 32 split the legacy global.ini in two: app-level settings stayed in
 # global.ini (BrowserHWAccel etc.) and user-preference settings moved to
 # user.ini. Seed both so OBS sees a complete config and never prompts about
@@ -101,7 +120,7 @@ envsubst < /opt/obs/config/obs-websocket.json.tmpl > "$OBS_HOME/plugin_config/ob
 # Render service.json only when STREAM_KEY is set. start-obs.sh keys off
 # this file's existence to decide whether to pass --startstreaming.
 if [[ -n "${STREAM_KEY:-}" ]]; then
-  echo "STREAM_KEY set; configuring Twitch and starting stream."
+  echo "STREAM_KEY set; configuring ${OBS_STREAM_SERVICE} and starting stream."
   envsubst < /opt/obs/config/service.json.tmpl \
     > "$OBS_HOME/basic/profiles/ADanaLife/service.json"
 else
