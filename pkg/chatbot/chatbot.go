@@ -71,7 +71,7 @@ type App struct {
 	Cron Cron
 	// Geocoder turns GPS coords into a place name for !location. Tests inject
 	// a recordingGeocoder / noopGeocoder; production uses realGeocoder which
-	// delegates to the pkg/geo default configured in Initialize.
+	// delegates to the pkg/geo default configured in ConnectIRC.
 	Geocoder Geocoder
 	// Twitch is the command-time Twitch Helix surface (follow lookups today).
 	// Tests inject a recordingTwitch; production uses realTwitch which
@@ -81,9 +81,9 @@ type App struct {
 
 	// commands is this App's command registry (built by buildRegistry);
 	// singleWordLookup / multiWordLookup index it by trigger + alias for
-	// dispatch. Populated by indexCommands() — production builds defaultApp's
-	// in init(); tests build a test App's via newTestApp. Replaces the former
-	// package-level globals so the registry travels with the App.
+	// dispatch. Built by indexCommands(), called from New() at construction.
+	// Replaces the former package-level globals so the registry travels with
+	// the App.
 	commands         []Command
 	singleWordLookup map[string]*Command
 	multiWordLookup  map[string]*Command
@@ -136,13 +136,6 @@ const subscriberMsg = "You must be a subscriber to run that command :)"
 // checkAccess. Disabled for launch so first-time viewers aren't told to
 // follow before they can try commands. Flip back to true to re-enable.
 var followerGatingEnabled = false
-
-// Initialize builds the package singleton's Twitch client. Thin wrapper over
-// defaultApp.ConnectIRC kept so cmd/tripbot is unchanged during the migration;
-// it goes away once cmd constructs its own App and calls ConnectIRC directly.
-func Initialize() *twitch.Client {
-	return defaultApp.ConnectIRC()
-}
 
 // ConnectIRC builds the Twitch IRC client, wires this App's inbound adapters to
 // it, and returns it. Also does the process-wide geocoder + Twitch-API warmup.
@@ -217,11 +210,6 @@ func (a *App) Chatter(_ context.Context) {
 	// use twitch emote feature to add some color
 	a.IRC.Say("/me " + help())
 }
-
-// Chatter shim delegating to defaultApp, so cmd's cron wiring keeps referencing
-// chatbot.Chatter as a function value. Retires once cmd registers the App's
-// method directly (later Phase C step).
-func Chatter(ctx context.Context) { defaultApp.Chatter(ctx) }
 
 func help() string {
 	text := c.HelpMessages[helpIndex]
