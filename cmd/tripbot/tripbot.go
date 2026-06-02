@@ -80,8 +80,15 @@ var version = "dev"
 type Tripbot struct {
 	version string
 
+	// app is the chatbot App that owns the command registry and runs chat
+	// commands + inbound handlers. Constructed in NewTripbot; setUpTwitchClient
+	// wires its Twitch adapters to the IRC client (ConnectIRC), and eventsub /
+	// cron register its methods. Replaces the package-level defaultApp on the
+	// live path.
+	app *chatbot.App
+
 	// irc is the go-twitch-irc client, constructed by setUpTwitchClient
-	// (chatbot.Initialize) and shared by connectToTwitch, pollForTwitchToken
+	// (app.ConnectIRC) and shared by connectToTwitch, pollForTwitchToken
 	// and the token-refresh cron job (SetIRCToken).
 	irc *twitch.Client
 
@@ -133,6 +140,7 @@ type Tripbot struct {
 func NewTripbot(version string) *Tripbot {
 	return &Tripbot{
 		version: version,
+		app:     chatbot.New(),
 		srv:     server.New(),
 		player: video.NewPlayer(
 			onscreensClient.New(c.Conf.OnscreensServerHost, natsclient.DefaultPublisher(), c.Conf.Environment),
@@ -168,7 +176,7 @@ func (t *Tripbot) Run() {
 	t.sessions.InitLeaderboard(context.Background())
 	t.startCron()
 	t.startFeatureFlags(shutdownCtx)
-	t.loadTwitchToken(shutdownCtx)           // must precede chatbot.Initialize — provides the IRC token
+	t.loadTwitchToken(shutdownCtx)           // must precede setUpTwitchClient — provides the IRC token
 	t.refreshTokensIfNearExpiry(shutdownCtx) // closes the restart-desync gap with the hourly cron
 	t.setUpTwitchClient()                    // required for the below
 	t.updateSubscribers()
@@ -276,8 +284,8 @@ func (t *Tripbot) startEventSub(ctx context.Context) {
 			BroadcasterToken:  token,
 			BroadcasterUserID: mytwitch.ChannelID(),
 		}, eventsub.Handlers{
-			OnFollow:    chatbot.AnnounceNewFollower,
-			OnSubscribe: chatbot.AnnounceSubscriber,
+			OnFollow:    t.app.AnnounceNewFollower,
+			OnSubscribe: t.app.AnnounceSubscriber,
 		})
 		if err != nil && !errors.Is(err, context.Canceled) {
 			slog.ErrorContext(ctx, "eventsub run terminated", "err", err)
@@ -406,7 +414,7 @@ func (t *Tripbot) pollForTwitchToken(ctx context.Context) {
 			slog.InfoContext(ctx, "Twitch token loaded; bot will connect on next attempt")
 			// Push the freshly-loaded token into the (already-constructed)
 			// IRC client so the connect loop's next try uses it instead of
-			// the empty token captured at chatbot.Initialize.
+			// the empty token captured at ConnectIRC.
 			if tok := mytwitch.IRCAuthToken(); tok != "" && t.irc != nil {
 				t.irc.SetIRCToken(tok)
 			}
@@ -429,8 +437,8 @@ func (t *Tripbot) refreshTokensIfNearExpiry(ctx context.Context) {
 // setUpTwitchClient sets up the Twitch client,
 // used by many bot features
 func (t *Tripbot) setUpTwitchClient() {
-	// set up the Twitch client
-	t.irc = chatbot.Initialize()
+	// build the Twitch IRC client and wire the App's inbound adapters to it
+	t.irc = t.app.ConnectIRC()
 }
 
 // updateSubscribers gets the list of current subscribers
@@ -551,7 +559,7 @@ func (t *Tripbot) scheduleBackgroundJobs() {
 			t.irc.SetIRCToken(tok)
 		}
 	})
-	t.addJob(2*time.Hour+57*time.Minute+30*time.Second, "chatbot.Chatter", chatbot.Chatter)
+	t.addJob(2*time.Hour+57*time.Minute+30*time.Second, "chatbot.Chatter", t.app.Chatter)
 }
 
 // addJob registers a gocron job at the given interval, wrapping fn with
