@@ -35,32 +35,9 @@ func TestVersionHandlerReturnsInjectedTag(t *testing.T) {
 	}
 }
 
-// These tests exercise *parse-error* paths only — the handlers reject bad
-// input before reaching libvlc, so we never touch the real player.
-
-func TestVlcSkipHandlerInvalidIntReturns422(t *testing.T) {
-	s := &Server{}
-	req := httptest.NewRequest(http.MethodGet, "/vlc/skip?n=notanumber", nil)
-	rec := httptest.NewRecorder()
-
-	s.vlcSkipHandler(rec, req)
-
-	if rec.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("got status %d, want %d", rec.Code, http.StatusUnprocessableEntity)
-	}
-}
-
-func TestVlcBackHandlerInvalidIntReturns422(t *testing.T) {
-	s := &Server{}
-	req := httptest.NewRequest(http.MethodGet, "/vlc/back?n=notanumber", nil)
-	rec := httptest.NewRecorder()
-
-	s.vlcBackHandler(rec, req)
-
-	if rec.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("got status %d, want %d", rec.Code, http.StatusUnprocessableEntity)
-	}
-}
+// The vlc skip / back / play / random commands moved to NATS (nats.go); their
+// HTTP handlers and the parse-error tests that covered them are gone. The
+// equivalent decode-error coverage lives in nats_test.go now.
 
 func TestCatchAllHandlerNonGet(t *testing.T) {
 	s := &Server{}
