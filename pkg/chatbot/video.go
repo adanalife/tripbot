@@ -36,7 +36,7 @@ var (
 )
 
 // SetVideoPlayer installs the Player that realVideo delegates to. Called from
-// cmd/tripbot once the Player is constructed. Mirrors SetScheduler.
+// cmd/tripbot once the Player is constructed.
 func SetVideoPlayer(p *video.Player) {
 	videoMu.Lock()
 	videoPlayer = p

@@ -64,10 +64,10 @@ type App struct {
 	// which delegates to the pkg/natsclient singleton (no-op when
 	// NATS_URL is empty).
 	NATS NATS
-	// Cron stops the background scheduler during !shutdown. Tests inject
-	// noopCron{}; production uses realCron which delegates to the
-	// constructed *background.Scheduler cmd/tripbot installs via
-	// SetScheduler once cron has started.
+	// Cron stops the background scheduler during !shutdown. Defaults to
+	// noopCron{} (set in New(), also what tests use); cmd/tripbot assigns the
+	// constructed *background.Scheduler — which satisfies Cron directly — once
+	// cron has started.
 	Cron Cron
 	// Geocoder turns GPS coords into a place name for !location. Tests inject
 	// a recordingGeocoder / noopGeocoder; production uses realGeocoder which
@@ -115,7 +115,7 @@ func New() *App {
 		NowPlaying: newRealNowPlaying(),
 		Flags:      realFlags{},
 		NATS:       realNATS{},
-		Cron:       realCron{},
+		Cron:       noopCron{},
 		Geocoder:   realGeocoder{},
 		Twitch:     realTwitch{},
 	}
