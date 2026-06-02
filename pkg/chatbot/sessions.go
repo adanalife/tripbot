@@ -46,7 +46,7 @@ type Sessions interface {
 // handlers) delegate to. cmd/tripbot installs the single process-wide instance
 // via SetSessions once it's constructed. nil until then (brief startup window)
 // and in tests, which inject their own Sessions fake rather than realSessions —
-// so the nil guards below only ever fire pre-install. Mirrors SetVideoPlayer.
+// so the nil guards below only ever fire pre-install.
 var (
 	sessionsMu sync.RWMutex
 	sessions   *users.Sessions

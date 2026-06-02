@@ -107,8 +107,8 @@ type Tripbot struct {
 	// player owns "what's currently playing" — the single process-wide
 	// instance, constructed in NewTripbot. The 60s cron tick refreshes it
 	// (GetCurrentlyPlaying); findInitialVideo + gracefulShutdown read it; it's
-	// installed into chatbot (SetVideoPlayer) so commands read the same state,
-	// and it publishes video.changed to NATS for the admin panel.
+	// wrapped into the chatbot Video adapter (NewVideoAdapter) so commands read
+	// the same state, and it publishes video.changed to NATS for the admin panel.
 	player *video.Player
 
 	// sessions tracks who's currently in chat (the login map) + the
@@ -171,8 +171,8 @@ func (t *Tripbot) Run() {
 	t.srv.SetVersion(t.version)
 	t.startHttpServer(shutdownCtx)
 	t.findInitialVideo()
-	chatbot.SetVideoPlayer(t.player) // commands read the same Player the cron refreshes
-	chatbot.SetSessions(t.sessions)  // commands + IRC handlers read the same session state
+	t.app.Video = chatbot.NewVideoAdapter(t.player) // commands read the same Player the cron refreshes
+	chatbot.SetSessions(t.sessions)                 // commands + IRC handlers read the same session state
 	t.sessions.InitLeaderboard(context.Background())
 	t.startCron()
 	t.startFeatureFlags(shutdownCtx)
