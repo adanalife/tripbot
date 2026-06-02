@@ -63,9 +63,10 @@ type App struct {
 	// realNowPlaying which polls SomaFM.
 	NowPlaying NowPlaying
 	// Flags evaluates feature flag values for command-time gating. Tests
-	// inject noopFlags{} (every key false); production uses realFlags which
-	// delegates to the Postgres-backed client cmd/tripbot installs via
-	// SetFlagClient once the DB connection is up.
+	// inject noopFlags{} (every key false); New() defaults it to an empty
+	// in-memory client (same fail-closed contract) for the startup window +
+	// defaultApp, and cmd/tripbot assigns the Postgres-backed client once the
+	// DB connection is up.
 	Flags feature.FlagClient
 	// NATS is the fire-and-forget pubsub surface. Tests inject a
 	// recordingNATS to assert on publishes; production uses realNATS
@@ -121,7 +122,7 @@ func New() *App {
 		IRC:        realIRC{},
 		Sessions:   realSessions{},
 		NowPlaying: newRealNowPlaying(),
-		Flags:      realFlags{},
+		Flags:      feature.NewInMemoryClient(nil),
 		NATS:       realNATS{},
 		Cron:       noopCron{},
 		Geocoder:   realGeocoder{},

@@ -211,7 +211,7 @@ func (t *Tripbot) startFeatureFlags(ctx context.Context) {
 		return
 	}
 	t.flagClient = fc
-	chatbot.SetFlagClient(fc)
+	t.app.Flags = fc // command-time flag gating reads the same Postgres-backed client
 	t.srv.SetFlagClient(fc)
 	go fc.Start(ctx)
 }
