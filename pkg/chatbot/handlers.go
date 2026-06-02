@@ -42,22 +42,35 @@ type chatUser interface {
 }
 
 // checkAccess returns true when the user is allowed to run cmd.
-// It calls sayFn with the appropriate denial message when access is denied.
-func (cmd *Command) checkAccess(ctx context.Context, user chatUser, sayFn func(string)) bool {
+// It calls say with the appropriate denial message when access is denied.
+func (cmd *Command) checkAccess(ctx context.Context, user chatUser, say func(string)) bool {
 	if followerGatingEnabled && cmd.RequiresFollow && !user.HasCommandAvailable(ctx) {
-		sayFn(followerMsg)
+		say(followerMsg)
 		return false
 	}
 	if cmd.RequiresSubscriber && !user.IsSubscriber() {
-		sayFn(subscriberMsg)
+		say(subscriberMsg)
 		return false
 	}
 	return true
 }
 
-func dispatch(ctx context.Context, cmd *Command, user *users.User, params []string) {
+// sessionUser adapts a *users.User plus the installed *Sessions to the
+// chatUser access-check seam — the follower/subscriber + command-availability
+// checks now live on Sessions (per-provider state), not on User.
+type sessionUser struct {
+	s *users.Sessions
+	u *users.User
+}
+
+func (su sessionUser) HasCommandAvailable(ctx context.Context) bool {
+	return su.s.HasCommandAvailable(ctx, su.u)
+}
+func (su sessionUser) IsSubscriber() bool { return su.s.IsSubscriber(*su.u) }
+
+func (a *App) dispatch(ctx context.Context, cmd *Command, user *users.User, params []string) {
 	incChatCommandCounter(cmd.Trigger)
-	if !cmd.checkAccess(ctx, user, sayFn) {
+	if !cmd.checkAccess(ctx, sessionUser{currentSessions(), user}, a.IRC.Say) {
 		return
 	}
 	// Start a child span under the chatbot.handle_message span from
@@ -75,7 +88,7 @@ func dispatch(ctx context.Context, cmd *Command, user *users.User, params []stri
 
 // findCommand parses message and returns the matching Command and params.
 // Returns nil if no command matches.
-func findCommand(message string) (*Command, []string) {
+func (a *App) findCommand(message string) (*Command, []string) {
 	msg := normalizeCommandPrefix(strings.TrimSpace(message))
 	split := strings.Split(msg, " ")
 
@@ -99,7 +112,7 @@ func findCommand(message string) (*Command, []string) {
 	}
 
 	// multi-word alias lookup (e.g. "no audio", "no sound")
-	for alias, cmd := range multiWordLookup {
+	for alias, cmd := range a.multiWordLookup {
 		if msg == alias || strings.HasPrefix(msg, alias+" ") {
 			remainder := strings.TrimSpace(strings.TrimPrefix(msg, alias))
 			var mwParams []string
@@ -111,13 +124,13 @@ func findCommand(message string) (*Command, []string) {
 	}
 
 	// single-word lookup
-	if cmd, ok := singleWordLookup[command]; ok {
+	if cmd, ok := a.singleWordLookup[command]; ok {
 		return cmd, params
 	}
 	return nil, nil
 }
 
-func runCommand(ctx context.Context, user *users.User, message string) {
+func (a *App) runCommand(ctx context.Context, user *users.User, message string) {
 	// parse for otel span attribute (only set for !-prefixed commands)
 	msg := normalizeCommandPrefix(strings.TrimSpace(message))
 	split := strings.Split(msg, " ")
@@ -132,9 +145,9 @@ func runCommand(ctx context.Context, user *users.User, message string) {
 		trace.SpanFromContext(ctx).SetAttributes(attribute.String("twitch.command", command))
 	}
 
-	cmd, params := findCommand(message)
+	cmd, params := a.findCommand(message)
 	if cmd != nil {
-		dispatch(ctx, cmd, user, params)
+		a.dispatch(ctx, cmd, user, params)
 		return
 	}
 
@@ -169,19 +182,22 @@ func PrivateMessage(msg twitch.PrivateMessage) {
 	// check to see if the message is a command
 	//TODO: also include ones prefixed with whitespace?
 	// log in the user
-	user := users.LoginIfNecessary(ctx, username)
+	user := currentSessions().LoginIfNecessary(ctx, username)
 
-	runCommand(ctx, user, message)
+	// defaultApp is the package singleton; PrivateMessage is still a
+	// free-function Twitch callback (registered in Initialize). It becomes a
+	// thin adapter onto a cmd-constructed *App in the later Phase C steps.
+	defaultApp.runCommand(ctx, user, message)
 }
 
 // this event fires when a user joins the channel
 func UserJoin(joinMessage twitch.UserJoinMessage) {
-	users.LoginIfNecessary(context.Background(), joinMessage.User)
+	currentSessions().LoginIfNecessary(context.Background(), joinMessage.User)
 }
 
 // this event fires when a user leaves the channel
 func UserPart(partMessage twitch.UserPartMessage) {
-	users.LogoutIfNecessary(context.Background(), partMessage.User)
+	currentSessions().LogoutIfNecessary(context.Background(), partMessage.User)
 }
 
 // send message to chat if someone subs

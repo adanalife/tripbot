@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -1168,17 +1169,10 @@ func TestMilesCmd_OtherUser_NotInDB(t *testing.T) {
 }
 
 func TestMilesCmd_Self_WithMiles(t *testing.T) {
-	mock := installMockDB(t)
 	app := newTestApp(video.Video{})
-
-	mock.ExpectQuery(`SELECT id FROM users WHERE username = `).
-		WithArgs("viewer1").
-		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(42))
-	mock.ExpectQuery(`SELECT \* FROM "scoreboards" WHERE`).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(7, "miles_2026_05"))
-	mock.ExpectQuery(`SELECT \* FROM "scores" WHERE`).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "scoreboard_id", "value"}).
-			AddRow(99, 42, 7, 8.0))
+	// Stage the miles via the Sessions seam; the GetScore math behind
+	// CurrentMonthlyMiles is covered in pkg/users / pkg/scoreboards.
+	app.Sessions = &recordingSessions{Miles: 50.0, MonthlyMiles: 8.0}
 
 	out, restore := captureSay(t)
 	defer restore()
@@ -1193,24 +1187,12 @@ func TestMilesCmd_Self_WithMiles(t *testing.T) {
 	if !strings.Contains(msg, "(50mi total)") {
 		t.Errorf("expected lifetime total in self-lookup, got %q", msg)
 	}
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Error(err)
-	}
 }
 
 func TestMilesCmd_Self_NewcomerHint(t *testing.T) {
-	mock := installMockDB(t)
 	app := newTestApp(video.Video{})
-
 	// Brand-new user: monthly = 0, lifetime = 0 → triggers both newcomer hints.
-	mock.ExpectQuery(`SELECT id FROM users WHERE username = `).
-		WithArgs("newbie").
-		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(99))
-	mock.ExpectQuery(`SELECT \* FROM "scoreboards" WHERE`).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(7, "miles_2026_05"))
-	mock.ExpectQuery(`SELECT \* FROM "scores" WHERE`).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "scoreboard_id", "value"}).
-			AddRow(100, 99, 7, 0.0))
+	app.Sessions = &recordingSessions{Miles: 0.0, MonthlyMiles: 0.0}
 
 	out, restore := captureSay(t)
 	defer restore()
@@ -1225,35 +1207,19 @@ func TestMilesCmd_Self_NewcomerHint(t *testing.T) {
 	if !strings.Contains(msg, "takes a bit for me to notice you") {
 		t.Errorf("expected zero-miles-specific hint, got %q", msg)
 	}
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Error(err)
-	}
 }
 
 func TestMilesCmd_OtherUser_Found(t *testing.T) {
-	mock := installMockDB(t)
 	app := newTestApp(video.Video{})
 
-	// Stage Sessions.Find to return a known user (replaces the old
-	// sqlmock SELECT * FROM users expectation).
+	// Stage Sessions.Find to return a known user, plus the miles the seam
+	// reports for them (the GetScore math is covered in pkg/users).
 	rec := &recordingSessions{
-		FindResult: users.User{ID: 42, Username: "viewer1", Miles: 120.0},
+		FindResult:   users.User{ID: 42, Username: "viewer1", Miles: 120.0},
+		Miles:        120.0,
+		MonthlyMiles: 15.5,
 	}
 	app.Sessions = rec
-
-	// 1. scoreboards.getUserIDByName — raw SELECT id by username
-	mock.ExpectQuery(`SELECT id FROM users WHERE username = `).
-		WithArgs("viewer1").
-		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(42))
-
-	// 2. scoreboards.findOrCreateScoreboard — FirstOrCreate SELECT
-	mock.ExpectQuery(`SELECT \* FROM "scoreboards" WHERE`).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(7, "miles_2026_05"))
-
-	// 3. scoreboards.findOrCreateScore — FirstOrCreate SELECT for the score row
-	mock.ExpectQuery(`SELECT \* FROM "scores" WHERE`).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "scoreboard_id", "value"}).
-			AddRow(99, 42, 7, 15.5))
 
 	out, restore := captureSay(t)
 	defer restore()
@@ -1268,11 +1234,11 @@ func TestMilesCmd_OtherUser_Found(t *testing.T) {
 	if !strings.Contains(msg, "(120mi total)") {
 		t.Errorf("expected lifetime miles in parens, got %q", msg)
 	}
-	if len(rec.Calls) != 1 || rec.Calls[0] != `Find("viewer1")` {
-		t.Errorf("expected Sessions.Find(\"viewer1\") call, got %v", rec.Calls)
-	}
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Error(err)
+	// the other-user path looks the user up via Sessions.Find, then reads
+	// their miles through the same seam.
+	want := []string{`Find("viewer1")`, `CurrentMiles("viewer1")`, `CurrentMonthlyMiles("viewer1")`}
+	if !slices.Equal(rec.Calls, want) {
+		t.Errorf("expected %v, got %v", want, rec.Calls)
 	}
 }
 

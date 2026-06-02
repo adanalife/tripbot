@@ -32,8 +32,6 @@ var helixClient = mytwitch.Client
 
 // SetVersion lets cmd/tripbot inject its build-time version string
 // before the HTTP server starts.
-func SetVersion(v string) { defaultServer.SetVersion(v) }
-
 func (s *Server) SetVersion(v string) {
 	if v != "" {
 		s.versionTag = v
@@ -52,8 +50,6 @@ func (s *Server) SetVersion(v string) {
 
 // SetTwitchConnected updates the chat-connection signal: the in-memory flag
 // the admin panel reads and the tripbot_twitch_connected gauge.
-func SetTwitchConnected(connected bool) { defaultServer.SetTwitchConnected(connected) }
-
 func (s *Server) SetTwitchConnected(connected bool) {
 	s.twitchConnected.Store(connected)
 	instrumentation.TwitchConnection.Set(connected)
@@ -61,8 +57,6 @@ func (s *Server) SetTwitchConnected(connected bool) {
 
 // TwitchConnected reports the last-known chat-connection state, for the
 // admin panel's status row.
-func TwitchConnected() bool { return defaultServer.TwitchConnected() }
-
 func (s *Server) TwitchConnected() bool {
 	return s.twitchConnected.Load()
 }
@@ -74,8 +68,6 @@ func (s *Server) TwitchConnected() bool {
 
 // SetFlagClient lets cmd/tripbot install the Postgres-backed FlagClient
 // once startFeatureFlags has loaded the initial snapshot.
-func SetFlagClient(fc feature.FlagClient) { defaultServer.SetFlagClient(fc) }
-
 func (s *Server) SetFlagClient(fc feature.FlagClient) {
 	s.flagMu.Lock()
 	s.flagClient = fc
@@ -94,13 +86,13 @@ func (s *Server) flagSnapshot(ctx context.Context) []feature.Flag {
 // build-time ldflag; sha + built_at are read from the binary's embedded
 // VCS info (Go's automatic -buildvcs). started_at is when the process
 // began (admin.startedAt) so callers can derive uptime themselves.
-func versionHandler(w http.ResponseWriter, r *http.Request) {
+func (s *Server) versionHandler(w http.ResponseWriter, r *http.Request) {
 	resp := struct {
 		Tag       string `json:"tag"`
 		Sha       string `json:"sha"`
 		BuiltAt   string `json:"built_at"`
 		StartedAt string `json:"started_at"`
-	}{Tag: defaultServer.versionTag, StartedAt: startedAt.UTC().Format(time.RFC3339)}
+	}{Tag: s.versionTag, StartedAt: startedAt.UTC().Format(time.RFC3339)}
 
 	if info, ok := debug.ReadBuildInfo(); ok {
 		for _, s := range info.Settings {

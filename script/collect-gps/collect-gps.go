@@ -12,7 +12,10 @@ import (
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/geo"
 	"github.com/adanalife/tripbot/pkg/helpers"
+	"github.com/adanalife/tripbot/pkg/natsclient"
+	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
 	"github.com/adanalife/tripbot/pkg/video"
+	vlcClient "github.com/adanalife/tripbot/pkg/vlc-client"
 )
 
 // this will hold the filename passed in via the CLI
@@ -41,9 +44,14 @@ func main() {
 		if videoFile != "" {
 			log.Fatal("you cannot use -current and -file at the same time")
 		}
-		// preload the currently-playing vid
-		video.GetCurrentlyPlaying(context.Background())
-		videoFile = video.CurrentlyPlaying().String()
+		// preload the currently-playing vid via a constructed Player (no
+		// package-level defaultPlayer anymore).
+		player := video.NewPlayer(
+			onscreensClient.New(c.Conf.OnscreensServerHost, natsclient.DefaultPublisher(), c.Conf.Environment),
+			vlcClient.New(c.Conf.VlcServerHost),
+		)
+		player.GetCurrentlyPlaying(context.Background())
+		videoFile = player.Current().String()
 	}
 
 	// a file was passed in via the CLI

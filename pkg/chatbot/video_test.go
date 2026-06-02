@@ -3,6 +3,7 @@ package chatbot
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/adanalife/tripbot/pkg/video"
 )
@@ -13,6 +14,7 @@ type noopVideo struct{}
 
 func (noopVideo) Current() video.Video                              { return video.Video{} }
 func (noopVideo) GetCurrentlyPlaying(_ context.Context) video.Video { return video.Video{} }
+func (noopVideo) CurrentProgress() time.Duration                    { return 0 }
 func (noopVideo) FindRandomByState(_ context.Context, _ string) (video.Video, error) {
 	return video.Video{}, nil
 }
@@ -36,6 +38,10 @@ func (r *recordingVideo) Current() video.Video {
 func (r *recordingVideo) GetCurrentlyPlaying(_ context.Context) video.Video {
 	r.Calls = append(r.Calls, "GetCurrentlyPlaying()")
 	return r.Vid
+}
+func (r *recordingVideo) CurrentProgress() time.Duration {
+	r.Calls = append(r.Calls, "CurrentProgress()")
+	return 0
 }
 func (r *recordingVideo) FindRandomByState(_ context.Context, state string) (video.Video, error) {
 	r.Calls = append(r.Calls, fmt.Sprintf("FindRandomByState(%q)", state))

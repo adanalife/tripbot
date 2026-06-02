@@ -70,7 +70,7 @@ var onscreenRegistry = map[string]onscreenStyle{
 		Name: SlugMiddleText, FontCSS: `"Trebuchet MS", sans-serif`, FontSizePx: 18, ColorCSS: "#ffffff",
 	},
 	SlugLeaderboard: {
-		// Server emits an HTML grid (see users.LeaderboardContent) so the
+		// Server emits an HTML grid (see renderLeaderboard) so the
 		// score column aligns via CSS rather than space-padding — any font
 		// works.
 		Name: SlugLeaderboard, FontCSS: `"Trebuchet MS", sans-serif`, FontSizePx: 18, ColorCSS: "#ffffff",

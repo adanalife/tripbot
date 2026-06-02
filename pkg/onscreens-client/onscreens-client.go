@@ -2,6 +2,7 @@ package onscreensClient
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log/slog"
@@ -10,28 +11,56 @@ import (
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/helpers"
+	"github.com/adanalife/tripbot/pkg/natsclient"
+	oe "github.com/adanalife/tripbot/pkg/onscreens-events"
 	"github.com/adanalife/tripbot/pkg/scoreboards"
-	"github.com/adanalife/tripbot/pkg/users"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
-// Client talks to the onscreens-server HTTP API. Construct via New(host).
+// Client talks to the onscreens-server HTTP API and mirrors each command
+// onto NATS. Construct via New(host, nats, env).
+//
+// The NATS publish is the HTTP→NATS migration (phase 2): commands publish to
+// NATS alongside the HTTP call, with HTTP still the source of truth, and the
+// onscreens-server subscriber acts on the same payload. nats may be nil
+// (tests that don't exercise pubsub) — publishes no-op then.
 type Client struct {
 	serverURL  string
 	httpClient *http.Client
+	nats       natsclient.Publisher
+	env        string
 }
 
 // New returns a Client pointed at the given onscreens-server host. The HTTP
 // transport is OTel-instrumented so outbound calls produce spans and
-// propagate W3C tracecontext headers.
-func New(host string) *Client {
+// propagate W3C tracecontext headers. nats + env drive the NATS mirror; pass
+// natsclient.DefaultPublisher() in production, or a nil publisher to disable
+// the mirror (tests).
+func New(host string, nats natsclient.Publisher, env string) *Client {
 	return &Client{
 		serverURL:  "http://" + host,
 		httpClient: &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)},
+		nats:       nats,
+		env:        env,
 	}
 }
 
+// publish marshals ev and fires it on subject. Fire-and-forget: marshal
+// errors are logged, and a nil publisher (or a nil underlying conn) no-ops.
+func (c *Client) publish(ctx context.Context, subject string, ev any) {
+	if c.nats == nil {
+		return
+	}
+	payload, err := json.Marshal(ev)
+	if err != nil {
+		slog.ErrorContext(ctx, "marshal onscreens event", "err", err, "subject", subject)
+		return
+	}
+	c.nats.Publish(ctx, subject, payload)
+}
+
 func (c *Client) HideMiddleText(ctx context.Context) error {
+	c.publish(ctx, oe.MiddleHideSubject(c.env), oe.Command{Envelope: oe.NewEnvelope()})
 	_, err := c.get(ctx, c.serverURL+"/onscreens/middle/hide")
 	if err != nil {
 		slog.ErrorContext(ctx, "error hiding middle onscreen", "err", err)
@@ -41,6 +70,12 @@ func (c *Client) HideMiddleText(ctx context.Context) error {
 }
 
 func (c *Client) ShowMiddleText(ctx context.Context, msg string) error {
+	// Publish NATS first (cheap, fire-and-forget) so a slow HTTP call doesn't
+	// delay it; HTTP remains the source of truth during the mirror period.
+	c.publish(ctx, oe.MiddleShowSubject(c.env), oe.MiddleShow{
+		Envelope: oe.NewEnvelope(),
+		Msg:      msg,
+	})
 	url := c.serverURL + "/onscreens/middle/show"
 	url = fmt.Sprintf("%s?msg=%s", url, helpers.Base64Encode(msg))
 	_, err := c.get(ctx, url)
@@ -52,12 +87,25 @@ func (c *Client) ShowMiddleText(ctx context.Context, msg string) error {
 }
 
 func (c *Client) ShowLeaderboard(ctx context.Context, title string, leaderboard [][]string) error {
-	content := users.LeaderboardContent(title, leaderboard)
+	// onscreens-server renders the HTML now, so both transports carry the
+	// structured {title, rows} payload. Build it once and reuse it for the
+	// NATS publish and the base64-JSON HTTP query param.
+	ev := oe.LeaderboardShow{
+		Envelope: oe.NewEnvelope(),
+		Title:    title,
+		Rows:     leaderboard,
+	}
+	c.publish(ctx, oe.LeaderboardShowSubject(c.env), ev)
 
+	payload, err := json.Marshal(ev)
+	if err != nil {
+		slog.ErrorContext(ctx, "marshal leaderboard event", "err", err)
+		return err
+	}
 	url := c.serverURL + "/onscreens/leaderboard/show"
-	url = fmt.Sprintf("%s?content=%s", url, helpers.Base64Encode(content))
+	url = fmt.Sprintf("%s?content=%s", url, helpers.Base64Encode(string(payload)))
 
-	_, err := c.get(ctx, url)
+	_, err = c.get(ctx, url)
 	if err != nil {
 		slog.ErrorContext(ctx, "error showing leaderboard onscreen", "err", err)
 		return err
@@ -96,6 +144,7 @@ func (c *Client) ShowGuessLeaderboard(ctx context.Context) {
 }
 
 func (c *Client) ShowTimewarp(ctx context.Context) error {
+	c.publish(ctx, oe.TimewarpShowSubject(c.env), oe.Command{Envelope: oe.NewEnvelope()})
 	_, err := c.get(ctx, c.serverURL+"/onscreens/timewarp/show")
 	if err != nil {
 		slog.ErrorContext(ctx, "error showing timewarp onscreen", "err", err)
@@ -117,6 +166,9 @@ func (c *Client) ShowFlag(ctx context.Context, dur time.Duration) error {
 }
 
 func (c *Client) ShowGPSImage(ctx context.Context, dur time.Duration) error {
+	// dur isn't transported — the server owns the GPS overlay's duration
+	// (gpsDuration); the HTTP query param is vestigial and ignored there too.
+	c.publish(ctx, oe.GPSShowSubject(c.env), oe.Command{Envelope: oe.NewEnvelope()})
 	url := c.serverURL + "/onscreens/gps/show"
 	url = fmt.Sprintf("%s?duration=%s", url, helpers.Base64Encode(string(rune(dur))))
 	_, err := c.get(ctx, url)
@@ -128,6 +180,7 @@ func (c *Client) ShowGPSImage(ctx context.Context, dur time.Duration) error {
 }
 
 func (c *Client) HideGPSImage(ctx context.Context) error {
+	c.publish(ctx, oe.GPSHideSubject(c.env), oe.Command{Envelope: oe.NewEnvelope()})
 	_, err := c.get(ctx, c.serverURL+"/onscreens/gps/hide")
 	if err != nil {
 		slog.ErrorContext(ctx, "error hiding gps onscreen", "err", err)

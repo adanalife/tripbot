@@ -7,6 +7,36 @@ All notable changes to TripBot. Format follows [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+## [v2.18.2] — 2026-06-02
+
+Patch release, almost entirely internal. The no-globals refactor finishes Phase B and opens Phase C: the last per-package `defaultX` singletons (`pkg/server`, `pkg/video`, `pkg/users`) are retired in favour of constructed structs threaded from cmd, cmd's own globals move into a `Tripbot` struct, and the chatbot's command registry, dispatch path, and event handlers move onto the injectable `App`. NATS phase 2 moves the onscreens command surface (and the admin panel's now-playing) onto pub/sub. Rounded out by a logout-path crash-loop fix, the producer half of the tripbot↔infra anti-drift contract, a `go test` env-default fix, and a CI action bump.
+
+### fix
+
+- **Logged-out users no longer crash-loop `save()`.** A user whose DB row couldn't be found or created (a transient `Find` error returns `ID: 0`) was cached in the session and then failed GORM's `Updates()` on every logout tick with "WHERE conditions required". `save()` now skips a zero-ID user and `login()` won't cache one, so the session self-heals on the next tick. No data lost — the `events` log and monthly scoreboard were unaffected; only the `users.miles` cache missed its increment, and it is recomputable. (TRIPBOT-8D, [#778])
+
+### pubsub
+
+- **NATS phase 2 — onscreens command surface on pub/sub.** The onscreens overlay commands move from direct HTTP calls onto NATS, extending the pub/sub substrate. ([#736])
+
+### refactor
+
+- **Phase B finish — retire the last package `defaultX` singletons.** `pkg/users` session state is encapsulated behind a constructed `*Sessions` with an injected `ChatterSource` ([#753]) and then has its `defaultSessions` global retired ([#764]); `pkg/server` retires `defaultServer`, threading a `*Server` through cmd ([#757]); `pkg/video` retires `defaultPlayer` and sources the admin panel's now-playing from NATS ([#758]).
+- **cmd globals lifted into a `Tripbot` struct (Phase C.1).** The `cmd/tripbot` entrypoint constructs and threads its dependencies instead of reaching for package globals. ([#755])
+- **chatbot Phase C — registry, dispatch, and handlers onto the `App`.** Social-media replies ([#766]), the dispatch path with access-check denials ([#768]), follower/subscriber announcements and the Chatter timer ([#769]), and the command registry with `findCommand` ([#770]) all move off package-level globals onto the injectable `App`, routing chat output through `a.IRC.Say`. Groundwork for retiring `defaultApp` and the `sayFn` global, and for multi-platform chat support.
+
+### CI
+
+- **`go test` defaults `ENV` to testing.** With `ENV` unset under `go test`, `config.SetEnvironment` defaulted to `development` and failed on the absent `.env.development`; it now defaults to `testing` via `testing.Testing()`, so bare `go test ./pkg/...` loads the checked-in `.env.testing` with no prefix — completing the repo-root resolution from v2.18.1. ([#767])
+
+### tooling
+
+- **tripbot↔infra anti-drift contract (producer half).** `pkg/contract/` holds the canonical service names, ports, and env-var keys as typed Go constants (cross-checked against `pkg/config/tripbot`, `pkg/obs`, `pkg/database`); a `go:generate` tool emits `contract.json` and a test fails on drift in either direction. A new `contract.yml` workflow regenerates in CI and fails if the committed file is stale. The infra cdk8s manifests consume it via `task contract:sync`. Dependency-free, so generate + test stay fast and hermetic. ([#777])
+
+### deps
+
+- **`jdx/mise-action` 2 → 4.** ([#759])
+
 ## [v2.18.1] — 2026-06-01
 
 Patch release. Mostly internals: the Phase B no-globals refactor lands its final package conversions — `pkg/twitch` and `pkg/server` now construct a `*API` / `*Server` instead of mutating package-level globals — alongside extracting reverse-geocoding into an injectable `pkg/geo` and giving chatbot a `App.Twitch` injection seam. Admin-panel polish continues (htmx live updates replacing full-page reloads, a GPS-jump-aware map trail, and an offline-collapsed stream preview), plus dashcam-cv database groundwork (pgvector), a `go test` ergonomics fix, and an OpenTelemetry deps bump.
@@ -1298,3 +1328,17 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#720]: https://github.com/adanalife/tripbot/pull/720
 [#722]: https://github.com/adanalife/tripbot/pull/722
 [#723]: https://github.com/adanalife/tripbot/pull/723
+[#736]: https://github.com/adanalife/tripbot/pull/736
+[#753]: https://github.com/adanalife/tripbot/pull/753
+[#755]: https://github.com/adanalife/tripbot/pull/755
+[#757]: https://github.com/adanalife/tripbot/pull/757
+[#758]: https://github.com/adanalife/tripbot/pull/758
+[#759]: https://github.com/adanalife/tripbot/pull/759
+[#764]: https://github.com/adanalife/tripbot/pull/764
+[#766]: https://github.com/adanalife/tripbot/pull/766
+[#767]: https://github.com/adanalife/tripbot/pull/767
+[#768]: https://github.com/adanalife/tripbot/pull/768
+[#769]: https://github.com/adanalife/tripbot/pull/769
+[#770]: https://github.com/adanalife/tripbot/pull/770
+[#777]: https://github.com/adanalife/tripbot/pull/777
+[#778]: https://github.com/adanalife/tripbot/pull/778
