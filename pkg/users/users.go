@@ -87,6 +87,14 @@ func (s *Sessions) CurrentMonthlyMiles(ctx context.Context, u User) float32 {
 
 // User.save() will take the given user and store it in the DB
 func (u User) save(ctx context.Context) {
+	// A zero ID means we never found or created a DB row for this user (e.g. a
+	// transient DB error in Find). Model(&u).Updates() would build an UPDATE
+	// with no WHERE clause, which GORM refuses ("WHERE conditions required").
+	// Skip rather than emit that misleading error every tick.
+	if u.ID == 0 {
+		slog.WarnContext(ctx, "refusing to save user with no ID", "username", u.Username)
+		return
+	}
 	if c.Conf.Verbose {
 		slog.InfoContext(ctx, "saving user", "username", u.Username)
 	}
