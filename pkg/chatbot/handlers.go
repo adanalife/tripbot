@@ -215,22 +215,22 @@ func (a *App) HandleWhisper(msg IncomingMessage) {
 // --- Twitch inbound adapters ---
 //
 // These translate go-twitch-irc event types into neutral Handle* calls on the
-// package singleton. They stay registered in Initialize until cmd constructs
-// the App and registers its methods directly (later Phase C step); a future
-// YouTube/etc. transport adds its own adapters feeding the same Handle* methods.
+// App, and are wired to the IRC client in ConnectIRC. A future YouTube/etc.
+// transport adds its own adapters feeding the same Handle* methods, so the
+// command path never learns about platforms.
 
-func PrivateMessage(msg twitch.PrivateMessage) {
-	defaultApp.HandleMessage(context.Background(), IncomingMessage{User: msg.User.Name, Text: msg.Message})
+func (a *App) onTwitchMessage(msg twitch.PrivateMessage) {
+	a.HandleMessage(context.Background(), IncomingMessage{User: msg.User.Name, Text: msg.Message})
 }
 
-func UserJoin(joinMessage twitch.UserJoinMessage) {
-	defaultApp.HandleJoin(joinMessage.User)
+func (a *App) onTwitchJoin(joinMessage twitch.UserJoinMessage) {
+	a.HandleJoin(joinMessage.User)
 }
 
-func UserPart(partMessage twitch.UserPartMessage) {
-	defaultApp.HandlePart(partMessage.User)
+func (a *App) onTwitchPart(partMessage twitch.UserPartMessage) {
+	a.HandlePart(partMessage.User)
 }
 
-func GetWhisper(message twitch.WhisperMessage) {
-	defaultApp.HandleWhisper(IncomingMessage{User: message.User.Name, Text: message.Message})
+func (a *App) onTwitchWhisper(message twitch.WhisperMessage) {
+	a.HandleWhisper(IncomingMessage{User: message.User.Name, Text: message.Message})
 }

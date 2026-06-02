@@ -259,10 +259,3 @@ func (a *App) registerTrigger(trigger string, cmd *Command) {
 		a.singleWordLookup[trigger] = cmd
 	}
 }
-
-// init builds the package singleton's registry. Once cmd constructs the App and
-// hands it to the message path (later Phase C step), this moves into that
-// constructor and defaultApp goes away.
-func init() {
-	defaultApp.indexCommands()
-}

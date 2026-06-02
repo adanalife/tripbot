@@ -99,20 +99,31 @@ func (a *App) db() *gorm.DB {
 	return database.GormDB()
 }
 
-var defaultApp = &App{
-	// DB stays nil; commands use a.db() which falls back to database.GormDB().
-	Onscreens:  realOnscreens{c: onscreensClient.New(c.Conf.OnscreensServerHost, natsclient.DefaultPublisher(), c.Conf.Environment)},
-	VLC:        realVLC{c: vlcClient.New(c.Conf.VlcServerHost)},
-	Video:      realVideo{},
-	IRC:        realIRC{},
-	Sessions:   realSessions{},
-	NowPlaying: newRealNowPlaying(),
-	Flags:      realFlags{},
-	NATS:       realNATS{},
-	Cron:       realCron{},
-	Geocoder:   realGeocoder{},
-	Twitch:     realTwitch{},
+// New constructs an App wired with the production (realX) dependency adapters,
+// with its command registry built and indexed. cmd builds the live App with
+// this; the package singleton defaultApp is built from it for the package-level
+// Twitch adapters / eventsub shims and the tests. Construction touches no
+// network or DB — the realX adapters are lazy.
+func New() *App {
+	a := &App{
+		// DB stays nil; commands use a.db() which falls back to database.GormDB().
+		Onscreens:  realOnscreens{c: onscreensClient.New(c.Conf.OnscreensServerHost, natsclient.DefaultPublisher(), c.Conf.Environment)},
+		VLC:        realVLC{c: vlcClient.New(c.Conf.VlcServerHost)},
+		Video:      realVideo{},
+		IRC:        realIRC{},
+		Sessions:   realSessions{},
+		NowPlaying: newRealNowPlaying(),
+		Flags:      realFlags{},
+		NATS:       realNATS{},
+		Cron:       realCron{},
+		Geocoder:   realGeocoder{},
+		Twitch:     realTwitch{},
+	}
+	a.indexCommands()
+	return a
 }
+
+var defaultApp = New()
 
 // used to determine which help message to display
 // randomized so it starts with a new one every restart
@@ -126,9 +137,17 @@ const subscriberMsg = "You must be a subscriber to run that command :)"
 // follow before they can try commands. Flip back to true to re-enable.
 var followerGatingEnabled = false
 
-// Initialize returns a Twitch client struct with all of the various configuration in place.
+// Initialize builds the package singleton's Twitch client. Thin wrapper over
+// defaultApp.ConnectIRC kept so cmd/tripbot is unchanged during the migration;
+// it goes away once cmd constructs its own App and calls ConnectIRC directly.
 func Initialize() *twitch.Client {
-	var err error
+	return defaultApp.ConnectIRC()
+}
+
+// ConnectIRC builds the Twitch IRC client, wires this App's inbound adapters to
+// it, and returns it. Also does the process-wide geocoder + Twitch-API warmup.
+// The returned client is connected by the caller (cmd/tripbot).
+func (a *App) ConnectIRC() *twitch.Client {
 	Uptime = time.Now()
 
 	// set up the process-wide geocoder (coords -> places). realGeocoder and
@@ -139,7 +158,7 @@ func Initialize() *twitch.Client {
 	// at boot, log and continue so the process stays up (readiness reports
 	// not-ready until the IRC connection lands). mytwitch.Client() doesn't
 	// cache on failure, so callers retry once Twitch is back.
-	if _, err = mytwitch.Client(); err != nil {
+	if _, err := mytwitch.Client(); err != nil {
 		slog.Error("twitch API client unavailable at startup; continuing", "err", err)
 	}
 
@@ -147,12 +166,12 @@ func Initialize() *twitch.Client {
 	// cmd/auth-bootstrap; cmd/tripbot calls mytwitch.LoadFromDB before this.
 	client = twitch.NewClient(c.Conf.BotUsername, mytwitch.IRCAuthToken())
 
-	// attach handlers
-	client.OnUserJoinMessage(UserJoin)
-	client.OnUserPartMessage(UserPart)
-	// client.OnUserNoticeMessage(chatbot.UserNotice)
-	client.OnWhisperMessage(GetWhisper)
-	client.OnPrivateMessage(PrivateMessage)
+	// attach this App's Twitch inbound adapters
+	client.OnUserJoinMessage(a.onTwitchJoin)
+	client.OnUserPartMessage(a.onTwitchPart)
+	// client.OnUserNoticeMessage(...)
+	client.OnWhisperMessage(a.onTwitchWhisper)
+	client.OnPrivateMessage(a.onTwitchMessage)
 
 	return client
 }
