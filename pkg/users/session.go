@@ -97,6 +97,14 @@ func (s *Sessions) login(ctx context.Context, username string) *User {
 	now := time.Now()
 
 	user := FindOrCreate(ctx, username)
+	// A zero ID means FindOrCreate couldn't get a DB row (transient Find error
+	// or a failed create). Don't cache an un-saveable user in the session, or
+	// every later logout tick would fail save(). Return without logging them in;
+	// the next tick retries FindOrCreate and self-heals once the DB recovers.
+	if user.ID == 0 {
+		slog.WarnContext(ctx, "could not find or create user, skipping login", "username", username)
+		return &user
+	}
 	// increment the number of visits
 	user.NumVisits = user.NumVisits + 1
 	// set the login time

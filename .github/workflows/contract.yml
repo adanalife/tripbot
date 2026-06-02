@@ -1,0 +1,42 @@
+name: contract
+
+# Guards the anti-drift contract bridge (pkg/contract): tripbot is the source of
+# truth for the service names / ports / env-var keys the infra cdk8s manifests
+# consume. This catches both failure modes — a constant changed without
+# regenerating contract.json, and contract.json hand-edited away from the
+# constants. pkg/contract is dependency-free (no cgo / libvlc), so this is fast.
+on:
+  pull_request:
+    paths:
+      - 'pkg/contract/**'
+      - '.github/workflows/contract.yml'
+  push:
+    branches:
+      - develop
+      - master
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      # Go toolchain from .tool-versions, per
+      # vault/decisions/golang-development-with-mise.md.
+      - uses: jdx/mise-action@v4
+
+      # `go generate` must reproduce the committed contract.json byte-for-byte.
+      - name: Regenerate contract.json
+        run: go generate ./pkg/contract
+
+      - name: Assert contract.json is up to date
+        run: |
+          if ! git diff --exit-code pkg/contract/contract.json; then
+            echo "::error::pkg/contract/contract.json is stale — run 'go generate ./pkg/contract' and commit."
+            exit 1
+          fi
+
+      # The test re-asserts constants == committed JSON (defense in depth, and
+      # covers the case where contract.json was hand-edited).
+      - name: Test
+        run: go test ./pkg/contract/...
