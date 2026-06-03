@@ -28,6 +28,20 @@ type FlagClient interface {
 	Snapshot(ctx context.Context) []Flag
 }
 
+// FlagToggler is the admin write surface: flip a flag's global default on or
+// off and make the change live immediately. It's kept separate from
+// FlagClient so the read path stays OpenFeature-shaped (a future SDK swap
+// only has to satisfy Bool/Snapshot); only the Postgres-backed client
+// implements it. Callers that want the toggle surface type-assert their
+// FlagClient to FlagToggler and degrade gracefully when it's absent (e.g.
+// the in-memory fallback used before the DB client is wired).
+type FlagToggler interface {
+	// SetEnabled persists the new global-default state for key and refreshes
+	// the in-memory snapshot so the change takes effect without waiting for
+	// the next background poll. Returns an error if key doesn't exist.
+	SetEnabled(ctx context.Context, key string, enabled bool) error
+}
+
 // EvalContext carries the targeting attributes a flag is evaluated against.
 // The App is responsible for populating it (Channel, Env from config;
 // Username and Roles from the user being acted on, if any).

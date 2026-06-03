@@ -102,14 +102,10 @@ func (s *Server) Start(ctx context.Context) error {
 	// version endpoint — returns build metadata as JSON
 	r.Handle("/version", tagged("/version", s.versionHandler)).Methods("GET", "HEAD")
 
-	// onscreen endpoints
+	// onscreen endpoints — commands (middle / leaderboard / timewarp / gps /
+	// flag) arrive over NATS now (see nats.go); only the browser-source feeds
+	// remain on HTTP: state JSON, per-onscreen HTML pages, and image assets.
 	osc := r.PathPrefix("/onscreens").Methods("GET").Subrouter()
-	osc.Handle("/flag/{action}", tagged("/onscreens/flag/{action}", s.onscreensFlagHandler))
-	osc.Handle("/gps/{action}", tagged("/onscreens/gps/{action}", s.onscreensGpsHandler))
-	osc.Handle("/leaderboard/{action}", tagged("/onscreens/leaderboard/{action}", s.onscreensLeaderboardHandler))
-	osc.Handle("/middle/{action}", tagged("/onscreens/middle/{action}", s.onscreensMiddleHandler))
-	osc.Handle("/timewarp/{action}", tagged("/onscreens/timewarp/{action}", s.onscreensTimewarpHandler))
-	// browser-source feeds: state JSON, per-onscreen HTML pages, and image assets.
 	osc.Handle("/state.json", tagged("/onscreens/state.json", s.onscreensStateHandler))
 	osc.Handle("/render/{name}", tagged("/onscreens/render/{name}", s.onscreensRenderHandler))
 	osc.Handle("/asset/{name}", tagged("/onscreens/asset/{name}", s.onscreensAssetHandler))
