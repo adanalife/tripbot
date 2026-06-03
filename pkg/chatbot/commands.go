@@ -233,17 +233,17 @@ func (a *App) weatherCmd(ctx context.Context, user *users.User, _ []string) {
 	}
 	vid := a.Video.Current()
 	if vid.Flagged {
-		a.IRC.Say("I couldn't figure out current GPS coords, using next closest...")
+		a.Chat.Say("I couldn't figure out current GPS coords, using next closest...")
 		vid = vid.Next(ctx)
 	}
 	lat, lng, _ := vid.Location()
 	desc, err := a.Weather.Historical(ctx, vid.DateFilmed, lat, lng)
 	if err != nil {
 		slog.ErrorContext(ctx, "weather lookup failed", "err", err)
-		a.IRC.Say("I couldn't fetch the weather for this spot, sorry!")
+		a.Chat.Say("I couldn't fetch the weather for this spot, sorry!")
 		return
 	}
-	a.IRC.Say(desc)
+	a.Chat.Say(desc)
 }
 
 func (a *App) locationCmd(ctx context.Context, user *users.User, _ []string) {

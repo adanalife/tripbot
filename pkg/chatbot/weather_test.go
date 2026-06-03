@@ -31,16 +31,16 @@ func (r *recordingWeather) Historical(_ context.Context, when time.Time, lat, ln
 
 func TestWeatherCmd_FlagOff_StaysSilent(t *testing.T) {
 	app := newTestApp(newTestVideo("Wyoming", 43.0, -108.0, time.Date(2018, 3, 7, 15, 0, 0, 0, time.UTC)))
-	irc := &recordingIRC{}
+	chat := &recordingChat{}
 	weather := &recordingWeather{Result: "Clear sky, 58°F"}
-	app.IRC = irc
+	app.Chat = chat
 	app.Weather = weather
 	// Flags defaults to noopFlags{} (every key false) — the fresh-deploy state.
 
 	app.weatherCmd(context.Background(), newTestUser("viewer1"), nil)
 
-	if len(irc.Says) != 0 {
-		t.Errorf("flag off: expected no chat output, got %v", irc.Says)
+	if len(chat.Says) != 0 {
+		t.Errorf("flag off: expected no chat output, got %v", chat.Says)
 	}
 	if len(weather.Calls) != 0 {
 		t.Errorf("flag off: expected no weather lookup, got %v", weather.Calls)
@@ -49,21 +49,21 @@ func TestWeatherCmd_FlagOff_StaysSilent(t *testing.T) {
 
 func TestWeatherCmd_FlagOn_SaysConditionsWithoutDate(t *testing.T) {
 	app := newTestApp(newTestVideo("Wyoming", 43.0, -108.0, time.Date(2018, 3, 7, 15, 0, 0, 0, time.UTC)))
-	irc := &recordingIRC{}
-	app.IRC = irc
+	chat := &recordingChat{}
+	app.Chat = chat
 	app.Weather = &recordingWeather{Result: "Clear sky, 58°F"}
 	app.Flags = &recordingFlags{Set: map[string]bool{weatherFlagKey: true}}
 
 	app.weatherCmd(context.Background(), newTestUser("viewer1"), nil)
 
-	if len(irc.Says) != 1 {
-		t.Fatalf("flag on: expected exactly one chat message, got %d: %v", len(irc.Says), irc.Says)
+	if len(chat.Says) != 1 {
+		t.Fatalf("flag on: expected exactly one chat message, got %d: %v", len(chat.Says), chat.Says)
 	}
-	if irc.Says[0] != "Clear sky, 58°F" {
-		t.Errorf("unexpected message %q", irc.Says[0])
+	if chat.Says[0] != "Clear sky, 58°F" {
+		t.Errorf("unexpected message %q", chat.Says[0])
 	}
-	if strings.Contains(irc.Says[0], "2018") || strings.Contains(irc.Says[0], "Mar") {
-		t.Errorf("message should not contain the filmed date, got %q", irc.Says[0])
+	if strings.Contains(chat.Says[0], "2018") || strings.Contains(chat.Says[0], "Mar") {
+		t.Errorf("message should not contain the filmed date, got %q", chat.Says[0])
 	}
 }
 
