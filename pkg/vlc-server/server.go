@@ -89,6 +89,11 @@ func (s *Server) releasePartial() {
 func (s *Server) Start(ctx context.Context) {
 	slog.InfoContext(ctx, "starting VLC web server", "bind", c.Conf.VlcServerBindAddress)
 
+	// Attach NATS subscribers (observe-only mirror — see nats.go). No-op when
+	// the natsclient singleton is nil (NATS_URL unset); HTTP remains the sole
+	// transport in that case.
+	s.StartNATSSubscribers(ctx)
+
 	r := mux.NewRouter()
 
 	// healthcheck endpoints. /health/ + /health/live answer process-alive

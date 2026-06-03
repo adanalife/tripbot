@@ -76,9 +76,10 @@ func fakeVLCServer(t *testing.T, current *string) *vlcClient.Client {
 		http.NotFound(w, r)
 	}))
 	t.Cleanup(srv.Close)
-	// vlcClient.New(host) builds the URL as "http://" + host, so strip the
-	// scheme from the httptest URL before handing it over.
-	return vlcClient.New(strings.TrimPrefix(srv.URL, "http://"))
+	// vlcClient.New builds the URL as "http://" + host, so strip the scheme
+	// from the httptest URL before handing it over. nil publisher disables the
+	// NATS mirror — this rig exercises the HTTP path only.
+	return vlcClient.New(strings.TrimPrefix(srv.URL, "http://"), nil, "test")
 }
 
 // expectLoadHit queues a sqlmock expectation for a successful load() — i.e.
