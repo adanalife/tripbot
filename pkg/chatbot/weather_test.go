@@ -59,7 +59,7 @@ func TestWeatherCmd_FlagOn_SaysConditionsWithoutDate(t *testing.T) {
 	if len(irc.Says) != 1 {
 		t.Fatalf("flag on: expected exactly one chat message, got %d: %v", len(irc.Says), irc.Says)
 	}
-	if irc.Says[0] != "Weather here: Clear sky, 58°F" {
+	if irc.Says[0] != "Clear sky, 58°F" {
 		t.Errorf("unexpected message %q", irc.Says[0])
 	}
 	if strings.Contains(irc.Says[0], "2018") || strings.Contains(irc.Says[0], "Mar") {

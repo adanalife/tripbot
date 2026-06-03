@@ -235,7 +235,7 @@ func (a *App) weatherCmd(ctx context.Context, user *users.User, _ []string) {
 		a.IRC.Say("I couldn't fetch the weather for this spot, sorry!")
 		return
 	}
-	a.IRC.Say(fmt.Sprintf("Weather here: %s", desc))
+	a.IRC.Say(desc)
 }
 
 func (a *App) locationCmd(ctx context.Context, user *users.User, _ []string) {
