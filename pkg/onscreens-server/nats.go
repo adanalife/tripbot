@@ -42,6 +42,7 @@ func (s *Server) StartNATSSubscribers(ctx context.Context) {
 		{oe.TimewarpHideSubject(env), s.handleTimewarpHide},
 		{oe.GPSShowSubject(env), s.handleGPSShow},
 		{oe.GPSHideSubject(env), s.handleGPSHide},
+		{oe.FlagShowSubject(env), s.handleFlagShow},
 		{oe.FlagHideSubject(env), s.handleFlagHide},
 	}
 	for _, sb := range subs {
@@ -78,6 +79,22 @@ func (s *Server) handleLeaderboardShow(m *nats.Msg) {
 		return
 	}
 	s.Leaderboard.ShowFor(renderLeaderboard(ev.Title, ev.Rows), leaderboardDuration)
+}
+
+// handleFlagShow stores the state abbrev on the flag onscreen and shows it
+// for the standard duration; the flag asset handler resolves Content to the
+// embedded per-state image. Strict: a missing state is a publisher bug.
+func (s *Server) handleFlagShow(m *nats.Msg) {
+	var ev oe.FlagShow
+	if err := json.Unmarshal(m.Data, &ev); err != nil {
+		slog.Error("nats: decode flag.show", "err", err, "subject", m.Subject)
+		return
+	}
+	if ev.State == "" {
+		slog.Warn("nats: flag.show missing state", "subject", m.Subject)
+		return
+	}
+	s.Flag.ShowFor(ev.State, flagDuration)
 }
 
 // The hide + empty-payload show handlers below take no data beyond the

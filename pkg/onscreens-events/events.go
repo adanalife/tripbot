@@ -29,6 +29,15 @@ type MiddleShow struct {
 	Msg string `json:"msg"`
 }
 
+// FlagShow is the payload for the flag.show subject. State is a two-letter
+// US state abbreviation (e.g. "MO"); the server maps it to an embedded flag
+// image and falls back to a transparent placeholder if it has no flag for
+// that state.
+type FlagShow struct {
+	Envelope
+	State string `json:"state"`
+}
+
 // LeaderboardShow is the payload for the leaderboard.show subject. The
 // server renders Rows into the on-screen HTML, so the wire carries
 // structured data rather than a pre-rendered blob.

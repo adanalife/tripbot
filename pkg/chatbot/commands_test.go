@@ -576,7 +576,7 @@ func TestStateCmd_DrivesShowFlagOverlay(t *testing.T) {
 // --- flagCmd ---
 
 func TestFlagCmd_DrivesShowFlagOverlay(t *testing.T) {
-	app := newTestApp(video.Video{})
+	app := newTestApp(video.Video{State: "Missouri"})
 	rec := &recordingOnscreens{}
 	app.Onscreens = rec
 
@@ -585,8 +585,8 @@ func TestFlagCmd_DrivesShowFlagOverlay(t *testing.T) {
 
 	app.flagCmd(context.Background(), newTestUser("viewer1"), nil)
 
-	if len(rec.Calls) != 1 || rec.Calls[0] != "ShowFlag(10s)" {
-		t.Errorf("expected ShowFlag(10s) overlay call, got %v", rec.Calls)
+	if len(rec.Calls) != 1 || rec.Calls[0] != "ShowFlag(Missouri,10s)" {
+		t.Errorf("expected ShowFlag(Missouri,10s) overlay call, got %v", rec.Calls)
 	}
 }
 
@@ -751,7 +751,7 @@ func TestGuessCmd_CorrectGuess_DrivesOverlayAndPlayback(t *testing.T) {
 	}
 
 	// Overlay sequence: ShowFlag (state flag) then ShowTimewarp (from a.timewarp()).
-	wantOverlay := []string{"ShowFlag(10s)", "ShowTimewarp()"}
+	wantOverlay := []string{"ShowFlag(Colorado,10s)", "ShowTimewarp()"}
 	if len(recOverlay.Calls) != len(wantOverlay) {
 		t.Fatalf("expected %d overlay calls, got %d: %v", len(wantOverlay), len(recOverlay.Calls), recOverlay.Calls)
 	}

@@ -6,15 +6,16 @@ import (
 	"html/template"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/gorilla/mux"
 )
 
 // flagPlaceholderPNG is a 1×1 transparent PNG served by the flag asset
-// endpoint while the state-driven flag swap is disabled (see flag.go's
-// TODO). The browser source's <img> tag fetches this URL even when the
-// onscreen is hidden, so we serve a valid PNG to keep the request quiet
-// rather than 404.
+// endpoint when no flag should be shown — the browser source's <img> tag
+// fetches this URL even when the onscreen is hidden, and it's also the
+// fallback for a state we have no flag image for. Serving a valid PNG keeps
+// the request quiet rather than 404.
 var flagPlaceholderPNG = []byte{
 	0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
 	0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
@@ -39,6 +40,27 @@ var onscreenTmpl = template.Must(template.ParseFS(onscreenTemplates, "templates/
 //
 //go:embed assets/GPS.png
 var gpsPNG []byte
+
+// flagsFS holds the per-state flag images (assets/flags/<abbrev>.png,
+// lowercase two-letter abbreviation), embedded so the slim runtime image is
+// self-contained. The flag asset handler serves the one matching the flag
+// onscreen's current state, falling back to flagPlaceholderPNG.
+//
+//go:embed assets/flags
+var flagsFS embed.FS
+
+// flagPNG returns the embedded flag image for a US state abbreviation (any
+// case), or nil if there's no flag for it.
+func flagPNG(abbrev string) []byte {
+	if abbrev == "" {
+		return nil
+	}
+	b, err := flagsFS.ReadFile("assets/flags/" + strings.ToLower(abbrev) + ".png")
+	if err != nil {
+		return nil
+	}
+	return b
+}
 
 // onscreenStyle controls how a single onscreen renders in its OBS browser source.
 // Keep these in sync with the dimensions / fonts that the previous text_ft2_source
@@ -134,10 +156,18 @@ func (s *Server) onscreensAssetHandler(w http.ResponseWriter, r *http.Request) {
 			slog.ErrorContext(r.Context(), "writing gps image", "err", err)
 		}
 	case SlugFlag:
+		// Serve the flag for the onscreen's current state (stored in
+		// Content as a state abbrev by handleFlagShow); fall back to the
+		// transparent placeholder when no state is set or we have no flag
+		// for it.
+		img := flagPNG(s.Flag.Content)
+		if img == nil {
+			img = flagPlaceholderPNG
+		}
 		w.Header().Set("Content-Type", "image/png")
 		w.Header().Set("Cache-Control", "no-store")
-		if _, err := w.Write(flagPlaceholderPNG); err != nil {
-			slog.ErrorContext(r.Context(), "writing flag placeholder", "err", err)
+		if _, err := w.Write(img); err != nil {
+			slog.ErrorContext(r.Context(), "writing flag image", "err", err)
 		}
 	default:
 		http.NotFound(w, r)

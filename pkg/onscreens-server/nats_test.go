@@ -162,6 +162,47 @@ func TestHandleFlagHide(t *testing.T) {
 	}
 }
 
+func TestHandleFlagShow_StoresStateAndShows(t *testing.T) {
+	s := &Server{Flag: newFlagOnscreen()}
+	msg := &nats.Msg{
+		Subject: "tripbot.test.onscreens.flag.show",
+		Data:    []byte(`{"state":"MO","emitted_at":"2026-06-02T16:00:00Z"}`),
+	}
+	s.handleFlagShow(msg)
+	if !s.Flag.IsShowing {
+		t.Error("Flag.IsShowing = false, want true")
+	}
+	if s.Flag.Content != "MO" {
+		t.Errorf("Flag.Content = %q, want MO", s.Flag.Content)
+	}
+}
+
+func TestHandleFlagShow_RejectsEmptyState(t *testing.T) {
+	s := &Server{Flag: newFlagOnscreen()}
+	s.handleFlagShow(emptyMsg("tripbot.test.onscreens.flag.show"))
+	if s.Flag.IsShowing {
+		t.Error("Flag.IsShowing = true, want false for a state-less show")
+	}
+}
+
+// TestFlagPNG_EmbeddedAndFallback asserts a known state resolves to embedded
+// flag bytes and an unknown/empty one resolves to nil (the asset handler
+// then serves the placeholder).
+func TestFlagPNG_EmbeddedAndFallback(t *testing.T) {
+	if got := flagPNG("MO"); len(got) == 0 {
+		t.Error("flagPNG(MO) returned no bytes; expected an embedded flag")
+	}
+	if got := flagPNG("mo"); len(got) == 0 {
+		t.Error("flagPNG(mo) (lowercase) returned no bytes; expected case-insensitive lookup")
+	}
+	if got := flagPNG(""); got != nil {
+		t.Error("flagPNG(\"\") = bytes, want nil")
+	}
+	if got := flagPNG("ZZ"); got != nil {
+		t.Error("flagPNG(ZZ) = bytes, want nil for unknown state")
+	}
+}
+
 // TestHideLenientOnEmptyBody asserts a hide with a nil/garbage body still
 // hides — the subject is the whole intent.
 func TestHideLenientOnEmptyBody(t *testing.T) {

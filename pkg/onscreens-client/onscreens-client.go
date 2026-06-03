@@ -153,15 +153,25 @@ func (c *Client) ShowTimewarp(ctx context.Context) error {
 	return nil
 }
 
-func (c *Client) ShowFlag(ctx context.Context, dur time.Duration) error {
-	//TODO: bring this back
-	// url := c.serverURL + "/onscreens/flag/show"
-	// url = fmt.Sprintf("%s?duration=%s", url, helpers.Base64Encode(string(rune(dur))))
-	// _, err := c.get(ctx, url)
-	// if err != nil {
-	// 	slog.ErrorContext(ctx, "error showing flag onscreen", "err", err)
-	// 	return err
-	// }
+// ShowFlag displays the flag for the given state. state may be a full name
+// ("Missouri") or a two-letter abbrev ("MO"); it's normalized to the abbrev
+// the server keys its embedded flag images on. The overlay's display duration
+// is owned by the server (flagDuration), so dur is not transported — kept in
+// the signature for symmetry with the other timed overlays. A state with no
+// known flag is a no-op (nothing to show).
+func (c *Client) ShowFlag(ctx context.Context, state string, dur time.Duration) error {
+	abbrev := state
+	if len(abbrev) != 2 {
+		abbrev = helpers.StateToStateAbbrev(state)
+	}
+	if abbrev == "" {
+		slog.WarnContext(ctx, "ShowFlag: no flag for state", "state", state)
+		return nil
+	}
+	c.publish(ctx, oe.FlagShowSubject(c.env), oe.FlagShow{
+		Envelope: oe.NewEnvelope(),
+		State:    strings.ToUpper(abbrev),
+	})
 	return nil
 }
 
