@@ -768,12 +768,12 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
   /* Shared disclosure-row styling — controls / now-playing / stream-preview
      all default closed and reveal on click. Same look, just different
      summary labels. */
-  details.stream-preview, details.now-playing, details.feature-flags { margin:24px 0 0; }
-  details.stream-preview > summary, details.now-playing > summary, details.feature-flags > summary { font-size:.8em; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); cursor:pointer; padding:8px 0; border-top:1px solid var(--divider); list-style:none; }
-  details.stream-preview > summary::-webkit-details-marker, details.now-playing > summary::-webkit-details-marker, details.feature-flags > summary::-webkit-details-marker { display:none; }
-  details.stream-preview > summary::before, details.now-playing > summary::before, details.feature-flags > summary::before { content:"▸ "; color:var(--dim); display:inline-block; }
-  details.stream-preview[open] > summary::before, details.now-playing[open] > summary::before, details.feature-flags[open] > summary::before { content:"▾ "; }
-  details.stream-preview > summary:hover, details.now-playing > summary:hover, details.feature-flags > summary:hover { color:var(--fg); }
+  details.stream-preview, details.now-playing, details.feature-flags, details.controls { margin:24px 0 0; }
+  details.stream-preview > summary, details.now-playing > summary, details.feature-flags > summary, details.controls > summary { font-size:.8em; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); cursor:pointer; padding:8px 0; border-top:1px solid var(--divider); list-style:none; }
+  details.stream-preview > summary::-webkit-details-marker, details.now-playing > summary::-webkit-details-marker, details.feature-flags > summary::-webkit-details-marker, details.controls > summary::-webkit-details-marker { display:none; }
+  details.stream-preview > summary::before, details.now-playing > summary::before, details.feature-flags > summary::before, details.controls > summary::before { content:"▸ "; color:var(--dim); display:inline-block; }
+  details.stream-preview[open] > summary::before, details.now-playing[open] > summary::before, details.feature-flags[open] > summary::before, details.controls[open] > summary::before { content:"▾ "; }
+  details.stream-preview > summary:hover, details.now-playing > summary:hover, details.feature-flags > summary:hover, details.controls > summary:hover { color:var(--fg); }
   /* feature-flags rows reuse .row but the name column carries the flag key
      in monospace; description trails after a separator dot like elsewhere. */
   .row.flag-row .name code { font-family:var(--mono); font-size:.95em; }
@@ -806,15 +806,10 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
   /* armed = first click landed; second click within 5s actually fires */
   button.stream.armed { background:#f85149; color:#fff; box-shadow:0 0 0 2px #f8514980; }
   .stream-unreachable { color:#666; font-size:.9em; font-style:italic; margin:6px 0 0; }
-  /* Collapsible "controls" disclosure — defaults closed so the page stays
-     calm; click "controls" to reveal stream toggle + future control widgets. */
-  details.controls { margin:24px 0 0; }
-  details.controls > summary { font-size:.8em; text-transform:uppercase; letter-spacing:.08em; color:#888; cursor:pointer; padding:8px 0; border-top:1px solid #1c1c1c; list-style:none; }
-  details.controls > summary::-webkit-details-marker { display:none; }
-  details.controls > summary::before { content:"▸ "; color:#666; transition:transform .15s ease; display:inline-block; }
-  details.controls[open] > summary::before { content:"▾ "; }
-  details.controls > summary:hover { color:#ccc; }
-  details.controls h3 { font-size:.8em; text-transform:uppercase; letter-spacing:.08em; color:#888; margin:14px 0 6px; }
+  /* Collapsible "controls" disclosure shares the disclosure-row styling
+     above (folded into the .stream-preview/.now-playing multi-selector);
+     only the .controls-specific h3 sub-heading lives here. */
+  details.controls h3 { font-size:.8em; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin:14px 0 6px; }
   /* per-service restart — small, unobtrusive, lives at the end of each row */
   button.restart { font:inherit; font-size:.8em; padding:3px 9px; border-radius:4px; border:1px solid #2a2a2a; background:#1a1a1a; color:#888; cursor:pointer; transition:background .15s, color .15s, border-color .15s; }
   button.restart:hover { background:#252525; color:#ccc; border-color:#3a3a3a; }
