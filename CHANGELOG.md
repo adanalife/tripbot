@@ -9,6 +9,7 @@ All notable changes to TripBot. Format follows [Keep a Changelog](https://keepac
 
 ### pubsub
 
+- **NATS phase 2 peel — onscreens commands are NATS-only now.** With the command surface burned in on NATS (and phase 3 running on top of it), the redundant HTTP command path is removed: the client publishes its subject and returns, and `onscreens-server` drops the `middle`/`leaderboard`/`timewarp`/`gps`/`flag` handlers and routes (the overlays are driven by the existing NATS subscribers). The browser-source feeds, health, version, metrics, and admin endpoints stay on HTTP, so `ONSCREENS_SERVER_HOST` is unchanged. With `NATS_URL` unset there's no longer an HTTP fallback — every live env runs NATS. ([#788])
 - **VLC command surface — observe-only NATS mirror.** Begins moving the VLC playback commands off direct HTTP onto NATS, following the onscreens template. The four fire-and-forget commands (`PlayRandom`, `PlayFileInPlaylist`, `Skip`, `Back`) now publish to `tripbot.<env>.vlc.<verb>` alongside their HTTP call, and vlc-server connects to NATS and subscribes — but **observe-only**: it logs what it would do without acting, because VLC commands aren't idempotent and acting on both transports would double-execute (skip two videos). HTTP stays the sole actor; this burns in delivery before the peel. `CurrentlyPlaying` is a read and stays HTTP-only. No-op where `NATS_URL` is unset; the peel + cdk8s `NATS_URL` wiring for vlc-server follow. ([#789])
 
 ## [v2.18.3] — 2026-06-02
@@ -1366,5 +1367,6 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#781]: https://github.com/adanalife/tripbot/pull/781
 [#782]: https://github.com/adanalife/tripbot/pull/782
 [#744]: https://github.com/adanalife/tripbot/pull/744
+[#788]: https://github.com/adanalife/tripbot/pull/788
 [#789]: https://github.com/adanalife/tripbot/pull/789
 [infra #623]: https://github.com/adanalife/infra/pull/623

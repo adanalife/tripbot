@@ -19,9 +19,9 @@ type Twitch interface {
 	FollowedAt(username string) (time.Time, bool)
 }
 
-// realTwitch is the production adapter the App is wired with at package init.
+// realTwitch is the production adapter the App is wired with in New().
 // Delegates to the package-level pkg/twitch shim (defaultClient). Mirrors the
-// realIRC / realOnscreens shape.
+// realVLC / realOnscreens shape.
 type realTwitch struct{}
 
 func (realTwitch) FollowedAt(username string) (time.Time, bool) {

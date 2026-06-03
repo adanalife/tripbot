@@ -9,7 +9,7 @@ import (
 
 // Onscreens is the subset of the onscreens-client surface that chatbot
 // commands depend on. Tests inject a fake; production uses the
-// realOnscreens adapter wired in defaultApp.
+// realOnscreens adapter wired in New().
 type Onscreens interface {
 	ShowFlag(ctx context.Context, dur time.Duration) error
 	ShowLeaderboard(ctx context.Context, title string, leaderboard [][]string) error
@@ -19,7 +19,7 @@ type Onscreens interface {
 }
 
 // realOnscreens delegates to a constructed *onscreensClient.Client. The
-// concrete Client instance is owned by the App (wired up in defaultApp),
+// concrete Client instance is owned by the App (wired up in New()),
 // not read off a package-level global in pkg/onscreens-client.
 //
 // The NATS mirror lives in the client itself now (it talks to NATS + HTTP

@@ -13,15 +13,13 @@ import (
 
 // StartNATSSubscribers attaches the server's NATS subscriptions to the
 // package-singleton *nats.Conn (initialized by main via natsclient.Connect).
-// No-op when the conn is nil (NATS_URL unset); HTTP remains the sole
-// transport then.
+// No-op when the conn is nil (NATS_URL unset) — with the HTTP command path
+// peeled off, the overlays simply receive no commands in that case.
 //
-// Phase 2: the onscreens command surface moves onto NATS. Each handler maps
-// 1-1 to the matching HTTP handler body, calling the same overlay method.
-// The publisher mirrors every command alongside HTTP with HTTP still the
-// source of truth, so acting here is presently redundant — but lets us burn
-// in NATS delivery before peeling HTTP off. Subscribers are registered
-// explicitly (not via an onscreens.> wildcard) so each gets its own
+// NATS is the sole transport for the onscreens command surface: each handler
+// drives the overlay the matching command targets. (The HTTP command path was
+// the mirror this burned in against, since peeled off.) Subscribers are
+// registered explicitly (not via an onscreens.> wildcard) so each gets its own
 // subscribe log line and the dispatch stays readable.
 func (s *Server) StartNATSSubscribers(ctx context.Context) {
 	conn := natsclient.Conn()

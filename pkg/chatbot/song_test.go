@@ -42,8 +42,8 @@ func (r *recordingNowPlaying) Current(_ context.Context) (string, string, error)
 
 func TestSongCmd_RendersCurrentTrack_ViaIRC(t *testing.T) {
 	app := newTestApp(video.Video{})
-	rec := &recordingIRC{}
-	app.IRC = rec
+	rec := &recordingChat{}
+	app.Chat = rec
 	app.NowPlaying = &recordingNowPlaying{Artist: "Steve Cobby", Title: "Big Wow"}
 
 	app.songCmd(context.Background(), newTestUser("viewer1"), nil)
@@ -58,8 +58,8 @@ func TestSongCmd_RendersCurrentTrack_ViaIRC(t *testing.T) {
 
 func TestSongCmd_FetchError_FallsBackToApology(t *testing.T) {
 	app := newTestApp(video.Video{})
-	rec := &recordingIRC{}
-	app.IRC = rec
+	rec := &recordingChat{}
+	app.Chat = rec
 	app.NowPlaying = &recordingNowPlaying{Err: errors.New("network unreachable")}
 
 	app.songCmd(context.Background(), newTestUser("viewer1"), nil)
