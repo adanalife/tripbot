@@ -169,8 +169,16 @@ func (a *App) milesCmd(ctx context.Context, user *users.User, params []string) {
 		monthlyMiles = a.Sessions.CurrentMonthlyMiles(ctx, u)
 	}
 
+	// Floor the *displayed* monthly miles at 0.01 so a brand-new viewer never
+	// sees "0.00mi", which reads as broken. This is display-only — the real
+	// monthlyMiles value still drives the newcomer-hint logic below.
+	displayMonthly := monthlyMiles
+	if displayMonthly < 0.01 {
+		displayMonthly = 0.01
+	}
+
 	msg := "@%s has %.2fmi this month"
-	msg = fmt.Sprintf(msg, username, monthlyMiles)
+	msg = fmt.Sprintf(msg, username, displayMonthly)
 
 	// add total miles if they have been around for more than one month
 	if lifetimeMiles > monthlyMiles {
