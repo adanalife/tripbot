@@ -48,7 +48,7 @@ func newTestVideo(state string, lat, lng float64, date time.Time) video.Video {
 // (recordingOnscreens / recordingVLC / recordingVideo / recordingIRC /
 // recordingSessions).
 func newTestApp(vid video.Video) *App {
-	return &App{
+	a := &App{
 		Onscreens:  noopOnscreens{},
 		VLC:        noopVLC{},
 		Video:      &recordingVideo{Vid: vid},
@@ -61,7 +61,15 @@ func newTestApp(vid video.Video) *App {
 		Geocoder:   noopGeocoder{},
 		Twitch:     noopTwitch{},
 	}
+	a.indexCommands() // build the registry, same as New() does in production
+	return a
 }
+
+// builtTestApp is a fake-wired App with the command registry indexed, shared by
+// the registry-inspection and findCommand-routing tests (read-only — they
+// inspect command definitions / routing, never dispatch). It replaces the
+// production defaultApp singleton those tests used to read.
+var builtTestApp = newTestApp(video.Video{})
 
 // --- App.IRC seam ---
 //
