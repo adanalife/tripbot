@@ -80,6 +80,10 @@ type App struct {
 	// a recordingGeocoder / noopGeocoder; production uses realGeocoder which
 	// delegates to the pkg/geo default configured in ConnectIRC.
 	Geocoder Geocoder
+	// Weather returns historical conditions at a point for !weather. Tests
+	// inject noopWeather; production uses realWeather, which queries the
+	// keyless Open-Meteo archive API.
+	Weather Weather
 	// Twitch is the command-time Twitch Helix surface (follow lookups today).
 	// Tests inject a recordingTwitch; production uses realTwitch which
 	// delegates to the pkg/twitch client. The future swap point for an
@@ -113,8 +117,8 @@ func (a *App) db() *gorm.DB {
 func New() *App {
 	a := &App{
 		// DB stays nil; commands use a.db() which falls back to database.GormDB().
-		Onscreens:  realOnscreens{c: onscreensClient.New(c.Conf.OnscreensServerHost, natsclient.DefaultPublisher(), c.Conf.Environment)},
-		VLC:        realVLC{c: vlcClient.New(c.Conf.VlcServerHost)},
+		Onscreens:  realOnscreens{c: onscreensClient.New(natsclient.DefaultPublisher(), c.Conf.Environment)},
+		VLC:        realVLC{c: vlcClient.New(c.Conf.VlcServerHost, natsclient.DefaultPublisher(), c.Conf.Environment)},
 		Video:      realVideo{},
 		Chat:       disconnectedChat{},
 		Sessions:   realSessions{},
@@ -123,6 +127,7 @@ func New() *App {
 		NATS:       realNATS{},
 		Cron:       noopCron{},
 		Geocoder:   realGeocoder{},
+		Weather:    realWeather{},
 		Twitch:     realTwitch{},
 	}
 	a.indexCommands()

@@ -144,8 +144,8 @@ func NewTripbot(version string) *Tripbot {
 		app:     chatbot.New(),
 		srv:     server.New(),
 		player: video.NewPlayer(
-			onscreensClient.New(c.Conf.OnscreensServerHost, natsclient.DefaultPublisher(), c.Conf.Environment),
-			vlcClient.New(c.Conf.VlcServerHost),
+			onscreensClient.New(natsclient.DefaultPublisher(), c.Conf.Environment),
+			vlcClient.New(c.Conf.VlcServerHost, natsclient.DefaultPublisher(), c.Conf.Environment),
 		),
 		sessions:   users.NewDefault(),
 		flagClient: feature.NewInMemoryClient(nil),
@@ -555,7 +555,7 @@ func (t *Tripbot) gracefulShutdown() {
 // Lives in this package (not pkg/background) to avoid circular deps with
 // the job-target packages.
 func (t *Tripbot) scheduleBackgroundJobs() {
-	onscreensCli := onscreensClient.New(c.Conf.OnscreensServerHost, natsclient.DefaultPublisher(), c.Conf.Environment)
+	onscreensCli := onscreensClient.New(natsclient.DefaultPublisher(), c.Conf.Environment)
 	t.addJob(60*time.Second, "video.GetCurrentlyPlaying", t.player.GetCurrentlyPlaying)
 	t.addJob(61*time.Second, "users.UpdateSession", t.sessions.UpdateSession)
 	t.addJob(62*time.Second, "users.UpdateLeaderboard", t.sessions.UpdateLeaderboard)

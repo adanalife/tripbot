@@ -9,18 +9,26 @@ All notable changes to TripBot. Format follows [Keep a Changelog](https://keepac
 
 ## [v3.0.0] — 2026-06-03
 
-Major release. Two milestones land together. **onscreens-server is now its own image + Deployment** — it is no longer built into or supervised inside the vlc image, which is the breaking deployment change behind the major bump. And the **chatbot no-globals refactor (Phase C) is complete**: the package now holds zero package-level globals, with both the inbound and outbound chat edges behind provider-neutral seams as groundwork for multi-platform chat. Rounded out by per-platform service names for the cdk8s app factory, a couple of `!`-command fixes and tweaks, and routine Go + cleanup chores.
+Major release. Two milestones land together. **onscreens-server is now its own image + Deployment** — it is no longer built into or supervised inside the vlc image, which is the breaking deployment change behind the major bump. And the **chatbot no-globals refactor (Phase C) is complete**: the package now holds zero package-level globals, with both the inbound and outbound chat edges behind provider-neutral seams as groundwork for multi-platform chat. NATS phase 2 also advances — the onscreens command surface is now NATS-only (the HTTP command path is gone) and the vlc command surface begins its observe-only mirror. Rounded out by a live feature-flag toggle and a `!weather` command in the admin/chat surfaces, per-platform service names for the cdk8s app factory, a couple of `!`-command fixes and tweaks, and routine Go + cleanup chores.
 
 ### Breaking
 
 - **onscreens-server no longer ships inside the vlc image.** The vlc `Dockerfile` drops the `onscreens-server` build step, its supervisord program, and `:8081` from `EXPOSE`; docker-compose runs `onscreens-server` as its own service. This is the final step of extracting onscreens into a standalone image + Deployment ([#728], shipped earlier) — anything routing to the in-pod copy on `:8081` must be repointed at `onscreens-server:8080` first (prod was repointed via [infra #654]). ([#729])
 
+### pubsub
+
+- **NATS phase 2 peel — onscreens commands are NATS-only now.** With the command surface burned in on NATS (and phase 3 running on top of it), the redundant HTTP command path is removed: the client publishes its subject and returns, and `onscreens-server` drops the `middle`/`leaderboard`/`timewarp`/`gps`/`flag` handlers and routes (the overlays are driven by the existing NATS subscribers). The browser-source feeds, health, version, metrics, and admin endpoints stay on HTTP, so `ONSCREENS_SERVER_HOST` is unchanged. With `NATS_URL` unset there's no longer an HTTP fallback — every live env runs NATS. ([#788])
+- **VLC command surface — observe-only NATS mirror.** Begins moving the VLC playback commands off direct HTTP onto NATS, following the onscreens template. The four fire-and-forget commands (`PlayRandom`, `PlayFileInPlaylist`, `Skip`, `Back`) now publish to `tripbot.<env>.vlc.<verb>` alongside their HTTP call, and vlc-server connects to NATS and subscribes — but **observe-only**: it logs what it would do without acting, because VLC commands aren't idempotent and acting on both transports would double-execute (skip two videos). HTTP stays the sole actor; this burns in delivery before the peel. `CurrentlyPlaying` is a read and stays HTTP-only. No-op where `NATS_URL` is unset; the peel + cdk8s `NATS_URL` wiring for vlc-server follow. ([#789])
+
 ### refactor
 
 - **chatbot Phase C complete — zero package-level globals.** The last global, `client *twitch.Client` (read directly by the package `Say`/`Whisper`), is replaced by a provider-neutral outbound seam: the `IRC` interface becomes `ChatClient` and `App.IRC` becomes `App.Chat`, `twitchChat` implements it over its own client + identity config, and `consoleMirror` wraps any `ChatClient` so every platform's output reaches the admin live console uniformly ([#787]). Preceded by retiring `defaultApp` so tests build their own `App` ([#784]) and collapsing the `sayFn`/`captureSay` test seam onto the injected `recordingIRC` fake ([#785]). The chatbot's inbound (`IncomingMessage`) and outbound (`ChatClient`) edges are now both provider-neutral — adding YouTube/TikTok is a new adapter, not surgery.
+- **Admin panel `.controls` disclosure uses the shared CSS variables.** Folds the controls disclosure block into the shared `.stream-preview`/`.now-playing`/`.feature-flags` multi-selector so it reads from the `--divider`/`--dim`/`--muted`/`--fg` variables instead of hardcoded hex, fixing a light-mode inconsistency (no change in dark mode). ([#792])
 
 ### feat
 
+- **Live enable/disable toggle for feature flags in the admin panel.** Each feature-flag row gets an arm-then-confirm toggle button backed by a new `feature.FlagToggler` write surface (`SetEnabled`), kept separate from the read-side `FlagClient`. The Postgres-backed client writes the `enabled` column and force-refreshes its in-memory snapshot, so the change is live immediately for both the panel and the bot's command-time gating — no wait for the 30s poll. ([#802])
+- **`!weather` — historical conditions at the dashcam location.** New chat command replying with the weather at the currently-playing clip's location *at the time it was filmed* (e.g. `Weather here on Mar 7, 2018 3pm: Clear sky, 58°F`), sourced from the free Open-Meteo historical archive (reanalysis back to 1940, so it covers the 2018 corpus). Follows the App-injection pattern (`App.Weather` + `realWeather`/`noopWeather`, mirroring `App.Geocoder`) and is follow-gated like `!sunset`/`!location`. ([#799])
 - **Per-platform service names in the contract.** Adds `tripbot`/`vlc`/`onscreens` per-platform service-name constants (`tripbot-twitch`, `vlc-youtube`, …), mirroring obs, as the source-of-truth half of the unified per-platform cdk8s app factory. The bare app-identity keys stay for Secret/ConfigMap names. ([#798])
 - **`!miles` floors displayed monthly miles at 0.01.** A user with a tiny but non-zero monthly total no longer renders as `0`. ([#796])
 - **`!leaderborad` aliases to `!leaderboard`.** Common typo now resolves instead of missing. ([#794])
@@ -1395,11 +1403,17 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#787]: https://github.com/adanalife/tripbot/pull/787
 [#784]: https://github.com/adanalife/tripbot/pull/784
 [#785]: https://github.com/adanalife/tripbot/pull/785
+[#788]: https://github.com/adanalife/tripbot/pull/788
+[#789]: https://github.com/adanalife/tripbot/pull/789
+[#792]: https://github.com/adanalife/tripbot/pull/792
 [#798]: https://github.com/adanalife/tripbot/pull/798
+[#799]: https://github.com/adanalife/tripbot/pull/799
 [#796]: https://github.com/adanalife/tripbot/pull/796
 [#794]: https://github.com/adanalife/tripbot/pull/794
 [#795]: https://github.com/adanalife/tripbot/pull/795
 [#793]: https://github.com/adanalife/tripbot/pull/793
 [#797]: https://github.com/adanalife/tripbot/pull/797
+[#791]: https://github.com/adanalife/tripbot/pull/791
+[#802]: https://github.com/adanalife/tripbot/pull/802
 [infra #623]: https://github.com/adanalife/infra/pull/623
 [infra #654]: https://github.com/adanalife/infra/pull/654

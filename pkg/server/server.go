@@ -111,6 +111,7 @@ func (s *Server) Start(ctx context.Context) {
 	// exposed; no app-layer auth gate (see CLAUDE.md / vault decisions).
 	admin := r.PathPrefix("/admin").Methods("POST").Subrouter()
 	admin.Handle("/obs/stream/{action}", tagged("/admin/obs/stream/{action}", obsStreamActionHandler))
+	admin.Handle("/flags/{key}/{action}", tagged("/admin/flags/{key}/{action}", s.flagActionHandler))
 	admin.Handle("/shutdown", tagged("/admin/shutdown", httpmw.ShutdownHandler()))
 	admin.Handle("/restart/{service}", tagged("/admin/restart/{service}", restartActionHandler))
 

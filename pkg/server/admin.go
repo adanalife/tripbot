@@ -151,6 +151,39 @@ func renderStreamControl(sc streamControl, oob bool) string {
 	return sb.String()
 }
 
+// flagRowTmpl renders one feature-flag <li>. It's the swap target for the
+// toggle POSTs (hx-target="closest .flag-row", hx-swap="outerHTML") and is
+// rendered identically on the initial page load (via the flagRow template
+// func) and by flagActionHandler's response, so a live toggle matches a fresh
+// page render. The toggle button only renders when .Toggleable — a read-only
+// client (startup window, tests) keeps the bare on/off status. The button is a
+// "molly" button (data-arm-label) so an accidental tap arms rather than fires,
+// matching the stream/restart toggles.
+var flagRowTmpl = template.Must(template.New("flagrow").Parse(
+	`<li class="row flag-row">` +
+		`<span class="dot {{if .Enabled}}up{{else}}down{{end}}"></span>` +
+		`<span class="name"><code>{{.Key}}</code>{{if .Description}}<span class="state"> · {{.Description}}</span>{{end}}</span>` +
+		`<span class="status">{{if .Enabled}}on{{else}}off{{end}}</span>` +
+		`{{- if .Toggleable}}` +
+		`{{- if .Enabled}}` +
+		`<button type="button" class="flag-toggle on" hx-post="/admin/flags/{{.Key}}/disable" hx-target="closest .flag-row" hx-swap="outerHTML" hx-disabled-elt="this" data-arm-label="click again to disable" data-original-label="disable">disable</button>` +
+		`{{- else}}` +
+		`<button type="button" class="flag-toggle off" hx-post="/admin/flags/{{.Key}}/enable" hx-target="closest .flag-row" hx-swap="outerHTML" hx-disabled-elt="this" data-arm-label="click again to enable" data-original-label="enable">enable</button>` +
+		`{{- end}}` +
+		`{{- end}}` +
+		`</li>`))
+
+// renderFlagRow executes flagRowTmpl to a string, shared by the initial page
+// render (via the flagRow template func) and flagActionHandler's swap response.
+func renderFlagRow(f featureFlag) string {
+	var sb strings.Builder
+	if err := flagRowTmpl.Execute(&sb, f); err != nil {
+		slog.Error("couldn't render flag row", "err", err)
+		return ""
+	}
+	return sb.String()
+}
+
 // statusRowsTmpl renders the <li> service-status rows. Extracted so the initial
 // page render (via the statusRows template func) and the /admin/refresh poll
 // produce identical markup, mirroring the streamControl/authCard pattern.
@@ -188,6 +221,10 @@ type featureFlag struct {
 	Key         string
 	Enabled     bool
 	Description string
+	// Toggleable is true when the installed flag client supports writes (the
+	// Postgres-backed client in prod). When false — the in-memory fallback
+	// during startup, or in tests — the row renders read-only with no button.
+	Toggleable bool
 }
 
 // adminData is the template payload.
@@ -318,12 +355,14 @@ func (s *Server) gatherFlags(ctx context.Context) []featureFlag {
 	if len(flags) == 0 {
 		return nil
 	}
+	_, toggleable := s.flagToggler()
 	out := make([]featureFlag, 0, len(flags))
 	for _, f := range flags {
 		out = append(out, featureFlag{
 			Key:         f.Key,
 			Enabled:     f.Enabled,
 			Description: f.Description,
+			Toggleable:  toggleable,
 		})
 	}
 	return out
@@ -446,6 +485,58 @@ func obsStreamActionHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if _, werr := w.Write([]byte(renderStreamControl(streamControl{Reachable: true, Active: active}, false))); werr != nil {
 		slog.ErrorContext(r.Context(), "couldn't write stream control", "err", werr)
+	}
+}
+
+// flagActionHandler handles POST /admin/flags/{key}/{action} (action =
+// "enable" or "disable") from the feature-flags section's toggle buttons.
+// It writes the new global default through the flag client's toggle surface —
+// which force-refreshes the in-memory snapshot, so the change is live for both
+// this panel and the bot's command gating immediately — then swaps in the
+// flag's row to reflect the new state.
+func (s *Server) flagActionHandler(w http.ResponseWriter, r *http.Request) {
+	key := mux.Vars(r)["key"]
+	action := mux.Vars(r)["action"]
+	var enabled bool
+	switch action {
+	case "enable":
+		enabled = true
+	case "disable":
+		enabled = false
+	default:
+		http.Error(w, "unknown action", http.StatusBadRequest)
+		return
+	}
+
+	toggler, ok := s.flagToggler()
+	if !ok {
+		// The in-memory fallback (startup window) has no write surface. The UI
+		// gates the button on the same condition, so this is the defensive path
+		// for a stale page posting before the Postgres client is wired.
+		slog.ErrorContext(r.Context(), "flag toggle unavailable: client is read-only", "key", key)
+		http.Error(w, "feature flags are read-only right now", http.StatusServiceUnavailable)
+		return
+	}
+	if err := toggler.SetEnabled(r.Context(), key, enabled); err != nil {
+		slog.ErrorContext(r.Context(), "flag toggle failed", "key", key, "action", action, "err", err)
+		http.Error(w, "couldn't toggle flag", http.StatusBadGateway)
+		return
+	}
+	slog.InfoContext(r.Context(), "feature flag toggled from admin panel", "key", key, "enabled", enabled)
+
+	// Re-render the row from the freshly-refreshed snapshot so the swapped-in
+	// markup matches a full page render exactly (carrying the description back).
+	row := featureFlag{Key: key, Enabled: enabled, Toggleable: true}
+	for _, f := range s.flagSnapshot(r.Context()) {
+		if f.Key == key {
+			row.Description = f.Description
+			row.Enabled = f.Enabled
+			break
+		}
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if _, werr := w.Write([]byte(renderFlagRow(row))); werr != nil {
+		slog.ErrorContext(r.Context(), "couldn't write flag row", "err", werr)
 	}
 }
 
@@ -698,6 +789,9 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
 	"streamControl": func(sc streamControl) template.HTML { return template.HTML(renderStreamControl(sc, false)) },
 	// statusRows renders the service-status <li> rows, shared with /admin/refresh.
 	"statusRows": func(s []serviceStatus) template.HTML { return template.HTML(renderStatusRows(s)) },
+	// flagRow renders one feature-flag <li>, shared with flagActionHandler so a
+	// live toggle's swapped-in row matches the initial render byte-for-byte.
+	"flagRow": func(f featureFlag) template.HTML { return template.HTML(renderFlagRow(f)) },
 }).Parse(`<!doctype html>
 <html lang="en">
 <head>
@@ -791,15 +885,22 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
   /* Shared disclosure-row styling — controls / now-playing / stream-preview
      all default closed and reveal on click. Same look, just different
      summary labels. */
-  details.stream-preview, details.now-playing, details.feature-flags { margin:24px 0 0; }
-  details.stream-preview > summary, details.now-playing > summary, details.feature-flags > summary { font-size:.8em; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); cursor:pointer; padding:8px 0; border-top:1px solid var(--divider); list-style:none; }
-  details.stream-preview > summary::-webkit-details-marker, details.now-playing > summary::-webkit-details-marker, details.feature-flags > summary::-webkit-details-marker { display:none; }
-  details.stream-preview > summary::before, details.now-playing > summary::before, details.feature-flags > summary::before { content:"▸ "; color:var(--dim); display:inline-block; }
-  details.stream-preview[open] > summary::before, details.now-playing[open] > summary::before, details.feature-flags[open] > summary::before { content:"▾ "; }
-  details.stream-preview > summary:hover, details.now-playing > summary:hover, details.feature-flags > summary:hover { color:var(--fg); }
+  details.stream-preview, details.now-playing, details.feature-flags, details.controls { margin:24px 0 0; }
+  details.stream-preview > summary, details.now-playing > summary, details.feature-flags > summary, details.controls > summary { font-size:.8em; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); cursor:pointer; padding:8px 0; border-top:1px solid var(--divider); list-style:none; }
+  details.stream-preview > summary::-webkit-details-marker, details.now-playing > summary::-webkit-details-marker, details.feature-flags > summary::-webkit-details-marker, details.controls > summary::-webkit-details-marker { display:none; }
+  details.stream-preview > summary::before, details.now-playing > summary::before, details.feature-flags > summary::before, details.controls > summary::before { content:"▸ "; color:var(--dim); display:inline-block; }
+  details.stream-preview[open] > summary::before, details.now-playing[open] > summary::before, details.feature-flags[open] > summary::before, details.controls[open] > summary::before { content:"▾ "; }
+  details.stream-preview > summary:hover, details.now-playing > summary:hover, details.feature-flags > summary:hover, details.controls > summary:hover { color:var(--fg); }
   /* feature-flags rows reuse .row but the name column carries the flag key
      in monospace; description trails after a separator dot like elsewhere. */
   .row.flag-row .name code { font-family:var(--mono); font-size:.95em; }
+  /* per-flag enable/disable toggle — same small, unobtrusive shape as .restart;
+     a green tint when the action will enable, and a molly button (arms on first
+     tap, fires on the second) like the stream/restart controls. */
+  button.flag-toggle { font:inherit; font-size:.8em; padding:3px 9px; border-radius:4px; border:1px solid #2a2a2a; background:#1a1a1a; color:#888; cursor:pointer; transition:background .15s, color .15s, border-color .15s; min-width:4.5em; }
+  button.flag-toggle:hover { background:#252525; color:#ccc; border-color:#3a3a3a; }
+  button.flag-toggle.off:hover { color:#7fc296; border-color:#2f6f43; }
+  button.flag-toggle.armed { background:#f85149; color:#fff; border-color:#f85149; box-shadow:0 0 0 2px #f8514980; }
   .stream-frame { aspect-ratio:16 / 9; width:100%; margin-top:10px; background:#000; border-radius:6px; overflow:hidden; }
   .stream-frame iframe { width:100%; height:100%; border:none; display:block; }
   a { color:#58a6ff; text-decoration:none; }
@@ -829,15 +930,10 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
   /* armed = first click landed; second click within 5s actually fires */
   button.stream.armed { background:#f85149; color:#fff; box-shadow:0 0 0 2px #f8514980; }
   .stream-unreachable { color:#666; font-size:.9em; font-style:italic; margin:6px 0 0; }
-  /* Collapsible "controls" disclosure — defaults closed so the page stays
-     calm; click "controls" to reveal stream toggle + future control widgets. */
-  details.controls { margin:24px 0 0; }
-  details.controls > summary { font-size:.8em; text-transform:uppercase; letter-spacing:.08em; color:#888; cursor:pointer; padding:8px 0; border-top:1px solid #1c1c1c; list-style:none; }
-  details.controls > summary::-webkit-details-marker { display:none; }
-  details.controls > summary::before { content:"▸ "; color:#666; transition:transform .15s ease; display:inline-block; }
-  details.controls[open] > summary::before { content:"▾ "; }
-  details.controls > summary:hover { color:#ccc; }
-  details.controls h3 { font-size:.8em; text-transform:uppercase; letter-spacing:.08em; color:#888; margin:14px 0 6px; }
+  /* Collapsible "controls" disclosure shares the disclosure-row styling
+     above (folded into the .stream-preview/.now-playing multi-selector);
+     only the .controls-specific h3 sub-heading lives here. */
+  details.controls h3 { font-size:.8em; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin:14px 0 6px; }
   /* per-service restart — small, unobtrusive, lives at the end of each row */
   button.restart { font:inherit; font-size:.8em; padding:3px 9px; border-radius:4px; border:1px solid #2a2a2a; background:#1a1a1a; color:#888; cursor:pointer; transition:background .15s, color .15s, border-color .15s; }
   button.restart:hover { background:#252525; color:#ccc; border-color:#3a3a3a; }
@@ -846,7 +942,7 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
      hx-post is in flight, and hx-disabled-elt also sets :disabled. Dim it + show
      a progress cursor so a tap reads as "working" and a double-tap is visibly
      inert until the request settles. */
-  button.htmx-request, button.stream:disabled, button.restart:disabled { opacity:.55; cursor:progress; }
+  button.htmx-request, button.stream:disabled, button.restart:disabled, button.flag-toggle:disabled { opacity:.55; cursor:progress; }
   /* live chat console — recent history rendered server-side, live lines stream
      in via SSE (sse-swap="chat", beforeend). Same disclosure look as the others. */
   details.chat { margin:24px 0 0; }
@@ -973,13 +1069,7 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
   <details class="feature-flags">
     <summary>feature flags</summary>
     <ul class="flags">
-      {{range .Flags}}
-      <li class="row flag-row">
-        <span class="dot {{if .Enabled}}up{{else}}down{{end}}"></span>
-        <span class="name"><code>{{.Key}}</code>{{if .Description}}<span class="state"> · {{.Description}}</span>{{end}}</span>
-        <span class="status">{{if .Enabled}}on{{else}}off{{end}}</span>
-      </li>
-      {{end}}
+      {{range .Flags}}{{flagRow .}}{{end}}
     </ul>
   </details>
   {{end}}

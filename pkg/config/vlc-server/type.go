@@ -60,4 +60,10 @@ type VlcServerConfig struct {
 	// boots without being told its own address; override when running
 	// multiple instances on one host or to pin to a specific interface.
 	VlcServerBindAddress string `default:":8080" envconfig:"VLC_SERVER_BIND_ADDRESS"`
+
+	// NatsURL is the in-cluster NATS endpoint the command subscriber connects
+	// to (tripbot.<env>.vlc.<verb>). Format:
+	// nats://nats.<env-platform-ns>.svc.cluster.local:4222. Optional — when
+	// unset, the subscriber is skipped and HTTP is the sole transport.
+	NatsURL string `envconfig:"NATS_URL"`
 }

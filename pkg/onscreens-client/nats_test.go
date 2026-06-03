@@ -3,9 +3,6 @@ package onscreensClient
 import (
 	"context"
 	"encoding/json"
-	"net/http"
-	"net/http/httptest"
-	"strings"
 	"sync"
 	"testing"
 
@@ -32,22 +29,11 @@ func (r *recordingPublisher) Publish(_ context.Context, subject string, payload 
 	r.Publishes = append(r.Publishes, recordedPublish{Subject: subject, Payload: cp})
 }
 
-// okServer stands up an httptest.Server that 200s everything, so the
-// client's HTTP path succeeds and tests can focus on the NATS mirror.
-func okServer(t *testing.T) string {
-	t.Helper()
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	t.Cleanup(srv.Close)
-	return strings.TrimPrefix(srv.URL, "http://")
-}
-
 // TestShowMiddleText_PublishesToNATS asserts the client fires the right
-// subject + envelope on every ShowMiddleText, alongside the HTTP call.
+// subject + envelope on every ShowMiddleText.
 func TestShowMiddleText_PublishesToNATS(t *testing.T) {
 	rec := &recordingPublisher{}
-	c := New(okServer(t), rec, "stage")
+	c := New(rec, "stage")
 
 	if err := c.ShowMiddleText(context.Background(), "hello world"); err != nil {
 		t.Fatalf("ShowMiddleText: %v", err)
@@ -75,11 +61,10 @@ func TestShowMiddleText_PublishesToNATS(t *testing.T) {
 
 // TestShowMiddleText_TopicReflectsEnv covers the subject scoping per env.
 func TestShowMiddleText_TopicReflectsEnv(t *testing.T) {
-	host := okServer(t)
 	for _, env := range []string{"prod", "development", "test"} {
 		t.Run(env, func(t *testing.T) {
 			rec := &recordingPublisher{}
-			c := New(host, rec, env)
+			c := New(rec, env)
 			if err := c.ShowMiddleText(context.Background(), "x"); err != nil {
 				t.Fatalf("ShowMiddleText: %v", err)
 			}
@@ -94,11 +79,11 @@ func TestShowMiddleText_TopicReflectsEnv(t *testing.T) {
 	}
 }
 
-// TestShowLeaderboard_PublishesStructured asserts the leaderboard publish
-// carries the structured {title, rows} payload (the server renders it).
+// TestShowLeaderboard_PublishesToNATS asserts the leaderboard publish carries
+// the structured {title, rows} payload (the server renders it).
 func TestShowLeaderboard_PublishesToNATS(t *testing.T) {
 	rec := &recordingPublisher{}
-	c := New(okServer(t), rec, "prod")
+	c := New(rec, "prod")
 
 	rows := [][]string{{"alice", "100"}, {"bob", "50"}}
 	if err := c.ShowLeaderboard(context.Background(), "Monthly Miles", rows); err != nil {
@@ -125,11 +110,9 @@ func TestShowLeaderboard_PublishesToNATS(t *testing.T) {
 	}
 }
 
-// TestEmptyPayloadCommandsPublish covers the mirror for the no-payload
-// commands: each fires exactly one publish on its subject with an envelope
-// that carries emitted_at.
+// TestEmptyPayloadCommandsPublish covers the no-payload commands: each fires
+// exactly one publish on its subject with an envelope that carries emitted_at.
 func TestEmptyPayloadCommandsPublish(t *testing.T) {
-	host := okServer(t)
 	cases := []struct {
 		name    string
 		call    func(c *Client) error
@@ -143,7 +126,7 @@ func TestEmptyPayloadCommandsPublish(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			rec := &recordingPublisher{}
-			c := New(host, rec, "stage")
+			c := New(rec, "stage")
 			if err := tc.call(c); err != nil {
 				t.Fatalf("call: %v", err)
 			}
@@ -168,7 +151,7 @@ func TestEmptyPayloadCommandsPublish(t *testing.T) {
 // (no subject in the taxonomy, so nothing is published).
 func TestShowFlagDoesNotPublish(t *testing.T) {
 	rec := &recordingPublisher{}
-	c := New(okServer(t), rec, "stage")
+	c := New(rec, "stage")
 	if err := c.ShowFlag(context.Background(), 10); err != nil {
 		t.Fatalf("ShowFlag: %v", err)
 	}
@@ -177,10 +160,10 @@ func TestShowFlagDoesNotPublish(t *testing.T) {
 	}
 }
 
-// TestNilPublisher_NoPublishNoPanic asserts a nil publisher disables the
-// mirror without panicking (the path used by HTTP-only test rigs).
+// TestNilPublisher_NoPublishNoPanic asserts a nil publisher disables
+// publishing without panicking.
 func TestNilPublisher_NoPublishNoPanic(t *testing.T) {
-	c := New(okServer(t), nil, "test")
+	c := New(nil, "test")
 	if err := c.ShowMiddleText(context.Background(), "x"); err != nil {
 		t.Fatalf("ShowMiddleText: %v", err)
 	}
