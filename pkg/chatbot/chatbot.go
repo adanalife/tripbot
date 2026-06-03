@@ -193,9 +193,6 @@ func Say(msg string) {
 	client.Say(speakTo, msg)
 }
 
-// sayFn is the internal send implementation; tests override it to capture output.
-var sayFn func(string) = Say
-
 // Whisper will whisper a message to a user
 // Note: go-twitch-irc v4 removed the Whisper() send method; we replicate the
 // v2 behavior by sending the raw IRC /w command via PRIVMSG on the bot's own channel.

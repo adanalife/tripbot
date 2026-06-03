@@ -31,12 +31,10 @@ func skipIfDarwin(t *testing.T) {
 }
 
 // runAsAdmin runs fn with lastTimewarpTime cleared so rate limiting is not a
-// concern, plus captureSay's restore wired up automatically.
+// concern. Chat output goes to the App's IRC fake (noopIRC by default).
 func runAsAdmin(t *testing.T, fn func()) {
 	t.Helper()
 	lastTimewarpTime = time.Time{}
-	_, restore := captureSay(t)
-	defer restore()
 	fn()
 }
 
@@ -151,9 +149,6 @@ func TestGuessCmd_CorrectGuess_RefreshesVideoAfterTimewarp(t *testing.T) {
 
 	expectAddToScoreChain(mock)
 	expectAddToScoreChain(mock)
-
-	_, restore := captureSay(t)
-	defer restore()
 
 	app.guessCmd(context.Background(), newTestUser("viewer1"), []string{"Colorado"})
 
