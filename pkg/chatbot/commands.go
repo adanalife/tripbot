@@ -18,6 +18,7 @@ import (
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
+	"github.com/adanalife/tripbot/pkg/feature"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/getsentry/sentry-go"
@@ -214,6 +215,14 @@ func (a *App) sunsetCmd(ctx context.Context, user *users.User, _ []string) {
 
 func (a *App) weatherCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !weather", "username", user.Username)
+	if !a.Flags.Bool(ctx, weatherFlagKey, feature.EvalContext{
+		Username: user.Username,
+		Channel:  c.Conf.ChannelName,
+		Env:      c.Conf.Environment,
+	}) {
+		slog.InfoContext(ctx, "!weather disabled by feature flag", "flag", weatherFlagKey, "username", user.Username)
+		return
+	}
 	vid := a.Video.Current()
 	if vid.Flagged {
 		a.IRC.Say("I couldn't figure out current GPS coords, using next closest...")

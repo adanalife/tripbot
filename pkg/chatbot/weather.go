@@ -8,6 +8,11 @@ import (
 	"time"
 )
 
+// weatherFlagKey gates the !weather command. It defaults off (the flag row
+// is seeded FALSE); flip it on per env / username / role via the feature_flags
+// table once the historical lookup is verified in chat.
+const weatherFlagKey = "chatbot.weather"
+
 // Weather is the subset of weather lookup chatbot commands depend on (just
 // historical conditions at a point, for !weather). Tests inject noopWeather;
 // production uses realWeather, which queries the Open-Meteo historical archive
