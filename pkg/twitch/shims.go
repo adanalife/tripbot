@@ -48,6 +48,10 @@ func Chatters() map[string]struct{} { return defaultClient.Chatters() }
 func UpdateChatters()               { defaultClient.UpdateChatters() }
 func ChannelID() string             { return defaultClient.ChannelID() }
 
+func SendChatMessageAsBroadcaster(ctx context.Context, text string) error {
+	return defaultClient.SendChatMessageAsBroadcaster(ctx, text)
+}
+
 // --- streams ---
 
 func IsChannelLive(ctx context.Context, login string) (bool, error) {

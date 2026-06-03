@@ -7,6 +7,10 @@ All notable changes to TripBot. Format follows [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+### admin
+
+- **Send chat messages from the admin console.** The chat pane gains a send box: type a message and post it to Twitch chat **as the bot** or **as the broadcaster**, with a toggle that only offers accounts currently logged in (and hides itself when just one is). The line renders optimistically (greyed) and confirms when it round-trips back on the live chat stream, reddening as "not delivered" if a send fails. Routed as a `chat.send` NATS command (console publishes, tripbot sends) so it's split-ready. **Broadcaster sends need a re-auth** — `user:write:chat` is new on the broadcaster scopes. ([#803])
+
 ### pubsub
 
 - **NATS phase 2 peel — onscreens commands are NATS-only now.** With the command surface burned in on NATS (and phase 3 running on top of it), the redundant HTTP command path is removed: the client publishes its subject and returns, and `onscreens-server` drops the `middle`/`leaderboard`/`timewarp`/`gps`/`flag` handlers and routes (the overlays are driven by the existing NATS subscribers). The browser-source feeds, health, version, metrics, and admin endpoints stay on HTTP, so `ONSCREENS_SERVER_HOST` is unchanged. With `NATS_URL` unset there's no longer an HTTP fallback — every live env runs NATS. ([#788])
@@ -1369,4 +1373,5 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#744]: https://github.com/adanalife/tripbot/pull/744
 [#788]: https://github.com/adanalife/tripbot/pull/788
 [#789]: https://github.com/adanalife/tripbot/pull/789
+[#803]: https://github.com/adanalife/tripbot/pull/803
 [infra #623]: https://github.com/adanalife/infra/pull/623
