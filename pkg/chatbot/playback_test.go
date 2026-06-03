@@ -31,7 +31,7 @@ func skipIfDarwin(t *testing.T) {
 }
 
 // runAsAdmin runs fn with lastTimewarpTime cleared so rate limiting is not a
-// concern. Chat output goes to the App's IRC fake (noopIRC by default).
+// concern. Chat output goes to the App's IRC fake (noopChat by default).
 func runAsAdmin(t *testing.T, fn func()) {
 	t.Helper()
 	lastTimewarpTime = time.Time{}
@@ -181,11 +181,11 @@ func TestJumpCmd_AdminPlaysRandomFromState(t *testing.T) {
 		// "<Slug>.MP4" — that's what gets passed to VLC.PlayFileInPlaylist.
 		RandomVid: video.Video{Slug: "2019_0615_183000_001", State: "California"},
 	}
-	recIRC := &recordingIRC{}
+	recIRC := &recordingChat{}
 	app.Onscreens = recOverlay
 	app.VLC = recVLC
 	app.Video = recVideo
-	app.IRC = recIRC
+	app.Chat = recIRC
 
 	runAsAdmin(t, func() {
 		app.jumpCmd(context.Background(), newTestUser(adminUser), []string{"california"})
@@ -227,11 +227,11 @@ func TestJumpCmd_NoFootageForState(t *testing.T) {
 	recVideo := &recordingVideo{
 		RandomErr: &terrors.NoFootageForStateError{Msg: "no matches found"},
 	}
-	recIRC := &recordingIRC{}
+	recIRC := &recordingChat{}
 	app.Onscreens = recOverlay
 	app.VLC = recVLC
 	app.Video = recVideo
-	app.IRC = recIRC
+	app.Chat = recIRC
 
 	runAsAdmin(t, func() {
 		app.jumpCmd(context.Background(), newTestUser(adminUser), []string{"wyoming"})
@@ -261,10 +261,10 @@ func TestJumpCmd_RejectsBadInput(t *testing.T) {
 	app := newTestApp(video.Video{})
 	recVLC := &recordingVLC{}
 	recVideo := &recordingVideo{}
-	recIRC := &recordingIRC{}
+	recIRC := &recordingChat{}
 	app.VLC = recVLC
 	app.Video = recVideo
-	app.IRC = recIRC
+	app.Chat = recIRC
 
 	runAsAdmin(t, func() {
 		app.jumpCmd(context.Background(), newTestUser(adminUser), nil)
