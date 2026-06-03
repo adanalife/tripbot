@@ -51,11 +51,13 @@ var BotScopes = []string{
 // Helix scopes that authorize against the channel owner's identity:
 // channel:read:subscriptions for GetSubscriptions, moderator:read:followers
 // for GetChannelFollows total, user:edit:broadcast for channel.update
-// (title/category changes).
+// (title/category changes), user:write:chat for the admin console's "send as
+// broadcaster" (Helix Send Chat Message posts as the authenticated user).
 var BroadcasterScopes = []string{
 	"channel:read:subscriptions",
 	"moderator:read:followers",
 	"user:edit:broadcast",
+	"user:write:chat",
 }
 
 // ErrNoToken signals "no oauth_tokens row for the bot account; run the
