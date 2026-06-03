@@ -58,6 +58,7 @@ func newTestApp(vid video.Video) *App {
 		NATS:       noopNATS{},
 		Cron:       noopCron{},
 		Geocoder:   noopGeocoder{},
+		Weather:    noopWeather{},
 		Twitch:     noopTwitch{},
 	}
 	a.indexCommands() // build the registry, same as New() does in production
