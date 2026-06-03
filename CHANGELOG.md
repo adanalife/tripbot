@@ -7,6 +7,34 @@ All notable changes to TripBot. Format follows [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+## [v3.0.0] — 2026-06-03
+
+Major release. Two milestones land together. **onscreens-server is now its own image + Deployment** — it is no longer built into or supervised inside the vlc image, which is the breaking deployment change behind the major bump. And the **chatbot no-globals refactor (Phase C) is complete**: the package now holds zero package-level globals, with both the inbound and outbound chat edges behind provider-neutral seams as groundwork for multi-platform chat. Rounded out by per-platform service names for the cdk8s app factory, a couple of `!`-command fixes and tweaks, and routine Go + cleanup chores.
+
+### Breaking
+
+- **onscreens-server no longer ships inside the vlc image.** The vlc `Dockerfile` drops the `onscreens-server` build step, its supervisord program, and `:8081` from `EXPOSE`; docker-compose runs `onscreens-server` as its own service. This is the final step of extracting onscreens into a standalone image + Deployment ([#728], shipped earlier) — anything routing to the in-pod copy on `:8081` must be repointed at `onscreens-server:8080` first (prod was repointed via [infra #654]). ([#729])
+
+### refactor
+
+- **chatbot Phase C complete — zero package-level globals.** The last global, `client *twitch.Client` (read directly by the package `Say`/`Whisper`), is replaced by a provider-neutral outbound seam: the `IRC` interface becomes `ChatClient` and `App.IRC` becomes `App.Chat`, `twitchChat` implements it over its own client + identity config, and `consoleMirror` wraps any `ChatClient` so every platform's output reaches the admin live console uniformly ([#787]). Preceded by retiring `defaultApp` so tests build their own `App` ([#784]) and collapsing the `sayFn`/`captureSay` test seam onto the injected `recordingIRC` fake ([#785]). The chatbot's inbound (`IncomingMessage`) and outbound (`ChatClient`) edges are now both provider-neutral — adding YouTube/TikTok is a new adapter, not surgery.
+
+### feat
+
+- **Per-platform service names in the contract.** Adds `tripbot`/`vlc`/`onscreens` per-platform service-name constants (`tripbot-twitch`, `vlc-youtube`, …), mirroring obs, as the source-of-truth half of the unified per-platform cdk8s app factory. The bare app-identity keys stay for Secret/ConfigMap names. ([#798])
+- **`!miles` floors displayed monthly miles at 0.01.** A user with a tiny but non-zero monthly total no longer renders as `0`. ([#796])
+- **`!leaderborad` aliases to `!leaderboard`.** Common typo now resolves instead of missing. ([#794])
+
+### fix
+
+- **`!location` suppresses the `0,0` fallback Maps URL.** When coordinates are unavailable, the command no longer emits a link pointing at null island. ([#795])
+- **Admin OBS nav link derives from `OBS_SERVER_HOST`.** The admin panel's OBS link is built from the configured host value instead of a hardcoded assumption. ([#793])
+
+### chore
+
+- **Go 1.26.3 → 1.26.4** for stdlib CVE fixes. ([#797])
+- **Removed the stale `Dashcam_Scenes.linux.json`** OBS scene collection. ([#791])
+
 ## [v2.18.3] — 2026-06-02
 
 Patch release. The headline is reboot-survival for the admin live console: its chat log and live map are now backed by JetStream, so a tripbot restart replays recent history instead of starting empty (NATS phase 3). The rest is the chatbot no-globals refactor (Phase C) reaching its conclusion — the `SetX` injection setters retire in favour of cmd assigning the App's dependencies directly, the package free-function shims are gone, and a `New()` constructor plus a platform-neutral inbound seam land as groundwork for multi-platform chat.
@@ -1362,4 +1390,16 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#781]: https://github.com/adanalife/tripbot/pull/781
 [#782]: https://github.com/adanalife/tripbot/pull/782
 [#744]: https://github.com/adanalife/tripbot/pull/744
+[#728]: https://github.com/adanalife/tripbot/pull/728
+[#729]: https://github.com/adanalife/tripbot/pull/729
+[#787]: https://github.com/adanalife/tripbot/pull/787
+[#784]: https://github.com/adanalife/tripbot/pull/784
+[#785]: https://github.com/adanalife/tripbot/pull/785
+[#798]: https://github.com/adanalife/tripbot/pull/798
+[#796]: https://github.com/adanalife/tripbot/pull/796
+[#794]: https://github.com/adanalife/tripbot/pull/794
+[#795]: https://github.com/adanalife/tripbot/pull/795
+[#793]: https://github.com/adanalife/tripbot/pull/793
+[#797]: https://github.com/adanalife/tripbot/pull/797
 [infra #623]: https://github.com/adanalife/infra/pull/623
+[infra #654]: https://github.com/adanalife/infra/pull/654
