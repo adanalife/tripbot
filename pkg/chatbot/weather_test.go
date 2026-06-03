@@ -2,6 +2,7 @@ package chatbot
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 )
@@ -43,6 +44,26 @@ func TestWeatherCmd_FlagOff_StaysSilent(t *testing.T) {
 	}
 	if len(weather.Calls) != 0 {
 		t.Errorf("flag off: expected no weather lookup, got %v", weather.Calls)
+	}
+}
+
+func TestWeatherCmd_FlagOn_SaysConditionsWithoutDate(t *testing.T) {
+	app := newTestApp(newTestVideo("Wyoming", 43.0, -108.0, time.Date(2018, 3, 7, 15, 0, 0, 0, time.UTC)))
+	irc := &recordingIRC{}
+	app.IRC = irc
+	app.Weather = &recordingWeather{Result: "Clear sky, 58°F"}
+	app.Flags = &recordingFlags{Set: map[string]bool{weatherFlagKey: true}}
+
+	app.weatherCmd(context.Background(), newTestUser("viewer1"), nil)
+
+	if len(irc.Says) != 1 {
+		t.Fatalf("flag on: expected exactly one chat message, got %d: %v", len(irc.Says), irc.Says)
+	}
+	if irc.Says[0] != "Weather here: Clear sky, 58°F" {
+		t.Errorf("unexpected message %q", irc.Says[0])
+	}
+	if strings.Contains(irc.Says[0], "2018") || strings.Contains(irc.Says[0], "Mar") {
+		t.Errorf("message should not contain the filmed date, got %q", irc.Says[0])
 	}
 }
 
