@@ -75,7 +75,7 @@ func TestNormalizeCommandPrefix_DispatchEquivalence(t *testing.T) {
 // --- findCommand routing tests ---
 
 func TestFindCommand_SingleWordTrigger(t *testing.T) {
-	cmd, params := defaultApp.findCommand("!help")
+	cmd, params := builtTestApp.findCommand("!help")
 	if cmd == nil {
 		t.Fatal("expected a command, got nil")
 	}
@@ -89,7 +89,7 @@ func TestFindCommand_SingleWordTrigger(t *testing.T) {
 
 func TestFindCommand_SingleWordAlias(t *testing.T) {
 	// "hi" is an alias of "hello"
-	cmd, _ := defaultApp.findCommand("hi")
+	cmd, _ := builtTestApp.findCommand("hi")
 	if cmd == nil {
 		t.Fatal("expected a command, got nil")
 	}
@@ -100,7 +100,7 @@ func TestFindCommand_SingleWordAlias(t *testing.T) {
 
 func TestFindCommand_MultiWordAlias(t *testing.T) {
 	// "no audio" is an alias of !report
-	cmd, params := defaultApp.findCommand("no audio")
+	cmd, params := builtTestApp.findCommand("no audio")
 	if cmd == nil {
 		t.Fatal("expected a command, got nil")
 	}
@@ -114,7 +114,7 @@ func TestFindCommand_MultiWordAlias(t *testing.T) {
 
 func TestFindCommand_MultiWordAliasWithTrailingText(t *testing.T) {
 	// "frozen since yesterday" — starts with the "frozen" alias
-	cmd, params := defaultApp.findCommand("frozen since yesterday")
+	cmd, params := builtTestApp.findCommand("frozen since yesterday")
 	if cmd == nil {
 		t.Fatal("expected a command, got nil")
 	}
@@ -128,7 +128,7 @@ func TestFindCommand_MultiWordAliasWithTrailingText(t *testing.T) {
 
 func TestFindCommand_InvertedBangRoutes(t *testing.T) {
 	// ¡miles should route to the same command as !miles
-	cmd, _ := defaultApp.findCommand("¡miles")
+	cmd, _ := builtTestApp.findCommand("¡miles")
 	if cmd == nil {
 		t.Fatal("expected a command, got nil")
 	}
@@ -139,7 +139,7 @@ func TestFindCommand_InvertedBangRoutes(t *testing.T) {
 
 func TestFindCommand_SpaceSeparatedBang(t *testing.T) {
 	// "! location" (with a space) should route to !location
-	cmd, _ := defaultApp.findCommand("! location")
+	cmd, _ := builtTestApp.findCommand("! location")
 	if cmd == nil {
 		t.Fatal("expected a command, got nil")
 	}
@@ -149,7 +149,7 @@ func TestFindCommand_SpaceSeparatedBang(t *testing.T) {
 }
 
 func TestFindCommand_WithParams(t *testing.T) {
-	cmd, params := defaultApp.findCommand("!goto 42")
+	cmd, params := builtTestApp.findCommand("!goto 42")
 	if cmd == nil {
 		t.Fatal("expected a command, got nil")
 	}
@@ -162,14 +162,14 @@ func TestFindCommand_WithParams(t *testing.T) {
 }
 
 func TestFindCommand_UnknownCommand(t *testing.T) {
-	cmd, _ := defaultApp.findCommand("!doesnotexist99")
+	cmd, _ := builtTestApp.findCommand("!doesnotexist99")
 	if cmd != nil {
 		t.Errorf("expected nil for unknown command, got %q", cmd.Trigger)
 	}
 }
 
 func TestFindCommand_EmptyMessage(t *testing.T) {
-	cmd, _ := defaultApp.findCommand("")
+	cmd, _ := builtTestApp.findCommand("")
 	if cmd != nil {
 		t.Errorf("expected nil for empty message, got %q", cmd.Trigger)
 	}
