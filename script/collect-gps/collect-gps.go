@@ -47,7 +47,7 @@ func main() {
 		// preload the currently-playing vid via a constructed Player (no
 		// package-level defaultPlayer anymore).
 		player := video.NewPlayer(
-			onscreensClient.New(c.Conf.OnscreensServerHost, natsclient.DefaultPublisher(), c.Conf.Environment),
+			onscreensClient.New(natsclient.DefaultPublisher(), c.Conf.Environment),
 			vlcClient.New(c.Conf.VlcServerHost),
 		)
 		player.GetCurrentlyPlaying(context.Background())

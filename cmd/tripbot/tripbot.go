@@ -84,8 +84,8 @@ type Tripbot struct {
 	// app is the chatbot App that owns the command registry and runs chat
 	// commands + inbound handlers. Constructed in NewTripbot; setUpTwitchClient
 	// wires its Twitch adapters to the IRC client (ConnectIRC), and eventsub /
-	// cron register its methods. Replaces the package-level defaultApp on the
-	// live path.
+	// cron register its methods. cmd owns this App; the package holds no
+	// singleton.
 	app *chatbot.App
 
 	// irc is the go-twitch-irc client, constructed by setUpTwitchClient
@@ -144,7 +144,7 @@ func NewTripbot(version string) *Tripbot {
 		app:     chatbot.New(),
 		srv:     server.New(),
 		player: video.NewPlayer(
-			onscreensClient.New(c.Conf.OnscreensServerHost, natsclient.DefaultPublisher(), c.Conf.Environment),
+			onscreensClient.New(natsclient.DefaultPublisher(), c.Conf.Environment),
 			vlcClient.New(c.Conf.VlcServerHost),
 		),
 		sessions:   users.NewDefault(),
@@ -555,7 +555,7 @@ func (t *Tripbot) gracefulShutdown() {
 // Lives in this package (not pkg/background) to avoid circular deps with
 // the job-target packages.
 func (t *Tripbot) scheduleBackgroundJobs() {
-	onscreensCli := onscreensClient.New(c.Conf.OnscreensServerHost, natsclient.DefaultPublisher(), c.Conf.Environment)
+	onscreensCli := onscreensClient.New(natsclient.DefaultPublisher(), c.Conf.Environment)
 	t.addJob(60*time.Second, "video.GetCurrentlyPlaying", t.player.GetCurrentlyPlaying)
 	t.addJob(61*time.Second, "users.UpdateSession", t.sessions.UpdateSession)
 	t.addJob(62*time.Second, "users.UpdateLeaderboard", t.sessions.UpdateLeaderboard)
