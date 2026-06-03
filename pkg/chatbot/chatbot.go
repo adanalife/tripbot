@@ -118,7 +118,7 @@ func New() *App {
 	a := &App{
 		// DB stays nil; commands use a.db() which falls back to database.GormDB().
 		Onscreens:  realOnscreens{c: onscreensClient.New(natsclient.DefaultPublisher(), c.Conf.Environment)},
-		VLC:        realVLC{c: vlcClient.New(c.Conf.VlcServerHost)},
+		VLC:        realVLC{c: vlcClient.New(c.Conf.VlcServerHost, natsclient.DefaultPublisher(), c.Conf.Environment)},
 		Video:      realVideo{},
 		Chat:       disconnectedChat{},
 		Sessions:   realSessions{},
