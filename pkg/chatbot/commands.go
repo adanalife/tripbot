@@ -228,9 +228,18 @@ func (a *App) locationCmd(ctx context.Context, user *users.User, _ []string) {
 	if err != nil {
 		slog.ErrorContext(ctx, "geocoding error", "err", err)
 	}
-	// generate a google maps url
-	url := helpers.GoogleMapsURL(lat, lng)
-	msg := fmt.Sprintf("%s %s", address, url)
+	// generate a google maps url — but only when we actually have coords.
+	// A 0,0 fallback (the fallback video also had no usable GPS) would
+	// otherwise emit a bogus maps.google.com/?q=0.00000,0.00000 link to chat.
+	var msg string
+	switch {
+	case lat != 0 || lng != 0:
+		msg = fmt.Sprintf("%s %s", address, helpers.GoogleMapsURL(lat, lng))
+	case address != "":
+		msg = address
+	default:
+		msg = "I couldn't pin down the exact spot, sorry!"
+	}
 	// record that they know the location now
 	user.SetLastLocationTime()
 	a.IRC.Say(msg)
