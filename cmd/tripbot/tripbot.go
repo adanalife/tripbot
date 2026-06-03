@@ -186,6 +186,7 @@ func (t *Tripbot) Run() {
 	t.startEventSub(shutdownCtx)
 	t.startNATS(shutdownCtx)
 	t.srv.StartEventHub(shutdownCtx)       // after startNATS: the hub subscribes to the live NATS conn
+	t.startChatSendSubscriber(shutdownCtx) // after startNATS + setUpTwitchClient: needs the conn and t.app.Chat
 	t.player.EmitCurrentVideo(shutdownCtx) // after the hub subscribes: seed its now-playing cache (no NATS replay)
 	t.startDiscord(shutdownCtx)
 	t.startSilentDisconnectWatchdog(shutdownCtx)
