@@ -5,40 +5,28 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/adanalife/tripbot/pkg/helpers"
 	oe "github.com/adanalife/tripbot/pkg/onscreens-events"
-	"github.com/davecgh/go-spew/spew"
 	"github.com/gorilla/mux"
 )
 
+// onscreensFlagHandler is the HTTP twin of the flag.show / flag.hide NATS
+// path (the client publishes over NATS; this stays for parity + manual
+// debugging, e.g. curl '/onscreens/flag/show?state=MO'). show takes a
+// two-letter state abbrev, which the asset handler resolves to the embedded
+// per-state flag image.
 func (s *Server) onscreensFlagHandler(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	spew.Dump(vars)
-
-	switch vars["action"] {
+	switch mux.Vars(r)["action"] {
 	case "show":
-		base64content, ok := r.URL.Query()["duration"]
-		if !ok || len(base64content) > 1 {
+		state := r.URL.Query().Get("state")
+		if state == "" {
 			http.Error(w, "417 expectation failed", http.StatusExpectationFailed)
 			return
 		}
-		//TODO: fix this
-		http.Error(w, "501 not implemented", http.StatusNotImplemented)
-		return
-		//durStr, err := helpers.Base64Decode(base64content[0])
-		//if err != nil {
-		//	slog.ErrorContext(r.Context(), "unable to decode string", "err", err)
-		//	http.Error(w, "422 unable to decode string", http.StatusUnprocessableEntity)
-		//	return
-		//}
-		//dur, err := time.ParseDuration(durStr)
-		//if err != nil {
-		//	http.Error(w, "422 unable to parse duration", http.StatusUnprocessableEntity)
-		//	return
-		//}
-		//s.Flag.ShowFor("", dur)
-		//fmt.Fprintf(w, "OK")
+		s.Flag.ShowFor(strings.ToUpper(state), flagDuration)
+		fmt.Fprintf(w, "OK")
 	case "hide":
 		s.Flag.Hide()
 		fmt.Fprintf(w, "OK")

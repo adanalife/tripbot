@@ -23,7 +23,7 @@ func TimewarpHideSubject(env string) string    { return subject(env, "timewarp",
 func GPSShowSubject(env string) string         { return subject(env, "gps", "show") }
 func GPSHideSubject(env string) string         { return subject(env, "gps", "hide") }
 
-// FlagHideSubject is the only flag subject. flag.show is intentionally
-// absent — the feature is disabled (the HTTP route 501s and the client
-// method is a no-op), so publishing it would be dead surface.
+// FlagShow carries the state whose flag to display (FlagShow.State); the
+// server resolves it to an embedded per-state flag image.
+func FlagShowSubject(env string) string { return subject(env, "flag", "show") }
 func FlagHideSubject(env string) string { return subject(env, "flag", "hide") }

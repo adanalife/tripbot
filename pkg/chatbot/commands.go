@@ -78,7 +78,7 @@ func (a *App) helloCmd(ctx context.Context, user *users.User, params []string) {
 
 func (a *App) flagCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !flag", "username", user.Username)
-	a.Onscreens.ShowFlag(ctx, 10*time.Second)
+	a.Onscreens.ShowFlag(ctx, a.Video.Current().State, 10*time.Second)
 }
 
 func (a *App) versionCmd(ctx context.Context, user *users.User, _ []string) {
@@ -407,7 +407,7 @@ func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 	if strings.ToLower(guess) == strings.ToLower(vid.State) {
 		msg = fmt.Sprintf("@%s got it! We're in %s", user.Username, vid.State)
 		// show the flag for the state
-		a.Onscreens.ShowFlag(ctx, 10*time.Second)
+		a.Onscreens.ShowFlag(ctx, vid.State, 10*time.Second)
 		// increase their guess score
 		user.AddToScore(ctx, guessScoreboard, 1.0)
 		user.AddToScore(ctx, scoreboards.CurrentGuessScoreboard(), 1.0)
@@ -428,7 +428,7 @@ func (a *App) stateCmd(ctx context.Context, user *users.User, _ []string) {
 	}
 	msg := fmt.Sprintf("We're in %s", vid.State)
 	// show the flag for the state
-	a.Onscreens.ShowFlag(ctx, 10*time.Second)
+	a.Onscreens.ShowFlag(ctx, vid.State, 10*time.Second)
 	// record that they know the location now
 	user.SetLastLocationTime()
 	a.IRC.Say(msg)

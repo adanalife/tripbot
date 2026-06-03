@@ -164,16 +164,40 @@ func TestEmptyPayloadCommandsPublish(t *testing.T) {
 	}
 }
 
-// TestShowFlagDoesNotPublish asserts the disabled flag.show stays a no-op
-// (no subject in the taxonomy, so nothing is published).
-func TestShowFlagDoesNotPublish(t *testing.T) {
+// TestShowFlagPublishes asserts flag.show publishes a FlagShow carrying the
+// state normalized to its two-letter abbrev.
+func TestShowFlagPublishes(t *testing.T) {
 	rec := &recordingPublisher{}
 	c := New(okServer(t), rec, "stage")
-	if err := c.ShowFlag(context.Background(), 10); err != nil {
+	if err := c.ShowFlag(context.Background(), "Missouri", 10); err != nil {
+		t.Fatalf("ShowFlag: %v", err)
+	}
+	if len(rec.Publishes) != 1 {
+		t.Fatalf("expected 1 publish, got %d", len(rec.Publishes))
+	}
+	pub := rec.Publishes[0]
+	if pub.Subject != "tripbot.stage.onscreens.flag.show" {
+		t.Errorf("subject = %q, want tripbot.stage.onscreens.flag.show", pub.Subject)
+	}
+	var ev oe.FlagShow
+	if err := json.Unmarshal(pub.Payload, &ev); err != nil {
+		t.Fatalf("payload not valid JSON: %v", err)
+	}
+	if ev.State != "MO" {
+		t.Errorf("state = %q, want MO", ev.State)
+	}
+}
+
+// TestShowFlagUnknownStateNoPublish asserts a state with no known abbrev is a
+// no-op (nothing to show).
+func TestShowFlagUnknownStateNoPublish(t *testing.T) {
+	rec := &recordingPublisher{}
+	c := New(okServer(t), rec, "stage")
+	if err := c.ShowFlag(context.Background(), "Atlantis", 10); err != nil {
 		t.Fatalf("ShowFlag: %v", err)
 	}
 	if len(rec.Publishes) != 0 {
-		t.Errorf("expected 0 publishes for disabled flag.show, got %d", len(rec.Publishes))
+		t.Errorf("expected 0 publishes for unknown state, got %d", len(rec.Publishes))
 	}
 }
 
