@@ -82,6 +82,18 @@ func (s *Server) flagSnapshot(ctx context.Context) []feature.Flag {
 	return client.Snapshot(ctx)
 }
 
+// flagToggler returns the installed flag client's write surface, if it has
+// one. The Postgres-backed client does; the in-memory fallback (startup
+// window, tests) doesn't — so the admin toggle UI and the toggle action
+// both gate on the ok result, degrading to read-only when absent.
+func (s *Server) flagToggler() (feature.FlagToggler, bool) {
+	s.flagMu.RLock()
+	client := s.flagClient
+	s.flagMu.RUnlock()
+	t, ok := client.(feature.FlagToggler)
+	return t, ok
+}
+
 // versionHandler returns build metadata as JSON. The tag comes from the
 // build-time ldflag; sha + built_at are read from the binary's embedded
 // VCS info (Go's automatic -buildvcs). started_at is when the process
