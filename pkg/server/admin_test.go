@@ -56,6 +56,56 @@ func TestTailnetServiceURL(t *testing.T) {
 	}
 }
 
+func TestHostServiceName(t *testing.T) {
+	cases := []struct {
+		hostPort, want string
+	}{
+		{"obs:8080", "obs"},
+		{"obs-twitch:8080", "obs-twitch"},
+		{"obs-twitch", "obs-twitch"}, // no port
+		{"", ""},
+	}
+	for _, tc := range cases {
+		if got := hostServiceName(tc.hostPort); got != tc.want {
+			t.Errorf("hostServiceName(%q) = %q, want %q", tc.hostPort, got, tc.want)
+		}
+	}
+}
+
+// The OBS nav link must follow OBS_SERVER_HOST's value so it resolves whether the
+// Service is named "obs" (prod) or "obs-twitch" (stage) — no hardcoded name.
+func TestGatherLinks_ObsURLFollowsConfiguredHost(t *testing.T) {
+	saved := struct{ env, obs string }{c.Conf.Environment, c.Conf.ObsServerHost}
+	t.Cleanup(func() { c.Conf.Environment = saved.env; c.Conf.ObsServerHost = saved.obs })
+
+	obsURL := func() string {
+		for _, l := range gatherLinks() {
+			if l.Label == "obs" {
+				return l.URL
+			}
+		}
+		return ""
+	}
+
+	c.Conf.Environment = "staging"
+	c.Conf.ObsServerHost = "obs-twitch:8080"
+	if got, want := obsURL(), "https://obs-twitch-stage.tail020deb.ts.net"; got != want {
+		t.Errorf("staging obs link = %q, want %q", got, want)
+	}
+
+	c.Conf.Environment = "production"
+	c.Conf.ObsServerHost = "obs:8080"
+	if got, want := obsURL(), "https://obs-prod.tail020deb.ts.net"; got != want {
+		t.Errorf("prod obs link = %q, want %q", got, want)
+	}
+
+	// Unconfigured OBS host → no dead link.
+	c.Conf.ObsServerHost = ""
+	if got := obsURL(); got != "" {
+		t.Errorf("empty OBS_SERVER_HOST should drop the obs link; got %q", got)
+	}
+}
+
 func TestHubbleNamespace(t *testing.T) {
 	saved := c.Conf.Environment
 	t.Cleanup(func() { c.Conf.Environment = saved })
@@ -406,6 +456,11 @@ func TestAdminHandler_RendersReadyStatusAndLinks(t *testing.T) {
 		c.Conf.ExternalURL = "https://tripbot.prod.whereisdana.today"
 		c.Conf.Environment = "production"
 	})
+	// ObsServerHost isn't covered by withConf — set it here so the OBS nav link
+	// renders. "obs:8080" is prod's name today → tailnet href obs-prod.
+	savedObs := c.Conf.ObsServerHost
+	t.Cleanup(func() { c.Conf.ObsServerHost = savedObs })
+	c.Conf.ObsServerHost = "obs:8080"
 	withCurrentlyPlaying(t, srv, video.Video{Slug: "wy_0042", State: "Wyoming"}, 3*time.Minute+12*time.Second)
 	withChatterCount(t, 12)
 

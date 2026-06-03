@@ -2,15 +2,12 @@ package chatbot
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"math/rand"
 	"time"
 
-	mylog "github.com/adanalife/tripbot/pkg/chatbot/log"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
-	"github.com/adanalife/tripbot/pkg/eventbus"
 	"github.com/adanalife/tripbot/pkg/feature"
 	"github.com/adanalife/tripbot/pkg/geo"
 	"github.com/adanalife/tripbot/pkg/natsclient"
@@ -23,11 +20,10 @@ import (
 )
 
 var googleMapsAPIKey string
-var client *twitch.Client
 var Uptime time.Time
 
-// App holds injectable dependencies for the chatbot.
-// Tests instantiate it directly with fakes; production uses defaultApp.
+// App holds injectable dependencies for the chatbot. cmd/tripbot constructs the
+// live one with New(); tests instantiate it directly with fakes.
 type App struct {
 	// DB is the GORM handle used by commands that need to read or write the
 	// database. nil in tests that don't exercise the DB; otherwise either the
@@ -42,10 +38,12 @@ type App struct {
 	// Video reads / refreshes the currently-playing dashcam video. Tests
 	// inject a no-op fake; production uses the realVideo adapter.
 	Video Video
-	// IRC sends chat output (Say, Whisper). Tests inject a recordingIRC
-	// to assert on chat messages; production uses the realIRC adapter
-	// which delegates to the package-level twitch client.
-	IRC IRC
+	// Chat sends chat output (Say, Whisper) to the streaming platform. Tests
+	// inject a recordingChat to assert on messages; production uses the
+	// twitchChat adapter (wrapped in the console mirror) that ConnectIRC wires
+	// to this App's own *twitch.Client. The provider-neutral seam: a YouTube /
+	// TikTok ChatClient drops in here without touching command code.
+	Chat ChatClient
 	// Sessions wraps the user-lookup / lifetime-leaderboard / shutdown
 	// surface of pkg/users for command-time queries. Tests inject a
 	// recordingSessions to assert lookups and stage results; production
@@ -64,9 +62,9 @@ type App struct {
 	NowPlaying NowPlaying
 	// Flags evaluates feature flag values for command-time gating. Tests
 	// inject noopFlags{} (every key false); New() defaults it to an empty
-	// in-memory client (same fail-closed contract) for the startup window +
-	// defaultApp, and cmd/tripbot assigns the Postgres-backed client once the
-	// DB connection is up.
+	// in-memory client (same fail-closed contract) for the startup window
+	// before cmd/tripbot assigns the Postgres-backed client once the DB
+	// connection is up.
 	Flags feature.FlagClient
 	// NATS is the fire-and-forget pubsub surface. Tests inject a
 	// recordingNATS to assert on publishes; production uses realNATS
@@ -109,17 +107,16 @@ func (a *App) db() *gorm.DB {
 }
 
 // New constructs an App wired with the production (realX) dependency adapters,
-// with its command registry built and indexed. cmd builds the live App with
-// this; the package singleton defaultApp is built from it for the package-level
-// Twitch adapters / eventsub shims and the tests. Construction touches no
-// network or DB — the realX adapters are lazy.
+// with its command registry built and indexed. cmd/tripbot builds the live App
+// with this and owns it; nothing in the package holds a singleton. Construction
+// touches no network or DB — the realX adapters are lazy.
 func New() *App {
 	a := &App{
 		// DB stays nil; commands use a.db() which falls back to database.GormDB().
 		Onscreens:  realOnscreens{c: onscreensClient.New(natsclient.DefaultPublisher(), c.Conf.Environment)},
 		VLC:        realVLC{c: vlcClient.New(c.Conf.VlcServerHost)},
 		Video:      realVideo{},
-		IRC:        realIRC{},
+		Chat:       disconnectedChat{},
 		Sessions:   realSessions{},
 		NowPlaying: newRealNowPlaying(),
 		Flags:      feature.NewInMemoryClient(nil),
@@ -131,8 +128,6 @@ func New() *App {
 	a.indexCommands()
 	return a
 }
-
-var defaultApp = New()
 
 // used to determine which help message to display
 // randomized so it starts with a new one every restart
@@ -147,8 +142,9 @@ const subscriberMsg = "You must be a subscriber to run that command :)"
 var followerGatingEnabled = false
 
 // ConnectIRC builds the Twitch IRC client, wires this App's inbound adapters to
-// it, and returns it. Also does the process-wide geocoder + Twitch-API warmup.
-// The returned client is connected by the caller (cmd/tripbot).
+// it, points this App's outbound Chat at it, and returns it. Also does the
+// process-wide geocoder + Twitch-API warmup. The returned client is connected
+// by the caller (cmd/tripbot).
 func (a *App) ConnectIRC() *twitch.Client {
 	Uptime = time.Now()
 
@@ -166,7 +162,7 @@ func (a *App) ConnectIRC() *twitch.Client {
 
 	// The IRC token comes from the DB-backed oauth_tokens row populated by
 	// cmd/auth-bootstrap; cmd/tripbot calls mytwitch.LoadFromDB before this.
-	client = twitch.NewClient(c.Conf.BotUsername, mytwitch.IRCAuthToken())
+	client := twitch.NewClient(c.Conf.BotUsername, mytwitch.IRCAuthToken())
 
 	// attach this App's Twitch inbound adapters
 	client.OnUserJoinMessage(a.onTwitchJoin)
@@ -175,49 +171,30 @@ func (a *App) ConnectIRC() *twitch.Client {
 	client.OnWhisperMessage(a.onTwitchWhisper)
 	client.OnPrivateMessage(a.onTwitchMessage)
 
-	return client
-}
-
-// Say will make a post in chat
-func Say(msg string) {
-	// include the message in the log
-	mylog.ChatMsg(c.Conf.BotUsername, msg)
-	// mirror the bot's own output onto the event bus so it shows in the admin
-	// live console — Twitch doesn't echo our sent messages back via
-	// PrivateMessage, so without this the console would miss everything the bot
-	// says. Fire-and-forget; no-op when NATS is unconfigured.
-	eventbus.EmitChatMessage(context.Background(), c.Conf.Environment, c.Conf.BotUsername, msg)
-	// figure out what channel to speak to
-	speakTo := c.Conf.ChannelName
-	if c.Conf.OutputChannel != "" {
-		speakTo = c.Conf.OutputChannel
+	// point this App's outbound chat at the Twitch client, wrapped in the
+	// provider-neutral console mirror so the bot's own output reaches the admin
+	// live console. A second provider (YouTube/…) wires its own ChatClient here.
+	a.Chat = consoleMirror{
+		inner: twitchChat{
+			client:        client,
+			channelName:   c.Conf.ChannelName,
+			outputChannel: c.Conf.OutputChannel,
+			botUsername:   c.Conf.BotUsername,
+		},
+		env:         c.Conf.Environment,
+		botUsername: c.Conf.BotUsername,
 	}
-	// say the message to chat
-	client.Say(speakTo, msg)
-}
 
-// sayFn is the internal send implementation; tests override it to capture output.
-var sayFn func(string) = Say
-
-// Whisper will whisper a message to a user
-// Note: go-twitch-irc v4 removed the Whisper() send method; we replicate the
-// v2 behavior by sending the raw IRC /w command via PRIVMSG on the bot's own channel.
-func Whisper(username, msg string) {
-	//TODO: include whispers in log
-	// include the message in the log
-	// mylog.ChatMsg(c.Conf.BotUsername, msg)
-	slog.Info("sending whisper", "to", username, "text", msg)
-	// say the message to chat
-	client.Say(c.Conf.BotUsername, fmt.Sprintf("/w %s %s", username, msg))
+	return client
 }
 
 // Chatter is designed to post a randomized message on a timer.
 // Right now it just posts random "help messages."
-// ctx is forward-compat plumbing — a.IRC.Say doesn't take ctx yet, so it's
-// not propagated into the IRC write.
+// ctx is forward-compat plumbing — a.Chat.Say doesn't take ctx yet, so it's
+// not propagated into the chat write.
 func (a *App) Chatter(_ context.Context) {
 	// use twitch emote feature to add some color
-	a.IRC.Say("/me " + help())
+	a.Chat.Say("/me " + help())
 }
 
 func help() string {

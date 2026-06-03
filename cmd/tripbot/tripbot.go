@@ -84,8 +84,8 @@ type Tripbot struct {
 	// app is the chatbot App that owns the command registry and runs chat
 	// commands + inbound handlers. Constructed in NewTripbot; setUpTwitchClient
 	// wires its Twitch adapters to the IRC client (ConnectIRC), and eventsub /
-	// cron register its methods. Replaces the package-level defaultApp on the
-	// live path.
+	// cron register its methods. cmd owns this App; the package holds no
+	// singleton.
 	app *chatbot.App
 
 	// irc is the go-twitch-irc client, constructed by setUpTwitchClient

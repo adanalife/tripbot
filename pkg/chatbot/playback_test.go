@@ -31,12 +31,10 @@ func skipIfDarwin(t *testing.T) {
 }
 
 // runAsAdmin runs fn with lastTimewarpTime cleared so rate limiting is not a
-// concern, plus captureSay's restore wired up automatically.
+// concern. Chat output goes to the App's IRC fake (noopChat by default).
 func runAsAdmin(t *testing.T, fn func()) {
 	t.Helper()
 	lastTimewarpTime = time.Time{}
-	_, restore := captureSay(t)
-	defer restore()
 	fn()
 }
 
@@ -152,9 +150,6 @@ func TestGuessCmd_CorrectGuess_RefreshesVideoAfterTimewarp(t *testing.T) {
 	expectAddToScoreChain(mock)
 	expectAddToScoreChain(mock)
 
-	_, restore := captureSay(t)
-	defer restore()
-
 	app.guessCmd(context.Background(), newTestUser("viewer1"), []string{"Colorado"})
 
 	// guessCmd first reads the current vid (Current), then the correct-guess
@@ -186,11 +181,11 @@ func TestJumpCmd_AdminPlaysRandomFromState(t *testing.T) {
 		// "<Slug>.MP4" — that's what gets passed to VLC.PlayFileInPlaylist.
 		RandomVid: video.Video{Slug: "2019_0615_183000_001", State: "California"},
 	}
-	recIRC := &recordingIRC{}
+	recIRC := &recordingChat{}
 	app.Onscreens = recOverlay
 	app.VLC = recVLC
 	app.Video = recVideo
-	app.IRC = recIRC
+	app.Chat = recIRC
 
 	runAsAdmin(t, func() {
 		app.jumpCmd(context.Background(), newTestUser(adminUser), []string{"california"})
@@ -232,11 +227,11 @@ func TestJumpCmd_NoFootageForState(t *testing.T) {
 	recVideo := &recordingVideo{
 		RandomErr: &terrors.NoFootageForStateError{Msg: "no matches found"},
 	}
-	recIRC := &recordingIRC{}
+	recIRC := &recordingChat{}
 	app.Onscreens = recOverlay
 	app.VLC = recVLC
 	app.Video = recVideo
-	app.IRC = recIRC
+	app.Chat = recIRC
 
 	runAsAdmin(t, func() {
 		app.jumpCmd(context.Background(), newTestUser(adminUser), []string{"wyoming"})
@@ -266,10 +261,10 @@ func TestJumpCmd_RejectsBadInput(t *testing.T) {
 	app := newTestApp(video.Video{})
 	recVLC := &recordingVLC{}
 	recVideo := &recordingVideo{}
-	recIRC := &recordingIRC{}
+	recIRC := &recordingChat{}
 	app.VLC = recVLC
 	app.Video = recVideo
-	app.IRC = recIRC
+	app.Chat = recIRC
 
 	runAsAdmin(t, func() {
 		app.jumpCmd(context.Background(), newTestUser(adminUser), nil)
