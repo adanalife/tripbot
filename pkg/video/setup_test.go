@@ -1,14 +1,15 @@
 package video
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/adanalife/tripbot/pkg/database"
-	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
 	vlcClient "github.com/adanalife/tripbot/pkg/vlc-client"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -43,12 +44,22 @@ func installMockDB(t *testing.T) sqlmock.Sqlmock {
 	return mock
 }
 
-// recordedCalls captures URL paths hit on a fake server.
-type recordedCalls struct {
-	paths []string
+// recordingOnscreens is an interface fake satisfying the Player's onscreens
+// dependency, capturing each GPS overlay call by method name. Replaces the
+// old httptest-backed rig now that Player takes an interface.
+type recordingOnscreens struct {
+	calls []string
 }
 
-func (r *recordedCalls) add(p string) { r.paths = append(r.paths, p) }
+func (r *recordingOnscreens) ShowGPSImage(_ context.Context, _ time.Duration) error {
+	r.calls = append(r.calls, "ShowGPSImage")
+	return nil
+}
+
+func (r *recordingOnscreens) HideGPSImage(_ context.Context) error {
+	r.calls = append(r.calls, "HideGPSImage")
+	return nil
+}
 
 // fakeVLCServer stands up an httptest.Server that responds to /vlc/current
 // with the value pointed to by current. Tests mutate *current to change what
@@ -65,29 +76,10 @@ func fakeVLCServer(t *testing.T, current *string) *vlcClient.Client {
 		http.NotFound(w, r)
 	}))
 	t.Cleanup(srv.Close)
-	// vlcClient.New(host) builds the URL as "http://" + host, so strip the
-	// scheme from the httptest URL before handing it over.
-	return vlcClient.New(strings.TrimPrefix(srv.URL, "http://"))
-}
-
-// fakeOnscreensServer stands up an httptest.Server that records calls to the
-// GPS show/hide endpoints. Tests assert on rec.paths to verify which overlay
-// transitions fired.
-//
-// Returns a *onscreens-client.Client configured to talk to the fake and a
-// pointer to the recorded-calls struct.
-func fakeOnscreensServer(t *testing.T) (*onscreensClient.Client, *recordedCalls) {
-	t.Helper()
-	rec := &recordedCalls{}
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/onscreens/gps/show", "/onscreens/gps/hide":
-			rec.add(r.URL.Path)
-		}
-		w.WriteHeader(http.StatusOK)
-	}))
-	t.Cleanup(srv.Close)
-	return onscreensClient.New(strings.TrimPrefix(srv.URL, "http://")), rec
+	// vlcClient.New builds the URL as "http://" + host, so strip the scheme
+	// from the httptest URL before handing it over. nil publisher disables the
+	// NATS mirror — this rig exercises the HTTP path only.
+	return vlcClient.New(strings.TrimPrefix(srv.URL, "http://"), nil, "test")
 }
 
 // expectLoadHit queues a sqlmock expectation for a successful load() — i.e.

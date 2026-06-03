@@ -102,8 +102,8 @@ func (a *App) songCmd(ctx context.Context, user *users.User, _ []string) {
 	artist, title, err := a.NowPlaying.Current(ctx)
 	if err != nil {
 		slog.ErrorContext(ctx, "now-playing fetch failed", "err", err)
-		a.IRC.Say("Couldn't reach the music source for the current track, sorry!")
+		a.Chat.Say("Couldn't reach the music source for the current track, sorry!")
 		return
 	}
-	a.IRC.Say(fmt.Sprintf("♪ Now playing: %s — %s", title, artist))
+	a.Chat.Say(fmt.Sprintf("♪ Now playing: %s — %s", title, artist))
 }

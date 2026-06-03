@@ -18,10 +18,9 @@ import (
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
+	"github.com/adanalife/tripbot/pkg/feature"
 	"github.com/adanalife/tripbot/pkg/helpers"
-	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/users"
-	"github.com/adanalife/tripbot/pkg/video"
 	"github.com/getsentry/sentry-go"
 	"github.com/hako/durafmt"
 	"gorm.io/gorm"
@@ -46,7 +45,7 @@ const guessScoreboard = "guess_state_total"
 func (a *App) helpCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !help", "username", user.Username)
 	msg := fmt.Sprintf("%s (%d of %d)", help(), helpIndex+1, len(c.HelpMessages))
-	a.IRC.Say(msg)
+	a.Chat.Say(msg)
 }
 
 func (a *App) helloCmd(ctx context.Context, user *users.User, params []string) {
@@ -69,11 +68,11 @@ func (a *App) helloCmd(ctx context.Context, user *users.User, params []string) {
 	msg += punctuation[rand.Intn(len(punctuation))]
 
 	// give a little help message if the user is new
-	if user.CurrentMiles(ctx) < 2.0 {
+	if a.Sessions.CurrentMiles(ctx, *user) < 2.0 {
 		msg += " I'm Tripbot, your adventure companion. Try using !commands to interact with me."
 	}
 
-	a.IRC.Say(msg)
+	a.Chat.Say(msg)
 	// update our record of last time it ran
 	lastHelloTime = time.Now()
 }
@@ -92,7 +91,7 @@ func (a *App) versionCmd(ctx context.Context, user *users.User, _ []string) {
 		currentVersion = readBuildVersion(ctx)
 	}
 
-	a.IRC.Say("Current version is " + currentVersion)
+	a.Chat.Say("Current version is " + currentVersion)
 }
 
 // readBuildVersion reads the build-time-baked tag from versionFilePath
@@ -116,7 +115,7 @@ func (a *App) uptimeCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !uptime", "username", user.Username)
 	dur := time.Now().Sub(Uptime)
 	msg := fmt.Sprintf("I have been running for %s", durafmt.Parse(dur))
-	a.IRC.Say(msg)
+	a.Chat.Say(msg)
 }
 
 func (a *App) followageCmd(ctx context.Context, user *users.User, params []string) {
@@ -129,21 +128,21 @@ func (a *App) followageCmd(ctx context.Context, user *users.User, params []strin
 		username = helpers.StripAtSign(params[0])
 	}
 
-	followedAt, ok := mytwitch.FollowedAt(username)
+	followedAt, ok := a.Twitch.FollowedAt(username)
 	if !ok {
 		if other {
-			a.IRC.Say(fmt.Sprintf("@%s isn't following the channel.", username))
+			a.Chat.Say(fmt.Sprintf("@%s isn't following the channel.", username))
 		} else {
-			a.IRC.Say("You're not following yet — hit that follow button!")
+			a.Chat.Say("You're not following yet — hit that follow button!")
 		}
 		return
 	}
 
 	dur := durafmt.Parse(time.Since(followedAt)).LimitFirstN(2)
 	if other {
-		a.IRC.Say(fmt.Sprintf("@%s has been following for %s.", username, dur))
+		a.Chat.Say(fmt.Sprintf("@%s has been following for %s.", username, dur))
 	} else {
-		a.IRC.Say(fmt.Sprintf("@%s, you've been following for %s. Thanks!", username, dur))
+		a.Chat.Say(fmt.Sprintf("@%s, you've been following for %s. Thanks!", username, dur))
 	}
 }
 
@@ -155,24 +154,32 @@ func (a *App) milesCmd(ctx context.Context, user *users.User, params []string) {
 	// check to see if an arg was provided
 	if len(params) == 0 {
 		username = user.Username
-		lifetimeMiles = user.CurrentMiles(ctx)
-		monthlyMiles = user.CurrentMonthlyMiles(ctx)
+		lifetimeMiles = a.Sessions.CurrentMiles(ctx, *user)
+		monthlyMiles = a.Sessions.CurrentMonthlyMiles(ctx, *user)
 	} else {
 		username = helpers.StripAtSign(params[0])
 		u := a.Sessions.Find(ctx, username)
 
 		// check to see if they are in our DB
 		if u.ID == 0 {
-			a.IRC.Say("I don't know them, sorry!")
+			a.Chat.Say("I don't know them, sorry!")
 			return
 		}
 
-		lifetimeMiles = u.CurrentMiles(ctx)
-		monthlyMiles = u.CurrentMonthlyMiles(ctx)
+		lifetimeMiles = a.Sessions.CurrentMiles(ctx, u)
+		monthlyMiles = a.Sessions.CurrentMonthlyMiles(ctx, u)
+	}
+
+	// Floor the *displayed* monthly miles at 0.01 so a brand-new viewer never
+	// sees "0.00mi", which reads as broken. This is display-only — the real
+	// monthlyMiles value still drives the newcomer-hint logic below.
+	displayMonthly := monthlyMiles
+	if displayMonthly < 0.01 {
+		displayMonthly = 0.01
 	}
 
 	msg := "@%s has %.2fmi this month"
-	msg = fmt.Sprintf(msg, username, monthlyMiles)
+	msg = fmt.Sprintf(msg, username, displayMonthly)
 
 	// add total miles if they have been around for more than one month
 	if lifetimeMiles > monthlyMiles {
@@ -192,33 +199,58 @@ func (a *App) milesCmd(ctx context.Context, user *users.User, params []string) {
 		}
 	}
 
-	a.IRC.Say(msg)
+	a.Chat.Say(msg)
 }
 
 func (a *App) kilometresCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !kilometres", "username", user.Username)
-	km := user.CurrentMiles(ctx) * 1.609344
+	km := a.Sessions.CurrentMiles(ctx, *user) * 1.609344
 	msg := "@%s has %.2f kilometres."
 	msg = fmt.Sprintf(msg, user.Username, km)
-	a.IRC.Say(msg)
+	a.Chat.Say(msg)
 }
 
 func (a *App) sunsetCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !sunset", "username", user.Username)
 	vid := a.Video.Current()
 	if vid.Flagged {
-		a.IRC.Say("I couldn't figure out current GPS coords, using next closest...")
+		a.Chat.Say("I couldn't figure out current GPS coords, using next closest...")
 		vid = vid.Next(ctx)
 	}
 	lat, lng, _ := vid.Location()
-	a.IRC.Say(helpers.SunsetStr(vid.DateFilmed, lat, lng))
+	a.Chat.Say(helpers.SunsetStr(vid.DateFilmed, lat, lng))
+}
+
+func (a *App) weatherCmd(ctx context.Context, user *users.User, _ []string) {
+	slog.InfoContext(ctx, "ran !weather", "username", user.Username)
+	if !a.Flags.Bool(ctx, weatherFlagKey, feature.EvalContext{
+		Username: user.Username,
+		Channel:  c.Conf.ChannelName,
+		Env:      c.Conf.Environment,
+	}) {
+		slog.InfoContext(ctx, "!weather disabled by feature flag", "flag", weatherFlagKey, "username", user.Username)
+		return
+	}
+	vid := a.Video.Current()
+	if vid.Flagged {
+		a.Chat.Say("I couldn't figure out current GPS coords, using next closest...")
+		vid = vid.Next(ctx)
+	}
+	lat, lng, _ := vid.Location()
+	desc, err := a.Weather.Historical(ctx, vid.DateFilmed, lat, lng)
+	if err != nil {
+		slog.ErrorContext(ctx, "weather lookup failed", "err", err)
+		a.Chat.Say("I couldn't fetch the weather for this spot, sorry!")
+		return
+	}
+	a.Chat.Say(desc)
 }
 
 func (a *App) locationCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !location (or similar)", "username", user.Username)
 	vid := a.Video.Current()
 	if vid.Flagged {
-		a.IRC.Say("I couldn't figure out current GPS coords, using next closest...")
+		a.Chat.Say("I couldn't figure out current GPS coords, using next closest...")
 		//TODO: write something like vid.FindClosest() that
 		// chooses whether or not to use Next() vs Prev()
 		vid = vid.Next(ctx)
@@ -226,16 +258,25 @@ func (a *App) locationCmd(ctx context.Context, user *users.User, _ []string) {
 	// extract the coordinates
 	lat, lng, err := vid.Location()
 	// geocode the location
-	address, _ := helpers.CityFromCoords(lat, lng)
+	address, _ := a.Geocoder.City(lat, lng)
 	if err != nil {
 		slog.ErrorContext(ctx, "geocoding error", "err", err)
 	}
-	// generate a google maps url
-	url := helpers.GoogleMapsURL(lat, lng)
-	msg := fmt.Sprintf("%s %s", address, url)
+	// generate a google maps url — but only when we actually have coords.
+	// A 0,0 fallback (the fallback video also had no usable GPS) would
+	// otherwise emit a bogus maps.google.com/?q=0.00000,0.00000 link to chat.
+	var msg string
+	switch {
+	case lat != 0 || lng != 0:
+		msg = fmt.Sprintf("%s %s", address, helpers.GoogleMapsURL(lat, lng))
+	case address != "":
+		msg = address
+	default:
+		msg = "I couldn't pin down the exact spot, sorry!"
+	}
 	// record that they know the location now
 	user.SetLastLocationTime()
-	a.IRC.Say(msg)
+	a.Chat.Say(msg)
 }
 
 func (a *App) monthlyMilesLeaderboardCmd(ctx context.Context, user *users.User, _ []string) {
@@ -260,7 +301,7 @@ func (a *App) monthlyMilesLeaderboardCmd(ctx context.Context, user *users.User, 
 			msg += ", "
 		}
 	}
-	a.IRC.Say(msg)
+	a.Chat.Say(msg)
 }
 
 func (a *App) lifetimeMilesLeaderboardCmd(ctx context.Context, user *users.User, _ []string) {
@@ -285,7 +326,7 @@ func (a *App) lifetimeMilesLeaderboardCmd(ctx context.Context, user *users.User,
 			msg += ", "
 		}
 	}
-	a.IRC.Say(msg)
+	a.Chat.Say(msg)
 }
 
 func (a *App) monthlyGuessLeaderboardCmd(ctx context.Context, user *users.User, _ []string) {
@@ -315,7 +356,7 @@ func (a *App) monthlyGuessLeaderboardCmd(ctx context.Context, user *users.User, 
 
 	// special message if no one has any correct guesses yet
 	if len(intLeaderboard) == 0 {
-		a.IRC.Say("No one is on that leaderboard yet!")
+		a.Chat.Say("No one is on that leaderboard yet!")
 		return
 	}
 
@@ -330,7 +371,7 @@ func (a *App) monthlyGuessLeaderboardCmd(ctx context.Context, user *users.User, 
 			msg += ", "
 		}
 	}
-	a.IRC.Say(msg)
+	a.Chat.Say(msg)
 }
 
 func (a *App) timeCmd(ctx context.Context, user *users.User, _ []string) {
@@ -344,11 +385,11 @@ func (a *App) timeCmd(ctx context.Context, user *users.User, _ []string) {
 		lat, lng, err = vid.Location()
 	}
 	if err != nil {
-		a.IRC.Say("I couldn't figure out current GPS coords, sorry!")
+		a.Chat.Say("I couldn't figure out current GPS coords, sorry!")
 	} else {
 		realDate := helpers.ActualDate(vid.DateFilmed, lat, lng)
 		fmtTime := realDate.Format("3:04pm MST")
-		a.IRC.Say(fmt.Sprintf("This moment was %s", fmtTime))
+		a.Chat.Say(fmt.Sprintf("This moment was %s", fmtTime))
 	}
 }
 
@@ -363,11 +404,11 @@ func (a *App) dateCmd(ctx context.Context, user *users.User, _ []string) {
 		lat, lng, err = vid.Location()
 	}
 	if err != nil {
-		a.IRC.Say("I couldn't figure out current GPS coords, sorry!")
+		a.Chat.Say("I couldn't figure out current GPS coords, sorry!")
 	} else {
 		realDate := helpers.ActualDate(vid.DateFilmed, lat, lng)
 		fmtDate := realDate.Format("Monday January 2, 2006")
-		a.IRC.Say(fmt.Sprintf("This moment was %s", fmtDate))
+		a.Chat.Say(fmt.Sprintf("This moment was %s", fmtDate))
 	}
 }
 
@@ -378,7 +419,7 @@ func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 
 	if len(params) == 0 {
 		msg = "Try and guess what state we're in! For example: !guess CA"
-		a.IRC.Say(msg)
+		a.Chat.Say(msg)
 		return
 	}
 
@@ -387,7 +428,7 @@ func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 		prettyDur := durafmt.ParseShort(user.GuessCooldownRemaining())
 		msg = "I recently told you the answer! Try again in %s."
 		msg = fmt.Sprintf(msg, prettyDur)
-		a.IRC.Say(msg)
+		a.Chat.Say(msg)
 		return
 	}
 
@@ -402,7 +443,7 @@ func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 
 	vid := a.Video.Current()
 	if vid.Flagged {
-		a.IRC.Say("I couldn't figure out current GPS coords, using next closest...")
+		a.Chat.Say("I couldn't figure out current GPS coords, using next closest...")
 		vid = vid.Next(ctx)
 	}
 
@@ -418,14 +459,14 @@ func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 	} else {
 		msg = "Try again! EarthDay"
 	}
-	a.IRC.Say(msg)
+	a.Chat.Say(msg)
 }
 
 func (a *App) stateCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !state", "username", user.Username)
 	vid := a.Video.Current()
 	if vid.Flagged {
-		a.IRC.Say("I couldn't figure out current GPS coords, using next closest...")
+		a.Chat.Say("I couldn't figure out current GPS coords, using next closest...")
 		vid = vid.Next(ctx)
 	}
 	msg := fmt.Sprintf("We're in %s", vid.State)
@@ -433,7 +474,7 @@ func (a *App) stateCmd(ctx context.Context, user *users.User, _ []string) {
 	a.Onscreens.ShowFlag(ctx, 10*time.Second)
 	// record that they know the location now
 	user.SetLastLocationTime()
-	a.IRC.Say(msg)
+	a.Chat.Say(msg)
 }
 
 // TODO: maybe there could be a !cancel command or something
@@ -450,7 +491,7 @@ func (a *App) reportCmd(ctx context.Context, user *users.User, params []string) 
 	if webhook := c.Conf.DiscordAlertsWebhook; webhook != "" {
 		go postReportToDiscord(webhook, user.Username, message)
 	}
-	a.IRC.Say("Thank you, I will look into this ASAP!")
+	a.Chat.Say("Thank you, I will look into this ASAP!")
 }
 
 // postReportToDiscord POSTs a viewer report to a Discord webhook.
@@ -487,9 +528,9 @@ func postReportToDiscord(webhookURL, username, message string) {
 
 func (a *App) bonusMilesCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !bonusmiles", "username", user.Username)
-	bonus := user.BonusMiles()
+	bonus := a.Sessions.BonusMiles(*user)
 	msg := fmt.Sprintf("%s has earned %.4f bonus miles this session", user.Username, bonus)
-	a.IRC.Say(msg)
+	a.Chat.Say(msg)
 }
 
 func (a *App) secretInfoCmd(ctx context.Context, user *users.User, _ []string) {
@@ -498,7 +539,7 @@ func (a *App) secretInfoCmd(ctx context.Context, user *users.User, _ []string) {
 		return
 	}
 	vid := a.Video.Current()
-	msg := fmt.Sprintf("currently playing: %s, playtime: %s", vid, video.CurrentProgress())
+	msg := fmt.Sprintf("currently playing: %s, playtime: %s", vid, a.Video.CurrentProgress())
 	lat, lng, err := vid.Location()
 	if err != nil {
 		msg = fmt.Sprintf("%s, err: %s", msg, err)
@@ -506,16 +547,16 @@ func (a *App) secretInfoCmd(ctx context.Context, user *users.User, _ []string) {
 		msg = fmt.Sprintf("%s, lat: %f, lng: %f", msg, lat, lng)
 	}
 	slog.InfoContext(ctx, "secretinfo output", "text", msg)
-	a.IRC.Say(msg)
+	a.Chat.Say(msg)
 }
 
 func (a *App) shutdownCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !shutdown", "username", user.Username)
 	if !c.UserIsAdmin(user.Username) {
-		a.IRC.Say("Nice try bucko")
+		a.Chat.Say("Nice try bucko")
 		return
 	}
-	a.IRC.Say("Shutting down...")
+	a.Chat.Say("Shutting down...")
 	slog.InfoContext(ctx, "shutdown: currently playing", "video", a.Video.Current())
 	if err := a.Cron.Stop(); err != nil {
 		slog.ErrorContext(ctx, "cron shutdown failed during !shutdown", "err", err)
@@ -540,13 +581,13 @@ func (a *App) middleCmd(ctx context.Context, user *users.User, params []string) 
 
 	// don't do anything if empty
 	if len(params) == 0 {
-		a.IRC.Say("What do you want to say?")
+		a.Chat.Say("What do you want to say?")
 		return
 	}
 
 	// if the arg was "hide", hide the text from view
 	if len(params) == 1 && strings.ToLower(params[0]) == "hide" {
-		a.IRC.Say("Got it! Hiding the message.")
+		a.Chat.Say("Got it! Hiding the message.")
 		a.Onscreens.HideMiddleText(ctx)
 		return
 	}

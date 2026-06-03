@@ -8,8 +8,6 @@ import (
 	"log/slog"
 	"net/http"
 	"runtime/debug"
-	"sync"
-	"sync/atomic"
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
@@ -29,19 +27,18 @@ var generateUserAccessToken = mytwitch.GenerateUserAccessToken
 // would request a real App Access Token from Twitch).
 var helixClient = mytwitch.Client
 
-// versionTag is set by main via SetVersion; overridden at build time
-// through `-ldflags "-X main.version=..."`.
-var versionTag = "dev"
+// versionTag (Server.versionTag) is set by main via SetVersion; overridden at
+// build time through `-ldflags "-X main.version=..."`.
 
 // SetVersion lets cmd/tripbot inject its build-time version string
 // before the HTTP server starts.
-func SetVersion(v string) {
+func (s *Server) SetVersion(v string) {
 	if v != "" {
-		versionTag = v
+		s.versionTag = v
 	}
 }
 
-// twitchConnected reports whether the bot currently has its Twitch IRC
+// Server.twitchConnected reports whether the bot currently has its Twitch IRC
 // connection. It deliberately does NOT gate the readiness probe: /health/ready
 // is always 200 once the HTTP server is up (see httpmw.ReadinessHandler), so
 // the admin panel, /auth/init and /auth/callback stay reachable through the
@@ -50,57 +47,64 @@ func SetVersion(v string) {
 // admin-panel status row and the tripbot_twitch_connected gauge, so "up but
 // not in chat" is surfaced without pulling the pod out of the Service.
 // cmd/tripbot flips it via SetTwitchConnected on IRC connect / disconnect.
-var twitchConnected atomic.Bool
 
 // SetTwitchConnected updates the chat-connection signal: the in-memory flag
 // the admin panel reads and the tripbot_twitch_connected gauge.
-func SetTwitchConnected(connected bool) {
-	twitchConnected.Store(connected)
+func (s *Server) SetTwitchConnected(connected bool) {
+	s.twitchConnected.Store(connected)
 	instrumentation.TwitchConnection.Set(connected)
 }
 
 // TwitchConnected reports the last-known chat-connection state, for the
 // admin panel's status row.
-func TwitchConnected() bool {
-	return twitchConnected.Load()
+func (s *Server) TwitchConnected() bool {
+	return s.twitchConnected.Load()
 }
 
-// flagClient is the FlagClient the admin panel enumerates for its "feature
-// flags" section. Defaults to an empty in-memory client so the panel
+// Server.flagClient is the FlagClient the admin panel enumerates for its
+// "feature flags" section. Defaults to an empty in-memory client so the panel
 // renders a blank section during the brief startup window between server
 // start and startFeatureFlags swapping in the Postgres-backed client.
-var (
-	flagMu     sync.RWMutex
-	flagClient feature.FlagClient = feature.NewInMemoryClient(nil)
-)
 
 // SetFlagClient lets cmd/tripbot install the Postgres-backed FlagClient
 // once startFeatureFlags has loaded the initial snapshot.
-func SetFlagClient(fc feature.FlagClient) {
-	flagMu.Lock()
-	flagClient = fc
-	flagMu.Unlock()
+func (s *Server) SetFlagClient(fc feature.FlagClient) {
+	s.flagMu.Lock()
+	s.flagClient = fc
+	s.flagMu.Unlock()
 }
 
 // flagSnapshot returns the current set of known flags for the admin panel.
-func flagSnapshot(ctx context.Context) []feature.Flag {
-	flagMu.RLock()
-	c := flagClient
-	flagMu.RUnlock()
-	return c.Snapshot(ctx)
+func (s *Server) flagSnapshot(ctx context.Context) []feature.Flag {
+	s.flagMu.RLock()
+	client := s.flagClient
+	s.flagMu.RUnlock()
+	return client.Snapshot(ctx)
+}
+
+// flagToggler returns the installed flag client's write surface, if it has
+// one. The Postgres-backed client does; the in-memory fallback (startup
+// window, tests) doesn't — so the admin toggle UI and the toggle action
+// both gate on the ok result, degrading to read-only when absent.
+func (s *Server) flagToggler() (feature.FlagToggler, bool) {
+	s.flagMu.RLock()
+	client := s.flagClient
+	s.flagMu.RUnlock()
+	t, ok := client.(feature.FlagToggler)
+	return t, ok
 }
 
 // versionHandler returns build metadata as JSON. The tag comes from the
 // build-time ldflag; sha + built_at are read from the binary's embedded
 // VCS info (Go's automatic -buildvcs). started_at is when the process
 // began (admin.startedAt) so callers can derive uptime themselves.
-func versionHandler(w http.ResponseWriter, r *http.Request) {
+func (s *Server) versionHandler(w http.ResponseWriter, r *http.Request) {
 	resp := struct {
 		Tag       string `json:"tag"`
 		Sha       string `json:"sha"`
 		BuiltAt   string `json:"built_at"`
 		StartedAt string `json:"started_at"`
-	}{Tag: versionTag, StartedAt: startedAt.UTC().Format(time.RFC3339)}
+	}{Tag: s.versionTag, StartedAt: startedAt.UTC().Format(time.RFC3339)}
 
 	if info, ok := debug.ReadBuildInfo(); ok {
 		for _, s := range info.Settings {

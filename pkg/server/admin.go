@@ -10,13 +10,13 @@ import (
 	"net/http"
 	"os"
 	"runtime/debug"
+	"strings"
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/httpmw"
 	"github.com/adanalife/tripbot/pkg/obs"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
-	"github.com/adanalife/tripbot/pkg/video"
 	"github.com/gorilla/mux"
 )
 
@@ -28,12 +28,7 @@ var startedAt = time.Now()
 // ping. 2s keeps a slow or hung vlc-server from stalling the panel render.
 var healthClient = &http.Client{Timeout: 2 * time.Second}
 
-// currentlyPlaying / currentProgress are overridable in tests; by default they
-// read pkg/video's in-process state (refreshed by a 60s cron tick), so the
-// admin panel costs nothing to show "now playing".
 var (
-	currentlyPlaying = video.CurrentlyPlaying
-	currentProgress  = video.CurrentProgress
 	// chatterCount is the in-memory count of users in chat, refreshed ~60s by
 	// the UpdateSession cron. Overridable in tests.
 	chatterCount = mytwitch.ChatterCount
@@ -121,6 +116,97 @@ type streamControl struct {
 	Active    bool
 }
 
+// streamControlTmpl renders the OBS stream toggle widget. It is the swap target
+// for the stream action POSTs (hx-target="#stream-control", hx-swap="outerHTML")
+// and is rendered identically on initial page load (via the streamControl
+// template func) and by obsStreamActionHandler's response, so a live toggle
+// matches a fresh page render. When OBS is unreachable the toggle is hidden — a
+// click would just fail.
+var streamControlTmpl = template.Must(template.New("streamcontrol").Parse(
+	`<div id="stream-control" class="stream-control"{{if .OOB}} hx-swap-oob="true"{{end}}>` +
+		`{{- if .Reachable}}` +
+		`{{- if .Active}}` +
+		`<button type="button" class="stream stop" hx-post="/admin/obs/stream/stop" hx-target="#stream-control" hx-swap="outerHTML" hx-disabled-elt="this" data-arm-label="click again to confirm stop" data-original-label="stop stream">stop stream</button>` +
+		`{{- else}}` +
+		`<button type="button" class="stream start" hx-post="/admin/obs/stream/start" hx-target="#stream-control" hx-swap="outerHTML" hx-disabled-elt="this" data-arm-label="click again to confirm start" data-original-label="start stream">start stream</button>` +
+		`{{- end}}` +
+		`{{- else}}<p class="stream-unreachable">OBS unreachable</p>{{- end}}` +
+		`</div>`))
+
+// renderStreamControl executes streamControlTmpl to a string. oob=true tags the
+// widget for an out-of-band swap (used by the periodic /admin/refresh poll);
+// false is the inline form used by the initial render (via the streamControl
+// template func) and the action response (which targets #stream-control
+// directly via hx-target).
+func renderStreamControl(sc streamControl, oob bool) string {
+	var sb strings.Builder
+	data := struct {
+		streamControl
+		OOB bool
+	}{sc, oob}
+	if err := streamControlTmpl.Execute(&sb, data); err != nil {
+		slog.Error("couldn't render stream control", "err", err)
+		return ""
+	}
+	return sb.String()
+}
+
+// flagRowTmpl renders one feature-flag <li>. It's the swap target for the
+// toggle POSTs (hx-target="closest .flag-row", hx-swap="outerHTML") and is
+// rendered identically on the initial page load (via the flagRow template
+// func) and by flagActionHandler's response, so a live toggle matches a fresh
+// page render. The toggle button only renders when .Toggleable — a read-only
+// client (startup window, tests) keeps the bare on/off status. The button is a
+// "molly" button (data-arm-label) so an accidental tap arms rather than fires,
+// matching the stream/restart toggles.
+var flagRowTmpl = template.Must(template.New("flagrow").Parse(
+	`<li class="row flag-row">` +
+		`<span class="dot {{if .Enabled}}up{{else}}down{{end}}"></span>` +
+		`<span class="name"><code>{{.Key}}</code>{{if .Description}}<span class="state"> · {{.Description}}</span>{{end}}</span>` +
+		`<span class="status">{{if .Enabled}}on{{else}}off{{end}}</span>` +
+		`{{- if .Toggleable}}` +
+		`{{- if .Enabled}}` +
+		`<button type="button" class="flag-toggle on" hx-post="/admin/flags/{{.Key}}/disable" hx-target="closest .flag-row" hx-swap="outerHTML" hx-disabled-elt="this" data-arm-label="click again to disable" data-original-label="disable">disable</button>` +
+		`{{- else}}` +
+		`<button type="button" class="flag-toggle off" hx-post="/admin/flags/{{.Key}}/enable" hx-target="closest .flag-row" hx-swap="outerHTML" hx-disabled-elt="this" data-arm-label="click again to enable" data-original-label="enable">enable</button>` +
+		`{{- end}}` +
+		`{{- end}}` +
+		`</li>`))
+
+// renderFlagRow executes flagRowTmpl to a string, shared by the initial page
+// render (via the flagRow template func) and flagActionHandler's swap response.
+func renderFlagRow(f featureFlag) string {
+	var sb strings.Builder
+	if err := flagRowTmpl.Execute(&sb, f); err != nil {
+		slog.Error("couldn't render flag row", "err", err)
+		return ""
+	}
+	return sb.String()
+}
+
+// statusRowsTmpl renders the <li> service-status rows. Extracted so the initial
+// page render (via the statusRows template func) and the /admin/refresh poll
+// produce identical markup, mirroring the streamControl/authCard pattern.
+var statusRowsTmpl = template.Must(template.New("statusrows").Parse(
+	`{{range .}}<li class="row">` +
+		`<span class="dot {{if .OK}}up{{else}}down{{end}}"></span>` +
+		`<span class="name">{{.Name}}</span>` +
+		`{{if .Uptime}}<span class="uptime">up {{.Uptime}}</span>{{end}}` +
+		`{{if .Version}}<span class="ver">{{if .VersionURL}}<a href="{{.VersionURL}}">{{.Version}}</a>{{else}}{{.Version}}{{end}}</span>{{end}}` +
+		`<span class="status">{{.Detail}}</span>` +
+		`<button type="button" class="restart" hx-post="/admin/restart/{{.Name}}" hx-swap="none" hx-disabled-elt="this" data-arm-label="confirm restart" data-original-label="restart">restart</button>` +
+		`</li>{{end}}`))
+
+// renderStatusRows executes statusRowsTmpl to a string.
+func renderStatusRows(s []serviceStatus) string {
+	var sb strings.Builder
+	if err := statusRowsTmpl.Execute(&sb, s); err != nil {
+		slog.Error("couldn't render status rows", "err", err)
+		return ""
+	}
+	return sb.String()
+}
+
 // navLink is one entry in the admin panel's links list.
 type navLink struct {
 	Label string
@@ -135,6 +221,10 @@ type featureFlag struct {
 	Key         string
 	Enabled     bool
 	Description string
+	// Toggleable is true when the installed flag client supports writes (the
+	// Postgres-backed client in prod). When false — the in-memory fallback
+	// during startup, or in tests — the row renders read-only with no button.
+	Toggleable bool
 }
 
 // adminData is the template payload.
@@ -163,7 +253,7 @@ type adminData struct {
 // pings, each version linking to its changelog), the currently-playing video
 // when vlc is up, the broadcaster/bot accounts, and links to the OBS / Grafana
 // / Traefik / Hubble dashboards. Replaces the bare 404 that used to sit on "/".
-func adminHandler(w http.ResponseWriter, r *http.Request) {
+func (s *Server) adminHandler(w http.ResponseWriter, r *http.Request) {
 	vlc := siblingStatus(r.Context(), "vlc", c.Conf.VlcServerHost)
 	onscreens := siblingStatus(r.Context(), "onscreens", c.Conf.OnscreensServerHost)
 	obs := siblingStatus(r.Context(), "obs", c.Conf.ObsServerHost)
@@ -175,26 +265,28 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 		Env:            c.Conf.Environment,
 		Uptime:         time.Since(startedAt).Round(time.Second).String(),
 		Chatters:       chatterCount(),
-		Services:       gatherStatus(buildSHA(), vlc, onscreens, obs),
-		Now:            currentVideo(vlc.OK),
+		Services:       s.gatherStatus(buildSHA(), vlc, onscreens, obs),
+		Now:            s.currentVideo(vlc.OK),
 		Audio:          nowPlayingFetcher(r.Context()),
 		Stream:         gatherStream(r.Context()),
 		PanelHost:      panelHost(r),
 		Links:          gatherLinks(),
-		Flags:          gatherFlags(r.Context()),
+		Flags:          s.gatherFlags(r.Context()),
 		Reauth:         accountsNeedingReauth(),
 		AuthStatuses:   authStatuses(),
-		ChatHistory:    eventHub.snapshotChat(),
-		MapTrailJSON:   mapTrailJSON(),
+		ChatHistory:    s.hub.snapshotChat(),
+		MapTrailJSON:   s.mapTrailJSON(),
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	// iOS Safari aggressively caches pages saved as Home Screen apps —
-	// without this, reopening the icon shows stale state until the user
-	// hard-refreshes. no-store forces a fresh fetch every time; the
-	// page is tiny so the cost is trivial.
-	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
-	w.Header().Set("Pragma", "no-cache")
+	// Cache the shell so revisiting (Home Screen reopen, tab return) repaints the
+	// last view instantly instead of a white blank while the page loads. The panel
+	// is live — SSE plus the 15s /admin/refresh poll reconcile any staleness within
+	// seconds — so an aggressive shell cache is safe here. Dropping the old
+	// no-store also lets the browser's back/forward cache restore the page (and
+	// resume its SSE connection) instantly on tab return; stale-while-revalidate
+	// keeps serving the cached paint while a fresh copy loads in the background.
+	w.Header().Set("Cache-Control", "max-age=30, stale-while-revalidate=86400")
 	if err := adminTmpl.Execute(w, data); err != nil {
 		slog.ErrorContext(r.Context(), "couldn't render admin panel", "err", err)
 	}
@@ -203,11 +295,11 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 // gatherStatus reports tripbot's own readiness (in-memory, free) and folds in
 // the already-probed sibling-service rows. Each row carries its build tag in a
 // version column linking to that build's changelog at the deployed sha.
-func gatherStatus(sha string, siblings ...serviceStatus) []serviceStatus {
+func (s *Server) gatherStatus(sha string, siblings ...serviceStatus) []serviceStatus {
 	tripbot := serviceStatus{
 		Name:       "tripbot",
-		OK:         twitchConnected.Load(),
-		Version:    versionTag,
+		OK:         s.twitchConnected.Load(),
+		Version:    s.versionTag,
 		VersionURL: changelogURL(sha),
 		Uptime:     uptimeSince(startedAt),
 	}
@@ -258,17 +350,19 @@ func uptimeSince(t time.Time) string {
 // flag into the small display row the template renders. Returns nil when
 // no flags are loaded yet (startup window before SetFlagClient) so the
 // template's {{if .Flags}} hides the section cleanly.
-func gatherFlags(ctx context.Context) []featureFlag {
-	flags := flagSnapshot(ctx)
+func (s *Server) gatherFlags(ctx context.Context) []featureFlag {
+	flags := s.flagSnapshot(ctx)
 	if len(flags) == 0 {
 		return nil
 	}
+	_, toggleable := s.flagToggler()
 	out := make([]featureFlag, 0, len(flags))
 	for _, f := range flags {
 		out = append(out, featureFlag{
 			Key:         f.Key,
 			Enabled:     f.Enabled,
 			Description: f.Description,
+			Toggleable:  toggleable,
 		})
 	}
 	return out
@@ -353,7 +447,10 @@ func restartActionHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		slog.ErrorContext(r.Context(), "admin restart failed", "service", service, "err", err)
 	}
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	// The button is hx-swap="none" — no body to return. Immediate feedback is the
+	// in-flight button state; the service drops then reappears in the status rows
+	// on the next panel refresh.
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // obsStreamActionHandler handles POST /admin/obs/stream/{action} (action =
@@ -376,27 +473,120 @@ func obsStreamActionHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		slog.ErrorContext(r.Context(), "obs stream toggle failed", "action", action, "err", err)
 	}
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	// Render from the resulting state: a successful start/stop took effect; a
+	// failed one left the previous state, so the swapped-in widget simply doesn't
+	// flip. The panel's periodic refresh reconciles any drift from OBS state
+	// changed outside the panel. (Source-of-truth philosophy, minus the full-page
+	// reload the old 303 redirect forced.)
+	active := (action == "start") == (err == nil)
+	// HX-Trigger lets the page react beyond the swapped widget — here, open or
+	// close the stream-preview disclosure to match the new state.
+	w.Header().Set("HX-Trigger", fmt.Sprintf(`{"tripbot:stream-changed":{"active":%t}}`, active))
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if _, werr := w.Write([]byte(renderStreamControl(streamControl{Reachable: true, Active: active}, false))); werr != nil {
+		slog.ErrorContext(r.Context(), "couldn't write stream control", "err", werr)
+	}
+}
+
+// flagActionHandler handles POST /admin/flags/{key}/{action} (action =
+// "enable" or "disable") from the feature-flags section's toggle buttons.
+// It writes the new global default through the flag client's toggle surface —
+// which force-refreshes the in-memory snapshot, so the change is live for both
+// this panel and the bot's command gating immediately — then swaps in the
+// flag's row to reflect the new state.
+func (s *Server) flagActionHandler(w http.ResponseWriter, r *http.Request) {
+	key := mux.Vars(r)["key"]
+	action := mux.Vars(r)["action"]
+	var enabled bool
+	switch action {
+	case "enable":
+		enabled = true
+	case "disable":
+		enabled = false
+	default:
+		http.Error(w, "unknown action", http.StatusBadRequest)
+		return
+	}
+
+	toggler, ok := s.flagToggler()
+	if !ok {
+		// The in-memory fallback (startup window) has no write surface. The UI
+		// gates the button on the same condition, so this is the defensive path
+		// for a stale page posting before the Postgres client is wired.
+		slog.ErrorContext(r.Context(), "flag toggle unavailable: client is read-only", "key", key)
+		http.Error(w, "feature flags are read-only right now", http.StatusServiceUnavailable)
+		return
+	}
+	if err := toggler.SetEnabled(r.Context(), key, enabled); err != nil {
+		slog.ErrorContext(r.Context(), "flag toggle failed", "key", key, "action", action, "err", err)
+		http.Error(w, "couldn't toggle flag", http.StatusBadGateway)
+		return
+	}
+	slog.InfoContext(r.Context(), "feature flag toggled from admin panel", "key", key, "enabled", enabled)
+
+	// Re-render the row from the freshly-refreshed snapshot so the swapped-in
+	// markup matches a full page render exactly (carrying the description back).
+	row := featureFlag{Key: key, Enabled: enabled, Toggleable: true}
+	for _, f := range s.flagSnapshot(r.Context()) {
+		if f.Key == key {
+			row.Description = f.Description
+			row.Enabled = f.Enabled
+			break
+		}
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if _, werr := w.Write([]byte(renderFlagRow(row))); werr != nil {
+		slog.ErrorContext(r.Context(), "couldn't write flag row", "err", werr)
+	}
+}
+
+// refreshHandler serves GET /admin/refresh: the always-present live panel
+// sections — the service status rows and the OBS stream toggle — as out-of-band
+// fragments. A hidden poller on the page (hx-trigger="every 15s") fetches this,
+// so the up/down dots, uptimes, versions, and stream state stay current without
+// a full reload. Conditionally-rendered sections (now-playing audio, feature
+// flags) are intentionally excluded: OOB-swapping into a target that may not be
+// in the DOM is fragile, and those values are low-volatility — they refresh on
+// the next full page load. Same sibling-ping cost as the root render; fine at
+// 15s for a single-operator panel.
+func (s *Server) refreshHandler(w http.ResponseWriter, r *http.Request) {
+	vlc := siblingStatus(r.Context(), "vlc", c.Conf.VlcServerHost)
+	onscreens := siblingStatus(r.Context(), "onscreens", c.Conf.OnscreensServerHost)
+	obs := siblingStatus(r.Context(), "obs", c.Conf.ObsServerHost)
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+
+	var sb strings.Builder
+	sb.WriteString(`<ul id="status-list" hx-swap-oob="true">`)
+	sb.WriteString(renderStatusRows(s.gatherStatus(buildSHA(), vlc, onscreens, obs)))
+	sb.WriteString(`</ul>`)
+	sb.WriteString(renderStreamControl(gatherStream(r.Context()), true))
+	if _, err := w.Write([]byte(sb.String())); err != nil {
+		slog.ErrorContext(r.Context(), "couldn't write panel refresh", "err", err)
+	}
 }
 
 // currentVideo summarizes the currently-playing video for the page, but only
 // when vlc is healthy (a stale value while vlc is down would be misleading).
-// Reads pkg/video's in-process value — no extra call. Returns nil when nothing
-// is playing yet (empty slug).
-func currentVideo(vlcOK bool) *nowPlaying {
+// Reads the last video.changed cached by the hub from NATS — no in-process
+// pkg/video dependency — so the panel can later be lifted into its own service.
+// Returns nil when no video.changed has arrived yet. Progress is derived from
+// the event's emitted_at (the clip start), matching the live SSE ticker.
+func (s *Server) currentVideo(vlcOK bool) *nowPlaying {
 	if !vlcOK {
 		return nil
 	}
-	v := currentlyPlaying()
-	if v.Slug == "" {
+	ev, ok := s.hub.snapshotNowPlaying()
+	if !ok || ev.File == "" {
 		return nil
 	}
-	progress := currentProgress()
+	started := parseEmitted(ev.EmittedAt)
 	return &nowPlaying{
-		File:      v.File(),
-		State:     v.State,
-		Progress:  progress.Round(time.Second).String(),
-		SinceUnix: time.Now().Add(-progress).Unix(),
+		File:      ev.File,
+		State:     ev.State,
+		Progress:  time.Since(started).Round(time.Second).String(),
+		SinceUnix: started.Unix(),
 	}
 }
 
@@ -455,8 +645,16 @@ func pingHealthy(ctx context.Context, rawURL string) bool {
 // neither appears here. Entries whose URL can't be derived are dropped.
 func gatherLinks() []navLink {
 	links := []navLink{}
-	if obs := tailnetServiceURL("obs"); obs != "" {
-		links = append(links, navLink{Label: "obs", URL: obs})
+	// Derive OBS's tailnet hostname from the *value* of OBS_SERVER_HOST, not a
+	// hardcoded "obs". The Tailscale operator exposes each Service at
+	// <service-name>-<env>.<tailnetBase>, and the Service is named whatever this
+	// env's config says — "obs" in prod, "obs-twitch" in stage post-rename — so
+	// reading the runtime host keeps the link resolving in both without a
+	// deploy-order hazard. See vault tripbot/TODO.md (config-driven admin panel).
+	if svc := hostServiceName(c.Conf.ObsServerHost); svc != "" {
+		if obs := tailnetServiceURL(svc); obs != "" {
+			links = append(links, navLink{Label: "obs", URL: obs})
+		}
 	}
 	links = append(links,
 		navLink{Label: "grafana", URL: grafanaURL},
@@ -524,6 +722,21 @@ func tailnetServiceURL(service string) string {
 	return "https://" + service + "-" + env + "." + tailnetBase
 }
 
+// hostServiceName returns the bare Kubernetes Service name from a host:port
+// config value such as OBS_SERVER_HOST / VLC_SERVER_HOST — "obs-twitch:8080" →
+// "obs-twitch", "obs" → "obs". It's how the admin panel addresses a sibling by
+// whatever name its Service actually carries in this env, rather than hardcoding
+// one. Returns "" for an empty input so the caller can drop the dependent link.
+func hostServiceName(hostPort string) string {
+	if hostPort == "" {
+		return ""
+	}
+	if host, _, err := net.SplitHostPort(hostPort); err == nil {
+		return host
+	}
+	return hostPort
+}
+
 // previewChannel returns the Twitch channel name the stream-preview embed
 // should load.
 func previewChannel() string {
@@ -571,6 +784,17 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
 	// so the initial server render and a later SSE swap are byte-identical.
 	"authCard":      func(s []mytwitch.AccountTokenStatus) template.HTML { return template.HTML(renderAuthCard(s)) },
 	"reauthCallout": func(r []mytwitch.AccountReauth) template.HTML { return template.HTML(renderReauthCallout(r)) },
+	// streamControl renders the OBS toggle so the initial paint is byte-identical
+	// to what obsStreamActionHandler swaps in after a live toggle.
+	"streamControl": func(sc streamControl) template.HTML { return template.HTML(renderStreamControl(sc, false)) },
+	// statusRows renders the service-status <li> rows, shared with /admin/refresh.
+	"statusRows": func(s []serviceStatus) template.HTML { return template.HTML(renderStatusRows(s)) },
+	// flagRow renders one feature-flag <li>, shared with flagActionHandler so a
+	// live toggle's swapped-in row matches the initial render byte-for-byte.
+	"flagRow": func(f featureFlag) template.HTML { return template.HTML(renderFlagRow(f)) },
+	// sendForm renders the chat send form gated on which identities are logged
+	// in (bot / broadcaster); a muted hint when neither is.
+	"sendForm": func(s []mytwitch.AccountTokenStatus) template.HTML { return template.HTML(renderSendForm(s)) },
 }).Parse(`<!doctype html>
 <html lang="en">
 <head>
@@ -664,15 +888,22 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
   /* Shared disclosure-row styling — controls / now-playing / stream-preview
      all default closed and reveal on click. Same look, just different
      summary labels. */
-  details.stream-preview, details.now-playing, details.feature-flags { margin:24px 0 0; }
-  details.stream-preview > summary, details.now-playing > summary, details.feature-flags > summary { font-size:.8em; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); cursor:pointer; padding:8px 0; border-top:1px solid var(--divider); list-style:none; }
-  details.stream-preview > summary::-webkit-details-marker, details.now-playing > summary::-webkit-details-marker, details.feature-flags > summary::-webkit-details-marker { display:none; }
-  details.stream-preview > summary::before, details.now-playing > summary::before, details.feature-flags > summary::before { content:"▸ "; color:var(--dim); display:inline-block; }
-  details.stream-preview[open] > summary::before, details.now-playing[open] > summary::before, details.feature-flags[open] > summary::before { content:"▾ "; }
-  details.stream-preview > summary:hover, details.now-playing > summary:hover, details.feature-flags > summary:hover { color:var(--fg); }
+  details.stream-preview, details.now-playing, details.feature-flags, details.controls { margin:24px 0 0; }
+  details.stream-preview > summary, details.now-playing > summary, details.feature-flags > summary, details.controls > summary { font-size:.8em; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); cursor:pointer; padding:8px 0; border-top:1px solid var(--divider); list-style:none; }
+  details.stream-preview > summary::-webkit-details-marker, details.now-playing > summary::-webkit-details-marker, details.feature-flags > summary::-webkit-details-marker, details.controls > summary::-webkit-details-marker { display:none; }
+  details.stream-preview > summary::before, details.now-playing > summary::before, details.feature-flags > summary::before, details.controls > summary::before { content:"▸ "; color:var(--dim); display:inline-block; }
+  details.stream-preview[open] > summary::before, details.now-playing[open] > summary::before, details.feature-flags[open] > summary::before, details.controls[open] > summary::before { content:"▾ "; }
+  details.stream-preview > summary:hover, details.now-playing > summary:hover, details.feature-flags > summary:hover, details.controls > summary:hover { color:var(--fg); }
   /* feature-flags rows reuse .row but the name column carries the flag key
      in monospace; description trails after a separator dot like elsewhere. */
   .row.flag-row .name code { font-family:var(--mono); font-size:.95em; }
+  /* per-flag enable/disable toggle — same small, unobtrusive shape as .restart;
+     a green tint when the action will enable, and a molly button (arms on first
+     tap, fires on the second) like the stream/restart controls. */
+  button.flag-toggle { font:inherit; font-size:.8em; padding:3px 9px; border-radius:4px; border:1px solid #2a2a2a; background:#1a1a1a; color:#888; cursor:pointer; transition:background .15s, color .15s, border-color .15s; min-width:4.5em; }
+  button.flag-toggle:hover { background:#252525; color:#ccc; border-color:#3a3a3a; }
+  button.flag-toggle.off:hover { color:#7fc296; border-color:#2f6f43; }
+  button.flag-toggle.armed { background:#f85149; color:#fff; border-color:#f85149; box-shadow:0 0 0 2px #f8514980; }
   .stream-frame { aspect-ratio:16 / 9; width:100%; margin-top:10px; background:#000; border-radius:6px; overflow:hidden; }
   .stream-frame iframe { width:100%; height:100%; border:none; display:block; }
   a { color:#58a6ff; text-decoration:none; }
@@ -691,7 +922,7 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
   .reauth a.btn:hover { background:#ffc578; color:#1a1100; }
   .reauth .why { font-family:var(--mono); font-size:.85em; opacity:.85; }
   /* stream toggle — start (green) or stop (red), with a molly-switch two-click confirm */
-  .stream-form { margin:8px 0 12px; }
+  .stream-control { margin:8px 0 12px; }
   button.stream { font:inherit; font-size:.9em; padding:6px 14px; border-radius:5px; border:none; cursor:pointer; transition:background .15s, color .15s; }
   button.stream.start { background:#1f6f3e; color:#e8f7ec; font-weight:600; }
   button.stream.start:hover { background:#2a8a4d; }
@@ -702,20 +933,19 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
   /* armed = first click landed; second click within 5s actually fires */
   button.stream.armed { background:#f85149; color:#fff; box-shadow:0 0 0 2px #f8514980; }
   .stream-unreachable { color:#666; font-size:.9em; font-style:italic; margin:6px 0 0; }
-  /* Collapsible "controls" disclosure — defaults closed so the page stays
-     calm; click "controls" to reveal stream toggle + future control widgets. */
-  details.controls { margin:24px 0 0; }
-  details.controls > summary { font-size:.8em; text-transform:uppercase; letter-spacing:.08em; color:#888; cursor:pointer; padding:8px 0; border-top:1px solid #1c1c1c; list-style:none; }
-  details.controls > summary::-webkit-details-marker { display:none; }
-  details.controls > summary::before { content:"▸ "; color:#666; transition:transform .15s ease; display:inline-block; }
-  details.controls[open] > summary::before { content:"▾ "; }
-  details.controls > summary:hover { color:#ccc; }
-  details.controls h3 { font-size:.8em; text-transform:uppercase; letter-spacing:.08em; color:#888; margin:14px 0 6px; }
+  /* Collapsible "controls" disclosure shares the disclosure-row styling
+     above (folded into the .stream-preview/.now-playing multi-selector);
+     only the .controls-specific h3 sub-heading lives here. */
+  details.controls h3 { font-size:.8em; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin:14px 0 6px; }
   /* per-service restart — small, unobtrusive, lives at the end of each row */
-  .row .restart-form { margin:0; }
   button.restart { font:inherit; font-size:.8em; padding:3px 9px; border-radius:4px; border:1px solid #2a2a2a; background:#1a1a1a; color:#888; cursor:pointer; transition:background .15s, color .15s, border-color .15s; }
   button.restart:hover { background:#252525; color:#ccc; border-color:#3a3a3a; }
   button.restart.armed { background:#f85149; color:#fff; border-color:#f85149; box-shadow:0 0 0 2px #f8514980; }
+  /* in-flight feedback: htmx adds .htmx-request to an action button while its
+     hx-post is in flight, and hx-disabled-elt also sets :disabled. Dim it + show
+     a progress cursor so a tap reads as "working" and a double-tap is visibly
+     inert until the request settles. */
+  button.htmx-request, button.stream:disabled, button.restart:disabled, button.flag-toggle:disabled { opacity:.55; cursor:progress; }
   /* live chat console — recent history rendered server-side, live lines stream
      in via SSE (sse-swap="chat", beforeend). Same disclosure look as the others. */
   details.chat { margin:24px 0 0; }
@@ -736,6 +966,23 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
   .chat-jump { position:absolute; left:50%; bottom:10px; transform:translateX(-50%); z-index:2; font:inherit; font-size:.8em; padding:4px 12px; border-radius:999px; border:1px solid var(--chip-border); background:var(--chip-bg); color:var(--fg); cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,.35); }
   .chat-jump:hover { border-color:#58a6ff; color:#9cf; }
   .chat-jump[hidden] { display:none; }
+  /* chat send box: identity toggle + text input. Sits below the scrollback. */
+  .chat-send { margin-top:8px; display:flex; flex-direction:column; gap:6px; }
+  .chat-send-as { display:flex; gap:14px; font-size:.82em; color:var(--muted); }
+  .chat-send-as label { cursor:pointer; display:inline-flex; align-items:center; gap:4px; }
+  .chat-send-as-single { font-size:.82em; color:var(--dim); }
+  .chat-send-row { display:flex; gap:6px; }
+  .chat-send-text { flex:1; min-width:0; font:inherit; font-size:.92em; padding:6px 8px; border-radius:6px; border:1px solid var(--chip-border); background:var(--chip-bg); color:var(--fg); }
+  .chat-send-text:focus { outline:none; border-color:#58a6ff; }
+  .chat-send button { font:inherit; font-size:.85em; padding:6px 14px; border-radius:6px; border:1px solid var(--chip-border); background:var(--chip-bg); color:var(--fg); cursor:pointer; }
+  .chat-send button:hover { border-color:#58a6ff; color:#9cf; }
+  .chat-send-empty { margin-top:8px; font-size:.82em; color:var(--dim); font-style:italic; }
+  /* optimistic outgoing line: greyed until the message round-trips back, then
+     the .pending class is removed; .failed reddens it if it never lands. */
+  .chat-line.pending { opacity:.5; }
+  .chat-line.failed { opacity:1; }
+  .chat-line.failed .ct { color:#f78166; }
+  .chat-line.failed::after { content:" · not delivered"; color:#f78166; font-size:.8em; }
   /* clickable chat usernames + the profile popover they open */
   .chat-line .cu { cursor:pointer; }
   .chat-line .cu:hover { text-decoration:underline; }
@@ -807,20 +1054,11 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
   <div id="reauth-card" sse-swap="reauth" hx-swap="innerHTML">{{reauthCallout .Reauth}}</div>
 
   <h2>status</h2>
-  <ul>
-    {{range .Services}}
-    <li class="row">
-      <span class="dot {{if .OK}}up{{else}}down{{end}}"></span>
-      <span class="name">{{.Name}}</span>
-      {{if .Uptime}}<span class="uptime">up {{.Uptime}}</span>{{end}}
-      {{if .Version}}<span class="ver">{{if .VersionURL}}<a href="{{.VersionURL}}">{{.Version}}</a>{{else}}{{.Version}}{{end}}</span>{{end}}
-      <span class="status">{{.Detail}}</span>
-      <form class="restart-form" method="post" action="/admin/restart/{{.Name}}">
-        <button type="submit" class="restart" data-arm-label="confirm restart" data-original-label="restart" onclick="return armConfirm(this)">restart</button>
-      </form>
-    </li>
-    {{end}}
-  </ul>
+  <!-- #status-list is OOB-swapped by the /admin/refresh poll (see the poller near
+       the footer) so the up/down dots, uptimes, and versions stay current without
+       a full reload. Each row's restart button is hx-post (hx-swap="none" — the
+       service just reappears in these rows on the next refresh). -->
+  <ul id="status-list">{{statusRows .Services}}</ul>
 
   <details class="chat" open>
     <summary>chat</summary>
@@ -829,11 +1067,15 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
          server-side from the hub's ring buffer; live lines stream in on top. -->
     <div class="chat-wrap">
       <div id="chat-log" class="chat-log" sse-swap="chat" hx-swap="beforeend">
-        {{range .ChatHistory}}<div class="chat-line"><time class="ct-ts" datetime="{{.At.Format "2006-01-02T15:04:05Z07:00"}}">{{.At.Format "15:04"}}</time> <span class="cu">{{.Username}}</span> <span class="ct">{{.Text}}</span></div>{{else}}<div class="chat-empty">waiting for chat…</div>{{end}}
+        {{range .ChatHistory}}<div class="chat-line"><time class="ct-ts" datetime="{{.At.Format "2006-01-02T15:04:05Z07:00"}}">{{.At.Format "15:04"}}</time> <span class="cu" hx-get="/admin/user/{{.Username}}" hx-target="#user-popover" hx-swap="innerHTML" hx-trigger="click">{{.Username}}</span> <span class="ct">{{.Text}}</span></div>{{else}}<div class="chat-empty">waiting for chat…</div>{{end}}
       </div>
       <!-- shown only while scrolled up (see JS): tapping jumps to the newest line -->
       <button id="chat-jump" class="chat-jump" type="button" hidden>↓ new</button>
     </div>
+    <!-- send box: re-rendered live on the "sendform" SSE event (pushed by the
+         auth poll) so the identity toggle tracks which accounts are logged in.
+         JS hooks submit for the optimistic-grey-then-confirm flow. -->
+    <div id="chat-send-box" sse-swap="sendform" hx-swap="innerHTML">{{sendForm .AuthStatuses}}</div>
   </details>
 
   {{if and .PreviewChannel .PanelHost}}
@@ -851,13 +1093,7 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
   <details class="feature-flags">
     <summary>feature flags</summary>
     <ul class="flags">
-      {{range .Flags}}
-      <li class="row flag-row">
-        <span class="dot {{if .Enabled}}up{{else}}down{{end}}"></span>
-        <span class="name"><code>{{.Key}}</code>{{if .Description}}<span class="state"> · {{.Description}}</span>{{end}}</span>
-        <span class="status">{{if .Enabled}}on{{else}}off{{end}}</span>
-      </li>
-      {{end}}
+      {{range .Flags}}{{flagRow .}}{{end}}
     </ul>
   </details>
   {{end}}
@@ -891,19 +1127,10 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
   <details class="controls">
     <summary>controls</summary>
     <h3>stream</h3>
-    {{if .Stream.Reachable}}
-      {{if .Stream.Active}}
-      <form class="stream-form" method="post" action="/admin/obs/stream/stop">
-        <button type="submit" class="stream stop" data-arm-label="click again to confirm stop" data-original-label="stop stream" onclick="return armConfirm(this)">stop stream</button>
-      </form>
-      {{else}}
-      <form class="stream-form" method="post" action="/admin/obs/stream/start">
-        <button type="submit" class="stream start" data-arm-label="click again to confirm start" data-original-label="start stream" onclick="return armConfirm(this)">start stream</button>
-      </form>
-      {{end}}
-    {{else}}
-    <p class="stream-unreachable">OBS unreachable</p>
-    {{end}}
+    <!-- stream toggle: hx-post flips OBS streaming and swaps this widget in place
+         (no full-page reload). The response re-renders from the resulting state,
+         so a failed toggle simply leaves the button unchanged. -->
+    {{streamControl .Stream}}
   </details>
 
   <h2>dashboards</h2>
@@ -915,6 +1142,12 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
     <button id="toggle-all" class="theme-toggle" type="button" title="expand or collapse all sections">▾ expand all</button>
     <button id="theme-toggle" class="theme-toggle" type="button" title="toggle theme">◐ theme</button>
   </div>
+
+  <!-- live refresh: every 15s, fetch the always-present panel sections (service
+       status rows + the OBS stream toggle) and OOB-swap them in, so the dots and
+       stream state stay current without a full reload. Conditionally-rendered
+       sections (now-playing audio, feature flags) refresh on full page load. -->
+  <div hx-get="/admin/refresh" hx-trigger="every 15s" hx-swap="none"></div>
 
   <!-- chat user-profile popover: filled by a fetch when a username in the chat
        console is clicked (see the profile JS); position:fixed so it floats. -->
@@ -1028,17 +1261,109 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
     if (!el.dataset.colored) { el.style.color = colorFor(el.textContent); el.dataset.colored = '1'; }
   });
   const decorate = (root) => { localize(root); colorize(root); };
+
+  // --- optimistic send + confirm ------------------------------------------
+  // A message sent from the box below is rendered immediately as a greyed
+  // .pending line. The real message round-trips back on the chat.message SSE
+  // stream (the bot's send mirror, or the bot reading a broadcaster line back
+  // inbound); when a matching line arrives we drop the duplicate and un-grey
+  // the optimistic one. If nothing matches within the timeout, it reddens.
+  const PENDING_TIMEOUT = 8000; // ms — broadcaster sends round-trip in a beat; bot is ~instant
+  const pending = new Map();    // key -> { node, timer }
+  const keyOf = (user, text) => user.trim().toLowerCase() + ' ' + text.trim();
+  const lineKey = (el) => {
+    const cu = el.querySelector('.cu'), ct = el.querySelector('.ct');
+    return (cu && ct) ? keyOf(cu.textContent, ct.textContent) : null;
+  };
+  // reconcile: if the just-arrived line matches a pending one, remove the
+  // duplicate and confirm (un-grey) the optimistic line. Returns true if so.
+  const reconcile = (incoming) => {
+    if (!incoming || !incoming.querySelector) return false;
+    const k = lineKey(incoming);
+    if (!k) return false;
+    const p = pending.get(k);
+    if (!p) return false;
+    clearTimeout(p.timer);
+    pending.delete(k);
+    p.node.classList.remove('pending', 'failed');
+    incoming.remove();
+    return true;
+  };
+  // addPending builds + appends the greyed optimistic line and arms its timeout.
+  const addPending = (username, text) => {
+    const line = document.createElement('div');
+    line.className = 'chat-line pending';
+    const t = document.createElement('time');
+    t.className = 'ct-ts';
+    const now = new Date();
+    t.setAttribute('datetime', now.toISOString());
+    const cu = document.createElement('span');
+    cu.className = 'cu';
+    cu.setAttribute('hx-get', '/admin/user/' + encodeURIComponent(username));
+    cu.setAttribute('hx-target', '#user-popover');
+    cu.setAttribute('hx-swap', 'innerHTML');
+    cu.setAttribute('hx-trigger', 'click');
+    cu.textContent = username;
+    const ct = document.createElement('span');
+    ct.className = 'ct';
+    ct.textContent = text;
+    line.append(t, document.createTextNode(' '), cu, document.createTextNode(' '), ct);
+    log.appendChild(line);
+    if (window.htmx) htmx.process(line);
+    decorate(log);
+    if (pinned) log.scrollTop = log.scrollHeight;
+    const k = keyOf(username, text);
+    const prev = pending.get(k);
+    if (prev) clearTimeout(prev.timer);
+    const timer = setTimeout(() => {
+      if (pending.get(k) && pending.get(k).node === line) { line.classList.add('failed'); pending.delete(k); }
+    }, PENDING_TIMEOUT);
+    pending.set(k, { node: line, timer });
+    return { key: k, node: line };
+  };
+
   log.addEventListener('htmx:afterSwap', () => {
     log.querySelectorAll('.chat-empty').forEach(el => el.remove());
+    const confirmed = reconcile(log.lastElementChild);
     decorate(log);
     if (pinned) {
       while (log.childElementCount > CAP) log.removeChild(log.firstElementChild);
       log.scrollTop = log.scrollHeight;
-    } else {
+    } else if (!confirmed) {
       unread++;
       refreshPill();
     }
   });
+
+  // Send box: hook submit to render the optimistic line, and the response to
+  // clear the input (success) or redden the line (publish failed outright).
+  // Delegated on body because the form is re-rendered live on the sendform SSE.
+  document.body.addEventListener('htmx:beforeRequest', (e) => {
+    const form = e.detail && e.detail.elt;
+    if (!form || !form.classList || !form.classList.contains('chat-send')) return;
+    const fd = new FormData(form);
+    const identity = fd.get('identity');
+    const text = (fd.get('text') || '').trim();
+    if (!identity || !text) return;
+    const user = identity === 'broadcaster' ? form.dataset.broadcasterUser : form.dataset.botUser;
+    if (!user) return;
+    form._pending = addPending(user, text);
+  });
+  document.body.addEventListener('htmx:afterRequest', (e) => {
+    const form = e.detail && e.detail.elt;
+    if (!form || !form.classList || !form.classList.contains('chat-send')) return;
+    const xhr = e.detail.xhr;
+    const ok = e.detail.successful && xhr && xhr.status >= 200 && xhr.status < 300;
+    if (ok) {
+      const input = form.querySelector('.chat-send-text');
+      if (input) input.value = '';
+    } else if (form._pending) {
+      form._pending.node.classList.add('failed');
+      pending.delete(form._pending.key);
+    }
+    form._pending = null;
+  });
+
   decorate(log); // localize times + color usernames in the server-rendered history
   log.scrollTop = log.scrollHeight; // start at the newest message
 })();
@@ -1093,38 +1418,30 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
   setInterval(tick, 1000);
 })();
 
-// Chat user-profile popover. A delegated click on any chat username (.cu)
-// fetches /admin/user/<name> and floats the returned card near the click;
-// clicking outside or pressing Escape closes it. Delegation covers SSE-added
-// lines without per-line wiring.
+// Chat user-profile popover. Each chat username (.cu) carries hx-get, so htmx
+// fetches /admin/user/<name> into #user-popover on click — including usernames
+// on SSE-added lines, since htmx processes swapped-in content (no delegation
+// needed). We only record where the click landed and, on htmx:afterSwap, reveal
+// + float the card near it; clicking outside or Escape closes it.
 (function() {
   const pop = document.getElementById('user-popover');
   if (!pop) return;
-  let open = false;
-  const hide = () => { pop.hidden = true; open = false; };
+  let lastXY = null, open = false;
   document.addEventListener('click', (e) => {
     const cu = e.target.closest('.cu');
-    if (cu) {
-      const name = cu.textContent.trim();
-      if (!name) return;
-      fetch('/admin/user/' + encodeURIComponent(name))
-        .then(r => r.ok ? r.text() : Promise.reject(r.status))
-        .then(html => {
-          pop.innerHTML = html;
-          pop.hidden = false; // unhide before measuring so offset* are real
-          open = true;
-          const pad = 8;
-          const x = Math.min(e.clientX, window.innerWidth - pop.offsetWidth - pad);
-          const y = Math.min(e.clientY + pad, window.innerHeight - pop.offsetHeight - pad);
-          pop.style.left = Math.max(pad, x) + 'px';
-          pop.style.top = Math.max(pad, y) + 'px';
-        })
-        .catch(() => {});
-      return;
-    }
-    if (open && !pop.contains(e.target)) hide();
+    if (cu) { lastXY = { x: e.clientX, y: e.clientY }; return; } // htmx issues the GET
+    if (open && !pop.contains(e.target)) { pop.hidden = true; open = false; }
   });
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hide(); });
+  pop.addEventListener('htmx:afterSwap', () => {
+    pop.hidden = false; // unhide before measuring so offset* are real
+    open = true;
+    const pad = 8, xy = lastXY || { x: pad, y: pad };
+    const x = Math.min(xy.x, window.innerWidth - pop.offsetWidth - pad);
+    const y = Math.min(xy.y + pad, window.innerHeight - pop.offsetHeight - pad);
+    pop.style.left = Math.max(pad, x) + 'px';
+    pop.style.top = Math.max(pad, y) + 'px';
+  });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { pop.hidden = true; open = false; } });
 })();
 
 // Live location map (Leaflet). Seeds a breadcrumb polyline + 🚐 pin from the
@@ -1143,7 +1460,46 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
   }).addTo(map);
 
   const van = L.divIcon({ className: 'van-marker', html: '🚐', iconSize: [24, 24], iconAnchor: [12, 12] });
-  const line = L.polyline(trail, { color: '#58a6ff', weight: 3, opacity: 0.75 }).addTo(map);
+
+  // Consecutive breadcrumbs farther apart than this are treated as a
+  // discontinuity (a timewarp clip or a bad GPS fix), not a driven path: the
+  // solid trail breaks and the gap is bridged with a faint dashed segment so the
+  // jump reads as "not real driving" rather than a straight slash across the map.
+  const JUMP_KM = 50;
+  const distKm = (a, b) => {
+    const R = 6371, rad = d => d * Math.PI / 180;
+    const dLat = rad(b[0] - a[0]), dLng = rad(b[1] - a[1]);
+    const s = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a[0])) * Math.cos(rad(b[0])) * Math.sin(dLng / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(s));
+  };
+  // Split the trail into solid runs (consecutive points within JUMP_KM) and the
+  // dashed bridge segments spanning each jump. Both are fed to Leaflet as
+  // multi-polylines (arrays of latlng arrays).
+  const splitTrail = (pts) => {
+    const runs = [], bridges = [];
+    if (!pts.length) return { runs, bridges };
+    let run = [pts[0]];
+    for (let i = 1; i < pts.length; i++) {
+      if (distKm(pts[i - 1], pts[i]) > JUMP_KM) {
+        runs.push(run);
+        bridges.push([pts[i - 1], pts[i]]);
+        run = [pts[i]];
+      } else {
+        run.push(pts[i]);
+      }
+    }
+    runs.push(run);
+    return { runs, bridges };
+  };
+
+  const solid = L.polyline([], { color: '#58a6ff', weight: 3, opacity: 0.75 }).addTo(map);
+  const dashed = L.polyline([], { color: '#58a6ff', weight: 2, opacity: 0.4, dashArray: '4 6' }).addTo(map);
+  const drawTrail = () => {
+    const { runs, bridges } = splitTrail(trail);
+    solid.setLatLngs(runs);
+    dashed.setLatLngs(bridges);
+  };
+  drawTrail();
   let marker = null;
   let hasPoint = false;
 
@@ -1164,7 +1520,7 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
     if (isNaN(lat) || isNaN(lng)) return;
     trail.push([lat, lng]);
     if (trail.length > 100) trail.shift();
-    line.setLatLngs(trail);
+    drawTrail();
     recenter(true);
   });
 
@@ -1200,43 +1556,57 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
   setTimeout(fix, 100);
 })();
 
-// iOS Home Screen apps return to a stale cached page on reopen — even with
-// no-store headers, Safari sometimes serves the old paint. Reload when the
-// tab becomes visible after being hidden ≥10s, so quick app-switches don't
-// reload-spam but a return-from-Home-Screen does.
+// No focus/visibility reload here anymore. The shell is cached for an instant
+// repaint and the panel is live (SSE + the 15s /admin/refresh poll), so
+// returning to the tab restores the last view (via the back/forward cache) and
+// self-updates within seconds — a hard reload would just reintroduce the white
+// flash on every return that we're trying to avoid.
+
+// Molly switch, integrated with htmx. Action buttons (restart / stream toggle)
+// carry data-arm-label: the first click arms the button (relabel + redden, 5s
+// window) and cancels the htmx request; a second click within the window lets it
+// through. Click-away or timeout disarms. htmx:confirm fires before every
+// request, so we gate the molly buttons there and let everything else pass.
 (function() {
-  let hiddenAt = 0;
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') {
-      hiddenAt = Date.now();
-    } else if (hiddenAt && Date.now() - hiddenAt >= 10000) {
-      location.reload();
-    }
+  let armed = null, timer = null;
+  const disarm = () => {
+    if (!armed) return;
+    armed.dataset.armed = '';
+    armed.classList.remove('armed');
+    armed.textContent = armed.dataset.originalLabel;
+    armed = null;
+    clearTimeout(timer);
+    document.removeEventListener('click', outside, true);
+  };
+  const outside = (e) => { if (armed && e.target !== armed) disarm(); };
+  document.body.addEventListener('htmx:confirm', (e) => {
+    const btn = e.detail.elt;
+    if (!btn || !btn.dataset || !btn.dataset.armLabel) return; // not a molly button
+    if (btn.dataset.armed === '1') { disarm(); return; }       // armed → let it fire
+    e.preventDefault();                                        // first click: arm + cancel
+    btn.dataset.armed = '1';
+    btn.classList.add('armed');
+    btn.textContent = btn.dataset.armLabel;
+    armed = btn;
+    timer = setTimeout(disarm, 5000);
+    // capture-phase listener so clicks anywhere else disarm before they bubble
+    setTimeout(() => document.addEventListener('click', outside, true), 0);
   });
 })();
 
-// Molly switch: first click arms the button (relabel + redden, 5s window);
-// second click within the window lets the form submit. Click-away or timeout
-// disarms. No deps — vanilla DOM only.
-function armConfirm(btn) {
-  if (btn.dataset.armed === '1') {
-    return true; // confirm — let the form submit
-  }
-  btn.dataset.armed = '1';
-  btn.classList.add('armed');
-  btn.textContent = btn.dataset.armLabel;
-  const disarm = () => {
-    btn.dataset.armed = '';
-    btn.classList.remove('armed');
-    btn.textContent = btn.dataset.originalLabel;
-    document.removeEventListener('click', outsideClick, true);
-  };
-  const outsideClick = (e) => { if (e.target !== btn) disarm(); };
-  setTimeout(disarm, 5000);
-  // capture-phase listener so clicks anywhere else disarm before they bubble
-  setTimeout(() => document.addEventListener('click', outsideClick, true), 0);
-  return false; // suppress this submit
-}
+// Stream preview follows a live toggle. obsStreamActionHandler returns an
+// HX-Trigger: tripbot:stream-changed event carrying the new state; open or close
+// the preview disclosure to match, so a toggle made from this panel updates the
+// preview without a reload. Setting .open fires the disclosure's own toggle
+// listener, which lazy-loads / unloads the iframe.
+(function() {
+  const details = document.getElementById('stream-preview');
+  if (!details) return;
+  document.body.addEventListener('tripbot:stream-changed', (e) => {
+    const active = !!(e.detail && e.detail.active);
+    if (details.open !== active) details.open = active;
+  });
+})();
 </script>
 </body>
 </html>`))

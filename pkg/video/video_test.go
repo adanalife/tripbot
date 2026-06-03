@@ -30,10 +30,10 @@ func skipIfDarwin(t *testing.T) {
 }
 
 func TestPlayer_Current_ZeroBeforeAnyCall(t *testing.T) {
-	onscreens, _ := fakeOnscreensServer(t)
+	rec := &recordingOnscreens{}
 	vlcCurrent := ""
 	vlc := fakeVLCServer(t, &vlcCurrent)
-	p := NewPlayer(onscreens, vlc)
+	p := NewPlayer(rec, vlc)
 
 	got := p.Current()
 	if got != (Video{}) {
@@ -44,10 +44,10 @@ func TestPlayer_Current_ZeroBeforeAnyCall(t *testing.T) {
 func TestPlayer_GetCurrentlyPlaying_FirstCall_FlaggedShowsGPS(t *testing.T) {
 	skipIfDarwin(t)
 	mock := installMockDB(t)
-	onscreens, rec := fakeOnscreensServer(t)
+	rec := &recordingOnscreens{}
 	vlcCurrent := "2018_0514_224801_013.MP4"
 	vlc := fakeVLCServer(t, &vlcCurrent)
-	p := NewPlayer(onscreens, vlc)
+	p := NewPlayer(rec, vlc)
 
 	// DB returns a flagged video for the slug derived from vlcCurrent.
 	expectLoadHit(mock, 1, "2018_0514_224801_013", true)
@@ -60,8 +60,8 @@ func TestPlayer_GetCurrentlyPlaying_FirstCall_FlaggedShowsGPS(t *testing.T) {
 	if !p.Current().Flagged {
 		t.Error("expected CurrentlyPlaying.Flagged = true (staged in mock rows)")
 	}
-	if len(rec.paths) != 1 || rec.paths[0] != "/onscreens/gps/show" {
-		t.Errorf("expected single ShowGPSImage call (/onscreens/gps/show), got %v", rec.paths)
+	if len(rec.calls) != 1 || rec.calls[0] != "ShowGPSImage" {
+		t.Errorf("expected single ShowGPSImage call, got %v", rec.calls)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Error(err)
@@ -71,10 +71,10 @@ func TestPlayer_GetCurrentlyPlaying_FirstCall_FlaggedShowsGPS(t *testing.T) {
 func TestPlayer_GetCurrentlyPlaying_FirstCall_NotFlaggedHidesGPS(t *testing.T) {
 	skipIfDarwin(t)
 	mock := installMockDB(t)
-	onscreens, rec := fakeOnscreensServer(t)
+	rec := &recordingOnscreens{}
 	vlcCurrent := "2019_0615_183000_001.MP4"
 	vlc := fakeVLCServer(t, &vlcCurrent)
-	p := NewPlayer(onscreens, vlc)
+	p := NewPlayer(rec, vlc)
 
 	expectLoadHit(mock, 7, "2019_0615_183000_001", false)
 
@@ -83,8 +83,8 @@ func TestPlayer_GetCurrentlyPlaying_FirstCall_NotFlaggedHidesGPS(t *testing.T) {
 	if p.Current().Flagged {
 		t.Error("expected CurrentlyPlaying.Flagged = false (staged in mock rows)")
 	}
-	if len(rec.paths) != 1 || rec.paths[0] != "/onscreens/gps/hide" {
-		t.Errorf("expected single HideGPSImage call (/onscreens/gps/hide), got %v", rec.paths)
+	if len(rec.calls) != 1 || rec.calls[0] != "HideGPSImage" {
+		t.Errorf("expected single HideGPSImage call, got %v", rec.calls)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Error(err)
@@ -94,10 +94,10 @@ func TestPlayer_GetCurrentlyPlaying_FirstCall_NotFlaggedHidesGPS(t *testing.T) {
 func TestPlayer_GetCurrentlyPlaying_SameVidIsNoop(t *testing.T) {
 	skipIfDarwin(t)
 	mock := installMockDB(t)
-	onscreens, rec := fakeOnscreensServer(t)
+	rec := &recordingOnscreens{}
 	vlcCurrent := "2018_0514_224801_013.MP4"
 	vlc := fakeVLCServer(t, &vlcCurrent)
-	p := NewPlayer(onscreens, vlc)
+	p := NewPlayer(rec, vlc)
 
 	// Only one DB hit expected — the second GetCurrentlyPlaying call sees
 	// curVid == preVid and short-circuits before reaching LoadOrCreate.
@@ -114,8 +114,8 @@ func TestPlayer_GetCurrentlyPlaying_SameVidIsNoop(t *testing.T) {
 	if p.timeStarted != timeStartedAfterFirst {
 		t.Error("expected timeStarted unchanged across same-vid calls; got a reset")
 	}
-	if len(rec.paths) != 1 {
-		t.Errorf("expected exactly one onscreens call (from first transition), got %d: %v", len(rec.paths), rec.paths)
+	if len(rec.calls) != 1 {
+		t.Errorf("expected exactly one onscreens call (from first transition), got %d: %v", len(rec.calls), rec.calls)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Error(err)
@@ -125,10 +125,10 @@ func TestPlayer_GetCurrentlyPlaying_SameVidIsNoop(t *testing.T) {
 func TestPlayer_GetCurrentlyPlaying_TransitionTogglesGPSAndResetsTimeStarted(t *testing.T) {
 	skipIfDarwin(t)
 	mock := installMockDB(t)
-	onscreens, rec := fakeOnscreensServer(t)
+	rec := &recordingOnscreens{}
 	vlcCurrent := "2018_0514_224801_013.MP4"
 	vlc := fakeVLCServer(t, &vlcCurrent)
-	p := NewPlayer(onscreens, vlc)
+	p := NewPlayer(rec, vlc)
 
 	// First vid: flagged → ShowGPSImage.
 	expectLoadHit(mock, 1, "2018_0514_224801_013", true)
@@ -158,13 +158,13 @@ func TestPlayer_GetCurrentlyPlaying_TransitionTogglesGPSAndResetsTimeStarted(t *
 	if p.Current().Slug == firstSlug {
 		t.Errorf("CurrentlyPlaying.Slug unchanged after transition (still %q)", firstSlug)
 	}
-	wantOverlay := []string{"/onscreens/gps/show", "/onscreens/gps/hide"}
-	if len(rec.paths) != len(wantOverlay) {
-		t.Fatalf("expected overlay sequence %v, got %v", wantOverlay, rec.paths)
+	wantOverlay := []string{"ShowGPSImage", "HideGPSImage"}
+	if len(rec.calls) != len(wantOverlay) {
+		t.Fatalf("expected overlay sequence %v, got %v", wantOverlay, rec.calls)
 	}
 	for i, want := range wantOverlay {
-		if rec.paths[i] != want {
-			t.Errorf("overlay call %d: want %q, got %q", i, want, rec.paths[i])
+		if rec.calls[i] != want {
+			t.Errorf("overlay call %d: want %q, got %q", i, want, rec.calls[i])
 		}
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
@@ -175,10 +175,10 @@ func TestPlayer_GetCurrentlyPlaying_TransitionTogglesGPSAndResetsTimeStarted(t *
 func TestPlayer_CurrentProgress_TracksTimeSinceStart(t *testing.T) {
 	skipIfDarwin(t)
 	mock := installMockDB(t)
-	onscreens, _ := fakeOnscreensServer(t)
+	rec := &recordingOnscreens{}
 	vlcCurrent := "2018_0514_224801_013.MP4"
 	vlc := fakeVLCServer(t, &vlcCurrent)
-	p := NewPlayer(onscreens, vlc)
+	p := NewPlayer(rec, vlc)
 
 	expectLoadHit(mock, 1, "2018_0514_224801_013", false)
 
@@ -200,18 +200,18 @@ func TestPlayer_GetCurrentlyPlaying_EmptyVlcResult_NoTransition(t *testing.T) {
 	// curVid stays "" and equals preVid (also ""), so LoadOrCreate is
 	// never invoked. installMockDB-less SetGormDB is left at nil; any
 	// DB hit would NPE and fail the test loudly.
-	onscreens, rec := fakeOnscreensServer(t)
+	rec := &recordingOnscreens{}
 	vlcCurrent := ""
 	vlc := fakeVLCServer(t, &vlcCurrent)
-	p := NewPlayer(onscreens, vlc)
+	p := NewPlayer(rec, vlc)
 
 	p.GetCurrentlyPlaying(context.Background())
 
 	if p.curVid != "" || p.preVid != "" {
 		t.Errorf("curVid/preVid after empty-vlc first call = (%q, %q); want (\"\",\"\")", p.curVid, p.preVid)
 	}
-	if len(rec.paths) != 0 {
-		t.Errorf("expected no overlay calls on no-transition path, got %v", rec.paths)
+	if len(rec.calls) != 0 {
+		t.Errorf("expected no overlay calls on no-transition path, got %v", rec.calls)
 	}
 	if p.Current() != (Video{}) {
 		t.Errorf("Current() after empty-vlc first call = %+v, want zero Video", p.Current())

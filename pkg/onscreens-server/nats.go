@@ -3,55 +3,88 @@ package onscreensServer
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log/slog"
 
 	c "github.com/adanalife/tripbot/pkg/config/onscreens-server"
 	"github.com/adanalife/tripbot/pkg/natsclient"
+	oe "github.com/adanalife/tripbot/pkg/onscreens-events"
 	"github.com/nats-io/nats.go"
 )
 
-// middleTextEvent mirrors the chatbot-side wire format for
-// tripbot.<env>.onscreens.middle.show. Mirror, not import, to keep the
-// chatbot/onscreens-server package boundary clean — the wire format
-// will live in its own pkg/events module once a second event lands.
-type middleTextEvent struct {
-	Msg       string `json:"msg"`
-	EmittedAt string `json:"emitted_at"`
-}
-
 // StartNATSSubscribers attaches the server's NATS subscriptions to the
-// package-singleton *nats.Conn (initialized by main via
-// natsclient.Connect). No-op when the conn is nil (NATS_URL unset).
-// Returns the subscription so callers can Unsubscribe on shutdown if
-// they want — phase 1 lets the process exit do that work.
+// package-singleton *nats.Conn (initialized by main via natsclient.Connect).
+// No-op when the conn is nil (NATS_URL unset) — with the HTTP command path
+// peeled off, the overlays simply receive no commands in that case.
 //
-// Phase 1: a single subject — tripbot.<env>.onscreens.middle.show. Phase
-// 2 peels the rest of the onscreens-client surface onto NATS.
+// NATS is the sole transport for the onscreens command surface: each handler
+// drives the overlay the matching command targets. (The HTTP command path was
+// the mirror this burned in against, since peeled off.) Subscribers are
+// registered explicitly (not via an onscreens.> wildcard) so each gets its own
+// subscribe log line and the dispatch stays readable.
 func (s *Server) StartNATSSubscribers(ctx context.Context) {
 	conn := natsclient.Conn()
 	if conn == nil {
 		slog.InfoContext(ctx, "nats subscriber skipped (NATS_URL unset)")
 		return
 	}
-	subject := fmt.Sprintf("tripbot.%s.onscreens.middle.show", c.Conf.Environment)
-	sub, err := conn.Subscribe(subject, s.handleMiddleTextShow)
-	if err != nil {
-		slog.ErrorContext(ctx, "nats subscribe failed", "err", err, "subject", subject)
-		return
+	env := c.Conf.Environment
+	subs := []struct {
+		subject string
+		handler nats.MsgHandler
+	}{
+		{oe.MiddleShowSubject(env), s.handleMiddleShow},
+		{oe.MiddleHideSubject(env), s.handleMiddleHide},
+		{oe.LeaderboardShowSubject(env), s.handleLeaderboardShow},
+		{oe.LeaderboardHideSubject(env), s.handleLeaderboardHide},
+		{oe.TimewarpShowSubject(env), s.handleTimewarpShow},
+		{oe.TimewarpHideSubject(env), s.handleTimewarpHide},
+		{oe.GPSShowSubject(env), s.handleGPSShow},
+		{oe.GPSHideSubject(env), s.handleGPSHide},
+		{oe.FlagHideSubject(env), s.handleFlagHide},
 	}
-	slog.InfoContext(ctx, "nats subscribed", "subject", subject, "queue", sub.Queue)
+	for _, sb := range subs {
+		// Best-effort: one bad subject shouldn't stop the rest from binding.
+		if _, err := conn.Subscribe(sb.subject, sb.handler); err != nil {
+			slog.ErrorContext(ctx, "nats subscribe failed", "err", err, "subject", sb.subject)
+			continue
+		}
+		slog.InfoContext(ctx, "nats subscribed", "subject", sb.subject)
+	}
 }
 
-func (s *Server) handleMiddleTextShow(m *nats.Msg) {
-	var ev middleTextEvent
+// handleMiddleShow shows the middle text. Strict: a missing msg or malformed
+// body is dropped — a show with no content is a publisher bug, not an intent.
+func (s *Server) handleMiddleShow(m *nats.Msg) {
+	var ev oe.MiddleShow
 	if err := json.Unmarshal(m.Data, &ev); err != nil {
-		slog.Error("nats: decode middle-text event", "err", err, "subject", m.Subject)
+		slog.Error("nats: decode middle.show", "err", err, "subject", m.Subject)
 		return
 	}
 	if ev.Msg == "" {
-		slog.Warn("nats: middle-text event missing msg field", "subject", m.Subject)
+		slog.Warn("nats: middle.show missing msg", "subject", m.Subject)
 		return
 	}
 	s.MiddleText.Show(ev.Msg)
 }
+
+// handleLeaderboardShow renders the {title, rows} payload server-side and
+// shows it for the standard duration — the same path the HTTP handler takes.
+func (s *Server) handleLeaderboardShow(m *nats.Msg) {
+	var ev oe.LeaderboardShow
+	if err := json.Unmarshal(m.Data, &ev); err != nil {
+		slog.Error("nats: decode leaderboard.show", "err", err, "subject", m.Subject)
+		return
+	}
+	s.Leaderboard.ShowFor(renderLeaderboard(ev.Title, ev.Rows), leaderboardDuration)
+}
+
+// The hide + empty-payload show handlers below take no data beyond the
+// envelope, so the body isn't inspected: the subject is the whole intent.
+// Hides are lenient by construction (nothing to reject).
+func (s *Server) handleMiddleHide(_ *nats.Msg)      { s.MiddleText.Hide() }
+func (s *Server) handleLeaderboardHide(_ *nats.Msg) { s.Leaderboard.Hide() }
+func (s *Server) handleTimewarpShow(_ *nats.Msg)    { s.Timewarp.ShowFor("Timewarp!", timewarpDuration) }
+func (s *Server) handleTimewarpHide(_ *nats.Msg)    { s.Timewarp.Hide() }
+func (s *Server) handleGPSShow(_ *nats.Msg)         { s.GPS.Show("") }
+func (s *Server) handleGPSHide(_ *nats.Msg)         { s.GPS.Hide() }
+func (s *Server) handleFlagHide(_ *nats.Msg)        { s.Flag.Hide() }

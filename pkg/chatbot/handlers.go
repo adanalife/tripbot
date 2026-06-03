@@ -42,22 +42,35 @@ type chatUser interface {
 }
 
 // checkAccess returns true when the user is allowed to run cmd.
-// It calls sayFn with the appropriate denial message when access is denied.
-func (cmd *Command) checkAccess(ctx context.Context, user chatUser, sayFn func(string)) bool {
+// It calls say with the appropriate denial message when access is denied.
+func (cmd *Command) checkAccess(ctx context.Context, user chatUser, say func(string)) bool {
 	if followerGatingEnabled && cmd.RequiresFollow && !user.HasCommandAvailable(ctx) {
-		sayFn(followerMsg)
+		say(followerMsg)
 		return false
 	}
 	if cmd.RequiresSubscriber && !user.IsSubscriber() {
-		sayFn(subscriberMsg)
+		say(subscriberMsg)
 		return false
 	}
 	return true
 }
 
-func dispatch(ctx context.Context, cmd *Command, user *users.User, params []string) {
+// sessionUser adapts a *users.User plus the installed *Sessions to the
+// chatUser access-check seam — the follower/subscriber + command-availability
+// checks now live on Sessions (per-provider state), not on User.
+type sessionUser struct {
+	s *users.Sessions
+	u *users.User
+}
+
+func (su sessionUser) HasCommandAvailable(ctx context.Context) bool {
+	return su.s.HasCommandAvailable(ctx, su.u)
+}
+func (su sessionUser) IsSubscriber() bool { return su.s.IsSubscriber(*su.u) }
+
+func (a *App) dispatch(ctx context.Context, cmd *Command, user *users.User, params []string) {
 	incChatCommandCounter(cmd.Trigger)
-	if !cmd.checkAccess(ctx, user, sayFn) {
+	if !cmd.checkAccess(ctx, sessionUser{a.UserSessions, user}, a.Chat.Say) {
 		return
 	}
 	// Start a child span under the chatbot.handle_message span from
@@ -75,7 +88,7 @@ func dispatch(ctx context.Context, cmd *Command, user *users.User, params []stri
 
 // findCommand parses message and returns the matching Command and params.
 // Returns nil if no command matches.
-func findCommand(message string) (*Command, []string) {
+func (a *App) findCommand(message string) (*Command, []string) {
 	msg := normalizeCommandPrefix(strings.TrimSpace(message))
 	split := strings.Split(msg, " ")
 
@@ -99,7 +112,7 @@ func findCommand(message string) (*Command, []string) {
 	}
 
 	// multi-word alias lookup (e.g. "no audio", "no sound")
-	for alias, cmd := range multiWordLookup {
+	for alias, cmd := range a.multiWordLookup {
 		if msg == alias || strings.HasPrefix(msg, alias+" ") {
 			remainder := strings.TrimSpace(strings.TrimPrefix(msg, alias))
 			var mwParams []string
@@ -111,13 +124,13 @@ func findCommand(message string) (*Command, []string) {
 	}
 
 	// single-word lookup
-	if cmd, ok := singleWordLookup[command]; ok {
+	if cmd, ok := a.singleWordLookup[command]; ok {
 		return cmd, params
 	}
 	return nil, nil
 }
 
-func runCommand(ctx context.Context, user *users.User, message string) {
+func (a *App) runCommand(ctx context.Context, user *users.User, message string) {
 	// parse for otel span attribute (only set for !-prefixed commands)
 	msg := normalizeCommandPrefix(strings.TrimSpace(message))
 	split := strings.Split(msg, " ")
@@ -132,9 +145,9 @@ func runCommand(ctx context.Context, user *users.User, message string) {
 		trace.SpanFromContext(ctx).SetAttributes(attribute.String("twitch.command", command))
 	}
 
-	cmd, params := findCommand(message)
+	cmd, params := a.findCommand(message)
 	if cmd != nil {
-		dispatch(ctx, cmd, user, params)
+		a.dispatch(ctx, cmd, user, params)
 		return
 	}
 
@@ -144,57 +157,80 @@ func runCommand(ctx context.Context, user *users.User, message string) {
 	}
 }
 
-// handles all chat messages
-func PrivateMessage(msg twitch.PrivateMessage) {
-	username := msg.User.Name
+// IncomingMessage is a platform-neutral inbound chat message. Platform
+// adapters (Twitch today; YouTube and others later) translate their native
+// event types into this shape before handing it to the App's Handle* methods,
+// so the command path stays platform-agnostic.
+type IncomingMessage struct {
+	User string // sender's platform username (Twitch sends display-case)
+	Text string // the message body, original case
+}
 
-	ctx, span := tracer.Start(context.Background(), "chatbot.handle_message",
-		trace.WithAttributes(attribute.String("twitch.user", username)))
+// HandleMessage processes one inbound chat message: records it (Loki + the
+// admin-console event bus), logs the user in, and runs any command it carries.
+func (a *App) HandleMessage(ctx context.Context, msg IncomingMessage) {
+	// span attribute kept as twitch.user for observability continuity; it
+	// generalizes to a platform-tagged key once a second platform lands.
+	ctx, span := tracer.Start(ctx, "chatbot.handle_message",
+		trace.WithAttributes(attribute.String("twitch.user", msg.User)))
 	defer span.End()
 
 	// increment the Prometheus counter
 	instrumentation.ChatMessages.Inc()
 
-	//TODO: we lose capitalization here, is that okay?
-	message := strings.ToLower(msg.Message)
-
 	// emit chat line to Loki via OTel
-	mylog.ChatMsg(username, msg.Message)
+	mylog.ChatMsg(msg.User, msg.Text)
 
 	// mirror the chat line onto the event bus so live consumers (the admin
 	// panel's chat pane) see it. Original-case username + text, matching the
 	// Loki line above; fire-and-forget, no-op when NATS is unconfigured.
-	eventbus.EmitChatMessage(ctx, c.Conf.Environment, msg.User.Name, msg.Message)
+	eventbus.EmitChatMessage(ctx, c.Conf.Environment, msg.User, msg.Text)
 
-	// check to see if the message is a command
-	//TODO: also include ones prefixed with whitespace?
-	// log in the user
-	user := users.LoginIfNecessary(ctx, username)
-
-	runCommand(ctx, user, message)
+	// log in the user, then run any command (lowercased for matching)
+	//TODO: we lose capitalization here, is that okay?
+	//TODO: also handle commands prefixed with whitespace?
+	user := a.UserSessions.LoginIfNecessary(ctx, msg.User)
+	a.runCommand(ctx, user, strings.ToLower(msg.Text))
 }
 
-// this event fires when a user joins the channel
-func UserJoin(joinMessage twitch.UserJoinMessage) {
-	users.LoginIfNecessary(context.Background(), joinMessage.User)
+// HandleJoin records that a user joined the channel.
+func (a *App) HandleJoin(username string) {
+	a.UserSessions.LoginIfNecessary(context.Background(), username)
 }
 
-// this event fires when a user leaves the channel
-func UserPart(partMessage twitch.UserPartMessage) {
-	users.LogoutIfNecessary(context.Background(), partMessage.User)
+// HandlePart records that a user left the channel.
+func (a *App) HandlePart(username string) {
+	a.UserSessions.LogoutIfNecessary(context.Background(), username)
 }
 
-// send message to chat if someone subs
-// func UserNotice(message twitch.UserNoticeMessage) {
-// 	// update the internal subscriber list
-// 	mytwitch.GetSubscribers()
-// }
-
-// if the message comes from me, then post the message to chat.
-// An admin whisper that triggers Say() is logged again as a chat line.
-func GetWhisper(message twitch.WhisperMessage) {
-	slog.Info("whisper received", "from", message.User.Name, "text", message.Message)
-	if c.UserIsAdmin(message.User.Name) {
-		Say(message.Message)
+// HandleWhisper lets an admin remote-say into chat by whispering the bot.
+// The resulting Say() is logged again as a chat line.
+func (a *App) HandleWhisper(msg IncomingMessage) {
+	slog.Info("whisper received", "from", msg.User, "text", msg.Text)
+	if c.UserIsAdmin(msg.User) {
+		a.Chat.Say(msg.Text)
 	}
+}
+
+// --- Twitch inbound adapters ---
+//
+// These translate go-twitch-irc event types into neutral Handle* calls on the
+// App, and are wired to the IRC client in ConnectIRC. A future YouTube/etc.
+// transport adds its own adapters feeding the same Handle* methods, so the
+// command path never learns about platforms.
+
+func (a *App) onTwitchMessage(msg twitch.PrivateMessage) {
+	a.HandleMessage(context.Background(), IncomingMessage{User: msg.User.Name, Text: msg.Message})
+}
+
+func (a *App) onTwitchJoin(joinMessage twitch.UserJoinMessage) {
+	a.HandleJoin(joinMessage.User)
+}
+
+func (a *App) onTwitchPart(partMessage twitch.UserPartMessage) {
+	a.HandlePart(partMessage.User)
+}
+
+func (a *App) onTwitchWhisper(message twitch.WhisperMessage) {
+	a.HandleWhisper(IncomingMessage{User: message.User.Name, Text: message.Message})
 }

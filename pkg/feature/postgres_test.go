@@ -154,6 +154,61 @@ func TestPostgresClient_RefreshFailureRetainsCache(t *testing.T) {
 	}
 }
 
+func TestPostgresClient_SetEnabled(t *testing.T) {
+	db, mock := newMockDB(t)
+	expectFlags(mock, flagRow{
+		Key:               "chatbot.weather",
+		Description:       "weather command",
+		Enabled:           false,
+		TargetRemovalDate: time.Now().Add(30 * 24 * time.Hour),
+	})
+	c, err := NewPostgresClient(context.Background(), db, time.Minute)
+	if err != nil {
+		t.Fatalf("NewPostgresClient: %v", err)
+	}
+	if c.Bool(context.Background(), "chatbot.weather", EvalContext{}) {
+		t.Fatal("flag should start disabled")
+	}
+
+	// The write, then the immediate force-refresh that pulls the new state in.
+	mock.ExpectExec(`UPDATE "feature_flags" SET`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	expectFlags(mock, flagRow{
+		Key:               "chatbot.weather",
+		Description:       "weather command",
+		Enabled:           true,
+		TargetRemovalDate: time.Now().Add(30 * 24 * time.Hour),
+	})
+
+	if err := c.SetEnabled(context.Background(), "chatbot.weather", true); err != nil {
+		t.Fatalf("SetEnabled: %v", err)
+	}
+	if !c.Bool(context.Background(), "chatbot.weather", EvalContext{}) {
+		t.Error("flag should be live-enabled immediately after SetEnabled, no poll wait")
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unmet sqlmock expectations: %v", err)
+	}
+}
+
+func TestPostgresClient_SetEnabledUnknownKey(t *testing.T) {
+	db, mock := newMockDB(t)
+	expectFlags(mock) // empty table
+	c, err := NewPostgresClient(context.Background(), db, time.Minute)
+	if err != nil {
+		t.Fatalf("NewPostgresClient: %v", err)
+	}
+	// Zero rows matched → error, and no force-refresh SELECT is issued.
+	mock.ExpectExec(`UPDATE "feature_flags" SET`).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	if err := c.SetEnabled(context.Background(), "nope.missing", true); err == nil {
+		t.Error("expected an error when toggling a key that doesn't exist")
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unmet sqlmock expectations: %v", err)
+	}
+}
+
 func TestPostgresClient_EmptyTable(t *testing.T) {
 	db, mock := newMockDB(t)
 	expectFlags(mock) // zero rows

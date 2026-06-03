@@ -7,6 +7,86 @@ All notable changes to TripBot. Format follows [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+### admin
+
+- **Send chat messages from the admin console.** The chat pane gains a send box: type a message and post it to Twitch chat **as the bot** or **as the broadcaster**, with a toggle that only offers accounts currently logged in (and hides itself when just one is). The line renders optimistically (greyed) and confirms when it round-trips back on the live chat stream, reddening as "not delivered" if a send fails. Routed as a `chat.send` NATS command (console publishes, tripbot sends) so it's split-ready. **Broadcaster sends need a re-auth** — `user:write:chat` is new on the broadcaster scopes. ([#803])
+
+### pubsub
+
+- **NATS phase 2 peel — onscreens commands are NATS-only now.** With the command surface burned in on NATS (and phase 3 running on top of it), the redundant HTTP command path is removed: the client publishes its subject and returns, and `onscreens-server` drops the `middle`/`leaderboard`/`timewarp`/`gps`/`flag` handlers and routes (the overlays are driven by the existing NATS subscribers). The browser-source feeds, health, version, metrics, and admin endpoints stay on HTTP, so `ONSCREENS_SERVER_HOST` is unchanged. With `NATS_URL` unset there's no longer an HTTP fallback — every live env runs NATS. ([#788])
+- **VLC command surface — observe-only NATS mirror.** Begins moving the VLC playback commands off direct HTTP onto NATS, following the onscreens template. The four fire-and-forget commands (`PlayRandom`, `PlayFileInPlaylist`, `Skip`, `Back`) now publish to `tripbot.<env>.vlc.<verb>` alongside their HTTP call, and vlc-server connects to NATS and subscribes — but **observe-only**: it logs what it would do without acting, because VLC commands aren't idempotent and acting on both transports would double-execute (skip two videos). HTTP stays the sole actor; this burns in delivery before the peel. `CurrentlyPlaying` is a read and stays HTTP-only. No-op where `NATS_URL` is unset; the peel + cdk8s `NATS_URL` wiring for vlc-server follow. ([#789])
+
+## [v2.18.3] — 2026-06-02
+
+Patch release. The headline is reboot-survival for the admin live console: its chat log and live map are now backed by JetStream, so a tripbot restart replays recent history instead of starting empty (NATS phase 3). The rest is the chatbot no-globals refactor (Phase C) reaching its conclusion — the `SetX` injection setters retire in favour of cmd assigning the App's dependencies directly, the package free-function shims are gone, and a `New()` constructor plus a platform-neutral inbound seam land as groundwork for multi-platform chat.
+
+### pubsub
+
+- **Live-console chat log + live map survive a reboot.** Both were in-memory ring buffers fed by core NATS, which has no replay — so every restart started the console empty until new messages arrived. They now bind ephemeral ordered JetStream consumers over two bounded file-backed streams (`TRIPBOT_CHAT` keeps 500, `TRIPBOT_VIDEO` keeps 200) and replay recent history into the buffers on startup. Publishers are unchanged; only the consumer side moved. Falls back to live-only core subscriptions when JetStream is unavailable (local dev, non-JetStream servers), so nothing breaks without it. Requires [infra #623] for file-backed JetStream + a PVC on the NATS deployment. (NATS phase 3, [#744])
+
+### refactor
+
+- **chatbot Phase C — retire the `SetX` setters; cmd owns the App.** The remaining package-level injection setters are removed in favour of `cmd/tripbot` assigning the App's dependencies directly: `App.Cron` ([#779]), `realVideo`'s own `Player` ([#780]), `App.Sessions` + `App.UserSessions` ([#781]), and `App.Flags` ([#782]). The package free-function shims retire with cmd taking ownership of the App ([#774]), preceded by a `New()` constructor + `ConnectIRC` method ([#773]) and a platform-neutral inbound seam (`IncomingMessage` + `Handle*` methods) that isolates the Twitch-specific entry points behind a transport-neutral interface ([#772]).
+
+## [v2.18.2] — 2026-06-02
+
+Patch release, almost entirely internal. The no-globals refactor finishes Phase B and opens Phase C: the last per-package `defaultX` singletons (`pkg/server`, `pkg/video`, `pkg/users`) are retired in favour of constructed structs threaded from cmd, cmd's own globals move into a `Tripbot` struct, and the chatbot's command registry, dispatch path, and event handlers move onto the injectable `App`. NATS phase 2 moves the onscreens command surface (and the admin panel's now-playing) onto pub/sub. Rounded out by a logout-path crash-loop fix, the producer half of the tripbot↔infra anti-drift contract, a `go test` env-default fix, and a CI action bump.
+
+### fix
+
+- **Logged-out users no longer crash-loop `save()`.** A user whose DB row couldn't be found or created (a transient `Find` error returns `ID: 0`) was cached in the session and then failed GORM's `Updates()` on every logout tick with "WHERE conditions required". `save()` now skips a zero-ID user and `login()` won't cache one, so the session self-heals on the next tick. No data lost — the `events` log and monthly scoreboard were unaffected; only the `users.miles` cache missed its increment, and it is recomputable. (TRIPBOT-8D, [#778])
+
+### pubsub
+
+- **NATS phase 2 — onscreens command surface on pub/sub.** The onscreens overlay commands move from direct HTTP calls onto NATS, extending the pub/sub substrate. ([#736])
+
+### refactor
+
+- **Phase B finish — retire the last package `defaultX` singletons.** `pkg/users` session state is encapsulated behind a constructed `*Sessions` with an injected `ChatterSource` ([#753]) and then has its `defaultSessions` global retired ([#764]); `pkg/server` retires `defaultServer`, threading a `*Server` through cmd ([#757]); `pkg/video` retires `defaultPlayer` and sources the admin panel's now-playing from NATS ([#758]).
+- **cmd globals lifted into a `Tripbot` struct (Phase C.1).** The `cmd/tripbot` entrypoint constructs and threads its dependencies instead of reaching for package globals. ([#755])
+- **chatbot Phase C — registry, dispatch, and handlers onto the `App`.** Social-media replies ([#766]), the dispatch path with access-check denials ([#768]), follower/subscriber announcements and the Chatter timer ([#769]), and the command registry with `findCommand` ([#770]) all move off package-level globals onto the injectable `App`, routing chat output through `a.IRC.Say`. Groundwork for retiring `defaultApp` and the `sayFn` global, and for multi-platform chat support.
+
+### CI
+
+- **`go test` defaults `ENV` to testing.** With `ENV` unset under `go test`, `config.SetEnvironment` defaulted to `development` and failed on the absent `.env.development`; it now defaults to `testing` via `testing.Testing()`, so bare `go test ./pkg/...` loads the checked-in `.env.testing` with no prefix — completing the repo-root resolution from v2.18.1. ([#767])
+
+### tooling
+
+- **tripbot↔infra anti-drift contract (producer half).** `pkg/contract/` holds the canonical service names, ports, and env-var keys as typed Go constants (cross-checked against `pkg/config/tripbot`, `pkg/obs`, `pkg/database`); a `go:generate` tool emits `contract.json` and a test fails on drift in either direction. A new `contract.yml` workflow regenerates in CI and fails if the committed file is stale. The infra cdk8s manifests consume it via `task contract:sync`. Dependency-free, so generate + test stay fast and hermetic. ([#777])
+
+### deps
+
+- **`jdx/mise-action` 2 → 4.** ([#759])
+
+## [v2.18.1] — 2026-06-01
+
+Patch release. Mostly internals: the Phase B no-globals refactor lands its final package conversions — `pkg/twitch` and `pkg/server` now construct a `*API` / `*Server` instead of mutating package-level globals — alongside extracting reverse-geocoding into an injectable `pkg/geo` and giving chatbot a `App.Twitch` injection seam. Admin-panel polish continues (htmx live updates replacing full-page reloads, a GPS-jump-aware map trail, and an offline-collapsed stream preview), plus dashcam-cv database groundwork (pgvector), a `go test` ergonomics fix, and an OpenTelemetry deps bump.
+
+### admin panel
+
+- **htmx live updates replace full-page reloads.** Restart and stream-toggle buttons `hx-post` and swap their widget in place instead of full-page POST + redirect (which reloaded the Twitch preview, re-initialized Leaflet, and lost chat scroll). Adds in-flight feedback (`hx-disabled-elt` + a dim/progress-cursor style) and a hidden 15s poller that OOB-swaps the service-status rows and stream toggle so they stay current without a reload. ([#752])
+- **Map trail breaks on GPS jumps.** The live map split the breadcrumb trail into solid runs of consecutive points within 50 km and renders each cross-jump gap as a faint dashed bridge, so a timewarp clip or bad GPS fix no longer slashes a straight line across the map. ([#749])
+- **Stream preview collapses when offline + shorter service labels.** The preview disclosure now defaults open only when OBS reports an active stream (was hardcoded open, always loading the Twitch player), and the status rows read `vlc` / `onscreens` instead of `vlc-server` / `onscreens-server`. ([#735])
+
+### dashcam-cv
+
+- **pgvector `frame_embeddings` table + `cv:stats` task.** Migration 015 adds a `vector(1152)` embeddings column (SigLIP2 so400m NaFlex) with HNSW cosine + unique indexes and `CREATE EXTENSION vector`; local dev Postgres moves to the `pgvector/pgvector:pg16` image. Migration 016 drops the dead `moments`/`viewings` tables. Adds a `cv:stats` task for coverage/size/rate via psql. ([#750])
+
+### refactor
+
+- **`pkg/twitch` → `*API`.** The package's mutable globals are encapsulated in a constructed `*API` with `New()`; existing exported functions keep thin shims delegating to a `defaultClient`, so external callers are unchanged. Marks the auth-core seam for the eventual standalone Helix service. ([#738])
+- **`pkg/server` → `*Server`.** The last Phase B conversion: `eventHub`, `twitchConnected`, `versionTag`, and the feature-flag client move onto a constructed `*Server` (package-level shims back a `defaultServer` singleton, so cmd/tripbot is unchanged). Deletes a dead `var server`. ([#754])
+- **reverse-geocoding extracted into `pkg/geo`.** `helpers.CityFromCoords` / `StateFromCoords` no longer reach into the geocoder SDK's package global from a pure utility package. New `pkg/geo` holds a `Geocoder` interface + `*Client` (API key as a field); `helpers` goes back to dependency-free. ([#747])
+- **chatbot: inject Twitch Helix surface as `App.Twitch`.** `followageCmd` calls `a.Twitch.FollowedAt(...)` through an injected interface instead of the `pkg/twitch` package global, continuing the chatbot-app-injection pattern and unlocking unit tests for the command. ([#751])
+
+### CI
+
+- **`go test` finds the repo-root `.env.testing` from any directory.** `config.SetEnvironment` resolved the dotenv file with a cwd-relative `godotenv.Load`, so a package's test binary — which runs from its own dir — never found the checked-in `.env.testing` and either `log.Fatalf`'d in a config `init()` or required a manual `set -a; . ./.env.testing; set +a`. The lookup now anchors at the module root (nearest ancestor with `go.mod`), so `ENV=testing go test ./pkg/...` works with no sourcing, matching the `task test` / `task test:macos` paths. Deployed binaries with no `go.mod` ancestor fall back to the bare relative path, preserving cluster behavior. ([#743])
+
+### deps
+
+- **OpenTelemetry instrumentation bumps** — `contrib/instrumentation/net/http/otelhttp` and `contrib/instrumentation/runtime` 0.68.0 → 0.69.0 (with `otel/sdk` 1.43 → 1.44 to match core). ([#746])
+
 ## [v2.18.0] — 2026-05-29
 
 Minor release. The admin panel's live console fills in around the chat pane shipped in v2.17.2: a live viewer count, a now-playing card that updates the instant the video changes, a token-expiry countdown, usable chat scrollback that only auto-scrolls when pinned to the bottom, a click-a-username profile popover (monthly miles + handling for 'unknown' dates), and a live location map with a breadcrumb trail and a 'show full route' corpus overlay. onscreens-server moves to its own standalone slim image with a multi-arch release pipeline. Internals: background jobs construct a `*Scheduler` instead of reaching for a package global, and the OpenTelemetry dependencies get bumped.
@@ -1253,9 +1333,45 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#712]: https://github.com/adanalife/tripbot/pull/712
 [#713]: https://github.com/adanalife/tripbot/pull/713
 [#714]: https://github.com/adanalife/tripbot/pull/714
+[#743]: https://github.com/adanalife/tripbot/pull/743
+[#735]: https://github.com/adanalife/tripbot/pull/735
+[#738]: https://github.com/adanalife/tripbot/pull/738
+[#746]: https://github.com/adanalife/tripbot/pull/746
+[#747]: https://github.com/adanalife/tripbot/pull/747
+[#749]: https://github.com/adanalife/tripbot/pull/749
+[#750]: https://github.com/adanalife/tripbot/pull/750
+[#751]: https://github.com/adanalife/tripbot/pull/751
+[#752]: https://github.com/adanalife/tripbot/pull/752
+[#754]: https://github.com/adanalife/tripbot/pull/754
 [#716]: https://github.com/adanalife/tripbot/pull/716
 [#717]: https://github.com/adanalife/tripbot/pull/717
 [#719]: https://github.com/adanalife/tripbot/pull/719
 [#720]: https://github.com/adanalife/tripbot/pull/720
 [#722]: https://github.com/adanalife/tripbot/pull/722
 [#723]: https://github.com/adanalife/tripbot/pull/723
+[#736]: https://github.com/adanalife/tripbot/pull/736
+[#753]: https://github.com/adanalife/tripbot/pull/753
+[#755]: https://github.com/adanalife/tripbot/pull/755
+[#757]: https://github.com/adanalife/tripbot/pull/757
+[#758]: https://github.com/adanalife/tripbot/pull/758
+[#759]: https://github.com/adanalife/tripbot/pull/759
+[#764]: https://github.com/adanalife/tripbot/pull/764
+[#766]: https://github.com/adanalife/tripbot/pull/766
+[#767]: https://github.com/adanalife/tripbot/pull/767
+[#768]: https://github.com/adanalife/tripbot/pull/768
+[#769]: https://github.com/adanalife/tripbot/pull/769
+[#770]: https://github.com/adanalife/tripbot/pull/770
+[#777]: https://github.com/adanalife/tripbot/pull/777
+[#778]: https://github.com/adanalife/tripbot/pull/778
+[#772]: https://github.com/adanalife/tripbot/pull/772
+[#773]: https://github.com/adanalife/tripbot/pull/773
+[#774]: https://github.com/adanalife/tripbot/pull/774
+[#779]: https://github.com/adanalife/tripbot/pull/779
+[#780]: https://github.com/adanalife/tripbot/pull/780
+[#781]: https://github.com/adanalife/tripbot/pull/781
+[#782]: https://github.com/adanalife/tripbot/pull/782
+[#744]: https://github.com/adanalife/tripbot/pull/744
+[#788]: https://github.com/adanalife/tripbot/pull/788
+[#789]: https://github.com/adanalife/tripbot/pull/789
+[#803]: https://github.com/adanalife/tripbot/pull/803
+[infra #623]: https://github.com/adanalife/infra/pull/623

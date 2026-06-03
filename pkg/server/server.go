@@ -6,13 +6,17 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
+	"github.com/adanalife/tripbot/pkg/feature"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/httpmw"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
+	"github.com/adanalife/tripbot/pkg/natsclient"
 	sentrynegroni "github.com/getsentry/sentry-go/negroni"
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -26,7 +30,40 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-var server *http.Server
+// Server holds the web server's mutable runtime state — the live-console hub,
+// the Twitch chat-connection flag, the build version tag, and the feature-flag
+// client the admin panel reads. cmd/tripbot constructs one via New, installs
+// values through the setter methods (SetVersion / SetTwitchConnected /
+// SetFlagClient) before and while Start runs, and the HTTP handlers are
+// methods on it so the panel reads this instance's state — no package global.
+type Server struct {
+	hub             *Hub
+	twitchConnected atomic.Bool
+	versionTag      string
+
+	flagMu     sync.RWMutex
+	flagClient feature.FlagClient
+
+	// publisher is the fire-and-forget NATS publish seam the admin console's
+	// "send chat message" form uses to emit a chatEvents.Send command. The
+	// subscriber that actually sends lives in cmd/tripbot (the Twitch-identity
+	// owner), so the panel only publishes — which keeps it split-ready. Tests
+	// inject a recording fake.
+	publisher natsclient.Publisher
+}
+
+// New constructs a Server with default runtime state: a fresh hub, the "dev"
+// version tag (overridden by SetVersion), an empty in-memory flag client
+// (swapped for the Postgres-backed one via SetFlagClient), and the singleton
+// NATS publisher (a no-op until natsclient.Connect runs).
+func New() *Server {
+	return &Server{
+		hub:        NewHub(),
+		versionTag: "dev",
+		flagClient: feature.NewInMemoryClient(nil),
+		publisher:  natsclient.DefaultPublisher(),
+	}
+}
 
 // shutdownTimeout is how long Shutdown waits for in-flight requests to
 // finish before forcing connections closed. 15s is the typical sweet spot:
@@ -38,7 +75,7 @@ const shutdownTimeout = 15 * time.Second
 // via signal.NotifyContext) the server stops accepting new connections and
 // waits up to shutdownTimeout for in-flight requests to complete before
 // returning.
-func Start(ctx context.Context) {
+func (s *Server) Start(ctx context.Context) {
 	slog.InfoContext(ctx, "starting web server", "port", c.Conf.TripbotServerPort)
 
 	r := mux.NewRouter()
@@ -53,7 +90,7 @@ func Start(ctx context.Context) {
 	hp.Handle("/ready", tagged("/health/ready", httpmw.ReadinessHandler()))
 
 	// version endpoint — returns build metadata as JSON
-	r.Handle("/version", tagged("/version", versionHandler)).Methods("GET", "HEAD")
+	r.Handle("/version", tagged("/version", s.versionHandler)).Methods("GET", "HEAD")
 
 	// auth endpoints
 	auth := r.PathPrefix("/auth").Methods("GET").Subrouter()
@@ -67,12 +104,15 @@ func Start(ctx context.Context) {
 	r.Path("/metrics").Handler(tagged("/metrics", promhttp.Handler().ServeHTTP))
 
 	// admin panel (status overview + links) on the root path
-	r.Handle("/", tagged("/", adminHandler)).Methods("GET", "HEAD")
+	r.Handle("/", tagged("/", s.adminHandler)).Methods("GET", "HEAD")
 
 	// live console: SSE stream the panel subscribes to (GET, long-lived) +
 	// the vendored htmx assets it loads. The /admin POST subrouter below is
 	// POST-only, so the GET stream registers on r directly.
-	r.Handle("/admin/events", tagged("/admin/events", eventsHandler)).Methods("GET")
+	r.Handle("/admin/events", tagged("/admin/events", s.eventsHandler)).Methods("GET")
+	// live panel refresh: hidden poller OOB-swaps the always-present status rows
+	// + stream toggle so they stay current without a full reload.
+	r.Handle("/admin/refresh", tagged("/admin/refresh", s.refreshHandler)).Methods("GET")
 	r.Handle("/admin/user/{username}", tagged("/admin/user/{username}", userProfileHandler)).Methods("GET")
 	r.Handle("/admin/map/corpus", tagged("/admin/map/corpus", mapCorpusHandler)).Methods("GET")
 	r.PathPrefix("/static/").Handler(staticHandler())
@@ -81,8 +121,10 @@ func Start(ctx context.Context) {
 	// exposed; no app-layer auth gate (see CLAUDE.md / vault decisions).
 	admin := r.PathPrefix("/admin").Methods("POST").Subrouter()
 	admin.Handle("/obs/stream/{action}", tagged("/admin/obs/stream/{action}", obsStreamActionHandler))
+	admin.Handle("/flags/{key}/{action}", tagged("/admin/flags/{key}/{action}", s.flagActionHandler))
 	admin.Handle("/shutdown", tagged("/admin/shutdown", httpmw.ShutdownHandler()))
 	admin.Handle("/restart/{service}", tagged("/admin/restart/{service}", restartActionHandler))
+	admin.Handle("/chat/send", tagged("/admin/chat/send", s.chatSendHandler))
 
 	// catch everything else
 	r.NotFoundHandler = tagged("/", catchAllHandler)

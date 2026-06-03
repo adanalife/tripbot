@@ -9,7 +9,6 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"github.com/adanalife/tripbot/pkg/scoreboards"
-	"github.com/adanalife/tripbot/pkg/users"
 )
 
 const leaderboardSize = 10
@@ -119,7 +118,7 @@ func (s *Session) runLifetimeLeaderboard(ctx context.Context, i *discordgo.Inter
 		slog.ErrorContext(ctx, "discord defer reply failed", "err", err, "command", "totalleaderboard")
 		return
 	}
-	entries := users.LifetimeMilesLeaderboard
+	entries := s.sessions.LifetimeLeaderboard()
 	if len(entries) > leaderboardSize {
 		entries = entries[:leaderboardSize]
 	}

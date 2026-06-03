@@ -1,11 +1,20 @@
 name: OBS CEF Base Image
 # Bakes adanalife/obs-cef-base:arm64-<OBS>-<CEF> + arm64-latest, which
-# Dockerfile.arm64 then COPYs the OBS install tree out of. Re-runs only when
-# the base Dockerfile or this workflow file changes; manual dispatch
-# available for re-bakes (e.g., chasing a CEF tarball mirror change).
+# Dockerfile.arm64 then COPYs the OBS install tree out of. This is a 90-min
+# arm64 CEF compile, so it must only run when it has to.
+#
+# Scoped to develop/master pushes that touch the base Dockerfile or this
+# workflow. The branches filter is load-bearing: GitHub ignores `paths`
+# filters on tag pushes, so without it every `v*` release tag bypassed the
+# path filter and triggered a full rebake (even though the base hadn't
+# changed). Manual dispatch stays available for re-bakes (e.g., chasing a
+# CEF tarball mirror change).
 on:
   workflow_dispatch:
   push:
+    branches:
+      - develop
+      - master
     paths:
       - 'infra/docker/obs/Dockerfile.arm64-base'
       - '.github/workflows/obs-base.yml'

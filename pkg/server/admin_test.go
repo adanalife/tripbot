@@ -3,13 +3,16 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"strings"
 	"testing"
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
+	"github.com/adanalife/tripbot/pkg/eventbus"
 	"github.com/adanalife/tripbot/pkg/feature"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/video"
@@ -52,6 +55,56 @@ func TestTailnetServiceURL(t *testing.T) {
 		if got := tailnetServiceURL(tc.service); got != tc.want {
 			t.Errorf("tailnetServiceURL(%q) with ENV=%q = %q, want %q", tc.service, tc.env, got, tc.want)
 		}
+	}
+}
+
+func TestHostServiceName(t *testing.T) {
+	cases := []struct {
+		hostPort, want string
+	}{
+		{"obs:8080", "obs"},
+		{"obs-twitch:8080", "obs-twitch"},
+		{"obs-twitch", "obs-twitch"}, // no port
+		{"", ""},
+	}
+	for _, tc := range cases {
+		if got := hostServiceName(tc.hostPort); got != tc.want {
+			t.Errorf("hostServiceName(%q) = %q, want %q", tc.hostPort, got, tc.want)
+		}
+	}
+}
+
+// The OBS nav link must follow OBS_SERVER_HOST's value so it resolves whether the
+// Service is named "obs" (prod) or "obs-twitch" (stage) — no hardcoded name.
+func TestGatherLinks_ObsURLFollowsConfiguredHost(t *testing.T) {
+	saved := struct{ env, obs string }{c.Conf.Environment, c.Conf.ObsServerHost}
+	t.Cleanup(func() { c.Conf.Environment = saved.env; c.Conf.ObsServerHost = saved.obs })
+
+	obsURL := func() string {
+		for _, l := range gatherLinks() {
+			if l.Label == "obs" {
+				return l.URL
+			}
+		}
+		return ""
+	}
+
+	c.Conf.Environment = "staging"
+	c.Conf.ObsServerHost = "obs-twitch:8080"
+	if got, want := obsURL(), "https://obs-twitch-stage.tail020deb.ts.net"; got != want {
+		t.Errorf("staging obs link = %q, want %q", got, want)
+	}
+
+	c.Conf.Environment = "production"
+	c.Conf.ObsServerHost = "obs:8080"
+	if got, want := obsURL(), "https://obs-prod.tail020deb.ts.net"; got != want {
+		t.Errorf("prod obs link = %q, want %q", got, want)
+	}
+
+	// Unconfigured OBS host → no dead link.
+	c.Conf.ObsServerHost = ""
+	if got := obsURL(); got != "" {
+		t.Errorf("empty OBS_SERVER_HOST should drop the obs link; got %q", got)
 	}
 }
 
@@ -109,7 +162,7 @@ func withObsStream(t *testing.T, startErr, stopErr error) (started, stopped *int
 	return started, stopped
 }
 
-func TestObsStreamActionHandler_StartRedirectsAndCalls(t *testing.T) {
+func TestObsStreamActionHandler_StartSwapsInStopControl(t *testing.T) {
 	started, _ := withObsStream(t, nil, nil)
 
 	r := mux.NewRouter()
@@ -119,18 +172,27 @@ func TestObsStreamActionHandler_StartRedirectsAndCalls(t *testing.T) {
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusSeeOther {
-		t.Fatalf("got status %d, want %d", rec.Code, http.StatusSeeOther)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("got status %d, want %d", rec.Code, http.StatusOK)
 	}
-	if got := rec.Header().Get("Location"); got != "/" {
-		t.Fatalf("got Location %q, want /", got)
+	body := rec.Body.String()
+	// A successful start flips the widget to offer "stop".
+	if !strings.Contains(body, `id="stream-control"`) {
+		t.Errorf("response should be the stream-control fragment; got %q", body)
+	}
+	if !strings.Contains(body, `hx-post="/admin/obs/stream/stop"`) {
+		t.Errorf("swapped-in widget should now offer stop; got %q", body)
+	}
+	// HX-Trigger tells the page the stream is now active (opens the preview).
+	if got := rec.Header().Get("HX-Trigger"); !strings.Contains(got, `"active":true`) {
+		t.Errorf("HX-Trigger = %q, want stream-changed active:true", got)
 	}
 	if *started != 1 {
 		t.Fatalf("obsStartStream called %d times, want 1", *started)
 	}
 }
 
-func TestObsStreamActionHandler_StopRedirectsAndCalls(t *testing.T) {
+func TestObsStreamActionHandler_StopSwapsInStartControl(t *testing.T) {
 	_, stopped := withObsStream(t, nil, nil)
 
 	r := mux.NewRouter()
@@ -140,8 +202,15 @@ func TestObsStreamActionHandler_StopRedirectsAndCalls(t *testing.T) {
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusSeeOther {
-		t.Fatalf("got status %d, want %d", rec.Code, http.StatusSeeOther)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("got status %d, want %d", rec.Code, http.StatusOK)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `hx-post="/admin/obs/stream/start"`) {
+		t.Errorf("swapped-in widget should now offer start; got %q", body)
+	}
+	if got := rec.Header().Get("HX-Trigger"); !strings.Contains(got, `"active":false`) {
+		t.Errorf("HX-Trigger = %q, want stream-changed active:false", got)
 	}
 	if *stopped != 1 {
 		t.Fatalf("obsStopStream called %d times, want 1", *stopped)
@@ -163,10 +232,11 @@ func TestObsStreamActionHandler_UnknownActionIs400(t *testing.T) {
 	}
 }
 
-func TestObsStreamActionHandler_RedirectsEvenOnError(t *testing.T) {
-	// State is the source of truth — refreshed panel will show the actual
-	// state. Surfacing the error in flash UI isn't worth the complexity for
-	// a tailnet-only solo-operator panel.
+func TestObsStreamActionHandler_ErrorLeavesStateUnchanged(t *testing.T) {
+	// State is the source of truth — a failed toggle re-renders the previous
+	// state, so the swapped-in widget simply doesn't flip. Surfacing the error in
+	// flash UI isn't worth the complexity for a tailnet-only solo-operator panel;
+	// the periodic refresh reconciles actual OBS state.
 	started, _ := withObsStream(t, errFakeOBS, nil)
 
 	r := mux.NewRouter()
@@ -176,8 +246,16 @@ func TestObsStreamActionHandler_RedirectsEvenOnError(t *testing.T) {
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusSeeOther {
-		t.Fatalf("got status %d, want %d", rec.Code, http.StatusSeeOther)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("got status %d, want %d", rec.Code, http.StatusOK)
+	}
+	// Start failed → widget still offers start (didn't flip to stop).
+	body := rec.Body.String()
+	if !strings.Contains(body, `hx-post="/admin/obs/stream/start"`) {
+		t.Errorf("failed start should leave the widget offering start; got %q", body)
+	}
+	if got := rec.Header().Get("HX-Trigger"); !strings.Contains(got, `"active":false`) {
+		t.Errorf("HX-Trigger = %q, want stream-changed active:false", got)
 	}
 	if *started != 1 {
 		t.Fatalf("obsStartStream called %d times, want 1", *started)
@@ -212,8 +290,8 @@ func TestRestartActionHandler_TripbotCallsSelf(t *testing.T) {
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusSeeOther {
-		t.Fatalf("got status %d, want %d", rec.Code, http.StatusSeeOther)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("got status %d, want %d", rec.Code, http.StatusNoContent)
 	}
 	if *selfCalls != 1 {
 		t.Fatalf("restartSelf called %d times, want 1", *selfCalls)
@@ -235,8 +313,8 @@ func TestRestartActionHandler_VlcProxiesToVlcServerHost(t *testing.T) {
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusSeeOther {
-		t.Fatalf("got status %d, want %d", rec.Code, http.StatusSeeOther)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("got status %d, want %d", rec.Code, http.StatusNoContent)
 	}
 	if *selfCalls != 0 {
 		t.Fatalf("restartSelf called %d times, want 0", *selfCalls)
@@ -277,9 +355,67 @@ func TestRestartActionHandler_UnknownServiceIs400(t *testing.T) {
 	}
 }
 
+func TestRefreshHandler_RendersOOBStatusAndStreamControl(t *testing.T) {
+	srv := New()
+	srv.SetTwitchConnected(true)
+
+	// stream active → the OOB widget should offer "stop"
+	savedStatus := obsStreamStatus
+	obsStreamStatus = func(context.Context) (bool, error) { return true, nil }
+	t.Cleanup(func() { obsStreamStatus = savedStatus })
+
+	// ObsServerHost isn't covered by withConf — save/restore it here.
+	savedObs := c.Conf.ObsServerHost
+	t.Cleanup(func() { c.Conf.ObsServerHost = savedObs })
+
+	vlc := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/health/ready":
+			w.WriteHeader(http.StatusOK)
+		case "/version":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"tag":"v9.9.9-vlc","sha":"deadbeefcafe"}`))
+		default:
+			t.Errorf("unexpected vlc request %q", r.URL.Path)
+		}
+	}))
+	defer vlc.Close()
+
+	withConf(t, func() {
+		c.Conf.VlcServerHost = strings.TrimPrefix(vlc.URL, "http://")
+		c.Conf.OnscreensServerHost = "" // skip the onscreens ping
+	})
+	c.Conf.ObsServerHost = "" // skip the obs sibling ping
+
+	rec := httptest.NewRecorder()
+	srv.refreshHandler(rec, httptest.NewRequest(http.MethodGet, "/admin/refresh", nil))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("got status %d, want %d", rec.Code, http.StatusOK)
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		`<ul id="status-list" hx-swap-oob="true">`, // status rows OOB target
+		"in chat",                          // tripbot connected
+		">vlc<",                            // vlc service row
+		`hx-post="/admin/restart/vlc"`,     // restart button rendered in the rows
+		`v9.9.9-vlc`,                       // vlc version pulled through
+		`id="stream-control"`,              // stream widget present
+		`hx-post="/admin/obs/stream/stop"`, // stream active → offers stop
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("refresh body missing %q", want)
+		}
+	}
+	// The stream widget must be OOB-tagged so it swaps without a target attr.
+	if !strings.Contains(body, `id="stream-control" class="stream-control" hx-swap-oob="true"`) {
+		t.Errorf("stream-control should be OOB-tagged; got %q", body)
+	}
+}
+
 func TestAdminHandler_RendersReadyStatusAndLinks(t *testing.T) {
-	defer SetTwitchConnected(false)
-	SetTwitchConnected(true)
+	srv := New()
+	srv.SetTwitchConnected(true)
 	withReauth(t, nil) // healthy tokens — no re-auth callout
 	withAuthStatuses(t, []mytwitch.AccountTokenStatus{
 		{Account: "bot", LoginAs: "tripbot4000", ExpiresAt: time.Date(2099, 1, 1, 0, 0, 0, 0, time.UTC)},
@@ -322,15 +458,18 @@ func TestAdminHandler_RendersReadyStatusAndLinks(t *testing.T) {
 		c.Conf.ExternalURL = "https://tripbot.prod.whereisdana.today"
 		c.Conf.Environment = "production"
 	})
-	withCurrentlyPlaying(t, video.Video{Slug: "wy_0042", State: "Wyoming"}, 3*time.Minute+12*time.Second)
+	// ObsServerHost isn't covered by withConf — set it here so the OBS nav link
+	// renders. "obs:8080" is prod's name today → tailnet href obs-prod.
+	savedObs := c.Conf.ObsServerHost
+	t.Cleanup(func() { c.Conf.ObsServerHost = savedObs })
+	c.Conf.ObsServerHost = "obs:8080"
+	withCurrentlyPlaying(t, srv, video.Video{Slug: "wy_0042", State: "Wyoming"}, 3*time.Minute+12*time.Second)
 	withChatterCount(t, 12)
 
-	saved := versionTag
-	defer func() { versionTag = saved }()
-	SetVersion("v1.2.3")
+	srv.SetVersion("v1.2.3")
 
 	rec := httptest.NewRecorder()
-	adminHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	srv.adminHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("got status %d, want %d", rec.Code, http.StatusOK)
@@ -377,8 +516,8 @@ func TestAdminHandler_RendersReadyStatusAndLinks(t *testing.T) {
 
 func TestAdminHandler_DegradedAndVlcUnreachable(t *testing.T) {
 	withNowPlaying(t, nowPlayingTrack{}) // no audio info — keeps assertion on "now playing" absence valid
-	defer SetTwitchConnected(false)
-	SetTwitchConnected(false)
+	srv := New()
+	srv.SetTwitchConnected(false)
 	withReauth(t, nil)
 
 	withConf(t, func() {
@@ -389,10 +528,10 @@ func TestAdminHandler_DegradedAndVlcUnreachable(t *testing.T) {
 	})
 	// even with a video loaded, an unhealthy vlc hides "now playing" rather
 	// than showing a possibly-stale value.
-	withCurrentlyPlaying(t, video.Video{Slug: "wy_0042", State: "Wyoming"}, time.Minute)
+	withCurrentlyPlaying(t, srv, video.Video{Slug: "wy_0042", State: "Wyoming"}, time.Minute)
 
 	rec := httptest.NewRecorder()
-	adminHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	srv.adminHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("got status %d, want %d", rec.Code, http.StatusOK)
@@ -427,14 +566,17 @@ func withConf(t *testing.T, set func()) {
 	set()
 }
 
-// withCurrentlyPlaying swaps the currentlyPlaying / currentProgress seams so
-// the admin handler sees a fixed video + progress without driving the player.
-func withCurrentlyPlaying(t *testing.T, v video.Video, progress time.Duration) {
+// withCurrentlyPlaying seeds srv's hub with a video.changed so the admin
+// handler renders a fixed "now playing" — mirroring how it reads now-playing
+// from the NATS hub cache in production. progress maps to the event's
+// emitted_at (clip start = now - progress).
+func withCurrentlyPlaying(t *testing.T, srv *Server, v video.Video, progress time.Duration) {
 	t.Helper()
-	savedV, savedP := currentlyPlaying, currentProgress
-	currentlyPlaying = func() video.Video { return v }
-	currentProgress = func() time.Duration { return progress }
-	t.Cleanup(func() { currentlyPlaying, currentProgress = savedV, savedP })
+	srv.hub.setNowPlaying(eventbus.VideoChanged{
+		File:      v.File(),
+		State:     v.State,
+		EmittedAt: time.Now().Add(-progress).Format(time.RFC3339Nano),
+	})
 }
 
 // withChatterCount swaps the chatterCount seam to a fixed value.
@@ -475,8 +617,8 @@ func withNowPlaying(t *testing.T, track nowPlayingTrack) {
 }
 
 func TestAdminHandler_RendersReauthPrompt(t *testing.T) {
-	defer SetTwitchConnected(false)
-	SetTwitchConnected(false)
+	srv := New()
+	srv.SetTwitchConnected(false)
 	withNowPlaying(t, nowPlayingTrack{})
 
 	withConf(t, func() {
@@ -491,7 +633,7 @@ func TestAdminHandler_RendersReauthPrompt(t *testing.T) {
 	})
 
 	rec := httptest.NewRecorder()
-	adminHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	srv.adminHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 
 	body := rec.Body.String()
 	for _, want := range []string{
@@ -512,8 +654,8 @@ func TestAdminHandler_RendersReauthPrompt(t *testing.T) {
 
 func TestAdminHandler_NoReauthPromptWhenHealthy(t *testing.T) {
 	withNowPlaying(t, nowPlayingTrack{})
-	defer SetTwitchConnected(false)
-	SetTwitchConnected(true)
+	srv := New()
+	srv.SetTwitchConnected(true)
 
 	withConf(t, func() { c.Conf.VlcServerHost = "" })
 	withReauth(t, nil) // all tokens healthy
@@ -522,31 +664,25 @@ func TestAdminHandler_NoReauthPromptWhenHealthy(t *testing.T) {
 	})
 
 	rec := httptest.NewRecorder()
-	adminHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	srv.adminHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 
 	if strings.Contains(rec.Body.String(), "re-authenticate") {
 		t.Errorf("re-auth prompt should be hidden when no account needs re-auth")
 	}
 }
 
-func withFlags(t *testing.T, flags map[string]feature.Flag) {
+func withFlags(t *testing.T, srv *Server, flags map[string]feature.Flag) {
 	t.Helper()
-	saved := flagClient
-	SetFlagClient(feature.NewInMemoryClient(flags))
-	t.Cleanup(func() {
-		flagMu.Lock()
-		flagClient = saved
-		flagMu.Unlock()
-	})
+	srv.SetFlagClient(feature.NewInMemoryClient(flags))
 }
 
 func TestAdminHandler_RendersFeatureFlagsWhenLoaded(t *testing.T) {
-	defer SetTwitchConnected(false)
-	SetTwitchConnected(true)
+	srv := New()
+	srv.SetTwitchConnected(true)
 	withNowPlaying(t, nowPlayingTrack{})
 	withReauth(t, nil)
 	withConf(t, func() { c.Conf.VlcServerHost = "" })
-	withFlags(t, map[string]feature.Flag{
+	withFlags(t, srv, map[string]feature.Flag{
 		"discord.bot_enabled": {
 			Key:               "discord.bot_enabled",
 			Description:       "Gates pkg/discord startup.",
@@ -562,7 +698,7 @@ func TestAdminHandler_RendersFeatureFlagsWhenLoaded(t *testing.T) {
 	})
 
 	rec := httptest.NewRecorder()
-	adminHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	srv.adminHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 
 	body := rec.Body.String()
 	for _, want := range []string{
@@ -588,47 +724,44 @@ func TestAdminHandler_RendersFeatureFlagsWhenLoaded(t *testing.T) {
 }
 
 func TestAdminHandler_HidesFeatureFlagsSectionWhenEmpty(t *testing.T) {
-	defer SetTwitchConnected(false)
-	SetTwitchConnected(true)
+	srv := New()
+	srv.SetTwitchConnected(true)
 	withNowPlaying(t, nowPlayingTrack{})
 	withReauth(t, nil)
 	withConf(t, func() { c.Conf.VlcServerHost = "" })
-	withFlags(t, nil) // no flags loaded
+	withFlags(t, srv, nil) // no flags loaded
 
 	rec := httptest.NewRecorder()
-	adminHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	srv.adminHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 
 	if strings.Contains(rec.Body.String(), "feature flags") {
 		t.Errorf("feature flags section should be hidden when no flags are loaded")
 	}
 }
 
-// withChatHistory swaps the package eventHub for a fresh one seeded with lines,
-// restoring the original after the test.
-func withChatHistory(t *testing.T, lines []ChatLine) {
+// withChatHistory seeds srv's hub with a fresh ring containing the given lines.
+func withChatHistory(t *testing.T, srv *Server, lines []ChatLine) {
 	t.Helper()
-	saved := eventHub
 	h := NewHub()
 	for _, l := range lines {
 		h.appendChat(l)
 	}
-	eventHub = h
-	t.Cleanup(func() { eventHub = saved })
+	srv.hub = h
 }
 
 func TestAdminHandler_RendersChatHistoryAndSSEWiring(t *testing.T) {
-	defer SetTwitchConnected(false)
-	SetTwitchConnected(true)
+	srv := New()
+	srv.SetTwitchConnected(true)
 	withNowPlaying(t, nowPlayingTrack{})
 	withReauth(t, nil)
 	withConf(t, func() { c.Conf.VlcServerHost = "" })
-	withChatHistory(t, []ChatLine{
+	withChatHistory(t, srv, []ChatLine{
 		{Username: "alice", Text: "hello", At: time.Date(2026, 5, 29, 13, 5, 0, 0, time.UTC)},
 		{Username: "bob", Text: "<b>hi</b>", At: time.Date(2026, 5, 29, 13, 6, 0, 0, time.UTC)},
 	})
 
 	rec := httptest.NewRecorder()
-	adminHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	srv.adminHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 
 	body := rec.Body.String()
 	for _, want := range []string{
@@ -647,17 +780,184 @@ func TestAdminHandler_RendersChatHistoryAndSSEWiring(t *testing.T) {
 }
 
 func TestAdminHandler_ChatEmptyPlaceholder(t *testing.T) {
-	defer SetTwitchConnected(false)
-	SetTwitchConnected(true)
+	srv := New()
+	srv.SetTwitchConnected(true)
 	withNowPlaying(t, nowPlayingTrack{})
 	withReauth(t, nil)
 	withConf(t, func() { c.Conf.VlcServerHost = "" })
-	withChatHistory(t, nil) // empty ring
+	withChatHistory(t, srv, nil) // empty ring
 
 	rec := httptest.NewRecorder()
-	adminHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	srv.adminHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 
 	if !strings.Contains(rec.Body.String(), "waiting for chat") {
 		t.Errorf("expected empty-chat placeholder when no history")
+	}
+}
+
+// fakeToggler is an in-memory FlagClient that also implements
+// feature.FlagToggler, so the admin toggle handler's write path can be
+// exercised without a database. SetEnabled mutates the in-memory flag and
+// records the call for assertions.
+type fakeToggler struct {
+	flags map[string]feature.Flag
+	calls []string // one "key=true"/"key=false" per SetEnabled
+}
+
+func newFakeToggler(flags map[string]feature.Flag) *fakeToggler {
+	if flags == nil {
+		flags = map[string]feature.Flag{}
+	}
+	return &fakeToggler{flags: flags}
+}
+
+func (f *fakeToggler) Bool(_ context.Context, key string, _ feature.EvalContext) bool {
+	return f.flags[key].Enabled
+}
+
+func (f *fakeToggler) Snapshot(_ context.Context) []feature.Flag {
+	out := make([]feature.Flag, 0, len(f.flags))
+	for _, fl := range f.flags {
+		out = append(out, fl)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Key < out[j].Key })
+	return out
+}
+
+func (f *fakeToggler) SetEnabled(_ context.Context, key string, enabled bool) error {
+	fl, ok := f.flags[key]
+	if !ok {
+		return fmt.Errorf("unknown flag %q", key)
+	}
+	fl.Enabled = enabled
+	f.flags[key] = fl
+	f.calls = append(f.calls, fmt.Sprintf("%s=%t", key, enabled))
+	return nil
+}
+
+func flagRouter(srv *Server) *mux.Router {
+	r := mux.NewRouter()
+	r.Handle("/admin/flags/{key}/{action}", http.HandlerFunc(srv.flagActionHandler)).Methods("POST")
+	return r
+}
+
+func TestFlagActionHandler_EnableTogglesAndSwapsRow(t *testing.T) {
+	srv := New()
+	tog := newFakeToggler(map[string]feature.Flag{
+		"chatbot.weather": {Key: "chatbot.weather", Description: "weather command", Enabled: false},
+	})
+	srv.SetFlagClient(tog)
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/flags/chatbot.weather/enable", nil)
+	rec := httptest.NewRecorder()
+	flagRouter(srv).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d, want 200; body %q", rec.Code, rec.Body.String())
+	}
+	if len(tog.calls) != 1 || tog.calls[0] != "chatbot.weather=true" {
+		t.Fatalf("SetEnabled calls = %v, want [chatbot.weather=true]", tog.calls)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `<code>chatbot.weather</code>`) {
+		t.Errorf("response should be the flag row; got %q", body)
+	}
+	// Now enabled, the swapped-in row offers the opposite (disable) action.
+	if !strings.Contains(body, `hx-post="/admin/flags/chatbot.weather/disable"`) {
+		t.Errorf("enabled row should now offer disable; got %q", body)
+	}
+	if !strings.Contains(body, `class="status">on<`) {
+		t.Errorf("row status should read on; got %q", body)
+	}
+	if !strings.Contains(body, "weather command") {
+		t.Errorf("row should carry the description back; got %q", body)
+	}
+}
+
+func TestFlagActionHandler_DisableTogglesOff(t *testing.T) {
+	srv := New()
+	tog := newFakeToggler(map[string]feature.Flag{
+		"chatbot.weather": {Key: "chatbot.weather", Description: "weather command", Enabled: true},
+	})
+	srv.SetFlagClient(tog)
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/flags/chatbot.weather/disable", nil)
+	rec := httptest.NewRecorder()
+	flagRouter(srv).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d, want 200; body %q", rec.Code, rec.Body.String())
+	}
+	if len(tog.calls) != 1 || tog.calls[0] != "chatbot.weather=false" {
+		t.Fatalf("SetEnabled calls = %v, want [chatbot.weather=false]", tog.calls)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `hx-post="/admin/flags/chatbot.weather/enable"`) {
+		t.Errorf("disabled row should now offer enable; got %q", body)
+	}
+	if !strings.Contains(body, `class="status">off<`) {
+		t.Errorf("row status should read off; got %q", body)
+	}
+}
+
+func TestFlagActionHandler_ReadOnlyClientIs503(t *testing.T) {
+	srv := New()
+	// The in-memory client has no write surface (doesn't implement FlagToggler).
+	srv.SetFlagClient(feature.NewInMemoryClient(map[string]feature.Flag{
+		"chatbot.weather": {Key: "chatbot.weather", Enabled: false},
+	}))
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/flags/chatbot.weather/enable", nil)
+	rec := httptest.NewRecorder()
+	flagRouter(srv).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status %d, want 503", rec.Code)
+	}
+}
+
+func TestFlagActionHandler_UnknownActionIs400(t *testing.T) {
+	srv := New()
+	srv.SetFlagClient(newFakeToggler(map[string]feature.Flag{
+		"chatbot.weather": {Key: "chatbot.weather", Enabled: false},
+	}))
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/flags/chatbot.weather/bogus", nil)
+	rec := httptest.NewRecorder()
+	flagRouter(srv).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status %d, want 400", rec.Code)
+	}
+}
+
+func TestFlagActionHandler_UnknownKeyIsBadGateway(t *testing.T) {
+	srv := New()
+	srv.SetFlagClient(newFakeToggler(nil)) // empty — every key unknown
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/flags/nope.missing/enable", nil)
+	rec := httptest.NewRecorder()
+	flagRouter(srv).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("status %d, want 502", rec.Code)
+	}
+}
+
+func TestAdminHandler_RendersToggleButtonsWhenClientWritable(t *testing.T) {
+	srv := New()
+	srv.SetTwitchConnected(true)
+	withNowPlaying(t, nowPlayingTrack{})
+	withReauth(t, nil)
+	withConf(t, func() { c.Conf.VlcServerHost = "" })
+	srv.SetFlagClient(newFakeToggler(map[string]feature.Flag{
+		"chatbot.weather": {Key: "chatbot.weather", Description: "weather command", Enabled: false},
+	}))
+
+	rec := httptest.NewRecorder()
+	srv.adminHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+
+	if !strings.Contains(rec.Body.String(), `hx-post="/admin/flags/chatbot.weather/enable"`) {
+		t.Errorf("writable client should render a toggle button in the flag row")
 	}
 }

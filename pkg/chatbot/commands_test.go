@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -14,21 +15,20 @@ import (
 	"gorm.io/gorm"
 )
 
-// captureSay swaps sayFn for a recorder and returns helpers to read the
-// captured output and restore the original. Always call restore() as a defer.
-// Each call to output() returns messages since the last call and resets the
-// buffer, so multiple calls within one test don't accumulate across rounds.
-func captureSay(t *testing.T) (output func() string, restore func()) {
+// captureSay installs a recordingChat on app and returns an output() accessor
+// with "messages since the last call, then reset" semantics, so multiple
+// output() calls within one test don't accumulate across rounds. It replaces
+// app.Chat, so construct the App first.
+func captureSay(t *testing.T, app *App) func() string {
 	t.Helper()
-	var msgs []string
-	orig := sayFn
-	sayFn = func(msg string) { msgs = append(msgs, msg) }
-	out := func() string {
-		result := strings.Join(msgs, "\n")
-		msgs = nil
-		return result
+	rec := &recordingChat{}
+	app.Chat = rec
+	last := 0
+	return func() string {
+		msgs := rec.Says[last:]
+		last = len(rec.Says)
+		return strings.Join(msgs, "\n")
 	}
-	return out, func() { sayFn = orig }
 }
 
 func newTestUser(name string) *users.User {
@@ -44,34 +44,43 @@ func newTestVideo(state string, lat, lng float64, date time.Time) video.Video {
 // video, plus no-op Onscreens, VLC, IRC, and Sessions fakes. For commands
 // that don't read Video, pass a zero-value video.Video. To assert on any of
 // those surfaces, replace the corresponding field with a recording fake
-// (recordingOnscreens / recordingVLC / recordingVideo / recordingIRC /
+// (recordingOnscreens / recordingVLC / recordingVideo / recordingChat /
 // recordingSessions).
 func newTestApp(vid video.Video) *App {
-	return &App{
+	a := &App{
 		Onscreens:  noopOnscreens{},
 		VLC:        noopVLC{},
 		Video:      &recordingVideo{Vid: vid},
-		IRC:        noopIRC{},
+		Chat:       noopChat{},
 		Sessions:   noopSessions{},
 		NowPlaying: noopNowPlaying{},
 		Flags:      noopFlags{},
 		NATS:       noopNATS{},
 		Cron:       noopCron{},
+		Geocoder:   noopGeocoder{},
+		Weather:    noopWeather{},
+		Twitch:     noopTwitch{},
 	}
+	a.indexCommands() // build the registry, same as New() does in production
+	return a
 }
 
-// --- App.IRC seam ---
+// builtTestApp is a fake-wired App with the command registry indexed, shared by
+// the registry-inspection and findCommand-routing tests (read-only — they
+// inspect command definitions / routing, never dispatch). It replaces the
+// production defaultApp singleton those tests used to read.
+var builtTestApp = newTestApp(video.Video{})
+
+// --- App.Chat seam ---
 //
-// These tests exercise the new App.IRC injection point introduced alongside
-// the legacy sayFn-based captureSay() helper. Pick a command that's been
-// migrated to a.IRC.Say(...) and assert via a recordingIRC. Once all command
-// callsites flow through a.IRC, the captureSay()-based tests above can be
-// rewritten in this shape and the global Say()/sayFn collapsed.
+// These tests assert on chat output through the App.Chat injection point by
+// installing a recordingChat directly. captureSay() above is a thin wrapper over
+// the same seam for the common "read the output text" case.
 
 func TestHelpCmd_SaysSomething_ViaIRC(t *testing.T) {
 	app := newTestApp(video.Video{})
-	rec := &recordingIRC{}
-	app.IRC = rec
+	rec := &recordingChat{}
+	app.Chat = rec
 
 	app.helpCmd(context.Background(), newTestUser("viewer1"), nil)
 
@@ -85,8 +94,8 @@ func TestHelpCmd_SaysSomething_ViaIRC(t *testing.T) {
 
 func TestUptimeCmd_SaysRunningFor_ViaIRC(t *testing.T) {
 	app := newTestApp(video.Video{})
-	rec := &recordingIRC{}
-	app.IRC = rec
+	rec := &recordingChat{}
+	app.Chat = rec
 	Uptime = time.Now().Add(-5 * time.Minute)
 
 	app.uptimeCmd(context.Background(), newTestUser("viewer1"), nil)
@@ -101,8 +110,8 @@ func TestUptimeCmd_SaysRunningFor_ViaIRC(t *testing.T) {
 
 func TestKilometresCmd_SaysViaIRC(t *testing.T) {
 	app := newTestApp(video.Video{})
-	rec := &recordingIRC{}
-	app.IRC = rec
+	rec := &recordingChat{}
+	app.Chat = rec
 
 	user := &users.User{Username: "viewer1", Miles: 10}
 	app.kilometresCmd(context.Background(), user, nil)
@@ -121,8 +130,8 @@ func TestKilometresCmd_SaysViaIRC(t *testing.T) {
 
 func TestHelloCmd_GreetsNewViewer_ViaIRC(t *testing.T) {
 	app := newTestApp(video.Video{})
-	rec := &recordingIRC{}
-	app.IRC = rec
+	rec := &recordingChat{}
+	app.Chat = rec
 	lastHelloTime = time.Time{} // clear rate limiter
 
 	app.helloCmd(context.Background(), newTestUser("newviewer"), nil)
@@ -140,8 +149,8 @@ func TestDateCmd_SaysViaIRC(t *testing.T) {
 	date := time.Date(2019, 6, 15, 18, 30, 0, 0, time.UTC)
 	vid := newTestVideo("Colorado", 39.5, -105.0, date)
 	app := newTestApp(vid)
-	rec := &recordingIRC{}
-	app.IRC = rec
+	rec := &recordingChat{}
+	app.Chat = rec
 
 	app.dateCmd(context.Background(), newTestUser("viewer1"), nil)
 
@@ -160,8 +169,8 @@ func TestTimeCmd_SaysViaIRC(t *testing.T) {
 	date := time.Date(2019, 6, 15, 18, 30, 0, 0, time.UTC)
 	vid := newTestVideo("Colorado", 39.5, -105.0, date)
 	app := newTestApp(vid)
-	rec := &recordingIRC{}
-	app.IRC = rec
+	rec := &recordingChat{}
+	app.Chat = rec
 
 	app.timeCmd(context.Background(), newTestUser("viewer1"), nil)
 
@@ -175,8 +184,8 @@ func TestTimeCmd_SaysViaIRC(t *testing.T) {
 
 func TestReportCmd_AcksViaIRC(t *testing.T) {
 	app := newTestApp(video.Video{})
-	rec := &recordingIRC{}
-	app.IRC = rec
+	rec := &recordingChat{}
+	app.Chat = rec
 
 	app.reportCmd(context.Background(), newTestUser("viewer1"), []string{"the", "bot", "is", "broken"})
 
@@ -190,8 +199,8 @@ func TestReportCmd_AcksViaIRC(t *testing.T) {
 
 func TestBonusMilesCmd_SaysViaIRC(t *testing.T) {
 	app := newTestApp(video.Video{})
-	rec := &recordingIRC{}
-	app.IRC = rec
+	rec := &recordingChat{}
+	app.Chat = rec
 
 	// BonusMiles is computed from user state; a zero user yields a stable string.
 	app.bonusMilesCmd(context.Background(), newTestUser("viewer1"), nil)
@@ -224,9 +233,6 @@ func TestMilesCmd_OtherUser_QueriesSessionsFind(t *testing.T) {
 	rec := &recordingSessions{}
 	app.Sessions = rec
 
-	_, restore := captureSay(t)
-	defer restore()
-
 	app.milesCmd(context.Background(), newTestUser("caller"), []string{"viewer1"})
 
 	if len(rec.Calls) != 1 || rec.Calls[0] != `Find("viewer1")` {
@@ -243,8 +249,7 @@ func TestLifetimeMilesLeaderboardCmd_ReadsSessions(t *testing.T) {
 	}
 	app.Sessions = rec
 
-	out, restore := captureSay(t)
-	defer restore()
+	out := captureSay(t, app)
 
 	app.lifetimeMilesLeaderboardCmd(context.Background(), newTestUser("caller"), nil)
 
@@ -276,8 +281,7 @@ func TestRecordingSessions_ShutdownIsRecorded(t *testing.T) {
 
 func TestHelpCmd_SaysSomething(t *testing.T) {
 	app := newTestApp(video.Video{})
-	out, restore := captureSay(t)
-	defer restore()
+	out := captureSay(t, app)
 
 	app.helpCmd(context.Background(), newTestUser("viewer1"), nil)
 
@@ -288,8 +292,7 @@ func TestHelpCmd_SaysSomething(t *testing.T) {
 
 func TestHelpCmd_MessageContainsCount(t *testing.T) {
 	app := newTestApp(video.Video{})
-	out, restore := captureSay(t)
-	defer restore()
+	out := captureSay(t, app)
 
 	app.helpCmd(context.Background(), newTestUser("viewer1"), nil)
 
@@ -301,8 +304,7 @@ func TestHelpCmd_MessageContainsCount(t *testing.T) {
 
 func TestHelpCmd_AdvancesIndex(t *testing.T) {
 	app := newTestApp(video.Video{})
-	out, restore := captureSay(t)
-	defer restore()
+	out := captureSay(t, app)
 
 	app.helpCmd(context.Background(), newTestUser("viewer1"), nil)
 	first := out()
@@ -320,8 +322,7 @@ func TestHelpCmd_AdvancesIndex(t *testing.T) {
 func TestUptimeCmd_SaysRunningFor(t *testing.T) {
 	app := newTestApp(video.Video{})
 	Uptime = time.Now().Add(-5 * time.Minute)
-	out, restore := captureSay(t)
-	defer restore()
+	out := captureSay(t, app)
 
 	app.uptimeCmd(context.Background(), newTestUser("viewer1"), nil)
 
@@ -335,8 +336,7 @@ func TestUptimeCmd_SaysRunningFor(t *testing.T) {
 func TestHelloCmd_GreetsNewViewer(t *testing.T) {
 	app := newTestApp(video.Video{})
 	lastHelloTime = time.Time{} // clear rate limiter
-	out, restore := captureSay(t)
-	defer restore()
+	out := captureSay(t, app)
 
 	// a fresh user with 0 miles gets the newcomer hint appended
 	app.helloCmd(context.Background(), newTestUser("newviewer"), nil)
@@ -353,8 +353,7 @@ func TestHelloCmd_GreetsNewViewer(t *testing.T) {
 func TestHelloCmd_RateLimitSilencesSecondCall(t *testing.T) {
 	app := newTestApp(video.Video{})
 	lastHelloTime = time.Now() // simulate a very recent greeting
-	out, restore := captureSay(t)
-	defer restore()
+	out := captureSay(t, app)
 
 	app.helloCmd(context.Background(), newTestUser("viewer1"), nil)
 
@@ -366,8 +365,7 @@ func TestHelloCmd_RateLimitSilencesSecondCall(t *testing.T) {
 func TestHelloCmd_IgnoresMessageWithParams(t *testing.T) {
 	app := newTestApp(video.Video{})
 	lastHelloTime = time.Time{} // not rate limited
-	out, restore := captureSay(t)
-	defer restore()
+	out := captureSay(t, app)
 
 	// "hello world" — has params so the bot stays quiet
 	app.helloCmd(context.Background(), newTestUser("viewer1"), []string{"world"})
@@ -381,8 +379,7 @@ func TestHelloCmd_IgnoresMessageWithParams(t *testing.T) {
 
 func TestKilometresCmd_ConvertsCorrectly(t *testing.T) {
 	app := newTestApp(video.Video{})
-	out, restore := captureSay(t)
-	defer restore()
+	out := captureSay(t, app)
 
 	user := &users.User{Username: "viewer1", Miles: 10}
 	app.kilometresCmd(context.Background(), user, nil)
@@ -395,8 +392,7 @@ func TestKilometresCmd_ConvertsCorrectly(t *testing.T) {
 
 func TestKilometresCmd_IncludesUsername(t *testing.T) {
 	app := newTestApp(video.Video{})
-	out, restore := captureSay(t)
-	defer restore()
+	out := captureSay(t, app)
 
 	user := &users.User{Username: "testviewer", Miles: 5}
 	app.kilometresCmd(context.Background(), user, nil)
@@ -408,8 +404,7 @@ func TestKilometresCmd_IncludesUsername(t *testing.T) {
 
 func TestKilometresCmd_ZeroMiles(t *testing.T) {
 	app := newTestApp(video.Video{})
-	out, restore := captureSay(t)
-	defer restore()
+	out := captureSay(t, app)
 
 	user := &users.User{Username: "newbie", Miles: 0}
 	app.kilometresCmd(context.Background(), user, nil)
@@ -426,8 +421,7 @@ func TestVersionCmd_UsesCachedVersion(t *testing.T) {
 	currentVersion = "v1.2.3-test"
 	defer func() { currentVersion = "" }()
 
-	out, restore := captureSay(t)
-	defer restore()
+	out := captureSay(t, app)
 
 	app.versionCmd(context.Background(), newTestUser("viewer1"), nil)
 
@@ -441,8 +435,7 @@ func TestVersionCmd_MessageFormat(t *testing.T) {
 	currentVersion = "v1.2.3-test"
 	defer func() { currentVersion = "" }()
 
-	out, restore := captureSay(t)
-	defer restore()
+	out := captureSay(t, app)
 
 	app.versionCmd(context.Background(), newTestUser("viewer1"), nil)
 
@@ -468,8 +461,7 @@ func TestVersionCmd_ReadsFromVersionFile(t *testing.T) {
 		currentVersion = ""
 	}()
 
-	out, restore := captureSay(t)
-	defer restore()
+	out := captureSay(t, app)
 
 	app.versionCmd(context.Background(), newTestUser("viewer1"), nil)
 
@@ -489,8 +481,7 @@ func TestVersionCmd_FallsBackToDevWhenFileMissing(t *testing.T) {
 		currentVersion = ""
 	}()
 
-	out, restore := captureSay(t)
-	defer restore()
+	out := captureSay(t, app)
 
 	app.versionCmd(context.Background(), newTestUser("viewer1"), nil)
 
@@ -516,8 +507,7 @@ func TestVersionCmd_FallsBackToDevWhenFileEmpty(t *testing.T) {
 		currentVersion = ""
 	}()
 
-	out, restore := captureSay(t)
-	defer restore()
+	out := captureSay(t, app)
 
 	app.versionCmd(context.Background(), newTestUser("viewer1"), nil)
 
@@ -531,8 +521,7 @@ func TestVersionCmd_FallsBackToDevWhenFileEmpty(t *testing.T) {
 func TestStateCmd_SaysCurrentState(t *testing.T) {
 	vid := newTestVideo("Colorado", 39.5, -105.0, time.Now())
 	app := newTestApp(vid)
-	out, restore := captureSay(t)
-	defer restore()
+	out := captureSay(t, app)
 
 	app.stateCmd(context.Background(), newTestUser("viewer1"), nil)
 
@@ -544,8 +533,7 @@ func TestStateCmd_SaysCurrentState(t *testing.T) {
 func TestStateCmd_MessageFormat(t *testing.T) {
 	vid := newTestVideo("Utah", 40.0, -111.0, time.Now())
 	app := newTestApp(vid)
-	out, restore := captureSay(t)
-	defer restore()
+	out := captureSay(t, app)
 
 	app.stateCmd(context.Background(), newTestUser("viewer1"), nil)
 
@@ -559,9 +547,6 @@ func TestStateCmd_DrivesShowFlagOverlay(t *testing.T) {
 	app := newTestApp(vid)
 	rec := &recordingOnscreens{}
 	app.Onscreens = rec
-
-	_, restore := captureSay(t)
-	defer restore()
 
 	app.stateCmd(context.Background(), newTestUser("viewer1"), nil)
 
@@ -577,9 +562,6 @@ func TestFlagCmd_DrivesShowFlagOverlay(t *testing.T) {
 	rec := &recordingOnscreens{}
 	app.Onscreens = rec
 
-	_, restore := captureSay(t)
-	defer restore()
-
 	app.flagCmd(context.Background(), newTestUser("viewer1"), nil)
 
 	if len(rec.Calls) != 1 || rec.Calls[0] != "ShowFlag(10s)" {
@@ -589,8 +571,7 @@ func TestFlagCmd_DrivesShowFlagOverlay(t *testing.T) {
 
 func TestFlagCmd_DoesNotSayInChat(t *testing.T) {
 	app := newTestApp(video.Video{})
-	out, restore := captureSay(t)
-	defer restore()
+	out := captureSay(t, app)
 
 	app.flagCmd(context.Background(), newTestUser("viewer1"), nil)
 
@@ -605,8 +586,7 @@ func TestDateCmd_SaysThisMomentWas(t *testing.T) {
 	date := time.Date(2019, 6, 15, 18, 30, 0, 0, time.UTC)
 	vid := newTestVideo("Colorado", 39.5, -105.0, date)
 	app := newTestApp(vid)
-	out, restore := captureSay(t)
-	defer restore()
+	out := captureSay(t, app)
 
 	app.dateCmd(context.Background(), newTestUser("viewer1"), nil)
 
@@ -620,8 +600,7 @@ func TestDateCmd_IncludesYear(t *testing.T) {
 	date := time.Date(2019, 6, 15, 18, 30, 0, 0, time.UTC)
 	vid := newTestVideo("Colorado", 39.5, -105.0, date)
 	app := newTestApp(vid)
-	out, restore := captureSay(t)
-	defer restore()
+	out := captureSay(t, app)
 
 	app.dateCmd(context.Background(), newTestUser("viewer1"), nil)
 
@@ -636,8 +615,7 @@ func TestTimeCmd_SaysThisMomentWas(t *testing.T) {
 	date := time.Date(2019, 6, 15, 18, 30, 0, 0, time.UTC)
 	vid := newTestVideo("Colorado", 39.5, -105.0, date)
 	app := newTestApp(vid)
-	out, restore := captureSay(t)
-	defer restore()
+	out := captureSay(t, app)
 
 	app.timeCmd(context.Background(), newTestUser("viewer1"), nil)
 
@@ -650,8 +628,7 @@ func TestTimeCmd_IncludesAMPM(t *testing.T) {
 	date := time.Date(2019, 6, 15, 18, 30, 0, 0, time.UTC)
 	vid := newTestVideo("Colorado", 39.5, -105.0, date)
 	app := newTestApp(vid)
-	out, restore := captureSay(t)
-	defer restore()
+	out := captureSay(t, app)
 
 	app.timeCmd(context.Background(), newTestUser("viewer1"), nil)
 
@@ -668,8 +645,7 @@ func TestSunsetCmd_SaysSunset(t *testing.T) {
 	date := time.Date(2019, 6, 15, 20, 0, 0, 0, time.UTC)
 	vid := newTestVideo("Colorado", 39.5, -105.0, date)
 	app := newTestApp(vid)
-	out, restore := captureSay(t)
-	defer restore()
+	out := captureSay(t, app)
 
 	app.sunsetCmd(context.Background(), newTestUser("viewer1"), nil)
 
@@ -683,8 +659,7 @@ func TestSunsetCmd_SaysSunset(t *testing.T) {
 func TestGuessCmd_NoParams_PromptsGuess(t *testing.T) {
 	vid := newTestVideo("Colorado", 39.5, -105.0, time.Now())
 	app := newTestApp(vid)
-	out, restore := captureSay(t)
-	defer restore()
+	out := captureSay(t, app)
 
 	app.guessCmd(context.Background(), newTestUser("viewer1"), nil)
 
@@ -696,8 +671,7 @@ func TestGuessCmd_NoParams_PromptsGuess(t *testing.T) {
 func TestGuessCmd_WrongGuess_SaysTryAgain(t *testing.T) {
 	vid := newTestVideo("Colorado", 39.5, -105.0, time.Now())
 	app := newTestApp(vid)
-	out, restore := captureSay(t)
-	defer restore()
+	out := captureSay(t, app)
 
 	// Wyoming != Colorado
 	app.guessCmd(context.Background(), newTestUser("viewer1"), []string{"Wyoming"})
@@ -737,8 +711,7 @@ func TestGuessCmd_CorrectGuess_DrivesOverlayAndPlayback(t *testing.T) {
 	expectAddToScoreChain(mock)
 	expectAddToScoreChain(mock)
 
-	out, restore := captureSay(t)
-	defer restore()
+	out := captureSay(t, app)
 
 	app.guessCmd(context.Background(), newTestUser("viewer1"), []string{"Colorado"})
 
@@ -779,8 +752,7 @@ func TestGuessCmd_CorrectGuess_FullStateName(t *testing.T) {
 	expectAddToScoreChain(mock)
 	expectAddToScoreChain(mock)
 
-	out, restore := captureSay(t)
-	defer restore()
+	out := captureSay(t, app)
 
 	app.guessCmd(context.Background(), newTestUser("viewer1"), []string{"Massachusetts"})
 
@@ -801,8 +773,7 @@ func TestGuessCmd_CorrectGuess_TwoLetterCode(t *testing.T) {
 	expectAddToScoreChain(mock)
 	expectAddToScoreChain(mock)
 
-	out, restore := captureSay(t)
-	defer restore()
+	out := captureSay(t, app)
 
 	app.guessCmd(context.Background(), newTestUser("viewer1"), []string{"CA"})
 
@@ -821,8 +792,7 @@ const adminUser = "test"
 
 func TestMiddleCmd_NonAdminIsSilent(t *testing.T) {
 	app := newTestApp(video.Video{})
-	out, restore := captureSay(t)
-	defer restore()
+	out := captureSay(t, app)
 
 	app.middleCmd(context.Background(), newTestUser("viewer1"), []string{"hello"})
 
@@ -833,8 +803,7 @@ func TestMiddleCmd_NonAdminIsSilent(t *testing.T) {
 
 func TestMiddleCmd_NoParams_PromptsForText(t *testing.T) {
 	app := newTestApp(video.Video{})
-	out, restore := captureSay(t)
-	defer restore()
+	out := captureSay(t, app)
 
 	app.middleCmd(context.Background(), newTestUser(adminUser), nil)
 
@@ -848,8 +817,7 @@ func TestMiddleCmd_Hide_DrivesHideOverlay(t *testing.T) {
 	rec := &recordingOnscreens{}
 	app.Onscreens = rec
 
-	out, restore := captureSay(t)
-	defer restore()
+	out := captureSay(t, app)
 
 	app.middleCmd(context.Background(), newTestUser(adminUser), []string{"hide"})
 
@@ -867,9 +835,6 @@ func TestMiddleCmd_Hide_CaseInsensitive(t *testing.T) {
 	rec := &recordingOnscreens{}
 	app.Onscreens = rec
 
-	_, restore := captureSay(t)
-	defer restore()
-
 	app.middleCmd(context.Background(), newTestUser(adminUser), []string{"HIDE"})
 
 	if len(rec.Calls) != 1 || rec.Calls[0] != "HideMiddleText()" {
@@ -881,9 +846,6 @@ func TestMiddleCmd_Text_DrivesShowOverlay(t *testing.T) {
 	app := newTestApp(video.Video{})
 	rec := &recordingOnscreens{}
 	app.Onscreens = rec
-
-	_, restore := captureSay(t)
-	defer restore()
 
 	// Multiple words get joined with a space into the overlay text.
 	app.middleCmd(context.Background(), newTestUser(adminUser), []string{"hello", "everyone"})
@@ -897,9 +859,6 @@ func TestMiddleCmd_NonAdmin_DoesNotDriveOverlay(t *testing.T) {
 	app := newTestApp(video.Video{})
 	rec := &recordingOnscreens{}
 	app.Onscreens = rec
-
-	_, restore := captureSay(t)
-	defer restore()
 
 	// A non-admin's params should be ignored — no chat, no overlay call.
 	app.middleCmd(context.Background(), newTestUser("viewer1"), []string{"hide"})
@@ -923,8 +882,7 @@ func TestLifetimeMilesLeaderboardCmd_Empty(t *testing.T) {
 	// noopSessions's LifetimeLeaderboard returns nil — the test asserts
 	// the empty-leaderboard header still renders cleanly.
 
-	out, restore := captureSay(t)
-	defer restore()
+	out := captureSay(t, app)
 
 	app.lifetimeMilesLeaderboardCmd(context.Background(), newTestUser("viewer1"), nil)
 
@@ -947,8 +905,7 @@ func TestLifetimeMilesLeaderboardCmd_WithUsers(t *testing.T) {
 	}
 	app.Sessions = recSessions
 
-	out, restore := captureSay(t)
-	defer restore()
+	out := captureSay(t, app)
 
 	app.lifetimeMilesLeaderboardCmd(context.Background(), newTestUser("caller"), nil)
 
@@ -988,8 +945,7 @@ func TestMonthlyMilesLeaderboardCmd_RendersTopUsers(t *testing.T) {
 	mock.ExpectQuery(`SELECT users\.username, scores\.value FROM "scores"`).
 		WillReturnRows(rows)
 
-	out, restore := captureSay(t)
-	defer restore()
+	out := captureSay(t, app)
 
 	app.monthlyMilesLeaderboardCmd(context.Background(), newTestUser("caller"), nil)
 
@@ -1021,8 +977,7 @@ func TestMonthlyGuessLeaderboardCmd_Empty_SaysNoneYet(t *testing.T) {
 	mock.ExpectQuery(`SELECT users\.username, scores\.value FROM "scores"`).
 		WillReturnRows(rows)
 
-	out, restore := captureSay(t)
-	defer restore()
+	out := captureSay(t, app)
 
 	app.monthlyGuessLeaderboardCmd(context.Background(), newTestUser("caller"), nil)
 
@@ -1049,8 +1004,7 @@ func TestMonthlyGuessLeaderboardCmd_WithGuesses_StripsDecimals(t *testing.T) {
 	mock.ExpectQuery(`SELECT users\.username, scores\.value FROM "scores"`).
 		WillReturnRows(rows)
 
-	out, restore := captureSay(t)
-	defer restore()
+	out := captureSay(t, app)
 
 	app.monthlyGuessLeaderboardCmd(context.Background(), newTestUser("caller"), nil)
 
@@ -1083,8 +1037,7 @@ func TestMonthlyGuessLeaderboardCmd_FiltersZeroScorers(t *testing.T) {
 	mock.ExpectQuery(`SELECT users\.username, scores\.value FROM "scores"`).
 		WillReturnRows(rows)
 
-	out, restore := captureSay(t)
-	defer restore()
+	out := captureSay(t, app)
 
 	app.monthlyGuessLeaderboardCmd(context.Background(), newTestUser("caller"), nil)
 
@@ -1121,8 +1074,7 @@ func TestMonthlyGuessLeaderboardCmd_AllZero_SaysNoneYetAndSkipsOverlay(t *testin
 	mock.ExpectQuery(`SELECT users\.username, scores\.value FROM "scores"`).
 		WillReturnRows(rows)
 
-	out, restore := captureSay(t)
-	defer restore()
+	out := captureSay(t, app)
 
 	app.monthlyGuessLeaderboardCmd(context.Background(), newTestUser("caller"), nil)
 
@@ -1152,8 +1104,7 @@ func TestMilesCmd_OtherUser_NotInDB(t *testing.T) {
 	rec := &recordingSessions{}
 	app.Sessions = rec
 
-	out, restore := captureSay(t)
-	defer restore()
+	out := captureSay(t, app)
 
 	app.milesCmd(context.Background(), newTestUser("caller"), []string{"ghost"})
 
@@ -1166,20 +1117,12 @@ func TestMilesCmd_OtherUser_NotInDB(t *testing.T) {
 }
 
 func TestMilesCmd_Self_WithMiles(t *testing.T) {
-	mock := installMockDB(t)
 	app := newTestApp(video.Video{})
+	// Stage the miles via the Sessions seam; the GetScore math behind
+	// CurrentMonthlyMiles is covered in pkg/users / pkg/scoreboards.
+	app.Sessions = &recordingSessions{Miles: 50.0, MonthlyMiles: 8.0}
 
-	mock.ExpectQuery(`SELECT id FROM users WHERE username = `).
-		WithArgs("viewer1").
-		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(42))
-	mock.ExpectQuery(`SELECT \* FROM "scoreboards" WHERE`).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(7, "miles_2026_05"))
-	mock.ExpectQuery(`SELECT \* FROM "scores" WHERE`).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "scoreboard_id", "value"}).
-			AddRow(99, 42, 7, 8.0))
-
-	out, restore := captureSay(t)
-	defer restore()
+	out := captureSay(t, app)
 
 	user := &users.User{Username: "viewer1", Miles: 50.0}
 	app.milesCmd(context.Background(), user, nil)
@@ -1191,27 +1134,14 @@ func TestMilesCmd_Self_WithMiles(t *testing.T) {
 	if !strings.Contains(msg, "(50mi total)") {
 		t.Errorf("expected lifetime total in self-lookup, got %q", msg)
 	}
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Error(err)
-	}
 }
 
 func TestMilesCmd_Self_NewcomerHint(t *testing.T) {
-	mock := installMockDB(t)
 	app := newTestApp(video.Video{})
-
 	// Brand-new user: monthly = 0, lifetime = 0 → triggers both newcomer hints.
-	mock.ExpectQuery(`SELECT id FROM users WHERE username = `).
-		WithArgs("newbie").
-		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(99))
-	mock.ExpectQuery(`SELECT \* FROM "scoreboards" WHERE`).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(7, "miles_2026_05"))
-	mock.ExpectQuery(`SELECT \* FROM "scores" WHERE`).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "scoreboard_id", "value"}).
-			AddRow(100, 99, 7, 0.0))
+	app.Sessions = &recordingSessions{Miles: 0.0, MonthlyMiles: 0.0}
 
-	out, restore := captureSay(t)
-	defer restore()
+	out := captureSay(t, app)
 
 	user := &users.User{Username: "newbie", Miles: 0.0}
 	app.milesCmd(context.Background(), user, nil)
@@ -1223,38 +1153,21 @@ func TestMilesCmd_Self_NewcomerHint(t *testing.T) {
 	if !strings.Contains(msg, "takes a bit for me to notice you") {
 		t.Errorf("expected zero-miles-specific hint, got %q", msg)
 	}
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Error(err)
-	}
 }
 
 func TestMilesCmd_OtherUser_Found(t *testing.T) {
-	mock := installMockDB(t)
 	app := newTestApp(video.Video{})
 
-	// Stage Sessions.Find to return a known user (replaces the old
-	// sqlmock SELECT * FROM users expectation).
+	// Stage Sessions.Find to return a known user, plus the miles the seam
+	// reports for them (the GetScore math is covered in pkg/users).
 	rec := &recordingSessions{
-		FindResult: users.User{ID: 42, Username: "viewer1", Miles: 120.0},
+		FindResult:   users.User{ID: 42, Username: "viewer1", Miles: 120.0},
+		Miles:        120.0,
+		MonthlyMiles: 15.5,
 	}
 	app.Sessions = rec
 
-	// 1. scoreboards.getUserIDByName — raw SELECT id by username
-	mock.ExpectQuery(`SELECT id FROM users WHERE username = `).
-		WithArgs("viewer1").
-		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(42))
-
-	// 2. scoreboards.findOrCreateScoreboard — FirstOrCreate SELECT
-	mock.ExpectQuery(`SELECT \* FROM "scoreboards" WHERE`).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(7, "miles_2026_05"))
-
-	// 3. scoreboards.findOrCreateScore — FirstOrCreate SELECT for the score row
-	mock.ExpectQuery(`SELECT \* FROM "scores" WHERE`).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "scoreboard_id", "value"}).
-			AddRow(99, 42, 7, 15.5))
-
-	out, restore := captureSay(t)
-	defer restore()
+	out := captureSay(t, app)
 
 	app.milesCmd(context.Background(), newTestUser("caller"), []string{"viewer1"})
 
@@ -1266,11 +1179,11 @@ func TestMilesCmd_OtherUser_Found(t *testing.T) {
 	if !strings.Contains(msg, "(120mi total)") {
 		t.Errorf("expected lifetime miles in parens, got %q", msg)
 	}
-	if len(rec.Calls) != 1 || rec.Calls[0] != `Find("viewer1")` {
-		t.Errorf("expected Sessions.Find(\"viewer1\") call, got %v", rec.Calls)
-	}
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Error(err)
+	// the other-user path looks the user up via Sessions.Find, then reads
+	// their miles through the same seam.
+	want := []string{`Find("viewer1")`, `CurrentMiles("viewer1")`, `CurrentMonthlyMiles("viewer1")`}
+	if !slices.Equal(rec.Calls, want) {
+		t.Errorf("expected %v, got %v", want, rec.Calls)
 	}
 }
 
@@ -1282,8 +1195,7 @@ func TestMilesCmd_OtherUser_StripsAtSign(t *testing.T) {
 	rec := &recordingSessions{}
 	app.Sessions = rec
 
-	out, restore := captureSay(t)
-	defer restore()
+	out := captureSay(t, app)
 
 	app.milesCmd(context.Background(), newTestUser("caller"), []string{"@ghost"})
 

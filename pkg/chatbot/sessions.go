@@ -8,24 +8,31 @@ import (
 
 // Sessions is the subset of the pkg/users surface that chatbot commands
 // depend on at command-time (user lookups, lifetime-leaderboard reads,
-// graceful shutdown of in-memory session state). Tests inject a fake;
-// production uses the package-backed realSessions adapter wired in
-// defaultApp. Mirrors the Onscreens/VLC/Video/IRC injection pattern.
+// miles computations, graceful shutdown of in-memory session state). Tests
+// inject a fake; production uses the realSessions adapter built by
+// NewSessionsAdapter. Mirrors the Onscreens/VLC/Video/IRC injection pattern.
 //
-// The IRC-side session lifecycle (LoginIfNecessary / LogoutIfNecessary)
-// is intentionally NOT on this interface — those are called from the
-// free-function handlers in handlers.go (PrivateMessage / UserJoin /
-// UserPart), which aren't App methods yet. They'll move onto App (and
-// onto this interface) in a follow-up.
+// The IRC-side session lifecycle (LoginIfNecessary / LogoutIfNecessary) and the
+// follower/subscriber + login-count reads are intentionally NOT on this
+// interface — they're called from the inbound handlers (HandleMessage / Join /
+// Part) and dispatch's access check, which reach the concrete *users.Sessions
+// through App.UserSessions directly. Keeping them off this interface keeps the
+// command-time fake surface (noopSessions / recordingSessions) minimal.
 type Sessions interface {
 	// Find looks up a user by username. Returns User{ID: 0} for an
 	// unknown user (mirrors pkg/users.Find's existing contract).
 	Find(ctx context.Context, username string) users.User
 	// LifetimeLeaderboard returns the current snapshot of the
 	// lifetime-miles leaderboard, a slice of [username, miles] pairs
-	// hydrated at startup by users.InitLeaderboard. Read-only from the
+	// hydrated at startup by InitLeaderboard. Read-only from the
 	// chatbot's perspective.
 	LifetimeLeaderboard() [][]string
+	// CurrentMiles / CurrentMonthlyMiles / BonusMiles compute a user's miles
+	// including the live session bonus, which depends on the session's login
+	// map — hence they live on Sessions and take the User.
+	CurrentMiles(ctx context.Context, u users.User) float32
+	CurrentMonthlyMiles(ctx context.Context, u users.User) float32
+	BonusMiles(u users.User) float32
 	// Shutdown logs out every in-memory session, flushing each user's
 	// state to the DB. Called by !shutdown before the process exits.
 	Shutdown(ctx context.Context)
@@ -34,21 +41,60 @@ type Sessions interface {
 	SetBot(ctx context.Context, username string, isBot bool) error
 }
 
-// realSessions delegates to pkg/users.
-type realSessions struct{}
+// realSessions delegates to its *users.Sessions, plus pkg/users' standalone DB
+// helper (Find, which is not session state). cmd/tripbot builds it around the
+// process-wide *users.Sessions via NewSessionsAdapter so commands read the same
+// session state the IRC handlers mutate. s is nil in New()'s default adapter
+// until cmd assigns App.Sessions, so the nil guards below cover that brief
+// startup window. Tests inject their own Sessions fake rather than realSessions,
+// so the guards only ever fire pre-install.
+type realSessions struct{ s *users.Sessions }
 
-func (realSessions) Find(ctx context.Context, username string) users.User {
+// NewSessionsAdapter builds the production Sessions adapter around s. cmd/tripbot
+// assigns the result onto App.Sessions once Sessions is constructed.
+func NewSessionsAdapter(s *users.Sessions) Sessions { return realSessions{s: s} }
+
+func (r realSessions) Find(ctx context.Context, username string) users.User {
 	return users.Find(ctx, username)
 }
 
-func (realSessions) LifetimeLeaderboard() [][]string {
-	return users.LifetimeMilesLeaderboard
+func (r realSessions) LifetimeLeaderboard() [][]string {
+	if r.s == nil {
+		return nil
+	}
+	return r.s.LifetimeLeaderboard()
 }
 
-func (realSessions) Shutdown(ctx context.Context) {
-	users.Shutdown(ctx)
+func (r realSessions) CurrentMiles(ctx context.Context, u users.User) float32 {
+	if r.s == nil {
+		return u.Miles
+	}
+	return r.s.CurrentMiles(ctx, u)
 }
 
-func (realSessions) SetBot(ctx context.Context, username string, isBot bool) error {
-	return users.SetBot(ctx, username, isBot)
+func (r realSessions) CurrentMonthlyMiles(ctx context.Context, u users.User) float32 {
+	if r.s == nil {
+		return 0
+	}
+	return r.s.CurrentMonthlyMiles(ctx, u)
+}
+
+func (r realSessions) BonusMiles(u users.User) float32 {
+	if r.s == nil {
+		return 0
+	}
+	return r.s.BonusMiles(u)
+}
+
+func (r realSessions) Shutdown(ctx context.Context) {
+	if r.s != nil {
+		r.s.Shutdown(ctx)
+	}
+}
+
+func (r realSessions) SetBot(ctx context.Context, username string, isBot bool) error {
+	if r.s == nil {
+		return nil
+	}
+	return r.s.SetBot(ctx, username, isBot)
 }

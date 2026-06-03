@@ -1,0 +1,39 @@
+{
+  "_comment": "Anti-drift contract between tripbot (consumer, source of truth) and infra/cdk8s (producer). Canonical service names, ports, and env-var keys. Generated from Go constants in tripbot's pkg/contract via `go generate ./pkg/contract`; the infra side syncs from it via `task contract:sync`. Edit pkg/contract/contract.go and regenerate — do not hand-edit this file.",
+  "services": {
+    "tripbot": "tripbot",
+    "vlc_server": "vlc-server",
+    "onscreens_server": "onscreens-server",
+    "obs_twitch": "obs-twitch",
+    "obs_youtube": "obs-youtube",
+    "tripbot_twitch": "tripbot-twitch",
+    "tripbot_youtube": "tripbot-youtube",
+    "vlc_twitch": "vlc-twitch",
+    "vlc_youtube": "vlc-youtube",
+    "onscreens_twitch": "onscreens-twitch",
+    "onscreens_youtube": "onscreens-youtube",
+    "postgres": "postgres"
+  },
+  "ports": {
+    "obs_vnc": 5900,
+    "obs_websocket": 4455,
+    "obs_novnc": 6080,
+    "obs_server": 8080,
+    "vlc_http": 8080,
+    "vlc_onscreens_legacy": 8081,
+    "vlc_rtsp": 8554,
+    "vlc_vnc": 5900,
+    "onscreens_http": 8080,
+    "tripbot_http": 8080,
+    "postgres": 5432
+  },
+  "env_keys": {
+    "obs_websocket_addr": "OBS_WEBSOCKET_ADDR",
+    "obs_server_host": "OBS_SERVER_HOST",
+    "vlc_server_host": "VLC_SERVER_HOST",
+    "onscreens_server_host": "ONSCREENS_SERVER_HOST",
+    "database_host": "DATABASE_HOST",
+    "stream_platform": "STREAM_PLATFORM",
+    "stream_key": "STREAM_KEY"
+  }
+}
