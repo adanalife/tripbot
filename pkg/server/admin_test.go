@@ -3,8 +3,10 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -790,5 +792,172 @@ func TestAdminHandler_ChatEmptyPlaceholder(t *testing.T) {
 
 	if !strings.Contains(rec.Body.String(), "waiting for chat") {
 		t.Errorf("expected empty-chat placeholder when no history")
+	}
+}
+
+// fakeToggler is an in-memory FlagClient that also implements
+// feature.FlagToggler, so the admin toggle handler's write path can be
+// exercised without a database. SetEnabled mutates the in-memory flag and
+// records the call for assertions.
+type fakeToggler struct {
+	flags map[string]feature.Flag
+	calls []string // one "key=true"/"key=false" per SetEnabled
+}
+
+func newFakeToggler(flags map[string]feature.Flag) *fakeToggler {
+	if flags == nil {
+		flags = map[string]feature.Flag{}
+	}
+	return &fakeToggler{flags: flags}
+}
+
+func (f *fakeToggler) Bool(_ context.Context, key string, _ feature.EvalContext) bool {
+	return f.flags[key].Enabled
+}
+
+func (f *fakeToggler) Snapshot(_ context.Context) []feature.Flag {
+	out := make([]feature.Flag, 0, len(f.flags))
+	for _, fl := range f.flags {
+		out = append(out, fl)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Key < out[j].Key })
+	return out
+}
+
+func (f *fakeToggler) SetEnabled(_ context.Context, key string, enabled bool) error {
+	fl, ok := f.flags[key]
+	if !ok {
+		return fmt.Errorf("unknown flag %q", key)
+	}
+	fl.Enabled = enabled
+	f.flags[key] = fl
+	f.calls = append(f.calls, fmt.Sprintf("%s=%t", key, enabled))
+	return nil
+}
+
+func flagRouter(srv *Server) *mux.Router {
+	r := mux.NewRouter()
+	r.Handle("/admin/flags/{key}/{action}", http.HandlerFunc(srv.flagActionHandler)).Methods("POST")
+	return r
+}
+
+func TestFlagActionHandler_EnableTogglesAndSwapsRow(t *testing.T) {
+	srv := New()
+	tog := newFakeToggler(map[string]feature.Flag{
+		"chatbot.weather": {Key: "chatbot.weather", Description: "weather command", Enabled: false},
+	})
+	srv.SetFlagClient(tog)
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/flags/chatbot.weather/enable", nil)
+	rec := httptest.NewRecorder()
+	flagRouter(srv).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d, want 200; body %q", rec.Code, rec.Body.String())
+	}
+	if len(tog.calls) != 1 || tog.calls[0] != "chatbot.weather=true" {
+		t.Fatalf("SetEnabled calls = %v, want [chatbot.weather=true]", tog.calls)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `<code>chatbot.weather</code>`) {
+		t.Errorf("response should be the flag row; got %q", body)
+	}
+	// Now enabled, the swapped-in row offers the opposite (disable) action.
+	if !strings.Contains(body, `hx-post="/admin/flags/chatbot.weather/disable"`) {
+		t.Errorf("enabled row should now offer disable; got %q", body)
+	}
+	if !strings.Contains(body, `class="status">on<`) {
+		t.Errorf("row status should read on; got %q", body)
+	}
+	if !strings.Contains(body, "weather command") {
+		t.Errorf("row should carry the description back; got %q", body)
+	}
+}
+
+func TestFlagActionHandler_DisableTogglesOff(t *testing.T) {
+	srv := New()
+	tog := newFakeToggler(map[string]feature.Flag{
+		"chatbot.weather": {Key: "chatbot.weather", Description: "weather command", Enabled: true},
+	})
+	srv.SetFlagClient(tog)
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/flags/chatbot.weather/disable", nil)
+	rec := httptest.NewRecorder()
+	flagRouter(srv).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d, want 200; body %q", rec.Code, rec.Body.String())
+	}
+	if len(tog.calls) != 1 || tog.calls[0] != "chatbot.weather=false" {
+		t.Fatalf("SetEnabled calls = %v, want [chatbot.weather=false]", tog.calls)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `hx-post="/admin/flags/chatbot.weather/enable"`) {
+		t.Errorf("disabled row should now offer enable; got %q", body)
+	}
+	if !strings.Contains(body, `class="status">off<`) {
+		t.Errorf("row status should read off; got %q", body)
+	}
+}
+
+func TestFlagActionHandler_ReadOnlyClientIs503(t *testing.T) {
+	srv := New()
+	// The in-memory client has no write surface (doesn't implement FlagToggler).
+	srv.SetFlagClient(feature.NewInMemoryClient(map[string]feature.Flag{
+		"chatbot.weather": {Key: "chatbot.weather", Enabled: false},
+	}))
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/flags/chatbot.weather/enable", nil)
+	rec := httptest.NewRecorder()
+	flagRouter(srv).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status %d, want 503", rec.Code)
+	}
+}
+
+func TestFlagActionHandler_UnknownActionIs400(t *testing.T) {
+	srv := New()
+	srv.SetFlagClient(newFakeToggler(map[string]feature.Flag{
+		"chatbot.weather": {Key: "chatbot.weather", Enabled: false},
+	}))
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/flags/chatbot.weather/bogus", nil)
+	rec := httptest.NewRecorder()
+	flagRouter(srv).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status %d, want 400", rec.Code)
+	}
+}
+
+func TestFlagActionHandler_UnknownKeyIsBadGateway(t *testing.T) {
+	srv := New()
+	srv.SetFlagClient(newFakeToggler(nil)) // empty — every key unknown
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/flags/nope.missing/enable", nil)
+	rec := httptest.NewRecorder()
+	flagRouter(srv).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("status %d, want 502", rec.Code)
+	}
+}
+
+func TestAdminHandler_RendersToggleButtonsWhenClientWritable(t *testing.T) {
+	srv := New()
+	srv.SetTwitchConnected(true)
+	withNowPlaying(t, nowPlayingTrack{})
+	withReauth(t, nil)
+	withConf(t, func() { c.Conf.VlcServerHost = "" })
+	srv.SetFlagClient(newFakeToggler(map[string]feature.Flag{
+		"chatbot.weather": {Key: "chatbot.weather", Description: "weather command", Enabled: false},
+	}))
+
+	rec := httptest.NewRecorder()
+	srv.adminHandler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+
+	if !strings.Contains(rec.Body.String(), `hx-post="/admin/flags/chatbot.weather/enable"`) {
+		t.Errorf("writable client should render a toggle button in the flag row")
 	}
 }
