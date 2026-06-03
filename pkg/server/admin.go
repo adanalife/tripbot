@@ -554,8 +554,16 @@ func pingHealthy(ctx context.Context, rawURL string) bool {
 // neither appears here. Entries whose URL can't be derived are dropped.
 func gatherLinks() []navLink {
 	links := []navLink{}
-	if obs := tailnetServiceURL("obs"); obs != "" {
-		links = append(links, navLink{Label: "obs", URL: obs})
+	// Derive OBS's tailnet hostname from the *value* of OBS_SERVER_HOST, not a
+	// hardcoded "obs". The Tailscale operator exposes each Service at
+	// <service-name>-<env>.<tailnetBase>, and the Service is named whatever this
+	// env's config says — "obs" in prod, "obs-twitch" in stage post-rename — so
+	// reading the runtime host keeps the link resolving in both without a
+	// deploy-order hazard. See vault tripbot/TODO.md (config-driven admin panel).
+	if svc := hostServiceName(c.Conf.ObsServerHost); svc != "" {
+		if obs := tailnetServiceURL(svc); obs != "" {
+			links = append(links, navLink{Label: "obs", URL: obs})
+		}
 	}
 	links = append(links,
 		navLink{Label: "grafana", URL: grafanaURL},
@@ -621,6 +629,21 @@ func tailnetServiceURL(service string) string {
 		return ""
 	}
 	return "https://" + service + "-" + env + "." + tailnetBase
+}
+
+// hostServiceName returns the bare Kubernetes Service name from a host:port
+// config value such as OBS_SERVER_HOST / VLC_SERVER_HOST — "obs-twitch:8080" →
+// "obs-twitch", "obs" → "obs". It's how the admin panel addresses a sibling by
+// whatever name its Service actually carries in this env, rather than hardcoding
+// one. Returns "" for an empty input so the caller can drop the dependent link.
+func hostServiceName(hostPort string) string {
+	if hostPort == "" {
+		return ""
+	}
+	if host, _, err := net.SplitHostPort(hostPort); err == nil {
+		return host
+	}
+	return hostPort
 }
 
 // previewChannel returns the Twitch channel name the stream-preview embed
