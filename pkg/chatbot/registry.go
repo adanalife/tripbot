@@ -199,7 +199,7 @@ func (a *App) buildRegistry() []Command {
 		},
 		{
 			Trigger:        "!leaderboard",
-			Aliases:        []string{"!monthlyleaderboard", "!lb", "!mlb", "!leaderbord", "!ldb", "!ldbd"},
+			Aliases:        []string{"!monthlyleaderboard", "!lb", "!mlb", "!leaderbord", "!leaderborad", "!ldb", "!ldbd"},
 			Handler:        a.monthlyMilesLeaderboardCmd,
 			RequiresFollow: true,
 		},
