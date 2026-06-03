@@ -52,6 +52,22 @@ const (
 	ServicePostgres = "postgres"
 )
 
+// Per-platform service names. Each streaming platform runs its own full stack
+// (tripbot + vlc + onscreens + obs); the names carry the platform suffix so a
+// Service only ever selects its own platform's pods. obs has been per-platform
+// since #629; the cdk8s app factory brings the other three onto the same shape.
+// The bare ServiceTripbot/ServiceVLCServer/ServiceOnscreensServer above remain
+// the app-identity prefixes (Secret/ConfigMap names) — only the workload
+// Services carry the suffix.
+const (
+	ServiceTripbotTwitch    = "tripbot-twitch"
+	ServiceTripbotYouTube   = "tripbot-youtube"
+	ServiceVLCTwitch        = "vlc-twitch"
+	ServiceVLCYouTube       = "vlc-youtube"
+	ServiceOnscreensTwitch  = "onscreens-twitch"
+	ServiceOnscreensYouTube = "onscreens-youtube"
+)
+
 // Pod ports. Several services co-locate on 8080 for their HTTP API but expose
 // other ports (VNC, websocket, RTSP) on their own pods, so the keys are
 // per-(service, role) rather than per-number.
@@ -132,6 +148,12 @@ func Current() Contract {
 			{"onscreens_server", ServiceOnscreensServer},
 			{"obs_twitch", ServiceOBSTwitch},
 			{"obs_youtube", ServiceOBSYouTube},
+			{"tripbot_twitch", ServiceTripbotTwitch},
+			{"tripbot_youtube", ServiceTripbotYouTube},
+			{"vlc_twitch", ServiceVLCTwitch},
+			{"vlc_youtube", ServiceVLCYouTube},
+			{"onscreens_twitch", ServiceOnscreensTwitch},
+			{"onscreens_youtube", ServiceOnscreensYouTube},
 			{"postgres", ServicePostgres},
 		},
 		Ports: []pair{

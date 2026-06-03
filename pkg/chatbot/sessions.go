@@ -44,11 +44,10 @@ type Sessions interface {
 // realSessions delegates to its *users.Sessions, plus pkg/users' standalone DB
 // helper (Find, which is not session state). cmd/tripbot builds it around the
 // process-wide *users.Sessions via NewSessionsAdapter so commands read the same
-// session state the IRC handlers mutate. s is nil in New()'s default adapter —
-// the brief startup window before cmd assigns App.Sessions, and the defaultApp
-// test fixture — so the nil guards below cover that. Tests inject their own
-// Sessions fake rather than realSessions, so the guards only ever fire
-// pre-install.
+// session state the IRC handlers mutate. s is nil in New()'s default adapter
+// until cmd assigns App.Sessions, so the nil guards below cover that brief
+// startup window. Tests inject their own Sessions fake rather than realSessions,
+// so the guards only ever fire pre-install.
 type realSessions struct{ s *users.Sessions }
 
 // NewSessionsAdapter builds the production Sessions adapter around s. cmd/tripbot

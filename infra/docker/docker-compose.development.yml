@@ -37,6 +37,12 @@ services:
     volumes:
       - .bash_history.remote:/root/.bash_history
 
+  onscreens-server:
+    environment:
+      ENV: development
+    env_file:
+      - ./.env.development
+
   db:
     volumes:
       - postgres_data:/var/lib/postgresql/data

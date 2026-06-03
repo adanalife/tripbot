@@ -2,7 +2,7 @@ package chatbot
 
 // IRC is the subset of the IRC client surface chatbot commands depend on
 // to send chat output. Tests inject a fake; production uses the package-backed
-// realIRC adapter wired in defaultApp. Mirrors the Onscreens/VLC pattern.
+// realIRC adapter wired in New(). Mirrors the Onscreens/VLC pattern.
 type IRC interface {
 	Say(msg string)               // post a message in chat
 	Whisper(username, msg string) // whisper to a specific user

@@ -26,8 +26,8 @@ var googleMapsAPIKey string
 var client *twitch.Client
 var Uptime time.Time
 
-// App holds injectable dependencies for the chatbot.
-// Tests instantiate it directly with fakes; production uses defaultApp.
+// App holds injectable dependencies for the chatbot. cmd/tripbot constructs the
+// live one with New(); tests instantiate it directly with fakes.
 type App struct {
 	// DB is the GORM handle used by commands that need to read or write the
 	// database. nil in tests that don't exercise the DB; otherwise either the
@@ -64,9 +64,9 @@ type App struct {
 	NowPlaying NowPlaying
 	// Flags evaluates feature flag values for command-time gating. Tests
 	// inject noopFlags{} (every key false); New() defaults it to an empty
-	// in-memory client (same fail-closed contract) for the startup window +
-	// defaultApp, and cmd/tripbot assigns the Postgres-backed client once the
-	// DB connection is up.
+	// in-memory client (same fail-closed contract) for the startup window
+	// before cmd/tripbot assigns the Postgres-backed client once the DB
+	// connection is up.
 	Flags feature.FlagClient
 	// NATS is the fire-and-forget pubsub surface. Tests inject a
 	// recordingNATS to assert on publishes; production uses realNATS
@@ -109,10 +109,9 @@ func (a *App) db() *gorm.DB {
 }
 
 // New constructs an App wired with the production (realX) dependency adapters,
-// with its command registry built and indexed. cmd builds the live App with
-// this; the package singleton defaultApp is built from it for the package-level
-// Twitch adapters / eventsub shims and the tests. Construction touches no
-// network or DB — the realX adapters are lazy.
+// with its command registry built and indexed. cmd/tripbot builds the live App
+// with this and owns it; nothing in the package holds a singleton. Construction
+// touches no network or DB — the realX adapters are lazy.
 func New() *App {
 	a := &App{
 		// DB stays nil; commands use a.db() which falls back to database.GormDB().
@@ -131,8 +130,6 @@ func New() *App {
 	a.indexCommands()
 	return a
 }
-
-var defaultApp = New()
 
 // used to determine which help message to display
 // randomized so it starts with a new one every restart
@@ -195,9 +192,6 @@ func Say(msg string) {
 	// say the message to chat
 	client.Say(speakTo, msg)
 }
-
-// sayFn is the internal send implementation; tests override it to capture output.
-var sayFn func(string) = Say
 
 // Whisper will whisper a message to a user
 // Note: go-twitch-irc v4 removed the Whisper() send method; we replicate the
