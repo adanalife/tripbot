@@ -134,6 +134,12 @@ func (a *App) buildRegistry() []Command {
 			RequiresFollow: true,
 		},
 		{
+			Trigger:        "!weather",
+			Aliases:        []string{"!wether", "!weahter", "!meteo"},
+			Handler:        a.weatherCmd,
+			RequiresFollow: true,
+		},
+		{
 			Trigger:        "!time",
 			Aliases:        []string{"!timr"},
 			Handler:        a.timeCmd,

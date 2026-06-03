@@ -82,6 +82,10 @@ type App struct {
 	// a recordingGeocoder / noopGeocoder; production uses realGeocoder which
 	// delegates to the pkg/geo default configured in ConnectIRC.
 	Geocoder Geocoder
+	// Weather returns historical conditions at a point for !weather. Tests
+	// inject noopWeather; production uses realWeather, which queries the
+	// keyless Open-Meteo archive API.
+	Weather Weather
 	// Twitch is the command-time Twitch Helix surface (follow lookups today).
 	// Tests inject a recordingTwitch; production uses realTwitch which
 	// delegates to the pkg/twitch client. The future swap point for an
@@ -126,6 +130,7 @@ func New() *App {
 		NATS:       realNATS{},
 		Cron:       noopCron{},
 		Geocoder:   realGeocoder{},
+		Weather:    realWeather{},
 		Twitch:     realTwitch{},
 	}
 	a.indexCommands()

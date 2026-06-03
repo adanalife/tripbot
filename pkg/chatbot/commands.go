@@ -212,6 +212,23 @@ func (a *App) sunsetCmd(ctx context.Context, user *users.User, _ []string) {
 	a.IRC.Say(helpers.SunsetStr(vid.DateFilmed, lat, lng))
 }
 
+func (a *App) weatherCmd(ctx context.Context, user *users.User, _ []string) {
+	slog.InfoContext(ctx, "ran !weather", "username", user.Username)
+	vid := a.Video.Current()
+	if vid.Flagged {
+		a.IRC.Say("I couldn't figure out current GPS coords, using next closest...")
+		vid = vid.Next(ctx)
+	}
+	lat, lng, _ := vid.Location()
+	desc, err := a.Weather.Historical(ctx, vid.DateFilmed, lat, lng)
+	if err != nil {
+		slog.ErrorContext(ctx, "weather lookup failed", "err", err)
+		a.IRC.Say("I couldn't fetch the weather for this spot, sorry!")
+		return
+	}
+	a.IRC.Say(fmt.Sprintf("Weather here on %s: %s", vid.DateFilmed.Format("Jan 2, 2006 3pm"), desc))
+}
+
 func (a *App) locationCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !location (or similar)", "username", user.Username)
 	vid := a.Video.Current()
