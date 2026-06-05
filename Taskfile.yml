@@ -1,8 +1,25 @@
 version: '3'
 
-# All targets shell into the `test` service defined in
+# All *docker* targets shell into the `test` service defined in
 # infra/docker/docker-compose.testing.yml via bin/devenv. Env vars
 # come from .env.testing; module/build caches live in named volumes.
+#
+# Native macOS targets (`*:macos`) instead build on the host against the
+# libvlc bundled inside VLC.app. The CGO incantation lives in the vars
+# below so it's defined once; `_vlc-deps` auto-installs VLC.app if the
+# headers are missing. See vault/tripbot/vlc-server/gotchas.md for why the
+# rpath / -Wno-error flags are needed.
+
+vars:
+  # libvlc header dir inside VLC.app — needed by every cgo compile.
+  VLC_CFLAGS: -I/Applications/VLC.app/Contents/MacOS/include
+  # Link flags for builds/tests/runs. rpath is required for `go test` /
+  # `go run` too (not just build), else `dyld: Library not loaded`. Do NOT
+  # add `-lvlc` — libvlc-go's own #cgo directive does it. -Wno-error mutes
+  # a libvlc-go/v3-vs-Apple-clang fatal that's harmless at runtime.
+  VLC_LDFLAGS: -L/Applications/VLC.app/Contents/MacOS/lib -Wl,-rpath,/Applications/VLC.app/Contents/MacOS/lib -Wno-error=incompatible-function-pointer-types
+  # Sentinel file proving the libvlc headers are present.
+  VLC_HEADER: /Applications/VLC.app/Contents/MacOS/include/vlc/vlc.h
 
 tasks:
   default:
@@ -31,22 +48,50 @@ tasks:
     cmds:
       - ENV=testing bin/devenv run --rm test go test -race ./...
 
+  # Auto-installs VLC.app (which bundles libvlc + its headers) when the cgo
+  # headers are missing, so every native `*:macos` build/test below "just
+  # works" on a fresh machine. The `status:` check makes this a no-op once
+  # the headers are present, so it's cheap to depend on.
+  _vlc-deps:
+    internal: true
+    platforms: [darwin]
+    status:
+      - test -f {{.VLC_HEADER}}
+    cmds:
+      - echo "→ libvlc headers not found; installing VLC.app via Homebrew (needed for cgo)…"
+      - brew install --cask vlc
+      - |
+        test -f {{.VLC_HEADER}} || {
+          echo "✗ VLC installed but headers still missing at {{.VLC_HEADER}}" >&2
+          echo "  (an existing non-cask VLC.app can lack headers — try: brew install --cask --force vlc)" >&2
+          exit 1
+        }
+
   # Native macOS test runner — host mise + VLC.app's bundled libvlc, no
-  # docker. Mirrors vlc-server:build:macos's CGO incantation (rpath is
-  # required for `go test` too, per vault/tripbot/vlc-server/gotchas.md).
-  # `dotenv` injects .env.testing's keys as real env vars so the config
-  # loader resolves them from the environment — `go test` runs each package
-  # from its own dir, so the .env.testing file itself isn't on the path.
+  # docker. `dotenv` injects .env.testing's keys as real env vars so the
+  # config loader resolves them from the environment — `go test` runs each
+  # package from its own dir, so the .env.testing file isn't on the path.
   test:macos:
     desc: Run all unit tests natively on macOS (host mise, no docker)
     platforms: [darwin]
+    deps: [_vlc-deps]
     dotenv: ['.env.testing']
     env:
       ENV: testing
-      CGO_CFLAGS: -I/Applications/VLC.app/Contents/MacOS/include
-      CGO_LDFLAGS: -L/Applications/VLC.app/Contents/MacOS/lib -Wl,-rpath,/Applications/VLC.app/Contents/MacOS/lib -Wno-error=incompatible-function-pointer-types
+      CGO_CFLAGS: '{{.VLC_CFLAGS}}'
+      CGO_LDFLAGS: '{{.VLC_LDFLAGS}}'
     cmds:
       - mise exec -- go test ./...
+
+  build:macos:
+    desc: Build everything natively on macOS against VLC.app's libvlc (host mise, no docker)
+    platforms: [darwin]
+    deps: [_vlc-deps]
+    env:
+      CGO_CFLAGS: '{{.VLC_CFLAGS}}'
+      CGO_LDFLAGS: '{{.VLC_LDFLAGS}}'
+    cmds:
+      - mise exec -- go build ./...
 
   shell:
     desc: Open an interactive Go-toolchain shell inside the test container
@@ -145,30 +190,27 @@ tasks:
     cmds:
       - uv run --with obsws-python bin/obs-browser-refresh
 
-  # vlc-server native macOS build — links against the libvlc bundled
-  # inside VLC.app. Saves recreating the CGO incantation from memory.
-  # See vault/tripbot/vlc-server/gotchas.md for the full story; key bits:
-  #   * rpath is required for `go test` / `go run`, not just `go build` —
-  #     otherwise `dyld: Library not loaded: @rpath/libvlc.dylib`.
-  #   * Do NOT add `-lvlc` to LDFLAGS — libvlc-go's own #cgo LDFLAGS
-  #     directive already does it; duplicating triggers a linker warning.
-  #   * `-Wno-error=incompatible-function-pointer-types` mutes a
-  #     libvlc-go/v3 vs Apple-clang fatal that's harmless at runtime.
+  # vlc-server-scoped native macOS targets. CGO flags come from the
+  # VLC_CFLAGS / VLC_LDFLAGS vars at the top of this file (which carry the
+  # rpath / -lvlc / -Wno-error rationale); both depend on _vlc-deps so VLC
+  # gets installed if missing. See vault/tripbot/vlc-server/gotchas.md.
 
   vlc-server:vet:macos:
     desc: Run `go vet` on vlc-server against VLC.app's libvlc headers (no link)
     platforms: [darwin]
+    deps: [_vlc-deps]
     env:
-      CGO_CFLAGS: -I/Applications/VLC.app/Contents/MacOS/include
+      CGO_CFLAGS: '{{.VLC_CFLAGS}}'
     cmds:
       - mise exec -- go vet ./pkg/vlc-server/...
 
   vlc-server:build:macos:
     desc: Build vlc-server natively on macOS against VLC.app's libvlc
     platforms: [darwin]
+    deps: [_vlc-deps]
     env:
-      CGO_CFLAGS: -I/Applications/VLC.app/Contents/MacOS/include
-      CGO_LDFLAGS: -L/Applications/VLC.app/Contents/MacOS/lib -Wl,-rpath,/Applications/VLC.app/Contents/MacOS/lib -Wno-error=incompatible-function-pointer-types
+      CGO_CFLAGS: '{{.VLC_CFLAGS}}'
+      CGO_LDFLAGS: '{{.VLC_LDFLAGS}}'
     cmds:
       - mise exec -- go build -o bin/vlc-server ./cmd/vlc-server
 
