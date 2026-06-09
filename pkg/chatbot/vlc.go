@@ -8,7 +8,7 @@ import (
 
 // VLC is the subset of the vlc-client surface that chatbot commands depend
 // on (timewarp, jump, skip, back). Tests inject a fake; production uses the
-// realVLC adapter wired in defaultApp. Mirrors the Onscreens injection
+// realVLC adapter wired in New(). Mirrors the Onscreens injection
 // pattern.
 type VLC interface {
 	PlayRandom(ctx context.Context) error
@@ -18,7 +18,7 @@ type VLC interface {
 }
 
 // realVLC delegates to a constructed *vlcClient.Client. The concrete Client
-// instance is owned by the App (wired up in defaultApp), not read off a
+// instance is owned by the App (wired up in New()), not read off a
 // package-level global in pkg/vlc-client.
 type realVLC struct {
 	c *vlcClient.Client

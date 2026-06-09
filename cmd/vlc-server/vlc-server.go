@@ -15,6 +15,7 @@ import (
 
 	c "github.com/adanalife/tripbot/pkg/config/vlc-server"
 	"github.com/adanalife/tripbot/pkg/helpers"
+	"github.com/adanalife/tripbot/pkg/natsclient"
 	"github.com/adanalife/tripbot/pkg/obs"
 	"github.com/adanalife/tripbot/pkg/telemetry"
 	vlcServer "github.com/adanalife/tripbot/pkg/vlc-server"
@@ -50,6 +51,11 @@ func main() {
 	// the app cleanup off the same signals.
 	shutdownCtx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stopSignals()
+
+	// Connect to NATS so Server.Start can attach the command subscribers.
+	// Optional — when NATS_URL is empty the conn is nil and the subscriber
+	// registration is skipped; HTTP remains the sole transport.
+	natsclient.Connect(c.Conf.NatsURL, "vlc-server")
 
 	// await graceful shutdown signal
 	listenForShutdown()

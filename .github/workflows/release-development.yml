@@ -44,18 +44,16 @@ jobs:
               - '.dockerignore'
               - '.github/workflows/release-development.yml'
             vlc:
-              # The vlc container builds two binaries from this repo:
-              # cmd/vlc-server and cmd/onscreens-server. Both transitively
-              # import packages outside their own cmd/pkg trees — e.g.
-              # cmd/vlc-server imports pkg/obs, pkg/instrumentation,
-              # pkg/telemetry, pkg/helpers, etc. Match anything under
-              # pkg/** so a change to any shared package triggers a vlc
-              # rebuild — same shape as the tripbot filter above. Without
-              # this, edits like the 2026-05-28 pkg/obs detangle silently
-              # ship a stale vlc image because the narrow vlc-only globs
-              # don't match pkg/obs/**.
+              # The vlc container builds cmd/vlc-server, which transitively
+              # imports packages outside its own cmd/pkg tree — e.g. pkg/obs,
+              # pkg/instrumentation, pkg/telemetry, pkg/helpers. Match anything
+              # under pkg/** so a change to any shared package triggers a vlc
+              # rebuild — same shape as the tripbot filter above. Without this,
+              # edits like the 2026-05-28 pkg/obs detangle silently ship a stale
+              # vlc image because the narrow vlc-only globs don't match
+              # pkg/obs/**. (onscreens-server is now its own image — see the
+              # onscreens filter below.)
               - 'cmd/vlc-server/**'
-              - 'cmd/onscreens-server/**'
               - 'pkg/**'
               - 'infra/docker/vlc/**'
               - 'go.mod'

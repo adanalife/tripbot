@@ -29,10 +29,10 @@ type Video interface {
 // CurrentProgress) and to pkg/video's standalone DB helper (FindRandomByState,
 // which is not Player state). cmd/tripbot installs the process-wide Player via
 // NewVideoAdapter so commands read the same playback state the cron tick
-// refreshes. player is nil in New()'s default adapter — the brief startup
-// window before cmd assigns App.Video, and the defaultApp test fixture — so the
-// nil guards below cover that. Tests inject their own Video fake rather than
-// realVideo, so the guards only ever fire pre-install.
+// refreshes. player is nil in New()'s default adapter until cmd assigns
+// App.Video, so the nil guards below cover that brief startup window. Tests
+// inject their own Video fake rather than realVideo, so the guards only ever
+// fire pre-install.
 type realVideo struct{ player *video.Player }
 
 // NewVideoAdapter builds the production Video adapter around p. cmd/tripbot
