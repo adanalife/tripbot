@@ -98,8 +98,8 @@ func TestRenderSendForm_GatesOnLogin(t *testing.T) {
 		if !strings.Contains(html, `data-broadcaster-user="adanalife_"`) {
 			t.Errorf("expected broadcaster data attr, got: %s", html)
 		}
-		// broadcaster is the pre-selected default (talking as the channel
-		// owner is the common case)
+		// broadcaster is the default (talking as the channel owner is the
+		// common case)
 		if !strings.Contains(html, `value="broadcaster" checked`) {
 			t.Errorf("expected broadcaster radio pre-checked, got: %s", html)
 		}

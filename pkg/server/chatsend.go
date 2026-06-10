@@ -111,7 +111,7 @@ func renderSendForm(statuses []mytwitch.AccountTokenStatus) string {
 			data.BcastUser = id.Username
 		}
 	}
-	// Pre-select the broadcaster (talking as the channel owner is the common
+	// Default to the broadcaster (talking as the channel owner is the common
 	// case); fall back to the first available identity when the broadcaster
 	// isn't logged in.
 	if len(ids) > 0 {
