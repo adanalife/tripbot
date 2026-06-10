@@ -199,7 +199,7 @@ func (a *App) buildRegistry() []Command {
 		},
 		{
 			Trigger:        "!location",
-			Aliases:        []string{"!tripbot", "!city", "!town", "!where", "!loacation", "!loation", "!loc", "!locatioin", "!locatoion", "!locaton", "!loclistion", "!locton", "1location", "¡location", "!locatiom", "!location!", "!locatio", "!lcoation"},
+			Aliases:        []string{"!tripbot", "!city", "!town", "!where", "!loacation", "!loation", "!loc", "!locatioin", "!locatoion", "!locaton", "!loclistion", "!locton", "1location", "¡location", "!locatiom", "!location!", "!locatio", "!lcoation", "!ocation"},
 			Handler:        a.locationCmd,
 			RequiresFollow: true,
 		},
