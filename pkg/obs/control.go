@@ -3,11 +3,22 @@ package obs
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 
+	"github.com/adanalife/tripbot/pkg/contract"
 	goobs "github.com/andreykaipov/goobs"
 )
+
+// defaultOBSWebsocketAddr is the fallback dialed when OBS_WEBSOCKET_ADDR is
+// unset. Derived from the shared contract so it tracks the canonical
+// obs-twitch service name + websocket port instead of drifting when OBS is
+// renamed (it was left as the pre-per-platform "obs:4455" once and broke the
+// watchdog on stage). In-cluster, cdk8s stamps OBS_WEBSOCKET_ADDR per platform
+// so the YouTube stack dials obs-youtube; this default only covers the
+// env-unset case.
+var defaultOBSWebsocketAddr = fmt.Sprintf("%s:%d", contract.ServiceOBSTwitch, contract.PortOBSWebsocket)
 
 // dial opens a fresh OBS WebSocket connection using the same env vars
 // PollStreamingActive reads. Callers are responsible for client.Disconnect().
@@ -16,7 +27,7 @@ import (
 func dial(_ context.Context) (*goobs.Client, error) {
 	addr := os.Getenv("OBS_WEBSOCKET_ADDR")
 	if addr == "" {
-		addr = "obs:4455"
+		addr = defaultOBSWebsocketAddr
 	}
 	passwd := os.Getenv("OBS_WEBSOCKET_PASSWD")
 	if passwd == "" {

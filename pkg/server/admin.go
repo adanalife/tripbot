@@ -792,6 +792,9 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
 	// flagRow renders one feature-flag <li>, shared with flagActionHandler so a
 	// live toggle's swapped-in row matches the initial render byte-for-byte.
 	"flagRow": func(f featureFlag) template.HTML { return template.HTML(renderFlagRow(f)) },
+	// sendForm renders the chat send form gated on which identities are logged
+	// in (bot / broadcaster); a muted hint when neither is.
+	"sendForm": func(s []mytwitch.AccountTokenStatus) template.HTML { return template.HTML(renderSendForm(s)) },
 }).Parse(`<!doctype html>
 <html lang="en">
 <head>
@@ -963,6 +966,23 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
   .chat-jump { position:absolute; left:50%; bottom:10px; transform:translateX(-50%); z-index:2; font:inherit; font-size:.8em; padding:4px 12px; border-radius:999px; border:1px solid var(--chip-border); background:var(--chip-bg); color:var(--fg); cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,.35); }
   .chat-jump:hover { border-color:#58a6ff; color:#9cf; }
   .chat-jump[hidden] { display:none; }
+  /* chat send box: identity toggle + text input. Sits below the scrollback. */
+  .chat-send { margin-top:8px; display:flex; flex-direction:column; gap:6px; }
+  .chat-send-as { display:flex; gap:14px; font-size:.82em; color:var(--muted); }
+  .chat-send-as label { cursor:pointer; display:inline-flex; align-items:center; gap:4px; }
+  .chat-send-as-single { font-size:.82em; color:var(--dim); }
+  .chat-send-row { display:flex; gap:6px; }
+  .chat-send-text { flex:1; min-width:0; font:inherit; font-size:.92em; padding:6px 8px; border-radius:6px; border:1px solid var(--chip-border); background:var(--chip-bg); color:var(--fg); }
+  .chat-send-text:focus { outline:none; border-color:#58a6ff; }
+  .chat-send button { font:inherit; font-size:.85em; padding:6px 14px; border-radius:6px; border:1px solid var(--chip-border); background:var(--chip-bg); color:var(--fg); cursor:pointer; }
+  .chat-send button:hover { border-color:#58a6ff; color:#9cf; }
+  .chat-send-empty { margin-top:8px; font-size:.82em; color:var(--dim); font-style:italic; }
+  /* optimistic outgoing line: greyed until the message round-trips back, then
+     the .pending class is removed; .failed reddens it if it never lands. */
+  .chat-line.pending { opacity:.5; }
+  .chat-line.failed { opacity:1; }
+  .chat-line.failed .ct { color:#f78166; }
+  .chat-line.failed::after { content:" · not delivered"; color:#f78166; font-size:.8em; }
   /* clickable chat usernames + the profile popover they open */
   .chat-line .cu { cursor:pointer; }
   .chat-line .cu:hover { text-decoration:underline; }
@@ -1052,6 +1072,10 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
       <!-- shown only while scrolled up (see JS): tapping jumps to the newest line -->
       <button id="chat-jump" class="chat-jump" type="button" hidden>↓ new</button>
     </div>
+    <!-- send box: re-rendered live on the "sendform" SSE event (pushed by the
+         auth poll) so the identity toggle tracks which accounts are logged in.
+         JS hooks submit for the optimistic-grey-then-confirm flow. -->
+    <div id="chat-send-box" sse-swap="sendform" hx-swap="innerHTML">{{sendForm .AuthStatuses}}</div>
   </details>
 
   {{if and .PreviewChannel .PanelHost}}
@@ -1237,17 +1261,109 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
     if (!el.dataset.colored) { el.style.color = colorFor(el.textContent); el.dataset.colored = '1'; }
   });
   const decorate = (root) => { localize(root); colorize(root); };
+
+  // --- optimistic send + confirm ------------------------------------------
+  // A message sent from the box below is rendered immediately as a greyed
+  // .pending line. The real message round-trips back on the chat.message SSE
+  // stream (the bot's send mirror, or the bot reading a broadcaster line back
+  // inbound); when a matching line arrives we drop the duplicate and un-grey
+  // the optimistic one. If nothing matches within the timeout, it reddens.
+  const PENDING_TIMEOUT = 8000; // ms — broadcaster sends round-trip in a beat; bot is ~instant
+  const pending = new Map();    // key -> { node, timer }
+  const keyOf = (user, text) => user.trim().toLowerCase() + ' ' + text.trim();
+  const lineKey = (el) => {
+    const cu = el.querySelector('.cu'), ct = el.querySelector('.ct');
+    return (cu && ct) ? keyOf(cu.textContent, ct.textContent) : null;
+  };
+  // reconcile: if the just-arrived line matches a pending one, remove the
+  // duplicate and confirm (un-grey) the optimistic line. Returns true if so.
+  const reconcile = (incoming) => {
+    if (!incoming || !incoming.querySelector) return false;
+    const k = lineKey(incoming);
+    if (!k) return false;
+    const p = pending.get(k);
+    if (!p) return false;
+    clearTimeout(p.timer);
+    pending.delete(k);
+    p.node.classList.remove('pending', 'failed');
+    incoming.remove();
+    return true;
+  };
+  // addPending builds + appends the greyed optimistic line and arms its timeout.
+  const addPending = (username, text) => {
+    const line = document.createElement('div');
+    line.className = 'chat-line pending';
+    const t = document.createElement('time');
+    t.className = 'ct-ts';
+    const now = new Date();
+    t.setAttribute('datetime', now.toISOString());
+    const cu = document.createElement('span');
+    cu.className = 'cu';
+    cu.setAttribute('hx-get', '/admin/user/' + encodeURIComponent(username));
+    cu.setAttribute('hx-target', '#user-popover');
+    cu.setAttribute('hx-swap', 'innerHTML');
+    cu.setAttribute('hx-trigger', 'click');
+    cu.textContent = username;
+    const ct = document.createElement('span');
+    ct.className = 'ct';
+    ct.textContent = text;
+    line.append(t, document.createTextNode(' '), cu, document.createTextNode(' '), ct);
+    log.appendChild(line);
+    if (window.htmx) htmx.process(line);
+    decorate(log);
+    if (pinned) log.scrollTop = log.scrollHeight;
+    const k = keyOf(username, text);
+    const prev = pending.get(k);
+    if (prev) clearTimeout(prev.timer);
+    const timer = setTimeout(() => {
+      if (pending.get(k) && pending.get(k).node === line) { line.classList.add('failed'); pending.delete(k); }
+    }, PENDING_TIMEOUT);
+    pending.set(k, { node: line, timer });
+    return { key: k, node: line };
+  };
+
   log.addEventListener('htmx:afterSwap', () => {
     log.querySelectorAll('.chat-empty').forEach(el => el.remove());
+    const confirmed = reconcile(log.lastElementChild);
     decorate(log);
     if (pinned) {
       while (log.childElementCount > CAP) log.removeChild(log.firstElementChild);
       log.scrollTop = log.scrollHeight;
-    } else {
+    } else if (!confirmed) {
       unread++;
       refreshPill();
     }
   });
+
+  // Send box: hook submit to render the optimistic line, and the response to
+  // clear the input (success) or redden the line (publish failed outright).
+  // Delegated on body because the form is re-rendered live on the sendform SSE.
+  document.body.addEventListener('htmx:beforeRequest', (e) => {
+    const form = e.detail && e.detail.elt;
+    if (!form || !form.classList || !form.classList.contains('chat-send')) return;
+    const fd = new FormData(form);
+    const identity = fd.get('identity');
+    const text = (fd.get('text') || '').trim();
+    if (!identity || !text) return;
+    const user = identity === 'broadcaster' ? form.dataset.broadcasterUser : form.dataset.botUser;
+    if (!user) return;
+    form._pending = addPending(user, text);
+  });
+  document.body.addEventListener('htmx:afterRequest', (e) => {
+    const form = e.detail && e.detail.elt;
+    if (!form || !form.classList || !form.classList.contains('chat-send')) return;
+    const xhr = e.detail.xhr;
+    const ok = e.detail.successful && xhr && xhr.status >= 200 && xhr.status < 300;
+    if (ok) {
+      const input = form.querySelector('.chat-send-text');
+      if (input) input.value = '';
+    } else if (form._pending) {
+      form._pending.node.classList.add('failed');
+      pending.delete(form._pending.key);
+    }
+    form._pending = null;
+  });
+
   decorate(log); // localize times + color usernames in the server-rendered history
   log.scrollTop = log.scrollHeight; // start at the newest message
 })();

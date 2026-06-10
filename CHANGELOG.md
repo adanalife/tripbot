@@ -7,6 +7,26 @@ All notable changes to TripBot. Format follows [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+## [v3.0.1] — 2026-06-09
+
+Patch release. The headline is **sending chat messages from the admin console** — a send box that posts to Twitch chat as the bot or the broadcaster. Alongside it: the OBS image can now be pointed at YouTube as well as Twitch via `STREAM_PLATFORM`, a fix for the OBS websocket-address fallback that broke after the per-platform service rename, and CI changes to cut Docker Hub rate-limiting and stop redundant OBS base rebakes.
+
+### admin
+
+- **Send chat messages from the admin console.** The chat pane gains a send box: type a message and post it to Twitch chat **as the bot** or **as the broadcaster**, with a toggle that only offers accounts currently logged in (and hides itself when just one is). The line renders optimistically (greyed) and confirms when it round-trips back on the live chat stream, reddening as "not delivered" if a send fails. Routed as a `chat.send` NATS command (console publishes, tripbot sends) so it's split-ready. **Broadcaster sends need a re-auth** — `user:write:chat` is new on the broadcaster scopes. ([#803])
+
+### obs
+
+- **OBS streaming target is parametrized via `STREAM_PLATFORM`.** The image hardcoded Twitch in `service.json.tmpl`, so one image could only ever stream to Twitch. A `STREAM_PLATFORM` env var (default `twitch`) now selects the service/server — `twitch` renders byte-identical to the old hardcoded file (a no-op), `youtube` points at YouTube's RTMPS ingest — unblocking a second OBS instance for YouTube without a separate image. ([#775])
+
+### fix
+
+- **OBS websocket address fallback derives from the contract.** The `OBS_WEBSOCKET_ADDR` fallback in `pkg/obs` was hardcoded to the pre-per-platform `obs:4455`; once OBS went per-platform (`obs` → `obs-twitch`) that name stopped resolving, so the watchdog, stream start/stop, and streaming-active poller failed with `dial tcp: lookup obs`. cdk8s never stamps the var onto tripbot, so the default is load-bearing — it now builds from `pkg/contract` (`ServiceOBSTwitch` + `PortOBSWebsocket`) and tracks the canonical service name. ([#804])
+
+### CI
+
+- **Reduce Docker Hub rate-limiting and stop redundant OBS base rebakes.** The tripbot/vlc/obs container CI workflows now authenticate Docker Hub pulls (so base-image pulls count against our account limit instead of the shared GitHub-runner-IP anonymous limit) and gain per-ref concurrency groups so a new push supersedes the in-flight build. The 90-min OBS CEF base bake is scoped to develop/master pushes so release tags no longer rebake an unchanged, version-pinned base. ([#786])
+
 ## [v3.0.0] — 2026-06-03
 
 Major release. Two milestones land together. **onscreens-server is now its own image + Deployment** — it is no longer built into or supervised inside the vlc image, which is the breaking deployment change behind the major bump. And the **chatbot no-globals refactor (Phase C) is complete**: the package now holds zero package-level globals, with both the inbound and outbound chat edges behind provider-neutral seams as groundwork for multi-platform chat. NATS phase 2 also advances — the onscreens command surface is now NATS-only (the HTTP command path is gone) and the vlc command surface begins its observe-only mirror. Rounded out by a live feature-flag toggle and a `!weather` command in the admin/chat surfaces, per-platform service names for the cdk8s app factory, a couple of `!`-command fixes and tweaks, and routine Go + cleanup chores.
@@ -1405,6 +1425,10 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#785]: https://github.com/adanalife/tripbot/pull/785
 [#788]: https://github.com/adanalife/tripbot/pull/788
 [#789]: https://github.com/adanalife/tripbot/pull/789
+[#803]: https://github.com/adanalife/tripbot/pull/803
+[#804]: https://github.com/adanalife/tripbot/pull/804
+[#775]: https://github.com/adanalife/tripbot/pull/775
+[#786]: https://github.com/adanalife/tripbot/pull/786
 [#792]: https://github.com/adanalife/tripbot/pull/792
 [#798]: https://github.com/adanalife/tripbot/pull/798
 [#799]: https://github.com/adanalife/tripbot/pull/799
