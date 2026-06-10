@@ -98,6 +98,23 @@ func TestRenderSendForm_GatesOnLogin(t *testing.T) {
 		if !strings.Contains(html, `data-broadcaster-user="adanalife_"`) {
 			t.Errorf("expected broadcaster data attr, got: %s", html)
 		}
+		// broadcaster is the pre-selected default (talking as the channel
+		// owner is the common case)
+		if !strings.Contains(html, `value="broadcaster" checked`) {
+			t.Errorf("expected broadcaster radio pre-checked, got: %s", html)
+		}
+		if strings.Contains(html, `value="bot" checked`) {
+			t.Errorf("bot radio should not be pre-checked when broadcaster is available, got: %s", html)
+		}
+	})
+
+	t.Run("bot-only falls back to bot pre-checked", func(t *testing.T) {
+		// only the bot logged in → single hidden input, but the default
+		// computation should still resolve to bot rather than nothing
+		html := renderSendForm([]mytwitch.AccountTokenStatus{healthyBot})
+		if !strings.Contains(html, `value="bot"`) {
+			t.Errorf("expected bot identity, got: %s", html)
+		}
 	})
 
 	t.Run("logged-out identity is omitted", func(t *testing.T) {
