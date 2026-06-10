@@ -32,6 +32,9 @@ func (h *Hub) pollAuth(ctx context.Context) {
 		statuses := tokenStatusesFn()
 		h.broadcast(sseEvent{Name: "auth", Data: renderAuthCard(statuses)})
 		h.broadcast(sseEvent{Name: "reauth", Data: renderReauthCallout(reauthsFromStatuses(statuses))})
+		// keep the chat send form's identity toggle in sync with login state —
+		// an account going missing/expired removes its "send as" option live.
+		h.broadcast(sseEvent{Name: "sendform", Data: renderSendForm(statuses)})
 	}
 	push()
 	t := time.NewTicker(authPollInterval)

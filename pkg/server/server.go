@@ -16,6 +16,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/httpmw"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
+	"github.com/adanalife/tripbot/pkg/natsclient"
 	sentrynegroni "github.com/getsentry/sentry-go/negroni"
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -42,16 +43,25 @@ type Server struct {
 
 	flagMu     sync.RWMutex
 	flagClient feature.FlagClient
+
+	// publisher is the fire-and-forget NATS publish seam the admin console's
+	// "send chat message" form uses to emit a chatEvents.Send command. The
+	// subscriber that actually sends lives in cmd/tripbot (the Twitch-identity
+	// owner), so the panel only publishes — which keeps it split-ready. Tests
+	// inject a recording fake.
+	publisher natsclient.Publisher
 }
 
 // New constructs a Server with default runtime state: a fresh hub, the "dev"
-// version tag (overridden by SetVersion), and an empty in-memory flag client
-// (swapped for the Postgres-backed one via SetFlagClient).
+// version tag (overridden by SetVersion), an empty in-memory flag client
+// (swapped for the Postgres-backed one via SetFlagClient), and the singleton
+// NATS publisher (a no-op until natsclient.Connect runs).
 func New() *Server {
 	return &Server{
 		hub:        NewHub(),
 		versionTag: "dev",
 		flagClient: feature.NewInMemoryClient(nil),
+		publisher:  natsclient.DefaultPublisher(),
 	}
 }
 
@@ -111,8 +121,10 @@ func (s *Server) Start(ctx context.Context) {
 	// exposed; no app-layer auth gate (see CLAUDE.md / vault decisions).
 	admin := r.PathPrefix("/admin").Methods("POST").Subrouter()
 	admin.Handle("/obs/stream/{action}", tagged("/admin/obs/stream/{action}", obsStreamActionHandler))
+	admin.Handle("/flags/{key}/{action}", tagged("/admin/flags/{key}/{action}", s.flagActionHandler))
 	admin.Handle("/shutdown", tagged("/admin/shutdown", httpmw.ShutdownHandler()))
 	admin.Handle("/restart/{service}", tagged("/admin/restart/{service}", restartActionHandler))
+	admin.Handle("/chat/send", tagged("/admin/chat/send", s.chatSendHandler))
 
 	// catch everything else
 	r.NotFoundHandler = tagged("/", catchAllHandler)

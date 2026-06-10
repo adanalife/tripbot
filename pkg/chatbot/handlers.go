@@ -70,7 +70,7 @@ func (su sessionUser) IsSubscriber() bool { return su.s.IsSubscriber(*su.u) }
 
 func (a *App) dispatch(ctx context.Context, cmd *Command, user *users.User, params []string) {
 	incChatCommandCounter(cmd.Trigger)
-	if !cmd.checkAccess(ctx, sessionUser{a.UserSessions, user}, a.IRC.Say) {
+	if !cmd.checkAccess(ctx, sessionUser{a.UserSessions, user}, a.Chat.Say) {
 		return
 	}
 	// Start a child span under the chatbot.handle_message span from
@@ -208,7 +208,7 @@ func (a *App) HandlePart(username string) {
 func (a *App) HandleWhisper(msg IncomingMessage) {
 	slog.Info("whisper received", "from", msg.User, "text", msg.Text)
 	if c.UserIsAdmin(msg.User) {
-		a.IRC.Say(msg.Text)
+		a.Chat.Say(msg.Text)
 	}
 }
 

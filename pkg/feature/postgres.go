@@ -2,6 +2,7 @@ package feature
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -61,6 +62,23 @@ func (r *repository) LoadAll(ctx context.Context) (map[string]Flag, error) {
 	return out, nil
 }
 
+// SetEnabled flips the enabled column for one flag. RowsAffected == 0 means
+// the key doesn't exist — surfaced as an error so an admin toggle of an
+// unknown key fails loudly rather than silently no-op'ing.
+func (r *repository) SetEnabled(ctx context.Context, key string, enabled bool) error {
+	res := r.db.WithContext(ctx).
+		Model(&flagRow{}).
+		Where("key = ?", key).
+		Updates(map[string]any{"enabled": enabled, "updated_at": time.Now()})
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return fmt.Errorf("feature flag %q not found", key)
+	}
+	return nil
+}
+
 // PostgresClient is a FlagClient backed by a Postgres-loaded snapshot
 // refreshed in a background goroutine. The hot path (Bool) is a map read
 // under an RWMutex — no DB hit per evaluation.
@@ -118,6 +136,24 @@ func (c *PostgresClient) refresh(ctx context.Context) error {
 	c.mu.Lock()
 	c.flags = next
 	c.mu.Unlock()
+	return nil
+}
+
+// SetEnabled persists the new global-default state for key, then force-loads
+// the snapshot so the change is live immediately — both this client's Bool
+// evaluations and its Snapshot reflect it without waiting for the next poll.
+// Implements FlagToggler.
+func (c *PostgresClient) SetEnabled(ctx context.Context, key string, enabled bool) error {
+	if err := c.repo.SetEnabled(ctx, key, enabled); err != nil {
+		return err
+	}
+	// Pull the fresh state in immediately. A refresh error here is unexpected
+	// (the write just succeeded), but if it happens the next poll reconciles;
+	// the DB is already authoritative, so we don't fail the toggle.
+	if err := c.refresh(ctx); err != nil {
+		slog.WarnContext(ctx, "flag toggle persisted but immediate refresh failed; next poll will reconcile",
+			"err", err, "key", key)
+	}
 	return nil
 }
 

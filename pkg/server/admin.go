@@ -151,6 +151,39 @@ func renderStreamControl(sc streamControl, oob bool) string {
 	return sb.String()
 }
 
+// flagRowTmpl renders one feature-flag <li>. It's the swap target for the
+// toggle POSTs (hx-target="closest .flag-row", hx-swap="outerHTML") and is
+// rendered identically on the initial page load (via the flagRow template
+// func) and by flagActionHandler's response, so a live toggle matches a fresh
+// page render. The toggle button only renders when .Toggleable — a read-only
+// client (startup window, tests) keeps the bare on/off status. The button is a
+// "molly" button (data-arm-label) so an accidental tap arms rather than fires,
+// matching the stream/restart toggles.
+var flagRowTmpl = template.Must(template.New("flagrow").Parse(
+	`<li class="row flag-row">` +
+		`<span class="dot {{if .Enabled}}up{{else}}down{{end}}"></span>` +
+		`<span class="name"><code>{{.Key}}</code>{{if .Description}}<span class="state"> · {{.Description}}</span>{{end}}</span>` +
+		`<span class="status">{{if .Enabled}}on{{else}}off{{end}}</span>` +
+		`{{- if .Toggleable}}` +
+		`{{- if .Enabled}}` +
+		`<button type="button" class="flag-toggle on" hx-post="/admin/flags/{{.Key}}/disable" hx-target="closest .flag-row" hx-swap="outerHTML" hx-disabled-elt="this" data-arm-label="click again to disable" data-original-label="disable">disable</button>` +
+		`{{- else}}` +
+		`<button type="button" class="flag-toggle off" hx-post="/admin/flags/{{.Key}}/enable" hx-target="closest .flag-row" hx-swap="outerHTML" hx-disabled-elt="this" data-arm-label="click again to enable" data-original-label="enable">enable</button>` +
+		`{{- end}}` +
+		`{{- end}}` +
+		`</li>`))
+
+// renderFlagRow executes flagRowTmpl to a string, shared by the initial page
+// render (via the flagRow template func) and flagActionHandler's swap response.
+func renderFlagRow(f featureFlag) string {
+	var sb strings.Builder
+	if err := flagRowTmpl.Execute(&sb, f); err != nil {
+		slog.Error("couldn't render flag row", "err", err)
+		return ""
+	}
+	return sb.String()
+}
+
 // statusRowsTmpl renders the <li> service-status rows. Extracted so the initial
 // page render (via the statusRows template func) and the /admin/refresh poll
 // produce identical markup, mirroring the streamControl/authCard pattern.
@@ -188,6 +221,10 @@ type featureFlag struct {
 	Key         string
 	Enabled     bool
 	Description string
+	// Toggleable is true when the installed flag client supports writes (the
+	// Postgres-backed client in prod). When false — the in-memory fallback
+	// during startup, or in tests — the row renders read-only with no button.
+	Toggleable bool
 }
 
 // adminData is the template payload.
@@ -318,12 +355,14 @@ func (s *Server) gatherFlags(ctx context.Context) []featureFlag {
 	if len(flags) == 0 {
 		return nil
 	}
+	_, toggleable := s.flagToggler()
 	out := make([]featureFlag, 0, len(flags))
 	for _, f := range flags {
 		out = append(out, featureFlag{
 			Key:         f.Key,
 			Enabled:     f.Enabled,
 			Description: f.Description,
+			Toggleable:  toggleable,
 		})
 	}
 	return out
@@ -449,6 +488,58 @@ func obsStreamActionHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// flagActionHandler handles POST /admin/flags/{key}/{action} (action =
+// "enable" or "disable") from the feature-flags section's toggle buttons.
+// It writes the new global default through the flag client's toggle surface —
+// which force-refreshes the in-memory snapshot, so the change is live for both
+// this panel and the bot's command gating immediately — then swaps in the
+// flag's row to reflect the new state.
+func (s *Server) flagActionHandler(w http.ResponseWriter, r *http.Request) {
+	key := mux.Vars(r)["key"]
+	action := mux.Vars(r)["action"]
+	var enabled bool
+	switch action {
+	case "enable":
+		enabled = true
+	case "disable":
+		enabled = false
+	default:
+		http.Error(w, "unknown action", http.StatusBadRequest)
+		return
+	}
+
+	toggler, ok := s.flagToggler()
+	if !ok {
+		// The in-memory fallback (startup window) has no write surface. The UI
+		// gates the button on the same condition, so this is the defensive path
+		// for a stale page posting before the Postgres client is wired.
+		slog.ErrorContext(r.Context(), "flag toggle unavailable: client is read-only", "key", key)
+		http.Error(w, "feature flags are read-only right now", http.StatusServiceUnavailable)
+		return
+	}
+	if err := toggler.SetEnabled(r.Context(), key, enabled); err != nil {
+		slog.ErrorContext(r.Context(), "flag toggle failed", "key", key, "action", action, "err", err)
+		http.Error(w, "couldn't toggle flag", http.StatusBadGateway)
+		return
+	}
+	slog.InfoContext(r.Context(), "feature flag toggled from admin panel", "key", key, "enabled", enabled)
+
+	// Re-render the row from the freshly-refreshed snapshot so the swapped-in
+	// markup matches a full page render exactly (carrying the description back).
+	row := featureFlag{Key: key, Enabled: enabled, Toggleable: true}
+	for _, f := range s.flagSnapshot(r.Context()) {
+		if f.Key == key {
+			row.Description = f.Description
+			row.Enabled = f.Enabled
+			break
+		}
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if _, werr := w.Write([]byte(renderFlagRow(row))); werr != nil {
+		slog.ErrorContext(r.Context(), "couldn't write flag row", "err", werr)
+	}
+}
+
 // refreshHandler serves GET /admin/refresh: the always-present live panel
 // sections — the service status rows and the OBS stream toggle — as out-of-band
 // fragments. A hidden poller on the page (hx-trigger="every 15s") fetches this,
@@ -554,8 +645,16 @@ func pingHealthy(ctx context.Context, rawURL string) bool {
 // neither appears here. Entries whose URL can't be derived are dropped.
 func gatherLinks() []navLink {
 	links := []navLink{}
-	if obs := tailnetServiceURL("obs"); obs != "" {
-		links = append(links, navLink{Label: "obs", URL: obs})
+	// Derive OBS's tailnet hostname from the *value* of OBS_SERVER_HOST, not a
+	// hardcoded "obs". The Tailscale operator exposes each Service at
+	// <service-name>-<env>.<tailnetBase>, and the Service is named whatever this
+	// env's config says — "obs" in prod, "obs-twitch" in stage post-rename — so
+	// reading the runtime host keeps the link resolving in both without a
+	// deploy-order hazard. See vault tripbot/TODO.md (config-driven admin panel).
+	if svc := hostServiceName(c.Conf.ObsServerHost); svc != "" {
+		if obs := tailnetServiceURL(svc); obs != "" {
+			links = append(links, navLink{Label: "obs", URL: obs})
+		}
 	}
 	links = append(links,
 		navLink{Label: "grafana", URL: grafanaURL},
@@ -623,6 +722,21 @@ func tailnetServiceURL(service string) string {
 	return "https://" + service + "-" + env + "." + tailnetBase
 }
 
+// hostServiceName returns the bare Kubernetes Service name from a host:port
+// config value such as OBS_SERVER_HOST / VLC_SERVER_HOST — "obs-twitch:8080" →
+// "obs-twitch", "obs" → "obs". It's how the admin panel addresses a sibling by
+// whatever name its Service actually carries in this env, rather than hardcoding
+// one. Returns "" for an empty input so the caller can drop the dependent link.
+func hostServiceName(hostPort string) string {
+	if hostPort == "" {
+		return ""
+	}
+	if host, _, err := net.SplitHostPort(hostPort); err == nil {
+		return host
+	}
+	return hostPort
+}
+
 // previewChannel returns the Twitch channel name the stream-preview embed
 // should load.
 func previewChannel() string {
@@ -675,6 +789,12 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
 	"streamControl": func(sc streamControl) template.HTML { return template.HTML(renderStreamControl(sc, false)) },
 	// statusRows renders the service-status <li> rows, shared with /admin/refresh.
 	"statusRows": func(s []serviceStatus) template.HTML { return template.HTML(renderStatusRows(s)) },
+	// flagRow renders one feature-flag <li>, shared with flagActionHandler so a
+	// live toggle's swapped-in row matches the initial render byte-for-byte.
+	"flagRow": func(f featureFlag) template.HTML { return template.HTML(renderFlagRow(f)) },
+	// sendForm renders the chat send form gated on which identities are logged
+	// in (bot / broadcaster); a muted hint when neither is.
+	"sendForm": func(s []mytwitch.AccountTokenStatus) template.HTML { return template.HTML(renderSendForm(s)) },
 }).Parse(`<!doctype html>
 <html lang="en">
 <head>
@@ -768,15 +888,22 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
   /* Shared disclosure-row styling — controls / now-playing / stream-preview
      all default closed and reveal on click. Same look, just different
      summary labels. */
-  details.stream-preview, details.now-playing, details.feature-flags { margin:24px 0 0; }
-  details.stream-preview > summary, details.now-playing > summary, details.feature-flags > summary { font-size:.8em; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); cursor:pointer; padding:8px 0; border-top:1px solid var(--divider); list-style:none; }
-  details.stream-preview > summary::-webkit-details-marker, details.now-playing > summary::-webkit-details-marker, details.feature-flags > summary::-webkit-details-marker { display:none; }
-  details.stream-preview > summary::before, details.now-playing > summary::before, details.feature-flags > summary::before { content:"▸ "; color:var(--dim); display:inline-block; }
-  details.stream-preview[open] > summary::before, details.now-playing[open] > summary::before, details.feature-flags[open] > summary::before { content:"▾ "; }
-  details.stream-preview > summary:hover, details.now-playing > summary:hover, details.feature-flags > summary:hover { color:var(--fg); }
+  details.stream-preview, details.now-playing, details.feature-flags, details.controls { margin:24px 0 0; }
+  details.stream-preview > summary, details.now-playing > summary, details.feature-flags > summary, details.controls > summary { font-size:.8em; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); cursor:pointer; padding:8px 0; border-top:1px solid var(--divider); list-style:none; }
+  details.stream-preview > summary::-webkit-details-marker, details.now-playing > summary::-webkit-details-marker, details.feature-flags > summary::-webkit-details-marker, details.controls > summary::-webkit-details-marker { display:none; }
+  details.stream-preview > summary::before, details.now-playing > summary::before, details.feature-flags > summary::before, details.controls > summary::before { content:"▸ "; color:var(--dim); display:inline-block; }
+  details.stream-preview[open] > summary::before, details.now-playing[open] > summary::before, details.feature-flags[open] > summary::before, details.controls[open] > summary::before { content:"▾ "; }
+  details.stream-preview > summary:hover, details.now-playing > summary:hover, details.feature-flags > summary:hover, details.controls > summary:hover { color:var(--fg); }
   /* feature-flags rows reuse .row but the name column carries the flag key
      in monospace; description trails after a separator dot like elsewhere. */
   .row.flag-row .name code { font-family:var(--mono); font-size:.95em; }
+  /* per-flag enable/disable toggle — same small, unobtrusive shape as .restart;
+     a green tint when the action will enable, and a molly button (arms on first
+     tap, fires on the second) like the stream/restart controls. */
+  button.flag-toggle { font:inherit; font-size:.8em; padding:3px 9px; border-radius:4px; border:1px solid #2a2a2a; background:#1a1a1a; color:#888; cursor:pointer; transition:background .15s, color .15s, border-color .15s; min-width:4.5em; }
+  button.flag-toggle:hover { background:#252525; color:#ccc; border-color:#3a3a3a; }
+  button.flag-toggle.off:hover { color:#7fc296; border-color:#2f6f43; }
+  button.flag-toggle.armed { background:#f85149; color:#fff; border-color:#f85149; box-shadow:0 0 0 2px #f8514980; }
   .stream-frame { aspect-ratio:16 / 9; width:100%; margin-top:10px; background:#000; border-radius:6px; overflow:hidden; }
   .stream-frame iframe { width:100%; height:100%; border:none; display:block; }
   a { color:#58a6ff; text-decoration:none; }
@@ -806,15 +933,10 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
   /* armed = first click landed; second click within 5s actually fires */
   button.stream.armed { background:#f85149; color:#fff; box-shadow:0 0 0 2px #f8514980; }
   .stream-unreachable { color:#666; font-size:.9em; font-style:italic; margin:6px 0 0; }
-  /* Collapsible "controls" disclosure — defaults closed so the page stays
-     calm; click "controls" to reveal stream toggle + future control widgets. */
-  details.controls { margin:24px 0 0; }
-  details.controls > summary { font-size:.8em; text-transform:uppercase; letter-spacing:.08em; color:#888; cursor:pointer; padding:8px 0; border-top:1px solid #1c1c1c; list-style:none; }
-  details.controls > summary::-webkit-details-marker { display:none; }
-  details.controls > summary::before { content:"▸ "; color:#666; transition:transform .15s ease; display:inline-block; }
-  details.controls[open] > summary::before { content:"▾ "; }
-  details.controls > summary:hover { color:#ccc; }
-  details.controls h3 { font-size:.8em; text-transform:uppercase; letter-spacing:.08em; color:#888; margin:14px 0 6px; }
+  /* Collapsible "controls" disclosure shares the disclosure-row styling
+     above (folded into the .stream-preview/.now-playing multi-selector);
+     only the .controls-specific h3 sub-heading lives here. */
+  details.controls h3 { font-size:.8em; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin:14px 0 6px; }
   /* per-service restart — small, unobtrusive, lives at the end of each row */
   button.restart { font:inherit; font-size:.8em; padding:3px 9px; border-radius:4px; border:1px solid #2a2a2a; background:#1a1a1a; color:#888; cursor:pointer; transition:background .15s, color .15s, border-color .15s; }
   button.restart:hover { background:#252525; color:#ccc; border-color:#3a3a3a; }
@@ -823,7 +945,7 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
      hx-post is in flight, and hx-disabled-elt also sets :disabled. Dim it + show
      a progress cursor so a tap reads as "working" and a double-tap is visibly
      inert until the request settles. */
-  button.htmx-request, button.stream:disabled, button.restart:disabled { opacity:.55; cursor:progress; }
+  button.htmx-request, button.stream:disabled, button.restart:disabled, button.flag-toggle:disabled { opacity:.55; cursor:progress; }
   /* live chat console — recent history rendered server-side, live lines stream
      in via SSE (sse-swap="chat", beforeend). Same disclosure look as the others. */
   details.chat { margin:24px 0 0; }
@@ -844,6 +966,23 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
   .chat-jump { position:absolute; left:50%; bottom:10px; transform:translateX(-50%); z-index:2; font:inherit; font-size:.8em; padding:4px 12px; border-radius:999px; border:1px solid var(--chip-border); background:var(--chip-bg); color:var(--fg); cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,.35); }
   .chat-jump:hover { border-color:#58a6ff; color:#9cf; }
   .chat-jump[hidden] { display:none; }
+  /* chat send box: identity toggle + text input. Sits below the scrollback. */
+  .chat-send { margin-top:8px; display:flex; flex-direction:column; gap:6px; }
+  .chat-send-as { display:flex; gap:14px; font-size:.82em; color:var(--muted); }
+  .chat-send-as label { cursor:pointer; display:inline-flex; align-items:center; gap:4px; }
+  .chat-send-as-single { font-size:.82em; color:var(--dim); }
+  .chat-send-row { display:flex; gap:6px; }
+  .chat-send-text { flex:1; min-width:0; font:inherit; font-size:.92em; padding:6px 8px; border-radius:6px; border:1px solid var(--chip-border); background:var(--chip-bg); color:var(--fg); }
+  .chat-send-text:focus { outline:none; border-color:#58a6ff; }
+  .chat-send button { font:inherit; font-size:.85em; padding:6px 14px; border-radius:6px; border:1px solid var(--chip-border); background:var(--chip-bg); color:var(--fg); cursor:pointer; }
+  .chat-send button:hover { border-color:#58a6ff; color:#9cf; }
+  .chat-send-empty { margin-top:8px; font-size:.82em; color:var(--dim); font-style:italic; }
+  /* optimistic outgoing line: greyed until the message round-trips back, then
+     the .pending class is removed; .failed reddens it if it never lands. */
+  .chat-line.pending { opacity:.5; }
+  .chat-line.failed { opacity:1; }
+  .chat-line.failed .ct { color:#f78166; }
+  .chat-line.failed::after { content:" · not delivered"; color:#f78166; font-size:.8em; }
   /* clickable chat usernames + the profile popover they open */
   .chat-line .cu { cursor:pointer; }
   .chat-line .cu:hover { text-decoration:underline; }
@@ -933,6 +1072,10 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
       <!-- shown only while scrolled up (see JS): tapping jumps to the newest line -->
       <button id="chat-jump" class="chat-jump" type="button" hidden>↓ new</button>
     </div>
+    <!-- send box: re-rendered live on the "sendform" SSE event (pushed by the
+         auth poll) so the identity toggle tracks which accounts are logged in.
+         JS hooks submit for the optimistic-grey-then-confirm flow. -->
+    <div id="chat-send-box" sse-swap="sendform" hx-swap="innerHTML">{{sendForm .AuthStatuses}}</div>
   </details>
 
   {{if and .PreviewChannel .PanelHost}}
@@ -950,13 +1093,7 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
   <details class="feature-flags">
     <summary>feature flags</summary>
     <ul class="flags">
-      {{range .Flags}}
-      <li class="row flag-row">
-        <span class="dot {{if .Enabled}}up{{else}}down{{end}}"></span>
-        <span class="name"><code>{{.Key}}</code>{{if .Description}}<span class="state"> · {{.Description}}</span>{{end}}</span>
-        <span class="status">{{if .Enabled}}on{{else}}off{{end}}</span>
-      </li>
-      {{end}}
+      {{range .Flags}}{{flagRow .}}{{end}}
     </ul>
   </details>
   {{end}}
@@ -1124,17 +1261,109 @@ var adminTmpl = template.Must(template.New("admin").Funcs(template.FuncMap{
     if (!el.dataset.colored) { el.style.color = colorFor(el.textContent); el.dataset.colored = '1'; }
   });
   const decorate = (root) => { localize(root); colorize(root); };
+
+  // --- optimistic send + confirm ------------------------------------------
+  // A message sent from the box below is rendered immediately as a greyed
+  // .pending line. The real message round-trips back on the chat.message SSE
+  // stream (the bot's send mirror, or the bot reading a broadcaster line back
+  // inbound); when a matching line arrives we drop the duplicate and un-grey
+  // the optimistic one. If nothing matches within the timeout, it reddens.
+  const PENDING_TIMEOUT = 8000; // ms — broadcaster sends round-trip in a beat; bot is ~instant
+  const pending = new Map();    // key -> { node, timer }
+  const keyOf = (user, text) => user.trim().toLowerCase() + ' ' + text.trim();
+  const lineKey = (el) => {
+    const cu = el.querySelector('.cu'), ct = el.querySelector('.ct');
+    return (cu && ct) ? keyOf(cu.textContent, ct.textContent) : null;
+  };
+  // reconcile: if the just-arrived line matches a pending one, remove the
+  // duplicate and confirm (un-grey) the optimistic line. Returns true if so.
+  const reconcile = (incoming) => {
+    if (!incoming || !incoming.querySelector) return false;
+    const k = lineKey(incoming);
+    if (!k) return false;
+    const p = pending.get(k);
+    if (!p) return false;
+    clearTimeout(p.timer);
+    pending.delete(k);
+    p.node.classList.remove('pending', 'failed');
+    incoming.remove();
+    return true;
+  };
+  // addPending builds + appends the greyed optimistic line and arms its timeout.
+  const addPending = (username, text) => {
+    const line = document.createElement('div');
+    line.className = 'chat-line pending';
+    const t = document.createElement('time');
+    t.className = 'ct-ts';
+    const now = new Date();
+    t.setAttribute('datetime', now.toISOString());
+    const cu = document.createElement('span');
+    cu.className = 'cu';
+    cu.setAttribute('hx-get', '/admin/user/' + encodeURIComponent(username));
+    cu.setAttribute('hx-target', '#user-popover');
+    cu.setAttribute('hx-swap', 'innerHTML');
+    cu.setAttribute('hx-trigger', 'click');
+    cu.textContent = username;
+    const ct = document.createElement('span');
+    ct.className = 'ct';
+    ct.textContent = text;
+    line.append(t, document.createTextNode(' '), cu, document.createTextNode(' '), ct);
+    log.appendChild(line);
+    if (window.htmx) htmx.process(line);
+    decorate(log);
+    if (pinned) log.scrollTop = log.scrollHeight;
+    const k = keyOf(username, text);
+    const prev = pending.get(k);
+    if (prev) clearTimeout(prev.timer);
+    const timer = setTimeout(() => {
+      if (pending.get(k) && pending.get(k).node === line) { line.classList.add('failed'); pending.delete(k); }
+    }, PENDING_TIMEOUT);
+    pending.set(k, { node: line, timer });
+    return { key: k, node: line };
+  };
+
   log.addEventListener('htmx:afterSwap', () => {
     log.querySelectorAll('.chat-empty').forEach(el => el.remove());
+    const confirmed = reconcile(log.lastElementChild);
     decorate(log);
     if (pinned) {
       while (log.childElementCount > CAP) log.removeChild(log.firstElementChild);
       log.scrollTop = log.scrollHeight;
-    } else {
+    } else if (!confirmed) {
       unread++;
       refreshPill();
     }
   });
+
+  // Send box: hook submit to render the optimistic line, and the response to
+  // clear the input (success) or redden the line (publish failed outright).
+  // Delegated on body because the form is re-rendered live on the sendform SSE.
+  document.body.addEventListener('htmx:beforeRequest', (e) => {
+    const form = e.detail && e.detail.elt;
+    if (!form || !form.classList || !form.classList.contains('chat-send')) return;
+    const fd = new FormData(form);
+    const identity = fd.get('identity');
+    const text = (fd.get('text') || '').trim();
+    if (!identity || !text) return;
+    const user = identity === 'broadcaster' ? form.dataset.broadcasterUser : form.dataset.botUser;
+    if (!user) return;
+    form._pending = addPending(user, text);
+  });
+  document.body.addEventListener('htmx:afterRequest', (e) => {
+    const form = e.detail && e.detail.elt;
+    if (!form || !form.classList || !form.classList.contains('chat-send')) return;
+    const xhr = e.detail.xhr;
+    const ok = e.detail.successful && xhr && xhr.status >= 200 && xhr.status < 300;
+    if (ok) {
+      const input = form.querySelector('.chat-send-text');
+      if (input) input.value = '';
+    } else if (form._pending) {
+      form._pending.node.classList.add('failed');
+      pending.delete(form._pending.key);
+    }
+    form._pending = null;
+  });
+
   decorate(log); // localize times + color usernames in the server-rendered history
   log.scrollTop = log.scrollHeight; // start at the newest message
 })();

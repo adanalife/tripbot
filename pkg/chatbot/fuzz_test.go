@@ -17,15 +17,6 @@ func splitFuzzParams(s string) []string {
 	return strings.Split(s, " ")
 }
 
-// newFuzzApp returns a test App whose IRC is a recording fake (not noopIRC,
-// which delegates to the package-level sayFn and would dereference the nil
-// twitch client during fuzz runs).
-func newFuzzApp(vid video.Video) *App {
-	app := newTestApp(vid)
-	app.IRC = &recordingIRC{}
-	return app
-}
-
 // FuzzFindCommand asserts the chat-message parser never panics on arbitrary
 // input. Anything that gets typed into Twitch chat (including the invisible
 // Chatterino dup-suppression rune \U000e0000, inverted-bang aliases, multi-
@@ -50,7 +41,7 @@ func FuzzFindCommand(f *testing.F) {
 		f.Add(s)
 	}
 	f.Fuzz(func(t *testing.T, s string) {
-		_, _ = defaultApp.findCommand(s)
+		_, _ = builtTestApp.findCommand(s)
 	})
 }
 
@@ -66,7 +57,7 @@ func FuzzGuessCmd(f *testing.F) {
 		f.Add(s)
 	}
 	f.Fuzz(func(t *testing.T, s string) {
-		app := newFuzzApp(newTestVideo(unguessableState, 0, 0, time.Time{}))
+		app := newTestApp(newTestVideo(unguessableState, 0, 0, time.Time{}))
 		params := splitFuzzParams(s)
 		// guessCmd's correct-guess branch lower-cases both sides and the
 		// 2-letter form gets expanded via helpers.StateAbbrevToState; bail
@@ -88,7 +79,7 @@ func FuzzMilesCmd(f *testing.F) {
 		f.Add(s)
 	}
 	f.Fuzz(func(t *testing.T, s string) {
-		app := newFuzzApp(video.Video{})
+		app := newTestApp(video.Video{})
 		params := splitFuzzParams(s)
 		if len(params) == 0 {
 			t.Skip("empty params hits the self path which reads CurrentMiles")
@@ -106,7 +97,7 @@ func FuzzFollowageCmd(f *testing.F) {
 		f.Add(s)
 	}
 	f.Fuzz(func(t *testing.T, s string) {
-		app := newFuzzApp(video.Video{})
+		app := newTestApp(video.Video{})
 		app.middleCmd(context.Background(), newTestUser("viewer1"), splitFuzzParams(s))
 		app.followageCmd(context.Background(), newTestUser("viewer1"), splitFuzzParams(s))
 	})
@@ -121,7 +112,7 @@ func FuzzMiddleCmd(f *testing.F) {
 		f.Add(s)
 	}
 	f.Fuzz(func(t *testing.T, s string) {
-		app := newFuzzApp(video.Video{})
+		app := newTestApp(video.Video{})
 		params := splitFuzzParams(s)
 		app.middleCmd(context.Background(), newTestUser(adminUser), params)
 	})
@@ -135,7 +126,7 @@ func FuzzSetBotFlag(f *testing.F) {
 		f.Add(s)
 	}
 	f.Fuzz(func(t *testing.T, s string) {
-		app := newFuzzApp(video.Video{})
+		app := newTestApp(video.Video{})
 		params := splitFuzzParams(s)
 		app.makeBotCmd(context.Background(), newTestUser(adminUser), params)
 		app.unBotCmd(context.Background(), newTestUser(adminUser), params)
