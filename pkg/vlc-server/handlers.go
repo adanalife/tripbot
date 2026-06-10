@@ -7,11 +7,7 @@ import (
 	"net/http"
 	"os"
 	"runtime/debug"
-	"strconv"
 	"time"
-
-	"github.com/davecgh/go-spew/spew"
-	"github.com/gorilla/mux"
 )
 
 // livenessHandler answers /health/ and /health/live. Liveness is a
@@ -86,74 +82,11 @@ func (s *Server) versionHandler(w http.ResponseWriter, r *http.Request) {
 // package load; close enough to process start for a human-readable "up Xh".
 var startedAt = time.Now()
 
+// vlcCurrentHandler returns the currently-playing file. This is the only
+// vlc command-surface route still on HTTP — it's a read. The play / random /
+// skip / back commands moved to NATS (see nats.go).
 func (s *Server) vlcCurrentHandler(w http.ResponseWriter, r *http.Request) {
-	// return the currently-playing file
 	fmt.Fprint(w, s.currentlyPlaying())
-}
-
-func (s *Server) vlcPlayHandler(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	spew.Dump(vars)
-
-	videoFile := vars["video"]
-
-	spew.Dump(videoFile)
-	if err := s.PlayVideoFile(videoFile); err != nil {
-		slog.ErrorContext(r.Context(), "couldn't play requested video", "err", err, "video", videoFile)
-		http.Error(w, err.Error(), http.StatusNotFound)
-		return
-	}
-
-	//TODO: better response
-	fmt.Fprintf(w, "OK")
-}
-
-func (s *Server) vlcBackHandler(w http.ResponseWriter, r *http.Request) {
-	num, ok := r.URL.Query()["n"]
-	if !ok || len(num) > 1 {
-		s.back(1)
-		return
-	}
-	i, err := strconv.Atoi(num[0])
-	if err != nil {
-		slog.ErrorContext(r.Context(), "couldn't convert input to int", "err", err)
-		http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
-		return
-	}
-
-	s.back(i)
-
-	//TODO: better response
-	fmt.Fprintf(w, "OK")
-
-}
-
-func (s *Server) vlcSkipHandler(w http.ResponseWriter, r *http.Request) {
-	num, ok := r.URL.Query()["n"]
-	if !ok || len(num) > 1 {
-		s.skip(1)
-		return
-	}
-	i, err := strconv.Atoi(num[0])
-	if err != nil {
-		slog.ErrorContext(r.Context(), "couldn't convert input to int", "err", err)
-		http.Error(w, "422 unprocessable entity", http.StatusUnprocessableEntity)
-		return
-	}
-
-	s.skip(i)
-
-	//TODO: better response
-	fmt.Fprintf(w, "OK")
-}
-
-func (s *Server) vlcRandomHandler(w http.ResponseWriter, r *http.Request) {
-	// play a random file
-	err := s.PlayRandom()
-	if err != nil {
-		http.Error(w, "error playing random", http.StatusInternalServerError)
-	}
-	fmt.Fprintf(w, "OK")
 }
 
 // nextFrameJPEGHandler serves the cached first-frame JPEG that the OBS
