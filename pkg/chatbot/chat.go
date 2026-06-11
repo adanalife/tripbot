@@ -28,6 +28,7 @@ type ChatClient interface {
 type consoleMirror struct {
 	inner       ChatClient
 	env         string
+	platform    string
 	botUsername string
 }
 
@@ -38,7 +39,7 @@ func (m consoleMirror) Say(msg string) {
 	// live console — the platform doesn't echo our sent messages back, so
 	// without this the console would miss everything the bot says.
 	// Fire-and-forget; no-op when NATS is unconfigured.
-	eventbus.EmitChatMessage(context.Background(), m.env, m.botUsername, msg)
+	eventbus.EmitChatMessage(context.Background(), m.env, m.platform, m.botUsername, msg)
 	m.inner.Say(msg)
 }
 

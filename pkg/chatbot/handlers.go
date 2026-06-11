@@ -184,7 +184,7 @@ func (a *App) HandleMessage(ctx context.Context, msg IncomingMessage) {
 	// mirror the chat line onto the event bus so live consumers (the admin
 	// panel's chat pane) see it. Original-case username + text, matching the
 	// Loki line above; fire-and-forget, no-op when NATS is unconfigured.
-	eventbus.EmitChatMessage(ctx, c.Conf.Environment, msg.User, msg.Text)
+	eventbus.EmitChatMessage(ctx, c.Conf.Environment, a.Platform, msg.User, msg.Text)
 
 	// log in the user, then run any command (lowercased for matching)
 	//TODO: we lose capitalization here, is that okay?

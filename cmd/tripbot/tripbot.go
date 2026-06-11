@@ -31,6 +31,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/adanalife/tripbot/pkg/video"
 	vlcClient "github.com/adanalife/tripbot/pkg/vlc-client"
+	myyoutube "github.com/adanalife/tripbot/pkg/youtube"
 	_ "github.com/dimiro1/banner/autoload"
 	"github.com/gempir/go-twitch-irc/v4"
 	"github.com/getsentry/sentry-go"
@@ -156,9 +157,21 @@ func main() {
 	NewTripbot(version).Run()
 }
 
-// Run performs the various steps to get the bot running.
+// platformIsTwitch reports whether this instance serves Twitch. Empty
+// Platform is treated as Twitch, matching the chatbot registry's contract.
+func platformIsTwitch() bool {
+	return c.Conf.Platform == "" || c.Conf.Platform == "twitch"
+}
+
+// Run performs the various steps to get the bot running. The spine —
+// telemetry, HTTP server, player, sessions, cron, feature flags, NATS, the
+// admin hub — is platform-neutral and runs on every instance; only the
+// chat-transport bring-up swaps on STREAM_PLATFORM. Twitch-only steps (IRC
+// token plumbing, EventSub, subscriber polling, the admin chat-send
+// subscriber, Discord, the OBS↔Twitch watchdog) are gated off non-Twitch
+// instances.
 func (t *Tripbot) Run() {
-	slog.Info("tripbot starting", "version", t.version)
+	slog.Info("tripbot starting", "version", t.version, "platform", c.Conf.Platform)
 	createRandomSeed()
 	// shutdownCtx is canceled on SIGINT/SIGTERM; the HTTP server uses it
 	// to trigger a graceful shutdown so in-flight requests aren't cut.
@@ -178,19 +191,57 @@ func (t *Tripbot) Run() {
 	t.sessions.InitLeaderboard(context.Background())
 	t.startCron()
 	t.startFeatureFlags(shutdownCtx)
-	t.loadTwitchToken(shutdownCtx)           // must precede setUpTwitchClient — provides the IRC token
-	t.refreshTokensIfNearExpiry(shutdownCtx) // closes the restart-desync gap with the hourly cron
-	t.setUpTwitchClient()                    // required for the below
-	t.updateSubscribers()
-	t.getCurrentUsers()
-	t.startEventSub(shutdownCtx)
+	if platformIsTwitch() {
+		t.loadTwitchToken(shutdownCtx)           // must precede setUpTwitchClient — provides the IRC token
+		t.refreshTokensIfNearExpiry(shutdownCtx) // closes the restart-desync gap with the hourly cron
+		t.setUpTwitchClient()                    // required for the below
+		t.updateSubscribers()
+		t.getCurrentUsers()
+		t.startEventSub(shutdownCtx)
+	}
 	t.startNATS(shutdownCtx)
 	t.srv.StartEventHub(shutdownCtx)       // after startNATS: the hub subscribes to the live NATS conn
-	t.startChatSendSubscriber(shutdownCtx) // after startNATS + setUpTwitchClient: needs the conn and t.app.Chat
 	t.player.EmitCurrentVideo(shutdownCtx) // after the hub subscribes: seed its now-playing cache (no NATS replay)
-	t.startDiscord(shutdownCtx)
-	t.startSilentDisconnectWatchdog(shutdownCtx)
+	if !platformIsTwitch() {
+		t.connectToYouTube(shutdownCtx)
+		return
+	}
+	// chat.send subjects are per-env, not per-platform — both platform
+	// instances would receive every admin send, so only the Twitch instance
+	// (which owns the bot/broadcaster identities the command names)
+	// subscribes.
+	t.startChatSendSubscriber(shutdownCtx)       // after startNATS + setUpTwitchClient: needs the conn and t.app.Chat
+	t.startDiscord(shutdownCtx)                  // Discord stays Twitch-side for v1
+	t.startSilentDisconnectWatchdog(shutdownCtx) // watches the OBS→Twitch stream specifically
 	t.connectToTwitch()
+}
+
+// connectToYouTube wires outbound chat + starts the inbound poller for a
+// PLATFORM=youtube instance, then blocks until shutdown — the YouTube analog
+// of connectToTwitch's blocking connect loop. Mirrors loadTwitchToken's
+// stay-up pattern: when the channel-owner oauth_tokens row is missing at
+// boot, the pod stays Ready (the admin panel + /auth/init?account=youtube
+// remain reachable for re-auth) and retries until the token lands.
+func (t *Tripbot) connectToYouTube(ctx context.Context) {
+	const retry = 15 * time.Second
+	binding, err := t.app.ConnectYouTube(ctx)
+	for err != nil {
+		slog.WarnContext(ctx, "no usable YouTube token; starting without chat and polling",
+			"reauth_url", myyoutube.AuthInitURL(), "err", err)
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(retry):
+		}
+		binding, err = t.app.ConnectYouTube(ctx)
+	}
+
+	go t.app.NewYouTubeChatPoller(binding).Run(ctx)
+	slog.InfoContext(ctx, "youtube chat poller started", "channel_id", myyoutube.ChannelID())
+
+	// nothing else to do on the main goroutine — the poller and HTTP server
+	// run until the signal handler shuts the process down.
+	<-ctx.Done()
 }
 
 // featureFlagRefreshInterval is how often the Postgres-backed flag client
@@ -556,8 +607,20 @@ func (t *Tripbot) gracefulShutdown() {
 // Lives in this package (not pkg/background) to avoid circular deps with
 // the job-target packages.
 func (t *Tripbot) scheduleBackgroundJobs() {
-	onscreensCli := onscreensClient.New(natsclient.DefaultPublisher(), c.Conf.Environment)
+	// platform-neutral jobs: every instance plays video and posts the
+	// periodic help message.
 	t.addJob(60*time.Second, "video.GetCurrentlyPlaying", t.player.GetCurrentlyPlaying)
+	t.addJob(2*time.Hour+57*time.Minute+30*time.Second, "chatbot.Chatter", t.app.Chatter)
+
+	if !platformIsTwitch() {
+		// Twitch-sourced jobs stay off non-Twitch instances: session/presence
+		// tracking reads Twitch chatters (YouTube presence is punted in v1),
+		// the guess leaderboard backs an excluded command, the subscriber /
+		// follower polls hit Helix, and the token-refresh job dereferences the
+		// IRC client this instance never constructs.
+		return
+	}
+	onscreensCli := onscreensClient.New(natsclient.DefaultPublisher(), c.Conf.Environment)
 	t.addJob(61*time.Second, "users.UpdateSession", t.sessions.UpdateSession)
 	t.addJob(62*time.Second, "users.UpdateLeaderboard", t.sessions.UpdateLeaderboard)
 	t.addJob(5*time.Minute, "onscreens.ShowGuessLeaderboard", onscreensCli.ShowGuessLeaderboard)
@@ -573,7 +636,6 @@ func (t *Tripbot) scheduleBackgroundJobs() {
 			t.irc.SetIRCToken(tok)
 		}
 	})
-	t.addJob(2*time.Hour+57*time.Minute+30*time.Second, "chatbot.Chatter", t.app.Chatter)
 }
 
 // addJob registers a gocron job at the given interval, wrapping fn with

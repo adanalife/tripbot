@@ -79,8 +79,13 @@ func emit(ctx context.Context, subj string, ev any) {
 // --- chat.message ---------------------------------------------------------
 
 // ChatMessage is the wire format for tripbot.<env>.chat.message — one incoming
-// Twitch chat line.
+// chat line from whichever platform this instance serves.
 type ChatMessage struct {
+	// Platform is the streaming platform the line came from ("twitch" /
+	// "youtube"). Both per-platform instances publish into the same env's
+	// subject, so this is what lets the admin console disambiguate. Empty on
+	// events emitted before the tag existed.
+	Platform  string `json:"platform,omitempty"`
 	Username  string `json:"username"`
 	Text      string `json:"text"`
 	EmittedAt string `json:"emitted_at"`
@@ -92,8 +97,9 @@ func ChatMessageSubject(env string) string { return subject(env, "chat", "messag
 
 // EmitChatMessage publishes an incoming chat line. Pass the original-case
 // username + text (not the lowercased command-parse copy).
-func EmitChatMessage(ctx context.Context, env, username, text string) {
+func EmitChatMessage(ctx context.Context, env, platform, username, text string) {
 	emit(ctx, ChatMessageSubject(env), ChatMessage{
+		Platform:  platform,
 		Username:  username,
 		Text:      text,
 		EmittedAt: emittedAt(),
