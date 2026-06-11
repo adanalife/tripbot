@@ -1,4 +1,4 @@
-FROM ubuntu:24.04
+FROM ghcr.io/adanalife/mirror/ubuntu:24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 

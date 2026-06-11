@@ -86,7 +86,7 @@ services:
   db:
     # pgvector/pgvector:pg16 is a drop-in for postgres:16-alpine that adds the
     # `vector` extension (used by frame_embeddings / dashcam-cv visual search).
-    image: pgvector/pgvector:pg16
+    image: ghcr.io/adanalife/mirror/pgvector:pg16
     restart: always
     ports:
       - "5432"
@@ -97,7 +97,7 @@ services:
     # data persistence is opt-in per environment (see docker-compose.development.yml)
 
   migrate:
-    image: migrate/migrate
+    image: ghcr.io/adanalife/mirror/migrate:4
     depends_on:
       - db
     volumes:

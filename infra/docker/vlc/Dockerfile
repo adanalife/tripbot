@@ -1,4 +1,4 @@
-FROM ubuntu:24.04
+FROM ghcr.io/adanalife/mirror/ubuntu:24.04
 
 # libva2 / libva-drm2 / mesa-va-drivers / vainfo are the userspace
 # VA-API plumbing libvlc needs to discover and use /dev/dri/renderD128

@@ -1,5 +1,5 @@
 # Builder: produce a static-ish tripbot binary with Go 1.26
-FROM golang:1.26-bookworm AS builder
+FROM ghcr.io/adanalife/mirror/golang:1.26-bookworm AS builder
 
 WORKDIR /src
 
@@ -13,7 +13,7 @@ RUN CGO_ENABLED=0 go build -ldflags="-s -w -X main.version=${VERSION}" -o /out/t
  && CGO_ENABLED=0 go build -ldflags="-s -w" -o /out/auth-bootstrap ./cmd/auth-bootstrap
 
 # Runtime: minimal Ubuntu 24.04 matching the VLC/OBS containers
-FROM ubuntu:24.04
+FROM ghcr.io/adanalife/mirror/ubuntu:24.04
 
 RUN apt-get update \
   && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
@@ -27,7 +27,7 @@ COPY --from=builder /out/tripbot /usr/local/bin/tripbot
 COPY --from=builder /out/auth-bootstrap /usr/local/bin/auth-bootstrap
 
 # Bundle the migrate CLI + db/migrate so this image can run schema migrations.
-COPY --from=migrate/migrate:4 /usr/local/bin/migrate /usr/local/bin/migrate
+COPY --from=ghcr.io/adanalife/mirror/migrate:4 /usr/local/bin/migrate /usr/local/bin/migrate
 COPY db/migrate /migrations
 
 # Bundle seed script + data so the k8s seed Job is self-contained.
