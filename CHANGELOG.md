@@ -17,7 +17,7 @@ Minor release. The headline is the **VLC command surface completing its move to 
 
 ### admin
 
-- **Chat-send box defaults to the broadcaster identity.** The send-from-console form's identity toggle pre-selected the bot (first in `TokenStatuses`); talking as the channel owner is the common case, so it now pre-selects the broadcaster when it's logged in, falling back to the bot otherwise. Both stay selectable. ([#807])
+- **Chat-send box defaults to the broadcaster identity.** The send-from-console form's identity toggle preselected the bot (first in `TokenStatuses`); talking as the channel owner is the common case, so it now preselects the broadcaster when it's logged in, falling back to the bot otherwise. Both stay selectable. ([#807])
 
 ### chatbot
 
