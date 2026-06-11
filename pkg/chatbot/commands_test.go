@@ -197,6 +197,27 @@ func TestReportCmd_AcksViaIRC(t *testing.T) {
 	}
 }
 
+func TestIsDiscordWebhookURL(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want bool
+	}{
+		{"valid", "https://discord.com/api/webhooks/123/abc", true},
+		{"placeholder", "placeholder — set via aws secretsmanager put-secret-value", false},
+		{"empty", "", false},
+		{"http scheme", "http://discord.com/api/webhooks/123/abc", false},
+		{"other host", "https://example.com/api/webhooks/123/abc", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isDiscordWebhookURL(tc.in); got != tc.want {
+				t.Errorf("isDiscordWebhookURL(%q) = %v, want %v", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestBonusMilesCmd_SaysViaIRC(t *testing.T) {
 	app := newTestApp(video.Video{})
 	rec := &recordingChat{}
