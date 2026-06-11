@@ -5,7 +5,7 @@
 # embedded in the binary (pkg/onscreens-server), so the runtime needs no assets.
 
 # Builder: produce a static binary with Go 1.26
-FROM golang:1.26-bookworm AS builder
+FROM ghcr.io/adanalife/mirror/golang:1.26-bookworm AS builder
 
 WORKDIR /src
 
@@ -18,7 +18,7 @@ COPY . .
 RUN CGO_ENABLED=0 go build -ldflags="-s -w -X main.version=${VERSION}" -o /out/onscreens-server ./cmd/onscreens-server
 
 # Runtime: minimal Ubuntu 24.04 matching the tripbot/vlc/obs containers
-FROM ubuntu:24.04
+FROM ghcr.io/adanalife/mirror/ubuntu:24.04
 
 RUN apt-get update \
   && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
