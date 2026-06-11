@@ -53,6 +53,9 @@ jobs:
           file: infra/docker/tripbot/Dockerfile
           tags: ${{ steps.meta.outputs.tags }}
           push: true
+          # load the image into the local daemon too, so the verify step
+          # runs it without pulling back from Docker Hub (quota)
+          load: true
           build-args: |
             VERSION=${{ steps.ver.outputs.value }}
             SHA=${{ github.sha }}
@@ -145,6 +148,7 @@ jobs:
           file: infra/docker/vlc/Dockerfile
           tags: ${{ steps.meta.outputs.tags }}
           push: true
+          load: true
           build-args: |
             VERSION=${{ steps.ver.outputs.value }}
             SHA=${{ github.sha }}
@@ -244,6 +248,7 @@ jobs:
           file: ${{ matrix.dockerfile }}
           tags: ${{ steps.meta.outputs.tags }}
           push: true
+          load: true
           build-args: |
             VERSION=${{ steps.ver.outputs.value }}
             SHA=${{ github.sha }}
@@ -338,6 +343,7 @@ jobs:
           file: infra/docker/onscreens-server/Dockerfile
           tags: ${{ steps.meta.outputs.tags }}
           push: true
+          load: true
           build-args: |
             VERSION=${{ steps.ver.outputs.value }}
             SHA=${{ github.sha }}
