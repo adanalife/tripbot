@@ -1,0 +1,56 @@
+# Refreshes the GHCR mirrors of the third-party Docker Hub base images our
+# Dockerfiles build FROM. The mirrors exist so CI never pulls from Docker Hub
+# at build time — Hub's pull rate limit repeatedly broke builds (manifest
+# resolution counts against the quota even on full layer-cache hits, so GHA
+# caching can't prevent it). The Dockerfiles reference
+# ghcr.io/adanalife/mirror/<image>:<tag>; this weekly copy keeps those mutable
+# tags tracking upstream (security patches, point releases).
+#
+# Adding a new base image: push the first copy (the crane command below, from
+# any authed machine), make the package public in the org packages UI, grant
+# this repo write access under the package's "Manage Actions access", and add
+# the pair to the list here + use the mirror ref in the Dockerfile.
+name: Mirror base images
+
+on:
+  schedule:
+    - cron: "17 9 * * 1" # weekly, Monday morning UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Login to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # crane copies the full multi-arch manifest list registry-to-registry
+      # (the release workflow's arm64 legs pull these mirrors too). crane
+      # rather than `docker buildx imagetools create`: the latter 400s on
+      # ghcr blob uploads for large layers (hit on golang:1.26-bookworm).
+      # The weekly Hub pulls here are a handful of requests — far under any
+      # limit. crane reads the docker-config auth the login step wrote.
+      - name: Copy images Hub -> GHCR
+        run: |
+          set -euo pipefail
+          while read -r src dst; do
+            echo "::group::${src} -> ${dst}"
+            go run github.com/google/go-containerregistry/cmd/crane@latest copy "${src}" "${dst}"
+            echo "::endgroup::"
+          done <<'EOF'
+          docker.io/golang:1.26-bookworm ghcr.io/adanalife/mirror/golang:1.26-bookworm
+          docker.io/ubuntu:24.04 ghcr.io/adanalife/mirror/ubuntu:24.04
+          docker.io/migrate/migrate:4 ghcr.io/adanalife/mirror/migrate:4
+          docker.io/pgvector/pgvector:pg16 ghcr.io/adanalife/mirror/pgvector:pg16
+          EOF
+      # mirror/obs-cef-base:<ver> is also on GHCR but deliberately NOT in the
+      # refresh list: its tags are immutable version pins (a CEF bump changes
+      # the tag in Dockerfile.arm64), so each new tag is a one-time crane copy
+      # when obs-base.yml publishes it.

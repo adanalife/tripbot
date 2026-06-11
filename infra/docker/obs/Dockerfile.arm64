@@ -11,13 +11,13 @@
 # but publishes amd64 only — no arm64 across any Ubuntu release. amd64 stays
 # on the PPA build (see Dockerfile).
 # =============================================================================
-FROM adanalife/obs-cef-base:arm64-32.1.2-6533 AS builder
+FROM ghcr.io/adanalife/mirror/obs-cef-base:arm64-32.1.2-6533 AS builder
 
 
 # =============================================================================
 # Runtime: minimal Ubuntu 24.04 with the artifacts copied over from builder.
 # =============================================================================
-FROM ubuntu:24.04
+FROM ghcr.io/adanalife/mirror/ubuntu:24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 

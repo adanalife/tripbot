@@ -7,6 +7,29 @@ All notable changes to TripBot. Format follows [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+## [v3.2.0] — 2026-06-11
+
+Minor release. The headline is the **YouTube provider going code-complete**: a `PLATFORM=youtube` tripbot instance now runs end to end — channel-owner OAuth, outbound live-chat sends, an inbound chat poller, and a boot sequence that branches per platform — built on the provider-neutral chat seams the Phase C refactor left behind. Alongside it: release CI now publishes a GitHub Release per tag, dispatches the infra version-bump PRs automatically, and pulls base images from GHCR mirrors to dodge Docker Hub rate limits; and `!report` validates its Discord webhook URL before POSTing.
+
+### youtube
+
+- **Per-platform command allowlist.** A `Platform` selector on `TripbotConfig` / `chatbot.App` (read from the same `STREAM_PLATFORM` key the OBS image uses): Twitch runs the full registry, while a YouTube instance indexes only a stateless v1 allowlist — info, weather/time, playback control, and socials — excluding everything that needs per-user identity, miles, Helix, or admin. Disabled triggers stay registered but never index into dispatch. ([#809])
+- **Quota spike.** A standalone `cmd` proving the OAuth → active-broadcast → `liveChatId` → poll/insert loop and measuring Data-API quota burn at the server-suggested cadence, before any tripbot wiring. Zero `tripbot/pkg` imports per the package-boundary discipline. ([#811])
+- **`pkg/youtube` — channel-owner OAuth + token storage.** Owns tripbot's YouTube identity, mirroring `pkg/twitch`. One identity (no bot/broadcaster split — YouTube live chat must run as the channel owner), stored in `oauth_tokens` as `provider=youtube` keyed by channel ID, with lazy refresh persisted on rotation and an optional `YOUTUBE_CHANNEL_ID` pin that rejects consent from the wrong channel before persist. Admin re-auth is `/auth/init?account=youtube` riding the existing callback path. All optional — a Twitch instance with no `YOUTUBE_*` env never fatals. ([#812])
+- **Outbound live-chat client.** `youtubeChat` implements the `ChatClient` seam: `Say` posts via `liveChatMessages.insert` (truncating at YouTube's 200-char limit, stripping the IRC `/me` prefix), `Whisper` is a no-op, and a rebindable `liveChatBinding` shared with the inbound poller drops sends with a log while no broadcast is live. Output flows through the console mirror, so the admin live console sees YouTube exactly like Twitch. ([#814])
+- **Inbound live-chat poller.** Discovers the active broadcast (idling quietly while not live), binds its chat, and pages messages into the shared command path via `HandleYouTubeMessage` — identical to the Twitch handler except viewers get a transient, never-persisted `users.User` (v1 punts identity/presence/miles). Skips the backlog page on every bind so stale commands never replay, filters the bot's own echoes, and disambiguates quota-exhausted 403s (5-min backoff) from chat-ended 403s (rediscover). ([#815])
+- **Per-platform boot.** `Run()` branches on `STREAM_PLATFORM`: the spine (telemetry, admin server, player, cron, flags, NATS, event hub) stays common; only chat bring-up swaps. A youtube pod with no token stays Ready and retries every 15s so the admin panel's re-auth flow is always reachable. Twitch-only steps (IRC token refresh, EventSub, follower/subscriber polls, chatter sessions, Discord, the OBS watchdog, the admin `chat.send` subscriber) are gated off non-Twitch instances, and `eventbus.ChatMessage` gains a `platform` tag so the admin console can disambiguate the two instances' chat lines. ([#816])
+
+### CI
+
+- **A GitHub Release per release tag.** `release.yml` gains a `github-release` job after the image manifests publish: `gh release create --generate-notes --verify-tag`, giving each version a human-readable PR-by-PR summary (the Releases page had been frozen at v1.9.1). ([#817])
+- **Release dispatches infra bump PRs.** Once all four manifests publish, the workflow fires a `tripbot-release` `repository_dispatch` at `adanalife/infra`, whose bump-prs workflow ([infra #694]) fans out one "bump prod \<component\>" PR per image — merge = deploy. Authenticated via a short-lived adanalife-automation GitHub App token ([infra #695]); no PAT. ([#818])
+- **Base images pull from GHCR mirrors, not Docker Hub.** Docker Hub's pull rate limit broke CI twice in one day; the 429 hits at manifest resolution, before the GHA layer cache is ever consulted. The three third-party base images (`golang`, `ubuntu`, `migrate`) are mirrored to `ghcr.io/adanalife/mirror/*` (unlimited anonymous pulls, co-located with the runners), every Dockerfile now points at the mirrors, and a weekly `mirror-images` workflow re-copies the tags with crane so they keep tracking upstream security patches. `adanalife/obs-cef-base` stays on Docker Hub — it's our own published image, not a mirror candidate. ([#820])
+
+### fix
+
+- **`!report` validates the Discord webhook URL before POSTing.** A placeholder or garbage `DISCORD_ALERTS_WEBHOOK` no longer logs an "unsupported protocol scheme" ERROR on every report — it warns once per process and falls through to the slog/Sentry audit path. ([#810])
+
 ## [v3.1.0] — 2026-06-10
 
 Minor release. The headline is the **VLC command surface completing its move to NATS** — the HTTP command path is gone and NATS is now the sole transport for playback commands, the final step of the migration the observe-only mirror began in v3.0.0. Alongside it: the admin console's chat-send box defaults to the broadcaster identity, and `!ocation` joins the `!location` typo aliases.
@@ -1461,3 +1484,15 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#807]: https://github.com/adanalife/tripbot/pull/807
 [#806]: https://github.com/adanalife/tripbot/pull/806
 [infra #645]: https://github.com/adanalife/infra/pull/645
+[#809]: https://github.com/adanalife/tripbot/pull/809
+[#810]: https://github.com/adanalife/tripbot/pull/810
+[#811]: https://github.com/adanalife/tripbot/pull/811
+[#812]: https://github.com/adanalife/tripbot/pull/812
+[#814]: https://github.com/adanalife/tripbot/pull/814
+[#815]: https://github.com/adanalife/tripbot/pull/815
+[#816]: https://github.com/adanalife/tripbot/pull/816
+[#817]: https://github.com/adanalife/tripbot/pull/817
+[#818]: https://github.com/adanalife/tripbot/pull/818
+[#820]: https://github.com/adanalife/tripbot/pull/820
+[infra #694]: https://github.com/adanalife/infra/pull/694
+[infra #695]: https://github.com/adanalife/infra/pull/695

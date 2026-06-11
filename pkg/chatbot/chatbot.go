@@ -25,6 +25,11 @@ var Uptime time.Time
 // App holds injectable dependencies for the chatbot. cmd/tripbot constructs the
 // live one with New(); tests instantiate it directly with fakes.
 type App struct {
+	// Platform names the streaming platform this App serves ("twitch" /
+	// "youtube"). It gates which commands are indexed for dispatch
+	// (indexCommands): Twitch runs the full registry, YouTube runs the v1
+	// allowlist. Empty is treated as Twitch. Set from c.Conf.Platform in New().
+	Platform string
 	// DB is the GORM handle used by commands that need to read or write the
 	// database. nil in tests that don't exercise the DB; otherwise either the
 	// real database.GormDB() or a sqlmock-backed gorm.DB.
@@ -116,6 +121,7 @@ func (a *App) db() *gorm.DB {
 // touches no network or DB — the realX adapters are lazy.
 func New() *App {
 	a := &App{
+		Platform: c.Conf.Platform,
 		// DB stays nil; commands use a.db() which falls back to database.GormDB().
 		Onscreens:  realOnscreens{c: onscreensClient.New(natsclient.DefaultPublisher(), c.Conf.Environment)},
 		VLC:        realVLC{c: vlcClient.New(c.Conf.VlcServerHost, natsclient.DefaultPublisher(), c.Conf.Environment)},
@@ -187,6 +193,7 @@ func (a *App) ConnectIRC() *twitch.Client {
 			botUsername:   c.Conf.BotUsername,
 		},
 		env:         c.Conf.Environment,
+		platform:    c.Conf.Platform,
 		botUsername: c.Conf.BotUsername,
 	}
 
