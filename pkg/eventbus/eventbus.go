@@ -13,7 +13,7 @@
 //
 // Subjects follow the project convention tripbot.<env>.<domain>.<event>;
 // envelopes are snake_case JSON carrying emitted_at (RFC3339Nano UTC) so a
-// future protobuf schema maps 1-1. See the NATS phase-0/1 session notes.
+// future protobuf schema maps 1-1.
 package eventbus
 
 import (

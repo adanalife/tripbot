@@ -28,10 +28,10 @@ var ShutdownDelay = 500 * time.Millisecond
 // tripbot's Go servers (tripbot, vlc-server, onscreens-server). Responds
 // 202 + a short body, then schedules SIGTERM after ShutdownDelay.
 //
-// The handler is intentionally minimal: no body parsing, no auth check
-// (tailnet-only by Ingress per the admin-panel discussion in CLAUDE.md +
-// vault/decisions). If/when the panel reaches beyond the tailnet, the
-// auth gate goes on the route registration, not here.
+// The handler is intentionally minimal: no body parsing, and no auth check
+// because the admin surface is only reachable over the tailnet by Ingress.
+// If/when the panel reaches beyond the tailnet, the auth gate goes on the
+// route registration, not here.
 func ShutdownHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		slog.WarnContext(r.Context(), "admin shutdown requested — SIGTERMing self", "delay", ShutdownDelay)

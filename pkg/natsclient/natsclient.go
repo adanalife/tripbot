@@ -2,10 +2,9 @@
 // onscreens-server. Mirrors the pkg/database singleton pattern: lazy on
 // first Connect, no-op when the URL is empty, swappable for tests.
 //
-// Phase 1 (vault/tripbot/TODO.md "Adopt NATS as the inter-component
-// message bus"): fire-and-forget pubsub over core NATS. Phase 3 adds the
-// JetStream accessor below for durable, replayable streams — the admin
-// live console backfills its chat/map buffers from them on startup.
+// Core NATS carries fire-and-forget pubsub; the JetStream accessor below
+// serves durable, replayable streams — the admin live console backfills
+// its chat/map buffers from them on startup.
 package natsclient
 
 import (

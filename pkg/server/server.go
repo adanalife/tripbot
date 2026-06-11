@@ -118,7 +118,7 @@ func (s *Server) Start(ctx context.Context) {
 	r.PathPrefix("/static/").Handler(staticHandler())
 
 	// admin actions — tailnet-only by virtue of where the Ingress is
-	// exposed; no app-layer auth gate (see CLAUDE.md / vault decisions).
+	// exposed; no app-layer auth gate.
 	admin := r.PathPrefix("/admin").Methods("POST").Subrouter()
 	admin.Handle("/obs/stream/{action}", tagged("/admin/obs/stream/{action}", obsStreamActionHandler))
 	admin.Handle("/flags/{key}/{action}", tagged("/admin/flags/{key}/{action}", s.flagActionHandler))

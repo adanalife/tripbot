@@ -21,7 +21,7 @@ import (
 
 // liveChatBinding holds the currently-bound live chat ID, shared between the
 // outbound youtubeChat (Say targets it) and the inbound poller (which
-// discovers and re-binds it across broadcast lifecycles — Phase B3). Empty
+// discovers and re-binds it across broadcast lifecycles). Empty
 // means "not live right now": sends drop, the poller keeps re-discovering.
 type liveChatBinding struct {
 	mu sync.RWMutex
@@ -77,8 +77,8 @@ func (yc youtubeChat) Whisper(username, msg string) {
 // ConnectYouTube wires this App's outbound chat to YouTube — the
 // ConnectIRC analog for a PLATFORM=youtube instance. It loads the
 // channel-owner token from the DB, binds the active broadcast's live chat
-// (non-fatal when nothing is live: sends drop until the inbound poller —
-// Phase B3 — binds it), and points a.Chat at the youtubeChat client wrapped
+// (non-fatal when nothing is live: sends drop until the inbound poller
+// binds it), and points a.Chat at the youtubeChat client wrapped
 // in the provider-neutral console mirror.
 //
 // Returns the binding for the inbound poller to share. Errors only when the
@@ -165,7 +165,7 @@ type youtubeChatPoller struct {
 
 // NewYouTubeChatPoller builds the production poller sharing this App and the
 // binding returned by ConnectYouTube. Run it in a goroutine (cmd/tripbot's
-// platform branch — Phase B4).
+// platform branch does).
 func (a *App) NewYouTubeChatPoller(binding *liveChatBinding) *youtubeChatPoller {
 	return &youtubeChatPoller{
 		app:          a,

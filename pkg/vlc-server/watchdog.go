@@ -43,7 +43,7 @@ func ResumeMarkerPath() string {
 // The libvlc RTSP server can answer OPTIONS (process alive, port bound)
 // while DESCRIBE returns 500 — the silent-failure mode that motivates this
 // probe: the sout chain went away without the player crashing or releasing
-// :8554. See vault/tripbot/vlc-server/gotchas.md.
+// :8554.
 func probeRTSPDescribe() error {
 	return probeRTSPDescribeAt(rtspProbeAddr)
 }

@@ -270,11 +270,8 @@ func (t *Tripbot) startFeatureFlags(ctx context.Context) {
 }
 
 // startNATS connects to the in-cluster NATS broker and declares the JetStream
-// streams that back the admin live console's durable history (phase 1 + 3 of
-// the pubsub migration). Optional — when NATS_URL is empty the connection is
-// skipped and publishes no-op silently; chatbot.realOnscreens.ShowMiddleText
-// still mirrors to NATS but the publish becomes a nil check, leaving HTTP as
-// the sole transport.
+// streams that back the admin live console's durable history. Optional — when
+// NATS_URL is empty the connection is skipped and publishes no-op silently.
 //
 // EnsureStreams must run before StartEventHub so the streams exist when the hub
 // binds its ordered consumers. It no-ops when JetStream is unavailable (NATS off

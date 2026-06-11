@@ -14,8 +14,8 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 )
 
-// TestHub_Start_replaysHistoryFromJetStream is the load-bearing test for phase 3:
-// it proves the live console survives a reboot. We publish chat + video history,
+// TestHub_Start_replaysHistoryFromJetStream proves the live console survives
+// a reboot. We publish chat + video history,
 // then start a *fresh* hub with no SSE clients connected and assert the durable
 // JetStream consumers replayed that history into the chat ring and map trail.
 // This is delivery-on-startup (replay), not live delivery — the messages were
