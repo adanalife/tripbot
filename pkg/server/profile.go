@@ -39,6 +39,16 @@ type userProfile struct {
 	LastSeen     time.Time
 }
 
+// floorDisplayMiles clamps a miles value to a 0.01 minimum for display so a
+// brand-new viewer never renders as "0.0". Display-only — callers must not
+// persist the result.
+func floorDisplayMiles(m float32) float32 {
+	if m < 0.01 {
+		return 0.01
+	}
+	return m
+}
+
 // userProfileHandler serves GET /admin/user/{username}: the HTML fragment the
 // live console pops over when an operator clicks a username. Phase 2 will add
 // timeout/ban actions here (needs the broadcaster token's
@@ -50,8 +60,11 @@ func userProfileHandler(w http.ResponseWriter, r *http.Request) {
 		if u := findUser(r.Context(), username); u.ID != 0 {
 			prof.Found = true
 			prof.IsBot = u.IsBot
-			prof.Miles = u.Miles
-			prof.MonthlyMiles = monthlyMiles(r.Context(), u)
+			// Floor the *displayed* miles at 0.01 so a brand-new viewer never
+			// shows as "0.0", which reads as broken — matching the !miles
+			// floor. Display-only: stored u.Miles is untouched.
+			prof.Miles = floorDisplayMiles(u.Miles)
+			prof.MonthlyMiles = floorDisplayMiles(monthlyMiles(r.Context(), u))
 			prof.FirstSeen = u.DateCreated
 			prof.LastSeen = u.LastSeen
 			prof.Sessions = sessionCount(r.Context(), username)
@@ -70,8 +83,8 @@ var userProfileTmpl = template.Must(template.New("profile").Parse(`<div class="p
   <div class="profile-name">{{.Username}}{{if .IsBot}} <span class="profile-bot">bot</span>{{end}}</div>
   {{- if .Found}}
   <dl class="profile-stats">
-    <dt>miles</dt><dd>{{printf "%.1f" .Miles}}</dd>
-    <dt>this month</dt><dd>{{printf "%.1f" .MonthlyMiles}}</dd>
+    <dt>miles</dt><dd>{{printf "%.2f" .Miles}}</dd>
+    <dt>this month</dt><dd>{{printf "%.2f" .MonthlyMiles}}</dd>
     <dt>sessions</dt><dd>{{.Sessions}}</dd>
     <dt>first seen</dt><dd>{{if .FirstSeen.IsZero}}unknown{{else}}{{.FirstSeen.Format "2006-01-02"}}{{end}}</dd>
     <dt>last seen</dt><dd>{{if .LastSeen.IsZero}}unknown{{else}}{{.LastSeen.Format "2006-01-02 15:04"}}{{end}}</dd>
