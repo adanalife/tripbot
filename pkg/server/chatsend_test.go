@@ -45,8 +45,8 @@ func TestChatSendHandler_PublishesValidSend(t *testing.T) {
 	if rec.calls != 1 {
 		t.Fatalf("publish calls = %d, want 1", rec.calls)
 	}
-	if !strings.HasSuffix(rec.subj, ".chat.send") {
-		t.Errorf("subject = %q, want suffix .chat.send", rec.subj)
+	if !strings.HasSuffix(rec.subj, ".chat.send.twitch") {
+		t.Errorf("subject = %q, want suffix .chat.send.twitch", rec.subj)
 	}
 	var ev chatEvents.Send
 	if err := json.Unmarshal(rec.data, &ev); err != nil {
