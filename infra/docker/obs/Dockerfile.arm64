@@ -11,7 +11,7 @@
 # but publishes amd64 only — no arm64 across any Ubuntu release. amd64 stays
 # on the PPA build (see Dockerfile).
 # =============================================================================
-FROM adanalife/obs-cef-base:arm64-32.1.2-6533 AS builder
+FROM ghcr.io/adanalife/mirror/obs-cef-base:arm64-32.1.2-6533 AS builder
 
 
 # =============================================================================
