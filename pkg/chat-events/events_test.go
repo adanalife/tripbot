@@ -7,16 +7,18 @@ import (
 
 func TestSendSubject(t *testing.T) {
 	cases := []struct {
-		env  string
-		want string
+		env      string
+		platform string
+		want     string
 	}{
-		{"staging", "tripbot.staging.chat.send"},
-		{"prod", "tripbot.prod.chat.send"},
-		{"development", "tripbot.development.chat.send"},
+		{"staging", PlatformTwitch, "tripbot.staging.chat.send.twitch"},
+		{"prod", PlatformTwitch, "tripbot.prod.chat.send.twitch"},
+		{"prod", PlatformYouTube, "tripbot.prod.chat.send.youtube"},
+		{"development", PlatformTwitch, "tripbot.development.chat.send.twitch"},
 	}
 	for _, tc := range cases {
-		if got := SendSubject(tc.env); got != tc.want {
-			t.Errorf("SendSubject(%q): got %q, want %q", tc.env, got, tc.want)
+		if got := SendSubject(tc.env, tc.platform); got != tc.want {
+			t.Errorf("SendSubject(%q, %q): got %q, want %q", tc.env, tc.platform, got, tc.want)
 		}
 	}
 }
