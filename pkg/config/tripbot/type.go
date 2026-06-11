@@ -3,6 +3,14 @@ package config
 type TripbotConfig struct {
 	Environment string `required:"true" envconfig:"ENV"`
 	ServerType  string `default:"tripbot"`
+	// Platform selects which streaming platform this bot instance serves.
+	// "twitch" (the default) runs the full command surface; "youtube" runs the
+	// restricted v1 allowlist (see pkg/chatbot/registry.go). One instance per
+	// platform, selected by config — same binary, blast-radius isolated.
+	// Reads the same STREAM_PLATFORM env key the OBS image uses
+	// (contract.EnvKeyStreamPlatform), so the cdk8s factory stamps one platform
+	// value across every component of a pipeline.
+	Platform string `default:"twitch" envconfig:"STREAM_PLATFORM"`
 
 	// ChannelName is the username of the stream
 	ChannelName string `required:"true" envconfig:"CHANNEL_NAME"`

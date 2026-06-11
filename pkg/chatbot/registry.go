@@ -241,16 +241,58 @@ func (a *App) buildRegistry() []Command {
 	}
 }
 
+// Platform names for App.Platform. Empty is treated as Twitch.
+const (
+	platformTwitch  = "twitch"
+	platformYouTube = "youtube"
+)
+
+// youtubeCommands is the v1 allowlist of triggers a YouTube instance runs — the
+// stateless "info + playback control" subset. Identity/miles commands (!miles,
+// !leaderboard, !guess, !state, !location, …), the Twitch-only !followage, and
+// the admin commands (!middle, !secretinfo, !shutdown, !makebot, !unbot) are
+// deliberately excluded: YouTube v1 runs no per-user state. The now-playing /
+// SomaFM commands (!song, !music, !somafm) are also deferred for now — the
+// background-audio source is Twitch-stream-specific. Aliases come along with
+// their trigger, so only triggers are listed. See the YouTube provider plan.
+var youtubeCommands = map[string]bool{
+	"!help": true, "!version": true, "!uptime": true, "!commands": true,
+	"!gas": true, "!report": true, "!flag": true,
+	// info (read current-video state only)
+	"!weather": true, "!time": true, "!date": true, "!sunset": true,
+	// playback control (drives this platform's vlc pipeline)
+	"!timewarp": true, "!goto": true, "!skip": true, "!back": true,
+	// socials / static links
+	"!socialmedia": true, "!discord": true, "!twitter": true, "!instagram": true,
+	"!facebook": true, "!youtube": true, "!tiktok": true, "!bluesky": true,
+}
+
+// commandEnabled reports whether cmd should be indexed for dispatch on this
+// App's platform. Twitch (the primary platform, and the empty default) runs the
+// full registry; YouTube runs only the youtubeCommands allowlist. An unknown
+// platform falls back to the full set.
+func (a *App) commandEnabled(cmd *Command) bool {
+	if a.Platform == platformYouTube {
+		return youtubeCommands[cmd.Trigger]
+	}
+	return true
+}
+
 // indexCommands builds a.commands from a.buildRegistry() and indexes it into
 // a.singleWordLookup / a.multiWordLookup by trigger and alias. Call once after
 // the App is constructed (its deps don't need to be set — buildRegistry only
-// binds handler method values to a).
+// binds handler method values to a). Commands not enabled for a.Platform
+// (commandEnabled) stay in a.commands but are never indexed, so they don't
+// dispatch on that platform.
 func (a *App) indexCommands() {
 	a.commands = a.buildRegistry()
 	a.singleWordLookup = make(map[string]*Command)
 	a.multiWordLookup = make(map[string]*Command)
 	for i := range a.commands {
 		cmd := &a.commands[i]
+		if !a.commandEnabled(cmd) {
+			continue
+		}
 		a.registerTrigger(cmd.Trigger, cmd)
 		for _, alias := range cmd.Aliases {
 			a.registerTrigger(alias, cmd)
