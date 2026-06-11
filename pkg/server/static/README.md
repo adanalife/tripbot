@@ -17,7 +17,7 @@ marker images aren't needed and aren't vendored.
 
 ## Updating
 
-Per the use-latest-stable-when-adding ADR, bump to the current stable release:
+Bump to the current stable release:
 
 ```sh
 curl -sL -o htmx.min.js https://unpkg.com/htmx.org/dist/htmx.min.js
