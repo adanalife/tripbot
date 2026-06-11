@@ -83,6 +83,7 @@ func availableSendIdentities(statuses []mytwitch.AccountTokenStatus) []sendIdent
 type sendFormData struct {
 	Identities []sendIdentity // available (logged-in) identities; drives the toggle
 	Multi      bool           // >1 identity → show the radio toggle; ==1 → a hidden input
+	Default    string         // pre-checked identity account; broadcaster when available
 	BotUser    string         // bot login when available, else "" — JS maps identity→username
 	BcastUser  string         // broadcaster login when available, else ""
 }
@@ -93,7 +94,7 @@ type sendFormData struct {
 // when it round-trips back on the chat.message stream.
 var sendFormTmpl = template.Must(template.New("sendform").Parse(
 	`{{if .Identities}}<form class="chat-send" hx-post="/admin/chat/send" hx-swap="none" autocomplete="off" data-bot-user="{{.BotUser}}" data-broadcaster-user="{{.BcastUser}}">` +
-		`{{if .Multi}}<div class="chat-send-as">{{range $i, $id := .Identities}}<label><input type="radio" name="identity" value="{{$id.Account}}"{{if eq $i 0}} checked{{end}}> {{$id.Username}}</label>{{end}}</div>` +
+		`{{if .Multi}}<div class="chat-send-as">{{range $id := .Identities}}<label><input type="radio" name="identity" value="{{$id.Account}}"{{if eq $id.Account $.Default}} checked{{end}}> {{$id.Username}}</label>{{end}}</div>` +
 		`{{else}}<input type="hidden" name="identity" value="{{(index .Identities 0).Account}}"><span class="chat-send-as-single">as {{(index .Identities 0).Username}}</span>{{end}}` +
 		`<div class="chat-send-row"><input class="chat-send-text" type="text" name="text" maxlength="500" placeholder="send a message…" required><button type="submit">send</button></div>` +
 		`</form>` +
@@ -109,6 +110,15 @@ func renderSendForm(statuses []mytwitch.AccountTokenStatus) string {
 		case chatEvents.IdentityBroadcaster:
 			data.BcastUser = id.Username
 		}
+	}
+	// Default to the broadcaster (talking as the channel owner is the common
+	// case); fall back to the first available identity when the broadcaster
+	// isn't logged in.
+	if len(ids) > 0 {
+		data.Default = ids[0].Account
+	}
+	if data.BcastUser != "" {
+		data.Default = chatEvents.IdentityBroadcaster
 	}
 	var sb strings.Builder
 	if err := sendFormTmpl.Execute(&sb, data); err != nil {

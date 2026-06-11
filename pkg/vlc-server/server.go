@@ -110,15 +110,10 @@ func (s *Server) Start(ctx context.Context) {
 	// version endpoint — returns build metadata as JSON
 	r.Handle("/version", tagged("/version", s.versionHandler)).Methods("GET", "HEAD")
 
-	// vlc endpoints
+	// vlc endpoints — the play / random / skip / back commands moved to NATS
+	// (see nats.go); only the currently-playing read remains on HTTP.
 	vlc := r.PathPrefix("/vlc").Methods("GET").Subrouter()
 	vlc.Handle("/current", tagged("/vlc/current", s.vlcCurrentHandler))
-	vlc.Handle("/play/{video}", tagged("/vlc/play/{video}", s.vlcPlayHandler))
-	vlc.Handle("/random", tagged("/vlc/random", s.vlcRandomHandler))
-	vlc.Handle("/back", tagged("/vlc/back", s.vlcBackHandler))
-	vlc.Handle("/back/{n}", tagged("/vlc/back/{n}", s.vlcBackHandler))
-	vlc.Handle("/skip", tagged("/vlc/skip", s.vlcSkipHandler))
-	vlc.Handle("/skip/{n}", tagged("/vlc/skip/{n}", s.vlcSkipHandler))
 
 	// onscreen endpoints now live in cmd/onscreens-server (separate binary,
 	// separate port). vlc-server no longer serves /onscreens/* — clients

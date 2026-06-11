@@ -7,6 +7,22 @@ All notable changes to TripBot. Format follows [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+## [v3.1.0] — 2026-06-10
+
+Minor release. The headline is the **VLC command surface completing its move to NATS** — the HTTP command path is gone and NATS is now the sole transport for playback commands, the final step of the migration the observe-only mirror began in v3.0.0. Alongside it: the admin console's chat-send box defaults to the broadcaster identity, and `!ocation` joins the `!location` typo aliases.
+
+### pubsub
+
+- **VLC command surface — HTTP peel; NATS is the sole command transport.** Completes the migration the observe-only mirror started in [#789] (v3.0.0). The client goes publish-only (the `c.get(...)` command calls are gone), vlc-server's subscribers flip from observe-only to acting (driving `PlayRandom` / `PlayVideoFile` / `skip` / `back`), and the `play` / `random` / `skip` / `back` HTTP handlers + routes are removed. The client peel lands first so there's never a window where both transports act. `/vlc/current` stays on HTTP (a read). Requires vlc-server's `NATS_URL` wiring ([infra #645]) to be live in each env. ([#790])
+
+### admin
+
+- **Chat-send box defaults to the broadcaster identity.** The send-from-console form's identity toggle preselected the bot (first in `TokenStatuses`); talking as the channel owner is the common case, so it now preselects the broadcaster when it's logged in, falling back to the bot otherwise. Both stay selectable. ([#807])
+
+### chatbot
+
+- **`!ocation` aliases to `!location`.** A common typo where the viewer drops the leading `l`, added alongside the existing `!location` typo aliases. ([#806])
+
 ## [v3.0.1] — 2026-06-09
 
 Patch release. The headline is **sending chat messages from the admin console** — a send box that posts to Twitch chat as the bot or the broadcaster. Alongside it: the OBS image can now be pointed at YouTube as well as Twitch via `STREAM_PLATFORM`, a fix for the OBS websocket-address fallback that broke after the per-platform service rename, and CI changes to cut Docker Hub rate-limiting and stop redundant OBS base rebakes.
@@ -1441,3 +1457,7 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#802]: https://github.com/adanalife/tripbot/pull/802
 [infra #623]: https://github.com/adanalife/infra/pull/623
 [infra #654]: https://github.com/adanalife/infra/pull/654
+[#790]: https://github.com/adanalife/tripbot/pull/790
+[#807]: https://github.com/adanalife/tripbot/pull/807
+[#806]: https://github.com/adanalife/tripbot/pull/806
+[infra #645]: https://github.com/adanalife/infra/pull/645
