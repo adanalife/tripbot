@@ -7,6 +7,14 @@ All notable changes to TripBot. Format follows [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+## [v3.2.1] — 2026-06-11
+
+Patch release. The v3.2.0 release run pushed its per-arch images but died at the version-stamping verify step — Docker Hub rate-limited the pull-back of our own just-pushed images — so the multi-arch manifests, GitHub Release, and infra bump dispatch never happened. This release fixes the verify step and ships everything v3.2.0 built.
+
+### CI
+
+- **Release builds load images locally for verification.** Each per-arch build leg now passes `load: true` alongside `push: true` (multi-exporter, buildx ≥ 0.13), so the verify step runs the locally-built image instead of pulling it back from Docker Hub — closing the "our own images still count against the pull quota" gap the GHCR mirrors ([#820]) deliberately left open. ([#821])
+
 ## [v3.2.0] — 2026-06-11
 
 Minor release. The headline is the **YouTube provider going code-complete**: a `PLATFORM=youtube` tripbot instance now runs end to end — channel-owner OAuth, outbound live-chat sends, an inbound chat poller, and a boot sequence that branches per platform — built on the provider-neutral chat seams the Phase C refactor left behind. Alongside it: release CI now publishes a GitHub Release per tag, dispatches the infra version-bump PRs automatically, and pulls base images from GHCR mirrors to dodge Docker Hub rate limits; and `!report` validates its Discord webhook URL before POSTing.
@@ -1494,5 +1502,6 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#817]: https://github.com/adanalife/tripbot/pull/817
 [#818]: https://github.com/adanalife/tripbot/pull/818
 [#820]: https://github.com/adanalife/tripbot/pull/820
+[#821]: https://github.com/adanalife/tripbot/pull/821
 [infra #694]: https://github.com/adanalife/infra/pull/694
 [infra #695]: https://github.com/adanalife/infra/pull/695
