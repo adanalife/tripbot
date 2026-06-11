@@ -115,8 +115,10 @@ const (
 	EnvKeyOnscreensServerHost = "ONSCREENS_SERVER_HOST"
 	// EnvKeyDatabaseHost is the Postgres host pkg/database requires.
 	EnvKeyDatabaseHost = "DATABASE_HOST"
-	// EnvKeyStreamPlatform selects which platform OBS streams to. Read by the
-	// OBS image entrypoint, not by Go.
+	// EnvKeyStreamPlatform selects which platform a per-platform instance
+	// serves. Read by the OBS image entrypoint (which platform OBS streams to)
+	// and by tripbot via TripbotConfig.Platform (which chat platform the bot
+	// serves + its command surface) — one platform value per pipeline.
 	EnvKeyStreamPlatform = "STREAM_PLATFORM"
 	// EnvKeyStreamKey is the per-platform stream key. Read by the OBS image
 	// entrypoint, not by Go.

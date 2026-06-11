@@ -60,3 +60,39 @@ func TestLookupMapsPointToCorrectCommand(t *testing.T) {
 		}
 	}
 }
+
+// TestYouTubeAllowlistTriggersExist guards against drift: every trigger in the
+// YouTube allowlist must be a real command in the full registry, so a rename or
+// removal can't silently leave a dangling allowlist entry.
+func TestYouTubeAllowlistTriggersExist(t *testing.T) {
+	full := &App{} // empty platform → full registry
+	full.indexCommands()
+	for trigger := range youtubeCommands {
+		if _, ok := full.singleWordLookup[trigger]; !ok {
+			t.Errorf("youtubeCommands trigger %q is not a real command in the registry", trigger)
+		}
+	}
+}
+
+// TestYouTubePlatformIndexesOnlyAllowlist verifies a YouTube App dispatches the
+// v1 allowlist (triggers + their aliases) and nothing else — identity/miles,
+// the Twitch-only !followage, and admin commands must not resolve.
+func TestYouTubePlatformIndexesOnlyAllowlist(t *testing.T) {
+	yt := &App{Platform: platformYouTube}
+	yt.indexCommands()
+
+	// allowed: a trigger and one of its aliases both resolve
+	for _, token := range []string{"!weather", "!meteo", "!skip", "!timewarp", "!warp", "!youtube"} {
+		if cmd, _ := yt.findCommand(token); cmd == nil {
+			t.Errorf("expected %q to be available on YouTube, got nil", token)
+		}
+	}
+
+	// excluded: identity/miles, Twitch-only, admin, and the deferred
+	// now-playing commands do not resolve
+	for _, token := range []string{"!miles", "!km", "!leaderboard", "!guess", "!state", "!location", "!followage", "!middle", "!shutdown", "!makebot", "hello", "!song", "!music", "!somafm"} {
+		if cmd, _ := yt.findCommand(token); cmd != nil {
+			t.Errorf("expected %q to be unavailable on YouTube, got %q", token, cmd.Trigger)
+		}
+	}
+}
