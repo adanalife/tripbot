@@ -45,8 +45,8 @@ func TestUserProfileHandler_Found(t *testing.T) {
 	body := renderProfile(t, "danalol")
 	for _, want := range []string{
 		"danalol",
-		"123.0",      // lifetime miles
-		"42.0",       // this month
+		"123.00",     // lifetime miles
+		"42.00",      // this month
 		">87<",       // sessions
 		"2019-05-01", // first seen
 		`href="https://twitch.tv/danalol"`,
@@ -69,6 +69,34 @@ func TestUserProfileHandler_NotFound(t *testing.T) {
 	}
 	if !strings.Contains(body, "ghost") {
 		t.Errorf("empty card should still name the user")
+	}
+}
+
+// TestUserProfileHandler_FloorsZeroMiles covers a brand-new viewer with no
+// accrued miles: the displayed values floor at 0.01 instead of "0.00", which
+// reads as broken. Display-only — the stored value is unchanged.
+func TestUserProfileHandler_FloorsZeroMiles(t *testing.T) {
+	withProfileSeams(t, users.User{ID: 11, Username: "newbie", Miles: 0}, 1, 0)
+	body := renderProfile(t, "newbie")
+	if strings.Contains(body, ">0.00<") {
+		t.Errorf("brand-new viewer should not render 0.00 miles: %q", body)
+	}
+	if !strings.Contains(body, ">0.01<") {
+		t.Errorf("expected floored 0.01 miles, got %q", body)
+	}
+}
+
+func TestFloorDisplayMiles(t *testing.T) {
+	cases := []struct{ in, want float32 }{
+		{0, 0.01},
+		{0.004, 0.01},
+		{0.01, 0.01},
+		{5.5, 5.5},
+	}
+	for _, tc := range cases {
+		if got := floorDisplayMiles(tc.in); got != tc.want {
+			t.Errorf("floorDisplayMiles(%v) = %v, want %v", tc.in, got, tc.want)
+		}
 	}
 }
 
