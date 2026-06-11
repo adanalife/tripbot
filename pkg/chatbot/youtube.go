@@ -8,9 +8,15 @@ import (
 	"sync"
 	"time"
 
+	mylog "github.com/adanalife/tripbot/pkg/chatbot/log"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
+	"github.com/adanalife/tripbot/pkg/eventbus"
 	"github.com/adanalife/tripbot/pkg/geo"
+	"github.com/adanalife/tripbot/pkg/instrumentation"
+	"github.com/adanalife/tripbot/pkg/users"
 	myyoutube "github.com/adanalife/tripbot/pkg/youtube"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // liveChatBinding holds the currently-bound live chat ID, shared between the
@@ -112,4 +118,156 @@ func (a *App) ConnectYouTube(ctx context.Context) (*liveChatBinding, error) {
 		botUsername: c.Conf.BotUsername,
 	}
 	return binding, nil
+}
+
+// HandleYouTubeMessage processes one inbound YouTube chat message. Identical
+// to HandleMessage except the login step: YouTube viewers are NOT logged in
+// or persisted — v1 punts identity, presence, and miles entirely (see the
+// platform allowlist), so the command path gets a transient User carrying
+// just the display name. The Loki chat line, the admin-console event-bus
+// mirror, and the metrics all stay.
+func (a *App) HandleYouTubeMessage(ctx context.Context, msg IncomingMessage) {
+	// span attribute key shared with the Twitch path for observability
+	// continuity; renaming both to a platform-tagged key is the B4 pass.
+	ctx, span := tracer.Start(ctx, "chatbot.handle_message",
+		trace.WithAttributes(attribute.String("twitch.user", msg.User)))
+	defer span.End()
+
+	instrumentation.ChatMessages.Inc()
+	mylog.ChatMsg(msg.User, msg.Text)
+	eventbus.EmitChatMessage(ctx, c.Conf.Environment, msg.User, msg.Text)
+
+	// transient, never written to the users table — the allowlisted command
+	// subset reads nothing user-specific beyond the name.
+	user := &users.User{Username: strings.ToLower(msg.User)}
+	a.runCommand(ctx, user, strings.ToLower(msg.Text))
+}
+
+// youtubeChatPoller is the inbound transport for a PLATFORM=youtube
+// instance: it discovers the active broadcast, binds its live chat (the same
+// binding youtubeChat sends to), and pages through liveChatMessages.list at
+// the server-suggested cadence, feeding each viewer message into the shared
+// command path. The seam fields default to pkg/youtube in
+// NewYouTubeChatPoller; tests inject fakes.
+type youtubeChatPoller struct {
+	app     *App
+	binding *liveChatBinding
+
+	discover     func(ctx context.Context) (string, error)
+	list         func(ctx context.Context, chatID, pageToken string) (*myyoutube.LiveChatPage, error)
+	ownChannelID func() string
+
+	pollFloor      time.Duration // minimum wait between list calls
+	rediscoverWait time.Duration // wait between discovery attempts while not live
+	quotaWait      time.Duration // backoff after a quota rejection
+}
+
+// NewYouTubeChatPoller builds the production poller sharing this App and the
+// binding returned by ConnectYouTube. Run it in a goroutine (cmd/tripbot's
+// platform branch — Phase B4).
+func (a *App) NewYouTubeChatPoller(binding *liveChatBinding) *youtubeChatPoller {
+	return &youtubeChatPoller{
+		app:          a,
+		binding:      binding,
+		discover:     myyoutube.ActiveLiveChatID,
+		list:         myyoutube.ListChatMessages,
+		ownChannelID: myyoutube.ChannelID,
+		// floor under the server-suggested interval; YouTube usually asks
+		// for ~3-10s, this only guards against pathological responses.
+		pollFloor:      2 * time.Second,
+		rediscoverWait: time.Minute,
+		quotaWait:      5 * time.Minute,
+	}
+}
+
+// Run polls until ctx is done. Lifecycle: unbound → discover (quietly idle
+// while the channel isn't live) → bind → page through chat → on ErrChatGone
+// (broadcast ended) unbind and rediscover. The first page after every bind
+// is discarded: liveChatMessages.list opens with recent history, and
+// replaying an hour-old !skip against the live pipeline would be wrong.
+func (p *youtubeChatPoller) Run(ctx context.Context) {
+	pageToken := ""
+	fresh := true // next page is the post-bind backlog page
+
+	for ctx.Err() == nil {
+		chatID := p.binding.ID()
+		if chatID == "" {
+			id, err := p.discover(ctx)
+			switch {
+			case err == nil:
+				p.binding.Bind(id)
+				pageToken = ""
+				fresh = true
+				slog.InfoContext(ctx, "youtube poller bound live chat", "live_chat_id", id)
+				continue
+			case errors.Is(err, myyoutube.ErrNoActiveBroadcast):
+				// not live is the normal idle state; stay quiet
+			default:
+				slog.ErrorContext(ctx, "youtube broadcast discovery failed", "err", err)
+			}
+			if !sleepCtx(ctx, p.rediscoverWait) {
+				return
+			}
+			continue
+		}
+
+		page, err := p.list(ctx, chatID, pageToken)
+		if err != nil {
+			switch {
+			case errors.Is(err, myyoutube.ErrChatGone):
+				slog.InfoContext(ctx, "youtube live chat ended; rediscovering")
+				p.binding.Bind("")
+				pageToken = ""
+			case myyoutube.IsQuotaError(err):
+				slog.ErrorContext(ctx, "youtube quota rejection; backing off", "err", err)
+				if !sleepCtx(ctx, p.quotaWait) {
+					return
+				}
+			case errors.Is(err, context.Canceled):
+				return
+			default:
+				slog.ErrorContext(ctx, "youtube chat poll failed", "err", err)
+				if !sleepCtx(ctx, p.rediscoverWait) {
+					return
+				}
+			}
+			continue
+		}
+		pageToken = page.NextPageToken
+
+		if fresh {
+			slog.InfoContext(ctx, "youtube poller skipped backlog page", "count", len(page.Messages))
+			fresh = false
+		} else {
+			own := p.ownChannelID()
+			for _, m := range page.Messages {
+				// the bot posts as the channel owner, so its own sends echo
+				// back in the list — already mirrored by consoleMirror.
+				if own != "" && m.AuthorChannelID == own {
+					continue
+				}
+				p.app.HandleYouTubeMessage(ctx, IncomingMessage{User: m.Author, Text: m.Text})
+			}
+		}
+
+		wait := page.PollAfter
+		if wait < p.pollFloor {
+			wait = p.pollFloor
+		}
+		if !sleepCtx(ctx, wait) {
+			return
+		}
+	}
+}
+
+// sleepCtx waits d or until ctx is done; false means ctx ended first.
+func sleepCtx(ctx context.Context, d time.Duration) bool {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-t.C:
+		return true
+	}
 }

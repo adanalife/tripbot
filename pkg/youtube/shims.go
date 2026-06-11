@@ -30,3 +30,7 @@ func ActiveLiveChatID(ctx context.Context) (string, error) {
 func InsertChatMessage(ctx context.Context, chatID, text string) error {
 	return defaultClient.InsertChatMessage(ctx, chatID, text)
 }
+
+func ListChatMessages(ctx context.Context, chatID, pageToken string) (*LiveChatPage, error) {
+	return defaultClient.ListChatMessages(ctx, chatID, pageToken)
+}
