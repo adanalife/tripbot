@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/scoreboards"
@@ -489,9 +490,28 @@ func (a *App) reportCmd(ctx context.Context, user *users.User, params []string) 
 	// silently when DISCORD_ALERTS_WEBHOOK is unset (e.g. local dev) —
 	// the slog/Sentry path still fires so nothing is lost.
 	if webhook := c.Conf.DiscordAlertsWebhook; webhook != "" {
-		go postReportToDiscord(webhook, user.Username, message)
+		if isDiscordWebhookURL(webhook) {
+			go postReportToDiscord(webhook, user.Username, message)
+		} else {
+			// A misconfigured secret (e.g. the SM placeholder string) would
+			// otherwise log a "unsupported protocol scheme" ERROR on every
+			// !report. Warn once per process and fall through to slog/Sentry.
+			reportWebhookWarnOnce.Do(func() {
+				slog.WarnContext(ctx, "DISCORD_ALERTS_WEBHOOK is not a Discord webhook URL; skipping Discord report")
+			})
+		}
 	}
 	a.Chat.Say("Thank you, I will look into this ASAP!")
+}
+
+// reportWebhookWarnOnce bounds the misconfigured-webhook warning to one line
+// per process instead of one per !report invocation.
+var reportWebhookWarnOnce sync.Once
+
+// isDiscordWebhookURL reports whether s looks like a Discord webhook endpoint,
+// guarding postReportToDiscord against placeholder/garbage secret values.
+func isDiscordWebhookURL(s string) bool {
+	return strings.HasPrefix(s, "https://discord.com/api/webhooks/")
 }
 
 // postReportToDiscord POSTs a viewer report to a Discord webhook.
