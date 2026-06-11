@@ -398,6 +398,22 @@ jobs:
           gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
             --title "$GITHUB_REF_NAME" --generate-notes --verify-tag
 
+  # Tell infra a new version exists: its bump-prs workflow fans out one
+  # Dependabot-style "bump prod <component>" PR per image (merge = deploy).
+  # Needs AUTOMATION_PAT (fine-grained PAT with Contents r/w on
+  # adanalife/infra) — GITHUB_TOKEN can't dispatch cross-repo.
+  dispatch-infra-bumps:
+    needs: [tripbot-manifest, vlc-manifest, obs-manifest, onscreens-server-manifest]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fire repository_dispatch to infra
+        env:
+          GH_TOKEN: ${{ secrets.AUTOMATION_PAT }}
+        run: |
+          gh api repos/adanalife/infra/dispatches \
+            -f event_type=tripbot-release \
+            -f "client_payload[version]=${GITHUB_REF_NAME#v}"
+
   notify:
     needs: [tripbot-manifest, vlc-manifest, obs-manifest, onscreens-server-manifest]
     runs-on: ubuntu-latest
