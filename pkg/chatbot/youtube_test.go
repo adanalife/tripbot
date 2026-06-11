@@ -122,19 +122,19 @@ func TestHandleYouTubeMessage_NonCommandIsQuiet(t *testing.T) {
 // pollerScript drives youtubeChatPoller.Run through a scripted sequence of
 // list responses, canceling the context when the script is exhausted.
 type pollerScript struct {
-	mu      sync.Mutex
-	pages   []func() (*myyoutube.LiveChatPage, error)
-	calls   []string // pageTokens seen, for cursor assertions
-	cancel  context.CancelFunc
-	discRet func() (string, error)
-	discN   int
+	mu            sync.Mutex
+	pages         []func() (*myyoutube.LiveChatPage, error)
+	calls         []string // pageTokens seen, for cursor assertions
+	cancel        context.CancelFunc
+	discoverRet   func() (string, error)
+	discoverCalls int
 }
 
 func (s *pollerScript) discover(_ context.Context) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.discN++
-	return s.discRet()
+	s.discoverCalls++
+	return s.discoverRet()
 }
 
 func (s *pollerScript) list(_ context.Context, _, pageToken string) (*myyoutube.LiveChatPage, error) {
@@ -231,7 +231,7 @@ func TestPoller_RebindsAfterChatGone(t *testing.T) {
 	script := &pollerScript{pages: []func() (*myyoutube.LiveChatPage, error){
 		func() (*myyoutube.LiveChatPage, error) { return nil, myyoutube.ErrChatGone },
 	}}
-	script.discRet = func() (string, error) { return "chat-new", nil }
+	script.discoverRet = func() (string, error) { return "chat-new", nil }
 	p, ctx := newScriptedPoller(t, app, binding, script)
 	// after ErrChatGone the poller rediscovers, binds chat-new, and calls
 	// list again; the script is exhausted by then, so that call cancels the
@@ -242,7 +242,7 @@ func TestPoller_RebindsAfterChatGone(t *testing.T) {
 	if got := binding.ID(); got != "chat-new" {
 		t.Errorf("binding after ErrChatGone = %q, want chat-new (rediscovered)", got)
 	}
-	if script.discN == 0 {
+	if script.discoverCalls == 0 {
 		t.Error("discover never called after ErrChatGone")
 	}
 }
