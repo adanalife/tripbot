@@ -398,6 +398,31 @@ jobs:
           gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
             --title "$GITHUB_REF_NAME" --generate-notes --verify-tag
 
+  # Tell infra a new version exists: its bump-prs workflow fans out one
+  # Dependabot-style "bump prod <component>" PR per image (merge = deploy).
+  # Auths as the adanalife-automation GitHub App (credentials fanned out by
+  # infra's terraform/platform) — GITHUB_TOKEN can't dispatch cross-repo.
+  dispatch-infra-bumps:
+    needs: [tripbot-manifest, vlc-manifest, obs-manifest, onscreens-server-manifest]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mint automation app token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.AUTOMATION_APP_ID }}
+          private-key: ${{ secrets.AUTOMATION_APP_PRIVATE_KEY }}
+          owner: adanalife
+          repositories: infra
+
+      - name: Fire repository_dispatch to infra
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          gh api repos/adanalife/infra/dispatches \
+            -f event_type=tripbot-release \
+            -f "client_payload[version]=${GITHUB_REF_NAME#v}"
+
   notify:
     needs: [tripbot-manifest, vlc-manifest, obs-manifest, onscreens-server-manifest]
     runs-on: ubuntu-latest
