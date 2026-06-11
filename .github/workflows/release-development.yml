@@ -1,7 +1,7 @@
 # Publishes :develop multi-arch images on push to develop, gated by
 # per-image path filters. Stage pulls :develop; prod stays on :latest
 # (release.yml). Mirrors release.yml's matrix-on-native-runners +
-# manifest-list shape (see vault/decisions/multi-arch-release-pattern.md).
+# manifest-list shape.
 name: Release Development
 on:
   push:

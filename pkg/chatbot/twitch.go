@@ -8,13 +8,11 @@ import (
 
 // Twitch is the command-time Twitch Helix surface the chatbot needs. Today
 // that's only follow lookups (followageCmd); it grows as admin-panel Helix
-// features land (ban/timeout, send-as-broadcaster — see
-// vault/tripbot/tripbot/TODO.md).
+// features land (ban/timeout, send-as-broadcaster).
 //
-// It is deliberately the seam where, once the Twitch Helix API moves into its
-// own service (vault/tripbot/TODO.md "Extract Twitch Helix API into a separate
-// service"), the in-process adapter below is swapped for an HTTP client —
-// without touching any command code.
+// It is deliberately the seam where, if the Twitch Helix API ever moves into
+// its own service, the in-process adapter below is swapped for an HTTP
+// client — without touching any command code.
 type Twitch interface {
 	FollowedAt(username string) (time.Time, bool)
 }

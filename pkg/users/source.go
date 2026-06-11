@@ -7,10 +7,9 @@ import "github.com/adanalife/tripbot/pkg/twitch"
 // session tracking (platform-agnostic) and the chat transport (per-platform).
 //
 // Today the only implementation is twitchSource, backed by Twitch Helix via
-// pkg/twitch. When the multi-platform chat-transport work lands, a YouTube or
-// TikTok adapter drops in here so a per-platform bot instance
-// (PLATFORM=youtube, etc.) tracks its own audience without Sessions changing.
-// See vault/sessions/2026-05-31-multi-platform-streaming-arch.md.
+// pkg/twitch. A YouTube or TikTok adapter drops in here so a per-platform bot
+// instance (PLATFORM=youtube, etc.) tracks its own audience without Sessions
+// changing.
 type ChatterSource interface {
 	// UpdateChatters refreshes the source's notion of who is in chat.
 	UpdateChatters()

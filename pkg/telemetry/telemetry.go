@@ -1,7 +1,6 @@
 // Package telemetry initializes OpenTelemetry providers (traces, metrics,
 // logs) for tripbot's binaries. Backend is OTLP/HTTP — typically Grafana
-// Cloud. Configuration comes from standard OTEL_* env vars; see
-// vault/decisions for the surrounding design.
+// Cloud. Configuration comes from standard OTEL_* env vars.
 //
 // Setting OTEL_SDK_DISABLED=true (or leaving OTEL_EXPORTER_OTLP_ENDPOINT
 // unset) makes Init skip the OTLP exporters and only wire up a Prometheus

@@ -4,8 +4,7 @@
 // It is imported by both the publisher (cmd/tripbot, via pkg/vlc-client) and
 // the subscriber (cmd/vlc-server). To stay safe as a shared package it is
 // stdlib-only and side-effect-free: no init(), no pkg/config import, env is
-// always a parameter rather than read from config here. See
-// vault/decisions/package-boundary-init-discipline.md.
+// always a parameter rather than read from config here.
 //
 // Scope: the fire-and-forget playback commands only (random / file / skip /
 // back). The currently-playing read stays on HTTP — a request/response read

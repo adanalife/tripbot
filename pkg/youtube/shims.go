@@ -10,7 +10,7 @@ import (
 // pkg/twitch's transitional shim pattern: callers (pkg/server's auth
 // handlers, cmd/tripbot's boot sequence) use these until a constructed
 // *Client is threaded through, at which point this file is deleted — see
-// pkg/twitch/shims.go and vault/decisions/chatbot-app-injection-pattern.md.
+// pkg/twitch/shims.go.
 
 var defaultClient = New()
 

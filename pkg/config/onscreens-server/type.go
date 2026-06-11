@@ -24,9 +24,8 @@ type OnscreensServerConfig struct {
 	// on its own pod/IP there's nothing to collide with.
 	OnscreensServerBindAddress string `default:":8081" envconfig:"ONSCREENS_SERVER_BIND_ADDRESS"`
 
-	// NatsURL is the in-cluster NATS endpoint the subscriber connects to
-	// (phase 1: tripbot.<env>.onscreens.middle.show). Format:
-	// nats://nats.<env-platform-ns>.svc.cluster.local:4222. Optional —
-	// when unset, the subscriber is skipped and HTTP is the sole transport.
+	// NatsURL is the in-cluster NATS endpoint the subscriber connects to.
+	// Format: nats://nats.<env-platform-ns>.svc.cluster.local:4222.
+	// Optional — when unset, the subscriber is skipped.
 	NatsURL string `envconfig:"NATS_URL"`
 }
