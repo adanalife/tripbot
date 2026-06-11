@@ -55,7 +55,7 @@ func TestEmitChatMessage(t *testing.T) {
 	nowFn = func() time.Time { return fixed }
 	t.Cleanup(func() { nowFn = func() time.Time { return time.Now().UTC() } })
 
-	EmitChatMessage(context.Background(), "development", "DanaLol", "Hello, World!")
+	EmitChatMessage(context.Background(), "development", "twitch", "DanaLol", "Hello, World!")
 
 	if len(rec.Publishes) != 1 {
 		t.Fatalf("expected 1 publish, got %d", len(rec.Publishes))
@@ -164,5 +164,5 @@ func TestEmit_NoNATS_NoPanic(t *testing.T) {
 	SetPublisher(realPublisher{})
 	t.Cleanup(func() { SetPublisher(realPublisher{}) })
 	// natsclient.Conn() is nil here (Connect never called) — must not panic.
-	EmitChatMessage(context.Background(), "test", "u", "x")
+	EmitChatMessage(context.Background(), "test", "twitch", "u", "x")
 }

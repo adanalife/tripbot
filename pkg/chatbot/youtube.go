@@ -115,6 +115,7 @@ func (a *App) ConnectYouTube(ctx context.Context) (*liveChatBinding, error) {
 			insert:  myyoutube.InsertChatMessage,
 		},
 		env:         c.Conf.Environment,
+		platform:    c.Conf.Platform,
 		botUsername: c.Conf.BotUsername,
 	}
 	return binding, nil
@@ -135,7 +136,7 @@ func (a *App) HandleYouTubeMessage(ctx context.Context, msg IncomingMessage) {
 
 	instrumentation.ChatMessages.Inc()
 	mylog.ChatMsg(msg.User, msg.Text)
-	eventbus.EmitChatMessage(ctx, c.Conf.Environment, msg.User, msg.Text)
+	eventbus.EmitChatMessage(ctx, c.Conf.Environment, a.Platform, msg.User, msg.Text)
 
 	// transient, never written to the users table — the allowlisted command
 	// subset reads nothing user-specific beyond the name.

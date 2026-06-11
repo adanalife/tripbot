@@ -193,6 +193,7 @@ func (a *App) ConnectIRC() *twitch.Client {
 			botUsername:   c.Conf.BotUsername,
 		},
 		env:         c.Conf.Environment,
+		platform:    c.Conf.Platform,
 		botUsername: c.Conf.BotUsername,
 	}
 
