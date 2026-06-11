@@ -22,3 +22,11 @@ func AuthCodeURL(state string) string                     { return defaultClient
 func GenerateUserAccessToken(ctx context.Context, code string) (string, error) {
 	return defaultClient.GenerateUserAccessToken(ctx, code)
 }
+
+func ActiveLiveChatID(ctx context.Context) (string, error) {
+	return defaultClient.ActiveLiveChatID(ctx)
+}
+
+func InsertChatMessage(ctx context.Context, chatID, text string) error {
+	return defaultClient.InsertChatMessage(ctx, chatID, text)
+}
