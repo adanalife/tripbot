@@ -48,4 +48,5 @@ jobs:
           docker.io/golang:1.26-bookworm ghcr.io/adanalife/mirror/golang:1.26-bookworm
           docker.io/ubuntu:24.04 ghcr.io/adanalife/mirror/ubuntu:24.04
           docker.io/migrate/migrate:4 ghcr.io/adanalife/mirror/migrate:4
+          docker.io/pgvector/pgvector:pg16 ghcr.io/adanalife/mirror/pgvector:pg16
           EOF
