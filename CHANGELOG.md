@@ -9,7 +9,7 @@ All notable changes to TripBot. Format follows [Keep a Changelog](https://keepac
 
 ## [v3.2.0] — 2026-06-11
 
-Minor release. The headline is the **YouTube provider going code-complete**: a `PLATFORM=youtube` tripbot instance now runs end to end — channel-owner OAuth, outbound live-chat sends, an inbound chat poller, and a boot sequence that branches per platform — built on the provider-neutral chat seams the Phase C refactor left behind. Alongside it: release CI now publishes a GitHub Release per tag and dispatches the infra version-bump PRs automatically, and `!report` validates its Discord webhook URL before POSTing.
+Minor release. The headline is the **YouTube provider going code-complete**: a `PLATFORM=youtube` tripbot instance now runs end to end — channel-owner OAuth, outbound live-chat sends, an inbound chat poller, and a boot sequence that branches per platform — built on the provider-neutral chat seams the Phase C refactor left behind. Alongside it: release CI now publishes a GitHub Release per tag, dispatches the infra version-bump PRs automatically, and pulls base images from GHCR mirrors to dodge Docker Hub rate limits; and `!report` validates its Discord webhook URL before POSTing.
 
 ### youtube
 
@@ -24,6 +24,7 @@ Minor release. The headline is the **YouTube provider going code-complete**: a `
 
 - **A GitHub Release per release tag.** `release.yml` gains a `github-release` job after the image manifests publish: `gh release create --generate-notes --verify-tag`, giving each version a human-readable PR-by-PR summary (the Releases page had been frozen at v1.9.1). ([#817])
 - **Release dispatches infra bump PRs.** Once all four manifests publish, the workflow fires a `tripbot-release` `repository_dispatch` at `adanalife/infra`, whose bump-prs workflow ([infra #694]) fans out one "bump prod \<component\>" PR per image — merge = deploy. Authenticated via a short-lived adanalife-automation GitHub App token ([infra #695]); no PAT. ([#818])
+- **Base images pull from GHCR mirrors, not Docker Hub.** Docker Hub's pull rate limit broke CI twice in one day; the 429 hits at manifest resolution, before the GHA layer cache is ever consulted. The three third-party base images (`golang`, `ubuntu`, `migrate`) are mirrored to `ghcr.io/adanalife/mirror/*` (unlimited anonymous pulls, co-located with the runners), every Dockerfile now points at the mirrors, and a weekly `mirror-images` workflow re-copies the tags with crane so they keep tracking upstream security patches. `adanalife/obs-cef-base` stays on Docker Hub — it's our own published image, not a mirror candidate. ([#820])
 
 ### fix
 
@@ -1492,5 +1493,6 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#816]: https://github.com/adanalife/tripbot/pull/816
 [#817]: https://github.com/adanalife/tripbot/pull/817
 [#818]: https://github.com/adanalife/tripbot/pull/818
+[#820]: https://github.com/adanalife/tripbot/pull/820
 [infra #694]: https://github.com/adanalife/infra/pull/694
 [infra #695]: https://github.com/adanalife/infra/pull/695
