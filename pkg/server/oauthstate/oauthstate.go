@@ -31,6 +31,12 @@ const (
 	AccountUnchecked   Account = ""
 	AccountBot         Account = "bot"
 	AccountBroadcaster Account = "broadcaster"
+	// AccountYouTube is the YouTube channel owner — the one YouTube identity
+	// (no bot/broadcaster split; see pkg/youtube). Doubles as the IdP
+	// selector: both Twitch and Google redirect to the same /auth/callback,
+	// and the account stashed with the state says which flow a callback
+	// belongs to.
+	AccountYouTube Account = "youtube"
 )
 
 type entry struct {

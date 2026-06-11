@@ -25,6 +25,20 @@ type TripbotConfig struct {
 	// callers fall back gracefully (no city/state lookups, no generated
 	// maps). The bot continues to run.
 	GoogleMapsAPIKey string `envconfig:"GOOGLE_MAPS_API_KEY"`
+
+	// YouTubeClientID / YouTubeClientSecret are the YouTube OAuth app
+	// credentials (a GCP-console "Web application" OAuth client whose
+	// authorized redirect URIs include <EXTERNAL_URL>/auth/callback).
+	// Only set on PLATFORM=youtube instances; optional everywhere else —
+	// pkg/youtube returns ErrNotConfigured rather than fataling when absent.
+	YouTubeClientID     string `envconfig:"YOUTUBE_CLIENT_ID"`
+	YouTubeClientSecret string `envconfig:"YOUTUBE_CLIENT_SECRET"`
+	// YouTubeChannelID optionally pins the expected channel identity. When
+	// set, the /auth/init?account=youtube consent flow rejects (and does not
+	// persist) tokens from any other channel — keeps a prod pod from storing
+	// the quiet test channel's token, and vice versa.
+	YouTubeChannelID string `envconfig:"YOUTUBE_CHANNEL_ID"`
+
 	// ReadOnly is used to prevent writing some things to the DB
 	ReadOnly bool `default:"false" envconfig:"READ_ONLY"`
 	// Verbose determines output verbosity
