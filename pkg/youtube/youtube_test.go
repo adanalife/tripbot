@@ -243,7 +243,7 @@ func TestAuthCodeURL_OfflineWithForcedConsent(t *testing.T) {
 	cl := newTestClient(t)
 	u, err := url.Parse(cl.AuthCodeURL("state-123"))
 	if err != nil {
-		t.Fatalf("AuthCodeURL unparseable: %v", err)
+		t.Fatalf("AuthCodeURL unparsable: %v", err)
 	}
 	q := u.Query()
 	if q.Get("client_id") != "client-id" || q.Get("state") != "state-123" {
