@@ -43,3 +43,27 @@ func TestNextIndexAlwaysInRange(t *testing.T) {
 		}
 	}
 }
+
+func TestShouldSeekTo(t *testing.T) {
+	tests := []struct {
+		name               string
+		positionMs, length int64
+		want               bool
+	}{
+		{"zero position never seeks", 0, 600_000, false},
+		{"negative position never seeks", -5, 600_000, false},
+		{"mid-clip seeks", 300_000, 600_000, true},
+		{"unknown length errs toward seeking", 300_000, 0, true},
+		{"position inside tail guard skipped", 599_000, 600_000, false},
+		{"position exactly at guard boundary skipped", 598_000, 600_000, false},
+		{"position just before guard seeks", 597_999, 600_000, true},
+		{"position past end skipped", 700_000, 600_000, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := shouldSeekTo(tt.positionMs, tt.length); got != tt.want {
+				t.Fatalf("shouldSeekTo(%d, %d) = %v, want %v", tt.positionMs, tt.length, got, tt.want)
+			}
+		})
+	}
+}
