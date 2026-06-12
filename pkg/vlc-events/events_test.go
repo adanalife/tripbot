@@ -15,6 +15,8 @@ func TestSubjects(t *testing.T) {
 		{"play.file", PlayFileSubject("prod"), "tripbot.prod.vlc.play.file"},
 		{"skip", SkipSubject("development"), "tripbot.development.vlc.skip"},
 		{"back", BackSubject("staging"), "tripbot.staging.vlc.back"},
+		{"lastplayed", LastPlayedSubject("prod", "twitch"), "tripbot.prod.vlc.lastplayed.twitch"},
+		{"lastplayed wildcard", LastPlayedWildcard("prod"), "tripbot.prod.vlc.lastplayed.*"},
 	}
 	for _, tc := range cases {
 		if tc.got != tc.want {
@@ -48,6 +50,21 @@ func TestPlayFileRoundTrip(t *testing.T) {
 		t.Fatalf("marshal: %v", err)
 	}
 	var out PlayFile
+	if err := json.Unmarshal(b, &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if out.File != in.File {
+		t.Errorf("file: got %q, want %q", out.File, in.File)
+	}
+}
+
+func TestLastPlayedRoundTrip(t *testing.T) {
+	in := LastPlayed{Envelope: NewEnvelope(), File: "2020-01-02-1234.mp4"}
+	b, err := json.Marshal(in)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var out LastPlayed
 	if err := json.Unmarshal(b, &out); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}

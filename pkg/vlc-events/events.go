@@ -55,3 +55,14 @@ type PlayFile struct {
 type Command struct {
 	Envelope
 }
+
+// LastPlayed is the payload for the lastplayed subject — the playlist
+// basename vlc-server most recently started playing. Published by vlc-server
+// itself on every successful play and read back on startup so a restarted
+// instance resumes the clip it was on. Just the basename: the playlist is
+// re-derived from disk on boot, so anything richer (state, GPS) would go
+// stale; tripbot's video.changed remains the enriched observation event.
+type LastPlayed struct {
+	Envelope
+	File string `json:"file"`
+}
