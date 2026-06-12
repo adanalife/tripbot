@@ -175,6 +175,42 @@ func stateGuessParams(command string, params []string) []string {
 	return nil
 }
 
+// fuzzyStateName returns the canonical state/territory name closest to guess
+// by edit distance, or "" when guess is already an exact state name, too far
+// from every state, or ambiguous between two states. The namespace here is
+// only the ~60 state names (no command triggers), so unlike fuzzyLookup the
+// correction can't collide with the command surface.
+func fuzzyStateName(guess string) string {
+	if helpers.StateToStateAbbrev(guess) != "" {
+		return "" // already exact — never touch it
+	}
+	maxDist := fuzzyMaxDistance(len([]rune(guess)))
+	if maxDist == 0 {
+		return ""
+	}
+
+	lowered := strings.ToLower(guess)
+	best := ""
+	bestDist := maxDist + 1
+	ambiguous := false
+	for _, name := range helpers.StateNames() {
+		dist := levenshtein(lowered, strings.ToLower(name))
+		if dist > maxDist {
+			continue
+		}
+		switch {
+		case dist < bestDist:
+			best, bestDist, ambiguous = name, dist, false
+		case dist == bestDist && name != best:
+			ambiguous = true
+		}
+	}
+	if ambiguous {
+		return ""
+	}
+	return best
+}
+
 func (a *App) runCommand(ctx context.Context, user *users.User, message string) {
 	// parse for otel span attribute (only set for !-prefixed commands)
 	msg := normalizeCommandPrefix(strings.TrimSpace(message))

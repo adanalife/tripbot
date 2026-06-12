@@ -1,6 +1,11 @@
 package chatbot
 
-import "testing"
+import (
+	"context"
+	"strings"
+	"testing"
+	"time"
+)
 
 func TestFindCommand_StateNameRoutesToGuess(t *testing.T) {
 	cmd, params := builtTestApp.findCommand("!florida")
@@ -64,5 +69,63 @@ func TestFindCommand_StateShortcutDisabledOnYouTube(t *testing.T) {
 func TestStateGuessParams_NonState(t *testing.T) {
 	if got := stateGuessParams("!notastate", nil); got != nil {
 		t.Errorf("stateGuessParams(!notastate) = %v, want nil", got)
+	}
+}
+
+func TestFuzzyStateName(t *testing.T) {
+	cases := []struct {
+		guess string
+		want  string
+	}{
+		{"florisa", "Florida"},
+		{"califonia", "California"},
+		{"new yrok", "New York"}, // transposition, but long enough for 2 edits
+		{"utak", "Utah"},
+		{"utha", ""},            // transposition = 2 edits; short inputs only get 1 (known limitation)
+		{"arkansa", "Arkansas"}, // distance 1 beats Kansas at 2 — no tie
+		{"florida", ""},         // exact names are never touched
+		{"FLORIDA", ""},         // ...case-insensitively
+		{"xyzzy", ""},           // nowhere near a state
+		{"fl", ""},              // too short to fuzz (abbrevs handled upstream)
+		{"", ""},
+	}
+	for _, c := range cases {
+		if got := fuzzyStateName(c.guess); got != c.want {
+			t.Errorf("fuzzyStateName(%q) = %q, want %q", c.guess, got, c.want)
+		}
+	}
+}
+
+func TestGuessCmd_CorrectGuess_Misspelled(t *testing.T) {
+	// a close misspelling of the right state still wins
+	mock := installMockDB(t)
+	vid := newTestVideo("Massachusetts", 42.3, -71.0, time.Now())
+	app := newTestApp(vid)
+
+	expectAddToScoreChain(mock)
+	expectAddToScoreChain(mock)
+
+	out := captureSay(t, app)
+
+	app.guessCmd(context.Background(), newTestUser("viewer1"), []string{"massachusets"})
+
+	if !strings.Contains(out(), "got it") {
+		t.Errorf("expected correct-guess msg, got %q", out())
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestGuessCmd_WrongGuess_MisspelledStaysWrong(t *testing.T) {
+	// a misspelling of the WRONG state corrects to that state and stays wrong
+	vid := newTestVideo("Colorado", 39.5, -105.0, time.Now())
+	app := newTestApp(vid)
+	out := captureSay(t, app)
+
+	app.guessCmd(context.Background(), newTestUser("viewer1"), []string{"wyomig"})
+
+	if !strings.Contains(out(), "Try again") {
+		t.Errorf("expected try-again in output, got %q", out())
 	}
 }
