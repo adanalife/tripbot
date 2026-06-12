@@ -20,7 +20,7 @@ func (s *Sessions) InitLeaderboard(ctx context.Context) {
 	var users []User
 
 	result := database.GormDB().WithContext(ctx).
-		Where("miles != 0 AND is_bot = false AND username != ?", strings.ToLower(c.Conf.ChannelName)).
+		Where("platform = ? AND miles != 0 AND is_bot = false AND username != ?", c.Conf.Platform, strings.ToLower(c.Conf.ChannelName)).
 		Order("miles DESC").
 		Limit(initLeaderboardSize).
 		Find(&users)

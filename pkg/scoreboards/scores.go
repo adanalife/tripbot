@@ -114,7 +114,7 @@ func (s Score) save(ctx context.Context) error {
 // TODO: this shouldn't be necessary, join the tables instead
 func getUserIDByName(ctx context.Context, username string) (uint16, error) {
 	var result struct{ ID uint16 }
-	err := database.GormDB().WithContext(ctx).Raw("SELECT id FROM users WHERE username = ?", username).Scan(&result).Error
+	err := database.GormDB().WithContext(ctx).Raw("SELECT id FROM users WHERE platform = ? AND username = ?", c.Conf.Platform, username).Scan(&result).Error
 	if err != nil {
 		slog.ErrorContext(ctx, "error fetching user ID", "err", err)
 	}
