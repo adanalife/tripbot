@@ -442,6 +442,13 @@ func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 		guess = helpers.StateAbbrevToState(guess)
 	}
 
+	// forgive close misspellings ("florisa" -> Florida); exact state names
+	// are never touched and ambiguous typos stay as typed
+	if corrected := fuzzyStateName(guess); corrected != "" {
+		slog.InfoContext(ctx, "fuzzy-corrected state guess", "text", guess, "state", corrected)
+		guess = corrected
+	}
+
 	vid := a.Video.Current()
 	if vid.Flagged {
 		a.Chat.Say("I couldn't figure out current GPS coords, using next closest...")
