@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"math/rand"
 	"path/filepath"
 	"time"
@@ -114,9 +115,12 @@ func shouldSeekTo(positionMs, lengthMs int64) bool {
 // while we seek; the one-time discontinuity lands at boot, when the OBS
 // ffmpeg_source is reconnecting anyway.
 func (s *Server) SeekToPosition(ctx context.Context, positionMs int64) {
-	if positionMs <= 0 || s.Player == nil {
+	// The upper bound rejects garbage input (no clip runs ~24.8 days) and
+	// makes the int64→int conversion safe where int is 32 bits.
+	if positionMs <= 0 || positionMs > math.MaxInt32 || s.Player == nil {
 		return
 	}
+	seekToMs := int(positionMs)
 	go func() {
 		deadline := time.Now().Add(seekSettleTimeout)
 		for !s.Player.IsPlaying() {
@@ -138,7 +142,7 @@ func (s *Server) SeekToPosition(ctx context.Context, positionMs int64) {
 				"position_ms", positionMs, "length_ms", lengthMs)
 			return
 		}
-		if err := s.Player.SetMediaTime(int(positionMs)); err != nil {
+		if err := s.Player.SetMediaTime(seekToMs); err != nil {
 			slog.WarnContext(ctx, "resume seek failed; continuing from clip start", "err", err, "position_ms", positionMs)
 			return
 		}
