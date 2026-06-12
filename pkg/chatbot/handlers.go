@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"strings"
 	"time"
+	"unicode"
 
 	mylog "github.com/adanalife/tripbot/pkg/chatbot/log"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
@@ -29,9 +30,19 @@ func incChatCommandCounter(command string) {
 // `¡` (U+00A1, two bytes in UTF-8: 0xC2 0xA1) to a regular `!` so that
 // Spanish-keyboard users (who type `¡` where US keyboards type `!`) can run
 // commands without switching layouts. e.g. `¡miles` -> `!miles`.
+//
+// A leading `1` (the unshifted `!` on US keyboards) is rewritten the same
+// way, but only when a letter follows — messages that genuinely start with a
+// number ("100 miles", "10/10") must not turn into command lookups.
+// e.g. `1location` -> `!location`.
 func normalizeCommandPrefix(msg string) string {
 	if strings.HasPrefix(msg, "¡") {
 		return "!" + strings.TrimPrefix(msg, "¡")
+	}
+	if rest := strings.TrimPrefix(msg, "1"); rest != msg && rest != "" {
+		if r := []rune(rest)[0]; unicode.IsLetter(r) {
+			return "!" + rest
+		}
 	}
 	return msg
 }
