@@ -1,3 +1,5 @@
 [codespell]
-# commads/quess/loacation/lcoation stay: CHANGELOG.md's historical #466 entry quotes them
+# abitrate/commads/quess/loacation/lcoation: quoted in CHANGELOG.md's historical #466 entry.
+# copys: obs-base.yml says "COPYs" (editing that file would trigger the 90-min CEF rebake).
+# locaiton/stae/comands: used by the fuzzy-router tests.
 ignore-words-list = caf,nd,abitrate,copys,commads,quess,loacation,lcoation,locaiton,stae,comands
