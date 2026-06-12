@@ -1,11 +1,13 @@
 package vlcServer
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
 	"math/rand"
 	"path/filepath"
+	"time"
 )
 
 // TODO: should we handle the case where index is outside range?
@@ -76,6 +78,72 @@ func (s *Server) PlayRandom() error {
 
 	// start playing the media
 	return s.playAtIndex(random)
+}
+
+// seekTailGuardMs keeps a resume-seek from landing in the last moments of a
+// clip — seeking to (or past) the end would make the list player roll
+// straight over to the next clip, which reads as a glitch, not a resume.
+const seekTailGuardMs = 2000
+
+// seekSettleTimeout bounds how long SeekToPosition waits for libvlc to reach
+// Playing state before giving up. Clips load in well under a second locally;
+// the headroom covers cold NFS reads.
+const seekSettleTimeout = 5 * time.Second
+
+// shouldSeekTo reports whether resuming at positionMs is worthwhile given the
+// clip's length. Pure so the guard is unit-testable without libvlc. Unknown
+// length (lengthMs <= 0, e.g. media not parsed yet) errs toward seeking —
+// libvlc clamps overshoots.
+func shouldSeekTo(positionMs, lengthMs int64) bool {
+	if positionMs <= 0 {
+		return false
+	}
+	if lengthMs > 0 && positionMs >= lengthMs-seekTailGuardMs {
+		return false
+	}
+	return true
+}
+
+// SeekToPosition seeks the currently-loading clip to positionMs once libvlc
+// actually reaches Playing state — a seek issued during Opening is silently
+// ignored, so the wait is load-bearing. Runs async (resume happens during
+// boot; blocking here would delay the HTTP listener) and is best-effort: on
+// timeout or error playback simply continues from the top of the clip.
+//
+// Burn-in note: the clip is being re-streamed through the RTSP sout chain
+// while we seek; the one-time discontinuity lands at boot, when the OBS
+// ffmpeg_source is reconnecting anyway.
+func (s *Server) SeekToPosition(ctx context.Context, positionMs int64) {
+	if positionMs <= 0 || s.Player == nil {
+		return
+	}
+	go func() {
+		deadline := time.Now().Add(seekSettleTimeout)
+		for !s.Player.IsPlaying() {
+			if time.Now().After(deadline) {
+				slog.WarnContext(ctx, "resume seek skipped: player never reached Playing", "position_ms", positionMs)
+				return
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(50 * time.Millisecond):
+			}
+		}
+		// MediaLength can read 0 until the demuxer settles; it's only a
+		// guard, so take whatever it says at this point.
+		lengthMs, _ := s.Player.MediaLength()
+		if !shouldSeekTo(positionMs, int64(lengthMs)) {
+			slog.InfoContext(ctx, "resume seek skipped: position at clip tail",
+				"position_ms", positionMs, "length_ms", lengthMs)
+			return
+		}
+		if err := s.Player.SetMediaTime(int(positionMs)); err != nil {
+			slog.WarnContext(ctx, "resume seek failed; continuing from clip start", "err", err, "position_ms", positionMs)
+			return
+		}
+		slog.InfoContext(ctx, "resumed playback position", "position_ms", positionMs, "length_ms", lengthMs)
+	}()
 }
 
 func (s *Server) getIndex(vidStr string) int {

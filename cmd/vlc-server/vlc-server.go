@@ -7,7 +7,6 @@ import (
 	"math/rand"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -99,6 +98,11 @@ func main() {
 	// SIGINT/SIGTERM.
 	srv.StartStatsPoller(shutdownCtx, 5*time.Second)
 
+	// keep the JetStream lastplayed last-value cache tracking the playback
+	// position, so a restart resumes mid-clip (at worst one interval behind).
+	// No-op publishes when NATS is off.
+	srv.StartLastPlayedTicker(shutdownCtx, 5*time.Second)
+
 	// poll the OBS WebSocket for streaming state + render/output stats.
 	go obs.PollStreamingActive(context.Background(), 30*time.Second)
 
@@ -126,7 +130,7 @@ func main() {
 //     each resume their own clip),
 //  3. a fresh random pick.
 func pickStartupVideo(ctx context.Context, srv *vlcServer.Server) {
-	if resumeFromMarker(srv) {
+	if resumeFromMarker(ctx, srv) {
 		return
 	}
 	if srv.ResumeFromLastPlayed(ctx) {
@@ -139,7 +143,7 @@ func pickStartupVideo(ctx context.Context, srv *vlcServer.Server) {
 // exists. The marker is consumed on read so a crash-loop doesn't pin playback
 // to the same broken clip forever. Returns false when there's no marker (the
 // common case) or the marked file can't be played.
-func resumeFromMarker(srv *vlcServer.Server) bool {
+func resumeFromMarker(ctx context.Context, srv *vlcServer.Server) bool {
 	marker := vlcServer.ResumeMarkerPath()
 	data, err := os.ReadFile(marker)
 	if err != nil {
@@ -150,15 +154,16 @@ func resumeFromMarker(srv *vlcServer.Server) bool {
 	if rmErr := os.Remove(marker); rmErr != nil {
 		slog.Warn("failed to remove resume marker", "err", rmErr, "marker", marker)
 	}
-	basename := strings.TrimSpace(string(data))
+	basename, posMs := vlcServer.ParseResumeMarker(data)
 	if basename == "" {
 		return false
 	}
-	slog.Info("resuming playback from watchdog marker", "video", basename, "marker", marker)
+	slog.Info("resuming playback from watchdog marker", "video", basename, "position_ms", posMs, "marker", marker)
 	if err := srv.PlayVideoFile(basename); err != nil {
 		slog.Error("marker resume failed; falling back", "err", err, "video", basename)
 		return false
 	}
+	srv.SeekToPosition(ctx, posMs)
 	return true
 }
 

@@ -65,3 +65,28 @@ func TestProbeRTSPDescribe_NoListener(t *testing.T) {
 		t.Fatalf("expected dial error, got: %v", err)
 	}
 }
+
+func TestResumeMarkerRoundTrip(t *testing.T) {
+	file, pos := ParseResumeMarker(formatResumeMarker("wy_0042.MP4", 123_456))
+	if file != "wy_0042.MP4" || pos != 123_456 {
+		t.Fatalf("round-trip = %q@%d, want wy_0042.MP4@123456", file, pos)
+	}
+}
+
+func TestParseResumeMarkerLegacyBasenameOnly(t *testing.T) {
+	// Markers written before positions existed carry only the basename.
+	file, pos := ParseResumeMarker([]byte("wy_0042.MP4\n"))
+	if file != "wy_0042.MP4" || pos != 0 {
+		t.Fatalf("legacy parse = %q@%d, want wy_0042.MP4@0", file, pos)
+	}
+}
+
+func TestParseResumeMarkerMalformedPosition(t *testing.T) {
+	file, pos := ParseResumeMarker([]byte("wy_0042.MP4\nnot-a-number\n"))
+	if file != "wy_0042.MP4" || pos != 0 {
+		t.Fatalf("malformed-position parse = %q@%d, want wy_0042.MP4@0", file, pos)
+	}
+	if f, p := ParseResumeMarker(nil); f != "" || p != 0 {
+		t.Fatalf("empty parse = %q@%d, want \"\"@0", f, p)
+	}
+}

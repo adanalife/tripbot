@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/vlc-server"
 	"github.com/adanalife/tripbot/pkg/natsclient"
@@ -48,15 +49,16 @@ func EnsureLastPlayedStream(ctx context.Context, js jetstream.JetStream, env str
 	return nil
 }
 
-// publishLastPlayed publishes file as this instance's lastplayed state.
-// Fire-and-forget core publish — the stream captures it; when NATS is
-// unconfigured it's a silent no-op (matching the eventbus convention).
-func publishLastPlayed(ctx context.Context, env, platform, file string) {
+// publishLastPlayed publishes file (+ playback position) as this instance's
+// lastplayed state. Fire-and-forget core publish — the stream captures it;
+// when NATS is unconfigured it's a silent no-op (matching the eventbus
+// convention).
+func publishLastPlayed(ctx context.Context, env, platform, file string, positionMs int64) {
 	conn := natsclient.Conn()
 	if conn == nil {
 		return
 	}
-	payload, err := json.Marshal(ve.LastPlayed{Envelope: ve.NewEnvelope(), File: file})
+	payload, err := json.Marshal(ve.LastPlayed{Envelope: ve.NewEnvelope(), File: file, PositionMs: positionMs})
 	if err != nil {
 		slog.ErrorContext(ctx, "lastplayed marshal failed", "err", err, "file", file)
 		return
@@ -68,24 +70,63 @@ func publishLastPlayed(ctx context.Context, env, platform, file string) {
 }
 
 // announceLastPlayed is the config-bound wrapper playAtIndex calls on every
-// successful play. Background ctx: the playback paths (NATS handlers, startup
-// resume) don't carry a request context.
+// successful play. Position 0 — a fresh clip starts at the top; the position
+// ticker refines it from there. Background ctx: the playback paths (NATS
+// handlers, startup resume) don't carry a request context.
 func (s *Server) announceLastPlayed(file string) {
-	publishLastPlayed(context.Background(), c.Conf.Environment, c.Conf.Platform, file)
+	publishLastPlayed(context.Background(), c.Conf.Environment, c.Conf.Platform, file, 0)
 }
 
-// lastPlayedFile reads the last-value cache back: the playlist basename this
-// (env, platform) instance most recently published, or ok=false when there's
-// nothing to resume (empty stream, NATS off, or any read error — resume is
-// best-effort, so errors are logged and swallowed).
-func lastPlayedFile(ctx context.Context, js jetstream.JetStream, env, platform string) (string, bool) {
+// StartLastPlayedTicker launches a goroutine that republishes the current
+// clip + playback position every interval, so the last-value cache tracks
+// where playback is (not just which clip started). Worst case a restart
+// resumes one interval behind. Same launcher shape as StartStatsPoller.
+func (s *Server) StartLastPlayedTicker(ctx context.Context, interval time.Duration) {
+	slog.InfoContext(ctx, "starting lastplayed position ticker", "interval", interval)
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				s.publishCurrentPosition(ctx)
+			}
+		}
+	}()
+}
+
+// publishCurrentPosition publishes the currently-playing file + position, or
+// quietly does nothing when playback isn't up (between clips, during boot).
+func (s *Server) publishCurrentPosition(ctx context.Context) {
+	if s.Player == nil || !s.Player.IsPlaying() {
+		return
+	}
+	file := s.currentlyPlaying()
+	if file == "" || file == "." {
+		return
+	}
+	pos, err := s.Player.MediaTime()
+	if err != nil {
+		slog.WarnContext(ctx, "lastplayed ticker: media time read failed", "err", err)
+		return
+	}
+	publishLastPlayed(ctx, c.Conf.Environment, c.Conf.Platform, file, int64(pos))
+}
+
+// lastPlayed reads the last-value cache back: the playlist basename + position
+// this (env, platform) instance most recently published, or ok=false when
+// there's nothing to resume (empty stream, NATS off, or any read error —
+// resume is best-effort, so errors are logged and swallowed).
+func lastPlayed(ctx context.Context, js jetstream.JetStream, env, platform string) (file string, positionMs int64, ok bool) {
 	if js == nil {
-		return "", false
+		return "", 0, false
 	}
 	stream, err := js.Stream(ctx, lastPlayedStreamName)
 	if err != nil {
 		slog.WarnContext(ctx, "lastplayed stream lookup failed", "err", err, "stream", lastPlayedStreamName)
-		return "", false
+		return "", 0, false
 	}
 	subj := ve.LastPlayedSubject(env, platform)
 	raw, err := stream.GetLastMsgForSubject(ctx, subj)
@@ -93,26 +134,26 @@ func lastPlayedFile(ctx context.Context, js jetstream.JetStream, env, platform s
 		if !errors.Is(err, jetstream.ErrMsgNotFound) {
 			slog.WarnContext(ctx, "lastplayed read failed", "err", err, "subject", subj)
 		}
-		return "", false
+		return "", 0, false
 	}
 	var ev ve.LastPlayed
 	if err := json.Unmarshal(raw.Data, &ev); err != nil {
 		slog.WarnContext(ctx, "lastplayed decode failed", "err", err, "subject", subj)
-		return "", false
+		return "", 0, false
 	}
 	if ev.File == "" {
-		return "", false
+		return "", 0, false
 	}
-	return ev.File, true
+	return ev.File, ev.PositionMs, true
 }
 
-// ResumeFromLastPlayed tries to resume the clip this instance was playing
-// before its last restart, read from the JetStream last-value cache. Returns
-// true when playback started; false means the caller should fall through to
-// the next startup pick (PlayRandom). A file that has since left the playlist
-// (corpus changed under the PVC) falls through too.
+// ResumeFromLastPlayed tries to resume the clip (and position) this instance
+// was playing before its last restart, read from the JetStream last-value
+// cache. Returns true when playback started; false means the caller should
+// fall through to the next startup pick (PlayRandom). A file that has since
+// left the playlist (corpus changed under the PVC) falls through too.
 func (s *Server) ResumeFromLastPlayed(ctx context.Context) bool {
-	file, ok := lastPlayedFile(ctx, natsclient.JetStream(), c.Conf.Environment, c.Conf.Platform)
+	file, posMs, ok := lastPlayed(ctx, natsclient.JetStream(), c.Conf.Environment, c.Conf.Platform)
 	if !ok {
 		return false
 	}
@@ -120,6 +161,8 @@ func (s *Server) ResumeFromLastPlayed(ctx context.Context) bool {
 		slog.WarnContext(ctx, "lastplayed resume failed; falling back", "err", err, "video", file)
 		return false
 	}
-	slog.InfoContext(ctx, "resumed playback from jetstream lastplayed", "video", file, "platform", c.Conf.Platform)
+	slog.InfoContext(ctx, "resumed playback from jetstream lastplayed",
+		"video", file, "position_ms", posMs, "platform", c.Conf.Platform)
+	s.SeekToPosition(ctx, posMs)
 	return true
 }
