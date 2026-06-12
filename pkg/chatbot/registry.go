@@ -199,10 +199,9 @@ func (a *App) buildRegistry() []Command {
 		},
 		{
 			Trigger: "!location",
-			// "1location" stays: fuzzyLookup only fires on "!"-prefixed
-			// tokens, so the digit-prefix typo can't reach it. "!loclistion"
-			// stays too: 3 edits from !location, beyond fuzzyLookup's max of 2
-			Aliases:        []string{"!tripbot", "!city", "!town", "!where", "!loc", "!loclistion", "1location"},
+			// "!loclistion" stays: 3 edits from !location, beyond
+			// fuzzyLookup's max of 2
+			Aliases:        []string{"!tripbot", "!city", "!town", "!where", "!loc", "!loclistion"},
 			Handler:        a.locationCmd,
 			RequiresFollow: true,
 		},
