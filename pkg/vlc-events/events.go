@@ -55,3 +55,19 @@ type PlayFile struct {
 type Command struct {
 	Envelope
 }
+
+// LastPlayed is the payload for the lastplayed subject — the playlist
+// basename vlc-server most recently started playing, plus how far in it was.
+// Published by vlc-server itself (at clip start and on a periodic position
+// ticker) and read back on startup so a restarted instance resumes the clip —
+// and the spot — it was on. Just the basename: the playlist is re-derived
+// from disk on boot, so anything richer (state, GPS) would go stale;
+// tripbot's video.changed remains the enriched observation event.
+type LastPlayed struct {
+	Envelope
+	File string `json:"file"`
+	// PositionMs is the playback position within File in milliseconds.
+	// 0 / omitted means start-of-clip — which is also what messages published
+	// before this field existed decode to.
+	PositionMs int64 `json:"position_ms,omitempty"`
+}
