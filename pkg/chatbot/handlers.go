@@ -127,6 +127,15 @@ func (a *App) findCommand(message string) (*Command, []string) {
 	if cmd, ok := a.singleWordLookup[command]; ok {
 		return cmd, params
 	}
+
+	// fuzzy fallback: route close misspellings of !-prefixed commands to
+	// their nearest registered trigger (e.g. "!locaiton" -> !location)
+	if strings.HasPrefix(command, "!") {
+		if cmd := a.fuzzyLookup(command); cmd != nil {
+			slog.Info("fuzzy-routed misspelled command", "text", command, "command", cmd.Trigger)
+			return cmd, params
+		}
+	}
 	return nil, nil
 }
 
