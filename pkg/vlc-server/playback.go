@@ -12,7 +12,16 @@ import (
 // or just explicitly pass in what we get here?
 func (s *Server) playAtIndex(index int) error {
 	// start playing the media
-	return s.Playlist.PlayAtIndex(uint(index))
+	if err := s.Playlist.PlayAtIndex(uint(index)); err != nil {
+		return err
+	}
+	// Every playback path (random / file / skip / back) funnels through here,
+	// so this is the one spot that keeps the JetStream last-value cache
+	// current for resume-on-restart. No-op when NATS is off.
+	if index >= 0 && index < len(s.VideoFiles) {
+		s.announceLastPlayed(s.VideoFiles[index])
+	}
+	return nil
 }
 
 // PlayVideoFile plays a video file in the playlist by basename. Returns
