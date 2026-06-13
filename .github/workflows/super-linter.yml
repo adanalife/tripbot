@@ -35,8 +35,8 @@ jobs:
           #   - pkg/server/static/: vendored third-party frontend assets
           #     (htmx + its SSE extension) — not ours to lint/format.
           #   - cdk8s/crds/: vendored upstream CRD schemas (ESO) captured via
-          #     `cdk8s import` — not ours to edit (codespell trips on field
-          #     names like `templateAs`).
+          #     `cdk8s import` — not ours to edit (codespell trips on their
+          #     CamelCase schema field names).
           FILTER_REGEX_EXCLUDE: '.*(^|/)go\.sum$|.*pkg/server/static/.*|.*cdk8s/crds/.*'
           # disabled because it's not working with C libs
           VALIDATE_GO: false
