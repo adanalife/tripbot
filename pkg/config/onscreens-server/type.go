@@ -28,4 +28,10 @@ type OnscreensServerConfig struct {
 	// Format: nats://nats.<env-platform-ns>.svc.cluster.local:4222.
 	// Optional — when unset, the subscriber is skipped.
 	NatsURL string `envconfig:"NATS_URL"`
+
+	// Platform names the streaming platform this onscreens instance serves
+	// ("twitch" / "youtube"). Drives per-platform rotator-message filtering so a
+	// YouTube overlay doesn't advertise Twitch-only commands. Defaults to twitch
+	// (the primary platform). Set by infra per onscreens-<platform> pod.
+	Platform string `default:"twitch" envconfig:"PLATFORM"`
 }
