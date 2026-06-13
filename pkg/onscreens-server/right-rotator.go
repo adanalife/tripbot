@@ -2,19 +2,18 @@ package onscreensServer
 
 import (
 	"log/slog"
-	"math/rand"
 	"time"
 )
 
 var rightRotatorUpdateFrequency = time.Duration(90 * time.Second)
 
-var possibleRightMessages = []string{
-	"Don't forget to follow :)",
-	"Don't forget to follow :)",
-	"Try running !location",
-	"Try running !location",
-	"Try running !timewarp",
-	"Streaming 24 hours a day",
+// All right-rotator lines are platform-neutral (!location and !timewarp are both
+// in the YouTube allowlist). Weight 2 reproduces the old duplicated entries.
+var possibleRightMessages = []rotatorMessage{
+	{Text: "Don't forget to follow :)", Weight: 2},
+	{Text: "Try running !location", Weight: 2},
+	{Text: "Try running !timewarp"},
+	{Text: "Streaming 24 hours a day"},
 }
 
 // newRightRotator constructs the right-rotator *Onscreen, primes it with
@@ -39,10 +38,6 @@ func rightRotatorLoop(osc *Onscreen) {
 
 // rightRotatorContent creates the content for the rightRotator
 func rightRotatorContent() string {
-	var output string
-
-	// pick a random message
-	output = possibleRightMessages[rand.Intn(len(possibleRightMessages))]
-
-	return output
+	// pick a weighted-random message for this platform
+	return pickRotatorMessage(possibleRightMessages)
 }
