@@ -1,0 +1,29 @@
+[project]
+name = "adanalife-tripbot-k8s"
+version = "0.1.0"
+description = "cdk8s (Python) authoring layer for the tripbot app workloads"
+requires-python = ">=3.12"
+dependencies = [
+    "cdk8s>=2.69",
+    "constructs>=10.3",
+    "pyyaml>=6.0.3",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "pyyaml>=6.0.3",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+target-version = "py312"
+
+[tool.ruff.lint]
+extend-select = ["I"]
