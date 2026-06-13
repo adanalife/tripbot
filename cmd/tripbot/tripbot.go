@@ -685,15 +685,14 @@ func (t *Tripbot) scheduleBackgroundJobs() {
 	if !platformIsTwitch() {
 		// Twitch-sourced jobs stay off non-Twitch instances: session/presence
 		// tracking reads Twitch chatters (YouTube presence is punted in v1),
-		// the guess leaderboard backs an excluded command, the subscriber /
+		// the leaderboards back excluded commands, the subscriber /
 		// follower polls hit Helix, and the token-refresh job dereferences the
 		// IRC client this instance never constructs.
 		return
 	}
-	onscreensCli := onscreensClient.New(natsclient.DefaultPublisher(), c.Conf.Environment)
 	t.addJob(61*time.Second, "users.UpdateSession", t.sessions.UpdateSession)
 	t.addJob(62*time.Second, "users.UpdateLeaderboard", t.sessions.UpdateLeaderboard)
-	t.addJob(5*time.Minute, "onscreens.ShowGuessLeaderboard", onscreensCli.ShowGuessLeaderboard)
+	t.addJob(5*time.Minute, "chatbot.ShowRotatingLeaderboard", t.app.ShowRotatingLeaderboard)
 	t.addJob(5*time.Minute, "users.PrintCurrentSession", t.sessions.PrintCurrentSession)
 	t.addJob(5*time.Minute, "twitch.GetSubscribers", mytwitch.GetSubscribers)
 	t.addJob(5*time.Minute, "twitch.GetFollowerCount", mytwitch.GetFollowerCount)
