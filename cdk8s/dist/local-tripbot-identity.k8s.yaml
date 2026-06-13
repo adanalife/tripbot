@@ -1,0 +1,92 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: tripbot-secret
+  namespace: default
+stringData:
+  DATABASE_DB: tripbot_docker
+  DATABASE_PASS: hunter2
+  DATABASE_USER: tripbot_docker
+type: Opaque
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  labels:
+    app.kubernetes.io/name: tripbot
+    app.kubernetes.io/part-of: tripbot
+  name: tripbot-twitch-creds
+  namespace: default
+spec:
+  dataFrom:
+    - extract:
+        key: k8s/tripbot/twitch-creds
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: SecretStore
+    name: aws-secretsmanager
+  target:
+    creationPolicy: Owner
+    name: tripbot-twitch-creds
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  labels:
+    app.kubernetes.io/name: tripbot
+    app.kubernetes.io/part-of: tripbot
+  name: tripbot-google-maps-api-key
+  namespace: default
+spec:
+  dataFrom:
+    - extract:
+        key: k8s/tripbot/google-maps-api-key
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: SecretStore
+    name: aws-secretsmanager
+  target:
+    creationPolicy: Owner
+    name: tripbot-google-maps-api-key
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  labels:
+    app.kubernetes.io/name: tripbot
+    app.kubernetes.io/part-of: tripbot
+  name: tripbot-discord-alerts-webhook
+  namespace: default
+spec:
+  data:
+    - remoteRef:
+        key: k8s/tripbot/discord-alerts-webhook
+      secretKey: DISCORD_ALERTS_WEBHOOK
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: SecretStore
+    name: aws-secretsmanager
+  target:
+    creationPolicy: Owner
+    name: tripbot-discord-alerts-webhook
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  labels:
+    app.kubernetes.io/name: tripbot
+    app.kubernetes.io/part-of: tripbot
+  name: tripbot-discord-bot-token
+  namespace: default
+spec:
+  data:
+    - remoteRef:
+        key: k8s/tripbot/discord-bot-token
+      secretKey: DISCORD_BOT_TOKEN
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: SecretStore
+    name: aws-secretsmanager
+  target:
+    creationPolicy: Owner
+    name: tripbot-discord-bot-token

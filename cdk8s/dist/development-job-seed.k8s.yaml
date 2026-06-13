@@ -1,0 +1,57 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: tripbot-seed
+  namespace: development
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      containers:
+        - command:
+            - /usr/local/bin/seed-db
+          envFrom:
+            - configMapRef:
+                name: tripbot-twitch-config
+            - secretRef:
+                name: tripbot-database-creds
+          image: adanalife/tripbot:develop
+          imagePullPolicy: Always
+          name: seed
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+      initContainers:
+        - command:
+            - sh
+            - -c
+            - until nc -z postgres 5432; do echo "waiting for postgres..."; sleep 2; done
+          image: busybox:1.36
+          name: wait-for-postgres
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+        - args:
+            - -path
+            - /migrations
+            - -database
+            - postgres://$(DATABASE_USER):$(DATABASE_PASS)@$(DATABASE_HOST):5432/$(DATABASE_DB)?sslmode=disable
+            - up
+          command:
+            - migrate
+          envFrom:
+            - configMapRef:
+                name: tripbot-twitch-config
+            - secretRef:
+                name: tripbot-database-creds
+          image: adanalife/tripbot:develop
+          imagePullPolicy: Always
+          name: migrate
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+      restartPolicy: Never
+  ttlSecondsAfterFinished: 600
