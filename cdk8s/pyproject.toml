@@ -24,6 +24,8 @@ pythonpath = ["."]
 
 [tool.ruff]
 target-version = "py312"
-
-[tool.ruff.lint]
-extend-select = ["I"]
+# NB: isort (rule "I") is deliberately NOT enabled. The constructs import the
+# cdk8s-generated `imports` package (cdk8s/imports/, gitignored) — ruff's isort
+# classifies it as first-party when the dir is present (local) and third-party
+# when it isn't (CI), so enabling "I" produces a reorder diff that only appears
+# in CI. infra/cdk8s leaves "I" off for the same reason.
