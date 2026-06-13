@@ -40,9 +40,9 @@ type userProfile struct {
 }
 
 // userProfileHandler serves GET /admin/user/{username}: the HTML fragment the
-// live console pops over when an operator clicks a username. Phase 2 will add
-// timeout/ban actions here (needs the broadcaster token's
-// moderator:manage:banned_users scope — see the vault TODO).
+// live console pops over when an operator clicks a username. Timeout/ban
+// actions are planned here (they need the broadcaster token's
+// moderator:manage:banned_users scope).
 func userProfileHandler(w http.ResponseWriter, r *http.Request) {
 	username := strings.ToLower(strings.TrimSpace(mux.Vars(r)["username"]))
 	prof := userProfile{Username: username}

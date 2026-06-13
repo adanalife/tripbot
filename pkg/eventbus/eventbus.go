@@ -13,7 +13,7 @@
 //
 // Subjects follow the project convention tripbot.<env>.<domain>.<event>;
 // envelopes are snake_case JSON carrying emitted_at (RFC3339Nano UTC) so a
-// future protobuf schema maps 1-1. See the NATS phase-0/1 session notes.
+// future protobuf schema maps 1-1.
 package eventbus
 
 import (
@@ -161,6 +161,52 @@ func EmitVideoChanged(ctx context.Context, env, file, state string, flagged bool
 	})
 }
 
+// --- auth.status ------------------------------------------------------------
+
+// AuthAccount is one identity's token state inside an AuthStatus snapshot.
+// Field semantics mirror mytwitch.AccountTokenStatus, but the type is defined
+// here so the eventbus stays free of pkg/twitch (and its DB-reaching imports)
+// per the package-boundary ADR — cmd/tripbot converts at the call site.
+type AuthAccount struct {
+	Account   string `json:"account"`              // "bot" | "broadcaster" | "youtube" — the /auth/init account selector
+	LoginAs   string `json:"login_as,omitempty"`   // the exact platform username/channel to sign in as
+	ExpiresAt string `json:"expires_at,omitempty"` // RFC3339Nano UTC; empty when unknown (missing token, or auto-refreshed)
+	Reason    string `json:"reason,omitempty"`     // "" healthy, else "missing" | "expired"
+	InitURL   string `json:"init_url,omitempty"`   // absolute re-auth URL (tripbot's /auth/init)
+}
+
+// AuthStatus is the wire format for tripbot.<env>.auth.status.<platform> — a
+// full token-state snapshot for one platform instance's identities, emitted on
+// a ~30s ticker. Consumers (the standalone console) render countdowns and
+// re-auth links from it; re-auth itself stays in tripbot (InitURL points there).
+type AuthStatus struct {
+	Platform  string        `json:"platform"`
+	Accounts  []AuthAccount `json:"accounts"`
+	EmittedAt string        `json:"emitted_at"`
+}
+
+// AuthStatusSubject returns the publish subject for one platform instance's
+// auth snapshots. Unlike the other domains this subject is per-platform — the
+// twitch and youtube instances own disjoint identities, and the per-platform
+// leaf lets the TRIPBOT_AUTH stream keep a last-value cache of each
+// (MaxMsgsPerSubject=1) instead of the instances clobbering one another.
+func AuthStatusSubject(env, platform string) string {
+	return subject(env, "auth", "status") + "." + platform
+}
+
+// AuthStatusWildcard returns the subscribe pattern covering every platform's
+// auth snapshots in env.
+func AuthStatusWildcard(env string) string { return subject(env, "auth", "status") + ".*" }
+
+// EmitAuthStatus publishes a token-state snapshot for this instance's platform.
+func EmitAuthStatus(ctx context.Context, env, platform string, accounts []AuthAccount) {
+	emit(ctx, AuthStatusSubject(env, platform), AuthStatus{
+		Platform:  platform,
+		Accounts:  accounts,
+		EmittedAt: emittedAt(),
+	})
+}
+
 // --- JetStream streams (durable history) ----------------------------------
 //
 // Two subjects need to survive a tripbot reboot so the admin live console can
@@ -174,6 +220,7 @@ func EmitVideoChanged(ctx context.Context, env, file, state string, flagged bool
 const (
 	chatStreamName  = "TRIPBOT_CHAT"
 	videoStreamName = "TRIPBOT_VIDEO"
+	authStreamName  = "TRIPBOT_AUTH"
 )
 
 // Retention caps match the admin hub's in-memory buffer sizes (pkg/server:
@@ -218,18 +265,31 @@ func EnsureStreams(ctx context.Context, js jetstream.JetStream, env string) erro
 			Discard:     jetstream.DiscardOld,
 			MaxMsgs:     videoStreamMaxMsgs,
 		},
+		{
+			Name:        authStreamName,
+			Description: "Last-known auth.status snapshot per platform instance (last-value cache).",
+			Subjects:    []string{AuthStatusWildcard(env)},
+			Storage:     jetstream.FileStorage,
+			Retention:   jetstream.LimitsPolicy,
+			Discard:     jetstream.DiscardOld,
+			// One retained message per subject leaf (= per platform): a fresh
+			// console replays exactly the latest snapshot from each instance,
+			// then live updates arrive on the same subscription.
+			MaxMsgsPerSubject: 1,
+		},
 	}
 	for _, cfg := range configs {
 		if _, err := js.CreateOrUpdateStream(ctx, cfg); err != nil {
 			return fmt.Errorf("ensure stream %s: %w", cfg.Name, err)
 		}
 	}
-	slog.InfoContext(ctx, "jetstream streams ensured", "streams", chatStreamName+","+videoStreamName, "env", env)
+	slog.InfoContext(ctx, "jetstream streams ensured", "streams", chatStreamName+","+videoStreamName+","+authStreamName, "env", env)
 	return nil
 }
 
-// ChatStreamName and VideoStreamName expose the stream names so consumers (the
-// admin hub) can bind ordered consumers to them without re-deriving the
-// constants.
+// ChatStreamName, VideoStreamName, and AuthStreamName expose the stream names
+// so consumers (the admin hub, the standalone console) can bind ordered
+// consumers to them without re-deriving the constants.
 func ChatStreamName() string  { return chatStreamName }
 func VideoStreamName() string { return videoStreamName }
+func AuthStreamName() string  { return authStreamName }

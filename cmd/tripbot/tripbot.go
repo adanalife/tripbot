@@ -202,6 +202,7 @@ func (t *Tripbot) Run() {
 	t.startNATS(shutdownCtx)
 	t.srv.StartEventHub(shutdownCtx)       // after startNATS: the hub subscribes to the live NATS conn
 	t.player.EmitCurrentVideo(shutdownCtx) // after the hub subscribes: seed its now-playing cache (no NATS replay)
+	t.startAuthStatusEmitter(shutdownCtx)  // after startNATS: publishes auth.status snapshots for the standalone console
 	if !platformIsTwitch() {
 		t.connectToYouTube(shutdownCtx)
 		return
@@ -256,7 +257,7 @@ const featureFlagRefreshInterval = 30 * time.Second
 // (false) until the next restart loads cleanly. Mirrors the loadTwitchToken
 // "stay up with limited functionality" pattern.
 func (t *Tripbot) startFeatureFlags(ctx context.Context) {
-	fc, err := feature.NewPostgresClient(ctx, database.GormDB(), featureFlagRefreshInterval)
+	fc, err := feature.NewPostgresClient(ctx, database.GormDB(), featureFlagRefreshInterval, c.Conf.Platform)
 	if err != nil {
 		slog.WarnContext(ctx, "feature flag client init failed; flags will default to off",
 			"fix", "ensure migration 013_create_feature_flags has run",
@@ -270,11 +271,8 @@ func (t *Tripbot) startFeatureFlags(ctx context.Context) {
 }
 
 // startNATS connects to the in-cluster NATS broker and declares the JetStream
-// streams that back the admin live console's durable history (phase 1 + 3 of
-// the pubsub migration). Optional — when NATS_URL is empty the connection is
-// skipped and publishes no-op silently; chatbot.realOnscreens.ShowMiddleText
-// still mirrors to NATS but the publish becomes a nil check, leaving HTTP as
-// the sole transport.
+// streams that back the admin live console's durable history. Optional — when
+// NATS_URL is empty the connection is skipped and publishes no-op silently.
 //
 // EnsureStreams must run before StartEventHub so the streams exist when the hub
 // binds its ordered consumers. It no-ops when JetStream is unavailable (NATS off
@@ -286,6 +284,78 @@ func (t *Tripbot) startNATS(ctx context.Context) {
 		slog.WarnContext(ctx, "jetstream stream setup failed; live console will run without durable history",
 			"err", err)
 	}
+}
+
+// authStatusInterval is how often the instance publishes its auth.status
+// snapshot. Matches the in-process panel's 30s pollAuth cadence — token expiry
+// moves on the order of minutes/hours, and the TRIPBOT_AUTH last-value stream
+// means a freshly-connected console is at most one interval stale.
+const authStatusInterval = 30 * time.Second
+
+// startAuthStatusEmitter publishes this instance's token state to
+// tripbot.<env>.auth.status.<platform> on start and every authStatusInterval.
+// The in-process admin hub ignores the subject (it polls token state directly);
+// the standalone console is the consumer. Snapshots are assembled here — not in
+// pkg/eventbus — so the eventbus stays free of pkg/twitch / pkg/youtube imports.
+func (t *Tripbot) startAuthStatusEmitter(ctx context.Context) {
+	platform := c.Conf.Platform
+	if platform == "" {
+		platform = "twitch"
+	}
+	snapshot := twitchAuthAccounts
+	if !platformIsTwitch() {
+		snapshot = youtubeAuthAccounts
+	}
+	go func() {
+		eventbus.EmitAuthStatus(ctx, c.Conf.Environment, platform, snapshot())
+		tick := time.NewTicker(authStatusInterval)
+		defer tick.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-tick.C:
+				eventbus.EmitAuthStatus(ctx, c.Conf.Environment, platform, snapshot())
+			}
+		}
+	}()
+}
+
+// twitchAuthAccounts converts the live Twitch token state (bot + broadcaster)
+// into the eventbus wire shape.
+func twitchAuthAccounts() []eventbus.AuthAccount {
+	statuses := mytwitch.TokenStatuses()
+	accounts := make([]eventbus.AuthAccount, 0, len(statuses))
+	for _, s := range statuses {
+		expiresAt := ""
+		if !s.ExpiresAt.IsZero() {
+			expiresAt = s.ExpiresAt.UTC().Format(time.RFC3339Nano)
+		}
+		accounts = append(accounts, eventbus.AuthAccount{
+			Account:   s.Account,
+			LoginAs:   s.LoginAs,
+			ExpiresAt: expiresAt,
+			Reason:    s.Reason,
+			InitURL:   s.InitURL,
+		})
+	}
+	return accounts
+}
+
+// youtubeAuthAccounts reports the channel-owner token's loaded/missing state.
+// No expiry: the oauth2 client auto-refreshes the access token via the refresh
+// token, so loaded-vs-missing is the operational signal (a dead refresh token
+// surfaces as the row being blanked → "missing").
+func youtubeAuthAccounts() []eventbus.AuthAccount {
+	account := eventbus.AuthAccount{
+		Account: "youtube",
+		LoginAs: myyoutube.ChannelID(),
+		InitURL: myyoutube.AuthInitURL(),
+	}
+	if myyoutube.ChannelID() == "" {
+		account.Reason = "missing"
+	}
+	return []eventbus.AuthAccount{account}
 }
 
 // startSilentDisconnectWatchdog launches the goroutine that detects the

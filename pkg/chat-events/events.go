@@ -9,7 +9,7 @@
 // the actual sending). Like pkg/onscreens-events and pkg/vlc-events it is
 // stdlib-only and side-effect-free: no init(), no pkg/config import, env is
 // always a parameter rather than read from config here — so it links safely
-// into any binary. See vault/decisions/package-boundary-init-discipline.md.
+// into any binary.
 package chatEvents
 
 import "time"

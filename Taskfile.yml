@@ -33,7 +33,7 @@ tasks:
 
   # Native macOS test runner — host mise + VLC.app's bundled libvlc, no
   # docker. Mirrors vlc-server:build:macos's CGO incantation (rpath is
-  # required for `go test` too, per vault/tripbot/vlc-server/gotchas.md).
+  # required for `go test` too).
   # `dotenv` injects .env.testing's keys as real env vars so the config
   # loader resolves them from the environment — `go test` runs each package
   # from its own dir, so the .env.testing file itself isn't on the path.
@@ -94,7 +94,7 @@ tasks:
         printf '\a'
         mise exec -- go run ./cmd/auth-bootstrap --account=broadcaster
 
-  # Release smoke flow — see vault/tripbot/release-checklist.md.
+  # Release smoke flow.
   # Targets the local k3d cluster running the stage-1 overlay
   # (cloudflared tunnel + apps).
 
@@ -147,7 +147,7 @@ tasks:
 
   # vlc-server native macOS build — links against the libvlc bundled
   # inside VLC.app. Saves recreating the CGO incantation from memory.
-  # See vault/tripbot/vlc-server/gotchas.md for the full story; key bits:
+  # Key bits:
   #   * rpath is required for `go test` / `go run`, not just `go build` —
   #     otherwise `dyld: Library not loaded: @rpath/libvlc.dylib`.
   #   * Do NOT add `-lvlc` to LDFLAGS — libvlc-go's own #cgo LDFLAGS

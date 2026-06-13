@@ -49,6 +49,7 @@ jobs:
           docker.io/ubuntu:24.04 ghcr.io/adanalife/mirror/ubuntu:24.04
           docker.io/migrate/migrate:4 ghcr.io/adanalife/mirror/migrate:4
           docker.io/pgvector/pgvector:pg16 ghcr.io/adanalife/mirror/pgvector:pg16
+          docker.io/python:3.13-slim-bookworm ghcr.io/adanalife/mirror/python:3.13-slim-bookworm
           EOF
       # mirror/obs-cef-base:<ver> is also on GHCR but deliberately NOT in the
       # refresh list: its tags are immutable version pins (a CEF bump changes

@@ -70,10 +70,10 @@ type TripbotConfig struct {
 	ObsServerHost string `envconfig:"OBS_SERVER_HOST"`
 
 	// NatsURL is the in-cluster NATS endpoint used for fire-and-forget
-	// inter-component events (phase 1: ShowMiddleText alongside HTTP).
-	// Format: nats://nats.<env-platform-ns>.svc.cluster.local:4222.
-	// Optional — when unset, NATS publishes no-op and the HTTP path is
-	// the sole transport. Lets local dev / tests skip NATS entirely.
+	// inter-component events. Format:
+	// nats://nats.<env-platform-ns>.svc.cluster.local:4222.
+	// Optional — when unset, NATS publishes no-op silently. Lets local
+	// dev / tests skip NATS entirely.
 	NatsURL string `envconfig:"NATS_URL"`
 
 	// DiscordAlertsWebhook is the Discord webhook URL that !report posts

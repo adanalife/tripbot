@@ -4,6 +4,15 @@ type VlcServerConfig struct {
 	Environment string `required:"true" envconfig:"ENV"`
 	ServerType  string `default:"vlc_server"`
 
+	// Platform names which streaming platform's stack this instance feeds
+	// ("twitch" / "youtube"). Reads the same STREAM_PLATFORM env key the other
+	// per-platform images use (contract.EnvKeyStreamPlatform), so the cdk8s
+	// factory stamps one platform per instance. It scopes the lastplayed
+	// subject leaf (tripbot.<env>.vlc.lastplayed.<platform>) — every platform
+	// instance shares the env's NATS, so without it the instances would
+	// clobber each other's resume state.
+	Platform string `default:"twitch" envconfig:"STREAM_PLATFORM"`
+
 	// Verbose determines output verbosity
 	Verbose bool `default:"false" envconfig:"VERBOSE"`
 	// VlcVerbose adds extra VLC output

@@ -6,10 +6,12 @@ import (
 	"log/slog"
 	"strings"
 	"time"
+	"unicode"
 
 	mylog "github.com/adanalife/tripbot/pkg/chatbot/log"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/eventbus"
+	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/gempir/go-twitch-irc/v4"
@@ -28,9 +30,19 @@ func incChatCommandCounter(command string) {
 // `¡` (U+00A1, two bytes in UTF-8: 0xC2 0xA1) to a regular `!` so that
 // Spanish-keyboard users (who type `¡` where US keyboards type `!`) can run
 // commands without switching layouts. e.g. `¡miles` -> `!miles`.
+//
+// A leading `1` (the unshifted `!` on US keyboards) is rewritten the same
+// way, but only when a letter follows — messages that genuinely start with a
+// number ("100 miles", "10/10") must not turn into command lookups.
+// e.g. `1location` -> `!location`.
 func normalizeCommandPrefix(msg string) string {
 	if strings.HasPrefix(msg, "¡") {
 		return "!" + strings.TrimPrefix(msg, "¡")
+	}
+	if rest := strings.TrimPrefix(msg, "1"); rest != msg && rest != "" {
+		if r := []rune(rest)[0]; unicode.IsLetter(r) {
+			return "!" + rest
+		}
 	}
 	return msg
 }
@@ -127,7 +139,87 @@ func (a *App) findCommand(message string) (*Command, []string) {
 	if cmd, ok := a.singleWordLookup[command]; ok {
 		return cmd, params
 	}
+
+	if strings.HasPrefix(command, "!") {
+		// state-name shortcut: "!florida" (or "!new york") runs !guess with
+		// the state as the guess. Only when !guess is enabled on this
+		// platform — on others the lookup misses and the token falls through.
+		if guess, ok := a.singleWordLookup["!guess"]; ok {
+			if stateParams := stateGuessParams(command, params); stateParams != nil {
+				return guess, stateParams
+			}
+		}
+
+		// fuzzy fallback: route close misspellings of !-prefixed commands to
+		// their nearest registered trigger (e.g. "!locaiton" -> !location)
+		if cmd := a.fuzzyLookup(command); cmd != nil {
+			slog.Info("fuzzy-routed misspelled command", "text", command, "command", cmd.Trigger)
+			return cmd, params
+		}
+	}
 	return nil, nil
+}
+
+// stateGuessParams returns the params to pass to !guess when command (a
+// !-prefixed token, with params possibly continuing a multi-word state name)
+// spells out a US state or territory: "!florida" yields ["florida"],
+// "!new york" yields ["new", "york"]. Returns nil when the token isn't a
+// state name. Two-letter abbreviations ("!fl") deliberately don't match —
+// only full names are checked, so tokens like "!hi" / "!ok" / "!me" can't
+// fire accidental guesses.
+func stateGuessParams(command string, params []string) []string {
+	name := strings.TrimPrefix(command, "!")
+	if name == "" {
+		return nil
+	}
+	// try the full phrase first so "!new york" matches New York rather than
+	// stopping at the bare "new"
+	if len(params) > 0 {
+		phrase := name + " " + strings.Join(params, " ")
+		if helpers.StateToStateAbbrev(phrase) != "" {
+			return strings.Split(phrase, " ")
+		}
+	}
+	if helpers.StateToStateAbbrev(name) != "" {
+		return []string{name}
+	}
+	return nil
+}
+
+// fuzzyStateName returns the canonical state/territory name closest to guess
+// by edit distance, or "" when guess is already an exact state name, too far
+// from every state, or ambiguous between two states. The namespace here is
+// only the ~60 state names (no command triggers), so unlike fuzzyLookup the
+// correction can't collide with the command surface.
+func fuzzyStateName(guess string) string {
+	if helpers.StateToStateAbbrev(guess) != "" {
+		return "" // already exact — never touch it
+	}
+	maxDist := fuzzyMaxDistance(len([]rune(guess)))
+	if maxDist == 0 {
+		return ""
+	}
+
+	lowered := strings.ToLower(guess)
+	best := ""
+	bestDist := maxDist + 1
+	ambiguous := false
+	for _, name := range helpers.StateNames() {
+		dist := levenshtein(lowered, strings.ToLower(name))
+		if dist > maxDist {
+			continue
+		}
+		switch {
+		case dist < bestDist:
+			best, bestDist, ambiguous = name, dist, false
+		case dist == bestDist && name != best:
+			ambiguous = true
+		}
+	}
+	if ambiguous {
+		return ""
+	}
+	return best
 }
 
 func (a *App) runCommand(ctx context.Context, user *users.User, message string) {

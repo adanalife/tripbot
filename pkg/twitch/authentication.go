@@ -38,8 +38,7 @@ var helixHTTPClient = &http.Client{Transport: rateLimitRecorder{next: otelhttp.N
 //
 // Broadcaster-gated endpoints (GetSubscriptions, GetChannelFollows total)
 // authorize against the broadcaster identity, not the bot — those live in
-// BroadcasterScopes. See [[../decisions/...]] / vault/tripbot/tripbot/TODO.md
-// "Subscriber/follower data" item for the identity-vs-scope distinction.
+// BroadcasterScopes.
 var BotScopes = []string{
 	"chat:read",
 	"chat:edit",

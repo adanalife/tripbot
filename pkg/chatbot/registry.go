@@ -38,7 +38,7 @@ func (a *App) buildRegistry() []Command {
 		},
 		{
 			Trigger:        "!timewarp",
-			Aliases:        []string{"!timewrap", "!timeskip", "!tw", "!timewqrp", "!warp"},
+			Aliases:        []string{"!timeskip", "!tw", "!warp"},
 			Handler:        a.timewarpCmd,
 			RequiresFollow: true,
 		},
@@ -117,7 +117,7 @@ func (a *App) buildRegistry() []Command {
 		},
 		{
 			Trigger: "!commands",
-			Aliases: []string{"!command", "¡command", "¡commands", "!commads", "!controls", "!commande"},
+			Aliases: []string{"!command", "!controls"},
 			Handler: func(_ context.Context, _ *users.User, _ []string) {
 				a.Chat.Say("You can try: !location, !guess, !date, !state, !sunset, !timewarp, !miles, !leaderboard, !song, and many other hidden commands!")
 			},
@@ -129,31 +129,31 @@ func (a *App) buildRegistry() []Command {
 		},
 		{
 			Trigger:        "!sunset",
-			Aliases:        []string{"!sunet"},
 			Handler:        a.sunsetCmd,
 			RequiresFollow: true,
 		},
 		{
 			Trigger:        "!weather",
-			Aliases:        []string{"!wether", "!weahter", "!meteo"},
+			Aliases:        []string{"!meteo"},
 			Handler:        a.weatherCmd,
 			RequiresFollow: true,
 		},
 		{
 			Trigger:        "!time",
-			Aliases:        []string{"!timr"},
 			Handler:        a.timeCmd,
 			RequiresFollow: true,
 		},
 		{
 			Trigger:        "!date",
-			Aliases:        []string{"!datw", "is this live", "is this live?"},
+			Aliases:        []string{"is this live", "is this live?"},
 			Handler:        a.dateCmd,
 			RequiresFollow: true,
 		},
 		{
-			Trigger:        "!guess",
-			Aliases:        []string{"!guss", "guess", "!gusss", "!guees", "!gues", "!quess", "!guis"},
+			Trigger: "!guess",
+			// "!guis" stays: it's 2 edits from !guess, beyond fuzzyLookup's
+			// reach at that length (max 1 edit for inputs of 4-6 runes)
+			Aliases:        []string{"guess", "!guis"},
 			Handler:        a.guessCmd,
 			RequiresFollow: true,
 		},
@@ -198,14 +198,16 @@ func (a *App) buildRegistry() []Command {
 			RequiresFollow: true,
 		},
 		{
-			Trigger:        "!location",
-			Aliases:        []string{"!tripbot", "!city", "!town", "!where", "!loacation", "!loation", "!loc", "!locatioin", "!locatoion", "!locaton", "!loclistion", "!locton", "1location", "¡location", "!locatiom", "!location!", "!locatio", "!lcoation", "!ocation"},
+			Trigger: "!location",
+			// "!loclistion" stays: 3 edits from !location, beyond
+			// fuzzyLookup's max of 2
+			Aliases:        []string{"!tripbot", "!city", "!town", "!where", "!loc", "!loclistion"},
 			Handler:        a.locationCmd,
 			RequiresFollow: true,
 		},
 		{
 			Trigger:        "!leaderboard",
-			Aliases:        []string{"!monthlyleaderboard", "!lb", "!mlb", "!leaderbord", "!leaderborad", "!ldb", "!ldbd"},
+			Aliases:        []string{"!monthlyleaderboard", "!lb", "!mlb", "!ldb", "!ldbd"},
 			Handler:        a.monthlyMilesLeaderboardCmd,
 			RequiresFollow: true,
 		},

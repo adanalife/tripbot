@@ -7,7 +7,6 @@ import (
 	"math/rand"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -57,6 +56,13 @@ func main() {
 	// registration is skipped; HTTP remains the sole transport.
 	natsclient.Connect(c.Conf.NatsURL, "vlc-server")
 
+	// Declare the lastplayed last-value-cache stream before the first play —
+	// a core publish to a subject no stream covers is silently uncaptured.
+	// Best-effort: resume-on-restart degrades to PlayRandom without it.
+	if err := vlcServer.EnsureLastPlayedStream(shutdownCtx, natsclient.JetStream(), c.Conf.Environment); err != nil {
+		slog.Warn("lastplayed stream setup failed; resume-on-restart disabled", "err", err)
+	}
+
 	// await graceful shutdown signal
 	listenForShutdown()
 
@@ -84,13 +90,18 @@ func main() {
 		srv.Shutdown(drainCtx)
 	}()
 
-	resumeFromMarker(srv)
+	pickStartupVideo(shutdownCtx, srv)
 
 	// poll libvlc for playback stats (FPS, bitrate, dropped frames) and
 	// surface them as OTel gauges. No-op when telemetry is disabled.
 	// Tied to shutdownCtx so the poller goroutine exits cleanly on
 	// SIGINT/SIGTERM.
 	srv.StartStatsPoller(shutdownCtx, 5*time.Second)
+
+	// keep the JetStream lastplayed last-value cache tracking the playback
+	// position, so a restart resumes mid-clip (at worst one interval behind).
+	// No-op publishes when NATS is off.
+	srv.StartLastPlayedTicker(shutdownCtx, 5*time.Second)
 
 	// poll the OBS WebSocket for streaming state + render/output stats.
 	go obs.PollStreamingActive(context.Background(), 30*time.Second)
@@ -109,32 +120,51 @@ func main() {
 	srv.Start(shutdownCtx)
 }
 
-// resumeFromMarker picks the startup video. If the self-heal watchdog
-// wrote a resume marker on its previous exit, play that file; otherwise
-// start fresh with a random pick. The marker is consumed on read so a
-// crash-loop doesn't pin playback to the same broken clip forever.
-func resumeFromMarker(srv *vlcServer.Server) {
+// pickStartupVideo picks the startup video, trying the most specific resume
+// signal first:
+//
+//  1. the watchdog's file marker (written just before a self-heal SIGTERM —
+//     same pod, freshest signal, consumed on read),
+//  2. the JetStream lastplayed last-value cache (survives pod restarts and
+//     reschedules; per-platform leaf so the twitch and youtube instances
+//     each resume their own clip),
+//  3. a fresh random pick.
+func pickStartupVideo(ctx context.Context, srv *vlcServer.Server) {
+	if resumeFromMarker(ctx, srv) {
+		return
+	}
+	if srv.ResumeFromLastPlayed(ctx) {
+		return
+	}
+	srv.PlayRandom()
+}
+
+// resumeFromMarker resumes from the self-heal watchdog's file marker, if one
+// exists. The marker is consumed on read so a crash-loop doesn't pin playback
+// to the same broken clip forever. Returns false when there's no marker (the
+// common case) or the marked file can't be played.
+func resumeFromMarker(ctx context.Context, srv *vlcServer.Server) bool {
 	marker := vlcServer.ResumeMarkerPath()
 	data, err := os.ReadFile(marker)
 	if err != nil {
-		srv.PlayRandom()
-		return
+		return false
 	}
 	// Remove the marker immediately so any subsequent crash falls back to
-	// PlayRandom rather than retrying the same file.
+	// the next startup pick rather than retrying the same file.
 	if rmErr := os.Remove(marker); rmErr != nil {
 		slog.Warn("failed to remove resume marker", "err", rmErr, "marker", marker)
 	}
-	basename := strings.TrimSpace(string(data))
+	basename, posMs := vlcServer.ParseResumeMarker(data)
 	if basename == "" {
-		srv.PlayRandom()
-		return
+		return false
 	}
-	slog.Info("resuming playback from watchdog marker", "video", basename, "marker", marker)
+	slog.Info("resuming playback from watchdog marker", "video", basename, "position_ms", posMs, "marker", marker)
 	if err := srv.PlayVideoFile(basename); err != nil {
-		slog.Error("resume failed; falling back to PlayRandom", "err", err, "video", basename)
-		srv.PlayRandom()
+		slog.Error("marker resume failed; falling back", "err", err, "video", basename)
+		return false
 	}
+	srv.SeekToPosition(ctx, posMs)
+	return true
 }
 
 // initializeTelemetry brings up OpenTelemetry providers (traces, metrics,

@@ -254,7 +254,7 @@ func TestLiveChatBinding_RebindSwitchesTarget(t *testing.T) {
 	yc := youtubeChat{binding: binding, insert: rec.insert}
 
 	yc.Say("first")
-	// broadcast ended; the poller re-discovers and re-binds (Phase B3 flow)
+	// broadcast ended; the poller re-discovers and re-binds
 	binding.Bind("chat-new")
 	yc.Say("second")
 

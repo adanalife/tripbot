@@ -708,7 +708,7 @@ func TestGuessCmd_WrongGuess_SaysTryAgain(t *testing.T) {
 // the lifetime "guess_state_total" scoreboard, once for the monthly one), so
 // callers queue it twice.
 func expectAddToScoreChain(mock sqlmock.Sqlmock) {
-	mock.ExpectQuery(`SELECT id FROM users WHERE username = `).
+	mock.ExpectQuery(`SELECT id FROM users WHERE platform = (.+) AND username = `).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(42))
 	mock.ExpectQuery(`SELECT \* FROM "scoreboards" WHERE`).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(7, "guess_sb"))
