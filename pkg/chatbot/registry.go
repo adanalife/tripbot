@@ -2,8 +2,10 @@ package chatbot
 
 import (
 	"context"
+	"math/rand"
 	"strings"
 
+	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/users"
 )
 
@@ -118,9 +120,7 @@ func (a *App) buildRegistry() []Command {
 		{
 			Trigger: "!commands",
 			Aliases: []string{"!command", "!controls"},
-			Handler: func(_ context.Context, _ *users.User, _ []string) {
-				a.Chat.Say("You can try: !location, !guess, !date, !state, !sunset, !timewarp, !miles, !leaderboard, !song, and many other hidden commands!")
-			},
+			Handler: a.commandsCmd,
 		},
 		{
 			Trigger:            "!bonusmiles",
@@ -250,10 +250,10 @@ const (
 )
 
 // youtubeCommands is the v1 allowlist of triggers a YouTube instance runs — the
-// stateless "info + playback control" subset. Identity/miles commands (!miles,
-// !leaderboard, !guess, !state, !location, …), the Twitch-only !followage, and
-// the admin commands (!middle, !secretinfo, !shutdown, !makebot, !unbot) are
-// deliberately excluded: YouTube v1 runs no per-user state. The now-playing /
+// "info + playback control" subset, plus the !state/!location info commands.
+// Identity/miles commands (!miles, !leaderboard, !guess, …), the Twitch-only
+// !followage, and the admin commands (!middle, !secretinfo, !shutdown, !makebot,
+// !unbot) are excluded: those are per-user identity/score state. The now-playing /
 // SomaFM commands (!song, !music, !somafm) are also deferred for now — the
 // background-audio source is Twitch-stream-specific. Aliases come along with
 // their trigger, so only triggers are listed. See the YouTube provider plan.
@@ -262,6 +262,7 @@ var youtubeCommands = map[string]bool{
 	"!gas": true, "!report": true, "!flag": true,
 	// info (read current-video state only)
 	"!weather": true, "!time": true, "!date": true, "!sunset": true,
+	"!state": true, "!location": true,
 	// playback control (drives this platform's vlc pipeline)
 	"!timewarp": true, "!goto": true, "!skip": true, "!back": true,
 	// socials / static links
@@ -300,6 +301,34 @@ func (a *App) indexCommands() {
 			a.registerTrigger(alias, cmd)
 		}
 	}
+	// Filter the rotating help lines to this platform, then start on a random
+	// one (so each restart opens differently). Must run after the lookups are
+	// built — enabledHelpMessages reads singleWordLookup.
+	a.helpMessages = a.enabledHelpMessages()
+	if len(a.helpMessages) > 0 {
+		a.helpIndex = rand.Intn(len(a.helpMessages))
+	}
+}
+
+// enabledHelpMessages returns c.HelpMessages minus any line whose leading
+// "!command" token isn't dispatchable on this platform — so a YouTube instance
+// never advertises a command that would silently no-op. A line that doesn't
+// start with a "!command" token is always kept.
+func (a *App) enabledHelpMessages() []string {
+	out := make([]string, 0, len(c.HelpMessages))
+	for _, msg := range c.HelpMessages {
+		fields := strings.Fields(msg)
+		if len(fields) > 0 {
+			token := strings.TrimRight(fields[0], ":")
+			if strings.HasPrefix(token, "!") {
+				if _, ok := a.singleWordLookup[token]; !ok {
+					continue // command disabled on this platform
+				}
+			}
+		}
+		out = append(out, msg)
+	}
+	return out
 }
 
 func (a *App) registerTrigger(trigger string, cmd *Command) {
