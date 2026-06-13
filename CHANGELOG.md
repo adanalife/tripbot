@@ -7,6 +7,27 @@ All notable changes to TripBot. Format follows [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+## [v3.3.1] — 2026-06-13
+
+Patch release. Mostly YouTube platform-awareness polish on the chat and overlay surfaces, plus a read-only user-profile endpoint for the standalone console and a copyright-safety fix for the YouTube OBS scene.
+
+### chatbot
+
+- **Chat command surface is YouTube-aware.** `!state` and `!location` are enabled on YouTube — they read the current video's location/flag overlay, the same read-current-video-state category as the already-allowlisted `!weather`/`!time`/`!date`/`!sunset` (they previously no-op'd silently as unindexed commands on YouTube). `!commands` and the rotating `!help`/Chatter lines now build from a featured set filtered by the platform's indexed lookups, so a YouTube instance no longer advertises commands that aren't in its allowlist (`!guess`, `!miles`, `!leaderboard`, `!song`). ([#835])
+
+### onscreens
+
+- **Periodic leaderboard overlay rotates across all three boards.** The 5-minute cron job only ever showed the guess leaderboard; it now picks at random each tick — monthly miles and guesses weighted evenly, lifetime total miles rarely (5%), with an empty pick falling back to monthly miles. Shared leaderboard row helpers move into `pkg/scoreboards`, and the job moves onto the chatbot `App` so it reaches the overlay and lifetime leaderboard through injected interfaces. ([#834])
+- **Rotator overlays are platform-aware with weighted selection.** The left/right overlay rotators advertised commands regardless of platform, so a YouTube overlay promoted `!miles`/`!guess` (disabled there). A new `rotatorMessage{Text, Platforms, Weight}` scopes lines to streaming platforms and biases weighted-random selection, replacing the old duplicate-line likelihood trick; `!miles`/`!guess` lines are scoped to Twitch. Adds `ONSCREENS_SERVER_PLATFORM` config. ([#836])
+
+### server
+
+- **Read-only JSON user-profile endpoint for tripbot-console.** `GET /api/user/{username}` returns the same chatter stats as the in-tripbot `/admin/user` popover (miles, monthly miles, sessions, first/last seen) as JSON, so the standalone console — which has no DB access by design — can proxy here over the in-namespace Service. ([#837])
+
+### obs
+
+- **YouTube OBS scene strips the SomaFM audio source.** The "Groove Salad Classic" ffmpeg_source plays licensed SomaFM audio that trips YouTube's Content ID and earns copyright strikes. Twitch tolerates it, so the OBS entrypoint now strips the source (and its scene-item references) via a jq pass over the rendered `Tripbot.json` only when `STREAM_PLATFORM=youtube`. Adds jq to both the amd64 and arm64 OBS images. ([#838])
+
 ## [v3.3.0] — 2026-06-12
 
 Minor release. The headline is **typo-tolerant chat commands** — misspelled `!`-commands now fuzzy-route to their nearest trigger, bare state names work as guess shortcuts (`!florida`), and the 31 hand-registered typo aliases that accumulated over the years retire. Alongside it: vlc-server resumes its last-played video (and position) across restarts, the shared database gains a platform dimension so YouTube viewers and feature flags don't collide with Twitch's, and each bot instance publishes auth-token snapshots to NATS for the standalone admin console.
@@ -1545,4 +1566,9 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#830]: https://github.com/adanalife/tripbot/pull/830
 [#831]: https://github.com/adanalife/tripbot/pull/831
 [#832]: https://github.com/adanalife/tripbot/pull/832
+[#834]: https://github.com/adanalife/tripbot/pull/834
+[#835]: https://github.com/adanalife/tripbot/pull/835
+[#836]: https://github.com/adanalife/tripbot/pull/836
+[#837]: https://github.com/adanalife/tripbot/pull/837
+[#838]: https://github.com/adanalife/tripbot/pull/838
 [infra #717]: https://github.com/adanalife/infra/pull/717
