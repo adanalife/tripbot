@@ -8,20 +8,22 @@ import (
 
 var leftRotatorUpdateFrequency = time.Duration(45 * time.Second)
 
-var possibleLeftMessages = []string{
-	"Crave something new? Try !timewarp",
-	"Earn miles for every minute you watch (!miles)",
-	"Follow the project elsewhere on !socialmedia",
-	"Join us on !discord",
-	"Join us on !discord",
-	"Try and !guess what state we're in",
-	"Use !commands to interact with the bot",
-	"Use !commands to interact with the bot",
-	"Where are we? (!location)",
-	// "LEADER",
-	// "Looking for artist for emotes and more",
-	// "Twitch Prime subs keep us on air :D",
-	// "Use !report to report stream issues",
+// !miles and !guess are Twitch-only (not in the YouTube command allowlist), so
+// those lines are scoped to Twitch — a YouTube overlay would otherwise advertise
+// commands that silently no-op there. Weight 2 reproduces the old duplicated
+// entries (!discord, !commands each appeared twice).
+var possibleLeftMessages = []rotatorMessage{
+	{Text: "Crave something new? Try !timewarp"},
+	{Text: "Earn miles for every minute you watch (!miles)", Platforms: []string{platformTwitch}},
+	{Text: "Follow the project elsewhere on !socialmedia"},
+	{Text: "Join us on !discord", Weight: 2},
+	{Text: "Try and !guess what state we're in", Platforms: []string{platformTwitch}},
+	{Text: "Use !commands to interact with the bot", Weight: 2},
+	{Text: "Where are we? (!location)"},
+	// {Text: "LEADER"},
+	// {Text: "Looking for artist for emotes and more"},
+	// {Text: "Twitch Prime subs keep us on air :D"},
+	// {Text: "Use !report to report stream issues"},
 }
 
 // newLeftRotator constructs the left-rotator *Onscreen, primes it with a
@@ -46,32 +48,11 @@ func leftRotatorLoop(osc *Onscreen) {
 
 // leftRotatorContent creates the content for the leftRotator
 func leftRotatorContent() string {
-	var output string
-
 	// show a special, very rare message
 	if rand.Intn(10000) == 0 {
 		return "You found the rare message! Make a clip for a prize!"
 	}
 
-	// pick a random message
-	message := possibleLeftMessages[rand.Intn(len(possibleLeftMessages))]
-
-	// some messages require custom logic
-	switch message {
-	//case "LEADER":
-	//	//TODO: maybe turn this into a call to tripbot?
-	//	if len(users.Leaderboard) == 0 {
-	//		terrors.Log(errors.New("leaderboard empty"), "")
-	//		// just use the default value
-	//		output = message
-	//		break
-	//	}
-	//	// get the first leader in the leaderboard
-	//	leader := users.Leaderboard[:1][0]
-	//	output = fmt.Sprintf("%s is leader with %s miles (!leaderboard)", leader[0], leader[1])
-	default:
-		output = message
-	}
-
-	return output
+	// pick a weighted-random message for this platform
+	return pickRotatorMessage(possibleLeftMessages)
 }

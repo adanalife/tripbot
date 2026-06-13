@@ -3,7 +3,6 @@ package chatbot
 import (
 	"context"
 	"log/slog"
-	"math/rand"
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
@@ -103,6 +102,14 @@ type App struct {
 	commands         []Command
 	singleWordLookup map[string]*Command
 	multiWordLookup  map[string]*Command
+
+	// helpMessages is the platform-filtered subset of c.HelpMessages — the
+	// rotating !help / Chatter lines, minus any whose command isn't enabled on
+	// this App's platform (so a YouTube instance doesn't advertise !miles etc.).
+	// helpIndex walks it; randomized at indexCommands() so each restart starts
+	// on a different line.
+	helpMessages []string
+	helpIndex    int
 }
 
 // db returns the DB handle the App should use. Prefers an explicit a.DB
@@ -139,10 +146,6 @@ func New() *App {
 	a.indexCommands()
 	return a
 }
-
-// used to determine which help message to display
-// randomized so it starts with a new one every restart
-var helpIndex = rand.Intn(len(c.HelpMessages))
 
 const followerMsg = "Right now only followers of the channel can run unlimited commands :)"
 const subscriberMsg = "You must be a subscriber to run that command :)"
@@ -205,13 +208,19 @@ func (a *App) ConnectIRC() *twitch.Client {
 // ctx is forward-compat plumbing — a.Chat.Say doesn't take ctx yet, so it's
 // not propagated into the chat write.
 func (a *App) Chatter(_ context.Context) {
-	// use twitch emote feature to add some color
-	a.Chat.Say("/me " + help())
+	// the "/me " twitch emote prefix adds some color on Twitch; youtubeChat.Say
+	// strips it (it would render as literal text on YouTube).
+	a.Chat.Say("/me " + a.help())
 }
 
-func help() string {
-	text := c.HelpMessages[helpIndex]
-	// bump the index
-	helpIndex = (helpIndex + 1) % len(c.HelpMessages)
+// help returns the next rotating help message for this App's platform and
+// advances the index. Empty when no help messages are enabled (guards against
+// a divide-by-zero on the modulo).
+func (a *App) help() string {
+	if len(a.helpMessages) == 0 {
+		return ""
+	}
+	text := a.helpMessages[a.helpIndex]
+	a.helpIndex = (a.helpIndex + 1) % len(a.helpMessages)
 	return text
 }
