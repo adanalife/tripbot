@@ -33,7 +33,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true" \
       | debconf-set-selections \
     && apt-get update && apt-get install -y --no-install-recommends \
-      sway wayvnc xwayland supervisor feh tini gettext-base procps \
+      sway wayvnc xwayland supervisor feh tini gettext-base jq procps \
       ca-certificates curl libgl1-mesa-dri \
       fonts-dejavu-core ttf-mscorefonts-installer \
       # OBS runtime deps (mirrors the build deps with -dev stripped) \
