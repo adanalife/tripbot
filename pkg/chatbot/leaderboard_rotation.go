@@ -10,7 +10,7 @@ import (
 // totalMilesOdds is the chance a given rotation tick shows the lifetime
 // "Total Miles" board; the remaining probability mass splits evenly
 // between the two monthly boards.
-const totalMilesOdds = 0.1
+const totalMilesOdds = 0.05
 
 type leaderboardKind int
 

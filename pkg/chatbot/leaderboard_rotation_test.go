@@ -16,10 +16,10 @@ func TestPickLeaderboard(t *testing.T) {
 		want leaderboardKind
 	}{
 		{0.0, totalMilesLeaderboard},
-		{0.0999, totalMilesLeaderboard},
-		{0.1, guessLeaderboard},
-		{0.5499, guessLeaderboard},
-		{0.55, monthlyMilesLeaderboard},
+		{0.0499, totalMilesLeaderboard},
+		{0.05, guessLeaderboard},
+		{0.5249, guessLeaderboard},
+		{0.525, monthlyMilesLeaderboard},
 		{0.9999, monthlyMilesLeaderboard},
 	}
 	for _, tt := range tests {
@@ -110,7 +110,7 @@ func TestShowRotatingLeaderboard_TotalMiles_TruncatesToSize(t *testing.T) {
 	}
 	app.Sessions = &recordingSessions{Leaderboard: lifetime}
 
-	app.showRotatingLeaderboard(context.Background(), 0.05) // total miles
+	app.showRotatingLeaderboard(context.Background(), 0.01) // total miles
 
 	want := fmt.Sprintf(`ShowLeaderboard("Total Miles", %d rows)`, leaderboardSize)
 	if len(rec.Calls) != 1 || !strings.Contains(rec.Calls[0], want) {
@@ -130,7 +130,7 @@ func TestShowRotatingLeaderboard_AllEmpty_SkipsOverlay(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"username", "value"}))
 
 	// total miles via noopSessions returns nil; the miles fallback is empty too
-	app.showRotatingLeaderboard(context.Background(), 0.05)
+	app.showRotatingLeaderboard(context.Background(), 0.01)
 
 	if len(rec.Calls) != 0 {
 		t.Errorf("expected no overlay call when every board is empty, got %v", rec.Calls)
