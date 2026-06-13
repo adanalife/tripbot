@@ -27,6 +27,9 @@ import (
 	"gorm.io/gorm"
 )
 
+// leaderboardSize is how many rows the leaderboard commands show.
+const leaderboardSize = 10
+
 // lastHelloTime is used to rate-limit the hello command
 var lastHelloTime time.Time = time.Now()
 
@@ -304,18 +307,13 @@ func (a *App) monthlyMilesLeaderboardCmd(ctx context.Context, user *users.User, 
 	slog.InfoContext(ctx, "ran !leaderboard", "username", user.Username)
 
 	// select users to show in leaderboard
-	size := 10
-	leaderboard := scoreboards.TopUsers(ctx, scoreboards.CurrentMilesScoreboard(), size)
-	if size > len(leaderboard) {
-		size = len(leaderboard)
-	}
-	leaderboard = leaderboard[:size]
+	leaderboard := scoreboards.TopMilesRows(ctx, leaderboardSize)
 
 	// display leaderboard on screen
 	a.Onscreens.ShowLeaderboard(ctx, "Monthly Miles", leaderboard)
 
 	// build a message to send to chat
-	msg := fmt.Sprintf("Top %d miles this month: ", size)
+	msg := fmt.Sprintf("Top %d miles this month: ", len(leaderboard))
 	for i, leaderPair := range leaderboard {
 		msg += fmt.Sprintf("%d. %s (%smi)", i+1, leaderPair[0], leaderPair[1])
 		if i+1 != len(leaderboard) {
@@ -329,7 +327,7 @@ func (a *App) lifetimeMilesLeaderboardCmd(ctx context.Context, user *users.User,
 	slog.InfoContext(ctx, "ran !totalleaderboard", "username", user.Username)
 
 	// select users to show in leaderboard
-	size := 10
+	size := leaderboardSize
 	lifetime := a.Sessions.LifetimeLeaderboard()
 	if size > len(lifetime) {
 		size = len(lifetime)
@@ -353,27 +351,8 @@ func (a *App) lifetimeMilesLeaderboardCmd(ctx context.Context, user *users.User,
 func (a *App) monthlyGuessLeaderboardCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !guessleaderboard", "username", user.Username)
 
-	// select users to show in leaderboard
-	size := 10
-	leaderboard := scoreboards.TopUsers(ctx, scoreboards.CurrentGuessScoreboard(), size)
-
-	// truncate the leaderboard if necessary
-	if size > len(leaderboard) {
-		size = len(leaderboard)
-	}
-	leaderboard = leaderboard[:size]
-
-	// Filter zero-scorers (AddToScoreByName uses FirstOrCreate, so every
-	// user who's ever guessed has a row — many at 0 early in the month).
-	var intLeaderboard [][]string
-	for _, leaderPair := range leaderboard {
-		// guesses are ints not floats, so remove the decimal place
-		intVersion := strings.Split(leaderPair[1], ".")[0]
-		if intVersion == "0" || intVersion == "" {
-			continue
-		}
-		intLeaderboard = append(intLeaderboard, []string{leaderPair[0], intVersion})
-	}
+	// select users to show in leaderboard (zero-scorers already filtered)
+	intLeaderboard := scoreboards.TopGuessRows(ctx, leaderboardSize)
 
 	// special message if no one has any correct guesses yet
 	if len(intLeaderboard) == 0 {
