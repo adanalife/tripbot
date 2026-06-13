@@ -1,8 +1,11 @@
 package chatbot
 
 import (
+	"context"
 	"strings"
 	"testing"
+
+	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 )
 
 func TestCommandsHaveNonEmptyTrigger(t *testing.T) {
@@ -94,5 +97,64 @@ func TestYouTubePlatformIndexesOnlyAllowlist(t *testing.T) {
 		if cmd, _ := yt.findCommand(token); cmd != nil {
 			t.Errorf("expected %q to be unavailable on YouTube, got %q", token, cmd.Trigger)
 		}
+	}
+}
+
+// TestCommandsCmdFiltersByPlatform verifies the !commands reply advertises only
+// commands dispatchable on the App's platform — Twitch lists the disabled-on-
+// YouTube ones (!guess, !miles, !leaderboard); YouTube does not, but still
+// includes the YouTube-enabled !state / !location.
+func TestCommandsCmdFiltersByPlatform(t *testing.T) {
+	twitch := &App{}
+	twitch.indexCommands()
+	twChat := &recordingChat{}
+	twitch.Chat = twChat
+	twitch.commandsCmd(context.Background(), nil, nil)
+	twOut := twChat.Output()
+	for _, want := range []string{"!guess", "!miles", "!leaderboard", "!state", "!location"} {
+		if !strings.Contains(twOut, want) {
+			t.Errorf("Twitch !commands missing %q: %q", want, twOut)
+		}
+	}
+
+	yt := &App{Platform: platformYouTube}
+	yt.indexCommands()
+	ytChat := &recordingChat{}
+	yt.Chat = ytChat
+	yt.commandsCmd(context.Background(), nil, nil)
+	ytOut := ytChat.Output()
+	for _, absent := range []string{"!guess", "!miles", "!leaderboard", "!song"} {
+		if strings.Contains(ytOut, absent) {
+			t.Errorf("YouTube !commands should not advertise %q: %q", absent, ytOut)
+		}
+	}
+	for _, want := range []string{"!state", "!location"} {
+		if !strings.Contains(ytOut, want) {
+			t.Errorf("YouTube !commands missing %q: %q", want, ytOut)
+		}
+	}
+}
+
+// TestEnabledHelpMessagesFiltersByPlatform verifies the rotating help lines drop
+// any whose command isn't dispatchable on the platform — so a YouTube instance
+// never advertises !miles / !guess / !leaderboard via !help or the Chatter cron.
+func TestEnabledHelpMessagesFiltersByPlatform(t *testing.T) {
+	twitch := &App{}
+	twitch.indexCommands()
+	if len(twitch.helpMessages) != len(c.HelpMessages) {
+		t.Errorf("Twitch should keep all %d help messages, got %d", len(c.HelpMessages), len(twitch.helpMessages))
+	}
+
+	yt := &App{Platform: platformYouTube}
+	yt.indexCommands()
+	for _, msg := range yt.helpMessages {
+		for _, banned := range []string{"!miles", "!guess", "!leaderboard"} {
+			if strings.HasPrefix(msg, banned) {
+				t.Errorf("YouTube help message advertises disabled %q: %q", banned, msg)
+			}
+		}
+	}
+	if len(yt.helpMessages) == 0 {
+		t.Error("YouTube help messages unexpectedly empty")
 	}
 }

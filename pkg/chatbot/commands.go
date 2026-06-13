@@ -45,8 +45,28 @@ const guessScoreboard = "guess_state_total"
 
 func (a *App) helpCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !help", "username", user.Username)
-	msg := fmt.Sprintf("%s (%d of %d)", help(), helpIndex+1, len(c.HelpMessages))
+	n := len(a.helpMessages)
+	// a.help() advances the index, so capture the displayed line's number first.
+	pos := a.helpIndex + 1
+	msg := fmt.Sprintf("%s (%d of %d)", a.help(), pos, n)
 	a.Chat.Say(msg)
+}
+
+// commandsCmd lists a curated set of featured commands — filtered to the ones
+// actually dispatchable on this App's platform, so a YouTube instance doesn't
+// suggest commands that would silently no-op.
+func (a *App) commandsCmd(_ context.Context, _ *users.User, _ []string) {
+	featured := []string{
+		"!location", "!guess", "!date", "!state",
+		"!sunset", "!timewarp", "!miles", "!leaderboard", "!song",
+	}
+	avail := make([]string, 0, len(featured))
+	for _, t := range featured {
+		if _, ok := a.singleWordLookup[t]; ok {
+			avail = append(avail, t)
+		}
+	}
+	a.Chat.Say("You can try: " + strings.Join(avail, ", ") + ", and many other hidden commands!")
 }
 
 func (a *App) helloCmd(ctx context.Context, user *users.User, params []string) {
