@@ -19,6 +19,7 @@ import (
 type User struct {
 	ID          uint16 `gorm:"primaryKey"`
 	Username    string
+	Platform    string
 	Miles       float32
 	NumVisits   uint16
 	HasDonated  bool
@@ -161,7 +162,7 @@ func FindOrCreate(ctx context.Context, username string) User {
 // Find will look up the username in the DB, and return a User if possible
 func Find(ctx context.Context, username string) User {
 	var user User
-	result := database.GormDB().WithContext(ctx).Where("username = ?", username).First(&user)
+	result := database.GormDB().WithContext(ctx).Where("platform = ? AND username = ?", c.Conf.Platform, username).First(&user)
 	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 		//TODO: is there a better way to do this?
 		return User{ID: 0}
@@ -228,7 +229,7 @@ func (u *User) SetLastLocationTime() {
 func create(ctx context.Context, username string) User {
 	slog.InfoContext(ctx, "creating user", "username", username)
 	// create a new row, using default vals and creating a single visit
-	newUser := User{Username: username, NumVisits: 1}
+	newUser := User{Username: username, Platform: c.Conf.Platform, NumVisits: 1}
 	if err := database.GormDB().WithContext(ctx).Create(&newUser).Error; err != nil {
 		slog.ErrorContext(ctx, "error creating user", "err", err)
 	}

@@ -257,7 +257,7 @@ const featureFlagRefreshInterval = 30 * time.Second
 // (false) until the next restart loads cleanly. Mirrors the loadTwitchToken
 // "stay up with limited functionality" pattern.
 func (t *Tripbot) startFeatureFlags(ctx context.Context) {
-	fc, err := feature.NewPostgresClient(ctx, database.GormDB(), featureFlagRefreshInterval)
+	fc, err := feature.NewPostgresClient(ctx, database.GormDB(), featureFlagRefreshInterval, c.Conf.Platform)
 	if err != nil {
 		slog.WarnContext(ctx, "feature flag client init failed; flags will default to off",
 			"fix", "ensure migration 013_create_feature_flags has run",
