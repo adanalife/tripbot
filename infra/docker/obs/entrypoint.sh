@@ -80,6 +80,25 @@ cp /opt/obs/config/user.ini   "$OBS_HOME/user.ini"
 envsubst < /opt/obs/config/basic.ini.tmpl > "$OBS_HOME/basic/profiles/ADanaLife/basic.ini"
 envsubst < /opt/obs/config/Tripbot.json.tmpl > "$OBS_HOME/basic/scenes/Tripbot.json"
 
+# SomaFM (the "Groove Salad Classic" ffmpeg_source) plays licensed music that
+# trips YouTube's Content ID and earns copyright strikes. Twitch tolerates it,
+# so the source stays in the shared scene collection and is stripped out only
+# for the YouTube canvas: drop the source definition plus every scene item that
+# references it, before OBS loads the collection. Top-level "sources" holds both
+# real sources and the scene objects (scenes reference members by name under
+# settings.items), so both passes are needed.
+if [ "${STREAM_PLATFORM:-twitch}" = "youtube" ]; then
+  scene_file="$OBS_HOME/basic/scenes/Tripbot.json"
+  jq --arg t "Groove Salad Classic" '
+    .sources |= map(select(.name != $t))
+    | .sources |= map(
+        if (.settings.items? | type) == "array"
+        then .settings.items |= map(select(.name != $t))
+        else . end)
+  ' "$scene_file" > "$scene_file.tmp" && mv "$scene_file.tmp" "$scene_file"
+  echo "stripped 'Groove Salad Classic' (SomaFM) from YouTube scene collection"
+fi
+
 # Advanced Output mode reads encoder-specific settings from streamEncoder.json
 # in the profile dir. VAAPI's keys (vaapi_device, integer profile) don't
 # overlap with x264's, so we case on OBS_STREAM_ENCODER to ship the right
