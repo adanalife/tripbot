@@ -82,7 +82,7 @@ func TestYouTubePlatformIndexesOnlyAllowlist(t *testing.T) {
 	yt.indexCommands()
 
 	// allowed: a trigger and one of its aliases both resolve
-	for _, token := range []string{"!weather", "!meteo", "!skip", "!timewarp", "!warp", "!youtube"} {
+	for _, token := range []string{"!weather", "!meteo", "!skip", "!timewarp", "!warp", "!youtube", "!state", "!location", "!where"} {
 		if cmd, _ := yt.findCommand(token); cmd == nil {
 			t.Errorf("expected %q to be available on YouTube, got nil", token)
 		}
@@ -90,7 +90,7 @@ func TestYouTubePlatformIndexesOnlyAllowlist(t *testing.T) {
 
 	// excluded: identity/miles, Twitch-only, admin, and the deferred
 	// now-playing commands do not resolve
-	for _, token := range []string{"!miles", "!km", "!leaderboard", "!guess", "!state", "!location", "!followage", "!middle", "!shutdown", "!makebot", "hello", "!song", "!music", "!somafm"} {
+	for _, token := range []string{"!miles", "!km", "!leaderboard", "!guess", "!followage", "!middle", "!shutdown", "!makebot", "hello", "!song", "!music", "!somafm"} {
 		if cmd, _ := yt.findCommand(token); cmd != nil {
 			t.Errorf("expected %q to be unavailable on YouTube, got %q", token, cmd.Trigger)
 		}

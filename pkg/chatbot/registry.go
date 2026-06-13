@@ -250,10 +250,10 @@ const (
 )
 
 // youtubeCommands is the v1 allowlist of triggers a YouTube instance runs — the
-// stateless "info + playback control" subset. Identity/miles commands (!miles,
-// !leaderboard, !guess, !state, !location, …), the Twitch-only !followage, and
-// the admin commands (!middle, !secretinfo, !shutdown, !makebot, !unbot) are
-// deliberately excluded: YouTube v1 runs no per-user state. The now-playing /
+// "info + playback control" subset, plus the !state/!location info commands.
+// Identity/miles commands (!miles, !leaderboard, !guess, …), the Twitch-only
+// !followage, and the admin commands (!middle, !secretinfo, !shutdown, !makebot,
+// !unbot) are excluded: those are per-user identity/score state. The now-playing /
 // SomaFM commands (!song, !music, !somafm) are also deferred for now — the
 // background-audio source is Twitch-stream-specific. Aliases come along with
 // their trigger, so only triggers are listed. See the YouTube provider plan.
@@ -262,6 +262,7 @@ var youtubeCommands = map[string]bool{
 	"!gas": true, "!report": true, "!flag": true,
 	// info (read current-video state only)
 	"!weather": true, "!time": true, "!date": true, "!sunset": true,
+	"!state": true, "!location": true,
 	// playback control (drives this platform's vlc pipeline)
 	"!timewarp": true, "!goto": true, "!skip": true, "!back": true,
 	// socials / static links
