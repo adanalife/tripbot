@@ -7,6 +7,36 @@ All notable changes to TripBot. Format follows [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+## [v3.3.0] — 2026-06-12
+
+Minor release. The headline is **typo-tolerant chat commands** — misspelled `!`-commands now fuzzy-route to their nearest trigger, bare state names work as guess shortcuts (`!florida`), and the 31 hand-registered typo aliases that accumulated over the years retire. Alongside it: vlc-server resumes its last-played video (and position) across restarts, the shared database gains a platform dimension so YouTube viewers and feature flags don't collide with Twitch's, and each bot instance publishes auth-token snapshots to NATS for the standalone admin console.
+
+### chatbot
+
+- **Misspelled commands fuzzy-match to their nearest trigger.** When an unrecognized `!`-command arrives, `findCommand` falls back to Levenshtein matching against the registered triggers and aliases, so `!locaiton` runs `!location` — no per-typo alias maintenance. The edit-distance threshold scales with length (1 edit for 4–6 runes, 2 for 7+; under 4 never matches), ties refuse to guess (`!tate` is one edit from both `!date` and `!state`, so it routes to neither), bare-word triggers don't participate, and every fuzzy route logs the typed text + resolved trigger so mis-routes are auditable. Routing goes through normal dispatch, so follow/subscriber gates and per-platform allowlists still apply. ([#827])
+- **State-name guess shortcut.** A `!`-prefixed US state or territory name runs `!guess` with that state — `!florida`, `!new york` (multi-word assembles from params), trailing chatter dropped. Full names only: two-letter abbreviations are excluded so `!hi`/`!ok`/`!me` can't fire accidental guesses. Registered commands always win, and the shortcut resolves `!guess` through the platform-filtered lookup, so it's inert where `!guess` isn't allowlisted. Runs ahead of the fuzzy fallback, so an exact state name can't be stolen by a near-miss trigger. ([#829])
+- **Hand-registered typo aliases retire.** The 31 typo aliases in the command registry (`!locaiton` cousins, `!guss` variants, `¡`-prefixed forms, …) are removed — each verified to still resolve via the fuzzy router or prefix normalization. `normalizeCommandPrefix` also gains digit-1 handling (`1` is the unshifted `!`), rewriting a leading `1` when a letter follows, which gives every command its `1`-prefix form for free. Two aliases beyond the fuzzy router's edit caps stay, with comments saying why. ([#831])
+
+### vlc
+
+- **vlc-server resumes its last-played video across restarts.** Every successful play publishes file + position to a per-platform `tripbot.<env>.vlc.lastplayed.<platform>` subject backed by a new `TRIPBOT_VLC_LASTPLAYED` JetStream last-value cache (a 5s ticker keeps the position current). On startup the pick order is watchdog file marker → JetStream lastplayed → `PlayRandom`, each step degrading gracefully, and position resume waits for libvlc to reach Playing before seeking (skipping seeks that land in the clip's final 2s). The per-platform leaf matters because the twitch and youtube vlc instances share the one per-env NATS. `VlcServerConfig` gains `STREAM_PLATFORM`, stamped by the cdk8s vlc factory ([infra #717]). ([#830])
+
+### youtube
+
+- **Platform-scoped users, events, and feature flags.** Gets the shared per-env Postgres ready for the YouTube bot going live. Migration 018 adds a `platform` column (default `twitch`) to `users` + `events`, with `users` uniqueness becoming `(platform, username)` so a YouTube viewer named `foo` doesn't merge with the Twitch `foo`; migration 019 platform-scopes `feature_flags` with a `(key, platform)` composite PK and seeds YouTube copies of the existing flags, so enabling a flag on YouTube no longer enables it on Twitch. All queries scope by the instance's configured platform; existing single-platform behavior is unchanged. ([#832])
+
+### pubsub
+
+- **Auth-token snapshots publish to NATS for the standalone console.** Each platform instance publishes its token state to `tripbot.<env>.auth.status.<platform>` every 30s, backed by a new `TRIPBOT_AUTH` JetStream stream with `MaxMsgsPerSubject: 1` — a last-value cache, so a freshly-connected console replays exactly the latest snapshot per platform and then receives live updates. The envelope carries account, login-as, expiry, missing/expired reason, and the absolute `/auth/init` URL; re-auth itself stays in tripbot. The in-process admin hub is unchanged. ([#826])
+
+### CI
+
+- **`python:3.13-slim-bookworm` joins the GHCR mirror refresh.** The base image for the standalone tripbot-console service is mirrored to `ghcr.io/adanalife/mirror/python` and added to the weekly refresh list, same as the Go/Ubuntu/migrate bases. ([#828])
+
+### docs
+
+- **Docs sweep: self-contained comments, CHANGELOG cleanup, README pruning.** Code/Taskfile/workflow comments no longer point at docs a reader of this repo can't follow — load-bearing context is stated inline, history-narration trimmed, a few stale comments corrected ([#823]). The CHANGELOG is synced from master and swept for internal milestone jargon ([#824]). Three obsolete READMEs (`infra/`, `infra/certs/`, `db/`) are removed and the root README's dead links fixed ([#825]).
+
 ## [v3.2.1] — 2026-06-11
 
 Patch release. The v3.2.0 release run pushed its per-arch images but died at the version-stamping verify step — Docker Hub rate-limited the pull-back of our own just-pushed images — so the multi-arch manifests, GitHub Release, and infra bump dispatch never happened. This release fixes the verify step and ships everything v3.2.0 built.
@@ -1505,3 +1535,14 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#821]: https://github.com/adanalife/tripbot/pull/821
 [infra #694]: https://github.com/adanalife/infra/pull/694
 [infra #695]: https://github.com/adanalife/infra/pull/695
+[#823]: https://github.com/adanalife/tripbot/pull/823
+[#824]: https://github.com/adanalife/tripbot/pull/824
+[#825]: https://github.com/adanalife/tripbot/pull/825
+[#826]: https://github.com/adanalife/tripbot/pull/826
+[#827]: https://github.com/adanalife/tripbot/pull/827
+[#828]: https://github.com/adanalife/tripbot/pull/828
+[#829]: https://github.com/adanalife/tripbot/pull/829
+[#830]: https://github.com/adanalife/tripbot/pull/830
+[#831]: https://github.com/adanalife/tripbot/pull/831
+[#832]: https://github.com/adanalife/tripbot/pull/832
+[infra #717]: https://github.com/adanalife/infra/pull/717
