@@ -100,11 +100,15 @@ func (v Video) save(ctx context.Context) error {
 	lat := v.Lat
 	lng := v.Lng
 	state := v.State
+	coordSource := v.CoordSource
+	if coordSource == "" {
+		coordSource = CoordSourceOCR
+	}
 
 	if lat == 0 || lng == 0 {
-		//TODO: this is where we used to run ocrCoords()
-		slog.DebugContext(ctx, "OCRing coords skipped!")
+		// No OCR runs anymore, so a runtime-created clip has no GPS fix.
 		flagged = true
+		coordSource = CoordSourceMissing
 	}
 
 	if !flagged {
@@ -126,6 +130,7 @@ func (v Video) save(ctx context.Context) error {
 		PrevVid:     v.PrevVid,
 		NextVid:     v.NextVid,
 		State:       state,
+		CoordSource: coordSource,
 		DateCreated: v.DateCreated,
 	}
 	return database.GormDB().WithContext(ctx).Create(&insert).Error

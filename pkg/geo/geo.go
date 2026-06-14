@@ -77,8 +77,8 @@ func (c *Client) State(lat, lon float64) (string, error) {
 }
 
 // defaultClient backs the package-level City/State free functions for callers
-// that aren't constructed with a Geocoder dependency (pkg/video's import path,
-// the collect-gps script). Disabled until SetDefault is called at startup.
+// that aren't constructed with a Geocoder dependency (pkg/video's import path).
+// Disabled until SetDefault is called at startup.
 var defaultClient Geocoder = &Client{}
 
 // SetDefault installs the process-wide Geocoder used by the package-level

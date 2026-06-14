@@ -12,6 +12,15 @@ import (
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 )
 
+// Provenance values for Video.CoordSource (videos.coord_source). See
+// migration 020 and cmd/backfill-coords.
+const (
+	CoordSourceOCR          = "ocr"          // original dashcam-overlay OCR fix
+	CoordSourceInterpolated = "interpolated" // synthesized from neighbouring clips
+	CoordSourceRejected     = "rejected"     // OCR outlier discarded (coords cleared)
+	CoordSourceMissing      = "missing"      // no GPS fix, none recoverable
+)
+
 // Videos represent a video file containing dashcam footage
 type Video struct {
 	ID          int `gorm:"primaryKey"`
@@ -22,6 +31,7 @@ type Video struct {
 	PrevVid     sql.NullInt64
 	Flagged     bool
 	State       string
+	CoordSource string
 	DateFilmed  time.Time
 	DateCreated time.Time
 }

@@ -1,0 +1,74 @@
+name: prod-dist-warning
+
+# Warn on PRs into master that change a prod (prod-1) app deploy unit. prod-1
+# apps autosync from master (AUTOSYNC_ENVS in infra's argocd.py), so MERGING
+# such a PR deploys the change to prod — no separate gesture. That's obvious on
+# the per-component version-bump PRs, but easy to miss on a release PR
+# (develop → master) that happens to carry a manifest-shape change to a prod
+# dist/ file (e.g. a resource-claim or env tweak). This posts a sticky comment
+# so the merge isn't done unaware.
+#
+# Lives on master so it runs against release PRs (pull_request uses the workflow
+# definition from the PR's base branch); reaches master via the normal release.
+on:
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  warn:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Detect prod app dist/ changes
+        id: detect
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          # Three-dot diff = the PR's own changes (merge-base..head), so a stale
+          # master doesn't produce false positives. Scope to the per-component
+          # app units (`prod-1-*-twitch.k8s.yaml`) — these are the autosynced
+          # deploy targets; jobs/identity/seed units aren't.
+          FILES=$(git diff --name-only "$BASE...$HEAD" -- 'cdk8s/dist/prod-1-*-twitch.k8s.yaml')
+          if [ -n "$FILES" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            {
+              echo "list<<LIST"
+              while IFS= read -r f; do
+                # \140 is a literal backtick (avoids a shellcheck SC2016 false positive)
+                printf -- '- \140%s\140\n' "$f"
+              done <<< "$FILES"
+              echo "LIST"
+            } >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Post warning
+        if: steps.detect.outputs.changed == 'true'
+        uses: marocchino/sticky-pull-request-comment@v3
+        with:
+          header: prod-dist-warning
+          message: |
+            ⚠️ **This PR changes prod (`prod-1`) app deploy units.**
+
+            prod-1 apps **autosync from `master`**, so **merging this PR deploys the change to prod** — no separate step. A change to the `vlc` or `obs` unit means a brief stream impact when the pod restarts. (`obs` is held out of autosync, so an OBS change instead waits for a manual Argo sync.)
+
+            Changed:
+            ${{ steps.detect.outputs.list }}
+
+            Make sure that's intended before merging.
+
+      - name: Clear stale warning
+        if: steps.detect.outputs.changed == 'false'
+        uses: marocchino/sticky-pull-request-comment@v3
+        with:
+          header: prod-dist-warning
+          delete: true
