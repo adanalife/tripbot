@@ -37,6 +37,31 @@ func TestNormalizeCommandPrefix(t *testing.T) {
 			want: "say ¡hola",
 		},
 		{
+			name: "leading 1 before a letter is rewritten to !",
+			in:   "1location",
+			want: "!location",
+		},
+		{
+			name: "leading 1 with params is rewritten to !",
+			in:   "1goto 42",
+			want: "!goto 42",
+		},
+		{
+			name: "number-leading message is untouched",
+			in:   "100 miles",
+			want: "100 miles",
+		},
+		{
+			name: "1 followed by punctuation is untouched",
+			in:   "10/10",
+			want: "10/10",
+		},
+		{
+			name: "bare 1 is untouched",
+			in:   "1",
+			want: "1",
+		},
+		{
 			name: "empty string is untouched",
 			in:   "",
 			want: "",
@@ -134,6 +159,24 @@ func TestFindCommand_InvertedBangRoutes(t *testing.T) {
 	}
 	if cmd.Trigger != "!miles" {
 		t.Errorf("got trigger %q, want !miles", cmd.Trigger)
+	}
+}
+
+func TestFindCommand_DigitOnePrefixRoutes(t *testing.T) {
+	// 1location should route to the same command as !location
+	cmd, _ := builtTestApp.findCommand("1location")
+	if cmd == nil {
+		t.Fatal("expected a command, got nil")
+	}
+	if cmd.Trigger != "!location" {
+		t.Errorf("got trigger %q, want !location", cmd.Trigger)
+	}
+}
+
+func TestFindCommand_NumberLeadingMessageDoesNotRoute(t *testing.T) {
+	// a message that genuinely starts with a number must not become a command
+	if cmd, _ := builtTestApp.findCommand("100 miles"); cmd != nil {
+		t.Errorf("findCommand(\"100 miles\") = %s, want nil", cmd.Trigger)
 	}
 }
 

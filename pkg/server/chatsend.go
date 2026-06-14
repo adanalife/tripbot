@@ -56,7 +56,11 @@ func (s *Server) chatSendHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	s.publisher.Publish(r.Context(), chatEvents.SendSubject(c.Conf.Environment), payload)
+	// The send form only offers the Twitch identities (bot/broadcaster)
+	// today, so every send routes to the Twitch instance regardless of which
+	// instance's console it was typed into. A YouTube send option would
+	// publish to SendSubject(env, PlatformYouTube).
+	s.publisher.Publish(r.Context(), chatEvents.SendSubject(c.Conf.Environment, chatEvents.PlatformTwitch), payload)
 	w.WriteHeader(http.StatusNoContent)
 }
 

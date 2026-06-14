@@ -33,7 +33,7 @@ tasks:
 
   # Native macOS test runner — host mise + VLC.app's bundled libvlc, no
   # docker. Mirrors vlc-server:build:macos's CGO incantation (rpath is
-  # required for `go test` too, per vault/tripbot/vlc-server/gotchas.md).
+  # required for `go test` too).
   # `dotenv` injects .env.testing's keys as real env vars so the config
   # loader resolves them from the environment — `go test` runs each package
   # from its own dir, so the .env.testing file itself isn't on the path.
@@ -94,7 +94,7 @@ tasks:
         printf '\a'
         mise exec -- go run ./cmd/auth-bootstrap --account=broadcaster
 
-  # Release smoke flow — see vault/tripbot/release-checklist.md.
+  # Release smoke flow.
   # Targets the local k3d cluster running the stage-1 overlay
   # (cloudflared tunnel + apps).
 
@@ -147,7 +147,7 @@ tasks:
 
   # vlc-server native macOS build — links against the libvlc bundled
   # inside VLC.app. Saves recreating the CGO incantation from memory.
-  # See vault/tripbot/vlc-server/gotchas.md for the full story; key bits:
+  # Key bits:
   #   * rpath is required for `go test` / `go run`, not just `go build` —
   #     otherwise `dyld: Library not loaded: @rpath/libvlc.dylib`.
   #   * Do NOT add `-lvlc` to LDFLAGS — libvlc-go's own #cgo LDFLAGS
@@ -179,3 +179,59 @@ tasks:
     cmds:
       - >-
         kubectl -n {{.NS}} exec postgres-0 -- bash -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT (SELECT count(*) FROM videos WHERE NOT flagged) AS total_videos, (SELECT count(DISTINCT video_id) FROM frame_embeddings) AS embedded, (SELECT count(*) FROM frame_embeddings) AS frames, (SELECT count(DISTINCT video_id) FROM frame_embeddings WHERE date_created > now() - make_interval(hours => 1)) AS videos_last_hr, pg_size_pretty(pg_total_relation_size('"'"'frame_embeddings'"'"')) AS size;"'
+
+  # cdk8s — the Python authoring layer for tripbot's app workload manifests
+  # (cdk8s/). Synthesizes dist/<env>-<component>-<platform>.k8s.yaml (+ the
+  # per-env identity unit + the one-shot Job files), which Argo delivers
+  # cross-repo. The stateful + shared-platform units stay in infra/cdk8s.
+  cdk8s:imports:
+    desc: Generate the typed k8s + ESO constructs (cdk8s import) into cdk8s/imports/ — gitignored, needed before synth/test on a fresh checkout
+    dir: cdk8s
+    cmds:
+      - mise exec -- uv run cdk8s import
+
+  cdk8s:synth:
+    desc: Synthesize the manifests (offline) -> cdk8s/dist/<env>-<component>-<platform>.k8s.yaml (+ identity / jobs)
+    dir: cdk8s
+    deps: [cdk8s:imports]
+    cmds:
+      - mise exec -- uv run cdk8s synth
+
+  cdk8s:test:
+    desc: Run the cdk8s synth-time checks on the committed dist/
+    dir: cdk8s
+    deps: [cdk8s:imports]
+    cmds:
+      - mise exec -- uv run pytest -q
+
+  cdk8s:check:
+    desc: Golden-file gate — re-synth and fail if cdk8s/dist/ is stale (run cdk8s:synth and commit)
+    dir: cdk8s
+    deps: [cdk8s:imports]
+    cmds:
+      - mise exec -- uv run cdk8s synth
+      - git diff --exit-code -- dist/ || { echo "dist/ is stale — run task cdk8s:synth and commit"; exit 1; }
+
+  cdk8s:stage:diff:
+    desc: kubectl diff the synthed stage-1 app manifests against the live cluster (read-only)
+    dir: cdk8s
+    deps: [cdk8s:imports]
+    cmds:
+      - mise exec -- uv run cdk8s synth
+      - for: { var: f, split: "\n" }
+        cmd: kubectl diff -f "{{.f}}" || true
+        vars:
+          f:
+            sh: ls dist/stage-1-*.k8s.yaml | grep -v -- '-job-'
+
+  cdk8s:prod:diff:
+    desc: kubectl diff the synthed prod-1 app manifests against the live cluster (read-only)
+    dir: cdk8s
+    deps: [cdk8s:imports]
+    cmds:
+      - mise exec -- uv run cdk8s synth
+      - for: { var: f, split: "\n" }
+        cmd: kubectl diff -f "{{.f}}" || true
+        vars:
+          f:
+            sh: ls dist/prod-1-*.k8s.yaml | grep -v -- '-job-'

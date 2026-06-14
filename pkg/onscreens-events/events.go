@@ -6,7 +6,7 @@
 // pkg/onscreens-client) and the subscriber (cmd/onscreens-server). To stay
 // safe as a shared package it is stdlib-only and side-effect-free: no
 // init(), no pkg/config import, env is always a parameter rather than read
-// from config here. See vault/decisions/package-boundary-init-discipline.md.
+// from config here.
 package onscreensEvents
 
 import "time"

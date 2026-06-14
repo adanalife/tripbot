@@ -34,7 +34,10 @@ jobs:
           #     allowlisted by word in .codespellrc instead.
           #   - pkg/server/static/: vendored third-party frontend assets
           #     (htmx + its SSE extension) — not ours to lint/format.
-          FILTER_REGEX_EXCLUDE: '.*(^|/)go\.sum$|.*pkg/server/static/.*'
+          #   - cdk8s/crds/: vendored upstream CRD schemas (ESO) captured via
+          #     `cdk8s import` — not ours to edit (codespell trips on their
+          #     CamelCase schema field names).
+          FILTER_REGEX_EXCLUDE: '.*(^|/)go\.sum$|.*pkg/server/static/.*|.*cdk8s/crds/.*'
           # disabled because it's not working with C libs
           VALIDATE_GO: false
           # disabled — none of the in-tree Dockerfiles have been
@@ -66,17 +69,23 @@ jobs:
           VALIDATE_SQLFLUFF: false
           VALIDATE_TRIVY: false
           VALIDATE_YAML_PRETTIER: false
-          # Python formatting + lint live in .pre-commit-config.yaml (Ruff).
-          # Disable the super-linter Python formatters/checkers that overlap
-          # with that pre-commit job:
+          # Python formatting + lint live in .pre-commit-config.yaml (Ruff) —
+          # Ruff is THE Python linter/formatter for this repo (cdk8s/ is the
+          # main Python tree). Disable the super-linter Python checkers that
+          # overlap with or contradict it:
           #   - BLACK: dueling-formatter problem with Ruff
           #   - RUFF_FORMAT: same Ruff version disagrees with our local Ruff
           #     for reasons we haven't tracked down — pre-commit catches
           #     format issues before they hit CI, so the duplicate gate isn't
           #     buying us anything
-          #   - MYPY: only Python in the repo is two standalone bin/ scripts
-          #     (no importable package, no type-check value); mypy also
-          #     complains they both register as `__main__`
+          #   - MYPY: no type-check value here; also flags the standalone bin/
+          #     scripts as both `__main__`
+          #   - PYLINT / FLAKE8 / ISORT: redundant with Ruff and disagree with
+          #     it (e.g. ISORT classifies the gitignored cdk8s/imports package
+          #     differently than Ruff). Ruff (PYTHON_RUFF, on) is the one linter.
           VALIDATE_PYTHON_BLACK: false
           VALIDATE_PYTHON_RUFF_FORMAT: false
           VALIDATE_PYTHON_MYPY: false
+          VALIDATE_PYTHON_PYLINT: false
+          VALIDATE_PYTHON_FLAKE8: false
+          VALIDATE_PYTHON_ISORT: false

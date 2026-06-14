@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+dist/*.log
+dist/.*
+# Generated typed k8s constructs (cdk8s import). Regenerate with `cdk8s import`
+# (pinned to the k8s API version + the ESO CRD schema in cdk8s.yaml). Gitignored
+# to keep the tree reviewable; CI / `task cdk8s:imports` runs the import.
+imports/

@@ -23,6 +23,16 @@ func StateToStateAbbrev(state string) string {
 	return ""
 }
 
+// StateNames returns the full state/territory names from the abbreviation
+// table. Order is unstable (map iteration); callers must not rely on it.
+func StateNames() []string {
+	names := make([]string, 0, len(stateAbbrevs))
+	for _, name := range stateAbbrevs {
+		names = append(names, name)
+	}
+	return names
+}
+
 // TODO: this doesn't handle the case where the state is invalid
 func TitlecaseState(state string) string {
 	if len(state) == 2 {

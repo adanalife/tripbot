@@ -53,6 +53,9 @@ jobs:
           file: infra/docker/tripbot/Dockerfile
           tags: ${{ steps.meta.outputs.tags }}
           push: true
+          # load the image into the local daemon too, so the verify step
+          # runs it without pulling back from Docker Hub (quota)
+          load: true
           build-args: |
             VERSION=${{ steps.ver.outputs.value }}
             SHA=${{ github.sha }}
@@ -145,6 +148,7 @@ jobs:
           file: infra/docker/vlc/Dockerfile
           tags: ${{ steps.meta.outputs.tags }}
           push: true
+          load: true
           build-args: |
             VERSION=${{ steps.ver.outputs.value }}
             SHA=${{ github.sha }}
@@ -244,6 +248,7 @@ jobs:
           file: ${{ matrix.dockerfile }}
           tags: ${{ steps.meta.outputs.tags }}
           push: true
+          load: true
           build-args: |
             VERSION=${{ steps.ver.outputs.value }}
             SHA=${{ github.sha }}
@@ -338,6 +343,7 @@ jobs:
           file: infra/docker/onscreens-server/Dockerfile
           tags: ${{ steps.meta.outputs.tags }}
           push: true
+          load: true
           build-args: |
             VERSION=${{ steps.ver.outputs.value }}
             SHA=${{ github.sha }}
@@ -381,6 +387,49 @@ jobs:
             echo "==> $tag = $tag-amd64 + $tag-arm64"
             docker buildx imagetools create -t "$tag" "$tag-amd64" "$tag-arm64"
           done <<< "${{ steps.meta.outputs.tags }}"
+
+  # The auto-tag flow (bump-version.yml) creates only a git tag; this is what
+  # makes the tag show up as a real GitHub Release with auto-generated notes
+  # (the infra bump PRs link to it).
+  github-release:
+    needs: [tripbot-manifest, vlc-manifest, obs-manifest, onscreens-server-manifest]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+            --title "$GITHUB_REF_NAME" --generate-notes --verify-tag
+
+  # Fan out the prod version-bump PRs: the in-repo bump-prs workflow opens one
+  # Dependabot-style "bump prod <component>" PR per image against master (merge =
+  # deploy). Relocated here from infra once the manifests moved into this repo —
+  # it now edits this repo's cdk8s/versions.yaml.
+  # Auths as the adanalife-automation GitHub App (credentials fanned out by
+  # infra's terraform/platform): the App token mints workflow runs whose later
+  # bump commits re-trigger the cdk8s synth gate (GITHUB_TOKEN commits would not).
+  bump-prod-pins:
+    needs: [tripbot-manifest, vlc-manifest, obs-manifest, onscreens-server-manifest]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mint automation app token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.AUTOMATION_APP_ID }}
+          private-key: ${{ secrets.AUTOMATION_APP_PRIVATE_KEY }}
+          owner: adanalife
+          repositories: tripbot
+
+      - name: Trigger the bump-prs workflow for this release
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          gh workflow run bump-prs.yml --repo "$GITHUB_REPOSITORY" \
+            -f "version=${GITHUB_REF_NAME#v}"
 
   notify:
     needs: [tripbot-manifest, vlc-manifest, obs-manifest, onscreens-server-manifest]

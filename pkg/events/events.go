@@ -15,6 +15,7 @@ import (
 type Event struct {
 	ID          int `gorm:"primaryKey"`
 	Username    string
+	Platform    string
 	Event       string
 	SessionID   uuid.UUID
 	DateCreated time.Time
@@ -25,7 +26,7 @@ func Login(ctx context.Context, user string, sessionID uuid.UUID) error {
 		slog.InfoContext(ctx, "skipping login event: read-only mode", "username", user)
 		return &terrors.ReadOnlyError{Msg: "read-only mode"}
 	}
-	if err := database.GormDB().WithContext(ctx).Create(&Event{Username: user, Event: "login", SessionID: sessionID}).Error; err != nil {
+	if err := database.GormDB().WithContext(ctx).Create(&Event{Username: user, Platform: c.Conf.Platform, Event: "login", SessionID: sessionID}).Error; err != nil {
 		return err
 	}
 	instrumentation.Events.Inc("login")
@@ -37,7 +38,7 @@ func Logout(ctx context.Context, user string, sessionID uuid.UUID) error {
 		slog.InfoContext(ctx, "skipping logout event: read-only mode", "username", user)
 		return &terrors.ReadOnlyError{Msg: "read-only mode"}
 	}
-	if err := database.GormDB().WithContext(ctx).Create(&Event{Username: user, Event: "logout", SessionID: sessionID}).Error; err != nil {
+	if err := database.GormDB().WithContext(ctx).Create(&Event{Username: user, Platform: c.Conf.Platform, Event: "logout", SessionID: sessionID}).Error; err != nil {
 		return err
 	}
 	instrumentation.Events.Inc("logout")
@@ -52,7 +53,7 @@ func SessionCount(ctx context.Context, username string) int64 {
 	var n int64
 	if err := database.GormDB().WithContext(ctx).
 		Model(&Event{}).
-		Where("username = ? AND event = ?", username, "login").
+		Where("platform = ? AND username = ? AND event = ?", c.Conf.Platform, username, "login").
 		Count(&n).Error; err != nil {
 		slog.ErrorContext(ctx, "session count failed", "err", err, "username", username)
 		return 0

@@ -14,8 +14,7 @@ import (
 // the package-level mutable globals are gone.
 //
 // These shims are transitional. Once a constructed *Client is threaded through
-// those callers, this whole file (and defaultClient) is deleted — see the
-// Phase B/C plan and vault/decisions/chatbot-app-injection-pattern.md.
+// those callers, this whole file (and defaultClient) is deleted.
 
 // --- auth / token ---
 

@@ -10,10 +10,6 @@ import (
 // NATS is the publish surface chatbot uses for fire-and-forget pubsub
 // events. Tests inject a fake (recordingNATS / noopNATS); production
 // uses realNATS which delegates to the pkg/natsclient singleton.
-//
-// Phase 1: a single call site (realOnscreens.ShowMiddleText) publishes
-// alongside the HTTP path. Phase 2 peels more onscreens-client surface
-// onto NATS; phase 3 adds JetStream for events that need replay.
 type NATS interface {
 	// Publish sends payload on subject. Errors are logged but never
 	// returned — every chatbot publish is fire-and-forget by design.

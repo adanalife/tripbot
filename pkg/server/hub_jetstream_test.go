@@ -14,8 +14,8 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 )
 
-// TestHub_Start_replaysHistoryFromJetStream is the load-bearing test for phase 3:
-// it proves the live console survives a reboot. We publish chat + video history,
+// TestHub_Start_replaysHistoryFromJetStream proves the live console survives
+// a reboot. We publish chat + video history,
 // then start a *fresh* hub with no SSE clients connected and assert the durable
 // JetStream consumers replayed that history into the chat ring and map trail.
 // This is delivery-on-startup (replay), not live delivery — the messages were
@@ -44,8 +44,8 @@ func TestHub_Start_replaysHistoryFromJetStream(t *testing.T) {
 	}
 
 	// Publish history BEFORE the hub starts — the whole point is replay.
-	eventbus.EmitChatMessage(ctx, env, "alice", "first")
-	eventbus.EmitChatMessage(ctx, env, "bob", "second")
+	eventbus.EmitChatMessage(ctx, env, "twitch", "alice", "first")
+	eventbus.EmitChatMessage(ctx, env, "twitch", "bob", "second")
 	eventbus.EmitVideoChanged(ctx, env, "wy_0001.MP4", "Wyoming", false, 41.5, -110.2)
 	eventbus.EmitVideoChanged(ctx, env, "ut_0002.MP4", "Utah", false, 40.0, -111.0)
 	if err := nc.Flush(); err != nil {

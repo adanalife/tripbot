@@ -7,31 +7,200 @@ All notable changes to TripBot. Format follows [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+### OBS
+
+- **YouTube scene plays a synthesized "Car Hum" bed in place of SomaFM.** SomaFM (the "Groove Salad Classic" source) is already stripped on YouTube to dodge Content ID strikes, leaving that stream with no background audio. A new license-clean, locally-generated car-interior drone (`assets/car-hum-loop.flac`, a seamless 4-min loop produced by `script/carhum/`) is added to the shared scene as the "Car Hum" `ffmpeg_source` and now fills that gap. The per-platform strip in the OBS entrypoint is symmetric: YouTube keeps Car Hum and drops SomaFM, Twitch keeps SomaFM and drops Car Hum, so the two never play together. ([#854])
+
+## [v3.3.4] — 2026-06-14
+
+Patch release. CI/release-plumbing only — no runtime behavior change. Finishes wiring the in-repo prod bump-PR workflow into the release flow now that the cdk8s manifests live in this repo.
+
+### CI
+
+- **Release workflow fans out the prod bump PRs in-repo.** The release's final step now triggers this repo's `bump-prs` workflow (`workflow_dispatch` with the released version) instead of a cross-repo `repository_dispatch` to infra, matching the cdk8s manifests' move into this repo. Still mints the `adanalife-automation` App token so the bump commits re-fire the cdk8s synth gate — now scoped to this repo. ([#845])
+- **Bump-PR commits and titles marked `#none` so they don't fire releases.** Bump PRs target `master`, where every push auto-tags and triggers a release; a pin edit is a deploy gesture, not a release, so each merged bump was minting a spurious release. The `#none` skip-tag marker (honored by `anothrNick/github-tag-action`) now lives in both the commit message and the PR title, surviving whether the PR is merge-committed or squash-merged. ([#851])
+
+## [v3.3.2] — 2026-06-13
+
+Patch release. Build/deploy plumbing only — no runtime behavior change. The Kubernetes manifest authoring for this repo's four images now lives in-repo, and the per-component prod-pin bump workflow moves here alongside it.
+
+### Deploy
+
+- **In-repo cdk8s authoring layer for the app manifests.** The Kubernetes manifests for the images built from this repo (tripbot, vlc, onscreens, obs) are now authored as typed cdk8s constructs under `cdk8s/`, synthesized to committed `dist/` files that Argo delivers cross-repo. Ported from `infra/cdk8s` byte-identically; identity-level Secrets and the prod-stream PriorityClass/ResourceQuota move into a per-env `tripbot-identity` deploy unit. The stateful + shared-platform layer (postgres, ESO store, observability, cert-manager, dashcam PV, Argo config) stays in infra. Adds a verify-only synth gate, pytest checks, and `cdk8s:*` Taskfile targets. ([#840])
+
+### CI
+
+- **Per-component prod bump-prs workflow relocated into this repo.** Now that `cdk8s/versions.yaml` lives here, the prod-pin bump workflow moves over too. On a release it opens one prod-pin bump PR per component against `master`, carrying the pin edit and re-synthed `dist/` in the same commit. `workflow_dispatch`-only for now — wiring `release.yml` to fire it happens together with the infra Argo cutover. ([#841])
+
+## [v3.3.1] — 2026-06-13
+
+Patch release. Mostly YouTube platform-awareness polish on the chat and overlay surfaces, plus a read-only user-profile endpoint for the standalone console and a copyright-safety fix for the YouTube OBS scene.
+
+### chatbot
+
+- **Chat command surface is YouTube-aware.** `!state` and `!location` are enabled on YouTube — they read the current video's location/flag overlay, the same read-current-video-state category as the already-allowlisted `!weather`/`!time`/`!date`/`!sunset` (they previously no-op'd silently as unindexed commands on YouTube). `!commands` and the rotating `!help`/Chatter lines now build from a featured set filtered by the platform's indexed lookups, so a YouTube instance no longer advertises commands that aren't in its allowlist (`!guess`, `!miles`, `!leaderboard`, `!song`). ([#835])
+
+### onscreens
+
+- **Periodic leaderboard overlay rotates across all three boards.** The 5-minute cron job only ever showed the guess leaderboard; it now picks at random each tick — monthly miles and guesses weighted evenly, lifetime total miles rarely (5%), with an empty pick falling back to monthly miles. Shared leaderboard row helpers move into `pkg/scoreboards`, and the job moves onto the chatbot `App` so it reaches the overlay and lifetime leaderboard through injected interfaces. ([#834])
+- **Rotator overlays are platform-aware with weighted selection.** The left/right overlay rotators advertised commands regardless of platform, so a YouTube overlay promoted `!miles`/`!guess` (disabled there). A new `rotatorMessage{Text, Platforms, Weight}` scopes lines to streaming platforms and biases weighted-random selection, replacing the old duplicate-line likelihood trick; `!miles`/`!guess` lines are scoped to Twitch. Adds `ONSCREENS_SERVER_PLATFORM` config. ([#836])
+
+### server
+
+- **Read-only JSON user-profile endpoint for tripbot-console.** `GET /api/user/{username}` returns the same chatter stats as the in-tripbot `/admin/user` popover (miles, monthly miles, sessions, first/last seen) as JSON, so the standalone console — which has no DB access by design — can proxy here over the in-namespace Service. ([#837])
+
+### obs
+
+- **YouTube OBS scene strips the SomaFM audio source.** The "Groove Salad Classic" ffmpeg_source plays licensed SomaFM audio that trips YouTube's Content ID and earns copyright strikes. Twitch tolerates it, so the OBS entrypoint now strips the source (and its scene-item references) via a jq pass over the rendered `Tripbot.json` only when `STREAM_PLATFORM=youtube`. Adds jq to both the amd64 and arm64 OBS images. ([#838])
+
+## [v3.3.0] — 2026-06-12
+
+Minor release. The headline is **typo-tolerant chat commands** — misspelled `!`-commands now fuzzy-route to their nearest trigger, bare state names work as guess shortcuts (`!florida`), and the 31 hand-registered typo aliases that accumulated over the years retire. Alongside it: vlc-server resumes its last-played video (and position) across restarts, the shared database gains a platform dimension so YouTube viewers and feature flags don't collide with Twitch's, and each bot instance publishes auth-token snapshots to NATS for the standalone admin console.
+
+### chatbot
+
+- **Misspelled commands fuzzy-match to their nearest trigger.** When an unrecognized `!`-command arrives, `findCommand` falls back to Levenshtein matching against the registered triggers and aliases, so `!locaiton` runs `!location` — no per-typo alias maintenance. The edit-distance threshold scales with length (1 edit for 4–6 runes, 2 for 7+; under 4 never matches), ties refuse to guess (`!tate` is one edit from both `!date` and `!state`, so it routes to neither), bare-word triggers don't participate, and every fuzzy route logs the typed text + resolved trigger so mis-routes are auditable. Routing goes through normal dispatch, so follow/subscriber gates and per-platform allowlists still apply. ([#827])
+- **State-name guess shortcut.** A `!`-prefixed US state or territory name runs `!guess` with that state — `!florida`, `!new york` (multi-word assembles from params), trailing chatter dropped. Full names only: two-letter abbreviations are excluded so `!hi`/`!ok`/`!me` can't fire accidental guesses. Registered commands always win, and the shortcut resolves `!guess` through the platform-filtered lookup, so it's inert where `!guess` isn't allowlisted. Runs ahead of the fuzzy fallback, so an exact state name can't be stolen by a near-miss trigger. ([#829])
+- **Hand-registered typo aliases retire.** The 31 typo aliases in the command registry (`!locaiton` cousins, `!guss` variants, `¡`-prefixed forms, …) are removed — each verified to still resolve via the fuzzy router or prefix normalization. `normalizeCommandPrefix` also gains digit-1 handling (`1` is the unshifted `!`), rewriting a leading `1` when a letter follows, which gives every command its `1`-prefix form for free. Two aliases beyond the fuzzy router's edit caps stay, with comments saying why. ([#831])
+
+### vlc
+
+- **vlc-server resumes its last-played video across restarts.** Every successful play publishes file + position to a per-platform `tripbot.<env>.vlc.lastplayed.<platform>` subject backed by a new `TRIPBOT_VLC_LASTPLAYED` JetStream last-value cache (a 5s ticker keeps the position current). On startup the pick order is watchdog file marker → JetStream lastplayed → `PlayRandom`, each step degrading gracefully, and position resume waits for libvlc to reach Playing before seeking (skipping seeks that land in the clip's final 2s). The per-platform leaf matters because the twitch and youtube vlc instances share the one per-env NATS. `VlcServerConfig` gains `STREAM_PLATFORM`, stamped by the cdk8s vlc factory ([infra #717]). ([#830])
+
+### youtube
+
+- **Platform-scoped users, events, and feature flags.** Gets the shared per-env Postgres ready for the YouTube bot going live. Migration 018 adds a `platform` column (default `twitch`) to `users` + `events`, with `users` uniqueness becoming `(platform, username)` so a YouTube viewer named `foo` doesn't merge with the Twitch `foo`; migration 019 platform-scopes `feature_flags` with a `(key, platform)` composite PK and seeds YouTube copies of the existing flags, so enabling a flag on YouTube no longer enables it on Twitch. All queries scope by the instance's configured platform; existing single-platform behavior is unchanged. ([#832])
+
+### pubsub
+
+- **Auth-token snapshots publish to NATS for the standalone console.** Each platform instance publishes its token state to `tripbot.<env>.auth.status.<platform>` every 30s, backed by a new `TRIPBOT_AUTH` JetStream stream with `MaxMsgsPerSubject: 1` — a last-value cache, so a freshly-connected console replays exactly the latest snapshot per platform and then receives live updates. The envelope carries account, login-as, expiry, missing/expired reason, and the absolute `/auth/init` URL; re-auth itself stays in tripbot. The in-process admin hub is unchanged. ([#826])
+
+### CI
+
+- **`python:3.13-slim-bookworm` joins the GHCR mirror refresh.** The base image for the standalone tripbot-console service is mirrored to `ghcr.io/adanalife/mirror/python` and added to the weekly refresh list, same as the Go/Ubuntu/migrate bases. ([#828])
+
+### docs
+
+- **Docs sweep: self-contained comments, CHANGELOG cleanup, README pruning.** Code/Taskfile/workflow comments no longer point at docs a reader of this repo can't follow — load-bearing context is stated inline, history-narration trimmed, a few stale comments corrected ([#823]). The CHANGELOG is synced from master and swept for internal milestone jargon ([#824]). Three obsolete READMEs (`infra/`, `infra/certs/`, `db/`) are removed and the root README's dead links fixed ([#825]).
+
+## [v3.2.1] — 2026-06-11
+
+Patch release. The v3.2.0 release run pushed its per-arch images but died at the version-stamping verify step — Docker Hub rate-limited the pull-back of our own just-pushed images — so the multi-arch manifests, GitHub Release, and infra bump dispatch never happened. This release fixes the verify step and ships everything v3.2.0 built.
+
+### CI
+
+- **Release builds load images locally for verification.** Each per-arch build leg now passes `load: true` alongside `push: true` (multi-exporter, buildx ≥ 0.13), so the verify step runs the locally-built image instead of pulling it back from Docker Hub — closing the "our own images still count against the pull quota" gap the GHCR mirrors ([#820]) deliberately left open. ([#821])
+
+## [v3.2.0] — 2026-06-11
+
+Minor release. The headline is the **YouTube provider going code-complete**: a `PLATFORM=youtube` tripbot instance now runs end to end — channel-owner OAuth, outbound live-chat sends, an inbound chat poller, and a boot sequence that branches per platform — built on the provider-neutral chat seams the no-globals refactor left behind. Alongside it: release CI now publishes a GitHub Release per tag, dispatches the infra version-bump PRs automatically, and pulls base images from GHCR mirrors to dodge Docker Hub rate limits; and `!report` validates its Discord webhook URL before POSTing.
+
+### youtube
+
+- **Per-platform command allowlist.** A `Platform` selector on `TripbotConfig` / `chatbot.App` (read from the same `STREAM_PLATFORM` key the OBS image uses): Twitch runs the full registry, while a YouTube instance indexes only a stateless v1 allowlist — info, weather/time, playback control, and socials — excluding everything that needs per-user identity, miles, Helix, or admin. Disabled triggers stay registered but never index into dispatch. ([#809])
+- **Quota spike.** A standalone `cmd` proving the OAuth → active-broadcast → `liveChatId` → poll/insert loop and measuring Data-API quota burn at the server-suggested cadence, before any tripbot wiring. Zero `tripbot/pkg` imports per the package-boundary discipline. ([#811])
+- **`pkg/youtube` — channel-owner OAuth + token storage.** Owns tripbot's YouTube identity, mirroring `pkg/twitch`. One identity (no bot/broadcaster split — YouTube live chat must run as the channel owner), stored in `oauth_tokens` as `provider=youtube` keyed by channel ID, with lazy refresh persisted on rotation and an optional `YOUTUBE_CHANNEL_ID` pin that rejects consent from the wrong channel before persist. Admin re-auth is `/auth/init?account=youtube` riding the existing callback path. All optional — a Twitch instance with no `YOUTUBE_*` env never fatals. ([#812])
+- **Outbound live-chat client.** `youtubeChat` implements the `ChatClient` seam: `Say` posts via `liveChatMessages.insert` (truncating at YouTube's 200-char limit, stripping the IRC `/me` prefix), `Whisper` is a no-op, and a rebindable `liveChatBinding` shared with the inbound poller drops sends with a log while no broadcast is live. Output flows through the console mirror, so the admin live console sees YouTube exactly like Twitch. ([#814])
+- **Inbound live-chat poller.** Discovers the active broadcast (idling quietly while not live), binds its chat, and pages messages into the shared command path via `HandleYouTubeMessage` — identical to the Twitch handler except viewers get a transient, never-persisted `users.User` (v1 punts identity/presence/miles). Skips the backlog page on every bind so stale commands never replay, filters the bot's own echoes, and disambiguates quota-exhausted 403s (5-min backoff) from chat-ended 403s (rediscover). ([#815])
+- **Per-platform boot.** `Run()` branches on `STREAM_PLATFORM`: the spine (telemetry, admin server, player, cron, flags, NATS, event hub) stays common; only chat bring-up swaps. A youtube pod with no token stays Ready and retries every 15s so the admin panel's re-auth flow is always reachable. Twitch-only steps (IRC token refresh, EventSub, follower/subscriber polls, chatter sessions, Discord, the OBS watchdog, the admin `chat.send` subscriber) are gated off non-Twitch instances, and `eventbus.ChatMessage` gains a `platform` tag so the admin console can disambiguate the two instances' chat lines. ([#816])
+
+### CI
+
+- **A GitHub Release per release tag.** `release.yml` gains a `github-release` job after the image manifests publish: `gh release create --generate-notes --verify-tag`, giving each version a human-readable PR-by-PR summary (the Releases page had been frozen at v1.9.1). ([#817])
+- **Release dispatches infra bump PRs.** Once all four manifests publish, the workflow fires a `tripbot-release` `repository_dispatch` at `adanalife/infra`, whose bump-prs workflow ([infra #694]) fans out one "bump prod \<component\>" PR per image — merge = deploy. Authenticated via a short-lived adanalife-automation GitHub App token ([infra #695]); no PAT. ([#818])
+- **Base images pull from GHCR mirrors, not Docker Hub.** Docker Hub's pull rate limit broke CI twice in one day; the 429 hits at manifest resolution, before the GHA layer cache is ever consulted. The three third-party base images (`golang`, `ubuntu`, `migrate`) are mirrored to `ghcr.io/adanalife/mirror/*` (unlimited anonymous pulls, co-located with the runners), every Dockerfile now points at the mirrors, and a weekly `mirror-images` workflow re-copies the tags with crane so they keep tracking upstream security patches. `adanalife/obs-cef-base` stays on Docker Hub — it's our own published image, not a mirror candidate. ([#820])
+
+### fix
+
+- **`!report` validates the Discord webhook URL before POSTing.** A placeholder or garbage `DISCORD_ALERTS_WEBHOOK` no longer logs an "unsupported protocol scheme" ERROR on every report — it warns once per process and falls through to the slog/Sentry audit path. ([#810])
+
+## [v3.1.0] — 2026-06-10
+
+Minor release. The headline is the **VLC command surface completing its move to NATS** — the HTTP command path is gone and NATS is now the sole transport for playback commands, the final step of the migration the observe-only mirror began in v3.0.0. Alongside it: the admin console's chat-send box defaults to the broadcaster identity, and `!ocation` joins the `!location` typo aliases.
+
+### pubsub
+
+- **VLC command surface — HTTP peel; NATS is the sole command transport.** Completes the migration the observe-only mirror started in [#789] (v3.0.0). The client goes publish-only (the `c.get(...)` command calls are gone), vlc-server's subscribers flip from observe-only to acting (driving `PlayRandom` / `PlayVideoFile` / `skip` / `back`), and the `play` / `random` / `skip` / `back` HTTP handlers + routes are removed. The client peel lands first so there's never a window where both transports act. `/vlc/current` stays on HTTP (a read). Requires vlc-server's `NATS_URL` wiring ([infra #645]) to be live in each env. ([#790])
+
+### admin
+
+- **Chat-send box defaults to the broadcaster identity.** The send-from-console form's identity toggle preselected the bot (first in `TokenStatuses`); talking as the channel owner is the common case, so it now preselects the broadcaster when it's logged in, falling back to the bot otherwise. Both stay selectable. ([#807])
+
+### chatbot
+
+- **`!ocation` aliases to `!location`.** A common typo where the viewer drops the leading `l`, added alongside the existing `!location` typo aliases. ([#806])
+
+## [v3.0.1] — 2026-06-09
+
+Patch release. The headline is **sending chat messages from the admin console** — a send box that posts to Twitch chat as the bot or the broadcaster. Alongside it: the OBS image can now be pointed at YouTube as well as Twitch via `STREAM_PLATFORM`, a fix for the OBS websocket-address fallback that broke after the per-platform service rename, and CI changes to cut Docker Hub rate-limiting and stop redundant OBS base rebakes.
+
 ### admin
 
 - **Send chat messages from the admin console.** The chat pane gains a send box: type a message and post it to Twitch chat **as the bot** or **as the broadcaster**, with a toggle that only offers accounts currently logged in (and hides itself when just one is). The line renders optimistically (greyed) and confirms when it round-trips back on the live chat stream, reddening as "not delivered" if a send fails. Routed as a `chat.send` NATS command (console publishes, tripbot sends) so it's split-ready. **Broadcaster sends need a re-auth** — `user:write:chat` is new on the broadcaster scopes. ([#803])
 
+### obs
+
+- **OBS streaming target is parametrized via `STREAM_PLATFORM`.** The image hardcoded Twitch in `service.json.tmpl`, so one image could only ever stream to Twitch. A `STREAM_PLATFORM` env var (default `twitch`) now selects the service/server — `twitch` renders byte-identical to the old hardcoded file (a no-op), `youtube` points at YouTube's RTMPS ingest — unblocking a second OBS instance for YouTube without a separate image. ([#775])
+
+### fix
+
+- **OBS websocket address fallback derives from the contract.** The `OBS_WEBSOCKET_ADDR` fallback in `pkg/obs` was hardcoded to the pre-per-platform `obs:4455`; once OBS went per-platform (`obs` → `obs-twitch`) that name stopped resolving, so the watchdog, stream start/stop, and streaming-active poller failed with `dial tcp: lookup obs`. cdk8s never stamps the var onto tripbot, so the default is load-bearing — it now builds from `pkg/contract` (`ServiceOBSTwitch` + `PortOBSWebsocket`) and tracks the canonical service name. ([#804])
+
+### CI
+
+- **Reduce Docker Hub rate-limiting and stop redundant OBS base rebakes.** The tripbot/vlc/obs container CI workflows now authenticate Docker Hub pulls (so base-image pulls count against our account limit instead of the shared GitHub-runner-IP anonymous limit) and gain per-ref concurrency groups so a new push supersedes the in-flight build. The 90-min OBS CEF base bake is scoped to develop/master pushes so release tags no longer rebake an unchanged, version-pinned base. ([#786])
+
+## [v3.0.0] — 2026-06-03
+
+Major release. Two milestones land together. **onscreens-server is now its own image + Deployment** — it is no longer built into or supervised inside the vlc image, which is the breaking deployment change behind the major bump. And the **chatbot no-globals refactor is complete**: the package now holds zero package-level globals, with both the inbound and outbound chat edges behind provider-neutral seams as groundwork for multi-platform chat. The NATS migration also advances — the onscreens command surface is now NATS-only (the HTTP command path is gone) and the vlc command surface begins its observe-only mirror. Rounded out by a live feature-flag toggle and a `!weather` command in the admin/chat surfaces, per-platform service names for the cdk8s app factory, a couple of `!`-command fixes and tweaks, and routine Go + cleanup chores.
+
+### Breaking
+
+- **onscreens-server no longer ships inside the vlc image.** The vlc `Dockerfile` drops the `onscreens-server` build step, its supervisord program, and `:8081` from `EXPOSE`; docker-compose runs `onscreens-server` as its own service. This is the final step of extracting onscreens into a standalone image + Deployment ([#728], shipped earlier) — anything routing to the in-pod copy on `:8081` must be repointed at `onscreens-server:8080` first (prod was repointed via [infra #654]). ([#729])
+
 ### pubsub
 
-- **NATS phase 2 peel — onscreens commands are NATS-only now.** With the command surface burned in on NATS (and phase 3 running on top of it), the redundant HTTP command path is removed: the client publishes its subject and returns, and `onscreens-server` drops the `middle`/`leaderboard`/`timewarp`/`gps`/`flag` handlers and routes (the overlays are driven by the existing NATS subscribers). The browser-source feeds, health, version, metrics, and admin endpoints stay on HTTP, so `ONSCREENS_SERVER_HOST` is unchanged. With `NATS_URL` unset there's no longer an HTTP fallback — every live env runs NATS. ([#788])
+- **Onscreens commands are NATS-only now.** With the command surface burned in on NATS, the redundant HTTP command path is removed: the client publishes its subject and returns, and `onscreens-server` drops the `middle`/`leaderboard`/`timewarp`/`gps`/`flag` handlers and routes (the overlays are driven by the existing NATS subscribers). The browser-source feeds, health, version, metrics, and admin endpoints stay on HTTP, so `ONSCREENS_SERVER_HOST` is unchanged. With `NATS_URL` unset there's no longer an HTTP fallback — every live env runs NATS. ([#788])
 - **VLC command surface — observe-only NATS mirror.** Begins moving the VLC playback commands off direct HTTP onto NATS, following the onscreens template. The four fire-and-forget commands (`PlayRandom`, `PlayFileInPlaylist`, `Skip`, `Back`) now publish to `tripbot.<env>.vlc.<verb>` alongside their HTTP call, and vlc-server connects to NATS and subscribes — but **observe-only**: it logs what it would do without acting, because VLC commands aren't idempotent and acting on both transports would double-execute (skip two videos). HTTP stays the sole actor; this burns in delivery before the peel. `CurrentlyPlaying` is a read and stays HTTP-only. No-op where `NATS_URL` is unset; the peel + cdk8s `NATS_URL` wiring for vlc-server follow. ([#789])
-- **VLC command surface — HTTP peel; NATS is the sole command transport.** Completes the migration started in #789. The client goes publish-only (the `c.get(...)` command calls are gone), vlc-server's subscribers flip from observe-only to acting (driving `PlayRandom` / `PlayVideoFile` / `skip` / `back`), and the `play` / `random` / `skip` / `back` HTTP handlers + routes are removed. The client peel lands first so there's never a window where both transports act. `/vlc/current` stays on HTTP (a read). Requires vlc-server's `NATS_URL` wiring ([infra #645]) to be live in each env. ([#790])
-
-## [v2.18.3] — 2026-06-02
-
-Patch release. The headline is reboot-survival for the admin live console: its chat log and live map are now backed by JetStream, so a tripbot restart replays recent history instead of starting empty (NATS phase 3). The rest is the chatbot no-globals refactor (Phase C) reaching its conclusion — the `SetX` injection setters retire in favour of cmd assigning the App's dependencies directly, the package free-function shims are gone, and a `New()` constructor plus a platform-neutral inbound seam land as groundwork for multi-platform chat.
-
-### pubsub
-
-- **Live-console chat log + live map survive a reboot.** Both were in-memory ring buffers fed by core NATS, which has no replay — so every restart started the console empty until new messages arrived. They now bind ephemeral ordered JetStream consumers over two bounded file-backed streams (`TRIPBOT_CHAT` keeps 500, `TRIPBOT_VIDEO` keeps 200) and replay recent history into the buffers on startup. Publishers are unchanged; only the consumer side moved. Falls back to live-only core subscriptions when JetStream is unavailable (local dev, non-JetStream servers), so nothing breaks without it. Requires [infra #623] for file-backed JetStream + a PVC on the NATS deployment. (NATS phase 3, [#744])
 
 ### refactor
 
-- **chatbot Phase C — retire the `SetX` setters; cmd owns the App.** The remaining package-level injection setters are removed in favour of `cmd/tripbot` assigning the App's dependencies directly: `App.Cron` ([#779]), `realVideo`'s own `Player` ([#780]), `App.Sessions` + `App.UserSessions` ([#781]), and `App.Flags` ([#782]). The package free-function shims retire with cmd taking ownership of the App ([#774]), preceded by a `New()` constructor + `ConnectIRC` method ([#773]) and a platform-neutral inbound seam (`IncomingMessage` + `Handle*` methods) that isolates the Twitch-specific entry points behind a transport-neutral interface ([#772]).
+- **chatbot no-globals refactor complete — zero package-level globals.** The last global, `client *twitch.Client` (read directly by the package `Say`/`Whisper`), is replaced by a provider-neutral outbound seam: the `IRC` interface becomes `ChatClient` and `App.IRC` becomes `App.Chat`, `twitchChat` implements it over its own client + identity config, and `consoleMirror` wraps any `ChatClient` so every platform's output reaches the admin live console uniformly ([#787]). Preceded by retiring `defaultApp` so tests build their own `App` ([#784]) and collapsing the `sayFn`/`captureSay` test seam onto the injected `recordingIRC` fake ([#785]). The chatbot's inbound (`IncomingMessage`) and outbound (`ChatClient`) edges are now both provider-neutral — adding YouTube/TikTok is a new adapter, not surgery.
+- **Admin panel `.controls` disclosure uses the shared CSS variables.** Folds the controls disclosure block into the shared `.stream-preview`/`.now-playing`/`.feature-flags` multi-selector so it reads from the `--divider`/`--dim`/`--muted`/`--fg` variables instead of hardcoded hex, fixing a light-mode inconsistency (no change in dark mode). ([#792])
+
+### feat
+
+- **Live enable/disable toggle for feature flags in the admin panel.** Each feature-flag row gets an arm-then-confirm toggle button backed by a new `feature.FlagToggler` write surface (`SetEnabled`), kept separate from the read-side `FlagClient`. The Postgres-backed client writes the `enabled` column and force-refreshes its in-memory snapshot, so the change is live immediately for both the panel and the bot's command-time gating — no wait for the 30s poll. ([#802])
+- **`!weather` — historical conditions at the dashcam location.** New chat command replying with the weather at the currently-playing clip's location *at the time it was filmed* (e.g. `Weather here on Mar 7, 2018 3pm: Clear sky, 58°F`), sourced from the free Open-Meteo historical archive (reanalysis back to 1940, so it covers the 2018 corpus). Follows the App-injection pattern (`App.Weather` + `realWeather`/`noopWeather`, mirroring `App.Geocoder`) and is follow-gated like `!sunset`/`!location`. ([#799])
+- **Per-platform service names in the contract.** Adds `tripbot`/`vlc`/`onscreens` per-platform service-name constants (`tripbot-twitch`, `vlc-youtube`, …), mirroring obs, as the source-of-truth half of the unified per-platform cdk8s app factory. The bare app-identity keys stay for Secret/ConfigMap names. ([#798])
+- **`!miles` floors displayed monthly miles at 0.01.** A user with a tiny but non-zero monthly total no longer renders as `0`. ([#796])
+- **`!leaderborad` aliases to `!leaderboard`.** Common typo now resolves instead of missing. ([#794])
+
+### fix
+
+- **`!location` suppresses the `0,0` fallback Maps URL.** When coordinates are unavailable, the command no longer emits a link pointing at null island. ([#795])
+- **Admin OBS nav link derives from `OBS_SERVER_HOST`.** The admin panel's OBS link is built from the configured host value instead of a hardcoded assumption. ([#793])
+
+### chore
+
+- **Go 1.26.3 → 1.26.4** for stdlib CVE fixes. ([#797])
+- **Removed the stale `Dashcam_Scenes.linux.json`** OBS scene collection. ([#791])
+
+## [v2.18.3] — 2026-06-02
+
+Patch release. The headline is reboot-survival for the admin live console: its chat log and live map are now backed by JetStream, so a tripbot restart replays recent history instead of starting empty. The rest is the chatbot no-globals refactor reaching its conclusion — the `SetX` injection setters retire in favour of cmd assigning the App's dependencies directly, the package free-function shims are gone, and a `New()` constructor plus a platform-neutral inbound seam land as groundwork for multi-platform chat.
+
+### pubsub
+
+- **Live-console chat log + live map survive a reboot.** Both were in-memory ring buffers fed by core NATS, which has no replay — so every restart started the console empty until new messages arrived. They now bind ephemeral ordered JetStream consumers over two bounded file-backed streams (`TRIPBOT_CHAT` keeps 500, `TRIPBOT_VIDEO` keeps 200) and replay recent history into the buffers on startup. Publishers are unchanged; only the consumer side moved. Falls back to live-only core subscriptions when JetStream is unavailable (local dev, non-JetStream servers), so nothing breaks without it. Requires [infra #623] for file-backed JetStream + a PVC on the NATS deployment. ([#744])
+
+### refactor
+
+- **chatbot — retire the `SetX` setters; cmd owns the App.** The remaining package-level injection setters are removed in favour of `cmd/tripbot` assigning the App's dependencies directly: `App.Cron` ([#779]), `realVideo`'s own `Player` ([#780]), `App.Sessions` + `App.UserSessions` ([#781]), and `App.Flags` ([#782]). The package free-function shims retire with cmd taking ownership of the App ([#774]), preceded by a `New()` constructor + `ConnectIRC` method ([#773]) and a platform-neutral inbound seam (`IncomingMessage` + `Handle*` methods) that isolates the Twitch-specific entry points behind a transport-neutral interface ([#772]).
 
 ## [v2.18.2] — 2026-06-02
 
-Patch release, almost entirely internal. The no-globals refactor finishes Phase B and opens Phase C: the last per-package `defaultX` singletons (`pkg/server`, `pkg/video`, `pkg/users`) are retired in favour of constructed structs threaded from cmd, cmd's own globals move into a `Tripbot` struct, and the chatbot's command registry, dispatch path, and event handlers move onto the injectable `App`. NATS phase 2 moves the onscreens command surface (and the admin panel's now-playing) onto pub/sub. Rounded out by a logout-path crash-loop fix, the producer half of the tripbot↔infra anti-drift contract, a `go test` env-default fix, and a CI action bump.
+Patch release, almost entirely internal. The no-globals refactor advances on every front: the last per-package `defaultX` singletons (`pkg/server`, `pkg/video`, `pkg/users`) are retired in favour of constructed structs threaded from cmd, cmd's own globals move into a `Tripbot` struct, and the chatbot's command registry, dispatch path, and event handlers move onto the injectable `App`. The NATS migration moves the onscreens command surface (and the admin panel's now-playing) onto pub/sub. Rounded out by a logout-path crash-loop fix, the producer half of the tripbot↔infra anti-drift contract, a `go test` env-default fix, and a CI action bump.
 
 ### fix
 
@@ -39,13 +208,13 @@ Patch release, almost entirely internal. The no-globals refactor finishes Phase 
 
 ### pubsub
 
-- **NATS phase 2 — onscreens command surface on pub/sub.** The onscreens overlay commands move from direct HTTP calls onto NATS, extending the pub/sub substrate. ([#736])
+- **Onscreens command surface on pub/sub.** The onscreens overlay commands move from direct HTTP calls onto NATS, extending the pub/sub substrate. ([#736])
 
 ### refactor
 
-- **Phase B finish — retire the last package `defaultX` singletons.** `pkg/users` session state is encapsulated behind a constructed `*Sessions` with an injected `ChatterSource` ([#753]) and then has its `defaultSessions` global retired ([#764]); `pkg/server` retires `defaultServer`, threading a `*Server` through cmd ([#757]); `pkg/video` retires `defaultPlayer` and sources the admin panel's now-playing from NATS ([#758]).
-- **cmd globals lifted into a `Tripbot` struct (Phase C.1).** The `cmd/tripbot` entrypoint constructs and threads its dependencies instead of reaching for package globals. ([#755])
-- **chatbot Phase C — registry, dispatch, and handlers onto the `App`.** Social-media replies ([#766]), the dispatch path with access-check denials ([#768]), follower/subscriber announcements and the Chatter timer ([#769]), and the command registry with `findCommand` ([#770]) all move off package-level globals onto the injectable `App`, routing chat output through `a.IRC.Say`. Groundwork for retiring `defaultApp` and the `sayFn` global, and for multi-platform chat support.
+- **Retire the last package `defaultX` singletons.** `pkg/users` session state is encapsulated behind a constructed `*Sessions` with an injected `ChatterSource` ([#753]) and then has its `defaultSessions` global retired ([#764]); `pkg/server` retires `defaultServer`, threading a `*Server` through cmd ([#757]); `pkg/video` retires `defaultPlayer` and sources the admin panel's now-playing from NATS ([#758]).
+- **cmd globals lifted into a `Tripbot` struct.** The `cmd/tripbot` entrypoint constructs and threads its dependencies instead of reaching for package globals. ([#755])
+- **chatbot registry, dispatch, and handlers onto the `App`.** Social-media replies ([#766]), the dispatch path with access-check denials ([#768]), follower/subscriber announcements and the Chatter timer ([#769]), and the command registry with `findCommand` ([#770]) all move off package-level globals onto the injectable `App`, routing chat output through `a.IRC.Say`. Groundwork for retiring `defaultApp` and the `sayFn` global, and for multi-platform chat support.
 
 ### CI
 
@@ -61,7 +230,7 @@ Patch release, almost entirely internal. The no-globals refactor finishes Phase 
 
 ## [v2.18.1] — 2026-06-01
 
-Patch release. Mostly internals: the Phase B no-globals refactor lands its final package conversions — `pkg/twitch` and `pkg/server` now construct a `*API` / `*Server` instead of mutating package-level globals — alongside extracting reverse-geocoding into an injectable `pkg/geo` and giving chatbot a `App.Twitch` injection seam. Admin-panel polish continues (htmx live updates replacing full-page reloads, a GPS-jump-aware map trail, and an offline-collapsed stream preview), plus dashcam-cv database groundwork (pgvector), a `go test` ergonomics fix, and an OpenTelemetry deps bump.
+Patch release. Mostly internals: the no-globals refactor lands its final package conversions — `pkg/twitch` and `pkg/server` now construct a `*API` / `*Server` instead of mutating package-level globals — alongside extracting reverse-geocoding into an injectable `pkg/geo` and giving chatbot a `App.Twitch` injection seam. Admin-panel polish continues (htmx live updates replacing full-page reloads, a GPS-jump-aware map trail, and an offline-collapsed stream preview), plus dashcam-cv database groundwork (pgvector), a `go test` ergonomics fix, and an OpenTelemetry deps bump.
 
 ### admin panel
 
@@ -76,7 +245,7 @@ Patch release. Mostly internals: the Phase B no-globals refactor lands its final
 ### refactor
 
 - **`pkg/twitch` → `*API`.** The package's mutable globals are encapsulated in a constructed `*API` with `New()`; existing exported functions keep thin shims delegating to a `defaultClient`, so external callers are unchanged. Marks the auth-core seam for the eventual standalone Helix service. ([#738])
-- **`pkg/server` → `*Server`.** The last Phase B conversion: `eventHub`, `twitchConnected`, `versionTag`, and the feature-flag client move onto a constructed `*Server` (package-level shims back a `defaultServer` singleton, so cmd/tripbot is unchanged). Deletes a dead `var server`. ([#754])
+- **`pkg/server` → `*Server`.** The last of the package conversions: `eventHub`, `twitchConnected`, `versionTag`, and the feature-flag client move onto a constructed `*Server` (package-level shims back a `defaultServer` singleton, so cmd/tripbot is unchanged). Deletes a dead `var server`. ([#754])
 - **reverse-geocoding extracted into `pkg/geo`.** `helpers.CityFromCoords` / `StateFromCoords` no longer reach into the geocoder SDK's package global from a pure utility package. New `pkg/geo` holds a `Geocoder` interface + `*Client` (API key as a field); `helpers` goes back to dependency-free. ([#747])
 - **chatbot: inject Twitch Helix surface as `App.Twitch`.** `followageCmd` calls `a.Twitch.FollowedAt(...)` through an injected interface instead of the `pkg/twitch` package global, continuing the chatbot-app-injection pattern and unlocking unit tests for the command. ([#751])
 
@@ -145,7 +314,7 @@ Patch release. Hotfix for the v2.17.0 silent-disconnect watchdog's import chain 
 
 ## [v2.17.0] — 2026-05-28
 
-Minor release. TripBot gets a live Discord bot session (four slash commands mirroring the Twitch leaderboards), gated behind the first flag of a new Postgres-backed feature-flag system with a read-only admin-panel listing. NATS adoption begins with phase 1 — `ShowMiddleText` parallel-publishes to `tripbot.<env>.onscreens.middle.show` while HTTP stays the source of truth. A silent-disconnect watchdog auto-recovers from the prod failure mode where OBS's RTMP write socket goes half-open and frames keep streaming into the void while Twitch shows offline. Twitch token handling closes a cron-desync gap that bit prod on 2026-05-26 (refresh-on-startup + expiry-timestamp gauge, plus a 30→45 minute refresh window that spares the helix 401 self-heal from firing on the routine cycle). Leaderboard rendering swaps space-padded monospace for CSS grid alignment so scores line up under the regular Trebuchet stack.
+Minor release. TripBot gets a live Discord bot session (four slash commands mirroring the Twitch leaderboards), gated behind the first flag of a new Postgres-backed feature-flag system with a read-only admin-panel listing. NATS adoption begins — `ShowMiddleText` parallel-publishes to `tripbot.<env>.onscreens.middle.show` while HTTP stays the source of truth. A silent-disconnect watchdog auto-recovers from the prod failure mode where OBS's RTMP write socket goes half-open and frames keep streaming into the void while Twitch shows offline. Twitch token handling closes a cron-desync gap that bit prod on 2026-05-26 (refresh-on-startup + expiry-timestamp gauge, plus a 30→45 minute refresh window that spares the helix 401 self-heal from firing on the routine cycle). Leaderboard rendering swaps space-padded monospace for CSS grid alignment so scores line up under the regular Trebuchet stack.
 
 ### feature flags
 
@@ -154,14 +323,14 @@ Minor release. TripBot gets a live Discord bot session (four slash commands mirr
 
 ### discord
 
-- **TripBot gets a live Discord bot session — first pass.** New `pkg/discord` opens a `bwmarrin/discordgo` gateway and registers four guild-scoped slash commands in ADanaLife: `/leaderboard` (monthly miles), `/totalleaderboard` (lifetime miles), `/guessleaderboard` (correct guesses this month), and a static ephemeral `/commands` listing the others. Names mirror the existing Twitch `!leaderboard` / `!totalleaderboard` / `!guessleaderboard` triggers so muscle memory transfers. Two new optional config fields (`DISCORD_BOT_TOKEN`, `DISCORD_GUILD_ID`); the bot stays disabled in any env where either is unset, empty, or still at the AWS Secrets Manager placeholder string — `pkg/discord.ShouldStart` is the single decision point that skips startup cleanly with one INFO log line. Every other failure path (auth failure, command-registration failure, gateway drop) is fail-open: tripbot's core IRC / EventSub paths are never blocked or crashed by Discord. Companion infra lands in `infra` (terraform SM containers + ESO + Deployment `envFrom`) and a setup runbook lives in the vault. Deferred to follow-up passes: OAuth Discord↔Twitch linking, `/miles <user>`, stream-state commands, retiring the existing `DISCORD_ALERTS_WEBHOOK`. ([#700])
+- **TripBot gets a live Discord bot session — first pass.** New `pkg/discord` opens a `bwmarrin/discordgo` gateway and registers four guild-scoped slash commands in ADanaLife: `/leaderboard` (monthly miles), `/totalleaderboard` (lifetime miles), `/guessleaderboard` (correct guesses this month), and a static ephemeral `/commands` listing the others. Names mirror the existing Twitch `!leaderboard` / `!totalleaderboard` / `!guessleaderboard` triggers so muscle memory transfers. Two new optional config fields (`DISCORD_BOT_TOKEN`, `DISCORD_GUILD_ID`); the bot stays disabled in any env where either is unset, empty, or still at the AWS Secrets Manager placeholder string — `pkg/discord.ShouldStart` is the single decision point that skips startup cleanly with one INFO log line. Every other failure path (auth failure, command-registration failure, gateway drop) is fail-open: tripbot's core IRC / EventSub paths are never blocked or crashed by Discord. Companion infra lands in `infra` (terraform SM containers + ESO + Deployment `envFrom`). Deferred to follow-up passes: OAuth Discord↔Twitch linking, `/miles <user>`, stream-state commands, retiring the existing `DISCORD_ALERTS_WEBHOOK`. ([#700])
 - **Gate Discord startup behind the `discord.bot_enabled` feature flag.** First production use of the flag system landed in #710. `startDiscord` evaluates the flag after the config-shaped `ShouldStart` check and returns early when it's false. Defaults off — both envs are gated until a row exists with `enabled=true`, so prod stays Discord-less and stage flips on with a one-shot `UPDATE feature_flags SET enabled=true WHERE key='discord.bot_enabled'`. Migration 014 seeds the flag with `enabled=false` and a `target_removal_date` 6 months out so it shows up in the admin panel from day one. ([#712])
 - **Diagnostic gateway logging.** `handleInteraction` logs every interaction it receives (type + guild_id + channel_id) before any type filter, and `discordgo.Session.LogLevel` flips to `LogInformational` so the library's HELLO / READY / dispatched-event chatter surfaces in our logs. Added to chase a stage symptom where `/leaderboard` autocompleted and Discord showed "is thinking…" but no `INTERACTION_CREATE` event ever surfaced in tripbot logs. ([#707])
 - **Stop deleting commands on shutdown + measure `/commands` reply latency.** Found via a stage rollout-restart sequence: commands vanished from Discord client autocomplete even though both old and new pod logs showed successful registration. The race was on shared command IDs — `ApplicationCommandBulkOverwrite` from the new pod updates entries in place, then the old pod's `Stop()` deletes the IDs it had stored (which are now the new pod's IDs too). Fix: `Stop()` only closes the gateway; `BulkOverwrite` is the right reconciliation primitive across pod cycles. Companion change times `InteractionRespond` and logs the outcome so a silently-slow reply (exceeding Discord's 3s response window but eventually returning nil) becomes visible. ([#708])
 
 ### nats
 
-- **Phase 1: `ShowMiddleText` parallel-publishes to `tripbot.<env>.onscreens.middle.show`.** Migrate one fire-and-forget HTTP call as proof of the pattern. HTTP remains the source of truth — a NATS outage / misconfig is invisible to viewers, and the on-screen overlay always lands via at least one path. New `pkg/natsclient` package holds a process-wide `*nats.Conn` singleton (mirroring `pkg/database`'s `SetGormDB` shape); empty `NATS_URL` → conn stays nil, all publishes no-op silently. Chatbot's `App` gains `App.NATS` (one method, `Publish`) + a `realNATS` adapter; `realOnscreens` carries the NATS conn + env and mirrors each `ShowMiddleText` call. Subscriber side: `onscreens-server.Server.StartNATSSubscribers` JSON-decodes the envelope and calls the same `s.MiddleText.Show(msg)` path the HTTP handler takes. Wire format is snake_case JSON (`{ "msg": "...", "emitted_at": "..." }`) so an eventual protobuf swap is a 1-1 schema mapping. No HTTP fallback peel (phase 2); no JetStream / durability (phase 3). ([#711])
+- **`ShowMiddleText` parallel-publishes to `tripbot.<env>.onscreens.middle.show`.** Migrate one fire-and-forget HTTP call as proof of the pattern. HTTP remains the source of truth — a NATS outage / misconfig is invisible to viewers, and the on-screen overlay always lands via at least one path. New `pkg/natsclient` package holds a process-wide `*nats.Conn` singleton (mirroring `pkg/database`'s `SetGormDB` shape); empty `NATS_URL` → conn stays nil, all publishes no-op silently. Chatbot's `App` gains `App.NATS` (one method, `Publish`) + a `realNATS` adapter; `realOnscreens` carries the NATS conn + env and mirrors each `ShowMiddleText` call. Subscriber side: `onscreens-server.Server.StartNATSSubscribers` JSON-decodes the envelope and calls the same `s.MiddleText.Show(msg)` path the HTTP handler takes. Wire format is snake_case JSON (`{ "msg": "...", "emitted_at": "..." }`) so an eventual protobuf swap is a 1-1 schema mapping. The HTTP-fallback peel and JetStream durability come later. ([#711])
 
 ### obs
 
@@ -638,7 +807,7 @@ Patch release. Unifies the error-capture pipeline on `slog` so direct `slog.Erro
 
 ### Cleanup
 
-- **Retire dead Twitch Helix Webhooks code.** The legacy Helix Webhooks API was deprecated by Twitch in 2021 and the subscription endpoint shut down shortly after; the receive + subscribe code in this repo has been gated off via `DISABLE_TWITCH_WEBHOOKS=true` in the kustomization since the platform cutover, so the path has been unreachable. Deletes `pkg/twitch/webhooks.go`, `pkg/server/twitch.go` (+ its tests), the three webhook HTTP handlers + their routes in `pkg/server/handlers.go` / `pkg/server/server.go` (+ their tests), the now-orphaned `AnnounceNewFollower` / `AnnounceSubscriber` helpers in `pkg/chatbot/chatbot.go`, the startup call + 12h cron + helper in `cmd/tripbot/tripbot.go`, and the `DisableTwitchWebhooks` config field + warn block. Sub-list freshness is unaffected — `mytwitch.GetSubscribers` already runs on a 5-minute cron. The matching kustomization-side cleanup lives in [adanalife/infra#485](https://github.com/adanalife/infra/pull/485). Bringing live new-follow / new-sub alerts back via EventSub is queued in the vault TODO. ([#569])
+- **Retire dead Twitch Helix Webhooks code.** The legacy Helix Webhooks API was deprecated by Twitch in 2021 and the subscription endpoint shut down shortly after; the receive + subscribe code in this repo has been gated off via `DISABLE_TWITCH_WEBHOOKS=true` in the kustomization since the platform cutover, so the path has been unreachable. Deletes `pkg/twitch/webhooks.go`, `pkg/server/twitch.go` (+ its tests), the three webhook HTTP handlers + their routes in `pkg/server/handlers.go` / `pkg/server/server.go` (+ their tests), the now-orphaned `AnnounceNewFollower` / `AnnounceSubscriber` helpers in `pkg/chatbot/chatbot.go`, the startup call + 12h cron + helper in `cmd/tripbot/tripbot.go`, and the `DisableTwitchWebhooks` config field + warn block. Sub-list freshness is unaffected — `mytwitch.GetSubscribers` already runs on a 5-minute cron. The matching kustomization-side cleanup lives in [adanalife/infra#485](https://github.com/adanalife/infra/pull/485). ([#569])
 
 ## [v2.9.0] — 2026-05-18
 
@@ -695,7 +864,7 @@ Minor release. Wraps up the chatbot `App` injection pattern (Video, IRC, Session
 
 ### Chatbot
 
-- **App injection completed: Video, IRC, Sessions.** Following the pattern documented in [`vault/decisions/chatbot-app-injection-pattern.md`](https://github.com/adanalife/vault), `App` now carries injectable interface fields for the remaining external surfaces — `Video` for playback queries, `IRC` for chat output (replacing the `Say()` / `sayFn` indirection), and `Sessions` for user-session bookkeeping. Production wires real implementations via `defaultApp`; tests inject recording/no-op fakes. Unblocks the `jumpCmd` correct-guess test gap that had been deferred from earlier rounds. ([#543], [#544], [#549], [#551])
+- **App injection completed: Video, IRC, Sessions.** `App` now carries injectable interface fields for the remaining external surfaces — `Video` for playback queries, `IRC` for chat output (replacing the `Say()` / `sayFn` indirection), and `Sessions` for user-session bookkeeping. Production wires real implementations via `defaultApp`; tests inject recording/no-op fakes. Unblocks the `jumpCmd` correct-guess test gap that had been deferred from earlier rounds. ([#543], [#544], [#549], [#551])
 
 ### Observability
 
@@ -718,7 +887,7 @@ Minor release. Wraps up the chatbot `App` injection pattern (Video, IRC, Session
 
 ### Cleanup
 
-- **Removed three vestigial files** — `pkg/moments/viewings.go` (never wired up; design preserved as a vault TODO for per-user moments-watched tracking), plus two other unused files. ([#542])
+- **Removed three vestigial files** — `pkg/moments/viewings.go` (never wired up), plus two other unused files. ([#542])
 
 ## [v2.7.1] — 2026-05-15
 
@@ -755,14 +924,14 @@ Minor release. Big one. The database layer migrates from raw `sqlx` to GORM acro
 
 ### Observability
 
-- **`tripbot_command_duration_seconds` histogram, `tripbot_events_total` counter, `tripbot_scoreboard_writes_total` counter.** Phase 5 of the 2026-05-15 instrumentation audit. Command latency is labelled by `command`; events counter is labelled `login`/`logout`; scoreboard writes labelled by scoreboard name. ([#532])
+- **`tripbot_command_duration_seconds` histogram, `tripbot_events_total` counter, `tripbot_scoreboard_writes_total` counter.** Command latency is labelled by `command`; events counter is labelled `login`/`logout`; scoreboard writes labelled by scoreboard name. ([#532])
 - **Surface non-2xx Twitch Helix responses with a metric and log.** Closes the silent-failure path that caused the 2026-05-15 incident: `nicklaw5/helix/v2` returns `(resp, nil)` with empty `Data` on 4xx/5xx, so every `pkg/twitch` call site was trusting empty responses and overwriting cached state with zeros. New checks log the offending status + body and increment `tripbot_helix_errors_total{endpoint,status}`. ([#530])
 - **Sentry `Release` tag from build-time version.** `terrors.Initialize` now takes a `version string` and sets it as `sentry.ClientOptions.Release`, reusing the `-ldflags "-X main.version=..."`-populated package var that `/version` already exposes (per #419). Sentry events now group by deployed version without any new env-var contract. ([#519])
 
 ### Chatbot
 
-- **Inject `Onscreens` and `DB` on `App` for testability.** Phase 1 of the testing/instrumentation pass: `Onscreens` interface in `pkg/chatbot/onscreens.go` covers `ShowFlag`, `ShowLeaderboard`, `HideMiddleText`, `ShowMiddleText`, `ShowTimewarp` — `defaultApp` wires `realOnscreens` (delegates to `pkg/onscreens-client`); tests pick from `noopOnscreens` or `recordingOnscreens`. `DB *gorm.DB` lands on `App` for sqlmock-backed command tests. ([#526])
-- **Tier 3 command tests via sqlmock.** 10 tests covering `lifetimeMilesLeaderboardCmd`, `monthlyMilesLeaderboardCmd`, `topMilesCmd`, `pointsLeaderboardCmd`, `milesCmd`, `guessCmd`, plus their DB-touching helpers. Regex matching on emitted SQL — no postgres service required in CI. ([#528])
+- **Inject `Onscreens` and `DB` on `App` for testability.** `Onscreens` interface in `pkg/chatbot/onscreens.go` covers `ShowFlag`, `ShowLeaderboard`, `HideMiddleText`, `ShowMiddleText`, `ShowTimewarp` — `defaultApp` wires `realOnscreens` (delegates to `pkg/onscreens-client`); tests pick from `noopOnscreens` or `recordingOnscreens`. `DB *gorm.DB` lands on `App` for sqlmock-backed command tests. ([#526])
+- **DB-backed command tests via sqlmock.** 10 tests covering `lifetimeMilesLeaderboardCmd`, `monthlyMilesLeaderboardCmd`, `topMilesCmd`, `pointsLeaderboardCmd`, `milesCmd`, `guessCmd`, plus their DB-touching helpers. Regex matching on emitted SQL — no postgres service required in CI. ([#528])
 - **Overlay-driving paths covered in `flagCmd`, `stateCmd`, `middleCmd`.** Uses the `recordingOnscreens` fake unlocked by #526 to assert each command actually drives the overlay surface it advertises (`ShowFlag` 10s window, `HideMiddleText`, `ShowMiddleText` free-form). ([#531])
 - **Retire `!survey`, add `!discord` rotator command.** Both had dangling references in `pkg/onscreens-server/left-rotator.go` and `pkg/config/tripbot/helpers.go` `HelpMessages` with no registry handler. `!survey` is removed entirely (and its three callsite references cleaned up); `!discord` becomes a real inline-registered handler. ([#527])
 
@@ -779,7 +948,7 @@ Minor release. Big one. The database layer migrates from raw `sqlx` to GORM acro
 
 - **Silence the expected `.env`-missing log in cluster contexts.** `pkg/config/{tripbot,vlc-server}` and `pkg/database` `init()` blocks now only emit the "Error loading .env file / Continuing anyway..." pair when `APP_ENV` is `development` or `testing`. ([#520])
 - **Demote `errcheck` reviewdog to `level: warning`.** Stops the noisy red check status caused by libvlc-go's import being unresolvable on the linting runner (no libvlc-dev installed). Matches the existing `revive` job; likely throwaway once super-linter's VALIDATE_GO returns. ([#522])
-- **Legacy plain-text `tripbot/todo` repo-root file removed.** Contents long ago routed into the vault per-subdir TODO files. ([#521])
+- **Legacy plain-text `tripbot/todo` repo-root file removed.** Contents long ago routed elsewhere. ([#521])
 
 ## [v2.6.4] — 2026-05-15
 
@@ -837,7 +1006,7 @@ Patch release. Adds an `obs_streaming_active` OTel gauge tracking live streaming
 
 ### Internal
 
-- **Chatbot `App` struct and Tier 2 command tests.** Test coverage extended to the `App` struct, plus handler tests for `middleCmd`. ([#506], [#507])
+- **Chatbot `App` struct and more command tests.** Test coverage extended to the `App` struct, plus handler tests for `middleCmd`. ([#506], [#507])
 - **Clearer log when startup is refused due to missing OAuth token.** The single `log.Fatalf` is split into two lines: one stating the bot is deliberately refusing to start (not crashing), the other giving the exact remediation command. ([#505])
 
 ## [v2.6.0] — 2026-05-15
@@ -1016,7 +1185,7 @@ Patch release. One observability gate broaden completing the staging-Sentry pipe
 
 ### CI
 
-- **Race detector + coveralls.io coverage publishing.** `testing.yml` now runs `go test -v -race -covermode=atomic -coverprofile=coverage.out ./...` and publishes via `jandelgado/gcov2lcov-action` + `coverallsapp/github-action`. Salvaged from closed PR [#126](https://github.com/adanalife/tripbot/pull/126); pairs with the in-progress unit-testing improvements tracked in `vault/tripbot/TODO.md`. ([#438])
+- **Race detector + coveralls.io coverage publishing.** `testing.yml` now runs `go test -v -race -covermode=atomic -coverprofile=coverage.out ./...` and publishes via `jandelgado/gcov2lcov-action` + `coverallsapp/github-action`. Salvaged from closed PR [#126](https://github.com/adanalife/tripbot/pull/126); pairs with the in-progress unit-testing improvements. ([#438])
 
 ### Cleanup
 
@@ -1107,7 +1276,7 @@ Closes a `/auth/twitch` token-leak (wrong non-empty secrets falling through to a
 
 ### Release
 
-- **`task release:smoke:stage-1`** — combined Taskfile target that applies `k8s/overlays/stage-1`, waits for the four rollouts (tripbot, vlc-server, obs, cloudflared), then hits both local-cluster and `tripbot.whalecore.com` health endpoints. Plus split-out `release:smoke:whalecore` and `release:smoke:local` for re-running just the public or in-cluster checks. Used by Phase 4 of the release checklist. ([#402])
+- **`task release:smoke:stage-1`** — combined Taskfile target that applies `k8s/overlays/stage-1`, waits for the four rollouts (tripbot, vlc-server, obs, cloudflared), then hits both local-cluster and `tripbot.whalecore.com` health endpoints. Plus split-out `release:smoke:whalecore` and `release:smoke:local` for re-running just the public or in-cluster checks. Used by the release checklist. ([#402])
 
 ### CI
 
@@ -1372,9 +1541,64 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#781]: https://github.com/adanalife/tripbot/pull/781
 [#782]: https://github.com/adanalife/tripbot/pull/782
 [#744]: https://github.com/adanalife/tripbot/pull/744
+[#728]: https://github.com/adanalife/tripbot/pull/728
+[#729]: https://github.com/adanalife/tripbot/pull/729
+[#787]: https://github.com/adanalife/tripbot/pull/787
+[#784]: https://github.com/adanalife/tripbot/pull/784
+[#785]: https://github.com/adanalife/tripbot/pull/785
 [#788]: https://github.com/adanalife/tripbot/pull/788
 [#789]: https://github.com/adanalife/tripbot/pull/789
-[#790]: https://github.com/adanalife/tripbot/pull/790
 [#803]: https://github.com/adanalife/tripbot/pull/803
+[#804]: https://github.com/adanalife/tripbot/pull/804
+[#775]: https://github.com/adanalife/tripbot/pull/775
+[#786]: https://github.com/adanalife/tripbot/pull/786
+[#792]: https://github.com/adanalife/tripbot/pull/792
+[#798]: https://github.com/adanalife/tripbot/pull/798
+[#799]: https://github.com/adanalife/tripbot/pull/799
+[#796]: https://github.com/adanalife/tripbot/pull/796
+[#794]: https://github.com/adanalife/tripbot/pull/794
+[#795]: https://github.com/adanalife/tripbot/pull/795
+[#793]: https://github.com/adanalife/tripbot/pull/793
+[#797]: https://github.com/adanalife/tripbot/pull/797
+[#791]: https://github.com/adanalife/tripbot/pull/791
+[#802]: https://github.com/adanalife/tripbot/pull/802
 [infra #623]: https://github.com/adanalife/infra/pull/623
+[infra #654]: https://github.com/adanalife/infra/pull/654
+[#790]: https://github.com/adanalife/tripbot/pull/790
+[#807]: https://github.com/adanalife/tripbot/pull/807
+[#806]: https://github.com/adanalife/tripbot/pull/806
 [infra #645]: https://github.com/adanalife/infra/pull/645
+[#809]: https://github.com/adanalife/tripbot/pull/809
+[#810]: https://github.com/adanalife/tripbot/pull/810
+[#811]: https://github.com/adanalife/tripbot/pull/811
+[#812]: https://github.com/adanalife/tripbot/pull/812
+[#814]: https://github.com/adanalife/tripbot/pull/814
+[#815]: https://github.com/adanalife/tripbot/pull/815
+[#816]: https://github.com/adanalife/tripbot/pull/816
+[#817]: https://github.com/adanalife/tripbot/pull/817
+[#818]: https://github.com/adanalife/tripbot/pull/818
+[#820]: https://github.com/adanalife/tripbot/pull/820
+[#821]: https://github.com/adanalife/tripbot/pull/821
+[infra #694]: https://github.com/adanalife/infra/pull/694
+[infra #695]: https://github.com/adanalife/infra/pull/695
+[#823]: https://github.com/adanalife/tripbot/pull/823
+[#824]: https://github.com/adanalife/tripbot/pull/824
+[#825]: https://github.com/adanalife/tripbot/pull/825
+[#826]: https://github.com/adanalife/tripbot/pull/826
+[#827]: https://github.com/adanalife/tripbot/pull/827
+[#828]: https://github.com/adanalife/tripbot/pull/828
+[#829]: https://github.com/adanalife/tripbot/pull/829
+[#830]: https://github.com/adanalife/tripbot/pull/830
+[#831]: https://github.com/adanalife/tripbot/pull/831
+[#832]: https://github.com/adanalife/tripbot/pull/832
+[#834]: https://github.com/adanalife/tripbot/pull/834
+[#835]: https://github.com/adanalife/tripbot/pull/835
+[#836]: https://github.com/adanalife/tripbot/pull/836
+[#837]: https://github.com/adanalife/tripbot/pull/837
+[#838]: https://github.com/adanalife/tripbot/pull/838
+[#840]: https://github.com/adanalife/tripbot/pull/840
+[#841]: https://github.com/adanalife/tripbot/pull/841
+[infra #717]: https://github.com/adanalife/infra/pull/717
+[#845]: https://github.com/adanalife/tripbot/pull/845
+[#851]: https://github.com/adanalife/tripbot/pull/851
+[#854]: https://github.com/adanalife/tripbot/pull/854
