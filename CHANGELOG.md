@@ -9,7 +9,11 @@ All notable changes to TripBot. Format follows [Keep a Changelog](https://keepac
 
 ## [v3.4.1] — 2026-06-14
 
-Patch release. A one-time cleanup pass over the dashcam GPS corpus: adds a provenance column so synthesized fixes are distinguishable from real OCR ones, ships a `backfill-coords` tool that interpolates missing fixes and corrects digit-flip OCR outliers, and reseeds `videos.csv` with the corrected coordinates. No runtime behavior change.
+Patch release. A one-time cleanup pass over the dashcam GPS corpus: adds a provenance column so synthesized fixes are distinguishable from real OCR ones, ships a `backfill-coords` tool that interpolates missing fixes and corrects digit-flip OCR outliers, and reseeds `videos.csv` with the corrected coordinates. Also makes prod-deploy impact visible on PRs. No runtime behavior change.
+
+### CI
+
+- **Prod-deploy impact is now visible on PRs.** A new `prod-dist-warning` workflow posts a sticky comment on any PR into `master` that touches a prod app deploy unit (`cdk8s/dist/prod-1-*-twitch.k8s.yaml`), spelling out that merging deploys to prod — the gap that let an incidental manifest change go live on a release merge rather than a deliberate gesture. The version-bump PR template (`bump-prs.yml`) is also corrected to be component-aware: prod-1 apps autosync from master so merging *is* the deploy, except OBS which is held out of autosync and still needs a manual sync. ([#859])
 
 ### Database
 
@@ -1631,6 +1635,7 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [infra #717]: https://github.com/adanalife/infra/pull/717
 [#845]: https://github.com/adanalife/tripbot/pull/845
 [#846]: https://github.com/adanalife/tripbot/pull/846
+[#859]: https://github.com/adanalife/tripbot/pull/859
 [#851]: https://github.com/adanalife/tripbot/pull/851
 [#854]: https://github.com/adanalife/tripbot/pull/854
 [#761]: https://github.com/adanalife/tripbot/pull/761
