@@ -1,0 +1,125 @@
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  labels:
+    app.kubernetes.io/name: tripbot
+    app.kubernetes.io/part-of: tripbot
+  name: tripbot-database-creds
+  namespace: prod-1
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: aws-secretsmanager
+    kind: SecretStore
+  target:
+    name: tripbot-database-creds
+    template:
+      type: Opaque
+      data:
+        DATABASE_USER: "{{ .user }}"
+        DATABASE_PASS: "{{ .password }}"
+        DATABASE_DB: "{{ .db }}"
+  data:
+    - secretKey: user
+      remoteRef:
+        key: k8s/postgres/credentials
+        property: user
+    - secretKey: password
+      remoteRef:
+        key: k8s/postgres/credentials
+        property: password
+    - secretKey: db
+      remoteRef:
+        key: k8s/postgres/credentials
+        property: db
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  labels:
+    app.kubernetes.io/name: tripbot
+    app.kubernetes.io/part-of: tripbot
+  name: tripbot-twitch-creds
+  namespace: prod-1
+spec:
+  dataFrom:
+    - extract:
+        key: k8s/tripbot/twitch-creds
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: SecretStore
+    name: aws-secretsmanager
+  target:
+    creationPolicy: Owner
+    name: tripbot-twitch-creds
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  labels:
+    app.kubernetes.io/name: tripbot
+    app.kubernetes.io/part-of: tripbot
+  name: tripbot-google-maps-api-key
+  namespace: prod-1
+spec:
+  dataFrom:
+    - extract:
+        key: k8s/tripbot/google-maps-api-key
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: SecretStore
+    name: aws-secretsmanager
+  target:
+    creationPolicy: Owner
+    name: tripbot-google-maps-api-key
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  labels:
+    app.kubernetes.io/name: tripbot
+    app.kubernetes.io/part-of: tripbot
+  name: tripbot-discord-alerts-webhook
+  namespace: prod-1
+spec:
+  data:
+    - remoteRef:
+        key: k8s/tripbot/discord-alerts-webhook
+      secretKey: DISCORD_ALERTS_WEBHOOK
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: SecretStore
+    name: aws-secretsmanager
+  target:
+    creationPolicy: Owner
+    name: tripbot-discord-alerts-webhook
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  labels:
+    app.kubernetes.io/name: tripbot
+    app.kubernetes.io/part-of: tripbot
+  name: tripbot-discord-bot-token
+  namespace: prod-1
+spec:
+  data:
+    - remoteRef:
+        key: k8s/tripbot/discord-bot-token
+      secretKey: DISCORD_BOT_TOKEN
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: SecretStore
+    name: aws-secretsmanager
+  target:
+    creationPolicy: Owner
+    name: tripbot-discord-bot-token
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: prod-stream
+  namespace: prod-1
+description: Live-stream workloads — outrank default-priority co-tenants; preempt them under node pressure.
+globalDefault: false
+value: 1000

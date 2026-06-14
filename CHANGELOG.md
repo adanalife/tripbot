@@ -7,6 +7,18 @@ All notable changes to TripBot. Format follows [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+## [v3.3.2] — 2026-06-13
+
+Patch release. Build/deploy plumbing only — no runtime behavior change. The Kubernetes manifest authoring for this repo's four images now lives in-repo, and the per-component prod-pin bump workflow moves here alongside it.
+
+### Deploy
+
+- **In-repo cdk8s authoring layer for the app manifests.** The Kubernetes manifests for the images built from this repo (tripbot, vlc, onscreens, obs) are now authored as typed cdk8s constructs under `cdk8s/`, synthesized to committed `dist/` files that Argo delivers cross-repo. Ported from `infra/cdk8s` byte-identically; identity-level Secrets and the prod-stream PriorityClass/ResourceQuota move into a per-env `tripbot-identity` deploy unit. The stateful + shared-platform layer (postgres, ESO store, observability, cert-manager, dashcam PV, Argo config) stays in infra. Adds a verify-only synth gate, pytest checks, and `cdk8s:*` Taskfile targets. ([#840])
+
+### CI
+
+- **Per-component prod bump-prs workflow relocated into this repo.** Now that `cdk8s/versions.yaml` lives here, the prod-pin bump workflow moves over too. On a release it opens one prod-pin bump PR per component against `master`, carrying the pin edit and re-synthed `dist/` in the same commit. `workflow_dispatch`-only for now — wiring `release.yml` to fire it happens together with the infra Argo cutover. ([#841])
+
 ## [v3.3.1] — 2026-06-13
 
 Patch release. Mostly YouTube platform-awareness polish on the chat and overlay surfaces, plus a read-only user-profile endpoint for the standalone console and a copyright-safety fix for the YouTube OBS scene.
@@ -1571,4 +1583,6 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#836]: https://github.com/adanalife/tripbot/pull/836
 [#837]: https://github.com/adanalife/tripbot/pull/837
 [#838]: https://github.com/adanalife/tripbot/pull/838
+[#840]: https://github.com/adanalife/tripbot/pull/840
+[#841]: https://github.com/adanalife/tripbot/pull/841
 [infra #717]: https://github.com/adanalife/infra/pull/717
