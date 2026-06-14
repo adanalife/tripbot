@@ -7,6 +7,10 @@ All notable changes to TripBot. Format follows [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+### OBS
+
+- **YouTube scene plays a synthesized "Car Hum" bed in place of SomaFM.** SomaFM (the "Groove Salad Classic" source) is already stripped on YouTube to dodge Content ID strikes, leaving that stream with no background audio. A new license-clean, locally-generated car-interior drone (`assets/car-hum-loop.flac`, a seamless 4-min loop produced by `script/carhum/`) is added to the shared scene as the "Car Hum" `ffmpeg_source` and now fills that gap. The per-platform strip in the OBS entrypoint is symmetric: YouTube keeps Car Hum and drops SomaFM, Twitch keeps SomaFM and drops Car Hum, so the two never play together. ([#854])
+
 ## [v3.3.4] — 2026-06-14
 
 Patch release. CI/release-plumbing only — no runtime behavior change. Finishes wiring the in-repo prod bump-PR workflow into the release flow now that the cdk8s manifests live in this repo.
@@ -1597,3 +1601,4 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [infra #717]: https://github.com/adanalife/infra/pull/717
 [#845]: https://github.com/adanalife/tripbot/pull/845
 [#851]: https://github.com/adanalife/tripbot/pull/851
+[#854]: https://github.com/adanalife/tripbot/pull/854
