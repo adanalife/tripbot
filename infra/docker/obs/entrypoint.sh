@@ -80,24 +80,42 @@ cp /opt/obs/config/user.ini   "$OBS_HOME/user.ini"
 envsubst < /opt/obs/config/basic.ini.tmpl > "$OBS_HOME/basic/profiles/ADanaLife/basic.ini"
 envsubst < /opt/obs/config/Tripbot.json.tmpl > "$OBS_HOME/basic/scenes/Tripbot.json"
 
-# SomaFM (the "Groove Salad Classic" ffmpeg_source) plays licensed music that
-# trips YouTube's Content ID and earns copyright strikes. Twitch tolerates it,
-# so the source stays in the shared scene collection and is stripped out only
-# for the YouTube canvas: drop the source definition plus every scene item that
-# references it, before OBS loads the collection. Top-level "sources" holds both
-# real sources and the scene objects (scenes reference members by name under
-# settings.items), so both passes are needed.
-if [ "${STREAM_PLATFORM:-twitch}" = "youtube" ]; then
-  scene_file="$OBS_HOME/basic/scenes/Tripbot.json"
-  jq --arg t "Groove Salad Classic" '
+# Per-platform background audio. The shared scene collection ships two
+# mutually-exclusive background-audio sources, and exactly one is stripped per
+# platform before OBS loads the collection:
+#
+#   - "Groove Salad Classic" (SomaFM ffmpeg_source) plays licensed music that
+#     trips YouTube's Content ID and earns copyright strikes. Twitch tolerates
+#     it, so it stays on Twitch and is stripped on YouTube.
+#   - "Car Hum" (a locally-generated, license-clean drone — see
+#     script/carhum/) is the YouTube background bed in its place, and is
+#     stripped on Twitch so the two don't both play.
+#
+# Top-level "sources" holds both real sources and the scene objects (scenes
+# reference members by name under settings.items), so both the source
+# definition and every referencing scene item are dropped.
+strip_scene_source() {
+  local name="$1" file="$2"
+  jq --arg t "$name" '
     .sources |= map(select(.name != $t))
     | .sources |= map(
         if (.settings.items? | type) == "array"
         then .settings.items |= map(select(.name != $t))
         else . end)
-  ' "$scene_file" > "$scene_file.tmp" && mv "$scene_file.tmp" "$scene_file"
-  echo "stripped 'Groove Salad Classic' (SomaFM) from YouTube scene collection"
-fi
+  ' "$file" > "$file.tmp" && mv "$file.tmp" "$file"
+}
+
+scene_file="$OBS_HOME/basic/scenes/Tripbot.json"
+case "${STREAM_PLATFORM:-twitch}" in
+  youtube)
+    strip_scene_source "Groove Salad Classic" "$scene_file"
+    echo "stripped 'Groove Salad Classic' (SomaFM); 'Car Hum' is the YouTube background audio"
+    ;;
+  *)
+    strip_scene_source "Car Hum" "$scene_file"
+    echo "stripped 'Car Hum'; 'Groove Salad Classic' (SomaFM) is the Twitch background audio"
+    ;;
+esac
 
 # Advanced Output mode reads encoder-specific settings from streamEncoder.json
 # in the profile dir. VAAPI's keys (vaapi_device, integer profile) don't
