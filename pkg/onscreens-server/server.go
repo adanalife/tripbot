@@ -91,6 +91,11 @@ func (s *Server) Start(ctx context.Context) error {
 	// nil (NATS_URL unset); HTTP remains the sole transport in that case.
 	s.StartNATSSubscribers(ctx)
 
+	// Restore the permanent middle-text overlay from its JetStream last-value
+	// cache so a server restart doesn't blank whatever text was on screen.
+	// Best-effort: a no-op without NATS / JetStream.
+	s.RestoreMiddleText(ctx)
+
 	r := mux.NewRouter()
 
 	// healthcheck endpoints
