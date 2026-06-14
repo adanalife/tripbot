@@ -19,4 +19,4 @@ prod-1:
   # restarting takes the stream down until OBS reconnects — pick a quiet moment
   obs: "3.2.1"
   # overlays blip; the stream itself stays up
-  onscreens-server: "3.3.0"
+  onscreens-server: "3.3.4"
