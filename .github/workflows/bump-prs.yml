@@ -7,6 +7,10 @@ name: bump-prs
 # it now edits THIS repo's cdk8s/versions.yaml and the PRs target `master`
 # (the prod-tracking branch — prod-1 pins float to master, stage rides develop).
 #
+# Bump PRs are deploy gestures, not releases: both the commit message and the PR
+# title carry `#none` so auto-tag.yml skips the version bump when they land on
+# master. Without it, every merged pin edit would mint a tag and fire release.yml.
+#
 # Fired by this repo's release workflow (workflow_dispatch with the released
 # version) or by hand. Each component leg:
 #
@@ -141,7 +145,11 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add cdk8s/versions.yaml cdk8s/dist/
-          git commit -m "Bump prod $COMPONENT to $VERSION"
+          # `#none` tells auto-tag.yml (anothrNick/github-tag-action) to skip the
+          # version bump when this lands on master. Bump PRs are deploy gestures,
+          # not releases — without this each merged bump would mint a new tag and
+          # fire release.yml, spamming releases off a pin edit.
+          git commit -m "Bump prod $COMPONENT to $VERSION #none"
           git push -f origin "$BRANCH"
 
       - name: Create or refresh the bump PR
@@ -149,7 +157,10 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
-          TITLE="Bump prod $COMPONENT to $VERSION"
+          # `#none` in the title too (not just the commit) so the skip-tag
+          # marker survives a squash-merge, where GitHub derives the commit
+          # subject from the PR title.
+          TITLE="Bump prod $COMPONENT to $VERSION #none"
           case "$COMPONENT" in
             obs) IMPACT="⚠️ **Merging restarts the OBS pod — the stream goes down until it reconnects.** Pick a quiet moment." ;;
             vlc) IMPACT="⚠️ **Merging restarts vlc-server — the playing video drops briefly on stream.** Pick a quiet moment." ;;

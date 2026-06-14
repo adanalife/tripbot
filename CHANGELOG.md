@@ -7,6 +7,15 @@ All notable changes to TripBot. Format follows [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+## [v3.3.4] — 2026-06-14
+
+Patch release. CI/release-plumbing only — no runtime behavior change. Finishes wiring the in-repo prod bump-PR workflow into the release flow now that the cdk8s manifests live in this repo.
+
+### CI
+
+- **Release workflow fans out the prod bump PRs in-repo.** The release's final step now triggers this repo's `bump-prs` workflow (`workflow_dispatch` with the released version) instead of a cross-repo `repository_dispatch` to infra, matching the cdk8s manifests' move into this repo. Still mints the `adanalife-automation` App token so the bump commits re-fire the cdk8s synth gate — now scoped to this repo. ([#845])
+- **Bump-PR commits and titles marked `#none` so they don't fire releases.** Bump PRs target `master`, where every push auto-tags and triggers a release; a pin edit is a deploy gesture, not a release, so each merged bump was minting a spurious release. The `#none` skip-tag marker (honored by `anothrNick/github-tag-action`) now lives in both the commit message and the PR title, surviving whether the PR is merge-committed or squash-merged. ([#851])
+
 ## [v3.3.2] — 2026-06-13
 
 Patch release. Build/deploy plumbing only — no runtime behavior change. The Kubernetes manifest authoring for this repo's four images now lives in-repo, and the per-component prod-pin bump workflow moves here alongside it.
@@ -1586,3 +1595,5 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#840]: https://github.com/adanalife/tripbot/pull/840
 [#841]: https://github.com/adanalife/tripbot/pull/841
 [infra #717]: https://github.com/adanalife/infra/pull/717
+[#845]: https://github.com/adanalife/tripbot/pull/845
+[#851]: https://github.com/adanalife/tripbot/pull/851
