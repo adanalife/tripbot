@@ -1,0 +1,31 @@
+[project]
+name = "adanalife-tripbot-k8s"
+version = "0.1.0"
+description = "cdk8s (Python) authoring layer for the tripbot app workloads"
+requires-python = ">=3.12"
+dependencies = [
+    "cdk8s>=2.69",
+    "constructs>=10.3",
+    "pyyaml>=6.0.3",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "pyyaml>=6.0.3",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+target-version = "py312"
+# NB: isort (rule "I") is deliberately NOT enabled. The constructs import the
+# cdk8s-generated `imports` package (cdk8s/imports/, gitignored) — ruff's isort
+# classifies it as first-party when the dir is present (local) and third-party
+# when it isn't (CI), so enabling "I" produces a reorder diff that only appears
+# in CI. infra/cdk8s leaves "I" off for the same reason.

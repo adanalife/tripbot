@@ -1,0 +1,12 @@
+# Tooling for the cdk8s (Python) Kubernetes authoring layer, scoped to cdk8s/ so
+# the Go CI jobs at the repo root don't pull in python/node. Per
+# vault/decisions/golang-development-with-mise.md + preferred-tools.md: mise pins
+# the interpreter + CLIs; uv handles project-local Python deps.
+[tools]
+python = "3.12"
+# jsii (cdk8s's runtime) supports node ^24/^22/^20; pin 24 to avoid the
+# "untested node" warning on the host's newer node.
+node = "24"
+# Kept in lockstep with infra/cdk8s/.mise.toml so both repos synth against the
+# same cdk8s-cli (the synthed dist/ is byte-compared during the cutover).
+"npm:cdk8s-cli" = "2.207.12"

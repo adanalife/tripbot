@@ -1,0 +1,21 @@
+# gitleaks config (shared by pre-commit + super-linter's GITLEAKS pass, so the
+# two agree on what's a false positive).
+#
+# Inherits the default ruleset and layers on allowlists for non-secret strings
+# the default rules false-positive on. Each entry documents *why* — keep that
+# pattern so a future reviewer can audit.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "tripbot repo allowlists for non-secret strings"
+# The public ADanaLife Discord guild snowflake (607964164220125258). It appears
+# in the cdk8s Tripbot construct (stage's config block) AND in the rendered
+# cdk8s/dist manifests; allowlist the value itself so both are covered. Not a
+# secret — it's visible on Discord invite previews; the bot token lives in AWS
+# Secrets Manager (k8s/tripbot/discord-bot-token) and never in this repo.
+# gitleaks' discord-client-id rule false-positives on the 18-digit numeric value.
+regexes = [
+  '''607964164220125258''',
+]
