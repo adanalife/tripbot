@@ -107,8 +107,8 @@ type decision struct {
 	wasOutlier bool
 	// implied speeds (mph) into and out of this clip, for the report. NaN when
 	// there is no neighbouring fix to measure against.
-	speedIn  float64
-	speedOut float64
+	inboundSpeed  float64
+	outboundSpeed float64
 }
 
 // changed reports whether this decision would alter the stored row.
@@ -211,7 +211,7 @@ func analyze(clips []clip, maxSpeedMph, minSpikeMiles, detourRatio float64, maxI
 	for i, c := range clips {
 		curLat[i], curLng[i], curState[i] = c.lat, c.lng, c.state
 		fix[i] = c.hasFix()
-		out[i] = decision{clip: c, action: actionKeep, speedIn: math.NaN(), speedOut: math.NaN()}
+		out[i] = decision{clip: c, action: actionKeep, inboundSpeed: math.NaN(), outboundSpeed: math.NaN()}
 	}
 
 	for {
@@ -242,13 +242,13 @@ func analyze(clips []clip, maxSpeedMph, minSpikeMiles, detourRatio float64, maxI
 				clips[next].filmed.Sub(clips[i].filmed) > maxInterpGap {
 				continue
 			}
-			out[i].speedIn = speedMph(clips[prev].filmed, clips[i].filmed, curLat[prev], curLng[prev], curLat[i], curLng[i])
-			out[i].speedOut = speedMph(clips[i].filmed, clips[next].filmed, curLat[i], curLng[i], curLat[next], curLng[next])
+			out[i].inboundSpeed = speedMph(clips[prev].filmed, clips[i].filmed, curLat[prev], curLng[prev], curLat[i], curLng[i])
+			out[i].outboundSpeed = speedMph(clips[i].filmed, clips[next].filmed, curLat[i], curLng[i], curLat[next], curLng[next])
 
 			excursion := haversineMiles(curLat[prev], curLng[prev], curLat[i], curLng[i])
 			direct := haversineMiles(curLat[prev], curLng[prev], curLat[next], curLng[next])
 			detour := excursion + haversineMiles(curLat[i], curLng[i], curLat[next], curLng[next])
-			if excursion > minSpikeMiles && detour > direct*detourRatio && out[i].speedIn > maxSpeedMph {
+			if excursion > minSpikeMiles && detour > direct*detourRatio && out[i].inboundSpeed > maxSpeedMph {
 				fix[i] = false
 				wasOutlier[i] = true
 				newOutliers++
@@ -452,7 +452,7 @@ func writeReport(w *os.File, decisions []decision) {
 		}
 		fmt.Fprintf(w, "%-32s  %-19s  %10.6f  %10.6f  %9s  %9s  %s\n",
 			d.slug, d.filmed.Format("2006-01-02 15:04:05"),
-			d.lat, d.lng, fmtSpeed(d.speedIn), fmtSpeed(d.speedOut), action)
+			d.lat, d.lng, fmtSpeed(d.inboundSpeed), fmtSpeed(d.outboundSpeed), action)
 	}
 	fmt.Fprintf(w, "\n%d clips: %d kept, %d interpolated (%d of them replacing an outlier), %d left missing\n",
 		len(decisions), kept, interps, replaced, missing)
@@ -481,8 +481,8 @@ func reportAction(d decision) string {
 // overSpeed reports whether either implied edge is unusually fast, so kept-but-
 // fast clips still surface in the report for eyeballing.
 func overSpeed(d decision) bool {
-	return (!math.IsNaN(d.speedIn) && d.speedIn > 80) ||
-		(!math.IsNaN(d.speedOut) && d.speedOut > 80)
+	return (!math.IsNaN(d.inboundSpeed) && d.inboundSpeed > 80) ||
+		(!math.IsNaN(d.outboundSpeed) && d.outboundSpeed > 80)
 }
 
 func fmtSpeed(v float64) string {
