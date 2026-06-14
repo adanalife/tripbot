@@ -7,6 +7,24 @@ All notable changes to TripBot. Format follows [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+## [v3.4.0] — 2026-06-14
+
+Minor release. Headlined by a license-clean synthesized background-audio bed for the YouTube stream; also drops vlc-server's unused iGPU claim to ease co-tenant contention, plus routine OpenTelemetry dependency bumps.
+
+### OBS
+
+- **YouTube scene plays a synthesized "Car Hum" bed in place of SomaFM.** SomaFM (the "Groove Salad Classic" source) is already stripped on YouTube to dodge Content ID strikes, leaving that stream with no background audio. A new license-clean, locally-generated car-interior drone (`assets/car-hum-loop.flac`, a seamless 4-min loop produced by `script/carhum/`) is added to the shared scene as the "Car Hum" `ffmpeg_source` and now fills that gap. The per-platform strip in the OBS entrypoint is symmetric: YouTube keeps Car Hum and drops SomaFM, Twitch keeps SomaFM and drops Car Hum, so the two never play together. ([#854])
+
+### Deploy
+
+- **vlc-server no longer claims the iGPU on prod or stage.** vlc does stream-copy plus trivial software decode and doesn't need the iGPU — proven live on stage (CPU flat at ~0.04 cores with and without `/dev/dri`, 0 restarts). Dropping its i915 claim frees an iGPU slot and eases the co-tenant contention behind the 2026-06-11 prod-stutter incident; OBS keeps its iGPU for VAAPI encode. Re-introduces the `vlc_gpu` flag (gating the claim on `gpu and vlc_gpu`) that the cdk8s-into-repo cutover had silently dropped, set `False` on both envs. ([#853])
+
+### Dependencies
+
+- Bump `go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp`. ([#761])
+- Bump `go.opentelemetry.io/otel/sdk/log` from 0.19.0 to 0.20.0. ([#762])
+- Bump `go.opentelemetry.io/otel/exporters/prometheus`. ([#763])
+
 ## [v3.3.4] — 2026-06-14
 
 Patch release. CI/release-plumbing only — no runtime behavior change. Finishes wiring the in-repo prod bump-PR workflow into the release flow now that the cdk8s manifests live in this repo.
@@ -1597,3 +1615,8 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [infra #717]: https://github.com/adanalife/infra/pull/717
 [#845]: https://github.com/adanalife/tripbot/pull/845
 [#851]: https://github.com/adanalife/tripbot/pull/851
+[#854]: https://github.com/adanalife/tripbot/pull/854
+[#761]: https://github.com/adanalife/tripbot/pull/761
+[#762]: https://github.com/adanalife/tripbot/pull/762
+[#763]: https://github.com/adanalife/tripbot/pull/763
+[#853]: https://github.com/adanalife/tripbot/pull/853
