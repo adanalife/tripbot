@@ -15,7 +15,7 @@ prod-1:
   # restarts the chat bot only; no stream impact
   tripbot: "3.3.0"
   # restarting drops the playing video briefly on stream
-  vlc: "3.2.1"
+  vlc: "3.3.0"
   # restarting takes the stream down until OBS reconnects — pick a quiet moment
   obs: "3.2.1"
   # overlays blip; the stream itself stays up
