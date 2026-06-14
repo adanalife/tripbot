@@ -32,13 +32,13 @@ func newMockDB(t *testing.T) (*gorm.DB, sqlmock.Sqlmock) {
 // expectFlags queues a successful SELECT on feature_flags returning the given rows.
 func expectFlags(mock sqlmock.Sqlmock, rows ...flagRow) {
 	r := sqlmock.NewRows([]string{
-		"key", "description", "enabled",
+		"key", "platform", "description", "enabled",
 		"enabled_for_usernames", "enabled_for_roles",
 		"target_removal_date", "created_at", "updated_at",
 	})
 	for _, row := range rows {
 		r.AddRow(
-			row.Key, row.Description, row.Enabled,
+			row.Key, "twitch", row.Description, row.Enabled,
 			pqArrayLiteral(row.EnabledForUsernames),
 			pqArrayLiteral(row.EnabledForRoles),
 			row.TargetRemovalDate, time.Now(), time.Now(),
@@ -76,7 +76,7 @@ func TestPostgresClient_InitialLoad(t *testing.T) {
 		TargetRemovalDate:   time.Now().Add(30 * 24 * time.Hour),
 	})
 
-	c, err := NewPostgresClient(context.Background(), db, time.Minute)
+	c, err := NewPostgresClient(context.Background(), db, time.Minute, "twitch")
 	if err != nil {
 		t.Fatalf("NewPostgresClient: %v", err)
 	}
@@ -103,7 +103,7 @@ func TestPostgresClient_InitialLoadError(t *testing.T) {
 	mock.ExpectQuery(`SELECT \* FROM "feature_flags"`).
 		WillReturnError(errors.New("connection refused"))
 
-	if _, err := NewPostgresClient(context.Background(), db, time.Minute); err == nil {
+	if _, err := NewPostgresClient(context.Background(), db, time.Minute, "twitch"); err == nil {
 		t.Error("expected initial load to surface the DB error")
 	}
 }
@@ -117,7 +117,7 @@ func TestPostgresClient_RefreshFailureRetainsCache(t *testing.T) {
 		Enabled:           true,
 		TargetRemovalDate: time.Now().Add(30 * 24 * time.Hour),
 	})
-	c, err := NewPostgresClient(context.Background(), db, time.Minute)
+	c, err := NewPostgresClient(context.Background(), db, time.Minute, "twitch")
 	if err != nil {
 		t.Fatalf("NewPostgresClient: %v", err)
 	}
@@ -162,7 +162,7 @@ func TestPostgresClient_SetEnabled(t *testing.T) {
 		Enabled:           false,
 		TargetRemovalDate: time.Now().Add(30 * 24 * time.Hour),
 	})
-	c, err := NewPostgresClient(context.Background(), db, time.Minute)
+	c, err := NewPostgresClient(context.Background(), db, time.Minute, "twitch")
 	if err != nil {
 		t.Fatalf("NewPostgresClient: %v", err)
 	}
@@ -194,7 +194,7 @@ func TestPostgresClient_SetEnabled(t *testing.T) {
 func TestPostgresClient_SetEnabledUnknownKey(t *testing.T) {
 	db, mock := newMockDB(t)
 	expectFlags(mock) // empty table
-	c, err := NewPostgresClient(context.Background(), db, time.Minute)
+	c, err := NewPostgresClient(context.Background(), db, time.Minute, "twitch")
 	if err != nil {
 		t.Fatalf("NewPostgresClient: %v", err)
 	}
@@ -209,10 +209,45 @@ func TestPostgresClient_SetEnabledUnknownKey(t *testing.T) {
 	}
 }
 
+// TestPostgresClient_PlatformScoping pins the per-platform contract: the
+// client only loads rows for its own platform, and a toggle only touches its
+// own platform's row — enabling a flag on youtube must not enable it on
+// twitch.
+func TestPostgresClient_PlatformScoping(t *testing.T) {
+	db, mock := newMockDB(t)
+	mock.ExpectQuery(`SELECT \* FROM "feature_flags" WHERE platform = \$1`).
+		WithArgs("youtube").
+		WillReturnRows(sqlmock.NewRows([]string{"key", "platform", "enabled"}).
+			AddRow("chatbot.weather", "youtube", false))
+
+	c, err := NewPostgresClient(context.Background(), db, time.Minute, "youtube")
+	if err != nil {
+		t.Fatalf("NewPostgresClient: %v", err)
+	}
+
+	mock.ExpectExec(`UPDATE "feature_flags" SET .+ WHERE key = \$\d+ AND platform = \$\d+`).
+		WithArgs(true, sqlmock.AnyArg(), "chatbot.weather", "youtube").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery(`SELECT \* FROM "feature_flags" WHERE platform = \$1`).
+		WithArgs("youtube").
+		WillReturnRows(sqlmock.NewRows([]string{"key", "platform", "enabled"}).
+			AddRow("chatbot.weather", "youtube", true))
+
+	if err := c.SetEnabled(context.Background(), "chatbot.weather", true); err != nil {
+		t.Fatalf("SetEnabled: %v", err)
+	}
+	if !c.Bool(context.Background(), "chatbot.weather", EvalContext{}) {
+		t.Error("flag should be enabled on the client's own platform")
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unmet sqlmock expectations: %v", err)
+	}
+}
+
 func TestPostgresClient_EmptyTable(t *testing.T) {
 	db, mock := newMockDB(t)
 	expectFlags(mock) // zero rows
-	c, err := NewPostgresClient(context.Background(), db, time.Minute)
+	c, err := NewPostgresClient(context.Background(), db, time.Minute, "twitch")
 	if err != nil {
 		t.Fatalf("NewPostgresClient: %v", err)
 	}

@@ -17,9 +17,8 @@ import (
 // the shims in shims.go are deleted.)
 //
 // Fields are grouped into two clusters on purpose. The **auth core** (helix
-// clients + tokens) is the cohesive unit that is slated to move into its own
-// auth service (see vault/tripbot/TODO.md "Extract Twitch Helix API into a
-// separate service") — keeping it visually distinct here marks that future
+// clients + tokens) is the cohesive unit that may eventually move into its
+// own auth service — keeping it visually distinct here marks that future
 // seam. The **query/viewer** cluster is cached read-state derived from Helix.
 //
 // Methods are still fronted by package-level free-function shims (see

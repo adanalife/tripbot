@@ -22,3 +22,18 @@ func PlayRandomSubject(env string) string { return subject(env, "play", "random"
 func PlayFileSubject(env string) string   { return subject(env, "play", "file") }
 func SkipSubject(env string) string       { return subject(env, "skip") }
 func BackSubject(env string) string       { return subject(env, "back") }
+
+// LastPlayedSubject is the per-platform leaf vlc-server publishes its
+// now-playing state to (tripbot.<env>.vlc.lastplayed.<platform>). Unlike the
+// command subjects above this one is *state*, not a command: every platform
+// instance (vlc-twitch, vlc-youtube) shares the env's NATS, so the platform
+// leaf keeps the TRIPBOT_VLC_LASTPLAYED stream's last-value cache
+// (MaxMsgsPerSubject=1) per instance instead of the instances clobbering one
+// another — same shape as tripbot.<env>.auth.status.<platform>.
+func LastPlayedSubject(env, platform string) string {
+	return subject(env, "lastplayed") + "." + platform
+}
+
+// LastPlayedWildcard covers every platform's lastplayed leaf in env — the
+// subject filter the TRIPBOT_VLC_LASTPLAYED stream is declared with.
+func LastPlayedWildcard(env string) string { return subject(env, "lastplayed") + ".*" }

@@ -80,6 +80,43 @@ cp /opt/obs/config/user.ini   "$OBS_HOME/user.ini"
 envsubst < /opt/obs/config/basic.ini.tmpl > "$OBS_HOME/basic/profiles/ADanaLife/basic.ini"
 envsubst < /opt/obs/config/Tripbot.json.tmpl > "$OBS_HOME/basic/scenes/Tripbot.json"
 
+# Per-platform background audio. The shared scene collection ships two
+# mutually-exclusive background-audio sources, and exactly one is stripped per
+# platform before OBS loads the collection:
+#
+#   - "Groove Salad Classic" (SomaFM ffmpeg_source) plays licensed music that
+#     trips YouTube's Content ID and earns copyright strikes. Twitch tolerates
+#     it, so it stays on Twitch and is stripped on YouTube.
+#   - "Car Hum" (a locally-generated, license-clean drone — see
+#     script/carhum/) is the YouTube background bed in its place, and is
+#     stripped on Twitch so the two don't both play.
+#
+# Top-level "sources" holds both real sources and the scene objects (scenes
+# reference members by name under settings.items), so both the source
+# definition and every referencing scene item are dropped.
+strip_scene_source() {
+  local name="$1" file="$2"
+  jq --arg t "$name" '
+    .sources |= map(select(.name != $t))
+    | .sources |= map(
+        if (.settings.items? | type) == "array"
+        then .settings.items |= map(select(.name != $t))
+        else . end)
+  ' "$file" > "$file.tmp" && mv "$file.tmp" "$file"
+}
+
+scene_file="$OBS_HOME/basic/scenes/Tripbot.json"
+case "${STREAM_PLATFORM:-twitch}" in
+  youtube)
+    strip_scene_source "Groove Salad Classic" "$scene_file"
+    echo "stripped 'Groove Salad Classic' (SomaFM); 'Car Hum' is the YouTube background audio"
+    ;;
+  *)
+    strip_scene_source "Car Hum" "$scene_file"
+    echo "stripped 'Car Hum'; 'Groove Salad Classic' (SomaFM) is the Twitch background audio"
+    ;;
+esac
+
 # Advanced Output mode reads encoder-specific settings from streamEncoder.json
 # in the profile dir. VAAPI's keys (vaapi_device, integer profile) don't
 # overlap with x264's, so we case on OBS_STREAM_ENCODER to ship the right

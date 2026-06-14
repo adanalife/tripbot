@@ -34,6 +34,47 @@ func sampleToken() Token {
 	}
 }
 
+func TestGetByProvider_Hit(t *testing.T) {
+	db, mock := newMockDB(t)
+	rows := sqlmock.NewRows([]string{
+		"id", "provider", "username", "twitch_user_id", "access_token", "refresh_token",
+		"expires_at", "scopes", "refresh_fail_count", "last_refresh_at",
+		"date_created", "date_updated",
+	}).AddRow(
+		2, "youtube", "UC123", nil, "yt-access", "yt-refresh",
+		time.Date(2026, 6, 11, 0, 0, 0, 0, time.UTC),
+		"https://www.googleapis.com/auth/youtube.force-ssl",
+		0, nil,
+		time.Date(2026, 6, 10, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, 6, 10, 0, 0, 0, 0, time.UTC),
+	)
+	mock.ExpectQuery(`SELECT .* FROM oauth_tokens WHERE provider=\$1 ORDER BY date_updated DESC LIMIT 1`).
+		WithArgs("youtube").
+		WillReturnRows(rows)
+
+	got, err := getByProviderFromDB(db, "youtube")
+	if err != nil {
+		t.Fatalf("getByProviderFromDB: %v", err)
+	}
+	if got.Username != "UC123" || got.AccessToken != "yt-access" {
+		t.Errorf("unexpected token: %+v", got)
+	}
+	if got.TwitchUserID.Valid {
+		t.Errorf("twitch_user_id should scan as NULL for youtube rows: %+v", got.TwitchUserID)
+	}
+}
+
+func TestGetByProvider_MissReturnsErrNoToken(t *testing.T) {
+	db, mock := newMockDB(t)
+	mock.ExpectQuery(`SELECT .* FROM oauth_tokens WHERE provider=\$1 ORDER BY date_updated DESC LIMIT 1`).
+		WithArgs("youtube").
+		WillReturnError(sql.ErrNoRows)
+
+	if _, err := getByProviderFromDB(db, "youtube"); !errors.Is(err, ErrNoToken) {
+		t.Fatalf("expected ErrNoToken, got %v", err)
+	}
+}
+
 func TestGet_Hit(t *testing.T) {
 	db, mock := newMockDB(t)
 	rows := sqlmock.NewRows([]string{

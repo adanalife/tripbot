@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/scoreboards"
@@ -25,6 +26,9 @@ import (
 	"github.com/hako/durafmt"
 	"gorm.io/gorm"
 )
+
+// leaderboardSize is how many rows the leaderboard commands show.
+const leaderboardSize = 10
 
 // lastHelloTime is used to rate-limit the hello command
 var lastHelloTime time.Time = time.Now()
@@ -44,8 +48,28 @@ const guessScoreboard = "guess_state_total"
 
 func (a *App) helpCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !help", "username", user.Username)
-	msg := fmt.Sprintf("%s (%d of %d)", help(), helpIndex+1, len(c.HelpMessages))
+	n := len(a.helpMessages)
+	// a.help() advances the index, so capture the displayed line's number first.
+	pos := a.helpIndex + 1
+	msg := fmt.Sprintf("%s (%d of %d)", a.help(), pos, n)
 	a.Chat.Say(msg)
+}
+
+// commandsCmd lists a curated set of featured commands — filtered to the ones
+// actually dispatchable on this App's platform, so a YouTube instance doesn't
+// suggest commands that would silently no-op.
+func (a *App) commandsCmd(_ context.Context, _ *users.User, _ []string) {
+	featured := []string{
+		"!location", "!guess", "!date", "!state",
+		"!sunset", "!timewarp", "!miles", "!leaderboard", "!song",
+	}
+	avail := make([]string, 0, len(featured))
+	for _, t := range featured {
+		if _, ok := a.singleWordLookup[t]; ok {
+			avail = append(avail, t)
+		}
+	}
+	a.Chat.Say("You can try: " + strings.Join(avail, ", ") + ", and many other hidden commands!")
 }
 
 func (a *App) helloCmd(ctx context.Context, user *users.User, params []string) {
@@ -283,18 +307,13 @@ func (a *App) monthlyMilesLeaderboardCmd(ctx context.Context, user *users.User, 
 	slog.InfoContext(ctx, "ran !leaderboard", "username", user.Username)
 
 	// select users to show in leaderboard
-	size := 10
-	leaderboard := scoreboards.TopUsers(ctx, scoreboards.CurrentMilesScoreboard(), size)
-	if size > len(leaderboard) {
-		size = len(leaderboard)
-	}
-	leaderboard = leaderboard[:size]
+	leaderboard := scoreboards.TopMilesRows(ctx, leaderboardSize)
 
 	// display leaderboard on screen
 	a.Onscreens.ShowLeaderboard(ctx, "Monthly Miles", leaderboard)
 
 	// build a message to send to chat
-	msg := fmt.Sprintf("Top %d miles this month: ", size)
+	msg := fmt.Sprintf("Top %d miles this month: ", len(leaderboard))
 	for i, leaderPair := range leaderboard {
 		msg += fmt.Sprintf("%d. %s (%smi)", i+1, leaderPair[0], leaderPair[1])
 		if i+1 != len(leaderboard) {
@@ -308,7 +327,7 @@ func (a *App) lifetimeMilesLeaderboardCmd(ctx context.Context, user *users.User,
 	slog.InfoContext(ctx, "ran !totalleaderboard", "username", user.Username)
 
 	// select users to show in leaderboard
-	size := 10
+	size := leaderboardSize
 	lifetime := a.Sessions.LifetimeLeaderboard()
 	if size > len(lifetime) {
 		size = len(lifetime)
@@ -332,27 +351,8 @@ func (a *App) lifetimeMilesLeaderboardCmd(ctx context.Context, user *users.User,
 func (a *App) monthlyGuessLeaderboardCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !guessleaderboard", "username", user.Username)
 
-	// select users to show in leaderboard
-	size := 10
-	leaderboard := scoreboards.TopUsers(ctx, scoreboards.CurrentGuessScoreboard(), size)
-
-	// truncate the leaderboard if necessary
-	if size > len(leaderboard) {
-		size = len(leaderboard)
-	}
-	leaderboard = leaderboard[:size]
-
-	// Filter zero-scorers (AddToScoreByName uses FirstOrCreate, so every
-	// user who's ever guessed has a row — many at 0 early in the month).
-	var intLeaderboard [][]string
-	for _, leaderPair := range leaderboard {
-		// guesses are ints not floats, so remove the decimal place
-		intVersion := strings.Split(leaderPair[1], ".")[0]
-		if intVersion == "0" || intVersion == "" {
-			continue
-		}
-		intLeaderboard = append(intLeaderboard, []string{leaderPair[0], intVersion})
-	}
+	// select users to show in leaderboard (zero-scorers already filtered)
+	intLeaderboard := scoreboards.TopGuessRows(ctx, leaderboardSize)
 
 	// special message if no one has any correct guesses yet
 	if len(intLeaderboard) == 0 {
@@ -441,6 +441,13 @@ func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 		guess = helpers.StateAbbrevToState(guess)
 	}
 
+	// forgive close misspellings ("florisa" -> Florida); exact state names
+	// are never touched and ambiguous typos stay as typed
+	if corrected := fuzzyStateName(guess); corrected != "" {
+		slog.InfoContext(ctx, "fuzzy-corrected state guess", "text", guess, "state", corrected)
+		guess = corrected
+	}
+
 	vid := a.Video.Current()
 	if vid.Flagged {
 		a.Chat.Say("I couldn't figure out current GPS coords, using next closest...")
@@ -489,9 +496,28 @@ func (a *App) reportCmd(ctx context.Context, user *users.User, params []string) 
 	// silently when DISCORD_ALERTS_WEBHOOK is unset (e.g. local dev) —
 	// the slog/Sentry path still fires so nothing is lost.
 	if webhook := c.Conf.DiscordAlertsWebhook; webhook != "" {
-		go postReportToDiscord(webhook, user.Username, message)
+		if isDiscordWebhookURL(webhook) {
+			go postReportToDiscord(webhook, user.Username, message)
+		} else {
+			// A misconfigured secret (e.g. the SM placeholder string) would
+			// otherwise log a "unsupported protocol scheme" ERROR on every
+			// !report. Warn once per process and fall through to slog/Sentry.
+			reportWebhookWarnOnce.Do(func() {
+				slog.WarnContext(ctx, "DISCORD_ALERTS_WEBHOOK is not a Discord webhook URL; skipping Discord report")
+			})
+		}
 	}
 	a.Chat.Say("Thank you, I will look into this ASAP!")
+}
+
+// reportWebhookWarnOnce bounds the misconfigured-webhook warning to one line
+// per process instead of one per !report invocation.
+var reportWebhookWarnOnce sync.Once
+
+// isDiscordWebhookURL reports whether s looks like a Discord webhook endpoint,
+// guarding postReportToDiscord against placeholder/garbage secret values.
+func isDiscordWebhookURL(s string) bool {
+	return strings.HasPrefix(s, "https://discord.com/api/webhooks/")
 }
 
 // postReportToDiscord POSTs a viewer report to a Discord webhook.

@@ -59,6 +59,29 @@ func getFromDB(db *sqlx.DB, provider, username string) (Token, error) {
 	return t, nil
 }
 
+// GetByProvider returns the provider's single row, or ErrNoToken if none
+// exists. Providers with one identity (YouTube: the channel owner) don't
+// know a username ahead of time the way Twitch does (c.Conf.BotUsername) —
+// the identity is discovered at consent time — so boot-time loading keys on
+// the provider alone. If stray extra rows exist, the most recently updated
+// one wins; clean strays up by hand.
+func GetByProvider(provider string) (Token, error) {
+	return getByProviderFromDB(database.Connection(), provider)
+}
+
+func getByProviderFromDB(db *sqlx.DB, provider string) (Token, error) {
+	var t Token
+	query := `SELECT * FROM oauth_tokens WHERE provider=$1 ORDER BY date_updated DESC LIMIT 1`
+	err := db.Get(&t, query, provider)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Token{}, ErrNoToken
+	}
+	if err != nil {
+		return Token{}, fmt.Errorf("oauthtokens.GetByProvider: %w", err)
+	}
+	return t, nil
+}
+
 // Upsert inserts the row or updates the existing one matching (provider, username).
 // On UPDATE, refresh_fail_count is reset to 0 (Upsert implies a successful refresh
 // or a fresh bootstrap), last_refresh_at + date_updated are stamped to now(),

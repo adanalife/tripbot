@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -36,6 +37,28 @@ func ResumeMarkerPath() string {
 	return filepath.Join(c.Conf.RunDir, resumeMarkerName)
 }
 
+// formatResumeMarker renders the marker file content: the basename on the
+// first line, the playback position (ms) on the second. Two lines rather
+// than one delimited line so the original basename-only format stays a valid
+// prefix of the new one.
+func formatResumeMarker(file string, positionMs int64) []byte {
+	return []byte(file + "\n" + strconv.FormatInt(positionMs, 10) + "\n")
+}
+
+// ParseResumeMarker decodes marker file content. The position line is
+// optional (markers written before positions existed have only the
+// basename); a missing or malformed position decodes as 0 = start of clip.
+func ParseResumeMarker(data []byte) (file string, positionMs int64) {
+	lines := strings.SplitN(strings.TrimSpace(string(data)), "\n", 2)
+	file = strings.TrimSpace(lines[0])
+	if len(lines) > 1 {
+		if ms, err := strconv.ParseInt(strings.TrimSpace(lines[1]), 10, 64); err == nil && ms > 0 {
+			positionMs = ms
+		}
+	}
+	return file, positionMs
+}
+
 // probeRTSPDescribe sends a single RTSP DESCRIBE to the local listener and
 // returns nil iff the server answers with a 200 status. Used by both
 // /health/rtsp and the self-heal watchdog.
@@ -43,7 +66,7 @@ func ResumeMarkerPath() string {
 // The libvlc RTSP server can answer OPTIONS (process alive, port bound)
 // while DESCRIBE returns 500 — the silent-failure mode that motivates this
 // probe: the sout chain went away without the player crashing or releasing
-// :8554. See vault/tripbot/vlc-server/gotchas.md.
+// :8554.
 func probeRTSPDescribe() error {
 	return probeRTSPDescribeAt(rtspProbeAddr)
 }
@@ -133,11 +156,18 @@ func (s *Server) triggerSelfHeal(ctx context.Context) {
 	if current == "" {
 		slog.WarnContext(ctx, "RTSP self-heal: no current video; skipping marker write", "marker", marker)
 	} else {
+		// Best-effort position capture — the player is mid-failure, so a
+		// read error just means the respawn resumes from the clip's start.
+		var posMs int64
+		if ms, err := s.Player.MediaTime(); err == nil {
+			posMs = int64(ms)
+		}
 		slog.ErrorContext(ctx, "RTSP self-heal: persisting resume marker and signaling SIGTERM",
 			"resume_from", current,
+			"position_ms", posMs,
 			"marker", marker,
 		)
-		if err := os.WriteFile(marker, []byte(current), 0o644); err != nil {
+		if err := os.WriteFile(marker, formatResumeMarker(current, posMs), 0o644); err != nil {
 			slog.ErrorContext(ctx, "failed to write resume marker", "err", err, "marker", marker)
 		}
 	}

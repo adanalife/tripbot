@@ -21,8 +21,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      # Go toolchain from .tool-versions, per
-      # vault/decisions/golang-development-with-mise.md.
+      # Go toolchain from .tool-versions.
       - uses: jdx/mise-action@v4
 
       # `go generate` must reproduce the committed contract.json byte-for-byte.

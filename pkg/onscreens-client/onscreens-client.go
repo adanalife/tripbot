@@ -4,12 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/natsclient"
 	oe "github.com/adanalife/tripbot/pkg/onscreens-events"
-	"github.com/adanalife/tripbot/pkg/scoreboards"
 )
 
 // Client publishes onscreens overlay commands onto NATS. Construct via
@@ -67,36 +65,6 @@ func (c *Client) ShowLeaderboard(ctx context.Context, title string, leaderboard 
 		Rows:     leaderboard,
 	})
 	return nil
-}
-
-// TODO: this is taken right from the !guessleaderboard command, DRY it?
-func (c *Client) ShowGuessLeaderboard(ctx context.Context) {
-	// select users to show in leaderboard
-	size := 10
-	leaderboard := scoreboards.TopUsers(ctx, scoreboards.CurrentGuessScoreboard(), size)
-	if size > len(leaderboard) {
-		size = len(leaderboard)
-	}
-	leaderboard = leaderboard[:size]
-
-	// Filter zero-scorers (AddToScoreByName uses FirstOrCreate, so every
-	// user who's ever guessed has a row — many at 0 early in the month).
-	// If the filtered list is empty, skip the overlay entirely.
-	var intLeaderboard [][]string
-	for _, leaderPair := range leaderboard {
-		// guesses are ints not floats, so remove the decimal place
-		intVersion := strings.Split(leaderPair[1], ".")[0]
-		if intVersion == "0" || intVersion == "" {
-			continue
-		}
-		intLeaderboard = append(intLeaderboard, []string{leaderPair[0], intVersion})
-	}
-	if len(intLeaderboard) == 0 {
-		return
-	}
-
-	// display leaderboard on screen
-	c.ShowLeaderboard(ctx, "Correct Guesses This Month", intLeaderboard)
 }
 
 func (c *Client) ShowTimewarp(ctx context.Context) error {

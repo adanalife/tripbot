@@ -15,12 +15,21 @@ import (
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"github.com/adanalife/tripbot/pkg/server/oauthstate"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
+	myyoutube "github.com/adanalife/tripbot/pkg/youtube"
 	"github.com/nicklaw5/helix/v2"
 )
 
 // generateUserAccessToken is overridable in tests so the /auth/callback
 // happy path can be exercised without round-tripping to Twitch.
 var generateUserAccessToken = mytwitch.GenerateUserAccessToken
+
+// youtubeGenerateToken / youtubeAuthCodeURL / youtubeConfigured are the
+// same seams for the YouTube leg of the auth flow.
+var (
+	youtubeGenerateToken = myyoutube.GenerateUserAccessToken
+	youtubeAuthCodeURL   = myyoutube.AuthCodeURL
+	youtubeConfigured    = myyoutube.Configured
+)
 
 // helixClient is overridable in tests so /auth/init's URL-construction can be
 // exercised without triggering mytwitch.Client()'s lazy network init (which
@@ -138,8 +147,32 @@ func authCallbackHandler(w http.ResponseWriter, r *http.Request) {
 
 	code := r.URL.Query().Get("code")
 	if code == "" {
-		slog.ErrorContext(r.Context(), "no code in response from twitch", "err", errors.New("code missing"))
-		http.Error(w, "no code in response from twitch", http.StatusBadRequest)
+		slog.ErrorContext(r.Context(), "no code in auth callback", "err", errors.New("code missing"))
+		http.Error(w, "no code in auth callback", http.StatusBadRequest)
+		return
+	}
+
+	// YouTube leg: Google redirects to this same path; the account stashed
+	// with the state says which IdP the code belongs to.
+	if account == oauthstate.AccountYouTube {
+		title, err := youtubeGenerateToken(r.Context(), code)
+		if err != nil {
+			var mismatch *myyoutube.ErrChannelMismatch
+			if errors.As(err, &mismatch) {
+				slog.WarnContext(r.Context(), "YouTube consent identity mismatch; no row written",
+					"expected", mismatch.Expected, "got", mismatch.Got, "got_title", mismatch.GotTitle)
+				w.Header().Set("Content-Type", "text/html; charset=utf-8")
+				w.WriteHeader(http.StatusBadRequest)
+				fmt.Fprintf(w, authYouTubeMismatchHTML, mismatch.GotTitle, mismatch.Got, mismatch.Expected)
+				return
+			}
+			slog.ErrorContext(r.Context(), "youtube GenerateUserAccessToken failed", "err", err)
+			http.Error(w, "failed to exchange code: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		slog.InfoContext(r.Context(), "received token from youtube via auth callback", "channel", title)
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		fmt.Fprintf(w, authSuccessHTML, title, string(account))
 		return
 	}
 
@@ -187,8 +220,18 @@ func authInitHandler(w http.ResponseWriter, r *http.Request) {
 	case "broadcaster":
 		scopes = mytwitch.BroadcasterScopes
 		account = oauthstate.AccountBroadcaster
+	case "youtube":
+		// YouTube goes to Google's authorize URL, not Twitch's — handle the
+		// whole leg here and return (no helix client involved).
+		if !youtubeConfigured() {
+			http.Error(w, "youtube auth not configured (YOUTUBE_CLIENT_ID / YOUTUBE_CLIENT_SECRET unset)", http.StatusServiceUnavailable)
+			return
+		}
+		state := oauthstate.New(oauthstate.AccountYouTube)
+		http.Redirect(w, r, youtubeAuthCodeURL(state), http.StatusFound)
+		return
 	default:
-		http.Error(w, "account must be 'bot' or 'broadcaster'", http.StatusBadRequest)
+		http.Error(w, "account must be 'bot', 'broadcaster', or 'youtube'", http.StatusBadRequest)
 		return
 	}
 	client, err := helixClient()
@@ -229,6 +272,17 @@ const authMismatchHTML = `<!doctype html>
 <style>body{background:#3a0000;color:#fff;font:14px/1.5 -apple-system,monospace;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}div{max-width:540px}code{background:#000;padding:2px 5px;border-radius:3px}a{color:#9cf}</style>
 </head>
 <body><div><h1>Wrong account</h1><p>You signed in as <code>%s</code>, but this leg expected <code>%s</code> (the <strong>%s</strong> account).</p><p>No token was written. Sign out of Twitch in this browser (or open an incognito window), then <a href="/auth/init?account=%s">click here to retry</a>.</p></div></body>
+</html>`
+
+// authYouTubeMismatchHTML is returned when the consenting Google account's
+// channel doesn't match the configured YOUTUBE_CHANNEL_ID. No row is written.
+// %s = got channel title, %s = got channel ID, %s = expected channel ID.
+const authYouTubeMismatchHTML = `<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>tripbot — wrong channel</title>
+<style>body{background:#3a0000;color:#fff;font:14px/1.5 -apple-system,monospace;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}div{max-width:540px}code{background:#000;padding:2px 5px;border-radius:3px}a{color:#9cf}</style>
+</head>
+<body><div><h1>Wrong channel</h1><p>You consented as <code>%s</code> (<code>%s</code>), but this instance expects channel <code>%s</code>.</p><p>No token was written. Switch to the channel-owner Google account (Google's account chooser appears on the consent screen), then <a href="/auth/init?account=youtube">click here to retry</a>.</p></div></body>
 </html>`
 
 // return a favicon if anyone asks for one

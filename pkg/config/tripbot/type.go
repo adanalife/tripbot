@@ -25,6 +25,20 @@ type TripbotConfig struct {
 	// callers fall back gracefully (no city/state lookups, no generated
 	// maps). The bot continues to run.
 	GoogleMapsAPIKey string `envconfig:"GOOGLE_MAPS_API_KEY"`
+
+	// YouTubeClientID / YouTubeClientSecret are the YouTube OAuth app
+	// credentials (a GCP-console "Web application" OAuth client whose
+	// authorized redirect URIs include <EXTERNAL_URL>/auth/callback).
+	// Only set on PLATFORM=youtube instances; optional everywhere else —
+	// pkg/youtube returns ErrNotConfigured rather than fataling when absent.
+	YouTubeClientID     string `envconfig:"YOUTUBE_CLIENT_ID"`
+	YouTubeClientSecret string `envconfig:"YOUTUBE_CLIENT_SECRET"`
+	// YouTubeChannelID optionally pins the expected channel identity. When
+	// set, the /auth/init?account=youtube consent flow rejects (and does not
+	// persist) tokens from any other channel — keeps a prod pod from storing
+	// the quiet test channel's token, and vice versa.
+	YouTubeChannelID string `envconfig:"YOUTUBE_CHANNEL_ID"`
+
 	// ReadOnly is used to prevent writing some things to the DB
 	ReadOnly bool `default:"false" envconfig:"READ_ONLY"`
 	// Verbose determines output verbosity
@@ -56,10 +70,10 @@ type TripbotConfig struct {
 	ObsServerHost string `envconfig:"OBS_SERVER_HOST"`
 
 	// NatsURL is the in-cluster NATS endpoint used for fire-and-forget
-	// inter-component events (phase 1: ShowMiddleText alongside HTTP).
-	// Format: nats://nats.<env-platform-ns>.svc.cluster.local:4222.
-	// Optional — when unset, NATS publishes no-op and the HTTP path is
-	// the sole transport. Lets local dev / tests skip NATS entirely.
+	// inter-component events. Format:
+	// nats://nats.<env-platform-ns>.svc.cluster.local:4222.
+	// Optional — when unset, NATS publishes no-op silently. Lets local
+	// dev / tests skip NATS entirely.
 	NatsURL string `envconfig:"NATS_URL"`
 
 	// DiscordAlertsWebhook is the Discord webhook URL that !report posts

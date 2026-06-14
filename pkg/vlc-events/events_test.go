@@ -15,6 +15,8 @@ func TestSubjects(t *testing.T) {
 		{"play.file", PlayFileSubject("prod"), "tripbot.prod.vlc.play.file"},
 		{"skip", SkipSubject("development"), "tripbot.development.vlc.skip"},
 		{"back", BackSubject("staging"), "tripbot.staging.vlc.back"},
+		{"lastplayed", LastPlayedSubject("prod", "twitch"), "tripbot.prod.vlc.lastplayed.twitch"},
+		{"lastplayed wildcard", LastPlayedWildcard("prod"), "tripbot.prod.vlc.lastplayed.*"},
 	}
 	for _, tc := range cases {
 		if tc.got != tc.want {
@@ -53,6 +55,36 @@ func TestPlayFileRoundTrip(t *testing.T) {
 	}
 	if out.File != in.File {
 		t.Errorf("file: got %q, want %q", out.File, in.File)
+	}
+}
+
+func TestLastPlayedRoundTrip(t *testing.T) {
+	in := LastPlayed{Envelope: NewEnvelope(), File: "2020-01-02-1234.mp4", PositionMs: 42_500}
+	b, err := json.Marshal(in)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var out LastPlayed
+	if err := json.Unmarshal(b, &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if out.File != in.File {
+		t.Errorf("file: got %q, want %q", out.File, in.File)
+	}
+	if out.PositionMs != in.PositionMs {
+		t.Errorf("position_ms: got %d, want %d", out.PositionMs, in.PositionMs)
+	}
+}
+
+func TestLastPlayedPositionlessDecodesToClipStart(t *testing.T) {
+	// Messages published before position_ms existed must decode as 0 —
+	// start-of-clip — not error.
+	var out LastPlayed
+	if err := json.Unmarshal([]byte(`{"emitted_at":"2026-01-01T00:00:00Z","file":"a.MP4"}`), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if out.PositionMs != 0 {
+		t.Errorf("position_ms: got %d, want 0", out.PositionMs)
 	}
 }
 

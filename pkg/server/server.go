@@ -114,11 +114,14 @@ func (s *Server) Start(ctx context.Context) {
 	// + stream toggle so they stay current without a full reload.
 	r.Handle("/admin/refresh", tagged("/admin/refresh", s.refreshHandler)).Methods("GET")
 	r.Handle("/admin/user/{username}", tagged("/admin/user/{username}", userProfileHandler)).Methods("GET")
+	// read-only JSON profile for the standalone tripbot-console's popover (it
+	// has no DB access and proxies here over the in-namespace Service).
+	r.Handle("/api/user/{username}", tagged("/api/user/{username}", userProfileAPIHandler)).Methods("GET")
 	r.Handle("/admin/map/corpus", tagged("/admin/map/corpus", mapCorpusHandler)).Methods("GET")
 	r.PathPrefix("/static/").Handler(staticHandler())
 
 	// admin actions — tailnet-only by virtue of where the Ingress is
-	// exposed; no app-layer auth gate (see CLAUDE.md / vault decisions).
+	// exposed; no app-layer auth gate.
 	admin := r.PathPrefix("/admin").Methods("POST").Subrouter()
 	admin.Handle("/obs/stream/{action}", tagged("/admin/obs/stream/{action}", obsStreamActionHandler))
 	admin.Handle("/flags/{key}/{action}", tagged("/admin/flags/{key}/{action}", s.flagActionHandler))

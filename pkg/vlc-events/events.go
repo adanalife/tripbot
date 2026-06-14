@@ -4,8 +4,7 @@
 // It is imported by both the publisher (cmd/tripbot, via pkg/vlc-client) and
 // the subscriber (cmd/vlc-server). To stay safe as a shared package it is
 // stdlib-only and side-effect-free: no init(), no pkg/config import, env is
-// always a parameter rather than read from config here. See
-// vault/decisions/package-boundary-init-discipline.md.
+// always a parameter rather than read from config here.
 //
 // Scope: the fire-and-forget playback commands only (random / file / skip /
 // back). The currently-playing read stays on HTTP — a request/response read
@@ -55,4 +54,20 @@ type PlayFile struct {
 // grows a field graduates to its own named type then.
 type Command struct {
 	Envelope
+}
+
+// LastPlayed is the payload for the lastplayed subject — the playlist
+// basename vlc-server most recently started playing, plus how far in it was.
+// Published by vlc-server itself (at clip start and on a periodic position
+// ticker) and read back on startup so a restarted instance resumes the clip —
+// and the spot — it was on. Just the basename: the playlist is re-derived
+// from disk on boot, so anything richer (state, GPS) would go stale;
+// tripbot's video.changed remains the enriched observation event.
+type LastPlayed struct {
+	Envelope
+	File string `json:"file"`
+	// PositionMs is the playback position within File in milliseconds.
+	// 0 / omitted means start-of-clip — which is also what messages published
+	// before this field existed decode to.
+	PositionMs int64 `json:"position_ms,omitempty"`
 }

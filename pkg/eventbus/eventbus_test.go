@@ -55,7 +55,7 @@ func TestEmitChatMessage(t *testing.T) {
 	nowFn = func() time.Time { return fixed }
 	t.Cleanup(func() { nowFn = func() time.Time { return time.Now().UTC() } })
 
-	EmitChatMessage(context.Background(), "development", "DanaLol", "Hello, World!")
+	EmitChatMessage(context.Background(), "development", "twitch", "DanaLol", "Hello, World!")
 
 	if len(rec.Publishes) != 1 {
 		t.Fatalf("expected 1 publish, got %d", len(rec.Publishes))
@@ -164,5 +164,65 @@ func TestEmit_NoNATS_NoPanic(t *testing.T) {
 	SetPublisher(realPublisher{})
 	t.Cleanup(func() { SetPublisher(realPublisher{}) })
 	// natsclient.Conn() is nil here (Connect never called) — must not panic.
-	EmitChatMessage(context.Background(), "test", "u", "x")
+	EmitChatMessage(context.Background(), "test", "twitch", "u", "x")
+}
+
+func TestAuthStatusSubject(t *testing.T) {
+	for _, env := range []string{"prod", "stage", "development"} {
+		for _, platform := range []string{"twitch", "youtube"} {
+			got := AuthStatusSubject(env, platform)
+			want := "tripbot." + env + ".auth.status." + platform
+			if got != want {
+				t.Errorf("AuthStatusSubject(%q, %q) = %q, want %q", env, platform, got, want)
+			}
+		}
+	}
+}
+
+func TestAuthStatusWildcard(t *testing.T) {
+	if got, want := AuthStatusWildcard("development"), "tripbot.development.auth.status.*"; got != want {
+		t.Errorf("AuthStatusWildcard(development) = %q, want %q", got, want)
+	}
+}
+
+func TestEmitAuthStatus(t *testing.T) {
+	rec := withRecorder(t)
+
+	fixed := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
+	nowFn = func() time.Time { return fixed }
+	t.Cleanup(func() { nowFn = func() time.Time { return time.Now().UTC() } })
+
+	accounts := []AuthAccount{
+		{Account: "bot", LoginAs: "tripbot4001", ExpiresAt: fixed.Add(2 * time.Hour).Format(time.RFC3339Nano), InitURL: "https://tripbot.example/auth/init?account=bot"},
+		{Account: "broadcaster", LoginAs: "adanalife_staging", Reason: "expired", InitURL: "https://tripbot.example/auth/init?account=broadcaster"},
+	}
+	EmitAuthStatus(context.Background(), "development", "twitch", accounts)
+
+	if len(rec.Publishes) != 1 {
+		t.Fatalf("expected 1 publish, got %d", len(rec.Publishes))
+	}
+	pub := rec.Publishes[0]
+	if pub.Subject != "tripbot.development.auth.status.twitch" {
+		t.Errorf("subject = %q, want tripbot.development.auth.status.twitch", pub.Subject)
+	}
+
+	var ev AuthStatus
+	if err := json.Unmarshal(pub.Payload, &ev); err != nil {
+		t.Fatalf("payload not valid JSON: %v", err)
+	}
+	if ev.Platform != "twitch" {
+		t.Errorf("platform = %q, want twitch", ev.Platform)
+	}
+	if len(ev.Accounts) != 2 {
+		t.Fatalf("accounts = %d, want 2", len(ev.Accounts))
+	}
+	if ev.Accounts[0].Account != "bot" || ev.Accounts[0].Reason != "" {
+		t.Errorf("accounts[0] = %+v, want healthy bot row", ev.Accounts[0])
+	}
+	if ev.Accounts[1].Reason != "expired" || ev.Accounts[1].InitURL == "" {
+		t.Errorf("accounts[1] = %+v, want expired broadcaster row with InitURL", ev.Accounts[1])
+	}
+	if ev.EmittedAt != fixed.Format(time.RFC3339Nano) {
+		t.Errorf("emitted_at = %q, want %q", ev.EmittedAt, fixed.Format(time.RFC3339Nano))
+	}
 }

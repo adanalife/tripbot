@@ -1,12 +1,11 @@
-// cmd/youtube-chat-spike is the Phase-B0 de-risk spike for the YouTube
-// provider: it proves the OAuth → active-broadcast → liveChatId →
+// cmd/youtube-chat-spike is the de-risk spike that preceded tripbot's
+// YouTube support: it proves the OAuth → active-broadcast → liveChatId →
 // poll/insert loop end-to-end and measures how fast the polling cadence
-// burns API quota, before any of it is wired into tripbot proper.
+// burns API quota, independent of tripbot proper.
 //
 // It is deliberately standalone — no tripbot/pkg imports, config via env
 // vars and flags only — so running it needs nothing but an OAuth client
-// and a live (unlisted is fine) broadcast. Delete or keep as a diagnostic
-// once Track B lands.
+// and a live (unlisted is fine) broadcast. Kept as a diagnostic.
 //
 // Setup (one-time, manual — terraform can't create OAuth clients):
 //  1. GCP console → APIs & Services → Credentials → Create OAuth client ID,
@@ -123,7 +122,7 @@ func oauthConfig() *oauth2.Config {
 
 // runLogin walks the authorization-code flow on a localhost listener and
 // prints the refresh token for the caller to export. Mirrors the shape of
-// cmd/auth-bootstrap's Twitch flow, minus the DB write — Phase B1 owns
+// cmd/auth-bootstrap's Twitch flow, minus the DB write — pkg/youtube owns
 // persistence.
 func runLogin(ctx context.Context, conf *oauth2.Config) {
 	stateBytes := make([]byte, 16)
@@ -250,9 +249,9 @@ func sendMessage(svc *youtube.Service, counts *callCounts, chatID, text string) 
 	fmt.Printf("sent: %q\n", text)
 }
 
-// pollChat runs the read loop the eventual inbound adapter (Phase B3) will
-// use: page through liveChatMessages.list at the server-suggested cadence,
-// printing each message, until the duration elapses.
+// pollChat runs the same read loop tripbot's inbound poller uses: page
+// through liveChatMessages.list at the server-suggested cadence, printing
+// each message, until the duration elapses.
 func pollChat(ctx context.Context, svc *youtube.Service, counts *callCounts, chatID string, duration time.Duration) {
 	fmt.Printf("polling live chat for %s (Ctrl-C to stop early loses the report)...\n", duration)
 	deadline := time.Now().Add(duration)

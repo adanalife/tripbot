@@ -2,10 +2,14 @@
 #   - LFS-tracked binaries (assets/video/): CI doesn't pull LFS, so the
 #     MP4 checkout is a permission-denied pointer rather than the real
 #     file, and end-of-file-fixer chokes trying to read it.
+#   - committed audio binaries (assets/audio/): the car-hum loop is a
+#     multi-MB FLAC the text hooks can't read and check-added-large-files
+#     would reject; it's an intentional, committed asset baked into the OBS
+#     image.
 #   - vendored frontend assets (pkg/server/static/): third-party htmx +
 #     its SSE extension, kept byte-for-byte upstream — not ours to
 #     reformat (no trailing newline, minified, etc.).
-exclude: '^(assets/video/|pkg/server/static/)'
+exclude: '^(assets/video/|assets/audio/|pkg/server/static/)'
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -37,11 +41,15 @@ repos:
       - id: detect-private-key
 
   # Secrets: broad scan layered on top of the narrow detect-aws-credentials
-  # / detect-private-key checks above. Sub-second.
+  # / detect-private-key checks above. Sub-second. Reads the same
+  # .github/linters/.gitleaks.toml super-linter's GITLEAKS pass uses, so the
+  # two agree on what's a false positive (e.g. the public Discord guild
+  # snowflake in the cdk8s manifests).
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.30.1
     hooks:
       - id: gitleaks
+        args: [--config, .github/linters/.gitleaks.toml]
 
   # GitHub Actions workflow linting — fast, and catches the kind of
   # workflow breakage super-linter's actionlint pass would.
