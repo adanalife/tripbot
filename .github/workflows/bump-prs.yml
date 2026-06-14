@@ -161,11 +161,23 @@ jobs:
           # marker survives a squash-merge, where GitHub derives the commit
           # subject from the PR title.
           TITLE="Bump prod $COMPONENT to $VERSION #none"
+          # DEPLOY describes what merging actually does. prod-1 apps autosync
+          # from master (AUTOSYNC_ENVS in infra's argocd.py), so merging deploys
+          # them with no manual step — EXCEPT prod OBS, which is held out of
+          # autosync (AUTOSYNC_HOLDOUTS) and still needs a deliberate Argo sync.
           case "$COMPONENT" in
-            obs) IMPACT="⚠️ **Merging restarts the OBS pod — the stream goes down until it reconnects.** Pick a quiet moment." ;;
-            vlc) IMPACT="⚠️ **Merging restarts vlc-server — the playing video drops briefly on stream.** Pick a quiet moment." ;;
-            tripbot) IMPACT="Restarts the chat bot only; no stream impact." ;;
-            *) IMPACT="Restarts the overlay server; overlays blip, the stream itself stays up." ;;
+            obs)
+              IMPACT="⚠️ **Merging restarts the OBS pod — the stream goes down until it reconnects.** Pick a quiet moment."
+              DEPLOY="Prod \`obs\` is held out of Argo autosync, so merging only stages the change on \`master\` — **then manually sync the \`obs\` app in Argo to deploy**." ;;
+            vlc)
+              IMPACT="⚠️ **Merging restarts vlc-server — the playing video drops briefly on stream.** Pick a quiet moment."
+              DEPLOY="Prod \`vlc\` autosyncs from \`master\`, so **merging deploys it** — no manual Argo step." ;;
+            tripbot)
+              IMPACT="Restarts the chat bot only; no stream impact."
+              DEPLOY="Prod \`tripbot\` autosyncs from \`master\`, so **merging deploys it** — no manual Argo step." ;;
+            *)
+              IMPACT="Restarts the overlay server; overlays blip, the stream itself stays up."
+              DEPLOY="Prod \`$COMPONENT\` autosyncs from \`master\`, so **merging deploys it** — no manual Argo step." ;;
           esac
           cat > /tmp/body.md <<EOF
           Offers prod \`$COMPONENT\`: **$CURRENT → $VERSION**.
@@ -173,8 +185,8 @@ jobs:
           $IMPACT
 
           - What changed: [v$CURRENT...v$VERSION](https://github.com/adanalife/tripbot/compare/v$CURRENT...v$VERSION) · [release notes](https://github.com/adanalife/tripbot/releases/tag/v$VERSION)
-          - Merging is the deploy gesture: after merge, sync the \`$COMPONENT\` app in Argo.
-          - Rollback: \`git revert\` the bump commit and sync again.
+          - $DEPLOY
+          - Rollback: \`git revert\` the bump commit (same deploy path as above).
           - The pin edit + the re-synthed \`dist/\` ride in the same commit on \`$BRANCH\`.
 
           This PR updates in place when newer releases ship (force-push to \`$BRANCH\`).
