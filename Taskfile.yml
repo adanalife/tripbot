@@ -172,14 +172,6 @@ tasks:
     cmds:
       - mise exec -- go build -o bin/vlc-server ./cmd/vlc-server
 
-  cv:stats:
-    desc: 'Quick dashcam-cv coverage/size/rate via psql, no model load (NS=stage-1 default)'
-    vars:
-      NS: '{{.NS | default "stage-1"}}'
-    cmds:
-      - >-
-        kubectl -n {{.NS}} exec postgres-0 -- bash -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT (SELECT count(*) FROM videos WHERE NOT flagged) AS total_videos, (SELECT count(DISTINCT video_id) FROM frame_embeddings) AS embedded, (SELECT count(*) FROM frame_embeddings) AS frames, (SELECT count(DISTINCT video_id) FROM frame_embeddings WHERE date_created > now() - make_interval(hours => 1)) AS videos_last_hr, pg_size_pretty(pg_total_relation_size('"'"'frame_embeddings'"'"')) AS size;"'
-
   # cdk8s — the Python authoring layer for tripbot's app workload manifests
   # (cdk8s/). Synthesizes dist/<env>-<component>-<platform>.k8s.yaml (+ the
   # per-env identity unit + the one-shot Job files), which Argo delivers
