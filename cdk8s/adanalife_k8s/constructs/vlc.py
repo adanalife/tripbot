@@ -106,7 +106,10 @@ class VlcServer(Construct):
             "memory": k8s.Quantity.from_string("512Mi"),
         }
         limits = {"memory": k8s.Quantity.from_string("2Gi")}
-        if env.gpu:
+        # vlc does stream-copy + software decode and doesn't need the iGPU; the
+        # claim is gated on vlc_gpu so an env can keep its GPU (for OBS) while
+        # dropping just vlc's claim.
+        if env.gpu and env.vlc_gpu:
             requests["gpu.intel.com/i915"] = k8s.Quantity.from_string("1")
             limits["gpu.intel.com/i915"] = k8s.Quantity.from_string("1")
 

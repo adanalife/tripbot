@@ -47,6 +47,12 @@ class EnvConfig:
     )
     secret_source: str = "eso"  # eso | local
     gpu: bool = False  # request gpu.intel.com/i915
+    # vlc-server's iGPU claim is gated on (gpu and vlc_gpu). Default True keeps the
+    # claim wherever the env has a GPU; set False to drop just vlc's claim while OBS
+    # keeps the iGPU. vlc proved it doesn't need the GPU (stream-copy + trivial
+    # software decode — CPU flat at ~0.04 cores with and without /dev/dri,
+    # verified live on stage 2026-06-13). See VlcServer in constructs/vlc.py.
+    vlc_gpu: bool = True
     obs_encoder: str = "obs_x264"  # ffmpeg_vaapi_tex on GPU envs
     obs_quality: str = "low"  # low | high
     dashcam_mode: str = "hostpath"  # nfs | hostpath
@@ -163,6 +169,11 @@ ENVS: dict[str, EnvConfig] = {
         binary_env="production",
         deployment_env="prod-1",
         gpu=True,
+        # vlc doesn't need the iGPU (stream-copy + software decode); dropping its
+        # claim frees an iGPU slot and eases co-tenant contention (the 2026-06-11
+        # prod-stutter incident). OBS keeps the iGPU for VAAPI encode. Proven on
+        # stage first, then prod on the live twitch stream.
+        vlc_gpu=False,
         obs_encoder="ffmpeg_vaapi_tex",
         obs_quality="high",
         dashcam_mode="nfs",
@@ -197,6 +208,11 @@ ENVS: dict[str, EnvConfig] = {
         binary_env="staging",
         deployment_env="stage-1",
         gpu=True,
+        # vlc's iGPU claim proven unnecessary 2026-06-13 (stream-copy + trivial
+        # software decode). Re-asserting vlc_gpu=False here — it was lost when the
+        # app workloads moved from infra into this repo (the cdk8s-into-repo
+        # cutover dropped the flag, so stage vlc silently reclaimed the iGPU).
+        vlc_gpu=False,
         obs_encoder="ffmpeg_vaapi_tex",
         obs_quality="low",
         dashcam_mode="nfs",
