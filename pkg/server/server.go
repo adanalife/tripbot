@@ -117,6 +117,9 @@ func (s *Server) Start(ctx context.Context) {
 	// read-only JSON profile for the standalone tripbot-console's popover (it
 	// has no DB access and proxies here over the in-namespace Service).
 	r.Handle("/api/user/{username}", tagged("/api/user/{username}", userProfileAPIHandler)).Methods("GET")
+	// read-only JSON list of the logins currently in chat, for the standalone
+	// tripbot-console's currently-active-chatters panel (it has no Twitch access).
+	r.Handle("/api/chatters", tagged("/api/chatters", chattersHandler)).Methods("GET")
 	r.Handle("/admin/map/corpus", tagged("/admin/map/corpus", mapCorpusHandler)).Methods("GET")
 	r.PathPrefix("/static/").Handler(staticHandler())
 
