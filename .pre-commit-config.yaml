@@ -2,14 +2,10 @@
 #   - LFS-tracked binaries (assets/video/): CI doesn't pull LFS, so the
 #     MP4 checkout is a permission-denied pointer rather than the real
 #     file, and end-of-file-fixer chokes trying to read it.
-#   - committed audio binaries (assets/audio/): the car-hum loop is a
-#     multi-MB FLAC the text hooks can't read and check-added-large-files
-#     would reject; it's an intentional, committed asset baked into the OBS
-#     image.
 #   - vendored frontend assets (pkg/server/static/): third-party htmx +
 #     its SSE extension, kept byte-for-byte upstream — not ours to
 #     reformat (no trailing newline, minified, etc.).
-exclude: '^(assets/video/|assets/audio/|pkg/server/static/)'
+exclude: '^(assets/video/|pkg/server/static/)'
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
