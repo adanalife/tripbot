@@ -81,7 +81,7 @@ func (p *Player) GetCurrentlyPlaying(ctx context.Context) {
 		// Announce the switch so the admin panel's "now playing" card updates
 		// live (no-op when NATS is unconfigured). emitted_at doubles as the
 		// clip start time for the panel's elapsed ticker.
-		eventbus.EmitVideoChanged(ctx, c.Conf.Environment,
+		eventbus.EmitVideoChanged(ctx, c.Conf.Environment, c.Conf.Platform,
 			p.CurrentlyPlaying.File(), p.CurrentlyPlaying.State, p.CurrentlyPlaying.Flagged,
 			p.CurrentlyPlaying.Lat, p.CurrentlyPlaying.Lng)
 
@@ -114,7 +114,7 @@ func (p *Player) EmitCurrentVideo(ctx context.Context) {
 	if p.CurrentlyPlaying.Slug == "" {
 		return
 	}
-	eventbus.EmitVideoChanged(ctx, c.Conf.Environment,
+	eventbus.EmitVideoChanged(ctx, c.Conf.Environment, c.Conf.Platform,
 		p.CurrentlyPlaying.File(), p.CurrentlyPlaying.State, p.CurrentlyPlaying.Flagged,
 		p.CurrentlyPlaying.Lat, p.CurrentlyPlaying.Lng)
 }

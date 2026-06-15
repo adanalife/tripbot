@@ -46,8 +46,8 @@ func TestHub_Start_replaysHistoryFromJetStream(t *testing.T) {
 	// Publish history BEFORE the hub starts — the whole point is replay.
 	eventbus.EmitChatMessage(ctx, env, "twitch", "alice", "first")
 	eventbus.EmitChatMessage(ctx, env, "twitch", "bob", "second")
-	eventbus.EmitVideoChanged(ctx, env, "wy_0001.MP4", "Wyoming", false, 41.5, -110.2)
-	eventbus.EmitVideoChanged(ctx, env, "ut_0002.MP4", "Utah", false, 40.0, -111.0)
+	eventbus.EmitVideoChanged(ctx, env, "twitch", "wy_0001.MP4", "Wyoming", false, 41.5, -110.2)
+	eventbus.EmitVideoChanged(ctx, env, "twitch", "ut_0002.MP4", "Utah", false, 40.0, -111.0)
 	if err := nc.Flush(); err != nil {
 		t.Fatalf("flush: %v", err)
 	}
