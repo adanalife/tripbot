@@ -26,7 +26,7 @@ spec:
             - secretRef:
                 name: tripbot-google-maps-api-key
                 optional: false
-          image: adanalife/tripbot:3.4.1
+          image: adanalife/tripbot:3.5.0
           imagePullPolicy: IfNotPresent
           name: auth-bootstrap
           ports:
