@@ -22,14 +22,15 @@ var (
 		// the 4-query GetScore chain).
 		0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10,
 	)
-	tripbotEvents     = mustCounter("tripbot_events_total", "Total login/logout events written to the events table, labeled by event")
-	scoreboardWrites  = mustCounter("tripbot_scoreboard_writes_total", "Total successful scoreboard score writes, labeled by scoreboard")
-	twitchSubscribers = mustGauge("twitch_subscribers_total", "Current number of Twitch channel subscribers")
-	twitchFollowers   = mustGauge("twitch_followers_total", "Current number of Twitch channel followers")
-	twitchConnected   = mustGauge("tripbot_twitch_connected", "1 when the bot is connected to Twitch chat (IRC), 0 otherwise")
-	twitchTokenExpiry = mustGauge("tripbot_twitch_token_expires_at_seconds", "Unix timestamp of the in-memory Twitch user-access-token's ExpiresAt, labeled by account (bot|broadcaster). 0 when the account has no loaded token.")
-	twitchHelixErrors = mustCounter("twitch_helix_errors_total", "Total non-2xx responses from the Twitch Helix API, labeled by endpoint and status_code")
-	twitchChannelLive = mustGauge("tripbot_twitch_channel_live", "1 when Helix GetStreams reports the configured channel as live, 0 when offline. Driven by the OBS silent-disconnect watchdog's Helix poll.")
+	tripbotEvents      = mustCounter("tripbot_events_total", "Total login/logout events written to the events table, labeled by event")
+	carSoundSelections = mustCounter("tripbot_carsound_selections_total", "Total times a viewer switched the YouTube background car-sound via !carsound, labeled by sound — drives the 'which voicing is most popular' question")
+	scoreboardWrites   = mustCounter("tripbot_scoreboard_writes_total", "Total successful scoreboard score writes, labeled by scoreboard")
+	twitchSubscribers  = mustGauge("twitch_subscribers_total", "Current number of Twitch channel subscribers")
+	twitchFollowers    = mustGauge("twitch_followers_total", "Current number of Twitch channel followers")
+	twitchConnected    = mustGauge("tripbot_twitch_connected", "1 when the bot is connected to Twitch chat (IRC), 0 otherwise")
+	twitchTokenExpiry  = mustGauge("tripbot_twitch_token_expires_at_seconds", "Unix timestamp of the in-memory Twitch user-access-token's ExpiresAt, labeled by account (bot|broadcaster). 0 when the account has no loaded token.")
+	twitchHelixErrors  = mustCounter("twitch_helix_errors_total", "Total non-2xx responses from the Twitch Helix API, labeled by endpoint and status_code")
+	twitchChannelLive  = mustGauge("tripbot_twitch_channel_live", "1 when Helix GetStreams reports the configured channel as live, 0 when offline. Driven by the OBS silent-disconnect watchdog's Helix poll.")
 
 	obsSilentDisconnectRestarts = mustCounter("tripbot_obs_silent_disconnect_restarts_total", "Total times the OBS silent-disconnect watchdog forced a StopStream+StartStream because OBS reported outputActive=true while Twitch reported the channel offline")
 
@@ -69,6 +70,11 @@ var Events = eventsIface{counter: tripbotEvents}
 // ScoreboardWrites exposes the scoreboard-write counter. Record by calling
 // ScoreboardWrites.Inc(scoreboardName) right after the row is persisted.
 var ScoreboardWrites = scoreboardWritesIface{counter: scoreboardWrites}
+
+// CarSoundSelections exposes the !carsound popularity counter. Record by
+// calling CarSoundSelections.Inc(soundName) when a viewer switches the
+// background car-sound, so Grafana can rank voicings by selection count.
+var CarSoundSelections = carSoundSelectionsIface{counter: carSoundSelections}
 
 // TwitchAudience exposes subscriber and follower gauge recording.
 var TwitchAudience = twitchAudienceIface{subscribers: twitchSubscribers, followers: twitchFollowers}
@@ -149,6 +155,12 @@ type scoreboardWritesIface struct{ counter metric.Int64Counter }
 
 func (s scoreboardWritesIface) Inc(scoreboard string) {
 	s.counter.Add(context.Background(), 1, metric.WithAttributes(attribute.String("scoreboard", scoreboard)))
+}
+
+type carSoundSelectionsIface struct{ counter metric.Int64Counter }
+
+func (c carSoundSelectionsIface) Inc(sound string) {
+	c.counter.Add(context.Background(), 1, metric.WithAttributes(attribute.String("sound", sound)))
 }
 
 type twitchAudienceIface struct {

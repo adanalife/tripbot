@@ -109,21 +109,29 @@ func EmitChatMessage(ctx context.Context, env, platform, username, text string) 
 // --- viewers.count --------------------------------------------------------
 
 // ViewerCount is the wire format for tripbot.<env>.viewers.count — the
-// authoritative chatter total Twitch reports, published on each chatter-list
-// refresh so the admin panel's "in chat" number updates live.
+// authoritative chatter total the platform reports, published on each
+// chatter-list refresh so the console's "in chat" number updates live.
 type ViewerCount struct {
+	// Platform is the streaming platform this count is for ("twitch" /
+	// "youtube"). Both per-platform instances publish into the same env's
+	// subject, so this is what lets the console keep a separate count per
+	// platform instead of the instances clobbering one another. Empty on
+	// events emitted before the tag existed.
+	Platform  string `json:"platform,omitempty"`
 	Count     int    `json:"count"`
 	EmittedAt string `json:"emitted_at"`
 }
 
 // ViewerCountSubject returns the subscribe/publish subject for viewer-count
-// updates in env. The admin hub builds the same string to subscribe.
+// updates in env. The console builds the same string to subscribe.
 func ViewerCountSubject(env string) string { return subject(env, "viewers", "count") }
 
-// EmitViewerCount publishes the current chatter total. The admin hub compares
-// it to the previous value to flash the count green (rising) or red (falling).
-func EmitViewerCount(ctx context.Context, env string, count int) {
+// EmitViewerCount publishes the current chatter total for this instance's
+// platform. The console compares it to the previous value to flash the count
+// green (rising) or red (falling).
+func EmitViewerCount(ctx context.Context, env, platform string, count int) {
 	emit(ctx, ViewerCountSubject(env), ViewerCount{
+		Platform:  platform,
 		Count:     count,
 		EmittedAt: emittedAt(),
 	})
@@ -133,9 +141,16 @@ func EmitViewerCount(ctx context.Context, env string, count int) {
 
 // VideoChanged is the wire format for tripbot.<env>.video.changed — published
 // when VLC switches to a new clip. State is the full state name (e.g.
-// "Wyoming"); Flagged marks a no-GPS clip. The admin panel's "now playing"
-// card updates from this without a reload.
+// "Wyoming"); Flagged marks a no-GPS clip. The console's "now playing" card
+// updates from this without a reload.
 type VideoChanged struct {
+	// Platform is the streaming platform whose VLC switched clips ("twitch" /
+	// "youtube"). Each platform runs its own VLC at an independent corpus
+	// position, so both per-platform instances publish into the same env's
+	// subject; this is what lets the console keep a separate now-playing card
+	// and map trail per platform. Empty on events emitted before the tag
+	// existed.
+	Platform  string  `json:"platform,omitempty"`
 	File      string  `json:"file"`
 	State     string  `json:"state"`
 	Flagged   bool    `json:"flagged"`
@@ -148,10 +163,12 @@ type VideoChanged struct {
 // events in env.
 func VideoChangedSubject(env string) string { return subject(env, "video", "changed") }
 
-// EmitVideoChanged publishes a video switch. The emitted_at doubles as the
-// clip's start time, so the panel can tick an elapsed timer from it.
-func EmitVideoChanged(ctx context.Context, env, file, state string, flagged bool, lat, lng float64) {
+// EmitVideoChanged publishes a video switch for this instance's platform. The
+// emitted_at doubles as the clip's start time, so the console can tick an
+// elapsed timer from it.
+func EmitVideoChanged(ctx context.Context, env, platform, file, state string, flagged bool, lat, lng float64) {
 	emit(ctx, VideoChangedSubject(env), VideoChanged{
+		Platform:  platform,
 		File:      file,
 		State:     state,
 		Flagged:   flagged,

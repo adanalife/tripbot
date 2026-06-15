@@ -70,6 +70,16 @@ spec:
       labels:
         app: tripbot-youtube
     spec:
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - preference:
+                matchExpressions:
+                  - key: dana.lol/board
+                    operator: In
+                    values:
+                      - rpi5
+              weight: 100
       containers:
         - env:
             - name: USER
@@ -157,6 +167,10 @@ spec:
         runAsUser: 65532
         seccompProfile:
           type: RuntimeDefault
+      tolerations:
+        - effect: NoSchedule
+          key: dana.lol/rpi5
+          operator: Exists
 ---
 apiVersion: v1
 kind: Service

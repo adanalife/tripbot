@@ -11,11 +11,29 @@ metadata:
 data:
   DASHCAM_RTSP_URL: rtsp://vlc-youtube:8554/dashcam
   OBS_QUALITY_PRESET: low
-  OBS_STREAM_ENCODER: ffmpeg_vaapi_tex
+  OBS_STREAM_ENCODER: obs_x264
   OBS_WEBSOCKET_PASSWD: adanalife
   ONSCREENS_URL_BASE: http://onscreens-youtube:8080
   STREAM_PLATFORM: youtube
   VLC_URL_BASE: http://vlc-youtube:8080
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: obs-youtube-stream-key
+  namespace: stage-1
+spec:
+  data:
+    - remoteRef:
+        key: k8s/obs/youtube-stream-key
+      secretKey: STREAM_KEY
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: SecretStore
+    name: aws-secretsmanager
+  target:
+    creationPolicy: Owner
+    name: obs-youtube-stream-key
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -37,7 +55,7 @@ spec:
   template:
     metadata:
       annotations:
-        adanalife.dev/config-hash: 26804620b3
+        adanalife.dev/config-hash: 54bf302110
       labels:
         app: obs-youtube
         app.kubernetes.io/instance: obs-youtube
@@ -73,11 +91,9 @@ spec:
               name: obs-server
           resources:
             limits:
-              gpu.intel.com/i915: "1"
               memory: 3Gi
             requests:
               cpu: 200m
-              gpu.intel.com/i915: "1"
               memory: 512Mi
           securityContext:
             allowPrivilegeEscalation: false

@@ -120,6 +120,10 @@ func (s *Server) Start(ctx context.Context) {
 	// read-only JSON list of the logins currently in chat, for the standalone
 	// tripbot-console's currently-active-chatters panel (it has no Twitch access).
 	r.Handle("/api/chatters", tagged("/api/chatters", chattersHandler)).Methods("GET")
+	// read-only JSON of the current golang-migrate schema version, for the
+	// standalone tripbot-console to surface which migration the env's DB is on
+	// (it has no DB access and proxies here over the in-namespace Service).
+	r.Handle("/api/db/migration", tagged("/api/db/migration", migrationVersionAPIHandler)).Methods("GET")
 	r.Handle("/admin/map/corpus", tagged("/admin/map/corpus", mapCorpusHandler)).Methods("GET")
 	r.PathPrefix("/static/").Handler(staticHandler())
 

@@ -19,7 +19,7 @@ from __future__ import annotations
 from constructs import Construct
 
 import imports.k8s as k8s
-from adanalife_k8s import appconfig, configmap
+from adanalife_k8s import appconfig, configmap, scheduling
 from adanalife_k8s.config import EnvConfig
 from adanalife_k8s.naming import app_name, meta_labels, selector
 
@@ -53,6 +53,12 @@ class VlcServer(Construct):
         # --- ConfigMap (stable name + content-hash annotation) ---
         data = dict(_BASE_CONFIG)
         data["VLC_SERVER_HOST"] = f"{name}:8080"  # self-reference
+        # OBS WebSocket control addr (:4455) — vlc-server polls OBS for streaming
+        # state, so it must dial its OWN platform's OBS (vlc-youtube → obs-youtube),
+        # not the baked-in obs-twitch default that left the YouTube vlc connecting
+        # to obs-twitch. Set explicitly per platform (same as tripbot.py); relying
+        # on the default already caused an incident (pkg/obs/control.go).
+        data["OBS_WEBSOCKET_ADDR"] = f"{app_name('obs', platform)}:4455"
         if appconfig.uses_local_stubs(env):
             data.update(appconfig.local_stubs())
         data.update(appconfig.telemetry_config(env, platform))
@@ -183,6 +189,20 @@ class VlcServer(Construct):
                             seccomp_profile=k8s.SeccompProfile(type="RuntimeDefault")
                         ),
                         priority_class_name=env.priority_class or None,
+                        # Prefer the ephemeral rpi5 worker when present, recover
+                        # to the MS-01 when it's gone (stage only). The RTSP feed
+                        # to OBS crosses the LAN instead of localhost when vlc
+                        # lands on the Pi. See scheduling.py.
+                        tolerations=(
+                            scheduling.prefer_rpi5_tolerations()
+                            if env.prefer_rpi5
+                            else None
+                        ),
+                        affinity=(
+                            scheduling.prefer_rpi5_affinity()
+                            if env.prefer_rpi5
+                            else None
+                        ),
                         containers=[container],
                         volumes=[volume],
                     ),
