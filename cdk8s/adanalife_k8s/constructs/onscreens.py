@@ -21,7 +21,7 @@ from __future__ import annotations
 from constructs import Construct
 
 import imports.k8s as k8s
-from adanalife_k8s import appconfig, configmap
+from adanalife_k8s import appconfig, configmap, scheduling
 from adanalife_k8s.config import EnvConfig
 from adanalife_k8s.naming import app_name, meta_labels, selector
 
@@ -130,6 +130,18 @@ class OnscreensServer(Construct):
                             seccomp_profile=k8s.SeccompProfile(type="RuntimeDefault")
                         ),
                         priority_class_name=env.priority_class or None,
+                        # Prefer the ephemeral rpi5 worker when present, recover
+                        # to the MS-01 when it's gone (stage only). See scheduling.py.
+                        tolerations=(
+                            scheduling.prefer_rpi5_tolerations()
+                            if env.prefer_rpi5
+                            else None
+                        ),
+                        affinity=(
+                            scheduling.prefer_rpi5_affinity()
+                            if env.prefer_rpi5
+                            else None
+                        ),
                         containers=[container],
                         volumes=[
                             k8s.Volume(name="run", empty_dir=k8s.EmptyDirVolumeSource())
