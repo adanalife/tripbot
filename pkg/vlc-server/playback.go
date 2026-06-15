@@ -39,6 +39,21 @@ func (s *Server) PlayVideoFile(vidStr string) error {
 	return s.playAtIndex(index)
 }
 
+// PlayVideoFileAt plays a video file by basename and then seeks to positionMs
+// within it. Same pair the resume-on-restart path runs (PlayVideoFile then
+// SeekToPosition) — factored out so the play.at NATS handler and a future
+// caller share one entry point. Seeking is async + best-effort (it waits for
+// libvlc to reach Playing, then guards against the clip tail); positionMs 0
+// just plays from the top. Returns the PlayVideoFile error if the file isn't
+// in the playlist.
+func (s *Server) PlayVideoFileAt(ctx context.Context, vidStr string, positionMs int64) error {
+	if err := s.PlayVideoFile(vidStr); err != nil {
+		return err
+	}
+	s.SeekToPosition(ctx, positionMs)
+	return nil
+}
+
 // nextIndex computes a wrapped playlist position. Pure function so it can
 // be unit-tested without libvlc. Negative offsets wrap to the back of the list.
 func nextIndex(current, offset, length int) int {
