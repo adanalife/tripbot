@@ -49,10 +49,10 @@ def emit_app_charts(scope: Construct, env: EnvConfig) -> None:
             chart = Chart(scope, f"{env.name}-{comp}-{platform}", namespace=ns)
             ctor(chart, platform, env=env)
 
-        # OBS — its own chart. twitch streams by default in prod (ESO stream-key);
-        # everything else boots idle until toggled on. youtube carries
-        # STREAM_PLATFORM=youtube.
-        streaming = platform == "twitch" and env.name == "prod-1"
+        # OBS — its own chart. A platform streams (ESO stream-key + --startstreaming)
+        # when it's listed in env.obs_streaming; otherwise it boots idle until
+        # toggled on. youtube carries STREAM_PLATFORM=youtube.
+        streaming = platform in env.obs_streaming
         obs_chart = Chart(scope, f"{env.name}-obs-{platform}", namespace=ns)
         ObsInstance(
             obs_chart,

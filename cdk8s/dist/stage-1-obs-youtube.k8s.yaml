@@ -17,6 +17,24 @@ data:
   STREAM_PLATFORM: youtube
   VLC_URL_BASE: http://vlc-youtube:8080
 ---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: obs-youtube-stream-key
+  namespace: stage-1
+spec:
+  data:
+    - remoteRef:
+        key: k8s/obs/youtube-stream-key
+      secretKey: STREAM_KEY
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: SecretStore
+    name: aws-secretsmanager
+  target:
+    creationPolicy: Owner
+    name: obs-youtube-stream-key
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:

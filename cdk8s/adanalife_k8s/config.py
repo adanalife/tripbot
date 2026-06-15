@@ -82,6 +82,13 @@ class EnvConfig:
     # Streaming platforms present in this env (obs instances). twitch everywhere;
     # youtube currently stage-only while the bot side is built out.
     platforms: tuple[str, ...] = ("twitch",)
+    # Subset of `platforms` whose OBS instance actually streams (emits its
+    # stream-key ExternalSecret from SM `k8s/obs/<platform>-stream-key` and boots
+    # with --startstreaming). Anything in `platforms` but not here boots idle
+    # (VNC-only). Per-env + per-platform so there's no hardcoded "prod-twitch is
+    # special" — a stream is turned on by listing it here, governed by the
+    # two-live-streams iGPU budget (prod-twitch + stage-youtube).
+    obs_streaming: tuple[str, ...] = ()
     # --- prod-stream protection (2026-06-11 stage-starves-prod incident) ---
     # PriorityClassName stamped on the env's app Deployment pods; when set,
     # SupportingChart also emits the PriorityClass itself. Prod outranks every
@@ -188,6 +195,7 @@ ENVS: dict[str, EnvConfig] = {
         # take years of irreplaceable data.
         data_namespace="prod-1-data",
         platforms=("twitch",),
+        obs_streaming=("twitch",),  # prod twitch is the always-live stream
         # The live stream always wins: prod app pods outrank default-priority
         # co-tenants (stage, dashcam-cv), and the encode/decode pair carries
         # real CPU requests so contention can't starve it (20-core node; the
@@ -240,6 +248,10 @@ ENVS: dict[str, EnvConfig] = {
         # streams total: prod-twitch + stage-youtube. Re-add "twitch" when
         # the burn-in ends.
         platforms=("youtube",),
+        # Stage streams to YouTube — the second half of the two-live-streams
+        # budget (prod-twitch + stage-youtube). Key from SM
+        # k8s/obs/youtube-stream-key (adanalife-stage account).
+        obs_streaming=("youtube",),
         # Guardrail from the same incident: cap what stage can request in
         # aggregate, so "accidentally scaled up too many stage deployments"
         # parks pods Unschedulable instead of crowding prod off the node.
