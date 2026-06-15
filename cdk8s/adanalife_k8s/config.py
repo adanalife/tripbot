@@ -119,6 +119,14 @@ class EnvConfig:
     # (EXTERNAL_URL, registered OAuth redirect URIs). Only dev needs it — k3d's
     # traefik is mapped to host :9443 because Colima can't bind :443.
     external_port: str = ""
+    # Bias this env's stateless app pods toward the ephemeral arm64 rpi5 worker
+    # (adanalife-rpi5) when it's present, falling back to the MS-01 when it's not.
+    # When True, the tripbot/vlc/onscreens constructs add a toleration for the
+    # node's dana.lol/rpi5 taint + a PREFERRED (never required) node affinity
+    # toward dana.lol/board=rpi5 (see scheduling.py). OBS deliberately opts
+    # out — the Pi 5 has no H.264 hw encoder. Stage only; prod stays on the MS-01
+    # (and the taint repels it regardless, since prod pods carry no toleration).
+    prefer_rpi5: bool = False
 
     def tag_for(self, component: str) -> str:
         """Image tag for a component: its pinned release tag when versions.yaml
@@ -241,6 +249,10 @@ ENVS: dict[str, EnvConfig] = {
         obs_quality="low",
         dashcam_mode="nfs",
         tailscale=True,
+        # Prefer the ephemeral arm64 rpi5 worker for stage's stateless app pods
+        # (tripbot/vlc/onscreens); they recover onto the MS-01 if the Pi is
+        # unplugged. See prefer_rpi5 on EnvConfig + scheduling.py.
+        prefer_rpi5=True,
         otel=False,
         postgres_size="10Gi",
         postgres_storage_class="local-path",

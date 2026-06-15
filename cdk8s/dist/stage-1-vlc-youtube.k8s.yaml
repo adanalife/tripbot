@@ -45,6 +45,16 @@ spec:
       labels:
         app: vlc-youtube
     spec:
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - preference:
+                matchExpressions:
+                  - key: dana.lol/board
+                    operator: In
+                    values:
+                      - rpi5
+              weight: 100
       containers:
         - envFrom:
             - configMapRef:
@@ -96,6 +106,10 @@ spec:
       securityContext:
         seccompProfile:
           type: RuntimeDefault
+      tolerations:
+        - effect: NoSchedule
+          key: dana.lol/rpi5
+          operator: Exists
       volumes:
         - name: dashcam
           persistentVolumeClaim:
