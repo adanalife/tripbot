@@ -95,7 +95,7 @@ func TestEmitViewerCount(t *testing.T) {
 	nowFn = func() time.Time { return fixed }
 	t.Cleanup(func() { nowFn = func() time.Time { return time.Now().UTC() } })
 
-	EmitViewerCount(context.Background(), "development", 42)
+	EmitViewerCount(context.Background(), "development", "twitch", 42)
 
 	if len(rec.Publishes) != 1 {
 		t.Fatalf("expected 1 publish, got %d", len(rec.Publishes))
@@ -108,6 +108,9 @@ func TestEmitViewerCount(t *testing.T) {
 	var ev ViewerCount
 	if err := json.Unmarshal(pub.Payload, &ev); err != nil {
 		t.Fatalf("payload not valid JSON: %v", err)
+	}
+	if ev.Platform != "twitch" {
+		t.Errorf("platform = %q, want twitch", ev.Platform)
 	}
 	if ev.Count != 42 {
 		t.Errorf("count = %d, want 42", ev.Count)
@@ -132,7 +135,7 @@ func TestEmitVideoChanged(t *testing.T) {
 	nowFn = func() time.Time { return fixed }
 	t.Cleanup(func() { nowFn = func() time.Time { return time.Now().UTC() } })
 
-	EmitVideoChanged(context.Background(), "development", "wy_0042.MP4", "Wyoming", false, 41.5, -110.2)
+	EmitVideoChanged(context.Background(), "development", "youtube", "wy_0042.MP4", "Wyoming", false, 41.5, -110.2)
 
 	if len(rec.Publishes) != 1 {
 		t.Fatalf("expected 1 publish, got %d", len(rec.Publishes))
@@ -145,6 +148,9 @@ func TestEmitVideoChanged(t *testing.T) {
 	var ev VideoChanged
 	if err := json.Unmarshal(pub.Payload, &ev); err != nil {
 		t.Fatalf("payload not valid JSON: %v", err)
+	}
+	if ev.Platform != "youtube" {
+		t.Errorf("platform = %q, want youtube", ev.Platform)
 	}
 	if ev.File != "wy_0042.MP4" || ev.State != "Wyoming" || ev.Flagged {
 		t.Errorf("envelope = %+v, want file=wy_0042.MP4 state=Wyoming flagged=false", ev)
