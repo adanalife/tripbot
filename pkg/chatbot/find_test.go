@@ -37,6 +37,8 @@ func newFindTestApp(t *testing.T, search Search) (*App, *recordingVLC, *recordin
 	app.VLC = recVLC
 	app.Chat = recChat
 	app.Search = search
+	// !find is feature-flagged; enable it for the behavior tests.
+	app.Flags = &recordingFlags{Set: map[string]bool{findFlagKey: true}}
 	return app, recVLC, recChat
 }
 
@@ -55,12 +57,33 @@ func TestFindCmd_JumpsToClosestHit(t *testing.T) {
 	if len(search.Queries) != 1 || search.Queries[0] != "snowy mountains" {
 		t.Fatalf("expected one search for %q, got %v", "snowy mountains", search.Queries)
 	}
-	want := `PlayFileAtTimestamp("2018_0514_224801_013.MP4", 163.5)`
+	// Lands findJumpLeadInSec ahead of the matched frame (163.5 - 12 = 151.5).
+	want := `PlayFileAtTimestamp("2018_0514_224801_013.MP4", 151.5)`
 	if len(recVLC.Calls) != 1 || recVLC.Calls[0] != want {
 		t.Errorf("expected VLC call %q, got %v", want, recVLC.Calls)
 	}
 	if got := recChat.Output(); !strings.Contains(got, "Jumping") || !strings.Contains(got, "Nevada") {
 		t.Errorf("expected a jump message naming the state, got %q", got)
+	}
+}
+
+func TestFindCmd_FlagOff_StaysSilent(t *testing.T) {
+	// The flag gate runs before everything (incl. the Darwin guard), so a
+	// disabled !find is silent on any OS — no search, no jump, no reply.
+	search := &recordingSearch{Hits: []SearchHit{{Slug: "x", TsSec: 1, Distance: 0.1}}}
+	app, recVLC, recChat := newFindTestApp(t, search)
+	app.Flags = noopFlags{} // every key false — fresh-deploy state
+
+	app.findCmd(context.Background(), newTestUser(adminUser), []string{"anything"})
+
+	if len(search.Queries) != 0 {
+		t.Errorf("expected no search when flag is off, got %v", search.Queries)
+	}
+	if len(recVLC.Calls) != 0 {
+		t.Errorf("expected no VLC jump when flag is off, got %v", recVLC.Calls)
+	}
+	if got := recChat.Output(); got != "" {
+		t.Errorf("expected silence when flag is off, got %q", got)
 	}
 }
 

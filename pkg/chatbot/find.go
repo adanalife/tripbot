@@ -12,6 +12,7 @@ import (
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
+	"github.com/adanalife/tripbot/pkg/feature"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/natsclient"
 	"github.com/adanalife/tripbot/pkg/users"
@@ -33,7 +34,22 @@ const (
 	// pgvector's <=> is (1 - cosine_similarity). Above this we treat the query
 	// as a miss rather than yanking the stream to a bad match.
 	findMaxDistance = 0.82
+	// findJumpLeadInSec lands the playhead this many seconds BEFORE the matched
+	// frame, so the moment is still upcoming when playback resumes (we don't
+	// want to land right on it and have it slip past on stream) and so it plays
+	// out in view after the seam overlay clears rather than being hidden by it.
+	// Slightly more than findSeamCoverDuration so a few seconds of run-up show
+	// uncovered before the moment itself. The vlc client clamps a resulting
+	// negative timestamp to start-of-clip.
+	findJumpLeadInSec = 12.0
+	// findSeamCoverDuration is how long the flag overlay hides the jump seam.
+	findSeamCoverDuration = 10 * time.Second
 )
+
+// findFlagKey gates !find. Off until the flag exists + is enabled in the
+// backing store (unknown keys evaluate false), so the command stays dormant
+// until the embed responder is deployed and we flip it on.
+const findFlagKey = "chatbot.find"
 
 // findEmbedRequest / findEmbedResponse are the NATS request/reply wire format
 // on tripbot.<env>.find.embed. The video-pipeline embed responder (deployment
@@ -195,6 +211,16 @@ func vectorLiteral(v []float32) string {
 func (a *App) findCmd(ctx context.Context, user *users.User, params []string) {
 	slog.InfoContext(ctx, "ran !find", "username", user.Username)
 
+	// Feature-flagged: stays fully silent (no usage hint, no jump) until enabled.
+	if !a.Flags.Bool(ctx, findFlagKey, feature.EvalContext{
+		Username: user.Username,
+		Channel:  c.Conf.ChannelName,
+		Env:      c.Conf.Environment,
+	}) {
+		slog.InfoContext(ctx, "!find disabled by feature flag", "flag", findFlagKey, "username", user.Username)
+		return
+	}
+
 	// VLC playback isn't wired up on the dev Mac (same guard as !goto).
 	if helpers.RunningOnDarwin() {
 		a.Chat.Say("Sorry, find isn't available right now")
@@ -227,7 +253,8 @@ func (a *App) findCmd(ctx context.Context, user *users.User, params []string) {
 	}
 
 	hit := hits[0]
-	if err := a.VLC.PlayFileAtTimestamp(ctx, hit.Slug+".MP4", hit.TsSec); err != nil {
+	// Land ahead of the matched frame so the moment doesn't slip past on stream.
+	if err := a.VLC.PlayFileAtTimestamp(ctx, hit.Slug+".MP4", hit.TsSec-findJumpLeadInSec); err != nil {
 		slog.ErrorContext(ctx, "find jump failed", "err", err, "slug", hit.Slug)
 		a.Chat.Say("Found it, but couldn't jump there — sorry!")
 		return
@@ -242,6 +269,6 @@ func (a *App) findCmd(ctx context.Context, user *users.User, params []string) {
 	// refresh the current-video record and cover the jump seam with the flag
 	// overlay, same sequence as !goto.
 	a.Video.GetCurrentlyPlaying(ctx)
-	a.Onscreens.ShowFlag(ctx, 10*time.Second)
+	a.Onscreens.ShowFlag(ctx, findSeamCoverDuration)
 	lastTimewarpTime = time.Now()
 }
