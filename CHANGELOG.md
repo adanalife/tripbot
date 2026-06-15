@@ -7,6 +7,26 @@ All notable changes to TripBot. Format follows [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+## [v3.4.1] — 2026-06-14
+
+Patch release. A one-time cleanup pass over the dashcam GPS corpus: adds a provenance column so synthesized fixes are distinguishable from real OCR ones, ships a `backfill-coords` tool that interpolates missing fixes and corrects digit-flip OCR outliers, and reseeds `videos.csv` with the corrected coordinates. Also makes prod-deploy impact visible on PRs. No runtime behavior change.
+
+### CI
+
+- **Prod-deploy impact is now visible on PRs.** A new `prod-dist-warning` workflow posts a sticky comment on any PR into `master` that touches a prod app deploy unit (`cdk8s/dist/prod-1-*-twitch.k8s.yaml`), spelling out that merging deploys to prod — the gap that let an incidental manifest change go live on a release merge rather than a deliberate gesture. The version-bump PR template (`bump-prs.yml`) is also corrected to be component-aware: prod-1 apps autosync from master so merging *is* the deploy, except OBS which is held out of autosync and still needs a manual sync. ([#859])
+
+### Database
+
+- **`videos.coord_source` provenance column.** Each clip's stored GPS fix now records how it was derived (`ocr`/`interpolated`/`rejected`/`missing`) so a corrective pass can mark synthesized points and a future re-OCR won't mistake them for real fixes. Existing 0/0 and flagged rows backfill to `missing`; runtime-created clips are stamped `missing` on save. ([#846])
+
+### Tooling
+
+- **`cmd/backfill-coords` cleans up dashcam GPS coordinates.** Walks videos in film order and, per the new provenance column, interpolates missing fixes from in-session neighbours and replaces digit-flip OCR outliers with interpolated points. Conservative by design — only judges clips against neighbours inside the interpolation window (trip boundaries left alone) and never clears a coordinate it can't replace. Dry-run by default; `--apply` writes to the DB, `--output-sql` emits idempotent slug-keyed UPDATEs. Mirrors `cmd/backfill-miles`. Removes the dead `collect-gps` script (its OCR pass was retired in #79). ([#846])
+
+### Seed
+
+- **Reseed `videos.csv` with corrected coordinates.** 334 clips gain coordinates (81 replacing digit-flip OCR outliers, 253 filling missing fixes), captured from `backfill-coords` output so a fresh seed loads the cleaned corpus. ([#846])
+
 ## [v3.4.0] — 2026-06-14
 
 Minor release. Headlined by a license-clean synthesized background-audio bed for the YouTube stream; also drops vlc-server's unused iGPU claim to ease co-tenant contention, plus routine OpenTelemetry dependency bumps.
@@ -1614,6 +1634,8 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#841]: https://github.com/adanalife/tripbot/pull/841
 [infra #717]: https://github.com/adanalife/infra/pull/717
 [#845]: https://github.com/adanalife/tripbot/pull/845
+[#846]: https://github.com/adanalife/tripbot/pull/846
+[#859]: https://github.com/adanalife/tripbot/pull/859
 [#851]: https://github.com/adanalife/tripbot/pull/851
 [#854]: https://github.com/adanalife/tripbot/pull/854
 [#761]: https://github.com/adanalife/tripbot/pull/761

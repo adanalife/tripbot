@@ -68,7 +68,7 @@ spec:
             - secretRef:
                 name: obs-stream-key
                 optional: true
-          image: adanalife/obs:3.2.1
+          image: adanalife/obs:3.4.1
           imagePullPolicy: IfNotPresent
           livenessProbe:
             exec:
