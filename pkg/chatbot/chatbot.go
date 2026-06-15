@@ -3,6 +3,7 @@ package chatbot
 import (
 	"context"
 	"log/slog"
+	"sync"
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
@@ -93,6 +94,18 @@ type App struct {
 	// delegates to the pkg/twitch client. The future swap point for an
 	// out-of-process Helix/auth service.
 	Twitch Twitch
+	// OBS drives live OBS WebSocket tweaks for chat commands — currently just
+	// !carsound repointing the YouTube background-audio source. Tests inject a
+	// fake; production uses realOBS (which dials per call via pkg/obs).
+	OBS OBS
+
+	// carSoundIdx is the index into carSounds of the YouTube background drone
+	// currently selected via !carsound; carSoundMu guards it (commands dispatch
+	// concurrently). Defaults to 0 — the scene's baked-in default — so a fresh
+	// process reports the right "now playing". In-memory only: resets on restart,
+	// same as OBS itself resets to the scene default.
+	carSoundMu  sync.Mutex
+	carSoundIdx int
 
 	// commands is this App's command registry (built by buildRegistry);
 	// singleWordLookup / multiWordLookup index it by trigger + alias for
@@ -142,6 +155,7 @@ func New() *App {
 		Geocoder:   realGeocoder{},
 		Weather:    realWeather{},
 		Twitch:     realTwitch{},
+		OBS:        realOBS{},
 	}
 	a.indexCommands()
 	return a

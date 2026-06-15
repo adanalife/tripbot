@@ -65,6 +65,16 @@ func (s *Server) handleMiddleShow(m *nats.Msg) {
 		return
 	}
 	s.MiddleText.Show(ev.Msg)
+	// Persist the new state so the overlay survives a server restart.
+	publishMiddleState(context.Background(), c.Conf.Environment, ev.Msg, true)
+}
+
+// handleMiddleHide hides the middle text. Hide retains the overlay's Content,
+// so the persisted state keeps the text (showing=false) — a restart restores
+// it hidden, matching the live state rather than blanking it.
+func (s *Server) handleMiddleHide(_ *nats.Msg) {
+	s.MiddleText.Hide()
+	publishMiddleState(context.Background(), c.Conf.Environment, s.MiddleText.Content, false)
 }
 
 // handleLeaderboardShow renders the {title, rows} payload server-side and
@@ -81,7 +91,6 @@ func (s *Server) handleLeaderboardShow(m *nats.Msg) {
 // The hide + empty-payload show handlers below take no data beyond the
 // envelope, so the body isn't inspected: the subject is the whole intent.
 // Hides are lenient by construction (nothing to reject).
-func (s *Server) handleMiddleHide(_ *nats.Msg)      { s.MiddleText.Hide() }
 func (s *Server) handleLeaderboardHide(_ *nats.Msg) { s.Leaderboard.Hide() }
 func (s *Server) handleTimewarpShow(_ *nats.Msg)    { s.Timewarp.ShowFor("Timewarp!", timewarpDuration) }
 func (s *Server) handleTimewarpHide(_ *nats.Msg)    { s.Timewarp.Hide() }

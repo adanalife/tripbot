@@ -53,6 +53,13 @@ class EnvConfig:
     # software decode — CPU flat at ~0.04 cores with and without /dev/dri,
     # verified live on stage 2026-06-13). See VlcServer in constructs/vlc.py.
     vlc_gpu: bool = True
+    # OBS's iGPU claim is gated on (gpu and obs_gpu), same shape as vlc_gpu.
+    # Default True keeps the claim wherever the env has a GPU; set False to drop
+    # just OBS's claim so the env stops being a live VAAPI consumer on the shared
+    # iGPU. An env that sets obs_gpu=False must also set obs_encoder="obs_x264" —
+    # without /dev/dri the VAAPI encoder can't run, so OBS falls back to software
+    # x264. See ObsInstance in constructs/obs.py.
+    obs_gpu: bool = True
     obs_encoder: str = "obs_x264"  # ffmpeg_vaapi_tex on GPU envs
     obs_quality: str = "low"  # low | high
     dashcam_mode: str = "hostpath"  # nfs | hostpath
@@ -82,6 +89,13 @@ class EnvConfig:
     # Streaming platforms present in this env (obs instances). twitch everywhere;
     # youtube currently stage-only while the bot side is built out.
     platforms: tuple[str, ...] = ("twitch",)
+    # Subset of `platforms` whose OBS instance actually streams (emits its
+    # stream-key ExternalSecret from SM `k8s/obs/<platform>-stream-key` and boots
+    # with --startstreaming). Anything in `platforms` but not here boots idle
+    # (VNC-only). Per-env + per-platform so there's no hardcoded "prod-twitch is
+    # special" — a stream is turned on by listing it here, governed by the
+    # two-live-streams iGPU budget (prod-twitch + stage-youtube).
+    obs_streaming: tuple[str, ...] = ()
     # --- prod-stream protection (2026-06-11 stage-starves-prod incident) ---
     # PriorityClassName stamped on the env's app Deployment pods; when set,
     # SupportingChart also emits the PriorityClass itself. Prod outranks every
@@ -105,6 +119,14 @@ class EnvConfig:
     # (EXTERNAL_URL, registered OAuth redirect URIs). Only dev needs it — k3d's
     # traefik is mapped to host :9443 because Colima can't bind :443.
     external_port: str = ""
+    # Bias this env's stateless app pods toward the ephemeral arm64 rpi5 worker
+    # (adanalife-rpi5) when it's present, falling back to the MS-01 when it's not.
+    # When True, the tripbot/vlc/onscreens constructs add a toleration for the
+    # node's dana.lol/rpi5 taint + a PREFERRED (never required) node affinity
+    # toward dana.lol/board=rpi5 (see scheduling.py). OBS deliberately opts
+    # out — the Pi 5 has no H.264 hw encoder. Stage only; prod stays on the MS-01
+    # (and the taint repels it regardless, since prod pods carry no toleration).
+    prefer_rpi5: bool = False
 
     def tag_for(self, component: str) -> str:
         """Image tag for a component: its pinned release tag when versions.yaml
@@ -188,6 +210,7 @@ ENVS: dict[str, EnvConfig] = {
         # take years of irreplaceable data.
         data_namespace="prod-1-data",
         platforms=("twitch",),
+        obs_streaming=("twitch",),  # prod twitch is the always-live stream
         # The live stream always wins: prod app pods outrank default-priority
         # co-tenants (stage, dashcam-cv), and the encode/decode pair carries
         # real CPU requests so contention can't starve it (20-core node; the
@@ -213,10 +236,23 @@ ENVS: dict[str, EnvConfig] = {
         # app workloads moved from infra into this repo (the cdk8s-into-repo
         # cutover dropped the flag, so stage vlc silently reclaimed the iGPU).
         vlc_gpu=False,
-        obs_encoder="ffmpeg_vaapi_tex",
+        # TEMPORARY (2026-06-15): stage obs-youtube dropped its iGPU claim so the
+        # only live VAAPI consumers on the shared Iris Xe are prod obs-twitch +
+        # the video-optimization job (2 concurrent encoders, not 3). A third
+        # concurrent consumer stuttered the prod stream on 2026-06-14. Stage
+        # youtube keeps streaming via software x264 (obs_encoder below); prod is
+        # CPU-protected by its priority class + requests. Revert (obs_gpu=True +
+        # obs_encoder="ffmpeg_vaapi_tex") once the optimization job no longer needs
+        # the iGPU, or once it's reworked to share the device with both streams.
+        obs_gpu=False,
+        obs_encoder="obs_x264",
         obs_quality="low",
         dashcam_mode="nfs",
         tailscale=True,
+        # Prefer the ephemeral arm64 rpi5 worker for stage's stateless app pods
+        # (tripbot/vlc/onscreens); they recover onto the MS-01 if the Pi is
+        # unplugged. See prefer_rpi5 on EnvConfig + scheduling.py.
+        prefer_rpi5=True,
         otel=False,
         postgres_size="10Gi",
         postgres_storage_class="local-path",
@@ -240,16 +276,20 @@ ENVS: dict[str, EnvConfig] = {
         # streams total: prod-twitch + stage-youtube. Re-add "twitch" when
         # the burn-in ends.
         platforms=("youtube",),
+        # Stage streams to YouTube — the second half of the two-live-streams
+        # budget (prod-twitch + stage-youtube). Key from SM
+        # k8s/obs/youtube-stream-key (adanalife-stage account).
+        obs_streaming=("youtube",),
         # Guardrail from the same incident: cap what stage can request in
         # aggregate, so "accidentally scaled up too many stage deployments"
         # parks pods Unschedulable instead of crowding prod off the node.
         # CPU/memory sized roomy — youtube stack (~0.5 CPU / 1.3Gi requests) +
         # dashcam-cv embed jobs (2× 1 CPU / 5Gi) + one-shot jobs fit with
-        # headroom; the node has 20 CPU / 31Gi. iGPU claims sized TIGHT to
-        # what stage runs today: vlc + obs steady (2) + 1 surge slot for
-        # vlc's RollingUpdate maxSurge=1 (obs is Recreate, no surge). Claims,
-        # not GPU time — encode contention is governed by the two-stream
-        # budget above, not by quota. Bump alongside re-adding twitch.
+        # headroom; the node has 20 CPU / 31Gi. iGPU cap left at 3 even though
+        # stage's own pods no longer claim the device (obs_gpu=False +
+        # vlc_gpu=False as of 2026-06-15) — the budget now covers the
+        # video-optimization job's claim with surge headroom. Restore the
+        # "vlc + obs steady + surge" sizing when obs_gpu flips back to True.
         app_quota={
             "requests.cpu": "6",
             "requests.memory": "16Gi",

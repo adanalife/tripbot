@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/adanalife/tripbot/pkg/scoreboards"
 	"github.com/adanalife/tripbot/pkg/video"
 )
 
@@ -43,8 +44,10 @@ func TestShowRotatingLeaderboard_MonthlyMiles(t *testing.T) {
 
 	app.showRotatingLeaderboard(context.Background(), 0.99) // monthly miles
 
-	if len(rec.Calls) != 1 || !strings.Contains(rec.Calls[0], `ShowLeaderboard("Monthly Miles", 2 rows)`) {
-		t.Errorf("expected one Monthly Miles overlay call, got %v", rec.Calls)
+	wantTitle := scoreboards.CurrentMilesMonth() + " Miles"
+	want := fmt.Sprintf(`ShowLeaderboard(%q, 2 rows)`, wantTitle)
+	if len(rec.Calls) != 1 || !strings.Contains(rec.Calls[0], want) {
+		t.Errorf("expected one %s overlay call, got %v", wantTitle, rec.Calls)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Error(err)
@@ -91,8 +94,10 @@ func TestShowRotatingLeaderboard_EmptyGuess_FallsBackToMonthlyMiles(t *testing.T
 
 	app.showRotatingLeaderboard(context.Background(), 0.3) // guess → empty → miles
 
-	if len(rec.Calls) != 1 || !strings.Contains(rec.Calls[0], `ShowLeaderboard("Monthly Miles", 1 rows)`) {
-		t.Errorf("expected fallback to Monthly Miles overlay, got %v", rec.Calls)
+	wantTitle := scoreboards.CurrentMilesMonth() + " Miles"
+	want := fmt.Sprintf(`ShowLeaderboard(%q, 1 rows)`, wantTitle)
+	if len(rec.Calls) != 1 || !strings.Contains(rec.Calls[0], want) {
+		t.Errorf("expected fallback to %s overlay, got %v", wantTitle, rec.Calls)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Error(err)

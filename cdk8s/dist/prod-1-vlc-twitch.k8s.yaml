@@ -11,6 +11,7 @@ data:
   ENV: production
   FONTCONFIG_PATH: /etc/fonts
   NATS_URL: nats://nats.prod-1-platform.svc.cluster.local:4222
+  OBS_WEBSOCKET_ADDR: obs-twitch:4455
   OTEL_RESOURCE_ATTRIBUTES: deployment.environment=prod-1,service.namespace=tripbot,service.platform=twitch
   OTEL_SDK_DISABLED: "false"
   OTEL_TRACES_SAMPLER: parentbased_traceidratio
@@ -40,7 +41,7 @@ spec:
   template:
     metadata:
       annotations:
-        adanalife.dev/config-hash: "0575176656"
+        adanalife.dev/config-hash: d7525e4c17
       labels:
         app: vlc-twitch
     spec:

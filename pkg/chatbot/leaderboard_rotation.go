@@ -65,6 +65,6 @@ func (a *App) fetchLeaderboard(ctx context.Context, kind leaderboardKind) (strin
 	case guessLeaderboard:
 		return "Correct Guesses This Month", scoreboards.TopGuessRows(ctx, leaderboardSize)
 	default:
-		return "Monthly Miles", scoreboards.TopMilesRows(ctx, leaderboardSize)
+		return scoreboards.CurrentMilesMonth() + " Miles", scoreboards.TopMilesRows(ctx, leaderboardSize)
 	}
 }

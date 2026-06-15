@@ -29,6 +29,17 @@ type MiddleShow struct {
 	Msg string `json:"msg"`
 }
 
+// MiddleState is the last-value state onscreens-server publishes about the
+// middle-text overlay so the text (and its shown/hidden status) survives a
+// server restart. Unlike MiddleShow — a *command* from tripbot — this is
+// *state* the server emits about itself, read back from the
+// MaxMsgsPerSubject=1 stream on startup. Mirrors the vlc lastplayed cache.
+type MiddleState struct {
+	Envelope
+	Msg     string `json:"msg"`
+	Showing bool   `json:"showing"`
+}
+
 // LeaderboardShow is the payload for the leaderboard.show subject. The
 // server renders Rows into the on-screen HTML, so the wire carries
 // structured data rather than a pre-rendered blob.

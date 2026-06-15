@@ -13,11 +13,30 @@ Examples:
     uv run carhum.py --duration 60 --out sample.wav
     uv run carhum.py --duration 1800 --out bed_30min.wav        # 30-minute bed
     uv run carhum.py --duration 120 --loop 6 --out loop.wav     # seamless 2-min loop
+    uv run carhum.py --preset highway --loop 6 --out highway.wav  # a character preset
 """
 
 import argparse
 import numpy as np
 from scipy import signal
+
+
+# Character presets — each is a base engine pitch plus the mix weights of the
+# four layers (sub rumble / road roar / cabin air / engine drone). They give
+# four audibly distinct "car" beds to cycle between on stream. `--base-hz`
+# still wins if passed explicitly. The un-presetted default ("classic") keeps
+# the original voicing so existing standalone renders are unchanged.
+DEFAULT_WEIGHTS = {"sub": 0.55, "road": 1.00, "air": 0.12, "eng": 0.16}
+PRESETS = {
+    # stopped/slow: low rumble, engine forward, little road roar.
+    "idle": {"base_hz": 40, "sub": 0.55, "road": 0.70, "air": 0.10, "eng": 0.30},
+    # fast tarmac: road roar dominant, bright cabin air, engine sunk.
+    "highway": {"base_hz": 60, "sub": 0.60, "road": 1.15, "air": 0.18, "eng": 0.10},
+    # balanced mid — closest to the original "low engine" voicing.
+    "backroad": {"base_hz": 50, "sub": 0.55, "road": 1.00, "air": 0.14, "eng": 0.18},
+    # airy/open: more cabin hiss up top, softer road, gentle engine.
+    "mountain": {"base_hz": 46, "sub": 0.50, "road": 0.85, "air": 0.22, "eng": 0.14},
+}
 
 
 def colored_noise(n, alpha, rng):
@@ -65,7 +84,7 @@ def engine_drone(t, sr, base_hz, n_harmonics, rng):
     return out / (np.std(out) + 1e-12)
 
 
-def build_channel(n, sr, base_hz, rng):
+def build_channel(n, sr, base_hz, rng, weights=DEFAULT_WEIGHTS):
     t = np.arange(n) / sr
 
     # 1. Sub rumble — chassis/road, felt more than heard. Very low.
@@ -88,7 +107,12 @@ def build_channel(n, sr, base_hz, rng):
     eng = butter_apply(eng, sr, 320, "low")
     eng *= slow_lfo(t, sr, 0.06, 0.20, rng)
 
-    mix = 0.55 * sub + 1.0 * road + 0.12 * air + 0.16 * eng
+    mix = (
+        weights["sub"] * sub
+        + weights["road"] * road
+        + weights["air"] * air
+        + weights["eng"] * eng
+    )
     return mix
 
 
@@ -109,7 +133,18 @@ def main():
     )
     p.add_argument("--duration", type=float, default=60.0, help="seconds")
     p.add_argument("--sr", type=int, default=48000, help="sample rate")
-    p.add_argument("--base-hz", type=float, default=52.0, help="engine fundamental")
+    p.add_argument(
+        "--preset",
+        choices=sorted(PRESETS),
+        default=None,
+        help="character preset (sets engine pitch + layer mix); see PRESETS",
+    )
+    p.add_argument(
+        "--base-hz",
+        type=float,
+        default=None,
+        help="engine fundamental (overrides the preset's; default 52)",
+    )
     p.add_argument("--seed", type=int, default=None, help="reproducible render")
     p.add_argument(
         "--loop",
@@ -123,13 +158,19 @@ def main():
     p.add_argument("--out", default="carhum.wav")
     args = p.parse_args()
 
+    # Resolve preset -> mix weights + engine pitch. An explicit --base-hz always
+    # wins; otherwise fall back to the preset's pitch, then the classic default.
+    preset = PRESETS.get(args.preset, {})
+    weights = {k: preset.get(k, DEFAULT_WEIGHTS[k]) for k in DEFAULT_WEIGHTS}
+    base_hz = args.base_hz if args.base_hz is not None else preset.get("base_hz", 52.0)
+
     ss = np.random.SeedSequence(args.seed)
     n = int(args.duration * args.sr)
 
     # Independent noise per channel -> natural stereo width, no harsh phasing.
     rngs = [np.random.default_rng(s) for s in ss.spawn(2)]
-    left = build_channel(n, args.sr, args.base_hz, rngs[0])
-    right = build_channel(n, args.sr, args.base_hz, rngs[1])
+    left = build_channel(n, args.sr, base_hz, rngs[0], weights)
+    right = build_channel(n, args.sr, base_hz, rngs[1], weights)
     stereo = np.stack([left, right], axis=1)
 
     if args.loop > 0:
@@ -150,7 +191,11 @@ def main():
     from scipy.io import wavfile
 
     wavfile.write(args.out, args.sr, pcm)
-    print(f"wrote {args.out}  ({args.duration:.0f}s, {args.sr} Hz, stereo)")
+    tag = args.preset or "classic"
+    print(
+        f"wrote {args.out}  ({args.duration:.0f}s, {args.sr} Hz, stereo, "
+        f"preset={tag}, base={base_hz:.0f}Hz)"
+    )
 
 
 if __name__ == "__main__":

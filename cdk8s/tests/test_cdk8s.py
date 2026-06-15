@@ -50,6 +50,17 @@ def test_each_component_has_deployment_and_service(env, comp, platform):
 
 
 @pytest.mark.parametrize("env,platform", [("prod-1", "twitch"), ("stage-1", "youtube")])
+@pytest.mark.parametrize("comp", ["vlc", "tripbot"])
+def test_obs_websocket_addr_is_platform_scoped(env, comp, platform):
+    """Both OBS-websocket clients (tripbot + vlc-server poll/control OBS) must dial
+    their OWN platform's OBS — vlc-youtube → obs-youtube, not the baked-in
+    obs-twitch default that broke the YouTube vlc."""
+    cms = _by_kind(_objects(f"{env}-{comp}-{platform}"), "ConfigMap")
+    data = next(cm["data"] for cm in cms if "OBS_WEBSOCKET_ADDR" in cm.get("data", {}))
+    assert data["OBS_WEBSOCKET_ADDR"] == f"obs-{platform}:4455"
+
+
+@pytest.mark.parametrize("env,platform", [("prod-1", "twitch"), ("stage-1", "youtube")])
 def test_prod_pinned_stage_floats(env, platform):
     """prod deploys the exact versions.yaml pin with IfNotPresent; stage floats
     on develop with Always."""
@@ -97,3 +108,29 @@ def test_youtube_tripbot_emits_youtube_creds():
     objs = _objects("stage-1-tripbot-youtube")
     es_names = {o["metadata"]["name"] for o in objs if o["kind"] == "ExternalSecret"}
     assert "tripbot-youtube-creds" in es_names
+
+
+# Which (env, platform) OBS instances actually stream — must mirror
+# config.EnvConfig.obs_streaming. A streaming instance emits its stream-key
+# ExternalSecret; an idle one does not (and boots without the key).
+STREAMING = {("prod-1", "twitch"), ("stage-1", "youtube")}
+
+
+@pytest.mark.parametrize("env,comp,platform", list(_env_components()), ids=str)
+def test_obs_stream_key_secret_iff_streaming(env, comp, platform):
+    if comp != "obs":
+        pytest.skip("stream-key toggle is OBS-only")
+    objs = _objects(f"{env}-obs-{platform}")
+    es_names = {o["metadata"]["name"] for o in _by_kind(objs, "ExternalSecret")}
+    # twitch keeps the shared base name; other platforms get a distinct one.
+    key_name = (
+        "obs-stream-key" if platform == "twitch" else f"obs-{platform}-stream-key"
+    )
+    if (env, platform) in STREAMING:
+        assert key_name in es_names, (
+            f"{env}/{platform} should stream but has no stream-key ExternalSecret"
+        )
+    else:
+        assert key_name not in es_names, (
+            f"{env}/{platform} should be idle but emits a stream-key ExternalSecret"
+        )

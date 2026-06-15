@@ -14,8 +14,16 @@ func subject(env, overlay, verb string) string {
 	return fmt.Sprintf("tripbot.%s.%s.%s.%s", env, domain, overlay, verb)
 }
 
-func MiddleShowSubject(env string) string      { return subject(env, "middle", "show") }
-func MiddleHideSubject(env string) string      { return subject(env, "middle", "hide") }
+func MiddleShowSubject(env string) string { return subject(env, "middle", "show") }
+func MiddleHideSubject(env string) string { return subject(env, "middle", "hide") }
+
+// MiddleStateSubject is the last-value state leaf onscreens-server publishes
+// the middle-text overlay's content + visibility to, so a restarted server
+// restores it (tripbot.<env>.onscreens.middle.state). Unlike middle.show /
+// middle.hide (commands from tripbot) this is *state* the server emits about
+// itself — backed by a MaxMsgsPerSubject=1 stream, the same shape as the vlc
+// lastplayed cache (tripbot.<env>.vlc.lastplayed.<platform>).
+func MiddleStateSubject(env string) string     { return subject(env, "middle", "state") }
 func LeaderboardShowSubject(env string) string { return subject(env, "leaderboard", "show") }
 func LeaderboardHideSubject(env string) string { return subject(env, "leaderboard", "hide") }
 func TimewarpShowSubject(env string) string    { return subject(env, "timewarp", "show") }
