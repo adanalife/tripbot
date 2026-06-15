@@ -123,9 +123,11 @@ class EnvConfig:
     # (adanalife-rpi5) when it's present, falling back to the MS-01 when it's not.
     # When True, the tripbot/vlc/onscreens constructs add a toleration for the
     # node's dana.lol/rpi5 taint + a PREFERRED (never required) node affinity
-    # toward dana.lol/board=rpi5 (see scheduling.py). OBS deliberately opts
-    # out — the Pi 5 has no H.264 hw encoder. Stage only; prod stays on the MS-01
-    # (and the taint repels it regardless, since prod pods carry no toleration).
+    # toward dana.lol/board=rpi5 (see scheduling.py). OBS opts in too, but only
+    # while it's a software encoder (not gpu and obs_gpu) — the Pi 5 has no H.264
+    # hw encoder, so a VAAPI OBS stays on the MS-01's Iris Xe. Stage only; prod
+    # stays on the MS-01 (and the taint repels it regardless, since prod pods
+    # carry no toleration).
     prefer_rpi5: bool = False
 
     def tag_for(self, component: str) -> str:
