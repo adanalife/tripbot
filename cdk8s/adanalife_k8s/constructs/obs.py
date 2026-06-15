@@ -97,7 +97,10 @@ class ObsInstance(Construct):
             "memory": k8s.Quantity.from_string("512Mi"),
         }
         limits = {"memory": k8s.Quantity.from_string("3Gi")}
-        if env.gpu:
+        # iGPU claim gated on (gpu and obs_gpu) — an env can drop just OBS's claim
+        # (env.obs_gpu=False) to stop being a live VAAPI consumer on the shared
+        # iGPU while still streaming via software x264 (env.obs_encoder).
+        if env.gpu and env.obs_gpu:
             requests["gpu.intel.com/i915"] = k8s.Quantity.from_string("1")
             limits["gpu.intel.com/i915"] = k8s.Quantity.from_string("1")
 
