@@ -98,6 +98,10 @@ type App struct {
 	// !carsound repointing the YouTube background-audio source. Tests inject a
 	// fake; production uses realOBS (which dials per call via pkg/obs).
 	OBS OBS
+	// Search runs visual search over the dashcam corpus for !find — it requests
+	// a query embedding from the video-pipeline responder over NATS and runs the
+	// pgvector cosine search. Tests inject a fake; production uses realSearch.
+	Search Search
 
 	// carSoundIdx is the index into carSounds of the YouTube background drone
 	// currently selected via !carsound; carSoundMu guards it (commands dispatch
@@ -156,6 +160,7 @@ func New() *App {
 		Weather:    realWeather{},
 		Twitch:     realTwitch{},
 		OBS:        realOBS{},
+		Search:     realSearch{},
 	}
 	a.indexCommands()
 	return a
