@@ -50,6 +50,17 @@ def test_each_component_has_deployment_and_service(env, comp, platform):
 
 
 @pytest.mark.parametrize("env,platform", [("prod-1", "twitch"), ("stage-1", "youtube")])
+@pytest.mark.parametrize("comp", ["vlc", "tripbot"])
+def test_obs_websocket_addr_is_platform_scoped(env, comp, platform):
+    """Both OBS-websocket clients (tripbot + vlc-server poll/control OBS) must dial
+    their OWN platform's OBS — vlc-youtube → obs-youtube, not the baked-in
+    obs-twitch default that broke the YouTube vlc."""
+    cms = _by_kind(_objects(f"{env}-{comp}-{platform}"), "ConfigMap")
+    data = next(cm["data"] for cm in cms if "OBS_WEBSOCKET_ADDR" in cm.get("data", {}))
+    assert data["OBS_WEBSOCKET_ADDR"] == f"obs-{platform}:4455"
+
+
+@pytest.mark.parametrize("env,platform", [("prod-1", "twitch"), ("stage-1", "youtube")])
 def test_prod_pinned_stage_floats(env, platform):
     """prod deploys the exact versions.yaml pin with IfNotPresent; stage floats
     on develop with Always."""

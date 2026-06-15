@@ -53,6 +53,12 @@ class VlcServer(Construct):
         # --- ConfigMap (stable name + content-hash annotation) ---
         data = dict(_BASE_CONFIG)
         data["VLC_SERVER_HOST"] = f"{name}:8080"  # self-reference
+        # OBS WebSocket control addr (:4455) — vlc-server polls OBS for streaming
+        # state, so it must dial its OWN platform's OBS (vlc-youtube → obs-youtube),
+        # not the baked-in obs-twitch default that left the YouTube vlc connecting
+        # to obs-twitch. Set explicitly per platform (same as tripbot.py); relying
+        # on the default already caused an incident (pkg/obs/control.go).
+        data["OBS_WEBSOCKET_ADDR"] = f"{app_name('obs', platform)}:4455"
         if appconfig.uses_local_stubs(env):
             data.update(appconfig.local_stubs())
         data.update(appconfig.telemetry_config(env, platform))

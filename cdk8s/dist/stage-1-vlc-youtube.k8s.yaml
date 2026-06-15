@@ -11,6 +11,7 @@ data:
   ENV: staging
   FONTCONFIG_PATH: /etc/fonts
   NATS_URL: nats://nats.stage-1-platform.svc.cluster.local:4222
+  OBS_WEBSOCKET_ADDR: obs-youtube:4455
   OTEL_RESOURCE_ATTRIBUTES: deployment.environment=stage-1,service.namespace=tripbot,service.platform=youtube
   OTEL_SDK_DISABLED: "true"
   OTEL_TRACES_SAMPLER: parentbased_traceidratio
@@ -41,7 +42,7 @@ spec:
   template:
     metadata:
       annotations:
-        adanalife.dev/config-hash: 73ed43388d
+        adanalife.dev/config-hash: 6784eb9f44
       labels:
         app: vlc-youtube
     spec:
