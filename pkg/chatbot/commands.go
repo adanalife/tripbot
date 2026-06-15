@@ -310,7 +310,7 @@ func (a *App) monthlyMilesLeaderboardCmd(ctx context.Context, user *users.User, 
 	leaderboard := scoreboards.TopMilesRows(ctx, leaderboardSize)
 
 	// display leaderboard on screen
-	a.Onscreens.ShowLeaderboard(ctx, "Monthly Miles", leaderboard)
+	a.Onscreens.ShowLeaderboard(ctx, scoreboards.CurrentMilesMonth()+" Miles", leaderboard)
 
 	// build a message to send to chat
 	msg := fmt.Sprintf("Top %d miles this month: ", len(leaderboard))

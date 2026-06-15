@@ -2,6 +2,7 @@ package chatbot
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/adanalife/tripbot/pkg/scoreboards"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/adanalife/tripbot/pkg/video"
 	"gorm.io/gorm"
@@ -978,7 +980,8 @@ func TestMonthlyMilesLeaderboardCmd_RendersTopUsers(t *testing.T) {
 	if !strings.HasPrefix(msg, "Top 2 miles this month:") {
 		t.Errorf("expected 'Top 2 miles this month:' prefix, got %q", msg)
 	}
-	if len(rec.Calls) != 1 || !strings.Contains(rec.Calls[0], `ShowLeaderboard("Monthly Miles", 2 rows)`) {
+	want := fmt.Sprintf(`ShowLeaderboard(%q, 2 rows)`, scoreboards.CurrentMilesMonth()+" Miles")
+	if len(rec.Calls) != 1 || !strings.Contains(rec.Calls[0], want) {
 		t.Errorf("expected one ShowLeaderboard overlay call with 2 rows, got %v", rec.Calls)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
