@@ -9,10 +9,11 @@ import (
 // — it just swallows every call.
 type noopVLC struct{}
 
-func (noopVLC) PlayRandom(_ context.Context) error                   { return nil }
-func (noopVLC) PlayFileInPlaylist(_ context.Context, _ string) error { return nil }
-func (noopVLC) Skip(_ context.Context, _ int) error                  { return nil }
-func (noopVLC) Back(_ context.Context, _ int) error                  { return nil }
+func (noopVLC) PlayRandom(_ context.Context) error                               { return nil }
+func (noopVLC) PlayFileInPlaylist(_ context.Context, _ string) error             { return nil }
+func (noopVLC) PlayFileAtTimestamp(_ context.Context, _ string, _ float64) error { return nil }
+func (noopVLC) Skip(_ context.Context, _ int) error                              { return nil }
+func (noopVLC) Back(_ context.Context, _ int) error                              { return nil }
 
 // recordingVLC captures every call made to it so tests can assert that
 // the chatbot drove playback as expected. All call records are appended
@@ -27,6 +28,10 @@ func (r *recordingVLC) PlayRandom(_ context.Context) error {
 }
 func (r *recordingVLC) PlayFileInPlaylist(_ context.Context, filename string) error {
 	r.Calls = append(r.Calls, fmt.Sprintf("PlayFileInPlaylist(%q)", filename))
+	return nil
+}
+func (r *recordingVLC) PlayFileAtTimestamp(_ context.Context, filename string, tsSec float64) error {
+	r.Calls = append(r.Calls, fmt.Sprintf("PlayFileAtTimestamp(%q, %.1f)", filename, tsSec))
 	return nil
 }
 func (r *recordingVLC) Skip(_ context.Context, n int) error {
