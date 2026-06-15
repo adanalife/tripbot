@@ -226,7 +226,7 @@ func (a *App) buildRegistry() []Command {
 		},
 		{
 			Trigger:        "!guessleaderboard",
-			Aliases:        []string{"!glb"},
+			Aliases:        []string{"!glb", "!guesslb"},
 			Handler:        a.monthlyGuessLeaderboardCmd,
 			RequiresFollow: true,
 		},
