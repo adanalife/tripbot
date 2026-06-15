@@ -31,6 +31,11 @@ func TestNoDuplicateTriggersOrAliases(t *testing.T) {
 
 func TestLookupMapsContainAllTriggers(t *testing.T) {
 	for _, cmd := range builtTestApp.commands {
+		// builtTestApp is a Twitch App; commands scoped to other platforms via
+		// Command.Platforms (like !carsound on YouTube) aren't indexed here.
+		if !builtTestApp.commandEnabled(&cmd) {
+			continue
+		}
 		all := append([]string{cmd.Trigger}, cmd.Aliases...)
 		for _, token := range all {
 			if strings.Contains(token, " ") {
@@ -49,6 +54,11 @@ func TestLookupMapsContainAllTriggers(t *testing.T) {
 func TestLookupMapsPointToCorrectCommand(t *testing.T) {
 	for i := range builtTestApp.commands {
 		cmd := &builtTestApp.commands[i]
+		// Skip commands scoped to other platforms via Command.Platforms — they
+		// aren't in builtTestApp's (Twitch) lookup maps by design.
+		if !builtTestApp.commandEnabled(cmd) {
+			continue
+		}
 		all := append([]string{cmd.Trigger}, cmd.Aliases...)
 		for _, token := range all {
 			var got *Command
@@ -65,27 +75,31 @@ func TestLookupMapsPointToCorrectCommand(t *testing.T) {
 }
 
 // TestYouTubeAllowlistTriggersExist guards against drift: every trigger in the
-// YouTube allowlist must be a real command in the full registry, so a rename or
-// removal can't silently leave a dangling allowlist entry.
+// YouTube allowlist must be a real command, so a rename or removal can't
+// silently leave a dangling allowlist entry. Indexed on a YouTube App because
+// the allowlist is consulted on the YouTube platform.
 func TestYouTubeAllowlistTriggersExist(t *testing.T) {
-	full := &App{} // empty platform → full registry
-	full.indexCommands()
+	yt := &App{Platform: platformYouTube}
+	yt.indexCommands()
 	for trigger := range youtubeCommands {
-		if _, ok := full.singleWordLookup[trigger]; !ok {
+		if _, ok := yt.singleWordLookup[trigger]; !ok {
 			t.Errorf("youtubeCommands trigger %q is not a real command in the registry", trigger)
 		}
 	}
 }
 
 // TestYouTubePlatformIndexesOnlyAllowlist verifies a YouTube App dispatches the
-// v1 allowlist (triggers + their aliases) and nothing else — identity/miles,
-// the Twitch-only !followage, and admin commands must not resolve.
+// v1 cross-platform allowlist (triggers + their aliases) plus its
+// platform-scoped commands, and nothing else — identity/miles, the Twitch-only
+// !followage, and admin commands must not resolve.
 func TestYouTubePlatformIndexesOnlyAllowlist(t *testing.T) {
 	yt := &App{Platform: platformYouTube}
 	yt.indexCommands()
 
-	// allowed: a trigger and one of its aliases both resolve
-	for _, token := range []string{"!weather", "!meteo", "!skip", "!timewarp", "!warp", "!youtube", "!state", "!location", "!where"} {
+	// allowed: a trigger and one of its aliases both resolve. The first set are
+	// cross-platform allowlist entries; !carsound/!carhum are YouTube-scoped via
+	// Command.Platforms.
+	for _, token := range []string{"!weather", "!meteo", "!skip", "!timewarp", "!warp", "!youtube", "!state", "!location", "!where", "!carsound", "!carhum"} {
 		if cmd, _ := yt.findCommand(token); cmd == nil {
 			t.Errorf("expected %q to be available on YouTube, got nil", token)
 		}

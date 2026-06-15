@@ -3,6 +3,7 @@ package chatbot
 import (
 	"context"
 	"math/rand"
+	"slices"
 	"strings"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
@@ -24,6 +25,12 @@ func (a *App) buildRegistry() []Command {
 		{
 			Trigger: "!flag",
 			Handler: a.flagCmd,
+		},
+		{
+			Trigger:   "!carsound",
+			Aliases:   []string{"!carhum"},
+			Handler:   a.carSoundCmd,
+			Platforms: []string{platformYouTube}, // repoints the YouTube-only "Car Hum" OBS source
 		},
 		{
 			Trigger: "!version",
@@ -243,11 +250,25 @@ func (a *App) buildRegistry() []Command {
 	}
 }
 
-// Platform names for App.Platform. Empty is treated as Twitch.
+// Platform names for App.Platform. Add a constant here when a new streaming
+// platform (Kick, TikTok, …) comes online; platform-specific commands then
+// reference it via Command.Platforms.
 const (
 	platformTwitch  = "twitch"
 	platformYouTube = "youtube"
 )
+
+// platform returns this App's platform, normalizing the empty/unset value to
+// Twitch. Twitch was the original (and is still the most mature) platform, so
+// an App constructed without an explicit platform behaves as Twitch. This is
+// the single place that "empty defaults to Twitch" lives — change it here if
+// that assumption ever needs to move.
+func (a *App) platform() string {
+	if a.Platform == "" {
+		return platformTwitch
+	}
+	return a.Platform
+}
 
 // youtubeCommands is the v1 allowlist of triggers a YouTube instance runs — the
 // "info + playback control" subset, plus the !state/!location info commands.
@@ -271,11 +292,22 @@ var youtubeCommands = map[string]bool{
 }
 
 // commandEnabled reports whether cmd should be indexed for dispatch on this
-// App's platform. Twitch (the primary platform, and the empty default) runs the
-// full registry; YouTube runs only the youtubeCommands allowlist. An unknown
-// platform falls back to the full set.
+// App's platform. Two orthogonal concerns, in order:
+//
+//  1. Platform-specific commands declare their scope via Command.Platforms. A
+//     command with a non-nil Platforms is governed solely by it — indexed on
+//     exactly the listed platforms, on every platform. This is symmetric: no
+//     platform is special, and a new Kick/TikTok-only command just lists itself.
+//  2. Cross-platform commands (Platforms == nil): YouTube is still a v1
+//     rollout, so it runs only the vetted youtubeCommands allowlist; mature
+//     platforms (Twitch, and any future fully-rolled-out platform) run them all.
+//     As more platforms graduate from v1 this allowlist gate may invert, but
+//     that's a future call.
 func (a *App) commandEnabled(cmd *Command) bool {
-	if a.Platform == platformYouTube {
+	if len(cmd.Platforms) > 0 {
+		return slices.Contains(cmd.Platforms, a.platform())
+	}
+	if a.platform() == platformYouTube {
 		return youtubeCommands[cmd.Trigger]
 	}
 	return true
