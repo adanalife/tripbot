@@ -53,6 +53,13 @@ class EnvConfig:
     # software decode — CPU flat at ~0.04 cores with and without /dev/dri,
     # verified live on stage 2026-06-13). See VlcServer in constructs/vlc.py.
     vlc_gpu: bool = True
+    # OBS's iGPU claim is gated on (gpu and obs_gpu), same shape as vlc_gpu.
+    # Default True keeps the claim wherever the env has a GPU; set False to drop
+    # just OBS's claim so the env stops being a live VAAPI consumer on the shared
+    # iGPU. An env that sets obs_gpu=False must also set obs_encoder="obs_x264" —
+    # without /dev/dri the VAAPI encoder can't run, so OBS falls back to software
+    # x264. See ObsInstance in constructs/obs.py.
+    obs_gpu: bool = True
     obs_encoder: str = "obs_x264"  # ffmpeg_vaapi_tex on GPU envs
     obs_quality: str = "low"  # low | high
     dashcam_mode: str = "hostpath"  # nfs | hostpath
@@ -221,7 +228,16 @@ ENVS: dict[str, EnvConfig] = {
         # app workloads moved from infra into this repo (the cdk8s-into-repo
         # cutover dropped the flag, so stage vlc silently reclaimed the iGPU).
         vlc_gpu=False,
-        obs_encoder="ffmpeg_vaapi_tex",
+        # TEMPORARY (2026-06-15): stage obs-youtube dropped its iGPU claim so the
+        # only live VAAPI consumers on the shared Iris Xe are prod obs-twitch +
+        # the video-optimization job (2 concurrent encoders, not 3). A third
+        # concurrent consumer stuttered the prod stream on 2026-06-14. Stage
+        # youtube keeps streaming via software x264 (obs_encoder below); prod is
+        # CPU-protected by its priority class + requests. Revert (obs_gpu=True +
+        # obs_encoder="ffmpeg_vaapi_tex") once the optimization job no longer needs
+        # the iGPU, or once it's reworked to share the device with both streams.
+        obs_gpu=False,
+        obs_encoder="obs_x264",
         obs_quality="low",
         dashcam_mode="nfs",
         tailscale=True,
@@ -257,11 +273,11 @@ ENVS: dict[str, EnvConfig] = {
         # parks pods Unschedulable instead of crowding prod off the node.
         # CPU/memory sized roomy — youtube stack (~0.5 CPU / 1.3Gi requests) +
         # dashcam-cv embed jobs (2× 1 CPU / 5Gi) + one-shot jobs fit with
-        # headroom; the node has 20 CPU / 31Gi. iGPU claims sized TIGHT to
-        # what stage runs today: vlc + obs steady (2) + 1 surge slot for
-        # vlc's RollingUpdate maxSurge=1 (obs is Recreate, no surge). Claims,
-        # not GPU time — encode contention is governed by the two-stream
-        # budget above, not by quota. Bump alongside re-adding twitch.
+        # headroom; the node has 20 CPU / 31Gi. iGPU cap left at 3 even though
+        # stage's own pods no longer claim the device (obs_gpu=False +
+        # vlc_gpu=False as of 2026-06-15) — the budget now covers the
+        # video-optimization job's claim with surge headroom. Restore the
+        # "vlc + obs steady + surge" sizing when obs_gpu flips back to True.
         app_quota={
             "requests.cpu": "6",
             "requests.memory": "16Gi",
