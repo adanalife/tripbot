@@ -13,13 +13,13 @@ var leftRotatorUpdateFrequency = time.Duration(45 * time.Second)
 // commands that silently no-op there. Weight 2 reproduces the old duplicated
 // entries (!discord, !commands each appeared twice).
 var possibleLeftMessages = []rotatorMessage{
-	{Text: "Crave something new? Try !timewarp"},
-	{Text: "Earn miles for every minute you watch (!miles)", Platforms: []string{platformTwitch}},
-	{Text: "Follow the project elsewhere on !socialmedia"},
-	{Text: "Join us on !discord", Weight: 2},
-	{Text: "Try and !guess what state we're in", Platforms: []string{platformTwitch}},
-	{Text: "Use !commands to interact with the bot", Weight: 2},
-	{Text: "Where are we? (!location)"},
+	{Text: "Crave something new? Try `!timewarp`"},
+	{Text: "Earn miles for every minute you watch (`!miles`)", Platforms: []string{platformTwitch}},
+	{Text: "Follow the project elsewhere on `!socialmedia`"},
+	{Text: "Join us on `!discord`", Weight: 2},
+	{Text: "Try and `!guess` what state we're in", Platforms: []string{platformTwitch}},
+	{Text: "Use `!commands` to interact with the bot", Weight: 2},
+	{Text: "Where are we? (`!location`)"},
 	// {Text: "LEADER"},
 	// {Text: "Looking for artist for emotes and more"},
 	// {Text: "Twitch Prime subs keep us on air :D"},

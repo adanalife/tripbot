@@ -11,8 +11,8 @@ var rightRotatorUpdateFrequency = time.Duration(90 * time.Second)
 // in the YouTube allowlist). Weight 2 reproduces the old duplicated entries.
 var possibleRightMessages = []rotatorMessage{
 	{Text: "Don't forget to follow :)", Weight: 2},
-	{Text: "Try running !location", Weight: 2},
-	{Text: "Try running !timewarp"},
+	{Text: "Try running `!location`", Weight: 2},
+	{Text: "Try running `!timewarp`"},
 	{Text: "Streaming 24 hours a day"},
 }
 
