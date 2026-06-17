@@ -17,11 +17,16 @@ import (
 // a real database.
 func withProfileSeams(t *testing.T, u users.User, sessions int64, monthly float32) {
 	t.Helper()
-	savedFind, savedCount, savedMonthly := findUser, sessionCount, monthlyMiles
-	t.Cleanup(func() { findUser, sessionCount, monthlyMiles = savedFind, savedCount, savedMonthly })
+	savedFind, savedCount, savedMonthly, savedEarliest := findUser, sessionCount, monthlyMiles, earliestEvent
+	t.Cleanup(func() {
+		findUser, sessionCount, monthlyMiles, earliestEvent = savedFind, savedCount, savedMonthly, savedEarliest
+	})
 	findUser = func(context.Context, string) users.User { return u }
 	sessionCount = func(context.Context, string) int64 { return sessions }
 	monthlyMiles = func(context.Context, users.User) float32 { return monthly }
+	// default: no surviving event history. Tests exercising the first-seen
+	// fallback override earliestEvent after calling withProfileSeams.
+	earliestEvent = func(context.Context, string, string) time.Time { return time.Time{} }
 }
 
 func renderProfile(t *testing.T, username string) string {
@@ -138,5 +143,37 @@ func TestUserProfileHandler_UnknownDates(t *testing.T) {
 	}
 	if !strings.Contains(body, "unknown") {
 		t.Errorf("expected 'unknown' for zero-value seen dates: %q", body)
+	}
+}
+
+// TestUserProfileHandler_FirstSeenFallback covers an account created during the
+// date_created bug window: its User row dates are zero, but a surviving real
+// event reconstructs first-seen. The earliest such event should win.
+func TestUserProfileHandler_FirstSeenFallback(t *testing.T) {
+	withProfileSeams(t, users.User{ID: 11, Username: "olduser"}, 5, 0)
+	earliestEvent = func(context.Context, string, string) time.Time {
+		return time.Date(2021, 3, 14, 0, 0, 0, 0, time.UTC)
+	}
+	body := renderProfile(t, "olduser")
+	if !strings.Contains(body, "first seen</dt><dd>2021-03-14") {
+		t.Errorf("expected event-derived first seen 2021-03-14, got %q", body)
+	}
+}
+
+// TestUserProfileHandler_FirstSeenPrefersEarliest covers a user whose row has a
+// real DateCreated but whose earliest event predates it — first-seen takes the
+// earlier of the two.
+func TestUserProfileHandler_FirstSeenPrefersEarliest(t *testing.T) {
+	withProfileSeams(t, users.User{
+		ID:          12,
+		Username:    "veteran",
+		DateCreated: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
+	}, 9, 0)
+	earliestEvent = func(context.Context, string, string) time.Time {
+		return time.Date(2019, 6, 2, 0, 0, 0, 0, time.UTC)
+	}
+	body := renderProfile(t, "veteran")
+	if !strings.Contains(body, "2019-06-02") {
+		t.Errorf("expected earliest (event) first seen 2019-06-02, got %q", body)
 	}
 }

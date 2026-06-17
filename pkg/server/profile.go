@@ -20,12 +20,32 @@ import (
 // Each is an operator-triggered read (one click), not a hot path, so the extra
 // monthly-score query is fine.
 var (
-	findUser     = users.Find
-	sessionCount = events.SessionCount
-	monthlyMiles = func(ctx context.Context, u users.User) float32 {
+	findUser      = users.Find
+	sessionCount  = events.SessionCount
+	earliestEvent = events.EarliestRealEventDate
+	monthlyMiles  = func(ctx context.Context, u users.User) float32 {
 		return u.GetScore(ctx, scoreboards.CurrentMilesScoreboard())
 	}
 )
+
+// bestEffortFirstSeen picks the earliest non-zero timestamp among the user
+// row's own dates and their earliest real event. The users row is authoritative
+// when present (FirstSeen/DateCreated are stamped on insert now), but accounts
+// created during the date_created bug window have zero-value dates there — for
+// those, the earliest non-bug event row is the best surviving evidence of when
+// we first saw them. Returns the zero time only when nothing real is available.
+func bestEffortFirstSeen(times ...time.Time) time.Time {
+	var best time.Time
+	for _, t := range times {
+		if t.IsZero() {
+			continue
+		}
+		if best.IsZero() || t.Before(best) {
+			best = t
+		}
+	}
+	return best
+}
 
 // userProfile is the chat-console popover payload — a small at-a-glance view of
 // a chatter, events-derived per the tripbot-events-table-design ADR. The JSON
@@ -56,7 +76,7 @@ func gatherUserProfile(ctx context.Context, username string) userProfile {
 		prof.IsBot = u.IsBot
 		prof.Miles = u.Miles
 		prof.MonthlyMiles = monthlyMiles(ctx, u)
-		prof.FirstSeen = u.DateCreated
+		prof.FirstSeen = bestEffortFirstSeen(u.FirstSeen, u.DateCreated, earliestEvent(ctx, u.Platform, username))
 		prof.LastSeen = u.LastSeen
 		prof.Sessions = sessionCount(ctx, username)
 	}
