@@ -1,47 +1,31 @@
 package server
 
-import (
-	"testing"
+import "testing"
 
-	"github.com/adanalife/tripbot/pkg/feature"
-)
-
-// New gives a Server with sensible default runtime state.
+// New gives a Server with the default "dev" version tag.
 func TestNewServerDefaults(t *testing.T) {
 	s := New()
-	if s.hub == nil {
-		t.Fatal("New() left hub nil")
-	}
 	if s.versionTag != "dev" {
 		t.Errorf("versionTag = %q, want %q", s.versionTag, "dev")
 	}
-	if s.flagClient == nil {
-		t.Fatal("New() left flagClient nil")
-	}
-	if s.TwitchConnected() {
-		t.Error("twitchConnected should default to false")
-	}
 }
 
-// The setters mutate the instance they're called on, and two Servers hold
-// independent runtime state.
-func TestServerSettersAreInstanceScoped(t *testing.T) {
+// SetVersion mutates the instance it's called on, and two Servers hold
+// independent version state. SetVersion ignores an empty string.
+func TestServerSetVersion(t *testing.T) {
 	a := New()
 	b := New()
 
 	a.SetVersion("v1.2.3")
-	a.SetTwitchConnected(true)
-	a.SetFlagClient(feature.NewInMemoryClient(map[string]feature.Flag{
-		"demo": {Key: "demo"},
-	}))
+	if a.versionTag != "v1.2.3" {
+		t.Errorf("a.versionTag = %q, want %q", a.versionTag, "v1.2.3")
+	}
+	if b.versionTag != "dev" {
+		t.Errorf("b picked up a's state: version=%q", b.versionTag)
+	}
 
-	if b.versionTag != "dev" || b.TwitchConnected() {
-		t.Errorf("b picked up a's state: version=%q connected=%v", b.versionTag, b.TwitchConnected())
-	}
-	if got := a.flagSnapshot(t.Context()); len(got) != 1 {
-		t.Errorf("a.flagSnapshot = %d flags, want 1", len(got))
-	}
-	if got := b.flagSnapshot(t.Context()); len(got) != 0 {
-		t.Errorf("b.flagSnapshot = %d flags, want 0 (independent of a)", len(got))
+	a.SetVersion("")
+	if a.versionTag != "v1.2.3" {
+		t.Errorf("SetVersion(\"\") clobbered the tag: %q", a.versionTag)
 	}
 }

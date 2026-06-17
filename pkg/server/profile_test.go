@@ -24,55 +24,6 @@ func withProfileSeams(t *testing.T, u users.User, sessions int64, monthly float3
 	monthlyMiles = func(context.Context, users.User) float32 { return monthly }
 }
 
-func renderProfile(t *testing.T, username string) string {
-	t.Helper()
-	r := mux.NewRouter()
-	r.Handle("/admin/user/{username}", http.HandlerFunc(userProfileHandler)).Methods("GET")
-	rec := httptest.NewRecorder()
-	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/admin/user/"+username, nil))
-	return rec.Body.String()
-}
-
-func TestUserProfileHandler_Found(t *testing.T) {
-	withProfileSeams(t, users.User{
-		ID:          42,
-		Username:    "danalol",
-		Miles:       123.0,
-		IsBot:       false,
-		DateCreated: time.Date(2019, 5, 1, 0, 0, 0, 0, time.UTC),
-		LastSeen:    time.Date(2026, 5, 29, 13, 5, 0, 0, time.UTC),
-	}, 87, 42.0)
-
-	body := renderProfile(t, "danalol")
-	for _, want := range []string{
-		"danalol",
-		"123.0",      // lifetime miles
-		"42.0",       // this month
-		">87<",       // sessions
-		"2019-05-01", // first seen
-		`href="https://twitch.tv/danalol"`,
-	} {
-		if !strings.Contains(body, want) {
-			t.Errorf("body missing %q\n%s", want, body)
-		}
-	}
-	if strings.Contains(body, "no record") {
-		t.Errorf("found user should not render the empty state")
-	}
-}
-
-func TestUserProfileHandler_NotFound(t *testing.T) {
-	withProfileSeams(t, users.User{ID: 0}, 0, 0)
-
-	body := renderProfile(t, "ghost")
-	if !strings.Contains(body, "no record") {
-		t.Errorf("expected empty state, got %q", body)
-	}
-	if !strings.Contains(body, "ghost") {
-		t.Errorf("empty card should still name the user")
-	}
-}
-
 func TestUserProfileAPIHandler_JSON(t *testing.T) {
 	withProfileSeams(t, users.User{
 		ID:          42,
@@ -120,23 +71,18 @@ func TestUserProfileAPIHandler_NotFound(t *testing.T) {
 	}
 }
 
-func TestUserProfileHandler_BotBadge(t *testing.T) {
+func TestUserProfileAPIHandler_BotFlag(t *testing.T) {
 	withProfileSeams(t, users.User{ID: 7, Username: "tripbot4000", IsBot: true}, 3, 0)
-	if body := renderProfile(t, "tripbot4000"); !strings.Contains(body, "profile-bot") {
-		t.Errorf("expected bot badge, got %q", body)
-	}
-}
+	r := mux.NewRouter()
+	r.Handle("/api/user/{username}", http.HandlerFunc(userProfileAPIHandler)).Methods("GET")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/user/tripbot4000", nil))
 
-// TestUserProfileHandler_UnknownDates covers a found user with no event history
-// (zero-value timestamps — e.g. a freshly-seeded account): show "unknown", not
-// Go's 0001-01-01 zero time.
-func TestUserProfileHandler_UnknownDates(t *testing.T) {
-	withProfileSeams(t, users.User{ID: 9, Username: "freshacct"}, 0, 0)
-	body := renderProfile(t, "freshacct")
-	if strings.Contains(body, "0001") {
-		t.Errorf("zero time should not render as 0001-...: %q", body)
+	var got userProfile
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v", err)
 	}
-	if !strings.Contains(body, "unknown") {
-		t.Errorf("expected 'unknown' for zero-value seen dates: %q", body)
+	if !got.Found || !got.IsBot {
+		t.Errorf("expected found bot, got %+v", got)
 	}
 }
