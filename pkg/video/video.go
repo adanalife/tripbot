@@ -11,6 +11,7 @@ import (
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/eventbus"
 	"github.com/adanalife/tripbot/pkg/helpers"
+	"github.com/adanalife/tripbot/pkg/instrumentation"
 	vlcClient "github.com/adanalife/tripbot/pkg/vlc-client"
 )
 
@@ -77,6 +78,11 @@ func (p *Player) GetCurrentlyPlaying(ctx context.Context) {
 			"file", p.CurrentlyPlaying.File(),
 			"state", helpers.StateToStateAbbrev(p.CurrentlyPlaying.State),
 		)
+
+		// Update the current-state gauge: set the new state's series to 1 and
+		// clear the prior one. A blank abbrev (unresolvable state) records as
+		// "unknown" so a stuck playhead is alertable.
+		instrumentation.CurrentState.Set(helpers.StateToStateAbbrev(p.CurrentlyPlaying.State))
 
 		// Announce the switch so the admin panel's "now playing" card updates
 		// live (no-op when NATS is unconfigured). emitted_at doubles as the
