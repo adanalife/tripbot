@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"encoding/json"
-	"html/template"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -63,22 +62,9 @@ func gatherUserProfile(ctx context.Context, username string) userProfile {
 	return prof
 }
 
-// userProfileHandler serves GET /admin/user/{username}: the HTML fragment the
-// in-tripbot live console pops over when an operator clicks a username.
-// Timeout/ban actions are planned here (they need the broadcaster token's
-// moderator:manage:banned_users scope).
-func userProfileHandler(w http.ResponseWriter, r *http.Request) {
-	prof := gatherUserProfile(r.Context(), mux.Vars(r)["username"])
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-store")
-	if err := userProfileTmpl.Execute(w, prof); err != nil {
-		slog.ErrorContext(r.Context(), "couldn't render user profile", "err", err)
-	}
-}
-
-// userProfileAPIHandler serves GET /api/user/{username}: the same data as
-// userProfileHandler but as JSON, for the standalone tripbot-console to render
-// its own popover (the console holds no DB access — it links over to here).
+// userProfileAPIHandler serves GET /api/user/{username}: a chatter's
+// at-a-glance stats as JSON, for the standalone tripbot-console to render its
+// own popover (the console holds no DB access — it proxies here).
 func userProfileAPIHandler(w http.ResponseWriter, r *http.Request) {
 	prof := gatherUserProfile(r.Context(), mux.Vars(r)["username"])
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -87,21 +73,3 @@ func userProfileAPIHandler(w http.ResponseWriter, r *http.Request) {
 		slog.ErrorContext(r.Context(), "couldn't encode user profile", "err", err)
 	}
 }
-
-// userProfileTmpl renders the popover fragment. html/template escapes the
-// username everywhere it appears (incl. the Twitch URL).
-var userProfileTmpl = template.Must(template.New("profile").Parse(`<div class="profile-card">
-  <div class="profile-name">{{.Username}}{{if .IsBot}} <span class="profile-bot">bot</span>{{end}}</div>
-  {{- if .Found}}
-  <dl class="profile-stats">
-    <dt>miles</dt><dd>{{printf "%.1f" .Miles}}</dd>
-    <dt>this month</dt><dd>{{printf "%.1f" .MonthlyMiles}}</dd>
-    <dt>sessions</dt><dd>{{.Sessions}}</dd>
-    <dt>first seen</dt><dd>{{if .FirstSeen.IsZero}}unknown{{else}}{{.FirstSeen.Format "2006-01-02"}}{{end}}</dd>
-    <dt>last seen</dt><dd>{{if .LastSeen.IsZero}}unknown{{else}}{{.LastSeen.Format "2006-01-02 15:04"}}{{end}}</dd>
-  </dl>
-  {{- else}}
-  <p class="profile-empty">no record for this user yet</p>
-  {{- end}}
-  <a class="profile-link" href="https://twitch.tv/{{.Username}}" target="_blank" rel="noopener">view on Twitch ↗</a>
-</div>`))

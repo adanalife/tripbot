@@ -7,6 +7,10 @@ All notable changes to TripBot. Format follows [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+### Cleanup
+
+- **Remove the in-tripbot admin panel in favor of tripbot-console.** Now that the standalone tripbot-console covers the admin dashboard, the in-process panel and its live-console SSE hub retire (`admin.go`, `hub.go`, `events.go`, the chat-send publisher form, `somafm.go`, `authcard.go`, and the vendored htmx/leaflet/sse assets). The HTTP surface the console and operators still need stays: `/auth/init` + `/auth/callback` (now fronted by a minimal landing page at `/` linking the bot/broadcaster/YouTube login flows), the read-only `/api/user`, `/api/chatters`, `/api/db/migration`, and `/admin/map/corpus` endpoints the console proxies over the in-namespace Service, plus `/version`, `/health`, and `/metrics`. The `chat.send` NATS subscriber stays in cmd/tripbot (the Twitch-identity owner), ready for the console to publish to once its chat-send feature lands. ([#886])
+
 ## [v3.4.0] — 2026-06-14
 
 Minor release. Headlined by a license-clean synthesized background-audio bed for the YouTube stream; also drops vlc-server's unused iGPU claim to ease co-tenant contention, plus routine OpenTelemetry dependency bumps.
@@ -1620,3 +1624,4 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#762]: https://github.com/adanalife/tripbot/pull/762
 [#763]: https://github.com/adanalife/tripbot/pull/763
 [#853]: https://github.com/adanalife/tripbot/pull/853
+[#886]: https://github.com/adanalife/tripbot/pull/886

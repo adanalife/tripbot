@@ -11,21 +11,28 @@ import (
 	"github.com/adanalife/tripbot/pkg/server/oauthstate"
 )
 
-// TestTwitchConnectedSignal pins the behavior split this PR introduces: the
-// chat-connection signal round-trips, but it's decoupled from the readiness
-// probe. The probe itself (httpmw.ReadinessHandler with no checks → always
-// 200) is covered in pkg/httpmw; here we just guard the signal accessors.
-func TestTwitchConnectedSignal(t *testing.T) {
-	srv := New()
+// TestRootHandlerServesAuthLinks pins that the landing page that replaced the
+// admin panel still surfaces the three OAuth bootstrap links.
+func TestRootHandlerServesAuthLinks(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	rootHandler(rec, req)
 
-	srv.SetTwitchConnected(false)
-	if srv.TwitchConnected() {
-		t.Fatalf("after SetTwitchConnected(false), TwitchConnected() = true, want false")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("got status %d, want %d", rec.Code, http.StatusOK)
 	}
-
-	srv.SetTwitchConnected(true)
-	if !srv.TwitchConnected() {
-		t.Fatalf("after SetTwitchConnected(true), TwitchConnected() = false, want true")
+	if !strings.Contains(rec.Header().Get("Content-Type"), "text/html") {
+		t.Errorf("Content-Type %q is not html", rec.Header().Get("Content-Type"))
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		"/auth/init?account=bot",
+		"/auth/init?account=broadcaster",
+		"/auth/init?account=youtube",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("root page missing link %q", want)
+		}
 	}
 }
 

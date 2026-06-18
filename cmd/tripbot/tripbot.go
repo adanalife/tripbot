@@ -100,17 +100,18 @@ type Tripbot struct {
 	// it.
 	scheduler *background.Scheduler
 
-	// srv is the admin-panel / auth / metrics HTTP server, constructed in
-	// NewTripbot. cmd installs runtime state through it (SetVersion,
-	// SetFlagClient, SetTwitchConnected) and starts it (Start, StartEventHub);
-	// the panel's handlers are methods on this instance.
+	// srv is the auth-links / console-API / metrics HTTP server, constructed in
+	// NewTripbot. cmd installs the build version through it (SetVersion) and
+	// starts it (Start). The rich admin panel moved to the standalone
+	// tripbot-console; what's left is the OAuth bootstrap pages, the read-only
+	// /api/* endpoints the console proxies, and /health + /metrics.
 	srv *server.Server
 
 	// player owns "what's currently playing" — the single process-wide
 	// instance, constructed in NewTripbot. The 60s cron tick refreshes it
 	// (GetCurrentlyPlaying); findInitialVideo + gracefulShutdown read it; it's
 	// wrapped into the chatbot Video adapter (NewVideoAdapter) so commands read
-	// the same state, and it publishes video.changed to NATS for the admin panel.
+	// the same state, and it publishes video.changed to NATS for the console.
 	player *video.Player
 
 	// sessions tracks who's currently in chat (the login map) + the
@@ -200,8 +201,7 @@ func (t *Tripbot) Run() {
 		t.startEventSub(shutdownCtx)
 	}
 	t.startNATS(shutdownCtx)
-	t.srv.StartEventHub(shutdownCtx)       // after startNATS: the hub subscribes to the live NATS conn
-	t.player.EmitCurrentVideo(shutdownCtx) // after the hub subscribes: seed its now-playing cache (no NATS replay)
+	t.player.EmitCurrentVideo(shutdownCtx) // after startNATS: publishes the current video.changed for the standalone console
 	t.startAuthStatusEmitter(shutdownCtx)  // after startNATS: publishes auth.status snapshots for the standalone console
 	if !platformIsTwitch() {
 		t.connectToYouTube(shutdownCtx)
@@ -221,7 +221,7 @@ func (t *Tripbot) Run() {
 // PLATFORM=youtube instance, then blocks until shutdown — the YouTube analog
 // of connectToTwitch's blocking connect loop. Mirrors loadTwitchToken's
 // stay-up pattern: when the channel-owner oauth_tokens row is missing at
-// boot, the pod stays Ready (the admin panel + /auth/init?account=youtube
+// boot, the pod stays Ready (the auth-links landing page + /auth/init?account=youtube
 // remain reachable for re-auth) and retries until the token lands.
 func (t *Tripbot) connectToYouTube(ctx context.Context) {
 	const retry = 15 * time.Second
@@ -266,22 +266,22 @@ func (t *Tripbot) startFeatureFlags(ctx context.Context) {
 	}
 	t.flagClient = fc
 	t.app.Flags = fc // command-time flag gating reads the same Postgres-backed client
-	t.srv.SetFlagClient(fc)
 	go fc.Start(ctx)
 }
 
 // startNATS connects to the in-cluster NATS broker and declares the JetStream
-// streams that back the admin live console's durable history. Optional — when
-// NATS_URL is empty the connection is skipped and publishes no-op silently.
+// streams that back the standalone tripbot-console's durable history. Optional —
+// when NATS_URL is empty the connection is skipped and publishes no-op silently.
 //
-// EnsureStreams must run before StartEventHub so the streams exist when the hub
-// binds its ordered consumers. It no-ops when JetStream is unavailable (NATS off
-// or a server without JetStream) — the hub then falls back to live-only core
-// subscriptions, so a stream-declare failure must not be fatal.
+// EnsureStreams declares the JetStream streams the standalone tripbot-console
+// consumes (chat + video history), so they exist before the publishers emit. It
+// no-ops when JetStream is unavailable (NATS off or a server without JetStream)
+// — publishes then fall back to live-only core subjects, so a stream-declare
+// failure must not be fatal.
 func (t *Tripbot) startNATS(ctx context.Context) {
 	natsclient.Connect(c.Conf.NatsURL, "tripbot")
 	if err := eventbus.EnsureStreams(ctx, natsclient.JetStream(), c.Conf.Environment); err != nil {
-		slog.WarnContext(ctx, "jetstream stream setup failed; live console will run without durable history",
+		slog.WarnContext(ctx, "jetstream stream setup failed; console will run without durable history",
 			"err", err)
 	}
 }
@@ -501,8 +501,8 @@ func (t *Tripbot) startCron() {
 // token lands — rather than crashlooping. A crashing pod after a wipe also
 // raced the DB restore's migrate init (see the 2026-05-20 convergence-wipe
 // notes); staying up avoids that. The pod stays Ready throughout (readiness
-// no longer gates on Twitch) so the admin panel + /auth/init are reachable
-// to re-auth; "not in chat" is surfaced via the admin panel + the
+// no longer gates on Twitch) so the auth-links landing page + /auth/init are
+// reachable to re-auth; "not in chat" is surfaced via the
 // tripbot_twitch_connected gauge instead.
 func (t *Tripbot) loadTwitchToken(ctx context.Context) {
 	if err := mytwitch.LoadFromDB(); err != nil {
@@ -595,12 +595,12 @@ func (t *Tripbot) connectToTwitch() {
 	slog.Info("joined channel", "channel", c.Conf.ChannelName, "url", fmt.Sprintf("https://twitch.tv/%s", c.Conf.ChannelName))
 
 	// Mark the bot connected to chat once the IRC connection is established.
-	// This drives the admin-panel status row + the tripbot_twitch_connected
-	// gauge — it does NOT gate /health/ready, which stays 200 so the pod keeps
-	// serving the admin panel + /auth/* even while the bot is offline.
+	// This drives the tripbot_twitch_connected gauge — it does NOT gate
+	// /health/ready, which stays 200 so the pod keeps serving /auth/* and the
+	// console-facing /api/* endpoints even while the bot is offline.
 	t.irc.OnConnect(func() {
 		slog.Info("connected to Twitch chat")
-		t.srv.SetTwitchConnected(true)
+		instrumentation.TwitchConnection.Set(true)
 	})
 
 	// actually connect to Twitch
@@ -608,10 +608,10 @@ func (t *Tripbot) connectToTwitch() {
 	for {
 		slog.Info("initializing connection to Twitch")
 		// Connect blocks while connected and returns when the connection
-		// drops; mark not-in-chat so the admin panel + gauge reflect the gap
-		// until the next OnConnect fires.
+		// drops; mark not-in-chat so the gauge reflects the gap until the next
+		// OnConnect fires.
 		err := t.irc.Connect()
-		t.srv.SetTwitchConnected(false)
+		instrumentation.TwitchConnection.Set(false)
 		if err != nil {
 			slog.Error("unable to connect to twitch", "err", err)
 			if errors.Is(err, twitch.ErrLoginAuthenticationFailed) {
@@ -627,7 +627,7 @@ func (t *Tripbot) connectToTwitch() {
 				} else {
 					// Reauth couldn't produce a token (refresh_token revoked and
 					// no fresh row in the DB yet). Surface the re-bootstrap link
-					// so re-auth is a click; the admin panel shows it too.
+					// so re-auth is a click; the auth-links landing page shows it too.
 					slog.Error("IRC auth failed and no valid token after reauth; re-bootstrap needed", "login_as", c.Conf.BotUsername, "reauth_url", mytwitch.AuthInitURL("bot"))
 				}
 			}
