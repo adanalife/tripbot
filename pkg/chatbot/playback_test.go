@@ -49,6 +49,8 @@ func TestTimewarpCmd_AdminDrivesPlaybackChain(t *testing.T) {
 	app.Onscreens = recOverlay
 	app.VLC = recVLC
 	app.Video = recVideo
+	// Credit flag on → the caller's username rides the overlay call.
+	app.Flags = &recordingFlags{Set: map[string]bool{timewarpCreditFlagKey: true}}
 
 	runAsAdmin(t, func() {
 		app.timewarpCmd(context.Background(), newTestUser(adminUser), nil)
@@ -65,6 +67,25 @@ func TestTimewarpCmd_AdminDrivesPlaybackChain(t *testing.T) {
 	// Video: GetCurrentlyPlaying refreshes pkg/video state after the shuffle.
 	if len(recVideo.Calls) != 1 || recVideo.Calls[0] != "GetCurrentlyPlaying()" {
 		t.Errorf("expected one GetCurrentlyPlaying call on Video, got %v", recVideo.Calls)
+	}
+}
+
+// With the credit flag off (the default / fresh-deploy state via noopFlags),
+// the warp still fires but the overlay gets no username — ShowTimewarp("").
+func TestTimewarpCmd_CreditFlagOff_NoUsername(t *testing.T) {
+	skipIfDarwin(t)
+	app := newTestApp(video.Video{})
+	recOverlay := &recordingOnscreens{}
+	app.Onscreens = recOverlay
+	app.VLC = &recordingVLC{}
+	app.Video = &recordingVideo{}
+
+	runAsAdmin(t, func() {
+		app.timewarpCmd(context.Background(), newTestUser(adminUser), nil)
+	})
+
+	if len(recOverlay.Calls) != 1 || recOverlay.Calls[0] != `ShowTimewarp("")` {
+		t.Errorf("expected ShowTimewarp with no credit, got %v", recOverlay.Calls)
 	}
 }
 

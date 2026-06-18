@@ -730,6 +730,8 @@ func TestGuessCmd_CorrectGuess_DrivesOverlayAndPlayback(t *testing.T) {
 	recVLC := &recordingVLC{}
 	app.Onscreens = recOverlay
 	app.VLC = recVLC
+	// Credit flag on → the guesser's username rides the timewarp overlay call.
+	app.Flags = &recordingFlags{Set: map[string]bool{timewarpCreditFlagKey: true}}
 
 	// Two AddToScore calls — lifetime ("guess_state_total") + monthly.
 	expectAddToScoreChain(mock)
