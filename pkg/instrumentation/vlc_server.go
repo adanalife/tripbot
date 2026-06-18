@@ -16,6 +16,9 @@ var (
 	vlcDemuxCorrupted     = mustFloat64Gauge("vlc_player_demux_corrupted", "Demux corruptions discarded since the current Media started")
 	vlcDemuxDiscontinuity = mustFloat64Gauge("vlc_player_demux_discontinuity", "Demux discontinuities dropped since the current Media started")
 
+	vlcTimeRemaining = mustFloat64Gauge("vlc_player_time_remaining_seconds", "Seconds remaining in the currently-playing clip (media length minus current playhead position)")
+	vlcProgress      = mustFloat64Gauge("vlc_player_progress_fraction", "Playback progress through the currently-playing clip as a 0..1 fraction")
+
 	obsStreamingGauge         = mustGauge("obs_streaming_active", "1 if OBS is actively streaming, 0 otherwise")
 	obsActiveFPS              = mustFloat64Gauge("obs_active_fps", "Current FPS being rendered by OBS")
 	obsAverageFrameRenderMS   = mustFloat64Gauge("obs_average_frame_render_time_ms", "Average time in milliseconds OBS spends rendering a frame")
@@ -44,6 +47,8 @@ type VLCPlayerStatsSnapshot struct {
 	LostPictures       float64
 	DemuxCorrupted     float64
 	DemuxDiscontinuity float64
+	TimeRemaining      float64 // seconds left in the current clip (length - playhead)
+	Progress           float64 // 0..1 fraction of the current clip played
 }
 
 // VLCPlayerStats exposes the libvlc playback stats. Call Update on every
@@ -57,6 +62,8 @@ var VLCPlayerStats = vlcPlayerStatsIface{
 	lostPictures:       vlcLostPictures,
 	demuxCorrupted:     vlcDemuxCorrupted,
 	demuxDiscontinuity: vlcDemuxDiscontinuity,
+	timeRemaining:      vlcTimeRemaining,
+	progress:           vlcProgress,
 }
 
 type vlcPlayerStatsIface struct {
@@ -68,6 +75,8 @@ type vlcPlayerStatsIface struct {
 	lostPictures       metric.Float64Gauge
 	demuxCorrupted     metric.Float64Gauge
 	demuxDiscontinuity metric.Float64Gauge
+	timeRemaining      metric.Float64Gauge
+	progress           metric.Float64Gauge
 }
 
 func (v vlcPlayerStatsIface) Update(s VLCPlayerStatsSnapshot) {
@@ -80,6 +89,8 @@ func (v vlcPlayerStatsIface) Update(s VLCPlayerStatsSnapshot) {
 	v.lostPictures.Record(ctx, s.LostPictures)
 	v.demuxCorrupted.Record(ctx, s.DemuxCorrupted)
 	v.demuxDiscontinuity.Record(ctx, s.DemuxDiscontinuity)
+	v.timeRemaining.Record(ctx, s.TimeRemaining)
+	v.progress.Record(ctx, s.Progress)
 }
 
 // OBSStreaming exposes the streaming-active gauge.
