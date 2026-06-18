@@ -7,6 +7,10 @@ All notable changes to TripBot. Format follows [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+### Observability
+
+- **New `tripbot_current_state` gauge exposes the dashcam playhead's US state.** A labeled gauge of the `tripbot_current_state{state="MO"} 1` shape, sourced from `pkg/video.Current().State` and updated at the existing video-transition site in `Player.GetCurrentlyPlaying`. On each transition the new state's series is set to `1` and the previously-active series cleared to `0`, so exactly one series reads `1` at a time. An unresolvable/blank state records as `state="unknown"`, giving an alertable signal when the playhead is stuck outside any US state. Powers a states-visited / time-per-state heatmap on the stream dashboards. ([#891])
+
 ### Cleanup
 
 - **Remove the in-tripbot admin panel in favor of tripbot-console.** Now that the standalone tripbot-console covers the admin dashboard, the in-process panel and its live-console SSE hub retire (`admin.go`, `hub.go`, `events.go`, the chat-send publisher form, `somafm.go`, `authcard.go`, and the vendored htmx/leaflet/sse assets). The HTTP surface the console and operators still need stays: `/auth/init` + `/auth/callback` (now fronted by a minimal landing page at `/` linking the bot/broadcaster/YouTube login flows), the read-only `/api/user`, `/api/chatters`, `/api/db/migration`, and `/admin/map/corpus` endpoints the console proxies over the in-namespace Service, plus `/version`, `/health`, and `/metrics`. The `chat.send` NATS subscriber stays in cmd/tripbot (the Twitch-identity owner), ready for the console to publish to once its chat-send feature lands. ([#886])
@@ -1625,3 +1629,4 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#763]: https://github.com/adanalife/tripbot/pull/763
 [#853]: https://github.com/adanalife/tripbot/pull/853
 [#886]: https://github.com/adanalife/tripbot/pull/886
+[#891]: https://github.com/adanalife/tripbot/pull/891
