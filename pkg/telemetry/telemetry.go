@@ -83,11 +83,13 @@ func Init(ctx context.Context, serviceName, serviceVersion string) (ShutdownFunc
 	if err != nil {
 		return noopShutdown, fmt.Errorf("prometheus exporter: %w", err)
 	}
-	mp := sdkmetric.NewMeterProvider(
+	mpOpts := []sdkmetric.Option{
 		sdkmetric.WithReader(sdkmetric.NewPeriodicReader(metricExp)),
 		sdkmetric.WithReader(promExp),
 		sdkmetric.WithResource(res),
-	)
+	}
+	mpOpts = append(mpOpts, dropBodySizeHistograms()...)
+	mp := sdkmetric.NewMeterProvider(mpOpts...)
 	otel.SetMeterProvider(mp)
 
 	if err := otelruntime.Start(otelruntime.WithMinimumReadMemStatsInterval(15 * time.Second)); err != nil {
@@ -139,6 +141,26 @@ func Init(ctx context.Context, serviceName, serviceVersion string) (ShutdownFunc
 		}
 		return errors.Join(errs...)
 	}, nil
+}
+
+// dropBodySizeHistograms returns MeterProvider options that drop the
+// http_server_{request,response}_body_size_bytes histograms via OTel SDK
+// views. These auto-instrumented histograms are pushed OTLP-direct to the
+// metrics backend (bypassing Alloy, so they can't be relabeled chart-side)
+// and account for ~700 active series with no panels reading them. The
+// http_server_request_duration_seconds histogram is deliberately left
+// untouched — its buckets back the p50/p95/p99 latency panels.
+func dropBodySizeHistograms() []sdkmetric.Option {
+	drop := func(name string) sdkmetric.Option {
+		return sdkmetric.WithView(sdkmetric.NewView(
+			sdkmetric.Instrument{Name: name},
+			sdkmetric.Stream{Aggregation: sdkmetric.AggregationDrop{}},
+		))
+	}
+	return []sdkmetric.Option{
+		drop("http.server.request.body.size"),
+		drop("http.server.response.body.size"),
+	}
 }
 
 func disabled() bool {
