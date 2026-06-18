@@ -92,6 +92,20 @@ func TestUserProfileAPIHandler_BotFlag(t *testing.T) {
 	}
 }
 
+// fetchProfile drives the JSON user-profile API and decodes the payload.
+func fetchProfile(t *testing.T, username string) userProfile {
+	t.Helper()
+	r := mux.NewRouter()
+	r.Handle("/api/user/{username}", http.HandlerFunc(userProfileAPIHandler)).Methods("GET")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/user/"+username, nil))
+	var got userProfile
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v\n%s", err, rec.Body.String())
+	}
+	return got
+}
+
 // TestUserProfileHandler_FirstSeenFallback covers an account created during the
 // date_created bug window: its User row dates are zero, but a surviving real
 // event reconstructs first-seen. The earliest such event should win.
@@ -100,9 +114,10 @@ func TestUserProfileHandler_FirstSeenFallback(t *testing.T) {
 	earliestEvent = func(context.Context, string, string) time.Time {
 		return time.Date(2021, 3, 14, 0, 0, 0, 0, time.UTC)
 	}
-	body := renderProfile(t, "olduser")
-	if !strings.Contains(body, "first seen</dt><dd>2021-03-14") {
-		t.Errorf("expected event-derived first seen 2021-03-14, got %q", body)
+	got := fetchProfile(t, "olduser")
+	want := time.Date(2021, 3, 14, 0, 0, 0, 0, time.UTC)
+	if !got.FirstSeen.Equal(want) {
+		t.Errorf("expected event-derived first seen %s, got %s", want, got.FirstSeen)
 	}
 }
 
@@ -118,8 +133,9 @@ func TestUserProfileHandler_FirstSeenPrefersEarliest(t *testing.T) {
 	earliestEvent = func(context.Context, string, string) time.Time {
 		return time.Date(2019, 6, 2, 0, 0, 0, 0, time.UTC)
 	}
-	body := renderProfile(t, "veteran")
-	if !strings.Contains(body, "2019-06-02") {
-		t.Errorf("expected earliest (event) first seen 2019-06-02, got %q", body)
+	got := fetchProfile(t, "veteran")
+	want := time.Date(2019, 6, 2, 0, 0, 0, 0, time.UTC)
+	if !got.FirstSeen.Equal(want) {
+		t.Errorf("expected earliest (event) first seen %s, got %s", want, got.FirstSeen)
 	}
 }
