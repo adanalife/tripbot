@@ -92,8 +92,21 @@ func (s *Server) handleLeaderboardShow(m *nats.Msg) {
 // envelope, so the body isn't inspected: the subject is the whole intent.
 // Hides are lenient by construction (nothing to reject).
 func (s *Server) handleLeaderboardHide(_ *nats.Msg) { s.Leaderboard.Hide() }
-func (s *Server) handleTimewarpShow(_ *nats.Msg)    { s.Timewarp.ShowFor("Timewarp!", timewarpDuration) }
 func (s *Server) handleTimewarpHide(_ *nats.Msg)    { s.Timewarp.Hide() }
 func (s *Server) handleGPSShow(_ *nats.Msg)         { s.GPS.Show("") }
 func (s *Server) handleGPSHide(_ *nats.Msg)         { s.GPS.Hide() }
 func (s *Server) handleFlagHide(_ *nats.Msg)        { s.Flag.Hide() }
+
+// handleTimewarpShow triggers the full-screen warp. The overlay's Content
+// carries the triggering chatter's username (lenient: a malformed body or a
+// missing username just yields no credit line — the warp still plays). The
+// browser source reads Content to render the "@username" credit under the
+// TIMEWARP wordmark.
+func (s *Server) handleTimewarpShow(m *nats.Msg) {
+	var ev oe.TimewarpShow
+	if err := json.Unmarshal(m.Data, &ev); err != nil {
+		slog.Error("nats: decode timewarp.show", "err", err, "subject", m.Subject)
+		return
+	}
+	s.Timewarp.ShowFor(ev.Username, timewarpDuration)
+}

@@ -461,8 +461,8 @@ func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 		// increase their guess score
 		user.AddToScore(ctx, guessScoreboard, 1.0)
 		user.AddToScore(ctx, scoreboards.CurrentGuessScoreboard(), 1.0)
-		// do a timewarp
-		a.timewarp(ctx)
+		// do a timewarp, crediting the guesser on the overlay
+		a.timewarp(ctx, user.Username)
 	} else {
 		msg = "Try again! EarthDay"
 	}

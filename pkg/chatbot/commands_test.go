@@ -744,8 +744,9 @@ func TestGuessCmd_CorrectGuess_DrivesOverlayAndPlayback(t *testing.T) {
 		t.Errorf("expected correct-guess chat message, got %q", msg)
 	}
 
-	// Overlay sequence: ShowFlag (state flag) then ShowTimewarp (from a.timewarp()).
-	wantOverlay := []string{"ShowFlag(10s)", "ShowTimewarp()"}
+	// Overlay sequence: ShowFlag (state flag) then ShowTimewarp (from
+	// a.timewarp()), crediting the guesser.
+	wantOverlay := []string{"ShowFlag(10s)", `ShowTimewarp("viewer1")`}
 	if len(recOverlay.Calls) != len(wantOverlay) {
 		t.Fatalf("expected %d overlay calls, got %d: %v", len(wantOverlay), len(recOverlay.Calls), recOverlay.Calls)
 	}

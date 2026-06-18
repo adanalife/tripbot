@@ -54,9 +54,9 @@ func TestTimewarpCmd_AdminDrivesPlaybackChain(t *testing.T) {
 		app.timewarpCmd(context.Background(), newTestUser(adminUser), nil)
 	})
 
-	// Overlay: ShowTimewarp is the only call.
-	if len(recOverlay.Calls) != 1 || recOverlay.Calls[0] != "ShowTimewarp()" {
-		t.Errorf("expected one ShowTimewarp overlay call, got %v", recOverlay.Calls)
+	// Overlay: ShowTimewarp is the only call, crediting the caller.
+	if len(recOverlay.Calls) != 1 || recOverlay.Calls[0] != `ShowTimewarp("test")` {
+		t.Errorf("expected one ShowTimewarp overlay call crediting the caller, got %v", recOverlay.Calls)
 	}
 	// VLC: PlayRandom shuffles to a new video.
 	if len(recVLC.Calls) != 1 || recVLC.Calls[0] != "PlayRandom()" {

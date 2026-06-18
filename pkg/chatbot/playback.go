@@ -33,14 +33,16 @@ var timewarpOverlayLeadIn = 500 * time.Millisecond
 // the cover has to be in place to mask that gap.
 var timewarpCoverDelay = 800 * time.Millisecond
 
-// timewarp jumps the playhead to a random video in the loop
-func (a *App) timewarp(ctx context.Context) {
+// timewarp jumps the playhead to a random video in the loop. username is the
+// chatter who triggered it — surfaced as a credit line on the warp overlay
+// (empty for callers with no attributable user).
+func (a *App) timewarp(ctx context.Context, username string) {
 	// give the chat message a beat to land before the visual takeover
 	time.Sleep(timewarpOverlayLeadIn)
 
 	// bring up the full-screen warp overlay, then give the browser source a
 	// beat to render the opaque cover before we hard-cut to a new clip
-	a.Onscreens.ShowTimewarp(ctx)
+	a.Onscreens.ShowTimewarp(ctx, username)
 	time.Sleep(timewarpCoverDelay)
 
 	// shuffle to a new video
@@ -76,8 +78,8 @@ func (a *App) timewarpCmd(ctx context.Context, user *users.User, _ []string) {
 		a.Chat.Say("Here we go...!")
 	}
 
-	// do the timewarp
-	a.timewarp(ctx)
+	// do the timewarp, crediting the caller on the overlay
+	a.timewarp(ctx, user.Username)
 }
 
 func (a *App) jumpCmd(ctx context.Context, user *users.User, params []string) {
