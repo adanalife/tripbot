@@ -33,7 +33,11 @@ type Video struct {
 	State       string
 	CoordSource string
 	DateFilmed  time.Time
-	DateCreated time.Time
+	// autoCreateTime stamps date_created on insert. A runtime-created clip (one
+	// not already in the DB) is built without setting it, so without the tag
+	// GORM writes the 0001-01-01 zero value over the column's DEFAULT
+	// CURRENT_TIMESTAMP. See pkg/events for the full story.
+	DateCreated time.Time `gorm:"autoCreateTime"`
 }
 
 // Location returns a lat/lng pair

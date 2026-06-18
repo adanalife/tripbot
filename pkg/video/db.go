@@ -69,14 +69,14 @@ func create(ctx context.Context, file string) (Video, error) {
 		return newVid, err
 	}
 
-	// create new (mostly) empty vid
+	// create new (mostly) empty vid. DateCreated is left unset so GORM's
+	// autoCreateTime stamps it on insert (see Video struct in type.go).
 	newVid = Video{
-		Slug:        slug,
-		Lat:         0,
-		Lng:         0,
-		Flagged:     false,
-		DateFilmed:  blankDate,
-		DateCreated: blankDate,
+		Slug:       slug,
+		Lat:        0,
+		Lng:        0,
+		Flagged:    false,
+		DateFilmed: blankDate,
 	}
 
 	// store the video in the DB

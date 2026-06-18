@@ -13,9 +13,12 @@ import (
 
 // Scoreboard represents a bucket of scores, and has a name to identify it
 type Scoreboard struct {
-	ID          uint16 `gorm:"primaryKey"`
-	Name        string
-	DateCreated time.Time
+	ID   uint16 `gorm:"primaryKey"`
+	Name string
+	// autoCreateTime stamps date_created on insert; createScoreboard() doesn't
+	// set it, so without the tag GORM writes the 0001-01-01 zero value over the
+	// column's DEFAULT CURRENT_TIMESTAMP. See pkg/events for the full story.
+	DateCreated time.Time `gorm:"autoCreateTime"`
 }
 
 type topUserResult struct {
