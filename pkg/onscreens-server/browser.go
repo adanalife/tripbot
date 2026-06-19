@@ -66,6 +66,17 @@ type onscreenStyle struct {
 	Markdown      bool         // run the onscreen's Content through renderInlineMarkdown before serving state.json (implies RenderAsHTML)
 }
 
+// ContentMarginLeftPx is the left margin (in px) that positions a
+// FitWidthPx-wide, text-centered content box so its center sits at AnchorXPx
+// within the browser-source viewport. It backs the anchored rotator layout's
+// normal-flow centering (see templates/onscreen.html.tmpl) — the layout
+// deliberately avoids position:absolute + transform, which promote the content
+// to a separate compositing layer that OBS's offscreen renderer fails to
+// repaint on update.
+func (s onscreenStyle) ContentMarginLeftPx() int {
+	return s.AnchorXPx - s.FitWidthPx/2
+}
+
 var onscreenRegistry = map[string]onscreenStyle{
 	SlugMiddleText: {
 		// Content supports inline markdown (see renderInlineMarkdown) so
