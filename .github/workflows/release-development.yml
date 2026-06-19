@@ -38,6 +38,13 @@ jobs:
             tripbot:
               - 'cmd/tripbot/**'
               - 'pkg/**'
+              # DB migrations are baked into the tripbot image and run by its
+              # migrate initContainer at pod boot — so a migration-only PR must
+              # rebuild the image, or the new migration never ships and the
+              # initContainer reports "no change" against a stale image. (Bit us
+              # 2026-06-19: #906's seed migration didn't reach :develop because
+              # this filter didn't watch db/migrate.)
+              - 'db/migrate/**'
               - 'infra/docker/tripbot/**'
               - 'go.mod'
               - 'go.sum'
