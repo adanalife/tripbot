@@ -10,6 +10,7 @@ import (
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
+	"github.com/adanalife/tripbot/pkg/feature"
 	"github.com/adanalife/tripbot/pkg/server/oauthstate"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	myyoutube "github.com/adanalife/tripbot/pkg/youtube"
@@ -42,6 +43,14 @@ func (s *Server) SetVersion(v string) {
 	if v != "" {
 		s.versionTag = v
 	}
+}
+
+// SetFlags injects the feature-flag client backing the console's /api/flags
+// endpoints. Called from cmd/tripbot's startFeatureFlags, before Start runs
+// the HTTP server (so there's no race on the field). Left nil when the
+// Postgres client fails to load — /api/flags then reports ok=false.
+func (s *Server) SetFlags(fc feature.FlagClient) {
+	s.flags = fc
 }
 
 // startedAt is when the process began; /version reports it so callers can derive
