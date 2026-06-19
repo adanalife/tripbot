@@ -126,6 +126,24 @@ spec:
     app: vlc-twitch
   type: ClusterIP
 ---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/name: vlc-twitch
+    app.kubernetes.io/part-of: tripbot
+  name: vlc-twitch-rtsp
+  namespace: prod-1
+spec:
+  ports:
+    - name: rtsp
+      nodePort: 30854
+      port: 8554
+      targetPort: rtsp
+  selector:
+    app: vlc-twitch
+  type: NodePort
+---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:

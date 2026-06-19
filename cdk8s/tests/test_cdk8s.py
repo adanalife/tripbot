@@ -49,6 +49,27 @@ def test_each_component_has_deployment_and_service(env, comp, platform):
     assert "Service" in kinds, f"{env}-{comp}-{platform} missing Service"
 
 
+def test_prod_vlc_rtsp_nodeport():
+    """prod vlc-twitch emits a fixed RTSP NodePort so a LAN box (OBS on a desktop)
+    can pull rtsp://<node-ip>:30854/dashcam without kubectl. The minipc has no
+    LoadBalancer controller, so it's a NodePort not an LB. Pinned at 30854."""
+    svcs = _by_kind(_objects("prod-1-vlc-twitch"), "Service")
+    np = next((s for s in svcs if s["metadata"]["name"] == "vlc-twitch-rtsp"), None)
+    assert np is not None, "prod vlc-twitch missing the vlc-twitch-rtsp NodePort"
+    assert np["spec"]["type"] == "NodePort"
+    [port] = np["spec"]["ports"]
+    assert port["nodePort"] == 30854
+    assert port["port"] == 8554 and port["targetPort"] == "rtsp"
+
+
+@pytest.mark.parametrize("stem", ["stage-1-vlc-youtube", "development-vlc-twitch"])
+def test_non_prod_has_no_rtsp_nodeport(stem):
+    """The RTSP NodePort is prod-only — stage/dev don't set vlc_rtsp_node_port (a
+    pinned NodePort can't be claimed twice on the co-tenant minipc node)."""
+    svcs = _by_kind(_objects(stem), "Service")
+    assert not any(s["spec"].get("type") == "NodePort" for s in svcs)
+
+
 @pytest.mark.parametrize("env,platform", [("prod-1", "twitch"), ("stage-1", "youtube")])
 @pytest.mark.parametrize("comp", ["vlc", "tripbot"])
 def test_obs_websocket_addr_is_platform_scoped(env, comp, platform):
