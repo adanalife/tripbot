@@ -7,6 +7,10 @@ All notable changes to TripBot. Format follows [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+### Fixes
+
+- **vlc-server actually resumes its last-played clip on restart.** libvlc 3.0.x's `libvlc_media_list_player_play_item_at_index` reads the player's *existing* media before swapping in the requested one and returns `-1` when that prior media is nil — i.e. on the very first play against a freshly-created list player — even though playback actually starts. So the first startup play (resume-from-marker / resume-from-lastplayed) saw a spurious "cannot play the requested media", fell through to `PlayRandom`, and a restart almost never resumed where it left off. The media player is now primed with the first loaded clip at construction, so the first real play returns correctly and resume-on-restart lands on the right clip with the position seek following. ([#907])
+
 ### Cleanup
 
 - **Remove the in-tripbot admin panel in favor of tripbot-console.** Now that the standalone tripbot-console covers the admin dashboard, the in-process panel and its live-console SSE hub retire (`admin.go`, `hub.go`, `events.go`, the chat-send publisher form, `somafm.go`, `authcard.go`, and the vendored htmx/leaflet/sse assets). The HTTP surface the console and operators still need stays: `/auth/init` + `/auth/callback` (now fronted by a minimal landing page at `/` linking the bot/broadcaster/YouTube login flows), the read-only `/api/user`, `/api/chatters`, `/api/db/migration`, and `/admin/map/corpus` endpoints the console proxies over the in-namespace Service, plus `/version`, `/health`, and `/metrics`. The `chat.send` NATS subscriber stays in cmd/tripbot (the Twitch-identity owner), ready for the console to publish to once its chat-send feature lands. ([#886])
@@ -1685,6 +1689,7 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#763]: https://github.com/adanalife/tripbot/pull/763
 [#853]: https://github.com/adanalife/tripbot/pull/853
 [#886]: https://github.com/adanalife/tripbot/pull/886
+[#907]: https://github.com/adanalife/tripbot/pull/907
 [#861]: https://github.com/adanalife/tripbot/pull/861
 [#863]: https://github.com/adanalife/tripbot/pull/863
 [#864]: https://github.com/adanalife/tripbot/pull/864
