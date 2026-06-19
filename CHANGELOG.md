@@ -11,9 +11,26 @@ All notable changes to TripBot. Format follows [Keep a Changelog](https://keepac
 
 - **vlc-server actually resumes its last-played clip on restart.** libvlc 3.0.x's `libvlc_media_list_player_play_item_at_index` reads the player's *existing* media before swapping in the requested one and returns `-1` when that prior media is nil — i.e. on the very first play against a freshly-created list player — even though playback actually starts. So the first startup play (resume-from-marker / resume-from-lastplayed) saw a spurious "cannot play the requested media", fell through to `PlayRandom`, and a restart almost never resumed where it left off. The media player is now primed with the first loaded clip at construction, so the first real play returns correctly and resume-on-restart lands on the right clip with the position seek following. ([#907])
 
+## [v3.6.0] — 2026-06-19
+
+Minor release. Retires the in-tripbot admin panel now that the standalone tripbot-console has taken over, leaving tripbot with just the HTTP surface the console and operators still depend on. Also renders inline markdown on the text overlays (so `!command` refs show in monospace), fixes the events table being frozen at year-0001 timestamps, exposes the prod dashcam feed over an RTSP NodePort for off-cluster pulls, and moves stage's software-encoder OBS onto the Pi 5 worker.
+
 ### Cleanup
 
 - **Remove the in-tripbot admin panel in favor of tripbot-console.** Now that the standalone tripbot-console covers the admin dashboard, the in-process panel and its live-console SSE hub retire (`admin.go`, `hub.go`, `events.go`, the chat-send publisher form, `somafm.go`, `authcard.go`, and the vendored htmx/leaflet/sse assets). The HTTP surface the console and operators still need stays: `/auth/init` + `/auth/callback` (now fronted by a minimal landing page at `/` linking the bot/broadcaster/YouTube login flows), the read-only `/api/user`, `/api/chatters`, `/api/db/migration`, and `/admin/map/corpus` endpoints the console proxies over the in-namespace Service, plus `/version`, `/health`, and `/metrics`. The `chat.send` NATS subscriber stays in cmd/tripbot (the Twitch-identity owner), ready for the console to publish to once its chat-send feature lands. ([#886])
+
+### Onscreens
+
+- **Inline markdown on text overlays.** The text onscreens now render `` `code` ``, `**bold**`, and `*italic*` — the motivating case being monospace `!command` references on the middle-text overlay and the bottom-strip rotators. A dependency-free `renderInlineMarkdown` (stdlib only) converts a small marker subset at the `state.json` wire boundary, so the stored content (and the JetStream-persisted middle-text state) stays raw markdown and only the served copy is HTML; code spans win over emphasis so asterisks inside backticks stay literal. Enabled on `middle-text`, `left-message`, and `right-message`, with a monospace pill style for legibility over the dashcam video. ([#885])
+
+### Deploy
+
+- **Prod vlc RTSP exposed via a fixed NodePort (30854) for off-cluster pulls.** A LAN box — e.g. OBS on a desktop — can now pull the raw dashcam feed at `rtsp://<minipc-ip>:30854/dashcam` (use `rtsp_transport=tcp`) without kubectl or a port-forward, the NodePort analogue of the k3d-only `<name>-host` LoadBalancer convenience (the minipc has no LB controller). A new `vlc_rtsp_node_port` knob defaults to `0` (no NodePort) and is set only on `prod-1`'s `twitch` instance; VNC/HTTP stay in-cluster. Overlays are composited in OBS, so the off-cluster feed is raw video only. ([#896])
+- **Stage software-encoder OBS scheduled onto the rpi5 worker.** Stage `obs-youtube` already runs software x264 (no iGPU claim, the 2026-06-15 VAAPI-contention cap), so it now biases toward the ephemeral arm64 `adanalife-rpi5` worker via a toleration + preferred node affinity — offloading the x264 encode off the MS-01 and easing the recurring stream/pipeline CPU contention. Gated on `prefer_rpi5 and not (gpu and obs_gpu)`, so only a software-encoder OBS biases toward the Pi; the affinity stays preferred (never required) so OBS recovers onto the MS-01 if the Pi is unplugged. Prod VAAPI OBS is untouched. ([#884])
+
+### Fixes
+
+- **`date_created` is stamped on insert (events table was frozen at `0001-01-01`).** Since 2026-05-15, every `events` row (and `users`/`scoreboards`/`scores`/runtime-created `videos`) was written with a year-1 timestamp: the GORM migration (#499) replaced raw INSERTs that omitted `date_created` (letting the column default apply) with `Create(&struct{})`, and GORM writes the zero-value `time.Time` unless the field carries a `default`/`autoCreateTime` tag. This is why the events table looked frozen — rows inserted fine but date filters saw nothing recent (`SessionCount` has no date filter, so miles stayed healthy and masked it). The create-time columns now carry `gorm:"autoCreateTime"`, and the user-profile popover computes a best-effort first-seen from the earliest non-sentinel event for accounts caught in the bug window. Already-written `0001-01-01` rows are not back-filled (unrecoverable); new rows are correct from here forward. ([#887])
 
 ## [v3.5.0] — 2026-06-15
 
@@ -1689,7 +1706,6 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#763]: https://github.com/adanalife/tripbot/pull/763
 [#853]: https://github.com/adanalife/tripbot/pull/853
 [#886]: https://github.com/adanalife/tripbot/pull/886
-[#907]: https://github.com/adanalife/tripbot/pull/907
 [#861]: https://github.com/adanalife/tripbot/pull/861
 [#863]: https://github.com/adanalife/tripbot/pull/863
 [#864]: https://github.com/adanalife/tripbot/pull/864
@@ -1703,3 +1719,7 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#875]: https://github.com/adanalife/tripbot/pull/875
 [#876]: https://github.com/adanalife/tripbot/pull/876
 [#877]: https://github.com/adanalife/tripbot/pull/877
+[#884]: https://github.com/adanalife/tripbot/pull/884
+[#885]: https://github.com/adanalife/tripbot/pull/885
+[#887]: https://github.com/adanalife/tripbot/pull/887
+[#896]: https://github.com/adanalife/tripbot/pull/896
