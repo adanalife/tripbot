@@ -67,8 +67,11 @@ func (c *Client) ShowLeaderboard(ctx context.Context, title string, leaderboard 
 	return nil
 }
 
-func (c *Client) ShowTimewarp(ctx context.Context) error {
-	c.publish(ctx, oe.TimewarpShowSubject(c.env), oe.Command{Envelope: oe.NewEnvelope()})
+func (c *Client) ShowTimewarp(ctx context.Context, username string) error {
+	c.publish(ctx, oe.TimewarpShowSubject(c.env), oe.TimewarpShow{
+		Envelope: oe.NewEnvelope(),
+		Username: username,
+	})
 	return nil
 }
 
