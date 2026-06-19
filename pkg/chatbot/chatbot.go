@@ -154,7 +154,7 @@ func New() *App {
 		Cron:       noopCron{},
 		Geocoder:   realGeocoder{},
 		Weather:    realWeather{},
-		Twitch:     realTwitch{},
+		Twitch:     newTwitch(),
 		OBS:        realOBS{},
 	}
 	a.indexCommands()
