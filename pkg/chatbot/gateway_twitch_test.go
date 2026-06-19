@@ -5,6 +5,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/adanalife/tripbot/pkg/feature"
 )
 
 func TestGatewayTwitch_FollowedAt_Following(t *testing.T) {
@@ -76,5 +78,35 @@ func TestGatewayTwitch_FollowedAt_TransportError(t *testing.T) {
 func TestNewGatewayTwitch_TrimsTrailingSlash(t *testing.T) {
 	if got := newGatewayTwitch("http://twitch-api:8080/").baseURL; got != "http://twitch-api:8080" {
 		t.Errorf("baseURL = %q, want trailing slash trimmed", got)
+	}
+}
+
+func TestFlaggedTwitch_DispatchesOnFlag(t *testing.T) {
+	gw := &recordingTwitch{Result: time.Unix(100, 0), OK: true}
+	inproc := &recordingTwitch{Result: time.Unix(200, 0), OK: true}
+
+	flagOn := feature.NewInMemoryClient(map[string]feature.Flag{
+		twitchGatewayFlagKey: {Key: twitchGatewayFlagKey, Enabled: true},
+	})
+	flagOff := feature.NewInMemoryClient(nil) // unknown key → off
+
+	// flag on → gateway
+	ft := flaggedTwitch{app: &App{Flags: flagOn}, gateway: gw, inproc: inproc}
+	if when, _ := ft.FollowedAt("viewer1"); !when.Equal(time.Unix(100, 0)) {
+		t.Errorf("flag on should route to the gateway; got %v", when)
+	}
+
+	// flag off → in-process (the default until toggled)
+	ft = flaggedTwitch{app: &App{Flags: flagOff}, gateway: gw, inproc: inproc}
+	if when, _ := ft.FollowedAt("viewer1"); !when.Equal(time.Unix(200, 0)) {
+		t.Errorf("flag off should route in-process; got %v", when)
+	}
+}
+
+func TestNewTwitch_NoURLSkipsGatewayWrapper(t *testing.T) {
+	// With no gateway URL there's nothing to flag — it's the plain in-process
+	// adapter, not a flaggedTwitch wrapper.
+	if _, ok := newTwitch(&App{}).(realTwitch); !ok {
+		t.Error("expected realTwitch when TWITCH_API_URL is empty")
 	}
 }

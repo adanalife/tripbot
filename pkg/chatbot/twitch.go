@@ -1,6 +1,7 @@
 package chatbot
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -9,8 +10,16 @@ import (
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
+	"github.com/adanalife/tripbot/pkg/feature"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 )
+
+// twitchGatewayFlagKey is the runtime kill-switch for routing the chatbot's
+// Helix calls through the platform-gateway. It defaults off (the flag row
+// doesn't exist until toggled), so even an env wired with TWITCH_API_URL stays
+// in-process until the flag is flipped on — the cutover (and instant revert,
+// no restart) is a console toggle. Only meaningful when TWITCH_API_URL is set.
+const twitchGatewayFlagKey = "chatbot.twitch_gateway"
 
 // Twitch is the command-time Twitch Helix surface the chatbot needs. Today
 // that's only follow lookups (followageCmd); it grows as admin-panel Helix
@@ -23,16 +32,37 @@ type Twitch interface {
 	FollowedAt(username string) (time.Time, bool)
 }
 
-// newTwitch picks the production Twitch adapter: the platform-gateway HTTP
-// client when TWITCH_API_URL is set, otherwise the in-process pkg/twitch path.
-// This is the Phase 3 flip — selecting by config keeps the in-process path as
-// the zero-config default, so envs that haven't been pointed at a gateway are
-// unchanged.
-func newTwitch() Twitch {
-	if c.Conf.TwitchAPIURL != "" {
-		return newGatewayTwitch(c.Conf.TwitchAPIURL)
+// newTwitch wires the production Twitch adapter. With no TWITCH_API_URL there's
+// no gateway to reach, so it's the plain in-process path (zero-config default).
+// When a gateway IS wired, it returns a flaggedTwitch that dispatches per call
+// based on the twitchGatewayFlagKey runtime flag — so the gateway is wired but
+// dormant until flipped on, and revertible without a restart.
+func newTwitch(a *App) Twitch {
+	if c.Conf.TwitchAPIURL == "" {
+		return realTwitch{}
 	}
-	return realTwitch{}
+	return flaggedTwitch{
+		app:     a,
+		gateway: newGatewayTwitch(c.Conf.TwitchAPIURL),
+		inproc:  realTwitch{},
+	}
+}
+
+// flaggedTwitch routes each call to the gateway or the in-process adapter based
+// on the live twitchGatewayFlagKey value, read from the App's flag client at
+// call time (cmd/tripbot reassigns a.Flags to the Postgres-backed, console-
+// toggleable client after New(), so the flag flips without a bot restart).
+type flaggedTwitch struct {
+	app     *App
+	gateway Twitch
+	inproc  Twitch
+}
+
+func (f flaggedTwitch) FollowedAt(username string) (time.Time, bool) {
+	if f.app.Flags.Bool(context.Background(), twitchGatewayFlagKey, feature.EvalContext{}) {
+		return f.gateway.FollowedAt(username)
+	}
+	return f.inproc.FollowedAt(username)
 }
 
 // realTwitch is the in-process adapter — used when no gateway URL is
