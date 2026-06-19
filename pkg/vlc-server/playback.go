@@ -14,7 +14,9 @@ import (
 // TODO: should we handle the case where index is outside range?
 // or just explicitly pass in what we get here?
 func (s *Server) playAtIndex(index int) error {
-	// start playing the media
+	// start playing the media. The underlying media player is primed with a
+	// media at construction (see primePlayer) so this returns correctly even
+	// when it's the very first play against the freshly-created list player.
 	if err := s.Playlist.PlayAtIndex(uint(index)); err != nil {
 		return err
 	}
