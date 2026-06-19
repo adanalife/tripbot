@@ -222,6 +222,37 @@ class VlcServer(Construct):
             spec=k8s.ServiceSpec(type="ClusterIP", selector=sel, ports=svc_ports),
         )
 
+        # --- RTSP NodePort (minipc convenience: a stable host endpoint for pulling
+        # the dashcam feed off-cluster — e.g. OBS on a LAN desktop — without
+        # kubectl port-forward. The minipc has no LoadBalancer controller, so this
+        # is the NodePort analogue of the k3d-only `<name>-host` LoadBalancer.
+        # Gated on the twitch platform + a configured port: prod-1 + stage-1
+        # co-tenant the one node, and a pinned NodePort can't be claimed twice, so
+        # only an env that sets vlc_rtsp_node_port (prod) emits one. RTSP only —
+        # VNC/HTTP stay in-cluster. Pull over TCP:
+        # rtsp://<node-ip>:<nodePort>/dashcam with rtsp_transport=tcp so the RTSP
+        # control + RTP media share the single forwarded port. ---
+        if env.vlc_rtsp_node_port and platform == "twitch":
+            k8s.KubeService(
+                self,
+                "rtsp-nodeport",
+                metadata=k8s.ObjectMeta(
+                    name=f"{name}-rtsp", namespace=ns, labels=labels
+                ),
+                spec=k8s.ServiceSpec(
+                    type="NodePort",
+                    selector=sel,
+                    ports=[
+                        k8s.ServicePort(
+                            name="rtsp",
+                            port=8554,
+                            target_port=k8s.IntOrString.from_string("rtsp"),
+                            node_port=env.vlc_rtsp_node_port,
+                        )
+                    ],
+                ),
+            )
+
         # --- host-access LoadBalancer (k3d-only convenience: local + dev, which
         # extends local). Overlay-added, so no metadata labels (matches render). ---
         if appconfig.uses_local_stubs(env):

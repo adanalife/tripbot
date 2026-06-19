@@ -119,6 +119,15 @@ class EnvConfig:
     # (EXTERNAL_URL, registered OAuth redirect URIs). Only dev needs it — k3d's
     # traefik is mapped to host :9443 because Colima can't bind :443.
     external_port: str = ""
+    # Fixed NodePort exposing vlc-twitch's RTSP listener on the node IP, so a LAN
+    # box (e.g. OBS on a desktop) can pull rtsp://<node-ip>:<port>/dashcam without
+    # kubectl/port-forward. 0 = no NodePort (default). Only the twitch instance
+    # emits it. The minipc has no LoadBalancer controller, so this is the stable-
+    # host-endpoint equivalent of the k3d-only `<name>-host` LoadBalancer. prod-1
+    # and stage-1 co-tenant the one minipc node, and a pinned NodePort can't be
+    # claimed twice on the same node — each env that wants one must pick a distinct
+    # number in the 30000-32767 range. RTSP only; VNC/HTTP stay in-cluster.
+    vlc_rtsp_node_port: int = 0
     # Bias this env's stateless app pods toward the ephemeral arm64 rpi5 worker
     # (adanalife-rpi5) when it's present, falling back to the MS-01 when it's not.
     # When True, the tripbot/vlc/onscreens constructs add a toleration for the
@@ -220,6 +229,10 @@ ENVS: dict[str, EnvConfig] = {
         priority_class="prod-stream",
         obs_cpu_request="2",
         vlc_cpu_request="1",
+        # Stable LAN endpoint for pulling the dashcam RTSP feed off-cluster
+        # (e.g. OBS on a desktop) without kubectl: rtsp://<minipc-ip>:30854/dashcam
+        # (TCP transport). Distinct from any future stage NodePort (same node).
+        vlc_rtsp_node_port=30854,
     ),
     "stage-1": EnvConfig(
         name="stage-1",
