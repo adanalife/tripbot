@@ -16,7 +16,7 @@ VERSIONS = Path(__file__).resolve().parents[1] / "versions.yaml"
 # (env, platform) the app charts are synthed for. Mirrors config.ENVS platforms.
 ENV_PLATFORMS = {
     "prod-1": ("twitch",),
-    "stage-1": ("youtube",),
+    "stage-1": ("youtube", "twitch"),
     "development": ("twitch",),
     "local": ("twitch",),
 }
@@ -129,6 +129,33 @@ def test_youtube_tripbot_emits_youtube_creds():
     objs = _objects("stage-1-tripbot-youtube")
     es_names = {o["metadata"]["name"] for o in objs if o["kind"] == "ExternalSecret"}
     assert "tripbot-youtube-creds" in es_names
+
+
+def test_stage_omits_replicas_prod_keeps_one():
+    """Stage app Deployments omit spec.replicas so a hand/console scale is
+    authoritative (manual_replicas); prod keeps replicas:1 so Argo holds it."""
+
+    def _deploy(stem):
+        return _by_kind(_objects(stem), "Deployment")[0]
+
+    for stem in ("stage-1-tripbot-twitch", "stage-1-tripbot-youtube"):
+        assert "replicas" not in _deploy(stem)["spec"], f"{stem} should omit replicas"
+    assert _deploy("prod-1-tripbot-twitch")["spec"]["replicas"] == 1
+
+
+def test_stage_twitch_routes_through_gateway():
+    """Stage tripbot-twitch carries TWITCH_API_URL (Phase 3 gateway); the youtube
+    instance and prod tripbot do not."""
+
+    def _cm_data(stem):
+        return _by_kind(_objects(stem), "ConfigMap")[0]["data"]
+
+    assert (
+        _cm_data("stage-1-tripbot-twitch").get("TWITCH_API_URL")
+        == "http://twitch-api.stage-1.svc.cluster.local:8080"
+    )
+    assert "TWITCH_API_URL" not in _cm_data("stage-1-tripbot-youtube")
+    assert "TWITCH_API_URL" not in _cm_data("prod-1-tripbot-twitch")
 
 
 # Which (env, platform) OBS instances actually stream — must mirror
