@@ -11,6 +11,64 @@ All notable changes to TripBot. Format follows [Keep a Changelog](https://keepac
 
 - **Remove the in-tripbot admin panel in favor of tripbot-console.** Now that the standalone tripbot-console covers the admin dashboard, the in-process panel and its live-console SSE hub retire (`admin.go`, `hub.go`, `events.go`, the chat-send publisher form, `somafm.go`, `authcard.go`, and the vendored htmx/leaflet/sse assets). The HTTP surface the console and operators still need stays: `/auth/init` + `/auth/callback` (now fronted by a minimal landing page at `/` linking the bot/broadcaster/YouTube login flows), the read-only `/api/user`, `/api/chatters`, `/api/db/migration`, and `/admin/map/corpus` endpoints the console proxies over the in-namespace Service, plus `/version`, `/health`, and `/metrics`. The `chat.send` NATS subscriber stays in cmd/tripbot (the Twitch-identity owner), ready for the console to publish to once its chat-send feature lands. ([#886])
 
+## [v3.5.0] — 2026-06-15
+
+Minor release. Rounds out the per-platform YouTube stream: a public `!carsound` command to cycle a set of license-clean background-audio voicings, platform-scoped eventbus payloads so the two bot instances stop clobbering each other's now-playing/viewer state, and two new console-facing JSON endpoints. Also persists the middle-text overlay across restarts, labels the monthly leaderboard with the month name, fixes the corpus map drawing cross-country streaks, and shuffles GPU/scheduling on stage to relieve iGPU contention.
+
+### Chat
+
+- **`!carsound` (alias `!carhum`) — public, YouTube-only — cycles background-audio voicings.** Builds on the v3.4.0 Car Hum bed with four character presets (`idle`, `highway`, `backroad`, `mountain`), each rendered at build time to a seamless-looping FLAC (numpy/scipy live only in a throwaway Docker stage, so the runtime image stays small and boot stays network-free). No arg reports what's playing; `next` cycles, `<name>` jumps, `list` shows options. Repoints the OBS `Car Hum` source live over the WebSocket — no scene reload — and increments `tripbot_carsound_selections_total{sound=…}` so the most-played voicing is rankable. Also centralizes per-platform command scoping behind a `Command.Platforms` field instead of the implicit "unset == Twitch" assumption. ([#869])
+- **`!guesslb` registered as an alias for `!guessleaderboard`.** ([#865])
+
+### Onscreens
+
+- **Middle-text overlay survives an onscreens-server restart.** The text previously lived only in memory, so a restart blanked the OBS browser source. It's now backed by a `MaxMsgsPerSubject=1` JetStream last-value cache (`TRIPBOT_ONSCREENS_MIDDLE`), mirroring the vlc `lastplayed` pattern, and restored on startup. Degrades gracefully when NATS is unavailable. ([#861])
+- **Monthly-miles leaderboard overlay is labeled with the current month** (e.g. "June Miles") instead of a generic "Monthly Miles" header, via a new `scoreboards.CurrentMilesMonth()` sharing the board's `time.Now()` basis. Lifetime and guess boards untouched. ([#866])
+
+### Console / API
+
+- **`GET /api/chatters`** returns the logins currently in chat as sorted JSON (`{"chatters": […], "count": N}`), read from the in-process chatter set the `UpdateSession` cron already refreshes — no new scope, no request-time network call. Feeds the standalone tripbot-console's active-chatters panel. ([#868])
+- **`GET /api/db/migration`** reports the current golang-migrate schema version as JSON (`{"ok": true, "version": 20, "dirty": false}`) so the console (which holds no DB access) can surface which migration each env's Postgres is on. ([#867])
+
+### Eventbus
+
+- **`video.changed` and `viewers.count` payloads carry a `Platform` field.** With both `tripbot-twitch` and `tripbot-youtube` publishing to the same env-scoped subjects, the two instances were clobbering each other — the console's now-playing card, map trail, and viewer count flickered between platforms. Mirrors the existing `ChatMessage.Platform` treatment so the console can render per-platform state; `omitempty` keeps pre-upgrade events graceful. ([#871])
+
+### Deploy
+
+- **vlc dials its own platform's OBS.** `OBS_WEBSOCKET_ADDR` is now set to `obs-<platform>:4455` on every vlc instance, fixing `vlc-youtube` dialing the nonexistent `obs-twitch` (it had been falling back to the baked-in default). Twitch now carries the address explicitly too rather than leaning on the default. One-time `prod-1-vlc-twitch` rollout from the config-hash bump (value unchanged). ([#877])
+- **Config-driven OBS streaming toggle; stage YouTube turned on durably.** Replaces the hardcoded `env == prod-1 and platform == twitch` streaming special-case with a per-env `obs_streaming` config tuple, and makes `stage-1-obs-youtube` stream — its stream key now ESO-managed from Secrets Manager (`k8s/obs/youtube-stream-key`) as the single source of truth. Prod renders byte-identical. ([#870])
+- **Stage `obs-youtube` drops its iGPU claim and software-encodes** (x264) to relieve the three-way VAAPI contention on the single mini-PC Iris Xe that stuttered the prod twitch stream. Adds an `obs_gpu` knob mirroring `vlc_gpu`. Stopgap until the optimization job stops needing the iGPU; prod untouched and CPU-protected by its priority class. ([#875])
+- **Stage stateless apps prefer the ephemeral rpi5 worker when present.** `tripbot`/`vlc`/`onscreens` opt into a toleration + preferred (never required) node affinity toward the Pi 5, falling back to the MS-01 when it's unplugged. OBS opts out (no H.264 hardware encoder); prod untouched. ([#876])
+
+### Fixes
+
+- **Corpus map no longer streaks across the country.** The admin map's full-route overlay drew one continuous polyline through every clip in film order, so each new trip (van resuming thousands of miles away) drew a straight line across the map. `mapCorpusHandler` now splits the route into segments on gaps over 25mi, returning a nested array Leaflet renders as a multi-polyline — no JS change. The fix lives in the durable `/admin/map/corpus` endpoint so the console's eventual map inherits it. ([#864])
+
+### Tooling
+
+- **Removed the `cv:stats` Taskfile target** — the last video-pipeline producer-era trace in tripbot, now that embedding production/monitoring lives in the standalone `video-pipeline` repo. A full audit confirmed nothing else producer-era remained. ([#863])
+
+## [v3.4.1] — 2026-06-14
+
+Patch release. A one-time cleanup pass over the dashcam GPS corpus: adds a provenance column so synthesized fixes are distinguishable from real OCR ones, ships a `backfill-coords` tool that interpolates missing fixes and corrects digit-flip OCR outliers, and reseeds `videos.csv` with the corrected coordinates. Also makes prod-deploy impact visible on PRs. No runtime behavior change.
+
+### CI
+
+- **Prod-deploy impact is now visible on PRs.** A new `prod-dist-warning` workflow posts a sticky comment on any PR into `master` that touches a prod app deploy unit (`cdk8s/dist/prod-1-*-twitch.k8s.yaml`), spelling out that merging deploys to prod — the gap that let an incidental manifest change go live on a release merge rather than a deliberate gesture. The version-bump PR template (`bump-prs.yml`) is also corrected to be component-aware: prod-1 apps autosync from master so merging *is* the deploy, except OBS which is held out of autosync and still needs a manual sync. ([#859])
+
+### Database
+
+- **`videos.coord_source` provenance column.** Each clip's stored GPS fix now records how it was derived (`ocr`/`interpolated`/`rejected`/`missing`) so a corrective pass can mark synthesized points and a future re-OCR won't mistake them for real fixes. Existing 0/0 and flagged rows backfill to `missing`; runtime-created clips are stamped `missing` on save. ([#846])
+
+### Tooling
+
+- **`cmd/backfill-coords` cleans up dashcam GPS coordinates.** Walks videos in film order and, per the new provenance column, interpolates missing fixes from in-session neighbours and replaces digit-flip OCR outliers with interpolated points. Conservative by design — only judges clips against neighbours inside the interpolation window (trip boundaries left alone) and never clears a coordinate it can't replace. Dry-run by default; `--apply` writes to the DB, `--output-sql` emits idempotent slug-keyed UPDATEs. Mirrors `cmd/backfill-miles`. Removes the dead `collect-gps` script (its OCR pass was retired in #79). ([#846])
+
+### Seed
+
+- **Reseed `videos.csv` with corrected coordinates.** 334 clips gain coordinates (81 replacing digit-flip OCR outliers, 253 filling missing fixes), captured from `backfill-coords` output so a fresh seed loads the cleaned corpus. ([#846])
+
 ## [v3.4.0] — 2026-06-14
 
 Minor release. Headlined by a license-clean synthesized background-audio bed for the YouTube stream; also drops vlc-server's unused iGPU claim to ease co-tenant contention, plus routine OpenTelemetry dependency bumps.
@@ -1618,6 +1676,8 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#841]: https://github.com/adanalife/tripbot/pull/841
 [infra #717]: https://github.com/adanalife/infra/pull/717
 [#845]: https://github.com/adanalife/tripbot/pull/845
+[#846]: https://github.com/adanalife/tripbot/pull/846
+[#859]: https://github.com/adanalife/tripbot/pull/859
 [#851]: https://github.com/adanalife/tripbot/pull/851
 [#854]: https://github.com/adanalife/tripbot/pull/854
 [#761]: https://github.com/adanalife/tripbot/pull/761
@@ -1625,3 +1685,16 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#763]: https://github.com/adanalife/tripbot/pull/763
 [#853]: https://github.com/adanalife/tripbot/pull/853
 [#886]: https://github.com/adanalife/tripbot/pull/886
+[#861]: https://github.com/adanalife/tripbot/pull/861
+[#863]: https://github.com/adanalife/tripbot/pull/863
+[#864]: https://github.com/adanalife/tripbot/pull/864
+[#865]: https://github.com/adanalife/tripbot/pull/865
+[#866]: https://github.com/adanalife/tripbot/pull/866
+[#867]: https://github.com/adanalife/tripbot/pull/867
+[#868]: https://github.com/adanalife/tripbot/pull/868
+[#869]: https://github.com/adanalife/tripbot/pull/869
+[#870]: https://github.com/adanalife/tripbot/pull/870
+[#871]: https://github.com/adanalife/tripbot/pull/871
+[#875]: https://github.com/adanalife/tripbot/pull/875
+[#876]: https://github.com/adanalife/tripbot/pull/876
+[#877]: https://github.com/adanalife/tripbot/pull/877
