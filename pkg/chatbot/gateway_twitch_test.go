@@ -76,7 +76,7 @@ func TestGatewayTwitch_FollowedAt_TransportError(t *testing.T) {
 }
 
 func TestNewGatewayTwitch_TrimsTrailingSlash(t *testing.T) {
-	if got := newGatewayTwitch("http://twitch-api:8080/").baseURL; got != "http://twitch-api:8080" {
+	if got := newGatewayTwitch("http://gateway-twitch:8080/").baseURL; got != "http://gateway-twitch:8080" {
 		t.Errorf("baseURL = %q, want trailing slash trimmed", got)
 	}
 }
