@@ -82,16 +82,26 @@ jobs:
 
           LATEST_TAG=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || echo "")
 
-          # --- Suggested bump, from the Unreleased changelog section ----------
-          # Heuristic only: Removed/breaking -> major, Added -> minor, else
-          # patch. The real bump is whatever token lands in the merge commit.
+          # --- Suggested bump ------------------------------------------------
+          # Heuristic only; the real bump is whatever token lands in the merge
+          # commit. Two signals, strongest wins:
+          #   1. Conventional-commit prefixes on the queued commits — the most
+          #      reliable signal (changelog section names vary): `feat!:` or a
+          #      `BREAKING CHANGE` body -> major, any `feat:` -> minor.
+          #   2. The Unreleased changelog section — breaking/Removed -> major,
+          #      Added -> minor.
           UNREL=""
           if [ -f CHANGELOG.md ]; then
             UNREL=$(awk '/^## \[Unreleased\]/{f=1;next} /^## \[/{f=0} f' CHANGELOG.md)
           fi
-          if echo "$UNREL" | grep -qiE 'breaking|^### *Removed'; then
+          SUBJECTS=$(git log --no-merges --pretty=format:'%s' "origin/master..HEAD")
+          BODIES=$(git log --no-merges --pretty=format:'%b' "origin/master..HEAD")
+          if echo "$SUBJECTS" | grep -qE '^[a-z]+(\(.+\))?!:' \
+            || echo "$BODIES" | grep -q 'BREAKING CHANGE' \
+            || echo "$UNREL" | grep -qiE 'breaking|^### *Removed'; then
             BUMP="major"
-          elif echo "$UNREL" | grep -qiE '^### *Added'; then
+          elif echo "$SUBJECTS" | grep -qE '^feat(\(.+\))?:' \
+            || echo "$UNREL" | grep -qiE '^### *Added'; then
             BUMP="minor"
           else
             BUMP="patch"
@@ -123,7 +133,7 @@ jobs:
             echo
             echo "$BUMP_LINE"
             echo
-            echo "_Bump is a guess from the Unreleased changelog (Added → minor, Removed/breaking → major, else patch). Your call._"
+            echo "_Bump is a guess from the queued commits + Unreleased changelog (\`feat\`/Added → minor, \`feat!\`/BREAKING/Removed → major, else patch). Your call — set the real bump via \`#minor\`/\`#major\` in the merge commit._"
             echo
             echo "**Diff:** [\`$RANGE\`](https://github.com/$REPO/compare/$RANGE) · **$AHEAD** commit(s) ahead of \`master\`."
             echo
