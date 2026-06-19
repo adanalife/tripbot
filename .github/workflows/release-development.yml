@@ -30,7 +30,7 @@ jobs:
       obs: ${{ steps.filter.outputs.obs }}
       onscreens: ${{ steps.filter.outputs.onscreens }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v4
         id: filter
         with:
@@ -38,6 +38,13 @@ jobs:
             tripbot:
               - 'cmd/tripbot/**'
               - 'pkg/**'
+              # DB migrations are baked into the tripbot image and run by its
+              # migrate initContainer at pod boot — so a migration-only PR must
+              # rebuild the image, or the new migration never ships and the
+              # initContainer reports "no change" against a stale image. (Bit us
+              # 2026-06-19: #906's seed migration didn't reach :develop because
+              # this filter didn't watch db/migrate.)
+              - 'db/migrate/**'
               - 'infra/docker/tripbot/**'
               - 'go.mod'
               - 'go.sum'
@@ -91,7 +98,7 @@ jobs:
             runner: ubuntu-24.04-arm
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Resolve develop version
         id: ver
@@ -171,7 +178,7 @@ jobs:
             runner: ubuntu-24.04-arm
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Resolve develop version
         id: ver
@@ -254,7 +261,7 @@ jobs:
             dockerfile: infra/docker/obs/Dockerfile.arm64
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Resolve develop version
         id: ver
@@ -334,7 +341,7 @@ jobs:
             runner: ubuntu-24.04-arm
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Resolve develop version
         id: ver

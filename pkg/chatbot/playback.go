@@ -11,9 +11,16 @@ import (
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
+	"github.com/adanalife/tripbot/pkg/feature"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/users"
 )
+
+// timewarpCreditFlagKey gates the on-overlay username credit (the chatter who
+// triggered !timewarp or a correct !guess). Defaults off — the flag row is
+// seeded FALSE per platform; flip it on per env / platform once the credit is
+// verified on stream. The warp itself always runs; only the credit is gated.
+const timewarpCreditFlagKey = "chatbot.timewarp_credit"
 
 // lastTimewarpTime is used to rate-limit users so they can't
 // over-do the time-skip features (including !skip and !back)
@@ -33,14 +40,28 @@ var timewarpOverlayLeadIn = 500 * time.Millisecond
 // the cover has to be in place to mask that gap.
 var timewarpCoverDelay = 800 * time.Millisecond
 
-// timewarp jumps the playhead to a random video in the loop
-func (a *App) timewarp(ctx context.Context) {
+// timewarp jumps the playhead to a random video in the loop. username is the
+// chatter who triggered it — surfaced as a credit line on the warp overlay
+// (empty for callers with no attributable user).
+func (a *App) timewarp(ctx context.Context, username string) {
 	// give the chat message a beat to land before the visual takeover
 	time.Sleep(timewarpOverlayLeadIn)
 
+	// The on-overlay username credit is feature-flagged (per platform); the
+	// warp always runs, only the credit line is gated. An empty credit means
+	// the overlay shows no @-line.
+	credit := username
+	if credit != "" && !a.Flags.Bool(ctx, timewarpCreditFlagKey, feature.EvalContext{
+		Username: username,
+		Channel:  c.Conf.ChannelName,
+		Env:      c.Conf.Environment,
+	}) {
+		credit = ""
+	}
+
 	// bring up the full-screen warp overlay, then give the browser source a
 	// beat to render the opaque cover before we hard-cut to a new clip
-	a.Onscreens.ShowTimewarp(ctx)
+	a.Onscreens.ShowTimewarp(ctx, credit)
 	time.Sleep(timewarpCoverDelay)
 
 	// shuffle to a new video
@@ -76,8 +97,8 @@ func (a *App) timewarpCmd(ctx context.Context, user *users.User, _ []string) {
 		a.Chat.Say("Here we go...!")
 	}
 
-	// do the timewarp
-	a.timewarp(ctx)
+	// do the timewarp, crediting the caller on the overlay
+	a.timewarp(ctx, user.Username)
 }
 
 func (a *App) jumpCmd(ctx context.Context, user *users.User, params []string) {

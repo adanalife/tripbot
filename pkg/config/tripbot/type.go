@@ -69,6 +69,14 @@ type TripbotConfig struct {
 	// for the "restart obs" button. Optional — blank skips the OBS row.
 	ObsServerHost string `envconfig:"OBS_SERVER_HOST"`
 
+	// TwitchAPIURL points the chatbot's command-time Twitch Helix calls at
+	// the platform-gateway gateway-twitch instance over HTTP, instead of the
+	// in-process pkg/twitch path. Empty (the default) keeps the in-process
+	// adapter, so existing envs are unaffected. When set — e.g.
+	// http://gateway-twitch.<env>.svc.cluster.local:8080 — App.Twitch becomes an
+	// HTTP client behind the same interface, with no command code changes.
+	TwitchAPIURL string `envconfig:"TWITCH_API_URL"`
+
 	// NatsURL is the in-cluster NATS endpoint used for fire-and-forget
 	// inter-component events. Format:
 	// nats://nats.<env-platform-ns>.svc.cluster.local:4222.

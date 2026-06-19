@@ -2,62 +2,43 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   labels:
-    app: obs-youtube
-    app.kubernetes.io/instance: obs-youtube
+    app: obs-twitch
+    app.kubernetes.io/instance: obs-twitch
     app.kubernetes.io/name: obs
     app.kubernetes.io/part-of: tripbot
-  name: obs-youtube-config
+  name: obs-twitch-config
   namespace: stage-1
 data:
-  DASHCAM_RTSP_URL: rtsp://vlc-youtube:8554/dashcam
+  DASHCAM_RTSP_URL: rtsp://vlc-twitch:8554/dashcam
   OBS_QUALITY_PRESET: low
   OBS_STREAM_ENCODER: obs_x264
   OBS_WEBSOCKET_PASSWD: adanalife
-  ONSCREENS_URL_BASE: http://onscreens-youtube:8080
-  STREAM_PLATFORM: youtube
-  VLC_URL_BASE: http://vlc-youtube:8080
----
-apiVersion: external-secrets.io/v1
-kind: ExternalSecret
-metadata:
-  name: obs-youtube-stream-key
-  namespace: stage-1
-spec:
-  data:
-    - remoteRef:
-        key: k8s/obs/youtube-stream-key
-      secretKey: STREAM_KEY
-  refreshInterval: 1h
-  secretStoreRef:
-    kind: SecretStore
-    name: aws-secretsmanager
-  target:
-    creationPolicy: Owner
-    name: obs-youtube-stream-key
+  ONSCREENS_URL_BASE: http://onscreens-twitch:8080
+  VLC_URL_BASE: http://vlc-twitch:8080
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
-    app: obs-youtube
-    app.kubernetes.io/instance: obs-youtube
+    app: obs-twitch
+    app.kubernetes.io/instance: obs-twitch
     app.kubernetes.io/name: obs
     app.kubernetes.io/part-of: tripbot
-  name: obs-youtube
+  name: obs-twitch
   namespace: stage-1
 spec:
   selector:
     matchLabels:
-      app: obs-youtube
+      app: obs-twitch
   strategy:
     type: Recreate
   template:
     metadata:
       annotations:
-        adanalife.dev/config-hash: 54bf302110
+        adanalife.dev/config-hash: dff69591c7
       labels:
-        app: obs-youtube
-        app.kubernetes.io/instance: obs-youtube
+        app: obs-twitch
+        app.kubernetes.io/instance: obs-twitch
         app.kubernetes.io/name: obs
         app.kubernetes.io/part-of: tripbot
     spec:
@@ -74,9 +55,9 @@ spec:
       containers:
         - envFrom:
             - configMapRef:
-                name: obs-youtube-config
+                name: obs-twitch-config
             - secretRef:
-                name: obs-youtube-stream-key
+                name: obs-stream-key
                 optional: true
           image: adanalife/obs:develop
           imagePullPolicy: Always
@@ -121,11 +102,11 @@ apiVersion: v1
 kind: Service
 metadata:
   labels:
-    app: obs-youtube
-    app.kubernetes.io/instance: obs-youtube
+    app: obs-twitch
+    app.kubernetes.io/instance: obs-twitch
     app.kubernetes.io/name: obs
     app.kubernetes.io/part-of: tripbot
-  name: obs-youtube
+  name: obs-twitch
   namespace: stage-1
 spec:
   ports:
@@ -142,7 +123,7 @@ spec:
       port: 8080
       targetPort: obs-server
   selector:
-    app: obs-youtube
+    app: obs-twitch
   type: ClusterIP
 ---
 apiVersion: networking.k8s.io/v1
@@ -150,39 +131,39 @@ kind: Ingress
 metadata:
   annotations:
     cert-manager.io/issuer: letsencrypt-route53
-    external-dns.alpha.kubernetes.io/hostname: obs-youtube.stage.whereisdana.today
-  name: obs-youtube
+    external-dns.alpha.kubernetes.io/hostname: obs-twitch.stage.whereisdana.today
+  name: obs-twitch
   namespace: stage-1
 spec:
   ingressClassName: traefik
   rules:
-    - host: obs-youtube.stage.whereisdana.today
+    - host: obs-twitch.stage.whereisdana.today
       http:
         paths:
           - backend:
               service:
-                name: obs-youtube
+                name: obs-twitch
                 port:
                   name: novnc
             path: /
             pathType: Prefix
   tls:
     - hosts:
-        - obs-youtube.stage.whereisdana.today
-      secretName: obs-youtube-tls
+        - obs-twitch.stage.whereisdana.today
+      secretName: obs-twitch-tls
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: obs-youtube-ts
+  name: obs-twitch-ts
   namespace: stage-1
 spec:
   defaultBackend:
     service:
-      name: obs-youtube
+      name: obs-twitch
       port:
         number: 6080
   ingressClassName: tailscale
   tls:
     - hosts:
-        - obs-youtube-stage
+        - obs-twitch-stage

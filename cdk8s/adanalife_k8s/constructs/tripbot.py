@@ -175,6 +175,11 @@ def config_data(env: EnvConfig, platform: str) -> dict[str, str]:
     data["EXTERNAL_URL"] = external_url(env, platform)
     if env.nats_url:
         data["NATS_URL"] = env.nats_url
+    # Route the twitch instance's command-time Helix calls through the
+    # platform-gateway gateway-twitch (Phase 3) where the env opts in. Only the
+    # twitch platform talks Helix, so the youtube instance never carries it.
+    if platform == "twitch" and env.twitch_api_url:
+        data["TWITCH_API_URL"] = env.twitch_api_url
     return data
 
 
@@ -321,7 +326,7 @@ class Tripbot(Construct):
             "deployment",
             metadata=k8s.ObjectMeta(name=name, namespace=ns, labels=labels),
             spec=k8s.DeploymentSpec(
-                replicas=1,
+                replicas=env.replicas,
                 selector=k8s.LabelSelector(match_labels=sel),
                 template=k8s.PodTemplateSpec(
                     metadata=k8s.ObjectMeta(

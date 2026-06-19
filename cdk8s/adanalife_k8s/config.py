@@ -138,6 +138,26 @@ class EnvConfig:
     # stays on the MS-01 (and the taint repels it regardless, since prod pods
     # carry no toleration).
     prefer_rpi5: bool = False
+    # When True, the app Deployments omit spec.replicas, so Argo never manages
+    # the replica count and a hand `kubectl scale` / console start-stop button is
+    # authoritative (survives autosync). Stage only — it's where components are
+    # parked at 0 to keep the minipc free for prod + the shared transcode job.
+    # Pairs with stage selfHeal being off in the Argo apps set (infra
+    # SELFHEAL_OFF_ENVS). prod keeps replicas declared so Argo holds it at 1.
+    manual_replicas: bool = False
+
+    @property
+    def replicas(self) -> int | None:
+        """spec.replicas for the app Deployments: None (omitted, manually
+        scaled) when manual_replicas, else 1."""
+        return None if self.manual_replicas else 1
+
+    # The platform-gateway gateway-twitch URL the chatbot routes its command-time
+    # Helix calls through (Phase 3). Empty keeps tripbot's in-process pkg/twitch
+    # path; set per env to flip App.Twitch to the HTTP client. Stage points at
+    # its in-namespace gateway-twitch Service; prod stays in-process until the
+    # gateway's prod release is cut + proven.
+    twitch_api_url: str = ""
 
     def tag_for(self, component: str) -> str:
         """Image tag for a component: its pinned release tag when versions.yaml
@@ -283,14 +303,22 @@ ENVS: dict[str, EnvConfig] = {
         # prod follows once the stage burn-in + dual-iGPU-encode validation
         # pass.
         #
-        # twitch is OFF here for the duration of the burn-in: running both
-        # stage stacks (8 pods, 4 iGPU claims) alongside prod made the prod
-        # twitch stream stutter on 2026-06-11 — the stage twitch pair never
-        # streamed (no stage stream key exists), but its VLC decode + OBS
-        # render still contended for the shared iGPU. Budget is two live
-        # streams total: prod-twitch + stage-youtube. Re-add "twitch" when
-        # the burn-in ends.
-        platforms=("youtube",),
+        # twitch is back ON (2026-06-19) to test the platform-gateway end to
+        # end: stage tripbot-twitch routes its Helix calls through gateway-twitch
+        # (twitch_api_url below). The 2026-06-11 prod-stutter that forced twitch
+        # OFF here was the stage twitch *VLC decode + OBS render* contending for
+        # the shared iGPU — so only tripbot-twitch (no GPU) is meant to run;
+        # vlc/obs/onscreens-twitch stay scaled to 0 (manual_replicas below +
+        # stage selfHeal off, so a hand/console scale sticks). Budget is still
+        # two live streams total: prod-twitch + stage-youtube.
+        platforms=("youtube", "twitch"),
+        # Stage components are scaled up/down by hand (only tripbot-twitch runs
+        # for the gateway test); omit replicas so Argo doesn't reset them.
+        manual_replicas=True,
+        # Route stage tripbot's command-time Helix calls through the in-namespace
+        # gateway-twitch gateway (Phase 3). prod stays in-process until its gateway
+        # release is cut.
+        twitch_api_url="http://gateway-twitch.stage-1.svc.cluster.local:8080",
         # Stage streams to YouTube — the second half of the two-live-streams
         # budget (prod-twitch + stage-youtube). Key from SM
         # k8s/obs/youtube-stream-key (adanalife-stage account).

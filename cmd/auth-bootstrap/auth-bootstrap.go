@@ -20,6 +20,12 @@
 //     completion.
 //  6. Exit cleanly.
 //
+// If the wrong account signs in (mytwitch.ErrIdentityMismatch), no token is
+// written and the process stays up: the listener (and the port-forward) keep
+// running, the "wrong account" page re-offers the authorize URL, and the
+// operator can sign out / use incognito and re-auth in place. Only a matching
+// identity writes the token and exits 0 — still bounded by flowTimeout.
+//
 // The Twitch app's registered redirect URI is http://localhost:8080/auth/callback;
 // this CLI relies on that registration matching what helix.Client sends.
 package main
@@ -51,8 +57,8 @@ const (
 	shutdownGrace = 5 * time.Second
 	// %s = expectedLogin, %s = --account flag value
 	successHTML = `<!doctype html><html><head><meta charset="utf-8"><title>tripbot — bootstrap success</title><style>body{background:#0a0a0a;color:#eee;font:14px/1.5 -apple-system,monospace;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}</style></head><body><div><h1>Success</h1><p>Refresh token persisted for <strong>%s</strong> (%s account). You may close this tab.</p></div></body></html>`
-	// %s = got login, %s = expected login, %s = expected account ("bot"/"broadcaster")
-	mismatchHTML = `<!doctype html><html><head><meta charset="utf-8"><title>tripbot — wrong account</title><style>body{background:#3a0000;color:#fff;font:14px/1.5 -apple-system,monospace;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}div{max-width:520px}code{background:#000;padding:2px 5px;border-radius:3px}</style></head><body><div><h1>Wrong account</h1><p>You signed in as <code>%s</code>, but this leg expected <code>%s</code> (the <strong>%s</strong> account).</p><p>No token was written. Sign out of Twitch in this browser (or open an incognito window), then re-run the bootstrap task.</p></div></body></html>`
+	// %s = got login, %s = expected login, %s = expected account ("bot"/"broadcaster"), %s = authorize URL (twice: href + visible text)
+	mismatchHTML = `<!doctype html><html><head><meta charset="utf-8"><title>tripbot — wrong account</title><style>body{background:#3a0000;color:#fff;font:14px/1.5 -apple-system,monospace;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}div{max-width:520px}code{background:#000;padding:2px 5px;border-radius:3px}a{color:#9cf;word-break:break-all}</style></head><body><div><h1>Wrong account</h1><p>You signed in as <code>%s</code>, but this leg expected <code>%s</code> (the <strong>%s</strong> account).</p><p>No token was written. Sign out of Twitch in this browser (or open an incognito window), then <a href="%s">re-authorize here</a> as the correct account — no need to re-run the task.</p><p><small>Or paste this URL: <code>%s</code></small></p></div></body></html>`
 )
 
 func main() {
@@ -117,13 +123,18 @@ func main() {
 		if err := mytwitch.GenerateUserAccessToken(code, expectedLogin); err != nil {
 			var mismatch *mytwitch.ErrIdentityMismatch
 			if errors.As(err, &mismatch) {
-				// Friendly browser page; no row was written.
+				// Wrong account: no row was written. Don't signal done — keep the
+				// listener (and thus the port-forward) up so the operator can sign
+				// out / use incognito and re-authorize in place. The wait loop stays
+				// bounded by flowTimeout, so a never-corrected mismatch still ends.
+				slog.Warn("wrong account signed in; no token written — re-authorize as the correct account", "got", mismatch.Got, "expected", mismatch.Expected, "account", mismatch.AccountID, "authorize_url", authURL)
 				w.Header().Set("Content-Type", "text/html; charset=utf-8")
 				w.WriteHeader(http.StatusBadRequest)
-				fmt.Fprintf(w, mismatchHTML, mismatch.Got, mismatch.Expected, mismatch.AccountID)
-			} else {
-				http.Error(w, "code exchange failed: "+err.Error(), http.StatusInternalServerError)
+				fmt.Fprintf(w, mismatchHTML, mismatch.Got, mismatch.Expected, mismatch.AccountID, authURL, authURL)
+				return
 			}
+			// Genuine non-recoverable error: fail loudly via the wait loop.
+			http.Error(w, "code exchange failed: "+err.Error(), http.StatusInternalServerError)
 			done <- err
 			return
 		}
@@ -155,13 +166,12 @@ func main() {
 		helpers.OpenInBrowser(authURL)
 	}
 
+	// A wrong-account sign-in no longer signals done (the handler keeps the
+	// listener up and re-surfaces the authorize URL), so done only fires on a
+	// matching identity (nil) or a genuine non-recoverable error.
 	select {
 	case err := <-done:
 		if err != nil {
-			var mismatch *mytwitch.ErrIdentityMismatch
-			if errors.As(err, &mismatch) {
-				log.Fatalf("bootstrap failed: %s\nNo token was written. Sign out of Twitch (or use a fresh incognito browser) and re-run `task auth:bootstrap:%s`.", mismatch.Error(), *account)
-			}
 			log.Fatalf("bootstrap failed: %v", err)
 		}
 		slog.Info("bootstrap successful, refresh token persisted to oauth_tokens", "login", expectedLogin, "account", *account)

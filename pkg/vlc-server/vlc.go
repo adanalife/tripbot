@@ -110,7 +110,40 @@ func (s *Server) initPlayer() error {
 	if err := s.setToLoop(); err != nil {
 		return err
 	}
-	return s.loadMedia()
+	if err := s.loadMedia(); err != nil {
+		return err
+	}
+	return s.primePlayer()
+}
+
+// primePlayer sets the underlying media player's media to the first loaded
+// clip so it is non-nil before the first PlayAtIndex.
+//
+// This works around a libvlc 3.0.x bug: libvlc_media_list_player_play_item_-
+// at_index reads the player's *existing* media (libvlc_media_player_get_media)
+// before swapping in the requested one, and returns -1 when that prior media
+// is nil — i.e. on the very first play against a freshly-created list player —
+// even though set_current_playing_item succeeds and playback actually starts.
+// Without priming, the first play after boot (the startup resume) reports a
+// spurious failure, so ResumeFromLastPlayed falls back to PlayRandom and a
+// restart never resumes the clip it left off on. The prime doesn't start
+// playback; it only seeds the player so the first real play returns correctly.
+func (s *Server) primePlayer() error {
+	count, err := s.MediaList.Count()
+	if err != nil {
+		return fmt.Errorf("counting media to prime player: %w", err)
+	}
+	if count == 0 {
+		return nil
+	}
+	media, err := s.MediaList.MediaAtIndex(0)
+	if err != nil {
+		return fmt.Errorf("fetching media to prime player: %w", err)
+	}
+	if err := s.Player.SetMedia(media); err != nil {
+		return fmt.Errorf("priming player media: %w", err)
+	}
+	return nil
 }
 
 // Health returns nil when the server is ready to serve a viewer, or an

@@ -30,7 +30,6 @@ metadata:
   name: vlc-youtube
   namespace: stage-1
 spec:
-  replicas: 1
   selector:
     matchLabels:
       app: vlc-youtube

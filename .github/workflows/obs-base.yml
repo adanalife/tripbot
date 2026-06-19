@@ -25,7 +25,7 @@ jobs:
     timeout-minutes: 90
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       # Parse OBS_VERSION / CEF_VERSION out of the Dockerfile so the tag
       # always matches what was actually built. Single source of truth lives

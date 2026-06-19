@@ -14,7 +14,7 @@ func (noopOnscreens) ShowFlag(_ context.Context, _ time.Duration) error         
 func (noopOnscreens) ShowLeaderboard(_ context.Context, _ string, _ [][]string) error { return nil }
 func (noopOnscreens) HideMiddleText(_ context.Context) error                          { return nil }
 func (noopOnscreens) ShowMiddleText(_ context.Context, _ string) error                { return nil }
-func (noopOnscreens) ShowTimewarp(_ context.Context) error                            { return nil }
+func (noopOnscreens) ShowTimewarp(_ context.Context, _ string) error                  { return nil }
 
 // recordingOnscreens captures every call made to it so tests can assert
 // the chatbot invoked the expected overlay method with the expected args.
@@ -39,7 +39,7 @@ func (r *recordingOnscreens) ShowMiddleText(_ context.Context, msg string) error
 	r.Calls = append(r.Calls, fmt.Sprintf("ShowMiddleText(%q)", msg))
 	return nil
 }
-func (r *recordingOnscreens) ShowTimewarp(_ context.Context) error {
-	r.Calls = append(r.Calls, "ShowTimewarp()")
+func (r *recordingOnscreens) ShowTimewarp(_ context.Context, username string) error {
+	r.Calls = append(r.Calls, fmt.Sprintf("ShowTimewarp(%q)", username))
 	return nil
 }
