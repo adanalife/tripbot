@@ -154,9 +154,12 @@ func New() *App {
 		Cron:       noopCron{},
 		Geocoder:   realGeocoder{},
 		Weather:    realWeather{},
-		Twitch:     realTwitch{},
 		OBS:        realOBS{},
 	}
+	// Twitch is wired after the literal so the gateway/in-process selector can
+	// hold the App and read its (later-reassigned) Flags client at call time —
+	// cmd/tripbot swaps in the Postgres-backed flag client after New().
+	a.Twitch = newTwitch(a)
 	a.indexCommands()
 	return a
 }

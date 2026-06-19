@@ -10,6 +10,7 @@ import (
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
+	"github.com/adanalife/tripbot/pkg/feature"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/httpmw"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
@@ -26,12 +27,13 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-// Server holds the web server's runtime state. Since the in-tripbot admin panel
-// was retired in favor of the standalone tripbot-console, that's just the build
-// version tag the /version endpoint reports. cmd/tripbot constructs one via New
-// and installs the tag through SetVersion before Start runs.
+// Server holds the web server's runtime state: the build version tag the
+// /version endpoint reports, and the feature-flag client the console's
+// /api/flags endpoints read/toggle. cmd/tripbot constructs one via New and
+// installs both (SetVersion, SetFlags) before Start runs.
 type Server struct {
 	versionTag string
+	flags      feature.FlagClient
 }
 
 // New constructs a Server with the default "dev" version tag (overridden by
@@ -100,6 +102,11 @@ func (s *Server) Start(ctx context.Context) {
 	r.Handle("/api/db/migration", tagged("/api/db/migration", migrationVersionAPIHandler)).Methods("GET")
 	// the full dashcam route as JSON, for the console's map overlay.
 	r.Handle("/admin/map/corpus", tagged("/admin/map/corpus", mapCorpusHandler)).Methods("GET")
+	// read-only JSON of the feature-flag snapshot, and a write to flip a flag's
+	// global default — the console's feature-flag panel. Internal-only like the
+	// rest of /api (no Ingress; reached over the in-namespace Service).
+	r.Handle("/api/flags", tagged("/api/flags", s.flagsHandler)).Methods("GET")
+	r.Handle("/api/flags/{key}", tagged("/api/flags/{key}", s.flagToggleHandler)).Methods("POST")
 
 	// catch everything else
 	r.NotFoundHandler = tagged("/", catchAllHandler)
