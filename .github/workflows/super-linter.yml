@@ -17,7 +17,7 @@ jobs:
       # fetch-depth: 0 is required by super-linter v6+: it diffs against
       # the default branch (develop) to figure out which files changed,
       # which means develop has to be present in the local checkout.
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: run-linters
