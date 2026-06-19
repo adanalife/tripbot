@@ -19,6 +19,7 @@ import imports.k8s as k8s
 from adanalife_k8s.config import EnvConfig
 from adanalife_k8s.contract import load_contract
 from adanalife_k8s.naming import app_name
+from adanalife_k8s.scheduling import prefer_rpi5_affinity, prefer_rpi5_tolerations
 
 # (port-name, port-number) — order/names match k8s/apps/obs/base/{deployment,service}.yaml
 _PORTS = [
@@ -100,7 +101,8 @@ class ObsInstance(Construct):
         # iGPU claim gated on (gpu and obs_gpu) — an env can drop just OBS's claim
         # (env.obs_gpu=False) to stop being a live VAAPI consumer on the shared
         # iGPU while still streaming via software x264 (env.obs_encoder).
-        if env.gpu and env.obs_gpu:
+        obs_uses_gpu = env.gpu and env.obs_gpu
+        if obs_uses_gpu:
             requests["gpu.intel.com/i915"] = k8s.Quantity.from_string("1")
             limits["gpu.intel.com/i915"] = k8s.Quantity.from_string("1")
 
@@ -145,6 +147,19 @@ class ObsInstance(Construct):
                             seccomp_profile=k8s.SeccompProfile(type="RuntimeDefault")
                         ),
                         priority_class_name=env.priority_class or None,
+                        # OBS joins the ephemeral rpi5 worker ONLY when it's a
+                        # software encoder (no iGPU claim): the Pi 5's VideoCore
+                        # VII has no H.264 hw encoder, so a VAAPI OBS must stay on
+                        # the MS-01's Iris Xe. Gated on `not obs_uses_gpu` so when
+                        # obs_gpu flips back to True the affinity drops here AND
+                        # the i915 resource claim hard-gates the pod back to the
+                        # MS-01. Stage-only via env.prefer_rpi5; see scheduling.py.
+                        affinity=prefer_rpi5_affinity()
+                        if (env.prefer_rpi5 and not obs_uses_gpu)
+                        else None,
+                        tolerations=prefer_rpi5_tolerations()
+                        if (env.prefer_rpi5 and not obs_uses_gpu)
+                        else None,
                         containers=[container],
                     ),
                 ),

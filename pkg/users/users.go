@@ -17,16 +17,22 @@ import (
 )
 
 type User struct {
-	ID          uint16 `gorm:"primaryKey"`
-	Username    string
-	Platform    string
-	Miles       float32
-	NumVisits   uint16
-	HasDonated  bool
-	IsBot       bool
-	FirstSeen   time.Time
-	LastSeen    time.Time
-	DateCreated time.Time
+	ID         uint16 `gorm:"primaryKey"`
+	Username   string
+	Platform   string
+	Miles      float32
+	NumVisits  uint16
+	HasDonated bool
+	IsBot      bool
+	// autoCreateTime stamps these with the current time on insert. create()
+	// builds a User without setting them, so without the tag GORM writes the
+	// zero value (0001-01-01) into columns whose DEFAULT is CURRENT_TIMESTAMP —
+	// which is why first_seen/date_created read back as "unknown" for every
+	// account created after the GORM migration (#499). LastSeen self-heals on
+	// the first save(), but is tagged for the same correctness on insert.
+	FirstSeen   time.Time `gorm:"autoCreateTime"`
+	LastSeen    time.Time `gorm:"autoCreateTime"`
+	DateCreated time.Time `gorm:"autoCreateTime"`
 	// in-memory session fields, not stored in DB
 	LoggedIn     time.Time `gorm:"-"`
 	sessionID    uuid.UUID `gorm:"-"`

@@ -4,9 +4,11 @@
 // counterpart to the observation chat.message events in pkg/eventbus: a Send
 // says "post this", a ChatMessage reports "this was posted".
 //
-// It is imported by the publisher (pkg/server — the admin console's send form)
-// and the subscriber (cmd/tripbot, which owns the Twitch identities and does
-// the actual sending). Like pkg/onscreens-events and pkg/vlc-events it is
+// It is imported by the subscriber (cmd/tripbot, which owns the Twitch
+// identities and does the actual sending) and by whatever publishes the command
+// — the standalone tripbot-console, once its chat-send feature lands (the
+// in-tripbot panel that used to publish this was retired with the console
+// split). Like pkg/onscreens-events and pkg/vlc-events it is
 // stdlib-only and side-effect-free: no init(), no pkg/config import, env is
 // always a parameter rather than read from config here — so it links safely
 // into any binary.
@@ -16,7 +18,7 @@ import "time"
 
 // Identity selects which Twitch identity a Send is posted as. The values match
 // the /auth/init account selector and pkg/twitch's AccountTokenStatus.Account,
-// so the admin panel's auth card and this command speak the same vocabulary.
+// so the console's auth card and this command speak the same vocabulary.
 const (
 	IdentityBot         = "bot"
 	IdentityBroadcaster = "broadcaster"

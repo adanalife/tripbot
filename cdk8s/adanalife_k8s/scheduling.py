@@ -24,9 +24,13 @@ the ephemeral/recover-to-MS-01 contract. When the Pi is unplugged, the running
 pod is evicted by the standard `node.kubernetes.io/unreachable` toleration
 (~5 min default) and reschedules onto the MS-01.
 
-OBS opts OUT even in stage: the Pi 5's VideoCore VII has no H.264 hardware
-encoder, so OBS must stay on the MS-01's Iris Xe. Its construct simply never
-calls these helpers.
+OBS opts in conditionally: the Pi 5's VideoCore VII has no H.264 hardware
+encoder, so a VAAPI OBS must stay on the MS-01's Iris Xe. But when OBS is a
+*software* encoder (no iGPU claim — `not (gpu and obs_gpu)`, e.g. stage
+obs-youtube as of 2026-06-15), the Pi can carry it, which also offloads the
+encode off the MS-01. So ObsInstance calls these helpers gated on
+`prefer_rpi5 and not obs_uses_gpu`; when obs_gpu flips back on, the i915 resource
+claim hard-gates the pod back to the MS-01 and the affinity drops out together.
 """
 
 from __future__ import annotations

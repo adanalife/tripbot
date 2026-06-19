@@ -87,6 +87,16 @@
   {{end}}
   #root.image { width: 100%; height: 100%; }
   #root.image img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  /* Inline markdown (renderInlineMarkdown): `code` becomes a monospace pill so
+     !command references stand out against the dashcam video. The dark backing
+     keeps it legible over arbitrary footage; bold/italic inherit by default. */
+  #root code {
+    font-family: "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+    font-size: 0.9em;
+    padding: 0.02em 0.32em;
+    border-radius: 0.25em;
+    background: rgba(0,0,0,0.4);
+  }
   /* Leaderboard onscreen (RenderAsHTML): CSS grid auto-sizes the score
      column to the widest entry, so digits align across rows in any font.
      LeaderboardContent in pkg/users emits the matching markup. */

@@ -1,7 +1,6 @@
 package server
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,8 +10,6 @@ import (
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
-	"github.com/adanalife/tripbot/pkg/feature"
-	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"github.com/adanalife/tripbot/pkg/server/oauthstate"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	myyoutube "github.com/adanalife/tripbot/pkg/youtube"
@@ -47,66 +44,15 @@ func (s *Server) SetVersion(v string) {
 	}
 }
 
-// Server.twitchConnected reports whether the bot currently has its Twitch IRC
-// connection. It deliberately does NOT gate the readiness probe: /health/ready
-// is always 200 once the HTTP server is up (see httpmw.ReadinessHandler), so
-// the admin panel, /auth/init and /auth/callback stay reachable through the
-// Ingress even when the bot is offline — otherwise the very page used to
-// re-auth a disconnected bot would 503. Instead this flag drives the
-// admin-panel status row and the tripbot_twitch_connected gauge, so "up but
-// not in chat" is surfaced without pulling the pod out of the Service.
-// cmd/tripbot flips it via SetTwitchConnected on IRC connect / disconnect.
-
-// SetTwitchConnected updates the chat-connection signal: the in-memory flag
-// the admin panel reads and the tripbot_twitch_connected gauge.
-func (s *Server) SetTwitchConnected(connected bool) {
-	s.twitchConnected.Store(connected)
-	instrumentation.TwitchConnection.Set(connected)
-}
-
-// TwitchConnected reports the last-known chat-connection state, for the
-// admin panel's status row.
-func (s *Server) TwitchConnected() bool {
-	return s.twitchConnected.Load()
-}
-
-// Server.flagClient is the FlagClient the admin panel enumerates for its
-// "feature flags" section. Defaults to an empty in-memory client so the panel
-// renders a blank section during the brief startup window between server
-// start and startFeatureFlags swapping in the Postgres-backed client.
-
-// SetFlagClient lets cmd/tripbot install the Postgres-backed FlagClient
-// once startFeatureFlags has loaded the initial snapshot.
-func (s *Server) SetFlagClient(fc feature.FlagClient) {
-	s.flagMu.Lock()
-	s.flagClient = fc
-	s.flagMu.Unlock()
-}
-
-// flagSnapshot returns the current set of known flags for the admin panel.
-func (s *Server) flagSnapshot(ctx context.Context) []feature.Flag {
-	s.flagMu.RLock()
-	client := s.flagClient
-	s.flagMu.RUnlock()
-	return client.Snapshot(ctx)
-}
-
-// flagToggler returns the installed flag client's write surface, if it has
-// one. The Postgres-backed client does; the in-memory fallback (startup
-// window, tests) doesn't — so the admin toggle UI and the toggle action
-// both gate on the ok result, degrading to read-only when absent.
-func (s *Server) flagToggler() (feature.FlagToggler, bool) {
-	s.flagMu.RLock()
-	client := s.flagClient
-	s.flagMu.RUnlock()
-	t, ok := client.(feature.FlagToggler)
-	return t, ok
-}
+// startedAt is when the process began; /version reports it so callers can derive
+// uptime. (The bot's chat-connection state is surfaced separately via the
+// tripbot_twitch_connected gauge, set directly by cmd/tripbot.)
+var startedAt = time.Now()
 
 // versionHandler returns build metadata as JSON. The tag comes from the
 // build-time ldflag; sha + built_at are read from the binary's embedded
-// VCS info (Go's automatic -buildvcs). started_at is when the process
-// began (admin.startedAt) so callers can derive uptime themselves.
+// VCS info (Go's automatic -buildvcs). started_at is the process start time
+// (startedAt) so callers can derive uptime themselves.
 func (s *Server) versionHandler(w http.ResponseWriter, r *http.Request) {
 	resp := struct {
 		Tag       string `json:"tag"`
@@ -283,6 +229,34 @@ const authYouTubeMismatchHTML = `<!doctype html>
 <style>body{background:#3a0000;color:#fff;font:14px/1.5 -apple-system,monospace;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}div{max-width:540px}code{background:#000;padding:2px 5px;border-radius:3px}a{color:#9cf}</style>
 </head>
 <body><div><h1>Wrong channel</h1><p>You consented as <code>%s</code> (<code>%s</code>), but this instance expects channel <code>%s</code>.</p><p>No token was written. Switch to the channel-owner Google account (Google's account chooser appears on the consent screen), then <a href="/auth/init?account=youtube">click here to retry</a>.</p></div></body>
+</html>`
+
+// rootHandler serves GET /: a minimal landing page linking to the bot,
+// broadcaster, and YouTube OAuth bootstrap flows. The rich admin panel moved to
+// the standalone tripbot-console; this keeps the login links reachable on the
+// pod itself for emergency re-auth when Dana isn't near the console.
+func rootHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if _, err := w.Write([]byte(rootHTML)); err != nil {
+		slog.ErrorContext(r.Context(), "couldn't write root page", "err", err)
+	}
+}
+
+// rootHTML is the body of the landing page. Inline (no template file) so the
+// handler has no filesystem dependency; the three links drive /auth/init.
+const rootHTML = `<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>tripbot</title>
+<style>body{background:#0a0a0a;color:#eee;font:14px/1.6 -apple-system,system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}main{max-width:420px;padding:1rem}h1{font-size:1.4rem;margin:0 0 .25rem}p{color:#999;margin:0 0 1.25rem}a.login{display:block;padding:.7rem 1rem;margin:.5rem 0;background:#161616;border:1px solid #2a2a2a;border-radius:8px;color:#9cf;text-decoration:none}a.login:hover{background:#1e1e1e;border-color:#3a3a3a}.note{color:#666;font-size:12px;margin-top:1.5rem}</style>
+</head>
+<body><main>
+<h1>tripbot</h1>
+<p>OAuth bootstrap — sign in to refresh a bot token.</p>
+<a class="login" href="/auth/init?account=bot">Log in the bot account →</a>
+<a class="login" href="/auth/init?account=broadcaster">Log in the broadcaster account →</a>
+<a class="login" href="/auth/init?account=youtube">Log in the YouTube channel →</a>
+<p class="note">The admin dashboard lives in tripbot-console.</p>
+</main></body>
 </html>`
 
 // return a favicon if anyone asks for one

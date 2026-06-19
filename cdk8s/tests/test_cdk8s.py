@@ -49,6 +49,27 @@ def test_each_component_has_deployment_and_service(env, comp, platform):
     assert "Service" in kinds, f"{env}-{comp}-{platform} missing Service"
 
 
+def test_prod_vlc_rtsp_nodeport():
+    """prod vlc-twitch emits a fixed RTSP NodePort so a LAN box (OBS on a desktop)
+    can pull rtsp://<node-ip>:30854/dashcam without kubectl. The minipc has no
+    LoadBalancer controller, so it's a NodePort not an LB. Pinned at 30854."""
+    svcs = _by_kind(_objects("prod-1-vlc-twitch"), "Service")
+    np = next((s for s in svcs if s["metadata"]["name"] == "vlc-twitch-rtsp"), None)
+    assert np is not None, "prod vlc-twitch missing the vlc-twitch-rtsp NodePort"
+    assert np["spec"]["type"] == "NodePort"
+    [port] = np["spec"]["ports"]
+    assert port["nodePort"] == 30854
+    assert port["port"] == 8554 and port["targetPort"] == "rtsp"
+
+
+@pytest.mark.parametrize("stem", ["stage-1-vlc-youtube", "development-vlc-twitch"])
+def test_non_prod_has_no_rtsp_nodeport(stem):
+    """The RTSP NodePort is prod-only — stage/dev don't set vlc_rtsp_node_port (a
+    pinned NodePort can't be claimed twice on the co-tenant minipc node)."""
+    svcs = _by_kind(_objects(stem), "Service")
+    assert not any(s["spec"].get("type") == "NodePort" for s in svcs)
+
+
 @pytest.mark.parametrize("env,platform", [("prod-1", "twitch"), ("stage-1", "youtube")])
 @pytest.mark.parametrize("comp", ["vlc", "tripbot"])
 def test_obs_websocket_addr_is_platform_scoped(env, comp, platform):
@@ -134,3 +155,37 @@ def test_obs_stream_key_secret_iff_streaming(env, comp, platform):
         assert key_name not in es_names, (
             f"{env}/{platform} should be idle but emits a stream-key ExternalSecret"
         )
+
+
+def _pod_spec(stem: str) -> dict:
+    return _by_kind(_objects(stem), "Deployment")[0]["spec"]["template"]["spec"]
+
+
+def _prefers_rpi5(spec: dict) -> bool:
+    """True iff the pod tolerates the rpi5 taint AND prefers the board label."""
+    tolerates = any(
+        t.get("key") == "dana.lol/rpi5" for t in spec.get("tolerations", [])
+    )
+    prefs = (
+        spec.get("affinity", {})
+        .get("nodeAffinity", {})
+        .get("preferredDuringSchedulingIgnoredDuringExecution", [])
+    )
+    biases = any(
+        req.get("key") == "dana.lol/board" and "rpi5" in req.get("values", [])
+        for term in prefs
+        for req in term.get("preference", {}).get("matchExpressions", [])
+    )
+    return tolerates and biases
+
+
+def test_stage_software_obs_prefers_rpi5():
+    """Stage obs-youtube is a software x264 encoder (no iGPU claim), so it joins
+    the ephemeral rpi5 worker — offloading the encode off the MS-01."""
+    assert _prefers_rpi5(_pod_spec("stage-1-obs-youtube"))
+
+
+def test_prod_vaapi_obs_stays_on_msi():
+    """Prod obs-twitch is a VAAPI encoder (holds the i915 claim), so it must NOT
+    bias toward the Pi (no H.264 hw encoder there) — it stays on the MS-01."""
+    assert not _prefers_rpi5(_pod_spec("prod-1-obs-twitch"))

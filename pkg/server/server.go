@@ -6,17 +6,13 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"sync"
-	"sync/atomic"
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
-	"github.com/adanalife/tripbot/pkg/feature"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/httpmw"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
-	"github.com/adanalife/tripbot/pkg/natsclient"
 	sentrynegroni "github.com/getsentry/sentry-go/negroni"
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -30,39 +26,18 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-// Server holds the web server's mutable runtime state — the live-console hub,
-// the Twitch chat-connection flag, the build version tag, and the feature-flag
-// client the admin panel reads. cmd/tripbot constructs one via New, installs
-// values through the setter methods (SetVersion / SetTwitchConnected /
-// SetFlagClient) before and while Start runs, and the HTTP handlers are
-// methods on it so the panel reads this instance's state — no package global.
+// Server holds the web server's runtime state. Since the in-tripbot admin panel
+// was retired in favor of the standalone tripbot-console, that's just the build
+// version tag the /version endpoint reports. cmd/tripbot constructs one via New
+// and installs the tag through SetVersion before Start runs.
 type Server struct {
-	hub             *Hub
-	twitchConnected atomic.Bool
-	versionTag      string
-
-	flagMu     sync.RWMutex
-	flagClient feature.FlagClient
-
-	// publisher is the fire-and-forget NATS publish seam the admin console's
-	// "send chat message" form uses to emit a chatEvents.Send command. The
-	// subscriber that actually sends lives in cmd/tripbot (the Twitch-identity
-	// owner), so the panel only publishes — which keeps it split-ready. Tests
-	// inject a recording fake.
-	publisher natsclient.Publisher
+	versionTag string
 }
 
-// New constructs a Server with default runtime state: a fresh hub, the "dev"
-// version tag (overridden by SetVersion), an empty in-memory flag client
-// (swapped for the Postgres-backed one via SetFlagClient), and the singleton
-// NATS publisher (a no-op until natsclient.Connect runs).
+// New constructs a Server with the default "dev" version tag (overridden by
+// SetVersion at startup).
 func New() *Server {
-	return &Server{
-		hub:        NewHub(),
-		versionTag: "dev",
-		flagClient: feature.NewInMemoryClient(nil),
-		publisher:  natsclient.DefaultPublisher(),
-	}
+	return &Server{versionTag: "dev"}
 }
 
 // shutdownTimeout is how long Shutdown waits for in-flight requests to
@@ -83,10 +58,12 @@ func (s *Server) Start(ctx context.Context) {
 	// healthcheck endpoints
 	hp := r.PathPrefix("/health").Methods("GET", "HEAD").Subrouter()
 	hp.Handle("/live", tagged("/health/live", httpmw.LivenessHandler()))
-	// /ready runs no checks: tripbot's HTTP surface (admin panel, /auth/init,
-	// /auth/callback, /metrics) doesn't depend on the Twitch connection, so the
-	// pod must stay routable even when the bot is offline. Chat-connection is
-	// surfaced via the admin panel + the tripbot_twitch_connected gauge.
+	// /ready runs no checks: tripbot's HTTP surface (the auth-links landing page,
+	// /auth/init, /auth/callback, the console-facing /api/* endpoints, /metrics)
+	// doesn't depend on the Twitch connection, so the pod must stay routable even
+	// when the bot is offline — otherwise the page used to re-auth a disconnected
+	// bot would 503. Chat-connection is surfaced via the tripbot_twitch_connected
+	// gauge.
 	hp.Handle("/ready", tagged("/health/ready", httpmw.ReadinessHandler()))
 
 	// version endpoint — returns build metadata as JSON
@@ -103,38 +80,26 @@ func (s *Server) Start(ctx context.Context) {
 	// prometheus metrics endpoint
 	r.Path("/metrics").Handler(tagged("/metrics", promhttp.Handler().ServeHTTP))
 
-	// admin panel (status overview + links) on the root path
-	r.Handle("/", tagged("/", s.adminHandler)).Methods("GET", "HEAD")
+	// root: a minimal landing page linking to the bot/broadcaster/YouTube login
+	// flows. The rich admin panel moved to the standalone tripbot-console; this
+	// page keeps the OAuth bootstrap links reachable on the pod itself for
+	// emergency re-auth.
+	r.Handle("/", tagged("/", rootHandler)).Methods("GET", "HEAD")
 
-	// live console: SSE stream the panel subscribes to (GET, long-lived) +
-	// the vendored htmx assets it loads. The /admin POST subrouter below is
-	// POST-only, so the GET stream registers on r directly.
-	r.Handle("/admin/events", tagged("/admin/events", s.eventsHandler)).Methods("GET")
-	// live panel refresh: hidden poller OOB-swaps the always-present status rows
-	// + stream toggle so they stay current without a full reload.
-	r.Handle("/admin/refresh", tagged("/admin/refresh", s.refreshHandler)).Methods("GET")
-	r.Handle("/admin/user/{username}", tagged("/admin/user/{username}", userProfileHandler)).Methods("GET")
-	// read-only JSON profile for the standalone tripbot-console's popover (it
-	// has no DB access and proxies here over the in-namespace Service).
+	// console-facing read-only endpoints. The standalone tripbot-console holds
+	// no DB/Twitch access of its own and proxies these over the in-namespace
+	// Service.
+	//
+	// read-only JSON profile for the console's user popover.
 	r.Handle("/api/user/{username}", tagged("/api/user/{username}", userProfileAPIHandler)).Methods("GET")
-	// read-only JSON list of the logins currently in chat, for the standalone
-	// tripbot-console's currently-active-chatters panel (it has no Twitch access).
+	// read-only JSON list of the logins currently in chat, for the console's
+	// currently-active-chatters panel.
 	r.Handle("/api/chatters", tagged("/api/chatters", chattersHandler)).Methods("GET")
-	// read-only JSON of the current golang-migrate schema version, for the
-	// standalone tripbot-console to surface which migration the env's DB is on
-	// (it has no DB access and proxies here over the in-namespace Service).
+	// read-only JSON of the current golang-migrate schema version, so the console
+	// can surface which migration the env's DB is on.
 	r.Handle("/api/db/migration", tagged("/api/db/migration", migrationVersionAPIHandler)).Methods("GET")
+	// the full dashcam route as JSON, for the console's map overlay.
 	r.Handle("/admin/map/corpus", tagged("/admin/map/corpus", mapCorpusHandler)).Methods("GET")
-	r.PathPrefix("/static/").Handler(staticHandler())
-
-	// admin actions — tailnet-only by virtue of where the Ingress is
-	// exposed; no app-layer auth gate.
-	admin := r.PathPrefix("/admin").Methods("POST").Subrouter()
-	admin.Handle("/obs/stream/{action}", tagged("/admin/obs/stream/{action}", obsStreamActionHandler))
-	admin.Handle("/flags/{key}/{action}", tagged("/admin/flags/{key}/{action}", s.flagActionHandler))
-	admin.Handle("/shutdown", tagged("/admin/shutdown", httpmw.ShutdownHandler()))
-	admin.Handle("/restart/{service}", tagged("/admin/restart/{service}", restartActionHandler))
-	admin.Handle("/chat/send", tagged("/admin/chat/send", s.chatSendHandler))
 
 	// catch everything else
 	r.NotFoundHandler = tagged("/", catchAllHandler)
@@ -173,17 +138,13 @@ func (s *Server) Start(ctx context.Context) {
 
 	srv := &http.Server{
 		Addr: fmt.Sprintf("0.0.0.0:%s", c.Conf.TripbotServerPort),
-		// WriteTimeout is 0 (disabled) because the admin panel's live console
-		// streams Server-Sent Events on /admin/events — a long-lived response a
-		// fixed write deadline would sever. The Go-idiomatic per-request
-		// http.ResponseController.SetWriteDeadline doesn't reach the underlying
-		// writer through the negroni + otelhttp (httpsnoop) HTTP/2 wrapper chain
-		// ("feature not supported"), so disabling it server-wide is the reliable
-		// fix. Slowloris protection is preserved by ReadHeaderTimeout (the header
-		// read is the attack vector WriteTimeout never really guarded anyway).
+		// All remaining responses are short (auth redirects, small JSON for the
+		// console, the metrics scrape). The live-console SSE stream that forced
+		// WriteTimeout=0 is gone with the admin panel, so a normal write deadline
+		// is back in place.
 		ReadTimeout:       time.Second * 15,
 		ReadHeaderTimeout: time.Second * 15,
-		WriteTimeout:      0,
+		WriteTimeout:      time.Second * 15,
 		IdleTimeout:       time.Second * 60,
 		MaxHeaderBytes:    1 << 20, // 1 MB
 		Handler:           otelhttp.NewHandler(app, c.Conf.ServerType),

@@ -49,9 +49,9 @@ func TestLeftRotatorSurfacesTwitchOnlyOnTwitch(t *testing.T) {
 	var sawMiles, sawGuess bool
 	for i := 0; i < 5000 && !(sawMiles && sawGuess); i++ {
 		switch pickRotatorMessage(possibleLeftMessages) {
-		case "Earn miles for every minute you watch (!miles)":
+		case "Earn miles for every minute you watch (`!miles`)":
 			sawMiles = true
-		case "Try and !guess what state we're in":
+		case "Try and `!guess` what state we're in":
 			sawGuess = true
 		}
 	}
