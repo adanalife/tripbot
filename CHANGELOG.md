@@ -7,9 +7,36 @@ All notable changes to TripBot. Format follows [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+## [v3.7.0] — 2026-06-19
+
+Minor release. Lands the groundwork for routing the Twitch bot's command-time Helix calls through the standalone platform-gateway (staged on stage-1, off by default), credits the triggering viewer on the timewarp overlay, adds a console-facing feature-flag API, and automates the develop↔master release flow. Plus fixes to vlc-server resume-on-restart, the auth-bootstrap retry path, and the `:develop` image-rebuild filter for migrations.
+
+### Onscreens
+
+- **The triggering viewer is credited on the timewarp overlay.** When a viewer runs `!timewarp` or guesses the state correctly with `!guess`, their username now appears as a credit line (e.g. `@viewer`) under the **TIMEWARP** wordmark on the full-screen warp overlay, carried end-to-end over the existing onscreens NATS command surface. ([#888])
+
+### Console / API
+
+- **`GET /api/flags` + `POST /api/flags/{key}`** give the standalone console a read/toggle surface over tripbot's feature flags (the console has no DB access, so it proxies). `GET` returns each flag's key/description/enabled state and targeting; `POST {"enabled": bool}` flips the global default via `feature.FlagToggler`. The flag client is injected into `Server` before the HTTP server starts; if Postgres is unavailable `GET` reports `ok:false` and `POST` returns 503. ([#903])
+
+### Platform gateway
+
+- **The chatbot's Twitch Helix surface can route through the platform-gateway.** `App.Twitch` picks its adapter by config — `TWITCH_API_URL` set → an HTTP client against the `gateway-twitch` service; empty → the in-process `pkg/twitch` path (the zero-config default, so existing envs are unchanged). No command code changed, cashing in the `App.Twitch` injection seam. ([#904])
+- **`chatbot.twitch_gateway` feature flag seeded (disabled).** Migration `021` creates the runtime kill-switch row for the gateway routing so it's toggleable from the console (`feature.SetEnabled` only UPDATEs, so the row had to exist first). ([#906])
+- **Stage twitch stack re-enabled behind the gateway, manually scaled.** `stage-1` adds `twitch` to its platforms and points `stage-1-tripbot-twitch` at `gateway-twitch` via `TWITCH_API_URL`; only the twitch instance gets it (youtube + prod stay in-process). A stage-only `manual_replicas` omits `spec.replicas` so Argo never resets a hand/console scale; prod keeps `replicas: 1`. ([#905], [#911])
+
 ### Fixes
 
 - **vlc-server actually resumes its last-played clip on restart.** libvlc 3.0.x's `libvlc_media_list_player_play_item_at_index` reads the player's *existing* media before swapping in the requested one and returns `-1` when that prior media is nil — i.e. on the very first play against a freshly-created list player — even though playback actually starts. So the first startup play (resume-from-marker / resume-from-lastplayed) saw a spurious "cannot play the requested media", fell through to `PlayRandom`, and a restart almost never resumed where it left off. The media player is now primed with the first loaded clip at construction, so the first real play returns correctly and resume-on-restart lands on the right clip with the position seek following. ([#907])
+- **`auth-bootstrap` stays up for a retry when the wrong Twitch account signs in.** It used to `log.Fatalf` on an identity mismatch, killing the job pod and dropping the `kubectl port-forward` so the bootstrap chain moved on. It now keeps the listener (and port-forward) up, re-surfaces the authorize URL to re-auth in place, and only writes the token + exits 0 on a matching identity. Still bounded by `flowTimeout`. ([#892])
+
+### CI / Tooling
+
+- **Standing draft release PR.** A new `pending-release.yml` keeps one draft `develop → master` PR open showing the next release's diff, `[Unreleased]` changelog, queued commits, and a suggested version bump — so the bump decision is made against a real diff instead of up front. ([#909])
+- **Automated master → develop back-merge PR.** A new `backmerge.yml` opens/refreshes a standing PR merging master back into develop after each ship, so the two branches don't diverge (merge it with a merge commit, never squash). ([#913])
+- **The `:develop` tripbot image rebuilds on `db/migrate/**` changes.** Migrations are baked into the image and applied by its `migrate` initContainer, but the per-image path filter omitted `db/migrate/**`, so migration-only PRs silently never shipped (e.g. #906's flag seed). ([#908])
+- **Repaired orphaned `pkg/server` profile tests** left after the admin-panel removal. ([#902])
+- **Bumped `actions/checkout` from 6 to 7.** ([#901])
 
 ## [v3.6.0] — 2026-06-19
 
@@ -1723,3 +1750,16 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#885]: https://github.com/adanalife/tripbot/pull/885
 [#887]: https://github.com/adanalife/tripbot/pull/887
 [#896]: https://github.com/adanalife/tripbot/pull/896
+[#888]: https://github.com/adanalife/tripbot/pull/888
+[#892]: https://github.com/adanalife/tripbot/pull/892
+[#901]: https://github.com/adanalife/tripbot/pull/901
+[#902]: https://github.com/adanalife/tripbot/pull/902
+[#903]: https://github.com/adanalife/tripbot/pull/903
+[#904]: https://github.com/adanalife/tripbot/pull/904
+[#905]: https://github.com/adanalife/tripbot/pull/905
+[#906]: https://github.com/adanalife/tripbot/pull/906
+[#907]: https://github.com/adanalife/tripbot/pull/907
+[#908]: https://github.com/adanalife/tripbot/pull/908
+[#909]: https://github.com/adanalife/tripbot/pull/909
+[#911]: https://github.com/adanalife/tripbot/pull/911
+[#913]: https://github.com/adanalife/tripbot/pull/913
