@@ -152,7 +152,7 @@ def test_stage_twitch_routes_through_gateway():
 
     assert (
         _cm_data("stage-1-tripbot-twitch").get("TWITCH_API_URL")
-        == "http://twitch-api.stage-1.svc.cluster.local:8080"
+        == "http://gateway-twitch.stage-1.svc.cluster.local:8080"
     )
     assert "TWITCH_API_URL" not in _cm_data("stage-1-tripbot-youtube")
     assert "TWITCH_API_URL" not in _cm_data("prod-1-tripbot-twitch")

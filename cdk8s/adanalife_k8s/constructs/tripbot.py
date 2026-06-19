@@ -176,7 +176,7 @@ def config_data(env: EnvConfig, platform: str) -> dict[str, str]:
     if env.nats_url:
         data["NATS_URL"] = env.nats_url
     # Route the twitch instance's command-time Helix calls through the
-    # platform-gateway twitch-api (Phase 3) where the env opts in. Only the
+    # platform-gateway gateway-twitch (Phase 3) where the env opts in. Only the
     # twitch platform talks Helix, so the youtube instance never carries it.
     if platform == "twitch" and env.twitch_api_url:
         data["TWITCH_API_URL"] = env.twitch_api_url

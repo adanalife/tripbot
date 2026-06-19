@@ -70,10 +70,10 @@ type TripbotConfig struct {
 	ObsServerHost string `envconfig:"OBS_SERVER_HOST"`
 
 	// TwitchAPIURL points the chatbot's command-time Twitch Helix calls at
-	// the platform-gateway twitch-api instance over HTTP, instead of the
+	// the platform-gateway gateway-twitch instance over HTTP, instead of the
 	// in-process pkg/twitch path. Empty (the default) keeps the in-process
 	// adapter, so existing envs are unaffected. When set — e.g.
-	// http://twitch-api.<env>.svc.cluster.local:8080 — App.Twitch becomes an
+	// http://gateway-twitch.<env>.svc.cluster.local:8080 — App.Twitch becomes an
 	// HTTP client behind the same interface, with no command code changes.
 	TwitchAPIURL string `envconfig:"TWITCH_API_URL"`
 

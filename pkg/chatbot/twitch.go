@@ -75,7 +75,7 @@ func (realTwitch) FollowedAt(username string) (time.Time, bool) {
 }
 
 // gatewayTwitch is the HTTP adapter — it reaches the platform-gateway
-// twitch-api instance instead of calling Helix in-process. It satisfies the
+// gateway-twitch instance instead of calling Helix in-process. It satisfies the
 // same Twitch interface, so command code is untouched (the payoff of the
 // #738/#739 injection seam).
 type gatewayTwitch struct {

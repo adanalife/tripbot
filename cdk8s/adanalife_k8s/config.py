@@ -152,10 +152,10 @@ class EnvConfig:
         scaled) when manual_replicas, else 1."""
         return None if self.manual_replicas else 1
 
-    # The platform-gateway twitch-api URL the chatbot routes its command-time
+    # The platform-gateway gateway-twitch URL the chatbot routes its command-time
     # Helix calls through (Phase 3). Empty keeps tripbot's in-process pkg/twitch
     # path; set per env to flip App.Twitch to the HTTP client. Stage points at
-    # its in-namespace twitch-api Service; prod stays in-process until the
+    # its in-namespace gateway-twitch Service; prod stays in-process until the
     # gateway's prod release is cut + proven.
     twitch_api_url: str = ""
 
@@ -304,7 +304,7 @@ ENVS: dict[str, EnvConfig] = {
         # pass.
         #
         # twitch is back ON (2026-06-19) to test the platform-gateway end to
-        # end: stage tripbot-twitch routes its Helix calls through twitch-api
+        # end: stage tripbot-twitch routes its Helix calls through gateway-twitch
         # (twitch_api_url below). The 2026-06-11 prod-stutter that forced twitch
         # OFF here was the stage twitch *VLC decode + OBS render* contending for
         # the shared iGPU — so only tripbot-twitch (no GPU) is meant to run;
@@ -316,9 +316,9 @@ ENVS: dict[str, EnvConfig] = {
         # for the gateway test); omit replicas so Argo doesn't reset them.
         manual_replicas=True,
         # Route stage tripbot's command-time Helix calls through the in-namespace
-        # twitch-api gateway (Phase 3). prod stays in-process until its gateway
+        # gateway-twitch gateway (Phase 3). prod stays in-process until its gateway
         # release is cut.
-        twitch_api_url="http://twitch-api.stage-1.svc.cluster.local:8080",
+        twitch_api_url="http://gateway-twitch.stage-1.svc.cluster.local:8080",
         # Stage streams to YouTube — the second half of the two-live-streams
         # budget (prod-twitch + stage-youtube). Key from SM
         # k8s/obs/youtube-stream-key (adanalife-stage account).
