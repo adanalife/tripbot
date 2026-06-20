@@ -124,9 +124,10 @@ jobs:
           fi
 
           # Render the pending changelog from the fragments in changelog.d/.
+          # towncrier writes its progress banner to stderr and the rendered
+          # notes to stdout, so 2>/dev/null leaves just the changelog body.
           NEXTBARE=${NEXT#v}; NEXTBARE=${NEXTBARE:-Unreleased}
-          DRAFT=$(uvx towncrier build --draft --config towncrier.toml --version "$NEXTBARE" 2>/dev/null \
-            | sed '1,/What is seen below is what would be written./d')
+          DRAFT=$(uvx towncrier build --draft --config towncrier.toml --version "$NEXTBARE" 2>/dev/null)
 
           BUMP_LINE="**Suggested bump:** \`$BUMP\`"
           if [ -n "$NEXT" ]; then
