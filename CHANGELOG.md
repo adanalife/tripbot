@@ -10,6 +10,7 @@ All notable changes to TripBot. Format follows [Keep a Changelog](https://keepac
 ### Platform gateway
 
 - **YouTube outbound chat-send routes through `gateway-youtube` unconditionally — the `chatbot.youtube_gateway` flag is gone.** A `tripbot-youtube` instance wired with `YOUTUBE_API_URL` now sends through the gateway with no runtime toggle. Unlike the Twitch cutover (which keeps a flag to de-risk the live-prod swap), YouTube has no live-prod stakes, so it cuts straight over — a revert is a `git revert` + redeploy. Drops the `flaggedYouTubeSend` wrapper; migration 024 removes the seeded flag row. The inbound chat poll still stays in-process (no gateway streaming endpoint yet). ([#935])
+- **`tripbot-youtube` reads inbound chat from the gateway — no YouTube token in tripbot at runtime.** When wired with `YOUTUBE_API_URL`, the youtube instance now drives `gateway-youtube`'s `GET /v1/chat/inbound` poll loop instead of calling `liveChatMessages.list` in-process. Combined with the outbound send (#935), both chat directions flow through the gateway, so `tripbot-youtube` no longer loads the `oauth_tokens` row at all — the gateway holds the YouTube credential. The in-process poll + token load remain the fallback for an un-wired instance (and the OAuth bootstrap still lives in tripbot until a later phase). Requires the matching `gateway-youtube` release ([platform-gateway#20](https://github.com/adanalife/platform-gateway/pull/20/changes)) to be live first. ([#936])
 
 ## [v3.8.0] — 2026-06-20
 
@@ -1806,3 +1807,4 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#925]: https://github.com/adanalife/tripbot/pull/925
 [#926]: https://github.com/adanalife/tripbot/pull/926
 [#935]: https://github.com/adanalife/tripbot/pull/935
+[#936]: https://github.com/adanalife/tripbot/pull/936

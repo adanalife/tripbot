@@ -189,6 +189,42 @@ func (c *Client) Followers(ctx context.Context) (int, error) {
 	return body.Total, nil
 }
 
+// InboundChatMessage is one inbound live-chat line — viewer messages only (the
+// gateway filters the channel's own echoed sends).
+type InboundChatMessage struct {
+	Author string `json:"author"`
+	Text   string `json:"text"`
+}
+
+// InboundChatPage is one page from GET /v1/chat/inbound. Cursor is opaque: pass
+// it back verbatim on the next call ("" to start, or after the gateway reports
+// offline). Live is false when no broadcast is active. PollAfterMS is the
+// gateway's suggested wait before the next poll (live cadence, rediscover wait,
+// or quota backoff) — the caller's only pacing input.
+type InboundChatPage struct {
+	Messages    []InboundChatMessage `json:"messages"`
+	Cursor      string               `json:"cursor"`
+	Live        bool                 `json:"live"`
+	PollAfterMS int                  `json:"poll_after_ms"`
+}
+
+// InboundChat fetches a page of inbound live chat, advancing the opaque cursor
+// (GET /v1/chat/inbound). The gateway owns discovery, paging, backlog-skip,
+// own-echo filtering, and pacing, so the caller just forwards the cursor. Only
+// platforms whose inbound chat is polled (YouTube) answer; a streaming-chat
+// platform returns the gateway's 501 as an error.
+func (c *Client) InboundChat(ctx context.Context, cursor string) (InboundChatPage, error) {
+	path := "/v1/chat/inbound"
+	if cursor != "" {
+		path += "?cursor=" + url.QueryEscape(cursor)
+	}
+	var page InboundChatPage
+	if err := c.getJSON(ctx, path, &page); err != nil {
+		return InboundChatPage{}, err
+	}
+	return page, nil
+}
+
 // getJSON issues a GET and decodes a 200 JSON body into dest; any non-200 or
 // decode failure is returned as an error.
 func (c *Client) getJSON(ctx context.Context, path string, dest any) error {

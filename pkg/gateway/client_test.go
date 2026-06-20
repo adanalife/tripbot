@@ -267,3 +267,48 @@ func TestSendChat_ErrorsOnNon2xx(t *testing.T) {
 		t.Error("expected an error on non-2xx")
 	}
 }
+
+func TestInboundChat_DecodesPageAndSendsCursor(t *testing.T) {
+	var gotPath, gotQuery string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		gotQuery = r.URL.Query().Get("cursor")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"messages":[{"author":"Viewer","text":"hi"}],"cursor":"c2","live":true,"poll_after_ms":3000}`))
+	}))
+	defer srv.Close()
+
+	page, err := New(srv.URL).InboundChat(context.Background(), "c1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotPath != "/v1/chat/inbound" {
+		t.Errorf("path = %q, want /v1/chat/inbound", gotPath)
+	}
+	if gotQuery != "c1" {
+		t.Errorf("cursor query = %q, want c1", gotQuery)
+	}
+	if !page.Live || page.Cursor != "c2" || page.PollAfterMS != 3000 {
+		t.Errorf("page = %+v", page)
+	}
+	if len(page.Messages) != 1 || page.Messages[0].Author != "Viewer" || page.Messages[0].Text != "hi" {
+		t.Errorf("messages = %+v", page.Messages)
+	}
+}
+
+func TestInboundChat_OmitsCursorParamWhenEmpty(t *testing.T) {
+	var hadCursorParam bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, hadCursorParam = r.URL.Query()["cursor"]
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"messages":[],"cursor":"","live":false,"poll_after_ms":60000}`))
+	}))
+	defer srv.Close()
+
+	if _, err := New(srv.URL).InboundChat(context.Background(), ""); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if hadCursorParam {
+		t.Error("empty cursor should omit the ?cursor param entirely")
+	}
+}
