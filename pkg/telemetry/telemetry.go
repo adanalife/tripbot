@@ -152,7 +152,21 @@ func disabled() bool {
 func newResource(ctx context.Context, name, version string) (*resource.Resource, error) {
 	return resource.New(ctx,
 		resource.WithFromEnv(),
-		resource.WithProcess(),
+		// Granular process detectors instead of resource.WithProcess(): the
+		// bundled WithProcessOwner detector calls os/user.Current(), which
+		// fails with "user: Current requires cgo or $USER set in environment"
+		// in our static CGO_ENABLED=0 binaries running as a uid with no
+		// /etc/passwd entry — that error silently disables the whole SDK.
+		// Enumerate every process detector WithProcess() bundles *except*
+		// the owner one, so process.* attributes are still emitted without
+		// requiring a $USER workaround.
+		resource.WithProcessPID(),
+		resource.WithProcessExecutableName(),
+		resource.WithProcessExecutablePath(),
+		resource.WithProcessCommandArgs(),
+		resource.WithProcessRuntimeName(),
+		resource.WithProcessRuntimeVersion(),
+		resource.WithProcessRuntimeDescription(),
 		resource.WithHost(),
 		resource.WithTelemetrySDK(),
 		resource.WithAttributes(
