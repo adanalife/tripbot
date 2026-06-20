@@ -158,6 +158,20 @@ def test_stage_twitch_routes_through_gateway():
     assert "TWITCH_API_URL" not in _cm_data("prod-1-tripbot-twitch")
 
 
+def test_stage_youtube_routes_sends_through_gateway():
+    """Stage tripbot-youtube carries YOUTUBE_API_URL (outbound send via the
+    gateway); the twitch instance does not."""
+
+    def _cm_data(stem):
+        return _by_kind(_objects(stem), "ConfigMap")[0]["data"]
+
+    assert (
+        _cm_data("stage-1-tripbot-youtube").get("YOUTUBE_API_URL")
+        == "http://gateway-youtube.stage-1.svc.cluster.local:8080"
+    )
+    assert "YOUTUBE_API_URL" not in _cm_data("stage-1-tripbot-twitch")
+
+
 # Which (env, platform) OBS instances actually stream — must mirror
 # config.EnvConfig.obs_streaming. A streaming instance emits its stream-key
 # ExternalSecret; an idle one does not (and boots without the key).
