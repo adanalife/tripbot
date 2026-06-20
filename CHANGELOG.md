@@ -5,7 +5,9 @@
 
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
-## [Unreleased]
+Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and are assembled here at release time by [towncrier](https://towncrier.readthedocs.io). See the [Changelog section of the README](README.md#changelog).
+
+<!-- towncrier release notes start -->
 
 ## [v3.8.0] — 2026-06-20
 

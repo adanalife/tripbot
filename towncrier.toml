@@ -1,0 +1,81 @@
+# Changelog fragments, assembled by towncrier at release time.
+#
+# Every feature/fix PR drops a fragment in changelog.d/ named <PR>.<type>.md
+# (e.g. 889.fix.md). Run via uvx — no project dependency:
+#
+#   uvx towncrier create -c towncrier.toml 889.fix.md   # scaffold a fragment
+#   task changelog:preview                               # see the pending notes
+#   task changelog:build VERSION=3.9.0                   # collate into CHANGELOG.md
+#
+# Sections are component-based (matching the existing CHANGELOG style), modeled
+# as towncrier "types". A genuinely new component means a new [[type]] block.
+# The optional `summary` type renders as the lead paragraph for the release.
+[tool.towncrier]
+directory = "changelog.d"
+filename = "CHANGELOG.md"
+template = ".github/towncrier-template.md"
+start_string = "<!-- towncrier release notes start -->\n"
+title_format = "## [v{version}] — {project_date}"
+issue_format = "[#{issue}](https://github.com/adanalife/tripbot/pull/{issue})"
+wrap = false
+all_bullets = true
+
+[[tool.towncrier.type]]
+directory = "summary"
+name = "Summary"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "gateway"
+name = "Platform gateway"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "chatbot"
+name = "Chatbot"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "onscreens"
+name = "Onscreens"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "vlc"
+name = "VLC"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "obs"
+name = "OBS"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "console"
+name = "Console / API"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "fix"
+name = "Fixes"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "deploy"
+name = "Deploy / Infra"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "ci"
+name = "CI / Tooling"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "cleanup"
+name = "Cleanup"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "misc"
+name = "Misc"
+showcontent = true
