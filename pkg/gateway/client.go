@@ -27,6 +27,13 @@ import (
 // caller (a chat command, the watchdog tick, the chat-send path).
 const defaultTimeout = 5 * time.Second
 
+// Chat identities accepted by SendChat, matching the gateway's
+// provider.Identity values. The empty string lets the gateway pick its default.
+const (
+	IdentityBot         = "bot"
+	IdentityBroadcaster = "broadcaster"
+)
+
 // Client talks to one platform-gateway instance over its v1 JSON API.
 type Client struct {
 	baseURL string

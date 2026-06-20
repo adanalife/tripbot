@@ -80,7 +80,7 @@ func TestFlaggedTwitch_DispatchesOnFlag(t *testing.T) {
 	inproc := &recordingTwitch{Result: time.Unix(200, 0), OK: true}
 
 	flagOn := feature.NewInMemoryClient(map[string]feature.Flag{
-		twitchGatewayFlagKey: {Key: twitchGatewayFlagKey, Enabled: true},
+		TwitchGatewayFlagKey: {Key: TwitchGatewayFlagKey, Enabled: true},
 	})
 	flagOff := feature.NewInMemoryClient(nil) // unknown key → off
 

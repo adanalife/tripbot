@@ -20,6 +20,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/eventbus"
 	"github.com/adanalife/tripbot/pkg/eventsub"
 	"github.com/adanalife/tripbot/pkg/feature"
+	"github.com/adanalife/tripbot/pkg/gateway"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"github.com/adanalife/tripbot/pkg/natsclient"
@@ -135,6 +136,33 @@ type Tripbot struct {
 	// startup window before startFeatureFlags swaps in the Postgres-backed
 	// client — same fail-closed contract as pkg/feature.
 	flagClient feature.FlagClient
+
+	// gateway is the HTTP client for the platform-gateway, or nil when no
+	// TWITCH_API_URL is configured (the in-process default). When non-nil it's
+	// the shared client the non-chatbot Helix callers (the OBS watchdog's
+	// live-check, the chat-send path) route through once useGateway reports the
+	// runtime flag is on — the same gate chatbot's flaggedTwitch uses.
+	gateway *gateway.Client
+}
+
+// newGatewayClient builds the platform-gateway client when TWITCH_API_URL is
+// set, else returns nil (the in-process default). Stateless and side-effect
+// free, so it's safe to construct at NewTripbot time.
+func newGatewayClient() *gateway.Client {
+	if c.Conf.TwitchAPIURL == "" {
+		return nil
+	}
+	return gateway.New(c.Conf.TwitchAPIURL)
+}
+
+// useGateway reports whether this instance should route a Helix call through
+// the platform-gateway rather than calling Helix in-process: the gateway must
+// be wired (TWITCH_API_URL set → gateway non-nil) AND the runtime flag on. Read
+// per call so cutover and revert need no restart, mirroring chatbot's
+// flaggedTwitch — one gate for "tripbot uses the gateway".
+func (t *Tripbot) useGateway(ctx context.Context) bool {
+	return t.gateway != nil &&
+		t.flagClient.Bool(ctx, chatbot.TwitchGatewayFlagKey, feature.EvalContext{})
 }
 
 // NewTripbot constructs a Tripbot with default runtime state. Dependencies
@@ -151,6 +179,7 @@ func NewTripbot(version string) *Tripbot {
 		),
 		sessions:   users.NewDefault(),
 		flagClient: feature.NewInMemoryClient(nil),
+		gateway:    newGatewayClient(),
 	}
 }
 
@@ -365,7 +394,25 @@ func youtubeAuthAccounts() []eventbus.AuthAccount {
 // 3 consecutive minute-spaced misalignments. First seen in prod on
 // 2026-05-27, ~30h into an OBS session.
 func (t *Tripbot) startSilentDisconnectWatchdog(ctx context.Context) {
-	go watchdog.WatchSilentDisconnect(ctx, watchdog.DefaultWatchdogDeps(), 60*time.Second, 3, 10*time.Minute)
+	deps := watchdog.DefaultWatchdogDeps()
+	if t.gateway != nil {
+		// Route the live-check through the gateway when the flag is on, falling
+		// back to the in-process check otherwise. The gateway/flag choice lives
+		// here in cmd (not in pkg/obs/watchdog) per package-boundary-init-discipline;
+		// the gauge set mirrors DefaultWatchdogDeps's in-process path.
+		inproc := deps.TwitchLive
+		deps.TwitchLive = func(ctx context.Context) (bool, error) {
+			if !t.useGateway(ctx) {
+				return inproc(ctx)
+			}
+			live, err := t.gateway.IsLive(ctx, c.Conf.ChannelName)
+			if err == nil {
+				instrumentation.TwitchChannelLive.Set(live)
+			}
+			return live, err
+		}
+	}
+	go watchdog.WatchSilentDisconnect(ctx, deps, 60*time.Second, 3, 10*time.Minute)
 }
 
 // startDiscord brings up the bot's Discord slash-command session when
