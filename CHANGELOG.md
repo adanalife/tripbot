@@ -7,9 +7,29 @@ All notable changes to TripBot. Format follows [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+## [v3.8.0] — 2026-06-20
+
+Minor release. Completes phase 3b of the platform-gateway migration: with the `chatbot.twitch_gateway` flag on, every in-process Helix caller — OBS watchdog live-check, broadcaster chat-send, cached audience refresh, and EventSub channel-ID resolution — now routes through the standalone gateway, making it the single Helix caller (the prerequisite for moving the Twitch token out of tripbot). Adds the YouTube outbound-chat-send analog behind its own flag, plus cross-service trace propagation from the gateway client. Rounds out with a `!km <username>` fix and two stage streaming-pipeline fixes: re-enabling VAAPI iGPU encode for obs-youtube and co-locating the vlc/onscreens feeders with their OBS pod to stop cross-node stutter.
+
+### Platform gateway
+
+- **The gateway is the single Helix caller when `chatbot.twitch_gateway` is on.** Phase 3b routed the remaining in-process Helix callers through the standalone platform-gateway: the OBS watchdog live-check and the broadcaster chat-send, via a new shared `pkg/gateway` client ([#920]); and the cached audience refresh — the subscriber/follower-count pollers, chatter refresh, and the live follower check ([#921]). The hot path stays a local cache read (only the *refresh* is repointed at the gateway), and the in-process paths remain as the flag-off fallback. ([#920], [#921])
+- **EventSub keeps its `ChannelID` under the gateway.** `channelID` was only ever populated as a side effect of an in-process Helix call; once 3b routed those through the gateway, it stayed empty and EventSub was silently skipped — no new-follower / new-subscriber announcements. `startEventSub` now resolves the channel ID via the gateway when the flag is on, falling through to the existing skip-with-warning on error. ([#922])
+- **YouTube outbound chat-send can route through `gateway-youtube`.** The YouTube analog of the Twitch cutover — `tripbot-youtube`'s send dispatches through the gateway behind a two-layer gate (`YOUTUBE_API_URL` wired + the `chatbot.youtube_gateway` flag), defaulting off with in-process failover. The inbound chat poll stays in-process. Migration 023 seeds the disabled flag. ([#925])
+- **Cross-service trace propagation from the gateway client.** The gateway HTTP client's transport is wrapped with `otelhttp`, so it starts a client span and injects the W3C `traceparent` header; the gateway nests its server span under tripbot's, so a chat command and the Helix call it triggers form one cross-service trace. Inert when tracing is disabled. ([#924])
+
 ### Onscreens
 
 - **Rotator overlays no longer go blank in OBS after their first rotation.** The left/right rotators centered text with `position:absolute` + `transform`, promoting it to its own compositing layer that OBS's offscreen renderer (CEF OSR) captured once but failed to repaint on later rotations. Switched to the same normal-flow, `margin-left`-offset centering middle-text uses, so OSR repaints it correctly. (Surfaced when #885 moved the rotators to `innerHTML` swaps on the composited layer.) ([#916])
+
+### Fixes
+
+- **`!km <username>` shows the named user's kilometres.** It previously ignored its argument and always reported the *caller's* km; it now mirrors `!miles`'s other-user lookup — strips a leading `@`, looks the user up via `Sessions.Find`, and reports their distance (same "I don't know them, sorry!" fallback). With no arg it still falls back to the caller. ([#889])
+
+### Deploy / Infra
+
+- **VAAPI iGPU encode re-enabled for the stage YouTube stream.** stage-1 `obs-youtube` moves back onto the MS-01's Iris Xe (`ffmpeg_vaapi_tex`, quality `high`) via the `gpu.intel.com/i915` claim instead of saturating the rpi5 with software x264. Concurrent VAAPI encoders are back to 2 (prod obs-twitch + stage obs-youtube), within the budget that only stuttered at 3. ([#923])
+- **Stage vlc/onscreens feeders co-locate with their OBS pod.** Their independent rpi5 node-affinity is replaced with a preferred `podAffinity` anchoring them to their platform's OBS pod, so the continuous video feed + overlays stay on localhost instead of crossing the WiFi link to reach OBS — the cause of choppy stage `obs-youtube`. Scoped to stage; prod and local unchanged. ([#926])
 
 ### CI / Tooling
 
@@ -1773,3 +1793,11 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#913]: https://github.com/adanalife/tripbot/pull/913
 [#919]: https://github.com/adanalife/tripbot/pull/919
 [#916]: https://github.com/adanalife/tripbot/pull/916
+[#889]: https://github.com/adanalife/tripbot/pull/889
+[#920]: https://github.com/adanalife/tripbot/pull/920
+[#921]: https://github.com/adanalife/tripbot/pull/921
+[#922]: https://github.com/adanalife/tripbot/pull/922
+[#923]: https://github.com/adanalife/tripbot/pull/923
+[#924]: https://github.com/adanalife/tripbot/pull/924
+[#925]: https://github.com/adanalife/tripbot/pull/925
+[#926]: https://github.com/adanalife/tripbot/pull/926
