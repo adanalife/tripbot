@@ -11,7 +11,6 @@ import (
 	mylog "github.com/adanalife/tripbot/pkg/chatbot/log"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/eventbus"
-	"github.com/adanalife/tripbot/pkg/feature"
 	"github.com/adanalife/tripbot/pkg/gateway"
 	"github.com/adanalife/tripbot/pkg/geo"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
@@ -114,7 +113,7 @@ func (a *App) ConnectYouTube(ctx context.Context) (*liveChatBinding, error) {
 	a.Chat = consoleMirror{
 		inner: youtubeChat{
 			binding: binding,
-			insert:  newYouTubeSend(a).send,
+			insert:  newYouTubeSend().send,
 		},
 		env:         c.Conf.Environment,
 		platform:    c.Conf.Platform,
@@ -123,38 +122,28 @@ func (a *App) ConnectYouTube(ctx context.Context) (*liveChatBinding, error) {
 	return binding, nil
 }
 
-// YouTubeGatewayFlagKey is the runtime kill-switch for routing outbound YouTube
-// chat sends through the platform-gateway (gateway-youtube). It defaults off
-// (the flag row doesn't exist until toggled), so even an instance wired with
-// YOUTUBE_API_URL stays in-process until the flag is flipped on — the cutover
-// (and instant revert, no restart) is a console toggle. Only meaningful when
-// YOUTUBE_API_URL is set. Mirrors TwitchGatewayFlagKey; the YouTube analog only
-// covers the outbound send — the inbound poll has no gateway endpoint.
-const YouTubeGatewayFlagKey = "chatbot.youtube_gateway"
-
 // youtubeSend is the outbound YouTube chat-send seam. The in-process path
 // inserts into the tripbot-bound live chat (chatID); the gateway path posts via
 // gateway-youtube's SendChat, which resolves the active live chat itself (so it
 // ignores chatID). Same signature as youtubeChat.insert so youtubeChat is
-// untouched. Mirrors the Twitch interface in twitch.go.
+// untouched.
 type youtubeSend interface {
 	send(ctx context.Context, chatID, text string) error
 }
 
-// newYouTubeSend wires the production send path. With no YOUTUBE_API_URL there's
-// no gateway to reach, so it's the plain in-process insert (zero-config
-// default). When a gateway IS wired, it returns a flaggedYouTubeSend that
-// dispatches per call based on the YouTubeGatewayFlagKey runtime flag — wired
-// but dormant until flipped on, revertible without a restart. Mirrors newTwitch.
-func newYouTubeSend(a *App) youtubeSend {
+// newYouTubeSend wires the production send path. A youtube instance wired with
+// YOUTUBE_API_URL routes sends through the platform-gateway (gateway-youtube)
+// unconditionally — no runtime flag. Unlike the Twitch cutover (which keeps a
+// flag as a de-risking tool for the live-prod swap), YouTube cuts straight over;
+// a revert is a git revert + redeploy. With no YOUTUBE_API_URL there's no
+// gateway to reach, so it falls back to the in-process insert — the zero-config
+// default for an un-wired instance, which goes away once pkg/youtube is deleted
+// (after the gateway owns the inbound poll too).
+func newYouTubeSend() youtubeSend {
 	if c.Conf.YouTubeAPIURL == "" {
 		return realYouTubeSend{}
 	}
-	return flaggedYouTubeSend{
-		app:     a,
-		gateway: gatewayYouTubeSend{client: gateway.New(c.Conf.YouTubeAPIURL)},
-		inproc:  realYouTubeSend{},
-	}
+	return gatewayYouTubeSend{client: gateway.New(c.Conf.YouTubeAPIURL)}
 }
 
 // realYouTubeSend is the in-process adapter — inserts into the bound live chat
@@ -175,24 +164,6 @@ type gatewayYouTubeSend struct {
 
 func (g gatewayYouTubeSend) send(ctx context.Context, _, text string) error {
 	return g.client.SendChat(ctx, "", text)
-}
-
-// flaggedYouTubeSend routes each send to the gateway or the in-process adapter
-// based on the live YouTubeGatewayFlagKey value, read from the App's flag client
-// at call time (cmd/tripbot reassigns a.Flags to the Postgres-backed, console-
-// toggleable client after New(), so the flag flips without a bot restart).
-// Mirrors flaggedTwitch.
-type flaggedYouTubeSend struct {
-	app     *App
-	gateway youtubeSend
-	inproc  youtubeSend
-}
-
-func (f flaggedYouTubeSend) send(ctx context.Context, chatID, text string) error {
-	if f.app.Flags.Bool(ctx, YouTubeGatewayFlagKey, feature.EvalContext{}) {
-		return f.gateway.send(ctx, chatID, text)
-	}
-	return f.inproc.send(ctx, chatID, text)
 }
 
 // HandleYouTubeMessage processes one inbound YouTube chat message. Identical

@@ -159,10 +159,10 @@ class EnvConfig:
     # gateway's prod release is cut + proven.
     twitch_api_url: str = ""
     # Like twitch_api_url, but for a youtube instance's outbound chat sends:
-    # gateway-youtube's URL routes them through the platform-gateway (gated at
-    # runtime by chatbot.youtube_gateway). Empty keeps the in-process pkg/youtube
-    # send. The inbound chat poll stays in-process regardless (no gateway
-    # streaming endpoint).
+    # gateway-youtube's URL routes them through the platform-gateway
+    # unconditionally (no runtime flag — unlike Twitch). Empty keeps the
+    # in-process pkg/youtube send. The inbound chat poll stays in-process
+    # regardless (no gateway streaming endpoint).
     youtube_api_url: str = ""
 
     def tag_for(self, component: str) -> str:
@@ -328,8 +328,8 @@ ENVS: dict[str, EnvConfig] = {
         # release is cut.
         twitch_api_url="http://gateway-twitch.stage-1.svc.cluster.local:8080",
         # Route stage tripbot-youtube's outbound chat sends through the
-        # in-namespace gateway-youtube (gated by chatbot.youtube_gateway). The
-        # inbound poll stays in-process. prod has no youtube instance yet.
+        # in-namespace gateway-youtube (unconditionally — no flag). The inbound
+        # poll stays in-process. prod has no youtube instance yet.
         youtube_api_url="http://gateway-youtube.stage-1.svc.cluster.local:8080",
         # Stage streams to YouTube — the second half of the two-live-streams
         # budget (prod-twitch + stage-youtube). Key from SM
