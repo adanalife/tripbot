@@ -180,6 +180,11 @@ def config_data(env: EnvConfig, platform: str) -> dict[str, str]:
     # twitch platform talks Helix, so the youtube instance never carries it.
     if platform == "twitch" and env.twitch_api_url:
         data["TWITCH_API_URL"] = env.twitch_api_url
+    # Route the youtube instance's outbound chat sends through gateway-youtube
+    # where the env opts in. Only the youtube platform sends YouTube chat, so the
+    # twitch instance never carries it. Gated at runtime by chatbot.youtube_gateway.
+    if platform == "youtube" and env.youtube_api_url:
+        data["YOUTUBE_API_URL"] = env.youtube_api_url
     return data
 
 

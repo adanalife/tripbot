@@ -158,6 +158,12 @@ class EnvConfig:
     # its in-namespace gateway-twitch Service; prod stays in-process until the
     # gateway's prod release is cut + proven.
     twitch_api_url: str = ""
+    # Like twitch_api_url, but for a youtube instance's outbound chat sends:
+    # gateway-youtube's URL routes them through the platform-gateway (gated at
+    # runtime by chatbot.youtube_gateway). Empty keeps the in-process pkg/youtube
+    # send. The inbound chat poll stays in-process regardless (no gateway
+    # streaming endpoint).
+    youtube_api_url: str = ""
 
     def tag_for(self, component: str) -> str:
         """Image tag for a component: its pinned release tag when versions.yaml
@@ -321,6 +327,10 @@ ENVS: dict[str, EnvConfig] = {
         # gateway-twitch gateway (Phase 3). prod stays in-process until its gateway
         # release is cut.
         twitch_api_url="http://gateway-twitch.stage-1.svc.cluster.local:8080",
+        # Route stage tripbot-youtube's outbound chat sends through the
+        # in-namespace gateway-youtube (gated by chatbot.youtube_gateway). The
+        # inbound poll stays in-process. prod has no youtube instance yet.
+        youtube_api_url="http://gateway-youtube.stage-1.svc.cluster.local:8080",
         # Stage streams to YouTube — the second half of the two-live-streams
         # budget (prod-twitch + stage-youtube). Key from SM
         # k8s/obs/youtube-stream-key (adanalife-stage account).
