@@ -7,6 +7,10 @@ All notable changes to TripBot. Format follows [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+### Onscreens
+
+- **Rotator overlays no longer go blank in OBS after their first rotation.** The left/right rotators centered text with `position:absolute` + `transform`, promoting it to its own compositing layer that OBS's offscreen renderer (CEF OSR) captured once but failed to repaint on later rotations. Switched to the same normal-flow, `margin-left`-offset centering middle-text uses, so OSR repaints it correctly. (Surfaced when #885 moved the rotators to `innerHTML` swaps on the composited layer.) ([#916])
+
 ### CI / Tooling
 
 - **Back-merge PR title shows the correct release version.** `backmerge.yml` read the version via `git describe`, which races `auto-tag.yml` on the same master push and labeled the back-merge PR with the *previous* release (e.g. v3.6.0 right after v3.7.0 shipped); it now reads the just-released version from the CHANGELOG, which is race-free. ([#919])
@@ -1768,3 +1772,4 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#911]: https://github.com/adanalife/tripbot/pull/911
 [#913]: https://github.com/adanalife/tripbot/pull/913
 [#919]: https://github.com/adanalife/tripbot/pull/919
+[#916]: https://github.com/adanalife/tripbot/pull/916
