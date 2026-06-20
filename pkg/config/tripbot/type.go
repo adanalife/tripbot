@@ -26,19 +26,6 @@ type TripbotConfig struct {
 	// maps). The bot continues to run.
 	GoogleMapsAPIKey string `envconfig:"GOOGLE_MAPS_API_KEY"`
 
-	// YouTubeClientID / YouTubeClientSecret are the YouTube OAuth app
-	// credentials (a GCP-console "Web application" OAuth client whose
-	// authorized redirect URIs include <EXTERNAL_URL>/auth/callback).
-	// Only set on PLATFORM=youtube instances; optional everywhere else —
-	// pkg/youtube returns ErrNotConfigured rather than fataling when absent.
-	YouTubeClientID     string `envconfig:"YOUTUBE_CLIENT_ID"`
-	YouTubeClientSecret string `envconfig:"YOUTUBE_CLIENT_SECRET"`
-	// YouTubeChannelID optionally pins the expected channel identity. When
-	// set, the /auth/init?account=youtube consent flow rejects (and does not
-	// persist) tokens from any other channel — keeps a prod pod from storing
-	// the quiet test channel's token, and vice versa.
-	YouTubeChannelID string `envconfig:"YOUTUBE_CHANNEL_ID"`
-
 	// ReadOnly is used to prevent writing some things to the DB
 	ReadOnly bool `default:"false" envconfig:"READ_ONLY"`
 	// Verbose determines output verbosity
@@ -77,14 +64,14 @@ type TripbotConfig struct {
 	// HTTP client behind the same interface, with no command code changes.
 	TwitchAPIURL string `envconfig:"TWITCH_API_URL"`
 
-	// YouTubeAPIURL points a PLATFORM=youtube instance's outbound chat sends at
-	// the platform-gateway gateway-youtube instance over HTTP, instead of the
-	// in-process pkg/youtube path. Empty (the default) keeps the in-process
-	// adapter. When set — e.g. http://gateway-youtube.<env>.svc.cluster.local:8080
-	// — outbound chat send routes through the gateway's SendChat (which resolves
-	// the active live chat itself) unconditionally; there is no runtime flag
-	// (unlike Twitch — YouTube cuts straight over). The inbound chat poll stays
-	// in-process (no gateway streaming endpoint).
+	// YouTubeAPIURL points a PLATFORM=youtube instance at the platform-gateway
+	// gateway-youtube instance over HTTP — e.g.
+	// http://gateway-youtube.<env>.svc.cluster.local:8080. Both chat directions
+	// flow through the gateway: outbound via its SendChat (which resolves the
+	// active live chat itself), inbound via its GET /v1/chat/inbound poll. The
+	// gateway also owns the YouTube OAuth token, so tripbot holds none at
+	// runtime. Required on a youtube instance — the in-process YouTube client is
+	// gone, so with this empty the instance comes up without YouTube chat.
 	YouTubeAPIURL string `envconfig:"YOUTUBE_API_URL"`
 
 	// NatsURL is the in-cluster NATS endpoint used for fire-and-forget
