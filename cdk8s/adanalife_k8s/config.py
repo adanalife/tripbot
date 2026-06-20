@@ -63,6 +63,12 @@ class EnvConfig:
     obs_encoder: str = "obs_x264"  # ffmpeg_vaapi_tex on GPU envs
     obs_quality: str = "low"  # low | high
     dashcam_mode: str = "hostpath"  # nfs | hostpath
+    # Which PVC vlc mounts the corpus from when dashcam_mode == "nfs": the
+    # NFS-backed `vlc-dashcam` (default) or the node-local `vlc-dashcam-local`
+    # cache. The local PVC + its NFS->local copy Job are provisioned by infra's
+    # dashcam_local_enabled flag; this only picks which claim vlc mounts. Flip back
+    # to "nfs" for an instant fallback while the local copy is (re)populated.
+    dashcam_source: str = "nfs"  # nfs | local (only meaningful when dashcam_mode=nfs)
     tailscale: bool = False  # emit the tailscale Ingress
     otel: bool = False  # OTEL_SDK_DISABLED=false when True
     postgres_size: str = "5Gi"
