@@ -331,7 +331,7 @@ class Tripbot(Construct):
             "deployment",
             metadata=k8s.ObjectMeta(name=name, namespace=ns, labels=labels),
             spec=k8s.DeploymentSpec(
-                replicas=env.replicas,
+                replicas=env.replicas_for(platform),
                 selector=k8s.LabelSelector(match_labels=sel),
                 template=k8s.PodTemplateSpec(
                     metadata=k8s.ObjectMeta(
