@@ -9,6 +9,10 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+### Platform gateway
+
+- **YouTube outbound chat-send routes through `gateway-youtube` unconditionally — the `chatbot.youtube_gateway` flag is gone.** A `tripbot-youtube` instance wired with `YOUTUBE_API_URL` now sends through the gateway with no runtime toggle. Unlike the Twitch cutover (which keeps a flag to de-risk the live-prod swap), YouTube has no live-prod stakes, so it cuts straight over — a revert is a `git revert` + redeploy. Drops the `flaggedYouTubeSend` wrapper; migration 024 removes the seeded flag row. The inbound chat poll still stays in-process (no gateway streaming endpoint yet). ([#935])
+
 ## [v3.8.0] — 2026-06-20
 
 Minor release. Completes phase 3b of the platform-gateway migration: with the `chatbot.twitch_gateway` flag on, every in-process Helix caller — OBS watchdog live-check, broadcaster chat-send, cached audience refresh, and EventSub channel-ID resolution — now routes through the standalone gateway, making it the single Helix caller (the prerequisite for moving the Twitch token out of tripbot). Adds the YouTube outbound-chat-send analog behind its own flag, plus cross-service trace propagation from the gateway client. Rounds out with a `!km <username>` fix and two stage streaming-pipeline fixes: re-enabling VAAPI iGPU encode for obs-youtube and co-locating the vlc/onscreens feeders with their OBS pod to stop cross-node stutter.
@@ -1803,3 +1807,4 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#924]: https://github.com/adanalife/tripbot/pull/924
 [#925]: https://github.com/adanalife/tripbot/pull/925
 [#926]: https://github.com/adanalife/tripbot/pull/926
+[#935]: https://github.com/adanalife/tripbot/pull/935

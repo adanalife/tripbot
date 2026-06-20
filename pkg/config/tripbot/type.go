@@ -82,8 +82,9 @@ type TripbotConfig struct {
 	// in-process pkg/youtube path. Empty (the default) keeps the in-process
 	// adapter. When set — e.g. http://gateway-youtube.<env>.svc.cluster.local:8080
 	// — outbound chat send routes through the gateway's SendChat (which resolves
-	// the active live chat itself), gated by the chatbot.youtube_gateway flag. The
-	// inbound chat poll stays in-process (no gateway streaming endpoint).
+	// the active live chat itself) unconditionally; there is no runtime flag
+	// (unlike Twitch — YouTube cuts straight over). The inbound chat poll stays
+	// in-process (no gateway streaming endpoint).
 	YouTubeAPIURL string `envconfig:"YOUTUBE_API_URL"`
 
 	// NatsURL is the in-cluster NATS endpoint used for fire-and-forget

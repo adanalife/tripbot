@@ -2,15 +2,15 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   labels:
-    app.kubernetes.io/name: onscreens-twitch
+    app.kubernetes.io/name: onscreens-youtube
     app.kubernetes.io/part-of: tripbot
-  name: onscreens-twitch-config
+  name: onscreens-youtube-config
   namespace: prod-1
 data:
   ENV: production
   NATS_URL: nats://nats.prod-1-platform.svc.cluster.local:4222
-  ONSCREENS_SERVER_PLATFORM: twitch
-  OTEL_RESOURCE_ATTRIBUTES: deployment.environment=prod-1,service.namespace=tripbot,service.platform=twitch
+  ONSCREENS_SERVER_PLATFORM: youtube
+  OTEL_RESOURCE_ATTRIBUTES: deployment.environment=prod-1,service.namespace=tripbot,service.platform=youtube
   OTEL_SDK_DISABLED: "false"
   OTEL_TRACES_SAMPLER: parentbased_traceidratio
   OTEL_TRACES_SAMPLER_ARG: "0.1"
@@ -20,15 +20,15 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
-    app.kubernetes.io/name: onscreens-twitch
+    app.kubernetes.io/name: onscreens-youtube
     app.kubernetes.io/part-of: tripbot
-  name: onscreens-twitch
+  name: onscreens-youtube
   namespace: prod-1
 spec:
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
-      app: onscreens-twitch
+      app: onscreens-youtube
   strategy:
     rollingUpdate:
       maxSurge: 1
@@ -37,14 +37,14 @@ spec:
   template:
     metadata:
       annotations:
-        adanalife.dev/config-hash: 1689252f67
+        adanalife.dev/config-hash: "9313331745"
       labels:
-        app: onscreens-twitch
+        app: onscreens-youtube
     spec:
       containers:
         - envFrom:
             - configMapRef:
-                name: onscreens-twitch-config
+                name: onscreens-youtube-config
             - secretRef:
                 name: sentry-vlc-server
                 optional: false
@@ -60,7 +60,7 @@ spec:
             initialDelaySeconds: 5
             periodSeconds: 30
             timeoutSeconds: 5
-          name: onscreens-twitch
+          name: onscreens-youtube
           ports:
             - containerPort: 8080
               name: http
@@ -96,9 +96,9 @@ apiVersion: v1
 kind: Service
 metadata:
   labels:
-    app.kubernetes.io/name: onscreens-twitch
+    app.kubernetes.io/name: onscreens-youtube
     app.kubernetes.io/part-of: tripbot
-  name: onscreens-twitch
+  name: onscreens-youtube
   namespace: prod-1
 spec:
   ports:
@@ -106,5 +106,5 @@ spec:
       port: 8080
       targetPort: http
   selector:
-    app: onscreens-twitch
+    app: onscreens-youtube
   type: ClusterIP
