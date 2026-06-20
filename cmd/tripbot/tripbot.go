@@ -458,6 +458,18 @@ func (t *Tripbot) startEventSub(ctx context.Context) {
 			"reauth_url", mytwitch.AuthInitURL("broadcaster"))
 		return
 	}
+	if mytwitch.ChannelID() == "" && t.useGateway(ctx) {
+		// When Helix calls route through the gateway, the in-process audience
+		// polls (updateSubscribers / UpdateChatters) that used to populate
+		// channelID as a side effect no longer run, so it's still "" here.
+		// Resolve it via the gateway's /v1/users/{login} so EventSub gets a
+		// BroadcasterUserID. Non-fatal — falls through to the skip below on error.
+		if id, err := t.gateway.UserID(ctx, c.Conf.ChannelName); err != nil {
+			slog.ErrorContext(ctx, "eventsub: resolving channel id via gateway failed", "err", err)
+		} else {
+			mytwitch.SetChannelID(id)
+		}
+	}
 	if mytwitch.ChannelID() == "" {
 		// getChannelID is lazy on first call; calling GetSubscribers /
 		// GetFollowerCount typically populates it. updateSubscribers()

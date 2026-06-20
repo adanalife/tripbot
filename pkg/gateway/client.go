@@ -100,6 +100,23 @@ func (c *Client) IsLive(ctx context.Context, login string) (bool, error) {
 	return body.Live, nil
 }
 
+// UserID resolves login to the platform's internal user/channel ID
+// (GET /v1/users/{login}). It's the gateway-routed replacement for the
+// in-process getChannelID side effect that EventSub's BroadcasterUserID needs —
+// once Helix calls route through the gateway, nothing else populates the ID.
+func (c *Client) UserID(ctx context.Context, login string) (string, error) {
+	var body struct {
+		ID string `json:"id"`
+	}
+	if err := c.getJSON(ctx, "/v1/users/"+url.PathEscape(login), &body); err != nil {
+		return "", err
+	}
+	if body.ID == "" {
+		return "", fmt.Errorf("gateway users/%s: empty id", login)
+	}
+	return body.ID, nil
+}
+
 // SendChat posts text to the channel's chat as identity ("bot" / "broadcaster";
 // "" lets the gateway pick its default) via POST /v1/chat.
 func (c *Client) SendChat(ctx context.Context, identity, text string) error {
