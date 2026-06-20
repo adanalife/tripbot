@@ -220,16 +220,47 @@ def _prefers_rpi5(spec: dict) -> bool:
     return tolerates and biases
 
 
-def test_stage_stateless_apps_prefer_rpi5():
-    """Stage's lightweight stateless app pods (vlc/onscreens/tripbot-youtube)
-    opt into the ephemeral rpi5 worker — they tolerate the taint and bias toward
-    the board label, recovering onto the MS-01 when the Pi is gone."""
-    for stem in (
-        "stage-1-vlc-youtube",
-        "stage-1-onscreens-youtube",
-        "stage-1-tripbot-youtube",
-    ):
-        assert _prefers_rpi5(_pod_spec(stem)), stem
+def _colocates_with_obs(spec: dict, obs_app: str) -> bool:
+    """True iff the pod prefers (podAffinity) the node running `obs_app`."""
+    prefs = (
+        spec.get("affinity", {})
+        .get("podAffinity", {})
+        .get("preferredDuringSchedulingIgnoredDuringExecution", [])
+    )
+    return any(
+        term.get("podAffinityTerm", {}).get("topologyKey") == "kubernetes.io/hostname"
+        and term.get("podAffinityTerm", {})
+        .get("labelSelector", {})
+        .get("matchLabels", {})
+        .get("app")
+        == obs_app
+        for term in prefs
+    )
+
+
+def test_stage_tripbot_prefers_rpi5():
+    """tripbot-youtube is control-plane (chat/EventSub), not a realtime OBS feeder,
+    so it keeps the independent rpi5 node-preference — tolerate the taint and bias
+    toward the board label, recovering onto the MS-01 when the Pi is gone."""
+    assert _prefers_rpi5(_pod_spec("stage-1-tripbot-youtube"))
+
+
+def test_stage_obs_feeders_colocate_with_obs():
+    """vlc + onscreens feed OBS continuously (RTSP / browser-source) and must reach
+    it on localhost, not across the LAN. They anchor to their platform's OBS pod
+    via podAffinity instead of pulling toward the Pi on their own — keeping the
+    rpi5 toleration so they can follow OBS onto the Pi, but NOT the board
+    node-affinity that previously split the pipeline when OBS spilled to the MS-01
+    (the 2026-06-19 stage obs-youtube stutter)."""
+    for stem in ("stage-1-vlc-youtube", "stage-1-onscreens-youtube"):
+        spec = _pod_spec(stem)
+        assert _colocates_with_obs(spec, "obs-youtube"), stem
+        # follows OBS onto the Pi if OBS lands there ...
+        assert any(
+            t.get("key") == "dana.lol/rpi5" for t in spec.get("tolerations", [])
+        ), stem
+        # ... but no longer carries an independent rpi5 board pull.
+        assert not _prefers_rpi5(spec), stem
 
 
 def test_stage_vaapi_obs_stays_on_msi():

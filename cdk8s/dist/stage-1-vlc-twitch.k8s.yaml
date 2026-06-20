@@ -45,14 +45,13 @@ spec:
         app: vlc-twitch
     spec:
       affinity:
-        nodeAffinity:
+        podAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
-            - preference:
-                matchExpressions:
-                  - key: dana.lol/board
-                    operator: In
-                    values:
-                      - rpi5
+            - podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: obs-twitch
+                topologyKey: kubernetes.io/hostname
               weight: 100
       containers:
         - envFrom:
