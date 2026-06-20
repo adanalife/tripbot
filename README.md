@@ -48,3 +48,21 @@ devenv logs tripbot
 # shut down everything
 devenv down
 ```
+
+### Changelog
+
+Changelog entries are managed with [towncrier](https://towncrier.readthedocs.io). **Every PR into `develop` adds a fragment** describing its user-facing change — a `changelog` CI check enforces this (label a PR `skip-changelog` for dependabot bumps, CI-only tweaks, or pure refactors that warrant no entry).
+
+A fragment is a small markdown file in [`changelog.d/`](changelog.d/) named `<PR-number>.<type>.md`, e.g. `889.fix.md`. Its contents are the entry prose (bold lead-in sentence, then detail — match the existing [`CHANGELOG.md`](CHANGELOG.md) style); the PR link is added automatically.
+
+```bash
+# scaffold one (opens $EDITOR); or just create the file by hand
+task changelog:add PR=889 TYPE=fix
+
+# preview the assembled notes
+task changelog:preview
+```
+
+Types map to the changelog's component sections: `gateway`, `chatbot`, `onscreens`, `vlc`, `obs`, `console`, `fix`, `deploy`, `ci`, `cleanup`, `misc`, plus `summary` (a lead paragraph for the release, named `+summary.summary.md` — no PR number).
+
+At release time, `task changelog:build VERSION=x.y.z` collates the fragments into a new `CHANGELOG.md` section and deletes them. See the standing `pending-release` PR for the cut steps.

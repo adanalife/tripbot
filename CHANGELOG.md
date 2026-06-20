@@ -5,11 +5,9 @@
 
 All notable changes to TripBot. Format follows [Keep a Changelog](https://keepachangelog.com); versioning follows [Semantic Versioning](https://semver.org).
 
-## [Unreleased]
+Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and are assembled here at release time by [towncrier](https://towncrier.readthedocs.io). See the [Changelog section of the README](README.md#changelog).
 
-### Platform gateway
-
-- **YouTube outbound chat-send routes through `gateway-youtube` unconditionally — the `chatbot.youtube_gateway` flag is gone.** A `tripbot-youtube` instance wired with `YOUTUBE_API_URL` now sends through the gateway with no runtime toggle. Unlike the Twitch cutover (which keeps a flag to de-risk the live-prod swap), YouTube has no live-prod stakes, so it cuts straight over — a revert is a `git revert` + redeploy. Drops the `flaggedYouTubeSend` wrapper; migration 024 removes the seeded flag row. The inbound chat poll still stays in-process (no gateway streaming endpoint yet). ([#935])
+<!-- towncrier release notes start -->
 
 ## [v3.8.0] — 2026-06-20
 
@@ -1805,4 +1803,3 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#924]: https://github.com/adanalife/tripbot/pull/924
 [#925]: https://github.com/adanalife/tripbot/pull/925
 [#926]: https://github.com/adanalife/tripbot/pull/926
-[#935]: https://github.com/adanalife/tripbot/pull/935
