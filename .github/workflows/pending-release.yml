@@ -72,11 +72,14 @@ jobs:
 
           # Nothing queued (develop is in sync with master, e.g. just after a
           # release): retire the standing draft if one is open, then stop.
-          if [ "$AHEAD" -eq 0 ]; then
+          # Use the net file diff, not the commit count — right after a release
+          # the back-merge leaves develop "ahead" by merge commits with no
+          # actual changes, and `gh pr create` errors on an empty diff.
+          if [ "$AHEAD" -eq 0 ] || git diff --quiet "origin/master...HEAD"; then
             if [ -n "$NUM" ] && [ "$IS_DRAFT" = "true" ]; then
               gh pr close "$NUM" --comment "develop is in sync with master — nothing pending. A fresh draft opens when new work lands on develop."
             fi
-            echo "develop has no commits ahead of master; nothing to stage."
+            echo "develop has no net changes over master; nothing to stage."
             exit 0
           fi
 
