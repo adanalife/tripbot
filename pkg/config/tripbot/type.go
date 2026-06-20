@@ -77,6 +77,15 @@ type TripbotConfig struct {
 	// HTTP client behind the same interface, with no command code changes.
 	TwitchAPIURL string `envconfig:"TWITCH_API_URL"`
 
+	// YouTubeAPIURL points a PLATFORM=youtube instance's outbound chat sends at
+	// the platform-gateway gateway-youtube instance over HTTP, instead of the
+	// in-process pkg/youtube path. Empty (the default) keeps the in-process
+	// adapter. When set — e.g. http://gateway-youtube.<env>.svc.cluster.local:8080
+	// — outbound chat send routes through the gateway's SendChat (which resolves
+	// the active live chat itself), gated by the chatbot.youtube_gateway flag. The
+	// inbound chat poll stays in-process (no gateway streaming endpoint).
+	YouTubeAPIURL string `envconfig:"YOUTUBE_API_URL"`
+
 	// NatsURL is the in-cluster NATS endpoint used for fire-and-forget
 	// inter-component events. Format:
 	// nats://nats.<env-platform-ns>.svc.cluster.local:4222.

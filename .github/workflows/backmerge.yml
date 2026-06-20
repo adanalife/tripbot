@@ -91,7 +91,11 @@ jobs:
           fi
           git push -f origin "$BRANCH"
 
-          LATEST_TAG=$(git describe --tags --abbrev=0 --match 'v*' origin/master 2>/dev/null || echo "")
+          # Label from the CHANGELOG's top released version, not git tags:
+          # backmerge runs on the same master push as auto-tag.yml, so the new
+          # tag often doesn't exist yet and `git describe` would label the PR
+          # with the PREVIOUS release. The stamped CHANGELOG entry is race-free.
+          LATEST_TAG=$(grep -m1 -oE '^## \[v[0-9]+\.[0-9]+\.[0-9]+\]' CHANGELOG.md 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' || echo "")
           TITLE="⏪ Back-merge master → develop${LATEST_TAG:+ ($LATEST_TAG)}"
           cat > /tmp/body.md <<EOF
           Merges \`master\` back into \`develop\` so the two don't diverge${LATEST_TAG:+ after $LATEST_TAG}. **$AHEAD** commit(s) on \`master\` are not yet on \`develop\`.

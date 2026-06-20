@@ -70,19 +70,26 @@
   #root.hidden { visibility: hidden; }
   {{if and (not .IsImage) (gt .FitWidthPx 0)}}
   /* Anchored mode: the browser-source viewport overhangs a smaller on-canvas
-     overlay (the bottom-strip rotators' grey-box). Text centers on AnchorXPx
-     within the viewport and shrinks to fit FitWidthPx. */
+     overlay (the bottom-strip rotators' grey-box). A fixed-width, text-centered
+     content box is offset via margin-left so its center sits at AnchorXPx, and
+     shrinks to fit FitWidthPx.
+
+     Deliberately normal-flow (flex + margin) rather than position:absolute +
+     transform. An absolutely-positioned/transformed box becomes its own
+     compositing layer, and OBS's offscreen browser renderer (CEF OSR) fails to
+     push that layer's repaints into the shared texture after the first paint —
+     so the rotators rendered once on load, then went blank on their first
+     content rotation. Middle-text never hit this because it's normal-flow;
+     matching that flow keeps the rotators painting across updates. */
   #root.text {
-    position: relative;
     width: 100%; height: 100%;
+    display: flex; align-items: center;
   }
   #root.text .content {
-    position: absolute;
-    top: 50%;
-    left: {{.AnchorXPx}}px;
-    transform: translate(-50%, -50%);
+    flex: 0 0 auto;
+    width: {{.FitWidthPx}}px;
+    margin-left: {{.ContentMarginLeftPx}}px;
     text-align: center;
-    max-width: {{.FitWidthPx}}px;
     white-space: nowrap;
     word-wrap: break-word;
   }

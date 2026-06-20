@@ -47,6 +47,12 @@ func Chatters() map[string]struct{} { return defaultClient.Chatters() }
 func UpdateChatters()               { defaultClient.UpdateChatters() }
 func ChannelID() string             { return defaultClient.ChannelID() }
 
+// SetSubscribers / SetChatters / SetChannelID feed cached state from
+// out-of-band (the platform-gateway) instead of an in-process Helix poll.
+func SetSubscribers(logins []string)         { defaultClient.SetSubscribers(logins) }
+func SetChatters(logins []string, count int) { defaultClient.SetChatters(logins, count) }
+func SetChannelID(id string)                 { defaultClient.SetChannelID(id) }
+
 func SendChatMessageAsBroadcaster(ctx context.Context, text string) error {
 	return defaultClient.SendChatMessageAsBroadcaster(ctx, text)
 }

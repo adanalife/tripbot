@@ -130,15 +130,19 @@ class OnscreensServer(Construct):
                             seccomp_profile=k8s.SeccompProfile(type="RuntimeDefault")
                         ),
                         priority_class_name=env.priority_class or None,
-                        # Prefer the ephemeral rpi5 worker when present, recover
-                        # to the MS-01 when it's gone (stage only). See scheduling.py.
+                        # Co-locate with this platform's OBS pod so the overlay
+                        # browser source reaches OBS on localhost, not across the
+                        # LAN. OBS owns the rpi5 node-preference; onscreens just
+                        # follows wherever OBS landed (toleration kept so it can
+                        # follow OBS onto the Pi). Stage only via env.prefer_rpi5.
+                        # See scheduling.py.
                         tolerations=(
                             scheduling.prefer_rpi5_tolerations()
                             if env.prefer_rpi5
                             else None
                         ),
                         affinity=(
-                            scheduling.prefer_rpi5_affinity()
+                            scheduling.colocate_with_obs_affinity(platform)
                             if env.prefer_rpi5
                             else None
                         ),

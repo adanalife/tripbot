@@ -20,6 +20,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/eventbus"
 	"github.com/adanalife/tripbot/pkg/eventsub"
 	"github.com/adanalife/tripbot/pkg/feature"
+	"github.com/adanalife/tripbot/pkg/gateway"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"github.com/adanalife/tripbot/pkg/natsclient"
@@ -135,13 +136,40 @@ type Tripbot struct {
 	// startup window before startFeatureFlags swaps in the Postgres-backed
 	// client — same fail-closed contract as pkg/feature.
 	flagClient feature.FlagClient
+
+	// gateway is the HTTP client for the platform-gateway, or nil when no
+	// TWITCH_API_URL is configured (the in-process default). When non-nil it's
+	// the shared client the non-chatbot Helix callers (the OBS watchdog's
+	// live-check, the chat-send path) route through once useGateway reports the
+	// runtime flag is on — the same gate chatbot's flaggedTwitch uses.
+	gateway *gateway.Client
+}
+
+// newGatewayClient builds the platform-gateway client when TWITCH_API_URL is
+// set, else returns nil (the in-process default). Stateless and side-effect
+// free, so it's safe to construct at NewTripbot time.
+func newGatewayClient() *gateway.Client {
+	if c.Conf.TwitchAPIURL == "" {
+		return nil
+	}
+	return gateway.New(c.Conf.TwitchAPIURL)
+}
+
+// useGateway reports whether this instance should route a Helix call through
+// the platform-gateway rather than calling Helix in-process: the gateway must
+// be wired (TWITCH_API_URL set → gateway non-nil) AND the runtime flag on. Read
+// per call so cutover and revert need no restart, mirroring chatbot's
+// flaggedTwitch — one gate for "tripbot uses the gateway".
+func (t *Tripbot) useGateway(ctx context.Context) bool {
+	return t.gateway != nil &&
+		t.flagClient.Bool(ctx, chatbot.TwitchGatewayFlagKey, feature.EvalContext{})
 }
 
 // NewTripbot constructs a Tripbot with default runtime state. Dependencies
 // that need I/O or ordering (the IRC client, scheduler, Discord session,
 // Postgres-backed flag client) are filled in by the boot-sequence methods.
 func NewTripbot(version string) *Tripbot {
-	return &Tripbot{
+	t := &Tripbot{
 		version: version,
 		app:     chatbot.New(),
 		srv:     server.New(),
@@ -149,9 +177,15 @@ func NewTripbot(version string) *Tripbot {
 			onscreensClient.New(natsclient.DefaultPublisher(), c.Conf.Environment),
 			vlcClient.New(c.Conf.VlcServerHost, natsclient.DefaultPublisher(), c.Conf.Environment),
 		),
-		sessions:   users.NewDefault(),
 		flagClient: feature.NewInMemoryClient(nil),
+		gateway:    newGatewayClient(),
 	}
+	// The audience source dispatches chatter refresh + the follower check to the
+	// gateway (when the flag is on) or in-process; with no gateway wired it's the
+	// plain in-process source. Reads t.gateway/t.flagClient lazily, so wiring it
+	// here against the partially-built t is fine.
+	t.sessions = users.New(gatewayChatterSource{t: t})
+	return t
 }
 
 func main() {
@@ -365,7 +399,25 @@ func youtubeAuthAccounts() []eventbus.AuthAccount {
 // 3 consecutive minute-spaced misalignments. First seen in prod on
 // 2026-05-27, ~30h into an OBS session.
 func (t *Tripbot) startSilentDisconnectWatchdog(ctx context.Context) {
-	go watchdog.WatchSilentDisconnect(ctx, watchdog.DefaultWatchdogDeps(), 60*time.Second, 3, 10*time.Minute)
+	deps := watchdog.DefaultWatchdogDeps()
+	if t.gateway != nil {
+		// Route the live-check through the gateway when the flag is on, falling
+		// back to the in-process check otherwise. The gateway/flag choice lives
+		// here in cmd (not in pkg/obs/watchdog) per package-boundary-init-discipline;
+		// the gauge set mirrors DefaultWatchdogDeps's in-process path.
+		inproc := deps.TwitchLive
+		deps.TwitchLive = func(ctx context.Context) (bool, error) {
+			if !t.useGateway(ctx) {
+				return inproc(ctx)
+			}
+			live, err := t.gateway.IsLive(ctx, c.Conf.ChannelName)
+			if err == nil {
+				instrumentation.TwitchChannelLive.Set(live)
+			}
+			return live, err
+		}
+	}
+	go watchdog.WatchSilentDisconnect(ctx, deps, 60*time.Second, 3, 10*time.Minute)
 }
 
 // startDiscord brings up the bot's Discord slash-command session when
@@ -405,6 +457,18 @@ func (t *Tripbot) startEventSub(ctx context.Context) {
 			"login_as", c.Conf.ChannelName,
 			"reauth_url", mytwitch.AuthInitURL("broadcaster"))
 		return
+	}
+	if mytwitch.ChannelID() == "" && t.useGateway(ctx) {
+		// When Helix calls route through the gateway, the in-process audience
+		// polls (updateSubscribers / UpdateChatters) that used to populate
+		// channelID as a side effect no longer run, so it's still "" here.
+		// Resolve it via the gateway's /v1/users/{login} so EventSub gets a
+		// BroadcasterUserID. Non-fatal — falls through to the skip below on error.
+		if id, err := t.gateway.UserID(ctx, c.Conf.ChannelName); err != nil {
+			slog.ErrorContext(ctx, "eventsub: resolving channel id via gateway failed", "err", err)
+		} else {
+			mytwitch.SetChannelID(id)
+		}
 	}
 	if mytwitch.ChannelID() == "" {
 		// getChannelID is lazy on first call; calling GetSubscribers /
@@ -577,10 +641,10 @@ func (t *Tripbot) setUpTwitchClient() {
 	t.irc = t.app.ConnectIRC()
 }
 
-// updateSubscribers gets the list of current subscribers
+// updateSubscribers gets the list of current subscribers (gateway-or-in-process
+// per the runtime flag — see refreshSubscribers).
 func (t *Tripbot) updateSubscribers() {
-	// update subscribers list
-	mytwitch.GetSubscribers(context.Background())
+	t.refreshSubscribers(context.Background())
 }
 
 // getCurrentUsers gets the users watching the stream
@@ -695,8 +759,8 @@ func (t *Tripbot) scheduleBackgroundJobs() {
 	t.addJob(62*time.Second, "users.UpdateLeaderboard", t.sessions.UpdateLeaderboard)
 	t.addJob(5*time.Minute, "chatbot.ShowRotatingLeaderboard", t.app.ShowRotatingLeaderboard)
 	t.addJob(5*time.Minute, "users.PrintCurrentSession", t.sessions.PrintCurrentSession)
-	t.addJob(5*time.Minute, "twitch.GetSubscribers", mytwitch.GetSubscribers)
-	t.addJob(5*time.Minute, "twitch.GetFollowerCount", mytwitch.GetFollowerCount)
+	t.addJob(5*time.Minute, "twitch.GetSubscribers", t.refreshSubscribers)
+	t.addJob(5*time.Minute, "twitch.GetFollowerCount", t.refreshFollowerCount)
 	t.addJob(1*time.Hour, "twitch.RefreshUserAccessToken", func(ctx context.Context) {
 		mytwitch.RefreshUserAccessToken(ctx)
 		// Keep the IRC client's stored token in sync with the rotated credentials.
