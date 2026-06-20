@@ -73,6 +73,23 @@ repos:
         language: system
         types: [go]
 
+  # Markdown linting — mirrors super-linter's MARKDOWN pass, reading the same
+  # .github/linters/.markdown-lint.yml config so the two agree, and catching
+  # markdown issues locally before CI. The towncrier Jinja template is named
+  # .md (towncrier picks its markup from the extension) but isn't valid
+  # markdown, so it's excluded here exactly as in super-linter.
+  # language_version pins an LTS node via nodeenv rather than using whatever
+  # node happens to be on the host/runner — markdownlint-cli's dev deps carry
+  # a strict `engines` range that a too-new (or too-old) system node fails to
+  # satisfy during `npm install`, which would make the hook non-deterministic.
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.49.0
+    hooks:
+      - id: markdownlint
+        language_version: lts
+        args: [--config, .github/linters/.markdown-lint.yml]
+        exclude: '^\.github/towncrier-template\.md$'
+
   # Python: ruff handles both lint and format. Matches super-linter's
   # PYTHON_RUFF + PYTHON_RUFF_FORMAT (PYTHON_BLACK is disabled there to
   # avoid the dueling-formatter problem).
