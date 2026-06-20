@@ -123,6 +123,37 @@ func TestIsLive_ErrorsOnNon200(t *testing.T) {
 	}
 }
 
+func TestUserID(t *testing.T) {
+	var gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		_, _ = w.Write([]byte(`{"id":"12345","login":"adanalife_","display_name":"ADanaLife_"}`))
+	}))
+	defer srv.Close()
+
+	id, err := New(srv.URL).UserID(context.Background(), "adanalife_")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if id != "12345" {
+		t.Errorf("id = %q, want 12345", id)
+	}
+	if gotPath != "/v1/users/adanalife_" {
+		t.Errorf("request path = %q, want /v1/users/adanalife_", gotPath)
+	}
+}
+
+func TestUserID_ErrorsOnEmptyID(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"id":"","login":"ghost"}`))
+	}))
+	defer srv.Close()
+
+	if _, err := New(srv.URL).UserID(context.Background(), "ghost"); err == nil {
+		t.Error("expected an error on empty id")
+	}
+}
+
 func TestSendChat(t *testing.T) {
 	var gotBody struct{ Identity, Text string }
 	var gotMethod, gotPath string

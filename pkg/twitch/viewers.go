@@ -15,6 +15,15 @@ func (cl *API) ChannelID() string {
 	return cl.channelID
 }
 
+// SetChannelID seeds the cached channel ID from out-of-band (the
+// platform-gateway's /v1/users/{login}) instead of an in-process getChannelID
+// lookup. Needed when Helix calls route through the gateway — the in-process
+// audience polls that used to populate channelID as a side effect no longer
+// run, so EventSub setup would otherwise see "".
+func (cl *API) SetChannelID(id string) {
+	cl.channelID = id
+}
+
 // ChatterCount returns the number of chatters as reported by Twitch.
 func (cl *API) ChatterCount() int {
 	return cl.chatterCount
