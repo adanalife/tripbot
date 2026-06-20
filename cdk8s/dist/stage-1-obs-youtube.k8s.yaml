@@ -10,8 +10,8 @@ metadata:
   namespace: stage-1
 data:
   DASHCAM_RTSP_URL: rtsp://vlc-youtube:8554/dashcam
-  OBS_QUALITY_PRESET: low
-  OBS_STREAM_ENCODER: obs_x264
+  OBS_QUALITY_PRESET: high
+  OBS_STREAM_ENCODER: ffmpeg_vaapi_tex
   OBS_WEBSOCKET_PASSWD: adanalife
   ONSCREENS_URL_BASE: http://onscreens-youtube:8080
   STREAM_PLATFORM: youtube
@@ -54,23 +54,13 @@ spec:
   template:
     metadata:
       annotations:
-        adanalife.dev/config-hash: 54bf302110
+        adanalife.dev/config-hash: 1aa871d64c
       labels:
         app: obs-youtube
         app.kubernetes.io/instance: obs-youtube
         app.kubernetes.io/name: obs
         app.kubernetes.io/part-of: tripbot
     spec:
-      affinity:
-        nodeAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-            - preference:
-                matchExpressions:
-                  - key: dana.lol/board
-                    operator: In
-                    values:
-                      - rpi5
-              weight: 100
       containers:
         - envFrom:
             - configMapRef:
@@ -100,9 +90,11 @@ spec:
               name: obs-server
           resources:
             limits:
+              gpu.intel.com/i915: "1"
               memory: 3Gi
             requests:
               cpu: 200m
+              gpu.intel.com/i915: "1"
               memory: 512Mi
           securityContext:
             allowPrivilegeEscalation: false
@@ -112,10 +104,6 @@ spec:
       securityContext:
         seccompProfile:
           type: RuntimeDefault
-      tolerations:
-        - effect: NoSchedule
-          key: dana.lol/rpi5
-          operator: Exists
 ---
 apiVersion: v1
 kind: Service
