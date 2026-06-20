@@ -206,10 +206,23 @@ def _prefers_rpi5(spec: dict) -> bool:
     return tolerates and biases
 
 
-def test_stage_software_obs_prefers_rpi5():
-    """Stage obs-youtube is a software x264 encoder (no iGPU claim), so it joins
-    the ephemeral rpi5 worker — offloading the encode off the MS-01."""
-    assert _prefers_rpi5(_pod_spec("stage-1-obs-youtube"))
+def test_stage_stateless_apps_prefer_rpi5():
+    """Stage's lightweight stateless app pods (vlc/onscreens/tripbot-youtube)
+    opt into the ephemeral rpi5 worker — they tolerate the taint and bias toward
+    the board label, recovering onto the MS-01 when the Pi is gone."""
+    for stem in (
+        "stage-1-vlc-youtube",
+        "stage-1-onscreens-youtube",
+        "stage-1-tripbot-youtube",
+    ):
+        assert _prefers_rpi5(_pod_spec(stem)), stem
+
+
+def test_stage_vaapi_obs_stays_on_msi():
+    """Stage obs-youtube is a VAAPI encoder (holds the i915 claim), so it must
+    NOT bias toward the Pi (no H.264 hw encoder there) — the resource claim
+    hard-gates it onto the MS-01 and the rpi5 affinity drops out together."""
+    assert not _prefers_rpi5(_pod_spec("stage-1-obs-youtube"))
 
 
 def test_prod_vaapi_obs_stays_on_msi():
