@@ -7,6 +7,10 @@ All notable changes to TripBot. Format follows [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+### CI / Tooling
+
+- **Back-merge PR title shows the correct release version.** `backmerge.yml` read the version via `git describe`, which races `auto-tag.yml` on the same master push and labeled the back-merge PR with the *previous* release (e.g. v3.6.0 right after v3.7.0 shipped); it now reads the just-released version from the CHANGELOG, which is race-free. ([#919])
+
 ## [v3.7.0] — 2026-06-19
 
 Minor release. Lands the groundwork for routing the Twitch bot's command-time Helix calls through the standalone platform-gateway (staged on stage-1, off by default), credits the triggering viewer on the timewarp overlay, adds a console-facing feature-flag API, and automates the develop↔master release flow. Plus fixes to vlc-server resume-on-restart, the auth-bootstrap retry path, and the `:develop` image-rebuild filter for migrations.
@@ -1763,3 +1767,4 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#909]: https://github.com/adanalife/tripbot/pull/909
 [#911]: https://github.com/adanalife/tripbot/pull/911
 [#913]: https://github.com/adanalife/tripbot/pull/913
+[#919]: https://github.com/adanalife/tripbot/pull/919
