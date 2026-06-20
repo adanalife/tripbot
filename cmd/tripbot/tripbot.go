@@ -258,6 +258,17 @@ func (t *Tripbot) Run() {
 // boot, the pod stays Ready (the auth-links landing page + /auth/init?account=youtube
 // remain reachable for re-auth) and retries until the token lands.
 func (t *Tripbot) connectToYouTube(ctx context.Context) {
+	// Gateway path: when wired with YOUTUBE_API_URL, both chat directions flow
+	// through gateway-youtube and tripbot holds no YouTube token — there's no
+	// oauth_tokens row to wait on, so skip the token-retry loop entirely.
+	if c.Conf.YouTubeAPIURL != "" {
+		t.app.ConnectYouTubeViaGateway()
+		go t.app.NewGatewayYouTubeChatPoller().Run(ctx)
+		slog.InfoContext(ctx, "youtube chat via gateway (inbound + outbound)", "gateway", c.Conf.YouTubeAPIURL)
+		<-ctx.Done()
+		return
+	}
+
 	const retry = 15 * time.Second
 	binding, err := t.app.ConnectYouTube(ctx)
 	for err != nil {
