@@ -1,0 +1,1 @@
+**The standing pending-release PR previews the assembled release notes via towncrier.** Its body now renders `towncrier build --draft` from the queued `changelog.d/` fragments, and bases the suggested-version-bump hint on the fragment types as well as commit prefixes — replacing the old scrape of the `[Unreleased]` changelog section.
