@@ -2,15 +2,12 @@ package chatbot
 
 import (
 	"context"
-	"encoding/json"
 	"log/slog"
-	"net/http"
-	"net/url"
-	"strings"
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/feature"
+	"github.com/adanalife/tripbot/pkg/gateway"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 )
 
@@ -75,49 +72,27 @@ func (realTwitch) FollowedAt(username string) (time.Time, bool) {
 }
 
 // gatewayTwitch is the HTTP adapter — it reaches the platform-gateway
-// gateway-twitch instance instead of calling Helix in-process. It satisfies the
-// same Twitch interface, so command code is untouched (the payoff of the
-// #738/#739 injection seam).
+// gateway-twitch instance (via the shared pkg/gateway client) instead of
+// calling Helix in-process. It satisfies the same Twitch interface, so command
+// code is untouched (the payoff of the #738/#739 injection seam).
 type gatewayTwitch struct {
-	baseURL string
-	client  *http.Client
+	client *gateway.Client
 }
 
 func newGatewayTwitch(baseURL string) gatewayTwitch {
-	return gatewayTwitch{
-		baseURL: strings.TrimRight(baseURL, "/"),
-		client:  &http.Client{Timeout: 5 * time.Second},
-	}
+	return gatewayTwitch{client: gateway.New(baseURL)}
 }
 
-// FollowedAt asks the gateway when username followed the channel
-// (GET /v1/followed-at/{login}). It fails closed (ok=false) on any transport,
-// decode, or non-2xx error — matching the in-process adapter, so gateway
-// trouble degrades a follow check rather than blocking the command. A 404 is
-// the gateway's "not a follower" answer and is expected, not logged.
+// FollowedAt asks the gateway when username followed the channel. It fails
+// closed (ok=false) on any transport, decode, or non-2xx error — matching the
+// in-process adapter, so gateway trouble degrades a follow check rather than
+// blocking the command. The gateway's "not a follower" answer (a clean 404)
+// comes back as ok=false with no error and is not logged.
 func (g gatewayTwitch) FollowedAt(username string) (time.Time, bool) {
-	endpoint := g.baseURL + "/v1/followed-at/" + url.PathEscape(username)
-	resp, err := g.client.Get(endpoint)
+	when, ok, err := g.client.FollowedAt(context.Background(), username)
 	if err != nil {
-		slog.Warn("gateway FollowedAt request failed", "username", username, "err", err)
+		slog.Warn("gateway FollowedAt failed", "username", username, "err", err)
 		return time.Time{}, false
 	}
-	defer resp.Body.Close()
-
-	switch resp.StatusCode {
-	case http.StatusOK:
-		var body struct {
-			FollowedAt time.Time `json:"followed_at"`
-		}
-		if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
-			slog.Warn("gateway FollowedAt decode failed", "username", username, "err", err)
-			return time.Time{}, false
-		}
-		return body.FollowedAt, true
-	case http.StatusNotFound:
-		return time.Time{}, false // not a follower — expected
-	default:
-		slog.Warn("gateway FollowedAt non-2xx", "username", username, "status", resp.StatusCode)
-		return time.Time{}, false
-	}
+	return when, ok
 }

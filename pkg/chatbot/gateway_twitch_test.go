@@ -75,12 +75,6 @@ func TestGatewayTwitch_FollowedAt_TransportError(t *testing.T) {
 	}
 }
 
-func TestNewGatewayTwitch_TrimsTrailingSlash(t *testing.T) {
-	if got := newGatewayTwitch("http://gateway-twitch:8080/").baseURL; got != "http://gateway-twitch:8080" {
-		t.Errorf("baseURL = %q, want trailing slash trimmed", got)
-	}
-}
-
 func TestFlaggedTwitch_DispatchesOnFlag(t *testing.T) {
 	gw := &recordingTwitch{Result: time.Unix(100, 0), OK: true}
 	inproc := &recordingTwitch{Result: time.Unix(200, 0), OK: true}
