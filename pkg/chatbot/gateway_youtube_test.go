@@ -8,24 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/adanalife/tripbot/pkg/feature"
+	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/gateway"
 )
-
-// recordingYouTubeSend records send calls so the flag-dispatch test can assert
-// which path a send took.
-type recordingYouTubeSend struct {
-	calls  int
-	chatID string
-	text   string
-}
-
-func (r *recordingYouTubeSend) send(_ context.Context, chatID, text string) error {
-	r.calls++
-	r.chatID = chatID
-	r.text = text
-	return nil
-}
 
 func TestGatewayYouTubeSend_PostsToChat(t *testing.T) {
 	var gotPath, gotBody string
@@ -66,38 +51,25 @@ func TestGatewayYouTubeSend_ErrorsOnNon2xx(t *testing.T) {
 	}
 }
 
-func TestFlaggedYouTubeSend_DispatchesOnFlag(t *testing.T) {
-	gw := &recordingYouTubeSend{}
-	inproc := &recordingYouTubeSend{}
+func TestNewYouTubeSend_NoURLUsesInProcess(t *testing.T) {
+	// With no YOUTUBE_API_URL there's no gateway to reach — fall back to the
+	// in-process insert.
+	prev := c.Conf.YouTubeAPIURL
+	c.Conf.YouTubeAPIURL = ""
+	defer func() { c.Conf.YouTubeAPIURL = prev }()
 
-	flagOn := feature.NewInMemoryClient(map[string]feature.Flag{
-		YouTubeGatewayFlagKey: {Key: YouTubeGatewayFlagKey, Enabled: true},
-	})
-	flagOff := feature.NewInMemoryClient(nil) // unknown key → off
-
-	// flag on → gateway
-	on := flaggedYouTubeSend{app: &App{Flags: flagOn}, gateway: gw, inproc: inproc}
-	if err := on.send(context.Background(), "c1", "hi"); err != nil {
-		t.Fatal(err)
-	}
-	if gw.calls != 1 || inproc.calls != 0 {
-		t.Errorf("flag on should route to the gateway; gw=%d inproc=%d", gw.calls, inproc.calls)
-	}
-
-	// flag off → in-process (the default until toggled)
-	off := flaggedYouTubeSend{app: &App{Flags: flagOff}, gateway: gw, inproc: inproc}
-	if err := off.send(context.Background(), "c1", "hi"); err != nil {
-		t.Fatal(err)
-	}
-	if inproc.calls != 1 {
-		t.Errorf("flag off should route in-process; inproc=%d", inproc.calls)
+	if _, ok := newYouTubeSend().(realYouTubeSend); !ok {
+		t.Error("expected realYouTubeSend when YOUTUBE_API_URL is empty")
 	}
 }
 
-func TestNewYouTubeSend_NoURLSkipsGatewayWrapper(t *testing.T) {
-	// With no YOUTUBE_API_URL there's nothing to flag — it's the plain in-process
-	// adapter, not a flaggedYouTubeSend wrapper.
-	if _, ok := newYouTubeSend(&App{}).(realYouTubeSend); !ok {
-		t.Error("expected realYouTubeSend when YOUTUBE_API_URL is empty")
+func TestNewYouTubeSend_WithURLUsesGateway(t *testing.T) {
+	// A wired instance routes through the gateway unconditionally — no flag.
+	prev := c.Conf.YouTubeAPIURL
+	c.Conf.YouTubeAPIURL = "http://gateway-youtube:8080"
+	defer func() { c.Conf.YouTubeAPIURL = prev }()
+
+	if _, ok := newYouTubeSend().(gatewayYouTubeSend); !ok {
+		t.Error("expected gatewayYouTubeSend when YOUTUBE_API_URL is set")
 	}
 }
