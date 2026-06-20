@@ -24,7 +24,7 @@ jobs:
   synth:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       # Toolchain via mise (cdk8s/.mise.toml pins python / node / cdk8s-cli).
       - uses: jdx/mise-action@v4

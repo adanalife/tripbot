@@ -16,7 +16,7 @@ VERSIONS = Path(__file__).resolve().parents[1] / "versions.yaml"
 # (env, platform) the app charts are synthed for. Mirrors config.ENVS platforms.
 ENV_PLATFORMS = {
     "prod-1": ("twitch",),
-    "stage-1": ("youtube",),
+    "stage-1": ("youtube", "twitch"),
     "development": ("twitch",),
     "local": ("twitch",),
 }
@@ -47,6 +47,27 @@ def test_each_component_has_deployment_and_service(env, comp, platform):
     kinds = {o["kind"] for o in objs}
     assert "Deployment" in kinds, f"{env}-{comp}-{platform} missing Deployment"
     assert "Service" in kinds, f"{env}-{comp}-{platform} missing Service"
+
+
+def test_prod_vlc_rtsp_nodeport():
+    """prod vlc-twitch emits a fixed RTSP NodePort so a LAN box (OBS on a desktop)
+    can pull rtsp://<node-ip>:30854/dashcam without kubectl. The minipc has no
+    LoadBalancer controller, so it's a NodePort not an LB. Pinned at 30854."""
+    svcs = _by_kind(_objects("prod-1-vlc-twitch"), "Service")
+    np = next((s for s in svcs if s["metadata"]["name"] == "vlc-twitch-rtsp"), None)
+    assert np is not None, "prod vlc-twitch missing the vlc-twitch-rtsp NodePort"
+    assert np["spec"]["type"] == "NodePort"
+    [port] = np["spec"]["ports"]
+    assert port["nodePort"] == 30854
+    assert port["port"] == 8554 and port["targetPort"] == "rtsp"
+
+
+@pytest.mark.parametrize("stem", ["stage-1-vlc-youtube", "development-vlc-twitch"])
+def test_non_prod_has_no_rtsp_nodeport(stem):
+    """The RTSP NodePort is prod-only — stage/dev don't set vlc_rtsp_node_port (a
+    pinned NodePort can't be claimed twice on the co-tenant minipc node)."""
+    svcs = _by_kind(_objects(stem), "Service")
+    assert not any(s["spec"].get("type") == "NodePort" for s in svcs)
 
 
 @pytest.mark.parametrize("env,platform", [("prod-1", "twitch"), ("stage-1", "youtube")])
@@ -110,6 +131,47 @@ def test_youtube_tripbot_emits_youtube_creds():
     assert "tripbot-youtube-creds" in es_names
 
 
+def test_stage_omits_replicas_prod_keeps_one():
+    """Stage app Deployments omit spec.replicas so a hand/console scale is
+    authoritative (manual_replicas); prod keeps replicas:1 so Argo holds it."""
+
+    def _deploy(stem):
+        return _by_kind(_objects(stem), "Deployment")[0]
+
+    for stem in ("stage-1-tripbot-twitch", "stage-1-tripbot-youtube"):
+        assert "replicas" not in _deploy(stem)["spec"], f"{stem} should omit replicas"
+    assert _deploy("prod-1-tripbot-twitch")["spec"]["replicas"] == 1
+
+
+def test_stage_twitch_routes_through_gateway():
+    """Stage tripbot-twitch carries TWITCH_API_URL (Phase 3 gateway); the youtube
+    instance and prod tripbot do not."""
+
+    def _cm_data(stem):
+        return _by_kind(_objects(stem), "ConfigMap")[0]["data"]
+
+    assert (
+        _cm_data("stage-1-tripbot-twitch").get("TWITCH_API_URL")
+        == "http://gateway-twitch.stage-1.svc.cluster.local:8080"
+    )
+    assert "TWITCH_API_URL" not in _cm_data("stage-1-tripbot-youtube")
+    assert "TWITCH_API_URL" not in _cm_data("prod-1-tripbot-twitch")
+
+
+def test_stage_youtube_routes_sends_through_gateway():
+    """Stage tripbot-youtube carries YOUTUBE_API_URL (outbound send via the
+    gateway); the twitch instance does not."""
+
+    def _cm_data(stem):
+        return _by_kind(_objects(stem), "ConfigMap")[0]["data"]
+
+    assert (
+        _cm_data("stage-1-tripbot-youtube").get("YOUTUBE_API_URL")
+        == "http://gateway-youtube.stage-1.svc.cluster.local:8080"
+    )
+    assert "YOUTUBE_API_URL" not in _cm_data("stage-1-tripbot-twitch")
+
+
 # Which (env, platform) OBS instances actually stream — must mirror
 # config.EnvConfig.obs_streaming. A streaming instance emits its stream-key
 # ExternalSecret; an idle one does not (and boots without the key).
@@ -158,10 +220,54 @@ def _prefers_rpi5(spec: dict) -> bool:
     return tolerates and biases
 
 
-def test_stage_software_obs_prefers_rpi5():
-    """Stage obs-youtube is a software x264 encoder (no iGPU claim), so it joins
-    the ephemeral rpi5 worker — offloading the encode off the MS-01."""
-    assert _prefers_rpi5(_pod_spec("stage-1-obs-youtube"))
+def _colocates_with_obs(spec: dict, obs_app: str) -> bool:
+    """True iff the pod prefers (podAffinity) the node running `obs_app`."""
+    prefs = (
+        spec.get("affinity", {})
+        .get("podAffinity", {})
+        .get("preferredDuringSchedulingIgnoredDuringExecution", [])
+    )
+    return any(
+        term.get("podAffinityTerm", {}).get("topologyKey") == "kubernetes.io/hostname"
+        and term.get("podAffinityTerm", {})
+        .get("labelSelector", {})
+        .get("matchLabels", {})
+        .get("app")
+        == obs_app
+        for term in prefs
+    )
+
+
+def test_stage_tripbot_prefers_rpi5():
+    """tripbot-youtube is control-plane (chat/EventSub), not a realtime OBS feeder,
+    so it keeps the independent rpi5 node-preference — tolerate the taint and bias
+    toward the board label, recovering onto the MS-01 when the Pi is gone."""
+    assert _prefers_rpi5(_pod_spec("stage-1-tripbot-youtube"))
+
+
+def test_stage_obs_feeders_colocate_with_obs():
+    """vlc + onscreens feed OBS continuously (RTSP / browser-source) and must reach
+    it on localhost, not across the LAN. They anchor to their platform's OBS pod
+    via podAffinity instead of pulling toward the Pi on their own — keeping the
+    rpi5 toleration so they can follow OBS onto the Pi, but NOT the board
+    node-affinity that previously split the pipeline when OBS spilled to the MS-01
+    (the 2026-06-19 stage obs-youtube stutter)."""
+    for stem in ("stage-1-vlc-youtube", "stage-1-onscreens-youtube"):
+        spec = _pod_spec(stem)
+        assert _colocates_with_obs(spec, "obs-youtube"), stem
+        # follows OBS onto the Pi if OBS lands there ...
+        assert any(
+            t.get("key") == "dana.lol/rpi5" for t in spec.get("tolerations", [])
+        ), stem
+        # ... but no longer carries an independent rpi5 board pull.
+        assert not _prefers_rpi5(spec), stem
+
+
+def test_stage_vaapi_obs_stays_on_msi():
+    """Stage obs-youtube is a VAAPI encoder (holds the i915 claim), so it must
+    NOT bias toward the Pi (no H.264 hw encoder there) — the resource claim
+    hard-gates it onto the MS-01 and the rpi5 affinity drops out together."""
+    assert not _prefers_rpi5(_pod_spec("stage-1-obs-youtube"))
 
 
 def test_prod_vaapi_obs_stays_on_msi():

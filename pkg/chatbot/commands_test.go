@@ -438,6 +438,73 @@ func TestKilometresCmd_ZeroMiles(t *testing.T) {
 	}
 }
 
+func TestKilometresCmd_OtherUser_Found(t *testing.T) {
+	app := newTestApp(video.Video{})
+
+	// Stage Sessions.Find to return a known user, plus the miles the seam
+	// reports for them (the GetScore math is covered in pkg/users).
+	rec := &recordingSessions{
+		FindResult: users.User{ID: 42, Username: "viewer1", Miles: 10.0},
+		Miles:      10.0,
+	}
+	app.Sessions = rec
+
+	out := captureSay(t, app)
+
+	app.kilometresCmd(context.Background(), newTestUser("caller"), []string{"viewer1"})
+
+	msg := out()
+	// the target's km, not the caller's: 10 miles * 1.609344 = "16.09"
+	if !strings.Contains(msg, "@viewer1 has 16.09 kilometres") {
+		t.Errorf("expected target user's km, got %q", msg)
+	}
+	// other-user path looks the user up via Sessions.Find, then reads their miles
+	want := []string{`Find("viewer1")`, `CurrentMiles("viewer1")`}
+	if !slices.Equal(rec.Calls, want) {
+		t.Errorf("expected %v, got %v", want, rec.Calls)
+	}
+}
+
+func TestKilometresCmd_OtherUser_NotInDB(t *testing.T) {
+	app := newTestApp(video.Video{})
+
+	// recordingSessions.FindResult defaults to users.User{} (ID == 0),
+	// which mirrors pkg/users.Find's "not found" contract.
+	rec := &recordingSessions{}
+	app.Sessions = rec
+
+	out := captureSay(t, app)
+
+	app.kilometresCmd(context.Background(), newTestUser("caller"), []string{"ghost"})
+
+	if !strings.Contains(out(), "I don't know them") {
+		t.Errorf("expected unknown-user message, got %q", out())
+	}
+	if len(rec.Calls) != 1 || rec.Calls[0] != `Find("ghost")` {
+		t.Errorf("expected Sessions.Find(\"ghost\") call, got %v", rec.Calls)
+	}
+}
+
+func TestKilometresCmd_OtherUser_StripsAtSign(t *testing.T) {
+	app := newTestApp(video.Video{})
+
+	// FindResult defaults to User{} (ID == 0) — the "@ghost" arg should be
+	// normalized to "ghost" before the Find call.
+	rec := &recordingSessions{}
+	app.Sessions = rec
+
+	out := captureSay(t, app)
+
+	app.kilometresCmd(context.Background(), newTestUser("caller"), []string{"@ghost"})
+
+	if !strings.Contains(out(), "I don't know them") {
+		t.Errorf("expected unknown-user message, got %q", out())
+	}
+	if len(rec.Calls) != 1 || rec.Calls[0] != `Find("ghost")` {
+		t.Errorf("expected Sessions.Find(\"ghost\") with @ stripped, got %v", rec.Calls)
+	}
+}
+
 // --- versionCmd ---
 
 func TestVersionCmd_UsesCachedVersion(t *testing.T) {
@@ -730,6 +797,8 @@ func TestGuessCmd_CorrectGuess_DrivesOverlayAndPlayback(t *testing.T) {
 	recVLC := &recordingVLC{}
 	app.Onscreens = recOverlay
 	app.VLC = recVLC
+	// Credit flag on → the guesser's username rides the timewarp overlay call.
+	app.Flags = &recordingFlags{Set: map[string]bool{timewarpCreditFlagKey: true}}
 
 	// Two AddToScore calls — lifetime ("guess_state_total") + monthly.
 	expectAddToScoreChain(mock)
@@ -744,8 +813,9 @@ func TestGuessCmd_CorrectGuess_DrivesOverlayAndPlayback(t *testing.T) {
 		t.Errorf("expected correct-guess chat message, got %q", msg)
 	}
 
-	// Overlay sequence: ShowFlag (state flag) then ShowTimewarp (from a.timewarp()).
-	wantOverlay := []string{"ShowFlag(10s)", "ShowTimewarp()"}
+	// Overlay sequence: ShowFlag (state flag) then ShowTimewarp (from
+	// a.timewarp()), crediting the guesser.
+	wantOverlay := []string{"ShowFlag(10s)", `ShowTimewarp("viewer1")`}
 	if len(recOverlay.Calls) != len(wantOverlay) {
 		t.Fatalf("expected %d overlay calls, got %d: %v", len(wantOverlay), len(recOverlay.Calls), recOverlay.Calls)
 	}

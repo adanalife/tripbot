@@ -7,9 +7,143 @@ All notable changes to TripBot. Format follows [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+## [v3.8.0] — 2026-06-20
+
+Minor release. Completes phase 3b of the platform-gateway migration: with the `chatbot.twitch_gateway` flag on, every in-process Helix caller — OBS watchdog live-check, broadcaster chat-send, cached audience refresh, and EventSub channel-ID resolution — now routes through the standalone gateway, making it the single Helix caller (the prerequisite for moving the Twitch token out of tripbot). Adds the YouTube outbound-chat-send analog behind its own flag, plus cross-service trace propagation from the gateway client. Rounds out with a `!km <username>` fix and two stage streaming-pipeline fixes: re-enabling VAAPI iGPU encode for obs-youtube and co-locating the vlc/onscreens feeders with their OBS pod to stop cross-node stutter.
+
+### Platform gateway
+
+- **The gateway is the single Helix caller when `chatbot.twitch_gateway` is on.** Phase 3b routed the remaining in-process Helix callers through the standalone platform-gateway: the OBS watchdog live-check and the broadcaster chat-send, via a new shared `pkg/gateway` client ([#920]); and the cached audience refresh — the subscriber/follower-count pollers, chatter refresh, and the live follower check ([#921]). The hot path stays a local cache read (only the *refresh* is repointed at the gateway), and the in-process paths remain as the flag-off fallback. ([#920], [#921])
+- **EventSub keeps its `ChannelID` under the gateway.** `channelID` was only ever populated as a side effect of an in-process Helix call; once 3b routed those through the gateway, it stayed empty and EventSub was silently skipped — no new-follower / new-subscriber announcements. `startEventSub` now resolves the channel ID via the gateway when the flag is on, falling through to the existing skip-with-warning on error. ([#922])
+- **YouTube outbound chat-send can route through `gateway-youtube`.** The YouTube analog of the Twitch cutover — `tripbot-youtube`'s send dispatches through the gateway behind a two-layer gate (`YOUTUBE_API_URL` wired + the `chatbot.youtube_gateway` flag), defaulting off with in-process failover. The inbound chat poll stays in-process. Migration 023 seeds the disabled flag. ([#925])
+- **Cross-service trace propagation from the gateway client.** The gateway HTTP client's transport is wrapped with `otelhttp`, so it starts a client span and injects the W3C `traceparent` header; the gateway nests its server span under tripbot's, so a chat command and the Helix call it triggers form one cross-service trace. Inert when tracing is disabled. ([#924])
+
+### Onscreens
+
+- **Rotator overlays no longer go blank in OBS after their first rotation.** The left/right rotators centered text with `position:absolute` + `transform`, promoting it to its own compositing layer that OBS's offscreen renderer (CEF OSR) captured once but failed to repaint on later rotations. Switched to the same normal-flow, `margin-left`-offset centering middle-text uses, so OSR repaints it correctly. (Surfaced when #885 moved the rotators to `innerHTML` swaps on the composited layer.) ([#916])
+
+### Fixes
+
+- **`!km <username>` shows the named user's kilometres.** It previously ignored its argument and always reported the *caller's* km; it now mirrors `!miles`'s other-user lookup — strips a leading `@`, looks the user up via `Sessions.Find`, and reports their distance (same "I don't know them, sorry!" fallback). With no arg it still falls back to the caller. ([#889])
+
+### Deploy / Infra
+
+- **VAAPI iGPU encode re-enabled for the stage YouTube stream.** stage-1 `obs-youtube` moves back onto the MS-01's Iris Xe (`ffmpeg_vaapi_tex`, quality `high`) via the `gpu.intel.com/i915` claim instead of saturating the rpi5 with software x264. Concurrent VAAPI encoders are back to 2 (prod obs-twitch + stage obs-youtube), within the budget that only stuttered at 3. ([#923])
+- **Stage vlc/onscreens feeders co-locate with their OBS pod.** Their independent rpi5 node-affinity is replaced with a preferred `podAffinity` anchoring them to their platform's OBS pod, so the continuous video feed + overlays stay on localhost instead of crossing the WiFi link to reach OBS — the cause of choppy stage `obs-youtube`. Scoped to stage; prod and local unchanged. ([#926])
+
+### CI / Tooling
+
+- **Back-merge PR title shows the correct release version.** `backmerge.yml` read the version via `git describe`, which races `auto-tag.yml` on the same master push and labeled the back-merge PR with the *previous* release (e.g. v3.6.0 right after v3.7.0 shipped); it now reads the just-released version from the CHANGELOG, which is race-free. ([#919])
+
+## [v3.7.0] — 2026-06-19
+
+Minor release. Lands the groundwork for routing the Twitch bot's command-time Helix calls through the standalone platform-gateway (staged on stage-1, off by default), credits the triggering viewer on the timewarp overlay, adds a console-facing feature-flag API, and automates the develop↔master release flow. Plus fixes to vlc-server resume-on-restart, the auth-bootstrap retry path, and the `:develop` image-rebuild filter for migrations.
+
+### Onscreens
+
+- **The triggering viewer is credited on the timewarp overlay.** When a viewer runs `!timewarp` or guesses the state correctly with `!guess`, their username now appears as a credit line (e.g. `@viewer`) under the **TIMEWARP** wordmark on the full-screen warp overlay, carried end-to-end over the existing onscreens NATS command surface. ([#888])
+
+### Console / API
+
+- **`GET /api/flags` + `POST /api/flags/{key}`** give the standalone console a read/toggle surface over tripbot's feature flags (the console has no DB access, so it proxies). `GET` returns each flag's key/description/enabled state and targeting; `POST {"enabled": bool}` flips the global default via `feature.FlagToggler`. The flag client is injected into `Server` before the HTTP server starts; if Postgres is unavailable `GET` reports `ok:false` and `POST` returns 503. ([#903])
+
+### Platform gateway
+
+- **The chatbot's Twitch Helix surface can route through the platform-gateway.** `App.Twitch` picks its adapter by config — `TWITCH_API_URL` set → an HTTP client against the `gateway-twitch` service; empty → the in-process `pkg/twitch` path (the zero-config default, so existing envs are unchanged). No command code changed, cashing in the `App.Twitch` injection seam. ([#904])
+- **`chatbot.twitch_gateway` feature flag seeded (disabled).** Migration `021` creates the runtime kill-switch row for the gateway routing so it's toggleable from the console (`feature.SetEnabled` only UPDATEs, so the row had to exist first). ([#906])
+- **Stage twitch stack re-enabled behind the gateway, manually scaled.** `stage-1` adds `twitch` to its platforms and points `stage-1-tripbot-twitch` at `gateway-twitch` via `TWITCH_API_URL`; only the twitch instance gets it (youtube + prod stay in-process). A stage-only `manual_replicas` omits `spec.replicas` so Argo never resets a hand/console scale; prod keeps `replicas: 1`. ([#905], [#911])
+
+### Fixes
+
+- **vlc-server actually resumes its last-played clip on restart.** libvlc 3.0.x's `libvlc_media_list_player_play_item_at_index` reads the player's *existing* media before swapping in the requested one and returns `-1` when that prior media is nil — i.e. on the very first play against a freshly-created list player — even though playback actually starts. So the first startup play (resume-from-marker / resume-from-lastplayed) saw a spurious "cannot play the requested media", fell through to `PlayRandom`, and a restart almost never resumed where it left off. The media player is now primed with the first loaded clip at construction, so the first real play returns correctly and resume-on-restart lands on the right clip with the position seek following. ([#907])
+- **`auth-bootstrap` stays up for a retry when the wrong Twitch account signs in.** It used to `log.Fatalf` on an identity mismatch, killing the job pod and dropping the `kubectl port-forward` so the bootstrap chain moved on. It now keeps the listener (and port-forward) up, re-surfaces the authorize URL to re-auth in place, and only writes the token + exits 0 on a matching identity. Still bounded by `flowTimeout`. ([#892])
+
+### CI / Tooling
+
+- **Standing draft release PR.** A new `pending-release.yml` keeps one draft `develop → master` PR open showing the next release's diff, `[Unreleased]` changelog, queued commits, and a suggested version bump — so the bump decision is made against a real diff instead of up front. ([#909])
+- **Automated master → develop back-merge PR.** A new `backmerge.yml` opens/refreshes a standing PR merging master back into develop after each ship, so the two branches don't diverge (merge it with a merge commit, never squash). ([#913])
+- **The `:develop` tripbot image rebuilds on `db/migrate/**` changes.** Migrations are baked into the image and applied by its `migrate` initContainer, but the per-image path filter omitted `db/migrate/**`, so migration-only PRs silently never shipped (e.g. #906's flag seed). ([#908])
+- **Repaired orphaned `pkg/server` profile tests** left after the admin-panel removal. ([#902])
+- **Bumped `actions/checkout` from 6 to 7.** ([#901])
+
+## [v3.6.0] — 2026-06-19
+
+Minor release. Retires the in-tripbot admin panel now that the standalone tripbot-console has taken over, leaving tripbot with just the HTTP surface the console and operators still depend on. Also renders inline markdown on the text overlays (so `!command` refs show in monospace), fixes the events table being frozen at year-0001 timestamps, exposes the prod dashcam feed over an RTSP NodePort for off-cluster pulls, and moves stage's software-encoder OBS onto the Pi 5 worker.
+
 ### Cleanup
 
 - **Remove the in-tripbot admin panel in favor of tripbot-console.** Now that the standalone tripbot-console covers the admin dashboard, the in-process panel and its live-console SSE hub retire (`admin.go`, `hub.go`, `events.go`, the chat-send publisher form, `somafm.go`, `authcard.go`, and the vendored htmx/leaflet/sse assets). The HTTP surface the console and operators still need stays: `/auth/init` + `/auth/callback` (now fronted by a minimal landing page at `/` linking the bot/broadcaster/YouTube login flows), the read-only `/api/user`, `/api/chatters`, `/api/db/migration`, and `/admin/map/corpus` endpoints the console proxies over the in-namespace Service, plus `/version`, `/health`, and `/metrics`. The `chat.send` NATS subscriber stays in cmd/tripbot (the Twitch-identity owner), ready for the console to publish to once its chat-send feature lands. ([#886])
+
+### Onscreens
+
+- **Inline markdown on text overlays.** The text onscreens now render `` `code` ``, `**bold**`, and `*italic*` — the motivating case being monospace `!command` references on the middle-text overlay and the bottom-strip rotators. A dependency-free `renderInlineMarkdown` (stdlib only) converts a small marker subset at the `state.json` wire boundary, so the stored content (and the JetStream-persisted middle-text state) stays raw markdown and only the served copy is HTML; code spans win over emphasis so asterisks inside backticks stay literal. Enabled on `middle-text`, `left-message`, and `right-message`, with a monospace pill style for legibility over the dashcam video. ([#885])
+
+### Deploy
+
+- **Prod vlc RTSP exposed via a fixed NodePort (30854) for off-cluster pulls.** A LAN box — e.g. OBS on a desktop — can now pull the raw dashcam feed at `rtsp://<minipc-ip>:30854/dashcam` (use `rtsp_transport=tcp`) without kubectl or a port-forward, the NodePort analogue of the k3d-only `<name>-host` LoadBalancer convenience (the minipc has no LB controller). A new `vlc_rtsp_node_port` knob defaults to `0` (no NodePort) and is set only on `prod-1`'s `twitch` instance; VNC/HTTP stay in-cluster. Overlays are composited in OBS, so the off-cluster feed is raw video only. ([#896])
+- **Stage software-encoder OBS scheduled onto the rpi5 worker.** Stage `obs-youtube` already runs software x264 (no iGPU claim, the 2026-06-15 VAAPI-contention cap), so it now biases toward the ephemeral arm64 `adanalife-rpi5` worker via a toleration + preferred node affinity — offloading the x264 encode off the MS-01 and easing the recurring stream/pipeline CPU contention. Gated on `prefer_rpi5 and not (gpu and obs_gpu)`, so only a software-encoder OBS biases toward the Pi; the affinity stays preferred (never required) so OBS recovers onto the MS-01 if the Pi is unplugged. Prod VAAPI OBS is untouched. ([#884])
+
+### Fixes
+
+- **`date_created` is stamped on insert (events table was frozen at `0001-01-01`).** Since 2026-05-15, every `events` row (and `users`/`scoreboards`/`scores`/runtime-created `videos`) was written with a year-1 timestamp: the GORM migration (#499) replaced raw INSERTs that omitted `date_created` (letting the column default apply) with `Create(&struct{})`, and GORM writes the zero-value `time.Time` unless the field carries a `default`/`autoCreateTime` tag. This is why the events table looked frozen — rows inserted fine but date filters saw nothing recent (`SessionCount` has no date filter, so miles stayed healthy and masked it). The create-time columns now carry `gorm:"autoCreateTime"`, and the user-profile popover computes a best-effort first-seen from the earliest non-sentinel event for accounts caught in the bug window. Already-written `0001-01-01` rows are not back-filled (unrecoverable); new rows are correct from here forward. ([#887])
+
+## [v3.5.0] — 2026-06-15
+
+Minor release. Rounds out the per-platform YouTube stream: a public `!carsound` command to cycle a set of license-clean background-audio voicings, platform-scoped eventbus payloads so the two bot instances stop clobbering each other's now-playing/viewer state, and two new console-facing JSON endpoints. Also persists the middle-text overlay across restarts, labels the monthly leaderboard with the month name, fixes the corpus map drawing cross-country streaks, and shuffles GPU/scheduling on stage to relieve iGPU contention.
+
+### Chat
+
+- **`!carsound` (alias `!carhum`) — public, YouTube-only — cycles background-audio voicings.** Builds on the v3.4.0 Car Hum bed with four character presets (`idle`, `highway`, `backroad`, `mountain`), each rendered at build time to a seamless-looping FLAC (numpy/scipy live only in a throwaway Docker stage, so the runtime image stays small and boot stays network-free). No arg reports what's playing; `next` cycles, `<name>` jumps, `list` shows options. Repoints the OBS `Car Hum` source live over the WebSocket — no scene reload — and increments `tripbot_carsound_selections_total{sound=…}` so the most-played voicing is rankable. Also centralizes per-platform command scoping behind a `Command.Platforms` field instead of the implicit "unset == Twitch" assumption. ([#869])
+- **`!guesslb` registered as an alias for `!guessleaderboard`.** ([#865])
+
+### Onscreens
+
+- **Middle-text overlay survives an onscreens-server restart.** The text previously lived only in memory, so a restart blanked the OBS browser source. It's now backed by a `MaxMsgsPerSubject=1` JetStream last-value cache (`TRIPBOT_ONSCREENS_MIDDLE`), mirroring the vlc `lastplayed` pattern, and restored on startup. Degrades gracefully when NATS is unavailable. ([#861])
+- **Monthly-miles leaderboard overlay is labeled with the current month** (e.g. "June Miles") instead of a generic "Monthly Miles" header, via a new `scoreboards.CurrentMilesMonth()` sharing the board's `time.Now()` basis. Lifetime and guess boards untouched. ([#866])
+
+### Console / API
+
+- **`GET /api/chatters`** returns the logins currently in chat as sorted JSON (`{"chatters": […], "count": N}`), read from the in-process chatter set the `UpdateSession` cron already refreshes — no new scope, no request-time network call. Feeds the standalone tripbot-console's active-chatters panel. ([#868])
+- **`GET /api/db/migration`** reports the current golang-migrate schema version as JSON (`{"ok": true, "version": 20, "dirty": false}`) so the console (which holds no DB access) can surface which migration each env's Postgres is on. ([#867])
+
+### Eventbus
+
+- **`video.changed` and `viewers.count` payloads carry a `Platform` field.** With both `tripbot-twitch` and `tripbot-youtube` publishing to the same env-scoped subjects, the two instances were clobbering each other — the console's now-playing card, map trail, and viewer count flickered between platforms. Mirrors the existing `ChatMessage.Platform` treatment so the console can render per-platform state; `omitempty` keeps pre-upgrade events graceful. ([#871])
+
+### Deploy
+
+- **vlc dials its own platform's OBS.** `OBS_WEBSOCKET_ADDR` is now set to `obs-<platform>:4455` on every vlc instance, fixing `vlc-youtube` dialing the nonexistent `obs-twitch` (it had been falling back to the baked-in default). Twitch now carries the address explicitly too rather than leaning on the default. One-time `prod-1-vlc-twitch` rollout from the config-hash bump (value unchanged). ([#877])
+- **Config-driven OBS streaming toggle; stage YouTube turned on durably.** Replaces the hardcoded `env == prod-1 and platform == twitch` streaming special-case with a per-env `obs_streaming` config tuple, and makes `stage-1-obs-youtube` stream — its stream key now ESO-managed from Secrets Manager (`k8s/obs/youtube-stream-key`) as the single source of truth. Prod renders byte-identical. ([#870])
+- **Stage `obs-youtube` drops its iGPU claim and software-encodes** (x264) to relieve the three-way VAAPI contention on the single mini-PC Iris Xe that stuttered the prod twitch stream. Adds an `obs_gpu` knob mirroring `vlc_gpu`. Stopgap until the optimization job stops needing the iGPU; prod untouched and CPU-protected by its priority class. ([#875])
+- **Stage stateless apps prefer the ephemeral rpi5 worker when present.** `tripbot`/`vlc`/`onscreens` opt into a toleration + preferred (never required) node affinity toward the Pi 5, falling back to the MS-01 when it's unplugged. OBS opts out (no H.264 hardware encoder); prod untouched. ([#876])
+
+### Fixes
+
+- **Corpus map no longer streaks across the country.** The admin map's full-route overlay drew one continuous polyline through every clip in film order, so each new trip (van resuming thousands of miles away) drew a straight line across the map. `mapCorpusHandler` now splits the route into segments on gaps over 25mi, returning a nested array Leaflet renders as a multi-polyline — no JS change. The fix lives in the durable `/admin/map/corpus` endpoint so the console's eventual map inherits it. ([#864])
+
+### Tooling
+
+- **Removed the `cv:stats` Taskfile target** — the last video-pipeline producer-era trace in tripbot, now that embedding production/monitoring lives in the standalone `video-pipeline` repo. A full audit confirmed nothing else producer-era remained. ([#863])
+
+## [v3.4.1] — 2026-06-14
+
+Patch release. A one-time cleanup pass over the dashcam GPS corpus: adds a provenance column so synthesized fixes are distinguishable from real OCR ones, ships a `backfill-coords` tool that interpolates missing fixes and corrects digit-flip OCR outliers, and reseeds `videos.csv` with the corrected coordinates. Also makes prod-deploy impact visible on PRs. No runtime behavior change.
+
+### CI
+
+- **Prod-deploy impact is now visible on PRs.** A new `prod-dist-warning` workflow posts a sticky comment on any PR into `master` that touches a prod app deploy unit (`cdk8s/dist/prod-1-*-twitch.k8s.yaml`), spelling out that merging deploys to prod — the gap that let an incidental manifest change go live on a release merge rather than a deliberate gesture. The version-bump PR template (`bump-prs.yml`) is also corrected to be component-aware: prod-1 apps autosync from master so merging *is* the deploy, except OBS which is held out of autosync and still needs a manual sync. ([#859])
+
+### Database
+
+- **`videos.coord_source` provenance column.** Each clip's stored GPS fix now records how it was derived (`ocr`/`interpolated`/`rejected`/`missing`) so a corrective pass can mark synthesized points and a future re-OCR won't mistake them for real fixes. Existing 0/0 and flagged rows backfill to `missing`; runtime-created clips are stamped `missing` on save. ([#846])
+
+### Tooling
+
+- **`cmd/backfill-coords` cleans up dashcam GPS coordinates.** Walks videos in film order and, per the new provenance column, interpolates missing fixes from in-session neighbours and replaces digit-flip OCR outliers with interpolated points. Conservative by design — only judges clips against neighbours inside the interpolation window (trip boundaries left alone) and never clears a coordinate it can't replace. Dry-run by default; `--apply` writes to the DB, `--output-sql` emits idempotent slug-keyed UPDATEs. Mirrors `cmd/backfill-miles`. Removes the dead `collect-gps` script (its OCR pass was retired in #79). ([#846])
+
+### Seed
+
+- **Reseed `videos.csv` with corrected coordinates.** 334 clips gain coordinates (81 replacing digit-flip OCR outliers, 253 filling missing fixes), captured from `backfill-coords` output so a fresh seed loads the cleaned corpus. ([#846])
 
 ## [v3.4.0] — 2026-06-14
 
@@ -1618,6 +1752,8 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#841]: https://github.com/adanalife/tripbot/pull/841
 [infra #717]: https://github.com/adanalife/infra/pull/717
 [#845]: https://github.com/adanalife/tripbot/pull/845
+[#846]: https://github.com/adanalife/tripbot/pull/846
+[#859]: https://github.com/adanalife/tripbot/pull/859
 [#851]: https://github.com/adanalife/tripbot/pull/851
 [#854]: https://github.com/adanalife/tripbot/pull/854
 [#761]: https://github.com/adanalife/tripbot/pull/761
@@ -1625,3 +1761,43 @@ The repo dates to 2018. v1.x covered the original development and steady-state o
 [#763]: https://github.com/adanalife/tripbot/pull/763
 [#853]: https://github.com/adanalife/tripbot/pull/853
 [#886]: https://github.com/adanalife/tripbot/pull/886
+[#861]: https://github.com/adanalife/tripbot/pull/861
+[#863]: https://github.com/adanalife/tripbot/pull/863
+[#864]: https://github.com/adanalife/tripbot/pull/864
+[#865]: https://github.com/adanalife/tripbot/pull/865
+[#866]: https://github.com/adanalife/tripbot/pull/866
+[#867]: https://github.com/adanalife/tripbot/pull/867
+[#868]: https://github.com/adanalife/tripbot/pull/868
+[#869]: https://github.com/adanalife/tripbot/pull/869
+[#870]: https://github.com/adanalife/tripbot/pull/870
+[#871]: https://github.com/adanalife/tripbot/pull/871
+[#875]: https://github.com/adanalife/tripbot/pull/875
+[#876]: https://github.com/adanalife/tripbot/pull/876
+[#877]: https://github.com/adanalife/tripbot/pull/877
+[#884]: https://github.com/adanalife/tripbot/pull/884
+[#885]: https://github.com/adanalife/tripbot/pull/885
+[#887]: https://github.com/adanalife/tripbot/pull/887
+[#896]: https://github.com/adanalife/tripbot/pull/896
+[#888]: https://github.com/adanalife/tripbot/pull/888
+[#892]: https://github.com/adanalife/tripbot/pull/892
+[#901]: https://github.com/adanalife/tripbot/pull/901
+[#902]: https://github.com/adanalife/tripbot/pull/902
+[#903]: https://github.com/adanalife/tripbot/pull/903
+[#904]: https://github.com/adanalife/tripbot/pull/904
+[#905]: https://github.com/adanalife/tripbot/pull/905
+[#906]: https://github.com/adanalife/tripbot/pull/906
+[#907]: https://github.com/adanalife/tripbot/pull/907
+[#908]: https://github.com/adanalife/tripbot/pull/908
+[#909]: https://github.com/adanalife/tripbot/pull/909
+[#911]: https://github.com/adanalife/tripbot/pull/911
+[#913]: https://github.com/adanalife/tripbot/pull/913
+[#919]: https://github.com/adanalife/tripbot/pull/919
+[#916]: https://github.com/adanalife/tripbot/pull/916
+[#889]: https://github.com/adanalife/tripbot/pull/889
+[#920]: https://github.com/adanalife/tripbot/pull/920
+[#921]: https://github.com/adanalife/tripbot/pull/921
+[#922]: https://github.com/adanalife/tripbot/pull/922
+[#923]: https://github.com/adanalife/tripbot/pull/923
+[#924]: https://github.com/adanalife/tripbot/pull/924
+[#925]: https://github.com/adanalife/tripbot/pull/925
+[#926]: https://github.com/adanalife/tripbot/pull/926

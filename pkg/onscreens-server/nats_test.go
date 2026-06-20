@@ -123,12 +123,30 @@ func TestHandleLeaderboardHide(t *testing.T) {
 
 func TestHandleTimewarpShow(t *testing.T) {
 	s := &Server{Timewarp: newTimewarp()}
+	msg := &nats.Msg{
+		Subject: "tripbot.test.onscreens.timewarp.show",
+		Data:    []byte(`{"username":"viewer1","emitted_at":"2026-06-18T16:00:00Z"}`),
+	}
+	s.handleTimewarpShow(msg)
+	if !s.Timewarp.IsShowing {
+		t.Error("Timewarp.IsShowing = false, want true")
+	}
+	// The triggering chatter's username rides on Content for the credit line.
+	if s.Timewarp.Content != "viewer1" {
+		t.Errorf("Timewarp.Content = %q, want viewer1", s.Timewarp.Content)
+	}
+}
+
+// A timewarp.show with no username (the empty-envelope shape the old wire
+// used) still triggers the warp — just with no credit line.
+func TestHandleTimewarpShow_NoUsername(t *testing.T) {
+	s := &Server{Timewarp: newTimewarp()}
 	s.handleTimewarpShow(emptyMsg("tripbot.test.onscreens.timewarp.show"))
 	if !s.Timewarp.IsShowing {
 		t.Error("Timewarp.IsShowing = false, want true")
 	}
-	if s.Timewarp.Content != "Timewarp!" {
-		t.Errorf("Timewarp.Content = %q, want Timewarp!", s.Timewarp.Content)
+	if s.Timewarp.Content != "" {
+		t.Errorf("Timewarp.Content = %q, want empty", s.Timewarp.Content)
 	}
 }
 

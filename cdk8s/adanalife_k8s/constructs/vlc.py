@@ -171,7 +171,7 @@ class VlcServer(Construct):
             "deployment",
             metadata=k8s.ObjectMeta(name=name, namespace=ns, labels=labels),
             spec=k8s.DeploymentSpec(
-                replicas=1,
+                replicas=env.replicas,
                 strategy=k8s.DeploymentStrategy(
                     type="RollingUpdate",
                     rolling_update=k8s.RollingUpdateDeployment(
@@ -189,17 +189,18 @@ class VlcServer(Construct):
                             seccomp_profile=k8s.SeccompProfile(type="RuntimeDefault")
                         ),
                         priority_class_name=env.priority_class or None,
-                        # Prefer the ephemeral rpi5 worker when present, recover
-                        # to the MS-01 when it's gone (stage only). The RTSP feed
-                        # to OBS crosses the LAN instead of localhost when vlc
-                        # lands on the Pi. See scheduling.py.
+                        # Co-locate with this platform's OBS pod so the RTSP feed
+                        # reaches OBS on localhost, not across the LAN. OBS owns the
+                        # rpi5 node-preference; vlc just follows wherever OBS landed
+                        # (toleration kept so it can follow OBS onto the Pi). Stage
+                        # only via env.prefer_rpi5. See scheduling.py.
                         tolerations=(
                             scheduling.prefer_rpi5_tolerations()
                             if env.prefer_rpi5
                             else None
                         ),
                         affinity=(
-                            scheduling.prefer_rpi5_affinity()
+                            scheduling.colocate_with_obs_affinity(platform)
                             if env.prefer_rpi5
                             else None
                         ),
@@ -221,6 +222,37 @@ class VlcServer(Construct):
             metadata=k8s.ObjectMeta(name=name, namespace=ns, labels=labels),
             spec=k8s.ServiceSpec(type="ClusterIP", selector=sel, ports=svc_ports),
         )
+
+        # --- RTSP NodePort (minipc convenience: a stable host endpoint for pulling
+        # the dashcam feed off-cluster — e.g. OBS on a LAN desktop — without
+        # kubectl port-forward. The minipc has no LoadBalancer controller, so this
+        # is the NodePort analogue of the k3d-only `<name>-host` LoadBalancer.
+        # Gated on the twitch platform + a configured port: prod-1 + stage-1
+        # co-tenant the one node, and a pinned NodePort can't be claimed twice, so
+        # only an env that sets vlc_rtsp_node_port (prod) emits one. RTSP only —
+        # VNC/HTTP stay in-cluster. Pull over TCP:
+        # rtsp://<node-ip>:<nodePort>/dashcam with rtsp_transport=tcp so the RTSP
+        # control + RTP media share the single forwarded port. ---
+        if env.vlc_rtsp_node_port and platform == "twitch":
+            k8s.KubeService(
+                self,
+                "rtsp-nodeport",
+                metadata=k8s.ObjectMeta(
+                    name=f"{name}-rtsp", namespace=ns, labels=labels
+                ),
+                spec=k8s.ServiceSpec(
+                    type="NodePort",
+                    selector=sel,
+                    ports=[
+                        k8s.ServicePort(
+                            name="rtsp",
+                            port=8554,
+                            target_port=k8s.IntOrString.from_string("rtsp"),
+                            node_port=env.vlc_rtsp_node_port,
+                        )
+                    ],
+                ),
+            )
 
         # --- host-access LoadBalancer (k3d-only convenience: local + dev, which
         # extends local). Overlay-added, so no metadata labels (matches render). ---

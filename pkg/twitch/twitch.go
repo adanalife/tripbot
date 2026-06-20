@@ -122,6 +122,34 @@ func (cl *API) GetFollowerCount(ctx context.Context) {
 	slog.InfoContext(ctx, "follower count", "channel", c.Conf.ChannelName, "total", resp.Data.Total)
 }
 
+// SetSubscribers replaces the cached subscriber list with logins sourced
+// out-of-band — the platform-gateway path, which polls Helix in the gateway
+// rather than in-process. Logins are lowercased to match GetSubscribers, so
+// UserIsSubscriber compares consistently regardless of which path populated the
+// cache. The audience gauge is set here too, mirroring GetSubscribers.
+func (cl *API) SetSubscribers(logins []string) {
+	subs := make([]string, len(logins))
+	for i, login := range logins {
+		subs[i] = strings.ToLower(login)
+	}
+	cl.subscribers = subs
+	instrumentation.TwitchAudience.SetSubscribers(int64(len(subs)))
+}
+
+// SetChatters replaces the cached chatter set and total with values sourced
+// out-of-band (the platform-gateway). count is the authoritative total (it may
+// exceed len(logins) when the channel has more chatters than one page);
+// Chatters() reads the logins, ChatterCount() reads the total — matching how
+// UpdateChatters populates them from a Helix response.
+func (cl *API) SetChatters(logins []string, count int) {
+	chatters := make([]helix.ChatChatter, len(logins))
+	for i, login := range logins {
+		chatters[i] = helix.ChatChatter{UserLogin: login}
+	}
+	cl.currentChatters = chatters
+	cl.chatterCount = count
+}
+
 // UserIsSubscriber returns true if the user subscribes to the channel
 func (cl *API) UserIsSubscriber(username string) bool {
 	for _, sub := range cl.subscribers {
