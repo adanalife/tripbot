@@ -20,6 +20,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 // defaultTimeout bounds every gateway call. The gateway is an in-cluster
@@ -42,10 +44,20 @@ type Client struct {
 
 // New builds a Client for the gateway reachable at baseURL (e.g.
 // http://gateway-twitch:8080). A trailing slash is tolerated.
+//
+// The transport is otelhttp-wrapped so every call starts a client span and
+// injects the W3C traceparent header (via the global propagator that
+// telemetry.Init installs). The gateway's otelhttp handler extracts it, making
+// its server span a child of this one — so a chat command and the Helix call it
+// triggers form a single cross-service trace. With tracing disabled the
+// propagator is a no-op, so this is inert.
 func New(baseURL string) *Client {
 	return &Client{
 		baseURL: strings.TrimRight(baseURL, "/"),
-		http:    &http.Client{Timeout: defaultTimeout},
+		http: &http.Client{
+			Timeout:   defaultTimeout,
+			Transport: otelhttp.NewTransport(http.DefaultTransport),
+		},
 	}
 }
 
