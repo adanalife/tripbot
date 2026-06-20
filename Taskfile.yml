@@ -103,19 +103,19 @@ tasks:
     vars:
       TYPE: '{{.TYPE | default "misc"}}'
     cmds:
-      - uvx towncrier create -c towncrier.toml --edit {{.PR}}.{{.TYPE}}.md
+      - uvx towncrier create --config towncrier.toml --edit {{.PR}}.{{.TYPE}}.md
 
   changelog:preview:
     desc: Preview the pending changelog from the current fragments (towncrier draft)
     cmds:
-      - uvx towncrier build --draft -c towncrier.toml --version {{.VERSION | default "Unreleased"}}
+      - uvx towncrier build --draft --config towncrier.toml --version {{.VERSION | default "Unreleased"}}
 
   changelog:build:
     desc: Collate fragments into CHANGELOG.md for a release + delete them (VERSION=3.9.0)
     requires:
       vars: [VERSION]
     cmds:
-      - uvx towncrier build --yes -c towncrier.toml --version {{trimPrefix "v" .VERSION}}
+      - uvx towncrier build --yes --config towncrier.toml --version {{trimPrefix "v" .VERSION}}
 
   # Release smoke flow.
   # Targets the local k3d cluster running the stage-1 overlay
