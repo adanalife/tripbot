@@ -146,6 +146,86 @@ func TestSendChat(t *testing.T) {
 	}
 }
 
+func TestChatters(t *testing.T) {
+	var gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		_, _ = w.Write([]byte(`{"count":3,"chatters":["alice","bob"]}`))
+	}))
+	defer srv.Close()
+
+	count, logins, err := New(srv.URL).Chatters(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotPath != "/v1/chatters" {
+		t.Errorf("path = %q, want /v1/chatters", gotPath)
+	}
+	if count != 3 {
+		t.Errorf("count = %d, want 3 (total can exceed len(logins))", count)
+	}
+	if len(logins) != 2 || logins[0] != "alice" || logins[1] != "bob" {
+		t.Errorf("logins = %v, want [alice bob]", logins)
+	}
+}
+
+func TestSubscribers(t *testing.T) {
+	var gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		_, _ = w.Write([]byte(`{"subscribers":["sub1","sub2"]}`))
+	}))
+	defer srv.Close()
+
+	subs, err := New(srv.URL).Subscribers(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotPath != "/v1/subscribers" {
+		t.Errorf("path = %q, want /v1/subscribers", gotPath)
+	}
+	if len(subs) != 2 || subs[0] != "sub1" {
+		t.Errorf("subscribers = %v, want [sub1 sub2]", subs)
+	}
+}
+
+func TestFollowers(t *testing.T) {
+	var gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		_, _ = w.Write([]byte(`{"total":42}`))
+	}))
+	defer srv.Close()
+
+	total, err := New(srv.URL).Followers(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotPath != "/v1/followers" {
+		t.Errorf("path = %q, want /v1/followers", gotPath)
+	}
+	if total != 42 {
+		t.Errorf("total = %d, want 42", total)
+	}
+}
+
+func TestCachedReads_ErrorOnNon200(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+	}))
+	defer srv.Close()
+	c := New(srv.URL)
+	if _, _, err := c.Chatters(context.Background()); err == nil {
+		t.Error("Chatters: expected error on non-200")
+	}
+	if _, err := c.Subscribers(context.Background()); err == nil {
+		t.Error("Subscribers: expected error on non-200")
+	}
+	if _, err := c.Followers(context.Background()); err == nil {
+		t.Error("Followers: expected error on non-200")
+	}
+}
+
 func TestSendChat_ErrorsOnNon2xx(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotImplemented) // e.g. a platform with no chat send

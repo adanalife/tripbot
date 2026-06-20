@@ -123,6 +123,60 @@ func (c *Client) SendChat(ctx context.Context, identity, text string) error {
 	return nil
 }
 
+// Chatters returns the channel's current chatter logins and the authoritative
+// total (GET /v1/chatters). The total can exceed len(logins) when the channel
+// has more chatters than the API returns in one page.
+func (c *Client) Chatters(ctx context.Context) (count int, logins []string, err error) {
+	var body struct {
+		Count    int      `json:"count"`
+		Chatters []string `json:"chatters"`
+	}
+	if err := c.getJSON(ctx, "/v1/chatters", &body); err != nil {
+		return 0, nil, err
+	}
+	return body.Count, body.Chatters, nil
+}
+
+// Subscribers returns the channel's current subscriber logins
+// (GET /v1/subscribers).
+func (c *Client) Subscribers(ctx context.Context) ([]string, error) {
+	var body struct {
+		Subscribers []string `json:"subscribers"`
+	}
+	if err := c.getJSON(ctx, "/v1/subscribers", &body); err != nil {
+		return nil, err
+	}
+	return body.Subscribers, nil
+}
+
+// Followers returns the channel's total follower count (GET /v1/followers).
+func (c *Client) Followers(ctx context.Context) (int, error) {
+	var body struct {
+		Total int `json:"total"`
+	}
+	if err := c.getJSON(ctx, "/v1/followers", &body); err != nil {
+		return 0, err
+	}
+	return body.Total, nil
+}
+
+// getJSON issues a GET and decodes a 200 JSON body into dest; any non-200 or
+// decode failure is returned as an error.
+func (c *Client) getJSON(ctx context.Context, path string, dest any) error {
+	resp, err := c.get(ctx, path)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("gateway %s: unexpected status %d", path, resp.StatusCode)
+	}
+	if err := json.NewDecoder(resp.Body).Decode(dest); err != nil {
+		return fmt.Errorf("gateway %s decode: %w", path, err)
+	}
+	return nil
+}
+
 // get issues a GET against the gateway, joining path onto the base URL.
 func (c *Client) get(ctx context.Context, path string) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+path, nil)
