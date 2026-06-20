@@ -169,7 +169,7 @@ func (t *Tripbot) useGateway(ctx context.Context) bool {
 // that need I/O or ordering (the IRC client, scheduler, Discord session,
 // Postgres-backed flag client) are filled in by the boot-sequence methods.
 func NewTripbot(version string) *Tripbot {
-	return &Tripbot{
+	t := &Tripbot{
 		version: version,
 		app:     chatbot.New(),
 		srv:     server.New(),
@@ -177,10 +177,15 @@ func NewTripbot(version string) *Tripbot {
 			onscreensClient.New(natsclient.DefaultPublisher(), c.Conf.Environment),
 			vlcClient.New(c.Conf.VlcServerHost, natsclient.DefaultPublisher(), c.Conf.Environment),
 		),
-		sessions:   users.NewDefault(),
 		flagClient: feature.NewInMemoryClient(nil),
 		gateway:    newGatewayClient(),
 	}
+	// The audience source dispatches chatter refresh + the follower check to the
+	// gateway (when the flag is on) or in-process; with no gateway wired it's the
+	// plain in-process source. Reads t.gateway/t.flagClient lazily, so wiring it
+	// here against the partially-built t is fine.
+	t.sessions = users.New(gatewayChatterSource{t: t})
+	return t
 }
 
 func main() {
@@ -624,10 +629,10 @@ func (t *Tripbot) setUpTwitchClient() {
 	t.irc = t.app.ConnectIRC()
 }
 
-// updateSubscribers gets the list of current subscribers
+// updateSubscribers gets the list of current subscribers (gateway-or-in-process
+// per the runtime flag — see refreshSubscribers).
 func (t *Tripbot) updateSubscribers() {
-	// update subscribers list
-	mytwitch.GetSubscribers(context.Background())
+	t.refreshSubscribers(context.Background())
 }
 
 // getCurrentUsers gets the users watching the stream
@@ -742,8 +747,8 @@ func (t *Tripbot) scheduleBackgroundJobs() {
 	t.addJob(62*time.Second, "users.UpdateLeaderboard", t.sessions.UpdateLeaderboard)
 	t.addJob(5*time.Minute, "chatbot.ShowRotatingLeaderboard", t.app.ShowRotatingLeaderboard)
 	t.addJob(5*time.Minute, "users.PrintCurrentSession", t.sessions.PrintCurrentSession)
-	t.addJob(5*time.Minute, "twitch.GetSubscribers", mytwitch.GetSubscribers)
-	t.addJob(5*time.Minute, "twitch.GetFollowerCount", mytwitch.GetFollowerCount)
+	t.addJob(5*time.Minute, "twitch.GetSubscribers", t.refreshSubscribers)
+	t.addJob(5*time.Minute, "twitch.GetFollowerCount", t.refreshFollowerCount)
 	t.addJob(1*time.Hour, "twitch.RefreshUserAccessToken", func(ctx context.Context) {
 		mytwitch.RefreshUserAccessToken(ctx)
 		// Keep the IRC client's stored token in sync with the rotated credentials.
