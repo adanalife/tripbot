@@ -1,0 +1,157 @@
+{
+  "_comment": "Generated from pkg/eventbus via `go generate ./pkg/contract` — do not hand-edit. The NATS subject + envelope registry tripbot publishes and tripbot-console consumes; payload schemas are JSON Schema (draft 2020-12).",
+  "subject_pattern": "tripbot.{env}.{domain}.{event}",
+  "subjects": {
+    "chat_message": {
+      "subject": "tripbot.{env}.chat.message",
+      "transport": "jetstream",
+      "stream": "TRIPBOT_CHAT",
+      "schema": {
+        "type": "object",
+        "title": "ChatMessage",
+        "properties": {
+          "platform": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "emitted_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "username",
+          "text",
+          "emitted_at"
+        ]
+      }
+    },
+    "viewers_count": {
+      "subject": "tripbot.{env}.viewers.count",
+      "transport": "core",
+      "schema": {
+        "type": "object",
+        "title": "ViewerCount",
+        "properties": {
+          "platform": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer"
+          },
+          "emitted_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "count",
+          "emitted_at"
+        ]
+      }
+    },
+    "video_changed": {
+      "subject": "tripbot.{env}.video.changed",
+      "transport": "jetstream",
+      "stream": "TRIPBOT_VIDEO",
+      "schema": {
+        "type": "object",
+        "title": "VideoChanged",
+        "properties": {
+          "platform": {
+            "type": "string"
+          },
+          "file": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "flagged": {
+            "type": "boolean"
+          },
+          "lat": {
+            "type": "number"
+          },
+          "lng": {
+            "type": "number"
+          },
+          "emitted_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "file",
+          "state",
+          "flagged",
+          "lat",
+          "lng",
+          "emitted_at"
+        ]
+      }
+    },
+    "auth_status": {
+      "subject": "tripbot.{env}.auth.status.{platform}",
+      "wildcard": "tripbot.{env}.auth.status.*",
+      "transport": "jetstream",
+      "stream": "TRIPBOT_AUTH",
+      "schema": {
+        "type": "object",
+        "title": "AuthStatus",
+        "properties": {
+          "platform": {
+            "type": "string"
+          },
+          "accounts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/AuthAccount"
+            }
+          },
+          "emitted_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "platform",
+          "accounts",
+          "emitted_at"
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "AuthAccount": {
+      "type": "object",
+      "title": "AuthAccount",
+      "properties": {
+        "account": {
+          "type": "string"
+        },
+        "login_as": {
+          "type": "string"
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "init_url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "account"
+      ]
+    }
+  }
+}
