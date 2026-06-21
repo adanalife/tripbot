@@ -10,7 +10,7 @@
 # any authed machine), make the package public in the org packages UI, grant
 # this repo write access under the package's "Manage Actions access", and add
 # the pair to the list here + use the mirror ref in the Dockerfile.
-name: Mirror base images
+name: mirror-images
 
 on:
   schedule:

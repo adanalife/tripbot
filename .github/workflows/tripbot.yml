@@ -1,4 +1,4 @@
-name: Tripbot
+name: tripbot
 on:
   pull_request:
   push:

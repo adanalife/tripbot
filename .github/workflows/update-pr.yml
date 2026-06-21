@@ -2,7 +2,7 @@ on:
   issue_comment:
     types: [created]
 
-name: Update PR
+name: update-pr
 jobs:
   update-branch:
     name: update-branch
