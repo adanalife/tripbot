@@ -21,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
@@ -143,8 +144,10 @@ func (c *Client) SendChat(ctx context.Context, identity, text string) error {
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.http.Do(req)
 	if err != nil {
+		instrumentation.GatewayConnection.Set(false)
 		return fmt.Errorf("gateway send-chat: %w", err)
 	}
+	instrumentation.GatewayConnection.Set(true)
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("gateway send-chat: unexpected status %d", resp.StatusCode)
@@ -250,7 +253,9 @@ func (c *Client) get(ctx context.Context, path string) (*http.Response, error) {
 	}
 	resp, err := c.http.Do(req)
 	if err != nil {
+		instrumentation.GatewayConnection.Set(false)
 		return nil, fmt.Errorf("gateway request: %w", err)
 	}
+	instrumentation.GatewayConnection.Set(true)
 	return resp, nil
 }
