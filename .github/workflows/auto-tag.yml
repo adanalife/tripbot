@@ -1,4 +1,4 @@
-name: Auto-tag on master push
+name: auto-tag
 on:
   push:
     branches:

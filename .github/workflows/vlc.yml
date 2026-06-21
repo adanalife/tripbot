@@ -1,4 +1,4 @@
-name: VLC Container
+name: vlc
 on:
   pull_request:
     paths:

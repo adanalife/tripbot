@@ -1,4 +1,4 @@
-name: OBS CEF Base Image
+name: obs-base
 # Bakes adanalife/obs-cef-base:arm64-<OBS>-<CEF> + arm64-latest, which
 # Dockerfile.arm64 then COPYs the OBS install tree out of. This is a 90-min
 # arm64 CEF compile, so it must only run when it has to.

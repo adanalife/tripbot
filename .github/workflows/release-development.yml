@@ -2,7 +2,7 @@
 # per-image path filters. Stage pulls :develop; prod stays on :latest
 # (release.yml). Mirrors release.yml's matrix-on-native-runners +
 # manifest-list shape.
-name: Release Development
+name: release-development
 on:
   push:
     branches:
