@@ -1,4 +1,4 @@
-name: PR title
+name: pr-title
 
 # Conventional Commits enforcement for the SQUASH SUBJECT. The commit-msg
 # pre-commit hook only guards local commits; because PRs squash-merge, the PR
