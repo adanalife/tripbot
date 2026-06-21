@@ -1,0 +1,1 @@
+**PR titles are now checked against [Conventional Commits](https://www.conventionalcommits.org) in CI.** A `pr-title` workflow (`amannn/action-semantic-pull-request`) fails a PR whose title isn't `type(scope): summary`. This closes the gap where the local `commit-msg` hook couldn't reach the squash subject — since develop PRs squash-merge, the PR title is what lands in history.
