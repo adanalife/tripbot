@@ -46,7 +46,7 @@ spec:
             - configMapRef:
                 name: onscreens-youtube-config
             - secretRef:
-                name: sentry-vlc-server
+                name: sentry-onscreens-server
                 optional: false
             - secretRef:
                 name: grafana-cloud-otlp
