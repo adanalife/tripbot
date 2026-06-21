@@ -101,7 +101,7 @@ spec:
       volumes:
         - name: dashcam
           persistentVolumeClaim:
-            claimName: vlc-dashcam
+            claimName: vlc-dashcam-local
             readOnly: true
 ---
 apiVersion: v1
