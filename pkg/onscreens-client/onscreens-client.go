@@ -82,6 +82,18 @@ func (c *Client) ShowFlag(ctx context.Context, dur time.Duration) error {
 	return nil
 }
 
+// UpdateLocation publishes the currently-playing clip's location + date for the
+// rotators to surface on a bot-less YouTube stream (see oe.LocationData).
+// Fire-and-forget; tripbot republishes on a timer.
+func (c *Client) UpdateLocation(ctx context.Context, location, date string) error {
+	c.publish(ctx, oe.LocationUpdateSubject(c.env), oe.LocationData{
+		Envelope: oe.NewEnvelope(),
+		Location: location,
+		Date:     date,
+	})
+	return nil
+}
+
 func (c *Client) ShowGPSImage(ctx context.Context, dur time.Duration) error {
 	// dur isn't transported — the server owns the GPS overlay's duration
 	// (gpsDuration).

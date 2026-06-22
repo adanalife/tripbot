@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/onscreens-server"
 	"github.com/adanalife/tripbot/pkg/natsclient"
@@ -41,6 +42,7 @@ func (s *Server) StartNATSSubscribers(ctx context.Context) {
 		{oe.GPSShowSubject(env), s.handleGPSShow},
 		{oe.GPSHideSubject(env), s.handleGPSHide},
 		{oe.FlagHideSubject(env), s.handleFlagHide},
+		{oe.LocationUpdateSubject(env), s.handleLocationUpdate},
 	}
 	for _, sb := range subs {
 		// Best-effort: one bad subject shouldn't stop the rest from binding.
@@ -96,6 +98,18 @@ func (s *Server) handleTimewarpHide(_ *nats.Msg)    { s.Timewarp.Hide() }
 func (s *Server) handleGPSShow(_ *nats.Msg)         { s.GPS.Show("") }
 func (s *Server) handleGPSHide(_ *nats.Msg)         { s.GPS.Hide() }
 func (s *Server) handleFlagHide(_ *nats.Msg)        { s.Flag.Hide() }
+
+// handleLocationUpdate caches the currently-playing clip's location + date so
+// the bot-less rotators can surface it. Lenient: a malformed body is dropped;
+// empty fields are allowed (the rotator skips whichever line is empty).
+func (s *Server) handleLocationUpdate(m *nats.Msg) {
+	var ev oe.LocationData
+	if err := json.Unmarshal(m.Data, &ev); err != nil {
+		slog.Error("nats: decode location.update", "err", err, "subject", m.Subject)
+		return
+	}
+	liveLocation.set(ev.Location, ev.Date, time.Now())
+}
 
 // handleTimewarpShow triggers the full-screen warp. The overlay's Content
 // carries the triggering chatter's username (lenient: a malformed body or a
