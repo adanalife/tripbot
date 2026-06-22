@@ -17,7 +17,7 @@ Thanks for watching!
 
 ### How it all works
 
-There are three main components, each running in its own container: the chatbot itself, which listens for user commands; a VLC-based video server, which manages the currently-playing video; and an OBS container, which composes the scene and streams it to Twitch. OBS pulls the VLC output over RTSP, so the bot and video server can still be split across machines.
+There are three main components built from this repo, each running in its own container: the chatbot itself, which listens for user commands; a VLC-based video server, which manages the currently-playing video; and an overlay server for on-screen graphics. The scene compositing and streaming to Twitch is handled by OBS, which lives in its own repo ([adanalife/obs](https://github.com/adanalife/obs)) and pulls the VLC output over RTSP — so the bot and video server can still be split across machines. The chatbot still controls that OBS over its WebSocket (start/stop, health watchdog).
 
 The general flow of information looks like this:
 
@@ -63,6 +63,6 @@ task changelog:add PR=889 TYPE=fix
 task changelog:preview
 ```
 
-Types map to the changelog's component sections: `gateway`, `chatbot`, `onscreens`, `vlc`, `obs`, `console`, `fix`, `deploy`, `ci`, `cleanup`, `misc`, plus `summary` (a lead paragraph for the release, named `+summary.summary.md` — no PR number).
+Types map to the changelog's component sections: `gateway`, `chatbot`, `onscreens`, `vlc`, `console`, `fix`, `deploy`, `ci`, `cleanup`, `misc`, plus `summary` (a lead paragraph for the release, named `+summary.summary.md` — no PR number).
 
 At release time, `task changelog:build VERSION=x.y.z` collates the fragments into a new `CHANGELOG.md` section and deletes them. See the standing `pending-release` PR for the cut steps.

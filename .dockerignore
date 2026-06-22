@@ -4,7 +4,6 @@
 # specific subtrees Dockerfiles COPY from. Keeps the build context
 # minimal without enumerating every infra/ subdir we don't care about.
 infra
-!infra/docker/obs
 !infra/docker/vlc/config
 !infra/docker/bin
 
