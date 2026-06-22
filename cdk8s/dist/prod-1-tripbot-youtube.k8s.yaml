@@ -28,6 +28,7 @@ data:
   TRIPBOT_SERVER_PORT: "8080"
   VERBOSE: "false"
   VLC_SERVER_HOST: vlc-youtube:8080
+  YOUTUBE_API_URL: http://gateway-youtube.prod-1.svc.cluster.local:8080
   YOUTUBE_INBOUND_ENABLED: "false"
 ---
 apiVersion: external-secrets.io/v1
@@ -66,7 +67,7 @@ spec:
   template:
     metadata:
       annotations:
-        adanalife.dev/config-hash: 54a56afcd2
+        adanalife.dev/config-hash: 73a0f8b3e9
       labels:
         app: tripbot-youtube
     spec:

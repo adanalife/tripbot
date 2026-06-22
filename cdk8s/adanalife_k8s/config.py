@@ -289,6 +289,11 @@ ENVS: dict[str, EnvConfig] = {
         # pending), so rotators serve promo copy and no command responds. Flip to
         # True when the YouTube Data API quota lands. See youtube_inbound_enabled.
         youtube_inbound_enabled=False,
+        # Route prod tripbot-youtube's outbound chat sends through the in-namespace
+        # gateway-youtube (the gateway owns the YouTube token). Mirrors stage. Only
+        # take effect once gateway-youtube holds a prod token — do not ship this
+        # ahead of that or sends fail (gateway-youtube has no token).
+        youtube_api_url="http://gateway-youtube.prod-1.svc.cluster.local:8080",
         # obs_streaming governs only the in-tripbot OBS build (prod-twitch). prod
         # obs-youtube streaming is owned by the standalone obs repo now (its own
         # obs_streaming + the per-platform OBS cutover in infra), so it's NOT
