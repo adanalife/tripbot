@@ -86,7 +86,7 @@ jobs:
   # Route the arm64 build legs to the self-hosted rpi5 runner
   # (arc-arm64-tripbot) when it's online, else fall back to the 2x-billed
   # GitHub-hosted arm runner — no manual intervention when the Pi is unplugged.
-  # Probes the repo's runners via the ARC GitHub App; minRunners:1 keeps one warm
+  # Probes the org's runners via the ARC GitHub App; minRunners:1 keeps one warm
   # runner registered so "an online runner exists" is a true health signal.
   # tripbot/vlc/onscreens consume this; obs deliberately stays GitHub-hosted (its
   # heavy compile isn't on the Pi yet).
@@ -109,7 +109,7 @@ jobs:
           # ARC scale-set runners route by scale-set NAME (runs-on:
           # arc-arm64-tripbot) and report empty .labels via this API, so match on
           # the runner name prefix, not a label.
-          online=$(gh api "repos/${{ github.repository }}/actions/runners" \
+          online=$(gh api "orgs/${{ github.repository_owner }}/actions/runners" \
             --jq 'any(.runners[]; .status=="online" and (.name|startswith("arc-arm64-tripbot")))')
           if [ "$online" = "true" ]; then
             echo "arm64_runner=arc-arm64-tripbot" >> "$GITHUB_OUTPUT"
