@@ -51,7 +51,7 @@ spec:
             - secretRef:
                 name: obs-youtube-stream-key
                 optional: true
-          image: adanalife/obs:3.4.1
+          image: adanalife/obs:3.9.2
           imagePullPolicy: IfNotPresent
           livenessProbe:
             exec:
