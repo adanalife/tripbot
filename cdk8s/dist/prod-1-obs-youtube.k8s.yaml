@@ -28,7 +28,7 @@ metadata:
   name: obs-youtube
   namespace: prod-1
 spec:
-  replicas: 0
+  replicas: 1
   selector:
     matchLabels:
       app: obs-youtube
