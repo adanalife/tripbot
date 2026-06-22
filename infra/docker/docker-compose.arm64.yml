@@ -1,9 +1,0 @@
-# Override that points the obs build at the arm64-specific Dockerfile.
-# Layer this onto docker-compose.yml when building or running the OBS
-# container on an arm64 host (Apple Silicon, ubuntu-24.04-arm, etc.).
-# amd64 hosts should not include this file — they use the PPA build in
-# infra/docker/obs/Dockerfile.
-services:
-  obs:
-    build:
-      dockerfile: infra/docker/obs/Dockerfile.arm64
