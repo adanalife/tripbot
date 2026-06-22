@@ -59,7 +59,7 @@ metadata:
   name: tripbot-youtube
   namespace: prod-1
 spec:
-  replicas: 0
+  replicas: 1
   selector:
     matchLabels:
       app: tripbot-youtube
@@ -95,7 +95,7 @@ spec:
                 optional: true
             - secretRef:
                 name: tripbot-youtube-creds
-          image: adanalife/tripbot:3.9.1
+          image: adanalife/tripbot:3.9.2
           imagePullPolicy: IfNotPresent
           livenessProbe:
             httpGet:
@@ -139,7 +139,7 @@ spec:
                 name: tripbot-youtube-config
             - secretRef:
                 name: tripbot-database-creds
-          image: adanalife/tripbot:3.9.1
+          image: adanalife/tripbot:3.9.2
           imagePullPolicy: IfNotPresent
           name: migrate
           resources:

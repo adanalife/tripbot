@@ -23,6 +23,7 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 ### Deploy / Infra
 
 - Prod YouTube launches bot-less while the YouTube Data API quota extension is pending — the inbound chat poll is off (it would blow the default quota at prod's 2s floor), so the bot streams and posts but answers no commands. Stage keeps the full bot for testing. ([#962](https://github.com/adanalife/tripbot/pull/962))
+- Unpark the prod-1 YouTube app stack — `tripbot`/`vlc`/`onscreens`-youtube go live (unlisted, bot-less) to burn in before the public launch. ([#968](https://github.com/adanalife/tripbot/pull/968))
 
 ## [v3.9.1] — 2026-06-21
 

@@ -277,22 +277,22 @@ ENVS: dict[str, EnvConfig] = {
         # The DB lives in its own namespace so a `kubectl delete ns prod-1` can't
         # take years of irreplaceable data.
         data_namespace="prod-1-data",
-        # youtube is staged here but parked at replicas=0 (parked_platforms): the
-        # full prod-youtube stack renders + Argo manages it, but it runs nothing
-        # until stage-youtube is shut down and prod-youtube is turned on, so the
-        # minipc never runs two youtube stacks at once. Turn on = drop "youtube"
-        # from parked_platforms (and, to stream, add it to obs_streaming + create
-        # the prod-account SM key k8s/obs/youtube-stream-key). The youtube tripbot
+        # youtube is LIVE (unparked) — the prod-youtube app stack (tripbot /
+        # vlc / onscreens) runs at replicas=1, streaming unlisted to burn in
+        # before the public launch. stage-youtube is scaled down first so the
+        # minipc never runs two youtube encoders at once. The youtube tripbot
         # instance pulls tripbot-youtube-creds from prod-account SM
-        # k8s/tripbot/youtube-creds regardless — that must exist for its
-        # ExternalSecret to sync.
+        # k8s/tripbot/youtube-creds — that must be seeded for its ExternalSecret
+        # to sync.
         platforms=("twitch", "youtube"),
-        parked_platforms=("youtube",),
         # prod youtube launches bot-less: inbound chat poll off (quota extension
         # pending), so rotators serve promo copy and no command responds. Flip to
         # True when the YouTube Data API quota lands. See youtube_inbound_enabled.
         youtube_inbound_enabled=False,
-        # prod twitch is the always-live stream; youtube boots idle until flip-on
+        # obs_streaming governs only the in-tripbot OBS build (prod-twitch). prod
+        # obs-youtube streaming is owned by the standalone obs repo now (its own
+        # obs_streaming + the per-platform OBS cutover in infra), so it's NOT
+        # listed here — tripbot-apps skips obs-youtube for prod.
         obs_streaming=("twitch",),
         # The live stream always wins: prod app pods outrank default-priority
         # co-tenants (stage, dashcam-cv), and the encode/decode pair carries
