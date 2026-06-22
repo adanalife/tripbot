@@ -2,6 +2,7 @@ package chatbot
 
 import (
 	"context"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -172,3 +173,26 @@ func TestEnabledHelpMessagesFiltersByPlatform(t *testing.T) {
 		t.Error("YouTube help messages unexpectedly empty")
 	}
 }
+
+// TestBotlessHelpMessagesAdvertiseNoCommands verifies a bot-less instance
+// (YouTube with inbound chat disabled) swaps its rotating help lines for the
+// promo set and advertises no "!command" token — typing a command into an
+// unread YouTube chat would look like a broken bot.
+func TestBotlessHelpMessagesAdvertiseNoCommands(t *testing.T) {
+	yt := &App{Platform: platformYouTube, botless: true}
+	yt.indexCommands()
+
+	if len(yt.helpMessages) != len(c.YouTubeBotlessHelpMessages) {
+		t.Fatalf("bot-less help should be the promo set (%d lines), got %d",
+			len(c.YouTubeBotlessHelpMessages), len(yt.helpMessages))
+	}
+	for _, msg := range yt.helpMessages {
+		if commandToken.MatchString(msg) {
+			t.Errorf("bot-less help line advertises a command: %q", msg)
+		}
+	}
+}
+
+// commandToken matches a chat-command token ("!" followed by a letter, e.g.
+// !location) without matching a bare "!" used as punctuation.
+var commandToken = regexp.MustCompile(`![a-zA-Z]`)

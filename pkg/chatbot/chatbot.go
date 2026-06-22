@@ -30,6 +30,14 @@ type App struct {
 	// (indexCommands): Twitch runs the full registry, YouTube runs the v1
 	// allowlist. Empty is treated as Twitch. Set from c.Conf.Platform in New().
 	Platform string
+	// botless, when true, makes the rotating Chatter / !help lines advertise
+	// promo copy (follow on Twitch, interactivity coming soon) instead of
+	// command ads — for a YouTube instance running with inbound chat disabled,
+	// where no command can respond. Set in New() from
+	// c.Conf.Platform == "youtube" && !c.Conf.YouTubeInboundEnabled. The
+	// zero value (false) keeps the normal per-platform command-filtered help,
+	// so directly-constructed test Apps are unaffected unless they opt in.
+	botless bool
 	// DB is the GORM handle used by commands that need to read or write the
 	// database. nil in tests that don't exercise the DB; otherwise either the
 	// real database.GormDB() or a sqlmock-backed gorm.DB.
@@ -142,6 +150,7 @@ func (a *App) db() *gorm.DB {
 func New() *App {
 	a := &App{
 		Platform: c.Conf.Platform,
+		botless:  c.Conf.Platform == platformYouTube && !c.Conf.YouTubeInboundEnabled,
 		// DB stays nil; commands use a.db() which falls back to database.GormDB().
 		Onscreens:  realOnscreens{c: onscreensClient.New(natsclient.DefaultPublisher(), c.Conf.Environment)},
 		VLC:        realVLC{c: vlcClient.New(c.Conf.VlcServerHost, natsclient.DefaultPublisher(), c.Conf.Environment)},
