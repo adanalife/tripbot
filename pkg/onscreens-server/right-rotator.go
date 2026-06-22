@@ -5,7 +5,15 @@ import (
 	"time"
 )
 
-var rightRotatorUpdateFrequency = time.Duration(90 * time.Second)
+// Matches the left rotator's 45s cadence. Beyond pacing the message swap, the
+// interval doubles as a blank-recovery cadence: OBS renders this overlay via
+// GPU-accelerated CEF offscreen rendering (BrowserHWAccel=true), whose
+// shared-texture handoff occasionally gets a stale/blank frame stuck — and CEF
+// only pushes a fresh frame when the rendered pixels actually change. A content
+// rotation is what forces that repaint, so a shorter interval bounds how long a
+// stuck-blank overlay stays blank. This was 90s, which left the right rotator
+// visibly blank ~2x longer than the left (the asymmetry that surfaced the bug).
+var rightRotatorUpdateFrequency = time.Duration(45 * time.Second)
 
 // All right-rotator lines are platform-neutral (!location and !timewarp are both
 // in the YouTube allowlist). Weight 2 reproduces the old duplicated entries.
