@@ -185,6 +185,12 @@ def config_data(env: EnvConfig, platform: str) -> dict[str, str]:
     # twitch instance never carries it. Routed unconditionally when wired (no flag).
     if platform == "youtube" and env.youtube_api_url:
         data["YOUTUBE_API_URL"] = env.youtube_api_url
+    # Bot-less YouTube: gate off the inbound chat poll. Only stamped when
+    # disabled (the binary defaults to enabled) so a live, inbound-enabled
+    # youtube instance keeps a minimal ConfigMap and no needless config-hash
+    # rollout. The chatbot also swaps to promo help copy when this is false.
+    if platform == "youtube" and not env.youtube_inbound_enabled:
+        data["YOUTUBE_INBOUND_ENABLED"] = "false"
     return data
 
 

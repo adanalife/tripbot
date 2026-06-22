@@ -270,8 +270,18 @@ func (t *Tripbot) connectToYouTube(ctx context.Context) {
 	}
 
 	t.app.ConnectYouTubeViaGateway()
-	go t.app.NewGatewayYouTubeChatPoller().Run(ctx)
-	slog.InfoContext(ctx, "youtube chat via gateway (inbound + outbound)", "gateway", c.Conf.YouTubeAPIURL)
+	if c.Conf.YouTubeInboundEnabled {
+		go t.app.NewGatewayYouTubeChatPoller().Run(ctx)
+		slog.InfoContext(ctx, "youtube chat via gateway (inbound + outbound)", "gateway", c.Conf.YouTubeAPIURL)
+	} else {
+		// Bot-less mode: outbound posting (rotators) + background jobs stay up,
+		// but the inbound poll — the expensive YouTube Data API spend — is off,
+		// so no command responds. The chatbot serves promo copy instead of
+		// command ads (see enabledHelpMessages). Flip YOUTUBE_INBOUND_ENABLED
+		// to true once the quota extension lands.
+		slog.WarnContext(ctx, "youtube inbound chat disabled (bot-less mode); outbound + jobs only",
+			"gateway", c.Conf.YouTubeAPIURL, "fix", "set YOUTUBE_INBOUND_ENABLED=true to read chat")
+	}
 
 	// nothing else to do on the main goroutine — the poller and HTTP server
 	// run until the signal handler shuts the process down.

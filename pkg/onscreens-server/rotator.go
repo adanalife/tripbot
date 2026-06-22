@@ -33,6 +33,14 @@ type rotatorMessage struct {
 	Weight    int
 }
 
+// botless reports whether this instance should show promotional copy instead of
+// command hints — true only for a YouTube pipeline whose inbound chat is off
+// (YOUTUBE_INBOUND_ENABLED=false). In that state no command can respond, so the
+// rotators must not advertise commands. Mirrors the chatbot's botless gate.
+func botless() bool {
+	return c.Conf.Platform == platformYouTube && !c.Conf.YouTubeInboundEnabled
+}
+
 // appliesTo reports whether m should show on the given platform.
 func (m rotatorMessage) appliesTo(platform string) bool {
 	if len(m.Platforms) == 0 {
