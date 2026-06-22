@@ -74,6 +74,16 @@ type TripbotConfig struct {
 	// gone, so with this empty the instance comes up without YouTube chat.
 	YouTubeAPIURL string `envconfig:"YOUTUBE_API_URL"`
 
+	// YouTubeInboundEnabled gates the gateway-youtube inbound chat poll on a
+	// PLATFORM=youtube instance. Default true. Set false for a "bot-less"
+	// YouTube presence: outbound posting (rotators) and the background jobs keep
+	// running, but nothing reads chat, so no command can respond. When false the
+	// chatbot also swaps its rotating Chatter/!help copy from command ads to
+	// promotional lines (see pkg/chatbot enabledHelpMessages) — advertising a
+	// command nobody can run reads as a broken bot. Flip to true the day the
+	// YouTube Data API quota extension lands. No effect on Twitch.
+	YouTubeInboundEnabled bool `default:"true" envconfig:"YOUTUBE_INBOUND_ENABLED"`
+
 	// NatsURL is the in-cluster NATS endpoint used for fire-and-forget
 	// inter-component events. Format:
 	// nats://nats.<env-platform-ns>.svc.cluster.local:4222.

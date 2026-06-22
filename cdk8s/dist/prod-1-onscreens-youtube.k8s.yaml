@@ -10,6 +10,7 @@ data:
   ENV: production
   NATS_URL: nats://nats.prod-1-platform.svc.cluster.local:4222
   ONSCREENS_SERVER_PLATFORM: youtube
+  ONSCREENS_SERVER_YOUTUBE_INBOUND_ENABLED: "false"
   OTEL_RESOURCE_ATTRIBUTES: deployment.environment=prod-1,service.namespace=tripbot,service.platform=youtube
   OTEL_SDK_DISABLED: "false"
   OTEL_TRACES_SAMPLER: parentbased_traceidratio
@@ -37,7 +38,7 @@ spec:
   template:
     metadata:
       annotations:
-        adanalife.dev/config-hash: "9313331745"
+        adanalife.dev/config-hash: e0054f4b89
       labels:
         app: onscreens-youtube
     spec:

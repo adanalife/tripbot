@@ -23,6 +23,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/gateway"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
+	"github.com/adanalife/tripbot/pkg/locationfeed"
 	"github.com/adanalife/tripbot/pkg/natsclient"
 	"github.com/adanalife/tripbot/pkg/obs/watchdog"
 	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
@@ -142,6 +143,13 @@ type Tripbot struct {
 	// live-check, the chat-send path) route through once useGateway reports the
 	// runtime flag is on — the same gate chatbot's flaggedTwitch uses.
 	gateway *gateway.Client
+
+	// locationFeed publishes the currently-playing clip's location + date to the
+	// onscreens rotators on a timer. Non-nil only on a bot-less YouTube instance
+	// (youtube + inbound chat disabled), where it surfaces the info the
+	// !location / !date / !state commands would return; nil disables the feed
+	// and its background job.
+	locationFeed *locationfeed.Emitter
 }
 
 // newGatewayClient builds the platform-gateway client when TWITCH_API_URL is
@@ -184,6 +192,16 @@ func NewTripbot(version string) *Tripbot {
 	// plain in-process source. Reads t.gateway/t.flagClient lazily, so wiring it
 	// here against the partially-built t is fine.
 	t.sessions = users.New(gatewayChatterSource{t: t})
+	// On a bot-less YouTube instance (no inbound chat → no commands), feed the
+	// rotators the clip's location/date in place of command hints. Gated by the
+	// same flag as the rest of the bot-less presentation; reuses the chatbot's
+	// Geocoder (pkg/geo default, set up in ConnectYouTubeViaGateway).
+	if !platformIsTwitch() && !c.Conf.YouTubeInboundEnabled {
+		t.locationFeed = locationfeed.New(
+			onscreensClient.New(natsclient.DefaultPublisher(), c.Conf.Environment),
+			t.app.Geocoder,
+		)
+	}
 	return t
 }
 
@@ -270,8 +288,18 @@ func (t *Tripbot) connectToYouTube(ctx context.Context) {
 	}
 
 	t.app.ConnectYouTubeViaGateway()
-	go t.app.NewGatewayYouTubeChatPoller().Run(ctx)
-	slog.InfoContext(ctx, "youtube chat via gateway (inbound + outbound)", "gateway", c.Conf.YouTubeAPIURL)
+	if c.Conf.YouTubeInboundEnabled {
+		go t.app.NewGatewayYouTubeChatPoller().Run(ctx)
+		slog.InfoContext(ctx, "youtube chat via gateway (inbound + outbound)", "gateway", c.Conf.YouTubeAPIURL)
+	} else {
+		// Bot-less mode: outbound posting (rotators) + background jobs stay up,
+		// but the inbound poll — the expensive YouTube Data API spend — is off,
+		// so no command responds. The chatbot serves promo copy instead of
+		// command ads (see enabledHelpMessages). Flip YOUTUBE_INBOUND_ENABLED
+		// to true once the quota extension lands.
+		slog.WarnContext(ctx, "youtube inbound chat disabled (bot-less mode); outbound + jobs only",
+			"gateway", c.Conf.YouTubeAPIURL, "fix", "set YOUTUBE_INBOUND_ENABLED=true to read chat")
+	}
 
 	// nothing else to do on the main goroutine — the poller and HTTP server
 	// run until the signal handler shuts the process down.
@@ -730,6 +758,14 @@ func (t *Tripbot) scheduleBackgroundJobs() {
 	// periodic help message.
 	t.addJob(60*time.Second, "video.GetCurrentlyPlaying", t.player.GetCurrentlyPlaying)
 	t.addJob(2*time.Hour+57*time.Minute+30*time.Second, "chatbot.Chatter", t.app.Chatter)
+	// Bot-less YouTube only: refresh the rotators' location/date feed every
+	// minute. Re-publishing (not just on video change) also recovers a restarted
+	// onscreens-server within a tick; the city geocode is throttled inside Emit.
+	if t.locationFeed != nil {
+		t.addJob(60*time.Second, "video.LocationFeed", func(ctx context.Context) {
+			t.locationFeed.Emit(ctx, t.player.Current())
+		})
+	}
 
 	if !platformIsTwitch() {
 		// Twitch-sourced jobs stay off non-Twitch instances: session/presence

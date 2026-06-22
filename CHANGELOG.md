@@ -9,6 +9,21 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v3.9.2] — 2026-06-22
+
+### Chatbot
+
+- Bot-less YouTube mode: `YOUTUBE_INBOUND_ENABLED` (default true) gates the inbound chat poll. When off, the Chatter/!help rotator serves promotional copy pointing viewers at the live Twitch channel instead of commands that can't respond. ([#962](https://github.com/adanalife/tripbot/pull/962))
+
+### Onscreens
+
+- On-screen left/right rotators serve promotional copy (watch & chat live on Twitch, interactivity coming soon) on a bot-less YouTube instance instead of advertising chat commands that no-op there. ([#962](https://github.com/adanalife/tripbot/pull/962))
+- On a bot-less YouTube stream the left/right rotators now surface the currently-playing clip's location (`📍 City, State`) and date (`📅 Date`) in place of the command hints — the info the `!location` / `!date` / `!state` commands would return, shown passively since no command can respond. tripbot pushes the data on a timer (city geocoded ≤1×/5min and cached); it mixes with the Twitch-CTA promo lines and falls back to promo-only when no fresh data. ([#966](https://github.com/adanalife/tripbot/pull/966))
+
+### Deploy / Infra
+
+- Prod YouTube launches bot-less while the YouTube Data API quota extension is pending — the inbound chat poll is off (it would blow the default quota at prod's 2s floor), so the bot streams and posts but answers no commands. Stage keeps the full bot for testing. ([#962](https://github.com/adanalife/tripbot/pull/962))
+
 ## [v3.9.1] — 2026-06-21
 
 ### CI / Tooling

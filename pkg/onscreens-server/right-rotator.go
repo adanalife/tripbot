@@ -24,6 +24,28 @@ var possibleRightMessages = []rotatorMessage{
 	{Text: "Streaming 24 hours a day"},
 }
 
+// botlessRightMessages replace the command-hint right rotator on a bot-less
+// YouTube instance (see botlessLeftMessages). Kept distinct from the left set so
+// the two corners don't show the same line at once. On a bot-less stream these
+// are mixed with the live date line (see botlessRightPool) — the info the !date
+// command would return.
+var botlessRightMessages = []rotatorMessage{
+	{Text: "Watch & chat live on Twitch", Weight: 2},
+	{Text: "Streaming 24 hours a day"},
+	{Text: "Don't forget to follow :)"},
+}
+
+// botlessRightPool is the bot-less right-rotator pool: the static promo lines
+// plus the live date line ("📅 Monday January 2, 2006") when tripbot has pushed
+// a fresh one. Paired with botlessLeftPool's location so the two corners show
+// "where" and "when" rather than duplicating one field.
+func botlessRightPool(now time.Time) []rotatorMessage {
+	if _, date, ok := liveLocation.snapshot(now); ok && date != "" {
+		return append([]rotatorMessage{{Text: "📅 " + date, Weight: liveDataWeight}}, botlessRightMessages...)
+	}
+	return botlessRightMessages
+}
+
 // newRightRotator constructs the right-rotator *Onscreen, primes it with
 // a first message synchronously (so the OBS browser source has content
 // to render the moment it polls — otherwise there's a brief race where
@@ -46,6 +68,9 @@ func rightRotatorLoop(osc *Onscreen) {
 
 // rightRotatorContent creates the content for the rightRotator
 func rightRotatorContent() string {
+	if botless() {
+		return pickRotatorMessage(botlessRightPool(time.Now()))
+	}
 	// pick a weighted-random message for this platform
 	return pickRotatorMessage(possibleRightMessages)
 }

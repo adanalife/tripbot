@@ -184,6 +184,16 @@ class EnvConfig:
     # in-process pkg/youtube send. The inbound chat poll stays in-process
     # regardless (no gateway streaming endpoint).
     youtube_api_url: str = ""
+    # Gate the youtube instance's inbound chat poll (tripbot's
+    # YOUTUBE_INBOUND_ENABLED + onscreens' rotator copy). False = bot-less
+    # YouTube: outbound rotators + background jobs run, but nothing reads chat
+    # (no command responds) and the rotators advertise promo copy pointing at
+    # Twitch instead of commands. Prod launches bot-less while the YouTube Data
+    # API quota extension is pending — prod's 2s poll floor would blow the
+    # default 10k/day quota. Flip to True the day the extension lands. Stage
+    # stays True: its 10s floor fits the default quota, so it runs the full bot
+    # for testing. Only meaningful on a youtube instance.
+    youtube_inbound_enabled: bool = True
 
     def tag_for(self, component: str) -> str:
         """Image tag for a component: its pinned release tag when versions.yaml
@@ -278,6 +288,10 @@ ENVS: dict[str, EnvConfig] = {
         # ExternalSecret to sync.
         platforms=("twitch", "youtube"),
         parked_platforms=("youtube",),
+        # prod youtube launches bot-less: inbound chat poll off (quota extension
+        # pending), so rotators serve promo copy and no command responds. Flip to
+        # True when the YouTube Data API quota lands. See youtube_inbound_enabled.
+        youtube_inbound_enabled=False,
         # prod twitch is the always-live stream; youtube boots idle until flip-on
         obs_streaming=("twitch",),
         # The live stream always wins: prod app pods outrank default-priority

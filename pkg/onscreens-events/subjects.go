@@ -31,6 +31,14 @@ func TimewarpHideSubject(env string) string    { return subject(env, "timewarp",
 func GPSShowSubject(env string) string         { return subject(env, "gps", "show") }
 func GPSHideSubject(env string) string         { return subject(env, "gps", "hide") }
 
+// LocationUpdateSubject carries the currently-playing clip's location + date
+// from tripbot to onscreens-server, which caches it and feeds it into the
+// rotators. On a bot-less YouTube stream the rotators surface this in place of
+// the command hints — it's the info the !location / !date / !state commands
+// would return, shown passively since no command can respond. Unlike the
+// overlay show/hide commands, this is a periodic data feed, not a one-shot.
+func LocationUpdateSubject(env string) string { return subject(env, "location", "update") }
+
 // FlagHideSubject is the only flag subject. flag.show is intentionally
 // absent — the feature is disabled (the HTTP route 501s and the client
 // method is a no-op), so publishing it would be dead surface.
