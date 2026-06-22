@@ -34,4 +34,12 @@ type OnscreensServerConfig struct {
 	// YouTube overlay doesn't advertise Twitch-only commands. Defaults to twitch
 	// (the primary platform). Set by infra per onscreens-<platform> pod.
 	Platform string `default:"twitch" envconfig:"PLATFORM"`
+
+	// YouTubeInboundEnabled mirrors tripbot's gate of the same name for this
+	// pipeline's platform. When false on a youtube instance the bot isn't
+	// reading chat, so the rotators advertise promotional copy (watch/chat on
+	// Twitch, interactivity coming soon) instead of command hints that would
+	// no-op. Default true; ignored on twitch. Stamped per-pipeline by infra
+	// alongside tripbot's flag so both surfaces flip together.
+	YouTubeInboundEnabled bool `default:"true" envconfig:"YOUTUBE_INBOUND_ENABLED"`
 }
