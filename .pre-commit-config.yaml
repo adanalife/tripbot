@@ -9,7 +9,7 @@ exclude: '^(assets/video/|pkg/server/static/)'
 
 # Install both the pre-commit (file-content) hooks and the commit-msg hook
 # (the Conventional Commits check below) on a plain `pre-commit install`.
-default_install_hook_types: [pre-commit, commit-msg]
+default_install_hook_types: [pre-commit, commit-msg, pre-push]
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -117,3 +117,13 @@ repos:
     hooks:
       - id: conventional-pre-commit
         stages: [commit-msg]
+
+  - repo: local
+    hooks:
+      - id: changelog-fragment
+        name: changelog fragment (towncrier)
+        entry: scripts/check-changelog-fragment.sh
+        language: script
+        stages: [pre-push]
+        pass_filenames: false
+        always_run: true
