@@ -26,12 +26,15 @@ func (realOBS) SetBackgroundAudioFile(ctx context.Context, inputName, file strin
 }
 
 // carHumInputName is the OBS source name of the background-audio ffmpeg_source
-// that !carsound repoints. Must match the source "name" in
-// infra/docker/obs/config/Tripbot.json.tmpl.
+// that !carsound repoints. Cross-repo contract: must match the source "name" in
+// the OBS scene config (config/Tripbot.json.tmpl in the adanalife/obs repo).
 const carHumInputName = "Car Hum"
 
-// carSoundDir is where the obs image's `carhum` build stage drops the rendered
-// variant FLACs. Must match the COPY target in infra/docker/obs/Dockerfile{,.arm64}.
+// carSoundDir is where the OBS image's `carhum` build stage drops the rendered
+// variant FLACs, as seen from inside the OBS container (the path is resolved by
+// OBS, which this command drives over the WebSocket — the files are not in the
+// tripbot image). Cross-repo contract: must match the COPY target in the
+// adanalife/obs repo's Dockerfile{,.arm64}.
 const carSoundDir = "/opt/tripbot/assets/carhum/"
 
 // carSound is one selectable background drone. Name matches the carhum.py
@@ -44,10 +47,11 @@ type carSound struct {
 func (s carSound) file() string { return carSoundDir + "car-hum-" + s.Name + ".flac" }
 
 // carSounds is the cycle order + registry of available background drones — a
-// hand-maintained contract with script/carhum/render-variants.sh (one FLAC per
-// entry) and the obs Dockerfiles' COPY. carSounds[0] is the scene's baked-in
-// default (Tripbot.json.tmpl points "Car Hum" at it), so the reported
-// "now playing" matches reality before anyone switches.
+// hand-maintained cross-repo contract with the adanalife/obs repo's
+// carhum/render-variants.sh (one FLAC per entry) and its Dockerfiles' COPY.
+// carSounds[0] is the scene's baked-in default (Tripbot.json.tmpl points
+// "Car Hum" at it), so the reported "now playing" matches reality before
+// anyone switches.
 var carSounds = []carSound{
 	{Name: "idle", Desc: "engine idling, low road"},
 	{Name: "highway", Desc: "fast tarmac roar"},
