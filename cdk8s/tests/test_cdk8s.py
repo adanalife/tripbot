@@ -20,7 +20,7 @@ ENV_PLATFORMS = {
     "development": ("twitch",),
     "local": ("twitch",),
 }
-COMPONENTS = ("tripbot", "vlc", "onscreens", "obs")
+COMPONENTS = ("tripbot", "vlc", "onscreens")
 
 
 def _objects(stem: str) -> list[dict]:
@@ -172,32 +172,6 @@ def test_stage_youtube_routes_sends_through_gateway():
     assert "YOUTUBE_API_URL" not in _cm_data("stage-1-tripbot-twitch")
 
 
-# Which (env, platform) OBS instances actually stream — must mirror
-# config.EnvConfig.obs_streaming. A streaming instance emits its stream-key
-# ExternalSecret; an idle one does not (and boots without the key).
-STREAMING = {("prod-1", "twitch"), ("stage-1", "youtube")}
-
-
-@pytest.mark.parametrize("env,comp,platform", list(_env_components()), ids=str)
-def test_obs_stream_key_secret_iff_streaming(env, comp, platform):
-    if comp != "obs":
-        pytest.skip("stream-key toggle is OBS-only")
-    objs = _objects(f"{env}-obs-{platform}")
-    es_names = {o["metadata"]["name"] for o in _by_kind(objs, "ExternalSecret")}
-    # twitch keeps the shared base name; other platforms get a distinct one.
-    key_name = (
-        "obs-stream-key" if platform == "twitch" else f"obs-{platform}-stream-key"
-    )
-    if (env, platform) in STREAMING:
-        assert key_name in es_names, (
-            f"{env}/{platform} should stream but has no stream-key ExternalSecret"
-        )
-    else:
-        assert key_name not in es_names, (
-            f"{env}/{platform} should be idle but emits a stream-key ExternalSecret"
-        )
-
-
 def _pod_spec(stem: str) -> dict:
     return _by_kind(_objects(stem), "Deployment")[0]["spec"]["template"]["spec"]
 
@@ -261,16 +235,3 @@ def test_stage_obs_feeders_colocate_with_obs():
         ), stem
         # ... but no longer carries an independent rpi5 board pull.
         assert not _prefers_rpi5(spec), stem
-
-
-def test_stage_vaapi_obs_stays_on_msi():
-    """Stage obs-youtube is a VAAPI encoder (holds the i915 claim), so it must
-    NOT bias toward the Pi (no H.264 hw encoder there) — the resource claim
-    hard-gates it onto the MS-01 and the rpi5 affinity drops out together."""
-    assert not _prefers_rpi5(_pod_spec("stage-1-obs-youtube"))
-
-
-def test_prod_vaapi_obs_stays_on_msi():
-    """Prod obs-twitch is a VAAPI encoder (holds the i915 claim), so it must NOT
-    bias toward the Pi (no H.264 hw encoder there) — it stays on the MS-01."""
-    assert not _prefers_rpi5(_pod_spec("prod-1-obs-twitch"))

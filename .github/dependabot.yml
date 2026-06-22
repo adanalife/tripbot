@@ -15,7 +15,3 @@ updates:
     directory: infra/docker/tripbot
     schedule:
       interval: daily
-  - package-ecosystem: docker
-    directory: infra/docker/obs
-    schedule:
-      interval: daily

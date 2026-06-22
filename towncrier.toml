@@ -46,11 +46,6 @@ name = "VLC"
 showcontent = true
 
 [[tool.towncrier.type]]
-directory = "obs"
-name = "OBS"
-showcontent = true
-
-[[tool.towncrier.type]]
 directory = "console"
 name = "Console / API"
 showcontent = true

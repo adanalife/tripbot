@@ -4,8 +4,9 @@ in dist/ and is applied independently — one per (component, platform) for the 
 (IdentityChart), plus the one-shot Job charts (emit_job_charts).
 
 This is the subset of infra/cdk8s's charts.py that moved to the tripbot repo: the
-four images built from this repo (tripbot, vlc, onscreens, obs) and tripbot's
-identity Secrets. The STATEFUL + shared-platform units stay in infra/cdk8s:
+three images built from this repo (tripbot, vlc, onscreens) and tripbot's
+identity Secrets. OBS is built + deployed from the standalone adanalife/obs repo
+(its own cdk8s). The STATEFUL + shared-platform units stay in infra/cdk8s:
 postgres (DataChart), the ESO SecretStore, the shared observability Secrets +
 cert-manager Issuers (SupportingChart), the dashcam PV/PVC, and the Argo config.
 Apps reference the materialized Secret names emitted by those infra units by name
@@ -19,17 +20,17 @@ from cdk8s import Chart
 from constructs import Construct
 
 from adanalife_k8s.config import EnvConfig
-from adanalife_k8s.constructs.obs import ObsInstance
 from adanalife_k8s.constructs.onscreens import OnscreensServer
 from adanalife_k8s.constructs.tripbot import Tripbot, emit_identity_secrets
 from adanalife_k8s.constructs.vlc import VlcServer
 from adanalife_k8s.stream_protection import emit_stream_protection
 
 # Stateless app components that each get their own Chart (→ one dist file + one
-# Argo Application) per (env, platform). obs is emitted separately for its
-# streaming args. Keep this list in sync with the contract's per-platform service
-# keys; naming.app_name maps (component, platform) -> the Service name.
-COMPONENTS = ("tripbot", "vlc", "onscreens", "obs")
+# Argo Application) per (env, platform). OBS is built + deployed from the
+# standalone adanalife/obs repo, not here. Keep this list in sync with the
+# contract's per-platform service keys; naming.app_name maps (component,
+# platform) -> the Service name.
+COMPONENTS = ("tripbot", "vlc", "onscreens")
 _SIMPLE_COMPONENTS = (
     ("tripbot", Tripbot),
     ("vlc", VlcServer),
@@ -48,22 +49,6 @@ def emit_app_charts(scope: Construct, env: EnvConfig) -> None:
         for comp, ctor in _SIMPLE_COMPONENTS:
             chart = Chart(scope, f"{env.name}-{comp}-{platform}", namespace=ns)
             ctor(chart, platform, env=env)
-
-        # OBS — its own chart. A platform streams (ESO stream-key + --startstreaming)
-        # when it's listed in env.obs_streaming; otherwise it boots idle until
-        # toggled on. youtube carries STREAM_PLATFORM=youtube.
-        streaming = platform in env.obs_streaming
-        obs_chart = Chart(scope, f"{env.name}-obs-{platform}", namespace=ns)
-        ObsInstance(
-            obs_chart,
-            platform,
-            env=env,
-            streaming=streaming,
-            stream_key_sm=f"k8s/obs/{platform}-stream-key" if streaming else None,
-            extra_config={"STREAM_PLATFORM": "youtube"}
-            if platform == "youtube"
-            else None,
-        )
 
 
 class IdentityChart(Chart):
