@@ -24,7 +24,10 @@ concurrency:
 jobs:
   fragment:
     runs-on: ubuntu-latest
-    if: ${{ !contains(github.event.pull_request.labels.*.name, 'skip-changelog') }}
+    # The back-merge PR (backmerge/master-to-develop) targets develop but
+    # carries no user-facing change, so it never needs a fragment — exempt
+    # it by head branch, mirroring pr-title.yml.
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'skip-changelog') && github.head_ref != 'backmerge/master-to-develop' }}
     steps:
       - uses: actions/checkout@v7
         with:
