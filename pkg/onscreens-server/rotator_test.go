@@ -1,6 +1,7 @@
 package onscreensServer
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 
@@ -13,6 +14,44 @@ func withPlatform(t *testing.T, platform string) {
 	prev := c.Conf.Platform
 	c.Conf.Platform = platform
 	t.Cleanup(func() { c.Conf.Platform = prev })
+}
+
+// withInbound sets c.Conf.YouTubeInboundEnabled for the duration of a test and
+// restores it.
+func withInbound(t *testing.T, enabled bool) {
+	t.Helper()
+	prev := c.Conf.YouTubeInboundEnabled
+	c.Conf.YouTubeInboundEnabled = enabled
+	t.Cleanup(func() { c.Conf.YouTubeInboundEnabled = prev })
+}
+
+// TestBotlessRotatorsAdvertiseNoCommands verifies that on a bot-less YouTube
+// instance both rotators serve the promo set and never surface a "!command"
+// token (which would no-op there and look broken).
+func TestBotlessRotatorsAdvertiseNoCommands(t *testing.T) {
+	withPlatform(t, platformYouTube)
+	withInbound(t, false)
+	// "!" followed by a letter is a command token (e.g. !location); a bare "!"
+	// as punctuation (the rare-message line) is fine.
+	commandToken := regexp.MustCompile(`![a-zA-Z]`)
+	for i := 0; i < 4000; i++ {
+		if msg := leftRotatorContent(); commandToken.MatchString(msg) {
+			t.Fatalf("bot-less left rotator surfaced a command: %q", msg)
+		}
+		if msg := rightRotatorContent(); commandToken.MatchString(msg) {
+			t.Fatalf("bot-less right rotator surfaced a command: %q", msg)
+		}
+	}
+}
+
+// TestRotatorsServeCommandsWhenInboundEnabled confirms a YouTube instance with
+// inbound chat on keeps the normal command-hint rotators (the post-quota state).
+func TestRotatorsServeCommandsWhenInboundEnabled(t *testing.T) {
+	withPlatform(t, platformYouTube)
+	withInbound(t, true)
+	if botless() {
+		t.Fatal("YouTube with inbound enabled should not be bot-less")
+	}
 }
 
 func TestRotatorMessageAppliesTo(t *testing.T) {

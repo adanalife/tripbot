@@ -26,6 +26,16 @@ var possibleLeftMessages = []rotatorMessage{
 	// {Text: "Use !report to report stream issues"},
 }
 
+// botlessLeftMessages replace the command-hint left rotator on a bot-less
+// YouTube instance: no commands work there, so point viewers at the live,
+// interactive Twitch stream and signal that YouTube interactivity is coming.
+var botlessLeftMessages = []rotatorMessage{
+	{Text: "Chat with the bot live on Twitch", Weight: 2},
+	{Text: "twitch.tv/ADanaLife_", Weight: 2},
+	{Text: "Interactive commands coming to YouTube soon"},
+	{Text: "Follow the journey live on Twitch"},
+}
+
 // newLeftRotator constructs the left-rotator *Onscreen, primes it with a
 // first message synchronously (so the OBS browser source has content to
 // render the moment it polls — otherwise there's a brief race where the
@@ -51,6 +61,10 @@ func leftRotatorContent() string {
 	// show a special, very rare message
 	if rand.Intn(10000) == 0 {
 		return "You found the rare message! Make a clip for a prize!"
+	}
+
+	if botless() {
+		return pickRotatorMessage(botlessLeftMessages)
 	}
 
 	// pick a weighted-random message for this platform

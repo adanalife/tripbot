@@ -24,6 +24,15 @@ var possibleRightMessages = []rotatorMessage{
 	{Text: "Streaming 24 hours a day"},
 }
 
+// botlessRightMessages replace the command-hint right rotator on a bot-less
+// YouTube instance (see botlessLeftMessages). Kept distinct from the left set so
+// the two corners don't show the same line at once.
+var botlessRightMessages = []rotatorMessage{
+	{Text: "Watch & chat live on Twitch", Weight: 2},
+	{Text: "Streaming 24 hours a day"},
+	{Text: "Don't forget to follow :)"},
+}
+
 // newRightRotator constructs the right-rotator *Onscreen, primes it with
 // a first message synchronously (so the OBS browser source has content
 // to render the moment it polls — otherwise there's a brief race where
@@ -46,6 +55,9 @@ func rightRotatorLoop(osc *Onscreen) {
 
 // rightRotatorContent creates the content for the rightRotator
 func rightRotatorContent() string {
+	if botless() {
+		return pickRotatorMessage(botlessRightMessages)
+	}
 	// pick a weighted-random message for this platform
 	return pickRotatorMessage(possibleRightMessages)
 }

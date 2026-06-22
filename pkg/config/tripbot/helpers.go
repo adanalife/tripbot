@@ -41,6 +41,21 @@ var HelpMessages = []string{
 	"!timewarp: Magically warp to a new moment in time",
 }
 
+// YouTubeBotlessHelpMessages are the rotating Chatter / !help lines a bot-less
+// YouTube instance posts (YOUTUBE_INBOUND_ENABLED=false). With no chat reader,
+// the interactive commands can't respond, so these advertise the live Twitch
+// channel and signal that YouTube interactivity is on the way. Deliberately
+// free of any "!command" token: a command a YouTube viewer types into an unread
+// chat looks like a broken bot. Swapped in by enabledHelpMessages when the App
+// is bot-less.
+var YouTubeBotlessHelpMessages = []string{
+	"Want to chat? The interactive bot is live right now on Twitch → twitch.tv/ADanaLife_",
+	"Interactive commands are coming to YouTube soon — follow so you don't miss it!",
+	"Curious where we are or what day this was? Ask the bot live on Twitch: twitch.tv/ADanaLife_",
+	"Driving across America, 24 hours a day. Watch and chat live on Twitch → twitch.tv/ADanaLife_",
+	"This is a bot-powered slow-TV roadtrip. The full interactive experience is on Twitch: twitch.tv/ADanaLife_",
+}
+
 var GoogleMapsStyle = []string{
 	"element:geometry|color:0x242f3e",
 	"element:labels.text.fill|color:0x746855",
