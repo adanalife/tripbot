@@ -9,6 +9,12 @@ name: pr-title
 # Scoped to develop-targeting PRs only: release PRs to master merge-commit
 # (not squash), so their title (`Release vX.Y.Z`) never becomes a commit
 # subject and isn't a conventional type — exempting them here.
+#
+# The standing back-merge PR (backmerge/master-to-develop, opened by
+# backmerge.yml) DOES target develop but is likewise merged with a merge commit
+# (never squashed), so its `⏪ Back-merge…` title never becomes a commit subject
+# either — the step below skips it by head branch. A skipped step still reports
+# the `conventional` job as success, so the required check stays green.
 on:
   pull_request:
     types: [opened, edited, reopened, synchronize]
@@ -22,6 +28,7 @@ jobs:
     name: conventional
     runs-on: ubuntu-latest
     steps:
-      - uses: amannn/action-semantic-pull-request@v6
+      - if: github.head_ref != 'backmerge/master-to-develop'
+        uses: amannn/action-semantic-pull-request@v6
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

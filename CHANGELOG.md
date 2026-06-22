@@ -9,6 +9,12 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v3.9.1] — 2026-06-21
+
+### CI / Tooling
+
+- Exempt the standing back-merge PR (`backmerge/master-to-develop`) from the conventional PR-title check — it merges with a merge commit, so its title never becomes a commit subject. ([#952](https://github.com/adanalife/tripbot/pull/952))
+
 ## [v3.9.0] — 2026-06-21
 
 Minor release. Completes the YouTube→platform-gateway migration: with both chat directions routed through `gateway-youtube`, tripbot holds no YouTube token at any point in its lifecycle, and the in-process YouTube auth + Data-API client are deleted. Prod now serves the dashcam corpus from the minipc's local NVMe instead of the NAS (with an instant NFS fallback), onscreens-server reports to its own Sentry project, and a consumer-side `tripbot_gateway_up` reachability metric lands. Rounds out with a batch of release-engineering upgrades — towncrier changelog fragments, Conventional Commits enforcement on commits and PR titles, and arm64 release builds routed to a self-hosted rpi5 runner with GitHub-hosted fallback.
