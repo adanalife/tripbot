@@ -27,8 +27,11 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
+          # ARC scale-set runners route by scale-set NAME (runs-on:
+          # arc-arm64-tripbot) and report empty .labels via this API, so match on
+          # the runner name prefix, not a label.
           online=$(gh api "repos/${{ github.repository }}/actions/runners" \
-            --jq 'any(.runners[]; .status=="online" and (.labels|any(.name=="arc-arm64-tripbot")))')
+            --jq 'any(.runners[]; .status=="online" and (.name|startswith("arc-arm64-tripbot")))')
           if [ "$online" = "true" ]; then
             echo "arm64_runner=arc-arm64-tripbot" >> "$GITHUB_OUTPUT"
             echo "::notice::arm64 legs → self-hosted rpi5 runner (arc-arm64-tripbot)"
