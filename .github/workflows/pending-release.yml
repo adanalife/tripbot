@@ -101,9 +101,13 @@ jobs:
           #      fix/ci/cleanup/misc implies feature work -> minor.
           SUBJECTS=$(git log --no-merges --pretty=format:'%s' "origin/master..HEAD")
           BODIES=$(git log --no-merges --pretty=format:'%b' "origin/master..HEAD")
+          # `|| true`: with no fragments (e.g. right after a release build
+          # consumed them all) the grep matches nothing and exits 1, which
+          # under `set -o pipefail` + `set -e` would abort the whole job. An
+          # empty HASFEAT just means "no minor signal", not an error.
           HASFEAT=$(find changelog.d -maxdepth 1 -type f -name '*.md' 2>/dev/null \
             | sed -nE 's#.*\.([a-z]+)\.md$#\1#p' \
-            | grep -vE '^(fix|ci|cleanup|misc|summary)$' | head -1)
+            | grep -vE '^(fix|ci|cleanup|misc|summary)$' | head -1 || true)
           if echo "$SUBJECTS" | grep -qE '^[a-z]+(\(.+\))?!:' \
             || echo "$BODIES" | grep -q 'BREAKING CHANGE'; then
             BUMP="major"
