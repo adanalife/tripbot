@@ -47,6 +47,12 @@ class OnscreensServer(Construct):
         # advertise Twitch-only commands (!miles, !guess). onscreens-server reads
         # ONSCREENS_SERVER_PLATFORM (defaults to twitch if unset).
         data["ONSCREENS_SERVER_PLATFORM"] = platform
+        # Bot-less YouTube: when the youtube pipeline's inbound chat is off, the
+        # rotators serve promo copy instead of command hints (no command can
+        # respond). Mirrors tripbot's YOUTUBE_INBOUND_ENABLED so both surfaces
+        # flip together. Only stamped when disabled (binary defaults to enabled).
+        if platform == "youtube" and not env.youtube_inbound_enabled:
+            data["ONSCREENS_SERVER_YOUTUBE_INBOUND_ENABLED"] = "false"
         cfg_hash = configmap.config_map(
             self,
             "config",
