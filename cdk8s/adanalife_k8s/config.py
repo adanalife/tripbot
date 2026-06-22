@@ -256,6 +256,7 @@ ENVS: dict[str, EnvConfig] = {
         obs_encoder="ffmpeg_vaapi_tex",
         obs_quality="high",
         dashcam_mode="nfs",
+        dashcam_source="local",  # serve the corpus off the minipc's local NVMe copy
         tailscale=True,
         otel=True,
         postgres_size="50Gi",
