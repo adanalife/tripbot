@@ -83,8 +83,41 @@ jobs:
               - '.dockerignore'
               - '.github/workflows/release-development.yml'
 
+  # Route the arm64 build legs to the self-hosted rpi5 runner
+  # (arc-arm64-tripbot) when it's online, else fall back to the 2x-billed
+  # GitHub-hosted arm runner — no manual intervention when the Pi is unplugged.
+  # Probes the repo's runners via the ARC GitHub App; minRunners:1 keeps one warm
+  # runner registered so "an online runner exists" is a true health signal.
+  # tripbot/vlc/onscreens consume this; obs deliberately stays GitHub-hosted (its
+  # heavy compile isn't on the Pi yet).
+  pick-runner:
+    runs-on: ubuntu-latest
+    outputs:
+      arm64_runner: ${{ steps.pick.outputs.arm64_runner }}
+    steps:
+      - name: Mint ARC GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.ARC_APP_ID }}
+          private-key: ${{ secrets.ARC_APP_PRIVATE_KEY }}
+      - name: Pick arm64 runner (self-hosted if online, else GitHub-hosted)
+        id: pick
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          online=$(gh api "repos/${{ github.repository }}/actions/runners" \
+            --jq 'any(.runners[]; .status=="online" and (.labels|any(.name=="arc-arm64-tripbot")))')
+          if [ "$online" = "true" ]; then
+            echo "arm64_runner=arc-arm64-tripbot" >> "$GITHUB_OUTPUT"
+            echo "::notice::arm64 legs → self-hosted rpi5 runner (arc-arm64-tripbot)"
+          else
+            echo "arm64_runner=ubuntu-24.04-arm" >> "$GITHUB_OUTPUT"
+            echo "::notice::arm64 legs → GitHub-hosted (rpi5 runner offline)"
+          fi
+
   tripbot-build:
-    needs: changes
+    needs: [changes, pick-runner]
     if: needs.changes.outputs.tripbot == 'true'
     name: tripbot-build (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
@@ -95,7 +128,7 @@ jobs:
           - arch: amd64
             runner: ubuntu-latest
           - arch: arm64
-            runner: ubuntu-24.04-arm
+            runner: ${{ needs.pick-runner.outputs.arm64_runner }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -164,7 +197,7 @@ jobs:
             adanalife/tripbot:develop-arm64
 
   vlc-build:
-    needs: changes
+    needs: [changes, pick-runner]
     if: needs.changes.outputs.vlc == 'true'
     name: vlc-build (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
@@ -175,7 +208,7 @@ jobs:
           - arch: amd64
             runner: ubuntu-latest
           - arch: arm64
-            runner: ubuntu-24.04-arm
+            runner: ${{ needs.pick-runner.outputs.arm64_runner }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -327,7 +360,7 @@ jobs:
             adanalife/obs:develop-arm64
 
   onscreens-server-build:
-    needs: changes
+    needs: [changes, pick-runner]
     if: needs.changes.outputs.onscreens == 'true'
     name: onscreens-server-build (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
@@ -338,7 +371,7 @@ jobs:
           - arch: amd64
             runner: ubuntu-latest
           - arch: arm64
-            runner: ubuntu-24.04-arm
+            runner: ${{ needs.pick-runner.outputs.arm64_runner }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
