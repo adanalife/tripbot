@@ -29,11 +29,28 @@ var possibleLeftMessages = []rotatorMessage{
 // botlessLeftMessages replace the command-hint left rotator on a bot-less
 // YouTube instance: no commands work there, so point viewers at the live,
 // interactive Twitch stream and signal that YouTube interactivity is coming.
+// On a bot-less stream these are mixed with the live location line (see
+// botlessLeftPool) — the info the !location command would return.
 var botlessLeftMessages = []rotatorMessage{
 	{Text: "Chat with the bot live on Twitch", Weight: 2},
 	{Text: "twitch.tv/ADanaLife_", Weight: 2},
 	{Text: "Interactive commands coming to YouTube soon"},
 	{Text: "Follow the journey live on Twitch"},
+}
+
+// liveDataWeight biases the live location/date line over the static promo lines
+// in the bot-less pools — the data is the headline (it's what the !location /
+// !date commands would return), the promo is the remainder. Tunable; ~50-65%
+// data against the current promo weights.
+const liveDataWeight = 6
+
+// botlessLeftPool is the bot-less left-rotator pool: the static promo lines plus
+// the live location line ("📍 City, State") when tripbot has pushed a fresh one.
+func botlessLeftPool(now time.Time) []rotatorMessage {
+	if loc, _, ok := liveLocation.snapshot(now); ok && loc != "" {
+		return append([]rotatorMessage{{Text: "📍 " + loc, Weight: liveDataWeight}}, botlessLeftMessages...)
+	}
+	return botlessLeftMessages
 }
 
 // newLeftRotator constructs the left-rotator *Onscreen, primes it with a
@@ -64,7 +81,7 @@ func leftRotatorContent() string {
 	}
 
 	if botless() {
-		return pickRotatorMessage(botlessLeftMessages)
+		return pickRotatorMessage(botlessLeftPool(time.Now()))
 	}
 
 	// pick a weighted-random message for this platform

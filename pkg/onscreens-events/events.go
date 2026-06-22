@@ -59,6 +59,18 @@ type TimewarpShow struct {
 	Username string `json:"username"`
 }
 
+// LocationData is the payload for the location.update subject — the
+// currently-playing clip's pre-formatted location ("City, State", or a bare
+// state when geocoding is unavailable) and date ("Monday January 2, 2006").
+// onscreens-server caches it and surfaces it through the bot-less rotators.
+// Either field may be empty (e.g. no geocode yet); the rotator skips an empty
+// line.
+type LocationData struct {
+	Envelope
+	Location string `json:"location"`
+	Date     string `json:"date"`
+}
+
 // Command is the payload for events that carry no data beyond the
 // envelope: every hide, plus gps.show (the server supplies its content and
 // duration). A single type rather than a swarm of identical empty structs —
