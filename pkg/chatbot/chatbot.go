@@ -225,7 +225,7 @@ func (a *App) ConnectIRC() *twitch.Client {
 // ctx is forward-compat plumbing — a.Chat.Say doesn't take ctx yet, so it's
 // not propagated into the chat write.
 func (a *App) Chatter(_ context.Context) {
-	// the "/me " twitch emote prefix adds some color on Twitch; youtubeChat.Say
+	// the "/me " twitch emote prefix adds some color on Twitch; gatewayYouTubeChat.Say
 	// strips it (it would render as literal text on YouTube).
 	a.Chat.Say("/me " + a.help())
 }

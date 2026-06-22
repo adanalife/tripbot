@@ -133,7 +133,7 @@ class ObsInstance(Construct):
             "deployment",
             metadata=k8s.ObjectMeta(name=name, namespace=ns, labels=labels),
             spec=k8s.DeploymentSpec(
-                replicas=env.replicas,
+                replicas=env.replicas_for(platform),
                 # Recreate: one Xvfb/VNC owner, no overlapping handoff.
                 strategy=k8s.DeploymentStrategy(type="Recreate"),
                 selector=k8s.LabelSelector(match_labels={"app": name}),

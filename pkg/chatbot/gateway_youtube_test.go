@@ -7,27 +7,12 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
-	"github.com/adanalife/tripbot/pkg/feature"
 	"github.com/adanalife/tripbot/pkg/gateway"
 )
 
-// recordingYouTubeSend records send calls so the flag-dispatch test can assert
-// which path a send took.
-type recordingYouTubeSend struct {
-	calls  int
-	chatID string
-	text   string
-}
-
-func (r *recordingYouTubeSend) send(_ context.Context, chatID, text string) error {
-	r.calls++
-	r.chatID = chatID
-	r.text = text
-	return nil
-}
-
-func TestGatewayYouTubeSend_PostsToChat(t *testing.T) {
+func TestGatewayYouTubeChat_SayPostsToGateway(t *testing.T) {
 	var gotPath, gotBody string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotPath = r.URL.Path
@@ -37,67 +22,56 @@ func TestGatewayYouTubeSend_PostsToChat(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	// chatID is deliberately ignored — the gateway resolves the active chat.
-	if err := (gatewayYouTubeSend{client: gateway.New(srv.URL)}).
-		send(context.Background(), "ignored-chat-id", "hello"); err != nil {
-		t.Fatal(err)
-	}
+	gatewayYouTubeChat{client: gateway.New(srv.URL)}.Say("/me hello")
 	if gotPath != "/v1/chat" {
 		t.Errorf("path = %q, want /v1/chat", gotPath)
 	}
-	// identity is "" (gateway default) and the chatID is not sent.
-	if !strings.Contains(gotBody, `"text":"hello"`) || !strings.Contains(gotBody, `"identity":""`) {
-		t.Errorf("body = %q, want text=hello identity=empty", gotBody)
-	}
-	if strings.Contains(gotBody, "ignored-chat-id") {
-		t.Errorf("body should not carry the chatID; got %q", gotBody)
+	// the Twitch-only "/me " prefix is stripped before sending to YouTube.
+	if !strings.Contains(gotBody, `"text":"hello"`) {
+		t.Errorf("body = %q, want text=hello (/me stripped)", gotBody)
 	}
 }
 
-func TestGatewayYouTubeSend_ErrorsOnNon2xx(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusBadGateway)
-	}))
-	defer srv.Close()
+// inboundChatFunc adapts a func to the inboundChatClient seam.
+type inboundChatFunc func(ctx context.Context, cursor string) (gateway.InboundChatPage, error)
 
-	if err := (gatewayYouTubeSend{client: gateway.New(srv.URL)}).
-		send(context.Background(), "", "hi"); err == nil {
-		t.Error("expected an error on a 502 from the gateway")
-	}
+func (f inboundChatFunc) InboundChat(ctx context.Context, cursor string) (gateway.InboundChatPage, error) {
+	return f(ctx, cursor)
 }
 
-func TestFlaggedYouTubeSend_DispatchesOnFlag(t *testing.T) {
-	gw := &recordingYouTubeSend{}
-	inproc := &recordingYouTubeSend{}
-
-	flagOn := feature.NewInMemoryClient(map[string]feature.Flag{
-		YouTubeGatewayFlagKey: {Key: YouTubeGatewayFlagKey, Enabled: true},
+func TestGatewayYouTubeChatPoller_FeedsMessagesAndAdvancesCursor(t *testing.T) {
+	pages := []gateway.InboundChatPage{
+		{Messages: []gateway.InboundChatMessage{{Author: "A", Text: "!miles"}, {Author: "B", Text: "hi"}}, Cursor: "c1", Live: true, PollAfterMS: 1},
+		{Cursor: "c2", Live: true, PollAfterMS: 1},
+	}
+	var gotCursors []string
+	call := 0
+	ctx, cancel := context.WithCancel(context.Background())
+	fake := inboundChatFunc(func(_ context.Context, cursor string) (gateway.InboundChatPage, error) {
+		gotCursors = append(gotCursors, cursor)
+		if call >= len(pages) {
+			cancel() // stop the loop after the scripted pages are drained
+			return gateway.InboundChatPage{}, context.Canceled
+		}
+		p := pages[call]
+		call++
+		return p, nil
 	})
-	flagOff := feature.NewInMemoryClient(nil) // unknown key → off
 
-	// flag on → gateway
-	on := flaggedYouTubeSend{app: &App{Flags: flagOn}, gateway: gw, inproc: inproc}
-	if err := on.send(context.Background(), "c1", "hi"); err != nil {
-		t.Fatal(err)
+	var handled []IncomingMessage
+	p := &gatewayYouTubeChatPoller{
+		client:    fake,
+		handle:    func(_ context.Context, m IncomingMessage) { handled = append(handled, m) },
+		pollFloor: time.Millisecond,
+		errWait:   time.Millisecond,
 	}
-	if gw.calls != 1 || inproc.calls != 0 {
-		t.Errorf("flag on should route to the gateway; gw=%d inproc=%d", gw.calls, inproc.calls)
-	}
+	p.Run(ctx)
 
-	// flag off → in-process (the default until toggled)
-	off := flaggedYouTubeSend{app: &App{Flags: flagOff}, gateway: gw, inproc: inproc}
-	if err := off.send(context.Background(), "c1", "hi"); err != nil {
-		t.Fatal(err)
+	// Cursor starts empty, then forwards each page's cursor.
+	if strings.Join(gotCursors, ",") != ",c1,c2" {
+		t.Errorf("cursors = %v, want [\"\" c1 c2]", gotCursors)
 	}
-	if inproc.calls != 1 {
-		t.Errorf("flag off should route in-process; inproc=%d", inproc.calls)
-	}
-}
-
-func TestNewYouTubeSend_NoURLSkipsGatewayWrapper(t *testing.T) {
-	// With no YOUTUBE_API_URL there's nothing to flag — it's the plain in-process
-	// adapter, not a flaggedYouTubeSend wrapper.
-	if _, ok := newYouTubeSend(&App{}).(realYouTubeSend); !ok {
-		t.Error("expected realYouTubeSend when YOUTUBE_API_URL is empty")
+	if len(handled) != 2 || handled[0].User != "A" || handled[0].Text != "!miles" || handled[1].User != "B" {
+		t.Errorf("handled = %+v, want A/!miles then B/hi", handled)
 	}
 }

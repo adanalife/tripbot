@@ -6,9 +6,14 @@ name: pending-release
 # bump-prs.yml's update-in-place pattern.
 #
 # This is a staging VIEW, not a release tool: it never merges anything. To cut
-# a release, rename this PR to "Release vX.Y.Z", mark it ready, and merge it
-# with the bump token (#minor / #major; default patch) in the MERGE COMMIT
-# message — auto-tag.yml reads the token from commits landing on master.
+# a release: on develop run `task changelog:build VERSION=X.Y.Z` to collate the
+# changelog.d/ fragments into CHANGELOG.md and commit; then rename this PR to
+# "Release vX.Y.Z", mark it ready, and merge it with the bump token (#minor /
+# #major; default patch) in the MERGE COMMIT message — auto-tag.yml reads the
+# token from commits landing on master.
+#
+# The pending changelog shown in the PR body is rendered with `towncrier build
+# --draft` from the fragments currently on develop.
 #
 # Once the PR is promoted out of draft (i.e. you've started cutting), this
 # workflow stops touching it, so it won't clobber a body/title you've edited.
@@ -47,6 +52,8 @@ jobs:
           fetch-depth: 0
           ref: develop
 
+      - uses: astral-sh/setup-uv@v7
+
       - name: Manage the pending-release draft PR
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
@@ -65,11 +72,14 @@ jobs:
 
           # Nothing queued (develop is in sync with master, e.g. just after a
           # release): retire the standing draft if one is open, then stop.
-          if [ "$AHEAD" -eq 0 ]; then
+          # Use the net file diff, not the commit count — right after a release
+          # the back-merge leaves develop "ahead" by merge commits with no
+          # actual changes, and `gh pr create` errors on an empty diff.
+          if [ "$AHEAD" -eq 0 ] || git diff --quiet "origin/master...HEAD"; then
             if [ -n "$NUM" ] && [ "$IS_DRAFT" = "true" ]; then
               gh pr close "$NUM" --comment "develop is in sync with master — nothing pending. A fresh draft opens when new work lands on develop."
             fi
-            echo "develop has no commits ahead of master; nothing to stage."
+            echo "develop has no net changes over master; nothing to stage."
             exit 0
           fi
 
@@ -85,23 +95,19 @@ jobs:
           # --- Suggested bump ------------------------------------------------
           # Heuristic only; the real bump is whatever token lands in the merge
           # commit. Two signals, strongest wins:
-          #   1. Conventional-commit prefixes on the queued commits — the most
-          #      reliable signal (changelog section names vary): `feat!:` or a
-          #      `BREAKING CHANGE` body -> major, any `feat:` -> minor.
-          #   2. The Unreleased changelog section — breaking/Removed -> major,
-          #      Added -> minor.
-          UNREL=""
-          if [ -f CHANGELOG.md ]; then
-            UNREL=$(awk '/^## \[Unreleased\]/{f=1;next} /^## \[/{f=0} f' CHANGELOG.md)
-          fi
+          #   1. Conventional-commit prefixes on the queued commits — `feat!:`
+          #      or a `BREAKING CHANGE` body -> major, any `feat:` -> minor.
+          #   2. Changelog fragment types — any component section other than
+          #      fix/ci/cleanup/misc implies feature work -> minor.
           SUBJECTS=$(git log --no-merges --pretty=format:'%s' "origin/master..HEAD")
           BODIES=$(git log --no-merges --pretty=format:'%b' "origin/master..HEAD")
+          HASFEAT=$(find changelog.d -maxdepth 1 -type f -name '*.md' 2>/dev/null \
+            | sed -nE 's#.*\.([a-z]+)\.md$#\1#p' \
+            | grep -vE '^(fix|ci|cleanup|misc|summary)$' | head -1)
           if echo "$SUBJECTS" | grep -qE '^[a-z]+(\(.+\))?!:' \
-            || echo "$BODIES" | grep -q 'BREAKING CHANGE' \
-            || echo "$UNREL" | grep -qiE 'breaking|^### *Removed'; then
+            || echo "$BODIES" | grep -q 'BREAKING CHANGE'; then
             BUMP="major"
-          elif echo "$SUBJECTS" | grep -qE '^feat(\(.+\))?:' \
-            || echo "$UNREL" | grep -qiE '^### *Added'; then
+          elif echo "$SUBJECTS" | grep -qE '^feat(\(.+\))?:' || [ -n "$HASFEAT" ]; then
             BUMP="minor"
           else
             BUMP="patch"
@@ -120,6 +126,12 @@ jobs:
             NEXT="v$MA.$MI.$PA"
           fi
 
+          # Render the pending changelog from the fragments in changelog.d/.
+          # towncrier writes its progress banner to stderr and the rendered
+          # notes to stdout, so 2>/dev/null leaves just the changelog body.
+          NEXTBARE=${NEXT#v}; NEXTBARE=${NEXTBARE:-Unreleased}
+          DRAFT=$(uvx towncrier build --draft --config towncrier.toml --version "$NEXTBARE" 2>/dev/null)
+
           BUMP_LINE="**Suggested bump:** \`$BUMP\`"
           if [ -n "$NEXT" ]; then
             BUMP_LINE="$BUMP_LINE → would tag **$NEXT** (from ${LATEST_TAG:-no prior tag})"
@@ -129,20 +141,20 @@ jobs:
           RANGE="${LATEST_TAG:-origin/master}...develop"
           {
             echo "> **Draft / staging view — not meant to merge as-is.** Rebuilt automatically on every push to \`develop\`."
-            echo "> To cut a release: rename this PR to \`Release vX.Y.Z\`, mark it **Ready for review**, then **merge it with a merge commit** whose message carries the bump token (\`#minor\` / \`#major\`; default \`patch\`). \`auto-tag.yml\` reads the token off the commit landing on \`master\`. Once promoted out of draft, this workflow stops editing the PR."
+            echo "> To cut a release: (1) on \`develop\`, run \`task changelog:build VERSION=X.Y.Z\` to collate the \`changelog.d/\` fragments into \`CHANGELOG.md\` (add a \`summary\` fragment first if you want a lead paragraph), commit, and push; (2) rename this PR to \`Release vX.Y.Z\`, mark it **Ready for review**; (3) **merge it with a merge commit** whose message carries the bump token (\`#minor\` / \`#major\`; default \`patch\`). \`auto-tag.yml\` reads the token off the commit landing on \`master\`. Once promoted out of draft, this workflow stops editing the PR."
             echo
             echo "$BUMP_LINE"
             echo
-            echo "_Bump is a guess from the queued commits + Unreleased changelog (\`feat\`/Added → minor, \`feat!\`/BREAKING/Removed → major, else patch). Your call — set the real bump via \`#minor\`/\`#major\` in the merge commit._"
+            echo "_Bump is a guess from the queued commits + changelog fragment types (\`feat\`/non-fix section → minor, \`feat!\`/BREAKING → major, else patch). Your call — set the real bump via \`#minor\`/\`#major\` in the merge commit._"
             echo
             echo "**Diff:** [\`$RANGE\`](https://github.com/$REPO/compare/$RANGE) · **$AHEAD** commit(s) ahead of \`master\`."
             echo
-            echo "### Changelog — Unreleased"
+            echo "### Changelog — pending (towncrier draft)"
             echo
-            if [ -n "$UNREL" ] && echo "$UNREL" | grep -q '[^[:space:]]'; then
-              echo "$UNREL"
+            if echo "$DRAFT" | grep -q '[^[:space:]]'; then
+              echo "$DRAFT"
             else
-              echo "_No \`## [Unreleased]\` entries in CHANGELOG.md._"
+              echo "_No changelog fragments in \`changelog.d/\` yet._"
             fi
             echo
             echo "### Queued since ${LATEST_TAG:-the last release}"

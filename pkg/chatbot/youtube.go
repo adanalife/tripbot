@@ -5,194 +5,120 @@ import (
 	"errors"
 	"log/slog"
 	"strings"
-	"sync"
 	"time"
 
 	mylog "github.com/adanalife/tripbot/pkg/chatbot/log"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/eventbus"
-	"github.com/adanalife/tripbot/pkg/feature"
 	"github.com/adanalife/tripbot/pkg/gateway"
 	"github.com/adanalife/tripbot/pkg/geo"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"github.com/adanalife/tripbot/pkg/users"
-	myyoutube "github.com/adanalife/tripbot/pkg/youtube"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
 
-// liveChatBinding holds the currently-bound live chat ID, shared between the
-// outbound youtubeChat (Say targets it) and the inbound poller (which
-// discovers and re-binds it across broadcast lifecycles). Empty
-// means "not live right now": sends drop, the poller keeps re-discovering.
-type liveChatBinding struct {
-	mu sync.RWMutex
-	id string
+// gatewayYouTubeChat is the outbound chat client for a youtube instance: it
+// posts through gateway-youtube's SendChat, which resolves the channel's active
+// live chat itself. It holds no live-chat binding and no YouTube token — the
+// gateway owns the send and the chat-ID resolution. Implements the
+// provider-neutral ChatClient seam.
+type gatewayYouTubeChat struct {
+	client *gateway.Client
 }
 
-func (b *liveChatBinding) ID() string {
-	b.mu.RLock()
-	defer b.mu.RUnlock()
-	return b.id
-}
-
-func (b *liveChatBinding) Bind(id string) {
-	b.mu.Lock()
-	b.id = id
-	b.mu.Unlock()
-}
-
-// youtubeChat sends to YouTube live chat through pkg/youtube, implementing
-// the provider-neutral ChatClient seam — the second provider the seam was
-// built for. The insert func defaults to myyoutube.InsertChatMessage;
-// tests inject a recorder.
-type youtubeChat struct {
-	binding *liveChatBinding
-	insert  func(ctx context.Context, chatID, text string) error
-}
-
-func (yc youtubeChat) Say(msg string) {
+func (g gatewayYouTubeChat) Say(msg string) {
 	// Twitch-only IRC emote command (the Chatter cron prefixes help messages
 	// with it); on YouTube it would render as literal text.
 	msg = strings.TrimPrefix(msg, "/me ")
-
-	chatID := yc.binding.ID()
-	if chatID == "" {
-		// Not live (or the poller hasn't bound the broadcast yet). Same
-		// drop-quietly contract as disconnectedChat, but logged: a dropped
-		// command response is worth seeing in Loki.
-		slog.Warn("youtube chat send dropped; no live chat bound", "text", msg)
-		return
-	}
-	if err := yc.insert(context.Background(), chatID, msg); err != nil {
-		slog.Error("youtube chat send failed", "err", err, "text", msg)
+	if err := g.client.SendChat(context.Background(), "", msg); err != nil {
+		slog.Error("youtube gateway chat send failed", "err", err, "text", msg)
 	}
 }
 
-// Whisper is a no-op: YouTube live chat has no direct-message equivalent.
-// The only production caller is HandleWhisper's admin remote-say, which is
-// Twitch-inbound anyway.
-func (yc youtubeChat) Whisper(username, msg string) {
+func (gatewayYouTubeChat) Whisper(username, msg string) {
 	slog.Debug("youtube has no whispers; dropped", "to", username, "text", msg)
 }
 
-// ConnectYouTube wires this App's outbound chat to YouTube — the
-// ConnectIRC analog for a PLATFORM=youtube instance. It loads the
-// channel-owner token from the DB, binds the active broadcast's live chat
-// (non-fatal when nothing is live: sends drop until the inbound poller
-// binds it), and points a.Chat at the youtubeChat client wrapped
-// in the provider-neutral console mirror.
-//
-// Returns the binding for the inbound poller to share. Errors only when the
-// OAuth token is missing/unusable — the operator-facing signal to visit
-// /auth/init?account=youtube.
-func (a *App) ConnectYouTube(ctx context.Context) (*liveChatBinding, error) {
+// ConnectYouTubeViaGateway wires outbound chat for a gateway-wired youtube
+// instance (YOUTUBE_API_URL set). Both directions flow through gateway-youtube —
+// outbound via SendChat here, inbound via NewGatewayYouTubeChatPoller — so
+// tripbot holds no YouTube token at runtime. Unlike ConnectYouTube it reads no
+// oauth_tokens row and binds no live chat, so there's nothing to fail on.
+func (a *App) ConnectYouTubeViaGateway() {
 	Uptime = time.Now()
 
-	// process-wide geocoder warmup, same as ConnectIRC (pkg/video routes
-	// through the default for coords -> places).
+	// process-wide geocoder warmup, same as ConnectYouTube / ConnectIRC.
 	geo.SetDefault(geo.New(c.Conf.GoogleMapsAPIKey))
 
-	if err := myyoutube.LoadFromDB(); err != nil {
-		return nil, err
-	}
-
-	binding := &liveChatBinding{}
-	chatID, err := myyoutube.ActiveLiveChatID(ctx)
-	switch {
-	case err == nil:
-		binding.Bind(chatID)
-		slog.InfoContext(ctx, "bound youtube live chat", "live_chat_id", chatID)
-	case errors.Is(err, myyoutube.ErrNoActiveBroadcast):
-		slog.WarnContext(ctx, "no active youtube broadcast at startup; chat sends drop until one is bound")
-	default:
-		// Discovery failed for a non-"not live" reason (network, auth).
-		// Still come up — the poller retries — but say why loudly.
-		slog.ErrorContext(ctx, "youtube live-chat discovery failed at startup", "err", err)
-	}
-
 	a.Chat = consoleMirror{
-		inner: youtubeChat{
-			binding: binding,
-			insert:  newYouTubeSend(a).send,
-		},
+		inner:       gatewayYouTubeChat{client: gateway.New(c.Conf.YouTubeAPIURL)},
 		env:         c.Conf.Environment,
 		platform:    c.Conf.Platform,
 		botUsername: c.Conf.BotUsername,
 	}
-	return binding, nil
 }
 
-// YouTubeGatewayFlagKey is the runtime kill-switch for routing outbound YouTube
-// chat sends through the platform-gateway (gateway-youtube). It defaults off
-// (the flag row doesn't exist until toggled), so even an instance wired with
-// YOUTUBE_API_URL stays in-process until the flag is flipped on — the cutover
-// (and instant revert, no restart) is a console toggle. Only meaningful when
-// YOUTUBE_API_URL is set. Mirrors TwitchGatewayFlagKey; the YouTube analog only
-// covers the outbound send — the inbound poll has no gateway endpoint.
-const YouTubeGatewayFlagKey = "chatbot.youtube_gateway"
-
-// youtubeSend is the outbound YouTube chat-send seam. The in-process path
-// inserts into the tripbot-bound live chat (chatID); the gateway path posts via
-// gateway-youtube's SendChat, which resolves the active live chat itself (so it
-// ignores chatID). Same signature as youtubeChat.insert so youtubeChat is
-// untouched. Mirrors the Twitch interface in twitch.go.
-type youtubeSend interface {
-	send(ctx context.Context, chatID, text string) error
+// inboundChatClient is the subset of *gateway.Client the gateway poller needs;
+// a fake satisfies it in tests.
+type inboundChatClient interface {
+	InboundChat(ctx context.Context, cursor string) (gateway.InboundChatPage, error)
 }
 
-// newYouTubeSend wires the production send path. With no YOUTUBE_API_URL there's
-// no gateway to reach, so it's the plain in-process insert (zero-config
-// default). When a gateway IS wired, it returns a flaggedYouTubeSend that
-// dispatches per call based on the YouTubeGatewayFlagKey runtime flag — wired
-// but dormant until flipped on, revertible without a restart. Mirrors newTwitch.
-func newYouTubeSend(a *App) youtubeSend {
-	if c.Conf.YouTubeAPIURL == "" {
-		return realYouTubeSend{}
-	}
-	return flaggedYouTubeSend{
-		app:     a,
-		gateway: gatewayYouTubeSend{client: gateway.New(c.Conf.YouTubeAPIURL)},
-		inproc:  realYouTubeSend{},
+// gatewayYouTubeChatPoller is the inbound transport for a gateway-wired youtube
+// instance: it drives gateway-youtube's GET /v1/chat/inbound, feeding each
+// returned viewer message into the shared command path. The gateway owns
+// discovery, paging, backlog-skip, own-echo filtering, and the poll cadence, so
+// this loop just advances the opaque cursor and sleeps the suggested interval —
+// holding no YouTube token. The gateway analog of youtubeChatPoller.
+type gatewayYouTubeChatPoller struct {
+	client    inboundChatClient
+	handle    func(ctx context.Context, msg IncomingMessage)
+	pollFloor time.Duration // floor under the gateway-suggested interval
+	errWait   time.Duration // backoff after a transport/gateway error
+}
+
+// NewGatewayYouTubeChatPoller builds the production gateway-backed poller,
+// feeding messages into this App's command path. Run it in a goroutine.
+func (a *App) NewGatewayYouTubeChatPoller() *gatewayYouTubeChatPoller {
+	return &gatewayYouTubeChatPoller{
+		client:    gateway.New(c.Conf.YouTubeAPIURL),
+		handle:    a.HandleYouTubeMessage,
+		pollFloor: 2 * time.Second,
+		errWait:   time.Minute,
 	}
 }
 
-// realYouTubeSend is the in-process adapter — inserts into the bound live chat
-// via pkg/youtube. Used when no YOUTUBE_API_URL is configured.
-type realYouTubeSend struct{}
-
-func (realYouTubeSend) send(ctx context.Context, chatID, text string) error {
-	return myyoutube.InsertChatMessage(ctx, chatID, text)
-}
-
-// gatewayYouTubeSend posts through the platform-gateway gateway-youtube instance
-// via the shared pkg/gateway client. chatID is ignored — the gateway-youtube
-// adapter resolves the channel's active live chat itself. identity is "" so the
-// gateway uses its default (YouTube has a single channel-owner token).
-type gatewayYouTubeSend struct {
-	client *gateway.Client
-}
-
-func (g gatewayYouTubeSend) send(ctx context.Context, _, text string) error {
-	return g.client.SendChat(ctx, "", text)
-}
-
-// flaggedYouTubeSend routes each send to the gateway or the in-process adapter
-// based on the live YouTubeGatewayFlagKey value, read from the App's flag client
-// at call time (cmd/tripbot reassigns a.Flags to the Postgres-backed, console-
-// toggleable client after New(), so the flag flips without a bot restart).
-// Mirrors flaggedTwitch.
-type flaggedYouTubeSend struct {
-	app     *App
-	gateway youtubeSend
-	inproc  youtubeSend
-}
-
-func (f flaggedYouTubeSend) send(ctx context.Context, chatID, text string) error {
-	if f.app.Flags.Bool(ctx, YouTubeGatewayFlagKey, feature.EvalContext{}) {
-		return f.gateway.send(ctx, chatID, text)
+// Run polls the gateway until ctx is done. The gateway returns an empty cursor
+// when offline / chat ended, so forwarding it is the rediscover path;
+// PollAfterMS carries the gateway's cadence (live interval, rediscover wait, or
+// quota backoff). A transport/gateway error backs off errWait and retries.
+func (p *gatewayYouTubeChatPoller) Run(ctx context.Context) {
+	cursor := ""
+	for ctx.Err() == nil {
+		page, err := p.client.InboundChat(ctx, cursor)
+		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				return
+			}
+			slog.ErrorContext(ctx, "youtube gateway inbound poll failed", "err", err)
+			if !sleepCtx(ctx, p.errWait) {
+				return
+			}
+			continue
+		}
+		cursor = page.Cursor
+		for _, m := range page.Messages {
+			p.handle(ctx, IncomingMessage{User: m.Author, Text: m.Text})
+		}
+		wait := time.Duration(page.PollAfterMS) * time.Millisecond
+		if wait < p.pollFloor {
+			wait = p.pollFloor
+		}
+		if !sleepCtx(ctx, wait) {
+			return
+		}
 	}
-	return f.inproc.send(ctx, chatID, text)
 }
 
 // HandleYouTubeMessage processes one inbound YouTube chat message. Identical
@@ -216,123 +142,6 @@ func (a *App) HandleYouTubeMessage(ctx context.Context, msg IncomingMessage) {
 	// subset reads nothing user-specific beyond the name.
 	user := &users.User{Username: strings.ToLower(msg.User)}
 	a.runCommand(ctx, user, strings.ToLower(msg.Text))
-}
-
-// youtubeChatPoller is the inbound transport for a PLATFORM=youtube
-// instance: it discovers the active broadcast, binds its live chat (the same
-// binding youtubeChat sends to), and pages through liveChatMessages.list at
-// the server-suggested cadence, feeding each viewer message into the shared
-// command path. The seam fields default to pkg/youtube in
-// NewYouTubeChatPoller; tests inject fakes.
-type youtubeChatPoller struct {
-	app     *App
-	binding *liveChatBinding
-
-	discover     func(ctx context.Context) (string, error)
-	list         func(ctx context.Context, chatID, pageToken string) (*myyoutube.LiveChatPage, error)
-	ownChannelID func() string
-
-	pollFloor      time.Duration // minimum wait between list calls
-	rediscoverWait time.Duration // wait between discovery attempts while not live
-	quotaWait      time.Duration // backoff after a quota rejection
-}
-
-// NewYouTubeChatPoller builds the production poller sharing this App and the
-// binding returned by ConnectYouTube. Run it in a goroutine (cmd/tripbot's
-// platform branch does).
-func (a *App) NewYouTubeChatPoller(binding *liveChatBinding) *youtubeChatPoller {
-	return &youtubeChatPoller{
-		app:          a,
-		binding:      binding,
-		discover:     myyoutube.ActiveLiveChatID,
-		list:         myyoutube.ListChatMessages,
-		ownChannelID: myyoutube.ChannelID,
-		// floor under the server-suggested interval; YouTube usually asks
-		// for ~3-10s, this only guards against pathological responses.
-		pollFloor:      2 * time.Second,
-		rediscoverWait: time.Minute,
-		quotaWait:      5 * time.Minute,
-	}
-}
-
-// Run polls until ctx is done. Lifecycle: unbound → discover (quietly idle
-// while the channel isn't live) → bind → page through chat → on ErrChatGone
-// (broadcast ended) unbind and rediscover. The first page after every bind
-// is discarded: liveChatMessages.list opens with recent history, and
-// replaying an hour-old !skip against the live pipeline would be wrong.
-func (p *youtubeChatPoller) Run(ctx context.Context) {
-	pageToken := ""
-	fresh := true // next page is the post-bind backlog page
-
-	for ctx.Err() == nil {
-		chatID := p.binding.ID()
-		if chatID == "" {
-			id, err := p.discover(ctx)
-			switch {
-			case err == nil:
-				p.binding.Bind(id)
-				pageToken = ""
-				fresh = true
-				slog.InfoContext(ctx, "youtube poller bound live chat", "live_chat_id", id)
-				continue
-			case errors.Is(err, myyoutube.ErrNoActiveBroadcast):
-				// not live is the normal idle state; stay quiet
-			default:
-				slog.ErrorContext(ctx, "youtube broadcast discovery failed", "err", err)
-			}
-			if !sleepCtx(ctx, p.rediscoverWait) {
-				return
-			}
-			continue
-		}
-
-		page, err := p.list(ctx, chatID, pageToken)
-		if err != nil {
-			switch {
-			case errors.Is(err, myyoutube.ErrChatGone):
-				slog.InfoContext(ctx, "youtube live chat ended; rediscovering")
-				p.binding.Bind("")
-				pageToken = ""
-			case myyoutube.IsQuotaError(err):
-				slog.ErrorContext(ctx, "youtube quota rejection; backing off", "err", err)
-				if !sleepCtx(ctx, p.quotaWait) {
-					return
-				}
-			case errors.Is(err, context.Canceled):
-				return
-			default:
-				slog.ErrorContext(ctx, "youtube chat poll failed", "err", err)
-				if !sleepCtx(ctx, p.rediscoverWait) {
-					return
-				}
-			}
-			continue
-		}
-		pageToken = page.NextPageToken
-
-		if fresh {
-			slog.InfoContext(ctx, "youtube poller skipped backlog page", "count", len(page.Messages))
-			fresh = false
-		} else {
-			own := p.ownChannelID()
-			for _, m := range page.Messages {
-				// the bot posts as the channel owner, so its own sends echo
-				// back in the list — already mirrored by consoleMirror.
-				if own != "" && m.AuthorChannelID == own {
-					continue
-				}
-				p.app.HandleYouTubeMessage(ctx, IncomingMessage{User: m.Author, Text: m.Text})
-			}
-		}
-
-		wait := page.PollAfter
-		if wait < p.pollFloor {
-			wait = p.pollFloor
-		}
-		if !sleepCtx(ctx, wait) {
-			return
-		}
-	}
 }
 
 // sleepCtx waits d or until ctx is done; false means ctx ended first.

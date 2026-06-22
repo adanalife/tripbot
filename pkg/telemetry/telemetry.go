@@ -83,11 +83,13 @@ func Init(ctx context.Context, serviceName, serviceVersion string) (ShutdownFunc
 	if err != nil {
 		return noopShutdown, fmt.Errorf("prometheus exporter: %w", err)
 	}
-	mp := sdkmetric.NewMeterProvider(
+	mpOpts := []sdkmetric.Option{
 		sdkmetric.WithReader(sdkmetric.NewPeriodicReader(metricExp)),
 		sdkmetric.WithReader(promExp),
 		sdkmetric.WithResource(res),
-	)
+	}
+	mpOpts = append(mpOpts, dropBodySizeHistograms()...)
+	mp := sdkmetric.NewMeterProvider(mpOpts...)
 	otel.SetMeterProvider(mp)
 
 	if err := otelruntime.Start(otelruntime.WithMinimumReadMemStatsInterval(15 * time.Second)); err != nil {
@@ -141,6 +143,26 @@ func Init(ctx context.Context, serviceName, serviceVersion string) (ShutdownFunc
 	}, nil
 }
 
+// dropBodySizeHistograms returns MeterProvider options that drop the
+// http_server_{request,response}_body_size_bytes histograms via OTel SDK
+// views. These auto-instrumented histograms are pushed OTLP-direct to the
+// metrics backend (bypassing Alloy, so they can't be relabeled chart-side)
+// and account for ~700 active series with no panels reading them. The
+// http_server_request_duration_seconds histogram is deliberately left
+// untouched — its buckets back the p50/p95/p99 latency panels.
+func dropBodySizeHistograms() []sdkmetric.Option {
+	drop := func(name string) sdkmetric.Option {
+		return sdkmetric.WithView(sdkmetric.NewView(
+			sdkmetric.Instrument{Name: name},
+			sdkmetric.Stream{Aggregation: sdkmetric.AggregationDrop{}},
+		))
+	}
+	return []sdkmetric.Option{
+		drop("http.server.request.body.size"),
+		drop("http.server.response.body.size"),
+	}
+}
+
 func disabled() bool {
 	switch strings.ToLower(os.Getenv("OTEL_SDK_DISABLED")) {
 	case "true", "1", "yes":
@@ -152,7 +174,21 @@ func disabled() bool {
 func newResource(ctx context.Context, name, version string) (*resource.Resource, error) {
 	return resource.New(ctx,
 		resource.WithFromEnv(),
-		resource.WithProcess(),
+		// Granular process detectors instead of resource.WithProcess(): the
+		// bundled WithProcessOwner detector calls os/user.Current(), which
+		// fails with "user: Current requires cgo or $USER set in environment"
+		// in our static CGO_ENABLED=0 binaries running as a uid with no
+		// /etc/passwd entry — that error silently disables the whole SDK.
+		// Enumerate every process detector WithProcess() bundles *except*
+		// the owner one, so process.* attributes are still emitted without
+		// requiring a $USER workaround.
+		resource.WithProcessPID(),
+		resource.WithProcessExecutableName(),
+		resource.WithProcessExecutablePath(),
+		resource.WithProcessCommandArgs(),
+		resource.WithProcessRuntimeName(),
+		resource.WithProcessRuntimeVersion(),
+		resource.WithProcessRuntimeDescription(),
 		resource.WithHost(),
 		resource.WithTelemetrySDK(),
 		resource.WithAttributes(

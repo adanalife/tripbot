@@ -1,4 +1,4 @@
-name: OBS Container
+name: obs
 on:
   pull_request:
     paths:

@@ -182,7 +182,7 @@ def config_data(env: EnvConfig, platform: str) -> dict[str, str]:
         data["TWITCH_API_URL"] = env.twitch_api_url
     # Route the youtube instance's outbound chat sends through gateway-youtube
     # where the env opts in. Only the youtube platform sends YouTube chat, so the
-    # twitch instance never carries it. Gated at runtime by chatbot.youtube_gateway.
+    # twitch instance never carries it. Routed unconditionally when wired (no flag).
     if platform == "youtube" and env.youtube_api_url:
         data["YOUTUBE_API_URL"] = env.youtube_api_url
     return data
@@ -331,7 +331,7 @@ class Tripbot(Construct):
             "deployment",
             metadata=k8s.ObjectMeta(name=name, namespace=ns, labels=labels),
             spec=k8s.DeploymentSpec(
-                replicas=env.replicas,
+                replicas=env.replicas_for(platform),
                 selector=k8s.LabelSelector(match_labels=sel),
                 template=k8s.PodTemplateSpec(
                     metadata=k8s.ObjectMeta(

@@ -63,6 +63,12 @@ class EnvConfig:
     obs_encoder: str = "obs_x264"  # ffmpeg_vaapi_tex on GPU envs
     obs_quality: str = "low"  # low | high
     dashcam_mode: str = "hostpath"  # nfs | hostpath
+    # Which PVC vlc mounts the corpus from when dashcam_mode == "nfs": the
+    # NFS-backed `vlc-dashcam` (default) or the node-local `vlc-dashcam-local`
+    # cache. The local PVC + its NFS->local copy Job are provisioned by infra's
+    # dashcam_local_enabled flag; this only picks which claim vlc mounts. Flip back
+    # to "nfs" for an instant fallback while the local copy is (re)populated.
+    dashcam_source: str = "nfs"  # nfs | local (only meaningful when dashcam_mode=nfs)
     tailscale: bool = False  # emit the tailscale Ingress
     otel: bool = False  # OTEL_SDK_DISABLED=false when True
     postgres_size: str = "5Gi"
@@ -145,12 +151,26 @@ class EnvConfig:
     # Pairs with stage selfHeal being off in the Argo apps set (infra
     # SELFHEAL_OFF_ENVS). prod keeps replicas declared so Argo holds it at 1.
     manual_replicas: bool = False
+    # Subset of `platforms` whose app Deployments render with spec.replicas=0 —
+    # the whole platform stack (tripbot/vlc/onscreens/obs) is emitted and Argo
+    # manages it, but parked off so it consumes no node resources until turned
+    # on by removing the platform from this set (a config edit + redeploy; under
+    # prod selfHeal a hand `kubectl scale` would just be reverted to 0). Lets a
+    # platform be staged on an env ahead of being made live. prod-youtube sits
+    # here until stage-youtube is shut down and prod-youtube is turned on, so the
+    # minipc never runs two youtube stacks at once.
+    parked_platforms: tuple[str, ...] = ()
 
     @property
     def replicas(self) -> int | None:
         """spec.replicas for the app Deployments: None (omitted, manually
         scaled) when manual_replicas, else 1."""
         return None if self.manual_replicas else 1
+
+    def replicas_for(self, platform: str) -> int | None:
+        """spec.replicas for a given platform's app Deployments: 0 when the
+        platform is parked (rendered but off), else the env-wide `replicas`."""
+        return 0 if platform in self.parked_platforms else self.replicas
 
     # The platform-gateway gateway-twitch URL the chatbot routes its command-time
     # Helix calls through (Phase 3). Empty keeps tripbot's in-process pkg/twitch
@@ -159,10 +179,10 @@ class EnvConfig:
     # gateway's prod release is cut + proven.
     twitch_api_url: str = ""
     # Like twitch_api_url, but for a youtube instance's outbound chat sends:
-    # gateway-youtube's URL routes them through the platform-gateway (gated at
-    # runtime by chatbot.youtube_gateway). Empty keeps the in-process pkg/youtube
-    # send. The inbound chat poll stays in-process regardless (no gateway
-    # streaming endpoint).
+    # gateway-youtube's URL routes them through the platform-gateway
+    # unconditionally (no runtime flag — unlike Twitch). Empty keeps the
+    # in-process pkg/youtube send. The inbound chat poll stays in-process
+    # regardless (no gateway streaming endpoint).
     youtube_api_url: str = ""
 
     def tag_for(self, component: str) -> str:
@@ -236,6 +256,7 @@ ENVS: dict[str, EnvConfig] = {
         obs_encoder="ffmpeg_vaapi_tex",
         obs_quality="high",
         dashcam_mode="nfs",
+        dashcam_source="local",  # serve the corpus off the minipc's local NVMe copy
         tailscale=True,
         otel=True,
         postgres_size="50Gi",
@@ -246,8 +267,19 @@ ENVS: dict[str, EnvConfig] = {
         # The DB lives in its own namespace so a `kubectl delete ns prod-1` can't
         # take years of irreplaceable data.
         data_namespace="prod-1-data",
-        platforms=("twitch",),
-        obs_streaming=("twitch",),  # prod twitch is the always-live stream
+        # youtube is staged here but parked at replicas=0 (parked_platforms): the
+        # full prod-youtube stack renders + Argo manages it, but it runs nothing
+        # until stage-youtube is shut down and prod-youtube is turned on, so the
+        # minipc never runs two youtube stacks at once. Turn on = drop "youtube"
+        # from parked_platforms (and, to stream, add it to obs_streaming + create
+        # the prod-account SM key k8s/obs/youtube-stream-key). The youtube tripbot
+        # instance pulls tripbot-youtube-creds from prod-account SM
+        # k8s/tripbot/youtube-creds regardless — that must exist for its
+        # ExternalSecret to sync.
+        platforms=("twitch", "youtube"),
+        parked_platforms=("youtube",),
+        # prod twitch is the always-live stream; youtube boots idle until flip-on
+        obs_streaming=("twitch",),
         # The live stream always wins: prod app pods outrank default-priority
         # co-tenants (stage, dashcam-cv), and the encode/decode pair carries
         # real CPU requests so contention can't starve it (20-core node; the
@@ -328,8 +360,8 @@ ENVS: dict[str, EnvConfig] = {
         # release is cut.
         twitch_api_url="http://gateway-twitch.stage-1.svc.cluster.local:8080",
         # Route stage tripbot-youtube's outbound chat sends through the
-        # in-namespace gateway-youtube (gated by chatbot.youtube_gateway). The
-        # inbound poll stays in-process. prod has no youtube instance yet.
+        # in-namespace gateway-youtube (unconditionally — no flag). The inbound
+        # poll stays in-process. prod has no youtube instance yet.
         youtube_api_url="http://gateway-youtube.stage-1.svc.cluster.local:8080",
         # Stage streams to YouTube — the second half of the two-live-streams
         # budget (prod-twitch + stage-youtube). Key from SM

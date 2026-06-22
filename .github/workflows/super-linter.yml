@@ -1,5 +1,5 @@
 ---
-name: Super Linter
+name: super-linter
 
 on:
   pull_request:
@@ -37,7 +37,10 @@ jobs:
           #   - cdk8s/crds/: vendored upstream CRD schemas (ESO) captured via
           #     `cdk8s import` — not ours to edit (codespell trips on their
           #     CamelCase schema field names).
-          FILTER_REGEX_EXCLUDE: '.*(^|/)go\.sum$|.*pkg/server/static/.*|.*cdk8s/crds/.*'
+          #   - towncrier-template.md: a Jinja template that *produces* markdown;
+          #     towncrier requires the .md extension (it picks markup from it),
+          #     but its `{% %}`/`[...]` syntax isn't valid markdown.
+          FILTER_REGEX_EXCLUDE: '.*(^|/)go\.sum$|.*pkg/server/static/.*|.*cdk8s/crds/.*|.*(^|/)towncrier-template\.md$'
           # disabled because it's not working with C libs
           VALIDATE_GO: false
           # disabled — none of the in-tree Dockerfiles have been

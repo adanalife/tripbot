@@ -69,10 +69,10 @@ class OnscreensServer(Construct):
                 k8s.EnvFromSource(
                     config_map_ref=k8s.ConfigMapEnvSource(name=f"{name}-config")
                 ),
-                # onscreens-server reuses the vlc-server Sentry DSN for now.
+                # onscreens-server reports to its own Sentry project.
                 k8s.EnvFromSource(
                     secret_ref=k8s.SecretEnvSource(
-                        name="sentry-vlc-server", optional=False
+                        name="sentry-onscreens-server", optional=False
                     )
                 ),
                 k8s.EnvFromSource(
@@ -112,7 +112,7 @@ class OnscreensServer(Construct):
             "deployment",
             metadata=k8s.ObjectMeta(name=name, namespace=ns, labels=labels),
             spec=k8s.DeploymentSpec(
-                replicas=env.replicas,
+                replicas=env.replicas_for(platform),
                 strategy=k8s.DeploymentStrategy(
                     type="RollingUpdate",
                     rolling_update=k8s.RollingUpdateDeployment(

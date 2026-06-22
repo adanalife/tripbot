@@ -32,7 +32,6 @@ import (
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/adanalife/tripbot/pkg/video"
 	vlcClient "github.com/adanalife/tripbot/pkg/vlc-client"
-	myyoutube "github.com/adanalife/tripbot/pkg/youtube"
 	_ "github.com/dimiro1/banner/autoload"
 	"github.com/gempir/go-twitch-irc/v4"
 	"github.com/getsentry/sentry-go"
@@ -251,28 +250,28 @@ func (t *Tripbot) Run() {
 	t.connectToTwitch()
 }
 
-// connectToYouTube wires outbound chat + starts the inbound poller for a
-// PLATFORM=youtube instance, then blocks until shutdown — the YouTube analog
-// of connectToTwitch's blocking connect loop. Mirrors loadTwitchToken's
-// stay-up pattern: when the channel-owner oauth_tokens row is missing at
-// boot, the pod stays Ready (the auth-links landing page + /auth/init?account=youtube
-// remain reachable for re-auth) and retries until the token lands.
+// connectToYouTube wires a PLATFORM=youtube instance's chat — both directions —
+// through gateway-youtube, then blocks until shutdown. YouTube auth + runtime
+// moved entirely onto the platform-gateway, so tripbot holds no YouTube token:
+// outbound sends go via gateway-youtube's SendChat, inbound chat via its
+// GET /v1/chat/inbound poll.
+//
+// YOUTUBE_API_URL is required — the in-process YouTube client is gone, so
+// without the gateway URL there's no way to reach YouTube. A misconfigured
+// instance comes up Ready with everything else working but no YouTube chat,
+// logging loudly (the same "stay up with limited functionality" contract as
+// loadTwitchToken).
 func (t *Tripbot) connectToYouTube(ctx context.Context) {
-	const retry = 15 * time.Second
-	binding, err := t.app.ConnectYouTube(ctx)
-	for err != nil {
-		slog.WarnContext(ctx, "no usable YouTube token; starting without chat and polling",
-			"reauth_url", myyoutube.AuthInitURL(), "err", err)
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(retry):
-		}
-		binding, err = t.app.ConnectYouTube(ctx)
+	if c.Conf.YouTubeAPIURL == "" {
+		slog.ErrorContext(ctx, "YOUTUBE_API_URL unset; youtube chat disabled",
+			"fix", "set YOUTUBE_API_URL to the gateway-youtube service URL")
+		<-ctx.Done()
+		return
 	}
 
-	go t.app.NewYouTubeChatPoller(binding).Run(ctx)
-	slog.InfoContext(ctx, "youtube chat poller started", "channel_id", myyoutube.ChannelID())
+	t.app.ConnectYouTubeViaGateway()
+	go t.app.NewGatewayYouTubeChatPoller().Run(ctx)
+	slog.InfoContext(ctx, "youtube chat via gateway (inbound + outbound)", "gateway", c.Conf.YouTubeAPIURL)
 
 	// nothing else to do on the main goroutine — the poller and HTTP server
 	// run until the signal handler shuts the process down.
@@ -328,21 +327,22 @@ func (t *Tripbot) startNATS(ctx context.Context) {
 const authStatusInterval = 30 * time.Second
 
 // startAuthStatusEmitter publishes this instance's token state to
-// tripbot.<env>.auth.status.<platform> on start and every authStatusInterval.
+// tripbot.<env>.auth.status.twitch on start and every authStatusInterval.
 // The in-process admin hub ignores the subject (it polls token state directly);
 // the standalone console is the consumer. Snapshots are assembled here — not in
-// pkg/eventbus — so the eventbus stays free of pkg/twitch / pkg/youtube imports.
+// pkg/eventbus — so the eventbus stays free of pkg/twitch imports.
+//
+// Only the Twitch instance holds tokens now: YouTube auth moved entirely onto
+// the platform-gateway (gateway-youtube owns the oauth_tokens youtube row), so a
+// youtube instance has no token state to report and skips this. (Surfacing
+// YouTube auth status to the console is the gateway's job once it grows a NATS
+// publisher — tracked separately.)
 func (t *Tripbot) startAuthStatusEmitter(ctx context.Context) {
-	platform := c.Conf.Platform
-	if platform == "" {
-		platform = "twitch"
-	}
-	snapshot := twitchAuthAccounts
 	if !platformIsTwitch() {
-		snapshot = youtubeAuthAccounts
+		return
 	}
 	go func() {
-		eventbus.EmitAuthStatus(ctx, c.Conf.Environment, platform, snapshot())
+		eventbus.EmitAuthStatus(ctx, c.Conf.Environment, "twitch", twitchAuthAccounts())
 		tick := time.NewTicker(authStatusInterval)
 		defer tick.Stop()
 		for {
@@ -350,7 +350,7 @@ func (t *Tripbot) startAuthStatusEmitter(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			case <-tick.C:
-				eventbus.EmitAuthStatus(ctx, c.Conf.Environment, platform, snapshot())
+				eventbus.EmitAuthStatus(ctx, c.Conf.Environment, "twitch", twitchAuthAccounts())
 			}
 		}
 	}()
@@ -375,22 +375,6 @@ func twitchAuthAccounts() []eventbus.AuthAccount {
 		})
 	}
 	return accounts
-}
-
-// youtubeAuthAccounts reports the channel-owner token's loaded/missing state.
-// No expiry: the oauth2 client auto-refreshes the access token via the refresh
-// token, so loaded-vs-missing is the operational signal (a dead refresh token
-// surfaces as the row being blanked → "missing").
-func youtubeAuthAccounts() []eventbus.AuthAccount {
-	account := eventbus.AuthAccount{
-		Account: "youtube",
-		LoginAs: myyoutube.ChannelID(),
-		InitURL: myyoutube.AuthInitURL(),
-	}
-	if myyoutube.ChannelID() == "" {
-		account.Reason = "missing"
-	}
-	return []eventbus.AuthAccount{account}
 }
 
 // startSilentDisconnectWatchdog launches the goroutine that detects the

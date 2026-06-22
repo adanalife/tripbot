@@ -7,6 +7,10 @@
 #     reformat (no trailing newline, minified, etc.).
 exclude: '^(assets/video/|pkg/server/static/)'
 
+# Install both the pre-commit (file-content) hooks and the commit-msg hook
+# (the Conventional Commits check below) on a plain `pre-commit install`.
+default_install_hook_types: [pre-commit, commit-msg]
+
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
@@ -73,6 +77,23 @@ repos:
         language: system
         types: [go]
 
+  # Markdown linting — mirrors super-linter's MARKDOWN pass, reading the same
+  # .github/linters/.markdown-lint.yml config so the two agree, and catching
+  # markdown issues locally before CI. The towncrier Jinja template is named
+  # .md (towncrier picks its markup from the extension) but isn't valid
+  # markdown, so it's excluded here exactly as in super-linter.
+  # language_version pins an LTS node via nodeenv rather than using whatever
+  # node happens to be on the host/runner — markdownlint-cli's dev deps carry
+  # a strict `engines` range that a too-new (or too-old) system node fails to
+  # satisfy during `npm install`, which would make the hook non-deterministic.
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.49.0
+    hooks:
+      - id: markdownlint
+        language_version: lts
+        args: [--config, .github/linters/.markdown-lint.yml]
+        exclude: '^\.github/towncrier-template\.md$'
+
   # Python: ruff handles both lint and format. Matches super-linter's
   # PYTHON_RUFF + PYTHON_RUFF_FORMAT (PYTHON_BLACK is disabled there to
   # avoid the dueling-formatter problem).
@@ -82,3 +103,17 @@ repos:
       - id: ruff-check
         args: [--fix]
       - id: ruff-format
+
+  # Conventional Commits — enforce `type(scope): summary` on commit messages so
+  # history stays machine-parseable: it feeds the towncrier changelog fragments,
+  # sets up future release automation (release-please et al.), and gives every
+  # contributor/agent the same commit grammar without re-explaining it. Runs at
+  # the commit-msg stage; default_install_hook_types (top of file) wires it up
+  # on `pre-commit install`. Note this guards LOCAL commits — since develop PRs
+  # squash-merge, the PR *title* becomes the squash subject, so keep PR titles
+  # conventional too.
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v4.4.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]

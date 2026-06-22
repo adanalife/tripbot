@@ -1,4 +1,4 @@
-name: cdk8s
+name: cdk8s-synth
 
 # Lints the Python cdk8s authoring layer (cdk8s/) and verifies the committed
 # dist/ deploy units are in sync with the source: re-synth and fail on any diff.

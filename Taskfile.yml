@@ -94,6 +94,29 @@ tasks:
         printf '\a'
         mise exec -- go run ./cmd/auth-bootstrap --account=broadcaster
 
+  # Changelog (towncrier). Fragments live in changelog.d/; assembled into
+  # CHANGELOG.md at release time. Run on the host via uvx — no project dep.
+  changelog:add:
+    desc: 'Scaffold a changelog fragment (PR=123 TYPE=fix). Types: gateway chatbot onscreens vlc obs console fix deploy ci cleanup misc summary'
+    requires:
+      vars: [PR]
+    vars:
+      TYPE: '{{.TYPE | default "misc"}}'
+    cmds:
+      - uvx towncrier create --config towncrier.toml --edit {{.PR}}.{{.TYPE}}.md
+
+  changelog:preview:
+    desc: Preview the pending changelog from the current fragments (towncrier draft)
+    cmds:
+      - uvx towncrier build --draft --config towncrier.toml --version {{.VERSION | default "Unreleased"}}
+
+  changelog:build:
+    desc: Collate fragments into CHANGELOG.md for a release + delete them (VERSION=3.9.0)
+    requires:
+      vars: [VERSION]
+    cmds:
+      - uvx towncrier build --yes --config towncrier.toml --version {{trimPrefix "v" .VERSION}}
+
   # Release smoke flow.
   # Targets the local k3d cluster running the stage-1 overlay
   # (cloudflared tunnel + apps).

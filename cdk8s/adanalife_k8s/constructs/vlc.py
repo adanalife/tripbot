@@ -7,9 +7,10 @@ overlays:
 
   * RollingUpdate (readiness-gated; dashcam PVC is ReadOnlyMany so both pods can
     mount during the surge), seccomp + drop-ALL hardening, /health probes.
-  * dashcam volume: NFS PVC (prod/stage, env.nfs_*) or hostPath (local/dev). The
-    PVC is shared across platforms (ReadOnlyMany), so every platform's vlc pod
-    mounts the same `vlc-dashcam` claim — it is NOT per-platform.
+  * dashcam volume: a PVC (prod/stage) or hostPath (local/dev). dashcam_source
+    selects the NFS-backed `vlc-dashcam` (default) or the node-local
+    `vlc-dashcam-local` cache. The claim is shared across platforms (ReadOnlyMany),
+    so every platform's vlc pod mounts the same one — it is NOT per-platform.
   * iGPU request on GPU envs; OTEL/Sentry envFrom from shared-secrets.
   * traefik Ingress (TLS on minipc) + optional Tailscale Ingress.
 """
@@ -83,16 +84,23 @@ class VlcServer(Construct):
             data=data,
         )
 
-        # --- dashcam volume (nfs PVC | hostPath) ---
-        # The NFS PV/PVC are NOT emitted here — they're stateful, so they live in
-        # DataChart (emit_dashcam_volume), separate from this stateless Deployment
-        # so app churn can't disturb them. This just references the PVC by name.
-        # The claim is shared (ReadOnlyMany) across platforms — not per-platform.
+        # --- dashcam volume (nfs/local PVC | hostPath) ---
+        # The PVCs are NOT emitted here — they're data infra, so they live in the
+        # infra repo (DataChart/SupportingChart), separate from this stateless
+        # Deployment so app churn can't disturb them. This just references a claim
+        # by name. dashcam_source flips which one: the NFS-backed `vlc-dashcam`
+        # (default) or the node-local `vlc-dashcam-local` cache (infra's
+        # dashcam_local_enabled must be on so that claim exists + is populated).
+        # Flipping back to nfs is the instant fallback while the local copy is
+        # (re)populated. The claim is shared (ReadOnlyMany) across platforms.
         if env.dashcam_mode == "nfs":
+            claim_name = (
+                "vlc-dashcam-local" if env.dashcam_source == "local" else "vlc-dashcam"
+            )
             volume = k8s.Volume(
                 name="dashcam",
                 persistent_volume_claim=k8s.PersistentVolumeClaimVolumeSource(
-                    claim_name="vlc-dashcam", read_only=True
+                    claim_name=claim_name, read_only=True
                 ),
             )
         else:
@@ -171,7 +179,7 @@ class VlcServer(Construct):
             "deployment",
             metadata=k8s.ObjectMeta(name=name, namespace=ns, labels=labels),
             spec=k8s.DeploymentSpec(
-                replicas=env.replicas,
+                replicas=env.replicas_for(platform),
                 strategy=k8s.DeploymentStrategy(
                     type="RollingUpdate",
                     rolling_update=k8s.RollingUpdateDeployment(
