@@ -767,6 +767,26 @@ func (t *Tripbot) scheduleBackgroundJobs() {
 		})
 	}
 
+	// YouTube instances (bot-less or full): discover the current broadcast's
+	// videoId on a slow ticker and publish it for the console, which links to and
+	// embeds the broadcast directly. Needed because an unlisted broadcast's
+	// channel/handle "/live" redirect only resolves a public stream. One quota
+	// unit per poll — negligible even against prod's constrained quota — and it
+	// runs regardless of YOUTUBE_INBOUND_ENABLED (discovery is not the chat read).
+	// WithStartImmediately so a fresh console sees the link without a full
+	// interval's wait; the last-value cache then retains it.
+	if !platformIsTwitch() && c.Conf.YouTubeAPIURL != "" {
+		ytGateway := gateway.New(c.Conf.YouTubeAPIURL)
+		t.addJob(2*time.Minute, "youtube.BroadcastDiscovery", func(ctx context.Context) {
+			b, err := ytGateway.ActiveBroadcast(ctx)
+			if err != nil {
+				slog.ErrorContext(ctx, "youtube broadcast discovery failed", "err", err)
+				return
+			}
+			eventbus.EmitYoutubeBroadcast(ctx, c.Conf.Environment, b.VideoID, b.Privacy, b.Live)
+		}, gocron.WithStartAt(gocron.WithStartImmediately()))
+	}
+
 	if !platformIsTwitch() {
 		// Twitch-sourced jobs stay off non-Twitch instances: session/presence
 		// tracking reads Twitch chatters (YouTube presence is punted in v1),
@@ -794,10 +814,13 @@ func (t *Tripbot) scheduleBackgroundJobs() {
 
 // addJob registers a gocron job at the given interval, wrapping fn with
 // tracedJob so each tick opens a span and centralising the error logging.
-func (t *Tripbot) addJob(interval time.Duration, name string, fn func(context.Context)) {
+// Extra gocron.JobOptions (e.g. WithStartAt for an immediate first run) are
+// appended verbatim; existing callers pass none.
+func (t *Tripbot) addJob(interval time.Duration, name string, fn func(context.Context), opts ...gocron.JobOption) {
 	_, err := t.scheduler.NewJob(
 		gocron.DurationJob(interval),
 		gocron.NewTask(tracedJob(name, fn)),
+		opts...,
 	)
 	if err != nil {
 		slog.Error("error adding background job: "+name, "err", err)
