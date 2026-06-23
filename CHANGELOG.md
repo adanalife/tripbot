@@ -9,6 +9,12 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v3.9.4] — 2026-06-23
+
+### VLC
+
+- Stamp a `service_platform` label (twitch/youtube) on every vlc-server and OBS metric series, so the per-platform encoder instances stay distinct instead of colliding on identical Prometheus series identities. ([#983](https://github.com/adanalife/tripbot/pull/983))
+
 ## [v3.9.3] — 2026-06-22
 
 ### Platform gateway
