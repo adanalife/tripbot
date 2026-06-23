@@ -1,0 +1,1 @@
+Finished the OBS decommission: removed the `bin/obs-browser-refresh` / `bin/obs-media-restart` operator scripts and the `obs:browser:refresh` task (they live in the [adanalife/obs](https://github.com/adanalife/obs) repo now), and repointed `pkg/chatbot/carsound.go`'s carhum/scene-config comments at the obs repo.

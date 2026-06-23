@@ -159,13 +159,6 @@ tasks:
     cmds:
       - task: release:smoke:stage-1
 
-  obs:browser:refresh:
-    desc: Refresh all OBS browser sources via websocket (OBS must be running and reachable)
-    env:
-      OBS_WEBSOCKET_PASSWD: '{{.OBS_WEBSOCKET_PASSWD | default "adanalife"}}'
-    cmds:
-      - uv run --with obsws-python bin/obs-browser-refresh
-
   # vlc-server native macOS build — links against the libvlc bundled
   # inside VLC.app. Saves recreating the CGO incantation from memory.
   # Key bits:
