@@ -97,7 +97,7 @@ tasks:
   # Changelog (towncrier). Fragments live in changelog.d/; assembled into
   # CHANGELOG.md at release time. Run on the host via uvx — no project dep.
   changelog:add:
-    desc: 'Scaffold a changelog fragment (PR=123 TYPE=fix). Types: gateway chatbot onscreens vlc obs console fix deploy ci cleanup misc summary'
+    desc: 'Scaffold a changelog fragment (PR=123 TYPE=fix). Types: gateway chatbot onscreens vlc console fix deploy ci cleanup misc summary'
     requires:
       vars: [PR]
     vars:
@@ -132,7 +132,6 @@ tasks:
     cmds:
       - docker buildx imagetools inspect adanalife/tripbot:{{.TAG}}
       - docker buildx imagetools inspect adanalife/vlc:{{.TAG}}
-      - docker buildx imagetools inspect adanalife/obs:{{.TAG}}
 
   release:smoke:whalecore:
     desc: Smoke-check tripbot.whalecore.com (requires allowlisted IP). Blocks on failure.
@@ -151,7 +150,6 @@ tasks:
       - task -d {{.HOME}}/adanalife/infra k8s-apply-stage-1
       - kubectl rollout status deploy/tripbot     --timeout=120s
       - kubectl rollout status deploy/vlc-server  --timeout=120s
-      - kubectl rollout status deploy/obs         --timeout=120s
       - kubectl rollout status deploy/cloudflared --timeout=60s
       - task: release:smoke:local
       - task: release:smoke:whalecore
@@ -160,13 +158,6 @@ tasks:
     desc: Alias for release:smoke:stage-1
     cmds:
       - task: release:smoke:stage-1
-
-  obs:browser:refresh:
-    desc: Refresh all OBS browser sources via websocket (docker-compose; OBS must be running)
-    env:
-      OBS_WEBSOCKET_PASSWD: '{{.OBS_WEBSOCKET_PASSWD | default "adanalife"}}'
-    cmds:
-      - uv run --with obsws-python bin/obs-browser-refresh
 
   # vlc-server native macOS build — links against the libvlc bundled
   # inside VLC.app. Saves recreating the CGO incantation from memory.

@@ -125,6 +125,36 @@
           "emitted_at"
         ]
       }
+    },
+    "youtube_broadcast": {
+      "subject": "tripbot.{env}.youtube.broadcast",
+      "transport": "jetstream",
+      "stream": "TRIPBOT_YOUTUBE",
+      "schema": {
+        "type": "object",
+        "title": "YoutubeBroadcast",
+        "properties": {
+          "video_id": {
+            "type": "string"
+          },
+          "live": {
+            "type": "boolean"
+          },
+          "privacy": {
+            "type": "string"
+          },
+          "emitted_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "video_id",
+          "live",
+          "privacy",
+          "emitted_at"
+        ]
+      }
     }
   },
   "$defs": {

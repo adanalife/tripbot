@@ -112,6 +112,37 @@ func TestIsLive(t *testing.T) {
 	}
 }
 
+func TestActiveBroadcast(t *testing.T) {
+	var gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		_, _ = w.Write([]byte(`{"video_id":"vid123","live":true,"privacy":"unlisted"}`))
+	}))
+	defer srv.Close()
+
+	b, err := New(srv.URL).ActiveBroadcast(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if b.VideoID != "vid123" || !b.Live || b.Privacy != "unlisted" {
+		t.Errorf("ActiveBroadcast = %+v, want {VideoID:vid123 Live:true Privacy:unlisted}", b)
+	}
+	if gotPath != "/v1/broadcast" {
+		t.Errorf("request path = %q, want /v1/broadcast", gotPath)
+	}
+}
+
+func TestActiveBroadcast_ErrorsOnNon200(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotImplemented)
+	}))
+	defer srv.Close()
+
+	if _, err := New(srv.URL).ActiveBroadcast(context.Background()); err == nil {
+		t.Error("expected an error on non-200 (e.g. a platform with no broadcast object)")
+	}
+}
+
 func TestIsLive_ErrorsOnNon200(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadGateway)

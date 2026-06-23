@@ -22,11 +22,12 @@ import (
 // duplicate the schema for little extra safety.
 func TestEventbusSchemaMatchesStructs(t *testing.T) {
 	structs := map[string]reflect.Type{
-		"ChatMessage":  reflect.TypeOf(eventbus.ChatMessage{}),
-		"ViewerCount":  reflect.TypeOf(eventbus.ViewerCount{}),
-		"VideoChanged": reflect.TypeOf(eventbus.VideoChanged{}),
-		"AuthStatus":   reflect.TypeOf(eventbus.AuthStatus{}),
-		"AuthAccount":  reflect.TypeOf(eventbus.AuthAccount{}),
+		"ChatMessage":      reflect.TypeOf(eventbus.ChatMessage{}),
+		"ViewerCount":      reflect.TypeOf(eventbus.ViewerCount{}),
+		"VideoChanged":     reflect.TypeOf(eventbus.VideoChanged{}),
+		"AuthStatus":       reflect.TypeOf(eventbus.AuthStatus{}),
+		"AuthAccount":      reflect.TypeOf(eventbus.AuthAccount{}),
+		"YoutubeBroadcast": reflect.TypeOf(eventbus.YoutubeBroadcast{}),
 	}
 
 	type nameReq struct {

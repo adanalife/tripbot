@@ -228,6 +228,26 @@ func (c *Client) InboundChat(ctx context.Context, cursor string) (InboundChatPag
 	return page, nil
 }
 
+// Broadcast is the channel's current live broadcast (GET /v1/broadcast). VideoID
+// is the watchable id (youtube.com/watch?v=<id>); Privacy is the visibility
+// ("public"/"unlisted"/"private"). Live is false when no broadcast is active.
+type Broadcast struct {
+	VideoID string `json:"video_id"`
+	Live    bool   `json:"live"`
+	Privacy string `json:"privacy"`
+}
+
+// ActiveBroadcast returns the channel's current live broadcast (GET
+// /v1/broadcast). Only platforms with a discoverable broadcast object (YouTube)
+// answer; a platform without one returns the gateway's 501 as an error.
+func (c *Client) ActiveBroadcast(ctx context.Context) (Broadcast, error) {
+	var b Broadcast
+	if err := c.getJSON(ctx, "/v1/broadcast", &b); err != nil {
+		return Broadcast{}, err
+	}
+	return b, nil
+}
+
 // getJSON issues a GET and decodes a 200 JSON body into dest; any non-200 or
 // decode failure is returned as an error.
 func (c *Client) getJSON(ctx context.Context, path string, dest any) error {

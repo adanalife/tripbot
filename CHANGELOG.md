@@ -9,6 +9,21 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v3.9.3] — 2026-06-22
+
+### Platform gateway
+
+- Route prod tripbot-youtube outbound chat sends through gateway-youtube (gateway owns the YouTube token). ([#971](https://github.com/adanalife/tripbot/pull/971))
+
+### Console / API
+
+- Publish the current YouTube broadcast (videoId + privacy) on `tripbot.<env>.youtube.broadcast` so the console can link to and embed the live broadcast directly — needed for an unlisted broadcast, whose channel/handle `/live` redirect only resolves a public stream. A YouTube-instance discovery cron polls the gateway's new `/v1/broadcast` endpoint every 2 minutes (running regardless of `YOUTUBE_INBOUND_ENABLED`, so it works on the bot-less prod instance).
+
+### Cleanup
+
+- Finished the OBS decommission: removed the `bin/obs-browser-refresh` / `bin/obs-media-restart` operator scripts and the `obs:browser:refresh` task (they live in the [adanalife/obs](https://github.com/adanalife/obs) repo now), and repointed `pkg/chatbot/carsound.go`'s carhum/scene-config comments at the obs repo.
+- Removed OBS from this repo. The OBS container image, its build/release workflows, and its cdk8s deployment now live in the standalone [adanalife/obs](https://github.com/adanalife/obs) repo; tripbot keeps only the runtime OBS WebSocket controller (`pkg/obs`) that drives the remote OBS instance.
+
 ## [v3.9.2] — 2026-06-22
 
 ### Chatbot

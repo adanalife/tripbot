@@ -42,7 +42,8 @@ var gpsPNG []byte
 
 // onscreenStyle controls how a single onscreen renders in its OBS browser source.
 // Keep these in sync with the dimensions / fonts that the previous text_ft2_source
-// and image_source entries in infra/docker/obs/config/Tripbot.json.tmpl used.
+// and image_source entries in the OBS scene config (config/Tripbot.json.tmpl in
+// the adanalife/obs repo) used.
 //
 // For text onscreens whose browser-source viewport overhangs a smaller on-canvas
 // overlay box (the bottom-strip rotators sit on a 640px third but their grey-box

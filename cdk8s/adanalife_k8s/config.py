@@ -53,15 +53,6 @@ class EnvConfig:
     # software decode — CPU flat at ~0.04 cores with and without /dev/dri,
     # verified live on stage 2026-06-13). See VlcServer in constructs/vlc.py.
     vlc_gpu: bool = True
-    # OBS's iGPU claim is gated on (gpu and obs_gpu), same shape as vlc_gpu.
-    # Default True keeps the claim wherever the env has a GPU; set False to drop
-    # just OBS's claim so the env stops being a live VAAPI consumer on the shared
-    # iGPU. An env that sets obs_gpu=False must also set obs_encoder="obs_x264" —
-    # without /dev/dri the VAAPI encoder can't run, so OBS falls back to software
-    # x264. See ObsInstance in constructs/obs.py.
-    obs_gpu: bool = True
-    obs_encoder: str = "obs_x264"  # ffmpeg_vaapi_tex on GPU envs
-    obs_quality: str = "low"  # low | high
     dashcam_mode: str = "hostpath"  # nfs | hostpath
     # Which PVC vlc mounts the corpus from when dashcam_mode == "nfs": the
     # NFS-backed `vlc-dashcam` (default) or the node-local `vlc-dashcam-local`
@@ -92,28 +83,23 @@ class EnvConfig:
     nfs_pv_name: str = (
         "vlc-dashcam-nfs"  # PVs bind 1:1 — stage needs its own (vlc-dashcam-nfs-stage)
     )
-    # Streaming platforms present in this env (obs instances). twitch everywhere;
-    # youtube currently stage-only while the bot side is built out.
+    # Streaming platforms present in this env. twitch everywhere; youtube
+    # currently stage-only while the bot side is built out. Drives the per-platform
+    # fan-out of tripbot/vlc/onscreens (OBS itself is deployed by the obs repo now,
+    # which carries its own obs_streaming for the stream-key + --startstreaming).
     platforms: tuple[str, ...] = ("twitch",)
-    # Subset of `platforms` whose OBS instance actually streams (emits its
-    # stream-key ExternalSecret from SM `k8s/obs/<platform>-stream-key` and boots
-    # with --startstreaming). Anything in `platforms` but not here boots idle
-    # (VNC-only). Per-env + per-platform so there's no hardcoded "prod-twitch is
-    # special" — a stream is turned on by listing it here, governed by the
-    # two-live-streams iGPU budget (prod-twitch + stage-youtube).
-    obs_streaming: tuple[str, ...] = ()
     # --- prod-stream protection (2026-06-11 stage-starves-prod incident) ---
     # PriorityClassName stamped on the env's app Deployment pods; when set,
     # SupportingChart also emits the PriorityClass itself. Prod outranks every
     # default-priority (0) pod, so under node pressure the scheduler preempts
     # co-tenant stage workloads, never the live stream.
     priority_class: str = ""
-    # CPU requests for the stream-critical pair. Requests are the CFS weight —
-    # under CPU contention each cgroup gets CPU proportional to its request, so
-    # prod's real-sized requests guarantee the encode/decode chain its share no
-    # matter how many 200m co-tenant pods burst. Non-prod stays at the small
-    # default so stage/dev keep their light footprint.
-    obs_cpu_request: str = "200m"
+    # CPU request for vlc-server (the stream-critical decode side; OBS, the encode
+    # side, is sized by the obs repo now). Requests are the CFS weight — under CPU
+    # contention each cgroup gets CPU proportional to its request, so prod's
+    # real-sized request guarantees the decode chain its share no matter how many
+    # 200m co-tenant pods burst. Non-prod stays at the small default so stage/dev
+    # keep their light footprint.
     vlc_cpu_request: str = "200m"
     # ResourceQuota hard caps for the app namespace (emitted by SupportingChart
     # when non-empty). Caps what the env can REQUEST in aggregate — scaling up
@@ -138,11 +124,10 @@ class EnvConfig:
     # (adanalife-rpi5) when it's present, falling back to the MS-01 when it's not.
     # When True, the tripbot/vlc/onscreens constructs add a toleration for the
     # node's dana.lol/rpi5 taint + a PREFERRED (never required) node affinity
-    # toward dana.lol/board=rpi5 (see scheduling.py). OBS opts in too, but only
-    # while it's a software encoder (not gpu and obs_gpu) — the Pi 5 has no H.264
-    # hw encoder, so a VAAPI OBS stays on the MS-01's Iris Xe. Stage only; prod
-    # stays on the MS-01 (and the taint repels it regardless, since prod pods
-    # carry no toleration).
+    # toward dana.lol/board=rpi5 (see scheduling.py). vlc/onscreens follow the OBS
+    # pod (colocate_with_obs_affinity) rather than carrying the board affinity
+    # themselves. Stage only; prod stays on the MS-01 (and the taint repels it
+    # regardless, since prod pods carry no toleration).
     prefer_rpi5: bool = False
     # When True, the app Deployments omit spec.replicas, so Argo never manages
     # the replica count and a hand `kubectl scale` / console start-stop button is
@@ -152,7 +137,7 @@ class EnvConfig:
     # SELFHEAL_OFF_ENVS). prod keeps replicas declared so Argo holds it at 1.
     manual_replicas: bool = False
     # Subset of `platforms` whose app Deployments render with spec.replicas=0 —
-    # the whole platform stack (tripbot/vlc/onscreens/obs) is emitted and Argo
+    # the whole platform stack (tripbot/vlc/onscreens) is emitted and Argo
     # manages it, but parked off so it consumes no node resources until turned
     # on by removing the platform from this set (a config edit + redeploy; under
     # prod selfHeal a hand `kubectl scale` would just be reverted to 0). Lets a
@@ -260,11 +245,9 @@ ENVS: dict[str, EnvConfig] = {
         gpu=True,
         # vlc doesn't need the iGPU (stream-copy + software decode); dropping its
         # claim frees an iGPU slot and eases co-tenant contention (the 2026-06-11
-        # prod-stutter incident). OBS keeps the iGPU for VAAPI encode. Proven on
-        # stage first, then prod on the live twitch stream.
+        # prod-stutter incident). OBS keeps the iGPU for VAAPI encode (sized in the
+        # obs repo now). Proven on stage first, then prod on the live twitch stream.
         vlc_gpu=False,
-        obs_encoder="ffmpeg_vaapi_tex",
-        obs_quality="high",
         dashcam_mode="nfs",
         dashcam_source="local",  # serve the corpus off the minipc's local NVMe copy
         tailscale=True,
@@ -289,17 +272,16 @@ ENVS: dict[str, EnvConfig] = {
         # pending), so rotators serve promo copy and no command responds. Flip to
         # True when the YouTube Data API quota lands. See youtube_inbound_enabled.
         youtube_inbound_enabled=False,
-        # obs_streaming governs only the in-tripbot OBS build (prod-twitch). prod
-        # obs-youtube streaming is owned by the standalone obs repo now (its own
-        # obs_streaming + the per-platform OBS cutover in infra), so it's NOT
-        # listed here — tripbot-apps skips obs-youtube for prod.
-        obs_streaming=("twitch",),
+        # Route prod tripbot-youtube's outbound chat sends through the in-namespace
+        # gateway-youtube (the gateway owns the YouTube token). Mirrors stage. The
+        # prod gateway holds a YouTube token as of 2026-06-22, so this is safe to
+        # ship; without a gateway token, sends would fail.
+        youtube_api_url="http://gateway-youtube.prod-1.svc.cluster.local:8080",
         # The live stream always wins: prod app pods outrank default-priority
-        # co-tenants (stage, dashcam-cv), and the encode/decode pair carries
-        # real CPU requests so contention can't starve it (20-core node; the
-        # whole prod chain requests ~3.2 CPU).
+        # co-tenants (stage, dashcam-cv), and vlc's decode side carries a real CPU
+        # request so contention can't starve it (20-core node). OBS's matching
+        # encode-side request lives in the obs repo now.
         priority_class="prod-stream",
-        obs_cpu_request="2",
         vlc_cpu_request="1",
         # Stable LAN endpoint for pulling the dashcam RTSP feed off-cluster
         # (e.g. OBS on a desktop) without kubectl: rtsp://<minipc-ip>:30854/dashcam
@@ -323,19 +305,6 @@ ENVS: dict[str, EnvConfig] = {
         # app workloads moved from infra into this repo (the cdk8s-into-repo
         # cutover dropped the flag, so stage vlc silently reclaimed the iGPU).
         vlc_gpu=False,
-        # stage obs-youtube streams via VAAPI on the shared Iris Xe again
-        # (re-enabled 2026-06-19). Live iGPU consumers are now prod obs-twitch +
-        # stage obs-youtube = 2 concurrent encoders, which is within budget — 3
-        # concurrent stuttered the prod stream on 2026-06-14, 2 is fine. The
-        # video-pipeline transcode job is CPU x264 (no iGPU claim), so it doesn't
-        # count against the iGPU budget. obs_gpu=True hard-gates obs-youtube onto
-        # the MS-01 (the i915 resource claim) and drops the rpi5 preferred
-        # affinity (see obs.py / scheduling.py); vlc/onscreens/tripbot-youtube
-        # stay on the Pi. High quality matches prod — VAAPI on the iGPU carries
-        # the 60fps encode cheaply.
-        obs_gpu=True,
-        obs_encoder="ffmpeg_vaapi_tex",
-        obs_quality="high",
         dashcam_mode="nfs",
         tailscale=True,
         # Prefer the ephemeral arm64 rpi5 worker for stage's stateless app pods
@@ -352,19 +321,17 @@ ENVS: dict[str, EnvConfig] = {
         # follows on its next wipe (set prod-1's data_namespace to prod-1-data).
         data_namespace="stage-1-data",
         # The YouTube platform stack burns in on stage first (tripbot-youtube
-        # binds chat once a broadcast is live; vlc-youtube self-sustains;
-        # obs-youtube boots idle — the streaming toggle is prod-twitch-only).
-        # prod follows once the stage burn-in + dual-iGPU-encode validation
-        # pass.
+        # binds chat once a broadcast is live; vlc-youtube self-sustains). prod
+        # follows once the stage burn-in + dual-iGPU-encode validation pass.
         #
         # twitch is back ON (2026-06-19) to test the platform-gateway end to
         # end: stage tripbot-twitch routes its Helix calls through gateway-twitch
         # (twitch_api_url below). The 2026-06-11 prod-stutter that forced twitch
         # OFF here was the stage twitch *VLC decode + OBS render* contending for
         # the shared iGPU — so only tripbot-twitch (no GPU) is meant to run;
-        # vlc/obs/onscreens-twitch stay scaled to 0 (manual_replicas below +
-        # stage selfHeal off, so a hand/console scale sticks). Budget is still
-        # two live streams total: prod-twitch + stage-youtube.
+        # vlc/onscreens-twitch stay scaled to 0 (manual_replicas below + stage
+        # selfHeal off, so a hand/console scale sticks). Budget is still two live
+        # streams total: prod-twitch + stage-youtube.
         platforms=("youtube", "twitch"),
         # Stage components are scaled up/down by hand (only tripbot-twitch runs
         # for the gateway test); omit replicas so Argo doesn't reset them.
@@ -377,10 +344,6 @@ ENVS: dict[str, EnvConfig] = {
         # in-namespace gateway-youtube (unconditionally — no flag). The inbound
         # poll stays in-process. prod has no youtube instance yet.
         youtube_api_url="http://gateway-youtube.stage-1.svc.cluster.local:8080",
-        # Stage streams to YouTube — the second half of the two-live-streams
-        # budget (prod-twitch + stage-youtube). Key from SM
-        # k8s/obs/youtube-stream-key (adanalife-stage account).
-        obs_streaming=("youtube",),
         # Guardrail from the same incident: cap what stage can request in
         # aggregate, so "accidentally scaled up too many stage deployments"
         # parks pods Unschedulable instead of crowding prod off the node.
@@ -409,7 +372,6 @@ ENVS: dict[str, EnvConfig] = {
         binary_env="staging",
         deployment_env="development",
         gpu=False,
-        obs_quality="low",
         dashcam_mode="hostpath",
         tailscale=False,
         otel=False,
@@ -430,7 +392,6 @@ ENVS: dict[str, EnvConfig] = {
         deployment_env="development",
         secret_source="local",
         gpu=False,
-        obs_quality="low",
         dashcam_mode="hostpath",
         tailscale=False,
         otel=False,

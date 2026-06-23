@@ -155,16 +155,23 @@ var (
 		{"reason", strType(), false},
 		{"init_url", strType(), false},
 	}
+	youtubeBroadcastFields = []field{
+		{"video_id", strType(), true},
+		{"live", boolType(), true},
+		{"privacy", strType(), true},
+		{"emitted_at", dateType(), true},
+	}
 )
 
 // envelopeFields maps each declared schema title to its field list so the
 // reflection test can cross-check against the real pkg/eventbus structs.
 var envelopeFields = map[string][]field{
-	"ChatMessage":  chatMessageFields,
-	"ViewerCount":  viewerCountFields,
-	"VideoChanged": videoChangedFields,
-	"AuthStatus":   authStatusFields,
-	"AuthAccount":  authAccountFields,
+	"ChatMessage":      chatMessageFields,
+	"ViewerCount":      viewerCountFields,
+	"VideoChanged":     videoChangedFields,
+	"AuthStatus":       authStatusFields,
+	"AuthAccount":      authAccountFields,
+	"YoutubeBroadcast": youtubeBroadcastFields,
 }
 
 // eventbusContract builds the full registry in stable on-disk order: the four
@@ -198,6 +205,12 @@ func eventbusContract() orderedObject {
 				{"transport", "jetstream"},
 				{"stream", "TRIPBOT_AUTH"},
 				{"schema", objectSchema("AuthStatus", authStatusFields)},
+			}},
+			{"youtube_broadcast", orderedObject{
+				{"subject", "tripbot.{env}.youtube.broadcast"},
+				{"transport", "jetstream"},
+				{"stream", "TRIPBOT_YOUTUBE"},
+				{"schema", objectSchema("YoutubeBroadcast", youtubeBroadcastFields)},
 			}},
 		}},
 		{"$defs", orderedObject{

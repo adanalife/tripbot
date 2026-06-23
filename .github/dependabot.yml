@@ -3,19 +3,34 @@
 
 version: 2
 updates:
+  # Bumps carry no user-facing change, so they never need a towncrier
+  # changelog fragment. Self-apply skip-changelog so the changelog
+  # workflow's existing label escape hatch exempts them — this keeps the
+  # enforcement workflow bot-agnostic (survives a future move off Dependabot
+  # without a workflow edit). Note: setting `labels` replaces Dependabot's
+  # defaults, so the otherwise-automatic dependencies/ecosystem labels are
+  # restated here.
   - package-ecosystem: gomod
     directory: /
     schedule:
       interval: daily
+    labels:
+      - dependencies
+      - go
+      - skip-changelog
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: daily
+    labels:
+      - dependencies
+      - github_actions
+      - skip-changelog
   - package-ecosystem: docker
     directory: infra/docker/tripbot
     schedule:
       interval: daily
-  - package-ecosystem: docker
-    directory: infra/docker/obs
-    schedule:
-      interval: daily
+    labels:
+      - dependencies
+      - docker
+      - skip-changelog
