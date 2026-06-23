@@ -1,1 +1,0 @@
-Removed OBS from this repo. The OBS container image, its build/release workflows, and its cdk8s deployment now live in the standalone [adanalife/obs](https://github.com/adanalife/obs) repo; tripbot keeps only the runtime OBS WebSocket controller (`pkg/obs`) that drives the remote OBS instance.
