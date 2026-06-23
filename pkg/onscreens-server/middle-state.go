@@ -34,10 +34,13 @@ func EnsureMiddleStateStream(ctx context.Context, js jetstream.JetStream, env st
 	cfg := jetstream.StreamConfig{
 		Name:        middleStateStreamName,
 		Description: "Last middle-text overlay state (content + visibility) for restore-on-restart.",
-		Subjects:    []string{oe.MiddleStateSubject(env)},
-		Storage:     jetstream.FileStorage,
-		Retention:   jetstream.LimitsPolicy,
-		Discard:     jetstream.DiscardOld,
+		// Wildcard over every platform leaf so both onscreens-twitch and
+		// onscreens-youtube can idempotently ensure the one stream while each
+		// reads/writes only its own tripbot.<env>.onscreens.middle.state.<platform>.
+		Subjects:  []string{oe.MiddleStateWildcard(env)},
+		Storage:   jetstream.FileStorage,
+		Retention: jetstream.LimitsPolicy,
+		Discard:   jetstream.DiscardOld,
 		// One retained message: exactly the latest middle-text state, nothing
 		// to prune.
 		MaxMsgsPerSubject: 1,
@@ -53,7 +56,7 @@ func EnsureMiddleStateStream(ctx context.Context, js jetstream.JetStream, env st
 // visibility as the last-value state. Fire-and-forget core publish — the
 // stream captures it; when NATS is unconfigured it's a silent no-op (matching
 // the eventbus convention).
-func publishMiddleState(ctx context.Context, env, msg string, showing bool) {
+func publishMiddleState(ctx context.Context, env, platform, msg string, showing bool) {
 	conn := natsclient.Conn()
 	if conn == nil {
 		return
@@ -63,7 +66,7 @@ func publishMiddleState(ctx context.Context, env, msg string, showing bool) {
 		slog.ErrorContext(ctx, "middle state marshal failed", "err", err)
 		return
 	}
-	subj := oe.MiddleStateSubject(env)
+	subj := oe.MiddleStateSubject(env, platform)
 	if err := conn.Publish(subj, payload); err != nil {
 		slog.ErrorContext(ctx, "middle state publish failed", "err", err, "subject", subj)
 	}
@@ -73,7 +76,7 @@ func publishMiddleState(ctx context.Context, env, msg string, showing bool) {
 // onscreens-server most recently published, or ok=false when there's nothing
 // to restore (empty stream, NATS off, or any read error — restore is
 // best-effort, so errors are logged and swallowed).
-func readMiddleState(ctx context.Context, js jetstream.JetStream, env string) (msg string, showing, ok bool) {
+func readMiddleState(ctx context.Context, js jetstream.JetStream, env, platform string) (msg string, showing, ok bool) {
 	if js == nil {
 		return "", false, false
 	}
@@ -82,7 +85,7 @@ func readMiddleState(ctx context.Context, js jetstream.JetStream, env string) (m
 		slog.WarnContext(ctx, "middle state stream lookup failed", "err", err, "stream", middleStateStreamName)
 		return "", false, false
 	}
-	subj := oe.MiddleStateSubject(env)
+	subj := oe.MiddleStateSubject(env, platform)
 	raw, err := stream.GetLastMsgForSubject(ctx, subj)
 	if err != nil {
 		if !errors.Is(err, jetstream.ErrMsgNotFound) {
@@ -109,7 +112,7 @@ func (s *Server) RestoreMiddleText(ctx context.Context) {
 		slog.ErrorContext(ctx, "couldn't ensure middle state stream", "err", err)
 		return
 	}
-	msg, showing, ok := readMiddleState(ctx, js, c.Conf.Environment)
+	msg, showing, ok := readMiddleState(ctx, js, c.Conf.Environment, c.Conf.Platform)
 	if !ok {
 		return
 	}

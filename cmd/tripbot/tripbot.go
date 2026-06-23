@@ -181,7 +181,7 @@ func NewTripbot(version string) *Tripbot {
 		app:     chatbot.New(),
 		srv:     server.New(),
 		player: video.NewPlayer(
-			onscreensClient.New(natsclient.DefaultPublisher(), c.Conf.Environment),
+			onscreensClient.New(natsclient.DefaultPublisher(), c.Conf.Environment, c.Conf.Platform),
 			vlcClient.New(c.Conf.VlcServerHost, natsclient.DefaultPublisher(), c.Conf.Environment),
 		),
 		flagClient: feature.NewInMemoryClient(nil),
@@ -198,7 +198,7 @@ func NewTripbot(version string) *Tripbot {
 	// Geocoder (pkg/geo default, set up in ConnectYouTubeViaGateway).
 	if !platformIsTwitch() && !c.Conf.YouTubeInboundEnabled {
 		t.locationFeed = locationfeed.New(
-			onscreensClient.New(natsclient.DefaultPublisher(), c.Conf.Environment),
+			onscreensClient.New(natsclient.DefaultPublisher(), c.Conf.Environment, c.Conf.Platform),
 			t.app.Geocoder,
 		)
 	}
