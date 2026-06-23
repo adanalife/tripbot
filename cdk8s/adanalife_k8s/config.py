@@ -272,6 +272,11 @@ ENVS: dict[str, EnvConfig] = {
         # pending), so rotators serve promo copy and no command responds. Flip to
         # True when the YouTube Data API quota lands. See youtube_inbound_enabled.
         youtube_inbound_enabled=False,
+        # Route prod tripbot-youtube's outbound chat sends through the in-namespace
+        # gateway-youtube (the gateway owns the YouTube token). Mirrors stage. The
+        # prod gateway holds a YouTube token as of 2026-06-22, so this is safe to
+        # ship; without a gateway token, sends would fail.
+        youtube_api_url="http://gateway-youtube.prod-1.svc.cluster.local:8080",
         # The live stream always wins: prod app pods outrank default-priority
         # co-tenants (stage, dashcam-cv), and vlc's decode side carries a real CPU
         # request so contention can't starve it (20-core node). OBS's matching
