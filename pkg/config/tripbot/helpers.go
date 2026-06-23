@@ -50,10 +50,11 @@ var HelpMessages = []string{
 // is bot-less.
 var YouTubeBotlessHelpMessages = []string{
 	"Want to chat? The interactive bot is live right now on Twitch → twitch.tv/ADanaLife_",
-	"Interactive commands are coming to YouTube soon — follow so you don't miss it!",
+	"Interactive commands are coming to YouTube soon — subscribe so you don't miss it!",
 	"Curious where we are or what day this was? Ask the bot live on Twitch: twitch.tv/ADanaLife_",
 	"Driving across America, 24 hours a day. Watch and chat live on Twitch → twitch.tv/ADanaLife_",
 	"This is a bot-powered slow-TV roadtrip. The full interactive experience is on Twitch: twitch.tv/ADanaLife_",
+	"Guess the state, earn miles, climb the leaderboard — all live on Twitch: twitch.tv/ADanaLife_",
 }
 
 var GoogleMapsStyle = []string{

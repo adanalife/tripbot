@@ -25,14 +25,17 @@ var possibleRightMessages = []rotatorMessage{
 }
 
 // botlessRightMessages replace the command-hint right rotator on a bot-less
-// YouTube instance (see botlessLeftMessages). Kept distinct from the left set so
-// the two corners don't show the same line at once. On a bot-less stream these
-// are mixed with the live date line (see botlessRightPool) — the info the !date
-// command would return.
+// YouTube instance (see botlessLeftMessages). This corner is the "subscribe
+// here + journey flavor" half of the split: the own-stream call to action uses
+// YouTube's "subscribe" (the left corner owns the Twitch CTA), so the two
+// corners advertise different actions instead of both saying "follow on
+// Twitch". On a bot-less stream these are mixed with the live date line (see
+// botlessRightPool) — the info the !date command would return.
 var botlessRightMessages = []rotatorMessage{
-	{Text: "Watch & chat live on Twitch", Weight: 2},
-	{Text: "Streaming 24 hours a day"},
-	{Text: "Don't forget to follow :)"},
+	{Text: "Driving across America, 24 hours a day"},
+	{Text: "Subscribe to ride along"},
+	{Text: "Slow-TV from the open road — just the drive"},
+	{Text: "Real dashcam footage, streaming nonstop"},
 }
 
 // botlessRightPool is the bot-less right-rotator pool: the static promo lines

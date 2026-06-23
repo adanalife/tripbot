@@ -27,15 +27,19 @@ var possibleLeftMessages = []rotatorMessage{
 }
 
 // botlessLeftMessages replace the command-hint left rotator on a bot-less
-// YouTube instance: no commands work there, so point viewers at the live,
-// interactive Twitch stream and signal that YouTube interactivity is coming.
+// YouTube instance: no commands work there, so this corner points viewers at
+// the live, interactive Twitch stream — the "where to interact" half of the
+// split. The right corner carries the YouTube subscribe + journey lines, so the
+// two corners never echo each other. Teases the guess/miles features without
+// printing a "!command" token a YouTube viewer would type into an unread chat.
 // On a bot-less stream these are mixed with the live location line (see
 // botlessLeftPool) — the info the !location command would return.
 var botlessLeftMessages = []rotatorMessage{
-	{Text: "Chat with the bot live on Twitch", Weight: 2},
+	{Text: "Chat live with the bot on Twitch", Weight: 2},
 	{Text: "twitch.tv/ADanaLife_", Weight: 2},
-	{Text: "Interactive commands coming to YouTube soon"},
-	{Text: "Follow the journey live on Twitch"},
+	{Text: "Interactive chat is coming to YouTube soon"},
+	{Text: "Want to talk to the bot? It's live on Twitch"},
+	{Text: "Guess the state and earn miles — live on Twitch"},
 }
 
 // liveDataWeight biases the live location/date line over the static promo lines
