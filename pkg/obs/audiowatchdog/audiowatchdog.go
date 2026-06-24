@@ -40,11 +40,12 @@ const (
 	// Car Hum voicing on YouTube.
 	fallbackFile = "/opt/tripbot/assets/carhum/car-hum-idle.flac"
 
-	// somaFMProbeURL is the SomaFM edge the watchdog probes to decide when it
-	// is safe to swap back. Matches the source's `input` URL in the scene
-	// config; a single-edge probe is conservative (if this edge is down we
-	// stay on the safe local bed even if another edge would work).
-	somaFMProbeURL = "https://ice4.somafm.com/gsclassic-128-mp3"
+	// somaFMProbeURL is the SomaFM endpoint the watchdog probes to decide when
+	// it is safe to swap back. Matches the source's `input` URL in the scene
+	// config — the round-robin ice.somafm.com hostname (4 edge IPs), so DNS
+	// hands out a healthy edge rather than pinning one. A failed probe keeps us
+	// on the safe local bed; per-edge probing is a tracked follow-up.
+	somaFMProbeURL = "https://ice.somafm.com/gsclassic-128-mp3"
 )
 
 // Deps are the OBS + SomaFM hooks the watchdog calls. Injectable so the loop
