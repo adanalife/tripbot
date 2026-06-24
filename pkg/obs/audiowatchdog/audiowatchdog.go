@@ -161,7 +161,14 @@ func Watch(ctx context.Context, deps Deps, cfg Config) {
 			instrumentation.OBSBackgroundAudio.SetOnFallback(onFallback)
 
 			db, fresh := deps.Level()
-			instrumentation.OBSBackgroundAudio.SetLevelDB(db)
+			if fresh {
+				// Only record a level we actually trust. A stale meter (the
+				// OBS WebSocket subscription dropped) would otherwise sit at
+				// the -60 floor and read as false silence; recording nothing
+				// instead lets the series go stale → NoData rather than
+				// fake-silent, so dashboards show a gap and alerts don't fire.
+				instrumentation.OBSBackgroundAudio.SetLevelDB(db)
+			}
 
 			state, err := deps.MediaState(ctx)
 			if err != nil {
