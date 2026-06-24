@@ -63,6 +63,7 @@ func newTestApp(vid video.Video) *App {
 		Weather:    noopWeather{},
 		Twitch:     noopTwitch{},
 		OBS:        noopOBS{},
+		Search:     noopSearch{},
 	}
 	a.indexCommands() // build the registry, same as New() does in production
 	return a

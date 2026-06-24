@@ -23,12 +23,14 @@ func TestNATSHandlersTolerateMalformedPayloads(t *testing.T) {
 	s.handleSkip(&nats.Msg{Subject: ve.SkipSubject("test"), Data: bad})
 	s.handleBack(&nats.Msg{Subject: ve.BackSubject("test"), Data: bad})
 	s.handlePlayFile(&nats.Msg{Subject: ve.PlayFileSubject("test"), Data: bad})
+	s.handlePlayFileAt(&nats.Msg{Subject: ve.PlayFileAtSubject("test"), Data: bad})
 }
 
-// handlePlayFile with an empty filename is a publisher bug — dropped before
-// the PlayVideoFile call (so safe on a zero Server).
+// handlePlayFile / handlePlayFileAt with an empty filename is a publisher bug —
+// dropped before the PlayVideoFile call (so safe on a zero Server).
 func TestPlayFileEmptyFilenameDropped(t *testing.T) {
 	s := &Server{}
 	empty := []byte(`{"emitted_at":"2026-01-01T00:00:00Z","file":""}`)
 	s.handlePlayFile(&nats.Msg{Subject: ve.PlayFileSubject("test"), Data: empty})
+	s.handlePlayFileAt(&nats.Msg{Subject: ve.PlayFileAtSubject("test"), Data: empty})
 }

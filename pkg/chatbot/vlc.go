@@ -13,6 +13,9 @@ import (
 type VLC interface {
 	PlayRandom(ctx context.Context) error
 	PlayFileInPlaylist(ctx context.Context, filename string) error
+	// PlayFileAtTimestamp plays filename and seeks to tsSec seconds in — the
+	// jump-to-moment path behind !find.
+	PlayFileAtTimestamp(ctx context.Context, filename string, tsSec float64) error
 	Skip(ctx context.Context, n int) error
 	Back(ctx context.Context, n int) error
 }
@@ -29,6 +32,9 @@ func (r realVLC) PlayRandom(ctx context.Context) error {
 }
 func (r realVLC) PlayFileInPlaylist(ctx context.Context, filename string) error {
 	return r.c.PlayFileInPlaylist(ctx, filename)
+}
+func (r realVLC) PlayFileAtTimestamp(ctx context.Context, filename string, tsSec float64) error {
+	return r.c.PlayFileAtTimestamp(ctx, filename, tsSec)
 }
 func (r realVLC) Skip(ctx context.Context, n int) error { return r.c.Skip(ctx, n) }
 func (r realVLC) Back(ctx context.Context, n int) error { return r.c.Back(ctx, n) }
