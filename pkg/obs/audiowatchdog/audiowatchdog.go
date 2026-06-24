@@ -106,30 +106,52 @@ func DefaultDeps(meter *VolumeMeter) Deps {
 	}
 }
 
+// somaFMProbeClient is dedicated to the reachability probe. DisableKeepAlives
+// forces a fresh connection every probe: a periodic liveness check must not
+// reuse a pooled connection, since a half-dead pooled conn to SomaFM would make
+// a perfectly healthy edge look unreachable and strand us on the fallback bed.
+// The explicit Timeout bounds the whole request as a backstop to the per-call
+// context deadline.
+var somaFMProbeClient = &http.Client{
+	Timeout:   6 * time.Second,
+	Transport: &http.Transport{DisableKeepAlives: true},
+}
+
 // defaultSomaFMReachable opens the SomaFM edge and reads a byte: success means
 // the edge is serving stream data. During an outage the connect hangs and the
-// 5s client timeout trips, so this returns false. Distinct from "the website
-// is up" — somafm.com can 200 while every ICEcast edge is dead.
+// timeout trips, so this returns false. Distinct from "the website is up" —
+// somafm.com can 200 while every ICEcast edge is dead.
+//
+// Every failure path logs why (at warn). The probe is only consulted while on
+// the fallback bed, so in steady state it's silent; the logging is what makes a
+// stuck-on-fallback state diagnosable instead of an unexplained silence (the
+// original swallowed every error — see the 2026-06-24 stage test).
 func defaultSomaFMReachable(ctx context.Context) bool {
-	cctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	cctx, cancel := context.WithTimeout(ctx, 6*time.Second)
 	defer cancel()
 	req, err := http.NewRequestWithContext(cctx, http.MethodGet, somaFMProbeURL, nil)
 	if err != nil {
+		slog.WarnContext(ctx, "somafm probe: build request failed", "err", err)
 		return false
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := somaFMProbeClient.Do(req)
 	if err != nil {
+		slog.WarnContext(ctx, "somafm probe: request failed", "err", err)
 		return false
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
+		slog.WarnContext(ctx, "somafm probe: unexpected status", "status", resp.StatusCode)
 		return false
 	}
 	// Read a single byte — a live stream yields one immediately; a stalled
 	// edge that completed the handshake but sends nothing trips the timeout.
 	buf := make([]byte, 1)
-	n, err := io.ReadFull(resp.Body, buf)
-	return n == 1 && (err == nil || err == io.EOF)
+	if _, err := io.ReadFull(resp.Body, buf); err != nil {
+		slog.WarnContext(ctx, "somafm probe: no stream bytes", "err", err)
+		return false
+	}
+	return true
 }
 
 // Watch evaluates the background-audio source every cfg.Interval and keeps
