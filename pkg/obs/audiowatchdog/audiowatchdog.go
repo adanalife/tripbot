@@ -46,6 +46,15 @@ const (
 	// hands out a healthy edge rather than pinning one. A failed probe keeps us
 	// on the safe local bed; per-edge probing is a tracked follow-up.
 	somaFMProbeURL = "https://ice.somafm.com/gsclassic-128-mp3"
+
+	// somaFMProbeUserAgent overrides Go's default User-Agent on the probe.
+	// SomaFM's ICEcast edges reject "Go-http-client/1.1" outright — the
+	// connection is closed before any response (the probe saw a bare EOF), so
+	// the probe always reported unreachable and the stream could never swap
+	// back off the fallback bed. Any non-default UA is accepted; confirmed on
+	// stage 2026-06-24. (OBS's own player sends an Lavf/ffmpeg UA, which is why
+	// playback itself was never affected.)
+	somaFMProbeUserAgent = "tripbot-audio-watchdog"
 )
 
 // Deps are the OBS + SomaFM hooks the watchdog calls. Injectable so the loop
@@ -134,6 +143,7 @@ func defaultSomaFMReachable(ctx context.Context) bool {
 		slog.WarnContext(ctx, "somafm probe: build request failed", "err", err)
 		return false
 	}
+	req.Header.Set("User-Agent", somaFMProbeUserAgent) // SomaFM rejects Go's default UA
 	resp, err := somaFMProbeClient.Do(req)
 	if err != nil {
 		slog.WarnContext(ctx, "somafm probe: request failed", "err", err)
