@@ -44,20 +44,28 @@ func SetBackgroundAudioFile(ctx context.Context, inputName, file string) error {
 // URL. Used by the audio-fallback watchdog to swap the SomaFM source onto the
 // local Car Hum bed when SomaFM is unreachable. file must exist inside the OBS
 // container.
+//
+// looping=true is essential: the SomaFM source ships with looping unset (a
+// radio stream doesn't loop), so without forcing it on, the fallback FLAC would
+// play exactly once and then go silent — re-creating the dead air we're trying
+// to avoid. (Confirmed on stage 2026-06-24.)
 func SetInputLocalFileMode(ctx context.Context, inputName, file string) error {
 	return setInputSettings(ctx, inputName, map[string]any{
 		"is_local_file": true,
 		"local_file":    file,
+		"looping":       true,
 	})
 }
 
 // SetInputNetworkMode flips an ffmpeg_source back to its network stream by
-// setting is_local_file=false. The source's `input` URL is preserved across
-// the local-file detour (the overlay merge never overwrote it), so OBS reopens
-// the original stream. The inverse of SetInputLocalFileMode.
+// setting is_local_file=false (and clearing looping, which is meaningless for a
+// live stream). The source's `input` URL is preserved across the local-file
+// detour (the overlay merge never overwrote it), so OBS reopens the original
+// stream. The inverse of SetInputLocalFileMode.
 func SetInputNetworkMode(ctx context.Context, inputName string) error {
 	return setInputSettings(ctx, inputName, map[string]any{
 		"is_local_file": false,
+		"looping":       false,
 	})
 }
 

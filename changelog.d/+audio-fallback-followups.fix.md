@@ -1,0 +1,1 @@
+Fix two issues in the SomaFM audio-fallback watchdog found during stage testing: the fallback now loops the local Car Hum bed (it was playing once and then going silent), and the SomaFM reachability probe now logs why it fails and uses a fresh connection per check (a stale pooled connection could otherwise strand the stream on the fallback bed).
