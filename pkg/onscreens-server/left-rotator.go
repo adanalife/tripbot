@@ -1,8 +1,6 @@
 package onscreensServer
 
 import (
-	"log/slog"
-	"math/rand"
 	"time"
 )
 
@@ -33,7 +31,7 @@ var possibleLeftMessages = []rotatorMessage{
 // two corners never echo each other. Teases the guess/miles features without
 // printing a "!command" token a YouTube viewer would type into an unread chat.
 // On a bot-less stream these are mixed with the live location line (see
-// botlessLeftPool) — the info the !location command would return.
+// leftLiveLine) — the info the !location command would return.
 var botlessLeftMessages = []rotatorMessage{
 	{Text: "Chat live with the bot on Twitch", Weight: 2},
 	{Text: "twitch.tv/ADanaLife_", Weight: 2},
@@ -48,46 +46,26 @@ var botlessLeftMessages = []rotatorMessage{
 // data against the current promo weights.
 const liveDataWeight = 6
 
-// botlessLeftPool is the bot-less left-rotator pool: the static promo lines plus
-// the live location line ("📍 City, State") when tripbot has pushed a fresh one.
-func botlessLeftPool(now time.Time) []rotatorMessage {
+// leftLiveLine is the bot-less left-rotator live-data line: the current location
+// ("📍 City, State") when tripbot has pushed a fresh one. Paired with
+// rightLiveLine's date so the two corners show "where" and "when" rather than
+// duplicating one field.
+func leftLiveLine(now time.Time) (rotatorMessage, bool) {
 	if loc, _, ok := liveLocation.snapshot(now); ok && loc != "" {
-		return append([]rotatorMessage{{Text: "📍 " + loc, Weight: liveDataWeight}}, botlessLeftMessages...)
+		return rotatorMessage{Text: "📍 " + loc, Weight: liveDataWeight}, true
 	}
-	return botlessLeftMessages
+	return rotatorMessage{}, false
 }
 
-// newLeftRotator constructs the left-rotator *Onscreen, primes it with a
-// first message synchronously (so the OBS browser source has content to
-// render the moment it polls — otherwise there's a brief race where the
-// rotator is empty until the goroutine schedules), and kicks off the
-// background loop that rotates the message every leftRotatorUpdateFrequency.
-func newLeftRotator() *Onscreen {
-	slog.Info("creating onscreen", "kind", "left-rotator")
-	osc := newOnscreen()
-	osc.Show(leftRotatorContent())
-	go leftRotatorLoop(osc)
-	return osc
-}
-
-func leftRotatorLoop(osc *Onscreen) {
-	for { // forever
-		time.Sleep(time.Duration(leftRotatorUpdateFrequency))
-		osc.Show(leftRotatorContent())
+// newLeftRotator configures the left corner. The caller pairs it with the right
+// rotator and calls start().
+func newLeftRotator() *rotator {
+	return &rotator{
+		kind:            "left-rotator",
+		freq:            leftRotatorUpdateFrequency,
+		messages:        possibleLeftMessages,
+		botlessMessages: botlessLeftMessages,
+		liveLine:        leftLiveLine,
+		rareMessage:     "You found the rare message! Make a clip for a prize!",
 	}
-}
-
-// leftRotatorContent creates the content for the leftRotator
-func leftRotatorContent() string {
-	// show a special, very rare message
-	if rand.Intn(10000) == 0 {
-		return "You found the rare message! Make a clip for a prize!"
-	}
-
-	if botless() {
-		return pickRotatorMessage(botlessLeftPool(time.Now()))
-	}
-
-	// pick a weighted-random message for this platform
-	return pickRotatorMessage(possibleLeftMessages)
 }
