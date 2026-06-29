@@ -10,6 +10,11 @@ import (
 // NATS is the publish surface chatbot uses for fire-and-forget pubsub
 // events. Tests inject a fake (recordingNATS / noopNATS); production
 // uses realNATS which delegates to the pkg/natsclient singleton.
+//
+// ponytail: NATS duplicates natsclient.Publisher (identical Publish signature),
+// and realNATS below duplicates natsclient's connPublisher adapter. Could
+// collapse onto natsclient.Publisher + natsclient.DefaultPublisher(). Kept as an
+// explicit local seam for now — deferred 2026-06-29 (ponytail-audit).
 type NATS interface {
 	// Publish sends payload on subject. Errors are logged but never
 	// returned — every chatbot publish is fire-and-forget by design.
