@@ -202,7 +202,6 @@ func makeGoogleMap(c *maps.Client, loc maps.LatLng, pathPoints []maps.LatLng) (i
 		Center: centerOfUSA.String(),
 		Zoom:   4,
 		Size:   "800x600",
-		// MapStyles: c.GoogleMapsStyle,
 		// Center:    loc.String(),
 		// Zoom:     5,
 		// Size:     "600x400",
