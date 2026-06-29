@@ -86,20 +86,6 @@ func ParseLatLng(ocrStr string) (float64, float64, error) {
 	return lat, lon, nil
 }
 
-// SplitOnRegex will is the equivalent of str.split(/regex/)
-func SplitOnRegex(text string, delimiter string) []string {
-	reg := regexp.MustCompile(delimiter)
-	indexes := reg.FindAllStringIndex(text, -1)
-	laststart := 0
-	result := make([]string, len(indexes)+1)
-	for i, element := range indexes {
-		result[i] = text[laststart:element[0]]
-		laststart = element[1]
-	}
-	result[len(indexes)] = text[laststart:]
-	return result
-}
-
 func RemoveNonLetters(input string) string {
 	reg, err := regexp.Compile("[^a-zA-Z]+")
 	if err != nil {
