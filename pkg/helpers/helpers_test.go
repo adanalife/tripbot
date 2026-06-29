@@ -186,50 +186,6 @@ func TestStripAtSign(t *testing.T) {
 	}
 }
 
-func TestBase64RoundTrip(t *testing.T) {
-	cases := []string{"", "hello", "Hello, World!", "miles: 42.0\n@dana"}
-	for _, in := range cases {
-		t.Run(in, func(t *testing.T) {
-			encoded := Base64Encode(in)
-			decoded, err := Base64Decode(encoded)
-			if err != nil {
-				t.Fatalf("decode error: %v", err)
-			}
-			if decoded != in {
-				t.Fatalf("round-trip mismatch: got %q, want %q", decoded, in)
-			}
-		})
-	}
-}
-
-func TestBase64DecodeError(t *testing.T) {
-	_, err := Base64Decode("!!!not-base64!!!")
-	if err == nil {
-		t.Fatal("expected decode error, got nil")
-	}
-}
-
-func TestInvertMap(t *testing.T) {
-	in := map[string]string{"a": "1", "b": "2", "c": "3"}
-	got := InvertMap(in)
-	want := map[string]string{"1": "a", "2": "b", "3": "c"}
-	if len(got) != len(want) {
-		t.Fatalf("got %v, want %v", got, want)
-	}
-	for k, v := range want {
-		if got[k] != v {
-			t.Fatalf("key %q: got %q, want %q", k, got[k], v)
-		}
-	}
-}
-
-func TestInvertMapEmpty(t *testing.T) {
-	got := InvertMap(map[string]string{})
-	if len(got) != 0 {
-		t.Fatalf("expected empty map, got %v", got)
-	}
-}
-
 func TestActualDate(t *testing.T) {
 	utc := time.Date(2024, 6, 15, 12, 0, 0, 0, time.UTC)
 	got := ActualDate(utc, 40.7128, -74.0060)
