@@ -11,7 +11,3 @@ func (c OnscreensServerConfig) IsStaging() bool {
 func (c OnscreensServerConfig) IsDevelopment() bool {
 	return c.Environment == "development"
 }
-
-func (c OnscreensServerConfig) IsTesting() bool {
-	return c.Environment == "testing"
-}
