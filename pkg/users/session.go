@@ -3,7 +3,7 @@ package users
 import (
 	"context"
 	"log/slog"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -200,7 +200,7 @@ func (s *Sessions) sortedUsernameList() []string {
 	for username := range s.loggedIn {
 		usernames = append(usernames, username)
 	}
-	sort.Sort(sort.StringSlice(usernames))
+	slices.Sort(usernames)
 	return usernames
 }
 
