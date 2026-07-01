@@ -61,14 +61,15 @@ func New(cfg Config) *Server {
 	if version == "" {
 		version = "dev"
 	}
+	leftRotator, rightRotator := startRotators()
 	return &Server{
 		Version:      version,
 		Flag:         newFlagOnscreen(),
 		GPS:          newGPSOnscreen(),
 		Leaderboard:  newLeaderboardOnscreen(),
-		LeftRotator:  newLeftRotator(),
+		LeftRotator:  leftRotator,
 		MiddleText:   newMiddleText(),
-		RightRotator: newRightRotator(),
+		RightRotator: rightRotator,
 		Timewarp:     newTimewarp(),
 	}
 }
