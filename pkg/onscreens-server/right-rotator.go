@@ -1,7 +1,6 @@
 package onscreensServer
 
 import (
-	"log/slog"
 	"time"
 )
 
@@ -25,52 +24,38 @@ var possibleRightMessages = []rotatorMessage{
 }
 
 // botlessRightMessages replace the command-hint right rotator on a bot-less
-// YouTube instance (see botlessLeftMessages). Kept distinct from the left set so
-// the two corners don't show the same line at once. On a bot-less stream these
-// are mixed with the live date line (see botlessRightPool) — the info the !date
-// command would return.
+// YouTube instance (see botlessLeftMessages). This corner is the "subscribe
+// here + journey flavor" half of the split: the own-stream call to action uses
+// YouTube's "subscribe" (the left corner owns the Twitch CTA), so the two
+// corners advertise different actions instead of both saying "follow on
+// Twitch". On a bot-less stream these are mixed with the live date line (see
+// rightLiveLine) — the info the !date command would return.
 var botlessRightMessages = []rotatorMessage{
-	{Text: "Watch & chat live on Twitch", Weight: 2},
-	{Text: "Streaming 24 hours a day"},
-	{Text: "Don't forget to follow :)"},
+	{Text: "Driving across America, 24 hours a day"},
+	{Text: "Subscribe to ride along"},
+	{Text: "Slow-TV from the open road — just the drive"},
+	{Text: "Real dashcam footage, streaming nonstop"},
 }
 
-// botlessRightPool is the bot-less right-rotator pool: the static promo lines
-// plus the live date line ("📅 Monday January 2, 2006") when tripbot has pushed
-// a fresh one. Paired with botlessLeftPool's location so the two corners show
-// "where" and "when" rather than duplicating one field.
-func botlessRightPool(now time.Time) []rotatorMessage {
+// rightLiveLine is the bot-less right-rotator live-data line: the current date
+// ("📅 Monday January 2, 2006") when tripbot has pushed a fresh one. Paired with
+// leftLiveLine's location so the two corners show "when" and "where" rather than
+// duplicating one field.
+func rightLiveLine(now time.Time) (rotatorMessage, bool) {
 	if _, date, ok := liveLocation.snapshot(now); ok && date != "" {
-		return append([]rotatorMessage{{Text: "📅 " + date, Weight: liveDataWeight}}, botlessRightMessages...)
+		return rotatorMessage{Text: "📅 " + date, Weight: liveDataWeight}, true
 	}
-	return botlessRightMessages
+	return rotatorMessage{}, false
 }
 
-// newRightRotator constructs the right-rotator *Onscreen, primes it with
-// a first message synchronously (so the OBS browser source has content
-// to render the moment it polls — otherwise there's a brief race where
-// the rotator is empty until the goroutine schedules), and kicks off the
-// background loop that rotates the message every rightRotatorUpdateFrequency.
-func newRightRotator() *Onscreen {
-	slog.Info("creating onscreen", "kind", "right-rotator")
-	osc := newOnscreen()
-	osc.Show(rightRotatorContent())
-	go rightRotatorLoop(osc)
-	return osc
-}
-
-func rightRotatorLoop(osc *Onscreen) {
-	for { // forever
-		time.Sleep(time.Duration(rightRotatorUpdateFrequency))
-		osc.Show(rightRotatorContent())
+// newRightRotator configures the right corner. The caller pairs it with the left
+// rotator and calls start().
+func newRightRotator() *rotator {
+	return &rotator{
+		kind:            "right-rotator",
+		freq:            rightRotatorUpdateFrequency,
+		messages:        possibleRightMessages,
+		botlessMessages: botlessRightMessages,
+		liveLine:        rightLiveLine,
 	}
-}
-
-// rightRotatorContent creates the content for the rightRotator
-func rightRotatorContent() string {
-	if botless() {
-		return pickRotatorMessage(botlessRightPool(time.Now()))
-	}
-	// pick a weighted-random message for this platform
-	return pickRotatorMessage(possibleRightMessages)
 }

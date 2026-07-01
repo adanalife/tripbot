@@ -25,6 +25,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"github.com/adanalife/tripbot/pkg/locationfeed"
 	"github.com/adanalife/tripbot/pkg/natsclient"
+	"github.com/adanalife/tripbot/pkg/obs/audiowatchdog"
 	"github.com/adanalife/tripbot/pkg/obs/watchdog"
 	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
 	"github.com/adanalife/tripbot/pkg/server"
@@ -181,7 +182,7 @@ func NewTripbot(version string) *Tripbot {
 		app:     chatbot.New(),
 		srv:     server.New(),
 		player: video.NewPlayer(
-			onscreensClient.New(natsclient.DefaultPublisher(), c.Conf.Environment),
+			onscreensClient.New(natsclient.DefaultPublisher(), c.Conf.Environment, c.Conf.Platform),
 			vlcClient.New(c.Conf.VlcServerHost, natsclient.DefaultPublisher(), c.Conf.Environment),
 		),
 		flagClient: feature.NewInMemoryClient(nil),
@@ -198,7 +199,7 @@ func NewTripbot(version string) *Tripbot {
 	// Geocoder (pkg/geo default, set up in ConnectYouTubeViaGateway).
 	if !platformIsTwitch() && !c.Conf.YouTubeInboundEnabled {
 		t.locationFeed = locationfeed.New(
-			onscreensClient.New(natsclient.DefaultPublisher(), c.Conf.Environment),
+			onscreensClient.New(natsclient.DefaultPublisher(), c.Conf.Environment, c.Conf.Platform),
 			t.app.Geocoder,
 		)
 	}
@@ -265,6 +266,7 @@ func (t *Tripbot) Run() {
 	t.startChatSendSubscriber(shutdownCtx)       // after startNATS + setUpTwitchClient: needs the conn and t.app.Chat
 	t.startDiscord(shutdownCtx)                  // Discord stays Twitch-side for v1
 	t.startSilentDisconnectWatchdog(shutdownCtx) // watches the OBS→Twitch stream specifically
+	t.startBackgroundAudioWatchdog(shutdownCtx)  // keeps audible music on-stream when SomaFM drops
 	t.connectToTwitch()
 }
 
@@ -430,6 +432,19 @@ func (t *Tripbot) startSilentDisconnectWatchdog(ctx context.Context) {
 		}
 	}
 	go watchdog.WatchSilentDisconnect(ctx, deps, 60*time.Second, 3, 10*time.Minute)
+}
+
+// startBackgroundAudioWatchdog launches the volume-meter connection + the
+// background-audio watchdog that keeps audible music on the Twitch stream when
+// SomaFM drops — swapping the "Groove Salad Classic" source onto the local Car
+// Hum bed when it goes silent and back when SomaFM recovers. Twitch-only:
+// SomaFM is the Twitch music bed; YouTube already runs the always-available
+// local Car Hum. First seen needed in prod on 2026-06-23, when a full SomaFM
+// edge outage left the stream silent with no self-heal.
+func (t *Tripbot) startBackgroundAudioWatchdog(ctx context.Context) {
+	meter := audiowatchdog.NewVolumeMeter(audiowatchdog.BackgroundAudioInputName, 30*time.Second)
+	go meter.Run(ctx)
+	go audiowatchdog.Watch(ctx, audiowatchdog.DefaultDeps(meter), audiowatchdog.DefaultConfig())
 }
 
 // startDiscord brings up the bot's Discord slash-command session when

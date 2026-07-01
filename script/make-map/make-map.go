@@ -23,8 +23,6 @@ var skipToDate = false
 var skipDate = time.Date(2018, time.Month(9), 29, 0, 0, 0, 0, time.UTC)
 
 func main() {
-	// spew.Dump(takeout.LoadLocations())
-
 	//TODO: remove this if it's not needed
 	// err := godotenv.Load()
 	// if err != nil {

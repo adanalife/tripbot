@@ -9,6 +9,24 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v3.10.0] — 2026-07-01
+
+### Onscreens
+
+- Platform-scope the onscreens overlay NATS subjects (trailing `.<platform>` leaf) so each per-platform `onscreens-server` only renders its own stream's overlays. Fixes the Twitch rotating leaderboard (and `!flag`/`!state`/middle-text) leaking onto the bot-less YouTube stream — leaderboards stay off YouTube until inbound chat, and therefore miles/guesses, returns there. ([#990](https://github.com/adanalife/tripbot/pull/990)) ([#990](https://github.com/adanalife/tripbot/pull/990))
+- Refresh the bot-less YouTube promo copy: the two on-screen rotator corners now advertise different actions (left → chat live on Twitch, right → subscribe on YouTube + journey flavor) instead of echoing the same "follow on Twitch" line, the `!help` rotator says "subscribe" rather than Twitch's "follow", and both pools gain variety plus a guess/miles/leaderboard tease that points viewers to where those features work. ([#991](https://github.com/adanalife/tripbot/pull/991)) ([#991](https://github.com/adanalife/tripbot/pull/991))
+- The two overlay corners no longer advertise the same command at the same time — when one rotator shows e.g. `!location`, the other skips any line mentioning that command (relaxing only if the exclusion would leave it blank). Internally the left/right rotators are now one parameterized `rotator` type instead of two near-identical copies.
+
+### Fixes
+
+- Keep audible music on the Twitch stream when SomaFM drops. A new OBS background-audio watchdog watches the `Groove Salad Classic` (SomaFM) source and, when it goes silent — the EOF-wedge where OBS stops retrying, single-edge jitter, or a full SomaFM edge outage, all seen on 2026-06-23 with no self-heal — swaps the source onto the local license-clean Car Hum bed so the stream isn't silent, then swaps it back once a SomaFM edge is serving bytes again. Adds `obs_background_audio_level_db`, `obs_background_audio_playing`, `obs_background_audio_on_fallback`, and `somafm_reachable` metrics to alert on. ([#993](https://github.com/adanalife/tripbot/pull/993))
+- Fix the SomaFM audio-fallback swap-back: the reachability probe sent Go's default `User-Agent`, which SomaFM's ICEcast edges reject (connection closed before any response), so the probe always reported unreachable and the stream could never return from the local Car Hum bed to SomaFM. The probe now sends a real User-Agent.
+- Fix two issues in the SomaFM audio-fallback watchdog found during stage testing: the fallback now loops the local Car Hum bed (it was playing once and then going silent), and the SomaFM reachability probe now logs why it fails and uses a fresh connection per check (a stale pooled connection could otherwise strand the stream on the fallback bed).
+
+### Cleanup
+
+- Drop the `go-spew` dependency — its only live use was a single debug dump, now done with `fmt.Printf`.
+
 ## [v3.9.4] — 2026-06-23
 
 ### VLC
