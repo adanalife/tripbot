@@ -1,1 +1,0 @@
-The two overlay corners no longer advertise the same command at the same time — when one rotator shows e.g. `!location`, the other skips any line mentioning that command (relaxing only if the exclusion would leave it blank). Internally the left/right rotators are now one parameterized `rotator` type instead of two near-identical copies.

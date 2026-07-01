@@ -1,1 +1,0 @@
-Fix the SomaFM audio-fallback swap-back: the reachability probe sent Go's default `User-Agent`, which SomaFM's ICEcast edges reject (connection closed before any response), so the probe always reported unreachable and the stream could never return from the local Car Hum bed to SomaFM. The probe now sends a real User-Agent.
