@@ -26,7 +26,7 @@ require (
 	github.com/lib/pq v1.12.3
 	github.com/logrusorgru/aurora/v3 v3.0.0
 	github.com/nathan-osman/go-sunrise v1.1.0
-	github.com/nats-io/nats-server/v2 v2.14.1
+	github.com/nats-io/nats-server/v2 v2.14.2
 	github.com/nats-io/nats.go v1.52.0
 	github.com/nicklaw5/helix/v2 v2.34.0
 	github.com/prometheus/client_golang v1.23.2
@@ -87,8 +87,8 @@ require (
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/mmcloughlin/profile v0.1.1 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/nats-io/jwt/v2 v2.8.1 // indirect
-	github.com/nats-io/nkeys v0.4.15 // indirect
+	github.com/nats-io/jwt/v2 v2.8.2 // indirect
+	github.com/nats-io/nkeys v0.4.16 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/nu7hatch/gouuid v0.0.0-20131221200532-179d4d0c4d8d // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
@@ -105,7 +105,7 @@ require (
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.43.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.10.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
-	golang.org/x/crypto v0.51.0 // indirect
+	golang.org/x/crypto v0.52.0 // indirect
 	golang.org/x/image v0.0.0-20200927104501-e162460cd6b5 // indirect
 	golang.org/x/net v0.55.0 // indirect
 	golang.org/x/sync v0.21.0 // indirect
