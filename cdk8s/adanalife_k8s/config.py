@@ -159,9 +159,11 @@ class EnvConfig:
 
     # The platform-gateway gateway-twitch URL the chatbot routes its command-time
     # Helix calls through (Phase 3). Empty keeps tripbot's in-process pkg/twitch
-    # path; set per env to flip App.Twitch to the HTTP client. Stage points at
-    # its in-namespace gateway-twitch Service; prod stays in-process until the
-    # gateway's prod release is cut + proven.
+    # path; set per env to flip App.Twitch to the HTTP client. Stage and prod
+    # point at their in-namespace gateway-twitch Service. Wiring the URL alone
+    # changes nothing at runtime: calls stay in-process until the
+    # chatbot.twitch_gateway flag is toggled on from the console (and revert
+    # instantly when toggled off).
     twitch_api_url: str = ""
     # Like twitch_api_url, but for a youtube instance's outbound chat sends:
     # gateway-youtube's URL routes them through the platform-gateway
@@ -277,6 +279,13 @@ ENVS: dict[str, EnvConfig] = {
         # prod gateway holds a YouTube token as of 2026-06-22, so this is safe to
         # ship; without a gateway token, sends would fail.
         youtube_api_url="http://gateway-youtube.prod-1.svc.cluster.local:8080",
+        # Route prod tripbot-twitch's command-time Helix calls through the
+        # in-namespace gateway-twitch, mirroring stage (proven there since
+        # 2026-06-19). Wired-but-dormant: the runtime chatbot.twitch_gateway
+        # flag (migration 021, defaults off) is the actual cutover switch, so
+        # shipping this is a no-op until the flag is flipped from the console —
+        # and flipping it back is the instant, restart-free revert.
+        twitch_api_url="http://gateway-twitch.prod-1.svc.cluster.local:8080",
         # The live stream always wins: prod app pods outrank default-priority
         # co-tenants (stage, dashcam-cv), and vlc's decode side carries a real CPU
         # request so contention can't starve it (20-core node). OBS's matching
@@ -337,8 +346,8 @@ ENVS: dict[str, EnvConfig] = {
         # for the gateway test); omit replicas so Argo doesn't reset them.
         manual_replicas=True,
         # Route stage tripbot's command-time Helix calls through the in-namespace
-        # gateway-twitch gateway (Phase 3). prod stays in-process until its gateway
-        # release is cut.
+        # gateway-twitch gateway (Phase 3). Proved out here first; prod is now
+        # wired the same way.
         twitch_api_url="http://gateway-twitch.stage-1.svc.cluster.local:8080",
         # Route stage tripbot-youtube's outbound chat sends through the
         # in-namespace gateway-youtube (unconditionally — no flag). The inbound
