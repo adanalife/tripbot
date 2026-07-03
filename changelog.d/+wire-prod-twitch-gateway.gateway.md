@@ -1,0 +1,1 @@
+Prod tripbot-twitch is now wired to gateway-twitch (TWITCH_API_URL set). Routing stays gated behind the chatbot.twitch_gateway feature flag, so the gateway is dormant until the flag is flipped on via the console — no restart.
