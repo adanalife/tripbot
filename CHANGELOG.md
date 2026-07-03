@@ -9,6 +9,30 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v3.10.1] — 2026-07-03
+
+### Chatbot
+
+- Rollup schema: `user_rollups` + `rollup_watermarks` + `scoreboard_snapshots` tables — derived-state substrate for the events rollup reconciler (worker in a follow-up PR) ([#1007](https://github.com/adanalife/tripbot/pull/1007))
+- Events rollup reconciler: `user_rollups` aggregates recomputed from the events table on an id watermark, plus once-only month-end scoreboard snapshots — derived state for `!leaderboard` async, `!lastmonth`, and cross-platform stats ([#1009](https://github.com/adanalife/tripbot/pull/1009))
+
+### Onscreens
+
+- Fixed the occasionally-blank rotator corner: a near-invisible heartbeat pixel on every onscreen page forces CEF to deliver a continuous frame stream to OBS, so a dropped frame after the hourly browser-source refresh self-heals in ~500ms instead of staying blank until the next rotation (up to 45s — indefinitely for middle-text). ([#1006](https://github.com/adanalife/tripbot/pull/1006))
+
+### Deploy / Infra
+
+- Identity/DB/observability Secrets now sync from SSM Parameter Store (the free `aws-parameterstore` ESO store) instead of AWS Secrets Manager.
+
+### Cleanup
+
+- Remove dead code flagged by a ponytail over-engineering audit: unused helpers (`ReadPidFile`, `PidExists`, `InvertMap`, `Base64Encode`/`Base64Decode` and the now-obsolete base64-in-URL regression test — overlay content moved to NATS), unused config (`IsTesting` on all three config types, the `GoogleMapsStyle` and `TimestampsToTry` vars), three caller-less `pkg/twitch` free-function shims, and the never-set `TripbotConfig.OutputChannel` field plus the dead branch that read it.
+- Replace a handful of hand-rolled loops/comparisons with their stdlib equivalents (`slices.Contains`, `slices.Sort`, `strings.EqualFold`). No behavior change.
+
+### Misc
+
+- Mark the chatbot/eventbus NATS publisher interfaces as ponytail debt (they duplicate `natsclient.Publisher`); no functional change.
+
 ## [v3.10.0] — 2026-07-01
 
 ### Onscreens
