@@ -28,6 +28,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/obs/audiowatchdog"
 	"github.com/adanalife/tripbot/pkg/obs/watchdog"
 	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
+	"github.com/adanalife/tripbot/pkg/rollups"
 	"github.com/adanalife/tripbot/pkg/server"
 	"github.com/adanalife/tripbot/pkg/telemetry"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
@@ -812,6 +813,11 @@ func (t *Tripbot) scheduleBackgroundJobs() {
 	}
 	t.addJob(61*time.Second, "users.UpdateSession", t.sessions.UpdateSession)
 	t.addJob(62*time.Second, "users.UpdateLeaderboard", t.sessions.UpdateLeaderboard)
+	// Derived-state reconciler over the events table (all platforms' events,
+	// but only one instance should run it — the twitch gate above covers that).
+	// Singleton mode + the reconciler's own row lock make overlap harmless.
+	t.addJob(5*time.Minute, "rollups.Reconcile", rollups.Reconcile,
+		gocron.WithSingletonMode(gocron.LimitModeReschedule))
 	t.addJob(5*time.Minute, "chatbot.ShowRotatingLeaderboard", t.app.ShowRotatingLeaderboard)
 	t.addJob(5*time.Minute, "users.PrintCurrentSession", t.sessions.PrintCurrentSession)
 	t.addJob(5*time.Minute, "twitch.GetSubscribers", t.refreshSubscribers)
