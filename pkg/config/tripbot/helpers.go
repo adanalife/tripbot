@@ -19,7 +19,7 @@ func (c TripbotConfig) IsDevelopment() bool {
 // UserIsAdmin returns true if a given user runs the channel
 // it's used to restrict admin features
 func UserIsAdmin(username string) bool {
-	return strings.ToLower(username) == strings.ToLower(Conf.ChannelName)
+	return strings.EqualFold(username, Conf.ChannelName)
 }
 
 // HelpMessages are all of the different things !help can return

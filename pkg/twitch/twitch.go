@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 	"time"
 
@@ -152,12 +153,7 @@ func (cl *API) SetChatters(logins []string, count int) {
 
 // UserIsSubscriber returns true if the user subscribes to the channel
 func (cl *API) UserIsSubscriber(username string) bool {
-	for _, sub := range cl.subscribers {
-		if username == sub {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(cl.subscribers, username)
 }
 
 // UserIsFollower returns true if the user follows the channel.
