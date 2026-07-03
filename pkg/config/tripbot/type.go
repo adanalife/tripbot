@@ -14,8 +14,6 @@ type TripbotConfig struct {
 
 	// ChannelName is the username of the stream
 	ChannelName string `required:"true" envconfig:"CHANNEL_NAME"`
-	// OutputChannel is the stream to which the bot will speak
-	OutputChannel string
 	// BotUsername is the username of the bot
 	BotUsername string `required:"true" envconfig:"BOT_USERNAME"`
 	// ExternalURL is the where the bot's HTTP server can be reached

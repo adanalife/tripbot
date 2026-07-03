@@ -216,10 +216,9 @@ func (a *App) ConnectIRC() *twitch.Client {
 	// live console. A second provider (YouTube/…) wires its own ChatClient here.
 	a.Chat = consoleMirror{
 		inner: twitchChat{
-			client:        client,
-			channelName:   c.Conf.ChannelName,
-			outputChannel: c.Conf.OutputChannel,
-			botUsername:   c.Conf.BotUsername,
+			client:      client,
+			channelName: c.Conf.ChannelName,
+			botUsername: c.Conf.BotUsername,
 		},
 		env:         c.Conf.Environment,
 		platform:    c.Conf.Platform,
