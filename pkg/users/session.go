@@ -267,3 +267,17 @@ func (s *Sessions) PrintCurrentSession(ctx context.Context) {
 
 // LoggedInCount returns the number of users currently in chat.
 func (s *Sessions) LoggedInCount() int { return len(s.loggedIn) }
+
+// LoggedInHumans returns the usernames of everyone currently in chat,
+// excluding bots. Same (pre-existing) caveat as the other loggedIn readers:
+// the map isn't locked against the UpdateSession cron.
+func (s *Sessions) LoggedInHumans() []string {
+	names := make([]string, 0, len(s.loggedIn))
+	for name, u := range s.loggedIn {
+		if u.IsBot {
+			continue
+		}
+		names = append(names, name)
+	}
+	return names
+}

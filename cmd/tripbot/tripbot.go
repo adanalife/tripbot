@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/adanalife/tripbot/pkg/achievements"
 	"github.com/adanalife/tripbot/pkg/background"
 	"github.com/adanalife/tripbot/pkg/chatbot"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
@@ -242,6 +243,17 @@ func (t *Tripbot) Run() {
 	t.app.Video = chatbot.NewVideoAdapter(t.player)         // commands read the same Player the cron refreshes
 	t.app.Sessions = chatbot.NewSessionsAdapter(t.sessions) // command-time queries
 	t.app.UserSessions = t.sessions                         // inbound IRC handlers + access checks read the same session state
+	if platformIsTwitch() {
+		// Log each clip transition + award viewer achievements. Twitch-only:
+		// it's the instance with presence tracking, and only one instance
+		// should write the shared video_plays log. Set after findInitialVideo
+		// so a restart doesn't re-log the clip already on screen.
+		t.player.OnChange = func(ctx context.Context, v video.Video) {
+			for _, msg := range achievements.HandleVideoChange(ctx, v, t.sessions.LoggedInHumans()) {
+				t.app.Chat.Say(msg)
+			}
+		}
+	}
 	t.sessions.InitLeaderboard(context.Background())
 	t.startCron()
 	t.startFeatureFlags(shutdownCtx)
