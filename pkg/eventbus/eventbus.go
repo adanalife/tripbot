@@ -30,6 +30,11 @@ import (
 // Publisher is the fire-and-forget publish surface the Emit helpers use. Tests
 // inject a fake via SetPublisher; production uses realPublisher, which delegates
 // to the pkg/natsclient singleton.
+//
+// ponytail: Publisher duplicates natsclient.Publisher (identical signature) and
+// realPublisher re-implements natsclient's connPublisher. Could collapse onto
+// natsclient.Publisher + natsclient.DefaultPublisher(). Kept as an explicit local
+// seam for now — deferred 2026-06-29 (ponytail-audit).
 type Publisher interface {
 	Publish(ctx context.Context, subject string, payload []byte)
 }
