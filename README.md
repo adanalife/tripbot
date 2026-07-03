@@ -7,7 +7,7 @@
 ![Build Status](https://img.shields.io/github/checks-status/adanalife/tripbot/master)
 [![License](https://img.shields.io/github/license/adanalife/tripbot)](https://tldrlegal.com/license/mit-license)
 
-This is the source code to [whereisdana.today](http://whereisdana.today), a 24/7 interactive [slow-tv](https://en.wikipedia.org/wiki/Slow_television) art project.
+This is the source code to [whereisdana.today](http://whereisdana.today), a 24/7 interactive [slow-tv](https://en.wikipedia.org/wiki/Slow_television) art project streaming on Twitch and YouTube.
 
 If you like it, please consider [subscribing](https://dana.lol/prime) to my channel on [Twitch.tv](https://www.twitch.tv/ADanaLife_).
 Thanks for watching!
@@ -17,7 +17,7 @@ Thanks for watching!
 
 ### How it all works
 
-There are three main components built from this repo, each running in its own container: the chatbot itself, which listens for user commands; a VLC-based video server, which manages the currently-playing video; and an overlay server for on-screen graphics. The scene compositing and streaming to Twitch is handled by OBS, which lives in its own repo ([adanalife/obs](https://github.com/adanalife/obs)) and pulls the VLC output over RTSP — so the bot and video server can still be split across machines. The chatbot still controls that OBS over its WebSocket (start/stop, health watchdog).
+There are three main components built from this repo, each running in its own container: the chatbot itself, which listens for user commands; a VLC-based video server, which manages the currently-playing video; and an overlay server for on-screen graphics. The scene compositing and streaming to the platforms (Twitch and YouTube) is handled by OBS, which lives in its own repo ([adanalife/obs](https://github.com/adanalife/obs)) and pulls the VLC output over RTSP — so the bot and video server can still be split across machines. The chatbot still controls that OBS over its WebSocket (start/stop, health watchdog). The admin UI lives in a separate private repo ([adanalife/tripbot-console](https://github.com/adanalife/tripbot-console)), and platform API calls route through a private [adanalife/platform-gateway](https://github.com/adanalife/platform-gateway) service.
 
 The general flow of information looks like this:
 
@@ -26,7 +26,27 @@ The general flow of information looks like this:
 For more detail, check out [Tripbot, the Adventure Robot](https://dana.lol/2020/04/15/tripbot-the-adventure-robot/).
 
 
-### Running tripbot locally
+### Developing on the host (quick start)
+
+Day-to-day Go work happens directly on the host. You'll need:
+
+- [mise](https://mise.jdx.dev) — provides the Go toolchain pinned in [`.tool-versions`](.tool-versions)
+- [go-task](https://taskfile.dev) — the task runner (`task --list` shows everything)
+- libvlc headers — needed by the cgo bindings behind the vlc/onscreens binaries: `brew install --cask vlc` on macOS, `apt install libvlc-dev` on Linux
+
+```bash
+# run the unit tests (natively on macOS; plain `task test` runs them in docker)
+task test:macos
+
+# or call go directly through mise
+mise exec -- go test ./...
+mise exec -- go build ./cmd/tripbot
+
+# build the libvlc-linked binary on macOS (sets the cgo flags for VLC.app)
+task vlc-server:build:macos
+```
+
+### Running the full stack locally
 
 You can use `docker-compose` to run tripbot on your own machine.
 It is configured to spin up all of the dependencies for the project.

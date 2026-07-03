@@ -262,7 +262,7 @@ class Tripbot(Construct):
                 namespace=ns,
                 labels=labels,
                 creation_policy="Owner",
-                extract="k8s/tripbot/youtube-creds",
+                extract="/k8s/tripbot/youtube-creds",
             )
             env_from.append(
                 k8s.EnvFromSource(
@@ -507,7 +507,7 @@ def _emit_db_external_secret(scope, ns, labels):
             {
                 "refreshInterval": "1h",
                 "secretStoreRef": {
-                    "name": "aws-secretsmanager",
+                    "name": "aws-parameterstore",
                     "kind": "SecretStore",
                 },
                 "target": {
@@ -525,21 +525,21 @@ def _emit_db_external_secret(scope, ns, labels):
                     {
                         "secretKey": "user",
                         "remoteRef": {
-                            "key": "k8s/postgres/credentials",
+                            "key": "/k8s/postgres/credentials",
                             "property": "user",
                         },
                     },
                     {
                         "secretKey": "password",
                         "remoteRef": {
-                            "key": "k8s/postgres/credentials",
+                            "key": "/k8s/postgres/credentials",
                             "property": "password",
                         },
                     },
                     {
                         "secretKey": "db",
                         "remoteRef": {
-                            "key": "k8s/postgres/credentials",
+                            "key": "/k8s/postgres/credentials",
                             "property": "db",
                         },
                     },
@@ -555,12 +555,12 @@ def _emit_app_external_secrets(scope, ns, labels):
         (
             "twitch-external-secret",
             "tripbot-twitch-creds",
-            "k8s/tripbot/twitch-creds",
+            "/k8s/tripbot/twitch-creds",
         ),
         (
             "google-maps-external-secret",
             "tripbot-google-maps-api-key",
-            "k8s/tripbot/google-maps-api-key",
+            "/k8s/tripbot/google-maps-api-key",
         ),
     ]:
         eso.external_secret(
@@ -577,13 +577,13 @@ def _emit_app_external_secrets(scope, ns, labels):
         (
             "discord-alerts-external-secret",
             "tripbot-discord-alerts-webhook",
-            "k8s/tripbot/discord-alerts-webhook",
+            "/k8s/tripbot/discord-alerts-webhook",
             "DISCORD_ALERTS_WEBHOOK",
         ),
         (
             "discord-bot-token-external-secret",
             "tripbot-discord-bot-token",
-            "k8s/tripbot/discord-bot-token",
+            "/k8s/tripbot/discord-bot-token",
             "DISCORD_BOT_TOKEN",
         ),
     ]:
