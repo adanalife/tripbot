@@ -573,6 +573,33 @@ func postReportToDiscord(webhookURL, username, message string) {
 	}
 }
 
+// achievementsCmd lists the caller's earned achievements, newest first.
+func (a *App) achievementsCmd(ctx context.Context, user *users.User, _ []string) {
+	slog.InfoContext(ctx, "ran !achievements", "username", user.Username)
+	var rows []struct{ Title string }
+	if err := a.db().WithContext(ctx).
+		Raw(`SELECT title FROM achievements WHERE platform = ? AND username = ? ORDER BY earned_at DESC`,
+			a.platform(), user.Username).Scan(&rows).Error; err != nil {
+		slog.ErrorContext(ctx, "achievements lookup failed", "err", err, "username", user.Username)
+		return
+	}
+	if len(rows) == 0 {
+		a.Chat.Say(fmt.Sprintf("@%s has no achievements yet — keep watching!", user.Username))
+		return
+	}
+	shown := rows
+	extra := ""
+	if len(rows) > 5 {
+		shown = rows[:5]
+		extra = fmt.Sprintf(", +%d more", len(rows)-5)
+	}
+	titles := make([]string, len(shown))
+	for i, r := range shown {
+		titles[i] = r.Title
+	}
+	a.Chat.Say(fmt.Sprintf("@%s has %d 🏆: %s%s", user.Username, len(rows), strings.Join(titles, ", "), extra))
+}
+
 func (a *App) bonusMilesCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !bonusmiles", "username", user.Username)
 	bonus := a.Sessions.BonusMiles(*user)

@@ -199,6 +199,12 @@ func (a *App) buildRegistry() []Command {
 			RequiresFollow: true,
 		},
 		{
+			Trigger:        "!achievements",
+			Aliases:        []string{"!achievement", "!badges"},
+			Handler:        a.achievementsCmd,
+			RequiresFollow: true,
+		},
+		{
 			Trigger:        "!km",
 			Aliases:        []string{"!kilometres", "!kilometers"},
 			Handler:        a.kilometresCmd,
