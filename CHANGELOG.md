@@ -9,6 +9,12 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v3.10.3] — 2026-07-04
+
+### Platform gateway
+
+- tripbot no longer refreshes Twitch tokens in-process — the platform gateway is the sole refresher and writer of `oauth_tokens`. This ends the two-writer race that produced periodic self-healed `401: Invalid OAuth token` errors. tripbot reads the gateway-refreshed tokens for the IRC connection and the EventSub handshake, and re-reads on a timer / on auth failure instead of refreshing. ([#1026](https://github.com/adanalife/tripbot/pull/1026))
+
 ## [v3.10.2] — 2026-07-04
 
 ### Platform gateway
