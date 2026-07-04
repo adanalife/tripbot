@@ -144,8 +144,9 @@ def test_stage_omits_replicas_prod_keeps_one():
 
 
 def test_stage_twitch_routes_through_gateway():
-    """Stage tripbot-twitch carries TWITCH_API_URL (Phase 3 gateway); the youtube
-    instance and prod tripbot do not."""
+    """Both stage and prod tripbot-twitch carry TWITCH_API_URL (Phase 3 gateway);
+    the youtube instances do not. On prod the gateway stays dormant until the
+    chatbot.twitch_gateway flag is flipped — TWITCH_API_URL only wires it."""
 
     def _cm_data(stem):
         return _by_kind(_objects(stem), "ConfigMap")[0]["data"]
@@ -154,8 +155,12 @@ def test_stage_twitch_routes_through_gateway():
         _cm_data("stage-1-tripbot-twitch").get("TWITCH_API_URL")
         == "http://gateway-twitch.stage-1.svc.cluster.local:8080"
     )
+    assert (
+        _cm_data("prod-1-tripbot-twitch").get("TWITCH_API_URL")
+        == "http://gateway-twitch.prod-1.svc.cluster.local:8080"
+    )
     assert "TWITCH_API_URL" not in _cm_data("stage-1-tripbot-youtube")
-    assert "TWITCH_API_URL" not in _cm_data("prod-1-tripbot-twitch")
+    assert "TWITCH_API_URL" not in _cm_data("prod-1-tripbot-youtube")
 
 
 def test_stage_youtube_routes_sends_through_gateway():
