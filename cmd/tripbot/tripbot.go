@@ -246,9 +246,8 @@ func (t *Tripbot) Run() {
 	t.startCron()
 	t.startFeatureFlags(shutdownCtx)
 	if platformIsTwitch() {
-		t.loadTwitchToken(shutdownCtx)           // must precede setUpTwitchClient — provides the IRC token
-		t.refreshTokensIfNearExpiry(shutdownCtx) // closes the restart-desync gap with the hourly cron
-		t.setUpTwitchClient()                    // required for the below
+		t.loadTwitchToken(shutdownCtx) // must precede setUpTwitchClient — provides the IRC token
+		t.setUpTwitchClient()          // required for the below
 		t.updateSubscribers()
 		t.getCurrentUsers()
 		t.startEventSub(shutdownCtx)
@@ -651,17 +650,6 @@ func (t *Tripbot) pollForTwitchToken(ctx context.Context) {
 	}
 }
 
-// refreshTokensIfNearExpiry runs the same refresh that the hourly cron does,
-// once, synchronously, at startup. gocron's DurationJob fires its first tick
-// one full interval after Scheduler.Start(), so a pod restart that lands
-// within the refresh window (or after expiry) would otherwise leave the
-// in-memory token stale until the cron catches up — up to an hour. refreshOne
-// early-returns when the stored token is healthy, so this is a no-op in the
-// common case.
-func (t *Tripbot) refreshTokensIfNearExpiry(ctx context.Context) {
-	mytwitch.RefreshUserAccessToken(ctx)
-}
-
 // setUpTwitchClient sets up the Twitch client,
 // used by many bot features
 func (t *Tripbot) setUpTwitchClient() {
@@ -708,20 +696,21 @@ func (t *Tripbot) connectToTwitch() {
 		if err != nil {
 			slog.Error("unable to connect to twitch", "err", err)
 			if errors.Is(err, twitch.ErrLoginAuthenticationFailed) {
-				// The IRC client's token was rejected. Re-establish the bot
-				// token from the DB (forced refresh, then re-read the row) so a
-				// token just written by auth-bootstrap is picked up without a
-				// restart — the common case after a DB restore carries a stale
-				// row. Then sync whatever's now in memory into the IRC client
-				// for the next Connect attempt.
-				mytwitch.Reauth(context.Background(), "bot")
+				// The IRC client's token was rejected. Re-read the bot row from
+				// oauth_tokens — the platform-gateway keeps it fresh, so a token
+				// it just rotated (or one auth-bootstrap wrote) is picked up
+				// without a restart. Then sync whatever's now in memory into the
+				// IRC client for the next Connect attempt.
+				if err := mytwitch.LoadFromDB(); err != nil {
+					slog.Warn("IRC auth failed; re-reading oauth_tokens failed", "err", err, "login_as", c.Conf.BotUsername)
+				}
 				if tok := mytwitch.IRCAuthToken(); tok != "" {
 					t.irc.SetIRCToken(tok)
 				} else {
-					// Reauth couldn't produce a token (refresh_token revoked and
-					// no fresh row in the DB yet). Surface the re-bootstrap link
-					// so re-auth is a click; the auth-links landing page shows it too.
-					slog.Error("IRC auth failed and no valid token after reauth; re-bootstrap needed", "login_as", c.Conf.BotUsername, "reauth_url", mytwitch.AuthInitURL("bot"))
+					// No usable token in the DB yet (e.g. the row is unseeded).
+					// Surface the re-bootstrap link so re-auth is a click; the
+					// auth-links landing page shows it too.
+					slog.Error("IRC auth failed and no valid token in oauth_tokens; re-bootstrap needed", "login_as", c.Conf.BotUsername, "reauth_url", mytwitch.AuthInitURL("bot"))
 				}
 			}
 			time.Sleep(time.Minute)
@@ -822,8 +811,14 @@ func (t *Tripbot) scheduleBackgroundJobs() {
 	t.addJob(5*time.Minute, "users.PrintCurrentSession", t.sessions.PrintCurrentSession)
 	t.addJob(5*time.Minute, "twitch.GetSubscribers", t.refreshSubscribers)
 	t.addJob(5*time.Minute, "twitch.GetFollowerCount", t.refreshFollowerCount)
-	t.addJob(1*time.Hour, "twitch.RefreshUserAccessToken", func(ctx context.Context) {
-		mytwitch.RefreshUserAccessToken(ctx)
+	// The platform-gateway owns token refresh now; tripbot only reads the rows
+	// it keeps fresh. Re-read on a timer so the in-memory tokens track the
+	// gateway's rotations — the IRC PASS line on reconnect and the token-expiry
+	// gauge (both fed by LoadFromDB) — without tripbot ever refreshing itself.
+	t.addJob(5*time.Minute, "twitch.ReloadTokens", func(ctx context.Context) {
+		if err := mytwitch.LoadFromDB(); err != nil {
+			slog.WarnContext(ctx, "periodic oauth_tokens reload failed", "err", err)
+		}
 		// Keep the IRC client's stored token in sync with the rotated credentials.
 		// go-twitch-irc captures the token at construction; without this, any
 		// reconnect after the first rotation replays the original boot-time token.
