@@ -9,6 +9,20 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v3.10.3] — 2026-07-04
+
+### Platform gateway
+
+- tripbot no longer refreshes Twitch tokens in-process — the platform gateway is the sole refresher and writer of `oauth_tokens`. This ends the two-writer race that produced periodic self-healed `401: Invalid OAuth token` errors. tripbot reads the gateway-refreshed tokens for the IRC connection and the EventSub handshake, and re-reads on a timer / on auth failure instead of refreshing. ([#1026](https://github.com/adanalife/tripbot/pull/1026))
+
+### Chatbot
+
+- Lifetime leaderboard is rebuilt from the users table every tick (was: in-memory from logged-in users only, drifting from the DB after boot); live session miles still overlay for logged-in viewers ([#1010](https://github.com/adanalife/tripbot/pull/1010))
+
+### Fixes
+
+- Index `events (username, event, date_created)` so the rollup reconciler does per-user index scans instead of full-scanning the events table every tick ([#1028](https://github.com/adanalife/tripbot/pull/1028))
+
 ## [v3.10.2] — 2026-07-04
 
 ### Platform gateway
