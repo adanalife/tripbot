@@ -20,11 +20,11 @@ metadata:
 spec:
   dataFrom:
     - extract:
-        key: k8s/tripbot/twitch-creds
+        key: /k8s/tripbot/twitch-creds
   refreshInterval: 1h
   secretStoreRef:
     kind: SecretStore
-    name: aws-secretsmanager
+    name: aws-parameterstore
   target:
     creationPolicy: Owner
     name: tripbot-twitch-creds
@@ -40,11 +40,11 @@ metadata:
 spec:
   dataFrom:
     - extract:
-        key: k8s/tripbot/google-maps-api-key
+        key: /k8s/tripbot/google-maps-api-key
   refreshInterval: 1h
   secretStoreRef:
     kind: SecretStore
-    name: aws-secretsmanager
+    name: aws-parameterstore
   target:
     creationPolicy: Owner
     name: tripbot-google-maps-api-key
@@ -60,12 +60,12 @@ metadata:
 spec:
   data:
     - remoteRef:
-        key: k8s/tripbot/discord-alerts-webhook
+        key: /k8s/tripbot/discord-alerts-webhook
       secretKey: DISCORD_ALERTS_WEBHOOK
   refreshInterval: 1h
   secretStoreRef:
     kind: SecretStore
-    name: aws-secretsmanager
+    name: aws-parameterstore
   target:
     creationPolicy: Owner
     name: tripbot-discord-alerts-webhook
@@ -81,12 +81,12 @@ metadata:
 spec:
   data:
     - remoteRef:
-        key: k8s/tripbot/discord-bot-token
+        key: /k8s/tripbot/discord-bot-token
       secretKey: DISCORD_BOT_TOKEN
   refreshInterval: 1h
   secretStoreRef:
     kind: SecretStore
-    name: aws-secretsmanager
+    name: aws-parameterstore
   target:
     creationPolicy: Owner
     name: tripbot-discord-bot-token

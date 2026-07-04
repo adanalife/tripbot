@@ -18,20 +18,15 @@ import (
 
 // --- auth / token ---
 
-func Client() (*helix.Client, error)            { return defaultClient.Client() }
-func BroadcasterClient() (*helix.Client, error) { return defaultClient.BroadcasterClient() }
-func LoadFromDB() error                         { return defaultClient.LoadFromDB() }
-func IRCAuthToken() string                      { return defaultClient.IRCAuthToken() }
-func CurrentUserAccessToken() string            { return defaultClient.CurrentUserAccessToken() }
-func BroadcasterUserAccessToken() string        { return defaultClient.BroadcasterUserAccessToken() }
-func AccountsNeedingReauth() []AccountReauth    { return defaultClient.AccountsNeedingReauth() }
-func TokenStatuses() []AccountTokenStatus       { return defaultClient.TokenStatuses() }
+func Client() (*helix.Client, error)      { return defaultClient.Client() }
+func LoadFromDB() error                   { return defaultClient.LoadFromDB() }
+func IRCAuthToken() string                { return defaultClient.IRCAuthToken() }
+func BroadcasterUserAccessToken() string  { return defaultClient.BroadcasterUserAccessToken() }
+func TokenStatuses() []AccountTokenStatus { return defaultClient.TokenStatuses() }
 
 func GenerateUserAccessToken(code string, expectedLogin string) error {
 	return defaultClient.GenerateUserAccessToken(code, expectedLogin)
 }
-func RefreshUserAccessToken(ctx context.Context) { defaultClient.RefreshUserAccessToken(ctx) }
-func Reauth(ctx context.Context, account string) { defaultClient.Reauth(ctx, account) }
 
 // --- audience / viewer queries ---
 

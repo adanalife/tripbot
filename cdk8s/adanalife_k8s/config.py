@@ -277,6 +277,11 @@ ENVS: dict[str, EnvConfig] = {
         # prod gateway holds a YouTube token as of 2026-06-22, so this is safe to
         # ship; without a gateway token, sends would fail.
         youtube_api_url="http://gateway-youtube.prod-1.svc.cluster.local:8080",
+        # Wire prod tripbot-twitch to gateway-twitch (in-namespace). This only
+        # sets TWITCH_API_URL — routing stays two-layer-gated, so the gateway is
+        # dormant until the chatbot.twitch_gateway feature flag is flipped on via
+        # the console (no restart). See vault/platform-gateway/cutover-runbook.
+        twitch_api_url="http://gateway-twitch.prod-1.svc.cluster.local:8080",
         # The live stream always wins: prod app pods outrank default-priority
         # co-tenants (stage, dashcam-cv), and vlc's decode side carries a real CPU
         # request so contention can't starve it (20-core node). OBS's matching

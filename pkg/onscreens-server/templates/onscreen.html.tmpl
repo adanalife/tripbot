@@ -133,6 +133,26 @@
 </style>
 </head>
 <body>
+<!-- Heartbeat: OBS renders this page via CEF offscreen rendering
+     (BrowserHWAccel), which only delivers a new frame to OBS when pixels
+     change — and occasionally drops one (post-reload, the page can get stuck
+     compositing its blank initial paint until the next content change; the
+     rotators' 45s cadence was the only recovery). Repainting this near-invisible
+     pixel twice a second forces a continuous frame stream, so a dropped frame
+     self-heals in ~500ms. background-color (not opacity/transform) on purpose:
+     it's a main-thread paint property, so it can't be optimized into a
+     compositor-only animation that OSR might fail to deliver. -->
+<div id="heartbeat" style="position:fixed;left:0;bottom:0;width:1px;height:1px;"></div>
+<script>
+(function () {
+  var hb = document.getElementById('heartbeat');
+  var on = false;
+  setInterval(function () {
+    on = !on;
+    hb.style.background = on ? 'rgba(0,0,0,0.02)' : 'rgba(0,0,0,0.01)';
+  }, 500);
+})();
+</script>
 {{if eq .Name "timewarp"}}
 <div id="warp">
   <div class="cover"><div class="streaks" id="tw-streaks"></div></div>

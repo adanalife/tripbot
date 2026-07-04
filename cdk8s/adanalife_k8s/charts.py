@@ -59,7 +59,7 @@ class IdentityChart(Chart):
     isolated from the per-component app churn so the DB-creds ExternalSecret isn't
     re-applied on every app sync.
 
-    Depends on infra's ESO SecretStore (the `aws-secretsmanager` store these
+    Depends on infra's ESO SecretStore (the `aws-parameterstore` store these
     ExternalSecrets reference) + the shared observability Secrets being present
     first — same data→supporting→apps ordering as before, now spanning two repos.
     """

@@ -475,7 +475,7 @@ func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 		vid = vid.Next(ctx)
 	}
 
-	if strings.ToLower(guess) == strings.ToLower(vid.State) {
+	if strings.EqualFold(guess, vid.State) {
 		msg = fmt.Sprintf("@%s got it! We're in %s", user.Username, vid.State)
 		// show the flag for the state
 		a.Onscreens.ShowFlag(ctx, 10*time.Second)
