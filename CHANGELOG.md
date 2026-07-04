@@ -9,6 +9,16 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v3.10.2] — 2026-07-04
+
+### Platform gateway
+
+- Prod tripbot-twitch is now wired to gateway-twitch (TWITCH_API_URL set). Routing stays gated behind the chatbot.twitch_gateway feature flag, so the gateway is dormant until the flag is flipped on via the console — no restart.
+
+### Deploy / Infra
+
+- The auth:bootstrap tasks read Twitch app credentials from SSM Parameter Store instead of the retired AWS Secrets Manager.
+
 ## [v3.10.1] — 2026-07-03
 
 ### Chatbot
