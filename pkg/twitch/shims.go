@@ -27,8 +27,6 @@ func TokenStatuses() []AccountTokenStatus { return defaultClient.TokenStatuses()
 func GenerateUserAccessToken(code string, expectedLogin string) error {
 	return defaultClient.GenerateUserAccessToken(code, expectedLogin)
 }
-func RefreshUserAccessToken(ctx context.Context) { defaultClient.RefreshUserAccessToken(ctx) }
-func Reauth(ctx context.Context, account string) { defaultClient.Reauth(ctx, account) }
 
 // --- audience / viewer queries ---
 
