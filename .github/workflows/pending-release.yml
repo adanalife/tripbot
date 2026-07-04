@@ -8,9 +8,13 @@ name: pending-release
 # This is a staging VIEW, not a release tool: it never merges anything. To cut
 # a release: on develop run `task changelog:build VERSION=X.Y.Z` to collate the
 # changelog.d/ fragments into CHANGELOG.md and commit; then rename this PR to
-# "Release vX.Y.Z", mark it ready, and merge it with the bump token (#minor /
-# #major; default patch) in the MERGE COMMIT message — auto-tag.yml reads the
-# token from commits landing on master.
+# "Release vX.Y.Z #patch" (or #minor / #major) and merge it. The bump token in
+# the title is ALWAYS required — it lands in the develop->master merge-commit
+# body, which is what auto-tag.yml reads. Do NOT rely on the "default patch":
+# every release window still contains the previous release's `Bump prod ... #none`
+# commits, and a bare title lets that stray #none skip tagging entirely (an
+# explicit #patch outranks #none; a missing token does not). This bit v3.4.1
+# and again v3.10.1.
 #
 # The pending changelog shown in the PR body is rendered with `towncrier build
 # --draft` from the fragments currently on develop.
@@ -145,7 +149,7 @@ jobs:
           RANGE="${LATEST_TAG:-origin/master}...develop"
           {
             echo "> **Draft / staging view — not meant to merge as-is.** Rebuilt automatically on every push to \`develop\`."
-            echo "> To cut a release: (1) on \`develop\`, run \`task changelog:build VERSION=X.Y.Z\` to collate the \`changelog.d/\` fragments into \`CHANGELOG.md\` (add a \`summary\` fragment first if you want a lead paragraph), commit, and push; (2) rename this PR to \`Release vX.Y.Z\`, mark it **Ready for review**; (3) **merge it with a merge commit** whose message carries the bump token (\`#minor\` / \`#major\`; default \`patch\`). \`auto-tag.yml\` reads the token off the commit landing on \`master\`. Once promoted out of draft, this workflow stops editing the PR."
+            echo "> To cut a release: (1) on \`develop\`, run \`task changelog:build VERSION=X.Y.Z\` to collate the \`changelog.d/\` fragments into \`CHANGELOG.md\` (add a \`summary\` fragment first if you want a lead paragraph), commit, and push; (2) rename this PR to \`Release vX.Y.Z #patch\` (or \`#minor\` / \`#major\`) — the bump token in the title is **required, always**, not optional; (3) mark it **Ready for review** and **merge it with a merge commit**. The title becomes the merge-commit body, and \`auto-tag.yml\` reads the token from it. ⚠️ Do not omit the token trusting the \`patch\` default: every release window carries the prior release's \`Bump prod ... #none\` commits, and a bare title lets that \`#none\` skip tagging (it skipped v3.10.1). An explicit \`#patch\` outranks \`#none\`. Once promoted out of draft, this workflow stops editing the PR."
             echo
             echo "$BUMP_LINE"
             echo
