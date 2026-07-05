@@ -399,7 +399,6 @@ func twitchAuthAccounts() []eventbus.AuthAccount {
 			LoginAs:   s.LoginAs,
 			ExpiresAt: expiresAt,
 			Reason:    s.Reason,
-			InitURL:   s.InitURL,
 		})
 	}
 	return accounts
@@ -476,9 +475,8 @@ func (t *Tripbot) startDiscord(ctx context.Context) {
 func (t *Tripbot) startEventSub(ctx context.Context) {
 	token := mytwitch.BroadcasterUserAccessToken()
 	if token == "" {
-		slog.WarnContext(ctx, "skipping eventsub: no broadcaster oauth_tokens row; bootstrap with `task tripbot:auth:bootstrap:broadcaster`",
-			"login_as", c.Conf.ChannelName,
-			"reauth_url", mytwitch.AuthInitURL("broadcaster"))
+		slog.WarnContext(ctx, "skipping eventsub: no broadcaster oauth_tokens row; re-auth via the platform-gateway consent flow (surfaced in tripbot-console)",
+			"login_as", c.Conf.ChannelName)
 		return
 	}
 	if mytwitch.ChannelID() == "" && t.gateway != nil {
@@ -591,8 +589,7 @@ func (t *Tripbot) loadTwitchToken(ctx context.Context) {
 	if err := mytwitch.LoadFromDB(); err != nil {
 		slog.WarnContext(ctx, "no usable Twitch token at boot; starting without a chat connection and polling",
 			"login_as", c.Conf.BotUsername,
-			"fix", "task tripbot:auth:bootstrap",
-			"reauth_url", mytwitch.AuthInitURL("bot"),
+			"fix", "re-auth via the platform-gateway consent flow (surfaced in tripbot-console)",
 			"err", err)
 		go t.pollForTwitchToken(ctx)
 	}
@@ -622,9 +619,8 @@ func (t *Tripbot) pollForTwitchToken(ctx context.Context) {
 		case <-ticker.C:
 			if err := mytwitch.LoadFromDB(); err != nil {
 				if time.Since(lastLogged) >= logEvery {
-					slog.WarnContext(ctx, "still waiting for Twitch token",
-						"login_as", c.Conf.BotUsername,
-						"reauth_url", mytwitch.AuthInitURL("bot"), "err", err)
+					slog.WarnContext(ctx, "still waiting for Twitch token (re-auth via the platform-gateway consent flow, surfaced in tripbot-console)",
+						"login_as", c.Conf.BotUsername, "err", err)
 					lastLogged = time.Now()
 				}
 				continue
@@ -699,9 +695,9 @@ func (t *Tripbot) connectToTwitch() {
 					t.irc.SetIRCToken(tok)
 				} else {
 					// No usable token in the DB yet (e.g. the row is unseeded).
-					// Surface the re-bootstrap link so re-auth is a click; the
-					// auth-links landing page shows it too.
-					slog.Error("IRC auth failed and no valid token in oauth_tokens; re-bootstrap needed", "login_as", c.Conf.BotUsername, "reauth_url", mytwitch.AuthInitURL("bot"))
+					// Re-auth runs through the platform-gateway consent flow now
+					// (surfaced in tripbot-console); the gateway writes the row.
+					slog.Error("IRC auth failed and no valid token in oauth_tokens; re-auth via the platform-gateway consent flow (surfaced in tripbot-console)", "login_as", c.Conf.BotUsername)
 				}
 			}
 			time.Sleep(time.Minute)

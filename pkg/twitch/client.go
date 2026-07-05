@@ -36,8 +36,8 @@ type API struct {
 	appAccessToken string
 
 	// tokenMu guards currentUserToken (bot) and currentBroadcasterToken.
-	// RWMutex because reads (IRCAuthToken, CurrentUserAccessToken) outnumber
-	// writes (LoadFromDB, refresh).
+	// RWMutex because reads (IRCAuthToken, BroadcasterUserAccessToken,
+	// TokenStatuses) outnumber writes (LoadFromDB).
 	tokenMu                 sync.RWMutex
 	currentUserToken        oauthtokens.Token
 	currentBroadcasterToken oauthtokens.Token

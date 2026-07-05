@@ -18,9 +18,9 @@ import (
 )
 
 // ErrNoToken is returned by Get when no row matches (provider, username).
-// Callers handle this as the cold-start signal — typically log.Fatal pointing
-// at the bootstrap CLI.
-var ErrNoToken = errors.New("oauthtokens: no row for (provider, username); run task tripbot:auth:bootstrap")
+// Callers handle this as the cold-start signal — the row is seeded by the
+// platform-gateway's OAuth consent flow (gateway-<platform>/auth/init).
+var ErrNoToken = errors.New("oauthtokens: no row for (provider, username); re-auth via the platform-gateway consent flow")
 
 // Token mirrors the oauth_tokens row. TwitchUserID + LastRefreshAt are
 // nullable in the schema; the bootstrap CLI populates twitch_user_id from

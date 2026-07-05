@@ -199,8 +199,8 @@ func TestEmitAuthStatus(t *testing.T) {
 	t.Cleanup(func() { nowFn = func() time.Time { return time.Now().UTC() } })
 
 	accounts := []AuthAccount{
-		{Account: "bot", LoginAs: "tripbot4001", ExpiresAt: fixed.Add(2 * time.Hour).Format(time.RFC3339Nano), InitURL: "https://tripbot.example/auth/init?account=bot"},
-		{Account: "broadcaster", LoginAs: "adanalife_staging", Reason: "expired", InitURL: "https://tripbot.example/auth/init?account=broadcaster"},
+		{Account: "bot", LoginAs: "tripbot4001", ExpiresAt: fixed.Add(2 * time.Hour).Format(time.RFC3339Nano)},
+		{Account: "broadcaster", LoginAs: "adanalife_staging", Reason: "expired"},
 	}
 	EmitAuthStatus(context.Background(), "development", "twitch", accounts)
 
@@ -225,8 +225,8 @@ func TestEmitAuthStatus(t *testing.T) {
 	if ev.Accounts[0].Account != "bot" || ev.Accounts[0].Reason != "" {
 		t.Errorf("accounts[0] = %+v, want healthy bot row", ev.Accounts[0])
 	}
-	if ev.Accounts[1].Reason != "expired" || ev.Accounts[1].InitURL == "" {
-		t.Errorf("accounts[1] = %+v, want expired broadcaster row with InitURL", ev.Accounts[1])
+	if ev.Accounts[1].Reason != "expired" || ev.Accounts[1].LoginAs != "adanalife_staging" {
+		t.Errorf("accounts[1] = %+v, want expired broadcaster row", ev.Accounts[1])
 	}
 	if ev.EmittedAt != fixed.Format(time.RFC3339Nano) {
 		t.Errorf("emitted_at = %q, want %q", ev.EmittedAt, fixed.Format(time.RFC3339Nano))

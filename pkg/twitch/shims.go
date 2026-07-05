@@ -6,9 +6,9 @@ import (
 
 // This file preserves the package-level free-function API that callers used
 // before pkg/twitch held a *Client. Each shim delegates to defaultClient so
-// existing call sites (pkg/users, pkg/server, cmd/tripbot, cmd/auth-bootstrap,
-// pkg/eventsub, pkg/chatbot) keep working unchanged while the package-level
-// mutable globals are gone.
+// existing call sites (pkg/users, pkg/server, cmd/tripbot, pkg/eventsub,
+// pkg/chatbot) keep working unchanged while the package-level mutable globals
+// are gone.
 //
 // These shims are transitional. Once a constructed *Client is threaded through
 // those callers, this whole file (and defaultClient) is deleted.
@@ -20,10 +20,6 @@ func LoadFromDB() error                   { return defaultClient.LoadFromDB() }
 func IRCAuthToken() string                { return defaultClient.IRCAuthToken() }
 func BroadcasterUserAccessToken() string  { return defaultClient.BroadcasterUserAccessToken() }
 func TokenStatuses() []AccountTokenStatus { return defaultClient.TokenStatuses() }
-
-func GenerateUserAccessToken(code string, expectedLogin string) error {
-	return defaultClient.GenerateUserAccessToken(code, expectedLogin)
-}
 
 // --- cached audience state (fed from the platform-gateway) ---
 

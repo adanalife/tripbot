@@ -60,33 +60,20 @@ func (s *Server) Start(ctx context.Context) {
 	// healthcheck endpoints
 	hp := r.PathPrefix("/health").Methods("GET", "HEAD").Subrouter()
 	hp.Handle("/live", tagged("/health/live", httpmw.LivenessHandler()))
-	// /ready runs no checks: tripbot's HTTP surface (the auth-links landing page,
-	// /auth/init, /auth/callback, the console-facing /api/* endpoints, /metrics)
-	// doesn't depend on the Twitch connection, so the pod must stay routable even
-	// when the bot is offline — otherwise the page used to re-auth a disconnected
-	// bot would 503. Chat-connection is surfaced via the tripbot_twitch_connected
-	// gauge.
+	// /ready runs no checks: tripbot's HTTP surface (the console-facing /api/*
+	// endpoints, /metrics, /version) doesn't depend on the Twitch connection, so
+	// the pod must stay routable even when the bot is offline. Chat-connection is
+	// surfaced via the tripbot_twitch_connected gauge.
 	hp.Handle("/ready", tagged("/health/ready", httpmw.ReadinessHandler()))
 
 	// version endpoint — returns build metadata as JSON
 	r.Handle("/version", tagged("/version", s.versionHandler)).Methods("GET", "HEAD")
-
-	// auth endpoints
-	auth := r.PathPrefix("/auth").Methods("GET").Subrouter()
-	auth.Handle("/init", tagged("/auth/init", authInitHandler))
-	auth.Handle("/callback", tagged("/auth/callback", authCallbackHandler))
 
 	// static assets
 	r.Handle("/favicon.ico", tagged("/favicon.ico", faviconHandler)).Methods("GET")
 
 	// prometheus metrics endpoint
 	r.Path("/metrics").Handler(tagged("/metrics", promhttp.Handler().ServeHTTP))
-
-	// root: a minimal landing page linking to the bot/broadcaster/YouTube login
-	// flows. The rich admin panel moved to the standalone tripbot-console; this
-	// page keeps the OAuth bootstrap links reachable on the pod itself for
-	// emergency re-auth.
-	r.Handle("/", tagged("/", rootHandler)).Methods("GET", "HEAD")
 
 	// console-facing read-only endpoints. The standalone tripbot-console holds
 	// no DB/Twitch access of its own and proxies these over the in-namespace
