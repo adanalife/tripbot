@@ -144,9 +144,8 @@ def test_stage_omits_replicas_prod_keeps_one():
 
 
 def test_stage_twitch_routes_through_gateway():
-    """Both stage and prod tripbot-twitch carry TWITCH_API_URL (Phase 3 gateway);
-    the youtube instances do not. On prod the gateway stays dormant until the
-    chatbot.twitch_gateway flag is flipped — TWITCH_API_URL only wires it."""
+    """Both stage and prod tripbot-twitch carry TWITCH_API_URL (the gateway is
+    the single Helix caller since the cutover); the youtube instances do not."""
 
     def _cm_data(stem):
         return _by_kind(_objects(stem), "ConfigMap")[0]["data"]
