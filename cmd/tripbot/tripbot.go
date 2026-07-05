@@ -238,6 +238,12 @@ func (t *Tripbot) Run() {
 	t.startCron()
 	t.startFeatureFlags(shutdownCtx)
 	if platformIsTwitch() {
+		if t.gateway == nil {
+			// No in-process Helix fallback since the cutover, so audience polls,
+			// the follower check, and broadcaster send have no backend here.
+			// Real deploys always wire TWITCH_API_URL; this is local/CI.
+			slog.WarnContext(shutdownCtx, "no TWITCH_API_URL: Twitch audience/follower/broadcaster-send features disabled (gateway not wired)")
+		}
 		t.loadTwitchToken(shutdownCtx) // must precede setUpTwitchClient — provides the IRC token
 		t.setUpTwitchClient()          // required for the below
 		t.updateSubscribers()

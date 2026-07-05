@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 
 	chatEvents "github.com/adanalife/tripbot/pkg/chat-events"
@@ -49,7 +50,11 @@ func (t *Tripbot) startChatSendSubscriber(ctx context.Context) {
 
 // sendChatAsBroadcaster posts text to the channel's chat as the broadcaster
 // through the platform-gateway (the single Helix caller). Fail-open semantics
-// are the caller's (chatsend.Dispatch logs and drops on error).
+// are the caller's (chatsend.Dispatch logs and drops on error). Errors when no
+// gateway is wired (a local/CI instance with no TWITCH_API_URL).
 func (t *Tripbot) sendChatAsBroadcaster(ctx context.Context, text string) error {
+	if t.gateway == nil {
+		return errors.New("cannot send as broadcaster: no gateway configured (TWITCH_API_URL unset)")
+	}
 	return t.gateway.SendChat(ctx, gateway.IdentityBroadcaster, text)
 }

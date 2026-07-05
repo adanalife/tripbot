@@ -14,6 +14,12 @@ import (
 // caller); the cached reads (Chatters / ChatterCount / IsSubscriber) read
 // tripbot's in-process audience cache — which the refresh populates from the
 // gateway — so they need no dispatch.
+//
+// t.gateway is nil only on an instance with no TWITCH_API_URL wired — a
+// non-Twitch instance, or a local/CI Twitch instance with no gateway. There's no
+// in-process Helix fallback any more, so the audience/follower features simply
+// have no backend there: the refreshes no-op (keeping the empty cache) and the
+// follower check fails closed. Real deploys always wire TWITCH_API_URL.
 type gatewayChatterSource struct{ t *Tripbot }
 
 func (s gatewayChatterSource) Chatters() map[string]struct{} { return mytwitch.Chatters() }
@@ -26,6 +32,9 @@ func (s gatewayChatterSource) IsSubscriber(username string) bool {
 // UpdateChatters refreshes the cached chatter set from the gateway. A gateway
 // error keeps the prior cached set, matching the don't-zero-on-error posture.
 func (s gatewayChatterSource) UpdateChatters() {
+	if s.t.gateway == nil {
+		return
+	}
 	ctx := context.Background()
 	count, logins, err := s.t.gateway.Chatters(ctx)
 	if err != nil {
@@ -36,13 +45,16 @@ func (s gatewayChatterSource) UpdateChatters() {
 }
 
 // IsFollower reports whether username follows the channel, via the gateway. The
-// broadcaster can't follow themselves, so admins short-circuit to true; a
-// gateway error fails closed (treated as non-follower).
+// broadcaster can't follow themselves, so admins short-circuit to true; no
+// gateway (or a gateway error) fails closed (treated as non-follower).
 func (s gatewayChatterSource) IsFollower(username string) bool {
-	ctx := context.Background()
 	if c.UserIsAdmin(username) {
 		return true
 	}
+	if s.t.gateway == nil {
+		return false
+	}
+	ctx := context.Background()
 	_, ok, err := s.t.gateway.FollowedAt(ctx, username)
 	if err != nil {
 		slog.WarnContext(ctx, "gateway follower check failed; treating as non-follower",
@@ -56,6 +68,9 @@ func (s gatewayChatterSource) IsFollower(username string) bool {
 // Driven at startup and by the 5-minute cron. A gateway error keeps the prior
 // cached list.
 func (t *Tripbot) refreshSubscribers(ctx context.Context) {
+	if t.gateway == nil {
+		return
+	}
 	subs, err := t.gateway.Subscribers(ctx)
 	if err != nil {
 		slog.WarnContext(ctx, "gateway subscribers refresh failed; keeping cached list", "err", err)
@@ -66,6 +81,9 @@ func (t *Tripbot) refreshSubscribers(ctx context.Context) {
 
 // refreshFollowerCount refreshes the follower-count gauge from the gateway.
 func (t *Tripbot) refreshFollowerCount(ctx context.Context) {
+	if t.gateway == nil {
+		return
+	}
 	total, err := t.gateway.Followers(ctx)
 	if err != nil {
 		slog.WarnContext(ctx, "gateway follower-count refresh failed", "err", err)
