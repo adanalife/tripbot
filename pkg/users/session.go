@@ -204,6 +204,23 @@ func (s *Sessions) GiveEveryoneMiles(gift float32) {
 	}
 }
 
+// CorrectMiles applies a manual miles delta (may be negative) to a user and
+// persists it immediately. If they're logged in, the live session copy is
+// adjusted so logout doesn't clobber the correction. Returns the new total.
+// The delta is deliberately NOT added to sessionExtraMiles — the caller logs a
+// separate correction event carrying it, and doing both would double-count.
+func (s *Sessions) CorrectMiles(ctx context.Context, username string, delta float32) float32 {
+	if u, ok := s.loggedIn[username]; ok {
+		u.Miles += delta
+		u.save(ctx)
+		return u.Miles
+	}
+	u := FindOrCreate(ctx, username)
+	u.Miles += delta
+	u.save(ctx)
+	return u.Miles
+}
+
 // sortedUsernameList creates a list of only usernames, and sort it
 func (s *Sessions) sortedUsernameList() []string {
 	usernames := make([]string, 0, len(s.loggedIn))

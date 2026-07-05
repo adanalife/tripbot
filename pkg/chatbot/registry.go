@@ -199,6 +199,11 @@ func (a *App) buildRegistry() []Command {
 			RequiresFollow: true,
 		},
 		{
+			// admin-gated inside the handler (broadcaster-only)
+			Trigger: "!givemiles",
+			Handler: a.giveMilesCmd,
+		},
+		{
 			Trigger:        "!km",
 			Aliases:        []string{"!kilometres", "!kilometers"},
 			Handler:        a.kilometresCmd,

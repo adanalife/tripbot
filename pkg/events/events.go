@@ -90,6 +90,22 @@ func Unsubscribe(ctx context.Context, user string) error {
 	return nil
 }
 
+// Correction records a manual miles adjustment (delta, may be negative) as an
+// event carrying the amount in extra_miles_earned, so the rollup folds it into
+// user_rollups.extra_miles alongside the session bonuses. This is the audit
+// trail for out-of-band miles changes the login/logout pairing can't see.
+func Correction(ctx context.Context, user string, delta float64) error {
+	if c.Conf.ReadOnly && c.Conf.Verbose {
+		slog.InfoContext(ctx, "skipping correction event: read-only mode", "username", user)
+		return &terrors.ReadOnlyError{Msg: "read-only mode"}
+	}
+	if err := database.GormDB().WithContext(ctx).Create(&Event{Username: user, Platform: c.Conf.Platform, Event: "correction", ExtraMilesEarned: &delta}).Error; err != nil {
+		return err
+	}
+	instrumentation.Events.Inc("correction")
+	return nil
+}
+
 // preFixSentinel is safely after the 0001-01-01 zero-time the timestamp bug
 // wrote (between the GORM migration #499 and the autoCreateTime fix) but well
 // before any real stream data — the stream started May 2019. Used to exclude

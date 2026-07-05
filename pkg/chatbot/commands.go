@@ -11,6 +11,7 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -19,6 +20,7 @@ import (
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
+	"github.com/adanalife/tripbot/pkg/events"
 	"github.com/adanalife/tripbot/pkg/feature"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/users"
@@ -595,6 +597,36 @@ func (a *App) secretInfoCmd(ctx context.Context, user *users.User, _ []string) {
 	}
 	slog.InfoContext(ctx, "secretinfo output", "text", msg)
 	a.Chat.Say(msg)
+}
+
+// giveMilesCmd is the admin !givemiles <user> <amount> command: it applies a
+// manual miles correction (amount may be negative) and logs a correction event
+// so the rollup folds it into user_rollups.extra_miles. Admin-only for now
+// (broadcaster); widen the gate to mods once a mod-status source exists.
+func (a *App) giveMilesCmd(ctx context.Context, user *users.User, params []string) {
+	slog.InfoContext(ctx, "ran !givemiles", "username", user.Username)
+	if !c.UserIsAdmin(user.Username) {
+		return
+	}
+	if len(params) < 2 {
+		a.Chat.Say("usage: !givemiles <user> <amount>")
+		return
+	}
+	target := helpers.StripAtSign(params[0])
+	delta, err := strconv.ParseFloat(params[1], 32)
+	if err != nil {
+		a.Chat.Say("that amount isn't a number I understand")
+		return
+	}
+	if u := a.Sessions.Find(ctx, target); u.ID == 0 {
+		a.Chat.Say("I don't know them, sorry!")
+		return
+	}
+	newTotal := a.Sessions.CorrectMiles(ctx, target, float32(delta))
+	if err := events.Correction(ctx, target, delta); err != nil {
+		slog.ErrorContext(ctx, "error creating correction event", "err", err)
+	}
+	a.Chat.Say(fmt.Sprintf("@%s now has %.2fmi", target, newTotal))
 }
 
 func (a *App) shutdownCmd(ctx context.Context, user *users.User, _ []string) {
