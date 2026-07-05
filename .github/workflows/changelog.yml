@@ -24,6 +24,7 @@ concurrency:
 jobs:
   fragment:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     # The back-merge PR (backmerge/master-to-develop) targets develop but
     # carries no user-facing change, so it never needs a fragment — exempt
     # it by head branch, mirroring pr-title.yml.

@@ -6,6 +6,7 @@ on:
 jobs:
   pre-commit:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       # gofmt (and the golang-based gitleaks/actionlint hooks) need the Go

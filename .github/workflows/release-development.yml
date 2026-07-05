@@ -23,6 +23,7 @@ jobs:
   # image. (OBS is built from the standalone adanalife/obs repo now.)
   changes:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     outputs:
       tripbot: ${{ steps.filter.outputs.tripbot }}
       vlc: ${{ steps.filter.outputs.vlc }}
@@ -83,6 +84,7 @@ jobs:
     if: needs.changes.outputs.tripbot == 'true'
     name: tripbot-build (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -141,6 +143,7 @@ jobs:
   tripbot-manifest:
     needs: tripbot-build
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -163,6 +166,7 @@ jobs:
     if: needs.changes.outputs.vlc == 'true'
     name: vlc-build (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -221,6 +225,7 @@ jobs:
   vlc-manifest:
     needs: vlc-build
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -243,6 +248,7 @@ jobs:
     if: needs.changes.outputs.onscreens == 'true'
     name: onscreens-server-build (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -301,6 +307,7 @@ jobs:
   onscreens-server-manifest:
     needs: onscreens-server-build
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4

@@ -39,6 +39,7 @@ concurrency:
 jobs:
   backmerge:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       BRANCH: backmerge/master-to-develop
     steps:
