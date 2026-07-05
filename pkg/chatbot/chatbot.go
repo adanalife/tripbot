@@ -199,8 +199,8 @@ func (a *App) ConnectIRC() *twitch.Client {
 		slog.Error("twitch API client unavailable at startup; continuing", "err", err)
 	}
 
-	// The IRC token comes from the DB-backed oauth_tokens row populated by
-	// cmd/auth-bootstrap; cmd/tripbot calls mytwitch.LoadFromDB before this.
+	// The IRC token comes from the DB-backed oauth_tokens row the platform-
+	// gateway keeps fresh; cmd/tripbot calls mytwitch.LoadFromDB before this.
 	client := twitch.NewClient(c.Conf.BotUsername, mytwitch.IRCAuthToken())
 
 	// attach this App's Twitch inbound adapters

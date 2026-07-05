@@ -9,8 +9,7 @@ RUN go mod download
 ARG VERSION=dev
 
 COPY . .
-RUN CGO_ENABLED=0 go build -ldflags="-s -w -X main.version=${VERSION}" -o /out/tripbot ./cmd/tripbot \
- && CGO_ENABLED=0 go build -ldflags="-s -w" -o /out/auth-bootstrap ./cmd/auth-bootstrap
+RUN CGO_ENABLED=0 go build -ldflags="-s -w -X main.version=${VERSION}" -o /out/tripbot ./cmd/tripbot
 
 # Runtime: minimal Ubuntu 24.04 matching the VLC/OBS containers
 FROM ghcr.io/adanalife/mirror/ubuntu:24.04
@@ -24,7 +23,6 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /out/tripbot /usr/local/bin/tripbot
-COPY --from=builder /out/auth-bootstrap /usr/local/bin/auth-bootstrap
 
 # Bundle the migrate CLI + db/migrate so this image can run schema migrations.
 COPY --from=ghcr.io/adanalife/mirror/migrate:4 /usr/local/bin/migrate /usr/local/bin/migrate
