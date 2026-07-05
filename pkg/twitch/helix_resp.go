@@ -29,9 +29,9 @@ import (
 // "broadcaster"); on a 401 it re-reads oauth_tokens (which the platform-gateway
 // keeps fresh) so the stale in-memory user-access-token is replaced and the
 // next call uses the current one. tripbot no longer refreshes in-process — that
-// would race the gateway's rotation. Pass "" to opt out — for app-access-token
-// calls (getChannelID's GetUsers) and the mid-bootstrap GetUsers, where
-// re-reading a user token wouldn't help.
+// would race the gateway's rotation. Pass "" to opt out — for the mid-bootstrap
+// GetUsers (GenerateUserAccessToken), where re-reading a user token wouldn't
+// help.
 func (cl *API) checkHelixResp(ctx context.Context, endpoint, account string, resp *helix.ResponseCommon) bool {
 	if resp == nil || resp.StatusCode < 400 {
 		return false

@@ -6,74 +6,37 @@ import (
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
-	"github.com/adanalife/tripbot/pkg/feature"
 	"github.com/adanalife/tripbot/pkg/gateway"
-	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 )
-
-// TwitchGatewayFlagKey is the runtime kill-switch for routing Helix calls
-// through the platform-gateway. It defaults off (the flag row doesn't exist
-// until toggled), so even an env wired with TWITCH_API_URL stays in-process
-// until the flag is flipped on — the cutover (and instant revert, no restart)
-// is a console toggle. Only meaningful when TWITCH_API_URL is set.
-//
-// Exported so cmd/tripbot can gate the non-chatbot Helix callers (the OBS
-// watchdog's live-check, the chat-send path) on the same flag — one gate for
-// "tripbot uses the gateway", with a single consistent revert story.
-const TwitchGatewayFlagKey = "chatbot.twitch_gateway"
 
 // Twitch is the command-time Twitch Helix surface the chatbot needs. Today
 // that's only follow lookups (followageCmd); it grows as admin-panel Helix
 // features land (ban/timeout, send-as-broadcaster).
 //
-// It is deliberately the seam where, if the Twitch Helix API ever moves into
-// its own service, the in-process adapter below is swapped for an HTTP
-// client — without touching any command code.
+// The Helix API is owned by the platform-gateway (gateway-twitch); this seam is
+// the HTTP client that reaches it, so command code stays untouched (the payoff
+// of the #738/#739 injection seam).
 type Twitch interface {
 	FollowedAt(username string) (time.Time, bool)
 }
 
-// newTwitch wires the production Twitch adapter. With no TWITCH_API_URL there's
-// no gateway to reach, so it's the plain in-process path (zero-config default).
-// When a gateway IS wired, it returns a flaggedTwitch that dispatches per call
-// based on the TwitchGatewayFlagKey runtime flag — so the gateway is wired but
-// dormant until flipped on, and revertible without a restart.
-func newTwitch(a *App) Twitch {
+// newTwitch wires the production Twitch adapter — the platform-gateway HTTP
+// client, the single Helix caller since the cutover. A non-Twitch instance
+// (PLATFORM=youtube) has no TWITCH_API_URL and thus no Twitch Helix surface, so
+// it gets a fail-closed no-op adapter.
+func newTwitch(*App) Twitch {
 	if c.Conf.TwitchAPIURL == "" {
-		return realTwitch{}
+		return noTwitch{}
 	}
-	return flaggedTwitch{
-		app:     a,
-		gateway: newGatewayTwitch(c.Conf.TwitchAPIURL),
-		inproc:  realTwitch{},
-	}
+	return newGatewayTwitch(c.Conf.TwitchAPIURL)
 }
 
-// flaggedTwitch routes each call to the gateway or the in-process adapter based
-// on the live TwitchGatewayFlagKey value, read from the App's flag client at
-// call time (cmd/tripbot reassigns a.Flags to the Postgres-backed, console-
-// toggleable client after New(), so the flag flips without a bot restart).
-type flaggedTwitch struct {
-	app     *App
-	gateway Twitch
-	inproc  Twitch
-}
+// noTwitch is the fail-closed adapter for instances with no gateway wired (a
+// non-Twitch bot). Every lookup reports "unknown", matching the gateway
+// adapter's fail-closed posture.
+type noTwitch struct{}
 
-func (f flaggedTwitch) FollowedAt(username string) (time.Time, bool) {
-	if f.app.Flags.Bool(context.Background(), TwitchGatewayFlagKey, feature.EvalContext{}) {
-		return f.gateway.FollowedAt(username)
-	}
-	return f.inproc.FollowedAt(username)
-}
-
-// realTwitch is the in-process adapter — used when no gateway URL is
-// configured. Delegates to the package-level pkg/twitch shim (defaultClient).
-// Mirrors the realVLC / realOnscreens shape.
-type realTwitch struct{}
-
-func (realTwitch) FollowedAt(username string) (time.Time, bool) {
-	return mytwitch.FollowedAt(username)
-}
+func (noTwitch) FollowedAt(string) (time.Time, bool) { return time.Time{}, false }
 
 // gatewayTwitch is the HTTP adapter — it reaches the platform-gateway
 // gateway-twitch instance (via the shared pkg/gateway client) instead of
@@ -88,10 +51,10 @@ func newGatewayTwitch(baseURL string) gatewayTwitch {
 }
 
 // FollowedAt asks the gateway when username followed the channel. It fails
-// closed (ok=false) on any transport, decode, or non-2xx error — matching the
-// in-process adapter, so gateway trouble degrades a follow check rather than
-// blocking the command. The gateway's "not a follower" answer (a clean 404)
-// comes back as ok=false with no error and is not logged.
+// closed (ok=false) on any transport, decode, or non-2xx error, so gateway
+// trouble degrades a follow check rather than blocking the command. The
+// gateway's "not a follower" answer (a clean 404) comes back as ok=false with
+// no error and is not logged.
 func (g gatewayTwitch) FollowedAt(username string) (time.Time, bool) {
 	when, ok, err := g.client.FollowedAt(context.Background(), username)
 	if err != nil {

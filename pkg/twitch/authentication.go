@@ -161,43 +161,6 @@ func (cl *API) Client() (*helix.Client, error) {
 	return client, nil
 }
 
-// BroadcasterClient returns the helix client that carries the broadcaster's
-// user-access-token, lazy-building it on first call. Calls authorizing
-// against the channel-owner identity (GetSubscriptions, GetChannelFollows
-// total, channel.update) must go through this client; the bot client would
-// 401 on those endpoints.
-//
-// The App Access Token is reused from Client(); each helix.Client only needs
-// the per-identity user-access-token to differ.
-func (cl *API) BroadcasterClient() (*helix.Client, error) {
-	if cl.broadcasterTwitchClient != nil {
-		return cl.broadcasterTwitchClient, nil
-	}
-	// Ensure Client() ran so appAccessToken is set.
-	if _, err := cl.Client(); err != nil {
-		return nil, err
-	}
-	client, err := helix.NewClient(&helix.Options{
-		ClientID:     ClientID,
-		ClientSecret: ClientSecret,
-		RedirectURI:  c.Conf.ExternalURL + "/auth/callback",
-		HTTPClient:   helixHTTPClient,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("twitch: building broadcaster client: %w", err)
-	}
-	if cl.appAccessToken != "" {
-		client.SetAppAccessToken(cl.appAccessToken)
-	}
-	cl.tokenMu.RLock()
-	if cl.currentBroadcasterToken.AccessToken != "" {
-		client.SetUserAccessToken(cl.currentBroadcasterToken.AccessToken)
-	}
-	cl.tokenMu.RUnlock()
-	cl.broadcasterTwitchClient = client
-	return client, nil
-}
-
 // LoadFromDB loads both the bot row and the broadcaster row from oauth_tokens.
 // The bot row is required (no IRC without it). The broadcaster row is
 // optional — when missing, broadcaster-gated Helix calls skip until it's
@@ -240,9 +203,6 @@ func (cl *API) LoadFromDB() error {
 	cl.tokenMu.Lock()
 	cl.currentBroadcasterToken = bt
 	cl.tokenMu.Unlock()
-	if cl.broadcasterTwitchClient != nil {
-		cl.broadcasterTwitchClient.SetUserAccessToken(bt.AccessToken)
-	}
 	instrumentation.TwitchTokenExpiry.SetExpiresAt("broadcaster", bt.ExpiresAt)
 	return nil
 }
@@ -491,9 +451,6 @@ func (cl *API) GenerateUserAccessToken(code string, expectedLogin string) error 
 		cl.tokenMu.Lock()
 		cl.currentBroadcasterToken = tok
 		cl.tokenMu.Unlock()
-		if cl.broadcasterTwitchClient != nil {
-			cl.broadcasterTwitchClient.SetUserAccessToken(tok.AccessToken)
-		}
 	default:
 		slog.Warn("OAuth bootstrap completed for unknown identity; oauth_tokens row written but in-memory state unchanged",
 			"login", u.Login, "bot", c.Conf.BotUsername, "broadcaster", c.Conf.ChannelName)
