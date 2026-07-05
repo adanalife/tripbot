@@ -157,7 +157,19 @@ func (s *Sessions) logout(ctx context.Context, u *User) {
 	// update the monthly scoreboard
 	u.AddToScore(ctx, scoreboards.CurrentMilesScoreboard(), sessionMiles)
 
-	if err := events.Logout(ctx, u.Username, u.sessionID); err != nil {
+	// extra_miles_earned: the bonus portion of this session the events pairing
+	// can't see — community sub-grants received (sessionExtraMiles) plus the 5%
+	// subscriber bonus, computed the same way the live award was. Recorded at
+	// source; left NULL when zero (most sessions).
+	extra := float64(u.sessionExtraMiles)
+	if s.IsSubscriber(*u) {
+		extra += float64(s.BonusMiles(*u))
+	}
+	var extraMiles *float64
+	if extra > 0 {
+		extraMiles = &extra
+	}
+	if err := events.Logout(ctx, u.Username, u.sessionID, extraMiles); err != nil {
 		slog.ErrorContext(ctx, "error creating logout event", "err", err)
 	}
 
@@ -187,6 +199,8 @@ func (s *Sessions) GiveEveryoneMiles(gift float32) {
 	slog.Info("giving all logged-in users gift miles", "gift", gift)
 	for _, user := range s.loggedIn {
 		user.Miles += gift
+		// track the grant separately so logout can record it as extra_miles_earned
+		user.sessionExtraMiles += gift
 	}
 }
 

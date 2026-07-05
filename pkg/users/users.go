@@ -38,6 +38,10 @@ type User struct {
 	sessionID    uuid.UUID `gorm:"-"`
 	lastCmd      time.Time `gorm:"-"`
 	lastLocation time.Time `gorm:"-"`
+	// sessionExtraMiles accumulates community sub-grants received during this
+	// session (GiveEveryoneMiles), so logout can record the full unreconstructable
+	// bonus. Resets each login (fresh User from FindOrCreate).
+	sessionExtraMiles float32 `gorm:"-"`
 }
 
 // this is how long they have before they can guess again
