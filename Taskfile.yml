@@ -218,6 +218,16 @@ tasks:
       - mise exec -- uv run cdk8s synth
       - git diff --exit-code -- dist/ || { echo "dist/ is stale — run task cdk8s:synth and commit"; exit 1; }
 
+  cdk8s:verify:
+    desc: The cdk8s edit loop in one step — synth, show what changed in dist/, run the synth-time checks
+    dir: cdk8s
+    deps: [cdk8s:imports]
+    cmds:
+      - mise exec -- uv run cdk8s synth
+      - git status --short -- dist/
+      - git diff --stat -- dist/
+      - mise exec -- uv run pytest -q
+
   cdk8s:stage:diff:
     desc: kubectl diff the synthed stage-1 app manifests against the live cluster (read-only)
     dir: cdk8s
