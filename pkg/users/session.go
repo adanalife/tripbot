@@ -33,18 +33,14 @@ type Sessions struct {
 	lifetimeLeaderboard [][]string
 }
 
-// New constructs a Sessions backed by the given ChatterSource.
+// New constructs a Sessions backed by the given ChatterSource. cmd/tripbot
+// wires the production gatewayChatterSource; tests build their own.
 func New(source ChatterSource) *Sessions {
 	return &Sessions{
 		source:   source,
 		loggedIn: make(map[string]*User),
 	}
 }
-
-// NewDefault constructs the production Sessions, wired to the Twitch-backed
-// chatter source. cmd/tripbot constructs one and threads it through the boot
-// sequence + into chatbot/discord; tests build their own *Sessions via New.
-func NewDefault() *Sessions { return New(twitchSource{}) }
 
 // UpdateSession uses the chatter source to maintain the list of
 // currently-logged-in users.

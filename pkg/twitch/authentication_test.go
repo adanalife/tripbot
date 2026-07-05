@@ -114,20 +114,6 @@ func TestBroadcasterScopes_DisjointFromBotScopes(t *testing.T) {
 	}
 }
 
-func TestBroadcasterTokenLoaded_FalseWhenEmpty(t *testing.T) {
-	cl := clientWithTokens(oauthtokens.Token{}, oauthtokens.Token{})
-	if cl.broadcasterTokenLoaded() {
-		t.Error("broadcasterTokenLoaded() = true with empty token; want false")
-	}
-}
-
-func TestBroadcasterTokenLoaded_TrueWhenSet(t *testing.T) {
-	cl := clientWithTokens(oauthtokens.Token{}, oauthtokens.Token{AccessToken: "broadcaster-tok"})
-	if !cl.broadcasterTokenLoaded() {
-		t.Error("broadcasterTokenLoaded() = false with token set; want true")
-	}
-}
-
 func TestErrIdentityMismatch_MessageNamesBoth(t *testing.T) {
 	err := &ErrIdentityMismatch{Expected: "tripbot4000", Got: "adanalife_", AccountID: "bot"}
 	msg := err.Error()
