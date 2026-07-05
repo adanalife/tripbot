@@ -49,11 +49,33 @@ type LeaderboardShow struct {
 	Rows  [][]string `json:"rows"`
 }
 
+// TimewarpShow is the payload for the timewarp.show subject. Username is the
+// chatter who triggered the warp (via !timewarp or a correct !guess); the
+// overlay surfaces it as a credit line under the TIMEWARP wordmark. Empty
+// when no user is attributable — the overlay then shows no credit. (The
+// server still supplies the warp's duration; only the credit travels here.)
+type TimewarpShow struct {
+	Envelope
+	Username string `json:"username"`
+}
+
+// LocationData is the payload for the location.update subject — the
+// currently-playing clip's pre-formatted location ("City, State", or a bare
+// state when geocoding is unavailable) and date ("Monday January 2, 2006").
+// onscreens-server caches it and surfaces it through the bot-less rotators.
+// Either field may be empty (e.g. no geocode yet); the rotator skips an empty
+// line.
+type LocationData struct {
+	Envelope
+	Location string `json:"location"`
+	Date     string `json:"date"`
+}
+
 // Command is the payload for events that carry no data beyond the
-// envelope: every hide, plus timewarp.show and gps.show (the server
-// supplies their content and duration). A single type rather than a swarm
-// of identical empty structs — the subject distinguishes them, and any
-// event that grows a field graduates to its own named type then.
+// envelope: every hide, plus gps.show (the server supplies its content and
+// duration). A single type rather than a swarm of identical empty structs —
+// the subject distinguishes them, and any event that grows a field
+// graduates to its own named type then (as timewarp.show did).
 type Command struct {
 	Envelope
 }

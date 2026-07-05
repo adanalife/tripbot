@@ -26,10 +26,12 @@ import (
 // (e.g. "GetUsers"); it should match the helix client method name.
 //
 // account names the identity the call authorized against ("bot" |
-// "broadcaster"); on a 401 it triggers Reauth so the stale user-access-token
-// is re-established from the DB and the next call uses a fresh one. Pass ""
-// to opt out — for app-access-token calls (getChannelID's GetUsers) and the
-// mid-bootstrap GetUsers, where re-reading a user token wouldn't help.
+// "broadcaster"); on a 401 it re-reads oauth_tokens (which the platform-gateway
+// keeps fresh) so the stale in-memory user-access-token is replaced and the
+// next call uses the current one. tripbot no longer refreshes in-process — that
+// would race the gateway's rotation. Pass "" to opt out — for app-access-token
+// calls (getChannelID's GetUsers) and the mid-bootstrap GetUsers, where
+// re-reading a user token wouldn't help.
 func (cl *API) checkHelixResp(ctx context.Context, endpoint, account string, resp *helix.ResponseCommon) bool {
 	if resp == nil || resp.StatusCode < 400 {
 		return false
@@ -37,7 +39,9 @@ func (cl *API) checkHelixResp(ctx context.Context, endpoint, account string, res
 	slog.ErrorContext(ctx, fmt.Sprintf("helix %s returned %d: %s", endpoint, resp.StatusCode, resp.ErrorMessage))
 	instrumentation.TwitchHelixErrors.Inc(endpoint, resp.StatusCode)
 	if resp.StatusCode == http.StatusUnauthorized && account != "" {
-		cl.Reauth(ctx, account)
+		if err := cl.LoadFromDB(); err != nil {
+			slog.WarnContext(ctx, "helix 401: re-reading oauth_tokens failed", "err", err, "account", account)
+		}
 	}
 	return true
 }

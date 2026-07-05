@@ -3,8 +3,31 @@ package instrumentation
 import (
 	"context"
 
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 )
+
+// platformAttr stamps the streaming platform (twitch/youtube) onto every
+// vlc-server and OBS metric series. Without it the per-platform vlc-server
+// instances emit byte-identical series identities — service.platform lives
+// only on the OTel resource → target_info, not on the datapoints — so the
+// twitch and youtube encoders collide onto one series. The attribute key
+// matches the resource attribute (service.platform → service_platform label)
+// so it lines up with target_info and the Stream Health dashboard's existing
+// filters. Defaults to twitch to match the config default; cmd/vlc-server
+// overrides it via SetPlatform at startup before the pollers begin.
+var platformAttr = metric.WithAttributes(attribute.String("service.platform", "twitch"))
+
+// SetPlatform stamps the streaming platform this instance feeds onto the
+// vlc-server/OBS gauges. Call once at startup (before the stats pollers run)
+// with the instance's STREAM_PLATFORM value so per-platform series stay
+// distinct as more platforms are added.
+func SetPlatform(p string) {
+	if p == "" {
+		p = "twitch"
+	}
+	platformAttr = metric.WithAttributes(attribute.String("service.platform", p))
+}
 
 var (
 	vlcInputBitRate       = mustFloat64Gauge("vlc_player_input_bitrate", "libvlc input bitrate (libvlc-native units, ~bytes/µs)")
@@ -81,16 +104,16 @@ type vlcPlayerStatsIface struct {
 
 func (v vlcPlayerStatsIface) Update(s VLCPlayerStatsSnapshot) {
 	ctx := context.Background()
-	v.inputBitRate.Record(ctx, s.InputBitRate)
-	v.demuxBitRate.Record(ctx, s.DemuxBitRate)
-	v.displayedFPS.Record(ctx, s.DisplayedFPS)
-	v.decodedVideo.Record(ctx, s.DecodedVideo)
-	v.displayedPictures.Record(ctx, s.DisplayedPictures)
-	v.lostPictures.Record(ctx, s.LostPictures)
-	v.demuxCorrupted.Record(ctx, s.DemuxCorrupted)
-	v.demuxDiscontinuity.Record(ctx, s.DemuxDiscontinuity)
-	v.timeRemaining.Record(ctx, s.TimeRemaining)
-	v.progress.Record(ctx, s.Progress)
+	v.inputBitRate.Record(ctx, s.InputBitRate, platformAttr)
+	v.demuxBitRate.Record(ctx, s.DemuxBitRate, platformAttr)
+	v.displayedFPS.Record(ctx, s.DisplayedFPS, platformAttr)
+	v.decodedVideo.Record(ctx, s.DecodedVideo, platformAttr)
+	v.displayedPictures.Record(ctx, s.DisplayedPictures, platformAttr)
+	v.lostPictures.Record(ctx, s.LostPictures, platformAttr)
+	v.demuxCorrupted.Record(ctx, s.DemuxCorrupted, platformAttr)
+	v.demuxDiscontinuity.Record(ctx, s.DemuxDiscontinuity, platformAttr)
+	v.timeRemaining.Record(ctx, s.TimeRemaining, platformAttr)
+	v.progress.Record(ctx, s.Progress, platformAttr)
 }
 
 // OBSStreaming exposes the streaming-active gauge.
@@ -146,7 +169,7 @@ func (o obsStreamingIface) Set(active bool) {
 	if active {
 		v = 1
 	}
-	o.g.Record(context.Background(), v)
+	o.g.Record(context.Background(), v, platformAttr)
 }
 
 type obsStatsIface struct {
@@ -168,26 +191,26 @@ type obsStatsIface struct {
 
 func (o obsStatsIface) Update(s OBSStatsSnapshot) {
 	ctx := context.Background()
-	o.activeFPS.Record(ctx, s.ActiveFPS)
-	o.averageFrameRender.Record(ctx, s.AverageFrameRenderTime)
-	o.cpuUsage.Record(ctx, s.CPUUsage)
-	o.memoryUsage.Record(ctx, s.MemoryUsage)
-	o.renderSkippedFrames.Record(ctx, s.RenderSkippedFrames)
-	o.renderTotalFrames.Record(ctx, s.RenderTotalFrames)
-	o.outputSkippedFrames.Record(ctx, s.OutputSkippedFrames)
-	o.outputTotalFrames.Record(ctx, s.OutputTotalFrames)
+	o.activeFPS.Record(ctx, s.ActiveFPS, platformAttr)
+	o.averageFrameRender.Record(ctx, s.AverageFrameRenderTime, platformAttr)
+	o.cpuUsage.Record(ctx, s.CPUUsage, platformAttr)
+	o.memoryUsage.Record(ctx, s.MemoryUsage, platformAttr)
+	o.renderSkippedFrames.Record(ctx, s.RenderSkippedFrames, platformAttr)
+	o.renderTotalFrames.Record(ctx, s.RenderTotalFrames, platformAttr)
+	o.outputSkippedFrames.Record(ctx, s.OutputSkippedFrames, platformAttr)
+	o.outputTotalFrames.Record(ctx, s.OutputTotalFrames, platformAttr)
 }
 
 func (o obsStatsIface) UpdateStream(s OBSStreamSnapshot) {
 	ctx := context.Background()
-	o.streamBytes.Record(ctx, s.OutputBytes)
-	o.streamDuration.Record(ctx, s.OutputDurationMS)
-	o.streamCongestion.Record(ctx, s.OutputCongestion)
+	o.streamBytes.Record(ctx, s.OutputBytes, platformAttr)
+	o.streamDuration.Record(ctx, s.OutputDurationMS, platformAttr)
+	o.streamCongestion.Record(ctx, s.OutputCongestion, platformAttr)
 	v := int64(0)
 	if s.Reconnecting {
 		v = 1
 	}
-	o.streamReconnecting.Record(ctx, v)
-	o.streamSkipped.Record(ctx, s.SkippedFrames)
-	o.streamTotal.Record(ctx, s.TotalFrames)
+	o.streamReconnecting.Record(ctx, v, platformAttr)
+	o.streamSkipped.Record(ctx, s.SkippedFrames, platformAttr)
+	o.streamTotal.Record(ctx, s.TotalFrames, platformAttr)
 }

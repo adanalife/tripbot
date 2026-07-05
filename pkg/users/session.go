@@ -2,8 +2,9 @@ package users
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -11,7 +12,6 @@ import (
 	"github.com/adanalife/tripbot/pkg/eventbus"
 	"github.com/adanalife/tripbot/pkg/events"
 	"github.com/adanalife/tripbot/pkg/scoreboards"
-	"github.com/davecgh/go-spew/spew"
 	"github.com/google/uuid"
 	"github.com/hako/durafmt"
 )
@@ -179,7 +179,7 @@ func (s *Sessions) isLoggedIn(username string) bool {
 func (s *Sessions) Shutdown(ctx context.Context) {
 	if c.Conf.Verbose {
 		slog.InfoContext(ctx, "logged-in users at shutdown")
-		spew.Dump(s.loggedIn)
+		fmt.Printf("%+v\n", s.loggedIn)
 	}
 	for _, user := range s.loggedIn {
 		s.logout(ctx, user)
@@ -200,7 +200,7 @@ func (s *Sessions) sortedUsernameList() []string {
 	for username := range s.loggedIn {
 		usernames = append(usernames, username)
 	}
-	sort.Sort(sort.StringSlice(usernames))
+	slices.Sort(usernames)
 	return usernames
 }
 

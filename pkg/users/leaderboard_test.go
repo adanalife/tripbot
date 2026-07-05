@@ -2,109 +2,117 @@ package users
 
 import (
 	"context"
+	"database/sql/driver"
+	"strings"
 	"testing"
+	"time"
+
+	"github.com/DATA-DOG/go-sqlmock"
+	c "github.com/adanalife/tripbot/pkg/config/tripbot"
+	"github.com/adanalife/tripbot/pkg/database"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 )
 
-func TestStrToFloat32Valid(t *testing.T) {
-	tests := []struct {
-		in   string
-		want float32
-	}{
-		{"0", 0},
-		{"1.5", 1.5},
-		{"42.0", 42.0},
-		{"-3.25", -3.25},
+// installMockDB mirrors pkg/chatbot's helper: a sqlmock-backed *gorm.DB
+// installed as the process-wide singleton so fetchLeaderboard routes to it.
+func installMockDB(t *testing.T) sqlmock.Sqlmock {
+	t.Helper()
+	sqlDB, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock.New: %v", err)
 	}
-	for _, tt := range tests {
-		t.Run(tt.in, func(t *testing.T) {
-			got := strToFloat32(context.Background(), tt.in)
-			if got != tt.want {
-				t.Fatalf("got %v, want %v", got, tt.want)
-			}
-		})
+	gdb, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{
+		SkipDefaultTransaction: true,
+	})
+	if err != nil {
+		t.Fatalf("gorm.Open: %v", err)
 	}
+	database.SetGormDB(gdb)
+	t.Cleanup(func() {
+		database.SetGormDB(nil)
+		_ = sqlDB.Close()
+	})
+	return mock
 }
 
-func TestRemoveFromLeaderboard(t *testing.T) {
+func leaderboardRows(rows ...[]driver.Value) *sqlmock.Rows {
+	r := sqlmock.NewRows([]string{"username", "miles", "platform", "is_bot"})
+	for _, row := range rows {
+		r.AddRow(row...)
+	}
+	return r
+}
+
+// TestUpdateLeaderboard_ReadsFromDB pins the platform-scoping contract with
+// strict args: the fetch must filter by this instance's platform and exclude
+// the channel owner (loose regexes have silently absorbed missing platform
+// filters before).
+func TestUpdateLeaderboard_ReadsFromDB(t *testing.T) {
+	mock := installMockDB(t)
+	mock.ExpectQuery(`SELECT \* FROM "users" WHERE platform = \$1 AND miles != 0 AND is_bot = false AND username != \$2 ORDER BY miles DESC LIMIT \$3`).
+		WithArgs(c.Conf.Platform, strings.ToLower(c.Conf.ChannelName), maxLeaderboardSize).
+		WillReturnRows(leaderboardRows(
+			[]driver.Value{"alice", float32(100), "twitch", false},
+			[]driver.Value{"bob", float32(50), "twitch", false},
+		))
+
 	s := New(noopChatterSource{})
-	s.lifetimeLeaderboard = [][]string{
-		{"alice", "100"}, {"bob", "75"}, {"carol", "50"},
-	}
+	s.UpdateLeaderboard(context.Background())
 
-	s.removeFromLeaderboard("bob")
-
-	if len(s.lifetimeLeaderboard) != 2 {
-		t.Fatalf("expected 2 entries after remove, got %d", len(s.lifetimeLeaderboard))
+	want := [][]string{{"alice", "100.0"}, {"bob", "50.0"}}
+	got := s.LifetimeLeaderboard()
+	if len(got) != len(want) {
+		t.Fatalf("expected %d entries, got %d: %v", len(want), len(got), got)
 	}
-	for _, pair := range s.lifetimeLeaderboard {
-		if pair[0] == "bob" {
-			t.Fatal("bob still present after remove")
+	for i := range want {
+		if got[i][0] != want[i][0] || got[i][1] != want[i][1] {
+			t.Fatalf("row %d: got %v, want %v", i, got[i], want[i])
 		}
 	}
-}
-
-func TestRemoveFromLeaderboardMissing(t *testing.T) {
-	s := New(noopChatterSource{})
-	s.lifetimeLeaderboard = [][]string{
-		{"alice", "100"}, {"bob", "75"},
-	}
-
-	s.removeFromLeaderboard("nobody")
-
-	if len(s.lifetimeLeaderboard) != 2 {
-		t.Fatalf("expected unchanged length after missing remove, got %d", len(s.lifetimeLeaderboard))
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unmet sqlmock expectations: %v", err)
 	}
 }
 
-func TestRemoveFromLeaderboardEmpty(t *testing.T) {
+// A logged-in user's in-progress session miles overlay their stored miles and
+// can reorder the board between logouts.
+func TestUpdateLeaderboard_OverlaysLiveSessionMiles(t *testing.T) {
+	mock := installMockDB(t)
+	mock.ExpectQuery(`SELECT \* FROM "users"`).
+		WithArgs(c.Conf.Platform, strings.ToLower(c.Conf.ChannelName), maxLeaderboardSize).
+		WillReturnRows(leaderboardRows(
+			[]driver.Value{"alice", float32(100), "twitch", false},
+			[]driver.Value{"bob", float32(99), "twitch", false},
+		))
+
 	s := New(noopChatterSource{})
+	// bob has been logged in for ~10 hours: 0.1mi/3min = ~20 miles in
+	// progress, enough to pass alice before his logout writes it back.
+	s.loggedIn["bob"] = &User{Username: "bob", Miles: 99, LoggedIn: time.Now().Add(-10 * time.Hour)}
+	s.UpdateLeaderboard(context.Background())
 
-	s.removeFromLeaderboard("alice")
-
-	if len(s.lifetimeLeaderboard) != 0 {
-		t.Fatalf("expected empty leaderboard, got %v", s.lifetimeLeaderboard)
+	got := s.LifetimeLeaderboard()
+	if len(got) != 2 || got[0][0] != "bob" {
+		t.Fatalf("expected bob first after live-miles overlay, got %v", got)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unmet sqlmock expectations: %v", err)
 	}
 }
 
-// insertIntoLeaderboard pulls miles from User.CurrentMiles. The user isn't in
-// the default session, so CurrentMiles returns User.Miles directly (no session
-// bonus) — making the math deterministic.
-func TestInsertIntoLeaderboardOrdersByMilesDesc(t *testing.T) {
+// A failed fetch must leave the previous board in place rather than blanking
+// what the rotators display.
+func TestUpdateLeaderboard_KeepsCacheOnError(t *testing.T) {
+	mock := installMockDB(t)
+	mock.ExpectQuery(`SELECT \* FROM "users"`).
+		WillReturnError(context.DeadlineExceeded)
+
 	s := New(noopChatterSource{})
-	s.lifetimeLeaderboard = [][]string{
-		{"existing-1", "100"},
-		{"existing-2", "50"},
-		{"existing-3", "10"},
-	}
+	s.lifetimeLeaderboard = [][]string{{"alice", "100.0"}}
+	s.UpdateLeaderboard(context.Background())
 
-	u := User{Username: "newcomer", Miles: 75}
-	s.insertIntoLeaderboard(context.Background(), u)
-
-	if len(s.lifetimeLeaderboard) != 4 {
-		t.Fatalf("expected 4 entries after insert, got %d: %v",
-			len(s.lifetimeLeaderboard), s.lifetimeLeaderboard)
-	}
-	if s.lifetimeLeaderboard[1][0] != "newcomer" {
-		t.Fatalf("expected newcomer at index 1 (between 100 and 50), got order %v", s.lifetimeLeaderboard)
-	}
-}
-
-func TestInsertIntoLeaderboardReplacesExistingUser(t *testing.T) {
-	s := New(noopChatterSource{})
-	s.lifetimeLeaderboard = [][]string{
-		{"alice", "100"},
-		{"bob", "50"},
-	}
-
-	// Bob's miles increased to 200 — should jump above alice and replace his old row.
-	u := User{Username: "bob", Miles: 200}
-	s.insertIntoLeaderboard(context.Background(), u)
-
-	if len(s.lifetimeLeaderboard) != 2 {
-		t.Fatalf("expected length unchanged after replace, got %d: %v",
-			len(s.lifetimeLeaderboard), s.lifetimeLeaderboard)
-	}
-	if s.lifetimeLeaderboard[0][0] != "bob" {
-		t.Fatalf("expected bob to be #1 with 200 miles, got %v", s.lifetimeLeaderboard)
+	if len(s.LifetimeLeaderboard()) != 1 {
+		t.Fatalf("expected cache preserved on error, got %v", s.LifetimeLeaderboard())
 	}
 }

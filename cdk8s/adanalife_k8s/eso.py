@@ -33,7 +33,7 @@ import imports.io.external_secrets as esx
 # The store every app ExternalSecret references — namespaced, identical in
 # every env (isolation is structural: a namespaced store is unreachable
 # cross-namespace; the backing eso-aws-credentials decides the AWS account).
-DEFAULT_STORE = ("aws-secretsmanager", "SecretStore")
+DEFAULT_STORE = ("aws-parameterstore", "SecretStore")
 
 _STORE_KIND = {
     "SecretStore": esx.ExternalSecretSpecSecretStoreRefKind.SECRET_STORE,

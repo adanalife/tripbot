@@ -49,7 +49,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        component: [tripbot, vlc, obs, onscreens-server]
+        component: [tripbot, vlc, onscreens-server]
     concurrency:
       group: bump-prs-${{ matrix.component }}
     env:
@@ -63,7 +63,7 @@ jobs:
           app-id: ${{ vars.AUTOMATION_APP_ID }}
           private-key: ${{ secrets.AUTOMATION_APP_PRIVATE_KEY }}
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: master
           token: ${{ steps.app-token.outputs.token }}
@@ -163,12 +163,9 @@ jobs:
           TITLE="Bump prod $COMPONENT to $VERSION #none"
           # DEPLOY describes what merging actually does. prod-1 apps autosync
           # from master (AUTOSYNC_ENVS in infra's argocd.py), so merging deploys
-          # them with no manual step — EXCEPT prod OBS, which is held out of
-          # autosync (AUTOSYNC_HOLDOUTS) and still needs a deliberate Argo sync.
+          # them with no manual step. (OBS is built + released from the standalone
+          # adanalife/obs repo now, so it's not bumped here.)
           case "$COMPONENT" in
-            obs)
-              IMPACT="⚠️ **Merging restarts the OBS pod — the stream goes down until it reconnects.** Pick a quiet moment."
-              DEPLOY="Prod \`obs\` is held out of Argo autosync, so merging only stages the change on \`master\` — **then manually sync the \`obs\` app in Argo to deploy**." ;;
             vlc)
               IMPACT="⚠️ **Merging restarts vlc-server — the playing video drops briefly on stream.** Pick a quiet moment."
               DEPLOY="Prod \`vlc\` autosyncs from \`master\`, so **merging deploys it** — no manual Argo step." ;;

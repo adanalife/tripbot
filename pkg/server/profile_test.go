@@ -92,6 +92,22 @@ func TestUserProfileAPIHandler_BotFlag(t *testing.T) {
 	}
 }
 
+// profileJSON runs the JSON profile handler for a username and returns the
+// decoded payload. (Replaces the removed HTML renderProfile helper — the admin
+// panel's HTML popover is gone; the surviving surface is the JSON endpoint.)
+func profileJSON(t *testing.T, username string) userProfile {
+	t.Helper()
+	r := mux.NewRouter()
+	r.Handle("/api/user/{username}", http.HandlerFunc(userProfileAPIHandler)).Methods("GET")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/user/"+username, nil))
+	var got userProfile
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v\n%s", err, rec.Body.String())
+	}
+	return got
+}
+
 // TestUserProfileHandler_FirstSeenFallback covers an account created during the
 // date_created bug window: its User row dates are zero, but a surviving real
 // event reconstructs first-seen. The earliest such event should win.
@@ -100,9 +116,9 @@ func TestUserProfileHandler_FirstSeenFallback(t *testing.T) {
 	earliestEvent = func(context.Context, string, string) time.Time {
 		return time.Date(2021, 3, 14, 0, 0, 0, 0, time.UTC)
 	}
-	body := renderProfile(t, "olduser")
-	if !strings.Contains(body, "first seen</dt><dd>2021-03-14") {
-		t.Errorf("expected event-derived first seen 2021-03-14, got %q", body)
+	want := time.Date(2021, 3, 14, 0, 0, 0, 0, time.UTC)
+	if got := profileJSON(t, "olduser"); !got.FirstSeen.Equal(want) {
+		t.Errorf("first seen = %v, want event-derived %v", got.FirstSeen, want)
 	}
 }
 
@@ -118,8 +134,8 @@ func TestUserProfileHandler_FirstSeenPrefersEarliest(t *testing.T) {
 	earliestEvent = func(context.Context, string, string) time.Time {
 		return time.Date(2019, 6, 2, 0, 0, 0, 0, time.UTC)
 	}
-	body := renderProfile(t, "veteran")
-	if !strings.Contains(body, "2019-06-02") {
-		t.Errorf("expected earliest (event) first seen 2019-06-02, got %q", body)
+	want := time.Date(2019, 6, 2, 0, 0, 0, 0, time.UTC)
+	if got := profileJSON(t, "veteran"); !got.FirstSeen.Equal(want) {
+		t.Errorf("first seen = %v, want earliest %v", got.FirstSeen, want)
 	}
 }

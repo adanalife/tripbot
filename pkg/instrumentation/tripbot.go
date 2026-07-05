@@ -32,6 +32,8 @@ var (
 	twitchHelixErrors  = mustCounter("twitch_helix_errors_total", "Total non-2xx responses from the Twitch Helix API, labeled by endpoint and status_code")
 	twitchChannelLive  = mustGauge("tripbot_twitch_channel_live", "1 when Helix GetStreams reports the configured channel as live, 0 when offline. Driven by the OBS silent-disconnect watchdog's Helix poll.")
 
+	gatewayUp = mustGauge("tripbot_gateway_up", "1 when tripbot's last platform-gateway call got an HTTP response (gateway reachable), 0 when it failed at the transport layer (connection refused, timeout, DNS). Consumer-side reachability — paired with the gateway's own platform_gateway_up (process liveness).")
+
 	obsSilentDisconnectRestarts = mustCounter("tripbot_obs_silent_disconnect_restarts_total", "Total times the OBS silent-disconnect watchdog forced a StopStream+StartStream because OBS reported outputActive=true while Twitch reported the channel offline")
 
 	twitchHelixRateRemaining = mustGauge("twitch_helix_rate_limit_remaining", "Last-seen Ratelimit-Remaining header from Twitch Helix responses (per app-access bearer)")
@@ -103,6 +105,13 @@ var TwitchHelixErrors = twitchHelixErrorsIface{counter: twitchHelixErrors}
 // returns empty. Paired with OBSStreaming in an alert: divergence
 // (OBS=1 / Twitch=0) is the silent half-open RTMP signal.
 var TwitchChannelLive = twitchChannelLiveIface{gauge: twitchChannelLive}
+
+// GatewayConnection exposes the consumer-side gateway-reachability gauge.
+// Set(true) after any HTTP response from the platform-gateway, Set(false) on a
+// transport failure (connection refused, timeout, DNS). Drives the "tripbot
+// can't reach the gateway" alert — distinct from the gateway's own
+// platform_gateway_up, which only reports that the gateway process is running.
+var GatewayConnection = gatewayConnectionIface{gauge: gatewayUp}
 
 // OBSSilentDisconnectRestarts exposes the watchdog's force-restart counter.
 // Inc() is called after a successful StopStream+StartStream sequence.
@@ -213,6 +222,16 @@ func (t twitchChannelLiveIface) Set(live bool) {
 		v = 1
 	}
 	t.gauge.Record(context.Background(), v)
+}
+
+type gatewayConnectionIface struct{ gauge metric.Int64Gauge }
+
+func (g gatewayConnectionIface) Set(reachable bool) {
+	var v int64
+	if reachable {
+		v = 1
+	}
+	g.gauge.Record(context.Background(), v)
 }
 
 type obsSilentDisconnectRestartsIface struct{ counter metric.Int64Counter }

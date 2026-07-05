@@ -1,0 +1,34 @@
+name: pr-title
+
+# Conventional Commits enforcement for the SQUASH SUBJECT. The commit-msg
+# pre-commit hook only guards local commits; because develop PRs squash-merge,
+# the PR *title* becomes the commit subject written to history, so it is
+# validated here. Mark this check "required" in branch protection to block
+# non-conforming titles. See vault/decisions/conventional-commits.md.
+#
+# Scoped to develop-targeting PRs only: release PRs to master merge-commit
+# (not squash), so their title (`Release vX.Y.Z`) never becomes a commit
+# subject and isn't a conventional type — exempting them here.
+#
+# The standing back-merge PR (backmerge/master-to-develop, opened by
+# backmerge.yml) DOES target develop but is likewise merged with a merge commit
+# (never squashed), so its `⏪ Back-merge…` title never becomes a commit subject
+# either — the step below skips it by head branch. A skipped step still reports
+# the `conventional` job as success, so the required check stays green.
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+    branches: [develop]
+
+permissions:
+  pull-requests: read
+
+jobs:
+  conventional:
+    name: conventional
+    runs-on: ubuntu-latest
+    steps:
+      - if: github.head_ref != 'backmerge/master-to-develop'
+        uses: amannn/action-semantic-pull-request@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

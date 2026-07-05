@@ -46,12 +46,12 @@ spec:
             - configMapRef:
                 name: onscreens-twitch-config
             - secretRef:
-                name: sentry-vlc-server
+                name: sentry-onscreens-server
                 optional: false
             - secretRef:
                 name: grafana-cloud-otlp
                 optional: false
-          image: adanalife/onscreens-server:3.4.0
+          image: adanalife/onscreens-server:3.10.2
           imagePullPolicy: IfNotPresent
           livenessProbe:
             httpGet:

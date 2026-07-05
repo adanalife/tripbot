@@ -33,7 +33,7 @@ func (r *recordingPublisher) Publish(_ context.Context, subject string, payload 
 // subject + envelope on every ShowMiddleText.
 func TestShowMiddleText_PublishesToNATS(t *testing.T) {
 	rec := &recordingPublisher{}
-	c := New(rec, "stage")
+	c := New(rec, "stage", "twitch")
 
 	if err := c.ShowMiddleText(context.Background(), "hello world"); err != nil {
 		t.Fatalf("ShowMiddleText: %v", err)
@@ -43,8 +43,8 @@ func TestShowMiddleText_PublishesToNATS(t *testing.T) {
 		t.Fatalf("expected 1 publish, got %d", len(rec.Publishes))
 	}
 	pub := rec.Publishes[0]
-	if pub.Subject != "tripbot.stage.onscreens.middle.show" {
-		t.Errorf("subject = %q, want tripbot.stage.onscreens.middle.show", pub.Subject)
+	if pub.Subject != "tripbot.stage.onscreens.middle.show.twitch" {
+		t.Errorf("subject = %q, want tripbot.stage.onscreens.middle.show.twitch", pub.Subject)
 	}
 
 	var ev oe.MiddleShow
@@ -59,19 +59,26 @@ func TestShowMiddleText_PublishesToNATS(t *testing.T) {
 	}
 }
 
-// TestShowMiddleText_TopicReflectsEnv covers the subject scoping per env.
-func TestShowMiddleText_TopicReflectsEnv(t *testing.T) {
-	for _, env := range []string{"prod", "development", "test"} {
-		t.Run(env, func(t *testing.T) {
+// TestShowMiddleText_TopicReflectsEnvAndPlatform covers the subject scoping
+// per env AND per streaming platform — the trailing platform leaf is what
+// keeps a Twitch overlay off the YouTube stream.
+func TestShowMiddleText_TopicReflectsEnvAndPlatform(t *testing.T) {
+	cases := []struct{ env, platform string }{
+		{"prod", "twitch"},
+		{"development", "youtube"},
+		{"test", "twitch"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.env+"/"+tc.platform, func(t *testing.T) {
 			rec := &recordingPublisher{}
-			c := New(rec, env)
+			c := New(rec, tc.env, tc.platform)
 			if err := c.ShowMiddleText(context.Background(), "x"); err != nil {
 				t.Fatalf("ShowMiddleText: %v", err)
 			}
 			if len(rec.Publishes) != 1 {
 				t.Fatalf("expected 1 publish")
 			}
-			want := "tripbot." + env + ".onscreens.middle.show"
+			want := "tripbot." + tc.env + ".onscreens.middle.show." + tc.platform
 			if rec.Publishes[0].Subject != want {
 				t.Errorf("subject = %q, want %q", rec.Publishes[0].Subject, want)
 			}
@@ -83,7 +90,7 @@ func TestShowMiddleText_TopicReflectsEnv(t *testing.T) {
 // the structured {title, rows} payload (the server renders it).
 func TestShowLeaderboard_PublishesToNATS(t *testing.T) {
 	rec := &recordingPublisher{}
-	c := New(rec, "prod")
+	c := New(rec, "prod", "twitch")
 
 	rows := [][]string{{"alice", "100"}, {"bob", "50"}}
 	if err := c.ShowLeaderboard(context.Background(), "Monthly Miles", rows); err != nil {
@@ -94,8 +101,8 @@ func TestShowLeaderboard_PublishesToNATS(t *testing.T) {
 		t.Fatalf("expected 1 publish, got %d", len(rec.Publishes))
 	}
 	pub := rec.Publishes[0]
-	if pub.Subject != "tripbot.prod.onscreens.leaderboard.show" {
-		t.Errorf("subject = %q, want tripbot.prod.onscreens.leaderboard.show", pub.Subject)
+	if pub.Subject != "tripbot.prod.onscreens.leaderboard.show.twitch" {
+		t.Errorf("subject = %q, want tripbot.prod.onscreens.leaderboard.show.twitch", pub.Subject)
 	}
 
 	var ev oe.LeaderboardShow
@@ -118,15 +125,15 @@ func TestEmptyPayloadCommandsPublish(t *testing.T) {
 		call    func(c *Client) error
 		subject string
 	}{
-		{"middle.hide", func(c *Client) error { return c.HideMiddleText(context.Background()) }, "tripbot.stage.onscreens.middle.hide"},
-		{"timewarp.show", func(c *Client) error { return c.ShowTimewarp(context.Background()) }, "tripbot.stage.onscreens.timewarp.show"},
-		{"gps.show", func(c *Client) error { return c.ShowGPSImage(context.Background(), 60) }, "tripbot.stage.onscreens.gps.show"},
-		{"gps.hide", func(c *Client) error { return c.HideGPSImage(context.Background()) }, "tripbot.stage.onscreens.gps.hide"},
+		{"middle.hide", func(c *Client) error { return c.HideMiddleText(context.Background()) }, "tripbot.stage.onscreens.middle.hide.twitch"},
+		{"timewarp.show", func(c *Client) error { return c.ShowTimewarp(context.Background(), "viewer1") }, "tripbot.stage.onscreens.timewarp.show.twitch"},
+		{"gps.show", func(c *Client) error { return c.ShowGPSImage(context.Background(), 60) }, "tripbot.stage.onscreens.gps.show.twitch"},
+		{"gps.hide", func(c *Client) error { return c.HideGPSImage(context.Background()) }, "tripbot.stage.onscreens.gps.hide.twitch"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			rec := &recordingPublisher{}
-			c := New(rec, "stage")
+			c := New(rec, "stage", "twitch")
 			if err := tc.call(c); err != nil {
 				t.Fatalf("call: %v", err)
 			}
@@ -151,7 +158,7 @@ func TestEmptyPayloadCommandsPublish(t *testing.T) {
 // (no subject in the taxonomy, so nothing is published).
 func TestShowFlagDoesNotPublish(t *testing.T) {
 	rec := &recordingPublisher{}
-	c := New(rec, "stage")
+	c := New(rec, "stage", "twitch")
 	if err := c.ShowFlag(context.Background(), 10); err != nil {
 		t.Fatalf("ShowFlag: %v", err)
 	}
@@ -163,7 +170,7 @@ func TestShowFlagDoesNotPublish(t *testing.T) {
 // TestNilPublisher_NoPublishNoPanic asserts a nil publisher disables
 // publishing without panicking.
 func TestNilPublisher_NoPublishNoPanic(t *testing.T) {
-	c := New(nil, "test")
+	c := New(nil, "test", "twitch")
 	if err := c.ShowMiddleText(context.Background(), "x"); err != nil {
 		t.Fatalf("ShowMiddleText: %v", err)
 	}

@@ -2,7 +2,7 @@
 # per-image path filters. Stage pulls :develop; prod stays on :latest
 # (release.yml). Mirrors release.yml's matrix-on-native-runners +
 # manifest-list shape.
-name: Release Development
+name: release-development
 on:
   push:
     branches:
@@ -19,18 +19,16 @@ concurrency:
 
 jobs:
   # Per-image path filters. tripbot and vlc rebuild on any Go change to
-  # their respective code surfaces; obs only rebuilds when its Dockerfile
-  # context changes (the arm64 CEF compile is ~30 min, so skipping it on
-  # Go-only merges is the load-bearing reason this job exists).
+  # their respective code surfaces, so a Go-only merge doesn't rebuild every
+  # image. (OBS is built from the standalone adanalife/obs repo now.)
   changes:
     runs-on: ubuntu-latest
     outputs:
       tripbot: ${{ steps.filter.outputs.tripbot }}
       vlc: ${{ steps.filter.outputs.vlc }}
-      obs: ${{ steps.filter.outputs.obs }}
       onscreens: ${{ steps.filter.outputs.onscreens }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v4
         id: filter
         with:
@@ -38,6 +36,13 @@ jobs:
             tripbot:
               - 'cmd/tripbot/**'
               - 'pkg/**'
+              # DB migrations are baked into the tripbot image and run by its
+              # migrate initContainer at pod boot — so a migration-only PR must
+              # rebuild the image, or the new migration never ships and the
+              # initContainer reports "no change" against a stale image. (Bit us
+              # 2026-06-19: #906's seed migration didn't reach :develop because
+              # this filter didn't watch db/migrate.)
+              - 'db/migrate/**'
               - 'infra/docker/tripbot/**'
               - 'go.mod'
               - 'go.sum'
@@ -59,9 +64,6 @@ jobs:
               - 'go.mod'
               - 'go.sum'
               - '.dockerignore'
-              - '.github/workflows/release-development.yml'
-            obs:
-              - 'infra/docker/obs/**'
               - '.github/workflows/release-development.yml'
             onscreens:
               # onscreens-server is a pure-Go binary that transitively imports
@@ -91,7 +93,7 @@ jobs:
             runner: ubuntu-24.04-arm
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Resolve develop version
         id: ver
@@ -171,7 +173,7 @@ jobs:
             runner: ubuntu-24.04-arm
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Resolve develop version
         id: ver
@@ -236,89 +238,6 @@ jobs:
             adanalife/vlc:develop-amd64 \
             adanalife/vlc:develop-arm64
 
-  obs-build:
-    needs: changes
-    if: needs.changes.outputs.obs == 'true'
-    name: obs-build (${{ matrix.arch }})
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: amd64
-            runner: ubuntu-latest
-            dockerfile: infra/docker/obs/Dockerfile
-          - arch: arm64
-            runner: ubuntu-24.04-arm
-            dockerfile: infra/docker/obs/Dockerfile.arm64
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Resolve develop version
-        id: ver
-        run: echo "value=develop-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Login to DockerHub
-        uses: docker/login-action@v4
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Generate tags
-        id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: adanalife/obs
-          flavor: |
-            latest=false
-            suffix=-${{ matrix.arch }}
-          tags: |
-            type=raw,value=develop
-
-      - name: Build & push
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: ${{ matrix.dockerfile }}
-          tags: ${{ steps.meta.outputs.tags }}
-          push: true
-          build-args: |
-            VERSION=${{ steps.ver.outputs.value }}
-            SHA=${{ github.sha }}
-          cache-from: type=gha,scope=obs-${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=obs-${{ matrix.arch }}
-
-      - name: Verify version stamping
-        run: |
-          IMAGE="adanalife/obs:develop-${{ matrix.arch }}"
-          .github/scripts/verify-stamped-image.sh "$IMAGE" \
-            "${{ steps.ver.outputs.value }}" "${{ github.sha }}"
-
-  obs-manifest:
-    needs: obs-build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Login to DockerHub
-        uses: docker/login-action@v4
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Create multi-arch manifest list
-        run: |
-          docker buildx imagetools create \
-            -t adanalife/obs:develop \
-            adanalife/obs:develop-amd64 \
-            adanalife/obs:develop-arm64
-
   onscreens-server-build:
     needs: changes
     if: needs.changes.outputs.onscreens == 'true'
@@ -334,7 +253,7 @@ jobs:
             runner: ubuntu-24.04-arm
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Resolve develop version
         id: ver

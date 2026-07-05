@@ -1,7 +1,6 @@
 package helpers
 
 import (
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -87,20 +86,6 @@ func ParseLatLng(ocrStr string) (float64, float64, error) {
 	return lat, lon, nil
 }
 
-// SplitOnRegex will is the equivalent of str.split(/regex/)
-func SplitOnRegex(text string, delimiter string) []string {
-	reg := regexp.MustCompile(delimiter)
-	indexes := reg.FindAllStringIndex(text, -1)
-	laststart := 0
-	result := make([]string, len(indexes)+1)
-	for i, element := range indexes {
-		result[i] = text[laststart:element[0]]
-		laststart = element[1]
-	}
-	result[len(indexes)] = text[laststart:]
-	return result
-}
-
 func RemoveNonLetters(input string) string {
 	reg, err := regexp.Compile("[^a-zA-Z]+")
 	if err != nil {
@@ -116,15 +101,6 @@ func FileExists(path string) bool {
 		return false
 	}
 	return err == nil
-}
-
-// InvertMap takes a string map and returns it as value->key
-func InvertMap(m map[string]string) map[string]string {
-	n := make(map[string]string)
-	for k, v := range m {
-		n[v] = k
-	}
-	return n
 }
 
 func ActualDate(utcDate time.Time, lat, long float64) time.Time {
@@ -185,7 +161,6 @@ func RunningOnLinux() bool {
 // this nastiness taken from:
 // https://gist.github.com/davidnewhall/3627895a9fc8fa0affbd747183abca39
 // Write a pid file, but first make sure it doesn't exist with a running pid.
-// TODO: consider refactoring to use PidExists()
 func WritePidFile(pidFile string) error {
 	// Read in the pid file as a slice of bytes.
 	if piddata, err := ioutil.ReadFile(pidFile); err == nil {
@@ -204,61 +179,6 @@ func WritePidFile(pidFile string) error {
 	// If we get here, then the pidfile didn't exist,
 	// or the pid in it doesn't belong to the user running this app.
 	return ioutil.WriteFile(pidFile, []byte(fmt.Sprintf("%d", os.Getpid())), 0664)
-}
-
-func ReadPidFile(pidFile string) int {
-	// Read in the pid file as a slice of bytes.
-	if piddata, err := ioutil.ReadFile(pidFile); err == nil {
-		// Convert the file contents to an integer.
-		pid, err := strconv.Atoi(strings.TrimSpace(string(piddata)))
-		if err == nil {
-			return pid
-		}
-	}
-	// return an invalid pid otherwise
-	return -1
-}
-
-// https://stackoverflow.com/a/59459658
-func PidExists(pid int) (bool, error) {
-	if pid <= 0 {
-		return false, fmt.Errorf("invalid pid %v", pid)
-	}
-	proc, err := os.FindProcess(int(pid))
-	if err != nil {
-		return false, err
-	}
-	err = proc.Signal(syscall.Signal(0))
-	if err == nil {
-		return true, nil
-	}
-	if err.Error() == "os: process already finished" {
-		return false, nil
-	}
-	errno, ok := err.(syscall.Errno)
-	if !ok {
-		return false, err
-	}
-	switch errno {
-	case syscall.ESRCH:
-		return false, nil
-	case syscall.EPERM:
-		return true, nil
-	}
-	return false, err
-}
-
-// https://stackoverflow.com/a/28672789
-func Base64Encode(str string) string {
-	return base64.URLEncoding.EncodeToString([]byte(str))
-}
-
-func Base64Decode(str string) (string, error) {
-	data, err := base64.URLEncoding.DecodeString(str)
-	if err != nil {
-		return "", err
-	}
-	return string(data), nil
 }
 
 func StripAtSign(username string) string {

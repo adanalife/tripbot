@@ -1,0 +1,170 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  labels:
+    app.kubernetes.io/name: vlc-youtube
+    app.kubernetes.io/part-of: tripbot
+  name: vlc-youtube-config
+  namespace: prod-1
+data:
+  DISPLAY: :0.0
+  ENV: production
+  FONTCONFIG_PATH: /etc/fonts
+  NATS_URL: nats://nats.prod-1-platform.svc.cluster.local:4222
+  OBS_WEBSOCKET_ADDR: obs-youtube:4455
+  OTEL_RESOURCE_ATTRIBUTES: deployment.environment=prod-1,service.namespace=tripbot,service.platform=youtube
+  OTEL_SDK_DISABLED: "false"
+  OTEL_TRACES_SAMPLER: parentbased_traceidratio
+  OTEL_TRACES_SAMPLER_ARG: "0.1"
+  SENTRY_ENVIRONMENT: prod-1
+  STREAM_PLATFORM: youtube
+  VLC_SERVER_HOST: vlc-youtube:8080
+  XDG_RUNTIME_DIR: /root/.cache/xdgr
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/name: vlc-youtube
+    app.kubernetes.io/part-of: tripbot
+  name: vlc-youtube
+  namespace: prod-1
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vlc-youtube
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+    type: RollingUpdate
+  template:
+    metadata:
+      annotations:
+        adanalife.dev/config-hash: 7d4652c56e
+      labels:
+        app: vlc-youtube
+    spec:
+      containers:
+        - envFrom:
+            - configMapRef:
+                name: vlc-youtube-config
+            - secretRef:
+                name: sentry-vlc-server
+                optional: false
+            - secretRef:
+                name: grafana-cloud-otlp
+                optional: false
+          image: adanalife/vlc:3.10.2
+          imagePullPolicy: IfNotPresent
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+          name: vlc-youtube
+          ports:
+            - containerPort: 8080
+              name: http
+            - containerPort: 5900
+              name: vnc
+            - containerPort: 8554
+              name: rtsp
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            limits:
+              memory: 2Gi
+            requests:
+              cpu: "1"
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - mountPath: /opt/data/Dashcam/_all
+              name: dashcam
+              readOnly: true
+      priorityClassName: prod-stream
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      volumes:
+        - name: dashcam
+          persistentVolumeClaim:
+            claimName: vlc-dashcam-local
+            readOnly: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/name: vlc-youtube
+    app.kubernetes.io/part-of: tripbot
+  name: vlc-youtube
+  namespace: prod-1
+spec:
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+    - name: rtsp
+      port: 8554
+      targetPort: rtsp
+    - name: vnc
+      port: 5900
+      targetPort: vnc
+  selector:
+    app: vlc-youtube
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    cert-manager.io/issuer: letsencrypt-route53
+    external-dns.alpha.kubernetes.io/hostname: vlc-youtube.prod.whereisdana.today
+  name: vlc-youtube
+  namespace: prod-1
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: vlc-youtube.prod.whereisdana.today
+      http:
+        paths:
+          - backend:
+              service:
+                name: vlc-youtube
+                port:
+                  name: http
+            path: /
+            pathType: Prefix
+  tls:
+    - hosts:
+        - vlc-youtube.prod.whereisdana.today
+      secretName: vlc-youtube-tls
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: vlc-youtube-ts
+  namespace: prod-1
+spec:
+  defaultBackend:
+    service:
+      name: vlc-youtube
+      port:
+        number: 8080
+  ingressClassName: tailscale
+  tls:
+    - hosts:
+        - vlc-youtube-prod

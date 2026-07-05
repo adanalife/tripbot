@@ -29,6 +29,7 @@ data:
   TRIPBOT_SERVER_PORT: "8080"
   VERBOSE: "false"
   VLC_SERVER_HOST: vlc-youtube:8080
+  YOUTUBE_API_URL: http://gateway-youtube.stage-1.svc.cluster.local:8080
 ---
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
@@ -41,11 +42,11 @@ metadata:
 spec:
   dataFrom:
     - extract:
-        key: k8s/tripbot/youtube-creds
+        key: /k8s/tripbot/youtube-creds
   refreshInterval: 1h
   secretStoreRef:
     kind: SecretStore
-    name: aws-secretsmanager
+    name: aws-parameterstore
   target:
     creationPolicy: Owner
     name: tripbot-youtube-creds
@@ -59,14 +60,13 @@ metadata:
   name: tripbot-youtube
   namespace: stage-1
 spec:
-  replicas: 1
   selector:
     matchLabels:
       app: tripbot-youtube
   template:
     metadata:
       annotations:
-        adanalife.dev/config-hash: a2657ba240
+        adanalife.dev/config-hash: bb3a1ae800
       labels:
         app: tripbot-youtube
     spec:

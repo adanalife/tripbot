@@ -10,23 +10,15 @@ import (
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
+	"github.com/adanalife/tripbot/pkg/feature"
 	"github.com/adanalife/tripbot/pkg/server/oauthstate"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
-	myyoutube "github.com/adanalife/tripbot/pkg/youtube"
 	"github.com/nicklaw5/helix/v2"
 )
 
 // generateUserAccessToken is overridable in tests so the /auth/callback
 // happy path can be exercised without round-tripping to Twitch.
 var generateUserAccessToken = mytwitch.GenerateUserAccessToken
-
-// youtubeGenerateToken / youtubeAuthCodeURL / youtubeConfigured are the
-// same seams for the YouTube leg of the auth flow.
-var (
-	youtubeGenerateToken = myyoutube.GenerateUserAccessToken
-	youtubeAuthCodeURL   = myyoutube.AuthCodeURL
-	youtubeConfigured    = myyoutube.Configured
-)
 
 // helixClient is overridable in tests so /auth/init's URL-construction can be
 // exercised without triggering mytwitch.Client()'s lazy network init (which
@@ -42,6 +34,14 @@ func (s *Server) SetVersion(v string) {
 	if v != "" {
 		s.versionTag = v
 	}
+}
+
+// SetFlags injects the feature-flag client backing the console's /api/flags
+// endpoints. Called from cmd/tripbot's startFeatureFlags, before Start runs
+// the HTTP server (so there's no race on the field). Left nil when the
+// Postgres client fails to load — /api/flags then reports ok=false.
+func (s *Server) SetFlags(fc feature.FlagClient) {
+	s.flags = fc
 }
 
 // startedAt is when the process began; /version reports it so callers can derive
@@ -98,30 +98,6 @@ func authCallbackHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// YouTube leg: Google redirects to this same path; the account stashed
-	// with the state says which IdP the code belongs to.
-	if account == oauthstate.AccountYouTube {
-		title, err := youtubeGenerateToken(r.Context(), code)
-		if err != nil {
-			var mismatch *myyoutube.ErrChannelMismatch
-			if errors.As(err, &mismatch) {
-				slog.WarnContext(r.Context(), "YouTube consent identity mismatch; no row written",
-					"expected", mismatch.Expected, "got", mismatch.Got, "got_title", mismatch.GotTitle)
-				w.Header().Set("Content-Type", "text/html; charset=utf-8")
-				w.WriteHeader(http.StatusBadRequest)
-				fmt.Fprintf(w, authYouTubeMismatchHTML, mismatch.GotTitle, mismatch.Got, mismatch.Expected)
-				return
-			}
-			slog.ErrorContext(r.Context(), "youtube GenerateUserAccessToken failed", "err", err)
-			http.Error(w, "failed to exchange code: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		slog.InfoContext(r.Context(), "received token from youtube via auth callback", "channel", title)
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		fmt.Fprintf(w, authSuccessHTML, title, string(account))
-		return
-	}
-
 	expectedLogin := ""
 	switch account {
 	case oauthstate.AccountBot:
@@ -166,18 +142,8 @@ func authInitHandler(w http.ResponseWriter, r *http.Request) {
 	case "broadcaster":
 		scopes = mytwitch.BroadcasterScopes
 		account = oauthstate.AccountBroadcaster
-	case "youtube":
-		// YouTube goes to Google's authorize URL, not Twitch's — handle the
-		// whole leg here and return (no helix client involved).
-		if !youtubeConfigured() {
-			http.Error(w, "youtube auth not configured (YOUTUBE_CLIENT_ID / YOUTUBE_CLIENT_SECRET unset)", http.StatusServiceUnavailable)
-			return
-		}
-		state := oauthstate.New(oauthstate.AccountYouTube)
-		http.Redirect(w, r, youtubeAuthCodeURL(state), http.StatusFound)
-		return
 	default:
-		http.Error(w, "account must be 'bot', 'broadcaster', or 'youtube'", http.StatusBadRequest)
+		http.Error(w, "account must be 'bot' or 'broadcaster'", http.StatusBadRequest)
 		return
 	}
 	client, err := helixClient()
@@ -220,20 +186,9 @@ const authMismatchHTML = `<!doctype html>
 <body><div><h1>Wrong account</h1><p>You signed in as <code>%s</code>, but this leg expected <code>%s</code> (the <strong>%s</strong> account).</p><p>No token was written. Sign out of Twitch in this browser (or open an incognito window), then <a href="/auth/init?account=%s">click here to retry</a>.</p></div></body>
 </html>`
 
-// authYouTubeMismatchHTML is returned when the consenting Google account's
-// channel doesn't match the configured YOUTUBE_CHANNEL_ID. No row is written.
-// %s = got channel title, %s = got channel ID, %s = expected channel ID.
-const authYouTubeMismatchHTML = `<!doctype html>
-<html>
-<head><meta charset="utf-8"><title>tripbot — wrong channel</title>
-<style>body{background:#3a0000;color:#fff;font:14px/1.5 -apple-system,monospace;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}div{max-width:540px}code{background:#000;padding:2px 5px;border-radius:3px}a{color:#9cf}</style>
-</head>
-<body><div><h1>Wrong channel</h1><p>You consented as <code>%s</code> (<code>%s</code>), but this instance expects channel <code>%s</code>.</p><p>No token was written. Switch to the channel-owner Google account (Google's account chooser appears on the consent screen), then <a href="/auth/init?account=youtube">click here to retry</a>.</p></div></body>
-</html>`
-
-// rootHandler serves GET /: a minimal landing page linking to the bot,
-// broadcaster, and YouTube OAuth bootstrap flows. The rich admin panel moved to
-// the standalone tripbot-console; this keeps the login links reachable on the
+// rootHandler serves GET /: a minimal landing page linking to the bot and
+// broadcaster OAuth bootstrap flows. The rich admin panel moved to the
+// standalone tripbot-console; this keeps the login links reachable on the
 // pod itself for emergency re-auth when Dana isn't near the console.
 func rootHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -243,7 +198,7 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // rootHTML is the body of the landing page. Inline (no template file) so the
-// handler has no filesystem dependency; the three links drive /auth/init.
+// handler has no filesystem dependency; the two links drive /auth/init.
 const rootHTML = `<!doctype html>
 <html>
 <head><meta charset="utf-8"><title>tripbot</title>
@@ -254,7 +209,6 @@ const rootHTML = `<!doctype html>
 <p>OAuth bootstrap — sign in to refresh a bot token.</p>
 <a class="login" href="/auth/init?account=bot">Log in the bot account →</a>
 <a class="login" href="/auth/init?account=broadcaster">Log in the broadcaster account →</a>
-<a class="login" href="/auth/init?account=youtube">Log in the YouTube channel →</a>
 <p class="note">The admin dashboard lives in tripbot-console.</p>
 </main></body>
 </html>`

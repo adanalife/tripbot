@@ -175,6 +175,22 @@ def config_data(env: EnvConfig, platform: str) -> dict[str, str]:
     data["EXTERNAL_URL"] = external_url(env, platform)
     if env.nats_url:
         data["NATS_URL"] = env.nats_url
+    # Route the twitch instance's command-time Helix calls through the
+    # platform-gateway gateway-twitch (Phase 3) where the env opts in. Only the
+    # twitch platform talks Helix, so the youtube instance never carries it.
+    if platform == "twitch" and env.twitch_api_url:
+        data["TWITCH_API_URL"] = env.twitch_api_url
+    # Route the youtube instance's outbound chat sends through gateway-youtube
+    # where the env opts in. Only the youtube platform sends YouTube chat, so the
+    # twitch instance never carries it. Routed unconditionally when wired (no flag).
+    if platform == "youtube" and env.youtube_api_url:
+        data["YOUTUBE_API_URL"] = env.youtube_api_url
+    # Bot-less YouTube: gate off the inbound chat poll. Only stamped when
+    # disabled (the binary defaults to enabled) so a live, inbound-enabled
+    # youtube instance keeps a minimal ConfigMap and no needless config-hash
+    # rollout. The chatbot also swaps to promo help copy when this is false.
+    if platform == "youtube" and not env.youtube_inbound_enabled:
+        data["YOUTUBE_INBOUND_ENABLED"] = "false"
     return data
 
 
@@ -246,7 +262,7 @@ class Tripbot(Construct):
                 namespace=ns,
                 labels=labels,
                 creation_policy="Owner",
-                extract="k8s/tripbot/youtube-creds",
+                extract="/k8s/tripbot/youtube-creds",
             )
             env_from.append(
                 k8s.EnvFromSource(
@@ -321,7 +337,7 @@ class Tripbot(Construct):
             "deployment",
             metadata=k8s.ObjectMeta(name=name, namespace=ns, labels=labels),
             spec=k8s.DeploymentSpec(
-                replicas=1,
+                replicas=env.replicas_for(platform),
                 selector=k8s.LabelSelector(match_labels=sel),
                 template=k8s.PodTemplateSpec(
                     metadata=k8s.ObjectMeta(
@@ -491,7 +507,7 @@ def _emit_db_external_secret(scope, ns, labels):
             {
                 "refreshInterval": "1h",
                 "secretStoreRef": {
-                    "name": "aws-secretsmanager",
+                    "name": "aws-parameterstore",
                     "kind": "SecretStore",
                 },
                 "target": {
@@ -509,21 +525,21 @@ def _emit_db_external_secret(scope, ns, labels):
                     {
                         "secretKey": "user",
                         "remoteRef": {
-                            "key": "k8s/postgres/credentials",
+                            "key": "/k8s/postgres/credentials",
                             "property": "user",
                         },
                     },
                     {
                         "secretKey": "password",
                         "remoteRef": {
-                            "key": "k8s/postgres/credentials",
+                            "key": "/k8s/postgres/credentials",
                             "property": "password",
                         },
                     },
                     {
                         "secretKey": "db",
                         "remoteRef": {
-                            "key": "k8s/postgres/credentials",
+                            "key": "/k8s/postgres/credentials",
                             "property": "db",
                         },
                     },
@@ -539,12 +555,12 @@ def _emit_app_external_secrets(scope, ns, labels):
         (
             "twitch-external-secret",
             "tripbot-twitch-creds",
-            "k8s/tripbot/twitch-creds",
+            "/k8s/tripbot/twitch-creds",
         ),
         (
             "google-maps-external-secret",
             "tripbot-google-maps-api-key",
-            "k8s/tripbot/google-maps-api-key",
+            "/k8s/tripbot/google-maps-api-key",
         ),
     ]:
         eso.external_secret(
@@ -561,13 +577,13 @@ def _emit_app_external_secrets(scope, ns, labels):
         (
             "discord-alerts-external-secret",
             "tripbot-discord-alerts-webhook",
-            "k8s/tripbot/discord-alerts-webhook",
+            "/k8s/tripbot/discord-alerts-webhook",
             "DISCORD_ALERTS_WEBHOOK",
         ),
         (
             "discord-bot-token-external-secret",
             "tripbot-discord-bot-token",
-            "k8s/tripbot/discord-bot-token",
+            "/k8s/tripbot/discord-bot-token",
             "DISCORD_BOT_TOKEN",
         ),
     ]:

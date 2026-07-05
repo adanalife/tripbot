@@ -18,20 +18,15 @@ import (
 
 // --- auth / token ---
 
-func Client() (*helix.Client, error)            { return defaultClient.Client() }
-func BroadcasterClient() (*helix.Client, error) { return defaultClient.BroadcasterClient() }
-func LoadFromDB() error                         { return defaultClient.LoadFromDB() }
-func IRCAuthToken() string                      { return defaultClient.IRCAuthToken() }
-func CurrentUserAccessToken() string            { return defaultClient.CurrentUserAccessToken() }
-func BroadcasterUserAccessToken() string        { return defaultClient.BroadcasterUserAccessToken() }
-func AccountsNeedingReauth() []AccountReauth    { return defaultClient.AccountsNeedingReauth() }
-func TokenStatuses() []AccountTokenStatus       { return defaultClient.TokenStatuses() }
+func Client() (*helix.Client, error)      { return defaultClient.Client() }
+func LoadFromDB() error                   { return defaultClient.LoadFromDB() }
+func IRCAuthToken() string                { return defaultClient.IRCAuthToken() }
+func BroadcasterUserAccessToken() string  { return defaultClient.BroadcasterUserAccessToken() }
+func TokenStatuses() []AccountTokenStatus { return defaultClient.TokenStatuses() }
 
 func GenerateUserAccessToken(code string, expectedLogin string) error {
 	return defaultClient.GenerateUserAccessToken(code, expectedLogin)
 }
-func RefreshUserAccessToken(ctx context.Context) { defaultClient.RefreshUserAccessToken(ctx) }
-func Reauth(ctx context.Context, account string) { defaultClient.Reauth(ctx, account) }
 
 // --- audience / viewer queries ---
 
@@ -46,6 +41,12 @@ func ChatterCount() int             { return defaultClient.ChatterCount() }
 func Chatters() map[string]struct{} { return defaultClient.Chatters() }
 func UpdateChatters()               { defaultClient.UpdateChatters() }
 func ChannelID() string             { return defaultClient.ChannelID() }
+
+// SetSubscribers / SetChatters / SetChannelID feed cached state from
+// out-of-band (the platform-gateway) instead of an in-process Helix poll.
+func SetSubscribers(logins []string)         { defaultClient.SetSubscribers(logins) }
+func SetChatters(logins []string, count int) { defaultClient.SetChatters(logins, count) }
+func SetChannelID(id string)                 { defaultClient.SetChannelID(id) }
 
 func SendChatMessageAsBroadcaster(ctx context.Context, text string) error {
 	return defaultClient.SendChatMessageAsBroadcaster(ctx, text)
