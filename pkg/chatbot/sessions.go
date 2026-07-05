@@ -33,6 +33,9 @@ type Sessions interface {
 	CurrentMiles(ctx context.Context, u users.User) float32
 	CurrentMonthlyMiles(ctx context.Context, u users.User) float32
 	BonusMiles(u users.User) float32
+	// CorrectMiles applies a manual miles delta (may be negative) to a user,
+	// persisting immediately, and returns the new total. Backs !givemiles.
+	CorrectMiles(ctx context.Context, username string, delta float32) float32
 	// Shutdown logs out every in-memory session, flushing each user's
 	// state to the DB. Called by !shutdown before the process exits.
 	Shutdown(ctx context.Context)
@@ -84,6 +87,13 @@ func (r realSessions) BonusMiles(u users.User) float32 {
 		return 0
 	}
 	return r.s.BonusMiles(u)
+}
+
+func (r realSessions) CorrectMiles(ctx context.Context, username string, delta float32) float32 {
+	if r.s == nil {
+		return 0
+	}
+	return r.s.CorrectMiles(ctx, username, delta)
 }
 
 func (r realSessions) Shutdown(ctx context.Context) {
