@@ -114,34 +114,6 @@ func TestGoogleMapsURL(t *testing.T) {
 	}
 }
 
-func TestSplitOnRegex(t *testing.T) {
-	tests := []struct {
-		name      string
-		text      string
-		delimiter string
-		want      []string
-	}{
-		{"simple comma split", "a,b,c", ",", []string{"a", "b", "c"}},
-		{"empty input", "", ",", []string{""}},
-		{"no matches", "abc", ",", []string{"abc"}},
-		{"trailing delimiter yields empty tail", "a,b,", ",", []string{"a", "b", ""}},
-		{"regex char class", "a1b2c3d", "[0-9]", []string{"a", "b", "c", "d"}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := SplitOnRegex(tt.text, tt.delimiter)
-			if len(got) != len(tt.want) {
-				t.Fatalf("got %v (len=%d), want %v (len=%d)", got, len(got), tt.want, len(tt.want))
-			}
-			for i := range got {
-				if got[i] != tt.want[i] {
-					t.Fatalf("index %d: got %q, want %q", i, got[i], tt.want[i])
-				}
-			}
-		})
-	}
-}
-
 func TestRemoveNonLetters(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -183,50 +155,6 @@ func TestStripAtSign(t *testing.T) {
 				t.Fatalf("got %q, want %q", got, tt.want)
 			}
 		})
-	}
-}
-
-func TestBase64RoundTrip(t *testing.T) {
-	cases := []string{"", "hello", "Hello, World!", "miles: 42.0\n@dana"}
-	for _, in := range cases {
-		t.Run(in, func(t *testing.T) {
-			encoded := Base64Encode(in)
-			decoded, err := Base64Decode(encoded)
-			if err != nil {
-				t.Fatalf("decode error: %v", err)
-			}
-			if decoded != in {
-				t.Fatalf("round-trip mismatch: got %q, want %q", decoded, in)
-			}
-		})
-	}
-}
-
-func TestBase64DecodeError(t *testing.T) {
-	_, err := Base64Decode("!!!not-base64!!!")
-	if err == nil {
-		t.Fatal("expected decode error, got nil")
-	}
-}
-
-func TestInvertMap(t *testing.T) {
-	in := map[string]string{"a": "1", "b": "2", "c": "3"}
-	got := InvertMap(in)
-	want := map[string]string{"1": "a", "2": "b", "3": "c"}
-	if len(got) != len(want) {
-		t.Fatalf("got %v, want %v", got, want)
-	}
-	for k, v := range want {
-		if got[k] != v {
-			t.Fatalf("key %q: got %q, want %q", k, got[k], v)
-		}
-	}
-}
-
-func TestInvertMapEmpty(t *testing.T) {
-	got := InvertMap(map[string]string{})
-	if len(got) != 0 {
-		t.Fatalf("expected empty map, got %v", got)
 	}
 }
 

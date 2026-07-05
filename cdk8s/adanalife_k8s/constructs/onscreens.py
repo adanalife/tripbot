@@ -47,6 +47,12 @@ class OnscreensServer(Construct):
         # advertise Twitch-only commands (!miles, !guess). onscreens-server reads
         # ONSCREENS_SERVER_PLATFORM (defaults to twitch if unset).
         data["ONSCREENS_SERVER_PLATFORM"] = platform
+        # Bot-less YouTube: when the youtube pipeline's inbound chat is off, the
+        # rotators serve promo copy instead of command hints (no command can
+        # respond). Mirrors tripbot's YOUTUBE_INBOUND_ENABLED so both surfaces
+        # flip together. Only stamped when disabled (binary defaults to enabled).
+        if platform == "youtube" and not env.youtube_inbound_enabled:
+            data["ONSCREENS_SERVER_YOUTUBE_INBOUND_ENABLED"] = "false"
         cfg_hash = configmap.config_map(
             self,
             "config",
@@ -69,10 +75,10 @@ class OnscreensServer(Construct):
                 k8s.EnvFromSource(
                     config_map_ref=k8s.ConfigMapEnvSource(name=f"{name}-config")
                 ),
-                # onscreens-server reuses the vlc-server Sentry DSN for now.
+                # onscreens-server reports to its own Sentry project.
                 k8s.EnvFromSource(
                     secret_ref=k8s.SecretEnvSource(
-                        name="sentry-vlc-server", optional=False
+                        name="sentry-onscreens-server", optional=False
                     )
                 ),
                 k8s.EnvFromSource(
@@ -112,7 +118,7 @@ class OnscreensServer(Construct):
             "deployment",
             metadata=k8s.ObjectMeta(name=name, namespace=ns, labels=labels),
             spec=k8s.DeploymentSpec(
-                replicas=1,
+                replicas=env.replicas_for(platform),
                 strategy=k8s.DeploymentStrategy(
                     type="RollingUpdate",
                     rolling_update=k8s.RollingUpdateDeployment(
@@ -130,15 +136,19 @@ class OnscreensServer(Construct):
                             seccomp_profile=k8s.SeccompProfile(type="RuntimeDefault")
                         ),
                         priority_class_name=env.priority_class or None,
-                        # Prefer the ephemeral rpi5 worker when present, recover
-                        # to the MS-01 when it's gone (stage only). See scheduling.py.
+                        # Co-locate with this platform's OBS pod so the overlay
+                        # browser source reaches OBS on localhost, not across the
+                        # LAN. OBS owns the rpi5 node-preference; onscreens just
+                        # follows wherever OBS landed (toleration kept so it can
+                        # follow OBS onto the Pi). Stage only via env.prefer_rpi5.
+                        # See scheduling.py.
                         tolerations=(
                             scheduling.prefer_rpi5_tolerations()
                             if env.prefer_rpi5
                             else None
                         ),
                         affinity=(
-                            scheduling.prefer_rpi5_affinity()
+                            scheduling.colocate_with_obs_affinity(platform)
                             if env.prefer_rpi5
                             else None
                         ),

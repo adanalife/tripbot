@@ -30,6 +30,14 @@ type App struct {
 	// (indexCommands): Twitch runs the full registry, YouTube runs the v1
 	// allowlist. Empty is treated as Twitch. Set from c.Conf.Platform in New().
 	Platform string
+	// botless, when true, makes the rotating Chatter / !help lines advertise
+	// promo copy (follow on Twitch, interactivity coming soon) instead of
+	// command ads — for a YouTube instance running with inbound chat disabled,
+	// where no command can respond. Set in New() from
+	// c.Conf.Platform == "youtube" && !c.Conf.YouTubeInboundEnabled. The
+	// zero value (false) keeps the normal per-platform command-filtered help,
+	// so directly-constructed test Apps are unaffected unless they opt in.
+	botless bool
 	// DB is the GORM handle used by commands that need to read or write the
 	// database. nil in tests that don't exercise the DB; otherwise either the
 	// real database.GormDB() or a sqlmock-backed gorm.DB.
@@ -142,8 +150,9 @@ func (a *App) db() *gorm.DB {
 func New() *App {
 	a := &App{
 		Platform: c.Conf.Platform,
+		botless:  c.Conf.Platform == platformYouTube && !c.Conf.YouTubeInboundEnabled,
 		// DB stays nil; commands use a.db() which falls back to database.GormDB().
-		Onscreens:  realOnscreens{c: onscreensClient.New(natsclient.DefaultPublisher(), c.Conf.Environment)},
+		Onscreens:  realOnscreens{c: onscreensClient.New(natsclient.DefaultPublisher(), c.Conf.Environment, c.Conf.Platform)},
 		VLC:        realVLC{c: vlcClient.New(c.Conf.VlcServerHost, natsclient.DefaultPublisher(), c.Conf.Environment)},
 		Video:      realVideo{},
 		Chat:       disconnectedChat{},
@@ -154,9 +163,12 @@ func New() *App {
 		Cron:       noopCron{},
 		Geocoder:   realGeocoder{},
 		Weather:    realWeather{},
-		Twitch:     realTwitch{},
 		OBS:        realOBS{},
 	}
+	// Twitch is wired after the literal so the gateway/in-process selector can
+	// hold the App and read its (later-reassigned) Flags client at call time —
+	// cmd/tripbot swaps in the Postgres-backed flag client after New().
+	a.Twitch = newTwitch(a)
 	a.indexCommands()
 	return a
 }
@@ -204,10 +216,9 @@ func (a *App) ConnectIRC() *twitch.Client {
 	// live console. A second provider (YouTube/…) wires its own ChatClient here.
 	a.Chat = consoleMirror{
 		inner: twitchChat{
-			client:        client,
-			channelName:   c.Conf.ChannelName,
-			outputChannel: c.Conf.OutputChannel,
-			botUsername:   c.Conf.BotUsername,
+			client:      client,
+			channelName: c.Conf.ChannelName,
+			botUsername: c.Conf.BotUsername,
 		},
 		env:         c.Conf.Environment,
 		platform:    c.Conf.Platform,
@@ -222,7 +233,7 @@ func (a *App) ConnectIRC() *twitch.Client {
 // ctx is forward-compat plumbing — a.Chat.Say doesn't take ctx yet, so it's
 // not propagated into the chat write.
 func (a *App) Chatter(_ context.Context) {
-	// the "/me " twitch emote prefix adds some color on Twitch; youtubeChat.Say
+	// the "/me " twitch emote prefix adds some color on Twitch; gatewayYouTubeChat.Say
 	// strips it (it would render as literal text on YouTube).
 	a.Chat.Say("/me " + a.help())
 }

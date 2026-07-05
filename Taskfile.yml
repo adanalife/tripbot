@@ -69,9 +69,9 @@ tasks:
     cmds:
       - |
         secret=$(aws-vault exec adanalife-stage -- \
-          aws secretsmanager get-secret-value \
-          --secret-id k8s/tripbot/twitch-creds \
-          --query SecretString --output text)
+          aws ssm get-parameter --with-decryption \
+          --name /k8s/tripbot/twitch-creds \
+          --query Parameter.Value --output text)
         export TWITCH_CLIENT_ID=$(echo "$secret" | jq -r .TWITCH_CLIENT_ID)
         export TWITCH_CLIENT_SECRET=$(echo "$secret" | jq -r .TWITCH_CLIENT_SECRET)
         printf '\a'
@@ -86,13 +86,36 @@ tasks:
     cmds:
       - |
         secret=$(aws-vault exec adanalife-stage -- \
-          aws secretsmanager get-secret-value \
-          --secret-id k8s/tripbot/twitch-creds \
-          --query SecretString --output text)
+          aws ssm get-parameter --with-decryption \
+          --name /k8s/tripbot/twitch-creds \
+          --query Parameter.Value --output text)
         export TWITCH_CLIENT_ID=$(echo "$secret" | jq -r .TWITCH_CLIENT_ID)
         export TWITCH_CLIENT_SECRET=$(echo "$secret" | jq -r .TWITCH_CLIENT_SECRET)
         printf '\a'
         mise exec -- go run ./cmd/auth-bootstrap --account=broadcaster
+
+  # Changelog (towncrier). Fragments live in changelog.d/; assembled into
+  # CHANGELOG.md at release time. Run on the host via uvx — no project dep.
+  changelog:add:
+    desc: 'Scaffold a changelog fragment (PR=123 TYPE=fix). Types: gateway chatbot onscreens vlc console fix deploy ci cleanup misc summary'
+    requires:
+      vars: [PR]
+    vars:
+      TYPE: '{{.TYPE | default "misc"}}'
+    cmds:
+      - uvx towncrier create --config towncrier.toml --edit {{.PR}}.{{.TYPE}}.md
+
+  changelog:preview:
+    desc: Preview the pending changelog from the current fragments (towncrier draft)
+    cmds:
+      - uvx towncrier build --draft --config towncrier.toml --version {{.VERSION | default "Unreleased"}}
+
+  changelog:build:
+    desc: Collate fragments into CHANGELOG.md for a release + delete them (VERSION=3.9.0)
+    requires:
+      vars: [VERSION]
+    cmds:
+      - uvx towncrier build --yes --config towncrier.toml --version {{trimPrefix "v" .VERSION}}
 
   # Release smoke flow.
   # Targets the local k3d cluster running the stage-1 overlay
@@ -109,7 +132,6 @@ tasks:
     cmds:
       - docker buildx imagetools inspect adanalife/tripbot:{{.TAG}}
       - docker buildx imagetools inspect adanalife/vlc:{{.TAG}}
-      - docker buildx imagetools inspect adanalife/obs:{{.TAG}}
 
   release:smoke:whalecore:
     desc: Smoke-check tripbot.whalecore.com (requires allowlisted IP). Blocks on failure.
@@ -128,7 +150,6 @@ tasks:
       - task -d {{.HOME}}/adanalife/infra k8s-apply-stage-1
       - kubectl rollout status deploy/tripbot     --timeout=120s
       - kubectl rollout status deploy/vlc-server  --timeout=120s
-      - kubectl rollout status deploy/obs         --timeout=120s
       - kubectl rollout status deploy/cloudflared --timeout=60s
       - task: release:smoke:local
       - task: release:smoke:whalecore
@@ -137,13 +158,6 @@ tasks:
     desc: Alias for release:smoke:stage-1
     cmds:
       - task: release:smoke:stage-1
-
-  obs:browser:refresh:
-    desc: Refresh all OBS browser sources via websocket (docker-compose; OBS must be running)
-    env:
-      OBS_WEBSOCKET_PASSWD: '{{.OBS_WEBSOCKET_PASSWD | default "adanalife"}}'
-    cmds:
-      - uv run --with obsws-python bin/obs-browser-refresh
 
   # vlc-server native macOS build — links against the libvlc bundled
   # inside VLC.app. Saves recreating the CGO incantation from memory.
@@ -203,6 +217,16 @@ tasks:
     cmds:
       - mise exec -- uv run cdk8s synth
       - git diff --exit-code -- dist/ || { echo "dist/ is stale — run task cdk8s:synth and commit"; exit 1; }
+
+  cdk8s:verify:
+    desc: The cdk8s edit loop in one step — synth, show what changed in dist/, run the synth-time checks
+    dir: cdk8s
+    deps: [cdk8s:imports]
+    cmds:
+      - mise exec -- uv run cdk8s synth
+      - git status --short -- dist/
+      - git diff --stat -- dist/
+      - mise exec -- uv run pytest -q
 
   cdk8s:stage:diff:
     desc: kubectl diff the synthed stage-1 app manifests against the live cluster (read-only)

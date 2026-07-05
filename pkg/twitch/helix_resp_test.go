@@ -50,9 +50,9 @@ func TestCheckHelixResp_ServerError(t *testing.T) {
 	}
 }
 
-// A 401 with account="" must still report the error but must NOT trigger
-// Reauth (which would make a live Twitch refresh call) — the app-token and
-// mid-bootstrap callsites rely on this opt-out.
+// A 401 with account="" must still report the error but must NOT trigger a
+// DB re-read of oauth_tokens — the app-token and mid-bootstrap callsites rely
+// on this opt-out.
 func TestCheckHelixResp_UnauthorizedNoAccountSkipsReauth(t *testing.T) {
 	cl := New()
 	rc := &helix.ResponseCommon{StatusCode: 401, ErrorMessage: "invalid oauth token"}

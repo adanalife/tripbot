@@ -11,15 +11,18 @@ func TestSubjects(t *testing.T) {
 		got  string
 		want string
 	}{
-		{"middle.show", MiddleShowSubject("staging"), "tripbot.staging.onscreens.middle.show"},
-		{"middle.hide", MiddleHideSubject("staging"), "tripbot.staging.onscreens.middle.hide"},
-		{"leaderboard.show", LeaderboardShowSubject("prod"), "tripbot.prod.onscreens.leaderboard.show"},
-		{"leaderboard.hide", LeaderboardHideSubject("prod"), "tripbot.prod.onscreens.leaderboard.hide"},
-		{"timewarp.show", TimewarpShowSubject("development"), "tripbot.development.onscreens.timewarp.show"},
-		{"timewarp.hide", TimewarpHideSubject("development"), "tripbot.development.onscreens.timewarp.hide"},
-		{"gps.show", GPSShowSubject("staging"), "tripbot.staging.onscreens.gps.show"},
-		{"gps.hide", GPSHideSubject("staging"), "tripbot.staging.onscreens.gps.hide"},
-		{"flag.hide", FlagHideSubject("prod"), "tripbot.prod.onscreens.flag.hide"},
+		{"middle.show", MiddleShowSubject("staging", "twitch"), "tripbot.staging.onscreens.middle.show.twitch"},
+		{"middle.hide", MiddleHideSubject("staging", "twitch"), "tripbot.staging.onscreens.middle.hide.twitch"},
+		{"middle.state", MiddleStateSubject("staging", "youtube"), "tripbot.staging.onscreens.middle.state.youtube"},
+		{"middle.state.wildcard", MiddleStateWildcard("staging"), "tripbot.staging.onscreens.middle.state.*"},
+		{"leaderboard.show", LeaderboardShowSubject("prod", "twitch"), "tripbot.prod.onscreens.leaderboard.show.twitch"},
+		{"leaderboard.hide", LeaderboardHideSubject("prod", "twitch"), "tripbot.prod.onscreens.leaderboard.hide.twitch"},
+		{"timewarp.show", TimewarpShowSubject("development", "twitch"), "tripbot.development.onscreens.timewarp.show.twitch"},
+		{"timewarp.hide", TimewarpHideSubject("development", "twitch"), "tripbot.development.onscreens.timewarp.hide.twitch"},
+		{"gps.show", GPSShowSubject("staging", "twitch"), "tripbot.staging.onscreens.gps.show.twitch"},
+		{"gps.hide", GPSHideSubject("staging", "twitch"), "tripbot.staging.onscreens.gps.hide.twitch"},
+		{"location.update", LocationUpdateSubject("prod", "youtube"), "tripbot.prod.onscreens.location.update.youtube"},
+		{"flag.hide", FlagHideSubject("prod", "twitch"), "tripbot.prod.onscreens.flag.hide.twitch"},
 	}
 	for _, tc := range cases {
 		if tc.got != tc.want {

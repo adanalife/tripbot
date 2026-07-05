@@ -12,7 +12,8 @@ import (
 )
 
 // TestRootHandlerServesAuthLinks pins that the landing page that replaced the
-// admin panel still surfaces the three OAuth bootstrap links.
+// admin panel still surfaces the Twitch OAuth bootstrap links. (YouTube auth
+// moved entirely onto the platform-gateway, so there's no YouTube link here.)
 func TestRootHandlerServesAuthLinks(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
@@ -28,11 +29,13 @@ func TestRootHandlerServesAuthLinks(t *testing.T) {
 	for _, want := range []string{
 		"/auth/init?account=bot",
 		"/auth/init?account=broadcaster",
-		"/auth/init?account=youtube",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("root page missing link %q", want)
 		}
+	}
+	if strings.Contains(body, "account=youtube") {
+		t.Error("root page should not link the removed YouTube auth flow")
 	}
 }
 

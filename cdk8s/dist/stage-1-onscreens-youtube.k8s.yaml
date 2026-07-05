@@ -25,7 +25,6 @@ metadata:
   name: onscreens-youtube
   namespace: stage-1
 spec:
-  replicas: 1
   selector:
     matchLabels:
       app: onscreens-youtube
@@ -42,21 +41,20 @@ spec:
         app: onscreens-youtube
     spec:
       affinity:
-        nodeAffinity:
+        podAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
-            - preference:
-                matchExpressions:
-                  - key: dana.lol/board
-                    operator: In
-                    values:
-                      - rpi5
+            - podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: obs-youtube
+                topologyKey: kubernetes.io/hostname
               weight: 100
       containers:
         - envFrom:
             - configMapRef:
                 name: onscreens-youtube-config
             - secretRef:
-                name: sentry-vlc-server
+                name: sentry-onscreens-server
                 optional: false
             - secretRef:
                 name: grafana-cloud-otlp

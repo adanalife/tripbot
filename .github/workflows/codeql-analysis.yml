@@ -1,4 +1,4 @@
-name: "CodeQL"
+name: codeql-analysis
 
 on:
   pull_request:
@@ -31,7 +31,7 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
 
     # Initializes the CodeQL tools for scanning.
     - name: Initialize CodeQL

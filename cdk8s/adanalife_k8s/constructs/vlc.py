@@ -7,9 +7,10 @@ overlays:
 
   * RollingUpdate (readiness-gated; dashcam PVC is ReadOnlyMany so both pods can
     mount during the surge), seccomp + drop-ALL hardening, /health probes.
-  * dashcam volume: NFS PVC (prod/stage, env.nfs_*) or hostPath (local/dev). The
-    PVC is shared across platforms (ReadOnlyMany), so every platform's vlc pod
-    mounts the same `vlc-dashcam` claim — it is NOT per-platform.
+  * dashcam volume: a PVC (prod/stage) or hostPath (local/dev). dashcam_source
+    selects the NFS-backed `vlc-dashcam` (default) or the node-local
+    `vlc-dashcam-local` cache. The claim is shared across platforms (ReadOnlyMany),
+    so every platform's vlc pod mounts the same one — it is NOT per-platform.
   * iGPU request on GPU envs; OTEL/Sentry envFrom from shared-secrets.
   * traefik Ingress (TLS on minipc) + optional Tailscale Ingress.
 """
@@ -83,16 +84,23 @@ class VlcServer(Construct):
             data=data,
         )
 
-        # --- dashcam volume (nfs PVC | hostPath) ---
-        # The NFS PV/PVC are NOT emitted here — they're stateful, so they live in
-        # DataChart (emit_dashcam_volume), separate from this stateless Deployment
-        # so app churn can't disturb them. This just references the PVC by name.
-        # The claim is shared (ReadOnlyMany) across platforms — not per-platform.
+        # --- dashcam volume (nfs/local PVC | hostPath) ---
+        # The PVCs are NOT emitted here — they're data infra, so they live in the
+        # infra repo (DataChart/SupportingChart), separate from this stateless
+        # Deployment so app churn can't disturb them. This just references a claim
+        # by name. dashcam_source flips which one: the NFS-backed `vlc-dashcam`
+        # (default) or the node-local `vlc-dashcam-local` cache (infra's
+        # dashcam_local_enabled must be on so that claim exists + is populated).
+        # Flipping back to nfs is the instant fallback while the local copy is
+        # (re)populated. The claim is shared (ReadOnlyMany) across platforms.
         if env.dashcam_mode == "nfs":
+            claim_name = (
+                "vlc-dashcam-local" if env.dashcam_source == "local" else "vlc-dashcam"
+            )
             volume = k8s.Volume(
                 name="dashcam",
                 persistent_volume_claim=k8s.PersistentVolumeClaimVolumeSource(
-                    claim_name="vlc-dashcam", read_only=True
+                    claim_name=claim_name, read_only=True
                 ),
             )
         else:
@@ -171,7 +179,7 @@ class VlcServer(Construct):
             "deployment",
             metadata=k8s.ObjectMeta(name=name, namespace=ns, labels=labels),
             spec=k8s.DeploymentSpec(
-                replicas=1,
+                replicas=env.replicas_for(platform),
                 strategy=k8s.DeploymentStrategy(
                     type="RollingUpdate",
                     rolling_update=k8s.RollingUpdateDeployment(
@@ -189,17 +197,18 @@ class VlcServer(Construct):
                             seccomp_profile=k8s.SeccompProfile(type="RuntimeDefault")
                         ),
                         priority_class_name=env.priority_class or None,
-                        # Prefer the ephemeral rpi5 worker when present, recover
-                        # to the MS-01 when it's gone (stage only). The RTSP feed
-                        # to OBS crosses the LAN instead of localhost when vlc
-                        # lands on the Pi. See scheduling.py.
+                        # Co-locate with this platform's OBS pod so the RTSP feed
+                        # reaches OBS on localhost, not across the LAN. OBS owns the
+                        # rpi5 node-preference; vlc just follows wherever OBS landed
+                        # (toleration kept so it can follow OBS onto the Pi). Stage
+                        # only via env.prefer_rpi5. See scheduling.py.
                         tolerations=(
                             scheduling.prefer_rpi5_tolerations()
                             if env.prefer_rpi5
                             else None
                         ),
                         affinity=(
-                            scheduling.prefer_rpi5_affinity()
+                            scheduling.colocate_with_obs_affinity(platform)
                             if env.prefer_rpi5
                             else None
                         ),
@@ -221,6 +230,37 @@ class VlcServer(Construct):
             metadata=k8s.ObjectMeta(name=name, namespace=ns, labels=labels),
             spec=k8s.ServiceSpec(type="ClusterIP", selector=sel, ports=svc_ports),
         )
+
+        # --- RTSP NodePort (minipc convenience: a stable host endpoint for pulling
+        # the dashcam feed off-cluster — e.g. OBS on a LAN desktop — without
+        # kubectl port-forward. The minipc has no LoadBalancer controller, so this
+        # is the NodePort analogue of the k3d-only `<name>-host` LoadBalancer.
+        # Gated on the twitch platform + a configured port: prod-1 + stage-1
+        # co-tenant the one node, and a pinned NodePort can't be claimed twice, so
+        # only an env that sets vlc_rtsp_node_port (prod) emits one. RTSP only —
+        # VNC/HTTP stay in-cluster. Pull over TCP:
+        # rtsp://<node-ip>:<nodePort>/dashcam with rtsp_transport=tcp so the RTSP
+        # control + RTP media share the single forwarded port. ---
+        if env.vlc_rtsp_node_port and platform == "twitch":
+            k8s.KubeService(
+                self,
+                "rtsp-nodeport",
+                metadata=k8s.ObjectMeta(
+                    name=f"{name}-rtsp", namespace=ns, labels=labels
+                ),
+                spec=k8s.ServiceSpec(
+                    type="NodePort",
+                    selector=sel,
+                    ports=[
+                        k8s.ServicePort(
+                            name="rtsp",
+                            port=8554,
+                            target_port=k8s.IntOrString.from_string("rtsp"),
+                            node_port=env.vlc_rtsp_node_port,
+                        )
+                    ],
+                ),
+            )
 
         # --- host-access LoadBalancer (k3d-only convenience: local + dev, which
         # extends local). Overlay-added, so no metadata labels (matches render). ---

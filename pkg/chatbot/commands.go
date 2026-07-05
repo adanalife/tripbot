@@ -226,11 +226,32 @@ func (a *App) milesCmd(ctx context.Context, user *users.User, params []string) {
 	a.Chat.Say(msg)
 }
 
-func (a *App) kilometresCmd(ctx context.Context, user *users.User, _ []string) {
+func (a *App) kilometresCmd(ctx context.Context, user *users.User, params []string) {
 	slog.InfoContext(ctx, "ran !kilometres", "username", user.Username)
-	km := a.Sessions.CurrentMiles(ctx, *user) * 1.609344
+
+	var username string
+	var miles float32
+
+	// check to see if an arg was provided (mirror milesCmd's other-user lookup)
+	if len(params) == 0 {
+		username = user.Username
+		miles = a.Sessions.CurrentMiles(ctx, *user)
+	} else {
+		username = helpers.StripAtSign(params[0])
+		u := a.Sessions.Find(ctx, username)
+
+		// check to see if they are in our DB
+		if u.ID == 0 {
+			a.Chat.Say("I don't know them, sorry!")
+			return
+		}
+
+		miles = a.Sessions.CurrentMiles(ctx, u)
+	}
+
+	km := miles * 1.609344
 	msg := "@%s has %.2f kilometres."
-	msg = fmt.Sprintf(msg, user.Username, km)
+	msg = fmt.Sprintf(msg, username, km)
 	a.Chat.Say(msg)
 }
 
@@ -454,15 +475,15 @@ func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 		vid = vid.Next(ctx)
 	}
 
-	if strings.ToLower(guess) == strings.ToLower(vid.State) {
+	if strings.EqualFold(guess, vid.State) {
 		msg = fmt.Sprintf("@%s got it! We're in %s", user.Username, vid.State)
 		// show the flag for the state
 		a.Onscreens.ShowFlag(ctx, 10*time.Second)
 		// increase their guess score
 		user.AddToScore(ctx, guessScoreboard, 1.0)
 		user.AddToScore(ctx, scoreboards.CurrentGuessScoreboard(), 1.0)
-		// do a timewarp
-		a.timewarp(ctx)
+		// do a timewarp, crediting the guesser on the overlay
+		a.timewarp(ctx, user.Username)
 	} else {
 		msg = "Try again! EarthDay"
 	}

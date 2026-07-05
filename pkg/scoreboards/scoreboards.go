@@ -11,10 +11,13 @@ import (
 	"github.com/adanalife/tripbot/pkg/database"
 )
 
-// Scoreboard represents a bucket of scores, and has a name to identify it
+// Scoreboard represents a bucket of scores, and has a name to identify it.
+// Names are per-platform (miles_2026_07 exists once per platform): uniqueness
+// is (name, platform), and every lookup scopes by this instance's platform.
 type Scoreboard struct {
-	ID   uint16 `gorm:"primaryKey"`
-	Name string
+	ID       uint16 `gorm:"primaryKey"`
+	Name     string
+	Platform string
 	// autoCreateTime stamps date_created on insert; createScoreboard() doesn't
 	// set it, so without the tag GORM writes the 0001-01-01 zero value over the
 	// column's DEFAULT CURRENT_TIMESTAMP. See pkg/events for the full story.
@@ -35,8 +38,10 @@ func TopUsers(ctx context.Context, scoreboardName string, size int) [][]string {
 		Select("users.username, scores.value").
 		Joins("JOIN scoreboards ON scores.scoreboard_id = scoreboards.id").
 		Joins("JOIN users ON scores.user_id = users.id").
-		Where("scoreboards.name = ?", scoreboardName).
-		Where("users.is_bot = false AND users.username != ?", strings.ToLower(c.Conf.ChannelName)).
+		Where("scoreboards.name = ? AND scoreboards.platform = ?", scoreboardName, c.Conf.Platform).
+		// users.platform too: scores written before boards were per-platform
+		// may hang off the other platform's same-named board.
+		Where("users.is_bot = false AND users.platform = ? AND users.username != ?", c.Conf.Platform, strings.ToLower(c.Conf.ChannelName)).
 		Order("scores.value DESC").
 		Limit(size).
 		Scan(&results)
@@ -54,7 +59,7 @@ func TopUsers(ctx context.Context, scoreboardName string, size int) [][]string {
 // findOrCreateScoreboard will find a Scoreboard in the DB or create one
 func findOrCreateScoreboard(ctx context.Context, name string) (Scoreboard, error) {
 	var scoreboard Scoreboard
-	result := database.GormDB().WithContext(ctx).Where(Scoreboard{Name: name}).FirstOrCreate(&scoreboard)
+	result := database.GormDB().WithContext(ctx).Where(Scoreboard{Name: name, Platform: c.Conf.Platform}).FirstOrCreate(&scoreboard)
 	return scoreboard, result.Error
 }
 
@@ -63,7 +68,7 @@ func createScoreboard(ctx context.Context, name string) (Scoreboard, error) {
 	if c.Conf.Verbose {
 		slog.InfoContext(ctx, "creating scoreboard", "name", name)
 	}
-	scoreboard := Scoreboard{Name: name}
+	scoreboard := Scoreboard{Name: name, Platform: c.Conf.Platform}
 	result := database.GormDB().WithContext(ctx).Create(&scoreboard)
 	return scoreboard, result.Error
 }

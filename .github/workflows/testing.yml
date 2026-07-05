@@ -1,4 +1,4 @@
-name: Testing
+name: testing
 on:
   pull_request:
   push:
@@ -12,7 +12,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
     - uses: arduino/setup-task@v2
       with:
         version: 3.x

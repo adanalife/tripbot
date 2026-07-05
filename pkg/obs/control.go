@@ -20,11 +20,17 @@ import (
 // env-unset case.
 var defaultOBSWebsocketAddr = fmt.Sprintf("%s:%d", contract.ServiceOBSTwitch, contract.PortOBSWebsocket)
 
-// dial opens a fresh OBS WebSocket connection using the same env vars
-// PollStreamingActive reads. Callers are responsible for client.Disconnect().
-// Returns an error if either OBS is unreachable or the password is rejected;
-// caller logs at the appropriate level for its context.
-func dial(_ context.Context) (*goobs.Client, error) {
+// Dial opens an OBS WebSocket connection using the same env vars
+// PollStreamingActive reads (OBS_WEBSOCKET_ADDR / OBS_WEBSOCKET_PASSWD),
+// applying any extra goobs options on top of the password. Callers are
+// responsible for client.Disconnect(). Returns an error if either OBS is
+// unreachable or the password is rejected; caller logs at the appropriate
+// level for its context.
+//
+// Exported so the audio-fallback watchdog's long-lived volume-meter
+// connection can add goobs.WithEventSubscriptions without duplicating the
+// addr/password resolution.
+func Dial(_ context.Context, opts ...goobs.Option) (*goobs.Client, error) {
 	addr := os.Getenv("OBS_WEBSOCKET_ADDR")
 	if addr == "" {
 		addr = defaultOBSWebsocketAddr
@@ -33,7 +39,13 @@ func dial(_ context.Context) (*goobs.Client, error) {
 	if passwd == "" {
 		passwd = "adanalife"
 	}
-	return goobs.New(addr, goobs.WithPassword(passwd))
+	return goobs.New(addr, append([]goobs.Option{goobs.WithPassword(passwd)}, opts...)...)
+}
+
+// dial opens a fresh OBS WebSocket connection with no extra options — the
+// per-call form used by the Start/Stop/Get helpers below.
+func dial(ctx context.Context) (*goobs.Client, error) {
+	return Dial(ctx)
 }
 
 // StartStream tells OBS to begin streaming. Opens a fresh connection per

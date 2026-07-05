@@ -42,7 +42,8 @@ var gpsPNG []byte
 
 // onscreenStyle controls how a single onscreen renders in its OBS browser source.
 // Keep these in sync with the dimensions / fonts that the previous text_ft2_source
-// and image_source entries in infra/docker/obs/config/Tripbot.json.tmpl used.
+// and image_source entries in the OBS scene config (config/Tripbot.json.tmpl in
+// the adanalife/obs repo) used.
 //
 // For text onscreens whose browser-source viewport overhangs a smaller on-canvas
 // overlay box (the bottom-strip rotators sit on a 640px third but their grey-box
@@ -64,6 +65,17 @@ type onscreenStyle struct {
 	FitWidthPx    int          // single-line width budget for shrink-to-fit (0 = no fit pass)
 	RenderAsHTML  bool         // inject content via innerHTML instead of textContent (server emits HTML for this onscreen)
 	Markdown      bool         // run the onscreen's Content through renderInlineMarkdown before serving state.json (implies RenderAsHTML)
+}
+
+// ContentMarginLeftPx is the left margin (in px) that positions a
+// FitWidthPx-wide, text-centered content box so its center sits at AnchorXPx
+// within the browser-source viewport. It backs the anchored rotator layout's
+// normal-flow centering (see templates/onscreen.html.tmpl) — the layout
+// deliberately avoids position:absolute + transform, which promote the content
+// to a separate compositing layer that OBS's offscreen renderer fails to
+// repaint on update.
+func (s onscreenStyle) ContentMarginLeftPx() int {
+	return s.AnchorXPx - s.FitWidthPx/2
 }
 
 var onscreenRegistry = map[string]onscreenStyle{
