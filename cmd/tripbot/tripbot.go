@@ -501,8 +501,9 @@ func (t *Tripbot) startEventSub(ctx context.Context) {
 			BroadcasterToken:  token,
 			BroadcasterUserID: mytwitch.ChannelID(),
 		}, eventsub.Handlers{
-			OnFollow:    t.app.AnnounceNewFollower,
-			OnSubscribe: t.app.AnnounceSubscriber,
+			OnFollow:      t.app.AnnounceNewFollower,
+			OnSubscribe:   t.app.AnnounceSubscriber,
+			OnUnsubscribe: t.app.RecordUnsubscribe,
 		})
 		if err != nil && !errors.Is(err, context.Canceled) {
 			slog.ErrorContext(ctx, "eventsub run terminated", "err", err)

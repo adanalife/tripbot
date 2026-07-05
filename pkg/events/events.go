@@ -50,6 +50,37 @@ func Logout(ctx context.Context, user string, sessionID uuid.UUID) error {
 	return nil
 }
 
+// Subscribe records that a viewer's subscription began (Twitch
+// channel.subscribe — initial subs and gift-sub recipients). Paired with
+// Unsubscribe it bounds a viewer's subscribed interval, which is what the 5%
+// miles bonus keys off. No session_id: this isn't a login/logout.
+func Subscribe(ctx context.Context, user string) error {
+	if c.Conf.ReadOnly && c.Conf.Verbose {
+		slog.InfoContext(ctx, "skipping subscribe event: read-only mode", "username", user)
+		return &terrors.ReadOnlyError{Msg: "read-only mode"}
+	}
+	if err := database.GormDB().WithContext(ctx).Create(&Event{Username: user, Platform: c.Conf.Platform, Event: "subscribe"}).Error; err != nil {
+		return err
+	}
+	instrumentation.Events.Inc("subscribe")
+	return nil
+}
+
+// Unsubscribe records that a viewer's subscription ended (Twitch
+// channel.subscription.end — real lapse/cancel, never a guessed expiry).
+// Closes the interval Subscribe opened.
+func Unsubscribe(ctx context.Context, user string) error {
+	if c.Conf.ReadOnly && c.Conf.Verbose {
+		slog.InfoContext(ctx, "skipping unsubscribe event: read-only mode", "username", user)
+		return &terrors.ReadOnlyError{Msg: "read-only mode"}
+	}
+	if err := database.GormDB().WithContext(ctx).Create(&Event{Username: user, Platform: c.Conf.Platform, Event: "unsubscribe"}).Error; err != nil {
+		return err
+	}
+	instrumentation.Events.Inc("unsubscribe")
+	return nil
+}
+
 // preFixSentinel is safely after the 0001-01-01 zero-time the timestamp bug
 // wrote (between the GORM migration #499 and the autoCreateTime fix) but well
 // before any real stream data — the stream started May 2019. Used to exclude
