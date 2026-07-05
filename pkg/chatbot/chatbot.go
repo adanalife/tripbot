@@ -98,9 +98,8 @@ type App struct {
 	// keyless Open-Meteo archive API.
 	Weather Weather
 	// Twitch is the command-time Twitch Helix surface (follow lookups today).
-	// Tests inject a recordingTwitch; production uses realTwitch which
-	// delegates to the pkg/twitch client. The future swap point for an
-	// out-of-process Helix/auth service.
+	// Tests inject a recordingTwitch; production uses the gatewayTwitch adapter,
+	// which reaches the platform-gateway (the out-of-process Helix service).
 	Twitch Twitch
 	// OBS drives live OBS WebSocket tweaks for chat commands — currently just
 	// !carsound repointing the YouTube background-audio source. Tests inject a

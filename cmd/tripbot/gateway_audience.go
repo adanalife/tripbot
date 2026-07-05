@@ -9,16 +9,11 @@ import (
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 )
 
-// gatewayChatterSource is the cmd-wired users.ChatterSource for instances that
-// may use the platform-gateway. Chatter refresh and the live follower check
-// route through the gateway when useGateway reports the runtime flag is on, else
-// in-process. The cached reads (Chatters / ChatterCount / IsSubscriber) always
-// read tripbot's in-process audience cache — which the refresh populates from
-// whichever source is active — so they need no dispatch.
-//
-// With no gateway wired (t.gateway == nil) useGateway is always false, so this
-// behaves exactly like the plain in-process Twitch source; that's why it can be
-// the source unconditionally.
+// gatewayChatterSource is the cmd-wired users.ChatterSource. Chatter refresh and
+// the live follower check route through the platform-gateway (the single Helix
+// caller); the cached reads (Chatters / ChatterCount / IsSubscriber) read
+// tripbot's in-process audience cache — which the refresh populates from the
+// gateway — so they need no dispatch.
 type gatewayChatterSource struct{ t *Tripbot }
 
 func (s gatewayChatterSource) Chatters() map[string]struct{} { return mytwitch.Chatters() }
@@ -28,15 +23,10 @@ func (s gatewayChatterSource) IsSubscriber(username string) bool {
 	return mytwitch.UserIsSubscriber(username)
 }
 
-// UpdateChatters refreshes the cached chatter set, from the gateway when the
-// flag is on, else the in-process Helix poll. A gateway error keeps the prior
-// cached set, matching UpdateChatters' don't-zero-on-error posture.
+// UpdateChatters refreshes the cached chatter set from the gateway. A gateway
+// error keeps the prior cached set, matching the don't-zero-on-error posture.
 func (s gatewayChatterSource) UpdateChatters() {
 	ctx := context.Background()
-	if !s.t.useGateway(ctx) {
-		mytwitch.UpdateChatters()
-		return
-	}
 	count, logins, err := s.t.gateway.Chatters(ctx)
 	if err != nil {
 		slog.WarnContext(ctx, "gateway chatters refresh failed; keeping cached set", "err", err)
@@ -45,14 +35,11 @@ func (s gatewayChatterSource) UpdateChatters() {
 	mytwitch.SetChatters(logins, count)
 }
 
-// IsFollower reports whether username follows the channel, via the gateway when
-// the flag is on, else in-process. Mirrors UserIsFollower's admin short-circuit
-// (the broadcaster can't follow themselves) and its fail-closed-on-error posture.
+// IsFollower reports whether username follows the channel, via the gateway. The
+// broadcaster can't follow themselves, so admins short-circuit to true; a
+// gateway error fails closed (treated as non-follower).
 func (s gatewayChatterSource) IsFollower(username string) bool {
 	ctx := context.Background()
-	if !s.t.useGateway(ctx) {
-		return mytwitch.UserIsFollower(username)
-	}
 	if c.UserIsAdmin(username) {
 		return true
 	}
@@ -65,14 +52,10 @@ func (s gatewayChatterSource) IsFollower(username string) bool {
 	return ok
 }
 
-// refreshSubscribers refreshes the cached subscriber list — from the gateway
-// when the flag is on, else the in-process Helix poll. Driven at startup and by
-// the 5-minute cron. A gateway error keeps the prior cached list.
+// refreshSubscribers refreshes the cached subscriber list from the gateway.
+// Driven at startup and by the 5-minute cron. A gateway error keeps the prior
+// cached list.
 func (t *Tripbot) refreshSubscribers(ctx context.Context) {
-	if !t.useGateway(ctx) {
-		mytwitch.GetSubscribers(ctx)
-		return
-	}
 	subs, err := t.gateway.Subscribers(ctx)
 	if err != nil {
 		slog.WarnContext(ctx, "gateway subscribers refresh failed; keeping cached list", "err", err)
@@ -81,13 +64,8 @@ func (t *Tripbot) refreshSubscribers(ctx context.Context) {
 	mytwitch.SetSubscribers(subs)
 }
 
-// refreshFollowerCount refreshes the follower-count gauge — from the gateway
-// when the flag is on, else the in-process Helix poll.
+// refreshFollowerCount refreshes the follower-count gauge from the gateway.
 func (t *Tripbot) refreshFollowerCount(ctx context.Context) {
-	if !t.useGateway(ctx) {
-		mytwitch.GetFollowerCount(ctx)
-		return
-	}
 	total, err := t.gateway.Followers(ctx)
 	if err != nil {
 		slog.WarnContext(ctx, "gateway follower-count refresh failed", "err", err)
