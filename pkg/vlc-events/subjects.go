@@ -20,6 +20,7 @@ func subject(env string, verb ...string) string {
 
 func PlayRandomSubject(env string) string { return subject(env, "play", "random") }
 func PlayFileSubject(env string) string   { return subject(env, "play", "file") }
+func PlayFileAtSubject(env string) string { return subject(env, "play", "at") }
 func SkipSubject(env string) string       { return subject(env, "skip") }
 func BackSubject(env string) string       { return subject(env, "back") }
 

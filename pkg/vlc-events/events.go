@@ -48,6 +48,18 @@ type PlayFile struct {
 	File string `json:"file"`
 }
 
+// PlayFileAt is the payload for the play.at subject — play File and then seek
+// to PositionMs within it (the client's PlayFileAtTimestamp(file, ts)). Unlike
+// play.file (which always starts at the top), this carries a seek target so
+// !find can jump straight to the matching moment. PositionMs 0 / omitted means
+// start-of-clip, identical to play.file.
+type PlayFileAt struct {
+	Envelope
+	File string `json:"file"`
+	// PositionMs is the seek target within File in milliseconds.
+	PositionMs int64 `json:"position_ms,omitempty"`
+}
+
 // Command is the payload for events that carry no data beyond the envelope:
 // play.random (the server picks the file). A single type rather than an empty
 // struct per subject — the subject distinguishes them, and any event that

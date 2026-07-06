@@ -95,6 +95,49 @@ func TestPlayFileInPlaylist_PublishesFile(t *testing.T) {
 	}
 }
 
+func TestPlayFileAtTimestamp_PublishesFileAndPosition(t *testing.T) {
+	rec := &recordingPublisher{}
+	c := New(commandHost, rec, "prod")
+
+	if err := c.PlayFileAtTimestamp(context.Background(), "clip.mp4", 163.5); err != nil {
+		t.Fatalf("PlayFileAtTimestamp: %v", err)
+	}
+
+	if len(rec.Publishes) != 1 {
+		t.Fatalf("expected 1 publish, got %d", len(rec.Publishes))
+	}
+	pub := rec.Publishes[0]
+	if pub.Subject != "tripbot.prod.vlc.play.at" {
+		t.Errorf("subject = %q, want tripbot.prod.vlc.play.at", pub.Subject)
+	}
+	var ev ve.PlayFileAt
+	if err := json.Unmarshal(pub.Payload, &ev); err != nil {
+		t.Fatalf("payload not valid JSON: %v", err)
+	}
+	if ev.File != "clip.mp4" {
+		t.Errorf("file = %q, want clip.mp4", ev.File)
+	}
+	if ev.PositionMs != 163_500 {
+		t.Errorf("position_ms = %d, want 163500", ev.PositionMs)
+	}
+}
+
+func TestPlayFileAtTimestamp_NegativeClampsToZero(t *testing.T) {
+	rec := &recordingPublisher{}
+	c := New(commandHost, rec, "stage")
+
+	if err := c.PlayFileAtTimestamp(context.Background(), "clip.mp4", -5); err != nil {
+		t.Fatalf("PlayFileAtTimestamp: %v", err)
+	}
+	var ev ve.PlayFileAt
+	if err := json.Unmarshal(rec.Publishes[0].Payload, &ev); err != nil {
+		t.Fatalf("payload not valid JSON: %v", err)
+	}
+	if ev.PositionMs != 0 {
+		t.Errorf("position_ms = %d, want 0", ev.PositionMs)
+	}
+}
+
 func TestSkipAndBack_PublishN(t *testing.T) {
 	cases := []struct {
 		name    string

@@ -58,6 +58,12 @@ func (a *App) buildRegistry() []Command {
 			RequiresFollow: true,
 		},
 		{
+			Trigger:        "!find",
+			Aliases:        []string{"!search"},
+			Handler:        a.findCmd,
+			RequiresFollow: true,
+		},
+		{
 			Trigger:        "!skip",
 			Handler:        a.skipCmd,
 			RequiresFollow: true,
@@ -290,7 +296,7 @@ var youtubeCommands = map[string]bool{
 	"!weather": true, "!time": true, "!date": true, "!sunset": true,
 	"!state": true, "!location": true,
 	// playback control (drives this platform's vlc pipeline)
-	"!timewarp": true, "!goto": true, "!skip": true, "!back": true,
+	"!timewarp": true, "!goto": true, "!find": true, "!skip": true, "!back": true,
 	// socials / static links
 	"!socialmedia": true, "!discord": true, "!twitter": true, "!instagram": true,
 	"!facebook": true, "!youtube": true, "!tiktok": true, "!bluesky": true,

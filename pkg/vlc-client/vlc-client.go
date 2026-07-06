@@ -80,6 +80,19 @@ func (c *Client) PlayFileInPlaylist(ctx context.Context, filename string) error 
 	return nil
 }
 
+// PlayFileAtTimestamp plays a file and seeks to tsSec seconds into it — the
+// jump-to-moment path behind !find. A non-positive tsSec just plays from the
+// top (vlc-server's seek guard no-ops there). Fire-and-forget like the other
+// commands.
+func (c *Client) PlayFileAtTimestamp(ctx context.Context, filename string, tsSec float64) error {
+	posMs := int64(tsSec * 1000)
+	if posMs < 0 {
+		posMs = 0
+	}
+	c.publish(ctx, ve.PlayFileAtSubject(c.env), ve.PlayFileAt{Envelope: ve.NewEnvelope(), File: filename, PositionMs: posMs})
+	return nil
+}
+
 func (c *Client) Skip(ctx context.Context, n int) error {
 	c.publish(ctx, ve.SkipSubject(c.env), ve.Skip{Envelope: ve.NewEnvelope(), N: n})
 	return nil

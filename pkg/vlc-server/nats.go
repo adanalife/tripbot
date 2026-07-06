@@ -34,6 +34,7 @@ func (s *Server) StartNATSSubscribers(ctx context.Context) {
 	}{
 		{ve.PlayRandomSubject(env), s.handlePlayRandom},
 		{ve.PlayFileSubject(env), s.handlePlayFile},
+		{ve.PlayFileAtSubject(env), s.handlePlayFileAt},
 		{ve.SkipSubject(env), s.handleSkip},
 		{ve.BackSubject(env), s.handleBack},
 	}
@@ -70,6 +71,23 @@ func (s *Server) handlePlayFile(m *nats.Msg) {
 	}
 	if err := s.PlayVideoFile(ev.File); err != nil {
 		slog.Error("nats: vlc play.file failed", "err", err, "file", ev.File)
+	}
+}
+
+func (s *Server) handlePlayFileAt(m *nats.Msg) {
+	var ev ve.PlayFileAt
+	if err := json.Unmarshal(m.Data, &ev); err != nil {
+		slog.Error("nats: decode vlc play.at", "err", err, "subject", m.Subject)
+		return
+	}
+	if ev.File == "" {
+		slog.Warn("nats: vlc play.at missing file", "subject", m.Subject)
+		return
+	}
+	// No request ctx on a fire-and-forget command; the seek is async + best-
+	// effort, so a background ctx is fine (matches the other handlers).
+	if err := s.PlayVideoFileAt(context.Background(), ev.File, ev.PositionMs); err != nil {
+		slog.Error("nats: vlc play.at failed", "err", err, "file", ev.File)
 	}
 }
 
