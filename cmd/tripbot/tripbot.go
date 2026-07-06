@@ -39,6 +39,7 @@ import (
 	"github.com/gempir/go-twitch-irc/v4"
 	"github.com/getsentry/sentry-go"
 	"github.com/go-co-op/gocron/v2"
+	"github.com/nats-io/nats.go"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -336,16 +337,19 @@ func (t *Tripbot) startFeatureFlags(ctx context.Context) {
 // when NATS_URL is empty the connection is skipped and publishes no-op silently.
 //
 // EnsureStreams declares the JetStream streams the standalone tripbot-console
-// consumes (chat + video history), so they exist before the publishers emit. It
-// no-ops when JetStream is unavailable (NATS off or a server without JetStream)
-// — publishes then fall back to live-only core subjects, so a stream-declare
+// consumes (chat + video history), so they exist before the publishers emit.
+// It runs in the on-connect callback so it executes against a live server
+// even when the first dial loses the boot race and the client connects late.
+// It no-ops when JetStream is unavailable (a server without JetStream) —
+// publishes then fall back to live-only core subjects, so a stream-declare
 // failure must not be fatal.
 func (t *Tripbot) startNATS(ctx context.Context) {
-	natsclient.Connect(c.Conf.NatsURL, "tripbot")
-	if err := eventbus.EnsureStreams(ctx, natsclient.JetStream(), c.Conf.Environment); err != nil {
-		slog.WarnContext(ctx, "jetstream stream setup failed; console will run without durable history",
-			"err", err)
-	}
+	natsclient.Connect(c.Conf.NatsURL, "tripbot", func(*nats.Conn) {
+		if err := eventbus.EnsureStreams(ctx, natsclient.JetStream(), c.Conf.Environment); err != nil {
+			slog.WarnContext(ctx, "jetstream stream setup failed; console will run without durable history",
+				"err", err)
+		}
+	})
 }
 
 // authStatusInterval is how often the instance publishes its auth.status
