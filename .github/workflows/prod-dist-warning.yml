@@ -21,8 +21,9 @@ permissions:
 jobs:
   warn:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -59,7 +60,7 @@ jobs:
           message: |
             ⚠️ **This PR changes prod (`prod-1`) app deploy units.**
 
-            prod-1 apps **autosync from `master`**, so **merging this PR deploys the change to prod** — no separate step. A change to the `vlc` or `obs` unit means a brief stream impact when the pod restarts. (`obs` is held out of autosync, so an OBS change instead waits for a manual Argo sync.)
+            prod-1 apps **autosync from `master`**, so **merging this PR deploys the change to prod** — no separate step. A change to the `vlc` unit means a brief stream impact when the pod restarts.
 
             Changed:
             ${{ steps.detect.outputs.list }}

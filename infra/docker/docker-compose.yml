@@ -19,32 +19,6 @@ services:
       - ./assets/video:/opt/data/Dashcam/_all:ro
     restart: unless-stopped
 
-  obs:
-    # privileged: true                       # not needed without GPU passthrough
-    image: adanalife/obs
-    hostname: obs
-    # env_file:                              # entrypoint reads only STREAM_KEY directly
-    #   - infra/docker/env.docker
-    build:
-      context: .
-      dockerfile: infra/docker/obs/Dockerfile
-    depends_on:
-      - vlc                                  # vlc must be up so RTSP source resolves
-      - onscreens-server                     # browser sources fetch overlay state from it
-    ports:
-      - "5902:5900"
-      - "4455:4455"                          # obs-websocket control plane
-    environment:
-      # DISPLAY: ":0.0"                      # entrypoint sets DISPLAY internally
-      # XDG_RUNTIME_DIR: "/root/.cache/xdgr"
-      # FONTCONFIG_PATH: "/etc/fonts"
-      STREAM_KEY: "${STREAM_KEY:-}"
-      DASHCAM_RTSP_URL: "${DASHCAM_RTSP_URL:-rtsp://vlc:8554/dashcam}"
-      # OBS browser sources fetch onscreen state from onscreens-server's HTTP API.
-      ONSCREENS_URL_BASE: "${ONSCREENS_URL_BASE:-http://onscreens-server:8080}"
-      OBS_WEBSOCKET_PASSWD: "${OBS_WEBSOCKET_PASSWD:-adanalife}"
-    restart: unless-stopped
-
   vlc:
     privileged: true
     image: adanalife/vlc
@@ -67,10 +41,9 @@ services:
       - ./assets/video:/opt/data/Dashcam/_all:ro
     restart: unless-stopped
 
-  # onscreens-server used to be a second binary inside the vlc container; it now
-  # runs as its own service (mirrors the k8s split). Binds :8080 via the image's
-  # ONSCREENS_SERVER_BIND_ADDRESS env. tripbot + obs reach it at
-  # onscreens-server:8080.
+  # onscreens-server runs as its own service (mirrors the k8s split). Binds
+  # :8080 via the image's ONSCREENS_SERVER_BIND_ADDRESS env. tripbot reaches
+  # it at onscreens-server:8080.
   onscreens-server:
     image: adanalife/onscreens-server
     hostname: onscreens-server

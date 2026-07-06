@@ -7,10 +7,9 @@ import (
 )
 
 // Onscreens overlay commands (middle / leaderboard / timewarp / gps / flag)
-// no longer have HTTP handlers — they arrive over NATS and are dispatched by
-// the subscribers in nats.go. The HTTP server here serves only the
-// browser-source feeds (state.json / render / asset), health, version,
-// metrics, and admin.
+// arrive over NATS and are dispatched by the subscribers in nats.go. The
+// HTTP server here serves only the browser-source feeds (state.json /
+// render / asset), health, version, metrics, and admin.
 
 // healthHandler is the liveness probe target.
 func healthHandler(w http.ResponseWriter, r *http.Request) {

@@ -14,6 +14,7 @@ import (
 
 	c "github.com/adanalife/tripbot/pkg/config/vlc-server"
 	"github.com/adanalife/tripbot/pkg/helpers"
+	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"github.com/adanalife/tripbot/pkg/natsclient"
 	"github.com/adanalife/tripbot/pkg/obs"
 	"github.com/adanalife/tripbot/pkg/telemetry"
@@ -68,6 +69,11 @@ func main() {
 
 	// set up telemetry (no-op if OTEL_SDK_DISABLED)
 	initializeTelemetry()
+
+	// stamp the streaming platform onto the vlc-server/OBS gauges so the
+	// per-platform instances (twitch/youtube/…) stay distinct series instead
+	// of colliding on identical labels. Must run before the stats pollers.
+	instrumentation.SetPlatform(c.Conf.Platform)
 
 	// set up error logging
 	initializeErrorLogger()
@@ -204,7 +210,6 @@ func gracefulShutdown() {
 	<-ctrlC
 
 	slog.Warn("caught CTRL-C, shutting down")
-	// anything below this probably won't be executed
 	if srv != nil {
 		drainCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		srv.Shutdown(drainCtx)

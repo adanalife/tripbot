@@ -7,27 +7,7 @@ services:
       DISABLE_WEBHOOKS: "true"
     env_file:
       - ./.env.development
-    #TODO: add apt update, apt install -y postgresql vim
-    #TODO: add dir in this repo with scripts intended to be run in docker
     # command: -c "go run cmd/tripbot/tripbot.go 2>&1"
-
-  obs:
-    environment:
-      ENV: development
-      OBS_QUALITY_PRESET: low
-      VDPAU_DRIVER: nvidia
-      # AWS_REGION: "${AWS_REGION}"
-      # AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID}"
-      # AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY}"
-      # AWS_SESSION_TOKEN: "${AWS_SESSION_TOKEN}"
-      # VLC_VERBOSE: "true"
-    env_file:
-      - ./.env.development
-    # set this to true to disable the OBS container
-    #entrypoint: "true"
-    restart: on-failure
-    volumes:
-      - .bash_history.remote:/root/.bash_history
 
   vlc:
     environment:

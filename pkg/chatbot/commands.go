@@ -11,6 +11,7 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -19,6 +20,7 @@ import (
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
+	"github.com/adanalife/tripbot/pkg/events"
 	"github.com/adanalife/tripbot/pkg/feature"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/users"
@@ -226,11 +228,32 @@ func (a *App) milesCmd(ctx context.Context, user *users.User, params []string) {
 	a.Chat.Say(msg)
 }
 
-func (a *App) kilometresCmd(ctx context.Context, user *users.User, _ []string) {
+func (a *App) kilometresCmd(ctx context.Context, user *users.User, params []string) {
 	slog.InfoContext(ctx, "ran !kilometres", "username", user.Username)
-	km := a.Sessions.CurrentMiles(ctx, *user) * 1.609344
+
+	var username string
+	var miles float32
+
+	// check to see if an arg was provided (mirror milesCmd's other-user lookup)
+	if len(params) == 0 {
+		username = user.Username
+		miles = a.Sessions.CurrentMiles(ctx, *user)
+	} else {
+		username = helpers.StripAtSign(params[0])
+		u := a.Sessions.Find(ctx, username)
+
+		// check to see if they are in our DB
+		if u.ID == 0 {
+			a.Chat.Say("I don't know them, sorry!")
+			return
+		}
+
+		miles = a.Sessions.CurrentMiles(ctx, u)
+	}
+
+	km := miles * 1.609344
 	msg := "@%s has %.2f kilometres."
-	msg = fmt.Sprintf(msg, user.Username, km)
+	msg = fmt.Sprintf(msg, username, km)
 	a.Chat.Say(msg)
 }
 
@@ -412,7 +435,6 @@ func (a *App) dateCmd(ctx context.Context, user *users.User, _ []string) {
 	}
 }
 
-// TODO: refactor to use golang '...' syntax
 func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 	slog.InfoContext(ctx, "ran !guess", "username", user.Username)
 	var msg string
@@ -454,15 +476,15 @@ func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 		vid = vid.Next(ctx)
 	}
 
-	if strings.ToLower(guess) == strings.ToLower(vid.State) {
+	if strings.EqualFold(guess, vid.State) {
 		msg = fmt.Sprintf("@%s got it! We're in %s", user.Username, vid.State)
 		// show the flag for the state
 		a.Onscreens.ShowFlag(ctx, 10*time.Second)
 		// increase their guess score
 		user.AddToScore(ctx, guessScoreboard, 1.0)
 		user.AddToScore(ctx, scoreboards.CurrentGuessScoreboard(), 1.0)
-		// do a timewarp
-		a.timewarp(ctx)
+		// do a timewarp, crediting the guesser on the overlay
+		a.timewarp(ctx, user.Username)
 	} else {
 		msg = "Try again! EarthDay"
 	}
@@ -485,7 +507,6 @@ func (a *App) stateCmd(ctx context.Context, user *users.User, _ []string) {
 }
 
 // TODO: maybe there could be a !cancel command or something
-// TODO: use fancy golang ... syntax?
 func (a *App) reportCmd(ctx context.Context, user *users.User, params []string) {
 	slog.InfoContext(ctx, "ran !report", "username", user.Username)
 	message := strings.Join(params, " ")
@@ -574,6 +595,36 @@ func (a *App) secretInfoCmd(ctx context.Context, user *users.User, _ []string) {
 	}
 	slog.InfoContext(ctx, "secretinfo output", "text", msg)
 	a.Chat.Say(msg)
+}
+
+// giveMilesCmd is the admin !givemiles <user> <amount> command: it applies a
+// manual miles correction (amount may be negative) and logs a correction event
+// so the rollup folds it into user_rollups.extra_miles. Admin-only for now
+// (broadcaster); widen the gate to mods once a mod-status source exists.
+func (a *App) giveMilesCmd(ctx context.Context, user *users.User, params []string) {
+	slog.InfoContext(ctx, "ran !givemiles", "username", user.Username)
+	if !c.UserIsAdmin(user.Username) {
+		return
+	}
+	if len(params) < 2 {
+		a.Chat.Say("usage: !givemiles <user> <amount>")
+		return
+	}
+	target := helpers.StripAtSign(params[0])
+	delta, err := strconv.ParseFloat(params[1], 32)
+	if err != nil {
+		a.Chat.Say("that amount isn't a number I understand")
+		return
+	}
+	if u := a.Sessions.Find(ctx, target); u.ID == 0 {
+		a.Chat.Say("I don't know them, sorry!")
+		return
+	}
+	newTotal := a.Sessions.CorrectMiles(ctx, target, float32(delta))
+	if err := events.Correction(ctx, target, delta); err != nil {
+		slog.ErrorContext(ctx, "error creating correction event", "err", err)
+	}
+	a.Chat.Say(fmt.Sprintf("@%s now has %.2fmi", target, newTotal))
 }
 
 func (a *App) shutdownCmd(ctx context.Context, user *users.User, _ []string) {

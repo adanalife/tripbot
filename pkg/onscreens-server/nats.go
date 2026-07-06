@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/onscreens-server"
 	"github.com/adanalife/tripbot/pkg/natsclient"
@@ -27,20 +28,25 @@ func (s *Server) StartNATSSubscribers(ctx context.Context) {
 		slog.InfoContext(ctx, "nats subscriber skipped (NATS_URL unset)")
 		return
 	}
+	// This server serves exactly one platform; subscribe only to that
+	// platform's leaf so a Twitch-triggered overlay never renders here on the
+	// YouTube stream (and vice versa).
 	env := c.Conf.Environment
+	platform := c.Conf.Platform
 	subs := []struct {
 		subject string
 		handler nats.MsgHandler
 	}{
-		{oe.MiddleShowSubject(env), s.handleMiddleShow},
-		{oe.MiddleHideSubject(env), s.handleMiddleHide},
-		{oe.LeaderboardShowSubject(env), s.handleLeaderboardShow},
-		{oe.LeaderboardHideSubject(env), s.handleLeaderboardHide},
-		{oe.TimewarpShowSubject(env), s.handleTimewarpShow},
-		{oe.TimewarpHideSubject(env), s.handleTimewarpHide},
-		{oe.GPSShowSubject(env), s.handleGPSShow},
-		{oe.GPSHideSubject(env), s.handleGPSHide},
-		{oe.FlagHideSubject(env), s.handleFlagHide},
+		{oe.MiddleShowSubject(env, platform), s.handleMiddleShow},
+		{oe.MiddleHideSubject(env, platform), s.handleMiddleHide},
+		{oe.LeaderboardShowSubject(env, platform), s.handleLeaderboardShow},
+		{oe.LeaderboardHideSubject(env, platform), s.handleLeaderboardHide},
+		{oe.TimewarpShowSubject(env, platform), s.handleTimewarpShow},
+		{oe.TimewarpHideSubject(env, platform), s.handleTimewarpHide},
+		{oe.GPSShowSubject(env, platform), s.handleGPSShow},
+		{oe.GPSHideSubject(env, platform), s.handleGPSHide},
+		{oe.FlagHideSubject(env, platform), s.handleFlagHide},
+		{oe.LocationUpdateSubject(env, platform), s.handleLocationUpdate},
 	}
 	for _, sb := range subs {
 		// Best-effort: one bad subject shouldn't stop the rest from binding.
@@ -66,7 +72,7 @@ func (s *Server) handleMiddleShow(m *nats.Msg) {
 	}
 	s.MiddleText.Show(ev.Msg)
 	// Persist the new state so the overlay survives a server restart.
-	publishMiddleState(context.Background(), c.Conf.Environment, ev.Msg, true)
+	publishMiddleState(context.Background(), c.Conf.Environment, c.Conf.Platform, ev.Msg, true)
 }
 
 // handleMiddleHide hides the middle text. Hide retains the overlay's Content,
@@ -74,7 +80,7 @@ func (s *Server) handleMiddleShow(m *nats.Msg) {
 // it hidden, matching the live state rather than blanking it.
 func (s *Server) handleMiddleHide(_ *nats.Msg) {
 	s.MiddleText.Hide()
-	publishMiddleState(context.Background(), c.Conf.Environment, s.MiddleText.Content, false)
+	publishMiddleState(context.Background(), c.Conf.Environment, c.Conf.Platform, s.MiddleText.Content, false)
 }
 
 // handleLeaderboardShow renders the {title, rows} payload server-side and
@@ -92,8 +98,33 @@ func (s *Server) handleLeaderboardShow(m *nats.Msg) {
 // envelope, so the body isn't inspected: the subject is the whole intent.
 // Hides are lenient by construction (nothing to reject).
 func (s *Server) handleLeaderboardHide(_ *nats.Msg) { s.Leaderboard.Hide() }
-func (s *Server) handleTimewarpShow(_ *nats.Msg)    { s.Timewarp.ShowFor("Timewarp!", timewarpDuration) }
 func (s *Server) handleTimewarpHide(_ *nats.Msg)    { s.Timewarp.Hide() }
 func (s *Server) handleGPSShow(_ *nats.Msg)         { s.GPS.Show("") }
 func (s *Server) handleGPSHide(_ *nats.Msg)         { s.GPS.Hide() }
 func (s *Server) handleFlagHide(_ *nats.Msg)        { s.Flag.Hide() }
+
+// handleLocationUpdate caches the currently-playing clip's location + date so
+// the bot-less rotators can surface it. Lenient: a malformed body is dropped;
+// empty fields are allowed (the rotator skips whichever line is empty).
+func (s *Server) handleLocationUpdate(m *nats.Msg) {
+	var ev oe.LocationData
+	if err := json.Unmarshal(m.Data, &ev); err != nil {
+		slog.Error("nats: decode location.update", "err", err, "subject", m.Subject)
+		return
+	}
+	liveLocation.set(ev.Location, ev.Date, time.Now())
+}
+
+// handleTimewarpShow triggers the full-screen warp. The overlay's Content
+// carries the triggering chatter's username (lenient: a malformed body or a
+// missing username just yields no credit line — the warp still plays). The
+// browser source reads Content to render the "@username" credit under the
+// TIMEWARP wordmark.
+func (s *Server) handleTimewarpShow(m *nats.Msg) {
+	var ev oe.TimewarpShow
+	if err := json.Unmarshal(m.Data, &ev); err != nil {
+		slog.Error("nats: decode timewarp.show", "err", err, "subject", m.Subject)
+		return
+	}
+	s.Timewarp.ShowFor(ev.Username, timewarpDuration)
+}

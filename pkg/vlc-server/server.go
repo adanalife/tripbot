@@ -100,7 +100,6 @@ func (s *Server) Start(ctx context.Context) {
 	// (shallow); /health/ready consults libvlc player state via Health()
 	// so K8s readiness probes pull the pod out of rotation if the player
 	// stalls (without restarting the process).
-	//TODO: handle HEAD requests here too
 	hp := r.PathPrefix("/health").Methods("GET", "HEAD").Subrouter()
 	hp.Handle("/", tagged("/health/", s.livenessHandler))
 	hp.Handle("/live", tagged("/health/live", s.livenessHandler))
@@ -110,13 +109,13 @@ func (s *Server) Start(ctx context.Context) {
 	// version endpoint — returns build metadata as JSON
 	r.Handle("/version", tagged("/version", s.versionHandler)).Methods("GET", "HEAD")
 
-	// vlc endpoints — the play / random / skip / back commands moved to NATS
-	// (see nats.go); only the currently-playing read remains on HTTP.
+	// vlc endpoints — the play / random / skip / back commands ride NATS
+	// (see nats.go); only the currently-playing read is served over HTTP.
 	vlc := r.PathPrefix("/vlc").Methods("GET").Subrouter()
 	vlc.Handle("/current", tagged("/vlc/current", s.vlcCurrentHandler))
 
-	// onscreen endpoints now live in cmd/onscreens-server (separate binary,
-	// separate port). vlc-server no longer serves /onscreens/* — clients
+	// Onscreen endpoints are served by cmd/onscreens-server (separate binary,
+	// separate port), so nothing under /onscreens/* is routed here — clients
 	// (chatbot, OBS browser sources) hit ONSCREENS_SERVER_HOST directly.
 
 	// next-frame cover layer. OBS loads /next-frame.html as a browser
@@ -149,7 +148,6 @@ func (s *Server) Start(ctx context.Context) {
 	// negroni.New + explicit middleware so we can swap negroni's stdlib
 	// logger for an slog-based one — see pkg/httpmw.SlogLogger. The static
 	// middleware from negroni.Classic is dropped (no public/ directory).
-	//TODO: consider adding HTMLPanicFormatter
 	app := negroni.New(
 		httpmw.NewRecovery(func(any) { instrumentation.HTTPPanics.Inc(c.Conf.ServerType) }),
 		httpmw.NewSlogLogger(),

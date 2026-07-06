@@ -55,19 +55,13 @@ func (m consoleMirror) Whisper(username, msg string) {
 // second provider additive (and pre-shapes the eventual out-of-process Helix /
 // auth service that will own token provisioning).
 type twitchChat struct {
-	client        *twitch.Client
-	channelName   string
-	outputChannel string
-	botUsername   string
+	client      *twitch.Client
+	channelName string
+	botUsername string
 }
 
 func (tc twitchChat) Say(msg string) {
-	// figure out what channel to speak to
-	speakTo := tc.channelName
-	if tc.outputChannel != "" {
-		speakTo = tc.outputChannel
-	}
-	tc.client.Say(speakTo, msg)
+	tc.client.Say(tc.channelName, msg)
 }
 
 // Whisper replicates the v2 whisper behavior: go-twitch-irc v4 removed the

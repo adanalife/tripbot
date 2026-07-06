@@ -199,8 +199,8 @@ func TestEmitAuthStatus(t *testing.T) {
 	t.Cleanup(func() { nowFn = func() time.Time { return time.Now().UTC() } })
 
 	accounts := []AuthAccount{
-		{Account: "bot", LoginAs: "tripbot4001", ExpiresAt: fixed.Add(2 * time.Hour).Format(time.RFC3339Nano), InitURL: "https://tripbot.example/auth/init?account=bot"},
-		{Account: "broadcaster", LoginAs: "adanalife_staging", Reason: "expired", InitURL: "https://tripbot.example/auth/init?account=broadcaster"},
+		{Account: "bot", LoginAs: "tripbot4001", ExpiresAt: fixed.Add(2 * time.Hour).Format(time.RFC3339Nano)},
+		{Account: "broadcaster", LoginAs: "adanalife_staging", Reason: "expired"},
 	}
 	EmitAuthStatus(context.Background(), "development", "twitch", accounts)
 
@@ -225,8 +225,45 @@ func TestEmitAuthStatus(t *testing.T) {
 	if ev.Accounts[0].Account != "bot" || ev.Accounts[0].Reason != "" {
 		t.Errorf("accounts[0] = %+v, want healthy bot row", ev.Accounts[0])
 	}
-	if ev.Accounts[1].Reason != "expired" || ev.Accounts[1].InitURL == "" {
-		t.Errorf("accounts[1] = %+v, want expired broadcaster row with InitURL", ev.Accounts[1])
+	if ev.Accounts[1].Reason != "expired" || ev.Accounts[1].LoginAs != "adanalife_staging" {
+		t.Errorf("accounts[1] = %+v, want expired broadcaster row", ev.Accounts[1])
+	}
+	if ev.EmittedAt != fixed.Format(time.RFC3339Nano) {
+		t.Errorf("emitted_at = %q, want %q", ev.EmittedAt, fixed.Format(time.RFC3339Nano))
+	}
+}
+
+func TestYoutubeBroadcastSubject(t *testing.T) {
+	for _, env := range []string{"prod", "stage", "development"} {
+		if got, want := YoutubeBroadcastSubject(env), "tripbot."+env+".youtube.broadcast"; got != want {
+			t.Errorf("YoutubeBroadcastSubject(%q) = %q, want %q", env, got, want)
+		}
+	}
+}
+
+func TestEmitYoutubeBroadcast(t *testing.T) {
+	rec := withRecorder(t)
+
+	fixed := time.Date(2026, 6, 22, 12, 0, 0, 0, time.UTC)
+	nowFn = func() time.Time { return fixed }
+	t.Cleanup(func() { nowFn = func() time.Time { return time.Now().UTC() } })
+
+	EmitYoutubeBroadcast(context.Background(), "prod", "ka57c6_Jz_o", "unlisted", true)
+
+	if len(rec.Publishes) != 1 {
+		t.Fatalf("expected 1 publish, got %d", len(rec.Publishes))
+	}
+	pub := rec.Publishes[0]
+	if pub.Subject != "tripbot.prod.youtube.broadcast" {
+		t.Errorf("subject = %q, want tripbot.prod.youtube.broadcast", pub.Subject)
+	}
+
+	var ev YoutubeBroadcast
+	if err := json.Unmarshal(pub.Payload, &ev); err != nil {
+		t.Fatalf("payload not valid JSON: %v", err)
+	}
+	if ev.VideoID != "ka57c6_Jz_o" || !ev.Live || ev.Privacy != "unlisted" {
+		t.Errorf("envelope = %+v, want video_id=ka57c6_Jz_o live=true privacy=unlisted", ev)
 	}
 	if ev.EmittedAt != fixed.Format(time.RFC3339Nano) {
 		t.Errorf("emitted_at = %q, want %q", ev.EmittedAt, fixed.Format(time.RFC3339Nano))

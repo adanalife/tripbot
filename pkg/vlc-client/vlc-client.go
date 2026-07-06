@@ -35,8 +35,6 @@ type Client struct {
 // caller's trace. nats + env drive command publishing; pass
 // natsclient.DefaultPublisher() in production, or a nil publisher to disable
 // publishing (tests).
-//
-// TODO: eventually support HTTPS
 func New(host string, nats natsclient.Publisher, env string) *Client {
 	return &Client{
 		serverURL:  "http://" + host,
@@ -105,10 +103,8 @@ func (c *Client) Back(ctx context.Context, n int) error {
 	return nil
 }
 
-// TODO: move this to a common location
-//
-// Transport-layer errors log at Debug, not Error: CurrentlyPlaying (the sole
-// remaining caller) logs its own operation-specific failure at Error with the
+// Transport-layer errors log at Debug, not Error: CurrentlyPlaying (its
+// only caller) logs its own operation-specific failure at Error with the
 // same underlying err. Logging here too would double-count every VLC outage in
 // Loki and Sentry.
 func (c *Client) get(ctx context.Context, url string) (string, error) {

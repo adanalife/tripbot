@@ -2,18 +2,23 @@ name: pre-commit
 
 on:
   pull_request:
-  push:
-    branches: [develop, master]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   pre-commit:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
-      # The gofmt hook (and the golang-based gitleaks/actionlint hooks) need
-      # the Go toolchain on PATH; mise installs it from .tool-versions.
+      - uses: actions/checkout@v7
+      # gofmt (and the golang-based gitleaks/actionlint hooks) need the Go
+      # toolchain on PATH; mise installs it from .tool-versions.
       - uses: jdx/mise-action@v4
+      - uses: actions/setup-python@v6
+      # no-commit-to-branch guards local commits; in CI the checkout is the
+      # branch itself, so the hook would false-positive on develop/master.
       - uses: pre-commit/action@v3.0.1
         env:
           SKIP: no-commit-to-branch

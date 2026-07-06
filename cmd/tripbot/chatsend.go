@@ -3,22 +3,23 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 
 	chatEvents "github.com/adanalife/tripbot/pkg/chat-events"
 	"github.com/adanalife/tripbot/pkg/chatsend"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
+	"github.com/adanalife/tripbot/pkg/gateway"
 	"github.com/adanalife/tripbot/pkg/natsclient"
-	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/nats-io/nats.go"
 )
 
-// startChatSendSubscriber wires the admin console's "send a chat message"
-// command. The console (pkg/server) publishes chatEvents.Send on
-// tripbot.<env>.chat.send; tripbot owns the Twitch identities, so it's the
-// thing that actually sends. This keeps the console split-ready: post-split it
-// publishes the same command and this subscriber relocates to whichever service
-// ends up owning the Twitch tokens, with no change to the console or the wire.
+// startChatSendSubscriber wires the "send a chat message" command. A publisher
+// emits chatEvents.Send on tripbot.<env>.chat.send.<platform>; tripbot owns the
+// Twitch identities, so it's the thing that actually sends. The in-tripbot admin
+// panel that used to publish this was retired with the tripbot-console split;
+// this subscriber stays as the receive side, ready for the standalone console to
+// publish to over the same wire format when its chat-send feature lands.
 //
 // No-op when NATS is unconfigured (the singleton conn is nil) — the same
 // fire-and-forget posture as the rest of the NATS surface. Must run after
@@ -38,11 +39,22 @@ func (t *Tripbot) startChatSendSubscriber(ctx context.Context) {
 		}
 		chatsend.Dispatch(ctx, ev,
 			func(text string) { t.app.Chat.Say(text) },
-			mytwitch.SendChatMessageAsBroadcaster,
+			t.sendChatAsBroadcaster,
 		)
 	}); err != nil {
 		slog.ErrorContext(ctx, "chat.send subscribe failed", "err", err, "subject", subject)
 		return
 	}
 	slog.InfoContext(ctx, "nats subscribed", "subject", subject)
+}
+
+// sendChatAsBroadcaster posts text to the channel's chat as the broadcaster
+// through the platform-gateway (the single Helix caller). Fail-open semantics
+// are the caller's (chatsend.Dispatch logs and drops on error). Errors when no
+// gateway is wired (a local/CI instance with no TWITCH_API_URL).
+func (t *Tripbot) sendChatAsBroadcaster(ctx context.Context, text string) error {
+	if t.gateway == nil {
+		return errors.New("cannot send as broadcaster: no gateway configured (TWITCH_API_URL unset)")
+	}
+	return t.gateway.SendChat(ctx, gateway.IdentityBroadcaster, text)
 }

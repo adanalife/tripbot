@@ -33,4 +33,17 @@ func main() {
 		log.Fatalf("write %s: %v", out, err)
 	}
 	log.Printf("wrote %s", out)
+
+	// The eventbus registry (NATS subjects + envelope JSON Schemas) is emitted
+	// alongside the service/port contract — a sibling eventbus.json the console
+	// syncs to discover subjects + payload shapes.
+	ebData, err := contract.MarshalEventbus()
+	if err != nil {
+		log.Fatalf("marshal eventbus: %v", err)
+	}
+	ebOut := filepath.Join(filepath.Dir(self), "..", "..", "eventbus.json")
+	if err := os.WriteFile(ebOut, ebData, 0o644); err != nil {
+		log.Fatalf("write %s: %v", ebOut, err)
+	}
+	log.Printf("wrote %s", ebOut)
 }

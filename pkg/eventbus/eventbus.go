@@ -30,6 +30,11 @@ import (
 // Publisher is the fire-and-forget publish surface the Emit helpers use. Tests
 // inject a fake via SetPublisher; production uses realPublisher, which delegates
 // to the pkg/natsclient singleton.
+//
+// ponytail: Publisher duplicates natsclient.Publisher (identical signature) and
+// realPublisher re-implements natsclient's connPublisher. Could collapse onto
+// natsclient.Publisher + natsclient.DefaultPublisher(). Kept as an explicit local
+// seam for now — deferred 2026-06-29 (ponytail-audit).
 type Publisher interface {
 	Publish(ctx context.Context, subject string, payload []byte)
 }
@@ -185,17 +190,18 @@ func EmitVideoChanged(ctx context.Context, env, platform, file, state string, fl
 // here so the eventbus stays free of pkg/twitch (and its DB-reaching imports)
 // per the package-boundary ADR — cmd/tripbot converts at the call site.
 type AuthAccount struct {
-	Account   string `json:"account"`              // "bot" | "broadcaster" | "youtube" — the /auth/init account selector
+	Account   string `json:"account"`              // "bot" | "broadcaster" | "youtube" — the consent account selector
 	LoginAs   string `json:"login_as,omitempty"`   // the exact platform username/channel to sign in as
 	ExpiresAt string `json:"expires_at,omitempty"` // RFC3339Nano UTC; empty when unknown (missing token, or auto-refreshed)
 	Reason    string `json:"reason,omitempty"`     // "" healthy, else "missing" | "expired"
-	InitURL   string `json:"init_url,omitempty"`   // absolute re-auth URL (tripbot's /auth/init)
 }
 
 // AuthStatus is the wire format for tripbot.<env>.auth.status.<platform> — a
 // full token-state snapshot for one platform instance's identities, emitted on
-// a ~30s ticker. Consumers (the standalone console) render countdowns and
-// re-auth links from it; re-auth itself stays in tripbot (InitURL points there).
+// a ~30s ticker. Consumers (the standalone console) render per-identity expiry
+// countdowns from it; re-auth itself runs through the platform-gateway consent
+// flow, so the console builds the re-auth link from the gateway host (mirroring
+// how it already handles YouTube), not from this snapshot.
 type AuthStatus struct {
 	Platform  string        `json:"platform"`
 	Accounts  []AuthAccount `json:"accounts"`
@@ -224,6 +230,38 @@ func EmitAuthStatus(ctx context.Context, env, platform string, accounts []AuthAc
 	})
 }
 
+// --- youtube.broadcast ------------------------------------------------------
+
+// YoutubeBroadcast is the wire format for tripbot.<env>.youtube.broadcast — the
+// current live YouTube broadcast discovered via the gateway, emitted on a slow
+// ticker by the youtube instance. VideoID is the watchable id
+// (youtube.com/watch?v=<id>); Privacy is "public"/"unlisted"/"private". Live is
+// false when no broadcast is active. The console needs this to link to (and
+// embed) an unlisted broadcast, whose channel/handle "/live" redirect only
+// resolves a public stream.
+type YoutubeBroadcast struct {
+	VideoID   string `json:"video_id"`
+	Live      bool   `json:"live"`
+	Privacy   string `json:"privacy"`
+	EmittedAt string `json:"emitted_at"`
+}
+
+// YoutubeBroadcastSubject returns the subscribe/publish subject for the current
+// YouTube broadcast in env. Only the youtube instance publishes it.
+func YoutubeBroadcastSubject(env string) string { return subject(env, "youtube", "broadcast") }
+
+// EmitYoutubeBroadcast publishes the current YouTube broadcast snapshot. A
+// last-value cache (TRIPBOT_YOUTUBE, MaxMsgsPerSubject=1) retains the latest so a
+// fresh console renders the link on connect.
+func EmitYoutubeBroadcast(ctx context.Context, env, videoID, privacy string, live bool) {
+	emit(ctx, YoutubeBroadcastSubject(env), YoutubeBroadcast{
+		VideoID:   videoID,
+		Live:      live,
+		Privacy:   privacy,
+		EmittedAt: emittedAt(),
+	})
+}
+
 // --- JetStream streams (durable history) ----------------------------------
 //
 // Two subjects need to survive a tripbot reboot so the admin live console can
@@ -235,9 +273,10 @@ func EmitAuthStatus(ctx context.Context, env, platform string, accounts []AuthAc
 // streamed — it's a momentary value with nothing to replay.
 
 const (
-	chatStreamName  = "TRIPBOT_CHAT"
-	videoStreamName = "TRIPBOT_VIDEO"
-	authStreamName  = "TRIPBOT_AUTH"
+	chatStreamName    = "TRIPBOT_CHAT"
+	videoStreamName   = "TRIPBOT_VIDEO"
+	authStreamName    = "TRIPBOT_AUTH"
+	youtubeStreamName = "TRIPBOT_YOUTUBE"
 )
 
 // Retention caps match the admin hub's in-memory buffer sizes (pkg/server:
@@ -294,19 +333,31 @@ func EnsureStreams(ctx context.Context, js jetstream.JetStream, env string) erro
 			// then live updates arrive on the same subscription.
 			MaxMsgsPerSubject: 1,
 		},
+		{
+			Name:        youtubeStreamName,
+			Description: "Last-known YouTube broadcast snapshot (last-value cache).",
+			Subjects:    []string{YoutubeBroadcastSubject(env)},
+			Storage:     jetstream.FileStorage,
+			Retention:   jetstream.LimitsPolicy,
+			Discard:     jetstream.DiscardOld,
+			// One retained message: a fresh console renders the current
+			// watch/embed link on connect, then live updates follow.
+			MaxMsgsPerSubject: 1,
+		},
 	}
 	for _, cfg := range configs {
 		if _, err := js.CreateOrUpdateStream(ctx, cfg); err != nil {
 			return fmt.Errorf("ensure stream %s: %w", cfg.Name, err)
 		}
 	}
-	slog.InfoContext(ctx, "jetstream streams ensured", "streams", chatStreamName+","+videoStreamName+","+authStreamName, "env", env)
+	slog.InfoContext(ctx, "jetstream streams ensured", "streams", chatStreamName+","+videoStreamName+","+authStreamName+","+youtubeStreamName, "env", env)
 	return nil
 }
 
-// ChatStreamName, VideoStreamName, and AuthStreamName expose the stream names
-// so consumers (the admin hub, the standalone console) can bind ordered
-// consumers to them without re-deriving the constants.
-func ChatStreamName() string  { return chatStreamName }
-func VideoStreamName() string { return videoStreamName }
-func AuthStreamName() string  { return authStreamName }
+// ChatStreamName, VideoStreamName, AuthStreamName, and YoutubeBroadcastStreamName
+// expose the stream names so consumers (the admin hub, the standalone console)
+// can bind ordered consumers to them without re-deriving the constants.
+func ChatStreamName() string             { return chatStreamName }
+func VideoStreamName() string            { return videoStreamName }
+func AuthStreamName() string             { return authStreamName }
+func YoutubeBroadcastStreamName() string { return youtubeStreamName }

@@ -31,9 +31,7 @@ var vlcStaticFlags = []string{
 
 // vlcCmdFlags is built lazily in startVLC() from vlcStaticFlags +
 // per-host tuning values pulled from config (VLC_FILE_CACHING,
-// VLC_CANVAS_WIDTH, VLC_CANVAS_HEIGHT). Defaults match what was
-// previously hardcoded here, so this is a no-op refactor unless an
-// env var is explicitly set.
+// VLC_CANVAS_WIDTH, VLC_CANVAS_HEIGHT).
 var vlcCmdFlags []string
 
 // mediaOptions returns the per-Media options driven by VLC_OUTPUT.
@@ -68,7 +66,7 @@ func mediaOptions() []string {
 
 // linuxSpecificFlags returns the Linux-only VLC flags, sourced from
 // config (VLC_VOUT, VLC_AVCODEC_HW). Defaults: --vout dummy (headless;
-// the container no longer ships an X server) and --avcodec-hw
+// the container has no X server) and --avcodec-hw
 // vdpau_avcodec (can be none, vdpau_avcodec, or cuda). On a Linux dev
 // host where you want a preview window, set VLC_VOUT=x11 and
 // VLC_OUTPUT=window (or both).
@@ -110,7 +108,40 @@ func (s *Server) initPlayer() error {
 	if err := s.setToLoop(); err != nil {
 		return err
 	}
-	return s.loadMedia()
+	if err := s.loadMedia(); err != nil {
+		return err
+	}
+	return s.primePlayer()
+}
+
+// primePlayer sets the underlying media player's media to the first loaded
+// clip so it is non-nil before the first PlayAtIndex.
+//
+// This works around a libvlc 3.0.x bug: libvlc_media_list_player_play_item_-
+// at_index reads the player's *existing* media (libvlc_media_player_get_media)
+// before swapping in the requested one, and returns -1 when that prior media
+// is nil — i.e. on the very first play against a freshly-created list player —
+// even though set_current_playing_item succeeds and playback actually starts.
+// Without priming, the first play after boot (the startup resume) reports a
+// spurious failure, so ResumeFromLastPlayed falls back to PlayRandom and a
+// restart never resumes the clip it left off on. The prime doesn't start
+// playback; it only seeds the player so the first real play returns correctly.
+func (s *Server) primePlayer() error {
+	count, err := s.MediaList.Count()
+	if err != nil {
+		return fmt.Errorf("counting media to prime player: %w", err)
+	}
+	if count == 0 {
+		return nil
+	}
+	media, err := s.MediaList.MediaAtIndex(0)
+	if err != nil {
+		return fmt.Errorf("fetching media to prime player: %w", err)
+	}
+	if err := s.Player.SetMedia(media); err != nil {
+		return fmt.Errorf("priming player media: %w", err)
+	}
+	return nil
 }
 
 // Health returns nil when the server is ready to serve a viewer, or an
@@ -153,8 +184,6 @@ func (s *Server) Health() error {
 // s.http may be nil if Shutdown is called before Start populated it; in
 // that case there's nothing to drain and we skip straight to libvlc
 // cleanup.
-//
-// TODO: are there more things to close gracefully?
 func (s *Server) Shutdown(ctx context.Context) {
 	if s.http != nil {
 		slog.InfoContext(ctx, "shutting down VLC web server")
@@ -197,8 +226,7 @@ func (s *Server) currentlyPlaying() string {
 
 func startVLC() error {
 	// build the base flag set from the static list + config-driven tuning
-	// values. Defaults in pkg/config/vlc-server reproduce what used to be
-	// hardcoded here, so unset env vars yield identical behavior.
+	// values (defaults live in pkg/config/vlc-server)
 	canvasW := strconv.Itoa(c.Conf.VlcCanvasWidth)
 	canvasH := strconv.Itoa(c.Conf.VlcCanvasHeight)
 	vlcCmdFlags = append([]string{}, vlcStaticFlags...)

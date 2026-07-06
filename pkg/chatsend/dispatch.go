@@ -1,5 +1,5 @@
-// Package chatsend holds the pure routing for the admin console's chat.send
-// command: given a decoded chatEvents.Send, call the right sender. It's split
+// Package chatsend holds the pure routing for the chat.send command: given a
+// decoded chatEvents.Send, call the right sender. It's split
 // out of cmd/tripbot's NATS subscriber so the routing is unit-testable —
 // cmd/tripbot (package main) imports github.com/dimiro1/banner/autoload, whose
 // init() runs flag.Parse() and makes the package untestable under `go test`.

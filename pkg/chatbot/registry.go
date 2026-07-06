@@ -205,6 +205,11 @@ func (a *App) buildRegistry() []Command {
 			RequiresFollow: true,
 		},
 		{
+			// admin-gated inside the handler (broadcaster-only)
+			Trigger: "!givemiles",
+			Handler: a.giveMilesCmd,
+		},
+		{
 			Trigger:        "!km",
 			Aliases:        []string{"!kilometres", "!kilometers"},
 			Handler:        a.kilometresCmd,
@@ -353,6 +358,13 @@ func (a *App) indexCommands() {
 // never advertises a command that would silently no-op. A line that doesn't
 // start with a "!command" token is always kept.
 func (a *App) enabledHelpMessages() []string {
+	// A bot-less instance (YouTube with inbound chat disabled) can't answer any
+	// command, so advertise promo copy pointing at Twitch instead of command
+	// hints that would silently no-op. These lines carry no "!command" token, so
+	// they skip the per-platform command filtering below.
+	if a.botless {
+		return slices.Clone(c.YouTubeBotlessHelpMessages)
+	}
 	out := make([]string, 0, len(c.HelpMessages))
 	for _, msg := range c.HelpMessages {
 		fields := strings.Fields(msg)

@@ -10,7 +10,7 @@
 # any authed machine), make the package public in the org packages UI, grant
 # this repo write access under the package's "Manage Actions access", and add
 # the pair to the list here + use the mirror ref in the Dockerfile.
-name: Mirror base images
+name: mirror-images
 
 on:
   schedule:
@@ -24,6 +24,7 @@ permissions:
 jobs:
   mirror:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Login to GHCR
         uses: docker/login-action@v4
@@ -51,7 +52,3 @@ jobs:
           docker.io/pgvector/pgvector:pg16 ghcr.io/adanalife/mirror/pgvector:pg16
           docker.io/python:3.13-slim-bookworm ghcr.io/adanalife/mirror/python:3.13-slim-bookworm
           EOF
-      # mirror/obs-cef-base:<ver> is also on GHCR but deliberately NOT in the
-      # refresh list: its tags are immutable version pins (a CEF bump changes
-      # the tag in Dockerfile.arm64), so each new tag is a one-time crane copy
-      # when obs-base.yml publishes it.

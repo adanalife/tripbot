@@ -13,14 +13,11 @@ import (
 
 // StartNATSSubscribers attaches the server's NATS subscriptions to the
 // package-singleton *nats.Conn (initialized by main via natsclient.Connect).
-// No-op when the conn is nil (NATS_URL unset) — with the HTTP command path
-// peeled off, the server simply receives no commands in that case.
+// No-op when the conn is nil (NATS_URL unset) — NATS is the sole command
+// transport, so the server simply receives no commands in that case.
 //
-// NATS is the sole transport for the vlc command surface: each handler drives
-// the same playback method the old HTTP handler called. (The observe-only
-// mirror this burned in against, and the HTTP command path, have since been
-// peeled off.) The publish-only client no longer calls HTTP, so there's no
-// double-execution despite vlc commands not being idempotent.
+// Because there is no parallel command path, non-idempotent vlc commands
+// can't double-execute.
 //
 // Subscribers are registered explicitly (not via a vlc.> wildcard) so each
 // gets its own subscribe log line and the dispatch stays readable.

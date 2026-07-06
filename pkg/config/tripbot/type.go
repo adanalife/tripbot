@@ -14,8 +14,6 @@ type TripbotConfig struct {
 
 	// ChannelName is the username of the stream
 	ChannelName string `required:"true" envconfig:"CHANNEL_NAME"`
-	// OutputChannel is the stream to which the bot will speak
-	OutputChannel string
 	// BotUsername is the username of the bot
 	BotUsername string `required:"true" envconfig:"BOT_USERNAME"`
 	// ExternalURL is the where the bot's HTTP server can be reached
@@ -25,19 +23,6 @@ type TripbotConfig struct {
 	// callers fall back gracefully (no city/state lookups, no generated
 	// maps). The bot continues to run.
 	GoogleMapsAPIKey string `envconfig:"GOOGLE_MAPS_API_KEY"`
-
-	// YouTubeClientID / YouTubeClientSecret are the YouTube OAuth app
-	// credentials (a GCP-console "Web application" OAuth client whose
-	// authorized redirect URIs include <EXTERNAL_URL>/auth/callback).
-	// Only set on PLATFORM=youtube instances; optional everywhere else —
-	// pkg/youtube returns ErrNotConfigured rather than fataling when absent.
-	YouTubeClientID     string `envconfig:"YOUTUBE_CLIENT_ID"`
-	YouTubeClientSecret string `envconfig:"YOUTUBE_CLIENT_SECRET"`
-	// YouTubeChannelID optionally pins the expected channel identity. When
-	// set, the /auth/init?account=youtube consent flow rejects (and does not
-	// persist) tokens from any other channel — keeps a prod pod from storing
-	// the quiet test channel's token, and vice versa.
-	YouTubeChannelID string `envconfig:"YOUTUBE_CHANNEL_ID"`
 
 	// ReadOnly is used to prevent writing some things to the DB
 	ReadOnly bool `default:"false" envconfig:"READ_ONLY"`
@@ -68,6 +53,34 @@ type TripbotConfig struct {
 	// panel probes it for the OBS row + posts to its /admin/shutdown
 	// for the "restart obs" button. Optional — blank skips the OBS row.
 	ObsServerHost string `envconfig:"OBS_SERVER_HOST"`
+
+	// TwitchAPIURL points the chatbot's command-time Twitch Helix calls at
+	// the platform-gateway gateway-twitch instance over HTTP, instead of the
+	// in-process pkg/twitch path. Empty (the default) keeps the in-process
+	// adapter, so existing envs are unaffected. When set — e.g.
+	// http://gateway-twitch.<env>.svc.cluster.local:8080 — App.Twitch becomes an
+	// HTTP client behind the same interface, with no command code changes.
+	TwitchAPIURL string `envconfig:"TWITCH_API_URL"`
+
+	// YouTubeAPIURL points a PLATFORM=youtube instance at the platform-gateway
+	// gateway-youtube instance over HTTP — e.g.
+	// http://gateway-youtube.<env>.svc.cluster.local:8080. Both chat directions
+	// flow through the gateway: outbound via its SendChat (which resolves the
+	// active live chat itself), inbound via its GET /v1/chat/inbound poll. The
+	// gateway also owns the YouTube OAuth token, so tripbot holds none at
+	// runtime. Required on a youtube instance — the in-process YouTube client is
+	// gone, so with this empty the instance comes up without YouTube chat.
+	YouTubeAPIURL string `envconfig:"YOUTUBE_API_URL"`
+
+	// YouTubeInboundEnabled gates the gateway-youtube inbound chat poll on a
+	// PLATFORM=youtube instance. Default true. Set false for a "bot-less"
+	// YouTube presence: outbound posting (rotators) and the background jobs keep
+	// running, but nothing reads chat, so no command can respond. When false the
+	// chatbot also swaps its rotating Chatter/!help copy from command ads to
+	// promotional lines (see pkg/chatbot enabledHelpMessages) — advertising a
+	// command nobody can run reads as a broken bot. Flip to true the day the
+	// YouTube Data API quota extension lands. No effect on Twitch.
+	YouTubeInboundEnabled bool `default:"true" envconfig:"YOUTUBE_INBOUND_ENABLED"`
 
 	// NatsURL is the in-cluster NATS endpoint used for fire-and-forget
 	// inter-component events. Format:

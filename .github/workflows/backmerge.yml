@@ -1,0 +1,113 @@
+name: backmerge
+
+# After anything lands on master (a release merge, a bump-prs pin edit), open or
+# refresh ONE standing PR that merges master back into develop, so develop never
+# drifts from master and release PRs never hit phantom-divergence conflicts.
+#
+# ⚠️ The PR it opens MUST be merged with a MERGE COMMIT, never squashed/rebased.
+# Squash copies the file contents without making master's commits ancestors of
+# develop, so the divergence stays in place and the next release PR conflicts on
+# CHANGELOG.md. The PR body repeats this warning.
+#
+# Mechanics mirror bump-prs.yml: a well-known branch (backmerge/master-to-develop)
+# is recreated from develop with master merged in and force-pushed, so there is
+# at most one open back-merge PR, always reflecting the latest master. Conflicts
+# are auto-resolved in master's favour (-X theirs) — right after a release the
+# only conflict is the CHANGELOG [Unreleased] -> [version] stamp, and master's
+# version is the correct post-release state.
+#
+# Authenticates as the automation GitHub App (same as bump-prs) so the PR's
+# pull_request events fire CI; GITHUB_TOKEN-created PRs don't trigger workflows.
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: backmerge
+  cancel-in-progress: true
+
+jobs:
+  backmerge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      BRANCH: backmerge/master-to-develop
+    steps:
+      - name: Mint automation app token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.AUTOMATION_APP_ID }}
+          private-key: ${{ secrets.AUTOMATION_APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: develop
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Open or refresh the back-merge PR
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          git fetch origin master develop --tags -q
+
+          AHEAD=$(git rev-list --count origin/develop..origin/master)
+
+          NUM=$(gh pr list --base develop --head "$BRANCH" --state open \
+            --json number --jq '.[0].number // empty')
+
+          # develop already contains everything on master — nothing to do.
+          if [ "$AHEAD" -eq 0 ]; then
+            if [ -n "$NUM" ]; then
+              gh pr close "$NUM" --comment "develop is back in sync with master — nothing to back-merge." --delete-branch
+            fi
+            echo "develop is in sync with master; nothing to back-merge."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Recreate the branch from develop and merge master in. -X theirs
+          # resolves conflicts in master's favour; the merge commit still carries
+          # master as a parent, so merging this PR heals the ancestry.
+          git checkout -B "$BRANCH" origin/develop
+          if ! git merge --no-ff -X theirs origin/master \
+              -m "Merge branch 'master' into develop (back-merge)"; then
+            git merge --abort || true
+            echo "::error::back-merge could not be auto-resolved; merge master into develop by hand."
+            exit 1
+          fi
+          git push -f origin "$BRANCH"
+
+          # Label from the CHANGELOG's top released version, not git tags:
+          # backmerge runs on the same master push as auto-tag.yml, so the new
+          # tag often doesn't exist yet and `git describe` would label the PR
+          # with the PREVIOUS release. The stamped CHANGELOG entry is race-free.
+          LATEST_TAG=$(grep -m1 -oE '^## \[v[0-9]+\.[0-9]+\.[0-9]+\]' CHANGELOG.md 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' || echo "")
+          TITLE="⏪ Back-merge master → develop${LATEST_TAG:+ ($LATEST_TAG)}"
+          cat > /tmp/body.md <<EOF
+          Merges \`master\` back into \`develop\` so the two don't diverge${LATEST_TAG:+ after $LATEST_TAG}. **$AHEAD** commit(s) on \`master\` are not yet on \`develop\`.
+
+          ## ⚠️ Merge with a MERGE COMMIT — do NOT squash or rebase
+
+          Squashing copies the file contents but does **not** make master's commits ancestors of develop, so the divergence stays and the next release PR conflicts on \`CHANGELOG.md\`. Use the **"Create a merge commit"** option. No bump token needed (this targets \`develop\`).
+
+          - CHANGELOG (and any other) conflicts were auto-resolved in **master's** favour — the correct post-release state. If develop had already picked up new \`[Unreleased]\` entries, re-add them here before merging.
+          - Recreated and force-pushed on every push to \`master\`, so it always reflects the latest master.
+          EOF
+          if [ -n "$NUM" ]; then
+            gh pr edit "$NUM" --title "$TITLE" --body-file /tmp/body.md
+            echo "Refreshed back-merge PR #$NUM."
+          else
+            gh pr create --base develop --head "$BRANCH" --title "$TITLE" --body-file /tmp/body.md
+          fi

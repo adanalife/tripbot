@@ -2,8 +2,9 @@ package users
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -11,18 +12,14 @@ import (
 	"github.com/adanalife/tripbot/pkg/eventbus"
 	"github.com/adanalife/tripbot/pkg/events"
 	"github.com/adanalife/tripbot/pkg/scoreboards"
-	"github.com/davecgh/go-spew/spew"
 	"github.com/google/uuid"
 	"github.com/hako/durafmt"
 )
 
-//TODO: consider moving this whole thing elsewhere (to background perhaps?)
-
 // Sessions tracks the users currently logged in to one platform's chat plus
-// the derived lifetime-miles leaderboard. It owns what used to be the
-// package-level LoggedIn map and LifetimeMilesLeaderboard slice, so a single
-// process holds exactly one Sessions and a per-platform bot instance gets its
-// own (the prerequisite for running, e.g., a YouTube bot beside the Twitch
+// the derived lifetime-miles leaderboard. The state lives on the struct, not
+// in package-level globals, so a per-platform bot instance gets its own
+// (the prerequisite for running, e.g., a YouTube bot beside the Twitch
 // one). Its view of who is in chat comes from an injected ChatterSource.
 type Sessions struct {
 	source ChatterSource
@@ -33,18 +30,14 @@ type Sessions struct {
 	lifetimeLeaderboard [][]string
 }
 
-// New constructs a Sessions backed by the given ChatterSource.
+// New constructs a Sessions backed by the given ChatterSource. cmd/tripbot
+// wires the production gatewayChatterSource; tests build their own.
 func New(source ChatterSource) *Sessions {
 	return &Sessions{
 		source:   source,
 		loggedIn: make(map[string]*User),
 	}
 }
-
-// NewDefault constructs the production Sessions, wired to the Twitch-backed
-// chatter source. cmd/tripbot constructs one and threads it through the boot
-// sequence + into chatbot/discord; tests build their own *Sessions via New.
-func NewDefault() *Sessions { return New(twitchSource{}) }
 
 // UpdateSession uses the chatter source to maintain the list of
 // currently-logged-in users.
@@ -161,7 +154,19 @@ func (s *Sessions) logout(ctx context.Context, u *User) {
 	// update the monthly scoreboard
 	u.AddToScore(ctx, scoreboards.CurrentMilesScoreboard(), sessionMiles)
 
-	if err := events.Logout(ctx, u.Username, u.sessionID); err != nil {
+	// extra_miles_earned: the bonus portion of this session the events pairing
+	// can't see — community sub-grants received (sessionExtraMiles) plus the 5%
+	// subscriber bonus, computed the same way the live award was. Recorded at
+	// source; left NULL when zero (most sessions).
+	extra := float64(u.sessionExtraMiles)
+	if s.IsSubscriber(*u) {
+		extra += float64(s.BonusMiles(*u))
+	}
+	var extraMiles *float64
+	if extra > 0 {
+		extraMiles = &extra
+	}
+	if err := events.Logout(ctx, u.Username, u.sessionID, extraMiles); err != nil {
 		slog.ErrorContext(ctx, "error creating logout event", "err", err)
 	}
 
@@ -179,7 +184,7 @@ func (s *Sessions) isLoggedIn(username string) bool {
 func (s *Sessions) Shutdown(ctx context.Context) {
 	if c.Conf.Verbose {
 		slog.InfoContext(ctx, "logged-in users at shutdown")
-		spew.Dump(s.loggedIn)
+		fmt.Printf("%+v\n", s.loggedIn)
 	}
 	for _, user := range s.loggedIn {
 		s.logout(ctx, user)
@@ -191,7 +196,26 @@ func (s *Sessions) GiveEveryoneMiles(gift float32) {
 	slog.Info("giving all logged-in users gift miles", "gift", gift)
 	for _, user := range s.loggedIn {
 		user.Miles += gift
+		// track the grant separately so logout can record it as extra_miles_earned
+		user.sessionExtraMiles += gift
 	}
+}
+
+// CorrectMiles applies a manual miles delta (may be negative) to a user and
+// persists it immediately. If they're logged in, the live session copy is
+// adjusted so logout doesn't clobber the correction. Returns the new total.
+// The delta is deliberately NOT added to sessionExtraMiles — the caller logs a
+// separate correction event carrying it, and doing both would double-count.
+func (s *Sessions) CorrectMiles(ctx context.Context, username string, delta float32) float32 {
+	if u, ok := s.loggedIn[username]; ok {
+		u.Miles += delta
+		u.save(ctx)
+		return u.Miles
+	}
+	u := FindOrCreate(ctx, username)
+	u.Miles += delta
+	u.save(ctx)
+	return u.Miles
 }
 
 // sortedUsernameList creates a list of only usernames, and sort it
@@ -200,7 +224,7 @@ func (s *Sessions) sortedUsernameList() []string {
 	for username := range s.loggedIn {
 		usernames = append(usernames, username)
 	}
-	sort.Sort(sort.StringSlice(usernames))
+	slices.Sort(usernames)
 	return usernames
 }
 

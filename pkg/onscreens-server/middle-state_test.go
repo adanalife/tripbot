@@ -24,6 +24,7 @@ func TestMiddleStateRoundTrip(t *testing.T) {
 	t.Cleanup(cancel)
 
 	const env = "testing"
+	const platform = "twitch"
 	js := natsclient.JetStream()
 	if js == nil {
 		t.Fatal("JetStream() returned nil against a JetStream-enabled server")
@@ -32,22 +33,22 @@ func TestMiddleStateRoundTrip(t *testing.T) {
 		t.Fatalf("ensure stream: %v", err)
 	}
 
-	publishMiddleState(ctx, env, "first text", true)
-	publishMiddleState(ctx, env, "second text", true) // supersedes first
+	publishMiddleState(ctx, env, platform, "first text", true)
+	publishMiddleState(ctx, env, platform, "second text", true) // supersedes first
 	if err := nc.Flush(); err != nil {
 		t.Fatalf("flush: %v", err)
 	}
 
 	// JetStream captures core publishes asynchronously; poll until the cache
 	// shows the superseding value.
-	waitMiddleState(t, ctx, js, env, "second text", true)
+	waitMiddleState(t, ctx, js, env, platform, "second text", true)
 
 	// A hide retains the content but flips visibility.
-	publishMiddleState(ctx, env, "second text", false)
+	publishMiddleState(ctx, env, platform, "second text", false)
 	if err := nc.Flush(); err != nil {
 		t.Fatalf("flush: %v", err)
 	}
-	waitMiddleState(t, ctx, js, env, "second text", false)
+	waitMiddleState(t, ctx, js, env, platform, "second text", false)
 }
 
 // TestRestoreMiddleText proves Server.RestoreMiddleText overrides the
@@ -64,14 +65,15 @@ func TestRestoreMiddleText(t *testing.T) {
 	// ensure + publish under the same env so the restore finds the state.
 	js := natsclient.JetStream()
 	env := c.Conf.Environment
+	platform := c.Conf.Platform
 	if err := EnsureMiddleStateStream(ctx, js, env); err != nil {
 		t.Fatalf("ensure stream: %v", err)
 	}
-	publishMiddleState(ctx, env, "restored text", true)
+	publishMiddleState(ctx, env, platform, "restored text", true)
 	if err := nc.Flush(); err != nil {
 		t.Fatalf("flush: %v", err)
 	}
-	waitMiddleState(t, ctx, js, env, "restored text", true)
+	waitMiddleState(t, ctx, js, env, platform, "restored text", true)
 
 	s := &Server{MiddleText: newMiddleText()}
 	s.RestoreMiddleText(ctx)
@@ -87,7 +89,7 @@ func TestRestoreMiddleText(t *testing.T) {
 // TestMiddleStateNilJetStream proves the paths degrade to "nothing to
 // restore" when NATS is unconfigured.
 func TestMiddleStateNilJetStream(t *testing.T) {
-	if _, _, ok := readMiddleState(context.Background(), nil, "testing"); ok {
+	if _, _, ok := readMiddleState(context.Background(), nil, "testing", "twitch"); ok {
 		t.Errorf("readMiddleState with nil js = ok=true, want false")
 	}
 	if err := EnsureMiddleStateStream(context.Background(), nil, "testing"); err != nil {
@@ -97,13 +99,13 @@ func TestMiddleStateNilJetStream(t *testing.T) {
 
 // waitMiddleState polls the last-value cache until it reads wantMsg/wantShowing,
 // or fails after a short deadline.
-func waitMiddleState(t *testing.T, ctx context.Context, js jetstream.JetStream, env, wantMsg string, wantShowing bool) {
+func waitMiddleState(t *testing.T, ctx context.Context, js jetstream.JetStream, env, platform, wantMsg string, wantShowing bool) {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
 	var gotMsg string
 	var gotShowing, ok bool
 	for time.Now().Before(deadline) {
-		if gotMsg, gotShowing, ok = readMiddleState(ctx, js, env); ok && gotMsg == wantMsg && gotShowing == wantShowing {
+		if gotMsg, gotShowing, ok = readMiddleState(ctx, js, env, platform); ok && gotMsg == wantMsg && gotShowing == wantShowing {
 			return
 		}
 		time.Sleep(20 * time.Millisecond)

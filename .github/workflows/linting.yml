@@ -1,4 +1,4 @@
-name: Linting
+name: linting
 on:
   pull_request:
   push:
@@ -7,13 +7,19 @@ on:
       - master
     tags:
       - v*
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
 
   revive:
     name: revive
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - run: sudo apt-get update -qq && sudo apt-get install -y libvlc-dev
       - name: golint
         uses: reviewdog/action-golangci-lint@v2
@@ -32,8 +38,9 @@ jobs:
   errcheck:
     name: errcheck
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - run: sudo apt-get update -qq && sudo apt-get install -y libvlc-dev
       - name: errcheck
         uses: reviewdog/action-golangci-lint@v2
@@ -42,3 +49,61 @@ jobs:
           golangci_lint_version: v2.12.1
           golangci_lint_flags: "--default=none --enable=errcheck"
           level: warning # GitHub Status Check won't become failure with this level.
+
+  migration-order:
+    name: migration-order
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      # golang-migrate tracks a single "current version" integer, so a migration
+      # numbered at or below the already-applied max is silently skipped forever.
+      # Gaps are fine (026 -> 028 just skips 027); the hazards are a duplicate
+      # number, or a PR adding a migration <= the base branch's max (the
+      # out-of-order-merge case). This catches both: an early warning on PRs, and
+      # the real net on push to develop. See vault: consider goose/atlas to
+      # remove the ascending-merge constraint structurally.
+      - name: Migrations don't collide or regress the schema version
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          set -euo pipefail
+
+          ups=$(printf '%s\n' db/migrate/*.up.sql     | sed -nE 's|.*/([0-9]+)_.*\.up\.sql|\1|p'   | sort)
+          downs=$(printf '%s\n' db/migrate/*.down.sql | sed -nE 's|.*/([0-9]+)_.*\.down\.sql|\1|p' | sort)
+
+          # every migration needs a matching up + down
+          if [ "$ups" != "$downs" ]; then
+            echo "::error::every migration needs a matching .up.sql and .down.sql"
+            diff <(echo "$ups") <(echo "$downs") || true
+            exit 1
+          fi
+
+          # no two files may share a number (the merge-collision disaster)
+          dups=$(echo "$ups" | uniq -d)
+          if [ -n "$dups" ]; then
+            echo "::error::duplicate migration number(s): $(echo "$dups" | tr '\n' ' ')— renumber the later PR above the current max"
+            exit 1
+          fi
+
+          # On a PR: any migration this branch adds must sit above the base
+          # branch's max, or golang-migrate skips it once base is deployed.
+          if [ -n "${BASE_REF:-}" ]; then
+            git fetch -q --depth=1 origin "$BASE_REF"
+            base=$(git ls-tree -r --name-only FETCH_HEAD -- db/migrate | sed -nE 's|db/migrate/([0-9]+)_.*\.up\.sql|\1|p' | sort -u)
+            base_max=$(echo "$base" | tail -1)
+            base_max=${base_max:-000}
+            added=$(comm -23 <(echo "$ups" | sort -u) <(echo "$base"))
+            bad=0
+            while IFS= read -r m; do
+              [ -n "$m" ] || continue
+              if [ "$((10#$m))" -le "$((10#$base_max))" ]; then
+                echo "::error::migration $m is not above $BASE_REF's current max ($base_max) — rebase and renumber it above $base_max, or migrate will skip it"
+                bad=1
+              fi
+            done <<< "$added"
+            [ "$bad" -eq 0 ]
+            echo "OK: added [$(echo "$added" | tr '\n' ' ')] above $BASE_REF max $base_max; no duplicates; up/down paired"
+          else
+            echo "OK (push): no duplicate migration numbers; up/down paired"
+          fi

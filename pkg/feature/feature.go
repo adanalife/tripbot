@@ -10,6 +10,7 @@ package feature
 
 import (
 	"context"
+	"slices"
 	"sort"
 	"time"
 )
@@ -78,10 +79,8 @@ func sortFlags(fs []Flag) {
 // against a username-targeted flag falls through to roles/default).
 func evaluate(f Flag, ctx EvalContext) bool {
 	if ctx.Username != "" {
-		for _, u := range f.EnabledForUsernames {
-			if u == ctx.Username {
-				return true
-			}
+		if slices.Contains(f.EnabledForUsernames, ctx.Username) {
+			return true
 		}
 	}
 	for _, want := range f.EnabledForRoles {

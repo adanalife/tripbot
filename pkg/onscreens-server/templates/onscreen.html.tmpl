@@ -25,12 +25,21 @@
   #warp .tw {
     position: absolute; left: 50%; top: 50%;
     transform: translate(-50%, -50%) scale(0.25);
+    display: flex; flex-direction: column; align-items: center;
     font-family: Impact, "Arial Narrow Bold", sans-serif; font-weight: 900;
     letter-spacing: 0.05em; text-transform: uppercase; text-align: center;
     line-height: 0.9; white-space: nowrap; opacity: 0; color: #eef0f4;
     font-size: 12vw;
     text-shadow: 0 0 22px rgba(180, 200, 230, 0.55), 0 4px 14px rgba(0, 0, 0, 0.6);
   }
+  /* the chatter who triggered the warp, credited under the wordmark; sized
+     relative to TIMEWARP so it scales with the same animation. Hidden when the
+     server sent no username (Content empty). */
+  #warp .tw-credit {
+    font-size: 0.34em; letter-spacing: 0.02em; text-transform: none;
+    margin-top: 0.18em; opacity: 0.92;
+  }
+  #warp .tw-credit:empty { display: none; }
   /* the .play class (added on the showing rising-edge) drives all the timing */
   #warp.play .cover     { animation: tw-cover 4.0s ease-in-out forwards; }
   #warp.play .streaks i { animation: tw-streak 1s linear infinite; }
@@ -61,19 +70,26 @@
   #root.hidden { visibility: hidden; }
   {{if and (not .IsImage) (gt .FitWidthPx 0)}}
   /* Anchored mode: the browser-source viewport overhangs a smaller on-canvas
-     overlay (the bottom-strip rotators' grey-box). Text centers on AnchorXPx
-     within the viewport and shrinks to fit FitWidthPx. */
+     overlay (the bottom-strip rotators' grey-box). A fixed-width, text-centered
+     content box is offset via margin-left so its center sits at AnchorXPx, and
+     shrinks to fit FitWidthPx.
+
+     Deliberately normal-flow (flex + margin) rather than position:absolute +
+     transform. An absolutely-positioned/transformed box becomes its own
+     compositing layer, and OBS's offscreen browser renderer (CEF OSR) fails to
+     push that layer's repaints into the shared texture after the first paint —
+     so the rotators rendered once on load, then went blank on their first
+     content rotation. Middle-text never hit this because it's normal-flow;
+     matching that flow keeps the rotators painting across updates. */
   #root.text {
-    position: relative;
     width: 100%; height: 100%;
+    display: flex; align-items: center;
   }
   #root.text .content {
-    position: absolute;
-    top: 50%;
-    left: {{.AnchorXPx}}px;
-    transform: translate(-50%, -50%);
+    flex: 0 0 auto;
+    width: {{.FitWidthPx}}px;
+    margin-left: {{.ContentMarginLeftPx}}px;
     text-align: center;
-    max-width: {{.FitWidthPx}}px;
     white-space: nowrap;
     word-wrap: break-word;
   }
@@ -87,6 +103,16 @@
   {{end}}
   #root.image { width: 100%; height: 100%; }
   #root.image img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  /* Inline markdown (renderInlineMarkdown): `code` becomes a monospace pill so
+     !command references stand out against the dashcam video. The dark backing
+     keeps it legible over arbitrary footage; bold/italic inherit by default. */
+  #root code {
+    font-family: "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+    font-size: 0.9em;
+    padding: 0.02em 0.32em;
+    border-radius: 0.25em;
+    background: rgba(0,0,0,0.4);
+  }
   /* Leaderboard onscreen (RenderAsHTML): CSS grid auto-sizes the score
      column to the widest entry, so digits align across rows in any font.
      LeaderboardContent in pkg/users emits the matching markup. */
@@ -107,16 +133,37 @@
 </style>
 </head>
 <body>
+<!-- Heartbeat: OBS renders this page via CEF offscreen rendering
+     (BrowserHWAccel), which only delivers a new frame to OBS when pixels
+     change — and occasionally drops one (post-reload, the page can get stuck
+     compositing its blank initial paint until the next content change; the
+     rotators' 45s cadence was the only recovery). Repainting this near-invisible
+     pixel twice a second forces a continuous frame stream, so a dropped frame
+     self-heals in ~500ms. background-color (not opacity/transform) on purpose:
+     it's a main-thread paint property, so it can't be optimized into a
+     compositor-only animation that OSR might fail to deliver. -->
+<div id="heartbeat" style="position:fixed;left:0;bottom:0;width:1px;height:1px;"></div>
+<script>
+(function () {
+  var hb = document.getElementById('heartbeat');
+  var on = false;
+  setInterval(function () {
+    on = !on;
+    hb.style.background = on ? 'rgba(0,0,0,0.02)' : 'rgba(0,0,0,0.01)';
+  }, 500);
+})();
+</script>
 {{if eq .Name "timewarp"}}
 <div id="warp">
   <div class="cover"><div class="streaks" id="tw-streaks"></div></div>
-  <div class="tw">TIMEWARP</div>
+  <div class="tw">TIMEWARP<span class="tw-credit" id="tw-credit"></span></div>
 </div>
 <script>
 (function () {
   var name = "timewarp";
   var warp = document.getElementById('warp');
   var streaks = document.getElementById('tw-streaks');
+  var credit = document.getElementById('tw-credit');
 
   // build the radial speed-lines once; negative delays stagger them so the
   // field is already in motion the instant the cover slams in.
@@ -143,8 +190,16 @@
       var data = await r.json();
       var snap = data[name];
       var showing = !!(snap && snap.showing);
-      if (showing && !wasShowing) play();
-      else if (!showing && wasShowing) warp.classList.remove('play');
+      if (showing && !wasShowing) {
+        // Content carries the triggering chatter's username (may be empty).
+        // Set it before the rising-edge play() so the credit animates in with
+        // the wordmark; :empty CSS hides the line when there's no username.
+        var who = (snap && snap.content) ? String(snap.content) : '';
+        credit.textContent = who ? '@' + who : '';
+        play();
+      } else if (!showing && wasShowing) {
+        warp.classList.remove('play');
+      }
       wasShowing = showing;
     } catch (e) {
       // network blip — keep last state, retry on the next tick

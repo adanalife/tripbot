@@ -18,7 +18,10 @@ type Score struct {
 	UserID       uint16
 	ScoreboardID uint16
 	Value        float32
-	DateCreated  time.Time
+	// autoCreateTime stamps date_created on insert; createScore() doesn't set
+	// it, so without the tag GORM writes the 0001-01-01 zero value over the
+	// column's DEFAULT CURRENT_TIMESTAMP. See pkg/events for the full story.
+	DateCreated time.Time `gorm:"autoCreateTime"`
 }
 
 // GetScoreByName returns the score value for a given username and scoreboard name
