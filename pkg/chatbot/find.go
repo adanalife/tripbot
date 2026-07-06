@@ -19,10 +19,9 @@ import (
 	"gorm.io/gorm"
 )
 
-// Tunables for !find. The distance ceiling is deliberately conservative: the
-// embed responder isn't deployed yet, so these are starting points to refine
-// against real query scores once it's live (see the dashcam-cv model notes —
-// SigLIP2 cosine similarities run low, ~0–0.3, so cosine *distances* run high).
+// Tunables for !find. SigLIP2 cosine similarities run low (~0–0.3), so cosine
+// *distances* run high — the ceiling is calibrated against real corpus scores,
+// not the intuitive "close to 0" range.
 const (
 	// findEmbedTimeout bounds the NATS request to the embed responder. A cold
 	// responder embeds a query in well under a second; the headroom is slack.
@@ -32,8 +31,10 @@ const (
 	findResultLimit = 5
 	// findMaxDistance is the cosine-distance ceiling for "close enough to jump".
 	// pgvector's <=> is (1 - cosine_similarity). Above this we treat the query
-	// as a miss rather than yanking the stream to a bad match.
-	findMaxDistance = 0.82
+	// as a miss rather than yanking the stream to a bad match. Calibrated on the
+	// stage corpus: a real match ("rain") tops out around 0.887, a nonsense
+	// query around 0.977, so 0.93 splits the two.
+	findMaxDistance = 0.93
 	// findJumpLeadInSec lands the playhead this many seconds BEFORE the matched
 	// frame, so the moment is still upcoming when playback resumes (we don't
 	// want to land right on it and have it slip past on stream) and so it plays
