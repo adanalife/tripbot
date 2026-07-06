@@ -1,0 +1,1 @@
+Persist the viewer-count and video-play signals into new append-only `video_plays` + `viewer_samples` tables (migration 033), so footage-performance history accrues durably instead of vanishing with each fire-and-forget NATS emission

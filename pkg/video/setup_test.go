@@ -90,3 +90,12 @@ func expectLoadHit(mock sqlmock.Sqlmock, id int, slug string, flagged bool) {
 		WillReturnRows(sqlmock.NewRows([]string{"id", "slug", "flagged"}).
 			AddRow(id, slug, flagged))
 }
+
+// expectPlayInsert queues the video_plays INSERT a clip transition writes
+// (viewstats.RecordPlay). State/lat/lng are zero because expectLoadHit stages
+// only id/slug/flagged.
+func expectPlayInsert(mock sqlmock.Sqlmock, videoID int, flagged bool) {
+	mock.ExpectQuery(`INSERT INTO "video_plays"`).
+		WithArgs(sqlmock.AnyArg(), videoID, "", flagged, 0.0, 0.0, sqlmock.AnyArg()).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+}
