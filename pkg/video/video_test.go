@@ -51,6 +51,7 @@ func TestPlayer_GetCurrentlyPlaying_FirstCall_FlaggedShowsGPS(t *testing.T) {
 
 	// DB returns a flagged video for the slug derived from vlcCurrent.
 	expectLoadHit(mock, 1, "2018_0514_224801_013", true)
+	expectPlayInsert(mock, 1, true)
 
 	p.GetCurrentlyPlaying(context.Background())
 
@@ -77,6 +78,7 @@ func TestPlayer_GetCurrentlyPlaying_FirstCall_NotFlaggedHidesGPS(t *testing.T) {
 	p := NewPlayer(rec, vlc)
 
 	expectLoadHit(mock, 7, "2019_0615_183000_001", false)
+	expectPlayInsert(mock, 7, false)
 
 	p.GetCurrentlyPlaying(context.Background())
 
@@ -99,9 +101,11 @@ func TestPlayer_GetCurrentlyPlaying_SameVidIsNoop(t *testing.T) {
 	vlc := fakeVLCServer(t, &vlcCurrent)
 	p := NewPlayer(rec, vlc)
 
-	// Only one DB hit expected — the second GetCurrentlyPlaying call sees
-	// curVid == preVid and short-circuits before reaching LoadOrCreate.
+	// Only one DB hit + play insert expected — the second GetCurrentlyPlaying
+	// call sees curVid == preVid and short-circuits before reaching
+	// LoadOrCreate.
 	expectLoadHit(mock, 1, "2018_0514_224801_013", false)
+	expectPlayInsert(mock, 1, false)
 
 	p.GetCurrentlyPlaying(context.Background())
 	timeStartedAfterFirst := p.timeStarted
@@ -130,10 +134,13 @@ func TestPlayer_GetCurrentlyPlaying_TransitionTogglesGPSAndResetsTimeStarted(t *
 	vlc := fakeVLCServer(t, &vlcCurrent)
 	p := NewPlayer(rec, vlc)
 
-	// First vid: flagged → ShowGPSImage.
+	// First vid: flagged → ShowGPSImage. Each transition loads the video then
+	// records its play, so the expectations interleave.
 	expectLoadHit(mock, 1, "2018_0514_224801_013", true)
+	expectPlayInsert(mock, 1, true)
 	// Second vid: not flagged → HideGPSImage.
 	expectLoadHit(mock, 2, "2019_0615_183000_001", false)
+	expectPlayInsert(mock, 2, false)
 
 	p.GetCurrentlyPlaying(context.Background())
 	firstStart := p.timeStarted
@@ -181,6 +188,7 @@ func TestPlayer_CurrentProgress_TracksTimeSinceStart(t *testing.T) {
 	p := NewPlayer(rec, vlc)
 
 	expectLoadHit(mock, 1, "2018_0514_224801_013", false)
+	expectPlayInsert(mock, 1, false)
 
 	p.GetCurrentlyPlaying(context.Background())
 	time.Sleep(10 * time.Millisecond)

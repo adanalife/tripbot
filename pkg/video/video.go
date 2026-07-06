@@ -12,6 +12,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/eventbus"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
+	"github.com/adanalife/tripbot/pkg/viewstats"
 	vlcClient "github.com/adanalife/tripbot/pkg/vlc-client"
 )
 
@@ -89,6 +90,13 @@ func (p *Player) GetCurrentlyPlaying(ctx context.Context) {
 		eventbus.EmitVideoChanged(ctx, c.Conf.Environment, c.Conf.Platform,
 			p.CurrentlyPlaying.File(), p.CurrentlyPlaying.State, p.CurrentlyPlaying.Flagged,
 			p.CurrentlyPlaying.Lat, p.CurrentlyPlaying.Lng)
+
+		// Persist the switch as a video_plays row — the durable half of the
+		// emission above (NATS core is fire-and-forget). The first tick after a
+		// restart records a fresh play for the clip already on screen, since its
+		// true start time wasn't observed.
+		viewstats.RecordPlay(ctx, p.CurrentlyPlaying.ID, p.CurrentlyPlaying.State,
+			p.CurrentlyPlaying.Flagged, p.CurrentlyPlaying.Lat, p.CurrentlyPlaying.Lng)
 
 		// show the no-GPS image
 		if p.CurrentlyPlaying.Flagged {

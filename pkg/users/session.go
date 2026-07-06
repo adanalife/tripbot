@@ -12,6 +12,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/eventbus"
 	"github.com/adanalife/tripbot/pkg/events"
 	"github.com/adanalife/tripbot/pkg/scoreboards"
+	"github.com/adanalife/tripbot/pkg/viewstats"
 	"github.com/google/uuid"
 	"github.com/hako/durafmt"
 )
@@ -49,6 +50,10 @@ func (s *Sessions) UpdateSession(ctx context.Context) {
 	// Publish the authoritative chatter total so the admin panel's live console
 	// updates the "in chat" number (and flashes it on a change) without a reload.
 	eventbus.EmitViewerCount(ctx, c.Conf.Environment, c.Conf.Platform, s.source.ChatterCount())
+
+	// Persist the same total as a viewer_samples row — the durable half of the
+	// emission above, tagged with the clip currently on screen.
+	viewstats.RecordSample(ctx, s.source.ChatterCount())
 
 	// log out the people who aren't present
 	for username, user := range s.loggedIn {
