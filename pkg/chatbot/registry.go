@@ -58,10 +58,10 @@ func (a *App) buildRegistry() []Command {
 			RequiresFollow: true,
 		},
 		{
-			Trigger:        "!find",
-			Aliases:        []string{"!search"},
-			Handler:        a.findCmd,
-			RequiresFollow: true,
+			Trigger:            "!find",
+			Aliases:            []string{"!search"},
+			Handler:            a.findCmd,
+			RequiresSubscriber: true,
 		},
 		{
 			Trigger:        "!skip",
@@ -296,7 +296,8 @@ var youtubeCommands = map[string]bool{
 	"!weather": true, "!time": true, "!date": true, "!sunset": true,
 	"!state": true, "!location": true,
 	// playback control (drives this platform's vlc pipeline)
-	"!timewarp": true, "!goto": true, "!find": true, "!skip": true, "!back": true,
+	// !find is Twitch-only for now — subscriber-gated + still slow, revisit for YouTube later
+	"!timewarp": true, "!goto": true, "!skip": true, "!back": true,
 	// socials / static links
 	"!socialmedia": true, "!discord": true, "!twitter": true, "!instagram": true,
 	"!facebook": true, "!youtube": true, "!tiktok": true, "!bluesky": true,
