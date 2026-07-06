@@ -1,1 +1,0 @@
-NATS connections now retry a failed initial connect forever instead of leaving the process permanently deaf. A boot race (node reboot bringing apps and NATS up together) previously killed timewarps, overlays, and `!guess` scoring integrity until a manual restart; now subscriptions replay and JetStream streams declare automatically when the connection lands.
