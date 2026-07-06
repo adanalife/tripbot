@@ -5,10 +5,14 @@
 //	DELETE FROM user_rollups;
 //	UPDATE rollup_watermarks SET last_event_id = 0 WHERE name = 'user_rollups';
 //
-// user_rollups.events_miles is events-derived only — it excludes the live
-// subscriber bonus and historical manual corrections, so it will read lower
-// than users.miles. users.miles remains the display number; this column is
-// for audit, reconciliation, and cross-platform aggregation.
+// user_rollups.events_miles is the pure pairing base — it excludes the live
+// subscriber bonus and manual corrections, so it reads lower than users.miles
+// (that delta is a drift alarm, not a bug). user_rollups.extra_miles captures
+// SUM(events.extra_miles_earned) over logout + correction events: the sub-grant,
+// 5%-bonus, and manual-correction portion the pairing can't see, so reconstructed
+// display miles ≈ events_miles + extra_miles.
+// users.miles remains the authoritative display number; these columns are for
+// audit, reconciliation, and cross-platform aggregation.
 package rollups
 
 import (
@@ -74,18 +78,21 @@ agg AS (
            (SELECT MIN(e.date_created) FROM events e WHERE e.platform = d.platform
               AND e.username = d.username AND e.date_created > '2000-01-01') AS first_seen,
            (SELECT MAX(e.date_created) FROM events e WHERE e.platform = d.platform
-              AND e.username = d.username AND e.date_created > '2000-01-01') AS last_seen
+              AND e.username = d.username AND e.date_created > '2000-01-01') AS last_seen,
+           (SELECT COALESCE(SUM(e.extra_miles_earned), 0) FROM events e WHERE e.platform = d.platform
+              AND e.username = d.username AND e.event IN ('logout', 'correction')) AS extra_miles
     FROM dirty d
     LEFT JOIN miles m ON m.platform = d.platform AND m.username = d.username
 )
-INSERT INTO user_rollups (platform, username, events_miles, session_count, first_seen, last_seen, date_updated)
-SELECT platform, username, events_miles, session_count, first_seen, last_seen, now()
+INSERT INTO user_rollups (platform, username, events_miles, session_count, first_seen, last_seen, extra_miles, date_updated)
+SELECT platform, username, events_miles, session_count, first_seen, last_seen, extra_miles, now()
 FROM agg
 ON CONFLICT (platform, username) DO UPDATE SET
     events_miles  = EXCLUDED.events_miles,
     session_count = EXCLUDED.session_count,
     first_seen    = EXCLUDED.first_seen,
     last_seen     = EXCLUDED.last_seen,
+    extra_miles   = EXCLUDED.extra_miles,
     date_updated  = now()
 `
 

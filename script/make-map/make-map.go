@@ -23,12 +23,6 @@ var skipToDate = false
 var skipDate = time.Date(2018, time.Month(9), 29, 0, 0, 0, 0, time.UTC)
 
 func main() {
-	//TODO: remove this if it's not needed
-	// err := godotenv.Load()
-	// if err != nil {
-	// 	log.Fatal("Error loading .env file")
-	// }
-
 	client, err := maps.NewClient(maps.WithAPIKey(c.Conf.GoogleMapsAPIKey))
 	if err != nil {
 		log.Fatalf("client error: %s", err)

@@ -1,17 +1,14 @@
 package twitch
 
 import (
-	"context"
-	"time"
-
 	"github.com/nicklaw5/helix/v2"
 )
 
 // This file preserves the package-level free-function API that callers used
 // before pkg/twitch held a *Client. Each shim delegates to defaultClient so
-// existing call sites (pkg/users, pkg/server, pkg/obs/watchdog, cmd/tripbot,
-// cmd/auth-bootstrap, pkg/eventsub, pkg/chatbot) keep working unchanged while
-// the package-level mutable globals are gone.
+// existing call sites (pkg/users, pkg/server, cmd/tripbot, pkg/eventsub,
+// pkg/chatbot) keep working unchanged while the package-level mutable globals
+// are gone.
 //
 // These shims are transitional. Once a constructed *Client is threaded through
 // those callers, this whole file (and defaultClient) is deleted.
@@ -24,36 +21,12 @@ func IRCAuthToken() string                { return defaultClient.IRCAuthToken() 
 func BroadcasterUserAccessToken() string  { return defaultClient.BroadcasterUserAccessToken() }
 func TokenStatuses() []AccountTokenStatus { return defaultClient.TokenStatuses() }
 
-func GenerateUserAccessToken(code string, expectedLogin string) error {
-	return defaultClient.GenerateUserAccessToken(code, expectedLogin)
-}
+// --- cached audience state (fed from the platform-gateway) ---
 
-// --- audience / viewer queries ---
-
-func GetSubscribers(ctx context.Context)    { defaultClient.GetSubscribers(ctx) }
-func GetFollowerCount(ctx context.Context)  { defaultClient.GetFollowerCount(ctx) }
-func UserIsSubscriber(username string) bool { return defaultClient.UserIsSubscriber(username) }
-func UserIsFollower(username string) bool   { return defaultClient.UserIsFollower(username) }
-func FollowedAt(username string) (time.Time, bool) {
-	return defaultClient.FollowedAt(username)
-}
-func ChatterCount() int             { return defaultClient.ChatterCount() }
-func Chatters() map[string]struct{} { return defaultClient.Chatters() }
-func UpdateChatters()               { defaultClient.UpdateChatters() }
-func ChannelID() string             { return defaultClient.ChannelID() }
-
-// SetSubscribers / SetChatters / SetChannelID feed cached state from
-// out-of-band (the platform-gateway) instead of an in-process Helix poll.
+func UserIsSubscriber(username string) bool  { return defaultClient.UserIsSubscriber(username) }
+func ChatterCount() int                      { return defaultClient.ChatterCount() }
+func Chatters() map[string]struct{}          { return defaultClient.Chatters() }
+func ChannelID() string                      { return defaultClient.ChannelID() }
 func SetSubscribers(logins []string)         { defaultClient.SetSubscribers(logins) }
 func SetChatters(logins []string, count int) { defaultClient.SetChatters(logins, count) }
 func SetChannelID(id string)                 { defaultClient.SetChannelID(id) }
-
-func SendChatMessageAsBroadcaster(ctx context.Context, text string) error {
-	return defaultClient.SendChatMessageAsBroadcaster(ctx, text)
-}
-
-// --- streams ---
-
-func IsChannelLive(ctx context.Context, login string) (bool, error) {
-	return defaultClient.IsChannelLive(ctx, login)
-}

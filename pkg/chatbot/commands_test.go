@@ -1304,6 +1304,34 @@ func TestMilesCmd_OtherUser_StripsAtSign(t *testing.T) {
 
 // --- makeBotCmd / unBotCmd ---
 
+func TestGiveMilesCmd_NonAdmin_NoOp(t *testing.T) {
+	app := newTestApp(video.Video{})
+	rec := &recordingSessions{}
+	app.Sessions = rec
+
+	app.giveMilesCmd(context.Background(), newTestUser("viewer1"), []string{"target", "50"})
+
+	if len(rec.Calls) != 0 {
+		t.Errorf("expected no Sessions calls for non-admin, got %v", rec.Calls)
+	}
+}
+
+func TestGiveMilesCmd_Admin_BadArgs_NoCorrection(t *testing.T) {
+	// missing amount, then non-numeric amount — both must bail before touching
+	// Sessions (Find/CorrectMiles), so no correction is applied.
+	for _, params := range [][]string{{"target"}, {"target", "notanumber"}} {
+		app := newTestApp(video.Video{})
+		rec := &recordingSessions{}
+		app.Sessions = rec
+
+		app.giveMilesCmd(context.Background(), newTestUser(adminUser), params)
+
+		if len(rec.Calls) != 0 {
+			t.Errorf("params %v: expected no Sessions calls, got %v", params, rec.Calls)
+		}
+	}
+}
+
 func TestMakeBotCmd_NonAdmin_DoesNotCallSetBot(t *testing.T) {
 	app := newTestApp(video.Video{})
 	rec := &recordingSessions{}

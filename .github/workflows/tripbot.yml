@@ -1,6 +1,19 @@
 name: tripbot
 on:
   pull_request:
+    # Docs/cdk8s/workflow-only PRs don't need a full image build + compose
+    # smoke. Push to develop stays unfiltered as the post-merge safety net.
+    paths:
+      - 'cmd/**'
+      - 'pkg/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'db/**'
+      - 'configs/**'
+      - 'assets/**'
+      - 'infra/docker/**'
+      - '.dockerignore'
+      - '.github/workflows/tripbot.yml'
   push:
     branches:
       - develop
@@ -15,6 +28,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
       COMPOSE_DOCKER_CLI_BUILD: 1
       DOCKER_BUILDKIT: 1

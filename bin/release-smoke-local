@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Smoke-check tripbot + vlc-server health endpoints via kubectl
 # port-forward against the currently-active kube context. Used by
-# `task release:smoke:local`. See vault/tripbot/release-checklist.md.
+# `task release:smoke:local`.
 set -euo pipefail
 
 TRIPBOT_PORT=18080

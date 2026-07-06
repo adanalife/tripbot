@@ -2,15 +2,12 @@ name: backmerge
 
 # After anything lands on master (a release merge, a bump-prs pin edit), open or
 # refresh ONE standing PR that merges master back into develop, so develop never
-# drifts from master. Skipping this back-merge is what caused the v3.6.0
-# phantom-divergence cleanup; this automates it (see merge-strategy-by-target-
-# branch + the cutting-a-release notes).
+# drifts from master and release PRs never hit phantom-divergence conflicts.
 #
 # ⚠️ The PR it opens MUST be merged with a MERGE COMMIT, never squashed/rebased.
 # Squash copies the file contents without making master's commits ancestors of
 # develop, so the divergence stays in place and the next release PR conflicts on
-# CHANGELOG.md (exactly what happened when the manual v3.6.0 back-merge was
-# squash-merged). The PR body repeats this warning.
+# CHANGELOG.md. The PR body repeats this warning.
 #
 # Mechanics mirror bump-prs.yml: a well-known branch (backmerge/master-to-develop)
 # is recreated from develop with master merged in and force-pushed, so there is
@@ -39,6 +36,7 @@ concurrency:
 jobs:
   backmerge:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       BRANCH: backmerge/master-to-develop
     steps:
@@ -49,7 +47,7 @@ jobs:
           app-id: ${{ vars.AUTOMATION_APP_ID }}
           private-key: ${{ secrets.AUTOMATION_APP_PRIVATE_KEY }}
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           ref: develop

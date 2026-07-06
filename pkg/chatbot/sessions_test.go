@@ -19,6 +19,7 @@ func (noopSessions) SetBot(_ context.Context, _ string, _ bool) error           
 func (noopSessions) CurrentMiles(_ context.Context, u users.User) float32        { return u.Miles }
 func (noopSessions) CurrentMonthlyMiles(_ context.Context, _ users.User) float32 { return 0 }
 func (noopSessions) BonusMiles(_ users.User) float32                             { return 0 }
+func (noopSessions) CorrectMiles(_ context.Context, _ string, _ float32) float32 { return 0 }
 
 // recordingSessions captures every call made to it so tests can assert
 // the chatbot queried the expected user / leaderboard surfaces.
@@ -67,4 +68,9 @@ func (r *recordingSessions) CurrentMonthlyMiles(_ context.Context, u users.User)
 func (r *recordingSessions) BonusMiles(u users.User) float32 {
 	r.Calls = append(r.Calls, fmt.Sprintf("BonusMiles(%q)", u.Username))
 	return r.Bonus
+}
+
+func (r *recordingSessions) CorrectMiles(_ context.Context, username string, delta float32) float32 {
+	r.Calls = append(r.Calls, fmt.Sprintf("CorrectMiles(%q, %g)", username, delta))
+	return r.Miles
 }

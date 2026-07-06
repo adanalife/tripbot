@@ -31,9 +31,7 @@ var vlcStaticFlags = []string{
 
 // vlcCmdFlags is built lazily in startVLC() from vlcStaticFlags +
 // per-host tuning values pulled from config (VLC_FILE_CACHING,
-// VLC_CANVAS_WIDTH, VLC_CANVAS_HEIGHT). Defaults match what was
-// previously hardcoded here, so this is a no-op refactor unless an
-// env var is explicitly set.
+// VLC_CANVAS_WIDTH, VLC_CANVAS_HEIGHT).
 var vlcCmdFlags []string
 
 // mediaOptions returns the per-Media options driven by VLC_OUTPUT.
@@ -68,7 +66,7 @@ func mediaOptions() []string {
 
 // linuxSpecificFlags returns the Linux-only VLC flags, sourced from
 // config (VLC_VOUT, VLC_AVCODEC_HW). Defaults: --vout dummy (headless;
-// the container no longer ships an X server) and --avcodec-hw
+// the container has no X server) and --avcodec-hw
 // vdpau_avcodec (can be none, vdpau_avcodec, or cuda). On a Linux dev
 // host where you want a preview window, set VLC_VOUT=x11 and
 // VLC_OUTPUT=window (or both).
@@ -186,8 +184,6 @@ func (s *Server) Health() error {
 // s.http may be nil if Shutdown is called before Start populated it; in
 // that case there's nothing to drain and we skip straight to libvlc
 // cleanup.
-//
-// TODO: are there more things to close gracefully?
 func (s *Server) Shutdown(ctx context.Context) {
 	if s.http != nil {
 		slog.InfoContext(ctx, "shutting down VLC web server")
@@ -230,8 +226,7 @@ func (s *Server) currentlyPlaying() string {
 
 func startVLC() error {
 	// build the base flag set from the static list + config-driven tuning
-	// values. Defaults in pkg/config/vlc-server reproduce what used to be
-	// hardcoded here, so unset env vars yield identical behavior.
+	// values (defaults live in pkg/config/vlc-server)
 	canvasW := strconv.Itoa(c.Conf.VlcCanvasWidth)
 	canvasH := strconv.Itoa(c.Conf.VlcCanvasHeight)
 	vlcCmdFlags = append([]string{}, vlcStaticFlags...)

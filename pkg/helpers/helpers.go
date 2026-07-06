@@ -69,8 +69,8 @@ func ParseLatLng(ocrStr string) (float64, float64, error) {
 		return lat, lon, errors.New("failed to convert lat or lon to float")
 	}
 
-	//TODO: this is lazy
-	// I hardcoded the minus sign instead of handling other hemispheres
+	// western hemisphere assumed: the minus sign is hardcoded rather than
+	// parsed (the continental-US bounds check below rejects anything else)
 	lon = -lon
 
 	// error on impossible coords
@@ -133,7 +133,6 @@ func sunriseSunset(utcDate time.Time, lat, long float64) (time.Time, time.Time) 
 	return ActualDate(rise, lat, long), ActualDate(set, lat, long)
 }
 
-// TODO: text the admin if it errors opening browser?
 func OpenInBrowser(url string) {
 	slog.Info("opening url in browser", "url", url)
 	err := open.Run(url)

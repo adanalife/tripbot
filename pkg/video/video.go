@@ -11,6 +11,7 @@ import (
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/eventbus"
 	"github.com/adanalife/tripbot/pkg/helpers"
+	"github.com/adanalife/tripbot/pkg/instrumentation"
 	vlcClient "github.com/adanalife/tripbot/pkg/vlc-client"
 )
 
@@ -41,10 +42,9 @@ func NewPlayer(onscreens onscreens, vlc *vlcClient.Client) *Player {
 
 // GetCurrentlyPlaying will use lsof to figure out
 // which dashcam video is currently playing (seriously).
-// ctx is forward-compat plumbing — vlc-client and onscreens-client don't
-// take ctx yet, so it's not propagated into their HTTP calls. Once they do,
-// trace spans for cron.video.GetCurrentlyPlaying ticks will nest the
-// underlying VLC poll and GPS-image toggles as children.
+// ctx carries the cron tick's trace span; it isn't propagated into the
+// vlc-client / onscreens-client HTTP calls (those clients don't take a ctx,
+// so the underlying VLC poll and GPS-image toggles don't nest as children).
 // TODO: consider making this return a video struct
 func (p *Player) GetCurrentlyPlaying(ctx context.Context) {
 	var err error
@@ -78,6 +78,11 @@ func (p *Player) GetCurrentlyPlaying(ctx context.Context) {
 			"state", helpers.StateToStateAbbrev(p.CurrentlyPlaying.State),
 		)
 
+		// Update the current-state gauge: set the new state's series to 1 and
+		// clear the prior one. A blank abbrev (unresolvable state) records as
+		// "unknown" so a stuck playhead is alertable.
+		instrumentation.CurrentState.Set(helpers.StateToStateAbbrev(p.CurrentlyPlaying.State))
+
 		// Announce the switch so the admin panel's "now playing" card updates
 		// live (no-op when NATS is unconfigured). emitted_at doubles as the
 		// clip start time for the panel's elapsed ticker.
@@ -87,7 +92,7 @@ func (p *Player) GetCurrentlyPlaying(ctx context.Context) {
 
 		// show the no-GPS image
 		if p.CurrentlyPlaying.Flagged {
-			//TODO: kinda cludgy that we hardcode 60s here
+			// the duration is ignored — the server owns the GPS overlay's duration
 			p.onscreens.ShowGPSImage(ctx, 60*time.Second)
 		} else {
 			p.onscreens.HideGPSImage(ctx)

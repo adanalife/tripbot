@@ -30,8 +30,9 @@ import (
 // All fields optional — leave a callback nil to skip subscribing to
 // that event entirely (no Twitch-side subscription is created either).
 type Handlers struct {
-	OnFollow    func(username string)
-	OnSubscribe func(username string, isGift bool, tier string)
+	OnFollow      func(username string)
+	OnSubscribe   func(username string, isGift bool, tier string)
+	OnUnsubscribe func(username string, isGift bool, tier string)
 }
 
 // Config is the static input Run needs to subscribe. ClientID matches
@@ -89,6 +90,11 @@ func Run(ctx context.Context, cfg Config, h Handlers) error {
 			h.OnSubscribe(e.UserName, e.IsGift, e.Tier)
 		})
 	}
+	if h.OnUnsubscribe != nil {
+		client.OnEventChannelSubscriptionEnd(func(e twitch.EventChannelSubscriptionEnd) {
+			h.OnUnsubscribe(e.UserName, e.IsGift, e.Tier)
+		})
+	}
 
 	client.OnWelcome(func(msg twitch.WelcomeMessage) {
 		sid := msg.Payload.Session.ID
@@ -105,6 +111,11 @@ func Run(ctx context.Context, cfg Config, h Handlers) error {
 		}
 		if h.OnSubscribe != nil {
 			subscribe(ctx, cfg, sid, twitch.SubChannelSubscribe, map[string]string{
+				"broadcaster_user_id": cfg.BroadcasterUserID,
+			})
+		}
+		if h.OnUnsubscribe != nil {
+			subscribe(ctx, cfg, sid, twitch.SubChannelSubscriptionEnd, map[string]string{
 				"broadcaster_user_id": cfg.BroadcasterUserID,
 			})
 		}

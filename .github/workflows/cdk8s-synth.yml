@@ -10,7 +10,7 @@ on:
     paths:
       - 'cdk8s/**'
       - 'pkg/contract/contract.json'
-      - '.github/workflows/cdk8s.yml'
+      - '.github/workflows/cdk8s-synth.yml'
   push:
     branches:
       - master
@@ -18,11 +18,16 @@ on:
     paths:
       - 'cdk8s/**'
       - 'pkg/contract/contract.json'
-      - '.github/workflows/cdk8s.yml'
+      - '.github/workflows/cdk8s-synth.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   synth:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
 

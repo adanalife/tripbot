@@ -160,8 +160,7 @@ def config_data(env: EnvConfig, platform: str) -> dict[str, str]:
     # OBS WebSocket control addr (port 4455) — distinct from OBS_SERVER_HOST's
     # :8080 Flask health server. Read directly by tripbot's pkg/obs (watchdog +
     # stream start/stop); must be per-platform so the YouTube stack dials
-    # obs-youtube, not obs-twitch. Was previously unset, leaving pkg/obs on its
-    # stale "obs:4455" default after OBS went per-platform.
+    # obs-youtube, not obs-twitch.
     data["OBS_WEBSOCKET_ADDR"] = f"{app_name('obs', platform)}:4455"
     # tripbot's Run() branches on STREAM_PLATFORM (chat transport, command
     # allowlist, Twitch-only boot steps). twitch is the binary's default, so —
@@ -176,7 +175,7 @@ def config_data(env: EnvConfig, platform: str) -> dict[str, str]:
     if env.nats_url:
         data["NATS_URL"] = env.nats_url
     # Route the twitch instance's command-time Helix calls through the
-    # platform-gateway gateway-twitch (Phase 3) where the env opts in. Only the
+    # platform-gateway gateway-twitch where the env wires it. Only the
     # twitch platform talks Helix, so the youtube instance never carries it.
     if platform == "twitch" and env.twitch_api_url:
         data["TWITCH_API_URL"] = env.twitch_api_url
@@ -601,129 +600,12 @@ def _emit_app_external_secrets(scope, ns, labels):
 # ---------------------------------------------------------------------------
 # One-shot Jobs — module-level emitters, NOT auto-run by the Tripbot construct.
 #
-# They are deliberately separate so a routine app apply never fires a one-shot.
-# The deploy tasks emit + apply
-# them on demand. All `envFrom` the PRIMARY platform's tripbot ConfigMap by name
-# (config_map_name(env.platforms[0]), e.g. tripbot-twitch-config) — the Jobs are
-# identity-level (one bot, one DB), not per-platform. On the
-# laptop the DB Secret is the secret.env-built `tripbot-secret` and the bootstrap
-# is a single combined Job; on eso envs the DB Secret is `tripbot-database-creds`
-# and the bootstrap splits into bot + broadcaster legs.
+# They are deliberately separate so a routine app apply never fires a one-shot;
+# the deploy tasks emit + apply them on demand. `envFrom` the PRIMARY platform's
+# tripbot ConfigMap by name (config_map_name(env.platforms[0])) — identity-level
+# (one DB), not per-platform. Only the DB seed Job remains: Twitch OAuth
+# bootstrap moved to the platform-gateway, so the auth-bootstrap Jobs are gone.
 # ---------------------------------------------------------------------------
-
-
-def emit_jobs(scope: Construct, env: EnvConfig) -> None:
-    """Emit the env's one-shot Jobs. local gets the combined auth-bootstrap +
-    seed (secret.env-wired); eso envs get the bot + broadcaster auth-bootstrap
-    legs + the ESO-wired seed."""
-    if env.secret_source == "local":
-        local_auth_bootstrap(scope, env)
-        seed(scope, env)
-    else:
-        auth_bootstrap_bot(scope, env)
-        auth_bootstrap_broadcaster(scope, env)
-        seed(scope, env)
-
-
-def _auth_bootstrap(
-    scope: Construct,
-    id: str,
-    name: str,
-    env: EnvConfig,
-    *,
-    account: str | None,
-    db_secret: str,
-    twitch_optional: bool,
-) -> None:
-    ns = env.namespace or None
-    args = [f"--account={account}"] if account else None
-    env_from = [
-        k8s.EnvFromSource(
-            config_map_ref=k8s.ConfigMapEnvSource(
-                name=config_map_name(env.platforms[0])
-            )
-        ),
-        k8s.EnvFromSource(secret_ref=k8s.SecretEnvSource(name=db_secret)),
-        k8s.EnvFromSource(
-            secret_ref=k8s.SecretEnvSource(
-                name="tripbot-twitch-creds", optional=twitch_optional
-            )
-        ),
-    ]
-    # The eso bootstrap legs also pull maps creds; the local combined Job
-    # (account=None) stops at twitch (matches overlays/local/auth-job.yaml).
-    if account is not None:
-        env_from.append(
-            k8s.EnvFromSource(
-                secret_ref=k8s.SecretEnvSource(
-                    name="tripbot-google-maps-api-key", optional=False
-                )
-            )
-        )
-    container = k8s.Container(
-        name="auth-bootstrap",
-        image=f"{IMAGE}:{env.tag_for('tripbot')}",
-        image_pull_policy=env.pull_policy_for("tripbot"),
-        command=["/usr/local/bin/auth-bootstrap"],
-        args=args,
-        ports=[k8s.ContainerPort(container_port=8080)],
-        # The OAuth callback must return to this port-forwarded pod, so
-        # EXTERNAL_URL is pinned to localhost:8080 (overrides the config host).
-        env=[k8s.EnvVar(name="EXTERNAL_URL", value="http://localhost:8080")],
-        env_from=env_from,
-        resources=SMALL_RESOURCES,
-    )
-    k8s.KubeJob(
-        scope,
-        id,
-        metadata=k8s.ObjectMeta(name=name, namespace=ns),
-        spec=k8s.JobSpec(
-            backoff_limit=0,
-            ttl_seconds_after_finished=600,
-            template=k8s.PodTemplateSpec(
-                spec=k8s.PodSpec(restart_policy="Never", containers=[container])
-            ),
-        ),
-    )
-
-
-def auth_bootstrap_bot(scope: Construct, env: EnvConfig) -> None:
-    """ESO-wired bot-account auth-bootstrap (credentialed envs)."""
-    _auth_bootstrap(
-        scope,
-        "auth-bootstrap-bot",
-        "tripbot-auth-bootstrap-bot",
-        env,
-        account="bot",
-        db_secret=DB_SECRET_NAME,
-        twitch_optional=False,
-    )
-
-
-def auth_bootstrap_broadcaster(scope: Construct, env: EnvConfig) -> None:
-    """ESO-wired broadcaster-account auth-bootstrap (credentialed envs)."""
-    _auth_bootstrap(
-        scope,
-        "auth-bootstrap-broadcaster",
-        "tripbot-auth-bootstrap-broadcaster",
-        env,
-        account="broadcaster",
-        db_secret=DB_SECRET_NAME,
-        twitch_optional=False,
-    )
-
-
-def local_auth_bootstrap(scope: Construct, env: EnvConfig) -> None:
-    """Laptop combined auth-bootstrap (secret.env-wired, no --account split)."""
-    _auth_bootstrap(
-        scope,
-        "auth-bootstrap",
-        "tripbot-auth-bootstrap",
-        env,
-        account=None,
-        db_secret=LOCAL_DB_SECRET,
-        twitch_optional=True,
-    )
 
 
 def seed(scope: Construct, env: EnvConfig) -> None:

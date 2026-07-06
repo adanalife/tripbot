@@ -41,10 +41,9 @@ services:
       - ./assets/video:/opt/data/Dashcam/_all:ro
     restart: unless-stopped
 
-  # onscreens-server used to be a second binary inside the vlc container; it now
-  # runs as its own service (mirrors the k8s split). Binds :8080 via the image's
-  # ONSCREENS_SERVER_BIND_ADDRESS env. tripbot reaches it at
-  # onscreens-server:8080.
+  # onscreens-server runs as its own service (mirrors the k8s split). Binds
+  # :8080 via the image's ONSCREENS_SERVER_BIND_ADDRESS env. tripbot reaches
+  # it at onscreens-server:8080.
   onscreens-server:
     image: adanalife/onscreens-server
     hostname: onscreens-server

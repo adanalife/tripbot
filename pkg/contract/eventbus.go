@@ -153,7 +153,6 @@ var (
 		{"login_as", strType(), false},
 		{"expires_at", dateType(), false},
 		{"reason", strType(), false},
-		{"init_url", strType(), false},
 	}
 	youtubeBroadcastFields = []field{
 		{"video_id", strType(), true},
