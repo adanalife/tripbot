@@ -242,6 +242,11 @@ func (a *App) findCmd(ctx context.Context, user *users.User, params []string) {
 	}
 	query := strings.Join(params, " ")
 
+	// Acknowledge immediately — the embed + pgvector search can take several
+	// seconds, and without a reply the command looks dead. Remove once the
+	// search is consistently fast.
+	a.Chat.Say(fmt.Sprintf("@%s 👀", user.Username))
+
 	hits, err := a.Search.Find(ctx, query)
 	if err != nil {
 		slog.ErrorContext(ctx, "find search failed", "err", err, "query", query)
