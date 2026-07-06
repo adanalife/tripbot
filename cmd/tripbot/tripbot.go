@@ -81,7 +81,7 @@ var version = "dev"
 
 // Tripbot holds the bot process's runtime dependencies and wiring. The boot
 // sequence (Run) and graceful shutdown are methods on it, so startup ordering
-// is explicit and the deps that used to be package-level globals are fields.
+// is explicit and the deps are fields rather than package-level globals.
 type Tripbot struct {
 	version string
 
@@ -140,7 +140,7 @@ type Tripbot struct {
 	flagClient feature.FlagClient
 
 	// gateway is the HTTP client for the platform-gateway — the single Helix
-	// caller since the cutover. Non-nil on a Twitch instance (TWITCH_API_URL is
+	// caller. Non-nil on a Twitch instance (TWITCH_API_URL is
 	// set); nil on a non-Twitch instance, which never reaches the Twitch Helix
 	// paths (all gated behind platformIsTwitch). The shared client the
 	// non-chatbot Helix callers (the OBS watchdog's live-check, the chat-send
@@ -580,10 +580,9 @@ func (t *Tripbot) startCron() {
 // Non-fatal: when the row is missing (e.g. auth-bootstrap hasn't run yet
 // against a freshly-restored DB) or the DB is briefly unreachable, the bot
 // comes up with limited functionality and polls in the background until the
-// token lands — rather than crashlooping. A crashing pod after a wipe also
-// raced the DB restore's migrate init (see the 2026-05-20 convergence-wipe
-// notes); staying up avoids that. The pod stays Ready throughout (readiness
-// no longer gates on Twitch) so the auth-links landing page + /auth/init are
+// token lands — rather than crashlooping (a crashlooping pod can also race a
+// concurrent DB restore's migrate init). The pod stays Ready throughout
+// (readiness doesn't gate on Twitch) so the auth-links landing page + /auth/init are
 // reachable to re-auth; "not in chat" is surfaced via the
 // tripbot_twitch_connected gauge instead.
 func (t *Tripbot) loadTwitchToken(ctx context.Context) {
@@ -715,8 +714,6 @@ func (t *Tripbot) gracefulShutdown() {
 	<-ctrlC
 
 	slog.Warn("caught CTRL-C, shutting down")
-	// anything below this probably won't be executed
-	// try and use !shutdown instead
 	//TODO: print different message if CurrentlyPlaying is ""
 	slog.Info("last played video", "file", t.player.Current().File())
 	if t.discordSession != nil {

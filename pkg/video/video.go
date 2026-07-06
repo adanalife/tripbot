@@ -42,10 +42,9 @@ func NewPlayer(onscreens onscreens, vlc *vlcClient.Client) *Player {
 
 // GetCurrentlyPlaying will use lsof to figure out
 // which dashcam video is currently playing (seriously).
-// ctx is forward-compat plumbing — vlc-client and onscreens-client don't
-// take ctx yet, so it's not propagated into their HTTP calls. Once they do,
-// trace spans for cron.video.GetCurrentlyPlaying ticks will nest the
-// underlying VLC poll and GPS-image toggles as children.
+// ctx carries the cron tick's trace span; it isn't propagated into the
+// vlc-client / onscreens-client HTTP calls (those clients don't take a ctx,
+// so the underlying VLC poll and GPS-image toggles don't nest as children).
 // TODO: consider making this return a video struct
 func (p *Player) GetCurrentlyPlaying(ctx context.Context) {
 	var err error
@@ -93,7 +92,7 @@ func (p *Player) GetCurrentlyPlaying(ctx context.Context) {
 
 		// show the no-GPS image
 		if p.CurrentlyPlaying.Flagged {
-			//TODO: kinda cludgy that we hardcode 60s here
+			// the duration is ignored — the server owns the GPS overlay's duration
 			p.onscreens.ShowGPSImage(ctx, 60*time.Second)
 		} else {
 			p.onscreens.HideGPSImage(ctx)

@@ -50,8 +50,8 @@ func (v Video) Location() (float64, float64, error) {
 	return v.Lat, v.Lng, err
 }
 
-// TODO: add color, include location/state/lat/lng?
-// TODO: where else does this get used tho?
+// String returns the slug, which callers (e.g. make-map's image filenames)
+// rely on as a stable identity — don't enrich it with display fields.
 // ex: 2018_0514_224801_013_a_opt
 func (v Video) String() string {
 	return v.Slug
@@ -62,7 +62,8 @@ func (v Video) String() string {
 // an example dashstr: 2018_0514_224801_013
 // ex: 2018_0514_224801_013
 func (v Video) DashStr() string {
-	//TODO: this never should have happened, but it did and it crashed the bot
+	// slugs shorter than 20 chars are malformed; return "" rather than
+	// panic on the slice below
 	if len(v.Slug) < 20 {
 		return ""
 	}

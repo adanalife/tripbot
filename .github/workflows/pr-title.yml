@@ -4,7 +4,7 @@ name: pr-title
 # pre-commit hook only guards local commits; because develop PRs squash-merge,
 # the PR *title* becomes the commit subject written to history, so it is
 # validated here. Mark this check "required" in branch protection to block
-# non-conforming titles. See vault/decisions/conventional-commits.md.
+# non-conforming titles.
 #
 # Scoped to develop-targeting PRs only: release PRs to master merge-commit
 # (not squash), so their title (`Release vX.Y.Z`) never becomes a commit

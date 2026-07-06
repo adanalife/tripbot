@@ -1,4 +1,3 @@
-// TODO: this would be better as just 'db'
 package database
 
 import (

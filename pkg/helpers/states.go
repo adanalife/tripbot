@@ -12,8 +12,8 @@ func StateAbbrevToState(abbrev string) string {
 
 func StateToStateAbbrev(state string) string {
 	// Case-insensitive lookup so names like "district of columbia" still
-	// resolve. strings.Title was previously used but mis-capitalised the
-	// internal "of"/"and" words in multi-word names.
+	// resolve (title-casing the input would mis-capitalise the internal
+	// "of"/"and" words in multi-word names).
 	want := strings.ToLower(state)
 	for abbrev, name := range stateAbbrevs {
 		if strings.ToLower(name) == want {

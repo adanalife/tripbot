@@ -45,8 +45,7 @@ func installMockDB(t *testing.T) sqlmock.Sqlmock {
 }
 
 // recordingOnscreens is an interface fake satisfying the Player's onscreens
-// dependency, capturing each GPS overlay call by method name. Replaces the
-// old httptest-backed rig now that Player takes an interface.
+// dependency, capturing each GPS overlay call by method name.
 type recordingOnscreens struct {
 	calls []string
 }

@@ -84,7 +84,7 @@ var CarSoundSelections = carSoundSelectionsIface{counter: carSoundSelections}
 var TwitchAudience = twitchAudienceIface{subscribers: twitchSubscribers, followers: twitchFollowers}
 
 // TwitchConnection exposes the chat-connection gauge. Set(true) on IRC
-// connect, Set(false) on disconnect. Readiness no longer gates on the Twitch
+// connect, Set(false) on disconnect. Readiness doesn't gate on the Twitch
 // connection (the pod stays in the Service so the re-auth page is reachable),
 // so this gauge — alongside the admin-panel status row — is what surfaces
 // "up but not in chat" to dashboards and alerts.

@@ -139,7 +139,6 @@ func (s *Server) faviconHandler(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, "assets/favicon.ico")
 }
 
-// TODO: use more StatusExpectationFailed instead of http.StatusUnprocessableEntity
 func (s *Server) catchAllHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":

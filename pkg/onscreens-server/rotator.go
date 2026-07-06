@@ -27,9 +27,8 @@ const rareOdds = 10000
 //   - Platforms scopes the line to specific streaming platforms; empty means
 //     "all platforms". This is what keeps a YouTube overlay from advertising
 //     Twitch-only commands (!miles, !guess).
-//   - Weight biases weighted-random selection (<1 is treated as 1). It replaces
-//     the old "list the same line twice" trick for making a message more
-//     frequent.
+//   - Weight biases weighted-random selection (<1 is treated as 1), making a
+//     message proportionally more frequent without listing it twice.
 //
 // The hardcoded slices are the current source of truth; this struct is also the
 // seam for a future admin-console-editable source (swap the slice for a loaded
