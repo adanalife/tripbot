@@ -286,8 +286,11 @@ ENVS: dict[str, EnvConfig] = {
         priority_class="prod-stream",
         vlc_cpu_request="1",
         # Stable LAN endpoint for pulling the dashcam RTSP feed off-cluster
-        # (e.g. OBS on a desktop) without kubectl: rtsp://<minipc-ip>:30854/dashcam
-        # (TCP transport). Distinct from any future stage NodePort (same node).
+        # (e.g. OBS on a desktop) without kubectl: rtsp://<minipc-ip>:30854/dashcam.
+        # UDP transport only — the libvlc RTSP sout answers SETUP with 461
+        # Unsupported for TCP interleave, so a kubectl port-forward (TCP-only)
+        # can't carry the media; the NodePort is the sole off-cluster path.
+        # Stage uses a distinct port (the two envs co-tenant the one node).
         vlc_rtsp_node_port=30854,
     ),
     "stage-1": EnvConfig(
@@ -305,6 +308,11 @@ ENVS: dict[str, EnvConfig] = {
         # vlc doesn't need the iGPU (stream-copy + trivial software decode);
         # vlc_gpu=False keeps stage vlc from claiming it.
         vlc_gpu=False,
+        # LAN endpoint to watch the stage dashcam feed off-cluster (find/guess
+        # testing) without kubectl: rtsp://<minipc-ip>:30855/dashcam over UDP
+        # (see the prod note above re: why UDP + why port-forward can't work).
+        # 30855 is distinct from prod's 30854 — same node can't reuse a NodePort.
+        vlc_rtsp_node_port=30855,
         dashcam_mode="nfs",
         tailscale=True,
         # Prefer the ephemeral arm64 rpi5 worker for stage's stateless app pods
