@@ -20,6 +20,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/telemetry"
 	vlcServer "github.com/adanalife/tripbot/pkg/vlc-server"
 	"github.com/getsentry/sentry-go"
+	"github.com/nats-io/nats.go"
 )
 
 // version is overridable at build time via -ldflags "-X main.version=...".
@@ -54,15 +55,20 @@ func main() {
 
 	// Connect to NATS so Server.Start can attach the command subscribers.
 	// Optional — when NATS_URL is empty the conn is nil and the subscriber
-	// registration is skipped; HTTP remains the sole transport.
-	natsclient.Connect(c.Conf.NatsURL, "vlc-server")
-
-	// Declare the lastplayed last-value-cache stream before the first play —
-	// a core publish to a subject no stream covers is silently uncaptured.
-	// Best-effort: resume-on-restart degrades to PlayRandom without it.
-	if err := vlcServer.EnsureLastPlayedStream(shutdownCtx, natsclient.JetStream(), c.Conf.Environment); err != nil {
-		slog.Warn("lastplayed stream setup failed; resume-on-restart disabled", "err", err)
-	}
+	// registration is skipped; HTTP remains the sole transport. A failed dial
+	// retries in the background (boot race) with subscriptions replayed on
+	// connect, so the subscribers below bind either way.
+	//
+	// The lastplayed last-value-cache stream is declared in the on-connect
+	// callback — a core publish to a subject no stream covers is silently
+	// uncaptured, and declaring on connect works even when the client wins
+	// the boot race and connects late. Best-effort: resume-on-restart
+	// degrades to PlayRandom without it.
+	natsclient.Connect(c.Conf.NatsURL, "vlc-server", func(*nats.Conn) {
+		if err := vlcServer.EnsureLastPlayedStream(shutdownCtx, natsclient.JetStream(), c.Conf.Environment); err != nil {
+			slog.Warn("lastplayed stream setup failed; resume-on-restart disabled", "err", err)
+		}
+	})
 
 	// await graceful shutdown signal
 	listenForShutdown()

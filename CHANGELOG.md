@@ -9,6 +9,20 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v3.12.0] — 2026-07-06
+
+### Chatbot
+
+- **New `!find` command — natural-language visual search over the dashcam corpus that jumps the stream to the closest matching moment.** This is the tripbot read-side consumer of the corpus embeddings (now seeded in prod). Ships dormant behind the `chatbot.find` feature flag and stays fully silent until enabled. The embed-responder deployment (video-pipeline) is out of scope — flip the flag on once it's live. ([#879](https://github.com/adanalife/tripbot/pull/879))
+- Persist the viewer-count and video-play signals into new append-only `video_plays` + `viewer_samples` tables (migration 033), so footage-performance history accrues durably instead of vanishing with each fire-and-forget NATS emission
+- Raise the `!find` match ceiling (`findMaxDistance` 0.82 → 0.93) so real matches land. Calibrated on the stage corpus: the old ceiling rejected every query, including known-good ones.
+- Seed the `chatbot.find` feature flag (disabled) so the console can toggle `!find` on.
+- `!find` is now subscriber-only and replies with 👀 the moment it's invoked, so a slow search reads as "working" rather than dead. Twitch-only for now (removed from the YouTube command allowlist).
+
+### Fixes
+
+- NATS connections now retry a failed initial connect forever instead of leaving the process permanently deaf. A boot race (node reboot bringing apps and NATS up together) previously killed timewarps, overlays, and `!guess` scoring integrity until a manual restart; now subscriptions replay and JetStream streams declare automatically when the connection lands.
+
 ## [v3.11.0] — 2026-07-06
 
 ### Platform gateway
