@@ -16,13 +16,10 @@ import (
 	"github.com/hako/durafmt"
 )
 
-//TODO: consider moving this whole thing elsewhere (to background perhaps?)
-
 // Sessions tracks the users currently logged in to one platform's chat plus
-// the derived lifetime-miles leaderboard. It owns what used to be the
-// package-level LoggedIn map and LifetimeMilesLeaderboard slice, so a single
-// process holds exactly one Sessions and a per-platform bot instance gets its
-// own (the prerequisite for running, e.g., a YouTube bot beside the Twitch
+// the derived lifetime-miles leaderboard. The state lives on the struct, not
+// in package-level globals, so a per-platform bot instance gets its own
+// (the prerequisite for running, e.g., a YouTube bot beside the Twitch
 // one). Its view of who is in chat comes from an injected ChatterSource.
 type Sessions struct {
 	source ChatterSource

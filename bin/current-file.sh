@@ -8,7 +8,6 @@ elif [[ "$OSTYPE" == "darwin"* ]]; then
   PIDFILE="run/OBS.pid"
 fi
 
-#TODO: check for presence of file here
 if [ ! -f "$PIDFILE" ]; then
   echo "Pidfile not found. Is OBS(OS X)/VLC(linux) running??"
   exit 2

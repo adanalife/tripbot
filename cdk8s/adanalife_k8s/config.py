@@ -157,11 +157,10 @@ class EnvConfig:
         platform is parked (rendered but off), else the env-wide `replicas`."""
         return 0 if platform in self.parked_platforms else self.replicas
 
-    # The platform-gateway gateway-twitch URL the chatbot routes its command-time
-    # Helix calls through (Phase 3). Empty keeps tripbot's in-process pkg/twitch
-    # path; set per env to flip App.Twitch to the HTTP client. Stage points at
-    # its in-namespace gateway-twitch Service; prod stays in-process until the
-    # gateway's prod release is cut + proven.
+    # The platform-gateway gateway-twitch URL a twitch instance routes its
+    # Helix calls through — the gateway is tripbot's sole Helix caller. Empty
+    # leaves the gateway unwired (local/CI only): the Twitch audience/follower/
+    # broadcaster-send features are disabled.
     twitch_api_url: str = ""
     # Like twitch_api_url, but for a youtube instance's outbound chat sends:
     # gateway-youtube's URL routes them through the platform-gateway
@@ -243,10 +242,9 @@ ENVS: dict[str, EnvConfig] = {
         binary_env="production",
         deployment_env="prod-1",
         gpu=True,
-        # vlc doesn't need the iGPU (stream-copy + software decode); dropping its
-        # claim frees an iGPU slot and eases co-tenant contention (the 2026-06-11
-        # prod-stutter incident). OBS keeps the iGPU for VAAPI encode (sized in the
-        # obs repo now). Proven on stage first, then prod on the live twitch stream.
+        # vlc doesn't need the iGPU (stream-copy + software decode); leaving its
+        # claim off frees an iGPU slot and eases co-tenant contention. OBS keeps
+        # the iGPU for VAAPI encode (sized in the obs repo).
         vlc_gpu=False,
         dashcam_mode="nfs",
         dashcam_source="local",  # serve the corpus off the minipc's local NVMe copy
@@ -304,10 +302,8 @@ ENVS: dict[str, EnvConfig] = {
         binary_env="staging",
         deployment_env="stage-1",
         gpu=True,
-        # vlc's iGPU claim proven unnecessary 2026-06-13 (stream-copy + trivial
-        # software decode). Re-asserting vlc_gpu=False here — it was lost when the
-        # app workloads moved from infra into this repo (the cdk8s-into-repo
-        # cutover dropped the flag, so stage vlc silently reclaimed the iGPU).
+        # vlc doesn't need the iGPU (stream-copy + trivial software decode);
+        # vlc_gpu=False keeps stage vlc from claiming it.
         vlc_gpu=False,
         dashcam_mode="nfs",
         tailscale=True,
@@ -324,29 +320,24 @@ ENVS: dict[str, EnvConfig] = {
         # in stage-1-data, so a `kubectl delete ns stage-1` can't take the DB. prod
         # follows on its next wipe (set prod-1's data_namespace to prod-1-data).
         data_namespace="stage-1-data",
-        # The YouTube platform stack burns in on stage first (tripbot-youtube
-        # binds chat once a broadcast is live; vlc-youtube self-sustains). prod
-        # follows once the stage burn-in + dual-iGPU-encode validation pass.
+        # New platform stacks burn in on stage first (tripbot-youtube binds
+        # chat once a broadcast is live; vlc-youtube self-sustains).
         #
-        # twitch is back ON (2026-06-19) to test the platform-gateway end to
-        # end: stage tripbot-twitch routes its Helix calls through gateway-twitch
-        # (twitch_api_url below). The 2026-06-11 prod-stutter that forced twitch
-        # OFF here was the stage twitch *VLC decode + OBS render* contending for
-        # the shared iGPU — so only tripbot-twitch (no GPU) is meant to run;
-        # vlc/onscreens-twitch stay scaled to 0 (manual_replicas below + stage
-        # selfHeal off, so a hand/console scale sticks). Budget is still two live
-        # streams total: prod-twitch + stage-youtube.
+        # Stage twitch is meant to run tripbot-twitch ONLY: stage twitch VLC
+        # decode + OBS render contending for the shared iGPU is what stutters
+        # the prod stream, so vlc/onscreens-twitch stay scaled to 0
+        # (manual_replicas below + stage selfHeal off, so a hand/console scale
+        # sticks). Budget is two live streams total: prod-twitch + stage-youtube.
         platforms=("youtube", "twitch"),
         # Stage components are scaled up/down by hand (only tripbot-twitch runs
-        # for the gateway test); omit replicas so Argo doesn't reset them.
+        # on the twitch side); omit replicas so Argo doesn't reset them.
         manual_replicas=True,
-        # Route stage tripbot's command-time Helix calls through the in-namespace
-        # gateway-twitch gateway (Phase 3). prod stays in-process until its gateway
-        # release is cut.
+        # Route stage tripbot-twitch's Helix calls through the in-namespace
+        # gateway-twitch.
         twitch_api_url="http://gateway-twitch.stage-1.svc.cluster.local:8080",
         # Route stage tripbot-youtube's outbound chat sends through the
         # in-namespace gateway-youtube (unconditionally — no flag). The inbound
-        # poll stays in-process. prod has no youtube instance yet.
+        # poll stays in-process.
         youtube_api_url="http://gateway-youtube.stage-1.svc.cluster.local:8080",
         # Guardrail from the same incident: cap what stage can request in
         # aggregate, so "accidentally scaled up too many stage deployments"

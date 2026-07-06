@@ -210,7 +210,6 @@ func gracefulShutdown() {
 	<-ctrlC
 
 	slog.Warn("caught CTRL-C, shutting down")
-	// anything below this probably won't be executed
 	if srv != nil {
 		drainCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		srv.Shutdown(drainCtx)

@@ -227,9 +227,9 @@ def test_stage_obs_feeders_colocate_with_obs():
     """vlc + onscreens feed OBS continuously (RTSP / browser-source) and must reach
     it on localhost, not across the LAN. They anchor to their platform's OBS pod
     via podAffinity instead of pulling toward the Pi on their own — keeping the
-    rpi5 toleration so they can follow OBS onto the Pi, but NOT the board
-    node-affinity that previously split the pipeline when OBS spilled to the MS-01
-    (the 2026-06-19 stage obs-youtube stutter)."""
+    rpi5 toleration so they can follow OBS onto the Pi, but NOT an independent
+    board node-affinity, which splits the pipeline across nodes (and stutters
+    the stream) whenever OBS spills to the MS-01."""
     for stem in ("stage-1-vlc-youtube", "stage-1-onscreens-youtube"):
         spec = _pod_spec(stem)
         assert _colocates_with_obs(spec, "obs-youtube"), stem
@@ -237,5 +237,5 @@ def test_stage_obs_feeders_colocate_with_obs():
         assert any(
             t.get("key") == "dana.lol/rpi5" for t in spec.get("tolerations", [])
         ), stem
-        # ... but no longer carries an independent rpi5 board pull.
+        # ... but carries no independent rpi5 board pull.
         assert not _prefers_rpi5(spec), stem

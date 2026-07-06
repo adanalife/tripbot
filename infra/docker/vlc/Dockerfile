@@ -38,8 +38,7 @@ ENV GOPATH="/go"
 
 EXPOSE 8080
 
-# Static configs baked into the image; the entrypoint no longer regenerates
-# these via heredocs at boot.
+# Static configs baked into the image.
 COPY infra/docker/vlc/config/syslog.conf /etc/supervisor/conf.d/syslog.conf
 COPY infra/docker/vlc/config/vlc.conf /etc/supervisor/conf.d/vlc.conf
 

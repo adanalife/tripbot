@@ -160,8 +160,7 @@ def config_data(env: EnvConfig, platform: str) -> dict[str, str]:
     # OBS WebSocket control addr (port 4455) — distinct from OBS_SERVER_HOST's
     # :8080 Flask health server. Read directly by tripbot's pkg/obs (watchdog +
     # stream start/stop); must be per-platform so the YouTube stack dials
-    # obs-youtube, not obs-twitch. Was previously unset, leaving pkg/obs on its
-    # stale "obs:4455" default after OBS went per-platform.
+    # obs-youtube, not obs-twitch.
     data["OBS_WEBSOCKET_ADDR"] = f"{app_name('obs', platform)}:4455"
     # tripbot's Run() branches on STREAM_PLATFORM (chat transport, command
     # allowlist, Twitch-only boot steps). twitch is the binary's default, so —
@@ -176,7 +175,7 @@ def config_data(env: EnvConfig, platform: str) -> dict[str, str]:
     if env.nats_url:
         data["NATS_URL"] = env.nats_url
     # Route the twitch instance's command-time Helix calls through the
-    # platform-gateway gateway-twitch (Phase 3) where the env opts in. Only the
+    # platform-gateway gateway-twitch where the env wires it. Only the
     # twitch platform talks Helix, so the youtube instance never carries it.
     if platform == "twitch" and env.twitch_api_url:
         data["TWITCH_API_URL"] = env.twitch_api_url

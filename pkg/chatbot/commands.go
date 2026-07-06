@@ -435,7 +435,6 @@ func (a *App) dateCmd(ctx context.Context, user *users.User, _ []string) {
 	}
 }
 
-// TODO: refactor to use golang '...' syntax
 func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 	slog.InfoContext(ctx, "ran !guess", "username", user.Username)
 	var msg string
@@ -508,7 +507,6 @@ func (a *App) stateCmd(ctx context.Context, user *users.User, _ []string) {
 }
 
 // TODO: maybe there could be a !cancel command or something
-// TODO: use fancy golang ... syntax?
 func (a *App) reportCmd(ctx context.Context, user *users.User, params []string) {
 	slog.InfoContext(ctx, "ran !report", "username", user.Username)
 	message := strings.Join(params, " ")

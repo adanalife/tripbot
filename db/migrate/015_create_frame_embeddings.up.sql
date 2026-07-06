@@ -1,6 +1,6 @@
--- Visual-search frame embeddings for the dashcam corpus (see tripbot/cv/ and
--- vault/tripbot/dashcam-cv-plan.md). Requires the pgvector extension, which the
--- postgres image provides (pgvector/pgvector:pg16).
+-- Visual-search frame embeddings for the dashcam corpus (see tripbot/cv/).
+-- Requires the pgvector extension, which the postgres image provides
+-- (pgvector/pgvector:pg16).
 CREATE EXTENSION IF NOT EXISTS vector;
 
 CREATE TABLE frame_embeddings (
