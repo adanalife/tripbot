@@ -9,6 +9,29 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v3.11.0] — 2026-07-06
+
+### Platform gateway
+
+- Completed the Twitch cutover: the platform-gateway is now the unconditional single Helix caller. The `chatbot.twitch_gateway` flag and the in-process `pkg/twitch` query path (subscriber/follower/chatter polls, follow lookups, broadcaster chat-send, live-check) are removed; migration 029 drops the now-dead flag row. Token read for IRC/EventSub is unchanged. ([#1038](https://github.com/adanalife/tripbot/pull/1038))
+- Removed tripbot's Twitch OAuth consent bootstrap — `cmd/auth-bootstrap`, the `/auth/*` handlers + login page, `pkg/server/oauthstate`, and `GenerateUserAccessToken`. The platform-gateway owns consent + refresh now (it writes the `oauth_tokens` rows); tripbot stays a token reader for IRC + EventSub. The `auth.status` snapshot drops `init_url` — the console derives the re-auth link from the gateway host (like it already does for YouTube). ([#1040](https://github.com/adanalife/tripbot/pull/1040))
+
+### Chatbot
+
+- Rollup schema: `user_rollups` + `rollup_watermarks` + `scoreboard_snapshots` tables — derived-state substrate for the events rollup reconciler (worker in a follow-up PR) ([#1007](https://github.com/adanalife/tripbot/pull/1007))
+- Monthly scoreboards are platform-scoped (`UNIQUE(name, platform)`, reads + creates filter by `STREAM_PLATFORM`), and `scores` gains the `UNIQUE(user_id, scoreboard_id)` constraint after merging historical duplicate pairs ([#1011](https://github.com/adanalife/tripbot/pull/1011))
+- Log subscriber-lifecycle events (`subscribe` on `channel.subscribe`, `unsubscribe` on `channel.subscription.end`) and record `extra_miles_earned` on logout events — the community sub-grant + 5% subscriber-bonus portion of a session the login/logout pairing can't reconstruct. Substrate for retroactively reconstructing true display miles as `events_miles + SUM(extra_miles_earned)`; logged at source now, not yet consumed by the rollup. ([#1039](https://github.com/adanalife/tripbot/pull/1039))
+- The events rollup now aggregates `extra_miles_earned` into a new `user_rollups.extra_miles` column, and a new admin `!givemiles <user> <amount>` command applies manual miles corrections (may be negative) as auditable `correction` events. Reconstructed display miles ≈ `events_miles + extra_miles`, where `extra_miles` sums the sub-grant, 5%-bonus, and manual-correction portions the login/logout pairing can't see — while `events_miles` stays the pure pairing base (its delta from `users.miles` is the drift alarm). ([#1041](https://github.com/adanalife/tripbot/pull/1041))
+
+### VLC
+
+- **Two new vlc-server gauges: `vlc_player_time_remaining_seconds` and `vlc_player_progress_fraction`.** Time-remaining is clip length minus the current playhead; progress is 0..1 through the current clip. Both are computed from libvlc's `MediaLength` / `MediaTime` / `MediaPosition` inside the existing `pollStats` loop (no new poller) and fold into the `VLCPlayerStats` snapshot. Useful for stream-health dashboards — anticipate clip transitions and spot stuck playheads. ([#890](https://github.com/adanalife/tripbot/pull/890))
+- **New `tripbot_current_state` gauge exposes which US state the dashcam playhead is currently in.** A labeled gauge (`tripbot_current_state{state="MO"} 1`) sourced from `pkg/video.Current().State` at the existing video-transition site. On each transition the new state's series is set to `1` and the previously-active series cleared to `0`, so exactly one series reads `1` at a time — no stale `=1` series linger. ([#891](https://github.com/adanalife/tripbot/pull/891))
+
+### Misc
+
+- - Added `task cdk8s:verify` — the synth → diff dist/ → synth-time-checks loop as one command ([#1037](https://github.com/adanalife/tripbot/pull/1037))
+
 ## [v3.10.3] — 2026-07-04
 
 ### Platform gateway
