@@ -43,6 +43,7 @@ concurrency:
 jobs:
   pending-release:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Mint automation app token
         id: app-token
@@ -51,7 +52,7 @@ jobs:
           app-id: ${{ vars.AUTOMATION_APP_ID }}
           private-key: ${{ secrets.AUTOMATION_APP_PRIVATE_KEY }}
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           ref: develop

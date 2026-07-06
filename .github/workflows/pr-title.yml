@@ -27,6 +27,7 @@ jobs:
   conventional:
     name: conventional
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - if: github.head_ref != 'backmerge/master-to-develop'
         uses: amannn/action-semantic-pull-request@v6

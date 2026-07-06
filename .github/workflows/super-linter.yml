@@ -1,17 +1,19 @@
 ---
 name: super-linter
 
+# Weekly sweep + on-demand, not a per-PR gate: pre-commit and the reviewdog
+# linting workflow already cover the per-PR lint surface; super-linter catches
+# the long-tail validators on a schedule instead of gating every push.
 on:
-  pull_request:
-  push:
-    branches:
-      - develop
-      - master
+  schedule:
+    - cron: '7 9 * * 1' # Mondays 09:07 UTC
+  workflow_dispatch:
 
 jobs:
   build:
     name: Run Linters
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       # fetch-depth: 0 is required by super-linter v6+: it diffs against
@@ -24,6 +26,8 @@ jobs:
         uses: super-linter/super-linter@v8
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # No PR diff to scope to on a schedule — lint the whole tree.
+          VALIDATE_ALL_CODEBASE: true
           # don't post a "Super-linter summary" comment on every PR run
           # (the Actions step summary tab still gets the same content)
           ENABLE_GITHUB_PULL_REQUEST_SUMMARY_COMMENT: false

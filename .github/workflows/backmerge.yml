@@ -39,6 +39,7 @@ concurrency:
 jobs:
   backmerge:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       BRANCH: backmerge/master-to-develop
     steps:
@@ -49,7 +50,7 @@ jobs:
           app-id: ${{ vars.AUTOMATION_APP_ID }}
           private-key: ${{ secrets.AUTOMATION_APP_PRIVATE_KEY }}
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           ref: develop

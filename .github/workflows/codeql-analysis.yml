@@ -1,25 +1,21 @@
 name: codeql-analysis
 
+# No schedule trigger: every PR and every push to develop/master already gets
+# analyzed, so a weekly cron re-scanning the same HEAD was duplicate work.
 on:
   pull_request:
   push:
     branches: [ develop, master ]
-  schedule:
-    #         ┌───────────── minute (0 - 59)
-    #         │  ┌───────────── hour (0 - 23)
-    #         │  │ ┌───────────── day of the month (1 - 31)
-    #         │  │ │ ┌───────────── month (1 - 12 or JAN-DEC)
-    #         │  │ │ │ ┌───────────── day of the week (0 - 6 or SUN-SAT)
-    #         │  │ │ │ │
-    #         │  │ │ │ │
-    #         │  │ │ │ │
-    #         *  * * * *
-    - cron: '34 22 * * 4'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   analyze:
     name: Analyze
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     strategy:
       fail-fast: false
