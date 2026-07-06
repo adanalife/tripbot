@@ -1,6 +1,19 @@
 name: testing
 on:
   pull_request:
+    # Docs/cdk8s/workflow-only PRs don't need the compose test stack. Push
+    # to develop/master and tag builds stay unfiltered as the safety net.
+    paths:
+      - 'cmd/**'
+      - 'pkg/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'db/**'
+      - 'configs/**'
+      - 'assets/**'
+      - 'infra/docker/**'
+      - 'Taskfile.yml'
+      - '.github/workflows/testing.yml'
   push:
     branches:
       - develop
