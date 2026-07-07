@@ -202,6 +202,15 @@ func TestReportCmd_AcksViaIRC(t *testing.T) {
 	}
 }
 
+func TestReportReporter_AnonymizesYouTube(t *testing.T) {
+	if got := reportReporter(platformYouTube, "someviewer"); got != "a youtube viewer" {
+		t.Errorf("youtube reporter = %q, want it anonymized (no viewer name in report sinks)", got)
+	}
+	if got := reportReporter(platformTwitch, "someviewer"); got != "someviewer" {
+		t.Errorf("twitch reporter = %q, want the username preserved", got)
+	}
+}
+
 func TestIsDiscordWebhookURL(t *testing.T) {
 	cases := []struct {
 		name string
