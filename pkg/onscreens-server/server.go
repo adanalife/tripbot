@@ -42,7 +42,6 @@ type Config struct {
 type Server struct {
 	Version string
 
-	Flag         *Onscreen
 	GPS          *Onscreen
 	Leaderboard  *Onscreen
 	LeftRotator  *Onscreen
@@ -53,7 +52,7 @@ type Server struct {
 	http *http.Server
 }
 
-// New constructs a *Server with all seven onscreens initialised and
+// New constructs a *Server with all six onscreens initialised and
 // their background loops (rotators, expiry sweepers) running. It does
 // not bind any sockets — Start does that.
 func New(cfg Config) *Server {
@@ -64,7 +63,6 @@ func New(cfg Config) *Server {
 	leftRotator, rightRotator := startRotators()
 	return &Server{
 		Version:      version,
-		Flag:         newFlagOnscreen(),
 		GPS:          newGPSOnscreen(),
 		Leaderboard:  newLeaderboardOnscreen(),
 		LeftRotator:  leftRotator,
@@ -108,8 +106,8 @@ func (s *Server) Start(ctx context.Context) error {
 	// version endpoint — returns build metadata as JSON
 	r.Handle("/version", tagged("/version", s.versionHandler)).Methods("GET", "HEAD")
 
-	// onscreen endpoints — commands (middle / leaderboard / timewarp / gps /
-	// flag) arrive over NATS now (see nats.go); only the browser-source feeds
+	// onscreen endpoints — commands (middle / leaderboard / timewarp / gps)
+	// arrive over NATS now (see nats.go); only the browser-source feeds
 	// remain on HTTP: state JSON, per-onscreen HTML pages, and image assets.
 	osc := r.PathPrefix("/onscreens").Methods("GET").Subrouter()
 	osc.Handle("/state.json", tagged("/onscreens/state.json", s.onscreensStateHandler))

@@ -22,7 +22,6 @@ func TestSubjects(t *testing.T) {
 		{"gps.show", GPSShowSubject("staging", "twitch"), "tripbot.staging.onscreens.gps.show.twitch"},
 		{"gps.hide", GPSHideSubject("staging", "twitch"), "tripbot.staging.onscreens.gps.hide.twitch"},
 		{"location.update", LocationUpdateSubject("prod", "youtube"), "tripbot.prod.onscreens.location.update.youtube"},
-		{"flag.hide", FlagHideSubject("prod", "twitch"), "tripbot.prod.onscreens.flag.hide.twitch"},
 	}
 	for _, tc := range cases {
 		if tc.got != tc.want {

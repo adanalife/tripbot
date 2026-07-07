@@ -49,13 +49,9 @@ const (
 	// findJumpLeadInSec lands the playhead this many seconds BEFORE the matched
 	// frame, so the moment is still upcoming when playback resumes (we don't
 	// want to land right on it and have it slip past on stream) and so it plays
-	// out in view after the seam overlay clears rather than being hidden by it.
-	// Slightly more than findSeamCoverDuration so a few seconds of run-up show
-	// uncovered before the moment itself. The vlc client clamps a resulting
-	// negative timestamp to start-of-clip.
+	// out in view after the warp overlay clears rather than being hidden by it.
+	// The vlc client clamps a resulting negative timestamp to start-of-clip.
 	findJumpLeadInSec = 12.0
-	// findSeamCoverDuration is how long the flag overlay hides the jump seam.
-	findSeamCoverDuration = 10 * time.Second
 )
 
 // findFlagKey gates !find. Off until the flag exists + is enabled in the
@@ -305,6 +301,13 @@ func (a *App) findCmd(ctx context.Context, user *users.User, params []string) {
 	}
 
 	hit := pickFindHit(hits)
+
+	// Don't name the state — a viewer can still guess where this is.
+	a.Chat.Say(fmt.Sprintf("Found %q! Jumping there...", query))
+
+	// Cover the jump with the full-screen warp overlay, same as !timewarp/!guess.
+	a.showTimewarpOverlay(ctx, user.Username)
+
 	// Land ahead of the matched frame so the moment doesn't slip past on stream.
 	if err := a.VLC.PlayFileAtTimestamp(ctx, hit.Slug+".MP4", hit.TsSec-findJumpLeadInSec); err != nil {
 		slog.ErrorContext(ctx, "find jump failed", "err", err, "slug", hit.Slug)
@@ -312,15 +315,6 @@ func (a *App) findCmd(ctx context.Context, user *users.User, params []string) {
 		return
 	}
 
-	msg := fmt.Sprintf("Found %q", query)
-	if hit.State != "" {
-		msg += " in " + helpers.TitlecaseState(hit.State)
-	}
-	a.Chat.Say(msg + "! Jumping there...")
-
-	// refresh the current-video record and cover the jump seam with the flag
-	// overlay, same sequence as !goto.
 	a.Video.GetCurrentlyPlaying(ctx)
-	a.Onscreens.ShowFlag(ctx, findSeamCoverDuration)
 	lastTimewarpTime = time.Now()
 }

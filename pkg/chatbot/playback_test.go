@@ -229,9 +229,9 @@ func TestJumpCmd_AdminPlaysRandomFromState(t *testing.T) {
 		t.Errorf("expected one %s VLC call, got %v", wantVLC, recVLC.Calls)
 	}
 
-	// Onscreens: ShowFlag for the state's flag overlay.
-	if len(recOverlay.Calls) != 1 || !strings.HasPrefix(recOverlay.Calls[0], "ShowFlag(") {
-		t.Errorf("expected one ShowFlag overlay call, got %v", recOverlay.Calls)
+	// Onscreens: !jump drives no overlay.
+	if len(recOverlay.Calls) != 0 {
+		t.Errorf("expected no overlay calls, got %v", recOverlay.Calls)
 	}
 
 	// IRC: a "Jumping to California...!" message.
@@ -263,7 +263,7 @@ func TestJumpCmd_NoFootageForState(t *testing.T) {
 		t.Errorf("expected single FindRandomByState(\"wyoming\"), got %v", recVideo.Calls)
 	}
 
-	// No VLC handoff, no flag overlay.
+	// No VLC handoff, no overlay.
 	if len(recVLC.Calls) != 0 {
 		t.Errorf("expected no VLC calls on no-footage path, got %v", recVLC.Calls)
 	}

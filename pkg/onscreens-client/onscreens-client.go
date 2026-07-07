@@ -81,13 +81,6 @@ func (c *Client) ShowTimewarp(ctx context.Context, username string) error {
 	return nil
 }
 
-func (c *Client) ShowFlag(ctx context.Context, dur time.Duration) error {
-	// flag.show is disabled — there's no subject in the taxonomy, so nothing
-	// is published.
-	//TODO: bring this back
-	return nil
-}
-
 // UpdateLocation publishes the currently-playing clip's location + date for the
 // rotators to surface on a bot-less YouTube stream (see oe.LocationData).
 // Fire-and-forget; tripbot republishes on a timer.

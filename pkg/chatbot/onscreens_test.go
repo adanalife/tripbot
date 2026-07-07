@@ -3,14 +3,12 @@ package chatbot
 import (
 	"context"
 	"fmt"
-	"time"
 )
 
 // noopOnscreens satisfies Onscreens for tests that don't care about the
 // overlay surface — it just swallows every call.
 type noopOnscreens struct{}
 
-func (noopOnscreens) ShowFlag(_ context.Context, _ time.Duration) error               { return nil }
 func (noopOnscreens) ShowLeaderboard(_ context.Context, _ string, _ [][]string) error { return nil }
 func (noopOnscreens) HideMiddleText(_ context.Context) error                          { return nil }
 func (noopOnscreens) ShowMiddleText(_ context.Context, _ string) error                { return nil }
@@ -23,10 +21,6 @@ type recordingOnscreens struct {
 	Calls []string
 }
 
-func (r *recordingOnscreens) ShowFlag(_ context.Context, dur time.Duration) error {
-	r.Calls = append(r.Calls, fmt.Sprintf("ShowFlag(%s)", dur))
-	return nil
-}
 func (r *recordingOnscreens) ShowLeaderboard(_ context.Context, title string, lb [][]string) error {
 	r.Calls = append(r.Calls, fmt.Sprintf("ShowLeaderboard(%q, %d rows)", title, len(lb)))
 	return nil

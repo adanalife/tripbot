@@ -171,15 +171,6 @@ func TestHandleGPSShowHide(t *testing.T) {
 	}
 }
 
-func TestHandleFlagHide(t *testing.T) {
-	s := &Server{Flag: newFlagOnscreen()}
-	s.Flag.Show("")
-	s.handleFlagHide(emptyMsg("tripbot.test.onscreens.flag.hide"))
-	if s.Flag.IsShowing {
-		t.Error("Flag.IsShowing = true, want false after hide")
-	}
-}
-
 // TestHideLenientOnEmptyBody asserts a hide with a nil/garbage body still
 // hides — the subject is the whole intent.
 func TestHideLenientOnEmptyBody(t *testing.T) {

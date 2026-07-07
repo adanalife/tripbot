@@ -154,19 +154,6 @@ func TestEmptyPayloadCommandsPublish(t *testing.T) {
 	}
 }
 
-// TestShowFlagDoesNotPublish asserts the disabled flag.show stays a no-op
-// (no subject in the taxonomy, so nothing is published).
-func TestShowFlagDoesNotPublish(t *testing.T) {
-	rec := &recordingPublisher{}
-	c := New(rec, "stage", "twitch")
-	if err := c.ShowFlag(context.Background(), 10); err != nil {
-		t.Fatalf("ShowFlag: %v", err)
-	}
-	if len(rec.Publishes) != 0 {
-		t.Errorf("expected 0 publishes for disabled flag.show, got %d", len(rec.Publishes))
-	}
-}
-
 // TestNilPublisher_NoPublishNoPanic asserts a nil publisher disables
 // publishing without panicking.
 func TestNilPublisher_NoPublishNoPanic(t *testing.T) {
