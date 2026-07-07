@@ -55,5 +55,17 @@ jobs:
         working-directory: cdk8s
         run: mise exec -- uv run cdk8s synth
 
+      - name: Freeze version-pinned prod-1 manifests
+        working-directory: cdk8s
+        # prod-1 app manifests are pinned to their release version and regenerated
+        # only by bump-prs, so a chart change on develop doesn't reach prod's
+        # committed dist until its version is bumped (that's what couples the
+        # config delta to the bump). Discard this HEAD re-synth of the pinned app
+        # files before the sync check; identity + one-shot jobs stay live. Mirrors
+        # the freeze in `task cdk8s:synth`.
+        run: |
+          git ls-files -- 'dist/prod-1-*-twitch.k8s.yaml' 'dist/prod-1-*-youtube.k8s.yaml' \
+            | xargs -r git checkout --
+
       - name: Verify dist/ is committed in sync
         run: git diff --exit-code -- cdk8s/dist/
