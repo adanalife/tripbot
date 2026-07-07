@@ -10,7 +10,6 @@ const (
 	SlugRightMessage = "right-message"
 	SlugTimewarp     = "timewarp"
 	SlugGPS          = "gps"
-	SlugFlag         = "flag"
 )
 
 // Lookup returns the *Onscreen registered under slug on this *Server, or
@@ -35,6 +34,5 @@ func (s *Server) all() map[string]*Onscreen {
 		SlugRightMessage: s.RightRotator,
 		SlugTimewarp:     s.Timewarp,
 		SlugGPS:          s.GPS,
-		SlugFlag:         s.Flag,
 	}
 }

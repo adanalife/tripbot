@@ -103,11 +103,6 @@ func (a *App) helloCmd(ctx context.Context, user *users.User, params []string) {
 	lastHelloTime = time.Now()
 }
 
-func (a *App) flagCmd(ctx context.Context, user *users.User, _ []string) {
-	slog.InfoContext(ctx, "ran !flag", "username", user.Username)
-	a.Onscreens.ShowFlag(ctx, 10*time.Second)
-}
-
 func (a *App) versionCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !version", "username", user.Username)
 
@@ -478,8 +473,6 @@ func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 
 	if strings.EqualFold(guess, vid.State) {
 		msg = fmt.Sprintf("@%s got it! We're in %s", user.Username, vid.State)
-		// show the flag for the state
-		a.Onscreens.ShowFlag(ctx, 10*time.Second)
 		// increase their guess score
 		user.AddToScore(ctx, guessScoreboard, 1.0)
 		user.AddToScore(ctx, scoreboards.CurrentGuessScoreboard(), 1.0)
@@ -499,8 +492,6 @@ func (a *App) stateCmd(ctx context.Context, user *users.User, _ []string) {
 		vid = vid.Next(ctx)
 	}
 	msg := fmt.Sprintf("We're in %s", vid.State)
-	// show the flag for the state
-	a.Onscreens.ShowFlag(ctx, 10*time.Second)
 	// record that they know the location now
 	user.SetLastLocationTime()
 	a.Chat.Say(msg)
@@ -625,6 +616,24 @@ func (a *App) giveMilesCmd(ctx context.Context, user *users.User, params []strin
 		slog.ErrorContext(ctx, "error creating correction event", "err", err)
 	}
 	a.Chat.Say(fmt.Sprintf("@%s now has %.2fmi", target, newTotal))
+}
+
+// refreshOverlaysCmd hard-reloads every OBS browser source (the onscreen
+// corners, the next-frame cover, etc.) by respawning each source's CEF render
+// process. Admin-only. This is the manual recovery for a crashed/frozen overlay
+// — the hourly soft refresh can't revive a crashed CEF webpage.
+func (a *App) refreshOverlaysCmd(ctx context.Context, user *users.User, _ []string) {
+	slog.InfoContext(ctx, "ran !refreshoverlays", "username", user.Username)
+	if !c.UserIsAdmin(user.Username) {
+		return
+	}
+	n, err := a.OBS.RefreshBrowserSources(ctx)
+	if err != nil {
+		slog.ErrorContext(ctx, "overlay refresh failed", "err", err)
+		a.Chat.Say("Couldn't refresh the overlays right now, try again in a bit")
+		return
+	}
+	a.Chat.Say(fmt.Sprintf("Refreshed %d overlay(s).", n))
 }
 
 func (a *App) shutdownCmd(ctx context.Context, user *users.User, _ []string) {

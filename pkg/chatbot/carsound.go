@@ -15,6 +15,7 @@ import (
 // fake; production uses the realOBS adapter wired in New().
 type OBS interface {
 	SetBackgroundAudioFile(ctx context.Context, inputName, file string) error
+	RefreshBrowserSources(ctx context.Context) (int, error)
 }
 
 // realOBS delegates to pkg/obs, which dials the OBS WebSocket per call using
@@ -23,6 +24,10 @@ type realOBS struct{}
 
 func (realOBS) SetBackgroundAudioFile(ctx context.Context, inputName, file string) error {
 	return obs.SetBackgroundAudioFile(ctx, inputName, file)
+}
+
+func (realOBS) RefreshBrowserSources(ctx context.Context) (int, error) {
+	return obs.RefreshBrowserSources(ctx)
 }
 
 // carHumInputName is the OBS source name of the background-audio ffmpeg_source

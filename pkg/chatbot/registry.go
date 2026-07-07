@@ -23,10 +23,6 @@ func (a *App) buildRegistry() []Command {
 			Handler: a.helloCmd,
 		},
 		{
-			Trigger: "!flag",
-			Handler: a.flagCmd,
-		},
-		{
 			Trigger:   "!carsound",
 			Aliases:   []string{"!carhum"},
 			Handler:   a.carSoundCmd,
@@ -76,6 +72,11 @@ func (a *App) buildRegistry() []Command {
 		{
 			Trigger: "!shutdown",
 			Handler: a.shutdownCmd,
+		},
+		{
+			Trigger: "!refreshoverlays",
+			Aliases: []string{"!refreshoverlay"},
+			Handler: a.refreshOverlaysCmd,
 		},
 		{
 			Trigger: "!socialmedia",
@@ -291,7 +292,7 @@ func (a *App) platform() string {
 // their trigger, so only triggers are listed. See the YouTube provider plan.
 var youtubeCommands = map[string]bool{
 	"!help": true, "!version": true, "!uptime": true, "!commands": true,
-	"!gas": true, "!report": true, "!flag": true,
+	"!gas": true, "!report": true,
 	// info (read current-video state only)
 	"!weather": true, "!time": true, "!date": true, "!sunset": true,
 	"!state": true, "!location": true,

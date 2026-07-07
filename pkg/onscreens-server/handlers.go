@@ -6,7 +6,7 @@ import (
 	"net/http"
 )
 
-// Onscreens overlay commands (middle / leaderboard / timewarp / gps / flag)
+// Onscreens overlay commands (middle / leaderboard / timewarp / gps)
 // arrive over NATS and are dispatched by the subscribers in nats.go. The
 // HTTP server here serves only the browser-source feeds (state.json /
 // render / asset), health, version, metrics, and admin.

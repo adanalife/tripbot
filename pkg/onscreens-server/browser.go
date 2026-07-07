@@ -10,23 +10,6 @@ import (
 	"github.com/gorilla/mux"
 )
 
-// flagPlaceholderPNG is a 1×1 transparent PNG served by the flag asset
-// endpoint while the state-driven flag swap is disabled (see flag.go's
-// TODO). The browser source's <img> tag fetches this URL even when the
-// onscreen is hidden, so we serve a valid PNG to keep the request quiet
-// rather than 404.
-var flagPlaceholderPNG = []byte{
-	0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
-	0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
-	0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-	0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4,
-	0x89, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x44, 0x41,
-	0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00,
-	0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00,
-	0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae,
-	0x42, 0x60, 0x82,
-}
-
 //go:embed templates/onscreen.html.tmpl
 var onscreenTemplates embed.FS
 
@@ -108,9 +91,6 @@ var onscreenRegistry = map[string]onscreenStyle{
 	SlugGPS: {
 		Name: SlugGPS, IsImage: true,
 	},
-	SlugFlag: {
-		Name: SlugFlag, IsImage: true,
-	},
 }
 
 // onscreensStateHandler returns a JSON snapshot of every onscreen's current
@@ -156,8 +136,7 @@ func (s *Server) onscreensRenderHandler(w http.ResponseWriter, r *http.Request) 
 }
 
 // onscreensAssetHandler serves the raw image bytes for image-type onscreens.
-// `gps` resolves to the embedded GPS overlay; `flag` returns a 1×1
-// transparent placeholder while the state-driven flag swap is offline.
+// `gps` resolves to the embedded GPS overlay.
 func (s *Server) onscreensAssetHandler(w http.ResponseWriter, r *http.Request) {
 	switch mux.Vars(r)["name"] {
 	case SlugGPS:
@@ -165,12 +144,6 @@ func (s *Server) onscreensAssetHandler(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		if _, err := w.Write(gpsPNG); err != nil {
 			slog.ErrorContext(r.Context(), "writing gps image", "err", err)
-		}
-	case SlugFlag:
-		w.Header().Set("Content-Type", "image/png")
-		w.Header().Set("Cache-Control", "no-store")
-		if _, err := w.Write(flagPlaceholderPNG); err != nil {
-			slog.ErrorContext(r.Context(), "writing flag placeholder", "err", err)
 		}
 	default:
 		http.NotFound(w, r)

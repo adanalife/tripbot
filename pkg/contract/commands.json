@@ -1,0 +1,189 @@
+{
+  "_comment": "Generated from pkg/onscreens-events via `go generate ./pkg/contract` — do not hand-edit. The NATS onscreens-command subject + envelope registry that tripbot and the admin console publish and onscreens-server consumes; payload schemas are JSON Schema (draft 2020-12).",
+  "subject_pattern": "tripbot.{env}.onscreens.{overlay}.{verb}.{platform}",
+  "subjects": {
+    "middle_show": {
+      "subject": "tripbot.{env}.onscreens.middle.show.{platform}",
+      "transport": "core",
+      "schema": {
+        "type": "object",
+        "title": "MiddleShow",
+        "properties": {
+          "emitted_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "msg": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "emitted_at",
+          "msg"
+        ]
+      }
+    },
+    "middle_hide": {
+      "subject": "tripbot.{env}.onscreens.middle.hide.{platform}",
+      "transport": "core",
+      "schema": {
+        "type": "object",
+        "title": "Command",
+        "properties": {
+          "emitted_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "emitted_at"
+        ]
+      }
+    },
+    "leaderboard_show": {
+      "subject": "tripbot.{env}.onscreens.leaderboard.show.{platform}",
+      "transport": "core",
+      "schema": {
+        "type": "object",
+        "title": "LeaderboardShow",
+        "properties": {
+          "emitted_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "title": {
+            "type": "string"
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "required": [
+          "emitted_at",
+          "title",
+          "rows"
+        ]
+      }
+    },
+    "leaderboard_hide": {
+      "subject": "tripbot.{env}.onscreens.leaderboard.hide.{platform}",
+      "transport": "core",
+      "schema": {
+        "type": "object",
+        "title": "Command",
+        "properties": {
+          "emitted_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "emitted_at"
+        ]
+      }
+    },
+    "timewarp_show": {
+      "subject": "tripbot.{env}.onscreens.timewarp.show.{platform}",
+      "transport": "core",
+      "schema": {
+        "type": "object",
+        "title": "TimewarpShow",
+        "properties": {
+          "emitted_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "username": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "emitted_at",
+          "username"
+        ]
+      }
+    },
+    "timewarp_hide": {
+      "subject": "tripbot.{env}.onscreens.timewarp.hide.{platform}",
+      "transport": "core",
+      "schema": {
+        "type": "object",
+        "title": "Command",
+        "properties": {
+          "emitted_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "emitted_at"
+        ]
+      }
+    },
+    "gps_show": {
+      "subject": "tripbot.{env}.onscreens.gps.show.{platform}",
+      "transport": "core",
+      "schema": {
+        "type": "object",
+        "title": "Command",
+        "properties": {
+          "emitted_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "emitted_at"
+        ]
+      }
+    },
+    "gps_hide": {
+      "subject": "tripbot.{env}.onscreens.gps.hide.{platform}",
+      "transport": "core",
+      "schema": {
+        "type": "object",
+        "title": "Command",
+        "properties": {
+          "emitted_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "emitted_at"
+        ]
+      }
+    },
+    "location_update": {
+      "subject": "tripbot.{env}.onscreens.location.update.{platform}",
+      "transport": "core",
+      "schema": {
+        "type": "object",
+        "title": "LocationData",
+        "properties": {
+          "emitted_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "location": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "emitted_at",
+          "location",
+          "date"
+        ]
+      }
+    }
+  }
+}
