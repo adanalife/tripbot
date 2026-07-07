@@ -5,8 +5,18 @@
 # Tags are the un-suffixed multi-arch manifest tags from the tripbot release
 # workflow — no `v` prefix (3.1.0, not v3.1.0).
 #
-# Edited by the bump-prs workflow (one PR per component); hand-edits are fine
-# too — run `task cdk8s:synth` after changing a pin.
+# A pinned env's app manifests are FROZEN to their release version: `task
+# cdk8s:synth` (and the CI gate) discard the HEAD re-synth of prod's app files,
+# so a chart/config change on develop does NOT reach prod's committed dist until
+# that component's version is bumped. The bump is where the pinned manifests
+# regenerate — so a bump PR's dist diff shows the image tag AND every config
+# change (env var, mount, arg) that release introduced for the component, as one
+# deploy. (Identity Secrets + one-shot Jobs are not frozen — they re-synth live.)
+#
+# Edited by the bump-prs workflow (one PR per component). Hand-edits: change the
+# pin, then `task cdk8s:prod:bump COMPONENT=<name>` regenerates just that
+# component's prod dist (the local mirror of bump-prs) — plain `task cdk8s:synth`
+# won't, since it freezes prod.
 #
 # The comment line between pins is load-bearing: git can't auto-merge edits on
 # adjacent lines, so without a separator each merged bump PR conflicts the

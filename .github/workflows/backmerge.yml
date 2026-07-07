@@ -1,8 +1,15 @@
 name: backmerge
 
-# After anything lands on master (a release merge, a bump-prs pin edit), open or
-# refresh ONE standing PR that merges master back into develop, so develop never
-# drifts from master and release PRs never hit phantom-divergence conflicts.
+# After a release lands on master, open or refresh ONE standing PR that merges
+# master back into develop, so develop never drifts from master and release PRs
+# never hit phantom-divergence conflicts.
+#
+# Bump-prs merges are excluded (paths-ignore below): each release fans out up to
+# three bump PRs, and every one is a separate master push that would otherwise
+# re-arm this workflow — spawning a fresh back-merge PR after the prior was merged
+# (the "3 back-merge PRs per version" churn). Bump PRs only touch the prod pin +
+# its synthed dist, which develop doesn't consume; the next release's back-merge
+# sweeps those commits into develop anyway, so skipping them here loses nothing.
 #
 # ⚠️ The PR it opens MUST be merged with a MERGE COMMIT, never squashed/rebased.
 # Squash copies the file contents without making master's commits ancestors of
@@ -23,6 +30,9 @@ on:
   push:
     branches:
       - master
+    paths-ignore:
+      - 'cdk8s/versions.yaml'
+      - 'cdk8s/dist/prod-1-*'
   workflow_dispatch:
 
 permissions:
