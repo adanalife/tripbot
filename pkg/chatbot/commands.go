@@ -498,18 +498,34 @@ func (a *App) stateCmd(ctx context.Context, user *users.User, _ []string) {
 }
 
 // TODO: maybe there could be a !cancel command or something
+// reportReporter is the label a !report is attributed to in its downstream
+// sinks (the Sentry error event and the Discord alert). YouTube viewers are
+// anonymized because v1 punts YouTube identity entirely (see the youtubeCommands
+// allowlist) — until real YouTube user support lands there is no persisted
+// identity to stand behind, so the name is kept out of those durable/external
+// sinks. Twitch reports keep the username. Note the transient 14-day Loki chat
+// line still carries the name for every message; this only governs the report's
+// longer-lived sinks.
+func reportReporter(platform, username string) string {
+	if platform == platformYouTube {
+		return "a youtube viewer"
+	}
+	return username
+}
+
 func (a *App) reportCmd(ctx context.Context, user *users.User, params []string) {
-	slog.InfoContext(ctx, "ran !report", "username", user.Username)
+	reporter := reportReporter(a.platform(), user.Username)
+	slog.InfoContext(ctx, "ran !report", "username", reporter)
 	message := strings.Join(params, " ")
 	// Always log to slog (→ stderr + Sentry via the slog→Sentry handler)
 	// as the durable audit trail.
-	slog.ErrorContext(ctx, "!report", "err", fmt.Errorf("viewer report from %s: %s", user.Username, message))
+	slog.ErrorContext(ctx, "!report", "err", fmt.Errorf("viewer report from %s: %s", reporter, message))
 	// Fire-and-forget to Discord for real-time notification. Skipped
 	// silently when DISCORD_ALERTS_WEBHOOK is unset (e.g. local dev) —
 	// the slog/Sentry path still fires so nothing is lost.
 	if webhook := c.Conf.DiscordAlertsWebhook; webhook != "" {
 		if isDiscordWebhookURL(webhook) {
-			go postReportToDiscord(webhook, user.Username, message)
+			go postReportToDiscord(webhook, reporter, message)
 		} else {
 			// A misconfigured secret (e.g. the SM placeholder string) would
 			// otherwise log a "unsupported protocol scheme" ERROR on every
