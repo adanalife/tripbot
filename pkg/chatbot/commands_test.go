@@ -2,6 +2,7 @@ package chatbot
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -854,6 +855,45 @@ func TestMiddleCmd_NonAdminIsSilent(t *testing.T) {
 
 	if out() != "" {
 		t.Errorf("expected silence for non-admin, got %q", out())
+	}
+}
+
+// --- refreshOverlaysCmd ---
+
+func TestRefreshOverlaysCmd_NonAdminIsSilent(t *testing.T) {
+	app := newTestApp(video.Video{})
+	obs := &recordingOBS{Refreshed: 5}
+	app.OBS = obs
+	out := captureSay(t, app)
+
+	app.refreshOverlaysCmd(context.Background(), newTestUser("viewer1"), nil)
+
+	if out() != "" {
+		t.Errorf("expected silence for non-admin, got %q", out())
+	}
+}
+
+func TestRefreshOverlaysCmd_AdminReportsCount(t *testing.T) {
+	app := newTestApp(video.Video{})
+	app.OBS = &recordingOBS{Refreshed: 3}
+	out := captureSay(t, app)
+
+	app.refreshOverlaysCmd(context.Background(), newTestUser(adminUser), nil)
+
+	if !strings.Contains(out(), "Refreshed 3 overlay") {
+		t.Errorf("expected refreshed-count report, got %q", out())
+	}
+}
+
+func TestRefreshOverlaysCmd_ErrorIsReported(t *testing.T) {
+	app := newTestApp(video.Video{})
+	app.OBS = &recordingOBS{refreshErr: errors.New("obs unreachable")}
+	out := captureSay(t, app)
+
+	app.refreshOverlaysCmd(context.Background(), newTestUser(adminUser), nil)
+
+	if !strings.Contains(out(), "Couldn't refresh") {
+		t.Errorf("expected failure message, got %q", out())
 	}
 }
 

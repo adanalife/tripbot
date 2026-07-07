@@ -618,6 +618,24 @@ func (a *App) giveMilesCmd(ctx context.Context, user *users.User, params []strin
 	a.Chat.Say(fmt.Sprintf("@%s now has %.2fmi", target, newTotal))
 }
 
+// refreshOverlaysCmd hard-reloads every OBS browser source (the onscreen
+// corners, the next-frame cover, etc.) by respawning each source's CEF render
+// process. Admin-only. This is the manual recovery for a crashed/frozen overlay
+// — the hourly soft refresh can't revive a crashed CEF webpage.
+func (a *App) refreshOverlaysCmd(ctx context.Context, user *users.User, _ []string) {
+	slog.InfoContext(ctx, "ran !refreshoverlays", "username", user.Username)
+	if !c.UserIsAdmin(user.Username) {
+		return
+	}
+	n, err := a.OBS.RefreshBrowserSources(ctx)
+	if err != nil {
+		slog.ErrorContext(ctx, "overlay refresh failed", "err", err)
+		a.Chat.Say("Couldn't refresh the overlays right now, try again in a bit")
+		return
+	}
+	a.Chat.Say(fmt.Sprintf("Refreshed %d overlay(s).", n))
+}
+
 func (a *App) shutdownCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !shutdown", "username", user.Username)
 	if !c.UserIsAdmin(user.Username) {

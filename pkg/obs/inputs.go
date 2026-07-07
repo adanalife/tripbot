@@ -2,10 +2,97 @@ package obs
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"time"
 
+	goobs "github.com/andreykaipov/goobs"
 	"github.com/andreykaipov/goobs/api/requests/inputs"
 )
+
+// browserSourceKind is the OBS input kind for a CEF browser_source.
+const browserSourceKind = "browser_source"
+
+// blankURL is the transient page a browser source is pointed at to force
+// obs-browser to tear down and recreate its CEF render process.
+const blankURL = "about:blank"
+
+// browserReloadGap is how long a source sits on blankURL before its real url is
+// restored — long enough for obs-browser to actually drop the old render
+// process rather than coalescing the two settings writes into a no-op.
+const browserReloadGap = 600 * time.Millisecond
+
+// RefreshBrowserSources hard-reloads every browser_source in OBS by swapping its
+// url to about:blank and back, forcing obs-browser to recreate the CEF render
+// process. Returns the number of sources reloaded.
+//
+// This is the recovery the hourly soft refresh can't do: a browser source whose
+// webpage has crashed (CEF "Webpage has crashed unexpectedly") is NOT revived by
+// PressInputPropertiesButton("refreshnocache") — only re-setting the url
+// respawns the render process. Reloads all sources on one connection; a
+// per-source failure is logged and skipped so one bad source doesn't strand the
+// rest.
+func RefreshBrowserSources(ctx context.Context) (int, error) {
+	client, err := dial(ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer func() {
+		if err := client.Disconnect(); err != nil {
+			slog.WarnContext(ctx, "obs disconnect", "err", err)
+		}
+	}()
+
+	list, err := client.Inputs.GetInputList(inputs.NewGetInputListParams())
+	if err != nil {
+		return 0, fmt.Errorf("obs get input list: %w", err)
+	}
+
+	var reloaded int
+	for _, in := range list.Inputs {
+		if in.InputKind != browserSourceKind {
+			continue
+		}
+		name := in.InputName
+		settings, err := client.Inputs.GetInputSettings(inputs.NewGetInputSettingsParams().WithInputName(name))
+		if err != nil {
+			slog.WarnContext(ctx, "obs get input settings", "err", err, "input", name)
+			continue
+		}
+		// A browser source backed by a local file (not a url) has nothing to
+		// reload this way; skip it rather than clobbering its settings.
+		url, ok := settings.InputSettings["url"].(string)
+		if !ok || url == "" {
+			continue
+		}
+		if err := setBrowserURL(client, name, blankURL); err != nil {
+			slog.WarnContext(ctx, "obs blank browser url", "err", err, "input", name)
+			continue
+		}
+		time.Sleep(browserReloadGap)
+		if err := setBrowserURL(client, name, url); err != nil {
+			// Left on about:blank — log loudly; the source is blank until the next
+			// refresh restores it.
+			slog.ErrorContext(ctx, "obs restore browser url", "err", err, "input", name, "url", url)
+			continue
+		}
+		reloaded++
+	}
+	slog.InfoContext(ctx, "hard-refreshed obs browser sources", "count", reloaded)
+	return reloaded, nil
+}
+
+// setBrowserURL merges a new url onto a browser source over an existing
+// connection (overlay=true leaves the source's other settings intact).
+func setBrowserURL(client *goobs.Client, name, url string) error {
+	_, err := client.Inputs.SetInputSettings(
+		inputs.NewSetInputSettingsParams().
+			WithInputName(name).
+			WithInputSettings(map[string]any{"url": url}).
+			WithOverlay(true),
+	)
+	return err
+}
 
 // SetBackgroundAudioFile repoints an ffmpeg_source input at a different local
 // media file over the OBS WebSocket — used by the !carsound command to swap the
