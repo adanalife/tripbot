@@ -7,7 +7,7 @@
 // This is deliberately distinct from two neighbours:
 //   - pkg/events — the Postgres-backed append-only session log (login/logout
 //     rows). That's durable state; this is ephemeral pub/sub.
-//   - onscreens *commands* (ShowMiddleText, ShowFlag, …) — imperatives aimed at
+//   - onscreens *commands* (ShowMiddleText, ShowTimewarp, …) — imperatives aimed at
 //     onscreens-server, with exactly one consumer that acts on them. Those live
 //     with the onscreens surface, not here.
 //

@@ -45,7 +45,6 @@ func (s *Server) StartNATSSubscribers(ctx context.Context) {
 		{oe.TimewarpHideSubject(env, platform), s.handleTimewarpHide},
 		{oe.GPSShowSubject(env, platform), s.handleGPSShow},
 		{oe.GPSHideSubject(env, platform), s.handleGPSHide},
-		{oe.FlagHideSubject(env, platform), s.handleFlagHide},
 		{oe.LocationUpdateSubject(env, platform), s.handleLocationUpdate},
 	}
 	for _, sb := range subs {
@@ -101,7 +100,6 @@ func (s *Server) handleLeaderboardHide(_ *nats.Msg) { s.Leaderboard.Hide() }
 func (s *Server) handleTimewarpHide(_ *nats.Msg)    { s.Timewarp.Hide() }
 func (s *Server) handleGPSShow(_ *nats.Msg)         { s.GPS.Show("") }
 func (s *Server) handleGPSHide(_ *nats.Msg)         { s.GPS.Hide() }
-func (s *Server) handleFlagHide(_ *nats.Msg)        { s.Flag.Hide() }
 
 // handleLocationUpdate caches the currently-playing clip's location + date so
 // the bot-less rotators can surface it. Lenient: a malformed body is dropped;

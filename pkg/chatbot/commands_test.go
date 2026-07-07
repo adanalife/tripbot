@@ -634,44 +634,6 @@ func TestStateCmd_MessageFormat(t *testing.T) {
 	}
 }
 
-func TestStateCmd_DrivesShowFlagOverlay(t *testing.T) {
-	vid := newTestVideo("Wyoming", 43.0, -107.0, time.Now())
-	app := newTestApp(vid)
-	rec := &recordingOnscreens{}
-	app.Onscreens = rec
-
-	app.stateCmd(context.Background(), newTestUser("viewer1"), nil)
-
-	if len(rec.Calls) != 1 || !strings.HasPrefix(rec.Calls[0], "ShowFlag(") {
-		t.Errorf("expected one ShowFlag overlay call, got %v", rec.Calls)
-	}
-}
-
-// --- flagCmd ---
-
-func TestFlagCmd_DrivesShowFlagOverlay(t *testing.T) {
-	app := newTestApp(video.Video{})
-	rec := &recordingOnscreens{}
-	app.Onscreens = rec
-
-	app.flagCmd(context.Background(), newTestUser("viewer1"), nil)
-
-	if len(rec.Calls) != 1 || rec.Calls[0] != "ShowFlag(10s)" {
-		t.Errorf("expected ShowFlag(10s) overlay call, got %v", rec.Calls)
-	}
-}
-
-func TestFlagCmd_DoesNotSayInChat(t *testing.T) {
-	app := newTestApp(video.Video{})
-	out := captureSay(t, app)
-
-	app.flagCmd(context.Background(), newTestUser("viewer1"), nil)
-
-	if out() != "" {
-		t.Errorf("expected flagCmd to be silent in chat, got %q", out())
-	}
-}
-
 // --- dateCmd ---
 
 func TestDateCmd_SaysThisMomentWas(t *testing.T) {
@@ -814,9 +776,8 @@ func TestGuessCmd_CorrectGuess_DrivesOverlayAndPlayback(t *testing.T) {
 		t.Errorf("expected correct-guess chat message, got %q", msg)
 	}
 
-	// Overlay sequence: ShowFlag (state flag) then ShowTimewarp (from
-	// a.timewarp()), crediting the guesser.
-	wantOverlay := []string{"ShowFlag(10s)", `ShowTimewarp("viewer1")`}
+	// Overlay: ShowTimewarp (from a.timewarp()), crediting the guesser.
+	wantOverlay := []string{`ShowTimewarp("viewer1")`}
 	if len(recOverlay.Calls) != len(wantOverlay) {
 		t.Fatalf("expected %d overlay calls, got %d: %v", len(wantOverlay), len(recOverlay.Calls), recOverlay.Calls)
 	}
