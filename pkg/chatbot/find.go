@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math/rand"
 	"strconv"
 	"strings"
 	"time"
@@ -26,9 +27,19 @@ const (
 	// findEmbedTimeout bounds the NATS request to the embed responder. A cold
 	// responder embeds a query in well under a second; the headroom is slack.
 	findEmbedTimeout = 10 * time.Second
-	// findResultLimit is how many candidate frames the pgvector search returns;
-	// the command jumps to the closest.
-	findResultLimit = 5
+	// findCandidatePool is how many nearest frames the pgvector search returns.
+	// !find jumps to a random distinct moment among them (below the ceiling)
+	// rather than always the single closest, so repeated !find <thing> tours
+	// different matches. Wider than findRandomizeTopN because the nearest frames
+	// cluster into a handful of moments once deduped.
+	findCandidatePool = 40
+	// findMomentBucketSec groups frames from the same clip within this many
+	// seconds into one "moment", so near-identical adjacent frames don't crowd
+	// the randomization down to a single spot on stream.
+	findMomentBucketSec = 60.0
+	// findRandomizeTopN caps how many distinct moments the pick randomizes over,
+	// keeping the jump reasonably close while still varied.
+	findRandomizeTopN = 10
 	// findMaxDistance is the cosine-distance ceiling for "close enough to jump".
 	// pgvector's <=> is (1 - cosine_similarity). Above this we treat the query
 	// as a miss rather than yanking the stream to a bad match. Calibrated on the
@@ -117,7 +128,7 @@ func (realSearch) Find(ctx context.Context, query string) ([]SearchHit, error) {
 	if err != nil {
 		return nil, err
 	}
-	return searchFrameEmbeddings(ctx, database.GormDB(), resp.Vector, resp.Model, resp.States, resp.Months, findResultLimit)
+	return searchFrameEmbeddings(ctx, database.GormDB(), resp.Vector, resp.Model, resp.States, resp.Months, findCandidatePool)
 }
 
 // requestEmbedding asks the video-pipeline responder to embed query, returning
@@ -206,6 +217,41 @@ func vectorLiteral(v []float32) string {
 	return b.String()
 }
 
+// findRandIntn is the randomness seam for moment selection; tests override it
+// to force a deterministic pick.
+var findRandIntn = rand.Intn
+
+// pickFindHit chooses which matching frame to jump to. Rather than always the
+// single closest frame (which makes !find deterministic — !find bridge would
+// land the same bridge every time), it collapses the nearest frames into
+// distinct moments — adjacent frames of one clip embed near-identically — and
+// picks one at random from the closest few, so repeated !find <thing> tours
+// different matches with no stored state. hits must be ordered nearest-first;
+// the caller guarantees hits[0] is under findMaxDistance, so at least one
+// moment always qualifies.
+func pickFindHit(hits []SearchHit) SearchHit {
+	seen := make(map[string]bool)
+	moments := make([]SearchHit, 0, findRandomizeTopN)
+	for _, h := range hits {
+		if h.Distance > findMaxDistance {
+			continue
+		}
+		key := fmt.Sprintf("%s:%d", h.Slug, int(h.TsSec/findMomentBucketSec))
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		moments = append(moments, h)
+		if len(moments) == findRandomizeTopN {
+			break
+		}
+	}
+	if len(moments) == 0 {
+		return hits[0]
+	}
+	return moments[findRandIntn(len(moments))]
+}
+
 // findCmd implements !find: visual search over the dashcam corpus, jumping the
 // stream to the closest matching moment. Shares the playback-jump rate-limiter
 // with !timewarp / !goto so the playhead can't be yanked too often.
@@ -258,7 +304,7 @@ func (a *App) findCmd(ctx context.Context, user *users.User, params []string) {
 		return
 	}
 
-	hit := hits[0]
+	hit := pickFindHit(hits)
 	// Land ahead of the matched frame so the moment doesn't slip past on stream.
 	if err := a.VLC.PlayFileAtTimestamp(ctx, hit.Slug+".MP4", hit.TsSec-findJumpLeadInSec); err != nil {
 		slog.ErrorContext(ctx, "find jump failed", "err", err, "slug", hit.Slug)
