@@ -6,7 +6,7 @@ import (
 )
 
 // This file declares the onscreens *command* registry — the NATS subjects that
-// drive the on-screen overlays (timewarp, middle text, leaderboard, GPS, flag)
+// drive the on-screen overlays (timewarp, middle text, leaderboard, GPS)
 // plus the passive location feed, with each payload as a JSON Schema (draft
 // 2020-12). It is emitted as the sibling commands.json by
 // `go generate ./pkg/contract`, exactly like eventbus.json.
@@ -99,7 +99,6 @@ func commandsContract() orderedObject {
 			{"timewarp_hide", commandSubject("timewarp", "hide", "Command", commandFields)},
 			{"gps_show", commandSubject("gps", "show", "Command", commandFields)},
 			{"gps_hide", commandSubject("gps", "hide", "Command", commandFields)},
-			{"flag_hide", commandSubject("flag", "hide", "Command", commandFields)},
 			{"location_update", commandSubject("location", "update", "LocationData", locationUpdateFields)},
 		}},
 	}

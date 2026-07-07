@@ -160,23 +160,6 @@
         ]
       }
     },
-    "flag_hide": {
-      "subject": "tripbot.{env}.onscreens.flag.hide.{platform}",
-      "transport": "core",
-      "schema": {
-        "type": "object",
-        "title": "Command",
-        "properties": {
-          "emitted_at": {
-            "type": "string",
-            "format": "date-time"
-          }
-        },
-        "required": [
-          "emitted_at"
-        ]
-      }
-    },
     "location_update": {
       "subject": "tripbot.{env}.onscreens.location.update.{platform}",
       "transport": "core",
