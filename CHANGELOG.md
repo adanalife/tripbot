@@ -9,6 +9,22 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v3.14.0] — 2026-07-07
+
+### Chatbot
+
+- `!find` now covers its playback jump with the same full-screen warp overlay as `!timewarp`/`!guess`, and no longer names the matched state in chat so viewers can still guess the location. ([#1071](https://github.com/adanalife/tripbot/pull/1071))
+- Add an admin-only `!refreshoverlays` command that hard-reloads OBS browser sources (respawning their CEF render process) to recover crashed/frozen onscreen overlays without restarting OBS. ([#1072](https://github.com/adanalife/tripbot/pull/1072))
+
+### Onscreens
+
+- Remove the long-disabled state-flag overlay (the `!flag` command and the `ShowFlag` no-op that published nothing). `!state`/`!guess`/`!jump` keep their chat and playback behavior; they just no longer fire the dead overlay. ([#1071](https://github.com/adanalife/tripbot/pull/1071))
+- Add `commands.json` to `pkg/contract` — the NATS onscreens-command subject + envelope registry (JSON Schema), so the admin console can publish overlay commands without hand-building subject strings. Companion to `eventbus.json`. ([#1074](https://github.com/adanalife/tripbot/pull/1074))
+
+### Console / API
+
+- tripbot now subscribes to an `obs.refresh` NATS command (`tripbot.<env>.obs.refresh.<platform>`), letting the admin console hard-reload a crashed/frozen OBS overlay from a button — the console-driven counterpart to the `!refreshoverlays` chat command. ([#1075](https://github.com/adanalife/tripbot/pull/1075))
+
 ## [v3.13.0] — 2026-07-06
 
 ### Chatbot
