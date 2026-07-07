@@ -44,6 +44,7 @@ func newFindTestApp(t *testing.T, search Search) (*App, *recordingVLC, *recordin
 
 func TestFindCmd_JumpsToClosestHit(t *testing.T) {
 	skipIfDarwin(t)
+	pinFindRandIntn(t, 0) // force the closest moment so the jump is assertable
 	search := &recordingSearch{Hits: []SearchHit{
 		{Slug: "2018_0514_224801_013", TsSec: 163.5, State: "Nevada", Distance: 0.21},
 		{Slug: "2018_0601_000000_001", TsSec: 12, State: "Utah", Distance: 0.55},
@@ -210,6 +211,47 @@ func TestSearchFrameEmbeddings_WithStateAndMonthFilters(t *testing.T) {
 func TestSearchFrameEmbeddings_EmptyVector(t *testing.T) {
 	if _, err := searchFrameEmbeddings(context.Background(), nil, nil, "model-x", nil, nil, 5); err == nil {
 		t.Error("expected an error for an empty query vector")
+	}
+}
+
+// pinFindRandIntn forces pickFindHit's random choice to a fixed index for the
+// duration of a test, then restores the real source.
+func pinFindRandIntn(t *testing.T, idx int) {
+	t.Helper()
+	orig := findRandIntn
+	findRandIntn = func(int) int { return idx }
+	t.Cleanup(func() { findRandIntn = orig })
+}
+
+func TestPickFindHit_CollapsesAdjacentFramesIntoOneMoment(t *testing.T) {
+	// Three near-identical adjacent frames of one clip plus one distinct moment:
+	// dedup should leave exactly two moments to randomize over.
+	hits := []SearchHit{
+		{Slug: "clipA", TsSec: 100.0, Distance: 0.20},
+		{Slug: "clipA", TsSec: 101.5, Distance: 0.21},
+		{Slug: "clipA", TsSec: 103.0, Distance: 0.22},
+		{Slug: "clipB", TsSec: 5.0, Distance: 0.30},
+	}
+	pinFindRandIntn(t, 1) // second distinct moment
+	if got := pickFindHit(hits); got.Slug != "clipB" {
+		t.Errorf("index 1 should be the second distinct moment clipB, got %+v", got)
+	}
+	pinFindRandIntn(t, 0) // first distinct moment = closest frame of clipA
+	if got := pickFindHit(hits); got.Slug != "clipA" || got.TsSec != 100.0 {
+		t.Errorf("index 0 should be clipA@100 (closest), got %+v", got)
+	}
+}
+
+func TestPickFindHit_SkipsHitsOverCeiling(t *testing.T) {
+	// The nearer hit is over the ceiling; only clipB qualifies. Pinning index 0
+	// must return clipB — if the over-ceiling hit were included it'd sort first.
+	hits := []SearchHit{
+		{Slug: "clipA", TsSec: 1, Distance: findMaxDistance + 0.01},
+		{Slug: "clipB", TsSec: 1, Distance: 0.20},
+	}
+	pinFindRandIntn(t, 0)
+	if got := pickFindHit(hits); got.Slug != "clipB" {
+		t.Errorf("expected the over-ceiling clipA to be skipped, got %+v", got)
 	}
 }
 
