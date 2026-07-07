@@ -78,7 +78,9 @@ type sessionUser struct {
 func (su sessionUser) HasCommandAvailable(ctx context.Context) bool {
 	return su.s.HasCommandAvailable(ctx, su.u)
 }
-func (su sessionUser) IsSubscriber() bool { return su.s.IsSubscriber(*su.u) }
+func (su sessionUser) IsSubscriber() bool {
+	return c.UserIsCompedSubscriber(su.u.Username) || su.s.IsSubscriber(*su.u)
+}
 
 func (a *App) dispatch(ctx context.Context, cmd *Command, user *users.User, params []string) {
 	incChatCommandCounter(cmd.Trigger)

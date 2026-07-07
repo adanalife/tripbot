@@ -22,6 +22,18 @@ func UserIsAdmin(username string) bool {
 	return strings.EqualFold(username, Conf.ChannelName)
 }
 
+// UserIsCompedSubscriber reports whether username is on the comped-subscriber
+// allowlist — treated as a subscriber for subscriber-only commands without an
+// actual sub.
+func UserIsCompedSubscriber(username string) bool {
+	for _, u := range Conf.CompedSubscribers {
+		if strings.EqualFold(u, username) {
+			return true
+		}
+	}
+	return false
+}
+
 // HelpMessages are all of the different things !help can return
 var HelpMessages = []string{
 	"!commands: List more commands you can use",
