@@ -9,6 +9,21 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v3.13.0] — 2026-07-06
+
+### Chatbot
+
+- `!find` now jumps to a random nearby match instead of always the closest, so repeating a search (e.g. `!find bridge`) tours different spots. ([#1062](https://github.com/adanalife/tripbot/pull/1062))
+- Specific users can be comped as subscribers (`COMPED_SUBSCRIBERS`) to run subscriber-only commands like `!find` without an actual sub. ([#1063](https://github.com/adanalife/tripbot/pull/1063))
+
+### Deploy / Infra
+
+- prod-1 app manifests are now frozen to their pinned release version — a component's version-bump PR carries its config changes (env vars, mounts, args) in the same `dist/` diff as the image-tag bump, instead of leaking to prod at release-merge time. ([#1065](https://github.com/adanalife/tripbot/pull/1065))
+
+### CI / Tooling
+
+- The master→develop back-merge PR now opens once per release instead of once per bump PR (it no longer re-fires on the per-component prod pin bumps). ([#1066](https://github.com/adanalife/tripbot/pull/1066))
+
 ## [v3.12.0] — 2026-07-06
 
 ### Chatbot
