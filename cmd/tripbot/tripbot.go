@@ -252,8 +252,9 @@ func (t *Tripbot) Run() {
 		t.startEventSub(shutdownCtx)
 	}
 	t.startNATS(shutdownCtx)
-	t.player.EmitCurrentVideo(shutdownCtx) // after startNATS: publishes the current video.changed for the standalone console
-	t.startAuthStatusEmitter(shutdownCtx)  // after startNATS: publishes auth.status snapshots for the standalone console
+	t.player.EmitCurrentVideo(shutdownCtx)   // after startNATS: publishes the current video.changed for the standalone console
+	t.startAuthStatusEmitter(shutdownCtx)    // after startNATS: publishes auth.status snapshots for the standalone console
+	t.startOBSRefreshSubscriber(shutdownCtx) // after startNATS: per-platform (each instance owns its OBS), so before the YouTube early-return
 	if !platformIsTwitch() {
 		t.connectToYouTube(shutdownCtx)
 		return
