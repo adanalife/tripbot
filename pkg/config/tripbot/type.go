@@ -16,6 +16,10 @@ type TripbotConfig struct {
 	ChannelName string `required:"true" envconfig:"CHANNEL_NAME"`
 	// BotUsername is the username of the bot
 	BotUsername string `required:"true" envconfig:"BOT_USERNAME"`
+	// CompedSubscribers are usernames treated as subscribers for
+	// subscriber-only commands without an actual sub (comped friends/VIPs).
+	// Comma-separated, case-insensitive. Empty by default.
+	CompedSubscribers []string `envconfig:"COMPED_SUBSCRIBERS"`
 	// ExternalURL is the where the bot's HTTP server can be reached
 	ExternalURL string `required:"true" envconfig:"EXTERNAL_URL"`
 	// GoogleMapsAPIKey is the API key with which we access Google Maps.

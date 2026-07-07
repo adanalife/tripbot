@@ -99,6 +99,9 @@ _ENV_CONFIG: dict[str, dict[str, str]] = {
         "CHANNEL_NAME": "adanalife_",
         "BOT_USERNAME": "tripbot4000",
         "GOOGLE_APPS_PROJECT_ID": "tripbot-prod",
+        # Comped as a subscriber for sub-only commands (e.g. !find) without
+        # an actual sub. Comma-separated for more than one.
+        "COMPED_SUBSCRIBERS": "reapermoss",
     },
     "stage-1": {
         "CHANNEL_NAME": "adanalife_staging",
