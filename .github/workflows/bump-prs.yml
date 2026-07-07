@@ -133,6 +133,19 @@ jobs:
           uv sync
           mise exec -- uv run cdk8s import
           mise exec -- uv run cdk8s synth
+          # cdk8s synth regenerated ALL prod-1 app manifests from master (which is
+          # the just-released tag — bump-prs fires from release.yml). This bump
+          # deploys ONE component, so freeze every OTHER prod component back to its
+          # own pinned release: without it, a chart/config change this release made
+          # to a component we're NOT bumping would leak into this PR. Only the
+          # bumped component's manifests change — carrying its image tag AND any
+          # config delta (new env var, mount, arg) this release introduced, so the
+          # deploy is visible as one diff. DISTNAME maps the pin key to the dist
+          # filename stem (onscreens-server -> onscreens; tripbot/vlc unchanged).
+          DISTNAME="${COMPONENT%-server}"
+          git ls-files -- 'dist/prod-1-*-twitch.k8s.yaml' 'dist/prod-1-*-youtube.k8s.yaml' \
+            | { grep -v "prod-1-${DISTNAME}-" || true; } \
+            | xargs -r git checkout --
 
       - name: Commit and push the bump branch
         if: env.CURRENT != env.VERSION
@@ -183,7 +196,7 @@ jobs:
           - What changed: [v$CURRENT...v$VERSION](https://github.com/adanalife/tripbot/compare/v$CURRENT...v$VERSION) · [release notes](https://github.com/adanalife/tripbot/releases/tag/v$VERSION)
           - $DEPLOY
           - Rollback: \`git revert\` the bump commit (same deploy path as above).
-          - The pin edit + the re-synthed \`dist/\` ride in the same commit on \`$BRANCH\`.
+          - The pin edit + the re-synthed \`dist/\` ride in the same commit on \`$BRANCH\`. The \`dist/\` diff shows the **full deploy** for this version — the image tag **and** any manifest/config change (env var, mount, arg) this release introduced for \`$COMPONENT\`, since prod is frozen to its pinned version between bumps.
 
           This PR updates in place when newer releases ship (force-push to \`$BRANCH\`).
           EOF
