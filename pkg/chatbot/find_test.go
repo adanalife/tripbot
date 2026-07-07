@@ -63,8 +63,9 @@ func TestFindCmd_JumpsToClosestHit(t *testing.T) {
 	if len(recVLC.Calls) != 1 || recVLC.Calls[0] != want {
 		t.Errorf("expected VLC call %q, got %v", want, recVLC.Calls)
 	}
-	if got := recChat.Output(); !strings.Contains(got, "Jumping") || !strings.Contains(got, "Nevada") {
-		t.Errorf("expected a jump message naming the state, got %q", got)
+	// The jump message must not name the state, so a viewer can still guess it.
+	if got := recChat.Output(); !strings.Contains(got, "Jumping") || strings.Contains(got, "Nevada") {
+		t.Errorf("expected a jump message that omits the state, got %q", got)
 	}
 }
 

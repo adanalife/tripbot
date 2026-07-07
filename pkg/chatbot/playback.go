@@ -40,10 +40,12 @@ var timewarpOverlayLeadIn = 500 * time.Millisecond
 // the cover has to be in place to mask that gap.
 var timewarpCoverDelay = 800 * time.Millisecond
 
-// timewarp jumps the playhead to a random video in the loop. username is the
-// chatter who triggered it — surfaced as a credit line on the warp overlay
-// (empty for callers with no attributable user).
-func (a *App) timewarp(ctx context.Context, username string) {
+// showTimewarpOverlay brings up the full-screen warp overlay that masks a
+// playhead jump: it waits a beat so the preceding chat message lands, resolves
+// the (feature-flagged) username credit, triggers the overlay, then waits for
+// the browser source to render the opaque cover before the caller hard-cuts.
+// Shared by !timewarp/!guess (random jump) and !find (targeted jump).
+func (a *App) showTimewarpOverlay(ctx context.Context, username string) {
 	// give the chat message a beat to land before the visual takeover
 	time.Sleep(timewarpOverlayLeadIn)
 
@@ -60,9 +62,16 @@ func (a *App) timewarp(ctx context.Context, username string) {
 	}
 
 	// bring up the full-screen warp overlay, then give the browser source a
-	// beat to render the opaque cover before we hard-cut to a new clip
+	// beat to render the opaque cover before we hard-cut
 	a.Onscreens.ShowTimewarp(ctx, credit)
 	time.Sleep(timewarpCoverDelay)
+}
+
+// timewarp jumps the playhead to a random video in the loop. username is the
+// chatter who triggered it — surfaced as a credit line on the warp overlay
+// (empty for callers with no attributable user).
+func (a *App) timewarp(ctx context.Context, username string) {
+	a.showTimewarpOverlay(ctx, username)
 
 	// shuffle to a new video
 	err := a.VLC.PlayRandom(ctx)
