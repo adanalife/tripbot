@@ -78,6 +78,11 @@ func (a *App) buildRegistry() []Command {
 			Handler: a.shutdownCmd,
 		},
 		{
+			Trigger: "!refreshoverlays",
+			Aliases: []string{"!refreshoverlay"},
+			Handler: a.refreshOverlaysCmd,
+		},
+		{
 			Trigger: "!socialmedia",
 			Aliases: []string{"!social", "!socials"},
 			Handler: func(_ context.Context, _ *users.User, _ []string) {
