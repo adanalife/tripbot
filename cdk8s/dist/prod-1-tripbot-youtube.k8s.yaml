@@ -9,6 +9,7 @@ metadata:
 data:
   BOT_USERNAME: tripbot4000
   CHANNEL_NAME: adanalife_
+  COMPED_SUBSCRIBERS: reapermoss
   DATABASE_HOST: postgres.prod-1-data.svc.cluster.local
   ENV: production
   EXTERNAL_URL: https://tripbot-youtube.prod.whereisdana.today
@@ -67,7 +68,7 @@ spec:
   template:
     metadata:
       annotations:
-        adanalife.dev/config-hash: 73a0f8b3e9
+        adanalife.dev/config-hash: 13902e838a
       labels:
         app: tripbot-youtube
     spec:
