@@ -9,6 +9,12 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v3.15.0] — 2026-07-07
+
+### Chatbot
+
+- The `!report` command no longer attaches a YouTube viewer's display name to its downstream alerts (Sentry, Discord), matching YouTube's no-persisted-identity model; the report text still comes through. Twitch reports are unchanged. ([#1079](https://github.com/adanalife/tripbot/pull/1079))
+
 ## [v3.14.0] — 2026-07-07
 
 ### Chatbot
