@@ -46,4 +46,17 @@ func main() {
 		log.Fatalf("write %s: %v", ebOut, err)
 	}
 	log.Printf("wrote %s", ebOut)
+
+	// The onscreens command registry (subjects onscreens-server subscribes to +
+	// their envelope schemas) is emitted alongside — a sibling commands.json the
+	// console syncs to publish overlay commands without hand-building subjects.
+	cmdData, err := contract.MarshalCommands()
+	if err != nil {
+		log.Fatalf("marshal commands: %v", err)
+	}
+	cmdOut := filepath.Join(filepath.Dir(self), "..", "..", "commands.json")
+	if err := os.WriteFile(cmdOut, cmdData, 0o644); err != nil {
+		log.Fatalf("write %s: %v", cmdOut, err)
+	}
+	log.Printf("wrote %s", cmdOut)
 }
