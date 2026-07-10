@@ -24,6 +24,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/feature"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/users"
+	"github.com/adanalife/tripbot/pkg/video"
 	"github.com/getsentry/sentry-go"
 	"github.com/hako/durafmt"
 	"gorm.io/gorm"
@@ -257,7 +258,13 @@ func (a *App) sunsetCmd(ctx context.Context, user *users.User, _ []string) {
 	vid := a.Video.Current()
 	if vid.Flagged {
 		a.Chat.Say("I couldn't figure out current GPS coords, using next closest...")
-		vid = vid.Next(ctx)
+		next, err := vid.Next(ctx)
+		if err != nil {
+			slog.ErrorContext(ctx, "error finding next unflagged video", "err", err)
+			a.Chat.Say("I couldn't figure out current GPS coords, sorry!")
+			return
+		}
+		vid = next
 	}
 	lat, lng, _ := vid.Location()
 	a.Chat.Say(helpers.SunsetStr(vid.DateFilmed, lat, lng))
@@ -276,7 +283,13 @@ func (a *App) weatherCmd(ctx context.Context, user *users.User, _ []string) {
 	vid := a.Video.Current()
 	if vid.Flagged {
 		a.Chat.Say("I couldn't figure out current GPS coords, using next closest...")
-		vid = vid.Next(ctx)
+		next, err := vid.Next(ctx)
+		if err != nil {
+			slog.ErrorContext(ctx, "error finding next unflagged video", "err", err)
+			a.Chat.Say("I couldn't figure out current GPS coords, sorry!")
+			return
+		}
+		vid = next
 	}
 	lat, lng, _ := vid.Location()
 	desc, err := a.Weather.Historical(ctx, vid.DateFilmed, lat, lng)
@@ -295,7 +308,13 @@ func (a *App) locationCmd(ctx context.Context, user *users.User, _ []string) {
 		a.Chat.Say("I couldn't figure out current GPS coords, using next closest...")
 		//TODO: write something like vid.FindClosest() that
 		// chooses whether or not to use Next() vs Prev()
-		vid = vid.Next(ctx)
+		next, err := vid.Next(ctx)
+		if err != nil {
+			slog.ErrorContext(ctx, "error finding next unflagged video", "err", err)
+			a.Chat.Say("I couldn't figure out current GPS coords, sorry!")
+			return
+		}
+		vid = next
 	}
 	// extract the coordinates
 	lat, lng, err := vid.Location()
@@ -398,7 +417,11 @@ func (a *App) timeCmd(ctx context.Context, user *users.User, _ []string) {
 	var lat, lng float64
 	vid := a.Video.Current()
 	if vid.Flagged {
-		lat, lng, err = vid.Next(ctx).Location()
+		var next video.Video
+		next, err = vid.Next(ctx)
+		if err == nil {
+			lat, lng, err = next.Location()
+		}
 	} else {
 		lat, lng, err = vid.Location()
 	}
@@ -417,7 +440,11 @@ func (a *App) dateCmd(ctx context.Context, user *users.User, _ []string) {
 	var lat, lng float64
 	vid := a.Video.Current()
 	if vid.Flagged {
-		lat, lng, err = vid.Next(ctx).Location()
+		var next video.Video
+		next, err = vid.Next(ctx)
+		if err == nil {
+			lat, lng, err = next.Location()
+		}
 	} else {
 		lat, lng, err = vid.Location()
 	}
@@ -468,7 +495,13 @@ func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 	vid := a.Video.Current()
 	if vid.Flagged {
 		a.Chat.Say("I couldn't figure out current GPS coords, using next closest...")
-		vid = vid.Next(ctx)
+		next, err := vid.Next(ctx)
+		if err != nil {
+			slog.ErrorContext(ctx, "error finding next unflagged video", "err", err)
+			a.Chat.Say("I couldn't figure out current GPS coords, sorry!")
+			return
+		}
+		vid = next
 	}
 
 	if strings.EqualFold(guess, vid.State) {
@@ -489,7 +522,13 @@ func (a *App) stateCmd(ctx context.Context, user *users.User, _ []string) {
 	vid := a.Video.Current()
 	if vid.Flagged {
 		a.Chat.Say("I couldn't figure out current GPS coords, using next closest...")
-		vid = vid.Next(ctx)
+		next, err := vid.Next(ctx)
+		if err != nil {
+			slog.ErrorContext(ctx, "error finding next unflagged video", "err", err)
+			a.Chat.Say("I couldn't figure out current GPS coords, sorry!")
+			return
+		}
+		vid = next
 	}
 	msg := fmt.Sprintf("We're in %s", vid.State)
 	// record that they know the location now
