@@ -50,11 +50,8 @@ const guessScoreboard = "guess_state_total"
 
 func (a *App) helpCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !help", "username", user.Username)
-	n := len(a.helpMessages)
-	// a.help() advances the index, so capture the displayed line's number first.
-	pos := a.helpIndex + 1
-	msg := fmt.Sprintf("%s (%d of %d)", a.help(), pos, n)
-	a.Chat.Say(msg)
+	msg, pos, total := a.help()
+	a.Chat.Say(fmt.Sprintf("%s (%d of %d)", msg, pos, total))
 }
 
 // commandsCmd lists a curated set of featured commands — filtered to the ones

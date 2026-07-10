@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -350,6 +351,27 @@ func TestHelpCmd_AdvancesIndex(t *testing.T) {
 	if first == second {
 		t.Errorf("expected different messages on successive calls, got %q twice", first)
 	}
+}
+
+// TestHelp_ConcurrentAdvance exercises the Chatter-cron vs !help-dispatch
+// interleaving; fails under -race if help()'s read-and-advance isn't atomic.
+func TestHelp_ConcurrentAdvance(t *testing.T) {
+	app := newTestApp(video.Video{})
+
+	var wg sync.WaitGroup
+	for range 8 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for range 100 {
+				msg, pos, total := app.help()
+				if msg == "" || pos < 1 || pos > total {
+					t.Errorf("help() returned msg=%q pos=%d total=%d", msg, pos, total)
+				}
+			}
+		}()
+	}
+	wg.Wait()
 }
 
 // --- uptimeCmd ---
