@@ -10,7 +10,6 @@ import (
 
 	c "github.com/adanalife/tripbot/pkg/config/onscreens-server"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
-	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/natsclient"
 	onscreensServer "github.com/adanalife/tripbot/pkg/onscreens-server"
 	"github.com/adanalife/tripbot/pkg/telemetry"
@@ -35,9 +34,6 @@ const httpShutdownTimeout = 5 * time.Second
 
 func main() {
 	slog.Info("onscreens-server starting", "version", version)
-
-	// write the current pid to a pidfile
-	helpers.WritePidFile(c.Conf.OnscreensPidFile)
 
 	// shutdownCtx is canceled on SIGINT/SIGTERM; the HTTP server uses it
 	// to trigger a graceful shutdown so in-flight requests aren't cut.

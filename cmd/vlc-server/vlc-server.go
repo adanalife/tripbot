@@ -43,9 +43,6 @@ func main() {
 	// create a brand new random seed
 	rand.Seed(time.Now().UnixNano())
 
-	// write the current pid to a pidfile
-	helpers.WritePidFile(c.Conf.VLCPidFile)
-
 	// shutdownCtx is canceled on SIGINT/SIGTERM; the HTTP server uses it
 	// to trigger a graceful shutdown so in-flight requests aren't cut.
 	// listenForShutdown's gracefulShutdown goroutine handles the rest of

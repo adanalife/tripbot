@@ -21,7 +21,6 @@ import (
 	"github.com/adanalife/tripbot/pkg/eventsub"
 	"github.com/adanalife/tripbot/pkg/feature"
 	"github.com/adanalife/tripbot/pkg/gateway"
-	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"github.com/adanalife/tripbot/pkg/locationfeed"
 	"github.com/adanalife/tripbot/pkg/natsclient"
@@ -522,7 +521,6 @@ func createRandomSeed() {
 
 // listenForShutdown creates a background job that listens for a graceful shutdown request
 func (t *Tripbot) listenForShutdown() {
-	helpers.WritePidFile(c.Conf.TripbotPidFile)
 	// start the graceful shutdown listener
 	go t.gracefulShutdown()
 }
