@@ -1,6 +1,7 @@
 package database
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
 	"log/slog"
@@ -9,7 +10,6 @@ import (
 
 	"github.com/XSAM/otelsql"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
-	"github.com/jmoiron/sqlx"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 	"github.com/uptrace/opentelemetry-go-extra/otelgorm"
@@ -19,7 +19,6 @@ import (
 )
 
 // this is how we will share the DB connection
-var dbConnection *sqlx.DB
 var gormConn *gorm.DB
 
 func init() {
@@ -47,9 +46,8 @@ func init() {
 	}
 }
 
-func connectToDB() *sqlx.DB {
-	// otelsql.Open instruments the postgres driver so every query becomes
-	// a span; the returned *sql.DB is wrapped into sqlx as usual.
+func connectToDB() *sql.DB {
+	// otelsql.Open instruments the postgres driver so every query becomes a span.
 	db, err := otelsql.Open("postgres", connStr(),
 		otelsql.WithAttributes(semconv.DBSystemPostgreSQL),
 	)
@@ -66,41 +64,26 @@ func connectToDB() *sqlx.DB {
 	); err != nil {
 		slog.Warn("could not register DB stats metrics", "err", err)
 	}
-	return sqlx.NewDb(db, "postgres")
+	return db
 }
 
-func Connection() *sqlx.DB {
-	// if it does not exist, create it
-	if dbConnection == nil {
-		dbConnection = connectToDB()
-	}
-	connected := isAlive()
-	for connected != true { // reconnect if we lost connection
-		slog.Warn("connection to DB was lost, waiting to reconnect")
+// connection blocks until a live *sql.DB is available, retrying every 5s —
+// this is what lets pods boot before postgres is ready.
+func connection() *sql.DB {
+	db := connectToDB()
+	for db == nil {
+		slog.Warn("no DB connection, waiting to reconnect")
 		time.Sleep(5 * time.Second)
-		dbConnection = connectToDB()
-		connected = isAlive()
-		if connected {
+		db = connectToDB()
+		if db != nil {
 			slog.Info("DB connection made")
 		}
 	}
-	return dbConnection
+	return db
 }
 
-func isAlive() bool {
-	if dbConnection == nil {
-		return false
-	}
-	err := dbConnection.Ping()
-	if err != nil {
-		slog.Error("error connecting to DB", "err", err)
-		return false
-	}
-	return true
-}
-
-// GormDB returns a singleton *gorm.DB that wraps the same otelsql-instrumented
-// *sql.DB used by Connection(), adding GORM-level span metadata via otelgorm.
+// GormDB returns a singleton *gorm.DB wrapping an otelsql-instrumented
+// *sql.DB, with GORM-level span metadata added via otelgorm.
 func GormDB() *gorm.DB {
 	if gormConn == nil {
 		gormConn = connectGorm()
@@ -119,9 +102,20 @@ func SetGormDB(db *gorm.DB) {
 	gormConn = db
 }
 
+// Close shuts down the shared DB connection pool.
+func Close() error {
+	if gormConn == nil {
+		return nil
+	}
+	sqlDB, err := gormConn.DB()
+	if err != nil {
+		return err
+	}
+	return sqlDB.Close()
+}
+
 func connectGorm() *gorm.DB {
-	// Reuse the otelsql-instrumented *sql.DB so both layers share one connection pool.
-	sqlDB := Connection().DB
+	sqlDB := connection()
 	gdb, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{})
 	if err != nil {
 		log.Fatal("GORM init failed:", err)

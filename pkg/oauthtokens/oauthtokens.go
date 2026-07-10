@@ -1,6 +1,6 @@
 // Package oauthtokens is the storage layer for OAuth refresh + access tokens
 // rotated by the bot itself. The on-disk source of truth lives in the
-// `oauth_tokens` table (migration 010); this package wraps it with sqlx queries
+// `oauth_tokens` table (migration 010); this package wraps it with GORM
 // matching the rest of tripbot's DB access pattern.
 package oauthtokens
 
@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/database"
-	"github.com/jmoiron/sqlx"
+	"gorm.io/gorm"
 )
 
 // ErrNoToken is returned by Get when no row matches (provider, username).
@@ -25,32 +25,30 @@ var ErrNoToken = errors.New("oauthtokens: no row for (provider, username); re-au
 // Token mirrors the oauth_tokens row. TwitchUserID + LastRefreshAt are
 // nullable in the schema; the bootstrap CLI populates twitch_user_id from
 // helix.GetUsers, but any out-of-band INSERT (CI seed, ad-hoc psql) may
-// leave it unset, so sqlx scans must handle NULL.
+// leave it unset, so scans must handle NULL.
 type Token struct {
-	ID               int            `db:"id"`
-	Provider         string         `db:"provider"`
-	Username         string         `db:"username"`
-	TwitchUserID     sql.NullString `db:"twitch_user_id"`
-	AccessToken      string         `db:"access_token"`
-	RefreshToken     string         `db:"refresh_token"`
-	ExpiresAt        time.Time      `db:"expires_at"`
-	Scopes           string         `db:"scopes"` // space-joined
-	RefreshFailCount int            `db:"refresh_fail_count"`
-	LastRefreshAt    sql.NullTime   `db:"last_refresh_at"`
-	DateCreated      time.Time      `db:"date_created"`
-	DateUpdated      time.Time      `db:"date_updated"`
+	ID               int `gorm:"primaryKey"`
+	Provider         string
+	Username         string
+	TwitchUserID     sql.NullString
+	AccessToken      string
+	RefreshToken     string
+	ExpiresAt        time.Time
+	Scopes           string // space-joined
+	RefreshFailCount int
+	LastRefreshAt    sql.NullTime
+	DateCreated      time.Time
+	DateUpdated      time.Time
 }
+
+// TableName overrides GORM's pluralized default ("tokens").
+func (Token) TableName() string { return "oauth_tokens" }
 
 // Get returns the row for (provider, username) or ErrNoToken if missing.
 func Get(provider, username string) (Token, error) {
-	return getFromDB(database.Connection(), provider, username)
-}
-
-func getFromDB(db *sqlx.DB, provider, username string) (Token, error) {
 	var t Token
-	query := `SELECT * FROM oauth_tokens WHERE provider=$1 AND username=$2`
-	err := db.Get(&t, query, provider, username)
-	if errors.Is(err, sql.ErrNoRows) {
+	err := database.GormDB().Where("provider = ? AND username = ?", provider, username).First(&t).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return Token{}, ErrNoToken
 	}
 	if err != nil {
@@ -66,14 +64,9 @@ func getFromDB(db *sqlx.DB, provider, username string) (Token, error) {
 // the provider alone. If stray extra rows exist, the most recently updated
 // one wins; clean strays up by hand.
 func GetByProvider(provider string) (Token, error) {
-	return getByProviderFromDB(database.Connection(), provider)
-}
-
-func getByProviderFromDB(db *sqlx.DB, provider string) (Token, error) {
 	var t Token
-	query := `SELECT * FROM oauth_tokens WHERE provider=$1 ORDER BY date_updated DESC LIMIT 1`
-	err := db.Get(&t, query, provider)
-	if errors.Is(err, sql.ErrNoRows) {
+	err := database.GormDB().Where("provider = ?", provider).Order("date_updated DESC").First(&t).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return Token{}, ErrNoToken
 	}
 	if err != nil {
@@ -87,21 +80,14 @@ func getByProviderFromDB(db *sqlx.DB, provider string) (Token, error) {
 // or a fresh bootstrap), last_refresh_at + date_updated are stamped to now(),
 // and date_created is preserved.
 func Upsert(t Token) error {
-	return upsertOnDB(database.Connection(), t)
-}
-
-func upsertOnDB(db *sqlx.DB, t Token) error {
-	tx, err := db.Beginx()
-	if err != nil {
-		return fmt.Errorf("oauthtokens.Upsert begin: %w", err)
-	}
-	query := `
+	// Raw SQL: GORM's clause.OnConflict can't express the differing
+	// insert-vs-update stamping below without being harder to read.
+	err := database.GormDB().Exec(`
 		INSERT INTO oauth_tokens
 			(provider, username, twitch_user_id, access_token, refresh_token,
 			 expires_at, scopes, refresh_fail_count, last_refresh_at)
 		VALUES
-			(:provider, :username, :twitch_user_id, :access_token, :refresh_token,
-			 :expires_at, :scopes, 0, NOW())
+			(?, ?, ?, ?, ?, ?, ?, 0, NOW())
 		ON CONFLICT (provider, username) DO UPDATE SET
 			twitch_user_id     = EXCLUDED.twitch_user_id,
 			access_token       = EXCLUDED.access_token,
@@ -111,13 +97,9 @@ func upsertOnDB(db *sqlx.DB, t Token) error {
 			refresh_fail_count = 0,
 			last_refresh_at    = NOW(),
 			date_updated       = NOW()
-	`
-	if _, err := tx.NamedExec(query, t); err != nil {
-		_ = tx.Rollback()
-		return fmt.Errorf("oauthtokens.Upsert exec: %w", err)
-	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("oauthtokens.Upsert commit: %w", err)
+	`, t.Provider, t.Username, t.TwitchUserID, t.AccessToken, t.RefreshToken, t.ExpiresAt, t.Scopes).Error
+	if err != nil {
+		return fmt.Errorf("oauthtokens.Upsert: %w", err)
 	}
 	return nil
 }
@@ -126,26 +108,17 @@ func upsertOnDB(db *sqlx.DB, t Token) error {
 // Called by the refresh loop on Twitch-side errors (5xx, network blip, revoked
 // token) so persistent failures surface in monitoring.
 func IncrementFailCount(provider, username string) error {
-	return incrementOnDB(database.Connection(), provider, username)
-}
-
-func incrementOnDB(db *sqlx.DB, provider, username string) error {
-	query := `
+	res := database.GormDB().Exec(`
 		UPDATE oauth_tokens
 		SET refresh_fail_count = refresh_fail_count + 1,
 		    last_refresh_at    = NOW(),
 		    date_updated       = NOW()
-		WHERE provider=$1 AND username=$2
-	`
-	res, err := db.Exec(query, provider, username)
-	if err != nil {
-		return fmt.Errorf("oauthtokens.IncrementFailCount: %w", err)
+		WHERE provider = ? AND username = ?
+	`, provider, username)
+	if res.Error != nil {
+		return fmt.Errorf("oauthtokens.IncrementFailCount: %w", res.Error)
 	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("oauthtokens.IncrementFailCount rows: %w", err)
-	}
-	if n == 0 {
+	if res.RowsAffected == 0 {
 		return ErrNoToken
 	}
 	return nil
@@ -161,20 +134,21 @@ func incrementOnDB(db *sqlx.DB, provider, username string) error {
 // has rotated it) and proceed without calling release().
 //
 // The lock is held against a single pooled connection; release() unlocks and
-// returns the connection to the pool.
+// returns the connection to the pool. Advisory locks are session-scoped, so
+// this goes through the raw *sql.DB — GORM can't pin a connection across calls.
 func TryRefreshLock(provider, username string) (bool, func(), error) {
-	return tryRefreshLockOnDB(database.Connection(), provider, username)
-}
-
-func tryRefreshLockOnDB(db *sqlx.DB, provider, username string) (bool, func(), error) {
 	ctx := context.Background()
-	conn, err := db.Connx(ctx)
+	sqlDB, err := database.GormDB().DB()
+	if err != nil {
+		return false, nil, fmt.Errorf("oauthtokens.TryRefreshLock db: %w", err)
+	}
+	conn, err := sqlDB.Conn(ctx)
 	if err != nil {
 		return false, nil, fmt.Errorf("oauthtokens.TryRefreshLock conn: %w", err)
 	}
 	key := lockKey(provider, username)
 	var acquired bool
-	if err := conn.GetContext(ctx, &acquired, "SELECT pg_try_advisory_lock($1)", key); err != nil {
+	if err := conn.QueryRowContext(ctx, "SELECT pg_try_advisory_lock($1)", key).Scan(&acquired); err != nil {
 		_ = conn.Close()
 		return false, nil, fmt.Errorf("oauthtokens.TryRefreshLock acquire: %w", err)
 	}

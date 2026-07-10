@@ -727,7 +727,7 @@ func (t *Tripbot) gracefulShutdown() {
 		}
 	}
 	t.sessions.Shutdown(context.Background())
-	err := database.Connection().Close()
+	err := database.Close()
 	if err != nil {
 		slog.Error("error closing DB connection", "err", err)
 	}
