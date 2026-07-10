@@ -254,9 +254,12 @@ func (t *Tripbot) Run() {
 	t.startAuthStatusEmitter(shutdownCtx)    // after startNATS: publishes auth.status snapshots for the standalone console
 	t.startOBSRefreshSubscriber(shutdownCtx) // after startNATS: per-platform (each instance owns its OBS), so before the YouTube early-return
 	if !platformIsTwitch() {
-		if c.Conf.Platform == "facebook" {
+		switch c.Conf.Platform {
+		case "facebook":
 			t.connectToFacebook(shutdownCtx)
-		} else {
+		case "instagram":
+			t.connectToInstagram(shutdownCtx)
+		default:
 			t.connectToYouTube(shutdownCtx)
 		}
 		return
@@ -332,6 +335,35 @@ func (t *Tripbot) connectToFacebook(ctx context.Context) {
 	t.app.ConnectFacebookViaGateway()
 	go t.app.NewGatewayChatPoller(c.Conf.FacebookAPIURL).Run(ctx)
 	slog.InfoContext(ctx, "facebook chat via gateway (inbound + outbound)", "gateway", c.Conf.FacebookAPIURL)
+
+	// nothing else to do on the main goroutine — the poller and HTTP server
+	// run until the signal handler shuts the process down.
+	<-ctx.Done()
+}
+
+// connectToInstagram wires a PLATFORM=instagram instance's chat through
+// gateway-instagram, then blocks until shutdown. Inbound-only: the gateway
+// polls live-broadcast comments off the Graph API, which cannot create IG
+// comments, so outbound Say is dropped (viewers get responses via onscreens /
+// playback effects). The broadcast itself is started by a human — there is no
+// API to go live on Instagram — so the poller idles on rediscovery until one
+// appears.
+//
+// INSTAGRAM_API_URL is required — without the gateway URL there's no way to
+// reach Instagram. A misconfigured instance comes up Ready with everything
+// else working but no Instagram chat, logging loudly (the same "stay up with
+// limited functionality" contract as connectToYouTube).
+func (t *Tripbot) connectToInstagram(ctx context.Context) {
+	if c.Conf.InstagramAPIURL == "" {
+		slog.ErrorContext(ctx, "INSTAGRAM_API_URL unset; instagram chat disabled",
+			"fix", "set INSTAGRAM_API_URL to the gateway-instagram service URL")
+		<-ctx.Done()
+		return
+	}
+
+	t.app.ConnectInstagramViaGateway()
+	go t.app.NewGatewayChatPoller(c.Conf.InstagramAPIURL).Run(ctx)
+	slog.InfoContext(ctx, "instagram chat via gateway (inbound only)", "gateway", c.Conf.InstagramAPIURL)
 
 	// nothing else to do on the main goroutine — the poller and HTTP server
 	// run until the signal handler shuts the process down.

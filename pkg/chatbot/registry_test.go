@@ -107,6 +107,24 @@ func TestFacebookPlatformIndexesOnlyAllowlist(t *testing.T) {
 	}
 }
 
+// TestInstagramPlatformIndexesOnlyAllowlist verifies an Instagram App runs the
+// same v1 cross-platform allowlist, and that platform-scoped commands stay on
+// their platform (!carsound is YouTube-only).
+func TestInstagramPlatformIndexesOnlyAllowlist(t *testing.T) {
+	ig := &App{Platform: platformInstagram}
+	ig.indexCommands()
+	for _, token := range []string{"!skip", "!timewarp", "!location", "!instagram"} {
+		if cmd, _ := ig.findCommand(token); cmd == nil {
+			t.Errorf("expected %q to be available on Instagram, got nil", token)
+		}
+	}
+	for _, token := range []string{"!miles", "!guess", "!shutdown", "!carsound"} {
+		if cmd, _ := ig.findCommand(token); cmd != nil {
+			t.Errorf("expected %q to be unavailable on Instagram, got %q", token, cmd.Trigger)
+		}
+	}
+}
+
 // TestYouTubePlatformIndexesOnlyAllowlist verifies a YouTube App dispatches the
 // v1 cross-platform allowlist (triggers + their aliases) plus its
 // platform-scoped commands, and nothing else — identity/miles, the Twitch-only
