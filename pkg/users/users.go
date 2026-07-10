@@ -53,12 +53,12 @@ var guessCooldown = 3 * time.Minute
 // per-user data stay explicitly separate.
 
 func (s *Sessions) loggedInDur(u User) time.Duration {
-	// exit early if they're not logged in
-	if !s.isLoggedIn(u.Username) {
+	// lookup the user in the session so the LoggedIn value is current
+	live, ok := s.get(u.Username)
+	if !ok {
 		return 0 * time.Second
 	}
-	// lookup the user in the session so the LoggedIn value is current
-	return time.Now().Sub(s.loggedIn[u.Username].LoggedIn)
+	return time.Now().Sub(live.LoggedIn)
 }
 
 func (s *Sessions) sessionMiles(ctx context.Context, u User) float32 {
@@ -129,9 +129,11 @@ func (s *Sessions) SetBot(ctx context.Context, username string, isBot bool) erro
 	}
 	user.IsBot = isBot
 	user.save(ctx)
+	s.mu.Lock()
 	if loggedIn, ok := s.loggedIn[username]; ok {
 		loggedIn.IsBot = isBot
 	}
+	s.mu.Unlock()
 	return nil
 }
 
