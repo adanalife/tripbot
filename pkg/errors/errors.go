@@ -116,5 +116,8 @@ func FatalContext(ctx context.Context, e error, msg string) {
 		e = errors.New(msg)
 	}
 	slog.ErrorContext(ctx, msg, "err", e)
+	// The slog-sentry handler enqueues on an async transport; without a
+	// flush the fatal event would die with the process before it's sent.
+	sentry.Flush(2 * time.Second)
 	os.Exit(1)
 }
