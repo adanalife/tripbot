@@ -2,9 +2,45 @@ package users
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
+
+	"github.com/DATA-DOG/go-sqlmock"
+	c "github.com/adanalife/tripbot/pkg/config/tripbot"
+	"gorm.io/gorm"
 )
+
+// Find's contract: a missing user is gorm.ErrRecordNotFound, while a real DB
+// failure propagates as itself — the two must never be conflated (a transient
+// DB error looking like "new user" is how duplicate rows get created).
+func TestFind_NotFoundVsDBError(t *testing.T) {
+	t.Run("missing user surfaces gorm.ErrRecordNotFound", func(t *testing.T) {
+		mock := installMockDB(t)
+		mock.ExpectQuery(`SELECT \* FROM "users"`).
+			WithArgs(c.Conf.Platform, "ghost", 1).
+			WillReturnRows(sqlmock.NewRows([]string{"id"}))
+
+		_, err := Find(context.Background(), "ghost")
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			t.Fatalf("want gorm.ErrRecordNotFound, got %v", err)
+		}
+	})
+
+	t.Run("DB failure propagates as itself, not as not-found", func(t *testing.T) {
+		mock := installMockDB(t)
+		dbErr := errors.New("connection refused")
+		mock.ExpectQuery(`SELECT \* FROM "users"`).WillReturnError(dbErr)
+
+		_, err := Find(context.Background(), "somebody")
+		if !errors.Is(err, dbErr) {
+			t.Fatalf("want underlying DB error, got %v", err)
+		}
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			t.Fatal("DB failure must not look like not-found")
+		}
+	})
+}
 
 func TestGuessCooldownRemaining(t *testing.T) {
 	t.Run("zero lastLocation returns no cooldown", func(t *testing.T) {
