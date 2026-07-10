@@ -27,12 +27,6 @@ const timewarpCreditFlagKey = "chatbot.timewarp_credit"
 // plus it's also used to reset peoples lastLocation time
 var lastTimewarpTime time.Time
 
-// timewarpOverlayLeadIn is how long we wait after the "Here we go...!" chat
-// message before bringing up the warp overlay. Lets the audience register the
-// chat beat before the cover slams in, so the takeover feels intentional
-// rather than instantaneous.
-var timewarpOverlayLeadIn = 500 * time.Millisecond
-
 // timewarpCoverDelay is how long we wait after triggering the full-screen warp
 // overlay before actually jumping the playhead. The overlay is driven by a
 // browser source that polls for state, so it needs a beat to bring the opaque
@@ -41,14 +35,11 @@ var timewarpOverlayLeadIn = 500 * time.Millisecond
 var timewarpCoverDelay = 800 * time.Millisecond
 
 // showTimewarpOverlay brings up the full-screen warp overlay that masks a
-// playhead jump: it waits a beat so the preceding chat message lands, resolves
-// the (feature-flagged) username credit, triggers the overlay, then waits for
-// the browser source to render the opaque cover before the caller hard-cuts.
+// playhead jump: it resolves the (feature-flagged) username credit, triggers
+// the overlay, then waits for the browser source to render the opaque cover
+// before the caller hard-cuts.
 // Shared by !timewarp/!guess (random jump) and !find (targeted jump).
 func (a *App) showTimewarpOverlay(ctx context.Context, username string) {
-	// give the chat message a beat to land before the visual takeover
-	time.Sleep(timewarpOverlayLeadIn)
-
 	// The on-overlay username credit is feature-flagged (per platform); the
 	// warp always runs, only the credit line is gated. An empty credit means
 	// the overlay shows no @-line.
