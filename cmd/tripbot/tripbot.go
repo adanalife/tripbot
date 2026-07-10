@@ -291,7 +291,7 @@ func (t *Tripbot) connectToYouTube(ctx context.Context) {
 
 	t.app.ConnectYouTubeViaGateway()
 	if c.Conf.YouTubeInboundEnabled {
-		go t.app.NewGatewayYouTubeChatPoller().Run(ctx)
+		go t.app.NewGatewayChatPoller(c.Conf.YouTubeAPIURL).Run(ctx)
 		slog.InfoContext(ctx, "youtube chat via gateway (inbound + outbound)", "gateway", c.Conf.YouTubeAPIURL)
 	} else {
 		// Bot-less mode: outbound posting (rotators) + background jobs stay up,
