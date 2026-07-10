@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"math/rand"
 	"os"
 	"os/signal"
 	"syscall"
@@ -219,7 +218,6 @@ func platformIsTwitch() bool {
 // instances.
 func (t *Tripbot) Run() {
 	slog.Info("tripbot starting", "version", t.version, "platform", c.Conf.Platform)
-	createRandomSeed()
 	// shutdownCtx is canceled on SIGINT/SIGTERM; the HTTP server uses it
 	// to trigger a graceful shutdown so in-flight requests aren't cut.
 	// listenForShutdown's gracefulShutdown goroutine handles the rest of
@@ -512,12 +510,6 @@ func (t *Tripbot) startEventSub(ctx context.Context) {
 			slog.ErrorContext(ctx, "eventsub run terminated", "err", err)
 		}
 	}()
-}
-
-// createRandomSeed ensures that random numbers will be random
-func createRandomSeed() {
-	// create a brand new random seed
-	rand.Seed(time.Now().UnixNano())
 }
 
 // listenForShutdown creates a background job that listens for a graceful shutdown request
