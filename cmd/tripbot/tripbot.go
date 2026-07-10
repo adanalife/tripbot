@@ -191,7 +191,7 @@ func NewTripbot(version string) *Tripbot {
 	// rotators the clip's location/date in place of command hints. Gated by the
 	// same flag as the rest of the bot-less presentation; reuses the chatbot's
 	// Geocoder (pkg/geo default, set up in ConnectYouTubeViaGateway).
-	if !platformIsTwitch() && !c.Conf.YouTubeInboundEnabled {
+	if c.Conf.Platform == "youtube" && !c.Conf.YouTubeInboundEnabled {
 		t.locationFeed = locationfeed.New(
 			onscreensClient.New(natsclient.DefaultPublisher(), c.Conf.Environment, c.Conf.Platform),
 			t.app.Geocoder,
@@ -256,7 +256,11 @@ func (t *Tripbot) Run() {
 	t.startAuthStatusEmitter(shutdownCtx)    // after startNATS: publishes auth.status snapshots for the standalone console
 	t.startOBSRefreshSubscriber(shutdownCtx) // after startNATS: per-platform (each instance owns its OBS), so before the YouTube early-return
 	if !platformIsTwitch() {
-		t.connectToYouTube(shutdownCtx)
+		if c.Conf.Platform == "tiktok" {
+			t.connectToTikTok(shutdownCtx)
+		} else {
+			t.connectToYouTube(shutdownCtx)
+		}
 		return
 	}
 	// chat.send subjects are per-env, not per-platform — both platform
@@ -302,6 +306,32 @@ func (t *Tripbot) connectToYouTube(ctx context.Context) {
 		slog.WarnContext(ctx, "youtube inbound chat disabled (bot-less mode); outbound + jobs only",
 			"gateway", c.Conf.YouTubeAPIURL, "fix", "set YOUTUBE_INBOUND_ENABLED=true to read chat")
 	}
+
+	// nothing else to do on the main goroutine — the poller and HTTP server
+	// run until the signal handler shuts the process down.
+	<-ctx.Done()
+}
+
+// connectToTikTok wires a PLATFORM=tiktok instance's chat through
+// gateway-tiktok, then blocks until shutdown. Inbound-only: the gateway reads
+// LIVE chat off TikTok's webcast, and TikTok has no chat-post API, so outbound
+// Say is dropped (viewers get responses via onscreens / playback effects).
+//
+// TIKTOK_API_URL is required — without the gateway URL there's no way to reach
+// TikTok. A misconfigured instance comes up Ready with everything else working
+// but no TikTok chat, logging loudly (the same "stay up with limited
+// functionality" contract as connectToYouTube).
+func (t *Tripbot) connectToTikTok(ctx context.Context) {
+	if c.Conf.TikTokAPIURL == "" {
+		slog.ErrorContext(ctx, "TIKTOK_API_URL unset; tiktok chat disabled",
+			"fix", "set TIKTOK_API_URL to the gateway-tiktok service URL")
+		<-ctx.Done()
+		return
+	}
+
+	t.app.ConnectTikTokViaGateway()
+	go t.app.NewGatewayChatPoller(c.Conf.TikTokAPIURL).Run(ctx)
+	slog.InfoContext(ctx, "tiktok chat via gateway (inbound only)", "gateway", c.Conf.TikTokAPIURL)
 
 	// nothing else to do on the main goroutine — the poller and HTTP server
 	// run until the signal handler shuts the process down.
