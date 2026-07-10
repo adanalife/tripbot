@@ -55,10 +55,10 @@ spec:
                 name: onscreens-twitch-config
             - secretRef:
                 name: sentry-onscreens-server
-                optional: false
+                optional: true
             - secretRef:
                 name: grafana-cloud-otlp
-                optional: false
+                optional: true
           image: adanalife/onscreens-server:develop
           imagePullPolicy: Always
           livenessProbe:

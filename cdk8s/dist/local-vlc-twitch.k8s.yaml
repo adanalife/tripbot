@@ -59,10 +59,10 @@ spec:
                 name: vlc-twitch-config
             - secretRef:
                 name: sentry-vlc-server
-                optional: false
+                optional: true
             - secretRef:
                 name: grafana-cloud-otlp
-                optional: false
+                optional: true
           image: adanalife/vlc:latest
           imagePullPolicy: Always
           livenessProbe:
