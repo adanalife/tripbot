@@ -76,15 +76,33 @@ func TestLookupMapsPointToCorrectCommand(t *testing.T) {
 }
 
 // TestYouTubeAllowlistTriggersExist guards against drift: every trigger in the
-// YouTube allowlist must be a real command, so a rename or removal can't
+// v1 allowlist must be a real command, so a rename or removal can't
 // silently leave a dangling allowlist entry. Indexed on a YouTube App because
 // the allowlist is consulted on the YouTube platform.
 func TestYouTubeAllowlistTriggersExist(t *testing.T) {
 	yt := &App{Platform: platformYouTube}
 	yt.indexCommands()
-	for trigger := range youtubeCommands {
+	for trigger := range v1Commands {
 		if _, ok := yt.singleWordLookup[trigger]; !ok {
-			t.Errorf("youtubeCommands trigger %q is not a real command in the registry", trigger)
+			t.Errorf("v1Commands trigger %q is not a real command in the registry", trigger)
+		}
+	}
+}
+
+// TestFacebookPlatformIndexesOnlyAllowlist verifies a Facebook App runs the
+// same v1 cross-platform allowlist, and that platform-scoped commands stay on
+// their platform (!carsound is YouTube-only).
+func TestFacebookPlatformIndexesOnlyAllowlist(t *testing.T) {
+	fb := &App{Platform: platformFacebook}
+	fb.indexCommands()
+	for _, token := range []string{"!skip", "!timewarp", "!location", "!facebook"} {
+		if cmd, _ := fb.findCommand(token); cmd == nil {
+			t.Errorf("expected %q to be available on Facebook, got nil", token)
+		}
+	}
+	for _, token := range []string{"!miles", "!guess", "!shutdown", "!carsound"} {
+		if cmd, _ := fb.findCommand(token); cmd != nil {
+			t.Errorf("expected %q to be unavailable on Facebook, got %q", token, cmd.Trigger)
 		}
 	}
 }
