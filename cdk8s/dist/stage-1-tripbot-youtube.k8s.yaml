@@ -105,7 +105,7 @@ spec:
                 optional: true
             - secretRef:
                 name: tripbot-youtube-creds
-          image: adanalife/tripbot:develop
+          image: adanalife/tripbot:main
           imagePullPolicy: Always
           livenessProbe:
             httpGet:
@@ -149,7 +149,7 @@ spec:
                 name: tripbot-youtube-config
             - secretRef:
                 name: tripbot-database-creds
-          image: adanalife/tripbot:develop
+          image: adanalife/tripbot:main
           imagePullPolicy: Always
           name: migrate
           resources:
