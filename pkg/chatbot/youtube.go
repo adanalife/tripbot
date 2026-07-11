@@ -109,7 +109,7 @@ func (p *gatewayYouTubeChatPoller) Run(ctx context.Context) {
 		}
 		cursor = page.Cursor
 		for _, m := range page.Messages {
-			p.handle(ctx, IncomingMessage{User: m.Author, Text: m.Text})
+			p.handle(ctx, IncomingMessage{User: m.Author, UserID: m.AuthorID, Text: m.Text})
 		}
 		wait := time.Duration(page.PollAfterMS) * time.Millisecond
 		if wait < p.pollFloor {
