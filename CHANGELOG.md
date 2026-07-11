@@ -9,6 +9,14 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v3.16.1] — 2026-07-11
+
+### Fixes
+
+- Fix a data race on viewer session state between the session cron and the IRC handlers. ([#1095](https://github.com/adanalife/tripbot/pull/1095))
+- Chat commands that fall back to the next unflagged video (`!location`, `!weather`, `!time`, and friends) no longer hang forever when the video chain is broken or every candidate is flagged — they now reply that GPS coords couldn't be found. ([#1101](https://github.com/adanalife/tripbot/pull/1101))
+- `users.Find` now returns a real error instead of a zero-ID sentinel, so a transient DB failure can no longer masquerade as "new user" — chat lookups report the outage instead of "I don't know them", and `FindOrCreate` won't create a duplicate row while the DB is flaking. ([#1104](https://github.com/adanalife/tripbot/pull/1104))
+
 ## [v3.16.0] — 2026-07-11
 
 ### Chatbot
