@@ -664,7 +664,7 @@ func (a *App) shutdownCmd(ctx context.Context, user *users.User, _ []string) {
 		slog.ErrorContext(ctx, "cron shutdown failed during !shutdown", "err", err)
 	}
 	a.Sessions.Shutdown(ctx)
-	err := database.Connection().Close()
+	err := database.Close()
 	if err != nil {
 		slog.ErrorContext(ctx, "DB close failed during shutdown", "err", err)
 	}
