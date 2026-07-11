@@ -180,11 +180,16 @@ func (a *App) milesCmd(ctx context.Context, user *users.User, params []string) {
 		monthlyMiles = a.Sessions.CurrentMonthlyMiles(ctx, *user)
 	} else {
 		username = helpers.StripAtSign(params[0])
-		u := a.Sessions.Find(ctx, username)
+		u, err := a.Sessions.Find(ctx, username)
 
 		// check to see if they are in our DB
-		if u.ID == 0 {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			a.Chat.Say("I don't know them, sorry!")
+			return
+		}
+		if err != nil {
+			slog.ErrorContext(ctx, "error finding user", "err", err, "username", username)
+			a.Chat.Say("Couldn't look them up right now, try again in a bit")
 			return
 		}
 
@@ -236,11 +241,16 @@ func (a *App) kilometresCmd(ctx context.Context, user *users.User, params []stri
 		miles = a.Sessions.CurrentMiles(ctx, *user)
 	} else {
 		username = helpers.StripAtSign(params[0])
-		u := a.Sessions.Find(ctx, username)
+		u, err := a.Sessions.Find(ctx, username)
 
 		// check to see if they are in our DB
-		if u.ID == 0 {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			a.Chat.Say("I don't know them, sorry!")
+			return
+		}
+		if err != nil {
+			slog.ErrorContext(ctx, "error finding user", "err", err, "username", username)
+			a.Chat.Say("Couldn't look them up right now, try again in a bit")
 			return
 		}
 
@@ -662,8 +672,13 @@ func (a *App) giveMilesCmd(ctx context.Context, user *users.User, params []strin
 		a.Chat.Say("that amount isn't a number I understand")
 		return
 	}
-	if u := a.Sessions.Find(ctx, target); u.ID == 0 {
-		a.Chat.Say("I don't know them, sorry!")
+	if _, err := a.Sessions.Find(ctx, target); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			a.Chat.Say("I don't know them, sorry!")
+		} else {
+			slog.ErrorContext(ctx, "error finding user", "err", err, "username", target)
+			a.Chat.Say("Couldn't look them up right now, try again in a bit")
+		}
 		return
 	}
 	newTotal := a.Sessions.CorrectMiles(ctx, target, float32(delta))
