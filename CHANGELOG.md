@@ -9,6 +9,26 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v3.16.0] — 2026-07-11
+
+### Chatbot
+
+- Removed the 500ms lead-in before the timewarp overlay, making `!timewarp`, `!guess`, and `!find` warps noticeably snappier (the cut-masking cover delay is unchanged). ([#1086](https://github.com/adanalife/tripbot/pull/1086))
+- Inbound chat messages now carry the sender's stable platform user ID (`IncomingMessage.UserID`, from the gateway's new `author_id` field / Twitch IRC tags) so future viewer persistence can key on something rename-proof. Carried, not yet consumed. ([#1109](https://github.com/adanalife/tripbot/pull/1109))
+
+### Fixes
+
+- Reverse geocoding no longer panics the video-save path when the geocoder returns zero addresses (bad GPS coords, ZERO_RESULTS) — `geo.City`/`geo.State` now return a descriptive error instead. ([#1091](https://github.com/adanalife/tripbot/pull/1091))
+- The `!weather` Open-Meteo fetch is now bounded by a 5s timeout, so a hung response can't stall the chat handler indefinitely. ([#1096](https://github.com/adanalife/tripbot/pull/1096))
+- vlc-server: `currentlyPlaying` no longer panics when the player has no current media — it returns an empty result early instead. ([#1097](https://github.com/adanalife/tripbot/pull/1097))
+- Flush Sentry before exiting in the fatal-error helpers so the fatal event isn't lost with the process ([#1099](https://github.com/adanalife/tripbot/pull/1099))
+- backfill-miles: `--output-sql` escapes single quotes in platform and username, so a `'` in a username no longer breaks the generated SQL. ([#1100](https://github.com/adanalife/tripbot/pull/1100))
+
+### Cleanup
+
+- Migrated `pkg/oauthtokens` (the last sqlx user) to GORM and removed sqlx from the dependency tree. ([#1090](https://github.com/adanalife/tripbot/pull/1090))
+- Drop deprecated no-op `rand.Seed` bootstrapping from the tripbot and vlc-server binaries (Go 1.20+ auto-seeds the global source) ([#1098](https://github.com/adanalife/tripbot/pull/1098))
+
 ## [v3.15.0] — 2026-07-07
 
 ### Chatbot
