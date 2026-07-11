@@ -12,6 +12,7 @@ on:
       - 'configs/**'
       - 'assets/**'
       - 'infra/docker/**'
+      - '.env.testing'
       - 'Taskfile.yml'
       - '.github/workflows/testing.yml'
   push:
