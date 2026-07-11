@@ -2,81 +2,158 @@ package viewstats
 
 import (
 	"context"
-	"database/sql/driver"
 	"testing"
 	"time"
 
-	"github.com/DATA-DOG/go-sqlmock"
-	"github.com/adanalife/tripbot/pkg/database"
-	"gorm.io/driver/postgres"
+	c "github.com/adanalife/tripbot/pkg/config/tripbot"
+	"github.com/adanalife/tripbot/pkg/database/testdb"
 	"gorm.io/gorm"
 )
 
-// installMockDB stands up a sqlmock-backed *gorm.DB as the process-wide
-// singleton. Mirrors the pattern from pkg/chatbot/mockdb_test.go.
-func installMockDB(t *testing.T) sqlmock.Sqlmock {
+// setup installs a transaction-scoped DB, pins the config the writers read, and
+// clears the package-global current-video tag so each test starts from a known
+// state. The transaction rolls back in cleanup, so rows never leak.
+func setup(t *testing.T) *gorm.DB {
 	t.Helper()
-	sqlDB, mock, err := sqlmock.New()
-	if err != nil {
-		t.Fatalf("sqlmock.New: %v", err)
-	}
-	gdb, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{
-		SkipDefaultTransaction: true,
-	})
-	if err != nil {
-		t.Fatalf("gorm.Open: %v", err)
-	}
-	database.SetGormDB(gdb)
+	db := testdb.New(t)
+
+	platform, readOnly := c.Conf.Platform, c.Conf.ReadOnly
+	c.Conf.Platform, c.Conf.ReadOnly = "twitch", false
+	currentVideoID.Store(0)
 	t.Cleanup(func() {
-		database.SetGormDB(nil)
-		_ = sqlDB.Close()
+		c.Conf.Platform, c.Conf.ReadOnly = platform, readOnly
+		currentVideoID.Store(0)
 	})
-	return mock
+	return db
 }
 
-// notZeroTime matches any non-zero timestamp arg — the guard that
-// autoCreateTime actually stamped the column instead of writing 0001-01-01
-// over its DEFAULT (the pkg/events regression).
-type notZeroTime struct{}
-
-func (notZeroTime) Match(v driver.Value) bool {
-	tm, ok := v.(time.Time)
-	return ok && !tm.IsZero()
+func allPlays(t *testing.T, db *gorm.DB) []VideoPlay {
+	t.Helper()
+	var plays []VideoPlay
+	if err := db.Order("id").Find(&plays).Error; err != nil {
+		t.Fatalf("read video_plays: %v", err)
+	}
+	return plays
 }
 
-func TestRecordPlayAndSample(t *testing.T) {
-	mock := installMockDB(t)
+func allSamples(t *testing.T, db *gorm.DB) []ViewerSample {
+	t.Helper()
+	var samples []ViewerSample
+	if err := db.Order("id").Find(&samples).Error; err != nil {
+		t.Fatalf("read viewer_samples: %v", err)
+	}
+	return samples
+}
+
+func TestRecordPlay_PersistsDenormalizedColumns(t *testing.T) {
+	db := setup(t)
+
+	RecordPlay(context.Background(), 42, "Utah", true, 38.5, -109.5)
+
+	plays := allPlays(t, db)
+	if len(plays) != 1 {
+		t.Fatalf("expected 1 video_plays row, got %d", len(plays))
+	}
+	got := plays[0]
+	if got.Platform != "twitch" {
+		t.Errorf("platform: want twitch, got %q", got.Platform)
+	}
+	if got.VideoID == nil || *got.VideoID != 42 {
+		t.Errorf("video_id: want 42, got %v", got.VideoID)
+	}
+	if got.State != "Utah" || !got.Flagged {
+		t.Errorf("state/flagged: want Utah/true, got %q/%v", got.State, got.Flagged)
+	}
+	if got.Lat != 38.5 || got.Lng != -109.5 {
+		t.Errorf("lat/lng: want 38.5/-109.5, got %v/%v", got.Lat, got.Lng)
+	}
+	// autoCreateTime must stamp started_at rather than writing the zero value
+	// over its DEFAULT CURRENT_TIMESTAMP (the pkg/events regression).
+	if time.Since(got.StartedAt) > time.Minute {
+		t.Errorf("started_at not stamped at insert: %v", got.StartedAt)
+	}
+}
+
+// A clip with no DB row (LoadOrCreate failed) still records the switch, with a
+// NULL video_id.
+func TestRecordPlay_ZeroVideoIDWritesNull(t *testing.T) {
+	db := setup(t)
+
+	RecordPlay(context.Background(), 0, "", false, 0, 0)
+
+	plays := allPlays(t, db)
+	if len(plays) != 1 {
+		t.Fatalf("expected 1 video_plays row, got %d", len(plays))
+	}
+	if plays[0].VideoID != nil {
+		t.Errorf("video_id: want NULL, got %v", *plays[0].VideoID)
+	}
+}
+
+func TestRecordSample_TagsCurrentVideo(t *testing.T) {
+	db := setup(t)
 	ctx := context.Background()
 
-	// A sample before any play carries a NULL video_id.
-	mock.ExpectQuery(`INSERT INTO "viewer_samples" .*RETURNING "id"`).
-		WithArgs(sqlmock.AnyArg(), 3, nil, notZeroTime{}).
-		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+	// Before any play, the sample carries a NULL video_id.
 	RecordSample(ctx, 3)
-
-	mock.ExpectQuery(`INSERT INTO "video_plays" .*RETURNING "id"`).
-		WithArgs(sqlmock.AnyArg(), 42, "Utah", false, 38.5, -109.5, notZeroTime{}).
-		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+	// A play tags every sample that follows it.
 	RecordPlay(ctx, 42, "Utah", false, 38.5, -109.5)
-
-	// After the play, samples are tagged with its video id.
-	mock.ExpectQuery(`INSERT INTO "viewer_samples" .*RETURNING "id"`).
-		WithArgs(sqlmock.AnyArg(), 5, 42, notZeroTime{}).
-		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(2))
 	RecordSample(ctx, 5)
-
-	// A play with no DB row (videoID 0) writes NULL and resets the sample tag.
-	mock.ExpectQuery(`INSERT INTO "video_plays" .*RETURNING "id"`).
-		WithArgs(sqlmock.AnyArg(), nil, "", true, 0.0, 0.0, notZeroTime{}).
-		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(2))
+	// A play with no DB row resets the tag back to NULL.
 	RecordPlay(ctx, 0, "", true, 0, 0)
+	RecordSample(ctx, 7)
 
-	mock.ExpectQuery(`INSERT INTO "viewer_samples" .*RETURNING "id"`).
-		WithArgs(sqlmock.AnyArg(), 5, nil, notZeroTime{}).
-		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(3))
-	RecordSample(ctx, 5)
+	samples := allSamples(t, db)
+	if len(samples) != 3 {
+		t.Fatalf("expected 3 viewer_samples rows, got %d", len(samples))
+	}
 
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Fatalf("unmet sqlmock expectations: %v", err)
+	wantCounts := []int{3, 5, 7}
+	wantVideo := []*int{nil, intPtr(42), nil}
+	for i, got := range samples {
+		if got.Platform != "twitch" {
+			t.Errorf("sample %d platform: want twitch, got %q", i, got.Platform)
+		}
+		if got.Count != wantCounts[i] {
+			t.Errorf("sample %d count: want %d, got %d", i, wantCounts[i], got.Count)
+		}
+		switch {
+		case wantVideo[i] == nil && got.VideoID != nil:
+			t.Errorf("sample %d video_id: want NULL, got %d", i, *got.VideoID)
+		case wantVideo[i] != nil && (got.VideoID == nil || *got.VideoID != *wantVideo[i]):
+			t.Errorf("sample %d video_id: want %d, got %v", i, *wantVideo[i], got.VideoID)
+		}
+		if time.Since(got.SampledAt) > time.Minute {
+			t.Errorf("sample %d sampled_at not stamped at insert: %v", i, got.SampledAt)
+		}
 	}
 }
+
+func TestReadOnly_SkipsWritesButStillTracksVideo(t *testing.T) {
+	db := setup(t)
+	c.Conf.ReadOnly = true
+	ctx := context.Background()
+
+	RecordPlay(ctx, 42, "Utah", false, 38.5, -109.5)
+	RecordSample(ctx, 5)
+
+	if plays := allPlays(t, db); len(plays) != 0 {
+		t.Errorf("expected no video_plays rows in read-only mode, got %d", len(plays))
+	}
+	if samples := allSamples(t, db); len(samples) != 0 {
+		t.Errorf("expected no viewer_samples rows in read-only mode, got %d", len(samples))
+	}
+	// The tag is stored before the read-only bail, so writes resume correctly
+	// tagged the moment read-only is lifted.
+	c.Conf.ReadOnly = false
+	RecordSample(ctx, 5)
+	samples := allSamples(t, db)
+	if len(samples) != 1 {
+		t.Fatalf("expected 1 viewer_samples row, got %d", len(samples))
+	}
+	if samples[0].VideoID == nil || *samples[0].VideoID != 42 {
+		t.Errorf("video_id: want 42, got %v", samples[0].VideoID)
+	}
+}
+
+func intPtr(i int) *int { return &i }
