@@ -3,10 +3,7 @@ on:
   pull_request:
   push:
     branches:
-      - develop
-      - master
-    tags:
-      - v*
+      - main
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -61,8 +58,7 @@ jobs:
       # Gaps are fine (026 -> 028 just skips 027); the hazards are a duplicate
       # number, or a PR adding a migration <= the base branch's max (the
       # out-of-order-merge case). This catches both: an early warning on PRs, and
-      # the real net on push to develop. See vault: consider goose/atlas to
-      # remove the ascending-merge constraint structurally.
+      # the real net on push to main.
       - name: Migrations don't collide or regress the schema version
         env:
           BASE_REF: ${{ github.event.pull_request.base.ref }}
