@@ -1,11 +1,11 @@
 name: codeql-analysis
 
 # No schedule trigger: pull_request + push events already analyze every commit
-# that lands on develop/master, so a cron re-scan would be redundant.
+# that lands on main, so a cron re-scan would be redundant.
 on:
   pull_request:
   push:
-    branches: [ develop, master ]
+    branches: [ main ]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

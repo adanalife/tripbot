@@ -32,7 +32,7 @@ class EnvConfig:
     namespace: str
     cluster: str  # minipc | k3d | local
     aws_account: str  # adanalife-prod | adanalife-stage | "" (local)
-    image_tag: str  # floating tag (latest | develop) for components without a pin
+    image_tag: str  # floating tag (latest | main) for components without a pin
     dns_base: str  # prod.whereisdana.today | stage... | dev...  ("" for local)
     nats_url: str
     sentry_env: str  # SENTRY_ENVIRONMENT (prod-1 | stage-1 | development)
@@ -186,7 +186,7 @@ class EnvConfig:
 
     def pull_policy_for(self, component: str) -> str:
         """Pinned release tags are immutable → IfNotPresent (no redundant pulls,
-        no silent drift). Floating tags (latest/develop) need Always to pick up
+        no silent drift). Floating tags (latest/main) need Always to pick up
         rebuilds under the same tag."""
         return "IfNotPresent" if component in self.image_pins else "Always"
 
@@ -298,7 +298,7 @@ ENVS: dict[str, EnvConfig] = {
         namespace="stage-1",
         cluster="minipc",
         aws_account="adanalife-stage",
-        image_tag="develop",
+        image_tag="main",
         dns_base="stage.whereisdana.today",
         nats_url="nats://nats.stage-1-platform.svc.cluster.local:4222",
         sentry_env="stage-1",
@@ -368,7 +368,7 @@ ENVS: dict[str, EnvConfig] = {
         namespace="development",
         cluster="k3d",
         aws_account="adanalife-stage",
-        image_tag="develop",
+        image_tag="main",
         dns_base="dev.whereisdana.today",
         nats_url="nats://nats.development-platform.svc.cluster.local:4222",
         sentry_env="development",

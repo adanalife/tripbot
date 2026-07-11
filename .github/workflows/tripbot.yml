@@ -2,7 +2,7 @@ name: tripbot
 on:
   pull_request:
     # Docs/cdk8s/workflow-only PRs don't need a full image build + compose
-    # smoke. Push to develop stays unfiltered as the post-merge safety net.
+    # smoke. Push to main stays unfiltered as the post-merge safety net.
     paths:
       - 'cmd/**'
       - 'pkg/**'
@@ -16,7 +16,7 @@ on:
       - '.github/workflows/tripbot.yml'
   push:
     branches:
-      - develop
+      - main
 
 # Supersede an in-flight run when new commits land on the same PR/branch —
 # a superseded build's image is immediately stale, and this keeps concurrent

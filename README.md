@@ -4,7 +4,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/adanalife/tripbot)](https://goreportcard.com/report/github.com/adanalife/tripbot)
 [![GitHub Super-Linter](https://github.com/adanalife/tripbot/workflows/Super%20Linter/badge.svg)](https://github.com/marketplace/actions/super-linter)
 [![Version](https://img.shields.io/github/v/release/adanalife/tripbot?sort=semver&include_prereleases)](https://github.com/adanalife/tripbot/releases)
-![Build Status](https://img.shields.io/github/checks-status/adanalife/tripbot/master)
+![Build Status](https://img.shields.io/github/checks-status/adanalife/tripbot/main)
 [![License](https://img.shields.io/github/license/adanalife/tripbot)](https://tldrlegal.com/license/mit-license)
 
 This is the source code to [whereisdana.today](http://whereisdana.today), a 24/7 interactive [slow-tv](https://en.wikipedia.org/wiki/Slow_television) art project streaming on Twitch and YouTube.
@@ -71,7 +71,7 @@ devenv down
 
 ### Changelog
 
-Changelog entries are managed with [towncrier](https://towncrier.readthedocs.io). **Every PR into `develop` adds a fragment** describing its user-facing change — a `changelog` CI check enforces this (label a PR `skip-changelog` for dependabot bumps, CI-only tweaks, or pure refactors that warrant no entry).
+Changelog entries are managed with [towncrier](https://towncrier.readthedocs.io). **Every PR into `main` adds a fragment** describing its user-facing change — a `changelog` CI check enforces this (label a PR `skip-changelog` for dependabot bumps, CI-only tweaks, or pure refactors that warrant no entry).
 
 A fragment is a small markdown file in [`changelog.d/`](changelog.d/) named `<PR-number>.<type>.md`, e.g. `889.fix.md`. Its contents are the entry prose (bold lead-in sentence, then detail — match the existing [`CHANGELOG.md`](CHANGELOG.md) style); the PR link is added automatically.
 
@@ -85,4 +85,6 @@ task changelog:preview
 
 Types map to the changelog's component sections: `gateway`, `chatbot`, `onscreens`, `vlc`, `console`, `fix`, `deploy`, `ci`, `cleanup`, `misc`, plus `summary` (a lead paragraph for the release, named `+summary.summary.md` — no PR number).
 
-At release time, `task changelog:build VERSION=x.y.z` collates the fragments into a new `CHANGELOG.md` section and deletes them. See the standing `pending-release` PR for the cut steps.
+### Releases
+
+Releases are trunk-based: [release-please](https://github.com/googleapis/release-please) maintains a standing release PR on `main` with the next version, computed from the conventional commits since the last release. The release PR also carries the collated changelog (built from the `changelog.d/` fragments) and the bumped + re-synthed prod deploy manifests. **Merging the release PR is the release**: it tags `vX.Y.Z`, publishes the GitHub Release, kicks off the multi-arch image builds, and deploys prod (prod-1 autosyncs from `main`). The `vlc` pod restart briefly drops the playing video, so merge at a quiet moment.
