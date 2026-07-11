@@ -32,7 +32,10 @@ func (s *Sessions) InitLeaderboard(ctx context.Context) {
 	if err != nil {
 		slog.ErrorContext(ctx, "error fetching leaderboard", "err", err)
 	}
-	s.lifetimeLeaderboard = toPairs(users)
+	pairs := toPairs(users)
+	s.mu.Lock()
+	s.lifetimeLeaderboard = pairs
+	s.mu.Unlock()
 }
 
 // UpdateLeaderboard rebuilds the lifetime-miles leaderboard from the users
@@ -47,15 +50,27 @@ func (s *Sessions) UpdateLeaderboard(ctx context.Context) {
 		return
 	}
 	for i, user := range users {
-		if live, ok := s.loggedIn[user.Username]; ok {
-			users[i].Miles = s.CurrentMiles(ctx, *live)
+		// copy the live user under the lock; CurrentMiles locks internally,
+		// so it must run after the release
+		s.mu.Lock()
+		live, ok := s.loggedIn[user.Username]
+		var liveCopy User
+		if ok {
+			liveCopy = *live
+		}
+		s.mu.Unlock()
+		if ok {
+			users[i].Miles = s.CurrentMiles(ctx, liveCopy)
 		}
 	}
 	// ponytail: a logged-in user whose stored miles sit just below the top-50
 	// cutoff won't appear until logout — same class of miss as the old
 	// in-memory rebuild.
 	sort.SliceStable(users, func(i, j int) bool { return users[i].Miles > users[j].Miles })
-	s.lifetimeLeaderboard = toPairs(users)
+	pairs := toPairs(users)
+	s.mu.Lock()
+	s.lifetimeLeaderboard = pairs
+	s.mu.Unlock()
 }
 
 // toPairs formats users as the [username, miles] string pairs the leaderboard
@@ -74,5 +89,10 @@ func toPairs(users []User) [][]string {
 
 // LifetimeLeaderboard returns the cached lifetime-miles leaderboard (a slice of
 // [username, miles] pairs), hydrated by InitLeaderboard and rebuilt by
-// UpdateLeaderboard.
-func (s *Sessions) LifetimeLeaderboard() [][]string { return s.lifetimeLeaderboard }
+// UpdateLeaderboard. The rebuilds swap the slice wholesale, so the returned
+// snapshot is safe to read without further locking.
+func (s *Sessions) LifetimeLeaderboard() [][]string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.lifetimeLeaderboard
+}

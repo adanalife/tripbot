@@ -70,6 +70,21 @@ jobs:
       version: ${{ needs.version.outputs.version }}
       tags: ${{ needs.version.outputs.tags }}
 
+  # Offer the stream-sensitive components as per-component deploy PRs once
+  # their images exist. tripbot deploys with the release PR itself (see
+  # release-please.yml), so it needs no bump PR.
+  bump-prs:
+    needs: [version, vlc, onscreens-server]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: write
+    steps:
+      - name: Dispatch bump-prs with the released version
+        run: gh workflow run bump-prs.yml --repo "$GITHUB_REPOSITORY" --ref main -f version="${{ needs.version.outputs.version }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   notify:
     needs: [tripbot, vlc, onscreens-server]
     runs-on: ubuntu-latest
