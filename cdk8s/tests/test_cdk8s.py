@@ -84,7 +84,7 @@ def test_obs_websocket_addr_is_platform_scoped(env, comp, platform):
 @pytest.mark.parametrize("env,platform", [("prod-1", "twitch"), ("stage-1", "youtube")])
 def test_prod_pinned_stage_floats(env, platform):
     """prod deploys the exact versions.yaml pin with IfNotPresent; stage floats
-    on develop with Always."""
+    on main with Always."""
     pins = yaml.safe_load(VERSIONS.read_text())
     dep = _by_kind(_objects(f"{env}-tripbot-{platform}"), "Deployment")[0]
     container = next(
@@ -98,7 +98,7 @@ def test_prod_pinned_stage_floats(env, platform):
         assert tag == pins["prod-1"]["tripbot"]
         assert container["imagePullPolicy"] == "IfNotPresent"
     else:
-        assert tag == "develop"
+        assert tag == "main"
         assert container["imagePullPolicy"] == "Always"
 
 
@@ -144,8 +144,8 @@ def test_stage_omits_replicas_prod_keeps_one():
 
 
 def test_stage_twitch_routes_through_gateway():
-    """Stage tripbot-twitch carries TWITCH_API_URL (Phase 3 gateway); the youtube
-    instance and prod tripbot do not."""
+    """Both stage and prod tripbot-twitch carry TWITCH_API_URL (the gateway is
+    the single Helix caller since the cutover); the youtube instances do not."""
 
     def _cm_data(stem):
         return _by_kind(_objects(stem), "ConfigMap")[0]["data"]
@@ -154,8 +154,12 @@ def test_stage_twitch_routes_through_gateway():
         _cm_data("stage-1-tripbot-twitch").get("TWITCH_API_URL")
         == "http://gateway-twitch.stage-1.svc.cluster.local:8080"
     )
+    assert (
+        _cm_data("prod-1-tripbot-twitch").get("TWITCH_API_URL")
+        == "http://gateway-twitch.prod-1.svc.cluster.local:8080"
+    )
     assert "TWITCH_API_URL" not in _cm_data("stage-1-tripbot-youtube")
-    assert "TWITCH_API_URL" not in _cm_data("prod-1-tripbot-twitch")
+    assert "TWITCH_API_URL" not in _cm_data("prod-1-tripbot-youtube")
 
 
 def test_stage_youtube_routes_sends_through_gateway():
@@ -223,9 +227,9 @@ def test_stage_obs_feeders_colocate_with_obs():
     """vlc + onscreens feed OBS continuously (RTSP / browser-source) and must reach
     it on localhost, not across the LAN. They anchor to their platform's OBS pod
     via podAffinity instead of pulling toward the Pi on their own — keeping the
-    rpi5 toleration so they can follow OBS onto the Pi, but NOT the board
-    node-affinity that previously split the pipeline when OBS spilled to the MS-01
-    (the 2026-06-19 stage obs-youtube stutter)."""
+    rpi5 toleration so they can follow OBS onto the Pi, but NOT an independent
+    board node-affinity, which splits the pipeline across nodes (and stutters
+    the stream) whenever OBS spills to the MS-01."""
     for stem in ("stage-1-vlc-youtube", "stage-1-onscreens-youtube"):
         spec = _pod_spec(stem)
         assert _colocates_with_obs(spec, "obs-youtube"), stem
@@ -233,5 +237,5 @@ def test_stage_obs_feeders_colocate_with_obs():
         assert any(
             t.get("key") == "dana.lol/rpi5" for t in spec.get("tolerations", [])
         ), stem
-        # ... but no longer carries an independent rpi5 board pull.
+        # ... but carries no independent rpi5 board pull.
         assert not _prefers_rpi5(spec), stem

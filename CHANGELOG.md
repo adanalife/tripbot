@@ -9,6 +9,172 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v3.17.0] — 2026-07-12
+
+### Chatbot
+
+- Facebook platform support: a `PLATFORM=facebook` instance runs chat through gateway-facebook in both directions — inbound live-video comments through the shared gateway poller and the v1 command allowlist, and (a first outside Twitch) outbound command replies posted to the live video as the Page. ([#1088](https://github.com/adanalife/tripbot/pull/1088))
+
+### VLC
+
+- Measure clip-boundary dead-air as a `vlc_player_media_swap_gap_seconds` histogram — armed when a clip ends (or a skip is requested), observed when the next clip reaches Playing, stamped per platform. ([#1124](https://github.com/adanalife/tripbot/pull/1124))
+
+### Fixes
+
+- Events writers honor `READ_ONLY` even when `VERBOSE` is off — read-only mode skipped DB writes only when both were set. ([#1092](https://github.com/adanalife/tripbot/pull/1092))
+- Guard the Twitch audience cache (subscribers, chatters, chatter count) with a mutex so the refresh crons and readers no longer race. ([#1093](https://github.com/adanalife/tripbot/pull/1093))
+- The streaming-platform metric attribute is now injected when the vlc-server/OBS stats publishers are constructed, removing a mutable package global that pollers read while it could be reassigned. ([#1103](https://github.com/adanalife/tripbot/pull/1103))
+
+## [v3.16.1] — 2026-07-11
+
+### Fixes
+
+- Fix a data race on viewer session state between the session cron and the IRC handlers. ([#1095](https://github.com/adanalife/tripbot/pull/1095))
+- Chat commands that fall back to the next unflagged video (`!location`, `!weather`, `!time`, and friends) no longer hang forever when the video chain is broken or every candidate is flagged — they now reply that GPS coords couldn't be found. ([#1101](https://github.com/adanalife/tripbot/pull/1101))
+- `users.Find` now returns a real error instead of a zero-ID sentinel, so a transient DB failure can no longer masquerade as "new user" — chat lookups report the outage instead of "I don't know them", and `FindOrCreate` won't create a duplicate row while the DB is flaking. ([#1104](https://github.com/adanalife/tripbot/pull/1104))
+
+## [v3.16.0] — 2026-07-11
+
+### Chatbot
+
+- Removed the 500ms lead-in before the timewarp overlay, making `!timewarp`, `!guess`, and `!find` warps noticeably snappier (the cut-masking cover delay is unchanged). ([#1086](https://github.com/adanalife/tripbot/pull/1086))
+- Inbound chat messages now carry the sender's stable platform user ID (`IncomingMessage.UserID`, from the gateway's new `author_id` field / Twitch IRC tags) so future viewer persistence can key on something rename-proof. Carried, not yet consumed. ([#1109](https://github.com/adanalife/tripbot/pull/1109))
+
+### Fixes
+
+- Reverse geocoding no longer panics the video-save path when the geocoder returns zero addresses (bad GPS coords, ZERO_RESULTS) — `geo.City`/`geo.State` now return a descriptive error instead. ([#1091](https://github.com/adanalife/tripbot/pull/1091))
+- The `!weather` Open-Meteo fetch is now bounded by a 5s timeout, so a hung response can't stall the chat handler indefinitely. ([#1096](https://github.com/adanalife/tripbot/pull/1096))
+- vlc-server: `currentlyPlaying` no longer panics when the player has no current media — it returns an empty result early instead. ([#1097](https://github.com/adanalife/tripbot/pull/1097))
+- Flush Sentry before exiting in the fatal-error helpers so the fatal event isn't lost with the process ([#1099](https://github.com/adanalife/tripbot/pull/1099))
+- backfill-miles: `--output-sql` escapes single quotes in platform and username, so a `'` in a username no longer breaks the generated SQL. ([#1100](https://github.com/adanalife/tripbot/pull/1100))
+
+### Cleanup
+
+- Migrated `pkg/oauthtokens` (the last sqlx user) to GORM and removed sqlx from the dependency tree. ([#1090](https://github.com/adanalife/tripbot/pull/1090))
+- Drop deprecated no-op `rand.Seed` bootstrapping from the tripbot and vlc-server binaries (Go 1.20+ auto-seeds the global source) ([#1098](https://github.com/adanalife/tripbot/pull/1098))
+
+## [v3.15.0] — 2026-07-07
+
+### Chatbot
+
+- The `!report` command no longer attaches a YouTube viewer's display name to its downstream alerts (Sentry, Discord), matching YouTube's no-persisted-identity model; the report text still comes through. Twitch reports are unchanged. ([#1079](https://github.com/adanalife/tripbot/pull/1079))
+
+## [v3.14.0] — 2026-07-07
+
+### Chatbot
+
+- `!find` now covers its playback jump with the same full-screen warp overlay as `!timewarp`/`!guess`, and no longer names the matched state in chat so viewers can still guess the location. ([#1071](https://github.com/adanalife/tripbot/pull/1071))
+- Add an admin-only `!refreshoverlays` command that hard-reloads OBS browser sources (respawning their CEF render process) to recover crashed/frozen onscreen overlays without restarting OBS. ([#1072](https://github.com/adanalife/tripbot/pull/1072))
+
+### Onscreens
+
+- Remove the long-disabled state-flag overlay (the `!flag` command and the `ShowFlag` no-op that published nothing). `!state`/`!guess`/`!jump` keep their chat and playback behavior; they just no longer fire the dead overlay. ([#1071](https://github.com/adanalife/tripbot/pull/1071))
+- Add `commands.json` to `pkg/contract` — the NATS onscreens-command subject + envelope registry (JSON Schema), so the admin console can publish overlay commands without hand-building subject strings. Companion to `eventbus.json`. ([#1074](https://github.com/adanalife/tripbot/pull/1074))
+
+### Console / API
+
+- tripbot now subscribes to an `obs.refresh` NATS command (`tripbot.<env>.obs.refresh.<platform>`), letting the admin console hard-reload a crashed/frozen OBS overlay from a button — the console-driven counterpart to the `!refreshoverlays` chat command. ([#1075](https://github.com/adanalife/tripbot/pull/1075))
+
+## [v3.13.0] — 2026-07-06
+
+### Chatbot
+
+- `!find` now jumps to a random nearby match instead of always the closest, so repeating a search (e.g. `!find bridge`) tours different spots. ([#1062](https://github.com/adanalife/tripbot/pull/1062))
+- Specific users can be comped as subscribers (`COMPED_SUBSCRIBERS`) to run subscriber-only commands like `!find` without an actual sub. ([#1063](https://github.com/adanalife/tripbot/pull/1063))
+
+### Deploy / Infra
+
+- prod-1 app manifests are now frozen to their pinned release version — a component's version-bump PR carries its config changes (env vars, mounts, args) in the same `dist/` diff as the image-tag bump, instead of leaking to prod at release-merge time. ([#1065](https://github.com/adanalife/tripbot/pull/1065))
+
+### CI / Tooling
+
+- The master→develop back-merge PR now opens once per release instead of once per bump PR (it no longer re-fires on the per-component prod pin bumps). ([#1066](https://github.com/adanalife/tripbot/pull/1066))
+
+## [v3.12.0] — 2026-07-06
+
+### Chatbot
+
+- **New `!find` command — natural-language visual search over the dashcam corpus that jumps the stream to the closest matching moment.** This is the tripbot read-side consumer of the corpus embeddings (now seeded in prod). Ships dormant behind the `chatbot.find` feature flag and stays fully silent until enabled. The embed-responder deployment (video-pipeline) is out of scope — flip the flag on once it's live. ([#879](https://github.com/adanalife/tripbot/pull/879))
+- Persist the viewer-count and video-play signals into new append-only `video_plays` + `viewer_samples` tables (migration 033), so footage-performance history accrues durably instead of vanishing with each fire-and-forget NATS emission
+- Raise the `!find` match ceiling (`findMaxDistance` 0.82 → 0.93) so real matches land. Calibrated on the stage corpus: the old ceiling rejected every query, including known-good ones.
+- Seed the `chatbot.find` feature flag (disabled) so the console can toggle `!find` on.
+- `!find` is now subscriber-only and replies with 👀 the moment it's invoked, so a slow search reads as "working" rather than dead. Twitch-only for now (removed from the YouTube command allowlist).
+
+### Fixes
+
+- NATS connections now retry a failed initial connect forever instead of leaving the process permanently deaf. A boot race (node reboot bringing apps and NATS up together) previously killed timewarps, overlays, and `!guess` scoring integrity until a manual restart; now subscriptions replay and JetStream streams declare automatically when the connection lands.
+
+## [v3.11.0] — 2026-07-06
+
+### Platform gateway
+
+- Completed the Twitch cutover: the platform-gateway is now the unconditional single Helix caller. The `chatbot.twitch_gateway` flag and the in-process `pkg/twitch` query path (subscriber/follower/chatter polls, follow lookups, broadcaster chat-send, live-check) are removed; migration 029 drops the now-dead flag row. Token read for IRC/EventSub is unchanged. ([#1038](https://github.com/adanalife/tripbot/pull/1038))
+- Removed tripbot's Twitch OAuth consent bootstrap — `cmd/auth-bootstrap`, the `/auth/*` handlers + login page, `pkg/server/oauthstate`, and `GenerateUserAccessToken`. The platform-gateway owns consent + refresh now (it writes the `oauth_tokens` rows); tripbot stays a token reader for IRC + EventSub. The `auth.status` snapshot drops `init_url` — the console derives the re-auth link from the gateway host (like it already does for YouTube). ([#1040](https://github.com/adanalife/tripbot/pull/1040))
+
+### Chatbot
+
+- Rollup schema: `user_rollups` + `rollup_watermarks` + `scoreboard_snapshots` tables — derived-state substrate for the events rollup reconciler (worker in a follow-up PR) ([#1007](https://github.com/adanalife/tripbot/pull/1007))
+- Monthly scoreboards are platform-scoped (`UNIQUE(name, platform)`, reads + creates filter by `STREAM_PLATFORM`), and `scores` gains the `UNIQUE(user_id, scoreboard_id)` constraint after merging historical duplicate pairs ([#1011](https://github.com/adanalife/tripbot/pull/1011))
+- Log subscriber-lifecycle events (`subscribe` on `channel.subscribe`, `unsubscribe` on `channel.subscription.end`) and record `extra_miles_earned` on logout events — the community sub-grant + 5% subscriber-bonus portion of a session the login/logout pairing can't reconstruct. Substrate for retroactively reconstructing true display miles as `events_miles + SUM(extra_miles_earned)`; logged at source now, not yet consumed by the rollup. ([#1039](https://github.com/adanalife/tripbot/pull/1039))
+- The events rollup now aggregates `extra_miles_earned` into a new `user_rollups.extra_miles` column, and a new admin `!givemiles <user> <amount>` command applies manual miles corrections (may be negative) as auditable `correction` events. Reconstructed display miles ≈ `events_miles + extra_miles`, where `extra_miles` sums the sub-grant, 5%-bonus, and manual-correction portions the login/logout pairing can't see — while `events_miles` stays the pure pairing base (its delta from `users.miles` is the drift alarm). ([#1041](https://github.com/adanalife/tripbot/pull/1041))
+
+### VLC
+
+- **Two new vlc-server gauges: `vlc_player_time_remaining_seconds` and `vlc_player_progress_fraction`.** Time-remaining is clip length minus the current playhead; progress is 0..1 through the current clip. Both are computed from libvlc's `MediaLength` / `MediaTime` / `MediaPosition` inside the existing `pollStats` loop (no new poller) and fold into the `VLCPlayerStats` snapshot. Useful for stream-health dashboards — anticipate clip transitions and spot stuck playheads. ([#890](https://github.com/adanalife/tripbot/pull/890))
+- **New `tripbot_current_state` gauge exposes which US state the dashcam playhead is currently in.** A labeled gauge (`tripbot_current_state{state="MO"} 1`) sourced from `pkg/video.Current().State` at the existing video-transition site. On each transition the new state's series is set to `1` and the previously-active series cleared to `0`, so exactly one series reads `1` at a time — no stale `=1` series linger. ([#891](https://github.com/adanalife/tripbot/pull/891))
+
+### Misc
+
+- - Added `task cdk8s:verify` — the synth → diff dist/ → synth-time-checks loop as one command ([#1037](https://github.com/adanalife/tripbot/pull/1037))
+
+## [v3.10.3] — 2026-07-04
+
+### Platform gateway
+
+- tripbot no longer refreshes Twitch tokens in-process — the platform gateway is the sole refresher and writer of `oauth_tokens`. This ends the two-writer race that produced periodic self-healed `401: Invalid OAuth token` errors. tripbot reads the gateway-refreshed tokens for the IRC connection and the EventSub handshake, and re-reads on a timer / on auth failure instead of refreshing. ([#1026](https://github.com/adanalife/tripbot/pull/1026))
+
+### Chatbot
+
+- Lifetime leaderboard is rebuilt from the users table every tick (was: in-memory from logged-in users only, drifting from the DB after boot); live session miles still overlay for logged-in viewers ([#1010](https://github.com/adanalife/tripbot/pull/1010))
+
+### Fixes
+
+- Index `events (username, event, date_created)` so the rollup reconciler does per-user index scans instead of full-scanning the events table every tick ([#1028](https://github.com/adanalife/tripbot/pull/1028))
+
+## [v3.10.2] — 2026-07-04
+
+### Platform gateway
+
+- Prod tripbot-twitch is now wired to gateway-twitch (TWITCH_API_URL set). Routing stays gated behind the chatbot.twitch_gateway feature flag, so the gateway is dormant until the flag is flipped on via the console — no restart.
+
+### Deploy / Infra
+
+- The auth:bootstrap tasks read Twitch app credentials from SSM Parameter Store instead of the retired AWS Secrets Manager.
+
+## [v3.10.1] — 2026-07-03
+
+### Chatbot
+
+- Rollup schema: `user_rollups` + `rollup_watermarks` + `scoreboard_snapshots` tables — derived-state substrate for the events rollup reconciler (worker in a follow-up PR) ([#1007](https://github.com/adanalife/tripbot/pull/1007))
+- Events rollup reconciler: `user_rollups` aggregates recomputed from the events table on an id watermark, plus once-only month-end scoreboard snapshots — derived state for `!leaderboard` async, `!lastmonth`, and cross-platform stats ([#1009](https://github.com/adanalife/tripbot/pull/1009))
+
+### Onscreens
+
+- Fixed the occasionally-blank rotator corner: a near-invisible heartbeat pixel on every onscreen page forces CEF to deliver a continuous frame stream to OBS, so a dropped frame after the hourly browser-source refresh self-heals in ~500ms instead of staying blank until the next rotation (up to 45s — indefinitely for middle-text). ([#1006](https://github.com/adanalife/tripbot/pull/1006))
+
+### Deploy / Infra
+
+- Identity/DB/observability Secrets now sync from SSM Parameter Store (the free `aws-parameterstore` ESO store) instead of AWS Secrets Manager.
+
+### Cleanup
+
+- Remove dead code flagged by a ponytail over-engineering audit: unused helpers (`ReadPidFile`, `PidExists`, `InvertMap`, `Base64Encode`/`Base64Decode` and the now-obsolete base64-in-URL regression test — overlay content moved to NATS), unused config (`IsTesting` on all three config types, the `GoogleMapsStyle` and `TimestampsToTry` vars), three caller-less `pkg/twitch` free-function shims, and the never-set `TripbotConfig.OutputChannel` field plus the dead branch that read it.
+- Replace a handful of hand-rolled loops/comparisons with their stdlib equivalents (`slices.Contains`, `slices.Sort`, `strings.EqualFold`). No behavior change.
+
+### Misc
+
+- Mark the chatbot/eventbus NATS publisher interfaces as ponytail debt (they duplicate `natsclient.Publisher`); no functional change.
+
 ## [v3.10.0] — 2026-07-01
 
 ### Onscreens

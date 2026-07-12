@@ -2,6 +2,7 @@ package instrumentation
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -31,6 +32,7 @@ var (
 	twitchTokenExpiry  = mustGauge("tripbot_twitch_token_expires_at_seconds", "Unix timestamp of the in-memory Twitch user-access-token's ExpiresAt, labeled by account (bot|broadcaster). 0 when the account has no loaded token.")
 	twitchHelixErrors  = mustCounter("twitch_helix_errors_total", "Total non-2xx responses from the Twitch Helix API, labeled by endpoint and status_code")
 	twitchChannelLive  = mustGauge("tripbot_twitch_channel_live", "1 when Helix GetStreams reports the configured channel as live, 0 when offline. Driven by the OBS silent-disconnect watchdog's Helix poll.")
+	currentState       = mustGauge("tripbot_current_state", "1 for the US state the dashcam playhead is currently in, 0 for the previously-active state, labeled by state (2-letter abbrev, or \"unknown\"). Only one series reads 1 at a time. Drives the states-visited heatmap and the 'stuck on unknown' alert.")
 
 	gatewayUp = mustGauge("tripbot_gateway_up", "1 when tripbot's last platform-gateway call got an HTTP response (gateway reachable), 0 when it failed at the transport layer (connection refused, timeout, DNS). Consumer-side reachability — paired with the gateway's own platform_gateway_up (process liveness).")
 
@@ -82,7 +84,7 @@ var CarSoundSelections = carSoundSelectionsIface{counter: carSoundSelections}
 var TwitchAudience = twitchAudienceIface{subscribers: twitchSubscribers, followers: twitchFollowers}
 
 // TwitchConnection exposes the chat-connection gauge. Set(true) on IRC
-// connect, Set(false) on disconnect. Readiness no longer gates on the Twitch
+// connect, Set(false) on disconnect. Readiness doesn't gate on the Twitch
 // connection (the pod stays in the Service so the re-auth page is reachable),
 // so this gauge — alongside the admin-panel status row — is what surfaces
 // "up but not in chat" to dashboards and alerts.
@@ -105,6 +107,14 @@ var TwitchHelixErrors = twitchHelixErrorsIface{counter: twitchHelixErrors}
 // returns empty. Paired with OBSStreaming in an alert: divergence
 // (OBS=1 / Twitch=0) is the silent half-open RTMP signal.
 var TwitchChannelLive = twitchChannelLiveIface{gauge: twitchChannelLive}
+
+// CurrentState exposes the dashcam-state gauge. Call Set(abbrev) on every
+// video transition with the active state's 2-letter abbreviation (or
+// "unknown" when the playhead isn't over a resolvable US state). It sets the
+// new state's series to 1 and clears the previously-active series to 0, so
+// exactly one series reads 1 at any time and no stale =1 series linger for
+// states the playhead has left.
+var CurrentState = &currentStateIface{gauge: currentState}
 
 // GatewayConnection exposes the consumer-side gateway-reachability gauge.
 // Set(true) after any HTTP response from the platform-gateway, Set(false) on a
@@ -222,6 +232,32 @@ func (t twitchChannelLiveIface) Set(live bool) {
 		v = 1
 	}
 	t.gauge.Record(context.Background(), v)
+}
+
+type currentStateIface struct {
+	gauge metric.Int64Gauge
+	mu    sync.Mutex
+	prev  string // last state set to 1, so we can clear it back to 0 on change
+}
+
+// Set records the active dashcam state. A blank abbrev is normalized to
+// "unknown" so the series always carries a non-empty label. On a transition
+// it zeroes the previously-active series before setting the new one to 1; a
+// repeated Set of the same state is a cheap no-op (the series already reads 1).
+func (s *currentStateIface) Set(abbrev string) {
+	if abbrev == "" {
+		abbrev = "unknown"
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if abbrev == s.prev {
+		return
+	}
+	if s.prev != "" {
+		s.gauge.Record(context.Background(), 0, metric.WithAttributes(attribute.String("state", s.prev)))
+	}
+	s.gauge.Record(context.Background(), 1, metric.WithAttributes(attribute.String("state", abbrev)))
+	s.prev = abbrev
 }
 
 type gatewayConnectionIface struct{ gauge metric.Int64Gauge }

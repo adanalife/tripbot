@@ -32,7 +32,7 @@ class EnvConfig:
     namespace: str
     cluster: str  # minipc | k3d | local
     aws_account: str  # adanalife-prod | adanalife-stage | "" (local)
-    image_tag: str  # floating tag (latest | develop) for components without a pin
+    image_tag: str  # floating tag (latest | main) for components without a pin
     dns_base: str  # prod.whereisdana.today | stage... | dev...  ("" for local)
     nats_url: str
     sentry_env: str  # SENTRY_ENVIRONMENT (prod-1 | stage-1 | development)
@@ -157,11 +157,10 @@ class EnvConfig:
         platform is parked (rendered but off), else the env-wide `replicas`."""
         return 0 if platform in self.parked_platforms else self.replicas
 
-    # The platform-gateway gateway-twitch URL the chatbot routes its command-time
-    # Helix calls through (Phase 3). Empty keeps tripbot's in-process pkg/twitch
-    # path; set per env to flip App.Twitch to the HTTP client. Stage points at
-    # its in-namespace gateway-twitch Service; prod stays in-process until the
-    # gateway's prod release is cut + proven.
+    # The platform-gateway gateway-twitch URL a twitch instance routes its
+    # Helix calls through — the gateway is tripbot's sole Helix caller. Empty
+    # leaves the gateway unwired (local/CI only): the Twitch audience/follower/
+    # broadcaster-send features are disabled.
     twitch_api_url: str = ""
     # Like twitch_api_url, but for a youtube instance's outbound chat sends:
     # gateway-youtube's URL routes them through the platform-gateway
@@ -187,7 +186,7 @@ class EnvConfig:
 
     def pull_policy_for(self, component: str) -> str:
         """Pinned release tags are immutable → IfNotPresent (no redundant pulls,
-        no silent drift). Floating tags (latest/develop) need Always to pick up
+        no silent drift). Floating tags (latest/main) need Always to pick up
         rebuilds under the same tag."""
         return "IfNotPresent" if component in self.image_pins else "Always"
 
@@ -243,10 +242,9 @@ ENVS: dict[str, EnvConfig] = {
         binary_env="production",
         deployment_env="prod-1",
         gpu=True,
-        # vlc doesn't need the iGPU (stream-copy + software decode); dropping its
-        # claim frees an iGPU slot and eases co-tenant contention (the 2026-06-11
-        # prod-stutter incident). OBS keeps the iGPU for VAAPI encode (sized in the
-        # obs repo now). Proven on stage first, then prod on the live twitch stream.
+        # vlc doesn't need the iGPU (stream-copy + software decode); leaving its
+        # claim off frees an iGPU slot and eases co-tenant contention. OBS keeps
+        # the iGPU for VAAPI encode (sized in the obs repo).
         vlc_gpu=False,
         dashcam_mode="nfs",
         dashcam_source="local",  # serve the corpus off the minipc's local NVMe copy
@@ -277,6 +275,10 @@ ENVS: dict[str, EnvConfig] = {
         # prod gateway holds a YouTube token as of 2026-06-22, so this is safe to
         # ship; without a gateway token, sends would fail.
         youtube_api_url="http://gateway-youtube.prod-1.svc.cluster.local:8080",
+        # Wire prod tripbot-twitch to gateway-twitch (in-namespace). Required:
+        # since the cutover the gateway is the unconditional single Helix caller
+        # (the twitch_gateway flag and the in-process fallback are gone).
+        twitch_api_url="http://gateway-twitch.prod-1.svc.cluster.local:8080",
         # The live stream always wins: prod app pods outrank default-priority
         # co-tenants (stage, dashcam-cv), and vlc's decode side carries a real CPU
         # request so contention can't starve it (20-core node). OBS's matching
@@ -284,8 +286,11 @@ ENVS: dict[str, EnvConfig] = {
         priority_class="prod-stream",
         vlc_cpu_request="1",
         # Stable LAN endpoint for pulling the dashcam RTSP feed off-cluster
-        # (e.g. OBS on a desktop) without kubectl: rtsp://<minipc-ip>:30854/dashcam
-        # (TCP transport). Distinct from any future stage NodePort (same node).
+        # (e.g. OBS on a desktop) without kubectl: rtsp://<minipc-ip>:30854/dashcam.
+        # UDP transport only — the libvlc RTSP sout answers SETUP with 461
+        # Unsupported for TCP interleave, so a kubectl port-forward (TCP-only)
+        # can't carry the media; the NodePort is the sole off-cluster path.
+        # Stage uses a distinct port (the two envs co-tenant the one node).
         vlc_rtsp_node_port=30854,
     ),
     "stage-1": EnvConfig(
@@ -293,18 +298,21 @@ ENVS: dict[str, EnvConfig] = {
         namespace="stage-1",
         cluster="minipc",
         aws_account="adanalife-stage",
-        image_tag="develop",
+        image_tag="main",
         dns_base="stage.whereisdana.today",
         nats_url="nats://nats.stage-1-platform.svc.cluster.local:4222",
         sentry_env="stage-1",
         binary_env="staging",
         deployment_env="stage-1",
         gpu=True,
-        # vlc's iGPU claim proven unnecessary 2026-06-13 (stream-copy + trivial
-        # software decode). Re-asserting vlc_gpu=False here — it was lost when the
-        # app workloads moved from infra into this repo (the cdk8s-into-repo
-        # cutover dropped the flag, so stage vlc silently reclaimed the iGPU).
+        # vlc doesn't need the iGPU (stream-copy + trivial software decode);
+        # vlc_gpu=False keeps stage vlc from claiming it.
         vlc_gpu=False,
+        # LAN endpoint to watch the stage dashcam feed off-cluster (find/guess
+        # testing) without kubectl: rtsp://<minipc-ip>:30855/dashcam over UDP
+        # (see the prod note above re: why UDP + why port-forward can't work).
+        # 30855 is distinct from prod's 30854 — same node can't reuse a NodePort.
+        vlc_rtsp_node_port=30855,
         dashcam_mode="nfs",
         tailscale=True,
         # Prefer the ephemeral arm64 rpi5 worker for stage's stateless app pods
@@ -320,29 +328,24 @@ ENVS: dict[str, EnvConfig] = {
         # in stage-1-data, so a `kubectl delete ns stage-1` can't take the DB. prod
         # follows on its next wipe (set prod-1's data_namespace to prod-1-data).
         data_namespace="stage-1-data",
-        # The YouTube platform stack burns in on stage first (tripbot-youtube
-        # binds chat once a broadcast is live; vlc-youtube self-sustains). prod
-        # follows once the stage burn-in + dual-iGPU-encode validation pass.
+        # New platform stacks burn in on stage first (tripbot-youtube binds
+        # chat once a broadcast is live; vlc-youtube self-sustains).
         #
-        # twitch is back ON (2026-06-19) to test the platform-gateway end to
-        # end: stage tripbot-twitch routes its Helix calls through gateway-twitch
-        # (twitch_api_url below). The 2026-06-11 prod-stutter that forced twitch
-        # OFF here was the stage twitch *VLC decode + OBS render* contending for
-        # the shared iGPU — so only tripbot-twitch (no GPU) is meant to run;
-        # vlc/onscreens-twitch stay scaled to 0 (manual_replicas below + stage
-        # selfHeal off, so a hand/console scale sticks). Budget is still two live
-        # streams total: prod-twitch + stage-youtube.
+        # Stage twitch is meant to run tripbot-twitch ONLY: stage twitch VLC
+        # decode + OBS render contending for the shared iGPU is what stutters
+        # the prod stream, so vlc/onscreens-twitch stay scaled to 0
+        # (manual_replicas below + stage selfHeal off, so a hand/console scale
+        # sticks). Budget is two live streams total: prod-twitch + stage-youtube.
         platforms=("youtube", "twitch"),
         # Stage components are scaled up/down by hand (only tripbot-twitch runs
-        # for the gateway test); omit replicas so Argo doesn't reset them.
+        # on the twitch side); omit replicas so Argo doesn't reset them.
         manual_replicas=True,
-        # Route stage tripbot's command-time Helix calls through the in-namespace
-        # gateway-twitch gateway (Phase 3). prod stays in-process until its gateway
-        # release is cut.
+        # Route stage tripbot-twitch's Helix calls through the in-namespace
+        # gateway-twitch.
         twitch_api_url="http://gateway-twitch.stage-1.svc.cluster.local:8080",
         # Route stage tripbot-youtube's outbound chat sends through the
         # in-namespace gateway-youtube (unconditionally — no flag). The inbound
-        # poll stays in-process. prod has no youtube instance yet.
+        # poll stays in-process.
         youtube_api_url="http://gateway-youtube.stage-1.svc.cluster.local:8080",
         # Guardrail from the same incident: cap what stage can request in
         # aggregate, so "accidentally scaled up too many stage deployments"
@@ -365,7 +368,7 @@ ENVS: dict[str, EnvConfig] = {
         namespace="development",
         cluster="k3d",
         aws_account="adanalife-stage",
-        image_tag="develop",
+        image_tag="main",
         dns_base="dev.whereisdana.today",
         nats_url="nats://nats.development-platform.svc.cluster.local:4222",
         sentry_env="development",

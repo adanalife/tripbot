@@ -7,7 +7,7 @@
 // This is deliberately distinct from two neighbours:
 //   - pkg/events — the Postgres-backed append-only session log (login/logout
 //     rows). That's durable state; this is ephemeral pub/sub.
-//   - onscreens *commands* (ShowMiddleText, ShowFlag, …) — imperatives aimed at
+//   - onscreens *commands* (ShowMiddleText, ShowTimewarp, …) — imperatives aimed at
 //     onscreens-server, with exactly one consumer that acts on them. Those live
 //     with the onscreens surface, not here.
 //
@@ -30,6 +30,11 @@ import (
 // Publisher is the fire-and-forget publish surface the Emit helpers use. Tests
 // inject a fake via SetPublisher; production uses realPublisher, which delegates
 // to the pkg/natsclient singleton.
+//
+// ponytail: Publisher duplicates natsclient.Publisher (identical signature) and
+// realPublisher re-implements natsclient's connPublisher. Could collapse onto
+// natsclient.Publisher + natsclient.DefaultPublisher(). Kept as an explicit local
+// seam for now — deferred 2026-06-29 (ponytail-audit).
 type Publisher interface {
 	Publish(ctx context.Context, subject string, payload []byte)
 }
@@ -185,17 +190,18 @@ func EmitVideoChanged(ctx context.Context, env, platform, file, state string, fl
 // here so the eventbus stays free of pkg/twitch (and its DB-reaching imports)
 // per the package-boundary ADR — cmd/tripbot converts at the call site.
 type AuthAccount struct {
-	Account   string `json:"account"`              // "bot" | "broadcaster" | "youtube" — the /auth/init account selector
+	Account   string `json:"account"`              // "bot" | "broadcaster" | "youtube" — the consent account selector
 	LoginAs   string `json:"login_as,omitempty"`   // the exact platform username/channel to sign in as
 	ExpiresAt string `json:"expires_at,omitempty"` // RFC3339Nano UTC; empty when unknown (missing token, or auto-refreshed)
 	Reason    string `json:"reason,omitempty"`     // "" healthy, else "missing" | "expired"
-	InitURL   string `json:"init_url,omitempty"`   // absolute re-auth URL (tripbot's /auth/init)
 }
 
 // AuthStatus is the wire format for tripbot.<env>.auth.status.<platform> — a
 // full token-state snapshot for one platform instance's identities, emitted on
-// a ~30s ticker. Consumers (the standalone console) render countdowns and
-// re-auth links from it; re-auth itself stays in tripbot (InitURL points there).
+// a ~30s ticker. Consumers (the standalone console) render per-identity expiry
+// countdowns from it; re-auth itself runs through the platform-gateway consent
+// flow, so the console builds the re-auth link from the gateway host (mirroring
+// how it already handles YouTube), not from this snapshot.
 type AuthStatus struct {
 	Platform  string        `json:"platform"`
 	Accounts  []AuthAccount `json:"accounts"`

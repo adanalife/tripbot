@@ -4,25 +4,29 @@ name: cdk8s-synth
 # dist/ deploy units are in sync with the source: re-synth and fail on any diff.
 # Verify-only — synth is fast enough to run locally via `task cdk8s:synth`, so
 # (unlike infra's cdk8s.yml) there's no push-back commit. dist/ is the GitOps
-# source Argo reads, so a stale dist/ on master would silently mis-deploy.
+# source Argo reads, so a stale dist/ on main would silently mis-deploy.
 on:
   pull_request:
     paths:
       - 'cdk8s/**'
       - 'pkg/contract/contract.json'
-      - '.github/workflows/cdk8s.yml'
+      - '.github/workflows/cdk8s-synth.yml'
   push:
     branches:
-      - master
-      - develop
+      - main
     paths:
       - 'cdk8s/**'
       - 'pkg/contract/contract.json'
-      - '.github/workflows/cdk8s.yml'
+      - '.github/workflows/cdk8s-synth.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   synth:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
 
@@ -49,6 +53,18 @@ jobs:
       - name: Synth
         working-directory: cdk8s
         run: mise exec -- uv run cdk8s synth
+
+      - name: Freeze version-pinned prod-1 manifests
+        working-directory: cdk8s
+        # prod-1 app manifests are pinned to their release version and regenerated
+        # only on release-please's release PR, so a chart change on main doesn't
+        # reach prod's committed dist until the next release (that's what couples
+        # the config delta to the version bump). Discard this HEAD re-synth of the
+        # pinned app files before the sync check; identity + one-shot jobs stay
+        # live. Mirrors the freeze in `task cdk8s:synth`.
+        run: |
+          git ls-files -- 'dist/prod-1-*-twitch.k8s.yaml' 'dist/prod-1-*-youtube.k8s.yaml' \
+            | xargs -r git checkout --
 
       - name: Verify dist/ is committed in sync
         run: git diff --exit-code -- cdk8s/dist/

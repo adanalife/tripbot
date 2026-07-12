@@ -42,11 +42,11 @@ metadata:
 spec:
   dataFrom:
     - extract:
-        key: k8s/tripbot/youtube-creds
+        key: /k8s/tripbot/youtube-creds
   refreshInterval: 1h
   secretStoreRef:
     kind: SecretStore
-    name: aws-secretsmanager
+    name: aws-parameterstore
   target:
     creationPolicy: Owner
     name: tripbot-youtube-creds
@@ -105,7 +105,7 @@ spec:
                 optional: true
             - secretRef:
                 name: tripbot-youtube-creds
-          image: adanalife/tripbot:develop
+          image: adanalife/tripbot:main
           imagePullPolicy: Always
           livenessProbe:
             httpGet:
@@ -149,7 +149,7 @@ spec:
                 name: tripbot-youtube-config
             - secretRef:
                 name: tripbot-database-creds
-          image: adanalife/tripbot:develop
+          image: adanalife/tripbot:main
           imagePullPolicy: Always
           name: migrate
           resources:

@@ -11,7 +11,7 @@ const domain = "onscreens"
 // every per-platform instance (tripbot-twitch, tripbot-youtube) shares the
 // env's NATS, and each onscreens-server (onscreens-twitch, onscreens-youtube)
 // subscribes only to its own leaf, so a Twitch-triggered overlay (a
-// leaderboard, a !flag) never renders on the YouTube stream — same shape as
+// leaderboard, a timewarp) never renders on the YouTube stream — same shape as
 // tripbot.<env>.vlc.lastplayed.<platform>. Unexported so callers go through
 // the typed constructors below, keeping the overlay/verb strings in one place
 // and out of reach of typos at the call site.
@@ -64,8 +64,3 @@ func GPSHideSubject(env, platform string) string { return subject(env, platform,
 func LocationUpdateSubject(env, platform string) string {
 	return subject(env, platform, "location", "update")
 }
-
-// FlagHideSubject is the only flag subject. flag.show is intentionally
-// absent — the feature is disabled (the HTTP route 501s and the client
-// method is a no-op), so publishing it would be dead surface.
-func FlagHideSubject(env, platform string) string { return subject(env, platform, "flag", "hide") }

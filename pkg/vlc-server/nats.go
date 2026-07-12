@@ -13,14 +13,11 @@ import (
 
 // StartNATSSubscribers attaches the server's NATS subscriptions to the
 // package-singleton *nats.Conn (initialized by main via natsclient.Connect).
-// No-op when the conn is nil (NATS_URL unset) — with the HTTP command path
-// peeled off, the server simply receives no commands in that case.
+// No-op when the conn is nil (NATS_URL unset) — NATS is the sole command
+// transport, so the server simply receives no commands in that case.
 //
-// NATS is the sole transport for the vlc command surface: each handler drives
-// the same playback method the old HTTP handler called. (The observe-only
-// mirror this burned in against, and the HTTP command path, have since been
-// peeled off.) The publish-only client no longer calls HTTP, so there's no
-// double-execution despite vlc commands not being idempotent.
+// Because there is no parallel command path, non-idempotent vlc commands
+// can't double-execute.
 //
 // Subscribers are registered explicitly (not via a vlc.> wildcard) so each
 // gets its own subscribe log line and the dispatch stays readable.
@@ -37,6 +34,7 @@ func (s *Server) StartNATSSubscribers(ctx context.Context) {
 	}{
 		{ve.PlayRandomSubject(env), s.handlePlayRandom},
 		{ve.PlayFileSubject(env), s.handlePlayFile},
+		{ve.PlayFileAtSubject(env), s.handlePlayFileAt},
 		{ve.SkipSubject(env), s.handleSkip},
 		{ve.BackSubject(env), s.handleBack},
 	}
@@ -73,6 +71,23 @@ func (s *Server) handlePlayFile(m *nats.Msg) {
 	}
 	if err := s.PlayVideoFile(ev.File); err != nil {
 		slog.Error("nats: vlc play.file failed", "err", err, "file", ev.File)
+	}
+}
+
+func (s *Server) handlePlayFileAt(m *nats.Msg) {
+	var ev ve.PlayFileAt
+	if err := json.Unmarshal(m.Data, &ev); err != nil {
+		slog.Error("nats: decode vlc play.at", "err", err, "subject", m.Subject)
+		return
+	}
+	if ev.File == "" {
+		slog.Warn("nats: vlc play.at missing file", "subject", m.Subject)
+		return
+	}
+	// No request ctx on a fire-and-forget command; the seek is async + best-
+	// effort, so a background ctx is fine (matches the other handlers).
+	if err := s.PlayVideoFileAt(context.Background(), ev.File, ev.PositionMs); err != nil {
+		slog.Error("nats: vlc play.at failed", "err", err, "file", ev.File)
 	}
 }
 

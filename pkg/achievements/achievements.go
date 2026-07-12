@@ -1,11 +1,11 @@
 // Package achievements awards viewer achievements from what's on screen.
 // The Twitch instance's video-change hook calls HandleVideoChange with the
-// new clip and the viewers currently in chat; it logs the play to
-// video_plays (the append-only "what was on screen when" record), upserts
-// each viewer's (state, day) visit row, and inserts any newly-crossed
-// achievements. Awarding is INSERT ... ON CONFLICT DO NOTHING against the
-// achievements table's unique key, so every step is idempotent — a missed
-// tick self-heals on the next clip change.
+// new clip and the viewers currently in chat; it upserts each viewer's
+// (state, day) visit row and inserts any newly-crossed achievements. (The
+// append-only "what was on screen when" record is pkg/viewstats's
+// video_plays log, written on the same hook.) Awarding is INSERT ... ON
+// CONFLICT DO NOTHING against the achievements table's unique key, so every
+// step is idempotent — a missed tick self-heals on the next clip change.
 package achievements
 
 import (
@@ -84,10 +84,6 @@ func HandleVideoChange(ctx context.Context, v video.Video, viewers []string) []s
 	unlocked := map[string][]string{}
 
 	err := database.GormDB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec(`INSERT INTO video_plays (video_id) VALUES (?)`, v.ID).Error; err != nil {
-			return err
-		}
-
 		if v.State != "" {
 			for _, viewer := range viewers {
 				if err := tx.Exec(`INSERT INTO user_state_days (platform, username, state, day)

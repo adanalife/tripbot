@@ -4,28 +4,34 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"sort"
+	"maps"
+	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/eventbus"
 	"github.com/adanalife/tripbot/pkg/events"
 	"github.com/adanalife/tripbot/pkg/scoreboards"
+	"github.com/adanalife/tripbot/pkg/viewstats"
 	"github.com/google/uuid"
 	"github.com/hako/durafmt"
 )
 
-//TODO: consider moving this whole thing elsewhere (to background perhaps?)
-
 // Sessions tracks the users currently logged in to one platform's chat plus
-// the derived lifetime-miles leaderboard. It owns what used to be the
-// package-level LoggedIn map and LifetimeMilesLeaderboard slice, so a single
-// process holds exactly one Sessions and a per-platform bot instance gets its
-// own (the prerequisite for running, e.g., a YouTube bot beside the Twitch
+// the derived lifetime-miles leaderboard. The state lives on the struct, not
+// in package-level globals, so a per-platform bot instance gets its own
+// (the prerequisite for running, e.g., a YouTube bot beside the Twitch
 // one). Its view of who is in chat comes from an injected ChatterSource.
+//
+// Sessions is accessed from multiple goroutines: the UpdateSession /
+// UpdateLeaderboard crons, the inbound IRC handlers, and command dispatch.
+// mu guards loggedIn and lifetimeLeaderboard; it is held only for map/slice
+// access, never across DB or chatter-source calls.
 type Sessions struct {
 	source ChatterSource
+	mu     sync.Mutex
 	// loggedIn maps username -> User for everyone currently in chat.
 	loggedIn map[string]*User
 	// lifetimeLeaderboard is the cached [username, miles] leaderboard,
@@ -33,18 +39,14 @@ type Sessions struct {
 	lifetimeLeaderboard [][]string
 }
 
-// New constructs a Sessions backed by the given ChatterSource.
+// New constructs a Sessions backed by the given ChatterSource. cmd/tripbot
+// wires the production gatewayChatterSource; tests build their own.
 func New(source ChatterSource) *Sessions {
 	return &Sessions{
 		source:   source,
 		loggedIn: make(map[string]*User),
 	}
 }
-
-// NewDefault constructs the production Sessions, wired to the Twitch-backed
-// chatter source. cmd/tripbot constructs one and threads it through the boot
-// sequence + into chatbot/discord; tests build their own *Sessions via New.
-func NewDefault() *Sessions { return New(twitchSource{}) }
 
 // UpdateSession uses the chatter source to maintain the list of
 // currently-logged-in users.
@@ -57,8 +59,13 @@ func (s *Sessions) UpdateSession(ctx context.Context) {
 	// updates the "in chat" number (and flashes it on a change) without a reload.
 	eventbus.EmitViewerCount(ctx, c.Conf.Environment, c.Conf.Platform, s.source.ChatterCount())
 
-	// log out the people who aren't present
-	for username, user := range s.loggedIn {
+	// Persist the same total as a viewer_samples row — the durable half of the
+	// emission above, tagged with the clip currently on screen.
+	viewstats.RecordSample(ctx, s.source.ChatterCount())
+
+	// log out the people who aren't present, working from a snapshot so the
+	// lock isn't held across the DB work logout does
+	for username, user := range s.sessionSnapshot() {
 		if _, ok := currentChatters[username]; ok {
 			// they're logged in and a current chatter, do nothing
 			continue
@@ -77,8 +84,8 @@ func (s *Sessions) UpdateSession(ctx context.Context) {
 // LoginIfNecessary checks the list of currently-logged in users and will
 // run login() if this user isn't currently logged in
 func (s *Sessions) LoginIfNecessary(ctx context.Context, username string) *User {
-	if s.isLoggedIn(username) {
-		return s.loggedIn[username]
+	if user, ok := s.get(username); ok {
+		return user
 	}
 	// they weren't logged in, so note in the DB
 	return s.login(ctx, username)
@@ -86,9 +93,28 @@ func (s *Sessions) LoginIfNecessary(ctx context.Context, username string) *User 
 
 // LogoutIfNecessary will log out the user if it finds them in the session
 func (s *Sessions) LogoutIfNecessary(ctx context.Context, username string) {
-	if s.isLoggedIn(username) {
-		s.logout(ctx, s.loggedIn[username])
+	if user, ok := s.get(username); ok {
+		s.logout(ctx, user)
 	}
+}
+
+// get returns the logged-in *User for username, if present. It takes mu;
+// callers must not already hold it.
+func (s *Sessions) get(username string) (*User, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	user, ok := s.loggedIn[username]
+	return user, ok
+}
+
+// sessionSnapshot returns a copy of the loggedIn map, so callers can iterate
+// (and do slow DB work per entry) without holding mu.
+func (s *Sessions) sessionSnapshot() map[string]*User {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	snapshot := make(map[string]*User, len(s.loggedIn))
+	maps.Copy(snapshot, s.loggedIn)
+	return snapshot
 }
 
 // login will record the users presence in the DB
@@ -125,7 +151,9 @@ func (s *Sessions) login(ctx context.Context, username string) *User {
 	}
 
 	// add them to the session
+	s.mu.Lock()
 	s.loggedIn[username] = &user
+	s.mu.Unlock()
 
 	if err := events.Login(ctx, username, user.sessionID); err != nil {
 		slog.ErrorContext(ctx, "error creating login event", "err", err)
@@ -161,27 +189,42 @@ func (s *Sessions) logout(ctx context.Context, u *User) {
 	// update the monthly scoreboard
 	u.AddToScore(ctx, scoreboards.CurrentMilesScoreboard(), sessionMiles)
 
-	if err := events.Logout(ctx, u.Username, u.sessionID); err != nil {
+	// extra_miles_earned: the bonus portion of this session the events pairing
+	// can't see — community sub-grants received (sessionExtraMiles) plus the 5%
+	// subscriber bonus, computed the same way the live award was. Recorded at
+	// source; left NULL when zero (most sessions).
+	extra := float64(u.sessionExtraMiles)
+	if s.IsSubscriber(*u) {
+		extra += float64(s.BonusMiles(*u))
+	}
+	var extraMiles *float64
+	if extra > 0 {
+		extraMiles = &extra
+	}
+	if err := events.Logout(ctx, u.Username, u.sessionID, extraMiles); err != nil {
 		slog.ErrorContext(ctx, "error creating logout event", "err", err)
 	}
 
 	// remove them from the session
+	s.mu.Lock()
 	delete(s.loggedIn, u.Username)
+	s.mu.Unlock()
 }
 
 // isLoggedIn checks if the user is currently logged in
 func (s *Sessions) isLoggedIn(username string) bool {
-	_, ok := s.loggedIn[username]
+	_, ok := s.get(username)
 	return ok
 }
 
 // Shutdown loops through all of the logged-in users and logs them out
 func (s *Sessions) Shutdown(ctx context.Context) {
+	snapshot := s.sessionSnapshot()
 	if c.Conf.Verbose {
 		slog.InfoContext(ctx, "logged-in users at shutdown")
-		fmt.Printf("%+v\n", s.loggedIn)
+		fmt.Printf("%+v\n", snapshot)
 	}
-	for _, user := range s.loggedIn {
+	for _, user := range snapshot {
 		s.logout(ctx, user)
 	}
 }
@@ -189,10 +232,42 @@ func (s *Sessions) Shutdown(ctx context.Context) {
 // GiveEveryoneMiles gives all logged-in users miles
 func (s *Sessions) GiveEveryoneMiles(gift float32) {
 	slog.Info("giving all logged-in users gift miles", "gift", gift)
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	for _, user := range s.loggedIn {
 		user.Miles += gift
+		// track the grant separately so logout can record it as extra_miles_earned
+		user.sessionExtraMiles += gift
 	}
 }
+
+// CorrectMiles applies a manual miles delta (may be negative) to a user and
+// persists it immediately. If they're logged in, the live session copy is
+// adjusted so logout doesn't clobber the correction. Returns the new total.
+// The delta is deliberately NOT added to sessionExtraMiles — the caller logs a
+// separate correction event carrying it, and doing both would double-count.
+func (s *Sessions) CorrectMiles(ctx context.Context, username string, delta float32) float32 {
+	s.mu.Lock()
+	live, ok := s.loggedIn[username]
+	var updated User
+	if ok {
+		live.Miles += delta
+		updated = *live
+	}
+	s.mu.Unlock()
+	if ok {
+		updated.save(ctx)
+		return updated.Miles
+	}
+	u := FindOrCreate(ctx, username)
+	u.Miles += delta
+	u.save(ctx)
+	return u.Miles
+}
+
+// The snapshot helpers below (sortedUsernameList, colorizeUsernames, humans,
+// countHumans, bots, countBots) read loggedIn directly and assume the caller
+// holds mu.
 
 // sortedUsernameList creates a list of only usernames, and sort it
 func (s *Sessions) sortedUsernameList() []string {
@@ -200,7 +275,7 @@ func (s *Sessions) sortedUsernameList() []string {
 	for username := range s.loggedIn {
 		usernames = append(usernames, username)
 	}
-	sort.Sort(sort.StringSlice(usernames))
+	slices.Sort(usernames)
 	return usernames
 }
 
@@ -254,24 +329,32 @@ func (s *Sessions) countBots() int {
 // PrintCurrentSession simply prints info about the current session.
 // ctx links the snapshot log line to the parent cron-tick span.
 func (s *Sessions) PrintCurrentSession(ctx context.Context) {
-	usernames := s.sortedUsernameList()
-	coloredUsernames := s.colorizeUsernames(usernames)
+	s.mu.Lock()
+	coloredUsernames := s.colorizeUsernames(s.sortedUsernameList())
+	humanCount := s.countHumans()
+	botCount := s.countBots()
+	s.mu.Unlock()
 
 	slog.InfoContext(ctx, "session snapshot",
 		"chatters", s.source.ChatterCount(),
-		"humans", s.countHumans(),
-		"bots", s.countBots(),
+		"humans", humanCount,
+		"bots", botCount,
 		"logged_in", strings.Join(coloredUsernames, ", "),
 	)
 }
 
 // LoggedInCount returns the number of users currently in chat.
-func (s *Sessions) LoggedInCount() int { return len(s.loggedIn) }
+func (s *Sessions) LoggedInCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.loggedIn)
+}
 
 // LoggedInHumans returns the usernames of everyone currently in chat,
-// excluding bots. Same (pre-existing) caveat as the other loggedIn readers:
-// the map isn't locked against the UpdateSession cron.
+// excluding bots.
 func (s *Sessions) LoggedInHumans() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	names := make([]string, 0, len(s.loggedIn))
 	for name, u := range s.loggedIn {
 		if u.IsBot {

@@ -59,7 +59,7 @@ class IdentityChart(Chart):
     isolated from the per-component app churn so the DB-creds ExternalSecret isn't
     re-applied on every app sync.
 
-    Depends on infra's ESO SecretStore (the `aws-secretsmanager` store these
+    Depends on infra's ESO SecretStore (the `aws-parameterstore` store these
     ExternalSecrets reference) + the shared observability Secrets being present
     first — same data→supporting→apps ordering as before, now spanning two repos.
     """
@@ -77,10 +77,9 @@ class IdentityChart(Chart):
 def emit_job_charts(scope: Construct, env: EnvConfig) -> None:
     """tripbot one-shot Jobs — one Chart each, so every Job synthesizes to its own
     `dist/<env>-job-<name>.k8s.yaml` and a deploy task can `kubectl apply` exactly
-    one. NOT auto-run on a normal apply (running a seed/auth Job on every reconcile
-    would be wrong) — invoked via `task tripbot:<env>:{db:seed,auth:bootstrap:*}`.
-    local gets the combined auth-bootstrap; eso envs get the bot + broadcaster
-    legs; both get seed."""
+    one. NOT auto-run on a normal apply (running a seed Job on every reconcile
+    would be wrong) — invoked via `task tripbot:<env>:db:seed`. Twitch OAuth
+    bootstrap moved to the platform-gateway, so only the DB seed Job remains."""
     from adanalife_k8s.constructs import tripbot as tb
 
     ns = env.namespace or None
@@ -88,9 +87,4 @@ def emit_job_charts(scope: Construct, env: EnvConfig) -> None:
     def _chart(suffix: str) -> Chart:
         return Chart(scope, f"{env.name}-job-{suffix}", namespace=ns)
 
-    if env.secret_source == "local":
-        tb.local_auth_bootstrap(_chart("auth-bootstrap"), env)
-    else:
-        tb.auth_bootstrap_bot(_chart("auth-bootstrap-bot"), env)
-        tb.auth_bootstrap_broadcaster(_chart("auth-bootstrap-broadcaster"), env)
     tb.seed(_chart("seed"), env)

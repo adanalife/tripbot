@@ -14,10 +14,12 @@ type TripbotConfig struct {
 
 	// ChannelName is the username of the stream
 	ChannelName string `required:"true" envconfig:"CHANNEL_NAME"`
-	// OutputChannel is the stream to which the bot will speak
-	OutputChannel string
 	// BotUsername is the username of the bot
 	BotUsername string `required:"true" envconfig:"BOT_USERNAME"`
+	// CompedSubscribers are usernames treated as subscribers for
+	// subscriber-only commands without an actual sub (comped friends/VIPs).
+	// Comma-separated, case-insensitive. Empty by default.
+	CompedSubscribers []string `envconfig:"COMPED_SUBSCRIBERS"`
 	// ExternalURL is the where the bot's HTTP server can be reached
 	ExternalURL string `required:"true" envconfig:"EXTERNAL_URL"`
 	// GoogleMapsAPIKey is the API key with which we access Google Maps.
@@ -83,6 +85,16 @@ type TripbotConfig struct {
 	// command nobody can run reads as a broken bot. Flip to true the day the
 	// YouTube Data API quota extension lands. No effect on Twitch.
 	YouTubeInboundEnabled bool `default:"true" envconfig:"YOUTUBE_INBOUND_ENABLED"`
+
+	// FacebookAPIURL points a PLATFORM=facebook instance at the platform-gateway
+	// gateway-facebook instance over HTTP — e.g.
+	// http://gateway-facebook.<env>.svc.cluster.local:8080. Both chat directions
+	// flow through the gateway: outbound via its SendChat (which comments on the
+	// Page's active live video as the Page), inbound via its GET /v1/chat/inbound
+	// poll. The gateway also owns the Page access token, so tripbot holds none at
+	// runtime. Required on a facebook instance — with this empty the instance
+	// comes up without Facebook chat.
+	FacebookAPIURL string `envconfig:"FACEBOOK_API_URL"`
 
 	// NatsURL is the in-cluster NATS endpoint used for fire-and-forget
 	// inter-component events. Format:

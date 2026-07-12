@@ -19,9 +19,10 @@ import (
 // through App.UserSessions directly. Keeping them off this interface keeps the
 // command-time fake surface (noopSessions / recordingSessions) minimal.
 type Sessions interface {
-	// Find looks up a user by username. Returns User{ID: 0} for an
-	// unknown user (mirrors pkg/users.Find's existing contract).
-	Find(ctx context.Context, username string) users.User
+	// Find looks up a user by username. Returns gorm.ErrRecordNotFound for
+	// an unknown user (mirrors pkg/users.Find's contract); any other error
+	// is a real DB failure.
+	Find(ctx context.Context, username string) (users.User, error)
 	// LifetimeLeaderboard returns the current snapshot of the
 	// lifetime-miles leaderboard, a slice of [username, miles] pairs
 	// hydrated at startup by InitLeaderboard. Read-only from the
@@ -33,6 +34,9 @@ type Sessions interface {
 	CurrentMiles(ctx context.Context, u users.User) float32
 	CurrentMonthlyMiles(ctx context.Context, u users.User) float32
 	BonusMiles(u users.User) float32
+	// CorrectMiles applies a manual miles delta (may be negative) to a user,
+	// persisting immediately, and returns the new total. Backs !givemiles.
+	CorrectMiles(ctx context.Context, username string, delta float32) float32
 	// Shutdown logs out every in-memory session, flushing each user's
 	// state to the DB. Called by !shutdown before the process exits.
 	Shutdown(ctx context.Context)
@@ -54,7 +58,7 @@ type realSessions struct{ s *users.Sessions }
 // assigns the result onto App.Sessions once Sessions is constructed.
 func NewSessionsAdapter(s *users.Sessions) Sessions { return realSessions{s: s} }
 
-func (r realSessions) Find(ctx context.Context, username string) users.User {
+func (r realSessions) Find(ctx context.Context, username string) (users.User, error) {
 	return users.Find(ctx, username)
 }
 
@@ -84,6 +88,13 @@ func (r realSessions) BonusMiles(u users.User) float32 {
 		return 0
 	}
 	return r.s.BonusMiles(u)
+}
+
+func (r realSessions) CorrectMiles(ctx context.Context, username string, delta float32) float32 {
+	if r.s == nil {
+		return 0
+	}
+	return r.s.CorrectMiles(ctx, username, delta)
 }
 
 func (r realSessions) Shutdown(ctx context.Context) {

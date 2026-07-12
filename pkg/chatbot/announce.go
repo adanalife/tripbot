@@ -1,7 +1,11 @@
 package chatbot
 
 import (
+	"context"
 	"fmt"
+	"log/slog"
+
+	"github.com/adanalife/tripbot/pkg/events"
 )
 
 // AnnounceNewFollower says a thank-you to a new follower in chat. Wired
@@ -11,8 +15,9 @@ func (a *App) AnnounceNewFollower(username string) {
 }
 
 // AnnounceSubscriber says a thank-you to a new subscriber, gives every
-// currently-logged-in viewer +1 mile, and announces the bonus. Wired
-// from pkg/eventsub on channel.subscribe events.
+// currently-logged-in viewer +1 mile, announces the bonus, and logs a
+// subscribe event (opening the viewer's subscribed interval). Wired from
+// pkg/eventsub on channel.subscribe events.
 //
 // isGift / tier round-trip from the EventSub payload so callers /
 // future enhancements can branch on them; today only the username drives
@@ -26,4 +31,19 @@ func (a *App) AnnounceSubscriber(username string, isGift bool, tier string) {
 	a.Chat.Say(fmt.Sprintf("Thank you for the sub, @%s; enjoy your !bonusmiles bleedPurple", username))
 	a.UserSessions.GiveEveryoneMiles(1.0)
 	a.Chat.Say(fmt.Sprintf("The %d current viewers have been given a bonus mile, too HolidayPresent", a.UserSessions.LoggedInCount()))
+	if err := events.Subscribe(context.Background(), username); err != nil {
+		slog.ErrorContext(context.Background(), "error creating subscribe event", "err", err)
+	}
+}
+
+// RecordUnsubscribe logs a subscription-end event so a viewer's subscribed
+// interval has a close (the real lapse/cancel from Twitch, not a guessed
+// expiry). No chat shout — unsubs aren't announced. Wired from pkg/eventsub
+// on channel.subscription.end events.
+func (a *App) RecordUnsubscribe(username string, isGift bool, tier string) {
+	_ = isGift
+	_ = tier
+	if err := events.Unsubscribe(context.Background(), username); err != nil {
+		slog.ErrorContext(context.Background(), "error creating unsubscribe event", "err", err)
+	}
 }

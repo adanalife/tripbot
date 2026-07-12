@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 
 	chatEvents "github.com/adanalife/tripbot/pkg/chat-events"
@@ -10,7 +11,6 @@ import (
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/gateway"
 	"github.com/adanalife/tripbot/pkg/natsclient"
-	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/nats-io/nats.go"
 )
 
@@ -48,13 +48,13 @@ func (t *Tripbot) startChatSendSubscriber(ctx context.Context) {
 	slog.InfoContext(ctx, "nats subscribed", "subject", subject)
 }
 
-// sendChatAsBroadcaster posts text to the channel's chat as the broadcaster:
-// through the platform-gateway when useGateway reports the runtime flag is on,
-// else the in-process Helix send. Fail-open semantics are the caller's
-// (chatsend.Dispatch logs and drops on error).
+// sendChatAsBroadcaster posts text to the channel's chat as the broadcaster
+// through the platform-gateway (the single Helix caller). Fail-open semantics
+// are the caller's (chatsend.Dispatch logs and drops on error). Errors when no
+// gateway is wired (a local/CI instance with no TWITCH_API_URL).
 func (t *Tripbot) sendChatAsBroadcaster(ctx context.Context, text string) error {
-	if t.useGateway(ctx) {
-		return t.gateway.SendChat(ctx, gateway.IdentityBroadcaster, text)
+	if t.gateway == nil {
+		return errors.New("cannot send as broadcaster: no gateway configured (TWITCH_API_URL unset)")
 	}
-	return mytwitch.SendChatMessageAsBroadcaster(ctx, text)
+	return t.gateway.SendChat(ctx, gateway.IdentityBroadcaster, text)
 }

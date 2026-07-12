@@ -12,24 +12,26 @@ import (
 	"log/slog"
 	"time"
 
-	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"github.com/adanalife/tripbot/pkg/obs"
-	"github.com/adanalife/tripbot/pkg/twitch"
 )
 
 // WatchdogDeps are the OBS+Twitch+restart hooks the silent-disconnect
 // watchdog calls. Injectable so the loop can be unit-tested without a real
-// OBS WebSocket or live Helix client. DefaultWatchdogDeps wires the
-// production implementations.
+// OBS WebSocket or live Helix client. DefaultWatchdogDeps wires the OBS +
+// restart hooks; TwitchLive is injected by the caller.
 type WatchdogDeps struct {
-	OBSActive  func(context.Context) (bool, error)
+	OBSActive func(context.Context) (bool, error)
+	// TwitchLive reports whether the channel is live. Injected by cmd/tripbot,
+	// which routes it through the platform-gateway — this package must not reach
+	// Twitch itself (package-boundary-init-discipline), so DefaultWatchdogDeps
+	// leaves it nil.
 	TwitchLive func(context.Context) (bool, error)
 	Restart    func(context.Context) error
 }
 
-// DefaultWatchdogDeps wires WatchSilentDisconnect's hooks to the real OBS
-// WebSocket + Helix client + StopStream/StartStream sequence.
+// DefaultWatchdogDeps wires WatchSilentDisconnect's OBS + restart hooks. The
+// caller injects TwitchLive (the gateway live-check).
 //
 // OBSActive uses GetStreamActiveSteady (not GetStreamStatus) so the
 // watchdog skips counting misses when OBS already knows the stream is
@@ -40,14 +42,7 @@ type WatchdogDeps struct {
 func DefaultWatchdogDeps() WatchdogDeps {
 	return WatchdogDeps{
 		OBSActive: obs.GetStreamActiveSteady,
-		TwitchLive: func(ctx context.Context) (bool, error) {
-			live, err := twitch.IsChannelLive(ctx, c.Conf.ChannelName)
-			if err == nil {
-				instrumentation.TwitchChannelLive.Set(live)
-			}
-			return live, err
-		},
-		Restart: defaultRestart,
+		Restart:   defaultRestart,
 	}
 }
 

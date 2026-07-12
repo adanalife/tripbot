@@ -23,12 +23,6 @@ var skipToDate = false
 var skipDate = time.Date(2018, time.Month(9), 29, 0, 0, 0, 0, time.UTC)
 
 func main() {
-	//TODO: remove this if it's not needed
-	// err := godotenv.Load()
-	// if err != nil {
-	// 	log.Fatal("Error loading .env file")
-	// }
-
 	client, err := maps.NewClient(maps.WithAPIKey(c.Conf.GoogleMapsAPIKey))
 	if err != nil {
 		log.Fatalf("client error: %s", err)
@@ -200,7 +194,6 @@ func makeGoogleMap(c *maps.Client, loc maps.LatLng, pathPoints []maps.LatLng) (i
 		Center: centerOfUSA.String(),
 		Zoom:   4,
 		Size:   "800x600",
-		// MapStyles: c.GoogleMapsStyle,
 		// Center:    loc.String(),
 		// Zoom:     5,
 		// Size:     "600x400",

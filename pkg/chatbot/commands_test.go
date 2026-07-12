@@ -2,6 +2,7 @@ package chatbot
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -63,6 +64,7 @@ func newTestApp(vid video.Video) *App {
 		Weather:    noopWeather{},
 		Twitch:     noopTwitch{},
 		OBS:        noopOBS{},
+		Search:     noopSearch{},
 	}
 	a.indexCommands() // build the registry, same as New() does in production
 	return a
@@ -197,6 +199,15 @@ func TestReportCmd_AcksViaIRC(t *testing.T) {
 	}
 	if !strings.Contains(rec.Says[0], "Thank you") {
 		t.Errorf("expected ack message via IRC, got %q", rec.Says[0])
+	}
+}
+
+func TestReportReporter_AnonymizesYouTube(t *testing.T) {
+	if got := reportReporter(platformYouTube, "someviewer"); got != "a youtube viewer" {
+		t.Errorf("youtube reporter = %q, want it anonymized (no viewer name in report sinks)", got)
+	}
+	if got := reportReporter(platformTwitch, "someviewer"); got != "someviewer" {
+		t.Errorf("twitch reporter = %q, want the username preserved", got)
 	}
 }
 
@@ -633,44 +644,6 @@ func TestStateCmd_MessageFormat(t *testing.T) {
 	}
 }
 
-func TestStateCmd_DrivesShowFlagOverlay(t *testing.T) {
-	vid := newTestVideo("Wyoming", 43.0, -107.0, time.Now())
-	app := newTestApp(vid)
-	rec := &recordingOnscreens{}
-	app.Onscreens = rec
-
-	app.stateCmd(context.Background(), newTestUser("viewer1"), nil)
-
-	if len(rec.Calls) != 1 || !strings.HasPrefix(rec.Calls[0], "ShowFlag(") {
-		t.Errorf("expected one ShowFlag overlay call, got %v", rec.Calls)
-	}
-}
-
-// --- flagCmd ---
-
-func TestFlagCmd_DrivesShowFlagOverlay(t *testing.T) {
-	app := newTestApp(video.Video{})
-	rec := &recordingOnscreens{}
-	app.Onscreens = rec
-
-	app.flagCmd(context.Background(), newTestUser("viewer1"), nil)
-
-	if len(rec.Calls) != 1 || rec.Calls[0] != "ShowFlag(10s)" {
-		t.Errorf("expected ShowFlag(10s) overlay call, got %v", rec.Calls)
-	}
-}
-
-func TestFlagCmd_DoesNotSayInChat(t *testing.T) {
-	app := newTestApp(video.Video{})
-	out := captureSay(t, app)
-
-	app.flagCmd(context.Background(), newTestUser("viewer1"), nil)
-
-	if out() != "" {
-		t.Errorf("expected flagCmd to be silent in chat, got %q", out())
-	}
-}
-
 // --- dateCmd ---
 
 func TestDateCmd_SaysThisMomentWas(t *testing.T) {
@@ -813,9 +786,8 @@ func TestGuessCmd_CorrectGuess_DrivesOverlayAndPlayback(t *testing.T) {
 		t.Errorf("expected correct-guess chat message, got %q", msg)
 	}
 
-	// Overlay sequence: ShowFlag (state flag) then ShowTimewarp (from
-	// a.timewarp()), crediting the guesser.
-	wantOverlay := []string{"ShowFlag(10s)", `ShowTimewarp("viewer1")`}
+	// Overlay: ShowTimewarp (from a.timewarp()), crediting the guesser.
+	wantOverlay := []string{`ShowTimewarp("viewer1")`}
 	if len(recOverlay.Calls) != len(wantOverlay) {
 		t.Fatalf("expected %d overlay calls, got %d: %v", len(wantOverlay), len(recOverlay.Calls), recOverlay.Calls)
 	}
@@ -892,6 +864,45 @@ func TestMiddleCmd_NonAdminIsSilent(t *testing.T) {
 
 	if out() != "" {
 		t.Errorf("expected silence for non-admin, got %q", out())
+	}
+}
+
+// --- refreshOverlaysCmd ---
+
+func TestRefreshOverlaysCmd_NonAdminIsSilent(t *testing.T) {
+	app := newTestApp(video.Video{})
+	obs := &recordingOBS{Refreshed: 5}
+	app.OBS = obs
+	out := captureSay(t, app)
+
+	app.refreshOverlaysCmd(context.Background(), newTestUser("viewer1"), nil)
+
+	if out() != "" {
+		t.Errorf("expected silence for non-admin, got %q", out())
+	}
+}
+
+func TestRefreshOverlaysCmd_AdminReportsCount(t *testing.T) {
+	app := newTestApp(video.Video{})
+	app.OBS = &recordingOBS{Refreshed: 3}
+	out := captureSay(t, app)
+
+	app.refreshOverlaysCmd(context.Background(), newTestUser(adminUser), nil)
+
+	if !strings.Contains(out(), "Refreshed 3 overlay") {
+		t.Errorf("expected refreshed-count report, got %q", out())
+	}
+}
+
+func TestRefreshOverlaysCmd_ErrorIsReported(t *testing.T) {
+	app := newTestApp(video.Video{})
+	app.OBS = &recordingOBS{refreshErr: errors.New("obs unreachable")}
+	out := captureSay(t, app)
+
+	app.refreshOverlaysCmd(context.Background(), newTestUser(adminUser), nil)
+
+	if !strings.Contains(out(), "Couldn't refresh") {
+		t.Errorf("expected failure message, got %q", out())
 	}
 }
 
@@ -1303,6 +1314,34 @@ func TestMilesCmd_OtherUser_StripsAtSign(t *testing.T) {
 }
 
 // --- makeBotCmd / unBotCmd ---
+
+func TestGiveMilesCmd_NonAdmin_NoOp(t *testing.T) {
+	app := newTestApp(video.Video{})
+	rec := &recordingSessions{}
+	app.Sessions = rec
+
+	app.giveMilesCmd(context.Background(), newTestUser("viewer1"), []string{"target", "50"})
+
+	if len(rec.Calls) != 0 {
+		t.Errorf("expected no Sessions calls for non-admin, got %v", rec.Calls)
+	}
+}
+
+func TestGiveMilesCmd_Admin_BadArgs_NoCorrection(t *testing.T) {
+	// missing amount, then non-numeric amount — both must bail before touching
+	// Sessions (Find/CorrectMiles), so no correction is applied.
+	for _, params := range [][]string{{"target"}, {"target", "notanumber"}} {
+		app := newTestApp(video.Video{})
+		rec := &recordingSessions{}
+		app.Sessions = rec
+
+		app.giveMilesCmd(context.Background(), newTestUser(adminUser), params)
+
+		if len(rec.Calls) != 0 {
+			t.Errorf("params %v: expected no Sessions calls, got %v", params, rec.Calls)
+		}
+	}
+}
 
 func TestMakeBotCmd_NonAdmin_DoesNotCallSetBot(t *testing.T) {
 	app := newTestApp(video.Video{})

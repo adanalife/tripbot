@@ -14,19 +14,12 @@ import (
 // twitch and youtube encoders collide onto one series. The attribute key
 // matches the resource attribute (service.platform → service_platform label)
 // so it lines up with target_info and the Stream Health dashboard's existing
-// filters. Defaults to twitch to match the config default; cmd/vlc-server
-// overrides it via SetPlatform at startup before the pollers begin.
-var platformAttr = metric.WithAttributes(attribute.String("service.platform", "twitch"))
-
-// SetPlatform stamps the streaming platform this instance feeds onto the
-// vlc-server/OBS gauges. Call once at startup (before the stats pollers run)
-// with the instance's STREAM_PLATFORM value so per-platform series stay
-// distinct as more platforms are added.
-func SetPlatform(p string) {
-	if p == "" {
-		p = "twitch"
+// filters. Defaults to twitch to match the config default.
+func platformAttr(platform string) metric.MeasurementOption {
+	if platform == "" {
+		platform = "twitch"
 	}
-	platformAttr = metric.WithAttributes(attribute.String("service.platform", p))
+	return metric.WithAttributes(attribute.String("service.platform", platform))
 }
 
 var (
@@ -38,6 +31,11 @@ var (
 	vlcLostPictures       = mustFloat64Gauge("vlc_player_lost_pictures", "Total lost (dropped) frames since the current Media started (resets on media change)")
 	vlcDemuxCorrupted     = mustFloat64Gauge("vlc_player_demux_corrupted", "Demux corruptions discarded since the current Media started")
 	vlcDemuxDiscontinuity = mustFloat64Gauge("vlc_player_demux_discontinuity", "Demux discontinuities dropped since the current Media started")
+
+	vlcTimeRemaining = mustFloat64Gauge("vlc_player_time_remaining_seconds", "Seconds remaining in the currently-playing clip (media length minus current playhead position)")
+	vlcProgress      = mustFloat64Gauge("vlc_player_progress_fraction", "Playback progress through the currently-playing clip as a 0..1 fraction")
+	vlcMediaSwapGap  = mustHistogram("vlc_player_media_swap_gap_seconds", "Dead-air at a clip boundary: seconds from the previous Media ending (or a clip change being requested) until the next Media reaches Playing",
+		0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10)
 
 	obsStreamingGauge         = mustGauge("obs_streaming_active", "1 if OBS is actively streaming, 0 otherwise")
 	obsActiveFPS              = mustFloat64Gauge("obs_active_fps", "Current FPS being rendered by OBS")
@@ -67,46 +65,53 @@ type VLCPlayerStatsSnapshot struct {
 	LostPictures       float64
 	DemuxCorrupted     float64
 	DemuxDiscontinuity float64
+	TimeRemaining      float64 // seconds left in the current clip (length - playhead)
+	Progress           float64 // 0..1 fraction of the current clip played
 }
 
-// VLCPlayerStats exposes the libvlc playback stats. Call Update on every
+// VLCPlayerStats publishes the libvlc playback stats, stamping every series
+// with the streaming platform it was constructed with. Call Update on every
 // poll tick with a fresh snapshot.
-var VLCPlayerStats = vlcPlayerStatsIface{
-	inputBitRate:       vlcInputBitRate,
-	demuxBitRate:       vlcDemuxBitRate,
-	displayedFPS:       vlcDisplayedFPS,
-	decodedVideo:       vlcDecodedVideo,
-	displayedPictures:  vlcDisplayedPictures,
-	lostPictures:       vlcLostPictures,
-	demuxCorrupted:     vlcDemuxCorrupted,
-	demuxDiscontinuity: vlcDemuxDiscontinuity,
+type VLCPlayerStats struct {
+	platform metric.MeasurementOption
 }
 
-type vlcPlayerStatsIface struct {
-	inputBitRate       metric.Float64Gauge
-	demuxBitRate       metric.Float64Gauge
-	displayedFPS       metric.Float64Gauge
-	decodedVideo       metric.Float64Gauge
-	displayedPictures  metric.Float64Gauge
-	lostPictures       metric.Float64Gauge
-	demuxCorrupted     metric.Float64Gauge
-	demuxDiscontinuity metric.Float64Gauge
+// NewVLCPlayerStats builds a publisher for the given streaming platform
+// (the instance's STREAM_PLATFORM value).
+func NewVLCPlayerStats(platform string) VLCPlayerStats {
+	return VLCPlayerStats{platform: platformAttr(platform)}
 }
 
-func (v vlcPlayerStatsIface) Update(s VLCPlayerStatsSnapshot) {
+func (v VLCPlayerStats) Update(s VLCPlayerStatsSnapshot) {
 	ctx := context.Background()
-	v.inputBitRate.Record(ctx, s.InputBitRate, platformAttr)
-	v.demuxBitRate.Record(ctx, s.DemuxBitRate, platformAttr)
-	v.displayedFPS.Record(ctx, s.DisplayedFPS, platformAttr)
-	v.decodedVideo.Record(ctx, s.DecodedVideo, platformAttr)
-	v.displayedPictures.Record(ctx, s.DisplayedPictures, platformAttr)
-	v.lostPictures.Record(ctx, s.LostPictures, platformAttr)
-	v.demuxCorrupted.Record(ctx, s.DemuxCorrupted, platformAttr)
-	v.demuxDiscontinuity.Record(ctx, s.DemuxDiscontinuity, platformAttr)
+	vlcInputBitRate.Record(ctx, s.InputBitRate, v.platform)
+	vlcDemuxBitRate.Record(ctx, s.DemuxBitRate, v.platform)
+	vlcDisplayedFPS.Record(ctx, s.DisplayedFPS, v.platform)
+	vlcDecodedVideo.Record(ctx, s.DecodedVideo, v.platform)
+	vlcDisplayedPictures.Record(ctx, s.DisplayedPictures, v.platform)
+	vlcLostPictures.Record(ctx, s.LostPictures, v.platform)
+	vlcDemuxCorrupted.Record(ctx, s.DemuxCorrupted, v.platform)
+	vlcDemuxDiscontinuity.Record(ctx, s.DemuxDiscontinuity, v.platform)
+	vlcTimeRemaining.Record(ctx, s.TimeRemaining, v.platform)
+	vlcProgress.Record(ctx, s.Progress, v.platform)
 }
 
-// OBSStreaming exposes the streaming-active gauge.
-var OBSStreaming = obsStreamingIface{g: obsStreamingGauge}
+// VLCSwapGap publishes clip-boundary dead-air observations, stamping every
+// sample with the streaming platform it was constructed with.
+type VLCSwapGap struct {
+	platform metric.MeasurementOption
+}
+
+// NewVLCSwapGap builds a publisher for the given streaming platform
+// (the instance's STREAM_PLATFORM value).
+func NewVLCSwapGap(platform string) VLCSwapGap {
+	return VLCSwapGap{platform: platformAttr(platform)}
+}
+
+// Record publishes one clip-boundary gap observation, in seconds.
+func (g VLCSwapGap) Record(seconds float64) {
+	vlcMediaSwapGap.Record(context.Background(), seconds, g.platform)
+}
 
 // OBSStatsSnapshot bundles OBS performance + stream-output stats so the
 // poller can publish in a single call without coupling instrumentation to
@@ -133,73 +138,50 @@ type OBSStreamSnapshot struct {
 	TotalFrames      float64
 }
 
-// OBSStats exposes the OBS performance + stream-output gauges.
-var OBSStats = obsStatsIface{
-	activeFPS:           obsActiveFPS,
-	averageFrameRender:  obsAverageFrameRenderMS,
-	cpuUsage:            obsCPUUsage,
-	memoryUsage:         obsMemoryUsage,
-	renderSkippedFrames: obsRenderSkippedFrames,
-	renderTotalFrames:   obsRenderTotalFrames,
-	outputSkippedFrames: obsOutputSkippedFrames,
-	outputTotalFrames:   obsOutputTotalFrames,
-	streamBytes:         obsStreamOutputBytes,
-	streamDuration:      obsStreamOutputDurationMS,
-	streamCongestion:    obsStreamCongestion,
-	streamReconnecting:  obsStreamReconnecting,
-	streamSkipped:       obsStreamSkippedFrames,
-	streamTotal:         obsStreamTotalFrames,
+// OBSStats publishes the OBS streaming-active, performance, and
+// stream-output gauges, stamping every series with the streaming platform
+// it was constructed with.
+type OBSStats struct {
+	platform metric.MeasurementOption
 }
 
-type obsStreamingIface struct{ g metric.Int64Gauge }
+// NewOBSStats builds a publisher for the given streaming platform
+// (the instance's STREAM_PLATFORM value).
+func NewOBSStats(platform string) OBSStats {
+	return OBSStats{platform: platformAttr(platform)}
+}
 
-func (o obsStreamingIface) Set(active bool) {
+// SetStreaming records whether OBS is actively streaming.
+func (o OBSStats) SetStreaming(active bool) {
 	v := int64(0)
 	if active {
 		v = 1
 	}
-	o.g.Record(context.Background(), v, platformAttr)
+	obsStreamingGauge.Record(context.Background(), v, o.platform)
 }
 
-type obsStatsIface struct {
-	activeFPS           metric.Float64Gauge
-	averageFrameRender  metric.Float64Gauge
-	cpuUsage            metric.Float64Gauge
-	memoryUsage         metric.Float64Gauge
-	renderSkippedFrames metric.Float64Gauge
-	renderTotalFrames   metric.Float64Gauge
-	outputSkippedFrames metric.Float64Gauge
-	outputTotalFrames   metric.Float64Gauge
-	streamBytes         metric.Float64Gauge
-	streamDuration      metric.Float64Gauge
-	streamCongestion    metric.Float64Gauge
-	streamReconnecting  metric.Int64Gauge
-	streamSkipped       metric.Float64Gauge
-	streamTotal         metric.Float64Gauge
-}
-
-func (o obsStatsIface) Update(s OBSStatsSnapshot) {
+func (o OBSStats) Update(s OBSStatsSnapshot) {
 	ctx := context.Background()
-	o.activeFPS.Record(ctx, s.ActiveFPS, platformAttr)
-	o.averageFrameRender.Record(ctx, s.AverageFrameRenderTime, platformAttr)
-	o.cpuUsage.Record(ctx, s.CPUUsage, platformAttr)
-	o.memoryUsage.Record(ctx, s.MemoryUsage, platformAttr)
-	o.renderSkippedFrames.Record(ctx, s.RenderSkippedFrames, platformAttr)
-	o.renderTotalFrames.Record(ctx, s.RenderTotalFrames, platformAttr)
-	o.outputSkippedFrames.Record(ctx, s.OutputSkippedFrames, platformAttr)
-	o.outputTotalFrames.Record(ctx, s.OutputTotalFrames, platformAttr)
+	obsActiveFPS.Record(ctx, s.ActiveFPS, o.platform)
+	obsAverageFrameRenderMS.Record(ctx, s.AverageFrameRenderTime, o.platform)
+	obsCPUUsage.Record(ctx, s.CPUUsage, o.platform)
+	obsMemoryUsage.Record(ctx, s.MemoryUsage, o.platform)
+	obsRenderSkippedFrames.Record(ctx, s.RenderSkippedFrames, o.platform)
+	obsRenderTotalFrames.Record(ctx, s.RenderTotalFrames, o.platform)
+	obsOutputSkippedFrames.Record(ctx, s.OutputSkippedFrames, o.platform)
+	obsOutputTotalFrames.Record(ctx, s.OutputTotalFrames, o.platform)
 }
 
-func (o obsStatsIface) UpdateStream(s OBSStreamSnapshot) {
+func (o OBSStats) UpdateStream(s OBSStreamSnapshot) {
 	ctx := context.Background()
-	o.streamBytes.Record(ctx, s.OutputBytes, platformAttr)
-	o.streamDuration.Record(ctx, s.OutputDurationMS, platformAttr)
-	o.streamCongestion.Record(ctx, s.OutputCongestion, platformAttr)
+	obsStreamOutputBytes.Record(ctx, s.OutputBytes, o.platform)
+	obsStreamOutputDurationMS.Record(ctx, s.OutputDurationMS, o.platform)
+	obsStreamCongestion.Record(ctx, s.OutputCongestion, o.platform)
 	v := int64(0)
 	if s.Reconnecting {
 		v = 1
 	}
-	o.streamReconnecting.Record(ctx, v, platformAttr)
-	o.streamSkipped.Record(ctx, s.SkippedFrames, platformAttr)
-	o.streamTotal.Record(ctx, s.TotalFrames, platformAttr)
+	obsStreamReconnecting.Record(ctx, v, o.platform)
+	obsStreamSkippedFrames.Record(ctx, s.SkippedFrames, o.platform)
+	obsStreamTotalFrames.Record(ctx, s.TotalFrames, o.platform)
 }

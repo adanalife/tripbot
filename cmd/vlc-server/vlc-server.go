@@ -4,7 +4,6 @@ import (
 	"context"
 	"log"
 	"log/slog"
-	"math/rand"
 	"os"
 	"os/signal"
 	"syscall"
@@ -14,12 +13,12 @@ import (
 
 	c "github.com/adanalife/tripbot/pkg/config/vlc-server"
 	"github.com/adanalife/tripbot/pkg/helpers"
-	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"github.com/adanalife/tripbot/pkg/natsclient"
 	"github.com/adanalife/tripbot/pkg/obs"
 	"github.com/adanalife/tripbot/pkg/telemetry"
 	vlcServer "github.com/adanalife/tripbot/pkg/vlc-server"
 	"github.com/getsentry/sentry-go"
+	"github.com/nats-io/nats.go"
 )
 
 // version is overridable at build time via -ldflags "-X main.version=...".
@@ -39,9 +38,6 @@ func main() {
 		log.Fatal("This doesn't yet work on darwin")
 	}
 
-	// create a brand new random seed
-	rand.Seed(time.Now().UnixNano())
-
 	// write the current pid to a pidfile
 	helpers.WritePidFile(c.Conf.VLCPidFile)
 
@@ -54,26 +50,26 @@ func main() {
 
 	// Connect to NATS so Server.Start can attach the command subscribers.
 	// Optional — when NATS_URL is empty the conn is nil and the subscriber
-	// registration is skipped; HTTP remains the sole transport.
-	natsclient.Connect(c.Conf.NatsURL, "vlc-server")
-
-	// Declare the lastplayed last-value-cache stream before the first play —
-	// a core publish to a subject no stream covers is silently uncaptured.
-	// Best-effort: resume-on-restart degrades to PlayRandom without it.
-	if err := vlcServer.EnsureLastPlayedStream(shutdownCtx, natsclient.JetStream(), c.Conf.Environment); err != nil {
-		slog.Warn("lastplayed stream setup failed; resume-on-restart disabled", "err", err)
-	}
+	// registration is skipped; HTTP remains the sole transport. A failed dial
+	// retries in the background (boot race) with subscriptions replayed on
+	// connect, so the subscribers below bind either way.
+	//
+	// The lastplayed last-value-cache stream is declared in the on-connect
+	// callback — a core publish to a subject no stream covers is silently
+	// uncaptured, and declaring on connect works even when the client wins
+	// the boot race and connects late. Best-effort: resume-on-restart
+	// degrades to PlayRandom without it.
+	natsclient.Connect(c.Conf.NatsURL, "vlc-server", func(*nats.Conn) {
+		if err := vlcServer.EnsureLastPlayedStream(shutdownCtx, natsclient.JetStream(), c.Conf.Environment); err != nil {
+			slog.Warn("lastplayed stream setup failed; resume-on-restart disabled", "err", err)
+		}
+	})
 
 	// await graceful shutdown signal
 	listenForShutdown()
 
 	// set up telemetry (no-op if OTEL_SDK_DISABLED)
 	initializeTelemetry()
-
-	// stamp the streaming platform onto the vlc-server/OBS gauges so the
-	// per-platform instances (twitch/youtube/…) stay distinct series instead
-	// of colliding on identical labels. Must run before the stats pollers.
-	instrumentation.SetPlatform(c.Conf.Platform)
 
 	// set up error logging
 	initializeErrorLogger()
@@ -109,8 +105,10 @@ func main() {
 	// No-op publishes when NATS is off.
 	srv.StartLastPlayedTicker(shutdownCtx, 5*time.Second)
 
-	// poll the OBS WebSocket for streaming state + render/output stats.
-	go obs.PollStreamingActive(context.Background(), 30*time.Second)
+	// poll the OBS WebSocket for streaming state + render/output stats,
+	// stamping the series with this instance's streaming platform so the
+	// per-platform instances (twitch/youtube/…) stay distinct.
+	go obs.PollStreamingActive(context.Background(), c.Conf.Platform, 30*time.Second)
 
 	// Self-heal watchdog: probes the local RTSP listener; after 3
 	// consecutive DESCRIBE failures (90s of sustained badness with the
@@ -210,7 +208,6 @@ func gracefulShutdown() {
 	<-ctrlC
 
 	slog.Warn("caught CTRL-C, shutting down")
-	// anything below this probably won't be executed
 	if srv != nil {
 		drainCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		srv.Shutdown(drainCtx)

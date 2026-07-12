@@ -9,6 +9,7 @@ metadata:
 data:
   BOT_USERNAME: tripbot4000
   CHANNEL_NAME: adanalife_
+  COMPED_SUBSCRIBERS: reapermoss
   DATABASE_HOST: postgres.prod-1-data.svc.cluster.local
   ENV: production
   EXTERNAL_URL: https://tripbot-twitch.prod.whereisdana.today
@@ -25,6 +26,7 @@ data:
   READ_ONLY: "false"
   SENTRY_ENVIRONMENT: prod-1
   TRIPBOT_SERVER_PORT: "8080"
+  TWITCH_API_URL: http://gateway-twitch.prod-1.svc.cluster.local:8080
   VERBOSE: "false"
   VLC_SERVER_HOST: vlc-twitch:8080
 ---
@@ -44,7 +46,7 @@ spec:
   template:
     metadata:
       annotations:
-        adanalife.dev/config-hash: 8f844f58f3
+        adanalife.dev/config-hash: 7885a57f35
       labels:
         app: tripbot-twitch
     spec:
@@ -71,7 +73,7 @@ spec:
             - secretRef:
                 name: tripbot-discord-bot-token
                 optional: true
-          image: adanalife/tripbot:3.9.4
+          image: adanalife/tripbot:3.17.0
           imagePullPolicy: IfNotPresent
           livenessProbe:
             httpGet:
@@ -115,7 +117,7 @@ spec:
                 name: tripbot-twitch-config
             - secretRef:
                 name: tripbot-database-creds
-          image: adanalife/tripbot:3.9.4
+          image: adanalife/tripbot:3.17.0
           imagePullPolicy: IfNotPresent
           name: migrate
           resources:

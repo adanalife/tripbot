@@ -2,109 +2,116 @@ package users
 
 import (
 	"context"
+	"strings"
 	"testing"
+	"time"
+
+	c "github.com/adanalife/tripbot/pkg/config/tripbot"
+	"github.com/adanalife/tripbot/pkg/database/testdb"
+	"gorm.io/gorm"
 )
 
-func TestStrToFloat32Valid(t *testing.T) {
-	tests := []struct {
-		in   string
-		want float32
-	}{
-		{"0", 0},
-		{"1.5", 1.5},
-		{"42.0", 42.0},
-		{"-3.25", -3.25},
-	}
-	for _, tt := range tests {
-		t.Run(tt.in, func(t *testing.T) {
-			got := strToFloat32(context.Background(), tt.in)
-			if got != tt.want {
-				t.Fatalf("got %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestRemoveFromLeaderboard(t *testing.T) {
-	s := New(noopChatterSource{})
-	s.lifetimeLeaderboard = [][]string{
-		{"alice", "100"}, {"bob", "75"}, {"carol", "50"},
-	}
-
-	s.removeFromLeaderboard("bob")
-
-	if len(s.lifetimeLeaderboard) != 2 {
-		t.Fatalf("expected 2 entries after remove, got %d", len(s.lifetimeLeaderboard))
-	}
-	for _, pair := range s.lifetimeLeaderboard {
-		if pair[0] == "bob" {
-			t.Fatal("bob still present after remove")
+// seedUsers inserts users rows through GORM, so the model's column mapping is
+// the same one the code under test reads back through.
+func seedUsers(t *testing.T, db *gorm.DB, users ...User) {
+	t.Helper()
+	for i := range users {
+		if users[i].Platform == "" {
+			users[i].Platform = c.Conf.Platform
+		}
+		if err := db.Create(&users[i]).Error; err != nil {
+			t.Fatalf("seeding user %q: %v", users[i].Username, err)
 		}
 	}
 }
 
-func TestRemoveFromLeaderboardMissing(t *testing.T) {
-	s := New(noopChatterSource{})
-	s.lifetimeLeaderboard = [][]string{
-		{"alice", "100"}, {"bob", "75"},
+// assertBoard compares a leaderboard against the expected [username, miles] pairs.
+func assertBoard(t *testing.T, got [][]string, want [][]string) {
+	t.Helper()
+	if len(got) != len(want) {
+		t.Fatalf("expected %d entries, got %d: %v", len(want), len(got), got)
 	}
-
-	s.removeFromLeaderboard("nobody")
-
-	if len(s.lifetimeLeaderboard) != 2 {
-		t.Fatalf("expected unchanged length after missing remove, got %d", len(s.lifetimeLeaderboard))
-	}
-}
-
-func TestRemoveFromLeaderboardEmpty(t *testing.T) {
-	s := New(noopChatterSource{})
-
-	s.removeFromLeaderboard("alice")
-
-	if len(s.lifetimeLeaderboard) != 0 {
-		t.Fatalf("expected empty leaderboard, got %v", s.lifetimeLeaderboard)
+	for i := range want {
+		if got[i][0] != want[i][0] || got[i][1] != want[i][1] {
+			t.Fatalf("row %d: got %v, want %v", i, got[i], want[i])
+		}
 	}
 }
 
-// insertIntoLeaderboard pulls miles from User.CurrentMiles. The user isn't in
-// the default session, so CurrentMiles returns User.Miles directly (no session
-// bonus) — making the math deterministic.
-func TestInsertIntoLeaderboardOrdersByMilesDesc(t *testing.T) {
+// The fetch must rank by stored miles, scoped to this instance's platform, and
+// exclude bots, the channel owner, and users with no miles.
+func TestUpdateLeaderboard_ReadsFromDB(t *testing.T) {
+	db := testdb.New(t)
+	seedUsers(t, db,
+		User{Username: "alice", Miles: 100},
+		User{Username: "bob", Miles: 50},
+		User{Username: "carol", Miles: 75},
+		User{Username: "botty", Miles: 200, IsBot: true},
+		User{Username: strings.ToLower(c.Conf.ChannelName), Miles: 300},
+		User{Username: "zed", Miles: 0},
+		User{Username: "elsewhere", Miles: 500, Platform: "youtube"},
+	)
+
 	s := New(noopChatterSource{})
-	s.lifetimeLeaderboard = [][]string{
-		{"existing-1", "100"},
-		{"existing-2", "50"},
-		{"existing-3", "10"},
-	}
+	s.UpdateLeaderboard(context.Background())
 
-	u := User{Username: "newcomer", Miles: 75}
-	s.insertIntoLeaderboard(context.Background(), u)
+	assertBoard(t, s.LifetimeLeaderboard(), [][]string{
+		{"alice", "100.0"},
+		{"carol", "75.0"},
+		{"bob", "50.0"},
+	})
+}
 
-	if len(s.lifetimeLeaderboard) != 4 {
-		t.Fatalf("expected 4 entries after insert, got %d: %v",
-			len(s.lifetimeLeaderboard), s.lifetimeLeaderboard)
-	}
-	if s.lifetimeLeaderboard[1][0] != "newcomer" {
-		t.Fatalf("expected newcomer at index 1 (between 100 and 50), got order %v", s.lifetimeLeaderboard)
+// InitLeaderboard hydrates the same board at boot.
+func TestInitLeaderboard_ReadsFromDB(t *testing.T) {
+	db := testdb.New(t)
+	seedUsers(t, db,
+		User{Username: "alice", Miles: 10},
+		User{Username: "bob", Miles: 20},
+	)
+
+	s := New(noopChatterSource{})
+	s.InitLeaderboard(context.Background())
+
+	assertBoard(t, s.LifetimeLeaderboard(), [][]string{
+		{"bob", "20.0"},
+		{"alice", "10.0"},
+	})
+}
+
+// A logged-in user's in-progress session miles overlay their stored miles and
+// can reorder the board between logouts.
+func TestUpdateLeaderboard_OverlaysLiveSessionMiles(t *testing.T) {
+	db := testdb.New(t)
+	seedUsers(t, db,
+		User{Username: "alice", Miles: 100},
+		User{Username: "bob", Miles: 99},
+	)
+
+	s := New(noopChatterSource{})
+	// bob has been logged in for ~10 hours: 0.1mi/3min = ~20 miles in
+	// progress, enough to pass alice before his logout writes it back.
+	s.loggedIn["bob"] = &User{Username: "bob", Miles: 99, LoggedIn: time.Now().Add(-10 * time.Hour)}
+	s.UpdateLeaderboard(context.Background())
+
+	got := s.LifetimeLeaderboard()
+	if len(got) != 2 || got[0][0] != "bob" {
+		t.Fatalf("expected bob first after live-miles overlay, got %v", got)
 	}
 }
 
-func TestInsertIntoLeaderboardReplacesExistingUser(t *testing.T) {
+// A failed fetch must leave the previous board in place rather than blanking
+// what the rotators display.
+func TestUpdateLeaderboard_KeepsCacheOnError(t *testing.T) {
+	testdb.New(t)
+
 	s := New(noopChatterSource{})
-	s.lifetimeLeaderboard = [][]string{
-		{"alice", "100"},
-		{"bob", "50"},
-	}
+	s.lifetimeLeaderboard = [][]string{{"alice", "100.0"}}
 
-	// Bob's miles increased to 200 — should jump above alice and replace his old row.
-	u := User{Username: "bob", Miles: 200}
-	s.insertIntoLeaderboard(context.Background(), u)
+	// A cancelled context is the cheapest real query failure.
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	s.UpdateLeaderboard(ctx)
 
-	if len(s.lifetimeLeaderboard) != 2 {
-		t.Fatalf("expected length unchanged after replace, got %d: %v",
-			len(s.lifetimeLeaderboard), s.lifetimeLeaderboard)
-	}
-	if s.lifetimeLeaderboard[0][0] != "bob" {
-		t.Fatalf("expected bob to be #1 with 200 miles, got %v", s.lifetimeLeaderboard)
-	}
+	assertBoard(t, s.LifetimeLeaderboard(), [][]string{{"alice", "100.0"}})
 }

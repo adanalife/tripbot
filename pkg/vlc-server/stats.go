@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"time"
 
+	c "github.com/adanalife/tripbot/pkg/config/vlc-server"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 )
 
@@ -18,6 +19,8 @@ import (
 func (s *Server) pollStats(ctx context.Context, interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
+
+	playerStats := instrumentation.NewVLCPlayerStats(c.Conf.Platform)
 
 	var (
 		prevDisplayed float64
@@ -33,6 +36,25 @@ func (s *Server) pollStats(ctx context.Context, interval time.Duration) {
 			if s.Player == nil {
 				continue
 			}
+
+			// Playhead-derived gauges, read from the player rather than the
+			// media-stats block. MediaLength/MediaTime are milliseconds;
+			// MediaPosition is a 0..1 fraction. Between clips or while paused
+			// these can read oddly (zero length, negative remaining) — we
+			// clamp the obvious nonsense but otherwise emit the raw values;
+			// smoothing is out of scope.
+			var timeRemaining, progress float64
+			if lengthMS, lerr := s.Player.MediaLength(); lerr == nil && lengthMS > 0 {
+				if timeMS, terr := s.Player.MediaTime(); terr == nil {
+					if remaining := lengthMS - timeMS; remaining > 0 {
+						timeRemaining = float64(remaining) / 1000.0
+					}
+				}
+			}
+			if pos, perr := s.Player.MediaPosition(); perr == nil {
+				progress = float64(pos)
+			}
+
 			media, err := s.Player.Media()
 			if err != nil || media == nil {
 				havePrev = false
@@ -59,7 +81,7 @@ func (s *Server) pollStats(ctx context.Context, interval time.Duration) {
 			prevTime = now
 			havePrev = true
 
-			instrumentation.VLCPlayerStats.Update(instrumentation.VLCPlayerStatsSnapshot{
+			playerStats.Update(instrumentation.VLCPlayerStatsSnapshot{
 				InputBitRate:       stats.InputBitRate,
 				DemuxBitRate:       stats.DemuxBitRate,
 				DisplayedFPS:       fps,
@@ -68,6 +90,8 @@ func (s *Server) pollStats(ctx context.Context, interval time.Duration) {
 				LostPictures:       float64(stats.LostPictures),
 				DemuxCorrupted:     float64(stats.DemuxCorrupted),
 				DemuxDiscontinuity: float64(stats.DemuxDiscontinuity),
+				TimeRemaining:      timeRemaining,
+				Progress:           progress,
 			})
 		}
 	}

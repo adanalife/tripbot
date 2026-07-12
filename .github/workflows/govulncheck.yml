@@ -3,13 +3,17 @@ on:
   pull_request:
   push:
     branches:
-      - develop
-      - master
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   govulncheck:
     name: govulncheck
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       # libvlc-dev is required because pkg/vlc-{client,server} pull in
       # libvlc-go/v3 (cgo); govulncheck has to build the package graph

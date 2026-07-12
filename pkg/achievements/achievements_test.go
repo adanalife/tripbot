@@ -2,7 +2,6 @@ package achievements
 
 import (
 	"context"
-	"regexp"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
@@ -35,12 +34,6 @@ func installMockDB(t *testing.T) sqlmock.Sqlmock {
 	return mock
 }
 
-func expectPlayInsert(mock sqlmock.Sqlmock, videoID int) {
-	mock.ExpectExec(regexp.QuoteMeta(`INSERT INTO video_plays (video_id) VALUES ($1)`)).
-		WithArgs(videoID).
-		WillReturnResult(sqlmock.NewResult(1, 1))
-}
-
 func TestHandleVideoChange_ZeroIDIsANoOp(t *testing.T) {
 	mock := installMockDB(t)
 	if msgs := HandleVideoChange(context.Background(), video.Video{}, []string{"alice"}); msgs != nil {
@@ -68,7 +61,6 @@ func TestHandleVideoChange_AwardsStateVisit(t *testing.T) {
 	v := video.Video{ID: 42, State: "California", Flagged: true} // Flagged skips the landmark pass
 
 	mock.ExpectBegin()
-	expectPlayInsert(mock, 42)
 	for _, viewer := range []string{"alice", "bob"} {
 		mock.ExpectExec(`INSERT INTO user_state_days`).
 			WithArgs("twitch", viewer, "California").
@@ -103,7 +95,6 @@ func TestHandleVideoChange_AwardsLandmark(t *testing.T) {
 	v := video.Video{ID: 9, Lat: 37.8199, Lng: -122.4786}
 
 	mock.ExpectBegin()
-	expectPlayInsert(mock, 9)
 	mock.ExpectExec(`INSERT INTO achievements`).
 		WithArgs("twitch", "alice", "landmark-golden-gate-bridge", "Saw the Golden Gate Bridge").
 		WillReturnResult(sqlmock.NewResult(1, 1))

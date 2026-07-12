@@ -11,6 +11,7 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -19,9 +20,11 @@ import (
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
+	"github.com/adanalife/tripbot/pkg/events"
 	"github.com/adanalife/tripbot/pkg/feature"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/users"
+	"github.com/adanalife/tripbot/pkg/video"
 	"github.com/getsentry/sentry-go"
 	"github.com/hako/durafmt"
 	"gorm.io/gorm"
@@ -101,11 +104,6 @@ func (a *App) helloCmd(ctx context.Context, user *users.User, params []string) {
 	lastHelloTime = time.Now()
 }
 
-func (a *App) flagCmd(ctx context.Context, user *users.User, _ []string) {
-	slog.InfoContext(ctx, "ran !flag", "username", user.Username)
-	a.Onscreens.ShowFlag(ctx, 10*time.Second)
-}
-
 func (a *App) versionCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !version", "username", user.Username)
 
@@ -182,11 +180,16 @@ func (a *App) milesCmd(ctx context.Context, user *users.User, params []string) {
 		monthlyMiles = a.Sessions.CurrentMonthlyMiles(ctx, *user)
 	} else {
 		username = helpers.StripAtSign(params[0])
-		u := a.Sessions.Find(ctx, username)
+		u, err := a.Sessions.Find(ctx, username)
 
 		// check to see if they are in our DB
-		if u.ID == 0 {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			a.Chat.Say("I don't know them, sorry!")
+			return
+		}
+		if err != nil {
+			slog.ErrorContext(ctx, "error finding user", "err", err, "username", username)
+			a.Chat.Say("Couldn't look them up right now, try again in a bit")
 			return
 		}
 
@@ -238,11 +241,16 @@ func (a *App) kilometresCmd(ctx context.Context, user *users.User, params []stri
 		miles = a.Sessions.CurrentMiles(ctx, *user)
 	} else {
 		username = helpers.StripAtSign(params[0])
-		u := a.Sessions.Find(ctx, username)
+		u, err := a.Sessions.Find(ctx, username)
 
 		// check to see if they are in our DB
-		if u.ID == 0 {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			a.Chat.Say("I don't know them, sorry!")
+			return
+		}
+		if err != nil {
+			slog.ErrorContext(ctx, "error finding user", "err", err, "username", username)
+			a.Chat.Say("Couldn't look them up right now, try again in a bit")
 			return
 		}
 
@@ -260,7 +268,13 @@ func (a *App) sunsetCmd(ctx context.Context, user *users.User, _ []string) {
 	vid := a.Video.Current()
 	if vid.Flagged {
 		a.Chat.Say("I couldn't figure out current GPS coords, using next closest...")
-		vid = vid.Next(ctx)
+		next, err := vid.Next(ctx)
+		if err != nil {
+			slog.ErrorContext(ctx, "error finding next unflagged video", "err", err)
+			a.Chat.Say("I couldn't figure out current GPS coords, sorry!")
+			return
+		}
+		vid = next
 	}
 	lat, lng, _ := vid.Location()
 	a.Chat.Say(helpers.SunsetStr(vid.DateFilmed, lat, lng))
@@ -279,7 +293,13 @@ func (a *App) weatherCmd(ctx context.Context, user *users.User, _ []string) {
 	vid := a.Video.Current()
 	if vid.Flagged {
 		a.Chat.Say("I couldn't figure out current GPS coords, using next closest...")
-		vid = vid.Next(ctx)
+		next, err := vid.Next(ctx)
+		if err != nil {
+			slog.ErrorContext(ctx, "error finding next unflagged video", "err", err)
+			a.Chat.Say("I couldn't figure out current GPS coords, sorry!")
+			return
+		}
+		vid = next
 	}
 	lat, lng, _ := vid.Location()
 	desc, err := a.Weather.Historical(ctx, vid.DateFilmed, lat, lng)
@@ -298,7 +318,13 @@ func (a *App) locationCmd(ctx context.Context, user *users.User, _ []string) {
 		a.Chat.Say("I couldn't figure out current GPS coords, using next closest...")
 		//TODO: write something like vid.FindClosest() that
 		// chooses whether or not to use Next() vs Prev()
-		vid = vid.Next(ctx)
+		next, err := vid.Next(ctx)
+		if err != nil {
+			slog.ErrorContext(ctx, "error finding next unflagged video", "err", err)
+			a.Chat.Say("I couldn't figure out current GPS coords, sorry!")
+			return
+		}
+		vid = next
 	}
 	// extract the coordinates
 	lat, lng, err := vid.Location()
@@ -401,7 +427,11 @@ func (a *App) timeCmd(ctx context.Context, user *users.User, _ []string) {
 	var lat, lng float64
 	vid := a.Video.Current()
 	if vid.Flagged {
-		lat, lng, err = vid.Next(ctx).Location()
+		var next video.Video
+		next, err = vid.Next(ctx)
+		if err == nil {
+			lat, lng, err = next.Location()
+		}
 	} else {
 		lat, lng, err = vid.Location()
 	}
@@ -420,7 +450,11 @@ func (a *App) dateCmd(ctx context.Context, user *users.User, _ []string) {
 	var lat, lng float64
 	vid := a.Video.Current()
 	if vid.Flagged {
-		lat, lng, err = vid.Next(ctx).Location()
+		var next video.Video
+		next, err = vid.Next(ctx)
+		if err == nil {
+			lat, lng, err = next.Location()
+		}
 	} else {
 		lat, lng, err = vid.Location()
 	}
@@ -433,7 +467,6 @@ func (a *App) dateCmd(ctx context.Context, user *users.User, _ []string) {
 	}
 }
 
-// TODO: refactor to use golang '...' syntax
 func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 	slog.InfoContext(ctx, "ran !guess", "username", user.Username)
 	var msg string
@@ -472,13 +505,17 @@ func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 	vid := a.Video.Current()
 	if vid.Flagged {
 		a.Chat.Say("I couldn't figure out current GPS coords, using next closest...")
-		vid = vid.Next(ctx)
+		next, err := vid.Next(ctx)
+		if err != nil {
+			slog.ErrorContext(ctx, "error finding next unflagged video", "err", err)
+			a.Chat.Say("I couldn't figure out current GPS coords, sorry!")
+			return
+		}
+		vid = next
 	}
 
-	if strings.ToLower(guess) == strings.ToLower(vid.State) {
+	if strings.EqualFold(guess, vid.State) {
 		msg = fmt.Sprintf("@%s got it! We're in %s", user.Username, vid.State)
-		// show the flag for the state
-		a.Onscreens.ShowFlag(ctx, 10*time.Second)
 		// increase their guess score
 		user.AddToScore(ctx, guessScoreboard, 1.0)
 		user.AddToScore(ctx, scoreboards.CurrentGuessScoreboard(), 1.0)
@@ -495,30 +532,52 @@ func (a *App) stateCmd(ctx context.Context, user *users.User, _ []string) {
 	vid := a.Video.Current()
 	if vid.Flagged {
 		a.Chat.Say("I couldn't figure out current GPS coords, using next closest...")
-		vid = vid.Next(ctx)
+		next, err := vid.Next(ctx)
+		if err != nil {
+			slog.ErrorContext(ctx, "error finding next unflagged video", "err", err)
+			a.Chat.Say("I couldn't figure out current GPS coords, sorry!")
+			return
+		}
+		vid = next
 	}
 	msg := fmt.Sprintf("We're in %s", vid.State)
-	// show the flag for the state
-	a.Onscreens.ShowFlag(ctx, 10*time.Second)
 	// record that they know the location now
 	user.SetLastLocationTime()
 	a.Chat.Say(msg)
 }
 
 // TODO: maybe there could be a !cancel command or something
-// TODO: use fancy golang ... syntax?
+// reportReporter is the label a !report is attributed to in its downstream
+// sinks (the Sentry error event and the Discord alert). Viewers on v1-rollout
+// platforms are anonymized because v1 punts their identity entirely (see the
+// v1Commands allowlist) — until real user support lands there is no persisted
+// identity to stand behind, so the name is kept out of those durable/external
+// sinks. Twitch reports keep the username. Note the transient 14-day Loki chat
+// line still carries the name for every message; this only governs the report's
+// longer-lived sinks.
+func reportReporter(platform, username string) string {
+	switch platform {
+	case platformYouTube:
+		return "a youtube viewer"
+	case platformFacebook:
+		return "a facebook viewer"
+	}
+	return username
+}
+
 func (a *App) reportCmd(ctx context.Context, user *users.User, params []string) {
-	slog.InfoContext(ctx, "ran !report", "username", user.Username)
+	reporter := reportReporter(a.platform(), user.Username)
+	slog.InfoContext(ctx, "ran !report", "username", reporter)
 	message := strings.Join(params, " ")
 	// Always log to slog (→ stderr + Sentry via the slog→Sentry handler)
 	// as the durable audit trail.
-	slog.ErrorContext(ctx, "!report", "err", fmt.Errorf("viewer report from %s: %s", user.Username, message))
+	slog.ErrorContext(ctx, "!report", "err", fmt.Errorf("viewer report from %s: %s", reporter, message))
 	// Fire-and-forget to Discord for real-time notification. Skipped
 	// silently when DISCORD_ALERTS_WEBHOOK is unset (e.g. local dev) —
 	// the slog/Sentry path still fires so nothing is lost.
 	if webhook := c.Conf.DiscordAlertsWebhook; webhook != "" {
 		if isDiscordWebhookURL(webhook) {
-			go postReportToDiscord(webhook, user.Username, message)
+			go postReportToDiscord(webhook, reporter, message)
 		} else {
 			// A misconfigured secret (e.g. the SM placeholder string) would
 			// otherwise log a "unsupported protocol scheme" ERROR on every
@@ -624,6 +683,59 @@ func (a *App) secretInfoCmd(ctx context.Context, user *users.User, _ []string) {
 	a.Chat.Say(msg)
 }
 
+// giveMilesCmd is the admin !givemiles <user> <amount> command: it applies a
+// manual miles correction (amount may be negative) and logs a correction event
+// so the rollup folds it into user_rollups.extra_miles. Admin-only for now
+// (broadcaster); widen the gate to mods once a mod-status source exists.
+func (a *App) giveMilesCmd(ctx context.Context, user *users.User, params []string) {
+	slog.InfoContext(ctx, "ran !givemiles", "username", user.Username)
+	if !c.UserIsAdmin(user.Username) {
+		return
+	}
+	if len(params) < 2 {
+		a.Chat.Say("usage: !givemiles <user> <amount>")
+		return
+	}
+	target := helpers.StripAtSign(params[0])
+	delta, err := strconv.ParseFloat(params[1], 32)
+	if err != nil {
+		a.Chat.Say("that amount isn't a number I understand")
+		return
+	}
+	if _, err := a.Sessions.Find(ctx, target); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			a.Chat.Say("I don't know them, sorry!")
+		} else {
+			slog.ErrorContext(ctx, "error finding user", "err", err, "username", target)
+			a.Chat.Say("Couldn't look them up right now, try again in a bit")
+		}
+		return
+	}
+	newTotal := a.Sessions.CorrectMiles(ctx, target, float32(delta))
+	if err := events.Correction(ctx, target, delta); err != nil {
+		slog.ErrorContext(ctx, "error creating correction event", "err", err)
+	}
+	a.Chat.Say(fmt.Sprintf("@%s now has %.2fmi", target, newTotal))
+}
+
+// refreshOverlaysCmd hard-reloads every OBS browser source (the onscreen
+// corners, the next-frame cover, etc.) by respawning each source's CEF render
+// process. Admin-only. This is the manual recovery for a crashed/frozen overlay
+// — the hourly soft refresh can't revive a crashed CEF webpage.
+func (a *App) refreshOverlaysCmd(ctx context.Context, user *users.User, _ []string) {
+	slog.InfoContext(ctx, "ran !refreshoverlays", "username", user.Username)
+	if !c.UserIsAdmin(user.Username) {
+		return
+	}
+	n, err := a.OBS.RefreshBrowserSources(ctx)
+	if err != nil {
+		slog.ErrorContext(ctx, "overlay refresh failed", "err", err)
+		a.Chat.Say("Couldn't refresh the overlays right now, try again in a bit")
+		return
+	}
+	a.Chat.Say(fmt.Sprintf("Refreshed %d overlay(s).", n))
+}
+
 func (a *App) shutdownCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !shutdown", "username", user.Username)
 	if !c.UserIsAdmin(user.Username) {
@@ -636,7 +748,7 @@ func (a *App) shutdownCmd(ctx context.Context, user *users.User, _ []string) {
 		slog.ErrorContext(ctx, "cron shutdown failed during !shutdown", "err", err)
 	}
 	a.Sessions.Shutdown(ctx)
-	err := database.Connection().Close()
+	err := database.Close()
 	if err != nil {
 		slog.ErrorContext(ctx, "DB close failed during shutdown", "err", err)
 	}

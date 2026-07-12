@@ -28,22 +28,16 @@ import (
 type API struct {
 	// --- auth core (future auth-service boundary) ---
 
-	// currentTwitchClient is the lazy-initialized bot helix client. IRC auth +
-	// any Helix endpoint authorized against the bot's identity goes through it.
+	// currentTwitchClient is the lazy-initialized bot helix client, built by
+	// Client() for the OAuth bootstrap's identity check (GetUsers) and the IRC
+	// readiness probe. The Helix query surface now lives in the platform-gateway.
 	currentTwitchClient *helix.Client
-	// broadcasterTwitchClient is the lazy-initialized broadcaster helix client.
-	// Endpoints that authorize against the channel-owner identity
-	// (GetSubscriptions, GetChannelFollows total, channel.update, mod actions)
-	// go through it — the bot client would 401 since the user-access-token's
-	// identity matters, not just its scope set.
-	broadcasterTwitchClient *helix.Client
-	// appAccessToken is set in Client() (Client Credentials grant) and shared
-	// by both helix clients.
+	// appAccessToken is set in Client() (Client Credentials grant).
 	appAccessToken string
 
 	// tokenMu guards currentUserToken (bot) and currentBroadcasterToken.
-	// RWMutex because reads (IRCAuthToken, CurrentUserAccessToken) outnumber
-	// writes (LoadFromDB, refresh).
+	// RWMutex because reads (IRCAuthToken, BroadcasterUserAccessToken,
+	// TokenStatuses) outnumber writes (LoadFromDB).
 	tokenMu                 sync.RWMutex
 	currentUserToken        oauthtokens.Token
 	currentBroadcasterToken oauthtokens.Token
@@ -52,21 +46,24 @@ type API struct {
 
 	// channelID is the twitch-internal user ID for the channel.
 	channelID string
-	// botID is the Twitch user ID for the bot account (moderator identity for
-	// API calls that require moderator:read:chatters).
-	botID string
+
+	// audienceMu guards subscribers, currentChatters, and chatterCount, which
+	// are written by the gateway refresh crons and read from command dispatch
+	// and the session-update cron. RWMutex because reads (UserIsSubscriber,
+	// Chatters, ChatterCount) outnumber writes.
+	audienceMu sync.RWMutex
 	// subscribers is the usernames of the current subscribers.
 	subscribers []string
-	// currentChatters holds the most recent chatter list from the Helix API.
+	// currentChatters holds the most recent chatter list, cached from the gateway.
 	currentChatters []helix.ChatChatter
 	// chatterCount is the total reported by the API (may exceed
 	// len(currentChatters) when the channel has more than one page of chatters).
 	chatterCount int
 }
 
-// New constructs an API with zero mutable state. The helix clients and App
-// Access Token are built lazily on first use (Client()/BroadcasterClient());
-// the static ClientID/ClientSecret credentials are read from env in init().
+// New constructs an API with zero mutable state. The helix client and App
+// Access Token are built lazily on first use (Client()); the static
+// ClientID/ClientSecret credentials are read from env in init().
 func New() *API {
 	return &API{}
 }

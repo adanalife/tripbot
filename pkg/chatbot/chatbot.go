@@ -98,14 +98,17 @@ type App struct {
 	// keyless Open-Meteo archive API.
 	Weather Weather
 	// Twitch is the command-time Twitch Helix surface (follow lookups today).
-	// Tests inject a recordingTwitch; production uses realTwitch which
-	// delegates to the pkg/twitch client. The future swap point for an
-	// out-of-process Helix/auth service.
+	// Tests inject a recordingTwitch; production uses the gatewayTwitch adapter,
+	// which reaches the platform-gateway (the out-of-process Helix service).
 	Twitch Twitch
 	// OBS drives live OBS WebSocket tweaks for chat commands — currently just
 	// !carsound repointing the YouTube background-audio source. Tests inject a
 	// fake; production uses realOBS (which dials per call via pkg/obs).
 	OBS OBS
+	// Search runs visual search over the dashcam corpus for !find — it requests
+	// a query embedding from the video-pipeline responder over NATS and runs the
+	// pgvector cosine search. Tests inject a fake; production uses realSearch.
+	Search Search
 
 	// carSoundIdx is the index into carSounds of the YouTube background drone
 	// currently selected via !carsound; carSoundMu guards it (commands dispatch
@@ -164,6 +167,7 @@ func New() *App {
 		Geocoder:   realGeocoder{},
 		Weather:    realWeather{},
 		OBS:        realOBS{},
+		Search:     realSearch{},
 	}
 	// Twitch is wired after the literal so the gateway/in-process selector can
 	// hold the App and read its (later-reassigned) Flags client at call time —
@@ -200,8 +204,8 @@ func (a *App) ConnectIRC() *twitch.Client {
 		slog.Error("twitch API client unavailable at startup; continuing", "err", err)
 	}
 
-	// The IRC token comes from the DB-backed oauth_tokens row populated by
-	// cmd/auth-bootstrap; cmd/tripbot calls mytwitch.LoadFromDB before this.
+	// The IRC token comes from the DB-backed oauth_tokens row the platform-
+	// gateway keeps fresh; cmd/tripbot calls mytwitch.LoadFromDB before this.
 	client := twitch.NewClient(c.Conf.BotUsername, mytwitch.IRCAuthToken())
 
 	// attach this App's Twitch inbound adapters
@@ -216,10 +220,9 @@ func (a *App) ConnectIRC() *twitch.Client {
 	// live console. A second provider (YouTube/…) wires its own ChatClient here.
 	a.Chat = consoleMirror{
 		inner: twitchChat{
-			client:        client,
-			channelName:   c.Conf.ChannelName,
-			outputChannel: c.Conf.OutputChannel,
-			botUsername:   c.Conf.BotUsername,
+			client:      client,
+			channelName: c.Conf.ChannelName,
+			botUsername: c.Conf.BotUsername,
 		},
 		env:         c.Conf.Environment,
 		platform:    c.Conf.Platform,

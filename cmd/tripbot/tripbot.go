@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"math/rand"
 	"os"
 	"os/signal"
 	"syscall"
@@ -40,6 +39,7 @@ import (
 	"github.com/gempir/go-twitch-irc/v4"
 	"github.com/getsentry/sentry-go"
 	"github.com/go-co-op/gocron/v2"
+	"github.com/nats-io/nats.go"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -82,7 +82,7 @@ var version = "dev"
 
 // Tripbot holds the bot process's runtime dependencies and wiring. The boot
 // sequence (Run) and graceful shutdown are methods on it, so startup ordering
-// is explicit and the deps that used to be package-level globals are fields.
+// is explicit and the deps are fields rather than package-level globals.
 type Tripbot struct {
 	version string
 
@@ -140,11 +140,12 @@ type Tripbot struct {
 	// client — same fail-closed contract as pkg/feature.
 	flagClient feature.FlagClient
 
-	// gateway is the HTTP client for the platform-gateway, or nil when no
-	// TWITCH_API_URL is configured (the in-process default). When non-nil it's
-	// the shared client the non-chatbot Helix callers (the OBS watchdog's
-	// live-check, the chat-send path) route through once useGateway reports the
-	// runtime flag is on — the same gate chatbot's flaggedTwitch uses.
+	// gateway is the HTTP client for the platform-gateway — the single Helix
+	// caller. Non-nil on a Twitch instance (TWITCH_API_URL is
+	// set); nil on a non-Twitch instance, which never reaches the Twitch Helix
+	// paths (all gated behind platformIsTwitch). The shared client the
+	// non-chatbot Helix callers (the OBS watchdog's live-check, the chat-send
+	// path) route through.
 	gateway *gateway.Client
 
 	// locationFeed publishes the currently-playing clip's location + date to the
@@ -156,23 +157,14 @@ type Tripbot struct {
 }
 
 // newGatewayClient builds the platform-gateway client when TWITCH_API_URL is
-// set, else returns nil (the in-process default). Stateless and side-effect
-// free, so it's safe to construct at NewTripbot time.
+// set (a Twitch instance), else returns nil (a non-Twitch instance has no
+// Twitch Helix surface). Stateless and side-effect free, so it's safe to
+// construct at NewTripbot time.
 func newGatewayClient() *gateway.Client {
 	if c.Conf.TwitchAPIURL == "" {
 		return nil
 	}
 	return gateway.New(c.Conf.TwitchAPIURL)
-}
-
-// useGateway reports whether this instance should route a Helix call through
-// the platform-gateway rather than calling Helix in-process: the gateway must
-// be wired (TWITCH_API_URL set → gateway non-nil) AND the runtime flag on. Read
-// per call so cutover and revert need no restart, mirroring chatbot's
-// flaggedTwitch — one gate for "tripbot uses the gateway".
-func (t *Tripbot) useGateway(ctx context.Context) bool {
-	return t.gateway != nil &&
-		t.flagClient.Bool(ctx, chatbot.TwitchGatewayFlagKey, feature.EvalContext{})
 }
 
 // NewTripbot constructs a Tripbot with default runtime state. Dependencies
@@ -199,7 +191,7 @@ func NewTripbot(version string) *Tripbot {
 	// rotators the clip's location/date in place of command hints. Gated by the
 	// same flag as the rest of the bot-less presentation; reuses the chatbot's
 	// Geocoder (pkg/geo default, set up in ConnectYouTubeViaGateway).
-	if !platformIsTwitch() && !c.Conf.YouTubeInboundEnabled {
+	if c.Conf.Platform == "youtube" && !c.Conf.YouTubeInboundEnabled {
 		t.locationFeed = locationfeed.New(
 			onscreensClient.New(natsclient.DefaultPublisher(), c.Conf.Environment, c.Conf.Platform),
 			t.app.Geocoder,
@@ -227,7 +219,6 @@ func platformIsTwitch() bool {
 // instances.
 func (t *Tripbot) Run() {
 	slog.Info("tripbot starting", "version", t.version, "platform", c.Conf.Platform)
-	createRandomSeed()
 	// shutdownCtx is canceled on SIGINT/SIGTERM; the HTTP server uses it
 	// to trigger a graceful shutdown so in-flight requests aren't cut.
 	// listenForShutdown's gracefulShutdown goroutine handles the rest of
@@ -244,10 +235,10 @@ func (t *Tripbot) Run() {
 	t.app.Sessions = chatbot.NewSessionsAdapter(t.sessions) // command-time queries
 	t.app.UserSessions = t.sessions                         // inbound IRC handlers + access checks read the same session state
 	if platformIsTwitch() {
-		// Log each clip transition + award viewer achievements. Twitch-only:
-		// it's the instance with presence tracking, and only one instance
-		// should write the shared video_plays log. Set after findInitialVideo
-		// so a restart doesn't re-log the clip already on screen.
+		// Award viewer achievements on each clip transition. Twitch-only:
+		// it's the instance with presence tracking, and achievements key off
+		// who's in chat. Set after findInitialVideo so a restart doesn't
+		// re-award for the clip already on screen.
 		t.player.OnChange = func(ctx context.Context, v video.Video) {
 			for _, msg := range achievements.HandleVideoChange(ctx, v, t.sessions.LoggedInHumans()) {
 				t.app.Chat.Say(msg)
@@ -258,18 +249,28 @@ func (t *Tripbot) Run() {
 	t.startCron()
 	t.startFeatureFlags(shutdownCtx)
 	if platformIsTwitch() {
-		t.loadTwitchToken(shutdownCtx)           // must precede setUpTwitchClient — provides the IRC token
-		t.refreshTokensIfNearExpiry(shutdownCtx) // closes the restart-desync gap with the hourly cron
-		t.setUpTwitchClient()                    // required for the below
+		if t.gateway == nil {
+			// No in-process Helix fallback since the cutover, so audience polls,
+			// the follower check, and broadcaster send have no backend here.
+			// Real deploys always wire TWITCH_API_URL; this is local/CI.
+			slog.WarnContext(shutdownCtx, "no TWITCH_API_URL: Twitch audience/follower/broadcaster-send features disabled (gateway not wired)")
+		}
+		t.loadTwitchToken(shutdownCtx) // must precede setUpTwitchClient — provides the IRC token
+		t.setUpTwitchClient()          // required for the below
 		t.updateSubscribers()
 		t.getCurrentUsers()
 		t.startEventSub(shutdownCtx)
 	}
 	t.startNATS(shutdownCtx)
-	t.player.EmitCurrentVideo(shutdownCtx) // after startNATS: publishes the current video.changed for the standalone console
-	t.startAuthStatusEmitter(shutdownCtx)  // after startNATS: publishes auth.status snapshots for the standalone console
+	t.player.EmitCurrentVideo(shutdownCtx)   // after startNATS: publishes the current video.changed for the standalone console
+	t.startAuthStatusEmitter(shutdownCtx)    // after startNATS: publishes auth.status snapshots for the standalone console
+	t.startOBSRefreshSubscriber(shutdownCtx) // after startNATS: per-platform (each instance owns its OBS), so before the YouTube early-return
 	if !platformIsTwitch() {
-		t.connectToYouTube(shutdownCtx)
+		if c.Conf.Platform == "facebook" {
+			t.connectToFacebook(shutdownCtx)
+		} else {
+			t.connectToYouTube(shutdownCtx)
+		}
 		return
 	}
 	// chat.send subjects are per-env, not per-platform — both platform
@@ -304,7 +305,7 @@ func (t *Tripbot) connectToYouTube(ctx context.Context) {
 
 	t.app.ConnectYouTubeViaGateway()
 	if c.Conf.YouTubeInboundEnabled {
-		go t.app.NewGatewayYouTubeChatPoller().Run(ctx)
+		go t.app.NewGatewayChatPoller(c.Conf.YouTubeAPIURL).Run(ctx)
 		slog.InfoContext(ctx, "youtube chat via gateway (inbound + outbound)", "gateway", c.Conf.YouTubeAPIURL)
 	} else {
 		// Bot-less mode: outbound posting (rotators) + background jobs stay up,
@@ -315,6 +316,34 @@ func (t *Tripbot) connectToYouTube(ctx context.Context) {
 		slog.WarnContext(ctx, "youtube inbound chat disabled (bot-less mode); outbound + jobs only",
 			"gateway", c.Conf.YouTubeAPIURL, "fix", "set YOUTUBE_INBOUND_ENABLED=true to read chat")
 	}
+
+	// nothing else to do on the main goroutine — the poller and HTTP server
+	// run until the signal handler shuts the process down.
+	<-ctx.Done()
+}
+
+// connectToFacebook wires a PLATFORM=facebook instance's chat — both
+// directions — through gateway-facebook, then blocks until shutdown. The
+// gateway owns the Page access token and the live-video resolution, so
+// tripbot holds no Facebook credential: outbound sends go via
+// gateway-facebook's SendChat (a Page comment on the live video), inbound
+// chat via its GET /v1/chat/inbound poll.
+//
+// FACEBOOK_API_URL is required — without the gateway URL there's no way to
+// reach Facebook. A misconfigured instance comes up Ready with everything
+// else working but no Facebook chat, logging loudly (the same "stay up with
+// limited functionality" contract as connectToYouTube).
+func (t *Tripbot) connectToFacebook(ctx context.Context) {
+	if c.Conf.FacebookAPIURL == "" {
+		slog.ErrorContext(ctx, "FACEBOOK_API_URL unset; facebook chat disabled",
+			"fix", "set FACEBOOK_API_URL to the gateway-facebook service URL")
+		<-ctx.Done()
+		return
+	}
+
+	t.app.ConnectFacebookViaGateway()
+	go t.app.NewGatewayChatPoller(c.Conf.FacebookAPIURL).Run(ctx)
+	slog.InfoContext(ctx, "facebook chat via gateway (inbound + outbound)", "gateway", c.Conf.FacebookAPIURL)
 
 	// nothing else to do on the main goroutine — the poller and HTTP server
 	// run until the signal handler shuts the process down.
@@ -351,16 +380,19 @@ func (t *Tripbot) startFeatureFlags(ctx context.Context) {
 // when NATS_URL is empty the connection is skipped and publishes no-op silently.
 //
 // EnsureStreams declares the JetStream streams the standalone tripbot-console
-// consumes (chat + video history), so they exist before the publishers emit. It
-// no-ops when JetStream is unavailable (NATS off or a server without JetStream)
-// — publishes then fall back to live-only core subjects, so a stream-declare
+// consumes (chat + video history), so they exist before the publishers emit.
+// It runs in the on-connect callback so it executes against a live server
+// even when the first dial loses the boot race and the client connects late.
+// It no-ops when JetStream is unavailable (a server without JetStream) —
+// publishes then fall back to live-only core subjects, so a stream-declare
 // failure must not be fatal.
 func (t *Tripbot) startNATS(ctx context.Context) {
-	natsclient.Connect(c.Conf.NatsURL, "tripbot")
-	if err := eventbus.EnsureStreams(ctx, natsclient.JetStream(), c.Conf.Environment); err != nil {
-		slog.WarnContext(ctx, "jetstream stream setup failed; console will run without durable history",
-			"err", err)
-	}
+	natsclient.Connect(c.Conf.NatsURL, "tripbot", func(*nats.Conn) {
+		if err := eventbus.EnsureStreams(ctx, natsclient.JetStream(), c.Conf.Environment); err != nil {
+			slog.WarnContext(ctx, "jetstream stream setup failed; console will run without durable history",
+				"err", err)
+		}
+	})
 }
 
 // authStatusInterval is how often the instance publishes its auth.status
@@ -414,7 +446,6 @@ func twitchAuthAccounts() []eventbus.AuthAccount {
 			LoginAs:   s.LoginAs,
 			ExpiresAt: expiresAt,
 			Reason:    s.Reason,
-			InitURL:   s.InitURL,
 		})
 	}
 	return accounts
@@ -427,22 +458,20 @@ func twitchAuthAccounts() []eventbus.AuthAccount {
 // 2026-05-27, ~30h into an OBS session.
 func (t *Tripbot) startSilentDisconnectWatchdog(ctx context.Context) {
 	deps := watchdog.DefaultWatchdogDeps()
-	if t.gateway != nil {
-		// Route the live-check through the gateway when the flag is on, falling
-		// back to the in-process check otherwise. The gateway/flag choice lives
-		// here in cmd (not in pkg/obs/watchdog) per package-boundary-init-discipline;
-		// the gauge set mirrors DefaultWatchdogDeps's in-process path.
-		inproc := deps.TwitchLive
-		deps.TwitchLive = func(ctx context.Context) (bool, error) {
-			if !t.useGateway(ctx) {
-				return inproc(ctx)
-			}
-			live, err := t.gateway.IsLive(ctx, c.Conf.ChannelName)
-			if err == nil {
-				instrumentation.TwitchChannelLive.Set(live)
-			}
-			return live, err
+	// The live-check routes through the platform-gateway (the single Helix
+	// caller). This wiring lives here in cmd (not in pkg/obs/watchdog) per
+	// package-boundary-init-discipline. A nil gateway is a misconfigured Twitch
+	// instance (TWITCH_API_URL unset) — report the check as errored rather than
+	// force-restarting on a false negative.
+	deps.TwitchLive = func(ctx context.Context) (bool, error) {
+		if t.gateway == nil {
+			return false, errors.New("watchdog live-check: no gateway configured")
 		}
+		live, err := t.gateway.IsLive(ctx, c.Conf.ChannelName)
+		if err == nil {
+			instrumentation.TwitchChannelLive.Set(live)
+		}
+		return live, err
 	}
 	go watchdog.WatchSilentDisconnect(ctx, deps, 60*time.Second, 3, 10*time.Minute)
 }
@@ -493,16 +522,13 @@ func (t *Tripbot) startDiscord(ctx context.Context) {
 func (t *Tripbot) startEventSub(ctx context.Context) {
 	token := mytwitch.BroadcasterUserAccessToken()
 	if token == "" {
-		slog.WarnContext(ctx, "skipping eventsub: no broadcaster oauth_tokens row; bootstrap with `task tripbot:auth:bootstrap:broadcaster`",
-			"login_as", c.Conf.ChannelName,
-			"reauth_url", mytwitch.AuthInitURL("broadcaster"))
+		slog.WarnContext(ctx, "skipping eventsub: no broadcaster oauth_tokens row; re-auth via the platform-gateway consent flow (surfaced in tripbot-console)",
+			"login_as", c.Conf.ChannelName)
 		return
 	}
-	if mytwitch.ChannelID() == "" && t.useGateway(ctx) {
-		// When Helix calls route through the gateway, the in-process audience
-		// polls (updateSubscribers / UpdateChatters) that used to populate
-		// channelID as a side effect no longer run, so it's still "" here.
-		// Resolve it via the gateway's /v1/users/{login} so EventSub gets a
+	if mytwitch.ChannelID() == "" && t.gateway != nil {
+		// The gateway owns Helix, so nothing populates channelID in-process any
+		// more. Resolve it via the gateway's /v1/users/{login} so EventSub gets a
 		// BroadcasterUserID. Non-fatal — falls through to the skip below on error.
 		if id, err := t.gateway.UserID(ctx, c.Conf.ChannelName); err != nil {
 			slog.ErrorContext(ctx, "eventsub: resolving channel id via gateway failed", "err", err)
@@ -511,9 +537,6 @@ func (t *Tripbot) startEventSub(ctx context.Context) {
 		}
 	}
 	if mytwitch.ChannelID() == "" {
-		// getChannelID is lazy on first call; calling GetSubscribers /
-		// GetFollowerCount typically populates it. updateSubscribers()
-		// above already ran, so this is belt-and-suspenders.
 		slog.WarnContext(ctx, "skipping eventsub: ChannelID not yet resolved")
 		return
 	}
@@ -523,19 +546,14 @@ func (t *Tripbot) startEventSub(ctx context.Context) {
 			BroadcasterToken:  token,
 			BroadcasterUserID: mytwitch.ChannelID(),
 		}, eventsub.Handlers{
-			OnFollow:    t.app.AnnounceNewFollower,
-			OnSubscribe: t.app.AnnounceSubscriber,
+			OnFollow:      t.app.AnnounceNewFollower,
+			OnSubscribe:   t.app.AnnounceSubscriber,
+			OnUnsubscribe: t.app.RecordUnsubscribe,
 		})
 		if err != nil && !errors.Is(err, context.Canceled) {
 			slog.ErrorContext(ctx, "eventsub run terminated", "err", err)
 		}
 	}()
-}
-
-// createRandomSeed ensures that random numbers will be random
-func createRandomSeed() {
-	// create a brand new random seed
-	rand.Seed(time.Now().UnixNano())
 }
 
 // listenForShutdown creates a background job that listens for a graceful shutdown request
@@ -603,18 +621,16 @@ func (t *Tripbot) startCron() {
 // Non-fatal: when the row is missing (e.g. auth-bootstrap hasn't run yet
 // against a freshly-restored DB) or the DB is briefly unreachable, the bot
 // comes up with limited functionality and polls in the background until the
-// token lands — rather than crashlooping. A crashing pod after a wipe also
-// raced the DB restore's migrate init (see the 2026-05-20 convergence-wipe
-// notes); staying up avoids that. The pod stays Ready throughout (readiness
-// no longer gates on Twitch) so the auth-links landing page + /auth/init are
+// token lands — rather than crashlooping (a crashlooping pod can also race a
+// concurrent DB restore's migrate init). The pod stays Ready throughout
+// (readiness doesn't gate on Twitch) so the auth-links landing page + /auth/init are
 // reachable to re-auth; "not in chat" is surfaced via the
 // tripbot_twitch_connected gauge instead.
 func (t *Tripbot) loadTwitchToken(ctx context.Context) {
 	if err := mytwitch.LoadFromDB(); err != nil {
 		slog.WarnContext(ctx, "no usable Twitch token at boot; starting without a chat connection and polling",
 			"login_as", c.Conf.BotUsername,
-			"fix", "task tripbot:auth:bootstrap",
-			"reauth_url", mytwitch.AuthInitURL("bot"),
+			"fix", "re-auth via the platform-gateway consent flow (surfaced in tripbot-console)",
 			"err", err)
 		go t.pollForTwitchToken(ctx)
 	}
@@ -644,9 +660,8 @@ func (t *Tripbot) pollForTwitchToken(ctx context.Context) {
 		case <-ticker.C:
 			if err := mytwitch.LoadFromDB(); err != nil {
 				if time.Since(lastLogged) >= logEvery {
-					slog.WarnContext(ctx, "still waiting for Twitch token",
-						"login_as", c.Conf.BotUsername,
-						"reauth_url", mytwitch.AuthInitURL("bot"), "err", err)
+					slog.WarnContext(ctx, "still waiting for Twitch token (re-auth via the platform-gateway consent flow, surfaced in tripbot-console)",
+						"login_as", c.Conf.BotUsername, "err", err)
 					lastLogged = time.Now()
 				}
 				continue
@@ -661,17 +676,6 @@ func (t *Tripbot) pollForTwitchToken(ctx context.Context) {
 			return
 		}
 	}
-}
-
-// refreshTokensIfNearExpiry runs the same refresh that the hourly cron does,
-// once, synchronously, at startup. gocron's DurationJob fires its first tick
-// one full interval after Scheduler.Start(), so a pod restart that lands
-// within the refresh window (or after expiry) would otherwise leave the
-// in-memory token stale until the cron catches up — up to an hour. refreshOne
-// early-returns when the stored token is healthy, so this is a no-op in the
-// common case.
-func (t *Tripbot) refreshTokensIfNearExpiry(ctx context.Context) {
-	mytwitch.RefreshUserAccessToken(ctx)
 }
 
 // setUpTwitchClient sets up the Twitch client,
@@ -720,20 +724,21 @@ func (t *Tripbot) connectToTwitch() {
 		if err != nil {
 			slog.Error("unable to connect to twitch", "err", err)
 			if errors.Is(err, twitch.ErrLoginAuthenticationFailed) {
-				// The IRC client's token was rejected. Re-establish the bot
-				// token from the DB (forced refresh, then re-read the row) so a
-				// token just written by auth-bootstrap is picked up without a
-				// restart — the common case after a DB restore carries a stale
-				// row. Then sync whatever's now in memory into the IRC client
-				// for the next Connect attempt.
-				mytwitch.Reauth(context.Background(), "bot")
+				// The IRC client's token was rejected. Re-read the bot row from
+				// oauth_tokens — the platform-gateway keeps it fresh, so a token
+				// it just rotated (or one auth-bootstrap wrote) is picked up
+				// without a restart. Then sync whatever's now in memory into the
+				// IRC client for the next Connect attempt.
+				if err := mytwitch.LoadFromDB(); err != nil {
+					slog.Warn("IRC auth failed; re-reading oauth_tokens failed", "err", err, "login_as", c.Conf.BotUsername)
+				}
 				if tok := mytwitch.IRCAuthToken(); tok != "" {
 					t.irc.SetIRCToken(tok)
 				} else {
-					// Reauth couldn't produce a token (refresh_token revoked and
-					// no fresh row in the DB yet). Surface the re-bootstrap link
-					// so re-auth is a click; the auth-links landing page shows it too.
-					slog.Error("IRC auth failed and no valid token after reauth; re-bootstrap needed", "login_as", c.Conf.BotUsername, "reauth_url", mytwitch.AuthInitURL("bot"))
+					// No usable token in the DB yet (e.g. the row is unseeded).
+					// Re-auth runs through the platform-gateway consent flow now
+					// (surfaced in tripbot-console); the gateway writes the row.
+					slog.Error("IRC auth failed and no valid token in oauth_tokens; re-auth via the platform-gateway consent flow (surfaced in tripbot-console)", "login_as", c.Conf.BotUsername)
 				}
 			}
 			time.Sleep(time.Minute)
@@ -750,8 +755,6 @@ func (t *Tripbot) gracefulShutdown() {
 	<-ctrlC
 
 	slog.Warn("caught CTRL-C, shutting down")
-	// anything below this probably won't be executed
-	// try and use !shutdown instead
 	//TODO: print different message if CurrentlyPlaying is ""
 	slog.Info("last played video", "file", t.player.Current().File())
 	if t.discordSession != nil {
@@ -760,7 +763,7 @@ func (t *Tripbot) gracefulShutdown() {
 		}
 	}
 	t.sessions.Shutdown(context.Background())
-	err := database.Connection().Close()
+	err := database.Close()
 	if err != nil {
 		slog.Error("error closing DB connection", "err", err)
 	}
@@ -834,8 +837,14 @@ func (t *Tripbot) scheduleBackgroundJobs() {
 	t.addJob(5*time.Minute, "users.PrintCurrentSession", t.sessions.PrintCurrentSession)
 	t.addJob(5*time.Minute, "twitch.GetSubscribers", t.refreshSubscribers)
 	t.addJob(5*time.Minute, "twitch.GetFollowerCount", t.refreshFollowerCount)
-	t.addJob(1*time.Hour, "twitch.RefreshUserAccessToken", func(ctx context.Context) {
-		mytwitch.RefreshUserAccessToken(ctx)
+	// The platform-gateway owns token refresh now; tripbot only reads the rows
+	// it keeps fresh. Re-read on a timer so the in-memory tokens track the
+	// gateway's rotations — the IRC PASS line on reconnect and the token-expiry
+	// gauge (both fed by LoadFromDB) — without tripbot ever refreshing itself.
+	t.addJob(5*time.Minute, "twitch.ReloadTokens", func(ctx context.Context) {
+		if err := mytwitch.LoadFromDB(); err != nil {
+			slog.WarnContext(ctx, "periodic oauth_tokens reload failed", "err", err)
+		}
 		// Keep the IRC client's stored token in sync with the rotated credentials.
 		// go-twitch-irc captures the token at construction; without this, any
 		// reconnect after the first rotation replays the original boot-time token.

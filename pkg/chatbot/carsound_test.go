@@ -15,17 +15,24 @@ import (
 type noopOBS struct{}
 
 func (noopOBS) SetBackgroundAudioFile(context.Context, string, string) error { return nil }
+func (noopOBS) RefreshBrowserSources(context.Context) (int, error)           { return 0, nil }
 
 // recordingOBS captures SetBackgroundAudioFile calls so tests can assert on the
 // input name + file path, and can be primed to return an error.
 type recordingOBS struct {
-	Calls []string // "<inputName>|<file>" per call
-	err   error
+	Calls      []string // "<inputName>|<file>" per call
+	Refreshed  int      // count returned from RefreshBrowserSources
+	refreshErr error
+	err        error
 }
 
 func (r *recordingOBS) SetBackgroundAudioFile(_ context.Context, inputName, file string) error {
 	r.Calls = append(r.Calls, inputName+"|"+file)
 	return r.err
+}
+
+func (r *recordingOBS) RefreshBrowserSources(context.Context) (int, error) {
+	return r.Refreshed, r.refreshErr
 }
 
 func TestCarSoundCmd_NoArgReportsCurrent_NoSwitch(t *testing.T) {
