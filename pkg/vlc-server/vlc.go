@@ -212,12 +212,18 @@ func (s *Server) currentlyPlaying() string {
 	cur, err := s.Player.Media()
 	if err != nil {
 		slog.Error("error fetching currently-playing media", "err", err)
+		return ""
+	}
+	if cur == nil {
+		// no media loaded in the player
+		return ""
 	}
 
 	// get media path
 	path, err := cur.Location()
 	if err != nil {
-		slog.Error("error fetching currently-playing media", "err", err)
+		slog.Error("error fetching currently-playing media location", "err", err)
+		return ""
 	}
 
 	// strip the path off and just return the filename

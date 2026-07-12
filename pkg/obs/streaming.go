@@ -12,9 +12,10 @@ import (
 )
 
 // PollStreamingActive connects to the OBS WebSocket and updates the
-// obs_streaming_active gauge every interval. Intended to be run as a
-// long-lived goroutine. Reconnects automatically on connection loss.
-func PollStreamingActive(ctx context.Context, interval time.Duration) {
+// obs_streaming_active gauge every interval, stamping the series with the
+// given streaming platform. Intended to be run as a long-lived goroutine.
+// Reconnects automatically on connection loss.
+func PollStreamingActive(ctx context.Context, platform string, interval time.Duration) {
 	addr := os.Getenv("OBS_WEBSOCKET_ADDR")
 	if addr == "" {
 		addr = defaultOBSWebsocketAddr
@@ -24,11 +25,12 @@ func PollStreamingActive(ctx context.Context, interval time.Duration) {
 		passwd = "adanalife"
 	}
 
+	obsStats := instrumentation.NewOBSStats(platform)
 	for {
 		if err := ctx.Err(); err != nil {
 			return
 		}
-		poll(ctx, addr, passwd, interval)
+		poll(ctx, obsStats, addr, passwd, interval)
 		// poll returned — connection lost. Wait before reconnecting.
 		select {
 		case <-ctx.Done():
@@ -40,11 +42,11 @@ func PollStreamingActive(ctx context.Context, interval time.Duration) {
 
 // poll connects once and loops until the context is cancelled or the
 // connection drops.
-func poll(ctx context.Context, addr, passwd string, interval time.Duration) {
+func poll(ctx context.Context, obsStats instrumentation.OBSStats, addr, passwd string, interval time.Duration) {
 	client, err := goobs.New(addr, goobs.WithPassword(passwd))
 	if err != nil {
 		slog.ErrorContext(ctx, "obs websocket connect failed", "addr", addr, "err", err)
-		instrumentation.OBSStreaming.Set(false)
+		obsStats.SetStreaming(false)
 		return
 	}
 	defer func() {
@@ -66,14 +68,14 @@ func poll(ctx context.Context, addr, passwd string, interval time.Duration) {
 			resp, err := client.Stream.GetStreamStatus()
 			if err != nil {
 				// Transient: OBS pod restart, network blip, websocket drop.
-				// The outer loop reconnects after 10s and OBSStreaming
+				// The outer loop reconnects after 10s and obs_streaming_active
 				// is the alertable signal — keep this off Sentry.
 				slog.WarnContext(ctx, "obs GetStreamStatus error", "err", err)
-				instrumentation.OBSStreaming.Set(false)
+				obsStats.SetStreaming(false)
 				return // trigger reconnect
 			}
-			instrumentation.OBSStreaming.Set(resp.OutputActive)
-			instrumentation.OBSStats.UpdateStream(instrumentation.OBSStreamSnapshot{
+			obsStats.SetStreaming(resp.OutputActive)
+			obsStats.UpdateStream(instrumentation.OBSStreamSnapshot{
 				OutputBytes:      resp.OutputBytes,
 				OutputDurationMS: resp.OutputDuration,
 				OutputCongestion: resp.OutputCongestion,
@@ -89,7 +91,7 @@ func poll(ctx context.Context, addr, passwd string, interval time.Duration) {
 				slog.WarnContext(ctx, "obs GetStats error", "err", err)
 				continue
 			}
-			instrumentation.OBSStats.Update(instrumentation.OBSStatsSnapshot{
+			obsStats.Update(instrumentation.OBSStatsSnapshot{
 				ActiveFPS:              stats.ActiveFps,
 				AverageFrameRenderTime: stats.AverageFrameRenderTime,
 				CPUUsage:               stats.CpuUsage,

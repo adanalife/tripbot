@@ -8,40 +8,30 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DATA-DOG/go-sqlmock"
-	"github.com/adanalife/tripbot/pkg/database"
 	vlcClient "github.com/adanalife/tripbot/pkg/vlc-client"
-	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
-// installMockDB stands up a sqlmock-backed *gorm.DB and installs it as the
-// process-wide singleton via database.SetGormDB. db.go's load/create/save
-// helpers (which read from database.GormDB() directly) will route to the mock
-// instead of attempting a real postgres connection.
-//
-// SkipDefaultTransaction stops GORM from wrapping every write in BEGIN/COMMIT,
-// which would otherwise force every test to mock those bookends.
-//
-// Mirrors the pattern from pkg/chatbot/mockdb_test.go.
-func installMockDB(t *testing.T) sqlmock.Sqlmock {
+// insertVideo writes a videos row and returns it with the SERIAL-assigned ID
+// populated, so callers can link chains by real ID.
+func insertVideo(t *testing.T, db *gorm.DB, vid Video) Video {
 	t.Helper()
-	sqlDB, mock, err := sqlmock.New()
-	if err != nil {
-		t.Fatalf("sqlmock.New: %v", err)
+	if err := db.Create(&vid).Error; err != nil {
+		t.Fatalf("insert video %q: %v", vid.Slug, err)
 	}
-	gdb, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{
-		SkipDefaultTransaction: true,
-	})
-	if err != nil {
-		t.Fatalf("gorm.Open: %v", err)
+	return vid
+}
+
+// playCount returns how many video_plays rows point at the given video, so
+// tests can assert on the play the Player actually persisted rather than on a
+// scripted INSERT. Scoped by video_id — the table is shared.
+func playCount(t *testing.T, db *gorm.DB, videoID int) int64 {
+	t.Helper()
+	var n int64
+	if err := db.Raw(`SELECT count(*) FROM video_plays WHERE video_id = ?`, videoID).Scan(&n).Error; err != nil {
+		t.Fatalf("count video_plays for video %d: %v", videoID, err)
 	}
-	database.SetGormDB(gdb)
-	t.Cleanup(func() {
-		database.SetGormDB(nil)
-		_ = sqlDB.Close()
-	})
-	return mock
+	return n
 }
 
 // recordingOnscreens is an interface fake satisfying the Player's onscreens
@@ -79,23 +69,4 @@ func fakeVLCServer(t *testing.T, current *string) *vlcClient.Client {
 	// from the httptest URL before handing it over. nil publisher disables the
 	// NATS mirror — this rig exercises the HTTP path only.
 	return vlcClient.New(strings.TrimPrefix(srv.URL, "http://"), nil, "test")
-}
-
-// expectLoadHit queues a sqlmock expectation for a successful load() — i.e.
-// db.go's `SELECT ... WHERE slug = ?` returning one row with the given
-// id/slug/flagged. State and other columns are left zero.
-func expectLoadHit(mock sqlmock.Sqlmock, id int, slug string, flagged bool) {
-	mock.ExpectQuery(`SELECT \* FROM "videos" WHERE slug = `).
-		WithArgs(slug, 1).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "slug", "flagged"}).
-			AddRow(id, slug, flagged))
-}
-
-// expectPlayInsert queues the video_plays INSERT a clip transition writes
-// (viewstats.RecordPlay). State/lat/lng are zero because expectLoadHit stages
-// only id/slug/flagged.
-func expectPlayInsert(mock sqlmock.Sqlmock, videoID int, flagged bool) {
-	mock.ExpectQuery(`INSERT INTO "video_plays"`).
-		WithArgs(sqlmock.AnyArg(), videoID, "", flagged, 0.0, 0.0, sqlmock.AnyArg()).
-		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
 }

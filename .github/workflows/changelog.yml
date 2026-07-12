@@ -1,17 +1,19 @@
 name: changelog
 
-# Require every PR into develop to add a towncrier changelog fragment under
-# changelog.d/ (see CONTRIBUTING / README "Changelog"). This is what keeps the
-# release changelog complete by construction, instead of reconstructing missing
-# entries from PR bodies at release time.
+# Require every PR into main to add a towncrier changelog fragment under
+# changelog.d/ (see README "Changelog"). This is what keeps the release
+# changelog complete by construction, instead of reconstructing missing entries
+# from PR bodies at release time.
 #
 # Escape hatch: add the `skip-changelog` label for PRs that genuinely warrant no
 # entry (dependabot bumps, CI-only tweaks, pure refactors, doc fixes).
+# release-please's own release PR is exempt by head branch — it collates the
+# fragments, it doesn't add one.
 
 on:
   pull_request:
     branches:
-      - develop
+      - main
     types: [opened, synchronize, reopened, labeled, unlabeled]
 
 permissions:
@@ -25,10 +27,7 @@ jobs:
   fragment:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # The back-merge PR (backmerge/master-to-develop) targets develop but
-    # carries no user-facing change, so it never needs a fragment — exempt
-    # it by head branch, mirroring pr-title.yml.
-    if: ${{ !contains(github.event.pull_request.labels.*.name, 'skip-changelog') && github.head_ref != 'backmerge/master-to-develop' }}
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'skip-changelog') && github.head_ref != 'release-please--branches--main' }}
     steps:
       - uses: actions/checkout@v7
         with:

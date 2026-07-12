@@ -36,6 +36,7 @@ import (
 	"log/slog"
 	"math"
 	"os"
+	"strings"
 
 	_ "github.com/lib/pq"
 )
@@ -78,6 +79,11 @@ const updateMilesSQL = `UPDATE users SET miles = $1 WHERE id = $2`
 // the same user IDs as the source. Matches by platform + username and only
 // raises miles.
 const upsertMilesSQLFmt = "UPDATE users SET miles = GREATEST(miles, %.4f) WHERE platform = '%s' AND username = '%s';\n"
+
+// sqlQuote escapes single quotes for inlined SQL string literals.
+func sqlQuote(s string) string {
+	return strings.ReplaceAll(s, "'", "''")
+}
 
 type row struct {
 	id       int
@@ -153,7 +159,7 @@ func main() {
 			if r.computed <= r.stored || r.delta < *minDelta {
 				continue
 			}
-			fmt.Printf(upsertMilesSQLFmt, r.computed, r.platform, r.username)
+			fmt.Printf(upsertMilesSQLFmt, r.computed, sqlQuote(r.platform), sqlQuote(r.username))
 		}
 		return
 	}

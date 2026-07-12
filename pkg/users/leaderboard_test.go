@@ -2,66 +2,32 @@ package users
 
 import (
 	"context"
-	"database/sql/driver"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/DATA-DOG/go-sqlmock"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
-	"github.com/adanalife/tripbot/pkg/database"
-	"gorm.io/driver/postgres"
+	"github.com/adanalife/tripbot/pkg/database/testdb"
 	"gorm.io/gorm"
 )
 
-// installMockDB mirrors pkg/chatbot's helper: a sqlmock-backed *gorm.DB
-// installed as the process-wide singleton so fetchLeaderboard routes to it.
-func installMockDB(t *testing.T) sqlmock.Sqlmock {
+// seedUsers inserts users rows through GORM, so the model's column mapping is
+// the same one the code under test reads back through.
+func seedUsers(t *testing.T, db *gorm.DB, users ...User) {
 	t.Helper()
-	sqlDB, mock, err := sqlmock.New()
-	if err != nil {
-		t.Fatalf("sqlmock.New: %v", err)
+	for i := range users {
+		if users[i].Platform == "" {
+			users[i].Platform = c.Conf.Platform
+		}
+		if err := db.Create(&users[i]).Error; err != nil {
+			t.Fatalf("seeding user %q: %v", users[i].Username, err)
+		}
 	}
-	gdb, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{
-		SkipDefaultTransaction: true,
-	})
-	if err != nil {
-		t.Fatalf("gorm.Open: %v", err)
-	}
-	database.SetGormDB(gdb)
-	t.Cleanup(func() {
-		database.SetGormDB(nil)
-		_ = sqlDB.Close()
-	})
-	return mock
 }
 
-func leaderboardRows(rows ...[]driver.Value) *sqlmock.Rows {
-	r := sqlmock.NewRows([]string{"username", "miles", "platform", "is_bot"})
-	for _, row := range rows {
-		r.AddRow(row...)
-	}
-	return r
-}
-
-// TestUpdateLeaderboard_ReadsFromDB pins the platform-scoping contract with
-// strict args: the fetch must filter by this instance's platform and exclude
-// the channel owner (loose regexes have silently absorbed missing platform
-// filters before).
-func TestUpdateLeaderboard_ReadsFromDB(t *testing.T) {
-	mock := installMockDB(t)
-	mock.ExpectQuery(`SELECT \* FROM "users" WHERE platform = \$1 AND miles != 0 AND is_bot = false AND username != \$2 ORDER BY miles DESC LIMIT \$3`).
-		WithArgs(c.Conf.Platform, strings.ToLower(c.Conf.ChannelName), maxLeaderboardSize).
-		WillReturnRows(leaderboardRows(
-			[]driver.Value{"alice", float32(100), "twitch", false},
-			[]driver.Value{"bob", float32(50), "twitch", false},
-		))
-
-	s := New(noopChatterSource{})
-	s.UpdateLeaderboard(context.Background())
-
-	want := [][]string{{"alice", "100.0"}, {"bob", "50.0"}}
-	got := s.LifetimeLeaderboard()
+// assertBoard compares a leaderboard against the expected [username, miles] pairs.
+func assertBoard(t *testing.T, got [][]string, want [][]string) {
+	t.Helper()
 	if len(got) != len(want) {
 		t.Fatalf("expected %d entries, got %d: %v", len(want), len(got), got)
 	}
@@ -70,21 +36,57 @@ func TestUpdateLeaderboard_ReadsFromDB(t *testing.T) {
 			t.Fatalf("row %d: got %v, want %v", i, got[i], want[i])
 		}
 	}
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Errorf("unmet sqlmock expectations: %v", err)
-	}
+}
+
+// The fetch must rank by stored miles, scoped to this instance's platform, and
+// exclude bots, the channel owner, and users with no miles.
+func TestUpdateLeaderboard_ReadsFromDB(t *testing.T) {
+	db := testdb.New(t)
+	seedUsers(t, db,
+		User{Username: "alice", Miles: 100},
+		User{Username: "bob", Miles: 50},
+		User{Username: "carol", Miles: 75},
+		User{Username: "botty", Miles: 200, IsBot: true},
+		User{Username: strings.ToLower(c.Conf.ChannelName), Miles: 300},
+		User{Username: "zed", Miles: 0},
+		User{Username: "elsewhere", Miles: 500, Platform: "youtube"},
+	)
+
+	s := New(noopChatterSource{})
+	s.UpdateLeaderboard(context.Background())
+
+	assertBoard(t, s.LifetimeLeaderboard(), [][]string{
+		{"alice", "100.0"},
+		{"carol", "75.0"},
+		{"bob", "50.0"},
+	})
+}
+
+// InitLeaderboard hydrates the same board at boot.
+func TestInitLeaderboard_ReadsFromDB(t *testing.T) {
+	db := testdb.New(t)
+	seedUsers(t, db,
+		User{Username: "alice", Miles: 10},
+		User{Username: "bob", Miles: 20},
+	)
+
+	s := New(noopChatterSource{})
+	s.InitLeaderboard(context.Background())
+
+	assertBoard(t, s.LifetimeLeaderboard(), [][]string{
+		{"bob", "20.0"},
+		{"alice", "10.0"},
+	})
 }
 
 // A logged-in user's in-progress session miles overlay their stored miles and
 // can reorder the board between logouts.
 func TestUpdateLeaderboard_OverlaysLiveSessionMiles(t *testing.T) {
-	mock := installMockDB(t)
-	mock.ExpectQuery(`SELECT \* FROM "users"`).
-		WithArgs(c.Conf.Platform, strings.ToLower(c.Conf.ChannelName), maxLeaderboardSize).
-		WillReturnRows(leaderboardRows(
-			[]driver.Value{"alice", float32(100), "twitch", false},
-			[]driver.Value{"bob", float32(99), "twitch", false},
-		))
+	db := testdb.New(t)
+	seedUsers(t, db,
+		User{Username: "alice", Miles: 100},
+		User{Username: "bob", Miles: 99},
+	)
 
 	s := New(noopChatterSource{})
 	// bob has been logged in for ~10 hours: 0.1mi/3min = ~20 miles in
@@ -96,23 +98,20 @@ func TestUpdateLeaderboard_OverlaysLiveSessionMiles(t *testing.T) {
 	if len(got) != 2 || got[0][0] != "bob" {
 		t.Fatalf("expected bob first after live-miles overlay, got %v", got)
 	}
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Errorf("unmet sqlmock expectations: %v", err)
-	}
 }
 
 // A failed fetch must leave the previous board in place rather than blanking
 // what the rotators display.
 func TestUpdateLeaderboard_KeepsCacheOnError(t *testing.T) {
-	mock := installMockDB(t)
-	mock.ExpectQuery(`SELECT \* FROM "users"`).
-		WillReturnError(context.DeadlineExceeded)
+	testdb.New(t)
 
 	s := New(noopChatterSource{})
 	s.lifetimeLeaderboard = [][]string{{"alice", "100.0"}}
-	s.UpdateLeaderboard(context.Background())
 
-	if len(s.LifetimeLeaderboard()) != 1 {
-		t.Fatalf("expected cache preserved on error, got %v", s.LifetimeLeaderboard())
-	}
+	// A cancelled context is the cheapest real query failure.
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	s.UpdateLeaderboard(ctx)
+
+	assertBoard(t, s.LifetimeLeaderboard(), [][]string{{"alice", "100.0"}})
 }

@@ -46,6 +46,12 @@ type API struct {
 
 	// channelID is the twitch-internal user ID for the channel.
 	channelID string
+
+	// audienceMu guards subscribers, currentChatters, and chatterCount, which
+	// are written by the gateway refresh crons and read from command dispatch
+	// and the session-update cron. RWMutex because reads (UserIsSubscriber,
+	// Chatters, ChatterCount) outnumber writes.
+	audienceMu sync.RWMutex
 	// subscribers is the usernames of the current subscribers.
 	subscribers []string
 	// currentChatters holds the most recent chatter list, cached from the gateway.

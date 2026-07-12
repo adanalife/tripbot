@@ -6,21 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DATA-DOG/go-sqlmock"
-	"github.com/jmoiron/sqlx"
+	"github.com/adanalife/tripbot/pkg/database/testdb"
 )
-
-func newMockDB(t *testing.T) (*sqlx.DB, sqlmock.Sqlmock) {
-	t.Helper()
-	// Default matcher is QueryMatcherRegexp; the expected strings below are
-	// substrings/patterns of the real queries.
-	db, mock, err := sqlmock.New()
-	if err != nil {
-		t.Fatalf("sqlmock.New: %v", err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
-	return sqlx.NewDb(db, "postgres"), mock
-}
 
 func sampleToken() Token {
 	return Token{
@@ -34,30 +21,69 @@ func sampleToken() Token {
 	}
 }
 
-func TestGetByProvider_Hit(t *testing.T) {
-	db, mock := newMockDB(t)
-	rows := sqlmock.NewRows([]string{
-		"id", "provider", "username", "twitch_user_id", "access_token", "refresh_token",
-		"expires_at", "scopes", "refresh_fail_count", "last_refresh_at",
-		"date_created", "date_updated",
-	}).AddRow(
-		2, "youtube", "UC123", nil, "yt-access", "yt-refresh",
-		time.Date(2026, 6, 11, 0, 0, 0, 0, time.UTC),
-		"https://www.googleapis.com/auth/youtube.force-ssl",
-		0, nil,
-		time.Date(2026, 6, 10, 0, 0, 0, 0, time.UTC),
-		time.Date(2026, 6, 10, 0, 0, 0, 0, time.UTC),
-	)
-	mock.ExpectQuery(`SELECT .* FROM oauth_tokens WHERE provider=\$1 ORDER BY date_updated DESC LIMIT 1`).
-		WithArgs("youtube").
-		WillReturnRows(rows)
-
-	got, err := getByProviderFromDB(db, "youtube")
-	if err != nil {
-		t.Fatalf("getByProviderFromDB: %v", err)
+func TestUpsertThenGet(t *testing.T) {
+	testdb.New(t)
+	tok := sampleToken()
+	if err := Upsert(tok); err != nil {
+		t.Fatalf("Upsert: %v", err)
 	}
-	if got.Username != "UC123" || got.AccessToken != "yt-access" {
+
+	got, err := Get("twitch", "tripbot4000")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.AccessToken != tok.AccessToken || got.RefreshToken != tok.RefreshToken || got.Scopes != tok.Scopes {
 		t.Errorf("unexpected token: %+v", got)
+	}
+	if !got.ExpiresAt.Equal(tok.ExpiresAt) {
+		t.Errorf("expires_at round-trip: want %v, got %v", tok.ExpiresAt, got.ExpiresAt)
+	}
+	if got.TwitchUserID.String != "12345" || !got.TwitchUserID.Valid {
+		t.Errorf("unexpected twitch_user_id: %+v", got.TwitchUserID)
+	}
+	if got.RefreshFailCount != 0 {
+		t.Errorf("expected RefreshFailCount=0, got %d", got.RefreshFailCount)
+	}
+	if !got.LastRefreshAt.Valid {
+		t.Error("expected last_refresh_at stamped on insert")
+	}
+	if got.DateCreated.IsZero() || got.DateUpdated.IsZero() {
+		t.Errorf("expected timestamps stamped: %+v", got)
+	}
+}
+
+func TestGet_MissReturnsErrNoToken(t *testing.T) {
+	testdb.New(t)
+	if _, err := Get("twitch", "ghost"); !errors.Is(err, ErrNoToken) {
+		t.Fatalf("expected ErrNoToken, got %v", err)
+	}
+}
+
+func TestGetByProvider_MostRecentlyUpdatedWins(t *testing.T) {
+	db := testdb.New(t)
+
+	older := sampleToken()
+	older.Provider, older.Username = "youtube", "UC-old"
+	older.TwitchUserID = sql.NullString{}
+	newer := older
+	newer.Username, newer.AccessToken = "UC-new", "yt-access"
+	for _, tok := range []Token{older, newer} {
+		if err := Upsert(tok); err != nil {
+			t.Fatalf("Upsert(%s): %v", tok.Username, err)
+		}
+	}
+	// Upsert stamps date_updated with NOW(), which is transaction-stable —
+	// both rows tie. Backdate one so the ORDER BY has something to order.
+	if err := db.Exec(`UPDATE oauth_tokens SET date_updated = date_updated - interval '1 hour' WHERE username = 'UC-old'`).Error; err != nil {
+		t.Fatalf("backdate: %v", err)
+	}
+
+	got, err := GetByProvider("youtube")
+	if err != nil {
+		t.Fatalf("GetByProvider: %v", err)
+	}
+	if got.Username != "UC-new" || got.AccessToken != "yt-access" {
+		t.Errorf("expected most recently updated row, got %+v", got)
 	}
 	if got.TwitchUserID.Valid {
 		t.Errorf("twitch_user_id should scan as NULL for youtube rows: %+v", got.TwitchUserID)
@@ -65,180 +91,118 @@ func TestGetByProvider_Hit(t *testing.T) {
 }
 
 func TestGetByProvider_MissReturnsErrNoToken(t *testing.T) {
-	db, mock := newMockDB(t)
-	mock.ExpectQuery(`SELECT .* FROM oauth_tokens WHERE provider=\$1 ORDER BY date_updated DESC LIMIT 1`).
-		WithArgs("youtube").
-		WillReturnError(sql.ErrNoRows)
-
-	if _, err := getByProviderFromDB(db, "youtube"); !errors.Is(err, ErrNoToken) {
+	testdb.New(t)
+	if _, err := GetByProvider("youtube"); !errors.Is(err, ErrNoToken) {
 		t.Fatalf("expected ErrNoToken, got %v", err)
 	}
 }
 
-func TestGet_Hit(t *testing.T) {
-	db, mock := newMockDB(t)
-	rows := sqlmock.NewRows([]string{
-		"id", "provider", "username", "twitch_user_id", "access_token", "refresh_token",
-		"expires_at", "scopes", "refresh_fail_count", "last_refresh_at",
-		"date_created", "date_updated",
-	}).AddRow(
-		1, "twitch", "tripbot4000", "12345", "access-abc", "refresh-xyz",
-		time.Date(2026, 5, 11, 0, 0, 0, 0, time.UTC),
-		"chat:read chat:edit",
-		0, nil,
-		time.Date(2026, 5, 10, 0, 0, 0, 0, time.UTC),
-		time.Date(2026, 5, 10, 0, 0, 0, 0, time.UTC),
-	)
-	mock.ExpectQuery(`SELECT .* FROM oauth_tokens WHERE provider=`).
-		WithArgs("twitch", "tripbot4000").
-		WillReturnRows(rows)
-
-	got, err := getFromDB(db, "twitch", "tripbot4000")
-	if err != nil {
-		t.Fatalf("getFromDB: %v", err)
+func TestUpsert_OnConflictUpdatesInPlace(t *testing.T) {
+	testdb.New(t)
+	if err := Upsert(sampleToken()); err != nil {
+		t.Fatalf("first Upsert: %v", err)
 	}
-	if got.Username != "tripbot4000" || got.AccessToken != "access-abc" || got.RefreshToken != "refresh-xyz" {
-		t.Errorf("unexpected token: %+v", got)
+	first, err := Get("twitch", "tripbot4000")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	// Dirty the row so the conflict path's reset is observable.
+	if err := IncrementFailCount("twitch", "tripbot4000"); err != nil {
+		t.Fatalf("IncrementFailCount: %v", err)
+	}
+
+	rotated := sampleToken()
+	rotated.AccessToken = "access-2"
+	rotated.RefreshToken = "refresh-2"
+	rotated.ExpiresAt = rotated.ExpiresAt.Add(time.Hour)
+	rotated.Scopes = "chat:read"
+	if err := Upsert(rotated); err != nil {
+		t.Fatalf("conflicting Upsert: %v", err)
+	}
+
+	got, err := Get("twitch", "tripbot4000")
+	if err != nil {
+		t.Fatalf("Get after upsert: %v", err)
+	}
+	if got.ID != first.ID {
+		t.Errorf("expected in-place update of row %d, got row %d", first.ID, got.ID)
+	}
+	if got.AccessToken != "access-2" || got.RefreshToken != "refresh-2" || got.Scopes != "chat:read" {
+		t.Errorf("row not updated: %+v", got)
+	}
+	if !got.ExpiresAt.Equal(rotated.ExpiresAt) {
+		t.Errorf("expires_at not updated: %v", got.ExpiresAt)
 	}
 	if got.RefreshFailCount != 0 {
-		t.Errorf("expected RefreshFailCount=0, got %d", got.RefreshFailCount)
+		t.Errorf("expected refresh_fail_count reset to 0, got %d", got.RefreshFailCount)
 	}
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Error(err)
-	}
-}
-
-func TestGet_Miss(t *testing.T) {
-	db, mock := newMockDB(t)
-	mock.ExpectQuery(`SELECT .* FROM oauth_tokens WHERE provider=`).
-		WithArgs("twitch", "ghost").
-		WillReturnError(sql.ErrNoRows)
-
-	_, err := getFromDB(db, "twitch", "ghost")
-	if !errors.Is(err, ErrNoToken) {
-		t.Errorf("expected ErrNoToken, got %v", err)
-	}
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Error(err)
+	if !got.DateCreated.Equal(first.DateCreated) {
+		t.Errorf("date_created not preserved: %v vs %v", got.DateCreated, first.DateCreated)
 	}
 }
 
-func TestUpsert_RunsExpectedQuery(t *testing.T) {
-	db, mock := newMockDB(t)
-	tok := sampleToken()
-
-	mock.ExpectBegin()
-	mock.ExpectExec(`INSERT INTO oauth_tokens`).
-		WithArgs(
-			tok.Provider, tok.Username, tok.TwitchUserID,
-			tok.AccessToken, tok.RefreshToken, tok.ExpiresAt, tok.Scopes,
-		).
-		WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectCommit()
-
-	if err := upsertOnDB(db, tok); err != nil {
-		t.Fatalf("upsertOnDB: %v", err)
+func TestIncrementFailCount(t *testing.T) {
+	testdb.New(t)
+	if err := Upsert(sampleToken()); err != nil {
+		t.Fatalf("Upsert: %v", err)
 	}
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Error(err)
+	for i := 0; i < 2; i++ {
+		if err := IncrementFailCount("twitch", "tripbot4000"); err != nil {
+			t.Fatalf("IncrementFailCount: %v", err)
+		}
 	}
-}
-
-func TestUpsert_RollsBackOnExecError(t *testing.T) {
-	db, mock := newMockDB(t)
-	tok := sampleToken()
-
-	mock.ExpectBegin()
-	mock.ExpectExec(`INSERT INTO oauth_tokens`).
-		WillReturnError(errors.New("boom"))
-	mock.ExpectRollback()
-
-	err := upsertOnDB(db, tok)
-	if err == nil {
-		t.Fatal("expected error from upsertOnDB, got nil")
+	got, err := Get("twitch", "tripbot4000")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
 	}
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Error(err)
+	if got.RefreshFailCount != 2 {
+		t.Errorf("expected RefreshFailCount=2, got %d", got.RefreshFailCount)
 	}
-}
-
-func TestIncrementFailCount_UpdatesRow(t *testing.T) {
-	db, mock := newMockDB(t)
-	mock.ExpectExec(`UPDATE oauth_tokens`).
-		WithArgs("twitch", "tripbot4000").
-		WillReturnResult(sqlmock.NewResult(0, 1))
-
-	if err := incrementOnDB(db, "twitch", "tripbot4000"); err != nil {
-		t.Fatalf("incrementOnDB: %v", err)
-	}
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Error(err)
+	if !got.LastRefreshAt.Valid {
+		t.Error("expected last_refresh_at stamped")
 	}
 }
 
 func TestIncrementFailCount_NoRowReturnsErrNoToken(t *testing.T) {
-	db, mock := newMockDB(t)
-	mock.ExpectExec(`UPDATE oauth_tokens`).
-		WithArgs("twitch", "ghost").
-		WillReturnResult(sqlmock.NewResult(0, 0))
-
-	err := incrementOnDB(db, "twitch", "ghost")
-	if !errors.Is(err, ErrNoToken) {
+	testdb.New(t)
+	if err := IncrementFailCount("twitch", "ghost"); !errors.Is(err, ErrNoToken) {
 		t.Errorf("expected ErrNoToken, got %v", err)
 	}
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Error(err)
-	}
 }
 
-func TestTryRefreshLock_Acquired(t *testing.T) {
-	db, mock := newMockDB(t)
-	key := lockKey("twitch", "tripbot4000")
+func TestTryRefreshLock(t *testing.T) {
+	// Shared, not New: advisory locks are session-scoped, and TryRefreshLock
+	// pins pooled connections a transaction-backed gorm.DB can't hand out.
+	// No rows are written.
+	testdb.Shared(t)
 
-	mock.ExpectQuery(`pg_try_advisory_lock`).
-		WithArgs(key).
-		WillReturnRows(sqlmock.NewRows([]string{"pg_try_advisory_lock"}).AddRow(true))
-	mock.ExpectExec(`pg_advisory_unlock`).
-		WithArgs(key).
-		WillReturnResult(sqlmock.NewResult(0, 0))
-
-	acquired, release, err := tryRefreshLockOnDB(db, "twitch", "tripbot4000")
+	acquired, release, err := TryRefreshLock("twitch", "tripbot4000")
 	if err != nil {
-		t.Fatalf("tryRefreshLockOnDB: %v", err)
+		t.Fatalf("TryRefreshLock: %v", err)
 	}
-	if !acquired {
-		t.Fatal("expected acquired=true")
+	if !acquired || release == nil {
+		t.Fatalf("expected first acquire to succeed, got acquired=%v release-nil=%v", acquired, release == nil)
 	}
-	if release == nil {
-		t.Fatal("expected non-nil release fn")
+
+	// A second session must see contention while the first holds the lock.
+	contended, contendedRelease, err := TryRefreshLock("twitch", "tripbot4000")
+	if err != nil {
+		t.Fatalf("contended TryRefreshLock: %v", err)
 	}
+	if contended || contendedRelease != nil {
+		t.Fatal("expected contention while lock held")
+	}
+
 	release()
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Error(err)
-	}
-}
 
-func TestTryRefreshLock_Contended(t *testing.T) {
-	db, mock := newMockDB(t)
-	key := lockKey("twitch", "tripbot4000")
-
-	mock.ExpectQuery(`pg_try_advisory_lock`).
-		WithArgs(key).
-		WillReturnRows(sqlmock.NewRows([]string{"pg_try_advisory_lock"}).AddRow(false))
-
-	acquired, release, err := tryRefreshLockOnDB(db, "twitch", "tripbot4000")
+	reacquired, release2, err := TryRefreshLock("twitch", "tripbot4000")
 	if err != nil {
-		t.Fatalf("tryRefreshLockOnDB: %v", err)
+		t.Fatalf("TryRefreshLock after release: %v", err)
 	}
-	if acquired {
-		t.Fatal("expected acquired=false")
+	if !reacquired {
+		t.Fatal("expected re-acquire after release")
 	}
-	if release != nil {
-		t.Fatal("expected nil release fn on contention")
-	}
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Error(err)
-	}
+	release2()
 }
 
 func TestLockKey_StableAndDistinct(t *testing.T) {
