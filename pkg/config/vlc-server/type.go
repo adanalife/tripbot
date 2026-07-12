@@ -20,8 +20,9 @@ type VlcServerConfig struct {
 
 	// VideoDir is where the videos live
 	VideoDir string `default:"/opt/data/Dashcam/_all" envconfig:"VIDEO_DIR"`
-	// RunDir is where temporary-but-important runtime files (the
-	// vlc-server pidfile) live. EmptyDir / tmpfs is sufficient in k8s.
+	// RunDir is where temporary-but-important runtime files (the watchdog's
+	// resume marker, the next-frame cover cache) live. EmptyDir / tmpfs is
+	// sufficient in k8s.
 	RunDir string `default:"/opt/data/run" envconfig:"RUN_DIR"`
 
 	// VlcFileCaching is the libvlc --file-caching value in milliseconds.
@@ -60,9 +61,6 @@ type VlcServerConfig struct {
 	// 1920x1080.
 	VlcCanvasWidth  int `default:"1920" envconfig:"VLC_CANVAS_WIDTH"`
 	VlcCanvasHeight int `default:"1080" envconfig:"VLC_CANVAS_HEIGHT"`
-
-	// VLCPidFile is where the vlc-server PID file lives
-	VLCPidFile string `default:"/opt/data/run/vlc-server.pid" envconfig:"VLC_PIDFILE"`
 
 	// VlcServerBindAddress is the address (host:port or :port) the
 	// vlc-server HTTP listener binds to. Defaults to :8080 so the pod

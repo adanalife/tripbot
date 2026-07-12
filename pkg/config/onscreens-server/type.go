@@ -7,12 +7,9 @@ type OnscreensServerConfig struct {
 	// Verbose determines output verbosity
 	Verbose bool `default:"false" envconfig:"VERBOSE"`
 
-	// RunDir is where temporary-but-important runtime files (the
-	// onscreens-server pidfile) live. EmptyDir / tmpfs is sufficient in k8s.
+	// RunDir is where temporary-but-important runtime files live.
+	// EmptyDir / tmpfs is sufficient in k8s.
 	RunDir string `default:"/opt/data/run" envconfig:"RUN_DIR"`
-
-	// OnscreensPidFile is where the onscreens-server PID file lives
-	OnscreensPidFile string `default:"/opt/data/run/onscreens-server.pid" envconfig:"ONSCREENS_PIDFILE"`
 
 	// OnscreensServerBindAddress is the address (host:port or :port) the
 	// onscreens-server HTTP listener binds to. The default stays :8081 — the

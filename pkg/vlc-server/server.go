@@ -44,6 +44,8 @@ type Server struct {
 	MediaList  *libvlc.MediaList
 	VideoFiles []string
 
+	swapGap swapGapTracker
+
 	http *http.Server
 }
 
