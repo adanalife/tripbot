@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"time"
 
+	c "github.com/adanalife/tripbot/pkg/config/vlc-server"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 )
 
@@ -18,6 +19,8 @@ import (
 func (s *Server) pollStats(ctx context.Context, interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
+
+	playerStats := instrumentation.NewVLCPlayerStats(c.Conf.Platform)
 
 	var (
 		prevDisplayed float64
@@ -78,7 +81,7 @@ func (s *Server) pollStats(ctx context.Context, interval time.Duration) {
 			prevTime = now
 			havePrev = true
 
-			instrumentation.VLCPlayerStats.Update(instrumentation.VLCPlayerStatsSnapshot{
+			playerStats.Update(instrumentation.VLCPlayerStatsSnapshot{
 				InputBitRate:       stats.InputBitRate,
 				DemuxBitRate:       stats.DemuxBitRate,
 				DisplayedFPS:       fps,

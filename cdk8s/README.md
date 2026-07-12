@@ -42,10 +42,10 @@ Run these via the repo-root Taskfile: `task cdk8s:imports`, `task cdk8s:synth`,
 
 `versions.yaml` holds the per-component **prod-1** image pins. prod deploys those
 exact tags (`IfNotPresent`); stage/dev/local float on `EnvConfig.image_tag`
-(`develop` / `latest`, `Always`). On a release the `bump-prs` workflow opens one
-PR per component editing its prod pin here (+ the re-synthed `dist/`), so each
-deploy is its own merge gesture in the order you choose — see
-`.github/workflows/bump-prs.yml`.
+(`main` / `latest`, `Always`). release-please bumps the pins on its standing
+release PR (the `x-release-please-version` markers) and that PR carries the
+re-synthed `dist/`, so merging the release PR is the prod deploy — see
+`.github/workflows/release-please.yml`.
 
 `contract.json` is read directly from this repo's `pkg/contract` (the Go source of
 truth) — no sync step.

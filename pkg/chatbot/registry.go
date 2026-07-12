@@ -266,9 +266,10 @@ func (a *App) buildRegistry() []Command {
 // platform (Kick, TikTok, …) comes online; platform-specific commands then
 // reference it via Command.Platforms.
 const (
-	platformTwitch  = "twitch"
-	platformYouTube = "youtube"
-	platformTikTok  = "tiktok"
+	platformTwitch   = "twitch"
+	platformYouTube  = "youtube"
+	platformFacebook = "facebook"
+	platformTikTok   = "tiktok"
 )
 
 // platform returns this App's platform, normalizing the empty/unset value to
@@ -284,7 +285,7 @@ func (a *App) platform() string {
 }
 
 // v1Commands is the allowlist of triggers a v1-rollout platform instance
-// (YouTube, TikTok) runs — the "info + playback control" subset, plus the
+// (YouTube, Facebook, TikTok) runs — the "info + playback control" subset, plus the
 // !state/!location info commands.
 // Identity/miles commands (!miles, !leaderboard, !guess, …), the Twitch-only
 // !followage, and the admin commands (!middle, !secretinfo, !shutdown, !makebot,
@@ -313,7 +314,7 @@ var v1Commands = map[string]bool{
 //     command with a non-nil Platforms is governed solely by it — indexed on
 //     exactly the listed platforms, on every platform. This is symmetric: no
 //     platform is special, and a new Kick/TikTok-only command just lists itself.
-//  2. Cross-platform commands (Platforms == nil): YouTube and TikTok are
+//  2. Cross-platform commands (Platforms == nil): YouTube, Facebook, and TikTok are
 //     still v1 rollouts, so they run only the vetted v1Commands allowlist;
 //     mature platforms (Twitch, and any future fully-rolled-out platform) run
 //     them all. As more platforms graduate from v1 this allowlist gate may
@@ -323,7 +324,7 @@ func (a *App) commandEnabled(cmd *Command) bool {
 		return slices.Contains(cmd.Platforms, a.platform())
 	}
 	switch a.platform() {
-	case platformYouTube, platformTikTok:
+	case platformYouTube, platformFacebook, platformTikTok:
 		return v1Commands[cmd.Trigger]
 	}
 	return true

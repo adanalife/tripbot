@@ -9,6 +9,22 @@ services:
     environment:
       ENV: testing
 
+  # DB-backed tests (pkg/database/testdb) run against the real postgres
+  # from the base compose file; the healthcheck + depends_on chain below
+  # makes `docker compose run test` boot db, run migrations, and only
+  # then start `go test`.
+  db:
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  migrate:
+    depends_on:
+      db:
+        condition: service_healthy
+
   # `test` is a one-shot Go toolchain container for running `go test`
   # outside the running stack. Invoked via `ENV=testing bin/devenv
   # run --rm test ...` (see Taskfile.yml).
@@ -18,6 +34,14 @@ services:
       context: .
       dockerfile: infra/docker/test/Dockerfile
     working_dir: /src
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      # DB tests skip when postgres is unreachable (`task test:macos` has
+      # no docker); inside this stack the DB is always there, so a skip
+      # would mask a wiring bug — fail instead.
+      TESTDB_REQUIRED: "1"
     env_file:
       - ./.env.testing
     volumes:

@@ -86,6 +86,16 @@ type TripbotConfig struct {
 	// YouTube Data API quota extension lands. No effect on Twitch.
 	YouTubeInboundEnabled bool `default:"true" envconfig:"YOUTUBE_INBOUND_ENABLED"`
 
+	// FacebookAPIURL points a PLATFORM=facebook instance at the platform-gateway
+	// gateway-facebook instance over HTTP — e.g.
+	// http://gateway-facebook.<env>.svc.cluster.local:8080. Both chat directions
+	// flow through the gateway: outbound via its SendChat (which comments on the
+	// Page's active live video as the Page), inbound via its GET /v1/chat/inbound
+	// poll. The gateway also owns the Page access token, so tripbot holds none at
+	// runtime. Required on a facebook instance — with this empty the instance
+	// comes up without Facebook chat.
+	FacebookAPIURL string `envconfig:"FACEBOOK_API_URL"`
+
 	// TikTokAPIURL points a PLATFORM=tiktok instance at the platform-gateway
 	// gateway-tiktok instance over HTTP — e.g.
 	// http://gateway-tiktok.<env>.svc.cluster.local:8080. Inbound-only: the

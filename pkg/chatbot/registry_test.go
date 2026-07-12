@@ -89,6 +89,24 @@ func TestYouTubeAllowlistTriggersExist(t *testing.T) {
 	}
 }
 
+// TestFacebookPlatformIndexesOnlyAllowlist verifies a Facebook App runs the
+// same v1 cross-platform allowlist, and that platform-scoped commands stay on
+// their platform (!carsound is YouTube-only).
+func TestFacebookPlatformIndexesOnlyAllowlist(t *testing.T) {
+	fb := &App{Platform: platformFacebook}
+	fb.indexCommands()
+	for _, token := range []string{"!skip", "!timewarp", "!location", "!facebook"} {
+		if cmd, _ := fb.findCommand(token); cmd == nil {
+			t.Errorf("expected %q to be available on Facebook, got nil", token)
+		}
+	}
+	for _, token := range []string{"!miles", "!guess", "!shutdown", "!carsound"} {
+		if cmd, _ := fb.findCommand(token); cmd != nil {
+			t.Errorf("expected %q to be unavailable on Facebook, got %q", token, cmd.Trigger)
+		}
+	}
+}
+
 // TestYouTubePlatformIndexesOnlyAllowlist verifies a YouTube App dispatches the
 // v1 cross-platform allowlist (triggers + their aliases) plus its
 // platform-scoped commands, and nothing else — identity/miles, the Twitch-only

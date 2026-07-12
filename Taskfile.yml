@@ -168,9 +168,9 @@ tasks:
     cmds:
       - mise exec -- uv run cdk8s synth
       # prod-1 app manifests are pinned to their release version: frozen here and
-      # regenerated only by the bump-prs workflow, so a chart change on develop
-      # doesn't reach prod's committed dist until that component's version is
-      # bumped — which is what puts the config delta in the same diff as the bump.
+      # regenerated only on release-please's release PR, so a chart change on
+      # main doesn't reach prod's committed dist until the next release — which
+      # is what puts the config delta in the same diff as the version bump.
       # Discard this HEAD re-synth of the pinned app files; identity + one-shot
       # jobs (no -twitch/-youtube suffix) stay live and re-synth normally.
       - |
@@ -223,7 +223,7 @@ tasks:
             sh: ls dist/prod-1-*.k8s.yaml | grep -v -- '-job-'
 
   cdk8s:prod:bump:
-    desc: 'Regenerate one prod-1 component''s pinned manifests after a hand pin edit in versions.yaml (COMPONENT=vlc|tripbot|onscreens-server) — local mirror of the bump-prs workflow'
+    desc: 'Regenerate one prod-1 component''s pinned manifests after a hand pin edit in versions.yaml (COMPONENT=vlc|tripbot|onscreens-server), e.g. a rollback'
     dir: cdk8s
     deps: [cdk8s:imports]
     requires:
@@ -231,9 +231,9 @@ tasks:
     cmds:
       # Full synth regenerates ALL prod app files from HEAD; freeze every OTHER
       # component back to its own pinned release so only COMPONENT's manifests
-      # change (its tag + any config delta this release introduced). Same logic as
-      # bump-prs.yml. DISTNAME strips the -server suffix (onscreens-server ->
-      # onscreens); tripbot/vlc are unchanged.
+      # change (its tag + any config delta this release introduced). DISTNAME
+      # strips the -server suffix (onscreens-server -> onscreens); tripbot/vlc
+      # are unchanged.
       - mise exec -- uv run cdk8s synth
       - |
         distname="{{.COMPONENT}}"; distname="${distname%-server}"

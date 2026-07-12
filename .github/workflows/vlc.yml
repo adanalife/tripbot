@@ -13,9 +13,7 @@ on:
       - 'go.sum'
   push:
     branches:
-      - develop
-    tags:
-      - v*
+      - main
     paths:
       - 'pkg/vlc-server/**'
       - 'pkg/vlc-client/**'

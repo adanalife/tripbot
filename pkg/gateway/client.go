@@ -193,10 +193,14 @@ func (c *Client) Followers(ctx context.Context) (int, error) {
 }
 
 // InboundChatMessage is one inbound live-chat line — viewer messages only (the
-// gateway filters the channel's own echoed sends).
+// gateway filters the channel's own echoed sends). Author is the human-facing
+// name (a mutable display name on some platforms); AuthorID is the
+// platform-native stable user ID — the key viewer persistence and identity
+// linking must use.
 type InboundChatMessage struct {
-	Author string `json:"author"`
-	Text   string `json:"text"`
+	Author   string `json:"author"`
+	AuthorID string `json:"author_id"`
+	Text     string `json:"text"`
 }
 
 // InboundChatPage is one page from GET /v1/chat/inbound. Cursor is opaque: pass

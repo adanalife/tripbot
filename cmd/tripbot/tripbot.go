@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"math/rand"
 	"os"
 	"os/signal"
 	"syscall"
@@ -219,7 +218,6 @@ func platformIsTwitch() bool {
 // instances.
 func (t *Tripbot) Run() {
 	slog.Info("tripbot starting", "version", t.version, "platform", c.Conf.Platform)
-	createRandomSeed()
 	// shutdownCtx is canceled on SIGINT/SIGTERM; the HTTP server uses it
 	// to trigger a graceful shutdown so in-flight requests aren't cut.
 	// listenForShutdown's gracefulShutdown goroutine handles the rest of
@@ -256,9 +254,12 @@ func (t *Tripbot) Run() {
 	t.startAuthStatusEmitter(shutdownCtx)    // after startNATS: publishes auth.status snapshots for the standalone console
 	t.startOBSRefreshSubscriber(shutdownCtx) // after startNATS: per-platform (each instance owns its OBS), so before the YouTube early-return
 	if !platformIsTwitch() {
-		if c.Conf.Platform == "tiktok" {
+		switch c.Conf.Platform {
+		case "facebook":
+			t.connectToFacebook(shutdownCtx)
+		case "tiktok":
 			t.connectToTikTok(shutdownCtx)
-		} else {
+		default:
 			t.connectToYouTube(shutdownCtx)
 		}
 		return
@@ -306,6 +307,34 @@ func (t *Tripbot) connectToYouTube(ctx context.Context) {
 		slog.WarnContext(ctx, "youtube inbound chat disabled (bot-less mode); outbound + jobs only",
 			"gateway", c.Conf.YouTubeAPIURL, "fix", "set YOUTUBE_INBOUND_ENABLED=true to read chat")
 	}
+
+	// nothing else to do on the main goroutine — the poller and HTTP server
+	// run until the signal handler shuts the process down.
+	<-ctx.Done()
+}
+
+// connectToFacebook wires a PLATFORM=facebook instance's chat — both
+// directions — through gateway-facebook, then blocks until shutdown. The
+// gateway owns the Page access token and the live-video resolution, so
+// tripbot holds no Facebook credential: outbound sends go via
+// gateway-facebook's SendChat (a Page comment on the live video), inbound
+// chat via its GET /v1/chat/inbound poll.
+//
+// FACEBOOK_API_URL is required — without the gateway URL there's no way to
+// reach Facebook. A misconfigured instance comes up Ready with everything
+// else working but no Facebook chat, logging loudly (the same "stay up with
+// limited functionality" contract as connectToYouTube).
+func (t *Tripbot) connectToFacebook(ctx context.Context) {
+	if c.Conf.FacebookAPIURL == "" {
+		slog.ErrorContext(ctx, "FACEBOOK_API_URL unset; facebook chat disabled",
+			"fix", "set FACEBOOK_API_URL to the gateway-facebook service URL")
+		<-ctx.Done()
+		return
+	}
+
+	t.app.ConnectFacebookViaGateway()
+	go t.app.NewGatewayChatPoller(c.Conf.FacebookAPIURL).Run(ctx)
+	slog.InfoContext(ctx, "facebook chat via gateway (inbound + outbound)", "gateway", c.Conf.FacebookAPIURL)
 
 	// nothing else to do on the main goroutine — the poller and HTTP server
 	// run until the signal handler shuts the process down.
@@ -544,12 +573,6 @@ func (t *Tripbot) startEventSub(ctx context.Context) {
 	}()
 }
 
-// createRandomSeed ensures that random numbers will be random
-func createRandomSeed() {
-	// create a brand new random seed
-	rand.Seed(time.Now().UnixNano())
-}
-
 // listenForShutdown creates a background job that listens for a graceful shutdown request
 func (t *Tripbot) listenForShutdown() {
 	helpers.WritePidFile(c.Conf.TripbotPidFile)
@@ -757,7 +780,7 @@ func (t *Tripbot) gracefulShutdown() {
 		}
 	}
 	t.sessions.Shutdown(context.Background())
-	err := database.Connection().Close()
+	err := database.Close()
 	if err != nil {
 		slog.Error("error closing DB connection", "err", err)
 	}
