@@ -58,8 +58,10 @@ spec:
                 name: tripbot-secret
             - secretRef:
                 name: grafana-cloud-otlp
+                optional: true
             - secretRef:
                 name: sentry-tripbot
+                optional: true
             - secretRef:
                 name: tripbot-twitch-creds
             - secretRef:
