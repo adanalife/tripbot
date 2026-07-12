@@ -105,6 +105,9 @@ func (s *Server) initPlayer() error {
 	if err := s.createPlayer(); err != nil {
 		return err
 	}
+	if err := s.initSwapGapEvents(); err != nil {
+		return err
+	}
 	if err := s.setToLoop(); err != nil {
 		return err
 	}
