@@ -5,13 +5,14 @@ import (
 	"runtime"
 	"testing"
 	"time"
+
+	"github.com/adanalife/tripbot/pkg/database/testdb"
 )
 
-// These tests cover the *Player state-machine introduced in #600. Before the
-// refactor, GetCurrentlyPlaying was a package-level function with package-level
-// state — no way to exercise the transition / GPS-overlay-toggle behaviour
-// without standing up real HTTP + DB. Now the Player is constructable, so we
-// can point it at httptest-backed clients and a sqlmock-backed gorm.DB.
+// These tests cover the *Player state-machine introduced in #600. The Player is
+// constructable, so it can be pointed at an httptest-backed vlc client, a
+// recording onscreens fake, and a real postgres transaction — each transition
+// loads the clip and records its play against the actual schema.
 //
 // Darwin path (figureOutCurrentVideo via lsof script) is not exercised here;
 // the Linux path is what runs in production and what CI tests against. The
@@ -43,69 +44,77 @@ func TestPlayer_Current_ZeroBeforeAnyCall(t *testing.T) {
 
 func TestPlayer_GetCurrentlyPlaying_FirstCall_FlaggedShowsGPS(t *testing.T) {
 	skipIfDarwin(t)
-	mock := installMockDB(t)
+	db := testdb.New(t)
 	rec := &recordingOnscreens{}
 	vlcCurrent := "2018_0514_224801_013.MP4"
 	vlc := fakeVLCServer(t, &vlcCurrent)
 	p := NewPlayer(rec, vlc)
 
-	// DB returns a flagged video for the slug derived from vlcCurrent.
-	expectLoadHit(mock, 1, "2018_0514_224801_013", true)
-	expectPlayInsert(mock, 1, true)
+	// The clip vlc reports is already in the DB, flagged (no GPS fix).
+	vid := insertVideo(t, db, Video{Slug: "2018_0514_224801_013", Flagged: true, CoordSource: CoordSourceMissing})
 
 	p.GetCurrentlyPlaying(context.Background())
 
+	if p.Current().ID != vid.ID {
+		t.Errorf("CurrentlyPlaying.ID = %d, want the persisted %d", p.Current().ID, vid.ID)
+	}
 	if p.Current().Slug != "2018_0514_224801_013" {
 		t.Errorf("CurrentlyPlaying.Slug = %q, want %q", p.Current().Slug, "2018_0514_224801_013")
 	}
 	if !p.Current().Flagged {
-		t.Error("expected CurrentlyPlaying.Flagged = true (staged in mock rows)")
+		t.Error("expected CurrentlyPlaying.Flagged = true (the row is flagged)")
 	}
 	if len(rec.calls) != 1 || rec.calls[0] != "ShowGPSImage" {
 		t.Errorf("expected single ShowGPSImage call, got %v", rec.calls)
 	}
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Error(err)
+	// The transition is durable: a video_plays row lands with the clip's state.
+	if n := playCount(t, db, vid.ID); n != 1 {
+		t.Errorf("video_plays rows for video %d = %d, want 1", vid.ID, n)
+	}
+	var flagged bool
+	if err := db.Raw(`SELECT flagged FROM video_plays WHERE video_id = ?`, vid.ID).Scan(&flagged).Error; err != nil {
+		t.Fatalf("read video_plays.flagged: %v", err)
+	}
+	if !flagged {
+		t.Error("video_plays row recorded flagged = false for a flagged clip")
 	}
 }
 
 func TestPlayer_GetCurrentlyPlaying_FirstCall_NotFlaggedHidesGPS(t *testing.T) {
 	skipIfDarwin(t)
-	mock := installMockDB(t)
+	db := testdb.New(t)
 	rec := &recordingOnscreens{}
 	vlcCurrent := "2019_0615_183000_001.MP4"
 	vlc := fakeVLCServer(t, &vlcCurrent)
 	p := NewPlayer(rec, vlc)
 
-	expectLoadHit(mock, 7, "2019_0615_183000_001", false)
-	expectPlayInsert(mock, 7, false)
+	vid := insertVideo(t, db, Video{Slug: "2019_0615_183000_001", State: "Oregon", Lat: 45.5, Lng: -122.6})
 
 	p.GetCurrentlyPlaying(context.Background())
 
 	if p.Current().Flagged {
-		t.Error("expected CurrentlyPlaying.Flagged = false (staged in mock rows)")
+		t.Error("expected CurrentlyPlaying.Flagged = false (the row is unflagged)")
+	}
+	if p.Current().State != "Oregon" {
+		t.Errorf("CurrentlyPlaying.State = %q, want %q", p.Current().State, "Oregon")
 	}
 	if len(rec.calls) != 1 || rec.calls[0] != "HideGPSImage" {
 		t.Errorf("expected single HideGPSImage call, got %v", rec.calls)
 	}
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Error(err)
+	if n := playCount(t, db, vid.ID); n != 1 {
+		t.Errorf("video_plays rows for video %d = %d, want 1", vid.ID, n)
 	}
 }
 
 func TestPlayer_GetCurrentlyPlaying_SameVidIsNoop(t *testing.T) {
 	skipIfDarwin(t)
-	mock := installMockDB(t)
+	db := testdb.New(t)
 	rec := &recordingOnscreens{}
 	vlcCurrent := "2018_0514_224801_013.MP4"
 	vlc := fakeVLCServer(t, &vlcCurrent)
 	p := NewPlayer(rec, vlc)
 
-	// Only one DB hit + play insert expected — the second GetCurrentlyPlaying
-	// call sees curVid == preVid and short-circuits before reaching
-	// LoadOrCreate.
-	expectLoadHit(mock, 1, "2018_0514_224801_013", false)
-	expectPlayInsert(mock, 1, false)
+	vid := insertVideo(t, db, Video{Slug: "2018_0514_224801_013", State: "Nevada", Lat: 39.5, Lng: -119.8})
 
 	p.GetCurrentlyPlaying(context.Background())
 	timeStartedAfterFirst := p.timeStarted
@@ -113,6 +122,8 @@ func TestPlayer_GetCurrentlyPlaying_SameVidIsNoop(t *testing.T) {
 	// Tiny sleep so a stray timeStarted reset would be observable.
 	time.Sleep(2 * time.Millisecond)
 
+	// Second call sees curVid == preVid and short-circuits before LoadOrCreate,
+	// so no second play is recorded.
 	p.GetCurrentlyPlaying(context.Background())
 
 	if p.timeStarted != timeStartedAfterFirst {
@@ -121,26 +132,22 @@ func TestPlayer_GetCurrentlyPlaying_SameVidIsNoop(t *testing.T) {
 	if len(rec.calls) != 1 {
 		t.Errorf("expected exactly one onscreens call (from first transition), got %d: %v", len(rec.calls), rec.calls)
 	}
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Error(err)
+	if n := playCount(t, db, vid.ID); n != 1 {
+		t.Errorf("video_plays rows for video %d = %d, want 1 (the no-op call recorded a play)", vid.ID, n)
 	}
 }
 
 func TestPlayer_GetCurrentlyPlaying_TransitionTogglesGPSAndResetsTimeStarted(t *testing.T) {
 	skipIfDarwin(t)
-	mock := installMockDB(t)
+	db := testdb.New(t)
 	rec := &recordingOnscreens{}
 	vlcCurrent := "2018_0514_224801_013.MP4"
 	vlc := fakeVLCServer(t, &vlcCurrent)
 	p := NewPlayer(rec, vlc)
 
-	// First vid: flagged → ShowGPSImage. Each transition loads the video then
-	// records its play, so the expectations interleave.
-	expectLoadHit(mock, 1, "2018_0514_224801_013", true)
-	expectPlayInsert(mock, 1, true)
-	// Second vid: not flagged → HideGPSImage.
-	expectLoadHit(mock, 2, "2019_0615_183000_001", false)
-	expectPlayInsert(mock, 2, false)
+	// First vid: flagged → ShowGPSImage. Second: unflagged → HideGPSImage.
+	first := insertVideo(t, db, Video{Slug: "2018_0514_224801_013", Flagged: true, CoordSource: CoordSourceMissing})
+	second := insertVideo(t, db, Video{Slug: "2019_0615_183000_001", State: "Oregon", Lat: 45.5, Lng: -122.6})
 
 	p.GetCurrentlyPlaying(context.Background())
 	firstStart := p.timeStarted
@@ -174,21 +181,24 @@ func TestPlayer_GetCurrentlyPlaying_TransitionTogglesGPSAndResetsTimeStarted(t *
 			t.Errorf("overlay call %d: want %q, got %q", i, want, rec.calls[i])
 		}
 	}
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Error(err)
+	// Each transition records its own play.
+	if n := playCount(t, db, first.ID); n != 1 {
+		t.Errorf("video_plays rows for the first clip = %d, want 1", n)
+	}
+	if n := playCount(t, db, second.ID); n != 1 {
+		t.Errorf("video_plays rows for the second clip = %d, want 1", n)
 	}
 }
 
 func TestPlayer_CurrentProgress_TracksTimeSinceStart(t *testing.T) {
 	skipIfDarwin(t)
-	mock := installMockDB(t)
+	db := testdb.New(t)
 	rec := &recordingOnscreens{}
 	vlcCurrent := "2018_0514_224801_013.MP4"
 	vlc := fakeVLCServer(t, &vlcCurrent)
 	p := NewPlayer(rec, vlc)
 
-	expectLoadHit(mock, 1, "2018_0514_224801_013", false)
-	expectPlayInsert(mock, 1, false)
+	insertVideo(t, db, Video{Slug: "2018_0514_224801_013", State: "Nevada", Lat: 39.5, Lng: -119.8})
 
 	p.GetCurrentlyPlaying(context.Background())
 	time.Sleep(10 * time.Millisecond)
@@ -204,10 +214,10 @@ func TestPlayer_CurrentProgress_TracksTimeSinceStart(t *testing.T) {
 
 func TestPlayer_GetCurrentlyPlaying_EmptyVlcResult_NoTransition(t *testing.T) {
 	skipIfDarwin(t)
-	// No mockDB needed — when vlc returns "" on the very first call,
-	// curVid stays "" and equals preVid (also ""), so LoadOrCreate is
-	// never invoked. installMockDB-less SetGormDB is left at nil; any
-	// DB hit would NPE and fail the test loudly.
+	// No testdb needed — when vlc returns "" on the very first call, curVid
+	// stays "" and equals preVid (also ""), so LoadOrCreate is never invoked.
+	// The database singleton is left nil; any DB hit would panic and fail the
+	// test loudly.
 	rec := &recordingOnscreens{}
 	vlcCurrent := ""
 	vlc := fakeVLCServer(t, &vlcCurrent)
