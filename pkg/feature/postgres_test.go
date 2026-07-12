@@ -2,259 +2,296 @@ package feature
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
-	"github.com/DATA-DOG/go-sqlmock"
-	"gorm.io/driver/postgres"
+	"github.com/adanalife/tripbot/pkg/database/testdb"
+	"github.com/lib/pq"
 	"gorm.io/gorm"
 )
 
-// newMockDB stands up a sqlmock-backed *gorm.DB suitable for unit-testing
-// the Postgres-backed flag client without a real database.
-func newMockDB(t *testing.T) (*gorm.DB, sqlmock.Sqlmock) {
+// insertFlag writes one feature_flags row through the same struct the client
+// reads back, so the GORM tags and the real column set are exercised on both
+// sides. Keys used here are test-only ("test.*") — feature_flags is seeded by
+// the migrations, so fixtures must not collide with the shipped flags.
+func insertFlag(t *testing.T, db *gorm.DB, row flagRow) {
 	t.Helper()
-	sqlDB, mock, err := sqlmock.New()
-	if err != nil {
-		t.Fatalf("sqlmock.New: %v", err)
+	if row.TargetRemovalDate.IsZero() {
+		row.TargetRemovalDate = time.Now().Add(30 * 24 * time.Hour)
 	}
-	gdb, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{
-		SkipDefaultTransaction: true,
-	})
-	if err != nil {
-		t.Fatalf("gorm.Open: %v", err)
+	// The allowlist columns are NOT NULL DEFAULT '{}'; a nil pq.StringArray
+	// writes NULL, not an empty array.
+	if row.EnabledForUsernames == nil {
+		row.EnabledForUsernames = pq.StringArray{}
 	}
-	t.Cleanup(func() { _ = sqlDB.Close() })
-	return gdb, mock
+	if row.EnabledForRoles == nil {
+		row.EnabledForRoles = pq.StringArray{}
+	}
+	if err := db.Create(&row).Error; err != nil {
+		t.Fatalf("insert flag %q/%q: %v", row.Key, row.Platform, err)
+	}
 }
 
-// expectFlags queues a successful SELECT on feature_flags returning the given rows.
-func expectFlags(mock sqlmock.Sqlmock, rows ...flagRow) {
-	r := sqlmock.NewRows([]string{
-		"key", "platform", "description", "enabled",
-		"enabled_for_usernames", "enabled_for_roles",
-		"target_removal_date", "created_at", "updated_at",
-	})
-	for _, row := range rows {
-		r.AddRow(
-			row.Key, "twitch", row.Description, row.Enabled,
-			pqArrayLiteral(row.EnabledForUsernames),
-			pqArrayLiteral(row.EnabledForRoles),
-			row.TargetRemovalDate, time.Now(), time.Now(),
-		)
+// enabledInDB reads the enabled column straight from postgres, bypassing the
+// client's cache — the check that a toggle actually landed on the row it
+// claimed to.
+func enabledInDB(t *testing.T, db *gorm.DB, key, platform string) bool {
+	t.Helper()
+	var row flagRow
+	if err := db.Where("key = ? AND platform = ?", key, platform).First(&row).Error; err != nil {
+		t.Fatalf("read back %q/%q: %v", key, platform, err)
 	}
-	mock.ExpectQuery(`SELECT \* FROM "feature_flags"`).WillReturnRows(r)
-}
-
-// pqArrayLiteral renders a []string the way the postgres driver returns a
-// TEXT[] column over the wire — `{a,b,c}` form — so pq.StringArray can
-// unmarshal it in tests.
-func pqArrayLiteral(s []string) string {
-	if len(s) == 0 {
-		return "{}"
-	}
-	out := "{"
-	for i, v := range s {
-		if i > 0 {
-			out += ","
-		}
-		out += v
-	}
-	out += "}"
-	return out
+	return row.Enabled
 }
 
 func TestPostgresClient_InitialLoad(t *testing.T) {
-	db, mock := newMockDB(t)
-	expectFlags(mock, flagRow{
-		Key:                 "chatbot.ascii",
+	db := testdb.New(t)
+	ctx := context.Background()
+	insertFlag(t, db, flagRow{
+		Key:                 "test.ascii",
+		Platform:            "twitch",
 		Description:         "experimental ascii command",
 		Enabled:             false,
 		EnabledForUsernames: []string{"dana"},
 		EnabledForRoles:     []string{"mod"},
-		TargetRemovalDate:   time.Now().Add(30 * 24 * time.Hour),
 	})
 
-	c, err := NewPostgresClient(context.Background(), db, time.Minute, "twitch")
+	c, err := NewPostgresClient(ctx, db, time.Minute, "twitch")
 	if err != nil {
 		t.Fatalf("NewPostgresClient: %v", err)
 	}
 
-	if !c.Bool(context.Background(), "chatbot.ascii", EvalContext{Username: "dana"}) {
+	if !c.Bool(ctx, "test.ascii", EvalContext{Username: "dana"}) {
 		t.Error("dana should be in the username allowlist")
 	}
-	if !c.Bool(context.Background(), "chatbot.ascii", EvalContext{Roles: []string{"mod"}}) {
+	if !c.Bool(ctx, "test.ascii", EvalContext{Roles: []string{"mod"}}) {
 		t.Error("mod role should match the role allowlist")
 	}
-	if c.Bool(context.Background(), "chatbot.ascii", EvalContext{Roles: []string{"regular"}}) {
+	if c.Bool(ctx, "test.ascii", EvalContext{Roles: []string{"regular"}}) {
 		t.Error("regular user should not be enabled")
 	}
-	if c.Bool(context.Background(), "chatbot.unknown", EvalContext{}) {
+	if c.Bool(ctx, "test.unknown", EvalContext{}) {
 		t.Error("unknown key should evaluate to false")
 	}
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Errorf("unmet sqlmock expectations: %v", err)
+}
+
+// TestPostgresClient_LoadsSeededFlags pins the client against the rows the
+// migrations actually ship: a flag seeded for both platforms loads on both,
+// disabled by default.
+func TestPostgresClient_LoadsSeededFlags(t *testing.T) {
+	db := testdb.New(t)
+	ctx := context.Background()
+
+	for _, platform := range []string{"twitch", "youtube"} {
+		c, err := NewPostgresClient(ctx, db, time.Minute, platform)
+		if err != nil {
+			t.Fatalf("NewPostgresClient(%s): %v", platform, err)
+		}
+		var found bool
+		for _, f := range c.Snapshot(ctx) {
+			if f.Key == "chatbot.weather" {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("%s: expected the seeded chatbot.weather flag in the snapshot", platform)
+		}
+		if c.Bool(ctx, "chatbot.weather", EvalContext{}) {
+			t.Errorf("%s: chatbot.weather is seeded disabled", platform)
+		}
 	}
 }
 
-func TestPostgresClient_InitialLoadError(t *testing.T) {
-	db, mock := newMockDB(t)
-	mock.ExpectQuery(`SELECT \* FROM "feature_flags"`).
-		WillReturnError(errors.New("connection refused"))
-
-	if _, err := NewPostgresClient(context.Background(), db, time.Minute, "twitch"); err == nil {
-		t.Error("expected initial load to surface the DB error")
-	}
-}
-
+// TestPostgresClient_RefreshFailureRetainsCache: a failed refresh must not
+// clear the last-known-good snapshot. The failure is induced with a cancelled
+// context — a real query error, not a synthetic driver one.
 func TestPostgresClient_RefreshFailureRetainsCache(t *testing.T) {
-	db, mock := newMockDB(t)
-	// Initial load: one flag, globally enabled.
-	expectFlags(mock, flagRow{
-		Key:               "chatbot.report_to_discord",
-		Description:       "discord webhook for !report",
-		Enabled:           true,
-		TargetRemovalDate: time.Now().Add(30 * 24 * time.Hour),
-	})
-	c, err := NewPostgresClient(context.Background(), db, time.Minute, "twitch")
+	db := testdb.New(t)
+	ctx := context.Background()
+	insertFlag(t, db, flagRow{Key: "test.report_to_discord", Platform: "twitch", Enabled: true})
+
+	c, err := NewPostgresClient(ctx, db, time.Minute, "twitch")
 	if err != nil {
 		t.Fatalf("NewPostgresClient: %v", err)
 	}
-	if !c.Bool(context.Background(), "chatbot.report_to_discord", EvalContext{}) {
+	if !c.Bool(ctx, "test.report_to_discord", EvalContext{}) {
 		t.Fatal("initial load: flag should be enabled")
 	}
 
-	// Manual refresh that fails — cache should be retained.
-	mock.ExpectQuery(`SELECT \* FROM "feature_flags"`).
-		WillReturnError(errors.New("connection refused"))
-	if err := c.refresh(context.Background()); err == nil {
-		t.Error("expected refresh to surface error")
+	cancelled, cancel := context.WithCancel(ctx)
+	cancel()
+	if err := c.refresh(cancelled); err == nil {
+		t.Error("expected refresh to surface the query error")
 	}
-	if !c.Bool(context.Background(), "chatbot.report_to_discord", EvalContext{}) {
+	if !c.Bool(ctx, "test.report_to_discord", EvalContext{}) {
 		t.Error("flag should still evaluate to enabled after a failed refresh")
 	}
 
-	// Recovery refresh: flag is now globally disabled.
-	expectFlags(mock, flagRow{
-		Key:               "chatbot.report_to_discord",
-		Description:       "discord webhook for !report",
-		Enabled:           false,
-		TargetRemovalDate: time.Now().Add(30 * 24 * time.Hour),
-	})
-	if err := c.refresh(context.Background()); err != nil {
+	// Recovery: an out-of-band write is picked up by the next good refresh.
+	if err := db.Model(&flagRow{}).
+		Where("key = ? AND platform = ?", "test.report_to_discord", "twitch").
+		Update("enabled", false).Error; err != nil {
+		t.Fatalf("disable flag: %v", err)
+	}
+	if err := c.refresh(ctx); err != nil {
 		t.Fatalf("recovery refresh: %v", err)
 	}
-	if c.Bool(context.Background(), "chatbot.report_to_discord", EvalContext{}) {
-		t.Error("flag should be disabled after successful refresh")
-	}
-
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Errorf("unmet sqlmock expectations: %v", err)
+	if c.Bool(ctx, "test.report_to_discord", EvalContext{}) {
+		t.Error("flag should be disabled after a successful refresh")
 	}
 }
 
 func TestPostgresClient_SetEnabled(t *testing.T) {
-	db, mock := newMockDB(t)
-	expectFlags(mock, flagRow{
-		Key:               "chatbot.weather",
-		Description:       "weather command",
-		Enabled:           false,
-		TargetRemovalDate: time.Now().Add(30 * 24 * time.Hour),
-	})
-	c, err := NewPostgresClient(context.Background(), db, time.Minute, "twitch")
+	db := testdb.New(t)
+	ctx := context.Background()
+	insertFlag(t, db, flagRow{Key: "test.weather", Platform: "twitch", Enabled: false})
+
+	c, err := NewPostgresClient(ctx, db, time.Minute, "twitch")
 	if err != nil {
 		t.Fatalf("NewPostgresClient: %v", err)
 	}
-	if c.Bool(context.Background(), "chatbot.weather", EvalContext{}) {
+	if c.Bool(ctx, "test.weather", EvalContext{}) {
 		t.Fatal("flag should start disabled")
 	}
 
-	// The write, then the immediate force-refresh that pulls the new state in.
-	mock.ExpectExec(`UPDATE "feature_flags" SET`).
-		WillReturnResult(sqlmock.NewResult(0, 1))
-	expectFlags(mock, flagRow{
-		Key:               "chatbot.weather",
-		Description:       "weather command",
-		Enabled:           true,
-		TargetRemovalDate: time.Now().Add(30 * 24 * time.Hour),
-	})
-
-	if err := c.SetEnabled(context.Background(), "chatbot.weather", true); err != nil {
+	if err := c.SetEnabled(ctx, "test.weather", true); err != nil {
 		t.Fatalf("SetEnabled: %v", err)
 	}
-	if !c.Bool(context.Background(), "chatbot.weather", EvalContext{}) {
+	if !c.Bool(ctx, "test.weather", EvalContext{}) {
 		t.Error("flag should be live-enabled immediately after SetEnabled, no poll wait")
 	}
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Errorf("unmet sqlmock expectations: %v", err)
+	if !enabledInDB(t, db, "test.weather", "twitch") {
+		t.Error("SetEnabled should have persisted enabled=true")
 	}
 }
 
 func TestPostgresClient_SetEnabledUnknownKey(t *testing.T) {
-	db, mock := newMockDB(t)
-	expectFlags(mock) // empty table
-	c, err := NewPostgresClient(context.Background(), db, time.Minute, "twitch")
+	db := testdb.New(t)
+	ctx := context.Background()
+	c, err := NewPostgresClient(ctx, db, time.Minute, "twitch")
 	if err != nil {
 		t.Fatalf("NewPostgresClient: %v", err)
 	}
-	// Zero rows matched → error, and no force-refresh SELECT is issued.
-	mock.ExpectExec(`UPDATE "feature_flags" SET`).
-		WillReturnResult(sqlmock.NewResult(0, 0))
-	if err := c.SetEnabled(context.Background(), "nope.missing", true); err == nil {
+	if err := c.SetEnabled(ctx, "test.missing", true); err == nil {
 		t.Error("expected an error when toggling a key that doesn't exist")
 	}
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Errorf("unmet sqlmock expectations: %v", err)
-	}
 }
 
-// TestPostgresClient_PlatformScoping pins the per-platform contract: the
-// client only loads rows for its own platform, and a toggle only touches its
-// own platform's row — enabling a flag on youtube must not enable it on
-// twitch.
+// TestPostgresClient_PlatformScoping pins the per-platform contract from
+// migration 019: a client loads only its own platform's rows, and a toggle
+// only touches its own platform's row — enabling a flag on youtube must not
+// enable it on twitch.
 func TestPostgresClient_PlatformScoping(t *testing.T) {
-	db, mock := newMockDB(t)
-	mock.ExpectQuery(`SELECT \* FROM "feature_flags" WHERE platform = \$1`).
-		WithArgs("youtube").
-		WillReturnRows(sqlmock.NewRows([]string{"key", "platform", "enabled"}).
-			AddRow("chatbot.weather", "youtube", false))
+	db := testdb.New(t)
+	ctx := context.Background()
+	insertFlag(t, db, flagRow{Key: "test.gateway", Platform: "twitch", Enabled: false})
+	insertFlag(t, db, flagRow{Key: "test.gateway", Platform: "youtube", Enabled: false})
+	insertFlag(t, db, flagRow{Key: "test.youtube_only", Platform: "youtube", Enabled: true})
 
-	c, err := NewPostgresClient(context.Background(), db, time.Minute, "youtube")
+	twitch, err := NewPostgresClient(ctx, db, time.Minute, "twitch")
 	if err != nil {
-		t.Fatalf("NewPostgresClient: %v", err)
+		t.Fatalf("NewPostgresClient(twitch): %v", err)
+	}
+	youtube, err := NewPostgresClient(ctx, db, time.Minute, "youtube")
+	if err != nil {
+		t.Fatalf("NewPostgresClient(youtube): %v", err)
 	}
 
-	mock.ExpectExec(`UPDATE "feature_flags" SET .+ WHERE key = \$\d+ AND platform = \$\d+`).
-		WithArgs(true, sqlmock.AnyArg(), "chatbot.weather", "youtube").
-		WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectQuery(`SELECT \* FROM "feature_flags" WHERE platform = \$1`).
-		WithArgs("youtube").
-		WillReturnRows(sqlmock.NewRows([]string{"key", "platform", "enabled"}).
-			AddRow("chatbot.weather", "youtube", true))
+	// A key that only exists on youtube is invisible (and false) on twitch.
+	if twitch.Bool(ctx, "test.youtube_only", EvalContext{}) {
+		t.Error("twitch client should not see a youtube-only flag")
+	}
+	if !youtube.Bool(ctx, "test.youtube_only", EvalContext{}) {
+		t.Error("youtube client should see its own flag")
+	}
 
-	if err := c.SetEnabled(context.Background(), "chatbot.weather", true); err != nil {
+	if err := youtube.SetEnabled(ctx, "test.gateway", true); err != nil {
 		t.Fatalf("SetEnabled: %v", err)
 	}
-	if !c.Bool(context.Background(), "chatbot.weather", EvalContext{}) {
+	if !youtube.Bool(ctx, "test.gateway", EvalContext{}) {
 		t.Error("flag should be enabled on the client's own platform")
 	}
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Errorf("unmet sqlmock expectations: %v", err)
+	if err := twitch.refresh(ctx); err != nil {
+		t.Fatalf("twitch refresh: %v", err)
+	}
+	if twitch.Bool(ctx, "test.gateway", EvalContext{}) {
+		t.Error("toggling on youtube must not enable the flag on twitch")
+	}
+	if enabledInDB(t, db, "test.gateway", "twitch") {
+		t.Error("the twitch row must be untouched by a youtube toggle")
+	}
+	if !enabledInDB(t, db, "test.gateway", "youtube") {
+		t.Error("the youtube row should be enabled")
 	}
 }
 
-func TestPostgresClient_EmptyTable(t *testing.T) {
-	db, mock := newMockDB(t)
-	expectFlags(mock) // zero rows
-	c, err := NewPostgresClient(context.Background(), db, time.Minute, "twitch")
+// TestPostgresClient_SetEnabledWrongPlatform: the key exists, but not for this
+// client's platform — the toggle matches zero rows and must fail loudly.
+func TestPostgresClient_SetEnabledWrongPlatform(t *testing.T) {
+	db := testdb.New(t)
+	ctx := context.Background()
+	insertFlag(t, db, flagRow{Key: "test.twitch_only", Platform: "twitch", Enabled: false})
+
+	youtube, err := NewPostgresClient(ctx, db, time.Minute, "youtube")
 	if err != nil {
 		t.Fatalf("NewPostgresClient: %v", err)
 	}
-	if c.Bool(context.Background(), "any.key", EvalContext{}) {
-		t.Error("empty table should evaluate every key to false")
+	if err := youtube.SetEnabled(ctx, "test.twitch_only", true); err == nil {
+		t.Error("expected an error toggling a key that has no row for this platform")
 	}
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Errorf("unmet sqlmock expectations: %v", err)
+	if enabledInDB(t, db, "test.twitch_only", "twitch") {
+		t.Error("the twitch row must not be touched by a youtube toggle attempt")
+	}
+}
+
+// TestPostgresClient_Snapshot: sorted by key, scoped to the platform, and
+// carrying the targeting arrays as they round-trip through the TEXT[] columns.
+func TestPostgresClient_Snapshot(t *testing.T) {
+	db := testdb.New(t)
+	ctx := context.Background()
+	insertFlag(t, db, flagRow{
+		Key:                 "test.zzz",
+		Platform:            "twitch",
+		Description:         "last by key",
+		EnabledForUsernames: []string{"dana", "someone_else"},
+		EnabledForRoles:     []string{"mod", "vip"},
+	})
+	insertFlag(t, db, flagRow{Key: "test.aaa", Platform: "twitch"})
+	insertFlag(t, db, flagRow{Key: "test.hidden", Platform: "youtube"})
+
+	c, err := NewPostgresClient(ctx, db, time.Minute, "twitch")
+	if err != nil {
+		t.Fatalf("NewPostgresClient: %v", err)
+	}
+
+	snap := c.Snapshot(ctx)
+	byKey := map[string]Flag{}
+	for i, f := range snap {
+		if i > 0 && snap[i-1].Key > f.Key {
+			t.Errorf("snapshot not sorted by key: %q before %q", snap[i-1].Key, f.Key)
+		}
+		byKey[f.Key] = f
+	}
+	if _, ok := byKey["test.hidden"]; ok {
+		t.Error("snapshot must not include another platform's rows")
+	}
+	if _, ok := byKey["test.aaa"]; !ok {
+		t.Error("snapshot missing test.aaa")
+	}
+	zzz, ok := byKey["test.zzz"]
+	if !ok {
+		t.Fatal("snapshot missing test.zzz")
+	}
+	if zzz.Description != "last by key" {
+		t.Errorf("description not loaded: %q", zzz.Description)
+	}
+	if len(zzz.EnabledForUsernames) != 2 || zzz.EnabledForUsernames[0] != "dana" {
+		t.Errorf("enabled_for_usernames round-trip: %#v", zzz.EnabledForUsernames)
+	}
+	if len(zzz.EnabledForRoles) != 2 || zzz.EnabledForRoles[1] != "vip" {
+		t.Errorf("enabled_for_roles round-trip: %#v", zzz.EnabledForRoles)
+	}
+	if zzz.TargetRemovalDate.IsZero() {
+		t.Error("target_removal_date not loaded")
 	}
 }
