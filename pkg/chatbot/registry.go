@@ -206,6 +206,12 @@ func (a *App) buildRegistry() []Command {
 			RequiresFollow: true,
 		},
 		{
+			Trigger:        "!achievements",
+			Aliases:        []string{"!achievement", "!badges"},
+			Handler:        a.achievementsCmd,
+			RequiresFollow: true,
+		},
+		{
 			// admin-gated inside the handler (broadcaster-only)
 			Trigger: "!givemiles",
 			Handler: a.giveMilesCmd,

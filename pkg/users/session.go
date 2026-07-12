@@ -349,3 +349,18 @@ func (s *Sessions) LoggedInCount() int {
 	defer s.mu.Unlock()
 	return len(s.loggedIn)
 }
+
+// LoggedInHumans returns the usernames of everyone currently in chat,
+// excluding bots.
+func (s *Sessions) LoggedInHumans() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	names := make([]string, 0, len(s.loggedIn))
+	for name, u := range s.loggedIn {
+		if u.IsBot {
+			continue
+		}
+		names = append(names, name)
+	}
+	return names
+}
