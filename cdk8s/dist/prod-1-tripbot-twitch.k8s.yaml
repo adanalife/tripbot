@@ -73,7 +73,7 @@ spec:
             - secretRef:
                 name: tripbot-discord-bot-token
                 optional: true
-          image: adanalife/tripbot:3.16.1
+          image: adanalife/tripbot:3.17.0
           imagePullPolicy: IfNotPresent
           livenessProbe:
             httpGet:
@@ -117,7 +117,7 @@ spec:
                 name: tripbot-twitch-config
             - secretRef:
                 name: tripbot-database-creds
-          image: adanalife/tripbot:3.16.1
+          image: adanalife/tripbot:3.17.0
           imagePullPolicy: IfNotPresent
           name: migrate
           resources:

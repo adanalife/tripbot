@@ -9,6 +9,22 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v3.17.0] — 2026-07-12
+
+### Chatbot
+
+- Facebook platform support: a `PLATFORM=facebook` instance runs chat through gateway-facebook in both directions — inbound live-video comments through the shared gateway poller and the v1 command allowlist, and (a first outside Twitch) outbound command replies posted to the live video as the Page. ([#1088](https://github.com/adanalife/tripbot/pull/1088))
+
+### VLC
+
+- Measure clip-boundary dead-air as a `vlc_player_media_swap_gap_seconds` histogram — armed when a clip ends (or a skip is requested), observed when the next clip reaches Playing, stamped per platform. ([#1124](https://github.com/adanalife/tripbot/pull/1124))
+
+### Fixes
+
+- Events writers honor `READ_ONLY` even when `VERBOSE` is off — read-only mode skipped DB writes only when both were set. ([#1092](https://github.com/adanalife/tripbot/pull/1092))
+- Guard the Twitch audience cache (subscribers, chatters, chatter count) with a mutex so the refresh crons and readers no longer race. ([#1093](https://github.com/adanalife/tripbot/pull/1093))
+- The streaming-platform metric attribute is now injected when the vlc-server/OBS stats publishers are constructed, removing a mutable package global that pollers read while it could be reassigned. ([#1103](https://github.com/adanalife/tripbot/pull/1103))
+
 ## [v3.16.1] — 2026-07-11
 
 ### Fixes
