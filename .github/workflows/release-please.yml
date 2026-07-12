@@ -1,0 +1,124 @@
+name: release-please
+# Trunk-based release flow: release-please maintains a standing release PR on
+# main — the next version + prod pins, computed from the conventional commits
+# since the last release. `skip-changelog` is set because this repo keeps
+# towncrier: the "Build changelog + re-synth" step below collates the
+# changelog.d/ fragments into CHANGELOG.md (and re-synths cdk8s/dist to match
+# the prod pins release-please just bumped) on the release PR branch, so the
+# built changelog + synced dist land atomically with the version bump when the
+# PR squash-merges. The re-synthed prod dist IS the deploy diff: prod-1
+# autosyncs from main, so merging the release PR deploys tripbot. The
+# stream-sensitive components (vlc, onscreens-server) are NOT deployed here —
+# their pins move via per-component bump PRs (bump-prs.yml, fired by
+# release.yml once the images exist), so their restarts are separate,
+# deliberately-timed merges.
+#
+# Merging the release PR creates the vX.Y.Z tag + GitHub Release; release.yml is
+# then dispatched explicitly at that tag because GITHUB_TOKEN-created tags don't
+# fire push triggers.
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write # tag + GitHub Release + release-PR branch
+  pull-requests: write # open/update the release PR
+  actions: write # dispatch release.yml
+
+concurrency:
+  group: release-please
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: googleapis/release-please-action@v5
+        id: release
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+      # On the standing-release-PR run (not the release-created run), stage the
+      # towncrier changelog + re-synthed dist onto the PR branch. Pushed with the
+      # automation app token so the push fires the PR's pull_request events (CI
+      # gates re-run against the final release state); a GITHUB_TOKEN push
+      # wouldn't. release-please recreates this branch from main on every push,
+      # so this rebuild is idempotent.
+      - name: Mint automation app token
+        if: ${{ steps.release.outputs.pr && !steps.release.outputs.release_created }}
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.AUTOMATION_APP_ID }}
+          private-key: ${{ secrets.AUTOMATION_APP_PRIVATE_KEY }}
+
+      - name: Check out the release PR branch
+        if: ${{ steps.release.outputs.pr && !steps.release.outputs.release_created }}
+        uses: actions/checkout@v7
+        with:
+          ref: release-please--branches--main
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
+
+      # Toolchain for the cdk8s re-synth (cdk8s/.mise.toml pins python / node /
+      # cdk8s-cli; uv handles the project-local Python deps on top).
+      - uses: jdx/mise-action@v4
+        if: ${{ steps.release.outputs.pr && !steps.release.outputs.release_created }}
+        with:
+          working_directory: cdk8s
+
+      - uses: astral-sh/setup-uv@v7
+        if: ${{ steps.release.outputs.pr && !steps.release.outputs.release_created }}
+
+      - name: Build changelog + re-synth cdk8s on the release PR branch
+        if: ${{ steps.release.outputs.pr && !steps.release.outputs.release_created }}
+        run: |
+          set -euo pipefail
+          # release-please bumped the manifest on this branch — the version is
+          # the single source of truth for both the changelog and the cut tag.
+          VERSION=$(jq -r '."."' .release-please-manifest.json)
+          echo "Release version: $VERSION"
+
+          # Collate the towncrier fragments (if any) into CHANGELOG.md + delete
+          # them. A release PR can exist with no fragments (a fix: whose entry
+          # was skip-changelog'd) — that's not an error, just no changelog
+          # stanza.
+          if compgen -G "changelog.d/*.md" > /dev/null; then
+            uvx towncrier build --yes --config towncrier.toml --version "$VERSION"
+          fi
+
+          # release-please bumped tripbot's prod pin in cdk8s/versions.yaml; a
+          # full (unfrozen) re-synth regenerates the prod-1 app manifests, so
+          # the dist diff on this PR shows tripbot's complete deploy — the
+          # image tag AND any manifest/config change this release introduced.
+          # (The freeze in `task cdk8s:synth` is for BETWEEN releases; release
+          # time is exactly when tripbot's prod dist regenerates.)
+          cd cdk8s
+          uv sync
+          mise exec -- uv run cdk8s import
+          mise exec -- uv run cdk8s synth
+          # Only tripbot's pin moved — vlc/onscreens deploy via their own bump
+          # PRs (bump-prs.yml) — so restore every other prod component to its
+          # committed pinned manifests, which the unfrozen synth above
+          # regenerated from HEAD (same freeze as `task cdk8s:prod:bump`).
+          git ls-files -- 'dist/prod-1-*-twitch.k8s.yaml' 'dist/prod-1-*-youtube.k8s.yaml' \
+            | { grep -v 'prod-1-tripbot-' || true; } \
+            | xargs -r git checkout --
+          cd ..
+
+          if ! git diff --quiet || [ -n "$(git status --porcelain)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -A
+            git commit -m "chore: build changelog + re-synth dist for $VERSION"
+            git push origin HEAD:release-please--branches--main
+          fi
+
+      - name: Dispatch release workflow at the new tag
+        if: ${{ steps.release.outputs.release_created }}
+        run: gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref "${{ steps.release.outputs.tag_name }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

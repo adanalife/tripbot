@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/scoreboards"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/gorilla/mux"
+	"gorm.io/gorm"
 )
 
 // findUser / sessionCount / monthlyMiles are the data seams the profile handler
@@ -70,15 +72,22 @@ func gatherUserProfile(ctx context.Context, username string) userProfile {
 	if username == "" {
 		return prof
 	}
-	if u := findUser(ctx, username); u.ID != 0 {
-		prof.Found = true
-		prof.IsBot = u.IsBot
-		prof.Miles = u.Miles
-		prof.MonthlyMiles = monthlyMiles(ctx, u)
-		prof.FirstSeen = bestEffortFirstSeen(u.FirstSeen, u.DateCreated, earliestEvent(ctx, u.Platform, username))
-		prof.LastSeen = u.LastSeen
-		prof.Sessions = sessionCount(ctx, username)
+	u, err := findUser(ctx, username)
+	if err != nil {
+		// not-found renders as Found=false; a real DB error does too, but
+		// gets logged so it's visible as a failure rather than a ghost user.
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			slog.ErrorContext(ctx, "error finding user", "err", err, "username", username)
+		}
+		return prof
 	}
+	prof.Found = true
+	prof.IsBot = u.IsBot
+	prof.Miles = u.Miles
+	prof.MonthlyMiles = monthlyMiles(ctx, u)
+	prof.FirstSeen = bestEffortFirstSeen(u.FirstSeen, u.DateCreated, earliestEvent(ctx, u.Platform, username))
+	prof.LastSeen = u.LastSeen
+	prof.Sessions = sessionCount(ctx, username)
 	return prof
 }
 

@@ -257,7 +257,12 @@ func (a *App) runCommand(ctx context.Context, user *users.User, message string) 
 // so the command path stays platform-agnostic.
 type IncomingMessage struct {
 	User string // sender's platform username (Twitch sends display-case)
-	Text string // the message body, original case
+	// UserID is the sender's platform-native stable user ID (Twitch user ID,
+	// YouTube channel ID, …). User can be a mutable display name on some
+	// platforms, so this is the identity key for any future viewer
+	// persistence or cross-platform linking. Carried, not yet consumed.
+	UserID string
+	Text   string // the message body, original case
 }
 
 // HandleMessage processes one inbound chat message: records it (Loki + the
@@ -314,7 +319,7 @@ func (a *App) HandleWhisper(msg IncomingMessage) {
 // command path never learns about platforms.
 
 func (a *App) onTwitchMessage(msg twitch.PrivateMessage) {
-	a.HandleMessage(context.Background(), IncomingMessage{User: msg.User.Name, Text: msg.Message})
+	a.HandleMessage(context.Background(), IncomingMessage{User: msg.User.Name, UserID: msg.User.ID, Text: msg.Message})
 }
 
 func (a *App) onTwitchJoin(joinMessage twitch.UserJoinMessage) {
@@ -326,5 +331,5 @@ func (a *App) onTwitchPart(partMessage twitch.UserPartMessage) {
 }
 
 func (a *App) onTwitchWhisper(message twitch.WhisperMessage) {
-	a.HandleWhisper(IncomingMessage{User: message.User.Name, Text: message.Message})
+	a.HandleWhisper(IncomingMessage{User: message.User.Name, UserID: message.User.ID, Text: message.Message})
 }

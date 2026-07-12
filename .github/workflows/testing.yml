@@ -1,8 +1,8 @@
 name: testing
 on:
   pull_request:
-    # Docs/cdk8s/workflow-only PRs don't need the compose test stack. Push
-    # to develop/master and tag builds stay unfiltered as the safety net.
+    # Docs/cdk8s/workflow-only PRs don't need the compose test stack. Pushes
+    # to main stay unfiltered as the safety net.
     paths:
       - 'cmd/**'
       - 'pkg/**'
@@ -12,14 +12,12 @@ on:
       - 'configs/**'
       - 'assets/**'
       - 'infra/docker/**'
+      - '.env.testing'
       - 'Taskfile.yml'
       - '.github/workflows/testing.yml'
   push:
     branches:
-      - develop
-      - master
-    tags:
-      - v*
+      - main
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -31,7 +29,7 @@ jobs:
     timeout-minutes: 30
     steps:
     - uses: actions/checkout@v7
-    - uses: arduino/setup-task@v2
+    - uses: arduino/setup-task@v3
       with:
         version: 3.x
         repo-token: ${{ secrets.GITHUB_TOKEN }}

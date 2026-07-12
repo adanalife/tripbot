@@ -266,8 +266,9 @@ func (a *App) buildRegistry() []Command {
 // platform (Kick, TikTok, …) comes online; platform-specific commands then
 // reference it via Command.Platforms.
 const (
-	platformTwitch  = "twitch"
-	platformYouTube = "youtube"
+	platformTwitch   = "twitch"
+	platformYouTube  = "youtube"
+	platformFacebook = "facebook"
 )
 
 // platform returns this App's platform, normalizing the empty/unset value to
@@ -282,15 +283,16 @@ func (a *App) platform() string {
 	return a.Platform
 }
 
-// youtubeCommands is the v1 allowlist of triggers a YouTube instance runs — the
-// "info + playback control" subset, plus the !state/!location info commands.
+// v1Commands is the allowlist of triggers a v1-rollout platform instance
+// (YouTube, Facebook) runs — the "info + playback control" subset, plus the
+// !state/!location info commands.
 // Identity/miles commands (!miles, !leaderboard, !guess, …), the Twitch-only
 // !followage, and the admin commands (!middle, !secretinfo, !shutdown, !makebot,
 // !unbot) are excluded: those are per-user identity/score state. The now-playing /
 // SomaFM commands (!song, !music, !somafm) are also deferred for now — the
 // background-audio source is Twitch-stream-specific. Aliases come along with
 // their trigger, so only triggers are listed. See the YouTube provider plan.
-var youtubeCommands = map[string]bool{
+var v1Commands = map[string]bool{
 	"!help": true, "!version": true, "!uptime": true, "!commands": true,
 	"!gas": true, "!report": true,
 	// info (read current-video state only)
@@ -311,17 +313,18 @@ var youtubeCommands = map[string]bool{
 //     command with a non-nil Platforms is governed solely by it — indexed on
 //     exactly the listed platforms, on every platform. This is symmetric: no
 //     platform is special, and a new Kick/TikTok-only command just lists itself.
-//  2. Cross-platform commands (Platforms == nil): YouTube is still a v1
-//     rollout, so it runs only the vetted youtubeCommands allowlist; mature
-//     platforms (Twitch, and any future fully-rolled-out platform) run them all.
-//     As more platforms graduate from v1 this allowlist gate may invert, but
-//     that's a future call.
+//  2. Cross-platform commands (Platforms == nil): YouTube and Facebook are
+//     still v1 rollouts, so they run only the vetted v1Commands allowlist;
+//     mature platforms (Twitch, and any future fully-rolled-out platform) run
+//     them all. As more platforms graduate from v1 this allowlist gate may
+//     invert, but that's a future call.
 func (a *App) commandEnabled(cmd *Command) bool {
 	if len(cmd.Platforms) > 0 {
 		return slices.Contains(cmd.Platforms, a.platform())
 	}
-	if a.platform() == platformYouTube {
-		return youtubeCommands[cmd.Trigger]
+	switch a.platform() {
+	case platformYouTube, platformFacebook:
+		return v1Commands[cmd.Trigger]
 	}
 	return true
 }

@@ -16,7 +16,9 @@ func (cl *API) SetSubscribers(logins []string) {
 	for i, login := range logins {
 		subs[i] = strings.ToLower(login)
 	}
+	cl.audienceMu.Lock()
 	cl.subscribers = subs
+	cl.audienceMu.Unlock()
 	instrumentation.TwitchAudience.SetSubscribers(int64(len(subs)))
 }
 
@@ -29,11 +31,15 @@ func (cl *API) SetChatters(logins []string, count int) {
 	for i, login := range logins {
 		chatters[i] = helix.ChatChatter{UserLogin: login}
 	}
+	cl.audienceMu.Lock()
 	cl.currentChatters = chatters
 	cl.chatterCount = count
+	cl.audienceMu.Unlock()
 }
 
 // UserIsSubscriber returns true if the user subscribes to the channel.
 func (cl *API) UserIsSubscriber(username string) bool {
+	cl.audienceMu.RLock()
+	defer cl.audienceMu.RUnlock()
 	return slices.Contains(cl.subscribers, username)
 }

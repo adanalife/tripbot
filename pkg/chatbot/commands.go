@@ -24,6 +24,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/feature"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/users"
+	"github.com/adanalife/tripbot/pkg/video"
 	"github.com/getsentry/sentry-go"
 	"github.com/hako/durafmt"
 	"gorm.io/gorm"
@@ -179,11 +180,16 @@ func (a *App) milesCmd(ctx context.Context, user *users.User, params []string) {
 		monthlyMiles = a.Sessions.CurrentMonthlyMiles(ctx, *user)
 	} else {
 		username = helpers.StripAtSign(params[0])
-		u := a.Sessions.Find(ctx, username)
+		u, err := a.Sessions.Find(ctx, username)
 
 		// check to see if they are in our DB
-		if u.ID == 0 {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			a.Chat.Say("I don't know them, sorry!")
+			return
+		}
+		if err != nil {
+			slog.ErrorContext(ctx, "error finding user", "err", err, "username", username)
+			a.Chat.Say("Couldn't look them up right now, try again in a bit")
 			return
 		}
 
@@ -235,11 +241,16 @@ func (a *App) kilometresCmd(ctx context.Context, user *users.User, params []stri
 		miles = a.Sessions.CurrentMiles(ctx, *user)
 	} else {
 		username = helpers.StripAtSign(params[0])
-		u := a.Sessions.Find(ctx, username)
+		u, err := a.Sessions.Find(ctx, username)
 
 		// check to see if they are in our DB
-		if u.ID == 0 {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			a.Chat.Say("I don't know them, sorry!")
+			return
+		}
+		if err != nil {
+			slog.ErrorContext(ctx, "error finding user", "err", err, "username", username)
+			a.Chat.Say("Couldn't look them up right now, try again in a bit")
 			return
 		}
 
@@ -257,7 +268,13 @@ func (a *App) sunsetCmd(ctx context.Context, user *users.User, _ []string) {
 	vid := a.Video.Current()
 	if vid.Flagged {
 		a.Chat.Say("I couldn't figure out current GPS coords, using next closest...")
-		vid = vid.Next(ctx)
+		next, err := vid.Next(ctx)
+		if err != nil {
+			slog.ErrorContext(ctx, "error finding next unflagged video", "err", err)
+			a.Chat.Say("I couldn't figure out current GPS coords, sorry!")
+			return
+		}
+		vid = next
 	}
 	lat, lng, _ := vid.Location()
 	a.Chat.Say(helpers.SunsetStr(vid.DateFilmed, lat, lng))
@@ -276,7 +293,13 @@ func (a *App) weatherCmd(ctx context.Context, user *users.User, _ []string) {
 	vid := a.Video.Current()
 	if vid.Flagged {
 		a.Chat.Say("I couldn't figure out current GPS coords, using next closest...")
-		vid = vid.Next(ctx)
+		next, err := vid.Next(ctx)
+		if err != nil {
+			slog.ErrorContext(ctx, "error finding next unflagged video", "err", err)
+			a.Chat.Say("I couldn't figure out current GPS coords, sorry!")
+			return
+		}
+		vid = next
 	}
 	lat, lng, _ := vid.Location()
 	desc, err := a.Weather.Historical(ctx, vid.DateFilmed, lat, lng)
@@ -295,7 +318,13 @@ func (a *App) locationCmd(ctx context.Context, user *users.User, _ []string) {
 		a.Chat.Say("I couldn't figure out current GPS coords, using next closest...")
 		//TODO: write something like vid.FindClosest() that
 		// chooses whether or not to use Next() vs Prev()
-		vid = vid.Next(ctx)
+		next, err := vid.Next(ctx)
+		if err != nil {
+			slog.ErrorContext(ctx, "error finding next unflagged video", "err", err)
+			a.Chat.Say("I couldn't figure out current GPS coords, sorry!")
+			return
+		}
+		vid = next
 	}
 	// extract the coordinates
 	lat, lng, err := vid.Location()
@@ -398,7 +427,11 @@ func (a *App) timeCmd(ctx context.Context, user *users.User, _ []string) {
 	var lat, lng float64
 	vid := a.Video.Current()
 	if vid.Flagged {
-		lat, lng, err = vid.Next(ctx).Location()
+		var next video.Video
+		next, err = vid.Next(ctx)
+		if err == nil {
+			lat, lng, err = next.Location()
+		}
 	} else {
 		lat, lng, err = vid.Location()
 	}
@@ -417,7 +450,11 @@ func (a *App) dateCmd(ctx context.Context, user *users.User, _ []string) {
 	var lat, lng float64
 	vid := a.Video.Current()
 	if vid.Flagged {
-		lat, lng, err = vid.Next(ctx).Location()
+		var next video.Video
+		next, err = vid.Next(ctx)
+		if err == nil {
+			lat, lng, err = next.Location()
+		}
 	} else {
 		lat, lng, err = vid.Location()
 	}
@@ -468,7 +505,13 @@ func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 	vid := a.Video.Current()
 	if vid.Flagged {
 		a.Chat.Say("I couldn't figure out current GPS coords, using next closest...")
-		vid = vid.Next(ctx)
+		next, err := vid.Next(ctx)
+		if err != nil {
+			slog.ErrorContext(ctx, "error finding next unflagged video", "err", err)
+			a.Chat.Say("I couldn't figure out current GPS coords, sorry!")
+			return
+		}
+		vid = next
 	}
 
 	if strings.EqualFold(guess, vid.State) {
@@ -489,7 +532,13 @@ func (a *App) stateCmd(ctx context.Context, user *users.User, _ []string) {
 	vid := a.Video.Current()
 	if vid.Flagged {
 		a.Chat.Say("I couldn't figure out current GPS coords, using next closest...")
-		vid = vid.Next(ctx)
+		next, err := vid.Next(ctx)
+		if err != nil {
+			slog.ErrorContext(ctx, "error finding next unflagged video", "err", err)
+			a.Chat.Say("I couldn't figure out current GPS coords, sorry!")
+			return
+		}
+		vid = next
 	}
 	msg := fmt.Sprintf("We're in %s", vid.State)
 	// record that they know the location now
@@ -499,16 +548,19 @@ func (a *App) stateCmd(ctx context.Context, user *users.User, _ []string) {
 
 // TODO: maybe there could be a !cancel command or something
 // reportReporter is the label a !report is attributed to in its downstream
-// sinks (the Sentry error event and the Discord alert). YouTube viewers are
-// anonymized because v1 punts YouTube identity entirely (see the youtubeCommands
-// allowlist) — until real YouTube user support lands there is no persisted
+// sinks (the Sentry error event and the Discord alert). Viewers on v1-rollout
+// platforms are anonymized because v1 punts their identity entirely (see the
+// v1Commands allowlist) — until real user support lands there is no persisted
 // identity to stand behind, so the name is kept out of those durable/external
 // sinks. Twitch reports keep the username. Note the transient 14-day Loki chat
 // line still carries the name for every message; this only governs the report's
 // longer-lived sinks.
 func reportReporter(platform, username string) string {
-	if platform == platformYouTube {
+	switch platform {
+	case platformYouTube:
 		return "a youtube viewer"
+	case platformFacebook:
+		return "a facebook viewer"
 	}
 	return username
 }
@@ -623,8 +675,13 @@ func (a *App) giveMilesCmd(ctx context.Context, user *users.User, params []strin
 		a.Chat.Say("that amount isn't a number I understand")
 		return
 	}
-	if u := a.Sessions.Find(ctx, target); u.ID == 0 {
-		a.Chat.Say("I don't know them, sorry!")
+	if _, err := a.Sessions.Find(ctx, target); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			a.Chat.Say("I don't know them, sorry!")
+		} else {
+			slog.ErrorContext(ctx, "error finding user", "err", err, "username", target)
+			a.Chat.Say("Couldn't look them up right now, try again in a bit")
+		}
 		return
 	}
 	newTotal := a.Sessions.CorrectMiles(ctx, target, float32(delta))
@@ -664,7 +721,7 @@ func (a *App) shutdownCmd(ctx context.Context, user *users.User, _ []string) {
 		slog.ErrorContext(ctx, "cron shutdown failed during !shutdown", "err", err)
 	}
 	a.Sessions.Shutdown(ctx)
-	err := database.Connection().Close()
+	err := database.Close()
 	if err != nil {
 		slog.ErrorContext(ctx, "DB close failed during shutdown", "err", err)
 	}

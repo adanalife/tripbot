@@ -136,19 +136,30 @@ func (v Video) save(ctx context.Context) error {
 	return database.GormDB().WithContext(ctx).Create(&insert).Error
 }
 
-// Next() finds the next unflagged video
+// Next() finds the next unflagged video by walking the next_vid chain.
+// The walk is bounded by the playlist length, so a broken chain or a
+// cycle of flagged videos returns an error instead of spinning forever.
 // TODO: should this be NextUnflagged?
-// TODO: handle errors in here?
-func (v Video) Next(ctx context.Context) Video {
+func (v Video) Next(ctx context.Context) (Video, error) {
+	var count int64
+	if err := database.GormDB().WithContext(ctx).Model(&Video{}).Count(&count).Error; err != nil {
+		return Video{}, err
+	}
+
 	vid := v
-	for { // ever
-		vid, _ = loadById(ctx, vid.NextVid.Int64)
+	for i := int64(0); i < count; i++ {
+		nextID := vid.NextVid.Int64
+		var err error
+		vid, err = loadById(ctx, nextID)
+		if err != nil {
+			return Video{}, fmt.Errorf("broken next_vid chain at id %d: %w", nextID, err)
+		}
 		// use the first unflagged video we find
 		if !vid.Flagged {
-			break
+			return vid, nil
 		}
 	}
-	return vid
+	return Video{}, errors.New("no unflagged video found in next_vid chain")
 }
 
 func (v Video) SetNextVid(ctx context.Context, nextVid Video) error {

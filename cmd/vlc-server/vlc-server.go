@@ -4,7 +4,6 @@ import (
 	"context"
 	"log"
 	"log/slog"
-	"math/rand"
 	"os"
 	"os/signal"
 	"syscall"
@@ -14,7 +13,6 @@ import (
 
 	c "github.com/adanalife/tripbot/pkg/config/vlc-server"
 	"github.com/adanalife/tripbot/pkg/helpers"
-	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"github.com/adanalife/tripbot/pkg/natsclient"
 	"github.com/adanalife/tripbot/pkg/obs"
 	"github.com/adanalife/tripbot/pkg/telemetry"
@@ -39,9 +37,6 @@ func main() {
 	if helpers.RunningOnDarwin() {
 		log.Fatal("This doesn't yet work on darwin")
 	}
-
-	// create a brand new random seed
-	rand.Seed(time.Now().UnixNano())
 
 	// write the current pid to a pidfile
 	helpers.WritePidFile(c.Conf.VLCPidFile)
@@ -75,11 +70,6 @@ func main() {
 
 	// set up telemetry (no-op if OTEL_SDK_DISABLED)
 	initializeTelemetry()
-
-	// stamp the streaming platform onto the vlc-server/OBS gauges so the
-	// per-platform instances (twitch/youtube/…) stay distinct series instead
-	// of colliding on identical labels. Must run before the stats pollers.
-	instrumentation.SetPlatform(c.Conf.Platform)
 
 	// set up error logging
 	initializeErrorLogger()
@@ -115,8 +105,10 @@ func main() {
 	// No-op publishes when NATS is off.
 	srv.StartLastPlayedTicker(shutdownCtx, 5*time.Second)
 
-	// poll the OBS WebSocket for streaming state + render/output stats.
-	go obs.PollStreamingActive(context.Background(), 30*time.Second)
+	// poll the OBS WebSocket for streaming state + render/output stats,
+	// stamping the series with this instance's streaming platform so the
+	// per-platform instances (twitch/youtube/…) stay distinct.
+	go obs.PollStreamingActive(context.Background(), c.Conf.Platform, 30*time.Second)
 
 	// Self-heal watchdog: probes the local RTSP listener; after 3
 	// consecutive DESCRIBE failures (90s of sustained badness with the

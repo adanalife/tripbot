@@ -11,6 +11,7 @@ import (
 
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/gorilla/mux"
+	"gorm.io/gorm"
 )
 
 // withProfileSeams stubs the DB-backed data reads so the handler renders without
@@ -21,7 +22,13 @@ func withProfileSeams(t *testing.T, u users.User, sessions int64, monthly float3
 	t.Cleanup(func() {
 		findUser, sessionCount, monthlyMiles, earliestEvent = savedFind, savedCount, savedMonthly, savedEarliest
 	})
-	findUser = func(context.Context, string) users.User { return u }
+	findUser = func(context.Context, string) (users.User, error) {
+		// mirror pkg/users.Find's contract: a staged zero-ID user means "no row"
+		if u.ID == 0 {
+			return users.User{}, gorm.ErrRecordNotFound
+		}
+		return u, nil
+	}
 	sessionCount = func(context.Context, string) int64 { return sessions }
 	monthlyMiles = func(context.Context, users.User) float32 { return monthly }
 	// default: no surviving event history. Tests exercising the first-seen

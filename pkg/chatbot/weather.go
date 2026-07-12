@@ -28,10 +28,17 @@ type Weather interface {
 // weather here when this was filmed" for the 2018 dashcam corpus.
 const openMeteoArchiveURL = "https://archive-api.open-meteo.com/v1/archive"
 
+// weatherHTTPTimeout bounds the archive fetch so a hung Open-Meteo response
+// can't stall the chat handler.
+const weatherHTTPTimeout = 5 * time.Second
+
 // realWeather queries the Open-Meteo archive over HTTP.
 type realWeather struct{}
 
 func (realWeather) Historical(ctx context.Context, when time.Time, lat, lng float64) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, weatherHTTPTimeout)
+	defer cancel()
+
 	date := when.Format("2006-01-02")
 	u := fmt.Sprintf(
 		"%s?latitude=%.4f&longitude=%.4f&start_date=%s&end_date=%s&hourly=temperature_2m,weather_code&temperature_unit=fahrenheit&timezone=auto",

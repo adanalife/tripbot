@@ -4,8 +4,8 @@
 # locally instead of in CI. The authoritative gate stays CI + the skip-changelog
 # PR label; this is a fast local pre-flight.
 #
-# Auto-skipped on develop/master/release/backmerge branches (they carry no
-# fragment). Bypass for genuinely fragment-less work (CI-only tweaks, refactors,
+# Auto-skipped on main and the release-please branch (they carry no fragment).
+# Bypass for genuinely fragment-less work (CI-only tweaks, refactors,
 # dep bumps):
 #   SKIP_CHANGELOG=1 git push     (then add the skip-changelog label on the PR)
 #   git push --no-verify          (skips all pre-push hooks)
@@ -15,10 +15,10 @@ set -euo pipefail
 
 branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo HEAD)"
 case "$branch" in
-  develop | master | release/* | backmerge/*) exit 0 ;;
+  main | release-please--branches--main) exit 0 ;;
 esac
 
-base="origin/develop"
+base="origin/main"
 git rev-parse --verify --quiet "$base" >/dev/null 2>&1 || exit 0
 
 if uvx towncrier check --config towncrier.toml --compare-with "$base"; then

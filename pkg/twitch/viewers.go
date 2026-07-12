@@ -17,12 +17,16 @@ func (cl *API) SetChannelID(id string) {
 // ChatterCount returns the number of chatters as reported by Twitch, cached
 // from the gateway via SetChatters.
 func (cl *API) ChatterCount() int {
+	cl.audienceMu.RLock()
+	defer cl.audienceMu.RUnlock()
 	return cl.chatterCount
 }
 
 // Chatters returns a set of current chatter logins, cached from the gateway via
 // SetChatters.
 func (cl *API) Chatters() map[string]struct{} {
+	cl.audienceMu.RLock()
+	defer cl.audienceMu.RUnlock()
 	chatters := make(map[string]struct{})
 	for _, chatter := range cl.currentChatters {
 		chatters[chatter.UserLogin] = struct{}{}

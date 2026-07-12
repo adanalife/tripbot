@@ -1,0 +1,118 @@
+# Reusable multi-arch image build: the matrix-on-native-runners + manifest-list
+# pattern shared by release.yml (versioned tags) and dev-image.yml (floating
+# :main). Each arch builds natively (amd64 on ubuntu-latest, arm64 on
+# ubuntu-24.04-arm — no QEMU for the cgo/libvlc compiles), pushes per-arch tags
+# like `:3.1.0-amd64` (bare version, no `v`), then the manifest job assembles
+# the un-suffixed multi-arch list `:3.1.0` per tag. Per-arch tags stay published
+# as the debugging escape hatch (pinnable when isolating arch-specific
+# behavior).
+#
+# Base images come from the GHCR mirrors (see mirror-images.yml) — CI never
+# pulls from Docker Hub at build time.
+name: build-image
+
+on:
+  workflow_call:
+    inputs:
+      image:
+        description: 'Docker Hub repository (e.g. adanalife/tripbot)'
+        required: true
+        type: string
+      dockerfile:
+        description: 'Dockerfile path (e.g. infra/docker/tripbot/Dockerfile)'
+        required: true
+        type: string
+      cache-scope:
+        description: 'GHA layer-cache scope prefix (per-arch suffix is appended)'
+        required: true
+        type: string
+      version:
+        description: 'Version string stamped into /etc/tripbot/version'
+        required: true
+        type: string
+      tags:
+        description: 'Whitespace-separated image tags to publish (the first one is used for the stamp verification)'
+        required: true
+        type: string
+
+jobs:
+  build:
+    name: build (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Generate per-arch tags
+        id: meta
+        run: |
+          {
+            echo 'refs<<EOF'
+            for t in ${{ inputs.tags }}; do
+              echo "${{ inputs.image }}:${t}-${{ matrix.arch }}"
+            done
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build & push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ${{ inputs.dockerfile }}
+          tags: ${{ steps.meta.outputs.refs }}
+          push: true
+          # load the image into the local daemon too, so the verify step
+          # runs it without pulling back from Docker Hub (quota)
+          load: true
+          build-args: |
+            VERSION=${{ inputs.version }}
+            SHA=${{ github.sha }}
+          cache-from: type=gha,scope=${{ inputs.cache-scope }}-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=${{ inputs.cache-scope }}-${{ matrix.arch }}
+
+      - name: Verify version stamping
+        run: |
+          set -- ${{ inputs.tags }}
+          IMAGE="${{ inputs.image }}:${1}-${{ matrix.arch }}"
+          .github/scripts/verify-stamped-image.sh "$IMAGE" \
+            "${{ inputs.version }}" "${{ github.sha }}"
+
+  manifest:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Create multi-arch manifest lists
+        run: |
+          for t in ${{ inputs.tags }}; do
+            tag="${{ inputs.image }}:${t}"
+            echo "==> $tag = $tag-amd64 + $tag-arm64"
+            docker buildx imagetools create -t "$tag" "$tag-amd64" "$tag-arm64"
+          done
