@@ -39,9 +39,6 @@ type TripbotConfig struct {
 	// MapsOutputDir is where generated maps will be stored
 	MapsOutputDir string `default:"/opt/data/maps" envconfig:"MAPS_OUTPUT_DIR"`
 
-	// TripbotPidFile is where the tripbot PID is written
-	TripbotPidFile string `default:"/opt/data/run/tripbot.pid" envconfig:"TRIPBOT_PIDFILE"`
-
 	// TripbotServerPort is used to specify the port on which the webserver runs
 	TripbotServerPort string `default:"8080" envconfig:"TRIPBOT_SERVER_PORT"`
 	// VlcServerHost is used to specify the host for the VLC webserver
@@ -104,6 +101,15 @@ type TripbotConfig struct {
 	// responses via onscreens / playback effects). Required on an instagram
 	// instance — with this empty the instance comes up without Instagram chat.
 	InstagramAPIURL string `envconfig:"INSTAGRAM_API_URL"`
+
+	// TikTokAPIURL points a PLATFORM=tiktok instance at the platform-gateway
+	// gateway-tiktok instance over HTTP — e.g.
+	// http://gateway-tiktok.<env>.svc.cluster.local:8080. Inbound-only: the
+	// gateway reads LIVE chat off TikTok's webcast; TikTok has no chat-post
+	// API, so outbound Say is dropped (viewers get responses via onscreens /
+	// playback effects). Required on a tiktok instance — with this empty the
+	// instance comes up without TikTok chat.
+	TikTokAPIURL string `envconfig:"TIKTOK_API_URL"`
 
 	// NatsURL is the in-cluster NATS endpoint used for fire-and-forget
 	// inter-component events. Format:

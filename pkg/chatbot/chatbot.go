@@ -26,9 +26,10 @@ var Uptime time.Time
 // live one with New(); tests instantiate it directly with fakes.
 type App struct {
 	// Platform names the streaming platform this App serves ("twitch" /
-	// "youtube"). It gates which commands are indexed for dispatch
-	// (indexCommands): Twitch runs the full registry, YouTube runs the v1
-	// allowlist. Empty is treated as Twitch. Set from c.Conf.Platform in New().
+	// "youtube" / "tiktok"). It gates which commands are indexed for dispatch
+	// (indexCommands): Twitch runs the full registry, YouTube and TikTok run
+	// the v1 allowlist. Empty is treated as Twitch. Set from c.Conf.Platform
+	// in New().
 	Platform string
 	// botless, when true, makes the rotating Chatter / !help lines advertise
 	// promo copy (follow on Twitch, interactivity coming soon) instead of

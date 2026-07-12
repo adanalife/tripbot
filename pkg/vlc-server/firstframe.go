@@ -15,8 +15,8 @@ import (
 
 const (
 	// nextFrameFileName is the single-slot cover-frame cache filename.
-	// Lives in RunDir alongside the pidfile so it shares the same
-	// writable mount and gets cleaned up on pod restart.
+	// Lives in RunDir alongside the watchdog's resume marker so it shares
+	// the same writable mount and gets cleaned up on pod restart.
 	nextFrameFileName = "next-frame.jpg"
 
 	// ffmpegExtractTimeout caps each extraction so a wedged ffmpeg can't

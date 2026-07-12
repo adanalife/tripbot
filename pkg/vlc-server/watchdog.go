@@ -31,8 +31,7 @@ const rtspProbeAddr = "localhost:8554"
 const resumeMarkerName = "vlc-server-resume-from.txt"
 
 // ResumeMarkerPath returns the absolute path to the resume marker, scoped
-// to the configured RunDir so it shares the same writable volume as the
-// pidfile.
+// to the configured RunDir so it lands on a writable volume.
 func ResumeMarkerPath() string {
 	return filepath.Join(c.Conf.RunDir, resumeMarkerName)
 }

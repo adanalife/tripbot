@@ -75,15 +75,18 @@ class OnscreensServer(Construct):
                 k8s.EnvFromSource(
                     config_map_ref=k8s.ConfigMapEnvSource(name=f"{name}-config")
                 ),
-                # onscreens-server reports to its own Sentry project.
+                # onscreens-server reports to its own Sentry project. The
+                # observability Secrets are optional so the pod can start
+                # before the ExternalSecrets sync; Sentry/OTLP just gate off
+                # when the env vars are absent.
                 k8s.EnvFromSource(
                     secret_ref=k8s.SecretEnvSource(
-                        name="sentry-onscreens-server", optional=False
+                        name="sentry-onscreens-server", optional=True
                     )
                 ),
                 k8s.EnvFromSource(
                     secret_ref=k8s.SecretEnvSource(
-                        name="grafana-cloud-otlp", optional=False
+                        name="grafana-cloud-otlp", optional=True
                     )
                 ),
             ],
@@ -109,7 +112,7 @@ class OnscreensServer(Construct):
                 },
                 limits={"memory": k8s.Quantity.from_string("128Mi")},
             ),
-            # Writable tmpfs scratch for the RUN_DIR pidfile — nothing durable.
+            # Writable tmpfs scratch for RUN_DIR — nothing durable.
             volume_mounts=[k8s.VolumeMount(name="run", mount_path=RUN_DIR)],
         )
 

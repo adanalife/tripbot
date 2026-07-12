@@ -5,30 +5,19 @@ import (
 	"log"
 	"log/slog"
 	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
-	terrors "github.com/adanalife/tripbot/pkg/errors"
-
+	"github.com/adanalife/tripbot/pkg/bootstrap"
 	c "github.com/adanalife/tripbot/pkg/config/vlc-server"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/natsclient"
 	"github.com/adanalife/tripbot/pkg/obs"
-	"github.com/adanalife/tripbot/pkg/telemetry"
 	vlcServer "github.com/adanalife/tripbot/pkg/vlc-server"
-	"github.com/getsentry/sentry-go"
 	"github.com/nats-io/nats.go"
 )
 
 // version is overridable at build time via -ldflags "-X main.version=...".
 var version = "dev"
-
-var telemetryShutdown telemetry.ShutdownFunc
-
-// srv is the running vlc-server, captured in main so gracefulShutdown can
-// reach it from its signal-handler goroutine.
-var srv *vlcServer.Server
 
 func main() {
 	slog.Info("vlc-server starting", "version", version)
@@ -38,15 +27,12 @@ func main() {
 		log.Fatal("This doesn't yet work on darwin")
 	}
 
-	// write the current pid to a pidfile
-	helpers.WritePidFile(c.Conf.VLCPidFile)
-
-	// shutdownCtx is canceled on SIGINT/SIGTERM; the HTTP server uses it
-	// to trigger a graceful shutdown so in-flight requests aren't cut.
-	// listenForShutdown's gracefulShutdown goroutine handles the rest of
-	// the app cleanup off the same signals.
-	shutdownCtx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stopSignals()
+	// ctx is canceled on SIGINT/SIGTERM; every background goroutine hangs
+	// off it, srv.Start returns when it cancels, the deferred drain runs,
+	// and the process exits 0. There is no separate signal-handler
+	// goroutine — this is the only shutdown path.
+	ctx, flush := bootstrap.Start("vlc-server", version, c.Conf)
+	defer flush()
 
 	// Connect to NATS so Server.Start can attach the command subscribers.
 	// Optional — when NATS_URL is empty the conn is nil and the subscriber
@@ -60,68 +46,55 @@ func main() {
 	// the boot race and connects late. Best-effort: resume-on-restart
 	// degrades to PlayRandom without it.
 	natsclient.Connect(c.Conf.NatsURL, "vlc-server", func(*nats.Conn) {
-		if err := vlcServer.EnsureLastPlayedStream(shutdownCtx, natsclient.JetStream(), c.Conf.Environment); err != nil {
+		if err := vlcServer.EnsureLastPlayedStream(ctx, natsclient.JetStream(), c.Conf.Environment); err != nil {
 			slog.Warn("lastplayed stream setup failed; resume-on-restart disabled", "err", err)
 		}
 	})
 
-	// await graceful shutdown signal
-	listenForShutdown()
-
-	// set up telemetry (no-op if OTEL_SDK_DISABLED)
-	initializeTelemetry()
-
-	// set up error logging
-	initializeErrorLogger()
-
 	// start VLC + load media; surfaces libvlc init errors instead of
 	// fatalling-during-init from inside the package.
-	var err error
-	srv, err = vlcServer.New(vlcServer.Config{Version: version})
+	srv, err := vlcServer.New(vlcServer.Config{Version: version})
 	if err != nil {
 		log.Fatal(err)
 	}
-	// On normal exit (Start returns when shutdownCtx is canceled), drain
-	// the HTTP server with a bounded ctx and release libvlc. The
-	// gracefulShutdown goroutine below also calls Shutdown for the
-	// os.Exit path — Shutdown tolerates being invoked twice (libvlc
-	// Release is a no-op when the instance is already released).
+	// Once Start returns (ctx canceled or listen failure), drain the HTTP
+	// server with a bounded ctx and release libvlc — before the deferred
+	// flush above sends the exporter backlog.
 	defer func() {
 		drainCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		srv.Shutdown(drainCtx)
 	}()
 
-	pickStartupVideo(shutdownCtx, srv)
+	pickStartupVideo(ctx, srv)
 
 	// poll libvlc for playback stats (FPS, bitrate, dropped frames) and
 	// surface them as OTel gauges. No-op when telemetry is disabled.
-	// Tied to shutdownCtx so the poller goroutine exits cleanly on
-	// SIGINT/SIGTERM.
-	srv.StartStatsPoller(shutdownCtx, 5*time.Second)
+	// Tied to ctx so the poller goroutine exits cleanly on SIGINT/SIGTERM.
+	srv.StartStatsPoller(ctx, 5*time.Second)
 
 	// keep the JetStream lastplayed last-value cache tracking the playback
 	// position, so a restart resumes mid-clip (at worst one interval behind).
 	// No-op publishes when NATS is off.
-	srv.StartLastPlayedTicker(shutdownCtx, 5*time.Second)
+	srv.StartLastPlayedTicker(ctx, 5*time.Second)
 
 	// poll the OBS WebSocket for streaming state + render/output stats,
 	// stamping the series with this instance's streaming platform so the
 	// per-platform instances (twitch/youtube/…) stay distinct.
-	go obs.PollStreamingActive(context.Background(), c.Conf.Platform, 30*time.Second)
+	go obs.PollStreamingActive(ctx, c.Conf.Platform, 30*time.Second)
 
 	// Self-heal watchdog: probes the local RTSP listener; after 3
 	// consecutive DESCRIBE failures (90s of sustained badness with the
-	// 30s interval), writes a resume marker and signals SIGTERM so
-	// supervisord respawns vlc-server. See pkg/vlc-server/watchdog.go.
-	srv.StartRTSPWatchdog(shutdownCtx, 30*time.Second, 3, 30*time.Second)
+	// 30s interval), writes a resume marker and signals SIGTERM so the
+	// pod's restartPolicy respawns vlc-server. See pkg/vlc-server/watchdog.go.
+	srv.StartRTSPWatchdog(ctx, 30*time.Second, 3, 30*time.Second)
 
 	// Cover-frame refresher: re-extracts the next video's first frame
 	// whenever the playing video changes. See pkg/vlc-server/firstframe.go.
-	srv.StartNextFrameRefresher(shutdownCtx, 5*time.Second)
+	srv.StartNextFrameRefresher(ctx, 5*time.Second)
 
-	// start the webserver
-	srv.Start(shutdownCtx)
+	// start the webserver — blocks until the signal context cancels
+	srv.Start(ctx)
 }
 
 // pickStartupVideo picks the startup video, trying the most specific resume
@@ -169,58 +142,4 @@ func resumeFromMarker(ctx context.Context, srv *vlcServer.Server) bool {
 	}
 	srv.SeekToPosition(ctx, posMs)
 	return true
-}
-
-// initializeTelemetry brings up OpenTelemetry providers (traces, metrics,
-// logs). No-ops cleanly if OTEL_SDK_DISABLED is set or no OTLP endpoint
-// is configured — see pkg/telemetry.
-func initializeTelemetry() {
-	ctx := context.Background()
-	shutdown, err := telemetry.Init(ctx, "vlc-server", version)
-	if err != nil {
-		slog.WarnContext(ctx, "telemetry init failed", "err", err)
-	}
-	telemetryShutdown = shutdown
-}
-
-// initializeErrorLogger makes sure the logger is configured
-func initializeErrorLogger() {
-	terrors.Initialize(c.Conf, version)
-}
-
-// listenForShutdown creates a background job that listens for a graceful shutdown request
-func listenForShutdown() {
-	// start the graceful shutdown listener
-	go gracefulShutdown()
-}
-
-// gracefulShutdown catches CTRL-C and cleans up
-func gracefulShutdown() {
-	ctrlC := make(chan os.Signal)
-	signal.Notify(ctrlC,
-		os.Interrupt,
-		syscall.SIGHUP,
-		syscall.SIGINT,
-		syscall.SIGTERM,
-		syscall.SIGQUIT)
-
-	// wait for signal
-	<-ctrlC
-
-	slog.Warn("caught CTRL-C, shutting down")
-	if srv != nil {
-		drainCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		srv.Shutdown(drainCtx)
-		cancel()
-	}
-	//TODO: stop cron here
-	sentry.Flush(time.Second * 5)
-	if telemetryShutdown != nil {
-		flushCtx, cancel := context.WithTimeout(context.Background(), time.Second*5)
-		if err := telemetryShutdown(flushCtx); err != nil {
-			slog.ErrorContext(flushCtx, "telemetry shutdown failed", "err", err)
-		}
-		cancel()
-	}
-	os.Exit(1)
 }

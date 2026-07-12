@@ -142,14 +142,17 @@ class VlcServer(Construct):
                 k8s.EnvFromSource(
                     config_map_ref=k8s.ConfigMapEnvSource(name=f"{name}-config")
                 ),
+                # Observability Secrets are optional so the pod can start
+                # before the ExternalSecrets sync; Sentry/OTLP just gate off
+                # when the env vars are absent.
                 k8s.EnvFromSource(
                     secret_ref=k8s.SecretEnvSource(
-                        name="sentry-vlc-server", optional=False
+                        name="sentry-vlc-server", optional=True
                     )
                 ),
                 k8s.EnvFromSource(
                     secret_ref=k8s.SecretEnvSource(
-                        name="grafana-cloud-otlp", optional=False
+                        name="grafana-cloud-otlp", optional=True
                     )
                 ),
             ],

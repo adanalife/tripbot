@@ -151,6 +151,24 @@ func TestYouTubePlatformIndexesOnlyAllowlist(t *testing.T) {
 	}
 }
 
+// TestTikTokPlatformIndexesOnlyAllowlist verifies a TikTok App runs the same
+// v1 cross-platform allowlist, and that platform-scoped commands stay on their
+// platform (!carsound is YouTube-only).
+func TestTikTokPlatformIndexesOnlyAllowlist(t *testing.T) {
+	tk := &App{Platform: platformTikTok}
+	tk.indexCommands()
+	for _, token := range []string{"!skip", "!timewarp", "!location", "!tiktok"} {
+		if cmd, _ := tk.findCommand(token); cmd == nil {
+			t.Errorf("expected %q to be available on TikTok, got nil", token)
+		}
+	}
+	for _, token := range []string{"!miles", "!guess", "!shutdown", "!carsound"} {
+		if cmd, _ := tk.findCommand(token); cmd != nil {
+			t.Errorf("expected %q to be unavailable on TikTok, got %q", token, cmd.Trigger)
+		}
+	}
+}
+
 // TestCommandsCmdFiltersByPlatform verifies the !commands reply advertises only
 // commands dispatchable on the App's platform — Twitch lists the disabled-on-
 // YouTube ones (!guess, !miles, !leaderboard); YouTube does not, but still
