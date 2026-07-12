@@ -39,7 +39,7 @@ func (f inboundChatFunc) InboundChat(ctx context.Context, cursor string) (gatewa
 	return f(ctx, cursor)
 }
 
-func TestGatewayYouTubeChatPoller_FeedsMessagesAndAdvancesCursor(t *testing.T) {
+func TestGatewayChatPoller_FeedsMessagesAndAdvancesCursor(t *testing.T) {
 	pages := []gateway.InboundChatPage{
 		{Messages: []gateway.InboundChatMessage{{Author: "A", Text: "!miles"}, {Author: "B", Text: "hi"}}, Cursor: "c1", Live: true, PollAfterMS: 1},
 		{Cursor: "c2", Live: true, PollAfterMS: 1},
@@ -59,7 +59,7 @@ func TestGatewayYouTubeChatPoller_FeedsMessagesAndAdvancesCursor(t *testing.T) {
 	})
 
 	var handled []IncomingMessage
-	p := &gatewayYouTubeChatPoller{
+	p := &gatewayChatPoller{
 		client:    fake,
 		handle:    func(_ context.Context, m IncomingMessage) { handled = append(handled, m) },
 		pollFloor: time.Millisecond,

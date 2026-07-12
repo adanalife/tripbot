@@ -106,12 +106,12 @@ repos:
 
   # Conventional Commits — enforce `type(scope): summary` on commit messages so
   # history stays machine-parseable: it feeds the towncrier changelog fragments,
-  # sets up future release automation (release-please et al.), and gives every
+  # drives release-please's version computation, and gives every
   # contributor/agent the same commit grammar without re-explaining it. Runs at
   # the commit-msg stage; default_install_hook_types (top of file) wires it up
-  # on `pre-commit install`. Note this guards LOCAL commits — since develop PRs
+  # on `pre-commit install`. Note this guards LOCAL commits — since PRs
   # squash-merge, the PR *title* becomes the squash subject, so keep PR titles
-  # conventional too.
+  # conventional too (pr-title.yml enforces that).
   - repo: https://github.com/compilerla/conventional-pre-commit
     rev: v4.4.0
     hooks:

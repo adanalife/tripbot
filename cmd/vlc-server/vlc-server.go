@@ -4,14 +4,12 @@ import (
 	"context"
 	"log"
 	"log/slog"
-	"math/rand"
 	"os"
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/bootstrap"
 	c "github.com/adanalife/tripbot/pkg/config/vlc-server"
 	"github.com/adanalife/tripbot/pkg/helpers"
-	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"github.com/adanalife/tripbot/pkg/natsclient"
 	"github.com/adanalife/tripbot/pkg/obs"
 	vlcServer "github.com/adanalife/tripbot/pkg/vlc-server"
@@ -28,9 +26,6 @@ func main() {
 	if helpers.RunningOnDarwin() {
 		log.Fatal("This doesn't yet work on darwin")
 	}
-
-	// create a brand new random seed
-	rand.Seed(time.Now().UnixNano())
 
 	// ctx is canceled on SIGINT/SIGTERM; every background goroutine hangs
 	// off it, srv.Start returns when it cancels, the deferred drain runs,
@@ -55,11 +50,6 @@ func main() {
 			slog.Warn("lastplayed stream setup failed; resume-on-restart disabled", "err", err)
 		}
 	})
-
-	// stamp the streaming platform onto the vlc-server/OBS gauges so the
-	// per-platform instances (twitch/youtube/…) stay distinct series instead
-	// of colliding on identical labels. Must run before the stats pollers.
-	instrumentation.SetPlatform(c.Conf.Platform)
 
 	// start VLC + load media; surfaces libvlc init errors instead of
 	// fatalling-during-init from inside the package.
@@ -88,8 +78,10 @@ func main() {
 	// No-op publishes when NATS is off.
 	srv.StartLastPlayedTicker(ctx, 5*time.Second)
 
-	// poll the OBS WebSocket for streaming state + render/output stats.
-	go obs.PollStreamingActive(ctx, 30*time.Second)
+	// poll the OBS WebSocket for streaming state + render/output stats,
+	// stamping the series with this instance's streaming platform so the
+	// per-platform instances (twitch/youtube/…) stay distinct.
+	go obs.PollStreamingActive(ctx, c.Conf.Platform, 30*time.Second)
 
 	// Self-heal watchdog: probes the local RTSP listener; after 3
 	// consecutive DESCRIBE failures (90s of sustained badness with the

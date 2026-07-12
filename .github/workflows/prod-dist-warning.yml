@@ -1,18 +1,15 @@
 name: prod-dist-warning
 
-# Warn on PRs into master that change a prod (prod-1) app deploy unit. prod-1
-# apps autosync from master (AUTOSYNC_ENVS in infra's argocd.py), so MERGING
-# such a PR deploys the change to prod — no separate gesture. That's obvious on
-# the per-component version-bump PRs, but easy to miss on a release PR
-# (develop → master) that happens to carry a manifest-shape change to a prod
-# dist/ file (e.g. a resource-claim or env tweak). This posts a sticky comment
-# so the merge isn't done unaware.
-#
-# Lives on master so it runs against release PRs (pull_request uses the workflow
-# definition from the PR's base branch); reaches master via the normal release.
+# Warn on PRs into main that change a prod (prod-1) app deploy unit. prod-1
+# apps autosync from main (AUTOSYNC_ENVS in infra's argocd.py), so MERGING
+# such a PR deploys the change to prod — no separate gesture. That's expected
+# on release-please's release PR (its re-synthed dist IS the deploy: vlc's
+# restart briefly drops the playing video, so merge at a quiet moment), but
+# easy to miss on a hand-edited pin rollback or any other PR that touches a
+# prod dist/ file. This posts a sticky comment so the merge isn't done unaware.
 on:
   pull_request:
-    branches: [master]
+    branches: [main]
 
 permissions:
   contents: read
@@ -34,7 +31,7 @@ jobs:
           HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
           # Three-dot diff = the PR's own changes (merge-base..head), so a stale
-          # master doesn't produce false positives. Scope to the per-component
+          # main doesn't produce false positives. Scope to the per-component
           # app units (`prod-1-*-twitch.k8s.yaml`) — these are the autosynced
           # deploy targets; jobs/identity/seed units aren't.
           FILES=$(git diff --name-only "$BASE...$HEAD" -- 'cdk8s/dist/prod-1-*-twitch.k8s.yaml')
@@ -60,7 +57,7 @@ jobs:
           message: |
             ⚠️ **This PR changes prod (`prod-1`) app deploy units.**
 
-            prod-1 apps **autosync from `master`**, so **merging this PR deploys the change to prod** — no separate step. A change to the `vlc` unit means a brief stream impact when the pod restarts.
+            prod-1 apps **autosync from `main`**, so **merging this PR deploys the change to prod** — no separate step. A change to the `vlc` unit means a brief stream impact when the pod restarts.
 
             Changed:
             ${{ steps.detect.outputs.list }}

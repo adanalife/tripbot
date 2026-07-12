@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"math/rand"
 	"os"
 	"time"
 
@@ -183,7 +182,7 @@ func NewTripbot(version string) *Tripbot {
 	// rotators the clip's location/date in place of command hints. Gated by the
 	// same flag as the rest of the bot-less presentation; reuses the chatbot's
 	// Geocoder (pkg/geo default, set up in ConnectYouTubeViaGateway).
-	if !platformIsTwitch() && !c.Conf.YouTubeInboundEnabled {
+	if c.Conf.Platform == "youtube" && !c.Conf.YouTubeInboundEnabled {
 		t.locationFeed = locationfeed.New(
 			onscreensClient.New(natsclient.DefaultPublisher(), c.Conf.Environment, c.Conf.Platform),
 			t.app.Geocoder,
@@ -211,7 +210,6 @@ func platformIsTwitch() bool {
 // instances.
 func (t *Tripbot) Run() {
 	slog.Info("tripbot starting", "version", t.version, "platform", c.Conf.Platform)
-	createRandomSeed()
 	// ctx is canceled on SIGINT/SIGTERM; every background goroutine hangs
 	// off it and the HTTP server uses it to trigger its graceful drain.
 	// When the blocking chat loop returns, t.shutdown runs the cleanup
@@ -257,6 +255,8 @@ func (t *Tripbot) Run() {
 		t.startSilentDisconnectWatchdog(ctx) // watches the OBS→Twitch stream specifically
 		t.startBackgroundAudioWatchdog(ctx)  // keeps audible music on-stream when SomaFM drops
 		t.connectToTwitch(ctx)               // blocks until shutdown
+	} else if c.Conf.Platform == "facebook" {
+		t.connectToFacebook(ctx) // blocks until shutdown
 	} else {
 		t.connectToYouTube(ctx) // blocks until shutdown
 	}
@@ -284,7 +284,7 @@ func (t *Tripbot) connectToYouTube(ctx context.Context) {
 
 	t.app.ConnectYouTubeViaGateway()
 	if c.Conf.YouTubeInboundEnabled {
-		go t.app.NewGatewayYouTubeChatPoller().Run(ctx)
+		go t.app.NewGatewayChatPoller(c.Conf.YouTubeAPIURL).Run(ctx)
 		slog.InfoContext(ctx, "youtube chat via gateway (inbound + outbound)", "gateway", c.Conf.YouTubeAPIURL)
 	} else {
 		// Bot-less mode: outbound posting (rotators) + background jobs stay up,
@@ -298,6 +298,34 @@ func (t *Tripbot) connectToYouTube(ctx context.Context) {
 
 	// nothing else to do on the main goroutine — the poller and HTTP server
 	// run until shutdown begins.
+	<-ctx.Done()
+}
+
+// connectToFacebook wires a PLATFORM=facebook instance's chat — both
+// directions — through gateway-facebook, then blocks until shutdown. The
+// gateway owns the Page access token and the live-video resolution, so
+// tripbot holds no Facebook credential: outbound sends go via
+// gateway-facebook's SendChat (a Page comment on the live video), inbound
+// chat via its GET /v1/chat/inbound poll.
+//
+// FACEBOOK_API_URL is required — without the gateway URL there's no way to
+// reach Facebook. A misconfigured instance comes up Ready with everything
+// else working but no Facebook chat, logging loudly (the same "stay up with
+// limited functionality" contract as connectToYouTube).
+func (t *Tripbot) connectToFacebook(ctx context.Context) {
+	if c.Conf.FacebookAPIURL == "" {
+		slog.ErrorContext(ctx, "FACEBOOK_API_URL unset; facebook chat disabled",
+			"fix", "set FACEBOOK_API_URL to the gateway-facebook service URL")
+		<-ctx.Done()
+		return
+	}
+
+	t.app.ConnectFacebookViaGateway()
+	go t.app.NewGatewayChatPoller(c.Conf.FacebookAPIURL).Run(ctx)
+	slog.InfoContext(ctx, "facebook chat via gateway (inbound + outbound)", "gateway", c.Conf.FacebookAPIURL)
+
+	// nothing else to do on the main goroutine — the poller and HTTP server
+	// run until the signal handler shuts the process down.
 	<-ctx.Done()
 }
 
@@ -507,12 +535,6 @@ func (t *Tripbot) startEventSub(ctx context.Context) {
 	}()
 }
 
-// createRandomSeed ensures that random numbers will be random
-func createRandomSeed() {
-	// create a brand new random seed
-	rand.Seed(time.Now().UnixNano())
-}
-
 // startHttpServer starts a webserver, which is used for admin tools and
 // receiving webhooks, in a goroutine. The passed context is honored by the
 // server for graceful shutdown — when it's canceled, the server stops
@@ -718,7 +740,7 @@ func (t *Tripbot) shutdown(httpDone <-chan struct{}) {
 	}
 	t.sessions.Shutdown(context.Background())
 	<-httpDone
-	if err := database.Connection().Close(); err != nil {
+	if err := database.Close(); err != nil {
 		slog.Error("error closing DB connection", "err", err)
 	}
 }

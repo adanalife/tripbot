@@ -5,14 +5,17 @@ import (
 	"fmt"
 
 	"github.com/adanalife/tripbot/pkg/users"
+	"gorm.io/gorm"
 )
 
 // noopSessions satisfies Sessions for tests that don't care about user
-// lookups — Find returns the zero-value (unknown) user, the leaderboard
+// lookups — Find reports every user as unknown, the leaderboard
 // reads as empty, and Shutdown is a no-op.
 type noopSessions struct{}
 
-func (noopSessions) Find(_ context.Context, _ string) users.User                 { return users.User{} }
+func (noopSessions) Find(_ context.Context, _ string) (users.User, error) {
+	return users.User{}, gorm.ErrRecordNotFound
+}
 func (noopSessions) LifetimeLeaderboard() [][]string                             { return nil }
 func (noopSessions) Shutdown(_ context.Context)                                  {}
 func (noopSessions) SetBot(_ context.Context, _ string, _ bool) error            { return nil }
@@ -30,15 +33,25 @@ type recordingSessions struct {
 	Calls       []string
 	FindResult  users.User
 	Leaderboard [][]string
+	// FindErr is the error Find will return for every call. When unset and
+	// FindResult is the zero user, Find returns gorm.ErrRecordNotFound —
+	// mirroring pkg/users.Find's "not found" contract.
+	FindErr error
 	// SetBotErr is the error SetBot will return for every call.
 	SetBotErr error
 	// Miles / MonthlyMiles / Bonus stage what the miles methods return.
 	Miles, MonthlyMiles, Bonus float32
 }
 
-func (r *recordingSessions) Find(_ context.Context, username string) users.User {
+func (r *recordingSessions) Find(_ context.Context, username string) (users.User, error) {
 	r.Calls = append(r.Calls, fmt.Sprintf("Find(%q)", username))
-	return r.FindResult
+	if r.FindErr != nil {
+		return users.User{}, r.FindErr
+	}
+	if r.FindResult.ID == 0 {
+		return users.User{}, gorm.ErrRecordNotFound
+	}
+	return r.FindResult, nil
 }
 
 func (r *recordingSessions) LifetimeLeaderboard() [][]string {

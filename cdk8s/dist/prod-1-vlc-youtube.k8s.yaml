@@ -56,7 +56,7 @@ spec:
             - secretRef:
                 name: grafana-cloud-otlp
                 optional: false
-          image: adanalife/vlc:3.14.0
+          image: adanalife/vlc:3.16.1
           imagePullPolicy: IfNotPresent
           livenessProbe:
             httpGet:

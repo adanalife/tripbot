@@ -1,344 +1,92 @@
+# Versioned multi-arch release build for the three images built from this repo
+# (tripbot, vlc, onscreens-server), via the shared build-image.yml reusable
+# workflow. Publishes `X.Y.Z` / `vX.Y` / `vX` / `latest` manifest lists (plus
+# the per-arch `-amd64`/`-arm64` variants) to Docker Hub.
+#
+# NOT concurrency-guarded (unlike dev-image.yml): cancelling could drop a
+# version, and per-version tags don't race.
 name: release
 on:
   push:
     tags:
       - v*
+  # release-please.yml dispatches this at the tag it just created — a
+  # GITHUB_TOKEN-created tag can't fire the push trigger above. The push
+  # trigger stays for manually-pushed tags.
+  workflow_dispatch:
 
 jobs:
-  tripbot-build:
-    name: tripbot-build (${{ matrix.arch }})
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: amd64
-            runner: ubuntu-latest
-          - arch: arm64
-            runner: ubuntu-24.04-arm
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Resolve bare version
-        id: ver
-        run: echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Login to DockerHub
-        uses: docker/login-action@v4
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Generate tags
-        id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: adanalife/tripbot
-          flavor: |
-            latest=true
-            suffix=-${{ matrix.arch }},onlatest=true
-          tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern=v{{major}}.{{minor}}
-            type=semver,pattern=v{{major}}
-
-      - name: Build & push
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: infra/docker/tripbot/Dockerfile
-          tags: ${{ steps.meta.outputs.tags }}
-          push: true
-          # load the image into the local daemon too, so the verify step
-          # runs it without pulling back from Docker Hub (quota)
-          load: true
-          build-args: |
-            VERSION=${{ steps.ver.outputs.value }}
-            SHA=${{ github.sha }}
-          cache-from: type=gha,scope=tripbot-${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=tripbot-${{ matrix.arch }}
-
-      - name: Verify version stamping
-        run: |
-          IMAGE="adanalife/tripbot:${{ steps.ver.outputs.value }}-${{ matrix.arch }}"
-          .github/scripts/verify-stamped-image.sh "$IMAGE" \
-            "${{ steps.ver.outputs.value }}" "${{ github.sha }}"
-
-  tripbot-manifest:
-    needs: tripbot-build
+  version:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 15
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+      tags: ${{ steps.ver.outputs.tags }}
     steps:
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Login to DockerHub
-        uses: docker/login-action@v4
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Generate tags
-        id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: adanalife/tripbot
-          flavor: latest=true
-          tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern=v{{major}}.{{minor}}
-            type=semver,pattern=v{{major}}
-
-      - name: Create multi-arch manifest lists
-        run: |
-          while IFS= read -r tag; do
-            [ -z "$tag" ] && continue
-            echo "==> $tag = $tag-amd64 + $tag-arm64"
-            docker buildx imagetools create -t "$tag" "$tag-amd64" "$tag-arm64"
-          done <<< "${{ steps.meta.outputs.tags }}"
-
-  vlc-build:
-    name: vlc-build (${{ matrix.arch }})
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: amd64
-            runner: ubuntu-latest
-          - arch: arm64
-            runner: ubuntu-24.04-arm
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Resolve bare version
+      - name: Resolve version + release tag set
         id: ver
-        run: echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Login to DockerHub
-        uses: docker/login-action@v4
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Generate tags
-        id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: adanalife/vlc
-          flavor: |
-            latest=true
-            suffix=-${{ matrix.arch }},onlatest=true
-          tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern=v{{major}}.{{minor}}
-            type=semver,pattern=v{{major}}
-
-      - name: Build & push
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: infra/docker/vlc/Dockerfile
-          tags: ${{ steps.meta.outputs.tags }}
-          push: true
-          load: true
-          build-args: |
-            VERSION=${{ steps.ver.outputs.value }}
-            SHA=${{ github.sha }}
-          cache-from: type=gha,scope=vlc-${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=vlc-${{ matrix.arch }}
-
-      - name: Verify version stamping
         run: |
-          IMAGE="adanalife/vlc:${{ steps.ver.outputs.value }}-${{ matrix.arch }}"
-          .github/scripts/verify-stamped-image.sh "$IMAGE" \
-            "${{ steps.ver.outputs.value }}" "${{ github.sha }}"
+          set -euo pipefail
+          if [[ "$GITHUB_REF_NAME" != v[0-9]* ]]; then
+            echo "::error::release must run at a vX.Y.Z tag ref (got '$GITHUB_REF_NAME')"
+            exit 1
+          fi
+          V="${GITHUB_REF_NAME#v}"          # 3.16.0
+          MAJOR_MINOR="v${V%.*}"            # v3.16
+          MAJOR="v${V%%.*}"                 # v3
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "tags=$V $MAJOR_MINOR $MAJOR latest" >> "$GITHUB_OUTPUT"
 
-  vlc-manifest:
-    needs: vlc-build
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    steps:
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+  tripbot:
+    needs: version
+    uses: ./.github/workflows/build-image.yml
+    secrets: inherit
+    with:
+      image: adanalife/tripbot
+      dockerfile: infra/docker/tripbot/Dockerfile
+      cache-scope: tripbot
+      version: ${{ needs.version.outputs.version }}
+      tags: ${{ needs.version.outputs.tags }}
 
-      - name: Login to DockerHub
-        uses: docker/login-action@v4
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+  vlc:
+    needs: version
+    uses: ./.github/workflows/build-image.yml
+    secrets: inherit
+    with:
+      image: adanalife/vlc
+      dockerfile: infra/docker/vlc/Dockerfile
+      cache-scope: vlc
+      version: ${{ needs.version.outputs.version }}
+      tags: ${{ needs.version.outputs.tags }}
 
-      - name: Generate tags
-        id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: adanalife/vlc
-          flavor: latest=true
-          tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern=v{{major}}.{{minor}}
-            type=semver,pattern=v{{major}}
+  onscreens-server:
+    needs: version
+    uses: ./.github/workflows/build-image.yml
+    secrets: inherit
+    with:
+      image: adanalife/onscreens-server
+      dockerfile: infra/docker/onscreens-server/Dockerfile
+      cache-scope: onscreens-server
+      version: ${{ needs.version.outputs.version }}
+      tags: ${{ needs.version.outputs.tags }}
 
-      - name: Create multi-arch manifest lists
-        run: |
-          while IFS= read -r tag; do
-            [ -z "$tag" ] && continue
-            echo "==> $tag = $tag-amd64 + $tag-arm64"
-            docker buildx imagetools create -t "$tag" "$tag-amd64" "$tag-arm64"
-          done <<< "${{ steps.meta.outputs.tags }}"
-
-  onscreens-server-build:
-    name: onscreens-server-build (${{ matrix.arch }})
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: amd64
-            runner: ubuntu-latest
-          - arch: arm64
-            runner: ubuntu-24.04-arm
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Resolve bare version
-        id: ver
-        run: echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Login to DockerHub
-        uses: docker/login-action@v4
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Generate tags
-        id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: adanalife/onscreens-server
-          flavor: |
-            latest=true
-            suffix=-${{ matrix.arch }},onlatest=true
-          tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern=v{{major}}.{{minor}}
-            type=semver,pattern=v{{major}}
-
-      - name: Build & push
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: infra/docker/onscreens-server/Dockerfile
-          tags: ${{ steps.meta.outputs.tags }}
-          push: true
-          load: true
-          build-args: |
-            VERSION=${{ steps.ver.outputs.value }}
-            SHA=${{ github.sha }}
-          cache-from: type=gha,scope=onscreens-server-${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=onscreens-server-${{ matrix.arch }}
-
-      - name: Verify version stamping
-        run: |
-          IMAGE="adanalife/onscreens-server:${{ steps.ver.outputs.value }}-${{ matrix.arch }}"
-          .github/scripts/verify-stamped-image.sh "$IMAGE" \
-            "${{ steps.ver.outputs.value }}" "${{ github.sha }}"
-
-  onscreens-server-manifest:
-    needs: onscreens-server-build
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    steps:
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Login to DockerHub
-        uses: docker/login-action@v4
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Generate tags
-        id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: adanalife/onscreens-server
-          flavor: latest=true
-          tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern=v{{major}}.{{minor}}
-            type=semver,pattern=v{{major}}
-
-      - name: Create multi-arch manifest lists
-        run: |
-          while IFS= read -r tag; do
-            [ -z "$tag" ] && continue
-            echo "==> $tag = $tag-amd64 + $tag-arm64"
-            docker buildx imagetools create -t "$tag" "$tag-amd64" "$tag-arm64"
-          done <<< "${{ steps.meta.outputs.tags }}"
-
-  # The auto-tag flow (bump-version.yml) creates only a git tag; this is what
-  # makes the tag show up as a real GitHub Release with auto-generated notes
-  # (the infra bump PRs link to it).
-  github-release:
-    needs: [tripbot-manifest, vlc-manifest, onscreens-server-manifest]
+  # Offer the stream-sensitive components as per-component deploy PRs once
+  # their images exist. tripbot deploys with the release PR itself (see
+  # release-please.yml), so it needs no bump PR.
+  bump-prs:
+    needs: [version, vlc, onscreens-server]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
-      contents: write
+      actions: write
     steps:
-      - name: Create GitHub release
+      - name: Dispatch bump-prs with the released version
+        run: gh workflow run bump-prs.yml --repo "$GITHUB_REPOSITORY" --ref main -f version="${{ needs.version.outputs.version }}"
         env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
-            --title "$GITHUB_REF_NAME" --generate-notes --verify-tag
-
-  # Fan out the prod version-bump PRs: the in-repo bump-prs workflow opens one
-  # Dependabot-style "bump prod <component>" PR per image against master (merge =
-  # deploy). Relocated here from infra once the manifests moved into this repo —
-  # it now edits this repo's cdk8s/versions.yaml.
-  # Auths as the adanalife-automation GitHub App (credentials fanned out by
-  # infra's terraform/platform): the App token mints workflow runs whose later
-  # bump commits re-trigger the cdk8s synth gate (GITHUB_TOKEN commits would not).
-  bump-prod-pins:
-    needs: [tripbot-manifest, vlc-manifest, onscreens-server-manifest]
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - name: Mint automation app token
-        id: app-token
-        uses: actions/create-github-app-token@v3
-        with:
-          app-id: ${{ vars.AUTOMATION_APP_ID }}
-          private-key: ${{ secrets.AUTOMATION_APP_PRIVATE_KEY }}
-          owner: adanalife
-          repositories: tripbot
-
-      - name: Trigger the bump-prs workflow for this release
-        env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
-        run: |
-          gh workflow run bump-prs.yml --repo "$GITHUB_REPOSITORY" \
-            -f "version=${GITHUB_REF_NAME#v}"
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   notify:
-    needs: [tripbot-manifest, vlc-manifest, onscreens-server-manifest]
+    needs: [tripbot, vlc, onscreens-server]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

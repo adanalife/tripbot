@@ -56,6 +56,11 @@ func (c *Client) City(lat, lon float64) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	// The SDK can return a nil error with zero addresses (e.g. ZERO_RESULTS
+	// for coords outside any mapped area); indexing would panic.
+	if len(addresses) == 0 {
+		return "", fmt.Errorf("reverse geocode returned no addresses for %f,%f", lat, lon)
+	}
 	address := addresses[0]
 	if address.City == "" {
 		return fmt.Sprintf("Somewhere in %s", address.State), nil
@@ -72,6 +77,9 @@ func (c *Client) State(lat, lon float64) (string, error) {
 	addresses, err := geocoder.GeocodingReverse(geocoder.Location{Latitude: lat, Longitude: lon})
 	if err != nil {
 		return "", err
+	}
+	if len(addresses) == 0 {
+		return "", fmt.Errorf("reverse geocode returned no addresses for %f,%f", lat, lon)
 	}
 	return addresses[0].State, nil
 }

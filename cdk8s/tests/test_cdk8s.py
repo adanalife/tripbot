@@ -84,7 +84,7 @@ def test_obs_websocket_addr_is_platform_scoped(env, comp, platform):
 @pytest.mark.parametrize("env,platform", [("prod-1", "twitch"), ("stage-1", "youtube")])
 def test_prod_pinned_stage_floats(env, platform):
     """prod deploys the exact versions.yaml pin with IfNotPresent; stage floats
-    on develop with Always."""
+    on main with Always."""
     pins = yaml.safe_load(VERSIONS.read_text())
     dep = _by_kind(_objects(f"{env}-tripbot-{platform}"), "Deployment")[0]
     container = next(
@@ -98,7 +98,7 @@ def test_prod_pinned_stage_floats(env, platform):
         assert tag == pins["prod-1"]["tripbot"]
         assert container["imagePullPolicy"] == "IfNotPresent"
     else:
-        assert tag == "develop"
+        assert tag == "main"
         assert container["imagePullPolicy"] == "Always"
 
 
