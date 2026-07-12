@@ -548,16 +548,19 @@ func (a *App) stateCmd(ctx context.Context, user *users.User, _ []string) {
 
 // TODO: maybe there could be a !cancel command or something
 // reportReporter is the label a !report is attributed to in its downstream
-// sinks (the Sentry error event and the Discord alert). YouTube viewers are
-// anonymized because v1 punts YouTube identity entirely (see the youtubeCommands
-// allowlist) — until real YouTube user support lands there is no persisted
+// sinks (the Sentry error event and the Discord alert). Viewers on v1-rollout
+// platforms are anonymized because v1 punts their identity entirely (see the
+// v1Commands allowlist) — until real user support lands there is no persisted
 // identity to stand behind, so the name is kept out of those durable/external
 // sinks. Twitch reports keep the username. Note the transient 14-day Loki chat
 // line still carries the name for every message; this only governs the report's
 // longer-lived sinks.
 func reportReporter(platform, username string) string {
-	if platform == platformYouTube {
+	switch platform {
+	case platformYouTube:
 		return "a youtube viewer"
+	case platformFacebook:
+		return "a facebook viewer"
 	}
 	return username
 }

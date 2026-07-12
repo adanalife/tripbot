@@ -190,7 +190,7 @@ func NewTripbot(version string) *Tripbot {
 	// rotators the clip's location/date in place of command hints. Gated by the
 	// same flag as the rest of the bot-less presentation; reuses the chatbot's
 	// Geocoder (pkg/geo default, set up in ConnectYouTubeViaGateway).
-	if !platformIsTwitch() && !c.Conf.YouTubeInboundEnabled {
+	if c.Conf.Platform == "youtube" && !c.Conf.YouTubeInboundEnabled {
 		t.locationFeed = locationfeed.New(
 			onscreensClient.New(natsclient.DefaultPublisher(), c.Conf.Environment, c.Conf.Platform),
 			t.app.Geocoder,
@@ -254,7 +254,11 @@ func (t *Tripbot) Run() {
 	t.startAuthStatusEmitter(shutdownCtx)    // after startNATS: publishes auth.status snapshots for the standalone console
 	t.startOBSRefreshSubscriber(shutdownCtx) // after startNATS: per-platform (each instance owns its OBS), so before the YouTube early-return
 	if !platformIsTwitch() {
-		t.connectToYouTube(shutdownCtx)
+		if c.Conf.Platform == "facebook" {
+			t.connectToFacebook(shutdownCtx)
+		} else {
+			t.connectToYouTube(shutdownCtx)
+		}
 		return
 	}
 	// chat.send subjects are per-env, not per-platform — both platform
@@ -289,7 +293,7 @@ func (t *Tripbot) connectToYouTube(ctx context.Context) {
 
 	t.app.ConnectYouTubeViaGateway()
 	if c.Conf.YouTubeInboundEnabled {
-		go t.app.NewGatewayYouTubeChatPoller().Run(ctx)
+		go t.app.NewGatewayChatPoller(c.Conf.YouTubeAPIURL).Run(ctx)
 		slog.InfoContext(ctx, "youtube chat via gateway (inbound + outbound)", "gateway", c.Conf.YouTubeAPIURL)
 	} else {
 		// Bot-less mode: outbound posting (rotators) + background jobs stay up,
@@ -300,6 +304,34 @@ func (t *Tripbot) connectToYouTube(ctx context.Context) {
 		slog.WarnContext(ctx, "youtube inbound chat disabled (bot-less mode); outbound + jobs only",
 			"gateway", c.Conf.YouTubeAPIURL, "fix", "set YOUTUBE_INBOUND_ENABLED=true to read chat")
 	}
+
+	// nothing else to do on the main goroutine — the poller and HTTP server
+	// run until the signal handler shuts the process down.
+	<-ctx.Done()
+}
+
+// connectToFacebook wires a PLATFORM=facebook instance's chat — both
+// directions — through gateway-facebook, then blocks until shutdown. The
+// gateway owns the Page access token and the live-video resolution, so
+// tripbot holds no Facebook credential: outbound sends go via
+// gateway-facebook's SendChat (a Page comment on the live video), inbound
+// chat via its GET /v1/chat/inbound poll.
+//
+// FACEBOOK_API_URL is required — without the gateway URL there's no way to
+// reach Facebook. A misconfigured instance comes up Ready with everything
+// else working but no Facebook chat, logging loudly (the same "stay up with
+// limited functionality" contract as connectToYouTube).
+func (t *Tripbot) connectToFacebook(ctx context.Context) {
+	if c.Conf.FacebookAPIURL == "" {
+		slog.ErrorContext(ctx, "FACEBOOK_API_URL unset; facebook chat disabled",
+			"fix", "set FACEBOOK_API_URL to the gateway-facebook service URL")
+		<-ctx.Done()
+		return
+	}
+
+	t.app.ConnectFacebookViaGateway()
+	go t.app.NewGatewayChatPoller(c.Conf.FacebookAPIURL).Run(ctx)
+	slog.InfoContext(ctx, "facebook chat via gateway (inbound + outbound)", "gateway", c.Conf.FacebookAPIURL)
 
 	// nothing else to do on the main goroutine — the poller and HTTP server
 	// run until the signal handler shuts the process down.
