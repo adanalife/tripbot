@@ -93,6 +93,15 @@ type TripbotConfig struct {
 	// comes up without Facebook chat.
 	FacebookAPIURL string `envconfig:"FACEBOOK_API_URL"`
 
+	// TikTokAPIURL points a PLATFORM=tiktok instance at the platform-gateway
+	// gateway-tiktok instance over HTTP — e.g.
+	// http://gateway-tiktok.<env>.svc.cluster.local:8080. Inbound-only: the
+	// gateway reads LIVE chat off TikTok's webcast; TikTok has no chat-post
+	// API, so outbound Say is dropped (viewers get responses via onscreens /
+	// playback effects). Required on a tiktok instance — with this empty the
+	// instance comes up without TikTok chat.
+	TikTokAPIURL string `envconfig:"TIKTOK_API_URL"`
+
 	// NatsURL is the in-cluster NATS endpoint used for fire-and-forget
 	// inter-component events. Format:
 	// nats://nats.<env-platform-ns>.svc.cluster.local:4222.
