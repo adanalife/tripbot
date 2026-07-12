@@ -109,7 +109,7 @@ class OnscreensServer(Construct):
                 },
                 limits={"memory": k8s.Quantity.from_string("128Mi")},
             ),
-            # Writable tmpfs scratch for the RUN_DIR pidfile — nothing durable.
+            # Writable tmpfs scratch for RUN_DIR — nothing durable.
             volume_mounts=[k8s.VolumeMount(name="run", mount_path=RUN_DIR)],
         )
 

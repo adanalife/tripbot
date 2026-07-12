@@ -6,21 +6,18 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/background"
+	"github.com/adanalife/tripbot/pkg/bootstrap"
 	"github.com/adanalife/tripbot/pkg/chatbot"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
 	"github.com/adanalife/tripbot/pkg/discord"
-	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/eventbus"
 	"github.com/adanalife/tripbot/pkg/eventsub"
 	"github.com/adanalife/tripbot/pkg/feature"
 	"github.com/adanalife/tripbot/pkg/gateway"
-	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"github.com/adanalife/tripbot/pkg/locationfeed"
 	"github.com/adanalife/tripbot/pkg/natsclient"
@@ -29,14 +26,12 @@ import (
 	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
 	"github.com/adanalife/tripbot/pkg/rollups"
 	"github.com/adanalife/tripbot/pkg/server"
-	"github.com/adanalife/tripbot/pkg/telemetry"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/adanalife/tripbot/pkg/video"
 	vlcClient "github.com/adanalife/tripbot/pkg/vlc-client"
 	_ "github.com/dimiro1/banner/autoload"
 	"github.com/gempir/go-twitch-irc/v4"
-	"github.com/getsentry/sentry-go"
 	"github.com/go-co-op/gocron/v2"
 	"github.com/nats-io/nats.go"
 	"go.opentelemetry.io/otel"
@@ -98,9 +93,8 @@ type Tripbot struct {
 	irc *twitch.Client
 
 	// scheduler is the background cron scheduler, constructed in startCron and
-	// shared by scheduleBackgroundJobs (job registration) and gracefulShutdown
-	// (Stop). Also assigned onto t.app.Cron so the !shutdown command can stop
-	// it.
+	// shared by scheduleBackgroundJobs (job registration) and shutdown (Stop).
+	// Also assigned onto t.app.Cron so the !shutdown command can stop it.
 	scheduler *background.Scheduler
 
 	// srv is the auth-links / console-API / metrics HTTP server, constructed in
@@ -112,7 +106,7 @@ type Tripbot struct {
 
 	// player owns "what's currently playing" — the single process-wide
 	// instance, constructed in NewTripbot. The 60s cron tick refreshes it
-	// (GetCurrentlyPlaying); findInitialVideo + gracefulShutdown read it; it's
+	// (GetCurrentlyPlaying); findInitialVideo + shutdown read it; it's
 	// wrapped into the chatbot Video adapter (NewVideoAdapter) so commands read
 	// the same state, and it publishes video.changed to NATS for the console.
 	player *video.Player
@@ -120,17 +114,15 @@ type Tripbot struct {
 	// sessions tracks who's currently in chat (the login map) + the
 	// lifetime-miles leaderboard — the single process-wide instance,
 	// constructed in NewTripbot. Cron jobs refresh it (UpdateSession /
-	// UpdateLeaderboard); boot hydrates it (InitLeaderboard); gracefulShutdown
+	// UpdateLeaderboard); boot hydrates it (InitLeaderboard); shutdown
 	// flushes it (Shutdown); assigned onto the chatbot App (Sessions adapter +
 	// UserSessions) and into discord so they read the same state. One *Sessions
 	// per chat provider is the multi-provider seam.
 	sessions *users.Sessions
 
-	telemetryShutdown telemetry.ShutdownFunc
-
 	// discordSession is set by startDiscord when the Discord bot is enabled
-	// for this env; gracefulShutdown calls Stop on it to deregister the
-	// per-guild slash commands. Nil when Discord stays gated off.
+	// for this env; shutdown calls Stop on it to deregister the per-guild
+	// slash commands. Nil when Discord stays gated off.
 	discordSession *discord.Session
 
 	// flagClient is the process-wide feature flag evaluator. Initialised to an
@@ -218,58 +210,57 @@ func platformIsTwitch() bool {
 // instances.
 func (t *Tripbot) Run() {
 	slog.Info("tripbot starting", "version", t.version, "platform", c.Conf.Platform)
-	// shutdownCtx is canceled on SIGINT/SIGTERM; the HTTP server uses it
-	// to trigger a graceful shutdown so in-flight requests aren't cut.
-	// listenForShutdown's gracefulShutdown goroutine handles the rest of
-	// the app cleanup off the same signals.
-	shutdownCtx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stopSignals()
-	t.listenForShutdown()
-	t.initializeTelemetry()
-	t.initializeErrorLogger()
+	// ctx is canceled on SIGINT/SIGTERM; every background goroutine hangs
+	// off it and the HTTP server uses it to trigger its graceful drain.
+	// When the blocking chat loop returns, t.shutdown runs the cleanup
+	// sequence and the process exits 0 — there is no separate
+	// signal-handler goroutine.
+	ctx, flush := bootstrap.Start("tripbot", t.version, c.Conf)
+	defer flush()
 	t.srv.SetVersion(t.version)
-	t.startHttpServer(shutdownCtx)
+	httpDone := t.startHttpServer(ctx)
 	t.findInitialVideo()
 	t.app.Video = chatbot.NewVideoAdapter(t.player)         // commands read the same Player the cron refreshes
 	t.app.Sessions = chatbot.NewSessionsAdapter(t.sessions) // command-time queries
 	t.app.UserSessions = t.sessions                         // inbound IRC handlers + access checks read the same session state
 	t.sessions.InitLeaderboard(context.Background())
-	t.startCron()
-	t.startFeatureFlags(shutdownCtx)
+	t.startFeatureFlags(ctx)
 	if platformIsTwitch() {
 		if t.gateway == nil {
 			// No in-process Helix fallback since the cutover, so audience polls,
 			// the follower check, and broadcaster send have no backend here.
 			// Real deploys always wire TWITCH_API_URL; this is local/CI.
-			slog.WarnContext(shutdownCtx, "no TWITCH_API_URL: Twitch audience/follower/broadcaster-send features disabled (gateway not wired)")
+			slog.WarnContext(ctx, "no TWITCH_API_URL: Twitch audience/follower/broadcaster-send features disabled (gateway not wired)")
 		}
-		t.loadTwitchToken(shutdownCtx) // must precede setUpTwitchClient — provides the IRC token
-		t.setUpTwitchClient()          // required for the below
+		t.loadTwitchToken(ctx) // must precede setUpTwitchClient — provides the IRC token
+		t.setUpTwitchClient()  // required for the below
 		t.updateSubscribers()
 		t.getCurrentUsers()
-		t.startEventSub(shutdownCtx)
+		t.startEventSub(ctx)
 	}
-	t.startNATS(shutdownCtx)
-	t.player.EmitCurrentVideo(shutdownCtx)   // after startNATS: publishes the current video.changed for the standalone console
-	t.startAuthStatusEmitter(shutdownCtx)    // after startNATS: publishes auth.status snapshots for the standalone console
-	t.startOBSRefreshSubscriber(shutdownCtx) // after startNATS: per-platform (each instance owns its OBS), so before the YouTube early-return
-	if !platformIsTwitch() {
-		if c.Conf.Platform == "facebook" {
-			t.connectToFacebook(shutdownCtx)
-		} else {
-			t.connectToYouTube(shutdownCtx)
-		}
-		return
+	// after setUpTwitchClient: the twitch.ReloadTokens job dereferences
+	// t.irc, so cron registration waits until the client exists.
+	t.startCron()
+	t.startNATS(ctx)
+	t.player.EmitCurrentVideo(ctx)   // after startNATS: publishes the current video.changed for the standalone console
+	t.startAuthStatusEmitter(ctx)    // after startNATS: publishes auth.status snapshots for the standalone console
+	t.startOBSRefreshSubscriber(ctx) // after startNATS: per-platform (each instance owns its OBS)
+	if platformIsTwitch() {
+		// chat.send subjects are per-env, not per-platform — both platform
+		// instances would receive every admin send, so only the Twitch instance
+		// (which owns the bot/broadcaster identities the command names)
+		// subscribes.
+		t.startChatSendSubscriber(ctx)       // after startNATS + setUpTwitchClient: needs the conn and t.app.Chat
+		t.startDiscord(ctx)                  // Discord stays Twitch-side for v1
+		t.startSilentDisconnectWatchdog(ctx) // watches the OBS→Twitch stream specifically
+		t.startBackgroundAudioWatchdog(ctx)  // keeps audible music on-stream when SomaFM drops
+		t.connectToTwitch(ctx)               // blocks until shutdown
+	} else if c.Conf.Platform == "facebook" {
+		t.connectToFacebook(ctx) // blocks until shutdown
+	} else {
+		t.connectToYouTube(ctx) // blocks until shutdown
 	}
-	// chat.send subjects are per-env, not per-platform — both platform
-	// instances would receive every admin send, so only the Twitch instance
-	// (which owns the bot/broadcaster identities the command names)
-	// subscribes.
-	t.startChatSendSubscriber(shutdownCtx)       // after startNATS + setUpTwitchClient: needs the conn and t.app.Chat
-	t.startDiscord(shutdownCtx)                  // Discord stays Twitch-side for v1
-	t.startSilentDisconnectWatchdog(shutdownCtx) // watches the OBS→Twitch stream specifically
-	t.startBackgroundAudioWatchdog(shutdownCtx)  // keeps audible music on-stream when SomaFM drops
-	t.connectToTwitch()
+	t.shutdown(httpDone)
 }
 
 // connectToYouTube wires a PLATFORM=youtube instance's chat — both directions —
@@ -306,7 +297,7 @@ func (t *Tripbot) connectToYouTube(ctx context.Context) {
 	}
 
 	// nothing else to do on the main goroutine — the poller and HTTP server
-	// run until the signal handler shuts the process down.
+	// run until shutdown begins.
 	<-ctx.Done()
 }
 
@@ -544,39 +535,19 @@ func (t *Tripbot) startEventSub(ctx context.Context) {
 	}()
 }
 
-// listenForShutdown creates a background job that listens for a graceful shutdown request
-func (t *Tripbot) listenForShutdown() {
-	helpers.WritePidFile(c.Conf.TripbotPidFile)
-	// start the graceful shutdown listener
-	go t.gracefulShutdown()
-}
-
-// initializeTelemetry brings up OpenTelemetry providers (traces, metrics,
-// logs). No-ops cleanly if OTEL_SDK_DISABLED is set or no OTLP endpoint
-// is configured — see pkg/telemetry.
-func (t *Tripbot) initializeTelemetry() {
-	ctx := context.Background()
-	shutdown, err := telemetry.Init(ctx, "tripbot", t.version)
-	if err != nil {
-		// telemetry init failure shouldn't crash the bot — log and continue.
-		slog.WarnContext(ctx, "telemetry init failed", "err", err)
-	}
-	t.telemetryShutdown = shutdown
-}
-
-// initializeErrorLogger makes sure the logger is configured
-func (t *Tripbot) initializeErrorLogger() {
-	terrors.Initialize(c.Conf, t.version)
-}
-
-// startHttpServer starts a webserver, which is
-// used for admin tools and receiving webhooks. The passed context is
-// honored by the server for graceful shutdown — when it's canceled,
-// the server stops accepting new connections and drains in-flight
-// requests up to its shutdown timeout.
-func (t *Tripbot) startHttpServer(ctx context.Context) {
-	// start the HTTP server
-	go t.srv.Start(ctx)
+// startHttpServer starts a webserver, which is used for admin tools and
+// receiving webhooks, in a goroutine. The passed context is honored by the
+// server for graceful shutdown — when it's canceled, the server stops
+// accepting new connections and drains in-flight requests up to its
+// shutdown timeout. The returned channel closes once that drain completes;
+// t.shutdown waits on it so the process doesn't exit mid-drain.
+func (t *Tripbot) startHttpServer(ctx context.Context) <-chan struct{} {
+	done := make(chan struct{})
+	go func() {
+		t.srv.Start(ctx)
+		close(done)
+	}()
+	return done
 }
 
 // findInitialVideo will determine the vido that is currently-playing
@@ -686,8 +657,8 @@ func (t *Tripbot) getCurrentUsers() {
 	t.sessions.PrintCurrentSession(context.Background())
 }
 
-// connectToTwitch joins Twitch chat and starts listening
-func (t *Tripbot) connectToTwitch() {
+// connectToTwitch joins Twitch chat and listens until ctx cancels.
+func (t *Tripbot) connectToTwitch(ctx context.Context) {
 	t.irc.Join(c.Conf.ChannelName)
 	slog.Info("joined channel", "channel", c.Conf.ChannelName, "url", fmt.Sprintf("https://twitch.tv/%s", c.Conf.ChannelName))
 
@@ -700,6 +671,15 @@ func (t *Tripbot) connectToTwitch() {
 		instrumentation.TwitchConnection.Set(true)
 	})
 
+	// Disconnect the IRC client when shutdown begins so the blocking
+	// Connect below returns and the loop can exit.
+	go func() {
+		<-ctx.Done()
+		if err := t.irc.Disconnect(); err != nil {
+			slog.Debug("irc disconnect on shutdown", "err", err)
+		}
+	}()
+
 	// actually connect to Twitch
 	// wrapped in a loop in case twitch goes down
 	for {
@@ -709,6 +689,9 @@ func (t *Tripbot) connectToTwitch() {
 		// OnConnect fires.
 		err := t.irc.Connect()
 		instrumentation.TwitchConnection.Set(false)
+		if ctx.Err() != nil {
+			return
+		}
 		if err != nil {
 			slog.Error("unable to connect to twitch", "err", err)
 			if errors.Is(err, twitch.ErrLoginAuthenticationFailed) {
@@ -729,44 +712,37 @@ func (t *Tripbot) connectToTwitch() {
 					slog.Error("IRC auth failed and no valid token in oauth_tokens; re-auth via the platform-gateway consent flow (surfaced in tripbot-console)", "login_as", c.Conf.BotUsername)
 				}
 			}
-			time.Sleep(time.Minute)
+			// retry after a minute, or bail if shutdown starts meanwhile
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(time.Minute):
+			}
 		}
 	}
 }
 
-// gracefulShutdown catches CTRL-C and cleans up
-func (t *Tripbot) gracefulShutdown() {
-	ctrlC := make(chan os.Signal, 1)
-	signal.Notify(ctrlC, os.Interrupt, syscall.SIGTERM)
-
-	// wait for signal
-	<-ctrlC
-
-	slog.Warn("caught CTRL-C, shutting down")
+// shutdown runs the cleanup sequence once the blocking chat loop returns:
+// stop the cron scheduler (no new ticks), stop Discord, flush session
+// state to the still-open DB, wait for the HTTP drain, then close the DB.
+// Sentry and telemetry flush afterwards, in bootstrap's deferred flush.
+func (t *Tripbot) shutdown(httpDone <-chan struct{}) {
+	slog.Warn("shutting down")
 	//TODO: print different message if CurrentlyPlaying is ""
 	slog.Info("last played video", "file", t.player.Current().File())
+	if err := t.scheduler.Stop(); err != nil {
+		slog.Error("error shutting down gocron scheduler", "err", err)
+	}
 	if t.discordSession != nil {
 		if err := t.discordSession.Stop(); err != nil {
 			slog.Error("discord stop failed", "err", err)
 		}
 	}
 	t.sessions.Shutdown(context.Background())
-	err := database.Close()
-	if err != nil {
+	<-httpDone
+	if err := database.Close(); err != nil {
 		slog.Error("error closing DB connection", "err", err)
 	}
-	if err := t.scheduler.Stop(); err != nil {
-		slog.Error("error shutting down gocron scheduler", "err", err)
-	}
-	sentry.Flush(time.Second * 5)
-	if t.telemetryShutdown != nil {
-		flushCtx, cancel := context.WithTimeout(context.Background(), time.Second*5)
-		if err := t.telemetryShutdown(flushCtx); err != nil {
-			slog.ErrorContext(flushCtx, "telemetry shutdown failed", "err", err)
-		}
-		cancel()
-	}
-	os.Exit(1)
 }
 
 // scheduleBackgroundJobs schedules the various background jobs.
