@@ -34,6 +34,8 @@ var (
 
 	vlcTimeRemaining = mustFloat64Gauge("vlc_player_time_remaining_seconds", "Seconds remaining in the currently-playing clip (media length minus current playhead position)")
 	vlcProgress      = mustFloat64Gauge("vlc_player_progress_fraction", "Playback progress through the currently-playing clip as a 0..1 fraction")
+	vlcMediaSwapGap  = mustHistogram("vlc_player_media_swap_gap_seconds", "Dead-air at a clip boundary: seconds from the previous Media ending (or a clip change being requested) until the next Media reaches Playing",
+		0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10)
 
 	obsStreamingGauge         = mustGauge("obs_streaming_active", "1 if OBS is actively streaming, 0 otherwise")
 	obsActiveFPS              = mustFloat64Gauge("obs_active_fps", "Current FPS being rendered by OBS")
@@ -92,6 +94,23 @@ func (v VLCPlayerStats) Update(s VLCPlayerStatsSnapshot) {
 	vlcDemuxDiscontinuity.Record(ctx, s.DemuxDiscontinuity, v.platform)
 	vlcTimeRemaining.Record(ctx, s.TimeRemaining, v.platform)
 	vlcProgress.Record(ctx, s.Progress, v.platform)
+}
+
+// VLCSwapGap publishes clip-boundary dead-air observations, stamping every
+// sample with the streaming platform it was constructed with.
+type VLCSwapGap struct {
+	platform metric.MeasurementOption
+}
+
+// NewVLCSwapGap builds a publisher for the given streaming platform
+// (the instance's STREAM_PLATFORM value).
+func NewVLCSwapGap(platform string) VLCSwapGap {
+	return VLCSwapGap{platform: platformAttr(platform)}
+}
+
+// Record publishes one clip-boundary gap observation, in seconds.
+func (g VLCSwapGap) Record(seconds float64) {
+	vlcMediaSwapGap.Record(context.Background(), seconds, g.platform)
 }
 
 // OBSStatsSnapshot bundles OBS performance + stream-output stats so the
