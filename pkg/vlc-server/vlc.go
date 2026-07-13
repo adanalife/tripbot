@@ -37,14 +37,22 @@ var vlcCmdFlags []string
 // mediaOptions returns the per-Media options driven by VLC_OUTPUT.
 // libvlc's --sout takes effect only when set on the media object itself —
 // passing --sout to libvlc.Init does NOT activate the stream-out chain.
-// `sout-keep` preserves the chain across playlist transitions so OBS
-// doesn't see EOF on every clip change.
+//
+// The chain is `gather:rtp{...}` + `sout-keep`, and both halves are
+// load-bearing for a seamless stream. `sout-keep` alone preserves the sout
+// *instance* across playlist transitions but still ends the RTP stream at
+// every media change, so each RTSP client (OBS) gets EOF every clip, eats
+// its reconnect delay, and rejoins mid-GOP — the visible inter-clip seam.
+// `gather` merges the successive Media into one continuous elementary
+// stream with monotonic timestamps, so clients never see a boundary at
+// all. gather requires the clips to share codec/dimensions/rate, which the
+// transcoded corpus guarantees.
 //
 //	rtsp   — RTSP listener only (container default).
 //	window — no sout; libvlc plays to its native window via --vout.
 //	both   — duplicate to a local display target and the RTSP listener.
 func mediaOptions() []string {
-	const rtspChain = "rtp{sdp=rtsp://:8554/dashcam}"
+	const rtspChain = "gather:rtp{sdp=rtsp://:8554/dashcam}"
 	switch c.Conf.VlcOutput {
 	case "window":
 		return nil
