@@ -9,6 +9,24 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v3.18.0] — 2026-07-13
+
+### Chatbot
+
+- TikTok platform support: a `PLATFORM=tiktok` instance polls inbound LIVE chat from gateway-tiktok and runs the v1 command allowlist. TikTok has no chat-post API, so command responses reach viewers via onscreens/playback effects only. ([#1087](https://github.com/adanalife/tripbot/pull/1087))
+
+### VLC
+
+- Stream one continuous elementary stream across clip boundaries (`gather:` in the sout chain) — RTSP clients no longer get EOF + reconnect + mid-GOP garbage at every clip change, which was the visible inter-clip seam. ([#1127](https://github.com/adanalife/tripbot/pull/1127))
+
+### Fixes
+
+- Sentry and Grafana OTLP `envFrom` secretRefs are now optional, so pods start even when the shared observability Secrets have not synced yet. ([#1107](https://github.com/adanalife/tripbot/pull/1107))
+
+### Deploy / Infra
+
+- Boot/shutdown consolidated into a shared `pkg/bootstrap`: all three binaries now shut down on a single path and exit 0 on a clean SIGTERM (previously 1), tripbot stops cron before closing the DB and waits for the HTTP drain, and the unused pidfile ritual is gone. ([#1105](https://github.com/adanalife/tripbot/pull/1105))
+
 ## [v3.17.0] — 2026-07-12
 
 ### Chatbot
