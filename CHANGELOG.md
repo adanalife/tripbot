@@ -9,6 +9,12 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v3.18.1] — 2026-07-13
+
+### VLC
+
+- Revert the `gather` sout chain: it removed the inter-clip seam but traded it for whole-frame block corruption at clip boundaries. Playback returns to the 3.17 baseline (subtle seam) pending a corruption-free fix. ([#1129](https://github.com/adanalife/tripbot/pull/1129))
+
 ## [v3.18.0] — 2026-07-13
 
 ### Chatbot
