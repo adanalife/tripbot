@@ -83,8 +83,10 @@ spec:
                 name: tripbot-database-creds
             - secretRef:
                 name: grafana-cloud-otlp
+                optional: true
             - secretRef:
                 name: sentry-tripbot
+                optional: true
             - secretRef:
                 name: tripbot-twitch-creds
             - secretRef:
@@ -97,7 +99,7 @@ spec:
                 optional: true
             - secretRef:
                 name: tripbot-youtube-creds
-          image: adanalife/tripbot:3.17.0
+          image: adanalife/tripbot:3.18.1
           imagePullPolicy: IfNotPresent
           livenessProbe:
             httpGet:
@@ -141,7 +143,7 @@ spec:
                 name: tripbot-youtube-config
             - secretRef:
                 name: tripbot-database-creds
-          image: adanalife/tripbot:3.17.0
+          image: adanalife/tripbot:3.18.1
           imagePullPolicy: IfNotPresent
           name: migrate
           resources:

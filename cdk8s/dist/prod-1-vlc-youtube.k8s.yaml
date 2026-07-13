@@ -52,11 +52,11 @@ spec:
                 name: vlc-youtube-config
             - secretRef:
                 name: sentry-vlc-server
-                optional: false
+                optional: true
             - secretRef:
                 name: grafana-cloud-otlp
-                optional: false
-          image: adanalife/vlc:3.17.0
+                optional: true
+          image: adanalife/vlc:3.18.1
           imagePullPolicy: IfNotPresent
           livenessProbe:
             httpGet:
