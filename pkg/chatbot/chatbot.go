@@ -157,7 +157,7 @@ func New() *App {
 		botless:  c.Conf.Platform == platformYouTube && !c.Conf.YouTubeInboundEnabled,
 		// DB stays nil; commands use a.db() which falls back to database.GormDB().
 		Onscreens:  realOnscreens{c: onscreensClient.New(natsclient.DefaultPublisher(), c.Conf.Environment, c.Conf.Platform)},
-		VLC:        realVLC{c: vlcClient.New(c.Conf.VlcServerHost, natsclient.DefaultPublisher(), c.Conf.Environment)},
+		VLC:        realVLC{c: vlcClient.New(c.Conf.VlcServerHost, natsclient.DefaultPublisher(), c.Conf.Environment, c.Conf.Platform)},
 		Video:      realVideo{},
 		Chat:       disconnectedChat{},
 		Sessions:   realSessions{},

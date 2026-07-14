@@ -11,11 +11,11 @@ func TestSubjects(t *testing.T) {
 		got  string
 		want string
 	}{
-		{"play.random", PlayRandomSubject("staging"), "tripbot.staging.vlc.play.random"},
-		{"play.file", PlayFileSubject("prod"), "tripbot.prod.vlc.play.file"},
-		{"play.at", PlayFileAtSubject("prod"), "tripbot.prod.vlc.play.at"},
-		{"skip", SkipSubject("development"), "tripbot.development.vlc.skip"},
-		{"back", BackSubject("staging"), "tripbot.staging.vlc.back"},
+		{"play.random", PlayRandomSubject("staging", "twitch"), "tripbot.staging.vlc.play.random.twitch"},
+		{"play.file", PlayFileSubject("prod", "youtube"), "tripbot.prod.vlc.play.file.youtube"},
+		{"play.at", PlayFileAtSubject("prod", "twitch"), "tripbot.prod.vlc.play.at.twitch"},
+		{"skip", SkipSubject("development", "youtube"), "tripbot.development.vlc.skip.youtube"},
+		{"back", BackSubject("staging", "twitch"), "tripbot.staging.vlc.back.twitch"},
 		{"lastplayed", LastPlayedSubject("prod", "twitch"), "tripbot.prod.vlc.lastplayed.twitch"},
 		{"lastplayed wildcard", LastPlayedWildcard("prod"), "tripbot.prod.vlc.lastplayed.*"},
 	}

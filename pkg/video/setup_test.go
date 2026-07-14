@@ -68,5 +68,5 @@ func fakeVLCServer(t *testing.T, current *string) *vlcClient.Client {
 	// vlcClient.New builds the URL as "http://" + host, so strip the scheme
 	// from the httptest URL before handing it over. nil publisher disables the
 	// NATS mirror — this rig exercises the HTTP path only.
-	return vlcClient.New(strings.TrimPrefix(srv.URL, "http://"), nil, "test")
+	return vlcClient.New(strings.TrimPrefix(srv.URL, "http://"), nil, "test", "twitch")
 }

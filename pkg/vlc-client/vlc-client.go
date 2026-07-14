@@ -13,18 +13,24 @@ import (
 )
 
 // Client issues vlc-server playback commands over NATS and reads the
-// currently-playing file over HTTP. Construct via New(host, nats, env).
+// currently-playing file over HTTP. Construct via New(host, nats, env, platform).
 //
 // The four fire-and-forget commands (PlayRandom, PlayFileInPlaylist, Skip,
-// Back) publish to tripbot.<env>.vlc.<verb>; vlc-server's subscriber acts on
-// them. The HTTP command path (the mirror that preceded the peel) is gone.
-// nats may be nil (tests that don't exercise pubsub) — publishes no-op then.
-// CurrentlyPlaying is a read and stays on HTTP, so host is still required.
+// Back) publish to tripbot.<env>.vlc.<verb>.<platform>; vlc-server's subscriber
+// acts on them. The HTTP command path (the mirror that preceded the peel) is
+// gone. nats may be nil (tests that don't exercise pubsub) — publishes no-op
+// then. CurrentlyPlaying is a read and stays on HTTP, so host is still required.
+//
+// platform is the streaming platform this tripbot instance serves ("twitch" /
+// "youtube"); it's the trailing leaf on every command subject so only the
+// matching vlc-<platform> server acts on it — a Twitch-triggered !find never
+// seeks the YouTube stream.
 type Client struct {
 	serverURL  string
 	httpClient *http.Client
 	nats       natsclient.Publisher
 	env        string
+	platform   string
 }
 
 // New returns a Client pointed at the given vlc-server host. The HTTP
@@ -35,12 +41,13 @@ type Client struct {
 // caller's trace. nats + env drive command publishing; pass
 // natsclient.DefaultPublisher() in production, or a nil publisher to disable
 // publishing (tests).
-func New(host string, nats natsclient.Publisher, env string) *Client {
+func New(host string, nats natsclient.Publisher, env, platform string) *Client {
 	return &Client{
 		serverURL:  "http://" + host,
 		httpClient: &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)},
 		nats:       nats,
 		env:        env,
+		platform:   platform,
 	}
 }
 
@@ -70,13 +77,13 @@ func (c *Client) CurrentlyPlaying(ctx context.Context) string {
 
 // PlayRandom plays a random file from the playlist
 func (c *Client) PlayRandom(ctx context.Context) error {
-	c.publish(ctx, ve.PlayRandomSubject(c.env), ve.Command{Envelope: ve.NewEnvelope()})
+	c.publish(ctx, ve.PlayRandomSubject(c.env, c.platform), ve.Command{Envelope: ve.NewEnvelope()})
 	return nil
 }
 
 // PlayFileInPlaylist plays a given file
 func (c *Client) PlayFileInPlaylist(ctx context.Context, filename string) error {
-	c.publish(ctx, ve.PlayFileSubject(c.env), ve.PlayFile{Envelope: ve.NewEnvelope(), File: filename})
+	c.publish(ctx, ve.PlayFileSubject(c.env, c.platform), ve.PlayFile{Envelope: ve.NewEnvelope(), File: filename})
 	return nil
 }
 
@@ -89,17 +96,17 @@ func (c *Client) PlayFileAtTimestamp(ctx context.Context, filename string, tsSec
 	if posMs < 0 {
 		posMs = 0
 	}
-	c.publish(ctx, ve.PlayFileAtSubject(c.env), ve.PlayFileAt{Envelope: ve.NewEnvelope(), File: filename, PositionMs: posMs})
+	c.publish(ctx, ve.PlayFileAtSubject(c.env, c.platform), ve.PlayFileAt{Envelope: ve.NewEnvelope(), File: filename, PositionMs: posMs})
 	return nil
 }
 
 func (c *Client) Skip(ctx context.Context, n int) error {
-	c.publish(ctx, ve.SkipSubject(c.env), ve.Skip{Envelope: ve.NewEnvelope(), N: n})
+	c.publish(ctx, ve.SkipSubject(c.env, c.platform), ve.Skip{Envelope: ve.NewEnvelope(), N: n})
 	return nil
 }
 
 func (c *Client) Back(ctx context.Context, n int) error {
-	c.publish(ctx, ve.BackSubject(c.env), ve.Back{Envelope: ve.NewEnvelope(), N: n})
+	c.publish(ctx, ve.BackSubject(c.env, c.platform), ve.Back{Envelope: ve.NewEnvelope(), N: n})
 	return nil
 }
 
