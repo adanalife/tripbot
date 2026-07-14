@@ -27,16 +27,16 @@ func (s *Server) StartNATSSubscribers(ctx context.Context) {
 		slog.InfoContext(ctx, "nats subscriber skipped (NATS_URL unset)")
 		return
 	}
-	env := c.Conf.Environment
+	env, platform := c.Conf.Environment, c.Conf.Platform
 	subs := []struct {
 		subject string
 		handler nats.MsgHandler
 	}{
-		{ve.PlayRandomSubject(env), s.handlePlayRandom},
-		{ve.PlayFileSubject(env), s.handlePlayFile},
-		{ve.PlayFileAtSubject(env), s.handlePlayFileAt},
-		{ve.SkipSubject(env), s.handleSkip},
-		{ve.BackSubject(env), s.handleBack},
+		{ve.PlayRandomSubject(env, platform), s.handlePlayRandom},
+		{ve.PlayFileSubject(env, platform), s.handlePlayFile},
+		{ve.PlayFileAtSubject(env, platform), s.handlePlayFileAt},
+		{ve.SkipSubject(env, platform), s.handleSkip},
+		{ve.BackSubject(env, platform), s.handleBack},
 	}
 	for _, sb := range subs {
 		// Best-effort: one bad subject shouldn't stop the rest from binding.

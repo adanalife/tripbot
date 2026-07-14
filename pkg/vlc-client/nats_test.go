@@ -50,7 +50,7 @@ func okServer(t *testing.T) string {
 
 func TestPlayRandom_PublishesToNATS(t *testing.T) {
 	rec := &recordingPublisher{}
-	c := New(commandHost, rec, "stage")
+	c := New(commandHost, rec, "stage", "twitch")
 
 	if err := c.PlayRandom(context.Background()); err != nil {
 		t.Fatalf("PlayRandom: %v", err)
@@ -59,8 +59,8 @@ func TestPlayRandom_PublishesToNATS(t *testing.T) {
 	if len(rec.Publishes) != 1 {
 		t.Fatalf("expected 1 publish, got %d", len(rec.Publishes))
 	}
-	if rec.Publishes[0].Subject != "tripbot.stage.vlc.play.random" {
-		t.Errorf("subject = %q, want tripbot.stage.vlc.play.random", rec.Publishes[0].Subject)
+	if rec.Publishes[0].Subject != "tripbot.stage.vlc.play.random.twitch" {
+		t.Errorf("subject = %q, want tripbot.stage.vlc.play.random.twitch", rec.Publishes[0].Subject)
 	}
 	var ev ve.Command
 	if err := json.Unmarshal(rec.Publishes[0].Payload, &ev); err != nil {
@@ -73,7 +73,7 @@ func TestPlayRandom_PublishesToNATS(t *testing.T) {
 
 func TestPlayFileInPlaylist_PublishesFile(t *testing.T) {
 	rec := &recordingPublisher{}
-	c := New(commandHost, rec, "prod")
+	c := New(commandHost, rec, "prod", "twitch")
 
 	if err := c.PlayFileInPlaylist(context.Background(), "clip.mp4"); err != nil {
 		t.Fatalf("PlayFileInPlaylist: %v", err)
@@ -83,8 +83,8 @@ func TestPlayFileInPlaylist_PublishesFile(t *testing.T) {
 		t.Fatalf("expected 1 publish, got %d", len(rec.Publishes))
 	}
 	pub := rec.Publishes[0]
-	if pub.Subject != "tripbot.prod.vlc.play.file" {
-		t.Errorf("subject = %q, want tripbot.prod.vlc.play.file", pub.Subject)
+	if pub.Subject != "tripbot.prod.vlc.play.file.twitch" {
+		t.Errorf("subject = %q, want tripbot.prod.vlc.play.file.twitch", pub.Subject)
 	}
 	var ev ve.PlayFile
 	if err := json.Unmarshal(pub.Payload, &ev); err != nil {
@@ -97,7 +97,7 @@ func TestPlayFileInPlaylist_PublishesFile(t *testing.T) {
 
 func TestPlayFileAtTimestamp_PublishesFileAndPosition(t *testing.T) {
 	rec := &recordingPublisher{}
-	c := New(commandHost, rec, "prod")
+	c := New(commandHost, rec, "prod", "twitch")
 
 	if err := c.PlayFileAtTimestamp(context.Background(), "clip.mp4", 163.5); err != nil {
 		t.Fatalf("PlayFileAtTimestamp: %v", err)
@@ -107,8 +107,8 @@ func TestPlayFileAtTimestamp_PublishesFileAndPosition(t *testing.T) {
 		t.Fatalf("expected 1 publish, got %d", len(rec.Publishes))
 	}
 	pub := rec.Publishes[0]
-	if pub.Subject != "tripbot.prod.vlc.play.at" {
-		t.Errorf("subject = %q, want tripbot.prod.vlc.play.at", pub.Subject)
+	if pub.Subject != "tripbot.prod.vlc.play.at.twitch" {
+		t.Errorf("subject = %q, want tripbot.prod.vlc.play.at.twitch", pub.Subject)
 	}
 	var ev ve.PlayFileAt
 	if err := json.Unmarshal(pub.Payload, &ev); err != nil {
@@ -124,7 +124,7 @@ func TestPlayFileAtTimestamp_PublishesFileAndPosition(t *testing.T) {
 
 func TestPlayFileAtTimestamp_NegativeClampsToZero(t *testing.T) {
 	rec := &recordingPublisher{}
-	c := New(commandHost, rec, "stage")
+	c := New(commandHost, rec, "stage", "twitch")
 
 	if err := c.PlayFileAtTimestamp(context.Background(), "clip.mp4", -5); err != nil {
 		t.Fatalf("PlayFileAtTimestamp: %v", err)
@@ -144,13 +144,13 @@ func TestSkipAndBack_PublishN(t *testing.T) {
 		call    func(c *Client) error
 		subject string
 	}{
-		{"skip", func(c *Client) error { return c.Skip(context.Background(), 3) }, "tripbot.stage.vlc.skip"},
-		{"back", func(c *Client) error { return c.Back(context.Background(), 2) }, "tripbot.stage.vlc.back"},
+		{"skip", func(c *Client) error { return c.Skip(context.Background(), 3) }, "tripbot.stage.vlc.skip.twitch"},
+		{"back", func(c *Client) error { return c.Back(context.Background(), 2) }, "tripbot.stage.vlc.back.twitch"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			rec := &recordingPublisher{}
-			c := New(commandHost, rec, "stage")
+			c := New(commandHost, rec, "stage", "twitch")
 			if err := tc.call(c); err != nil {
 				t.Fatalf("call: %v", err)
 			}
@@ -180,7 +180,7 @@ func TestSkipAndBack_PublishN(t *testing.T) {
 // not a fire-and-forget command and must not hit NATS.
 func TestCurrentlyPlaying_DoesNotPublish(t *testing.T) {
 	rec := &recordingPublisher{}
-	c := New(okServer(t), rec, "stage")
+	c := New(okServer(t), rec, "stage", "twitch")
 	_ = c.CurrentlyPlaying(context.Background())
 	if len(rec.Publishes) != 0 {
 		t.Errorf("expected 0 publishes for CurrentlyPlaying, got %d", len(rec.Publishes))
@@ -192,11 +192,11 @@ func TestTopicReflectsEnv(t *testing.T) {
 	for _, env := range []string{"prod", "development", "test"} {
 		t.Run(env, func(t *testing.T) {
 			rec := &recordingPublisher{}
-			c := New(commandHost, rec, env)
+			c := New(commandHost, rec, env, "twitch")
 			if err := c.Skip(context.Background(), 1); err != nil {
 				t.Fatalf("Skip: %v", err)
 			}
-			want := "tripbot." + env + ".vlc.skip"
+			want := "tripbot." + env + ".vlc.skip.twitch"
 			if rec.Publishes[0].Subject != want {
 				t.Errorf("subject = %q, want %q", rec.Publishes[0].Subject, want)
 			}
@@ -207,7 +207,7 @@ func TestTopicReflectsEnv(t *testing.T) {
 // TestNilPublisher_NoPublishNoPanic asserts a nil publisher disables
 // publishing without panicking.
 func TestNilPublisher_NoPublishNoPanic(t *testing.T) {
-	c := New(commandHost, nil, "test")
+	c := New(commandHost, nil, "test", "twitch")
 	if err := c.Skip(context.Background(), 1); err != nil {
 		t.Fatalf("Skip: %v", err)
 	}

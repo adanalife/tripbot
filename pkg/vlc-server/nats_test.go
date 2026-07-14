@@ -20,10 +20,10 @@ func TestNATSHandlersTolerateMalformedPayloads(t *testing.T) {
 
 	// Malformed bodies are logged and dropped, not panicked on, and never
 	// reach s.skip / s.back / s.PlayVideoFile.
-	s.handleSkip(&nats.Msg{Subject: ve.SkipSubject("test"), Data: bad})
-	s.handleBack(&nats.Msg{Subject: ve.BackSubject("test"), Data: bad})
-	s.handlePlayFile(&nats.Msg{Subject: ve.PlayFileSubject("test"), Data: bad})
-	s.handlePlayFileAt(&nats.Msg{Subject: ve.PlayFileAtSubject("test"), Data: bad})
+	s.handleSkip(&nats.Msg{Subject: ve.SkipSubject("test", "twitch"), Data: bad})
+	s.handleBack(&nats.Msg{Subject: ve.BackSubject("test", "twitch"), Data: bad})
+	s.handlePlayFile(&nats.Msg{Subject: ve.PlayFileSubject("test", "twitch"), Data: bad})
+	s.handlePlayFileAt(&nats.Msg{Subject: ve.PlayFileAtSubject("test", "twitch"), Data: bad})
 }
 
 // handlePlayFile / handlePlayFileAt with an empty filename is a publisher bug —
@@ -31,6 +31,6 @@ func TestNATSHandlersTolerateMalformedPayloads(t *testing.T) {
 func TestPlayFileEmptyFilenameDropped(t *testing.T) {
 	s := &Server{}
 	empty := []byte(`{"emitted_at":"2026-01-01T00:00:00Z","file":""}`)
-	s.handlePlayFile(&nats.Msg{Subject: ve.PlayFileSubject("test"), Data: empty})
-	s.handlePlayFileAt(&nats.Msg{Subject: ve.PlayFileAtSubject("test"), Data: empty})
+	s.handlePlayFile(&nats.Msg{Subject: ve.PlayFileSubject("test", "twitch"), Data: empty})
+	s.handlePlayFileAt(&nats.Msg{Subject: ve.PlayFileAtSubject("test", "twitch"), Data: empty})
 }
