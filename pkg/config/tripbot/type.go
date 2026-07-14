@@ -93,6 +93,15 @@ type TripbotConfig struct {
 	// comes up without Facebook chat.
 	FacebookAPIURL string `envconfig:"FACEBOOK_API_URL"`
 
+	// InstagramAPIURL points a PLATFORM=instagram instance at the
+	// platform-gateway gateway-instagram instance over HTTP — e.g.
+	// http://gateway-instagram.<env>.svc.cluster.local:8080. Inbound-only: the
+	// gateway polls live-broadcast comments off the Graph API; the Graph API
+	// cannot create IG comments, so outbound Say is dropped (viewers get
+	// responses via onscreens / playback effects). Required on an instagram
+	// instance — with this empty the instance comes up without Instagram chat.
+	InstagramAPIURL string `envconfig:"INSTAGRAM_API_URL"`
+
 	// TikTokAPIURL points a PLATFORM=tiktok instance at the platform-gateway
 	// gateway-tiktok instance over HTTP — e.g.
 	// http://gateway-tiktok.<env>.svc.cluster.local:8080. Inbound-only: the

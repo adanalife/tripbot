@@ -561,6 +561,8 @@ func reportReporter(platform, username string) string {
 		return "a youtube viewer"
 	case platformFacebook:
 		return "a facebook viewer"
+	case platformInstagram:
+		return "an instagram viewer"
 	case platformTikTok:
 		return "a tiktok viewer"
 	}
