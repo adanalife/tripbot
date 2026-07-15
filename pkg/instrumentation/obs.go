@@ -8,12 +8,12 @@ import (
 )
 
 // platformAttr stamps the streaming platform (twitch/youtube) onto every
-// vlc-server and OBS metric series. Without it the per-platform vlc-server
-// instances emit byte-identical series identities — service.platform lives
-// only on the OTel resource → target_info, not on the datapoints — so the
-// twitch and youtube encoders collide onto one series. The attribute key
-// matches the resource attribute (service.platform → service_platform label)
-// so it lines up with target_info and the Stream Health dashboard's existing
+// OBS metric series. Without it the per-platform instances emit
+// byte-identical series identities — service.platform lives only on the
+// OTel resource → target_info, not on the datapoints — so the twitch and
+// youtube encoders collide onto one series. The attribute key matches the
+// resource attribute (service.platform → service_platform label) so it
+// lines up with target_info and the Stream Health dashboard's existing
 // filters. Defaults to twitch to match the config default.
 func platformAttr(platform string) metric.MeasurementOption {
 	if platform == "" {
@@ -23,20 +23,6 @@ func platformAttr(platform string) metric.MeasurementOption {
 }
 
 var (
-	vlcInputBitRate       = mustFloat64Gauge("vlc_player_input_bitrate", "libvlc input bitrate (libvlc-native units, ~bytes/µs)")
-	vlcDemuxBitRate       = mustFloat64Gauge("vlc_player_demux_bitrate", "libvlc demux bitrate (libvlc-native units, ~bytes/µs)")
-	vlcDisplayedFPS       = mustFloat64Gauge("vlc_player_displayed_fps", "Derived frames-per-second: delta of displayed pictures over the poll interval")
-	vlcDecodedVideo       = mustFloat64Gauge("vlc_player_decoded_video_frames", "Total decoded video blocks since the current Media started (resets on media change)")
-	vlcDisplayedPictures  = mustFloat64Gauge("vlc_player_displayed_pictures", "Total displayed frames since the current Media started (resets on media change)")
-	vlcLostPictures       = mustFloat64Gauge("vlc_player_lost_pictures", "Total lost (dropped) frames since the current Media started (resets on media change)")
-	vlcDemuxCorrupted     = mustFloat64Gauge("vlc_player_demux_corrupted", "Demux corruptions discarded since the current Media started")
-	vlcDemuxDiscontinuity = mustFloat64Gauge("vlc_player_demux_discontinuity", "Demux discontinuities dropped since the current Media started")
-
-	vlcTimeRemaining = mustFloat64Gauge("vlc_player_time_remaining_seconds", "Seconds remaining in the currently-playing clip (media length minus current playhead position)")
-	vlcProgress      = mustFloat64Gauge("vlc_player_progress_fraction", "Playback progress through the currently-playing clip as a 0..1 fraction")
-	vlcMediaSwapGap  = mustHistogram("vlc_player_media_swap_gap_seconds", "Dead-air at a clip boundary: seconds from the previous Media ending (or a clip change being requested) until the next Media reaches Playing",
-		0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10)
-
 	obsStreamingGauge         = mustGauge("obs_streaming_active", "1 if OBS is actively streaming, 0 otherwise")
 	obsActiveFPS              = mustFloat64Gauge("obs_active_fps", "Current FPS being rendered by OBS")
 	obsAverageFrameRenderMS   = mustFloat64Gauge("obs_average_frame_render_time_ms", "Average time in milliseconds OBS spends rendering a frame")
@@ -53,65 +39,6 @@ var (
 	obsStreamSkippedFrames    = mustFloat64Gauge("obs_stream_output_skipped_frames", "Stream-output skipped frames since stream start")
 	obsStreamTotalFrames      = mustFloat64Gauge("obs_stream_output_total_frames", "Stream-output total frames since stream start")
 )
-
-// VLCPlayerStatsSnapshot is the shape vlc-server hands to instrumentation
-// each poll tick. Decouples the gauges from libvlc-go's MediaStats type.
-type VLCPlayerStatsSnapshot struct {
-	InputBitRate       float64
-	DemuxBitRate       float64
-	DisplayedFPS       float64 // derived by the caller from delta of DisplayedPictures
-	DecodedVideo       float64
-	DisplayedPictures  float64
-	LostPictures       float64
-	DemuxCorrupted     float64
-	DemuxDiscontinuity float64
-	TimeRemaining      float64 // seconds left in the current clip (length - playhead)
-	Progress           float64 // 0..1 fraction of the current clip played
-}
-
-// VLCPlayerStats publishes the libvlc playback stats, stamping every series
-// with the streaming platform it was constructed with. Call Update on every
-// poll tick with a fresh snapshot.
-type VLCPlayerStats struct {
-	platform metric.MeasurementOption
-}
-
-// NewVLCPlayerStats builds a publisher for the given streaming platform
-// (the instance's STREAM_PLATFORM value).
-func NewVLCPlayerStats(platform string) VLCPlayerStats {
-	return VLCPlayerStats{platform: platformAttr(platform)}
-}
-
-func (v VLCPlayerStats) Update(s VLCPlayerStatsSnapshot) {
-	ctx := context.Background()
-	vlcInputBitRate.Record(ctx, s.InputBitRate, v.platform)
-	vlcDemuxBitRate.Record(ctx, s.DemuxBitRate, v.platform)
-	vlcDisplayedFPS.Record(ctx, s.DisplayedFPS, v.platform)
-	vlcDecodedVideo.Record(ctx, s.DecodedVideo, v.platform)
-	vlcDisplayedPictures.Record(ctx, s.DisplayedPictures, v.platform)
-	vlcLostPictures.Record(ctx, s.LostPictures, v.platform)
-	vlcDemuxCorrupted.Record(ctx, s.DemuxCorrupted, v.platform)
-	vlcDemuxDiscontinuity.Record(ctx, s.DemuxDiscontinuity, v.platform)
-	vlcTimeRemaining.Record(ctx, s.TimeRemaining, v.platform)
-	vlcProgress.Record(ctx, s.Progress, v.platform)
-}
-
-// VLCSwapGap publishes clip-boundary dead-air observations, stamping every
-// sample with the streaming platform it was constructed with.
-type VLCSwapGap struct {
-	platform metric.MeasurementOption
-}
-
-// NewVLCSwapGap builds a publisher for the given streaming platform
-// (the instance's STREAM_PLATFORM value).
-func NewVLCSwapGap(platform string) VLCSwapGap {
-	return VLCSwapGap{platform: platformAttr(platform)}
-}
-
-// Record publishes one clip-boundary gap observation, in seconds.
-func (g VLCSwapGap) Record(seconds float64) {
-	vlcMediaSwapGap.Record(context.Background(), seconds, g.platform)
-}
 
 // OBSStatsSnapshot bundles OBS performance + stream-output stats so the
 // poller can publish in a single call without coupling instrumentation to
