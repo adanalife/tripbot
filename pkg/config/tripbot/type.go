@@ -28,10 +28,14 @@ type TripbotConfig struct {
 	// maps). The bot continues to run.
 	GoogleMapsAPIKey string `envconfig:"GOOGLE_MAPS_API_KEY"`
 
-	// ReadOnly is used to prevent writing some things to the DB
+	// ReadOnly suppresses the recurring per-tick DB writes so the bot can run
+	// against a live stream without mutating data. It is a PARTIAL guard, not a
+	// global one: it stops event rows (pkg/events), viewer_plays/viewer_samples
+	// (pkg/viewstats), and the rollup reconciler (pkg/rollups). It does NOT stop
+	// user saves (pkg/users), scoreboard/score writes (pkg/scoreboards),
+	// video-play-order updates (pkg/video), or oauth-token writes
+	// (pkg/oauthtokens) — those still write. Off in every deployed env.
 	ReadOnly bool `default:"false" envconfig:"READ_ONLY"`
-	// Verbose determines output verbosity
-	Verbose bool `default:"false" envconfig:"VERBOSE"`
 
 	// VideoDir is where the videos live
 	VideoDir string `default:"/opt/data/Dashcam/_all" envconfig:"VIDEO_DIR"`

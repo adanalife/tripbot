@@ -103,9 +103,6 @@ func createScore(ctx context.Context, userID, scoreboardID uint16) (Score, error
 
 // save() will take the given score and store it in the DB
 func (s Score) save(ctx context.Context) error {
-	if c.Conf.Verbose {
-		slog.InfoContext(ctx, "saving score", "user_id", s.UserID, "scoreboard_id", s.ScoreboardID, "value", s.Value)
-	}
 	err := database.GormDB().WithContext(ctx).Model(&s).Update("value", s.Value).Error
 	if err != nil {
 		slog.ErrorContext(ctx, "error saving score", "err", err)

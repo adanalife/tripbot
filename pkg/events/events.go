@@ -34,9 +34,6 @@ type Event struct {
 
 func Login(ctx context.Context, user string, sessionID uuid.UUID) error {
 	if c.Conf.ReadOnly {
-		if c.Conf.Verbose {
-			slog.InfoContext(ctx, "skipping login event: read-only mode", "username", user)
-		}
 		return &terrors.ReadOnlyError{Msg: "read-only mode"}
 	}
 	if err := database.GormDB().WithContext(ctx).Create(&Event{Username: user, Platform: c.Conf.Platform, Event: "login", SessionID: sessionID}).Error; err != nil {
@@ -51,9 +48,6 @@ func Login(ctx context.Context, user string, sessionID uuid.UUID) error {
 // when it's zero.
 func Logout(ctx context.Context, user string, sessionID uuid.UUID, extraMiles *float64) error {
 	if c.Conf.ReadOnly {
-		if c.Conf.Verbose {
-			slog.InfoContext(ctx, "skipping logout event: read-only mode", "username", user)
-		}
 		return &terrors.ReadOnlyError{Msg: "read-only mode"}
 	}
 	if err := database.GormDB().WithContext(ctx).Create(&Event{Username: user, Platform: c.Conf.Platform, Event: "logout", SessionID: sessionID, ExtraMilesEarned: extraMiles}).Error; err != nil {
@@ -69,9 +63,6 @@ func Logout(ctx context.Context, user string, sessionID uuid.UUID, extraMiles *f
 // miles bonus keys off. No session_id: this isn't a login/logout.
 func Subscribe(ctx context.Context, user string) error {
 	if c.Conf.ReadOnly {
-		if c.Conf.Verbose {
-			slog.InfoContext(ctx, "skipping subscribe event: read-only mode", "username", user)
-		}
 		return &terrors.ReadOnlyError{Msg: "read-only mode"}
 	}
 	if err := database.GormDB().WithContext(ctx).Create(&Event{Username: user, Platform: c.Conf.Platform, Event: "subscribe"}).Error; err != nil {
@@ -86,9 +77,6 @@ func Subscribe(ctx context.Context, user string) error {
 // Closes the interval Subscribe opened.
 func Unsubscribe(ctx context.Context, user string) error {
 	if c.Conf.ReadOnly {
-		if c.Conf.Verbose {
-			slog.InfoContext(ctx, "skipping unsubscribe event: read-only mode", "username", user)
-		}
 		return &terrors.ReadOnlyError{Msg: "read-only mode"}
 	}
 	if err := database.GormDB().WithContext(ctx).Create(&Event{Username: user, Platform: c.Conf.Platform, Event: "unsubscribe"}).Error; err != nil {
@@ -104,9 +92,6 @@ func Unsubscribe(ctx context.Context, user string) error {
 // trail for out-of-band miles changes the login/logout pairing can't see.
 func Correction(ctx context.Context, user string, delta float64) error {
 	if c.Conf.ReadOnly {
-		if c.Conf.Verbose {
-			slog.InfoContext(ctx, "skipping correction event: read-only mode", "username", user)
-		}
 		return &terrors.ReadOnlyError{Msg: "read-only mode"}
 	}
 	if err := database.GormDB().WithContext(ctx).Create(&Event{Username: user, Platform: c.Conf.Platform, Event: "correction", ExtraMilesEarned: &delta}).Error; err != nil {

@@ -1,0 +1,1 @@
+Removed the unused `VERBOSE` config flag; its gated log lines are superseded by slog levels. `READ_ONLY` is unchanged and now documents which writes it actually guards (a partial dry-run: events, viewstats, and rollups only).

@@ -65,9 +65,6 @@ func findOrCreateScoreboard(ctx context.Context, name string) (Scoreboard, error
 
 // createScoreboard() will actually create the DB record
 func createScoreboard(ctx context.Context, name string) (Scoreboard, error) {
-	if c.Conf.Verbose {
-		slog.InfoContext(ctx, "creating scoreboard", "name", name)
-	}
 	scoreboard := Scoreboard{Name: name, Platform: c.Conf.Platform}
 	result := database.GormDB().WithContext(ctx).Create(&scoreboard)
 	return scoreboard, result.Error

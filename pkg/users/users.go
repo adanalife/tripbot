@@ -70,11 +70,7 @@ func (s *Sessions) sessionMiles(ctx context.Context, u User) float32 {
 	sessionMiles := helpers.DurationToMiles(loggedInDur)
 	// give subscribers a miles bonus
 	if s.IsSubscriber(u) {
-		bonusMiles := s.BonusMiles(u)
-		if c.Conf.Verbose {
-			slog.InfoContext(ctx, "subscriber will get bonus miles", "username", u.Username, "bonus_miles", bonusMiles)
-		}
-		sessionMiles += bonusMiles
+		sessionMiles += s.BonusMiles(u)
 	}
 	return sessionMiles
 }
@@ -105,9 +101,6 @@ func (u User) save(ctx context.Context) {
 	if u.ID == 0 {
 		slog.WarnContext(ctx, "refusing to save user with no ID", "username", u.Username)
 		return
-	}
-	if c.Conf.Verbose {
-		slog.InfoContext(ctx, "saving user", "username", u.Username)
 	}
 	err := database.GormDB().WithContext(ctx).Model(&u).Updates(map[string]any{
 		"last_seen":  u.LastSeen,
@@ -160,9 +153,6 @@ func (u User) String() string {
 
 // FindOrCreate will try to find the user in the DB, otherwise it will create a new user
 func FindOrCreate(ctx context.Context, username string) User {
-	if c.Conf.Verbose {
-		slog.InfoContext(ctx, "FindOrCreate", "username", username)
-	}
 	user, err := Find(ctx, username)
 	if err == nil {
 		return user
