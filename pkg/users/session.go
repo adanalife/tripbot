@@ -2,7 +2,6 @@ package users
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"maps"
 	"slices"
@@ -220,10 +219,6 @@ func (s *Sessions) isLoggedIn(username string) bool {
 // Shutdown loops through all of the logged-in users and logs them out
 func (s *Sessions) Shutdown(ctx context.Context) {
 	snapshot := s.sessionSnapshot()
-	if c.Conf.Verbose {
-		slog.InfoContext(ctx, "logged-in users at shutdown")
-		fmt.Printf("%+v\n", snapshot)
-	}
 	for _, user := range snapshot {
 		s.logout(ctx, user)
 	}

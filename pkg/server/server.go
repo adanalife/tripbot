@@ -11,7 +11,6 @@ import (
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/feature"
-	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/httpmw"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 	sentrynegroni "github.com/getsentry/sentry-go/negroni"
@@ -97,10 +96,6 @@ func (s *Server) Start(ctx context.Context) {
 
 	// catch everything else
 	r.NotFoundHandler = tagged("/", catchAllHandler)
-
-	if c.Conf.Verbose {
-		helpers.PrintAllRoutes(r)
-	}
 
 	// negroni.New + explicit middleware so we can swap negroni's stdlib
 	// logger for an slog-based one — see pkg/httpmw.SlogLogger. The static
