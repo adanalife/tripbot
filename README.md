@@ -75,6 +75,8 @@ Changelog entries are managed with [towncrier](https://towncrier.readthedocs.io)
 
 A fragment is a small markdown file in [`changelog.d/`](changelog.d/) named `<PR-number>.<type>.md`, e.g. `889.fix.md`. Its contents are the entry prose (bold lead-in sentence, then detail — match the existing [`CHANGELOG.md`](CHANGELOG.md) style); the PR link is added automatically.
 
+You won't know the PR number when branching, so run `task changelog:add TYPE=<type>` — it drops a `+`-prefixed placeholder (towncrier's issue-less convention, e.g. `+fix.fix.md`), and the `changelog-number` workflow renames it to `<PR-number>.<type>.md` on first push. No `SKIP_CHANGELOG` dance needed.
+
 ```bash
 # scaffold one (opens $EDITOR); or just create the file by hand
 task changelog:add PR=889 TYPE=fix

@@ -1,0 +1,1 @@
+**Changelog fragments can be created without knowing the PR number.** Write a `+`-placeholder fragment (`task changelog:add TYPE=fix`) and the new `changelog-number` workflow renames it to `<PR#>.<type>.md` on push — no more `SKIP_CHANGELOG` dance.
