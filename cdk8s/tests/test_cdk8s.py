@@ -20,7 +20,7 @@ ENV_PLATFORMS = {
     "development": ("twitch",),
     "local": ("twitch",),
 }
-COMPONENTS = ("tripbot", "vlc", "onscreens")
+COMPONENTS = ("tripbot", "onscreens")
 
 
 def _objects(stem: str) -> list[dict]:
@@ -49,33 +49,12 @@ def test_each_component_has_deployment_and_service(env, comp, platform):
     assert "Service" in kinds, f"{env}-{comp}-{platform} missing Service"
 
 
-def test_prod_vlc_rtsp_nodeport():
-    """prod vlc-twitch emits a fixed RTSP NodePort so a LAN box (OBS on a desktop)
-    can pull rtsp://<node-ip>:30854/dashcam without kubectl. The minipc has no
-    LoadBalancer controller, so it's a NodePort not an LB. Pinned at 30854."""
-    svcs = _by_kind(_objects("prod-1-vlc-twitch"), "Service")
-    np = next((s for s in svcs if s["metadata"]["name"] == "vlc-twitch-rtsp"), None)
-    assert np is not None, "prod vlc-twitch missing the vlc-twitch-rtsp NodePort"
-    assert np["spec"]["type"] == "NodePort"
-    [port] = np["spec"]["ports"]
-    assert port["nodePort"] == 30854
-    assert port["port"] == 8554 and port["targetPort"] == "rtsp"
-
-
-@pytest.mark.parametrize("stem", ["stage-1-vlc-youtube", "development-vlc-twitch"])
-def test_non_prod_has_no_rtsp_nodeport(stem):
-    """The RTSP NodePort is prod-only — stage/dev don't set vlc_rtsp_node_port (a
-    pinned NodePort can't be claimed twice on the co-tenant minipc node)."""
-    svcs = _by_kind(_objects(stem), "Service")
-    assert not any(s["spec"].get("type") == "NodePort" for s in svcs)
-
-
 @pytest.mark.parametrize("env,platform", [("prod-1", "twitch"), ("stage-1", "youtube")])
-@pytest.mark.parametrize("comp", ["vlc", "tripbot"])
+@pytest.mark.parametrize("comp", ["tripbot"])
 def test_obs_websocket_addr_is_platform_scoped(env, comp, platform):
-    """Both OBS-websocket clients (tripbot + vlc-server poll/control OBS) must dial
-    their OWN platform's OBS — vlc-youtube → obs-youtube, not the baked-in
-    obs-twitch default that broke the YouTube vlc."""
+    """tripbot's OBS-websocket client (watchdog + stream start/stop) must dial
+    its OWN platform's OBS — the youtube instance dials obs-youtube, not the
+    baked-in obs-twitch default."""
     cms = _by_kind(_objects(f"{env}-{comp}-{platform}"), "ConfigMap")
     data = next(cm["data"] for cm in cms if "OBS_WEBSOCKET_ADDR" in cm.get("data", {}))
     assert data["OBS_WEBSOCKET_ADDR"] == f"obs-{platform}:4455"
@@ -224,18 +203,15 @@ def test_stage_tripbot_prefers_rpi5():
 
 
 def test_stage_obs_feeders_colocate_with_obs():
-    """vlc + onscreens feed OBS continuously (RTSP / browser-source) and must reach
-    it on localhost, not across the LAN. They anchor to their platform's OBS pod
-    via podAffinity instead of pulling toward the Pi on their own — keeping the
-    rpi5 toleration so they can follow OBS onto the Pi, but NOT an independent
+    """onscreens feeds OBS continuously (browser-source) and must reach it on
+    localhost, not across the LAN. It anchors to its platform's OBS pod via
+    podAffinity instead of pulling toward the Pi on its own — keeping the
+    rpi5 toleration so it can follow OBS onto the Pi, but NOT an independent
     board node-affinity, which splits the pipeline across nodes (and stutters
     the stream) whenever OBS spills to the MS-01."""
-    for stem in ("stage-1-vlc-youtube", "stage-1-onscreens-youtube"):
-        spec = _pod_spec(stem)
-        assert _colocates_with_obs(spec, "obs-youtube"), stem
-        # follows OBS onto the Pi if OBS lands there ...
-        assert any(
-            t.get("key") == "dana.lol/rpi5" for t in spec.get("tolerations", [])
-        ), stem
-        # ... but carries no independent rpi5 board pull.
-        assert not _prefers_rpi5(spec), stem
+    spec = _pod_spec("stage-1-onscreens-youtube")
+    assert _colocates_with_obs(spec, "obs-youtube")
+    # follows OBS onto the Pi if OBS lands there ...
+    assert any(t.get("key") == "dana.lol/rpi5" for t in spec.get("tolerations", []))
+    # ... but carries no independent rpi5 board pull.
+    assert not _prefers_rpi5(spec)

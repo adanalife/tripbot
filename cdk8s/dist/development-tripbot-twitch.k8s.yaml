@@ -26,7 +26,7 @@ data:
   SENTRY_ENVIRONMENT: development
   TRIPBOT_SERVER_PORT: "8080"
   VERBOSE: "false"
-  VLC_SERVER_HOST: vlc-twitch:8080
+  VLC_SERVER_HOST: playout-twitch:8080
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -44,7 +44,7 @@ spec:
   template:
     metadata:
       annotations:
-        adanalife.dev/config-hash: fe7f09b6cc
+        adanalife.dev/config-hash: e0f1d27278
       labels:
         app: tripbot-twitch
     spec:

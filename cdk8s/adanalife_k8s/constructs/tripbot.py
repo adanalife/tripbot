@@ -149,7 +149,7 @@ def external_url(env: EnvConfig, platform: str) -> str:
 
 def config_data(env: EnvConfig, platform: str) -> dict[str, str]:
     """The assembled tripbot-config data for an env+platform: base literals + the
-    per-platform sibling-service hosts (this platform's vlc/onscreens/obs) +
+    per-platform sibling-service hosts (this platform's playout/onscreens/obs) +
     telemetry + the per-env identity/extra block. Shared with the Jobs so a Job
     applied on its own carries the same config the Deployment runs with. NATS_URL
     is only present where the env defines one (absent on local)."""
@@ -157,6 +157,8 @@ def config_data(env: EnvConfig, platform: str) -> dict[str, str]:
     # bare "postgres" when co-located (parity); cross-namespace FQDN when the DB
     # is isolated in its own namespace (env.data_namespace).
     data["DATABASE_HOST"] = env.postgres_host
+    # The playback API (playout's Service; the vlc key names the wire contract
+    # playout serves).
     data["VLC_SERVER_HOST"] = f"{app_name('vlc', platform)}:8080"
     data["ONSCREENS_SERVER_HOST"] = f"{app_name('onscreens', platform)}:8080"
     data["OBS_SERVER_HOST"] = f"{app_name('obs', platform)}:8080"
