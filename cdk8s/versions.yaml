@@ -14,12 +14,10 @@
 # Secrets + one-shot Jobs are not frozen — they re-synth live.)
 #
 # How each pin moves:
-#   - tripbot: bumped by release-please on its standing release PR (the
-#     `x-release-please-version` marker anchors the replace) — merging the
-#     release PR deploys it. Chat bot only; safe to restart anytime.
-#   - vlc / onscreens-server: offered as per-component bump PRs by
-#     bump-prs.yml after each release — deploy gestures, merged when the
-#     stream can take the restart.
+#   - tripbot / onscreens-server: bumped by release-please on its standing
+#     release PR (the `x-release-please-version` marker anchors the replace)
+#     — merging the release PR deploys both. tripbot restarts only the chat
+#     bot; onscreens restarts only blip the overlays.
 #   - obs: built + deployed from the standalone adanalife/obs repo.
 #
 # Hand-edits (e.g. a rollback): change the pin, then `task cdk8s:prod:bump
@@ -27,14 +25,12 @@
 # `task cdk8s:synth` won't, since it freezes prod.
 #
 # The comment line between pins is load-bearing: git can't auto-merge edits on
-# adjacent lines, so without a separator concurrent bump PRs conflict each
+# adjacent lines, so without a separator concurrent pin-edit PRs conflict each
 # other.
 prod-1:
   # restarts the chat bot only; no stream impact
   tripbot: "3.18.1" # x-release-please-version
-  # restarting drops the playing video briefly on stream
-  vlc: "3.18.1"
   # restarting takes the stream down until OBS reconnects — pick a quiet moment
   obs: "3.4.1"
   # overlays blip; the stream itself stays up
-  onscreens-server: "3.18.1"
+  onscreens-server: "3.18.1" # x-release-please-version
