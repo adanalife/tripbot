@@ -1,0 +1,73 @@
+name: changelog-number
+
+# Fill in the PR number on placeholder changelog fragments so contributors never
+# need to know it up front. Write a fragment on the branch using towncrier's
+# issue-less "+" convention — changelog.d/+<slug>.<type>.md — and this workflow
+# renames it to <PR#>.<type>.md and commits it back, giving the release
+# changelog a PR link per entry.
+#
+# The changelog gate (changelog.yml) already accepts "+" fragments natively, so
+# nothing is blocked before this runs — this only upgrades the fragment's name.
+#
+# Pushed with the automation app token (not GITHUB_TOKEN) so the rename commit
+# re-fires the PR's checks against the numbered state; a GITHUB_TOKEN push
+# wouldn't, and branch protection would then wait forever on checks for the new
+# SHA. That re-fire re-runs this workflow too, but by then no "+" fragment
+# remains, so it's a no-op — no commit loop.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: changelog-number-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  number:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Skip forks (their GITHUB_TOKEN/app token can't push to the head branch)
+    # and release-please's own branch (it carries no fragments to number).
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.head_ref != 'release-please--branches--main'
+    steps:
+      - name: Mint automation app token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.AUTOMATION_APP_ID }}
+          private-key: ${{ secrets.AUTOMATION_APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Number placeholder changelog fragments
+        env:
+          PR: ${{ github.event.pull_request.number }}
+          BRANCH: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          renamed=0
+          for f in changelog.d/+*.md; do
+            base="$(basename "$f" .md)"   # +slug.fix
+            type="${base##*.}"            # fix
+            git mv "$f" "changelog.d/${PR}.${type}.md"
+            renamed=1
+          done
+          if [ "$renamed" -eq 0 ]; then
+            echo "No placeholder fragments to number."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "ci: number changelog fragment(s) for #${PR}"
+          git push origin "HEAD:${BRANCH}"

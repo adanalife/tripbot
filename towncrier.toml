@@ -1,11 +1,15 @@
 # Changelog fragments, assembled by towncrier at release time.
 #
 # Every feature/fix PR drops a fragment in changelog.d/ named <PR>.<type>.md
-# (e.g. 889.fix.md). Run via uvx — no project dependency:
+# (e.g. 889.fix.md). You rarely know the PR number when branching, so scaffold a
+# "+" placeholder (towncrier's issue-less convention) and let CI number it:
 #
-#   uvx towncrier create -c towncrier.toml 889.fix.md   # scaffold a fragment
-#   task changelog:preview                               # see the pending notes
-#   task changelog:build VERSION=3.9.0                   # collate into CHANGELOG.md
+#   task changelog:add TYPE=fix          # writes changelog.d/+fix.fix.md
+#   task changelog:preview               # see the pending notes
+#   task changelog:build VERSION=3.9.0   # collate into CHANGELOG.md
+#
+# On push, changelog-number.yml renames +<slug>.<type>.md -> <PR#>.<type>.md so
+# the release changelog links each entry to its PR.
 #
 # Sections are component-based (matching the existing CHANGELOG style), modeled
 # as towncrier "types". A genuinely new component means a new [[type]] block.
