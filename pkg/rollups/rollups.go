@@ -121,8 +121,8 @@ WHERE ranked.rank <= 50
 // boards, then recompute aggregates for users with events past the watermark
 // and advance it. The watermark keys on events.id — never date_created, which
 // is zero-valued on historical rows.
-func Reconcile(ctx context.Context) {
-	if c.Conf.ReadOnly {
+func Reconcile(ctx context.Context, cfg *c.TripbotConfig) {
+	if cfg.ReadOnly {
 		return
 	}
 

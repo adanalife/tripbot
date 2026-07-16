@@ -88,7 +88,7 @@ func gatherUserProfile(ctx context.Context, platform, username string) userProfi
 	prof.MonthlyMiles = monthlyMiles(ctx, u)
 	prof.FirstSeen = bestEffortFirstSeen(u.FirstSeen, u.DateCreated, earliestEvent(ctx, u.Platform, username))
 	prof.LastSeen = u.LastSeen
-	prof.Sessions = sessionCount(ctx, username)
+	prof.Sessions = sessionCount(ctx, platform, username)
 	return prof
 }
 

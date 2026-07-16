@@ -56,9 +56,9 @@ var currentVideoID atomic.Int64
 
 // RecordPlay writes a video_plays row for a clip switch. Pass videoID 0 when
 // the clip has no DB row; the row is written with a NULL video_id.
-func RecordPlay(ctx context.Context, videoID int, state string, flagged bool, lat, lng float64) {
+func RecordPlay(ctx context.Context, cfg *c.TripbotConfig, videoID int, state string, flagged bool, lat, lng float64) {
 	currentVideoID.Store(int64(videoID))
-	if c.Conf.ReadOnly {
+	if cfg.ReadOnly {
 		return
 	}
 	var vid *int
@@ -66,7 +66,7 @@ func RecordPlay(ctx context.Context, videoID int, state string, flagged bool, la
 		vid = &videoID
 	}
 	play := VideoPlay{
-		Platform: c.Conf.Platform,
+		Platform: cfg.Platform,
 		VideoID:  vid,
 		State:    state,
 		Flagged:  flagged,
@@ -80,8 +80,8 @@ func RecordPlay(ctx context.Context, videoID int, state string, flagged bool, la
 
 // RecordSample writes a viewer_samples row for one viewer-count tick, tagged
 // with the currently-playing clip as of the last RecordPlay.
-func RecordSample(ctx context.Context, count int) {
-	if c.Conf.ReadOnly {
+func RecordSample(ctx context.Context, cfg *c.TripbotConfig, count int) {
+	if cfg.ReadOnly {
 		return
 	}
 	var vid *int
@@ -89,7 +89,7 @@ func RecordSample(ctx context.Context, count int) {
 		vid = &id
 	}
 	sample := ViewerSample{
-		Platform: c.Conf.Platform,
+		Platform: cfg.Platform,
 		Count:    count,
 		VideoID:  vid,
 	}

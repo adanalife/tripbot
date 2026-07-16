@@ -168,7 +168,7 @@ func NewTripbot(version string) *Tripbot {
 		app:     chatbot.New(c.Conf),
 		srv:     server.New(c.Conf),
 		player: video.NewPlayer(
-			c.Conf.Environment, c.Conf.Platform,
+			c.Conf,
 			onscreensClient.New(natsclient.DefaultPublisher(), c.Conf.Environment, c.Conf.Platform),
 			vlcClient.New(c.Conf.VlcServerHost, natsclient.DefaultPublisher(), c.Conf.Environment, c.Conf.Platform),
 		),
@@ -547,7 +547,7 @@ func (t *Tripbot) startDiscord(ctx context.Context) {
 		slog.InfoContext(ctx, "discord disabled by feature flag", "flag", discord.FlagKey)
 		return
 	}
-	session, err := discord.New(c.Conf.DiscordBotToken, c.Conf.DiscordGuildID, t.sessions)
+	session, err := discord.New(c.Conf, t.sessions)
 	if err != nil {
 		slog.ErrorContext(ctx, "discord init failed", "err", err)
 		return
@@ -860,7 +860,7 @@ func (t *Tripbot) scheduleBackgroundJobs() {
 	// Derived-state reconciler over the events table (all platforms' events,
 	// but only one instance should run it — the twitch gate above covers that).
 	// Singleton mode + the reconciler's own row lock make overlap harmless.
-	t.addJob(5*time.Minute, "rollups.Reconcile", rollups.Reconcile,
+	t.addJob(5*time.Minute, "rollups.Reconcile", func(ctx context.Context) { rollups.Reconcile(ctx, c.Conf) },
 		gocron.WithSingletonMode(gocron.LimitModeReschedule))
 	t.addJob(5*time.Minute, "chatbot.ShowRotatingLeaderboard", t.app.ShowRotatingLeaderboard)
 	t.addJob(5*time.Minute, "users.PrintCurrentSession", t.sessions.PrintCurrentSession)

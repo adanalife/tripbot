@@ -62,7 +62,7 @@ func (s *Sessions) UpdateSession(ctx context.Context) {
 
 	// Persist the same total as a viewer_samples row — the durable half of the
 	// emission above, tagged with the clip currently on screen.
-	viewstats.RecordSample(ctx, s.source.ChatterCount())
+	viewstats.RecordSample(ctx, s.cfg, s.source.ChatterCount())
 
 	// log out the people who aren't present, working from a snapshot so the
 	// lock isn't held across the DB work logout does
@@ -156,7 +156,7 @@ func (s *Sessions) login(ctx context.Context, username string) *User {
 	s.loggedIn[username] = &user
 	s.mu.Unlock()
 
-	if err := events.Login(ctx, username, user.sessionID); err != nil {
+	if err := events.Login(ctx, s.cfg, username, user.sessionID); err != nil {
 		slog.ErrorContext(ctx, "error creating login event", "err", err)
 	}
 
@@ -202,7 +202,7 @@ func (s *Sessions) logout(ctx context.Context, u *User) {
 	if extra > 0 {
 		extraMiles = &extra
 	}
-	if err := events.Logout(ctx, u.Username, u.sessionID, extraMiles); err != nil {
+	if err := events.Logout(ctx, s.cfg, u.Username, u.sessionID, extraMiles); err != nil {
 		slog.ErrorContext(ctx, "error creating logout event", "err", err)
 	}
 

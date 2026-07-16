@@ -31,7 +31,7 @@ func (a *App) AnnounceSubscriber(username string, isGift bool, tier string) {
 	a.Chat.Say(fmt.Sprintf("Thank you for the sub, @%s; enjoy your !bonusmiles bleedPurple", username))
 	a.UserSessions.GiveEveryoneMiles(1.0)
 	a.Chat.Say(fmt.Sprintf("The %d current viewers have been given a bonus mile, too HolidayPresent", a.UserSessions.LoggedInCount()))
-	if err := events.Subscribe(context.Background(), username); err != nil {
+	if err := events.Subscribe(context.Background(), a.Cfg, username); err != nil {
 		slog.ErrorContext(context.Background(), "error creating subscribe event", "err", err)
 	}
 }
@@ -43,7 +43,7 @@ func (a *App) AnnounceSubscriber(username string, isGift bool, tier string) {
 func (a *App) RecordUnsubscribe(username string, isGift bool, tier string) {
 	_ = isGift
 	_ = tier
-	if err := events.Unsubscribe(context.Background(), username); err != nil {
+	if err := events.Unsubscribe(context.Background(), a.Cfg, username); err != nil {
 		slog.ErrorContext(context.Background(), "error creating unsubscribe event", "err", err)
 	}
 }

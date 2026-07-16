@@ -353,7 +353,7 @@ func (a *App) monthlyMilesLeaderboardCmd(ctx context.Context, user *users.User, 
 	slog.InfoContext(ctx, "ran !leaderboard", "username", user.Username)
 
 	// select users to show in leaderboard
-	leaderboard := scoreboards.TopMilesRows(ctx, leaderboardSize)
+	leaderboard := scoreboards.TopMilesRows(ctx, a.Cfg, leaderboardSize)
 
 	// display leaderboard on screen
 	a.Onscreens.ShowLeaderboard(ctx, scoreboards.CurrentMilesMonth()+" Miles", leaderboard)
@@ -398,7 +398,7 @@ func (a *App) monthlyGuessLeaderboardCmd(ctx context.Context, user *users.User, 
 	slog.InfoContext(ctx, "ran !guessleaderboard", "username", user.Username)
 
 	// select users to show in leaderboard (zero-scorers already filtered)
-	intLeaderboard := scoreboards.TopGuessRows(ctx, leaderboardSize)
+	intLeaderboard := scoreboards.TopGuessRows(ctx, a.Cfg, leaderboardSize)
 
 	// special message if no one has any correct guesses yet
 	if len(intLeaderboard) == 0 {
@@ -688,7 +688,7 @@ func (a *App) giveMilesCmd(ctx context.Context, user *users.User, params []strin
 		return
 	}
 	newTotal := a.Sessions.CorrectMiles(ctx, target, float32(delta))
-	if err := events.Correction(ctx, target, delta); err != nil {
+	if err := events.Correction(ctx, a.Cfg, target, delta); err != nil {
 		slog.ErrorContext(ctx, "error creating correction event", "err", err)
 	}
 	a.Chat.Say(fmt.Sprintf("@%s now has %.2fmi", target, newTotal))
