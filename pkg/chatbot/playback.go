@@ -10,6 +10,7 @@ import (
 	"time"
 
 	terrors "github.com/adanalife/tripbot/pkg/errors"
+	"github.com/hako/durafmt"
 
 	"github.com/adanalife/tripbot/pkg/feature"
 	"github.com/adanalife/tripbot/pkg/helpers"
@@ -174,27 +175,6 @@ func parseSeekSpan(arg string) (time.Duration, error) {
 	return time.ParseDuration(arg)
 }
 
-// formatSeekSpan renders a span the way a chatter would type it: "10m",
-// "1h30m", "45s" — no trailing zero units (time.Duration.String would give
-// "1h30m0s"). Callers pass a positive span.
-func formatSeekSpan(d time.Duration) string {
-	d = d.Round(time.Second)
-	h := int(d.Hours())
-	m := int(d.Minutes()) % 60
-	s := int(d.Seconds()) % 60
-	var b strings.Builder
-	if h > 0 {
-		fmt.Fprintf(&b, "%dh", h)
-	}
-	if m > 0 {
-		fmt.Fprintf(&b, "%dm", m)
-	}
-	if s > 0 || b.Len() == 0 {
-		fmt.Fprintf(&b, "%ds", s)
-	}
-	return b.String()
-}
-
 func (a *App) skipCmd(ctx context.Context, user *users.User, params []string) {
 	a.seekCmd(ctx, user, params, "!skip", 1)
 }
@@ -248,10 +228,11 @@ func (a *App) seekCmd(ctx context.Context, user *users.User, params []string, na
 		if err := a.VLC.Seek(ctx, span); err != nil {
 			slog.ErrorContext(ctx, "error from VLC client", "err", err)
 		}
+		// same reply formatting as !followage: two largest units
 		if span > 0 {
-			a.Chat.Say("⏩ Skipping ahead " + formatSeekSpan(span))
+			a.Chat.Say(fmt.Sprintf("⏩ Skipping ahead %s", durafmt.Parse(span).LimitFirstN(2)))
 		} else {
-			a.Chat.Say("⏪ Going back " + formatSeekSpan(-span))
+			a.Chat.Say(fmt.Sprintf("⏪ Going back %s", durafmt.Parse(-span).LimitFirstN(2)))
 		}
 	}
 

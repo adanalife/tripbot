@@ -125,13 +125,13 @@ func TestSkipAndBackCmd_SpansSeekByFootageDuration(t *testing.T) {
 		wantCall string
 		wantSay  string
 	}{
-		{"skip duration", "skip", []string{"10m"}, "Seek(10m0s)", "⏩ Skipping ahead 10m"},
-		{"skip bare number means minutes", "skip", []string{"3"}, "Seek(3m0s)", "⏩ Skipping ahead 3m"},
-		{"skip spaced span joins", "skip", []string{"1h", "30m"}, "Seek(1h30m0s)", "⏩ Skipping ahead 1h30m"},
-		{"skip negative rewinds", "skip", []string{"-10m"}, "Seek(-10m0s)", "⏪ Going back 10m"},
-		{"back duration", "back", []string{"45s"}, "Seek(-45s)", "⏪ Going back 45s"},
-		{"back negative fast-forwards", "back", []string{"-2m"}, "Seek(2m0s)", "⏩ Skipping ahead 2m"},
-		{"any timescale goes through", "skip", []string{"1000h"}, "Seek(1000h0m0s)", "⏩ Skipping ahead 1000h"},
+		{"skip duration", "skip", []string{"10m"}, "Seek(10m0s)", "⏩ Skipping ahead 10 minutes"},
+		{"skip bare number means minutes", "skip", []string{"3"}, "Seek(3m0s)", "⏩ Skipping ahead 3 minutes"},
+		{"skip spaced span joins", "skip", []string{"1h", "30m"}, "Seek(1h30m0s)", "⏩ Skipping ahead 1 hour 30 minutes"},
+		{"skip negative rewinds", "skip", []string{"-10m"}, "Seek(-10m0s)", "⏪ Going back 10 minutes"},
+		{"back duration", "back", []string{"45s"}, "Seek(-45s)", "⏪ Going back 45 seconds"},
+		{"back negative fast-forwards", "back", []string{"-2m"}, "Seek(2m0s)", "⏩ Skipping ahead 2 minutes"},
+		{"any timescale goes through", "skip", []string{"1000h"}, "Seek(1000h0m0s)", "⏩ Skipping ahead 5 weeks 6 days"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -202,24 +202,6 @@ func TestSkipCmd_RejectsUnparseableSpans(t *testing.T) {
 				t.Errorf("expected reply %q, got %v", tc.wantSay, recIRC.Says)
 			}
 		})
-	}
-}
-
-func TestFormatSeekSpan(t *testing.T) {
-	cases := []struct {
-		in   time.Duration
-		want string
-	}{
-		{10 * time.Minute, "10m"},
-		{90 * time.Minute, "1h30m"},
-		{45 * time.Second, "45s"},
-		{2*time.Hour + 15*time.Second, "2h15s"},
-		{0, "0s"},
-	}
-	for _, tc := range cases {
-		if got := formatSeekSpan(tc.in); got != tc.want {
-			t.Errorf("formatSeekSpan(%v) = %q, want %q", tc.in, got, tc.want)
-		}
 	}
 }
 
