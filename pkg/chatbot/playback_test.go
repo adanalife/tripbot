@@ -12,9 +12,9 @@ import (
 )
 
 // These tests cover the four playback commands that refresh pkg/video state
-// after telling vlc-server to change tracks. Before App.Video was injectable,
+// after telling playout to change tracks. Before App.Video was injectable,
 // the refresh was an unobserved package-level call into video.GetCurrentlyPlaying
-// (which in turn hit vlc-server over HTTP). Now we can assert it fires.
+// (which in turn hit playout over HTTP). Now we can assert it fires.
 //
 // The *Cmd handlers early-return on Darwin via helpers.RunningOnDarwin(), so
 // each test calls skipIfDarwin to no-op when running `go test` locally on a Mac.
@@ -44,10 +44,10 @@ func TestTimewarpCmd_AdminDrivesPlaybackChain(t *testing.T) {
 	skipIfDarwin(t)
 	app := newTestApp(video.Video{})
 	recOverlay := &recordingOnscreens{}
-	recVLC := &recordingVLC{}
+	recPlayout := &recordingPlayout{}
 	recVideo := &recordingVideo{}
 	app.Onscreens = recOverlay
-	app.VLC = recVLC
+	app.Playout = recPlayout
 	app.Video = recVideo
 	// Credit flag on → the caller's username rides the overlay call.
 	app.Flags = &recordingFlags{Set: map[string]bool{timewarpCreditFlagKey: true}}
@@ -60,9 +60,9 @@ func TestTimewarpCmd_AdminDrivesPlaybackChain(t *testing.T) {
 	if len(recOverlay.Calls) != 1 || recOverlay.Calls[0] != `ShowTimewarp("test")` {
 		t.Errorf("expected one ShowTimewarp overlay call crediting the caller, got %v", recOverlay.Calls)
 	}
-	// VLC: PlayRandom shuffles to a new video.
-	if len(recVLC.Calls) != 1 || recVLC.Calls[0] != "PlayRandom()" {
-		t.Errorf("expected one PlayRandom VLC call, got %v", recVLC.Calls)
+	// Playout: PlayRandom shuffles to a new video.
+	if len(recPlayout.Calls) != 1 || recPlayout.Calls[0] != "PlayRandom()" {
+		t.Errorf("expected one PlayRandom Playout call, got %v", recPlayout.Calls)
 	}
 	// Video: GetCurrentlyPlaying refreshes pkg/video state after the shuffle.
 	if len(recVideo.Calls) != 1 || recVideo.Calls[0] != "GetCurrentlyPlaying()" {
@@ -77,7 +77,7 @@ func TestTimewarpCmd_CreditFlagOff_NoUsername(t *testing.T) {
 	app := newTestApp(video.Video{})
 	recOverlay := &recordingOnscreens{}
 	app.Onscreens = recOverlay
-	app.VLC = &recordingVLC{}
+	app.Playout = &recordingPlayout{}
 	app.Video = &recordingVideo{}
 
 	runAsAdmin(t, func() {
@@ -94,9 +94,9 @@ func TestTimewarpCmd_CreditFlagOff_NoUsername(t *testing.T) {
 func TestSkipCmd_AdminDrivesPlaybackChain(t *testing.T) {
 	skipIfDarwin(t)
 	app := newTestApp(video.Video{})
-	recVLC := &recordingVLC{}
+	recPlayout := &recordingPlayout{}
 	recVideo := &recordingVideo{}
-	app.VLC = recVLC
+	app.Playout = recPlayout
 	app.Video = recVideo
 
 	runAsAdmin(t, func() {
@@ -104,8 +104,8 @@ func TestSkipCmd_AdminDrivesPlaybackChain(t *testing.T) {
 		app.skipCmd(context.Background(), newTestUser(adminUser), nil)
 	})
 
-	if len(recVLC.Calls) != 1 || recVLC.Calls[0] != "Skip(1)" {
-		t.Errorf("expected one Skip(1) VLC call, got %v", recVLC.Calls)
+	if len(recPlayout.Calls) != 1 || recPlayout.Calls[0] != "Skip(1)" {
+		t.Errorf("expected one Skip(1) Playout call, got %v", recPlayout.Calls)
 	}
 	if len(recVideo.Calls) != 1 || recVideo.Calls[0] != "GetCurrentlyPlaying()" {
 		t.Errorf("expected one GetCurrentlyPlaying call on Video, got %v", recVideo.Calls)
@@ -115,17 +115,17 @@ func TestSkipCmd_AdminDrivesPlaybackChain(t *testing.T) {
 func TestSkipCmd_AdminPassesParamCountThrough(t *testing.T) {
 	skipIfDarwin(t)
 	app := newTestApp(video.Video{})
-	recVLC := &recordingVLC{}
+	recPlayout := &recordingPlayout{}
 	recVideo := &recordingVideo{}
-	app.VLC = recVLC
+	app.Playout = recPlayout
 	app.Video = recVideo
 
 	runAsAdmin(t, func() {
 		app.skipCmd(context.Background(), newTestUser(adminUser), []string{"3"})
 	})
 
-	if len(recVLC.Calls) != 1 || recVLC.Calls[0] != "Skip(3)" {
-		t.Errorf("expected one Skip(3) VLC call, got %v", recVLC.Calls)
+	if len(recPlayout.Calls) != 1 || recPlayout.Calls[0] != "Skip(3)" {
+		t.Errorf("expected one Skip(3) Playout call, got %v", recPlayout.Calls)
 	}
 	if len(recVideo.Calls) != 1 || recVideo.Calls[0] != "GetCurrentlyPlaying()" {
 		t.Errorf("expected one GetCurrentlyPlaying call on Video, got %v", recVideo.Calls)
@@ -137,17 +137,17 @@ func TestSkipCmd_AdminPassesParamCountThrough(t *testing.T) {
 func TestBackCmd_AdminDrivesPlaybackChain(t *testing.T) {
 	skipIfDarwin(t)
 	app := newTestApp(video.Video{})
-	recVLC := &recordingVLC{}
+	recPlayout := &recordingPlayout{}
 	recVideo := &recordingVideo{}
-	app.VLC = recVLC
+	app.Playout = recPlayout
 	app.Video = recVideo
 
 	runAsAdmin(t, func() {
 		app.backCmd(context.Background(), newTestUser(adminUser), nil)
 	})
 
-	if len(recVLC.Calls) != 1 || recVLC.Calls[0] != "Back(1)" {
-		t.Errorf("expected one Back(1) VLC call, got %v", recVLC.Calls)
+	if len(recPlayout.Calls) != 1 || recPlayout.Calls[0] != "Back(1)" {
+		t.Errorf("expected one Back(1) Playout call, got %v", recPlayout.Calls)
 	}
 	if len(recVideo.Calls) != 1 || recVideo.Calls[0] != "GetCurrentlyPlaying()" {
 		t.Errorf("expected one GetCurrentlyPlaying call on Video, got %v", recVideo.Calls)
@@ -196,15 +196,15 @@ func TestJumpCmd_AdminPlaysRandomFromState(t *testing.T) {
 	skipIfDarwin(t)
 	app := newTestApp(video.Video{})
 	recOverlay := &recordingOnscreens{}
-	recVLC := &recordingVLC{}
+	recPlayout := &recordingPlayout{}
 	recVideo := &recordingVideo{
 		// staged result returned from FindRandomByState; .File() renders as
-		// "<Slug>.MP4" — that's what gets passed to VLC.PlayFileInPlaylist.
+		// "<Slug>.MP4" — that's what gets passed to Playout.PlayFileInPlaylist.
 		RandomVid: video.Video{Slug: "2019_0615_183000_001", State: "California"},
 	}
 	recIRC := &recordingChat{}
 	app.Onscreens = recOverlay
-	app.VLC = recVLC
+	app.Playout = recPlayout
 	app.Video = recVideo
 	app.Chat = recIRC
 
@@ -212,7 +212,7 @@ func TestJumpCmd_AdminPlaysRandomFromState(t *testing.T) {
 		app.jumpCmd(context.Background(), newTestUser(adminUser), []string{"california"})
 	})
 
-	// Video: FindRandomByState("california") then GetCurrentlyPlaying() after VLC handoff.
+	// Video: FindRandomByState("california") then GetCurrentlyPlaying() after Playout handoff.
 	wantVideo := []string{`FindRandomByState("california")`, "GetCurrentlyPlaying()"}
 	if len(recVideo.Calls) != len(wantVideo) {
 		t.Fatalf("expected %d Video calls, got %d: %v", len(wantVideo), len(recVideo.Calls), recVideo.Calls)
@@ -223,10 +223,10 @@ func TestJumpCmd_AdminPlaysRandomFromState(t *testing.T) {
 		}
 	}
 
-	// VLC: PlayFileInPlaylist called with the staged video's filename.
-	wantVLC := `PlayFileInPlaylist("2019_0615_183000_001.MP4")`
-	if len(recVLC.Calls) != 1 || recVLC.Calls[0] != wantVLC {
-		t.Errorf("expected one %s VLC call, got %v", wantVLC, recVLC.Calls)
+	// Playout: PlayFileInPlaylist called with the staged video's filename.
+	wantPlayoutCall := `PlayFileInPlaylist("2019_0615_183000_001.MP4")`
+	if len(recPlayout.Calls) != 1 || recPlayout.Calls[0] != wantPlayoutCall {
+		t.Errorf("expected one %s Playout call, got %v", wantPlayoutCall, recPlayout.Calls)
 	}
 
 	// Onscreens: !jump drives no overlay.
@@ -244,13 +244,13 @@ func TestJumpCmd_NoFootageForState(t *testing.T) {
 	skipIfDarwin(t)
 	app := newTestApp(video.Video{})
 	recOverlay := &recordingOnscreens{}
-	recVLC := &recordingVLC{}
+	recPlayout := &recordingPlayout{}
 	recVideo := &recordingVideo{
 		RandomErr: &terrors.NoFootageForStateError{Msg: "no matches found"},
 	}
 	recIRC := &recordingChat{}
 	app.Onscreens = recOverlay
-	app.VLC = recVLC
+	app.Playout = recPlayout
 	app.Video = recVideo
 	app.Chat = recIRC
 
@@ -263,9 +263,9 @@ func TestJumpCmd_NoFootageForState(t *testing.T) {
 		t.Errorf("expected single FindRandomByState(\"wyoming\"), got %v", recVideo.Calls)
 	}
 
-	// No VLC handoff, no overlay.
-	if len(recVLC.Calls) != 0 {
-		t.Errorf("expected no VLC calls on no-footage path, got %v", recVLC.Calls)
+	// No Playout handoff, no overlay.
+	if len(recPlayout.Calls) != 0 {
+		t.Errorf("expected no Playout calls on no-footage path, got %v", recPlayout.Calls)
 	}
 	if len(recOverlay.Calls) != 0 {
 		t.Errorf("expected no overlay calls on no-footage path, got %v", recOverlay.Calls)
@@ -280,10 +280,10 @@ func TestJumpCmd_NoFootageForState(t *testing.T) {
 func TestJumpCmd_RejectsBadInput(t *testing.T) {
 	skipIfDarwin(t)
 	app := newTestApp(video.Video{})
-	recVLC := &recordingVLC{}
+	recPlayout := &recordingPlayout{}
 	recVideo := &recordingVideo{}
 	recIRC := &recordingChat{}
-	app.VLC = recVLC
+	app.Playout = recPlayout
 	app.Video = recVideo
 	app.Chat = recIRC
 
@@ -295,8 +295,8 @@ func TestJumpCmd_RejectsBadInput(t *testing.T) {
 	if len(recVideo.Calls) != 0 {
 		t.Errorf("expected no Video calls on bad input, got %v", recVideo.Calls)
 	}
-	if len(recVLC.Calls) != 0 {
-		t.Errorf("expected no VLC calls on bad input, got %v", recVLC.Calls)
+	if len(recPlayout.Calls) != 0 {
+		t.Errorf("expected no Playout calls on bad input, got %v", recPlayout.Calls)
 	}
 
 	// IRC: usage message.

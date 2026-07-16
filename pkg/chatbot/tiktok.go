@@ -10,7 +10,7 @@ import (
 // tiktokChat is the outbound ChatClient for a tiktok instance. TikTok has no
 // chat-post API — the webcast protocol the gateway reads is observe-only — so
 // Say drops the message. Viewers still see command effects through the
-// platform's own vlc/onscreens pipeline, and the consoleMirror wrapper keeps
+// platform's own playout/onscreens pipeline, and the consoleMirror wrapper keeps
 // the would-be replies visible in the admin console.
 type tiktokChat struct{}
 

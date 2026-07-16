@@ -35,7 +35,7 @@ const (
 // Initialize takes a Config interface and brings up Sentry.
 //
 // version is the build-time version string (typically set via -ldflags
-// "-X main.version=..." in cmd/tripbot and cmd/vlc-server). It's passed
+// "-X main.version=..." in cmd/tripbot). It's passed
 // to sentry as the Release tag so Sentry can group issues by release
 // and surface "this regression started in vX.Y.Z."
 func Initialize(c config.Config, version string) {
@@ -60,7 +60,7 @@ func Initialize(c config.Config, version string) {
 
 	// Tag the scope with which streaming platform this instance serves so
 	// twitch vs youtube errors are filterable within the one shared Sentry
-	// project. tripbot/vlc-server carry it as STREAM_PLATFORM; onscreens-server
+	// project. tripbot carries it as STREAM_PLATFORM; onscreens-server
 	// as PLATFORM. Skip the tag when neither is set rather than tag an empty.
 	platform := os.Getenv(contract.EnvKeyStreamPlatform)
 	if platform == "" {

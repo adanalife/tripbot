@@ -10,7 +10,7 @@ import (
 )
 
 // These tests cover the *Player state-machine introduced in #600. The Player is
-// constructable, so it can be pointed at an httptest-backed vlc client, a
+// constructable, so it can be pointed at an httptest-backed playout client, a
 // recording onscreens fake, and a real postgres transaction — each transition
 // loads the clip and records its play against the actual schema.
 //
@@ -21,7 +21,7 @@ import (
 
 // skipIfDarwin no-ops the test when GOOS=darwin. GetCurrentlyPlaying picks
 // the figureOutCurrentVideo path on Darwin (lsof + bin/current-file.sh),
-// bypassing the vlc client entirely — so the fake vlc server's response
+// bypassing the playout client entirely — so the fake playout server's response
 // would be ignored and the test would shell out for real.
 func skipIfDarwin(t *testing.T) {
 	t.Helper()
@@ -32,9 +32,9 @@ func skipIfDarwin(t *testing.T) {
 
 func TestPlayer_Current_ZeroBeforeAnyCall(t *testing.T) {
 	rec := &recordingOnscreens{}
-	vlcCurrent := ""
-	vlc := fakeVLCServer(t, &vlcCurrent)
-	p := NewPlayer(rec, vlc)
+	playoutCurrent := ""
+	playout := fakePlayoutServer(t, &playoutCurrent)
+	p := NewPlayer(rec, playout)
 
 	got := p.Current()
 	if got != (Video{}) {
@@ -46,11 +46,11 @@ func TestPlayer_GetCurrentlyPlaying_FirstCall_FlaggedShowsGPS(t *testing.T) {
 	skipIfDarwin(t)
 	db := testdb.New(t)
 	rec := &recordingOnscreens{}
-	vlcCurrent := "2018_0514_224801_013.MP4"
-	vlc := fakeVLCServer(t, &vlcCurrent)
-	p := NewPlayer(rec, vlc)
+	playoutCurrent := "2018_0514_224801_013.MP4"
+	playout := fakePlayoutServer(t, &playoutCurrent)
+	p := NewPlayer(rec, playout)
 
-	// The clip vlc reports is already in the DB, flagged (no GPS fix).
+	// The clip playout reports is already in the DB, flagged (no GPS fix).
 	vid := insertVideo(t, db, Video{Slug: "2018_0514_224801_013", Flagged: true, CoordSource: CoordSourceMissing})
 
 	p.GetCurrentlyPlaying(context.Background())
@@ -84,9 +84,9 @@ func TestPlayer_GetCurrentlyPlaying_FirstCall_NotFlaggedHidesGPS(t *testing.T) {
 	skipIfDarwin(t)
 	db := testdb.New(t)
 	rec := &recordingOnscreens{}
-	vlcCurrent := "2019_0615_183000_001.MP4"
-	vlc := fakeVLCServer(t, &vlcCurrent)
-	p := NewPlayer(rec, vlc)
+	playoutCurrent := "2019_0615_183000_001.MP4"
+	playout := fakePlayoutServer(t, &playoutCurrent)
+	p := NewPlayer(rec, playout)
 
 	vid := insertVideo(t, db, Video{Slug: "2019_0615_183000_001", State: "Oregon", Lat: 45.5, Lng: -122.6})
 
@@ -110,9 +110,9 @@ func TestPlayer_GetCurrentlyPlaying_SameVidIsNoop(t *testing.T) {
 	skipIfDarwin(t)
 	db := testdb.New(t)
 	rec := &recordingOnscreens{}
-	vlcCurrent := "2018_0514_224801_013.MP4"
-	vlc := fakeVLCServer(t, &vlcCurrent)
-	p := NewPlayer(rec, vlc)
+	playoutCurrent := "2018_0514_224801_013.MP4"
+	playout := fakePlayoutServer(t, &playoutCurrent)
+	p := NewPlayer(rec, playout)
 
 	vid := insertVideo(t, db, Video{Slug: "2018_0514_224801_013", State: "Nevada", Lat: 39.5, Lng: -119.8})
 
@@ -141,9 +141,9 @@ func TestPlayer_GetCurrentlyPlaying_TransitionTogglesGPSAndResetsTimeStarted(t *
 	skipIfDarwin(t)
 	db := testdb.New(t)
 	rec := &recordingOnscreens{}
-	vlcCurrent := "2018_0514_224801_013.MP4"
-	vlc := fakeVLCServer(t, &vlcCurrent)
-	p := NewPlayer(rec, vlc)
+	playoutCurrent := "2018_0514_224801_013.MP4"
+	playout := fakePlayoutServer(t, &playoutCurrent)
+	p := NewPlayer(rec, playout)
 
 	// First vid: flagged → ShowGPSImage. Second: unflagged → HideGPSImage.
 	first := insertVideo(t, db, Video{Slug: "2018_0514_224801_013", Flagged: true, CoordSource: CoordSourceMissing})
@@ -153,9 +153,9 @@ func TestPlayer_GetCurrentlyPlaying_TransitionTogglesGPSAndResetsTimeStarted(t *
 	firstStart := p.timeStarted
 	firstSlug := p.Current().Slug
 
-	// Flip the vlc-server's reported path; sleep so any reset to timeStarted
+	// Flip the playout-server's reported path; sleep so any reset to timeStarted
 	// is observable as a strictly-greater value.
-	vlcCurrent = "2019_0615_183000_001.MP4"
+	playoutCurrent = "2019_0615_183000_001.MP4"
 	time.Sleep(2 * time.Millisecond)
 
 	p.GetCurrentlyPlaying(context.Background())
@@ -194,9 +194,9 @@ func TestPlayer_CurrentProgress_TracksTimeSinceStart(t *testing.T) {
 	skipIfDarwin(t)
 	db := testdb.New(t)
 	rec := &recordingOnscreens{}
-	vlcCurrent := "2018_0514_224801_013.MP4"
-	vlc := fakeVLCServer(t, &vlcCurrent)
-	p := NewPlayer(rec, vlc)
+	playoutCurrent := "2018_0514_224801_013.MP4"
+	playout := fakePlayoutServer(t, &playoutCurrent)
+	p := NewPlayer(rec, playout)
 
 	insertVideo(t, db, Video{Slug: "2018_0514_224801_013", State: "Nevada", Lat: 39.5, Lng: -119.8})
 
@@ -212,26 +212,26 @@ func TestPlayer_CurrentProgress_TracksTimeSinceStart(t *testing.T) {
 	}
 }
 
-func TestPlayer_GetCurrentlyPlaying_EmptyVlcResult_NoTransition(t *testing.T) {
+func TestPlayer_GetCurrentlyPlaying_EmptyPlayoutResult_NoTransition(t *testing.T) {
 	skipIfDarwin(t)
-	// No testdb needed — when vlc returns "" on the very first call, curVid
+	// No testdb needed — when playout returns "" on the very first call, curVid
 	// stays "" and equals preVid (also ""), so LoadOrCreate is never invoked.
 	// The database singleton is left nil; any DB hit would panic and fail the
 	// test loudly.
 	rec := &recordingOnscreens{}
-	vlcCurrent := ""
-	vlc := fakeVLCServer(t, &vlcCurrent)
-	p := NewPlayer(rec, vlc)
+	playoutCurrent := ""
+	playout := fakePlayoutServer(t, &playoutCurrent)
+	p := NewPlayer(rec, playout)
 
 	p.GetCurrentlyPlaying(context.Background())
 
 	if p.curVid != "" || p.preVid != "" {
-		t.Errorf("curVid/preVid after empty-vlc first call = (%q, %q); want (\"\",\"\")", p.curVid, p.preVid)
+		t.Errorf("curVid/preVid after empty-playout first call = (%q, %q); want (\"\",\"\")", p.curVid, p.preVid)
 	}
 	if len(rec.calls) != 0 {
 		t.Errorf("expected no overlay calls on no-transition path, got %v", rec.calls)
 	}
 	if p.Current() != (Video{}) {
-		t.Errorf("Current() after empty-vlc first call = %+v, want zero Video", p.Current())
+		t.Errorf("Current() after empty-playout first call = %+v, want zero Video", p.Current())
 	}
 }

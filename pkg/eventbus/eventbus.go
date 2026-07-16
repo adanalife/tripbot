@@ -145,12 +145,12 @@ func EmitViewerCount(ctx context.Context, env, platform string, count int) {
 // --- video.changed --------------------------------------------------------
 
 // VideoChanged is the wire format for tripbot.<env>.video.changed — published
-// when VLC switches to a new clip. State is the full state name (e.g.
+// when playout switches to a new clip. State is the full state name (e.g.
 // "Wyoming"); Flagged marks a no-GPS clip. The console's "now playing" card
 // updates from this without a reload.
 type VideoChanged struct {
-	// Platform is the streaming platform whose VLC switched clips ("twitch" /
-	// "youtube"). Each platform runs its own VLC at an independent corpus
+	// Platform is the streaming platform whose playout switched clips ("twitch" /
+	// "youtube"). Each platform runs its own playout at an independent corpus
 	// position, so both per-platform instances publish into the same env's
 	// subject; this is what lets the console keep a separate now-playing card
 	// and map trail per platform. Empty on events emitted before the tag

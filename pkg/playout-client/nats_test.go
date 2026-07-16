@@ -1,4 +1,4 @@
-package vlcClient
+package playoutClient
 
 import (
 	"context"
@@ -9,13 +9,13 @@ import (
 	"sync"
 	"testing"
 
-	ve "github.com/adanalife/tripbot/pkg/vlc-events"
+	ve "github.com/adanalife/tripbot/pkg/playout-events"
 )
 
 // commandHost is handed to New for the command tests. The four commands are
 // NATS-only (no HTTP after the peel), so this host is never dialed — it just
 // satisfies New's signature.
-const commandHost = "vlc.invalid:0"
+const commandHost = "playout.invalid:0"
 
 // recordingPublisher captures every publish so tests can assert on the
 // subject + payload. Goroutine-safe. Satisfies natsclient.Publisher.

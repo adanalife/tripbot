@@ -49,7 +49,7 @@ const (
 	// frame, so the moment is still upcoming when playback resumes (we don't
 	// want to land right on it and have it slip past on stream) and so it plays
 	// out in view after the warp overlay clears rather than being hidden by it.
-	// The vlc client clamps a resulting negative timestamp to start-of-clip.
+	// The playout client clamps a resulting negative timestamp to start-of-clip.
 	findJumpLeadInSec = 12.0
 )
 
@@ -266,7 +266,7 @@ func (a *App) findCmd(ctx context.Context, user *users.User, params []string) {
 		return
 	}
 
-	// VLC playback isn't wired up on the dev Mac (same guard as !goto).
+	// Playout playback isn't wired up on the dev Mac (same guard as !goto).
 	if helpers.RunningOnDarwin() {
 		a.Chat.Say("Sorry, find isn't available right now")
 		return
@@ -311,7 +311,7 @@ func (a *App) findCmd(ctx context.Context, user *users.User, params []string) {
 	a.showTimewarpOverlay(ctx, user.Username)
 
 	// Land ahead of the matched frame so the moment doesn't slip past on stream.
-	if err := a.VLC.PlayFileAtTimestamp(ctx, hit.Slug+".MP4", hit.TsSec-findJumpLeadInSec); err != nil {
+	if err := a.Playout.PlayFileAtTimestamp(ctx, hit.Slug+".MP4", hit.TsSec-findJumpLeadInSec); err != nil {
 		slog.ErrorContext(ctx, "find jump failed", "err", err, "slug", hit.Slug)
 		a.Chat.Say("Found it, but couldn't jump there — sorry!")
 		return

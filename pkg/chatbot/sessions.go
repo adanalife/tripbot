@@ -10,7 +10,7 @@ import (
 // depend on at command-time (user lookups, lifetime-leaderboard reads,
 // miles computations, graceful shutdown of in-memory session state). Tests
 // inject a fake; production uses the realSessions adapter built by
-// NewSessionsAdapter. Mirrors the Onscreens/VLC/Video/IRC injection pattern.
+// NewSessionsAdapter. Mirrors the Onscreens/Playout/Video/IRC injection pattern.
 //
 // The IRC-side session lifecycle (LoginIfNecessary / LogoutIfNecessary) and the
 // follower/subscriber + login-count reads are intentionally NOT on this

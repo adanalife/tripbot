@@ -1,4 +1,4 @@
-package vlcClient
+package playoutClient
 
 import (
 	"context"
@@ -8,22 +8,22 @@ import (
 	"net/http"
 
 	"github.com/adanalife/tripbot/pkg/natsclient"
-	ve "github.com/adanalife/tripbot/pkg/vlc-events"
+	ve "github.com/adanalife/tripbot/pkg/playout-events"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
-// Client issues vlc-server playback commands over NATS and reads the
+// Client issues playout playback commands over NATS and reads the
 // currently-playing file over HTTP. Construct via New(host, nats, env, platform).
 //
 // The four fire-and-forget commands (PlayRandom, PlayFileInPlaylist, Skip,
-// Back) publish to tripbot.<env>.vlc.<verb>.<platform>; vlc-server's subscriber
+// Back) publish to tripbot.<env>.vlc.<verb>.<platform>; playout's subscriber
 // acts on them. The HTTP command path (the mirror that preceded the peel) is
 // gone. nats may be nil (tests that don't exercise pubsub) — publishes no-op
 // then. CurrentlyPlaying is a read and stays on HTTP, so host is still required.
 //
 // platform is the streaming platform this tripbot instance serves ("twitch" /
 // "youtube"); it's the trailing leaf on every command subject so only the
-// matching vlc-<platform> server acts on it — a Twitch-triggered !find never
+// matching playout-<platform> server acts on it — a Twitch-triggered !find never
 // seeks the YouTube stream.
 type Client struct {
 	serverURL  string
@@ -33,7 +33,7 @@ type Client struct {
 	platform   string
 }
 
-// New returns a Client pointed at the given vlc-server host. The HTTP
+// New returns a Client pointed at the given playout host. The HTTP
 // transport is OTel-instrumented so outbound calls produce spans and
 // propagate W3C tracecontext headers. Callers must pass ctx so the
 // propagation has an active span to attach to — passing context.Background()
@@ -59,7 +59,7 @@ func (c *Client) publish(ctx context.Context, subject string, ev any) {
 	}
 	payload, err := json.Marshal(ev)
 	if err != nil {
-		slog.ErrorContext(ctx, "marshal vlc event", "err", err, "subject", subject)
+		slog.ErrorContext(ctx, "marshal playout event", "err", err, "subject", subject)
 		return
 	}
 	c.nats.Publish(ctx, subject, payload)
@@ -89,7 +89,7 @@ func (c *Client) PlayFileInPlaylist(ctx context.Context, filename string) error 
 
 // PlayFileAtTimestamp plays a file and seeks to tsSec seconds into it — the
 // jump-to-moment path behind !find. A non-positive tsSec just plays from the
-// top (vlc-server's seek guard no-ops there). Fire-and-forget like the other
+// top (playout's seek guard no-ops there). Fire-and-forget like the other
 // commands.
 func (c *Client) PlayFileAtTimestamp(ctx context.Context, filename string, tsSec float64) error {
 	posMs := int64(tsSec * 1000)
@@ -112,23 +112,23 @@ func (c *Client) Back(ctx context.Context, n int) error {
 
 // Transport-layer errors log at Debug, not Error: CurrentlyPlaying (its
 // only caller) logs its own operation-specific failure at Error with the
-// same underlying err. Logging here too would double-count every VLC outage in
+// same underlying err. Logging here too would double-count every playout outage in
 // Loki and Sentry.
 func (c *Client) get(ctx context.Context, url string) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		slog.DebugContext(ctx, "error building request to VLC server", "err", err)
+		slog.DebugContext(ctx, "error building request to playout server", "err", err)
 		return "", err
 	}
 	response, err := c.httpClient.Do(req)
 	if err != nil {
-		slog.DebugContext(ctx, "error connecting to VLC server", "err", err)
+		slog.DebugContext(ctx, "error connecting to playout server", "err", err)
 		return "", err
 	}
 	defer response.Body.Close()
 	contents, err := ioutil.ReadAll(response.Body)
 	if err != nil {
-		slog.DebugContext(ctx, "error reading response from VLC server", "err", err)
+		slog.DebugContext(ctx, "error reading response from playout server", "err", err)
 		return "", err
 	}
 	return string(contents), nil

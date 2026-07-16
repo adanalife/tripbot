@@ -5,7 +5,7 @@
 // OBS WebSocket, so it's the subscriber; the standalone tripbot-console is the
 // publisher (a settings-page button), the same command split as pkg/chat-events.
 //
-// Like pkg/chat-events, pkg/vlc-events and pkg/onscreens-events it is
+// Like pkg/chat-events, pkg/playout-events and pkg/onscreens-events it is
 // stdlib-only and side-effect-free: no init(), no pkg/config import, env is
 // always a parameter rather than read from config — so it links safely into any
 // binary.

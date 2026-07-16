@@ -25,7 +25,7 @@ var ShutdownSignal = func() error {
 var ShutdownDelay = 500 * time.Millisecond
 
 // ShutdownHandler returns the POST /admin/shutdown handler shared across
-// tripbot's Go servers (tripbot, vlc-server, onscreens-server). Responds
+// tripbot's Go servers (tripbot, onscreens-server). Responds
 // 202 + a short body, then schedules SIGTERM after ShutdownDelay.
 //
 // The handler is intentionally minimal: no body parsing, and no auth check

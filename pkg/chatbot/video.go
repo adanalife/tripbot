@@ -10,13 +10,13 @@ import (
 // Video is the subset of the pkg/video surface that chatbot commands depend
 // on. Tests inject a fake; production uses the realVideo adapter, which
 // cmd/tripbot builds around the process-wide *video.Player via NewVideoAdapter.
-// Mirrors the Onscreens/VLC injection pattern.
+// Mirrors the Onscreens/Playout injection pattern.
 type Video interface {
 	// Current returns the video the system believes is currently playing,
 	// without making any I/O calls.
 	Current() video.Video
 	// GetCurrentlyPlaying refreshes the Player's notion of what's currently
-	// playing (an HTTP call to vlc-server in production) and returns it.
+	// playing (an HTTP call to playout in production) and returns it.
 	GetCurrentlyPlaying(ctx context.Context) video.Video
 	// CurrentProgress reports how long the current clip has been playing.
 	CurrentProgress() time.Duration

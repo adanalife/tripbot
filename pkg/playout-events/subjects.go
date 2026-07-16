@@ -1,12 +1,14 @@
-package vlcEvents
+package playoutEvents
 
 import (
 	"fmt"
 	"strings"
 )
 
-// domain is the fixed segment between <env> and the verb in every vlc
-// subject: tripbot.<env>.vlc.<verb>.<platform>.
+// domain is the fixed segment between <env> and the verb in every playout
+// subject: tripbot.<env>.vlc.<verb>.<platform>. The "vlc" value is the legacy
+// wire name playout subscribes to; it renames with the coordinated contract
+// change, not unilaterally here.
 const domain = "vlc"
 
 // subject builds tripbot.<env>.vlc.<verb...>. Unexported so callers go
@@ -19,7 +21,7 @@ func subject(env string, verb ...string) string {
 }
 
 // The command subjects carry a trailing platform leaf so each streaming
-// platform's playback stays isolated: vlc-twitch and vlc-youtube share the
+// platform's playback stays isolated: playout-twitch and playout-youtube share the
 // env's NATS and each subscribes only to its own leaf, so a Twitch-triggered
 // !find never seeks the YouTube stream — same shape as the lastplayed leaf below.
 func PlayRandomSubject(env, platform string) string { return subject(env, "play", "random", platform) }
@@ -28,10 +30,10 @@ func PlayFileAtSubject(env, platform string) string { return subject(env, "play"
 func SkipSubject(env, platform string) string       { return subject(env, "skip", platform) }
 func BackSubject(env, platform string) string       { return subject(env, "back", platform) }
 
-// LastPlayedSubject is the per-platform leaf vlc-server publishes its
+// LastPlayedSubject is the per-platform leaf playout publishes its
 // now-playing state to (tripbot.<env>.vlc.lastplayed.<platform>). Unlike the
 // command subjects above this one is *state*, not a command: every platform
-// instance (vlc-twitch, vlc-youtube) shares the env's NATS, so the platform
+// instance (playout-twitch, playout-youtube) shares the env's NATS, so the platform
 // leaf keeps the TRIPBOT_VLC_LASTPLAYED stream's last-value cache
 // (MaxMsgsPerSubject=1) per instance instead of the instances clobbering one
 // another — same shape as tripbot.<env>.auth.status.<platform>.

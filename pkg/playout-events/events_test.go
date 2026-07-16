@@ -1,4 +1,4 @@
-package vlcEvents
+package playoutEvents
 
 import (
 	"encoding/json"

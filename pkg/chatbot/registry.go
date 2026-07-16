@@ -300,7 +300,7 @@ var v1Commands = map[string]bool{
 	// info (read current-video state only)
 	"!weather": true, "!time": true, "!date": true, "!sunset": true,
 	"!state": true, "!location": true,
-	// playback control (drives this platform's vlc pipeline)
+	// playback control (drives this platform's playout pipeline)
 	// !find is Twitch-only for now — subscriber-gated + still slow, revisit for YouTube later
 	"!timewarp": true, "!goto": true, "!skip": true, "!back": true,
 	// socials / static links
