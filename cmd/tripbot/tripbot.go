@@ -21,6 +21,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"github.com/adanalife/tripbot/pkg/locationfeed"
 	"github.com/adanalife/tripbot/pkg/natsclient"
+	"github.com/adanalife/tripbot/pkg/obs"
 	"github.com/adanalife/tripbot/pkg/obs/audiowatchdog"
 	"github.com/adanalife/tripbot/pkg/obs/watchdog"
 	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
@@ -245,6 +246,10 @@ func (t *Tripbot) Run() {
 	t.player.EmitCurrentVideo(ctx)   // after startNATS: publishes the current video.changed for the standalone console
 	t.startAuthStatusEmitter(ctx)    // after startNATS: publishes auth.status snapshots for the standalone console
 	t.startOBSRefreshSubscriber(ctx) // after startNATS: per-platform (each instance owns its OBS)
+	// Poll this instance's OBS WebSocket for streaming state + render/output
+	// stats, stamping the series with the platform. These obs_* gauges feed
+	// the stream-health dashboards and alerts.
+	go obs.PollStreamingActive(ctx, c.Conf.Platform, 30*time.Second)
 	if platformIsTwitch() {
 		// chat.send subjects are per-env, not per-platform — both platform
 		// instances would receive every admin send, so only the Twitch instance
