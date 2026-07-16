@@ -4,7 +4,6 @@ import (
 	"context"
 	"log/slog"
 
-	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 )
@@ -48,7 +47,7 @@ func (s gatewayChatterSource) UpdateChatters() {
 // broadcaster can't follow themselves, so admins short-circuit to true; no
 // gateway (or a gateway error) fails closed (treated as non-follower).
 func (s gatewayChatterSource) IsFollower(username string) bool {
-	if c.Conf.UserIsAdmin(username) {
+	if s.t.cfg.UserIsAdmin(username) {
 		return true
 	}
 	if s.t.gateway == nil {

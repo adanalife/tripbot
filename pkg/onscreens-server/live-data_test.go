@@ -31,36 +31,34 @@ func TestLocationStoreFreshness(t *testing.T) {
 }
 
 func TestBotlessPoolsIncludeFreshLocationData(t *testing.T) {
-	withPlatform(t, platformYouTube)
-	withInbound(t, false) // bot-less, so pool() returns the promo set
+	cfg := rotatorConf(platformYouTube, false) // bot-less, so pool() returns the promo set
 	now := time.Now()
 	liveLocation.set("Moab, Utah", "Thursday June 14, 2018", now)
 	t.Cleanup(func() { liveLocation.set("", "", time.Time{}) })
 
-	if got := newLeftRotator().pool(now); !poolHasText(got, "📍 Moab, Utah") {
+	if got := newLeftRotator(cfg).pool(now); !poolHasText(got, "📍 Moab, Utah") {
 		t.Errorf("bot-less left pool missing the location line: %+v", got)
 	}
-	if got := newRightRotator().pool(now); !poolHasText(got, "📅 Thursday June 14, 2018") {
+	if got := newRightRotator(cfg).pool(now); !poolHasText(got, "📅 Thursday June 14, 2018") {
 		t.Errorf("bot-less right pool missing the date line: %+v", got)
 	}
 }
 
 func TestBotlessPoolsOmitStaleData(t *testing.T) {
-	withPlatform(t, platformYouTube)
-	withInbound(t, false)
+	cfg := rotatorConf(platformYouTube, false)
 	now := time.Now()
 	liveLocation.set("Moab, Utah", "Thursday June 14, 2018", now.Add(-locationDataTTL-time.Minute))
 	t.Cleanup(func() { liveLocation.set("", "", time.Time{}) })
 
 	// Stale data → pools fall back to the static promo sets only.
-	left := newLeftRotator().pool(now)
+	left := newLeftRotator(cfg).pool(now)
 	if poolHasText(left, "📍 Moab, Utah") {
 		t.Error("stale location should not appear in the left pool")
 	}
 	if len(left) != len(botlessLeftMessages) {
 		t.Errorf("left pool = %d entries, want the %d static promo lines", len(left), len(botlessLeftMessages))
 	}
-	if poolHasText(newRightRotator().pool(now), "📅 Thursday June 14, 2018") {
+	if poolHasText(newRightRotator(cfg).pool(now), "📅 Thursday June 14, 2018") {
 		t.Error("stale date should not appear in the right pool")
 	}
 }

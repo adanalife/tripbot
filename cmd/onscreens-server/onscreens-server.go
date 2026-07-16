@@ -24,21 +24,23 @@ const httpShutdownTimeout = 5 * time.Second
 func main() {
 	slog.Info("onscreens-server starting", "version", version)
 
+	conf := c.Load()
+
 	// ctx is canceled on SIGINT/SIGTERM; srv.Start returns when that
 	// happens, the drain below runs, and the process exits 0. There is no
 	// separate signal-handler goroutine — this is the only shutdown path.
-	ctx, flush := bootstrap.Start("onscreens-server", version, c.Conf)
+	ctx, flush := bootstrap.Start("onscreens-server", version, conf)
 	defer flush()
 
 	// Connect to NATS so Server.Start can attach subscribers. Optional —
 	// when NATS_URL is empty the conn is nil and the subscriber registration
 	// is skipped; HTTP remains the sole transport.
-	natsclient.Connect(c.Conf.NatsURL, "onscreens-server")
+	natsclient.Connect(conf.NatsURL, "onscreens-server")
 
 	// construct the server — runs all per-onscreen init (singletons +
 	// background loops) up front so the HTTP routes have everything to
 	// read by the time the listener accepts.
-	srv := onscreensServer.New(onscreensServer.Config{Version: version})
+	srv := onscreensServer.New(onscreensServer.Config{Version: version, Conf: conf})
 
 	// start the webserver — blocks until ListenAndServe fails or the
 	// signal context cancels

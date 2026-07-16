@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/adanalife/tripbot/pkg/config"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"github.com/adanalife/tripbot/pkg/oauthtokens"
 	"github.com/nicklaw5/helix/v2"
@@ -60,8 +61,11 @@ var (
 
 // init requires the static credentials needed to build a helix client.
 // TWITCH_AUTH_TOKEN is intentionally NOT required — the IRC token lives in the
-// oauth_tokens table and is loaded via LoadFromDB at boot.
+// oauth_tokens table and is loaded via LoadFromDB at boot. SetEnvironment
+// loads the env-specific dotenv file first, so the requirement holds under
+// bare `go test` too (no main has called config.Load there).
 func init() {
+	config.SetEnvironment()
 	requiredVars := []string{
 		"TWITCH_CLIENT_ID",
 		"TWITCH_CLIENT_SECRET",

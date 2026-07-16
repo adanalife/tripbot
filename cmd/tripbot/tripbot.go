@@ -81,6 +81,10 @@ var version = "dev"
 type Tripbot struct {
 	version string
 
+	// cfg is the process config, loaded once in main and threaded into every
+	// constructor — nothing reads a package-level config global.
+	cfg *c.TripbotConfig
+
 	// app is the chatbot App that owns the command registry and runs chat
 	// commands + inbound handlers. Constructed in NewTripbot; setUpTwitchClient
 	// wires its Twitch adapters to the IRC client (ConnectIRC), and eventsub /
@@ -152,41 +156,42 @@ type Tripbot struct {
 // set (a Twitch instance), else returns nil (a non-Twitch instance has no
 // Twitch Helix surface). Stateless and side-effect free, so it's safe to
 // construct at NewTripbot time.
-func newGatewayClient() *gateway.Client {
-	if c.Conf.TwitchAPIURL == "" {
+func newGatewayClient(cfg *c.TripbotConfig) *gateway.Client {
+	if cfg.TwitchAPIURL == "" {
 		return nil
 	}
-	return gateway.New(c.Conf.TwitchAPIURL)
+	return gateway.New(cfg.TwitchAPIURL)
 }
 
 // NewTripbot constructs a Tripbot with default runtime state. Dependencies
 // that need I/O or ordering (the IRC client, scheduler, Discord session,
 // Postgres-backed flag client) are filled in by the boot-sequence methods.
-func NewTripbot(version string) *Tripbot {
+func NewTripbot(version string, cfg *c.TripbotConfig) *Tripbot {
 	t := &Tripbot{
 		version: version,
-		app:     chatbot.New(c.Conf),
-		srv:     server.New(c.Conf),
+		cfg:     cfg,
+		app:     chatbot.New(cfg),
+		srv:     server.New(cfg),
 		player: video.NewPlayer(
-			c.Conf,
-			onscreensClient.New(natsclient.DefaultPublisher(), c.Conf.Environment, c.Conf.Platform),
-			vlcClient.New(c.Conf.VlcServerHost, natsclient.DefaultPublisher(), c.Conf.Environment, c.Conf.Platform),
+			cfg,
+			onscreensClient.New(natsclient.DefaultPublisher(), cfg.Environment, cfg.Platform),
+			vlcClient.New(cfg.VlcServerHost, natsclient.DefaultPublisher(), cfg.Environment, cfg.Platform),
 		),
 		flagClient: feature.NewInMemoryClient(nil),
-		gateway:    newGatewayClient(),
+		gateway:    newGatewayClient(cfg),
 	}
 	// The audience source dispatches chatter refresh + the follower check to the
 	// gateway (when the flag is on) or in-process; with no gateway wired it's the
 	// plain in-process source. Reads t.gateway/t.flagClient lazily, so wiring it
 	// here against the partially-built t is fine.
-	t.sessions = users.New(c.Conf, gatewayChatterSource{t: t})
+	t.sessions = users.New(t.cfg, gatewayChatterSource{t: t})
 	// On a bot-less YouTube instance (no inbound chat → no commands), feed the
 	// rotators the clip's location/date in place of command hints. Gated by the
 	// same flag as the rest of the bot-less presentation; reuses the chatbot's
 	// Geocoder (pkg/geo default, set up in ConnectYouTubeViaGateway).
-	if c.Conf.Platform == "youtube" && !c.Conf.YouTubeInboundEnabled {
+	if t.cfg.Platform == "youtube" && !t.cfg.YouTubeInboundEnabled {
 		t.locationFeed = locationfeed.New(
-			onscreensClient.New(natsclient.DefaultPublisher(), c.Conf.Environment, c.Conf.Platform),
+			onscreensClient.New(natsclient.DefaultPublisher(), t.cfg.Environment, t.cfg.Platform),
 			t.app.Geocoder,
 		)
 	}
@@ -194,13 +199,13 @@ func NewTripbot(version string) *Tripbot {
 }
 
 func main() {
-	NewTripbot(version).Run()
+	NewTripbot(version, c.Load()).Run()
 }
 
 // platformIsTwitch reports whether this instance serves Twitch. Empty
 // Platform is treated as Twitch, matching the chatbot registry's contract.
-func platformIsTwitch() bool {
-	return c.Conf.Platform == "" || c.Conf.Platform == "twitch"
+func (t *Tripbot) platformIsTwitch() bool {
+	return t.cfg.Platform == "" || t.cfg.Platform == "twitch"
 }
 
 // Run performs the various steps to get the bot running. The spine —
@@ -211,23 +216,23 @@ func platformIsTwitch() bool {
 // subscriber, Discord, the OBS↔Twitch watchdog) are gated off non-Twitch
 // instances.
 func (t *Tripbot) Run() {
-	slog.Info("tripbot starting", "version", t.version, "platform", c.Conf.Platform)
+	slog.Info("tripbot starting", "version", t.version, "platform", t.cfg.Platform)
 	// ctx is canceled on SIGINT/SIGTERM; every background goroutine hangs
 	// off it and the HTTP server uses it to trigger its graceful drain.
 	// When the blocking chat loop returns, t.shutdown runs the cleanup
 	// sequence and the process exits 0 — there is no separate
 	// signal-handler goroutine.
-	ctx, flush := bootstrap.Start("tripbot", t.version, c.Conf)
+	ctx, flush := bootstrap.Start("tripbot", t.version, t.cfg)
 	defer flush()
 	t.srv.SetVersion(t.version)
 	httpDone := t.startHttpServer(ctx)
 	t.findInitialVideo()
-	t.app.Video = chatbot.NewVideoAdapter(t.player)                          // commands read the same Player the cron refreshes
-	t.app.Sessions = chatbot.NewSessionsAdapter(c.Conf.Platform, t.sessions) // command-time queries
-	t.app.UserSessions = t.sessions                                          // inbound IRC handlers + access checks read the same session state
+	t.app.Video = chatbot.NewVideoAdapter(t.player)                         // commands read the same Player the cron refreshes
+	t.app.Sessions = chatbot.NewSessionsAdapter(t.cfg.Platform, t.sessions) // command-time queries
+	t.app.UserSessions = t.sessions                                         // inbound IRC handlers + access checks read the same session state
 	t.sessions.InitLeaderboard(context.Background())
 	t.startFeatureFlags(ctx)
-	if platformIsTwitch() {
+	if t.platformIsTwitch() {
 		if t.gateway == nil {
 			// No in-process Helix fallback since the cutover, so audience polls,
 			// the follower check, and broadcaster send have no backend here.
@@ -250,8 +255,8 @@ func (t *Tripbot) Run() {
 	// Poll this instance's OBS WebSocket for streaming state + render/output
 	// stats, stamping the series with the platform. These obs_* gauges feed
 	// the stream-health dashboards and alerts.
-	go obs.PollStreamingActive(ctx, c.Conf.Platform, 30*time.Second)
-	if platformIsTwitch() {
+	go obs.PollStreamingActive(ctx, t.cfg.Platform, 30*time.Second)
+	if t.platformIsTwitch() {
 		// chat.send subjects are per-env, not per-platform — both platform
 		// instances would receive every admin send, so only the Twitch instance
 		// (which owns the bot/broadcaster identities the command names)
@@ -261,11 +266,11 @@ func (t *Tripbot) Run() {
 		t.startSilentDisconnectWatchdog(ctx) // watches the OBS→Twitch stream specifically
 		t.startBackgroundAudioWatchdog(ctx)  // keeps audible music on-stream when SomaFM drops
 		t.connectToTwitch(ctx)               // blocks until shutdown
-	} else if c.Conf.Platform == "facebook" {
+	} else if t.cfg.Platform == "facebook" {
 		t.connectToFacebook(ctx) // blocks until shutdown
-	} else if c.Conf.Platform == "instagram" {
+	} else if t.cfg.Platform == "instagram" {
 		t.connectToInstagram(ctx) // blocks until shutdown
-	} else if c.Conf.Platform == "tiktok" {
+	} else if t.cfg.Platform == "tiktok" {
 		t.connectToTikTok(ctx) // blocks until shutdown
 	} else {
 		t.connectToYouTube(ctx) // blocks until shutdown
@@ -285,7 +290,7 @@ func (t *Tripbot) Run() {
 // logging loudly (the same "stay up with limited functionality" contract as
 // loadTwitchToken).
 func (t *Tripbot) connectToYouTube(ctx context.Context) {
-	if c.Conf.YouTubeAPIURL == "" {
+	if t.cfg.YouTubeAPIURL == "" {
 		slog.ErrorContext(ctx, "YOUTUBE_API_URL unset; youtube chat disabled",
 			"fix", "set YOUTUBE_API_URL to the gateway-youtube service URL")
 		<-ctx.Done()
@@ -293,9 +298,9 @@ func (t *Tripbot) connectToYouTube(ctx context.Context) {
 	}
 
 	t.app.ConnectYouTubeViaGateway()
-	if c.Conf.YouTubeInboundEnabled {
-		go t.app.NewGatewayChatPoller(c.Conf.YouTubeAPIURL).Run(ctx)
-		slog.InfoContext(ctx, "youtube chat via gateway (inbound + outbound)", "gateway", c.Conf.YouTubeAPIURL)
+	if t.cfg.YouTubeInboundEnabled {
+		go t.app.NewGatewayChatPoller(t.cfg.YouTubeAPIURL).Run(ctx)
+		slog.InfoContext(ctx, "youtube chat via gateway (inbound + outbound)", "gateway", t.cfg.YouTubeAPIURL)
 	} else {
 		// Bot-less mode: outbound posting (rotators) + background jobs stay up,
 		// but the inbound poll — the expensive YouTube Data API spend — is off,
@@ -303,7 +308,7 @@ func (t *Tripbot) connectToYouTube(ctx context.Context) {
 		// command ads (see enabledHelpMessages). Flip YOUTUBE_INBOUND_ENABLED
 		// to true once the quota extension lands.
 		slog.WarnContext(ctx, "youtube inbound chat disabled (bot-less mode); outbound + jobs only",
-			"gateway", c.Conf.YouTubeAPIURL, "fix", "set YOUTUBE_INBOUND_ENABLED=true to read chat")
+			"gateway", t.cfg.YouTubeAPIURL, "fix", "set YOUTUBE_INBOUND_ENABLED=true to read chat")
 	}
 
 	// nothing else to do on the main goroutine — the poller and HTTP server
@@ -323,7 +328,7 @@ func (t *Tripbot) connectToYouTube(ctx context.Context) {
 // else working but no Facebook chat, logging loudly (the same "stay up with
 // limited functionality" contract as connectToYouTube).
 func (t *Tripbot) connectToFacebook(ctx context.Context) {
-	if c.Conf.FacebookAPIURL == "" {
+	if t.cfg.FacebookAPIURL == "" {
 		slog.ErrorContext(ctx, "FACEBOOK_API_URL unset; facebook chat disabled",
 			"fix", "set FACEBOOK_API_URL to the gateway-facebook service URL")
 		<-ctx.Done()
@@ -331,8 +336,8 @@ func (t *Tripbot) connectToFacebook(ctx context.Context) {
 	}
 
 	t.app.ConnectFacebookViaGateway()
-	go t.app.NewGatewayChatPoller(c.Conf.FacebookAPIURL).Run(ctx)
-	slog.InfoContext(ctx, "facebook chat via gateway (inbound + outbound)", "gateway", c.Conf.FacebookAPIURL)
+	go t.app.NewGatewayChatPoller(t.cfg.FacebookAPIURL).Run(ctx)
+	slog.InfoContext(ctx, "facebook chat via gateway (inbound + outbound)", "gateway", t.cfg.FacebookAPIURL)
 
 	// nothing else to do on the main goroutine — the poller and HTTP server
 	// run until the signal handler shuts the process down.
@@ -352,7 +357,7 @@ func (t *Tripbot) connectToFacebook(ctx context.Context) {
 // else working but no Instagram chat, logging loudly (the same "stay up with
 // limited functionality" contract as connectToYouTube).
 func (t *Tripbot) connectToInstagram(ctx context.Context) {
-	if c.Conf.InstagramAPIURL == "" {
+	if t.cfg.InstagramAPIURL == "" {
 		slog.ErrorContext(ctx, "INSTAGRAM_API_URL unset; instagram chat disabled",
 			"fix", "set INSTAGRAM_API_URL to the gateway-instagram service URL")
 		<-ctx.Done()
@@ -360,8 +365,8 @@ func (t *Tripbot) connectToInstagram(ctx context.Context) {
 	}
 
 	t.app.ConnectInstagramViaGateway()
-	go t.app.NewGatewayChatPoller(c.Conf.InstagramAPIURL).Run(ctx)
-	slog.InfoContext(ctx, "instagram chat via gateway (inbound only)", "gateway", c.Conf.InstagramAPIURL)
+	go t.app.NewGatewayChatPoller(t.cfg.InstagramAPIURL).Run(ctx)
+	slog.InfoContext(ctx, "instagram chat via gateway (inbound only)", "gateway", t.cfg.InstagramAPIURL)
 
 	// nothing else to do on the main goroutine — the poller and HTTP server
 	// run until the signal handler shuts the process down.
@@ -378,7 +383,7 @@ func (t *Tripbot) connectToInstagram(ctx context.Context) {
 // but no TikTok chat, logging loudly (the same "stay up with limited
 // functionality" contract as connectToYouTube).
 func (t *Tripbot) connectToTikTok(ctx context.Context) {
-	if c.Conf.TikTokAPIURL == "" {
+	if t.cfg.TikTokAPIURL == "" {
 		slog.ErrorContext(ctx, "TIKTOK_API_URL unset; tiktok chat disabled",
 			"fix", "set TIKTOK_API_URL to the gateway-tiktok service URL")
 		<-ctx.Done()
@@ -386,8 +391,8 @@ func (t *Tripbot) connectToTikTok(ctx context.Context) {
 	}
 
 	t.app.ConnectTikTokViaGateway()
-	go t.app.NewGatewayChatPoller(c.Conf.TikTokAPIURL).Run(ctx)
-	slog.InfoContext(ctx, "tiktok chat via gateway (inbound only)", "gateway", c.Conf.TikTokAPIURL)
+	go t.app.NewGatewayChatPoller(t.cfg.TikTokAPIURL).Run(ctx)
+	slog.InfoContext(ctx, "tiktok chat via gateway (inbound only)", "gateway", t.cfg.TikTokAPIURL)
 
 	// nothing else to do on the main goroutine — the poller and HTTP server
 	// run until the signal handler shuts the process down.
@@ -406,7 +411,7 @@ const featureFlagRefreshInterval = 30 * time.Second
 // (false) until the next restart loads cleanly. Mirrors the loadTwitchToken
 // "stay up with limited functionality" pattern.
 func (t *Tripbot) startFeatureFlags(ctx context.Context) {
-	fc, err := feature.NewPostgresClient(ctx, database.GormDB(), featureFlagRefreshInterval, c.Conf.Platform)
+	fc, err := feature.NewPostgresClient(ctx, database.GormDB(), featureFlagRefreshInterval, t.cfg.Platform)
 	if err != nil {
 		slog.WarnContext(ctx, "feature flag client init failed; flags will default to off",
 			"fix", "ensure migration 013_create_feature_flags has run",
@@ -431,8 +436,8 @@ func (t *Tripbot) startFeatureFlags(ctx context.Context) {
 // publishes then fall back to live-only core subjects, so a stream-declare
 // failure must not be fatal.
 func (t *Tripbot) startNATS(ctx context.Context) {
-	natsclient.Connect(c.Conf.NatsURL, "tripbot", func(*nats.Conn) {
-		if err := eventbus.EnsureStreams(ctx, natsclient.JetStream(), c.Conf.Environment); err != nil {
+	natsclient.Connect(t.cfg.NatsURL, "tripbot", func(*nats.Conn) {
+		if err := eventbus.EnsureStreams(ctx, natsclient.JetStream(), t.cfg.Environment); err != nil {
 			slog.WarnContext(ctx, "jetstream stream setup failed; console will run without durable history",
 				"err", err)
 		}
@@ -457,11 +462,11 @@ const authStatusInterval = 30 * time.Second
 // YouTube auth status to the console is the gateway's job once it grows a NATS
 // publisher — tracked separately.)
 func (t *Tripbot) startAuthStatusEmitter(ctx context.Context) {
-	if !platformIsTwitch() {
+	if !t.platformIsTwitch() {
 		return
 	}
 	go func() {
-		eventbus.EmitAuthStatus(ctx, c.Conf.Environment, "twitch", twitchAuthAccounts())
+		eventbus.EmitAuthStatus(ctx, t.cfg.Environment, "twitch", t.twitchAuthAccounts())
 		tick := time.NewTicker(authStatusInterval)
 		defer tick.Stop()
 		for {
@@ -469,7 +474,7 @@ func (t *Tripbot) startAuthStatusEmitter(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			case <-tick.C:
-				eventbus.EmitAuthStatus(ctx, c.Conf.Environment, "twitch", twitchAuthAccounts())
+				eventbus.EmitAuthStatus(ctx, t.cfg.Environment, "twitch", t.twitchAuthAccounts())
 			}
 		}
 	}()
@@ -477,8 +482,8 @@ func (t *Tripbot) startAuthStatusEmitter(ctx context.Context) {
 
 // twitchAuthAccounts converts the live Twitch token state (bot + broadcaster)
 // into the eventbus wire shape.
-func twitchAuthAccounts() []eventbus.AuthAccount {
-	statuses := mytwitch.TokenStatuses(c.Conf.BotUsername, c.Conf.ChannelName)
+func (t *Tripbot) twitchAuthAccounts() []eventbus.AuthAccount {
+	statuses := mytwitch.TokenStatuses(t.cfg.BotUsername, t.cfg.ChannelName)
 	accounts := make([]eventbus.AuthAccount, 0, len(statuses))
 	for _, s := range statuses {
 		expiresAt := ""
@@ -511,7 +516,7 @@ func (t *Tripbot) startSilentDisconnectWatchdog(ctx context.Context) {
 		if t.gateway == nil {
 			return false, errors.New("watchdog live-check: no gateway configured")
 		}
-		live, err := t.gateway.IsLive(ctx, c.Conf.ChannelName)
+		live, err := t.gateway.IsLive(ctx, t.cfg.ChannelName)
 		if err == nil {
 			instrumentation.TwitchChannelLive.Set(live)
 		}
@@ -539,15 +544,15 @@ func (t *Tripbot) startBackgroundAudioWatchdog(ctx context.Context) {
 // (or crash) tripbot startup — Discord is additive to the core IRC /
 // EventSub paths.
 func (t *Tripbot) startDiscord(ctx context.Context) {
-	if ok, reason := discord.ShouldStart(c.Conf); !ok {
+	if ok, reason := discord.ShouldStart(t.cfg); !ok {
 		slog.InfoContext(ctx, "discord disabled", "reason", reason)
 		return
 	}
-	if !t.flagClient.Bool(ctx, discord.FlagKey, feature.EvalContext{Env: c.Conf.Environment}) {
+	if !t.flagClient.Bool(ctx, discord.FlagKey, feature.EvalContext{Env: t.cfg.Environment}) {
 		slog.InfoContext(ctx, "discord disabled by feature flag", "flag", discord.FlagKey)
 		return
 	}
-	session, err := discord.New(c.Conf, t.sessions)
+	session, err := discord.New(t.cfg, t.sessions)
 	if err != nil {
 		slog.ErrorContext(ctx, "discord init failed", "err", err)
 		return
@@ -567,14 +572,14 @@ func (t *Tripbot) startEventSub(ctx context.Context) {
 	token := mytwitch.BroadcasterUserAccessToken()
 	if token == "" {
 		slog.WarnContext(ctx, "skipping eventsub: no broadcaster oauth_tokens row; re-auth via the platform-gateway consent flow (surfaced in tripbot-console)",
-			"login_as", c.Conf.ChannelName)
+			"login_as", t.cfg.ChannelName)
 		return
 	}
 	if mytwitch.ChannelID() == "" && t.gateway != nil {
 		// The gateway owns Helix, so nothing populates channelID in-process any
 		// more. Resolve it via the gateway's /v1/users/{login} so EventSub gets a
 		// BroadcasterUserID. Non-fatal — falls through to the skip below on error.
-		if id, err := t.gateway.UserID(ctx, c.Conf.ChannelName); err != nil {
+		if id, err := t.gateway.UserID(ctx, t.cfg.ChannelName); err != nil {
 			slog.ErrorContext(ctx, "eventsub: resolving channel id via gateway failed", "err", err)
 		} else {
 			mytwitch.SetChannelID(id)
@@ -651,9 +656,9 @@ func (t *Tripbot) startCron() {
 // reachable to re-auth; "not in chat" is surfaced via the
 // tripbot_twitch_connected gauge instead.
 func (t *Tripbot) loadTwitchToken(ctx context.Context) {
-	if err := mytwitch.LoadFromDB(c.Conf.BotUsername, c.Conf.ChannelName); err != nil {
+	if err := mytwitch.LoadFromDB(t.cfg.BotUsername, t.cfg.ChannelName); err != nil {
 		slog.WarnContext(ctx, "no usable Twitch token at boot; starting without a chat connection and polling",
-			"login_as", c.Conf.BotUsername,
+			"login_as", t.cfg.BotUsername,
 			"fix", "re-auth via the platform-gateway consent flow (surfaced in tripbot-console)",
 			"err", err)
 		go t.pollForTwitchToken(ctx)
@@ -682,10 +687,10 @@ func (t *Tripbot) pollForTwitchToken(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if err := mytwitch.LoadFromDB(c.Conf.BotUsername, c.Conf.ChannelName); err != nil {
+			if err := mytwitch.LoadFromDB(t.cfg.BotUsername, t.cfg.ChannelName); err != nil {
 				if time.Since(lastLogged) >= logEvery {
 					slog.WarnContext(ctx, "still waiting for Twitch token (re-auth via the platform-gateway consent flow, surfaced in tripbot-console)",
-						"login_as", c.Conf.BotUsername, "err", err)
+						"login_as", t.cfg.BotUsername, "err", err)
 					lastLogged = time.Now()
 				}
 				continue
@@ -724,8 +729,8 @@ func (t *Tripbot) getCurrentUsers() {
 
 // connectToTwitch joins Twitch chat and listens until ctx cancels.
 func (t *Tripbot) connectToTwitch(ctx context.Context) {
-	t.irc.Join(c.Conf.ChannelName)
-	slog.Info("joined channel", "channel", c.Conf.ChannelName, "url", fmt.Sprintf("https://twitch.tv/%s", c.Conf.ChannelName))
+	t.irc.Join(t.cfg.ChannelName)
+	slog.Info("joined channel", "channel", t.cfg.ChannelName, "url", fmt.Sprintf("https://twitch.tv/%s", t.cfg.ChannelName))
 
 	// Mark the bot connected to chat once the IRC connection is established.
 	// This drives the tripbot_twitch_connected gauge — it does NOT gate
@@ -765,8 +770,8 @@ func (t *Tripbot) connectToTwitch(ctx context.Context) {
 				// it just rotated (or one auth-bootstrap wrote) is picked up
 				// without a restart. Then sync whatever's now in memory into the
 				// IRC client for the next Connect attempt.
-				if err := mytwitch.LoadFromDB(c.Conf.BotUsername, c.Conf.ChannelName); err != nil {
-					slog.Warn("IRC auth failed; re-reading oauth_tokens failed", "err", err, "login_as", c.Conf.BotUsername)
+				if err := mytwitch.LoadFromDB(t.cfg.BotUsername, t.cfg.ChannelName); err != nil {
+					slog.Warn("IRC auth failed; re-reading oauth_tokens failed", "err", err, "login_as", t.cfg.BotUsername)
 				}
 				if tok := mytwitch.IRCAuthToken(); tok != "" {
 					t.irc.SetIRCToken(tok)
@@ -774,7 +779,7 @@ func (t *Tripbot) connectToTwitch(ctx context.Context) {
 					// No usable token in the DB yet (e.g. the row is unseeded).
 					// Re-auth runs through the platform-gateway consent flow now
 					// (surfaced in tripbot-console); the gateway writes the row.
-					slog.Error("IRC auth failed and no valid token in oauth_tokens; re-auth via the platform-gateway consent flow (surfaced in tripbot-console)", "login_as", c.Conf.BotUsername)
+					slog.Error("IRC auth failed and no valid token in oauth_tokens; re-auth via the platform-gateway consent flow (surfaced in tripbot-console)", "login_as", t.cfg.BotUsername)
 				}
 			}
 			// retry after a minute, or bail if shutdown starts meanwhile
@@ -835,19 +840,19 @@ func (t *Tripbot) scheduleBackgroundJobs() {
 	// runs regardless of YOUTUBE_INBOUND_ENABLED (discovery is not the chat read).
 	// WithStartImmediately so a fresh console sees the link without a full
 	// interval's wait; the last-value cache then retains it.
-	if !platformIsTwitch() && c.Conf.YouTubeAPIURL != "" {
-		ytGateway := gateway.New(c.Conf.YouTubeAPIURL)
+	if !t.platformIsTwitch() && t.cfg.YouTubeAPIURL != "" {
+		ytGateway := gateway.New(t.cfg.YouTubeAPIURL)
 		t.addJob(2*time.Minute, "youtube.BroadcastDiscovery", func(ctx context.Context) {
 			b, err := ytGateway.ActiveBroadcast(ctx)
 			if err != nil {
 				slog.ErrorContext(ctx, "youtube broadcast discovery failed", "err", err)
 				return
 			}
-			eventbus.EmitYoutubeBroadcast(ctx, c.Conf.Environment, b.VideoID, b.Privacy, b.Live)
+			eventbus.EmitYoutubeBroadcast(ctx, t.cfg.Environment, b.VideoID, b.Privacy, b.Live)
 		}, gocron.WithStartAt(gocron.WithStartImmediately()))
 	}
 
-	if !platformIsTwitch() {
+	if !t.platformIsTwitch() {
 		// Twitch-sourced jobs stay off non-Twitch instances: session/presence
 		// tracking reads Twitch chatters (YouTube presence is punted in v1),
 		// the leaderboards back excluded commands, the subscriber /
@@ -860,7 +865,7 @@ func (t *Tripbot) scheduleBackgroundJobs() {
 	// Derived-state reconciler over the events table (all platforms' events,
 	// but only one instance should run it — the twitch gate above covers that).
 	// Singleton mode + the reconciler's own row lock make overlap harmless.
-	t.addJob(5*time.Minute, "rollups.Reconcile", func(ctx context.Context) { rollups.Reconcile(ctx, c.Conf) },
+	t.addJob(5*time.Minute, "rollups.Reconcile", func(ctx context.Context) { rollups.Reconcile(ctx, t.cfg) },
 		gocron.WithSingletonMode(gocron.LimitModeReschedule))
 	t.addJob(5*time.Minute, "chatbot.ShowRotatingLeaderboard", t.app.ShowRotatingLeaderboard)
 	t.addJob(5*time.Minute, "users.PrintCurrentSession", t.sessions.PrintCurrentSession)
@@ -871,7 +876,7 @@ func (t *Tripbot) scheduleBackgroundJobs() {
 	// gateway's rotations — the IRC PASS line on reconnect and the token-expiry
 	// gauge (both fed by LoadFromDB) — without tripbot ever refreshing itself.
 	t.addJob(5*time.Minute, "twitch.ReloadTokens", func(ctx context.Context) {
-		if err := mytwitch.LoadFromDB(c.Conf.BotUsername, c.Conf.ChannelName); err != nil {
+		if err := mytwitch.LoadFromDB(t.cfg.BotUsername, t.cfg.ChannelName); err != nil {
 			slog.WarnContext(ctx, "periodic oauth_tokens reload failed", "err", err)
 		}
 		// Keep the IRC client's stored token in sync with the rotated credentials.
