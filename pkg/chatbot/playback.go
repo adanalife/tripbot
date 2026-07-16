@@ -10,7 +10,6 @@ import (
 
 	terrors "github.com/adanalife/tripbot/pkg/errors"
 
-	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/feature"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/users"
@@ -46,8 +45,8 @@ func (a *App) showTimewarpOverlay(ctx context.Context, username string) {
 	credit := username
 	if credit != "" && !a.Flags.Bool(ctx, timewarpCreditFlagKey, feature.EvalContext{
 		Username: username,
-		Channel:  c.Conf.ChannelName,
-		Env:      c.Conf.Environment,
+		Channel:  a.Cfg.ChannelName,
+		Env:      a.Cfg.Environment,
 	}) {
 		credit = ""
 	}
@@ -85,7 +84,7 @@ func (a *App) timewarpCmd(ctx context.Context, user *users.User, _ []string) {
 	}
 
 	// rate-limit the number of times this can run
-	if !c.UserIsAdmin(user.Username) {
+	if !a.Cfg.UserIsAdmin(user.Username) {
 		if time.Now().Sub(lastTimewarpTime) < 20*time.Second {
 			a.Chat.Say("Not yet; enjoy the moment!")
 			return
@@ -93,7 +92,7 @@ func (a *App) timewarpCmd(ctx context.Context, user *users.User, _ []string) {
 	}
 
 	// only say this if the caller is not me
-	if !c.UserIsAdmin(user.Username) {
+	if !a.Cfg.UserIsAdmin(user.Username) {
 		a.Chat.Say("Here we go...!")
 	}
 
@@ -112,7 +111,7 @@ func (a *App) jumpCmd(ctx context.Context, user *users.User, params []string) {
 	}
 
 	// rate-limit the number of times this can run
-	if !c.UserIsAdmin(user.Username) {
+	if !a.Cfg.UserIsAdmin(user.Username) {
 		if time.Now().Sub(lastTimewarpTime) < 20*time.Second {
 			a.Chat.Say("Not yet; enjoy the moment!")
 			return
@@ -169,7 +168,7 @@ func (a *App) skipCmd(ctx context.Context, user *users.User, params []string) {
 	}
 
 	// rate-limit the number of times this can run
-	if !c.UserIsAdmin(user.Username) {
+	if !a.Cfg.UserIsAdmin(user.Username) {
 		if time.Now().Sub(lastTimewarpTime) < 20*time.Second {
 			a.Chat.Say("Not yet; enjoy the moment!")
 			return
@@ -214,7 +213,7 @@ func (a *App) backCmd(ctx context.Context, user *users.User, params []string) {
 	}
 
 	// rate-limit the number of times this can run
-	if !c.UserIsAdmin(user.Username) {
+	if !a.Cfg.UserIsAdmin(user.Username) {
 		if time.Now().Sub(lastTimewarpTime) < 20*time.Second {
 			a.Chat.Say("Not yet; enjoy the moment!")
 			return

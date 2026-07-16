@@ -71,20 +71,21 @@ func (cmd *Command) checkAccess(ctx context.Context, user chatUser, say func(str
 // chatUser access-check seam — the follower/subscriber + command-availability
 // checks now live on Sessions (per-provider state), not on User.
 type sessionUser struct {
-	s *users.Sessions
-	u *users.User
+	cfg *c.TripbotConfig
+	s   *users.Sessions
+	u   *users.User
 }
 
 func (su sessionUser) HasCommandAvailable(ctx context.Context) bool {
 	return su.s.HasCommandAvailable(ctx, su.u)
 }
 func (su sessionUser) IsSubscriber() bool {
-	return c.UserIsCompedSubscriber(su.u.Username) || su.s.IsSubscriber(*su.u)
+	return su.cfg.UserIsCompedSubscriber(su.u.Username) || su.s.IsSubscriber(*su.u)
 }
 
 func (a *App) dispatch(ctx context.Context, cmd *Command, user *users.User, params []string) {
 	incChatCommandCounter(cmd.Trigger)
-	if !cmd.checkAccess(ctx, sessionUser{a.UserSessions, user}, a.Chat.Say) {
+	if !cmd.checkAccess(ctx, sessionUser{a.Cfg, a.UserSessions, user}, a.Chat.Say) {
 		return
 	}
 	// Start a child span under the chatbot.handle_message span from
@@ -278,12 +279,12 @@ func (a *App) HandleMessage(ctx context.Context, msg IncomingMessage) {
 	instrumentation.ChatMessages.Inc()
 
 	// emit chat line to Loki via OTel
-	mylog.ChatMsg(msg.User, msg.Text)
+	mylog.ChatMsg(msg.User, a.Cfg.ChannelName, msg.Text)
 
 	// mirror the chat line onto the event bus so live consumers (the admin
 	// panel's chat pane) see it. Original-case username + text, matching the
 	// Loki line above; fire-and-forget, no-op when NATS is unconfigured.
-	eventbus.EmitChatMessage(ctx, c.Conf.Environment, a.Platform, msg.User, msg.Text)
+	eventbus.EmitChatMessage(ctx, a.Cfg.Environment, a.Platform, msg.User, msg.Text)
 
 	// log in the user, then run any command (lowercased for matching)
 	//TODO: we lose capitalization here, is that okay?
@@ -306,7 +307,7 @@ func (a *App) HandlePart(username string) {
 // The resulting Say() is logged again as a chat line.
 func (a *App) HandleWhisper(msg IncomingMessage) {
 	slog.Info("whisper received", "from", msg.User, "text", msg.Text)
-	if c.UserIsAdmin(msg.User) {
+	if a.Cfg.UserIsAdmin(msg.User) {
 		a.Chat.Say(msg.Text)
 	}
 }

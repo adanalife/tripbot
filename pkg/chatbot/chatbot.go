@@ -19,23 +19,26 @@ import (
 	"gorm.io/gorm"
 )
 
-var googleMapsAPIKey string
 var Uptime time.Time
 
 // App holds injectable dependencies for the chatbot. cmd/tripbot constructs the
 // live one with New(); tests instantiate it directly with fakes.
 type App struct {
+	// Cfg is this App's view of the tripbot config. New() stores the cfg it
+	// was handed; tests set a literal with just the fields their commands
+	// read (ChannelName for admin checks, Environment for event emits, …).
+	Cfg *c.TripbotConfig
 	// Platform names the streaming platform this App serves ("twitch" /
 	// "youtube" / "tiktok"). It gates which commands are indexed for dispatch
 	// (indexCommands): Twitch runs the full registry, YouTube and TikTok run
-	// the v1 allowlist. Empty is treated as Twitch. Set from c.Conf.Platform
+	// the v1 allowlist. Empty is treated as Twitch. Set from cfg.Platform
 	// in New().
 	Platform string
 	// botless, when true, makes the rotating Chatter / !help lines advertise
 	// promo copy (follow on Twitch, interactivity coming soon) instead of
 	// command ads — for a YouTube instance running with inbound chat disabled,
 	// where no command can respond. Set in New() from
-	// c.Conf.Platform == "youtube" && !c.Conf.YouTubeInboundEnabled. The
+	// cfg.Platform == "youtube" && !cfg.YouTubeInboundEnabled. The
 	// zero value (false) keeps the normal per-platform command-filtered help,
 	// so directly-constructed test Apps are unaffected unless they opt in.
 	botless bool
@@ -151,13 +154,14 @@ func (a *App) db() *gorm.DB {
 // with its command registry built and indexed. cmd/tripbot builds the live App
 // with this and owns it; nothing in the package holds a singleton. Construction
 // touches no network or DB — the realX adapters are lazy.
-func New() *App {
+func New(cfg *c.TripbotConfig) *App {
 	a := &App{
-		Platform: c.Conf.Platform,
-		botless:  c.Conf.Platform == platformYouTube && !c.Conf.YouTubeInboundEnabled,
+		Cfg:      cfg,
+		Platform: cfg.Platform,
+		botless:  cfg.Platform == platformYouTube && !cfg.YouTubeInboundEnabled,
 		// DB stays nil; commands use a.db() which falls back to database.GormDB().
-		Onscreens:  realOnscreens{c: onscreensClient.New(natsclient.DefaultPublisher(), c.Conf.Environment, c.Conf.Platform)},
-		VLC:        realVLC{c: vlcClient.New(c.Conf.VlcServerHost, natsclient.DefaultPublisher(), c.Conf.Environment, c.Conf.Platform)},
+		Onscreens:  realOnscreens{c: onscreensClient.New(natsclient.DefaultPublisher(), cfg.Environment, cfg.Platform)},
+		VLC:        realVLC{c: vlcClient.New(cfg.VlcServerHost, natsclient.DefaultPublisher(), cfg.Environment, cfg.Platform)},
 		Video:      realVideo{},
 		Chat:       disconnectedChat{},
 		Sessions:   realSessions{},
@@ -168,7 +172,7 @@ func New() *App {
 		Geocoder:   realGeocoder{},
 		Weather:    realWeather{},
 		OBS:        realOBS{},
-		Search:     realSearch{},
+		Search:     realSearch{env: cfg.Environment},
 	}
 	// Twitch is wired after the literal so the gateway/in-process selector can
 	// hold the App and read its (later-reassigned) Flags client at call time —
@@ -195,7 +199,7 @@ func (a *App) ConnectIRC() *twitch.Client {
 
 	// set up the process-wide geocoder (coords -> places). realGeocoder and
 	// pkg/video both route through this default.
-	geo.SetDefault(geo.New(c.Conf.GoogleMapsAPIKey))
+	geo.SetDefault(geo.New(a.Cfg.GoogleMapsAPIKey))
 
 	// initialize the twitch API client. Non-fatal: if Twitch is unreachable
 	// at boot, log and continue so the process stays up (readiness reports
@@ -207,7 +211,7 @@ func (a *App) ConnectIRC() *twitch.Client {
 
 	// The IRC token comes from the DB-backed oauth_tokens row the platform-
 	// gateway keeps fresh; cmd/tripbot calls mytwitch.LoadFromDB before this.
-	client := twitch.NewClient(c.Conf.BotUsername, mytwitch.IRCAuthToken())
+	client := twitch.NewClient(a.Cfg.BotUsername, mytwitch.IRCAuthToken())
 
 	// attach this App's Twitch inbound adapters
 	client.OnUserJoinMessage(a.onTwitchJoin)
@@ -222,12 +226,13 @@ func (a *App) ConnectIRC() *twitch.Client {
 	a.Chat = consoleMirror{
 		inner: twitchChat{
 			client:      client,
-			channelName: c.Conf.ChannelName,
-			botUsername: c.Conf.BotUsername,
+			channelName: a.Cfg.ChannelName,
+			botUsername: a.Cfg.BotUsername,
 		},
-		env:         c.Conf.Environment,
-		platform:    c.Conf.Platform,
-		botUsername: c.Conf.BotUsername,
+		env:         a.Cfg.Environment,
+		channel:     a.Cfg.ChannelName,
+		platform:    a.Cfg.Platform,
+		botUsername: a.Cfg.BotUsername,
 	}
 
 	return client

@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/gateway"
 	"github.com/adanalife/tripbot/pkg/geo"
 )
@@ -41,12 +40,13 @@ func (a *App) ConnectFacebookViaGateway() {
 	Uptime = time.Now()
 
 	// process-wide geocoder warmup, same as ConnectYouTubeViaGateway / ConnectIRC.
-	geo.SetDefault(geo.New(c.Conf.GoogleMapsAPIKey))
+	geo.SetDefault(geo.New(a.Cfg.GoogleMapsAPIKey))
 
 	a.Chat = consoleMirror{
-		inner:       gatewayFacebookChat{client: gateway.New(c.Conf.FacebookAPIURL)},
-		env:         c.Conf.Environment,
-		platform:    c.Conf.Platform,
-		botUsername: c.Conf.BotUsername,
+		inner:       gatewayFacebookChat{client: gateway.New(a.Cfg.FacebookAPIURL)},
+		env:         a.Cfg.Environment,
+		channel:     a.Cfg.ChannelName,
+		platform:    a.Cfg.Platform,
+		botUsername: a.Cfg.BotUsername,
 	}
 }

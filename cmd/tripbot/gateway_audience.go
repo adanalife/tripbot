@@ -48,7 +48,7 @@ func (s gatewayChatterSource) UpdateChatters() {
 // broadcaster can't follow themselves, so admins short-circuit to true; no
 // gateway (or a gateway error) fails closed (treated as non-follower).
 func (s gatewayChatterSource) IsFollower(username string) bool {
-	if c.UserIsAdmin(username) {
+	if c.Conf.UserIsAdmin(username) {
 		return true
 	}
 	if s.t.gateway == nil {

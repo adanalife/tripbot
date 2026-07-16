@@ -18,7 +18,6 @@ import (
 
 	"github.com/adanalife/tripbot/pkg/scoreboards"
 
-	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
 	"github.com/adanalife/tripbot/pkg/events"
 	"github.com/adanalife/tripbot/pkg/feature"
@@ -284,8 +283,8 @@ func (a *App) weatherCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !weather", "username", user.Username)
 	if !a.Flags.Bool(ctx, weatherFlagKey, feature.EvalContext{
 		Username: user.Username,
-		Channel:  c.Conf.ChannelName,
-		Env:      c.Conf.Environment,
+		Channel:  a.Cfg.ChannelName,
+		Env:      a.Cfg.Environment,
 	}) {
 		slog.InfoContext(ctx, "!weather disabled by feature flag", "flag", weatherFlagKey, "username", user.Username)
 		return
@@ -579,7 +578,7 @@ func (a *App) reportCmd(ctx context.Context, user *users.User, params []string) 
 	// Fire-and-forget to Discord for real-time notification. Skipped
 	// silently when DISCORD_ALERTS_WEBHOOK is unset (e.g. local dev) —
 	// the slog/Sentry path still fires so nothing is lost.
-	if webhook := c.Conf.DiscordAlertsWebhook; webhook != "" {
+	if webhook := a.Cfg.DiscordAlertsWebhook; webhook != "" {
 		if isDiscordWebhookURL(webhook) {
 			go postReportToDiscord(webhook, reporter, message)
 		} else {
@@ -645,7 +644,7 @@ func (a *App) bonusMilesCmd(ctx context.Context, user *users.User, _ []string) {
 
 func (a *App) secretInfoCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !secretinfo", "username", user.Username)
-	if !c.UserIsAdmin(user.Username) {
+	if !a.Cfg.UserIsAdmin(user.Username) {
 		return
 	}
 	vid := a.Video.Current()
@@ -666,7 +665,7 @@ func (a *App) secretInfoCmd(ctx context.Context, user *users.User, _ []string) {
 // (broadcaster); widen the gate to mods once a mod-status source exists.
 func (a *App) giveMilesCmd(ctx context.Context, user *users.User, params []string) {
 	slog.InfoContext(ctx, "ran !givemiles", "username", user.Username)
-	if !c.UserIsAdmin(user.Username) {
+	if !a.Cfg.UserIsAdmin(user.Username) {
 		return
 	}
 	if len(params) < 2 {
@@ -701,7 +700,7 @@ func (a *App) giveMilesCmd(ctx context.Context, user *users.User, params []strin
 // — the hourly soft refresh can't revive a crashed CEF webpage.
 func (a *App) refreshOverlaysCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !refreshoverlays", "username", user.Username)
-	if !c.UserIsAdmin(user.Username) {
+	if !a.Cfg.UserIsAdmin(user.Username) {
 		return
 	}
 	n, err := a.OBS.RefreshBrowserSources(ctx)
@@ -715,7 +714,7 @@ func (a *App) refreshOverlaysCmd(ctx context.Context, user *users.User, _ []stri
 
 func (a *App) shutdownCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !shutdown", "username", user.Username)
-	if !c.UserIsAdmin(user.Username) {
+	if !a.Cfg.UserIsAdmin(user.Username) {
 		a.Chat.Say("Nice try bucko")
 		return
 	}
@@ -738,7 +737,7 @@ func (a *App) shutdownCmd(ctx context.Context, user *users.User, _ []string) {
 func (a *App) middleCmd(ctx context.Context, user *users.User, params []string) {
 	slog.InfoContext(ctx, "ran !middle", "username", user.Username)
 	// don't let strangers run this
-	if !c.UserIsAdmin(user.Username) {
+	if !a.Cfg.UserIsAdmin(user.Username) {
 		return
 	}
 
@@ -775,7 +774,7 @@ func (a *App) unBotCmd(ctx context.Context, user *users.User, params []string) {
 // in chat, logs the outcome for ops visibility.
 func (a *App) setBotFlag(ctx context.Context, user *users.User, params []string, isBot bool, trigger string) {
 	slog.InfoContext(ctx, "ran "+trigger, "username", user.Username)
-	if !c.UserIsAdmin(user.Username) {
+	if !a.Cfg.UserIsAdmin(user.Username) {
 		return
 	}
 	if len(params) == 0 {
