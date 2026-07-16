@@ -169,16 +169,26 @@ func (c *Client) Chatters(ctx context.Context) (count int, logins []string, err 
 	return body.Count, body.Chatters, nil
 }
 
-// Subscribers returns the channel's current subscriber logins
-// (GET /v1/subscribers).
-func (c *Client) Subscribers(ctx context.Context) ([]string, error) {
+// Subscribers returns the channel's current subscribers as a login → tier map
+// (GET /v1/subscribers). A login the gateway reports without a tier (an older
+// gateway without the tiers field) defaults to tier 1.
+func (c *Client) Subscribers(ctx context.Context) (map[string]int, error) {
 	var body struct {
-		Subscribers []string `json:"subscribers"`
+		Subscribers []string       `json:"subscribers"`
+		Tiers       map[string]int `json:"tiers"`
 	}
 	if err := c.getJSON(ctx, "/v1/subscribers", &body); err != nil {
 		return nil, err
 	}
-	return body.Subscribers, nil
+	subs := make(map[string]int, len(body.Subscribers))
+	for _, login := range body.Subscribers {
+		tier := body.Tiers[login]
+		if tier < 1 {
+			tier = 1
+		}
+		subs[login] = tier
+	}
+	return subs, nil
 }
 
 // Followers returns the channel's total follower count (GET /v1/followers).
