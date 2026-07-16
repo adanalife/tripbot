@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/config"
+	"github.com/adanalife/tripbot/pkg/contract"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"github.com/getsentry/sentry-go"
 	sentryotel "github.com/getsentry/sentry-go/otel"
@@ -55,6 +56,20 @@ func Initialize(c config.Config, version string) {
 	})
 	if err != nil {
 		fmt.Println(err)
+	}
+
+	// Tag the scope with which streaming platform this instance serves so
+	// twitch vs youtube errors are filterable within the one shared Sentry
+	// project. tripbot/vlc-server carry it as STREAM_PLATFORM; onscreens-server
+	// as PLATFORM. Skip the tag when neither is set rather than tag an empty.
+	platform := os.Getenv(contract.EnvKeyStreamPlatform)
+	if platform == "" {
+		platform = os.Getenv("PLATFORM")
+	}
+	if platform != "" {
+		sentry.ConfigureScope(func(s *sentry.Scope) {
+			s.SetTag("platform", platform)
+		})
 	}
 }
 
