@@ -29,6 +29,7 @@ import (
 // mu guards loggedIn and lifetimeLeaderboard; it is held only for map/slice
 // access, never across DB or chatter-source calls.
 type Sessions struct {
+	cfg    *c.TripbotConfig
 	source ChatterSource
 	mu     sync.Mutex
 	// loggedIn maps username -> User for everyone currently in chat.
@@ -40,8 +41,9 @@ type Sessions struct {
 
 // New constructs a Sessions backed by the given ChatterSource. cmd/tripbot
 // wires the production gatewayChatterSource; tests build their own.
-func New(source ChatterSource) *Sessions {
+func New(cfg *c.TripbotConfig, source ChatterSource) *Sessions {
 	return &Sessions{
+		cfg:      cfg,
 		source:   source,
 		loggedIn: make(map[string]*User),
 	}
@@ -56,7 +58,7 @@ func (s *Sessions) UpdateSession(ctx context.Context) {
 
 	// Publish the authoritative chatter total so the admin panel's live console
 	// updates the "in chat" number (and flashes it on a change) without a reload.
-	eventbus.EmitViewerCount(ctx, c.Conf.Environment, c.Conf.Platform, s.source.ChatterCount())
+	eventbus.EmitViewerCount(ctx, s.cfg.Environment, s.cfg.Platform, s.source.ChatterCount())
 
 	// Persist the same total as a viewer_samples row — the durable half of the
 	// emission above, tagged with the clip currently on screen.
@@ -121,7 +123,7 @@ func (s *Sessions) sessionSnapshot() map[string]*User {
 func (s *Sessions) login(ctx context.Context, username string) *User {
 	now := time.Now()
 
-	user := FindOrCreate(ctx, username)
+	user := FindOrCreate(ctx, s.cfg.Platform, username)
 	// A zero ID means FindOrCreate couldn't get a DB row (transient Find error
 	// or a failed create). Don't cache an un-saveable user in the session, or
 	// every later logout tick would fail save(). Return without logging them in;
@@ -254,7 +256,7 @@ func (s *Sessions) CorrectMiles(ctx context.Context, username string, delta floa
 		updated.save(ctx)
 		return updated.Miles
 	}
-	u := FindOrCreate(ctx, username)
+	u := FindOrCreate(ctx, s.cfg.Platform, username)
 	u.Miles += delta
 	u.save(ctx)
 	return u.Miles

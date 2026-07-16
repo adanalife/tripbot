@@ -34,7 +34,7 @@ func TestPlayer_Current_ZeroBeforeAnyCall(t *testing.T) {
 	rec := &recordingOnscreens{}
 	vlcCurrent := ""
 	vlc := fakeVLCServer(t, &vlcCurrent)
-	p := NewPlayer(rec, vlc)
+	p := NewPlayer("testing", "twitch", rec, vlc)
 
 	got := p.Current()
 	if got != (Video{}) {
@@ -48,7 +48,7 @@ func TestPlayer_GetCurrentlyPlaying_FirstCall_FlaggedShowsGPS(t *testing.T) {
 	rec := &recordingOnscreens{}
 	vlcCurrent := "2018_0514_224801_013.MP4"
 	vlc := fakeVLCServer(t, &vlcCurrent)
-	p := NewPlayer(rec, vlc)
+	p := NewPlayer("testing", "twitch", rec, vlc)
 
 	// The clip vlc reports is already in the DB, flagged (no GPS fix).
 	vid := insertVideo(t, db, Video{Slug: "2018_0514_224801_013", Flagged: true, CoordSource: CoordSourceMissing})
@@ -86,7 +86,7 @@ func TestPlayer_GetCurrentlyPlaying_FirstCall_NotFlaggedHidesGPS(t *testing.T) {
 	rec := &recordingOnscreens{}
 	vlcCurrent := "2019_0615_183000_001.MP4"
 	vlc := fakeVLCServer(t, &vlcCurrent)
-	p := NewPlayer(rec, vlc)
+	p := NewPlayer("testing", "twitch", rec, vlc)
 
 	vid := insertVideo(t, db, Video{Slug: "2019_0615_183000_001", State: "Oregon", Lat: 45.5, Lng: -122.6})
 
@@ -112,7 +112,7 @@ func TestPlayer_GetCurrentlyPlaying_SameVidIsNoop(t *testing.T) {
 	rec := &recordingOnscreens{}
 	vlcCurrent := "2018_0514_224801_013.MP4"
 	vlc := fakeVLCServer(t, &vlcCurrent)
-	p := NewPlayer(rec, vlc)
+	p := NewPlayer("testing", "twitch", rec, vlc)
 
 	vid := insertVideo(t, db, Video{Slug: "2018_0514_224801_013", State: "Nevada", Lat: 39.5, Lng: -119.8})
 
@@ -143,7 +143,7 @@ func TestPlayer_GetCurrentlyPlaying_TransitionTogglesGPSAndResetsTimeStarted(t *
 	rec := &recordingOnscreens{}
 	vlcCurrent := "2018_0514_224801_013.MP4"
 	vlc := fakeVLCServer(t, &vlcCurrent)
-	p := NewPlayer(rec, vlc)
+	p := NewPlayer("testing", "twitch", rec, vlc)
 
 	// First vid: flagged → ShowGPSImage. Second: unflagged → HideGPSImage.
 	first := insertVideo(t, db, Video{Slug: "2018_0514_224801_013", Flagged: true, CoordSource: CoordSourceMissing})
@@ -196,7 +196,7 @@ func TestPlayer_CurrentProgress_TracksTimeSinceStart(t *testing.T) {
 	rec := &recordingOnscreens{}
 	vlcCurrent := "2018_0514_224801_013.MP4"
 	vlc := fakeVLCServer(t, &vlcCurrent)
-	p := NewPlayer(rec, vlc)
+	p := NewPlayer("testing", "twitch", rec, vlc)
 
 	insertVideo(t, db, Video{Slug: "2018_0514_224801_013", State: "Nevada", Lat: 39.5, Lng: -119.8})
 
@@ -221,7 +221,7 @@ func TestPlayer_GetCurrentlyPlaying_EmptyVlcResult_NoTransition(t *testing.T) {
 	rec := &recordingOnscreens{}
 	vlcCurrent := ""
 	vlc := fakeVLCServer(t, &vlcCurrent)
-	p := NewPlayer(rec, vlc)
+	p := NewPlayer("testing", "twitch", rec, vlc)
 
 	p.GetCurrentlyPlaying(context.Background())
 

@@ -12,7 +12,6 @@ import (
 	"github.com/logrusorgru/aurora/v3"
 	"gorm.io/gorm"
 
-	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
 )
 
@@ -116,7 +115,7 @@ func (u User) save(ctx context.Context) {
 // SetBot flips users.is_bot for a username. Returns gorm.ErrRecordNotFound
 // if the user doesn't exist in the DB.
 func (s *Sessions) SetBot(ctx context.Context, username string, isBot bool) error {
-	user, err := Find(ctx, username)
+	user, err := Find(ctx, s.cfg.Platform, username)
 	if err != nil {
 		return err
 	}
@@ -145,15 +144,12 @@ func (u User) String() string {
 	if u.IsBot {
 		return aurora.Gray(15, u.Username).String()
 	}
-	if c.UserIsAdmin(u.Username) {
-		return aurora.Gray(11, u.Username).String()
-	}
 	return aurora.Magenta(u.Username).String()
 }
 
 // FindOrCreate will try to find the user in the DB, otherwise it will create a new user
-func FindOrCreate(ctx context.Context, username string) User {
-	user, err := Find(ctx, username)
+func FindOrCreate(ctx context.Context, platform, username string) User {
+	user, err := Find(ctx, platform, username)
 	if err == nil {
 		return user
 	}
@@ -164,14 +160,14 @@ func FindOrCreate(ctx context.Context, username string) User {
 		return User{}
 	}
 	// create the user in the DB
-	return create(ctx, username)
+	return create(ctx, platform, username)
 }
 
 // Find looks up the username in the DB. A missing user surfaces as
 // gorm.ErrRecordNotFound; any other error is a real DB failure.
-func Find(ctx context.Context, username string) (User, error) {
+func Find(ctx context.Context, platform, username string) (User, error) {
 	var user User
-	result := database.GormDB().WithContext(ctx).Where("platform = ? AND username = ?", c.Conf.Platform, username).First(&user)
+	result := database.GormDB().WithContext(ctx).Where("platform = ? AND username = ?", platform, username).First(&user)
 	if result.Error != nil {
 		return User{}, result.Error
 	}
@@ -230,14 +226,14 @@ func (u *User) SetLastLocationTime() {
 
 // TODO: maybe return an err here?
 // create() will actually create the DB record
-func create(ctx context.Context, username string) User {
+func create(ctx context.Context, platform, username string) User {
 	slog.InfoContext(ctx, "creating user", "username", username)
 	// create a new row, using default vals and creating a single visit
-	newUser := User{Username: username, Platform: c.Conf.Platform, NumVisits: 1}
+	newUser := User{Username: username, Platform: platform, NumVisits: 1}
 	if err := database.GormDB().WithContext(ctx).Create(&newUser).Error; err != nil {
 		slog.ErrorContext(ctx, "error creating user", "err", err)
 	}
-	user, err := Find(ctx, username)
+	user, err := Find(ctx, platform, username)
 	if err != nil {
 		slog.ErrorContext(ctx, "error finding user after create", "err", err, "username", username)
 	}

@@ -4,7 +4,7 @@ import "testing"
 
 // New gives a Server with the default "dev" version tag.
 func TestNewServerDefaults(t *testing.T) {
-	s := New()
+	s := New(testConf)
 	if s.versionTag != "dev" {
 		t.Errorf("versionTag = %q, want %q", s.versionTag, "dev")
 	}
@@ -13,8 +13,8 @@ func TestNewServerDefaults(t *testing.T) {
 // SetVersion mutates the instance it's called on, and two Servers hold
 // independent version state. SetVersion ignores an empty string.
 func TestServerSetVersion(t *testing.T) {
-	a := New()
-	b := New()
+	a := New(testConf)
+	b := New(testConf)
 
 	a.SetVersion("v1.2.3")
 	if a.versionTag != "v1.2.3" {

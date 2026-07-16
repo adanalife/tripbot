@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database/testdb"
 	"gorm.io/gorm"
 )
@@ -18,7 +17,7 @@ func TestFind_NotFoundVsDBError(t *testing.T) {
 	t.Run("missing user surfaces gorm.ErrRecordNotFound", func(t *testing.T) {
 		testdb.New(t)
 
-		if _, err := Find(context.Background(), "ghost"); !errors.Is(err, gorm.ErrRecordNotFound) {
+		if _, err := Find(context.Background(), testConf.Platform, "ghost"); !errors.Is(err, gorm.ErrRecordNotFound) {
 			t.Fatalf("want gorm.ErrRecordNotFound, got %v", err)
 		}
 	})
@@ -32,7 +31,7 @@ func TestFind_NotFoundVsDBError(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 
-		_, err := Find(ctx, "somebody")
+		_, err := Find(ctx, testConf.Platform, "somebody")
 		if !errors.Is(err, context.Canceled) {
 			t.Fatalf("want the underlying DB error, got %v", err)
 		}
@@ -48,7 +47,7 @@ func TestFind_IsPlatformScoped(t *testing.T) {
 	db := testdb.New(t)
 	seedUsers(t, db, User{Username: "ghost", Miles: 5, Platform: "youtube"})
 
-	if _, err := Find(context.Background(), "ghost"); !errors.Is(err, gorm.ErrRecordNotFound) {
+	if _, err := Find(context.Background(), testConf.Platform, "ghost"); !errors.Is(err, gorm.ErrRecordNotFound) {
 		t.Fatalf("want gorm.ErrRecordNotFound for another platform's user, got %v", err)
 	}
 }
@@ -60,11 +59,11 @@ func TestFindOrCreate_CreatesRow(t *testing.T) {
 	testdb.New(t)
 	ctx := context.Background()
 
-	user := FindOrCreate(ctx, "newbie")
+	user := FindOrCreate(ctx, testConf.Platform, "newbie")
 	if user.ID == 0 {
 		t.Fatal("expected a persisted user with a real ID")
 	}
-	if user.Username != "newbie" || user.Platform != c.Conf.Platform {
+	if user.Username != "newbie" || user.Platform != testConf.Platform {
 		t.Errorf("unexpected identity: %+v", user)
 	}
 	if user.NumVisits != 1 {
@@ -90,8 +89,8 @@ func TestFindOrCreate_FindsExistingRow(t *testing.T) {
 	db := testdb.New(t)
 	ctx := context.Background()
 
-	first := FindOrCreate(ctx, "repeat")
-	second := FindOrCreate(ctx, "repeat")
+	first := FindOrCreate(ctx, testConf.Platform, "repeat")
+	second := FindOrCreate(ctx, testConf.Platform, "repeat")
 	if second.ID != first.ID {
 		t.Fatalf("expected the same row, got %d then %d", first.ID, second.ID)
 	}
@@ -111,7 +110,7 @@ func TestSave_PersistsMutableColumns(t *testing.T) {
 	testdb.New(t)
 	ctx := context.Background()
 
-	user := FindOrCreate(ctx, "saver")
+	user := FindOrCreate(ctx, testConf.Platform, "saver")
 	lastSeen := time.Date(2026, 5, 11, 12, 0, 0, 0, time.UTC)
 	user.Miles = 42.5
 	user.NumVisits = 7
@@ -119,7 +118,7 @@ func TestSave_PersistsMutableColumns(t *testing.T) {
 	user.LastSeen = lastSeen
 	user.save(ctx)
 
-	got, err := Find(ctx, "saver")
+	got, err := Find(ctx, testConf.Platform, "saver")
 	if err != nil {
 		t.Fatalf("Find after save: %v", err)
 	}
@@ -152,15 +151,15 @@ func TestSetBot(t *testing.T) {
 		testdb.New(t)
 		ctx := context.Background()
 
-		s := New(noopChatterSource{})
-		user := FindOrCreate(ctx, "maybebot")
+		s := New(testConf, noopChatterSource{})
+		user := FindOrCreate(ctx, testConf.Platform, "maybebot")
 		s.loggedIn["maybebot"] = &user
 
 		if err := s.SetBot(ctx, "maybebot", true); err != nil {
 			t.Fatalf("SetBot: %v", err)
 		}
 
-		got, err := Find(ctx, "maybebot")
+		got, err := Find(ctx, testConf.Platform, "maybebot")
 		if err != nil {
 			t.Fatalf("Find: %v", err)
 		}
@@ -175,7 +174,7 @@ func TestSetBot(t *testing.T) {
 	t.Run("unknown user returns not-found", func(t *testing.T) {
 		testdb.New(t)
 
-		s := New(noopChatterSource{})
+		s := New(testConf, noopChatterSource{})
 		err := s.SetBot(context.Background(), "ghost", true)
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
 			t.Fatalf("want gorm.ErrRecordNotFound, got %v", err)

@@ -22,7 +22,7 @@ func withProfileSeams(t *testing.T, u users.User, sessions int64, monthly float3
 	t.Cleanup(func() {
 		findUser, sessionCount, monthlyMiles, earliestEvent = savedFind, savedCount, savedMonthly, savedEarliest
 	})
-	findUser = func(context.Context, string) (users.User, error) {
+	findUser = func(context.Context, string, string) (users.User, error) {
 		// mirror pkg/users.Find's contract: a staged zero-ID user means "no row"
 		if u.ID == 0 {
 			return users.User{}, gorm.ErrRecordNotFound
@@ -46,7 +46,7 @@ func TestUserProfileAPIHandler_JSON(t *testing.T) {
 	}, 87, 42.0)
 
 	r := mux.NewRouter()
-	r.Handle("/api/user/{username}", http.HandlerFunc(userProfileAPIHandler)).Methods("GET")
+	r.Handle("/api/user/{username}", http.HandlerFunc(New(testConf).userProfileAPIHandler)).Methods("GET")
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/user/danalol", nil))
 
@@ -70,7 +70,7 @@ func TestUserProfileAPIHandler_JSON(t *testing.T) {
 func TestUserProfileAPIHandler_NotFound(t *testing.T) {
 	withProfileSeams(t, users.User{ID: 0}, 0, 0)
 	r := mux.NewRouter()
-	r.Handle("/api/user/{username}", http.HandlerFunc(userProfileAPIHandler)).Methods("GET")
+	r.Handle("/api/user/{username}", http.HandlerFunc(New(testConf).userProfileAPIHandler)).Methods("GET")
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/user/ghost", nil))
 
@@ -86,7 +86,7 @@ func TestUserProfileAPIHandler_NotFound(t *testing.T) {
 func TestUserProfileAPIHandler_BotFlag(t *testing.T) {
 	withProfileSeams(t, users.User{ID: 7, Username: "tripbot4000", IsBot: true}, 3, 0)
 	r := mux.NewRouter()
-	r.Handle("/api/user/{username}", http.HandlerFunc(userProfileAPIHandler)).Methods("GET")
+	r.Handle("/api/user/{username}", http.HandlerFunc(New(testConf).userProfileAPIHandler)).Methods("GET")
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/user/tripbot4000", nil))
 
@@ -105,7 +105,7 @@ func TestUserProfileAPIHandler_BotFlag(t *testing.T) {
 func profileJSON(t *testing.T, username string) userProfile {
 	t.Helper()
 	r := mux.NewRouter()
-	r.Handle("/api/user/{username}", http.HandlerFunc(userProfileAPIHandler)).Methods("GET")
+	r.Handle("/api/user/{username}", http.HandlerFunc(New(testConf).userProfileAPIHandler)).Methods("GET")
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/user/"+username, nil))
 	var got userProfile

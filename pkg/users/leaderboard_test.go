@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database/testdb"
 	"gorm.io/gorm"
 )
@@ -17,7 +16,7 @@ func seedUsers(t *testing.T, db *gorm.DB, users ...User) {
 	t.Helper()
 	for i := range users {
 		if users[i].Platform == "" {
-			users[i].Platform = c.Conf.Platform
+			users[i].Platform = testConf.Platform
 		}
 		if err := db.Create(&users[i]).Error; err != nil {
 			t.Fatalf("seeding user %q: %v", users[i].Username, err)
@@ -47,12 +46,12 @@ func TestUpdateLeaderboard_ReadsFromDB(t *testing.T) {
 		User{Username: "bob", Miles: 50},
 		User{Username: "carol", Miles: 75},
 		User{Username: "botty", Miles: 200, IsBot: true},
-		User{Username: strings.ToLower(c.Conf.ChannelName), Miles: 300},
+		User{Username: strings.ToLower(testConf.ChannelName), Miles: 300},
 		User{Username: "zed", Miles: 0},
 		User{Username: "elsewhere", Miles: 500, Platform: "youtube"},
 	)
 
-	s := New(noopChatterSource{})
+	s := New(testConf, noopChatterSource{})
 	s.UpdateLeaderboard(context.Background())
 
 	assertBoard(t, s.LifetimeLeaderboard(), [][]string{
@@ -70,7 +69,7 @@ func TestInitLeaderboard_ReadsFromDB(t *testing.T) {
 		User{Username: "bob", Miles: 20},
 	)
 
-	s := New(noopChatterSource{})
+	s := New(testConf, noopChatterSource{})
 	s.InitLeaderboard(context.Background())
 
 	assertBoard(t, s.LifetimeLeaderboard(), [][]string{
@@ -88,7 +87,7 @@ func TestUpdateLeaderboard_OverlaysLiveSessionMiles(t *testing.T) {
 		User{Username: "bob", Miles: 99},
 	)
 
-	s := New(noopChatterSource{})
+	s := New(testConf, noopChatterSource{})
 	// bob has been logged in for ~10 hours: 0.1mi/3min = ~20 miles in
 	// progress, enough to pass alice before his logout writes it back.
 	s.loggedIn["bob"] = &User{Username: "bob", Miles: 99, LoggedIn: time.Now().Add(-10 * time.Hour)}
@@ -105,7 +104,7 @@ func TestUpdateLeaderboard_OverlaysLiveSessionMiles(t *testing.T) {
 func TestUpdateLeaderboard_KeepsCacheOnError(t *testing.T) {
 	testdb.New(t)
 
-	s := New(noopChatterSource{})
+	s := New(testConf, noopChatterSource{})
 	s.lifetimeLeaderboard = [][]string{{"alice", "100.0"}}
 
 	// A cancelled context is the cheapest real query failure.
