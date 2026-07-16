@@ -27,7 +27,6 @@ data:
   SENTRY_ENVIRONMENT: stage-1
   STREAM_PLATFORM: youtube
   TRIPBOT_SERVER_PORT: "8080"
-  VERBOSE: "false"
   VLC_SERVER_HOST: playout-youtube:8080
   YOUTUBE_API_URL: http://gateway-youtube.stage-1.svc.cluster.local:8080
 ---
@@ -66,7 +65,7 @@ spec:
   template:
     metadata:
       annotations:
-        adanalife.dev/config-hash: 4ce3bc6496
+        adanalife.dev/config-hash: 0e6d0e4b33
       labels:
         app: tripbot-youtube
     spec:
