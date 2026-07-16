@@ -112,23 +112,96 @@ func TestSkipCmd_AdminDrivesPlaybackChain(t *testing.T) {
 	}
 }
 
-func TestSkipCmd_AdminPassesParamCountThrough(t *testing.T) {
+// With an argument, !skip/!back move the playhead by a span of footage via
+// Seek rather than hopping clips: durations parse as Go durations, bare
+// numbers mean minutes, and the sign picks the direction ("!skip -10m"
+// rewinds). The chat reply states the span moved.
+func TestSkipAndBackCmd_SpansSeekByFootageDuration(t *testing.T) {
 	skipIfDarwin(t)
-	app := newTestApp(video.Video{})
-	recVLC := &recordingVLC{}
-	recVideo := &recordingVideo{}
-	app.VLC = recVLC
-	app.Video = recVideo
-
-	runAsAdmin(t, func() {
-		app.skipCmd(context.Background(), newTestUser(adminUser), []string{"3"})
-	})
-
-	if len(recVLC.Calls) != 1 || recVLC.Calls[0] != "Skip(3)" {
-		t.Errorf("expected one Skip(3) VLC call, got %v", recVLC.Calls)
+	cases := []struct {
+		name     string
+		cmd      string
+		params   []string
+		wantCall string
+		wantSay  string
+	}{
+		{"skip duration", "skip", []string{"10m"}, "Seek(10m0s)", "⏩ Skipping ahead 10 minutes"},
+		{"skip bare number means minutes", "skip", []string{"3"}, "Seek(3m0s)", "⏩ Skipping ahead 3 minutes"},
+		{"skip spaced span joins", "skip", []string{"1h", "30m"}, "Seek(1h30m0s)", "⏩ Skipping ahead 1 hour 30 minutes"},
+		{"skip negative rewinds", "skip", []string{"-10m"}, "Seek(-10m0s)", "⏪ Going back 10 minutes"},
+		{"back duration", "back", []string{"45s"}, "Seek(-45s)", "⏪ Going back 45 seconds"},
+		{"back negative fast-forwards", "back", []string{"-2m"}, "Seek(2m0s)", "⏩ Skipping ahead 2 minutes"},
+		{"any timescale goes through", "skip", []string{"1000h"}, "Seek(1000h0m0s)", "⏩ Skipping ahead 5 weeks 6 days"},
 	}
-	if len(recVideo.Calls) != 1 || recVideo.Calls[0] != "GetCurrentlyPlaying()" {
-		t.Errorf("expected one GetCurrentlyPlaying call on Video, got %v", recVideo.Calls)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			app := newTestApp(video.Video{})
+			recVLC := &recordingVLC{}
+			recVideo := &recordingVideo{}
+			recIRC := &recordingChat{}
+			app.VLC = recVLC
+			app.Video = recVideo
+			app.Chat = recIRC
+
+			runAsAdmin(t, func() {
+				if tc.cmd == "skip" {
+					app.skipCmd(context.Background(), newTestUser(adminUser), tc.params)
+				} else {
+					app.backCmd(context.Background(), newTestUser(adminUser), tc.params)
+				}
+			})
+
+			if len(recVLC.Calls) != 1 || recVLC.Calls[0] != tc.wantCall {
+				t.Errorf("expected one %s VLC call, got %v", tc.wantCall, recVLC.Calls)
+			}
+			if len(recVideo.Calls) != 1 || recVideo.Calls[0] != "GetCurrentlyPlaying()" {
+				t.Errorf("expected one GetCurrentlyPlaying call on Video, got %v", recVideo.Calls)
+			}
+			if len(recIRC.Says) != 1 || recIRC.Says[0] != tc.wantSay {
+				t.Errorf("expected reply %q, got %v", tc.wantSay, recIRC.Says)
+			}
+		})
+	}
+}
+
+// Unparseable spans reply with usage without touching playback. Any
+// parseable timescale is allowed (the player wraps modulo the corpus), so
+// only spans that overflow time.Duration count as unparseable.
+func TestSkipCmd_RejectsUnparseableSpans(t *testing.T) {
+	skipIfDarwin(t)
+	cases := []struct {
+		name    string
+		params  []string
+		wantSay string
+	}{
+		{"gibberish", []string{"potato"}, "Usage: !skip [time, like 10m or 1h30m]"},
+		{"zero span", []string{"0m"}, "Usage: !skip [time, like 10m or 1h30m]"},
+		{"bare minutes overflowing a duration", []string{"99999999999999999"}, "Usage: !skip [time, like 10m or 1h30m]"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			app := newTestApp(video.Video{})
+			recVLC := &recordingVLC{}
+			recVideo := &recordingVideo{}
+			recIRC := &recordingChat{}
+			app.VLC = recVLC
+			app.Video = recVideo
+			app.Chat = recIRC
+
+			runAsAdmin(t, func() {
+				app.skipCmd(context.Background(), newTestUser(adminUser), tc.params)
+			})
+
+			if len(recVLC.Calls) != 0 {
+				t.Errorf("expected no VLC calls, got %v", recVLC.Calls)
+			}
+			if len(recVideo.Calls) != 0 {
+				t.Errorf("expected no Video calls, got %v", recVideo.Calls)
+			}
+			if len(recIRC.Says) != 1 || recIRC.Says[0] != tc.wantSay {
+				t.Errorf("expected reply %q, got %v", tc.wantSay, recIRC.Says)
+			}
+		})
 	}
 }
 
