@@ -1,0 +1,1 @@
+tripbot now polls its platform's OBS WebSocket for streaming state + render/output stats (the `obs_*` stream-health gauges), so the metrics survive vlc-server's retirement and finally exist for YouTube.
