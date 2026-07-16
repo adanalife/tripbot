@@ -156,59 +156,62 @@ func (a *App) jumpCmd(ctx context.Context, user *users.User, params []string) {
 	lastTimewarpTime = time.Now()
 }
 
+// seekSpanMax caps how far one !skip/!back can move the playhead. Bigger
+// jumps are what !timewarp and !goto are for, and each seek walks clip
+// durations server-side — an unbounded span would walk the whole corpus.
+const seekSpanMax = 24 * time.Hour
+
+// parseSeekSpan turns a !skip/!back argument into a footage duration.
+// Accepts Go duration forms ("10m", "1h30m", "90s") and bare numbers, which
+// mean minutes ("!skip 10" moves ten minutes). The sign comes back as given —
+// "!skip -10m" is a rewind.
+func parseSeekSpan(arg string) (time.Duration, error) {
+	if n, err := strconv.Atoi(arg); err == nil {
+		return time.Duration(n) * time.Minute, nil
+	}
+	return time.ParseDuration(arg)
+}
+
+// formatSeekSpan renders a span the way a chatter would type it: "10m",
+// "1h30m", "45s" — no trailing zero units (time.Duration.String would give
+// "1h30m0s"). Callers pass a positive span.
+func formatSeekSpan(d time.Duration) string {
+	d = d.Round(time.Second)
+	h := int(d.Hours())
+	m := int(d.Minutes()) % 60
+	s := int(d.Seconds()) % 60
+	var b strings.Builder
+	if h > 0 {
+		fmt.Fprintf(&b, "%dh", h)
+	}
+	if m > 0 {
+		fmt.Fprintf(&b, "%dm", m)
+	}
+	if s > 0 || b.Len() == 0 {
+		fmt.Fprintf(&b, "%ds", s)
+	}
+	return b.String()
+}
+
 func (a *App) skipCmd(ctx context.Context, user *users.User, params []string) {
-	var err error
-	var n int
-	slog.InfoContext(ctx, "ran !skip", "username", user.Username)
-
-	// exit early if we're on OS X
-	if helpers.RunningOnDarwin() {
-		a.Chat.Say("Sorry, skip isn't available right now")
-		return
-	}
-
-	// rate-limit the number of times this can run
-	if !a.Cfg.UserIsAdmin(user.Username) {
-		if time.Now().Sub(lastTimewarpTime) < 20*time.Second {
-			a.Chat.Say("Not yet; enjoy the moment!")
-			return
-		}
-	}
-
-	// first we count the given params
-	if len(params) == 0 {
-		// just skip once if no params
-		n = 1
-	} else {
-		// we were given args
-		// try and convert their input to a number
-		n, err = strconv.Atoi(params[0])
-		// if conversion fails or they give too many args
-		if err != nil || len(params) > 1 {
-			a.Chat.Say("Usage: !skip [num]")
-			return
-		}
-	}
-
-	// skip to a new video
-	err = a.VLC.Skip(ctx, n)
-	if err != nil {
-		slog.ErrorContext(ctx, "error from VLC client", "err", err)
-	}
-	// update the currently-playing video
-	a.Video.GetCurrentlyPlaying(ctx)
-	// update our record of last time it ran
-	lastTimewarpTime = time.Now()
+	a.seekCmd(ctx, user, params, "!skip", 1)
 }
 
 func (a *App) backCmd(ctx context.Context, user *users.User, params []string) {
-	var err error
-	var n int
-	slog.InfoContext(ctx, "ran !back", "username", user.Username)
+	a.seekCmd(ctx, user, params, "!back", -1)
+}
+
+// seekCmd is the shared !skip/!back handler; dir is +1 for !skip, -1 for
+// !back. Without an argument it hops one whole clip in dir's direction. With
+// one it moves the playhead by that span of footage ("!skip 10m",
+// "!back 1h30m", bare numbers meaning minutes), crossing clip boundaries as
+// needed. A negative span flips direction, so "!skip -10m" rewinds.
+func (a *App) seekCmd(ctx context.Context, user *users.User, params []string, name string, dir int) {
+	slog.InfoContext(ctx, "ran "+name, "username", user.Username)
 
 	// exit early if we're on OS X
 	if helpers.RunningOnDarwin() {
-		a.Chat.Say("Sorry, back isn't available right now")
+		a.Chat.Say(fmt.Sprintf("Sorry, %s isn't available right now", strings.TrimPrefix(name, "!")))
 		return
 	}
 
@@ -220,26 +223,39 @@ func (a *App) backCmd(ctx context.Context, user *users.User, params []string) {
 		}
 	}
 
-	// first we count the given params
 	if len(params) == 0 {
-		// just back once if no params
-		n = 1
+		// no argument: hop a single clip
+		var err error
+		if dir >= 0 {
+			err = a.VLC.Skip(ctx, 1)
+		} else {
+			err = a.VLC.Back(ctx, 1)
+		}
+		if err != nil {
+			slog.ErrorContext(ctx, "error from VLC client", "err", err)
+		}
 	} else {
-		// we were given args
-		// try and convert their input to a number
-		n, err = strconv.Atoi(params[0])
-		// if conversion fails or they give too many args
-		if err != nil || len(params) > 1 {
-			a.Chat.Say("Usage: !back [num]")
+		// joining params lets "!skip 1h 30m" read as one span
+		span, err := parseSeekSpan(strings.Join(params, ""))
+		if err != nil || span == 0 {
+			a.Chat.Say(fmt.Sprintf("Usage: %s [time, like 10m or 1h30m]", name))
 			return
+		}
+		if span > seekSpanMax || span < -seekSpanMax {
+			a.Chat.Say(fmt.Sprintf("%s tops out at 24h", name))
+			return
+		}
+		span *= time.Duration(dir)
+		if err := a.VLC.Seek(ctx, span); err != nil {
+			slog.ErrorContext(ctx, "error from VLC client", "err", err)
+		}
+		if span > 0 {
+			a.Chat.Say("⏩ Skipping ahead " + formatSeekSpan(span))
+		} else {
+			a.Chat.Say("⏪ Going back " + formatSeekSpan(-span))
 		}
 	}
 
-	// back to an old video
-	err = a.VLC.Back(ctx, n)
-	if err != nil {
-		slog.ErrorContext(ctx, "error from VLC client", "err", err)
-	}
 	// update the currently-playing video
 	a.Video.GetCurrentlyPlaying(ctx)
 	// update our record of last time it ran

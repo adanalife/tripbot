@@ -2,6 +2,7 @@ package chatbot
 
 import (
 	"context"
+	"time"
 
 	vlcClient "github.com/adanalife/tripbot/pkg/vlc-client"
 )
@@ -18,6 +19,9 @@ type VLC interface {
 	PlayFileAtTimestamp(ctx context.Context, filename string, tsSec float64) error
 	Skip(ctx context.Context, n int) error
 	Back(ctx context.Context, n int) error
+	// Seek moves the playhead by delta of footage, crossing clip boundaries;
+	// negative rewinds. The duration form of !skip/!back.
+	Seek(ctx context.Context, delta time.Duration) error
 }
 
 // realVLC delegates to a constructed *vlcClient.Client. The concrete Client
@@ -38,3 +42,6 @@ func (r realVLC) PlayFileAtTimestamp(ctx context.Context, filename string, tsSec
 }
 func (r realVLC) Skip(ctx context.Context, n int) error { return r.c.Skip(ctx, n) }
 func (r realVLC) Back(ctx context.Context, n int) error { return r.c.Back(ctx, n) }
+func (r realVLC) Seek(ctx context.Context, delta time.Duration) error {
+	return r.c.Seek(ctx, delta)
+}

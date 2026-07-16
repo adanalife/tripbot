@@ -112,23 +112,111 @@ func TestSkipCmd_AdminDrivesPlaybackChain(t *testing.T) {
 	}
 }
 
-func TestSkipCmd_AdminPassesParamCountThrough(t *testing.T) {
+// With an argument, !skip/!back move the playhead by a span of footage via
+// Seek rather than hopping clips: durations parse as Go durations, bare
+// numbers mean minutes, and the sign picks the direction ("!skip -10m"
+// rewinds). The chat reply states the span moved.
+func TestSkipAndBackCmd_SpansSeekByFootageDuration(t *testing.T) {
 	skipIfDarwin(t)
-	app := newTestApp(video.Video{})
-	recVLC := &recordingVLC{}
-	recVideo := &recordingVideo{}
-	app.VLC = recVLC
-	app.Video = recVideo
-
-	runAsAdmin(t, func() {
-		app.skipCmd(context.Background(), newTestUser(adminUser), []string{"3"})
-	})
-
-	if len(recVLC.Calls) != 1 || recVLC.Calls[0] != "Skip(3)" {
-		t.Errorf("expected one Skip(3) VLC call, got %v", recVLC.Calls)
+	cases := []struct {
+		name     string
+		cmd      string
+		params   []string
+		wantCall string
+		wantSay  string
+	}{
+		{"skip duration", "skip", []string{"10m"}, "Seek(10m0s)", "⏩ Skipping ahead 10m"},
+		{"skip bare number means minutes", "skip", []string{"3"}, "Seek(3m0s)", "⏩ Skipping ahead 3m"},
+		{"skip spaced span joins", "skip", []string{"1h", "30m"}, "Seek(1h30m0s)", "⏩ Skipping ahead 1h30m"},
+		{"skip negative rewinds", "skip", []string{"-10m"}, "Seek(-10m0s)", "⏪ Going back 10m"},
+		{"back duration", "back", []string{"45s"}, "Seek(-45s)", "⏪ Going back 45s"},
+		{"back negative fast-forwards", "back", []string{"-2m"}, "Seek(2m0s)", "⏩ Skipping ahead 2m"},
 	}
-	if len(recVideo.Calls) != 1 || recVideo.Calls[0] != "GetCurrentlyPlaying()" {
-		t.Errorf("expected one GetCurrentlyPlaying call on Video, got %v", recVideo.Calls)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			app := newTestApp(video.Video{})
+			recVLC := &recordingVLC{}
+			recVideo := &recordingVideo{}
+			recIRC := &recordingChat{}
+			app.VLC = recVLC
+			app.Video = recVideo
+			app.Chat = recIRC
+
+			runAsAdmin(t, func() {
+				if tc.cmd == "skip" {
+					app.skipCmd(context.Background(), newTestUser(adminUser), tc.params)
+				} else {
+					app.backCmd(context.Background(), newTestUser(adminUser), tc.params)
+				}
+			})
+
+			if len(recVLC.Calls) != 1 || recVLC.Calls[0] != tc.wantCall {
+				t.Errorf("expected one %s VLC call, got %v", tc.wantCall, recVLC.Calls)
+			}
+			if len(recVideo.Calls) != 1 || recVideo.Calls[0] != "GetCurrentlyPlaying()" {
+				t.Errorf("expected one GetCurrentlyPlaying call on Video, got %v", recVideo.Calls)
+			}
+			if len(recIRC.Says) != 1 || recIRC.Says[0] != tc.wantSay {
+				t.Errorf("expected reply %q, got %v", tc.wantSay, recIRC.Says)
+			}
+		})
+	}
+}
+
+// Unparseable spans and spans past the cap reply without touching playback.
+func TestSkipCmd_RejectsBadAndOversizedSpans(t *testing.T) {
+	skipIfDarwin(t)
+	cases := []struct {
+		name    string
+		params  []string
+		wantSay string
+	}{
+		{"gibberish", []string{"potato"}, "Usage: !skip [time, like 10m or 1h30m]"},
+		{"zero span", []string{"0m"}, "Usage: !skip [time, like 10m or 1h30m]"},
+		{"past the cap", []string{"48h"}, "!skip tops out at 24h"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			app := newTestApp(video.Video{})
+			recVLC := &recordingVLC{}
+			recVideo := &recordingVideo{}
+			recIRC := &recordingChat{}
+			app.VLC = recVLC
+			app.Video = recVideo
+			app.Chat = recIRC
+
+			runAsAdmin(t, func() {
+				app.skipCmd(context.Background(), newTestUser(adminUser), tc.params)
+			})
+
+			if len(recVLC.Calls) != 0 {
+				t.Errorf("expected no VLC calls, got %v", recVLC.Calls)
+			}
+			if len(recVideo.Calls) != 0 {
+				t.Errorf("expected no Video calls, got %v", recVideo.Calls)
+			}
+			if len(recIRC.Says) != 1 || recIRC.Says[0] != tc.wantSay {
+				t.Errorf("expected reply %q, got %v", tc.wantSay, recIRC.Says)
+			}
+		})
+	}
+}
+
+func TestFormatSeekSpan(t *testing.T) {
+	cases := []struct {
+		in   time.Duration
+		want string
+	}{
+		{10 * time.Minute, "10m"},
+		{90 * time.Minute, "1h30m"},
+		{45 * time.Second, "45s"},
+		{2*time.Hour + 15*time.Second, "2h15s"},
+		{0, "0s"},
+	}
+	for _, tc := range cases {
+		if got := formatSeekSpan(tc.in); got != tc.want {
+			t.Errorf("formatSeekSpan(%v) = %q, want %q", tc.in, got, tc.want)
+		}
 	}
 }
 

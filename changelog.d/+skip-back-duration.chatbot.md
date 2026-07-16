@@ -1,0 +1,1 @@
+`!skip` and `!back` now move by a span of footage instead of a clip count: `!skip 10m`, `!back 1h30m`, bare numbers meaning minutes, negatives flipping direction — and the reply states the time moved. Without an argument they still hop one clip.
