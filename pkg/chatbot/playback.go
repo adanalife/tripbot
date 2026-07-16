@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -156,17 +157,18 @@ func (a *App) jumpCmd(ctx context.Context, user *users.User, params []string) {
 	lastTimewarpTime = time.Now()
 }
 
-// seekSpanMax caps how far one !skip/!back can move the playhead. Bigger
-// jumps are what !timewarp and !goto are for, and each seek walks clip
-// durations server-side — an unbounded span would walk the whole corpus.
-const seekSpanMax = 24 * time.Hour
-
 // parseSeekSpan turns a !skip/!back argument into a footage duration.
 // Accepts Go duration forms ("10m", "1h30m", "90s") and bare numbers, which
 // mean minutes ("!skip 10" moves ten minutes). The sign comes back as given —
-// "!skip -10m" is a rewind.
+// "!skip -10m" is a rewind. Any timescale is fine — the player wraps moves
+// longer than the corpus modulo its total length; only spans that overflow
+// a time.Duration are rejected.
 func parseSeekSpan(arg string) (time.Duration, error) {
 	if n, err := strconv.Atoi(arg); err == nil {
+		const maxMinutes = math.MaxInt64 / int64(time.Minute)
+		if int64(n) > maxMinutes || int64(n) < -maxMinutes {
+			return 0, fmt.Errorf("span overflows: %d minutes", n)
+		}
 		return time.Duration(n) * time.Minute, nil
 	}
 	return time.ParseDuration(arg)
@@ -205,7 +207,8 @@ func (a *App) backCmd(ctx context.Context, user *users.User, params []string) {
 // !back. Without an argument it hops one whole clip in dir's direction. With
 // one it moves the playhead by that span of footage ("!skip 10m",
 // "!back 1h30m", bare numbers meaning minutes), crossing clip boundaries as
-// needed. A negative span flips direction, so "!skip -10m" rewinds.
+// needed and wrapping moves longer than the corpus modulo its total length.
+// A negative span flips direction, so "!skip -10m" rewinds.
 func (a *App) seekCmd(ctx context.Context, user *users.User, params []string, name string, dir int) {
 	slog.InfoContext(ctx, "ran "+name, "username", user.Username)
 
@@ -239,10 +242,6 @@ func (a *App) seekCmd(ctx context.Context, user *users.User, params []string, na
 		span, err := parseSeekSpan(strings.Join(params, ""))
 		if err != nil || span == 0 {
 			a.Chat.Say(fmt.Sprintf("Usage: %s [time, like 10m or 1h30m]", name))
-			return
-		}
-		if span > seekSpanMax || span < -seekSpanMax {
-			a.Chat.Say(fmt.Sprintf("%s tops out at 24h", name))
 			return
 		}
 		span *= time.Duration(dir)

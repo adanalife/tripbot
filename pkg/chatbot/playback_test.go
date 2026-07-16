@@ -131,6 +131,7 @@ func TestSkipAndBackCmd_SpansSeekByFootageDuration(t *testing.T) {
 		{"skip negative rewinds", "skip", []string{"-10m"}, "Seek(-10m0s)", "⏪ Going back 10m"},
 		{"back duration", "back", []string{"45s"}, "Seek(-45s)", "⏪ Going back 45s"},
 		{"back negative fast-forwards", "back", []string{"-2m"}, "Seek(2m0s)", "⏩ Skipping ahead 2m"},
+		{"any timescale goes through", "skip", []string{"1000h"}, "Seek(1000h0m0s)", "⏩ Skipping ahead 1000h"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -163,8 +164,10 @@ func TestSkipAndBackCmd_SpansSeekByFootageDuration(t *testing.T) {
 	}
 }
 
-// Unparseable spans and spans past the cap reply without touching playback.
-func TestSkipCmd_RejectsBadAndOversizedSpans(t *testing.T) {
+// Unparseable spans reply with usage without touching playback. Any
+// parseable timescale is allowed (the player wraps modulo the corpus), so
+// only spans that overflow time.Duration count as unparseable.
+func TestSkipCmd_RejectsUnparseableSpans(t *testing.T) {
 	skipIfDarwin(t)
 	cases := []struct {
 		name    string
@@ -173,7 +176,7 @@ func TestSkipCmd_RejectsBadAndOversizedSpans(t *testing.T) {
 	}{
 		{"gibberish", []string{"potato"}, "Usage: !skip [time, like 10m or 1h30m]"},
 		{"zero span", []string{"0m"}, "Usage: !skip [time, like 10m or 1h30m]"},
-		{"past the cap", []string{"48h"}, "!skip tops out at 24h"},
+		{"bare minutes overflowing a duration", []string{"99999999999999999"}, "Usage: !skip [time, like 10m or 1h30m]"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
