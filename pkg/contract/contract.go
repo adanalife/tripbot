@@ -66,6 +66,11 @@ const (
 	ServiceVLCYouTube       = "vlc-youtube"
 	ServiceOnscreensTwitch  = "onscreens-twitch"
 	ServiceOnscreensYouTube = "onscreens-youtube"
+	// The playout Services (adanalife/playout repo) serve the same playback
+	// API vlc-server does (/vlc/current); tripbot reads the current clip from
+	// these while the vlc_* entries keep naming the vlc-server workloads.
+	ServicePlayoutTwitch  = "playout-twitch"
+	ServicePlayoutYouTube = "playout-youtube"
 )
 
 // Pod ports. Several services co-locate on 8080 for their HTTP API but expose
@@ -154,6 +159,8 @@ func Current() Contract {
 			{"tripbot_youtube", ServiceTripbotYouTube},
 			{"vlc_twitch", ServiceVLCTwitch},
 			{"vlc_youtube", ServiceVLCYouTube},
+			{"playout_twitch", ServicePlayoutTwitch},
+			{"playout_youtube", ServicePlayoutYouTube},
 			{"onscreens_twitch", ServiceOnscreensTwitch},
 			{"onscreens_youtube", ServiceOnscreensYouTube},
 			{"postgres", ServicePostgres},
