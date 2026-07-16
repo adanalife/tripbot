@@ -29,6 +29,10 @@ func (s gatewayChatterSource) IsSubscriber(username string) bool {
 	return mytwitch.UserIsSubscriber(username)
 }
 
+func (s gatewayChatterSource) SubscriberTier(username string) int {
+	return mytwitch.UserSubscriberTier(username)
+}
+
 // UpdateChatters refreshes the cached chatter set from the gateway. A gateway
 // error keeps the prior cached set, matching the don't-zero-on-error posture.
 func (s gatewayChatterSource) UpdateChatters() {
@@ -64,9 +68,9 @@ func (s gatewayChatterSource) IsFollower(username string) bool {
 	return ok
 }
 
-// refreshSubscribers refreshes the cached subscriber list from the gateway.
-// Driven at startup and by the 5-minute cron. A gateway error keeps the prior
-// cached list.
+// refreshSubscribers refreshes the cached subscriber tier map from the
+// gateway. Driven at startup and by the 5-minute cron. A gateway error keeps
+// the prior cached map.
 func (t *Tripbot) refreshSubscribers(ctx context.Context) {
 	if t.gateway == nil {
 		return
