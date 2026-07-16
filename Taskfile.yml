@@ -69,7 +69,7 @@ tasks:
       # changelog-number.yml renames it to <PR#>.<type>.md once the PR is open.
       NAME: '{{if .PR}}{{.PR}}{{else}}+{{.SLUG | default .TYPE}}{{end}}'
     cmds:
-      - uvx towncrier create --config towncrier.toml --edit {{.NAME}}.{{.TYPE}}.md
+      - uvx towncrier create --config towncrier.toml {{.NAME}}.{{.TYPE}}.md
 
   changelog:preview:
     desc: Preview the pending changelog from the current fragments (towncrier draft)
