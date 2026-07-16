@@ -181,3 +181,18 @@ func (m *MessageCounter) Add() { m.n.Add(1) }
 
 // Drain returns the count accumulated since the last Drain and resets it.
 func (m *MessageCounter) Drain() int { return int(m.n.Swap(0)) }
+
+// MilesOnScreenSince returns the road miles the van covered on this
+// platform's stream since the given instant: the sum of videos.miles_driven
+// over the plays recorded after it. Plays of clips with unknown distance
+// contribute nothing. The live complement to the rollup's real_miles — pass a
+// viewer's login time to get their current session's portion.
+func MilesOnScreenSince(ctx context.Context, platform string, since time.Time) (float32, error) {
+	var miles float32
+	err := database.GormDB().WithContext(ctx).
+		Raw(`SELECT COALESCE(SUM(v.miles_driven), 0)
+		     FROM video_plays p JOIN videos v ON v.id = p.video_id
+		     WHERE p.platform = ? AND p.started_at >= ?`,
+			platform, since).Scan(&miles).Error
+	return miles, err
+}
