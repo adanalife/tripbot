@@ -12,11 +12,21 @@ import (
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/scoreboards"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/adanalife/tripbot/pkg/video"
 	"gorm.io/gorm"
 )
+
+// testConf is the config test Apps carry — the same values .env.testing
+// supplies, as a literal so command tests don't reach through the loaded
+// package global.
+var testConf = &c.TripbotConfig{
+	Environment: "testing",
+	ChannelName: "test",
+	BotUsername: "test",
+}
 
 // captureSay installs a recordingChat on app and returns an output() accessor
 // with "messages since the last call, then reset" semantics, so multiple
@@ -51,6 +61,7 @@ func newTestVideo(state string, lat, lng float64, date time.Time) video.Video {
 // recordingSessions).
 func newTestApp(vid video.Video) *App {
 	a := &App{
+		Cfg:        testConf,
 		Onscreens:  noopOnscreens{},
 		VLC:        noopVLC{},
 		Video:      &recordingVideo{Vid: vid},

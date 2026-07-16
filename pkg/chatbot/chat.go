@@ -29,12 +29,13 @@ type consoleMirror struct {
 	inner       ChatClient
 	env         string
 	platform    string
+	channel     string
 	botUsername string
 }
 
 func (m consoleMirror) Say(msg string) {
 	// include the message in the log
-	mylog.ChatMsg(m.botUsername, msg)
+	mylog.ChatMsg(m.botUsername, m.channel, msg)
 	// mirror the bot's own output onto the event bus so it shows in the admin
 	// live console — the platform doesn't echo our sent messages back, so
 	// without this the console would miss everything the bot says.

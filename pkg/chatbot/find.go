@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
 	"github.com/adanalife/tripbot/pkg/feature"
 	"github.com/adanalife/tripbot/pkg/helpers"
@@ -114,13 +113,16 @@ type Search interface {
 // request can't be made — the expected state until the responder is deployed.
 var errSearchUnavailable = errors.New("search unavailable: NATS not connected")
 
-// realSearch is the production Search adapter. It holds no state: the embed
-// request goes through the pkg/natsclient singleton (like realNATS) and the
-// pgvector query through the process-wide DB (like realSessions).
-type realSearch struct{}
+// realSearch is the production Search adapter. Beyond the env its NATS
+// subjects are namespaced by, it holds no state: the embed request goes
+// through the pkg/natsclient singleton (like realNATS) and the pgvector
+// query through the process-wide DB (like realSessions).
+type realSearch struct {
+	env string
+}
 
-func (realSearch) Find(ctx context.Context, query string) ([]SearchHit, error) {
-	resp, err := requestEmbedding(ctx, c.Conf.Environment, query)
+func (s realSearch) Find(ctx context.Context, query string) ([]SearchHit, error) {
+	resp, err := requestEmbedding(ctx, s.env, query)
 	if err != nil {
 		return nil, err
 	}
@@ -257,8 +259,8 @@ func (a *App) findCmd(ctx context.Context, user *users.User, params []string) {
 	// Feature-flagged: stays fully silent (no usage hint, no jump) until enabled.
 	if !a.Flags.Bool(ctx, findFlagKey, feature.EvalContext{
 		Username: user.Username,
-		Channel:  c.Conf.ChannelName,
-		Env:      c.Conf.Environment,
+		Channel:  a.Cfg.ChannelName,
+		Env:      a.Cfg.Environment,
 	}) {
 		slog.InfoContext(ctx, "!find disabled by feature flag", "flag", findFlagKey, "username", user.Username)
 		return
@@ -271,7 +273,7 @@ func (a *App) findCmd(ctx context.Context, user *users.User, params []string) {
 	}
 
 	// rate-limit non-admins, shared with the other playback jumps.
-	if !c.UserIsAdmin(user.Username) {
+	if !a.Cfg.UserIsAdmin(user.Username) {
 		if time.Since(lastTimewarpTime) < 20*time.Second {
 			a.Chat.Say("Not yet; enjoy the moment!")
 			return

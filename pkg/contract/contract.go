@@ -69,6 +69,11 @@ const (
 	ServiceVLCYouTube       = "playout-youtube"
 	ServiceOnscreensTwitch  = "onscreens-twitch"
 	ServiceOnscreensYouTube = "onscreens-youtube"
+	// Aliases of ServiceVLC*: both key sets name playout's Services. The
+	// legacy vlc_* keys hold the wire-contract names consumers still read;
+	// they collapse into these when the contract renames vlc → playout.
+	ServicePlayoutTwitch  = "playout-twitch"
+	ServicePlayoutYouTube = "playout-youtube"
 )
 
 // Pod ports. Several services co-locate on 8080 for their HTTP API but expose
@@ -148,6 +153,8 @@ func Current() Contract {
 			{"tripbot_youtube", ServiceTripbotYouTube},
 			{"vlc_twitch", ServiceVLCTwitch},
 			{"vlc_youtube", ServiceVLCYouTube},
+			{"playout_twitch", ServicePlayoutTwitch},
+			{"playout_youtube", ServicePlayoutYouTube},
 			{"onscreens_twitch", ServiceOnscreensTwitch},
 			{"onscreens_youtube", ServiceOnscreensYouTube},
 			{"postgres", ServicePostgres},

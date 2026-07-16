@@ -9,6 +9,8 @@
     "tripbot_youtube": "tripbot-youtube",
     "vlc_twitch": "playout-twitch",
     "vlc_youtube": "playout-youtube",
+    "playout_twitch": "playout-twitch",
+    "playout_youtube": "playout-youtube",
     "onscreens_twitch": "onscreens-twitch",
     "onscreens_youtube": "onscreens-youtube",
     "postgres": "postgres"
