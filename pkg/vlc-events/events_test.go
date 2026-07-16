@@ -16,6 +16,7 @@ func TestSubjects(t *testing.T) {
 		{"play.at", PlayFileAtSubject("prod", "twitch"), "tripbot.prod.vlc.play.at.twitch"},
 		{"skip", SkipSubject("development", "youtube"), "tripbot.development.vlc.skip.youtube"},
 		{"back", BackSubject("staging", "twitch"), "tripbot.staging.vlc.back.twitch"},
+		{"seek", SeekSubject("production", "twitch"), "tripbot.production.vlc.seek.twitch"},
 		{"lastplayed", LastPlayedSubject("prod", "twitch"), "tripbot.prod.vlc.lastplayed.twitch"},
 		{"lastplayed wildcard", LastPlayedWildcard("prod"), "tripbot.prod.vlc.lastplayed.*"},
 	}
@@ -38,6 +39,24 @@ func TestSkipRoundTrip(t *testing.T) {
 	}
 	if out.N != in.N {
 		t.Errorf("n: got %d, want %d", out.N, in.N)
+	}
+	if out.EmittedAt == "" {
+		t.Error("emitted_at empty after round-trip")
+	}
+}
+
+func TestSeekRoundTrip(t *testing.T) {
+	in := Seek{Envelope: NewEnvelope(), DeltaMs: -600_000}
+	b, err := json.Marshal(in)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var out Seek
+	if err := json.Unmarshal(b, &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if out.DeltaMs != in.DeltaMs {
+		t.Errorf("delta_ms: got %d, want %d", out.DeltaMs, in.DeltaMs)
 	}
 	if out.EmittedAt == "" {
 		t.Error("emitted_at empty after round-trip")
