@@ -4,7 +4,7 @@ name: contract
 # truth for the service names / ports / env-var keys the infra cdk8s manifests
 # consume. This catches both failure modes — a constant changed without
 # regenerating contract.json, and contract.json hand-edited away from the
-# constants. pkg/contract is dependency-free (no cgo / libvlc), so this is fast.
+# constants. pkg/contract is dependency-free (no cgo), so this is fast.
 on:
   pull_request:
     paths:
