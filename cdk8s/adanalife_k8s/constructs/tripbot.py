@@ -156,7 +156,9 @@ def config_data(env: EnvConfig, platform: str) -> dict[str, str]:
     # bare "postgres" when co-located (parity); cross-namespace FQDN when the DB
     # is isolated in its own namespace (env.data_namespace).
     data["DATABASE_HOST"] = env.postgres_host
-    data["VLC_SERVER_HOST"] = f"{app_name('vlc', platform)}:8080"
+    # playout serves the same playback API vlc-server did (/vlc/current); the
+    # env key keeps the VLC_SERVER_HOST name tripbot reads.
+    data["VLC_SERVER_HOST"] = f"{app_name('playout', platform)}:8080"
     data["ONSCREENS_SERVER_HOST"] = f"{app_name('onscreens', platform)}:8080"
     data["OBS_SERVER_HOST"] = f"{app_name('obs', platform)}:8080"
     # OBS WebSocket control addr (port 4455) — distinct from OBS_SERVER_HOST's
