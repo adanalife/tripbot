@@ -11,6 +11,10 @@
 // SUM(events.extra_miles_earned) over logout + correction events: the sub-grant,
 // 5%-bonus, and manual-correction portion the pairing can't see, so reconstructed
 // display miles ≈ events_miles + extra_miles.
+// user_rollups.real_miles is the real-odometer number: SUM(videos.miles_driven)
+// over the video_plays that fell inside the user's sessions — the actual road
+// miles the van drove while they watched. Coverage starts at the video_plays
+// epoch (migration 033).
 // users.miles remains the authoritative display number; these columns are for
 // audit, reconciliation, and cross-platform aggregation.
 package rollups
@@ -59,7 +63,7 @@ logout_rn AS (
     WHERE e.event = 'logout'
 ),
 sessions AS (
-    SELECT l.platform, l.username,
+    SELECT l.platform, l.username, l.login_time, lo.logout_time,
            EXTRACT(EPOCH FROM (lo.logout_time - l.login_time)) / 60.0 AS minutes
     FROM login_rn l
     JOIN logout_rn lo ON lo.platform = l.platform AND lo.username = l.username AND lo.rn = l.rn
@@ -70,9 +74,21 @@ miles AS (
     SELECT platform, username, SUM(0.1 * minutes / 3.0)::real AS events_miles
     FROM sessions GROUP BY platform, username
 ),
+real_miles AS (
+    /* A play counts when it started inside the session window — no proration
+       at the edges (clips are ~3 minutes, so the boundary error is at most one
+       clip). Plays of clips with unknown distance contribute nothing. */
+    SELECT s.platform, s.username, SUM(v.miles_driven)::real AS real_miles
+    FROM sessions s
+    JOIN video_plays p ON p.platform = s.platform
+       AND p.started_at >= s.login_time AND p.started_at < s.logout_time
+    JOIN videos v ON v.id = p.video_id AND v.miles_driven IS NOT NULL
+    GROUP BY s.platform, s.username
+),
 agg AS (
     SELECT d.platform, d.username,
            COALESCE(m.events_miles, 0) AS events_miles,
+           COALESCE(r.real_miles, 0) AS real_miles,
            (SELECT COUNT(*) FROM events e WHERE e.platform = d.platform
               AND e.username = d.username AND e.event = 'login') AS session_count,
            (SELECT MIN(e.date_created) FROM events e WHERE e.platform = d.platform
@@ -83,12 +99,14 @@ agg AS (
               AND e.username = d.username AND e.event IN ('logout', 'correction')) AS extra_miles
     FROM dirty d
     LEFT JOIN miles m ON m.platform = d.platform AND m.username = d.username
+    LEFT JOIN real_miles r ON r.platform = d.platform AND r.username = d.username
 )
-INSERT INTO user_rollups (platform, username, events_miles, session_count, first_seen, last_seen, extra_miles, date_updated)
-SELECT platform, username, events_miles, session_count, first_seen, last_seen, extra_miles, now()
+INSERT INTO user_rollups (platform, username, events_miles, real_miles, session_count, first_seen, last_seen, extra_miles, date_updated)
+SELECT platform, username, events_miles, real_miles, session_count, first_seen, last_seen, extra_miles, now()
 FROM agg
 ON CONFLICT (platform, username) DO UPDATE SET
     events_miles  = EXCLUDED.events_miles,
+    real_miles    = EXCLUDED.real_miles,
     session_count = EXCLUDED.session_count,
     first_seen    = EXCLUDED.first_seen,
     last_seen     = EXCLUDED.last_seen,
