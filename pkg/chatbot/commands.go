@@ -23,8 +23,10 @@ import (
 	"github.com/adanalife/tripbot/pkg/events"
 	"github.com/adanalife/tripbot/pkg/feature"
 	"github.com/adanalife/tripbot/pkg/helpers"
+	"github.com/adanalife/tripbot/pkg/rollups"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/adanalife/tripbot/pkg/video"
+	"github.com/adanalife/tripbot/pkg/viewstats"
 	"github.com/getsentry/sentry-go"
 	"github.com/hako/durafmt"
 	"gorm.io/gorm"
@@ -634,6 +636,31 @@ func postReportToDiscord(webhookURL, username, message string) {
 	if resp.StatusCode >= 300 {
 		slog.ErrorContext(ctx, "discord webhook non-2xx", "status", resp.StatusCode)
 	}
+}
+
+// realMilesCmd is the subscriber-perk odometer readout: how many real road
+// miles the van drove during the clips this viewer watched — completed
+// sessions from the rollup plus the current session live. Distinct from
+// !miles, whose number is a flat time-based rate.
+func (a *App) realMilesCmd(ctx context.Context, user *users.User, _ []string) {
+	slog.InfoContext(ctx, "ran !realmiles", "username", user.Username)
+	rolled, err := rollups.RealMiles(ctx, a.platform(), user.Username)
+	if err != nil {
+		slog.ErrorContext(ctx, "real-miles rollup read failed", "err", err)
+		a.Chat.Say("I couldn't read the odometer right now, sorry!")
+		return
+	}
+	live, err := viewstats.MilesOnScreenSince(ctx, user.LoggedIn)
+	if err != nil {
+		slog.ErrorContext(ctx, "real-miles live read failed", "err", err)
+		live = 0 // the rolled-up part still stands
+	}
+	total := rolled + live
+	if total == 0 {
+		a.Chat.Say(fmt.Sprintf("@%s your real odometer is still at zero — it ticks up whenever the van covers ground while you watch.", user.Username))
+		return
+	}
+	a.Chat.Say(fmt.Sprintf("@%s the van has driven %.1f real road miles while you watched 🚐", user.Username, total))
 }
 
 func (a *App) bonusMilesCmd(ctx context.Context, user *users.User, _ []string) {
