@@ -4,7 +4,6 @@ import (
 	"log/slog"
 	"time"
 
-	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/geo"
 )
 
@@ -31,12 +30,13 @@ func (a *App) ConnectInstagramViaGateway() {
 	Uptime = time.Now()
 
 	// process-wide geocoder warmup, same as ConnectYouTubeViaGateway / ConnectIRC.
-	geo.SetDefault(geo.New(c.Conf.GoogleMapsAPIKey))
+	geo.SetDefault(geo.New(a.Cfg.GoogleMapsAPIKey))
 
 	a.Chat = consoleMirror{
 		inner:       instagramChat{},
-		env:         c.Conf.Environment,
-		platform:    c.Conf.Platform,
-		botUsername: c.Conf.BotUsername,
+		env:         a.Cfg.Environment,
+		channel:     a.Cfg.ChannelName,
+		platform:    a.Cfg.Platform,
+		botUsername: a.Cfg.BotUsername,
 	}
 }

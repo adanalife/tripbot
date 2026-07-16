@@ -76,7 +76,7 @@ func TestGatewayTwitch_FollowedAt_TransportError(t *testing.T) {
 func TestNewTwitch_NoURLIsNoop(t *testing.T) {
 	// A non-Twitch instance has no TWITCH_API_URL, so there's no gateway to
 	// reach — newTwitch returns the fail-closed no-op adapter.
-	if _, ok := newTwitch(&App{}).(noTwitch); !ok {
+	if _, ok := newTwitch(&App{Cfg: testConf}).(noTwitch); !ok {
 		t.Error("expected noTwitch when TWITCH_API_URL is empty")
 	}
 }

@@ -165,7 +165,7 @@ func newGatewayClient() *gateway.Client {
 func NewTripbot(version string) *Tripbot {
 	t := &Tripbot{
 		version: version,
-		app:     chatbot.New(),
+		app:     chatbot.New(c.Conf),
 		srv:     server.New(),
 		player: video.NewPlayer(
 			onscreensClient.New(natsclient.DefaultPublisher(), c.Conf.Environment, c.Conf.Platform),

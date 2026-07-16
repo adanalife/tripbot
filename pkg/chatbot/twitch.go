@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"time"
 
-	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/gateway"
 )
 
@@ -24,11 +23,11 @@ type Twitch interface {
 // client, the single Helix caller since the cutover. A non-Twitch instance
 // (PLATFORM=youtube) has no TWITCH_API_URL and thus no Twitch Helix surface, so
 // it gets a fail-closed no-op adapter.
-func newTwitch(*App) Twitch {
-	if c.Conf.TwitchAPIURL == "" {
+func newTwitch(a *App) Twitch {
+	if a.Cfg.TwitchAPIURL == "" {
 		return noTwitch{}
 	}
-	return newGatewayTwitch(c.Conf.TwitchAPIURL)
+	return newGatewayTwitch(a.Cfg.TwitchAPIURL)
 }
 
 // noTwitch is the fail-closed adapter for instances with no gateway wired (a

@@ -5,7 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/eventbus"
 )
 
@@ -56,8 +55,9 @@ func TestConsoleMirror_PublishesBotOutputToEventbus(t *testing.T) {
 
 	cm := consoleMirror{
 		inner:       disconnectedChat{},
-		env:         c.Conf.Environment,
-		botUsername: c.Conf.BotUsername,
+		env:         testConf.Environment,
+		channel:     testConf.ChannelName,
+		botUsername: testConf.BotUsername,
 	}
 	cm.Say("hello chat")
 
@@ -65,15 +65,15 @@ func TestConsoleMirror_PublishesBotOutputToEventbus(t *testing.T) {
 		t.Fatalf("expected 1 publish, got %d", len(rec.Publishes))
 	}
 	p := rec.Publishes[0]
-	if want := "tripbot." + c.Conf.Environment + ".chat.message"; p.Subject != want {
+	if want := "tripbot." + testConf.Environment + ".chat.message"; p.Subject != want {
 		t.Errorf("subject = %q, want %q", p.Subject, want)
 	}
 	var ev eventbus.ChatMessage
 	if err := json.Unmarshal(p.Payload, &ev); err != nil {
 		t.Fatalf("bad payload: %v", err)
 	}
-	if ev.Username != c.Conf.BotUsername {
-		t.Errorf("username = %q, want bot %q", ev.Username, c.Conf.BotUsername)
+	if ev.Username != testConf.BotUsername {
+		t.Errorf("username = %q, want bot %q", ev.Username, testConf.BotUsername)
 	}
 	if ev.Text != "hello chat" {
 		t.Errorf("text = %q, want hello chat", ev.Text)

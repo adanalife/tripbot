@@ -8,7 +8,6 @@ import (
 	"time"
 
 	mylog "github.com/adanalife/tripbot/pkg/chatbot/log"
-	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/eventbus"
 	"github.com/adanalife/tripbot/pkg/gateway"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
@@ -94,8 +93,8 @@ func (a *App) HandleGatewayMessage(ctx context.Context, msg IncomingMessage) {
 	defer span.End()
 
 	instrumentation.ChatMessages.Inc()
-	mylog.ChatMsg(msg.User, msg.Text)
-	eventbus.EmitChatMessage(ctx, c.Conf.Environment, a.Platform, msg.User, msg.Text)
+	mylog.ChatMsg(msg.User, a.Cfg.ChannelName, msg.Text)
+	eventbus.EmitChatMessage(ctx, a.Cfg.Environment, a.Platform, msg.User, msg.Text)
 
 	// transient, never written to the users table — the allowlisted command
 	// subset reads nothing user-specific beyond the name.
