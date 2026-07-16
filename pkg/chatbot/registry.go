@@ -206,6 +206,12 @@ func (a *App) buildRegistry() []Command {
 			RequiresFollow: true,
 		},
 		{
+			Trigger:            "!realmiles",
+			Aliases:            []string{"!odometer"},
+			Handler:            a.realMilesCmd,
+			RequiresSubscriber: true,
+		},
+		{
 			// admin-gated inside the handler (broadcaster-only)
 			Trigger: "!givemiles",
 			Handler: a.giveMilesCmd,

@@ -133,6 +133,18 @@ WHERE ranked.rank <= 50
   AND NOT EXISTS (SELECT 1 FROM scoreboard_snapshots ss WHERE ss.scoreboard_name = ?)
 `
 
+// RealMiles returns the user's rolled-up real-odometer miles: the road miles
+// the van drove during clips watched in completed sessions. 0 when the user
+// has no rollup row yet. The current session's portion isn't here — pair with
+// viewstats.MilesOnScreenSince(login time) for a live total.
+func RealMiles(ctx context.Context, platform, username string) (float32, error) {
+	var miles float32
+	err := database.GormDB().WithContext(ctx).
+		Raw(`SELECT COALESCE((SELECT real_miles FROM user_rollups WHERE platform = ? AND username = ?), 0)`,
+			platform, username).Scan(&miles).Error
+	return miles, err
+}
+
 // Reconcile is the rollup tick, registered as a background job on the twitch
 // instance (it scans every platform's events regardless of which instance
 // runs it). One transaction per tick: snapshot any just-finished monthly
