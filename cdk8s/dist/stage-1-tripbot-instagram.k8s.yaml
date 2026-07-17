@@ -14,6 +14,7 @@ data:
   ENV: staging
   EXTERNAL_URL: https://tripbot-instagram.stage.whereisdana.today
   GOOGLE_APPS_PROJECT_ID: tripbot-stage
+  INSTAGRAM_API_URL: http://gateway-instagram.stage-1.svc.cluster.local:8080
   MAPS_OUTPUT_DIR: /opt/data/maps
   NATS_URL: nats://nats.stage-1-platform.svc.cluster.local:4222
   OBS_SERVER_HOST: obs-instagram:8080
@@ -45,7 +46,7 @@ spec:
   template:
     metadata:
       annotations:
-        adanalife.dev/config-hash: 38d7b0110a
+        adanalife.dev/config-hash: 10841c79c0
       labels:
         app: tripbot-instagram
     spec:

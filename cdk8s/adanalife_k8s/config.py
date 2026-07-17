@@ -132,6 +132,14 @@ class EnvConfig:
     # in-process pkg/youtube send. The inbound chat poll stays in-process
     # regardless (no gateway streaming endpoint).
     youtube_api_url: str = ""
+    # The gateway-transport platforms: a PLATFORM=facebook/instagram/tiktok
+    # instance reaches BOTH chat directions through its per-platform gateway
+    # instance (inbound poll always; outbound sends where the platform is
+    # two-way). Required on those instances — with the URL empty the pod
+    # boots without platform chat.
+    facebook_api_url: str = ""
+    instagram_api_url: str = ""
+    tiktok_api_url: str = ""
     # Gate the youtube instance's inbound chat poll (tripbot's
     # YOUTUBE_INBOUND_ENABLED + onscreens' rotator copy). False = bot-less
     # YouTube: outbound rotators + background jobs run, but nothing reads chat
@@ -294,6 +302,12 @@ ENVS: dict[str, EnvConfig] = {
         # in-namespace gateway-youtube (unconditionally — no flag). The inbound
         # poll stays in-process.
         youtube_api_url="http://gateway-youtube.stage-1.svc.cluster.local:8080",
+        # The parked platform instances point at their in-namespace gateway
+        # the same way, so a hand scale-up is a working bring-up rather than
+        # a chat-less pod waiting on a config edit.
+        facebook_api_url="http://gateway-facebook.stage-1.svc.cluster.local:8080",
+        instagram_api_url="http://gateway-instagram.stage-1.svc.cluster.local:8080",
+        tiktok_api_url="http://gateway-tiktok.stage-1.svc.cluster.local:8080",
         # Guardrail from the same incident: cap what stage can request in
         # aggregate, so "accidentally scaled up too many stage deployments"
         # parks pods Unschedulable instead of crowding prod off the node.

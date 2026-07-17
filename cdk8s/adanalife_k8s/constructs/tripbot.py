@@ -188,6 +188,16 @@ def config_data(env: EnvConfig, platform: str) -> dict[str, str]:
     # twitch instance never carries it. Routed unconditionally when wired (no flag).
     if platform == "youtube" and env.youtube_api_url:
         data["YOUTUBE_API_URL"] = env.youtube_api_url
+    # The gateway-transport platforms reach both chat directions through
+    # their per-platform gateway instance where the env wires it — required
+    # for chat to come up at all (the binary boots chat-less without it).
+    gateway_api_urls = {
+        "facebook": env.facebook_api_url,
+        "instagram": env.instagram_api_url,
+        "tiktok": env.tiktok_api_url,
+    }
+    if gateway_api_urls.get(platform):
+        data[f"{platform.upper()}_API_URL"] = gateway_api_urls[platform]
     # Bot-less YouTube: gate off the inbound chat poll. Only stamped when
     # disabled (the binary defaults to enabled) so a live, inbound-enabled
     # youtube instance keeps a minimal ConfigMap and no needless config-hash
