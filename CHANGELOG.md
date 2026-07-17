@@ -9,6 +9,25 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v4.2.0] — 2026-07-17
+
+### Chatbot
+
+- The facebook instance publishes a broadcast snapshot (`tripbot.<env>.facebook.broadcast`, TRIPBOT_FACEBOOK last-value cache) with the video id and public/unpublished privacy, mirroring the youtube broadcast ticker ([#1169](https://github.com/adanalife/tripbot/pull/1169))
+
+### Playout
+
+- vlc-server removed — dashcam playback is owned by the standalone [playout](https://github.com/adanalife/playout) repo, which serves the same wire contract (`/vlc/current` HTTP + `tripbot.<env>.vlc.*` NATS). The repo is pure Go again (no CGO/libvlc), the vlc image/CI legs are gone, and the release PR now deploys onscreens-server alongside tripbot (per-component bump PRs retired). ([#1135](https://github.com/adanalife/tripbot/pull/1135))
+- Renamed the vlc client packages and identifiers to playout: `pkg/vlc-client` → `pkg/playout-client`, `pkg/vlc-events` → `pkg/playout-events`, the chatbot `VLC` interface → `Playout`, plus the towncrier `vlc` fragment type and tooling references. The wire contract is unchanged — `/vlc/current`, the `tripbot.<env>.vlc.*` subjects, and `VLC_SERVER_HOST` keep their legacy names until the coordinated contract rename. ([#1151](https://github.com/adanalife/tripbot/pull/1151))
+
+### Deploy / Infra
+
+- Stage parks every platform at replicas:0 — the resting state is everything-off; a platform comes online via the console scale-up button ([#1165](https://github.com/adanalife/tripbot/pull/1165), [#1166](https://github.com/adanalife/tripbot/pull/1166), [#1167](https://github.com/adanalife/tripbot/pull/1167))
+
+### Cleanup
+
+- Thread config into `users`, `video`, `server`, and `twitch` constructors/calls instead of reading the `c.Conf` global — second step of retiring config-as-global. ([#1143](https://github.com/adanalife/tripbot/pull/1143))
+
 ## [v4.1.0] — 2026-07-17
 
 ### Deploy / Infra
