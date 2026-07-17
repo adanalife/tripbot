@@ -9,6 +9,16 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v4.3.1] — 2026-07-17
+
+### Fixes
+
+- Gateway calls allow 15s (was 5s) — facebook comment writes regularly exceed 5s, turning successful sends into spurious 502s. ([#1173](https://github.com/adanalife/tripbot/pull/1173))
+
+### Cleanup
+
+- Pass config into the events / scoreboards / viewstats / rollups write helpers and drop `pkg/database`'s init-time config read — third step of retiring config-as-global. ([#1144](https://github.com/adanalife/tripbot/pull/1144))
+
 ## [v4.3.0] — 2026-07-17
 
 ### Chatbot
