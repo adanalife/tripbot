@@ -160,17 +160,21 @@ var (
 		{"privacy", strType(), true},
 		{"emitted_at", dateType(), true},
 	}
+	// Same shape as youtube's; privacy carries facebook's two states
+	// ("public"/"unpublished") instead of youtube's three.
+	facebookBroadcastFields = youtubeBroadcastFields
 )
 
 // envelopeFields maps each declared schema title to its field list so the
 // reflection test can cross-check against the real pkg/eventbus structs.
 var envelopeFields = map[string][]field{
-	"ChatMessage":      chatMessageFields,
-	"ViewerCount":      viewerCountFields,
-	"VideoChanged":     videoChangedFields,
-	"AuthStatus":       authStatusFields,
-	"AuthAccount":      authAccountFields,
-	"YoutubeBroadcast": youtubeBroadcastFields,
+	"ChatMessage":       chatMessageFields,
+	"ViewerCount":       viewerCountFields,
+	"VideoChanged":      videoChangedFields,
+	"AuthStatus":        authStatusFields,
+	"AuthAccount":       authAccountFields,
+	"YoutubeBroadcast":  youtubeBroadcastFields,
+	"FacebookBroadcast": facebookBroadcastFields,
 }
 
 // eventbusContract builds the full registry in stable on-disk order: the four
@@ -210,6 +214,12 @@ func eventbusContract() orderedObject {
 				{"transport", "jetstream"},
 				{"stream", "TRIPBOT_YOUTUBE"},
 				{"schema", objectSchema("YoutubeBroadcast", youtubeBroadcastFields)},
+			}},
+			{"facebook_broadcast", orderedObject{
+				{"subject", "tripbot.{env}.facebook.broadcast"},
+				{"transport", "jetstream"},
+				{"stream", "TRIPBOT_FACEBOOK"},
+				{"schema", objectSchema("FacebookBroadcast", facebookBroadcastFields)},
 			}},
 		}},
 		{"$defs", orderedObject{
