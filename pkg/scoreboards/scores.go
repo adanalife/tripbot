@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"time"
 
-	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"gorm.io/gorm"
@@ -26,13 +25,13 @@ type Score struct {
 
 // GetScoreByName returns the score value for a given username and scoreboard name
 // TODO: this could be achieved with a single query
-func GetScoreByName(ctx context.Context, username, scoreboardName string) (float32, error) {
-	userID, err := getUserIDByName(ctx, username)
+func GetScoreByName(ctx context.Context, platform, username, scoreboardName string) (float32, error) {
+	userID, err := getUserIDByName(ctx, platform, username)
 	if err != nil {
 		slog.ErrorContext(ctx, "error getting user ID", "err", err)
 		return -1.0, err
 	}
-	scoreboard, err := findOrCreateScoreboard(ctx, scoreboardName)
+	scoreboard, err := findOrCreateScoreboard(ctx, platform, scoreboardName)
 	if err != nil {
 		slog.ErrorContext(ctx, "error finding or creating scoreboard", "err", err)
 		return -1.0, err
@@ -47,13 +46,13 @@ func GetScoreByName(ctx context.Context, username, scoreboardName string) (float
 
 // AddToScoreByName increases the score value for a given username and scoreboard name
 // TODO: this could be achieved with less queries
-func AddToScoreByName(ctx context.Context, username, scoreboardName string, scoreToAdd float32) error {
-	userID, err := getUserIDByName(ctx, username)
+func AddToScoreByName(ctx context.Context, platform, username, scoreboardName string, scoreToAdd float32) error {
+	userID, err := getUserIDByName(ctx, platform, username)
 	if err != nil {
 		slog.ErrorContext(ctx, "error getting userID for user", "err", err)
 		return err
 	}
-	scoreboard, err := findOrCreateScoreboard(ctx, scoreboardName)
+	scoreboard, err := findOrCreateScoreboard(ctx, platform, scoreboardName)
 	if err != nil {
 		slog.ErrorContext(ctx, "error finding or creating scoreboard", "err", err)
 		return err
@@ -112,9 +111,9 @@ func (s Score) save(ctx context.Context) error {
 
 // getUserIDByName fetches the user ID for a given username
 // TODO: this shouldn't be necessary, join the tables instead
-func getUserIDByName(ctx context.Context, username string) (uint16, error) {
+func getUserIDByName(ctx context.Context, platform, username string) (uint16, error) {
 	var result struct{ ID uint16 }
-	err := database.GormDB().WithContext(ctx).Raw("SELECT id FROM users WHERE platform = ? AND username = ?", c.Conf.Platform, username).Scan(&result).Error
+	err := database.GormDB().WithContext(ctx).Raw("SELECT id FROM users WHERE platform = ? AND username = ?", platform, username).Scan(&result).Error
 	if err != nil {
 		slog.ErrorContext(ctx, "error fetching user ID", "err", err)
 	}

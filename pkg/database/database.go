@@ -9,8 +9,6 @@ import (
 	"time"
 
 	"github.com/XSAM/otelsql"
-	c "github.com/adanalife/tripbot/pkg/config/tripbot"
-	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 	"github.com/uptrace/opentelemetry-go-extra/otelgorm"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
@@ -21,18 +19,10 @@ import (
 // this is how we will share the DB connection
 var gormConn *gorm.DB
 
-func init() {
-	var err error
-
-	err = godotenv.Load(".env." + c.Conf.Environment)
-	// In cluster contexts (staging/production) the .env file is not shipped —
-	// env values come from envconfig instead — so the missing-file error is
-	// expected and noise. Only surface it for local-dev workflows.
-	if err != nil && (c.Conf.Environment == "development" || c.Conf.Environment == "testing") {
-		slog.Warn("error loading .env file, continuing anyway", "err", err)
-	}
-
-	// first we have to check we have all of the right ENV vars
+func connectToDB() *sql.DB {
+	// config.SetEnvironment has already loaded the env-specific dotenv file
+	// (repo-root-resolved), so the DATABASE_* values are either in the process
+	// env or genuinely missing — fail loudly rather than dialing garbage.
 	requiredVars := []string{
 		"DATABASE_USER",
 		"DATABASE_DB",
@@ -44,9 +34,6 @@ func init() {
 			log.Fatalf("You must set %s", v)
 		}
 	}
-}
-
-func connectToDB() *sql.DB {
 	// otelsql.Open instruments the postgres driver so every query becomes a span.
 	db, err := otelsql.Open("postgres", connStr(),
 		otelsql.WithAttributes(semconv.DBSystemPostgreSQL),

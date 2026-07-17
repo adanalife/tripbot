@@ -117,17 +117,16 @@ func closeTo(t *testing.T, label string, got, want float64) {
 	}
 }
 
+// testConf is a writable config for the reconcile runs under test.
+var testConf = &c.TripbotConfig{Environment: "testing", Platform: "twitch"}
+
 func TestReconcile_ReadOnlySkipsEverything(t *testing.T) {
 	db := testdb.New(t)
 	parkWatermark(t, db)
 	wm := watermark(t, db)
 	addSession(t, db, "readonly_user", 0, 90*time.Minute)
 
-	orig := c.Conf.ReadOnly
-	c.Conf.ReadOnly = true
-	t.Cleanup(func() { c.Conf.ReadOnly = orig })
-
-	Reconcile(context.Background())
+	Reconcile(context.Background(), &c.TripbotConfig{ReadOnly: true})
 
 	if got := watermark(t, db); got != wm {
 		t.Errorf("ReadOnly advanced the watermark: %d -> %d", wm, got)
@@ -145,7 +144,7 @@ func TestReconcile_NoNewEventsIsANoOp(t *testing.T) {
 	wm := watermark(t, db)
 	before := countRows(t, db, `SELECT COUNT(*) FROM user_rollups`)
 
-	Reconcile(context.Background())
+	Reconcile(context.Background(), testConf)
 
 	if got := watermark(t, db); got != wm {
 		t.Errorf("watermark moved with no new events: %d -> %d", wm, got)
@@ -165,7 +164,7 @@ func TestReconcile_ComputesMilesFromPairedSessions(t *testing.T) {
 	addSession(t, db, "hiker", 4*time.Hour, 30*time.Minute)
 	maxID := maxEventID(t, db)
 
-	Reconcile(context.Background())
+	Reconcile(context.Background(), testConf)
 
 	got := getRollup(t, db, "twitch", "hiker")
 	closeTo(t, "events_miles", got.EventsMiles, 4.0)
@@ -195,7 +194,7 @@ func TestReconcile_DropsSessionsOverTwentyFourHours(t *testing.T) {
 	addSession(t, db, "forgot_to_leave", 0, 26*time.Hour)
 	addSession(t, db, "forgot_to_leave", 27*time.Hour, 60*time.Minute)
 
-	Reconcile(context.Background())
+	Reconcile(context.Background(), testConf)
 
 	got := getRollup(t, db, "twitch", "forgot_to_leave")
 	closeTo(t, "events_miles", got.EventsMiles, 2.0)
@@ -215,7 +214,7 @@ func TestReconcile_ExcludesPre2000SentinelFromSeenTimes(t *testing.T) {
 	addEvent(t, db, "twitch", "old_timer", "chat", sentinel, 0)
 	addSession(t, db, "old_timer", 0, 30*time.Minute)
 
-	Reconcile(context.Background())
+	Reconcile(context.Background(), testConf)
 
 	got := getRollup(t, db, "twitch", "old_timer")
 	if !got.FirstSeen.Equal(base) {
@@ -235,7 +234,7 @@ func TestReconcile_SumsExtraMilesFromLogoutAndCorrection(t *testing.T) {
 	addEvent(t, db, "twitch", "bonus_haver", "correction", base.Add(2*time.Hour), 2.0)
 	addEvent(t, db, "twitch", "bonus_haver", "correction", base.Add(3*time.Hour), -0.5)
 
-	Reconcile(context.Background())
+	Reconcile(context.Background(), testConf)
 
 	got := getRollup(t, db, "twitch", "bonus_haver")
 	closeTo(t, "extra_miles", got.ExtraMiles, 3.0)
@@ -248,11 +247,11 @@ func TestReconcile_IsIdempotentAndRecomputesInPlace(t *testing.T) {
 	parkWatermark(t, db)
 	addSession(t, db, "repeat_visitor", 0, 90*time.Minute)
 
-	Reconcile(context.Background())
+	Reconcile(context.Background(), testConf)
 	first := getRollup(t, db, "twitch", "repeat_visitor")
 
 	// A second tick with no new events short-circuits; the row must survive.
-	Reconcile(context.Background())
+	Reconcile(context.Background(), testConf)
 	if again := getRollup(t, db, "twitch", "repeat_visitor"); again != first {
 		t.Errorf("second tick changed the row: %+v -> %+v", first, again)
 	}
@@ -262,7 +261,7 @@ func TestReconcile_IsIdempotentAndRecomputesInPlace(t *testing.T) {
 	if err := db.Exec(`UPDATE rollup_watermarks SET last_event_id = 0 WHERE name = ?`, watermarkName).Error; err != nil {
 		t.Fatalf("rewind watermark: %v", err)
 	}
-	Reconcile(context.Background())
+	Reconcile(context.Background(), testConf)
 
 	if rebuilt := getRollup(t, db, "twitch", "repeat_visitor"); rebuilt != first {
 		t.Errorf("full recompute is not self-healing: %+v -> %+v", first, rebuilt)
@@ -281,7 +280,7 @@ func TestReconcile_KeepsPlatformsSeparate(t *testing.T) {
 	addEvent(t, db, "youtube", "twin", "login", base, 0)
 	addEvent(t, db, "youtube", "twin", "logout", base.Add(30*time.Minute), 0)
 
-	Reconcile(context.Background())
+	Reconcile(context.Background(), testConf)
 
 	closeTo(t, "twitch events_miles", getRollup(t, db, "twitch", "twin").EventsMiles, 3.0)
 	closeTo(t, "youtube events_miles", getRollup(t, db, "youtube", "twin").EventsMiles, 1.0)
@@ -322,7 +321,7 @@ func TestReconcile_SnapshotsPreviousMonthScoreboard(t *testing.T) {
 	addScore(t, db, boardID, "gold", false, 60)
 	addScore(t, db, boardID, "tripbot4000", true, 999)
 
-	Reconcile(context.Background())
+	Reconcile(context.Background(), testConf)
 
 	type snapshotRow struct {
 		Rank     int
@@ -353,7 +352,7 @@ func TestReconcile_SnapshotsPreviousMonthScoreboard(t *testing.T) {
 	// The NOT EXISTS guard makes the freeze once-only: a later tick must not
 	// re-snapshot, even after the board gains a score.
 	addScore(t, db, boardID, "latecomer", false, 100)
-	Reconcile(context.Background())
+	Reconcile(context.Background(), testConf)
 
 	if n := countRows(t, db, `SELECT COUNT(*) FROM scoreboard_snapshots WHERE scoreboard_name = ?`, board); n != 2 {
 		t.Errorf("snapshot re-ran: got %d rows, want 2", n)
@@ -372,7 +371,7 @@ func TestReconcile_SnapshotCapsAtTopFifty(t *testing.T) {
 		addScore(t, db, boardID, fmt.Sprintf("guesser_%d", i), false, float64(i))
 	}
 
-	Reconcile(context.Background())
+	Reconcile(context.Background(), testConf)
 
 	if n := countRows(t, db, `SELECT COUNT(*) FROM scoreboard_snapshots WHERE scoreboard_name = ?`, board); n != 50 {
 		t.Errorf("snapshot should cap at 50 rows, got %d", n)

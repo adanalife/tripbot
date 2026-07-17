@@ -29,7 +29,7 @@ type topUserResult struct {
 	Value    float32
 }
 
-func TopUsers(ctx context.Context, scoreboardName string, size int) [][]string {
+func TopUsers(ctx context.Context, cfg *c.TripbotConfig, scoreboardName string, size int) [][]string {
 	var leaderboard [][]string
 
 	var results []topUserResult
@@ -38,10 +38,10 @@ func TopUsers(ctx context.Context, scoreboardName string, size int) [][]string {
 		Select("users.username, scores.value").
 		Joins("JOIN scoreboards ON scores.scoreboard_id = scoreboards.id").
 		Joins("JOIN users ON scores.user_id = users.id").
-		Where("scoreboards.name = ? AND scoreboards.platform = ?", scoreboardName, c.Conf.Platform).
+		Where("scoreboards.name = ? AND scoreboards.platform = ?", scoreboardName, cfg.Platform).
 		// users.platform too: scores written before boards were per-platform
 		// may hang off the other platform's same-named board.
-		Where("users.is_bot = false AND users.platform = ? AND users.username != ?", c.Conf.Platform, strings.ToLower(c.Conf.ChannelName)).
+		Where("users.is_bot = false AND users.platform = ? AND users.username != ?", cfg.Platform, strings.ToLower(cfg.ChannelName)).
 		Order("scores.value DESC").
 		Limit(size).
 		Scan(&results)
@@ -57,15 +57,15 @@ func TopUsers(ctx context.Context, scoreboardName string, size int) [][]string {
 }
 
 // findOrCreateScoreboard will find a Scoreboard in the DB or create one
-func findOrCreateScoreboard(ctx context.Context, name string) (Scoreboard, error) {
+func findOrCreateScoreboard(ctx context.Context, platform, name string) (Scoreboard, error) {
 	var scoreboard Scoreboard
-	result := database.GormDB().WithContext(ctx).Where(Scoreboard{Name: name, Platform: c.Conf.Platform}).FirstOrCreate(&scoreboard)
+	result := database.GormDB().WithContext(ctx).Where(Scoreboard{Name: name, Platform: platform}).FirstOrCreate(&scoreboard)
 	return scoreboard, result.Error
 }
 
 // createScoreboard() will actually create the DB record
-func createScoreboard(ctx context.Context, name string) (Scoreboard, error) {
-	scoreboard := Scoreboard{Name: name, Platform: c.Conf.Platform}
+func createScoreboard(ctx context.Context, platform, name string) (Scoreboard, error) {
+	scoreboard := Scoreboard{Name: name, Platform: platform}
 	result := database.GormDB().WithContext(ctx).Create(&scoreboard)
 	return scoreboard, result.Error
 }

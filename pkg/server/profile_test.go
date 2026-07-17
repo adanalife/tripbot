@@ -29,7 +29,7 @@ func withProfileSeams(t *testing.T, u users.User, sessions int64, monthly float3
 		}
 		return u, nil
 	}
-	sessionCount = func(context.Context, string) int64 { return sessions }
+	sessionCount = func(context.Context, string, string) int64 { return sessions }
 	monthlyMiles = func(context.Context, users.User) float32 { return monthly }
 	// default: no surviving event history. Tests exercising the first-seen
 	// fallback override earliestEvent after calling withProfileSeams.

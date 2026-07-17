@@ -2,6 +2,7 @@ package video
 
 import (
 	"context"
+	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"log/slog"
 	"os/exec"
 	"path/filepath"
@@ -31,15 +32,16 @@ type Player struct {
 	CurrentlyPlaying Video // exported because external callers read the current video off it
 	curVid, preVid   string
 	timeStarted      time.Time
-	env, platform    string
+	cfg              *c.TripbotConfig
 	onscreens        onscreens
 	playout          *playoutClient.Client
 }
 
-// NewPlayer returns a Player with its own Onscreens + Playout clients. env and
-// platform tag the video.changed events it emits.
-func NewPlayer(env, platform string, onscreens onscreens, playout *playoutClient.Client) *Player {
-	return &Player{env: env, platform: platform, onscreens: onscreens, playout: playout}
+// NewPlayer returns a Player with its own Onscreens + Playout clients. cfg
+// supplies the env + platform its video.changed events are tagged with and
+// the read-only gate its video_plays writes honor.
+func NewPlayer(cfg *c.TripbotConfig, onscreens onscreens, playout *playoutClient.Client) *Player {
+	return &Player{cfg: cfg, onscreens: onscreens, playout: playout}
 }
 
 // GetCurrentlyPlaying will use lsof to figure out
@@ -88,7 +90,7 @@ func (p *Player) GetCurrentlyPlaying(ctx context.Context) {
 		// Announce the switch so the admin panel's "now playing" card updates
 		// live (no-op when NATS is unconfigured). emitted_at doubles as the
 		// clip start time for the panel's elapsed ticker.
-		eventbus.EmitVideoChanged(ctx, p.env, p.platform,
+		eventbus.EmitVideoChanged(ctx, p.cfg.Environment, p.cfg.Platform,
 			p.CurrentlyPlaying.File(), p.CurrentlyPlaying.State, p.CurrentlyPlaying.Flagged,
 			p.CurrentlyPlaying.Lat, p.CurrentlyPlaying.Lng)
 
@@ -96,7 +98,7 @@ func (p *Player) GetCurrentlyPlaying(ctx context.Context) {
 		// emission above (NATS core is fire-and-forget). The first tick after a
 		// restart records a fresh play for the clip already on screen, since its
 		// true start time wasn't observed.
-		viewstats.RecordPlay(ctx, p.CurrentlyPlaying.ID, p.CurrentlyPlaying.State,
+		viewstats.RecordPlay(ctx, p.cfg, p.CurrentlyPlaying.ID, p.CurrentlyPlaying.State,
 			p.CurrentlyPlaying.Flagged, p.CurrentlyPlaying.Lat, p.CurrentlyPlaying.Lng)
 
 		// show the no-GPS image
@@ -128,7 +130,7 @@ func (p *Player) EmitCurrentVideo(ctx context.Context) {
 	if p.CurrentlyPlaying.Slug == "" {
 		return
 	}
-	eventbus.EmitVideoChanged(ctx, p.env, p.platform,
+	eventbus.EmitVideoChanged(ctx, p.cfg.Environment, p.cfg.Platform,
 		p.CurrentlyPlaying.File(), p.CurrentlyPlaying.State, p.CurrentlyPlaying.Flagged,
 		p.CurrentlyPlaying.Lat, p.CurrentlyPlaying.Lng)
 }
