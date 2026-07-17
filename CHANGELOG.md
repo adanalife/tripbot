@@ -9,6 +9,12 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v4.3.0] — 2026-07-17
+
+### Chatbot
+
+- The facebook broadcast event carries `broadcast_id` + `permalink_url`, giving the console a real watch link and Live Producer dashboard link per broadcast. ([#1171](https://github.com/adanalife/tripbot/pull/1171))
+
 ## [v4.2.0] — 2026-07-17
 
 ### Chatbot
