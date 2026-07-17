@@ -3,7 +3,7 @@
 into dist/.
 
 Per env:  <env>-<component>-<platform>  — one deploy unit / Argo Application each
-                                           (tripbot/vlc/onscreens/obs × platforms)
+                                           (tripbot/onscreens × platforms)
           <env>-tripbot-identity         — identity Secrets + prod-stream protection
           <env>-job-<name>               — tripbot one-shot Jobs (auth/seed; their own tasks)
 

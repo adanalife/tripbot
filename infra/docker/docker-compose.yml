@@ -19,28 +19,6 @@ services:
       - ./assets/video:/opt/data/Dashcam/_all:ro
     restart: unless-stopped
 
-  vlc:
-    privileged: true
-    image: adanalife/vlc
-    hostname: vlc
-    env_file:
-      - infra/docker/env.docker
-    build:
-      context: .
-      dockerfile: infra/docker/vlc/Dockerfile
-    ports:
-      # this should match the VLC_SERVER_HOST env var
-      - "8080"
-      - "8554:8554"
-    environment:
-      XDG_RUNTIME_DIR: "/root/.cache/xdgr"
-      # hack to make fontconfig happy
-      FONTCONFIG_PATH: "/etc/fonts"
-    volumes:
-      - .:/go/src/github.com/adanalife/tripbot
-      - ./assets/video:/opt/data/Dashcam/_all:ro
-    restart: unless-stopped
-
   # onscreens-server runs as its own service (mirrors the k8s split). Binds
   # :8080 via the image's ONSCREENS_SERVER_BIND_ADDRESS env. tripbot reaches
   # it at onscreens-server:8080.

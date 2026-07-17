@@ -9,14 +9,6 @@ services:
       - ./.env.development
     # command: -c "go run cmd/tripbot/tripbot.go 2>&1"
 
-  vlc:
-    environment:
-      ENV: development
-    env_file:
-      - ./.env.development
-    volumes:
-      - .bash_history.remote:/root/.bash_history
-
   onscreens-server:
     environment:
       ENV: development

@@ -4,9 +4,9 @@ in dist/ and is applied independently — one per (component, platform) for the 
 (IdentityChart), plus the one-shot Job charts (emit_job_charts).
 
 This is the subset of infra/cdk8s's charts.py that moved to the tripbot repo: the
-three images built from this repo (tripbot, vlc, onscreens) and tripbot's
-identity Secrets. OBS is built + deployed from the standalone adanalife/obs repo
-(its own cdk8s). The STATEFUL + shared-platform units stay in infra/cdk8s:
+two images built from this repo (tripbot, onscreens) and tripbot's identity
+Secrets. OBS is built + deployed from the standalone adanalife/obs repo (its own
+cdk8s); dashcam playback from the standalone adanalife/playout repo. The STATEFUL + shared-platform units stay in infra/cdk8s:
 postgres (DataChart), the ESO SecretStore, the shared observability Secrets +
 cert-manager Issuers (SupportingChart), the dashcam PV/PVC, and the Argo config.
 Apps reference the materialized Secret names emitted by those infra units by name
@@ -22,18 +22,16 @@ from constructs import Construct
 from adanalife_k8s.config import EnvConfig
 from adanalife_k8s.constructs.onscreens import OnscreensServer
 from adanalife_k8s.constructs.tripbot import Tripbot, emit_identity_secrets
-from adanalife_k8s.constructs.vlc import VlcServer
 from adanalife_k8s.stream_protection import emit_stream_protection
 
 # Stateless app components that each get their own Chart (→ one dist file + one
-# Argo Application) per (env, platform). OBS is built + deployed from the
-# standalone adanalife/obs repo, not here. Keep this list in sync with the
-# contract's per-platform service keys; naming.app_name maps (component,
-# platform) -> the Service name.
-COMPONENTS = ("tripbot", "vlc", "onscreens")
+# Argo Application) per (env, platform). OBS (adanalife/obs) and dashcam
+# playback (adanalife/playout) deploy from their own repos, not here. Keep this
+# list in sync with the contract's per-platform service keys; naming.app_name
+# maps (component, platform) -> the Service name.
+COMPONENTS = ("tripbot", "onscreens")
 _SIMPLE_COMPONENTS = (
     ("tripbot", Tripbot),
-    ("vlc", VlcServer),
     ("onscreens", OnscreensServer),
 )
 

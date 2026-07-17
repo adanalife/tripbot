@@ -10,9 +10,9 @@
 // `go generate ./pkg/contract`, and commit the regenerated JSON together.
 //
 // Where tripbot already owns a value (the obs-websocket addr default, the
-// VLC RTSP port, the env-var keys behind pkg/config/tripbot's envconfig tags),
-// the constant here is cross-checked against that definition rather than being
-// an independent literal. Values with no prior Go home (the logical service
+// env-var keys behind pkg/config/tripbot's envconfig tags), the constant here
+// is cross-checked against that definition rather than being an independent
+// literal. Values with no prior Go home (the logical service
 // names, the various pod ports, the stream env keys read only by shell/docker)
 // are declared here as their new canonical home.
 //
@@ -39,8 +39,6 @@ const comment = "Anti-drift contract between tripbot (consumer, source of truth)
 const (
 	// ServiceTripbot is the chatbot / admin-panel service.
 	ServiceTripbot = "tripbot"
-	// ServiceVLCServer is the vlc-server (dashcam playback + RTSP) service.
-	ServiceVLCServer = "vlc-server"
 	// ServiceOnscreensServer is the onscreens-server (overlay render) service.
 	ServiceOnscreensServer = "onscreens-server"
 	// ServiceOBSTwitch is the OBS instance streaming to Twitch. This matches
@@ -53,22 +51,27 @@ const (
 )
 
 // Per-platform service names. Each streaming platform runs its own full stack
-// (tripbot + vlc + onscreens + obs); the names carry the platform suffix so a
-// Service only ever selects its own platform's pods. obs has been per-platform
-// since #629; the cdk8s app factory brings the other three onto the same shape.
-// The bare ServiceTripbot/ServiceVLCServer/ServiceOnscreensServer above remain
+// (tripbot + playout + onscreens + obs); the names carry the platform suffix
+// so a Service only ever selects its own platform's pods. obs has been
+// per-platform since #629; the cdk8s app factory brings tripbot/onscreens onto
+// the same shape. The bare ServiceTripbot/ServiceOnscreensServer above remain
 // the app-identity prefixes (Secret/ConfigMap names) — only the workload
 // Services carry the suffix.
+//
+// ServiceVLC* name playout's Services (the adanalife/playout repo authors
+// them): playout serves vlc-server's wire contract — the /vlc/current HTTP
+// API and the tripbot.<env>.vlc.* NATS subjects — so the Go-side vlc naming
+// stays until the client packages are renamed.
 const (
 	ServiceTripbotTwitch    = "tripbot-twitch"
 	ServiceTripbotYouTube   = "tripbot-youtube"
-	ServiceVLCTwitch        = "vlc-twitch"
-	ServiceVLCYouTube       = "vlc-youtube"
+	ServiceVLCTwitch        = "playout-twitch"
+	ServiceVLCYouTube       = "playout-youtube"
 	ServiceOnscreensTwitch  = "onscreens-twitch"
 	ServiceOnscreensYouTube = "onscreens-youtube"
-	// The playout Services (adanalife/playout repo) serve the same playback
-	// API vlc-server does (/vlc/current); tripbot reads the current clip from
-	// these while the vlc_* entries keep naming the vlc-server workloads.
+	// Aliases of ServiceVLC*: both key sets name playout's Services. The
+	// legacy vlc_* keys hold the wire-contract names consumers still read;
+	// they collapse into these when the contract renames vlc → playout.
 	ServicePlayoutTwitch  = "playout-twitch"
 	ServicePlayoutYouTube = "playout-youtube"
 )
@@ -86,16 +89,8 @@ const (
 	PortOBSNoVNC = 6080
 	// PortOBSServer is the obs-server (Flask health/version/shutdown) port.
 	PortOBSServer = 8080
-	// PortVLCHTTP is the vlc-server HTTP API port.
+	// PortVLCHTTP is the playback HTTP API port (playout's /vlc/current).
 	PortVLCHTTP = 8080
-	// PortVLCOnscreensLegacy is the legacy onscreens port vlc-server used to
-	// serve before onscreens-server split out.
-	PortVLCOnscreensLegacy = 8081
-	// PortVLCRTSP is the vlc-server RTSP output port. Matches the :8554 RTSP
-	// chain baked into pkg/vlc-server.
-	PortVLCRTSP = 8554
-	// PortVLCVNC is the VNC port on the vlc-server pod.
-	PortVLCVNC = 5900
 	// PortOnscreensHTTP is the onscreens-server HTTP API port.
 	PortOnscreensHTTP = 8080
 	// PortTripbotHTTP is the tripbot chatbot/admin HTTP port.
@@ -151,7 +146,6 @@ func Current() Contract {
 		Comment: comment,
 		Services: []pair{
 			{"tripbot", ServiceTripbot},
-			{"vlc_server", ServiceVLCServer},
 			{"onscreens_server", ServiceOnscreensServer},
 			{"obs_twitch", ServiceOBSTwitch},
 			{"obs_youtube", ServiceOBSYouTube},
@@ -171,9 +165,6 @@ func Current() Contract {
 			{"obs_novnc", PortOBSNoVNC},
 			{"obs_server", PortOBSServer},
 			{"vlc_http", PortVLCHTTP},
-			{"vlc_onscreens_legacy", PortVLCOnscreensLegacy},
-			{"vlc_rtsp", PortVLCRTSP},
-			{"vlc_vnc", PortVLCVNC},
 			{"onscreens_http", PortOnscreensHTTP},
 			{"tripbot_http", PortTripbotHTTP},
 			{"postgres", PortPostgres},
