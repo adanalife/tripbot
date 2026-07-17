@@ -123,6 +123,23 @@ func SunsetStr(utcDate time.Time, lat, lon float64) string {
 	return fmt.Sprintf("Sunset on this day is in %s", durafmt.ParseShort(dateDiff))
 }
 
+// IsDaytime reports whether the moment utcDate, filmed at lat/long, fell
+// between that day's sunrise and sunset there — i.e. it's daylight footage.
+// Backs the !daytime "skip to the next morning" jump.
+func IsDaytime(utcDate time.Time, lat, long float64) bool {
+	realDate := ActualDate(utcDate, lat, long)
+	rise, set := sunriseSunset(realDate, lat, long)
+	return realDate.After(rise) && realDate.Before(set)
+}
+
+// LocalDate returns utcDate localized to lat/long and truncated to midnight —
+// the calendar day the footage belongs to at its filming location. !daytime
+// uses it to tell "the following day" from the current clip's day.
+func LocalDate(utcDate time.Time, lat, long float64) time.Time {
+	d := ActualDate(utcDate, lat, long)
+	return time.Date(d.Year(), d.Month(), d.Day(), 0, 0, 0, 0, d.Location())
+}
+
 func sunriseSunset(utcDate time.Time, lat, long float64) (time.Time, time.Time) {
 	rise, set := sunrise.SunriseSunset(
 		lat, long,
