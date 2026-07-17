@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/adanalife/tripbot/pkg/natsclient"
 	ve "github.com/adanalife/tripbot/pkg/vlc-events"
@@ -107,6 +108,15 @@ func (c *Client) Skip(ctx context.Context, n int) error {
 
 func (c *Client) Back(ctx context.Context, n int) error {
 	c.publish(ctx, ve.BackSubject(c.env, c.platform), ve.Back{Envelope: ve.NewEnvelope(), N: n})
+	return nil
+}
+
+// Seek moves the playhead by delta relative to the current playback position,
+// crossing clip boundaries as needed; negative rewinds. The server walks real
+// clip durations, so the move covers that much footage — the duration-based
+// !skip/!back path. Fire-and-forget like the other commands.
+func (c *Client) Seek(ctx context.Context, delta time.Duration) error {
+	c.publish(ctx, ve.SeekSubject(c.env, c.platform), ve.Seek{Envelope: ve.NewEnvelope(), DeltaMs: delta.Milliseconds()})
 	return nil
 }
 

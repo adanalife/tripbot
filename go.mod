@@ -5,7 +5,6 @@ go 1.26.4
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/XSAM/otelsql v0.42.0
-	github.com/adrg/libvlc-go/v3 v3.1.6
 	github.com/andreykaipov/goobs v1.8.3
 	github.com/bradfitz/latlong v0.0.0-20170410180902-f3db6d0dff40
 	github.com/bwmarrin/discordgo v0.29.0

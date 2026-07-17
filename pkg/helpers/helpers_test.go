@@ -169,6 +169,33 @@ func TestActualDate(t *testing.T) {
 	}
 }
 
+func TestIsDaytime(t *testing.T) {
+	lat, lon := 40.7128, -74.0060 // New York (EDT in July, UTC-4)
+
+	// 12:00 UTC on July 4 is 08:00 EDT — well after sunrise, well before sunset.
+	if !IsDaytime(time.Date(2024, 7, 4, 12, 0, 0, 0, time.UTC), lat, lon) {
+		t.Error("expected 08:00 EDT to be daytime")
+	}
+	// 02:00 UTC on July 5 is 22:00 EDT on July 4 — after sunset.
+	if IsDaytime(time.Date(2024, 7, 5, 2, 0, 0, 0, time.UTC), lat, lon) {
+		t.Error("expected 22:00 EDT to be nighttime")
+	}
+}
+
+func TestLocalDate(t *testing.T) {
+	lat, lon := 40.7128, -74.0060 // New York (EDT in July, UTC-4)
+
+	// 02:00 UTC on July 5 is 22:00 EDT on July 4 — the local calendar day is
+	// the 4th, not the 5th the UTC instant falls on.
+	got := LocalDate(time.Date(2024, 7, 5, 2, 0, 0, 0, time.UTC), lat, lon)
+	if y, m, d := got.Date(); y != 2024 || m != time.July || d != 4 {
+		t.Errorf("LocalDate = %04d-%02d-%02d, want 2024-07-04", y, m, d)
+	}
+	if h, mn, s := got.Clock(); h != 0 || mn != 0 || s != 0 {
+		t.Errorf("LocalDate not truncated to midnight: %v", got)
+	}
+}
+
 func TestSunsetStrFutureAndPast(t *testing.T) {
 	lat, lon := 40.7128, -74.0060
 

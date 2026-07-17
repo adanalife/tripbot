@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/adanalife/tripbot/pkg/database/testdb"
+	terrors "github.com/adanalife/tripbot/pkg/errors"
 )
 
 // link writes from.next_vid = to.ID through the production helper, so the
@@ -139,6 +140,66 @@ func TestFindRandomByState(t *testing.T) {
 		if got.ID != want.ID {
 			t.Errorf("FindRandomByState(%q) = id %d (state %q), want id %d", state, got.ID, got.State, want.ID)
 		}
+	}
+}
+
+func TestFindNextDaytime(t *testing.T) {
+	db := testdb.New(t)
+	ctx := context.Background()
+
+	// Denver (UTC-6 in May); date_filmed drives the walk. Use far-future dates
+	// so no seed/2018 rows fall after the current clip and skew the query.
+	// backdate sets an exact UTC instant per clip.
+	lat, lng := 39.7392, -104.9903
+	backdate := func(v Video, iso string) {
+		if err := db.Exec(`UPDATE videos SET date_filmed = ?::timestamptz WHERE id = ?`, iso, v.ID).Error; err != nil {
+			t.Fatalf("backdate %d: %v", v.ID, err)
+		}
+	}
+
+	// current: 22:00 MDT May 14 (night). next-day night, then the first daytime
+	// clip of the following morning (noon), then a later daytime clip.
+	current := insertVideo(t, db, Video{Slug: "2099_0514_220000_001", Lat: lat, Lng: lng})
+	nextNight := insertVideo(t, db, Video{Slug: "2099_0515_030000_002", Lat: lat, Lng: lng})
+	lateDay := insertVideo(t, db, Video{Slug: "2099_0515_150000_004", Lat: lat, Lng: lng})
+	morning := insertVideo(t, db, Video{Slug: "2099_0515_120000_003", Lat: lat, Lng: lng})
+
+	backdate(current, "2099-05-15T04:00:00Z")   // 22:00 MDT May 14 — night, day May 14
+	backdate(nextNight, "2099-05-15T09:00:00Z") // 03:00 MDT May 15 — night, day May 15
+	backdate(morning, "2099-05-15T18:00:00Z")   // 12:00 MDT May 15 — daytime, day May 15
+	backdate(lateDay, "2099-05-15T21:00:00Z")   // 15:00 MDT May 15 — daytime, day May 15
+
+	got, err := FindNextDaytime(ctx, reload(t, current.ID))
+	if err != nil {
+		t.Fatalf("FindNextDaytime: %v", err)
+	}
+	// Skips the current day and the next day's pre-dawn night clip, landing on
+	// the following morning's first daytime clip — not the later afternoon one.
+	if got.ID != morning.ID {
+		t.Errorf("FindNextDaytime = id %d (slug %q), want the next morning id %d (slug %q)",
+			got.ID, got.Slug, morning.ID, morning.Slug)
+	}
+}
+
+func TestFindNextDaytime_NoDaytimeAhead(t *testing.T) {
+	db := testdb.New(t)
+	ctx := context.Background()
+
+	lat, lng := 39.7392, -104.9903
+	backdate := func(v Video, iso string) {
+		if err := db.Exec(`UPDATE videos SET date_filmed = ?::timestamptz WHERE id = ?`, iso, v.ID).Error; err != nil {
+			t.Fatalf("backdate %d: %v", v.ID, err)
+		}
+	}
+
+	current := insertVideo(t, db, Video{Slug: "2099_0614_220000_001", Lat: lat, Lng: lng})
+	onlyNight := insertVideo(t, db, Video{Slug: "2099_0615_030000_002", Lat: lat, Lng: lng})
+	backdate(current, "2099-06-15T04:00:00Z")   // 22:00 MDT June 14 — night
+	backdate(onlyNight, "2099-06-15T09:00:00Z") // 03:00 MDT June 15 — night
+
+	_, err := FindNextDaytime(ctx, reload(t, current.ID))
+	if _, ok := err.(*terrors.NoDaytimeFoundError); !ok {
+		t.Fatalf("FindNextDaytime err = %v, want *NoDaytimeFoundError", err)
 	}
 }
 

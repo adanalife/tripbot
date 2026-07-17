@@ -35,7 +35,7 @@ jobs:
         repo-token: ${{ secrets.GITHUB_TOKEN }}
     # `task test:cover` runs the test service from
     # infra/docker/docker-compose.testing.yml — same path used locally,
-    # so CI doesn't need its own Go toolchain or libvlc-dev install.
+    # so CI doesn't need its own Go toolchain.
     - name: Run tests with coverage
       run: task test:cover | tee coverage.txt
     - name: Coverage summary

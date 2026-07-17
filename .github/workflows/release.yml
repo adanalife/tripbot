@@ -1,5 +1,5 @@
-# Versioned multi-arch release build for the three images built from this repo
-# (tripbot, vlc, onscreens-server), via the shared build-image.yml reusable
+# Versioned multi-arch release build for the two images built from this repo
+# (tripbot, onscreens-server), via the shared build-image.yml reusable
 # workflow. Publishes `X.Y.Z` / `vX.Y` / `vX` / `latest` manifest lists (plus
 # the per-arch `-amd64`/`-arm64` variants) to Docker Hub.
 #
@@ -48,17 +48,6 @@ jobs:
       version: ${{ needs.version.outputs.version }}
       tags: ${{ needs.version.outputs.tags }}
 
-  vlc:
-    needs: version
-    uses: ./.github/workflows/build-image.yml
-    secrets: inherit
-    with:
-      image: adanalife/vlc
-      dockerfile: infra/docker/vlc/Dockerfile
-      cache-scope: vlc
-      version: ${{ needs.version.outputs.version }}
-      tags: ${{ needs.version.outputs.tags }}
-
   onscreens-server:
     needs: version
     uses: ./.github/workflows/build-image.yml
@@ -70,23 +59,8 @@ jobs:
       version: ${{ needs.version.outputs.version }}
       tags: ${{ needs.version.outputs.tags }}
 
-  # Offer the stream-sensitive components as per-component deploy PRs once
-  # their images exist. tripbot deploys with the release PR itself (see
-  # release-please.yml), so it needs no bump PR.
-  bump-prs:
-    needs: [version, vlc, onscreens-server]
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    permissions:
-      actions: write
-    steps:
-      - name: Dispatch bump-prs with the released version
-        run: gh workflow run bump-prs.yml --repo "$GITHUB_REPOSITORY" --ref main -f version="${{ needs.version.outputs.version }}"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
   notify:
-    needs: [tripbot, vlc, onscreens-server]
+    needs: [tripbot, onscreens-server]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -96,4 +70,6 @@ jobs:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
           VERSION_TAG: ${{ github.ref_name }}
         with:
-          args: 'New Docker images released for [{{ EVENT_PAYLOAD.repository.full_name }}]({{ EVENT_PAYLOAD.repository.html_url }}): [{{ VERSION_TAG }}]({{ EVENT_PAYLOAD.compare }})'
+          # Link the tagged CHANGELOG.md, not a payload `compare` URL: releases
+          # dispatch via workflow_dispatch, whose event payload has no `compare`.
+          args: 'New Docker images released for [{{ EVENT_PAYLOAD.repository.full_name }}]({{ EVENT_PAYLOAD.repository.html_url }}): [{{ VERSION_TAG }}]({{ EVENT_PAYLOAD.repository.html_url }}/blob/{{ VERSION_TAG }}/CHANGELOG.md)'

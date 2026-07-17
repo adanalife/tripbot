@@ -41,6 +41,16 @@ type Back struct {
 	N int `json:"n"`
 }
 
+// Seek is the payload for the seek subject — move the playhead by DeltaMs
+// milliseconds relative to the current playback position, crossing clip
+// boundaries as needed; negative rewinds. The server walks real clip
+// durations, so a duration-based !skip/!back lands where that much footage
+// actually is (the client's Seek(delta)).
+type Seek struct {
+	Envelope
+	DeltaMs int64 `json:"delta_ms"`
+}
+
 // PlayFile is the payload for the play.file subject. File is the playlist
 // filename to play (the client's PlayFileInPlaylist(file)).
 type PlayFile struct {

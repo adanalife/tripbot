@@ -1,6 +1,6 @@
-"""Config-literal blocks shared by the Go services (vlc-server + tripbot share
-one config package, so they share env-var surface). Kept here so the two
-constructs assemble identical telemetry/stub blocks instead of drifting.
+"""Config-literal blocks shared by the Go services (tripbot + onscreens-server
+share config surface). Kept here so the constructs assemble identical
+telemetry/stub blocks instead of drifting.
 """
 
 from __future__ import annotations
@@ -10,7 +10,7 @@ from adanalife_k8s.config import EnvConfig
 
 def telemetry_config(env: EnvConfig, platform: str) -> dict[str, str]:
     """ENV + OTEL_* + SENTRY_ENVIRONMENT — the per-env telemetry block every
-    Go service (tripbot/vlc-server/onscreens-server) merges onto its base
+    Go service (tripbot/onscreens-server) merges onto its base
     ConfigMap. `platform` is stamped into the OTel resource attributes as
     `service.platform`, which Grafana Cloud surfaces as a `service_platform`
     metric/log label so dashboards can filter twitch vs youtube."""
