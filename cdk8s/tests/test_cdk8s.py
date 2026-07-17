@@ -112,15 +112,18 @@ def test_youtube_tripbot_emits_youtube_creds():
     assert "tripbot-youtube-creds" in es_names
 
 
-def test_stage_omits_replicas_prod_keeps_one():
-    """Stage app Deployments omit spec.replicas so a hand/console scale is
-    authoritative (manual_replicas); prod keeps replicas:1 so Argo holds it."""
+def test_stage_parks_everything_prod_keeps_one():
+    """Every stage platform Deployment renders replicas:0 — the resting
+    state is everything-off, and a platform comes online via the console's
+    scale-up button (stage selfHeal off, so the hand scale sticks). Prod
+    keeps replicas:1 so Argo holds it."""
 
     def _deploy(stem):
         return _by_kind(_objects(stem), "Deployment")[0]
 
-    for stem in ("stage-1-tripbot-twitch", "stage-1-tripbot-youtube"):
-        assert "replicas" not in _deploy(stem)["spec"], f"{stem} should omit replicas"
+    for platform in ("twitch", "youtube", "tiktok", "facebook", "instagram"):
+        stem = f"stage-1-tripbot-{platform}"
+        assert _deploy(stem)["spec"]["replicas"] == 0, f"{stem} should be parked"
     assert _deploy("prod-1-tripbot-twitch")["spec"]["replicas"] == 1
 
 
