@@ -26,19 +26,20 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-// Server holds the web server's runtime state: the build version tag the
-// /version endpoint reports, and the feature-flag client the console's
+// Server holds the web server's runtime state: its config, the build version
+// tag the /version endpoint reports, and the feature-flag client the console's
 // /api/flags endpoints read/toggle. cmd/tripbot constructs one via New and
 // installs both (SetVersion, SetFlags) before Start runs.
 type Server struct {
+	cfg        *c.TripbotConfig
 	versionTag string
 	flags      feature.FlagClient
 }
 
 // New constructs a Server with the default "dev" version tag (overridden by
 // SetVersion at startup).
-func New() *Server {
-	return &Server{versionTag: "dev"}
+func New(cfg *c.TripbotConfig) *Server {
+	return &Server{cfg: cfg, versionTag: "dev"}
 }
 
 // shutdownTimeout is how long Shutdown waits for in-flight requests to
@@ -52,7 +53,7 @@ const shutdownTimeout = 15 * time.Second
 // waits up to shutdownTimeout for in-flight requests to complete before
 // returning.
 func (s *Server) Start(ctx context.Context) {
-	slog.InfoContext(ctx, "starting web server", "port", c.Conf.TripbotServerPort)
+	slog.InfoContext(ctx, "starting web server", "port", s.cfg.TripbotServerPort)
 
 	r := mux.NewRouter()
 
@@ -79,7 +80,7 @@ func (s *Server) Start(ctx context.Context) {
 	// Service.
 	//
 	// read-only JSON profile for the console's user popover.
-	r.Handle("/api/user/{username}", tagged("/api/user/{username}", userProfileAPIHandler)).Methods("GET")
+	r.Handle("/api/user/{username}", tagged("/api/user/{username}", s.userProfileAPIHandler)).Methods("GET")
 	// read-only JSON list of the logins currently in chat, for the console's
 	// currently-active-chatters panel.
 	r.Handle("/api/chatters", tagged("/api/chatters", chattersHandler)).Methods("GET")
@@ -101,21 +102,21 @@ func (s *Server) Start(ctx context.Context) {
 	// logger for an slog-based one — see pkg/httpmw.SlogLogger. The static
 	// middleware from negroni.Classic is dropped (no public/ directory).
 	app := negroni.New(
-		httpmw.NewRecovery(func(any) { instrumentation.HTTPPanics.Inc(c.Conf.ServerType) }),
+		httpmw.NewRecovery(func(any) { instrumentation.HTTPPanics.Inc(s.cfg.ServerType) }),
 		httpmw.NewSlogLogger(),
 	)
 
 	// attach http-metrics (prometheus) middleware
 	metricsMw := middleware.New(middleware.Config{
 		Recorder: metrics.NewRecorder(metrics.Config{}),
-		Service:  c.Conf.ServerType,
+		Service:  s.cfg.ServerType,
 	})
 	app.Use(negronimiddleware.Handler("", metricsMw))
 
 	// attach security middleware
 	secureMw := secure.New(secure.Options{
 		FrameDeny:     true,
-		IsDevelopment: c.Conf.IsDevelopment(),
+		IsDevelopment: s.cfg.IsDevelopment(),
 	})
 	app.Use(negroni.HandlerFunc(secureMw.HandlerFuncWithNext))
 
@@ -126,7 +127,7 @@ func (s *Server) Start(ctx context.Context) {
 	app.UseHandler(r)
 
 	srv := &http.Server{
-		Addr: fmt.Sprintf("0.0.0.0:%s", c.Conf.TripbotServerPort),
+		Addr: fmt.Sprintf("0.0.0.0:%s", s.cfg.TripbotServerPort),
 		// All remaining responses are short (auth redirects, small JSON for the
 		// console, the metrics scrape). The live-console SSE stream that forced
 		// WriteTimeout=0 is gone with the admin panel, so a normal write deadline
@@ -136,7 +137,7 @@ func (s *Server) Start(ctx context.Context) {
 		WriteTimeout:      time.Second * 15,
 		IdleTimeout:       time.Second * 60,
 		MaxHeaderBytes:    1 << 20, // 1 MB
-		Handler:           otelhttp.NewHandler(app, c.Conf.ServerType),
+		Handler:           otelhttp.NewHandler(app, s.cfg.ServerType),
 	}
 
 	// Run ListenAndServe in a goroutine so we can block on ctx.Done() and

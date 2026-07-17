@@ -5,11 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"path"
-	"path/filepath"
 	"strconv"
 	"time"
-
-	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 )
 
 // Provenance values for Video.CoordSource (videos.coord_source). See
@@ -73,11 +70,6 @@ func (v Video) DashStr() string {
 // ex: 2018_0514_224801_013.MP4
 func (v Video) File() string {
 	return fmt.Sprintf("%s.MP4", v.Slug)
-}
-
-// ex: /Volumes/.../2018_0514_224801_013.MP4
-func (v Video) Path() string {
-	return filepath.Join(c.Conf.VideoDir, v.File())
 }
 
 // toDate parses the vidStr and returns a time.Time object for the video
