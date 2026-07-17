@@ -135,8 +135,10 @@ type App struct {
 	// rotating !help / Chatter lines, minus any whose command isn't enabled on
 	// this App's platform (so a YouTube instance doesn't advertise !miles etc.).
 	// helpIndex walks it; randomized at indexCommands() so each restart starts
-	// on a different line.
+	// on a different line. helpMu guards the index — the Chatter cron and
+	// !help dispatch advance it concurrently.
 	helpMessages []string
+	helpMu       sync.Mutex
 	helpIndex    int
 }
 
@@ -245,17 +247,24 @@ func (a *App) ConnectIRC() *twitch.Client {
 func (a *App) Chatter(_ context.Context) {
 	// the "/me " twitch emote prefix adds some color on Twitch; gatewayYouTubeChat.Say
 	// strips it (it would render as literal text on YouTube).
-	a.Chat.Say("/me " + a.help())
+	msg, _, _ := a.help()
+	a.Chat.Say("/me " + msg)
 }
 
-// help returns the next rotating help message for this App's platform and
-// advances the index. Empty when no help messages are enabled (guards against
-// a divide-by-zero on the modulo).
-func (a *App) help() string {
-	if len(a.helpMessages) == 0 {
-		return ""
+// help returns the next rotating help message for this App's platform, its
+// 1-based position, and the rotation length, advancing the index. helpMu
+// makes the read-and-advance atomic — the Chatter cron and !help dispatch
+// call this concurrently. Empty when no help messages are enabled (guards
+// against a divide-by-zero on the modulo).
+func (a *App) help() (msg string, pos, total int) {
+	a.helpMu.Lock()
+	defer a.helpMu.Unlock()
+	total = len(a.helpMessages)
+	if total == 0 {
+		return "", 0, 0
 	}
-	text := a.helpMessages[a.helpIndex]
-	a.helpIndex = (a.helpIndex + 1) % len(a.helpMessages)
-	return text
+	msg = a.helpMessages[a.helpIndex]
+	pos = a.helpIndex + 1
+	a.helpIndex = (a.helpIndex + 1) % total
+	return msg, pos, total
 }
