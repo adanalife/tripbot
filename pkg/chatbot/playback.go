@@ -66,9 +66,9 @@ func (a *App) timewarp(ctx context.Context, username string) {
 	a.showTimewarpOverlay(ctx, username)
 
 	// shuffle to a new video
-	err := a.VLC.PlayRandom(ctx)
+	err := a.Playout.PlayRandom(ctx)
 	if err != nil {
-		slog.ErrorContext(ctx, "error from VLC client", "err", err)
+		slog.ErrorContext(ctx, "error from Playout client", "err", err)
 	}
 	// update the currently-playing video
 	a.Video.GetCurrentlyPlaying(ctx)
@@ -144,10 +144,10 @@ func (a *App) jumpCmd(ctx context.Context, user *users.User, params []string) {
 		a.Chat.Say("Usage: !jump [state]")
 		return
 	}
-	// tell VLC to play it
-	err = a.VLC.PlayFileInPlaylist(ctx, randomVid.File())
+	// tell Playout to play it
+	err = a.Playout.PlayFileInPlaylist(ctx, randomVid.File())
 	if err != nil {
-		slog.ErrorContext(ctx, "error from VLC client", "err", err)
+		slog.ErrorContext(ctx, "error from Playout client", "err", err)
 		a.Chat.Say("Usage: !jump [state]")
 		return
 	}
@@ -191,9 +191,9 @@ func (a *App) daytimeCmd(ctx context.Context, user *users.User, _ []string) {
 		return
 	}
 
-	// tell VLC to play it
-	if err := a.VLC.PlayFileInPlaylist(ctx, target.File()); err != nil {
-		slog.ErrorContext(ctx, "error from VLC client", "err", err)
+	// tell Playout to play it
+	if err := a.Playout.PlayFileInPlaylist(ctx, target.File()); err != nil {
+		slog.ErrorContext(ctx, "error from Playout client", "err", err)
 		a.Chat.Say("Sorry, I couldn't skip to daytime right now")
 		return
 	}
@@ -256,12 +256,12 @@ func (a *App) seekCmd(ctx context.Context, user *users.User, params []string, na
 		// no argument: hop a single clip
 		var err error
 		if dir >= 0 {
-			err = a.VLC.Skip(ctx, 1)
+			err = a.Playout.Skip(ctx, 1)
 		} else {
-			err = a.VLC.Back(ctx, 1)
+			err = a.Playout.Back(ctx, 1)
 		}
 		if err != nil {
-			slog.ErrorContext(ctx, "error from VLC client", "err", err)
+			slog.ErrorContext(ctx, "error from Playout client", "err", err)
 		}
 	} else {
 		// joining params lets "!skip 1h 30m" read as one span
@@ -271,8 +271,8 @@ func (a *App) seekCmd(ctx context.Context, user *users.User, params []string, na
 			return
 		}
 		span *= time.Duration(dir)
-		if err := a.VLC.Seek(ctx, span); err != nil {
-			slog.ErrorContext(ctx, "error from VLC client", "err", err)
+		if err := a.Playout.Seek(ctx, span); err != nil {
+			slog.ErrorContext(ctx, "error from Playout client", "err", err)
 		}
 		// same reply formatting as !followage: two largest units
 		if span > 0 {

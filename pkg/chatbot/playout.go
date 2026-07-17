@@ -4,14 +4,14 @@ import (
 	"context"
 	"time"
 
-	vlcClient "github.com/adanalife/tripbot/pkg/vlc-client"
+	playoutClient "github.com/adanalife/tripbot/pkg/playout-client"
 )
 
-// VLC is the subset of the vlc-client surface that chatbot commands depend
+// Playout is the subset of the playout-client surface that chatbot commands depend
 // on (timewarp, jump, skip, back). Tests inject a fake; production uses the
-// realVLC adapter wired in New(). Mirrors the Onscreens injection
+// realPlayout adapter wired in New(). Mirrors the Onscreens injection
 // pattern.
-type VLC interface {
+type Playout interface {
 	PlayRandom(ctx context.Context) error
 	PlayFileInPlaylist(ctx context.Context, filename string) error
 	// PlayFileAtTimestamp plays filename and seeks to tsSec seconds in — the
@@ -24,24 +24,24 @@ type VLC interface {
 	Seek(ctx context.Context, delta time.Duration) error
 }
 
-// realVLC delegates to a constructed *vlcClient.Client. The concrete Client
+// realPlayout delegates to a constructed *playoutClient.Client. The concrete Client
 // instance is owned by the App (wired up in New()), not read off a
-// package-level global in pkg/vlc-client.
-type realVLC struct {
-	c *vlcClient.Client
+// package-level global in pkg/playout-client.
+type realPlayout struct {
+	c *playoutClient.Client
 }
 
-func (r realVLC) PlayRandom(ctx context.Context) error {
+func (r realPlayout) PlayRandom(ctx context.Context) error {
 	return r.c.PlayRandom(ctx)
 }
-func (r realVLC) PlayFileInPlaylist(ctx context.Context, filename string) error {
+func (r realPlayout) PlayFileInPlaylist(ctx context.Context, filename string) error {
 	return r.c.PlayFileInPlaylist(ctx, filename)
 }
-func (r realVLC) PlayFileAtTimestamp(ctx context.Context, filename string, tsSec float64) error {
+func (r realPlayout) PlayFileAtTimestamp(ctx context.Context, filename string, tsSec float64) error {
 	return r.c.PlayFileAtTimestamp(ctx, filename, tsSec)
 }
-func (r realVLC) Skip(ctx context.Context, n int) error { return r.c.Skip(ctx, n) }
-func (r realVLC) Back(ctx context.Context, n int) error { return r.c.Back(ctx, n) }
-func (r realVLC) Seek(ctx context.Context, delta time.Duration) error {
+func (r realPlayout) Skip(ctx context.Context, n int) error { return r.c.Skip(ctx, n) }
+func (r realPlayout) Back(ctx context.Context, n int) error { return r.c.Back(ctx, n) }
+func (r realPlayout) Seek(ctx context.Context, delta time.Duration) error {
 	return r.c.Seek(ctx, delta)
 }

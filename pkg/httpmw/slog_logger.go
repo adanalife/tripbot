@@ -1,5 +1,5 @@
 // Package httpmw holds HTTP middleware shared across tripbot's web servers
-// (tripbot, vlc-server, onscreens-server).
+// (tripbot, onscreens-server).
 package httpmw
 
 import (

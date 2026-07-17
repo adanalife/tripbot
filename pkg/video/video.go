@@ -11,8 +11,8 @@ import (
 	"github.com/adanalife/tripbot/pkg/eventbus"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
+	playoutClient "github.com/adanalife/tripbot/pkg/playout-client"
 	"github.com/adanalife/tripbot/pkg/viewstats"
-	vlcClient "github.com/adanalife/tripbot/pkg/vlc-client"
 )
 
 // onscreens is the subset of the onscreens-client surface the Player drives
@@ -25,7 +25,7 @@ type onscreens interface {
 }
 
 // Player owns the state of "what's currently playing" and the clients that
-// drive the VLC playback + onscreens overlays. Construct via NewPlayer; the
+// drive the Playout playback + onscreens overlays. Construct via NewPlayer; the
 // single process-wide instance lives on cmd/tripbot's Tripbot struct.
 type Player struct {
 	CurrentlyPlaying Video // exported because external callers read the current video off it
@@ -33,20 +33,20 @@ type Player struct {
 	timeStarted      time.Time
 	env, platform    string
 	onscreens        onscreens
-	vlc              *vlcClient.Client
+	playout          *playoutClient.Client
 }
 
-// NewPlayer returns a Player with its own Onscreens + VLC clients. env and
+// NewPlayer returns a Player with its own Onscreens + Playout clients. env and
 // platform tag the video.changed events it emits.
-func NewPlayer(env, platform string, onscreens onscreens, vlc *vlcClient.Client) *Player {
-	return &Player{env: env, platform: platform, onscreens: onscreens, vlc: vlc}
+func NewPlayer(env, platform string, onscreens onscreens, playout *playoutClient.Client) *Player {
+	return &Player{env: env, platform: platform, onscreens: onscreens, playout: playout}
 }
 
 // GetCurrentlyPlaying will use lsof to figure out
 // which dashcam video is currently playing (seriously).
 // ctx carries the cron tick's trace span; it isn't propagated into the
-// vlc-client / onscreens-client HTTP calls (those clients don't take a ctx,
-// so the underlying VLC poll and GPS-image toggles don't nest as children).
+// playout-client / onscreens-client HTTP calls (those clients don't take a ctx,
+// so the underlying Playout poll and GPS-image toggles don't nest as children).
 // TODO: consider making this return a video struct
 func (p *Player) GetCurrentlyPlaying(ctx context.Context) {
 	var err error
@@ -58,7 +58,7 @@ func (p *Player) GetCurrentlyPlaying(ctx context.Context) {
 	if helpers.RunningOnDarwin() {
 		p.curVid = p.figureOutCurrentVideo(ctx)
 	} else {
-		p.curVid = p.vlc.CurrentlyPlaying(ctx)
+		p.curVid = p.playout.CurrentlyPlaying(ctx)
 	}
 
 	// if the currently-playing video has changed
@@ -69,7 +69,7 @@ func (p *Player) GetCurrentlyPlaying(ctx context.Context) {
 		// share the Video with the system
 		p.CurrentlyPlaying, err = LoadOrCreate(ctx, p.curVid)
 		if err != nil {
-			// Downstream of vlc.CurrentlyPlaying; the wrapper there already
+			// Downstream of playout.CurrentlyPlaying; the wrapper there already
 			// logged the root cause at Error. Debug-level keeps the breadcrumb
 			// without double-counting in Sentry.
 			slog.DebugContext(ctx, "unable to create Video", "err", err, "file", p.curVid)

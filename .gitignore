@@ -23,7 +23,6 @@ infra/**/google
 
 # compiled binaries
 bin/tripbot
-bin/vlc-server
 
 # env files shouldn't get checked in
 # because they have secrets

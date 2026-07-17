@@ -10,8 +10,8 @@ import (
 // defaultSleepInterval is how often onscreens refresh themselves
 const defaultSleepInterval = time.Duration(5 * time.Second)
 
-// Onscreen is also the JSON wire format served by the browser-source
-// state endpoint in pkg/vlc-server, so Content/IsShowing carry json
+// Onscreen is also the JSON wire format served by onscreens-server's
+// browser-source state endpoint, so Content/IsShowing carry json
 // tags and the bookkeeping fields are skipped.
 type Onscreen struct {
 	Content       string        `json:"content"`

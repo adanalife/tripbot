@@ -81,7 +81,7 @@ task changelog:add PR=889 TYPE=fix
 task changelog:preview
 ```
 
-Types map to the changelog's component sections: `gateway`, `chatbot`, `onscreens`, `vlc`, `console`, `fix`, `deploy`, `ci`, `cleanup`, `misc`, plus `summary` (a lead paragraph for the release, named `+summary.summary.md` — no PR number).
+Types map to the changelog's component sections: `gateway`, `chatbot`, `onscreens`, `playout`, `console`, `fix`, `deploy`, `ci`, `cleanup`, `misc`, plus `summary` (a lead paragraph for the release, named `+summary.summary.md` — no PR number).
 
 ### Releases
 

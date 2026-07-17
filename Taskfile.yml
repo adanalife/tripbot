@@ -58,7 +58,7 @@ tasks:
   # Changelog (towncrier). Fragments live in changelog.d/; assembled into
   # CHANGELOG.md at release time. Run on the host via uvx — no project dep.
   changelog:add:
-    desc: 'Scaffold a changelog fragment (TYPE=fix, optional SLUG=my-thing; CI numbers it on push). Pass PR=123 to name it directly. Types: gateway chatbot onscreens vlc console fix deploy ci cleanup misc summary'
+    desc: 'Scaffold a changelog fragment (TYPE=fix, optional SLUG=my-thing; CI numbers it on push). Pass PR=123 to name it directly. Types: gateway chatbot onscreens playout console fix deploy ci cleanup misc summary'
     vars:
       TYPE: '{{.TYPE | default "misc"}}'
       # No PR yet? Drop a "+" placeholder (towncrier's issue-less convention) —
