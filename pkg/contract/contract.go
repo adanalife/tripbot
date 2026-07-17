@@ -46,6 +46,13 @@ const (
 	ServiceOBSTwitch = "obs-twitch"
 	// ServiceOBSYouTube is the OBS instance streaming to YouTube.
 	ServiceOBSYouTube = "obs-youtube"
+	// ServiceOBSTikTok, ServiceOBSFacebook, and ServiceOBSInstagram name the
+	// OBS instances for the remaining platforms. Referenced as sibling
+	// hostnames by tripbot's per-platform config even before those OBS deploys
+	// exist (the tiktok/instagram scenes need a vertical canvas first).
+	ServiceOBSTikTok    = "obs-tiktok"
+	ServiceOBSFacebook  = "obs-facebook"
+	ServiceOBSInstagram = "obs-instagram"
 	// ServicePostgres is the Postgres service (DATABASE_HOST in cluster).
 	ServicePostgres = "postgres"
 )
@@ -63,17 +70,28 @@ const (
 // API and the tripbot.<env>.vlc.* NATS subjects — so the Go-side vlc naming
 // stays until the client packages are renamed.
 const (
-	ServiceTripbotTwitch    = "tripbot-twitch"
-	ServiceTripbotYouTube   = "tripbot-youtube"
-	ServiceVLCTwitch        = "playout-twitch"
-	ServiceVLCYouTube       = "playout-youtube"
-	ServiceOnscreensTwitch  = "onscreens-twitch"
-	ServiceOnscreensYouTube = "onscreens-youtube"
+	ServiceTripbotTwitch      = "tripbot-twitch"
+	ServiceTripbotYouTube     = "tripbot-youtube"
+	ServiceTripbotTikTok      = "tripbot-tiktok"
+	ServiceTripbotFacebook    = "tripbot-facebook"
+	ServiceTripbotInstagram   = "tripbot-instagram"
+	ServiceVLCTwitch          = "playout-twitch"
+	ServiceVLCYouTube         = "playout-youtube"
+	ServiceOnscreensTwitch    = "onscreens-twitch"
+	ServiceOnscreensYouTube   = "onscreens-youtube"
+	ServiceOnscreensTikTok    = "onscreens-tiktok"
+	ServiceOnscreensFacebook  = "onscreens-facebook"
+	ServiceOnscreensInstagram = "onscreens-instagram"
 	// Aliases of ServiceVLC*: both key sets name playout's Services. The
 	// legacy vlc_* keys hold the wire-contract names consumers still read;
 	// they collapse into these when the contract renames vlc → playout.
 	ServicePlayoutTwitch  = "playout-twitch"
 	ServicePlayoutYouTube = "playout-youtube"
+	// The remaining platforms have no vlc_* alias — vlc-server is retired
+	// (#1135), so playout owns these names outright.
+	ServicePlayoutTikTok    = "playout-tiktok"
+	ServicePlayoutFacebook  = "playout-facebook"
+	ServicePlayoutInstagram = "playout-instagram"
 )
 
 // Pod ports. Several services co-locate on 8080 for their HTTP API but expose
@@ -149,14 +167,26 @@ func Current() Contract {
 			{"onscreens_server", ServiceOnscreensServer},
 			{"obs_twitch", ServiceOBSTwitch},
 			{"obs_youtube", ServiceOBSYouTube},
+			{"obs_tiktok", ServiceOBSTikTok},
+			{"obs_facebook", ServiceOBSFacebook},
+			{"obs_instagram", ServiceOBSInstagram},
 			{"tripbot_twitch", ServiceTripbotTwitch},
 			{"tripbot_youtube", ServiceTripbotYouTube},
+			{"tripbot_tiktok", ServiceTripbotTikTok},
+			{"tripbot_facebook", ServiceTripbotFacebook},
+			{"tripbot_instagram", ServiceTripbotInstagram},
 			{"vlc_twitch", ServiceVLCTwitch},
 			{"vlc_youtube", ServiceVLCYouTube},
 			{"playout_twitch", ServicePlayoutTwitch},
 			{"playout_youtube", ServicePlayoutYouTube},
+			{"playout_tiktok", ServicePlayoutTikTok},
+			{"playout_facebook", ServicePlayoutFacebook},
+			{"playout_instagram", ServicePlayoutInstagram},
 			{"onscreens_twitch", ServiceOnscreensTwitch},
 			{"onscreens_youtube", ServiceOnscreensYouTube},
+			{"onscreens_tiktok", ServiceOnscreensTikTok},
+			{"onscreens_facebook", ServiceOnscreensFacebook},
+			{"onscreens_instagram", ServiceOnscreensInstagram},
 			{"postgres", ServicePostgres},
 		},
 		Ports: []pair{

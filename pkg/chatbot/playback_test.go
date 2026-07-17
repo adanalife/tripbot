@@ -112,23 +112,96 @@ func TestSkipCmd_AdminDrivesPlaybackChain(t *testing.T) {
 	}
 }
 
-func TestSkipCmd_AdminPassesParamCountThrough(t *testing.T) {
+// With an argument, !skip/!back move the playhead by a span of footage via
+// Seek rather than hopping clips: durations parse as Go durations, bare
+// numbers mean minutes, and the sign picks the direction ("!skip -10m"
+// rewinds). The chat reply states the span moved.
+func TestSkipAndBackCmd_SpansSeekByFootageDuration(t *testing.T) {
 	skipIfDarwin(t)
-	app := newTestApp(video.Video{})
-	recPlayout := &recordingPlayout{}
-	recVideo := &recordingVideo{}
-	app.Playout = recPlayout
-	app.Video = recVideo
-
-	runAsAdmin(t, func() {
-		app.skipCmd(context.Background(), newTestUser(adminUser), []string{"3"})
-	})
-
-	if len(recPlayout.Calls) != 1 || recPlayout.Calls[0] != "Skip(3)" {
-		t.Errorf("expected one Skip(3) Playout call, got %v", recPlayout.Calls)
+	cases := []struct {
+		name     string
+		cmd      string
+		params   []string
+		wantCall string
+		wantSay  string
+	}{
+		{"skip duration", "skip", []string{"10m"}, "Seek(10m0s)", "⏩ Skipping ahead 10 minutes"},
+		{"skip bare number means minutes", "skip", []string{"3"}, "Seek(3m0s)", "⏩ Skipping ahead 3 minutes"},
+		{"skip spaced span joins", "skip", []string{"1h", "30m"}, "Seek(1h30m0s)", "⏩ Skipping ahead 1 hour 30 minutes"},
+		{"skip negative rewinds", "skip", []string{"-10m"}, "Seek(-10m0s)", "⏪ Going back 10 minutes"},
+		{"back duration", "back", []string{"45s"}, "Seek(-45s)", "⏪ Going back 45 seconds"},
+		{"back negative fast-forwards", "back", []string{"-2m"}, "Seek(2m0s)", "⏩ Skipping ahead 2 minutes"},
+		{"any timescale goes through", "skip", []string{"1000h"}, "Seek(1000h0m0s)", "⏩ Skipping ahead 5 weeks 6 days"},
 	}
-	if len(recVideo.Calls) != 1 || recVideo.Calls[0] != "GetCurrentlyPlaying()" {
-		t.Errorf("expected one GetCurrentlyPlaying call on Video, got %v", recVideo.Calls)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			app := newTestApp(video.Video{})
+			recPlayout := &recordingPlayout{}
+			recVideo := &recordingVideo{}
+			recIRC := &recordingChat{}
+			app.Playout = recPlayout
+			app.Video = recVideo
+			app.Chat = recIRC
+
+			runAsAdmin(t, func() {
+				if tc.cmd == "skip" {
+					app.skipCmd(context.Background(), newTestUser(adminUser), tc.params)
+				} else {
+					app.backCmd(context.Background(), newTestUser(adminUser), tc.params)
+				}
+			})
+
+			if len(recPlayout.Calls) != 1 || recPlayout.Calls[0] != tc.wantCall {
+				t.Errorf("expected one %s Playout call, got %v", tc.wantCall, recPlayout.Calls)
+			}
+			if len(recVideo.Calls) != 1 || recVideo.Calls[0] != "GetCurrentlyPlaying()" {
+				t.Errorf("expected one GetCurrentlyPlaying call on Video, got %v", recVideo.Calls)
+			}
+			if len(recIRC.Says) != 1 || recIRC.Says[0] != tc.wantSay {
+				t.Errorf("expected reply %q, got %v", tc.wantSay, recIRC.Says)
+			}
+		})
+	}
+}
+
+// Unparseable spans reply with usage without touching playback. Any
+// parseable timescale is allowed (the player wraps modulo the corpus), so
+// only spans that overflow time.Duration count as unparseable.
+func TestSkipCmd_RejectsUnparseableSpans(t *testing.T) {
+	skipIfDarwin(t)
+	cases := []struct {
+		name    string
+		params  []string
+		wantSay string
+	}{
+		{"gibberish", []string{"potato"}, "Usage: !skip [time, like 10m or 1h30m]"},
+		{"zero span", []string{"0m"}, "Usage: !skip [time, like 10m or 1h30m]"},
+		{"bare minutes overflowing a duration", []string{"99999999999999999"}, "Usage: !skip [time, like 10m or 1h30m]"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			app := newTestApp(video.Video{})
+			recPlayout := &recordingPlayout{}
+			recVideo := &recordingVideo{}
+			recIRC := &recordingChat{}
+			app.Playout = recPlayout
+			app.Video = recVideo
+			app.Chat = recIRC
+
+			runAsAdmin(t, func() {
+				app.skipCmd(context.Background(), newTestUser(adminUser), tc.params)
+			})
+
+			if len(recPlayout.Calls) != 0 {
+				t.Errorf("expected no Playout calls, got %v", recPlayout.Calls)
+			}
+			if len(recVideo.Calls) != 0 {
+				t.Errorf("expected no Video calls, got %v", recVideo.Calls)
+			}
+			if len(recIRC.Says) != 1 || recIRC.Says[0] != tc.wantSay {
+				t.Errorf("expected reply %q, got %v", tc.wantSay, recIRC.Says)
+			}
+		})
 	}
 }
 
@@ -224,9 +297,9 @@ func TestJumpCmd_AdminPlaysRandomFromState(t *testing.T) {
 	}
 
 	// Playout: PlayFileInPlaylist called with the staged video's filename.
-	wantPlayoutCall := `PlayFileInPlaylist("2019_0615_183000_001.MP4")`
-	if len(recPlayout.Calls) != 1 || recPlayout.Calls[0] != wantPlayoutCall {
-		t.Errorf("expected one %s Playout call, got %v", wantPlayoutCall, recPlayout.Calls)
+	wantPlayout := `PlayFileInPlaylist("2019_0615_183000_001.MP4")`
+	if len(recPlayout.Calls) != 1 || recPlayout.Calls[0] != wantPlayout {
+		t.Errorf("expected one %s Playout call, got %v", wantPlayout, recPlayout.Calls)
 	}
 
 	// Onscreens: !jump drives no overlay.
@@ -274,6 +347,76 @@ func TestJumpCmd_NoFootageForState(t *testing.T) {
 	// IRC: the "No footage for X... yet!" message (titlecased).
 	if len(recIRC.Says) != 1 || !strings.Contains(recIRC.Says[0], "No footage for Wyoming") {
 		t.Errorf("expected single 'No footage for Wyoming' message, got %v", recIRC.Says)
+	}
+}
+
+// --- daytimeCmd ---
+
+func TestDaytimeCmd_AdminJumpsToNextMorning(t *testing.T) {
+	skipIfDarwin(t)
+	app := newTestApp(video.Video{})
+	recPlayout := &recordingPlayout{}
+	recVideo := &recordingVideo{
+		Vid:        video.Video{Slug: "2018_0514_224801_001"},
+		DaytimeVid: video.Video{Slug: "2018_0515_120000_009"},
+	}
+	recIRC := &recordingChat{}
+	app.Playout = recPlayout
+	app.Video = recVideo
+	app.Chat = recIRC
+
+	runAsAdmin(t, func() {
+		app.daytimeCmd(context.Background(), newTestUser(adminUser), nil)
+	})
+
+	// Video: reads the current clip, finds the next daytime one, then refreshes.
+	wantVideo := []string{"Current()", `FindNextDaytime("2018_0514_224801_001")`, "GetCurrentlyPlaying()"}
+	if len(recVideo.Calls) != len(wantVideo) {
+		t.Fatalf("expected %d Video calls, got %d: %v", len(wantVideo), len(recVideo.Calls), recVideo.Calls)
+	}
+	for i, want := range wantVideo {
+		if recVideo.Calls[i] != want {
+			t.Errorf("Video call %d: want %q, got %q", i, want, recVideo.Calls[i])
+		}
+	}
+
+	// Playout: plays the daytime clip's file.
+	wantPlayout := `PlayFileInPlaylist("2018_0515_120000_009.MP4")`
+	if len(recPlayout.Calls) != 1 || recPlayout.Calls[0] != wantPlayout {
+		t.Errorf("expected one %s Playout call, got %v", wantPlayout, recPlayout.Calls)
+	}
+
+	if len(recIRC.Says) != 1 || !strings.Contains(recIRC.Says[0], "next morning") {
+		t.Errorf("expected a 'next morning' message, got %v", recIRC.Says)
+	}
+}
+
+func TestDaytimeCmd_NoDaytimeAhead(t *testing.T) {
+	skipIfDarwin(t)
+	app := newTestApp(video.Video{})
+	recPlayout := &recordingPlayout{}
+	recVideo := &recordingVideo{
+		DaytimeErr: &terrors.NoDaytimeFoundError{Msg: "no daytime footage found ahead"},
+	}
+	recIRC := &recordingChat{}
+	app.Playout = recPlayout
+	app.Video = recVideo
+	app.Chat = recIRC
+
+	runAsAdmin(t, func() {
+		app.daytimeCmd(context.Background(), newTestUser(adminUser), nil)
+	})
+
+	// No Playout handoff on the not-found path, and no GetCurrentlyPlaying refresh.
+	if len(recPlayout.Calls) != 0 {
+		t.Errorf("expected no Playout calls on no-daytime path, got %v", recPlayout.Calls)
+	}
+	wantVideo := []string{"Current()", `FindNextDaytime("")`}
+	if len(recVideo.Calls) != len(wantVideo) {
+		t.Fatalf("expected %d Video calls, got %d: %v", len(wantVideo), len(recVideo.Calls), recVideo.Calls)
+	}
+	if len(recIRC.Says) != 1 || !strings.Contains(recIRC.Says[0], "enjoy the night") {
+		t.Errorf("expected an 'enjoy the night' message, got %v", recIRC.Says)
 	}
 }
 

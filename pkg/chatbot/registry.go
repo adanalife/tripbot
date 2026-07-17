@@ -70,6 +70,12 @@ func (a *App) buildRegistry() []Command {
 			RequiresFollow: true,
 		},
 		{
+			Trigger:        "!daytime",
+			Aliases:        []string{"!daylight", "!morning"},
+			Handler:        a.daytimeCmd,
+			RequiresFollow: true,
+		},
+		{
 			Trigger: "!shutdown",
 			Handler: a.shutdownCmd,
 		},
@@ -302,7 +308,7 @@ var v1Commands = map[string]bool{
 	"!state": true, "!location": true,
 	// playback control (drives this platform's playout pipeline)
 	// !find is Twitch-only for now — subscriber-gated + still slow, revisit for YouTube later
-	"!timewarp": true, "!goto": true, "!skip": true, "!back": true,
+	"!timewarp": true, "!goto": true, "!skip": true, "!back": true, "!daytime": true,
 	// socials / static links
 	"!socialmedia": true, "!discord": true, "!twitter": true, "!instagram": true,
 	"!facebook": true, "!youtube": true, "!tiktok": true, "!bluesky": true,

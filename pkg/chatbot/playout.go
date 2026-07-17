@@ -2,6 +2,7 @@ package chatbot
 
 import (
 	"context"
+	"time"
 
 	playoutClient "github.com/adanalife/tripbot/pkg/playout-client"
 )
@@ -18,6 +19,9 @@ type Playout interface {
 	PlayFileAtTimestamp(ctx context.Context, filename string, tsSec float64) error
 	Skip(ctx context.Context, n int) error
 	Back(ctx context.Context, n int) error
+	// Seek moves the playhead by delta of footage, crossing clip boundaries;
+	// negative rewinds. The duration form of !skip/!back.
+	Seek(ctx context.Context, delta time.Duration) error
 }
 
 // realPlayout delegates to a constructed *playoutClient.Client. The concrete Client
@@ -38,3 +42,6 @@ func (r realPlayout) PlayFileAtTimestamp(ctx context.Context, filename string, t
 }
 func (r realPlayout) Skip(ctx context.Context, n int) error { return r.c.Skip(ctx, n) }
 func (r realPlayout) Back(ctx context.Context, n int) error { return r.c.Back(ctx, n) }
+func (r realPlayout) Seek(ctx context.Context, delta time.Duration) error {
+	return r.c.Seek(ctx, delta)
+}

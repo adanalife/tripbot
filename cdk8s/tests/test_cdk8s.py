@@ -71,7 +71,9 @@ def test_prod_pinned_stage_floats(env, platform):
         for c in dep["spec"]["template"]["spec"]["containers"]
         if c["name"].startswith("tripbot")
     )
-    image, tag = container["image"].rsplit(":", 1)
+    # Split on the first colon: the repo has no registry-host:port prefix, and
+    # the tag itself may carry a @sha256 digest suffix (a digest-pinned deploy).
+    image, tag = container["image"].split(":", 1)
     assert image == "adanalife/tripbot"  # public Docker Hub image, no v-prefix tag
     if env == "prod-1":
         assert tag == pins["prod-1"]["tripbot"]

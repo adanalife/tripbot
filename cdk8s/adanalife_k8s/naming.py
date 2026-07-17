@@ -24,7 +24,8 @@ def app_name(app: str, platform: str) -> str:
     """The per-platform Kubernetes Service/Deployment name for one app, resolved
     through the contract — e.g. app_name("onscreens", "twitch") -> "onscreens-twitch".
 
-    `app` is one of "tripbot" / "onscreens" / "obs" / "playout"; the contract holds
+    `app` is one of "tripbot" / "onscreens" / "obs" / "playout" (the playback
+    API, served by playout's Services); the contract holds
     the canonical `<app>_<platform>` -> service-name mapping (tripbot's
     pkg/contract is the source of truth, synced via `task contract:sync`). This is
     the single naming entrypoint the app factory routes every workload name

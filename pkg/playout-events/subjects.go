@@ -29,6 +29,7 @@ func PlayFileSubject(env, platform string) string   { return subject(env, "play"
 func PlayFileAtSubject(env, platform string) string { return subject(env, "play", "at", platform) }
 func SkipSubject(env, platform string) string       { return subject(env, "skip", platform) }
 func BackSubject(env, platform string) string       { return subject(env, "back", platform) }
+func SeekSubject(env, platform string) string       { return subject(env, "seek", platform) }
 
 // LastPlayedSubject is the per-platform leaf playout publishes its
 // now-playing state to (tripbot.<env>.vlc.lastplayed.<platform>). Unlike the

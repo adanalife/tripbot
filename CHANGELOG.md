@@ -9,6 +9,32 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v4.0.0] — 2026-07-17
+
+### Chatbot
+
+- `!daytime` (aliases `!daylight`, `!morning`) skips a dusk/night stretch ahead to the next morning's daylight footage. ([#1158](https://github.com/adanalife/tripbot/pull/1158))
+
+### VLC
+
+- vlc-server removed — dashcam playback is owned by the standalone [playout](https://github.com/adanalife/playout) repo, which serves the same wire contract (`/vlc/current` HTTP + `tripbot.<env>.vlc.*` NATS). The repo is pure Go again (no CGO/libvlc), the vlc image/CI legs are gone, and the release PR now deploys onscreens-server alongside tripbot (per-component bump PRs retired). ([#1135](https://github.com/adanalife/tripbot/pull/1135))
+
+## [v3.20.0] — 2026-07-16
+
+### Chatbot
+
+- `!skip` and `!back` now move by a span of footage instead of a clip count: `!skip 10m`, `!back 1h30m`, bare numbers meaning minutes, negatives flipping direction, any timescale (moves longer than the corpus wrap around) — and the reply states the time moved. Without an argument they still hop one clip. ([#1152](https://github.com/adanalife/tripbot/pull/1152))
+- The subscriber miles bonus (`!bonusmiles`) now scales with subscription tier: 5% of session miles per tier, so tier 2 subs earn 10% and tier 3 subs earn 15%. ([#1156](https://github.com/adanalife/tripbot/pull/1156))
+
+### CI / Tooling
+
+- Drop `--edit` from the `changelog:add` task so it no longer opens $EDITOR and hangs in non-interactive (Claude/CI) sessions. ([#1137](https://github.com/adanalife/tripbot/pull/1137))
+- Release Discord notification links the version to the tagged `CHANGELOG.md` instead of an empty URL. ([#1154](https://github.com/adanalife/tripbot/pull/1154))
+
+### Cleanup
+
+- Inject the tripbot config into `chatbot.App` (`New(cfg)` + an `App.Cfg` field) instead of reading the `c.Conf` package global — first step of retiring config-as-global. ([#1142](https://github.com/adanalife/tripbot/pull/1142))
+
 ## [v3.19.0] — 2026-07-16
 
 ### Chatbot
