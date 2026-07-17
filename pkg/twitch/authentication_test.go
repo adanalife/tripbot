@@ -4,7 +4,6 @@ import (
 	"testing"
 	"time"
 
-	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/oauthtokens"
 )
 
@@ -135,17 +134,7 @@ func TestIRCAuthToken_ConcurrentReads(t *testing.T) {
 	}
 }
 
-// withTokenConf sets the bot/broadcaster identities TokenStatuses reads and
-// restores them afterward.
-func withTokenConf(t *testing.T, bot, channel string) {
-	t.Helper()
-	savedBot, savedChan := c.Conf.BotUsername, c.Conf.ChannelName
-	c.Conf.BotUsername, c.Conf.ChannelName = bot, channel
-	t.Cleanup(func() { c.Conf.BotUsername, c.Conf.ChannelName = savedBot, savedChan })
-}
-
 func TestTokenStatuses_HealthyReportsExpiryForEveryIdentity(t *testing.T) {
-	withTokenConf(t, "tripbot4000", "adanalife_")
 	botExp := time.Now().Add(3 * time.Hour)
 	bcastExp := time.Now().Add(2 * time.Hour)
 	cl := clientWithTokens(
@@ -153,7 +142,7 @@ func TestTokenStatuses_HealthyReportsExpiryForEveryIdentity(t *testing.T) {
 		oauthtokens.Token{AccessToken: "good", ExpiresAt: bcastExp},
 	)
 
-	got := cl.TokenStatuses()
+	got := cl.TokenStatuses("tripbot4000", "adanalife_")
 	if len(got) != 2 {
 		t.Fatalf("got %d statuses, want 2 (bot + broadcaster): %+v", len(got), got)
 	}
@@ -168,11 +157,10 @@ func TestTokenStatuses_HealthyReportsExpiryForEveryIdentity(t *testing.T) {
 }
 
 func TestTokenStatuses_CarriesReauthReason(t *testing.T) {
-	withTokenConf(t, "tripbot4000", "adanalife_")
 	healthy := oauthtokens.Token{AccessToken: "good", ExpiresAt: time.Now().Add(time.Hour)}
 	cl := clientWithTokens(oauthtokens.Token{}, healthy) // bot blank → missing
 
-	got := cl.TokenStatuses()
+	got := cl.TokenStatuses("tripbot4000", "adanalife_")
 	if len(got) != 2 || got[0].Account != "bot" || got[0].Reason != "missing" {
 		t.Fatalf("got %+v, want bot row with Reason=missing", got)
 	}
@@ -181,11 +169,10 @@ func TestTokenStatuses_CarriesReauthReason(t *testing.T) {
 // When the bot and broadcaster are the same account, there's no separate
 // broadcaster row — a blank broadcaster slot must not produce a phantom entry.
 func TestTokenStatuses_NoSeparateBroadcaster(t *testing.T) {
-	withTokenConf(t, "tripbot4000", "tripbot4000")
 	healthy := oauthtokens.Token{AccessToken: "good", ExpiresAt: time.Now().Add(time.Hour)}
 	cl := clientWithTokens(healthy, oauthtokens.Token{})
 
-	got := cl.TokenStatuses()
+	got := cl.TokenStatuses("tripbot4000", "tripbot4000")
 	if len(got) != 1 || got[0].Account != "bot" {
 		t.Fatalf("TokenStatuses() = %+v, want only the bot row when no distinct broadcaster identity", got)
 	}

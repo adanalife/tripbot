@@ -63,16 +63,17 @@ type userProfile struct {
 	LastSeen     time.Time `json:"last_seen"`
 }
 
-// gatherUserProfile reads a chatter's at-a-glance stats through the DB seams.
-// Operator-triggered (one click), not a hot path, so the extra monthly-score
-// query is fine. An empty username or no matching row returns Found=false.
-func gatherUserProfile(ctx context.Context, username string) userProfile {
+// gatherUserProfile reads a chatter's at-a-glance stats through the DB seams,
+// scoped to this instance's platform. Operator-triggered (one click), not a
+// hot path, so the extra monthly-score query is fine. An empty username or no
+// matching row returns Found=false.
+func gatherUserProfile(ctx context.Context, platform, username string) userProfile {
 	username = strings.ToLower(strings.TrimSpace(username))
 	prof := userProfile{Username: username}
 	if username == "" {
 		return prof
 	}
-	u, err := findUser(ctx, username)
+	u, err := findUser(ctx, platform, username)
 	if err != nil {
 		// not-found renders as Found=false; a real DB error does too, but
 		// gets logged so it's visible as a failure rather than a ghost user.
@@ -94,8 +95,8 @@ func gatherUserProfile(ctx context.Context, username string) userProfile {
 // userProfileAPIHandler serves GET /api/user/{username}: a chatter's
 // at-a-glance stats as JSON, for the standalone tripbot-console to render its
 // own popover (the console holds no DB access — it proxies here).
-func userProfileAPIHandler(w http.ResponseWriter, r *http.Request) {
-	prof := gatherUserProfile(r.Context(), mux.Vars(r)["username"])
+func (s *Server) userProfileAPIHandler(w http.ResponseWriter, r *http.Request) {
+	prof := gatherUserProfile(r.Context(), s.cfg.Platform, mux.Vars(r)["username"])
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	if err := json.NewEncoder(w).Encode(prof); err != nil {

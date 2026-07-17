@@ -15,11 +15,15 @@ import (
 
 // --- auth / token ---
 
-func Client() (*helix.Client, error)      { return defaultClient.Client() }
-func LoadFromDB() error                   { return defaultClient.LoadFromDB() }
-func IRCAuthToken() string                { return defaultClient.IRCAuthToken() }
-func BroadcasterUserAccessToken() string  { return defaultClient.BroadcasterUserAccessToken() }
-func TokenStatuses() []AccountTokenStatus { return defaultClient.TokenStatuses() }
+func Client() (*helix.Client, error) { return defaultClient.Client() }
+func LoadFromDB(botUser, broadcasterUser string) error {
+	return defaultClient.LoadFromDB(botUser, broadcasterUser)
+}
+func IRCAuthToken() string               { return defaultClient.IRCAuthToken() }
+func BroadcasterUserAccessToken() string { return defaultClient.BroadcasterUserAccessToken() }
+func TokenStatuses(botUser, broadcasterUser string) []AccountTokenStatus {
+	return defaultClient.TokenStatuses(botUser, broadcasterUser)
+}
 
 // --- cached audience state (fed from the platform-gateway) ---
 

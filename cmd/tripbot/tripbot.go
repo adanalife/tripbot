@@ -166,8 +166,9 @@ func NewTripbot(version string) *Tripbot {
 	t := &Tripbot{
 		version: version,
 		app:     chatbot.New(c.Conf),
-		srv:     server.New(),
+		srv:     server.New(c.Conf),
 		player: video.NewPlayer(
+			c.Conf.Environment, c.Conf.Platform,
 			onscreensClient.New(natsclient.DefaultPublisher(), c.Conf.Environment, c.Conf.Platform),
 			playoutClient.New(c.Conf.VlcServerHost, natsclient.DefaultPublisher(), c.Conf.Environment, c.Conf.Platform),
 		),
@@ -178,7 +179,7 @@ func NewTripbot(version string) *Tripbot {
 	// gateway (when the flag is on) or in-process; with no gateway wired it's the
 	// plain in-process source. Reads t.gateway/t.flagClient lazily, so wiring it
 	// here against the partially-built t is fine.
-	t.sessions = users.New(gatewayChatterSource{t: t})
+	t.sessions = users.New(c.Conf, gatewayChatterSource{t: t})
 	// On a bot-less YouTube instance (no inbound chat → no commands), feed the
 	// rotators the clip's location/date in place of command hints. Gated by the
 	// same flag as the rest of the bot-less presentation; reuses the chatbot's
@@ -221,9 +222,9 @@ func (t *Tripbot) Run() {
 	t.srv.SetVersion(t.version)
 	httpDone := t.startHttpServer(ctx)
 	t.findInitialVideo()
-	t.app.Video = chatbot.NewVideoAdapter(t.player)         // commands read the same Player the cron refreshes
-	t.app.Sessions = chatbot.NewSessionsAdapter(t.sessions) // command-time queries
-	t.app.UserSessions = t.sessions                         // inbound IRC handlers + access checks read the same session state
+	t.app.Video = chatbot.NewVideoAdapter(t.player)                          // commands read the same Player the cron refreshes
+	t.app.Sessions = chatbot.NewSessionsAdapter(c.Conf.Platform, t.sessions) // command-time queries
+	t.app.UserSessions = t.sessions                                          // inbound IRC handlers + access checks read the same session state
 	t.sessions.InitLeaderboard(context.Background())
 	t.startFeatureFlags(ctx)
 	if platformIsTwitch() {
@@ -477,7 +478,7 @@ func (t *Tripbot) startAuthStatusEmitter(ctx context.Context) {
 // twitchAuthAccounts converts the live Twitch token state (bot + broadcaster)
 // into the eventbus wire shape.
 func twitchAuthAccounts() []eventbus.AuthAccount {
-	statuses := mytwitch.TokenStatuses()
+	statuses := mytwitch.TokenStatuses(c.Conf.BotUsername, c.Conf.ChannelName)
 	accounts := make([]eventbus.AuthAccount, 0, len(statuses))
 	for _, s := range statuses {
 		expiresAt := ""
@@ -650,7 +651,7 @@ func (t *Tripbot) startCron() {
 // reachable to re-auth; "not in chat" is surfaced via the
 // tripbot_twitch_connected gauge instead.
 func (t *Tripbot) loadTwitchToken(ctx context.Context) {
-	if err := mytwitch.LoadFromDB(); err != nil {
+	if err := mytwitch.LoadFromDB(c.Conf.BotUsername, c.Conf.ChannelName); err != nil {
 		slog.WarnContext(ctx, "no usable Twitch token at boot; starting without a chat connection and polling",
 			"login_as", c.Conf.BotUsername,
 			"fix", "re-auth via the platform-gateway consent flow (surfaced in tripbot-console)",
@@ -681,7 +682,7 @@ func (t *Tripbot) pollForTwitchToken(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if err := mytwitch.LoadFromDB(); err != nil {
+			if err := mytwitch.LoadFromDB(c.Conf.BotUsername, c.Conf.ChannelName); err != nil {
 				if time.Since(lastLogged) >= logEvery {
 					slog.WarnContext(ctx, "still waiting for Twitch token (re-auth via the platform-gateway consent flow, surfaced in tripbot-console)",
 						"login_as", c.Conf.BotUsername, "err", err)
@@ -764,7 +765,7 @@ func (t *Tripbot) connectToTwitch(ctx context.Context) {
 				// it just rotated (or one auth-bootstrap wrote) is picked up
 				// without a restart. Then sync whatever's now in memory into the
 				// IRC client for the next Connect attempt.
-				if err := mytwitch.LoadFromDB(); err != nil {
+				if err := mytwitch.LoadFromDB(c.Conf.BotUsername, c.Conf.ChannelName); err != nil {
 					slog.Warn("IRC auth failed; re-reading oauth_tokens failed", "err", err, "login_as", c.Conf.BotUsername)
 				}
 				if tok := mytwitch.IRCAuthToken(); tok != "" {
@@ -870,7 +871,7 @@ func (t *Tripbot) scheduleBackgroundJobs() {
 	// gateway's rotations — the IRC PASS line on reconnect and the token-expiry
 	// gauge (both fed by LoadFromDB) — without tripbot ever refreshing itself.
 	t.addJob(5*time.Minute, "twitch.ReloadTokens", func(ctx context.Context) {
-		if err := mytwitch.LoadFromDB(); err != nil {
+		if err := mytwitch.LoadFromDB(c.Conf.BotUsername, c.Conf.ChannelName); err != nil {
 			slog.WarnContext(ctx, "periodic oauth_tokens reload failed", "err", err)
 		}
 		// Keep the IRC client's stored token in sync with the rotated credentials.

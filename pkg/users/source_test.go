@@ -3,7 +3,17 @@ package users
 import (
 	"testing"
 	"time"
+
+	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 )
+
+// testConf is the config test Sessions carry — the same values .env.testing
+// supplies, as a literal so tests don't reach through the loaded global.
+var testConf = &c.TripbotConfig{
+	Environment: "testing",
+	Platform:    "twitch",
+	ChannelName: "test",
+}
 
 // noopChatterSource is a ChatterSource that reports nobody in chat and nobody
 // followed/subscribed. Used by tests that build a *Sessions but don't exercise
@@ -47,7 +57,7 @@ func (r *recordingChatterSource) IsFollower(username string) bool {
 // *Sessions + source).
 func TestSessionsIsSubscriberUsesChatterSource(t *testing.T) {
 	rec := &recordingChatterSource{subscribers: map[string]bool{"alice": true}}
-	s := New(rec)
+	s := New(testConf, rec)
 
 	if !s.IsSubscriber(User{Username: "alice"}) {
 		t.Fatal("expected alice to be a subscriber via the injected source")
@@ -64,7 +74,7 @@ func TestSessionsIsSubscriberUsesChatterSource(t *testing.T) {
 // session miles per tier, with non-subscribers (tier 0) shown the tier-1 rate.
 func TestBonusMilesScalesWithSubscriberTier(t *testing.T) {
 	rec := &recordingChatterSource{tiers: map[string]int{"tier1": 1, "tier2": 2, "tier3": 3}}
-	s := New(rec)
+	s := New(testConf, rec)
 
 	loginTime := time.Now().Add(-3 * time.Minute) // ≈0.1 session miles
 	for _, username := range []string{"nonsub", "tier1", "tier2", "tier3"} {
@@ -97,8 +107,8 @@ func TestBonusMilesScalesWithSubscriberTier(t *testing.T) {
 // per-platform bot instance (e.g. YouTube) beside the Twitch one without them
 // sharing a global session map.
 func TestSessionsHoldIndependentState(t *testing.T) {
-	a := New(noopChatterSource{})
-	b := New(noopChatterSource{})
+	a := New(testConf, noopChatterSource{})
+	b := New(testConf, noopChatterSource{})
 
 	a.lifetimeLeaderboard = [][]string{{"x", "1"}}
 	a.loggedIn["x"] = &User{Username: "x"}

@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/eventbus"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
@@ -32,13 +31,15 @@ type Player struct {
 	CurrentlyPlaying Video // exported because external callers read the current video off it
 	curVid, preVid   string
 	timeStarted      time.Time
+	env, platform    string
 	onscreens        onscreens
 	playout          *playoutClient.Client
 }
 
-// NewPlayer returns a Player with its own Onscreens + Playout clients.
-func NewPlayer(onscreens onscreens, playout *playoutClient.Client) *Player {
-	return &Player{onscreens: onscreens, playout: playout}
+// NewPlayer returns a Player with its own Onscreens + Playout clients. env and
+// platform tag the video.changed events it emits.
+func NewPlayer(env, platform string, onscreens onscreens, playout *playoutClient.Client) *Player {
+	return &Player{env: env, platform: platform, onscreens: onscreens, playout: playout}
 }
 
 // GetCurrentlyPlaying will use lsof to figure out
@@ -87,7 +88,7 @@ func (p *Player) GetCurrentlyPlaying(ctx context.Context) {
 		// Announce the switch so the admin panel's "now playing" card updates
 		// live (no-op when NATS is unconfigured). emitted_at doubles as the
 		// clip start time for the panel's elapsed ticker.
-		eventbus.EmitVideoChanged(ctx, c.Conf.Environment, c.Conf.Platform,
+		eventbus.EmitVideoChanged(ctx, p.env, p.platform,
 			p.CurrentlyPlaying.File(), p.CurrentlyPlaying.State, p.CurrentlyPlaying.Flagged,
 			p.CurrentlyPlaying.Lat, p.CurrentlyPlaying.Lng)
 
@@ -127,7 +128,7 @@ func (p *Player) EmitCurrentVideo(ctx context.Context) {
 	if p.CurrentlyPlaying.Slug == "" {
 		return
 	}
-	eventbus.EmitVideoChanged(ctx, c.Conf.Environment, c.Conf.Platform,
+	eventbus.EmitVideoChanged(ctx, p.env, p.platform,
 		p.CurrentlyPlaying.File(), p.CurrentlyPlaying.State, p.CurrentlyPlaying.Flagged,
 		p.CurrentlyPlaying.Lat, p.CurrentlyPlaying.Lng)
 }

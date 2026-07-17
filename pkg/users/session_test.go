@@ -21,7 +21,7 @@ func TestSessions_ConcurrentAccess(t *testing.T) {
 	db := testdb.New(t)
 	seedUsers(t, db, User{Username: "alice", Miles: 100})
 
-	s := New(noopChatterSource{})
+	s := New(testConf, noopChatterSource{})
 	s.loggedIn["alice"] = &User{Username: "alice", Miles: 100, LoggedIn: time.Now()}
 
 	ctx := context.Background()
@@ -51,13 +51,13 @@ func TestLoginIfNecessary_PersistsVisitAndEvent(t *testing.T) {
 	db := testdb.New(t)
 	ctx := context.Background()
 
-	s := New(noopChatterSource{})
+	s := New(testConf, noopChatterSource{})
 	user := s.LoginIfNecessary(ctx, "arrival")
 	if user.ID == 0 {
 		t.Fatal("expected a persisted user")
 	}
 
-	stored, err := Find(ctx, "arrival")
+	stored, err := Find(ctx, testConf.Platform, "arrival")
 	if err != nil {
 		t.Fatalf("Find: %v", err)
 	}
@@ -93,7 +93,7 @@ func TestLogoutIfNecessary_BanksMilesAndClosesSession(t *testing.T) {
 	db := testdb.New(t)
 	ctx := context.Background()
 
-	s := New(noopChatterSource{})
+	s := New(testConf, noopChatterSource{})
 	user := s.LoginIfNecessary(ctx, "departure")
 	// Backdate the login so the session banks a non-zero mileage:
 	// 0.1mi/3min means ~20 miles for ten hours in chat.
@@ -106,7 +106,7 @@ func TestLogoutIfNecessary_BanksMilesAndClosesSession(t *testing.T) {
 	if s.LoggedInCount() != 0 {
 		t.Errorf("expected an empty session after logout, got %d", s.LoggedInCount())
 	}
-	stored, err := Find(ctx, "departure")
+	stored, err := Find(ctx, testConf.Platform, "departure")
 	if err != nil {
 		t.Fatalf("Find: %v", err)
 	}
@@ -136,7 +136,7 @@ func TestLogout_RecordsGiftedMilesAsExtra(t *testing.T) {
 	db := testdb.New(t)
 	ctx := context.Background()
 
-	s := New(noopChatterSource{})
+	s := New(testConf, noopChatterSource{})
 	s.LoginIfNecessary(ctx, "gifted")
 	s.GiveEveryoneMiles(5)
 	s.LogoutIfNecessary(ctx, "gifted")
@@ -161,12 +161,12 @@ func TestCorrectMiles(t *testing.T) {
 		ctx := context.Background()
 		seedUsers(t, db, User{Username: "offline", Miles: 10})
 
-		s := New(noopChatterSource{})
+		s := New(testConf, noopChatterSource{})
 		if got := s.CorrectMiles(ctx, "offline", -4); got != 6 {
 			t.Errorf("expected 6 miles returned, got %v", got)
 		}
 
-		stored, err := Find(ctx, "offline")
+		stored, err := Find(ctx, testConf.Platform, "offline")
 		if err != nil {
 			t.Fatalf("Find: %v", err)
 		}
@@ -179,7 +179,7 @@ func TestCorrectMiles(t *testing.T) {
 		testdb.New(t)
 		ctx := context.Background()
 
-		s := New(noopChatterSource{})
+		s := New(testConf, noopChatterSource{})
 		s.LoginIfNecessary(ctx, "online")
 		s.CorrectMiles(ctx, "online", 12)
 
@@ -190,7 +190,7 @@ func TestCorrectMiles(t *testing.T) {
 		if live.Miles != 12 {
 			t.Errorf("expected the live copy corrected, got %v", live.Miles)
 		}
-		stored, err := Find(ctx, "online")
+		stored, err := Find(ctx, testConf.Platform, "online")
 		if err != nil {
 			t.Fatalf("Find: %v", err)
 		}
