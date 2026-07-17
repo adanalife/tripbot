@@ -274,10 +274,16 @@ ENVS: dict[str, EnvConfig] = {
         # stream, so onscreens-twitch stays scaled to 0 (manual_replicas below
         # + stage selfHeal off, so a hand/console scale sticks). Budget is two
         # live streams total: prod-twitch + stage-youtube.
-        platforms=("youtube", "twitch"),
+        platforms=("youtube", "twitch", "tiktok", "facebook", "instagram"),
         # Stage components are scaled up/down by hand (only tripbot-twitch runs
         # on the twitch side); omit replicas so Argo doesn't reset them.
         manual_replicas=True,
+        # tiktok/facebook/instagram are staged ahead of being live: the
+        # tripbot/onscreens deploys are emitted at replicas:0 so bringing a
+        # platform up is a hand scale-up, not a new manifest. The gateway for
+        # each already parks on stage; the video/scene half (obs vertical
+        # canvas for tiktok/instagram) and per-platform activation land later.
+        parked_platforms=("tiktok", "facebook", "instagram"),
         # Route stage tripbot-twitch's Helix calls through the in-namespace
         # gateway-twitch.
         twitch_api_url="http://gateway-twitch.stage-1.svc.cluster.local:8080",

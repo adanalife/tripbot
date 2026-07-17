@@ -1,0 +1,214 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  labels:
+    app.kubernetes.io/name: tripbot-instagram
+    app.kubernetes.io/part-of: tripbot
+  name: tripbot-instagram-config
+  namespace: stage-1
+data:
+  BOT_USERNAME: tripbot4001
+  CHANNEL_NAME: adanalife_staging
+  DATABASE_HOST: postgres.stage-1-data.svc.cluster.local
+  DISCORD_GUILD_ID: "607964164220125258"
+  ENV: staging
+  EXTERNAL_URL: https://tripbot-instagram.stage.whereisdana.today
+  GOOGLE_APPS_PROJECT_ID: tripbot-stage
+  MAPS_OUTPUT_DIR: /opt/data/maps
+  NATS_URL: nats://nats.stage-1-platform.svc.cluster.local:4222
+  OBS_SERVER_HOST: obs-instagram:8080
+  OBS_WEBSOCKET_ADDR: obs-instagram:4455
+  ONSCREENS_SERVER_HOST: onscreens-instagram:8080
+  OTEL_RESOURCE_ATTRIBUTES: deployment.environment=stage-1,service.namespace=tripbot,service.platform=instagram
+  OTEL_SDK_DISABLED: "true"
+  OTEL_TRACES_SAMPLER: parentbased_traceidratio
+  OTEL_TRACES_SAMPLER_ARG: "0.1"
+  READ_ONLY: "false"
+  SENTRY_ENVIRONMENT: stage-1
+  STREAM_PLATFORM: instagram
+  TRIPBOT_SERVER_PORT: "8080"
+  VLC_SERVER_HOST: playout-instagram:8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/name: tripbot-instagram
+    app.kubernetes.io/part-of: tripbot
+  name: tripbot-instagram
+  namespace: stage-1
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: tripbot-instagram
+  template:
+    metadata:
+      annotations:
+        adanalife.dev/config-hash: 38d7b0110a
+      labels:
+        app: tripbot-instagram
+    spec:
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - preference:
+                matchExpressions:
+                  - key: dana.lol/board
+                    operator: In
+                    values:
+                      - rpi5
+              weight: 100
+      containers:
+        - env:
+            - name: USER
+              value: tripbot
+          envFrom:
+            - configMapRef:
+                name: tripbot-instagram-config
+            - secretRef:
+                name: tripbot-database-creds
+            - secretRef:
+                name: grafana-cloud-otlp
+                optional: true
+            - secretRef:
+                name: sentry-tripbot
+                optional: true
+            - secretRef:
+                name: tripbot-twitch-creds
+            - secretRef:
+                name: tripbot-google-maps-api-key
+            - secretRef:
+                name: tripbot-discord-alerts-webhook
+                optional: true
+            - secretRef:
+                name: tripbot-discord-bot-token
+                optional: true
+          image: adanalife/tripbot:main
+          imagePullPolicy: Always
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+          name: tripbot-instagram
+          ports:
+            - containerPort: 8080
+              name: http
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            limits:
+              memory: 1Gi
+            requests:
+              cpu: 100m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+      initContainers:
+        - args:
+            - -path
+            - /migrations
+            - -database
+            - postgres://$(DATABASE_USER):$(DATABASE_PASS)@$(DATABASE_HOST):5432/$(DATABASE_DB)?sslmode=disable
+            - up
+          command:
+            - migrate
+          envFrom:
+            - configMapRef:
+                name: tripbot-instagram-config
+            - secretRef:
+                name: tripbot-database-creds
+          image: adanalife/tripbot:main
+          imagePullPolicy: Always
+          name: migrate
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+      securityContext:
+        runAsGroup: 65532
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      tolerations:
+        - effect: NoSchedule
+          key: dana.lol/rpi5
+          operator: Exists
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/name: tripbot-instagram
+    app.kubernetes.io/part-of: tripbot
+  name: tripbot-instagram
+  namespace: stage-1
+spec:
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+  selector:
+    app: tripbot-instagram
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    cert-manager.io/issuer: letsencrypt-route53
+    external-dns.alpha.kubernetes.io/hostname: tripbot-instagram.stage.whereisdana.today
+  labels:
+    app.kubernetes.io/name: tripbot-instagram
+    app.kubernetes.io/part-of: tripbot
+  name: tripbot-instagram
+  namespace: stage-1
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: tripbot-instagram.stage.whereisdana.today
+      http:
+        paths:
+          - backend:
+              service:
+                name: tripbot-instagram
+                port:
+                  name: http
+            path: /
+            pathType: Prefix
+  tls:
+    - hosts:
+        - tripbot-instagram.stage.whereisdana.today
+      secretName: tripbot-instagram-tls
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: tripbot-instagram-ts
+  namespace: stage-1
+spec:
+  defaultBackend:
+    service:
+      name: tripbot-instagram
+      port:
+        number: 8080
+  ingressClassName: tailscale
+  tls:
+    - hosts:
+        - tripbot-instagram-stage
