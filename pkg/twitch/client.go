@@ -52,8 +52,9 @@ type API struct {
 	// and the session-update cron. RWMutex because reads (UserIsSubscriber,
 	// Chatters, ChatterCount) outnumber writes.
 	audienceMu sync.RWMutex
-	// subscribers is the usernames of the current subscribers.
-	subscribers []string
+	// subscribers maps each current subscriber's username to their
+	// subscription tier (1–3).
+	subscribers map[string]int
 	// currentChatters holds the most recent chatter list, cached from the gateway.
 	currentChatters []helix.ChatChatter
 	// chatterCount is the total reported by the API (may exceed

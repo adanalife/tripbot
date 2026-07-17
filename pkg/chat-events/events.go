@@ -8,7 +8,7 @@
 // identities and does the actual sending) and by whatever publishes the command
 // — the standalone tripbot-console, once its chat-send feature lands (the
 // in-tripbot panel that used to publish this was retired with the console
-// split). Like pkg/onscreens-events and pkg/vlc-events it is
+// split). Like pkg/onscreens-events and pkg/playout-events it is
 // stdlib-only and side-effect-free: no init(), no pkg/config import, env is
 // always a parameter rather than read from config here — so it links safely
 // into any binary.

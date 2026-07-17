@@ -5,10 +5,6 @@ services:
     environment:
       ENV: testing
 
-  vlc:
-    environment:
-      ENV: testing
-
   # DB-backed tests (pkg/database/testdb) run against the real postgres
   # from the base compose file; the healthcheck + depends_on chain below
   # makes `docker compose run test` boot db, run migrations, and only

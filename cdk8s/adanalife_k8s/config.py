@@ -2,13 +2,12 @@
 
 One `EnvConfig` replaces the per-app `overlays/<env>` sprawl. Charts/constructs
 read these fields instead of branching on env name inline. App-specific config
-that *also* varies by env (the big vlc/tripbot literal blocks) is assembled in
+that *also* varies by env (the big tripbot literal block) is assembled in
 each construct from these knobs; this table holds only the cross-app values.
 """
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
@@ -37,7 +36,7 @@ class EnvConfig:
     nats_url: str
     sentry_env: str  # SENTRY_ENVIRONMENT (prod-1 | stage-1 | development)
     # Per-component pinned release tags, loaded from versions.yaml by load_env.
-    # Keyed by image name (tripbot, vlc, obs, onscreens-server). Pinned
+    # Keyed by image name (tripbot, obs, onscreens-server). Pinned
     # components deploy that exact tag with IfNotPresent (release tags are
     # immutable); unpinned ones fall back to image_tag with Always.
     image_pins: dict[str, str] = field(default_factory=dict)
@@ -47,19 +46,6 @@ class EnvConfig:
     )
     secret_source: str = "eso"  # eso | local
     gpu: bool = False  # request gpu.intel.com/i915
-    # vlc-server's iGPU claim is gated on (gpu and vlc_gpu). Default True keeps the
-    # claim wherever the env has a GPU; set False to drop just vlc's claim while OBS
-    # keeps the iGPU. vlc proved it doesn't need the GPU (stream-copy + trivial
-    # software decode — CPU flat at ~0.04 cores with and without /dev/dri,
-    # verified live on stage 2026-06-13). See VlcServer in constructs/vlc.py.
-    vlc_gpu: bool = True
-    dashcam_mode: str = "hostpath"  # nfs | hostpath
-    # Which PVC vlc mounts the corpus from when dashcam_mode == "nfs": the
-    # NFS-backed `vlc-dashcam` (default) or the node-local `vlc-dashcam-local`
-    # cache. The local PVC + its NFS->local copy Job are provisioned by infra's
-    # dashcam_local_enabled flag; this only picks which claim vlc mounts. Flip back
-    # to "nfs" for an instant fallback while the local copy is (re)populated.
-    dashcam_source: str = "nfs"  # nfs | local (only meaningful when dashcam_mode=nfs)
     tailscale: bool = False  # emit the tailscale Ingress
     otel: bool = False  # OTEL_SDK_DISABLED=false when True
     postgres_size: str = "5Gi"
@@ -69,8 +55,7 @@ class EnvConfig:
     # render). Set to an isolated namespace (e.g. "stage-1-data") to move the DB
     # StatefulSet + its ESO SecretStore out of the app namespace, so deleting the
     # app namespace can't drop the database. Apps reach it cross-namespace via the
-    # postgres_host FQDN. The dashcam PVC does NOT move (vlc mounts it; PVCs are
-    # namespace-local) — it shifts to SupportingChart in the app namespace.
+    # postgres_host FQDN.
     data_namespace: str = ""
     external_dns_role_arn: str = (
         ""  # cert-manager DNS-01 Route53 role (per AWS account)
@@ -78,14 +63,9 @@ class EnvConfig:
     lan_ip: str = (
         "192.168.1.200"  # mini-PC node IP external-dns/traefik target (platform Helm)
     )
-    nfs_server: str = ""  # dashcam NFS export (nfs mode); from $NFS_SERVER at synth
-    nfs_path: str = ""  # dashcam NFS path; from $NFS_PATH at synth
-    nfs_pv_name: str = (
-        "vlc-dashcam-nfs"  # PVs bind 1:1 — stage needs its own (vlc-dashcam-nfs-stage)
-    )
     # Streaming platforms present in this env. twitch everywhere; youtube
     # currently stage-only while the bot side is built out. Drives the per-platform
-    # fan-out of tripbot/vlc/onscreens (OBS itself is deployed by the obs repo now,
+    # fan-out of tripbot/onscreens (OBS itself is deployed by the obs repo now,
     # which carries its own obs_streaming for the stream-key + --startstreaming).
     platforms: tuple[str, ...] = ("twitch",)
     # --- prod-stream protection (2026-06-11 stage-starves-prod incident) ---
@@ -94,13 +74,6 @@ class EnvConfig:
     # default-priority (0) pod, so under node pressure the scheduler preempts
     # co-tenant stage workloads, never the live stream.
     priority_class: str = ""
-    # CPU request for vlc-server (the stream-critical decode side; OBS, the encode
-    # side, is sized by the obs repo now). Requests are the CFS weight — under CPU
-    # contention each cgroup gets CPU proportional to its request, so prod's
-    # real-sized request guarantees the decode chain its share no matter how many
-    # 200m co-tenant pods burst. Non-prod stays at the small default so stage/dev
-    # keep their light footprint.
-    vlc_cpu_request: str = "200m"
     # ResourceQuota hard caps for the app namespace (emitted by SupportingChart
     # when non-empty). Caps what the env can REQUEST in aggregate — scaling up
     # too many deployments hits the quota and pods stay unscheduled instead of
@@ -111,22 +84,13 @@ class EnvConfig:
     # (EXTERNAL_URL, registered OAuth redirect URIs). Only dev needs it — k3d's
     # traefik is mapped to host :9443 because Colima can't bind :443.
     external_port: str = ""
-    # Fixed NodePort exposing vlc-twitch's RTSP listener on the node IP, so a LAN
-    # box (e.g. OBS on a desktop) can pull rtsp://<node-ip>:<port>/dashcam without
-    # kubectl/port-forward. 0 = no NodePort (default). Only the twitch instance
-    # emits it. The minipc has no LoadBalancer controller, so this is the stable-
-    # host-endpoint equivalent of the k3d-only `<name>-host` LoadBalancer. prod-1
-    # and stage-1 co-tenant the one minipc node, and a pinned NodePort can't be
-    # claimed twice on the same node — each env that wants one must pick a distinct
-    # number in the 30000-32767 range. RTSP only; VNC/HTTP stay in-cluster.
-    vlc_rtsp_node_port: int = 0
     # Bias this env's stateless app pods toward the ephemeral arm64 rpi5 worker
     # (adanalife-rpi5) when it's present, falling back to the MS-01 when it's not.
-    # When True, the tripbot/vlc/onscreens constructs add a toleration for the
+    # When True, the tripbot/onscreens constructs add a toleration for the
     # node's dana.lol/rpi5 taint + a PREFERRED (never required) node affinity
-    # toward dana.lol/board=rpi5 (see scheduling.py). vlc/onscreens follow the OBS
+    # toward dana.lol/board=rpi5 (see scheduling.py). onscreens follows the OBS
     # pod (colocate_with_obs_affinity) rather than carrying the board affinity
-    # themselves. Stage only; prod stays on the MS-01 (and the taint repels it
+    # itself. Stage only; prod stays on the MS-01 (and the taint repels it
     # regardless, since prod pods carry no toleration).
     prefer_rpi5: bool = False
     # When True, the app Deployments omit spec.replicas, so Argo never manages
@@ -137,7 +101,7 @@ class EnvConfig:
     # SELFHEAL_OFF_ENVS). prod keeps replicas declared so Argo holds it at 1.
     manual_replicas: bool = False
     # Subset of `platforms` whose app Deployments render with spec.replicas=0 —
-    # the whole platform stack (tripbot/vlc/onscreens) is emitted and Argo
+    # the whole platform stack (tripbot/onscreens) is emitted and Argo
     # manages it, but parked off so it consumes no node resources until turned
     # on by removing the platform from this set (a config edit + redeploy; under
     # prod selfHeal a hand `kubectl scale` would just be reverted to 0). Lets a
@@ -242,24 +206,17 @@ ENVS: dict[str, EnvConfig] = {
         binary_env="production",
         deployment_env="prod-1",
         gpu=True,
-        # vlc doesn't need the iGPU (stream-copy + software decode); leaving its
-        # claim off frees an iGPU slot and eases co-tenant contention. OBS keeps
-        # the iGPU for VAAPI encode (sized in the obs repo).
-        vlc_gpu=False,
-        dashcam_mode="nfs",
-        dashcam_source="local",  # serve the corpus off the minipc's local NVMe copy
         tailscale=True,
         otel=True,
         postgres_size="50Gi",
         postgres_storage_class="local-path-retain",
         postgres_backup=True,
         external_dns_role_arn=_PROD_ROLE,
-        nfs_pv_name="vlc-dashcam-nfs",
         # The DB lives in its own namespace so a `kubectl delete ns prod-1` can't
         # take years of irreplaceable data.
         data_namespace="prod-1-data",
         # youtube is LIVE (unparked) — the prod-youtube app stack (tripbot /
-        # vlc / onscreens) runs at replicas=1, streaming unlisted to burn in
+        # onscreens) runs at replicas=1, streaming unlisted to burn in
         # before the public launch. stage-youtube is scaled down first so the
         # minipc never runs two youtube encoders at once. The youtube tripbot
         # instance pulls tripbot-youtube-creds from prod-account SM
@@ -280,18 +237,9 @@ ENVS: dict[str, EnvConfig] = {
         # (the twitch_gateway flag and the in-process fallback are gone).
         twitch_api_url="http://gateway-twitch.prod-1.svc.cluster.local:8080",
         # The live stream always wins: prod app pods outrank default-priority
-        # co-tenants (stage, dashcam-cv), and vlc's decode side carries a real CPU
-        # request so contention can't starve it (20-core node). OBS's matching
-        # encode-side request lives in the obs repo now.
+        # co-tenants (stage, dashcam-cv) under node pressure. The playback
+        # decode/encode CPU requests live in the playout and obs repos now.
         priority_class="prod-stream",
-        vlc_cpu_request="1",
-        # Stable LAN endpoint for pulling the dashcam RTSP feed off-cluster
-        # (e.g. OBS on a desktop) without kubectl: rtsp://<minipc-ip>:30854/dashcam.
-        # UDP transport only — the libvlc RTSP sout answers SETUP with 461
-        # Unsupported for TCP interleave, so a kubectl port-forward (TCP-only)
-        # can't carry the media; the NodePort is the sole off-cluster path.
-        # Stage uses a distinct port (the two envs co-tenant the one node).
-        vlc_rtsp_node_port=30854,
     ),
     "stage-1": EnvConfig(
         name="stage-1",
@@ -305,41 +253,37 @@ ENVS: dict[str, EnvConfig] = {
         binary_env="staging",
         deployment_env="stage-1",
         gpu=True,
-        # vlc doesn't need the iGPU (stream-copy + trivial software decode);
-        # vlc_gpu=False keeps stage vlc from claiming it.
-        vlc_gpu=False,
-        # LAN endpoint to watch the stage dashcam feed off-cluster (find/guess
-        # testing) without kubectl: rtsp://<minipc-ip>:30855/dashcam over UDP
-        # (see the prod note above re: why UDP + why port-forward can't work).
-        # 30855 is distinct from prod's 30854 — same node can't reuse a NodePort.
-        vlc_rtsp_node_port=30855,
-        dashcam_mode="nfs",
         tailscale=True,
         # Prefer the ephemeral arm64 rpi5 worker for stage's stateless app pods
-        # (tripbot/vlc/onscreens); they recover onto the MS-01 if the Pi is
+        # (tripbot/onscreens); they recover onto the MS-01 if the Pi is
         # unplugged. See prefer_rpi5 on EnvConfig + scheduling.py.
         prefer_rpi5=True,
         otel=False,
         postgres_size="10Gi",
         postgres_storage_class="local-path",
         external_dns_role_arn=_STAGE_ROLE,
-        nfs_pv_name="vlc-dashcam-nfs-stage",
         # Stage rehearses DB-in-its-own-namespace: postgres + its SecretStore land
         # in stage-1-data, so a `kubectl delete ns stage-1` can't take the DB. prod
         # follows on its next wipe (set prod-1's data_namespace to prod-1-data).
         data_namespace="stage-1-data",
         # New platform stacks burn in on stage first (tripbot-youtube binds
-        # chat once a broadcast is live; vlc-youtube self-sustains).
+        # chat once a broadcast is live).
         #
-        # Stage twitch is meant to run tripbot-twitch ONLY: stage twitch VLC
-        # decode + OBS render contending for the shared iGPU is what stutters
-        # the prod stream, so vlc/onscreens-twitch stay scaled to 0
-        # (manual_replicas below + stage selfHeal off, so a hand/console scale
-        # sticks). Budget is two live streams total: prod-twitch + stage-youtube.
-        platforms=("youtube", "twitch"),
+        # Stage twitch is meant to run tripbot-twitch ONLY: extra stage stream
+        # workloads contending for the shared node is what stutters the prod
+        # stream, so onscreens-twitch stays scaled to 0 (manual_replicas below
+        # + stage selfHeal off, so a hand/console scale sticks). Budget is two
+        # live streams total: prod-twitch + stage-youtube.
+        platforms=("youtube", "twitch", "tiktok", "facebook", "instagram"),
         # Stage components are scaled up/down by hand (only tripbot-twitch runs
         # on the twitch side); omit replicas so Argo doesn't reset them.
         manual_replicas=True,
+        # tiktok/facebook/instagram are staged ahead of being live: the
+        # tripbot/onscreens deploys are emitted at replicas:0 so bringing a
+        # platform up is a hand scale-up, not a new manifest. The gateway for
+        # each already parks on stage; the video/scene half (obs vertical
+        # canvas for tiktok/instagram) and per-platform activation land later.
+        parked_platforms=("tiktok", "facebook", "instagram"),
         # Route stage tripbot-twitch's Helix calls through the in-namespace
         # gateway-twitch.
         twitch_api_url="http://gateway-twitch.stage-1.svc.cluster.local:8080",
@@ -354,8 +298,7 @@ ENVS: dict[str, EnvConfig] = {
         # dashcam-cv embed jobs (2× 1 CPU / 5Gi) + one-shot jobs fit with
         # headroom; the node has 20 CPU / 31Gi. iGPU cap of 3 covers stage
         # obs-youtube's own claim (1, re-enabled 2026-06-19) plus the
-        # video-optimization job's claim with surge headroom; vlc_gpu stays False
-        # (stream-copy needs no device).
+        # video-optimization job's claim with surge headroom.
         app_quota={
             "requests.cpu": "6",
             "requests.memory": "16Gi",
@@ -375,7 +318,6 @@ ENVS: dict[str, EnvConfig] = {
         binary_env="staging",
         deployment_env="development",
         gpu=False,
-        dashcam_mode="hostpath",
         tailscale=False,
         otel=False,
         external_dns_role_arn=_STAGE_ROLE,
@@ -395,7 +337,6 @@ ENVS: dict[str, EnvConfig] = {
         deployment_env="development",
         secret_source="local",
         gpu=False,
-        dashcam_mode="hostpath",
         tailscale=False,
         otel=False,
         platforms=("twitch",),
@@ -411,17 +352,8 @@ def load_env(name: str) -> EnvConfig:
     from dataclasses import replace
 
     # Per-component release pins ride in from versions.yaml rather than the
-    # static table above, so the bump-prs workflow edits one data file.
+    # static table above, so release automation edits one data file.
     pins = image_pins().get(name)
     if pins:
         env = replace(env, image_pins=dict(pins))
-    # NFS coordinates are deployment-host-specific (gitignored in Kustomize as
-    # dashcam-nfs.local.yaml); thread them in from the environment at synth so
-    # they never get committed. Placeholders match the legacy .example render.
-    if env.dashcam_mode == "nfs":
-        env = replace(
-            env,
-            nfs_server=os.environ.get("NFS_SERVER", "<NFS server address>"),
-            nfs_path=os.environ.get("NFS_PATH", "<export path>"),
-        )
     return env

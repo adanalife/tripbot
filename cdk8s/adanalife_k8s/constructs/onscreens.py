@@ -1,7 +1,7 @@
 """OnscreensServer — the standalone onscreens HTTP API + NATS middle-text subscriber.
 
-Reproduces k8s/apps/onscreens-server/base + overlays. Formerly a second port on
-the vlc-server pod (:8081); now its own stateless Deployment on :8080 that
+Reproduces k8s/apps/onscreens-server/base + overlays. A stateless Deployment
+on :8080 that
 
   * serves the onscreens feeds OBS browser sources poll (ONSCREENS_URL_BASE) and
     the HTTP API tripbot calls (ONSCREENS_SERVER_HOST),

@@ -10,7 +10,7 @@ import (
 // instagramChat is the outbound ChatClient for an instagram instance. The
 // Graph API can read live comments but not create them, so Say drops the
 // message. Viewers still see command effects through the platform's own
-// vlc/onscreens pipeline, and the consoleMirror wrapper keeps the would-be
+// playout/onscreens pipeline, and the consoleMirror wrapper keeps the would-be
 // replies visible in the admin console — the same shape as tiktokChat.
 type instagramChat struct{}
 

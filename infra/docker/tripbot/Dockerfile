@@ -11,7 +11,7 @@ ARG VERSION=dev
 COPY . .
 RUN CGO_ENABLED=0 go build -ldflags="-s -w -X main.version=${VERSION}" -o /out/tripbot ./cmd/tripbot
 
-# Runtime: minimal Ubuntu 24.04 matching the VLC/OBS containers
+# Runtime: minimal Ubuntu 24.04 matching the OBS container
 FROM ghcr.io/adanalife/mirror/ubuntu:24.04
 
 RUN apt-get update \

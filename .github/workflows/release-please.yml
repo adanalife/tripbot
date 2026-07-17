@@ -7,11 +7,9 @@ name: release-please
 # the prod pins release-please just bumped) on the release PR branch, so the
 # built changelog + synced dist land atomically with the version bump when the
 # PR squash-merges. The re-synthed prod dist IS the deploy diff: prod-1
-# autosyncs from main, so merging the release PR deploys tripbot. The
-# stream-sensitive components (vlc, onscreens-server) are NOT deployed here —
-# their pins move via per-component bump PRs (bump-prs.yml, fired by
-# release.yml once the images exist), so their restarts are separate,
-# deliberately-timed merges.
+# autosyncs from main, so merging the release PR deploys tripbot and
+# onscreens-server (tripbot restarts only the chat bot; onscreens restarts
+# only blip the overlays — the stream itself stays up).
 #
 # Merging the release PR creates the vX.Y.Z tag + GitHub Release; release.yml is
 # then dispatched explicitly at that tag because GITHUB_TOKEN-created tags don't
@@ -90,23 +88,16 @@ jobs:
             uvx towncrier build --yes --config towncrier.toml --version "$VERSION"
           fi
 
-          # release-please bumped tripbot's prod pin in cdk8s/versions.yaml; a
+          # release-please bumped the prod pins in cdk8s/versions.yaml; a
           # full (unfrozen) re-synth regenerates the prod-1 app manifests, so
-          # the dist diff on this PR shows tripbot's complete deploy — the
-          # image tag AND any manifest/config change this release introduced.
+          # the dist diff on this PR shows the complete deploy — the image
+          # tags AND any manifest/config change this release introduced.
           # (The freeze in `task cdk8s:synth` is for BETWEEN releases; release
-          # time is exactly when tripbot's prod dist regenerates.)
+          # time is exactly when the prod dist regenerates.)
           cd cdk8s
           uv sync
           mise exec -- uv run cdk8s import
           mise exec -- uv run cdk8s synth
-          # Only tripbot's pin moved — vlc/onscreens deploy via their own bump
-          # PRs (bump-prs.yml) — so restore every other prod component to its
-          # committed pinned manifests, which the unfrozen synth above
-          # regenerated from HEAD (same freeze as `task cdk8s:prod:bump`).
-          git ls-files -- 'dist/prod-1-*-twitch.k8s.yaml' 'dist/prod-1-*-youtube.k8s.yaml' \
-            | { grep -v 'prod-1-tripbot-' || true; } \
-            | xargs -r git checkout --
           cd ..
 
           if ! git diff --quiet || [ -n "$(git status --porcelain)" ]; then

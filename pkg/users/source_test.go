@@ -2,6 +2,7 @@ package users
 
 import (
 	"testing"
+	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 )
@@ -23,12 +24,14 @@ func (noopChatterSource) UpdateChatters()               {}
 func (noopChatterSource) Chatters() map[string]struct{} { return map[string]struct{}{} }
 func (noopChatterSource) ChatterCount() int             { return 0 }
 func (noopChatterSource) IsSubscriber(_ string) bool    { return false }
+func (noopChatterSource) SubscriberTier(_ string) int   { return 0 }
 func (noopChatterSource) IsFollower(_ string) bool      { return false }
 
 // recordingChatterSource answers from canned maps and counts calls, so tests
 // can assert the seam actually routes through the injected source.
 type recordingChatterSource struct {
 	subscribers map[string]bool
+	tiers       map[string]int
 	followers   map[string]bool
 	subCalls    int
 	followCalls int
@@ -40,6 +43,9 @@ func (recordingChatterSource) ChatterCount() int             { return 0 }
 func (r *recordingChatterSource) IsSubscriber(username string) bool {
 	r.subCalls++
 	return r.subscribers[username]
+}
+func (r *recordingChatterSource) SubscriberTier(username string) int {
+	return r.tiers[username]
 }
 func (r *recordingChatterSource) IsFollower(username string) bool {
 	r.followCalls++
@@ -61,6 +67,39 @@ func TestSessionsIsSubscriberUsesChatterSource(t *testing.T) {
 	}
 	if rec.subCalls != 2 {
 		t.Fatalf("expected 2 IsSubscriber calls on the source, got %d", rec.subCalls)
+	}
+}
+
+// BonusMiles scales with the subscription tier from the ChatterSource: 5% of
+// session miles per tier, with non-subscribers (tier 0) shown the tier-1 rate.
+func TestBonusMilesScalesWithSubscriberTier(t *testing.T) {
+	rec := &recordingChatterSource{tiers: map[string]int{"tier1": 1, "tier2": 2, "tier3": 3}}
+	s := New(testConf, rec)
+
+	loginTime := time.Now().Add(-3 * time.Minute) // ≈0.1 session miles
+	for _, username := range []string{"nonsub", "tier1", "tier2", "tier3"} {
+		s.loggedIn[username] = &User{Username: username, LoggedIn: loginTime}
+	}
+
+	base := s.BonusMiles(User{Username: "tier1"})
+	if base <= 0 {
+		t.Fatalf("expected a positive tier-1 bonus, got %f", base)
+	}
+	tests := []struct {
+		username string
+		want     float32
+	}{
+		{"nonsub", base}, // would-be bonus at the tier-1 rate
+		{"tier2", base * 2},
+		{"tier3", base * 3},
+	}
+	for _, tt := range tests {
+		got := s.BonusMiles(User{Username: tt.username})
+		// the sessions were logged in at the same instant, but the two
+		// BonusMiles calls happen a hair apart — allow a tiny drift
+		if diff := got - tt.want; diff < -0.001 || diff > 0.001 {
+			t.Errorf("BonusMiles(%q) = %f, want ≈%f", tt.username, got, tt.want)
+		}
 	}
 }
 

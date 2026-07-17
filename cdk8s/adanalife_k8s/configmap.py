@@ -2,8 +2,8 @@
 stable-name emitter that returns a content hash for the pod-template annotation.
 
 The plan's deliberate divergence from Kustomize: Kustomize name-hashes the
-ConfigMap (`vlc-server-config-tkd4fgtt6c`) and rewrites every reference to it.
-cdk8s instead keeps the **stable logical name** (`vlc-server-config`) and stamps
+ConfigMap (`tripbot-config-tkd4fgtt6c`) and rewrites every reference to it.
+cdk8s instead keeps the **stable logical name** (`tripbot-config`) and stamps
 a short content hash as `adanalife.dev/config-hash` on the pod template, so the
 Deployment still rolls on config change but jobs/`envFrom` references that target
 the name (e.g. the stable `tripbot-config`) never break.

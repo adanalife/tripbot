@@ -10,7 +10,7 @@ import (
 	"github.com/joho/godotenv"
 )
 
-// Config is used so we can pass TripbotConfig OR VlcServerConfig
+// Config is used so we can pass TripbotConfig OR OnscreensServerConfig
 // into some functions that need it
 type Config interface {
 	IsProduction() bool
@@ -38,7 +38,7 @@ func SetEnvironment() {
 		}
 		// envconfig.Process reads from the process env; the defaulted
 		// value has to be visible to the required:"true" field on
-		// TripbotConfig.Environment / VlcServerConfig.Environment.
+		// TripbotConfig.Environment / OnscreensServerConfig.Environment.
 		os.Setenv("ENV", envVar)
 	}
 

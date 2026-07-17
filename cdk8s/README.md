@@ -1,7 +1,7 @@
 # cdk8s — tripbot app workload manifests (Python)
 
-The Kubernetes manifests for the four images built from this repo — **tripbot,
-vlc, onscreens, obs** — authored as typed cdk8s constructs and synthesized to
+The Kubernetes manifests for the images built from this repo — **tripbot,
+onscreens** — authored as typed cdk8s constructs and synthesized to
 plain YAML under `dist/`. Argo delivers those committed files cross-repo (the
 `tripbot-apps` / `tripbot-identity` ApplicationSets live in `infra`, pointed at
 this repo). Keeping the manifests here means an env-var / config change rides in

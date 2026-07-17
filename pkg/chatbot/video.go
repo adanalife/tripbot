@@ -10,19 +10,23 @@ import (
 // Video is the subset of the pkg/video surface that chatbot commands depend
 // on. Tests inject a fake; production uses the realVideo adapter, which
 // cmd/tripbot builds around the process-wide *video.Player via NewVideoAdapter.
-// Mirrors the Onscreens/VLC injection pattern.
+// Mirrors the Onscreens/Playout injection pattern.
 type Video interface {
 	// Current returns the video the system believes is currently playing,
 	// without making any I/O calls.
 	Current() video.Video
 	// GetCurrentlyPlaying refreshes the Player's notion of what's currently
-	// playing (an HTTP call to vlc-server in production) and returns it.
+	// playing (an HTTP call to playout in production) and returns it.
 	GetCurrentlyPlaying(ctx context.Context) video.Video
 	// CurrentProgress reports how long the current clip has been playing.
 	CurrentProgress() time.Duration
 	// FindRandomByState returns a random video filmed in the given US state.
 	// Returns *terrors.NoFootageForStateError when no rows match.
 	FindRandomByState(ctx context.Context, state string) (video.Video, error)
+	// FindNextDaytime returns the next daytime clip filmed on a later day than
+	// `after` — the "skip to the next morning" target behind !daytime. Returns
+	// *terrors.NoDaytimeFoundError when there's no later daytime clip ahead.
+	FindNextDaytime(ctx context.Context, after video.Video) (video.Video, error)
 }
 
 // realVideo delegates to its *video.Player (Current / GetCurrentlyPlaying /
@@ -63,4 +67,8 @@ func (r realVideo) CurrentProgress() time.Duration {
 
 func (r realVideo) FindRandomByState(ctx context.Context, state string) (video.Video, error) {
 	return video.FindRandomByState(ctx, state)
+}
+
+func (r realVideo) FindNextDaytime(ctx context.Context, after video.Video) (video.Video, error) {
+	return video.FindNextDaytime(ctx, after)
 }

@@ -9,6 +9,56 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v4.0.0] — 2026-07-17
+
+### Chatbot
+
+- `!daytime` (aliases `!daylight`, `!morning`) skips a dusk/night stretch ahead to the next morning's daylight footage. ([#1158](https://github.com/adanalife/tripbot/pull/1158))
+
+### VLC
+
+- vlc-server removed — dashcam playback is owned by the standalone [playout](https://github.com/adanalife/playout) repo, which serves the same wire contract (`/vlc/current` HTTP + `tripbot.<env>.vlc.*` NATS). The repo is pure Go again (no CGO/libvlc), the vlc image/CI legs are gone, and the release PR now deploys onscreens-server alongside tripbot (per-component bump PRs retired). ([#1135](https://github.com/adanalife/tripbot/pull/1135))
+
+## [v3.20.0] — 2026-07-16
+
+### Chatbot
+
+- `!skip` and `!back` now move by a span of footage instead of a clip count: `!skip 10m`, `!back 1h30m`, bare numbers meaning minutes, negatives flipping direction, any timescale (moves longer than the corpus wrap around) — and the reply states the time moved. Without an argument they still hop one clip. ([#1152](https://github.com/adanalife/tripbot/pull/1152))
+- The subscriber miles bonus (`!bonusmiles`) now scales with subscription tier: 5% of session miles per tier, so tier 2 subs earn 10% and tier 3 subs earn 15%. ([#1156](https://github.com/adanalife/tripbot/pull/1156))
+
+### CI / Tooling
+
+- Drop `--edit` from the `changelog:add` task so it no longer opens $EDITOR and hangs in non-interactive (Claude/CI) sessions. ([#1137](https://github.com/adanalife/tripbot/pull/1137))
+- Release Discord notification links the version to the tagged `CHANGELOG.md` instead of an empty URL. ([#1154](https://github.com/adanalife/tripbot/pull/1154))
+
+### Cleanup
+
+- Inject the tripbot config into `chatbot.App` (`New(cfg)` + an `App.Cfg` field) instead of reading the `c.Conf` package global — first step of retiring config-as-global. ([#1142](https://github.com/adanalife/tripbot/pull/1142))
+
+## [v3.19.0] — 2026-07-16
+
+### Chatbot
+
+- Instagram platform support: a `PLATFORM=instagram` instance polls inbound live-broadcast comments from gateway-instagram and runs the v1 command allowlist. The Graph API cannot post IG comments, so command responses reach viewers via onscreens/playback effects only. ([#1089](https://github.com/adanalife/tripbot/pull/1089))
+- tripbot now polls its platform's OBS WebSocket for streaming state + render/output stats (the `obs_*` stream-health gauges), so the metrics survive vlc-server's retirement and finally exist for YouTube. ([#1141](https://github.com/adanalife/tripbot/pull/1141))
+
+### VLC
+
+- `!find` and the other playback commands are now scoped per streaming platform — a Twitch command no longer seeks the YouTube stream (and vice versa). The NATS command subjects gained a trailing platform leaf (`tripbot.<env>.vlc.<verb>.<platform>`). ([#1133](https://github.com/adanalife/tripbot/pull/1133))
+- tripbot reads the currently-playing clip from playout (`playout-<platform>:8080`) instead of vlc-server — same `/vlc/current` wire contract, new server. Fixes the year-0001 rotator dates on platforms where vlc-server is scaled down. ([#1140](https://github.com/adanalife/tripbot/pull/1140))
+
+### CI / Tooling
+
+- **Changelog fragments can be created without knowing the PR number.** Write a `+`-placeholder fragment (`task changelog:add TYPE=fix`) and the new `changelog-number` workflow renames it to `<PR#>.<type>.md` on push — no more `SKIP_CHANGELOG` dance. ([#1134](https://github.com/adanalife/tripbot/pull/1134))
+
+### Cleanup
+
+- Removed the unused `VERBOSE` config flag; its gated log lines are superseded by slog levels. `READ_ONLY` is unchanged and now documents which writes it actually guards (a partial dry-run: events, viewstats, and rollups only). ([#1136](https://github.com/adanalife/tripbot/pull/1136))
+
+### Misc
+
+- Tagged Sentry events with the `platform` (twitch / youtube / …) each instance serves, so per-platform errors are filterable and alertable within the shared Sentry project. ([#1138](https://github.com/adanalife/tripbot/pull/1138))
+
 ## [v3.18.1] — 2026-07-13
 
 ### VLC

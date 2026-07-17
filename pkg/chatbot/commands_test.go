@@ -54,16 +54,16 @@ func newTestVideo(state string, lat, lng float64, date time.Time) video.Video {
 }
 
 // newTestApp returns an App whose Video reports vid as the currently-playing
-// video, plus no-op Onscreens, VLC, IRC, and Sessions fakes. For commands
+// video, plus no-op Onscreens, Playout, IRC, and Sessions fakes. For commands
 // that don't read Video, pass a zero-value video.Video. To assert on any of
 // those surfaces, replace the corresponding field with a recording fake
-// (recordingOnscreens / recordingVLC / recordingVideo / recordingChat /
+// (recordingOnscreens / recordingPlayout / recordingVideo / recordingChat /
 // recordingSessions).
 func newTestApp(vid video.Video) *App {
 	a := &App{
 		Cfg:        testConf,
 		Onscreens:  noopOnscreens{},
-		VLC:        noopVLC{},
+		Playout:    noopPlayout{},
 		Video:      &recordingVideo{Vid: vid},
 		Chat:       noopChat{},
 		Sessions:   noopSessions{},
@@ -778,9 +778,9 @@ func TestGuessCmd_CorrectGuess_DrivesOverlayAndPlayback(t *testing.T) {
 	vid := newTestVideo("Colorado", 39.5, -105.0, time.Now())
 	app := newTestApp(vid)
 	recOverlay := &recordingOnscreens{}
-	recVLC := &recordingVLC{}
+	recPlayout := &recordingPlayout{}
 	app.Onscreens = recOverlay
-	app.VLC = recVLC
+	app.Playout = recPlayout
 	// Credit flag on → the guesser's username rides the timewarp overlay call.
 	app.Flags = &recordingFlags{Set: map[string]bool{timewarpCreditFlagKey: true}}
 
@@ -808,9 +808,9 @@ func TestGuessCmd_CorrectGuess_DrivesOverlayAndPlayback(t *testing.T) {
 		}
 	}
 
-	// VLC: PlayRandom fires inside a.timewarp().
-	if len(recVLC.Calls) != 1 || recVLC.Calls[0] != "PlayRandom()" {
-		t.Errorf("expected single PlayRandom call, got %v", recVLC.Calls)
+	// Playout: PlayRandom fires inside a.timewarp().
+	if len(recPlayout.Calls) != 1 || recPlayout.Calls[0] != "PlayRandom()" {
+		t.Errorf("expected single PlayRandom call, got %v", recPlayout.Calls)
 	}
 
 	if err := mock.ExpectationsWereMet(); err != nil {
