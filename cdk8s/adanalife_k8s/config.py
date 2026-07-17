@@ -215,14 +215,17 @@ ENVS: dict[str, EnvConfig] = {
         # The DB lives in its own namespace so a `kubectl delete ns prod-1` can't
         # take years of irreplaceable data.
         data_namespace="prod-1-data",
-        # youtube is LIVE (unparked) — the prod-youtube app stack (tripbot /
-        # onscreens) runs at replicas=1, streaming unlisted to burn in
-        # before the public launch. stage-youtube is scaled down first so the
-        # minipc never runs two youtube encoders at once. The youtube tripbot
-        # instance pulls tripbot-youtube-creds from prod-account SM
-        # k8s/tripbot/youtube-creds — that must be seeded for its ExternalSecret
-        # to sync.
+        # The prod-youtube app stack (tripbot / onscreens) is parked at
+        # replicas:0: the YouTube Data API quota extension is pending, the bot
+        # can't poll chat without it (youtube_inbound_enabled below), so the
+        # stack stays staged rather than running idle. The obs repo parks its
+        # prod-youtube encoder to match. Manifests still render while parked —
+        # the tripbot-youtube-creds ExternalSecret (prod-account SM
+        # k8s/tripbot/youtube-creds) keeps syncing, which gateway-youtube also
+        # relies on. Unpark by dropping "youtube" from parked_platforms once
+        # the quota lands.
         platforms=("twitch", "youtube"),
+        parked_platforms=("youtube",),
         # prod youtube launches bot-less: inbound chat poll off (quota extension
         # pending), so rotators serve promo copy and no command responds. Flip to
         # True when the YouTube Data API quota lands. See youtube_inbound_enabled.
