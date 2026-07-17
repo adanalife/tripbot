@@ -9,6 +9,12 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v4.4.0] — 2026-07-17
+
+### Deploy / Infra
+
+- Stage the prod Facebook stack (tripbot-facebook + onscreens-facebook), parked at replicas:0 until a console scale-up. Prod facebook manifests are release-pinned like twitch/youtube. ([#1175](https://github.com/adanalife/tripbot/pull/1175))
+
 ## [v4.3.1] — 2026-07-17
 
 ### Fixes
