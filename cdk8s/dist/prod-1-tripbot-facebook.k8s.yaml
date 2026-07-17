@@ -1,0 +1,202 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  labels:
+    app.kubernetes.io/name: tripbot-facebook
+    app.kubernetes.io/part-of: tripbot
+  name: tripbot-facebook-config
+  namespace: prod-1
+data:
+  BOT_USERNAME: tripbot4000
+  CHANNEL_NAME: adanalife_
+  COMPED_SUBSCRIBERS: reapermoss
+  DATABASE_HOST: postgres.prod-1-data.svc.cluster.local
+  ENV: production
+  EXTERNAL_URL: https://tripbot-facebook.prod.whereisdana.today
+  FACEBOOK_API_URL: http://gateway-facebook.prod-1.svc.cluster.local:8080
+  GOOGLE_APPS_PROJECT_ID: tripbot-prod
+  MAPS_OUTPUT_DIR: /opt/data/maps
+  NATS_URL: nats://nats.prod-1-platform.svc.cluster.local:4222
+  OBS_SERVER_HOST: obs-facebook:8080
+  OBS_WEBSOCKET_ADDR: obs-facebook:4455
+  ONSCREENS_SERVER_HOST: onscreens-facebook:8080
+  OTEL_RESOURCE_ATTRIBUTES: deployment.environment=prod-1,service.namespace=tripbot,service.platform=facebook
+  OTEL_SDK_DISABLED: "false"
+  OTEL_TRACES_SAMPLER: parentbased_traceidratio
+  OTEL_TRACES_SAMPLER_ARG: "0.1"
+  READ_ONLY: "false"
+  SENTRY_ENVIRONMENT: prod-1
+  STREAM_PLATFORM: facebook
+  TRIPBOT_SERVER_PORT: "8080"
+  VLC_SERVER_HOST: playout-facebook:8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/name: tripbot-facebook
+    app.kubernetes.io/part-of: tripbot
+  name: tripbot-facebook
+  namespace: prod-1
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: tripbot-facebook
+  template:
+    metadata:
+      annotations:
+        adanalife.dev/config-hash: 2bbade99a4
+      labels:
+        app: tripbot-facebook
+    spec:
+      containers:
+        - env:
+            - name: USER
+              value: tripbot
+          envFrom:
+            - configMapRef:
+                name: tripbot-facebook-config
+            - secretRef:
+                name: tripbot-database-creds
+            - secretRef:
+                name: grafana-cloud-otlp
+                optional: true
+            - secretRef:
+                name: sentry-tripbot
+                optional: true
+            - secretRef:
+                name: tripbot-twitch-creds
+            - secretRef:
+                name: tripbot-google-maps-api-key
+            - secretRef:
+                name: tripbot-discord-alerts-webhook
+                optional: true
+            - secretRef:
+                name: tripbot-discord-bot-token
+                optional: true
+          image: adanalife/tripbot:4.3.1@sha256:121491f29555440c039a46a569a7fa1f2e3dc6d2c5d2ce915bc4228ebade71f0
+          imagePullPolicy: IfNotPresent
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+          name: tripbot-facebook
+          ports:
+            - containerPort: 8080
+              name: http
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            limits:
+              memory: 1Gi
+            requests:
+              cpu: 100m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+      initContainers:
+        - args:
+            - -path
+            - /migrations
+            - -database
+            - postgres://$(DATABASE_USER):$(DATABASE_PASS)@$(DATABASE_HOST):5432/$(DATABASE_DB)?sslmode=disable
+            - up
+          command:
+            - migrate
+          envFrom:
+            - configMapRef:
+                name: tripbot-facebook-config
+            - secretRef:
+                name: tripbot-database-creds
+          image: adanalife/tripbot:4.3.1@sha256:121491f29555440c039a46a569a7fa1f2e3dc6d2c5d2ce915bc4228ebade71f0
+          imagePullPolicy: IfNotPresent
+          name: migrate
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+      priorityClassName: prod-stream
+      securityContext:
+        runAsGroup: 65532
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/name: tripbot-facebook
+    app.kubernetes.io/part-of: tripbot
+  name: tripbot-facebook
+  namespace: prod-1
+spec:
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+  selector:
+    app: tripbot-facebook
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    cert-manager.io/issuer: letsencrypt-route53
+    external-dns.alpha.kubernetes.io/hostname: tripbot-facebook.prod.whereisdana.today
+  labels:
+    app.kubernetes.io/name: tripbot-facebook
+    app.kubernetes.io/part-of: tripbot
+  name: tripbot-facebook
+  namespace: prod-1
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: tripbot-facebook.prod.whereisdana.today
+      http:
+        paths:
+          - backend:
+              service:
+                name: tripbot-facebook
+                port:
+                  name: http
+            path: /
+            pathType: Prefix
+  tls:
+    - hosts:
+        - tripbot-facebook.prod.whereisdana.today
+      secretName: tripbot-facebook-tls
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: tripbot-facebook-ts
+  namespace: prod-1
+spec:
+  defaultBackend:
+    service:
+      name: tripbot-facebook
+      port:
+        number: 8080
+  ingressClassName: tailscale
+  tls:
+    - hosts:
+        - tripbot-facebook-prod

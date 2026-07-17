@@ -232,8 +232,15 @@ ENVS: dict[str, EnvConfig] = {
         # k8s/tripbot/youtube-creds) keeps syncing, which gateway-youtube also
         # relies on. Unpark by dropping "youtube" from parked_platforms once
         # the quota lands.
-        platforms=("twitch", "youtube"),
-        parked_platforms=("youtube",),
+        #
+        # facebook is staged the same way: parked at replicas:0 so its
+        # tripbot / onscreens instances render but don't run until a console
+        # scale-up. It streams to the real ADL Page (public go-live from
+        # Facebook Live Producer via a persistent stream key); gateway-facebook
+        # holds the Page token and discovers the live for chat. Unpark by
+        # dropping "facebook" from parked_platforms.
+        platforms=("twitch", "youtube", "facebook"),
+        parked_platforms=("youtube", "facebook"),
         # prod youtube launches bot-less: inbound chat poll off (quota extension
         # pending), so rotators serve promo copy and no command responds. Flip to
         # True when the YouTube Data API quota lands. See youtube_inbound_enabled.
@@ -243,6 +250,9 @@ ENVS: dict[str, EnvConfig] = {
         # prod gateway holds a YouTube token as of 2026-06-22, so this is safe to
         # ship; without a gateway token, sends would fail.
         youtube_api_url="http://gateway-youtube.prod-1.svc.cluster.local:8080",
+        # Route prod tripbot-facebook's chat sends through the in-namespace
+        # gateway-facebook (the gateway owns the Page token). Mirrors stage.
+        facebook_api_url="http://gateway-facebook.prod-1.svc.cluster.local:8080",
         # Wire prod tripbot-twitch to gateway-twitch (in-namespace). Required:
         # since the cutover the gateway is the unconditional single Helix caller
         # (the twitch_gateway flag and the in-process fallback are gone).

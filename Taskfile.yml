@@ -144,7 +144,7 @@ tasks:
       # Discard this HEAD re-synth of the pinned app files; identity + one-shot
       # jobs (no -twitch/-youtube suffix) stay live and re-synth normally.
       - |
-        pinned=$(git ls-files -- 'dist/prod-1-*-twitch.k8s.yaml' 'dist/prod-1-*-youtube.k8s.yaml')
+        pinned=$(git ls-files -- 'dist/prod-1-*-twitch.k8s.yaml' 'dist/prod-1-*-youtube.k8s.yaml' 'dist/prod-1-*-facebook.k8s.yaml')
         [ -n "$pinned" ] && git checkout -- $pinned || true
 
   cdk8s:test:
@@ -207,5 +207,5 @@ tasks:
       - mise exec -- uv run cdk8s synth
       - |
         distname="{{.COMPONENT}}"; distname="${distname%-server}"
-        others=$(git ls-files -- 'dist/prod-1-*-twitch.k8s.yaml' 'dist/prod-1-*-youtube.k8s.yaml' | grep -v "prod-1-${distname}-" || true)
+        others=$(git ls-files -- 'dist/prod-1-*-twitch.k8s.yaml' 'dist/prod-1-*-youtube.k8s.yaml' 'dist/prod-1-*-facebook.k8s.yaml' | grep -v "prod-1-${distname}-" || true)
         [ -n "$others" ] && git checkout -- $others || true
