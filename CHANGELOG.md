@@ -9,6 +9,13 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v4.1.0] — 2026-07-17
+
+### Deploy / Infra
+
+- Stage now emits parked (replicas:0) tripbot and onscreens deploys for tiktok, facebook, and instagram, so bringing a platform up is a hand scale-up rather than a new manifest. ([#1161](https://github.com/adanalife/tripbot/pull/1161))
+- The cdk8s synth now emits a per-app discovery index at `dist/apps/<env>-<app>.json`, so infra's tripbot-apps ApplicationSet can self-discover deploy units instead of duplicating the platform matrix. ([#1164](https://github.com/adanalife/tripbot/pull/1164))
+
 ## [v4.0.0] — 2026-07-17
 
 ### Chatbot
