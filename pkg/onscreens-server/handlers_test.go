@@ -57,6 +57,34 @@ func TestRenderMiddleTextEmitsHTMLMode(t *testing.T) {
 	}
 }
 
+// Under-construction is a static slate with no *Onscreen state: its render
+// page must serve, must not poll state.json (it never shows/hides — scene
+// layering in OBS is the visibility mechanism), and must stay out of the
+// state snapshot.
+func TestRenderUnderConstructionIsStatic(t *testing.T) {
+	s := newTestServer(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/onscreens/render/under-construction", nil)
+	req = mux.SetURLVars(req, map[string]string{"name": SlugUnderConstruction})
+	rec := httptest.NewRecorder()
+
+	s.onscreensRenderHandler(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("got status %d, want 200", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "ROAD") {
+		t.Fatalf("expected roadwork sign in under-construction render, got body:\n%s", body)
+	}
+	if strings.Contains(body, "state.json") {
+		t.Fatalf("under-construction render must not poll state.json, got body:\n%s", body)
+	}
+	if _, ok := s.Snapshot()[SlugUnderConstruction]; ok {
+		t.Fatalf("under-construction must not appear in the state snapshot")
+	}
+}
+
 // state.json renders the markdown source of a Markdown-flagged onscreen to
 // HTML at the wire boundary, while the stored Content stays the raw source.
 func TestStateHandlerRendersMarkdown(t *testing.T) {
