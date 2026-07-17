@@ -26,7 +26,7 @@ metadata:
   name: onscreens-youtube
   namespace: prod-1
 spec:
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: onscreens-youtube
