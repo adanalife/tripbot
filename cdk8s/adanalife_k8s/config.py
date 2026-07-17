@@ -277,24 +277,23 @@ ENVS: dict[str, EnvConfig] = {
         # in stage-1-data, so a `kubectl delete ns stage-1` can't take the DB. prod
         # follows on its next wipe (set prod-1's data_namespace to prod-1-data).
         data_namespace="stage-1-data",
-        # New platform stacks burn in on stage first (tripbot-youtube binds
-        # chat once a broadcast is live).
+        # New platform stacks burn in on stage first. facebook is the active
+        # burn-in platform: its tripbot/onscreens render unparked (replicas
+        # omitted via manual_replicas, so hand/console scales stick under
+        # stage selfHeal-off), chatting against the ADL Staging Page.
         #
-        # Stage twitch is meant to run tripbot-twitch ONLY: extra stage stream
-        # workloads contending for the shared node is what stutters the prod
-        # stream, so onscreens-twitch stays scaled to 0 (manual_replicas below
-        # + stage selfHeal off, so a hand/console scale sticks). Budget is two
-        # live streams total: prod-twitch + stage-youtube.
+        # Extra stage stream workloads contending for the shared node is what
+        # stutters the prod stream — budget is two live streams total:
+        # prod-twitch + one stage burn-in.
         platforms=("youtube", "twitch", "tiktok", "facebook", "instagram"),
-        # Stage components are scaled up/down by hand (only tripbot-twitch runs
-        # on the twitch side); omit replicas so Argo doesn't reset them.
+        # Stage components are scaled up/down by hand; omit replicas so Argo
+        # doesn't reset them.
         manual_replicas=True,
-        # tiktok/facebook/instagram are staged ahead of being live: the
-        # tripbot/onscreens deploys are emitted at replicas:0 so bringing a
-        # platform up is a hand scale-up, not a new manifest. The gateway for
-        # each already parks on stage; the video/scene half (obs vertical
-        # canvas for tiktok/instagram) and per-platform activation land later.
-        parked_platforms=("tiktok", "facebook", "instagram"),
+        # Everything except the facebook burn-in is parked: deploys are
+        # emitted at replicas:0 so bringing a platform up is a config flip
+        # here (or a hand scale-up for a quick test), not a new manifest.
+        # The vertical-canvas video half for tiktok/instagram lands later.
+        parked_platforms=("twitch", "youtube", "tiktok", "instagram"),
         # Route stage tripbot-twitch's Helix calls through the in-namespace
         # gateway-twitch.
         twitch_api_url="http://gateway-twitch.stage-1.svc.cluster.local:8080",

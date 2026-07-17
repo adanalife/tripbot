@@ -25,7 +25,6 @@ metadata:
   name: onscreens-facebook
   namespace: stage-1
 spec:
-  replicas: 0
   selector:
     matchLabels:
       app: onscreens-facebook
