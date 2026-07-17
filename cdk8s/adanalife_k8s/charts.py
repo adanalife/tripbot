@@ -49,6 +49,16 @@ def emit_app_charts(scope: Construct, env: EnvConfig) -> None:
             ctor(chart, platform, env=env)
 
 
+def app_unit_names(env: EnvConfig) -> list[str]:
+    """The `<component>-<platform>` names emit_app_charts produces for env — one
+    per (component, platform). main.py writes a `dist/apps/<env>-<app>.json`
+    discovery entry for each, so infra's tripbot-apps ApplicationSet can
+    self-discover the deploy units with a git files generator rather than
+    duplicating this (env × component × platform) matrix in the infra repo.
+    """
+    return [f"{comp}-{platform}" for platform in env.platforms for comp in COMPONENTS]
+
+
 class IdentityChart(Chart):
     """tripbot's per-env identity-level Secrets (DB creds + twitch/maps/discord —
     one bot identity, one DB, shared by every platform stack in the namespace),
