@@ -173,6 +173,12 @@
           "privacy": {
             "type": "string"
           },
+          "broadcast_id": {
+            "type": "string"
+          },
+          "permalink_url": {
+            "type": "string"
+          },
           "emitted_at": {
             "type": "string",
             "format": "date-time"
@@ -182,6 +188,8 @@
           "video_id",
           "live",
           "privacy",
+          "broadcast_id",
+          "permalink_url",
           "emitted_at"
         ]
       }

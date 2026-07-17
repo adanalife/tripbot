@@ -160,9 +160,19 @@ var (
 		{"privacy", strType(), true},
 		{"emitted_at", dateType(), true},
 	}
-	// Same shape as youtube's; privacy carries facebook's two states
-	// ("public"/"unpublished") instead of youtube's three.
-	facebookBroadcastFields = youtubeBroadcastFields
+	// youtube's shape plus facebook's broadcast-object fields: privacy carries
+	// facebook's two states ("public"/"unpublished") instead of youtube's
+	// three, broadcast_id is the live-video object id (the Live Producer
+	// dashboard key), and permalink_url the site-relative watch path — the
+	// only link that resolves an unpublished broadcast.
+	facebookBroadcastFields = []field{
+		{"video_id", strType(), true},
+		{"live", boolType(), true},
+		{"privacy", strType(), true},
+		{"broadcast_id", strType(), true},
+		{"permalink_url", strType(), true},
+		{"emitted_at", dateType(), true},
+	}
 )
 
 // envelopeFields maps each declared schema title to its field list so the

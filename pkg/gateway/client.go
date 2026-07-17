@@ -245,10 +245,16 @@ func (c *Client) InboundChat(ctx context.Context, cursor string) (InboundChatPag
 // Broadcast is the channel's current live broadcast (GET /v1/broadcast). VideoID
 // is the watchable id (youtube.com/watch?v=<id>); Privacy is the visibility
 // ("public"/"unlisted"/"private"). Live is false when no broadcast is active.
+// BroadcastID and PermalinkURL are set by platforms whose broadcast object is
+// distinct from the watchable video (facebook: the live-video id + the
+// site-relative watch path, the only link that resolves an unpublished
+// broadcast); empty elsewhere.
 type Broadcast struct {
-	VideoID string `json:"video_id"`
-	Live    bool   `json:"live"`
-	Privacy string `json:"privacy"`
+	VideoID      string `json:"video_id"`
+	Live         bool   `json:"live"`
+	Privacy      string `json:"privacy"`
+	BroadcastID  string `json:"broadcast_id"`
+	PermalinkURL string `json:"permalink_url"`
 }
 
 // ActiveBroadcast returns the channel's current live broadcast (GET

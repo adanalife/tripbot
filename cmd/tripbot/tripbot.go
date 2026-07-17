@@ -859,7 +859,7 @@ func (t *Tripbot) scheduleBackgroundJobs() {
 				slog.ErrorContext(ctx, "facebook broadcast discovery failed", "err", err)
 				return
 			}
-			eventbus.EmitFacebookBroadcast(ctx, c.Conf.Environment, b.VideoID, b.Privacy, b.Live)
+			eventbus.EmitFacebookBroadcast(ctx, c.Conf.Environment, b.VideoID, b.BroadcastID, b.PermalinkURL, b.Privacy, b.Live)
 		}, gocron.WithStartAt(gocron.WithStartImmediately()))
 	}
 
