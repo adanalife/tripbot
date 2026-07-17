@@ -255,16 +255,21 @@ func YoutubeBroadcastSubject(env string) string { return subject(env, "youtube",
 // FacebookBroadcast is the wire format for tripbot.<env>.facebook.broadcast —
 // the Page's current live video discovered via the gateway, emitted on a slow
 // ticker by the facebook instance. VideoID is the watchable video object id
-// (facebook.com/video.php?v=<id>); Privacy is "public"/"unpublished" —
-// "unpublished" is the timeline-hidden (admin-only) dry-run state, facebook's
-// analog of a youtube unlisted broadcast. Live is false when no broadcast is
-// active. The console needs this to badge and link an unpublished rehearsal,
-// which the Page timeline never shows.
+// (facebook.com/video.php?v=<id>); BroadcastID is the live-video object id
+// (facebook.com/live/producer/<id>); PermalinkURL is the site-relative watch
+// path — the only link that resolves an unpublished broadcast (admin-only).
+// Privacy is "public"/"unpublished" — "unpublished" is the timeline-hidden
+// (admin-only) dry-run state, facebook's analog of a youtube unlisted
+// broadcast. Live is false when no broadcast is active. The console needs
+// this to badge and link an unpublished rehearsal, which the Page timeline
+// never shows.
 type FacebookBroadcast struct {
-	VideoID   string `json:"video_id"`
-	Live      bool   `json:"live"`
-	Privacy   string `json:"privacy"`
-	EmittedAt string `json:"emitted_at"`
+	VideoID      string `json:"video_id"`
+	Live         bool   `json:"live"`
+	Privacy      string `json:"privacy"`
+	BroadcastID  string `json:"broadcast_id"`
+	PermalinkURL string `json:"permalink_url"`
+	EmittedAt    string `json:"emitted_at"`
 }
 
 // FacebookBroadcastSubject returns the subscribe/publish subject for the
@@ -274,12 +279,14 @@ func FacebookBroadcastSubject(env string) string { return subject(env, "facebook
 // EmitFacebookBroadcast publishes the current Facebook broadcast snapshot. A
 // last-value cache (TRIPBOT_FACEBOOK, MaxMsgsPerSubject=1) retains the latest
 // so a fresh console renders the badge on connect.
-func EmitFacebookBroadcast(ctx context.Context, env, videoID, privacy string, live bool) {
+func EmitFacebookBroadcast(ctx context.Context, env, videoID, broadcastID, permalinkURL, privacy string, live bool) {
 	emit(ctx, FacebookBroadcastSubject(env), FacebookBroadcast{
-		VideoID:   videoID,
-		Live:      live,
-		Privacy:   privacy,
-		EmittedAt: emittedAt(),
+		VideoID:      videoID,
+		Live:         live,
+		Privacy:      privacy,
+		BroadcastID:  broadcastID,
+		PermalinkURL: permalinkURL,
+		EmittedAt:    emittedAt(),
 	})
 }
 

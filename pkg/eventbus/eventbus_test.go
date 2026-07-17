@@ -285,7 +285,7 @@ func TestEmitFacebookBroadcast(t *testing.T) {
 	nowFn = func() time.Time { return fixed }
 	t.Cleanup(func() { nowFn = func() time.Time { return time.Now().UTC() } })
 
-	EmitFacebookBroadcast(context.Background(), "staging", "10102938475", "unpublished", true)
+	EmitFacebookBroadcast(context.Background(), "staging", "10102938475", "1719603579", "/page/videos/10102938475", "unpublished", true)
 
 	if len(rec.Publishes) != 1 {
 		t.Fatalf("expected 1 publish, got %d", len(rec.Publishes))
@@ -301,5 +301,8 @@ func TestEmitFacebookBroadcast(t *testing.T) {
 	}
 	if ev.VideoID != "10102938475" || !ev.Live || ev.Privacy != "unpublished" {
 		t.Errorf("envelope = %+v, want video_id=10102938475 live=true privacy=unpublished", ev)
+	}
+	if ev.BroadcastID != "1719603579" || ev.PermalinkURL != "/page/videos/10102938475" {
+		t.Errorf("envelope = %+v, want broadcast_id=1719603579 permalink_url=/page/videos/10102938475", ev)
 	}
 }
