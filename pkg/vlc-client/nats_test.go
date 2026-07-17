@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	ve "github.com/adanalife/tripbot/pkg/vlc-events"
 )
@@ -173,6 +174,29 @@ func TestSkipAndBack_PublishN(t *testing.T) {
 				t.Errorf("n = %d, want %d", ev.N, want)
 			}
 		})
+	}
+}
+
+func TestSeek_PublishesSignedDeltaMs(t *testing.T) {
+	rec := &recordingPublisher{}
+	c := New(commandHost, rec, "stage", "twitch")
+
+	if err := c.Seek(context.Background(), -10*time.Minute); err != nil {
+		t.Fatalf("Seek: %v", err)
+	}
+
+	if len(rec.Publishes) != 1 {
+		t.Fatalf("expected 1 publish, got %d", len(rec.Publishes))
+	}
+	if rec.Publishes[0].Subject != "tripbot.stage.vlc.seek.twitch" {
+		t.Errorf("subject = %q, want tripbot.stage.vlc.seek.twitch", rec.Publishes[0].Subject)
+	}
+	var ev ve.Seek
+	if err := json.Unmarshal(rec.Publishes[0].Payload, &ev); err != nil {
+		t.Fatalf("payload not valid JSON: %v", err)
+	}
+	if ev.DeltaMs != -600_000 {
+		t.Errorf("delta_ms = %d, want -600000", ev.DeltaMs)
 	}
 }
 

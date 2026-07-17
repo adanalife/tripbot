@@ -3,6 +3,7 @@ package chatbot
 import (
 	"context"
 	"fmt"
+	"time"
 )
 
 // noopVLC satisfies VLC for tests that don't care about playback transitions
@@ -14,6 +15,7 @@ func (noopVLC) PlayFileInPlaylist(_ context.Context, _ string) error            
 func (noopVLC) PlayFileAtTimestamp(_ context.Context, _ string, _ float64) error { return nil }
 func (noopVLC) Skip(_ context.Context, _ int) error                              { return nil }
 func (noopVLC) Back(_ context.Context, _ int) error                              { return nil }
+func (noopVLC) Seek(_ context.Context, _ time.Duration) error                    { return nil }
 
 // recordingVLC captures every call made to it so tests can assert that
 // the chatbot drove playback as expected. All call records are appended
@@ -40,5 +42,9 @@ func (r *recordingVLC) Skip(_ context.Context, n int) error {
 }
 func (r *recordingVLC) Back(_ context.Context, n int) error {
 	r.Calls = append(r.Calls, fmt.Sprintf("Back(%d)", n))
+	return nil
+}
+func (r *recordingVLC) Seek(_ context.Context, delta time.Duration) error {
+	r.Calls = append(r.Calls, fmt.Sprintf("Seek(%s)", delta))
 	return nil
 }
