@@ -97,6 +97,11 @@ var onscreenRegistry = map[string]onscreenStyle{
 	SlugGPS: {
 		Name: SlugGPS, IsImage: true,
 	},
+	SlugUnderConstruction: {
+		// Fully static page with its own template branch (like timewarp);
+		// the text-onscreen style fields don't apply.
+		Name: SlugUnderConstruction,
+	},
 }
 
 // rotatorSides maps the two corner-rotator slugs to their Side, so styleFor can
