@@ -13,6 +13,7 @@ data:
   DISCORD_GUILD_ID: "607964164220125258"
   ENV: staging
   EXTERNAL_URL: https://tripbot-facebook.stage.whereisdana.today
+  FACEBOOK_API_URL: http://gateway-facebook.stage-1.svc.cluster.local:8080
   GOOGLE_APPS_PROJECT_ID: tripbot-stage
   MAPS_OUTPUT_DIR: /opt/data/maps
   NATS_URL: nats://nats.stage-1-platform.svc.cluster.local:4222
@@ -45,7 +46,7 @@ spec:
   template:
     metadata:
       annotations:
-        adanalife.dev/config-hash: 040b0c9ffb
+        adanalife.dev/config-hash: 2d3e8f3969
       labels:
         app: tripbot-facebook
     spec:
