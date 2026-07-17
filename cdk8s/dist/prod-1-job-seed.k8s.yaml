@@ -15,7 +15,7 @@ spec:
                 name: tripbot-twitch-config
             - secretRef:
                 name: tripbot-database-creds
-          image: adanalife/tripbot:4.3.1@sha256:121491f29555440c039a46a569a7fa1f2e3dc6d2c5d2ce915bc4228ebade71f0
+          image: adanalife/tripbot:4.4.0@sha256:121491f29555440c039a46a569a7fa1f2e3dc6d2c5d2ce915bc4228ebade71f0
           imagePullPolicy: IfNotPresent
           name: seed
           resources:
@@ -46,7 +46,7 @@ spec:
                 name: tripbot-twitch-config
             - secretRef:
                 name: tripbot-database-creds
-          image: adanalife/tripbot:4.3.1@sha256:121491f29555440c039a46a569a7fa1f2e3dc6d2c5d2ce915bc4228ebade71f0
+          image: adanalife/tripbot:4.4.0@sha256:121491f29555440c039a46a569a7fa1f2e3dc6d2c5d2ce915bc4228ebade71f0
           imagePullPolicy: IfNotPresent
           name: migrate
           resources:
