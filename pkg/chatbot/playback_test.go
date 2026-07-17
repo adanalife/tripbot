@@ -350,6 +350,76 @@ func TestJumpCmd_NoFootageForState(t *testing.T) {
 	}
 }
 
+// --- daytimeCmd ---
+
+func TestDaytimeCmd_AdminJumpsToNextMorning(t *testing.T) {
+	skipIfDarwin(t)
+	app := newTestApp(video.Video{})
+	recVLC := &recordingVLC{}
+	recVideo := &recordingVideo{
+		Vid:        video.Video{Slug: "2018_0514_224801_001"},
+		DaytimeVid: video.Video{Slug: "2018_0515_120000_009"},
+	}
+	recIRC := &recordingChat{}
+	app.VLC = recVLC
+	app.Video = recVideo
+	app.Chat = recIRC
+
+	runAsAdmin(t, func() {
+		app.daytimeCmd(context.Background(), newTestUser(adminUser), nil)
+	})
+
+	// Video: reads the current clip, finds the next daytime one, then refreshes.
+	wantVideo := []string{"Current()", `FindNextDaytime("2018_0514_224801_001")`, "GetCurrentlyPlaying()"}
+	if len(recVideo.Calls) != len(wantVideo) {
+		t.Fatalf("expected %d Video calls, got %d: %v", len(wantVideo), len(recVideo.Calls), recVideo.Calls)
+	}
+	for i, want := range wantVideo {
+		if recVideo.Calls[i] != want {
+			t.Errorf("Video call %d: want %q, got %q", i, want, recVideo.Calls[i])
+		}
+	}
+
+	// VLC: plays the daytime clip's file.
+	wantVLC := `PlayFileInPlaylist("2018_0515_120000_009.MP4")`
+	if len(recVLC.Calls) != 1 || recVLC.Calls[0] != wantVLC {
+		t.Errorf("expected one %s VLC call, got %v", wantVLC, recVLC.Calls)
+	}
+
+	if len(recIRC.Says) != 1 || !strings.Contains(recIRC.Says[0], "next morning") {
+		t.Errorf("expected a 'next morning' message, got %v", recIRC.Says)
+	}
+}
+
+func TestDaytimeCmd_NoDaytimeAhead(t *testing.T) {
+	skipIfDarwin(t)
+	app := newTestApp(video.Video{})
+	recVLC := &recordingVLC{}
+	recVideo := &recordingVideo{
+		DaytimeErr: &terrors.NoDaytimeFoundError{Msg: "no daytime footage found ahead"},
+	}
+	recIRC := &recordingChat{}
+	app.VLC = recVLC
+	app.Video = recVideo
+	app.Chat = recIRC
+
+	runAsAdmin(t, func() {
+		app.daytimeCmd(context.Background(), newTestUser(adminUser), nil)
+	})
+
+	// No VLC handoff on the not-found path, and no GetCurrentlyPlaying refresh.
+	if len(recVLC.Calls) != 0 {
+		t.Errorf("expected no VLC calls on no-daytime path, got %v", recVLC.Calls)
+	}
+	wantVideo := []string{"Current()", `FindNextDaytime("")`}
+	if len(recVideo.Calls) != len(wantVideo) {
+		t.Fatalf("expected %d Video calls, got %d: %v", len(wantVideo), len(recVideo.Calls), recVideo.Calls)
+	}
+	if len(recIRC.Says) != 1 || !strings.Contains(recIRC.Says[0], "enjoy the night") {
+		t.Errorf("expected an 'enjoy the night' message, got %v", recIRC.Says)
+	}
+}
+
 func TestJumpCmd_RejectsBadInput(t *testing.T) {
 	skipIfDarwin(t)
 	app := newTestApp(video.Video{})
