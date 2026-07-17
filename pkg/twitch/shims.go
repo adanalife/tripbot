@@ -28,9 +28,10 @@ func TokenStatuses(botUser, broadcasterUser string) []AccountTokenStatus {
 // --- cached audience state (fed from the platform-gateway) ---
 
 func UserIsSubscriber(username string) bool  { return defaultClient.UserIsSubscriber(username) }
+func UserSubscriberTier(username string) int { return defaultClient.UserSubscriberTier(username) }
 func ChatterCount() int                      { return defaultClient.ChatterCount() }
 func Chatters() map[string]struct{}          { return defaultClient.Chatters() }
 func ChannelID() string                      { return defaultClient.ChannelID() }
-func SetSubscribers(logins []string)         { defaultClient.SetSubscribers(logins) }
+func SetSubscribers(tiers map[string]int)    { defaultClient.SetSubscribers(tiers) }
 func SetChatters(logins []string, count int) { defaultClient.SetChatters(logins, count) }
 func SetChannelID(id string)                 { defaultClient.SetChannelID(id) }

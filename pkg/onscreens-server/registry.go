@@ -1,6 +1,6 @@
 package onscreensServer
 
-// Slug identifiers for the onscreens that vlc-server's HTTP layer addresses
+// Slug identifiers for the onscreens that onscreens-server's HTTP layer addresses
 // individually (state endpoint, render template, asset). Names match the URL
 // path components OBS browser sources fetch.
 const (

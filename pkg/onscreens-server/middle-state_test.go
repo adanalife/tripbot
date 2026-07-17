@@ -114,7 +114,7 @@ func waitMiddleState(t *testing.T, ctx context.Context, js jetstream.JetStream, 
 
 // connectEmbeddedJetStream starts an in-process JetStream-enabled nats-server
 // on a random port with a temp store dir and returns a client connection.
-// (Same fixture shape as pkg/vlc-server's lastplayed_test.)
+// (Same fixture shape as the lastplayed resume tests playout ported.)
 func connectEmbeddedJetStream(t *testing.T) *nats.Conn {
 	t.Helper()
 	ns, err := natsserver.NewServer(&natsserver.Options{

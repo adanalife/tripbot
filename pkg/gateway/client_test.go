@@ -235,7 +235,7 @@ func TestSubscribers(t *testing.T) {
 	var gotPath string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotPath = r.URL.Path
-		_, _ = w.Write([]byte(`{"subscribers":["sub1","sub2"]}`))
+		_, _ = w.Write([]byte(`{"subscribers":["sub1","sub2"],"tiers":{"sub1":3}}`))
 	}))
 	defer srv.Close()
 
@@ -246,8 +246,9 @@ func TestSubscribers(t *testing.T) {
 	if gotPath != "/v1/subscribers" {
 		t.Errorf("path = %q, want /v1/subscribers", gotPath)
 	}
-	if len(subs) != 2 || subs[0] != "sub1" {
-		t.Errorf("subscribers = %v, want [sub1 sub2]", subs)
+	// sub2 is missing from the tiers map and defaults to tier 1
+	if len(subs) != 2 || subs["sub1"] != 3 || subs["sub2"] != 1 {
+		t.Errorf("subscribers = %v, want map[sub1:3 sub2:1]", subs)
 	}
 }
 

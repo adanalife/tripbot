@@ -8,6 +8,14 @@ func (e *NoFootageForStateError) Error() string {
 	return e.Msg
 }
 
+type NoDaytimeFoundError struct {
+	Msg string
+}
+
+func (e *NoDaytimeFoundError) Error() string {
+	return e.Msg
+}
+
 type ReadOnlyError struct {
 	Msg string
 }

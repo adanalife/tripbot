@@ -25,12 +25,12 @@ import (
 	"github.com/adanalife/tripbot/pkg/obs/audiowatchdog"
 	"github.com/adanalife/tripbot/pkg/obs/watchdog"
 	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
+	playoutClient "github.com/adanalife/tripbot/pkg/playout-client"
 	"github.com/adanalife/tripbot/pkg/rollups"
 	"github.com/adanalife/tripbot/pkg/server"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/adanalife/tripbot/pkg/video"
-	vlcClient "github.com/adanalife/tripbot/pkg/vlc-client"
 	_ "github.com/dimiro1/banner/autoload"
 	"github.com/gempir/go-twitch-irc/v4"
 	"github.com/go-co-op/gocron/v2"
@@ -175,7 +175,7 @@ func NewTripbot(version string, cfg *c.TripbotConfig) *Tripbot {
 		player: video.NewPlayer(
 			cfg,
 			onscreensClient.New(natsclient.DefaultPublisher(), cfg.Environment, cfg.Platform),
-			vlcClient.New(cfg.VlcServerHost, natsclient.DefaultPublisher(), cfg.Environment, cfg.Platform),
+			playoutClient.New(cfg.VlcServerHost, natsclient.DefaultPublisher(), cfg.Environment, cfg.Platform),
 		),
 		flagClient: feature.NewInMemoryClient(nil),
 		gateway:    newGatewayClient(cfg),

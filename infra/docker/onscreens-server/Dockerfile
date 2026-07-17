@@ -1,7 +1,7 @@
 # onscreens-server: the HTTP API that owns overlay state (leaderboard, middle
 # text, rotators, timewarp, GPS/flag images) and serves the OBS browser-source
-# feeds. A pure-Go binary with no libvlc/GPU/X needs — modeled on the tripbot
-# image, not the heavyweight vlc image it used to ride inside. GPS.png is
+# feeds. A pure-Go binary with no GPU/X needs — modeled on the tripbot
+# image. GPS.png is
 # embedded in the binary (pkg/onscreens-server), so the runtime needs no assets.
 
 # Builder: produce a static binary with Go 1.26
@@ -17,7 +17,7 @@ ARG VERSION=dev
 COPY . .
 RUN CGO_ENABLED=0 go build -ldflags="-s -w -X main.version=${VERSION}" -o /out/onscreens-server ./cmd/onscreens-server
 
-# Runtime: minimal Ubuntu 24.04 matching the tripbot/vlc/obs containers
+# Runtime: minimal Ubuntu 24.04 matching the tripbot/obs containers
 FROM ghcr.io/adanalife/mirror/ubuntu:24.04
 
 RUN apt-get update \

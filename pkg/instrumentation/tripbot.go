@@ -315,7 +315,7 @@ func (c cronIface) Panic(job string) {
 type httpPanicsIface struct{ counter metric.Int64Counter }
 
 // Inc records one recovered HTTP-handler panic, labeled by service
-// (typically the configured ServerType: "tripbot" / "vlc_server" / "onscreens_server").
+// (typically the configured ServerType: "tripbot" / "onscreens_server").
 func (h httpPanicsIface) Inc(service string) {
 	h.counter.Add(context.Background(), 1, metric.WithAttributes(attribute.String("service", service)))
 }

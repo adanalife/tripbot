@@ -1,20 +1,23 @@
 package twitch
 
 import (
-	"slices"
 	"strings"
 
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"github.com/nicklaw5/helix/v2"
 )
 
-// SetSubscribers replaces the cached subscriber list with logins sourced from
+// SetSubscribers replaces the cached login → tier map with values sourced from
 // the platform-gateway (which polls Helix). Logins are lowercased so
-// UserIsSubscriber compares consistently. The audience gauge is set here too.
-func (cl *API) SetSubscribers(logins []string) {
-	subs := make([]string, len(logins))
-	for i, login := range logins {
-		subs[i] = strings.ToLower(login)
+// UserIsSubscriber compares consistently; tiers below 1 are clamped to 1 (a
+// listed subscriber is at least tier 1). The audience gauge is set here too.
+func (cl *API) SetSubscribers(tiers map[string]int) {
+	subs := make(map[string]int, len(tiers))
+	for login, tier := range tiers {
+		if tier < 1 {
+			tier = 1
+		}
+		subs[strings.ToLower(login)] = tier
 	}
 	cl.audienceMu.Lock()
 	cl.subscribers = subs
@@ -41,5 +44,14 @@ func (cl *API) SetChatters(logins []string, count int) {
 func (cl *API) UserIsSubscriber(username string) bool {
 	cl.audienceMu.RLock()
 	defer cl.audienceMu.RUnlock()
-	return slices.Contains(cl.subscribers, username)
+	_, ok := cl.subscribers[username]
+	return ok
+}
+
+// UserSubscriberTier returns the user's subscription tier (1–3), or 0 if they
+// don't subscribe to the channel.
+func (cl *API) UserSubscriberTier(username string) int {
+	cl.audienceMu.RLock()
+	defer cl.audienceMu.RUnlock()
+	return cl.subscribers[username]
 }

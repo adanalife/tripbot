@@ -1,4 +1,5 @@
 [codespell]
 # abitrate/commads/quess/loacation/lcoation: quoted in CHANGELOG.md's historical #466 entry.
 # locaiton/stae/comands: used by the fuzzy-router tests.
-ignore-words-list = caf,nd,abitrate,commads,quess,loacation,lcoation,locaiton,stae,comands
+# unparseable: a legitimate spelling (playback_test.go); codespell wants "unparsable".
+ignore-words-list = caf,nd,abitrate,commads,quess,loacation,lcoation,locaiton,stae,comands,unparseable

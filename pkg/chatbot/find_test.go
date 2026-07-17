@@ -29,17 +29,17 @@ func (r *recordingSearch) Find(_ context.Context, query string) ([]SearchHit, er
 	return r.Hits, r.Err
 }
 
-func newFindTestApp(t *testing.T, search Search) (*App, *recordingVLC, *recordingChat) {
+func newFindTestApp(t *testing.T, search Search) (*App, *recordingPlayout, *recordingChat) {
 	t.Helper()
 	app := newTestApp(video.Video{})
-	recVLC := &recordingVLC{}
+	recPlayout := &recordingPlayout{}
 	recChat := &recordingChat{}
-	app.VLC = recVLC
+	app.Playout = recPlayout
 	app.Chat = recChat
 	app.Search = search
 	// !find is feature-flagged; enable it for the behavior tests.
 	app.Flags = &recordingFlags{Set: map[string]bool{findFlagKey: true}}
-	return app, recVLC, recChat
+	return app, recPlayout, recChat
 }
 
 func TestFindCmd_JumpsToClosestHit(t *testing.T) {
@@ -49,7 +49,7 @@ func TestFindCmd_JumpsToClosestHit(t *testing.T) {
 		{Slug: "2018_0514_224801_013", TsSec: 163.5, State: "Nevada", Distance: 0.21},
 		{Slug: "2018_0601_000000_001", TsSec: 12, State: "Utah", Distance: 0.55},
 	}}
-	app, recVLC, recChat := newFindTestApp(t, search)
+	app, recPlayout, recChat := newFindTestApp(t, search)
 
 	runAsAdmin(t, func() {
 		app.findCmd(context.Background(), newTestUser(adminUser), []string{"snowy", "mountains"})
@@ -60,8 +60,8 @@ func TestFindCmd_JumpsToClosestHit(t *testing.T) {
 	}
 	// Lands findJumpLeadInSec ahead of the matched frame (163.5 - 12 = 151.5).
 	want := `PlayFileAtTimestamp("2018_0514_224801_013.MP4", 151.5)`
-	if len(recVLC.Calls) != 1 || recVLC.Calls[0] != want {
-		t.Errorf("expected VLC call %q, got %v", want, recVLC.Calls)
+	if len(recPlayout.Calls) != 1 || recPlayout.Calls[0] != want {
+		t.Errorf("expected Playout call %q, got %v", want, recPlayout.Calls)
 	}
 	// The jump message must not name the state, so a viewer can still guess it.
 	if got := recChat.Output(); !strings.Contains(got, "Jumping") || strings.Contains(got, "Nevada") {
@@ -73,7 +73,7 @@ func TestFindCmd_FlagOff_StaysSilent(t *testing.T) {
 	// The flag gate runs before everything (incl. the Darwin guard), so a
 	// disabled !find is silent on any OS — no search, no jump, no reply.
 	search := &recordingSearch{Hits: []SearchHit{{Slug: "x", TsSec: 1, Distance: 0.1}}}
-	app, recVLC, recChat := newFindTestApp(t, search)
+	app, recPlayout, recChat := newFindTestApp(t, search)
 	app.Flags = noopFlags{} // every key false — fresh-deploy state
 
 	app.findCmd(context.Background(), newTestUser(adminUser), []string{"anything"})
@@ -81,8 +81,8 @@ func TestFindCmd_FlagOff_StaysSilent(t *testing.T) {
 	if len(search.Queries) != 0 {
 		t.Errorf("expected no search when flag is off, got %v", search.Queries)
 	}
-	if len(recVLC.Calls) != 0 {
-		t.Errorf("expected no VLC jump when flag is off, got %v", recVLC.Calls)
+	if len(recPlayout.Calls) != 0 {
+		t.Errorf("expected no Playout jump when flag is off, got %v", recPlayout.Calls)
 	}
 	if got := recChat.Output(); got != "" {
 		t.Errorf("expected silence when flag is off, got %q", got)
@@ -91,14 +91,14 @@ func TestFindCmd_FlagOff_StaysSilent(t *testing.T) {
 
 func TestFindCmd_NoHits(t *testing.T) {
 	skipIfDarwin(t)
-	app, recVLC, recChat := newFindTestApp(t, &recordingSearch{Hits: nil})
+	app, recPlayout, recChat := newFindTestApp(t, &recordingSearch{Hits: nil})
 
 	runAsAdmin(t, func() {
 		app.findCmd(context.Background(), newTestUser(adminUser), []string{"unicorns"})
 	})
 
-	if len(recVLC.Calls) != 0 {
-		t.Errorf("expected no VLC jump on a miss, got %v", recVLC.Calls)
+	if len(recPlayout.Calls) != 0 {
+		t.Errorf("expected no Playout jump on a miss, got %v", recPlayout.Calls)
 	}
 	if got := recChat.Output(); !strings.Contains(got, "Couldn't find") {
 		t.Errorf("expected a not-found reply, got %q", got)
@@ -110,14 +110,14 @@ func TestFindCmd_DistanceTooFarIsAMiss(t *testing.T) {
 	// A hit exists but it's past the distance ceiling — treat as a miss rather
 	// than yanking the stream to a bad match.
 	search := &recordingSearch{Hits: []SearchHit{{Slug: "x", TsSec: 1, Distance: findMaxDistance + 0.01}}}
-	app, recVLC, recChat := newFindTestApp(t, search)
+	app, recPlayout, recChat := newFindTestApp(t, search)
 
 	runAsAdmin(t, func() {
 		app.findCmd(context.Background(), newTestUser(adminUser), []string{"something"})
 	})
 
-	if len(recVLC.Calls) != 0 {
-		t.Errorf("expected no VLC jump for a too-distant hit, got %v", recVLC.Calls)
+	if len(recPlayout.Calls) != 0 {
+		t.Errorf("expected no Playout jump for a too-distant hit, got %v", recPlayout.Calls)
 	}
 	if got := recChat.Output(); !strings.Contains(got, "Couldn't find") {
 		t.Errorf("expected a not-found reply, got %q", got)
@@ -126,14 +126,14 @@ func TestFindCmd_DistanceTooFarIsAMiss(t *testing.T) {
 
 func TestFindCmd_SearchError(t *testing.T) {
 	skipIfDarwin(t)
-	app, recVLC, recChat := newFindTestApp(t, &recordingSearch{Err: errors.New("responder down")})
+	app, recPlayout, recChat := newFindTestApp(t, &recordingSearch{Err: errors.New("responder down")})
 
 	runAsAdmin(t, func() {
 		app.findCmd(context.Background(), newTestUser(adminUser), []string{"anything"})
 	})
 
-	if len(recVLC.Calls) != 0 {
-		t.Errorf("expected no VLC jump on search error, got %v", recVLC.Calls)
+	if len(recPlayout.Calls) != 0 {
+		t.Errorf("expected no Playout jump on search error, got %v", recPlayout.Calls)
 	}
 	if got := recChat.Output(); !strings.Contains(got, "isn't available") {
 		t.Errorf("expected an unavailable reply, got %q", got)
@@ -143,7 +143,7 @@ func TestFindCmd_SearchError(t *testing.T) {
 func TestFindCmd_NoArgsShowsUsage(t *testing.T) {
 	skipIfDarwin(t)
 	search := &recordingSearch{}
-	app, recVLC, recChat := newFindTestApp(t, search)
+	app, recPlayout, recChat := newFindTestApp(t, search)
 
 	runAsAdmin(t, func() {
 		app.findCmd(context.Background(), newTestUser(adminUser), nil)
@@ -152,8 +152,8 @@ func TestFindCmd_NoArgsShowsUsage(t *testing.T) {
 	if len(search.Queries) != 0 {
 		t.Errorf("expected no search with empty args, got %v", search.Queries)
 	}
-	if len(recVLC.Calls) != 0 {
-		t.Errorf("expected no VLC jump with empty args, got %v", recVLC.Calls)
+	if len(recPlayout.Calls) != 0 {
+		t.Errorf("expected no Playout jump with empty args, got %v", recPlayout.Calls)
 	}
 	if got := recChat.Output(); !strings.Contains(strings.ToLower(got), "usage") {
 		t.Errorf("expected a usage reply, got %q", got)

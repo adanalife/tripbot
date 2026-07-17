@@ -18,7 +18,7 @@ import (
 // helixHTTPClient is the otelhttp-instrumented HTTP client passed to every
 // helix.NewClient call. Without this, outbound Twitch Helix requests leave
 // no trail in Tempo; with it, each helix call shows up as a span. Pairs with
-// the otelhttp transports already used by pkg/vlc-client and pkg/onscreens-client.
+// the otelhttp transports already used by pkg/playout-client and pkg/onscreens-client.
 //
 // The rateLimitRecorder wraps the otelhttp transport so every Helix
 // response also updates the twitch_helix_rate_limit_* gauges.

@@ -31,9 +31,7 @@ tasks:
     cmds:
       - ENV=testing bin/devenv run --rm test go test -race ./...
 
-  # Native macOS test runner — host mise + VLC.app's bundled libvlc, no
-  # docker. Mirrors vlc-server:build:macos's CGO incantation (rpath is
-  # required for `go test` too).
+  # Native macOS test runner — host mise, no docker (the repo is pure Go).
   # `dotenv` injects .env.testing's keys as real env vars so the config
   # loader resolves them from the environment — `go test` runs each package
   # from its own dir, so the .env.testing file itself isn't on the path.
@@ -43,8 +41,6 @@ tasks:
     dotenv: ['.env.testing']
     env:
       ENV: testing
-      CGO_CFLAGS: -I/Applications/VLC.app/Contents/MacOS/include
-      CGO_LDFLAGS: -L/Applications/VLC.app/Contents/MacOS/lib -Wl,-rpath,/Applications/VLC.app/Contents/MacOS/lib -Wno-error=incompatible-function-pointer-types
     cmds:
       - mise exec -- go test ./...
 
@@ -62,7 +58,7 @@ tasks:
   # Changelog (towncrier). Fragments live in changelog.d/; assembled into
   # CHANGELOG.md at release time. Run on the host via uvx — no project dep.
   changelog:add:
-    desc: 'Scaffold a changelog fragment (TYPE=fix, optional SLUG=my-thing; CI numbers it on push). Pass PR=123 to name it directly. Types: gateway chatbot onscreens vlc console fix deploy ci cleanup misc summary'
+    desc: 'Scaffold a changelog fragment (TYPE=fix, optional SLUG=my-thing; CI numbers it on push). Pass PR=123 to name it directly. Types: gateway chatbot onscreens playout console fix deploy ci cleanup misc summary'
     vars:
       TYPE: '{{.TYPE | default "misc"}}'
       # No PR yet? Drop a "+" placeholder (towncrier's issue-less convention) —
@@ -97,7 +93,7 @@ tasks:
       TAG: '{{trimPrefix "v" .VERSION}}'
     cmds:
       - docker buildx imagetools inspect adanalife/tripbot:{{.TAG}}
-      - docker buildx imagetools inspect adanalife/vlc:{{.TAG}}
+      - docker buildx imagetools inspect adanalife/onscreens-server:{{.TAG}}
 
   release:smoke:whalecore:
     desc: Smoke-check tripbot.whalecore.com (requires allowlisted IP). Blocks on failure.
@@ -106,7 +102,7 @@ tasks:
       - 'echo "✓ tripbot.whalecore.com/health/live"'
 
   release:smoke:local:
-    desc: Smoke-check in-cluster tripbot+vlc-server health via kubectl port-forward.
+    desc: Smoke-check in-cluster tripbot health via kubectl port-forward.
     cmds:
       - bin/release-smoke-local
 
@@ -115,7 +111,6 @@ tasks:
     cmds:
       - task -d {{.HOME}}/adanalife/infra k8s-apply-stage-1
       - kubectl rollout status deploy/tripbot     --timeout=120s
-      - kubectl rollout status deploy/vlc-server  --timeout=120s
       - kubectl rollout status deploy/cloudflared --timeout=60s
       - task: release:smoke:local
       - task: release:smoke:whalecore
@@ -125,32 +120,6 @@ tasks:
     cmds:
       - task: release:smoke:stage-1
 
-  # vlc-server native macOS build — links against the libvlc bundled
-  # inside VLC.app. Saves recreating the CGO incantation from memory.
-  # Key bits:
-  #   * rpath is required for `go test` / `go run`, not just `go build` —
-  #     otherwise `dyld: Library not loaded: @rpath/libvlc.dylib`.
-  #   * Do NOT add `-lvlc` to LDFLAGS — libvlc-go's own #cgo LDFLAGS
-  #     directive already does it; duplicating triggers a linker warning.
-  #   * `-Wno-error=incompatible-function-pointer-types` mutes a
-  #     libvlc-go/v3 vs Apple-clang fatal that's harmless at runtime.
-
-  vlc-server:vet:macos:
-    desc: Run `go vet` on vlc-server against VLC.app's libvlc headers (no link)
-    platforms: [darwin]
-    env:
-      CGO_CFLAGS: -I/Applications/VLC.app/Contents/MacOS/include
-    cmds:
-      - mise exec -- go vet ./pkg/vlc-server/...
-
-  vlc-server:build:macos:
-    desc: Build vlc-server natively on macOS against VLC.app's libvlc
-    platforms: [darwin]
-    env:
-      CGO_CFLAGS: -I/Applications/VLC.app/Contents/MacOS/include
-      CGO_LDFLAGS: -L/Applications/VLC.app/Contents/MacOS/lib -Wl,-rpath,/Applications/VLC.app/Contents/MacOS/lib -Wno-error=incompatible-function-pointer-types
-    cmds:
-      - mise exec -- go build -o bin/vlc-server ./cmd/vlc-server
 
   # cdk8s — the Python authoring layer for tripbot's app workload manifests
   # (cdk8s/). Synthesizes dist/<env>-<component>-<platform>.k8s.yaml (+ the
@@ -224,7 +193,7 @@ tasks:
             sh: ls dist/prod-1-*.k8s.yaml | grep -v -- '-job-'
 
   cdk8s:prod:bump:
-    desc: 'Regenerate one prod-1 component''s pinned manifests after a hand pin edit in versions.yaml (COMPONENT=vlc|tripbot|onscreens-server), e.g. a rollback'
+    desc: 'Regenerate one prod-1 component''s pinned manifests after a hand pin edit in versions.yaml (COMPONENT=tripbot|onscreens-server), e.g. a rollback'
     dir: cdk8s
     deps: [cdk8s:imports]
     requires:
@@ -233,8 +202,8 @@ tasks:
       # Full synth regenerates ALL prod app files from HEAD; freeze every OTHER
       # component back to its own pinned release so only COMPONENT's manifests
       # change (its tag + any config delta this release introduced). DISTNAME
-      # strips the -server suffix (onscreens-server -> onscreens); tripbot/vlc
-      # are unchanged.
+      # strips the -server suffix (onscreens-server -> onscreens); tripbot is
+      # unchanged.
       - mise exec -- uv run cdk8s synth
       - |
         distname="{{.COMPONENT}}"; distname="${distname%-server}"

@@ -33,7 +33,7 @@ type MiddleShow struct {
 // middle-text overlay so the text (and its shown/hidden status) survives a
 // server restart. Unlike MiddleShow — a *command* from tripbot — this is
 // *state* the server emits about itself, read back from the
-// MaxMsgsPerSubject=1 stream on startup. Mirrors the vlc lastplayed cache.
+// MaxMsgsPerSubject=1 stream on startup. Mirrors the playout lastplayed cache.
 type MiddleState struct {
 	Envelope
 	Msg     string `json:"msg"`

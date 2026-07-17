@@ -2,9 +2,8 @@
 // cross-checks OBS's outputActive state against Twitch's live status
 // and force-restarts the OBS stream on sustained divergence. Lives
 // here (not in the parent pkg/obs package) so binaries that only need
-// pkg/obs's WebSocket helpers — vlc-server in particular — don't drag
-// in pkg/config/tripbot or pkg/twitch transitively. cmd/tripbot is
-// the sole consumer.
+// pkg/obs's WebSocket helpers don't drag in pkg/config/tripbot or
+// pkg/twitch transitively. cmd/tripbot is the sole consumer.
 package watchdog
 
 import (

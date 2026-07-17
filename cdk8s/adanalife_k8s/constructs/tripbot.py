@@ -148,7 +148,7 @@ def external_url(env: EnvConfig, platform: str) -> str:
 
 def config_data(env: EnvConfig, platform: str) -> dict[str, str]:
     """The assembled tripbot-config data for an env+platform: base literals + the
-    per-platform sibling-service hosts (this platform's vlc/onscreens/obs) +
+    per-platform sibling-service hosts (this platform's playout/onscreens/obs) +
     telemetry + the per-env identity/extra block. Shared with the Jobs so a Job
     applied on its own carries the same config the Deployment runs with. NATS_URL
     is only present where the env defines one (absent on local)."""

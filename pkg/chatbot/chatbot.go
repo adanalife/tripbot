@@ -12,9 +12,9 @@ import (
 	"github.com/adanalife/tripbot/pkg/geo"
 	"github.com/adanalife/tripbot/pkg/natsclient"
 	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
+	playoutClient "github.com/adanalife/tripbot/pkg/playout-client"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/users"
-	vlcClient "github.com/adanalife/tripbot/pkg/vlc-client"
 	"github.com/gempir/go-twitch-irc/v4"
 	"gorm.io/gorm"
 )
@@ -49,9 +49,9 @@ type App struct {
 	// Onscreens drives the OBS browser-source overlays for chat-triggered
 	// effects (leaderboards, flags, middle-text). Tests inject a no-op fake.
 	Onscreens Onscreens
-	// VLC drives playback operations (timewarp, jump, skip, back). Tests
-	// inject a no-op fake; production uses the realVLC adapter.
-	VLC VLC
+	// Playout drives playback operations (timewarp, jump, skip, back). Tests
+	// inject a no-op fake; production uses the realPlayout adapter.
+	Playout Playout
 	// Video reads / refreshes the currently-playing dashcam video. Tests
 	// inject a no-op fake; production uses the realVideo adapter.
 	Video Video
@@ -161,7 +161,7 @@ func New(cfg *c.TripbotConfig) *App {
 		botless:  cfg.Platform == platformYouTube && !cfg.YouTubeInboundEnabled,
 		// DB stays nil; commands use a.db() which falls back to database.GormDB().
 		Onscreens:  realOnscreens{c: onscreensClient.New(natsclient.DefaultPublisher(), cfg.Environment, cfg.Platform)},
-		VLC:        realVLC{c: vlcClient.New(cfg.VlcServerHost, natsclient.DefaultPublisher(), cfg.Environment, cfg.Platform)},
+		Playout:    realPlayout{c: playoutClient.New(cfg.VlcServerHost, natsclient.DefaultPublisher(), cfg.Environment, cfg.Platform)},
 		Video:      realVideo{},
 		Chat:       disconnectedChat{},
 		Sessions:   realSessions{},

@@ -78,11 +78,19 @@ func (s *Sessions) CurrentMiles(ctx context.Context, u User) float32 {
 	return u.Miles + s.sessionMiles(ctx, u)
 }
 
+// BonusMiles is the subscriber miles bonus accrued this session: 5% of session
+// miles per subscription tier (tier 1 = 5%, tier 2 = 10%, tier 3 = 15%).
+// Non-subscribers get the tier-1 rate — !bonusmiles reports the would-be bonus
+// for anyone, and only sessionMiles' IsSubscriber gate decides who is awarded.
 func (s *Sessions) BonusMiles(u User) float32 {
 	if s.isLoggedIn(u.Username) {
 		loggedInDur := s.loggedInDur(u)
 		sessionMiles := helpers.DurationToMiles(loggedInDur)
-		return sessionMiles * 0.05
+		tier := s.source.SubscriberTier(u.Username)
+		if tier < 1 {
+			tier = 1
+		}
+		return sessionMiles * 0.05 * float32(tier)
 	}
 	return 0.0
 }
@@ -137,6 +145,12 @@ func (s *Sessions) IsFollower(u User) bool {
 // IsSubscriber returns true if the user is a subscriber
 func (s *Sessions) IsSubscriber(u User) bool {
 	return s.source.IsSubscriber(u.Username)
+}
+
+// SubscriberTier returns the user's subscription tier (1–3), or 0 for a
+// non-subscriber.
+func (s *Sessions) SubscriberTier(u User) int {
+	return s.source.SubscriberTier(u.Username)
 }
 
 // User.String prints a colored version of the user
