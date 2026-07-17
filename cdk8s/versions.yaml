@@ -29,7 +29,12 @@
 # other.
 prod-1:
   # restarts the chat bot only; no stream impact
-  tripbot: "4.0.0" # x-release-please-version
+  # Digest-pinned to the correctly-built 4.0.0 multi-arch image: the minipc had
+  # a stale image locally tagged 4.0.0 (missing migrations 032/033), and
+  # IfNotPresent kept using it instead of the published tag. Pinning the digest
+  # forces the node to pull the exact good image. Restore to a plain "4.0.x" tag
+  # at the next release.
+  tripbot: "4.0.0@sha256:121491f29555440c039a46a569a7fa1f2e3dc6d2c5d2ce915bc4228ebade71f0" # x-release-please-version
   # restarting takes the stream down until OBS reconnects — pick a quiet moment
   obs: "3.4.1"
   # overlays blip; the stream itself stays up
