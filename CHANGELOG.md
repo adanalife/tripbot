@@ -9,6 +9,18 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v4.6.0] — 2026-07-20
+
+### Chatbot
+
+- The per-platform command gate is now driven by a declared `commandScope` capability rather than a hardcoded list of platform names. An unrecognized `STREAM_PLATFORM` defaults to the vetted v1 allowlist instead of falling through to the full command surface, so a newly wired platform can't silently inherit the identity/miles and admin commands. ([#1181](https://github.com/adanalife/tripbot/pull/1181))
+- Publish follow, sub, gift-sub, and resub events to the console over NATS (`chat.subscriber`), and subscribe to the `channel.subscription.gift` and `channel.subscription.message` EventSub types so gifters and resubbers are thanked in chat too. ([#1182](https://github.com/adanalife/tripbot/pull/1182))
+
+### Cleanup
+
+- Pass config into the events / scoreboards / viewstats / rollups write helpers and drop `pkg/database`'s init-time config read — third step of retiring config-as-global. ([#1144](https://github.com/adanalife/tripbot/pull/1144))
+- Retire the `c.Conf` config globals: `pkg/config/tripbot` and `pkg/config/onscreens-server` drop their `init()` loaders for a `Load()` called once from main, and config is threaded through the servers, rotators, and command handlers instead of read from a package global — final step of retiring config-as-global. ([#1145](https://github.com/adanalife/tripbot/pull/1145))
+
 ## [v4.5.0] — 2026-07-20
 
 ### Deploy / Infra
