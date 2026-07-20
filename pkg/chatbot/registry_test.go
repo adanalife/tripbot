@@ -169,6 +169,30 @@ func TestTikTokPlatformIndexesOnlyAllowlist(t *testing.T) {
 	}
 }
 
+// TestUndeclaredPlatformDefaultsToAllowlist is the capability-driven gate's
+// safety property: a platform absent from platformCommandScope (e.g. a
+// freshly-wired Kick instance) is restricted to the v1 allowlist rather than
+// falling through to the full command surface. Without the conservative default
+// a new STREAM_PLATFORM would silently inherit every command, including the
+// identity/miles and admin commands its backend can't support yet.
+func TestUndeclaredPlatformDefaultsToAllowlist(t *testing.T) {
+	app := &App{Platform: "kick"} // deliberately not in platformCommandScope
+	app.indexCommands()
+
+	// allowlisted cross-platform commands resolve
+	for _, token := range []string{"!weather", "!timewarp", "!state", "!location"} {
+		if cmd, _ := app.findCommand(token); cmd == nil {
+			t.Errorf("expected allowlisted %q to be available on an undeclared platform, got nil", token)
+		}
+	}
+	// full-surface-only commands must not resolve on an undeclared platform
+	for _, token := range []string{"!miles", "!leaderboard", "!guess", "!middle", "!shutdown"} {
+		if cmd, _ := app.findCommand(token); cmd != nil {
+			t.Errorf("undeclared platform should not run full-surface %q, got %q", token, cmd.Trigger)
+		}
+	}
+}
+
 // TestCommandsCmdFiltersByPlatform verifies the !commands reply advertises only
 // commands dispatchable on the App's platform — Twitch lists the disabled-on-
 // YouTube ones (!guess, !miles, !leaderboard); YouTube does not, but still

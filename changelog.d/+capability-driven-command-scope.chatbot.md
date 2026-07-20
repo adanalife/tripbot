@@ -1,0 +1,1 @@
+The per-platform command gate is now driven by a declared `commandScope` capability rather than a hardcoded list of platform names. An unrecognized `STREAM_PLATFORM` defaults to the vetted v1 allowlist instead of falling through to the full command surface, so a newly wired platform can't silently inherit the identity/miles and admin commands.
