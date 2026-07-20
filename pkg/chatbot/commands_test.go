@@ -213,12 +213,17 @@ func TestReportCmd_AcksViaIRC(t *testing.T) {
 	}
 }
 
-func TestReportReporter_AnonymizesYouTube(t *testing.T) {
+func TestReportReporter_AnonymizesYouTubeOnly(t *testing.T) {
+	// YouTube's privacy policy anonymizes its viewers.
 	if got := reportReporter(platformYouTube, "someviewer"); got != "a youtube viewer" {
-		t.Errorf("youtube reporter = %q, want it anonymized (no viewer name in report sinks)", got)
+		t.Errorf("youtube reporter = %q, want it anonymized (privacy policy)", got)
 	}
-	if got := reportReporter(platformTwitch, "someviewer"); got != "someviewer" {
-		t.Errorf("twitch reporter = %q, want the username preserved", got)
+	// Every other platform — Twitch, the other non-Twitch platforms, and any
+	// unrecognized one — keeps the real username by default.
+	for _, platform := range []string{platformTwitch, platformFacebook, platformInstagram, platformTikTok, "kick"} {
+		if got := reportReporter(platform, "someviewer"); got != "someviewer" {
+			t.Errorf("%s reporter = %q, want the username kept by default", platform, got)
+		}
 	}
 }
 
