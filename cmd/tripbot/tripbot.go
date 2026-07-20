@@ -598,6 +598,8 @@ func (t *Tripbot) startEventSub(ctx context.Context) {
 			OnFollow:      t.app.AnnounceNewFollower,
 			OnSubscribe:   t.app.AnnounceSubscriber,
 			OnUnsubscribe: t.app.RecordUnsubscribe,
+			OnGift:        t.app.AnnounceGiftSub,
+			OnResub:       t.app.AnnounceResub,
 		})
 		if err != nil && !errors.Is(err, context.Canceled) {
 			slog.ErrorContext(ctx, "eventsub run terminated", "err", err)

@@ -33,6 +33,16 @@ type Handlers struct {
 	OnFollow      func(username string)
 	OnSubscribe   func(username string, isGift bool, tier string)
 	OnUnsubscribe func(username string, isGift bool, tier string)
+	// OnGift fires on channel.subscription.gift — the gifter's event, carrying
+	// how many subs they gave (count) and whether the gift was anonymous (in
+	// which case gifter is empty). Distinct from the per-recipient
+	// channel.subscribe events (is_gift=true) that also fire.
+	OnGift func(gifter string, count int, tier string, isAnonymous bool)
+	// OnResub fires on channel.subscription.message — a resubscription the
+	// viewer chose to share, carrying their cumulative + streak month counts
+	// and the message they typed. channel.subscribe does not fire for resubs,
+	// so this is the only signal for a continued subscription.
+	OnResub func(username string, cumulativeMonths, streakMonths int, tier, message string)
 }
 
 // Config is the static input Run needs to subscribe. ClientID matches
@@ -95,6 +105,16 @@ func Run(ctx context.Context, cfg Config, h Handlers) error {
 			h.OnUnsubscribe(e.UserName, e.IsGift, e.Tier)
 		})
 	}
+	if h.OnGift != nil {
+		client.OnEventChannelSubscriptionGift(func(e twitch.EventChannelSubscriptionGift) {
+			h.OnGift(e.UserName, e.Total, e.Tier, e.IsAnonymous)
+		})
+	}
+	if h.OnResub != nil {
+		client.OnEventChannelSubscriptionMessage(func(e twitch.EventChannelSubscriptionMessage) {
+			h.OnResub(e.UserName, e.CumulativeMonths, e.StreakMonths, e.Tier, e.Message.Text)
+		})
+	}
 
 	client.OnWelcome(func(msg twitch.WelcomeMessage) {
 		sid := msg.Payload.Session.ID
@@ -116,6 +136,16 @@ func Run(ctx context.Context, cfg Config, h Handlers) error {
 		}
 		if h.OnUnsubscribe != nil {
 			subscribe(ctx, cfg, sid, twitch.SubChannelSubscriptionEnd, map[string]string{
+				"broadcaster_user_id": cfg.BroadcasterUserID,
+			})
+		}
+		if h.OnGift != nil {
+			subscribe(ctx, cfg, sid, twitch.SubChannelSubscriptionGift, map[string]string{
+				"broadcaster_user_id": cfg.BroadcasterUserID,
+			})
+		}
+		if h.OnResub != nil {
+			subscribe(ctx, cfg, sid, twitch.SubChannelSubscriptionMessage, map[string]string{
 				"broadcaster_user_id": cfg.BroadcasterUserID,
 			})
 		}

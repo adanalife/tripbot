@@ -129,6 +129,18 @@ var (
 		{"text", strType(), true},
 		{"emitted_at", dateType(), true},
 	}
+	subscriberEventFields = []field{
+		{"platform", strType(), false},
+		{"kind", strType(), true},
+		{"username", strType(), true},
+		{"tier", strType(), false},
+		{"months", intType(), false},
+		{"streak", intType(), false},
+		{"gift_count", intType(), false},
+		{"is_anonymous", boolType(), false},
+		{"message", strType(), false},
+		{"emitted_at", dateType(), true},
+	}
 	viewerCountFields = []field{
 		{"platform", strType(), false},
 		{"count", intType(), true},
@@ -179,6 +191,7 @@ var (
 // reflection test can cross-check against the real pkg/eventbus structs.
 var envelopeFields = map[string][]field{
 	"ChatMessage":       chatMessageFields,
+	"SubscriberEvent":   subscriberEventFields,
 	"ViewerCount":       viewerCountFields,
 	"VideoChanged":      videoChangedFields,
 	"AuthStatus":        authStatusFields,
@@ -200,6 +213,11 @@ func eventbusContract() orderedObject {
 				{"transport", "jetstream"},
 				{"stream", "TRIPBOT_CHAT"},
 				{"schema", objectSchema("ChatMessage", chatMessageFields)},
+			}},
+			{"chat_subscriber", orderedObject{
+				{"subject", "tripbot.{env}.chat.subscriber"},
+				{"transport", "core"},
+				{"schema", objectSchema("SubscriberEvent", subscriberEventFields)},
 			}},
 			{"viewers_count", orderedObject{
 				{"subject", "tripbot.{env}.viewers.count"},
