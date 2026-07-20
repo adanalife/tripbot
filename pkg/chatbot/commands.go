@@ -546,24 +546,28 @@ func (a *App) stateCmd(ctx context.Context, user *users.User, _ []string) {
 }
 
 // TODO: maybe there could be a !cancel command or something
+// anonymizedReportPlatforms maps a platform to the anonymized label used for
+// its viewers in a !report's durable/external sinks (the Sentry error event and
+// the Discord alert). Membership is the capability the reporter label keys off,
+// not a hardcoded name check. Only YouTube anonymizes for now — its privacy
+// policy was strict about not recording a viewer's identity in such sinks. A
+// platform absent from the map — Twitch, the other platforms, and any
+// unrecognized one — keeps the real username: name-by-default is the intended
+// behavior, and anonymization is the per-platform exception a privacy policy
+// imposes (add a platform here if its policy comes to require it).
+var anonymizedReportPlatforms = map[string]string{
+	platformYouTube: "a youtube viewer",
+}
+
 // reportReporter is the label a !report is attributed to in its downstream
-// sinks (the Sentry error event and the Discord alert). Viewers on v1-rollout
-// platforms are anonymized because v1 punts their identity entirely (see the
-// v1Commands allowlist) — until real user support lands there is no persisted
-// identity to stand behind, so the name is kept out of those durable/external
-// sinks. Twitch reports keep the username. Note the transient 14-day Loki chat
-// line still carries the name for every message; this only governs the report's
+// sinks. It defaults to the viewer's real username; a platform whose privacy
+// policy forbids recording viewer identities (see anonymizedReportPlatforms)
+// gets an anonymized label instead. Note the transient 14-day Loki chat line
+// still carries the name for every message; this only governs the report's
 // longer-lived sinks.
 func reportReporter(platform, username string) string {
-	switch platform {
-	case platformYouTube:
-		return "a youtube viewer"
-	case platformFacebook:
-		return "a facebook viewer"
-	case platformInstagram:
-		return "an instagram viewer"
-	case platformTikTok:
-		return "a tiktok viewer"
+	if label, ok := anonymizedReportPlatforms[platform]; ok {
+		return label
 	}
 	return username
 }
