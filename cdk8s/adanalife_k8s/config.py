@@ -132,6 +132,14 @@ class EnvConfig:
     # in-process pkg/youtube send. The inbound chat poll stays in-process
     # regardless (no gateway streaming endpoint).
     youtube_api_url: str = ""
+    # The gateway-transport platforms: a PLATFORM=facebook/instagram/tiktok
+    # instance reaches BOTH chat directions through its per-platform gateway
+    # instance (inbound poll always; outbound sends where the platform is
+    # two-way). Required on those instances — with the URL empty the pod
+    # boots without platform chat.
+    facebook_api_url: str = ""
+    instagram_api_url: str = ""
+    tiktok_api_url: str = ""
     # Gate the youtube instance's inbound chat poll (tripbot's
     # YOUTUBE_INBOUND_ENABLED + onscreens' rotator copy). False = bot-less
     # YouTube: outbound rotators + background jobs run, but nothing reads chat
@@ -215,14 +223,24 @@ ENVS: dict[str, EnvConfig] = {
         # The DB lives in its own namespace so a `kubectl delete ns prod-1` can't
         # take years of irreplaceable data.
         data_namespace="prod-1-data",
-        # youtube is LIVE (unparked) — the prod-youtube app stack (tripbot /
-        # onscreens) runs at replicas=1, streaming unlisted to burn in
-        # before the public launch. stage-youtube is scaled down first so the
-        # minipc never runs two youtube encoders at once. The youtube tripbot
-        # instance pulls tripbot-youtube-creds from prod-account SM
-        # k8s/tripbot/youtube-creds — that must be seeded for its ExternalSecret
-        # to sync.
-        platforms=("twitch", "youtube"),
+        # The prod-youtube app stack (tripbot / onscreens) is parked at
+        # replicas:0: the YouTube Data API quota extension is pending, the bot
+        # can't poll chat without it (youtube_inbound_enabled below), so the
+        # stack stays staged rather than running idle. The obs repo parks its
+        # prod-youtube encoder to match. Manifests still render while parked —
+        # the tripbot-youtube-creds ExternalSecret (prod-account SM
+        # k8s/tripbot/youtube-creds) keeps syncing, which gateway-youtube also
+        # relies on. Unpark by dropping "youtube" from parked_platforms once
+        # the quota lands.
+        #
+        # facebook is staged the same way: parked at replicas:0 so its
+        # tripbot / onscreens instances render but don't run until a console
+        # scale-up. It streams to the real ADL Page (public go-live from
+        # Facebook Live Producer via a persistent stream key); gateway-facebook
+        # holds the Page token and discovers the live for chat. Unpark by
+        # dropping "facebook" from parked_platforms.
+        platforms=("twitch", "youtube", "facebook"),
+        parked_platforms=("youtube", "facebook"),
         # prod youtube launches bot-less: inbound chat poll off (quota extension
         # pending), so rotators serve promo copy and no command responds. Flip to
         # True when the YouTube Data API quota lands. See youtube_inbound_enabled.
@@ -232,6 +250,9 @@ ENVS: dict[str, EnvConfig] = {
         # prod gateway holds a YouTube token as of 2026-06-22, so this is safe to
         # ship; without a gateway token, sends would fail.
         youtube_api_url="http://gateway-youtube.prod-1.svc.cluster.local:8080",
+        # Route prod tripbot-facebook's chat sends through the in-namespace
+        # gateway-facebook (the gateway owns the Page token). Mirrors stage.
+        facebook_api_url="http://gateway-facebook.prod-1.svc.cluster.local:8080",
         # Wire prod tripbot-twitch to gateway-twitch (in-namespace). Required:
         # since the cutover the gateway is the unconditional single Helix caller
         # (the twitch_gateway flag and the in-process fallback are gone).
@@ -266,24 +287,19 @@ ENVS: dict[str, EnvConfig] = {
         # in stage-1-data, so a `kubectl delete ns stage-1` can't take the DB. prod
         # follows on its next wipe (set prod-1's data_namespace to prod-1-data).
         data_namespace="stage-1-data",
-        # New platform stacks burn in on stage first (tripbot-youtube binds
-        # chat once a broadcast is live).
+        # Every stage platform is present but parked at replicas:0 — the
+        # resting state is everything-off, and a platform comes online via
+        # the console's scale-up button (stage selfHeal is off, so the hand
+        # scale sticks until the next sync re-zeroes it). facebook is the
+        # current burn-in platform, chatting against the ADL Staging Page.
         #
-        # Stage twitch is meant to run tripbot-twitch ONLY: extra stage stream
-        # workloads contending for the shared node is what stutters the prod
-        # stream, so onscreens-twitch stays scaled to 0 (manual_replicas below
-        # + stage selfHeal off, so a hand/console scale sticks). Budget is two
-        # live streams total: prod-twitch + stage-youtube.
+        # Extra stage stream workloads contending for the shared node is what
+        # stutters the prod stream — budget is two live streams total:
+        # prod-twitch + one stage burn-in.
         platforms=("youtube", "twitch", "tiktok", "facebook", "instagram"),
-        # Stage components are scaled up/down by hand (only tripbot-twitch runs
-        # on the twitch side); omit replicas so Argo doesn't reset them.
         manual_replicas=True,
-        # tiktok/facebook/instagram are staged ahead of being live: the
-        # tripbot/onscreens deploys are emitted at replicas:0 so bringing a
-        # platform up is a hand scale-up, not a new manifest. The gateway for
-        # each already parks on stage; the video/scene half (obs vertical
-        # canvas for tiktok/instagram) and per-platform activation land later.
-        parked_platforms=("tiktok", "facebook", "instagram"),
+        # The vertical-canvas video half for tiktok/instagram lands later.
+        parked_platforms=("twitch", "youtube", "tiktok", "facebook", "instagram"),
         # Route stage tripbot-twitch's Helix calls through the in-namespace
         # gateway-twitch.
         twitch_api_url="http://gateway-twitch.stage-1.svc.cluster.local:8080",
@@ -291,6 +307,12 @@ ENVS: dict[str, EnvConfig] = {
         # in-namespace gateway-youtube (unconditionally — no flag). The inbound
         # poll stays in-process.
         youtube_api_url="http://gateway-youtube.stage-1.svc.cluster.local:8080",
+        # The parked platform instances point at their in-namespace gateway
+        # the same way, so a hand scale-up is a working bring-up rather than
+        # a chat-less pod waiting on a config edit.
+        facebook_api_url="http://gateway-facebook.stage-1.svc.cluster.local:8080",
+        instagram_api_url="http://gateway-instagram.stage-1.svc.cluster.local:8080",
+        tiktok_api_url="http://gateway-tiktok.stage-1.svc.cluster.local:8080",
         # Guardrail from the same incident: cap what stage can request in
         # aggregate, so "accidentally scaled up too many stage deployments"
         # parks pods Unschedulable instead of crowding prod off the node.

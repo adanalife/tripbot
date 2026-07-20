@@ -852,6 +852,22 @@ func (t *Tripbot) scheduleBackgroundJobs() {
 		}, gocron.WithStartAt(gocron.WithStartImmediately()))
 	}
 
+	// The facebook analog of the youtube ticker above: snapshot the Page's
+	// current broadcast (video id + public/unpublished privacy) so the
+	// console can badge and link an unpublished rehearsal, which the Page
+	// timeline never shows.
+	if !t.platformIsTwitch() && t.cfg.FacebookAPIURL != "" {
+		fbGateway := gateway.New(t.cfg.FacebookAPIURL)
+		t.addJob(2*time.Minute, "facebook.BroadcastDiscovery", func(ctx context.Context) {
+			b, err := fbGateway.ActiveBroadcast(ctx)
+			if err != nil {
+				slog.ErrorContext(ctx, "facebook broadcast discovery failed", "err", err)
+				return
+			}
+			eventbus.EmitFacebookBroadcast(ctx, t.cfg.Environment, b.VideoID, b.BroadcastID, b.PermalinkURL, b.Privacy, b.Live)
+		}, gocron.WithStartAt(gocron.WithStartImmediately()))
+	}
+
 	if !t.platformIsTwitch() {
 		// Twitch-sourced jobs stay off non-Twitch instances: session/presence
 		// tracking reads Twitch chatters (YouTube presence is punted in v1),

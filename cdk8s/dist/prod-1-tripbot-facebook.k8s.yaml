@@ -2,71 +2,61 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   labels:
-    app.kubernetes.io/name: tripbot-instagram
+    app.kubernetes.io/name: tripbot-facebook
     app.kubernetes.io/part-of: tripbot
-  name: tripbot-instagram-config
-  namespace: stage-1
+  name: tripbot-facebook-config
+  namespace: prod-1
 data:
-  BOT_USERNAME: tripbot4001
-  CHANNEL_NAME: adanalife_staging
-  DATABASE_HOST: postgres.stage-1-data.svc.cluster.local
-  DISCORD_GUILD_ID: "607964164220125258"
-  ENV: staging
-  EXTERNAL_URL: https://tripbot-instagram.stage.whereisdana.today
-  GOOGLE_APPS_PROJECT_ID: tripbot-stage
-  INSTAGRAM_API_URL: http://gateway-instagram.stage-1.svc.cluster.local:8080
+  BOT_USERNAME: tripbot4000
+  CHANNEL_NAME: adanalife_
+  COMPED_SUBSCRIBERS: reapermoss
+  DATABASE_HOST: postgres.prod-1-data.svc.cluster.local
+  ENV: production
+  EXTERNAL_URL: https://tripbot-facebook.prod.whereisdana.today
+  FACEBOOK_API_URL: http://gateway-facebook.prod-1.svc.cluster.local:8080
+  GOOGLE_APPS_PROJECT_ID: tripbot-prod
   MAPS_OUTPUT_DIR: /opt/data/maps
-  NATS_URL: nats://nats.stage-1-platform.svc.cluster.local:4222
-  OBS_SERVER_HOST: obs-instagram:8080
-  OBS_WEBSOCKET_ADDR: obs-instagram:4455
-  ONSCREENS_SERVER_HOST: onscreens-instagram:8080
-  OTEL_RESOURCE_ATTRIBUTES: deployment.environment=stage-1,service.namespace=tripbot,service.platform=instagram
-  OTEL_SDK_DISABLED: "true"
+  NATS_URL: nats://nats.prod-1-platform.svc.cluster.local:4222
+  OBS_SERVER_HOST: obs-facebook:8080
+  OBS_WEBSOCKET_ADDR: obs-facebook:4455
+  ONSCREENS_SERVER_HOST: onscreens-facebook:8080
+  OTEL_RESOURCE_ATTRIBUTES: deployment.environment=prod-1,service.namespace=tripbot,service.platform=facebook
+  OTEL_SDK_DISABLED: "false"
   OTEL_TRACES_SAMPLER: parentbased_traceidratio
   OTEL_TRACES_SAMPLER_ARG: "0.1"
   READ_ONLY: "false"
-  SENTRY_ENVIRONMENT: stage-1
-  STREAM_PLATFORM: instagram
+  SENTRY_ENVIRONMENT: prod-1
+  STREAM_PLATFORM: facebook
   TRIPBOT_SERVER_PORT: "8080"
-  VLC_SERVER_HOST: playout-instagram:8080
+  VLC_SERVER_HOST: playout-facebook:8080
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
-    app.kubernetes.io/name: tripbot-instagram
+    app.kubernetes.io/name: tripbot-facebook
     app.kubernetes.io/part-of: tripbot
-  name: tripbot-instagram
-  namespace: stage-1
+  name: tripbot-facebook
+  namespace: prod-1
 spec:
   replicas: 0
   selector:
     matchLabels:
-      app: tripbot-instagram
+      app: tripbot-facebook
   template:
     metadata:
       annotations:
-        adanalife.dev/config-hash: 10841c79c0
+        adanalife.dev/config-hash: 2bbade99a4
       labels:
-        app: tripbot-instagram
+        app: tripbot-facebook
     spec:
-      affinity:
-        nodeAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-            - preference:
-                matchExpressions:
-                  - key: dana.lol/board
-                    operator: In
-                    values:
-                      - rpi5
-              weight: 100
       containers:
         - env:
             - name: USER
               value: tripbot
           envFrom:
             - configMapRef:
-                name: tripbot-instagram-config
+                name: tripbot-facebook-config
             - secretRef:
                 name: tripbot-database-creds
             - secretRef:
@@ -85,8 +75,8 @@ spec:
             - secretRef:
                 name: tripbot-discord-bot-token
                 optional: true
-          image: adanalife/tripbot:main
-          imagePullPolicy: Always
+          image: adanalife/tripbot:4.4.0
+          imagePullPolicy: IfNotPresent
           livenessProbe:
             httpGet:
               path: /health/live
@@ -94,7 +84,7 @@ spec:
             initialDelaySeconds: 15
             periodSeconds: 30
             timeoutSeconds: 5
-          name: tripbot-instagram
+          name: tripbot-facebook
           ports:
             - containerPort: 8080
               name: http
@@ -126,11 +116,11 @@ spec:
             - migrate
           envFrom:
             - configMapRef:
-                name: tripbot-instagram-config
+                name: tripbot-facebook-config
             - secretRef:
                 name: tripbot-database-creds
-          image: adanalife/tripbot:main
-          imagePullPolicy: Always
+          image: adanalife/tripbot:4.4.0
+          imagePullPolicy: IfNotPresent
           name: migrate
           resources:
             requests:
@@ -141,32 +131,29 @@ spec:
             capabilities:
               drop:
                 - ALL
+      priorityClassName: prod-stream
       securityContext:
         runAsGroup: 65532
         runAsNonRoot: true
         runAsUser: 65532
         seccompProfile:
           type: RuntimeDefault
-      tolerations:
-        - effect: NoSchedule
-          key: dana.lol/rpi5
-          operator: Exists
 ---
 apiVersion: v1
 kind: Service
 metadata:
   labels:
-    app.kubernetes.io/name: tripbot-instagram
+    app.kubernetes.io/name: tripbot-facebook
     app.kubernetes.io/part-of: tripbot
-  name: tripbot-instagram
-  namespace: stage-1
+  name: tripbot-facebook
+  namespace: prod-1
 spec:
   ports:
     - name: http
       port: 8080
       targetPort: http
   selector:
-    app: tripbot-instagram
+    app: tripbot-facebook
   type: ClusterIP
 ---
 apiVersion: networking.k8s.io/v1
@@ -174,42 +161,42 @@ kind: Ingress
 metadata:
   annotations:
     cert-manager.io/issuer: letsencrypt-route53
-    external-dns.alpha.kubernetes.io/hostname: tripbot-instagram.stage.whereisdana.today
+    external-dns.alpha.kubernetes.io/hostname: tripbot-facebook.prod.whereisdana.today
   labels:
-    app.kubernetes.io/name: tripbot-instagram
+    app.kubernetes.io/name: tripbot-facebook
     app.kubernetes.io/part-of: tripbot
-  name: tripbot-instagram
-  namespace: stage-1
+  name: tripbot-facebook
+  namespace: prod-1
 spec:
   ingressClassName: traefik
   rules:
-    - host: tripbot-instagram.stage.whereisdana.today
+    - host: tripbot-facebook.prod.whereisdana.today
       http:
         paths:
           - backend:
               service:
-                name: tripbot-instagram
+                name: tripbot-facebook
                 port:
                   name: http
             path: /
             pathType: Prefix
   tls:
     - hosts:
-        - tripbot-instagram.stage.whereisdana.today
-      secretName: tripbot-instagram-tls
+        - tripbot-facebook.prod.whereisdana.today
+      secretName: tripbot-facebook-tls
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: tripbot-instagram-ts
-  namespace: stage-1
+  name: tripbot-facebook-ts
+  namespace: prod-1
 spec:
   defaultBackend:
     service:
-      name: tripbot-instagram
+      name: tripbot-facebook
       port:
         number: 8080
   ingressClassName: tailscale
   tls:
     - hosts:
-        - tripbot-instagram-stage
+        - tripbot-facebook-prod

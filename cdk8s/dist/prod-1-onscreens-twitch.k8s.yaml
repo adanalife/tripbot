@@ -51,7 +51,7 @@ spec:
             - secretRef:
                 name: grafana-cloud-otlp
                 optional: true
-          image: adanalife/onscreens-server:4.0.0
+          image: adanalife/onscreens-server:4.4.0
           imagePullPolicy: IfNotPresent
           livenessProbe:
             httpGet:

@@ -2,33 +2,33 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   labels:
-    app.kubernetes.io/name: onscreens-youtube
+    app.kubernetes.io/name: onscreens-facebook
     app.kubernetes.io/part-of: tripbot
-  name: onscreens-youtube-config
-  namespace: stage-1
+  name: onscreens-facebook-config
+  namespace: prod-1
 data:
-  ENV: staging
-  NATS_URL: nats://nats.stage-1-platform.svc.cluster.local:4222
-  ONSCREENS_SERVER_PLATFORM: youtube
-  OTEL_RESOURCE_ATTRIBUTES: deployment.environment=stage-1,service.namespace=tripbot,service.platform=youtube
-  OTEL_SDK_DISABLED: "true"
+  ENV: production
+  NATS_URL: nats://nats.prod-1-platform.svc.cluster.local:4222
+  ONSCREENS_SERVER_PLATFORM: facebook
+  OTEL_RESOURCE_ATTRIBUTES: deployment.environment=prod-1,service.namespace=tripbot,service.platform=facebook
+  OTEL_SDK_DISABLED: "false"
   OTEL_TRACES_SAMPLER: parentbased_traceidratio
   OTEL_TRACES_SAMPLER_ARG: "0.1"
-  SENTRY_ENVIRONMENT: stage-1
+  SENTRY_ENVIRONMENT: prod-1
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
-    app.kubernetes.io/name: onscreens-youtube
+    app.kubernetes.io/name: onscreens-facebook
     app.kubernetes.io/part-of: tripbot
-  name: onscreens-youtube
-  namespace: stage-1
+  name: onscreens-facebook
+  namespace: prod-1
 spec:
   replicas: 0
   selector:
     matchLabels:
-      app: onscreens-youtube
+      app: onscreens-facebook
   strategy:
     rollingUpdate:
       maxSurge: 1
@@ -37,31 +37,22 @@ spec:
   template:
     metadata:
       annotations:
-        adanalife.dev/config-hash: f58e83b39b
+        adanalife.dev/config-hash: 79a437818a
       labels:
-        app: onscreens-youtube
+        app: onscreens-facebook
     spec:
-      affinity:
-        podAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-            - podAffinityTerm:
-                labelSelector:
-                  matchLabels:
-                    app: obs-youtube
-                topologyKey: kubernetes.io/hostname
-              weight: 100
       containers:
         - envFrom:
             - configMapRef:
-                name: onscreens-youtube-config
+                name: onscreens-facebook-config
             - secretRef:
                 name: sentry-onscreens-server
                 optional: true
             - secretRef:
                 name: grafana-cloud-otlp
                 optional: true
-          image: adanalife/onscreens-server:main
-          imagePullPolicy: Always
+          image: adanalife/onscreens-server:4.4.0
+          imagePullPolicy: IfNotPresent
           livenessProbe:
             httpGet:
               path: /health/live
@@ -69,7 +60,7 @@ spec:
             initialDelaySeconds: 5
             periodSeconds: 30
             timeoutSeconds: 5
-          name: onscreens-youtube
+          name: onscreens-facebook
           ports:
             - containerPort: 8080
               name: http
@@ -93,13 +84,10 @@ spec:
           volumeMounts:
             - mountPath: /opt/data/run
               name: run
+      priorityClassName: prod-stream
       securityContext:
         seccompProfile:
           type: RuntimeDefault
-      tolerations:
-        - effect: NoSchedule
-          key: dana.lol/rpi5
-          operator: Exists
       volumes:
         - emptyDir: {}
           name: run
@@ -108,15 +96,15 @@ apiVersion: v1
 kind: Service
 metadata:
   labels:
-    app.kubernetes.io/name: onscreens-youtube
+    app.kubernetes.io/name: onscreens-facebook
     app.kubernetes.io/part-of: tripbot
-  name: onscreens-youtube
-  namespace: stage-1
+  name: onscreens-facebook
+  namespace: prod-1
 spec:
   ports:
     - name: http
       port: 8080
       targetPort: http
   selector:
-    app: onscreens-youtube
+    app: onscreens-facebook
   type: ClusterIP

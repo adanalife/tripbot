@@ -26,7 +26,7 @@ metadata:
   name: onscreens-youtube
   namespace: prod-1
 spec:
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: onscreens-youtube
@@ -52,7 +52,7 @@ spec:
             - secretRef:
                 name: grafana-cloud-otlp
                 optional: true
-          image: adanalife/onscreens-server:4.0.0
+          image: adanalife/onscreens-server:4.4.0
           imagePullPolicy: IfNotPresent
           livenessProbe:
             httpGet:

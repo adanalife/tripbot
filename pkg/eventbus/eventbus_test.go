@@ -269,3 +269,40 @@ func TestEmitYoutubeBroadcast(t *testing.T) {
 		t.Errorf("emitted_at = %q, want %q", ev.EmittedAt, fixed.Format(time.RFC3339Nano))
 	}
 }
+
+func TestFacebookBroadcastSubject(t *testing.T) {
+	for _, env := range []string{"prod", "stage", "development"} {
+		if got, want := FacebookBroadcastSubject(env), "tripbot."+env+".facebook.broadcast"; got != want {
+			t.Errorf("FacebookBroadcastSubject(%q) = %q, want %q", env, got, want)
+		}
+	}
+}
+
+func TestEmitFacebookBroadcast(t *testing.T) {
+	rec := withRecorder(t)
+
+	fixed := time.Date(2026, 7, 17, 12, 0, 0, 0, time.UTC)
+	nowFn = func() time.Time { return fixed }
+	t.Cleanup(func() { nowFn = func() time.Time { return time.Now().UTC() } })
+
+	EmitFacebookBroadcast(context.Background(), "staging", "10102938475", "1719603579", "/page/videos/10102938475", "unpublished", true)
+
+	if len(rec.Publishes) != 1 {
+		t.Fatalf("expected 1 publish, got %d", len(rec.Publishes))
+	}
+	pub := rec.Publishes[0]
+	if pub.Subject != "tripbot.staging.facebook.broadcast" {
+		t.Errorf("subject = %q, want tripbot.staging.facebook.broadcast", pub.Subject)
+	}
+
+	var ev FacebookBroadcast
+	if err := json.Unmarshal(pub.Payload, &ev); err != nil {
+		t.Fatalf("payload not valid JSON: %v", err)
+	}
+	if ev.VideoID != "10102938475" || !ev.Live || ev.Privacy != "unpublished" {
+		t.Errorf("envelope = %+v, want video_id=10102938475 live=true privacy=unpublished", ev)
+	}
+	if ev.BroadcastID != "1719603579" || ev.PermalinkURL != "/page/videos/10102938475" {
+		t.Errorf("envelope = %+v, want broadcast_id=1719603579 permalink_url=/page/videos/10102938475", ev)
+	}
+}

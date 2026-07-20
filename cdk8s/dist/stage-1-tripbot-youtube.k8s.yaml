@@ -59,6 +59,7 @@ metadata:
   name: tripbot-youtube
   namespace: stage-1
 spec:
+  replicas: 0
   selector:
     matchLabels:
       app: tripbot-youtube

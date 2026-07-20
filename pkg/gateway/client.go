@@ -26,9 +26,13 @@ import (
 )
 
 // defaultTimeout bounds every gateway call. The gateway is an in-cluster
-// neighbour, so a few seconds is generous; a hung gateway must not wedge a
-// caller (a chat command, the watchdog tick, the chat-send path).
-const defaultTimeout = 5 * time.Second
+// neighbour, but it proxies the platform call synchronously and some platform
+// writes are genuinely slow — facebook comment creation regularly takes
+// 3.5–5s+, which a 5s bound turned into spurious context-canceled 502s for
+// sends Graph had already accepted (a double-post hazard should sends ever
+// retry). 15s covers the slow-write tail while still unwedging callers (a
+// chat command, the watchdog tick, the chat-send path) from a hung gateway.
+const defaultTimeout = 15 * time.Second
 
 // Chat identities accepted by SendChat, matching the gateway's
 // provider.Identity values. The empty string lets the gateway pick its default.
@@ -245,10 +249,16 @@ func (c *Client) InboundChat(ctx context.Context, cursor string) (InboundChatPag
 // Broadcast is the channel's current live broadcast (GET /v1/broadcast). VideoID
 // is the watchable id (youtube.com/watch?v=<id>); Privacy is the visibility
 // ("public"/"unlisted"/"private"). Live is false when no broadcast is active.
+// BroadcastID and PermalinkURL are set by platforms whose broadcast object is
+// distinct from the watchable video (facebook: the live-video id + the
+// site-relative watch path, the only link that resolves an unpublished
+// broadcast); empty elsewhere.
 type Broadcast struct {
-	VideoID string `json:"video_id"`
-	Live    bool   `json:"live"`
-	Privacy string `json:"privacy"`
+	VideoID      string `json:"video_id"`
+	Live         bool   `json:"live"`
+	Privacy      string `json:"privacy"`
+	BroadcastID  string `json:"broadcast_id"`
+	PermalinkURL string `json:"permalink_url"`
 }
 
 // ActiveBroadcast returns the channel's current live broadcast (GET

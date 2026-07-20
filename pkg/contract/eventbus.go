@@ -160,17 +160,31 @@ var (
 		{"privacy", strType(), true},
 		{"emitted_at", dateType(), true},
 	}
+	// youtube's shape plus facebook's broadcast-object fields: privacy carries
+	// facebook's two states ("public"/"unpublished") instead of youtube's
+	// three, broadcast_id is the live-video object id (the Live Producer
+	// dashboard key), and permalink_url the site-relative watch path — the
+	// only link that resolves an unpublished broadcast.
+	facebookBroadcastFields = []field{
+		{"video_id", strType(), true},
+		{"live", boolType(), true},
+		{"privacy", strType(), true},
+		{"broadcast_id", strType(), true},
+		{"permalink_url", strType(), true},
+		{"emitted_at", dateType(), true},
+	}
 )
 
 // envelopeFields maps each declared schema title to its field list so the
 // reflection test can cross-check against the real pkg/eventbus structs.
 var envelopeFields = map[string][]field{
-	"ChatMessage":      chatMessageFields,
-	"ViewerCount":      viewerCountFields,
-	"VideoChanged":     videoChangedFields,
-	"AuthStatus":       authStatusFields,
-	"AuthAccount":      authAccountFields,
-	"YoutubeBroadcast": youtubeBroadcastFields,
+	"ChatMessage":       chatMessageFields,
+	"ViewerCount":       viewerCountFields,
+	"VideoChanged":      videoChangedFields,
+	"AuthStatus":        authStatusFields,
+	"AuthAccount":       authAccountFields,
+	"YoutubeBroadcast":  youtubeBroadcastFields,
+	"FacebookBroadcast": facebookBroadcastFields,
 }
 
 // eventbusContract builds the full registry in stable on-disk order: the four
@@ -210,6 +224,12 @@ func eventbusContract() orderedObject {
 				{"transport", "jetstream"},
 				{"stream", "TRIPBOT_YOUTUBE"},
 				{"schema", objectSchema("YoutubeBroadcast", youtubeBroadcastFields)},
+			}},
+			{"facebook_broadcast", orderedObject{
+				{"subject", "tripbot.{env}.facebook.broadcast"},
+				{"transport", "jetstream"},
+				{"stream", "TRIPBOT_FACEBOOK"},
+				{"schema", objectSchema("FacebookBroadcast", facebookBroadcastFields)},
 			}},
 		}},
 		{"$defs", orderedObject{

@@ -8,17 +8,23 @@
 package natsclient
 
 import (
+	"context"
 	"log/slog"
+	"os"
 	"sync"
 	"time"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 )
 
 var (
-	mu   sync.Mutex
-	conn *nats.Conn
+	mu        sync.Mutex
+	conn      *nats.Conn
+	gaugeOnce sync.Once
 )
 
 // reconnectWait is the delay between connect attempts, both for the initial
@@ -73,10 +79,52 @@ func Connect(url string, name string, onConnect ...func(*nats.Conn)) *nats.Conn 
 		return nil
 	}
 	conn = c
+	gaugeOnce.Do(registerConnectedGauge)
 	if !c.IsConnected() {
 		slog.Warn("nats unreachable; retrying in background", "url", url, "name", name)
 	}
 	return conn
+}
+
+// registerConnectedGauge wires up nats_connected, an observable gauge that
+// reports 1 while the singleton connection is established and 0 while it's
+// disconnected, reconnecting, or never came up. A sustained 0 means this
+// process's fire-and-forget publishes are dropped and its subscriptions aren't
+// delivering — the silent failure mode where a consumer boots before NATS is
+// reachable and stays deaf. Registered once, on the first successful Connect;
+// the callback reads the live conn each collection, so it tracks drops and
+// recoveries without any handler bookkeeping. Uses the global meter provider,
+// which pkg/telemetry sets up (and which late-binds instruments created before
+// that, so registration order with telemetry.Init doesn't matter).
+func registerConnectedGauge() {
+	// Stamp service.platform onto the datapoint so the per-platform instances
+	// (tripbot-twitch/youtube, onscreens-twitch/youtube) don't collide onto one
+	// byte-identical series: service.platform on the OTel resource reaches only
+	// target_info, not datapoints. Mirrors pkg/instrumentation's platformAttr
+	// and the service-health dashboards' service_platform filter; defaults to
+	// twitch like the config default.
+	platform := os.Getenv("STREAM_PLATFORM")
+	if platform == "" {
+		platform = "twitch"
+	}
+	platformAttr := metric.WithAttributes(attribute.String("service.platform", platform))
+
+	meter := otel.Meter("github.com/adanalife/tripbot/pkg/natsclient")
+	_, err := meter.Int64ObservableGauge(
+		"nats_connected",
+		metric.WithDescription("1 while the process's NATS connection is established, 0 while disconnected/reconnecting or never connected (publishes dropped, subscriptions not delivering)"),
+		metric.WithInt64Callback(func(_ context.Context, o metric.Int64Observer) error {
+			var v int64
+			if c := Conn(); c != nil && c.IsConnected() {
+				v = 1
+			}
+			o.Observe(v, platformAttr)
+			return nil
+		}),
+	)
+	if err != nil {
+		slog.Error("register nats_connected gauge failed", "err", err)
+	}
 }
 
 // Conn returns the current package-singleton *nats.Conn, or nil if

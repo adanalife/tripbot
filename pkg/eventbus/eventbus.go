@@ -250,6 +250,46 @@ type YoutubeBroadcast struct {
 // YouTube broadcast in env. Only the youtube instance publishes it.
 func YoutubeBroadcastSubject(env string) string { return subject(env, "youtube", "broadcast") }
 
+// --- facebook.broadcast ------------------------------------------------------
+
+// FacebookBroadcast is the wire format for tripbot.<env>.facebook.broadcast —
+// the Page's current live video discovered via the gateway, emitted on a slow
+// ticker by the facebook instance. VideoID is the watchable video object id
+// (facebook.com/video.php?v=<id>); BroadcastID is the live-video object id
+// (facebook.com/live/producer/<id>); PermalinkURL is the site-relative watch
+// path — the only link that resolves an unpublished broadcast (admin-only).
+// Privacy is "public"/"unpublished" — "unpublished" is the timeline-hidden
+// (admin-only) dry-run state, facebook's analog of a youtube unlisted
+// broadcast. Live is false when no broadcast is active. The console needs
+// this to badge and link an unpublished rehearsal, which the Page timeline
+// never shows.
+type FacebookBroadcast struct {
+	VideoID      string `json:"video_id"`
+	Live         bool   `json:"live"`
+	Privacy      string `json:"privacy"`
+	BroadcastID  string `json:"broadcast_id"`
+	PermalinkURL string `json:"permalink_url"`
+	EmittedAt    string `json:"emitted_at"`
+}
+
+// FacebookBroadcastSubject returns the subscribe/publish subject for the
+// current Facebook broadcast in env. Only the facebook instance publishes it.
+func FacebookBroadcastSubject(env string) string { return subject(env, "facebook", "broadcast") }
+
+// EmitFacebookBroadcast publishes the current Facebook broadcast snapshot. A
+// last-value cache (TRIPBOT_FACEBOOK, MaxMsgsPerSubject=1) retains the latest
+// so a fresh console renders the badge on connect.
+func EmitFacebookBroadcast(ctx context.Context, env, videoID, broadcastID, permalinkURL, privacy string, live bool) {
+	emit(ctx, FacebookBroadcastSubject(env), FacebookBroadcast{
+		VideoID:      videoID,
+		Live:         live,
+		Privacy:      privacy,
+		BroadcastID:  broadcastID,
+		PermalinkURL: permalinkURL,
+		EmittedAt:    emittedAt(),
+	})
+}
+
 // EmitYoutubeBroadcast publishes the current YouTube broadcast snapshot. A
 // last-value cache (TRIPBOT_YOUTUBE, MaxMsgsPerSubject=1) retains the latest so a
 // fresh console renders the link on connect.
@@ -273,10 +313,11 @@ func EmitYoutubeBroadcast(ctx context.Context, env, videoID, privacy string, liv
 // streamed — it's a momentary value with nothing to replay.
 
 const (
-	chatStreamName    = "TRIPBOT_CHAT"
-	videoStreamName   = "TRIPBOT_VIDEO"
-	authStreamName    = "TRIPBOT_AUTH"
-	youtubeStreamName = "TRIPBOT_YOUTUBE"
+	chatStreamName     = "TRIPBOT_CHAT"
+	videoStreamName    = "TRIPBOT_VIDEO"
+	authStreamName     = "TRIPBOT_AUTH"
+	youtubeStreamName  = "TRIPBOT_YOUTUBE"
+	facebookStreamName = "TRIPBOT_FACEBOOK"
 )
 
 // Retention caps match the admin hub's in-memory buffer sizes (pkg/server:
@@ -344,20 +385,32 @@ func EnsureStreams(ctx context.Context, js jetstream.JetStream, env string) erro
 			// watch/embed link on connect, then live updates follow.
 			MaxMsgsPerSubject: 1,
 		},
+		{
+			Name:        facebookStreamName,
+			Description: "Last-known Facebook broadcast snapshot (last-value cache).",
+			Subjects:    []string{FacebookBroadcastSubject(env)},
+			Storage:     jetstream.FileStorage,
+			Retention:   jetstream.LimitsPolicy,
+			Discard:     jetstream.DiscardOld,
+			// One retained message: a fresh console renders the current
+			// badge/link on connect, then live updates follow.
+			MaxMsgsPerSubject: 1,
+		},
 	}
 	for _, cfg := range configs {
 		if _, err := js.CreateOrUpdateStream(ctx, cfg); err != nil {
 			return fmt.Errorf("ensure stream %s: %w", cfg.Name, err)
 		}
 	}
-	slog.InfoContext(ctx, "jetstream streams ensured", "streams", chatStreamName+","+videoStreamName+","+authStreamName+","+youtubeStreamName, "env", env)
+	slog.InfoContext(ctx, "jetstream streams ensured", "streams", chatStreamName+","+videoStreamName+","+authStreamName+","+youtubeStreamName+","+facebookStreamName, "env", env)
 	return nil
 }
 
-// ChatStreamName, VideoStreamName, AuthStreamName, and YoutubeBroadcastStreamName
-// expose the stream names so consumers (the admin hub, the standalone console)
-// can bind ordered consumers to them without re-deriving the constants.
-func ChatStreamName() string             { return chatStreamName }
-func VideoStreamName() string            { return videoStreamName }
-func AuthStreamName() string             { return authStreamName }
-func YoutubeBroadcastStreamName() string { return youtubeStreamName }
+// The *StreamName functions expose the stream names so consumers (the admin
+// hub, the standalone console) can bind ordered consumers to them without
+// re-deriving the constants.
+func ChatStreamName() string              { return chatStreamName }
+func VideoStreamName() string             { return videoStreamName }
+func AuthStreamName() string              { return authStreamName }
+func YoutubeBroadcastStreamName() string  { return youtubeStreamName }
+func FacebookBroadcastStreamName() string { return facebookStreamName }

@@ -155,6 +155,44 @@
           "emitted_at"
         ]
       }
+    },
+    "facebook_broadcast": {
+      "subject": "tripbot.{env}.facebook.broadcast",
+      "transport": "jetstream",
+      "stream": "TRIPBOT_FACEBOOK",
+      "schema": {
+        "type": "object",
+        "title": "FacebookBroadcast",
+        "properties": {
+          "video_id": {
+            "type": "string"
+          },
+          "live": {
+            "type": "boolean"
+          },
+          "privacy": {
+            "type": "string"
+          },
+          "broadcast_id": {
+            "type": "string"
+          },
+          "permalink_url": {
+            "type": "string"
+          },
+          "emitted_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "video_id",
+          "live",
+          "privacy",
+          "broadcast_id",
+          "permalink_url",
+          "emitted_at"
+        ]
+      }
     }
   },
   "$defs": {
