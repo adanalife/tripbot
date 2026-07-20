@@ -314,6 +314,36 @@ var v1Commands = map[string]bool{
 	"!facebook": true, "!youtube": true, "!tiktok": true, "!bluesky": true,
 }
 
+// commandScope is how much of the cross-platform command surface a platform
+// runs — the per-platform capability the command gate keys off, a declared
+// property of the platform rather than a hardcoded name check.
+type commandScope int
+
+const (
+	// scopeV1 runs only the vetted v1Commands allowlist. It is the zero value,
+	// so any platform absent from platformCommandScope defaults to it: a newly
+	// added platform (Kick, …) proves itself through the allowlist rather than
+	// silently inheriting the full command surface.
+	scopeV1 commandScope = iota
+	// scopeFull runs every cross-platform command — a mature, fully-rolled-out
+	// platform.
+	scopeFull
+)
+
+// platformCommandScope declares each known platform's command-surface scope.
+// A platform absent from the map gets the zero value (scopeV1), so the gate is
+// driven by this capability declaration and an unrecognized STREAM_PLATFORM can
+// never fall through to the full surface. Graduating a platform is a one-line
+// change here (scopeV1 → scopeFull), symmetric across platforms — none is
+// special-cased by name.
+var platformCommandScope = map[string]commandScope{
+	platformTwitch:    scopeFull,
+	platformYouTube:   scopeV1,
+	platformFacebook:  scopeV1,
+	platformInstagram: scopeV1,
+	platformTikTok:    scopeV1,
+}
+
 // commandEnabled reports whether cmd should be indexed for dispatch on this
 // App's platform. Two orthogonal concerns, in order:
 //
@@ -321,20 +351,19 @@ var v1Commands = map[string]bool{
 //     command with a non-nil Platforms is governed solely by it — indexed on
 //     exactly the listed platforms, on every platform. This is symmetric: no
 //     platform is special, and a new Kick/TikTok-only command just lists itself.
-//  2. Cross-platform commands (Platforms == nil): YouTube, Facebook,
-//     Instagram, and TikTok are still v1 rollouts, so they run only the vetted
-//     v1Commands allowlist; mature platforms (Twitch, and any future
-//     fully-rolled-out platform) run them all. As more platforms graduate from
-//     v1 this allowlist gate may invert, but that's a future call.
+//  2. Cross-platform commands (Platforms == nil) are gated by the platform's
+//     declared commandScope: a scopeFull platform (Twitch today) runs them all;
+//     every other platform runs only the vetted v1Commands allowlist. The
+//     conservative default (scopeV1 for any undeclared platform) means a new
+//     platform is restricted to the allowlist, never handed the full surface.
 func (a *App) commandEnabled(cmd *Command) bool {
 	if len(cmd.Platforms) > 0 {
 		return slices.Contains(cmd.Platforms, a.platform())
 	}
-	switch a.platform() {
-	case platformYouTube, platformFacebook, platformInstagram, platformTikTok:
-		return v1Commands[cmd.Trigger]
+	if platformCommandScope[a.platform()] == scopeFull {
+		return true
 	}
-	return true
+	return v1Commands[cmd.Trigger]
 }
 
 // indexCommands builds a.commands from a.buildRegistry() and indexes it into
