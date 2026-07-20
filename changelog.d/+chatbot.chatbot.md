@@ -1,0 +1,1 @@
+Publish follow, sub, gift-sub, and resub events to the console over NATS (`chat.subscriber`), and subscribe to the `channel.subscription.gift` and `channel.subscription.message` EventSub types so gifters and resubbers are thanked in chat too.
