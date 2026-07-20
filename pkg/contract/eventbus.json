@@ -31,6 +31,52 @@
         ]
       }
     },
+    "chat_subscriber": {
+      "subject": "tripbot.{env}.chat.subscriber",
+      "transport": "core",
+      "schema": {
+        "type": "object",
+        "title": "SubscriberEvent",
+        "properties": {
+          "platform": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          },
+          "tier": {
+            "type": "string"
+          },
+          "months": {
+            "type": "integer"
+          },
+          "streak": {
+            "type": "integer"
+          },
+          "gift_count": {
+            "type": "integer"
+          },
+          "is_anonymous": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string"
+          },
+          "emitted_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "kind",
+          "username",
+          "emitted_at"
+        ]
+      }
+    },
     "viewers_count": {
       "subject": "tripbot.{env}.viewers.count",
       "transport": "core",

@@ -302,6 +302,49 @@ func EmitYoutubeBroadcast(ctx context.Context, env, videoID, privacy string, liv
 	})
 }
 
+// --- chat.subscriber --------------------------------------------------------
+
+// SubscriberEvent is the wire format for tripbot.<env>.chat.subscriber — a
+// notable community event (new follow, new sub, gifted subs, or a resub with a
+// message) the console surfaces in its chat panel: a distinctly-styled inline
+// line for every kind, plus a large celebratory banner for the sub kinds. Kind
+// selects the treatment and which of the optional fields carry meaning:
+//
+//	follow → username
+//	sub    → username, tier
+//	gift   → username (the gifter, or "" when is_anonymous), tier, gift_count
+//	resub  → username, tier, months (cumulative), streak, message
+//
+// Emitted core (not streamed): these are live-only "don't miss it" moments —
+// there's nothing to replay for a viewer who wasn't watching, and the console
+// deliberately never re-animates a past event on reload.
+type SubscriberEvent struct {
+	// Platform is the streaming platform the event came from ("twitch"); empty
+	// on events emitted before the tag existed. Only Twitch has an EventSub
+	// source today, but the tag keeps the console's per-platform filter honest.
+	Platform    string `json:"platform,omitempty"`
+	Kind        string `json:"kind"`     // "follow" | "sub" | "gift" | "resub"
+	Username    string `json:"username"` // the actor; "" for an anonymous gifter
+	Tier        string `json:"tier,omitempty"`
+	Months      int    `json:"months,omitempty"`       // cumulative months (resub)
+	Streak      int    `json:"streak,omitempty"`       // consecutive months (resub); 0 when the subscriber hides it
+	GiftCount   int    `json:"gift_count,omitempty"`   // subs gifted in this event (gift)
+	IsAnonymous bool   `json:"is_anonymous,omitempty"` // anonymous gifter (gift)
+	Message     string `json:"message,omitempty"`      // resub message text (resub)
+	EmittedAt   string `json:"emitted_at"`
+}
+
+// SubscriberEventSubject returns the subscribe/publish subject for subscriber
+// events in env. The console builds the same string to subscribe.
+func SubscriberEventSubject(env string) string { return subject(env, "chat", "subscriber") }
+
+// EmitSubscriberEvent publishes one subscriber event. Callers build the struct
+// (Kind + the fields that kind carries); EmittedAt is stamped here.
+func EmitSubscriberEvent(ctx context.Context, env string, ev SubscriberEvent) {
+	ev.EmittedAt = emittedAt()
+	emit(ctx, SubscriberEventSubject(env), ev)
+}
+
 // --- JetStream streams (durable history) ----------------------------------
 //
 // Two subjects need to survive a tripbot reboot so the admin live console can
