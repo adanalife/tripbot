@@ -1,0 +1,1 @@
+Export a `nats_connected` gauge (1 up / 0 down) from `pkg/natsclient`, so both tripbot and onscreens-server surface when their NATS connection is down — the silent failure mode where a consumer boots before NATS is reachable and stays deaf until restart.
