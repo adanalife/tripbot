@@ -1,6 +1,7 @@
 package onscreensServer
 
 import (
+	c "github.com/adanalife/tripbot/pkg/config/onscreens-server"
 	"time"
 )
 
@@ -59,8 +60,9 @@ func leftLiveLine(now time.Time) (rotatorMessage, bool) {
 
 // newLeftRotator configures the left corner. The caller pairs it with the right
 // rotator and calls start().
-func newLeftRotator() *rotator {
+func newLeftRotator(cfg *c.OnscreensServerConfig) *rotator {
 	return &rotator{
+		cfg:             cfg,
 		kind:            "left-rotator",
 		freq:            leftRotatorUpdateFrequency,
 		messages:        possibleLeftMessages,

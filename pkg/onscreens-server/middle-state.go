@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log/slog"
 
-	c "github.com/adanalife/tripbot/pkg/config/onscreens-server"
 	"github.com/adanalife/tripbot/pkg/natsclient"
 	oe "github.com/adanalife/tripbot/pkg/onscreens-events"
 	"github.com/nats-io/nats.go/jetstream"
@@ -108,11 +107,11 @@ func readMiddleState(ctx context.Context, js jetstream.JetStream, env, platform 
 // overlay at its constructed default (empty content, showing).
 func (s *Server) RestoreMiddleText(ctx context.Context) {
 	js := natsclient.JetStream()
-	if err := EnsureMiddleStateStream(ctx, js, c.Conf.Environment); err != nil {
+	if err := EnsureMiddleStateStream(ctx, js, s.cfg.Environment); err != nil {
 		slog.ErrorContext(ctx, "couldn't ensure middle state stream", "err", err)
 		return
 	}
-	msg, showing, ok := readMiddleState(ctx, js, c.Conf.Environment, c.Conf.Platform)
+	msg, showing, ok := readMiddleState(ctx, js, s.cfg.Environment, s.cfg.Platform)
 	if !ok {
 		return
 	}

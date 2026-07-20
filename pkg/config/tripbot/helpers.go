@@ -34,12 +34,6 @@ func (c TripbotConfig) UserIsCompedSubscriber(username string) bool {
 	return false
 }
 
-// UserIsAdmin and UserIsCompedSubscriber on the package-level Conf. Callers
-// with an injected *TripbotConfig use the methods above instead; these wrappers
-// retire with the Conf global.
-func UserIsAdmin(username string) bool     { return Conf.UserIsAdmin(username) }
-func UserIsCompedSubscriber(u string) bool { return Conf.UserIsCompedSubscriber(u) }
-
 // HelpMessages are all of the different things !help can return
 var HelpMessages = []string{
 	"!commands: List more commands you can use",

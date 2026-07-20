@@ -48,6 +48,7 @@ type rotatorMessage struct {
 // advertises a command the sibling is currently showing, so the two corners
 // don't both say "!location" at once (which reads as broken).
 type rotator struct {
+	cfg             *c.OnscreensServerConfig
 	kind            string                                     // for logs: "left-rotator" / "right-rotator"
 	freq            time.Duration                              // how often the visible line swaps
 	messages        []rotatorMessage                           // bot-enabled pool (command hints)
@@ -64,9 +65,9 @@ type rotator struct {
 // loops, and returns their *Onscreen render targets. Left is started first, so
 // it primes with no sibling content yet (right.osc is still nil — siblingCommands
 // no-ops); right then primes against left's first line.
-func startRotators() (left, right *Onscreen) {
-	l := newLeftRotator()
-	r := newRightRotator()
+func startRotators(cfg *c.OnscreensServerConfig) (left, right *Onscreen) {
+	l := newLeftRotator(cfg)
+	r := newRightRotator(cfg)
 	l.sibling, r.sibling = r, l
 	return l.start(), r.start()
 }
@@ -98,14 +99,14 @@ func (r *rotator) content() string {
 	if r.rareMessage != "" && rand.Intn(rareOdds) == 0 {
 		return r.rareMessage
 	}
-	return pickRotatorMessage(r.pool(time.Now()), r.siblingCommands())
+	return pickRotatorMessage(r.cfg.Platform, r.pool(time.Now()), r.siblingCommands())
 }
 
 // pool returns the message set for the current instance state: the bot-less
 // promo pool (with the live location/date line prepended when fresh) on a
 // bot-less YouTube instance, otherwise the normal command-hint pool.
 func (r *rotator) pool(now time.Time) []rotatorMessage {
-	if !botless() {
+	if !r.botless() {
 		return r.messages
 	}
 	if r.liveLine != nil {
@@ -129,8 +130,8 @@ func (r *rotator) siblingCommands() map[string]bool {
 // command hints — true only for a YouTube pipeline whose inbound chat is off
 // (YOUTUBE_INBOUND_ENABLED=false). In that state no command can respond, so the
 // rotators must not advertise commands. Mirrors the chatbot's botless gate.
-func botless() bool {
-	return c.Conf.Platform == platformYouTube && !c.Conf.YouTubeInboundEnabled
+func (r *rotator) botless() bool {
+	return r.cfg.Platform == platformYouTube && !r.cfg.YouTubeInboundEnabled
 }
 
 // appliesTo reports whether m should show on the given platform.
@@ -182,9 +183,7 @@ func (m rotatorMessage) sharesCommand(exclude map[string]bool) bool {
 // If exclude rules out every otherwise-eligible message, the exclusion is
 // relaxed rather than showing nothing — better a brief duplicate than a blank
 // corner.
-func pickRotatorMessage(msgs []rotatorMessage, exclude map[string]bool) string {
-	platform := c.Conf.Platform
-
+func pickRotatorMessage(platform string, msgs []rotatorMessage, exclude map[string]bool) string {
 	eligible := func(m rotatorMessage) bool {
 		return m.appliesTo(platform) && !m.sharesCommand(exclude)
 	}
@@ -198,7 +197,7 @@ func pickRotatorMessage(msgs []rotatorMessage, exclude map[string]bool) string {
 	if total == 0 {
 		if len(exclude) > 0 {
 			// Every candidate collided with the sibling; relax and retry once.
-			return pickRotatorMessage(msgs, nil)
+			return pickRotatorMessage(platform, msgs, nil)
 		}
 		return ""
 	}

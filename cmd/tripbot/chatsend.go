@@ -8,7 +8,6 @@ import (
 
 	chatEvents "github.com/adanalife/tripbot/pkg/chat-events"
 	"github.com/adanalife/tripbot/pkg/chatsend"
-	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/gateway"
 	"github.com/adanalife/tripbot/pkg/natsclient"
 	"github.com/nats-io/nats.go"
@@ -30,7 +29,7 @@ func (t *Tripbot) startChatSendSubscriber(ctx context.Context) {
 		slog.InfoContext(ctx, "chat.send subscriber skipped (NATS_URL unset)")
 		return
 	}
-	subject := chatEvents.SendSubject(c.Conf.Environment, chatEvents.PlatformTwitch)
+	subject := chatEvents.SendSubject(t.cfg.Environment, chatEvents.PlatformTwitch)
 	if _, err := conn.Subscribe(subject, func(m *nats.Msg) {
 		var ev chatEvents.Send
 		if err := json.Unmarshal(m.Data, &ev); err != nil {

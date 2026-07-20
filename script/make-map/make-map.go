@@ -23,7 +23,9 @@ var skipToDate = false
 var skipDate = time.Date(2018, time.Month(9), 29, 0, 0, 0, 0, time.UTC)
 
 func main() {
-	client, err := maps.NewClient(maps.WithAPIKey(c.Conf.GoogleMapsAPIKey))
+	cfg := c.Load()
+
+	client, err := maps.NewClient(maps.WithAPIKey(cfg.GoogleMapsAPIKey))
 	if err != nil {
 		log.Fatalf("client error: %s", err)
 	}
@@ -36,13 +38,13 @@ func main() {
 	skipIndex := 0
 
 	// loop over every file in the screencapDir
-	err = filepath.Walk(c.Conf.VideoDir,
+	err = filepath.Walk(cfg.VideoDir,
 		func(path string, _ os.FileInfo, err error) error {
 			if err != nil {
 				return err
 			}
 			// skip the directory name itself
-			if path == c.Conf.VideoDir {
+			if path == cfg.VideoDir {
 				return nil
 			}
 
@@ -54,7 +56,7 @@ func main() {
 
 			// this is where we will save the map image
 			imgFilename := fmt.Sprintf("%s.png", vid.String())
-			fullImgFilename := filepath.Join(c.Conf.MapsOutputDir, imgFilename)
+			fullImgFilename := filepath.Join(cfg.MapsOutputDir, imgFilename)
 
 			// skip stuff from before this time
 			if skipToDate {

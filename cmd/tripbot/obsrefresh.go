@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"log/slog"
 
-	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/natsclient"
 	"github.com/adanalife/tripbot/pkg/obs"
 	obsEvents "github.com/adanalife/tripbot/pkg/obs-events"
@@ -30,7 +29,7 @@ func (t *Tripbot) startOBSRefreshSubscriber(ctx context.Context) {
 		slog.InfoContext(ctx, "obs.refresh subscriber skipped (NATS_URL unset)")
 		return
 	}
-	subject := obsEvents.RefreshSubject(c.Conf.Environment, c.Conf.Platform)
+	subject := obsEvents.RefreshSubject(t.cfg.Environment, t.cfg.Platform)
 	if _, err := conn.Subscribe(subject, func(m *nats.Msg) {
 		var ev obsEvents.Refresh
 		if err := json.Unmarshal(m.Data, &ev); err != nil {

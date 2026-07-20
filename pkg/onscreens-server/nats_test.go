@@ -11,7 +11,7 @@ import (
 // lands on the MiddleText overlay the same way the HTTP handler would
 // (s.MiddleText.Show is the shared path).
 func TestHandleMiddleShow_DecodesAndShows(t *testing.T) {
-	s := &Server{MiddleText: newMiddleText()}
+	s := &Server{cfg: testConf, MiddleText: newMiddleText()}
 
 	msg := &nats.Msg{
 		Subject: "tripbot.test.onscreens.middle.show",
@@ -32,7 +32,7 @@ func TestHandleMiddleShow_DecodesAndShows(t *testing.T) {
 // Content must not change. (MiddleText starts IsShowing=true by design — it
 // carries pre-restart text — so this asserts on Content.)
 func TestHandleMiddleShow_RejectsEmptyMsg(t *testing.T) {
-	s := &Server{MiddleText: newMiddleText()}
+	s := &Server{cfg: testConf, MiddleText: newMiddleText()}
 	s.MiddleText.Content = "pre-existing"
 
 	msg := &nats.Msg{
@@ -48,7 +48,7 @@ func TestHandleMiddleShow_RejectsEmptyMsg(t *testing.T) {
 
 // TestHandleMiddleShow_RejectsBadJSON covers a non-JSON payload.
 func TestHandleMiddleShow_RejectsBadJSON(t *testing.T) {
-	s := &Server{MiddleText: newMiddleText()}
+	s := &Server{cfg: testConf, MiddleText: newMiddleText()}
 	s.MiddleText.Content = "pre-existing"
 
 	msg := &nats.Msg{
@@ -69,7 +69,7 @@ func emptyMsg(subject string) *nats.Msg {
 }
 
 func TestHandleMiddleHide(t *testing.T) {
-	s := &Server{MiddleText: newMiddleText()}
+	s := &Server{cfg: testConf, MiddleText: newMiddleText()}
 	s.MiddleText.Show("something")
 	s.handleMiddleHide(emptyMsg("tripbot.test.onscreens.middle.hide"))
 	if s.MiddleText.IsShowing {
@@ -174,7 +174,7 @@ func TestHandleGPSShowHide(t *testing.T) {
 // TestHideLenientOnEmptyBody asserts a hide with a nil/garbage body still
 // hides — the subject is the whole intent.
 func TestHideLenientOnEmptyBody(t *testing.T) {
-	s := &Server{MiddleText: newMiddleText()}
+	s := &Server{cfg: testConf, MiddleText: newMiddleText()}
 	s.MiddleText.Show("x")
 	s.handleMiddleHide(&nats.Msg{Subject: "tripbot.test.onscreens.middle.hide", Data: nil})
 	if s.MiddleText.IsShowing {
