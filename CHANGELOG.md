@@ -9,6 +9,16 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v4.5.0] — 2026-07-20
+
+### Deploy / Infra
+
+- Prod tripbot now runs the actual 4.4.0 image — the pin had carried a stale digest from the 4.0.0 build, so a digest override made every prod tripbot component run 4.0.0 content under the 4.4.0 tag. ([#1177](https://github.com/adanalife/tripbot/pull/1177))
+
+### Misc
+
+- Export a `nats_connected` gauge (1 up / 0 down) from `pkg/natsclient`, so both tripbot and onscreens-server surface when their NATS connection is down — the silent failure mode where a consumer boots before NATS is reachable and stays deaf until restart. ([#1180](https://github.com/adanalife/tripbot/pull/1180))
+
 ## [v4.4.0] — 2026-07-17
 
 ### Deploy / Infra
