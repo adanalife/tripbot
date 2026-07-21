@@ -25,6 +25,24 @@ def image_pins() -> dict[str, dict[str, str]]:
         return yaml.safe_load(f) or {}
 
 
+# The fleet-wide supported-platform set, owned by platform-gateway (its Go
+# adapter registry, provider.SupportedPlatforms, is the source of truth) and
+# synced into this repo's platforms.json via `task platforms:sync`. Every env's
+# `platforms` must be a subset of it (validated at the bottom of this module).
+# Never hand-edit platforms.json — add an adapter in the gateway + re-sync.
+_PLATFORMS_FILE = Path(__file__).resolve().parents[2] / "platforms.json"
+
+
+def _load_supported_platforms() -> tuple[str, ...]:
+    import json
+
+    with _PLATFORMS_FILE.open() as f:
+        return tuple(json.load(f)["platforms"])
+
+
+SUPPORTED_PLATFORMS = _load_supported_platforms()
+
+
 @dataclass(frozen=True)
 class EnvConfig:
     name: str  # prod-1 | stage-1 | development | local
@@ -204,8 +222,10 @@ ENVS: dict[str, EnvConfig] = {
         # Page once scaled up (gateway-facebook holds the Page token). Manifests
         # render while parked — e.g. the tripbot-youtube-creds ExternalSecret
         # (prod-account SM k8s/tripbot/youtube-creds) keeps syncing, which
-        # gateway-youtube also relies on.
-        platforms=("twitch", "youtube", "facebook"),
+        # gateway-youtube also relies on. instagram/tiktok synthesize here too
+        # (born parked); they wait on the 9:16 vertical scene + stream keys before
+        # a console scale-up can bring them live.
+        platforms=SUPPORTED_PLATFORMS,
         # prod youtube launches bot-less: inbound chat poll off (quota extension
         # pending), so rotators serve promo copy and no command responds. Flip to
         # True when the YouTube Data API quota lands. See youtube_inbound_enabled.
@@ -261,7 +281,7 @@ ENVS: dict[str, EnvConfig] = {
         # Extra stage stream workloads contending for the shared node is what
         # stutters the prod stream — budget is two live streams total:
         # prod-twitch + one stage burn-in.
-        platforms=("youtube", "twitch", "tiktok", "facebook", "instagram"),
+        platforms=SUPPORTED_PLATFORMS,
         # Route stage tripbot-twitch's Helix calls through the in-namespace
         # gateway-twitch.
         twitch_api_url="http://gateway-twitch.stage-1.svc.cluster.local:8080",
@@ -326,6 +346,18 @@ ENVS: dict[str, EnvConfig] = {
         platforms=("twitch",),
     ),
 }
+
+
+# Guard: an env can only run platforms the gateway has an adapter for. A
+# platform with no adapter has no chat transport, so reject it at synth time
+# rather than emitting a dead instance.
+for _name, _env in ENVS.items():
+    _unknown = tuple(p for p in _env.platforms if p not in SUPPORTED_PLATFORMS)
+    if _unknown:
+        raise ValueError(
+            f"{_name}: platforms {_unknown} not in SUPPORTED_PLATFORMS "
+            f"{SUPPORTED_PLATFORMS} — add an adapter in platform-gateway + run `task platforms:sync`"
+        )
 
 
 def load_env(name: str) -> EnvConfig:

@@ -1,0 +1,53 @@
+name: platforms-contract
+
+# Guards the fleet-wide platform-set contract: platform-gateway owns
+# platforms.json (its Go adapter registry is the source of truth) and every repo
+# syncs a copy via `task platforms:sync`. This asserts the synced copy still
+# matches the gateway's main — catching both a stale local copy and the gateway
+# adding/removing a platform we haven't re-synced. Always runs (so it can be a
+# required check) plus a daily schedule to catch drift on days no PR touches it.
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: '17 13 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  platforms-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      # The gateway repo is private, so read it with an org-scoped automation
+      # app token (least privilege: platform-gateway only), not GITHUB_TOKEN.
+      - name: Mint automation app token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.AUTOMATION_APP_ID }}
+          private-key: ${{ secrets.AUTOMATION_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: platform-gateway
+
+      - name: Assert platforms.json matches platform-gateway/main
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          gh api "repos/${{ github.repository_owner }}/platform-gateway/contents/platforms.json?ref=main" \
+            -H "Accept: application/vnd.github.raw" > gateway-platforms.json
+          if ! diff -u gateway-platforms.json platforms.json; then
+            echo "::error::platforms.json is out of sync with platform-gateway/main — run 'task platforms:sync' and commit."
+            exit 1
+          fi
+          rm -f gateway-platforms.json

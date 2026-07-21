@@ -121,6 +121,15 @@ tasks:
       - task: release:smoke:stage-1
 
 
+  # platforms.json is the fleet-wide supported-platform set, owned by
+  # platform-gateway (its Go adapter registry is the source of truth) and synced
+  # into every repo — the same sibling-checkout convention the eventbus/contract
+  # bridges use. cdk8s reads it into SUPPORTED_PLATFORMS; never hand-edit it here.
+  platforms:sync:
+    desc: Re-sync platforms.json from the sibling platform-gateway checkout (the source of truth)
+    cmds:
+      - cp ../platform-gateway/platforms.json platforms.json
+
   # cdk8s — the Python authoring layer for tripbot's app workload manifests
   # (cdk8s/). Synthesizes dist/<env>-<component>-<platform>.k8s.yaml (+ the
   # per-env identity unit + the one-shot Job files), which Argo delivers
@@ -141,10 +150,12 @@ tasks:
       # regenerated only on release-please's release PR, so a chart change on
       # main doesn't reach prod's committed dist until the next release — which
       # is what puts the config delta in the same diff as the version bump.
-      # Discard this HEAD re-synth of the pinned app files; identity + one-shot
-      # jobs (no -twitch/-youtube suffix) stay live and re-synth normally.
+      # Discard this HEAD re-synth of the pinned app files. Match every prod-1
+      # app manifest (all components × all platforms) so a newly-supported
+      # platform is frozen like the rest without editing this list; identity +
+      # one-shot Jobs carry no per-platform suffix and re-synth normally.
       - |
-        pinned=$(git ls-files -- 'dist/prod-1-*-twitch.k8s.yaml' 'dist/prod-1-*-youtube.k8s.yaml' 'dist/prod-1-*-facebook.k8s.yaml')
+        pinned=$(git ls-files -- 'dist/prod-1-*.k8s.yaml' | grep -vE 'prod-1-(tripbot-identity|job-)')
         [ -n "$pinned" ] && git checkout -- $pinned || true
 
   cdk8s:test:
@@ -207,5 +218,5 @@ tasks:
       - mise exec -- uv run cdk8s synth
       - |
         distname="{{.COMPONENT}}"; distname="${distname%-server}"
-        others=$(git ls-files -- 'dist/prod-1-*-twitch.k8s.yaml' 'dist/prod-1-*-youtube.k8s.yaml' 'dist/prod-1-*-facebook.k8s.yaml' | grep -v "prod-1-${distname}-" || true)
+        others=$(git ls-files -- 'dist/prod-1-*.k8s.yaml' | grep -vE 'prod-1-(tripbot-identity|job-)' | grep -v "prod-1-${distname}-" || true)
         [ -n "$others" ] && git checkout -- $others || true

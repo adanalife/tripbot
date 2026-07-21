@@ -12,7 +12,7 @@ spec:
             - /usr/local/bin/seed-db
           envFrom:
             - configMapRef:
-                name: tripbot-youtube-config
+                name: tripbot-twitch-config
             - secretRef:
                 name: tripbot-database-creds
           image: adanalife/tripbot:main
@@ -43,7 +43,7 @@ spec:
             - migrate
           envFrom:
             - configMapRef:
-                name: tripbot-youtube-config
+                name: tripbot-twitch-config
             - secretRef:
                 name: tripbot-database-creds
           image: adanalife/tripbot:main
