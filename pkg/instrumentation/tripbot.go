@@ -108,12 +108,12 @@ var TwitchHelixErrors = twitchHelixErrorsIface{counter: twitchHelixErrors}
 // (OBS=1 / Twitch=0) is the silent half-open RTMP signal.
 var TwitchChannelLive = twitchChannelLiveIface{gauge: twitchChannelLive}
 
-// CurrentState exposes the dashcam-state gauge. Call Set(abbrev) on every
-// video transition with the active state's 2-letter abbreviation (or
-// "unknown" when the playhead isn't over a resolvable US state). It sets the
-// new state's series to 1 and clears the previously-active series to 0, so
-// exactly one series reads 1 at any time and no stale =1 series linger for
-// states the playhead has left.
+// CurrentState exposes the dashcam-state gauge. Call Set(abbrev, platform) on
+// every video transition with the active state's 2-letter abbreviation (or
+// "unknown" when the playhead isn't over a resolvable US state) and the
+// instance's streaming platform. It sets the new state's series to 1 and
+// clears the previously-active series to 0, so exactly one series reads 1 at
+// any time and no stale =1 series linger for states the playhead has left.
 var CurrentState = &currentStateIface{gauge: currentState}
 
 // GatewayConnection exposes the consumer-side gateway-reachability gauge.
@@ -240,11 +240,15 @@ type currentStateIface struct {
 	prev  string // last state set to 1, so we can clear it back to 0 on change
 }
 
-// Set records the active dashcam state. A blank abbrev is normalized to
-// "unknown" so the series always carries a non-empty label. On a transition
-// it zeroes the previously-active series before setting the new one to 1; a
-// repeated Set of the same state is a cheap no-op (the series already reads 1).
-func (s *currentStateIface) Set(abbrev string) {
+// Set records the active dashcam state for the given streaming platform. A
+// blank abbrev is normalized to "unknown" so the series always carries a
+// non-empty label. The platform is stamped as a datapoint attribute
+// (service.platform) so the per-platform instances don't collide on a
+// byte-identical series — matching the OBS gauges and target_info. On a
+// transition it zeroes the previously-active series before setting the new one
+// to 1; a repeated Set of the same state is a cheap no-op (the series already
+// reads 1).
+func (s *currentStateIface) Set(abbrev, platform string) {
 	if abbrev == "" {
 		abbrev = "unknown"
 	}
@@ -253,10 +257,11 @@ func (s *currentStateIface) Set(abbrev string) {
 	if abbrev == s.prev {
 		return
 	}
+	plat := platformAttr(platform)
 	if s.prev != "" {
-		s.gauge.Record(context.Background(), 0, metric.WithAttributes(attribute.String("state", s.prev)))
+		s.gauge.Record(context.Background(), 0, metric.WithAttributes(attribute.String("state", s.prev)), plat)
 	}
-	s.gauge.Record(context.Background(), 1, metric.WithAttributes(attribute.String("state", abbrev)))
+	s.gauge.Record(context.Background(), 1, metric.WithAttributes(attribute.String("state", abbrev)), plat)
 	s.prev = abbrev
 }
 
