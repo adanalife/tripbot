@@ -25,7 +25,7 @@ metadata:
   name: onscreens-twitch
   namespace: development
 spec:
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: onscreens-twitch
