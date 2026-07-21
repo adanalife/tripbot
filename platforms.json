@@ -1,0 +1,10 @@
+{
+  "_comment": "Generated from provider.SupportedPlatforms via `task generate` — do not hand-edit. The gateway adapter set is the fleet-wide source of truth for the platform list; every adanalife repo syncs this file rather than restating the platform set.",
+  "platforms": [
+    "twitch",
+    "youtube",
+    "facebook",
+    "instagram",
+    "tiktok"
+  ]
+}
