@@ -9,6 +9,20 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v4.7.0] — 2026-07-21
+
+### Fixes
+
+- Stamp `service.platform` on the `tripbot_current_state` gauge so the per-platform instances no longer collide on a byte-identical series. ([#1186](https://github.com/adanalife/tripbot/pull/1186))
+
+### Deploy / Infra
+
+- App Deployments (tripbot/onscreens) now birth parked at `replicas: 0` for every platform and env — a platform comes online via the console's per-platform scale-up, which sticks because Argo ignores `.spec.replicas`. Replaces the `parked_platforms`/`manual_replicas` cdk8s knobs (replica count is now runtime-owned). ([#1185](https://github.com/adanalife/tripbot/pull/1185))
+
+### Cleanup
+
+- `!report` attribution is now driven by a declared `anonymizedReportPlatforms` capability map rather than a switch over platform names. Reports keep the viewer's real username by default; for now only YouTube is anonymized (its privacy policy was strict about recording viewer identity). Facebook/Instagram/TikTok now keep the name too — anonymization is a per-platform exception a privacy policy imposes, added back per platform if its policy requires it. ([#1183](https://github.com/adanalife/tripbot/pull/1183))
+
 ## [v4.6.0] — 2026-07-20
 
 ### Chatbot
