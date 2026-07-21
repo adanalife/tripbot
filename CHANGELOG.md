@@ -9,6 +9,12 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v4.8.0] — 2026-07-21
+
+### Deploy / Infra
+
+- The supported-platform set now comes from platform-gateway's generated `platforms.json` (synced via `task platforms:sync`) rather than a hardcoded per-env list — prod-1 and stage-1 synthesize the full supported set (adding parked `instagram`/`tiktok` on prod), and a future platform is picked up by re-syncing. A `platforms-contract` CI check keeps the synced copy matched to the gateway. ([#1189](https://github.com/adanalife/tripbot/pull/1189))
+
 ## [v4.7.0] — 2026-07-21
 
 ### Fixes
