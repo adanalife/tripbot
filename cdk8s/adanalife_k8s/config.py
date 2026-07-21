@@ -222,8 +222,10 @@ ENVS: dict[str, EnvConfig] = {
         # Page once scaled up (gateway-facebook holds the Page token). Manifests
         # render while parked — e.g. the tripbot-youtube-creds ExternalSecret
         # (prod-account SM k8s/tripbot/youtube-creds) keeps syncing, which
-        # gateway-youtube also relies on.
-        platforms=("twitch", "youtube", "facebook"),
+        # gateway-youtube also relies on. instagram/tiktok synthesize here too
+        # (born parked); they wait on the 9:16 vertical scene + stream keys before
+        # a console scale-up can bring them live.
+        platforms=SUPPORTED_PLATFORMS,
         # prod youtube launches bot-less: inbound chat poll off (quota extension
         # pending), so rotators serve promo copy and no command responds. Flip to
         # True when the YouTube Data API quota lands. See youtube_inbound_enabled.
@@ -279,7 +281,7 @@ ENVS: dict[str, EnvConfig] = {
         # Extra stage stream workloads contending for the shared node is what
         # stutters the prod stream — budget is two live streams total:
         # prod-twitch + one stage burn-in.
-        platforms=("youtube", "twitch", "tiktok", "facebook", "instagram"),
+        platforms=SUPPORTED_PLATFORMS,
         # Route stage tripbot-twitch's Helix calls through the in-namespace
         # gateway-twitch.
         twitch_api_url="http://gateway-twitch.stage-1.svc.cluster.local:8080",
