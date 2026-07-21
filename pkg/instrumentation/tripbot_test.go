@@ -25,7 +25,7 @@ func TestCurrentStateSet_TracksActiveState(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s.Set(tt.in)
+			s.Set(tt.in, "twitch")
 			if s.prev != tt.wantPrev {
 				t.Errorf("after Set(%q), prev = %q, want %q", tt.in, s.prev, tt.wantPrev)
 			}
@@ -37,6 +37,6 @@ func TestCurrentStateSet_TracksActiveState(t *testing.T) {
 // default OTel meter swallows records), matching how every other iface in
 // this package behaves when no exporter is configured.
 func TestCurrentStateSet_DefaultIsSafe(t *testing.T) {
-	CurrentState.Set("WY")
-	CurrentState.Set("")
+	CurrentState.Set("WY", "twitch")
+	CurrentState.Set("", "")
 }

@@ -85,7 +85,7 @@ func (p *Player) GetCurrentlyPlaying(ctx context.Context) {
 		// Update the current-state gauge: set the new state's series to 1 and
 		// clear the prior one. A blank abbrev (unresolvable state) records as
 		// "unknown" so a stuck playhead is alertable.
-		instrumentation.CurrentState.Set(helpers.StateToStateAbbrev(p.CurrentlyPlaying.State))
+		instrumentation.CurrentState.Set(helpers.StateToStateAbbrev(p.CurrentlyPlaying.State), p.cfg.Platform)
 
 		// Announce the switch so the admin panel's "now playing" card updates
 		// live (no-op when NATS is unconfigured). emitted_at doubles as the
