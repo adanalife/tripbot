@@ -355,7 +355,10 @@ class Tripbot(Construct):
             "deployment",
             metadata=k8s.ObjectMeta(name=name, namespace=ns, labels=labels),
             spec=k8s.DeploymentSpec(
-                replicas=env.replicas_for(platform),
+                # Births parked; a console scale-up brings the platform live and
+                # Argo ignores .spec.replicas so the scale sticks (infra argocd
+                # ignore_replicas). Replica count is runtime-owned, not git-owned.
+                replicas=0,
                 selector=k8s.LabelSelector(match_labels=sel),
                 template=k8s.PodTemplateSpec(
                     metadata=k8s.ObjectMeta(

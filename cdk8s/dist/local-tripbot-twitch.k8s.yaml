@@ -35,7 +35,7 @@ metadata:
   name: tripbot-twitch
   namespace: default
 spec:
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: tripbot-twitch

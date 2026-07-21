@@ -93,33 +93,6 @@ class EnvConfig:
     # itself. Stage only; prod stays on the MS-01 (and the taint repels it
     # regardless, since prod pods carry no toleration).
     prefer_rpi5: bool = False
-    # When True, the app Deployments omit spec.replicas, so Argo never manages
-    # the replica count and a hand `kubectl scale` / console start-stop button is
-    # authoritative (survives autosync). Stage only — it's where components are
-    # parked at 0 to keep the minipc free for prod + the shared transcode job.
-    # Pairs with stage selfHeal being off in the Argo apps set (infra
-    # SELFHEAL_OFF_ENVS). prod keeps replicas declared so Argo holds it at 1.
-    manual_replicas: bool = False
-    # Subset of `platforms` whose app Deployments render with spec.replicas=0 —
-    # the whole platform stack (tripbot/onscreens) is emitted and Argo
-    # manages it, but parked off so it consumes no node resources until turned
-    # on by removing the platform from this set (a config edit + redeploy; under
-    # prod selfHeal a hand `kubectl scale` would just be reverted to 0). Lets a
-    # platform be staged on an env ahead of being made live. prod-youtube sits
-    # here until stage-youtube is shut down and prod-youtube is turned on, so the
-    # minipc never runs two youtube stacks at once.
-    parked_platforms: tuple[str, ...] = ()
-
-    @property
-    def replicas(self) -> int | None:
-        """spec.replicas for the app Deployments: None (omitted, manually
-        scaled) when manual_replicas, else 1."""
-        return None if self.manual_replicas else 1
-
-    def replicas_for(self, platform: str) -> int | None:
-        """spec.replicas for a given platform's app Deployments: 0 when the
-        platform is parked (rendered but off), else the env-wide `replicas`."""
-        return 0 if platform in self.parked_platforms else self.replicas
 
     # The platform-gateway gateway-twitch URL a twitch instance routes its
     # Helix calls through — the gateway is tripbot's sole Helix caller. Empty
@@ -223,24 +196,16 @@ ENVS: dict[str, EnvConfig] = {
         # The DB lives in its own namespace so a `kubectl delete ns prod-1` can't
         # take years of irreplaceable data.
         data_namespace="prod-1-data",
-        # The prod-youtube app stack (tripbot / onscreens) is parked at
-        # replicas:0: the YouTube Data API quota extension is pending, the bot
-        # can't poll chat without it (youtube_inbound_enabled below), so the
-        # stack stays staged rather than running idle. The obs repo parks its
-        # prod-youtube encoder to match. Manifests still render while parked —
-        # the tripbot-youtube-creds ExternalSecret (prod-account SM
-        # k8s/tripbot/youtube-creds) keeps syncing, which gateway-youtube also
-        # relies on. Unpark by dropping "youtube" from parked_platforms once
-        # the quota lands.
-        #
-        # facebook is staged the same way: parked at replicas:0 so its
-        # tripbot / onscreens instances render but don't run until a console
-        # scale-up. It streams to the real ADL Page (public go-live from
-        # Facebook Live Producer via a persistent stream key); gateway-facebook
-        # holds the Page token and discovers the live for chat. Unpark by
-        # dropping "facebook" from parked_platforms.
+        # Every platform's app stack (tripbot / onscreens) is emitted and Argo
+        # manages it, but births parked at replicas:0 — a console scale-up brings
+        # one live (Argo ignores .spec.replicas, so the scale sticks). Only twitch
+        # runs today; youtube waits on the pending Data API quota extension
+        # (youtube_inbound_enabled below), and facebook streams to the real ADL
+        # Page once scaled up (gateway-facebook holds the Page token). Manifests
+        # render while parked — e.g. the tripbot-youtube-creds ExternalSecret
+        # (prod-account SM k8s/tripbot/youtube-creds) keeps syncing, which
+        # gateway-youtube also relies on.
         platforms=("twitch", "youtube", "facebook"),
-        parked_platforms=("youtube", "facebook"),
         # prod youtube launches bot-less: inbound chat poll off (quota extension
         # pending), so rotators serve promo copy and no command responds. Flip to
         # True when the YouTube Data API quota lands. See youtube_inbound_enabled.
@@ -287,19 +252,16 @@ ENVS: dict[str, EnvConfig] = {
         # in stage-1-data, so a `kubectl delete ns stage-1` can't take the DB. prod
         # follows on its next wipe (set prod-1's data_namespace to prod-1-data).
         data_namespace="stage-1-data",
-        # Every stage platform is present but parked at replicas:0 — the
-        # resting state is everything-off, and a platform comes online via
-        # the console's scale-up button (stage selfHeal is off, so the hand
-        # scale sticks until the next sync re-zeroes it). facebook is the
-        # current burn-in platform, chatting against the ADL Staging Page.
+        # Every stage platform is present but births parked at replicas:0 — the
+        # resting state is everything-off, and a platform comes online via the
+        # console's scale-up button (Argo ignores .spec.replicas, so the hand
+        # scale sticks). facebook is the current burn-in platform, chatting
+        # against the ADL Staging Page.
         #
         # Extra stage stream workloads contending for the shared node is what
         # stutters the prod stream — budget is two live streams total:
         # prod-twitch + one stage burn-in.
         platforms=("youtube", "twitch", "tiktok", "facebook", "instagram"),
-        manual_replicas=True,
-        # The vertical-canvas video half for tiktok/instagram lands later.
-        parked_platforms=("twitch", "youtube", "tiktok", "facebook", "instagram"),
         # Route stage tripbot-twitch's Helix calls through the in-namespace
         # gateway-twitch.
         twitch_api_url="http://gateway-twitch.stage-1.svc.cluster.local:8080",
