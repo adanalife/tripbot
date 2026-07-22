@@ -91,6 +91,11 @@ var onscreenRegistry = map[string]onscreenStyle{
 	SlugGPS: {
 		Name: SlugGPS, IsImage: true,
 	},
+	SlugUnderConstruction: {
+		// Fully static page with its own template branch (like timewarp);
+		// the text-onscreen style fields don't apply.
+		Name: SlugUnderConstruction,
+	},
 }
 
 // onscreensStateHandler returns a JSON snapshot of every onscreen's current
