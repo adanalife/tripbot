@@ -19,6 +19,9 @@ concurrency:
   group: dev-image
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   # Per-image path filters, so a merge that doesn't touch an image's build
   # surface doesn't rebuild it. Both images rebuild on any Go change — their
