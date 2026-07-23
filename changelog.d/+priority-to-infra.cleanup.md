@@ -1,0 +1,1 @@
+The `prod-stream` PriorityClass is no longer emitted by the tripbot-identity unit — the cluster scheduling tiers (`prod-stream` / `prod-support`) are owned by infra now (referenced by name across every app repo). App pods are unchanged; they still set `priorityClassName=prod-stream`.

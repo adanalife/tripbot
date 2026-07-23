@@ -114,12 +114,3 @@ spec:
   target:
     creationPolicy: Owner
     name: tripbot-discord-bot-token
----
-apiVersion: scheduling.k8s.io/v1
-kind: PriorityClass
-metadata:
-  name: prod-stream
-  namespace: prod-1
-description: Live-stream workloads — outrank default-priority co-tenants; preempt them under node pressure.
-globalDefault: false
-value: 1000

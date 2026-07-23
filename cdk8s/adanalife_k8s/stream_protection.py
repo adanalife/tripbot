@@ -1,9 +1,14 @@
-"""Prod-stream protection objects (2026-06-11 stage-starves-prod incident).
+"""Co-tenant ResourceQuota (2026-06-11 stage-starves-prod incident).
 
-Extracted from infra/cdk8s's supporting.py: just the PriorityClass + ResourceQuota
-half (k8s-typed, no cert-manager), which is tripbot-owned. The shared observability
-Secrets + cert-manager Issuers stay in infra's SupportingChart. Emitted into the
-per-env tripbot-identity unit (charts.IdentityChart) alongside the identity Secrets.
+The app-namespace ResourceQuota that caps what co-tenant envs can request in
+aggregate. Emitted into the per-env tripbot-identity unit (charts.IdentityChart)
+alongside the identity Secrets.
+
+The scheduling priority tiers (prod-stream / prod-support) that used to live here
+are owned by infra now (adanalife_k8s/priority.py, delivered by the prod-1
+SupportingChart) — cluster-wide policy referenced by name across every app repo.
+This module keeps only the namespace-scoped quota half; app pods still set
+priorityClassName=env.priority_class, referencing the infra-owned class.
 """
 
 from __future__ import annotations
@@ -15,26 +20,11 @@ from adanalife_k8s.config import EnvConfig
 
 
 def emit_stream_protection(scope: Construct, env: EnvConfig) -> None:
-    """The prod-stream protection objects: the PriorityClass the env's app pods
-    reference (when env.priority_class is set), and the app-namespace ResourceQuota
-    capping what co-tenant envs can request in aggregate (when env.app_quota is set).
+    """The app-namespace ResourceQuota capping what co-tenant envs can request in
+    aggregate (when env.app_quota is set). The priority tiers app pods reference
+    are owned by infra (adanalife_k8s/priority.py); see the module docstring.
     """
     ns = env.namespace or None
-
-    if env.priority_class:
-        # Cluster-scoped; cdk8s stamps the chart namespace, which the apiserver
-        # ignores on cluster-scoped kinds (same as dashcam-cv-low). value 1000
-        # outranks every default-priority (0) pod, so under node pressure the
-        # scheduler preempts co-tenants, never the live stream. dashcam-cv-low
-        # (-10) stays the most-preemptible tier.
-        k8s.KubePriorityClass(
-            scope,
-            "priority-class",
-            metadata=k8s.ObjectMeta(name=env.priority_class),
-            value=1000,
-            global_default=False,
-            description="Live-stream workloads — outrank default-priority co-tenants; preempt them under node pressure.",
-        )
 
     if env.app_quota:
         k8s.KubeResourceQuota(
