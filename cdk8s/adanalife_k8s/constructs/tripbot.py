@@ -14,7 +14,7 @@ Reproduces k8s/apps/tripbot/base + overlays:
   * Service (ClusterIP :8080) + traefik Ingress everywhere (the web UI / OAuth
     round-trip is reachable on-LAN in every env). The *bot* is outbound-only
     (EventSub via WebSocket), but the dashboard Ingress is published per env;
-    minipc envs add TLS + a Tailscale Ingress. local is HTTP-only at
+    minipc envs add TLS. local is HTTP-only at
     tripbot.localhost.
 The construct envFroms its DB + app Secrets by name but does NOT emit them —
 they're identity-level (one bot, one DB, shared by every platform stack), so
@@ -411,8 +411,6 @@ class Tripbot(Construct):
 
         # --- Ingress (dashboard / OAuth) — published in every env ---
         self._ingress(name, platform, env, ns, labels)
-        if env.tailscale:
-            self._tailscale_ingress(name, env, ns, labels)
 
     # ---- Ingress helpers ----
     def _ingress(self, name, platform, env: EnvConfig, ns, labels):
@@ -458,23 +456,6 @@ class Tripbot(Construct):
                         ),
                     )
                 ],
-            ),
-        )
-
-    def _tailscale_ingress(self, name, env: EnvConfig, ns, labels):
-        short = env.dns_base.split(".")[0]  # prod / stage
-        k8s.KubeIngress(
-            self,
-            "ts-ingress",
-            metadata=k8s.ObjectMeta(name=f"{name}-ts", namespace=ns),
-            spec=k8s.IngressSpec(
-                ingress_class_name="tailscale",
-                default_backend=k8s.IngressBackend(
-                    service=k8s.IngressServiceBackend(
-                        name=name, port=k8s.ServiceBackendPort(number=8080)
-                    )
-                ),
-                tls=[k8s.IngressTls(hosts=[f"{name}-{short}"])],
             ),
         )
 

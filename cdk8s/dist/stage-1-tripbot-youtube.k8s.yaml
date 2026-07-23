@@ -219,19 +219,3 @@ spec:
     - hosts:
         - tripbot-youtube.stage.whereisdana.today
       secretName: tripbot-youtube-tls
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: tripbot-youtube-ts
-  namespace: stage-1
-spec:
-  defaultBackend:
-    service:
-      name: tripbot-youtube
-      port:
-        number: 8080
-  ingressClassName: tailscale
-  tls:
-    - hosts:
-        - tripbot-youtube-stage

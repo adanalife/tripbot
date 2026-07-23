@@ -196,19 +196,3 @@ spec:
     - hosts:
         - tripbot-twitch.stage.whereisdana.today
       secretName: tripbot-twitch-tls
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: tripbot-twitch-ts
-  namespace: stage-1
-spec:
-  defaultBackend:
-    service:
-      name: tripbot-twitch
-      port:
-        number: 8080
-  ingressClassName: tailscale
-  tls:
-    - hosts:
-        - tripbot-twitch-stage
