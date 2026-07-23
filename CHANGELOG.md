@@ -9,6 +9,12 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v4.8.1] — 2026-07-23
+
+### Fixes
+
+- Bump golang.org/x/text to v0.39.0 to resolve GO-2026-5970 (infinite loop on invalid input; transitive dependency). ([#1191](https://github.com/adanalife/tripbot/pull/1191))
+
 ## [v4.8.0] — 2026-07-21
 
 ### Deploy / Infra
