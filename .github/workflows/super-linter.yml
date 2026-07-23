@@ -26,7 +26,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: run-linters
-        uses: super-linter/super-linter@v8
+        uses: super-linter/super-linter@v8.7.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # No PR diff to scope to on a schedule — lint the whole tree.
