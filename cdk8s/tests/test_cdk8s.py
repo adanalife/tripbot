@@ -97,13 +97,15 @@ def test_identity_unit_emits_app_secrets(env):
         assert "tripbot-database-creds" in es_names
 
 
-def test_prod_stream_protection_priorityclass_only_in_prod():
-    prod = {o["kind"] for o in _objects("prod-1-tripbot-identity")}
-    assert "PriorityClass" in prod
-    # stage carries the ResourceQuota but no prod PriorityClass.
-    stage = _objects("stage-1-tripbot-identity")
-    assert "PriorityClass" not in {o["kind"] for o in stage}
-    assert "ResourceQuota" in {o["kind"] for o in stage}
+def test_priority_classes_owned_by_infra_not_tripbot():
+    # The prod-stream / prod-support scheduling tiers moved to infra
+    # (adanalife_k8s/priority.py, delivered by the prod-1 SupportingChart) —
+    # tripbot's identity unit emits no PriorityClass in any env; app pods
+    # reference the infra-owned class by name (priorityClassName=env.priority_class).
+    for stem in ("prod-1-tripbot-identity", "stage-1-tripbot-identity"):
+        assert "PriorityClass" not in {o["kind"] for o in _objects(stem)}
+    # The co-tenant ResourceQuota still lives here.
+    assert "ResourceQuota" in {o["kind"] for o in _objects("stage-1-tripbot-identity")}
 
 
 def test_youtube_tripbot_emits_youtube_creds():
