@@ -197,19 +197,3 @@ spec:
     - hosts:
         - tripbot-facebook.stage.whereisdana.today
       secretName: tripbot-facebook-tls
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: tripbot-facebook-ts
-  namespace: stage-1
-spec:
-  defaultBackend:
-    service:
-      name: tripbot-facebook
-      port:
-        number: 8080
-  ingressClassName: tailscale
-  tls:
-    - hosts:
-        - tripbot-facebook-stage

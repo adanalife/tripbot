@@ -64,7 +64,6 @@ class EnvConfig:
     )
     secret_source: str = "eso"  # eso | local
     gpu: bool = False  # request gpu.intel.com/i915
-    tailscale: bool = False  # emit the tailscale Ingress
     otel: bool = False  # OTEL_SDK_DISABLED=false when True
     postgres_size: str = "5Gi"
     postgres_storage_class: str = ""  # "" = cluster default; local-path-retain on prod
@@ -205,7 +204,6 @@ ENVS: dict[str, EnvConfig] = {
         binary_env="production",
         deployment_env="prod-1",
         gpu=True,
-        tailscale=True,
         otel=True,
         postgres_size="50Gi",
         postgres_storage_class="local-path-retain",
@@ -259,7 +257,6 @@ ENVS: dict[str, EnvConfig] = {
         binary_env="staging",
         deployment_env="stage-1",
         gpu=True,
-        tailscale=True,
         # Prefer the ephemeral arm64 rpi5 worker for stage's stateless app pods
         # (tripbot/onscreens); they recover onto the MS-01 if the Pi is
         # unplugged. See prefer_rpi5 on EnvConfig + scheduling.py.
@@ -322,7 +319,6 @@ ENVS: dict[str, EnvConfig] = {
         binary_env="staging",
         deployment_env="development",
         gpu=False,
-        tailscale=False,
         otel=False,
         external_dns_role_arn=_STAGE_ROLE,
         platforms=("twitch",),
@@ -341,7 +337,6 @@ ENVS: dict[str, EnvConfig] = {
         deployment_env="development",
         secret_source="local",
         gpu=False,
-        tailscale=False,
         otel=False,
         platforms=("twitch",),
     ),

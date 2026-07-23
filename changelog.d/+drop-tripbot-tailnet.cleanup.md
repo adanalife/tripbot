@@ -1,0 +1,1 @@
+Drop the per-platform tripbot Tailscale ingress. The tailnet proxies existed for the old admin console, which now lives in tripbot-console; nothing reaches tripbot over the tailnet anymore. Removes the now-unused `tailscale` env flag. Reclaims two proxy pods per platform per env on the minipc.
