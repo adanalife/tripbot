@@ -66,7 +66,8 @@ jobs:
         # pinned app files before the sync check; identity + one-shot jobs stay
         # live. Mirrors the freeze in `task cdk8s:synth`.
         run: |
-          git ls-files -- 'dist/prod-1-*-twitch.k8s.yaml' 'dist/prod-1-*-youtube.k8s.yaml' 'dist/prod-1-*-facebook.k8s.yaml' \
+          git ls-files -- 'dist/prod-1-*.k8s.yaml' \
+            | grep -vE 'prod-1-(tripbot-identity|job-)' \
             | xargs -r git checkout --
 
       - name: Verify dist/ is committed in sync
