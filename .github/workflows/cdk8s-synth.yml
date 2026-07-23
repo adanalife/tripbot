@@ -39,7 +39,7 @@ jobs:
           working_directory: cdk8s
 
       # uv handles project-local Python deps on top of mise's interpreter.
-      - uses: astral-sh/setup-uv@v7
+      - uses: astral-sh/setup-uv@v8.2.0 # no floating major tag published
 
       - name: Install Python deps
         working-directory: cdk8s
