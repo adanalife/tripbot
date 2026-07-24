@@ -68,7 +68,7 @@ jobs:
         with:
           working_directory: cdk8s
 
-      - uses: astral-sh/setup-uv@v8.2.0 # no floating major tag published
+      - uses: astral-sh/setup-uv@v9.0.0 # no floating major tag published
         if: ${{ steps.release.outputs.pr && !steps.release.outputs.release_created }}
 
       - name: Build changelog + re-synth cdk8s on the release PR branch
