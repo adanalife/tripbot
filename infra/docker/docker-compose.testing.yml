@@ -22,8 +22,8 @@ services:
         condition: service_healthy
 
   # `test` is a one-shot Go toolchain container for running `go test`
-  # outside the running stack. Invoked via `ENV=testing bin/devenv
-  # run --rm test ...` (see Taskfile.yml).
+  # outside the running stack. Invoked via `task test`, which wraps
+  # `docker compose run --rm test ...` (see Taskfile.yml).
   test:
     image: adanalife/tripbot-test
     build:
@@ -44,8 +44,8 @@ services:
       - .:/src
       - tripbot-gomod-cache:/go/pkg/mod
       - tripbot-gobuild-cache:/root/.cache/go-build
-    # Overridable via `ENV=testing bin/devenv run --rm test <cmd>` —
-    # the Taskfile uses that to swap in -coverprofile / -race variants.
+    # Overridable via `docker compose run --rm test <cmd>` — the Taskfile
+    # uses that to swap in -coverprofile / -race variants.
     command: go test ./...
 
 volumes:

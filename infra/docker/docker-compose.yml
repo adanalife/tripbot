@@ -45,7 +45,7 @@ services:
       POSTGRES_PASSWORD: "${DATABASE_PASS}"
       POSTGRES_USER: "${DATABASE_USER}"
       POSTGRES_DB: "${DATABASE_DB}"
-    # data persistence is opt-in per environment (see docker-compose.development.yml)
+    # ephemeral — no data volume; test/CI runs start from a fresh migrated db
 
   migrate:
     image: ghcr.io/adanalife/mirror/migrate:4
