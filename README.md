@@ -44,26 +44,13 @@ mise exec -- go build ./cmd/tripbot
 
 ### Running the full stack locally
 
-You can use `docker-compose` to run tripbot on your own machine.
-It is configured to spin up all of the dependencies for the project.
-A helper script ([`bin/devenv`](bin/devenv)) has been created to make the process a little easier.
-For example:
+The full application stack (bot + dependencies) runs on the local k3d dev
+cluster managed from the [infra repo](https://github.com/adanalife/infra) —
+`task k8s:dev:cluster:up` brings it up. See that repo's README for the cluster
+lifecycle targets.
 
-```bash
-# (optional) create alias for devenv script
-alias devenv="$(pwd)/bin/devenv"
-
-# spin up tripbot stack on current machine
-devenv up --daemon
-# see running containers
-devenv ps
-
-# see logs for a specific container
-devenv logs tripbot
-
-# shut down everything
-devenv down
-```
+For DB-backed tests you only need postgres, which `task test` spins up on demand
+via the docker-compose testing stack ([`infra/docker/docker-compose.testing.yml`](infra/docker/docker-compose.testing.yml)) — no manual setup required.
 
 ### Changelog
 

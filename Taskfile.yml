@@ -1,8 +1,16 @@
 version: '3'
 
-# All targets shell into the `test` service defined in
-# infra/docker/docker-compose.testing.yml via bin/devenv. Env vars
+# The test targets run in the one-shot `test` service defined in
+# infra/docker/docker-compose.testing.yml (layered on the base compose):
+# it boots postgres, applies migrations, then runs `go test`. Env vars
 # come from .env.testing; module/build caches live in named volumes.
+
+vars:
+  # The compose stack the test targets run against — the same base +
+  # testing overlay CI uses (infra/docker/docker-compose.testing.yml).
+  COMPOSE: >-
+    docker compose --project-directory . --env-file infra/docker/env.docker
+    -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.testing.yml
 
 tasks:
   default:
@@ -13,23 +21,23 @@ tasks:
   test:
     desc: Run all unit tests
     cmds:
-      - ENV=testing bin/devenv run --rm test go test ./...
+      - "{{.COMPOSE}} run --rm test go test ./..."
 
   test:cover:
     desc: Run tests with coverage + race detector; prints per-function and total coverage
     cmds:
-      - ENV=testing bin/devenv run --rm test bash -c 'go test -v -race -covermode=atomic -coverprofile=coverage.out ./... && go tool cover -func=coverage.out'
+      - "{{.COMPOSE}} run --rm test bash -c 'go test -v -race -covermode=atomic -coverprofile=coverage.out ./... && go tool cover -func=coverage.out'"
 
   test:cover:html:
     desc: Generate HTML coverage report at coverage.html
     cmds:
-      - ENV=testing bin/devenv run --rm test bash -c 'go test -coverprofile=coverage.out ./... && go tool cover -html=coverage.out -o coverage.html'
+      - "{{.COMPOSE}} run --rm test bash -c 'go test -coverprofile=coverage.out ./... && go tool cover -html=coverage.out -o coverage.html'"
       - 'echo "Open coverage.html in your browser"'
 
   test:race:
     desc: Run tests with the race detector (slower; surfaces data races)
     cmds:
-      - ENV=testing bin/devenv run --rm test go test -race ./...
+      - "{{.COMPOSE}} run --rm test go test -race ./..."
 
   # Native macOS test runner — host mise, no docker (the repo is pure Go).
   # `dotenv` injects .env.testing's keys as real env vars so the config
@@ -48,7 +56,7 @@ tasks:
     desc: Open an interactive Go-toolchain shell inside the test container
     interactive: true
     cmds:
-      - ENV=testing bin/devenv run --rm test bash
+      - "{{.COMPOSE}} run --rm test bash"
 
   # Twitch OAuth consent + token bootstrap is owned by the platform-gateway now
   # (gateway-twitch's /auth/* flow writes the oauth_tokens rows). The old
