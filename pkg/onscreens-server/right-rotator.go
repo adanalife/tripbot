@@ -11,12 +11,12 @@ import (
 // shared-texture handoff occasionally gets a stale/blank frame stuck — and CEF
 // only pushes a fresh frame when the rendered pixels actually change. A content
 // rotation is what forces that repaint, so a shorter interval bounds how long a
-// stuck-blank overlay stays blank. This was 90s, which left the right rotator
-// visibly blank ~2x longer than the left (the asymmetry that surfaced the bug).
+// stuck-blank overlay stays blank.
 var rightRotatorUpdateFrequency = time.Duration(45 * time.Second)
 
 // All right-rotator lines are platform-neutral (!location and !timewarp are both
-// in the YouTube allowlist). Weight 2 reproduces the old duplicated entries.
+// in the YouTube allowlist). Weight 2 makes the follow and !location hints
+// twice as likely as the unweighted lines.
 var possibleRightMessages = []rotatorMessage{
 	{Text: "Don't forget to follow :)", Weight: 2},
 	{Text: "Try running `!location`", Weight: 2},
