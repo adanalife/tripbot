@@ -15,8 +15,10 @@ import (
 // (that would drag tripbot-only config/DB init into this binary; see the
 // package-boundary-init-discipline ADR).
 const (
-	platformTwitch  = "twitch"
-	platformYouTube = "youtube"
+	platformTwitch    = "twitch"
+	platformYouTube   = "youtube"
+	platformTikTok    = "tiktok"
+	platformInstagram = "instagram"
 )
 
 // rareOdds is the 1-in-N chance the left rotator shows its easter-egg line.
@@ -102,11 +104,11 @@ func (r *rotator) content() string {
 	return pickRotatorMessage(r.cfg.Platform, r.pool(time.Now()), r.siblingCommands())
 }
 
-// pool returns the message set for the current instance state: the bot-less
-// promo pool (with the live location/date line prepended when fresh) on a
-// bot-less YouTube instance, otherwise the normal command-hint pool.
+// pool returns the message set for the current instance state: the promo pool
+// (with the live location/date line prepended when fresh) on an instance that
+// can't surface a command result, otherwise the normal command-hint pool.
 func (r *rotator) pool(now time.Time) []rotatorMessage {
-	if !r.botless() {
+	if !r.promoMode() {
 		return r.messages
 	}
 	if r.liveLine != nil {
@@ -126,12 +128,28 @@ func (r *rotator) siblingCommands() map[string]bool {
 	return commandsIn(r.sibling.osc.Content)
 }
 
-// botless reports whether this instance should show promotional copy instead of
-// command hints — true only for a YouTube pipeline whose inbound chat is off
-// (YOUTUBE_INBOUND_ENABLED=false). In that state no command can respond, so the
-// rotators must not advertise commands. Mirrors the chatbot's botless gate.
-func (r *rotator) botless() bool {
-	return r.cfg.Platform == platformYouTube && !r.cfg.YouTubeInboundEnabled
+// promoMode reports whether this corner should show promotional copy instead of
+// command hints — true whenever a hinted "!command" couldn't produce a result
+// the viewer sees, which would read as broken. Two cases:
+//
+//   - a bot-less YouTube instance (YOUTUBE_INBOUND_ENABLED=false) receives no
+//     commands at all;
+//   - a read-only platform (TikTok, Instagram) receives commands but the bot
+//     can't post a reply (TikTok/Instagram have no chat-send API — the gateway
+//     webcast/poll is observe-only), and this rotator advertises no
+//     on-screen-effect command, so every hint would look unanswered.
+//
+// Mirrors the chatbot's command gating (v1Commands + the read-only platforms).
+// Twitch and an inbound-on YouTube run the full command-hint pool.
+func (r *rotator) promoMode() bool {
+	switch r.cfg.Platform {
+	case platformTikTok, platformInstagram:
+		return true
+	case platformYouTube:
+		return !r.cfg.YouTubeInboundEnabled
+	default:
+		return false
+	}
 }
 
 // appliesTo reports whether m should show on the given platform.

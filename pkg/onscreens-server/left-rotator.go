@@ -25,18 +25,22 @@ var possibleLeftMessages = []rotatorMessage{
 	// {Text: "Use !report to report stream issues"},
 }
 
-// botlessLeftMessages replace the command-hint left rotator on a bot-less
-// YouTube instance: no commands work there, so this corner points viewers at
-// the live, interactive Twitch stream — the "where to interact" half of the
-// split. The right corner carries the YouTube subscribe + journey lines, so the
-// two corners never echo each other. Teases the guess/miles features without
-// printing a "!command" token a YouTube viewer would type into an unread chat.
-// On a bot-less stream these are mixed with the live location line (see
-// leftLiveLine) — the info the !location command would return.
+// botlessLeftMessages replace the command-hint left rotator in promoMode (a
+// bot-less YouTube instance, or a read-only platform like TikTok/Instagram where
+// the bot can't reply): no chat command lands a visible reply there, so this
+// corner points viewers at the live, interactive Twitch stream — the "where to
+// interact" half of the split. The right corner carries the subscribe + journey
+// lines, so the two corners never echo each other. Teases the guess/miles
+// features without printing a "!command" token a viewer would type into an
+// unread/unanswered chat. On a promoMode stream these are mixed with the live
+// location line (see leftLiveLine) — the info the !location command would
+// return. The "coming to YouTube" tease is scoped to YouTube (it names that
+// platform); every other line is platform-neutral and safe on any promoMode
+// platform.
 var botlessLeftMessages = []rotatorMessage{
 	{Text: "Chat live with the bot on Twitch", Weight: 2},
 	{Text: "twitch.tv/ADanaLife_", Weight: 2},
-	{Text: "Interactive chat is coming to YouTube soon"},
+	{Text: "Interactive chat is coming to YouTube soon", Platforms: []string{platformYouTube}},
 	{Text: "Want to talk to the bot? It's live on Twitch"},
 	{Text: "Guess the state and earn miles — live on Twitch"},
 }
