@@ -38,7 +38,7 @@ const reconnectWait = 2 * time.Second
 //
 // The connection retries forever: RetryOnFailedConnect covers the boot race
 // where this process starts before NATS is reachable (a node reboot brings
-// apps and NATS up together), so a failed first dial no longer leaves the
+// apps and NATS up together), so a failed first dial doesn't leave the
 // process permanently deaf. The returned conn is usable immediately —
 // subscriptions made while disconnected are queued client-side and replayed
 // on connect; publishes buffer up to the client's reconnect buffer and are

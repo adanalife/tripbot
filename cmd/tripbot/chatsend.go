@@ -15,10 +15,9 @@ import (
 
 // startChatSendSubscriber wires the "send a chat message" command. A publisher
 // emits chatEvents.Send on tripbot.<env>.chat.send.<platform>; tripbot owns the
-// Twitch identities, so it's the thing that actually sends. The in-tripbot admin
-// panel that used to publish this was retired with the tripbot-console split;
-// this subscriber stays as the receive side, ready for the standalone console to
-// publish to over the same wire format when its chat-send feature lands.
+// Twitch identities, so it's the thing that actually sends. This subscriber is
+// the receive side; the standalone tripbot-console publishes to it over the
+// same wire format once its chat-send feature lands.
 //
 // No-op when NATS is unconfigured (the singleton conn is nil) — the same
 // fire-and-forget posture as the rest of the NATS surface. Must run after

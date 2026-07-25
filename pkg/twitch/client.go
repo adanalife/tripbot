@@ -7,10 +7,10 @@ import (
 	"github.com/nicklaw5/helix/v2"
 )
 
-// API owns the mutable Twitch state that used to live in package-level
-// globals: the two helix clients, the App Access Token, the per-identity
-// user-access-tokens, and the cached channel/viewer/audience data. It is the
-// in-process implementation of "talk to Twitch"; construct one with New().
+// API owns the mutable Twitch state: the two helix clients, the App Access
+// Token, the per-identity user-access-tokens, and the cached
+// channel/viewer/audience data. It is the in-process implementation of
+// "talk to Twitch"; construct one with New().
 //
 // (Named API rather than Client because the package already exposes a
 // Client() helix-getter that callers depend on — the type can be renamed once

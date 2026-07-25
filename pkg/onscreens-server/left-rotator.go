@@ -9,8 +9,8 @@ var leftRotatorUpdateFrequency = time.Duration(45 * time.Second)
 
 // !miles and !guess are Twitch-only (not in the YouTube command allowlist), so
 // those lines are scoped to Twitch — a YouTube overlay would otherwise advertise
-// commands that silently no-op there. Weight 2 reproduces the old duplicated
-// entries (!discord, !commands each appeared twice).
+// commands that silently no-op there. Weight 2 makes !discord and !commands
+// twice as likely as the unweighted lines.
 var possibleLeftMessages = []rotatorMessage{
 	{Text: "Crave something new? Try `!timewarp`"},
 	{Text: "Earn miles for every minute you watch (`!miles`)", Platforms: []string{platformTwitch}},
