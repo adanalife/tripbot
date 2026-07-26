@@ -9,6 +9,22 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v4.9.0] — 2026-07-26
+
+### Onscreens
+
+- On-screen rotators now show promo copy instead of command hints on read-only platforms (TikTok, Instagram), where the bot receives chat but can't reply — so an overlay never advertises a `!command` that would go unanswered. Generalizes the bot-less-YouTube promo gate into a `promoMode` covering both cases, and scopes the YouTube-specific promo lines to YouTube. ([#1200](https://github.com/adanalife/tripbot/pull/1200))
+
+### CI / Tooling
+
+- Harden shared CI workflows: scope token permissions, pin super-linter and setup-uv. ([#1194](https://github.com/adanalife/tripbot/pull/1194))
+
+### Cleanup
+
+- The `prod-stream` PriorityClass is no longer emitted by the tripbot-identity unit — the cluster scheduling tiers (`prod-stream` / `prod-support`) are owned by infra now (referenced by name across every app repo). App pods are unchanged; they still set `priorityClassName=prod-stream`. ([#1195](https://github.com/adanalife/tripbot/pull/1195))
+- Drop the per-platform tripbot Tailscale ingress. The tailnet proxies existed for the old admin console, which now lives in tripbot-console; nothing reaches tripbot over the tailnet anymore. Removes the now-unused `tailscale` env flag. Reclaims two proxy pods per platform per env on the minipc. ([#1196](https://github.com/adanalife/tripbot/pull/1196))
+- Removed the `bin/devenv` and `bin/prodenv` docker-compose wrappers (and the development/production compose overlays, plus the now-orphaned `onscreens-server` and `seed` services from the base compose). The full local stack runs on the k3d dev cluster now, and the `task test*` targets invoke `docker compose run --rm test` directly against the testing overlay — the same stack CI uses. ([#1199](https://github.com/adanalife/tripbot/pull/1199))
+
 ## [v4.8.1] — 2026-07-23
 
 ### Fixes

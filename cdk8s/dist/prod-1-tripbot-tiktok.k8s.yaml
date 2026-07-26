@@ -74,7 +74,7 @@ spec:
             - secretRef:
                 name: tripbot-discord-bot-token
                 optional: true
-          image: adanalife/tripbot:4.8.1
+          image: adanalife/tripbot:4.9.0
           imagePullPolicy: IfNotPresent
           livenessProbe:
             httpGet:
@@ -118,7 +118,7 @@ spec:
                 name: tripbot-tiktok-config
             - secretRef:
                 name: tripbot-database-creds
-          image: adanalife/tripbot:4.8.1
+          image: adanalife/tripbot:4.9.0
           imagePullPolicy: IfNotPresent
           name: migrate
           resources:
@@ -183,19 +183,3 @@ spec:
     - hosts:
         - tripbot-tiktok.prod.whereisdana.today
       secretName: tripbot-tiktok-tls
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: tripbot-tiktok-ts
-  namespace: prod-1
-spec:
-  defaultBackend:
-    service:
-      name: tripbot-tiktok
-      port:
-        number: 8080
-  ingressClassName: tailscale
-  tls:
-    - hosts:
-        - tripbot-tiktok-prod
