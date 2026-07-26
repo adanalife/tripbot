@@ -14,29 +14,41 @@ func rotatorConf(platform string, inbound bool) *c.OnscreensServerConfig {
 	return &c.OnscreensServerConfig{Environment: "testing", Platform: platform, YouTubeInboundEnabled: inbound}
 }
 
-// TestBotlessRotatorsAdvertiseNoCommands verifies that on a bot-less YouTube
-// instance both rotators serve the promo set and never surface a "!command"
-// token (which would no-op there and look broken).
-func TestBotlessRotatorsAdvertiseNoCommands(t *testing.T) {
-	cfg := rotatorConf(platformYouTube, false)
+// TestPromoModeRotatorsAdvertiseNoCommands verifies that on every promoMode
+// instance — bot-less YouTube and the read-only platforms (TikTok, Instagram)
+// where the bot can't reply — both rotators serve the promo set and never
+// surface a "!command" token (which would no-op there and look broken).
+func TestPromoModeRotatorsAdvertiseNoCommands(t *testing.T) {
 	// "!" followed by a letter is a command token (e.g. !location); a bare "!"
 	// as punctuation (the rare-message line) is fine.
 	commandToken := regexp.MustCompile(`![a-zA-Z]`)
-	for i := 0; i < 4000; i++ {
-		if msg := newLeftRotator(cfg).content(); commandToken.MatchString(msg) {
-			t.Fatalf("bot-less left rotator surfaced a command: %q", msg)
-		}
-		if msg := newRightRotator(cfg).content(); commandToken.MatchString(msg) {
-			t.Fatalf("bot-less right rotator surfaced a command: %q", msg)
-		}
+	cases := []struct {
+		name string
+		cfg  *c.OnscreensServerConfig
+	}{
+		{"youtube inbound off", rotatorConf(platformYouTube, false)},
+		{"tiktok read-only", rotatorConf(platformTikTok, true)},
+		{"instagram read-only", rotatorConf(platformInstagram, true)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			for i := 0; i < 4000; i++ {
+				if msg := newLeftRotator(tc.cfg).content(); commandToken.MatchString(msg) {
+					t.Fatalf("promoMode left rotator surfaced a command: %q", msg)
+				}
+				if msg := newRightRotator(tc.cfg).content(); commandToken.MatchString(msg) {
+					t.Fatalf("promoMode right rotator surfaced a command: %q", msg)
+				}
+			}
+		})
 	}
 }
 
 // TestRotatorsServeCommandsWhenInboundEnabled confirms a YouTube instance with
 // inbound chat on keeps the normal command-hint rotators (the post-quota state).
 func TestRotatorsServeCommandsWhenInboundEnabled(t *testing.T) {
-	if (&rotator{cfg: rotatorConf(platformYouTube, true)}).botless() {
-		t.Fatal("YouTube with inbound enabled should not be bot-less")
+	if (&rotator{cfg: rotatorConf(platformYouTube, true)}).promoMode() {
+		t.Fatal("YouTube with inbound enabled should not be in promo mode")
 	}
 }
 

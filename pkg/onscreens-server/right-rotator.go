@@ -24,16 +24,19 @@ var possibleRightMessages = []rotatorMessage{
 	{Text: "Streaming 24 hours a day"},
 }
 
-// botlessRightMessages replace the command-hint right rotator on a bot-less
-// YouTube instance (see botlessLeftMessages). This corner is the "subscribe
-// here + journey flavor" half of the split: the own-stream call to action uses
-// YouTube's "subscribe" (the left corner owns the Twitch CTA), so the two
-// corners advertise different actions instead of both saying "follow on
-// Twitch". On a bot-less stream these are mixed with the live date line (see
-// rightLiveLine) — the info the !date command would return.
+// botlessRightMessages replace the command-hint right rotator in promoMode (see
+// botlessLeftMessages). This corner is the "subscribe here + journey flavor"
+// half of the split: the own-stream call to action (the left corner owns the
+// Twitch CTA), so the two corners advertise different actions instead of both
+// saying "follow on Twitch". On a promoMode stream these are mixed with the live
+// date line (see rightLiveLine) — the info the !date command would return. The
+// "Subscribe" CTA is scoped to YouTube (its own-platform verb); the journey
+// lines are platform-neutral and safe on any promoMode platform (TikTok/IG say
+// "follow", not "subscribe" — a TikTok-worded CTA can be added when its copy is
+// settled).
 var botlessRightMessages = []rotatorMessage{
 	{Text: "Driving across America, 24 hours a day"},
-	{Text: "Subscribe to ride along"},
+	{Text: "Subscribe to ride along", Platforms: []string{platformYouTube}},
 	{Text: "Slow-TV from the open road — just the drive"},
 	{Text: "Real dashcam footage, streaming nonstop"},
 }
