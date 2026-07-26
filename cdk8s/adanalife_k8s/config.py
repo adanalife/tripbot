@@ -236,6 +236,13 @@ ENVS: dict[str, EnvConfig] = {
         # Route prod tripbot-facebook's chat sends through the in-namespace
         # gateway-facebook (the gateway owns the Page token). Mirrors stage.
         facebook_api_url="http://gateway-facebook.prod-1.svc.cluster.local:8080",
+        # Wire prod tripbot-{instagram,tiktok} to their in-namespace gateway,
+        # required for inbound chat to come up at all — without it the instance
+        # boots chat-less and never polls the gateway. Both are read-only
+        # (inbound webcast/Graph comments; no chat-post API), so viewers get
+        # command effects through onscreens/playout, not chat replies.
+        instagram_api_url="http://gateway-instagram.prod-1.svc.cluster.local:8080",
+        tiktok_api_url="http://gateway-tiktok.prod-1.svc.cluster.local:8080",
         # Wire prod tripbot-twitch to gateway-twitch (in-namespace). Required:
         # since the cutover the gateway is the unconditional single Helix caller
         # (the twitch_gateway flag and the in-process fallback are gone).
