@@ -9,6 +9,12 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v4.9.1] — 2026-07-26
+
+### Fixes
+
+- Wire prod `tripbot-{tiktok,instagram}` to their in-namespace gateway (`TIKTOK_API_URL` / `INSTAGRAM_API_URL`) so inbound chat comes up — without it the instance booted chat-less and never polled the gateway, so no viewer command was ever read. ([#1202](https://github.com/adanalife/tripbot/pull/1202))
+
 ## [v4.9.0] — 2026-07-26
 
 ### Onscreens
