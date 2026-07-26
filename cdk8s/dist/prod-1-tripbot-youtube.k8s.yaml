@@ -98,7 +98,7 @@ spec:
                 optional: true
             - secretRef:
                 name: tripbot-youtube-creds
-          image: adanalife/tripbot:4.8.1
+          image: adanalife/tripbot:4.9.0
           imagePullPolicy: IfNotPresent
           livenessProbe:
             httpGet:
@@ -142,7 +142,7 @@ spec:
                 name: tripbot-youtube-config
             - secretRef:
                 name: tripbot-database-creds
-          image: adanalife/tripbot:4.8.1
+          image: adanalife/tripbot:4.9.0
           imagePullPolicy: IfNotPresent
           name: migrate
           resources:
@@ -207,19 +207,3 @@ spec:
     - hosts:
         - tripbot-youtube.prod.whereisdana.today
       secretName: tripbot-youtube-tls
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: tripbot-youtube-ts
-  namespace: prod-1
-spec:
-  defaultBackend:
-    service:
-      name: tripbot-youtube
-      port:
-        number: 8080
-  ingressClassName: tailscale
-  tls:
-    - hosts:
-        - tripbot-youtube-prod
