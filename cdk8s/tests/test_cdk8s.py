@@ -166,6 +166,23 @@ def test_stage_youtube_routes_sends_through_gateway():
     assert "YOUTUBE_API_URL" not in _cm_data("stage-1-tripbot-twitch")
 
 
+def test_read_only_platforms_route_through_gateway():
+    """The read-only gateway platforms (instagram, tiktok) carry their
+    <PLATFORM>_API_URL in both stage and prod — required for inbound chat to
+    come up at all (the binary boots chat-less without it)."""
+
+    def _cm_data(stem):
+        return _by_kind(_objects(stem), "ConfigMap")[0]["data"]
+
+    for env in ("stage-1", "prod-1"):
+        for platform in ("instagram", "tiktok"):
+            key = f"{platform.upper()}_API_URL"
+            assert (
+                _cm_data(f"{env}-tripbot-{platform}").get(key)
+                == f"http://gateway-{platform}.{env}.svc.cluster.local:8080"
+            ), f"{env}-tripbot-{platform} missing {key}"
+
+
 def _pod_spec(stem: str) -> dict:
     return _by_kind(_objects(stem), "Deployment")[0]["spec"]["template"]["spec"]
 
