@@ -9,6 +9,18 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v4.10.0] — 2026-07-27
+
+### Chatbot
+
+- TikTok LIVE gifts now trigger an on-stream effect. A gift arriving on the gateway's inbound stream fires a timewarp — the playhead jumps to a random clip behind the full-screen warp overlay, credited to the gifter — which is the interaction that works on a platform where the bot can't post a reply. Gifts bypass the 20s chat playback rate-limit but hold a 6s floor of their own so two gifts can't stack warp covers. Which effect a gift fires comes from a value ladder (`giftTiers`), so retuning it is a one-line change. Gated behind the `chatbot.gifts` feature flag.
+
+  `!find` is available on the gateway platforms (TikTok, YouTube, Facebook, Instagram), not just Twitch. Its subscriber gate now only applies where the platform actually exposes a subscriber signal — everywhere else it would have rejected every viewer forever, which is indistinguishable from a broken command. ([#1204](https://github.com/adanalife/tripbot/pull/1204))
+
+### Onscreens
+
+- The TikTok corner rotators advertise gifting — the one interaction a viewer wouldn't guess works there — instead of pointing at Twitch. The Twitch calls-to-action are gone from the promo pools on every platform that uses them. The pools stay free of `!command` hints: anyone who knows the commands doesn't need a corner spent telling them. ([#1204](https://github.com/adanalife/tripbot/pull/1204))
+
 ## [v4.9.1] — 2026-07-26
 
 ### Fixes
