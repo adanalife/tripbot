@@ -1,7 +1,6 @@
 package onscreensServer
 
 import (
-	"regexp"
 	"strings"
 	"testing"
 
@@ -14,14 +13,13 @@ func rotatorConf(platform string, inbound bool) *c.OnscreensServerConfig {
 	return &c.OnscreensServerConfig{Environment: "testing", Platform: platform, YouTubeInboundEnabled: inbound}
 }
 
-// TestPromoModeRotatorsAdvertiseNoCommands verifies that on every promoMode
-// instance — bot-less YouTube and the read-only platforms (TikTok, Instagram)
-// where the bot can't reply — both rotators serve the promo set and never
-// surface a "!command" token (which would no-op there and look broken).
-func TestPromoModeRotatorsAdvertiseNoCommands(t *testing.T) {
-	// "!" followed by a letter is a command token (e.g. !location); a bare "!"
-	// as punctuation (the rare-message line) is fine.
-	commandToken := regexp.MustCompile(`![a-zA-Z]`)
+// TestPromoModeRotatorsAdvertiseOnlyEffectCommands verifies that on every
+// promoMode instance — bot-less YouTube and the read-only platforms (TikTok,
+// Instagram) where the bot can't reply — both rotators serve the promo set and
+// surface no reply-only command. An effect command is allowed: its result is
+// the playhead jump on stream, which needs no chat reply. A reply-only one
+// would silently no-op there and look broken.
+func TestPromoModeRotatorsAdvertiseOnlyEffectCommands(t *testing.T) {
 	cases := []struct {
 		name string
 		cfg  *c.OnscreensServerConfig
@@ -32,15 +30,30 @@ func TestPromoModeRotatorsAdvertiseNoCommands(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			for i := 0; i < 4000; i++ {
-				if msg := newLeftRotator(tc.cfg).content(); commandToken.MatchString(msg) {
-					t.Fatalf("promoMode left rotator surfaced a command: %q", msg)
-				}
-				if msg := newRightRotator(tc.cfg).content(); commandToken.MatchString(msg) {
-					t.Fatalf("promoMode right rotator surfaced a command: %q", msg)
+			check := func(corner, msg string) {
+				t.Helper()
+				for cmd := range commandsIn(msg) {
+					if !effectCommands[cmd] {
+						t.Fatalf("promoMode %s rotator surfaced reply-only !%s: %q", corner, cmd, msg)
+					}
 				}
 			}
+			for i := 0; i < 4000; i++ {
+				check("left", newLeftRotator(tc.cfg).content())
+				check("right", newRightRotator(tc.cfg).content())
+			}
 		})
+	}
+}
+
+// The Twitch CTAs are gone from the promo pools: a viewer on another platform
+// is already watching: pointing them at Twitch spends the corner on a handoff
+// rather than on something they can do right here.
+func TestPromoPoolsDoNotAdvertiseTwitch(t *testing.T) {
+	for _, m := range append(append([]rotatorMessage{}, promoLeftMessages...), promoRightMessages...) {
+		if strings.Contains(strings.ToLower(m.Text), "twitch") {
+			t.Errorf("promo pool still points at Twitch: %q", m.Text)
+		}
 	}
 }
 

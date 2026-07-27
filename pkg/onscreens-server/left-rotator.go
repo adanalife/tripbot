@@ -25,33 +25,38 @@ var possibleLeftMessages = []rotatorMessage{
 	// {Text: "Use !report to report stream issues"},
 }
 
-// botlessLeftMessages replace the command-hint left rotator in promoMode (a
-// bot-less YouTube instance, or a read-only platform like TikTok/Instagram where
-// the bot can't reply): no chat command lands a visible reply there, so this
-// corner points viewers at the live, interactive Twitch stream — the "where to
-// interact" half of the split. The right corner carries the subscribe + journey
-// lines, so the two corners never echo each other. Teases the guess/miles
-// features without printing a "!command" token a viewer would type into an
-// unread/unanswered chat. On a promoMode stream these are mixed with the live
-// location line (see leftLiveLine) — the info the !location command would
-// return. The "coming to YouTube" tease is scoped to YouTube (it names that
-// platform); every other line is platform-neutral and safe on any promoMode
-// platform.
-var botlessLeftMessages = []rotatorMessage{
-	{Text: "Chat live with the bot on Twitch", Weight: 2},
-	{Text: "twitch.tv/ADanaLife_", Weight: 2},
+// promoLeftMessages replace the full command-hint left rotator in promoMode (a
+// bot-less YouTube instance, or a read-only platform like TikTok/Instagram
+// where the bot can't reply). The split between the corners is by action: this
+// one owns "here is what you can make happen", the right owns "here is what
+// you're watching".
+//
+// On a read-only platform the effect commands are the ones worth hinting —
+// !timewarp and !find land their result on the stream, which needs no chat
+// reply — so those lines are scoped to TikTok, alongside the gift copy. A
+// reply-only command (!location, !miles) is deliberately absent: its whole
+// result is a chat line nobody would see. The YouTube tease names its own
+// platform and is scoped to it; everything unscoped is safe anywhere.
+//
+// On a promoMode stream these are mixed with the live location line (see
+// leftLiveLine) — the info the !location command would return.
+var promoLeftMessages = []rotatorMessage{
+	{Text: "🎁 Send a gift → warp us to a random moment", Platforms: []string{platformTikTok}, Weight: 3},
+	{Text: "Gift the stream, change what's on screen", Platforms: []string{platformTikTok}},
+	{Text: "Type `!timewarp` to jump somewhere new", Platforms: []string{platformTikTok}, Weight: 2},
+	{Text: "`!find a tunnel at sunset` — we'll go there", Platforms: []string{platformTikTok}, Weight: 2},
 	{Text: "Interactive chat is coming to YouTube soon", Platforms: []string{platformYouTube}},
-	{Text: "Want to talk to the bot? It's live on Twitch"},
-	{Text: "Guess the state and earn miles — live on Twitch"},
+	{Text: "Somewhere on a road across America"},
+	{Text: "Every mile of this was actually driven"},
 }
 
 // liveDataWeight biases the live location/date line over the static promo lines
-// in the bot-less pools — the data is the headline (it's what the !location /
+// in the promo pools — the data is the headline (it's what the !location /
 // !date commands would return), the promo is the remainder. Tunable; ~50-65%
 // data against the current promo weights.
 const liveDataWeight = 6
 
-// leftLiveLine is the bot-less left-rotator live-data line: the current location
+// leftLiveLine is the promoMode left-rotator live-data line: the current location
 // ("📍 City, State") when tripbot has pushed a fresh one. Paired with
 // rightLiveLine's date so the two corners show "where" and "when" rather than
 // duplicating one field.
@@ -66,12 +71,12 @@ func leftLiveLine(now time.Time) (rotatorMessage, bool) {
 // rotator and calls start().
 func newLeftRotator(cfg *c.OnscreensServerConfig) *rotator {
 	return &rotator{
-		cfg:             cfg,
-		kind:            "left-rotator",
-		freq:            leftRotatorUpdateFrequency,
-		messages:        possibleLeftMessages,
-		botlessMessages: botlessLeftMessages,
-		liveLine:        leftLiveLine,
-		rareMessage:     "You found the rare message! Make a clip for a prize!",
+		cfg:           cfg,
+		kind:          "left-rotator",
+		freq:          leftRotatorUpdateFrequency,
+		messages:      possibleLeftMessages,
+		promoMessages: promoLeftMessages,
+		liveLine:      leftLiveLine,
+		rareMessage:   "You found the rare message! Make a clip for a prize!",
 	}
 }

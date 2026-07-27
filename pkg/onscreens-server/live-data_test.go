@@ -55,8 +55,8 @@ func TestBotlessPoolsOmitStaleData(t *testing.T) {
 	if poolHasText(left, "📍 Moab, Utah") {
 		t.Error("stale location should not appear in the left pool")
 	}
-	if len(left) != len(botlessLeftMessages) {
-		t.Errorf("left pool = %d entries, want the %d static promo lines", len(left), len(botlessLeftMessages))
+	if len(left) != len(promoLeftMessages) {
+		t.Errorf("left pool = %d entries, want the %d static promo lines", len(left), len(promoLeftMessages))
 	}
 	if poolHasText(newRightRotator(cfg).pool(now), "📅 Thursday June 14, 2018") {
 		t.Error("stale date should not appear in the right pool")

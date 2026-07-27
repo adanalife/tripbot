@@ -24,6 +24,25 @@ const (
 // rareOdds is the 1-in-N chance the left rotator shows its easter-egg line.
 const rareOdds = 10000
 
+// effectCommands are the commands whose result lands on the stream itself — a
+// playhead jump behind the warp overlay — rather than in a chat reply. Keyed by
+// the token without its leading bang, aliases included, since that's what
+// commandsIn yields.
+//
+// They are the only commands a promoMode corner may advertise: a viewer on a
+// read-only platform sees the effect perfectly well, while a reply-only command
+// (!location, !miles) would look unanswered. Held here rather than read from
+// pkg/chatbot's registry, which onscreens-server must not import — same reason
+// the platform constants above are duplicated. Keep in sync with the effect
+// handlers there.
+var effectCommands = map[string]bool{
+	"timewarp": true, "timeskip": true, "tw": true, "warp": true,
+	"find": true, "search": true,
+	"goto": true, "jump": true,
+	"skip": true, "back": true,
+	"daytime": true, "daylight": true, "morning": true,
+}
+
 // rotatorMessage is one line a rotator can display.
 //
 //   - Platforms scopes the line to specific streaming platforms; empty means
@@ -50,13 +69,13 @@ type rotatorMessage struct {
 // advertises a command the sibling is currently showing, so the two corners
 // don't both say "!location" at once (which reads as broken).
 type rotator struct {
-	cfg             *c.OnscreensServerConfig
-	kind            string                                     // for logs: "left-rotator" / "right-rotator"
-	freq            time.Duration                              // how often the visible line swaps
-	messages        []rotatorMessage                           // bot-enabled pool (command hints)
-	botlessMessages []rotatorMessage                           // bot-less promo pool (no commands)
-	liveLine        func(now time.Time) (rotatorMessage, bool) // bot-less live-data line (location/date); nil = none
-	rareMessage     string                                     // 1-in-rareOdds easter egg; "" = none
+	cfg           *c.OnscreensServerConfig
+	kind          string                                     // for logs: "left-rotator" / "right-rotator"
+	freq          time.Duration                              // how often the visible line swaps
+	messages      []rotatorMessage                           // full pool (every command hint)
+	promoMessages []rotatorMessage                           // promoMode pool (no reply-only command hints)
+	liveLine      func(now time.Time) (rotatorMessage, bool) // promoMode live-data line (location/date); nil = none
+	rareMessage   string                                     // 1-in-rareOdds easter egg; "" = none
 
 	osc     *Onscreen // render target; nil until start()
 	sibling *rotator  // the other corner, for command de-duplication
@@ -106,17 +125,17 @@ func (r *rotator) content() string {
 
 // pool returns the message set for the current instance state: the promo pool
 // (with the live location/date line prepended when fresh) on an instance that
-// can't surface a command result, otherwise the normal command-hint pool.
+// can't surface a command result, otherwise the full command-hint pool.
 func (r *rotator) pool(now time.Time) []rotatorMessage {
 	if !r.promoMode() {
 		return r.messages
 	}
 	if r.liveLine != nil {
 		if line, ok := r.liveLine(now); ok {
-			return append([]rotatorMessage{line}, r.botlessMessages...)
+			return append([]rotatorMessage{line}, r.promoMessages...)
 		}
 	}
-	return r.botlessMessages
+	return r.promoMessages
 }
 
 // siblingCommands is the set of !command tokens the other corner is currently
@@ -128,16 +147,22 @@ func (r *rotator) siblingCommands() map[string]bool {
 	return commandsIn(r.sibling.osc.Content)
 }
 
-// promoMode reports whether this corner should show promotional copy instead of
-// command hints — true whenever a hinted "!command" couldn't produce a result
-// the viewer sees, which would read as broken. Two cases:
+// promoMode reports whether this corner draws from the promo pool instead of
+// the full command-hint pool — true whenever a hint for a reply-only command
+// couldn't produce a result the viewer sees, which would read as broken. Two
+// cases:
 //
 //   - a bot-less YouTube instance (YOUTUBE_INBOUND_ENABLED=false) receives no
 //     commands at all;
 //   - a read-only platform (TikTok, Instagram) receives commands but the bot
-//     can't post a reply (TikTok/Instagram have no chat-send API — the gateway
-//     webcast/poll is observe-only), and this rotator advertises no
-//     on-screen-effect command, so every hint would look unanswered.
+//     can't post a reply (neither has a chat-send API — the gateway
+//     webcast/poll is observe-only), so a command whose whole result is a chat
+//     line looks unanswered.
+//
+// The promo pool is not command-free, though: an effect command (!timewarp,
+// !find) lands its result on the stream itself, which a read-only viewer sees
+// perfectly well, so those hints belong there. What promoMode excludes is the
+// reply-only half of the surface.
 //
 // Mirrors the chatbot's command gating (v1Commands + the read-only platforms).
 // Twitch and an inbound-on YouTube run the full command-hint pool.

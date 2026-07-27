@@ -24,24 +24,23 @@ var possibleRightMessages = []rotatorMessage{
 	{Text: "Streaming 24 hours a day"},
 }
 
-// botlessRightMessages replace the command-hint right rotator in promoMode (see
-// botlessLeftMessages). This corner is the "subscribe here + journey flavor"
-// half of the split: the own-stream call to action (the left corner owns the
-// Twitch CTA), so the two corners advertise different actions instead of both
-// saying "follow on Twitch". On a promoMode stream these are mixed with the live
-// date line (see rightLiveLine) — the info the !date command would return. The
-// "Subscribe" CTA is scoped to YouTube (its own-platform verb); the journey
-// lines are platform-neutral and safe on any promoMode platform (TikTok/IG say
-// "follow", not "subscribe" — a TikTok-worded CTA can be added when its copy is
-// settled).
-var botlessRightMessages = []rotatorMessage{
+// promoRightMessages replace the full command-hint right rotator in promoMode
+// (see promoLeftMessages). This corner owns "here is what you're watching" —
+// the journey flavor plus each platform's own-platform call to action, worded
+// in that platform's verb (YouTube subscribes, TikTok follows) so the two
+// corners never advertise the same action at once.
+//
+// On a promoMode stream these are mixed with the live date line (see
+// rightLiveLine) — the info the !date command would return.
+var promoRightMessages = []rotatorMessage{
 	{Text: "Driving across America, 24 hours a day"},
 	{Text: "Subscribe to ride along", Platforms: []string{platformYouTube}},
+	{Text: "Follow to ride along", Platforms: []string{platformTikTok, platformInstagram}},
 	{Text: "Slow-TV from the open road — just the drive"},
 	{Text: "Real dashcam footage, streaming nonstop"},
 }
 
-// rightLiveLine is the bot-less right-rotator live-data line: the current date
+// rightLiveLine is the promoMode right-rotator live-data line: the current date
 // ("📅 Monday January 2, 2006") when tripbot has pushed a fresh one. Paired with
 // leftLiveLine's location so the two corners show "when" and "where" rather than
 // duplicating one field.
@@ -56,11 +55,11 @@ func rightLiveLine(now time.Time) (rotatorMessage, bool) {
 // rotator and calls start().
 func newRightRotator(cfg *c.OnscreensServerConfig) *rotator {
 	return &rotator{
-		cfg:             cfg,
-		kind:            "right-rotator",
-		freq:            rightRotatorUpdateFrequency,
-		messages:        possibleRightMessages,
-		botlessMessages: botlessRightMessages,
-		liveLine:        rightLiveLine,
+		cfg:           cfg,
+		kind:          "right-rotator",
+		freq:          rightRotatorUpdateFrequency,
+		messages:      possibleRightMessages,
+		promoMessages: promoRightMessages,
+		liveLine:      rightLiveLine,
 	}
 }
