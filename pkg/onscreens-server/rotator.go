@@ -24,25 +24,6 @@ const (
 // rareOdds is the 1-in-N chance the left rotator shows its easter-egg line.
 const rareOdds = 10000
 
-// effectCommands are the commands whose result lands on the stream itself — a
-// playhead jump behind the warp overlay — rather than in a chat reply. Keyed by
-// the token without its leading bang, aliases included, since that's what
-// commandsIn yields.
-//
-// They are the only commands a promoMode corner may advertise: a viewer on a
-// read-only platform sees the effect perfectly well, while a reply-only command
-// (!location, !miles) would look unanswered. Held here rather than read from
-// pkg/chatbot's registry, which onscreens-server must not import — same reason
-// the platform constants above are duplicated. Keep in sync with the effect
-// handlers there.
-var effectCommands = map[string]bool{
-	"timewarp": true, "timeskip": true, "tw": true, "warp": true,
-	"find": true, "search": true,
-	"goto": true, "jump": true,
-	"skip": true, "back": true,
-	"daytime": true, "daylight": true, "morning": true,
-}
-
 // rotatorMessage is one line a rotator can display.
 //
 //   - Platforms scopes the line to specific streaming platforms; empty means
@@ -148,24 +129,18 @@ func (r *rotator) siblingCommands() map[string]bool {
 }
 
 // promoMode reports whether this corner draws from the promo pool instead of
-// the full command-hint pool — true whenever a hint for a reply-only command
-// couldn't produce a result the viewer sees, which would read as broken. Two
-// cases:
+// the command-hint pool — true whenever a hinted "!command" couldn't produce a
+// result the viewer sees, which would read as broken. Two cases:
 //
 //   - a bot-less YouTube instance (YOUTUBE_INBOUND_ENABLED=false) receives no
 //     commands at all;
 //   - a read-only platform (TikTok, Instagram) receives commands but the bot
 //     can't post a reply (neither has a chat-send API — the gateway
-//     webcast/poll is observe-only), so a command whose whole result is a chat
-//     line looks unanswered.
-//
-// The promo pool is not command-free, though: an effect command (!timewarp,
-// !find) lands its result on the stream itself, which a read-only viewer sees
-// perfectly well, so those hints belong there. What promoMode excludes is the
-// reply-only half of the surface.
+//     webcast/poll is observe-only), so a command whose result is a chat line
+//     looks unanswered.
 //
 // Mirrors the chatbot's command gating (v1Commands + the read-only platforms).
-// Twitch and an inbound-on YouTube run the full command-hint pool.
+// Twitch and an inbound-on YouTube run the command-hint pool.
 func (r *rotator) promoMode() bool {
 	switch r.cfg.Platform {
 	case platformTikTok, platformInstagram:

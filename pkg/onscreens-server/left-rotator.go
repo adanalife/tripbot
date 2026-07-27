@@ -25,26 +25,23 @@ var possibleLeftMessages = []rotatorMessage{
 	// {Text: "Use !report to report stream issues"},
 }
 
-// promoLeftMessages replace the full command-hint left rotator in promoMode (a
+// promoLeftMessages replace the command-hint left rotator in promoMode (a
 // bot-less YouTube instance, or a read-only platform like TikTok/Instagram
 // where the bot can't reply). The split between the corners is by action: this
 // one owns "here is what you can make happen", the right owns "here is what
 // you're watching".
 //
-// On a read-only platform the effect commands are the ones worth hinting —
-// !timewarp and !find land their result on the stream, which needs no chat
-// reply — so those lines are scoped to TikTok, alongside the gift copy. A
-// reply-only command (!location, !miles) is deliberately absent: its whole
-// result is a chat line nobody would see. The YouTube tease names its own
-// platform and is scoped to it; everything unscoped is safe anywhere.
+// No line names a "!command", the same rule the pool has always followed: a
+// hint is only worth a corner if it reaches someone who wouldn't act anyway,
+// and a viewer who already knows the commands doesn't need telling. Gifting is
+// the exception worth advertising because it's a platform UI action rather
+// than something to type, and nobody would guess it does anything here.
 //
 // On a promoMode stream these are mixed with the live location line (see
 // leftLiveLine) — the info the !location command would return.
 var promoLeftMessages = []rotatorMessage{
 	{Text: "🎁 Send a gift → warp us to a random moment", Platforms: []string{platformTikTok}, Weight: 3},
-	{Text: "Gift the stream, change what's on screen", Platforms: []string{platformTikTok}},
-	{Text: "Type `!timewarp` to jump somewhere new", Platforms: []string{platformTikTok}, Weight: 2},
-	{Text: "`!find a tunnel at sunset` — we'll go there", Platforms: []string{platformTikTok}, Weight: 2},
+	{Text: "Gift the stream, change what's on screen", Platforms: []string{platformTikTok}, Weight: 2},
 	{Text: "Interactive chat is coming to YouTube soon", Platforms: []string{platformYouTube}},
 	{Text: "Somewhere on a road across America"},
 	{Text: "Every mile of this was actually driven"},
