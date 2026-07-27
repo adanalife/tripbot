@@ -53,14 +53,19 @@ type chatUser interface {
 	IsSubscriber() bool
 }
 
-// checkAccess returns true when the user is allowed to run cmd.
+// checkAccess returns true when the user is allowed to run cmd on platform.
 // It calls say with the appropriate denial message when access is denied.
-func (cmd *Command) checkAccess(ctx context.Context, user chatUser, say func(string)) bool {
+//
+// The subscriber gate only applies where the platform has subscribers to check
+// (platformHasSubscribers). Elsewhere it would reject every viewer forever, so
+// a RequiresSubscriber command runs ungated — bounded there by the v1 allowlist
+// instead.
+func (cmd *Command) checkAccess(ctx context.Context, platform string, user chatUser, say func(string)) bool {
 	if followerGatingEnabled && cmd.RequiresFollow && !user.HasCommandAvailable(ctx) {
 		say(followerMsg)
 		return false
 	}
-	if cmd.RequiresSubscriber && !user.IsSubscriber() {
+	if cmd.RequiresSubscriber && platformHasSubscribers[platform] && !user.IsSubscriber() {
 		say(subscriberMsg)
 		return false
 	}
@@ -85,7 +90,7 @@ func (su sessionUser) IsSubscriber() bool {
 
 func (a *App) dispatch(ctx context.Context, cmd *Command, user *users.User, params []string) {
 	incChatCommandCounter(cmd.Trigger)
-	if !cmd.checkAccess(ctx, sessionUser{a.Cfg, a.UserSessions, user}, a.Chat.Say) {
+	if !cmd.checkAccess(ctx, a.platform(), sessionUser{a.Cfg, a.UserSessions, user}, a.Chat.Say) {
 		return
 	}
 	// Start a child span under the chatbot.handle_message span from

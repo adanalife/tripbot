@@ -307,8 +307,8 @@ var v1Commands = map[string]bool{
 	"!weather": true, "!time": true, "!date": true, "!sunset": true,
 	"!state": true, "!location": true,
 	// playback control (drives this platform's playout pipeline)
-	// !find is Twitch-only for now — subscriber-gated + still slow, revisit for YouTube later
 	"!timewarp": true, "!goto": true, "!skip": true, "!back": true, "!daytime": true,
+	"!find": true,
 	// socials / static links
 	"!socialmedia": true, "!discord": true, "!twitter": true, "!instagram": true,
 	"!facebook": true, "!youtube": true, "!tiktok": true, "!bluesky": true,
@@ -342,6 +342,21 @@ var platformCommandScope = map[string]commandScope{
 	platformFacebook:  scopeV1,
 	platformInstagram: scopeV1,
 	platformTikTok:    scopeV1,
+}
+
+// platformHasSubscribers declares which platforms expose a subscriber signal
+// tripbot can actually check. Twitch does; the gateway platforms give viewers
+// no persisted identity at all (v1 hands the command path a transient user), so
+// there is nothing there for RequiresSubscriber to read.
+//
+// A RequiresSubscriber command is therefore ungated on a platform with no
+// subscriber signal — see (*Command).checkAccess. The alternative is a gate
+// nobody can ever pass, which to a viewer is indistinguishable from a broken
+// command. The zero value (absent → no subscriber signal) is the right default
+// for a newly added platform: it starts out with no identity plumbing, and the
+// v1 allowlist is what bounds its command surface.
+var platformHasSubscribers = map[string]bool{
+	platformTwitch: true,
 }
 
 // commandEnabled reports whether cmd should be indexed for dispatch on this

@@ -236,7 +236,7 @@ var _ chatUser = sessionUser{}
 func TestCheckAccess_NoRestrictions(t *testing.T) {
 	cmd := &Command{Trigger: "!test"}
 	var said string
-	if !cmd.checkAccess(context.Background(), &fakeUser{}, func(msg string) { said = msg }) {
+	if !cmd.checkAccess(context.Background(), platformTwitch, &fakeUser{}, func(msg string) { said = msg }) {
 		t.Error("expected true for unrestricted command")
 	}
 	if said != "" {
@@ -251,7 +251,7 @@ func TestCheckAccess_RequiresFollow_NonFollower(t *testing.T) {
 
 	cmd := &Command{Trigger: "!test", RequiresFollow: true}
 	var said string
-	if cmd.checkAccess(context.Background(), &fakeUser{follower: false}, func(msg string) { said = msg }) {
+	if cmd.checkAccess(context.Background(), platformTwitch, &fakeUser{follower: false}, func(msg string) { said = msg }) {
 		t.Error("expected false for non-follower")
 	}
 	if said != followerMsg {
@@ -266,7 +266,7 @@ func TestCheckAccess_RequiresFollow_Follower(t *testing.T) {
 
 	cmd := &Command{Trigger: "!test", RequiresFollow: true}
 	var said string
-	if !cmd.checkAccess(context.Background(), &fakeUser{follower: true}, func(msg string) { said = msg }) {
+	if !cmd.checkAccess(context.Background(), platformTwitch, &fakeUser{follower: true}, func(msg string) { said = msg }) {
 		t.Error("expected true for follower")
 	}
 	if said != "" {
@@ -281,7 +281,7 @@ func TestCheckAccess_RequiresFollow_GatingDisabled(t *testing.T) {
 
 	cmd := &Command{Trigger: "!test", RequiresFollow: true}
 	var said string
-	if !cmd.checkAccess(context.Background(), &fakeUser{follower: false}, func(msg string) { said = msg }) {
+	if !cmd.checkAccess(context.Background(), platformTwitch, &fakeUser{follower: false}, func(msg string) { said = msg }) {
 		t.Error("expected true for non-follower when gating disabled")
 	}
 	if said != "" {
@@ -292,7 +292,7 @@ func TestCheckAccess_RequiresFollow_GatingDisabled(t *testing.T) {
 func TestCheckAccess_RequiresSubscriber_NonSubscriber(t *testing.T) {
 	cmd := &Command{Trigger: "!test", RequiresSubscriber: true}
 	var said string
-	if cmd.checkAccess(context.Background(), &fakeUser{subscriber: false}, func(msg string) { said = msg }) {
+	if cmd.checkAccess(context.Background(), platformTwitch, &fakeUser{subscriber: false}, func(msg string) { said = msg }) {
 		t.Error("expected false for non-subscriber")
 	}
 	if said != subscriberMsg {
@@ -303,10 +303,25 @@ func TestCheckAccess_RequiresSubscriber_NonSubscriber(t *testing.T) {
 func TestCheckAccess_RequiresSubscriber_Subscriber(t *testing.T) {
 	cmd := &Command{Trigger: "!test", RequiresSubscriber: true}
 	var said string
-	if !cmd.checkAccess(context.Background(), &fakeUser{subscriber: true}, func(msg string) { said = msg }) {
+	if !cmd.checkAccess(context.Background(), platformTwitch, &fakeUser{subscriber: true}, func(msg string) { said = msg }) {
 		t.Error("expected true for subscriber")
 	}
 	if said != "" {
 		t.Errorf("expected no message, got %q", said)
+	}
+}
+
+// A platform with no subscriber signal can't answer the subscriber gate, so it
+// doesn't apply there — the alternative is a check no viewer could ever pass.
+func TestCheckAccess_RequiresSubscriber_PlatformWithoutSubscribers(t *testing.T) {
+	cmd := &Command{Trigger: "!test", RequiresSubscriber: true}
+	for _, platform := range []string{platformTikTok, platformInstagram, platformYouTube, "kick"} {
+		var said string
+		if !cmd.checkAccess(context.Background(), platform, &fakeUser{subscriber: false}, func(msg string) { said = msg }) {
+			t.Errorf("%s: expected the subscriber gate to be skipped", platform)
+		}
+		if said != "" {
+			t.Errorf("%s: expected no denial message, got %q", platform, said)
+		}
 	}
 }

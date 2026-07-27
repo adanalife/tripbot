@@ -1,0 +1,1 @@
+`!find` is available on the gateway platforms (TikTok, YouTube, Facebook, Instagram), not just Twitch. Its subscriber gate now only applies where the platform actually exposes a subscriber signal — everywhere else it would have rejected every viewer forever, which is indistinguishable from a broken command.
