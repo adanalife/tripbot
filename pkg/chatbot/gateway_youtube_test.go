@@ -75,3 +75,55 @@ func TestGatewayChatPoller_FeedsMessagesAndAdvancesCursor(t *testing.T) {
 		t.Errorf("handled = %+v, want A/!miles then B/hi", handled)
 	}
 }
+
+// The poller routes by kind: comments to the command path, gifts to the effect
+// path, and an unrecognized kind to neither — a newer gateway can emit a kind
+// this build has never seen, and its empty Text would otherwise reach the
+// command parser as a blank line.
+func TestGatewayChatPollerRoutesByKind(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	page := gateway.InboundChatPage{
+		Messages: []gateway.InboundChatMessage{
+			{Author: "A", AuthorID: "1", Text: "!timewarp"},
+			{Author: "B", AuthorID: "2", Kind: gateway.KindGift,
+				Gift: &gateway.Gift{ID: "5655", Name: "Rose", Count: 3, Diamonds: 1}},
+			{Author: "C", AuthorID: "3", Kind: gateway.KindGift}, // malformed: no payload
+			{Author: "D", AuthorID: "4", Kind: "like"},           // unknown kind
+		},
+		Cursor: "c1", Live: true, PollAfterMS: 1,
+	}
+
+	sent := false
+	fake := inboundChatFunc(func(_ context.Context, _ string) (gateway.InboundChatPage, error) {
+		if sent {
+			cancel()
+			return gateway.InboundChatPage{}, context.Canceled
+		}
+		sent = true
+		return page, nil
+	})
+
+	var msgs []IncomingMessage
+	var gifts []IncomingGift
+	p := &gatewayChatPoller{
+		client:     fake,
+		handle:     func(_ context.Context, m IncomingMessage) { msgs = append(msgs, m) },
+		handleGift: func(_ context.Context, g IncomingGift) { gifts = append(gifts, g) },
+		pollFloor:  time.Millisecond,
+		errWait:    time.Millisecond,
+	}
+	p.Run(ctx)
+
+	if len(msgs) != 1 || msgs[0].User != "A" || msgs[0].Text != "!timewarp" {
+		t.Errorf("chat handled = %+v, want only A/!timewarp", msgs)
+	}
+	if len(gifts) != 1 {
+		t.Fatalf("gifts handled = %+v, want only the one with a payload", gifts)
+	}
+	want := IncomingGift{User: "B", UserID: "2", Name: "Rose", Count: 3, Value: 3}
+	if gifts[0] != want {
+		t.Errorf("gift = %+v, want %+v", gifts[0], want)
+	}
+}
