@@ -29,35 +29,16 @@ func (r *recordingWeather) Historical(_ context.Context, when time.Time, lat, ln
 	return r.Result, r.Err
 }
 
-func TestWeatherCmd_FlagOff_StaysSilent(t *testing.T) {
-	app := newTestApp(newTestVideo("Wyoming", 43.0, -108.0, time.Date(2018, 3, 7, 15, 0, 0, 0, time.UTC)))
-	chat := &recordingChat{}
-	weather := &recordingWeather{Result: "Clear sky, 58°F"}
-	app.Chat = chat
-	app.Weather = weather
-	// Flags defaults to noopFlags{} (every key false) — the fresh-deploy state.
-
-	app.weatherCmd(context.Background(), newTestUser("viewer1"), nil)
-
-	if len(chat.Says) != 0 {
-		t.Errorf("flag off: expected no chat output, got %v", chat.Says)
-	}
-	if len(weather.Calls) != 0 {
-		t.Errorf("flag off: expected no weather lookup, got %v", weather.Calls)
-	}
-}
-
-func TestWeatherCmd_FlagOn_SaysConditionsWithoutDate(t *testing.T) {
+func TestWeatherCmd_SaysConditionsWithoutDate(t *testing.T) {
 	app := newTestApp(newTestVideo("Wyoming", 43.0, -108.0, time.Date(2018, 3, 7, 15, 0, 0, 0, time.UTC)))
 	chat := &recordingChat{}
 	app.Chat = chat
 	app.Weather = &recordingWeather{Result: "Clear sky, 58°F"}
-	app.Flags = &recordingFlags{Set: map[string]bool{weatherFlagKey: true}}
 
 	app.weatherCmd(context.Background(), newTestUser("viewer1"), nil)
 
 	if len(chat.Says) != 1 {
-		t.Fatalf("flag on: expected exactly one chat message, got %d: %v", len(chat.Says), chat.Says)
+		t.Fatalf("expected exactly one chat message, got %d: %v", len(chat.Says), chat.Says)
 	}
 	if chat.Says[0] != "Clear sky, 58°F" {
 		t.Errorf("unexpected message %q", chat.Says[0])

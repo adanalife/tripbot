@@ -37,8 +37,6 @@ func newFindTestApp(t *testing.T, search Search) (*App, *recordingPlayout, *reco
 	app.Playout = recPlayout
 	app.Chat = recChat
 	app.Search = search
-	// !find is feature-flagged; enable it for the behavior tests.
-	app.Flags = &recordingFlags{Set: map[string]bool{findFlagKey: true}}
 	return app, recPlayout, recChat
 }
 
@@ -66,26 +64,6 @@ func TestFindCmd_JumpsToClosestHit(t *testing.T) {
 	// The jump message must not name the state, so a viewer can still guess it.
 	if got := recChat.Output(); !strings.Contains(got, "Jumping") || strings.Contains(got, "Nevada") {
 		t.Errorf("expected a jump message that omits the state, got %q", got)
-	}
-}
-
-func TestFindCmd_FlagOff_StaysSilent(t *testing.T) {
-	// The flag gate runs before everything (incl. the Darwin guard), so a
-	// disabled !find is silent on any OS — no search, no jump, no reply.
-	search := &recordingSearch{Hits: []SearchHit{{Slug: "x", TsSec: 1, Distance: 0.1}}}
-	app, recPlayout, recChat := newFindTestApp(t, search)
-	app.Flags = noopFlags{} // every key false — fresh-deploy state
-
-	app.findCmd(context.Background(), newTestUser(adminUser), []string{"anything"})
-
-	if len(search.Queries) != 0 {
-		t.Errorf("expected no search when flag is off, got %v", search.Queries)
-	}
-	if len(recPlayout.Calls) != 0 {
-		t.Errorf("expected no Playout jump when flag is off, got %v", recPlayout.Calls)
-	}
-	if got := recChat.Output(); got != "" {
-		t.Errorf("expected silence when flag is off, got %q", got)
 	}
 }
 

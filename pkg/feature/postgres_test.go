@@ -89,15 +89,15 @@ func TestPostgresClient_LoadsSeededFlags(t *testing.T) {
 		}
 		var found bool
 		for _, f := range c.Snapshot(ctx) {
-			if f.Key == "chatbot.weather" {
+			if f.Key == "chatbot.timewarp_credit" {
 				found = true
 			}
 		}
 		if !found {
-			t.Errorf("%s: expected the seeded chatbot.weather flag in the snapshot", platform)
+			t.Errorf("%s: expected the seeded chatbot.timewarp_credit flag in the snapshot", platform)
 		}
-		if c.Bool(ctx, "chatbot.weather", EvalContext{}) {
-			t.Errorf("%s: chatbot.weather is seeded disabled", platform)
+		if c.Bool(ctx, "chatbot.timewarp_credit", EvalContext{}) {
+			t.Errorf("%s: chatbot.timewarp_credit is seeded disabled", platform)
 		}
 	}
 }
