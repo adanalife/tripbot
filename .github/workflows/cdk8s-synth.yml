@@ -1,16 +1,16 @@
 name: cdk8s-synth
 
-# Lints the Python cdk8s authoring layer (cdk8s/) and verifies the committed
-# dist/ deploy units are in sync with the source: re-synth and fail on any diff.
-# Verify-only — synth is fast enough to run locally via `task cdk8s:synth`, so
-# (unlike infra's cdk8s.yml) there's no push-back commit. dist/ is the GitOps
-# source Argo reads, so a stale dist/ on main would silently mis-deploy.
+# Post-merge sweep: lints the Python cdk8s authoring layer (cdk8s/) and verifies
+# the committed dist/ deploy units are in sync with the source: re-synth and
+# fail on any diff. Verify-only — synth is fast enough to run locally via `task
+# cdk8s:synth`, so (unlike infra's cdk8s.yml) there's no push-back commit.
+# dist/ is the GitOps source Argo reads, so a stale dist/ on main would silently
+# mis-deploy.
+#
+# The PR-time check is a step of the `gates` job in pr-gates.yml, guarded on the
+# PR's changed paths. This workflow is the main-branch backstop, catching a
+# desync that lands some way other than a PR.
 on:
-  pull_request:
-    paths:
-      - 'cdk8s/**'
-      - 'pkg/contract/contract.json'
-      - '.github/workflows/cdk8s-synth.yml'
   push:
     branches:
       - main

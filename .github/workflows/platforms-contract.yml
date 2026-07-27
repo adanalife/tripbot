@@ -4,10 +4,12 @@ name: platforms-contract
 # platforms.json (its Go adapter registry is the source of truth) and every repo
 # syncs a copy via `task platforms:sync`. This asserts the synced copy still
 # matches the gateway's main — catching both a stale local copy and the gateway
-# adding/removing a platform we haven't re-synced. Always runs (so it can be a
-# required check) plus a daily schedule to catch drift on days no PR touches it.
+# adding/removing a platform we haven't re-synced.
+#
+# The daily schedule is the point of this workflow: gateway-side drift lands
+# with no PR here to notice it. The PR-time check is a step of the `gates` job
+# in pr-gates.yml.
 on:
-  pull_request:
   push:
     branches:
       - main
