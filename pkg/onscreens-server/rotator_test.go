@@ -44,6 +44,17 @@ func TestPromoModeRotatorsAdvertiseNoCommands(t *testing.T) {
 	}
 }
 
+// The Twitch CTAs are gone from the promo pools: a viewer on another platform
+// is already watching, so pointing them at Twitch spends the corner on a
+// handoff rather than on something they can do right here.
+func TestPromoPoolsDoNotAdvertiseTwitch(t *testing.T) {
+	for _, m := range append(append([]rotatorMessage{}, promoLeftMessages...), promoRightMessages...) {
+		if strings.Contains(strings.ToLower(m.Text), "twitch") {
+			t.Errorf("promo pool still points at Twitch: %q", m.Text)
+		}
+	}
+}
+
 // TestRotatorsServeCommandsWhenInboundEnabled confirms a YouTube instance with
 // inbound chat on keeps the normal command-hint rotators (the post-quota state).
 func TestRotatorsServeCommandsWhenInboundEnabled(t *testing.T) {

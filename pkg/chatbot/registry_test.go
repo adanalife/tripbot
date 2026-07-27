@@ -157,7 +157,7 @@ func TestYouTubePlatformIndexesOnlyAllowlist(t *testing.T) {
 func TestTikTokPlatformIndexesOnlyAllowlist(t *testing.T) {
 	tk := &App{Platform: platformTikTok}
 	tk.indexCommands()
-	for _, token := range []string{"!skip", "!timewarp", "!location", "!tiktok"} {
+	for _, token := range []string{"!skip", "!timewarp", "!location", "!tiktok", "!find", "!search"} {
 		if cmd, _ := tk.findCommand(token); cmd == nil {
 			t.Errorf("expected %q to be available on TikTok, got nil", token)
 		}

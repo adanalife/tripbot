@@ -50,13 +50,13 @@ type rotatorMessage struct {
 // advertises a command the sibling is currently showing, so the two corners
 // don't both say "!location" at once (which reads as broken).
 type rotator struct {
-	cfg             *c.OnscreensServerConfig
-	kind            string                                     // for logs: "left-rotator" / "right-rotator"
-	freq            time.Duration                              // how often the visible line swaps
-	messages        []rotatorMessage                           // bot-enabled pool (command hints)
-	botlessMessages []rotatorMessage                           // bot-less promo pool (no commands)
-	liveLine        func(now time.Time) (rotatorMessage, bool) // bot-less live-data line (location/date); nil = none
-	rareMessage     string                                     // 1-in-rareOdds easter egg; "" = none
+	cfg           *c.OnscreensServerConfig
+	kind          string                                     // for logs: "left-rotator" / "right-rotator"
+	freq          time.Duration                              // how often the visible line swaps
+	messages      []rotatorMessage                           // full pool (every command hint)
+	promoMessages []rotatorMessage                           // promoMode pool (no reply-only command hints)
+	liveLine      func(now time.Time) (rotatorMessage, bool) // promoMode live-data line (location/date); nil = none
+	rareMessage   string                                     // 1-in-rareOdds easter egg; "" = none
 
 	osc     *Onscreen // render target; nil until start()
 	sibling *rotator  // the other corner, for command de-duplication
@@ -106,17 +106,17 @@ func (r *rotator) content() string {
 
 // pool returns the message set for the current instance state: the promo pool
 // (with the live location/date line prepended when fresh) on an instance that
-// can't surface a command result, otherwise the normal command-hint pool.
+// can't surface a command result, otherwise the full command-hint pool.
 func (r *rotator) pool(now time.Time) []rotatorMessage {
 	if !r.promoMode() {
 		return r.messages
 	}
 	if r.liveLine != nil {
 		if line, ok := r.liveLine(now); ok {
-			return append([]rotatorMessage{line}, r.botlessMessages...)
+			return append([]rotatorMessage{line}, r.promoMessages...)
 		}
 	}
-	return r.botlessMessages
+	return r.promoMessages
 }
 
 // siblingCommands is the set of !command tokens the other corner is currently
@@ -128,19 +128,19 @@ func (r *rotator) siblingCommands() map[string]bool {
 	return commandsIn(r.sibling.osc.Content)
 }
 
-// promoMode reports whether this corner should show promotional copy instead of
-// command hints — true whenever a hinted "!command" couldn't produce a result
-// the viewer sees, which would read as broken. Two cases:
+// promoMode reports whether this corner draws from the promo pool instead of
+// the command-hint pool — true whenever a hinted "!command" couldn't produce a
+// result the viewer sees, which would read as broken. Two cases:
 //
 //   - a bot-less YouTube instance (YOUTUBE_INBOUND_ENABLED=false) receives no
 //     commands at all;
 //   - a read-only platform (TikTok, Instagram) receives commands but the bot
-//     can't post a reply (TikTok/Instagram have no chat-send API — the gateway
-//     webcast/poll is observe-only), and this rotator advertises no
-//     on-screen-effect command, so every hint would look unanswered.
+//     can't post a reply (neither has a chat-send API — the gateway
+//     webcast/poll is observe-only), so a command whose result is a chat line
+//     looks unanswered.
 //
 // Mirrors the chatbot's command gating (v1Commands + the read-only platforms).
-// Twitch and an inbound-on YouTube run the full command-hint pool.
+// Twitch and an inbound-on YouTube run the command-hint pool.
 func (r *rotator) promoMode() bool {
 	switch r.cfg.Platform {
 	case platformTikTok, platformInstagram:

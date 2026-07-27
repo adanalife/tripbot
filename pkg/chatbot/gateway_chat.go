@@ -29,10 +29,11 @@ type inboundChatClient interface {
 // filtering, and the poll cadence, so this loop just advances the opaque
 // cursor and sleeps the suggested interval — holding no platform credential.
 type gatewayChatPoller struct {
-	client    inboundChatClient
-	handle    func(ctx context.Context, msg IncomingMessage)
-	pollFloor time.Duration // floor under the gateway-suggested interval
-	errWait   time.Duration // backoff after a transport/gateway error
+	client     inboundChatClient
+	handle     func(ctx context.Context, msg IncomingMessage)
+	handleGift func(ctx context.Context, gift IncomingGift)
+	pollFloor  time.Duration // floor under the gateway-suggested interval
+	errWait    time.Duration // backoff after a transport/gateway error
 }
 
 // NewGatewayChatPoller builds the production gateway-backed poller against the
@@ -40,10 +41,11 @@ type gatewayChatPoller struct {
 // path. Run it in a goroutine.
 func (a *App) NewGatewayChatPoller(apiURL string) *gatewayChatPoller {
 	return &gatewayChatPoller{
-		client:    gateway.New(apiURL),
-		handle:    a.HandleGatewayMessage,
-		pollFloor: 2 * time.Second,
-		errWait:   time.Minute,
+		client:     gateway.New(apiURL),
+		handle:     a.HandleGatewayMessage,
+		handleGift: a.HandleGatewayGift,
+		pollFloor:  2 * time.Second,
+		errWait:    time.Minute,
 	}
 }
 
@@ -67,7 +69,7 @@ func (p *gatewayChatPoller) Run(ctx context.Context) {
 		}
 		cursor = page.Cursor
 		for _, m := range page.Messages {
-			p.handle(ctx, IncomingMessage{User: m.Author, UserID: m.AuthorID, Text: m.Text})
+			p.route(ctx, m)
 		}
 		wait := time.Duration(page.PollAfterMS) * time.Millisecond
 		if wait < p.pollFloor {
@@ -76,6 +78,32 @@ func (p *gatewayChatPoller) Run(ctx context.Context) {
 		if !sleepCtx(ctx, wait) {
 			return
 		}
+	}
+}
+
+// route sends one inbound event to the handler for its kind. An unrecognized
+// kind is dropped rather than treated as a comment: a newer gateway can add a
+// kind this build has never heard of, and every non-comment kind so far has an
+// empty Text, which would reach the command path as a blank line.
+func (p *gatewayChatPoller) route(ctx context.Context, m gateway.InboundChatMessage) {
+	switch m.Kind {
+	case gateway.KindChat:
+		p.handle(ctx, IncomingMessage{User: m.Author, UserID: m.AuthorID, Text: m.Text})
+	case gateway.KindGift:
+		if m.Gift == nil {
+			slog.WarnContext(ctx, "gateway gift carries no gift payload", "author", m.Author)
+			return
+		}
+		p.handleGift(ctx, IncomingGift{
+			User:   m.Author,
+			UserID: m.AuthorID,
+			Name:   m.Gift.Name,
+			Count:  m.Gift.Count,
+			Value:  m.Gift.Value(),
+		})
+	default:
+		slog.WarnContext(ctx, "unhandled gateway inbound kind; ignoring",
+			"kind", string(m.Kind), "author", m.Author)
 	}
 }
 

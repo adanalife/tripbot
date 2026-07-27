@@ -206,15 +206,50 @@ func (c *Client) Followers(ctx context.Context) (int, error) {
 	return body.Total, nil
 }
 
-// InboundChatMessage is one inbound live-chat line — viewer messages only (the
-// gateway filters the channel's own echoed sends). Author is the human-facing
-// name (a mutable display name on some platforms); AuthorID is the
-// platform-native stable user ID — the key viewer persistence and identity
-// linking must use.
+// InboundKind says what a viewer did. It mirrors the gateway's provider.InboundKind
+// — duplicated by hand across the two repos, same convention as the eventbus
+// envelopes; keep in sync.
+type InboundKind string
+
+const (
+	// KindChat is a viewer comment. The zero value, so a page from a gateway
+	// that predates the field decodes as comments.
+	KindChat InboundKind = ""
+	// KindGift is a viewer gift/donation: Text is empty and Gift is set.
+	KindGift InboundKind = "gift"
+)
+
+// Gift is a viewer gift in platform-neutral shape.
+//
+// Diamonds is the per-gift value in the platform's creator-side unit (TikTok
+// diamonds, roughly half the coin price the viewer paid) and Count is how many
+// were sent in one action, so the gift's worth is Value(). Name is display
+// text, not an identifier — platforms rename and retire gifts, so route on
+// Value.
+type Gift struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Count    int    `json:"count"`
+	Diamonds int    `json:"diamonds"`
+}
+
+// Value is the gift's total worth in the platform's creator-side unit.
+func (g Gift) Value() int { return g.Diamonds * g.Count }
+
+// InboundChatMessage is one inbound live event — viewer activity only (the
+// gateway filters the channel's own echoed sends). Kind says whether it's a
+// comment or a gift; a consumer must switch on it rather than assume, because
+// a gift's Text is empty and would parse as a blank command.
+//
+// Author is the human-facing name (a mutable display name on some platforms);
+// AuthorID is the platform-native stable user ID — the key viewer persistence
+// and identity linking must use.
 type InboundChatMessage struct {
-	Author   string `json:"author"`
-	AuthorID string `json:"author_id"`
-	Text     string `json:"text"`
+	Author   string      `json:"author"`
+	AuthorID string      `json:"author_id"`
+	Text     string      `json:"text"`
+	Kind     InboundKind `json:"kind,omitempty"`
+	Gift     *Gift       `json:"gift,omitempty"`
 }
 
 // InboundChatPage is one page from GET /v1/chat/inbound. Cursor is opaque: pass
