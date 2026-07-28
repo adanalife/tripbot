@@ -28,6 +28,11 @@ import (
 type API struct {
 	// --- auth core (future auth-service boundary) ---
 
+	// clientID and clientSecret are the static Twitch app credentials, installed
+	// by SetCredentials at boot. Only Client() reads them.
+	clientID     string
+	clientSecret string
+
 	// currentTwitchClient is the lazy-initialized bot helix client, built by
 	// Client() for the OAuth bootstrap's identity check (GetUsers) and the IRC
 	// readiness probe. The Helix query surface now lives in the platform-gateway.
@@ -63,14 +68,14 @@ type API struct {
 }
 
 // New constructs an API with zero mutable state. The helix client and App
-// Access Token are built lazily on first use (Client()); the static
-// ClientID/ClientSecret credentials are read from env in init().
+// Access Token are built lazily on first use (Client()); the static app
+// credentials arrive via SetCredentials.
 func New() *API {
 	return &API{}
 }
 
 // defaultClient backs the package-level free-function shims in shims.go. It
 // preserves the previous "call twitch.Foo() from anywhere" surface while the
-// globals are gone. Constructed at package-init; New() touches no env, so it
-// is safe before init() populates ClientID/ClientSecret.
+// globals are gone. Constructed at package-init, which reads no env and touches
+// no network — importing this package has no side effects.
 var defaultClient = New()

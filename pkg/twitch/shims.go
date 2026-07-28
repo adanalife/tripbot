@@ -16,6 +16,9 @@ import (
 // --- auth / token ---
 
 func Client() (*helix.Client, error) { return defaultClient.Client() }
+func SetCredentials(clientID, clientSecret string) {
+	defaultClient.SetCredentials(clientID, clientSecret)
+}
 func LoadFromDB(botUser, broadcasterUser string) error {
 	return defaultClient.LoadFromDB(botUser, broadcasterUser)
 }

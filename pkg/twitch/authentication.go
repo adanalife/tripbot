@@ -2,13 +2,10 @@ package twitch
 
 import (
 	"errors"
-	"log"
 	"log/slog"
 	"net/http"
-	"os"
 	"time"
 
-	"github.com/adanalife/tripbot/pkg/config"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"github.com/adanalife/tripbot/pkg/oauthtokens"
 	"github.com/nicklaw5/helix/v2"
@@ -51,32 +48,20 @@ var BroadcasterScopes = []string{
 // oauthtokens for caller convenience.
 var ErrNoToken = oauthtokens.ErrNoToken
 
-// ClientID, ClientSecret are the static app credentials, set from env in
-// init(). They are not per-instance mutable state, so they stay package-level
-// (ClientID is read directly by cmd/tripbot's EventSub setup).
-var (
-	ClientID     string
-	ClientSecret string
-)
+// ErrNoCredentials means SetCredentials was never called, so there's nothing to
+// build a helix client from. Only a twitch instance calls it — every other
+// platform reaches its chat through a platform-gateway and never touches this
+// path, which is why missing credentials are an error here rather than a
+// process-wide requirement.
+var ErrNoCredentials = errors.New("twitch: no client credentials set")
 
-// init requires the static credentials needed to build a helix client.
-// TWITCH_AUTH_TOKEN is intentionally NOT required — the IRC token lives in the
-// oauth_tokens table and is loaded via LoadFromDB at boot. SetEnvironment
-// loads the env-specific dotenv file first, so the requirement holds under
-// bare `go test` too (no main has called config.Load there).
-func init() {
-	config.SetEnvironment()
-	requiredVars := []string{
-		"TWITCH_CLIENT_ID",
-		"TWITCH_CLIENT_SECRET",
-	}
-	for _, v := range requiredVars {
-		if _, ok := os.LookupEnv(v); !ok {
-			log.Fatalf("You must set %s", v)
-		}
-	}
-	ClientID = os.Getenv("TWITCH_CLIENT_ID")
-	ClientSecret = os.Getenv("TWITCH_CLIENT_SECRET")
+// SetCredentials installs the static Twitch app credentials. cmd/tripbot calls
+// it from the twitch-only bring-up with the values off its config; TWITCH_AUTH_TOKEN
+// is deliberately not among them — the IRC token lives in the oauth_tokens table
+// and arrives via LoadFromDB.
+func (cl *API) SetCredentials(clientID, clientSecret string) {
+	cl.clientID = clientID
+	cl.clientSecret = clientSecret
 }
 
 // Client returns the shared helix client, lazy-initializing on first call.
@@ -87,9 +72,12 @@ func (cl *API) Client() (*helix.Client, error) {
 	if cl.currentTwitchClient != nil {
 		return cl.currentTwitchClient, nil
 	}
+	if cl.clientID == "" || cl.clientSecret == "" {
+		return nil, ErrNoCredentials
+	}
 	client, err := helix.NewClient(&helix.Options{
-		ClientID:     ClientID,
-		ClientSecret: ClientSecret,
+		ClientID:     cl.clientID,
+		ClientSecret: cl.clientSecret,
 		HTTPClient:   helixHTTPClient,
 	})
 	if err != nil {

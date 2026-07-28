@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"log/slog"
 	"os"
 	"time"
@@ -642,7 +643,7 @@ func (t *Tripbot) startEventSub(ctx context.Context) {
 	}
 	go func() {
 		err := eventsub.Run(ctx, eventsub.Config{
-			ClientID:          mytwitch.ClientID,
+			ClientID:          t.cfg.TwitchClientID,
 			BroadcasterToken:  token,
 			BroadcasterUserID: mytwitch.ChannelID(),
 		}, eventsub.Handlers{
@@ -762,8 +763,36 @@ func (t *Tripbot) pollForTwitchToken(ctx context.Context) {
 
 // setUpTwitchClient sets up the Twitch client,
 // used by many bot features
+// setUpTwitchClient installs the static app credentials and builds the Twitch
+// IRC client, wiring the App's inbound adapters to it.
+//
+// The credentials are required, and fatal when absent: unlike a missing gateway
+// URL — where the instance stays up serving everything but that platform's chat
+// — there is no useful Twitch instance without them. Nothing outside this
+// twitch-only path needs them, which is why the check lives here rather than in
+// config.Load or a package init.
+// missingTwitchCredentials names the static Twitch app credentials that aren't
+// set, in a stable order. TWITCH_AUTH_TOKEN is deliberately absent: the IRC
+// token lives in the oauth_tokens table and is loaded via LoadFromDB.
+func missingTwitchCredentials(cfg *c.TripbotConfig) []string {
+	var missing []string
+	for _, cred := range []struct{ name, value string }{
+		{"TWITCH_CLIENT_ID", cfg.TwitchClientID},
+		{"TWITCH_CLIENT_SECRET", cfg.TwitchClientSecret},
+	} {
+		if cred.value == "" {
+			missing = append(missing, cred.name)
+		}
+	}
+	return missing
+}
+
 func (t *Tripbot) setUpTwitchClient() {
-	// build the Twitch IRC client and wire the App's inbound adapters to it
+	for _, name := range missingTwitchCredentials(t.cfg) {
+		log.Fatalf("You must set %s", name)
+	}
+	mytwitch.SetCredentials(t.cfg.TwitchClientID, t.cfg.TwitchClientSecret)
+
 	t.irc = t.app.ConnectIRC()
 }
 
