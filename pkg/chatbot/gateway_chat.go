@@ -34,6 +34,7 @@ type gatewayChatPoller struct {
 	handleGift func(ctx context.Context, gift IncomingGift)
 	pollFloor  time.Duration // floor under the gateway-suggested interval
 	errWait    time.Duration // backoff after a transport/gateway error
+	platform   string        // stamped on the liveness gauge so instances don't collide
 	// setLive records each page's Live flag. nil (the default) reports no
 	// liveness at all; ReportsLiveness points it at the channel-live gauge.
 	setLive func(bool)
@@ -48,7 +49,8 @@ type gatewayChatPoller struct {
 // live — so two writers on one gauge would flap it, and the silent-disconnect
 // alert with it.
 func (p *gatewayChatPoller) ReportsLiveness() *gatewayChatPoller {
-	p.setLive = instrumentation.ChannelLive.Set
+	platform := p.platform
+	p.setLive = func(live bool) { instrumentation.ChannelLive.Set(live, platform) }
 	return p
 }
 
@@ -62,6 +64,7 @@ func (a *App) NewGatewayChatPoller(apiURL string) *gatewayChatPoller {
 		handleGift: a.HandleGatewayGift,
 		pollFloor:  2 * time.Second,
 		errWait:    time.Minute,
+		platform:   a.Platform,
 	}
 }
 

@@ -585,7 +585,7 @@ func (t *Tripbot) startSilentDisconnectWatchdog(ctx context.Context) {
 		live, err := t.gateway.IsLive(ctx, t.cfg.ChannelName)
 		if err == nil {
 			instrumentation.TwitchChannelLive.Set(live)
-			instrumentation.ChannelLive.Set(live)
+			instrumentation.ChannelLive.Set(live, t.cfg.Platform)
 		}
 		return live, err
 	}
@@ -921,7 +921,7 @@ func (t *Tripbot) scheduleBackgroundJobs() {
 			// This tick is YouTube's liveness source rather than the inbound chat
 			// poll: it runs whether or not chat is enabled, and it reports an
 			// active broadcast as live even when that broadcast has no live chat.
-			instrumentation.ChannelLive.Set(b.Live)
+			instrumentation.ChannelLive.Set(b.Live, t.cfg.Platform)
 		}, gocron.WithStartAt(gocron.WithStartImmediately()))
 	}
 
@@ -938,7 +938,7 @@ func (t *Tripbot) scheduleBackgroundJobs() {
 				return
 			}
 			eventbus.EmitFacebookBroadcast(ctx, t.cfg.Environment, b.VideoID, b.BroadcastID, b.PermalinkURL, b.Privacy, b.Live)
-			instrumentation.ChannelLive.Set(b.Live)
+			instrumentation.ChannelLive.Set(b.Live, t.cfg.Platform)
 		}, gocron.WithStartAt(gocron.WithStartImmediately()))
 	}
 

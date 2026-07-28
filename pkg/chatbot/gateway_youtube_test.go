@@ -184,3 +184,15 @@ func TestGatewayChatPollerLivenessIsOptIn(t *testing.T) {
 		t.Error("ReportsLiveness left setLive nil")
 	}
 }
+
+// The poller must carry its App's platform, because that is what stamps the
+// liveness gauge. service.platform lives only on the OTel resource, so an
+// unstamped datapoint gives every per-platform instance the same series
+// identity and they collide onto one, last write winning — a tiktok that went
+// dark would read as live because twitch wrote after it.
+func TestGatewayChatPollerCarriesPlatform(t *testing.T) {
+	p := (&App{Platform: platformTikTok}).NewGatewayChatPoller("http://gateway.invalid")
+	if p.platform != platformTikTok {
+		t.Errorf("platform = %q, want %q", p.platform, platformTikTok)
+	}
+}
