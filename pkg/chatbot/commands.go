@@ -166,6 +166,27 @@ func (a *App) followageCmd(ctx context.Context, user *users.User, params []strin
 	}
 }
 
+// formatLifetimeMiles renders the lifetime total for a !miles reply. Whole
+// miles read best, so the total is rounded — except when the rounded total
+// would be smaller than the two-decimal monthly figure sitting next to it in
+// the same sentence, which looks like a bug to viewers. In that case the total
+// keeps two decimals to match the month, and never renders below it.
+func formatLifetimeMiles(lifetimeMiles, displayMonthly float32) string {
+	rounded := math.Round(float64(lifetimeMiles))
+
+	// what the monthly figure actually renders as, at two decimals
+	monthlyShown := math.Round(float64(displayMonthly)*100) / 100
+	if rounded >= monthlyShown {
+		return fmt.Sprintf("%v", rounded)
+	}
+
+	total := float64(lifetimeMiles)
+	if total < monthlyShown {
+		total = monthlyShown
+	}
+	return fmt.Sprintf("%.2f", total)
+}
+
 func (a *App) milesCmd(ctx context.Context, user *users.User, params []string) {
 	slog.InfoContext(ctx, "ran !miles", "username", user.Username)
 	var username string
@@ -208,8 +229,8 @@ func (a *App) milesCmd(ctx context.Context, user *users.User, params []string) {
 
 	// add total miles if they have been around for more than one month
 	if lifetimeMiles > monthlyMiles {
-		msg += " (%vmi total)."
-		msg = fmt.Sprintf(msg, math.Round(float64(lifetimeMiles)))
+		msg += " (%smi total)."
+		msg = fmt.Sprintf(msg, formatLifetimeMiles(lifetimeMiles, displayMonthly))
 	} else {
 		msg += "."
 
