@@ -25,6 +25,7 @@ const (
 	PlatformYouTube   = "youtube"
 	PlatformTikTok    = "tiktok"
 	PlatformInstagram = "instagram"
+	PlatformFacebook  = "facebook"
 )
 
 // RareOdds is the 1-in-N chance the left rotator shows its easter-egg line.
