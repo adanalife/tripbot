@@ -130,6 +130,34 @@ func TestSave_PersistsMutableColumns(t *testing.T) {
 	}
 }
 
+// exclude_from_leaderboard is set out-of-band against the DB, so a routine
+// save() carrying a stale copy of the row must leave it alone.
+func TestSave_LeavesExcludeFromLeaderboardAlone(t *testing.T) {
+	db := testdb.New(t)
+	ctx := context.Background()
+
+	user := FindOrCreate(ctx, testConf.Platform, "optedout")
+	if err := db.Model(&User{}).Where("id = ?", user.ID).
+		Update("exclude_from_leaderboard", true).Error; err != nil {
+		t.Fatalf("setting exclude_from_leaderboard: %v", err)
+	}
+
+	// the in-memory copy predates the flag, as a logged-in session's would
+	user.Miles = 5
+	user.save(ctx)
+
+	got, err := Find(ctx, testConf.Platform, "optedout")
+	if err != nil {
+		t.Fatalf("Find after save: %v", err)
+	}
+	if !got.ExcludeFromLeaderboard {
+		t.Error("save() reverted exclude_from_leaderboard")
+	}
+	if got.Miles != 5 {
+		t.Errorf("miles not persisted: %v", got.Miles)
+	}
+}
+
 // A zero ID means no DB row was ever found or created; saving would emit an
 // UPDATE with no WHERE clause, so it must be refused outright.
 func TestSave_ZeroIDWritesNothing(t *testing.T) {

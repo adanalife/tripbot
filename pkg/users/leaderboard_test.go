@@ -38,7 +38,7 @@ func assertBoard(t *testing.T, got [][]string, want [][]string) {
 }
 
 // The fetch must rank by stored miles, scoped to this instance's platform, and
-// exclude bots, the channel owner, and users with no miles.
+// exclude bots, opted-out accounts, the channel owner, and users with no miles.
 func TestUpdateLeaderboard_ReadsFromDB(t *testing.T) {
 	db := testdb.New(t)
 	seedUsers(t, db,
@@ -46,6 +46,8 @@ func TestUpdateLeaderboard_ReadsFromDB(t *testing.T) {
 		User{Username: "bob", Miles: 50},
 		User{Username: "carol", Miles: 75},
 		User{Username: "botty", Miles: 200, IsBot: true},
+		// a human who simply doesn't want to be ranked
+		User{Username: "optedout", Miles: 400, ExcludeFromLeaderboard: true},
 		User{Username: strings.ToLower(testConf.ChannelName), Miles: 300},
 		User{Username: "zed", Miles: 0},
 		User{Username: "elsewhere", Miles: 500, Platform: "youtube"},

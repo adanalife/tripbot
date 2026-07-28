@@ -23,6 +23,10 @@ type User struct {
 	NumVisits  uint16
 	HasDonated bool
 	IsBot      bool
+	// ExcludeFromLeaderboard hides the account from every leaderboard read
+	// while leaving it a normal chatter everywhere else. Independent of
+	// IsBot, which carries behavioral meaning beyond ranking.
+	ExcludeFromLeaderboard bool
 	// autoCreateTime stamps these with the current time on insert. create()
 	// builds a User without setting them, so without the tag GORM writes the
 	// zero value (0001-01-01) into columns whose DEFAULT is CURRENT_TIMESTAMP —
@@ -109,6 +113,9 @@ func (u User) save(ctx context.Context) {
 		slog.WarnContext(ctx, "refusing to save user with no ID", "username", u.Username)
 		return
 	}
+	// exclude_from_leaderboard is deliberately absent: nothing in the app sets
+	// it, so writing the session's copy back would let a stale in-memory false
+	// revert a flag set directly against the DB while the user was logged in.
 	err := database.GormDB().WithContext(ctx).Model(&u).Updates(map[string]any{
 		"last_seen":  u.LastSeen,
 		"num_visits": u.NumVisits,
