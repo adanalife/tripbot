@@ -18,7 +18,6 @@
 #     release PR (the `x-release-please-version` marker anchors the replace)
 #     — merging the release PR deploys both. tripbot restarts only the chat
 #     bot; onscreens restarts only blip the overlays.
-#   - obs: built + deployed from the standalone adanalife/obs repo.
 #
 # Hand-edits (e.g. a rollback): change the pin, then `task cdk8s:prod:bump
 # COMPONENT=<name>` regenerates just that component's prod dist — plain
@@ -30,7 +29,5 @@
 prod-1:
   # restarts the chat bot only; no stream impact
   tripbot: "4.12.0" # x-release-please-version
-  # restarting takes the stream down until OBS reconnects — pick a quiet moment
-  obs: "3.4.1"
   # overlays blip; the stream itself stays up
   onscreens-server: "4.12.0" # x-release-please-version
