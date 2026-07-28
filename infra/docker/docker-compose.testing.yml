@@ -34,9 +34,9 @@ services:
       migrate:
         condition: service_completed_successfully
     environment:
-      # DB tests skip when postgres is unreachable (`task test:macos` has
-      # no docker); inside this stack the DB is always there, so a skip
-      # would mask a wiring bug — fail instead.
+      # DB tests skip when postgres is unreachable (bare `go test` on the
+      # host); inside this stack the DB is always there, so a skip would
+      # mask a wiring bug — fail instead.
       TESTDB_REQUIRED: "1"
     env_file:
       - ./.env.testing

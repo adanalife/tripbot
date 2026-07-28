@@ -68,8 +68,8 @@ func connect(t *testing.T) *gorm.DB {
 		// DATABASE_* values are present under bare `go test`, where no main
 		// has called config.Load.
 		config.SetEnvironment()
-		// connect_timeout keeps the no-docker case (task test:macos) at a
-		// fast skip instead of a hanging dial.
+		// connect_timeout keeps the no-docker case (bare `go test` on the
+		// host) at a fast skip instead of a hanging dial.
 		dsn := fmt.Sprintf("postgres://%s:%s@%s/%s?sslmode=disable&connect_timeout=3",
 			os.Getenv("DATABASE_USER"), os.Getenv("DATABASE_PASS"),
 			os.Getenv("DATABASE_HOST"), os.Getenv("DATABASE_DB"))

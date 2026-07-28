@@ -34,10 +34,11 @@ Day-to-day Go work happens directly on the host. You'll need:
 - [go-task](https://taskfile.dev) — the task runner (`task --list` shows everything)
 
 ```bash
-# run the unit tests (natively on macOS; plain `task test` runs them in docker)
-task test:macos
+# run the unit tests in docker (postgres included, so the DB-backed tests run)
+task test
 
-# or call go directly through mise
+# or call go directly through mise — the repo is pure Go, so the tests run on
+# the host with no extra setup; the DB-backed ones skip without postgres
 mise exec -- go test ./...
 mise exec -- go build ./cmd/tripbot
 ```
