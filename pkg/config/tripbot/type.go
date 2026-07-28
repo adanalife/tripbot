@@ -20,8 +20,6 @@ type TripbotConfig struct {
 	// subscriber-only commands without an actual sub (comped friends/VIPs).
 	// Comma-separated, case-insensitive. Empty by default.
 	CompedSubscribers []string `envconfig:"COMPED_SUBSCRIBERS"`
-	// ExternalURL is the where the bot's HTTP server can be reached
-	ExternalURL string `required:"true" envconfig:"EXTERNAL_URL"`
 	// GoogleMapsAPIKey is the API key with which we access Google Maps.
 	// Optional — when unset, geocoder + static-map calls are skipped and
 	// callers fall back gracefully (no city/state lookups, no generated
