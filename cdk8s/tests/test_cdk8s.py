@@ -108,6 +108,49 @@ def test_priority_classes_owned_by_infra_not_tripbot():
     assert "ResourceQuota" in {o["kind"] for o in _objects("stage-1-tripbot-identity")}
 
 
+def _env_from_secrets(stem: str) -> set[str]:
+    """The Secret names a stem's tripbot container pulls env from."""
+    dep = _by_kind(_objects(stem), "Deployment")[0]
+    container = next(
+        c
+        for c in dep["spec"]["template"]["spec"]["containers"]
+        if c["name"].startswith("tripbot")
+    )
+    return {
+        src["secretRef"]["name"]
+        for src in container.get("envFrom", [])
+        if "secretRef" in src
+    }
+
+
+def test_only_twitch_mounts_the_twitch_creds_secret():
+    """The Twitch app credentials are read only by a twitch instance, which
+    builds a helix client from them; every other platform reaches its chat
+    through a platform-gateway that owns its own credential. The ExternalSecret
+    stays identity-level, so what's guarded here is the per-platform *mount*.
+
+    stage-1 rather than prod-1: prod's app manifests are release-pinned, so they
+    keep the old mount until the next release re-synths them.
+    """
+    assert "tripbot-twitch-creds" in _env_from_secrets("stage-1-tripbot-twitch")
+    for platform in ("youtube", "tiktok", "facebook", "instagram"):
+        stem = f"stage-1-tripbot-{platform}"
+        assert "tripbot-twitch-creds" not in _env_from_secrets(stem), (
+            f"{stem} mounts Twitch credentials it never reads"
+        )
+
+
+def test_every_platform_still_mounts_shared_app_secrets():
+    """Guards the blast radius of the twitch-creds scoping: the genuinely
+    identity-level Secrets stay on every platform. Maps in particular is
+    boot-required — geo warms on every Connect path, not just twitch."""
+    for platform in ("twitch", "youtube", "tiktok", "facebook", "instagram"):
+        mounted = _env_from_secrets(f"stage-1-tripbot-{platform}")
+        assert {"tripbot-database-creds", "tripbot-google-maps-api-key"} <= mounted, (
+            f"stage-1-tripbot-{platform} lost a shared app Secret: {mounted}"
+        )
+
+
 def test_youtube_tripbot_emits_youtube_creds():
     objs = _objects("stage-1-tripbot-youtube")
     es_names = {o["metadata"]["name"] for o in objs if o["kind"] == "ExternalSecret"}

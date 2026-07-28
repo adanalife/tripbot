@@ -236,8 +236,8 @@ class Tripbot(Construct):
         # collision). The discord and observability (Sentry/OTLP) Secrets are
         # optional so the bot boots without them — observability gates itself
         # off when the env vars are absent, and the pod isn't hostage to
-        # ExternalSecret sync order. Boot-required Secrets (DB creds, twitch,
-        # maps) stay required: a missing one fails loud.
+        # ExternalSecret sync order. Boot-required Secrets (DB creds, maps, and
+        # twitch on a twitch instance) stay required: a missing one fails loud.
         env_from = [
             k8s.EnvFromSource(config_map_ref=k8s.ConfigMapEnvSource(name=cm_name)),
             k8s.EnvFromSource(secret_ref=k8s.SecretEnvSource(name=db_secret)),
@@ -247,9 +247,21 @@ class Tripbot(Construct):
             k8s.EnvFromSource(
                 secret_ref=k8s.SecretEnvSource(name="sentry-tripbot", optional=True)
             ),
-            k8s.EnvFromSource(
-                secret_ref=k8s.SecretEnvSource(name="tripbot-twitch-creds")
-            ),
+        ]
+
+        # The Twitch app credentials are read only by a twitch instance, which
+        # builds a helix client from them; every other platform reaches its chat
+        # through a platform-gateway that owns its own credential. The
+        # ExternalSecret stays identity-level (one Twitch dev app for the bot,
+        # like google-maps) — it's the *mount* that's per-platform.
+        if platform == "twitch":
+            env_from.append(
+                k8s.EnvFromSource(
+                    secret_ref=k8s.SecretEnvSource(name="tripbot-twitch-creds")
+                )
+            )
+
+        env_from += [
             k8s.EnvFromSource(
                 secret_ref=k8s.SecretEnvSource(name="tripbot-google-maps-api-key")
             ),
