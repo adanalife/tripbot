@@ -9,6 +9,30 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v4.12.0] — 2026-07-28
+
+### Chatbot
+
+- Accounts can be kept off the leaderboards without being marked as bots: a new `users.exclude_from_leaderboard` flag is honored by the lifetime board, the monthly scoreboards, and the month-end snapshots. Seeded on for `adanalife_` and `tripbot4000`. ([#1217](https://github.com/adanalife/tripbot/pull/1217))
+- `!jump` reaches multi-word states and territories again: the input sanitizer keeps interior spaces, so `!jump new york` (and New Jersey, the Carolinas, Rhode Island, District of Columbia, …) resolves instead of being mangled into `newyork`. Extra whitespace collapses, stray punctuation is still stripped, and names up to four words long are accepted. ([#1220](https://github.com/adanalife/tripbot/pull/1220))
+- Emit a platform-agnostic `tripbot_channel_live` gauge so the OBS silent-disconnect alert can cover more than Twitch. TikTok reports it from the inbound-chat poll's `Live` flag — the webcast room the gateway tracks for chat is the room viewers watch, so a room reaped out from under a healthy OBS push shows up within a poll and costs no extra platform call. YouTube and Facebook report it from their existing broadcast-discovery ticks. ([#1223](https://github.com/adanalife/tripbot/pull/1223))
+
+### Onscreens
+
+- Rotator copy can embed substitution variables — `$location`, `$state`, `$date`, `$weather`, `$sunset` — resolved from the currently-playing clip when the line renders. Weather comes from the keyless Open-Meteo archive (the same source `!weather` uses), sunset from the footage's own coordinates. A line whose variables don't yet have values is passed over rather than putting a bare `$weather` on stream, and an undeclared token is rejected when the copy is saved. The clip-data feed behind them now runs on every platform, not just a bot-less YouTube. ([#1224](https://github.com/adanalife/tripbot/pull/1224))
+
+### Fixes
+
+- `!facebook` now links the live Facebook Page (`facebook.com/adanalifeunderscore`) instead of a dead URL. ([#1212](https://github.com/adanalife/tripbot/pull/1212))
+- **`TitlecaseState` handles unrecognized input.** An unknown two-letter abbreviation used to come back as an empty string, so a chat reply built from it rendered as `No footage for ... yet!`. Unrecognized input is now echoed back title-cased, whitespace is trimmed, and recognized states resolve to the canonical table spelling — fixing `!jump dc`, which previously looked up `District Of Columbia` and never matched the corpus. ([#1214](https://github.com/adanalife/tripbot/pull/1214))
+- The lifetime total in a `!miles` reply no longer reads smaller than the monthly figure beside it. Whole miles read best for a long-time viewer, so the total stays rounded — but for someone whose lifetime miles are nearly all from this month, rounding down produced `has 13.44mi this month (13mi total).`, which looks like a bug. The total now keeps the month's two decimals whenever rounding would put it below the month. ([#1215](https://github.com/adanalife/tripbot/pull/1215))
+- `users.create` returns its error instead of swallowing it. A failed insert used to be logged and then papered over with whatever the follow-up `Find` returned — a zero or partially populated `User` that flowed onward and only surfaced later as a phantom row or a bogus "user should be bot" style anomaly. `FindOrCreate` now discards a failed create outright and returns an empty `User`, which callers already treat as "no DB row" (`login` skips caching it, `save` refuses to write it), so a create failure self-heals on the next tick instead of poisoning the session. ([#1216](https://github.com/adanalife/tripbot/pull/1216))
+
+### Cleanup
+
+- Renamed `video.Next()` to `video.NextUnflagged()` so the name says what the method does: it walks the `next_vid` chain past flagged clips rather than returning the literal next one. ([#1213](https://github.com/adanalife/tripbot/pull/1213))
+- `users.FindOrCreate` returns `(User, error)`, so a lookup failure and a create failure are no longer both flattened into a bare empty `User`. The error is tagged `users.ErrLookupFailed` or `users.ErrCreateFailed` and wraps the underlying DB error, giving callers and log readers a way to tell "couldn't read the existing row" from "couldn't write a new one". Hot-path behavior is unchanged: `login` and `CorrectMiles` log the error and continue keying off the zero ID, so an un-saveable user still isn't cached and the next tick still self-heals. ([#1221](https://github.com/adanalife/tripbot/pull/1221))
+
 ## [v4.11.0] — 2026-07-28
 
 ### Chatbot
