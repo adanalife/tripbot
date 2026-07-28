@@ -87,6 +87,48 @@ func TestLoginIfNecessary_PersistsVisitAndEvent(t *testing.T) {
 	}
 }
 
+// A FindOrCreate failure degrades to "not logged in this tick" rather than
+// breaking the interaction: login still hands back a User, leaves the session
+// map untouched so nothing un-saveable gets cached, and lets the next tick
+// succeed once the DB is reachable again.
+func TestLogin_SelfHealsAfterFindOrCreateFailure(t *testing.T) {
+	db := testdb.New(t)
+	seedUsers(t, db, User{Username: "flaky", Miles: 3})
+
+	s := New(testConf, noopChatterSource{})
+
+	// A cancelled context stands in for a transient DB outage.
+	failing, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	user := s.LoginIfNecessary(failing, "flaky")
+	if user == nil {
+		t.Fatal("login must still return a User when the lookup fails")
+	}
+	if user.ID != 0 {
+		t.Errorf("expected a zero User for an unreachable DB, got %+v", user)
+	}
+	if _, ok := s.get("flaky"); ok {
+		t.Error("an un-saveable user must not be cached in the session")
+	}
+	if s.LoggedInCount() != 0 {
+		t.Errorf("expected nobody logged in, got %d", s.LoggedInCount())
+	}
+
+	// The next tick retries and recovers.
+	ctx := context.Background()
+	recovered := s.LoginIfNecessary(ctx, "flaky")
+	if recovered.ID == 0 {
+		t.Fatal("expected the retry to find the existing row")
+	}
+	if recovered.Miles != 3 {
+		t.Errorf("expected the seeded miles, got %v", recovered.Miles)
+	}
+	if _, ok := s.get("flaky"); !ok {
+		t.Error("expected the recovered user to be logged in")
+	}
+}
+
 // Logging out banks the session's miles to the users row, drops the user from
 // the session, and closes the pairing with a logout event.
 func TestLogoutIfNecessary_BanksMilesAndClosesSession(t *testing.T) {

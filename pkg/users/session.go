@@ -123,7 +123,10 @@ func (s *Sessions) sessionSnapshot() map[string]*User {
 func (s *Sessions) login(ctx context.Context, username string) *User {
 	now := time.Now()
 
-	user := FindOrCreate(ctx, s.cfg.Platform, username)
+	user, err := FindOrCreate(ctx, s.cfg.Platform, username)
+	if err != nil {
+		slog.ErrorContext(ctx, "error finding or creating user", "err", err, "username", username)
+	}
 	// A zero ID means FindOrCreate couldn't get a DB row (transient Find error
 	// or a failed create). Don't cache an un-saveable user in the session, or
 	// every later logout tick would fail save(). Return without logging them in;
@@ -256,7 +259,12 @@ func (s *Sessions) CorrectMiles(ctx context.Context, username string, delta floa
 		updated.save(ctx)
 		return updated.Miles
 	}
-	u := FindOrCreate(ctx, s.cfg.Platform, username)
+	u, err := FindOrCreate(ctx, s.cfg.Platform, username)
+	if err != nil {
+		// save() refuses an ID-less user, so the correction is dropped rather
+		// than half-applied; the returned total reflects only the delta.
+		slog.ErrorContext(ctx, "error finding or creating user", "err", err, "username", username)
+	}
 	u.Miles += delta
 	u.save(ctx)
 	return u.Miles

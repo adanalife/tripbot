@@ -60,7 +60,10 @@ func TestFindOrCreate_CreatesRow(t *testing.T) {
 	testdb.New(t)
 	ctx := context.Background()
 
-	user := FindOrCreate(ctx, testConf.Platform, "newbie")
+	user, err := FindOrCreate(ctx, testConf.Platform, "newbie")
+	if err != nil {
+		t.Fatalf("FindOrCreate: %v", err)
+	}
 	if user.ID == 0 {
 		t.Fatal("expected a persisted user with a real ID")
 	}
@@ -90,8 +93,14 @@ func TestFindOrCreate_FindsExistingRow(t *testing.T) {
 	db := testdb.New(t)
 	ctx := context.Background()
 
-	first := FindOrCreate(ctx, testConf.Platform, "repeat")
-	second := FindOrCreate(ctx, testConf.Platform, "repeat")
+	first, err := FindOrCreate(ctx, testConf.Platform, "repeat")
+	if err != nil {
+		t.Fatalf("first FindOrCreate: %v", err)
+	}
+	second, err := FindOrCreate(ctx, testConf.Platform, "repeat")
+	if err != nil {
+		t.Fatalf("second FindOrCreate: %v", err)
+	}
 	if second.ID != first.ID {
 		t.Fatalf("expected the same row, got %d then %d", first.ID, second.ID)
 	}
@@ -135,16 +144,64 @@ func TestCreate_SurfacesFailure(t *testing.T) {
 	})
 }
 
-// A failed create must not hand a half-populated User back to the caller:
-// login() keys off a zero ID to skip caching an un-saveable user in the
-// session, and save() refuses to write one.
-func TestFindOrCreate_FailedCreateYieldsZeroUser(t *testing.T) {
-	testdb.New(t)
+// FindOrCreate's contract: both failure modes come back as a zero User plus an
+// error that says which half gave up, with the DB error still reachable. A
+// half-populated User must never flow onward — login() keys off a zero ID to
+// skip caching an un-saveable user in the session, and save() refuses to write
+// one.
+func TestFindOrCreate_SurfacesFailure(t *testing.T) {
+	t.Run("a failed create is tagged ErrCreateFailed", func(t *testing.T) {
+		testdb.New(t)
 
-	got := FindOrCreate(context.Background(), testConf.Platform, strings.Repeat("x", 65))
-	if got.ID != 0 || got.Username != "" {
-		t.Fatalf("want a zero User when create fails, got %+v", got)
-	}
+		// users.username is VARCHAR(64), so an oversized name is a
+		// deterministic insert failure against the real schema.
+		got, err := FindOrCreate(context.Background(), testConf.Platform, strings.Repeat("x", 65))
+		if !errors.Is(err, ErrCreateFailed) {
+			t.Fatalf("want ErrCreateFailed, got %v", err)
+		}
+		if errors.Is(err, ErrLookupFailed) {
+			t.Error("a create failure must not read as a lookup failure")
+		}
+		if got.ID != 0 || got.Username != "" {
+			t.Errorf("want a zero User when create fails, got %+v", got)
+		}
+	})
+
+	t.Run("a failed lookup is tagged ErrLookupFailed and wraps the DB error", func(t *testing.T) {
+		db := testdb.New(t)
+		seedUsers(t, db, User{Username: "unreadable", Miles: 1})
+
+		// A cancelled context is the cheapest real query failure: the row
+		// exists, so this can only be the Find half failing.
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		got, err := FindOrCreate(ctx, testConf.Platform, "unreadable")
+		if !errors.Is(err, ErrLookupFailed) {
+			t.Fatalf("want ErrLookupFailed, got %v", err)
+		}
+		if errors.Is(err, ErrCreateFailed) {
+			t.Error("a lookup failure must not read as a create failure")
+		}
+		if !errors.Is(err, context.Canceled) {
+			t.Errorf("want the underlying DB error wrapped, got %v", err)
+		}
+		if got.ID != 0 || got.Username != "" {
+			t.Errorf("want a zero User when the lookup fails, got %+v", got)
+		}
+	})
+
+	t.Run("a missing user is not an error", func(t *testing.T) {
+		testdb.New(t)
+
+		got, err := FindOrCreate(context.Background(), testConf.Platform, "brandnew")
+		if err != nil {
+			t.Fatalf("a not-found user is the create path, not a failure: %v", err)
+		}
+		if got.ID == 0 {
+			t.Error("expected a persisted user")
+		}
+	})
 }
 
 // save() writes the mutable columns back — the update map names them by hand,
@@ -153,7 +210,10 @@ func TestSave_PersistsMutableColumns(t *testing.T) {
 	testdb.New(t)
 	ctx := context.Background()
 
-	user := FindOrCreate(ctx, testConf.Platform, "saver")
+	user, err := FindOrCreate(ctx, testConf.Platform, "saver")
+	if err != nil {
+		t.Fatalf("FindOrCreate: %v", err)
+	}
 	lastSeen := time.Date(2026, 5, 11, 12, 0, 0, 0, time.UTC)
 	user.Miles = 42.5
 	user.NumVisits = 7
@@ -179,7 +239,10 @@ func TestSave_LeavesExcludeFromLeaderboardAlone(t *testing.T) {
 	db := testdb.New(t)
 	ctx := context.Background()
 
-	user := FindOrCreate(ctx, testConf.Platform, "optedout")
+	user, err := FindOrCreate(ctx, testConf.Platform, "optedout")
+	if err != nil {
+		t.Fatalf("FindOrCreate: %v", err)
+	}
 	if err := db.Model(&User{}).Where("id = ?", user.ID).
 		Update("exclude_from_leaderboard", true).Error; err != nil {
 		t.Fatalf("setting exclude_from_leaderboard: %v", err)
@@ -223,7 +286,10 @@ func TestSetBot(t *testing.T) {
 		ctx := context.Background()
 
 		s := New(testConf, noopChatterSource{})
-		user := FindOrCreate(ctx, testConf.Platform, "maybebot")
+		user, err := FindOrCreate(ctx, testConf.Platform, "maybebot")
+		if err != nil {
+			t.Fatalf("FindOrCreate: %v", err)
+		}
 		s.loggedIn["maybebot"] = &user
 
 		if err := s.SetBot(ctx, "maybebot", true); err != nil {

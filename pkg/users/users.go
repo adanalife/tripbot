@@ -169,28 +169,34 @@ func (u User) String() string {
 	return aurora.Magenta(u.Username).String()
 }
 
-// FindOrCreate will try to find the user in the DB, otherwise it will create a new user
-func FindOrCreate(ctx context.Context, platform, username string) User {
+// ErrLookupFailed and ErrCreateFailed mark which half of FindOrCreate gave up:
+// an existing row that couldn't be read, versus a new row that couldn't be
+// written. Both wrap the underlying DB error, so errors.Is still reaches it.
+var (
+	ErrLookupFailed = errors.New("users: lookup failed")
+	ErrCreateFailed = errors.New("users: create failed")
+)
+
+// FindOrCreate will try to find the user in the DB, otherwise it will create a
+// new user. Either failure comes back as a zero User alongside an error tagged
+// with ErrLookupFailed or ErrCreateFailed; callers key off the zero ID to treat
+// it as "no DB row" and retry on a later tick.
+func FindOrCreate(ctx context.Context, platform, username string) (User, error) {
 	user, err := Find(ctx, platform, username)
 	if err == nil {
-		return user
+		return user, nil
 	}
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
 		// A real DB error must not look like a new user — creating here could
-		// duplicate an existing row. Callers treat a zero ID as "no DB row".
-		slog.ErrorContext(ctx, "error finding user", "err", err, "username", username)
-		return User{}
+		// duplicate an existing row.
+		return User{}, fmt.Errorf("%w for %s: %w", ErrLookupFailed, username, err)
 	}
 	// create the user in the DB
 	user, err = create(ctx, platform, username)
 	if err != nil {
-		// Callers treat a zero ID as "no DB row" and skip caching or saving the
-		// user, so a failed create degrades to "not logged in this tick" rather
-		// than a half-populated User flowing onward.
-		slog.ErrorContext(ctx, "error creating user", "err", err, "username", username)
-		return User{}
+		return User{}, fmt.Errorf("%w: %w", ErrCreateFailed, err)
 	}
-	return user
+	return user, nil
 }
 
 // Find looks up the username in the DB. A missing user surfaces as
