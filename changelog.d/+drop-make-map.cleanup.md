@@ -1,1 +1,1 @@
-Dropped the orphan `script/make-map` one-off and the empty `log/` directory, retiring the `googlemaps.github.io/maps` dependency with them.
+Dropped the orphan `script/make-map` one-off, the empty `log/` directory, and the two `pkg/helpers` functions make-map was the only caller of, retiring the `googlemaps.github.io/maps` dependency with them.

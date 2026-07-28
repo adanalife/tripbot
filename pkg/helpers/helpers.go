@@ -1,14 +1,11 @@
 package helpers
 
 import (
-	"errors"
 	"fmt"
 	"log/slog"
-	"os"
 	"path/filepath"
 	"regexp"
 	"runtime"
-	"strconv"
 	"strings"
 	"time"
 
@@ -43,62 +40,12 @@ func GoogleMapsURL(lat, long float64) string {
 	return fmt.Sprintf("https://maps.google.com/?q=%.5f%%2C%.5f&ll=%.5f%%2C%.5f&z=5", lat, long, lat, long)
 }
 
-// ParseLatLng converts an OCRed string into a LatLng
-func ParseLatLng(ocrStr string) (float64, float64, error) {
-	// first we have to change the string format
-	// from: W111.845329N40.774768
-	//   to: 40.774768,111.845329
-	nIndex := strings.Index(ocrStr, "N")
-
-	// check if we even found an N
-	if nIndex < 0 {
-		return 0, 0, errors.New("can't find an N in the string")
-	}
-
-	if nIndex == 0 {
-		return 0, 0, errors.New("N was the first letter")
-	}
-
-	// split up ad lat and long
-	lat, _ := strconv.ParseFloat(ocrStr[nIndex+1:], 64)
-	lon, _ := strconv.ParseFloat(ocrStr[1:nIndex], 64)
-
-	if lat == 0.0 || lon == 0.0 {
-		return lat, lon, errors.New("failed to convert lat or lon to float")
-	}
-
-	// western hemisphere assumed: the minus sign is hardcoded rather than
-	// parsed (the continental-US bounds check below rejects anything else)
-	lon = -lon
-
-	// error on impossible coords
-	if lat < -90.0 || lat > 90.0 || lon < -180.0 || lon > 180.0 {
-		return lat, lon, errors.New("lat or lon had impossible magnitude")
-	}
-
-	// skip anything outside of the continental US (for error correction)
-	if lat < 25.7 || lat > 49.23 || lon < -124.44 || lon > -66.57 {
-		return lat, lon, errors.New("lat or lon outside USA")
-	}
-
-	return lat, lon, nil
-}
-
 func RemoveNonLetters(input string) string {
 	reg, err := regexp.Compile("[^a-zA-Z]+")
 	if err != nil {
 		slog.Error("error compiling regex", "err", err)
 	}
 	return reg.ReplaceAllString(input, "")
-}
-
-// FileExists simply returns true if a file exists
-func FileExists(path string) bool {
-	_, err := os.Stat(path)
-	if os.IsNotExist(err) {
-		return false
-	}
-	return err == nil
 }
 
 func ActualDate(utcDate time.Time, lat, long float64) time.Time {
