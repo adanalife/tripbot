@@ -1,6 +1,7 @@
 package twitch
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -41,6 +42,43 @@ func TestNew_IsolatedState(t *testing.T) {
 	}
 	if b.IRCAuthToken() != "" {
 		t.Errorf("client b should be empty; got %q — state leaked between instances", b.IRCAuthToken())
+	}
+}
+
+// Client() has to refuse rather than hand back a helix client built on empty
+// credentials — the credentials arrive via SetCredentials now, and only a
+// twitch instance calls it, so "unset" is a reachable state for any other
+// platform that stumbles into this path.
+func TestClient_ErrorsWithoutCredentials(t *testing.T) {
+	for _, tt := range []struct {
+		name       string
+		id, secret string
+	}{
+		{"neither set", "", ""},
+		{"id only", "id", ""},
+		{"secret only", "", "secret"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			cl := New()
+			cl.SetCredentials(tt.id, tt.secret)
+			client, err := cl.Client()
+			if !errors.Is(err, ErrNoCredentials) {
+				t.Errorf("err = %v, want ErrNoCredentials", err)
+			}
+			if client != nil {
+				t.Error("client is non-nil despite missing credentials")
+			}
+		})
+	}
+}
+
+// SetCredentials is per-instance, like the tokens — no package global to leak
+// one instance's credentials into another.
+func TestSetCredentials_IsolatedPerInstance(t *testing.T) {
+	a, b := New(), New()
+	a.SetCredentials("a-id", "a-secret")
+	if b.clientID != "" || b.clientSecret != "" {
+		t.Errorf("credentials leaked to another instance: id=%q secret=%q", b.clientID, b.clientSecret)
 	}
 }
 
