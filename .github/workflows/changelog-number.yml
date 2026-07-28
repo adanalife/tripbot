@@ -6,8 +6,16 @@ name: changelog-number
 # renames it to <PR#>.<type>.md and commits it back, giving the release
 # changelog a PR link per entry.
 #
-# The changelog gate (changelog.yml) already accepts "+" fragments natively, so
-# nothing is blocked before this runs — this only upgrades the fragment's name.
+# The changelog gate already accepts "+" fragments natively, so nothing is
+# blocked before this runs — this only upgrades the fragment's name.
+#
+# Only fragments the head branch adds on top of its own base get numbered. A
+# stacked PR carries its parent's still-unnumbered placeholder, and that one
+# belongs to the parent's number, not this PR's.
+#
+# Several fragments of one type in a single PR are fine: the second and later
+# ones take towncrier's counter suffix (<PR>.<type>.1.md), which towncrier reads
+# as a distinct entry under the same PR link.
 #
 # Pushed with the automation app token (not GITHUB_TOKEN) so the rename commit
 # re-fires the PR's checks against the numbered state; a GITHUB_TOKEN push
@@ -53,20 +61,50 @@ jobs:
         env:
           PR: ${{ github.event.pull_request.number }}
           BRANCH: ${{ github.head_ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           set -euo pipefail
           shopt -s nullglob
-          renamed=0
+
+          # Placeholders this branch introduces, not ones inherited from an
+          # ancestor branch in a stack.
+          mine=()
+          while IFS= read -r f; do
+            [ -n "$f" ] && mine+=("$f")
+          done < <(git diff --name-only --diff-filter=A "${BASE_SHA}...HEAD" -- 'changelog.d/+*.md')
+
+          # Anything else still carrying a "+" came from a parent PR; naming it
+          # after this PR would misattribute the entry and collide with the
+          # parent's rename.
           for f in changelog.d/+*.md; do
-            base="$(basename "$f" .md)"   # +slug.fix
-            type="${base##*.}"            # fix
-            git mv "$f" "changelog.d/${PR}.${type}.md"
-            renamed=1
+            case " ${mine[*]} " in
+              *" $f "*) continue ;;
+            esac
+            echo "::notice title=Inherited changelog fragment::${f} was added by an ancestor branch, not this PR — leaving it for that PR to number."
           done
-          if [ "$renamed" -eq 0 ]; then
+
+          if [ ${#mine[@]} -eq 0 ]; then
             echo "No placeholder fragments to number."
             exit 0
           fi
+
+          for f in "${mine[@]}"; do
+            base="$(basename "$f" .md)"   # +slug.fix
+            type="${base##*.}"            # fix
+            # towncrier reads <issue>.<type>.<counter>.md, so repeat types in one
+            # PR get a counter rather than clobbering the first fragment.
+            target="changelog.d/${PR}.${type}.md"
+            n=0
+            while [ -e "$target" ]; do
+              n=$((n + 1))
+              target="changelog.d/${PR}.${type}.${n}.md"
+            done
+            if [ "$n" -gt 0 ]; then
+              echo "::notice title=Repeat changelog type::${f} is fragment $((n + 1)) of type '${type}' in this PR — numbering it ${target} (towncrier counter suffix)."
+            fi
+            git mv "$f" "$target"
+          done
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "ci: number changelog fragment(s) for #${PR}"
