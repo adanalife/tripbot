@@ -73,6 +73,65 @@ func startRotators(cfg *c.OnscreensServerConfig) (left, right *rotator) {
 	return l, r
 }
 
+// cornerRotatorFreq paces both corners' message swap. Beyond pacing, the
+// interval doubles as a blank-recovery cadence: OBS renders these overlays via
+// GPU-accelerated CEF offscreen rendering (BrowserHWAccel=true), whose
+// shared-texture handoff occasionally gets a stale/blank frame stuck — and CEF
+// only pushes a fresh frame when the rendered pixels actually change. A content
+// rotation is what forces that repaint, so a shorter interval bounds how long a
+// stuck-blank overlay stays blank.
+const cornerRotatorFreq = 45 * time.Second
+
+// liveDataWeight biases the live location/date line over the static promo lines
+// in the promo pools — the data is the headline (it's what the !location /
+// !date commands would return), the promo is the remainder. Tunable; ~50-65%
+// data against the default promo weights.
+const liveDataWeight = 6
+
+// leftLiveLine and rightLiveLine are the promoMode live-data lines: where the
+// clip was filmed, and the day it was filmed. Paired so the two corners show
+// "where" and "when" rather than duplicating one field. Each renders only while
+// tripbot is pushing its field — an unresolved $variable makes the line
+// ineligible.
+//
+// Not part of the console-editable copy: they're the one line each promo corner
+// is guaranteed to be able to show, so they ship with the binary rather than
+// being something an edit could leave a platform without.
+var (
+	leftLiveLine  = rot.Message{Text: "📍 $location", Weight: liveDataWeight}
+	rightLiveLine = rot.Message{Text: "📅 $date", Weight: liveDataWeight}
+)
+
+// newCornerRotator configures one corner, seeded with copy — the copy compiled
+// into the binary at startup, console-edited copy once RestoreRotatorCopy has
+// run. The caller pairs the two corners as siblings and calls start().
+func newCornerRotator(cfg *c.OnscreensServerConfig, kind string, liveLine rot.Message, copy rot.Corner, rareMessage string) *rotator {
+	r := &rotator{
+		cfg:      cfg,
+		kind:     kind,
+		freq:     cornerRotatorFreq,
+		liveLine: liveLine,
+	}
+	r.setCopy(copy, rareMessage)
+	return r
+}
+
+// newLeftRotator builds the left corner. The rare-message easter egg is this
+// corner's alone.
+func newLeftRotator(cfg *c.OnscreensServerConfig, cfgCopy rot.Config) *rotator {
+	return newCornerRotator(cfg, "left-rotator", leftLiveLine, cfgCopy.Left, cfgCopy.RareMessage)
+}
+
+// newRightRotator builds the right corner. No rare message — that easter egg is
+// the left corner's.
+//
+// This is the tighter corner of the two: its grey-box underlay is 369px against
+// the left's 564px (rot.BudgetFor), so its lines have to be shorter to avoid
+// shrinking to the font floor and wrapping to a second line.
+func newRightRotator(cfg *c.OnscreensServerConfig, cfgCopy rot.Config) *rotator {
+	return newCornerRotator(cfg, "right-rotator", rightLiveLine, cfgCopy.Right, "")
+}
+
 // setCopy swaps in new copy for this corner. The next rotation tick renders it;
 // whatever line is on screen right now is left alone rather than yanked
 // mid-display.
