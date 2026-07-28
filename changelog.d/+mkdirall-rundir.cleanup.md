@@ -1,0 +1,1 @@
+onscreens-server creates its run dir with a plain `os.MkdirAll` instead of a one-element slice looped over a `Stat`/`IsNotExist` dance, which also fixes a Stat error other than not-exist silently skipping the create.
