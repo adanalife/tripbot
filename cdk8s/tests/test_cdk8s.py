@@ -10,17 +10,32 @@ from pathlib import Path
 import pytest
 import yaml
 
+from adanalife_k8s.config import ENVS, SUPPORTED_PLATFORMS
+
 DIST = Path(__file__).resolve().parents[1] / "dist"
 VERSIONS = Path(__file__).resolve().parents[1] / "versions.yaml"
 
-# (env, platform) the app charts are synthed for. Mirrors config.ENVS platforms.
-ENV_PLATFORMS = {
-    "prod-1": ("twitch",),
-    "stage-1": ("youtube", "twitch"),
-    "development": ("twitch",),
-    "local": ("twitch",),
-}
+# (env, platform) the app charts are synthed for, read off the env definitions
+# rather than restated — a platform added to platforms.json (the fleet-wide
+# source of truth, synced by `task platforms:sync`) is covered here the moment
+# it synths. adanalife_k8s.config is stdlib + yaml only, so importing it keeps
+# jsii/node out of the default test run.
+ENV_PLATFORMS = {name: env.platforms for name, env in ENVS.items()}
 COMPONENTS = ("tripbot", "onscreens")
+
+# Every platform except twitch reaches chat through its own platform-gateway
+# instance and carries a <PLATFORM>_API_URL to find it (the EnvConfig
+# <platform>_api_url fields). twitch is the exception: its gateway is optional,
+# with the in-process path as the fallback.
+GATEWAY_PLATFORMS = tuple(p for p in SUPPORTED_PLATFORMS if p != "twitch")
+
+# The (env, platform) pairs of every synthed app unit — for assertions that
+# should hold on each platform rather than a hand-picked sample of two.
+ENV_PLATFORM_PAIRS = [
+    (env, platform)
+    for env, platforms in ENV_PLATFORMS.items()
+    for platform in platforms
+]
 
 
 def _objects(stem: str) -> list[dict]:
@@ -49,7 +64,7 @@ def test_each_component_has_deployment_and_service(env, comp, platform):
     assert "Service" in kinds, f"{env}-{comp}-{platform} missing Service"
 
 
-@pytest.mark.parametrize("env,platform", [("prod-1", "twitch"), ("stage-1", "youtube")])
+@pytest.mark.parametrize("env,platform", ENV_PLATFORM_PAIRS, ids=lambda v: str(v))
 @pytest.mark.parametrize("comp", ["tripbot"])
 def test_obs_websocket_addr_is_platform_scoped(env, comp, platform):
     """tripbot's OBS-websocket client (watchdog + stream start/stop) must dial
@@ -60,10 +75,11 @@ def test_obs_websocket_addr_is_platform_scoped(env, comp, platform):
     assert data["OBS_WEBSOCKET_ADDR"] == f"obs-{platform}:4455"
 
 
-@pytest.mark.parametrize("env,platform", [("prod-1", "twitch"), ("stage-1", "youtube")])
-def test_prod_pinned_stage_floats(env, platform):
-    """prod deploys the exact versions.yaml pin with IfNotPresent; stage floats
-    on main with Always."""
+@pytest.mark.parametrize("env,platform", ENV_PLATFORM_PAIRS, ids=lambda v: str(v))
+def test_prod_pinned_others_float(env, platform):
+    """prod deploys the exact versions.yaml pin with IfNotPresent; every other
+    env floats on its EnvConfig.image_tag with Always — "main" for stage and
+    development, "latest" on the laptop."""
     pins = yaml.safe_load(VERSIONS.read_text())
     dep = _by_kind(_objects(f"{env}-tripbot-{platform}"), "Deployment")[0]
     container = next(
@@ -79,7 +95,7 @@ def test_prod_pinned_stage_floats(env, platform):
         assert tag == pins["prod-1"]["tripbot"]
         assert container["imagePullPolicy"] == "IfNotPresent"
     else:
-        assert tag == "main"
+        assert tag == ENVS[env].image_tag
         assert container["imagePullPolicy"] == "Always"
 
 
@@ -133,7 +149,7 @@ def test_only_twitch_mounts_the_twitch_creds_secret():
     keep the old mount until the next release re-synths them.
     """
     assert "tripbot-twitch-creds" in _env_from_secrets("stage-1-tripbot-twitch")
-    for platform in ("youtube", "tiktok", "facebook", "instagram"):
+    for platform in GATEWAY_PLATFORMS:
         stem = f"stage-1-tripbot-{platform}"
         assert "tripbot-twitch-creds" not in _env_from_secrets(stem), (
             f"{stem} mounts Twitch credentials it never reads"
@@ -144,7 +160,7 @@ def test_every_platform_still_mounts_shared_app_secrets():
     """Guards the blast radius of the twitch-creds scoping: the genuinely
     identity-level Secrets stay on every platform. Maps in particular is
     boot-required — geo warms on every Connect path, not just twitch."""
-    for platform in ("twitch", "youtube", "tiktok", "facebook", "instagram"):
+    for platform in ENV_PLATFORMS["stage-1"]:
         mounted = _env_from_secrets(f"stage-1-tripbot-{platform}")
         assert {"tripbot-database-creds", "tripbot-google-maps-api-key"} <= mounted, (
             f"stage-1-tripbot-{platform} lost a shared app Secret: {mounted}"
@@ -168,7 +184,7 @@ def test_stage_parks_every_platform():
     def _deploy(stem):
         return _by_kind(_objects(stem), "Deployment")[0]
 
-    for platform in ("twitch", "youtube", "tiktok", "facebook", "instagram"):
+    for platform in ENV_PLATFORMS["stage-1"]:
         stem = f"stage-1-tripbot-{platform}"
         assert _deploy(stem)["spec"]["replicas"] == 0, f"{stem} should be parked"
     # prod still renders its Deployment (existence is the invariant; the replica
@@ -209,16 +225,17 @@ def test_stage_youtube_routes_sends_through_gateway():
     assert "YOUTUBE_API_URL" not in _cm_data("stage-1-tripbot-twitch")
 
 
-def test_read_only_platforms_route_through_gateway():
-    """The read-only gateway platforms (instagram, tiktok) carry their
-    <PLATFORM>_API_URL in both stage and prod — required for inbound chat to
-    come up at all (the binary boots chat-less without it)."""
+def test_gateway_platforms_route_through_gateway():
+    """Every non-twitch platform carries its <PLATFORM>_API_URL in both stage and
+    prod — required for chat to come up at all (the binary boots chat-less
+    without it). twitch is excluded: its gateway URL is optional, with the
+    in-process path as the fallback."""
 
     def _cm_data(stem):
         return _by_kind(_objects(stem), "ConfigMap")[0]["data"]
 
     for env in ("stage-1", "prod-1"):
-        for platform in ("instagram", "tiktok"):
+        for platform in GATEWAY_PLATFORMS:
             key = f"{platform.upper()}_API_URL"
             assert (
                 _cm_data(f"{env}-tripbot-{platform}").get(key)
