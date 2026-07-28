@@ -27,6 +27,7 @@ import (
 	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
 	playoutClient "github.com/adanalife/tripbot/pkg/playout-client"
 	"github.com/adanalife/tripbot/pkg/rollups"
+	"github.com/adanalife/tripbot/pkg/rotatorstore"
 	"github.com/adanalife/tripbot/pkg/server"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/users"
@@ -136,6 +137,12 @@ type Tripbot struct {
 	// client — same fail-closed contract as pkg/feature.
 	flagClient feature.FlagClient
 
+	// rotatorStore owns the console-edited corner-rotator copy in Postgres.
+	// Retained past the /api/rotators wiring so the NATS on-connect callback can
+	// republish every stored platform's copy, refilling the last-value cache
+	// onscreens-server restores from. Nil until startRotatorEditing runs.
+	rotatorStore *rotatorstore.Store
+
 	// gateway is the HTTP client for the platform-gateway — the single Helix
 	// caller. Non-nil on a Twitch instance (TWITCH_API_URL is
 	// set); nil on a non-Twitch instance, which never reaches the Twitch Helix
@@ -232,6 +239,7 @@ func (t *Tripbot) Run() {
 	t.app.UserSessions = t.sessions                                         // inbound IRC handlers + access checks read the same session state
 	t.sessions.InitLeaderboard(context.Background())
 	t.startFeatureFlags(ctx)
+	t.startRotatorEditing()
 	if t.platformIsTwitch() {
 		if t.gateway == nil {
 			// No in-process Helix fallback since the cutover, so audience polls,
@@ -424,6 +432,59 @@ func (t *Tripbot) startFeatureFlags(ctx context.Context) {
 	go fc.Start(ctx)
 }
 
+// startRotatorEditing wires the console's /api/rotators surface: the Postgres
+// store that owns the edited corner-rotator copy, and the NATS publisher that
+// pushes a save to the platform's onscreens-server. Needs only the DB, so it
+// runs before NATS is up; the stream-declare and republish happen on connect
+// (see ensureRotatorCopyPublished).
+//
+// Without it the endpoints answer 503 and the overlays run the copy compiled
+// into onscreens-server — copy editing must never be what keeps the bot down.
+func (t *Tripbot) startRotatorEditing() {
+	t.rotatorStore = rotatorstore.New(database.GormDB())
+	t.srv.SetRotators(t.rotatorStore,
+		onscreensClient.New(natsclient.DefaultPublisher(), t.cfg.Environment, t.cfg.Platform))
+}
+
+// ensureRotatorCopyPublished declares the rotator-copy last-value stream and
+// republishes every stored platform's copy onto it. Runs from the NATS
+// on-connect callback so it executes against a live server.
+//
+// The republish is the repair path for that cache: it rides a local-path PVC
+// that `talosctl upgrade` wipes even with --preserve, so refilling it from the
+// Postgres record of truth is what keeps a wipe from costing hand-authored copy.
+// Best-effort per platform — a failure logs, and the next restart or console
+// save covers it.
+func (t *Tripbot) ensureRotatorCopyPublished(ctx context.Context) {
+	if err := onscreensClient.EnsureRotatorConfigStream(ctx, natsclient.JetStream(), t.cfg.Environment); err != nil {
+		slog.WarnContext(ctx, "rotator config stream setup failed; edits won't survive an onscreens restart",
+			"err", err)
+	}
+	if t.rotatorStore == nil {
+		return
+	}
+	platforms, err := t.rotatorStore.Platforms(ctx)
+	if err != nil {
+		slog.WarnContext(ctx, "couldn't list stored rotator copy to republish",
+			"fix", "ensure migration 034_create_onscreens_rotators has run", "err", err)
+		return
+	}
+	pub := onscreensClient.New(natsclient.DefaultPublisher(), t.cfg.Environment, t.cfg.Platform)
+	for _, platform := range platforms {
+		cfg, _, err := t.rotatorStore.GetOrDefault(ctx, platform)
+		if err != nil {
+			slog.WarnContext(ctx, "couldn't read stored rotator copy", "err", err, "platform", platform)
+			continue
+		}
+		if err := pub.PublishRotatorConfig(ctx, platform, cfg); err != nil {
+			slog.WarnContext(ctx, "couldn't republish rotator copy", "err", err, "platform", platform)
+		}
+	}
+	if len(platforms) > 0 {
+		slog.InfoContext(ctx, "republished stored rotator copy", "platforms", len(platforms))
+	}
+}
+
 // startNATS connects to the in-cluster NATS broker and declares the JetStream
 // streams that back the standalone tripbot-console's durable history. Optional —
 // when NATS_URL is empty the connection is skipped and publishes no-op silently.
@@ -441,6 +502,7 @@ func (t *Tripbot) startNATS(ctx context.Context) {
 			slog.WarnContext(ctx, "jetstream stream setup failed; console will run without durable history",
 				"err", err)
 		}
+		t.ensureRotatorCopyPublished(ctx)
 	})
 }
 
