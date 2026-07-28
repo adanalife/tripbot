@@ -157,6 +157,29 @@ func TestRightCornerHasNoRareMessage(t *testing.T) {
 	}
 }
 
+// The corners split "where" and "when" between them: left shows the location,
+// right the date. Swapping them wouldn't fail anything else here — both lines
+// resolve on both corners — it would just put the wrong field in each corner on
+// stream.
+func TestCornersCarryTheirOwnLiveLine(t *testing.T) {
+	cfg := rotatorConf(platformTwitch, true)
+	if got := leftRotator(cfg).liveLine.Text; got != "📍 $location" {
+		t.Errorf("left live line = %q, want the location line", got)
+	}
+	if got := rightRotator(cfg).liveLine.Text; got != "📅 $date" {
+		t.Errorf("right live line = %q, want the date line", got)
+	}
+}
+
+// Both corners swap on the same cadence; a drift between them would show up as
+// the two overlays visibly falling out of step.
+func TestCornersShareTheirCadence(t *testing.T) {
+	cfg := rotatorConf(platformTwitch, true)
+	if l, r := leftRotator(cfg).freq, rightRotator(cfg).freq; l != r {
+		t.Errorf("left freq = %v, right freq = %v, want equal", l, r)
+	}
+}
+
 // TestApplyRotatorConfigUpdatesBothCorners covers the NATS-delivered update at
 // the Server level, including that the rare message lands only on the left.
 func TestApplyRotatorConfigUpdatesBothCorners(t *testing.T) {

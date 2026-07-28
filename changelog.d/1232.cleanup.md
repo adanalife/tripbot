@@ -1,0 +1,1 @@
+Folded `left-rotator.go` and `right-rotator.go` into `rotator.go` behind one `newCornerRotator`, with the two corners' 45s cadence as a single shared constant instead of two vars documented as matching each other.
