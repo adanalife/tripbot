@@ -2,6 +2,7 @@ package chatbot
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -125,5 +126,73 @@ func TestGatewayChatPollerRoutesByKind(t *testing.T) {
 	want := IncomingGift{User: "B", UserID: "2", Name: "Rose", Count: 3, Value: 3}
 	if gifts[0] != want {
 		t.Errorf("gift = %+v, want %+v", gifts[0], want)
+	}
+}
+
+// Liveness reporting tracks each page's Live flag, and a poll that fails must
+// leave it untouched: an unreachable gateway says nothing about whether the
+// channel is live, and recording offline there would read as a silent
+// disconnect and page.
+func TestGatewayChatPollerReportsLiveness(t *testing.T) {
+	pages := []struct {
+		page gateway.InboundChatPage
+		err  error
+	}{
+		{page: gateway.InboundChatPage{Cursor: "c1", Live: true, PollAfterMS: 1}},
+		{err: errors.New("connection refused")}, // must not record
+		{page: gateway.InboundChatPage{Cursor: "c2", Live: false, PollAfterMS: 1}},
+	}
+
+	call := 0
+	ctx, cancel := context.WithCancel(context.Background())
+	fake := inboundChatFunc(func(_ context.Context, _ string) (gateway.InboundChatPage, error) {
+		if call >= len(pages) {
+			cancel()
+			return gateway.InboundChatPage{}, context.Canceled
+		}
+		p := pages[call]
+		call++
+		return p.page, p.err
+	})
+
+	var recorded []bool
+	p := &gatewayChatPoller{
+		client:    fake,
+		handle:    func(context.Context, IncomingMessage) {},
+		pollFloor: time.Millisecond,
+		errWait:   time.Millisecond,
+		setLive:   func(live bool) { recorded = append(recorded, live) },
+	}
+	p.Run(ctx)
+
+	if len(recorded) != 2 || !recorded[0] || recorded[1] {
+		t.Errorf("recorded = %v, want [true false] (the failed poll records nothing)", recorded)
+	}
+}
+
+// Liveness is opt-in: the default poller reports none, so a platform whose
+// liveness comes from a broadcast-discovery tick doesn't get a second writer
+// fighting it on the same gauge.
+func TestGatewayChatPollerLivenessIsOptIn(t *testing.T) {
+	if (&gatewayChatPoller{}).setLive != nil {
+		t.Error("setLive is set by default, want nil until ReportsLiveness")
+	}
+	if (&App{}).NewGatewayChatPoller("http://gateway.invalid").setLive != nil {
+		t.Error("NewGatewayChatPoller reports liveness, want opt-in via ReportsLiveness")
+	}
+	if (&App{}).NewGatewayChatPoller("http://gateway.invalid").ReportsLiveness().setLive == nil {
+		t.Error("ReportsLiveness left setLive nil")
+	}
+}
+
+// The poller must carry its App's platform, because that is what stamps the
+// liveness gauge. service.platform lives only on the OTel resource, so an
+// unstamped datapoint gives every per-platform instance the same series
+// identity and they collide onto one, last write winning — a tiktok that went
+// dark would read as live because twitch wrote after it.
+func TestGatewayChatPollerCarriesPlatform(t *testing.T) {
+	p := (&App{Platform: platformTikTok}).NewGatewayChatPoller("http://gateway.invalid")
+	if p.platform != platformTikTok {
+		t.Errorf("platform = %q, want %q", p.platform, platformTikTok)
 	}
 }

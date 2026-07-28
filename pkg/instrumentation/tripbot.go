@@ -32,6 +32,7 @@ var (
 	twitchTokenExpiry  = mustGauge("tripbot_twitch_token_expires_at_seconds", "Unix timestamp of the in-memory Twitch user-access-token's ExpiresAt, labeled by account (bot|broadcaster). 0 when the account has no loaded token.")
 	twitchHelixErrors  = mustCounter("twitch_helix_errors_total", "Total non-2xx responses from the Twitch Helix API, labeled by endpoint and status_code")
 	twitchChannelLive  = mustGauge("tripbot_twitch_channel_live", "1 when Helix GetStreams reports the configured channel as live, 0 when offline. Driven by the OBS silent-disconnect watchdog's Helix poll.")
+	channelLive        = mustGauge("tripbot_channel_live", "1 when the platform reports this instance's channel as live, 0 when offline, labeled by service_platform. Paired with obs_streaming_active in the silent-disconnect alert: OBS=1 while the platform says 0 means we are streaming into the void.")
 	currentState       = mustGauge("tripbot_current_state", "1 for the US state the dashcam playhead is currently in, 0 for the previously-active state, labeled by state (2-letter abbrev, or \"unknown\"). Only one series reads 1 at a time. Drives the states-visited heatmap and the 'stuck on unknown' alert.")
 
 	gatewayUp = mustGauge("tripbot_gateway_up", "1 when tripbot's last platform-gateway call got an HTTP response (gateway reachable), 0 when it failed at the transport layer (connection refused, timeout, DNS). Consumer-side reachability — paired with the gateway's own platform_gateway_up (process liveness).")
@@ -107,6 +108,17 @@ var TwitchHelixErrors = twitchHelixErrorsIface{counter: twitchHelixErrors}
 // returns empty. Paired with OBSStreaming in an alert: divergence
 // (OBS=1 / Twitch=0) is the silent half-open RTMP signal.
 var TwitchChannelLive = twitchChannelLiveIface{gauge: twitchChannelLive}
+
+// ChannelLive exposes the platform-agnostic live-status gauge. Call
+// Set(live, platform) from whatever already learns this instance's live state —
+// the Twitch watchdog's Helix poll, the gateway inbound-chat poll's Live flag,
+// or a broadcast-discovery tick. The platform is stamped as a datapoint
+// attribute for the same reason the OBS metrics do it: service.platform lives
+// only on the resource, so without it every per-platform instance would emit the
+// same series identity and collide onto one, last write winning. Every platform
+// an alert can watch must call this; a platform that never does has no series,
+// which the lost-visibility canary reports rather than reading as offline.
+var ChannelLive = channelLiveIface{gauge: channelLive}
 
 // CurrentState exposes the dashcam-state gauge. Call Set(abbrev, platform) on
 // every video transition with the active state's 2-letter abbreviation (or
@@ -232,6 +244,16 @@ func (t twitchChannelLiveIface) Set(live bool) {
 		v = 1
 	}
 	t.gauge.Record(context.Background(), v)
+}
+
+type channelLiveIface struct{ gauge metric.Int64Gauge }
+
+func (c channelLiveIface) Set(live bool, platform string) {
+	var v int64
+	if live {
+		v = 1
+	}
+	c.gauge.Record(context.Background(), v, platformAttr(platform))
 }
 
 type currentStateIface struct {
