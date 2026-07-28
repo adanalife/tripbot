@@ -13,6 +13,7 @@ import (
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
+	"github.com/adanalife/tripbot/pkg/database/testdb"
 	"github.com/adanalife/tripbot/pkg/events"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/adanalife/tripbot/pkg/video"
@@ -1316,6 +1317,93 @@ func TestGiveMilesCmd_Admin_BadArgs_NoCorrection(t *testing.T) {
 			t.Errorf("params %v: expected no Sessions calls, got %v", params, rec.Calls)
 		}
 	}
+}
+
+// A correction that didn't persist has no running total to report, so the reply
+// has to say so rather than post a number viewers would read as authoritative.
+func TestGiveMilesCmd_CorrectMilesFails_SaysFailureNotANumber(t *testing.T) {
+	app := newTestApp(video.Video{})
+	rec := &recordingSessions{
+		FindResult:      users.User{ID: 7, Username: "target"},
+		Miles:           60,
+		CorrectMilesErr: users.ErrLookupFailed,
+	}
+	app.Sessions = rec
+
+	out, _ := captureSay(t, app)
+
+	app.giveMilesCmd(context.Background(), newTestUser(adminUser), []string{"target", "50"})
+
+	msg := out()
+	if !strings.Contains(msg, "try again in a bit") {
+		t.Errorf("expected a failure message, got %q", msg)
+	}
+	for _, unwanted := range []string{"now has", "50", "60"} {
+		if strings.Contains(msg, unwanted) {
+			t.Errorf("expected no total in the reply, got %q", msg)
+		}
+	}
+	want := []string{`Find("target")`, `CorrectMiles("target", 50)`}
+	if !slices.Equal(rec.Calls, want) {
+		t.Errorf("expected %v, got %v", want, rec.Calls)
+	}
+}
+
+// The correction event is the append-only audit trail the miles rollups derive
+// from, so it must exist exactly when the users row got the correction and
+// never otherwise — an orphan event is a permanent divergence.
+func TestGiveMilesCmd_CorrectionEventOnlyOnSuccess(t *testing.T) {
+	correctionEvents := func(t *testing.T, db *gorm.DB) []events.Event {
+		t.Helper()
+		var found []events.Event
+		if err := db.Where("username = ? AND event = ?", "target", "correction").Find(&found).Error; err != nil {
+			t.Fatalf("reading events: %v", err)
+		}
+		return found
+	}
+
+	t.Run("a persisted correction is reported and recorded", func(t *testing.T) {
+		db := testdb.New(t)
+		app := newTestApp(video.Video{})
+		app.Sessions = &recordingSessions{
+			FindResult: users.User{ID: 7, Username: "target"},
+			Miles:      60,
+		}
+		out, _ := captureSay(t, app)
+
+		app.giveMilesCmd(context.Background(), newTestUser(adminUser), []string{"target", "50"})
+
+		if msg := out(); msg != "@target now has 60.00mi" {
+			t.Errorf("expected the running total in the reply, got %q", msg)
+		}
+		found := correctionEvents(t, db)
+		if len(found) != 1 {
+			t.Fatalf("expected 1 correction event, got %d", len(found))
+		}
+		if found[0].ExtraMilesEarned == nil || *found[0].ExtraMilesEarned != 50 {
+			t.Errorf("expected extra_miles_earned=50, got %v", found[0].ExtraMilesEarned)
+		}
+	})
+
+	t.Run("a dropped correction records nothing", func(t *testing.T) {
+		db := testdb.New(t)
+		app := newTestApp(video.Video{})
+		app.Sessions = &recordingSessions{
+			FindResult:      users.User{ID: 7, Username: "target"},
+			Miles:           60,
+			CorrectMilesErr: users.ErrCreateFailed,
+		}
+		out, _ := captureSay(t, app)
+
+		app.giveMilesCmd(context.Background(), newTestUser(adminUser), []string{"target", "50"})
+
+		if msg := out(); strings.Contains(msg, "now has") {
+			t.Errorf("expected no total in the reply, got %q", msg)
+		}
+		if found := correctionEvents(t, db); len(found) != 0 {
+			t.Errorf("expected no correction event, got %d", len(found))
+		}
+	})
 }
 
 func TestMakeBotCmd_Admin_NoParams_DoesNotCallSetBot(t *testing.T) {
