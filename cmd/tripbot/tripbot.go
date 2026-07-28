@@ -282,140 +282,116 @@ func (t *Tripbot) Run() {
 		t.startSilentDisconnectWatchdog(ctx) // watches the OBS→Twitch stream specifically
 		t.startBackgroundAudioWatchdog(ctx)  // keeps audible music on-stream when SomaFM drops
 		t.connectToTwitch(ctx)               // blocks until shutdown
-	} else if t.cfg.Platform == "facebook" {
-		t.connectToFacebook(ctx) // blocks until shutdown
-	} else if t.cfg.Platform == "instagram" {
-		t.connectToInstagram(ctx) // blocks until shutdown
-	} else if t.cfg.Platform == "tiktok" {
-		t.connectToTikTok(ctx) // blocks until shutdown
 	} else {
-		t.connectToYouTube(ctx) // blocks until shutdown
+		t.connectViaGateway(ctx, t.gatewayPlatform()) // blocks until shutdown
 	}
 	t.shutdown(httpDone)
 }
 
-// connectToYouTube wires a PLATFORM=youtube instance's chat — both directions —
-// through gateway-youtube, then blocks until shutdown. YouTube auth + runtime
-// moved entirely onto the platform-gateway, so tripbot holds no YouTube token:
-// outbound sends go via gateway-youtube's SendChat, inbound chat via its
-// GET /v1/chat/inbound poll.
+// gatewayPlatform describes how one non-Twitch platform reaches its chat. All
+// of them go through a platform-gateway service: outbound via its SendChat,
+// inbound via its GET /v1/chat/inbound poll, so tripbot holds no credential for
+// any of them. What differs is the URL, which outbound client gets installed,
+// and whether the inbound poll runs at all.
+type gatewayPlatform struct {
+	name    string // platform slug, used in log messages
+	envVar  string // config var holding the gateway URL; named in the error when unset
+	apiURL  string // that var's value
+	connect func() // installs the outbound chat client on the App
+
+	// directions describes the platform's chat reach for the log line.
+	// "inbound only" platforms have no post API — TikTok's webcast protocol is
+	// observe-only, Instagram's Graph API can read live comments but not create
+	// them — so their outbound client drops sends.
+	directions string
+
+	// reportsLiveness marks a platform whose chat poll is also its only
+	// liveness signal, so the poll should write the live gauge. TikTok has no
+	// broadcast-discovery tick, and the webcast room the gateway tracks for
+	// chat is the same room viewers watch — so that poll is what catches a room
+	// reaped out from under a healthy OBS push. Platforms with their own
+	// discovery tick leave it off rather than have two writers fight over one
+	// gauge.
+	reportsLiveness bool
+
+	// skipInbound turns the inbound poll off, leaving outbound and the
+	// background jobs running. Only YouTube uses it: the poll is the expensive
+	// YouTube Data API spend, and until the quota extension lands the instance
+	// runs bot-less. inboundOffReason is logged in its place.
+	skipInbound      bool
+	inboundOffReason string
+	inboundOffFix    string
+}
+
+// gatewayPlatform returns the descriptor for this instance's platform. An
+// unrecognized platform falls through to youtube, matching the dispatch this
+// replaces (empty PLATFORM never reaches here — platformIsTwitch claims it).
+func (t *Tripbot) gatewayPlatform() gatewayPlatform {
+	switch t.cfg.Platform {
+	case "facebook":
+		// The gateway owns the Page access token and the live-video resolution,
+		// so outbound sends land as a Page comment on the live video.
+		return gatewayPlatform{
+			name: "facebook", envVar: "FACEBOOK_API_URL", apiURL: t.cfg.FacebookAPIURL,
+			connect: t.app.ConnectFacebookViaGateway, directions: "inbound + outbound",
+		}
+	case "instagram":
+		// The broadcast itself is started by a human — there is no API to go
+		// live on Instagram — so the poller idles on rediscovery until one
+		// appears.
+		return gatewayPlatform{
+			name: "instagram", envVar: "INSTAGRAM_API_URL", apiURL: t.cfg.InstagramAPIURL,
+			connect: t.app.ConnectInstagramViaGateway, directions: "inbound only",
+		}
+	case "tiktok":
+		return gatewayPlatform{
+			name: "tiktok", envVar: "TIKTOK_API_URL", apiURL: t.cfg.TikTokAPIURL,
+			connect: t.app.ConnectTikTokViaGateway, directions: "inbound only",
+			reportsLiveness: true,
+		}
+	default:
+		return gatewayPlatform{
+			name: "youtube", envVar: "YOUTUBE_API_URL", apiURL: t.cfg.YouTubeAPIURL,
+			connect: t.app.ConnectYouTubeViaGateway, directions: "inbound + outbound",
+			skipInbound:      !t.cfg.YouTubeInboundEnabled,
+			inboundOffReason: "youtube inbound chat disabled (bot-less mode); outbound + jobs only",
+			inboundOffFix:    "set YOUTUBE_INBOUND_ENABLED=true to read chat",
+		}
+	}
+}
+
+// connectViaGateway brings up p's chat and blocks until shutdown.
 //
-// YOUTUBE_API_URL is required — the in-process YouTube client is gone, so
-// without the gateway URL there's no way to reach YouTube. A misconfigured
-// instance comes up Ready with everything else working but no YouTube chat,
-// logging loudly (the same "stay up with limited functionality" contract as
-// loadTwitchToken).
-func (t *Tripbot) connectToYouTube(ctx context.Context) {
-	if t.cfg.YouTubeAPIURL == "" {
-		slog.ErrorContext(ctx, "YOUTUBE_API_URL unset; youtube chat disabled",
-			"fix", "set YOUTUBE_API_URL to the gateway-youtube service URL")
+// The gateway URL is required — without it there's no way to reach the platform
+// — but a missing one is not fatal: the instance comes up Ready with everything
+// else working and no chat, logging loudly. Same "stay up with limited
+// functionality" contract as loadTwitchToken.
+func (t *Tripbot) connectViaGateway(ctx context.Context, p gatewayPlatform) {
+	if p.apiURL == "" {
+		slog.ErrorContext(ctx, p.envVar+" unset; "+p.name+" chat disabled",
+			"fix", "set "+p.envVar+" to the gateway-"+p.name+" service URL")
 		<-ctx.Done()
 		return
 	}
 
-	t.app.ConnectYouTubeViaGateway()
-	if t.cfg.YouTubeInboundEnabled {
-		go t.app.NewGatewayChatPoller(t.cfg.YouTubeAPIURL).Run(ctx)
-		slog.InfoContext(ctx, "youtube chat via gateway (inbound + outbound)", "gateway", t.cfg.YouTubeAPIURL)
+	p.connect()
+
+	if p.skipInbound {
+		// Outbound posting (rotators) and the background jobs stay up, but no
+		// command responds. The chatbot serves promo copy instead of command
+		// ads (see enabledHelpMessages).
+		slog.WarnContext(ctx, p.inboundOffReason, "gateway", p.apiURL, "fix", p.inboundOffFix)
 	} else {
-		// Bot-less mode: outbound posting (rotators) + background jobs stay up,
-		// but the inbound poll — the expensive YouTube Data API spend — is off,
-		// so no command responds. The chatbot serves promo copy instead of
-		// command ads (see enabledHelpMessages). Flip YOUTUBE_INBOUND_ENABLED
-		// to true once the quota extension lands.
-		slog.WarnContext(ctx, "youtube inbound chat disabled (bot-less mode); outbound + jobs only",
-			"gateway", t.cfg.YouTubeAPIURL, "fix", "set YOUTUBE_INBOUND_ENABLED=true to read chat")
+		poller := t.app.NewGatewayChatPoller(p.apiURL)
+		if p.reportsLiveness {
+			poller = poller.ReportsLiveness()
+		}
+		go poller.Run(ctx)
+		slog.InfoContext(ctx, p.name+" chat via gateway ("+p.directions+")", "gateway", p.apiURL)
 	}
 
 	// nothing else to do on the main goroutine — the poller and HTTP server
 	// run until shutdown begins.
-	<-ctx.Done()
-}
-
-// connectToFacebook wires a PLATFORM=facebook instance's chat — both
-// directions — through gateway-facebook, then blocks until shutdown. The
-// gateway owns the Page access token and the live-video resolution, so
-// tripbot holds no Facebook credential: outbound sends go via
-// gateway-facebook's SendChat (a Page comment on the live video), inbound
-// chat via its GET /v1/chat/inbound poll.
-//
-// FACEBOOK_API_URL is required — without the gateway URL there's no way to
-// reach Facebook. A misconfigured instance comes up Ready with everything
-// else working but no Facebook chat, logging loudly (the same "stay up with
-// limited functionality" contract as connectToYouTube).
-func (t *Tripbot) connectToFacebook(ctx context.Context) {
-	if t.cfg.FacebookAPIURL == "" {
-		slog.ErrorContext(ctx, "FACEBOOK_API_URL unset; facebook chat disabled",
-			"fix", "set FACEBOOK_API_URL to the gateway-facebook service URL")
-		<-ctx.Done()
-		return
-	}
-
-	t.app.ConnectFacebookViaGateway()
-	go t.app.NewGatewayChatPoller(t.cfg.FacebookAPIURL).Run(ctx)
-	slog.InfoContext(ctx, "facebook chat via gateway (inbound + outbound)", "gateway", t.cfg.FacebookAPIURL)
-
-	// nothing else to do on the main goroutine — the poller and HTTP server
-	// run until the signal handler shuts the process down.
-	<-ctx.Done()
-}
-
-// connectToInstagram wires a PLATFORM=instagram instance's chat through
-// gateway-instagram, then blocks until shutdown. Inbound-only: the gateway
-// polls live-broadcast comments off the Graph API, which cannot create IG
-// comments, so outbound Say is dropped (viewers get responses via onscreens /
-// playback effects). The broadcast itself is started by a human — there is no
-// API to go live on Instagram — so the poller idles on rediscovery until one
-// appears.
-//
-// INSTAGRAM_API_URL is required — without the gateway URL there's no way to
-// reach Instagram. A misconfigured instance comes up Ready with everything
-// else working but no Instagram chat, logging loudly (the same "stay up with
-// limited functionality" contract as connectToYouTube).
-func (t *Tripbot) connectToInstagram(ctx context.Context) {
-	if t.cfg.InstagramAPIURL == "" {
-		slog.ErrorContext(ctx, "INSTAGRAM_API_URL unset; instagram chat disabled",
-			"fix", "set INSTAGRAM_API_URL to the gateway-instagram service URL")
-		<-ctx.Done()
-		return
-	}
-
-	t.app.ConnectInstagramViaGateway()
-	go t.app.NewGatewayChatPoller(t.cfg.InstagramAPIURL).Run(ctx)
-	slog.InfoContext(ctx, "instagram chat via gateway (inbound only)", "gateway", t.cfg.InstagramAPIURL)
-
-	// nothing else to do on the main goroutine — the poller and HTTP server
-	// run until the signal handler shuts the process down.
-	<-ctx.Done()
-}
-
-// connectToTikTok wires a PLATFORM=tiktok instance's chat through
-// gateway-tiktok, then blocks until shutdown. Inbound-only: the gateway reads
-// LIVE chat off TikTok's webcast, and TikTok has no chat-post API, so outbound
-// Say is dropped (viewers get responses via onscreens / playback effects).
-//
-// TIKTOK_API_URL is required — without the gateway URL there's no way to reach
-// TikTok. A misconfigured instance comes up Ready with everything else working
-// but no TikTok chat, logging loudly (the same "stay up with limited
-// functionality" contract as connectToYouTube).
-func (t *Tripbot) connectToTikTok(ctx context.Context) {
-	if t.cfg.TikTokAPIURL == "" {
-		slog.ErrorContext(ctx, "TIKTOK_API_URL unset; tiktok chat disabled",
-			"fix", "set TIKTOK_API_URL to the gateway-tiktok service URL")
-		<-ctx.Done()
-		return
-	}
-
-	t.app.ConnectTikTokViaGateway()
-	// ReportsLiveness: TikTok has no broadcast-discovery tick, and the webcast
-	// room the gateway tracks for chat is the same room viewers watch — so this
-	// poll is both the chat transport and the only signal that the LIVE is still
-	// up. It is what catches a room reaped out from under a healthy OBS push.
-	go t.app.NewGatewayChatPoller(t.cfg.TikTokAPIURL).ReportsLiveness().Run(ctx)
-	slog.InfoContext(ctx, "tiktok chat via gateway (inbound only)", "gateway", t.cfg.TikTokAPIURL)
-
-	// nothing else to do on the main goroutine — the poller and HTTP server
-	// run until the signal handler shuts the process down.
 	<-ctx.Done()
 }
 
