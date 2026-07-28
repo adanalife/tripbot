@@ -29,6 +29,21 @@ func createUser(t *testing.T, db *gorm.DB, username, platform string, isBot bool
 	return id
 }
 
+// createOptedOutUser inserts a viewer who is not a bot but has asked to stay
+// off the leaderboards, and returns its ID.
+func createOptedOutUser(t *testing.T, db *gorm.DB, username, platform string) uint16 {
+	t.Helper()
+	var id uint16
+	row := db.Raw(
+		`INSERT INTO users (username, platform, exclude_from_leaderboard) VALUES (?, ?, TRUE) RETURNING id`,
+		username, platform,
+	).Row()
+	if err := row.Scan(&id); err != nil {
+		t.Fatalf("insert opted-out user %q: %v", username, err)
+	}
+	return id
+}
+
 // createScoreboardOn inserts a scoreboard for an arbitrary platform, which
 // createScoreboard() can't do (it always stamps this instance's platform).
 func createScoreboardOn(t *testing.T, db *gorm.DB, name, platform string) uint16 {
@@ -56,8 +71,8 @@ func insertScore(t *testing.T, db *gorm.DB, userID, scoreboardID uint16, value f
 }
 
 // TestTopUsers covers the whole read contract in one board: descending order,
-// float formatting, and the three exclusions (bots, the channel owner, and
-// users belonging to another platform).
+// float formatting, and the four exclusions (bots, opted-out accounts, the
+// channel owner, and users belonging to another platform).
 func TestTopUsers(t *testing.T) {
 	db := testdb.New(t)
 	ctx := context.Background()
@@ -79,12 +94,14 @@ func TestTopUsers(t *testing.T) {
 		}
 	}
 
-	// Rows that must not surface: a bot, the channel owner, and a viewer from
-	// another platform whose score hangs off this platform's board.
+	// Rows that must not surface: a bot, an opted-out human, the channel owner,
+	// and a viewer from another platform whose score hangs off this platform's
+	// board.
 	botID := createUser(t, db, "tripbot4000", testConf.Platform, true)
+	optedOutID := createOptedOutUser(t, db, "optedout", testConf.Platform)
 	ownerID := createUser(t, db, strings.ToLower(testConf.ChannelName), testConf.Platform, false)
 	otherPlatformID := createUser(t, db, "carol", "youtube", false)
-	for _, id := range []uint16{botID, ownerID, otherPlatformID} {
+	for _, id := range []uint16{botID, optedOutID, ownerID, otherPlatformID} {
 		insertScore(t, db, id, sb.ID, 999)
 	}
 

@@ -14,11 +14,12 @@ var initLeaderboardSize = 25
 var maxLeaderboardSize = 50
 
 // fetchLeaderboard reads the top users by stored lifetime miles, scoped to
-// this instance's platform, excluding bots and the channel owner.
+// this instance's platform, excluding bots, opted-out accounts, and the
+// channel owner.
 func (s *Sessions) fetchLeaderboard(ctx context.Context, limit int) ([]User, error) {
 	var users []User
 	result := database.GormDB().WithContext(ctx).
-		Where("platform = ? AND miles != 0 AND is_bot = false AND username != ?", s.cfg.Platform, strings.ToLower(s.cfg.ChannelName)).
+		Where("platform = ? AND miles != 0 AND is_bot = false AND exclude_from_leaderboard = false AND username != ?", s.cfg.Platform, strings.ToLower(s.cfg.ChannelName)).
 		Order("miles DESC").
 		Limit(limit).
 		Find(&users)
@@ -74,7 +75,7 @@ func (s *Sessions) UpdateLeaderboard(ctx context.Context) {
 
 // toPairs formats users as the [username, miles] string pairs the leaderboard
 // consumers render, skipping admin accounts (the DB query already excludes
-// bots and the channel owner).
+// bots, opted-out accounts, and the channel owner).
 func (s *Sessions) toPairs(users []User) [][]string {
 	pairs := make([][]string, 0, len(users))
 	for _, user := range users {

@@ -311,6 +311,23 @@ func addScore(t *testing.T, db *gorm.DB, boardID int64, username string, isBot b
 	}
 }
 
+// addOptedOutScore wires up the same rows for a human who has asked to stay
+// off the leaderboards.
+func addOptedOutScore(t *testing.T, db *gorm.DB, boardID int64, username string, value float64) {
+	t.Helper()
+	var userID int64
+	err := db.Raw(`INSERT INTO users (username, platform, exclude_from_leaderboard)
+	               VALUES (?, 'twitch', TRUE) RETURNING id`, username).Scan(&userID).Error
+	if err != nil {
+		t.Fatalf("insert opted-out user %s: %v", username, err)
+	}
+	err = db.Exec(`INSERT INTO scores (user_id, scoreboard_id, value) VALUES (?, ?, ?)`,
+		userID, boardID, value).Error
+	if err != nil {
+		t.Fatalf("insert score for %s: %v", username, err)
+	}
+}
+
 func TestReconcile_SnapshotsPreviousMonthScoreboard(t *testing.T) {
 	db := testdb.New(t)
 	parkWatermark(t, db)
@@ -320,6 +337,7 @@ func TestReconcile_SnapshotsPreviousMonthScoreboard(t *testing.T) {
 	addScore(t, db, boardID, "silver", false, 30)
 	addScore(t, db, boardID, "gold", false, 60)
 	addScore(t, db, boardID, "tripbot4000", true, 999)
+	addOptedOutScore(t, db, boardID, "adanalife_", 998)
 
 	Reconcile(context.Background(), testConf)
 
@@ -341,7 +359,7 @@ func TestReconcile_SnapshotsPreviousMonthScoreboard(t *testing.T) {
 		{Rank: 2, Username: "silver", Value: 30, Platform: "twitch"},
 	}
 	if len(rows) != len(want) {
-		t.Fatalf("snapshot rows: got %+v, want %+v (bots are excluded)", rows, want)
+		t.Fatalf("snapshot rows: got %+v, want %+v (bots and opted-out accounts are excluded)", rows, want)
 	}
 	for i := range want {
 		if rows[i] != want[i] {

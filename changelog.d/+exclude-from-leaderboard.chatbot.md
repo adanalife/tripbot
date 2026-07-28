@@ -1,0 +1,1 @@
+Accounts can be kept off the leaderboards without being marked as bots: a new `users.exclude_from_leaderboard` flag is honored by the lifetime board, the monthly scoreboards, and the month-end snapshots. Seeded on for `adanalife_` and `tripbot4000`.
