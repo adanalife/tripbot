@@ -32,29 +32,31 @@ type Event struct {
 	ExtraMilesEarned *float64 `gorm:"column:extra_miles_earned"`
 }
 
-func Login(ctx context.Context, cfg *c.TripbotConfig, user string, sessionID uuid.UUID) error {
+// record writes one event row and counts it. Every event kind goes through
+// here, so the read-only guard, the platform stamp and the metric can't be
+// forgotten by a new kind. The caller supplies only the fields its kind uses;
+// the rest write as NULL / zero.
+func record(ctx context.Context, cfg *c.TripbotConfig, e Event) error {
 	if cfg.ReadOnly {
 		return &terrors.ReadOnlyError{Msg: "read-only mode"}
 	}
-	if err := database.GormDB().WithContext(ctx).Create(&Event{Username: user, Platform: cfg.Platform, Event: "login", SessionID: sessionID}).Error; err != nil {
+	e.Platform = cfg.Platform
+	if err := database.GormDB().WithContext(ctx).Create(&e).Error; err != nil {
 		return err
 	}
-	instrumentation.Events.Inc("login")
+	instrumentation.Events.Inc(e.Event)
 	return nil
+}
+
+func Login(ctx context.Context, cfg *c.TripbotConfig, user string, sessionID uuid.UUID) error {
+	return record(ctx, cfg, Event{Username: user, Event: "login", SessionID: sessionID})
 }
 
 // Logout records a session-end event. extraMiles is the session's
 // unreconstructable bonus (sub-grants + 5% bonus); pass nil to write NULL
 // when it's zero.
 func Logout(ctx context.Context, cfg *c.TripbotConfig, user string, sessionID uuid.UUID, extraMiles *float64) error {
-	if cfg.ReadOnly {
-		return &terrors.ReadOnlyError{Msg: "read-only mode"}
-	}
-	if err := database.GormDB().WithContext(ctx).Create(&Event{Username: user, Platform: cfg.Platform, Event: "logout", SessionID: sessionID, ExtraMilesEarned: extraMiles}).Error; err != nil {
-		return err
-	}
-	instrumentation.Events.Inc("logout")
-	return nil
+	return record(ctx, cfg, Event{Username: user, Event: "logout", SessionID: sessionID, ExtraMilesEarned: extraMiles})
 }
 
 // Subscribe records that a viewer's subscription began (Twitch
@@ -62,28 +64,14 @@ func Logout(ctx context.Context, cfg *c.TripbotConfig, user string, sessionID uu
 // Unsubscribe it bounds a viewer's subscribed interval, which is what the 5%
 // miles bonus keys off. No session_id: this isn't a login/logout.
 func Subscribe(ctx context.Context, cfg *c.TripbotConfig, user string) error {
-	if cfg.ReadOnly {
-		return &terrors.ReadOnlyError{Msg: "read-only mode"}
-	}
-	if err := database.GormDB().WithContext(ctx).Create(&Event{Username: user, Platform: cfg.Platform, Event: "subscribe"}).Error; err != nil {
-		return err
-	}
-	instrumentation.Events.Inc("subscribe")
-	return nil
+	return record(ctx, cfg, Event{Username: user, Event: "subscribe"})
 }
 
 // Unsubscribe records that a viewer's subscription ended (Twitch
 // channel.subscription.end — real lapse/cancel, never a guessed expiry).
 // Closes the interval Subscribe opened.
 func Unsubscribe(ctx context.Context, cfg *c.TripbotConfig, user string) error {
-	if cfg.ReadOnly {
-		return &terrors.ReadOnlyError{Msg: "read-only mode"}
-	}
-	if err := database.GormDB().WithContext(ctx).Create(&Event{Username: user, Platform: cfg.Platform, Event: "unsubscribe"}).Error; err != nil {
-		return err
-	}
-	instrumentation.Events.Inc("unsubscribe")
-	return nil
+	return record(ctx, cfg, Event{Username: user, Event: "unsubscribe"})
 }
 
 // Correction records a manual miles adjustment (delta, may be negative) as an
@@ -91,14 +79,7 @@ func Unsubscribe(ctx context.Context, cfg *c.TripbotConfig, user string) error {
 // user_rollups.extra_miles alongside the session bonuses. This is the audit
 // trail for out-of-band miles changes the login/logout pairing can't see.
 func Correction(ctx context.Context, cfg *c.TripbotConfig, user string, delta float64) error {
-	if cfg.ReadOnly {
-		return &terrors.ReadOnlyError{Msg: "read-only mode"}
-	}
-	if err := database.GormDB().WithContext(ctx).Create(&Event{Username: user, Platform: cfg.Platform, Event: "correction", ExtraMilesEarned: &delta}).Error; err != nil {
-		return err
-	}
-	instrumentation.Events.Inc("correction")
-	return nil
+	return record(ctx, cfg, Event{Username: user, Event: "correction", ExtraMilesEarned: &delta})
 }
 
 // preFixSentinel is safely after the 0001-01-01 zero-time the timestamp bug
