@@ -3,6 +3,7 @@ package users
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -101,6 +102,48 @@ func TestFindOrCreate_FindsExistingRow(t *testing.T) {
 	}
 	if count != 1 {
 		t.Fatalf("expected exactly 1 row for repeat, got %d", count)
+	}
+}
+
+// create's contract: a failed insert surfaces as an error instead of a
+// zero-or-partial User that flows onward and only turns into an anomaly later.
+func TestCreate_SurfacesFailure(t *testing.T) {
+	t.Run("insert failure returns an error and no partial User", func(t *testing.T) {
+		testdb.New(t)
+
+		// users.username is VARCHAR(64), so an oversized name is a
+		// deterministic insert failure against the real schema.
+		user, err := create(context.Background(), testConf.Platform, strings.Repeat("x", 65))
+		if err == nil {
+			t.Fatal("want an error from a failed insert, got nil")
+		}
+		if user.ID != 0 || user.Username != "" {
+			t.Errorf("want a zero User alongside the error, got %+v", user)
+		}
+	})
+
+	t.Run("the underlying DB error is wrapped, not replaced", func(t *testing.T) {
+		testdb.New(t)
+
+		// A cancelled context is the cheapest real query failure.
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		if _, err := create(ctx, testConf.Platform, "doomed"); !errors.Is(err, context.Canceled) {
+			t.Fatalf("want the underlying DB error, got %v", err)
+		}
+	})
+}
+
+// A failed create must not hand a half-populated User back to the caller:
+// login() keys off a zero ID to skip caching an un-saveable user in the
+// session, and save() refuses to write one.
+func TestFindOrCreate_FailedCreateYieldsZeroUser(t *testing.T) {
+	testdb.New(t)
+
+	got := FindOrCreate(context.Background(), testConf.Platform, strings.Repeat("x", 65))
+	if got.ID != 0 || got.Username != "" {
+		t.Fatalf("want a zero User when create fails, got %+v", got)
 	}
 }
 
