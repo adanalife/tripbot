@@ -29,7 +29,7 @@ func reload(t *testing.T, id int) Video {
 	return vid
 }
 
-func TestVideoNext_ReturnsFirstUnflagged(t *testing.T) {
+func TestVideoNextUnflagged_ReturnsFirstUnflagged(t *testing.T) {
 	db := testdb.New(t)
 
 	start := insertVideo(t, db, Video{Slug: "2018_0514_224801_001"})
@@ -40,23 +40,23 @@ func TestVideoNext_ReturnsFirstUnflagged(t *testing.T) {
 	link(t, start, flagged)
 	link(t, flagged, want)
 
-	got, err := reload(t, start.ID).Next(context.Background())
+	got, err := reload(t, start.ID).NextUnflagged(context.Background())
 	if err != nil {
-		t.Fatalf("Next() error = %v, want nil", err)
+		t.Fatalf("NextUnflagged() error = %v, want nil", err)
 	}
 	if got.ID != want.ID {
-		t.Errorf("Next() = id %d (slug %q), want id %d (slug %q)", got.ID, got.Slug, want.ID, want.Slug)
+		t.Errorf("NextUnflagged() = id %d (slug %q), want id %d (slug %q)", got.ID, got.Slug, want.ID, want.Slug)
 	}
 	if got.Flagged {
-		t.Error("Next() returned a flagged video")
+		t.Error("NextUnflagged() returned a flagged video")
 	}
 	// The whole row round-trips, so a drifted column tag fails here.
 	if got.Slug != want.Slug || got.State != "Oregon" || got.Lat != 45.5 || got.Lng != -122.6 {
-		t.Errorf("Next() row = %+v, want the persisted %+v", got, want)
+		t.Errorf("NextUnflagged() row = %+v, want the persisted %+v", got, want)
 	}
 }
 
-func TestVideoNext_BrokenChainReturnsError(t *testing.T) {
+func TestVideoNextUnflagged_BrokenChainReturnsError(t *testing.T) {
 	db := testdb.New(t)
 
 	start := insertVideo(t, db, Video{Slug: "2018_0514_224801_010"})
@@ -67,12 +67,12 @@ func TestVideoNext_BrokenChainReturnsError(t *testing.T) {
 		t.Fatalf("dangle next_vid: %v", err)
 	}
 
-	if _, err := reload(t, start.ID).Next(context.Background()); err == nil {
-		t.Fatal("Next() over a dangling next_vid returned nil error, want error")
+	if _, err := reload(t, start.ID).NextUnflagged(context.Background()); err == nil {
+		t.Fatal("NextUnflagged() over a dangling next_vid returned nil error, want error")
 	}
 }
 
-func TestVideoNext_AllFlaggedCycleReturnsError(t *testing.T) {
+func TestVideoNextUnflagged_AllFlaggedCycleReturnsError(t *testing.T) {
 	db := testdb.New(t)
 
 	// Two flagged videos pointing at each other: a walk that isn't bounded by
@@ -82,8 +82,8 @@ func TestVideoNext_AllFlaggedCycleReturnsError(t *testing.T) {
 	link(t, a, b)
 	link(t, b, a)
 
-	if _, err := reload(t, a.ID).Next(context.Background()); err == nil {
-		t.Fatal("Next() over an all-flagged cycle returned nil error, want error")
+	if _, err := reload(t, a.ID).NextUnflagged(context.Background()); err == nil {
+		t.Fatal("NextUnflagged() over an all-flagged cycle returned nil error, want error")
 	}
 }
 
