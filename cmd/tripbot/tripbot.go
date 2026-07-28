@@ -466,7 +466,7 @@ func (t *Tripbot) ensureRotatorCopyPublished(ctx context.Context) {
 	platforms, err := t.rotatorStore.Platforms(ctx)
 	if err != nil {
 		slog.WarnContext(ctx, "couldn't list stored rotator copy to republish",
-			"fix", "ensure migration 034_create_onscreens_rotators has run", "err", err)
+			"fix", "ensure migration 037_create_onscreens_rotators has run", "err", err)
 		return
 	}
 	pub := onscreensClient.New(natsclient.DefaultPublisher(), t.cfg.Environment, t.cfg.Platform)
