@@ -363,13 +363,16 @@ const (
 	facebookStreamName = "TRIPBOT_FACEBOOK"
 )
 
-// Retention caps match the admin hub's in-memory buffer sizes (pkg/server:
-// chatRingSize=500, mapTrailSize=100) so a startup backfill exactly refills
-// them. Video keeps headroom over the 100-point trail since each video.changed
-// is one clip, not one breadcrumb (flagged/no-fix clips drop no breadcrumb).
+// Retention caps sized so a console restart's backfill refills its in-memory
+// buffers (tripbot-console/src/console/hub.py: CHAT_RING_SIZE=100,
+// MAP_TRAIL_SIZE=1000 breadcrumbs *per platform*). Every platform's tripbot
+// publishes video.changed to the one shared subject, so the video cap is the
+// per-platform trail length times the supported-platform count — otherwise a
+// fresh console seeds each map trail with only cap/platforms points and the
+// trail looks stubby until it grows back live.
 const (
 	chatStreamMaxMsgs  = 500
-	videoStreamMaxMsgs = 200
+	videoStreamMaxMsgs = 5000 // 1000-point trail × 5 platforms
 )
 
 // EnsureStreams idempotently declares the JetStream streams backing the admin
