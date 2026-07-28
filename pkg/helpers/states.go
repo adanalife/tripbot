@@ -33,10 +33,22 @@ func StateNames() []string {
 	return names
 }
 
-// TODO: this doesn't handle the case where the state is invalid
+// TitlecaseState renders a US state or territory in the canonical display form
+// used throughout the app (and stored in the videos table). It accepts either a
+// two-letter abbreviation ("ca", "DC") or a full name ("california"), ignoring
+// case and surrounding whitespace, and returns the table's spelling — so "DC"
+// becomes "District of Columbia" rather than "District Of Columbia".
+//
+// Input that names no known state is echoed back title-cased instead of being
+// swallowed, so callers that render the result (chat replies, onscreens) show
+// what was asked for rather than an empty string.
 func TitlecaseState(state string) string {
-	if len(state) == 2 {
-		state = StateAbbrevToState(state)
+	state = strings.TrimSpace(state)
+	if name := StateAbbrevToState(state); name != "" {
+		return name
+	}
+	if abbrev := StateToStateAbbrev(state); abbrev != "" {
+		return stateAbbrevs[abbrev]
 	}
 	return strings.Title(strings.ToLower(state))
 }
