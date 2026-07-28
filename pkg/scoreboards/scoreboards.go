@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"strings"
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
@@ -41,7 +40,7 @@ func TopUsers(ctx context.Context, cfg *c.TripbotConfig, scoreboardName string, 
 		Where("scoreboards.name = ? AND scoreboards.platform = ?", scoreboardName, cfg.Platform).
 		// users.platform too: scores written before boards were per-platform
 		// may hang off the other platform's same-named board.
-		Where("users.is_bot = false AND users.exclude_from_leaderboard = false AND users.platform = ? AND users.username != ?", cfg.Platform, strings.ToLower(cfg.ChannelName)).
+		Where("users.is_bot = false AND users.exclude_from_leaderboard = false AND users.platform = ? AND users.username != ?", cfg.Platform, cfg.ChannelName).
 		Order("scores.value DESC").
 		Limit(size).
 		Scan(&results)

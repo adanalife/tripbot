@@ -2,7 +2,6 @@ package users
 
 import (
 	"context"
-	"strings"
 	"testing"
 	"time"
 
@@ -48,7 +47,7 @@ func TestUpdateLeaderboard_ReadsFromDB(t *testing.T) {
 		User{Username: "botty", Miles: 200, IsBot: true},
 		// a human who simply doesn't want to be ranked
 		User{Username: "optedout", Miles: 400, ExcludeFromLeaderboard: true},
-		User{Username: strings.ToLower(testConf.ChannelName), Miles: 300},
+		User{Username: testConf.ChannelName, Miles: 300},
 		User{Username: "zed", Miles: 0},
 		User{Username: "elsewhere", Miles: 500, Platform: "youtube"},
 	)
