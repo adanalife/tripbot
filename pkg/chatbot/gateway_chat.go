@@ -34,6 +34,22 @@ type gatewayChatPoller struct {
 	handleGift func(ctx context.Context, gift IncomingGift)
 	pollFloor  time.Duration // floor under the gateway-suggested interval
 	errWait    time.Duration // backoff after a transport/gateway error
+	// setLive records each page's Live flag. nil (the default) reports no
+	// liveness at all; ReportsLiveness points it at the channel-live gauge.
+	setLive func(bool)
+}
+
+// ReportsLiveness makes the poller record each page's Live flag to the
+// channel-live gauge, returning the poller so it chains onto the constructor.
+// Enable it only where the inbound poll is the instance's sole liveness source.
+// A platform that also runs a broadcast-discovery tick has a second writer, and
+// the two answers can disagree — YouTube's chat discovery reports not-live for
+// an active broadcast whose chat is disabled, while broadcast discovery reports
+// live — so two writers on one gauge would flap it, and the silent-disconnect
+// alert with it.
+func (p *gatewayChatPoller) ReportsLiveness() *gatewayChatPoller {
+	p.setLive = instrumentation.ChannelLive.Set
+	return p
 }
 
 // NewGatewayChatPoller builds the production gateway-backed poller against the
@@ -53,6 +69,13 @@ func (a *App) NewGatewayChatPoller(apiURL string) *gatewayChatPoller {
 // when offline / chat ended, so forwarding it is the rediscover path;
 // PollAfterMS carries the gateway's cadence (live interval, rediscover wait, or
 // quota backoff). A transport/gateway error backs off errWait and retries.
+//
+// Under ReportsLiveness, each page's Live flag also feeds the channel-live
+// gauge. The gateway resolves it from the platform itself — for TikTok, whether
+// the webcast room is still there — so the poll doubles as the liveness signal
+// at no extra platform call. A failed poll leaves the gauge alone: an
+// unreachable gateway says nothing about whether the channel is live, and
+// recording 0 there would read as a silent disconnect.
 func (p *gatewayChatPoller) Run(ctx context.Context) {
 	cursor := ""
 	for ctx.Err() == nil {
@@ -66,6 +89,9 @@ func (p *gatewayChatPoller) Run(ctx context.Context) {
 				return
 			}
 			continue
+		}
+		if p.setLive != nil {
+			p.setLive(page.Live)
 		}
 		cursor = page.Cursor
 		for _, m := range page.Messages {

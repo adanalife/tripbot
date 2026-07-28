@@ -399,7 +399,11 @@ func (t *Tripbot) connectToTikTok(ctx context.Context) {
 	}
 
 	t.app.ConnectTikTokViaGateway()
-	go t.app.NewGatewayChatPoller(t.cfg.TikTokAPIURL).Run(ctx)
+	// ReportsLiveness: TikTok has no broadcast-discovery tick, and the webcast
+	// room the gateway tracks for chat is the same room viewers watch — so this
+	// poll is both the chat transport and the only signal that the LIVE is still
+	// up. It is what catches a room reaped out from under a healthy OBS push.
+	go t.app.NewGatewayChatPoller(t.cfg.TikTokAPIURL).ReportsLiveness().Run(ctx)
 	slog.InfoContext(ctx, "tiktok chat via gateway (inbound only)", "gateway", t.cfg.TikTokAPIURL)
 
 	// nothing else to do on the main goroutine — the poller and HTTP server
@@ -581,6 +585,7 @@ func (t *Tripbot) startSilentDisconnectWatchdog(ctx context.Context) {
 		live, err := t.gateway.IsLive(ctx, t.cfg.ChannelName)
 		if err == nil {
 			instrumentation.TwitchChannelLive.Set(live)
+			instrumentation.ChannelLive.Set(live)
 		}
 		return live, err
 	}
@@ -913,6 +918,10 @@ func (t *Tripbot) scheduleBackgroundJobs() {
 				return
 			}
 			eventbus.EmitYoutubeBroadcast(ctx, t.cfg.Environment, b.VideoID, b.Privacy, b.Live)
+			// This tick is YouTube's liveness source rather than the inbound chat
+			// poll: it runs whether or not chat is enabled, and it reports an
+			// active broadcast as live even when that broadcast has no live chat.
+			instrumentation.ChannelLive.Set(b.Live)
 		}, gocron.WithStartAt(gocron.WithStartImmediately()))
 	}
 
@@ -929,6 +938,7 @@ func (t *Tripbot) scheduleBackgroundJobs() {
 				return
 			}
 			eventbus.EmitFacebookBroadcast(ctx, t.cfg.Environment, b.VideoID, b.BroadcastID, b.PermalinkURL, b.Privacy, b.Live)
+			instrumentation.ChannelLive.Set(b.Live)
 		}, gocron.WithStartAt(gocron.WithStartImmediately()))
 	}
 
