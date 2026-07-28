@@ -120,16 +120,20 @@ func (a *App) jumpCmd(ctx context.Context, user *users.User, params []string) {
 		}
 	}
 
-	// exit if the user gave no args or too many
-	if len(params) == 0 || len(params) > 2 {
+	// exit if the user gave no args
+	if len(params) == 0 {
 		a.Chat.Say("Usage: !jump [state]")
 		return
 	}
 
-	// skip to a video from the given state
-	state := strings.Join(params, " ")
-	// sanitize the input
-	state = helpers.RemoveNonLetters(state)
+	// skip to a video from the given state, sanitizing the input first
+	state := helpers.NormalizeStateInput(strings.Join(params, " "))
+	// the longest state and territory names run four words
+	// ("Federated States of Micronesia")
+	if state == "" || len(strings.Fields(state)) > 4 {
+		a.Chat.Say("Usage: !jump [state]")
+		return
+	}
 	titlecaseState := helpers.TitlecaseState(state)
 	randomVid, err := a.Video.FindRandomByState(ctx, state)
 	// check to see if we even have footage for this state
