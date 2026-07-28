@@ -12,7 +12,6 @@ data:
   DATABASE_HOST: postgres.stage-1-data.svc.cluster.local
   DISCORD_GUILD_ID: "607964164220125258"
   ENV: staging
-  EXTERNAL_URL: https://tripbot-tiktok.stage.whereisdana.today
   GOOGLE_APPS_PROJECT_ID: tripbot-stage
   MAPS_OUTPUT_DIR: /opt/data/maps
   NATS_URL: nats://nats.stage-1-platform.svc.cluster.local:4222
@@ -46,7 +45,7 @@ spec:
   template:
     metadata:
       annotations:
-        adanalife.dev/config-hash: 781e3739b2
+        adanalife.dev/config-hash: 8de14893f4
       labels:
         app: tripbot-tiktok
     spec:

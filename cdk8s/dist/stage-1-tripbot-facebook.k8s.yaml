@@ -12,7 +12,6 @@ data:
   DATABASE_HOST: postgres.stage-1-data.svc.cluster.local
   DISCORD_GUILD_ID: "607964164220125258"
   ENV: staging
-  EXTERNAL_URL: https://tripbot-facebook.stage.whereisdana.today
   FACEBOOK_API_URL: http://gateway-facebook.stage-1.svc.cluster.local:8080
   GOOGLE_APPS_PROJECT_ID: tripbot-stage
   MAPS_OUTPUT_DIR: /opt/data/maps
@@ -46,7 +45,7 @@ spec:
   template:
     metadata:
       annotations:
-        adanalife.dev/config-hash: 2d3e8f3969
+        adanalife.dev/config-hash: b740e9df82
       labels:
         app: tripbot-facebook
     spec:
