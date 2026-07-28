@@ -3,6 +3,7 @@ package users
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -181,7 +182,15 @@ func FindOrCreate(ctx context.Context, platform, username string) User {
 		return User{}
 	}
 	// create the user in the DB
-	return create(ctx, platform, username)
+	user, err = create(ctx, platform, username)
+	if err != nil {
+		// Callers treat a zero ID as "no DB row" and skip caching or saving the
+		// user, so a failed create degrades to "not logged in this tick" rather
+		// than a half-populated User flowing onward.
+		slog.ErrorContext(ctx, "error creating user", "err", err, "username", username)
+		return User{}
+	}
+	return user
 }
 
 // Find looks up the username in the DB. A missing user surfaces as
@@ -245,18 +254,19 @@ func (u *User) SetLastLocationTime() {
 	u.lastLocation = time.Now()
 }
 
-// TODO: maybe return an err here?
-// create() will actually create the DB record
-func create(ctx context.Context, platform, username string) User {
+// create() inserts the DB record and reads it back, so the returned User
+// carries the assigned ID and the DB-defaulted columns. Any failure is
+// returned rather than folded into a zero User.
+func create(ctx context.Context, platform, username string) (User, error) {
 	slog.InfoContext(ctx, "creating user", "username", username)
 	// create a new row, using default vals and creating a single visit
 	newUser := User{Username: username, Platform: platform, NumVisits: 1}
 	if err := database.GormDB().WithContext(ctx).Create(&newUser).Error; err != nil {
-		slog.ErrorContext(ctx, "error creating user", "err", err)
+		return User{}, fmt.Errorf("create user %s: %w", username, err)
 	}
 	user, err := Find(ctx, platform, username)
 	if err != nil {
-		slog.ErrorContext(ctx, "error finding user after create", "err", err, "username", username)
+		return User{}, fmt.Errorf("find user %s after create: %w", username, err)
 	}
-	return user
+	return user, nil
 }
