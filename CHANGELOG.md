@@ -9,6 +9,25 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v4.11.0] — 2026-07-28
+
+### Chatbot
+
+- `!find` and `!weather` are no longer feature-flagged. Both shipped behind a dormant gate while their dependencies were being proven; both are stable, so the gates and their `feature_flags` rows are gone. `!find` now answers on every gateway platform it's allowlisted on rather than only where a flag row happened to be enabled. ([#1207](https://github.com/adanalife/tripbot/pull/1207))
+
+### Onscreens
+
+- Corner-rotator overlay copy is now editable per platform from the admin console instead of hardcoded in the binary. Postgres holds the copy, tripbot's new `/api/rotators/{platform}` serves and saves it, and a save pushes it to that platform's onscreens-server over NATS — no redeploy, no restart. Each platform starts prefilled from the copy that shipped in the binary, and can be reset back to it. ([#1211](https://github.com/adanalife/tripbot/pull/1211))
+
+### Fixes
+
+- Every feature flag now has a row on every platform. 019 established "one row per platform" and seeded youtube from twitch, but facebook, instagram, and tiktok were added later and never backfilled — and a missing row isn't a default, it's a feature that reads as off with no way to switch it on. That's why `chatbot.timewarp_credit` was unreachable on tiktok (so a timewarp there could never show its credit line) and why `!weather` silently returned on facebook/instagram/tiktok despite being in the v1 command allowlist. Backfilled rows land disabled; existing rows and their state are untouched. ([#1206](https://github.com/adanalife/tripbot/pull/1206))
+- Bump the indirect `google.golang.org/grpc` dependency to v1.82.1, clearing [GO-2026-6061](https://pkg.go.dev/vuln/GO-2026-6061) (xDS RBAC authorization engine + HTTP/2 transport server). Reachable from `pkg/natsclient`, so govulncheck fails without it. ([#1209](https://github.com/adanalife/tripbot/pull/1209))
+
+### CI / Tooling
+
+- Collapse the fast per-PR gates (conventional title, changelog fragment, platforms.json contract, cdk8s dist sync) into a single `gates` job in `pr-gates.yml`. Actions bills per job rounded up to the minute, so four short checks cost four minutes; as steps of one job they cost one. ([#1210](https://github.com/adanalife/tripbot/pull/1210))
+
 ## [v4.10.0] — 2026-07-27
 
 ### Chatbot
