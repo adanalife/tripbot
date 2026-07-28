@@ -128,22 +128,10 @@ _ENV_CONFIG: dict[str, dict[str, str]] = {
 def public_host(env: EnvConfig, platform: str) -> str:
     """The instance's public host: per-name everywhere (tripbot-twitch.<dns>,
     tripbot-youtube.<dns>); the .localhost TLD when the env publishes no DNS.
-    Single source for the Ingress rule, external-dns annotation, TLS secret
-    host, and EXTERNAL_URL — they can't drift apart."""
+    Single source for the Ingress rule, external-dns annotation, and TLS secret
+    host — they can't drift apart."""
     name = app_name("tripbot", platform)
     return f"{name}.localhost" if not env.dns_base else f"{name}.{env.dns_base}"
-
-
-def external_url(env: EnvConfig, platform: str) -> str:
-    """EXTERNAL_URL for an instance: scheme + public_host (+ the env's
-    non-standard port, e.g. dev's :9443). Both OAuth flows build their redirect
-    as EXTERNAL_URL + /auth/callback, so this must match the host the instance
-    actually serves on — and each value needs a matching authorized redirect
-    URI registered on the platform's OAuth app (Twitch dev console / GCP
-    console)."""
-    scheme = "https" if env.dns_base else "http"
-    port = f":{env.external_port}" if env.external_port else ""
-    return f"{scheme}://{public_host(env, platform)}{port}"
 
 
 def config_data(env: EnvConfig, platform: str) -> dict[str, str]:
@@ -175,7 +163,6 @@ def config_data(env: EnvConfig, platform: str) -> dict[str, str]:
         data["STREAM_PLATFORM"] = platform
     data.update(appconfig.telemetry_config(env, platform))
     data.update(_ENV_CONFIG[env.name])
-    data["EXTERNAL_URL"] = external_url(env, platform)
     if env.nats_url:
         data["NATS_URL"] = env.nats_url
     # Route the twitch instance's command-time Helix calls through the
@@ -426,10 +413,10 @@ class Tripbot(Construct):
 
     # ---- Ingress helpers ----
     def _ingress(self, name, platform, env: EnvConfig, ns, labels):
-        # Per-name host shared with EXTERNAL_URL via public_host() — symmetric
-        # with the other per-platform components. local uses the .localhost TLD
-        # (no DNS/TLS); every other env publishes a real host with external-dns
-        # + cert-manager TLS (DNS-01 Route53).
+        # Per-name host via public_host() — symmetric with the other
+        # per-platform components. local uses the .localhost TLD (no DNS/TLS);
+        # every other env publishes a real host with external-dns + cert-manager
+        # TLS (DNS-01 Route53).
         host = public_host(env, platform)
         ann = (
             {}

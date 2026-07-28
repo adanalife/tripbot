@@ -1,0 +1,1 @@
+Dropped the dead `EXTERNAL_URL` config. It only existed for tripbot's OAuth `/auth/callback` redirect URI, which moved to platform-gateway, so the `required:"true"` field no longer had a reader — and cdk8s no longer stamps it into the tripbot ConfigMaps.

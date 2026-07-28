@@ -97,10 +97,6 @@ class EnvConfig:
     # crowding the node. NB: quota on requests.* means every pod in the
     # namespace must declare requests for those resources or be rejected.
     app_quota: dict[str, str] = field(default_factory=dict)
-    # Non-standard public HTTPS port carried in externally-visible URLs
-    # (EXTERNAL_URL, registered OAuth redirect URIs). Only dev needs it — k3d's
-    # traefik is mapped to host :9443 because Colima can't bind :443.
-    external_port: str = ""
     # Bias this env's stateless app pods toward the ephemeral arm64 rpi5 worker
     # (adanalife-rpi5) when it's present, falling back to the MS-01 when it's not.
     # When True, the tripbot/onscreens constructs add a toleration for the
@@ -329,7 +325,6 @@ ENVS: dict[str, EnvConfig] = {
         otel=False,
         external_dns_role_arn=_STAGE_ROLE,
         platforms=("twitch",),
-        external_port="9443",
     ),
     "local": EnvConfig(
         name="local",

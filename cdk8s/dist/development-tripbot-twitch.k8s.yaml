@@ -11,7 +11,6 @@ data:
   CHANNEL_NAME: adanalife_staging
   DATABASE_HOST: postgres
   ENV: staging
-  EXTERNAL_URL: https://tripbot-twitch.dev.whereisdana.today:9443
   GOOGLE_APPS_PROJECT_ID: tripbot-stage
   MAPS_OUTPUT_DIR: /opt/data/maps
   NATS_URL: nats://nats.development-platform.svc.cluster.local:4222
@@ -43,7 +42,7 @@ spec:
   template:
     metadata:
       annotations:
-        adanalife.dev/config-hash: c55170f7ae
+        adanalife.dev/config-hash: 1db4defba1
       labels:
         app: tripbot-twitch
     spec:

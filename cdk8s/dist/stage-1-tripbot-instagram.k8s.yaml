@@ -12,7 +12,6 @@ data:
   DATABASE_HOST: postgres.stage-1-data.svc.cluster.local
   DISCORD_GUILD_ID: "607964164220125258"
   ENV: staging
-  EXTERNAL_URL: https://tripbot-instagram.stage.whereisdana.today
   GOOGLE_APPS_PROJECT_ID: tripbot-stage
   INSTAGRAM_API_URL: http://gateway-instagram.stage-1.svc.cluster.local:8080
   MAPS_OUTPUT_DIR: /opt/data/maps
@@ -46,7 +45,7 @@ spec:
   template:
     metadata:
       annotations:
-        adanalife.dev/config-hash: 10841c79c0
+        adanalife.dev/config-hash: b1f1d18f94
       labels:
         app: tripbot-instagram
     spec:
