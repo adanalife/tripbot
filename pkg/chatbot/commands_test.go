@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -245,6 +246,72 @@ func TestIsDiscordWebhookURL(t *testing.T) {
 				t.Errorf("isDiscordWebhookURL(%q) = %v, want %v", tc.in, got, tc.want)
 			}
 		})
+	}
+}
+
+func TestFormatLifetimeMiles(t *testing.T) {
+	cases := []struct {
+		name     string
+		lifetime float32
+		monthly  float32
+		want     string
+	}{
+		{"long-time viewer rounds to whole miles", 412.68, 15.35, "413"},
+		{"rounding down still clears the month", 99.2, 15.35, "99"},
+		{"rounded total would read below the month", 13.44, 13.44, "13.44"},
+		{"nearly all lifetime miles came this month", 15.35, 15.01, "15.35"},
+		{"total exactly equals the rendered month", 13.0, 13.0, "13"},
+		{"month rounds up to the whole total", 13.004, 13.004, "13"},
+		{"floored-at-a-cent month with a sub-cent total", 0.004, 0.01, "0.01"},
+		{"zero", 0, 0, "0"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := formatLifetimeMiles(tc.lifetime, tc.monthly)
+			if got != tc.want {
+				t.Errorf("formatLifetimeMiles(%v, %v) = %q, want %q", tc.lifetime, tc.monthly, got, tc.want)
+			}
+		})
+	}
+}
+
+// The lifetime total must never render smaller than the monthly figure beside
+// it — the whole point of the conditional rounding.
+func TestFormatLifetimeMilesNeverReadsBelowTheMonth(t *testing.T) {
+	for _, monthly := range []float32{0.01, 0.5, 1.0, 13.44, 15.35, 99.99, 250.0} {
+		for _, extra := range []float32{0, 0.001, 0.01, 0.4, 0.5, 0.9, 5} {
+			lifetime := monthly + extra
+			got := formatLifetimeMiles(lifetime, monthly)
+			total, err := strconv.ParseFloat(got, 64)
+			if err != nil {
+				t.Fatalf("formatLifetimeMiles(%v, %v) = %q, unparseable: %v", lifetime, monthly, got, err)
+			}
+			shownMonthly, err := strconv.ParseFloat(fmt.Sprintf("%.2f", monthly), 64)
+			if err != nil {
+				t.Fatalf("parsing rendered month %v: %v", monthly, err)
+			}
+			if total < shownMonthly {
+				t.Errorf("formatLifetimeMiles(%v, %v) = %q, which reads below the %.2fmi month",
+					lifetime, monthly, got, monthly)
+			}
+		}
+	}
+}
+
+func TestMilesCmd_TotalNeverReadsBelowTheMonth(t *testing.T) {
+	app := newTestApp(video.Video{})
+	rec := &recordingChat{}
+	app.Chat = rec
+	app.Sessions = &recordingSessions{Miles: 13.441, MonthlyMiles: 13.44}
+
+	app.milesCmd(context.Background(), newTestUser("viewer1"), nil)
+
+	if len(rec.Says) != 1 {
+		t.Fatalf("expected exactly one Say() call, got %d: %v", len(rec.Says), rec.Says)
+	}
+	want := "@viewer1 has 13.44mi this month (13.44mi total)."
+	if rec.Says[0] != want {
+		t.Errorf("miles reply = %q, want %q", rec.Says[0], want)
 	}
 }
 
