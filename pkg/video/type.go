@@ -47,8 +47,8 @@ func (v Video) Location() (float64, float64, error) {
 	return v.Lat, v.Lng, err
 }
 
-// String returns the slug, which callers (e.g. make-map's image filenames)
-// rely on as a stable identity — don't enrich it with display fields.
+// String returns the slug, which callers rely on as a stable identity — don't
+// enrich it with display fields.
 // ex: 2018_0514_224801_013_a_opt
 func (v Video) String() string {
 	return v.Slug
