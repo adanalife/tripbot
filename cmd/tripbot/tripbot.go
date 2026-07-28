@@ -151,11 +151,11 @@ type Tripbot struct {
 	// path) route through.
 	gateway *gateway.Client
 
-	// locationFeed publishes the currently-playing clip's location + date to the
-	// onscreens rotators on a timer. Non-nil only on a bot-less YouTube instance
-	// (youtube + inbound chat disabled), where it surfaces the info the
-	// !location / !date / !state commands would return; nil disables the feed
-	// and its background job.
+	// locationFeed publishes the currently-playing clip's location, state, date,
+	// weather, and sunset to the onscreens rotators on a timer — the values their
+	// $variables resolve to, and on a stream where no command can reply the
+	// passive stand-in for the !location / !date hints. Runs on every instance,
+	// since an authored $variable can appear in any platform's copy.
 	locationFeed *locationfeed.Emitter
 }
 
@@ -192,16 +192,14 @@ func NewTripbot(version string, cfg *c.TripbotConfig) *Tripbot {
 	// plain in-process source. Reads t.gateway/t.flagClient lazily, so wiring it
 	// here against the partially-built t is fine.
 	t.sessions = users.New(t.cfg, gatewayChatterSource{t: t})
-	// On a bot-less YouTube instance (no inbound chat → no commands), feed the
-	// rotators the clip's location/date in place of command hints. Gated by the
-	// same flag as the rest of the bot-less presentation; reuses the chatbot's
-	// Geocoder (pkg/geo default, set up in ConnectYouTubeViaGateway).
-	if t.cfg.Platform == "youtube" && !t.cfg.YouTubeInboundEnabled {
-		t.locationFeed = locationfeed.New(
-			onscreensClient.New(natsclient.DefaultPublisher(), t.cfg.Environment, t.cfg.Platform),
-			t.app.Geocoder,
-		)
-	}
+	// Feed the rotators what's playing, so their $variables resolve. Reuses the
+	// chatbot's Geocoder and Weather adapters (the pkg/geo default is installed by
+	// whichever Connect* path this platform takes).
+	t.locationFeed = locationfeed.New(
+		onscreensClient.New(natsclient.DefaultPublisher(), t.cfg.Environment, t.cfg.Platform),
+		t.app.Geocoder,
+		t.app.Weather,
+	)
 	return t
 }
 
@@ -887,14 +885,12 @@ func (t *Tripbot) scheduleBackgroundJobs() {
 	// periodic help message.
 	t.addJob(60*time.Second, "video.GetCurrentlyPlaying", t.player.GetCurrentlyPlaying)
 	t.addJob(2*time.Hour+57*time.Minute+30*time.Second, "chatbot.Chatter", t.app.Chatter)
-	// Bot-less YouTube only: refresh the rotators' location/date feed every
-	// minute. Re-publishing (not just on video change) also recovers a restarted
-	// onscreens-server within a tick; the city geocode is throttled inside Emit.
-	if t.locationFeed != nil {
-		t.addJob(60*time.Second, "video.LocationFeed", func(ctx context.Context) {
-			t.locationFeed.Emit(ctx, t.player.Current())
-		})
-	}
+	// Refresh the rotators' clip-data feed every minute. Re-publishing (not just
+	// on video change) also recovers a restarted onscreens-server within a tick;
+	// the geocode and weather lookups are throttled inside Emit.
+	t.addJob(60*time.Second, "video.LocationFeed", func(ctx context.Context) {
+		t.locationFeed.Emit(ctx, t.player.Current())
+	})
 
 	// YouTube instances (bot-less or full): discover the current broadcast's
 	// videoId on a slow ticker and publish it for the console, which links to and

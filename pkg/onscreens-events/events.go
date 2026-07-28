@@ -63,16 +63,24 @@ type TimewarpShow struct {
 	Username string `json:"username"`
 }
 
-// LocationData is the payload for the location.update subject — the
-// currently-playing clip's pre-formatted location ("City, State", or a bare
-// state when geocoding is unavailable) and date ("Monday January 2, 2006").
-// onscreens-server caches it and surfaces it through the bot-less rotators.
-// Either field may be empty (e.g. no geocode yet); the rotator skips an empty
-// line.
+// LocationData is the payload for the location.update subject — everything
+// onscreens-server knows about the currently-playing clip, pre-formatted for
+// display: the location ("City, State", or a bare state when geocoding is
+// unavailable), the state on its own, the date ("Monday January 2, 2006"), the
+// conditions when it was filmed ("Partly cloudy, 71°F"), and that day's sunset
+// at that spot ("8:42 PM").
+//
+// onscreens-server caches it and resolves the rotators' $variables from it. Any
+// field may be empty (no geocode yet, an archive lookup that failed), and a
+// rotator line referencing an empty one simply isn't eligible to render — so
+// the wire carries "unknown" as an absent value rather than a placeholder.
 type LocationData struct {
 	Envelope
 	Location string `json:"location"`
+	State    string `json:"state"`
 	Date     string `json:"date"`
+	Weather  string `json:"weather"`
+	Sunset   string `json:"sunset"`
 }
 
 // RotatorConfig is the payload for the rotator.config subject: the full
