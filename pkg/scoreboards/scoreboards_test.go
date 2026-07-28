@@ -3,7 +3,6 @@ package scoreboards
 import (
 	"context"
 	"reflect"
-	"strings"
 	"testing"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
@@ -99,7 +98,7 @@ func TestTopUsers(t *testing.T) {
 	// board.
 	botID := createUser(t, db, "tripbot4000", testConf.Platform, true)
 	optedOutID := createOptedOutUser(t, db, "optedout", testConf.Platform)
-	ownerID := createUser(t, db, strings.ToLower(testConf.ChannelName), testConf.Platform, false)
+	ownerID := createUser(t, db, testConf.ChannelName, testConf.Platform, false)
 	otherPlatformID := createUser(t, db, "carol", "youtube", false)
 	for _, id := range []uint16{botID, optedOutID, ownerID, otherPlatformID} {
 		insertScore(t, db, id, sb.ID, 999)

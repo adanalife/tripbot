@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"sort"
-	"strings"
 
 	"github.com/adanalife/tripbot/pkg/database"
 )
@@ -19,7 +18,7 @@ var maxLeaderboardSize = 50
 func (s *Sessions) fetchLeaderboard(ctx context.Context, limit int) ([]User, error) {
 	var users []User
 	result := database.GormDB().WithContext(ctx).
-		Where("platform = ? AND miles != 0 AND is_bot = false AND exclude_from_leaderboard = false AND username != ?", s.cfg.Platform, strings.ToLower(s.cfg.ChannelName)).
+		Where("platform = ? AND miles != 0 AND is_bot = false AND exclude_from_leaderboard = false AND username != ?", s.cfg.Platform, s.cfg.ChannelName).
 		Order("miles DESC").
 		Limit(limit).
 		Find(&users)
