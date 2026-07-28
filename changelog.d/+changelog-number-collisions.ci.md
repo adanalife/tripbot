@@ -1,0 +1,1 @@
+`changelog-number` numbers only the placeholder fragments the head branch adds on top of its own base, so a stacked PR no longer tries to rename its parent's fragment, and repeat fragments of one type in a single PR take towncrier's counter suffix instead of colliding.
