@@ -13,7 +13,7 @@ import (
 // a follow event to the console. Wired from pkg/eventsub on channel.follow v2
 // events.
 func (a *App) AnnounceNewFollower(username string) {
-	a.Chat.Say(fmt.Sprintf("Thank you for the follow, @%s; try !commands to interact with me", username))
+	a.Chat.Say(fmt.Sprintf("Thank you for the follow, @%s; type !commands in chat to see what you can do", username))
 	eventbus.EmitSubscriberEvent(context.Background(), a.Cfg.Environment, eventbus.SubscriberEvent{
 		Platform: a.Platform,
 		Kind:     "follow",
