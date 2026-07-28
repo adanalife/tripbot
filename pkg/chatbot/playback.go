@@ -215,6 +215,9 @@ func (a *App) daytimeCmd(ctx context.Context, user *users.User, _ []string) {
 // longer than the corpus modulo its total length; only spans that overflow
 // a time.Duration are rejected.
 func parseSeekSpan(arg string) (time.Duration, error) {
+	// time.ParseDuration only accepts lowercase unit suffixes, so "1H30M" has
+	// to be folded before it parses.
+	arg = strings.ToLower(arg)
 	if n, err := strconv.Atoi(arg); err == nil {
 		const maxMinutes = math.MaxInt64 / int64(time.Minute)
 		if int64(n) > maxMinutes || int64(n) < -maxMinutes {

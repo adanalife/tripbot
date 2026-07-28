@@ -31,6 +31,14 @@ import (
 // leaderboardSize is how many rows the leaderboard commands show.
 const leaderboardSize = 10
 
+// targetUsername turns a chat-mention param ("@DanaMerrick") into the canonical
+// username used everywhere else: @-less and lowercase. Params reach handlers
+// with their original casing, and usernames are stored lowercase, so every
+// command that looks up another viewer routes its param through here.
+func targetUsername(param string) string {
+	return strings.ToLower(helpers.StripAtSign(param))
+}
+
 // lastHelloTime is used to rate-limit the hello command
 var lastHelloTime time.Time = time.Now()
 
@@ -145,7 +153,7 @@ func (a *App) followageCmd(ctx context.Context, user *users.User, params []strin
 	username := user.Username
 	other := len(params) > 0
 	if other {
-		username = helpers.StripAtSign(params[0])
+		username = targetUsername(params[0])
 	}
 
 	followedAt, ok := a.Twitch.FollowedAt(username)
@@ -198,7 +206,7 @@ func (a *App) milesCmd(ctx context.Context, user *users.User, params []string) {
 		lifetimeMiles = a.Sessions.CurrentMiles(ctx, *user)
 		monthlyMiles = a.Sessions.CurrentMonthlyMiles(ctx, *user)
 	} else {
-		username = helpers.StripAtSign(params[0])
+		username = targetUsername(params[0])
 		u, err := a.Sessions.Find(ctx, username)
 
 		// check to see if they are in our DB
@@ -259,7 +267,7 @@ func (a *App) kilometresCmd(ctx context.Context, user *users.User, params []stri
 		username = user.Username
 		miles = a.Sessions.CurrentMiles(ctx, *user)
 	} else {
-		username = helpers.StripAtSign(params[0])
+		username = targetUsername(params[0])
 		u, err := a.Sessions.Find(ctx, username)
 
 		// check to see if they are in our DB
@@ -688,7 +696,7 @@ func (a *App) giveMilesCmd(ctx context.Context, user *users.User, params []strin
 		a.Chat.Say("usage: !givemiles <user> <amount>")
 		return
 	}
-	target := helpers.StripAtSign(params[0])
+	target := targetUsername(params[0])
 	delta, err := strconv.ParseFloat(params[1], 32)
 	if err != nil {
 		a.Chat.Say("that amount isn't a number I understand")
@@ -797,7 +805,7 @@ func (a *App) setBotFlag(ctx context.Context, user *users.User, params []string,
 		slog.WarnContext(ctx, trigger+" called with no target", "username", user.Username)
 		return
 	}
-	target := strings.ToLower(strings.TrimPrefix(params[0], "@"))
+	target := targetUsername(params[0])
 	if err := a.Sessions.SetBot(ctx, target, isBot); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			slog.WarnContext(ctx, trigger+": target user not found", "target", target)

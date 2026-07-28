@@ -3,6 +3,8 @@ package chatbot
 import (
 	"context"
 	"testing"
+
+	"github.com/adanalife/tripbot/pkg/video"
 )
 
 func TestNormalizeCommandPrefix(t *testing.T) {
@@ -215,6 +217,111 @@ func TestFindCommand_EmptyMessage(t *testing.T) {
 	cmd, _ := builtTestApp.findCommand("")
 	if cmd != nil {
 		t.Errorf("expected nil for empty message, got %q", cmd.Trigger)
+	}
+}
+
+// --- trigger case-folding / param casing ---
+
+// TestFindCommand_TriggerCaseInsensitive covers the trigger side of the split:
+// the token is folded before lookup, so shouty and mixed-case triggers route.
+func TestFindCommand_TriggerCaseInsensitive(t *testing.T) {
+	for _, in := range []string{"!MILES", "!Miles", "!mIlEs", "HI", "! LOCATION"} {
+		t.Run(in, func(t *testing.T) {
+			cmd, _ := builtTestApp.findCommand(in)
+			if cmd == nil {
+				t.Fatalf("findCommand(%q) = nil, want a command", in)
+			}
+		})
+	}
+}
+
+// TestFindCommand_LeadingWhitespace asserts a command typed with surrounding
+// whitespace still dispatches.
+func TestFindCommand_LeadingWhitespace(t *testing.T) {
+	for _, in := range []string{" !miles", "\t!miles", "  !MILES  "} {
+		t.Run(in, func(t *testing.T) {
+			cmd, _ := builtTestApp.findCommand(in)
+			if cmd == nil {
+				t.Fatalf("findCommand(%q) = nil, want !miles", in)
+			}
+			if cmd.Trigger != "!miles" {
+				t.Errorf("findCommand(%q) = %q, want !miles", in, cmd.Trigger)
+			}
+		})
+	}
+}
+
+// TestFindCommand_ParamsKeepOriginalCase is the param side of the split: free
+// text handed to a command survives verbatim, so !middle can set capitalized
+// on-screen text.
+func TestFindCommand_ParamsKeepOriginalCase(t *testing.T) {
+	cmd, params := builtTestApp.findCommand("!MIDDLE Hello World")
+	if cmd == nil {
+		t.Fatal("expected a command, got nil")
+	}
+	if cmd.Trigger != "!middle" {
+		t.Errorf("got trigger %q, want !middle", cmd.Trigger)
+	}
+	if len(params) != 2 || params[0] != "Hello" || params[1] != "World" {
+		t.Errorf("params = %v, want [Hello World]", params)
+	}
+}
+
+// TestFindCommand_MultiWordAliasKeepsParamCase covers the same for the
+// multi-word alias path, which matches the alias across whole words.
+func TestFindCommand_MultiWordAliasKeepsParamCase(t *testing.T) {
+	cmd, params := builtTestApp.findCommand("No Audio Since Yesterday")
+	if cmd == nil {
+		t.Fatal("expected a command, got nil")
+	}
+	if cmd.Trigger != "!report" {
+		t.Errorf("got trigger %q, want !report", cmd.Trigger)
+	}
+	if len(params) != 2 || params[0] != "Since" || params[1] != "Yesterday" {
+		t.Errorf("params = %v, want [Since Yesterday]", params)
+	}
+}
+
+// TestRunCommand_MiddleTextKeepsCapitalization is the end-to-end proof through
+// the shared dispatcher both platform transports call: a shouty trigger routes
+// and the free text lands on the overlay with its capitals.
+func TestRunCommand_MiddleTextKeepsCapitalization(t *testing.T) {
+	app := newTestApp(video.Video{})
+	rec := &recordingOnscreens{}
+	app.Onscreens = rec
+
+	app.runCommand(context.Background(), newTestUser(adminUser), " !MIDDLE Hello World ")
+
+	want := `ShowMiddleText("Hello World")`
+	if len(rec.Calls) != 1 || rec.Calls[0] != want {
+		t.Errorf("overlay calls = %v, want [%s]", rec.Calls, want)
+	}
+}
+
+// TestRunCommand_MiddleHideStillHides guards the handlers that fold param case
+// themselves: !middle's "hide" keyword still hides when typed shouty, now that
+// the dispatcher no longer pre-lowercases it.
+func TestRunCommand_MiddleHideStillHides(t *testing.T) {
+	app := newTestApp(video.Video{})
+	rec := &recordingOnscreens{}
+	app.Onscreens = rec
+
+	app.runCommand(context.Background(), newTestUser(adminUser), "!middle HIDE")
+
+	if len(rec.Calls) != 1 || rec.Calls[0] != "HideMiddleText()" {
+		t.Errorf("overlay calls = %v, want [HideMiddleText()]", rec.Calls)
+	}
+}
+
+func TestTargetUsername(t *testing.T) {
+	for in, want := range map[string]string{
+		"@DanaMerrick": "danamerrick",
+		"DanaMerrick":  "danamerrick",
+		"@viewer1":     "viewer1",
+	} {
+		if got := targetUsername(in); got != want {
+			t.Errorf("targetUsername(%q) = %q, want %q", in, got, want)
+		}
 	}
 }
 

@@ -156,7 +156,7 @@ func (a *App) HandleGatewayMessage(ctx context.Context, msg IncomingMessage) {
 	// transient, never written to the users table — the allowlisted command
 	// subset reads nothing user-specific beyond the name.
 	user := &users.User{Username: strings.ToLower(msg.User)}
-	a.runCommand(ctx, user, strings.ToLower(msg.Text))
+	a.runCommand(ctx, user, msg.Text)
 }
 
 // sleepCtx waits d or until ctx is done; false means ctx ended first.

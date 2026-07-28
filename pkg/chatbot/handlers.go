@@ -108,11 +108,16 @@ func (a *App) dispatch(ctx context.Context, cmd *Command, user *users.User, para
 
 // findCommand parses message and returns the matching Command and params.
 // Returns nil if no command matches.
+//
+// Triggers match case-insensitively ("!MILES" runs !miles) while params reach
+// the handler with their original casing, so free-text commands like
+// "!middle Hello World" can carry capital letters. Handlers that need a
+// normalized param (a username, an enum-ish keyword) fold the case themselves.
 func (a *App) findCommand(message string) (*Command, []string) {
 	msg := normalizeCommandPrefix(strings.TrimSpace(message))
 	split := strings.Split(msg, " ")
 
-	command := split[0]
+	command := strings.ToLower(split[0])
 	var params []string
 
 	if len(split) > 1 {
@@ -127,20 +132,23 @@ func (a *App) findCommand(message string) (*Command, []string) {
 
 	// handle case where people add a space (like "! location")
 	if command == "!" && len(params) > 0 {
-		command = command + params[0]
+		command = command + strings.ToLower(params[0])
 		params = params[1:]
 	}
 
-	// multi-word alias lookup (e.g. "no audio", "no sound")
+	// multi-word alias lookup (e.g. "no audio", "no sound"). Compares whole
+	// words rather than trimming a byte prefix off msg, so the params after the
+	// alias survive case-folding untouched.
 	for alias, cmd := range a.multiWordLookup {
-		if msg == alias || strings.HasPrefix(msg, alias+" ") {
-			remainder := strings.TrimSpace(strings.TrimPrefix(msg, alias))
-			var mwParams []string
-			if remainder != "" {
-				mwParams = strings.Split(remainder, " ")
-			}
-			return cmd, mwParams
+		aliasWords := strings.Count(alias, " ") + 1
+		if len(split) < aliasWords || !strings.EqualFold(strings.Join(split[:aliasWords], " "), alias) {
+			continue
 		}
+		var mwParams []string
+		if len(split) > aliasWords {
+			mwParams = split[aliasWords:]
+		}
+		return cmd, mwParams
 	}
 
 	// single-word lookup
@@ -234,9 +242,9 @@ func (a *App) runCommand(ctx context.Context, user *users.User, message string) 
 	// parse for otel span attribute (only set for !-prefixed commands)
 	msg := normalizeCommandPrefix(strings.TrimSpace(message))
 	split := strings.Split(msg, " ")
-	command := split[0]
+	command := strings.ToLower(split[0])
 	if command == "!" && len(split) > 1 {
-		command = "!" + split[1]
+		command = "!" + strings.ToLower(split[1])
 	}
 	// Tag the active span with the parsed command. Bare-word triggers
 	// (e.g. "hello") aren't included to keep the attribute's cardinality
@@ -291,11 +299,10 @@ func (a *App) HandleMessage(ctx context.Context, msg IncomingMessage) {
 	// Loki line above; fire-and-forget, no-op when NATS is unconfigured.
 	eventbus.EmitChatMessage(ctx, a.Cfg.Environment, a.Platform, msg.User, msg.Text)
 
-	// log in the user, then run any command (lowercased for matching)
-	//TODO: we lose capitalization here, is that okay?
-	//TODO: also handle commands prefixed with whitespace?
+	// log in the user, then run any command. The original casing goes through:
+	// runCommand folds only the trigger token for matching.
 	user := a.UserSessions.LoginIfNecessary(ctx, msg.User)
-	a.runCommand(ctx, user, strings.ToLower(msg.Text))
+	a.runCommand(ctx, user, msg.Text)
 }
 
 // HandleJoin records that a user joined the channel.
