@@ -2,7 +2,6 @@ package config
 
 import (
 	"log"
-	"log/slog"
 	"os"
 
 	"github.com/adanalife/tripbot/pkg/config"
@@ -21,19 +20,10 @@ func Load() *OnscreensServerConfig {
 		log.Fatalf("could not load config: %v", err)
 	}
 
-	// these dirs will get created on boot if necessary
-	dirsToCreate := []string{
-		cfg.RunDir,
-	}
-	for _, d := range dirsToCreate {
-		if _, err := os.Stat(d); err != nil {
-			if os.IsNotExist(err) {
-				slog.Info("creating directory", "dir", d)
-				if err := os.MkdirAll(d, 0755); err != nil {
-					log.Fatalf("Error creating directory %s: %s", d, err)
-				}
-			}
-		}
+	// the run dir is created on boot if it isn't there; MkdirAll is a no-op
+	// when it already is.
+	if err := os.MkdirAll(cfg.RunDir, 0755); err != nil {
+		log.Fatalf("Error creating directory %s: %s", cfg.RunDir, err)
 	}
 	return &cfg
 }
