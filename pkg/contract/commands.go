@@ -54,7 +54,10 @@ var (
 	locationUpdateFields = []field{
 		{"emitted_at", dateType(), true},
 		{"location", strType(), true},
+		{"state", strType(), true},
 		{"date", strType(), true},
+		{"weather", strType(), true},
+		{"sunset", strType(), true},
 	}
 	// One rotator line: the text plus its optional platform scoping and
 	// selection weight. Mirrors pkg/rotator.Message.

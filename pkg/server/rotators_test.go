@@ -138,6 +138,50 @@ func TestRotatorsGetServesDefaultsWithBudgets(t *testing.T) {
 	}
 }
 
+// The editor generates its variable palette from this rather than hardcoding a
+// second list, so every entry has to arrive complete.
+func TestRotatorsGetDeclaresVariables(t *testing.T) {
+	_, _, h := rotatorTestServer(t)
+
+	w := doJSON(t, h, http.MethodGet, "/api/rotators/twitch", "")
+	var got rotatorConfigDTO
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(got.Variables) != len(rot.Variables()) {
+		t.Fatalf("variables = %d, want the %d declared in pkg/rotator",
+			len(got.Variables), len(rot.Variables()))
+	}
+	for _, v := range got.Variables {
+		if v.Name == "" || v.Description == "" || v.Example == "" {
+			t.Errorf("variable arrived incomplete: %+v", v)
+		}
+	}
+}
+
+// A misspelled variable is rejected with the offending token named, the same 422
+// path a too-long line takes — the console shows the body verbatim.
+func TestRotatorsPutRejectsUnknownVariable(t *testing.T) {
+	store, pub, h := rotatorTestServer(t)
+
+	w := doJSON(t, h, http.MethodPut, "/api/rotators/twitch",
+		`{"left":{"messages":[{"text":"driving through $loction"}],"promo_messages":[]},`+
+			`"right":{"messages":[],"promo_messages":[]}}`)
+
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want 422: %s", w.Code, w.Body)
+	}
+	if !strings.Contains(w.Body.String(), "$loction") {
+		t.Errorf("body %q should name the offending token", w.Body.String())
+	}
+	if len(store.saved) != 0 {
+		t.Error("a rejected save should not reach the store")
+	}
+	if len(pub.published) != 0 {
+		t.Error("a rejected save should not publish")
+	}
+}
+
 func TestRotatorsPutSavesAndPublishes(t *testing.T) {
 	store, pub, h := rotatorTestServer(t)
 

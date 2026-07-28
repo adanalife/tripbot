@@ -83,15 +83,13 @@ func (c *Client) ShowTimewarp(ctx context.Context, username string) error {
 	return nil
 }
 
-// UpdateLocation publishes the currently-playing clip's location + date for the
-// rotators to surface on a bot-less YouTube stream (see oe.LocationData).
-// Fire-and-forget; tripbot republishes on a timer.
-func (c *Client) UpdateLocation(ctx context.Context, location, date string) error {
-	c.publish(ctx, oe.LocationUpdateSubject(c.env, c.platform), oe.LocationData{
-		Envelope: oe.NewEnvelope(),
-		Location: location,
-		Date:     date,
-	})
+// UpdateLocation publishes what's known about the currently-playing clip —
+// location, state, date, conditions, sunset — for the rotators to resolve their
+// $variables from (see oe.LocationData). The envelope is stamped here so callers
+// only supply the data. Fire-and-forget; tripbot republishes on a timer.
+func (c *Client) UpdateLocation(ctx context.Context, data oe.LocationData) error {
+	data.Envelope = oe.NewEnvelope()
+	c.publish(ctx, oe.LocationUpdateSubject(c.env, c.platform), data)
 	return nil
 }
 

@@ -47,20 +47,3 @@ func TestWeatherCmd_SaysConditionsWithoutDate(t *testing.T) {
 		t.Errorf("message should not contain the filmed date, got %q", chat.Says[0])
 	}
 }
-
-func TestWeatherCodeText(t *testing.T) {
-	cases := map[int]string{
-		0:   "Clear sky",
-		2:   "Partly cloudy",
-		45:  "Foggy",
-		63:  "Rain",
-		75:  "Snow",
-		95:  "Thunderstorm",
-		999: "Unknown conditions",
-	}
-	for code, want := range cases {
-		if got := weatherCodeText(code); got != want {
-			t.Errorf("weatherCodeText(%d) = %q, want %q", code, got, want)
-		}
-	}
-}

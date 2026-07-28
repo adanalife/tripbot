@@ -123,6 +123,15 @@ func SunsetStr(utcDate time.Time, lat, lon float64) string {
 	return fmt.Sprintf("Sunset on this day is in %s", durafmt.ParseShort(dateDiff))
 }
 
+// SunsetAt returns the moment the sun set on the day utcDate was filmed, in the
+// timezone of the filming location — so formatting it yields a clock time a
+// viewer of that footage would recognise. Backs the rotators' $sunset variable,
+// where a clock time reads better than SunsetStr's relative phrasing.
+func SunsetAt(utcDate time.Time, lat, lon float64) time.Time {
+	_, sunset := sunriseSunset(ActualDate(utcDate, lat, lon), lat, lon)
+	return sunset
+}
+
 // IsDaytime reports whether the moment utcDate, filmed at lat/long, fell
 // between that day's sunrise and sunset there — i.e. it's daylight footage.
 // Backs the !daytime "skip to the next morning" jump.

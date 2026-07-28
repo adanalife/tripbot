@@ -98,8 +98,8 @@ type App struct {
 	// delegates to the pkg/geo default configured in ConnectIRC.
 	Geocoder Geocoder
 	// Weather returns historical conditions at a point for !weather. Tests
-	// inject noopWeather; production uses realWeather, which queries the
-	// keyless Open-Meteo archive API.
+	// inject noopWeather; production uses pkg/weather's keyless Open-Meteo
+	// archive client.
 	Weather Weather
 	// Twitch is the command-time Twitch Helix surface (follow lookups today).
 	// Tests inject a recordingTwitch; production uses the gatewayTwitch adapter,
@@ -170,7 +170,7 @@ func New(cfg *c.TripbotConfig) *App {
 		NATS:       realNATS{},
 		Cron:       noopCron{},
 		Geocoder:   realGeocoder{},
-		Weather:    realWeather{},
+		Weather:    realWeather,
 		OBS:        realOBS{},
 		Search:     realSearch{env: cfg.Environment},
 	}

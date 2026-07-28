@@ -91,14 +91,19 @@ func (m Message) SharesCommand(exclude map[string]bool) bool {
 	return false
 }
 
-// Pick returns a weighted-random message among those applicable to platform and
-// not advertising a command in exclude (the sibling corner's current commands).
-// Returns "" when no message applies at all. If exclude rules out every
-// otherwise-eligible message, the exclusion is relaxed rather than showing
-// nothing — better a brief duplicate than a blank corner.
-func Pick(platform string, msgs []Message, exclude map[string]bool) string {
+// Pick returns a weighted-random message among those applicable to platform,
+// not advertising a command in exclude (the sibling corner's current commands),
+// and whose $variables all resolve against vars — with those variables
+// substituted. Returns "" when no message applies at all.
+//
+// If exclude rules out every otherwise-eligible message, the exclusion is relaxed
+// rather than showing nothing — better a brief duplicate than a blank corner. The
+// variable check is never relaxed: a line whose data hasn't arrived would go to
+// air with a literal "$weather" in it, which is worse than the corner skipping it
+// this rotation.
+func Pick(platform string, msgs []Message, exclude map[string]bool, vars Vars) string {
 	eligible := func(m Message) bool {
-		return m.AppliesTo(platform) && !m.SharesCommand(exclude)
+		return m.AppliesTo(platform) && !m.SharesCommand(exclude) && vars.Resolvable(m.Text)
 	}
 
 	total := 0
@@ -110,7 +115,7 @@ func Pick(platform string, msgs []Message, exclude map[string]bool) string {
 	if total == 0 {
 		if len(exclude) > 0 {
 			// Every candidate collided with the sibling; relax and retry once.
-			return Pick(platform, msgs, nil)
+			return Pick(platform, msgs, nil, vars)
 		}
 		return ""
 	}
@@ -121,7 +126,7 @@ func Pick(platform string, msgs []Message, exclude map[string]bool) string {
 			continue
 		}
 		if n -= m.Weighted(); n < 0 {
-			return m.Text
+			return vars.Expand(m.Text)
 		}
 	}
 	return "" // unreachable: n < total guarantees a hit above

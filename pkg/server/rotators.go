@@ -47,24 +47,32 @@ func (s *Server) SetRotators(store RotatorStore, pub RotatorPublisher) {
 // binary", not of the line itself, so it has no business in the stored document
 // or in what goes to onscreens-server.
 //
+// Variables is the set of $tokens a line may embed, each with a description and
+// an example value. Declared once in pkg/rotator and shipped here so the editor's
+// insert menu is generated from what onscreens-server can actually substitute,
+// rather than being a second hardcoded list that drifts from it. The examples are
+// what the editor measures a line's rendered width against.
+//
 // Stored reports whether Config is saved copy or a prefill of those defaults.
 type rotatorConfigDTO struct {
-	Platform string       `json:"platform"`
-	Stored   bool         `json:"stored"`
-	Config   rot.Config   `json:"config"`
-	Defaults rot.Config   `json:"defaults"`
-	Budgets  []rot.Budget `json:"budgets"`
+	Platform  string         `json:"platform"`
+	Stored    bool           `json:"stored"`
+	Config    rot.Config     `json:"config"`
+	Defaults  rot.Config     `json:"defaults"`
+	Budgets   []rot.Budget   `json:"budgets"`
+	Variables []rot.Variable `json:"variables"`
 }
 
 // newRotatorConfigDTO builds the response every rotator endpoint returns, so the
 // three of them can't drift on which context the editor gets.
 func newRotatorConfigDTO(platform string, stored bool, cfg rot.Config) rotatorConfigDTO {
 	return rotatorConfigDTO{
-		Platform: platform,
-		Stored:   stored,
-		Config:   cfg,
-		Defaults: rot.DefaultConfigFor(platform),
-		Budgets:  rot.Budgets(),
+		Platform:  platform,
+		Stored:    stored,
+		Config:    cfg,
+		Defaults:  rot.DefaultConfigFor(platform),
+		Budgets:   rot.Budgets(),
+		Variables: rot.Variables(),
 	}
 }
 
