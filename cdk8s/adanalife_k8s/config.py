@@ -54,7 +54,7 @@ class EnvConfig:
     nats_url: str
     sentry_env: str  # SENTRY_ENVIRONMENT (prod-1 | stage-1 | development)
     # Per-component pinned release tags, loaded from versions.yaml by load_env.
-    # Keyed by image name (tripbot, obs, onscreens-server). Pinned
+    # Keyed by image name (tripbot, onscreens-server). Pinned
     # components deploy that exact tag with IfNotPresent (release tags are
     # immutable); unpinned ones fall back to image_tag with Always.
     image_pins: dict[str, str] = field(default_factory=dict)

@@ -1,0 +1,1 @@
+Dropped the vestigial `obs` image pin from `cdk8s/versions.yaml`. OBS is built and deployed from the standalone `adanalife/obs` repo, which carries its own pins, so nothing here read the key — the re-synth is a no-op.
