@@ -2,6 +2,7 @@ package users
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -196,7 +197,9 @@ func TestLogout_RecordsGiftedMilesAsExtra(t *testing.T) {
 }
 
 // CorrectMiles applies a manual delta and persists it, whether or not the user
-// is currently in chat.
+// is currently in chat. A correction that can't be persisted comes back as an
+// error rather than a total — the caller keys off that to skip both the chat
+// reply and the correction event.
 func TestCorrectMiles(t *testing.T) {
 	t.Run("logged-out user is corrected in the DB", func(t *testing.T) {
 		db := testdb.New(t)
@@ -204,7 +207,11 @@ func TestCorrectMiles(t *testing.T) {
 		seedUsers(t, db, User{Username: "offline", Miles: 10})
 
 		s := New(testConf, noopChatterSource{})
-		if got := s.CorrectMiles(ctx, "offline", -4); got != 6 {
+		got, err := s.CorrectMiles(ctx, "offline", -4)
+		if err != nil {
+			t.Fatalf("CorrectMiles: %v", err)
+		}
+		if got != 6 {
 			t.Errorf("expected 6 miles returned, got %v", got)
 		}
 
@@ -217,13 +224,42 @@ func TestCorrectMiles(t *testing.T) {
 		}
 	})
 
+	t.Run("an unpersistable correction returns the error, not a total", func(t *testing.T) {
+		db := testdb.New(t)
+		seedUsers(t, db, User{Username: "unreadable", Miles: 10})
+
+		// A cancelled context is the cheapest real query failure: the row
+		// exists, so FindOrCreate can only be failing on the lookup.
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		s := New(testConf, noopChatterSource{})
+		got, err := s.CorrectMiles(ctx, "unreadable", -4)
+		if !errors.Is(err, ErrLookupFailed) {
+			t.Fatalf("want ErrLookupFailed, got %v", err)
+		}
+		if got != 0 {
+			t.Errorf("a dropped correction must not report a total, got %v", got)
+		}
+
+		stored, err := Find(context.Background(), testConf.Platform, "unreadable")
+		if err != nil {
+			t.Fatalf("Find: %v", err)
+		}
+		if stored.Miles != 10 {
+			t.Errorf("expected the stored miles untouched, got %v", stored.Miles)
+		}
+	})
+
 	t.Run("logged-in user's live copy is corrected too", func(t *testing.T) {
 		testdb.New(t)
 		ctx := context.Background()
 
 		s := New(testConf, noopChatterSource{})
 		s.LoginIfNecessary(ctx, "online")
-		s.CorrectMiles(ctx, "online", 12)
+		if _, err := s.CorrectMiles(ctx, "online", 12); err != nil {
+			t.Fatalf("CorrectMiles: %v", err)
+		}
 
 		live, ok := s.get("online")
 		if !ok {

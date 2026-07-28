@@ -22,7 +22,9 @@ func (noopSessions) SetBot(_ context.Context, _ string, _ bool) error           
 func (noopSessions) CurrentMiles(_ context.Context, u users.User) float32        { return u.Miles }
 func (noopSessions) CurrentMonthlyMiles(_ context.Context, _ users.User) float32 { return 0 }
 func (noopSessions) BonusMiles(_ users.User) float32                             { return 0 }
-func (noopSessions) CorrectMiles(_ context.Context, _ string, _ float32) float32 { return 0 }
+func (noopSessions) CorrectMiles(_ context.Context, _ string, _ float32) (float32, error) {
+	return 0, nil
+}
 
 // recordingSessions captures every call made to it so tests can assert
 // the chatbot queried the expected user / leaderboard surfaces.
@@ -39,6 +41,9 @@ type recordingSessions struct {
 	FindErr error
 	// SetBotErr is the error SetBot will return for every call.
 	SetBotErr error
+	// CorrectMilesErr is the error CorrectMiles will return for every call,
+	// standing in for a correction that didn't persist.
+	CorrectMilesErr error
 	// Miles / MonthlyMiles / Bonus stage what the miles methods return.
 	Miles, MonthlyMiles, Bonus float32
 }
@@ -83,7 +88,10 @@ func (r *recordingSessions) BonusMiles(u users.User) float32 {
 	return r.Bonus
 }
 
-func (r *recordingSessions) CorrectMiles(_ context.Context, username string, delta float32) float32 {
+func (r *recordingSessions) CorrectMiles(_ context.Context, username string, delta float32) (float32, error) {
 	r.Calls = append(r.Calls, fmt.Sprintf("CorrectMiles(%q, %g)", username, delta))
-	return r.Miles
+	if r.CorrectMilesErr != nil {
+		return 0, r.CorrectMilesErr
+	}
+	return r.Miles, nil
 }
