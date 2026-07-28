@@ -2,11 +2,14 @@ package onscreensServer
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"testing"
 
+	rot "github.com/adanalife/tripbot/pkg/rotator"
 	"github.com/gorilla/mux"
 )
 
@@ -84,5 +87,65 @@ func TestStateHandlerRendersMarkdown(t *testing.T) {
 	// Stored Content stays untouched raw markdown.
 	if c := s.MiddleText.Content; c != "use `!find` to search" {
 		t.Fatalf("stored Content was mutated: %q", c)
+	}
+}
+
+// The corner rotators take their font + shrink-to-fit budget from pkg/rotator
+// rather than from the registry literal, so this asserts the rendered browser
+// source actually carries those numbers. Without it a broken styleFor would ship
+// a stream-visible overlay at font-size 0 with no fit width, and nothing else
+// here would notice.
+func TestRenderRotatorsCarryTheirBudgets(t *testing.T) {
+	s := newTestServer(t)
+
+	for _, tc := range []struct {
+		slug string
+		side rot.Side
+	}{
+		{SlugLeftMessage, rot.SideLeft},
+		{SlugRightMessage, rot.SideRight},
+	} {
+		t.Run(tc.slug, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/onscreens/render/"+tc.slug, nil)
+			req = mux.SetURLVars(req, map[string]string{"name": tc.slug})
+			rec := httptest.NewRecorder()
+
+			s.onscreensRenderHandler(rec, req)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("got status %d, want 200", rec.Code)
+			}
+			body := rec.Body.String()
+			b := rot.BudgetFor(tc.side)
+			for _, want := range []string{
+				fmt.Sprintf("font-size: %dpx", b.FontSizePx),
+				fmt.Sprintf("width: %dpx", b.FitWidthPx),
+				b.FontFamilyCSS,
+			} {
+				if !strings.Contains(body, want) {
+					t.Errorf("render missing %q", want)
+				}
+			}
+			// The shrink-to-fit constants land in a <script>, where html/template
+			// pads an injected number ("= 18 ;"), so these match on the value
+			// rather than on exact spacing.
+			for _, want := range []struct {
+				name  string
+				value int
+			}{
+				{"MAX_FONT_PX", b.FontSizePx},
+				{"MIN_FONT_PX", b.MinFontSizePx},
+				{"FIT_WIDTH_PX", b.FitWidthPx},
+			} {
+				re := regexp.MustCompile(want.name + `\s*=\s*` + fmt.Sprint(want.value) + `\s*;`)
+				if !re.MatchString(body) {
+					t.Errorf("render missing %s = %d", want.name, want.value)
+				}
+			}
+			// Anchored mode is what the shrink-to-fit pass keys off.
+			if !strings.Contains(body, `data-anchored="true"`) {
+				t.Error("rotator render should be in anchored mode")
+			}
+		})
 	}
 }

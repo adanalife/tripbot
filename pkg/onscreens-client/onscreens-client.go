@@ -8,6 +8,8 @@ import (
 
 	"github.com/adanalife/tripbot/pkg/natsclient"
 	oe "github.com/adanalife/tripbot/pkg/onscreens-events"
+	rot "github.com/adanalife/tripbot/pkg/rotator"
+	"github.com/nats-io/nats.go/jetstream"
 )
 
 // Client publishes onscreens overlay commands onto NATS. Construct via
@@ -91,6 +93,39 @@ func (c *Client) UpdateLocation(ctx context.Context, location, date string) erro
 		Date:     date,
 	})
 	return nil
+}
+
+// PublishRotatorConfig pushes edited corner-rotator copy to a platform's
+// onscreens-server, which swaps it into its live pools.
+//
+// The platform is a parameter here rather than the client's own, unlike every
+// command above. The admin console edits all platforms' copy through whichever
+// single tripbot instance it's pointed at, and the subject's platform leaf is
+// what routes each document to the right onscreens-server — so tripbot-twitch
+// legitimately publishes YouTube's copy. Every instance in an env shares the
+// same NATS.
+//
+// EnsureRotatorConfigStream must have run first, or the publish is captured by
+// no stream and won't survive an onscreens-server restart.
+func (c *Client) PublishRotatorConfig(ctx context.Context, platform string, cfg rot.Config) error {
+	c.publish(ctx, oe.RotatorConfigSubject(c.env, platform), oe.RotatorConfig{
+		Envelope:    oe.NewEnvelope(),
+		Left:        cfg.Left,
+		Right:       cfg.Right,
+		RareMessage: cfg.RareMessage,
+	})
+	return nil
+}
+
+// EnsureRotatorConfigStream declares the last-value stream that retains the most
+// recent rotator copy per platform. Idempotent, and a no-op without JetStream;
+// onscreens-server ensures the same stream at boot, since whichever side starts
+// first has to declare it (a core publish to an uncovered subject is dropped).
+func EnsureRotatorConfigStream(ctx context.Context, js jetstream.JetStream, env string) error {
+	return natsclient.EnsureLastValueStream(ctx, js,
+		oe.RotatorConfigStreamName,
+		"Last admin-console rotator copy per platform, for restore-on-restart.",
+		[]string{oe.RotatorConfigWildcard(env)})
 }
 
 func (c *Client) ShowGPSImage(ctx context.Context, dur time.Duration) error {

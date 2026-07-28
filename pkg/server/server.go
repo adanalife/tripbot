@@ -27,13 +27,16 @@ import (
 )
 
 // Server holds the web server's runtime state: its config, the build version
-// tag the /version endpoint reports, and the feature-flag client the console's
-// /api/flags endpoints read/toggle. cmd/tripbot constructs one via New and
-// installs both (SetVersion, SetFlags) before Start runs.
+// tag the /version endpoint reports, the feature-flag client the console's
+// /api/flags endpoints read/toggle, and the store + publisher behind
+// /api/rotators. cmd/tripbot constructs one via New and installs them
+// (SetVersion, SetFlags, SetRotators) before Start runs.
 type Server struct {
 	cfg        *c.TripbotConfig
 	versionTag string
 	flags      feature.FlagClient
+	rotators   RotatorStore
+	rotatorPub RotatorPublisher
 }
 
 // New constructs a Server with the default "dev" version tag (overridden by
@@ -94,6 +97,14 @@ func (s *Server) Start(ctx context.Context) {
 	// rest of /api (no Ingress; reached over the in-namespace Service).
 	r.Handle("/api/flags", tagged("/api/flags", s.flagsHandler)).Methods("GET")
 	r.Handle("/api/flags/{key}", tagged("/api/flags/{key}", s.flagToggleHandler)).Methods("POST")
+
+	// Corner-rotator copy for the console's editor: read one platform's copy,
+	// save it (which pushes it live over NATS), or reset it to the defaults
+	// compiled into onscreens-server.
+	rotatorRoute := "/api/rotators/{platform}"
+	r.Handle(rotatorRoute, tagged(rotatorRoute, s.rotatorsGetHandler)).Methods("GET")
+	r.Handle(rotatorRoute, tagged(rotatorRoute, s.rotatorsPutHandler)).Methods("PUT")
+	r.Handle(rotatorRoute, tagged(rotatorRoute, s.rotatorsResetHandler)).Methods("DELETE")
 
 	// catch everything else
 	r.NotFoundHandler = tagged("/", catchAllHandler)

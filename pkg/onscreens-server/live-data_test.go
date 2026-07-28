@@ -3,9 +3,11 @@ package onscreensServer
 import (
 	"testing"
 	"time"
+
+	rot "github.com/adanalife/tripbot/pkg/rotator"
 )
 
-func poolHasText(pool []rotatorMessage, text string) bool {
+func poolHasText(pool []rot.Message, text string) bool {
 	for _, m := range pool {
 		if m.Text == text {
 			return true
@@ -36,10 +38,10 @@ func TestBotlessPoolsIncludeFreshLocationData(t *testing.T) {
 	liveLocation.set("Moab, Utah", "Thursday June 14, 2018", now)
 	t.Cleanup(func() { liveLocation.set("", "", time.Time{}) })
 
-	if got := newLeftRotator(cfg).pool(now); !poolHasText(got, "📍 Moab, Utah") {
+	if got := currentPool(leftRotator(cfg), now); !poolHasText(got, "📍 Moab, Utah") {
 		t.Errorf("bot-less left pool missing the location line: %+v", got)
 	}
-	if got := newRightRotator(cfg).pool(now); !poolHasText(got, "📅 Thursday June 14, 2018") {
+	if got := currentPool(rightRotator(cfg), now); !poolHasText(got, "📅 Thursday June 14, 2018") {
 		t.Errorf("bot-less right pool missing the date line: %+v", got)
 	}
 }
@@ -51,14 +53,14 @@ func TestBotlessPoolsOmitStaleData(t *testing.T) {
 	t.Cleanup(func() { liveLocation.set("", "", time.Time{}) })
 
 	// Stale data → pools fall back to the static promo sets only.
-	left := newLeftRotator(cfg).pool(now)
+	left := currentPool(leftRotator(cfg), now)
 	if poolHasText(left, "📍 Moab, Utah") {
 		t.Error("stale location should not appear in the left pool")
 	}
-	if len(left) != len(promoLeftMessages) {
-		t.Errorf("left pool = %d entries, want the %d static promo lines", len(left), len(promoLeftMessages))
+	if len(left) != len(rot.DefaultConfig().Left.PromoMessages) {
+		t.Errorf("left pool = %d entries, want the %d static promo lines", len(left), len(rot.DefaultConfig().Left.PromoMessages))
 	}
-	if poolHasText(newRightRotator(cfg).pool(now), "📅 Thursday June 14, 2018") {
+	if poolHasText(currentPool(rightRotator(cfg), now), "📅 Thursday June 14, 2018") {
 		t.Error("stale date should not appear in the right pool")
 	}
 }

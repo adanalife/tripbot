@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	rot "github.com/adanalife/tripbot/pkg/rotator"
 	"github.com/gorilla/mux"
 )
 
@@ -76,14 +77,19 @@ var onscreenRegistry = map[string]onscreenStyle{
 		Name: SlugLeaderboard, FontCSS: `"Trebuchet MS", sans-serif`, FontSizePx: 18, ColorCSS: "#ffffff",
 		RenderAsHTML: true,
 	},
+	// Both corner rotators take their font and width budget from rot.BudgetFor
+	// (applied in styleFor), which the admin console also reads to warn when a
+	// line won't fit — a duplicate constant here would let the warning drift off
+	// the real layout. AnchorXPx stays local: it positions the box within the
+	// browser-source viewport, which is layout, not a copy-length budget.
 	SlugLeftMessage: {
 		// Rotator lines advertise !commands, so they render markdown too.
-		Name: SlugLeftMessage, FontCSS: `"Trebuchet MS", sans-serif`, FontSizePx: 28, MinFontSizePx: 18, ColorCSS: "#ffffff",
-		AnchorXPx: 282, FitWidthPx: 564, RenderAsHTML: true, Markdown: true,
+		Name: SlugLeftMessage, ColorCSS: "#ffffff", AnchorXPx: 282,
+		RenderAsHTML: true, Markdown: true,
 	},
 	SlugRightMessage: {
-		Name: SlugRightMessage, FontCSS: `"Trebuchet MS", sans-serif`, FontSizePx: 28, MinFontSizePx: 18, ColorCSS: "#ffffff",
-		AnchorXPx: 456, FitWidthPx: 369, RenderAsHTML: true, Markdown: true,
+		Name: SlugRightMessage, ColorCSS: "#ffffff", AnchorXPx: 456,
+		RenderAsHTML: true, Markdown: true,
 	},
 	SlugTimewarp: {
 		Name: SlugTimewarp, FontCSS: `sans-serif`, FontSizePx: 72, ColorCSS: "#ffffff", DropShadow: true,
@@ -91,6 +97,31 @@ var onscreenRegistry = map[string]onscreenStyle{
 	SlugGPS: {
 		Name: SlugGPS, IsImage: true,
 	},
+}
+
+// rotatorSides maps the two corner-rotator slugs to their Side, so styleFor can
+// pull each one's font and width budget from pkg/rotator.
+var rotatorSides = map[string]rot.Side{
+	SlugLeftMessage:  rot.SideLeft,
+	SlugRightMessage: rot.SideRight,
+}
+
+// styleFor returns the render style registered for slug. For the corner rotators
+// it fills in the font and shrink-to-fit budget from pkg/rotator — the same
+// values the console measures candidate copy against.
+func styleFor(slug string) (onscreenStyle, bool) {
+	style, ok := onscreenRegistry[slug]
+	if !ok {
+		return onscreenStyle{}, false
+	}
+	if side, isRotator := rotatorSides[slug]; isRotator {
+		b := rot.BudgetFor(side)
+		style.FontCSS = template.CSS(b.FontFamilyCSS)
+		style.FontSizePx = b.FontSizePx
+		style.MinFontSizePx = b.MinFontSizePx
+		style.FitWidthPx = b.FitWidthPx
+	}
+	return style, true
 }
 
 // onscreensStateHandler returns a JSON snapshot of every onscreen's current
@@ -123,7 +154,7 @@ func (s *Server) onscreensStateHandler(w http.ResponseWriter, r *http.Request) {
 // updates its DOM in place.
 func (s *Server) onscreensRenderHandler(w http.ResponseWriter, r *http.Request) {
 	name := mux.Vars(r)["name"]
-	style, ok := onscreenRegistry[name]
+	style, ok := styleFor(name)
 	if !ok {
 		http.NotFound(w, r)
 		return
