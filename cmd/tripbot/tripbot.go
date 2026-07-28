@@ -32,7 +32,6 @@ import (
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/adanalife/tripbot/pkg/video"
-	_ "github.com/dimiro1/banner/autoload"
 	"github.com/gempir/go-twitch-irc/v4"
 	"github.com/go-co-op/gocron/v2"
 	"github.com/nats-io/nats.go"
@@ -204,7 +203,18 @@ func NewTripbot(version string, cfg *c.TripbotConfig) *Tripbot {
 }
 
 func main() {
+	printBanner()
 	NewTripbot(version, c.Load()).Run()
+}
+
+// printBanner prints the repo-root banner.txt if it's there. The file is a
+// local-dev nicety and isn't copied into the container image, so an absent
+// file is the ordinary production case and prints nothing — hence the ignored
+// error.
+func printBanner() {
+	if art, err := os.ReadFile("banner.txt"); err == nil {
+		fmt.Print(string(art))
+	}
 }
 
 // platformIsTwitch reports whether this instance serves Twitch. Empty

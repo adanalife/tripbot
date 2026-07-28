@@ -1,0 +1,1 @@
+Replaced the `dimiro1/banner/autoload` dependency with a two-line `os.ReadFile` in `main()`. Its `init()` called `flag.Parse()`, which made `package main` impossible to test; `cmd/tripbot` can now carry tests.
