@@ -80,6 +80,44 @@ func TestTitlecaseState(t *testing.T) {
 	}
 }
 
+func TestNormalizeStateInput(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"single word", "utah", "utah"},
+		{"multi-word keeps its space", "new york", "new york"},
+		{"mixed case is untouched", "NEW York", "NEW York"},
+		{"runs of whitespace collapse", "  NEW   york  ", "NEW york"},
+		{"tabs and newlines collapse", "new\tyork\n", "new york"},
+		{"punctuation is stripped", "new york!?", "new york"},
+		{"digits are stripped", "utah2", "utah"},
+		{"abbrev with dots stays one token", "n.y.", "ny"},
+		{"three-word territory", "district of columbia", "district of columbia"},
+		{"empty", "", ""},
+		{"no letters at all", "!!!123", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := NormalizeStateInput(tt.input)
+			if got != tt.want {
+				t.Fatalf("got %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// Every state and territory name survives normalization unchanged, so a viewer
+// who types a name exactly gets it through to the lookup.
+func TestNormalizeStateInputKeepsEveryStateName(t *testing.T) {
+	for _, name := range StateNames() {
+		if got := NormalizeStateInput(name); got != name {
+			t.Errorf("NormalizeStateInput(%q) = %q", name, got)
+		}
+	}
+}
+
 // Round-trip pins behavior for state names that survive strings.Title.
 // Names with lowercase connectors like "District of Columbia" don't
 // round-trip today (StateToStateAbbrev title-cases "of" → "Of"); we

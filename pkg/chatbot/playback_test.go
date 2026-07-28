@@ -2,6 +2,7 @@ package chatbot
 
 import (
 	"context"
+	"fmt"
 	"runtime"
 	"strings"
 	"testing"
@@ -347,6 +348,102 @@ func TestJumpCmd_NoFootageForState(t *testing.T) {
 	// IRC: the "No footage for X... yet!" message (titlecased).
 	if len(recIRC.Says) != 1 || !strings.Contains(recIRC.Says[0], "No footage for Wyoming") {
 		t.Errorf("expected single 'No footage for Wyoming' message, got %v", recIRC.Says)
+	}
+}
+
+// jumpCmd sanitizes its params before the lookup: multi-word state names keep
+// their interior space, stray whitespace and punctuation are cleaned up, and
+// case is left for the lookup to resolve.
+func TestJumpCmd_StateNameParsing(t *testing.T) {
+	skipIfDarwin(t)
+	tests := []struct {
+		name      string
+		params    []string
+		wantState string
+		wantSay   string
+	}{
+		{"single word", []string{"utah"}, "utah", "Jumping to Utah"},
+		{"multi-word name", []string{"new", "york"}, "new york", "Jumping to New York"},
+		{"upper case multi-word name", []string{"NEW", "YORK"}, "NEW YORK", "Jumping to New York"},
+		{"extra whitespace between words", []string{"", "", "NEW", "", "york", ""}, "NEW york", "Jumping to New York"},
+		{"trailing punctuation", []string{"utah!"}, "utah", "Jumping to Utah"},
+		{"abbreviation", []string{"dc"}, "dc", "Jumping to District of Columbia"},
+		{"three-word territory", []string{"district", "of", "columbia"}, "district of columbia", "Jumping to District of Columbia"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			app := newTestApp(video.Video{})
+			recVideo := &recordingVideo{
+				RandomVid: video.Video{Slug: "2019_0615_183000_001"},
+			}
+			recIRC := &recordingChat{}
+			app.Playout = &recordingPlayout{}
+			app.Video = recVideo
+			app.Chat = recIRC
+
+			runAsAdmin(t, func() {
+				app.jumpCmd(context.Background(), newTestUser(adminUser), tt.params)
+			})
+
+			wantCall := fmt.Sprintf("FindRandomByState(%q)", tt.wantState)
+			if len(recVideo.Calls) == 0 || recVideo.Calls[0] != wantCall {
+				t.Errorf("expected first Video call %s, got %v", wantCall, recVideo.Calls)
+			}
+			if len(recIRC.Says) != 1 || !strings.Contains(recIRC.Says[0], tt.wantSay) {
+				t.Errorf("expected a %q message, got %v", tt.wantSay, recIRC.Says)
+			}
+		})
+	}
+}
+
+// An unrecognized multi-word name still reaches the friendly no-footage reply
+// rather than erroring out.
+func TestJumpCmd_UnknownMultiWordStateSaysNoFootage(t *testing.T) {
+	skipIfDarwin(t)
+	app := newTestApp(video.Video{})
+	recPlayout := &recordingPlayout{}
+	recVideo := &recordingVideo{
+		RandomErr: &terrors.NoFootageForStateError{Msg: "no matches found"},
+	}
+	recIRC := &recordingChat{}
+	app.Playout = recPlayout
+	app.Video = recVideo
+	app.Chat = recIRC
+
+	runAsAdmin(t, func() {
+		app.jumpCmd(context.Background(), newTestUser(adminUser), []string{"north", "atlantis"})
+	})
+
+	if len(recVideo.Calls) != 1 || recVideo.Calls[0] != `FindRandomByState("north atlantis")` {
+		t.Errorf("expected single FindRandomByState(\"north atlantis\"), got %v", recVideo.Calls)
+	}
+	if len(recPlayout.Calls) != 0 {
+		t.Errorf("expected no Playout calls on no-footage path, got %v", recPlayout.Calls)
+	}
+	if len(recIRC.Says) != 1 || !strings.Contains(recIRC.Says[0], "No footage for North Atlantis") {
+		t.Errorf("expected single 'No footage for North Atlantis' message, got %v", recIRC.Says)
+	}
+}
+
+// Input that sanitizes down to nothing gets the usage reply without a lookup.
+func TestJumpCmd_NoStateNameInParams(t *testing.T) {
+	skipIfDarwin(t)
+	app := newTestApp(video.Video{})
+	recVideo := &recordingVideo{}
+	recIRC := &recordingChat{}
+	app.Playout = &recordingPlayout{}
+	app.Video = recVideo
+	app.Chat = recIRC
+
+	runAsAdmin(t, func() {
+		app.jumpCmd(context.Background(), newTestUser(adminUser), []string{"123!?"})
+	})
+
+	if len(recVideo.Calls) != 0 {
+		t.Errorf("expected no Video calls, got %v", recVideo.Calls)
+	}
+	if len(recIRC.Says) != 1 || !strings.Contains(recIRC.Says[0], "Usage: !jump [state]") {
+		t.Errorf("expected the usage message, got %v", recIRC.Says)
 	}
 }
 

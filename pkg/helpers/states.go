@@ -1,6 +1,21 @@
 package helpers
 
-import "strings"
+import (
+	"regexp"
+	"strings"
+)
+
+// characters that can't appear in a state or territory name
+var nonStateNameChars = regexp.MustCompile(`[^a-zA-Z\s]+`)
+
+// NormalizeStateInput cleans up a user-supplied state name so it can be looked
+// up: characters a state name can't contain (digits, punctuation, emoji) are
+// dropped, runs of whitespace collapse to a single space, and the ends are
+// trimmed. Interior spaces survive, so multi-word names like "new york" stay
+// intact. Case is left alone — TitlecaseState resolves that.
+func NormalizeStateInput(input string) string {
+	return strings.Join(strings.Fields(nonStateNameChars.ReplaceAllString(input, "")), " ")
+}
 
 func StateAbbrevToState(abbrev string) string {
 	val, ok := stateAbbrevs[strings.ToUpper(abbrev)]

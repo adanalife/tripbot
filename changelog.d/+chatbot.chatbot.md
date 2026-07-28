@@ -1,0 +1,1 @@
+`!jump` reaches multi-word states and territories again: the input sanitizer keeps interior spaces, so `!jump new york` (and New Jersey, the Carolinas, Rhode Island, District of Columbia, …) resolves instead of being mangled into `newyork`. Extra whitespace collapses, stray punctuation is still stripped, and names up to four words long are accepted.
