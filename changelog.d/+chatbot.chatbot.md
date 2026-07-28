@@ -1,0 +1,1 @@
+Command params keep the capitalization they were typed with. The dispatcher folds case on the trigger token only, so `!MILES` still routes while `!middle Hello World` sets on-screen text with its capitals intact — on Twitch and the gateway platforms alike. Commands typed with leading whitespace dispatch too.

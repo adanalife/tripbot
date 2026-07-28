@@ -544,3 +544,23 @@ func TestJumpCmd_RejectsBadInput(t *testing.T) {
 		t.Errorf("expected usage message via IRC, got %v", recIRC.Says)
 	}
 }
+
+// parseSeekSpan folds case because time.ParseDuration only accepts lowercase
+// unit suffixes, and params reach handlers with the viewer's original casing.
+func TestParseSeekSpan_UppercaseUnits(t *testing.T) {
+	for _, in := range []string{"1H30M", "1h30M", "45S"} {
+		t.Run(in, func(t *testing.T) {
+			got, err := parseSeekSpan(in)
+			if err != nil {
+				t.Fatalf("parseSeekSpan(%q): %v", in, err)
+			}
+			want, err := time.ParseDuration(strings.ToLower(in))
+			if err != nil {
+				t.Fatalf("bad test case %q: %v", in, err)
+			}
+			if got != want {
+				t.Errorf("parseSeekSpan(%q) = %v, want %v", in, got, want)
+			}
+		})
+	}
+}

@@ -35,6 +35,9 @@ func FuzzFindCommand(f *testing.F) {
 		"frozen since yesterday",
 		"!help \U000e0000",
 		"!help\t",
+		" !MILES",
+		"!MIDDLE Hello World",
+		"No Audio Since Yesterday",
 		"\x00",
 	}
 	for _, s := range seeds {
@@ -71,7 +74,7 @@ func FuzzGuessCmd(f *testing.F) {
 }
 
 // FuzzMilesCmd exercises the other-user lookup path, which calls
-// helpers.StripAtSign(params[0]). The noopSessions fake returns a zero-value
+// targetUsername(params[0]). The noopSessions fake returns a zero-value
 // user so milesCmd short-circuits before any DB-backed mileage lookup.
 func FuzzMilesCmd(f *testing.F) {
 	seeds := []string{"@dana", "dana", "", "@", " ", "@dana extra", "\x00", "@@dana"}
@@ -88,7 +91,7 @@ func FuzzMilesCmd(f *testing.F) {
 	})
 }
 
-// FuzzFollowageCmd covers the StripAtSign-on-params[0] path for !followage.
+// FuzzFollowageCmd covers the targetUsername-on-params[0] path for !followage.
 // mytwitch.FollowedAt short-circuits when the broadcaster token isn't loaded
 // (the test-env default), so no HTTP fires.
 func FuzzFollowageCmd(f *testing.F) {
@@ -118,8 +121,8 @@ func FuzzMiddleCmd(f *testing.F) {
 	})
 }
 
-// FuzzSetBotFlag covers the !makebot / !unbot argument handling: lowercase
-// + TrimPrefix("@") on params[0], then the noopSessions.SetBot call.
+// FuzzSetBotFlag covers the !makebot / !unbot argument handling:
+// targetUsername(params[0]), then the noopSessions.SetBot call.
 func FuzzSetBotFlag(f *testing.F) {
 	seeds := []string{"@dana", "dana", "DANA", "@", "", " ", "@@dana", "@dana extra", "\x00"}
 	for _, s := range seeds {

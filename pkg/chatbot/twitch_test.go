@@ -53,6 +53,8 @@ func TestFollowageCmd_NotFollowing_SelfPrompt(t *testing.T) {
 	}
 }
 
+// The mention param is canonicalized before the lookup: @-stripped and
+// lowercased, matching how usernames are stored and how logins are spelled.
 func TestFollowageCmd_OtherUser_LooksUpStrippedName(t *testing.T) {
 	app := newTestApp(video.Video{})
 	rec := &recordingChat{}
@@ -62,8 +64,8 @@ func TestFollowageCmd_OtherUser_LooksUpStrippedName(t *testing.T) {
 
 	app.followageCmd(context.Background(), newTestUser("viewer1"), []string{"@someoneElse"})
 
-	if len(twitch.Lookups) != 1 || twitch.Lookups[0] != "someoneElse" {
-		t.Fatalf("expected a lookup for the @-stripped target, got %v", twitch.Lookups)
+	if len(twitch.Lookups) != 1 || twitch.Lookups[0] != "someoneelse" {
+		t.Fatalf("expected a lookup for the canonicalized target, got %v", twitch.Lookups)
 	}
 	if got := strings.Join(rec.Says, " "); !strings.Contains(got, "isn't following") {
 		t.Fatalf("expected the other-user not-following reply, got %q", rec.Says)
