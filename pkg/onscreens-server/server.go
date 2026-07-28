@@ -49,6 +49,12 @@ type Server struct {
 	RightRotator *Onscreen
 	Timewarp     *Onscreen
 
+	// The corner rotators behind LeftRotator / RightRotator. Kept so copy
+	// edited in the admin console, arriving over NATS, can be swapped into the
+	// live pools.
+	left  *rotator
+	right *rotator
+
 	http *http.Server
 }
 
@@ -60,16 +66,18 @@ func New(cfg Config) *Server {
 	if version == "" {
 		version = "dev"
 	}
-	leftRotator, rightRotator := startRotators(cfg.Conf)
+	left, right := startRotators(cfg.Conf)
 	return &Server{
 		Version:      version,
 		cfg:          cfg.Conf,
 		GPS:          newGPSOnscreen(),
 		Leaderboard:  newLeaderboardOnscreen(),
-		LeftRotator:  leftRotator,
+		LeftRotator:  left.osc,
 		MiddleText:   newMiddleText(),
-		RightRotator: rightRotator,
+		RightRotator: right.osc,
 		Timewarp:     newTimewarp(),
+		left:         left,
+		right:        right,
 	}
 }
 

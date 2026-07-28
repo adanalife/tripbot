@@ -1,8 +1,10 @@
 package onscreensServer
 
 import (
-	c "github.com/adanalife/tripbot/pkg/config/onscreens-server"
 	"time"
+
+	c "github.com/adanalife/tripbot/pkg/config/onscreens-server"
+	rot "github.com/adanalife/tripbot/pkg/rotator"
 )
 
 // Matches the left rotator's 45s cadence. Beyond pacing the message swap, the
@@ -14,52 +16,37 @@ import (
 // stuck-blank overlay stays blank.
 var rightRotatorUpdateFrequency = time.Duration(45 * time.Second)
 
-// All right-rotator lines are platform-neutral (!location and !timewarp are both
-// in the YouTube allowlist). Weight 2 makes the follow and !location hints
-// twice as likely as the unweighted lines.
-var possibleRightMessages = []rotatorMessage{
-	{Text: "Don't forget to follow :)", Weight: 2},
-	{Text: "Try running `!location`", Weight: 2},
-	{Text: "Try running `!timewarp`"},
-	{Text: "Streaming 24 hours a day"},
-}
-
-// promoRightMessages replace the full command-hint right rotator in promoMode
-// (see promoLeftMessages). This corner owns "here is what you're watching" —
-// the journey flavor plus each platform's own-platform call to action, worded
-// in that platform's verb (YouTube subscribes, TikTok follows) so the two
-// corners never advertise the same action at once.
-//
-// On a promoMode stream these are mixed with the live date line (see
-// rightLiveLine) — the info the !date command would return.
-var promoRightMessages = []rotatorMessage{
-	{Text: "Driving across America, 24 hours a day"},
-	{Text: "Subscribe to ride along", Platforms: []string{platformYouTube}},
-	{Text: "Follow to ride along", Platforms: []string{platformTikTok, platformInstagram}},
-	{Text: "Slow-TV from the open road — just the drive"},
-	{Text: "Real dashcam footage, streaming nonstop"},
-}
-
 // rightLiveLine is the promoMode right-rotator live-data line: the current date
 // ("📅 Monday January 2, 2006") when tripbot has pushed a fresh one. Paired with
 // leftLiveLine's location so the two corners show "when" and "where" rather than
 // duplicating one field.
-func rightLiveLine(now time.Time) (rotatorMessage, bool) {
+//
+// Generated from the playing clip rather than authored, so it's deliberately not
+// part of the console-editable copy — it's mixed into the promo pool here at
+// render time.
+func rightLiveLine(now time.Time) (rot.Message, bool) {
 	if _, date, ok := liveLocation.snapshot(now); ok && date != "" {
-		return rotatorMessage{Text: "📅 " + date, Weight: liveDataWeight}, true
+		return rot.Message{Text: "📅 " + date, Weight: liveDataWeight}, true
 	}
-	return rotatorMessage{}, false
+	return rot.Message{}, false
 }
 
-// newRightRotator configures the right corner. The caller pairs it with the left
-// rotator and calls start().
-func newRightRotator(cfg *c.OnscreensServerConfig) *rotator {
-	return &rotator{
-		cfg:           cfg,
-		kind:          "right-rotator",
-		freq:          rightRotatorUpdateFrequency,
-		messages:      possibleRightMessages,
-		promoMessages: promoRightMessages,
-		liveLine:      rightLiveLine,
+// newRightRotator configures the right corner, seeded with cfgCopy — the copy
+// compiled into the binary at startup, console-edited copy once
+// RestoreRotatorCopy has run. The caller pairs it with the left rotator and
+// calls start().
+//
+// This is the tighter corner of the two: its grey-box underlay is 369px against
+// the left's 564px (rot.BudgetFor), so its lines have to be shorter to avoid
+// shrinking to the font floor and wrapping to a second line.
+func newRightRotator(cfg *c.OnscreensServerConfig, cfgCopy rot.Config) *rotator {
+	r := &rotator{
+		cfg:      cfg,
+		kind:     "right-rotator",
+		freq:     rightRotatorUpdateFrequency,
+		liveLine: rightLiveLine,
 	}
+	// No rare message on this corner — the easter egg is the left corner's.
+	r.setCopy(cfgCopy.Right, "")
+	return r
 }

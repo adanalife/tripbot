@@ -3,42 +3,33 @@ package onscreensServer
 import (
 	"log/slog"
 	"math/rand"
-	"regexp"
-	"slices"
+	"sync/atomic"
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/onscreens-server"
+	rot "github.com/adanalife/tripbot/pkg/rotator"
 )
 
-// Streaming platforms a rotator message can be scoped to. Mirrors the values
-// pkg/chatbot uses, but kept local — onscreens-server must not import chatbot
-// (that would drag tripbot-only config/DB init into this binary; see the
-// package-boundary-init-discipline ADR).
+// The message type, platform constants, default copy, weighted-pick logic, and
+// per-corner render budgets all live in pkg/rotator, shared with the tripbot
+// /api/rotators surface that serves and stores console edits. That package is
+// stdlib-only, so importing it here doesn't drag config/DB init into this binary
+// (the package-boundary-init-discipline ADR).
 const (
-	platformTwitch    = "twitch"
-	platformYouTube   = "youtube"
-	platformTikTok    = "tiktok"
-	platformInstagram = "instagram"
+	platformTwitch    = rot.PlatformTwitch
+	platformYouTube   = rot.PlatformYouTube
+	platformTikTok    = rot.PlatformTikTok
+	platformInstagram = rot.PlatformInstagram
 )
 
-// rareOdds is the 1-in-N chance the left rotator shows its easter-egg line.
-const rareOdds = 10000
-
-// rotatorMessage is one line a rotator can display.
-//
-//   - Platforms scopes the line to specific streaming platforms; empty means
-//     "all platforms". This is what keeps a YouTube overlay from advertising
-//     Twitch-only commands (!miles, !guess).
-//   - Weight biases weighted-random selection (<1 is treated as 1), making a
-//     message proportionally more frequent without listing it twice.
-//
-// The hardcoded slices are the current source of truth; this struct is also the
-// seam for a future admin-console-editable source (swap the slice for a loaded
-// one) — tracked as a TODO, not built yet.
-type rotatorMessage struct {
-	Text      string
-	Platforms []string
-	Weight    int
+// rotatorCopy is the editable copy one corner is currently rotating through.
+// Held behind a single atomic pointer so a console edit swaps all three fields
+// at once — the render loop can't observe a half-applied update (new messages
+// against a stale rare line) and doesn't need a lock on the read path.
+type rotatorCopy struct {
+	messages      []rot.Message // full pool (every command hint)
+	promoMessages []rot.Message // promoMode pool (no reply-only command hints)
+	rareMessage   string        // 1-in-rot.RareOdds easter egg; "" = none
 }
 
 // rotator drives one corner overlay (left or right). Both corners are the same
@@ -50,41 +41,65 @@ type rotatorMessage struct {
 // advertises a command the sibling is currently showing, so the two corners
 // don't both say "!location" at once (which reads as broken).
 type rotator struct {
-	cfg           *c.OnscreensServerConfig
-	kind          string                                     // for logs: "left-rotator" / "right-rotator"
-	freq          time.Duration                              // how often the visible line swaps
-	messages      []rotatorMessage                           // full pool (every command hint)
-	promoMessages []rotatorMessage                           // promoMode pool (no reply-only command hints)
-	liveLine      func(now time.Time) (rotatorMessage, bool) // promoMode live-data line (location/date); nil = none
-	rareMessage   string                                     // 1-in-rareOdds easter egg; "" = none
+	cfg      *c.OnscreensServerConfig
+	kind     string                                  // for logs: "left-rotator" / "right-rotator"
+	freq     time.Duration                           // how often the visible line swaps
+	liveLine func(now time.Time) (rot.Message, bool) // promoMode live-data line (location/date); nil = none
+
+	// copy is swapped wholesale when edited copy arrives from the admin console;
+	// the loop goroutine only ever loads it. Never nil once the constructor ran.
+	copy atomic.Pointer[rotatorCopy]
 
 	osc     *Onscreen // render target; nil until start()
 	sibling *rotator  // the other corner, for command de-duplication
 }
 
-// startRotators builds both corner rotators, pairs them as siblings (so neither
-// advertises a command the other is currently showing), starts their background
-// loops, and returns their *Onscreen render targets. Left is started first, so
-// it primes with no sibling content yet (right.osc is still nil — siblingCommands
-// no-ops); right then primes against left's first line.
-func startRotators(cfg *c.OnscreensServerConfig) (left, right *Onscreen) {
-	l := newLeftRotator(cfg)
-	r := newRightRotator(cfg)
+// startRotators builds both corner rotators from the copy compiled into the
+// binary, pairs them as siblings (so neither advertises a command the other is
+// currently showing), and starts their background loops. Copy edited in the
+// admin console is applied afterwards by the caller (RestoreRotatorCopy), so the
+// overlays render valid defaults during the window before NATS is up.
+//
+// Left is started first, so it primes with no sibling content yet (right.osc is
+// still nil — siblingCommands no-ops); right then primes against left's first
+// line.
+func startRotators(cfg *c.OnscreensServerConfig) (left, right *rotator) {
+	def := rot.DefaultConfig()
+	l := newLeftRotator(cfg, def)
+	r := newRightRotator(cfg, def)
 	l.sibling, r.sibling = r, l
-	return l.start(), r.start()
+	l.start()
+	r.start()
+	return l, r
+}
+
+// setCopy swaps in new copy for this corner. The next rotation tick renders it;
+// whatever line is on screen right now is left alone rather than yanked
+// mid-display.
+func (r *rotator) setCopy(corner rot.Corner, rareMessage string) {
+	r.copy.Store(&rotatorCopy{
+		messages:      corner.Messages,
+		promoMessages: corner.PromoMessages,
+		rareMessage:   rareMessage,
+	})
+}
+
+// applyRotatorConfig swaps new copy into both corners. The rare message is the
+// left corner's alone; the right corner never rolls for it.
+func (s *Server) applyRotatorConfig(cfg rot.Config) {
+	s.left.setCopy(cfg.Left, cfg.RareMessage)
+	s.right.setCopy(cfg.Right, "")
 }
 
 // start creates the rotator's *Onscreen, primes it with a first message
 // synchronously (so the OBS browser source has content to render the moment it
 // polls — otherwise there's a brief race where the rotator is empty until the
-// goroutine schedules), kicks off the background rotation loop, and returns the
-// onscreen.
-func (r *rotator) start() *Onscreen {
+// goroutine schedules), and kicks off the background rotation loop.
+func (r *rotator) start() {
 	slog.Info("creating onscreen", "kind", r.kind)
 	r.osc = newOnscreen()
 	r.osc.Show(r.content())
 	go r.loop()
-	return r.osc
 }
 
 func (r *rotator) loop() {
@@ -98,25 +113,26 @@ func (r *rotator) loop() {
 // otherwise a weighted-random pick from this corner's pool that doesn't collide
 // with whatever command the sibling corner is currently showing.
 func (r *rotator) content() string {
-	if r.rareMessage != "" && rand.Intn(rareOdds) == 0 {
-		return r.rareMessage
+	cp := r.copy.Load()
+	if cp.rareMessage != "" && rand.Intn(rot.RareOdds) == 0 {
+		return cp.rareMessage
 	}
-	return pickRotatorMessage(r.cfg.Platform, r.pool(time.Now()), r.siblingCommands())
+	return rot.Pick(r.cfg.Platform, r.pool(cp, time.Now()), r.siblingCommands())
 }
 
 // pool returns the message set for the current instance state: the promo pool
 // (with the live location/date line prepended when fresh) on an instance that
 // can't surface a command result, otherwise the full command-hint pool.
-func (r *rotator) pool(now time.Time) []rotatorMessage {
+func (r *rotator) pool(cp *rotatorCopy, now time.Time) []rot.Message {
 	if !r.promoMode() {
-		return r.messages
+		return cp.messages
 	}
 	if r.liveLine != nil {
 		if line, ok := r.liveLine(now); ok {
-			return append([]rotatorMessage{line}, r.promoMessages...)
+			return append([]rot.Message{line}, cp.promoMessages...)
 		}
 	}
-	return r.promoMessages
+	return cp.promoMessages
 }
 
 // siblingCommands is the set of !command tokens the other corner is currently
@@ -125,7 +141,7 @@ func (r *rotator) siblingCommands() map[string]bool {
 	if r.sibling == nil || r.sibling.osc == nil {
 		return nil
 	}
-	return commandsIn(r.sibling.osc.Content)
+	return rot.CommandsIn(r.sibling.osc.Content)
 }
 
 // promoMode reports whether this corner draws from the promo pool instead of
@@ -150,84 +166,4 @@ func (r *rotator) promoMode() bool {
 	default:
 		return false
 	}
-}
-
-// appliesTo reports whether m should show on the given platform.
-func (m rotatorMessage) appliesTo(platform string) bool {
-	return len(m.Platforms) == 0 || slices.Contains(m.Platforms, platform)
-}
-
-func (m rotatorMessage) weight() int {
-	if m.Weight < 1 {
-		return 1
-	}
-	return m.Weight
-}
-
-// commandTokenRE matches a "!command" token: a bang followed by word chars (so a
-// bare "!" used as punctuation, e.g. in the rare-message line, isn't a command).
-var commandTokenRE = regexp.MustCompile(`!(\w+)`)
-
-// commandsIn returns the set of !command tokens mentioned in text (without the
-// leading bang). Empty/nil when text advertises no commands.
-func commandsIn(text string) map[string]bool {
-	matches := commandTokenRE.FindAllStringSubmatch(text, -1)
-	if len(matches) == 0 {
-		return nil
-	}
-	cmds := make(map[string]bool, len(matches))
-	for _, m := range matches {
-		cmds[m[1]] = true
-	}
-	return cmds
-}
-
-// sharesCommand reports whether m advertises any command in exclude.
-func (m rotatorMessage) sharesCommand(exclude map[string]bool) bool {
-	if len(exclude) == 0 {
-		return false
-	}
-	for cmd := range commandsIn(m.Text) {
-		if exclude[cmd] {
-			return true
-		}
-	}
-	return false
-}
-
-// pickRotatorMessage returns a weighted-random message among those applicable to
-// this instance's platform and not advertising a command in exclude (the
-// sibling corner's current commands). Returns "" when no message applies at all.
-// If exclude rules out every otherwise-eligible message, the exclusion is
-// relaxed rather than showing nothing — better a brief duplicate than a blank
-// corner.
-func pickRotatorMessage(platform string, msgs []rotatorMessage, exclude map[string]bool) string {
-	eligible := func(m rotatorMessage) bool {
-		return m.appliesTo(platform) && !m.sharesCommand(exclude)
-	}
-
-	total := 0
-	for _, m := range msgs {
-		if eligible(m) {
-			total += m.weight()
-		}
-	}
-	if total == 0 {
-		if len(exclude) > 0 {
-			// Every candidate collided with the sibling; relax and retry once.
-			return pickRotatorMessage(platform, msgs, nil)
-		}
-		return ""
-	}
-
-	n := rand.Intn(total)
-	for _, m := range msgs {
-		if !eligible(m) {
-			continue
-		}
-		if n -= m.weight(); n < 0 {
-			return m.Text
-		}
-	}
-	return "" // unreachable: n < total guarantees a hit above
 }
