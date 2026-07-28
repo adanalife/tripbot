@@ -23,7 +23,7 @@ func TestGatewayYouTubeChat_SayPostsToGateway(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	gatewayYouTubeChat{client: gateway.New(srv.URL)}.Say("/me hello")
+	gatewayChat{client: gateway.New(srv.URL), platform: platformYouTube}.Say("/me hello")
 	if gotPath != "/v1/chat" {
 		t.Errorf("path = %q, want /v1/chat", gotPath)
 	}
