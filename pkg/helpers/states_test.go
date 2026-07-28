@@ -56,10 +56,19 @@ func TestTitlecaseState(t *testing.T) {
 		want  string
 	}{
 		{"abbrev", "ca", "California"},
+		{"upper case abbrev", "CA", "California"},
+		{"mixed case abbrev", "Ny", "New York"},
 		{"all-lower full name", "california", "California"},
 		{"mixed case full name", "cAlIfOrNiA", "California"},
-		{"unknown abbrev returns empty title-cased", "ZZ", ""},
-		{"two-letter non-abbrev unknown", "Zz", ""},
+		{"multi-word full name", "new york", "New York"},
+		{"abbrev with lowercase connector", "dc", "District of Columbia"},
+		{"full name with lowercase connector", "DISTRICT OF COLUMBIA", "District of Columbia"},
+		{"surrounding whitespace around abbrev", "  ca  ", "California"},
+		{"surrounding whitespace around full name", "\tcalifornia\n", "California"},
+		{"unknown abbrev echoes input", "ZZ", "Zz"},
+		{"unknown name echoes input", "atlantis", "Atlantis"},
+		{"empty", "", ""},
+		{"whitespace only", "   ", ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
