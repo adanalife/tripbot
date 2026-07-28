@@ -114,7 +114,7 @@ func (a *App) buildRegistry() []Command {
 			Trigger: "!facebook",
 			Aliases: []string{"!fb"},
 			Handler: func(_ context.Context, _ *users.User, _ []string) {
-				a.Chat.Say("Follow on Facebook: https://www.facebook.com/adanalifeblog")
+				a.Chat.Say("Follow on Facebook: https://www.facebook.com/adanalifeunderscore")
 			},
 		},
 		{
