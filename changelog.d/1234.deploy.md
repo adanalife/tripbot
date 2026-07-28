@@ -1,0 +1,1 @@
+Only a twitch instance mounts `tripbot-twitch-creds` now — the youtube, tiktok, facebook and instagram pods no longer carry Twitch app credentials they never read. Prod picks this up at the next release, since its manifests are version-pinned.
