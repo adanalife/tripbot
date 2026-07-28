@@ -15,20 +15,15 @@ var leftRotatorUpdateFrequency = time.Duration(45 * time.Second)
 // data against the default promo weights.
 const liveDataWeight = 6
 
-// leftLiveLine is the promoMode left-rotator live-data line: the current location
-// ("📍 City, State") when tripbot has pushed a fresh one. Paired with
-// rightLiveLine's date so the two corners show "where" and "when" rather than
-// duplicating one field.
+// leftLiveLine is the promoMode left-rotator live-data line: where the clip was
+// filmed. Paired with rightLiveLine's date so the two corners show "where" and
+// "when" rather than duplicating one field. Renders only while tripbot is pushing
+// a location — an unresolved $variable makes the line ineligible.
 //
-// Generated from the playing clip rather than authored, so it's deliberately not
-// part of the console-editable copy — it's mixed into the promo pool here at
-// render time.
-func leftLiveLine(now time.Time) (rot.Message, bool) {
-	if loc, _, ok := liveLocation.snapshot(now); ok && loc != "" {
-		return rot.Message{Text: "📍 " + loc, Weight: liveDataWeight}, true
-	}
-	return rot.Message{}, false
-}
+// Not part of the console-editable copy: it's the one line each promo corner is
+// guaranteed to be able to show, so it ships with the binary rather than being
+// something an edit could leave a platform without.
+var leftLiveLine = rot.Message{Text: "📍 $location", Weight: liveDataWeight}
 
 // newLeftRotator configures the left corner, seeded with cfgCopy — the copy
 // compiled into the binary at startup, console-edited copy once

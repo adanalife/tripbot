@@ -39,10 +39,12 @@ func (e *ValidationError) Error() string {
 // and keeping it would silently hide lines.
 //
 // Rejecting: a line past the corner's hard length limit, a weight past MaxWeight,
-// or a pool past MaxMessagesPerPool. Length is checked against the corner the
-// line actually renders in, which is the whole point of doing it here — the right
-// corner's budget is 369px against the left's 564px, so the same line can pass on
-// one side and fail on the other.
+// a pool past MaxMessagesPerPool, or a $variable that isn't declared. Length is
+// checked against the corner the line actually renders in, which is the whole
+// point of doing it here — the right corner's budget is 369px against the left's
+// 564px, so the same line can pass on one side and fail on the other — and it's
+// checked with the variables expanded to their examples, since "$location" is
+// nine characters and what it renders as is twenty-four.
 func Sanitize(cfg Config) (Config, error) {
 	out := Config{RareMessage: strings.TrimSpace(cfg.RareMessage)}
 
@@ -67,13 +69,37 @@ func Sanitize(cfg Config) (Config, error) {
 	}
 
 	// The rare line renders in the left corner, so it answers to that budget.
-	if b := BudgetFor(SideLeft); out.RareMessage != "" && b.TooLong(out.RareMessage) {
-		return Config{}, &ValidationError{
-			Side: SideLeft, Pool: "rare_message", Text: out.RareMessage,
-			Msg: fmt.Sprintf("too long to render (over %d characters)", b.HardMaxRunes()),
+	if out.RareMessage != "" {
+		if err := checkVariables(SideLeft, "rare_message", 0, out.RareMessage); err != nil {
+			return Config{}, err
+		}
+		if b := BudgetFor(SideLeft); b.TooLong(ExpandExamples(out.RareMessage)) {
+			return Config{}, &ValidationError{
+				Side: SideLeft, Pool: "rare_message", Text: out.RareMessage,
+				Msg: fmt.Sprintf("too long to render (over %d characters)", b.HardMaxRunes()),
+			}
 		}
 	}
 	return out, nil
+}
+
+// checkVariables rejects a line referencing a $token that isn't in the declared
+// set — a typo, caught here rather than by rendering the literal token on a 24/7
+// stream. The message names the offending token so the editor can point at it.
+func checkVariables(side Side, pool string, index int, text string) error {
+	unknown := UnknownVariablesIn(text)
+	if len(unknown) == 0 {
+		return nil
+	}
+	known := make([]string, 0, len(variables))
+	for _, v := range variables {
+		known = append(known, v.Token())
+	}
+	return &ValidationError{
+		Side: side, Pool: pool, Index: index, Text: text,
+		Msg: fmt.Sprintf("unknown variable $%s (available: %s)",
+			unknown[0], strings.Join(known, ", ")),
+	}
 }
 
 func sanitizePool(side Side, pool string, msgs []Message) ([]Message, error) {
@@ -84,7 +110,10 @@ func sanitizePool(side Side, pool string, msgs []Message) ([]Message, error) {
 		if m.Text == "" {
 			continue // an empty editor row is not an error, just nothing
 		}
-		if budget.TooLong(m.Text) {
+		if err := checkVariables(side, pool, i, m.Text); err != nil {
+			return nil, err
+		}
+		if budget.TooLong(ExpandExamples(m.Text)) {
 			return nil, &ValidationError{
 				Side: side, Pool: pool, Index: i, Text: m.Text,
 				Msg: fmt.Sprintf("too long to render in the %s corner (over %d characters)",

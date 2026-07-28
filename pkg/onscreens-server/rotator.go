@@ -42,9 +42,9 @@ type rotatorCopy struct {
 // don't both say "!location" at once (which reads as broken).
 type rotator struct {
 	cfg      *c.OnscreensServerConfig
-	kind     string                                  // for logs: "left-rotator" / "right-rotator"
-	freq     time.Duration                           // how often the visible line swaps
-	liveLine func(now time.Time) (rot.Message, bool) // promoMode live-data line (location/date); nil = none
+	kind     string        // for logs: "left-rotator" / "right-rotator"
+	freq     time.Duration // how often the visible line swaps
+	liveLine rot.Message   // promoMode live-data line (location/date); zero = none
 
 	// copy is swapped wholesale when edited copy arrives from the admin console;
 	// the loop goroutine only ever loads it. Never nil once the constructor ran.
@@ -111,28 +111,34 @@ func (r *rotator) loop() {
 
 // content picks the next line to display: the rare easter egg on a lucky roll,
 // otherwise a weighted-random pick from this corner's pool that doesn't collide
-// with whatever command the sibling corner is currently showing.
+// with whatever command the sibling corner is currently showing. Either way the
+// line's $variables are substituted from the clip data tripbot last pushed.
+//
+// A rare line whose variables don't resolve falls through to the pool rather than
+// spending the 1-in-RareOdds roll on a line it can't render.
 func (r *rotator) content() string {
 	cp := r.copy.Load()
-	if cp.rareMessage != "" && rand.Intn(rot.RareOdds) == 0 {
-		return cp.rareMessage
+	now := time.Now()
+	vars := liveLocation.snapshot(now)
+	if cp.rareMessage != "" && vars.Resolvable(cp.rareMessage) && rand.Intn(rot.RareOdds) == 0 {
+		return vars.Expand(cp.rareMessage)
 	}
-	return rot.Pick(r.cfg.Platform, r.pool(cp, time.Now()), r.siblingCommands())
+	return rot.Pick(r.cfg.Platform, r.pool(cp), r.siblingCommands(), vars)
 }
 
 // pool returns the message set for the current instance state: the promo pool
-// (with the live location/date line prepended when fresh) on an instance that
-// can't surface a command result, otherwise the full command-hint pool.
-func (r *rotator) pool(cp *rotatorCopy, now time.Time) []rot.Message {
+// plus this corner's live-data line on an instance that can't surface a command
+// result, otherwise the full command-hint pool. The live line is appended
+// unconditionally — it's written in $variables like any other line, so Pick drops
+// it on its own whenever the clip data is missing or stale.
+func (r *rotator) pool(cp *rotatorCopy) []rot.Message {
 	if !r.promoMode() {
 		return cp.messages
 	}
-	if r.liveLine != nil {
-		if line, ok := r.liveLine(now); ok {
-			return append([]rot.Message{line}, cp.promoMessages...)
-		}
+	if r.liveLine.Text == "" {
+		return cp.promoMessages
 	}
-	return cp.promoMessages
+	return append([]rot.Message{r.liveLine}, cp.promoMessages...)
 }
 
 // siblingCommands is the set of !command tokens the other corner is currently

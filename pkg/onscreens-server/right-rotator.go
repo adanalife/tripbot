@@ -16,20 +16,13 @@ import (
 // stuck-blank overlay stays blank.
 var rightRotatorUpdateFrequency = time.Duration(45 * time.Second)
 
-// rightLiveLine is the promoMode right-rotator live-data line: the current date
-// ("📅 Monday January 2, 2006") when tripbot has pushed a fresh one. Paired with
-// leftLiveLine's location so the two corners show "when" and "where" rather than
-// duplicating one field.
+// rightLiveLine is the promoMode right-rotator live-data line: the day the clip
+// was filmed. Paired with leftLiveLine's location so the two corners show "when"
+// and "where" rather than duplicating one field. Renders only while tripbot is
+// pushing a date — an unresolved $variable makes the line ineligible.
 //
-// Generated from the playing clip rather than authored, so it's deliberately not
-// part of the console-editable copy — it's mixed into the promo pool here at
-// render time.
-func rightLiveLine(now time.Time) (rot.Message, bool) {
-	if _, date, ok := liveLocation.snapshot(now); ok && date != "" {
-		return rot.Message{Text: "📅 " + date, Weight: liveDataWeight}, true
-	}
-	return rot.Message{}, false
-}
+// Not part of the console-editable copy, for the same reason as leftLiveLine.
+var rightLiveLine = rot.Message{Text: "📅 $date", Weight: liveDataWeight}
 
 // newRightRotator configures the right corner, seeded with cfgCopy — the copy
 // compiled into the binary at startup, console-edited copy once

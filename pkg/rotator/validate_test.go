@@ -107,3 +107,60 @@ func TestSanitizeAcceptsShippedDefaults(t *testing.T) {
 		}
 	}
 }
+
+// A misspelled variable has to be caught here: it would otherwise save cleanly
+// and then render "$loction" on a 24/7 stream.
+func TestSanitizeRejectsUnknownVariable(t *testing.T) {
+	_, err := Sanitize(Config{Left: Corner{
+		Messages: []Message{{Text: "fine"}, {Text: "driving through $loction"}},
+	}})
+
+	var verr *ValidationError
+	if !errors.As(err, &verr) {
+		t.Fatalf("error = %v, want a *ValidationError", err)
+	}
+	if verr.Index != 1 || verr.Pool != "messages" {
+		t.Errorf("error located %s[%d], want messages[1]", verr.Pool, verr.Index)
+	}
+	if !strings.Contains(verr.Msg, "$loction") {
+		t.Errorf("message %q should name the offending token", verr.Msg)
+	}
+	// The message doubles as the list of what *is* available, since the console
+	// shows it verbatim.
+	for _, v := range Variables() {
+		if !strings.Contains(verr.Msg, v.Token()) {
+			t.Errorf("message %q should offer %s", verr.Msg, v.Token())
+		}
+	}
+	// The rare line answers to the same check.
+	if _, err := Sanitize(Config{RareMessage: "you found $nothing!"}); err == nil {
+		t.Error("expected the rare line's unknown variable to be rejected")
+	}
+}
+
+func TestSanitizeAcceptsDeclaredVariables(t *testing.T) {
+	var msgs []Message
+	for _, v := range Variables() {
+		msgs = append(msgs, Message{Text: v.Token()})
+	}
+	if _, err := Sanitize(Config{Left: Corner{Messages: msgs}}); err != nil {
+		t.Errorf("declared variables rejected: %v", err)
+	}
+}
+
+// Length is measured against what a line renders as, not what it's written as: a
+// short line of tokens can expand past the corner it sits in.
+func TestSanitizeMeasuresVariablesExpanded(t *testing.T) {
+	// Repeat a token until its expansion clears the right corner's limit while
+	// the authored text stays well inside it.
+	loc, _ := variableByName("location")
+	n := BudgetFor(SideRight).HardMaxRunes()/len(loc.Example) + 2
+	text := strings.Repeat(loc.Token()+" ", n)
+	if BudgetFor(SideRight).TooLong(text) {
+		t.Fatalf("test setup: authored text is already too long (%d runes)", len(text))
+	}
+
+	if _, err := Sanitize(Config{Right: Corner{Messages: []Message{{Text: text}}}}); err == nil {
+		t.Error("expected a line whose expansion overflows the corner to be rejected")
+	}
+}

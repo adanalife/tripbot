@@ -4,7 +4,6 @@ import (
 	"regexp"
 	"strings"
 	"testing"
-	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/onscreens-server"
 	rot "github.com/adanalife/tripbot/pkg/rotator"
@@ -32,9 +31,9 @@ func rightRotator(cfg *c.OnscreensServerConfig) *rotator {
 	return newRightRotator(cfg, rot.DefaultConfig())
 }
 
-// currentPool is the pool the corner would draw from at now.
-func currentPool(r *rotator, now time.Time) []rot.Message {
-	return r.pool(r.copy.Load(), now)
+// currentPool is the pool the corner would draw from.
+func currentPool(r *rotator) []rot.Message {
+	return r.pool(r.copy.Load())
 }
 
 // TestPromoModeRotatorsAdvertiseNoCommands verifies that on every promoMode

@@ -25,7 +25,7 @@ func TestMessageAppliesTo(t *testing.T) {
 func TestDefaultsOmitTwitchOnlyOnYouTube(t *testing.T) {
 	pool := DefaultConfig().Left.Messages
 	for i := 0; i < 2000; i++ {
-		msg := Pick(PlatformYouTube, pool, nil)
+		msg := Pick(PlatformYouTube, pool, nil, nil)
 		if strings.Contains(msg, "!miles") || strings.Contains(msg, "!guess") {
 			t.Fatalf("YouTube left rotator surfaced a Twitch-only line: %q", msg)
 		}
@@ -38,7 +38,7 @@ func TestDefaultsSurfaceTwitchOnlyOnTwitch(t *testing.T) {
 	pool := DefaultConfig().Left.Messages
 	var sawMiles, sawGuess bool
 	for i := 0; i < 5000 && !(sawMiles && sawGuess); i++ {
-		switch Pick(PlatformTwitch, pool, nil) {
+		switch Pick(PlatformTwitch, pool, nil, nil) {
 		case "Earn miles for every minute you watch (`!miles`)":
 			sawMiles = true
 		case "Try and `!guess` what state we're in":
@@ -55,13 +55,13 @@ func TestPickEmptyWhenNoneApply(t *testing.T) {
 		{Text: "a", Platforms: []string{PlatformTwitch}},
 		{Text: "b", Platforms: []string{PlatformTwitch}},
 	}
-	if got := Pick(PlatformYouTube, twitchOnly, nil); got != "" {
+	if got := Pick(PlatformYouTube, twitchOnly, nil, nil); got != "" {
 		t.Errorf("expected empty string when no message applies, got %q", got)
 	}
 }
 
 func TestPickEmptyPool(t *testing.T) {
-	if got := Pick(PlatformTwitch, nil, nil); got != "" {
+	if got := Pick(PlatformTwitch, nil, nil, nil); got != "" {
 		t.Errorf("expected empty string for an empty pool, got %q", got)
 	}
 }
@@ -76,7 +76,7 @@ func TestPickRespectsWeight(t *testing.T) {
 	var common int
 	const n = 10000
 	for i := 0; i < n; i++ {
-		if Pick(PlatformTwitch, msgs, nil) == "common" {
+		if Pick(PlatformTwitch, msgs, nil, nil) == "common" {
 			common++
 		}
 	}
@@ -116,7 +116,7 @@ func TestPickExcludesSiblingCommand(t *testing.T) {
 	pool := DefaultConfig().Right.Messages
 	exclude := map[string]bool{"location": true}
 	for i := 0; i < 4000; i++ {
-		if got := Pick(PlatformTwitch, pool, exclude); got == "Try running `!location`" {
+		if got := Pick(PlatformTwitch, pool, exclude, nil); got == "Try running `!location`" {
 			t.Fatalf("right rotator surfaced !location while sibling shows it: %q", got)
 		}
 	}
@@ -127,7 +127,7 @@ func TestPickExcludesSiblingCommand(t *testing.T) {
 // (briefly duplicate) line rather than going blank.
 func TestPickRelaxesWhenExclusionEmptiesPool(t *testing.T) {
 	msgs := []Message{{Text: "Try running `!location`"}}
-	if got := Pick(PlatformTwitch, msgs, map[string]bool{"location": true}); got != "Try running `!location`" {
+	if got := Pick(PlatformTwitch, msgs, map[string]bool{"location": true}, nil); got != "Try running `!location`" {
 		t.Errorf("expected exclusion to relax to the only line, got %q", got)
 	}
 }
