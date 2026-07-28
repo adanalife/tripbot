@@ -4,12 +4,16 @@
 //
 // It is imported by both the publisher (cmd/tripbot, via
 // pkg/onscreens-client) and the subscriber (cmd/onscreens-server). To stay
-// safe as a shared package it is stdlib-only and side-effect-free: no
-// init(), no pkg/config import, env is always a parameter rather than read
-// from config here.
+// safe as a shared package it is side-effect-free: no init(), no pkg/config
+// import, env is always a parameter rather than read from config here. Its
+// only non-stdlib import is pkg/rotator, which holds to the same rules.
 package onscreensEvents
 
-import "time"
+import (
+	"time"
+
+	"github.com/adanalife/tripbot/pkg/rotator"
+)
 
 // Envelope is embedded in every onscreens command event. EmittedAt is an
 // RFC3339Nano UTC timestamp, useful for latency/debugging. Snake_case JSON
@@ -70,6 +74,28 @@ type LocationData struct {
 	Location string `json:"location"`
 	Date     string `json:"date"`
 }
+
+// RotatorConfig is the payload for the rotator.config subject: the full
+// corner-rotator copy for one platform, as edited in the admin console and
+// stored in Postgres. It replaces the receiving server's pools wholesale rather
+// than describing a delta — the console edits a whole list at a time, and a
+// whole-document swap can't half-apply.
+//
+// Left and Right each carry a full command-hint pool and a promoMode promo pool;
+// RareMessage is the left corner's easter egg ("" disables it). The live
+// location/date lines aren't here — onscreens-server generates those from the
+// playing clip and mixes them in at render time.
+type RotatorConfig struct {
+	Envelope
+	Left        rotator.Corner `json:"left"`
+	Right       rotator.Corner `json:"right"`
+	RareMessage string         `json:"rare_message,omitempty"`
+}
+
+// RotatorConfigStreamName is the JetStream stream holding the last rotator copy
+// published per platform — a last-value cache so a restarted onscreens-server
+// reads its copy straight back instead of falling to the compiled-in defaults.
+const RotatorConfigStreamName = "TRIPBOT_ONSCREENS_ROTATOR"
 
 // Command is the payload for events that carry no data beyond the
 // envelope: every hide, plus gps.show (the server supplies its content and

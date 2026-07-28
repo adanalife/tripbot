@@ -104,6 +104,11 @@ func (s *Server) Start(ctx context.Context) error {
 	// Best-effort: a no-op without NATS / JetStream.
 	s.RestoreMiddleText(ctx)
 
+	// Restore console-edited rotator copy from its JetStream last-value cache so
+	// a restart doesn't drop the corners back to the copy compiled into the
+	// binary. Best-effort: a no-op without NATS / JetStream.
+	s.RestoreRotatorCopy(ctx)
+
 	r := mux.NewRouter()
 
 	// healthcheck endpoints
