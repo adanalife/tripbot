@@ -1,0 +1,1 @@
+Collapsed the four per-platform gateway chat files (youtube, facebook, tiktok, instagram) into one `gateway_platforms.go` with two clients — one that posts, one that drops — plus a test pinning which platform gets which.
