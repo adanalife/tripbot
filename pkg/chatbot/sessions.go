@@ -2,6 +2,7 @@ package chatbot
 
 import (
 	"context"
+	"errors"
 
 	"github.com/adanalife/tripbot/pkg/users"
 )
@@ -36,7 +37,9 @@ type Sessions interface {
 	BonusMiles(u users.User) float32
 	// CorrectMiles applies a manual miles delta (may be negative) to a user,
 	// persisting immediately, and returns the new total. Backs !givemiles.
-	CorrectMiles(ctx context.Context, username string, delta float32) float32
+	// An error means nothing was persisted and the returned total is
+	// meaningless — don't report it, and don't record a correction event.
+	CorrectMiles(ctx context.Context, username string, delta float32) (float32, error)
 	// Shutdown logs out every in-memory session, flushing each user's
 	// state to the DB. Called by !shutdown before the process exits.
 	Shutdown(ctx context.Context)
@@ -96,9 +99,11 @@ func (r realSessions) BonusMiles(u users.User) float32 {
 	return r.s.BonusMiles(u)
 }
 
-func (r realSessions) CorrectMiles(ctx context.Context, username string, delta float32) float32 {
+func (r realSessions) CorrectMiles(ctx context.Context, username string, delta float32) (float32, error) {
 	if r.s == nil {
-		return 0
+		// The read-only guards above can fall back to a zero value, but a
+		// correction that never reached a session can't report a total.
+		return 0, errors.New("chatbot: sessions adapter has no session state")
 	}
 	return r.s.CorrectMiles(ctx, username, delta)
 }
