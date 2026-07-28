@@ -266,7 +266,7 @@ func (a *App) sunsetCmd(ctx context.Context, user *users.User, _ []string) {
 	vid := a.Video.Current()
 	if vid.Flagged {
 		a.Chat.Say("I couldn't figure out current GPS coords, using next closest...")
-		next, err := vid.Next(ctx)
+		next, err := vid.NextUnflagged(ctx)
 		if err != nil {
 			slog.ErrorContext(ctx, "error finding next unflagged video", "err", err)
 			a.Chat.Say("I couldn't figure out current GPS coords, sorry!")
@@ -283,7 +283,7 @@ func (a *App) weatherCmd(ctx context.Context, user *users.User, _ []string) {
 	vid := a.Video.Current()
 	if vid.Flagged {
 		a.Chat.Say("I couldn't figure out current GPS coords, using next closest...")
-		next, err := vid.Next(ctx)
+		next, err := vid.NextUnflagged(ctx)
 		if err != nil {
 			slog.ErrorContext(ctx, "error finding next unflagged video", "err", err)
 			a.Chat.Say("I couldn't figure out current GPS coords, sorry!")
@@ -308,7 +308,7 @@ func (a *App) locationCmd(ctx context.Context, user *users.User, _ []string) {
 		a.Chat.Say("I couldn't figure out current GPS coords, using next closest...")
 		//TODO: write something like vid.FindClosest() that
 		// chooses whether or not to use Next() vs Prev()
-		next, err := vid.Next(ctx)
+		next, err := vid.NextUnflagged(ctx)
 		if err != nil {
 			slog.ErrorContext(ctx, "error finding next unflagged video", "err", err)
 			a.Chat.Say("I couldn't figure out current GPS coords, sorry!")
@@ -418,7 +418,7 @@ func (a *App) timeCmd(ctx context.Context, user *users.User, _ []string) {
 	vid := a.Video.Current()
 	if vid.Flagged {
 		var next video.Video
-		next, err = vid.Next(ctx)
+		next, err = vid.NextUnflagged(ctx)
 		if err == nil {
 			lat, lng, err = next.Location()
 		}
@@ -441,7 +441,7 @@ func (a *App) dateCmd(ctx context.Context, user *users.User, _ []string) {
 	vid := a.Video.Current()
 	if vid.Flagged {
 		var next video.Video
-		next, err = vid.Next(ctx)
+		next, err = vid.NextUnflagged(ctx)
 		if err == nil {
 			lat, lng, err = next.Location()
 		}
@@ -495,7 +495,7 @@ func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 	vid := a.Video.Current()
 	if vid.Flagged {
 		a.Chat.Say("I couldn't figure out current GPS coords, using next closest...")
-		next, err := vid.Next(ctx)
+		next, err := vid.NextUnflagged(ctx)
 		if err != nil {
 			slog.ErrorContext(ctx, "error finding next unflagged video", "err", err)
 			a.Chat.Say("I couldn't figure out current GPS coords, sorry!")
@@ -522,7 +522,7 @@ func (a *App) stateCmd(ctx context.Context, user *users.User, _ []string) {
 	vid := a.Video.Current()
 	if vid.Flagged {
 		a.Chat.Say("I couldn't figure out current GPS coords, using next closest...")
-		next, err := vid.Next(ctx)
+		next, err := vid.NextUnflagged(ctx)
 		if err != nil {
 			slog.ErrorContext(ctx, "error finding next unflagged video", "err", err)
 			a.Chat.Say("I couldn't figure out current GPS coords, sorry!")
