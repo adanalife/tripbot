@@ -36,16 +36,36 @@ func (s *Server) SetRotators(store RotatorStore, pub RotatorPublisher) {
 
 // rotatorConfigDTO is the JSON shape the console renders and submits.
 //
-// Budgets rides along on reads so the editor can warn about copy that won't fit
-// without hardcoding the corner widths — it measures candidate text in the
-// overlay's own font (FontFamilyCSS) against FitWidthPx at MinFontSizePx. Stored
-// reports whether this is saved copy or a prefill from the defaults compiled into
-// onscreens-server, so the UI can say which.
+// Budgets rides along so the editor can warn about copy that won't fit without
+// hardcoding the corner widths — it measures candidate text in the overlay's own
+// font (FontFamilyCSS) against FitWidthPx at MinFontSizePx.
+//
+// Defaults is the copy compiled into onscreens-server for this platform, sent so
+// the editor can mark each line as shipped-with-the-product or authored here.
+// Provenance is derived by comparing against this rather than recorded on the
+// message, deliberately: it's a property of "how does this line compare to the
+// binary", not of the line itself, so it has no business in the stored document
+// or in what goes to onscreens-server.
+//
+// Stored reports whether Config is saved copy or a prefill of those defaults.
 type rotatorConfigDTO struct {
 	Platform string       `json:"platform"`
 	Stored   bool         `json:"stored"`
 	Config   rot.Config   `json:"config"`
+	Defaults rot.Config   `json:"defaults"`
 	Budgets  []rot.Budget `json:"budgets"`
+}
+
+// newRotatorConfigDTO builds the response every rotator endpoint returns, so the
+// three of them can't drift on which context the editor gets.
+func newRotatorConfigDTO(platform string, stored bool, cfg rot.Config) rotatorConfigDTO {
+	return rotatorConfigDTO{
+		Platform: platform,
+		Stored:   stored,
+		Config:   cfg,
+		Defaults: rot.DefaultConfigFor(platform),
+		Budgets:  rot.Budgets(),
+	}
 }
 
 // knownPlatform guards the platform path segment. The platform is a primary key
@@ -91,12 +111,7 @@ func (s *Server) rotatorsGetHandler(w http.ResponseWriter, r *http.Request) {
 			"err", err, "platform", platform)
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(rotatorConfigDTO{
-		Platform: platform,
-		Stored:   stored,
-		Config:   cfg,
-		Budgets:  rot.Budgets(),
-	})
+	_ = json.NewEncoder(w).Encode(newRotatorConfigDTO(platform, stored, cfg))
 }
 
 // rotatorsPutHandler saves one platform's rotator copy and pushes it live.
@@ -145,12 +160,7 @@ func (s *Server) rotatorsPutHandler(w http.ResponseWriter, r *http.Request) {
 		"left_promo", len(cfg.Left.PromoMessages), "right_promo", len(cfg.Right.PromoMessages))
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(rotatorConfigDTO{
-		Platform: platform,
-		Stored:   true,
-		Config:   cfg,
-		Budgets:  rot.Budgets(),
-	})
+	_ = json.NewEncoder(w).Encode(newRotatorConfigDTO(platform, true, cfg))
 }
 
 // rotatorsResetHandler drops a platform's stored copy, reverting it to the
@@ -177,10 +187,5 @@ func (s *Server) rotatorsResetHandler(w http.ResponseWriter, r *http.Request) {
 	slog.InfoContext(r.Context(), "rotator config reset to defaults via console", "platform", platform)
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(rotatorConfigDTO{
-		Platform: platform,
-		Stored:   false,
-		Config:   cfg,
-		Budgets:  rot.Budgets(),
-	})
+	_ = json.NewEncoder(w).Encode(newRotatorConfigDTO(platform, false, cfg))
 }

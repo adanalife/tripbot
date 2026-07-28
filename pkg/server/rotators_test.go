@@ -303,3 +303,71 @@ func TestRotatorsGetServesDefaultsOnStoreError(t *testing.T) {
 		t.Error("expected defaults to be served despite the read error")
 	}
 }
+
+// Every response carries the compiled-in defaults for the platform, which is how
+// the editor tells a shipped line from one authored in the console. Without it
+// there's no provenance to show, since the stored document doesn't record it.
+func TestRotatorsResponsesCarryDefaults(t *testing.T) {
+	store, _, h := rotatorTestServer(t)
+	store.saved["twitch"] = rot.Config{Left: rot.Corner{Messages: []rot.Message{{Text: "mine"}}}}
+
+	for _, tc := range []struct{ method, path, body string }{
+		{http.MethodGet, "/api/rotators/twitch", ""},
+		{http.MethodPut, "/api/rotators/twitch", `{"left":{"messages":[{"text":"mine"}]}}`},
+		{http.MethodDelete, "/api/rotators/twitch", ""},
+	} {
+		t.Run(tc.method, func(t *testing.T) {
+			w := doJSON(t, h, tc.method, tc.path, tc.body)
+			if w.Code != http.StatusOK {
+				t.Fatalf("status = %d: %s", w.Code, w.Body)
+			}
+			var got rotatorConfigDTO
+			if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			if len(got.Defaults.Left.Messages) == 0 {
+				t.Error("response carries no default left-corner copy")
+			}
+			// Defaults are the platform-filtered set, so provenance can't be
+			// judged against copy that would never render here.
+			for _, m := range got.Defaults.Left.Messages {
+				if len(m.Platforms) != 0 {
+					t.Errorf("defaults kept platform scoping on %q", m.Text)
+				}
+			}
+		})
+	}
+}
+
+// The defaults are per platform, so a YouTube editor judges provenance against
+// YouTube's shipped copy rather than Twitch's.
+func TestRotatorsDefaultsArePlatformSpecific(t *testing.T) {
+	_, _, h := rotatorTestServer(t)
+
+	texts := func(platform string) map[string]bool {
+		w := doJSON(t, h, http.MethodGet, "/api/rotators/"+platform, "")
+		var got rotatorConfigDTO
+		if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		out := map[string]bool{}
+		for _, m := range got.Defaults.Left.Messages {
+			out[m.Text] = true
+		}
+		return out
+	}
+
+	twitch, youtube := texts("twitch"), texts("youtube")
+	var twitchOnly string
+	for text := range twitch {
+		if strings.Contains(text, "!miles") {
+			twitchOnly = text
+		}
+	}
+	if twitchOnly == "" {
+		t.Fatal("expected a Twitch-only default line to compare against")
+	}
+	if youtube[twitchOnly] {
+		t.Errorf("YouTube defaults included the Twitch-only line %q", twitchOnly)
+	}
+}
