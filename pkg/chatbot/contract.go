@@ -15,10 +15,9 @@ import (
 // The projection is generated rather than hand-declared — unlike the wire
 // schemas in pkg/contract, which describe a handful of stable fields, this is
 // 45 rows of data that would rot the moment someone adds a command and forgets
-// the second copy. pkg/contract still never imports this package (a shared
-// package pulling in the chatbot is the boundary rule from the
-// package-boundary-init-discipline ADR); the generator is a main, so the
-// import lives there and no binary inherits it.
+// the second copy. pkg/contract still never imports this package — a shared
+// package must not pull in the chatbot — so the generator is a main and no
+// binary inherits the import.
 
 // CommandSpec is one chat command as a consumer outside this binary sees it:
 // how to invoke it, who may, and where it answers. Handlers and help copy are

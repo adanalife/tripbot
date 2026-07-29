@@ -66,8 +66,8 @@ func (cl *API) SetCredentials(clientID, clientSecret string) {
 
 // Client returns the shared helix client, lazy-initializing on first call.
 // First-call side effect: requests an App Access Token (Client Credentials).
-// The command-time Helix query surface moved to the platform-gateway; this
-// client remains as the chatbot's boot-time Twitch-reachability probe.
+// The command-time Helix query surface belongs to the platform-gateway; this
+// client is only the chatbot's boot-time Twitch-reachability probe.
 func (cl *API) Client() (*helix.Client, error) {
 	if cl.currentTwitchClient != nil {
 		return cl.currentTwitchClient, nil

@@ -32,8 +32,8 @@ func TestIRCAuthToken_EmptyWhenUnloaded(t *testing.T) {
 	}
 }
 
-// TestNew_IsolatedState confirms the new-shape payoff: two constructed clients
-// don't share token state the way the old package globals did.
+// TestNew_IsolatedState confirms two constructed clients don't share token
+// state — each *API carries its own.
 func TestNew_IsolatedState(t *testing.T) {
 	a := clientWithTokens(oauthtokens.Token{AccessToken: "a-tok"}, oauthtokens.Token{})
 	b := New()

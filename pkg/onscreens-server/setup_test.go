@@ -22,9 +22,8 @@ func init() {
 	terrors.Initialize(*testConf, "test")
 }
 
-// newTestServer constructs a fresh *Server for the calling test, giving
-// each test real state isolation rather than the cross-test sharing the
-// old sync.Once helper provided.
+// newTestServer constructs a fresh *Server for the calling test, so no state
+// is shared across tests.
 //
 // New() spawns the seven onscreens' background goroutines (rotator loops +
 // expiry sweepers). They have no stop hook today, so each test leaks its

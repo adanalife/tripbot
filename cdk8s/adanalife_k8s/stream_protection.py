@@ -4,11 +4,11 @@ The app-namespace ResourceQuota that caps what co-tenant envs can request in
 aggregate. Emitted into the per-env tripbot-identity unit (charts.IdentityChart)
 alongside the identity Secrets.
 
-The scheduling priority tiers (prod-stream / prod-support) that used to live here
-are owned by infra now (adanalife_k8s/priority.py, delivered by the prod-1
-SupportingChart) — cluster-wide policy referenced by name across every app repo.
-This module keeps only the namespace-scoped quota half; app pods still set
-priorityClassName=env.priority_class, referencing the infra-owned class.
+The scheduling priority tiers (prod-stream / prod-support) are owned by infra
+(adanalife_k8s/priority.py, delivered by the prod-1 SupportingChart) —
+cluster-wide policy referenced by name across every app repo. This module holds
+only the namespace-scoped quota; app pods set priorityClassName=
+env.priority_class, referencing the infra-owned class.
 """
 
 from __future__ import annotations

@@ -3,10 +3,11 @@ in dist/ and is applied independently — one per (component, platform) for the 
 (emit_app_charts), one per env for the identity Secrets + stream protection
 (IdentityChart), plus the one-shot Job charts (emit_job_charts).
 
-This is the subset of infra/cdk8s's charts.py that moved to the tripbot repo: the
-two images built from this repo (tripbot, onscreens) and tripbot's identity
-Secrets. OBS is built + deployed from the standalone adanalife/obs repo (its own
-cdk8s); dashcam playback from the standalone adanalife/playout repo. The STATEFUL + shared-platform units stay in infra/cdk8s:
+This repo owns the deploy units for what it builds: the two images (tripbot,
+onscreens) and tripbot's identity Secrets. OBS is built + deployed from the
+standalone adanalife/obs repo (its own cdk8s); dashcam playback from the
+standalone adanalife/playout repo. The STATEFUL + shared-platform units live in
+infra/cdk8s:
 postgres (DataChart), the ESO SecretStore, the shared observability Secrets +
 cert-manager Issuers (SupportingChart), the dashcam PV/PVC, and the Argo config.
 Apps reference the materialized Secret names emitted by those infra units by name
@@ -86,8 +87,8 @@ def emit_job_charts(scope: Construct, env: EnvConfig) -> None:
     """tripbot one-shot Jobs — one Chart each, so every Job synthesizes to its own
     `dist/<env>-job-<name>.k8s.yaml` and a deploy task can `kubectl apply` exactly
     one. NOT auto-run on a normal apply (running a seed Job on every reconcile
-    would be wrong) — invoked via `task tripbot:<env>:db:seed`. Twitch OAuth
-    bootstrap moved to the platform-gateway, so only the DB seed Job remains."""
+    would be wrong) — invoked via `task tripbot:<env>:db:seed`. The DB seed is
+    the only one: Twitch OAuth bootstrap belongs to the platform-gateway."""
     from adanalife_k8s.constructs import tripbot as tb
 
     ns = env.namespace or None

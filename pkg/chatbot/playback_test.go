@@ -254,10 +254,9 @@ func TestGuessCmd_CorrectGuess_RefreshesVideoAfterTimewarp(t *testing.T) {
 
 // --- jumpCmd ---
 //
-// jumpCmd was previously untestable because it called the package-level
-// video.FindRandomByState directly (DB-backed). With Video.FindRandomByState
-// on the injectable Video interface, we can stage results and exercise all
-// three branches: success, no-footage-for-state, and bad input.
+// jumpCmd reaches footage through the injectable Video interface, so these
+// tests stage FindRandomByState results and exercise all three branches:
+// success, no-footage-for-state, and bad input.
 
 func TestJumpCmd_AdminPlaysRandomFromState(t *testing.T) {
 	skipIfDarwin(t)

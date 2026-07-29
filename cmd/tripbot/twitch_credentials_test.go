@@ -7,11 +7,10 @@ import (
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 )
 
-// The credential requirement used to live in pkg/twitch's init(), so every
-// platform's instance died without Twitch credentials it would never use.
-// It's now scoped to the twitch bring-up — which means this check is the only
-// thing standing between a credential-less twitch instance and a helix client
-// it can't build.
+// The credential requirement is scoped to the twitch bring-up rather than
+// enforced package-wide, so a non-Twitch instance boots without credentials it
+// would never use. That makes this check the only thing standing between a
+// credential-less twitch instance and a helix client it can't build.
 func TestMissingTwitchCredentials(t *testing.T) {
 	tests := []struct {
 		name string

@@ -7,7 +7,7 @@
 // stores edited copy for the admin console) import it. Pulling any
 // pkg/config/<binary> or pkg/database import in here would drag DB/config init
 // into onscreens-server's binary — the failure mode behind the v2.17.0
-// vlc-server outage. See the package-boundary-init-discipline ADR; the guard is
+// vlc-server outage. The guard is
 // `go list -deps ./cmd/onscreens-server | grep tripbot/pkg/`.
 package rotator
 

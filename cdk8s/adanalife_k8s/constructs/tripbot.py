@@ -224,8 +224,8 @@ class Tripbot(Construct):
         # just envFroms them by name below.
 
         # --- envFrom: config, DB creds, shared OTLP/Sentry, then app Secrets ---
-        # Order matches the legacy render exactly (later entries win on key
-        # collision). The discord and observability (Sentry/OTLP) Secrets are
+        # Order is load-bearing: later entries win on key collision.
+        # The discord and observability (Sentry/OTLP) Secrets are
         # optional so the bot boots without them — observability gates itself
         # off when the env vars are absent, and the pod isn't hostage to
         # ExternalSecret sync order. Boot-required Secrets (DB creds, maps, and
@@ -638,8 +638,8 @@ def _emit_app_external_secrets(scope, ns, labels):
 # They are deliberately separate so a routine app apply never fires a one-shot;
 # the deploy tasks emit + apply them on demand. `envFrom` the PRIMARY platform's
 # tripbot ConfigMap by name (config_map_name(env.platforms[0])) — identity-level
-# (one DB), not per-platform. Only the DB seed Job remains: Twitch OAuth
-# bootstrap moved to the platform-gateway, so the auth-bootstrap Jobs are gone.
+# (one DB), not per-platform. The DB seed is the only one: Twitch OAuth
+# bootstrap belongs to the platform-gateway.
 # ---------------------------------------------------------------------------
 
 
