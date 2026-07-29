@@ -9,6 +9,12 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v4.14.2] — 2026-07-29
+
+### Fixes
+
+- Reading the live bed off OBS at startup now builds the album play order too, positioned on the track already on air. A tripbot that started while OBS was already on the album bed had nothing to advance to, so the stream went silent after that one track. ([#1258](https://github.com/adanalife/tripbot/pull/1258))
+
 ## [v4.14.1] — 2026-07-29
 
 ### Fixes
