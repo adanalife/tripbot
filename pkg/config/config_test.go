@@ -25,7 +25,7 @@ func TestResolveFromRepoRootFindsGoMod(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	chdir(t, nested)
+	t.Chdir(nested)
 
 	got := resolveFromRepoRoot(".env.testing")
 	want := filepath.Join(root, ".env.testing")
@@ -37,7 +37,7 @@ func TestResolveFromRepoRootFindsGoMod(t *testing.T) {
 // When no go.mod exists above cwd (e.g. a deployed binary), the bare relative
 // path is returned so godotenv.Load no-ops on the missing file as before.
 func TestResolveFromRepoRootFallsBackWithoutGoMod(t *testing.T) {
-	chdir(t, t.TempDir())
+	t.Chdir(t.TempDir())
 
 	if got := resolveFromRepoRoot(".env.production"); got != ".env.production" {
 		t.Errorf("resolveFromRepoRoot fallback = %q, want bare %q", got, ".env.production")
@@ -49,10 +49,14 @@ func TestResolveFromRepoRootFallsBackWithoutGoMod(t *testing.T) {
 // `go test ./pkg/...` fails on the absent .env.development + missing required
 // config keys.
 func TestSetEnvironmentDefaultsToTestingUnderGoTest(t *testing.T) {
+	// SetEnvironment branches on os.LookupEnv's ok, so this test needs ENV
+	// genuinely absent — t.Setenv can only set it to a value (including ""),
+	// which takes the other branch. Hence the manual save/restore.
 	orig, had := os.LookupEnv("ENV")
 	os.Unsetenv("ENV")
 	t.Cleanup(func() {
 		if had {
+			//nolint:usetesting // t.Setenv is unusable from a Cleanup, and "" != unset
 			os.Setenv("ENV", orig)
 		} else {
 			os.Unsetenv("ENV")
@@ -64,19 +68,4 @@ func TestSetEnvironmentDefaultsToTestingUnderGoTest(t *testing.T) {
 	if got := os.Getenv("ENV"); got != "testing" {
 		t.Errorf("SetEnvironment() with ENV unset under go test: ENV=%q, want %q", got, "testing")
 	}
-}
-
-// chdir switches into dir for the duration of the test, restoring the original
-// working directory afterward. t.TempDir()s used here have no go.mod ancestor
-// outside themselves, so the resolver's walk terminates at the filesystem root.
-func chdir(t *testing.T, dir string) {
-	t.Helper()
-	orig, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Chdir(dir); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Chdir(orig) })
 }
