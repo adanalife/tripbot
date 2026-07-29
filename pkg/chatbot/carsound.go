@@ -8,6 +8,7 @@ import (
 
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"github.com/adanalife/tripbot/pkg/obs"
+	"github.com/adanalife/tripbot/pkg/obs/beds"
 	"github.com/adanalife/tripbot/pkg/users"
 )
 
@@ -31,9 +32,9 @@ func (realOBS) RefreshBrowserSources(ctx context.Context) (int, error) {
 }
 
 // carHumInputName is the OBS source name of the background-audio ffmpeg_source
-// that !carsound repoints. Cross-repo contract: must match the source "name" in
-// the OBS scene config (config/Tripbot.json.tmpl in the adanalife/obs repo).
-const carHumInputName = "Car Hum"
+// that !carsound repoints. Every bed plays through this one source, so picking
+// a drone here also switches the stream off whatever else was playing.
+const carHumInputName = beds.InputName
 
 // carSoundDir is where the OBS image's `carhum` build stage drops the rendered
 // variant FLACs, as seen from inside the OBS container (the path is resolved by
@@ -84,8 +85,7 @@ func findCarSound(name string) int {
 	return -1
 }
 
-// carSoundCmd is the public !carsound command (YouTube only — Twitch keeps the
-// SomaFM source, so the "Car Hum" input doesn't exist there). With no args it
+// carSoundCmd is the public !carsound command. With no args it
 // reports what's playing, which is both the audience-facing "what's this sound"
 // answer and how Dana learns which voicings viewers reach for. `next` cycles,
 // `<name>` jumps to a specific one, `list` shows the options.

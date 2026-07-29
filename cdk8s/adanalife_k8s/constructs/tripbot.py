@@ -50,6 +50,11 @@ LOCAL_DB_SECRET = "tripbot-secret"  # secret.env-built DB creds (laptop)
 # bot identity, not any one platform stack.
 NAME_IDENTITY = "tripbot"
 
+# Where the read-only `obs-music` album share is mounted. Cross-repo contract:
+# the obs repo mounts the same claim at the same path, and pkg/obs/beds hands
+# OBS the track paths it reads here — so the two must agree exactly.
+MUSIC_MOUNT_PATH = "/opt/tripbot/assets/music"
+
 # Small but explicit requests for the helper containers (migrate init, one-shot
 # Job containers). Namespaces under a ResourceQuota that enforces requests.*
 # (stage-1's app-quota) reject any pod whose containers omit requests for the
@@ -347,6 +352,33 @@ class Tripbot(Construct):
                 },
                 limits={"memory": k8s.Quantity.from_string("1Gi")},
             ),
+            # The album background-audio bed: tripbot lists the share to shuffle
+            # and advance tracks, and OBS mounts the same claim at the same path,
+            # so a path picked here is valid over there. Read-only on both sides.
+            volume_mounts=(
+                [
+                    k8s.VolumeMount(
+                        name="music",
+                        mount_path=MUSIC_MOUNT_PATH,
+                        read_only=True,
+                    )
+                ]
+                if env.music_share
+                else None
+            ),
+        )
+
+        music_volumes = (
+            [
+                k8s.Volume(
+                    name="music",
+                    persistent_volume_claim=k8s.PersistentVolumeClaimVolumeSource(
+                        claim_name="obs-music", read_only=True
+                    ),
+                )
+            ]
+            if env.music_share
+            else None
         )
 
         k8s.KubeDeployment(
@@ -385,6 +417,7 @@ class Tripbot(Construct):
                         ),
                         init_containers=[migrate],
                         containers=[container],
+                        volumes=music_volumes,
                     ),
                 ),
             ),

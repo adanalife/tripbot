@@ -27,6 +27,14 @@ func (s *Server) SetFlags(fc feature.FlagClient) {
 	s.flags = fc
 }
 
+// SetBeds injects the background-audio bed store backing /api/audio. Called
+// from cmd/tripbot before Start runs the HTTP server (so there's no race on
+// the field). Left nil on a tripbot with no OBS pairing — /api/audio then
+// reports ok=false and the console shows the panel unavailable.
+func (s *Server) SetBeds(b BedStore) {
+	s.beds = b
+}
+
 // startedAt is when the process began; /version reports it so callers can derive
 // uptime. (The bot's chat-connection state is surfaced separately via the
 // tripbot_twitch_connected gauge, set directly by cmd/tripbot.)

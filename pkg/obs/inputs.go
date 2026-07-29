@@ -128,20 +128,44 @@ func SetBackgroundAudioFile(ctx context.Context, inputName, file string) error {
 // is_local_file=true and pointing local_file at the given path. The overlay
 // merge leaves the source's `input` (network URL) field untouched, so
 // SetInputNetworkMode can flip straight back to it without re-supplying the
-// URL. Used by the audio-fallback watchdog to swap the SomaFM source onto the
-// local Car Hum bed when SomaFM is unreachable. file must exist inside the OBS
-// container.
+// URL. Used by the audio-fallback watchdog to swap the background-audio source
+// onto the local Car Hum bed when SomaFM is unreachable, and by the bed store
+// to play album tracks. file must exist inside the OBS container.
 //
-// looping=true is essential: the SomaFM source ships with looping unset (a
-// radio stream doesn't loop), so without forcing it on, the fallback FLAC would
-// play exactly once and then go silent — re-creating the dead air we're trying
-// to avoid. (Confirmed on stage 2026-06-24.)
-func SetInputLocalFileMode(ctx context.Context, inputName, file string) error {
+// loop must be true for a bed that has to stay audible on its own: the SomaFM
+// source ships with looping unset (a radio stream doesn't loop), so without
+// forcing it on, a fallback FLAC would play exactly once and then go silent —
+// re-creating the dead air we're trying to avoid. (Confirmed on stage
+// 2026-06-24.) Album tracks pass false, because the whole point is that OBS
+// reports the media ended so the next track can be queued.
+func SetInputLocalFileMode(ctx context.Context, inputName, file string, loop bool) error {
 	return setInputSettings(ctx, inputName, map[string]any{
 		"is_local_file": true,
 		"local_file":    file,
-		"looping":       true,
+		"looping":       loop,
 	})
+}
+
+// GetInputSettings reads an input's current settings over the WebSocket. Used
+// at startup to work out which background-audio bed the OBS container booted
+// on, so the console reports what's actually playing rather than a guess.
+func GetInputSettings(ctx context.Context, inputName string) (map[string]any, error) {
+	client, err := dial(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err := client.Disconnect(); err != nil {
+			slog.WarnContext(ctx, "obs disconnect", "err", err)
+		}
+	}()
+	resp, err := client.Inputs.GetInputSettings(
+		inputs.NewGetInputSettingsParams().WithInputName(inputName),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return resp.InputSettings, nil
 }
 
 // SetInputNetworkMode flips an ffmpeg_source back to its network stream by

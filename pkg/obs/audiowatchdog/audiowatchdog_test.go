@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/obs"
+	"github.com/adanalife/tripbot/pkg/obs/beds"
 )
 
 // tick is one scripted evaluation: what OBS reports for the source's media
@@ -33,13 +34,24 @@ type fakeDeps struct {
 
 	toFallback atomic.Int32
 	toSomaFM   atomic.Int32
+	advances   atomic.Int32
+
+	// bed is the selected background-audio bed; the SomaFM outage machinery
+	// only runs while it's SomaFM.
+	bed beds.Bed
 
 	doneCh   chan struct{}
 	doneOnce sync.Once
 }
 
 func newFakeDeps(script []tick) *fakeDeps {
-	return &fakeDeps{script: script, doneCh: make(chan struct{})}
+	return &fakeDeps{script: script, bed: beds.SomaFM, doneCh: make(chan struct{})}
+}
+
+// onBed returns the same fake scripted to a different selected bed.
+func (f *fakeDeps) onBed(b beds.Bed) *fakeDeps {
+	f.bed = b
+	return f
 }
 
 func (f *fakeDeps) deps() Deps {
@@ -74,6 +86,11 @@ func (f *fakeDeps) deps() Deps {
 		},
 		SwapToSomaFM: func(context.Context) error {
 			f.toSomaFM.Add(1)
+			return nil
+		},
+		ActiveBed: func() beds.Bed { return f.bed },
+		AdvanceAlbum: func(context.Context) error {
+			f.advances.Add(1)
 			return nil
 		},
 	}
@@ -168,5 +185,43 @@ func TestWatch_CooldownSuppressesSwapBack(t *testing.T) {
 	}
 	if got := deps.toSomaFM.Load(); got != 0 {
 		t.Fatalf("to_somafm swaps: want 0 (cooldown suppresses), got %d", got)
+	}
+}
+
+func TestWatch_AdvancesAlbumWhenTrackEnds(t *testing.T) {
+	// Album tracks play unlooped, so OBS reports ENDED between them — each one
+	// is the cue to queue the next track.
+	deps := newFakeDeps([]tick{playing, ended, playing, ended, playing}).onBed(beds.Album)
+	runUntilExhausted(t, deps, cfg(3, 4, time.Minute))
+	if got := deps.advances.Load(); got != 2 {
+		t.Fatalf("album advances: want 2, got %d", got)
+	}
+}
+
+func TestWatch_LocalBedNeverSwapsToFallback(t *testing.T) {
+	// A run of down ticks that would trip the SomaFM fallback. On a local bed
+	// there's nothing to fall back to — swapping would stomp the operator's
+	// choice of bed — so the outage machinery must stay out of it.
+	for _, bed := range []beds.Bed{beds.CarHum, beds.Album} {
+		t.Run(string(bed), func(t *testing.T) {
+			deps := newFakeDeps([]tick{ended, ended, ended, ended, ended}).onBed(bed)
+			runUntilExhausted(t, deps, cfg(3, 4, 0))
+			if got := deps.toFallback.Load(); got != 0 {
+				t.Fatalf("to_fallback swaps on %s: want 0, got %d", bed, got)
+			}
+			if got := deps.toSomaFM.Load(); got != 0 {
+				t.Fatalf("to_somafm swaps on %s: want 0, got %d", bed, got)
+			}
+		})
+	}
+}
+
+func TestWatch_CarHumBedDoesNotAdvanceAlbum(t *testing.T) {
+	// The car-hum drone loops forever; an ENDED tick there is a wedge, not a
+	// track boundary, and must not walk an album playlist that isn't playing.
+	deps := newFakeDeps([]tick{ended, ended, ended}).onBed(beds.CarHum)
+	runUntilExhausted(t, deps, cfg(3, 4, time.Minute))
+	if got := deps.advances.Load(); got != 0 {
+		t.Fatalf("album advances on carhum: want 0, got %d", got)
 	}
 }
