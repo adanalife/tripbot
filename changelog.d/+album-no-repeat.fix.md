@@ -1,0 +1,1 @@
+The album bed no longer replays the track it just finished. Each wrap of the play order reshuffles it, and a plain shuffle can deal the finished track straight back to the front — a back-to-back repeat, which is the one ordering a listener notices.

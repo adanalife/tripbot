@@ -305,3 +305,25 @@ func TestDetect_KeepsTheSeedWhenOBSIsUnreachable(t *testing.T) {
 		t.Fatalf("want the seed bed retained, got %s", bed)
 	}
 }
+
+// Wrapping the play order reshuffles it, and a plain shuffle can deal the track
+// that just finished straight back to the front — an immediate repeat is the
+// one ordering a listener notices. Walk several full wraps so the reshuffle is
+// exercised many times rather than once.
+func TestAdvance_NeverRepeatsATrackAcrossTheWrap(t *testing.T) {
+	o := &fakeOBS{}
+	s := NewStore(o, CarHum, albumDir(t, 3), "twitch")
+	if err := s.Set(context.Background(), Album); err != nil {
+		t.Fatal(err)
+	}
+	prev := o.file
+	for i := 0; i < 60; i++ {
+		if err := s.Advance(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		if o.file == prev {
+			t.Fatalf("advance %d replayed %q back-to-back", i, filepath.Base(o.file))
+		}
+		prev = o.file
+	}
+}
