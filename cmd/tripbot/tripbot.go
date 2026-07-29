@@ -603,8 +603,8 @@ func (t *Tripbot) startTwitchWatchdog(ctx context.Context) {
 // startTikTokWatchdog recovers a reaped LIVE room. TikTok's failure is one
 // layer above Twitch's: the Streamlabs-minted room is gone once a push gap
 // outlives the relay target's idleTimeout, and reconnecting OBS's push into a
-// dead room changes nothing — the room has to be re-minted through the
-// gateway, which binds a fresh portrait relay target for the push to land on.
+// dead room changes nothing — the room has to be re-minted through the gateway,
+// which binds a fresh portrait relay target, and the push re-opened onto it.
 //
 // Slower to fire and slower to repeat than the Twitch watchdog: a re-mint
 // costs a brand-new LIVE (viewers have to rejoin), so it waits out five
@@ -624,7 +624,9 @@ func (t *Tripbot) startTikTokWatchdog(ctx context.Context) {
 	deps.ChannelLive = func(ctx context.Context) (bool, error) {
 		return gw.IsLive(ctx, t.cfg.ChannelName)
 	}
-	deps.Restart = func(ctx context.Context) error { return remintTikTokEgress(ctx, gw, tiktokRemintGap) }
+	deps.Restart = func(ctx context.Context) error {
+		return remintTikTokEgress(ctx, gw, tiktokRemintGap, watchdog.RestartOBSOutput)
+	}
 	go watchdog.WatchSilentDisconnect(ctx, deps, 60*time.Second, 5, 30*time.Minute)
 }
 
@@ -632,11 +634,17 @@ func (t *Tripbot) startTikTokWatchdog(ctx context.Context) {
 // its replacement. Mirrors the settle pause in the OBS restart next door.
 const tiktokRemintGap = 5 * time.Second
 
-// remintTikTokEgress stops the gateway's egress and starts a fresh one,
-// pausing for gap in between. Push-after-bind is the ordering that works: OBS
-// keeps pushing throughout and reconnects onto the new target within a second
-// or so of the start.
-func remintTikTokEgress(ctx context.Context, gw *gateway.Client, gap time.Duration) error {
+// remintTikTokEgress stops the gateway's egress, starts a fresh one after gap,
+// then restarts the OBS output so the push lands on the target the new room
+// bound.
+//
+// The bounce is the load-bearing step. A push already in flight is not moved
+// onto a target that binds under it: the relay keeps accepting frames and
+// forwards them at the target that was unbound, so the fresh room sits at
+// "LIVE will begin shortly" with no source while the gateway reports it live —
+// a state nothing else detects (2026-07-29). Only an RTMP session opened after
+// the bind reaches the new room.
+func remintTikTokEgress(ctx context.Context, gw *gateway.Client, gap time.Duration, restartOBS func(context.Context) error) error {
 	if err := gw.StopEgress(ctx); err != nil {
 		return err
 	}
@@ -645,7 +653,10 @@ func remintTikTokEgress(ctx context.Context, gw *gateway.Client, gap time.Durati
 		return ctx.Err()
 	case <-time.After(gap):
 	}
-	return gw.StartEgress(ctx)
+	if err := gw.StartEgress(ctx); err != nil {
+		return err
+	}
+	return restartOBS(ctx)
 }
 
 // startBackgroundAudio constructs this instance's bed store and hands it to the
