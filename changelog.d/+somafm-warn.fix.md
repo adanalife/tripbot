@@ -1,0 +1,1 @@
+Log the audio watchdog swapping to the local bed at warn instead of error. SomaFM going away is an upstream outage the watchdog handles by design, so the swap is a recovery, not a fault; a swap that *fails* is still an error.
