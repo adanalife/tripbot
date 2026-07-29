@@ -9,6 +9,13 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v4.14.1] — 2026-07-29
+
+### Fixes
+
+- The silent-disconnect watchdog retires its restart cooldown once a recovery has held, so a second, unrelated outage recovers on detection instead of waiting out the timer. TikTok's 30m cooldown had stranded a banned LIVE for five minutes past detection. ([#1255](https://github.com/adanalife/tripbot/pull/1255))
+- A TikTok re-mint now restarts the OBS output after binding the new relay target. A push already in flight kept feeding the unbound target, leaving the fresh LIVE with no source while the gateway reported it live. ([#1257](https://github.com/adanalife/tripbot/pull/1257))
+
 ## [v4.14.0] — 2026-07-29
 
 ### Chatbot
