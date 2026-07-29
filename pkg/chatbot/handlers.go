@@ -279,7 +279,9 @@ type IncomingMessage struct {
 }
 
 // HandleMessage processes one inbound chat message: records it (Loki + the
-// admin-console event bus), logs the user in, and runs any command it carries.
+// admin-console event bus), resolves the sender, and runs any command it
+// carries. Every platform arrives here — inbound is one gateway poll — so the
+// only thing that varies is whether the sender has a persisted identity.
 func (a *App) HandleMessage(ctx context.Context, msg IncomingMessage) {
 	// span attribute kept as twitch.user for observability continuity; it
 	// generalizes to a platform-tagged key once a second platform lands.
@@ -298,8 +300,21 @@ func (a *App) HandleMessage(ctx context.Context, msg IncomingMessage) {
 	// Loki line above; fire-and-forget, no-op when NATS is unconfigured.
 	eventbus.EmitChatMessage(ctx, a.Cfg.Environment, a.Platform, msg.User, msg.Text)
 
-	// log in the user, then run any command. The original casing goes through:
-	// runCommand folds only the trigger token for matching.
-	user := a.UserSessions.LoginIfNecessary(ctx, msg.User)
-	a.runCommand(ctx, user, msg.Text)
+	// resolve the sender, then run any command. The original casing goes
+	// through: runCommand folds only the trigger token for matching.
+	a.runCommand(ctx, a.chatUser(ctx, msg.User), msg.Text)
+}
+
+// chatUser resolves a sender to the user the command path runs as.
+//
+// On a platform that persists identity this is the login step — it creates or
+// refreshes the users row and the session, so presence, miles, and the
+// follower/subscriber access checks all have something to read. Everywhere else
+// it is a transient user carrying just the display name, which is all the v1
+// allowlist needs.
+func (a *App) chatUser(ctx context.Context, username string) *users.User {
+	if platformPersistsUsers[a.platform()] {
+		return a.UserSessions.LoginIfNecessary(ctx, username)
+	}
+	return &users.User{Username: strings.ToLower(username)}
 }

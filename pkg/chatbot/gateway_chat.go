@@ -4,16 +4,10 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"strings"
 	"time"
 
-	mylog "github.com/adanalife/tripbot/pkg/chatbot/log"
-	"github.com/adanalife/tripbot/pkg/eventbus"
 	"github.com/adanalife/tripbot/pkg/gateway"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
-	"github.com/adanalife/tripbot/pkg/users"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
 )
 
 // inboundChatClient is the subset of *gateway.Client the gateway poller needs;
@@ -108,7 +102,7 @@ func (p *gatewayChatPoller) ReportsChatConnection() *gatewayChatPoller {
 func (a *App) NewGatewayChatPoller(apiURL string) *gatewayChatPoller {
 	return &gatewayChatPoller{
 		client:     gateway.New(apiURL),
-		handle:     a.HandleGatewayMessage,
+		handle:     a.HandleMessage,
 		handleGift: a.HandleGatewayGift,
 		pollFloor:  2 * time.Second,
 		errWait:    time.Minute,
@@ -188,29 +182,6 @@ func (p *gatewayChatPoller) route(ctx context.Context, m gateway.InboundChatMess
 		slog.WarnContext(ctx, "unhandled gateway inbound kind; ignoring",
 			"kind", string(m.Kind), "author", m.Author)
 	}
-}
-
-// HandleGatewayMessage processes one inbound chat message from a gateway-wired
-// platform. Identical to HandleMessage except the login step: gateway-platform
-// viewers are NOT logged in or persisted — v1 punts identity, presence, and
-// miles entirely (see the v1 command allowlist), so the command path gets a
-// transient User carrying just the display name. The Loki chat line, the
-// admin-console event-bus mirror, and the metrics all stay.
-func (a *App) HandleGatewayMessage(ctx context.Context, msg IncomingMessage) {
-	// span attribute key shared with the Twitch path for observability
-	// continuity; renaming both to a platform-tagged key is the B4 pass.
-	ctx, span := tracer.Start(ctx, "chatbot.handle_message",
-		trace.WithAttributes(attribute.String("twitch.user", msg.User)))
-	defer span.End()
-
-	instrumentation.ChatMessages.Inc()
-	mylog.ChatMsg(msg.User, a.Cfg.ChannelName, msg.Text)
-	eventbus.EmitChatMessage(ctx, a.Cfg.Environment, a.Platform, msg.User, msg.Text)
-
-	// transient, never written to the users table — the allowlisted command
-	// subset reads nothing user-specific beyond the name.
-	user := &users.User{Username: strings.ToLower(msg.User)}
-	a.runCommand(ctx, user, msg.Text)
 }
 
 // sleepCtx waits d or until ctx is done; false means ctx ended first.
