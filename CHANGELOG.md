@@ -9,6 +9,13 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v4.14.3] — 2026-07-29
+
+### Fixes
+
+- An errored live-check no longer clears the silent-disconnect watchdog's collected misses. A check failing every other tick could hold the count under the threshold indefinitely, so a dark channel would never be recovered; misses are now held and aged out instead. ([#1260](https://github.com/adanalife/tripbot/pull/1260))
+- Log OBS websocket connect failures at warn instead of error. A platform whose OBS deployment is scaled to zero fails here on every 10s retry, and the slog-to-Sentry bridge turned each attempt into an event — roughly 26k/day across the three parked platforms, which drained the monthly Sentry quota. `obs_streaming_active` remains the alertable signal. ([#1261](https://github.com/adanalife/tripbot/pull/1261))
+
 ## [v4.14.2] — 2026-07-29
 
 ### Fixes
