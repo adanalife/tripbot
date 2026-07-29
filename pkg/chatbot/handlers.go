@@ -276,6 +276,18 @@ type IncomingMessage struct {
 	// persistence or cross-platform linking. Carried, not yet consumed.
 	UserID string
 	Text   string // the message body, original case
+	// MessageID is the platform's own id for this message, empty on platforms
+	// that don't surface one. Carried onto the event bus so a console
+	// moderation action has something to address.
+	MessageID string
+	// Moderator, Subscriber, and Broadcaster are the sender's role in this
+	// channel as the platform reported it on this message. They ride the event
+	// bus for display; the access checks in checkAccess still read the
+	// persisted session, which is the answer that survives a platform that
+	// reports no roles at all.
+	Moderator   bool
+	Subscriber  bool
+	Broadcaster bool
 }
 
 // HandleMessage processes one inbound chat message: records it (Loki + the
@@ -298,7 +310,16 @@ func (a *App) HandleMessage(ctx context.Context, msg IncomingMessage) {
 	// mirror the chat line onto the event bus so live consumers (the admin
 	// panel's chat pane) see it. Original-case username + text, matching the
 	// Loki line above; fire-and-forget, no-op when NATS is unconfigured.
-	eventbus.EmitChatMessage(ctx, a.Cfg.Environment, a.Platform, msg.User, msg.Text)
+	eventbus.EmitChatMessage(ctx, a.Cfg.Environment, eventbus.ChatMessage{
+		Platform:    a.Platform,
+		Username:    msg.User,
+		UserID:      msg.UserID,
+		Text:        msg.Text,
+		MessageID:   msg.MessageID,
+		Moderator:   msg.Moderator,
+		Subscriber:  msg.Subscriber,
+		Broadcaster: msg.Broadcaster,
+	})
 
 	// resolve the sender, then run any command. The original casing goes
 	// through: runCommand folds only the trigger token for matching.

@@ -85,15 +85,37 @@ func emit(ctx context.Context, subj string, ev any) {
 
 // ChatMessage is the wire format for tripbot.<env>.chat.message — one incoming
 // chat line from whichever platform this instance serves.
+//
+// It carries enough to act on a message, not just display it: the sender's
+// platform id, the message's own id, and the roles the platform reported. A
+// subscriber can therefore be identified from the subject alone, without a
+// consumer holding a database connection or a platform credential.
 type ChatMessage struct {
 	// Platform is the streaming platform the line came from ("twitch" /
 	// "youtube"). Both per-platform instances publish into the same env's
 	// subject, so this is what lets the admin console disambiguate. Empty on
 	// events emitted before the tag existed.
-	Platform  string `json:"platform,omitempty"`
-	Username  string `json:"username"`
-	Text      string `json:"text"`
-	EmittedAt string `json:"emitted_at"`
+	Platform string `json:"platform,omitempty"`
+	Username string `json:"username"`
+	// UserID is the sender's platform-native stable id. Username is a mutable
+	// display name on some platforms, so this is what a consumer keys identity
+	// on. Empty for the bot's own mirrored sends, and on any platform that
+	// withholds it.
+	UserID string `json:"user_id,omitempty"`
+	Text   string `json:"text"`
+	// MessageID is the platform's own id for this message — what a moderation
+	// action addresses. Empty for the bot's own mirrored sends (the platform
+	// hasn't assigned one yet at mirror time) and on platforms that surface no
+	// id.
+	MessageID string `json:"message_id,omitempty"`
+	// Moderator, Subscriber, and Broadcaster are the sender's role in the
+	// channel as the platform reported it on this message. All three are false
+	// both for a viewer with no roles and on a platform that reports none, so a
+	// consumer gating on them must know which platforms answer.
+	Moderator   bool   `json:"moderator,omitempty"`
+	Subscriber  bool   `json:"subscriber,omitempty"`
+	Broadcaster bool   `json:"broadcaster,omitempty"`
+	EmittedAt   string `json:"emitted_at"`
 }
 
 // ChatMessageSubject returns the subscribe/publish subject for chat messages in
@@ -101,14 +123,11 @@ type ChatMessage struct {
 func ChatMessageSubject(env string) string { return subject(env, "chat", "message") }
 
 // EmitChatMessage publishes an incoming chat line. Pass the original-case
-// username + text (not the lowercased command-parse copy).
-func EmitChatMessage(ctx context.Context, env, platform, username, text string) {
-	emit(ctx, ChatMessageSubject(env), ChatMessage{
-		Platform:  platform,
-		Username:  username,
-		Text:      text,
-		EmittedAt: emittedAt(),
-	})
+// username + text (not the lowercased command-parse copy); EmittedAt is
+// stamped here, so callers leave it zero.
+func EmitChatMessage(ctx context.Context, env string, msg ChatMessage) {
+	msg.EmittedAt = emittedAt()
+	emit(ctx, ChatMessageSubject(env), msg)
 }
 
 // --- viewers.count --------------------------------------------------------

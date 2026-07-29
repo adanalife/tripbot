@@ -87,7 +87,7 @@ func TestGatewayChatPollerRoutesByKind(t *testing.T) {
 
 	page := gateway.InboundChatPage{
 		Messages: []gateway.InboundChatMessage{
-			{Author: "A", AuthorID: "1", Text: "!timewarp"},
+			{Author: "A", AuthorID: "1", Text: "!timewarp", MessageID: "m1", Moderator: true, Subscriber: true},
 			{Author: "B", AuthorID: "2", Kind: gateway.KindGift,
 				Gift: &gateway.Gift{ID: "5655", Name: "Rose", Count: 3, Diamonds: 1}},
 			{Author: "C", AuthorID: "3", Kind: gateway.KindGift}, // malformed: no payload
@@ -117,8 +117,18 @@ func TestGatewayChatPollerRoutesByKind(t *testing.T) {
 	}
 	p.Run(ctx)
 
-	if len(msgs) != 1 || msgs[0].User != "A" || msgs[0].Text != "!timewarp" {
-		t.Errorf("chat handled = %+v, want only A/!timewarp", msgs)
+	if len(msgs) != 1 {
+		t.Fatalf("chat handled = %+v, want only A/!timewarp", msgs)
+	}
+	// The identity and role fields come along whole — the poller is a
+	// translation, so a field the gateway reports and this drops is invisible
+	// until a consumer downstream is missing it.
+	wantMsg := IncomingMessage{
+		User: "A", UserID: "1", Text: "!timewarp", MessageID: "m1",
+		Moderator: true, Subscriber: true,
+	}
+	if msgs[0] != wantMsg {
+		t.Errorf("chat handled = %+v, want %+v", msgs[0], wantMsg)
 	}
 	if len(gifts) != 1 {
 		t.Fatalf("gifts handled = %+v, want only the one with a payload", gifts)

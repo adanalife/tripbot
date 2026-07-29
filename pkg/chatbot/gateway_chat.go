@@ -165,7 +165,15 @@ func (p *gatewayChatPoller) Run(ctx context.Context) {
 func (p *gatewayChatPoller) route(ctx context.Context, m gateway.InboundChatMessage) {
 	switch m.Kind {
 	case gateway.KindChat:
-		p.handle(ctx, IncomingMessage{User: m.Author, UserID: m.AuthorID, Text: m.Text})
+		p.handle(ctx, IncomingMessage{
+			User:        m.Author,
+			UserID:      m.AuthorID,
+			Text:        m.Text,
+			MessageID:   m.MessageID,
+			Moderator:   m.Moderator,
+			Subscriber:  m.Subscriber,
+			Broadcaster: m.Broadcaster,
+		})
 	case gateway.KindGift:
 		if m.Gift == nil {
 			slog.WarnContext(ctx, "gateway gift carries no gift payload", "author", m.Author)
