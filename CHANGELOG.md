@@ -9,6 +9,12 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v4.13.1] — 2026-07-29
+
+### Fixes
+
+- The album background-audio bed now only plays tracks from album subdirectories of the music share. Loose audio files at the share root — it also holds a 556MB `carsounds.m4a` — were being shuffled into the rotation as tracks.
+
 ## [v4.13.0] — 2026-07-29
 
 ### Chatbot

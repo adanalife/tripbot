@@ -1,1 +1,0 @@
-The album background-audio bed now only plays tracks from album subdirectories of the music share. Loose audio files at the share root — it also holds a 556MB `carsounds.m4a` — were being shuffled into the rotation as tracks.
