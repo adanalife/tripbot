@@ -1,0 +1,504 @@
+{
+  "_comment": "Generated from pkg/chatbot's command registry via `go generate ./pkg/contract` — do not hand-edit. Every chat command tripbot answers: its trigger, aliases, access gate, and the platforms it dispatches on (already resolved). Synced into the admin console alongside contract.json / eventbus.json / commands.json.",
+  "commands": [
+    {
+      "trigger": "!back",
+      "requires_follow": true,
+      "platforms": [
+        "facebook",
+        "instagram",
+        "tiktok",
+        "twitch",
+        "youtube"
+      ]
+    },
+    {
+      "trigger": "!bluesky",
+      "aliases": [
+        "!bsky"
+      ],
+      "platforms": [
+        "facebook",
+        "instagram",
+        "tiktok",
+        "twitch",
+        "youtube"
+      ]
+    },
+    {
+      "trigger": "!bonusmiles",
+      "requires_subscriber": true,
+      "platforms": [
+        "twitch"
+      ]
+    },
+    {
+      "trigger": "!carsound",
+      "aliases": [
+        "!carhum"
+      ],
+      "platforms": [
+        "youtube"
+      ]
+    },
+    {
+      "trigger": "!commands",
+      "aliases": [
+        "!command",
+        "!controls"
+      ],
+      "platforms": [
+        "facebook",
+        "instagram",
+        "tiktok",
+        "twitch",
+        "youtube"
+      ]
+    },
+    {
+      "trigger": "!date",
+      "aliases": [
+        "is this live",
+        "is this live?"
+      ],
+      "requires_follow": true,
+      "platforms": [
+        "facebook",
+        "instagram",
+        "tiktok",
+        "twitch",
+        "youtube"
+      ]
+    },
+    {
+      "trigger": "!daytime",
+      "aliases": [
+        "!daylight",
+        "!morning"
+      ],
+      "requires_follow": true,
+      "platforms": [
+        "facebook",
+        "instagram",
+        "tiktok",
+        "twitch",
+        "youtube"
+      ]
+    },
+    {
+      "trigger": "!discord",
+      "platforms": [
+        "facebook",
+        "instagram",
+        "tiktok",
+        "twitch",
+        "youtube"
+      ]
+    },
+    {
+      "trigger": "!facebook",
+      "aliases": [
+        "!fb"
+      ],
+      "platforms": [
+        "facebook",
+        "instagram",
+        "tiktok",
+        "twitch",
+        "youtube"
+      ]
+    },
+    {
+      "trigger": "!find",
+      "aliases": [
+        "!search"
+      ],
+      "requires_subscriber": true,
+      "platforms": [
+        "facebook",
+        "instagram",
+        "tiktok",
+        "twitch",
+        "youtube"
+      ]
+    },
+    {
+      "trigger": "!followage",
+      "aliases": [
+        "!followtime"
+      ],
+      "platforms": [
+        "twitch"
+      ]
+    },
+    {
+      "trigger": "!gas",
+      "aliases": [
+        "!fuel",
+        "!petrol"
+      ],
+      "platforms": [
+        "facebook",
+        "instagram",
+        "tiktok",
+        "twitch",
+        "youtube"
+      ]
+    },
+    {
+      "trigger": "!givemiles",
+      "platforms": [
+        "twitch"
+      ]
+    },
+    {
+      "trigger": "!goto",
+      "aliases": [
+        "!jump"
+      ],
+      "requires_follow": true,
+      "platforms": [
+        "facebook",
+        "instagram",
+        "tiktok",
+        "twitch",
+        "youtube"
+      ]
+    },
+    {
+      "trigger": "!guess",
+      "aliases": [
+        "guess",
+        "!guis"
+      ],
+      "requires_follow": true,
+      "platforms": [
+        "twitch"
+      ]
+    },
+    {
+      "trigger": "!guessleaderboard",
+      "aliases": [
+        "!glb",
+        "!guesslb"
+      ],
+      "requires_follow": true,
+      "platforms": [
+        "twitch"
+      ]
+    },
+    {
+      "trigger": "!help",
+      "platforms": [
+        "facebook",
+        "instagram",
+        "tiktok",
+        "twitch",
+        "youtube"
+      ]
+    },
+    {
+      "trigger": "!instagram",
+      "aliases": [
+        "!ig",
+        "!insta"
+      ],
+      "platforms": [
+        "facebook",
+        "instagram",
+        "tiktok",
+        "twitch",
+        "youtube"
+      ]
+    },
+    {
+      "trigger": "!km",
+      "aliases": [
+        "!kilometres",
+        "!kilometers"
+      ],
+      "requires_follow": true,
+      "platforms": [
+        "twitch"
+      ]
+    },
+    {
+      "trigger": "!leaderboard",
+      "aliases": [
+        "!monthlyleaderboard",
+        "!lb",
+        "!mlb",
+        "!ldb",
+        "!ldbd"
+      ],
+      "requires_follow": true,
+      "platforms": [
+        "twitch"
+      ]
+    },
+    {
+      "trigger": "!location",
+      "aliases": [
+        "!tripbot",
+        "!city",
+        "!town",
+        "!where",
+        "!loc",
+        "!loclistion"
+      ],
+      "requires_follow": true,
+      "platforms": [
+        "facebook",
+        "instagram",
+        "tiktok",
+        "twitch",
+        "youtube"
+      ]
+    },
+    {
+      "trigger": "!makebot",
+      "platforms": [
+        "twitch"
+      ]
+    },
+    {
+      "trigger": "!middle",
+      "platforms": [
+        "twitch"
+      ]
+    },
+    {
+      "trigger": "!miles",
+      "aliases": [
+        "!points"
+      ],
+      "requires_follow": true,
+      "platforms": [
+        "twitch"
+      ]
+    },
+    {
+      "trigger": "!refreshoverlays",
+      "aliases": [
+        "!refreshoverlay"
+      ],
+      "platforms": [
+        "twitch"
+      ]
+    },
+    {
+      "trigger": "!report",
+      "aliases": [
+        "no audio",
+        "no sound",
+        "no music",
+        "frozen"
+      ],
+      "platforms": [
+        "facebook",
+        "instagram",
+        "tiktok",
+        "twitch",
+        "youtube"
+      ]
+    },
+    {
+      "trigger": "!secretinfo",
+      "platforms": [
+        "twitch"
+      ]
+    },
+    {
+      "trigger": "!shutdown",
+      "platforms": [
+        "twitch"
+      ]
+    },
+    {
+      "trigger": "!skip",
+      "requires_follow": true,
+      "platforms": [
+        "facebook",
+        "instagram",
+        "tiktok",
+        "twitch",
+        "youtube"
+      ]
+    },
+    {
+      "trigger": "!socialmedia",
+      "aliases": [
+        "!social",
+        "!socials"
+      ],
+      "platforms": [
+        "facebook",
+        "instagram",
+        "tiktok",
+        "twitch",
+        "youtube"
+      ]
+    },
+    {
+      "trigger": "!somafm",
+      "platforms": [
+        "twitch"
+      ]
+    },
+    {
+      "trigger": "!song",
+      "aliases": [
+        "!music"
+      ],
+      "platforms": [
+        "twitch"
+      ]
+    },
+    {
+      "trigger": "!state",
+      "requires_follow": true,
+      "platforms": [
+        "facebook",
+        "instagram",
+        "tiktok",
+        "twitch",
+        "youtube"
+      ]
+    },
+    {
+      "trigger": "!sunset",
+      "requires_follow": true,
+      "platforms": [
+        "facebook",
+        "instagram",
+        "tiktok",
+        "twitch",
+        "youtube"
+      ]
+    },
+    {
+      "trigger": "!tiktok",
+      "platforms": [
+        "facebook",
+        "instagram",
+        "tiktok",
+        "twitch",
+        "youtube"
+      ]
+    },
+    {
+      "trigger": "!time",
+      "requires_follow": true,
+      "platforms": [
+        "facebook",
+        "instagram",
+        "tiktok",
+        "twitch",
+        "youtube"
+      ]
+    },
+    {
+      "trigger": "!timewarp",
+      "aliases": [
+        "!timeskip",
+        "!tw",
+        "!warp"
+      ],
+      "requires_follow": true,
+      "platforms": [
+        "facebook",
+        "instagram",
+        "tiktok",
+        "twitch",
+        "youtube"
+      ]
+    },
+    {
+      "trigger": "!totalleaderboard",
+      "aliases": [
+        "!lifetimeleaderboard",
+        "!tlb",
+        "!llb"
+      ],
+      "requires_follow": true,
+      "platforms": [
+        "twitch"
+      ]
+    },
+    {
+      "trigger": "!twitter",
+      "platforms": [
+        "facebook",
+        "instagram",
+        "tiktok",
+        "twitch",
+        "youtube"
+      ]
+    },
+    {
+      "trigger": "!unbot",
+      "platforms": [
+        "twitch"
+      ]
+    },
+    {
+      "trigger": "!uptime",
+      "platforms": [
+        "facebook",
+        "instagram",
+        "tiktok",
+        "twitch",
+        "youtube"
+      ]
+    },
+    {
+      "trigger": "!version",
+      "platforms": [
+        "facebook",
+        "instagram",
+        "tiktok",
+        "twitch",
+        "youtube"
+      ]
+    },
+    {
+      "trigger": "!weather",
+      "aliases": [
+        "!meteo"
+      ],
+      "requires_follow": true,
+      "platforms": [
+        "facebook",
+        "instagram",
+        "tiktok",
+        "twitch",
+        "youtube"
+      ]
+    },
+    {
+      "trigger": "!youtube",
+      "aliases": [
+        "!yt"
+      ],
+      "platforms": [
+        "facebook",
+        "instagram",
+        "tiktok",
+        "twitch",
+        "youtube"
+      ]
+    },
+    {
+      "trigger": "hello",
+      "aliases": [
+        "hi",
+        "hey",
+        "hallo",
+        "!bot"
+      ],
+      "platforms": [
+        "twitch"
+      ]
+    }
+  ]
+}
