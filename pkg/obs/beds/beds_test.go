@@ -261,6 +261,43 @@ func TestDetect_ReadsTheLiveBedFromOBS(t *testing.T) {
 	}
 }
 
+// Detecting the album has to build the play order too. OBS picks the boot track
+// itself when the album is a platform's default bed, so no Set runs — and
+// without a play order Advance has nowhere to go, leaving the stream silent
+// after that one track ends.
+func TestDetect_AlbumBuildsThePlayOrder(t *testing.T) {
+	dir := albumDir(t, 3)
+	playing := filepath.Join(dir, "fifty-horizons", "a track.mp3")
+	o := &fakeOBS{settings: map[string]any{"is_local_file": true, "local_file": playing}}
+	s := NewStore(o, CarHum, dir)
+	s.Detect(context.Background())
+
+	if bed, track := s.Current(); bed != Album || track != playing {
+		t.Fatalf("Current() = %s, %q; want album playing %q", bed, track, playing)
+	}
+	if err := s.Advance(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if o.file == "" || o.file == playing {
+		t.Fatalf("advance wrote %q; want a different track", o.file)
+	}
+}
+
+// An album detected with no tracks to scan leaves the bed reported honestly
+// rather than crashing or claiming a track — the console shows what's on air.
+func TestDetect_AlbumWithNoTracksStillReportsTheBed(t *testing.T) {
+	dir := t.TempDir()
+	o := &fakeOBS{settings: map[string]any{
+		"is_local_file": true,
+		"local_file":    filepath.Join(dir, "gone", "x.mp3"),
+	}}
+	s := NewStore(o, CarHum, dir)
+	s.Detect(context.Background())
+	if bed, track := s.Current(); bed != Album || track != "" {
+		t.Fatalf("Current() = %s, %q; want album with no track", bed, track)
+	}
+}
+
 func TestDetect_KeepsTheSeedWhenOBSIsUnreachable(t *testing.T) {
 	s := NewStore(&fakeOBS{err: errors.New("nope")}, SomaFM, t.TempDir())
 	s.Detect(context.Background())

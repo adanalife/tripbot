@@ -21,6 +21,7 @@ import (
 	"log/slog"
 	"math/rand/v2"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -126,9 +127,21 @@ func (s *Store) Detect(ctx context.Context) {
 		return
 	}
 	bed := bedFromSettings(settings, s.musicDir)
+	file, _ := settings["local_file"].(string)
 	s.mu.Lock()
 	s.bed = bed
+	var loadErr error
+	if bed == Album {
+		// OBS booted straight onto the album — its per-platform default, no Set
+		// involved — so nothing has built the play order yet. Without one Advance
+		// has nowhere to go and the bed plays a single track and falls silent.
+		loadErr = s.loadAlbumLocked(file)
+	}
 	s.mu.Unlock()
+	if loadErr != nil {
+		slog.WarnContext(ctx, "background audio: album is live but its play order is empty",
+			"err", loadErr)
+	}
 	slog.InfoContext(ctx, "background audio: detected bed at startup", "bed", bed)
 }
 
@@ -164,15 +177,12 @@ func (s *Store) Set(ctx context.Context, bed Bed) error {
 
 	s.mu.Lock()
 	if bed == Album {
-		tracks, err := scanTracks(s.musicDir)
-		if err != nil || len(tracks) == 0 {
+		if err := s.loadAlbumLocked(""); err != nil {
 			s.mu.Unlock()
 			// No share mounted / no files: refuse rather than leaving the stream
 			// silent. The caller surfaces this; the current bed keeps playing.
-			return fmt.Errorf("no album tracks under %s: %w", s.musicDir, err)
+			return err
 		}
-		shuffle(tracks)
-		s.tracks, s.idx = tracks, 0
 	}
 	target := s.trackLocked(bed)
 	s.mu.Unlock()
@@ -210,6 +220,22 @@ func (s *Store) Advance(ctx context.Context) error {
 		return fmt.Errorf("advance album track: %w", err)
 	}
 	slog.InfoContext(ctx, "background audio: next track", "track", filepath.Base(track))
+	return nil
+}
+
+// loadAlbumLocked builds a fresh shuffled play order. playing positions the
+// order on a track already on air (pass "" to start at the top), so the next
+// advance moves off it instead of restarting it. Caller holds s.mu.
+func (s *Store) loadAlbumLocked(playing string) error {
+	tracks, err := scanTracks(s.musicDir)
+	if err != nil {
+		return fmt.Errorf("scan album tracks under %s: %w", s.musicDir, err)
+	}
+	if len(tracks) == 0 {
+		return fmt.Errorf("no album tracks under %s", s.musicDir)
+	}
+	shuffle(tracks)
+	s.tracks, s.idx = tracks, max(slices.Index(tracks, playing), 0)
 	return nil
 }
 
