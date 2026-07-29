@@ -742,19 +742,34 @@ func (t *Tripbot) startEventSub(ctx context.Context) {
 		return
 	}
 	go func() {
-		err := eventsub.Run(ctx, eventsub.Config{
-			ClientID:          t.cfg.TwitchClientID,
-			BroadcasterToken:  token,
-			BroadcasterUserID: mytwitch.ChannelID(),
-		}, eventsub.Handlers{
-			OnFollow:      t.app.AnnounceNewFollower,
-			OnSubscribe:   t.app.AnnounceSubscriber,
-			OnUnsubscribe: t.app.RecordUnsubscribe,
-			OnGift:        t.app.AnnounceGiftSub,
-			OnResub:       t.app.AnnounceResub,
-		})
-		if err != nil && !errors.Is(err, context.Canceled) {
-			slog.ErrorContext(ctx, "eventsub run terminated", "err", err)
+		for {
+			if ctx.Err() != nil {
+				return
+			}
+			err := eventsub.Run(ctx, eventsub.Config{
+				ClientID:          t.cfg.TwitchClientID,
+				BroadcasterToken:  token,
+				BroadcasterUserID: mytwitch.ChannelID(),
+			}, eventsub.Handlers{
+				OnFollow:      t.app.AnnounceNewFollower,
+				OnSubscribe:   t.app.AnnounceSubscriber,
+				OnUnsubscribe: t.app.RecordUnsubscribe,
+				OnGift:        t.app.AnnounceGiftSub,
+				OnResub:       t.app.AnnounceResub,
+			})
+			if err == nil || errors.Is(err, context.Canceled) {
+				return
+			}
+			// Twitch closing the socket outright surfaces here instead of as a
+			// session_reconnect frame the library handles itself, so Run has to
+			// be redialed or follower/sub announcements stay dead until the pod
+			// restarts. Run resubscribes on the new session's welcome.
+			slog.WarnContext(ctx, "eventsub run terminated; reconnecting", "err", err)
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(10 * time.Second):
+			}
 		}
 	}()
 }

@@ -1,0 +1,1 @@
+Reconnect Twitch EventSub after the socket drops. `eventsub.Run` was called once, so an outright socket close (rather than a `session_reconnect` frame the library handles itself) ended the goroutine and left follower, subscriber, gift-sub, and resub announcements dead until the pod restarted.
