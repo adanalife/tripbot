@@ -9,6 +9,44 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v4.13.0] — 2026-07-29
+
+### Chatbot
+
+- The new-follower thank-you now nudges people toward `!commands`, so a follow doubles as the moment a viewer discovers the bot is interactive. ([#1242](https://github.com/adanalife/tripbot/pull/1242))
+- Command params keep the capitalization they were typed with. The dispatcher folds case on the trigger token only, so `!MILES` still routes while `!middle Hello World` sets on-screen text with its capitals intact — on Twitch and the gateway platforms alike. Commands typed with leading whitespace dispatch too. ([#1244](https://github.com/adanalife/tripbot/pull/1244))
+- Background audio is now selectable per platform from the console: SomaFM, the car-hum drone, or an album from the mounted music share. The album shuffles and advances to the next track when OBS reports the current one ended, and `/api/audio` reads and switches the live bed. The audio watchdog runs on every platform now (any platform can select any bed) and only applies its SomaFM outage recovery while SomaFM is the selected bed. ([#1246](https://github.com/adanalife/tripbot/pull/1246))
+
+### Fixes
+
+- Raise the `TRIPBOT_VIDEO` retention cap to 5000 messages so a freshly started console backfills a full 1000-point map trail for every platform instead of a stubby fraction of one. ([#1236](https://github.com/adanalife/tripbot/pull/1236))
+- Bump the pinned Go toolchain to 1.26.5 (`go.mod` + `.tool-versions`) for the crypto/tls Encrypted Client Hello privacy leak, [GO-2026-5856](https://pkg.go.dev/vuln/GO-2026-5856). CI already built on 1.26.5 because the govulncheck action resolves latest-stable Go via `check-latest`; this pins local dev builds to a patched stdlib too. ([#1243](https://github.com/adanalife/tripbot/pull/1243))
+
+### Deploy / Infra
+
+- Only a twitch instance mounts `tripbot-twitch-creds` now — the youtube, tiktok, facebook and instagram pods no longer carry Twitch app credentials they never read. Prod picks this up at the next release, since its manifests are version-pinned. ([#1234](https://github.com/adanalife/tripbot/pull/1234))
+
+### CI / Tooling
+
+- The cdk8s tests derive their platform lists from `platforms.json` and the env definitions instead of restating them. The hand-maintained map had gone stale and was silently skipping facebook, instagram and tiktok everywhere plus youtube on prod; the suite goes from 28 checks to 62. ([#1234](https://github.com/adanalife/tripbot/pull/1234))
+- The weekly base-image mirror installs a pinned `crane` release binary (`imjasonh/setup-crane`, crane v0.21.7) instead of compiling it from source on every run — matching playout. ([#1235](https://github.com/adanalife/tripbot/pull/1235))
+- `changelog-number` numbers only the placeholder fragments the head branch adds on top of its own base, so a stacked PR no longer tries to rename its parent's fragment, and repeat fragments of one type in a single PR take towncrier's counter suffix instead of colliding. ([#1240](https://github.com/adanalife/tripbot/pull/1240))
+
+### Cleanup
+
+- The `test:macos` task is gone. It existed to run the tests with the libvlc CGO flags on a host with VLC installed; the repo is pure Go, and `mise exec -- go test ./...` on the host now behaves identically to what the task wrapped — the config loader resolves `.env.testing` from the repo root on its own, and DB-backed tests skip when postgres is unreachable. `task test` still runs the full suite against postgres in docker. ([#1225](https://github.com/adanalife/tripbot/pull/1225))
+- Dropped the orphan `script/make-map` one-off, the empty `log/` directory, and the two `pkg/helpers` functions make-map was the only caller of, retiring the `googlemaps.github.io/maps` dependency with them. ([#1226](https://github.com/adanalife/tripbot/pull/1226))
+- Replaced the `dimiro1/banner/autoload` dependency with a two-line `os.ReadFile` in `main()`. Its `init()` called `flag.Parse()`, which made `package main` impossible to test; `cmd/tripbot` can now carry tests. ([#1227](https://github.com/adanalife/tripbot/pull/1227))
+- Collapsed the four per-platform gateway chat files (youtube, facebook, tiktok, instagram) into one `gateway_platforms.go` with two clients — one that posts, one that drops — plus a test pinning which platform gets which. ([#1228](https://github.com/adanalife/tripbot/pull/1228))
+- Collapsed the four `connectTo{YouTube,Facebook,Instagram,TikTok}` boot paths into one `gatewayPlatform` descriptor plus a shared `connectViaGateway`, and gave `cmd/tripbot` its first tests. ([#1229](https://github.com/adanalife/tripbot/pull/1229))
+- The five event writers now share one `record` helper for the read-only guard, the platform stamp and the metric, with `pkg/events`' first tests covering both. ([#1230](https://github.com/adanalife/tripbot/pull/1230))
+- onscreens-server creates its run dir with a plain `os.MkdirAll` instead of a one-element slice looped over a `Stat`/`IsNotExist` dance, which also fixes a Stat error other than not-exist silently skipping the create. ([#1231](https://github.com/adanalife/tripbot/pull/1231))
+- Folded `left-rotator.go` and `right-rotator.go` into `rotator.go` behind one `newCornerRotator`, with the two corners' 45s cadence as a single shared constant instead of two vars documented as matching each other. ([#1232](https://github.com/adanalife/tripbot/pull/1232))
+- `pkg/twitch` no longer validates credentials and calls `log.Fatalf` from `init()`. The Twitch app credentials come off `TripbotConfig` and are installed by the twitch-only bring-up, so a tiktok/instagram/facebook/youtube instance no longer dies at startup over credentials it never uses. ([#1233](https://github.com/adanalife/tripbot/pull/1233))
+- Dropped the vestigial `obs` image pin from `cdk8s/versions.yaml`. OBS is built and deployed from the standalone `adanalife/obs` repo, which carries its own pins, so nothing here read the key — the re-synth is a no-op. ([#1238](https://github.com/adanalife/tripbot/pull/1238))
+- Dropped the dead `EXTERNAL_URL` config. It only existed for tripbot's OAuth `/auth/callback` redirect URI, which moved to platform-gateway, so the `required:"true"` field no longer had a reader — and cdk8s no longer stamps it into the tripbot ConfigMaps. ([#1239](https://github.com/adanalife/tripbot/pull/1239))
+- `CHANNEL_NAME` is lowercased once when `TripbotConfig` loads, so the scoreboard and leaderboard queries no longer wrap `cfg.ChannelName` in `strings.ToLower` at each use site. ([#1241](https://github.com/adanalife/tripbot/pull/1241))
+
 ## [v4.12.0] — 2026-07-28
 
 ### Chatbot
