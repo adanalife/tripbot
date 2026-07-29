@@ -107,6 +107,21 @@ class EnvConfig:
     # regardless, since prod pods carry no toleration).
     prefer_rpi5: bool = False
 
+    # Mount the read-only `obs-music` claim (the NFS-backed album share the
+    # infra repo provisions). tripbot needs it for the same reason OBS does —
+    # it enumerates the tracks to shuffle and advance them — and mounts it at
+    # the same path, so a track path it picks resolves inside the OBS container
+    # too.
+    #
+    # Off by default, and deliberately an explicit per-env opt-in rather than
+    # something derived from the cluster: a pod cannot schedule until its claim
+    # binds (Kubernetes has no optional PVC — `optional` covers ConfigMap and
+    # Secret volumes only), so turning this on before the PV exists strands the
+    # pod. Adoption order for an env: provision the PV with
+    # `task k8s:<env>:nfs-pv` in infra, confirm the claim is Bound, THEN flip
+    # this on. Getting that backwards took prod OBS down on 2026-07-29.
+    music_share: bool = False
+
     # The platform-gateway gateway-twitch URL a twitch instance routes its
     # Helix calls through — the gateway is tripbot's sole Helix caller. Empty
     # leaves the gateway unwired (local/CI only): the Twitch audience/follower/
@@ -156,16 +171,6 @@ class EnvConfig:
     @property
     def tls(self) -> bool:
         """Whether app ingresses get cert-manager TLS (minipc envs only)."""
-        return self.cluster == "minipc"
-
-    @property
-    def music_share(self) -> bool:
-        """Whether the read-only `obs-music` claim is mounted. tripbot needs the
-        album share for the same reason OBS does — it enumerates the tracks to
-        shuffle and advance them — and mounts it at the same path so a track
-        path it picks resolves inside the OBS container too. Only the minipc
-        envs have the volume (infra provisions it); elsewhere the album bed is
-        simply unavailable and the other two beds work as normal."""
         return self.cluster == "minipc"
 
     @property
@@ -257,6 +262,8 @@ ENVS: dict[str, EnvConfig] = {
         # co-tenants (stage, dashcam-cv) under node pressure. The playback
         # decode/encode CPU requests live in the playout and obs repos now.
         priority_class="prod-stream",
+        # On since 2026-07-29, after the obs-music PV was provisioned.
+        music_share=True,
     ),
     "stage-1": EnvConfig(
         name="stage-1",
@@ -274,6 +281,8 @@ ENVS: dict[str, EnvConfig] = {
         # (tripbot/onscreens); they recover onto the MS-01 if the Pi is
         # unplugged. See prefer_rpi5 on EnvConfig + scheduling.py.
         prefer_rpi5=True,
+        # On since 2026-07-29, after the obs-music PV was provisioned.
+        music_share=True,
         otel=False,
         postgres_size="10Gi",
         postgres_storage_class="local-path",
