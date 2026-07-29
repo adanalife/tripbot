@@ -10,9 +10,14 @@ import (
 )
 
 // installMockDB stands up a sqlmock-backed *gorm.DB and installs it as the
-// process-wide singleton via database.SetGormDB. Commands that go through
-// package-level helpers like users.Find / scoreboards.TopUsers will route to
-// the mock instead of attempting a real postgres connection.
+// process-wide singleton via database.SetGormDB, so a test can assert on the
+// SQL a query builder emits without a postgres connection.
+//
+// It is for tests whose subject *is* the query — searchFrameEmbeddings and its
+// pgvector clauses. A command test wants a fake on the App instead
+// (recordingScoreboards, recordingSessions, …): asserting a command's
+// behaviour through the SQL it happens to cause makes the test fail on
+// refactors that changed nothing a viewer can see.
 //
 // SkipDefaultTransaction stops GORM from wrapping every write in BEGIN/COMMIT,
 // which would otherwise force every test to mock those bookends.

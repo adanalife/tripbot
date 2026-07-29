@@ -12,9 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DATA-DOG/go-sqlmock"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
-	"github.com/adanalife/tripbot/pkg/scoreboards"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/adanalife/tripbot/pkg/video"
 	"gorm.io/gorm"
@@ -62,21 +60,23 @@ func newTestVideo(state string, lat, lng float64, date time.Time) video.Video {
 // recordingSessions).
 func newTestApp(vid video.Video) *App {
 	a := &App{
-		Cfg:        testConf,
-		Onscreens:  noopOnscreens{},
-		Playout:    noopPlayout{},
-		Video:      &recordingVideo{Vid: vid},
-		Chat:       noopChat{},
-		Sessions:   noopSessions{},
-		NowPlaying: noopNowPlaying{},
-		Flags:      noopFlags{},
-		NATS:       noopNATS{},
-		Cron:       noopCron{},
-		Geocoder:   noopGeocoder{},
-		Weather:    noopWeather{},
-		Twitch:     noopTwitch{},
-		OBS:        noopOBS{},
-		Search:     noopSearch{},
+		Cfg:         testConf,
+		Onscreens:   noopOnscreens{},
+		Playout:     noopPlayout{},
+		Video:       &recordingVideo{Vid: vid},
+		Chat:        noopChat{},
+		Sessions:    noopSessions{},
+		NowPlaying:  noopNowPlaying{},
+		Flags:       noopFlags{},
+		NATS:        noopNATS{},
+		Cron:        noopCron{},
+		Geocoder:    noopGeocoder{},
+		Weather:     noopWeather{},
+		Twitch:      noopTwitch{},
+		OBS:         noopOBS{},
+		Search:      noopSearch{},
+		Scoreboards: noopScoreboards{},
+		Events:      noopEvents{},
 	}
 	a.indexCommands() // build the registry, same as New() does in production
 	return a
@@ -336,11 +336,11 @@ func TestBonusMilesCmd_SaysViaIRC(t *testing.T) {
 
 // --- App.Sessions seam ---
 //
-// These tests exercise the new App.Sessions injection point. Pick a command
-// that calls a.Sessions.<method>(...) and assert via a recordingSessions.
-// The DB-backed chain that follows a successful Find lookup (the GetScore
-// query trio) is still exercised via sqlmock in the broader miles tests
-// below — these tests focus on the Sessions surface itself.
+// These tests exercise the App.Sessions injection point. Pick a command that
+// calls a.Sessions.<method>(...) and assert via a recordingSessions. The
+// DB-backed chain behind a successful lookup (the GetScore query trio) belongs
+// to pkg/users and pkg/scoreboards and is tested there — these focus on the
+// Sessions surface itself.
 
 func TestMilesCmd_OtherUser_QueriesSessionsFind(t *testing.T) {
 	// Confirm a.Sessions.Find is the lookup path for the !miles <user> form.
@@ -828,37 +828,17 @@ func TestGuessCmd_WrongGuess_SaysTryAgain(t *testing.T) {
 	}
 }
 
-// expectAddToScoreChain queues sqlmock expectations for one user.AddToScore
-// call: getUserIDByName + findOrCreateScoreboard + findOrCreateScore + the
-// UPDATE on Score.save. AddToScore fires twice on a correct guess (once for
-// the lifetime "guess_state_total" scoreboard, once for the monthly one), so
-// callers queue it twice.
-func expectAddToScoreChain(mock sqlmock.Sqlmock) {
-	mock.ExpectQuery(`SELECT id FROM users WHERE platform = (.+) AND username = `).
-		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(42))
-	mock.ExpectQuery(`SELECT \* FROM "scoreboards" WHERE`).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(7, "guess_sb"))
-	mock.ExpectQuery(`SELECT \* FROM "scores" WHERE`).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "scoreboard_id", "value"}).
-			AddRow(99, 42, 7, 5.0))
-	mock.ExpectExec(`UPDATE "scores" SET`).
-		WillReturnResult(sqlmock.NewResult(0, 1))
-}
-
 func TestGuessCmd_CorrectGuess_DrivesOverlayAndPlayback(t *testing.T) {
-	mock := installMockDB(t)
 	vid := newTestVideo("Colorado", 39.5, -105.0, time.Now())
 	app := newTestApp(vid)
 	recOverlay := &recordingOnscreens{}
 	recPlayout := &recordingPlayout{}
+	recScores := &recordingScoreboards{}
 	app.Onscreens = recOverlay
 	app.Playout = recPlayout
+	app.Scoreboards = recScores
 	// Credit flag on → the guesser's username rides the timewarp overlay call.
 	app.Flags = &recordingFlags{Set: map[string]bool{timewarpCreditFlagKey: true}}
-
-	// Two AddToScore calls — lifetime ("guess_state_total") + monthly.
-	expectAddToScoreChain(mock)
-	expectAddToScoreChain(mock)
 
 	out := captureSay(t, app)
 
@@ -885,8 +865,9 @@ func TestGuessCmd_CorrectGuess_DrivesOverlayAndPlayback(t *testing.T) {
 		t.Errorf("expected single PlayRandom call, got %v", recPlayout.Calls)
 	}
 
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Error(err)
+	// The guess is scored — one credit, both boards being the adapter's business.
+	if !slices.Equal(recScores.Credited, []string{"viewer1"}) {
+		t.Errorf("credited = %v, want the guesser once", recScores.Credited)
 	}
 }
 
@@ -894,12 +875,10 @@ func TestGuessCmd_CorrectGuess_FullStateName(t *testing.T) {
 	// guessCmd converts 2-letter codes to long-form before comparing; pass
 	// the long form directly to confirm the equality branch works without
 	// the abbrev lookup.
-	mock := installMockDB(t)
 	vid := newTestVideo("Massachusetts", 42.3, -71.0, time.Now())
 	app := newTestApp(vid)
-
-	expectAddToScoreChain(mock)
-	expectAddToScoreChain(mock)
+	recScores := &recordingScoreboards{}
+	app.Scoreboards = recScores
 
 	out := captureSay(t, app)
 
@@ -908,19 +887,17 @@ func TestGuessCmd_CorrectGuess_FullStateName(t *testing.T) {
 	if !strings.Contains(out(), "got it") {
 		t.Errorf("expected correct-guess msg, got %q", out())
 	}
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Error(err)
+	if !slices.Equal(recScores.Credited, []string{"viewer1"}) {
+		t.Errorf("credited = %v, want the guesser once", recScores.Credited)
 	}
 }
 
 func TestGuessCmd_CorrectGuess_TwoLetterCode(t *testing.T) {
 	// Two-letter codes get expanded via helpers.StateAbbrevToState.
-	mock := installMockDB(t)
 	vid := newTestVideo("California", 36.7, -119.4, time.Now())
 	app := newTestApp(vid)
-
-	expectAddToScoreChain(mock)
-	expectAddToScoreChain(mock)
+	recScores := &recordingScoreboards{}
+	app.Scoreboards = recScores
 
 	out := captureSay(t, app)
 
@@ -929,8 +906,8 @@ func TestGuessCmd_CorrectGuess_TwoLetterCode(t *testing.T) {
 	if !strings.Contains(out(), "got it") {
 		t.Errorf("expected correct-guess msg from CA, got %q", out())
 	}
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Error(err)
+	if !slices.Equal(recScores.Credited, []string{"viewer1"}) {
+		t.Errorf("credited = %v, want the guesser once", recScores.Credited)
 	}
 }
 
@@ -1118,20 +1095,19 @@ func TestLifetimeMilesLeaderboardCmd_WithUsers(t *testing.T) {
 
 // --- monthlyMilesLeaderboardCmd ---
 //
-// scoreboards.TopUsers emits a JOIN across scores, scoreboards, and users.
-// With sqlmock we just need to honor the one query the command makes.
+// The board's rows come from App.Scoreboards, so these stage rows directly and
+// assert on what the command renders from them. Where those rows come from —
+// the JOIN across scores, scoreboards, and users — is pkg/scoreboards' business
+// and is tested there.
 
 func TestMonthlyMilesLeaderboardCmd_RendersTopUsers(t *testing.T) {
-	mock := installMockDB(t)
 	app := newTestApp(video.Video{})
 	rec := &recordingOnscreens{}
 	app.Onscreens = rec
-
-	rows := sqlmock.NewRows([]string{"username", "value"}).
-		AddRow("viewer1", 42.5).
-		AddRow("viewer2", 12.0)
-	mock.ExpectQuery(`SELECT users\.username, scores\.value FROM "scores"`).
-		WillReturnRows(rows)
+	app.Scoreboards = &recordingScoreboards{
+		Month: "July",
+		Miles: [][]string{{"viewer1", "42.5"}, {"viewer2", "12.0"}},
+	}
 
 	out := captureSay(t, app)
 
@@ -1144,27 +1120,22 @@ func TestMonthlyMilesLeaderboardCmd_RendersTopUsers(t *testing.T) {
 	if !strings.HasPrefix(msg, "Top 2 miles this month:") {
 		t.Errorf("expected 'Top 2 miles this month:' prefix, got %q", msg)
 	}
-	want := fmt.Sprintf(`ShowLeaderboard(%q, 2 rows)`, scoreboards.CurrentMilesMonth()+" Miles")
+	want := `ShowLeaderboard("July Miles", 2 rows)`
 	if len(rec.Calls) != 1 || !strings.Contains(rec.Calls[0], want) {
 		t.Errorf("expected one ShowLeaderboard overlay call with 2 rows, got %v", rec.Calls)
-	}
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Error(err)
 	}
 }
 
 // --- monthlyGuessLeaderboardCmd ---
 
+// An empty board is also what an all-zero board looks like by the time the
+// command sees it — pkg/scoreboards filters the zero-scorers out (TestGuessRows
+// covers that), so both cases arrive here as no rows.
 func TestMonthlyGuessLeaderboardCmd_Empty_SaysNoneYet(t *testing.T) {
-	mock := installMockDB(t)
 	app := newTestApp(video.Video{})
 	rec := &recordingOnscreens{}
 	app.Onscreens = rec
-
-	// scoreboards.TopUsers returns an empty result set
-	rows := sqlmock.NewRows([]string{"username", "value"})
-	mock.ExpectQuery(`SELECT users\.username, scores\.value FROM "scores"`).
-		WillReturnRows(rows)
+	app.Scoreboards = &recordingScoreboards{} // no rows
 
 	out := captureSay(t, app)
 
@@ -1176,105 +1147,53 @@ func TestMonthlyGuessLeaderboardCmd_Empty_SaysNoneYet(t *testing.T) {
 	if len(rec.Calls) != 0 {
 		t.Errorf("expected no overlay call when leaderboard empty, got %v", rec.Calls)
 	}
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Error(err)
-	}
 }
 
-func TestMonthlyGuessLeaderboardCmd_WithGuesses_StripsDecimals(t *testing.T) {
-	mock := installMockDB(t)
+func TestMonthlyGuessLeaderboardCmd_RendersRankedRows(t *testing.T) {
 	app := newTestApp(video.Video{})
 	rec := &recordingOnscreens{}
 	app.Onscreens = rec
-
-	rows := sqlmock.NewRows([]string{"username", "value"}).
-		AddRow("viewer1", 7.0).
-		AddRow("viewer2", 3.0)
-	mock.ExpectQuery(`SELECT users\.username, scores\.value FROM "scores"`).
-		WillReturnRows(rows)
+	app.Scoreboards = &recordingScoreboards{
+		Guesses: [][]string{{"viewer1", "7"}, {"viewer2", "3"}},
+	}
 
 	out := captureSay(t, app)
 
 	app.monthlyGuessLeaderboardCmd(context.Background(), newTestUser("caller"), nil)
 
 	msg := out()
-	// guess scores are formatted as integers in the chat message
 	if !strings.Contains(msg, "1. viewer1 (7)") {
-		t.Errorf("expected integer-formatted guess count, got %q", msg)
+		t.Errorf("expected the top row ranked first, got %q", msg)
 	}
-	if strings.Contains(msg, "7.0") {
-		t.Errorf("decimals should be stripped, but found '7.0' in %q", msg)
-	}
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Error(err)
+	if !strings.Contains(msg, "2. viewer2 (3)") {
+		t.Errorf("expected the second row ranked second, got %q", msg)
 	}
 }
 
-// Zero-scorers (rows present because AddToScoreByName FirstOrCreate seeds 0)
-// should be filtered out of both the overlay and the chat message.
-func TestMonthlyGuessLeaderboardCmd_FiltersZeroScorers(t *testing.T) {
-	mock := installMockDB(t)
+// The advertised count is the number of rows actually rendered, not a fixed
+// leaderboardSize — the board is often shorter than the cap, and claiming
+// "Top 5" over two names reads as a bug to a viewer.
+func TestMonthlyGuessLeaderboardCmd_CountMatchesRowsRendered(t *testing.T) {
 	app := newTestApp(video.Video{})
 	rec := &recordingOnscreens{}
 	app.Onscreens = rec
-
-	rows := sqlmock.NewRows([]string{"username", "value"}).
-		AddRow("viewer1", 5.0).
-		AddRow("viewer2", 0.0).
-		AddRow("viewer3", 2.0).
-		AddRow("viewer4", 0.0)
-	mock.ExpectQuery(`SELECT users\.username, scores\.value FROM "scores"`).
-		WillReturnRows(rows)
+	app.Scoreboards = &recordingScoreboards{
+		Guesses: [][]string{{"viewer1", "5"}, {"viewer3", "2"}},
+	}
 
 	out := captureSay(t, app)
 
 	app.monthlyGuessLeaderboardCmd(context.Background(), newTestUser("caller"), nil)
 
 	msg := out()
-	if strings.Contains(msg, "viewer2") || strings.Contains(msg, "viewer4") {
-		t.Errorf("expected zero-scorers filtered from chat message, got %q", msg)
+	if !strings.Contains(msg, "Top 2 correct guesses") {
+		t.Errorf("expected count to match the two rows, got %q", msg)
 	}
 	if !strings.Contains(msg, "viewer1") || !strings.Contains(msg, "viewer3") {
-		t.Errorf("expected non-zero scorers retained, got %q", msg)
-	}
-	if !strings.Contains(msg, "Top 2 correct guesses") {
-		t.Errorf("expected count to reflect filtered length (2), got %q", msg)
+		t.Errorf("expected both rows rendered, got %q", msg)
 	}
 	if len(rec.Calls) != 1 {
 		t.Fatalf("expected one overlay call, got %v", rec.Calls)
-	}
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Error(err)
-	}
-}
-
-// When every scoreboard row is a zero-scorer (start of a new month), the
-// command should fall back to the "no one yet" chat message and skip the
-// overlay entirely — same shape as the truly-empty query result.
-func TestMonthlyGuessLeaderboardCmd_AllZero_SaysNoneYetAndSkipsOverlay(t *testing.T) {
-	mock := installMockDB(t)
-	app := newTestApp(video.Video{})
-	rec := &recordingOnscreens{}
-	app.Onscreens = rec
-
-	rows := sqlmock.NewRows([]string{"username", "value"}).
-		AddRow("viewer1", 0.0).
-		AddRow("viewer2", 0.0)
-	mock.ExpectQuery(`SELECT users\.username, scores\.value FROM "scores"`).
-		WillReturnRows(rows)
-
-	out := captureSay(t, app)
-
-	app.monthlyGuessLeaderboardCmd(context.Background(), newTestUser("caller"), nil)
-
-	if !strings.Contains(out(), "No one is on that leaderboard yet") {
-		t.Errorf("expected empty-leaderboard message when all zero, got %q", out())
-	}
-	if len(rec.Calls) != 0 {
-		t.Errorf("expected no overlay call when all zero, got %v", rec.Calls)
-	}
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Error(err)
 	}
 }
 
