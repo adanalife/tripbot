@@ -9,6 +9,16 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v4.14.0] — 2026-07-29
+
+### Chatbot
+
+- The silent-disconnect watchdog now covers TikTok. When OBS is pushing but the LIVE room is gone, it re-mints the room through the gateway (stop then start the egress) instead of leaving the stream invisible until someone notices. ([#1252](https://github.com/adanalife/tripbot/pull/1252))
+
+### Deploy / Infra
+
+- Mounting the `obs-music` album share is now an explicit per-env opt-in (`music_share`, off by default) rather than derived from the cluster. A pod can't schedule until its claim binds, so an env must provision the PV before turning the mount on. Renders identically for prod-1 and stage-1. ([#1253](https://github.com/adanalife/tripbot/pull/1253))
+
 ## [v4.13.1] — 2026-07-29
 
 ### Fixes
