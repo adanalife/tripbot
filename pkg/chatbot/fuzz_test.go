@@ -66,7 +66,7 @@ func FuzzGuessCmd(f *testing.F) {
 		// 2-letter form gets expanded via helpers.StateAbbrevToState; bail
 		// if either form matches the sentinel (essentially impossible).
 		guess := strings.Join(params, " ")
-		if strings.ToLower(guess) == strings.ToLower(unguessableState) {
+		if strings.EqualFold(guess, unguessableState) {
 			t.Skip("fuzz hit the sentinel state")
 		}
 		app.guessCmd(context.Background(), newTestUser("viewer1"), params)
