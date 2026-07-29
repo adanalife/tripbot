@@ -12,7 +12,6 @@ data:
   COMPED_SUBSCRIBERS: reapermoss
   DATABASE_HOST: postgres.prod-1-data.svc.cluster.local
   ENV: production
-  EXTERNAL_URL: https://tripbot-tiktok.prod.whereisdana.today
   GOOGLE_APPS_PROJECT_ID: tripbot-prod
   MAPS_OUTPUT_DIR: /opt/data/maps
   NATS_URL: nats://nats.prod-1-platform.svc.cluster.local:4222
@@ -46,7 +45,7 @@ spec:
   template:
     metadata:
       annotations:
-        adanalife.dev/config-hash: abd18707ae
+        adanalife.dev/config-hash: 5b6fe7870e
       labels:
         app: tripbot-tiktok
     spec:
@@ -66,8 +65,6 @@ spec:
                 name: sentry-tripbot
                 optional: true
             - secretRef:
-                name: tripbot-twitch-creds
-            - secretRef:
                 name: tripbot-google-maps-api-key
             - secretRef:
                 name: tripbot-discord-alerts-webhook
@@ -75,7 +72,7 @@ spec:
             - secretRef:
                 name: tripbot-discord-bot-token
                 optional: true
-          image: adanalife/tripbot:4.12.0
+          image: adanalife/tripbot:4.13.0
           imagePullPolicy: IfNotPresent
           livenessProbe:
             httpGet:
@@ -105,6 +102,10 @@ spec:
             capabilities:
               drop:
                 - ALL
+          volumeMounts:
+            - mountPath: /opt/tripbot/assets/music
+              name: music
+              readOnly: true
       initContainers:
         - args:
             - -path
@@ -119,7 +120,7 @@ spec:
                 name: tripbot-tiktok-config
             - secretRef:
                 name: tripbot-database-creds
-          image: adanalife/tripbot:4.12.0
+          image: adanalife/tripbot:4.13.0
           imagePullPolicy: IfNotPresent
           name: migrate
           resources:
@@ -138,6 +139,11 @@ spec:
         runAsUser: 65532
         seccompProfile:
           type: RuntimeDefault
+      volumes:
+        - name: music
+          persistentVolumeClaim:
+            claimName: obs-music
+            readOnly: true
 ---
 apiVersion: v1
 kind: Service
