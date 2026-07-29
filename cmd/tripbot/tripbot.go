@@ -608,7 +608,9 @@ func (t *Tripbot) startTwitchWatchdog(ctx context.Context) {
 //
 // Slower to fire and slower to repeat than the Twitch watchdog: a re-mint
 // costs a brand-new LIVE (viewers have to rejoin), so it waits out five
-// consecutive misses rather than three, and holds a 30m cooldown.
+// consecutive misses rather than three, and holds a 30m cooldown — which the
+// watchdog retires once a re-mint has held for five ticks, so the long timer
+// only ever suppresses re-mints that aren't taking.
 func (t *Tripbot) startTikTokWatchdog(ctx context.Context) {
 	if t.cfg.TikTokAPIURL == "" {
 		slog.WarnContext(ctx, "no TIKTOK_API_URL: silent-disconnect watchdog disabled (gateway not wired)")

@@ -111,6 +111,35 @@ func TestWatchSilentDisconnect_CooldownSuppressesRapidRestarts(t *testing.T) {
 	}
 }
 
+// A recovery that held, followed by an unrelated outage, recovers on detection
+// instead of waiting out the cooldown — the shape of the 2026-07-29 TikTok ban,
+// where the room ran fine for 21 minutes between two independent deaths.
+func TestWatchSilentDisconnect_HeldRecoveryRetiresCooldown(t *testing.T) {
+	deps := newFakeDeps([][2]bool{
+		{true, false}, {true, false}, {true, false}, // → restart 1
+		{true, true}, {true, true}, {true, true}, // recovery holds for threshold ticks
+		{true, false}, {true, false}, {true, false}, // → restart 2, cooldown retired
+	})
+	runUntilExhausted(t, deps, 3, time.Hour)
+	if got := deps.restarts.Load(); got != 2 {
+		t.Fatalf("restart count: want 2 (held recovery retires the cooldown), got %d", got)
+	}
+}
+
+// A recovery too brief to prove itself leaves the cooldown in force, so a
+// platform flapping live/offline still can't drive a restart loop.
+func TestWatchSilentDisconnect_BriefRecoveryKeepsCooldown(t *testing.T) {
+	deps := newFakeDeps([][2]bool{
+		{true, false}, {true, false}, {true, false}, // → restart 1
+		{true, true},                                // one live tick: not enough to prove the recovery took
+		{true, false}, {true, false}, {true, false}, // cooldown still blocks
+	})
+	runUntilExhausted(t, deps, 3, time.Hour)
+	if got := deps.restarts.Load(); got != 1 {
+		t.Fatalf("restart count: want 1 (brief recovery keeps the cooldown), got %d", got)
+	}
+}
+
 func TestWatchSilentDisconnect_ObsInactiveSkips(t *testing.T) {
 	deps := newFakeDeps([][2]bool{
 		{false, false}, {false, false}, {false, false}, {false, false},

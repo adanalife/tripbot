@@ -70,7 +70,9 @@ func defaultRestart(ctx context.Context) error {
 // WatchSilentDisconnect detects the state where OBS reports outputActive=true
 // but the platform reports the channel offline, and calls deps.Restart after
 // `threshold` consecutive misalignments. `cooldown` bounds how often recovery
-// can fire so a flapping platform API can't put us in a restart loop.
+// can fire so a flapping platform API can't put us in a restart loop — but it
+// is retired as soon as a recovery is seen to hold (see below), so it only ever
+// suppresses retries of a recovery that isn't working.
 //
 // Background: when Twitch's ingest server closes the RTMP session without
 // the FIN/RST making it back to OBS (e.g. an idle middlebox dropping the
@@ -81,7 +83,7 @@ func defaultRestart(ctx context.Context) error {
 // leaving OBS pushing happily at a room nobody can watch. Either way the
 // divergence is only visible from outside OBS.
 func WatchSilentDisconnect(ctx context.Context, deps WatchdogDeps, interval time.Duration, threshold int, cooldown time.Duration) {
-	misses := 0
+	misses, liveStreak := 0, 0
 	var lastRestart time.Time
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -118,8 +120,21 @@ func WatchSilentDisconnect(ctx context.Context, deps WatchdogDeps, interval time
 			}
 			if live {
 				misses = 0
+				// A recovery that has held for as long as it takes to declare a
+				// death took. The cooldown exists to stop retrying a recovery
+				// that isn't working, so holding it against a later, unrelated
+				// outage only keeps the stream dark: on 2026-07-29 TikTok ended
+				// the LIVE 21 minutes after a re-mint, and the 30m cooldown
+				// stranded it for 5 more minutes past detection.
+				liveStreak++
+				if liveStreak >= threshold && !lastRestart.IsZero() {
+					slog.InfoContext(ctx, "watchdog: recovery held, cooldown retired",
+						"live_ticks", liveStreak)
+					lastRestart = time.Time{}
+				}
 				continue
 			}
+			liveStreak = 0
 			misses++
 			slog.WarnContext(ctx, "watchdog: silent-disconnect suspected",
 				"misses", misses, "threshold", threshold)
