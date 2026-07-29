@@ -6,7 +6,6 @@ import (
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
-	"github.com/adanalife/tripbot/pkg/database"
 	"github.com/adanalife/tripbot/pkg/feature"
 	"github.com/adanalife/tripbot/pkg/geo"
 	"github.com/adanalife/tripbot/pkg/natsclient"
@@ -15,7 +14,6 @@ import (
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/gempir/go-twitch-irc/v4"
-	"gorm.io/gorm"
 )
 
 var Uptime time.Time
@@ -41,10 +39,6 @@ type App struct {
 	// zero value (false) keeps the normal per-platform command-filtered help,
 	// so directly-constructed test Apps are unaffected unless they opt in.
 	botless bool
-	// DB is the GORM handle used by commands that need to read or write the
-	// database. nil in tests that don't exercise the DB; otherwise either the
-	// real database.GormDB() or a sqlmock-backed gorm.DB.
-	DB *gorm.DB
 	// Onscreens drives the OBS browser-source overlays for chat-triggered
 	// effects (leaderboards, flags, middle-text). Tests inject a no-op fake.
 	Onscreens Onscreens
@@ -116,6 +110,14 @@ type App struct {
 	// a fake; cmd/tripbot assigns the same *beds.Store the console's /api/audio
 	// drives. Nil until then, which !audio reports as unavailable.
 	Beds Beds
+	// Scoreboards reads the miles / correct-guess leaderboards and credits a
+	// correct guess. Tests inject a recordingScoreboards to stage rows and
+	// assert credits; production uses realScoreboards.
+	Scoreboards Scoreboards
+	// Events records viewer-lifecycle events (subscribe, unsubscribe, miles
+	// correction) to the append-only events table. Tests inject a
+	// recordingEvents; production uses realEvents.
+	Events Events
 
 	// commands is this App's command registry (built by buildRegistry);
 	// singleWordLookup / multiWordLookup index it by trigger + alias for
@@ -135,39 +137,30 @@ type App struct {
 	helpIndex    int
 }
 
-// db returns the DB handle the App should use. Prefers an explicit a.DB
-// (which tests set to a sqlmock-backed gorm.DB), otherwise falls back to the
-// process-wide singleton. Lazy so package init never touches the DB.
-func (a *App) db() *gorm.DB {
-	if a.DB != nil {
-		return a.DB
-	}
-	return database.GormDB()
-}
-
 // New constructs an App wired with the production (realX) dependency adapters,
 // with its command registry built and indexed. cmd/tripbot builds the live App
 // with this and owns it; nothing in the package holds a singleton. Construction
 // touches no network or DB — the realX adapters are lazy.
 func New(cfg *c.TripbotConfig) *App {
 	a := &App{
-		Cfg:      cfg,
-		Platform: cfg.Platform,
-		botless:  cfg.Platform == platformYouTube && !cfg.YouTubeInboundEnabled,
-		// DB stays nil; commands use a.db() which falls back to database.GormDB().
-		Onscreens:  realOnscreens{c: onscreensClient.New(natsclient.DefaultPublisher(), cfg.Environment, cfg.Platform)},
-		Playout:    realPlayout{c: playoutClient.New(cfg.VlcServerHost, natsclient.DefaultPublisher(), cfg.Environment, cfg.Platform)},
-		Video:      realVideo{},
-		Chat:       disconnectedChat{},
-		Sessions:   realSessions{},
-		NowPlaying: newRealNowPlaying(),
-		Flags:      feature.NewInMemoryClient(nil),
-		NATS:       realNATS{},
-		Cron:       noopCron{},
-		Geocoder:   realGeocoder{},
-		Weather:    realWeather,
-		OBS:        realOBS{},
-		Search:     realSearch{env: cfg.Environment},
+		Cfg:         cfg,
+		Platform:    cfg.Platform,
+		botless:     cfg.Platform == platformYouTube && !cfg.YouTubeInboundEnabled,
+		Onscreens:   realOnscreens{c: onscreensClient.New(natsclient.DefaultPublisher(), cfg.Environment, cfg.Platform)},
+		Playout:     realPlayout{c: playoutClient.New(cfg.VlcServerHost, natsclient.DefaultPublisher(), cfg.Environment, cfg.Platform)},
+		Video:       realVideo{},
+		Chat:        disconnectedChat{},
+		Sessions:    realSessions{},
+		NowPlaying:  newRealNowPlaying(),
+		Flags:       feature.NewInMemoryClient(nil),
+		NATS:        realNATS{},
+		Cron:        noopCron{},
+		Geocoder:    realGeocoder{},
+		Weather:     realWeather,
+		OBS:         realOBS{},
+		Search:      realSearch{env: cfg.Environment},
+		Scoreboards: realScoreboards{cfg: cfg},
+		Events:      realEvents{cfg: cfg},
 	}
 	// Twitch is wired after the literal so the gateway/in-process selector can
 	// hold the App and read its (later-reassigned) Flags client at call time —

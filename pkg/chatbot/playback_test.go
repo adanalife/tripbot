@@ -236,14 +236,10 @@ func TestBackCmd_AdminDrivesPlaybackChain(t *testing.T) {
 // the correct-guess chain rather than just a side effect.
 
 func TestGuessCmd_CorrectGuess_RefreshesVideoAfterTimewarp(t *testing.T) {
-	mock := installMockDB(t)
 	vid := newTestVideo("Colorado", 39.5, -105.0, time.Now())
 	app := newTestApp(vid)
 	recVideo := &recordingVideo{Vid: vid}
 	app.Video = recVideo
-
-	expectAddToScoreChain(mock)
-	expectAddToScoreChain(mock)
 
 	app.guessCmd(context.Background(), newTestUser("viewer1"), []string{"Colorado"})
 
@@ -253,9 +249,6 @@ func TestGuessCmd_CorrectGuess_RefreshesVideoAfterTimewarp(t *testing.T) {
 	if len(recVideo.Calls) != len(wantCalls) ||
 		recVideo.Calls[0] != wantCalls[0] || recVideo.Calls[1] != wantCalls[1] {
 		t.Errorf("expected calls %v, got %v", wantCalls, recVideo.Calls)
-	}
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Error(err)
 	}
 }
 

@@ -3,8 +3,9 @@
 // Error capture flows through slog: log emitters call slog.Error /
 // slog.ErrorContext; pkg/telemetry installs samber/slog-sentry as a
 // handler so every slog Error becomes a Sentry event automatically.
-// The BeforeSend hook below throttles Sentry traffic to stay within
-// the free-tier 5k events/month budget.
+// The BeforeSend hook below keeps that inside the free-tier 5k
+// events/month budget: only prod reports at all, and its traffic is
+// deduplicated and capped.
 package errors
 
 import (
@@ -73,14 +74,19 @@ func Initialize(c config.Config, version string) {
 	}
 }
 
-// throttle returns a BeforeSend hook. In dev / testing it drops every
-// event so local runs never reach the prod Sentry project. In prod /
-// staging it enforces per-fingerprint cooldown + absolute hourly cap.
+// throttle returns a BeforeSend hook. Only prod reports: every other env
+// drops each event, so neither a local run nor stage reaches the shared
+// Sentry project. Stage exists to be broken — it runs against parked
+// platforms, absent upstreams and a bot that isn't a channel moderator — so
+// its errors describe the environment rather than a defect. In prod the hook
+// enforces a per-fingerprint cooldown plus an absolute hourly cap.
 //
 // Events dropped here still reach Loki via the OTel slog handler — Loki
-// has the complete record; Sentry receives a deduplicated sample.
+// has the complete record; Sentry receives a deduplicated sample. Drops are
+// counted in SentryEventsDropped, so a silenced env is visible rather than
+// merely quiet.
 func throttle(c config.Config) func(event *sentry.Event, hint *sentry.EventHint) *sentry.Event {
-	if c == nil || (!c.IsProduction() && !c.IsStaging()) {
+	if c == nil || !c.IsProduction() {
 		return func(*sentry.Event, *sentry.EventHint) *sentry.Event {
 			instrumentation.SentryEventsDropped.Inc("disabled")
 			return nil

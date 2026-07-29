@@ -761,6 +761,14 @@ func (t *Tripbot) startEventSub(ctx context.Context) {
 			if err == nil || errors.Is(err, context.Canceled) {
 				return
 			}
+			if errors.Is(err, eventsub.ErrUnauthorized) {
+				// The token is loaded once above, so every redial would repeat
+				// this rejection — roughly three a minute, since Twitch drops a
+				// subscription-less session after ~10s. Stop and say so; the
+				// recovery is a broadcaster re-consent and a restart.
+				slog.ErrorContext(ctx, "eventsub disabled: broadcaster token rejected — re-consent via the platform-gateway flow (surfaced in tripbot-console), then restart", "err", err)
+				return
+			}
 			// Twitch closing the socket outright surfaces here instead of as a
 			// session_reconnect frame the library handles itself, so Run has to
 			// be redialed or follower/sub announcements stay dead until the pod
