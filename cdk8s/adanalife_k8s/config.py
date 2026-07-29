@@ -159,6 +159,16 @@ class EnvConfig:
         return self.cluster == "minipc"
 
     @property
+    def music_share(self) -> bool:
+        """Whether the read-only `obs-music` claim is mounted. tripbot needs the
+        album share for the same reason OBS does — it enumerates the tracks to
+        shuffle and advance them — and mounts it at the same path so a track
+        path it picks resolves inside the OBS container too. Only the minipc
+        envs have the volume (infra provisions it); elsewhere the album bed is
+        simply unavailable and the other two beds work as normal."""
+        return self.cluster == "minipc"
+
+    @property
     def data_ns(self) -> str:
         """Namespace the stateful data unit (postgres + its SecretStore) lands in:
         the app namespace by default, or the isolated one when data_namespace set."""

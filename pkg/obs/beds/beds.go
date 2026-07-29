@@ -1,0 +1,260 @@
+// Package beds owns which background-audio bed the stream is playing and how
+// to switch between them.
+//
+// The OBS scene collection ships ONE "Background Audio" ffmpeg_source (see the
+// adanalife/obs repo's config/Tripbot.json.tmpl). Its settings decide the bed:
+// a network stream for SomaFM, a looping local FLAC for the car-hum drone, a
+// non-looping local track for the album. Switching a bed is therefore just a
+// SetInputSettings overlay onto that one source — the same mechanism the audio
+// watchdog has used since 2026-06-23 to swap SomaFM out for the local bed.
+//
+// Which bed is live is process state, not database state: it's a property of
+// the OBS container this tripbot is paired with, and it dies with the pod. The
+// Store reads it back off OBS at startup so a tripbot restart doesn't lose
+// track of what's actually playing.
+package beds
+
+import (
+	"context"
+	"fmt"
+	"io/fs"
+	"log/slog"
+	"math/rand/v2"
+	"path/filepath"
+	"sort"
+	"strings"
+	"sync"
+)
+
+// Bed is one selectable background-audio source.
+type Bed string
+
+const (
+	// SomaFM is the Groove Salad Classic internet-radio stream. Its music is not
+	// cleared for our rebroadcast — it trips YouTube's Content ID and the other
+	// platforms' audio ID — so it's a Twitch-only default, by tolerance rather
+	// than licence.
+	SomaFM Bed = "somafm"
+	// CarHum is the synthesized, licence-clean car-interior drone baked into the
+	// OBS image. Safe on every platform; the watchdog's fallback bed.
+	CarHum Bed = "carhum"
+	// Album plays tracks from the mounted music share, one at a time, advancing
+	// when OBS reports the current track ended.
+	Album Bed = "album"
+)
+
+// All is the bed set the console offers, in display order.
+var All = []Bed{SomaFM, CarHum, Album}
+
+// Valid reports whether b is a bed we know how to play.
+func Valid(b Bed) bool {
+	for _, x := range All {
+		if x == b {
+			return true
+		}
+	}
+	return false
+}
+
+// Cross-repo contracts with the adanalife/obs repo. InputName must match the
+// source "name" in config/Tripbot.json.tmpl; the paths must match what the
+// image bakes in (carhum) and where cdk8s mounts the obs-music PVC. tripbot
+// mounts that same claim at the same path, so a path chosen here resolves
+// identically inside the OBS container.
+const (
+	InputName  = "Background Audio"
+	CarHumFile = "/opt/tripbot/assets/carhum/car-hum-idle.flac"
+	MusicDir   = "/opt/tripbot/assets/music"
+)
+
+// audioExts are the track extensions scanned for under MusicDir. Matches the
+// find in the obs repo's script/background-audio.sh.
+var audioExts = map[string]bool{".mp3": true, ".flac": true, ".m4a": true, ".ogg": true}
+
+// OBS is the subset of pkg/obs the store drives. Injectable so switching logic
+// unit-tests without a real OBS WebSocket.
+type OBS interface {
+	// SetNetwork flips the source back to its configured stream URL.
+	SetNetwork(ctx context.Context, inputName string) error
+	// SetLocalFile points the source at a local path; loop=false lets the media
+	// end (which is how album advance is triggered).
+	SetLocalFile(ctx context.Context, inputName, file string, loop bool) error
+	// Settings reads the source's current settings.
+	Settings(ctx context.Context, inputName string) (map[string]any, error)
+}
+
+// Store holds the live bed + album position and applies changes to OBS.
+type Store struct {
+	obs      OBS
+	musicDir string
+
+	mu     sync.Mutex
+	bed    Bed
+	tracks []string // shuffled play order; rebuilt each time the album starts
+	idx    int
+}
+
+// NewStore returns a store defaulting to bed (used until Detect reads the real
+// one off OBS). musicDir is the album root; "" uses MusicDir.
+func NewStore(o OBS, bed Bed, musicDir string) *Store {
+	if musicDir == "" {
+		musicDir = MusicDir
+	}
+	if !Valid(bed) {
+		bed = CarHum
+	}
+	return &Store{obs: o, bed: bed, musicDir: musicDir}
+}
+
+// Current reports the live bed and, on the album, the track file playing.
+func (s *Store) Current() (Bed, string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.bed != Album || s.idx >= len(s.tracks) {
+		return s.bed, ""
+	}
+	return s.bed, s.tracks[s.idx]
+}
+
+// Detect reads the source's settings and records which bed OBS actually booted
+// on, so a tripbot restart doesn't report a stale guess. A failure here is not
+// fatal — the configured default stands and the next switch corrects it.
+func (s *Store) Detect(ctx context.Context) {
+	settings, err := s.obs.Settings(ctx, InputName)
+	if err != nil {
+		slog.WarnContext(ctx, "background audio: could not read current bed from obs", "err", err)
+		return
+	}
+	bed := bedFromSettings(settings, s.musicDir)
+	s.mu.Lock()
+	s.bed = bed
+	s.mu.Unlock()
+	slog.InfoContext(ctx, "background audio: detected bed at startup", "bed", bed)
+}
+
+// bedFromSettings maps an ffmpeg_source's settings back to the bed that would
+// have produced them. A local file under the music share is the album; any
+// other local file is the car-hum drone (that's the only other one the image
+// ships); a network source is SomaFM.
+func bedFromSettings(settings map[string]any, musicDir string) Bed {
+	if local, _ := settings["is_local_file"].(bool); !local {
+		return SomaFM
+	}
+	file, _ := settings["local_file"].(string)
+	if under(file, musicDir) {
+		return Album
+	}
+	return CarHum
+}
+
+// under reports whether file sits inside dir, comparing whole path segments so
+// a sibling like "/music-old/x.mp3" can't match "/music".
+func under(file, dir string) bool {
+	rel, err := filepath.Rel(dir, file)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+// Set switches to bed and applies it to OBS. Switching to the album (re)shuffles
+// the play order and starts on its first track. The store is only updated once
+// OBS accepts the change, so a failed switch leaves the reported bed truthful.
+func (s *Store) Set(ctx context.Context, bed Bed) error {
+	if !Valid(bed) {
+		return fmt.Errorf("unknown background-audio bed %q", bed)
+	}
+
+	s.mu.Lock()
+	if bed == Album {
+		tracks, err := scanTracks(s.musicDir)
+		if err != nil || len(tracks) == 0 {
+			s.mu.Unlock()
+			// No share mounted / no files: refuse rather than leaving the stream
+			// silent. The caller surfaces this; the current bed keeps playing.
+			return fmt.Errorf("no album tracks under %s: %w", s.musicDir, err)
+		}
+		shuffle(tracks)
+		s.tracks, s.idx = tracks, 0
+	}
+	target := s.trackLocked(bed)
+	s.mu.Unlock()
+
+	if err := s.apply(ctx, bed, target); err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	s.bed = bed
+	s.mu.Unlock()
+	slog.InfoContext(ctx, "background audio: bed switched", "bed", bed, "track", target)
+	return nil
+}
+
+// Advance moves to the next album track (wrapping at the end) and plays it.
+// A no-op unless the album is the live bed — the watchdog calls this whenever
+// OBS reports the media ended, which also happens on the other beds.
+func (s *Store) Advance(ctx context.Context) error {
+	s.mu.Lock()
+	if s.bed != Album || len(s.tracks) == 0 {
+		s.mu.Unlock()
+		return nil
+	}
+	s.idx = (s.idx + 1) % len(s.tracks)
+	// Re-shuffle on wrap so a long stream doesn't repeat the same 100-track
+	// sequence in the same order every time.
+	if s.idx == 0 {
+		shuffle(s.tracks)
+	}
+	track := s.tracks[s.idx]
+	s.mu.Unlock()
+
+	if err := s.obs.SetLocalFile(ctx, InputName, track, false); err != nil {
+		return fmt.Errorf("advance album track: %w", err)
+	}
+	slog.InfoContext(ctx, "background audio: next track", "track", filepath.Base(track))
+	return nil
+}
+
+// trackLocked returns the local file a bed should play, or "" for SomaFM.
+// Caller holds s.mu.
+func (s *Store) trackLocked(bed Bed) string {
+	switch bed {
+	case CarHum:
+		return CarHumFile
+	case Album:
+		if s.idx < len(s.tracks) {
+			return s.tracks[s.idx]
+		}
+	}
+	return ""
+}
+
+// apply writes the bed onto the OBS source. Only the album plays unlooped.
+func (s *Store) apply(ctx context.Context, bed Bed, track string) error {
+	if bed == SomaFM {
+		return s.obs.SetNetwork(ctx, InputName)
+	}
+	return s.obs.SetLocalFile(ctx, InputName, track, bed != Album)
+}
+
+// scanTracks lists every audio file under dir, sorted so the pre-shuffle order
+// is deterministic (the shuffle is what makes playback vary, not readdir order).
+func scanTracks(dir string) ([]string, error) {
+	var out []string
+	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() && audioExts[strings.ToLower(filepath.Ext(path))] {
+			out = append(out, path)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
+func shuffle(tracks []string) {
+	rand.Shuffle(len(tracks), func(i, j int) { tracks[i], tracks[j] = tracks[j], tracks[i] })
+}

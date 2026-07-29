@@ -35,6 +35,7 @@ type Server struct {
 	cfg        *c.TripbotConfig
 	versionTag string
 	flags      feature.FlagClient
+	beds       BedStore
 	rotators   RotatorStore
 	rotatorPub RotatorPublisher
 }
@@ -97,6 +98,11 @@ func (s *Server) Start(ctx context.Context) {
 	// rest of /api (no Ingress; reached over the in-namespace Service).
 	r.Handle("/api/flags", tagged("/api/flags", s.flagsHandler)).Methods("GET")
 	r.Handle("/api/flags/{key}", tagged("/api/flags/{key}", s.flagToggleHandler)).Methods("POST")
+
+	// Background audio: which bed this platform's OBS is playing, and the
+	// switch between them.
+	r.Handle("/api/audio", tagged("/api/audio", s.audioHandler)).Methods("GET")
+	r.Handle("/api/audio", tagged("/api/audio", s.audioSetHandler)).Methods("POST")
 
 	// Corner-rotator copy for the console's editor: read one platform's copy,
 	// save it (which pushes it live over NATS), or reset it to the defaults

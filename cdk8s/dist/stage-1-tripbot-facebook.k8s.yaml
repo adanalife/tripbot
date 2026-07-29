@@ -112,6 +112,10 @@ spec:
             capabilities:
               drop:
                 - ALL
+          volumeMounts:
+            - mountPath: /opt/tripbot/assets/music
+              name: music
+              readOnly: true
       initContainers:
         - args:
             - -path
@@ -148,6 +152,11 @@ spec:
         - effect: NoSchedule
           key: dana.lol/rpi5
           operator: Exists
+      volumes:
+        - name: music
+          persistentVolumeClaim:
+            claimName: obs-music
+            readOnly: true
 ---
 apiVersion: v1
 kind: Service

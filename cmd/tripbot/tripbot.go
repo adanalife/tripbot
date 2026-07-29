@@ -24,6 +24,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/natsclient"
 	"github.com/adanalife/tripbot/pkg/obs"
 	"github.com/adanalife/tripbot/pkg/obs/audiowatchdog"
+	"github.com/adanalife/tripbot/pkg/obs/beds"
 	"github.com/adanalife/tripbot/pkg/obs/watchdog"
 	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
 	playoutClient "github.com/adanalife/tripbot/pkg/playout-client"
@@ -97,6 +98,11 @@ type Tripbot struct {
 	// (app.ConnectIRC) and shared by connectToTwitch, pollForTwitchToken
 	// and the token-refresh cron job (SetIRCToken).
 	irc *twitch.Client
+
+	// beds owns which background-audio bed this platform's OBS is playing and
+	// applies switches to it. Constructed in startBackgroundAudio and shared by
+	// the console API (/api/audio) and the audio watchdog (album advance).
+	beds *beds.Store
 
 	// scheduler is the background cron scheduler, constructed in startCron and
 	// shared by scheduleBackgroundJobs (job registration) and shutdown (Stop).
@@ -273,6 +279,8 @@ func (t *Tripbot) Run() {
 	// stats, stamping the series with the platform. These obs_* gauges feed
 	// the stream-health dashboards and alerts.
 	go obs.PollStreamingActive(ctx, t.cfg.Platform, 30*time.Second)
+	t.startBackgroundAudio(ctx)         // every platform: owns its own OBS's bed
+	t.startBackgroundAudioWatchdog(ctx) // recovers SomaFM outages; advances album tracks
 	if t.platformIsTwitch() {
 		// chat.send subjects are per-env, not per-platform — both platform
 		// instances would receive every admin send, so only the Twitch instance
@@ -281,7 +289,6 @@ func (t *Tripbot) Run() {
 		t.startChatSendSubscriber(ctx)       // after startNATS + setUpTwitchClient: needs the conn and t.app.Chat
 		t.startDiscord(ctx)                  // Discord stays Twitch-side for v1
 		t.startSilentDisconnectWatchdog(ctx) // watches the OBS→Twitch stream specifically
-		t.startBackgroundAudioWatchdog(ctx)  // keeps audible music on-stream when SomaFM drops
 		t.connectToTwitch(ctx)               // blocks until shutdown
 	} else {
 		t.connectViaGateway(ctx, t.gatewayPlatform()) // blocks until shutdown
@@ -577,17 +584,35 @@ func (t *Tripbot) startSilentDisconnectWatchdog(ctx context.Context) {
 	go watchdog.WatchSilentDisconnect(ctx, deps, 60*time.Second, 3, 10*time.Minute)
 }
 
+// startBackgroundAudio constructs this instance's bed store and hands it to the
+// console API. The seed bed mirrors the OBS entrypoint's per-platform default;
+// Detect then reads the source's real settings so a tripbot restart reports
+// what's actually playing rather than the default. Detect dials OBS, so it runs
+// in the background — a slow or absent OBS must not hold up startup.
+func (t *Tripbot) startBackgroundAudio(ctx context.Context) {
+	seed := beds.CarHum
+	if t.platformIsTwitch() {
+		seed = beds.SomaFM
+	}
+	t.beds = beds.NewStore(beds.RealOBS{}, seed, "")
+	t.srv.SetBeds(t.beds) // the console's /api/audio reads + switches through it
+	go t.beds.Detect(ctx)
+}
+
 // startBackgroundAudioWatchdog launches the volume-meter connection + the
-// background-audio watchdog that keeps audible music on the Twitch stream when
-// SomaFM drops — swapping the "Groove Salad Classic" source onto the local Car
-// Hum bed when it goes silent and back when SomaFM recovers. Twitch-only:
-// SomaFM is the Twitch music bed; YouTube already runs the always-available
-// local Car Hum. First seen needed in prod on 2026-06-23, when a full SomaFM
-// edge outage left the stream silent with no self-heal.
+// background-audio watchdog. It does two jobs, both tied to the single
+// "Background Audio" source: it keeps audible music on the stream when SomaFM
+// drops (swapping onto the local Car Hum bed and back once SomaFM recovers —
+// first needed in prod on 2026-06-23, when a full SomaFM edge outage left the
+// stream silent with no self-heal), and it advances the album to its next track
+// when OBS reports the current one ended.
+//
+// Runs on every platform: any platform can now select any bed, so neither job
+// is Twitch-specific. On the car-hum bed it only records the audio gauges.
 func (t *Tripbot) startBackgroundAudioWatchdog(ctx context.Context) {
 	meter := audiowatchdog.NewVolumeMeter(audiowatchdog.BackgroundAudioInputName, 30*time.Second)
 	go meter.Run(ctx)
-	go audiowatchdog.Watch(ctx, audiowatchdog.DefaultDeps(meter), audiowatchdog.DefaultConfig())
+	go audiowatchdog.Watch(ctx, audiowatchdog.DefaultDeps(meter, t.beds), audiowatchdog.DefaultConfig())
 }
 
 // startDiscord brings up the bot's Discord slash-command session when

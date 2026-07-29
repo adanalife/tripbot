@@ -24,21 +24,22 @@ import (
 
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"github.com/adanalife/tripbot/pkg/obs"
+	"github.com/adanalife/tripbot/pkg/obs/beds"
 )
 
 // Cross-repo contracts with the adanalife/obs repo's scene config
 // (config/Tripbot.json.tmpl) and Dockerfiles:
 const (
-	// BackgroundAudioInputName is the OBS source name of the Twitch music bed.
-	// Must match the source "name" in the scene config.
-	BackgroundAudioInputName = "Groove Salad Classic"
+	// BackgroundAudioInputName is the OBS source name of the music bed. Must
+	// match the source "name" in the scene config. Every bed plays through this
+	// one source, so the watchdog reads the same input whichever is selected.
+	BackgroundAudioInputName = beds.InputName
 
 	// fallbackFile is the local, license-clean bed the source is pointed at
 	// when SomaFM is unreachable. Baked into every OBS image by the carhum
 	// build stage (COPY target in the obs repo's Dockerfile{,.arm64}); the
-	// path is resolved by OBS, not tripbot. "idle" is the scene's default
-	// Car Hum voicing on YouTube.
-	fallbackFile = "/opt/tripbot/assets/carhum/car-hum-idle.flac"
+	// path is resolved by OBS, not tripbot.
+	fallbackFile = beds.CarHumFile
 
 	// somaFMProbeURL is the SomaFM endpoint the watchdog probes to decide when
 	// it is safe to swap back. Matches the source's `input` URL in the scene
@@ -72,6 +73,13 @@ type Deps struct {
 	SwapToFallback func(context.Context) error
 	// SwapToSomaFM points the source back at its SomaFM network stream.
 	SwapToSomaFM func(context.Context) error
+	// ActiveBed reports which bed the stream is meant to be playing. Only the
+	// SomaFM bed needs the outage machinery below — a local bed can't be
+	// rescued by swapping to another local bed.
+	ActiveBed func() beds.Bed
+	// AdvanceAlbum queues the next album track. Called when OBS reports the
+	// media ended while the album bed is live.
+	AdvanceAlbum func(context.Context) error
 }
 
 // Config holds the watchdog's timing + threshold knobs.
@@ -99,15 +107,20 @@ func DefaultConfig() Config {
 
 // DefaultDeps wires Watch's hooks to the real OBS WebSocket helpers, the live
 // volume meter, and an HTTP SomaFM probe.
-func DefaultDeps(meter *VolumeMeter) Deps {
+func DefaultDeps(meter *VolumeMeter, store *beds.Store) Deps {
 	return Deps{
+		ActiveBed: func() beds.Bed {
+			bed, _ := store.Current()
+			return bed
+		},
+		AdvanceAlbum: store.Advance,
 		MediaState: func(ctx context.Context) (string, error) {
 			return obs.GetMediaInputState(ctx, BackgroundAudioInputName)
 		},
 		Level:           meter.Level,
 		SomaFMReachable: defaultSomaFMReachable,
 		SwapToFallback: func(ctx context.Context) error {
-			return obs.SetInputLocalFileMode(ctx, BackgroundAudioInputName, fallbackFile)
+			return obs.SetInputLocalFileMode(ctx, BackgroundAudioInputName, fallbackFile, true)
 		},
 		SwapToSomaFM: func(ctx context.Context) error {
 			return obs.SetInputNetworkMode(ctx, BackgroundAudioInputName)
@@ -213,6 +226,30 @@ func Watch(ctx context.Context, deps Deps, cfg Config) {
 			}
 			playing := state == obs.MediaStatePlaying
 			instrumentation.OBSBackgroundAudio.SetPlaying(playing)
+
+			// The SomaFM outage machinery below only makes sense while SomaFM is
+			// the selected bed. On a local bed there's nothing to fall back
+			// *to* and nothing to recover, so hold the counters at zero rather
+			// than letting a quiet passage accumulate misses toward a swap that
+			// would stomp the operator's choice.
+			if bed := deps.ActiveBed(); bed != beds.SomaFM {
+				failMisses, recoverHits = 0, 0
+				// "On fallback" is a statement about the SomaFM bed; once the
+				// operator has moved off it, holding the flag would make the
+				// next switch back to SomaFM look like an outage recovery.
+				if onFallback {
+					onFallback = false
+					instrumentation.OBSBackgroundAudio.SetOnFallback(false)
+				}
+				// The album plays one track at a time, unlooped, so OBS ends the
+				// media between tracks — that's the cue to queue the next one.
+				if bed == beds.Album && obs.MediaStateDown(state) {
+					if err := deps.AdvanceAlbum(ctx); err != nil {
+						slog.ErrorContext(ctx, "audio watchdog: album advance failed", "err", err)
+					}
+				}
+				continue
+			}
 
 			cooling := time.Since(lastSwap) < cfg.Cooldown
 
