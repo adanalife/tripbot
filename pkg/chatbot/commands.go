@@ -16,10 +16,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/adanalife/tripbot/pkg/scoreboards"
-
 	"github.com/adanalife/tripbot/pkg/database"
-	"github.com/adanalife/tripbot/pkg/events"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/adanalife/tripbot/pkg/video"
@@ -49,11 +46,6 @@ var currentVersion string
 // outside a container the file won't exist and versionCmd falls back to
 // "dev". Overridable in tests.
 var versionFilePath = "/etc/tripbot/version"
-
-// this is the scoreboard name used for counting correct guesses
-const guessScoreboard = "guess_state_total"
-
-//TODO: incorrect guess scoreboard?
 
 func (a *App) helpCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !help", "username", user.Username)
@@ -373,10 +365,10 @@ func (a *App) monthlyMilesLeaderboardCmd(ctx context.Context, user *users.User, 
 	slog.InfoContext(ctx, "ran !leaderboard", "username", user.Username)
 
 	// select users to show in leaderboard
-	leaderboard := scoreboards.TopMilesRows(ctx, a.Cfg, leaderboardSize)
+	leaderboard := a.Scoreboards.TopMiles(ctx, leaderboardSize)
 
 	// display leaderboard on screen
-	a.Onscreens.ShowLeaderboard(ctx, scoreboards.CurrentMilesMonth()+" Miles", leaderboard)
+	a.Onscreens.ShowLeaderboard(ctx, a.Scoreboards.MilesMonth()+" Miles", leaderboard)
 
 	// build a message to send to chat
 	msg := fmt.Sprintf("Top %d miles this month: ", len(leaderboard))
@@ -418,7 +410,7 @@ func (a *App) monthlyGuessLeaderboardCmd(ctx context.Context, user *users.User, 
 	slog.InfoContext(ctx, "ran !guessleaderboard", "username", user.Username)
 
 	// select users to show in leaderboard (zero-scorers already filtered)
-	intLeaderboard := scoreboards.TopGuessRows(ctx, a.Cfg, leaderboardSize)
+	intLeaderboard := a.Scoreboards.TopGuesses(ctx, leaderboardSize)
 
 	// special message if no one has any correct guesses yet
 	if len(intLeaderboard) == 0 {
@@ -536,8 +528,7 @@ func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 	if strings.EqualFold(guess, vid.State) {
 		msg = fmt.Sprintf("@%s got it! We're in %s", user.Username, vid.State)
 		// increase their guess score
-		user.AddToScore(ctx, guessScoreboard, 1.0)
-		user.AddToScore(ctx, scoreboards.CurrentGuessScoreboard(), 1.0)
+		a.Scoreboards.CreditGuess(ctx, user)
 		// do a timewarp, crediting the guesser on the overlay
 		a.timewarp(ctx, user.Username)
 	} else {
@@ -712,7 +703,7 @@ func (a *App) giveMilesCmd(ctx context.Context, user *users.User, params []strin
 		return
 	}
 	newTotal := a.Sessions.CorrectMiles(ctx, target, float32(delta))
-	if err := events.Correction(ctx, a.Cfg, target, delta); err != nil {
+	if err := a.Events.Correction(ctx, target, delta); err != nil {
 		slog.ErrorContext(ctx, "error creating correction event", "err", err)
 	}
 	a.Chat.Say(fmt.Sprintf("@%s now has %.2fmi", target, newTotal))

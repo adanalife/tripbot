@@ -19,8 +19,16 @@ func TopMilesRows(ctx context.Context, cfg *c.TripbotConfig, size int) [][]strin
 // has a row — many at 0 early in the month), and the float values are
 // rendered as ints. May return an empty slice.
 func TopGuessRows(ctx context.Context, cfg *c.TripbotConfig, size int) [][]string {
+	return guessRows(TopUsers(ctx, cfg, CurrentGuessScoreboard(), size))
+}
+
+// guessRows applies the guess-board presentation rules to raw [username,
+// value] pairs: drop the zero-scorers, render the rest as whole numbers. Split
+// out from the query so it can be tested as what it is — string shaping —
+// rather than through a mocked JOIN.
+func guessRows(pairs [][]string) [][]string {
 	var rows [][]string
-	for _, pair := range TopUsers(ctx, cfg, CurrentGuessScoreboard(), size) {
+	for _, pair := range pairs {
 		// guesses are ints not floats, so remove the decimal place
 		guesses := strings.Split(pair[1], ".")[0]
 		if guesses == "0" || guesses == "" {

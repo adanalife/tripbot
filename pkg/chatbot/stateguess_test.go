@@ -98,12 +98,10 @@ func TestFuzzyStateName(t *testing.T) {
 
 func TestGuessCmd_CorrectGuess_Misspelled(t *testing.T) {
 	// a close misspelling of the right state still wins
-	mock := installMockDB(t)
 	vid := newTestVideo("Massachusetts", 42.3, -71.0, time.Now())
 	app := newTestApp(vid)
-
-	expectAddToScoreChain(mock)
-	expectAddToScoreChain(mock)
+	recScores := &recordingScoreboards{}
+	app.Scoreboards = recScores
 
 	out := captureSay(t, app)
 
@@ -112,8 +110,9 @@ func TestGuessCmd_CorrectGuess_Misspelled(t *testing.T) {
 	if !strings.Contains(out(), "got it") {
 		t.Errorf("expected correct-guess msg, got %q", out())
 	}
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Error(err)
+	// A fuzzy-corrected guess scores like an exact one.
+	if len(recScores.Credited) != 1 {
+		t.Errorf("credited = %v, want the guesser once", recScores.Credited)
 	}
 }
 
