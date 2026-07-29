@@ -74,7 +74,9 @@ func RestartOBSOutput(ctx context.Context) error {
 // `threshold` consecutive misalignments. `cooldown` bounds how often recovery
 // can fire so a flapping platform API can't put us in a restart loop — but it
 // is retired as soon as a recovery is seen to hold (see below), so it only ever
-// suppresses retries of a recovery that isn't working.
+// suppresses retries of a recovery that isn't working. A live-check that errors
+// answers neither way: collected misses are held (and aged out) rather than
+// cleared, so an unreliable check can't mask a channel that is genuinely dark.
 //
 // Background: when Twitch's ingest server closes the RTMP session without
 // the FIN/RST making it back to OBS (e.g. an idle middlebox dropping the
@@ -86,7 +88,11 @@ func RestartOBSOutput(ctx context.Context) error {
 // divergence is only visible from outside OBS.
 func WatchSilentDisconnect(ctx context.Context, deps WatchdogDeps, interval time.Duration, threshold int, cooldown time.Duration) {
 	misses, liveStreak := 0, 0
-	var lastRestart time.Time
+	var lastRestart, lastAnswer time.Time
+	// How long collected misses outlive the last definite live/offline answer:
+	// the same span it takes to declare a death, so evidence never survives
+	// longer than it would have taken to act on it.
+	staleAfter := time.Duration(threshold) * interval
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
@@ -116,10 +122,21 @@ func WatchSilentDisconnect(ctx context.Context, deps WatchdogDeps, interval time
 			}
 			live, err := deps.ChannelLive(ctx)
 			if err != nil {
-				slog.WarnContext(ctx, "watchdog: live status unavailable", "err", err)
-				misses = 0
+				// An unknown answer is not evidence of health. Zeroing here let a
+				// live-check failing every other tick hold misses under the
+				// threshold indefinitely, so a dark channel would never be
+				// recovered — and TikTok's check is least reliable exactly when
+				// rooms are churning, which is when recovery matters most. Keep
+				// the count and let it go stale instead, so an unreliable check
+				// delays recovery rather than preventing it.
+				if time.Since(lastAnswer) > staleAfter {
+					misses = 0
+				}
+				slog.WarnContext(ctx, "watchdog: live status unavailable",
+					"err", err, "misses", misses)
 				continue
 			}
+			lastAnswer = time.Now()
 			if live {
 				misses = 0
 				// A recovery that has held for as long as it takes to declare a

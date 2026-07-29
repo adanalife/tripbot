@@ -150,49 +150,73 @@ func TestWatchSilentDisconnect_ObsInactiveSkips(t *testing.T) {
 	}
 }
 
-func TestWatchSilentDisconnect_LiveCheckErrorResetsMisses(t *testing.T) {
-	var tickCount atomic.Int32
-	var restarts atomic.Int32
+// liveAnswer is one scripted ChannelLive result: a definite live/offline
+// answer, or an error standing for "unknown" (TikTok's IsLive returning
+// ErrIPBlockedOrBanned under throttling is the real case).
+type liveAnswer struct {
+	live bool
+	err  error
+}
+
+// runLiveScript drives the watchdog through script with OBS always streaming,
+// and reports how many restarts fired. interval is explicit because the misses
+// held across an unknown answer age out after threshold*interval.
+func runLiveScript(t *testing.T, script []liveAnswer, interval time.Duration, threshold int) int32 {
+	t.Helper()
+	var idx, restarts atomic.Int32
 	done := make(chan struct{})
 	var doneOnce sync.Once
 
 	deps := WatchdogDeps{
-		OBSActive: func(context.Context) (bool, error) {
-			return true, nil
-		},
+		OBSActive: func(context.Context) (bool, error) { return true, nil },
 		ChannelLive: func(context.Context) (bool, error) {
-			n := tickCount.Add(1)
-			switch n {
-			case 1, 2:
-				return false, nil // miss 1, miss 2
-			case 3:
-				return false, errors.New("live-check transient") // resets misses
-			case 4, 5:
-				return false, nil // miss 1, miss 2 (no third → no restart)
-			default:
+			n := int(idx.Add(1)) - 1
+			if n >= len(script) {
 				doneOnce.Do(func() { close(done) })
 				return true, nil
 			}
+			return script[n].live, script[n].err
 		},
-		Restart: func(context.Context) error {
-			restarts.Add(1)
-			return nil
-		},
+		Restart: func(context.Context) error { restarts.Add(1); return nil },
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go WatchSilentDisconnect(ctx, deps, 2*time.Millisecond, 3, time.Minute)
-
+	go WatchSilentDisconnect(ctx, deps, interval, threshold, time.Minute)
 	select {
 	case <-done:
-	case <-time.After(2 * time.Second):
-		t.Fatal("test loop did not advance")
+	case <-time.After(5 * time.Second):
+		t.Fatal("script not exhausted")
 	}
 	cancel()
 	time.Sleep(10 * time.Millisecond)
+	return restarts.Load()
+}
 
-	if got := restarts.Load(); got != 0 {
-		t.Fatalf("restart count: want 0 (live-check error reset misses before threshold), got %d", got)
+// An unknown live status must not clear the misses already collected: a check
+// that fails every other tick would otherwise hold the count under the
+// threshold forever, leaving a dark channel unrecovered.
+func TestWatchSilentDisconnect_LiveCheckErrorHoldsMisses(t *testing.T) {
+	unknown := liveAnswer{err: errors.New("live-check transient")}
+	offline := liveAnswer{}
+	got := runLiveScript(t, []liveAnswer{offline, offline, unknown, offline}, 10*time.Millisecond, 3)
+	if got != 1 {
+		t.Fatalf("restart count: want 1 (misses survive an unknown answer), got %d", got)
+	}
+}
+
+// Held misses still expire: once the last definite answer is older than it
+// takes to declare a death, the evidence is discarded rather than firing a
+// restart off observations from another era.
+func TestWatchSilentDisconnect_HeldMissesGoStale(t *testing.T) {
+	unknown := liveAnswer{err: errors.New("live-check transient")}
+	offline := liveAnswer{}
+	script := []liveAnswer{offline, offline}
+	for i := 0; i < 8; i++ { // 80ms of unknowns against a 30ms staleness window
+		script = append(script, unknown)
+	}
+	script = append(script, offline, offline)
+	if got := runLiveScript(t, script, 10*time.Millisecond, 3); got != 0 {
+		t.Fatalf("restart count: want 0 (stale misses discarded), got %d", got)
 	}
 }
