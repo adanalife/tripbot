@@ -570,7 +570,7 @@ func (t *Tripbot) startSilentDisconnectWatchdog(ctx context.Context) {
 	// package-boundary-init-discipline. A nil gateway is a misconfigured Twitch
 	// instance (TWITCH_API_URL unset) — report the check as errored rather than
 	// force-restarting on a false negative.
-	deps.TwitchLive = func(ctx context.Context) (bool, error) {
+	deps.ChannelLive = func(ctx context.Context) (bool, error) {
 		if t.gateway == nil {
 			return false, errors.New("watchdog live-check: no gateway configured")
 		}

@@ -9,10 +9,10 @@ import (
 	"time"
 )
 
-// fakeDeps drives the watchdog with scripted (obs, twitch) responses,
+// fakeDeps drives the watchdog with scripted (obs, live) responses,
 // counts restarts, and signals when the script is exhausted so the test
 // can cleanly tear down the loop. OBSActive advances the script (it's
-// called every tick) and stashes the current pair; TwitchLive reads from
+// called every tick) and stashes the current pair; ChannelLive reads from
 // that stash. Holds the final pair after exhaustion to avoid racing
 // shutdown.
 type fakeDeps struct {
@@ -45,7 +45,7 @@ func (f *fakeDeps) deps() WatchdogDeps {
 			}
 			return f.current[0], nil
 		},
-		TwitchLive: func(context.Context) (bool, error) {
+		ChannelLive: func(context.Context) (bool, error) {
 			f.mu.Lock()
 			defer f.mu.Unlock()
 			return f.current[1], nil
@@ -121,7 +121,7 @@ func TestWatchSilentDisconnect_ObsInactiveSkips(t *testing.T) {
 	}
 }
 
-func TestWatchSilentDisconnect_HelixErrorResetsMisses(t *testing.T) {
+func TestWatchSilentDisconnect_LiveCheckErrorResetsMisses(t *testing.T) {
 	var tickCount atomic.Int32
 	var restarts atomic.Int32
 	done := make(chan struct{})
@@ -131,13 +131,13 @@ func TestWatchSilentDisconnect_HelixErrorResetsMisses(t *testing.T) {
 		OBSActive: func(context.Context) (bool, error) {
 			return true, nil
 		},
-		TwitchLive: func(context.Context) (bool, error) {
+		ChannelLive: func(context.Context) (bool, error) {
 			n := tickCount.Add(1)
 			switch n {
 			case 1, 2:
 				return false, nil // miss 1, miss 2
 			case 3:
-				return false, errors.New("helix transient") // resets misses
+				return false, errors.New("live-check transient") // resets misses
 			case 4, 5:
 				return false, nil // miss 1, miss 2 (no third → no restart)
 			default:
@@ -164,6 +164,6 @@ func TestWatchSilentDisconnect_HelixErrorResetsMisses(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	if got := restarts.Load(); got != 0 {
-		t.Fatalf("restart count: want 0 (helix error reset misses before threshold), got %d", got)
+		t.Fatalf("restart count: want 0 (live-check error reset misses before threshold), got %d", got)
 	}
 }

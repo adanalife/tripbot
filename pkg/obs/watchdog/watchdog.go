@@ -1,9 +1,13 @@
 // Package watchdog implements the silent-disconnect detector that
-// cross-checks OBS's outputActive state against Twitch's live status
-// and force-restarts the OBS stream on sustained divergence. Lives
-// here (not in the parent pkg/obs package) so binaries that only need
-// pkg/obs's WebSocket helpers don't drag in pkg/config/tripbot or
-// pkg/twitch transitively. cmd/tripbot is the sole consumer.
+// cross-checks OBS's outputActive state against the platform's live
+// status and forces recovery on sustained divergence. Lives here (not
+// in the parent pkg/obs package) so binaries that only need pkg/obs's
+// WebSocket helpers don't drag in pkg/config/tripbot or pkg/twitch
+// transitively. cmd/tripbot is the sole consumer.
+//
+// The recovery action is the caller's to supply: restarting the OBS output
+// fixes a half-open RTMP socket, but a platform that mints a broadcast object
+// per session needs that object re-minted instead.
 package watchdog
 
 import (
@@ -15,22 +19,24 @@ import (
 	"github.com/adanalife/tripbot/pkg/obs"
 )
 
-// WatchdogDeps are the OBS+Twitch+restart hooks the silent-disconnect
+// WatchdogDeps are the OBS+platform+recovery hooks the silent-disconnect
 // watchdog calls. Injectable so the loop can be unit-tested without a real
-// OBS WebSocket or live Helix client. DefaultWatchdogDeps wires the OBS +
-// restart hooks; TwitchLive is injected by the caller.
+// OBS WebSocket or live platform client. DefaultWatchdogDeps wires the OBS +
+// restart hooks; ChannelLive is injected by the caller.
 type WatchdogDeps struct {
 	OBSActive func(context.Context) (bool, error)
-	// TwitchLive reports whether the channel is live. Injected by cmd/tripbot,
+	// ChannelLive reports whether the channel is live. Injected by cmd/tripbot,
 	// which routes it through the platform-gateway — this package must not reach
-	// Twitch itself (package-boundary-init-discipline), so DefaultWatchdogDeps
-	// leaves it nil.
-	TwitchLive func(context.Context) (bool, error)
-	Restart    func(context.Context) error
+	// a platform API itself (package-boundary-init-discipline), so
+	// DefaultWatchdogDeps leaves it nil.
+	ChannelLive func(context.Context) (bool, error)
+	// Restart returns the stream to a viewable state. Defaults to restarting the
+	// OBS output; a caller whose platform needs a heavier recovery replaces it.
+	Restart func(context.Context) error
 }
 
 // DefaultWatchdogDeps wires WatchSilentDisconnect's OBS + restart hooks. The
-// caller injects TwitchLive (the gateway live-check).
+// caller injects ChannelLive (the gateway live-check).
 //
 // OBSActive uses GetStreamActiveSteady (not GetStreamStatus) so the
 // watchdog skips counting misses when OBS already knows the stream is
@@ -61,18 +67,19 @@ func defaultRestart(ctx context.Context) error {
 	return obs.StartStream(ctx)
 }
 
-// WatchSilentDisconnect detects the silent half-open RTMP state where OBS
-// reports outputActive=true but Twitch's API reports the channel offline,
-// and force-restarts the stream after `threshold` consecutive
-// misalignments. `cooldown` bounds how often a restart can fire so a
-// flapping Twitch API can't put us in a restart loop.
+// WatchSilentDisconnect detects the state where OBS reports outputActive=true
+// but the platform reports the channel offline, and calls deps.Restart after
+// `threshold` consecutive misalignments. `cooldown` bounds how often recovery
+// can fire so a flapping platform API can't put us in a restart loop.
 //
 // Background: when Twitch's ingest server closes the RTMP session without
 // the FIN/RST making it back to OBS (e.g. an idle middlebox dropping the
 // connection, or some Twitch-side terminations), OBS's write socket stays
 // open and its built-in reconnect never fires — it keeps writing into the
-// void. The fix is to detect the divergence from outside OBS and force a
-// fresh RTMP connection.
+// void. TikTok reaches the same place by a different route: the Streamlabs
+// room is reaped once a push gap outlives the relay target's idleTimeout,
+// leaving OBS pushing happily at a room nobody can watch. Either way the
+// divergence is only visible from outside OBS.
 func WatchSilentDisconnect(ctx context.Context, deps WatchdogDeps, interval time.Duration, threshold int, cooldown time.Duration) {
 	misses := 0
 	var lastRestart time.Time
@@ -103,13 +110,13 @@ func WatchSilentDisconnect(ctx context.Context, deps WatchdogDeps, interval time
 				misses = 0
 				continue
 			}
-			twitchLive, err := deps.TwitchLive(ctx)
+			live, err := deps.ChannelLive(ctx)
 			if err != nil {
-				slog.WarnContext(ctx, "watchdog: helix status unavailable", "err", err)
+				slog.WarnContext(ctx, "watchdog: live status unavailable", "err", err)
 				misses = 0
 				continue
 			}
-			if twitchLive {
+			if live {
 				misses = 0
 				continue
 			}
