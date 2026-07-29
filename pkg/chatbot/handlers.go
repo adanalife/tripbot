@@ -14,7 +14,6 @@ import (
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"github.com/adanalife/tripbot/pkg/users"
-	"github.com/gempir/go-twitch-irc/v4"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -303,46 +302,4 @@ func (a *App) HandleMessage(ctx context.Context, msg IncomingMessage) {
 	// runCommand folds only the trigger token for matching.
 	user := a.UserSessions.LoginIfNecessary(ctx, msg.User)
 	a.runCommand(ctx, user, msg.Text)
-}
-
-// HandleJoin records that a user joined the channel.
-func (a *App) HandleJoin(username string) {
-	a.UserSessions.LoginIfNecessary(context.Background(), username)
-}
-
-// HandlePart records that a user left the channel.
-func (a *App) HandlePart(username string) {
-	a.UserSessions.LogoutIfNecessary(context.Background(), username)
-}
-
-// HandleWhisper lets an admin remote-say into chat by whispering the bot.
-// The resulting Say() is logged again as a chat line.
-func (a *App) HandleWhisper(msg IncomingMessage) {
-	slog.Info("whisper received", "from", msg.User, "text", msg.Text)
-	if a.Cfg.UserIsAdmin(msg.User) {
-		a.Chat.Say(msg.Text)
-	}
-}
-
-// --- Twitch inbound adapters ---
-//
-// These translate go-twitch-irc event types into neutral Handle* calls on the
-// App, and are wired to the IRC client in ConnectIRC. A future YouTube/etc.
-// transport adds its own adapters feeding the same Handle* methods, so the
-// command path never learns about platforms.
-
-func (a *App) onTwitchMessage(msg twitch.PrivateMessage) {
-	a.HandleMessage(context.Background(), IncomingMessage{User: msg.User.Name, UserID: msg.User.ID, Text: msg.Message})
-}
-
-func (a *App) onTwitchJoin(joinMessage twitch.UserJoinMessage) {
-	a.HandleJoin(joinMessage.User)
-}
-
-func (a *App) onTwitchPart(partMessage twitch.UserPartMessage) {
-	a.HandlePart(partMessage.User)
-}
-
-func (a *App) onTwitchWhisper(message twitch.WhisperMessage) {
-	a.HandleWhisper(IncomingMessage{User: message.User.Name, UserID: message.User.ID, Text: message.Message})
 }

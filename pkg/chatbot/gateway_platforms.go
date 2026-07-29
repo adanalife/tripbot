@@ -10,20 +10,20 @@ import (
 	"github.com/adanalife/tripbot/pkg/geo"
 )
 
-// The gateway-wired platforms (everything except Twitch) split two ways on
-// outbound chat, and that split is the only thing that differs between them:
+// Every platform reaches chat through its platform-gateway, and they split two
+// ways on outbound:
 //
-//   - youtube, facebook — the gateway can post, so Say goes out through its
-//     SendChat. The gateway owns the credential and resolves the target itself
-//     (YouTube's active live chat, Facebook's live video), so tripbot holds no
-//     platform token and binds no chat ID.
+//   - twitch, youtube, facebook — the gateway can post, so Say goes out through
+//     its SendChat. The gateway owns the credential and resolves the target
+//     itself (Twitch's IRC connection, YouTube's active live chat, Facebook's
+//     live video), so tripbot holds no platform token and binds no chat ID.
 //   - tiktok, instagram — the platform has no way to post. TikTok's webcast
 //     protocol is observe-only, and Instagram's Graph API can read live
 //     comments but not create them. Say drops the message; viewers still see
 //     command effects through playout/onscreens, and consoleMirror keeps the
 //     would-be reply visible in the admin console.
 //
-// Inbound is uniform across all four — NewGatewayChatPoller against the same
+// Inbound is uniform across all of them — NewGatewayChatPoller against the same
 // gateway — so it lives in gateway_chat.go rather than here.
 
 // gatewayChat is the outbound ChatClient for a platform whose gateway can post.
@@ -32,24 +32,30 @@ import (
 type gatewayChat struct {
 	client   *gateway.Client
 	platform string
+
+	// identity selects which of the platform's credentials speaks. Empty lets
+	// the gateway pick its default, which is what the single-identity platforms
+	// want; Twitch has both a bot and a broadcaster identity, so it names one.
+	identity string
+
+	// keepActions leaves a leading "/me " in place. Only Twitch understands it
+	// as an action command — and only because its gateway sends over IRC, where
+	// chat commands are interpreted. Everywhere else it would post as literal
+	// text, so it's stripped.
+	keepActions bool
 }
 
 func (g gatewayChat) Say(msg string) {
-	// Twitch-only IRC emote command (the Chatter cron prefixes help messages
-	// with it); anywhere else it would render as literal text.
-	msg = strings.TrimPrefix(msg, "/me ")
-	if err := g.client.SendChat(context.Background(), "", msg); err != nil {
+	if !g.keepActions {
+		msg = strings.TrimPrefix(msg, "/me ")
+	}
+	if err := g.client.SendChat(context.Background(), g.identity, msg); err != nil {
 		slog.Error(g.platform+" gateway chat send failed", "err", err, "text", msg)
 	}
 }
 
-// Whisper drops: no gateway platform has a whisper equivalent.
-func (g gatewayChat) Whisper(username, msg string) {
-	slog.Debug(g.platform+" has no whispers; dropped", "to", username, "text", msg)
-}
-
 // noOutboundChat is the ChatClient for a platform tripbot can read but not
-// write. Both methods drop with a debug line.
+// write. Say drops with a debug line.
 type noOutboundChat struct {
 	platform string
 }
@@ -58,14 +64,9 @@ func (c noOutboundChat) Say(msg string) {
 	slog.Debug(c.platform+" has no chat send; dropped", "text", msg)
 }
 
-func (c noOutboundChat) Whisper(username, msg string) {
-	slog.Debug(c.platform+" has no whispers; dropped", "to", username, "text", msg)
-}
-
 // connectViaGateway installs inner as the App's outbound chat client behind the
-// console mirror and warms the process-wide geocoder, the same way ConnectIRC
-// does for Twitch. There is no connection to fail: the gateway holds the
-// credential, and inbound runs as a separate poller.
+// console mirror and warms the process-wide geocoder. There is no connection to
+// fail: the gateway holds the credential, and inbound runs as a separate poller.
 func (a *App) connectViaGateway(inner ChatClient) {
 	Uptime = time.Now()
 
@@ -78,6 +79,23 @@ func (a *App) connectViaGateway(inner ChatClient) {
 		platform:    a.Cfg.Platform,
 		botUsername: a.Cfg.BotUsername,
 	}
+}
+
+// ConnectTwitchViaGateway wires a twitch instance (TWITCH_API_URL set). Both
+// directions flow through gateway-twitch, which terminates the channel's IRC
+// connection: outbound sends as the bot identity over that same connection, and
+// inbound arrives on the shared cursored poll.
+//
+// The bot identity is named explicitly because Twitch is the one platform with
+// two credentials — the gateway's default is the broadcaster, which is who the
+// console's send-as-broadcaster path wants, not who the bot speaks as.
+func (a *App) ConnectTwitchViaGateway() {
+	a.connectViaGateway(gatewayChat{
+		client:      gateway.New(a.Cfg.TwitchAPIURL),
+		platform:    platformTwitch,
+		identity:    gateway.IdentityBot,
+		keepActions: true,
+	})
 }
 
 // ConnectYouTubeViaGateway wires a youtube instance (YOUTUBE_API_URL set).

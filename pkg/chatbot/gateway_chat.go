@@ -38,6 +38,13 @@ type gatewayChatPoller struct {
 	// setLive records each page's Live flag. nil (the default) reports no
 	// liveness at all; ReportsLiveness points it at the channel-live gauge.
 	setLive func(bool)
+
+	// setChatConnected records whether the inbound chat transport is reachable.
+	// nil (the default) reports nothing; ReportsChatConnection points it at the
+	// chat-connection gauge. Distinct from setLive: this asks "can the bot
+	// receive chat at all", which a failed poll answers (no), where it says
+	// nothing about whether the channel is live.
+	setChatConnected func(bool)
 }
 
 // ReportsLiveness makes the poller record each page's Live flag to the
@@ -51,6 +58,47 @@ type gatewayChatPoller struct {
 func (p *gatewayChatPoller) ReportsLiveness() *gatewayChatPoller {
 	platform := p.platform
 	p.setLive = func(live bool) { instrumentation.ChannelLive.Set(live, platform) }
+	return p
+}
+
+// LongPolls drops the floor under the gateway-suggested poll interval,
+// returning the poller so it chains onto the constructor.
+//
+// Enable it against a gateway that holds an otherwise-empty inbound request open
+// until a message arrives (Twitch, whose gateway terminates IRC). There the wait
+// already happened inside the request, so sleeping afterwards would only add
+// latency to every message. The gateway signals it by suggesting a 0 interval;
+// the floor is what would otherwise override that.
+//
+// Safe against a gateway that doesn't long-poll: one that returns immediately
+// also returns a non-zero suggested interval, and one too old to serve inbound
+// chat at all errors, which backs off errWait.
+func (p *gatewayChatPoller) LongPolls() *gatewayChatPoller {
+	p.pollFloor = 0
+	return p
+}
+
+// ReportsChatConnection makes the poller record whether it can reach the
+// platform's inbound chat to the chat-connection gauge, returning the poller so
+// it chains onto the constructor.
+//
+// Enable it where the gateway terminates a streaming chat transport (Twitch
+// IRC), so "the bot is not in chat" stays observable now that the connection
+// itself lives in the gateway. It reads the same page.Live flag as
+// ReportsLiveness but answers a different question, so the two can both be on
+// without fighting: for a platform whose chat exists only while it streams they
+// happen to agree, and for Twitch — where chat is reachable off-stream —
+// liveness comes from the OBS-side watchdog instead.
+//
+// A failed poll records 0 deliberately: whatever the cause (gateway down,
+// gateway's own connection down, network in between), the bot is not receiving
+// chat, which is exactly what the gauge means. Pairing it with the gateway's own
+// platform_gateway_chat_connected localises a fault — gateway 1 / tripbot 0 puts
+// it between them.
+func (p *gatewayChatPoller) ReportsChatConnection() *gatewayChatPoller {
+	p.setChatConnected = func(connected bool) {
+		instrumentation.TwitchConnection.Set(connected)
+	}
 	return p
 }
 
@@ -88,6 +136,9 @@ func (p *gatewayChatPoller) Run(ctx context.Context) {
 				return
 			}
 			slog.ErrorContext(ctx, "gateway inbound poll failed", "err", err)
+			if p.setChatConnected != nil {
+				p.setChatConnected(false)
+			}
 			if !sleepCtx(ctx, p.errWait) {
 				return
 			}
@@ -95,6 +146,9 @@ func (p *gatewayChatPoller) Run(ctx context.Context) {
 		}
 		if p.setLive != nil {
 			p.setLive(page.Live)
+		}
+		if p.setChatConnected != nil {
+			p.setChatConnected(page.Live)
 		}
 		cursor = page.Cursor
 		for _, m := range page.Messages {

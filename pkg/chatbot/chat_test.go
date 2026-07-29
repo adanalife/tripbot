@@ -10,30 +10,19 @@ import (
 
 // noopChat satisfies ChatClient for tests that don't care about chat output —
 // it swallows everything. Tests that assert on output inject a recordingChat
-// instead (see captureSay / the *_ViaIRC tests).
+// instead.
 type noopChat struct{}
 
-func (noopChat) Say(_ string)        {}
-func (noopChat) Whisper(_, _ string) {}
+func (noopChat) Say(_ string) {}
 
-// recordingChat captures every Say/Whisper call so tests can assert on
-// chat output. All call records are appended in order.
+// recordingChat captures every Say call so tests can assert on chat output.
+// Messages are appended in order.
 type recordingChat struct {
-	Says     []string          // ordered list of Say() messages
-	Whispers []recordedWhisper // ordered list of Whisper() calls
-}
-
-type recordedWhisper struct {
-	Username string
-	Msg      string
+	Says []string // ordered list of Say() messages
 }
 
 func (r *recordingChat) Say(msg string) {
 	r.Says = append(r.Says, msg)
-}
-
-func (r *recordingChat) Whisper(username, msg string) {
-	r.Whispers = append(r.Whispers, recordedWhisper{Username: username, Msg: msg})
 }
 
 // Output returns all Say() messages joined by newline, mirroring the

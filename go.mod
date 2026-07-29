@@ -8,7 +8,6 @@ require (
 	github.com/andreykaipov/goobs v1.8.3
 	github.com/bradfitz/latlong v0.0.0-20170410180902-f3db6d0dff40
 	github.com/bwmarrin/discordgo v0.29.0
-	github.com/gempir/go-twitch-irc/v4 v4.4.1
 	github.com/getsentry/sentry-go v0.46.2
 	github.com/getsentry/sentry-go/negroni v0.46.2
 	github.com/getsentry/sentry-go/otel v0.46.2
