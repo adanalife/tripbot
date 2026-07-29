@@ -40,19 +40,28 @@ func (f *fakeOBS) Settings(context.Context, string) (map[string]any, error) {
 	return f.settings, nil
 }
 
-// albumDir writes n dummy tracks (plus a non-audio file that must be ignored)
-// and returns the directory.
+// albumDir builds a share holding one album of n tracks. It mirrors the real
+// layout: the album is a SUBDIRECTORY, and the share root also holds a loose
+// audio file (the 556MB carsounds.m4a lives there) plus a non-audio file —
+// neither of which is a track. Returns the share root, which is what gets
+// mounted.
 func albumDir(t *testing.T, n int) string {
 	t.Helper()
 	dir := t.TempDir()
+	album := filepath.Join(dir, "fifty-horizons")
+	if err := os.MkdirAll(album, 0o700); err != nil {
+		t.Fatal(err)
+	}
 	for i := 0; i < n; i++ {
-		name := filepath.Join(dir, string(rune('a'+i))+" track.mp3")
+		name := filepath.Join(album, string(rune('a'+i))+" track.mp3")
 		if err := os.WriteFile(name, nil, 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := os.WriteFile(filepath.Join(dir, "readme.txt"), nil, 0o600); err != nil {
-		t.Fatal(err)
+	for _, loose := range []string{"carsounds.m4a", "readme.txt"} {
+		if err := os.WriteFile(filepath.Join(dir, loose), nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
 	}
 	return dir
 }
@@ -93,8 +102,8 @@ func TestSet_AlbumPlaysATrackUnlooped(t *testing.T) {
 	if err := s.Set(context.Background(), Album); err != nil {
 		t.Fatal(err)
 	}
-	if filepath.Dir(o.file) != dir {
-		t.Fatalf("album track %q not from %q", o.file, dir)
+	if filepath.Dir(o.file) != filepath.Join(dir, "fifty-horizons") {
+		t.Fatalf("album track %q not from the album directory under %q", o.file, dir)
 	}
 	// Looping an album track means OBS never reports media-ended, so the
 	// advance never fires and the stream sticks on one song forever.
@@ -107,7 +116,7 @@ func TestSet_AlbumPlaysATrackUnlooped(t *testing.T) {
 }
 
 func TestSet_AlbumSkipsNonAudioFiles(t *testing.T) {
-	dir := albumDir(t, 1) // one .mp3 + one readme.txt
+	dir := albumDir(t, 1)
 	o := &fakeOBS{}
 	s := NewStore(o, CarHum, dir)
 	if err := s.Set(context.Background(), Album); err != nil {
@@ -115,6 +124,42 @@ func TestSet_AlbumSkipsNonAudioFiles(t *testing.T) {
 	}
 	if filepath.Ext(o.file) != ".mp3" {
 		t.Fatalf("picked a non-audio file: %s", o.file)
+	}
+}
+
+func TestSet_AlbumIgnoresLooseFilesAtTheShareRoot(t *testing.T) {
+	// The real share keeps carsounds.m4a — 556MB, nine hours — beside the album
+	// directories. Treating it as a track would put it on the stream and stall
+	// the rotation until it ended.
+	dir := albumDir(t, 3)
+	o := &fakeOBS{}
+	s := NewStore(o, CarHum, dir)
+	for i := 0; i < 6; i++ {
+		if err := s.Set(context.Background(), Album); err != nil {
+			t.Fatal(err)
+		}
+		if filepath.Base(o.file) == "carsounds.m4a" {
+			t.Fatal("picked the loose carsounds.m4a from the share root")
+		}
+		if err := s.Advance(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		if filepath.Base(o.file) == "carsounds.m4a" {
+			t.Fatal("advanced onto the loose carsounds.m4a from the share root")
+		}
+	}
+}
+
+func TestSet_AlbumWithOnlyLooseRootFilesFails(t *testing.T) {
+	// A share with audio but no album directory has nothing playable — better a
+	// refused switch than a 556MB archive on the stream.
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "carsounds.m4a"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s := NewStore(&fakeOBS{}, CarHum, dir)
+	if err := s.Set(context.Background(), Album); err == nil {
+		t.Fatal("a share with no album directory should refuse the album bed")
 	}
 }
 
@@ -201,7 +246,7 @@ func TestDetect_ReadsTheLiveBedFromOBS(t *testing.T) {
 	}{
 		{"network stream", map[string]any{"is_local_file": false}, SomaFM},
 		{"carhum flac", map[string]any{"is_local_file": true, "local_file": CarHumFile}, CarHum},
-		{"album track", map[string]any{"is_local_file": true, "local_file": filepath.Join(dir, "a track.mp3")}, Album},
+		{"album track", map[string]any{"is_local_file": true, "local_file": filepath.Join(dir, "fifty-horizons", "a track.mp3")}, Album},
 		// A sibling directory whose name merely prefixes the share must not
 		// read as the album.
 		{"lookalike dir", map[string]any{"is_local_file": true, "local_file": dir + "-old/x.mp3"}, CarHum},
