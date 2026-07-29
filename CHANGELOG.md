@@ -9,6 +9,12 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v4.14.4] — 2026-07-29
+
+### Chatbot
+
+- Reconnect Twitch EventSub after the socket drops. `eventsub.Run` was called once, so an outright socket close (rather than a `session_reconnect` frame the library handles itself) ended the goroutine and left follower, subscriber, gift-sub, and resub announcements dead until the pod restarted. ([#1263](https://github.com/adanalife/tripbot/pull/1263))
+
 ## [v4.14.3] — 2026-07-29
 
 ### Fixes
