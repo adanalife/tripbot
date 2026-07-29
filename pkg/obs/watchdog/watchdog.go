@@ -47,15 +47,17 @@ type WatchdogDeps struct {
 func DefaultWatchdogDeps() WatchdogDeps {
 	return WatchdogDeps{
 		OBSActive: obs.GetStreamActiveSteady,
-		Restart:   defaultRestart,
+		Restart:   RestartOBSOutput,
 	}
 }
 
-// defaultRestart stops then starts the OBS stream with a small gap to let
+// RestartOBSOutput stops then starts the OBS stream with a small gap to let
 // the RTMP teardown settle before OBS opens a fresh connection. Matches
 // the manual recovery sequence we ran by hand the first time the silent
-// half-open hit prod (see the 2026-05-27 incident).
-func defaultRestart(ctx context.Context) error {
+// half-open hit prod (see the 2026-05-27 incident). Exported because a
+// platform whose recovery replaces Restart still needs the push itself
+// re-established afterwards.
+func RestartOBSOutput(ctx context.Context) error {
 	if err := obs.StopStream(ctx); err != nil {
 		return err
 	}

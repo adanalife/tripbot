@@ -1,0 +1,1 @@
+A TikTok re-mint now restarts the OBS output after binding the new relay target. A push already in flight kept feeding the unbound target, leaving the fresh LIVE with no source while the gateway reported it live.
