@@ -9,4 +9,12 @@ python = "3.12"
 node = "24"
 # Kept in lockstep with infra/cdk8s/.mise.toml so both repos synth against the
 # same cdk8s-cli (the synthed dist/ is byte-compared during the cutover).
-"npm:cdk8s-cli" = "2.207.12"
+#
+# jsii@5.9.48 trips mise's no-downgrade trust policy: 5.9.18 was published to
+# npm through GitHub's OIDC trusted publisher, 5.9.48 through a classic token,
+# which reads as weaker publish evidence. The build provenance is intact — the
+# SLSA attestation on 5.9.48 resolves to aws/jsii-compiler, .github/workflows/
+# release.yml, tag v5.9.48 — so this is a publish-path change at the maintainer,
+# not a tampered release. Drop the exclude once a jsii the pinned cdk8s-cli
+# resolves to is published via the trusted publisher again.
+"npm:cdk8s-cli" = { version = "2.207.12", trust_policy_excludes = ["jsii@5.9.48"] }
