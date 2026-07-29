@@ -129,18 +129,29 @@ tasks:
   # (cdk8s/). Synthesizes dist/<env>-<component>-<platform>.k8s.yaml (+ the
   # per-env identity unit + the one-shot Job files), which Argo delivers
   # cross-repo. The stateful + shared-platform units stay in infra/cdk8s.
+  cdk8s:cli:
+    desc: Install the pinned cdk8s CLI into cdk8s/node_modules from the committed package-lock.json
+    dir: cdk8s
+    cmds:
+      - mise exec -- npm ci
+    # npm ci stamps node_modules/.package-lock.json; skip the reinstall while it
+    # is newer than the lockfile it was built from.
+    status:
+      - test node_modules/.package-lock.json -nt package-lock.json
+
   cdk8s:imports:
     desc: Generate the typed k8s + ESO constructs (cdk8s import) into cdk8s/imports/ — gitignored, needed before synth/test on a fresh checkout
     dir: cdk8s
+    deps: [cdk8s:cli]
     cmds:
-      - mise exec -- uv run cdk8s import
+      - mise exec -- uv run npx cdk8s import
 
   cdk8s:synth:
     desc: Synthesize the manifests (offline) -> cdk8s/dist/<env>-<component>-<platform>.k8s.yaml (+ identity / jobs)
     dir: cdk8s
     deps: [cdk8s:imports]
     cmds:
-      - mise exec -- uv run cdk8s synth
+      - mise exec -- uv run npx cdk8s synth
       # prod-1 app manifests are pinned to their release version: frozen here and
       # regenerated only on release-please's release PR, so a chart change on
       # main doesn't reach prod's committed dist until the next release — which

@@ -34,3 +34,15 @@ updates:
       - dependencies
       - docker
       - skip-changelog
+  # The cdk8s CLI and its jsii toolchain. Dependabot has no mise backend, so
+  # this is only reachable because the CLI is pinned in package-lock.json
+  # rather than cdk8s/.mise.toml. The cdk8s gate re-synths on the bump PR, so a
+  # codegen change that would move dist/ fails the PR instead of main.
+  - package-ecosystem: npm
+    directory: cdk8s
+    schedule:
+      interval: daily
+    labels:
+      - dependencies
+      - javascript
+      - skip-changelog
