@@ -1,0 +1,1 @@
+Covered the Open-Meteo archive fetch: the hourly-sample index, the short-day clamp, the missing-weather-code fallback, the request query shape, and every failure path (non-200, malformed JSON, empty samples, cancelled context). `pkg/weather` coverage 18.6% -> 76.7%.
