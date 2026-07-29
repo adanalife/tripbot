@@ -33,7 +33,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # Toolchain via mise (cdk8s/.mise.toml pins python / node / cdk8s-cli).
+      # Toolchain via mise (cdk8s/.mise.toml pins python / node).
       - uses: jdx/mise-action@v4
         with:
           working_directory: cdk8s
@@ -45,9 +45,13 @@ jobs:
         working-directory: cdk8s
         run: uv sync
 
+      - name: Install the cdk8s CLI
+        working-directory: cdk8s
+        run: mise exec -- npm ci
+
       - name: Generate typed k8s constructs (cdk8s import)
         working-directory: cdk8s
-        run: mise exec -- uv run cdk8s import
+        run: mise exec -- uv run npx cdk8s import
 
       - name: Run synth-time checks
         working-directory: cdk8s
@@ -55,7 +59,7 @@ jobs:
 
       - name: Synth
         working-directory: cdk8s
-        run: mise exec -- uv run cdk8s synth
+        run: mise exec -- uv run npx cdk8s synth
 
       - name: Freeze version-pinned prod-1 manifests
         working-directory: cdk8s

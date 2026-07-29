@@ -61,8 +61,8 @@ jobs:
           fetch-depth: 0
           token: ${{ steps.app-token.outputs.token }}
 
-      # Toolchain for the cdk8s re-synth (cdk8s/.mise.toml pins python / node /
-      # cdk8s-cli; uv handles the project-local Python deps on top).
+      # Toolchain for the cdk8s re-synth (cdk8s/.mise.toml pins python / node;
+      # uv handles the project-local Python deps on top, npm ci the CLI).
       - uses: jdx/mise-action@v4
         if: ${{ steps.release.outputs.pr && !steps.release.outputs.release_created }}
         with:
@@ -96,8 +96,9 @@ jobs:
           # time is exactly when the prod dist regenerates.)
           cd cdk8s
           uv sync
-          mise exec -- uv run cdk8s import
-          mise exec -- uv run cdk8s synth
+          mise exec -- npm ci
+          mise exec -- uv run npx cdk8s import
+          mise exec -- uv run npx cdk8s synth
           cd ..
 
           if ! git diff --quiet || [ -n "$(git status --porcelain)" ]; then

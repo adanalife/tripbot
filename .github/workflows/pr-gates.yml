@@ -115,7 +115,7 @@ jobs:
       # Verify the committed cdk8s/dist/ deploy units are in sync with the
       # authoring code. The post-merge sweep on main lives in cdk8s-synth.yml.
 
-      # Toolchain via mise (cdk8s/.mise.toml pins python / node / cdk8s-cli).
+      # Toolchain via mise (cdk8s/.mise.toml pins python / node).
       - uses: jdx/mise-action@v4
         if: steps.changed.outputs.cdk8s == 'true'
         with:
@@ -126,10 +126,15 @@ jobs:
         working-directory: cdk8s
         run: uv sync
 
+      - name: Install the cdk8s CLI
+        if: steps.changed.outputs.cdk8s == 'true'
+        working-directory: cdk8s
+        run: mise exec -- npm ci
+
       - name: Generate typed k8s constructs (cdk8s import)
         if: steps.changed.outputs.cdk8s == 'true'
         working-directory: cdk8s
-        run: mise exec -- uv run cdk8s import
+        run: mise exec -- uv run npx cdk8s import
 
       - name: Run synth-time checks
         if: steps.changed.outputs.cdk8s == 'true'
@@ -139,7 +144,7 @@ jobs:
       - name: Synth
         if: steps.changed.outputs.cdk8s == 'true'
         working-directory: cdk8s
-        run: mise exec -- uv run cdk8s synth
+        run: mise exec -- uv run npx cdk8s synth
 
       - name: Freeze version-pinned prod-1 manifests
         if: steps.changed.outputs.cdk8s == 'true'

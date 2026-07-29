@@ -17,21 +17,23 @@ between the two repos.
 
 ## Setup
 
-Tools are pinned via mise (`.mise.toml`): python, node, cdk8s-cli. Python deps via
-uv.
+Tools are pinned via mise (`.mise.toml`): python, node. Python deps via uv. The
+cdk8s CLI is an npm devDependency pinned in `package-lock.json`, so its jsii
+toolchain resolves the same way on every machine and in CI.
 
 ```bash
-mise install                 # python, node, cdk8s-cli
+mise install                 # python, node
 uv sync                      # python deps into .venv
-mise exec -- uv run cdk8s import   # typed k8s + ESO constructs into imports/ (gitignored)
+npm ci                       # cdk8s CLI into node_modules/ (gitignored)
+mise exec -- uv run npx cdk8s import   # typed k8s + ESO constructs into imports/ (gitignored)
 ```
 
 ## Develop
 
 ```bash
-mise exec -- uv run cdk8s synth                  # -> dist/<env>-<component>-<platform>.k8s.yaml (+ -tripbot-identity / -job-*)
-CDK8S_ENV=stage-1 mise exec -- uv run cdk8s synth    # one env
-mise exec -- uv run pytest -q                    # synth-time checks on dist/
+mise exec -- uv run npx cdk8s synth                  # -> dist/<env>-<component>-<platform>.k8s.yaml (+ -tripbot-identity / -job-*)
+CDK8S_ENV=stage-1 mise exec -- uv run npx cdk8s synth    # one env
+mise exec -- uv run pytest -q                        # synth-time checks on dist/
 ```
 
 Run these via the repo-root Taskfile: `task cdk8s:imports`, `task cdk8s:synth`,
