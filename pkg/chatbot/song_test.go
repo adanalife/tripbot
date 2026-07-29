@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/adanalife/tripbot/pkg/obs/beds"
 	"github.com/adanalife/tripbot/pkg/video"
 )
 
@@ -53,6 +54,55 @@ func TestSongCmd_RendersCurrentTrack_ViaIRC(t *testing.T) {
 	}
 	if !strings.Contains(rec.Says[0], "Big Wow") || !strings.Contains(rec.Says[0], "Steve Cobby") {
 		t.Errorf("expected title + artist in output, got %q", rec.Says[0])
+	}
+}
+
+// The bed decides the answer: SomaFM's feed describes SomaFM, so consulting it
+// while another bed is on air names a track nobody is hearing. TikTok boots on
+// the album, so this is the common case, not the exotic one.
+func TestSongCmd_OffSomaFM_ReportsTheLiveBedNotTheFeed(t *testing.T) {
+	for _, tc := range []struct {
+		bed   beds.Bed
+		track string
+		want  string
+	}{
+		{beds.Album, testTrack, "Colorado Sunrise"},
+		{beds.CarHum, "", bedDescs[beds.CarHum]},
+	} {
+		t.Run(string(tc.bed), func(t *testing.T) {
+			app := newTestApp(video.Video{})
+			feed := &recordingNowPlaying{Artist: "Steve Cobby", Title: "Big Wow"}
+			app.NowPlaying = feed
+			app.Beds = &fakeBeds{bed: tc.bed, track: tc.track}
+			out := captureSay(t, app)
+
+			app.songCmd(context.Background(), newTestUser("viewer1"), nil)
+
+			if feed.Calls != 0 {
+				t.Errorf("must not consult the SomaFM feed on the %s bed", tc.bed)
+			}
+			got := out()
+			if !strings.Contains(got, tc.want) {
+				t.Errorf("expected %q in the report, got %q", tc.want, got)
+			}
+			if strings.Contains(got, "Big Wow") {
+				t.Errorf("reported a SomaFM track while the %s bed was playing: %q", tc.bed, got)
+			}
+		})
+	}
+}
+
+// On the SomaFM bed the feed is the only thing that knows the track.
+func TestSongCmd_OnSomaFM_StillReadsTheFeed(t *testing.T) {
+	app := newTestApp(video.Video{})
+	app.NowPlaying = &recordingNowPlaying{Artist: "Steve Cobby", Title: "Big Wow"}
+	app.Beds = &fakeBeds{bed: beds.SomaFM}
+	out := captureSay(t, app)
+
+	app.songCmd(context.Background(), newTestUser("viewer1"), nil)
+
+	if got := out(); !strings.Contains(got, "Big Wow") {
+		t.Errorf("expected the SomaFM track, got %q", got)
 	}
 }
 

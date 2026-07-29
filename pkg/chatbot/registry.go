@@ -23,10 +23,9 @@ func (a *App) buildRegistry() []Command {
 			Handler: a.helloCmd,
 		},
 		{
-			Trigger:   "!carsound",
-			Aliases:   []string{"!carhum"},
-			Handler:   a.carSoundCmd,
-			Platforms: []string{platformYouTube}, // repoints the YouTube-only "Car Hum" OBS source
+			Trigger: "!audio",
+			Aliases: []string{"!bed", "!carsound", "!carhum"},
+			Handler: a.audioCmd,
 		},
 		{
 			Trigger: "!version",
@@ -296,13 +295,15 @@ func (a *App) platform() string {
 // !state/!location info commands.
 // Identity/miles commands (!miles, !leaderboard, !guess, …), the Twitch-only
 // !followage, and the admin commands (!middle, !secretinfo, !shutdown, !makebot,
-// !unbot) are excluded: those are per-user identity/score state. The now-playing /
-// SomaFM commands (!song, !music, !somafm) are also deferred for now — the
-// background-audio source is Twitch-stream-specific. Aliases come along with
-// their trigger, so only triggers are listed. See the YouTube provider plan.
+// !unbot) are excluded: those are per-user identity/score state. !somafm is
+// excluded too — it credits a bed that only Twitch defaults to. Aliases come
+// along with their trigger, so only triggers are listed. See the YouTube
+// provider plan.
 var v1Commands = map[string]bool{
 	"!help": true, "!version": true, "!uptime": true, "!commands": true,
 	"!gas": true, "!report": true,
+	// background audio (every platform's scene ships the one bed source)
+	"!song": true, "!audio": true,
 	// info (read current-video state only)
 	"!weather": true, "!time": true, "!date": true, "!sunset": true,
 	"!state": true, "!location": true,

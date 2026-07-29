@@ -25,6 +25,8 @@ import (
 	"sort"
 	"strings"
 	"sync"
+
+	"github.com/adanalife/tripbot/pkg/instrumentation"
 )
 
 // Bed is one selectable background-audio source.
@@ -194,6 +196,9 @@ func (s *Store) Set(ctx context.Context, bed Bed) error {
 	s.mu.Lock()
 	s.bed = bed
 	s.mu.Unlock()
+	// Counted here rather than at the callers so a console switch and a chat
+	// switch land on the same counter — they are the same switch.
+	instrumentation.BackgroundAudioSelections.Inc(string(bed))
 	slog.InfoContext(ctx, "background audio: bed switched", "bed", bed, "track", target)
 	return nil
 }
@@ -291,6 +296,17 @@ func scanTracks(dir string) ([]string, error) {
 	}
 	sort.Strings(out)
 	return out, nil
+}
+
+// TrackTitle turns an album track path into something worth showing a human:
+// the filename without its extension. "" stays "" (the other beds have no
+// track), which is how callers tell "no track" from "a track".
+func TrackTitle(path string) string {
+	if path == "" {
+		return ""
+	}
+	base := filepath.Base(path)
+	return strings.TrimSuffix(base, filepath.Ext(base))
 }
 
 func shuffle(tracks []string) {

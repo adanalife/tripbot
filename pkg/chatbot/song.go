@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/adanalife/tripbot/pkg/obs/beds"
 	"github.com/adanalife/tripbot/pkg/users"
 )
 
@@ -96,8 +97,23 @@ func fetchSomaFMCurrent(ctx context.Context, url string) (string, string, error)
 	return parsed.Songs[0].Artist, parsed.Songs[0].Title, nil
 }
 
+// songCmd answers "what is this music". Which answer is right depends on the
+// live background-audio bed: only SomaFM has an external now-playing feed, so
+// reading that feed while the album or the car hum is on air names a track
+// nobody is hearing. The console's now-playing line asks tripbot for the same
+// reason.
+//
+// With no bed store wired (an instance with no OBS pairing) the SomaFM feed is
+// the only answer available, so it stands.
 func (a *App) songCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !song", "username", user.Username)
+
+	if a.Beds != nil {
+		if bed, track := a.Beds.Current(); bed != beds.SomaFM {
+			a.Chat.Say("♪ Now playing: " + describeBed(bed, track))
+			return
+		}
+	}
 
 	artist, title, err := a.NowPlaying.Current(ctx)
 	if err != nil {

@@ -2,6 +2,21 @@
   "_comment": "Generated from pkg/chatbot's command registry via `go generate ./pkg/contract` — do not hand-edit. Every chat command tripbot answers: its trigger, aliases, access gate, and the platforms it dispatches on (already resolved). Synced into the admin console alongside contract.json / eventbus.json / commands.json.",
   "commands": [
     {
+      "trigger": "!audio",
+      "aliases": [
+        "!bed",
+        "!carsound",
+        "!carhum"
+      ],
+      "platforms": [
+        "facebook",
+        "instagram",
+        "tiktok",
+        "twitch",
+        "youtube"
+      ]
+    },
+    {
       "trigger": "!back",
       "requires_follow": true,
       "platforms": [
@@ -30,15 +45,6 @@
       "requires_subscriber": true,
       "platforms": [
         "twitch"
-      ]
-    },
-    {
-      "trigger": "!carsound",
-      "aliases": [
-        "!carhum"
-      ],
-      "platforms": [
-        "youtube"
       ]
     },
     {
@@ -351,7 +357,11 @@
         "!music"
       ],
       "platforms": [
-        "twitch"
+        "facebook",
+        "instagram",
+        "tiktok",
+        "twitch",
+        "youtube"
       ]
     },
     {

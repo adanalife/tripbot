@@ -33,7 +33,7 @@ func TestNoDuplicateTriggersOrAliases(t *testing.T) {
 func TestLookupMapsContainAllTriggers(t *testing.T) {
 	for _, cmd := range builtTestApp.commands {
 		// builtTestApp is a Twitch App; commands scoped to other platforms via
-		// Command.Platforms (like !carsound on YouTube) aren't indexed here.
+		// Command.Platforms aren't indexed here.
 		if !builtTestApp.commandEnabled(&cmd) {
 			continue
 		}
@@ -90,17 +90,16 @@ func TestYouTubeAllowlistTriggersExist(t *testing.T) {
 }
 
 // TestFacebookPlatformIndexesOnlyAllowlist verifies a Facebook App runs the
-// same v1 cross-platform allowlist, and that platform-scoped commands stay on
-// their platform (!carsound is YouTube-only).
+// same v1 cross-platform allowlist.
 func TestFacebookPlatformIndexesOnlyAllowlist(t *testing.T) {
 	fb := &App{Platform: platformFacebook}
 	fb.indexCommands()
-	for _, token := range []string{"!skip", "!timewarp", "!location", "!facebook"} {
+	for _, token := range []string{"!skip", "!timewarp", "!location", "!facebook", "!audio", "!song"} {
 		if cmd, _ := fb.findCommand(token); cmd == nil {
 			t.Errorf("expected %q to be available on Facebook, got nil", token)
 		}
 	}
-	for _, token := range []string{"!miles", "!guess", "!shutdown", "!carsound"} {
+	for _, token := range []string{"!miles", "!guess", "!shutdown", "!somafm"} {
 		if cmd, _ := fb.findCommand(token); cmd != nil {
 			t.Errorf("expected %q to be unavailable on Facebook, got %q", token, cmd.Trigger)
 		}
@@ -108,17 +107,16 @@ func TestFacebookPlatformIndexesOnlyAllowlist(t *testing.T) {
 }
 
 // TestInstagramPlatformIndexesOnlyAllowlist verifies an Instagram App runs the
-// same v1 cross-platform allowlist, and that platform-scoped commands stay on
-// their platform (!carsound is YouTube-only).
+// same v1 cross-platform allowlist.
 func TestInstagramPlatformIndexesOnlyAllowlist(t *testing.T) {
 	ig := &App{Platform: platformInstagram}
 	ig.indexCommands()
-	for _, token := range []string{"!skip", "!timewarp", "!location", "!instagram"} {
+	for _, token := range []string{"!skip", "!timewarp", "!location", "!instagram", "!audio", "!song"} {
 		if cmd, _ := ig.findCommand(token); cmd == nil {
 			t.Errorf("expected %q to be available on Instagram, got nil", token)
 		}
 	}
-	for _, token := range []string{"!miles", "!guess", "!shutdown", "!carsound"} {
+	for _, token := range []string{"!miles", "!guess", "!shutdown", "!somafm"} {
 		if cmd, _ := ig.findCommand(token); cmd != nil {
 			t.Errorf("expected %q to be unavailable on Instagram, got %q", token, cmd.Trigger)
 		}
@@ -133,18 +131,17 @@ func TestYouTubePlatformIndexesOnlyAllowlist(t *testing.T) {
 	yt := &App{Platform: platformYouTube}
 	yt.indexCommands()
 
-	// allowed: a trigger and one of its aliases both resolve. The first set are
-	// cross-platform allowlist entries; !carsound/!carhum are YouTube-scoped via
-	// Command.Platforms.
-	for _, token := range []string{"!weather", "!meteo", "!skip", "!timewarp", "!warp", "!youtube", "!state", "!location", "!where", "!carsound", "!carhum"} {
+	// allowed: a trigger and one of its aliases both resolve — all of these are
+	// cross-platform allowlist entries.
+	for _, token := range []string{"!weather", "!meteo", "!skip", "!timewarp", "!warp", "!youtube", "!state", "!location", "!where", "!audio", "!carsound", "!carhum", "!song", "!music"} {
 		if cmd, _ := yt.findCommand(token); cmd == nil {
 			t.Errorf("expected %q to be available on YouTube, got nil", token)
 		}
 	}
 
-	// excluded: identity/miles, Twitch-only, admin, and the deferred
-	// now-playing commands do not resolve
-	for _, token := range []string{"!miles", "!km", "!leaderboard", "!guess", "!followage", "!middle", "!shutdown", "!makebot", "hello", "!song", "!music", "!somafm"} {
+	// excluded: identity/miles, Twitch-only, admin, and the SomaFM credit line
+	// do not resolve
+	for _, token := range []string{"!miles", "!km", "!leaderboard", "!guess", "!followage", "!middle", "!shutdown", "!makebot", "hello", "!somafm"} {
 		if cmd, _ := yt.findCommand(token); cmd != nil {
 			t.Errorf("expected %q to be unavailable on YouTube, got %q", token, cmd.Trigger)
 		}
@@ -152,17 +149,16 @@ func TestYouTubePlatformIndexesOnlyAllowlist(t *testing.T) {
 }
 
 // TestTikTokPlatformIndexesOnlyAllowlist verifies a TikTok App runs the same
-// v1 cross-platform allowlist, and that platform-scoped commands stay on their
-// platform (!carsound is YouTube-only).
+// v1 cross-platform allowlist.
 func TestTikTokPlatformIndexesOnlyAllowlist(t *testing.T) {
 	tk := &App{Platform: platformTikTok}
 	tk.indexCommands()
-	for _, token := range []string{"!skip", "!timewarp", "!location", "!tiktok", "!find", "!search"} {
+	for _, token := range []string{"!skip", "!timewarp", "!location", "!tiktok", "!find", "!search", "!audio", "!song"} {
 		if cmd, _ := tk.findCommand(token); cmd == nil {
 			t.Errorf("expected %q to be available on TikTok, got nil", token)
 		}
 	}
-	for _, token := range []string{"!miles", "!guess", "!shutdown", "!carsound"} {
+	for _, token := range []string{"!miles", "!guess", "!shutdown", "!somafm"} {
 		if cmd, _ := tk.findCommand(token); cmd != nil {
 			t.Errorf("expected %q to be unavailable on TikTok, got %q", token, cmd.Trigger)
 		}
@@ -216,7 +212,7 @@ func TestCommandsCmdFiltersByPlatform(t *testing.T) {
 	yt.Chat = ytChat
 	yt.commandsCmd(context.Background(), nil, nil)
 	ytOut := ytChat.Output()
-	for _, absent := range []string{"!guess", "!miles", "!leaderboard", "!song"} {
+	for _, absent := range []string{"!guess", "!miles", "!leaderboard", "!somafm"} {
 		if strings.Contains(ytOut, absent) {
 			t.Errorf("YouTube !commands should not advertise %q: %q", absent, ytOut)
 		}

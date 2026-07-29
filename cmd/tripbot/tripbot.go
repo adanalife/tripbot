@@ -671,6 +671,7 @@ func (t *Tripbot) startBackgroundAudio(ctx context.Context) {
 	}
 	t.beds = beds.NewStore(beds.RealOBS{}, seed, "")
 	t.srv.SetBeds(t.beds) // the console's /api/audio reads + switches through it
+	t.app.Beds = t.beds   // and !audio, so chat and console report the same bed
 	go t.beds.Detect(ctx)
 }
 
