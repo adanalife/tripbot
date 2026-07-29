@@ -1,0 +1,1 @@
+The silent-disconnect watchdog retires its restart cooldown once a recovery has held, so a second, unrelated outage recovers on detection instead of waiting out the timer. TikTok's 30m cooldown had stranded a banned LIVE for five minutes past detection.
