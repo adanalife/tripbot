@@ -24,7 +24,7 @@ var (
 		0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10,
 	)
 	tripbotEvents             = mustCounter("tripbot_events_total", "Total login/logout events written to the events table, labeled by event")
-	backgroundAudioSelections = mustCounter("tripbot_background_audio_selections_total", "Total background-audio bed switches, labeled by bed (somafm|carhum|album) — answers what the stream has been playing and how often it changes")
+	backgroundAudioSelections = mustCounter("tripbot_background_audio_selections_total", "Total background-audio bed switches, labeled by bed (somafm|carhum|album) and platform — answers what the stream has been playing and how often it changes")
 	scoreboardWrites          = mustCounter("tripbot_scoreboard_writes_total", "Total successful scoreboard score writes, labeled by scoreboard")
 	twitchSubscribers         = mustGauge("twitch_subscribers_total", "Current number of Twitch channel subscribers")
 	twitchFollowers           = mustGauge("twitch_followers_total", "Current number of Twitch channel followers")
@@ -189,8 +189,8 @@ func (s scoreboardWritesIface) Inc(scoreboard string) {
 
 type backgroundAudioSelectionsIface struct{ counter metric.Int64Counter }
 
-func (c backgroundAudioSelectionsIface) Inc(bed string) {
-	c.counter.Add(context.Background(), 1, metric.WithAttributes(attribute.String("bed", bed)))
+func (c backgroundAudioSelectionsIface) Inc(platform, bed string) {
+	c.counter.Add(context.Background(), 1, metric.WithAttributes(attribute.String("bed", bed)), platformAttr(platform))
 }
 
 type twitchAudienceIface struct {

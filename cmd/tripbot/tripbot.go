@@ -669,7 +669,7 @@ func (t *Tripbot) startBackgroundAudio(ctx context.Context) {
 	if t.platformIsTwitch() {
 		seed = beds.SomaFM
 	}
-	t.beds = beds.NewStore(beds.RealOBS{}, seed, "")
+	t.beds = beds.NewStore(beds.RealOBS{}, seed, "", t.cfg.Platform)
 	t.srv.SetBeds(t.beds) // the console's /api/audio reads + switches through it
 	t.app.Beds = t.beds   // and !audio, so chat and console report the same bed
 	go t.beds.Detect(ctx)

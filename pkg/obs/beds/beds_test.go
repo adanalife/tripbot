@@ -68,7 +68,7 @@ func albumDir(t *testing.T, n int) string {
 
 func TestSet_SomaFMUsesNetworkMode(t *testing.T) {
 	o := &fakeOBS{}
-	s := NewStore(o, CarHum, albumDir(t, 2))
+	s := NewStore(o, CarHum, albumDir(t, 2), "twitch")
 	if err := s.Set(context.Background(), SomaFM); err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +82,7 @@ func TestSet_SomaFMUsesNetworkMode(t *testing.T) {
 
 func TestSet_CarHumLoops(t *testing.T) {
 	o := &fakeOBS{}
-	s := NewStore(o, SomaFM, albumDir(t, 2))
+	s := NewStore(o, SomaFM, albumDir(t, 2), "twitch")
 	if err := s.Set(context.Background(), CarHum); err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +98,7 @@ func TestSet_CarHumLoops(t *testing.T) {
 func TestSet_AlbumPlaysATrackUnlooped(t *testing.T) {
 	dir := albumDir(t, 3)
 	o := &fakeOBS{}
-	s := NewStore(o, CarHum, dir)
+	s := NewStore(o, CarHum, dir, "twitch")
 	if err := s.Set(context.Background(), Album); err != nil {
 		t.Fatal(err)
 	}
@@ -118,7 +118,7 @@ func TestSet_AlbumPlaysATrackUnlooped(t *testing.T) {
 func TestSet_AlbumSkipsNonAudioFiles(t *testing.T) {
 	dir := albumDir(t, 1)
 	o := &fakeOBS{}
-	s := NewStore(o, CarHum, dir)
+	s := NewStore(o, CarHum, dir, "twitch")
 	if err := s.Set(context.Background(), Album); err != nil {
 		t.Fatal(err)
 	}
@@ -133,7 +133,7 @@ func TestSet_AlbumIgnoresLooseFilesAtTheShareRoot(t *testing.T) {
 	// the rotation until it ended.
 	dir := albumDir(t, 3)
 	o := &fakeOBS{}
-	s := NewStore(o, CarHum, dir)
+	s := NewStore(o, CarHum, dir, "twitch")
 	for i := 0; i < 6; i++ {
 		if err := s.Set(context.Background(), Album); err != nil {
 			t.Fatal(err)
@@ -157,7 +157,7 @@ func TestSet_AlbumWithOnlyLooseRootFilesFails(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "carsounds.m4a"), nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	s := NewStore(&fakeOBS{}, CarHum, dir)
+	s := NewStore(&fakeOBS{}, CarHum, dir, "twitch")
 	if err := s.Set(context.Background(), Album); err == nil {
 		t.Fatal("a share with no album directory should refuse the album bed")
 	}
@@ -165,7 +165,7 @@ func TestSet_AlbumWithOnlyLooseRootFilesFails(t *testing.T) {
 
 func TestSet_AlbumWithNoTracksFails(t *testing.T) {
 	o := &fakeOBS{}
-	s := NewStore(o, CarHum, t.TempDir())
+	s := NewStore(o, CarHum, t.TempDir(), "twitch")
 	if err := s.Set(context.Background(), Album); err == nil {
 		t.Fatal("empty share should fail rather than silence the stream")
 	}
@@ -177,7 +177,7 @@ func TestSet_AlbumWithNoTracksFails(t *testing.T) {
 
 func TestSet_FailedSwitchKeepsReportingTheOldBed(t *testing.T) {
 	o := &fakeOBS{err: errors.New("obs unreachable")}
-	s := NewStore(o, SomaFM, albumDir(t, 2))
+	s := NewStore(o, SomaFM, albumDir(t, 2), "twitch")
 	if err := s.Set(context.Background(), CarHum); err == nil {
 		t.Fatal("want an error when OBS rejects the switch")
 	}
@@ -187,7 +187,7 @@ func TestSet_FailedSwitchKeepsReportingTheOldBed(t *testing.T) {
 }
 
 func TestSet_RejectsUnknownBed(t *testing.T) {
-	s := NewStore(&fakeOBS{}, CarHum, t.TempDir())
+	s := NewStore(&fakeOBS{}, CarHum, t.TempDir(), "twitch")
 	if err := s.Set(context.Background(), Bed("wurlitzer")); err == nil {
 		t.Fatal("want an error for an unknown bed")
 	}
@@ -196,7 +196,7 @@ func TestSet_RejectsUnknownBed(t *testing.T) {
 func TestAdvance_WalksEveryTrackThenWraps(t *testing.T) {
 	const n = 4
 	o := &fakeOBS{}
-	s := NewStore(o, CarHum, albumDir(t, n))
+	s := NewStore(o, CarHum, albumDir(t, n), "twitch")
 	if err := s.Set(context.Background(), Album); err != nil {
 		t.Fatal(err)
 	}
@@ -225,7 +225,7 @@ func TestAdvance_WalksEveryTrackThenWraps(t *testing.T) {
 
 func TestAdvance_NoopOnOtherBeds(t *testing.T) {
 	o := &fakeOBS{}
-	s := NewStore(o, CarHum, albumDir(t, 3))
+	s := NewStore(o, CarHum, albumDir(t, 3), "twitch")
 	if err := s.Set(context.Background(), CarHum); err != nil {
 		t.Fatal(err)
 	}
@@ -252,7 +252,7 @@ func TestDetect_ReadsTheLiveBedFromOBS(t *testing.T) {
 		{"lookalike dir", map[string]any{"is_local_file": true, "local_file": dir + "-old/x.mp3"}, CarHum},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			s := NewStore(&fakeOBS{settings: tc.settings}, SomaFM, dir)
+			s := NewStore(&fakeOBS{settings: tc.settings}, SomaFM, dir, "twitch")
 			s.Detect(context.Background())
 			if bed, _ := s.Current(); bed != tc.want {
 				t.Fatalf("detected %s, want %s", bed, tc.want)
@@ -269,7 +269,7 @@ func TestDetect_AlbumBuildsThePlayOrder(t *testing.T) {
 	dir := albumDir(t, 3)
 	playing := filepath.Join(dir, "fifty-horizons", "a track.mp3")
 	o := &fakeOBS{settings: map[string]any{"is_local_file": true, "local_file": playing}}
-	s := NewStore(o, CarHum, dir)
+	s := NewStore(o, CarHum, dir, "twitch")
 	s.Detect(context.Background())
 
 	if bed, track := s.Current(); bed != Album || track != playing {
@@ -291,7 +291,7 @@ func TestDetect_AlbumWithNoTracksStillReportsTheBed(t *testing.T) {
 		"is_local_file": true,
 		"local_file":    filepath.Join(dir, "gone", "x.mp3"),
 	}}
-	s := NewStore(o, CarHum, dir)
+	s := NewStore(o, CarHum, dir, "twitch")
 	s.Detect(context.Background())
 	if bed, track := s.Current(); bed != Album || track != "" {
 		t.Fatalf("Current() = %s, %q; want album with no track", bed, track)
@@ -299,7 +299,7 @@ func TestDetect_AlbumWithNoTracksStillReportsTheBed(t *testing.T) {
 }
 
 func TestDetect_KeepsTheSeedWhenOBSIsUnreachable(t *testing.T) {
-	s := NewStore(&fakeOBS{err: errors.New("nope")}, SomaFM, t.TempDir())
+	s := NewStore(&fakeOBS{err: errors.New("nope")}, SomaFM, t.TempDir(), "twitch")
 	s.Detect(context.Background())
 	if bed, _ := s.Current(); bed != SomaFM {
 		t.Fatalf("want the seed bed retained, got %s", bed)
