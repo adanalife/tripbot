@@ -137,8 +137,8 @@ func TestHandleTimewarpShow(t *testing.T) {
 	}
 }
 
-// A timewarp.show with no username (the empty-envelope shape the old wire
-// used) still triggers the warp — just with no credit line.
+// A timewarp.show with no username still triggers the warp — just with no
+// credit line.
 func TestHandleTimewarpShow_NoUsername(t *testing.T) {
 	s := &Server{Timewarp: newTimewarp()}
 	s.handleTimewarpShow(emptyMsg("tripbot.test.onscreens.timewarp.show"))

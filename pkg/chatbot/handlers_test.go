@@ -299,8 +299,8 @@ func TestRunCommand_MiddleTextKeepsCapitalization(t *testing.T) {
 }
 
 // TestRunCommand_MiddleHideStillHides guards the handlers that fold param case
-// themselves: !middle's "hide" keyword still hides when typed shouty, now that
-// the dispatcher no longer pre-lowercases it.
+// themselves: the dispatcher passes params through verbatim, so !middle's
+// "hide" keyword has to still hide when typed shouty.
 func TestRunCommand_MiddleHideStillHides(t *testing.T) {
 	app := newTestApp(video.Video{})
 	rec := &recordingOnscreens{}

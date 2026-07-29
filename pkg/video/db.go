@@ -106,7 +106,7 @@ func (v Video) save(ctx context.Context) error {
 	}
 
 	if lat == 0 || lng == 0 {
-		// No OCR runs anymore, so a runtime-created clip has no GPS fix.
+		// Nothing runs OCR at runtime, so a clip created here has no GPS fix.
 		flagged = true
 		coordSource = CoordSourceMissing
 	}

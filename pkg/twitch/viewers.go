@@ -9,7 +9,7 @@ func (cl *API) ChannelID() string {
 
 // SetChannelID seeds the cached channel ID from out-of-band (the
 // platform-gateway's /v1/users/{login}). The gateway owns Helix, so nothing
-// resolves the ID in-process any more; EventSub setup would otherwise see "".
+// resolves the ID in-process; EventSub setup would otherwise see "".
 func (cl *API) SetChannelID(id string) {
 	cl.channelID = id
 }

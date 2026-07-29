@@ -11,8 +11,8 @@ import (
 // the durable history behind "when was this viewer subscribed" and "where did
 // these miles come from". Tests inject a fake; production uses realEvents.
 //
-// The table is append-only by design (see the tripbot-events-table-design
-// ADR), so every method here is a write that is never revised. Each returns
+// The table is append-only by design, so every method here is a write that is
+// never revised — nothing updates or deletes a row. Each returns
 // its error rather than logging: a lost event is a hole in that history, and
 // the caller is the one that knows whether it can say so in chat.
 type Events interface {
