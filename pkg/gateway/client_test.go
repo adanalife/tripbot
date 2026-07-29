@@ -344,3 +344,43 @@ func TestInboundChat_OmitsCursorParamWhenEmpty(t *testing.T) {
 		t.Error("empty cursor should omit the ?cursor param entirely")
 	}
 }
+
+func TestEgressStopStart(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		call func(*Client) error
+		want string
+	}{
+		{"stop", func(c *Client) error { return c.StopEgress(context.Background()) }, "/v1/egress/stop"},
+		{"start", func(c *Client) error { return c.StartEgress(context.Background()) }, "/v1/egress/start"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var gotMethod, gotPath string
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				gotMethod, gotPath = r.Method, r.URL.Path
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer srv.Close()
+
+			if err := tc.call(New(srv.URL)); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if gotMethod != http.MethodPost || gotPath != tc.want {
+				t.Errorf("request = %s %s, want POST %s", gotMethod, gotPath, tc.want)
+			}
+		})
+	}
+}
+
+// A gateway with no egress routes mounted (a platform with a static ingest key)
+// 404s — the caller must see that as an error, not a silent success.
+func TestStartEgress_ErrorsOnNon2xx(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	if err := New(srv.URL).StartEgress(context.Background()); err == nil {
+		t.Error("expected an error on non-2xx")
+	}
+}

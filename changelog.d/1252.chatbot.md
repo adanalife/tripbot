@@ -1,0 +1,1 @@
+The silent-disconnect watchdog now covers TikTok. When OBS is pushing but the LIVE room is gone, it re-mints the room through the gateway (stop then start the egress) instead of leaving the stream invisible until someone notices.

@@ -37,7 +37,7 @@ var (
 
 	gatewayUp = mustGauge("tripbot_gateway_up", "1 when tripbot's last platform-gateway call got an HTTP response (gateway reachable), 0 when it failed at the transport layer (connection refused, timeout, DNS). Consumer-side reachability — paired with the gateway's own platform_gateway_up (process liveness).")
 
-	obsSilentDisconnectRestarts = mustCounter("tripbot_obs_silent_disconnect_restarts_total", "Total times the OBS silent-disconnect watchdog forced a StopStream+StartStream because OBS reported outputActive=true while Twitch reported the channel offline")
+	obsSilentDisconnectRestarts = mustCounter("tripbot_obs_silent_disconnect_restarts_total", "Total times the silent-disconnect watchdog forced a recovery because OBS reported outputActive=true while the platform reported the channel offline. The recovery is a StopStream+StartStream on Twitch and an egress re-mint on TikTok; the series is per-platform, so service_platform tells them apart")
 
 	twitchHelixRateRemaining = mustGauge("twitch_helix_rate_limit_remaining", "Last-seen Ratelimit-Remaining header from Twitch Helix responses (per app-access bearer)")
 	twitchHelixRateLimit     = mustGauge("twitch_helix_rate_limit_total", "Last-seen Ratelimit-Limit header from Twitch Helix responses (per app-access bearer)")
@@ -135,11 +135,10 @@ var CurrentState = &currentStateIface{gauge: currentState}
 // platform_gateway_up, which only reports that the gateway process is running.
 var GatewayConnection = gatewayConnectionIface{gauge: gatewayUp}
 
-// OBSSilentDisconnectRestarts exposes the watchdog's force-restart counter.
-// Inc() is called after a successful StopStream+StartStream sequence.
-// Any non-zero rate is alertable — the watchdog only fires after a
-// 3-minute debounce, so even one increment means we saw a real silent
-// disconnect in prod.
+// OBSSilentDisconnectRestarts exposes the watchdog's forced-recovery counter.
+// Inc() is called after a successful recovery. Any non-zero rate is alertable —
+// the watchdog only fires after a multi-minute debounce, so even one increment
+// means we saw a real silent disconnect in prod.
 var OBSSilentDisconnectRestarts = obsSilentDisconnectRestartsIface{counter: obsSilentDisconnectRestarts}
 
 // TwitchHelixRateLimit exposes the per-bearer Helix rate-budget gauges.
