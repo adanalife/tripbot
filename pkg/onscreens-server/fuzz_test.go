@@ -60,7 +60,7 @@ func FuzzRenderInlineMarkdown(f *testing.F) {
 		"`a`b`c`", "`a`b`",
 		"*`a`*", "`*a*`", "**`a`**",
 		// Non-ASCII, control bytes, and a bidi override.
-		"\x00", "\U000e0000", "é*ü*ñ", "‮*rtl*",
+		"\x00", "\U000e0000", "é*ü*ñ", "\u202e*rtl*",
 	}
 	for _, s := range seeds {
 		f.Add(s)
