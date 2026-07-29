@@ -16,8 +16,9 @@ import (
 
 // archiveURL is the Open-Meteo historical reanalysis endpoint. It's free and
 // keyless, and covers back to 1940 — so it can answer for the 2018 dashcam
-// corpus.
-const archiveURL = "https://archive-api.open-meteo.com/v1/archive"
+// corpus. A var, not a const, so tests can point it at an httptest server;
+// nothing outside this package can reach it.
+var archiveURL = "https://archive-api.open-meteo.com/v1/archive"
 
 // httpTimeout bounds the archive fetch so a hung Open-Meteo response can't
 // stall a chat handler or a background tick.

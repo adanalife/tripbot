@@ -207,11 +207,14 @@ func (s *Store) Advance(ctx context.Context) error {
 		s.mu.Unlock()
 		return nil
 	}
+	current := s.tracks[s.idx]
 	s.idx = (s.idx + 1) % len(s.tracks)
 	// Re-shuffle on wrap so a long stream doesn't repeat the same 100-track
-	// sequence in the same order every time.
+	// sequence in the same order every time. The fresh order has to keep the
+	// track that just finished off the front, or wrapping plays it twice back
+	// to back.
 	if s.idx == 0 {
-		shuffle(s.tracks)
+		reshuffleAvoiding(s.tracks, current)
 	}
 	track := s.tracks[s.idx]
 	s.mu.Unlock()
@@ -295,4 +298,15 @@ func scanTracks(dir string) ([]string, error) {
 
 func shuffle(tracks []string) {
 	rand.Shuffle(len(tracks), func(i, j int) { tracks[i], tracks[j] = tracks[j], tracks[i] })
+}
+
+// reshuffleAvoiding shuffles tracks and keeps avoid off the front, so the play
+// order wrapping can't put the track that just finished straight back on air.
+// A one-track album has nowhere else to go and repeats regardless.
+func reshuffleAvoiding(tracks []string, avoid string) {
+	shuffle(tracks)
+	if len(tracks) > 1 && tracks[0] == avoid {
+		j := 1 + rand.IntN(len(tracks)-1)
+		tracks[0], tracks[j] = tracks[j], tracks[0]
+	}
 }
