@@ -235,8 +235,7 @@ func (t *Tripbot) platformIsTwitch() bool {
 // admin hub — is platform-neutral and runs on every instance; only the
 // chat-transport bring-up swaps on STREAM_PLATFORM. Twitch-only steps (IRC
 // token plumbing, EventSub, subscriber polling, the admin chat-send
-// subscriber, Discord, the OBS↔Twitch watchdog) are gated off non-Twitch
-// instances.
+// subscriber, Discord) are gated off non-Twitch instances.
 func (t *Tripbot) Run() {
 	slog.Info("tripbot starting", "version", t.version, "platform", t.cfg.Platform)
 	// ctx is canceled on SIGINT/SIGTERM; every background goroutine hangs
@@ -281,15 +280,15 @@ func (t *Tripbot) Run() {
 	go obs.PollStreamingActive(ctx, t.cfg.Platform, 30*time.Second)
 	t.startBackgroundAudio(ctx)         // every platform: owns its own OBS's bed
 	t.startBackgroundAudioWatchdog(ctx) // recovers SomaFM outages; advances album tracks
+	t.startStreamWatchdog(ctx)          // twitch + tiktok: recovers a stream the platform stopped showing
 	if t.platformIsTwitch() {
 		// chat.send subjects are per-env, not per-platform — both platform
 		// instances would receive every admin send, so only the Twitch instance
 		// (which owns the bot/broadcaster identities the command names)
 		// subscribes.
-		t.startChatSendSubscriber(ctx)       // after startNATS + setUpTwitchClient: needs the conn and t.app.Chat
-		t.startDiscord(ctx)                  // Discord stays Twitch-side for v1
-		t.startSilentDisconnectWatchdog(ctx) // watches the OBS→Twitch stream specifically
-		t.connectToTwitch(ctx)               // blocks until shutdown
+		t.startChatSendSubscriber(ctx) // after startNATS + setUpTwitchClient: needs the conn and t.app.Chat
+		t.startDiscord(ctx)            // Discord stays Twitch-side for v1
+		t.connectToTwitch(ctx)         // blocks until shutdown
 	} else {
 		t.connectViaGateway(ctx, t.gatewayPlatform()) // blocks until shutdown
 	}
@@ -558,18 +557,35 @@ func (t *Tripbot) twitchAuthAccounts() []eventbus.AuthAccount {
 	return accounts
 }
 
-// startSilentDisconnectWatchdog launches the goroutine that detects the
-// half-open RTMP state where OBS reports outputActive=true but Twitch's
-// API shows the channel offline, and force-restarts the stream after
-// 3 consecutive minute-spaced misalignments. First seen in prod on
-// 2026-05-27, ~30h into an OBS session.
-func (t *Tripbot) startSilentDisconnectWatchdog(ctx context.Context) {
+// startStreamWatchdog launches the goroutine that detects the silent
+// disconnect — OBS reporting outputActive=true while the platform reports the
+// channel offline — and forces recovery after several consecutive
+// minute-spaced misalignments. First seen in prod on Twitch 2026-05-27, ~30h
+// into an OBS session.
+//
+// Both live-checks route through the platform-gateway. That wiring lives here
+// in cmd rather than in pkg/obs/watchdog, per
+// package-boundary-init-discipline.
+//
+// Platforms whose broadcast is a set-and-forget ingest key have nothing to
+// recover from outside OBS and get no watchdog.
+func (t *Tripbot) startStreamWatchdog(ctx context.Context) {
+	switch {
+	case t.platformIsTwitch():
+		t.startTwitchWatchdog(ctx)
+	case t.cfg.Platform == "tiktok":
+		t.startTikTokWatchdog(ctx)
+	}
+}
+
+// startTwitchWatchdog recovers the half-open RTMP socket: Twitch's ingest
+// closed the session without the FIN/RST reaching OBS, so a StopStream +
+// StartStream opens a fresh connection.
+func (t *Tripbot) startTwitchWatchdog(ctx context.Context) {
 	deps := watchdog.DefaultWatchdogDeps()
-	// The live-check routes through the platform-gateway (the single Helix
-	// caller). This wiring lives here in cmd (not in pkg/obs/watchdog) per
-	// package-boundary-init-discipline. A nil gateway is a misconfigured Twitch
-	// instance (TWITCH_API_URL unset) — report the check as errored rather than
-	// force-restarting on a false negative.
+	// A nil gateway is a misconfigured Twitch instance (TWITCH_API_URL unset) —
+	// report the check as errored rather than force-restarting on a false
+	// negative.
 	deps.ChannelLive = func(ctx context.Context) (bool, error) {
 		if t.gateway == nil {
 			return false, errors.New("watchdog live-check: no gateway configured")
@@ -582,6 +598,52 @@ func (t *Tripbot) startSilentDisconnectWatchdog(ctx context.Context) {
 		return live, err
 	}
 	go watchdog.WatchSilentDisconnect(ctx, deps, 60*time.Second, 3, 10*time.Minute)
+}
+
+// startTikTokWatchdog recovers a reaped LIVE room. TikTok's failure is one
+// layer above Twitch's: the Streamlabs-minted room is gone once a push gap
+// outlives the relay target's idleTimeout, and reconnecting OBS's push into a
+// dead room changes nothing — the room has to be re-minted through the
+// gateway, which binds a fresh portrait relay target for the push to land on.
+//
+// Slower to fire and slower to repeat than the Twitch watchdog: a re-mint
+// costs a brand-new LIVE (viewers have to rejoin), so it waits out five
+// consecutive misses rather than three, and holds a 30m cooldown.
+func (t *Tripbot) startTikTokWatchdog(ctx context.Context) {
+	if t.cfg.TikTokAPIURL == "" {
+		slog.WarnContext(ctx, "no TIKTOK_API_URL: silent-disconnect watchdog disabled (gateway not wired)")
+		return
+	}
+	gw := gateway.New(t.cfg.TikTokAPIURL)
+	deps := watchdog.DefaultWatchdogDeps()
+	// No gauge write here: the inbound chat poll already owns
+	// tripbot_channel_live for TikTok (gatewayPlatform.reportsLiveness), and two
+	// writers on one gauge would fight.
+	deps.ChannelLive = func(ctx context.Context) (bool, error) {
+		return gw.IsLive(ctx, t.cfg.ChannelName)
+	}
+	deps.Restart = func(ctx context.Context) error { return remintTikTokEgress(ctx, gw, tiktokRemintGap) }
+	go watchdog.WatchSilentDisconnect(ctx, deps, 60*time.Second, 5, 30*time.Minute)
+}
+
+// tiktokRemintGap lets the old relay target unbind before the new room binds
+// its replacement. Mirrors the settle pause in the OBS restart next door.
+const tiktokRemintGap = 5 * time.Second
+
+// remintTikTokEgress stops the gateway's egress and starts a fresh one,
+// pausing for gap in between. Push-after-bind is the ordering that works: OBS
+// keeps pushing throughout and reconnects onto the new target within a second
+// or so of the start.
+func remintTikTokEgress(ctx context.Context, gw *gateway.Client, gap time.Duration) error {
+	if err := gw.StopEgress(ctx); err != nil {
+		return err
+	}
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(gap):
+	}
+	return gw.StartEgress(ctx)
 }
 
 // startBackgroundAudio constructs this instance's bed store and hands it to the
