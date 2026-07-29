@@ -56,15 +56,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       # staticcheck catches the classes reading misses: dead unexported code
-      # (U1000), deprecated stdlib (SA1019), and simplifications (S1012).
-      # Bundled with the test-hygiene linters because they share this job's
-      # "nothing here should ever have findings" bar — the tree is clean as of
-      # this workflow landing, so any report is new.
+      # (U1000), deprecated stdlib (SA1019), and simplifications (S1012). The
+      # test-hygiene linters ride along because they share the same bar — the
+      # tree has no findings for any of them, so anything reported here is new.
       #   usetesting — os.Setenv/os.Chdir where t.Setenv/t.Chdir belongs
       #   thelper    — a test helper missing t.Helper(), which misreports the
       #                failing line as the helper's rather than the caller's
       #   tparallel  — t.Parallel() misuse once tests start using it
-      # Check selection (notably -QF1001) lives in .golangci.yml.
+      # Which checks are active (notably -QF1001) lives in .golangci.yml.
       - name: staticcheck
         uses: reviewdog/action-golangci-lint@v2
         with:

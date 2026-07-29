@@ -1,8 +1,10 @@
 # golangci-lint settings only — which linters run is chosen per job by the
-# --default=none --enable=... flags in .github/workflows/linting.yml, so that
-# each reviewdog job reports under its own check name. Keeping selection out of
-# this file avoids the config-plus-flag union that would let one job's linters
-# leak into another's report.
+# --default=none --enable=... flags in .github/workflows/linting.yml, one job
+# per concern so the checks list names which linter found something. Keeping
+# selection out of this file matters because config and flags union rather than
+# override: an `enable` list here would run revive inside the staticcheck job
+# too, and every job posts through the same reviewdog check, so there would be
+# no way to tell which one raised a comment.
 #
 # Run locally with the same version CI pins (see .tool-versions):
 #   mise exec -- golangci-lint run --default=none --enable=staticcheck ./...
