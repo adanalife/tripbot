@@ -307,6 +307,39 @@ func (c *Client) ActiveBroadcast(ctx context.Context) (Broadcast, error) {
 	return b, nil
 }
 
+// StopEgress ends the platform's outbound broadcast (POST /v1/egress/stop).
+// Only a gateway whose adapter manages the broadcast lifecycle (TikTok via
+// Streamlabs) mounts the egress routes; anywhere else this 404s.
+func (c *Client) StopEgress(ctx context.Context) error {
+	return c.postEmpty(ctx, "/v1/egress/stop")
+}
+
+// StartEgress mints a fresh outbound broadcast (POST /v1/egress/start). No body
+// is sent, which tells the gateway to resolve the title from its own metadata
+// store rather than take one from the caller.
+func (c *Client) StartEgress(ctx context.Context) error {
+	return c.postEmpty(ctx, "/v1/egress/start")
+}
+
+// postEmpty POSTs to path with no body and discards a 2xx response.
+func (c *Client) postEmpty(ctx context.Context, path string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+path, nil)
+	if err != nil {
+		return fmt.Errorf("gateway %s request: %w", path, err)
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		instrumentation.GatewayConnection.Set(false)
+		return fmt.Errorf("gateway %s: %w", path, err)
+	}
+	instrumentation.GatewayConnection.Set(true)
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("gateway %s: unexpected status %d", path, resp.StatusCode)
+	}
+	return nil
+}
+
 // getJSON issues a GET and decodes a 200 JSON body into dest; any non-200 or
 // decode failure is returned as an error.
 func (c *Client) getJSON(ctx context.Context, path string, dest any) error {
