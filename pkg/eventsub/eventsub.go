@@ -8,8 +8,9 @@
 //
 // Lifecycle: Run blocks until the context is cancelled or the WebSocket
 // session terminates fatally. The library handles session_reconnect
-// frames transparently; cmd/tripbot is expected to call Run in a
-// goroutine and survive a Run-returns-error.
+// frames transparently, but an outright socket close returns an error —
+// so Run is one connection attempt, and the caller owns redialing it
+// (cmd/tripbot runs it in a goroutine that loops with a delay).
 //
 // Subscriptions are created in the OnWelcome callback (per Twitch's
 // protocol — you can't subscribe until you have a session ID). If a
