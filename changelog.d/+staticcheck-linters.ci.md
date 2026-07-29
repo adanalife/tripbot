@@ -1,0 +1,1 @@
+CI now runs `staticcheck` plus the `usetesting` / `thelper` / `tparallel` test-hygiene linters, and the tree is clean against all four. `golangci-lint` is pinned in `.tool-versions` so the same checks run locally.
