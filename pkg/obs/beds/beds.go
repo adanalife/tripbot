@@ -235,17 +235,29 @@ func (s *Store) apply(ctx context.Context, bed Bed, track string) error {
 	return s.obs.SetLocalFile(ctx, InputName, track, bed != Album)
 }
 
-// scanTracks lists every audio file under dir, sorted so the pre-shuffle order
+// scanTracks lists the album tracks under dir, sorted so the pre-shuffle order
 // is deterministic (the shuffle is what makes playback vary, not readdir order).
+//
+// Albums are SUBDIRECTORIES of the share; loose files at its root are not
+// tracks. The share holds other audio beside the albums — carsounds.m4a, a
+// 556MB archive — and a flat scan would shuffle that in as one enormous track.
+//
+// ponytail: every album subdirectory is one pool, which with a single album is
+// that album. Add a picker when a second one shows up and they shouldn't
+// interleave.
 func scanTracks(dir string) ([]string, error) {
 	var out []string
 	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		if !d.IsDir() && audioExts[strings.ToLower(filepath.Ext(path))] {
-			out = append(out, path)
+		if d.IsDir() || !audioExts[strings.ToLower(filepath.Ext(path))] {
+			return nil
 		}
+		if filepath.Dir(path) == filepath.Clean(dir) {
+			return nil // loose file at the share root, not an album track
+		}
+		out = append(out, path)
 		return nil
 	})
 	if err != nil {
