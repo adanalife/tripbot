@@ -283,6 +283,31 @@ func TestDetect_AlbumBuildsThePlayOrder(t *testing.T) {
 	}
 }
 
+// Advancing must never put the track that just finished straight back on air.
+// The re-shuffle on wrap used to be able to, which a listener hears as the same
+// song twice in a row. Enough advances to wrap a 3-track order many times over,
+// so a re-shuffle that can land on the outgoing track is caught rather than
+// left to chance.
+func TestAdvance_NeverRepeatsATrackBackToBack(t *testing.T) {
+	dir := albumDir(t, 3)
+	o := &fakeOBS{settings: map[string]any{"is_local_file": true}}
+	s := NewStore(o, CarHum, dir)
+	if err := s.Set(context.Background(), Album); err != nil {
+		t.Fatal(err)
+	}
+
+	prev := o.file
+	for i := range 200 {
+		if err := s.Advance(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		if o.file == prev {
+			t.Fatalf("advance %d replayed %q back to back", i, filepath.Base(o.file))
+		}
+		prev = o.file
+	}
+}
+
 // An album detected with no tracks to scan leaves the bed reported honestly
 // rather than crashing or claiming a track — the console shows what's on air.
 func TestDetect_AlbumWithNoTracksStillReportsTheBed(t *testing.T) {
