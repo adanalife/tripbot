@@ -9,3 +9,5 @@ dist/.*
 # (pinned to the k8s API version + the ESO CRD schema in cdk8s.yaml). Gitignored
 # to keep the tree reviewable; CI / `task cdk8s:imports` runs the import.
 imports/
+# The cdk8s CLI, installed by `npm ci` from the committed package-lock.json.
+node_modules/

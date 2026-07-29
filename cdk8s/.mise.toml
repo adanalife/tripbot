@@ -7,6 +7,9 @@ python = "3.12"
 # jsii (cdk8s's runtime) supports node ^24/^22/^20; pin 24 to avoid the
 # "untested node" warning on the host's newer node.
 node = "24"
-# Kept in lockstep with infra/cdk8s/.mise.toml so both repos synth against the
-# same cdk8s-cli (the synthed dist/ is byte-compared during the cutover).
-"npm:cdk8s-cli" = "2.207.12"
+# The cdk8s CLI is NOT a mise tool. It lives in package.json and installs from
+# the committed package-lock.json, which pins its transitive tree — jsii,
+# jsii-pacmak and jsii-rosetta all float within their declared ranges, and a
+# fresh CI resolution picking a new one has broken the synth gate twice. The
+# lockfile also makes the CLI bot-bumpable: Dependabot has no mise backend, but
+# it does have npm.
