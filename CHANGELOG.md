@@ -9,6 +9,16 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v4.15.1] — 2026-07-30
+
+### Fixes
+
+- Stamp `service.instance.id` on the telemetry resource, so each per-platform instance gets its own metric series. Metrics recorded without an explicit platform attribute — `tripbot_gateway_up`, `tripbot_obs_silent_disconnect_restarts_total` — were sharing one series across every instance and reporting whichever pod pushed last. ([#1282](https://github.com/adanalife/tripbot/pull/1282))
+
+### CI / Tooling
+
+- The staticcheck / unused / usetesting / thelper / tparallel lint job now fails on any finding, repo-wide, instead of reporting and passing. `unused` is newly enabled — golangci-lint splits it out from staticcheck, so dead code was previously unguarded. ([#1277](https://github.com/adanalife/tripbot/pull/1277))
+
 ## [v4.15.0] — 2026-07-30
 
 ### Chatbot
