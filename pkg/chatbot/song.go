@@ -13,52 +13,55 @@ import (
 	"github.com/adanalife/tripbot/pkg/users"
 )
 
-// NowPlaying reports the currently-playing track on the stream's background
-// audio source. Tests inject a fake; production uses realNowPlaying which
-// polls SomaFM's per-channel now-playing JSON feed.
+// NowPlaying reports the currently-playing track on the given SomaFM channel.
+// Tests inject a fake; production uses realNowPlaying which polls SomaFM's
+// per-channel now-playing JSON feed.
 type NowPlaying interface {
-	Current(ctx context.Context) (artist, title string, err error)
+	Current(ctx context.Context, station string) (artist, title string, err error)
 }
 
 const (
-	somaFMNowPlayingURL   = "https://somafm.com/songs/gsclassic.json"
 	nowPlayingCacheTTL    = 30 * time.Second
 	nowPlayingHTTPTimeout = 5 * time.Second
 )
 
 // realNowPlaying fetches and caches the current song from SomaFM. The cache
 // avoids hammering SomaFM (one fetch per nowPlayingCacheTTL even under chat
-// spam) and provides a stale-fallback if a fetch fails.
+// spam) and provides a stale-fallback if a fetch fails. It holds one station's
+// answer: a retune must not be answered with the channel we just left, so a
+// different station is a miss.
 type realNowPlaying struct {
-	url string
-	ttl time.Duration
+	songsURL func(station string) string // beds.SongsURL; tests point it at a stub
+	ttl      time.Duration
 
 	mu        sync.Mutex
+	station   string
 	artist    string
 	title     string
 	fetchedAt time.Time
 }
 
 func newRealNowPlaying() *realNowPlaying {
-	return &realNowPlaying{url: somaFMNowPlayingURL, ttl: nowPlayingCacheTTL}
+	return &realNowPlaying{songsURL: beds.SongsURL, ttl: nowPlayingCacheTTL}
 }
 
-func (r *realNowPlaying) Current(ctx context.Context) (string, string, error) {
+func (r *realNowPlaying) Current(ctx context.Context, station string) (string, string, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if !r.fetchedAt.IsZero() && time.Since(r.fetchedAt) < r.ttl {
+	fresh := !r.fetchedAt.IsZero() && r.station == station
+	if fresh && time.Since(r.fetchedAt) < r.ttl {
 		return r.artist, r.title, nil
 	}
 
-	artist, title, err := fetchSomaFMCurrent(ctx, r.url)
+	artist, title, err := fetchSomaFMCurrent(ctx, r.songsURL(station))
 	if err != nil {
-		if !r.fetchedAt.IsZero() {
+		if fresh {
 			return r.artist, r.title, nil
 		}
 		return "", "", err
 	}
-	r.artist, r.title, r.fetchedAt = artist, title, time.Now()
+	r.station, r.artist, r.title, r.fetchedAt = station, artist, title, time.Now()
 	return artist, title, nil
 }
 
@@ -104,22 +107,28 @@ func fetchSomaFMCurrent(ctx context.Context, url string) (string, string, error)
 // reason.
 //
 // With no bed store wired (an instance with no OBS pairing) the SomaFM feed is
-// the only answer available, so it stands.
+// the only answer available, so it stands — on the default channel, since
+// nothing is tracking which one is tuned.
 func (a *App) songCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !song", "username", user.Username)
 
+	station := beds.DefaultStation
 	if a.Beds != nil {
-		if bed, track := a.Beds.Current(); bed != beds.SomaFM {
-			a.Chat.Say("♪ Now playing: " + describeBed(bed, track))
+		if bed, _ := a.Beds.Current(); bed != beds.SomaFM {
+			a.Chat.Say("♪ Now playing: " + a.describeAudio())
 			return
 		}
+		station = a.Beds.Station()
 	}
 
-	artist, title, err := a.NowPlaying.Current(ctx)
+	artist, title, err := a.NowPlaying.Current(ctx, station)
 	if err != nil {
-		slog.ErrorContext(ctx, "now-playing fetch failed", "err", err)
+		slog.ErrorContext(ctx, "now-playing fetch failed", "err", err, "station", station)
 		a.Chat.Say("Couldn't reach the music source for the current track, sorry!")
 		return
 	}
-	a.Chat.Say(fmt.Sprintf("♪ Now playing: %s — %s", title, artist))
+	// Naming the channel matters once there are 40-odd of them: "Drone Zone" is
+	// half the answer to "what is this".
+	a.Chat.Say(fmt.Sprintf("♪ Now playing on %s: %s — %s",
+		beds.StationName(station), title, artist))
 }

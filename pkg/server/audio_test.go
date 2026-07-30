@@ -15,13 +15,22 @@ import (
 
 // fakeBeds is a BedStore seam for the /api/audio handlers.
 type fakeBeds struct {
-	bed    beds.Bed
-	track  string
-	setErr error
-	sets   []beds.Bed
+	bed      beds.Bed
+	track    string
+	station  string
+	setErr   error
+	sets     []beds.Bed
+	stations []string
 }
 
 func (f *fakeBeds) Current() (beds.Bed, string) { return f.bed, f.track }
+
+func (f *fakeBeds) Station() string {
+	if f.station == "" {
+		return beds.DefaultStation
+	}
+	return f.station
+}
 
 func (f *fakeBeds) Set(_ context.Context, bed beds.Bed) error {
 	f.sets = append(f.sets, bed)
@@ -29,6 +38,15 @@ func (f *fakeBeds) Set(_ context.Context, bed beds.Bed) error {
 		return f.setErr
 	}
 	f.bed = bed
+	return nil
+}
+
+func (f *fakeBeds) SetStation(_ context.Context, station string) error {
+	f.stations = append(f.stations, station)
+	if f.setErr != nil {
+		return f.setErr
+	}
+	f.bed, f.station = beds.SomaFM, station
 	return nil
 }
 
@@ -80,6 +98,15 @@ func TestAudioHandler_ReportsBedAndOptions(t *testing.T) {
 	if len(opts) != len(beds.All) {
 		t.Fatalf("beds: want %d options, got %v", len(beds.All), body["beds"])
 	}
+	// Same for the SomaFM channel picker: the lineup lives here, not in the
+	// console, so the two can't disagree about what's selectable.
+	stations, _ := body["stations"].([]any)
+	if len(stations) != len(beds.Stations) {
+		t.Fatalf("stations: want %d, got %d", len(beds.Stations), len(stations))
+	}
+	if body["station"] != beds.DefaultStation {
+		t.Fatalf("station: %v", body["station"])
+	}
 }
 
 func TestAudioHandler_UnavailableWithoutAStore(t *testing.T) {
@@ -109,6 +136,38 @@ func TestAudioSetHandler_SwitchesBed(t *testing.T) {
 	// re-render from the write instead of racing a follow-up read.
 	if body["bed"] != "carhum" {
 		t.Fatalf("bed: %v", body["bed"])
+	}
+}
+
+// The console posts a station on its own; that has to select the SomaFM bed too,
+// or picking a channel from the car-hum bed would change nothing audible.
+func TestAudioSetHandler_TunesAStation(t *testing.T) {
+	f := &fakeBeds{bed: beds.CarHum}
+	w := postAudio(t, &Server{beds: f}, `{"station":"dronezone"}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status: %d (%s)", w.Code, w.Body)
+	}
+	if len(f.sets) != 0 {
+		t.Fatalf("a station must not go through Set: %v", f.sets)
+	}
+	if len(f.stations) != 1 || f.stations[0] != "dronezone" {
+		t.Fatalf("stations: %v", f.stations)
+	}
+	var body map[string]any
+	_ = json.NewDecoder(w.Body).Decode(&body)
+	if body["bed"] != "somafm" || body["station"] != "dronezone" {
+		t.Fatalf("response: %v", body)
+	}
+}
+
+func TestAudioSetHandler_RejectsUnknownStation(t *testing.T) {
+	f := &fakeBeds{bed: beds.SomaFM}
+	w := postAudio(t, &Server{beds: f}, `{"station":"wurlitzer-fm"}`)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status: want 400, got %d", w.Code)
+	}
+	if len(f.stations) != 0 {
+		t.Fatalf("an unknown station reached the store: %v", f.stations)
 	}
 }
 

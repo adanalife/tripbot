@@ -31,15 +31,24 @@ func (r *recordingOBS) RefreshBrowserSources(context.Context) (int, error) {
 // a switch happened (or didn't), and mirrors the store's "only the album has a
 // track" shape.
 type fakeBeds struct {
-	bed   beds.Bed
-	track string
-	sets  []beds.Bed
-	err   error
+	bed      beds.Bed
+	track    string
+	station  string
+	sets     []beds.Bed
+	stations []string
+	err      error
 }
 
 const testTrack = "/opt/tripbot/assets/music/fifty-horizons/Colorado Sunrise.mp3"
 
 func (f *fakeBeds) Current() (beds.Bed, string) { return f.bed, f.track }
+
+func (f *fakeBeds) Station() string {
+	if f.station == "" {
+		return beds.DefaultStation
+	}
+	return f.station
+}
 
 func (f *fakeBeds) Set(_ context.Context, bed beds.Bed) error {
 	f.sets = append(f.sets, bed)
@@ -50,6 +59,15 @@ func (f *fakeBeds) Set(_ context.Context, bed beds.Bed) error {
 	if bed == beds.Album {
 		f.track = testTrack
 	}
+	return nil
+}
+
+func (f *fakeBeds) SetStation(_ context.Context, station string) error {
+	f.stations = append(f.stations, station)
+	if f.err != nil {
+		return f.err
+	}
+	f.bed, f.track, f.station = beds.SomaFM, "", station
 	return nil
 }
 
@@ -104,6 +122,24 @@ func TestAudioCmd_AdminSwitchesAndAnnouncesTheTrack(t *testing.T) {
 	}
 	if !strings.Contains(got, "Colorado Sunrise") {
 		t.Errorf("expected the announcement to name the playing track, got %q", got)
+	}
+}
+
+// A SomaFM channel id is accepted in the same argument slot as a bed name — no
+// channel id collides with one, and "switch the music to X" is one intent.
+func TestAudioCmd_AdminTunesASomaFMStation(t *testing.T) {
+	app, fake, out := newAudioTestApp(t, beds.CarHum, "")
+
+	app.audioCmd(context.Background(), newTestUser(adminUser), []string{"DroneZone"}) // case-insensitive
+
+	if len(fake.sets) != 0 {
+		t.Errorf("a station is a tune, not a bed switch, got %v", fake.sets)
+	}
+	if len(fake.stations) != 1 || fake.stations[0] != "dronezone" {
+		t.Fatalf("expected one tune to dronezone, got %v", fake.stations)
+	}
+	if got := out(); !strings.Contains(got, "Drone Zone") {
+		t.Errorf("expected the announcement to name the channel, got %q", got)
 	}
 }
 
