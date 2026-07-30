@@ -127,8 +127,9 @@ func EnsureRotatorConfigStream(ctx context.Context, js jetstream.JetStream, env 
 }
 
 func (c *Client) ShowGPSImage(ctx context.Context, dur time.Duration) error {
-	// dur isn't transported — the server owns the GPS overlay's duration
-	// (gpsDuration).
+	// dur isn't transported: the GPS overlay has no auto-expiry, so it stays up
+	// until HideGPSImage. The parameter is kept for symmetry with the other
+	// timed overlays.
 	c.publish(ctx, oe.GPSShowSubject(c.env, c.platform), oe.Command{Envelope: oe.NewEnvelope()})
 	return nil
 }

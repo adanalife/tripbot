@@ -29,11 +29,6 @@ func TestCommandsSchemaMatchesStructs(t *testing.T) {
 		"Command":         reflect.TypeOf(oe.Command{}),
 	}
 
-	type nameReq struct {
-		name     string
-		required bool
-	}
-
 	for title, typ := range structs {
 		declared, ok := commandEnvelopeFields[title]
 		if !ok {

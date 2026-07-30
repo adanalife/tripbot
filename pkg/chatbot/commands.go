@@ -82,7 +82,7 @@ func (a *App) helloCmd(ctx context.Context, user *users.User, params []string) {
 	}
 
 	// check if we said hi too recently
-	if time.Now().Sub(lastHelloTime) < 20*time.Second {
+	if time.Since(lastHelloTime) < 20*time.Second {
 		return
 	}
 
@@ -133,7 +133,7 @@ func readBuildVersion(ctx context.Context) string {
 
 func (a *App) uptimeCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !uptime", "username", user.Username)
-	dur := time.Now().Sub(Uptime)
+	dur := time.Since(Uptime)
 	msg := fmt.Sprintf("I have been running for %s", durafmt.Parse(dur))
 	a.Chat.Say(msg)
 }
