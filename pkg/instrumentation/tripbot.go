@@ -37,7 +37,7 @@ var (
 
 	gatewayUp = mustGauge("tripbot_gateway_up", "1 when tripbot's last platform-gateway call got an HTTP response (gateway reachable), 0 when it failed at the transport layer (connection refused, timeout, DNS). Consumer-side reachability — paired with the gateway's own platform_gateway_up (process liveness).")
 
-	obsSilentDisconnectRestarts = mustCounter("tripbot_obs_silent_disconnect_restarts_total", "Total times the silent-disconnect watchdog forced a recovery because OBS reported outputActive=true while the platform reported the channel offline. The recovery is a StopStream+StartStream on Twitch and an egress re-mint on TikTok; the series is per-platform, so service_platform tells them apart")
+	obsSilentDisconnectRestarts = mustCounter("tripbot_obs_silent_disconnect_restarts_total", "Total times the silent-disconnect watchdog forced a recovery because OBS reported outputActive=true while the platform reported the channel offline. The recovery is a StopStream+StartStream on Twitch and an egress re-mint on TikTok; the datapoints carry no platform attribute, so instance (the pod name) is what tells the platforms apart")
 
 	twitchHelixRateRemaining = mustGauge("twitch_helix_rate_limit_remaining", "Last-seen Ratelimit-Remaining header from Twitch Helix responses (per app-access bearer)")
 	twitchHelixRateLimit     = mustGauge("twitch_helix_rate_limit_total", "Last-seen Ratelimit-Limit header from Twitch Helix responses (per app-access bearer)")
