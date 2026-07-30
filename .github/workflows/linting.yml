@@ -55,10 +55,13 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
-      # staticcheck catches the classes reading misses: dead unexported code
-      # (U1000), deprecated stdlib (SA1019), and simplifications (S1012). The
-      # test-hygiene linters ride along because they share the same bar — the
-      # tree has no findings for any of them, so anything reported here is new.
+      # staticcheck catches the classes reading misses: deprecated stdlib
+      # (SA1019) and simplifications (S1012). Dead code is `unused`, a separate
+      # linter in golangci-lint v2 — staticcheck does not report it, so both are
+      # needed to cover what the standalone staticcheck binary reports as one.
+      # The test-hygiene linters ride along because they share the same bar —
+      # the tree has no findings for any of them, so anything reported here is
+      # new.
       #   usetesting — os.Setenv/os.Chdir where t.Setenv/t.Chdir belongs
       #   thelper    — a test helper missing t.Helper(), which misreports the
       #                failing line as the helper's rather than the caller's
@@ -69,7 +72,7 @@ jobs:
         with:
           github_token: ${{ secrets.github_token }}
           golangci_lint_version: v2.12.1
-          golangci_lint_flags: "--default=none --enable=staticcheck,usetesting,thelper,tparallel"
+          golangci_lint_flags: "--default=none --enable=staticcheck,unused,usetesting,thelper,tparallel"
           level: warning # GitHub Status Check won't become failure with this level.
 
   migration-order:
