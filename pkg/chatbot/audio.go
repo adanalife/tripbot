@@ -25,8 +25,8 @@ func (realOBS) RefreshBrowserSources(ctx context.Context) (int, error) {
 	return obs.RefreshBrowserSources(ctx)
 }
 
-// Beds is the background-audio surface !audio drives: read the live bed,
-// switch to another. It is the same *beds.Store the console's /api/audio
+// Beds is the background-audio surface !audio and !song drive: read what's on
+// air, switch to another bed. It is the same *beds.Store the console's /api/audio
 // drives, so a chat switch and a console switch are one switch and both report
 // the same answer. Tests inject a fake; cmd/tripbot assigns the live store.
 // Nil on an instance with no OBS pairing, which !audio reports rather than
@@ -34,6 +34,7 @@ func (realOBS) RefreshBrowserSources(ctx context.Context) (int, error) {
 type Beds interface {
 	Current() (beds.Bed, string)
 	Station() string
+	SomaFMTrack(ctx context.Context) (artist, title string, err error)
 	Set(ctx context.Context, bed beds.Bed) error
 	SetStation(ctx context.Context, station string) error
 }

@@ -18,12 +18,21 @@ type fakeBeds struct {
 	bed      beds.Bed
 	track    string
 	station  string
+	artist   string
+	title    string
+	feedErr  error
 	setErr   error
 	sets     []beds.Bed
 	stations []string
+	feeds    int
 }
 
 func (f *fakeBeds) Current() (beds.Bed, string) { return f.bed, f.track }
+
+func (f *fakeBeds) SomaFMTrack(context.Context) (string, string, error) {
+	f.feeds++
+	return f.artist, f.title, f.feedErr
+}
 
 func (f *fakeBeds) Station() string {
 	if f.station == "" {
@@ -106,6 +115,45 @@ func TestAudioHandler_ReportsBedAndOptions(t *testing.T) {
 	}
 	if body["station"] != beds.DefaultStation {
 		t.Fatalf("station: %v", body["station"])
+	}
+}
+
+// On the SomaFM bed the track comes from the feed, so the console renders one
+// line from one source whichever bed is live instead of fetching SomaFM itself.
+func TestAudioHandler_ReportsTheSomaFMTrack(t *testing.T) {
+	f := &fakeBeds{bed: beds.SomaFM, artist: "Steve Cobby", title: "Big Wow"}
+	_, body := getAudio(t, &Server{beds: f})
+	if body["track"] != "Steve Cobby — Big Wow" {
+		t.Fatalf("track: %v", body["track"])
+	}
+	if f.feeds != 1 {
+		t.Fatalf("feed reads: %d, want 1", f.feeds)
+	}
+}
+
+// A feed that won't answer is a missing line, not an error: the panel still has
+// to render the bed, and the next poll picks the track up.
+func TestAudioHandler_SomaFMFeedFailureLeavesNoTrack(t *testing.T) {
+	f := &fakeBeds{bed: beds.SomaFM, feedErr: errors.New("somafm unreachable")}
+	code, body := getAudio(t, &Server{beds: f})
+	if code != http.StatusOK {
+		t.Fatalf("status: %d", code)
+	}
+	if body["track"] != "" || body["bed"] != "somafm" {
+		t.Fatalf("want the bed with no track, got %v", body)
+	}
+}
+
+// The local beds have no feed to consult — asking one would name a song nobody
+// is hearing.
+func TestAudioHandler_DoesNotConsultTheFeedOffSomaFM(t *testing.T) {
+	f := &fakeBeds{bed: beds.CarHum, artist: "Steve Cobby", title: "Big Wow"}
+	_, body := getAudio(t, &Server{beds: f})
+	if f.feeds != 0 {
+		t.Fatalf("feed read on the %s bed", f.bed)
+	}
+	if body["track"] != "" {
+		t.Fatalf("track: %v", body["track"])
 	}
 }
 

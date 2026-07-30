@@ -1,0 +1,1 @@
+`/api/audio` reports the SomaFM track alongside the album one, so the console reads a single track field for every bed instead of polling SomaFM's songs feed itself. The now-playing fetch moved next to the station it belongs to, in `pkg/obs/beds`, and one cached fetch now serves `!song` and every open console tab.

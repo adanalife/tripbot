@@ -90,7 +90,8 @@ type OBS interface {
 type Store struct {
 	obs      OBS
 	musicDir string
-	platform string // stamped on the bed metrics; each platform picks its own bed
+	platform string      // stamped on the bed metrics; each platform picks its own bed
+	np       *nowPlaying // SomaFM's feed for the tuned channel
 
 	mu      sync.Mutex
 	bed     Bed
@@ -110,7 +111,14 @@ func NewStore(o OBS, bed Bed, musicDir, platform string) *Store {
 	if !Valid(bed) {
 		bed = CarHum
 	}
-	return &Store{obs: o, bed: bed, musicDir: musicDir, platform: platform, station: DefaultStation}
+	return &Store{
+		obs:      o,
+		bed:      bed,
+		musicDir: musicDir,
+		platform: platform,
+		station:  DefaultStation,
+		np:       newNowPlaying(),
+	}
 }
 
 // Current reports the live bed and, on the album, the track file playing.
@@ -129,6 +137,14 @@ func (s *Store) Station() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.station
+}
+
+// SomaFMTrack reports the song playing on the tuned channel, from SomaFM's feed
+// for it. Cached, so chat and the console's poll share one fetch. Only ask while
+// the SomaFM bed is live — it answers for the tuned channel either way, and on
+// another bed that names a song nobody is hearing.
+func (s *Store) SomaFMTrack(ctx context.Context) (artist, title string, err error) {
+	return s.np.current(ctx, s.Station())
 }
 
 // Detect reads the source's settings and records which bed OBS actually booted

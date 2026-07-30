@@ -15,6 +15,7 @@ import (
 type BedStore interface {
 	Current() (beds.Bed, string)
 	Station() string
+	SomaFMTrack(ctx context.Context) (artist, title string, err error)
 	Set(ctx context.Context, bed beds.Bed) error
 	SetStation(ctx context.Context, station string) error
 }
@@ -37,10 +38,34 @@ func (s *Server) audioHandler(w http.ResponseWriter, r *http.Request) {
 		bed, track := s.beds.Current()
 		body["ok"] = true
 		body["bed"] = string(bed)
-		body["track"] = beds.TrackTitle(track)
+		body["track"] = s.track(r.Context(), bed, track)
 		body["station"] = s.beds.Station()
 	}
 	_ = json.NewEncoder(w).Encode(body)
+}
+
+// track is the display line for whatever the live bed is playing: the album's
+// filename, or the song SomaFM's feed reports for the tuned channel. "" when
+// nothing knows (the car hum has no track, and a feed that won't answer is not
+// worth an error — the console renders no line and re-asks on its next poll).
+//
+// The SomaFM read is here rather than in the console because the station lives
+// here: one cached fetch behind this endpoint serves chat and every open tab,
+// where a console-side fetch would need the station shipped to it first and
+// would still be a second cache to keep honest.
+func (s *Server) track(ctx context.Context, bed beds.Bed, albumTrack string) string {
+	if bed != beds.SomaFM {
+		return beds.TrackTitle(albumTrack)
+	}
+	artist, title, err := s.beds.SomaFMTrack(ctx)
+	if err != nil {
+		slog.DebugContext(ctx, "background audio: somafm now-playing unavailable", "err", err)
+		return ""
+	}
+	if artist == "" || title == "" {
+		return artist + title
+	}
+	return artist + " — " + title
 }
 
 // audioSetHandler switches the background-audio bed. The console POSTs
@@ -92,7 +117,7 @@ func (s *Server) audioSetHandler(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"ok":      true,
 		"bed":     string(current),
-		"track":   beds.TrackTitle(track),
+		"track":   s.track(r.Context(), current, track),
 		"station": s.beds.Station(),
 	})
 }

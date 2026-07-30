@@ -34,14 +34,23 @@ type fakeBeds struct {
 	bed      beds.Bed
 	track    string
 	station  string
+	artist   string
+	title    string
+	feedErr  error
 	sets     []beds.Bed
 	stations []string
+	feeds    int
 	err      error
 }
 
 const testTrack = "/opt/tripbot/assets/music/fifty-horizons/Colorado Sunrise.mp3"
 
 func (f *fakeBeds) Current() (beds.Bed, string) { return f.bed, f.track }
+
+func (f *fakeBeds) SomaFMTrack(context.Context) (string, string, error) {
+	f.feeds++
+	return f.artist, f.title, f.feedErr
+}
 
 func (f *fakeBeds) Station() string {
 	if f.station == "" {
