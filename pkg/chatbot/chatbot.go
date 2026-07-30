@@ -87,8 +87,8 @@ type App struct {
 	// cron has started.
 	Cron Cron
 	// Geocoder turns GPS coords into a place name for !location. Tests inject
-	// a recordingGeocoder / noopGeocoder; production uses realGeocoder which
-	// delegates to the pkg/geo default configured in ConnectIRC.
+	// a noopGeocoder; production uses realGeocoder which delegates to the
+	// pkg/geo default configured in ConnectIRC.
 	Geocoder Geocoder
 	// Weather returns historical conditions at a point for !weather. Tests
 	// inject noopWeather; production uses pkg/weather's keyless Open-Meteo
@@ -115,8 +115,8 @@ type App struct {
 	// assert credits; production uses realScoreboards.
 	Scoreboards Scoreboards
 	// Events records viewer-lifecycle events (subscribe, unsubscribe, miles
-	// correction) to the append-only events table. Tests inject a
-	// recordingEvents; production uses realEvents.
+	// correction) to the append-only events table. Tests inject a noopEvents;
+	// production uses realEvents.
 	Events Events
 
 	// commands is this App's command registry (built by buildRegistry);

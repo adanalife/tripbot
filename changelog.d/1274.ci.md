@@ -1,0 +1,1 @@
+Converted the OBS silent-disconnect watchdog tests to `testing/synctest`, so they run on a virtual clock: exact tick boundaries instead of racing real 2ms timers, ~8x faster, and no `time.Sleep` drain windows. Adds coverage for the OBS-unreachable branch.

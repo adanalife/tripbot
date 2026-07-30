@@ -1,0 +1,1 @@
+Added a fuzz target for the onscreens overlay markdown renderer, pinning two invariants over arbitrary input: no caller-supplied angle bracket survives as markup, and every emitted tag is balanced. 1.4M executions clean.

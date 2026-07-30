@@ -82,7 +82,7 @@ func (a *App) helloCmd(ctx context.Context, user *users.User, params []string) {
 	}
 
 	// check if we said hi too recently
-	if time.Now().Sub(lastHelloTime) < 20*time.Second {
+	if time.Since(lastHelloTime) < 20*time.Second {
 		return
 	}
 
@@ -133,7 +133,7 @@ func readBuildVersion(ctx context.Context) string {
 
 func (a *App) uptimeCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !uptime", "username", user.Username)
-	dur := time.Now().Sub(Uptime)
+	dur := time.Since(Uptime)
 	msg := fmt.Sprintf("I have been running for %s", durafmt.Parse(dur))
 	a.Chat.Say(msg)
 }
@@ -556,7 +556,6 @@ func (a *App) stateCmd(ctx context.Context, user *users.User, _ []string) {
 	a.Chat.Say(msg)
 }
 
-// TODO: maybe there could be a !cancel command or something
 // anonymizedReportPlatforms maps a platform to the anonymized label used for
 // its viewers in a !report's durable/external sinks (the Sentry error event and
 // the Discord alert). Membership is the capability the reporter label keys off,
@@ -747,7 +746,6 @@ func (a *App) shutdownCmd(ctx context.Context, user *users.User, _ []string) {
 	os.Exit(0)
 }
 
-// TODO: this will always be lower case, find out why
 // middleCmd sets the text at the bottom-middle of the stream
 func (a *App) middleCmd(ctx context.Context, user *users.User, params []string) {
 	slog.InfoContext(ctx, "ran !middle", "username", user.Username)

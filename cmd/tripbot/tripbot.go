@@ -111,8 +111,8 @@ type Tripbot struct {
 
 	// srv is the auth-links / console-API / metrics HTTP server, constructed in
 	// NewTripbot. cmd installs the build version through it (SetVersion) and
-	// starts it (Start). The rich admin panel moved to the standalone
-	// tripbot-console; what's left is the OAuth bootstrap pages, the read-only
+	// starts it (Start). The rich admin panel lives in the standalone
+	// tripbot-console; this server holds the OAuth bootstrap pages, the read-only
 	// /api/* endpoints the console proxies, and /health + /metrics.
 	srv *server.Server
 
@@ -256,8 +256,8 @@ func (t *Tripbot) Run() {
 	t.startRotatorEditing()
 	if t.platformIsTwitch() {
 		if t.gateway == nil {
-			// No in-process Helix fallback since the cutover, so audience polls,
-			// the follower check, and broadcaster send have no backend here.
+			// There is no in-process Helix fallback, so audience polls, the
+			// follower check, and broadcaster send have no backend here.
 			// Real deploys always wire TWITCH_API_URL; this is local/CI.
 			slog.WarnContext(ctx, "no TWITCH_API_URL: Twitch audience/follower/broadcaster-send features disabled (gateway not wired)")
 		}
@@ -331,8 +331,8 @@ type gatewayPlatform struct {
 }
 
 // gatewayPlatform returns the descriptor for this instance's platform. An
-// unrecognized platform falls through to youtube, matching the dispatch this
-// replaces (empty PLATFORM never reaches here — platformIsTwitch claims it).
+// unrecognized platform falls through to youtube (empty PLATFORM never reaches
+// here — platformIsTwitch claims it).
 func (t *Tripbot) gatewayPlatform() gatewayPlatform {
 	switch t.cfg.Platform {
 	case "facebook":
@@ -513,8 +513,8 @@ const authStatusInterval = 30 * time.Second
 // the standalone console is the consumer. Snapshots are assembled here — not in
 // pkg/eventbus — so the eventbus stays free of pkg/twitch imports.
 //
-// Only the Twitch instance holds tokens now: YouTube auth moved entirely onto
-// the platform-gateway (gateway-youtube owns the oauth_tokens youtube row), so a
+// Only the Twitch instance holds tokens: YouTube auth lives entirely on the
+// platform-gateway (gateway-youtube owns the oauth_tokens youtube row), so a
 // youtube instance has no token state to report and skips this. (Surfacing
 // YouTube auth status to the console is the gateway's job once it grows a NATS
 // publisher — tracked separately.)
@@ -564,8 +564,8 @@ func (t *Tripbot) twitchAuthAccounts() []eventbus.AuthAccount {
 // into an OBS session.
 //
 // Both live-checks route through the platform-gateway. That wiring lives here
-// in cmd rather than in pkg/obs/watchdog, per
-// package-boundary-init-discipline.
+// in cmd rather than in pkg/obs/watchdog, so the shared package takes no
+// binary-specific dependency.
 //
 // Platforms whose broadcast is a set-and-forget ingest key have nothing to
 // recover from outside OBS and get no watchdog.
@@ -683,7 +683,7 @@ func (t *Tripbot) startBackgroundAudio(ctx context.Context) {
 // stream silent with no self-heal), and it advances the album to its next track
 // when OBS reports the current one ended.
 //
-// Runs on every platform: any platform can now select any bed, so neither job
+// Runs on every platform: any platform can select any bed, so neither job
 // is Twitch-specific. On the car-hum bed it only records the audio gauges.
 func (t *Tripbot) startBackgroundAudioWatchdog(ctx context.Context) {
 	meter := audiowatchdog.NewVolumeMeter(audiowatchdog.BackgroundAudioInputName, 30*time.Second)
@@ -729,8 +729,8 @@ func (t *Tripbot) startEventSub(ctx context.Context) {
 		return
 	}
 	if mytwitch.ChannelID() == "" && t.gateway != nil {
-		// The gateway owns Helix, so nothing populates channelID in-process any
-		// more. Resolve it via the gateway's /v1/users/{login} so EventSub gets a
+		// The gateway owns Helix, so nothing populates channelID in-process.
+		// Resolve it via the gateway's /v1/users/{login} so EventSub gets a
 		// BroadcasterUserID. Non-fatal — falls through to the skip below on error.
 		if id, err := t.gateway.UserID(ctx, t.cfg.ChannelName); err != nil {
 			slog.ErrorContext(ctx, "eventsub: resolving channel id via gateway failed", "err", err)
@@ -798,8 +798,8 @@ func (t *Tripbot) startHttpServer(ctx context.Context) <-chan struct{} {
 	return done
 }
 
-// findInitialVideo will determine the vido that is currently-playing
-// we want to run this early, otherwise it will be unset until the first cron job runs
+// findInitialVideo determines the video that is currently playing. Run it
+// early, otherwise it stays unset until the first cron job runs.
 func (t *Tripbot) findInitialVideo() {
 	t.player.GetCurrentlyPlaying(context.Background())
 	v := t.player.Current()

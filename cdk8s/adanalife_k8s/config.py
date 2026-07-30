@@ -240,9 +240,8 @@ ENVS: dict[str, EnvConfig] = {
         # True when the YouTube Data API quota lands. See youtube_inbound_enabled.
         youtube_inbound_enabled=False,
         # Route prod tripbot-youtube's outbound chat sends through the in-namespace
-        # gateway-youtube (the gateway owns the YouTube token). Mirrors stage. The
-        # prod gateway holds a YouTube token as of 2026-06-22, so this is safe to
-        # ship; without a gateway token, sends would fail.
+        # gateway-youtube (the gateway owns the YouTube token). Mirrors stage.
+        # Sends fail if the prod gateway is missing its YouTube token.
         youtube_api_url="http://gateway-youtube.prod-1.svc.cluster.local:8080",
         # Route prod tripbot-facebook's chat sends through the in-namespace
         # gateway-facebook (the gateway owns the Page token). Mirrors stage.
@@ -255,14 +254,14 @@ ENVS: dict[str, EnvConfig] = {
         instagram_api_url="http://gateway-instagram.prod-1.svc.cluster.local:8080",
         tiktok_api_url="http://gateway-tiktok.prod-1.svc.cluster.local:8080",
         # Wire prod tripbot-twitch to gateway-twitch (in-namespace). Required:
-        # since the cutover the gateway is the unconditional single Helix caller
-        # (the twitch_gateway flag and the in-process fallback are gone).
+        # the gateway is the unconditional single Helix caller, with no
+        # in-process fallback.
         twitch_api_url="http://gateway-twitch.prod-1.svc.cluster.local:8080",
         # The live stream always wins: prod app pods outrank default-priority
         # co-tenants (stage, dashcam-cv) under node pressure. The playback
-        # decode/encode CPU requests live in the playout and obs repos now.
+        # decode/encode CPU requests live in the playout and obs repos.
         priority_class="prod-stream",
-        # On since 2026-07-29, after the obs-music PV was provisioned.
+        # Requires the obs-music PV.
         music_share=True,
     ),
     "stage-1": EnvConfig(

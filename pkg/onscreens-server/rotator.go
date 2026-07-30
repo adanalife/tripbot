@@ -13,8 +13,8 @@ import (
 // The message type, platform constants, default copy, weighted-pick logic, and
 // per-corner render budgets all live in pkg/rotator, shared with the tripbot
 // /api/rotators surface that serves and stores console edits. That package is
-// stdlib-only, so importing it here doesn't drag config/DB init into this binary
-// (the package-boundary-init-discipline ADR).
+// stdlib-only, so importing it here doesn't drag config/DB init into this
+// binary.
 const (
 	platformTwitch    = rot.PlatformTwitch
 	platformYouTube   = rot.PlatformYouTube
