@@ -66,7 +66,6 @@ func newTestApp(vid video.Video) *App {
 		Video:       &recordingVideo{Vid: vid},
 		Chat:        noopChat{},
 		Sessions:    noopSessions{},
-		NowPlaying:  noopNowPlaying{},
 		Flags:       noopFlags{},
 		NATS:        noopNATS{},
 		Cron:        noopCron{},

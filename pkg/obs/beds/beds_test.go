@@ -11,17 +11,18 @@ import (
 // fakeOBS records what would have been written to the OBS source.
 type fakeOBS struct {
 	network  bool
+	url      string
 	file     string
 	loop     bool
 	settings map[string]any
 	err      error
 }
 
-func (f *fakeOBS) SetNetwork(context.Context, string) error {
+func (f *fakeOBS) SetNetwork(_ context.Context, _, url string) error {
 	if f.err != nil {
 		return f.err
 	}
-	f.network, f.file = true, ""
+	f.network, f.url, f.file = true, url, ""
 	return nil
 }
 
@@ -77,6 +78,87 @@ func TestSet_SomaFMUsesNetworkMode(t *testing.T) {
 	}
 	if bed, track := s.Current(); bed != SomaFM || track != "" {
 		t.Fatalf("current: want somafm/no track, got %s/%s", bed, track)
+	}
+}
+
+// The station is what makes the SomaFM bed a choice rather than one stream, so
+// tuning has to reach OBS as a URL and select the bed in one move — nobody means
+// "tune a station I'm not playing".
+func TestSetStation_TunesAndSelectsTheSomaFMBed(t *testing.T) {
+	o := &fakeOBS{}
+	s := NewStore(o, CarHum, albumDir(t, 2), "twitch")
+	if err := s.SetStation(context.Background(), "dronezone"); err != nil {
+		t.Fatal(err)
+	}
+	if o.url != StreamURL("dronezone") {
+		t.Fatalf("obs url = %q, want %q", o.url, StreamURL("dronezone"))
+	}
+	if bed, _ := s.Current(); bed != SomaFM {
+		t.Fatalf("bed = %s, want somafm", bed)
+	}
+	if s.Station() != "dronezone" {
+		t.Fatalf("station = %q, want dronezone", s.Station())
+	}
+}
+
+// A station OBS wouldn't accept must not become the one we report: !song and the
+// console's now-playing line would then name a channel nobody is hearing.
+func TestSetStation_RollsBackWhenOBSRejectsIt(t *testing.T) {
+	o := &fakeOBS{err: errors.New("obs unreachable")}
+	s := NewStore(o, SomaFM, t.TempDir(), "twitch")
+	if err := s.SetStation(context.Background(), "dronezone"); err == nil {
+		t.Fatal("want an error when OBS rejects the tune")
+	}
+	if s.Station() != DefaultStation {
+		t.Fatalf("station = %q, want the previous %q", s.Station(), DefaultStation)
+	}
+}
+
+func TestSetStation_RejectsAnUnknownChannel(t *testing.T) {
+	s := NewStore(&fakeOBS{}, SomaFM, t.TempDir(), "twitch")
+	if err := s.SetStation(context.Background(), "not-a-channel"); err == nil {
+		t.Fatal("want an error for a channel SomaFM doesn't have")
+	}
+}
+
+// Switching away and back has to land on the tuned station, not the default:
+// the station outlives the bed.
+func TestSet_SomaFMReturnsToTheTunedStation(t *testing.T) {
+	o := &fakeOBS{}
+	s := NewStore(o, SomaFM, albumDir(t, 2), "twitch")
+	if err := s.SetStation(context.Background(), "u80s"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Set(context.Background(), CarHum); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Set(context.Background(), SomaFM); err != nil {
+		t.Fatal(err)
+	}
+	if o.url != StreamURL("u80s") {
+		t.Fatalf("obs url = %q, want the tuned %q", o.url, StreamURL("u80s"))
+	}
+}
+
+func TestStationFromURL(t *testing.T) {
+	for _, tc := range []struct{ url, want string }{
+		{StreamURL("dronezone"), "dronezone"},
+		// The obs repo's scene config pins an edge host and its own bitrate; both
+		// have to read back as the station.
+		{"https://ice4.somafm.com/gsclassic-128-mp3", "gsclassic"},
+		{"https://ice2.somafm.com/dronezone-256-mp3", "dronezone"},
+		// Ids with digits are still whole ids.
+		{StreamURL("7soul"), "7soul"},
+		{StreamURL("u80s"), "u80s"},
+		{"https://ice.somafm.com/nosuchchannel-128-mp3", ""},
+		// "live" is a real channel id, so a non-SomaFM URL that happens to end in
+		// one must not read as a station.
+		{"rtmp://example.com/live", ""},
+		{"", ""},
+	} {
+		if got := stationFromURL(tc.url); got != tc.want {
+			t.Errorf("stationFromURL(%q) = %q, want %q", tc.url, got, tc.want)
+		}
 	}
 }
 
@@ -295,6 +377,20 @@ func TestDetect_AlbumWithNoTracksStillReportsTheBed(t *testing.T) {
 	s.Detect(context.Background())
 	if bed, track := s.Current(); bed != Album || track != "" {
 		t.Fatalf("Current() = %s, %q; want album with no track", bed, track)
+	}
+}
+
+// A tripbot restart must not report the default channel while OBS plays another
+// one — the scene's `input` URL is the only record of which is tuned.
+func TestDetect_ReadsTheStationFromTheSourceURL(t *testing.T) {
+	o := &fakeOBS{settings: map[string]any{
+		"is_local_file": false,
+		"input":         "https://ice4.somafm.com/spacestation-128-mp3",
+	}}
+	s := NewStore(o, CarHum, t.TempDir(), "twitch")
+	s.Detect(context.Background())
+	if s.Station() != "spacestation" {
+		t.Fatalf("station = %q, want spacestation", s.Station())
 	}
 }
 

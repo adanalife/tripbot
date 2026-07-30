@@ -96,11 +96,11 @@ func setBrowserURL(client *goobs.Client, name, url string) error {
 
 // SetInputLocalFileMode flips an ffmpeg_source to play a local file by setting
 // is_local_file=true and pointing local_file at the given path. The overlay
-// merge leaves the source's `input` (network URL) field untouched, so
-// SetInputNetworkMode can flip straight back to it without re-supplying the
-// URL. Used by the audio-fallback watchdog to swap the background-audio source
-// onto the local Car Hum bed when SomaFM is unreachable, and by the bed store
-// to play album tracks. file must exist inside the OBS container.
+// merge leaves the source's `input` (network URL) field untouched, so the
+// station it names survives the detour and is still readable at startup. Used
+// by the audio-fallback watchdog to swap the background-audio source onto the
+// local Car Hum bed when SomaFM is unreachable, and by the bed store to play
+// album tracks. file must exist inside the OBS container.
 //
 // loop must be true for a bed that has to stay audible on its own: the SomaFM
 // source ships with looping unset (a radio stream doesn't loop), so without
@@ -138,15 +138,18 @@ func GetInputSettings(ctx context.Context, inputName string) (map[string]any, er
 	return resp.InputSettings, nil
 }
 
-// SetInputNetworkMode flips an ffmpeg_source back to its network stream by
+// SetInputNetworkMode flips an ffmpeg_source to the network stream at url by
 // setting is_local_file=false (and clearing looping, which is meaningless for a
-// live stream). The source's `input` URL is preserved across the local-file
-// detour (the overlay merge never overwrote it), so OBS reopens the original
-// stream. The inverse of SetInputLocalFileMode.
-func SetInputNetworkMode(ctx context.Context, inputName string) error {
+// live stream). The inverse of SetInputLocalFileMode.
+//
+// The url is supplied on every call rather than relying on the one the scene
+// config baked in, because which stream the source should play is a live choice
+// (the selected SomaFM station), not a fixed property of the scene.
+func SetInputNetworkMode(ctx context.Context, inputName, url string) error {
 	return setInputSettings(ctx, inputName, map[string]any{
 		"is_local_file": false,
 		"looping":       false,
+		"input":         url,
 	})
 }
 

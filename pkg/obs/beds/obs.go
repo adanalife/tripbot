@@ -10,8 +10,8 @@ import (
 // rest of pkg/obs — bed switches are rare (a console click or a track ending).
 type RealOBS struct{}
 
-func (RealOBS) SetNetwork(ctx context.Context, inputName string) error {
-	return obs.SetInputNetworkMode(ctx, inputName)
+func (RealOBS) SetNetwork(ctx context.Context, inputName, url string) error {
+	return obs.SetInputNetworkMode(ctx, inputName, url)
 }
 
 func (RealOBS) SetLocalFile(ctx context.Context, inputName, file string, loop bool) error {

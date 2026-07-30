@@ -66,10 +66,6 @@ type App struct {
 	// assigns the same *users.Sessions it wraps into Sessions. nil in tests and
 	// the brief startup window before cmd assigns it.
 	UserSessions *users.Sessions
-	// NowPlaying reports the currently-playing track on the stream's
-	// background audio source. Tests inject a fake; production uses
-	// realNowPlaying which polls SomaFM.
-	NowPlaying NowPlaying
 	// Flags evaluates feature flag values for command-time gating. Tests
 	// inject noopFlags{} (every key false); New() defaults it to an empty
 	// in-memory client (same fail-closed contract) for the startup window
@@ -151,7 +147,6 @@ func New(cfg *c.TripbotConfig) *App {
 		Video:       realVideo{},
 		Chat:        disconnectedChat{},
 		Sessions:    realSessions{},
-		NowPlaying:  newRealNowPlaying(),
 		Flags:       feature.NewInMemoryClient(nil),
 		NATS:        realNATS{},
 		Cron:        noopCron{},
