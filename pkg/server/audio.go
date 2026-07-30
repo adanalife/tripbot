@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
-	"path/filepath"
-	"strings"
 
 	"github.com/adanalife/tripbot/pkg/obs/beds"
 )
@@ -38,7 +36,7 @@ func (s *Server) audioHandler(w http.ResponseWriter, r *http.Request) {
 		"ok":    true,
 		"bed":   string(bed),
 		"beds":  options,
-		"track": trackTitle(track),
+		"track": beds.TrackTitle(track),
 	})
 }
 
@@ -75,17 +73,6 @@ func (s *Server) audioSetHandler(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"ok":    true,
 		"bed":   string(current),
-		"track": trackTitle(track),
+		"track": beds.TrackTitle(track),
 	})
-}
-
-// trackTitle turns an album track path into something worth showing in the
-// console: the filename without its extension. "" stays "" (the other beds
-// have no track).
-func trackTitle(path string) string {
-	if path == "" {
-		return ""
-	}
-	base := filepath.Base(path)
-	return strings.TrimSuffix(base, filepath.Ext(base))
 }

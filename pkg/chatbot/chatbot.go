@@ -3,7 +3,6 @@ package chatbot
 import (
 	"context"
 	"log/slog"
-	"sync"
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
@@ -100,13 +99,17 @@ type App struct {
 	// which reaches the platform-gateway (the out-of-process Helix service).
 	Twitch Twitch
 	// OBS drives live OBS WebSocket tweaks for chat commands — currently just
-	// !carsound repointing the YouTube background-audio source. Tests inject a
-	// fake; production uses realOBS (which dials per call via pkg/obs).
+	// !refreshoverlays respawning the browser sources. Tests inject a fake;
+	// production uses realOBS (which dials per call via pkg/obs).
 	OBS OBS
 	// Search runs visual search over the dashcam corpus for !find — it requests
 	// a query embedding from the video-pipeline responder over NATS and runs the
 	// pgvector cosine search. Tests inject a fake; production uses realSearch.
 	Search Search
+	// Beds reads and switches the background-audio bed for !audio. Tests inject
+	// a fake; cmd/tripbot assigns the same *beds.Store the console's /api/audio
+	// drives. Nil until then, which !audio reports as unavailable.
+	Beds Beds
 	// Scoreboards reads the miles / correct-guess leaderboards and credits a
 	// correct guess. Tests inject a recordingScoreboards to stage rows and
 	// assert credits; production uses realScoreboards.
@@ -115,14 +118,6 @@ type App struct {
 	// correction) to the append-only events table. Tests inject a noopEvents;
 	// production uses realEvents.
 	Events Events
-
-	// carSoundIdx is the index into carSounds of the YouTube background drone
-	// currently selected via !carsound; carSoundMu guards it (commands dispatch
-	// concurrently). Defaults to 0 — the scene's baked-in default — so a fresh
-	// process reports the right "now playing". In-memory only: resets on restart,
-	// same as OBS itself resets to the scene default.
-	carSoundMu  sync.Mutex
-	carSoundIdx int
 
 	// commands is this App's command registry (built by buildRegistry);
 	// singleWordLookup / multiWordLookup index it by trigger + alias for

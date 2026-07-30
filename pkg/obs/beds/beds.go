@@ -25,6 +25,8 @@ import (
 	"sort"
 	"strings"
 	"sync"
+
+	"github.com/adanalife/tripbot/pkg/instrumentation"
 )
 
 // Bed is one selectable background-audio source.
@@ -88,6 +90,7 @@ type OBS interface {
 type Store struct {
 	obs      OBS
 	musicDir string
+	platform string // stamped on the bed metrics; each platform picks its own bed
 
 	mu     sync.Mutex
 	bed    Bed
@@ -96,15 +99,17 @@ type Store struct {
 }
 
 // NewStore returns a store defaulting to bed (used until Detect reads the real
-// one off OBS). musicDir is the album root; "" uses MusicDir.
-func NewStore(o OBS, bed Bed, musicDir string) *Store {
+// one off OBS). musicDir is the album root; "" uses MusicDir. platform labels
+// the bed metrics — without it the per-platform instances, which each run a
+// different bed, would write the same series.
+func NewStore(o OBS, bed Bed, musicDir, platform string) *Store {
 	if musicDir == "" {
 		musicDir = MusicDir
 	}
 	if !Valid(bed) {
 		bed = CarHum
 	}
-	return &Store{obs: o, bed: bed, musicDir: musicDir}
+	return &Store{obs: o, bed: bed, musicDir: musicDir, platform: platform}
 }
 
 // Current reports the live bed and, on the album, the track file playing.
@@ -124,6 +129,9 @@ func (s *Store) Detect(ctx context.Context) {
 	settings, err := s.obs.Settings(ctx, InputName)
 	if err != nil {
 		slog.WarnContext(ctx, "background audio: could not read current bed from obs", "err", err)
+		// Publish the seed anyway: it's what Current() reports, so the gauge and
+		// the store agree even when the read failed.
+		s.record()
 		return
 	}
 	bed := bedFromSettings(settings, s.musicDir)
@@ -138,6 +146,7 @@ func (s *Store) Detect(ctx context.Context) {
 		loadErr = s.loadAlbumLocked(file)
 	}
 	s.mu.Unlock()
+	s.record()
 	if loadErr != nil {
 		slog.WarnContext(ctx, "background audio: album is live but its play order is empty",
 			"err", loadErr)
@@ -194,6 +203,10 @@ func (s *Store) Set(ctx context.Context, bed Bed) error {
 	s.mu.Lock()
 	s.bed = bed
 	s.mu.Unlock()
+	s.record()
+	// Counted here rather than at the callers so a console switch and a chat
+	// switch land on the same counter — they are the same switch.
+	instrumentation.BackgroundAudioSelections.Inc(s.platform, string(bed))
 	slog.InfoContext(ctx, "background audio: bed switched", "bed", bed, "track", target)
 	return nil
 }
@@ -294,6 +307,35 @@ func scanTracks(dir string) ([]string, error) {
 	}
 	sort.Strings(out)
 	return out, nil
+}
+
+// record publishes the live bed and the depth of the album play order. Both
+// are read back under the lock so the gauges describe one consistent moment.
+//
+// The play-order depth is here because an empty one is invisible everywhere
+// else: Advance returns silently when there is nothing to advance to, so an
+// album bed with no tracks plays its boot track and then falls silent with OBS
+// still reporting a healthy source. album=1 with tracks=0 is that state, and
+// it is the only warning of it.
+func (s *Store) record() {
+	s.mu.Lock()
+	bed, tracks := s.bed, len(s.tracks)
+	s.mu.Unlock()
+	for _, b := range All {
+		instrumentation.OBSBackgroundAudio.SetBed(s.platform, string(b), b == bed)
+	}
+	instrumentation.OBSBackgroundAudio.SetAlbumTracks(s.platform, tracks)
+}
+
+// TrackTitle turns an album track path into something worth showing a human:
+// the filename without its extension. "" stays "" (the other beds have no
+// track), which is how callers tell "no track" from "a track".
+func TrackTitle(path string) string {
+	if path == "" {
+		return ""
+	}
+	base := filepath.Base(path)
+	return strings.TrimSuffix(base, filepath.Ext(base))
 }
 
 func shuffle(tracks []string) {
