@@ -271,8 +271,12 @@ func (t *Tripbot) Run() {
 	// t.irc, so cron registration waits until the client exists.
 	t.startCron()
 	t.startNATS(ctx)
-	t.player.EmitCurrentVideo(ctx)   // after startNATS: publishes the current video.changed for the standalone console
-	t.startAuthStatusEmitter(ctx)    // after startNATS: publishes auth.status snapshots for the standalone console
+	t.player.EmitCurrentVideo(ctx) // after startNATS: publishes the current video.changed for the standalone console
+	if t.platformIsTwitch() {
+		// after startNATS: the first auth.status snapshot for the standalone
+		// console. The twitch.EmitAuthStatus cron job keeps it fresh.
+		t.emitAuthStatus(ctx)
+	}
 	t.startOBSRefreshSubscriber(ctx) // after startNATS: per-platform (each instance owns its OBS)
 	// Poll this instance's OBS WebSocket for streaming state + render/output
 	// stats, stamping the series with the platform. These obs_* gauges feed
@@ -507,34 +511,21 @@ func (t *Tripbot) startNATS(ctx context.Context) {
 // means a freshly-connected console is at most one interval stale.
 const authStatusInterval = 30 * time.Second
 
-// startAuthStatusEmitter publishes this instance's token state to
-// tripbot.<env>.auth.status.twitch on start and every authStatusInterval.
-// The in-process admin hub ignores the subject (it polls token state directly);
-// the standalone console is the consumer. Snapshots are assembled here — not in
-// pkg/eventbus — so the eventbus stays free of pkg/twitch imports.
+// emitAuthStatus publishes this instance's token state to
+// tripbot.<env>.auth.status.twitch. The in-process admin hub ignores the
+// subject (it polls token state directly); the standalone console is the
+// consumer. Snapshots are assembled here — not in pkg/eventbus — so the
+// eventbus stays free of pkg/twitch imports.
 //
-// Only the Twitch instance holds tokens: YouTube auth lives entirely on the
+// Run once from Run, after NATS is up so the first snapshot isn't published
+// into a connecting client, then on authStatusInterval as a cron job. Only the
+// Twitch instance holds tokens: YouTube auth lives entirely on the
 // platform-gateway (gateway-youtube owns the oauth_tokens youtube row), so a
-// youtube instance has no token state to report and skips this. (Surfacing
-// YouTube auth status to the console is the gateway's job once it grows a NATS
-// publisher — tracked separately.)
-func (t *Tripbot) startAuthStatusEmitter(ctx context.Context) {
-	if !t.platformIsTwitch() {
-		return
-	}
-	go func() {
-		eventbus.EmitAuthStatus(ctx, t.cfg.Environment, "twitch", t.twitchAuthAccounts())
-		tick := time.NewTicker(authStatusInterval)
-		defer tick.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-tick.C:
-				eventbus.EmitAuthStatus(ctx, t.cfg.Environment, "twitch", t.twitchAuthAccounts())
-			}
-		}
-	}()
+// youtube instance has no token state to report and the job is Twitch-gated
+// with the rest. (Surfacing YouTube auth status to the console is the gateway's
+// job once it grows a NATS publisher — tracked separately.)
+func (t *Tripbot) emitAuthStatus(ctx context.Context) {
+	eventbus.EmitAuthStatus(ctx, t.cfg.Environment, "twitch", t.twitchAuthAccounts())
 }
 
 // twitchAuthAccounts converts the live Twitch token state (bot + broadcaster)
@@ -1105,6 +1096,10 @@ func (t *Tripbot) scheduleBackgroundJobs() {
 	t.addJob(5*time.Minute, "users.PrintCurrentSession", t.sessions.PrintCurrentSession)
 	t.addJob(5*time.Minute, "twitch.GetSubscribers", t.refreshSubscribers)
 	t.addJob(5*time.Minute, "twitch.GetFollowerCount", t.refreshFollowerCount)
+	// Run publishes the first snapshot once NATS is connected; this keeps it
+	// fresh. Registered here rather than as its own goroutine so a panic in the
+	// token read is recovered and each publish gets a span and duration metric.
+	t.addJob(authStatusInterval, "twitch.EmitAuthStatus", t.emitAuthStatus)
 	// The platform-gateway owns token refresh now; tripbot only reads the rows
 	// it keeps fresh. Re-read on a timer so the in-memory tokens track the
 	// gateway's rotations — the IRC PASS line on reconnect and the token-expiry

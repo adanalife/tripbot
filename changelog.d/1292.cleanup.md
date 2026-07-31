@@ -1,0 +1,1 @@
+Move the periodic `auth.status` publish onto the cron scheduler instead of its own goroutine, so each tick gets a trace span, a duration metric, and panic recovery — a panic reading token state used to take the process down with it.
