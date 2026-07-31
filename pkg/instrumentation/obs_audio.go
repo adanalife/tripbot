@@ -42,7 +42,7 @@ var (
 // swap counter on each source change.
 // The bed store records SetBed / SetAlbumTracks whenever the live bed changes
 // or is re-read off OBS.
-var OBSBackgroundAudio = obsBackgroundAudioIface{
+var OBSBackgroundAudio = obsBackgroundAudioMetrics{
 	levelDB:     obsBackgroundAudioLevelDB,
 	playing:     obsBackgroundAudioPlaying,
 	onFallback:  obsBackgroundAudioOnFallback,
@@ -52,7 +52,7 @@ var OBSBackgroundAudio = obsBackgroundAudioIface{
 	albumTracks: backgroundAudioAlbumTracks,
 }
 
-type obsBackgroundAudioIface struct {
+type obsBackgroundAudioMetrics struct {
 	levelDB     metric.Float64Gauge
 	playing     metric.Int64Gauge
 	onFallback  metric.Int64Gauge
@@ -63,22 +63,22 @@ type obsBackgroundAudioIface struct {
 }
 
 // SetLevelDB records the latest peak output level (already floored at -60).
-func (o obsBackgroundAudioIface) SetLevelDB(db float64) {
+func (o obsBackgroundAudioMetrics) SetLevelDB(db float64) {
 	o.levelDB.Record(context.Background(), db)
 }
 
 // SetPlaying records whether OBS reports the source's media state as PLAYING.
-func (o obsBackgroundAudioIface) SetPlaying(playing bool) {
+func (o obsBackgroundAudioMetrics) SetPlaying(playing bool) {
 	o.playing.Record(context.Background(), b2i(playing))
 }
 
 // SetOnFallback records whether the watchdog has the source on the local bed.
-func (o obsBackgroundAudioIface) SetOnFallback(on bool) {
+func (o obsBackgroundAudioMetrics) SetOnFallback(on bool) {
 	o.onFallback.Record(context.Background(), b2i(on))
 }
 
 // SetSomaFMReachable records the last SomaFM edge probe result.
-func (o obsBackgroundAudioIface) SetSomaFMReachable(reachable bool) {
+func (o obsBackgroundAudioMetrics) SetSomaFMReachable(reachable bool) {
 	o.reachable.Record(context.Background(), b2i(reachable))
 }
 
@@ -86,7 +86,7 @@ func (o obsBackgroundAudioIface) SetSomaFMReachable(reachable bool) {
 // writes every bed it knows about on each change — the live one and the rest —
 // rather than only the winner, so no series is left reading 1 for a bed that
 // stopped playing. Bed switches are rare, so the extra writes are free.
-func (o obsBackgroundAudioIface) SetBed(platform, bed string, live bool) {
+func (o obsBackgroundAudioMetrics) SetBed(platform, bed string, live bool) {
 	o.bed.Record(context.Background(), b2i(live),
 		metric.WithAttributes(attribute.String("bed", bed)), platformAttr(platform))
 }
@@ -94,18 +94,11 @@ func (o obsBackgroundAudioIface) SetBed(platform, bed string, live bool) {
 // SetAlbumTracks records how many tracks the album play order holds. 0 is the
 // interesting value: on the album bed it means the next track-ended event has
 // nowhere to advance to.
-func (o obsBackgroundAudioIface) SetAlbumTracks(platform string, n int) {
+func (o obsBackgroundAudioMetrics) SetAlbumTracks(platform string, n int) {
 	o.albumTracks.Record(context.Background(), int64(n), platformAttr(platform))
 }
 
 // IncSwap counts a source swap; direction is "to_fallback" or "to_somafm".
-func (o obsBackgroundAudioIface) IncSwap(direction string) {
+func (o obsBackgroundAudioMetrics) IncSwap(direction string) {
 	o.swaps.Add(context.Background(), 1, metric.WithAttributes(attribute.String("direction", direction)))
-}
-
-func b2i(b bool) int64 {
-	if b {
-		return 1
-	}
-	return 0
 }
