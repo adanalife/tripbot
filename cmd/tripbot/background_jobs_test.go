@@ -29,8 +29,9 @@ var neutralJobs = []string{
 // tracking read Twitch chatters; the leaderboards need viewers who earn miles
 // and guess, which needs a chatter with a persisted identity (the gateway
 // platforms hand the command path a transient user); the subscriber and follower
-// polls hit Helix; and the token refresh dereferences the IRC client a
-// non-Twitch instance never constructs.
+// polls hit Helix; the token refresh dereferences the IRC client a non-Twitch
+// instance never constructs; and only the Twitch instance holds tokens to report
+// an auth status for (gateway-youtube owns the youtube oauth_tokens row).
 var twitchOnlyJobs = []string{
 	"users.UpdateSession",
 	"users.UpdateLeaderboard",
@@ -40,6 +41,7 @@ var twitchOnlyJobs = []string{
 	"twitch.GetSubscribers",
 	"twitch.GetFollowerCount",
 	"twitch.ReloadTokens",
+	"twitch.EmitAuthStatus",
 }
 
 // The broadcast-discovery jobs are doubly gated: off Twitch, and only when that
