@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/adanalife/tripbot/pkg/background"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
+	"github.com/go-co-op/gocron/v2"
 )
 
 // Every background job falls into one of the groups below, and together they are
@@ -65,13 +65,13 @@ var leaderboardJobs = []string{"chatbot.ShowRotatingLeaderboard", "users.UpdateL
 func scheduledJobNames(t *testing.T, cfg *c.TripbotConfig) []string {
 	t.Helper()
 
-	sched, err := background.New()
+	sched, err := gocron.NewScheduler()
 	if err != nil {
-		t.Fatalf("background.New(): %v", err)
+		t.Fatalf("gocron.NewScheduler(): %v", err)
 	}
 	t.Cleanup(func() {
-		if err := sched.Stop(); err != nil {
-			t.Errorf("scheduler Stop(): %v", err)
+		if err := sched.Shutdown(); err != nil {
+			t.Errorf("scheduler Shutdown(): %v", err)
 		}
 	})
 
