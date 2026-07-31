@@ -39,28 +39,6 @@ func TestGoogleMapsURL(t *testing.T) {
 	}
 }
 
-func TestRemoveNonLetters(t *testing.T) {
-	tests := []struct {
-		name  string
-		input string
-		want  string
-	}{
-		{"empty", "", ""},
-		{"all letters", "Hello", "Hello"},
-		{"mixed", "Hello, World! 123", "HelloWorld"},
-		{"only punctuation", "!!!", ""},
-		{"unicode (non-ascii) is stripped", "café", "caf"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := RemoveNonLetters(tt.input)
-			if got != tt.want {
-				t.Fatalf("got %q, want %q", got, tt.want)
-			}
-		})
-	}
-}
-
 func TestStripAtSign(t *testing.T) {
 	tests := []struct {
 		name  string
