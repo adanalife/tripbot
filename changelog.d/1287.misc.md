@@ -1,0 +1,1 @@
+Pin the gate that keeps miles/guess leaderboards off the gateway platforms. The rotating-leaderboard overlay and the lifetime-board rebuild are Twitch-only by way of an early return partway down the job registration, which a later edit could defeat without any test noticing.
