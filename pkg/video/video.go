@@ -4,9 +4,6 @@ import (
 	"context"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"log/slog"
-	"os/exec"
-	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/eventbus"
@@ -44,8 +41,8 @@ func NewPlayer(cfg *c.TripbotConfig, onscreens onscreens, playout *playoutClient
 	return &Player{cfg: cfg, onscreens: onscreens, playout: playout}
 }
 
-// GetCurrentlyPlaying will use lsof to figure out
-// which dashcam video is currently playing (seriously).
+// GetCurrentlyPlaying asks Playout which dashcam video is on screen and
+// advances the Player's state if it changed.
 // ctx carries the cron tick's trace span; it isn't propagated into the
 // playout-client / onscreens-client HTTP calls (those clients don't take a ctx,
 // so the underlying Playout poll and GPS-image toggles don't nest as children).
@@ -57,11 +54,7 @@ func (p *Player) GetCurrentlyPlaying(ctx context.Context) {
 	p.preVid = p.curVid
 
 	// figure out what's currently playing
-	if helpers.RunningOnDarwin() {
-		p.curVid = p.figureOutCurrentVideo(ctx)
-	} else {
-		p.curVid = p.playout.CurrentlyPlaying(ctx)
-	}
+	p.curVid = p.playout.CurrentlyPlaying(ctx)
 
 	// if the currently-playing video has changed
 	if p.curVid != p.preVid {
@@ -133,20 +126,4 @@ func (p *Player) EmitCurrentVideo(ctx context.Context) {
 	eventbus.EmitVideoChanged(ctx, p.cfg.Environment, p.cfg.Platform,
 		p.CurrentlyPlaying.File(), p.CurrentlyPlaying.State, p.CurrentlyPlaying.Flagged,
 		p.CurrentlyPlaying.Lat, p.CurrentlyPlaying.Lng)
-}
-
-func (p *Player) figureOutCurrentVideo(ctx context.Context) string {
-	if helpers.RunningOnWindows() {
-		slog.ErrorContext(ctx, "can't run script on windows")
-		return ""
-	}
-	// run the shell script to get currently-playing video
-	scriptPath := filepath.Join(helpers.ProjectRoot(), "bin", "current-file.sh")
-	out, err := exec.Command(scriptPath).Output()
-	outString := strings.TrimSpace(string(out))
-	if err != nil {
-		slog.ErrorContext(ctx, "figureOutCurrentVideo script failed", "err", err, "output", outString)
-		return ""
-	}
-	return outString
 }
