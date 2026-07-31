@@ -21,11 +21,11 @@ type Video interface {
 	// CurrentProgress reports how long the current clip has been playing.
 	CurrentProgress() time.Duration
 	// FindRandomByState returns a random video filmed in the given US state.
-	// Returns *terrors.NoFootageForStateError when no rows match.
+	// Returns terrors.ErrNoFootageForState when no rows match.
 	FindRandomByState(ctx context.Context, state string) (video.Video, error)
 	// FindNextDaytime returns the next daytime clip filmed on a later day than
 	// `after` — the "skip to the next morning" target behind !daytime. Returns
-	// *terrors.NoDaytimeFoundError when there's no later daytime clip ahead.
+	// terrors.ErrNoDaytimeFound when there's no later daytime clip ahead.
 	FindNextDaytime(ctx context.Context, after video.Video) (video.Video, error)
 }
 
