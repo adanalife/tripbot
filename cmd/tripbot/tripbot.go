@@ -1132,6 +1132,6 @@ func (t *Tripbot) addJob(interval time.Duration, name string, fn func(context.Co
 		append([]gocron.JobOption{gocron.WithName(name)}, opts...)...,
 	)
 	if err != nil {
-		slog.Error("error adding background job: "+name, "err", err)
+		slog.Error("error adding background job", "job", name, "err", err)
 	}
 }
