@@ -1,0 +1,1 @@
+`server.Server.Start` returns its listener error instead of exiting the process from inside the library. Deciding whether a failed listen is fatal belongs to the binary, which is what the sibling onscreens-server already does.
