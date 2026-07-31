@@ -128,3 +128,54 @@ func TestGuessCmd_WrongGuess_MisspelledStaysWrong(t *testing.T) {
 		t.Errorf("expected try-again in output, got %q", out())
 	}
 }
+
+// An unflagged video can still have no state: pkg/video's save path only
+// geocodes when coords parse, and a geocoder error (including the expected
+// ErrDisabled when no Maps key is set) leaves State empty without flagging.
+// Nobody can guess an answer that doesn't exist, so nobody gets credited.
+func TestGuessCmd_StatelessVideo_CreditsNobody(t *testing.T) {
+	// The two-letter miss is the input that used to reach here as "": a
+	// non-abbreviation was blanked before the comparison, so "" == "" matched
+	// and handed out a guess point plus a timewarp on demand.
+	for _, guess := range []string{"zz", "Colorado", ""} {
+		t.Run("guess="+guess, func(t *testing.T) {
+			app := newTestApp(newTestVideo("", 39.5, -105.0, time.Now()))
+			recScores := &recordingScoreboards{}
+			recPlayout := &recordingPlayout{}
+			app.Scoreboards = recScores
+			app.Playout = recPlayout
+			out := captureSay(t, app)
+
+			app.guessCmd(context.Background(), newTestUser("viewer1"), []string{guess})
+
+			if strings.Contains(out(), "got it") {
+				t.Errorf("guess %q won against a stateless video: %q", guess, out())
+			}
+			if len(recScores.Credited) != 0 {
+				t.Errorf("credited = %v, want nobody", recScores.Credited)
+			}
+			if len(recPlayout.Calls) != 0 {
+				t.Errorf("playout calls = %v, want no timewarp", recPlayout.Calls)
+			}
+		})
+	}
+}
+
+// A two-letter guess that isn't a state code survives to the comparison as
+// typed instead of being blanked, matching what pkg/video's FindRandomByState
+// does with the same lookup.
+func TestGuessCmd_TwoLetterNonState_IsNotBlanked(t *testing.T) {
+	app := newTestApp(newTestVideo("Colorado", 39.5, -105.0, time.Now()))
+	recScores := &recordingScoreboards{}
+	app.Scoreboards = recScores
+	out := captureSay(t, app)
+
+	app.guessCmd(context.Background(), newTestUser("viewer1"), []string{"zz"})
+
+	if !strings.Contains(out(), "Try again") {
+		t.Errorf("expected try-again for a non-state pair, got %q", out())
+	}
+	if len(recScores.Credited) != 0 {
+		t.Errorf("credited = %v, want nobody", recScores.Credited)
+	}
+}

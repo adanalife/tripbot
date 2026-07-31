@@ -500,10 +500,13 @@ func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 	// get the arg from the command
 	guess := strings.Join(params, " ")
 
-	// convert to short form if they used the full name
-	// e.g. "Massachusetts" instead of "MA"
+	// expand a two-letter abbreviation to the full name the DB stores
+	// ("MA" -> "Massachusetts"). A pair that isn't a state code is left as
+	// typed; blanking it would compare "" against the video's state.
 	if len(guess) == 2 {
-		guess = helpers.StateAbbrevToState(guess)
+		if full := helpers.StateAbbrevToState(guess); full != "" {
+			guess = full
+		}
 	}
 
 	// forgive close misspellings ("florisa" -> Florida); exact state names
@@ -523,6 +526,15 @@ func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 			return
 		}
 		vid = next
+	}
+
+	// A video whose geocode came back empty (no Maps key, or ZERO_RESULTS)
+	// isn't flagged, so it reaches here with no state to guess at. There's no
+	// right answer to credit, and matching against "" would credit anyone
+	// whose guess normalized to empty.
+	if vid.State == "" {
+		a.Chat.Say("I don't know what state this is, sorry!")
+		return
 	}
 
 	if strings.EqualFold(guess, vid.State) {
