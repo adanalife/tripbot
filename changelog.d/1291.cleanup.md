@@ -1,0 +1,1 @@
+Delete two unused functions from `pkg/helpers`: `RemoveNonLetters` (which compiled the same regexp on every call and would have nil-panicked on the compile error it logged) and `OpenInBrowser`, whose removal drops the `open-golang` dependency.

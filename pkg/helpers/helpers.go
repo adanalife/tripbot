@@ -2,8 +2,6 @@ package helpers
 
 import (
 	"fmt"
-	"log/slog"
-	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -11,12 +9,10 @@ import (
 	"github.com/bradfitz/latlong"
 	"github.com/hako/durafmt"
 	"github.com/nathan-osman/go-sunrise"
-	"github.com/skratchdot/open-golang/open"
 )
 
-// Reverse geocoding (coords -> city/state) moved to pkg/geo, which wraps the
-// kelvins/geocoder SDK behind an injectable Geocoder interface. helpers stays
-// a pure, dependency-free utility package.
+// Reverse geocoding (coords -> city/state) lives in pkg/geo, which wraps the
+// kelvins/geocoder SDK behind an injectable Geocoder interface.
 
 // DurationToMiles converts Durations to miles
 func DurationToMiles(dur time.Duration) float32 {
@@ -28,14 +24,6 @@ func DurationToMiles(dur time.Duration) float32 {
 // TODO find query param for zoom level
 func GoogleMapsURL(lat, long float64) string {
 	return fmt.Sprintf("https://maps.google.com/?q=%.5f%%2C%.5f&ll=%.5f%%2C%.5f&z=5", lat, long, lat, long)
-}
-
-func RemoveNonLetters(input string) string {
-	reg, err := regexp.Compile("[^a-zA-Z]+")
-	if err != nil {
-		slog.Error("error compiling regex", "err", err)
-	}
-	return reg.ReplaceAllString(input, "")
 }
 
 func ActualDate(utcDate time.Time, lat, long float64) time.Time {
@@ -92,14 +80,6 @@ func sunriseSunset(utcDate time.Time, lat, long float64) (time.Time, time.Time) 
 		utcDate.Year(), utcDate.Month(), utcDate.Day(),
 	)
 	return ActualDate(rise, lat, long), ActualDate(set, lat, long)
-}
-
-func OpenInBrowser(url string) {
-	slog.Info("opening url in browser", "url", url)
-	err := open.Run(url)
-	if err != nil {
-		slog.Error("error opening browser", "err", err)
-	}
 }
 
 // TODO: remove this and all darwin-only support
