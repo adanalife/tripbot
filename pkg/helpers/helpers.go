@@ -11,9 +11,8 @@ import (
 	"github.com/nathan-osman/go-sunrise"
 )
 
-// Reverse geocoding (coords -> city/state) moved to pkg/geo, which wraps the
-// kelvins/geocoder SDK behind an injectable Geocoder interface. helpers stays
-// a pure, dependency-free utility package.
+// Reverse geocoding (coords -> city/state) lives in pkg/geo, which wraps the
+// kelvins/geocoder SDK behind an injectable Geocoder interface.
 
 // DurationToMiles converts Durations to miles
 func DurationToMiles(dur time.Duration) float32 {
