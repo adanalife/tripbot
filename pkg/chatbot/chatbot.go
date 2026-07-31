@@ -79,7 +79,7 @@ type App struct {
 	NATS NATS
 	// Cron stops the background scheduler during !shutdown. Defaults to
 	// noopCron{} (set in New(), also what tests use); cmd/tripbot assigns the
-	// constructed *background.Scheduler — which satisfies Cron directly — once
+	// constructed gocron.Scheduler — which satisfies Cron directly — once
 	// cron has started.
 	Cron Cron
 	// Geocoder turns GPS coords into a place name for !location. Tests inject

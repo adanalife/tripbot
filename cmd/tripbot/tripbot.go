@@ -9,7 +9,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/adanalife/tripbot/pkg/background"
 	"github.com/adanalife/tripbot/pkg/bootstrap"
 	"github.com/adanalife/tripbot/pkg/chatbot"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
@@ -105,9 +104,10 @@ type Tripbot struct {
 	beds *beds.Store
 
 	// scheduler is the background cron scheduler, constructed in startCron and
-	// shared by scheduleBackgroundJobs (job registration) and shutdown (Stop).
-	// Also assigned onto t.app.Cron so the !shutdown command can stop it.
-	scheduler *background.Scheduler
+	// shared by scheduleBackgroundJobs (job registration) and shutdown
+	// (Shutdown). Also assigned onto t.app.Cron so the !shutdown command can
+	// stop it.
+	scheduler gocron.Scheduler
 
 	// srv is the auth-links / console-API / metrics HTTP server, constructed in
 	// NewTripbot. cmd installs the build version through it (SetVersion) and
@@ -811,14 +811,15 @@ func (t *Tripbot) findInitialVideo() {
 
 // startCron starts the background workers
 func (t *Tripbot) startCron() {
-	s, err := background.New()
+	s, err := gocron.NewScheduler()
 	if err != nil {
 		slog.Error("error creating background scheduler", "err", err)
 		os.Exit(1)
 	}
 	t.scheduler = s
+	slog.Info("starting cron")
 	t.scheduler.Start()
-	// let !shutdown stop the same scheduler instance (*background.Scheduler
+	// let !shutdown stop the same scheduler instance (gocron.Scheduler
 	// satisfies chatbot.Cron directly)
 	t.app.Cron = t.scheduler
 	t.scheduleBackgroundJobs()
@@ -1006,8 +1007,16 @@ func (t *Tripbot) shutdown(httpDone <-chan struct{}) {
 	slog.Warn("shutting down")
 	//TODO: print different message if CurrentlyPlaying is ""
 	slog.Info("last played video", "file", t.player.Current().File())
-	if err := t.scheduler.Stop(); err != nil {
-		slog.Error("error shutting down gocron scheduler", "err", err)
+	// Shutdown cancels in-flight job contexts, so any ctx-aware work in those
+	// jobs unwinds rather than running to completion. Cron jobs here are short
+	// idempotent ticks that retry on the next interval, so losing an in-flight
+	// execution is fine. Nil until startCron runs, so a signal arriving during
+	// boot doesn't panic the cleanup path.
+	if t.scheduler != nil {
+		slog.Info("stopping cron")
+		if err := t.scheduler.Shutdown(); err != nil {
+			slog.Error("error shutting down gocron scheduler", "err", err)
+		}
 	}
 	if t.discordSession != nil {
 		if err := t.discordSession.Stop(); err != nil {

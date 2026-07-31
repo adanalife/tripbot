@@ -734,7 +734,7 @@ func (a *App) shutdownCmd(ctx context.Context, user *users.User, _ []string) {
 	}
 	a.Chat.Say("Shutting down...")
 	slog.InfoContext(ctx, "shutdown: currently playing", "video", a.Video.Current())
-	if err := a.Cron.Stop(); err != nil {
+	if err := a.Cron.Shutdown(); err != nil {
 		slog.ErrorContext(ctx, "cron shutdown failed during !shutdown", "err", err)
 	}
 	a.Sessions.Shutdown(ctx)
