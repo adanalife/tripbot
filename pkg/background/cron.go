@@ -36,6 +36,13 @@ func (s *Scheduler) NewJob(jd gocron.JobDefinition, task gocron.Task, opts ...go
 	return s.sched.NewJob(jd, task, opts...)
 }
 
+// Jobs returns the currently registered jobs. Each carries the name its
+// caller passed via gocron.WithName, so callers can assert on what got
+// scheduled without running any of it.
+func (s *Scheduler) Jobs() []gocron.Job {
+	return s.sched.Jobs()
+}
+
 // Stop shuts down the scheduler. In-flight job contexts are canceled, so any
 // ctx-aware work in those jobs unwinds rather than running to completion. Cron
 // jobs here are short idempotent ticks that retry on the next interval, so

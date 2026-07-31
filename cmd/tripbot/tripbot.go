@@ -1117,11 +1117,15 @@ func (t *Tripbot) scheduleBackgroundJobs() {
 // tracedJob so each tick opens a span and centralising the error logging.
 // Extra gocron.JobOptions (e.g. WithStartAt for an immediate first run) are
 // appended verbatim; existing callers pass none.
+//
+// name reaches gocron itself via WithName, not just the span and the error log,
+// so the scheduler can be asked what it holds — which is how the platform gates
+// in scheduleBackgroundJobs are tested without running a single tick.
 func (t *Tripbot) addJob(interval time.Duration, name string, fn func(context.Context), opts ...gocron.JobOption) {
 	_, err := t.scheduler.NewJob(
 		gocron.DurationJob(interval),
 		gocron.NewTask(tracedJob(name, fn)),
-		opts...,
+		append([]gocron.JobOption{gocron.WithName(name)}, opts...)...,
 	)
 	if err != nil {
 		slog.Error("error adding background job: "+name, "err", err)
