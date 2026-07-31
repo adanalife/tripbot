@@ -3,7 +3,6 @@ package helpers
 import (
 	"fmt"
 	"log/slog"
-	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
@@ -18,15 +17,6 @@ import (
 // Reverse geocoding (coords -> city/state) moved to pkg/geo, which wraps the
 // kelvins/geocoder SDK behind an injectable Geocoder interface. helpers stays
 // a pure, dependency-free utility package.
-
-// ProjectRoot returns the root directory of the project
-func ProjectRoot() string {
-	_, b, _, _ := runtime.Caller(0)
-	helperPath := filepath.Dir(b)
-	projectRoot := filepath.Join(helperPath, "..", "..")
-	absolutePath, _ := filepath.Abs(projectRoot)
-	return absolutePath
-}
 
 // DurationToMiles converts Durations to miles
 func DurationToMiles(dur time.Duration) float32 {
@@ -116,11 +106,6 @@ func OpenInBrowser(url string) {
 // RunningOnDarwin returns true if we're on darwin (OS X)
 func RunningOnDarwin() bool {
 	return runtime.GOOS == "darwin"
-}
-
-// RunningOnWindows returns true if we're on windows
-func RunningOnWindows() bool {
-	return runtime.GOOS == "windows"
 }
 
 // RunningOnLinux returns true if we're on linux

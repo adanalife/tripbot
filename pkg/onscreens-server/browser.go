@@ -17,9 +17,9 @@ var onscreenTemplates embed.FS
 var onscreenTmpl = template.Must(template.ParseFS(onscreenTemplates, "templates/onscreen.html.tmpl"))
 
 // gpsPNG is the GPS map overlay, embedded so the binary is self-contained and
-// has no runtime dependency on the source tree (helpers.ProjectRoot() resolves
-// to a compile-time path that doesn't exist in the slim runtime image). Kept in
-// sync with the canonical assets/GPS.png at the repo root.
+// has no runtime dependency on the source tree — a source-relative path resolves
+// to a compile-time location that doesn't exist in the slim runtime image. Kept
+// in sync with the canonical assets/GPS.png at the repo root.
 //
 //go:embed assets/GPS.png
 var gpsPNG []byte

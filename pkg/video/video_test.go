@@ -3,7 +3,6 @@ package video
 import (
 	"context"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
-	"runtime"
 	"testing"
 	"time"
 
@@ -15,21 +14,8 @@ import (
 // recording onscreens fake, and a real postgres transaction — each transition
 // loads the clip and records its play against the actual schema.
 //
-// Darwin path (figureOutCurrentVideo via lsof script) is not exercised here;
-// the Linux path is what runs in production and what CI tests against. The
-// non-Darwin guard on the relevant tests keeps the assertions stable when
-// running `go test` locally on a Mac.
-
-// skipIfDarwin no-ops the test when GOOS=darwin. GetCurrentlyPlaying picks
-// the figureOutCurrentVideo path on Darwin (lsof + bin/current-file.sh),
-// bypassing the playout client entirely — so the fake playout server's response
-// would be ignored and the test would shell out for real.
-func skipIfDarwin(t *testing.T) {
-	t.Helper()
-	if runtime.GOOS == "darwin" {
-		t.Skip("GetCurrentlyPlaying takes the lsof path on darwin; covered in CI (linux)")
-	}
-}
+// GetCurrentlyPlaying reads the fake playout server on every platform, so these
+// assertions hold identically wherever `go test` runs.
 
 // testConf is the config test Players carry — env + platform for event tags,
 // ReadOnly false so the video_plays writes aren't skipped.
@@ -48,7 +34,6 @@ func TestPlayer_Current_ZeroBeforeAnyCall(t *testing.T) {
 }
 
 func TestPlayer_GetCurrentlyPlaying_FirstCall_FlaggedShowsGPS(t *testing.T) {
-	skipIfDarwin(t)
 	db := testdb.New(t)
 	rec := &recordingOnscreens{}
 	playoutCurrent := "2018_0514_224801_013.MP4"
@@ -86,7 +71,6 @@ func TestPlayer_GetCurrentlyPlaying_FirstCall_FlaggedShowsGPS(t *testing.T) {
 }
 
 func TestPlayer_GetCurrentlyPlaying_FirstCall_NotFlaggedHidesGPS(t *testing.T) {
-	skipIfDarwin(t)
 	db := testdb.New(t)
 	rec := &recordingOnscreens{}
 	playoutCurrent := "2019_0615_183000_001.MP4"
@@ -112,7 +96,6 @@ func TestPlayer_GetCurrentlyPlaying_FirstCall_NotFlaggedHidesGPS(t *testing.T) {
 }
 
 func TestPlayer_GetCurrentlyPlaying_SameVidIsNoop(t *testing.T) {
-	skipIfDarwin(t)
 	db := testdb.New(t)
 	rec := &recordingOnscreens{}
 	playoutCurrent := "2018_0514_224801_013.MP4"
@@ -143,7 +126,6 @@ func TestPlayer_GetCurrentlyPlaying_SameVidIsNoop(t *testing.T) {
 }
 
 func TestPlayer_GetCurrentlyPlaying_TransitionTogglesGPSAndResetsTimeStarted(t *testing.T) {
-	skipIfDarwin(t)
 	db := testdb.New(t)
 	rec := &recordingOnscreens{}
 	playoutCurrent := "2018_0514_224801_013.MP4"
@@ -196,7 +178,6 @@ func TestPlayer_GetCurrentlyPlaying_TransitionTogglesGPSAndResetsTimeStarted(t *
 }
 
 func TestPlayer_CurrentProgress_TracksTimeSinceStart(t *testing.T) {
-	skipIfDarwin(t)
 	db := testdb.New(t)
 	rec := &recordingOnscreens{}
 	playoutCurrent := "2018_0514_224801_013.MP4"
@@ -218,11 +199,15 @@ func TestPlayer_CurrentProgress_TracksTimeSinceStart(t *testing.T) {
 }
 
 func TestPlayer_GetCurrentlyPlaying_EmptyPlayoutResult_NoTransition(t *testing.T) {
-	skipIfDarwin(t)
-	// No testdb needed — when playout returns "" on the very first call, curVid
-	// stays "" and equals preVid (also ""), so LoadOrCreate is never invoked.
-	// The database singleton is left nil; any DB hit would panic and fail the
-	// test loudly.
+	// When playout returns "" on the very first call, curVid stays "" and equals
+	// preVid (also ""), so LoadOrCreate is never invoked and no play is recorded —
+	// that absence is what the assertions below check.
+	//
+	// The fixture is taken purely for its gate: pkg/database log.Fatalf's the whole
+	// test binary when DB config is absent, so a bare host needs the same
+	// skip-when-postgres-is-unreachable treatment as the tests around it.
+	testdb.New(t)
+
 	rec := &recordingOnscreens{}
 	playoutCurrent := ""
 	playout := fakePlayoutServer(t, &playoutCurrent)
