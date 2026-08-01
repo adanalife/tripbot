@@ -84,11 +84,15 @@ var BackgroundAudioSelections = backgroundAudioSelectionsIface{counter: backgrou
 // TwitchAudience exposes subscriber and follower gauge recording.
 var TwitchAudience = twitchAudienceIface{subscribers: twitchSubscribers, followers: twitchFollowers}
 
-// TwitchConnection exposes the chat-connection gauge. Set(true) on IRC
-// connect, Set(false) on disconnect. Readiness doesn't gate on the Twitch
-// connection (the pod stays in the Service so the re-auth page is reachable),
-// so this gauge — alongside the admin-panel status row — is what surfaces
-// "up but not in chat" to dashboards and alerts.
+// TwitchConnection exposes the chat-connection gauge — whether the bot can
+// reach Twitch chat, written by the gateway inbound poll (the gateway holds the
+// chat transport itself). Readiness doesn't gate on the Twitch connection (the
+// pod stays in the Service so the re-auth page is reachable), so this gauge —
+// alongside the admin-panel status row — is what surfaces "up but not in chat"
+// to dashboards and alerts.
+//
+// It pairs with the gateway's own platform_gateway_chat_connected: this one 0
+// while that one is 1 localises the fault to the path between them.
 var TwitchConnection = twitchConnectionIface{gauge: twitchConnected}
 
 // TwitchTokenExpiry exposes the per-account token-expiry timestamp gauge.

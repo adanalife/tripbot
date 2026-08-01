@@ -14,7 +14,6 @@ import (
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"github.com/adanalife/tripbot/pkg/users"
-	"github.com/gempir/go-twitch-irc/v4"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -280,7 +279,9 @@ type IncomingMessage struct {
 }
 
 // HandleMessage processes one inbound chat message: records it (Loki + the
-// admin-console event bus), logs the user in, and runs any command it carries.
+// admin-console event bus), resolves the sender, and runs any command it
+// carries. Every platform arrives here — inbound is one gateway poll — so the
+// only thing that varies is whether the sender has a persisted identity.
 func (a *App) HandleMessage(ctx context.Context, msg IncomingMessage) {
 	// span attribute kept as twitch.user for observability continuity; it
 	// generalizes to a platform-tagged key once a second platform lands.
@@ -299,50 +300,21 @@ func (a *App) HandleMessage(ctx context.Context, msg IncomingMessage) {
 	// Loki line above; fire-and-forget, no-op when NATS is unconfigured.
 	eventbus.EmitChatMessage(ctx, a.Cfg.Environment, a.Platform, msg.User, msg.Text)
 
-	// log in the user, then run any command. The original casing goes through:
-	// runCommand folds only the trigger token for matching.
-	user := a.UserSessions.LoginIfNecessary(ctx, msg.User)
-	a.runCommand(ctx, user, msg.Text)
+	// resolve the sender, then run any command. The original casing goes
+	// through: runCommand folds only the trigger token for matching.
+	a.runCommand(ctx, a.chatUser(ctx, msg.User), msg.Text)
 }
 
-// HandleJoin records that a user joined the channel.
-func (a *App) HandleJoin(username string) {
-	a.UserSessions.LoginIfNecessary(context.Background(), username)
-}
-
-// HandlePart records that a user left the channel.
-func (a *App) HandlePart(username string) {
-	a.UserSessions.LogoutIfNecessary(context.Background(), username)
-}
-
-// HandleWhisper lets an admin remote-say into chat by whispering the bot.
-// The resulting Say() is logged again as a chat line.
-func (a *App) HandleWhisper(msg IncomingMessage) {
-	slog.Info("whisper received", "from", msg.User, "text", msg.Text)
-	if a.Cfg.UserIsAdmin(msg.User) {
-		a.Chat.Say(msg.Text)
-	}
-}
-
-// --- Twitch inbound adapters ---
+// chatUser resolves a sender to the user the command path runs as.
 //
-// These translate go-twitch-irc event types into neutral Handle* calls on the
-// App, and are wired to the IRC client in ConnectIRC. A future YouTube/etc.
-// transport adds its own adapters feeding the same Handle* methods, so the
-// command path never learns about platforms.
-
-func (a *App) onTwitchMessage(msg twitch.PrivateMessage) {
-	a.HandleMessage(context.Background(), IncomingMessage{User: msg.User.Name, UserID: msg.User.ID, Text: msg.Message})
-}
-
-func (a *App) onTwitchJoin(joinMessage twitch.UserJoinMessage) {
-	a.HandleJoin(joinMessage.User)
-}
-
-func (a *App) onTwitchPart(partMessage twitch.UserPartMessage) {
-	a.HandlePart(partMessage.User)
-}
-
-func (a *App) onTwitchWhisper(message twitch.WhisperMessage) {
-	a.HandleWhisper(IncomingMessage{User: message.User.Name, UserID: message.User.ID, Text: message.Message})
+// On a platform that persists identity this is the login step — it creates or
+// refreshes the users row and the session, so presence, miles, and the
+// follower/subscriber access checks all have something to read. Everywhere else
+// it is a transient user carrying just the display name, which is all the v1
+// allowlist needs.
+func (a *App) chatUser(ctx context.Context, username string) *users.User {
+	if platformPersistsUsers[a.platform()] {
+		return a.UserSessions.LoginIfNecessary(ctx, username)
+	}
+	return &users.User{Username: strings.ToLower(username)}
 }

@@ -2,18 +2,14 @@ package chatbot
 
 import (
 	"context"
-	"log/slog"
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/feature"
-	"github.com/adanalife/tripbot/pkg/geo"
 	"github.com/adanalife/tripbot/pkg/natsclient"
 	onscreensClient "github.com/adanalife/tripbot/pkg/onscreens-client"
 	playoutClient "github.com/adanalife/tripbot/pkg/playout-client"
-	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/users"
-	"github.com/gempir/go-twitch-irc/v4"
 )
 
 var Uptime time.Time
@@ -48,20 +44,19 @@ type App struct {
 	// Video reads / refreshes the currently-playing dashcam video. Tests
 	// inject a no-op fake; production uses the realVideo adapter.
 	Video Video
-	// Chat sends chat output (Say, Whisper) to the streaming platform. Tests
-	// inject a recordingChat to assert on messages; production uses the
-	// twitchChat adapter (wrapped in the console mirror) that ConnectIRC wires
-	// to this App's own *twitch.Client. The provider-neutral seam: a YouTube /
-	// TikTok ChatClient drops in here without touching command code.
+	// Chat sends chat output to the streaming platform. Tests inject a
+	// recordingChat to assert on messages; production uses the gateway-backed
+	// adapter (wrapped in the console mirror) that the platform's Connect*
+	// installs. The provider-neutral seam: every platform's ChatClient drops in
+	// here without touching command code.
 	Chat ChatClient
 	// Sessions wraps the user-lookup / lifetime-leaderboard / shutdown
 	// surface of pkg/users for command-time queries. Tests inject a
 	// recordingSessions to assert lookups and stage results; production
 	// uses the realSessions adapter built by NewSessionsAdapter.
 	Sessions Sessions
-	// UserSessions is the concrete process-wide session state the inbound IRC
-	// handlers (HandleMessage / Join / Part) and dispatch's access check use
-	// directly — the login/logout lifecycle + follower/subscriber + login-count
+	// UserSessions is the concrete process-wide session state the inbound chat
+	// handlers (HandleMessage) and dispatch's access check use directly — the login/logout lifecycle + follower/subscriber + login-count
 	// reads that are intentionally off the narrow Sessions interface. cmd/tripbot
 	// assigns the same *users.Sessions it wraps into Sessions. nil in tests and
 	// the brief startup window before cmd assigns it.
@@ -83,8 +78,8 @@ type App struct {
 	// cron has started.
 	Cron Cron
 	// Geocoder turns GPS coords into a place name for !location. Tests inject
-	// a noopGeocoder; production uses realGeocoder which delegates to the
-	// pkg/geo default configured in ConnectIRC.
+	// a recordingGeocoder / noopGeocoder; production uses realGeocoder which
+	// delegates to the pkg/geo default installed by connectViaGateway.
 	Geocoder Geocoder
 	// Weather returns historical conditions at a point for !weather. Tests
 	// inject noopWeather; production uses pkg/weather's keyless Open-Meteo
@@ -172,54 +167,6 @@ const subscriberMsg = "You must be a subscriber to run that command :)"
 // checkAccess. Disabled for launch so first-time viewers aren't told to
 // follow before they can try commands. Flip back to true to re-enable.
 var followerGatingEnabled = false
-
-// ConnectIRC builds the Twitch IRC client, wires this App's inbound adapters to
-// it, points this App's outbound Chat at it, and returns it. Also does the
-// process-wide geocoder + Twitch-API warmup. The returned client is connected
-// by the caller (cmd/tripbot).
-func (a *App) ConnectIRC() *twitch.Client {
-	Uptime = time.Now()
-
-	// set up the process-wide geocoder (coords -> places). realGeocoder and
-	// pkg/video both route through this default.
-	geo.SetDefault(geo.New(a.Cfg.GoogleMapsAPIKey))
-
-	// initialize the twitch API client. Non-fatal: if Twitch is unreachable
-	// at boot, log and continue so the process stays up (readiness reports
-	// not-ready until the IRC connection lands). mytwitch.Client() doesn't
-	// cache on failure, so callers retry once Twitch is back.
-	if _, err := mytwitch.Client(); err != nil {
-		slog.Error("twitch API client unavailable at startup; continuing", "err", err)
-	}
-
-	// The IRC token comes from the DB-backed oauth_tokens row the platform-
-	// gateway keeps fresh; cmd/tripbot calls mytwitch.LoadFromDB before this.
-	client := twitch.NewClient(a.Cfg.BotUsername, mytwitch.IRCAuthToken())
-
-	// attach this App's Twitch inbound adapters
-	client.OnUserJoinMessage(a.onTwitchJoin)
-	client.OnUserPartMessage(a.onTwitchPart)
-	// client.OnUserNoticeMessage(...)
-	client.OnWhisperMessage(a.onTwitchWhisper)
-	client.OnPrivateMessage(a.onTwitchMessage)
-
-	// point this App's outbound chat at the Twitch client, wrapped in the
-	// provider-neutral console mirror so the bot's own output reaches the admin
-	// live console. A second provider (YouTube/…) wires its own ChatClient here.
-	a.Chat = consoleMirror{
-		inner: twitchChat{
-			client:      client,
-			channelName: a.Cfg.ChannelName,
-			botUsername: a.Cfg.BotUsername,
-		},
-		env:         a.Cfg.Environment,
-		channel:     a.Cfg.ChannelName,
-		platform:    a.Cfg.Platform,
-		botUsername: a.Cfg.BotUsername,
-	}
-
-	return client
-}
 
 // Chatter is designed to post a randomized message on a timer.
 // Right now it just posts random "help messages."

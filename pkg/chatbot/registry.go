@@ -345,6 +345,23 @@ var platformCommandScope = map[string]commandScope{
 	platformTikTok:    scopeV1,
 }
 
+// platformPersistsUsers declares which platforms give a chatter a persisted
+// identity — a users row, a session, miles, a login/logout lifecycle. Twitch
+// does; the gateway platforms punt identity for v1, so their chatters reach the
+// command path as a transient user carrying only a display name.
+//
+// It is what decides whether an inbound message logs its sender in, so the two
+// halves stay consistent by construction: a platform that persists users runs
+// the identity commands (scopeFull) and can answer a subscriber check, and one
+// that doesn't is bounded by the v1 allowlist, which reads nothing user-specific
+// beyond the name. Graduating a platform means flipping it here and in
+// platformCommandScope together — flipping only the scope would hand
+// identity-reading commands a user with no rows behind it, which answers 0
+// miles rather than failing.
+var platformPersistsUsers = map[string]bool{
+	platformTwitch: true,
+}
+
 // platformHasSubscribers declares which platforms expose a subscriber signal
 // tripbot can actually check. Twitch does; the gateway platforms give viewers
 // no persisted identity at all (v1 hands the command path a transient user), so
