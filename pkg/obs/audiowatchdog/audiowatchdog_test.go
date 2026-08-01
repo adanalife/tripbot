@@ -18,6 +18,9 @@ type tick struct {
 	reachable bool
 	db        float64
 	fresh     bool
+	// console, if set, runs before this tick is evaluated: an operator action
+	// that repoints the source without telling the watchdog.
+	console func(*fakeDeps)
 }
 
 // fakeDeps drives Watch with a scripted sequence of ticks and counts the swaps
@@ -39,6 +42,11 @@ type fakeDeps struct {
 	// bed is the selected background-audio bed; the SomaFM outage machinery
 	// only runs while it's SomaFM.
 	bed beds.Bed
+	// sourceLocal stands in for OBS: what the background-audio source is
+	// actually pointed at. The swap hooks move it, so the watchdog reads back
+	// the consequences of its own actions rather than a value the test asserts
+	// into place.
+	sourceLocal bool
 
 	doneCh   chan struct{}
 	doneOnce sync.Once
@@ -67,6 +75,9 @@ func (f *fakeDeps) deps() Deps {
 			} else {
 				f.current = f.script[f.idx]
 				f.idx++
+				if f.current.console != nil {
+					f.current.console(f)
+				}
 			}
 			return f.current.reachable
 		},
@@ -81,12 +92,23 @@ func (f *fakeDeps) deps() Deps {
 			return f.current.state, nil
 		},
 		SwapToFallback: func(context.Context) error {
+			f.mu.Lock()
+			defer f.mu.Unlock()
+			f.sourceLocal = true
 			f.toFallback.Add(1)
 			return nil
 		},
 		SwapToSomaFM: func(context.Context) error {
+			f.mu.Lock()
+			defer f.mu.Unlock()
+			f.sourceLocal = false
 			f.toSomaFM.Add(1)
 			return nil
+		},
+		SourceIsLocal: func(context.Context) (bool, error) {
+			f.mu.Lock()
+			defer f.mu.Unlock()
+			return f.sourceLocal, nil
 		},
 		ActiveBed: func() beds.Bed { return f.bed },
 		AdvanceAlbum: func(context.Context) error {
@@ -171,6 +193,21 @@ func TestWatch_SwapsBackAfterSomaFMRecovers(t *testing.T) {
 	}
 	if got := deps.toSomaFM.Load(); got != 1 {
 		t.Fatalf("to_somafm swaps: want 1, got %d", got)
+	}
+}
+
+func TestWatch_ConsoleReselectingSomaFMFallsBackAgain(t *testing.T) {
+	// Mid-outage, an operator picks SomaFM again in the console. That repoints
+	// the source at the dead stream without the watchdog swapping anything, so
+	// the stream goes silent — and the watchdog has to notice and fall back a
+	// second time rather than sit waiting for a recovery it already handled.
+	// (2026-08-01: it sat, and Twitch was silent until SomaFM came back.)
+	reselect := ended
+	reselect.console = func(f *fakeDeps) { f.sourceLocal = false }
+	deps := newFakeDeps([]tick{ended, ended, ended, reselect, ended, ended, ended})
+	runUntilExhausted(t, deps, cfg(3, 4, 0))
+	if got := deps.toFallback.Load(); got != 2 {
+		t.Fatalf("to_fallback swaps: want 2, got %d", got)
 	}
 }
 
