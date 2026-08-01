@@ -23,21 +23,21 @@ var (
 		// the 4-query GetScore chain).
 		0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10,
 	)
-	tripbotEvents      = mustCounter("tripbot_events_total", "Total login/logout events written to the events table, labeled by event")
-	carSoundSelections = mustCounter("tripbot_carsound_selections_total", "Total times a viewer switched the YouTube background car-sound via !carsound, labeled by sound — drives the 'which voicing is most popular' question")
-	scoreboardWrites   = mustCounter("tripbot_scoreboard_writes_total", "Total successful scoreboard score writes, labeled by scoreboard")
-	twitchSubscribers  = mustGauge("twitch_subscribers_total", "Current number of Twitch channel subscribers")
-	twitchFollowers    = mustGauge("twitch_followers_total", "Current number of Twitch channel followers")
-	twitchConnected    = mustGauge("tripbot_twitch_connected", "1 when the bot is connected to Twitch chat (IRC), 0 otherwise")
-	twitchTokenExpiry  = mustGauge("tripbot_twitch_token_expires_at_seconds", "Unix timestamp of the in-memory Twitch user-access-token's ExpiresAt, labeled by account (bot|broadcaster). 0 when the account has no loaded token.")
-	twitchHelixErrors  = mustCounter("twitch_helix_errors_total", "Total non-2xx responses from the Twitch Helix API, labeled by endpoint and status_code")
-	twitchChannelLive  = mustGauge("tripbot_twitch_channel_live", "1 when Helix GetStreams reports the configured channel as live, 0 when offline. Driven by the OBS silent-disconnect watchdog's Helix poll.")
-	channelLive        = mustGauge("tripbot_channel_live", "1 when the platform reports this instance's channel as live, 0 when offline, labeled by service_platform. Paired with obs_streaming_active in the silent-disconnect alert: OBS=1 while the platform says 0 means we are streaming into the void.")
-	currentState       = mustGauge("tripbot_current_state", "1 for the US state the dashcam playhead is currently in, 0 for the previously-active state, labeled by state (2-letter abbrev, or \"unknown\"). Only one series reads 1 at a time. Drives the states-visited heatmap and the 'stuck on unknown' alert.")
+	tripbotEvents             = mustCounter("tripbot_events_total", "Total login/logout events written to the events table, labeled by event")
+	backgroundAudioSelections = mustCounter("tripbot_background_audio_selections_total", "Total background-audio bed switches, labeled by bed (somafm|carhum|album) and platform — answers what the stream has been playing and how often it changes")
+	scoreboardWrites          = mustCounter("tripbot_scoreboard_writes_total", "Total successful scoreboard score writes, labeled by scoreboard")
+	twitchSubscribers         = mustGauge("twitch_subscribers_total", "Current number of Twitch channel subscribers")
+	twitchFollowers           = mustGauge("twitch_followers_total", "Current number of Twitch channel followers")
+	twitchConnected           = mustGauge("tripbot_twitch_connected", "1 when the bot is connected to Twitch chat (IRC), 0 otherwise")
+	twitchTokenExpiry         = mustGauge("tripbot_twitch_token_expires_at_seconds", "Unix timestamp of the in-memory Twitch user-access-token's ExpiresAt, labeled by account (bot|broadcaster). 0 when the account has no loaded token.")
+	twitchHelixErrors         = mustCounter("twitch_helix_errors_total", "Total non-2xx responses from the Twitch Helix API, labeled by endpoint and status_code")
+	twitchChannelLive         = mustGauge("tripbot_twitch_channel_live", "1 when Helix GetStreams reports the configured channel as live, 0 when offline. Driven by the OBS silent-disconnect watchdog's Helix poll.")
+	channelLive               = mustGauge("tripbot_channel_live", "1 when the platform reports this instance's channel as live, 0 when offline, labeled by service_platform. Paired with obs_streaming_active in the silent-disconnect alert: OBS=1 while the platform says 0 means we are streaming into the void.")
+	currentState              = mustGauge("tripbot_current_state", "1 for the US state the dashcam playhead is currently in, 0 for the previously-active state, labeled by state (2-letter abbrev, or \"unknown\"). Only one series reads 1 at a time. Drives the states-visited heatmap and the 'stuck on unknown' alert.")
 
 	gatewayUp = mustGauge("tripbot_gateway_up", "1 when tripbot's last platform-gateway call got an HTTP response (gateway reachable), 0 when it failed at the transport layer (connection refused, timeout, DNS). Consumer-side reachability — paired with the gateway's own platform_gateway_up (process liveness).")
 
-	obsSilentDisconnectRestarts = mustCounter("tripbot_obs_silent_disconnect_restarts_total", "Total times the silent-disconnect watchdog forced a recovery because OBS reported outputActive=true while the platform reported the channel offline. The recovery is a StopStream+StartStream on Twitch and an egress re-mint on TikTok; the series is per-platform, so service_platform tells them apart")
+	obsSilentDisconnectRestarts = mustCounter("tripbot_obs_silent_disconnect_restarts_total", "Total times the silent-disconnect watchdog forced a recovery because OBS reported outputActive=true while the platform reported the channel offline. The recovery is a StopStream+StartStream on Twitch and an egress re-mint on TikTok; the datapoints carry no platform attribute, so instance (the pod name) is what tells the platforms apart")
 
 	twitchHelixRateRemaining = mustGauge("twitch_helix_rate_limit_remaining", "Last-seen Ratelimit-Remaining header from Twitch Helix responses (per app-access bearer)")
 	twitchHelixRateLimit     = mustGauge("twitch_helix_rate_limit_total", "Last-seen Ratelimit-Limit header from Twitch Helix responses (per app-access bearer)")
@@ -76,10 +76,10 @@ var Events = eventsIface{counter: tripbotEvents}
 // ScoreboardWrites.Inc(scoreboardName) right after the row is persisted.
 var ScoreboardWrites = scoreboardWritesIface{counter: scoreboardWrites}
 
-// CarSoundSelections exposes the !carsound popularity counter. Record by
-// calling CarSoundSelections.Inc(soundName) when a viewer switches the
-// background car-sound, so Grafana can rank voicings by selection count.
-var CarSoundSelections = carSoundSelectionsIface{counter: carSoundSelections}
+// BackgroundAudioSelections exposes the bed-switch counter. Recorded inside
+// beds.Store.Set, so every switch counts once no matter which surface — the
+// console or !audio — asked for it.
+var BackgroundAudioSelections = backgroundAudioSelectionsIface{counter: backgroundAudioSelections}
 
 // TwitchAudience exposes subscriber and follower gauge recording.
 var TwitchAudience = twitchAudienceIface{subscribers: twitchSubscribers, followers: twitchFollowers}
@@ -191,10 +191,10 @@ func (s scoreboardWritesIface) Inc(scoreboard string) {
 	s.counter.Add(context.Background(), 1, metric.WithAttributes(attribute.String("scoreboard", scoreboard)))
 }
 
-type carSoundSelectionsIface struct{ counter metric.Int64Counter }
+type backgroundAudioSelectionsIface struct{ counter metric.Int64Counter }
 
-func (c carSoundSelectionsIface) Inc(sound string) {
-	c.counter.Add(context.Background(), 1, metric.WithAttributes(attribute.String("sound", sound)))
+func (c backgroundAudioSelectionsIface) Inc(platform, bed string) {
+	c.counter.Add(context.Background(), 1, metric.WithAttributes(attribute.String("bed", bed)), platformAttr(platform))
 }
 
 type twitchAudienceIface struct {

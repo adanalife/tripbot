@@ -21,10 +21,9 @@ import (
 // own auth service — keeping it visually distinct here marks that future
 // seam. The **query/viewer** cluster is cached read-state derived from Helix.
 //
-// Methods are still fronted by package-level free-function shims (see
-// shims.go) delegating to defaultClient, so existing callers are unchanged
-// while the globals are eliminated; threading a constructed *API through
-// callers and deleting the shims is a later step.
+// Methods are fronted by package-level free-function shims (see shims.go) that
+// delegate to defaultClient; threading a constructed *API through callers and
+// deleting the shims is a later step.
 type API struct {
 	// --- auth core (future auth-service boundary) ---
 
@@ -35,7 +34,7 @@ type API struct {
 
 	// currentTwitchClient is the lazy-initialized bot helix client, built by
 	// Client() for the OAuth bootstrap's identity check (GetUsers) and the IRC
-	// readiness probe. The Helix query surface now lives in the platform-gateway.
+	// readiness probe. The Helix query surface lives in the platform-gateway.
 	currentTwitchClient *helix.Client
 	// appAccessToken is set in Client() (Client Credentials grant).
 	appAccessToken string

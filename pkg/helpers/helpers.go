@@ -2,9 +2,6 @@ package helpers
 
 import (
 	"fmt"
-	"log/slog"
-	"path/filepath"
-	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -12,21 +9,10 @@ import (
 	"github.com/bradfitz/latlong"
 	"github.com/hako/durafmt"
 	"github.com/nathan-osman/go-sunrise"
-	"github.com/skratchdot/open-golang/open"
 )
 
-// Reverse geocoding (coords -> city/state) moved to pkg/geo, which wraps the
-// kelvins/geocoder SDK behind an injectable Geocoder interface. helpers stays
-// a pure, dependency-free utility package.
-
-// ProjectRoot returns the root directory of the project
-func ProjectRoot() string {
-	_, b, _, _ := runtime.Caller(0)
-	helperPath := filepath.Dir(b)
-	projectRoot := filepath.Join(helperPath, "..", "..")
-	absolutePath, _ := filepath.Abs(projectRoot)
-	return absolutePath
-}
+// Reverse geocoding (coords -> city/state) lives in pkg/geo, which wraps the
+// kelvins/geocoder SDK behind an injectable Geocoder interface.
 
 // DurationToMiles converts Durations to miles
 func DurationToMiles(dur time.Duration) float32 {
@@ -38,14 +24,6 @@ func DurationToMiles(dur time.Duration) float32 {
 // TODO find query param for zoom level
 func GoogleMapsURL(lat, long float64) string {
 	return fmt.Sprintf("https://maps.google.com/?q=%.5f%%2C%.5f&ll=%.5f%%2C%.5f&z=5", lat, long, lat, long)
-}
-
-func RemoveNonLetters(input string) string {
-	reg, err := regexp.Compile("[^a-zA-Z]+")
-	if err != nil {
-		slog.Error("error compiling regex", "err", err)
-	}
-	return reg.ReplaceAllString(input, "")
 }
 
 func ActualDate(utcDate time.Time, lat, long float64) time.Time {
@@ -104,23 +82,10 @@ func sunriseSunset(utcDate time.Time, lat, long float64) (time.Time, time.Time) 
 	return ActualDate(rise, lat, long), ActualDate(set, lat, long)
 }
 
-func OpenInBrowser(url string) {
-	slog.Info("opening url in browser", "url", url)
-	err := open.Run(url)
-	if err != nil {
-		slog.Error("error opening browser", "err", err)
-	}
-}
-
 // TODO: remove this and all darwin-only support
 // RunningOnDarwin returns true if we're on darwin (OS X)
 func RunningOnDarwin() bool {
 	return runtime.GOOS == "darwin"
-}
-
-// RunningOnWindows returns true if we're on windows
-func RunningOnWindows() bool {
-	return runtime.GOOS == "windows"
 }
 
 // RunningOnLinux returns true if we're on linux

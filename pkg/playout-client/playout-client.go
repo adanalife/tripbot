@@ -3,7 +3,7 @@ package playoutClient
 import (
 	"context"
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"log/slog"
 	"net/http"
 	"time"
@@ -136,7 +136,7 @@ func (c *Client) get(ctx context.Context, url string) (string, error) {
 		return "", err
 	}
 	defer response.Body.Close()
-	contents, err := ioutil.ReadAll(response.Body)
+	contents, err := io.ReadAll(response.Body)
 	if err != nil {
 		slog.DebugContext(ctx, "error reading response from playout server", "err", err)
 		return "", err

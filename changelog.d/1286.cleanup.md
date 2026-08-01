@@ -1,0 +1,1 @@
+Dropped the `lsof`-based current-video lookup (`bin/current-file.sh` and `figureOutCurrentVideo`). `GetCurrentlyPlaying` asks Playout on every platform now instead of shelling out to `lsof` on macOS, so local dev takes the same path as production. The six Darwin test skips in `pkg/video` go with it, along with the orphaned `helpers.ProjectRoot` and `helpers.RunningOnWindows`.

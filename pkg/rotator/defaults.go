@@ -43,10 +43,9 @@ const DefaultRareMessage = "You found the rare message! Make a clip for a prize!
 // commands that silently no-op there. Weight 2 makes !discord and !commands
 // twice as likely as the unweighted lines.
 //
-// Lines parked rather than deleted, kept here so the ideas aren't lost now that
-// the live list is edited in the admin console: "LEADER"; "Looking for artist
-// for emotes and more"; "Twitch Prime subs keep us on air :D"; "Use !report to
-// report stream issues".
+// Unused copy ideas parked here (the live list is edited in the admin console):
+// "LEADER"; "Looking for artist for emotes and more"; "Twitch Prime subs keep
+// us on air :D"; "Use !report to report stream issues".
 var defaultLeftMessages = []Message{
 	{Text: "Crave something new? Try `!timewarp`"},
 	{Text: "Earn miles for every minute you watch (`!miles`)", Platforms: []string{PlatformTwitch}},

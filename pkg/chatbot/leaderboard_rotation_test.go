@@ -6,8 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/DATA-DOG/go-sqlmock"
-	"github.com/adanalife/tripbot/pkg/scoreboards"
 	"github.com/adanalife/tripbot/pkg/video"
 )
 
@@ -31,76 +29,52 @@ func TestPickLeaderboard(t *testing.T) {
 }
 
 func TestShowRotatingLeaderboard_MonthlyMiles(t *testing.T) {
-	mock := installMockDB(t)
 	app := newTestApp(video.Video{})
 	rec := &recordingOnscreens{}
 	app.Onscreens = rec
-
-	rows := sqlmock.NewRows([]string{"username", "value"}).
-		AddRow("viewer1", 12.5).
-		AddRow("viewer2", 3.2)
-	mock.ExpectQuery(`SELECT users\.username, scores\.value FROM "scores"`).
-		WillReturnRows(rows)
+	app.Scoreboards = &recordingScoreboards{
+		Month: "July",
+		Miles: [][]string{{"viewer1", "12.5"}, {"viewer2", "3.2"}},
+	}
 
 	app.showRotatingLeaderboard(context.Background(), 0.99) // monthly miles
 
-	wantTitle := scoreboards.CurrentMilesMonth() + " Miles"
-	want := fmt.Sprintf(`ShowLeaderboard(%q, 2 rows)`, wantTitle)
+	want := `ShowLeaderboard("July Miles", 2 rows)`
 	if len(rec.Calls) != 1 || !strings.Contains(rec.Calls[0], want) {
-		t.Errorf("expected one %s overlay call, got %v", wantTitle, rec.Calls)
-	}
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Error(err)
+		t.Errorf("expected one July Miles overlay call, got %v", rec.Calls)
 	}
 }
 
 func TestShowRotatingLeaderboard_Guess(t *testing.T) {
-	mock := installMockDB(t)
 	app := newTestApp(video.Video{})
 	rec := &recordingOnscreens{}
 	app.Onscreens = rec
-
-	rows := sqlmock.NewRows([]string{"username", "value"}).
-		AddRow("viewer1", 7.0).
-		AddRow("viewer2", 0.0) // zero-scorer, filtered
-	mock.ExpectQuery(`SELECT users\.username, scores\.value FROM "scores"`).
-		WillReturnRows(rows)
+	app.Scoreboards = &recordingScoreboards{Guesses: [][]string{{"viewer1", "7"}}}
 
 	app.showRotatingLeaderboard(context.Background(), 0.3) // guess
 
 	if len(rec.Calls) != 1 || !strings.Contains(rec.Calls[0], `ShowLeaderboard("Correct Guesses This Month", 1 rows)`) {
-		t.Errorf("expected one guess overlay call with the zero-scorer filtered, got %v", rec.Calls)
-	}
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Error(err)
+		t.Errorf("expected one guess overlay call, got %v", rec.Calls)
 	}
 }
 
 // An empty guess board (early in the month) falls back to monthly miles
 // rather than skipping the rotation slot.
 func TestShowRotatingLeaderboard_EmptyGuess_FallsBackToMonthlyMiles(t *testing.T) {
-	mock := installMockDB(t)
 	app := newTestApp(video.Video{})
 	rec := &recordingOnscreens{}
 	app.Onscreens = rec
-
-	empty := sqlmock.NewRows([]string{"username", "value"})
-	mock.ExpectQuery(`SELECT users\.username, scores\.value FROM "scores"`).
-		WillReturnRows(empty)
-	miles := sqlmock.NewRows([]string{"username", "value"}).
-		AddRow("viewer1", 12.5)
-	mock.ExpectQuery(`SELECT users\.username, scores\.value FROM "scores"`).
-		WillReturnRows(miles)
+	app.Scoreboards = &recordingScoreboards{
+		Month: "July",
+		Miles: [][]string{{"viewer1", "12.5"}},
+		// Guesses stays empty — early in the month, nobody has scored yet.
+	}
 
 	app.showRotatingLeaderboard(context.Background(), 0.3) // guess → empty → miles
 
-	wantTitle := scoreboards.CurrentMilesMonth() + " Miles"
-	want := fmt.Sprintf(`ShowLeaderboard(%q, 1 rows)`, wantTitle)
+	want := `ShowLeaderboard("July Miles", 1 rows)`
 	if len(rec.Calls) != 1 || !strings.Contains(rec.Calls[0], want) {
-		t.Errorf("expected fallback to %s overlay, got %v", wantTitle, rec.Calls)
-	}
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Error(err)
+		t.Errorf("expected fallback to July Miles overlay, got %v", rec.Calls)
 	}
 }
 
@@ -126,21 +100,15 @@ func TestShowRotatingLeaderboard_TotalMiles_TruncatesToSize(t *testing.T) {
 // If both the pick and the monthly-miles fallback are empty, no overlay is
 // published at all.
 func TestShowRotatingLeaderboard_AllEmpty_SkipsOverlay(t *testing.T) {
-	mock := installMockDB(t)
 	app := newTestApp(video.Video{})
 	rec := &recordingOnscreens{}
 	app.Onscreens = rec
+	// total miles via noopSessions returns nil; noopScoreboards makes the
+	// monthly-miles fallback empty too
 
-	mock.ExpectQuery(`SELECT users\.username, scores\.value FROM "scores"`).
-		WillReturnRows(sqlmock.NewRows([]string{"username", "value"}))
-
-	// total miles via noopSessions returns nil; the miles fallback is empty too
 	app.showRotatingLeaderboard(context.Background(), 0.01)
 
 	if len(rec.Calls) != 0 {
 		t.Errorf("expected no overlay call when every board is empty, got %v", rec.Calls)
-	}
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Error(err)
 	}
 }

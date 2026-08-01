@@ -1,0 +1,1 @@
+Extend the background-job gate test to every cron in `scheduleBackgroundJobs`, asserting the exact set each platform schedules rather than spot-checking a few names. Covers the eight Twitch-only jobs, the three platform-neutral ones, and the doubly-gated YouTube/Facebook broadcast-discovery jobs.

@@ -15,9 +15,9 @@ import (
 // gateway — so they need no dispatch.
 //
 // t.gateway is nil only on an instance with no TWITCH_API_URL wired — a
-// non-Twitch instance, or a local/CI Twitch instance with no gateway. There's no
-// in-process Helix fallback any more, so the audience/follower features simply
-// have no backend there: the refreshes no-op (keeping the empty cache) and the
+// non-Twitch instance, or a local/CI Twitch instance with no gateway. There is
+// no in-process Helix fallback, so the audience/follower features simply have
+// no backend there: the refreshes no-op (keeping the empty cache) and the
 // follower check fails closed. Real deploys always wire TWITCH_API_URL.
 type gatewayChatterSource struct{ t *Tripbot }
 

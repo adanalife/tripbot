@@ -65,6 +65,12 @@ func TitlecaseState(state string) string {
 	if abbrev := StateToStateAbbrev(state); abbrev != "" {
 		return stateAbbrevs[abbrev]
 	}
+	// strings.Title is deprecated in favour of x/text's cases.Title, which is
+	// the wrong trade here: this path echoes back whatever a viewer typed, and
+	// cases.Title treats a digit as a word boundary ("3rd street" becomes "3Rd
+	// Street"). strings.Title's word rule is the one that reads correctly for
+	// arbitrary input, and Go 1 compatibility keeps it from being removed.
+	//nolint:staticcheck // SA1019: see above
 	return strings.Title(strings.ToLower(state))
 }
 

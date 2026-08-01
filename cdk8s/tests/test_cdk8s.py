@@ -146,7 +146,7 @@ def test_only_twitch_mounts_the_twitch_creds_secret():
     stays identity-level, so what's guarded here is the per-platform *mount*.
 
     stage-1 rather than prod-1: prod's app manifests are release-pinned, so they
-    keep the old mount until the next release re-synths them.
+    lag stage until the next release re-synths them.
     """
     assert "tripbot-twitch-creds" in _env_from_secrets("stage-1-tripbot-twitch")
     for platform in GATEWAY_PLATFORMS:
@@ -194,7 +194,7 @@ def test_stage_parks_every_platform():
 
 def test_stage_twitch_routes_through_gateway():
     """Both stage and prod tripbot-twitch carry TWITCH_API_URL (the gateway is
-    the single Helix caller since the cutover); the youtube instances do not."""
+    the single Helix caller); the youtube instances do not."""
 
     def _cm_data(stem):
         return _by_kind(_objects(stem), "ConfigMap")[0]["data"]

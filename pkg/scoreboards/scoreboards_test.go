@@ -43,8 +43,9 @@ func createOptedOutUser(t *testing.T, db *gorm.DB, username, platform string) ui
 	return id
 }
 
-// createScoreboardOn inserts a scoreboard for an arbitrary platform, which
-// createScoreboard() can't do (it always stamps this instance's platform).
+// createScoreboardOn inserts a scoreboard for an arbitrary platform, which the
+// package's own lookups can't do (they always scope to this instance's
+// platform).
 func createScoreboardOn(t *testing.T, db *gorm.DB, name, platform string) uint16 {
 	t.Helper()
 	var id uint16

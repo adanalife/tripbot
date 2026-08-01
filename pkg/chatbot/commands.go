@@ -16,10 +16,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/adanalife/tripbot/pkg/scoreboards"
-
 	"github.com/adanalife/tripbot/pkg/database"
-	"github.com/adanalife/tripbot/pkg/events"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/adanalife/tripbot/pkg/video"
@@ -49,11 +46,6 @@ var currentVersion string
 // outside a container the file won't exist and versionCmd falls back to
 // "dev". Overridable in tests.
 var versionFilePath = "/etc/tripbot/version"
-
-// this is the scoreboard name used for counting correct guesses
-const guessScoreboard = "guess_state_total"
-
-//TODO: incorrect guess scoreboard?
 
 func (a *App) helpCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !help", "username", user.Username)
@@ -90,7 +82,7 @@ func (a *App) helloCmd(ctx context.Context, user *users.User, params []string) {
 	}
 
 	// check if we said hi too recently
-	if time.Now().Sub(lastHelloTime) < 20*time.Second {
+	if time.Since(lastHelloTime) < 20*time.Second {
 		return
 	}
 
@@ -141,7 +133,7 @@ func readBuildVersion(ctx context.Context) string {
 
 func (a *App) uptimeCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !uptime", "username", user.Username)
-	dur := time.Now().Sub(Uptime)
+	dur := time.Since(Uptime)
 	msg := fmt.Sprintf("I have been running for %s", durafmt.Parse(dur))
 	a.Chat.Say(msg)
 }
@@ -373,10 +365,10 @@ func (a *App) monthlyMilesLeaderboardCmd(ctx context.Context, user *users.User, 
 	slog.InfoContext(ctx, "ran !leaderboard", "username", user.Username)
 
 	// select users to show in leaderboard
-	leaderboard := scoreboards.TopMilesRows(ctx, a.Cfg, leaderboardSize)
+	leaderboard := a.Scoreboards.TopMiles(ctx, leaderboardSize)
 
 	// display leaderboard on screen
-	a.Onscreens.ShowLeaderboard(ctx, scoreboards.CurrentMilesMonth()+" Miles", leaderboard)
+	a.Onscreens.ShowLeaderboard(ctx, a.Scoreboards.MilesMonth()+" Miles", leaderboard)
 
 	// build a message to send to chat
 	msg := fmt.Sprintf("Top %d miles this month: ", len(leaderboard))
@@ -418,7 +410,7 @@ func (a *App) monthlyGuessLeaderboardCmd(ctx context.Context, user *users.User, 
 	slog.InfoContext(ctx, "ran !guessleaderboard", "username", user.Username)
 
 	// select users to show in leaderboard (zero-scorers already filtered)
-	intLeaderboard := scoreboards.TopGuessRows(ctx, a.Cfg, leaderboardSize)
+	intLeaderboard := a.Scoreboards.TopGuesses(ctx, leaderboardSize)
 
 	// special message if no one has any correct guesses yet
 	if len(intLeaderboard) == 0 {
@@ -508,10 +500,13 @@ func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 	// get the arg from the command
 	guess := strings.Join(params, " ")
 
-	// convert to short form if they used the full name
-	// e.g. "Massachusetts" instead of "MA"
+	// expand a two-letter abbreviation to the full name the DB stores
+	// ("MA" -> "Massachusetts"). A pair that isn't a state code is left as
+	// typed; blanking it would compare "" against the video's state.
 	if len(guess) == 2 {
-		guess = helpers.StateAbbrevToState(guess)
+		if full := helpers.StateAbbrevToState(guess); full != "" {
+			guess = full
+		}
 	}
 
 	// forgive close misspellings ("florisa" -> Florida); exact state names
@@ -533,11 +528,19 @@ func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 		vid = next
 	}
 
+	// A video whose geocode came back empty (no Maps key, or ZERO_RESULTS)
+	// isn't flagged, so it reaches here with no state to guess at. There's no
+	// right answer to credit, and matching against "" would credit anyone
+	// whose guess normalized to empty.
+	if vid.State == "" {
+		a.Chat.Say("I don't know what state this is, sorry!")
+		return
+	}
+
 	if strings.EqualFold(guess, vid.State) {
 		msg = fmt.Sprintf("@%s got it! We're in %s", user.Username, vid.State)
 		// increase their guess score
-		user.AddToScore(ctx, guessScoreboard, 1.0)
-		user.AddToScore(ctx, scoreboards.CurrentGuessScoreboard(), 1.0)
+		a.Scoreboards.CreditGuess(ctx, user)
 		// do a timewarp, crediting the guesser on the overlay
 		a.timewarp(ctx, user.Username)
 	} else {
@@ -565,7 +568,6 @@ func (a *App) stateCmd(ctx context.Context, user *users.User, _ []string) {
 	a.Chat.Say(msg)
 }
 
-// TODO: maybe there could be a !cancel command or something
 // anonymizedReportPlatforms maps a platform to the anonymized label used for
 // its viewers in a !report's durable/external sinks (the Sentry error event and
 // the Discord alert). Membership is the capability the reporter label keys off,
@@ -712,7 +714,7 @@ func (a *App) giveMilesCmd(ctx context.Context, user *users.User, params []strin
 		return
 	}
 	newTotal := a.Sessions.CorrectMiles(ctx, target, float32(delta))
-	if err := events.Correction(ctx, a.Cfg, target, delta); err != nil {
+	if err := a.Events.Correction(ctx, target, delta); err != nil {
 		slog.ErrorContext(ctx, "error creating correction event", "err", err)
 	}
 	a.Chat.Say(fmt.Sprintf("@%s now has %.2fmi", target, newTotal))
@@ -744,7 +746,7 @@ func (a *App) shutdownCmd(ctx context.Context, user *users.User, _ []string) {
 	}
 	a.Chat.Say("Shutting down...")
 	slog.InfoContext(ctx, "shutdown: currently playing", "video", a.Video.Current())
-	if err := a.Cron.Stop(); err != nil {
+	if err := a.Cron.Shutdown(); err != nil {
 		slog.ErrorContext(ctx, "cron shutdown failed during !shutdown", "err", err)
 	}
 	a.Sessions.Shutdown(ctx)
@@ -756,7 +758,6 @@ func (a *App) shutdownCmd(ctx context.Context, user *users.User, _ []string) {
 	os.Exit(0)
 }
 
-// TODO: this will always be lower case, find out why
 // middleCmd sets the text at the bottom-middle of the stream
 func (a *App) middleCmd(ctx context.Context, user *users.User, params []string) {
 	slog.InfoContext(ctx, "ran !middle", "username", user.Username)

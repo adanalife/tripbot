@@ -9,7 +9,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/adanalife/tripbot/pkg/background"
 	"github.com/adanalife/tripbot/pkg/bootstrap"
 	"github.com/adanalife/tripbot/pkg/chatbot"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
@@ -98,14 +97,15 @@ type Tripbot struct {
 	beds *beds.Store
 
 	// scheduler is the background cron scheduler, constructed in startCron and
-	// shared by scheduleBackgroundJobs (job registration) and shutdown (Stop).
-	// Also assigned onto t.app.Cron so the !shutdown command can stop it.
-	scheduler *background.Scheduler
+	// shared by scheduleBackgroundJobs (job registration) and shutdown
+	// (Shutdown). Also assigned onto t.app.Cron so the !shutdown command can
+	// stop it.
+	scheduler gocron.Scheduler
 
 	// srv is the auth-links / console-API / metrics HTTP server, constructed in
 	// NewTripbot. cmd installs the build version through it (SetVersion) and
-	// starts it (Start). The rich admin panel moved to the standalone
-	// tripbot-console; what's left is the OAuth bootstrap pages, the read-only
+	// starts it (Start). The rich admin panel lives in the standalone
+	// tripbot-console; this server holds the OAuth bootstrap pages, the read-only
 	// /api/* endpoints the console proxies, and /health + /metrics.
 	srv *server.Server
 
@@ -249,8 +249,8 @@ func (t *Tripbot) Run() {
 	t.startRotatorEditing()
 	if t.platformIsTwitch() {
 		if t.gateway == nil {
-			// No in-process Helix fallback since the cutover, so audience polls,
-			// the follower check, and broadcaster send have no backend here.
+			// There is no in-process Helix fallback, so audience polls, the
+			// follower check, and broadcaster send have no backend here.
 			// Real deploys always wire TWITCH_API_URL; this is local/CI.
 			slog.WarnContext(ctx, "no TWITCH_API_URL: Twitch audience/follower/broadcaster-send features disabled (gateway not wired)")
 		}
@@ -262,8 +262,12 @@ func (t *Tripbot) Run() {
 	}
 	t.startCron()
 	t.startNATS(ctx)
-	t.player.EmitCurrentVideo(ctx)   // after startNATS: publishes the current video.changed for the standalone console
-	t.startAuthStatusEmitter(ctx)    // after startNATS: publishes auth.status snapshots for the standalone console
+	t.player.EmitCurrentVideo(ctx) // after startNATS: publishes the current video.changed for the standalone console
+	if t.platformIsTwitch() {
+		// after startNATS: the first auth.status snapshot for the standalone
+		// console. The twitch.EmitAuthStatus cron job keeps it fresh.
+		t.emitAuthStatus(ctx)
+	}
 	t.startOBSRefreshSubscriber(ctx) // after startNATS: per-platform (each instance owns its OBS)
 	// Poll this instance's OBS WebSocket for streaming state + render/output
 	// stats, stamping the series with the platform. These obs_* gauges feed
@@ -333,8 +337,8 @@ type gatewayPlatform struct {
 }
 
 // gatewayPlatform returns the descriptor for this instance's platform. An
-// unrecognized platform falls through to youtube, matching the dispatch this
-// replaces (empty PLATFORM never reaches here — platformIsTwitch claims it).
+// unrecognized platform falls through to youtube (empty PLATFORM never reaches
+// here — platformIsTwitch claims it).
 func (t *Tripbot) gatewayPlatform() gatewayPlatform {
 	switch t.cfg.Platform {
 	case "", "twitch":
@@ -526,34 +530,21 @@ func (t *Tripbot) startNATS(ctx context.Context) {
 // means a freshly-connected console is at most one interval stale.
 const authStatusInterval = 30 * time.Second
 
-// startAuthStatusEmitter publishes this instance's token state to
-// tripbot.<env>.auth.status.twitch on start and every authStatusInterval.
-// The in-process admin hub ignores the subject (it polls token state directly);
-// the standalone console is the consumer. Snapshots are assembled here — not in
-// pkg/eventbus — so the eventbus stays free of pkg/twitch imports.
+// emitAuthStatus publishes this instance's token state to
+// tripbot.<env>.auth.status.twitch. The in-process admin hub ignores the
+// subject (it polls token state directly); the standalone console is the
+// consumer. Snapshots are assembled here — not in pkg/eventbus — so the
+// eventbus stays free of pkg/twitch imports.
 //
-// Only the Twitch instance holds tokens now: YouTube auth moved entirely onto
-// the platform-gateway (gateway-youtube owns the oauth_tokens youtube row), so a
-// youtube instance has no token state to report and skips this. (Surfacing
-// YouTube auth status to the console is the gateway's job once it grows a NATS
-// publisher — tracked separately.)
-func (t *Tripbot) startAuthStatusEmitter(ctx context.Context) {
-	if !t.platformIsTwitch() {
-		return
-	}
-	go func() {
-		eventbus.EmitAuthStatus(ctx, t.cfg.Environment, "twitch", t.twitchAuthAccounts())
-		tick := time.NewTicker(authStatusInterval)
-		defer tick.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-tick.C:
-				eventbus.EmitAuthStatus(ctx, t.cfg.Environment, "twitch", t.twitchAuthAccounts())
-			}
-		}
-	}()
+// Run once from Run, after NATS is up so the first snapshot isn't published
+// into a connecting client, then on authStatusInterval as a cron job. Only the
+// Twitch instance holds tokens: YouTube auth lives entirely on the
+// platform-gateway (gateway-youtube owns the oauth_tokens youtube row), so a
+// youtube instance has no token state to report and the job is Twitch-gated
+// with the rest. (Surfacing YouTube auth status to the console is the gateway's
+// job once it grows a NATS publisher — tracked separately.)
+func (t *Tripbot) emitAuthStatus(ctx context.Context) {
+	eventbus.EmitAuthStatus(ctx, t.cfg.Environment, "twitch", t.twitchAuthAccounts())
 }
 
 // twitchAuthAccounts converts the live Twitch token state (bot + broadcaster)
@@ -583,8 +574,8 @@ func (t *Tripbot) twitchAuthAccounts() []eventbus.AuthAccount {
 // into an OBS session.
 //
 // Both live-checks route through the platform-gateway. That wiring lives here
-// in cmd rather than in pkg/obs/watchdog, per
-// package-boundary-init-discipline.
+// in cmd rather than in pkg/obs/watchdog, so the shared package takes no
+// binary-specific dependency.
 //
 // Platforms whose broadcast is a set-and-forget ingest key have nothing to
 // recover from outside OBS and get no watchdog.
@@ -688,8 +679,9 @@ func (t *Tripbot) startBackgroundAudio(ctx context.Context) {
 	if t.platformIsTwitch() {
 		seed = beds.SomaFM
 	}
-	t.beds = beds.NewStore(beds.RealOBS{}, seed, "")
+	t.beds = beds.NewStore(beds.RealOBS{}, seed, "", t.cfg.Platform)
 	t.srv.SetBeds(t.beds) // the console's /api/audio reads + switches through it
+	t.app.Beds = t.beds   // and !audio, so chat and console report the same bed
 	go t.beds.Detect(ctx)
 }
 
@@ -701,7 +693,7 @@ func (t *Tripbot) startBackgroundAudio(ctx context.Context) {
 // stream silent with no self-heal), and it advances the album to its next track
 // when OBS reports the current one ended.
 //
-// Runs on every platform: any platform can now select any bed, so neither job
+// Runs on every platform: any platform can select any bed, so neither job
 // is Twitch-specific. On the car-hum bed it only records the audio gauges.
 func (t *Tripbot) startBackgroundAudioWatchdog(ctx context.Context) {
 	meter := audiowatchdog.NewVolumeMeter(audiowatchdog.BackgroundAudioInputName, 30*time.Second)
@@ -747,8 +739,8 @@ func (t *Tripbot) startEventSub(ctx context.Context) {
 		return
 	}
 	if mytwitch.ChannelID() == "" && t.gateway != nil {
-		// The gateway owns Helix, so nothing populates channelID in-process any
-		// more. Resolve it via the gateway's /v1/users/{login} so EventSub gets a
+		// The gateway owns Helix, so nothing populates channelID in-process.
+		// Resolve it via the gateway's /v1/users/{login} so EventSub gets a
 		// BroadcasterUserID. Non-fatal — falls through to the skip below on error.
 		if id, err := t.gateway.UserID(ctx, t.cfg.ChannelName); err != nil {
 			slog.ErrorContext(ctx, "eventsub: resolving channel id via gateway failed", "err", err)
@@ -777,6 +769,14 @@ func (t *Tripbot) startEventSub(ctx context.Context) {
 				OnResub:       t.app.AnnounceResub,
 			})
 			if err == nil || errors.Is(err, context.Canceled) {
+				return
+			}
+			if errors.Is(err, eventsub.ErrUnauthorized) {
+				// The token is loaded once above, so every redial would repeat
+				// this rejection — roughly three a minute, since Twitch drops a
+				// subscription-less session after ~10s. Stop and say so; the
+				// recovery is a broadcaster re-consent and a restart.
+				slog.ErrorContext(ctx, "eventsub disabled: broadcaster token rejected — re-consent via the platform-gateway flow (surfaced in tripbot-console), then restart", "err", err)
 				return
 			}
 			// Twitch closing the socket outright surfaces here instead of as a
@@ -808,8 +808,8 @@ func (t *Tripbot) startHttpServer(ctx context.Context) <-chan struct{} {
 	return done
 }
 
-// findInitialVideo will determine the vido that is currently-playing
-// we want to run this early, otherwise it will be unset until the first cron job runs
+// findInitialVideo determines the video that is currently playing. Run it
+// early, otherwise it stays unset until the first cron job runs.
 func (t *Tripbot) findInitialVideo() {
 	t.player.GetCurrentlyPlaying(context.Background())
 	v := t.player.Current()
@@ -821,14 +821,15 @@ func (t *Tripbot) findInitialVideo() {
 
 // startCron starts the background workers
 func (t *Tripbot) startCron() {
-	s, err := background.New()
+	s, err := gocron.NewScheduler()
 	if err != nil {
 		slog.Error("error creating background scheduler", "err", err)
 		os.Exit(1)
 	}
 	t.scheduler = s
+	slog.Info("starting cron")
 	t.scheduler.Start()
-	// let !shutdown stop the same scheduler instance (*background.Scheduler
+	// let !shutdown stop the same scheduler instance (gocron.Scheduler
 	// satisfies chatbot.Cron directly)
 	t.app.Cron = t.scheduler
 	t.scheduleBackgroundJobs()
@@ -941,8 +942,16 @@ func (t *Tripbot) shutdown(httpDone <-chan struct{}) {
 	slog.Warn("shutting down")
 	//TODO: print different message if CurrentlyPlaying is ""
 	slog.Info("last played video", "file", t.player.Current().File())
-	if err := t.scheduler.Stop(); err != nil {
-		slog.Error("error shutting down gocron scheduler", "err", err)
+	// Shutdown cancels in-flight job contexts, so any ctx-aware work in those
+	// jobs unwinds rather than running to completion. Cron jobs here are short
+	// idempotent ticks that retry on the next interval, so losing an in-flight
+	// execution is fine. Nil until startCron runs, so a signal arriving during
+	// boot doesn't panic the cleanup path.
+	if t.scheduler != nil {
+		slog.Info("stopping cron")
+		if err := t.scheduler.Shutdown(); err != nil {
+			slog.Error("error shutting down gocron scheduler", "err", err)
+		}
 	}
 	if t.discordSession != nil {
 		if err := t.discordSession.Stop(); err != nil {
@@ -1031,6 +1040,10 @@ func (t *Tripbot) scheduleBackgroundJobs() {
 	t.addJob(5*time.Minute, "users.PrintCurrentSession", t.sessions.PrintCurrentSession)
 	t.addJob(5*time.Minute, "twitch.GetSubscribers", t.refreshSubscribers)
 	t.addJob(5*time.Minute, "twitch.GetFollowerCount", t.refreshFollowerCount)
+	// Run publishes the first snapshot once NATS is connected; this keeps it
+	// fresh. Registered here rather than as its own goroutine so a panic in the
+	// token read is recovered and each publish gets a span and duration metric.
+	t.addJob(authStatusInterval, "twitch.EmitAuthStatus", t.emitAuthStatus)
 	// The platform-gateway owns token refresh now; tripbot only reads the rows
 	// it keeps fresh. Re-read on a timer so the in-memory tokens track the
 	// gateway's rotations — the IRC PASS line on reconnect and the token-expiry
@@ -1046,13 +1059,17 @@ func (t *Tripbot) scheduleBackgroundJobs() {
 // tracedJob so each tick opens a span and centralising the error logging.
 // Extra gocron.JobOptions (e.g. WithStartAt for an immediate first run) are
 // appended verbatim; existing callers pass none.
+//
+// name reaches gocron itself via WithName, not just the span and the error log,
+// so the scheduler can be asked what it holds — which is how the platform gates
+// in scheduleBackgroundJobs are tested without running a single tick.
 func (t *Tripbot) addJob(interval time.Duration, name string, fn func(context.Context), opts ...gocron.JobOption) {
 	_, err := t.scheduler.NewJob(
 		gocron.DurationJob(interval),
 		gocron.NewTask(tracedJob(name, fn)),
-		opts...,
+		append([]gocron.JobOption{gocron.WithName(name)}, opts...)...,
 	)
 	if err != nil {
-		slog.Error("error adding background job: "+name, "err", err)
+		slog.Error("error adding background job", "job", name, "err", err)
 	}
 }

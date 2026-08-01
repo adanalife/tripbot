@@ -64,9 +64,11 @@ repos:
     hooks:
       - id: shellcheck
 
-  # Go formatting — gofmt only (not full golangci-lint) to avoid the
-  # libvlc/cgo build issues that made super-linter disable Go. Auto-fixes
-  # and fails the run if any file needed reformatting; re-stage and commit.
+  # Go formatting — gofmt only. The linters live in CI via reviewdog
+  # (.github/workflows/linting.yml), one job per concern, so a pre-commit
+  # golangci-lint hook would duplicate them and put a cold ~50s run in front of
+  # the first commit on every clone. Auto-fixes and fails the run if any file
+  # needed reformatting; re-stage and commit.
   # Needs the Go toolchain on PATH — CI provides it via mise (.tool-versions).
   - repo: local
     hooks:

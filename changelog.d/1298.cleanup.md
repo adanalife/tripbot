@@ -1,0 +1,1 @@
+Replace two hand-rolled loops in `cmd/backfill-coords` with their stdlib equivalents — `sqlQuote` becomes `strings.ReplaceAll` (matching its `cmd/backfill-miles` twin, which had already drifted to the simpler form) and `dashes` becomes `strings.Repeat` + `strings.Join` — and widen the two output writers to `io.Writer` so they're testable.

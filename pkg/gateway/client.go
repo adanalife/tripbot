@@ -6,8 +6,8 @@
 //
 // The client is a thin, stateless request/response wrapper over the gateway's
 // v1 JSON endpoints. It holds no platform-specific knowledge and triggers no
-// init-time side effects, so any binary or package may import it (see the
-// package-boundary-init-discipline ADR). Callers decide their own
+// init-time side effects, so any binary or package may import it without
+// inheriting config/DB startup. Callers decide their own
 // fail-open/fail-closed posture from the returned error.
 package gateway
 

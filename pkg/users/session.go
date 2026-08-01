@@ -173,7 +173,7 @@ func (s *Sessions) logout(ctx context.Context, u *User) {
 
 	// print logout message if they're human
 	if !u.IsBot {
-		loggedInDur := time.Now().Sub(u.LoggedIn)
+		loggedInDur := time.Since(u.LoggedIn)
 		slog.InfoContext(ctx, "logging out user",
 			"user", u.String(),
 			"duration", durafmt.ParseShort(loggedInDur).String(),

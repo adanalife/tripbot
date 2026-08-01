@@ -9,6 +9,47 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v4.15.1] — 2026-07-30
+
+### Fixes
+
+- Stamp `service.instance.id` on the telemetry resource, so each per-platform instance gets its own metric series. Metrics recorded without an explicit platform attribute — `tripbot_gateway_up`, `tripbot_obs_silent_disconnect_restarts_total` — were sharing one series across every instance and reporting whichever pod pushed last. ([#1282](https://github.com/adanalife/tripbot/pull/1282))
+
+### CI / Tooling
+
+- The staticcheck / unused / usetesting / thelper / tparallel lint job now fails on any finding, repo-wide, instead of reporting and passing. `unused` is newly enabled — golangci-lint splits it out from staticcheck, so dead code was previously unguarded. ([#1277](https://github.com/adanalife/tripbot/pull/1277))
+
+## [v4.15.0] — 2026-07-30
+
+### Chatbot
+
+- The chat command registry is now emitted as a contract. `go generate ./pkg/contract` writes `chat-commands.json` alongside the existing three — every command's trigger, aliases, access gate, and the platforms it actually dispatches on, already resolved from both gating rules — so the admin console can render the live command list instead of hand-maintaining one, and a second implementation can diff its registry against tripbot's mechanically. A golden test fails if the registry changes without regenerating. ([#1269](https://github.com/adanalife/tripbot/pull/1269))
+- Stop redialing EventSub when Twitch rejects the broadcaster token. A 401 on every subscription is permanent until someone re-consents, but the reconnect loop retried it every ~20s (Twitch drops a subscription-less session with close code 4003), logging five errors a cycle. `Run` now returns `ErrUnauthorized` in that case and the caller stops with an actionable message. A token that only lacks one event type scope still keeps the subscriptions it got, and still reconnects. ([#1270](https://github.com/adanalife/tripbot/pull/1270))
+- Two gauges make the background-audio bed observable. `tripbot_background_audio_bed` reads 1 for the bed on air and 0 for the others (labeled by bed and platform), so "what is the stream playing" is answerable without asking OBS. `tripbot_background_audio_album_tracks` reports the depth of the album play order — 0 while the album is live means the current track ends and nothing advances, which is how the album fell silent for eight minutes on 2026-07-29 while emitting no log line at all. Alert on `album=1 AND tracks=0`.
+
+  Both are recorded inside `beds.Store` at every switch and at the startup bed detection, and both carry the platform label — each platform runs its own bed, so an unlabeled series would have the instances overwriting each other. `tripbot_background_audio_selections_total` gains the same label. ([#1273](https://github.com/adanalife/tripbot/pull/1273))
+- `!carsound` becomes `!audio`, driving the real background-audio beds. It cycled four car-hum voicings through a YouTube-only OBS path that predated the bed store; it now reads and switches the same three beds (`somafm`, `carhum`, `album`) the console's `/api/audio` drives, on every platform. Switching is admin-only — the bed is the music every viewer hears at once — and `!carsound` / `!carhum` still resolve as aliases.
+
+  `!song` follows the bed too. It polled SomaFM's now-playing feed unconditionally, so on a platform booting the album (TikTok) it named a Groove Salad track nobody was hearing; it now reports the live album track or the car hum, and only reads the feed when SomaFM is actually playing. Both commands join the cross-platform allowlist, and `tripbot_carsound_selections_total` becomes `tripbot_background_audio_selections_total`, labeled by bed and recorded inside the bed store so console and chat switches both count. ([#1273](https://github.com/adanalife/tripbot/pull/1273))
+- `/api/audio` reports the SomaFM track alongside the album one, so the console reads a single track field for every bed instead of polling SomaFM's songs feed itself. The now-playing fetch moved next to the station it belongs to, in `pkg/obs/beds`, and one cached fetch now serves `!song` and every open console tab. ([#1279](https://github.com/adanalife/tripbot/pull/1279))
+- The SomaFM background-audio bed can play any of SomaFM's channels, not just Groove Salad Classic. Pick one from the console's background-audio panel or with `!audio <channel>` (`!audio dronezone`); `!song` and the console's now-playing line follow the tuned channel, as does the audio watchdog's reachability probe. ([#1279](https://github.com/adanalife/tripbot/pull/1279))
+
+### Fixes
+
+- Report to Sentry from prod only. Stage runs against parked platforms, absent upstreams, and a bot that is deliberately not a channel moderator, so its errors described the environment rather than a defect while spending a shared event budget. Covers tripbot and onscreens-server, which share the boot spine. Stage errors still reach Loki. ([#1267](https://github.com/adanalife/tripbot/pull/1267))
+- The album bed no longer replays a track back to back. Wrapping the play order re-shuffled without regard for the track that had just finished, so it could land straight back on air. ([#1274](https://github.com/adanalife/tripbot/pull/1274))
+
+### CI / Tooling
+
+- Converted the OBS silent-disconnect watchdog tests to `testing/synctest`, so they run on a virtual clock: exact tick boundaries instead of racing real 2ms timers, ~8x faster, and no `time.Sleep` drain windows. Adds coverage for the OBS-unreachable branch. ([#1274](https://github.com/adanalife/tripbot/pull/1274))
+- Covered the Open-Meteo archive fetch: the hourly-sample index, the short-day clamp, the missing-weather-code fallback, the request query shape, and every failure path (non-200, malformed JSON, empty samples, cancelled context). `pkg/weather` coverage 18.6% -> 76.7%. ([#1274](https://github.com/adanalife/tripbot/pull/1274))
+- Added a fuzz target for the onscreens overlay markdown renderer, pinning two invariants over arbitrary input: no caller-supplied angle bracket survives as markup, and every emitted tag is balanced. 1.4M executions clean. ([#1274](https://github.com/adanalife/tripbot/pull/1274))
+- CI now runs `staticcheck` plus the `usetesting` / `thelper` / `tparallel` test-hygiene linters, and the tree is clean against all four. `golangci-lint` is pinned in `.tool-versions` so the same checks run locally. ([#1276](https://github.com/adanalife/tripbot/pull/1276))
+
+### Cleanup
+
+- The chatbot's remaining direct database access moves behind injected interfaces, joining the surfaces that already were: `App.Scoreboards` for the miles / correct-guess leaderboards and for crediting a guess, `App.Events` for the append-only subscribe / unsubscribe / miles-correction trail. The unused `App.DB` gorm handle is gone. No behaviour changes — but twelve command tests stop declaring the SQL they expect and assert on what the command does instead, and the guess board's zero-scorer filtering picks up a direct unit test in `pkg/scoreboards`. ([#1272](https://github.com/adanalife/tripbot/pull/1272))
+
 ## [v4.14.4] — 2026-07-29
 
 ### Chatbot

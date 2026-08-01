@@ -49,7 +49,7 @@ func bestEffortFirstSeen(times ...time.Time) time.Time {
 }
 
 // userProfile is the chat-console popover payload — a small at-a-glance view of
-// a chatter, events-derived per the tripbot-events-table-design ADR. The JSON
+// a chatter, derived from the append-only events table. The JSON
 // tags are the wire format the standalone tripbot-console reads via
 // GET /api/user/{username} (it has no DB access of its own and proxies here).
 type userProfile struct {

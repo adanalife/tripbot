@@ -124,6 +124,7 @@ func TestNormalizeStateInputKeepsEveryStateName(t *testing.T) {
 // only assert names that survive the title-cased lookup.
 func TestStateAbbrevRoundTrip(t *testing.T) {
 	for abbrev, name := range stateAbbrevs {
+		//nolint:staticcheck // SA1019: mirrors TitlecaseState's own fallback
 		if strings.Title(strings.ToLower(name)) != name {
 			continue
 		}
