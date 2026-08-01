@@ -9,6 +9,30 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v4.16.0] — 2026-08-01
+
+### Chatbot
+
+- Twitch chat now flows through gateway-twitch in both directions, like every other platform: inbound on the shared cursored poll (long-polled, so replies stay as immediate as they were), outbound as the bot identity. tripbot no longer opens an IRC connection or holds a chat token — `ConnectIRC`, the reconnect loop, the IRC token plumbing, and the `go-twitch-irc` dependency are gone. Whisper-to-remote-say is removed; the console's chat-send does that job. `tripbot_twitch_connected` keeps its meaning and is now written by the inbound poll. ([#1266](https://github.com/adanalife/tripbot/pull/1266))
+
+### Fixes
+
+- Stop `!guess` from crediting a guess on a video with no known state. A two-letter guess that isn't a state code was blanked before the comparison, and a video whose geocode came back empty isn't flagged, so `!guess zz` matched `""` against `""` — a guess point and a timewarp on demand. The abbreviation lookup now leaves an unknown pair as typed, and a stateless video says so instead of comparing. ([#1290](https://github.com/adanalife/tripbot/pull/1290))
+
+### Cleanup
+
+- Dropped the `lsof`-based current-video lookup (`bin/current-file.sh` and `figureOutCurrentVideo`). `GetCurrentlyPlaying` asks Playout on every platform now instead of shelling out to `lsof` on macOS, so local dev takes the same path as production. The six Darwin test skips in `pkg/video` go with it, along with the orphaned `helpers.ProjectRoot` and `helpers.RunningOnWindows`. ([#1286](https://github.com/adanalife/tripbot/pull/1286))
+- Hold the gocron scheduler directly instead of behind a `pkg/background` wrapper. `gocron.Scheduler` is already an interface, so the wrapper was five passthrough methods around it; the nil-safe shutdown it existed for now lives at the one shutdown call site that needs it. ([#1289](https://github.com/adanalife/tripbot/pull/1289))
+- Delete two unused functions from `pkg/helpers`: `RemoveNonLetters` (which compiled the same regexp on every call and would have nil-panicked on the compile error it logged) and `OpenInBrowser`, whose removal drops the `open-golang` dependency. ([#1291](https://github.com/adanalife/tripbot/pull/1291))
+- Move the periodic `auth.status` publish onto the cron scheduler instead of its own goroutine, so each tick gets a trace span, a duration metric, and panic recovery — a panic reading token state used to take the process down with it. ([#1292](https://github.com/adanalife/tripbot/pull/1292))
+- Replace two hand-rolled loops in `cmd/backfill-coords` with their stdlib equivalents — `sqlQuote` becomes `strings.ReplaceAll` (matching its `cmd/backfill-miles` twin, which had already drifted to the simpler form) and `dashes` becomes `strings.Repeat` + `strings.Join` — and widen the two output writers to `io.Writer` so they're testable. ([#1298](https://github.com/adanalife/tripbot/pull/1298))
+- Log the failing cron job's name as a `job` attribute rather than concatenating it into the slog message, so the message stays a constant that groups in Loki and Sentry. ([#1300](https://github.com/adanalife/tripbot/pull/1300))
+
+### Misc
+
+- Pin the gate that keeps miles/guess leaderboards off the gateway platforms. The rotating-leaderboard overlay and the lifetime-board rebuild are Twitch-only by way of an early return partway down the job registration, which a later edit could defeat without any test noticing. ([#1287](https://github.com/adanalife/tripbot/pull/1287))
+- Extend the background-job gate test to every cron in `scheduleBackgroundJobs`, asserting the exact set each platform schedules rather than spot-checking a few names. Covers the eight Twitch-only jobs, the three platform-neutral ones, and the doubly-gated YouTube/Facebook broadcast-discovery jobs. ([#1288](https://github.com/adanalife/tripbot/pull/1288))
+
 ## [v4.15.1] — 2026-07-30
 
 ### Fixes
