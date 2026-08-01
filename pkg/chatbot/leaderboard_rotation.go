@@ -3,8 +3,6 @@ package chatbot
 import (
 	"context"
 	"math/rand/v2"
-
-	"github.com/adanalife/tripbot/pkg/scoreboards"
 )
 
 // totalMilesOdds is the chance a given rotation tick shows the lifetime
@@ -63,8 +61,8 @@ func (a *App) fetchLeaderboard(ctx context.Context, kind leaderboardKind) (strin
 		}
 		return "Total Miles", rows
 	case guessLeaderboard:
-		return "Correct Guesses This Month", scoreboards.TopGuessRows(ctx, a.Cfg, leaderboardSize)
+		return "Correct Guesses This Month", a.Scoreboards.TopGuesses(ctx, leaderboardSize)
 	default:
-		return scoreboards.CurrentMilesMonth() + " Miles", scoreboards.TopMilesRows(ctx, a.Cfg, leaderboardSize)
+		return a.Scoreboards.MilesMonth() + " Miles", a.Scoreboards.TopMiles(ctx, leaderboardSize)
 	}
 }

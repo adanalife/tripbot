@@ -194,8 +194,32 @@ func newResource(ctx context.Context, name, version string) (*resource.Resource,
 		resource.WithAttributes(
 			semconv.ServiceName(name),
 			semconv.ServiceVersion(version),
+			// service.instance.id becomes the `instance` label on every pushed
+			// series, which is what keeps the per-platform instances apart. A
+			// metric recorded without a platform attribute is otherwise
+			// byte-identical across all of them — every instance writes one
+			// shared series, and its value is whichever pod pushed last.
+			// tripbot_gateway_up shows the shape: one series in the backend
+			// taking five pods' samples, so "the gateway is unreachable" can't
+			// be traced to which instance saw that. platformAttr fixes it one
+			// metric at a time (see pkg/instrumentation); this fixes the
+			// identity itself, including for metrics nobody remembered to label.
+			semconv.ServiceInstanceID(instanceID()),
 		),
 	)
+}
+
+// instanceID identifies the process behind a series. HOSTNAME is the pod name
+// under Kubernetes; the os.Hostname fallback covers a local run.
+func instanceID() string {
+	if h := os.Getenv("HOSTNAME"); h != "" {
+		return h
+	}
+	h, err := os.Hostname()
+	if err != nil {
+		return "unknown"
+	}
+	return h
 }
 
 func initPromOnlyMeter(ctx context.Context, name, version string) error {

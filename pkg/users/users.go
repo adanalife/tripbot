@@ -62,7 +62,7 @@ func (s *Sessions) loggedInDur(u User) time.Duration {
 	if !ok {
 		return 0 * time.Second
 	}
-	return time.Now().Sub(live.LoggedIn)
+	return time.Since(live.LoggedIn)
 }
 
 func (s *Sessions) sessionMiles(ctx context.Context, u User) float32 {

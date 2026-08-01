@@ -236,14 +236,10 @@ func TestBackCmd_AdminDrivesPlaybackChain(t *testing.T) {
 // the correct-guess chain rather than just a side effect.
 
 func TestGuessCmd_CorrectGuess_RefreshesVideoAfterTimewarp(t *testing.T) {
-	mock := installMockDB(t)
 	vid := newTestVideo("Colorado", 39.5, -105.0, time.Now())
 	app := newTestApp(vid)
 	recVideo := &recordingVideo{Vid: vid}
 	app.Video = recVideo
-
-	expectAddToScoreChain(mock)
-	expectAddToScoreChain(mock)
 
 	app.guessCmd(context.Background(), newTestUser("viewer1"), []string{"Colorado"})
 
@@ -254,17 +250,13 @@ func TestGuessCmd_CorrectGuess_RefreshesVideoAfterTimewarp(t *testing.T) {
 		recVideo.Calls[0] != wantCalls[0] || recVideo.Calls[1] != wantCalls[1] {
 		t.Errorf("expected calls %v, got %v", wantCalls, recVideo.Calls)
 	}
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Error(err)
-	}
 }
 
 // --- jumpCmd ---
 //
-// jumpCmd was previously untestable because it called the package-level
-// video.FindRandomByState directly (DB-backed). With Video.FindRandomByState
-// on the injectable Video interface, we can stage results and exercise all
-// three branches: success, no-footage-for-state, and bad input.
+// jumpCmd reaches footage through the injectable Video interface, so these
+// tests stage FindRandomByState results and exercise all three branches:
+// success, no-footage-for-state, and bad input.
 
 func TestJumpCmd_AdminPlaysRandomFromState(t *testing.T) {
 	skipIfDarwin(t)

@@ -13,14 +13,13 @@ import (
 // features land (ban/timeout, send-as-broadcaster).
 //
 // The Helix API is owned by the platform-gateway (gateway-twitch); this seam is
-// the HTTP client that reaches it, so command code stays untouched (the payoff
-// of the #738/#739 injection seam).
+// the HTTP client that reaches it, so command code never names a transport.
 type Twitch interface {
 	FollowedAt(username string) (time.Time, bool)
 }
 
 // newTwitch wires the production Twitch adapter — the platform-gateway HTTP
-// client, the single Helix caller since the cutover. A non-Twitch instance
+// client, the single Helix caller. A non-Twitch instance
 // (PLATFORM=youtube) has no TWITCH_API_URL and thus no Twitch Helix surface, so
 // it gets a fail-closed no-op adapter.
 func newTwitch(a *App) Twitch {

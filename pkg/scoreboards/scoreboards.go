@@ -17,8 +17,8 @@ type Scoreboard struct {
 	ID       uint16 `gorm:"primaryKey"`
 	Name     string
 	Platform string
-	// autoCreateTime stamps date_created on insert; createScoreboard() doesn't
-	// set it, so without the tag GORM writes the 0001-01-01 zero value over the
+	// autoCreateTime stamps date_created on insert; the insert path doesn't set
+	// it, so without the tag GORM writes the 0001-01-01 zero value over the
 	// column's DEFAULT CURRENT_TIMESTAMP. See pkg/events for the full story.
 	DateCreated time.Time `gorm:"autoCreateTime"`
 }
@@ -59,12 +59,5 @@ func TopUsers(ctx context.Context, cfg *c.TripbotConfig, scoreboardName string, 
 func findOrCreateScoreboard(ctx context.Context, platform, name string) (Scoreboard, error) {
 	var scoreboard Scoreboard
 	result := database.GormDB().WithContext(ctx).Where(Scoreboard{Name: name, Platform: platform}).FirstOrCreate(&scoreboard)
-	return scoreboard, result.Error
-}
-
-// createScoreboard() will actually create the DB record
-func createScoreboard(ctx context.Context, platform, name string) (Scoreboard, error) {
-	scoreboard := Scoreboard{Name: name, Platform: platform}
-	result := database.GormDB().WithContext(ctx).Create(&scoreboard)
 	return scoreboard, result.Error
 }

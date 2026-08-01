@@ -41,13 +41,6 @@ const (
 	// path is resolved by OBS, not tripbot.
 	fallbackFile = beds.CarHumFile
 
-	// somaFMProbeURL is the SomaFM endpoint the watchdog probes to decide when
-	// it is safe to swap back. Matches the source's `input` URL in the scene
-	// config — the round-robin ice.somafm.com hostname (4 edge IPs), so DNS
-	// hands out a healthy edge rather than pinning one. A failed probe keeps us
-	// on the safe local bed; per-edge probing is a tracked follow-up.
-	somaFMProbeURL = "https://ice.somafm.com/gsclassic-128-mp3"
-
 	// somaFMProbeUserAgent overrides Go's default User-Agent on the probe.
 	// SomaFM's ICEcast edges reject "Go-http-client/1.1" outright — the
 	// connection is closed before any response (the probe saw a bare EOF), so
@@ -117,13 +110,18 @@ func DefaultDeps(meter *VolumeMeter, store *beds.Store) Deps {
 		MediaState: func(ctx context.Context) (string, error) {
 			return obs.GetMediaInputState(ctx, BackgroundAudioInputName)
 		},
-		Level:           meter.Level,
-		SomaFMReachable: defaultSomaFMReachable,
+		Level: meter.Level,
+		// Both hooks read the station at call time rather than closing over it:
+		// the console or chat can retune mid-outage, and swapping back to the
+		// station we left would undo that.
+		SomaFMReachable: func(ctx context.Context) bool {
+			return defaultSomaFMReachable(ctx, beds.StreamURL(store.Station()))
+		},
 		SwapToFallback: func(ctx context.Context) error {
 			return obs.SetInputLocalFileMode(ctx, BackgroundAudioInputName, fallbackFile, true)
 		},
 		SwapToSomaFM: func(ctx context.Context) error {
-			return obs.SetInputNetworkMode(ctx, BackgroundAudioInputName)
+			return obs.SetInputNetworkMode(ctx, BackgroundAudioInputName, beds.StreamURL(store.Station()))
 		},
 	}
 }
@@ -144,14 +142,17 @@ var somaFMProbeClient = &http.Client{
 // timeout trips, so this returns false. Distinct from "the website is up" —
 // somafm.com can 200 while every ICEcast edge is dead.
 //
+// url is the live station's stream — the exact URL OBS is playing, so a station
+// that is down on its own is caught, not masked by a healthy sibling channel.
+//
 // Every failure path logs why (at warn). The probe is only consulted while on
 // the fallback bed, so in steady state it's silent; the logging is what makes a
 // stuck-on-fallback state diagnosable instead of an unexplained silence (the
 // original swallowed every error — see the 2026-06-24 stage test).
-func defaultSomaFMReachable(ctx context.Context) bool {
+func defaultSomaFMReachable(ctx context.Context, url string) bool {
 	cctx, cancel := context.WithTimeout(ctx, 6*time.Second)
 	defer cancel()
-	req, err := http.NewRequestWithContext(cctx, http.MethodGet, somaFMProbeURL, nil)
+	req, err := http.NewRequestWithContext(cctx, http.MethodGet, url, nil)
 	if err != nil {
 		slog.WarnContext(ctx, "somafm probe: build request failed", "err", err)
 		return false

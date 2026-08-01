@@ -52,10 +52,16 @@ func FuzzFindCommand(f *testing.F) {
 // to a sentinel string no realistic chat input can match, so fuzz stays on
 // the wrong-guess path (no DB writes). The handful of inputs that happen to
 // match are skipped to avoid the AddToScore path's sqlmock requirement.
+//
+// The sentinel has to be non-empty for that to hold, and deliberately so: a
+// stateless video is a real production case and any input the parser reduces
+// to "" would match it. TestGuessCmd_StatelessVideo_CreditsNobody covers that
+// side, where the assertion is that nothing gets credited rather than that
+// nothing matches.
 func FuzzGuessCmd(f *testing.F) {
 	const unguessableState = "\x00ZZ_FUZZ_SENTINEL_ZZ\x00"
 
-	seeds := []string{"", " ", "CA", "ca", "California", "@CA", "CA ZZ", "\x00", "  CA  "}
+	seeds := []string{"", " ", "CA", "ca", "California", "@CA", "CA ZZ", "\x00", "  CA  ", "zz", "  x"}
 	for _, s := range seeds {
 		f.Add(s)
 	}
@@ -66,7 +72,7 @@ func FuzzGuessCmd(f *testing.F) {
 		// 2-letter form gets expanded via helpers.StateAbbrevToState; bail
 		// if either form matches the sentinel (essentially impossible).
 		guess := strings.Join(params, " ")
-		if strings.ToLower(guess) == strings.ToLower(unguessableState) {
+		if strings.EqualFold(guess, unguessableState) {
 			t.Skip("fuzz hit the sentinel state")
 		}
 		app.guessCmd(context.Background(), newTestUser("viewer1"), params)

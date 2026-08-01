@@ -26,6 +26,10 @@ func renderLeaderboard(title string, leaderboard [][]string) string {
 
 	var b strings.Builder
 	b.WriteString(`<div class="lb-grid">`)
+	// strings.Title is deprecated, but x/text's cases.Title would lower-case the
+	// rest of each word and treat digits as boundaries — needless risk for a
+	// title the chatbot already sends capitalised ("Total Miles", "July Miles").
+	//nolint:staticcheck // SA1019: see above
 	fmt.Fprintf(&b, `<div class="lb-title">%s</div>`, html.EscapeString(strings.Title(title)))
 	for _, row := range leaderboard {
 		fmt.Fprintf(

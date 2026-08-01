@@ -27,7 +27,6 @@ require (
 	github.com/nicklaw5/helix/v2 v2.34.0
 	github.com/prometheus/client_golang v1.23.2
 	github.com/samber/slog-sentry/v2 v2.10.3
-	github.com/skratchdot/open-golang v0.0.0-20200116055534-eef842397966
 	github.com/slok/go-http-metrics v0.13.0
 	github.com/unrolled/secure v1.17.0
 	github.com/uptrace/opentelemetry-go-extra/otelgorm v0.3.2

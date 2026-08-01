@@ -2,13 +2,11 @@ package scoreboards
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/database"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
-	"gorm.io/gorm"
 )
 
 // Score represents a user's score on a scoreboard
@@ -17,7 +15,7 @@ type Score struct {
 	UserID       uint16
 	ScoreboardID uint16
 	Value        float32
-	// autoCreateTime stamps date_created on insert; createScore() doesn't set
+	// autoCreateTime stamps date_created on insert; the insert path doesn't set
 	// it, so without the tag GORM writes the 0001-01-01 zero value over the
 	// column's DEFAULT CURRENT_TIMESTAMP. See pkg/events for the full story.
 	DateCreated time.Time `gorm:"autoCreateTime"`
@@ -76,27 +74,6 @@ func findOrCreateScore(ctx context.Context, userID, scoreboardID uint16) (Score,
 	result := database.GormDB().WithContext(ctx).
 		Where(Score{UserID: userID, ScoreboardID: scoreboardID}).
 		FirstOrCreate(&score)
-	return score, result.Error
-}
-
-// findScore will look up the score in the DB
-// TODO: this shouldn't be necessary, join the tables instead
-func findScore(ctx context.Context, userID, scoreboardID uint16) (Score, error) {
-	var score Score
-	result := database.GormDB().WithContext(ctx).
-		Where("user_id = ? AND scoreboard_id = ?", userID, scoreboardID).
-		First(&score)
-	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-		return Score{}, gorm.ErrRecordNotFound
-	}
-	return score, result.Error
-}
-
-// createScore() will actually create the DB record
-func createScore(ctx context.Context, userID, scoreboardID uint16) (Score, error) {
-	slog.InfoContext(ctx, "creating score", "user_id", userID, "scoreboard_id", scoreboardID)
-	score := Score{UserID: userID, ScoreboardID: scoreboardID}
-	result := database.GormDB().WithContext(ctx).Create(&score)
 	return score, result.Error
 }
 

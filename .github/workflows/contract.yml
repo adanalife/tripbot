@@ -2,9 +2,15 @@ name: contract
 
 # Guards the anti-drift contract bridge (pkg/contract): tripbot is the source of
 # truth for the service names / ports / env-var keys the infra cdk8s manifests
-# consume. This catches both failure modes — a constant changed without
-# regenerating contract.json, and contract.json hand-edited away from the
-# constants. pkg/contract is dependency-free (no cgo), so this is fast.
+# consume, the NATS subjects and envelopes the console reads, and the chat
+# command registry it renders. This catches both failure modes — a source
+# changed without regenerating, and a generated file hand-edited away from its
+# source.
+#
+# chat-commands.json is generated from pkg/chatbot, which this path filter
+# deliberately doesn't cover: a registry edit is caught by the golden test in
+# the always-run `test` job instead, rather than making every chatbot PR pull in
+# a second gate.
 on:
   pull_request:
     paths:
@@ -28,14 +34,14 @@ jobs:
       # Go toolchain from .tool-versions.
       - uses: jdx/mise-action@v4
 
-      # `go generate` must reproduce the committed contract.json byte-for-byte.
-      - name: Regenerate contract.json
+      # `go generate` must reproduce every committed JSON byte-for-byte.
+      - name: Regenerate the contract files
         run: go generate ./pkg/contract
 
-      - name: Assert contract.json is up to date
+      - name: Assert the contract files are up to date
         run: |
-          if ! git diff --exit-code pkg/contract/contract.json; then
-            echo "::error::pkg/contract/contract.json is stale — run 'go generate ./pkg/contract' and commit."
+          if ! git diff --exit-code pkg/contract/; then
+            echo "::error::a pkg/contract JSON file is stale — run 'go generate ./pkg/contract' and commit."
             exit 1
           fi
 

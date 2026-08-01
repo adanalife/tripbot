@@ -207,7 +207,7 @@ func EmitVideoChanged(ctx context.Context, env, platform, file, state string, fl
 // AuthAccount is one identity's token state inside an AuthStatus snapshot.
 // Field semantics mirror mytwitch.AccountTokenStatus, but the type is defined
 // here so the eventbus stays free of pkg/twitch (and its DB-reaching imports)
-// per the package-boundary ADR — cmd/tripbot converts at the call site.
+// — cmd/tripbot converts at the call site.
 type AuthAccount struct {
 	Account   string `json:"account"`              // "bot" | "broadcaster" | "youtube" — the consent account selector
 	LoginAs   string `json:"login_as,omitempty"`   // the exact platform username/channel to sign in as

@@ -87,7 +87,7 @@ func (a *App) timewarpCmd(ctx context.Context, user *users.User, _ []string) {
 
 	// rate-limit the number of times this can run
 	if !a.Cfg.UserIsAdmin(user.Username) {
-		if time.Now().Sub(lastTimewarpTime) < 20*time.Second {
+		if time.Since(lastTimewarpTime) < 20*time.Second {
 			a.Chat.Say("Not yet; enjoy the moment!")
 			return
 		}
@@ -114,7 +114,7 @@ func (a *App) jumpCmd(ctx context.Context, user *users.User, params []string) {
 
 	// rate-limit the number of times this can run
 	if !a.Cfg.UserIsAdmin(user.Username) {
-		if time.Now().Sub(lastTimewarpTime) < 20*time.Second {
+		if time.Since(lastTimewarpTime) < 20*time.Second {
 			a.Chat.Say("Not yet; enjoy the moment!")
 			return
 		}
@@ -178,7 +178,7 @@ func (a *App) daytimeCmd(ctx context.Context, user *users.User, _ []string) {
 
 	// rate-limit the number of times this can run
 	if !a.Cfg.UserIsAdmin(user.Username) {
-		if time.Now().Sub(lastTimewarpTime) < 20*time.Second {
+		if time.Since(lastTimewarpTime) < 20*time.Second {
 			a.Chat.Say("Not yet; enjoy the moment!")
 			return
 		}
@@ -253,7 +253,7 @@ func (a *App) seekCmd(ctx context.Context, user *users.User, params []string, na
 
 	// rate-limit the number of times this can run
 	if !a.Cfg.UserIsAdmin(user.Username) {
-		if time.Now().Sub(lastTimewarpTime) < 20*time.Second {
+		if time.Since(lastTimewarpTime) < 20*time.Second {
 			a.Chat.Say("Not yet; enjoy the moment!")
 			return
 		}

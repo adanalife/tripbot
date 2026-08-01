@@ -4,7 +4,7 @@
 // It lives apart from pkg/rotator on purpose. pkg/rotator is imported by
 // onscreens-server and must stay dependency-free; this package imports GORM and
 // is imported only by cmd/tripbot and pkg/server, so the DB never reaches the
-// overlay renderer's binary (the package-boundary-init-discipline ADR).
+// overlay renderer's binary.
 //
 // Postgres owns the copy rather than the JetStream cache that pushes it to
 // onscreens-server: that cache sits on a local-path PVC which `talosctl upgrade`

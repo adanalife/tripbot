@@ -25,16 +25,18 @@ import (
 	"sort"
 	"strings"
 	"sync"
+
+	"github.com/adanalife/tripbot/pkg/instrumentation"
 )
 
 // Bed is one selectable background-audio source.
 type Bed string
 
 const (
-	// SomaFM is the Groove Salad Classic internet-radio stream. Its music is not
-	// cleared for our rebroadcast — it trips YouTube's Content ID and the other
-	// platforms' audio ID — so it's a Twitch-only default, by tolerance rather
-	// than licence.
+	// SomaFM is internet radio, on whichever of SomaFM's channels is selected
+	// (see Stations). Its music is not cleared for our rebroadcast — it trips
+	// YouTube's Content ID and the other platforms' audio ID — so it's a
+	// Twitch-only default, by tolerance rather than licence.
 	SomaFM Bed = "somafm"
 	// CarHum is the synthesized, licence-clean car-interior drone baked into the
 	// OBS image. Safe on every platform; the watchdog's fallback bed.
@@ -75,8 +77,8 @@ var audioExts = map[string]bool{".mp3": true, ".flac": true, ".m4a": true, ".ogg
 // OBS is the subset of pkg/obs the store drives. Injectable so switching logic
 // unit-tests without a real OBS WebSocket.
 type OBS interface {
-	// SetNetwork flips the source back to its configured stream URL.
-	SetNetwork(ctx context.Context, inputName string) error
+	// SetNetwork flips the source to a network stream URL.
+	SetNetwork(ctx context.Context, inputName, url string) error
 	// SetLocalFile points the source at a local path; loop=false lets the media
 	// end (which is how album advance is triggered).
 	SetLocalFile(ctx context.Context, inputName, file string, loop bool) error
@@ -88,23 +90,35 @@ type OBS interface {
 type Store struct {
 	obs      OBS
 	musicDir string
+	platform string      // stamped on the bed metrics; each platform picks its own bed
+	np       *nowPlaying // SomaFM's feed for the tuned channel
 
-	mu     sync.Mutex
-	bed    Bed
-	tracks []string // shuffled play order; rebuilt each time the album starts
-	idx    int
+	mu      sync.Mutex
+	bed     Bed
+	station string   // SomaFM channel id the SomaFM bed plays
+	tracks  []string // shuffled play order; rebuilt each time the album starts
+	idx     int
 }
 
 // NewStore returns a store defaulting to bed (used until Detect reads the real
-// one off OBS). musicDir is the album root; "" uses MusicDir.
-func NewStore(o OBS, bed Bed, musicDir string) *Store {
+// one off OBS). musicDir is the album root; "" uses MusicDir. platform labels
+// the bed metrics — without it the per-platform instances, which each run a
+// different bed, would write the same series.
+func NewStore(o OBS, bed Bed, musicDir, platform string) *Store {
 	if musicDir == "" {
 		musicDir = MusicDir
 	}
 	if !Valid(bed) {
 		bed = CarHum
 	}
-	return &Store{obs: o, bed: bed, musicDir: musicDir}
+	return &Store{
+		obs:      o,
+		bed:      bed,
+		musicDir: musicDir,
+		platform: platform,
+		station:  DefaultStation,
+		np:       newNowPlaying(),
+	}
 }
 
 // Current reports the live bed and, on the album, the track file playing.
@@ -117,6 +131,22 @@ func (s *Store) Current() (Bed, string) {
 	return s.bed, s.tracks[s.idx]
 }
 
+// Station reports the SomaFM channel the SomaFM bed plays. Always a station,
+// whichever bed is live — it's the one the bed returns to.
+func (s *Store) Station() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.station
+}
+
+// SomaFMTrack reports the song playing on the tuned channel, from SomaFM's feed
+// for it. Cached, so chat and the console's poll share one fetch. Only ask while
+// the SomaFM bed is live — it answers for the tuned channel either way, and on
+// another bed that names a song nobody is hearing.
+func (s *Store) SomaFMTrack(ctx context.Context) (artist, title string, err error) {
+	return s.np.current(ctx, s.Station())
+}
+
 // Detect reads the source's settings and records which bed OBS actually booted
 // on, so a tripbot restart doesn't report a stale guess. A failure here is not
 // fatal — the configured default stands and the next switch corrects it.
@@ -124,12 +154,22 @@ func (s *Store) Detect(ctx context.Context) {
 	settings, err := s.obs.Settings(ctx, InputName)
 	if err != nil {
 		slog.WarnContext(ctx, "background audio: could not read current bed from obs", "err", err)
+		// Publish the seed anyway: it's what Current() reports, so the gauge and
+		// the store agree even when the read failed.
+		s.record()
 		return
 	}
 	bed := bedFromSettings(settings, s.musicDir)
 	file, _ := settings["local_file"].(string)
+	// The scene config's `input` URL is the station OBS booted on. It survives a
+	// local-file detour (the overlay merge never clears it), so it's readable
+	// whichever bed is live.
+	url, _ := settings["input"].(string)
 	s.mu.Lock()
 	s.bed = bed
+	if station := stationFromURL(url); station != "" {
+		s.station = station
+	}
 	var loadErr error
 	if bed == Album {
 		// OBS booted straight onto the album — its per-platform default, no Set
@@ -137,12 +177,14 @@ func (s *Store) Detect(ctx context.Context) {
 		// has nowhere to go and the bed plays a single track and falls silent.
 		loadErr = s.loadAlbumLocked(file)
 	}
+	station := s.station
 	s.mu.Unlock()
+	s.record()
 	if loadErr != nil {
 		slog.WarnContext(ctx, "background audio: album is live but its play order is empty",
 			"err", loadErr)
 	}
-	slog.InfoContext(ctx, "background audio: detected bed at startup", "bed", bed)
+	slog.InfoContext(ctx, "background audio: detected bed at startup", "bed", bed, "station", station)
 }
 
 // bedFromSettings maps an ffmpeg_source's settings back to the bed that would
@@ -185,16 +227,45 @@ func (s *Store) Set(ctx context.Context, bed Bed) error {
 		}
 	}
 	target := s.trackLocked(bed)
+	station := s.station
 	s.mu.Unlock()
 
-	if err := s.apply(ctx, bed, target); err != nil {
+	if err := s.apply(ctx, bed, target, station); err != nil {
 		return err
 	}
 
 	s.mu.Lock()
 	s.bed = bed
 	s.mu.Unlock()
+	s.record()
+	// Counted here rather than at the callers so a console switch and a chat
+	// switch land on the same counter — they are the same switch.
+	instrumentation.BackgroundAudioSelections.Inc(s.platform, string(bed))
 	slog.InfoContext(ctx, "background audio: bed switched", "bed", bed, "track", target)
+	return nil
+}
+
+// SetStation tunes the SomaFM bed to another channel and switches to it, so
+// picking a station is one action rather than "select somafm, then tune". The
+// station is recorded before the switch so Set applies it, and rolled back if
+// OBS rejects the switch — a station we aren't playing must not be the one we
+// report.
+func (s *Store) SetStation(ctx context.Context, station string) error {
+	if !ValidStation(station) {
+		return fmt.Errorf("unknown somafm station %q", station)
+	}
+	s.mu.Lock()
+	prev := s.station
+	s.station = station
+	s.mu.Unlock()
+
+	if err := s.Set(ctx, SomaFM); err != nil {
+		s.mu.Lock()
+		s.station = prev
+		s.mu.Unlock()
+		return err
+	}
+	slog.InfoContext(ctx, "background audio: station tuned", "station", station)
 	return nil
 }
 
@@ -207,11 +278,14 @@ func (s *Store) Advance(ctx context.Context) error {
 		s.mu.Unlock()
 		return nil
 	}
+	current := s.tracks[s.idx]
 	s.idx = (s.idx + 1) % len(s.tracks)
 	// Re-shuffle on wrap so a long stream doesn't repeat the same 100-track
-	// sequence in the same order every time.
+	// sequence in the same order every time. The fresh order has to keep the
+	// track that just finished off the front, or wrapping plays it twice back
+	// to back.
 	if s.idx == 0 {
-		shuffle(s.tracks)
+		reshuffleAvoiding(s.tracks, current)
 	}
 	track := s.tracks[s.idx]
 	s.mu.Unlock()
@@ -254,9 +328,9 @@ func (s *Store) trackLocked(bed Bed) string {
 }
 
 // apply writes the bed onto the OBS source. Only the album plays unlooped.
-func (s *Store) apply(ctx context.Context, bed Bed, track string) error {
+func (s *Store) apply(ctx context.Context, bed Bed, track, station string) error {
 	if bed == SomaFM {
-		return s.obs.SetNetwork(ctx, InputName)
+		return s.obs.SetNetwork(ctx, InputName, StreamURL(station))
 	}
 	return s.obs.SetLocalFile(ctx, InputName, track, bed != Album)
 }
@@ -293,6 +367,46 @@ func scanTracks(dir string) ([]string, error) {
 	return out, nil
 }
 
+// record publishes the live bed and the depth of the album play order. Both
+// are read back under the lock so the gauges describe one consistent moment.
+//
+// The play-order depth is here because an empty one is invisible everywhere
+// else: Advance returns silently when there is nothing to advance to, so an
+// album bed with no tracks plays its boot track and then falls silent with OBS
+// still reporting a healthy source. album=1 with tracks=0 is that state, and
+// it is the only warning of it.
+func (s *Store) record() {
+	s.mu.Lock()
+	bed, tracks := s.bed, len(s.tracks)
+	s.mu.Unlock()
+	for _, b := range All {
+		instrumentation.OBSBackgroundAudio.SetBed(s.platform, string(b), b == bed)
+	}
+	instrumentation.OBSBackgroundAudio.SetAlbumTracks(s.platform, tracks)
+}
+
+// TrackTitle turns an album track path into something worth showing a human:
+// the filename without its extension. "" stays "" (the other beds have no
+// track), which is how callers tell "no track" from "a track".
+func TrackTitle(path string) string {
+	if path == "" {
+		return ""
+	}
+	base := filepath.Base(path)
+	return strings.TrimSuffix(base, filepath.Ext(base))
+}
+
 func shuffle(tracks []string) {
 	rand.Shuffle(len(tracks), func(i, j int) { tracks[i], tracks[j] = tracks[j], tracks[i] })
+}
+
+// reshuffleAvoiding shuffles tracks and keeps avoid off the front, so the play
+// order wrapping can't put the track that just finished straight back on air.
+// A one-track album has nowhere else to go and repeats regardless.
+func reshuffleAvoiding(tracks []string, avoid string) {
+	shuffle(tracks)
+	if len(tracks) > 1 && tracks[0] == avoid {
+		j := 1 + rand.IntN(len(tracks)-1)
+		tracks[0], tracks[j] = tracks[j], tracks[0]
+	}
 }
