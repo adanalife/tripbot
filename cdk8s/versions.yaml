@@ -28,6 +28,6 @@
 # other.
 prod-1:
   # restarts the chat bot only; no stream impact
-  tripbot: "4.16.0" # x-release-please-version
+  tripbot: "4.16.1" # x-release-please-version
   # overlays blip; the stream itself stays up
-  onscreens-server: "4.16.0" # x-release-please-version
+  onscreens-server: "4.16.1" # x-release-please-version
