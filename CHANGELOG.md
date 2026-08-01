@@ -9,6 +9,12 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v4.16.1] — 2026-08-01
+
+### Fixes
+
+- The audio watchdog reads the live background-audio source from OBS instead of remembering its last swap, so reselecting SomaFM in the console during an outage no longer leaves the stream silent. ([#1303](https://github.com/adanalife/tripbot/pull/1303))
+
 ## [v4.16.0] — 2026-08-01
 
 ### Chatbot
