@@ -70,6 +70,11 @@ type Deps struct {
 	// SomaFM bed needs the outage machinery below — a local bed can't be
 	// rescued by swapping to another local bed.
 	ActiveBed func() beds.Bed
+	// SourceIsLocal reports whether the background-audio source is pointed at a
+	// local file right now. Read from OBS every tick rather than remembered
+	// from the last swap: the console and chat repoint the same source, so
+	// remembered state goes stale the moment an operator switches a bed.
+	SourceIsLocal func(context.Context) (bool, error)
 	// AdvanceAlbum queues the next album track. Called when OBS reports the
 	// media ended while the album bed is live.
 	AdvanceAlbum func(context.Context) error
@@ -109,6 +114,14 @@ func DefaultDeps(meter *VolumeMeter, store *beds.Store) Deps {
 		AdvanceAlbum: store.Advance,
 		MediaState: func(ctx context.Context) (string, error) {
 			return obs.GetMediaInputState(ctx, BackgroundAudioInputName)
+		},
+		SourceIsLocal: func(ctx context.Context) (bool, error) {
+			settings, err := obs.GetInputSettings(ctx, BackgroundAudioInputName)
+			if err != nil {
+				return false, err
+			}
+			local, _ := settings["is_local_file"].(bool)
+			return local, nil
 		},
 		Level: meter.Level,
 		// Both hooks read the station at call time rather than closing over it:
@@ -192,7 +205,6 @@ func Watch(ctx context.Context, deps Deps, cfg Config) {
 		"recover_threshold", cfg.RecoverThreshold, "cooldown", cfg.Cooldown)
 
 	var (
-		onFallback  bool
 		failMisses  int
 		recoverHits int
 		lastSwap    time.Time
@@ -205,7 +217,6 @@ func Watch(ctx context.Context, deps Deps, cfg Config) {
 		case <-ticker.C:
 			reachable := deps.SomaFMReachable(ctx)
 			instrumentation.OBSBackgroundAudio.SetSomaFMReachable(reachable)
-			instrumentation.OBSBackgroundAudio.SetOnFallback(onFallback)
 
 			db, fresh := deps.Level()
 			if fresh {
@@ -235,13 +246,9 @@ func Watch(ctx context.Context, deps Deps, cfg Config) {
 			// would stomp the operator's choice.
 			if bed := deps.ActiveBed(); bed != beds.SomaFM {
 				failMisses, recoverHits = 0, 0
-				// "On fallback" is a statement about the SomaFM bed; once the
-				// operator has moved off it, holding the flag would make the
-				// next switch back to SomaFM look like an outage recovery.
-				if onFallback {
-					onFallback = false
-					instrumentation.OBSBackgroundAudio.SetOnFallback(false)
-				}
+				// "On fallback" is a statement about the SomaFM bed: a local bed
+				// the operator chose is not a fallback, however local it is.
+				instrumentation.OBSBackgroundAudio.SetOnFallback(false)
 				// The album plays one track at a time, unlooped, so OBS ends the
 				// media between tracks — that's the cue to queue the next one.
 				if bed == beds.Album && obs.MediaStateDown(state) {
@@ -251,6 +258,20 @@ func Watch(ctx context.Context, deps Deps, cfg Config) {
 				}
 				continue
 			}
+
+			// On the SomaFM bed, a local file on the source means an earlier
+			// fallback is still in place. Reading it off OBS rather than
+			// remembering the last swap is what makes a bed switch made behind
+			// the watchdog's back — the console reselecting SomaFM mid-outage —
+			// visible: the source goes back to the dead stream, so the next tick
+			// sees silence again instead of waiting out a recovery that already
+			// happened.
+			onFallback, err := deps.SourceIsLocal(ctx)
+			if err != nil {
+				slog.WarnContext(ctx, "audio watchdog: obs source settings unavailable", "err", err)
+				continue
+			}
+			instrumentation.OBSBackgroundAudio.SetOnFallback(onFallback)
 
 			cooling := time.Since(lastSwap) < cfg.Cooldown
 
@@ -279,7 +300,6 @@ func Watch(ctx context.Context, deps Deps, cfg Config) {
 					slog.ErrorContext(ctx, "audio watchdog: swap to fallback failed", "err", err)
 					continue
 				}
-				onFallback = true
 				lastSwap = time.Now()
 				failMisses = 0
 				recoverHits = 0
@@ -309,7 +329,6 @@ func Watch(ctx context.Context, deps Deps, cfg Config) {
 				slog.ErrorContext(ctx, "audio watchdog: swap back to SomaFM failed", "err", err)
 				continue
 			}
-			onFallback = false
 			lastSwap = time.Now()
 			recoverHits = 0
 			instrumentation.OBSBackgroundAudio.SetOnFallback(false)
