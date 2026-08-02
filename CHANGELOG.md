@@ -9,6 +9,12 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v4.16.2] — 2026-08-02
+
+### Fixes
+
+- A tripbot restart during a SomaFM outage no longer strands the stream on the car-hum drone: the audio watchdog's fallback now uses its own file, so the bed read back from OBS at startup still says SomaFM. ([#1305](https://github.com/adanalife/tripbot/pull/1305))
+
 ## [v4.16.1] — 2026-08-01
 
 ### Fixes
