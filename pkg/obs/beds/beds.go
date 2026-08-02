@@ -68,6 +68,13 @@ const (
 	InputName  = "Background Audio"
 	CarHumFile = "/opt/tripbot/assets/carhum/car-hum-idle.flac"
 	MusicDir   = "/opt/tripbot/assets/music"
+
+	// FallbackFile is the audio watchdog's copy of the car-hum drone: the same
+	// audio as CarHumFile at a path of its own. The source's settings record
+	// only which file is playing, so the two names are what separate "an
+	// operator selected the car hum" from "the watchdog fell back to it" — a
+	// distinction the process loses on restart and can only read back here.
+	FallbackFile = "/opt/tripbot/assets/carhum/car-hum-fallback.flac"
 )
 
 // audioExts are the track extensions scanned for under MusicDir. Matches the
@@ -188,16 +195,24 @@ func (s *Store) Detect(ctx context.Context) {
 }
 
 // bedFromSettings maps an ffmpeg_source's settings back to the bed that would
-// have produced them. A local file under the music share is the album; any
-// other local file is the car-hum drone (that's the only other one the image
-// ships); a network source is SomaFM.
+// have produced them. A local file under the music share is the album; the
+// watchdog's fallback file means SomaFM is still the selected bed and an outage
+// is in progress; any other local file is the car-hum drone (that's the only
+// other one the image ships); a network source is SomaFM.
 func bedFromSettings(settings map[string]any, musicDir string) Bed {
 	if local, _ := settings["is_local_file"].(bool); !local {
 		return SomaFM
 	}
 	file, _ := settings["local_file"].(string)
-	if under(file, musicDir) {
+	switch {
+	case under(file, musicDir):
 		return Album
+	case file == FallbackFile:
+		// Only the watchdog writes this path, and only while SomaFM is the
+		// selected bed. Reading it as CarHum would hand an operator choice to
+		// the outage, which switches the watchdog off and strands the stream on
+		// the drone once SomaFM comes back.
+		return SomaFM
 	}
 	return CarHum
 }
