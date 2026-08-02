@@ -9,6 +9,12 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v4.17.0] — 2026-08-02
+
+### Chatbot
+
+- The onscreen leaderboard rotation can now include the two [guessr](https://guessr.dana.lol) boards — the last closed daily one and the running monthly one — read from the game rather than stored here. Each comes up about half as often as a miles board. Gated behind the `chatbot.guessr_leaderboard` feature flag, which ships off; with it off the rotation is the three boards it was before. ([#1306](https://github.com/adanalife/tripbot/pull/1306))
+
 ## [v4.16.2] — 2026-08-02
 
 ### Fixes
