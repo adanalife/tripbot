@@ -28,8 +28,36 @@ func TestPickLeaderboard(t *testing.T) {
 		{0.9999, guessrMonthlyLeaderboard},
 	}
 	for _, tt := range tests {
-		if got := pickLeaderboard(tt.roll); got != tt.want {
+		if got := pickLeaderboard(tt.roll, true); got != tt.want {
 			t.Errorf("pickLeaderboard(%v) = %v, want %v", tt.roll, got, tt.want)
+		}
+	}
+}
+
+// With the flag off the rotation is the three-board split that predates the
+// guessing game — the boards are removed from the draw, not drawn and then
+// skipped, so no tick is spent on a board that renders nothing.
+func TestPickLeaderboard_GuessrDisabled(t *testing.T) {
+	tests := []struct {
+		roll float64
+		want leaderboardKind
+	}{
+		{0.0, totalMilesLeaderboard},
+		{0.0499, totalMilesLeaderboard},
+		{0.05, guessLeaderboard},
+		{0.5249, guessLeaderboard},
+		{0.525, monthlyMilesLeaderboard},
+		{0.9999, monthlyMilesLeaderboard},
+	}
+	for _, tt := range tests {
+		if got := pickLeaderboard(tt.roll, false); got != tt.want {
+			t.Errorf("pickLeaderboard(%v, false) = %v, want %v", tt.roll, got, tt.want)
+		}
+	}
+	for i := 0; i < 1000; i++ {
+		got := pickLeaderboard(float64(i)/1000, false)
+		if got == guessrDailyLeaderboard || got == guessrMonthlyLeaderboard {
+			t.Fatalf("roll %v picked a guessr board with the flag off", float64(i)/1000)
 		}
 	}
 }
@@ -127,7 +155,7 @@ func TestPickLeaderboard_GuessrBoardsGetHalfShare(t *testing.T) {
 	const samples = 100000
 	counts := map[leaderboardKind]int{}
 	for i := 0; i < samples; i++ {
-		counts[pickLeaderboard(float64(i)/samples)]++
+		counts[pickLeaderboard(float64(i)/samples, true)]++
 	}
 	for _, guessr := range []leaderboardKind{guessrDailyLeaderboard, guessrMonthlyLeaderboard} {
 		for _, full := range []leaderboardKind{guessLeaderboard, monthlyMilesLeaderboard} {
@@ -152,6 +180,7 @@ func TestShowRotatingLeaderboard_GuessrDaily(t *testing.T) {
 	app := newTestApp(video.Video{})
 	rec := &recordingOnscreens{}
 	app.Onscreens = rec
+	app.Flags = &recordingFlags{Set: map[string]bool{guessrBoardFlagKey: true}}
 
 	app.showRotatingLeaderboard(context.Background(), 0.7) // guessr daily
 
@@ -171,6 +200,7 @@ func TestShowRotatingLeaderboard_GuessrMonthly(t *testing.T) {
 	app := newTestApp(video.Video{})
 	rec := &recordingOnscreens{}
 	app.Onscreens = rec
+	app.Flags = &recordingFlags{Set: map[string]bool{guessrBoardFlagKey: true}}
 
 	app.showRotatingLeaderboard(context.Background(), 0.9) // guessr monthly
 
@@ -211,6 +241,7 @@ func TestShowRotatingLeaderboard_GuessrServesHTML_FallsBack(t *testing.T) {
 	app := newTestApp(video.Video{})
 	rec := &recordingOnscreens{}
 	app.Onscreens = rec
+	app.Flags = &recordingFlags{Set: map[string]bool{guessrBoardFlagKey: true}}
 	app.Scoreboards = &recordingScoreboards{
 		Month: "August",
 		Miles: [][]string{{"viewer1", "12.5"}},
@@ -236,6 +267,7 @@ func TestShowRotatingLeaderboard_GuessrEmpty_FallsBack(t *testing.T) {
 	app := newTestApp(video.Video{})
 	rec := &recordingOnscreens{}
 	app.Onscreens = rec
+	app.Flags = &recordingFlags{Set: map[string]bool{guessrBoardFlagKey: true}}
 	app.Scoreboards = &recordingScoreboards{
 		Month: "August",
 		Miles: [][]string{{"viewer1", "12.5"}},
@@ -253,4 +285,36 @@ func swapGuessrURL(t *testing.T, url string) {
 	original := guessrBoardURL
 	guessrBoardURL = url
 	t.Cleanup(func() { guessrBoardURL = original })
+}
+
+// With the flag off, no roll reaches the game at all. Asserted against a server
+// that fails the test if it is called, because the point of the flag is taking
+// an outbound dependency off a live broadcast — a version that still fetched
+// and discarded the rows would pass a "no guessr board on screen" check while
+// leaving the call in place.
+func TestShowRotatingLeaderboard_FlagOff_NeverFetches(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Error("fetched the guessr board with the flag off")
+	}))
+	defer srv.Close()
+	swapGuessrURL(t, srv.URL)
+
+	app := newTestApp(video.Video{})
+	rec := &recordingOnscreens{}
+	app.Onscreens = rec
+	app.Flags = &recordingFlags{} // every key false
+	app.Scoreboards = &recordingScoreboards{
+		Month: "August",
+		Miles: [][]string{{"viewer1", "12.5"}},
+	}
+
+	// The rolls that would land on the guessr boards with the flag on.
+	for _, roll := range []float64{0.7, 0.9} {
+		app.showRotatingLeaderboard(context.Background(), roll)
+	}
+	for _, call := range rec.Calls {
+		if strings.Contains(call, "Guessr") {
+			t.Errorf("a guessr board reached the overlay with the flag off: %s", call)
+		}
+	}
 }
