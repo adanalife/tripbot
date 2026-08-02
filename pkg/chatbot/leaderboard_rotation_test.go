@@ -280,6 +280,108 @@ func TestShowRotatingLeaderboard_GuessrEmpty_FallsBack(t *testing.T) {
 	}
 }
 
+// !guessr defaults to the daily board, in chat and on the overlay. The third
+// row is malformed on purpose: rows are indexed positionally by both consumers,
+// and the overlay renderer that does so runs in another process.
+func TestGuessrLeaderboardCmd_Daily(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.Query().Get("board"); got != "daily" {
+			t.Errorf("expected the daily board, got %q", got)
+		}
+		fmt.Fprint(w, `{"board":"daily","period":"2026-08-01","rows":[["Lucky Overpass",4993],["Cedar Glacier",732],["Truncated"]]}`)
+	}))
+	defer srv.Close()
+	swapGuessrURL(t, srv.URL)
+
+	app := newTestApp(video.Video{})
+	rec := &recordingOnscreens{}
+	app.Onscreens = rec
+	app.Flags = &recordingFlags{Set: map[string]bool{guessrBoardFlagKey: true}}
+	out := captureSay(t, app)
+
+	app.guessrLeaderboardCmd(context.Background(), newTestUser("viewer1"), nil)
+
+	want := "August 1 Guessr: 1. Lucky Overpass (4993), 2. Cedar Glacier (732)"
+	if got := out(); got != want {
+		t.Errorf("chat said %q, want %q", got, want)
+	}
+	if len(rec.Calls) != 1 || !strings.Contains(rec.Calls[0], `ShowLeaderboard("August 1 Guessr", 2 rows)`) {
+		t.Errorf("expected one August 1 Guessr overlay call, got %v", rec.Calls)
+	}
+}
+
+func TestGuessrLeaderboardCmd_MonthlyParam(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.Query().Get("board"); got != "monthly" {
+			t.Errorf("expected the monthly board, got %q", got)
+		}
+		fmt.Fprint(w, `{"board":"monthly","period":"2026-08","rows":[["Endless Roadside",17163]]}`)
+	}))
+	defer srv.Close()
+	swapGuessrURL(t, srv.URL)
+
+	app := newTestApp(video.Video{})
+	app.Flags = &recordingFlags{Set: map[string]bool{guessrBoardFlagKey: true}}
+	out := captureSay(t, app)
+
+	app.guessrLeaderboardCmd(context.Background(), newTestUser("viewer1"), []string{"Monthly"})
+
+	if want := "August Guessr: 1. Endless Roadside (17163)"; out() != want {
+		t.Errorf("chat said %q, want %q", out(), want)
+	}
+}
+
+// No rows is both "nobody has played it" and "the game is unreachable" — the
+// bot can't tell them apart and neither can the reply, so it points at the game
+// instead of claiming either.
+func TestGuessrLeaderboardCmd_NoRows_PointsAtTheGame(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprint(w, `{"board":"daily","period":"2026-08-01","rows":[]}`)
+	}))
+	defer srv.Close()
+	swapGuessrURL(t, srv.URL)
+
+	app := newTestApp(video.Video{})
+	rec := &recordingOnscreens{}
+	app.Onscreens = rec
+	app.Flags = &recordingFlags{Set: map[string]bool{guessrBoardFlagKey: true}}
+	out := captureSay(t, app)
+
+	app.guessrLeaderboardCmd(context.Background(), newTestUser("viewer1"), nil)
+
+	if !strings.Contains(out(), guessrGameURL) {
+		t.Errorf("expected the game link in %q", out())
+	}
+	if len(rec.Calls) != 0 {
+		t.Errorf("expected no overlay call for an empty board, got %v", rec.Calls)
+	}
+}
+
+// The flag takes the boards off the overlay; a command that fetched anyway
+// would put one back on a live broadcast.
+func TestGuessrLeaderboardCmd_FlagOff_NeverFetches(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Error("fetched the guessr board with the flag off")
+	}))
+	defer srv.Close()
+	swapGuessrURL(t, srv.URL)
+
+	app := newTestApp(video.Video{})
+	rec := &recordingOnscreens{}
+	app.Onscreens = rec
+	app.Flags = &recordingFlags{} // every key false
+	out := captureSay(t, app)
+
+	app.guessrLeaderboardCmd(context.Background(), newTestUser("viewer1"), nil)
+
+	if out() != "" {
+		t.Errorf("said %q with the flag off, want silence", out())
+	}
+	if len(rec.Calls) != 0 {
+		t.Errorf("expected no overlay call with the flag off, got %v", rec.Calls)
+	}
+}
+
 func swapGuessrURL(t *testing.T, url string) {
 	t.Helper()
 	original := guessrBoardURL

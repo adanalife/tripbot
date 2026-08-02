@@ -171,8 +171,11 @@ func (a *App) buildRegistry() []Command {
 		{
 			Trigger: "!guess",
 			// "!guis" stays: it's 2 edits from !guess, beyond fuzzyLookup's
-			// reach at that length (max 1 edit for inputs of 4-6 runes)
-			Aliases:        []string{"guess", "!guis"},
+			// reach at that length (max 1 edit for inputs of 4-6 runes).
+			// "!guesss"/"!guesr" are equidistant from !guess and !guessr, so
+			// fuzzyLookup calls them ambiguous and answers nothing; the state
+			// guess is the far more likely intent at that spelling.
+			Aliases:        []string{"guess", "!guis", "!guesss", "!guesr"},
 			Handler:        a.guessCmd,
 			RequiresFollow: true,
 		},
@@ -245,6 +248,12 @@ func (a *App) buildRegistry() []Command {
 			Trigger:        "!guessleaderboard",
 			Aliases:        []string{"!glb", "!guesslb"},
 			Handler:        a.monthlyGuessLeaderboardCmd,
+			RequiresFollow: true,
+		},
+		{
+			Trigger:        "!guessr",
+			Aliases:        []string{"!guessrleaderboard", "!grlb"},
+			Handler:        a.guessrLeaderboardCmd,
 			RequiresFollow: true,
 		},
 		{

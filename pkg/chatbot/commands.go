@@ -62,7 +62,7 @@ func (a *App) helpCmd(ctx context.Context, user *users.User, _ []string) {
 func (a *App) commandsCmd(_ context.Context, _ *users.User, _ []string) {
 	featured := []string{
 		"!location", "!guess", "!date", "!state",
-		"!sunset", "!timewarp", "!miles", "!leaderboard", "!song",
+		"!sunset", "!timewarp", "!miles", "!leaderboard", "!guessr", "!song",
 	}
 	avail := make([]string, 0, len(featured))
 	for _, t := range featured {
