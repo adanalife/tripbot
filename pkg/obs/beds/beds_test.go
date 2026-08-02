@@ -328,6 +328,11 @@ func TestDetect_ReadsTheLiveBedFromOBS(t *testing.T) {
 	}{
 		{"network stream", map[string]any{"is_local_file": false}, SomaFM},
 		{"carhum flac", map[string]any{"is_local_file": true, "local_file": CarHumFile}, CarHum},
+		// The watchdog's copy of the same drone means SomaFM is still the
+		// selected bed, mid-outage. Reading it as CarHum switches the outage
+		// machinery off and strands the stream on the drone after SomaFM
+		// recovers — the restart-during-fallback case.
+		{"watchdog fallback flac", map[string]any{"is_local_file": true, "local_file": FallbackFile}, SomaFM},
 		{"album track", map[string]any{"is_local_file": true, "local_file": filepath.Join(dir, "fifty-horizons", "a track.mp3")}, Album},
 		// A sibling directory whose name merely prefixes the share must not
 		// read as the album.

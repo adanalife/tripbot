@@ -38,8 +38,10 @@ const (
 	// fallbackFile is the local, license-clean bed the source is pointed at
 	// when SomaFM is unreachable. Baked into every OBS image by the carhum
 	// build stage (COPY target in the obs repo's Dockerfile{,.arm64}); the
-	// path is resolved by OBS, not tripbot.
-	fallbackFile = beds.CarHumFile
+	// path is resolved by OBS, not tripbot. The same drone as the selectable
+	// car-hum bed under its own name, so a restart can still tell an outage
+	// from an operator's choice — see beds.FallbackFile.
+	fallbackFile = beds.FallbackFile
 
 	// somaFMProbeUserAgent overrides Go's default User-Agent on the probe.
 	// SomaFM's ICEcast edges reject "Go-http-client/1.1" outright — the
