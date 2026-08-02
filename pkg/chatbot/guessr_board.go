@@ -4,10 +4,19 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
+
+	"github.com/adanalife/tripbot/pkg/feature"
+	"github.com/adanalife/tripbot/pkg/users"
 )
+
+// guessrGameURL is where a viewer goes to play. Separate from guessrBoardURL
+// because that one is redirected at an httptest server in tests; this is copy.
+const guessrGameURL = "https://guessr.dana.lol"
 
 // guessrBoardURL is the boards endpoint the guessing game serves at
 // guessr.dana.lol. A var, not a const, so tests can point it at an httptest
@@ -68,6 +77,12 @@ func guessrBoard(ctx context.Context, board string) (string, [][]string, error) 
 
 	rows := make([][]string, 0, len(body.Rows))
 	for _, row := range body.Rows {
+		// Short rows are dropped rather than padded: every consumer indexes
+		// [0] and [1] positionally, and the overlay renderer that does so runs
+		// in another process where the panic would take the whole thing down.
+		if len(row) < 2 {
+			continue
+		}
 		cells := make([]string, 0, len(row))
 		for _, cell := range row {
 			cells = append(cells, fmt.Sprint(cell))
@@ -75,4 +90,47 @@ func guessrBoard(ctx context.Context, board string) (string, [][]string, error) 
 		rows = append(rows, cells)
 	}
 	return body.Period, rows, nil
+}
+
+// guessrLeaderboardCmd answers !guessr with the game's board, on screen and in
+// chat. Daily by default — the topical one — with "monthly" for the running
+// total, so both boards the rotation shows are reachable on demand.
+func (a *App) guessrLeaderboardCmd(ctx context.Context, user *users.User, params []string) {
+	slog.InfoContext(ctx, "ran !guessr", "username", user.Username)
+
+	// The same flag the rotation reads. It exists so the boards can leave the
+	// overlay from the console without a deploy, and a command that ignored it
+	// would put one straight back.
+	if !a.Flags.Bool(ctx, guessrBoardFlagKey, feature.EvalContext{
+		Username: user.Username,
+		Channel:  a.Cfg.ChannelName,
+		Env:      a.Cfg.Environment,
+	}) {
+		slog.InfoContext(ctx, "guessr leaderboard disabled by feature flag", "flag", guessrBoardFlagKey)
+		return
+	}
+
+	board, parse, display := "daily", "2006-01-02", "January 2"
+	if len(params) > 0 && strings.HasPrefix(strings.ToLower(params[0]), "month") {
+		board, parse, display = "monthly", "2006-01", "January"
+	}
+
+	title, rows := a.guessrLeaderboard(ctx, board, parse, display)
+	// No rows covers both a board nobody has played and a game this cluster
+	// can't reach, so the reply has to be true of either.
+	if len(rows) == 0 {
+		a.Chat.Say("No " + board + " guessr scores to show right now — play at " + guessrGameURL)
+		return
+	}
+
+	a.Onscreens.ShowLeaderboard(ctx, title, rows)
+
+	msg := title + ": "
+	for i, row := range rows {
+		msg += fmt.Sprintf("%d. %s (%s)", i+1, row[0], row[1])
+		if i+1 != len(rows) {
+			msg += ", "
+		}
+	}
+	a.Chat.Say(msg)
 }
