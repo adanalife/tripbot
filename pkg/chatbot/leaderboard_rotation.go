@@ -2,13 +2,22 @@ package chatbot
 
 import (
 	"context"
+	"log/slog"
 	"math/rand/v2"
+	"time"
 )
 
 // totalMilesOdds is the chance a given rotation tick shows the lifetime
-// "Total Miles" board; the remaining probability mass splits evenly
-// between the two monthly boards.
+// "Total Miles" board. It stays rare because it barely moves: the same names
+// sit at the top of it for months.
 const totalMilesOdds = 0.05
+
+// boardShare is what remains, split six ways. The two long-running boards take
+// two shares each and the two guessing-game boards take one, so a guessr board
+// comes up about half as often as a miles board — new, but not at the expense
+// of the boards viewers have been climbing all month. The two together add up
+// to one miles board's worth of screen time.
+const boardShare = (1 - totalMilesOdds) / 6
 
 type leaderboardKind int
 
@@ -16,6 +25,8 @@ const (
 	guessLeaderboard leaderboardKind = iota
 	monthlyMilesLeaderboard
 	totalMilesLeaderboard
+	guessrDailyLeaderboard
+	guessrMonthlyLeaderboard
 )
 
 // pickLeaderboard maps a [0,1) roll onto a leaderboard choice.
@@ -23,10 +34,14 @@ func pickLeaderboard(roll float64) leaderboardKind {
 	switch {
 	case roll < totalMilesOdds:
 		return totalMilesLeaderboard
-	case roll < totalMilesOdds+(1-totalMilesOdds)/2:
+	case roll < totalMilesOdds+2*boardShare:
 		return guessLeaderboard
-	default:
+	case roll < totalMilesOdds+4*boardShare:
 		return monthlyMilesLeaderboard
+	case roll < totalMilesOdds+5*boardShare:
+		return guessrDailyLeaderboard
+	default:
+		return guessrMonthlyLeaderboard
 	}
 }
 
@@ -62,7 +77,32 @@ func (a *App) fetchLeaderboard(ctx context.Context, kind leaderboardKind) (strin
 		return "Total Miles", rows
 	case guessLeaderboard:
 		return "Correct Guesses This Month", a.Scoreboards.TopGuesses(ctx, leaderboardSize)
+	case guessrDailyLeaderboard:
+		return a.guessrLeaderboard(ctx, "daily", "2006-01-02", "January 2")
+	case guessrMonthlyLeaderboard:
+		return a.guessrLeaderboard(ctx, "monthly", "2006-01", "January")
 	default:
 		return a.Scoreboards.MilesMonth() + " Miles", a.Scoreboards.TopMiles(ctx, leaderboardSize)
 	}
+}
+
+// guessrLeaderboard fetches a board from the guessing game and titles it after
+// the span it covers, e.g. "August 1 Guessr" — matching the "July Miles" shape
+// the miles boards use.
+//
+// A failure is a log line and no rows, which the caller reads as an empty board
+// and falls back from. The game lives outside this cluster, so it being
+// unreachable is an ordinary condition rather than an error worth a slot: a
+// missed board costs one rotation tick.
+func (a *App) guessrLeaderboard(ctx context.Context, board, parse, display string) (string, [][]string) {
+	period, rows, err := guessrBoard(ctx, board)
+	if err != nil {
+		slog.ErrorContext(ctx, "could not fetch guessr leaderboard", "err", err, "board", board)
+		return "", nil
+	}
+	title := "Guessr"
+	if when, err := time.Parse(parse, period); err == nil {
+		title = when.Format(display) + " Guessr"
+	}
+	return title, rows
 }

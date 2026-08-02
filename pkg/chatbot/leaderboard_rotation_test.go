@@ -3,6 +3,8 @@ package chatbot
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -17,9 +19,13 @@ func TestPickLeaderboard(t *testing.T) {
 		{0.0, totalMilesLeaderboard},
 		{0.0499, totalMilesLeaderboard},
 		{0.05, guessLeaderboard},
-		{0.5249, guessLeaderboard},
-		{0.525, monthlyMilesLeaderboard},
-		{0.9999, monthlyMilesLeaderboard},
+		{0.3666, guessLeaderboard},
+		{0.3667, monthlyMilesLeaderboard},
+		{0.6833, monthlyMilesLeaderboard},
+		{0.6834, guessrDailyLeaderboard},
+		{0.8416, guessrDailyLeaderboard},
+		{0.8417, guessrMonthlyLeaderboard},
+		{0.9999, guessrMonthlyLeaderboard},
 	}
 	for _, tt := range tests {
 		if got := pickLeaderboard(tt.roll); got != tt.want {
@@ -111,4 +117,140 @@ func TestShowRotatingLeaderboard_AllEmpty_SkipsOverlay(t *testing.T) {
 	if len(rec.Calls) != 0 {
 		t.Errorf("expected no overlay call when every board is empty, got %v", rec.Calls)
 	}
+}
+
+// The odds Dana asked for, stated as the property rather than as thresholds:
+// each guessing-game board comes up about half as often as a miles or chat-guess
+// board. Sampling the roll space beats re-deriving the boundaries, because it
+// still holds if the shares are ever expressed some other way.
+func TestPickLeaderboard_GuessrBoardsGetHalfShare(t *testing.T) {
+	const samples = 100000
+	counts := map[leaderboardKind]int{}
+	for i := 0; i < samples; i++ {
+		counts[pickLeaderboard(float64(i)/samples)]++
+	}
+	for _, guessr := range []leaderboardKind{guessrDailyLeaderboard, guessrMonthlyLeaderboard} {
+		for _, full := range []leaderboardKind{guessLeaderboard, monthlyMilesLeaderboard} {
+			ratio := float64(counts[full]) / float64(counts[guessr])
+			if ratio < 1.95 || ratio > 2.05 {
+				t.Errorf("board %v should come up ~2x as often as %v, got %.2fx", full, guessr, ratio)
+			}
+		}
+	}
+}
+
+func TestShowRotatingLeaderboard_GuessrDaily(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.Query().Get("board"); got != "daily" {
+			t.Errorf("expected the daily board, got %q", got)
+		}
+		fmt.Fprint(w, `{"board":"daily","period":"2026-08-01","rows":[["Lucky Overpass",4993],["anonymous",120]]}`)
+	}))
+	defer srv.Close()
+	swapGuessrURL(t, srv.URL)
+
+	app := newTestApp(video.Video{})
+	rec := &recordingOnscreens{}
+	app.Onscreens = rec
+
+	app.showRotatingLeaderboard(context.Background(), 0.7) // guessr daily
+
+	want := `ShowLeaderboard("August 1 Guessr", 2 rows)`
+	if len(rec.Calls) != 1 || !strings.Contains(rec.Calls[0], want) {
+		t.Errorf("expected %s, got %v", want, rec.Calls)
+	}
+}
+
+func TestShowRotatingLeaderboard_GuessrMonthly(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"board":"monthly","period":"2026-08","rows":[["Lucky Overpass",4993]]}`)
+	}))
+	defer srv.Close()
+	swapGuessrURL(t, srv.URL)
+
+	app := newTestApp(video.Video{})
+	rec := &recordingOnscreens{}
+	app.Onscreens = rec
+
+	app.showRotatingLeaderboard(context.Background(), 0.9) // guessr monthly
+
+	want := `ShowLeaderboard("August Guessr", 1 rows)`
+	if len(rec.Calls) != 1 || !strings.Contains(rec.Calls[0], want) {
+		t.Errorf("expected %s, got %v", want, rec.Calls)
+	}
+}
+
+// The score is rendered as the digits that were sent. A float64 round-trip
+// would print a big enough number in scientific notation on the overlay.
+func TestGuessrBoard_LargeScoreKeepsItsDigits(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprint(w, `{"board":"monthly","period":"2026-08","rows":[["Lucky Overpass",12345678]]}`)
+	}))
+	defer srv.Close()
+	swapGuessrURL(t, srv.URL)
+
+	_, rows, err := guessrBoard(context.Background(), "monthly")
+	if err != nil {
+		t.Fatalf("guessrBoard: %v", err)
+	}
+	if rows[0][1] != "12345678" {
+		t.Errorf("score rendered as %q, want 12345678", rows[0][1])
+	}
+}
+
+// Cloudflare Pages answers 200 with the game's HTML for a path no Function
+// claims, which is what a bot pointed at a deploy predating the boards API
+// gets. That must read as an empty board and fall back, not as rows.
+func TestShowRotatingLeaderboard_GuessrServesHTML_FallsBack(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprint(w, "<!doctype html>\n<html lang=\"en\">")
+	}))
+	defer srv.Close()
+	swapGuessrURL(t, srv.URL)
+
+	app := newTestApp(video.Video{})
+	rec := &recordingOnscreens{}
+	app.Onscreens = rec
+	app.Scoreboards = &recordingScoreboards{
+		Month: "August",
+		Miles: [][]string{{"viewer1", "12.5"}},
+	}
+
+	app.showRotatingLeaderboard(context.Background(), 0.7) // guessr daily → unreachable → miles
+
+	want := `ShowLeaderboard("August Miles", 1 rows)`
+	if len(rec.Calls) != 1 || !strings.Contains(rec.Calls[0], want) {
+		t.Errorf("expected fallback to August Miles, got %v", rec.Calls)
+	}
+}
+
+// A board the game is reachable for but has no rows in yet — a date nobody has
+// finished — is the same empty-board fallback, without an error to log.
+func TestShowRotatingLeaderboard_GuessrEmpty_FallsBack(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprint(w, `{"board":"daily","period":"2026-08-01","rows":[]}`)
+	}))
+	defer srv.Close()
+	swapGuessrURL(t, srv.URL)
+
+	app := newTestApp(video.Video{})
+	rec := &recordingOnscreens{}
+	app.Onscreens = rec
+	app.Scoreboards = &recordingScoreboards{
+		Month: "August",
+		Miles: [][]string{{"viewer1", "12.5"}},
+	}
+
+	app.showRotatingLeaderboard(context.Background(), 0.7)
+
+	if len(rec.Calls) != 1 || !strings.Contains(rec.Calls[0], `ShowLeaderboard("August Miles", 1 rows)`) {
+		t.Errorf("expected fallback to August Miles, got %v", rec.Calls)
+	}
+}
+
+func swapGuessrURL(t *testing.T, url string) {
+	t.Helper()
+	original := guessrBoardURL
+	guessrBoardURL = url
+	t.Cleanup(func() { guessrBoardURL = original })
 }
