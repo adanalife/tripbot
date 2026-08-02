@@ -1,6 +1,7 @@
 package onscreensServer
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -26,24 +27,23 @@ func TestRenderLeaderboard(t *testing.T) {
 	}
 }
 
-func TestRenderLeaderboardTruncatesToFive(t *testing.T) {
-	board := [][]string{
-		{"u1", "10"}, {"u2", "9"}, {"u3", "8"}, {"u4", "7"},
-		{"u5", "6"}, {"u6", "5"}, {"u7", "4"},
+func TestRenderLeaderboardTruncatesToMax(t *testing.T) {
+	var board [][]string
+	for i := 1; i <= maxLeaderboardRows+2; i++ {
+		board = append(board, []string{fmt.Sprintf("u%d", i), fmt.Sprint(100 - i)})
 	}
 	got := renderLeaderboard("top", board)
 
-	if strings.Contains(got, "u6") || strings.Contains(got, "u7") {
-		t.Fatalf("expected truncation to 5 entries, got %q", got)
-	}
-	for _, name := range []string{"u1", "u2", "u3", "u4", "u5"} {
-		if !strings.Contains(got, name) {
-			t.Fatalf("expected %q in top-5, got %q", name, got)
+	// "u1" is a substring of "u10", so match the rendered span, not the name.
+	for i := 1; i <= maxLeaderboardRows+2; i++ {
+		span := fmt.Sprintf(`<span class="lb-user">(u%d)</span>`, i)
+		if want := i <= maxLeaderboardRows; strings.Contains(got, span) != want {
+			t.Fatalf("u%d present = %v, want %v: %q", i, !want, want, got)
 		}
 	}
 }
 
-func TestRenderLeaderboardSmallerThanFive(t *testing.T) {
+func TestRenderLeaderboardSmallerThanMax(t *testing.T) {
 	board := [][]string{
 		{"alice", "100"},
 		{"bob", "50"},
