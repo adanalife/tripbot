@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
@@ -24,6 +25,9 @@ type fakeBeds struct {
 	setErr   error
 	sets     []beds.Bed
 	stations []string
+	albums   []string // SetAlbum calls, in order
+	album    string
+	onShare  []string // what Albums() reports; nil means the fan album alone
 	feeds    int
 }
 
@@ -56,6 +60,28 @@ func (f *fakeBeds) SetStation(_ context.Context, station string) error {
 		return f.setErr
 	}
 	f.bed, f.station = beds.SomaFM, station
+	return nil
+}
+
+func (f *fakeBeds) Album() string { return f.album }
+
+func (f *fakeBeds) Albums() []string {
+	if f.onShare == nil {
+		return []string{"fifty-horizons"}
+	}
+	return f.onShare
+}
+
+func (f *fakeBeds) ValidAlbum(album string) bool {
+	return album != "" && slices.Contains(f.Albums(), album)
+}
+
+func (f *fakeBeds) SetAlbum(_ context.Context, album string) error {
+	f.albums = append(f.albums, album)
+	if f.setErr != nil {
+		return f.setErr
+	}
+	f.bed, f.album = beds.Album, album
 	return nil
 }
 
@@ -115,6 +141,66 @@ func TestAudioHandler_ReportsBedAndOptions(t *testing.T) {
 	}
 	if body["station"] != beds.DefaultStation {
 		t.Fatalf("station: %v", body["station"])
+	}
+}
+
+// The album picker is built from the share, so the list has to travel with the
+// state the same way the station lineup does — and be read live, since music
+// lands on the NAS without a deploy.
+func TestAudioHandler_ReportsTheAlbumAndTheShare(t *testing.T) {
+	f := &fakeBeds{
+		bed:     beds.Album,
+		album:   "streambeats-lofi",
+		onShare: []string{"fifty-horizons", "streambeats-ambient", "streambeats-lofi"},
+	}
+	_, body := getAudio(t, &Server{beds: f})
+	if body["album"] != "streambeats-lofi" {
+		t.Fatalf("album: %v", body["album"])
+	}
+	albums, _ := body["albums"].([]any)
+	if len(albums) != 3 {
+		t.Fatalf("albums: want 3, got %v", body["albums"])
+	}
+}
+
+func TestAudioSetHandler_SelectsAnAlbum(t *testing.T) {
+	f := &fakeBeds{bed: beds.CarHum, onShare: []string{"fifty-horizons", "streambeats-lofi"}}
+	w := postAudio(t, &Server{beds: f}, `{"album":"streambeats-lofi"}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status: %d, body %q", w.Code, w.Body.String())
+	}
+	if len(f.albums) != 1 || f.albums[0] != "streambeats-lofi" {
+		t.Fatalf("expected one selection of streambeats-lofi, got %v", f.albums)
+	}
+	if len(f.sets) != 0 {
+		t.Errorf("an album selects its own bed, no separate switch: %v", f.sets)
+	}
+}
+
+// A stale console tab POSTing an album that has left the share is the client's
+// mistake (400), not the share failing (502) — the two want different UI.
+func TestAudioSetHandler_UnknownAlbumIs400(t *testing.T) {
+	f := &fakeBeds{bed: beds.CarHum, onShare: []string{"fifty-horizons"}}
+	w := postAudio(t, &Server{beds: f}, `{"album":"streambeats-edm"}`)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status: want 400, got %d (%q)", w.Code, w.Body.String())
+	}
+	if len(f.albums) != 0 {
+		t.Errorf("an unknown album must not reach the store, got %v", f.albums)
+	}
+}
+
+// A share that goes away mid-switch is a 502: the name was real, applying it
+// wasn't possible, and the previous bed keeps playing.
+func TestAudioSetHandler_AlbumSwitchFailureIs502(t *testing.T) {
+	f := &fakeBeds{
+		bed:     beds.CarHum,
+		onShare: []string{"streambeats-lofi"},
+		setErr:  errors.New("no album tracks under /opt/tripbot/assets/music/streambeats-lofi"),
+	}
+	w := postAudio(t, &Server{beds: f}, `{"album":"streambeats-lofi"}`)
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("status: want 502, got %d (%q)", w.Code, w.Body.String())
 	}
 }
 

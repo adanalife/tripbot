@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 )
 
@@ -41,12 +42,12 @@ func (f *fakeOBS) Settings(context.Context, string) (map[string]any, error) {
 	return f.settings, nil
 }
 
-// albumDir builds a share holding one album of n tracks. It mirrors the real
+// shareDir builds a share holding one album of n tracks. It mirrors the real
 // layout: the album is a SUBDIRECTORY, and the share root also holds a loose
 // audio file (the 556MB carsounds.m4a lives there) plus a non-audio file —
 // neither of which is a track. Returns the share root, which is what gets
-// mounted.
-func albumDir(t *testing.T, n int) string {
+// mounted. shareOf builds the multi-album case.
+func shareDir(t *testing.T, n int) string {
 	t.Helper()
 	dir := t.TempDir()
 	album := filepath.Join(dir, "fifty-horizons")
@@ -67,9 +68,192 @@ func albumDir(t *testing.T, n int) string {
 	return dir
 }
 
+// shareOf builds a share of several albums, each with the given track count —
+// the layout once StreamBeats lands beside the fan album. Carries the same loose
+// root files as shareDir, since those must stay out of every album.
+func shareOf(t *testing.T, albums map[string]int) string {
+	t.Helper()
+	dir := t.TempDir()
+	for album, n := range albums {
+		if err := os.MkdirAll(filepath.Join(dir, album), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		for i := 0; i < n; i++ {
+			name := filepath.Join(dir, album, string(rune('a'+i))+" track.mp3")
+			if err := os.WriteFile(name, nil, 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	for _, loose := range []string{"carsounds.m4a", "readme.txt"} {
+		if err := os.WriteFile(filepath.Join(dir, loose), nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return dir
+}
+
+// fourAlbums is the share this feature exists for: the fan album plus three
+// StreamBeats collections, with an empty directory that must not read as an
+// album.
+func fourAlbums(t *testing.T) string {
+	t.Helper()
+	dir := shareOf(t, map[string]int{
+		"fifty-horizons":        3,
+		"streambeats-ambient":   2,
+		"streambeats-lofi":      4,
+		"streambeats-synthwave": 2,
+	})
+	if err := os.MkdirAll(filepath.Join(dir, "streambeats-empty"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+func TestAlbums_ListsTrackBearingSubdirsOnly(t *testing.T) {
+	s := NewStore(&fakeOBS{}, CarHum, fourAlbums(t), "twitch")
+	want := []string{"fifty-horizons", "streambeats-ambient", "streambeats-lofi", "streambeats-synthwave"}
+	if got := s.Albums(); !slices.Equal(got, want) {
+		t.Errorf("albums: want %v, got %v", want, got)
+	}
+}
+
+func TestResolveAlbum(t *testing.T) {
+	s := NewStore(&fakeOBS{}, CarHum, fourAlbums(t), "twitch")
+	for _, tc := range []struct{ arg, want string }{
+		{"streambeats-lofi", "streambeats-lofi"}, // exact
+		{"lofi", "streambeats-lofi"},             // unique trailing segment
+		{"ambient", "streambeats-ambient"},       // the shorthand chat will use
+		{"fifty-horizons", "fifty-horizons"},     // no prefix to strip
+		{"horizons", "fifty-horizons"},           // ...but still reachable by suffix
+		{"streambeats", ""},                      // a prefix is not a name
+		{"empty", ""},                            // trackless dir isn't an album
+		{"groovesalad", ""},                      // a station is not an album
+		{"", ""},                                 // no argument resolves to nothing
+	} {
+		if got := s.ResolveAlbum(tc.arg); got != tc.want {
+			t.Errorf("ResolveAlbum(%q): want %q, got %q", tc.arg, tc.want, got)
+		}
+	}
+}
+
+func TestResolveAlbum_AmbiguousShorthandResolvesToNothing(t *testing.T) {
+	// Two albums ending "-lofi" mean "lofi" has stopped naming one of them.
+	// Guessing would switch the stream to whichever sorted first.
+	s := NewStore(&fakeOBS{}, CarHum, shareOf(t, map[string]int{
+		"streambeats-lofi": 2, "chillhop-lofi": 2,
+	}), "twitch")
+	if got := s.ResolveAlbum("lofi"); got != "" {
+		t.Errorf("ambiguous shorthand: want %q, got %q", "", got)
+	}
+	if got := s.ResolveAlbum("chillhop-lofi"); got != "chillhop-lofi" {
+		t.Errorf("exact name must still win over the ambiguity: got %q", got)
+	}
+}
+
+func TestSetAlbum_PlaysOnlyThatAlbumsTracks(t *testing.T) {
+	o := &fakeOBS{}
+	dir := fourAlbums(t)
+	s := NewStore(o, CarHum, dir, "twitch")
+
+	if err := s.SetAlbum(context.Background(), "streambeats-ambient"); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.Album(); got != "streambeats-ambient" {
+		t.Errorf("selected album: want streambeats-ambient, got %q", got)
+	}
+	bed, _ := s.Current()
+	if bed != Album {
+		t.Errorf("picking an album must select the album bed, got %q", bed)
+	}
+	// Walk the whole order; every track must come from the selected album. The
+	// bug this catches is the play order still spanning the share, which sounds
+	// fine for one track and then wanders into another album.
+	want := filepath.Join(dir, "streambeats-ambient")
+	for i := 0; i < 6; i++ {
+		if _, track := s.Current(); filepath.Dir(track) != want {
+			t.Fatalf("track %d came from outside the album: %s", i, track)
+		}
+		if err := s.Advance(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestSetAlbum_UnknownAlbumIsRefusedAndChangesNothing(t *testing.T) {
+	o := &fakeOBS{}
+	s := NewStore(o, CarHum, fourAlbums(t), "twitch")
+	if err := s.SetAlbum(context.Background(), "streambeats-edm"); err == nil {
+		t.Fatal("expected an error for an album that isn't on the share")
+	}
+	if got := s.Album(); got != "" {
+		t.Errorf("a refused album must not be recorded, got %q", got)
+	}
+	if bed, _ := s.Current(); bed != CarHum {
+		t.Errorf("a refused album must not switch the bed, got %q", bed)
+	}
+}
+
+func TestSetAlbum_EmptyWidensToTheWholeShare(t *testing.T) {
+	dir := fourAlbums(t)
+	s := NewStore(&fakeOBS{}, CarHum, dir, "twitch")
+	if err := s.SetAlbum(context.Background(), ""); err != nil {
+		t.Fatal(err)
+	}
+	// 3+2+4+2 tracks, and neither loose root file.
+	seen := map[string]bool{}
+	for i := 0; i < 11; i++ {
+		_, track := s.Current()
+		seen[track] = true
+		if filepath.Dir(track) == filepath.Clean(dir) {
+			t.Fatalf("loose share-root file played as a track: %s", track)
+		}
+		if err := s.Advance(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(seen) != 11 {
+		t.Errorf("whole-share order: want 11 distinct tracks, got %d", len(seen))
+	}
+}
+
+func TestDetect_RecoversTheAlbumFromThePlayingTrack(t *testing.T) {
+	// A restart mid-album must come back scoped to that album. Reading only the
+	// bed back would widen the order to the whole share, so the next advance
+	// wanders out of what's on air.
+	dir := fourAlbums(t)
+	playing := filepath.Join(dir, "streambeats-lofi", "b track.mp3")
+	o := &fakeOBS{settings: map[string]any{"is_local_file": true, "local_file": playing}}
+	s := NewStore(o, CarHum, dir, "twitch")
+	s.Detect(context.Background())
+
+	if got := s.Album(); got != "streambeats-lofi" {
+		t.Fatalf("recovered album: want streambeats-lofi, got %q", got)
+	}
+	want := filepath.Join(dir, "streambeats-lofi")
+	if _, track := s.Current(); filepath.Dir(track) != want {
+		t.Errorf("play order not scoped to the recovered album: %s", track)
+	}
+}
+
+func TestAlbumFromFile(t *testing.T) {
+	const share = "/opt/tripbot/assets/music"
+	for _, tc := range []struct{ file, want string }{
+		{share + "/streambeats-lofi/a.mp3", "streambeats-lofi"},
+		{share + "/fifty-horizons/deep/b.mp3", "fifty-horizons"}, // nesting belongs to the top album
+		{share + "/carsounds.m4a", ""},                           // loose at the root, no album
+		{"/opt/tripbot/assets/carhum/car-hum-idle.flac", ""},     // another bed entirely
+		{"", ""},
+	} {
+		if got := albumFromFile(tc.file, share); got != tc.want {
+			t.Errorf("albumFromFile(%q): want %q, got %q", tc.file, tc.want, got)
+		}
+	}
+}
+
 func TestSet_SomaFMUsesNetworkMode(t *testing.T) {
 	o := &fakeOBS{}
-	s := NewStore(o, CarHum, albumDir(t, 2), "twitch")
+	s := NewStore(o, CarHum, shareDir(t, 2), "twitch")
 	if err := s.Set(context.Background(), SomaFM); err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +270,7 @@ func TestSet_SomaFMUsesNetworkMode(t *testing.T) {
 // "tune a station I'm not playing".
 func TestSetStation_TunesAndSelectsTheSomaFMBed(t *testing.T) {
 	o := &fakeOBS{}
-	s := NewStore(o, CarHum, albumDir(t, 2), "twitch")
+	s := NewStore(o, CarHum, shareDir(t, 2), "twitch")
 	if err := s.SetStation(context.Background(), "dronezone"); err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +309,7 @@ func TestSetStation_RejectsAnUnknownChannel(t *testing.T) {
 // the station outlives the bed.
 func TestSet_SomaFMReturnsToTheTunedStation(t *testing.T) {
 	o := &fakeOBS{}
-	s := NewStore(o, SomaFM, albumDir(t, 2), "twitch")
+	s := NewStore(o, SomaFM, shareDir(t, 2), "twitch")
 	if err := s.SetStation(context.Background(), "u80s"); err != nil {
 		t.Fatal(err)
 	}
@@ -164,7 +348,7 @@ func TestStationFromURL(t *testing.T) {
 
 func TestSet_CarHumLoops(t *testing.T) {
 	o := &fakeOBS{}
-	s := NewStore(o, SomaFM, albumDir(t, 2), "twitch")
+	s := NewStore(o, SomaFM, shareDir(t, 2), "twitch")
 	if err := s.Set(context.Background(), CarHum); err != nil {
 		t.Fatal(err)
 	}
@@ -178,7 +362,7 @@ func TestSet_CarHumLoops(t *testing.T) {
 }
 
 func TestSet_AlbumPlaysATrackUnlooped(t *testing.T) {
-	dir := albumDir(t, 3)
+	dir := shareDir(t, 3)
 	o := &fakeOBS{}
 	s := NewStore(o, CarHum, dir, "twitch")
 	if err := s.Set(context.Background(), Album); err != nil {
@@ -198,7 +382,7 @@ func TestSet_AlbumPlaysATrackUnlooped(t *testing.T) {
 }
 
 func TestSet_AlbumSkipsNonAudioFiles(t *testing.T) {
-	dir := albumDir(t, 1)
+	dir := shareDir(t, 1)
 	o := &fakeOBS{}
 	s := NewStore(o, CarHum, dir, "twitch")
 	if err := s.Set(context.Background(), Album); err != nil {
@@ -213,7 +397,7 @@ func TestSet_AlbumIgnoresLooseFilesAtTheShareRoot(t *testing.T) {
 	// The real share keeps carsounds.m4a — 556MB, nine hours — beside the album
 	// directories. Treating it as a track would put it on the stream and stall
 	// the rotation until it ended.
-	dir := albumDir(t, 3)
+	dir := shareDir(t, 3)
 	o := &fakeOBS{}
 	s := NewStore(o, CarHum, dir, "twitch")
 	for i := 0; i < 6; i++ {
@@ -259,7 +443,7 @@ func TestSet_AlbumWithNoTracksFails(t *testing.T) {
 
 func TestSet_FailedSwitchKeepsReportingTheOldBed(t *testing.T) {
 	o := &fakeOBS{err: errors.New("obs unreachable")}
-	s := NewStore(o, SomaFM, albumDir(t, 2), "twitch")
+	s := NewStore(o, SomaFM, shareDir(t, 2), "twitch")
 	if err := s.Set(context.Background(), CarHum); err == nil {
 		t.Fatal("want an error when OBS rejects the switch")
 	}
@@ -278,7 +462,7 @@ func TestSet_RejectsUnknownBed(t *testing.T) {
 func TestAdvance_WalksEveryTrackThenWraps(t *testing.T) {
 	const n = 4
 	o := &fakeOBS{}
-	s := NewStore(o, CarHum, albumDir(t, n), "twitch")
+	s := NewStore(o, CarHum, shareDir(t, n), "twitch")
 	if err := s.Set(context.Background(), Album); err != nil {
 		t.Fatal(err)
 	}
@@ -307,7 +491,7 @@ func TestAdvance_WalksEveryTrackThenWraps(t *testing.T) {
 
 func TestAdvance_NoopOnOtherBeds(t *testing.T) {
 	o := &fakeOBS{}
-	s := NewStore(o, CarHum, albumDir(t, 3), "twitch")
+	s := NewStore(o, CarHum, shareDir(t, 3), "twitch")
 	if err := s.Set(context.Background(), CarHum); err != nil {
 		t.Fatal(err)
 	}
@@ -320,7 +504,7 @@ func TestAdvance_NoopOnOtherBeds(t *testing.T) {
 }
 
 func TestDetect_ReadsTheLiveBedFromOBS(t *testing.T) {
-	dir := albumDir(t, 1)
+	dir := shareDir(t, 1)
 	for _, tc := range []struct {
 		name     string
 		settings map[string]any
@@ -353,7 +537,7 @@ func TestDetect_ReadsTheLiveBedFromOBS(t *testing.T) {
 // without a play order Advance has nowhere to go, leaving the stream silent
 // after that one track ends.
 func TestDetect_AlbumBuildsThePlayOrder(t *testing.T) {
-	dir := albumDir(t, 3)
+	dir := shareDir(t, 3)
 	playing := filepath.Join(dir, "fifty-horizons", "a track.mp3")
 	o := &fakeOBS{settings: map[string]any{"is_local_file": true, "local_file": playing}}
 	s := NewStore(o, CarHum, dir, "twitch")
@@ -413,7 +597,7 @@ func TestDetect_KeepsTheSeedWhenOBSIsUnreachable(t *testing.T) {
 // exercised many times rather than once.
 func TestAdvance_NeverRepeatsATrackAcrossTheWrap(t *testing.T) {
 	o := &fakeOBS{}
-	s := NewStore(o, CarHum, albumDir(t, 3), "twitch")
+	s := NewStore(o, CarHum, shareDir(t, 3), "twitch")
 	if err := s.Set(context.Background(), Album); err != nil {
 		t.Fatal(err)
 	}

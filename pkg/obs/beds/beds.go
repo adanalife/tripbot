@@ -20,6 +20,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"math/rand/v2"
+	"os"
 	"path/filepath"
 	"slices"
 	"sort"
@@ -103,6 +104,7 @@ type Store struct {
 	mu      sync.Mutex
 	bed     Bed
 	station string   // SomaFM channel id the SomaFM bed plays
+	album   string   // album subdir the Album bed plays; "" is the whole share
 	tracks  []string // shuffled play order; rebuilt each time the album starts
 	idx     int
 }
@@ -146,6 +148,53 @@ func (s *Store) Station() string {
 	return s.station
 }
 
+// Album reports the album subdir the Album bed plays, or "" for the whole share
+// shuffled together. Like Station, it answers whichever bed is live — it's the
+// selection the bed returns to.
+func (s *Store) Album() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.album
+}
+
+// Albums lists the selectable albums on the share, in display order. Read off
+// the filesystem on every call rather than cached at startup: the share is an
+// NFS mount Dana drops new music onto, and a list cached at boot would hide a
+// new album until the next restart.
+func (s *Store) Albums() []string {
+	return scanAlbums(s.musicDir)
+}
+
+// ValidAlbum reports whether album names a directory on the share holding at
+// least one track. Unlike ValidStation, which checks a fixed list, this has to
+// hit the filesystem — albums are whatever is on the share.
+func (s *Store) ValidAlbum(album string) bool {
+	return album != "" && slices.Contains(s.Albums(), album)
+}
+
+// ResolveAlbum maps what someone typed onto an album on the share, or "" if
+// nothing matches. Exact directory names always win; failing that, a unique
+// trailing segment does, so "ambient" reaches "streambeats-ambient" without
+// anyone typing the provenance prefix that makes the share readable. Ambiguity
+// resolves to nothing rather than to a guess — two albums ending "-ambient" mean
+// the shorthand has stopped being a name.
+func (s *Store) ResolveAlbum(arg string) string {
+	albums := s.Albums()
+	if slices.Contains(albums, arg) {
+		return arg
+	}
+	var match string
+	for _, a := range albums {
+		if strings.HasSuffix(a, "-"+arg) {
+			if match != "" {
+				return ""
+			}
+			match = a
+		}
+	}
+	return match
+}
+
 // SomaFMTrack reports the song playing on the tuned channel, from SomaFM's feed
 // for it. Cached, so chat and the console's poll share one fetch. Only ask while
 // the SomaFM bed is live — it answers for the tuned channel either way, and on
@@ -176,6 +225,12 @@ func (s *Store) Detect(ctx context.Context) {
 	s.bed = bed
 	if station := stationFromURL(url); station != "" {
 		s.station = station
+	}
+	// The playing file names the album OBS booted on, the way the `input` URL
+	// names the station. Without this a restart mid-album reports the whole share
+	// and the next advance wanders out of the album that's on air.
+	if album := albumFromFile(file, s.musicDir); album != "" {
+		s.album = album
 	}
 	var loadErr error
 	if bed == Album {
@@ -215,6 +270,27 @@ func bedFromSettings(settings map[string]any, musicDir string) Bed {
 		return SomaFM
 	}
 	return CarHum
+}
+
+// albumFromFile recovers the album subdir from a track path, so the Store can
+// read the live album back off OBS at startup rather than guessing — the
+// counterpart of stationFromURL. A track directly at the share root belongs to
+// no album and yields "", as does any path outside the share.
+func albumFromFile(file, musicDir string) string {
+	if file == "" || !under(file, musicDir) {
+		return ""
+	}
+	rel, err := filepath.Rel(musicDir, file)
+	if err != nil {
+		return ""
+	}
+	// Only the first segment is the album; deeper nesting (an album with
+	// per-disc subdirs) still belongs to the album at the top.
+	album, _, nested := strings.Cut(rel, string(filepath.Separator))
+	if !nested {
+		return "" // loose file at the share root
+	}
+	return album
 }
 
 // under reports whether file sits inside dir, comparing whole path segments so
@@ -257,6 +333,29 @@ func (s *Store) Set(ctx context.Context, bed Bed) error {
 	// switch land on the same counter — they are the same switch.
 	instrumentation.BackgroundAudioSelections.Inc(s.platform, string(bed))
 	slog.InfoContext(ctx, "background audio: bed switched", "bed", bed, "track", target)
+	return nil
+}
+
+// SetAlbum narrows the Album bed to one album on the share and switches to it,
+// so picking an album is one action rather than "select album, then narrow".
+// Mirrors SetStation, including the rollback: an album we aren't playing must
+// not be the one we report. Pass "" to widen back to the whole share.
+func (s *Store) SetAlbum(ctx context.Context, album string) error {
+	if album != "" && !s.ValidAlbum(album) {
+		return fmt.Errorf("unknown album %q", album)
+	}
+	s.mu.Lock()
+	prev := s.album
+	s.album = album
+	s.mu.Unlock()
+
+	if err := s.Set(ctx, Album); err != nil {
+		s.mu.Lock()
+		s.album = prev
+		s.mu.Unlock()
+		return err
+	}
+	slog.InfoContext(ctx, "background audio: album selected", "album", album)
 	return nil
 }
 
@@ -316,12 +415,13 @@ func (s *Store) Advance(ctx context.Context) error {
 // order on a track already on air (pass "" to start at the top), so the next
 // advance moves off it instead of restarting it. Caller holds s.mu.
 func (s *Store) loadAlbumLocked(playing string) error {
-	tracks, err := scanTracks(s.musicDir)
+	dir := albumDir(s.musicDir, s.album)
+	tracks, err := scanTracks(dir, s.album != "")
 	if err != nil {
-		return fmt.Errorf("scan album tracks under %s: %w", s.musicDir, err)
+		return fmt.Errorf("scan album tracks under %s: %w", dir, err)
 	}
 	if len(tracks) == 0 {
-		return fmt.Errorf("no album tracks under %s", s.musicDir)
+		return fmt.Errorf("no album tracks under %s", dir)
 	}
 	shuffle(tracks)
 	s.tracks, s.idx = tracks, max(slices.Index(tracks, playing), 0)
@@ -350,17 +450,46 @@ func (s *Store) apply(ctx context.Context, bed Bed, track, station string) error
 	return s.obs.SetLocalFile(ctx, InputName, track, bed != Album)
 }
 
+// albumDir is the directory a selection plays out of: one album's own
+// subdirectory, or the whole share when nothing is selected.
+func albumDir(musicDir, album string) string {
+	if album == "" {
+		return musicDir
+	}
+	return filepath.Join(musicDir, album)
+}
+
+// scanAlbums lists the selectable albums: every immediate subdirectory of the
+// share holding at least one track. Sorted, so the console picker and chat's
+// option list read the same order every time. An unreadable share yields no
+// albums rather than an error — the caller's next scanTracks reports why.
+func scanAlbums(musicDir string) []string {
+	entries, err := os.ReadDir(musicDir)
+	if err != nil {
+		return nil
+	}
+	var out []string
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		if tracks, err := scanTracks(filepath.Join(musicDir, e.Name()), true); err == nil && len(tracks) > 0 {
+			out = append(out, e.Name())
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
 // scanTracks lists the album tracks under dir, sorted so the pre-shuffle order
 // is deterministic (the shuffle is what makes playback vary, not readdir order).
 //
-// Albums are SUBDIRECTORIES of the share; loose files at its root are not
-// tracks. The share holds other audio beside the albums — carsounds.m4a, a
-// 556MB archive — and a flat scan would shuffle that in as one enormous track.
-//
-// ponytail: every album subdirectory is one pool, which with a single album is
-// that album. Add a picker when a second one shows up and they shouldn't
-// interleave.
-func scanTracks(dir string) ([]string, error) {
+// loose says whether audio sitting directly in dir counts. Scanning one album,
+// it does — that's where its tracks live. Scanning the whole share, it does not:
+// albums are the share's SUBDIRECTORIES, and the root holds other audio beside
+// them (carsounds.m4a, a 556MB archive) that a flat scan would shuffle in as one
+// enormous track.
+func scanTracks(dir string, loose bool) ([]string, error) {
 	var out []string
 	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -369,7 +498,7 @@ func scanTracks(dir string) ([]string, error) {
 		if d.IsDir() || !audioExts[strings.ToLower(filepath.Ext(path))] {
 			return nil
 		}
-		if filepath.Dir(path) == filepath.Clean(dir) {
+		if !loose && filepath.Dir(path) == filepath.Clean(dir) {
 			return nil // loose file at the share root, not an album track
 		}
 		out = append(out, path)

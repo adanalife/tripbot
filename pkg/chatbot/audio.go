@@ -34,30 +34,45 @@ func (realOBS) RefreshBrowserSources(ctx context.Context) (int, error) {
 type Beds interface {
 	Current() (beds.Bed, string)
 	Station() string
+	Album() string
+	Albums() []string
+	ResolveAlbum(arg string) string
 	SomaFMTrack(ctx context.Context) (artist, title string, err error)
 	Set(ctx context.Context, bed beds.Bed) error
 	SetStation(ctx context.Context, station string) error
+	SetAlbum(ctx context.Context, album string) error
 }
 
 // bedDescs is the audience-facing name of each local bed — chat asks "what am I
 // listening to", not "which enum is set". SomaFM isn't here: it's named by its
-// selected channel, which is a runtime choice.
-//
-// ponytail: the album is named here because there is exactly one. Describe it
-// generically (or read a title off the share) when a second album shows up —
-// the same trigger that splits beds.scanTracks into per-album pools.
+// selected channel, and the album by its selected album — both runtime choices.
 var bedDescs = map[beds.Bed]string{
 	beds.CarHum: "the car's own hum",
-	beds.Album:  "Fifty Horizons, by wooderCZ",
+	beds.Album:  "the music share",
+}
+
+// albumDescs credits the albums whose directory name doesn't carry it. Anything
+// not listed is named by its directory, which is why share directories are worth
+// naming for humans. A missing credit here is a cosmetic gap, not a failure: an
+// album added to the share is playable the moment it lands.
+var albumDescs = map[string]string{
+	"fifty-horizons":        "Fifty Horizons, by wooderCZ",
+	"streambeats-ambient":   "StreamBeats: Ambient",
+	"streambeats-hifi":      "StreamBeats: Hifi",
+	"streambeats-lofi":      "StreamBeats: Lofi",
+	"streambeats-synthwave": "StreamBeats: Synthwave",
 }
 
 // audioCmd is the public !audio command. Anyone can ask what's playing; only
 // admins switch, because the bed is the music every viewer hears at once and
 // the console offers the same beds to the same person.
 //
-// One argument covers both a bed and a SomaFM channel ("!audio carhum",
-// "!audio dronezone") because no channel id collides with a bed name, and
-// "switch the music to X" is one intent however X is spelled.
+// One argument covers a bed, a SomaFM channel, or an album on the share
+// ("!audio carhum", "!audio dronezone", "!audio ambient") because none of those
+// namespaces collide, and "switch the music to X" is one intent however X is
+// spelled. Beds are matched first and albums last: a bed name is fixed
+// vocabulary, an album is a directory Dana can rename, so an album can never
+// shadow a word the command already answered to.
 func (a *App) audioCmd(ctx context.Context, user *users.User, params []string) {
 	arg := ""
 	if len(params) > 0 {
@@ -84,11 +99,17 @@ func (a *App) audioCmd(ctx context.Context, user *users.User, params []string) {
 	case beds.ValidStation(arg):
 		err = a.Beds.SetStation(ctx, arg)
 	default:
-		// The channel list is 40-odd names, so chat gets the link rather than the
-		// list — somafm.com names them better than we would anyway.
-		a.Chat.Say(fmt.Sprintf("🎵 No background audio called %q. Options: %s, "+
-			"or any SomaFM channel id from https://somafm.com/listen/", arg, bedNames()))
-		return
+		album := a.Beds.ResolveAlbum(arg)
+		if album == "" {
+			// The channel list is 40-odd names, so chat gets the link rather than the
+			// list — somafm.com names them better than we would anyway. The albums
+			// are ours and few, so those are named outright.
+			a.Chat.Say(fmt.Sprintf("🎵 No background audio called %q. Options: %s, "+
+				"or any SomaFM channel id from https://somafm.com/listen/",
+				arg, strings.Join(append(bedNameList(), a.Beds.Albums()...), ", ")))
+			return
+		}
+		err = a.Beds.SetAlbum(ctx, album)
 	}
 	if err != nil {
 		slog.ErrorContext(ctx, "background audio switch failed",
@@ -113,18 +134,34 @@ func (a *App) describeAudio() string {
 	if !ok {
 		desc = string(bed)
 	}
+	// On the album bed the selected album is the name worth saying — "the music
+	// share" describes where it came from, not what anyone is hearing.
+	if bed == beds.Album {
+		if album := a.Beds.Album(); album != "" {
+			desc = albumName(album)
+		}
+	}
 	if title := beds.TrackTitle(track); title != "" {
 		return fmt.Sprintf("%s — %q", desc, title)
 	}
 	return desc
 }
 
-// bedNames is the "somafm, carhum, album" list shown when a switch names
-// something that is neither a bed nor a station.
-func bedNames() string {
+// albumName is an album's audience-facing name: its credit when we have one, its
+// directory otherwise.
+func albumName(album string) string {
+	if desc, ok := albumDescs[album]; ok {
+		return desc
+	}
+	return album
+}
+
+// bedNameList is the "somafm, carhum, album" list shown when a switch names
+// something that is neither a bed, a station, nor an album.
+func bedNameList() []string {
 	names := make([]string, len(beds.All))
 	for i, b := range beds.All {
 		names[i] = string(b)
 	}
-	return strings.Join(names, ", ")
+	return names
 }

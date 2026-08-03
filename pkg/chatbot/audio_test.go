@@ -3,6 +3,7 @@ package chatbot
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -39,6 +40,9 @@ type fakeBeds struct {
 	feedErr  error
 	sets     []beds.Bed
 	stations []string
+	albums   []string // SetAlbum calls, in order
+	album    string
+	onShare  []string // what Albums() reports; nil means the fan album alone
 	feeds    int
 	err      error
 }
@@ -77,6 +81,46 @@ func (f *fakeBeds) SetStation(_ context.Context, station string) error {
 		return f.err
 	}
 	f.bed, f.track, f.station = beds.SomaFM, "", station
+	return nil
+}
+
+func (f *fakeBeds) Album() string { return f.album }
+
+func (f *fakeBeds) Albums() []string {
+	if f.onShare == nil {
+		return []string{"fifty-horizons"}
+	}
+	return f.onShare
+}
+
+// ResolveAlbum mirrors the real store's rule (exact name, else unique trailing
+// segment) so the command's behavior is exercised against the same contract.
+func (f *fakeBeds) ResolveAlbum(arg string) string {
+	if arg == "" {
+		return ""
+	}
+	albums := f.Albums()
+	if slices.Contains(albums, arg) {
+		return arg
+	}
+	var match string
+	for _, a := range albums {
+		if strings.HasSuffix(a, "-"+arg) {
+			if match != "" {
+				return ""
+			}
+			match = a
+		}
+	}
+	return match
+}
+
+func (f *fakeBeds) SetAlbum(_ context.Context, album string) error {
+	f.albums = append(f.albums, album)
+	if f.err != nil {
+		return f.err
+	}
+	f.bed, f.track, f.album = beds.Album, testTrack, album
 	return nil
 }
 
@@ -152,18 +196,95 @@ func TestAudioCmd_AdminTunesASomaFMStation(t *testing.T) {
 	}
 }
 
+// An album on the share is accepted in the same argument slot as a bed name or a
+// station id — the third namespace the one argument covers.
+func TestAudioCmd_AdminPicksAnAlbumByName(t *testing.T) {
+	app, fake, out := newAudioTestApp(t, beds.CarHum, "")
+	fake.onShare = []string{"fifty-horizons", "streambeats-lofi"}
+
+	app.audioCmd(context.Background(), newTestUser(adminUser), []string{"Streambeats-Lofi"}) // case-insensitive
+
+	if len(fake.sets) != 0 {
+		t.Errorf("an album is a selection, not a bare bed switch, got %v", fake.sets)
+	}
+	if len(fake.albums) != 1 || fake.albums[0] != "streambeats-lofi" {
+		t.Fatalf("expected one selection of streambeats-lofi, got %v", fake.albums)
+	}
+	if got := out(); !strings.Contains(got, albumDescs["streambeats-lofi"]) {
+		t.Errorf("expected the announcement to credit the album, got %q", got)
+	}
+}
+
+// Typing the provenance prefix is what the shorthand exists to avoid: the share
+// wants "streambeats-ambient" for legibility, chat wants "ambient".
+func TestAudioCmd_AdminPicksAnAlbumByShorthand(t *testing.T) {
+	app, fake, out := newAudioTestApp(t, beds.CarHum, "")
+	fake.onShare = []string{"fifty-horizons", "streambeats-ambient", "streambeats-lofi"}
+
+	app.audioCmd(context.Background(), newTestUser(adminUser), []string{"ambient"})
+
+	if len(fake.albums) != 1 || fake.albums[0] != "streambeats-ambient" {
+		t.Fatalf("expected the shorthand to reach streambeats-ambient, got %v", fake.albums)
+	}
+	if got := out(); !strings.Contains(got, "StreamBeats: Ambient") {
+		t.Errorf("expected the announcement to credit the album, got %q", got)
+	}
+}
+
+// The fan album carries its credit rather than its directory name, since the
+// directory is not what anyone would call it.
+func TestAudioCmd_AlbumAnnouncementUsesTheCreditNotTheDirectory(t *testing.T) {
+	app, _, out := newAudioTestApp(t, beds.CarHum, "")
+
+	app.audioCmd(context.Background(), newTestUser(adminUser), []string{"fifty-horizons"})
+
+	got := out()
+	if !strings.Contains(got, "Fifty Horizons, by wooderCZ") {
+		t.Errorf("expected the fan album's credit, got %q", got)
+	}
+	if strings.Contains(got, "fifty-horizons") {
+		t.Errorf("expected the credit rather than the directory name, got %q", got)
+	}
+}
+
+// An album on the share with no credit in albumDescs is still playable — it just
+// gets named by its directory. A missing credit must not make it unreachable.
+func TestAudioCmd_UncreditedAlbumIsNamedByItsDirectory(t *testing.T) {
+	app, fake, out := newAudioTestApp(t, beds.CarHum, "")
+	fake.onShare = []string{"some-new-drop"}
+
+	app.audioCmd(context.Background(), newTestUser(adminUser), []string{"some-new-drop"})
+
+	if len(fake.albums) != 1 || fake.albums[0] != "some-new-drop" {
+		t.Fatalf("expected the uncredited album to be selected, got %v", fake.albums)
+	}
+	if got := out(); !strings.Contains(got, "some-new-drop") {
+		t.Errorf("expected the directory name as the fallback, got %q", got)
+	}
+}
+
 func TestAudioCmd_UnknownBedListsOptionsWithoutSwitching(t *testing.T) {
 	app, fake, out := newAudioTestApp(t, beds.CarHum, "")
+	fake.onShare = []string{"fifty-horizons", "streambeats-lofi"}
 
 	app.audioCmd(context.Background(), newTestUser(adminUser), []string{"spaceship"})
 
 	if len(fake.sets) != 0 {
 		t.Fatalf("an unknown bed must not switch, got %v", fake.sets)
 	}
+	if len(fake.albums) != 0 {
+		t.Fatalf("an unknown name must not select an album, got %v", fake.albums)
+	}
 	got := out()
 	for _, b := range beds.All {
 		if !strings.Contains(got, string(b)) {
 			t.Errorf("expected %q in the options list, got %q", b, got)
+		}
+	}
+	// The albums are ours and few, so they're named outright rather than linked.
+	for _, a := range fake.onShare {
+		if !strings.Contains(got, a) {
+			t.Errorf("expected album %q in the options list, got %q", a, got)
 		}
 	}
 }
