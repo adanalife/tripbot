@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/adanalife/tripbot/pkg/obs/beds"
 	"github.com/gorilla/mux"
@@ -33,6 +34,7 @@ type fakeBeds struct {
 	shuffles     []bool   // SetShuffle calls, in order
 	onShare      []string // what Albums() reports; nil means the fan album alone
 	feeds        int
+	pending      *beds.Switch // a switch waiting out the delay; nil = none
 }
 
 func (f *fakeBeds) Current() (beds.Bed, string) { return f.bed, f.track }
@@ -40,6 +42,16 @@ func (f *fakeBeds) Current() (beds.Bed, string) { return f.bed, f.track }
 func (f *fakeBeds) SomaFMTrack(context.Context) (string, string, error) {
 	f.feeds++
 	return f.artist, f.title, f.feedErr
+}
+
+// Pending models the real store's switch delay: nil is a store applying switches
+// inline (the tests below drive the effects directly), and a test that cares
+// about the waiting state sets it.
+func (f *fakeBeds) Pending() (beds.Switch, bool) {
+	if f.pending == nil {
+		return beds.Switch{}, false
+	}
+	return *f.pending, true
 }
 
 func (f *fakeBeds) Station() string {
@@ -461,5 +473,41 @@ func TestAudioSetHandler_ShuffleFalseIsNotAbsent(t *testing.T) {
 	postAudio(t, &Server{beds: g}, `{"bed":"carhum"}`)
 	if len(g.shuffles) != 0 {
 		t.Fatalf("a bed switch must not touch shuffle, got %v", g.shuffles)
+	}
+}
+
+// The console needs the waiting switch as its own field: bed/station/album still
+// describe the audio, so without this a click renders as no change at all.
+func TestAudioHandler_ShipsTheWaitingSwitch(t *testing.T) {
+	f := &fakeBeds{bed: beds.CarHum, pending: &beds.Switch{
+		Bed:     beds.SomaFM,
+		Station: "dronezone",
+		At:      time.Now().Add(5 * time.Second),
+	}}
+	_, body := getAudio(t, &Server{beds: f})
+
+	if body["bed"] != "carhum" {
+		t.Errorf("the live bed must still be the car hum, got %v", body["bed"])
+	}
+	pending, ok := body["pending"].(map[string]any)
+	if !ok {
+		t.Fatalf("pending: %v", body["pending"])
+	}
+	if pending["bed"] != "somafm" || pending["station"] != "dronezone" {
+		t.Errorf("pending = %v", pending)
+	}
+	// A countdown, so it has to arrive as a number of seconds left rather than a
+	// deadline the console would have to trust its own clock against.
+	if in, _ := pending["in_seconds"].(float64); in < 1 || in > 5 {
+		t.Errorf("in_seconds = %v, want the remaining wait", pending["in_seconds"])
+	}
+}
+
+// Nothing waiting means no field at all, so the console's countdown markup can
+// key off its presence.
+func TestAudioHandler_OmitsPendingWhenNothingIsWaiting(t *testing.T) {
+	_, body := getAudio(t, &Server{beds: &fakeBeds{bed: beds.CarHum}})
+	if _, ok := body["pending"]; ok {
+		t.Errorf("pending shipped with nothing waiting: %v", body["pending"])
 	}
 }

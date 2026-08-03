@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/adanalife/tripbot/pkg/obs/beds"
 	"github.com/adanalife/tripbot/pkg/video"
@@ -44,7 +45,8 @@ type fakeBeds struct {
 	stations []string
 	albums   []string // SetAlbum calls, in order
 	album    string
-	onShare  []string // what Albums() reports; nil means the fan album alone
+	onShare  []string     // what Albums() reports; nil means the fan album alone
+	pending  *beds.Switch // a switch waiting out the delay; nil = none
 	feeds    int
 	err      error
 }
@@ -56,6 +58,16 @@ func (f *fakeBeds) Current() (beds.Bed, string) { return f.bed, f.track }
 func (f *fakeBeds) SomaFMTrack(context.Context) (string, string, error) {
 	f.feeds++
 	return f.artist, f.title, f.feedErr
+}
+
+// Pending models the real store's switch delay: nil is a store applying switches
+// inline (the tests below drive the effects directly), and a test that cares
+// about the waiting state sets it.
+func (f *fakeBeds) Pending() (beds.Switch, bool) {
+	if f.pending == nil {
+		return beds.Switch{}, false
+	}
+	return *f.pending, true
 }
 
 func (f *fakeBeds) Station() string {
@@ -467,5 +479,37 @@ func TestSongCmd_SaysTheAlbumAndLabelOnce(t *testing.T) {
 	got := out()
 	if want := `♪ Now playing: "Holosmith" — Breaker, StreamBeats by Harris Heller`; got != want {
 		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+// A switch waits before it lands, so the announcement is future tense and says
+// how long — that wait is the window a second !audio can correct it in, which
+// nobody can use without being told it exists.
+func TestAudioCmd_AnnouncesAPendingSwitchInTheFuture(t *testing.T) {
+	app, fake, out := newAudioTestApp(t, beds.CarHum, "")
+	fake.onShare = []string{"streambeats-synthwave-rose"}
+	fake.pending = &beds.Switch{
+		Bed:   beds.Album,
+		Album: "streambeats-synthwave-rose",
+		At:    time.Now().Add(5 * time.Second),
+	}
+
+	app.audioCmd(context.Background(), newTestUser(adminUser), []string{"rose"})
+
+	if got := out(); got != "🎵 Switching to Streambeats Synthwave Rose in 5s" {
+		t.Errorf("got %q", got)
+	}
+}
+
+// The whole-share selection has no album to name, and "" would announce as an
+// empty string where the interesting part goes.
+func TestAudioCmd_NamesTheWholeShareWhenNothingIsSelected(t *testing.T) {
+	app, fake, out := newAudioTestApp(t, beds.CarHum, "")
+	fake.pending = &beds.Switch{Bed: beds.Album, At: time.Now().Add(5 * time.Second)}
+
+	app.audioCmd(context.Background(), newTestUser(adminUser), []string{"album"})
+
+	if got := out(); !strings.Contains(got, "everything on the music share") {
+		t.Errorf("got %q", got)
 	}
 }

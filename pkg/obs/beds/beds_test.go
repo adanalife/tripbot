@@ -14,8 +14,11 @@ import (
 // report of one track ending (see Advance) and would otherwise swallow the
 // back-to-back advances these tests drive by hand. The guard itself is covered
 // by TestAdvance_DropsADuplicateEndingReport, which turns it back on.
+// The switch delay goes off for the same reason: these tests read OBS straight
+// after a Set, and zero applies inline. TestSchedule_* turn it back on.
 func TestMain(m *testing.M) {
 	advanceDebounce = 0
+	switchDelay = 0
 	os.Exit(m.Run())
 }
 
@@ -847,5 +850,88 @@ func TestParseTrack(t *testing.T) {
 		if got := ParseTrack(tc.path); got != tc.want {
 			t.Errorf("ParseTrack(%q) = %+v, want %+v", tc.path, got, tc.want)
 		}
+	}
+}
+
+// waitFor polls until cond holds, so a test can wait on a scheduled switch
+// landing without sleeping for the whole delay.
+func waitFor(t *testing.T, what string, cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for !cond() {
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for %s", what)
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+// The reason the delay exists: a mis-click corrected inside the window lands
+// once, on the correction. Queueing both would play the mistake for a moment,
+// which on a live stream is the disruption being avoided.
+func TestSchedule_SupersedesASwitchStillWaiting(t *testing.T) {
+	switchDelay = 50 * time.Millisecond
+	t.Cleanup(func() { switchDelay = 0 })
+
+	o := &fakeOBS{}
+	s := NewStore(o, Album, shareDir(t, 3), "twitch")
+	ctx := context.Background()
+	if err := s.Set(ctx, SomaFM); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Set(ctx, CarHum); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the switch to land", func() bool {
+		bed, _ := s.Current()
+		return bed == CarHum
+	})
+
+	// Reading the fake after observing the store settle is ordered by the store's
+	// own lock, so there's no race with the timer goroutine.
+	if o.network {
+		t.Errorf("the superseded somafm switch reached OBS: url=%q", o.url)
+	}
+	if o.file != CarHumFile {
+		t.Errorf("OBS is playing %q, want the car hum", o.file)
+	}
+}
+
+// While a tune waits, the store still reports the channel that's audible. The
+// pending one is a separate answer, so nothing can report a station nobody is
+// hearing (the same rule the rollback has always kept).
+func TestSchedule_ReportsThePendingTuneWithoutClaimingIt(t *testing.T) {
+	switchDelay = 50 * time.Millisecond
+	t.Cleanup(func() { switchDelay = 0 })
+
+	o := &fakeOBS{}
+	s := NewStore(o, CarHum, shareDir(t, 3), "twitch")
+	if err := s.SetStation(context.Background(), "dronezone"); err != nil {
+		t.Fatal(err)
+	}
+
+	sw, ok := s.Pending()
+	if !ok {
+		t.Fatal("want the tune reported as pending")
+	}
+	if sw.Bed != SomaFM || sw.Station != "dronezone" {
+		t.Errorf("pending = %+v, want the somafm bed on dronezone", sw)
+	}
+	if sw.At.Before(time.Now()) {
+		t.Errorf("pending lands at %v, already in the past", sw.At)
+	}
+	if got := s.Station(); got == "dronezone" {
+		t.Error("the pending station is being reported as the live one")
+	}
+
+	waitFor(t, "the tune to land", func() bool {
+		_, pending := s.Pending()
+		return !pending
+	})
+	if got := s.Station(); got != "dronezone" {
+		t.Errorf("station = %q after the tune landed, want dronezone", got)
+	}
+	if bed, _ := s.Current(); bed != SomaFM {
+		t.Errorf("bed = %q after the tune landed, want somafm", bed)
 	}
 }

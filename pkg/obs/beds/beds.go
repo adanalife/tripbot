@@ -113,12 +113,42 @@ type Store struct {
 	tracks    []string // the play order; rebuilt each time a selection starts
 	idx       int
 	lastStart time.Time // when a track was last pointed at OBS; see Advance
+
+	// The switch waiting out switchDelay, and the timer that will apply it. gen
+	// rises with every request so a timer that fires after being superseded can
+	// tell it is stale — Timer.Stop can't promise it won.
+	pending *Switch
+	timer   *time.Timer
+	gen     uint64
 }
 
 // advanceDebounce is how soon after a track starts another advance is taken to
 // be a duplicate report of the same ending rather than a real one. A var so the
 // tests, which advance back to back on purpose, can switch it off.
 var advanceDebounce = 3 * time.Second
+
+// switchDelay is how long a requested switch waits before it reaches OBS. The
+// bed is the audio every viewer hears at once, so a mis-click on the console (or
+// a fumbled `!audio`) is disruptive in a way no other control is — this is the
+// window to correct it in. Long enough to notice and re-click, short enough that
+// a deliberate switch doesn't read as a dead button.
+//
+// A var so tests can shrink it. Zero applies inline, which is also the honest
+// behavior for "no delay configured": the switch lands before the call returns
+// and OBS's answer is the caller's.
+var switchDelay = 5 * time.Second
+
+// Switch is a bed switch that hasn't reached OBS yet. Station and Album carry
+// the choice within the bed, since a pending tune has to be describable before
+// it's live — the store still reports the playing station and album, not these.
+type Switch struct {
+	Bed     Bed
+	Station string
+	Album   string
+	// At is when the switch lands. A deadline rather than a duration so a value
+	// read once doesn't go stale while it's being rendered.
+	At time.Time
+}
 
 // NewStore returns a store defaulting to bed (used until Detect reads the real
 // one off OBS). musicDir is the album root; "" uses MusicDir. platform labels
@@ -388,14 +418,24 @@ func under(file, dir string) bool {
 	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
-// Set switches to bed and applies it to OBS. Switching to the album (re)shuffles
-// the play order and starts on its first track. The store is only updated once
-// OBS accepts the change, so a failed switch leaves the reported bed truthful.
+// Set switches to bed after switchDelay. An invalid bed is rejected here and
+// now; everything else is the scheduled path, so see schedule for what the
+// caller can and can't learn from the error.
 func (s *Store) Set(ctx context.Context, bed Bed) error {
 	if !Valid(bed) {
 		return fmt.Errorf("unknown background-audio bed %q", bed)
 	}
+	s.mu.Lock()
+	station, album := s.station, s.album
+	s.mu.Unlock()
+	return s.schedule(ctx, Switch{Bed: bed, Station: station, Album: album})
+}
 
+// setNow switches to bed and applies it to OBS. Switching to the album
+// (re)shuffles the play order and starts on its first track. The store is only
+// updated once OBS accepts the change, so a failed switch leaves the reported
+// bed truthful.
+func (s *Store) setNow(ctx context.Context, bed Bed) error {
 	s.mu.Lock()
 	if bed == Album {
 		if err := s.loadAlbumLocked(""); err != nil {
@@ -427,50 +467,104 @@ func (s *Store) Set(ctx context.Context, bed Bed) error {
 
 // SetAlbum narrows the Album bed to one album on the share — or to a group of
 // them, when album is a prefix like "streambeats-lofi" — and switches to it, so
-// picking is one action rather than "select album, then narrow". Mirrors
-// SetStation, including the rollback: a selection we aren't playing must not be
-// the one we report. Pass "" to widen back to the whole share.
+// picking is one action rather than "select album, then narrow". Pass "" to
+// widen back to the whole share.
 func (s *Store) SetAlbum(ctx context.Context, album string) error {
 	if album != "" && !s.ValidAlbum(album) {
 		return fmt.Errorf("unknown album %q", album)
 	}
 	s.mu.Lock()
-	prev := s.album
-	s.album = album
+	station := s.station
 	s.mu.Unlock()
-
-	if err := s.Set(ctx, Album); err != nil {
-		s.mu.Lock()
-		s.album = prev
-		s.mu.Unlock()
-		return err
-	}
-	slog.InfoContext(ctx, "background audio: album selected", "album", album)
-	return nil
+	return s.schedule(ctx, Switch{Bed: Album, Station: station, Album: album})
 }
 
 // SetStation tunes the SomaFM bed to another channel and switches to it, so
-// picking a station is one action rather than "select somafm, then tune". The
-// station is recorded before the switch so Set applies it, and rolled back if
-// OBS rejects the switch — a station we aren't playing must not be the one we
-// report.
+// picking a station is one action rather than "select somafm, then tune".
 func (s *Store) SetStation(ctx context.Context, station string) error {
 	if !ValidStation(station) {
 		return fmt.Errorf("unknown somafm station %q", station)
 	}
 	s.mu.Lock()
-	prev := s.station
-	s.station = station
+	album := s.album
+	s.mu.Unlock()
+	return s.schedule(ctx, Switch{Bed: SomaFM, Station: station, Album: album})
+}
+
+// schedule holds sw for switchDelay and then applies it, replacing whatever was
+// already waiting. Superseding rather than queueing is the whole point: a
+// mis-click corrected inside the window must not land twice, and the correction
+// is what the operator meant.
+//
+// The returned error only covers what is knowable now — an unreachable OBS or an
+// unmounted share can't be, since they're discovered when the switch lands.
+// Those log a warning and leave the live bed alone, so the store keeps reporting
+// what's actually playing and a caller re-reading it sees the switch didn't take.
+func (s *Store) schedule(ctx context.Context, sw Switch) error {
+	if switchDelay <= 0 {
+		return s.applyPending(ctx, sw)
+	}
+
+	sw.At = time.Now().Add(switchDelay)
+	s.mu.Lock()
+	if s.timer != nil {
+		s.timer.Stop()
+	}
+	s.gen++
+	gen := s.gen
+	s.pending = &sw
+	// context.WithoutCancel: the switch outlives the request that asked for it —
+	// an HTTP handler returning would otherwise cancel the OBS call that lands
+	// seconds later.
+	applyCtx := context.WithoutCancel(ctx)
+	s.timer = time.AfterFunc(switchDelay, func() {
+		s.mu.Lock()
+		stale := gen != s.gen
+		s.mu.Unlock()
+		if stale {
+			return // superseded between the timer firing and this lock
+		}
+		if err := s.applyPending(applyCtx, sw); err != nil {
+			slog.WarnContext(applyCtx, "background audio: scheduled switch failed",
+				"err", err, "bed", sw.Bed, "station", sw.Station, "album", sw.Album)
+		}
+	})
+	s.mu.Unlock()
+	slog.InfoContext(ctx, "background audio: switch scheduled", "bed", sw.Bed,
+		"station", sw.Station, "album", sw.Album, "delay", switchDelay)
+	return nil
+}
+
+// applyPending records sw's station and album and switches to its bed, rolling
+// both back if OBS rejects the switch — a station or album we aren't playing must
+// not be the one we report.
+func (s *Store) applyPending(ctx context.Context, sw Switch) error {
+	s.mu.Lock()
+	prevStation, prevAlbum := s.station, s.album
+	s.station, s.album = sw.Station, sw.Album
+	s.pending = nil
 	s.mu.Unlock()
 
-	if err := s.Set(ctx, SomaFM); err != nil {
+	if err := s.setNow(ctx, sw.Bed); err != nil {
 		s.mu.Lock()
-		s.station = prev
+		s.station, s.album = prevStation, prevAlbum
 		s.mu.Unlock()
 		return err
 	}
-	slog.InfoContext(ctx, "background audio: station tuned", "station", station)
+	slog.InfoContext(ctx, "background audio: switch applied", "bed", sw.Bed,
+		"station", sw.Station, "album", sw.Album)
 	return nil
+}
+
+// Pending reports the switch waiting to land, if there is one. false means what
+// the store reports is what OBS is playing.
+func (s *Store) Pending() (Switch, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.pending == nil {
+		return Switch{}, false
+	}
+	return *s.pending, true
 }
 
 // Advance moves to the next album track (wrapping at the end) and plays it.

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/adanalife/tripbot/pkg/obs"
 	"github.com/adanalife/tripbot/pkg/obs/beds"
@@ -40,6 +41,7 @@ type Beds interface {
 	Groups() []string
 	ResolveAlbum(arg string) string
 	SomaFMTrack(ctx context.Context) (artist, title string, err error)
+	Pending() (beds.Switch, bool)
 	Set(ctx context.Context, bed beds.Bed) error
 	SetStation(ctx context.Context, station string) error
 	SetAlbum(ctx context.Context, album string) error
@@ -122,6 +124,14 @@ func (a *App) audioCmd(ctx context.Context, user *users.User, params []string) {
 	}
 
 	slog.InfoContext(ctx, "background audio switched via chat", "arg", arg, "username", user.Username)
+	// The switch waits a few seconds before it lands, so announcing it in the past
+	// tense would name audio nobody can hear yet — and the wait is worth saying out
+	// loud, since it's the window another `!audio` can correct this one in.
+	if sw, ok := a.Beds.Pending(); ok {
+		a.Chat.Say(fmt.Sprintf("🎵 Switching to %s in %s",
+			describeSwitch(sw), time.Until(sw.At).Round(time.Second)))
+		return
+	}
 	a.Chat.Say("🎵 Switched to " + a.audioSource())
 }
 
@@ -133,6 +143,26 @@ func (a *App) describeAudio() string {
 		return fmt.Sprintf("%q — %s", t.Title, a.audioSource())
 	}
 	return a.audioSource()
+}
+
+// describeSwitch names what a pending switch will land on. Reads the switch
+// rather than the store, which still describes the audio that's playing — and on
+// the album bed it can only name the selection, since the track it will start on
+// hasn't been chosen yet.
+func describeSwitch(sw beds.Switch) string {
+	switch sw.Bed {
+	case beds.SomaFM:
+		return beds.StationName(sw.Station) + " on SomaFM"
+	case beds.Album:
+		if sw.Album == "" {
+			return "everything on the music share"
+		}
+		return albumName(sw.Album)
+	}
+	if desc, ok := bedDescs[sw.Bed]; ok {
+		return desc
+	}
+	return string(sw.Bed)
 }
 
 // audioSource names where the audio is coming from and nothing about the song:
