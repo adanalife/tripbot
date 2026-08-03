@@ -9,6 +9,16 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v4.19.0] — 2026-08-03
+
+### Chatbot
+
+- `!audio` now takes an album name as well as a bed or a SomaFM channel, so the album bed can be narrowed to one album on the music share instead of shuffling everything on it together — `!audio rose` reaches `synthwave-rose` without typing the genre prefix. Albums are the share's subdirectories, read live, so music dropped on the NAS is selectable without a deploy; the selection sticks the way a tuned SomaFM channel does, and the console's Album picker has an "everything on the share" option to widen it again. The console's `/api/audio` gained the matching `album` field and album list. ([#1314](https://github.com/adanalife/tripbot/pull/1314))
+
+### CI / Tooling
+
+- `bin/stage-streambeats` — stages bought StreamBeats albums onto the music share the album bed plays from, taking the Bandcamp .zip files as downloaded and naming each directory `streambeats-<genre>-<album>` so the bed can select all of them, one genre, or one album. It carries the album→genre table, which is the part the archives can't tell you: Bandcamp tags every album "Electronic, lofi", including the synthwave ones. Dry run by default, never deletes, and safe to re-run after each batch. ([#1315](https://github.com/adanalife/tripbot/pull/1315))
+
 ## [v4.18.0] — 2026-08-03
 
 ### Chatbot
