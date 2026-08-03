@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/adanalife/tripbot/pkg/scoreboards"
 	"github.com/bwmarrin/discordgo"
 )
 
@@ -16,17 +17,24 @@ func leaderboardEmbed(title string, entries [][]string) *discordgo.MessageEmbed 
 	if len(entries) == 0 {
 		return nil
 	}
-	var b strings.Builder
-	rank := 0
+	// Drop the malformed rows before ranking, not while rendering: a skipped
+	// row must not consume a place, or the survivors start at second.
+	rows := make([][]string, 0, len(entries))
 	for _, pair := range entries {
 		if len(pair) < 2 {
 			continue
 		}
-		rank++
-		fmt.Fprintf(&b, "**%d.** %s — %s\n", rank, pair[0], pair[1])
+		rows = append(rows, pair)
 	}
-	if rank == 0 {
+	if len(rows) == 0 {
 		return nil
+	}
+	// Ties share the better place, matching what the chat commands say, so the
+	// same board doesn't rank two level viewers differently in the two places.
+	ranks := scoreboards.Ranks(rows)
+	var b strings.Builder
+	for i, pair := range rows {
+		fmt.Fprintf(&b, "**%d.** %s — %s\n", ranks[i], pair[0], pair[1])
 	}
 	return &discordgo.MessageEmbed{
 		Title:       title,

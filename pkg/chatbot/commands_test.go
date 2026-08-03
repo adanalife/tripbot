@@ -1153,6 +1153,26 @@ func TestMonthlyMilesLeaderboardCmd_OverlayShorterThanChat(t *testing.T) {
 	}
 }
 
+// Two viewers level on miles are both first, and the viewer behind them is
+// third — nobody is put ahead of an equal by an accident of row order.
+func TestMonthlyMilesLeaderboardCmd_TiesShareAPlace(t *testing.T) {
+	app := newTestApp(video.Video{})
+	app.Onscreens = &recordingOnscreens{}
+	app.Scoreboards = &recordingScoreboards{
+		Month: "July",
+		Miles: [][]string{{"alice", "12.0"}, {"bob", "12.0"}, {"carol", "9.0"}},
+	}
+
+	out := captureSay(t, app)
+
+	app.monthlyMilesLeaderboardCmd(context.Background(), newTestUser("caller"), nil)
+
+	want := "1. alice (12.0mi), 1. bob (12.0mi), 3. carol (9.0mi)"
+	if msg := out(); !strings.Contains(msg, want) {
+		t.Errorf("expected %q, got %q", want, msg)
+	}
+}
+
 // --- monthlyGuessLeaderboardCmd ---
 
 // An empty board is also what an all-zero board looks like by the time the

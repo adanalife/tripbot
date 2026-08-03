@@ -125,12 +125,5 @@ func (a *App) guessrLeaderboardCmd(ctx context.Context, user *users.User, params
 
 	a.Onscreens.ShowLeaderboard(ctx, title, overlayRows(rows, size))
 
-	msg := title + ": "
-	for i, row := range rows {
-		msg += fmt.Sprintf("%d. %s (%s)", i+1, row[0], row[1])
-		if i+1 != len(rows) {
-			msg += ", "
-		}
-	}
-	a.Chat.Say(msg)
+	a.Chat.Say(title + ": " + rankedList(rows, ""))
 }

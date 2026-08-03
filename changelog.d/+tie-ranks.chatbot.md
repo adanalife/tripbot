@@ -1,0 +1,1 @@
+Tied leaderboard scores now share a place. Two viewers level on miles are both first and the next one down is third, wherever a place number is printed — the chat commands and the Discord embeds. Tied names also hold a fixed order instead of swapping around between refreshes.

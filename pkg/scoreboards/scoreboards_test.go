@@ -116,6 +116,31 @@ func TestTopUsers(t *testing.T) {
 	}
 }
 
+// Tied scores come back in a fixed order. Without the username tiebreaker
+// Postgres may return equal values in any order, and the overlay re-renders
+// the board every rotation tick — so tied viewers would visibly swap places
+// on a live broadcast. Inserted worst-name-first so a query that only sorted
+// by value would have to reorder them to pass.
+func TestTopUsers_TiesOrderByUsername(t *testing.T) {
+	db := testdb.New(t)
+	ctx := context.Background()
+
+	sb, err := findOrCreateScoreboard(ctx, testConf.Platform, "miles_2026_07")
+	if err != nil {
+		t.Fatalf("findOrCreateScoreboard: %v", err)
+	}
+	for _, name := range []string{"carol", "bob", "alice"} {
+		insertScore(t, db, createUser(t, db, name, testConf.Platform, false), sb.ID, 12.5)
+	}
+
+	want := [][]string{{"alice", "12.5"}, {"bob", "12.5"}, {"carol", "12.5"}}
+	for i := 0; i < 3; i++ {
+		if got := TopUsers(ctx, testConf, "miles_2026_07", 10); !reflect.DeepEqual(got, want) {
+			t.Fatalf("TopUsers call %d = %v, want %v", i+1, got, want)
+		}
+	}
+}
+
 // A same-named board on another platform must not leak into this instance's
 // leaderboard — scoreboard names are global, uniqueness is (name, platform).
 func TestTopUsers_OtherPlatformBoardExcluded(t *testing.T) {
