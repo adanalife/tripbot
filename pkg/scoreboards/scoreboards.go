@@ -41,7 +41,10 @@ func TopUsers(ctx context.Context, cfg *c.TripbotConfig, scoreboardName string, 
 		// users.platform too: scores written before boards were per-platform
 		// may hang off the other platform's same-named board.
 		Where("users.is_bot = false AND users.exclude_from_leaderboard = false AND users.platform = ? AND users.username != ?", cfg.Platform, cfg.ChannelName).
-		Order("scores.value DESC").
+		// username breaks the tie: without it Postgres is free to return equal
+		// scores in any order, so a board that re-renders every rotation tick
+		// shuffles its tied rows on screen for no reason a viewer can see.
+		Order("scores.value DESC, users.username ASC").
 		Limit(size).
 		Scan(&results)
 	if result.Error != nil {
