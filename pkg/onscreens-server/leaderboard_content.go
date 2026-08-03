@@ -17,11 +17,12 @@ import (
 // rather than a pre-rendered blob, and the renderer lives next to the
 // overlay it feeds. Kept dependency-free (fmt/html/strings) so it doesn't
 // drag pkg/users' DB/config init into this binary.
-// maxLeaderboardRows is what fits on the overlay. It matches the chatbot's
-// leaderboardSize — the sender already caps its boards at ten, so anything
-// stricter here silently drops rows a viewer was told about in chat. Restated
-// rather than imported: a shared package must not pull in the chatbot, and the
-// event arrives over NATS from a sender this binary can't bound.
+// maxLeaderboardRows is what fits on the overlay: a ceiling, not the policy.
+// The sender picks each board's length (most are shorter than this), so
+// anything stricter here would silently drop rows it deliberately sent.
+// Restated rather than imported: a shared package must not pull in the
+// chatbot, and the event arrives over NATS from a sender this binary can't
+// bound.
 const maxLeaderboardRows = 10
 
 func renderLeaderboard(title string, leaderboard [][]string) string {

@@ -94,23 +94,23 @@ func (a *App) showRotatingLeaderboard(ctx context.Context, roll float64) {
 }
 
 // fetchLeaderboard returns the overlay title and rows for the given kind.
-// Titles match the ones the corresponding chat commands use.
+// Titles match the ones the corresponding chat commands use. Everything it
+// returns goes straight to the overlay, so each board is fetched at its
+// onscreen size rather than trimmed afterwards.
 func (a *App) fetchLeaderboard(ctx context.Context, kind leaderboardKind) (string, [][]string) {
 	switch kind {
 	case totalMilesLeaderboard:
-		rows := a.Sessions.LifetimeLeaderboard()
-		if len(rows) > leaderboardSize {
-			rows = rows[:leaderboardSize]
-		}
-		return "Total Miles", rows
+		return "Total Miles", overlayRows(a.Sessions.LifetimeLeaderboard(), onscreenRows)
 	case guessLeaderboard:
-		return "Correct Guesses This Month", a.Scoreboards.TopGuesses(ctx, leaderboardSize)
+		return "Correct Guesses This Month", a.Scoreboards.TopGuesses(ctx, onscreenRows)
 	case guessrDailyLeaderboard:
-		return a.guessrLeaderboard(ctx, "daily", "2006-01-02", "January 2")
+		title, rows := a.guessrLeaderboard(ctx, "daily", "2006-01-02", "January 2")
+		return title, overlayRows(rows, onscreenRows)
 	case guessrMonthlyLeaderboard:
-		return a.guessrLeaderboard(ctx, "monthly", "2006-01", "January")
+		title, rows := a.guessrLeaderboard(ctx, "monthly", "2006-01", "January")
+		return title, overlayRows(rows, guessrMonthlyRows)
 	default:
-		return a.Scoreboards.MilesMonth() + " Miles", a.Scoreboards.TopMiles(ctx, leaderboardSize)
+		return a.Scoreboards.MilesMonth() + " Miles", a.Scoreboards.TopMiles(ctx, onscreenRows)
 	}
 }
 
