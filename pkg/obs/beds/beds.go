@@ -22,6 +22,7 @@ import (
 	"math/rand/v2"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -679,15 +680,57 @@ func (s *Store) record() {
 	instrumentation.OBSBackgroundAudio.SetAlbumTracks(s.platform, tracks)
 }
 
-// TrackTitle turns an album track path into something worth showing a human:
-// the filename without its extension. "" stays "" (the other beds have no
-// track), which is how callers tell "no track" from "a track".
-func TrackTitle(path string) string {
+// Track is an album track as its own filename spells it. Bandcamp names files
+// "<artist> - <album> - <NN Title>", so the filename carries the credit the
+// share's directory name can't and repeats the album the directory already has.
+// Splitting them apart is what lets a caller name a track without saying the
+// album twice.
+//
+// Artist and Album are "" for a filename that names only the track; the
+// directory is the only album a caller has in that case.
+type Track struct {
+	Title  string
+	Album  string
+	Artist string
+}
+
+// ParseTrack reads an album track path. "" yields a zero Track (the other beds
+// have no track), which is how callers tell "no track" from "a track".
+func ParseTrack(path string) Track {
 	if path == "" {
-		return ""
+		return Track{}
 	}
 	base := filepath.Base(path)
-	return strings.TrimSuffix(base, filepath.Ext(base))
+	name := strings.TrimSuffix(base, filepath.Ext(base))
+
+	// Under three fields the filename isn't the tagged shape, so all of it is the
+	// title — "001 Maine - Atlantic Dawn" is one title, not an artist and a track.
+	parts := strings.Split(name, " - ")
+	if len(parts) < 3 {
+		return Track{Title: trimTrackNumber(name)}
+	}
+	return Track{
+		Artist: parts[0],
+		Album:  parts[1],
+		Title:  trimTrackNumber(strings.Join(parts[2:], " - ")),
+	}
+}
+
+// TrackTitle is the track's title alone, for surfaces that show the album
+// separately (the console ships playing_album beside this).
+func TrackTitle(path string) string { return ParseTrack(path).Title }
+
+// trackNumber matches the leading position a tagged filename carries: "21 ",
+// "01. ", "3) ".
+var trackNumber = regexp.MustCompile(`^\d+[.)-]?\s+`)
+
+// trimTrackNumber drops that position. Anyone asking what a song is isn't asking
+// where it sits on a disc they can't see.
+func trimTrackNumber(title string) string {
+	if trimmed := trackNumber.ReplaceAllString(title, ""); trimmed != "" {
+		return trimmed
+	}
+	return title // a filename that is only a number keeps it
 }
 
 func shuffle(tracks []string) {

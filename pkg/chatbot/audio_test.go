@@ -219,7 +219,7 @@ func TestAudioCmd_ViewerNamingABedStillCannotSwitch(t *testing.T) {
 	}
 }
 
-func TestAudioCmd_AdminSwitchesAndAnnouncesTheTrack(t *testing.T) {
+func TestAudioCmd_AdminSwitchesAndAnnouncesTheAlbum(t *testing.T) {
 	app, fake, out := newAudioTestApp(t, beds.CarHum, "")
 
 	app.audioCmd(context.Background(), newTestUser(adminUser), []string{"Album"}) // case-insensitive
@@ -233,8 +233,10 @@ func TestAudioCmd_AdminSwitchesAndAnnouncesTheTrack(t *testing.T) {
 	if !strings.Contains(got, "Fifty Horizons, by wooderCZ") {
 		t.Errorf("expected the announcement to name the album on air, got %q", got)
 	}
-	if !strings.Contains(got, "Colorado Sunrise") {
-		t.Errorf("expected the announcement to name the playing track, got %q", got)
+	// A switch is about the bed. The track it lands on is a second old and about
+	// to change on its own, so the announcement leaves it to !song.
+	if strings.Contains(got, "Colorado Sunrise") {
+		t.Errorf("a switch shouldn't name the track it landed on, got %q", got)
 	}
 }
 
@@ -447,5 +449,23 @@ func TestSongCmd_NamesTheAlbumOnAirUnderAGroupSelection(t *testing.T) {
 	}
 	if !strings.Contains(got, "Petals") {
 		t.Errorf("expected the track title, got %q", got)
+	}
+}
+
+// Every file the StreamBeats albums ship carries the label and the album in its
+// own name, which the directory carries too — announced whole, one line says
+// "StreamBeats" twice, "Breaker" twice, and a track number.
+func TestSongCmd_SaysTheAlbumAndLabelOnce(t *testing.T) {
+	app, fake, out := newAudioTestApp(t, beds.Album, "")
+	fake.onShare = []string{"streambeats-synthwave-breaker"}
+	fake.album = "streambeats"
+	fake.track = "/opt/tripbot/assets/music/streambeats-synthwave-breaker/" +
+		"StreamBeats by Harris Heller - Breaker - 21 Holosmith.flac"
+
+	app.songCmd(context.Background(), newTestUser("viewer1"), nil)
+
+	got := out()
+	if want := `♪ Now playing: "Holosmith" — Breaker, StreamBeats by Harris Heller`; got != want {
+		t.Errorf("got %q, want %q", got, want)
 	}
 }

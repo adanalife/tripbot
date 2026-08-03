@@ -154,8 +154,8 @@ func TestAudioHandler_ReportsBedAndOptions(t *testing.T) {
 		t.Fatalf("bed: %v", body["bed"])
 	}
 	// The console renders the track name as-is, so it must arrive without the
-	// directory or the extension.
-	if body["track"] != "007 New York - Skyline After Midnight" {
+	// directory, the extension, or the track number.
+	if body["track"] != "New York - Skyline After Midnight" {
 		t.Fatalf("track: %v", body["track"])
 	}
 	// The console builds its dropdown from this list rather than hardcoding it.
