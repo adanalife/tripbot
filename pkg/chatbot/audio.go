@@ -122,13 +122,24 @@ func (a *App) audioCmd(ctx context.Context, user *users.User, params []string) {
 	}
 
 	slog.InfoContext(ctx, "background audio switched via chat", "arg", arg, "username", user.Username)
-	a.Chat.Say("🎵 Switched to " + a.describeAudio())
+	a.Chat.Say("🎵 Switched to " + a.audioSource())
 }
 
-// describeAudio renders what's on air for chat: the SomaFM bed by its channel,
-// the album by its track, the car hum by itself. Reads through a.Beds, so only
-// call it with a store wired.
+// describeAudio renders what's on air for chat, track first: the answer to "what
+// is this song". Reads through a.Beds, so only call it with a store wired.
 func (a *App) describeAudio() string {
+	_, track := a.Beds.Current()
+	if t := beds.ParseTrack(track); t.Title != "" {
+		return fmt.Sprintf("%q — %s", t.Title, a.audioSource())
+	}
+	return a.audioSource()
+}
+
+// audioSource names where the audio is coming from and nothing about the song:
+// the SomaFM bed by its channel, the album bed by its album, the car hum by
+// itself. This is what a switch announces — the track it lands on is a second
+// old and about to change, so naming it there answers a question nobody asked.
+func (a *App) audioSource() string {
 	bed, track := a.Beds.Current()
 	if bed == beds.SomaFM {
 		return beds.StationName(a.Beds.Station()) + " on SomaFM"
@@ -137,29 +148,27 @@ func (a *App) describeAudio() string {
 	if !ok {
 		desc = string(bed)
 	}
-	// On the album bed, name the album the track is actually in rather than the
-	// selection: on a group ("streambeats-lofi") or the whole share the selection
-	// covers dozens of albums, and the one playing is the answer to "what is
-	// this?" — the question anyone asking is asking.
-	t := beds.ParseTrack(track)
-	if bed == beds.Album {
-		switch {
-		// A tagged filename names its own album and artist, and both beat the
-		// directory: the directory has to be sortable and group-prefixed
-		// ("streambeats-synthwave-breaker"), so reading it aloud repeats the label
-		// the track already carries and volunteers a genre nobody asked about.
-		case t.Album != "" && t.Artist != "":
-			desc = fmt.Sprintf("%s, %s", t.Album, t.Artist)
-		case t.Album != "":
-			desc = t.Album
-		case a.Beds.PlayingAlbum() != "":
-			desc = albumName(a.Beds.PlayingAlbum())
-		case a.Beds.Album() != "":
-			desc = albumName(a.Beds.Album())
-		}
+	if bed != beds.Album {
+		return desc
 	}
-	if t.Title != "" {
-		return fmt.Sprintf("%q — %s", t.Title, desc)
+	// Name the album the track is actually in rather than the selection: on a group
+	// ("streambeats-lofi") or the whole share the selection covers dozens of
+	// albums, and the one playing is the answer to "what is this?" — the question
+	// anyone asking is asking.
+	t := beds.ParseTrack(track)
+	switch {
+	// A tagged filename names its own album and artist, and both beat the
+	// directory: the directory has to be sortable and group-prefixed
+	// ("streambeats-synthwave-breaker"), so reading it aloud repeats the label the
+	// track already carries and volunteers a genre nobody asked about.
+	case t.Album != "" && t.Artist != "":
+		return fmt.Sprintf("%s, %s", t.Album, t.Artist)
+	case t.Album != "":
+		return t.Album
+	case a.Beds.PlayingAlbum() != "":
+		return albumName(a.Beds.PlayingAlbum())
+	case a.Beds.Album() != "":
+		return albumName(a.Beds.Album())
 	}
 	return desc
 }

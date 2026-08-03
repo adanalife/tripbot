@@ -219,7 +219,7 @@ func TestAudioCmd_ViewerNamingABedStillCannotSwitch(t *testing.T) {
 	}
 }
 
-func TestAudioCmd_AdminSwitchesAndAnnouncesTheTrack(t *testing.T) {
+func TestAudioCmd_AdminSwitchesAndAnnouncesTheAlbum(t *testing.T) {
 	app, fake, out := newAudioTestApp(t, beds.CarHum, "")
 
 	app.audioCmd(context.Background(), newTestUser(adminUser), []string{"Album"}) // case-insensitive
@@ -233,8 +233,10 @@ func TestAudioCmd_AdminSwitchesAndAnnouncesTheTrack(t *testing.T) {
 	if !strings.Contains(got, "Fifty Horizons, by wooderCZ") {
 		t.Errorf("expected the announcement to name the album on air, got %q", got)
 	}
-	if !strings.Contains(got, "Colorado Sunrise") {
-		t.Errorf("expected the announcement to name the playing track, got %q", got)
+	// A switch is about the bed. The track it lands on is a second old and about
+	// to change on its own, so the announcement leaves it to !song.
+	if strings.Contains(got, "Colorado Sunrise") {
+		t.Errorf("a switch shouldn't name the track it landed on, got %q", got)
 	}
 }
 
