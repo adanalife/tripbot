@@ -197,7 +197,9 @@ func defaultSomaFMReachable(ctx context.Context, url string) bool {
 // audible music on the stream: it swaps to the local bed after cfg.FailThreshold
 // consecutive down ticks and swaps back after cfg.RecoverThreshold consecutive
 // ticks of SomaFM being reachable, with cfg.Cooldown between any two swaps.
-// Records the audio gauges every tick. Runs until ctx is cancelled.
+// Records the playing / level / on-fallback gauges every tick; somafm_reachable
+// only on the ticks that probe, so it reads NoData rather than a stale 1 while
+// nothing is waiting on the edge. Runs until ctx is cancelled.
 func Watch(ctx context.Context, deps Deps, cfg Config) {
 	ticker := time.NewTicker(cfg.Interval)
 	defer ticker.Stop()
@@ -217,9 +219,6 @@ func Watch(ctx context.Context, deps Deps, cfg Config) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			reachable := deps.SomaFMReachable(ctx)
-			instrumentation.OBSBackgroundAudio.SetSomaFMReachable(reachable)
-
 			db, fresh := deps.Level()
 			if fresh {
 				// Only record a level we actually trust. A stale meter (the
@@ -310,7 +309,13 @@ func Watch(ctx context.Context, deps Deps, cfg Config) {
 				continue
 			}
 
-			// On the local fallback bed: wait for SomaFM to come back.
+			// On the local fallback bed: wait for SomaFM to come back. This is the
+			// only state whose outcome depends on the edge being up, so it's the
+			// only state that probes: a connection opened on a tick that could
+			// not act on the answer is load on SomaFM's edge for nothing, and
+			// enough of them across the fleet reads as abuse from one IP.
+			reachable := deps.SomaFMReachable(ctx)
+			instrumentation.OBSBackgroundAudio.SetSomaFMReachable(reachable)
 			if !reachable {
 				recoverHits = 0
 				continue

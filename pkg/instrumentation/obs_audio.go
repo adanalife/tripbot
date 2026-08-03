@@ -28,7 +28,7 @@ var (
 	obsBackgroundAudioOnFallback = mustGauge("obs_background_audio_on_fallback",
 		"1 when the audio-fallback watchdog has swapped the Twitch background bed to the local Car Hum file because SomaFM was unreachable, 0 when on the normal SomaFM source.")
 	somafmReachable = mustGauge("somafm_reachable",
-		"1 when the SomaFM edge served stream bytes on the watchdog's last probe, 0 when it timed out or returned no data. Gates the swap back from the local fallback.")
+		"1 when the SomaFM edge served stream bytes on the watchdog's last probe, 0 when it timed out or returned no data. Gates the swap back from the local fallback, and reported only while a bot is waiting on that gate: absent in steady state, so read a gap as 'nothing needed the edge', not as 'the edge is down'.")
 	obsBackgroundAudioSwaps = mustCounter("obs_background_audio_swaps_total",
 		"Total background-audio source swaps performed by the audio-fallback watchdog, labeled by direction (to_fallback|to_somafm). Any to_fallback increment means SomaFM dropped in prod.")
 	backgroundAudioBed = mustGauge("tripbot_background_audio_bed",
