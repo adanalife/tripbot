@@ -138,7 +138,11 @@ func (a *App) buildRegistry() []Command {
 		},
 		{
 			Trigger: "!commands",
-			Aliases: []string{"!command", "!controls"},
+			// "!hello" lists commands rather than greeting: a viewer who types
+			// the bang is addressing the bot, and what they want next is the
+			// command surface. The bare "hello" trigger above still greets, so
+			// an ordinary greeting in chat is unaffected.
+			Aliases: []string{"!command", "!controls", "!hello"},
 			Handler: a.commandsCmd,
 		},
 		{

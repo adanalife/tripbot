@@ -125,6 +125,29 @@ func TestFindCommand_SingleWordAlias(t *testing.T) {
 	}
 }
 
+// "!hello" and bare "hello" deliberately route to different commands — the bang
+// lists the command surface, the bare greeting greets back. Nothing about the
+// matcher would produce that on its own: fuzzyLookup skips bare-word triggers,
+// so "!hello" reached no command at all before it was registered as an alias.
+// Pinned as a pair because the split is surprising enough to look like a bug.
+func TestFindCommand_BangHelloListsCommands(t *testing.T) {
+	cmd, _ := builtTestApp.findCommand("!hello")
+	if cmd == nil {
+		t.Fatal("expected a command, got nil")
+	}
+	if cmd.Trigger != "!commands" {
+		t.Errorf("!hello routed to %q, want !commands", cmd.Trigger)
+	}
+
+	bare, _ := builtTestApp.findCommand("hello")
+	if bare == nil {
+		t.Fatal("expected a command for bare hello, got nil")
+	}
+	if bare.Trigger != "hello" {
+		t.Errorf("bare hello routed to %q, want hello", bare.Trigger)
+	}
+}
+
 func TestFindCommand_MultiWordAlias(t *testing.T) {
 	// "no audio" is an alias of !report
 	cmd, params := builtTestApp.findCommand("no audio")
