@@ -24,11 +24,13 @@ type tick struct {
 }
 
 // fakeDeps drives Watch with a scripted sequence of ticks and counts the swaps
-// in each direction. The script advances on SomaFMReachable (the first hook
-// called each tick); Level and MediaState read the stashed current tick so all
-// three reflect the same scripted evaluation. Signals doneCh once exhausted so
-// the test can tear the loop down cleanly, holding the last tick to avoid
-// racing shutdown.
+// in each direction. The script advances on Level, the one hook called on every
+// tick unconditionally; MediaState and SomaFMReachable read the stashed current
+// tick so all three reflect the same scripted evaluation. The probe is
+// deliberately not the advancing hook — it only runs on ticks that can act on
+// the answer, so driving the script from it would stall the moment the watchdog
+// correctly declines to probe. Signals doneCh once exhausted so the test can
+// tear the loop down cleanly, holding the last tick to avoid racing shutdown.
 type fakeDeps struct {
 	mu      sync.Mutex
 	script  []tick
@@ -38,6 +40,7 @@ type fakeDeps struct {
 	toFallback atomic.Int32
 	toSomaFM   atomic.Int32
 	advances   atomic.Int32
+	probes     atomic.Int32
 
 	// bed is the selected background-audio bed; the SomaFM outage machinery
 	// only runs while it's SomaFM.
@@ -65,6 +68,12 @@ func (f *fakeDeps) onBed(b beds.Bed) *fakeDeps {
 func (f *fakeDeps) deps() Deps {
 	return Deps{
 		SomaFMReachable: func(context.Context) bool {
+			f.probes.Add(1)
+			f.mu.Lock()
+			defer f.mu.Unlock()
+			return f.current.reachable
+		},
+		Level: func() (float64, bool) {
 			f.mu.Lock()
 			defer f.mu.Unlock()
 			if f.idx >= len(f.script) {
@@ -79,11 +88,6 @@ func (f *fakeDeps) deps() Deps {
 					f.current.console(f)
 				}
 			}
-			return f.current.reachable
-		},
-		Level: func() (float64, bool) {
-			f.mu.Lock()
-			defer f.mu.Unlock()
 			return f.current.db, f.current.fresh
 		},
 		MediaState: func(context.Context) (string, error) {
@@ -251,6 +255,42 @@ func TestWatch_LocalBedNeverSwapsToFallback(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestWatch_ProbesOnlyWhileStrandedOnFallback(t *testing.T) {
+	// The probe opens a fresh connection to SomaFM's edge every time it runs, so
+	// it must only run on a tick whose outcome depends on the answer: stranded on
+	// the local bed, waiting to swap back. A local bed the operator picked, or a
+	// healthy SomaFM stream, needs no probe — and probing anyway put every
+	// platform's bot on the edge every interval, which is enough traffic from one
+	// IP to get it firewalled (2026-08-02).
+	t.Run("local bed never probes", func(t *testing.T) {
+		for _, bed := range []beds.Bed{beds.CarHum, beds.Album} {
+			deps := newFakeDeps([]tick{ended, ended, ended, playing}).onBed(bed)
+			runUntilExhausted(t, deps, cfg(3, 4, 0))
+			if got := deps.probes.Load(); got != 0 {
+				t.Errorf("probes on %s bed: want 0, got %d", bed, got)
+			}
+		}
+	})
+
+	t.Run("healthy somafm stream never probes", func(t *testing.T) {
+		deps := newFakeDeps([]tick{playing, playing, playing, playing})
+		runUntilExhausted(t, deps, cfg(3, 4, 0))
+		if got := deps.probes.Load(); got != 0 {
+			t.Errorf("probes while the stream is healthy: want 0, got %d", got)
+		}
+	})
+
+	t.Run("probes once stranded on the fallback", func(t *testing.T) {
+		// 3 down ticks strand us on the local bed; only the ticks after that
+		// swap consult the edge.
+		deps := newFakeDeps([]tick{ended, ended, ended, ended, ended})
+		runUntilExhausted(t, deps, cfg(3, 4, 0))
+		if got := deps.probes.Load(); got == 0 {
+			t.Fatal("no probe while stranded on the fallback: SomaFM can never be seen to recover")
+		}
+	})
 }
 
 func TestWatch_CarHumBedDoesNotAdvanceAlbum(t *testing.T) {
