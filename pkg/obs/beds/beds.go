@@ -26,6 +26,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 )
@@ -106,11 +107,17 @@ type Store struct {
 	station string // SomaFM channel id the SomaFM bed plays
 	// album is the Album bed's selection: one album's directory, a prefix naming
 	// a group of them ("streambeats-lofi"), or "" for the whole share.
-	album   string
-	shuffle bool     // play order is shuffled rather than sequential
-	tracks  []string // the play order; rebuilt each time a selection starts
-	idx     int
+	album     string
+	shuffle   bool     // play order is shuffled rather than sequential
+	tracks    []string // the play order; rebuilt each time a selection starts
+	idx       int
+	lastStart time.Time // when a track was last pointed at OBS; see Advance
 }
+
+// advanceDebounce is how soon after a track starts another advance is taken to
+// be a duplicate report of the same ending rather than a real one. A var so the
+// tests, which advance back to back on purpose, can switch it off.
+var advanceDebounce = 3 * time.Second
 
 // NewStore returns a store defaulting to bed (used until Detect reads the real
 // one off OBS). musicDir is the album root; "" uses MusicDir. platform labels
@@ -407,6 +414,7 @@ func (s *Store) Set(ctx context.Context, bed Bed) error {
 
 	s.mu.Lock()
 	s.bed = bed
+	s.lastStart = time.Now()
 	s.mu.Unlock()
 	s.record()
 	// Counted here rather than at the callers so a console switch and a chat
@@ -465,14 +473,22 @@ func (s *Store) SetStation(ctx context.Context, station string) error {
 }
 
 // Advance moves to the next album track (wrapping at the end) and plays it.
-// A no-op unless the album is the live bed — the watchdog calls this whenever
-// OBS reports the media ended, which also happens on the other beds.
+// A no-op unless the album is the live bed — the callers report the media
+// ending, which also happens on the other beds.
+//
+// Two of them report the same ending: the playback-ended subscription, which
+// arrives in milliseconds, and the watchdog tick that backs it up. So an
+// advance within advanceDebounce of the last track starting is dropped as that
+// duplicate. Tracks run minutes, so nothing legitimate lands that close — and
+// the same guard covers an operator's switch, which starts a track through Set
+// and would otherwise be stepped over by the outgoing track's own ending.
 func (s *Store) Advance(ctx context.Context) error {
 	s.mu.Lock()
-	if s.bed != Album || len(s.tracks) == 0 {
+	if s.bed != Album || len(s.tracks) == 0 || time.Since(s.lastStart) < advanceDebounce {
 		s.mu.Unlock()
 		return nil
 	}
+	s.lastStart = time.Now()
 	current := s.tracks[s.idx]
 	s.idx = (s.idx + 1) % len(s.tracks)
 	// Re-shuffle on wrap so a long stream doesn't repeat the same 100-track

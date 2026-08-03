@@ -691,12 +691,17 @@ func (t *Tripbot) startBackgroundAudio(ctx context.Context) {
 // drops (swapping onto the local Car Hum bed and back once SomaFM recovers —
 // first needed in prod on 2026-06-23, when a full SomaFM edge outage left the
 // stream silent with no self-heal), and it advances the album to its next track
-// when OBS reports the current one ended.
+// when OBS reports the current one ended. The meter's subscription carries that
+// report, so a track boundary is a WebSocket event rather than the watchdog's
+// next tick — the difference between a hard cut and seconds of dead air. The
+// tick still advances as a backstop for an ending missed while the subscription
+// was reconnecting.
 //
 // Runs on every platform: any platform can select any bed, so neither job
 // is Twitch-specific. On the car-hum bed it only records the audio gauges.
 func (t *Tripbot) startBackgroundAudioWatchdog(ctx context.Context) {
-	meter := audiowatchdog.NewVolumeMeter(audiowatchdog.BackgroundAudioInputName, 30*time.Second)
+	meter := audiowatchdog.NewVolumeMeter(
+		audiowatchdog.BackgroundAudioInputName, 30*time.Second, t.beds.Advance)
 	go meter.Run(ctx)
 	go audiowatchdog.Watch(ctx, audiowatchdog.DefaultDeps(meter, t.beds), audiowatchdog.DefaultConfig())
 }

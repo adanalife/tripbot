@@ -7,7 +7,17 @@ import (
 	"path/filepath"
 	"slices"
 	"testing"
+	"time"
 )
+
+// TestMain switches off the advance debounce, which exists to drop a second
+// report of one track ending (see Advance) and would otherwise swallow the
+// back-to-back advances these tests drive by hand. The guard itself is covered
+// by TestAdvance_DropsADuplicateEndingReport, which turns it back on.
+func TestMain(m *testing.M) {
+	advanceDebounce = 0
+	os.Exit(m.Run())
+}
 
 // fakeOBS records what would have been written to the OBS source.
 type fakeOBS struct {
@@ -642,6 +652,39 @@ func TestAdvance_WalksEveryTrackThenWraps(t *testing.T) {
 	}
 	if o.file == "" {
 		t.Fatal("advance past the end should wrap, not stop")
+	}
+}
+
+// One track ending is reported twice — by the playback-ended subscription and
+// by the watchdog tick that backs it up — and acting on both would skip a track.
+func TestAdvance_DropsADuplicateEndingReport(t *testing.T) {
+	defer func(d time.Duration) { advanceDebounce = d }(advanceDebounce)
+	advanceDebounce = time.Minute
+
+	o := &fakeOBS{}
+	s := NewStore(o, CarHum, shareOf(t, map[string]int{"streambeats-lofi-gold": 4}), "twitch")
+	ctx := context.Background()
+	if err := s.SetShuffle(ctx, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetAlbum(ctx, "streambeats-lofi-gold"); err != nil {
+		t.Fatal(err)
+	}
+	// Age the selection's own stamp: what's under test is two advances against
+	// each other, not an advance against the switch that started the album.
+	s.mu.Lock()
+	s.lastStart = time.Time{}
+	s.mu.Unlock()
+
+	for range 2 {
+		if err := s.Advance(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Sequential order over "a track.mp3".."d track.mp3": one advance off the
+	// first track lands on the second, and the duplicate must not reach the third.
+	if got := filepath.Base(o.file); got != "b track.mp3" {
+		t.Errorf("two reports of one ending played %q, want b track.mp3", got)
 	}
 }
 
