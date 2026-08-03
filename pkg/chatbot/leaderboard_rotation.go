@@ -14,12 +14,13 @@ import (
 // sit at the top of it for months.
 const totalMilesOdds = 0.05
 
-// boardShare is what remains, split six ways. The two long-running boards take
-// two shares each and the two guessing-game boards take one, so a guessr board
-// comes up about half as often as a miles board — new, but not at the expense
-// of the boards viewers have been climbing all month. The two together add up
-// to one miles board's worth of screen time.
-const boardShare = (1 - totalMilesOdds) / 6
+// boardShare is what remains, split eleven ways: four shares each to the two
+// long-running boards, two to the monthly guessr board, one to the daily. So a
+// guessr board never comes up at the expense of the boards viewers have been
+// climbing all month, and the daily one is the rarest of all — it shows the
+// last *closed* date, five names from a day that is already over, so it is the
+// board that goes stalest between ticks.
+const boardShare = (1 - totalMilesOdds) / 11
 
 // guessrBoardFlagKey gates the two guessing-game boards. Off, the rotation is
 // exactly the three boards it was before them — not a fetch that renders
@@ -56,11 +57,11 @@ func pickLeaderboard(roll float64, guessr bool) leaderboardKind {
 	switch {
 	case roll < totalMilesOdds:
 		return totalMilesLeaderboard
-	case roll < totalMilesOdds+2*boardShare:
-		return guessLeaderboard
 	case roll < totalMilesOdds+4*boardShare:
+		return guessLeaderboard
+	case roll < totalMilesOdds+8*boardShare:
 		return monthlyMilesLeaderboard
-	case roll < totalMilesOdds+5*boardShare:
+	case roll < totalMilesOdds+9*boardShare:
 		return guessrDailyLeaderboard
 	default:
 		return guessrMonthlyLeaderboard
