@@ -9,6 +9,30 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v4.20.0] — 2026-08-03 🚭
+
+### Chatbot
+
+- `!song` names the track from its own filename tags, so a StreamBeats song announces as `"Holosmith" — Breaker, StreamBeats by Harris Heller` rather than repeating the label and the album twice with a track number on the end. The console's now-playing line drops the track number too. An `!audio` switch now names only what it switched to (`Switched to Breaker, StreamBeats by Harris Heller`) and leaves the song to `!song`. ([#1322](https://github.com/adanalife/tripbot/pull/1322))
+- A background-audio switch now waits 5 seconds before it reaches OBS, so a mis-click on the console — or a fumbled `!audio` — can be corrected before the stream's audio changes. A second switch inside the window replaces the first rather than queueing behind it. `!audio` announces the wait (`Switching to Breaker, StreamBeats by Harris Heller in 5s`), and `/api/audio` ships the waiting switch as `pending` so the console can show it. ([#1324](https://github.com/adanalife/tripbot/pull/1324))
+- Tied leaderboard scores now share a place. Two viewers level on miles are both first and the next one down is third, wherever a place number is printed — the chat commands and the Discord embeds. Tied names also hold a fixed order instead of swapping around between refreshes. ([#1325](https://github.com/adanalife/tripbot/pull/1325))
+- `!hello` now lists the commands you can try, the same as `!commands`. It previously matched nothing at all. Saying plain `hello` (or `hi`, or `hey`) in chat still gets a greeting back. ([#1328](https://github.com/adanalife/tripbot/pull/1328))
+
+### Onscreens
+
+- Onscreen leaderboards are back to five rows. The monthly Guessr board keeps ten — it's a whole month's running total, so the names below fifth place are still worth reading. Chat still lists ten, where a longer list costs nothing. ([#1321](https://github.com/adanalife/tripbot/pull/1321))
+- The daily Guessr board comes up half as often in the onscreen rotation. It shows the last finished day, so it's the board that ages fastest between appearances — the monthly board and the miles boards keep their share. ([#1323](https://github.com/adanalife/tripbot/pull/1323))
+
+### Fixes
+
+- The album bed advances the moment a track ends rather than on the audio watchdog's next 7-second tick, so the gap between two songs is no longer up to seven seconds of silence. ([#1317](https://github.com/adanalife/tripbot/pull/1317))
+- Outbound chat no longer reports an offline platform as a failure. The rotating chatter and the timed jobs Say on a schedule regardless of whether anything is live, so on Facebook — where a comment can only be posted to a live video — every offline hour was logging an error per tick and forwarding it to Sentry. The gateway's two state replies (409 nothing live, 503 platform refused the call) now carry sentinels, and `Say` logs those at warn; a genuine upstream failure keeps its error level. ([#1327](https://github.com/adanalife/tripbot/pull/1327))
+
+### Misc
+
+- Added the `video_coords` table, which records where the van was at each moment of a clip rather than once per clip. ([#1319](https://github.com/adanalife/tripbot/pull/1319))
+- Coordinates in `video_coords` are now keyed to the recording they were read from rather than to the clip cut out of it, so correcting a trim point re-places them instead of silently invalidating them. ([#1320](https://github.com/adanalife/tripbot/pull/1320))
+
 ## [v4.19.0] — 2026-08-03
 
 ### Chatbot
