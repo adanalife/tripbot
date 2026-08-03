@@ -1,0 +1,1 @@
+Coordinates in `video_coords` are now keyed to the recording they were read from rather than to the clip cut out of it, so correcting a trim point re-places them instead of silently invalidating them.
