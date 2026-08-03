@@ -118,14 +118,14 @@ func TestShowRotatingLeaderboard_TotalMiles_TruncatesToSize(t *testing.T) {
 	app.Onscreens = rec
 
 	var lifetime [][]string
-	for i := 0; i < leaderboardSize+5; i++ {
+	for i := 0; i < 12; i++ {
 		lifetime = append(lifetime, []string{fmt.Sprintf("viewer%d", i), "100.0"})
 	}
 	app.Sessions = &recordingSessions{Leaderboard: lifetime}
 
 	app.showRotatingLeaderboard(context.Background(), 0.01) // total miles
 
-	want := fmt.Sprintf(`ShowLeaderboard("Total Miles", %d rows)`, leaderboardSize)
+	want := `ShowLeaderboard("Total Miles", 5 rows)`
 	if len(rec.Calls) != 1 || !strings.Contains(rec.Calls[0], want) {
 		t.Errorf("expected truncated Total Miles overlay (%s), got %v", want, rec.Calls)
 	}
@@ -207,6 +207,47 @@ func TestShowRotatingLeaderboard_GuessrMonthly(t *testing.T) {
 	want := `ShowLeaderboard("August Guessr", 1 rows)`
 	if len(rec.Calls) != 1 || !strings.Contains(rec.Calls[0], want) {
 		t.Errorf("expected %s, got %v", want, rec.Calls)
+	}
+}
+
+// The one board that keeps a full ten rows onscreen. Both guessr boards come
+// off the same fetch, so serving one over-long response to both proves the size
+// travels with the board rather than the code path.
+func TestShowRotatingLeaderboard_GuessrMonthlyKeepsMoreRows(t *testing.T) {
+	var rows []string
+	for i := 0; i < 12; i++ {
+		rows = append(rows, fmt.Sprintf(`["viewer%d",%d]`, i, 100-i))
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		period := "2026-08"
+		if r.URL.Query().Get("board") == "daily" {
+			period = "2026-08-01"
+		}
+		fmt.Fprintf(w, `{"period":%q,"rows":[%s]}`, period, strings.Join(rows, ","))
+	}))
+	defer srv.Close()
+	swapGuessrURL(t, srv.URL)
+
+	for _, tc := range []struct {
+		name string
+		roll float64
+		want string
+	}{
+		{"daily", 0.7, `ShowLeaderboard("August 1 Guessr", 5 rows)`},
+		{"monthly", 0.9, `ShowLeaderboard("August Guessr", 10 rows)`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			app := newTestApp(video.Video{})
+			rec := &recordingOnscreens{}
+			app.Onscreens = rec
+			app.Flags = &recordingFlags{Set: map[string]bool{guessrBoardFlagKey: true}}
+
+			app.showRotatingLeaderboard(context.Background(), tc.roll)
+
+			if len(rec.Calls) != 1 || !strings.Contains(rec.Calls[0], tc.want) {
+				t.Errorf("expected %s, got %v", tc.want, rec.Calls)
+			}
+		})
 	}
 }
 

@@ -110,9 +110,9 @@ func (a *App) guessrLeaderboardCmd(ctx context.Context, user *users.User, params
 		return
 	}
 
-	board, parse, display := "daily", "2006-01-02", "January 2"
+	board, parse, display, size := "daily", "2006-01-02", "January 2", onscreenRows
 	if len(params) > 0 && strings.HasPrefix(strings.ToLower(params[0]), "month") {
-		board, parse, display = "monthly", "2006-01", "January"
+		board, parse, display, size = "monthly", "2006-01", "January", guessrMonthlyRows
 	}
 
 	title, rows := a.guessrLeaderboard(ctx, board, parse, display)
@@ -123,7 +123,7 @@ func (a *App) guessrLeaderboardCmd(ctx context.Context, user *users.User, params
 		return
 	}
 
-	a.Onscreens.ShowLeaderboard(ctx, title, rows)
+	a.Onscreens.ShowLeaderboard(ctx, title, overlayRows(rows, size))
 
 	msg := title + ": "
 	for i, row := range rows {

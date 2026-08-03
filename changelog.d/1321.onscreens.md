@@ -1,0 +1,1 @@
+Onscreen leaderboards are back to five rows. The monthly Guessr board keeps ten — it's a whole month's running total, so the names below fifth place are still worth reading. Chat still lists ten, where a longer list costs nothing.
