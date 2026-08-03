@@ -252,6 +252,11 @@ func Watch(ctx context.Context, deps Deps, cfg Config) {
 				instrumentation.OBSBackgroundAudio.SetOnFallback(false)
 				// The album plays one track at a time, unlooped, so OBS ends the
 				// media between tracks — that's the cue to queue the next one.
+				// The meter's playback-ended subscription normally gets there
+				// first, in milliseconds; this is the backstop for an ending
+				// that landed while the subscription was down, where the cost is
+				// one gap of up to Interval instead of a bed that never advances
+				// again. The Store drops whichever arrives second.
 				if bed == beds.Album && obs.MediaStateDown(state) {
 					if err := deps.AdvanceAlbum(ctx); err != nil {
 						slog.ErrorContext(ctx, "audio watchdog: album advance failed", "err", err)

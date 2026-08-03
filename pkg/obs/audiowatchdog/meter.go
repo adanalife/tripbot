@@ -22,15 +22,17 @@ const silenceFloorDB = -60.0
 // WebSocket drops, so a flapping OBS can't spin a tight reconnect loop.
 const meterReconnectDelay = 5 * time.Second
 
-// VolumeMeter holds the latest peak output level for one OBS input, fed by a
-// long-lived OBS WebSocket connection subscribed to the InputVolumeMeters
-// high-volume event (one frame every ~50ms). It exists because OBS exposes
-// audio levels only as a pushed event — there is no request to poll them — so
-// detecting "playing but silent" needs a persistent subscription. Read the
-// current value with Level(); the connection self-heals on drop.
+// VolumeMeter watches one OBS input over a long-lived WebSocket connection: it
+// holds the input's latest peak output level, and it relays the input's
+// playback-ended events to onEnded. Both jobs need a subscription rather than a
+// request — OBS exposes audio levels only as a pushed event (one frame every
+// ~50ms), and the end of a track is a moment, not a state you can poll without
+// leaving dead air behind. Read the current level with Level(); the connection
+// self-heals on drop.
 type VolumeMeter struct {
 	inputName  string
 	staleAfter time.Duration
+	onEnded    func(context.Context) error
 
 	mu       sync.RWMutex
 	lastDB   float64
@@ -40,11 +42,13 @@ type VolumeMeter struct {
 // NewVolumeMeter builds a meter for the named OBS input. staleAfter is how
 // long a sample stays trusted — past it, Level reports fresh=false so callers
 // fall back to other signals (the source may have stopped emitting meters
-// entirely). It does not connect until Run is called.
-func NewVolumeMeter(inputName string, staleAfter time.Duration) *VolumeMeter {
+// entirely). onEnded runs each time that input finishes playing its media, and
+// may be nil. It does not connect until Run is called.
+func NewVolumeMeter(inputName string, staleAfter time.Duration, onEnded func(context.Context) error) *VolumeMeter {
 	return &VolumeMeter{
 		inputName:  inputName,
 		staleAfter: staleAfter,
+		onEnded:    onEnded,
 		lastDB:     silenceFloorDB,
 	}
 }
@@ -83,7 +87,8 @@ func (m *VolumeMeter) Run(ctx context.Context) {
 // stream until the connection drops or ctx is cancelled. Returns so Run can
 // reconnect.
 func (m *VolumeMeter) connectAndConsume(ctx context.Context) {
-	client, err := obs.Dial(ctx, goobs.WithEventSubscriptions(subscriptions.InputVolumeMeters))
+	client, err := obs.Dial(ctx, goobs.WithEventSubscriptions(
+		subscriptions.InputVolumeMeters|subscriptions.MediaInputs))
 	if err != nil {
 		slog.WarnContext(ctx, "obs volume meter: connect failed", "err", err)
 		return
@@ -104,11 +109,31 @@ func (m *VolumeMeter) connectAndConsume(ctx context.Context) {
 				slog.WarnContext(ctx, "obs volume meter: event stream closed")
 				return
 			}
-			meters, ok := ev.(*events.InputVolumeMeters)
-			if !ok {
-				continue
-			}
-			m.consume(meters)
+			m.handle(ctx, ev)
+		}
+	}
+}
+
+// handle routes one event off the subscription; anything else on the stream is
+// ignored.
+//
+// ponytail: onEnded runs inline. A wedged OBS can stall it, which stops the
+// level updates and makes Level report fresh=false — a case the watchdog
+// already treats as untrusted rather than silent. Dispatch it on its own
+// goroutine if that stall ever costs more than the meter's freshness.
+func (m *VolumeMeter) handle(ctx context.Context, ev any) {
+	switch e := ev.(type) {
+	case *events.InputVolumeMeters:
+		m.consume(e)
+	case *events.MediaInputPlaybackEnded:
+		// Every media source in the scene raises this — the dashcam player ends
+		// a clip every few minutes — so the input name is what makes it ours.
+		if e.InputName != m.inputName || m.onEnded == nil {
+			return
+		}
+		slog.InfoContext(ctx, "obs volume meter: input playback ended", "input", e.InputName)
+		if err := m.onEnded(ctx); err != nil {
+			slog.ErrorContext(ctx, "obs volume meter: playback-ended handler failed", "err", err)
 		}
 	}
 }
