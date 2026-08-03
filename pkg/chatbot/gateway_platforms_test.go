@@ -1,9 +1,12 @@
 package chatbot
 
 import (
+	"bytes"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
@@ -134,6 +137,41 @@ func TestGatewayChatSayActionsAndIdentity(t *testing.T) {
 			}
 			if got["identity"] != tt.identity {
 				t.Errorf("identity = %q, want %q", got["identity"], tt.identity)
+			}
+		})
+	}
+}
+
+// Say's log level is the whole point of the classification: error reaches Sentry
+// and warn doesn't. A Facebook Page that isn't live answers 409 on every
+// scheduled rotator tick, which is an ordinary offline hour rather than a defect
+// — while a 502 is a real failure and has to keep its error level.
+func TestSayLogsPlatformStatesBelowError(t *testing.T) {
+	tests := []struct {
+		name      string
+		status    int
+		wantError bool
+	}{
+		{"nothing live", http.StatusConflict, false},
+		{"platform refused", http.StatusServiceUnavailable, false},
+		{"upstream failed", http.StatusBadGateway, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(tt.status)
+			}))
+			defer srv.Close()
+
+			var buf bytes.Buffer
+			restore := slog.Default()
+			slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})))
+			defer slog.SetDefault(restore)
+
+			gatewayChat{client: gateway.New(srv.URL), platform: platformFacebook}.Say("hello")
+
+			if gotError := strings.Contains(buf.String(), "level=ERROR"); gotError != tt.wantError {
+				t.Errorf("logged at error = %v, want %v; log = %q", gotError, tt.wantError, buf.String())
 			}
 		})
 	}
