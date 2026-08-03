@@ -1,0 +1,1 @@
+`!song` and `!audio` name the track from its own filename tags, so a StreamBeats song announces as `"Holosmith" — Breaker, StreamBeats by Harris Heller` rather than repeating the label and the album twice with a track number on the end. The console's now-playing line drops the track number too.

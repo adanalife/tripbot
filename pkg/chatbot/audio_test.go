@@ -449,3 +449,21 @@ func TestSongCmd_NamesTheAlbumOnAirUnderAGroupSelection(t *testing.T) {
 		t.Errorf("expected the track title, got %q", got)
 	}
 }
+
+// Every file the StreamBeats albums ship carries the label and the album in its
+// own name, which the directory carries too — announced whole, one line says
+// "StreamBeats" twice, "Breaker" twice, and a track number.
+func TestSongCmd_SaysTheAlbumAndLabelOnce(t *testing.T) {
+	app, fake, out := newAudioTestApp(t, beds.Album, "")
+	fake.onShare = []string{"streambeats-synthwave-breaker"}
+	fake.album = "streambeats"
+	fake.track = "/opt/tripbot/assets/music/streambeats-synthwave-breaker/" +
+		"StreamBeats by Harris Heller - Breaker - 21 Holosmith.flac"
+
+	app.songCmd(context.Background(), newTestUser("viewer1"), nil)
+
+	got := out()
+	if want := `♪ Now playing: "Holosmith" — Breaker, StreamBeats by Harris Heller`; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}

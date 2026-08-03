@@ -811,3 +811,41 @@ func TestAdvance_NeverRepeatsATrackAcrossTheWrap(t *testing.T) {
 		prev = o.file
 	}
 }
+
+// The share holds two filename conventions — Bandcamp's tagged
+// "<artist> - <album> - <NN Title>" and a bare numbered title — and chat asks
+// what a song is, not where it sits on a disc.
+func TestParseTrack(t *testing.T) {
+	for _, tc := range []struct {
+		path string
+		want Track
+	}{{
+		path: "/music/streambeats-synthwave-breaker/StreamBeats by Harris Heller - Breaker - 21 Holosmith.flac",
+		want: Track{Title: "Holosmith", Album: "Breaker", Artist: "StreamBeats by Harris Heller"},
+	}, {
+		// A hyphen inside the title survives: only the first two fields are the
+		// artist and the album, whatever follows is one title.
+		path: "/music/x/Artist - Album - 04 Cross - Country.mp3",
+		want: Track{Title: "Cross - Country", Album: "Album", Artist: "Artist"},
+	}, {
+		path: "/music/fifty-horizons/001 Maine - Atlantic Dawn.mp3",
+		want: Track{Title: "Maine - Atlantic Dawn"},
+	}, {
+		path: "/music/x/07 Petals.mp3",
+		want: Track{Title: "Petals"},
+	}, {
+		path: "/music/x/Untitled.mp3",
+		want: Track{Title: "Untitled"},
+	}, {
+		// All-number filename: dropping the number would leave nothing to say.
+		path: "/music/x/07.mp3",
+		want: Track{Title: "07"},
+	}, {
+		path: "",
+		want: Track{},
+	}} {
+		if got := ParseTrack(tc.path); got != tc.want {
+			t.Errorf("ParseTrack(%q) = %+v, want %+v", tc.path, got, tc.want)
+		}
+	}
+}

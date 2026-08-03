@@ -141,15 +141,25 @@ func (a *App) describeAudio() string {
 	// selection: on a group ("streambeats-lofi") or the whole share the selection
 	// covers dozens of albums, and the one playing is the answer to "what is
 	// this?" — the question anyone asking is asking.
+	t := beds.ParseTrack(track)
 	if bed == beds.Album {
-		if album := a.Beds.PlayingAlbum(); album != "" {
-			desc = albumName(album)
-		} else if album := a.Beds.Album(); album != "" {
-			desc = albumName(album)
+		switch {
+		// A tagged filename names its own album and artist, and both beat the
+		// directory: the directory has to be sortable and group-prefixed
+		// ("streambeats-synthwave-breaker"), so reading it aloud repeats the label
+		// the track already carries and volunteers a genre nobody asked about.
+		case t.Album != "" && t.Artist != "":
+			desc = fmt.Sprintf("%s, %s", t.Album, t.Artist)
+		case t.Album != "":
+			desc = t.Album
+		case a.Beds.PlayingAlbum() != "":
+			desc = albumName(a.Beds.PlayingAlbum())
+		case a.Beds.Album() != "":
+			desc = albumName(a.Beds.Album())
 		}
 	}
-	if title := beds.TrackTitle(track); title != "" {
-		return fmt.Sprintf("%s — %q", desc, title)
+	if t.Title != "" {
+		return fmt.Sprintf("%q — %s", t.Title, desc)
 	}
 	return desc
 }
