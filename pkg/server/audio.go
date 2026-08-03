@@ -16,8 +16,12 @@ type BedStore interface {
 	Current() (beds.Bed, string)
 	Station() string
 	Album() string
+	PlayingAlbum() string
 	Albums() []string
+	Groups() []string
 	ValidAlbum(album string) bool
+	Shuffle() bool
+	SetShuffle(ctx context.Context, on bool) error
 	SomaFMTrack(ctx context.Context) (artist, title string, err error)
 	Set(ctx context.Context, bed beds.Bed) error
 	SetStation(ctx context.Context, station string) error
@@ -50,6 +54,15 @@ func (s *Server) audioHandler(w http.ResponseWriter, r *http.Request) {
 		// be wrong the first time Dana drops an album on the NAS.
 		body["album"] = s.beds.Album()
 		body["albums"] = s.beds.Albums()
+		// Groups are prefixes covering several albums ("streambeats-lofi"). They
+		// travel beside the albums because the picker offers both, and both are
+		// derived from the share rather than declared anywhere.
+		body["groups"] = s.beds.Groups()
+		// On a group selection the chosen name isn't what's on air, so the album
+		// the current track sits in ships too — that's the one the console shows
+		// and the one you'd act on to drop something from the rotation.
+		body["playing_album"] = s.beds.PlayingAlbum()
+		body["shuffle"] = s.beds.Shuffle()
 	}
 	_ = json.NewEncoder(w).Encode(body)
 }
@@ -99,6 +112,9 @@ func (s *Server) audioSetHandler(w http.ResponseWriter, r *http.Request) {
 		// the whole share. Absent and empty have to be different requests, which a
 		// plain string can't express.
 		Album *string `json:"album"`
+		// Also a pointer: false is a real instruction (play in order), which a
+		// plain bool can't tell from "the caller said nothing about shuffle".
+		Shuffle *bool `json:"shuffle"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, "bad request body", http.StatusBadRequest)
@@ -123,6 +139,8 @@ func (s *Server) audioSetHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		err = s.beds.SetAlbum(r.Context(), *body.Album)
+	case body.Shuffle != nil:
+		err = s.beds.SetShuffle(r.Context(), *body.Shuffle)
 	case beds.Valid(beds.Bed(body.Bed)):
 		err = s.beds.Set(r.Context(), beds.Bed(body.Bed))
 	default:
@@ -141,10 +159,12 @@ func (s *Server) audioSetHandler(w http.ResponseWriter, r *http.Request) {
 		"bed", current, "station", s.beds.Station(), "album", s.beds.Album())
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{
-		"ok":      true,
-		"bed":     string(current),
-		"track":   s.track(r.Context(), current, track),
-		"station": s.beds.Station(),
-		"album":   s.beds.Album(),
+		"ok":            true,
+		"bed":           string(current),
+		"track":         s.track(r.Context(), current, track),
+		"station":       s.beds.Station(),
+		"album":         s.beds.Album(),
+		"playing_album": s.beds.PlayingAlbum(),
+		"shuffle":       s.beds.Shuffle(),
 	})
 }

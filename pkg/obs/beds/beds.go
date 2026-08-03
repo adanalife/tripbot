@@ -103,9 +103,12 @@ type Store struct {
 
 	mu      sync.Mutex
 	bed     Bed
-	station string   // SomaFM channel id the SomaFM bed plays
-	album   string   // album subdir the Album bed plays; "" is the whole share
-	tracks  []string // shuffled play order; rebuilt each time the album starts
+	station string // SomaFM channel id the SomaFM bed plays
+	// album is the Album bed's selection: one album's directory, a prefix naming
+	// a group of them ("streambeats-lofi"), or "" for the whole share.
+	album   string
+	shuffle bool     // play order is shuffled rather than sequential
+	tracks  []string // the play order; rebuilt each time a selection starts
 	idx     int
 }
 
@@ -126,6 +129,7 @@ func NewStore(o OBS, bed Bed, musicDir, platform string) *Store {
 		musicDir: musicDir,
 		platform: platform,
 		station:  DefaultStation,
+		shuffle:  true, // a single album on a 24/7 stream shouldn't loop in one order
 		np:       newNowPlaying(),
 	}
 }
@@ -148,13 +152,66 @@ func (s *Store) Station() string {
 	return s.station
 }
 
-// Album reports the album subdir the Album bed plays, or "" for the whole share
-// shuffled together. Like Station, it answers whichever bed is live — it's the
+// Album reports the Album bed's selection: one album, a group prefix, or "" for
+// the whole share. Like Station, it answers whichever bed is live — it's the
 // selection the bed returns to.
+//
+// This is what was *chosen*, which on a group is not what you're hearing. For
+// that, see PlayingAlbum.
 func (s *Store) Album() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.album
+}
+
+// PlayingAlbum reports the album the current track actually sits in, which on a
+// group selection ("streambeats-lofi", or the whole share) is the only way to
+// know what's on air. "" when the album bed isn't playing.
+//
+// Read off the track path rather than tracked separately: the path is what OBS
+// is playing, so it can't drift from the audio the way a remembered value could.
+func (s *Store) PlayingAlbum() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.bed != Album || s.idx >= len(s.tracks) {
+		return ""
+	}
+	return albumFromFile(s.tracks[s.idx], s.musicDir)
+}
+
+// Shuffle reports whether the play order is shuffled rather than sequential.
+func (s *Store) Shuffle() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.shuffle
+}
+
+// SetShuffle turns shuffling on or off and rebuilds the play order to match,
+// keeping the track that's on air at the front so the audio doesn't jump mid-song.
+// A no-op off the album bed beyond recording the preference, which the next
+// selection then honors.
+//
+// Not persisted: it lives with the process, like the bed itself. A pod restart
+// returns to shuffled, where the album and station survive because they can be
+// read back off OBS and this can't.
+func (s *Store) SetShuffle(ctx context.Context, on bool) error {
+	s.mu.Lock()
+	s.shuffle = on
+	playing := ""
+	if s.bed == Album && s.idx < len(s.tracks) {
+		playing = s.tracks[s.idx]
+	}
+	var err error
+	if s.bed == Album {
+		err = s.loadAlbumLocked(playing)
+	}
+	s.mu.Unlock()
+	if err != nil {
+		return err
+	}
+	s.record()
+	slog.InfoContext(ctx, "background audio: shuffle set", "shuffle", on)
+	return nil
 }
 
 // Albums lists the selectable albums on the share, in display order. Read off
@@ -165,22 +222,45 @@ func (s *Store) Albums() []string {
 	return scanAlbums(s.musicDir)
 }
 
-// ValidAlbum reports whether album names a directory on the share holding at
-// least one track. Unlike ValidStation, which checks a fixed list, this has to
-// hit the filesystem — albums are whatever is on the share.
-func (s *Store) ValidAlbum(album string) bool {
-	return album != "" && slices.Contains(s.Albums(), album)
+// Groups lists the prefixes that name more than one album, so the picker can
+// offer "all of StreamBeats" and "the lofi ones" beside the individual albums.
+// Sorted, shortest-first within a name, which puts the broad group above the
+// narrow ones it contains.
+//
+// Derived from the directory names rather than declared: the naming convention
+// IS the grouping, so a new album joins its groups by being named like its
+// siblings, with nothing to keep in sync.
+func (s *Store) Groups() []string {
+	return scanGroups(s.Albums())
 }
 
-// ResolveAlbum maps what someone typed onto an album on the share, or "" if
-// nothing matches. Exact directory names always win; failing that, a unique
-// trailing segment does, so "rose" reaches "synthwave-rose" without anyone
-// typing the genre prefix that makes the share sort usefully. Ambiguity resolves
-// to nothing rather than to a guess — two albums ending "-midnight" mean the
-// shorthand has stopped being a name.
+// ValidAlbum reports whether album names something playable on the share: one
+// album's directory, or a prefix naming at least one. Unlike ValidStation, which
+// checks a fixed list, this has to hit the filesystem — albums are whatever is
+// on the share.
+func (s *Store) ValidAlbum(album string) bool {
+	return album != "" && len(albumsFor(s.Albums(), album)) > 0
+}
+
+// ResolveAlbum maps what someone typed onto a selection, or "" if nothing
+// matches. In order: an exact directory name, then a prefix naming a group
+// ("streambeats", "streambeats-lofi"), then a unique trailing segment, so "rose"
+// reaches "streambeats-synthwave-rose" without anyone typing the prefix that
+// makes the share sort usefully.
+//
+// Ambiguity in the trailing-segment step resolves to nothing rather than to a
+// guess: there are two albums called Midnight, so once both are on the share
+// "midnight" has stopped naming one of them and only the full name will do.
 func (s *Store) ResolveAlbum(arg string) string {
+	if arg == "" {
+		return ""
+	}
 	albums := s.Albums()
 	if slices.Contains(albums, arg) {
+		return arg
+	}
+	// A prefix naming a group is a selection in its own right.
+	if len(albumsFor(albums, arg)) > 0 {
 		return arg
 	}
 	var match string
@@ -336,10 +416,11 @@ func (s *Store) Set(ctx context.Context, bed Bed) error {
 	return nil
 }
 
-// SetAlbum narrows the Album bed to one album on the share and switches to it,
-// so picking an album is one action rather than "select album, then narrow".
-// Mirrors SetStation, including the rollback: an album we aren't playing must
-// not be the one we report. Pass "" to widen back to the whole share.
+// SetAlbum narrows the Album bed to one album on the share — or to a group of
+// them, when album is a prefix like "streambeats-lofi" — and switches to it, so
+// picking is one action rather than "select album, then narrow". Mirrors
+// SetStation, including the rollback: a selection we aren't playing must not be
+// the one we report. Pass "" to widen back to the whole share.
 func (s *Store) SetAlbum(ctx context.Context, album string) error {
 	if album != "" && !s.ValidAlbum(album) {
 		return fmt.Errorf("unknown album %q", album)
@@ -397,8 +478,8 @@ func (s *Store) Advance(ctx context.Context) error {
 	// Re-shuffle on wrap so a long stream doesn't repeat the same 100-track
 	// sequence in the same order every time. The fresh order has to keep the
 	// track that just finished off the front, or wrapping plays it twice back
-	// to back.
-	if s.idx == 0 {
+	// to back. Sequential order wraps as-is — repeating it is the point.
+	if s.idx == 0 && s.shuffle {
 		reshuffleAvoiding(s.tracks, current)
 	}
 	track := s.tracks[s.idx]
@@ -415,15 +496,36 @@ func (s *Store) Advance(ctx context.Context) error {
 // order on a track already on air (pass "" to start at the top), so the next
 // advance moves off it instead of restarting it. Caller holds s.mu.
 func (s *Store) loadAlbumLocked(playing string) error {
-	dir := albumDir(s.musicDir, s.album)
-	tracks, err := scanTracks(dir, s.album != "")
-	if err != nil {
-		return fmt.Errorf("scan album tracks under %s: %w", dir, err)
+	var tracks []string
+	if s.album == "" {
+		// The whole share: one walk, skipping the loose files at its root.
+		var err error
+		if tracks, err = scanTracks(s.musicDir, false); err != nil {
+			return fmt.Errorf("scan album tracks under %s: %w", s.musicDir, err)
+		}
+	} else {
+		// One album, or every album under a group prefix. Walked per album and
+		// concatenated in sorted order, so an unshuffled group plays album by
+		// album instead of interleaving them.
+		matched := albumsFor(scanAlbums(s.musicDir), s.album)
+		if len(matched) == 0 {
+			return fmt.Errorf("no album on the share named or under %q", s.album)
+		}
+		for _, album := range matched {
+			dir := filepath.Join(s.musicDir, album)
+			found, err := scanTracks(dir, true)
+			if err != nil {
+				return fmt.Errorf("scan album tracks under %s: %w", dir, err)
+			}
+			tracks = append(tracks, found...)
+		}
 	}
 	if len(tracks) == 0 {
-		return fmt.Errorf("no album tracks under %s", dir)
+		return fmt.Errorf("no album tracks for selection %q under %s", s.album, s.musicDir)
 	}
-	shuffle(tracks)
+	if s.shuffle {
+		shuffle(tracks)
+	}
 	s.tracks, s.idx = tracks, max(slices.Index(tracks, playing), 0)
 	return nil
 }
@@ -450,13 +552,45 @@ func (s *Store) apply(ctx context.Context, bed Bed, track, station string) error
 	return s.obs.SetLocalFile(ctx, InputName, track, bed != Album)
 }
 
-// albumDir is the directory a selection plays out of: one album's own
-// subdirectory, or the whole share when nothing is selected.
-func albumDir(musicDir, album string) string {
-	if album == "" {
-		return musicDir
+// albumsFor returns the albums a selection covers: the one it names exactly, or
+// every album under it when it's a group prefix. Empty when nothing matches.
+//
+// The prefix has to end at a "-" boundary, or "streambeats-lo" would quietly
+// select the lofi albums and read as a working selection rather than a typo.
+func albumsFor(albums []string, selection string) []string {
+	if slices.Contains(albums, selection) {
+		return []string{selection}
 	}
-	return filepath.Join(musicDir, album)
+	var out []string
+	for _, a := range albums {
+		if strings.HasPrefix(a, selection+"-") {
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
+// scanGroups finds the prefixes shared by more than one album — every "-"
+// boundary of every name, kept when at least two albums sit under it. Sorted, so
+// "streambeats" precedes "streambeats-lofi": broad group first, then the narrow
+// ones inside it.
+func scanGroups(albums []string) []string {
+	counts := map[string]int{}
+	for _, a := range albums {
+		for i, c := range a {
+			if c == '-' {
+				counts[a[:i]]++
+			}
+		}
+	}
+	var out []string
+	for prefix, n := range counts {
+		if n > 1 {
+			out = append(out, prefix)
+		}
+	}
+	sort.Strings(out)
+	return out
 }
 
 // scanAlbums lists the selectable albums: every immediate subdirectory of the

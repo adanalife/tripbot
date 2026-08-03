@@ -93,45 +93,72 @@ func shareOf(t *testing.T, albums map[string]int) string {
 	return dir
 }
 
-// fourAlbums is the share this feature exists for: the fan album plus three
-// genre-prefixed StreamBeats albums, with an empty directory that must not read
-// as an album.
-func fourAlbums(t *testing.T) string {
+// realShare mirrors the live layout: the fan album plus StreamBeats albums named
+// streambeats-<genre>-<album>, which is what makes "streambeats" and
+// "streambeats-lofi" groups. Carries an empty directory that must not read as an
+// album.
+func realShare(t *testing.T) string {
 	t.Helper()
 	dir := shareOf(t, map[string]int{
-		"fifty-horizons":   3,
-		"ambient-diamonds": 2,
-		"lofi-secluded":    4,
-		"synthwave-rose":   2,
+		"fifty-horizons":                3,
+		"streambeats-ambient-diamonds":  2,
+		"streambeats-lofi-secluded":     4,
+		"streambeats-lofi-gold":         2,
+		"streambeats-synthwave-rose":    2,
+		"streambeats-synthwave-breaker": 3,
 	})
-	if err := os.MkdirAll(filepath.Join(dir, "lofi-empty"), 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Join(dir, "streambeats-lofi-empty"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	return dir
 }
 
 func TestAlbums_ListsTrackBearingSubdirsOnly(t *testing.T) {
-	s := NewStore(&fakeOBS{}, CarHum, fourAlbums(t), "twitch")
+	s := NewStore(&fakeOBS{}, CarHum, realShare(t), "twitch")
 	// Sorted, so the picker and chat's option list read the same order every time.
-	want := []string{"ambient-diamonds", "fifty-horizons", "lofi-secluded", "synthwave-rose"}
+	want := []string{
+		"fifty-horizons",
+		"streambeats-ambient-diamonds",
+		"streambeats-lofi-gold",
+		"streambeats-lofi-secluded",
+		"streambeats-synthwave-breaker",
+		"streambeats-synthwave-rose",
+	}
 	if got := s.Albums(); !slices.Equal(got, want) {
 		t.Errorf("albums: want %v, got %v", want, got)
 	}
 }
 
+// The naming convention IS the grouping: a prefix covering more than one album is
+// a group, so albums join one by being named like their siblings.
+func TestGroups_ArePrefixesCoveringMoreThanOneAlbum(t *testing.T) {
+	s := NewStore(&fakeOBS{}, CarHum, realShare(t), "twitch")
+	// "streambeats" (5), "streambeats-lofi" (2), "streambeats-synthwave" (2).
+	// "streambeats-ambient" covers only Diamonds, so it isn't offered as a group —
+	// though it still resolves, since a prefix over one album is unambiguous.
+	// "fifty" covers one album and is likewise not a group.
+	want := []string{"streambeats", "streambeats-lofi", "streambeats-synthwave"}
+	if got := s.Groups(); !slices.Equal(got, want) {
+		t.Errorf("groups: want %v, got %v", want, got)
+	}
+}
+
 func TestResolveAlbum(t *testing.T) {
-	s := NewStore(&fakeOBS{}, CarHum, fourAlbums(t), "twitch")
+	s := NewStore(&fakeOBS{}, CarHum, realShare(t), "twitch")
 	for _, tc := range []struct{ arg, want string }{
-		{"lofi-secluded", "lofi-secluded"},   // exact
-		{"secluded", "lofi-secluded"},        // unique trailing segment
-		{"diamonds", "ambient-diamonds"},     // the shorthand chat will use
-		{"rose", "synthwave-rose"},           // ...and the one-word album case
-		{"fifty-horizons", "fifty-horizons"}, // exact, with no genre prefix
-		{"horizons", "fifty-horizons"},       // reachable by suffix all the same
-		{"lofi", ""},                         // a genre prefix is not an album name
-		{"empty", ""},                        // trackless dir isn't an album
-		{"groovesalad", ""},                  // a station is not an album
-		{"", ""},                             // no argument resolves to nothing
+		{"streambeats-lofi-gold", "streambeats-lofi-gold"}, // exact album
+		{"gold", "streambeats-lofi-gold"},                  // unique trailing segment
+		{"rose", "streambeats-synthwave-rose"},             // the shorthand chat will use
+		{"streambeats", "streambeats"},                     // the all-of-it group
+		{"streambeats-lofi", "streambeats-lofi"},           // a narrower group
+		{"streambeats-ambient", "streambeats-ambient"},     // a prefix over one album
+		{"fifty-horizons", "fifty-horizons"},               // exact, with no prefix
+		{"horizons", "fifty-horizons"},                     // reachable by suffix
+		{"streambeats-lo", ""},                             // a partial segment is a typo
+		{"lofi", ""},                                       // an interior segment is not a prefix
+		{"empty", ""},                                      // trackless dir isn't an album
+		{"groovesalad", ""},                                // a station is not an album
+		{"", ""},                                           // no argument resolves to nothing
 	} {
 		if got := s.ResolveAlbum(tc.arg); got != tc.want {
 			t.Errorf("ResolveAlbum(%q): want %q, got %q", tc.arg, tc.want, got)
@@ -140,30 +167,153 @@ func TestResolveAlbum(t *testing.T) {
 }
 
 func TestResolveAlbum_AmbiguousShorthandResolvesToNothing(t *testing.T) {
-	// StreamBeats really does list "Midnight" under two genres, so two albums
-	// ending "-midnight" is the live case, not a hypothetical. "midnight" has
-	// stopped naming one of them, and guessing would switch the stream to
-	// whichever sorted first.
+	// There are two different StreamBeats albums called "Midnight", one synthwave
+	// and one hip-hop, so this is the live case rather than a hypothetical. Once
+	// both are on the share "midnight" has stopped naming one of them, and
+	// guessing would switch the stream to whichever sorted first.
 	s := NewStore(&fakeOBS{}, CarHum, shareOf(t, map[string]int{
-		"synthwave-midnight": 2, "hiphop-midnight": 2,
+		"streambeats-synthwave-midnight": 2, "streambeats-hiphop-midnight": 2,
 	}), "twitch")
 	if got := s.ResolveAlbum("midnight"); got != "" {
 		t.Errorf("ambiguous shorthand: want %q, got %q", "", got)
 	}
-	if got := s.ResolveAlbum("hiphop-midnight"); got != "hiphop-midnight" {
+	if got := s.ResolveAlbum("streambeats-hiphop-midnight"); got != "streambeats-hiphop-midnight" {
 		t.Errorf("exact name must still win over the ambiguity: got %q", got)
+	}
+}
+
+// A group plays every album under it. Unshuffled, they arrive album by album,
+// which is what makes "I've heard enough of this one" a judgement you can make.
+func TestSetAlbum_GroupPlaysEveryAlbumUnderItInOrder(t *testing.T) {
+	dir := realShare(t)
+	s := NewStore(&fakeOBS{}, CarHum, dir, "twitch")
+	if err := s.SetShuffle(context.Background(), false); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetAlbum(context.Background(), "streambeats-lofi"); err != nil {
+		t.Fatal(err)
+	}
+	// gold (2) then secluded (4), in sorted directory order — not interleaved.
+	var seen []string
+	for i := 0; i < 6; i++ {
+		_, track := s.Current()
+		seen = append(seen, filepath.Base(filepath.Dir(track)))
+		if err := s.Advance(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want := []string{
+		"streambeats-lofi-gold", "streambeats-lofi-gold",
+		"streambeats-lofi-secluded", "streambeats-lofi-secluded",
+		"streambeats-lofi-secluded", "streambeats-lofi-secluded",
+	}
+	if !slices.Equal(seen, want) {
+		t.Errorf("group play order:\n want %v\n  got %v", want, seen)
+	}
+}
+
+// The whole point of the group for Dana: knowing which album a track came from,
+// so an album can be dropped from the rotation. The selection can't answer that.
+func TestPlayingAlbum_NamesTheTracksAlbumNotTheSelection(t *testing.T) {
+	dir := realShare(t)
+	s := NewStore(&fakeOBS{}, CarHum, dir, "twitch")
+	if err := s.SetShuffle(context.Background(), false); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetAlbum(context.Background(), "streambeats"); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.Album(); got != "streambeats" {
+		t.Fatalf("selection: want streambeats, got %q", got)
+	}
+	if got := s.PlayingAlbum(); got != "streambeats-ambient-diamonds" {
+		t.Errorf("playing album: want streambeats-ambient-diamonds, got %q", got)
+	}
+	// Walk into the next album and the answer follows the audio.
+	for range 2 {
+		if err := s.Advance(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := s.PlayingAlbum(); got != "streambeats-lofi-gold" {
+		t.Errorf("playing album after advancing: want streambeats-lofi-gold, got %q", got)
+	}
+}
+
+func TestPlayingAlbum_EmptyOffTheAlbumBed(t *testing.T) {
+	s := NewStore(&fakeOBS{}, CarHum, realShare(t), "twitch")
+	if got := s.PlayingAlbum(); got != "" {
+		t.Errorf("car hum has no album, got %q", got)
+	}
+}
+
+// Sequential order must survive a wrap — the re-shuffle on wrap is what keeps a
+// shuffled order fresh, and running it on a sequential one would silently turn
+// shuffle back on after one pass.
+func TestAdvance_SequentialOrderRepeatsRatherThanReshuffling(t *testing.T) {
+	dir := shareOf(t, map[string]int{"streambeats-lofi-gold": 4})
+	s := NewStore(&fakeOBS{}, CarHum, dir, "twitch")
+	if err := s.SetShuffle(context.Background(), false); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetAlbum(context.Background(), "streambeats-lofi-gold"); err != nil {
+		t.Fatal(err)
+	}
+	var first, second []string
+	for i := 0; i < 8; i++ {
+		_, track := s.Current()
+		if i < 4 {
+			first = append(first, filepath.Base(track))
+		} else {
+			second = append(second, filepath.Base(track))
+		}
+		if err := s.Advance(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if !slices.Equal(first, second) {
+		t.Errorf("second pass differs from the first:\n %v\n %v", first, second)
+	}
+	if !slices.IsSorted(first) {
+		t.Errorf("sequential order should be sorted, got %v", first)
+	}
+}
+
+// Toggling shuffle mid-track must not jump the audio: the track on air stays at
+// the front of the rebuilt order.
+func TestSetShuffle_KeepsTheTrackOnAir(t *testing.T) {
+	dir := shareOf(t, map[string]int{"streambeats-lofi-gold": 8})
+	s := NewStore(&fakeOBS{}, CarHum, dir, "twitch")
+	if err := s.SetAlbum(context.Background(), "streambeats-lofi-gold"); err != nil {
+		t.Fatal(err)
+	}
+	_, before := s.Current()
+	if err := s.SetShuffle(context.Background(), false); err != nil {
+		t.Fatal(err)
+	}
+	if _, after := s.Current(); after != before {
+		t.Errorf("track changed under the toggle: %q -> %q", before, after)
+	}
+	if s.Shuffle() {
+		t.Error("shuffle should be off")
+	}
+	if err := s.SetShuffle(context.Background(), true); err != nil {
+		t.Fatal(err)
+	}
+	if _, after := s.Current(); after != before {
+		t.Errorf("track changed turning shuffle back on: %q -> %q", before, after)
 	}
 }
 
 func TestSetAlbum_PlaysOnlyThatAlbumsTracks(t *testing.T) {
 	o := &fakeOBS{}
-	dir := fourAlbums(t)
+	dir := realShare(t)
 	s := NewStore(o, CarHum, dir, "twitch")
 
-	if err := s.SetAlbum(context.Background(), "ambient-diamonds"); err != nil {
+	if err := s.SetAlbum(context.Background(), "streambeats-ambient-diamonds"); err != nil {
 		t.Fatal(err)
 	}
-	if got := s.Album(); got != "ambient-diamonds" {
+	if got := s.Album(); got != "streambeats-ambient-diamonds" {
 		t.Errorf("selected album: want ambient-diamonds, got %q", got)
 	}
 	bed, _ := s.Current()
@@ -173,7 +323,7 @@ func TestSetAlbum_PlaysOnlyThatAlbumsTracks(t *testing.T) {
 	// Walk the whole order; every track must come from the selected album. The
 	// bug this catches is the play order still spanning the share, which sounds
 	// fine for one track and then wanders into another album.
-	want := filepath.Join(dir, "ambient-diamonds")
+	want := filepath.Join(dir, "streambeats-ambient-diamonds")
 	for i := 0; i < 6; i++ {
 		if _, track := s.Current(); filepath.Dir(track) != want {
 			t.Fatalf("track %d came from outside the album: %s", i, track)
@@ -186,8 +336,8 @@ func TestSetAlbum_PlaysOnlyThatAlbumsTracks(t *testing.T) {
 
 func TestSetAlbum_UnknownAlbumIsRefusedAndChangesNothing(t *testing.T) {
 	o := &fakeOBS{}
-	s := NewStore(o, CarHum, fourAlbums(t), "twitch")
-	if err := s.SetAlbum(context.Background(), "edm-nocturnal"); err == nil {
+	s := NewStore(o, CarHum, realShare(t), "twitch")
+	if err := s.SetAlbum(context.Background(), "streambeats-edm-nocturnal"); err == nil {
 		t.Fatal("expected an error for an album that isn't on the share")
 	}
 	if got := s.Album(); got != "" {
@@ -199,7 +349,7 @@ func TestSetAlbum_UnknownAlbumIsRefusedAndChangesNothing(t *testing.T) {
 }
 
 func TestSetAlbum_EmptyWidensToTheWholeShare(t *testing.T) {
-	dir := fourAlbums(t)
+	dir := realShare(t)
 	s := NewStore(&fakeOBS{}, CarHum, dir, "twitch")
 	if err := s.SetAlbum(context.Background(), ""); err != nil {
 		t.Fatal(err)
@@ -225,16 +375,16 @@ func TestDetect_RecoversTheAlbumFromThePlayingTrack(t *testing.T) {
 	// A restart mid-album must come back scoped to that album. Reading only the
 	// bed back would widen the order to the whole share, so the next advance
 	// wanders out of what's on air.
-	dir := fourAlbums(t)
-	playing := filepath.Join(dir, "lofi-secluded", "b track.mp3")
+	dir := realShare(t)
+	playing := filepath.Join(dir, "streambeats-lofi-secluded", "b track.mp3")
 	o := &fakeOBS{settings: map[string]any{"is_local_file": true, "local_file": playing}}
 	s := NewStore(o, CarHum, dir, "twitch")
 	s.Detect(context.Background())
 
-	if got := s.Album(); got != "lofi-secluded" {
+	if got := s.Album(); got != "streambeats-lofi-secluded" {
 		t.Fatalf("recovered album: want lofi-secluded, got %q", got)
 	}
-	want := filepath.Join(dir, "lofi-secluded")
+	want := filepath.Join(dir, "streambeats-lofi-secluded")
 	if _, track := s.Current(); filepath.Dir(track) != want {
 		t.Errorf("play order not scoped to the recovered album: %s", track)
 	}
@@ -243,7 +393,9 @@ func TestDetect_RecoversTheAlbumFromThePlayingTrack(t *testing.T) {
 func TestAlbumFromFile(t *testing.T) {
 	const share = "/opt/tripbot/assets/music"
 	for _, tc := range []struct{ file, want string }{
-		{share + "/lofi-secluded/a.mp3", "lofi-secluded"},
+		{share + "/streambeats-lofi-secluded/a.mp3", "streambeats-lofi-secluded"},
+		// The whole directory name is the album — the group prefixes inside it are
+		// a naming convention, not a hierarchy on disk.
 		{share + "/fifty-horizons/deep/b.mp3", "fifty-horizons"}, // nesting belongs to the top album
 		{share + "/carsounds.m4a", ""},                           // loose at the root, no album
 		{"/opt/tripbot/assets/carhum/car-hum-idle.flac", ""},     // another bed entirely

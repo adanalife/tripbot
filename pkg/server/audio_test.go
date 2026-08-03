@@ -16,19 +16,23 @@ import (
 
 // fakeBeds is a BedStore seam for the /api/audio handlers.
 type fakeBeds struct {
-	bed      beds.Bed
-	track    string
-	station  string
-	artist   string
-	title    string
-	feedErr  error
-	setErr   error
-	sets     []beds.Bed
-	stations []string
-	albums   []string // SetAlbum calls, in order
-	album    string
-	onShare  []string // what Albums() reports; nil means the fan album alone
-	feeds    int
+	bed          beds.Bed
+	track        string
+	station      string
+	artist       string
+	title        string
+	feedErr      error
+	setErr       error
+	sets         []beds.Bed
+	stations     []string
+	albums       []string // SetAlbum calls, in order
+	album        string
+	playingAlbum string
+	groups       []string
+	shuffle      bool
+	shuffles     []bool   // SetShuffle calls, in order
+	onShare      []string // what Albums() reports; nil means the fan album alone
+	feeds        int
 }
 
 func (f *fakeBeds) Current() (beds.Bed, string) { return f.bed, f.track }
@@ -65,6 +69,21 @@ func (f *fakeBeds) SetStation(_ context.Context, station string) error {
 
 func (f *fakeBeds) Album() string { return f.album }
 
+func (f *fakeBeds) PlayingAlbum() string { return f.playingAlbum }
+
+func (f *fakeBeds) Groups() []string { return f.groups }
+
+func (f *fakeBeds) Shuffle() bool { return f.shuffle }
+
+func (f *fakeBeds) SetShuffle(_ context.Context, on bool) error {
+	f.shuffles = append(f.shuffles, on)
+	if f.setErr != nil {
+		return f.setErr
+	}
+	f.shuffle = on
+	return nil
+}
+
 func (f *fakeBeds) Albums() []string {
 	if f.onShare == nil {
 		return []string{"fifty-horizons"}
@@ -73,7 +92,18 @@ func (f *fakeBeds) Albums() []string {
 }
 
 func (f *fakeBeds) ValidAlbum(album string) bool {
-	return album != "" && slices.Contains(f.Albums(), album)
+	if album == "" {
+		return false
+	}
+	if slices.Contains(f.Albums(), album) {
+		return true
+	}
+	for _, a := range f.Albums() {
+		if strings.HasPrefix(a, album+"-") {
+			return true // a group prefix is a valid selection
+		}
+	}
+	return false
 }
 
 func (f *fakeBeds) SetAlbum(_ context.Context, album string) error {
@@ -360,5 +390,76 @@ func TestAudioSetHandler_UnavailableWithoutAStore(t *testing.T) {
 	w := postAudio(t, &Server{}, `{"bed":"carhum"}`)
 	if w.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status: want 503, got %d", w.Code)
+	}
+}
+
+// The console builds the picker from albums + groups, and shows the album on air
+// rather than the selection — under a group they're different, and the album is
+// the one Dana would act on.
+func TestAudioHandler_ReportsGroupsPlayingAlbumAndShuffle(t *testing.T) {
+	f := &fakeBeds{
+		bed:          beds.Album,
+		album:        "streambeats",
+		playingAlbum: "streambeats-lofi-gold",
+		onShare:      []string{"streambeats-lofi-gold", "streambeats-synthwave-rose"},
+		groups:       []string{"streambeats"},
+		shuffle:      false,
+	}
+	_, body := getAudio(t, &Server{beds: f})
+	if body["album"] != "streambeats" {
+		t.Errorf("selection: %v", body["album"])
+	}
+	if body["playing_album"] != "streambeats-lofi-gold" {
+		t.Errorf("playing album: %v", body["playing_album"])
+	}
+	groups, _ := body["groups"].([]any)
+	if len(groups) != 1 {
+		t.Errorf("groups: want 1, got %v", body["groups"])
+	}
+	if body["shuffle"] != false {
+		t.Errorf("shuffle: %v", body["shuffle"])
+	}
+}
+
+func TestAudioSetHandler_SelectsAGroup(t *testing.T) {
+	f := &fakeBeds{bed: beds.CarHum, onShare: []string{
+		"streambeats-lofi-gold", "streambeats-synthwave-rose",
+	}}
+	w := postAudio(t, &Server{beds: f}, `{"album":"streambeats"}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status: %d (%q)", w.Code, w.Body.String())
+	}
+	if len(f.albums) != 1 || f.albums[0] != "streambeats" {
+		t.Fatalf("expected the group to reach the store, got %v", f.albums)
+	}
+}
+
+func TestAudioSetHandler_TogglesShuffle(t *testing.T) {
+	f := &fakeBeds{bed: beds.Album, shuffle: true}
+	w := postAudio(t, &Server{beds: f}, `{"shuffle":false}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status: %d (%q)", w.Code, w.Body.String())
+	}
+	if !slices.Equal(f.shuffles, []bool{false}) {
+		t.Fatalf("expected one shuffle-off, got %v", f.shuffles)
+	}
+	if f.shuffle {
+		t.Error("shuffle should be off")
+	}
+}
+
+// false is a real instruction, so it must not read as "the caller said nothing".
+// A plain bool in the request struct would make shuffle impossible to turn off.
+func TestAudioSetHandler_ShuffleFalseIsNotAbsent(t *testing.T) {
+	f := &fakeBeds{bed: beds.Album, shuffle: true}
+	postAudio(t, &Server{beds: f}, `{"shuffle":false}`)
+	if len(f.shuffles) != 1 {
+		t.Fatalf("shuffle:false must reach the store, got %v", f.shuffles)
+	}
+	// ...and omitting it entirely must not touch shuffle at all.
+	g := &fakeBeds{bed: beds.Album, shuffle: true, onShare: []string{"fifty-horizons"}}
+	postAudio(t, &Server{beds: g}, `{"bed":"carhum"}`)
+	if len(g.shuffles) != 0 {
+		t.Fatalf("a bed switch must not touch shuffle, got %v", g.shuffles)
 	}
 }
