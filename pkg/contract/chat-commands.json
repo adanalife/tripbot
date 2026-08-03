@@ -51,7 +51,8 @@
       "trigger": "!commands",
       "aliases": [
         "!command",
-        "!controls"
+        "!controls",
+        "!hello"
       ],
       "platforms": [
         "facebook",
