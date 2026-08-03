@@ -9,6 +9,20 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v4.18.0] — 2026-08-03
+
+### Chatbot
+
+- `!guessr` puts the guessing game's board in chat and on the overlay on demand — daily by default, `!guessr monthly` for the running total. Gated by the same `chatbot.guessr_leaderboard` flag as the rotation. ([#1309](https://github.com/adanalife/tripbot/pull/1309))
+
+### Onscreens
+
+- The overlay leaderboard shows ten rows instead of five, matching the number the chatbot sends — the bottom half of every board was being dropped between chat and screen. ([#1310](https://github.com/adanalife/tripbot/pull/1310))
+
+### Fixes
+
+- The audio watchdog's SomaFM reachability probe now runs only while a bot is actually stranded on the local fallback bed, rather than on every tick of every platform. It was opening a fresh connection to SomaFM's edge every 7s from all five platform bots — four of them on the album bed, where the answer can't be acted on — which is enough sustained traffic from one IP for SomaFM to firewall it. Also drops ~60k warn lines/day of probe-failure logging. ([#1312](https://github.com/adanalife/tripbot/pull/1312))
+
 ## [v4.17.0] — 2026-08-02
 
 ### Chatbot
