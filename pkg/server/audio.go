@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/adanalife/tripbot/pkg/obs/beds"
 )
@@ -23,6 +24,7 @@ type BedStore interface {
 	Shuffle() bool
 	SetShuffle(ctx context.Context, on bool) error
 	SomaFMTrack(ctx context.Context) (artist, title string, err error)
+	Pending() (beds.Switch, bool)
 	Set(ctx context.Context, bed beds.Bed) error
 	SetStation(ctx context.Context, station string) error
 	SetAlbum(ctx context.Context, album string) error
@@ -63,6 +65,20 @@ func (s *Server) audioHandler(w http.ResponseWriter, r *http.Request) {
 		// and the one you'd act on to drop something from the rotation.
 		body["playing_album"] = s.beds.PlayingAlbum()
 		body["shuffle"] = s.beds.Shuffle()
+		// A switch waits a few seconds before it reaches OBS, so the fields above
+		// still describe the audio while a click is in flight. Ship the waiting one
+		// separately: without it the console shows the old state and reads as a
+		// button that did nothing. Absent when nothing is waiting.
+		if sw, ok := s.beds.Pending(); ok {
+			body["pending"] = map[string]any{
+				"bed":     string(sw.Bed),
+				"station": sw.Station,
+				"album":   sw.Album,
+				// Seconds left rather than a timestamp: the console renders a
+				// countdown, and clock skew between the two would show in it.
+				"in_seconds": max(0, int(time.Until(sw.At).Round(time.Second).Seconds())),
+			}
+		}
 	}
 	_ = json.NewEncoder(w).Encode(body)
 }
