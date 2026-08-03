@@ -150,11 +150,11 @@ func TestAudioHandler_ReportsBedAndOptions(t *testing.T) {
 func TestAudioHandler_ReportsTheAlbumAndTheShare(t *testing.T) {
 	f := &fakeBeds{
 		bed:     beds.Album,
-		album:   "streambeats-lofi",
-		onShare: []string{"fifty-horizons", "streambeats-ambient", "streambeats-lofi"},
+		album:   "lofi-secluded",
+		onShare: []string{"fifty-horizons", "ambient-diamonds", "lofi-secluded"},
 	}
 	_, body := getAudio(t, &Server{beds: f})
-	if body["album"] != "streambeats-lofi" {
+	if body["album"] != "lofi-secluded" {
 		t.Fatalf("album: %v", body["album"])
 	}
 	albums, _ := body["albums"].([]any)
@@ -164,13 +164,13 @@ func TestAudioHandler_ReportsTheAlbumAndTheShare(t *testing.T) {
 }
 
 func TestAudioSetHandler_SelectsAnAlbum(t *testing.T) {
-	f := &fakeBeds{bed: beds.CarHum, onShare: []string{"fifty-horizons", "streambeats-lofi"}}
-	w := postAudio(t, &Server{beds: f}, `{"album":"streambeats-lofi"}`)
+	f := &fakeBeds{bed: beds.CarHum, onShare: []string{"fifty-horizons", "lofi-secluded"}}
+	w := postAudio(t, &Server{beds: f}, `{"album":"lofi-secluded"}`)
 	if w.Code != http.StatusOK {
 		t.Fatalf("status: %d, body %q", w.Code, w.Body.String())
 	}
-	if len(f.albums) != 1 || f.albums[0] != "streambeats-lofi" {
-		t.Fatalf("expected one selection of streambeats-lofi, got %v", f.albums)
+	if len(f.albums) != 1 || f.albums[0] != "lofi-secluded" {
+		t.Fatalf("expected one selection of lofi-secluded, got %v", f.albums)
 	}
 	if len(f.sets) != 0 {
 		t.Errorf("an album selects its own bed, no separate switch: %v", f.sets)
@@ -181,7 +181,7 @@ func TestAudioSetHandler_SelectsAnAlbum(t *testing.T) {
 // mistake (400), not the share failing (502) — the two want different UI.
 func TestAudioSetHandler_UnknownAlbumIs400(t *testing.T) {
 	f := &fakeBeds{bed: beds.CarHum, onShare: []string{"fifty-horizons"}}
-	w := postAudio(t, &Server{beds: f}, `{"album":"streambeats-edm"}`)
+	w := postAudio(t, &Server{beds: f}, `{"album":"edm-nocturnal"}`)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("status: want 400, got %d (%q)", w.Code, w.Body.String())
 	}
@@ -194,7 +194,7 @@ func TestAudioSetHandler_UnknownAlbumIs400(t *testing.T) {
 // to reach the store rather than falling through to the bed branch and 400ing.
 // It's what the console's blank option posts.
 func TestAudioSetHandler_EmptyAlbumWidensToTheWholeShare(t *testing.T) {
-	f := &fakeBeds{bed: beds.Album, album: "streambeats-lofi"}
+	f := &fakeBeds{bed: beds.Album, album: "lofi-secluded"}
 	w := postAudio(t, &Server{beds: f}, `{"album":""}`)
 	if w.Code != http.StatusOK {
 		t.Fatalf("status: want 200, got %d (%q)", w.Code, w.Body.String())
@@ -207,7 +207,7 @@ func TestAudioSetHandler_EmptyAlbumWidensToTheWholeShare(t *testing.T) {
 // Omitting the field entirely is a bed switch, not a widening — otherwise every
 // {"bed": ...} POST would silently reset the selected album.
 func TestAudioSetHandler_AbsentAlbumIsNotAWidening(t *testing.T) {
-	f := &fakeBeds{bed: beds.Album, album: "streambeats-lofi"}
+	f := &fakeBeds{bed: beds.Album, album: "lofi-secluded"}
 	w := postAudio(t, &Server{beds: f}, `{"bed":"carhum"}`)
 	if w.Code != http.StatusOK {
 		t.Fatalf("status: %d (%q)", w.Code, w.Body.String())
@@ -225,10 +225,10 @@ func TestAudioSetHandler_AbsentAlbumIsNotAWidening(t *testing.T) {
 func TestAudioSetHandler_AlbumSwitchFailureIs502(t *testing.T) {
 	f := &fakeBeds{
 		bed:     beds.CarHum,
-		onShare: []string{"streambeats-lofi"},
-		setErr:  errors.New("no album tracks under /opt/tripbot/assets/music/streambeats-lofi"),
+		onShare: []string{"lofi-secluded"},
+		setErr:  errors.New("no album tracks under /opt/tripbot/assets/music/lofi-secluded"),
 	}
-	w := postAudio(t, &Server{beds: f}, `{"album":"streambeats-lofi"}`)
+	w := postAudio(t, &Server{beds: f}, `{"album":"lofi-secluded"}`)
 	if w.Code != http.StatusBadGateway {
 		t.Fatalf("status: want 502, got %d (%q)", w.Code, w.Body.String())
 	}

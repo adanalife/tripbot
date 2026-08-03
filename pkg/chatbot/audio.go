@@ -51,16 +51,12 @@ var bedDescs = map[beds.Bed]string{
 	beds.Album:  "the music share",
 }
 
-// albumDescs credits the albums whose directory name doesn't carry it. Anything
-// not listed is named by its directory, which is why share directories are worth
-// naming for humans. A missing credit here is a cosmetic gap, not a failure: an
-// album added to the share is playable the moment it lands.
+// albumDescs credits the albums whose directory name can't carry it — an
+// attribution has punctuation and a person in it, which a directory shouldn't.
+// Everything else is named from its directory, so this stays a handful of
+// entries rather than a catalogue that has to be fed.
 var albumDescs = map[string]string{
-	"fifty-horizons":        "Fifty Horizons, by wooderCZ",
-	"streambeats-ambient":   "StreamBeats: Ambient",
-	"streambeats-hifi":      "StreamBeats: Hifi",
-	"streambeats-lofi":      "StreamBeats: Lofi",
-	"streambeats-synthwave": "StreamBeats: Synthwave",
+	"fifty-horizons": "Fifty Horizons, by wooderCZ",
 }
 
 // audioCmd is the public !audio command. Anyone can ask what's playing; only
@@ -147,13 +143,24 @@ func (a *App) describeAudio() string {
 	return desc
 }
 
-// albumName is an album's audience-facing name: its credit when we have one, its
-// directory otherwise.
+// albumName is an album's audience-facing name: its credit when we have one, and
+// otherwise its directory read aloud — hyphens to spaces, each word capitalized,
+// so "synthwave-lone-wolf" announces as "Synthwave Lone Wolf".
+//
+// Derived rather than tabulated because the share holds dozens of albums and
+// grows without a deploy: a per-album table would be permanently one purchase
+// behind, and an album missing from it would announce as a directory name.
 func albumName(album string) string {
 	if desc, ok := albumDescs[album]; ok {
 		return desc
 	}
-	return album
+	words := strings.Split(album, "-")
+	for i, w := range words {
+		if w != "" {
+			words[i] = strings.ToUpper(w[:1]) + w[1:]
+		}
+	}
+	return strings.Join(words, " ")
 }
 
 // bedNameList is the "somafm, carhum, album" list shown when a switch names

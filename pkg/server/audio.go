@@ -80,7 +80,7 @@ func (s *Server) track(ctx context.Context, bed beds.Bed, albumTrack string) str
 
 // audioSetHandler switches the background-audio bed. The console POSTs
 // {"bed": "album"} to /api/audio, {"station": "dronezone"} to tune the SomaFM
-// bed to another channel, or {"album": "streambeats-lofi"} to narrow the album
+// bed to another channel, or {"album": "lofi-secluded"} to narrow the album
 // bed to one album — the latter two select their bed too, since tuning a station
 // or picking an album you can't hear isn't a thing anyone means. {"album": ""}
 // widens that bed back to the whole share. A name we don't know is a 400; a

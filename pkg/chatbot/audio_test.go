@@ -200,34 +200,34 @@ func TestAudioCmd_AdminTunesASomaFMStation(t *testing.T) {
 // station id — the third namespace the one argument covers.
 func TestAudioCmd_AdminPicksAnAlbumByName(t *testing.T) {
 	app, fake, out := newAudioTestApp(t, beds.CarHum, "")
-	fake.onShare = []string{"fifty-horizons", "streambeats-lofi"}
+	fake.onShare = []string{"fifty-horizons", "lofi-secluded"}
 
-	app.audioCmd(context.Background(), newTestUser(adminUser), []string{"Streambeats-Lofi"}) // case-insensitive
+	app.audioCmd(context.Background(), newTestUser(adminUser), []string{"Lofi-Secluded"}) // case-insensitive
 
 	if len(fake.sets) != 0 {
 		t.Errorf("an album is a selection, not a bare bed switch, got %v", fake.sets)
 	}
-	if len(fake.albums) != 1 || fake.albums[0] != "streambeats-lofi" {
-		t.Fatalf("expected one selection of streambeats-lofi, got %v", fake.albums)
+	if len(fake.albums) != 1 || fake.albums[0] != "lofi-secluded" {
+		t.Fatalf("expected one selection of lofi-secluded, got %v", fake.albums)
 	}
-	if got := out(); !strings.Contains(got, albumDescs["streambeats-lofi"]) {
-		t.Errorf("expected the announcement to credit the album, got %q", got)
+	if got := out(); !strings.Contains(got, "Lofi Secluded") {
+		t.Errorf("expected the announcement to name the album, got %q", got)
 	}
 }
 
-// Typing the provenance prefix is what the shorthand exists to avoid: the share
-// wants "streambeats-ambient" for legibility, chat wants "ambient".
+// Typing the genre prefix is what the shorthand exists to avoid: the share wants
+// "synthwave-rose" so albums of a genre sort together, chat wants "rose".
 func TestAudioCmd_AdminPicksAnAlbumByShorthand(t *testing.T) {
 	app, fake, out := newAudioTestApp(t, beds.CarHum, "")
-	fake.onShare = []string{"fifty-horizons", "streambeats-ambient", "streambeats-lofi"}
+	fake.onShare = []string{"fifty-horizons", "synthwave-rose", "lofi-secluded"}
 
-	app.audioCmd(context.Background(), newTestUser(adminUser), []string{"ambient"})
+	app.audioCmd(context.Background(), newTestUser(adminUser), []string{"rose"})
 
-	if len(fake.albums) != 1 || fake.albums[0] != "streambeats-ambient" {
-		t.Fatalf("expected the shorthand to reach streambeats-ambient, got %v", fake.albums)
+	if len(fake.albums) != 1 || fake.albums[0] != "synthwave-rose" {
+		t.Fatalf("expected the shorthand to reach synthwave-rose, got %v", fake.albums)
 	}
-	if got := out(); !strings.Contains(got, "StreamBeats: Ambient") {
-		t.Errorf("expected the announcement to credit the album, got %q", got)
+	if got := out(); !strings.Contains(got, "Synthwave Rose") {
+		t.Errorf("expected the announcement to name the album, got %q", got)
 	}
 }
 
@@ -247,25 +247,45 @@ func TestAudioCmd_AlbumAnnouncementUsesTheCreditNotTheDirectory(t *testing.T) {
 	}
 }
 
-// An album on the share with no credit in albumDescs is still playable — it just
-// gets named by its directory. A missing credit must not make it unreachable.
-func TestAudioCmd_UncreditedAlbumIsNamedByItsDirectory(t *testing.T) {
+// An album with no credit in albumDescs is still playable, and announces as its
+// directory read aloud rather than as a slug. A missing credit must not make an
+// album unreachable — the share grows faster than the table.
+func TestAudioCmd_UncreditedAlbumIsNamedFromItsDirectory(t *testing.T) {
 	app, fake, out := newAudioTestApp(t, beds.CarHum, "")
-	fake.onShare = []string{"some-new-drop"}
+	fake.onShare = []string{"synthwave-lone-wolf"}
 
-	app.audioCmd(context.Background(), newTestUser(adminUser), []string{"some-new-drop"})
+	app.audioCmd(context.Background(), newTestUser(adminUser), []string{"lone-wolf"})
 
-	if len(fake.albums) != 1 || fake.albums[0] != "some-new-drop" {
+	if len(fake.albums) != 1 || fake.albums[0] != "synthwave-lone-wolf" {
 		t.Fatalf("expected the uncredited album to be selected, got %v", fake.albums)
 	}
-	if got := out(); !strings.Contains(got, "some-new-drop") {
-		t.Errorf("expected the directory name as the fallback, got %q", got)
+	got := out()
+	if !strings.Contains(got, "Synthwave Lone Wolf") {
+		t.Errorf("expected the directory read aloud, got %q", got)
+	}
+	if strings.Contains(got, "synthwave-lone-wolf") {
+		t.Errorf("expected no raw slug in chat, got %q", got)
+	}
+}
+
+func TestAlbumName(t *testing.T) {
+	for _, tc := range []struct{ album, want string }{
+		{"fifty-horizons", "Fifty Horizons, by wooderCZ"}, // credited
+		{"synthwave-rose", "Synthwave Rose"},
+		{"lofi-certain-shade-of-blue", "Lofi Certain Shade Of Blue"},
+		{"lofi-in-4k", "Lofi In 4k"},
+		{"diamonds", "Diamonds"}, // no prefix
+		{"", ""},
+	} {
+		if got := albumName(tc.album); got != tc.want {
+			t.Errorf("albumName(%q): want %q, got %q", tc.album, tc.want, got)
+		}
 	}
 }
 
 func TestAudioCmd_UnknownBedListsOptionsWithoutSwitching(t *testing.T) {
 	app, fake, out := newAudioTestApp(t, beds.CarHum, "")
-	fake.onShare = []string{"fifty-horizons", "streambeats-lofi"}
+	fake.onShare = []string{"fifty-horizons", "lofi-secluded"}
 
 	app.audioCmd(context.Background(), newTestUser(adminUser), []string{"spaceship"})
 

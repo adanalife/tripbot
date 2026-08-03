@@ -174,10 +174,10 @@ func (s *Store) ValidAlbum(album string) bool {
 
 // ResolveAlbum maps what someone typed onto an album on the share, or "" if
 // nothing matches. Exact directory names always win; failing that, a unique
-// trailing segment does, so "ambient" reaches "streambeats-ambient" without
-// anyone typing the provenance prefix that makes the share readable. Ambiguity
-// resolves to nothing rather than to a guess — two albums ending "-ambient" mean
-// the shorthand has stopped being a name.
+// trailing segment does, so "rose" reaches "synthwave-rose" without anyone
+// typing the genre prefix that makes the share sort usefully. Ambiguity resolves
+// to nothing rather than to a guess — two albums ending "-midnight" mean the
+// shorthand has stopped being a name.
 func (s *Store) ResolveAlbum(arg string) string {
 	albums := s.Albums()
 	if slices.Contains(albums, arg) {
