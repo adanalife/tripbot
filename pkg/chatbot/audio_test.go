@@ -3,6 +3,9 @@ package chatbot
 import (
 	"context"
 	"errors"
+	"path/filepath"
+	"slices"
+	"sort"
 	"strings"
 	"testing"
 
@@ -39,6 +42,9 @@ type fakeBeds struct {
 	feedErr  error
 	sets     []beds.Bed
 	stations []string
+	albums   []string // SetAlbum calls, in order
+	album    string
+	onShare  []string // what Albums() reports; nil means the fan album alone
 	feeds    int
 	err      error
 }
@@ -78,6 +84,102 @@ func (f *fakeBeds) SetStation(_ context.Context, station string) error {
 	}
 	f.bed, f.track, f.station = beds.SomaFM, "", station
 	return nil
+}
+
+func (f *fakeBeds) Album() string { return f.album }
+
+// PlayingAlbum is what the track path says, which is what the real store derives
+// it from — so a group selection reports the album, not the group.
+func (f *fakeBeds) PlayingAlbum() string {
+	if f.bed != beds.Album || f.track == "" {
+		return ""
+	}
+	return filepath.Base(filepath.Dir(f.track))
+}
+
+func (f *fakeBeds) Groups() []string { return scanGroupsForTest(f.Albums()) }
+
+// scanGroupsForTest mirrors beds.scanGroups: prefixes covering >1 album.
+func scanGroupsForTest(albums []string) []string {
+	counts := map[string]int{}
+	for _, a := range albums {
+		for i, c := range a {
+			if c == '-' {
+				counts[a[:i]]++
+			}
+		}
+	}
+	var out []string
+	for prefix, n := range counts {
+		if n > 1 {
+			out = append(out, prefix)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+func (f *fakeBeds) Albums() []string {
+	if f.onShare == nil {
+		return []string{"fifty-horizons"}
+	}
+	return f.onShare
+}
+
+// ResolveAlbum mirrors the real store's rule (exact name, else unique trailing
+// segment) so the command's behavior is exercised against the same contract.
+func (f *fakeBeds) ResolveAlbum(arg string) string {
+	if arg == "" {
+		return ""
+	}
+	albums := f.Albums()
+	if slices.Contains(albums, arg) {
+		return arg
+	}
+	for _, a := range albums {
+		if strings.HasPrefix(a, arg+"-") {
+			return arg // a prefix naming a group is a selection of its own
+		}
+	}
+	var match string
+	for _, a := range albums {
+		if strings.HasSuffix(a, "-"+arg) {
+			if match != "" {
+				return ""
+			}
+			match = a
+		}
+	}
+	return match
+}
+
+func (f *fakeBeds) SetAlbum(_ context.Context, album string) error {
+	f.albums = append(f.albums, album)
+	if f.err != nil {
+		return f.err
+	}
+	f.bed, f.album = beds.Album, album
+	// A selection plays a track from inside it, which is what PlayingAlbum reads.
+	if album == "" {
+		f.track = testTrack
+	} else {
+		f.track = "/opt/tripbot/assets/music/" + f.firstUnder(album) + "/03 Track.mp3"
+	}
+	return nil
+}
+
+// firstUnder is the album a selection starts on: itself when it names one album,
+// or the first of the group in sorted order.
+func (f *fakeBeds) firstUnder(selection string) string {
+	if slices.Contains(f.Albums(), selection) {
+		return selection
+	}
+	for _, a := range f.Albums() {
+		if strings.HasPrefix(a, selection+"-") {
+			return a
+		}
+	}
+	return selection
 }
 
 // newAudioTestApp wires an App with a fake bed store on the given bed. adminUser
@@ -126,8 +228,10 @@ func TestAudioCmd_AdminSwitchesAndAnnouncesTheTrack(t *testing.T) {
 		t.Fatalf("expected one switch to the album, got %v", fake.sets)
 	}
 	got := out()
-	if !strings.Contains(got, bedDescs[beds.Album]) {
-		t.Errorf("expected the announcement to name the album, got %q", got)
+	// The bare bed switch lands inside an album, and it's that album that gets
+	// named — "the music share" is where it came from, not what anyone's hearing.
+	if !strings.Contains(got, "Fifty Horizons, by wooderCZ") {
+		t.Errorf("expected the announcement to name the album on air, got %q", got)
 	}
 	if !strings.Contains(got, "Colorado Sunrise") {
 		t.Errorf("expected the announcement to name the playing track, got %q", got)
@@ -152,19 +256,122 @@ func TestAudioCmd_AdminTunesASomaFMStation(t *testing.T) {
 	}
 }
 
+// An album on the share is accepted in the same argument slot as a bed name or a
+// station id — the third namespace the one argument covers.
+func TestAudioCmd_AdminPicksAnAlbumByName(t *testing.T) {
+	app, fake, out := newAudioTestApp(t, beds.CarHum, "")
+	fake.onShare = []string{"fifty-horizons", "streambeats-lofi-secluded"}
+
+	app.audioCmd(context.Background(), newTestUser(adminUser), []string{"Streambeats-Lofi-Secluded"}) // case-insensitive
+
+	if len(fake.sets) != 0 {
+		t.Errorf("an album is a selection, not a bare bed switch, got %v", fake.sets)
+	}
+	if len(fake.albums) != 1 || fake.albums[0] != "streambeats-lofi-secluded" {
+		t.Fatalf("expected one selection of lofi-secluded, got %v", fake.albums)
+	}
+	if got := out(); !strings.Contains(got, "Streambeats Lofi Secluded") {
+		t.Errorf("expected the announcement to name the album, got %q", got)
+	}
+}
+
+// Typing the genre prefix is what the shorthand exists to avoid: the share wants
+// "streambeats-synthwave-rose" so albums of a genre sort together, chat wants "rose".
+func TestAudioCmd_AdminPicksAnAlbumByShorthand(t *testing.T) {
+	app, fake, out := newAudioTestApp(t, beds.CarHum, "")
+	fake.onShare = []string{"fifty-horizons", "streambeats-synthwave-rose", "streambeats-lofi-secluded"}
+
+	app.audioCmd(context.Background(), newTestUser(adminUser), []string{"rose"})
+
+	if len(fake.albums) != 1 || fake.albums[0] != "streambeats-synthwave-rose" {
+		t.Fatalf("expected the shorthand to reach synthwave-rose, got %v", fake.albums)
+	}
+	if got := out(); !strings.Contains(got, "Streambeats Synthwave Rose") {
+		t.Errorf("expected the announcement to name the album, got %q", got)
+	}
+}
+
+// The fan album carries its credit rather than its directory name, since the
+// directory is not what anyone would call it.
+func TestAudioCmd_AlbumAnnouncementUsesTheCreditNotTheDirectory(t *testing.T) {
+	app, _, out := newAudioTestApp(t, beds.CarHum, "")
+
+	app.audioCmd(context.Background(), newTestUser(adminUser), []string{"fifty-horizons"})
+
+	got := out()
+	if !strings.Contains(got, "Fifty Horizons, by wooderCZ") {
+		t.Errorf("expected the fan album's credit, got %q", got)
+	}
+	if strings.Contains(got, "fifty-horizons") {
+		t.Errorf("expected the credit rather than the directory name, got %q", got)
+	}
+}
+
+// An album with no credit in albumDescs is still playable, and announces as its
+// directory read aloud rather than as a slug. A missing credit must not make an
+// album unreachable — the share grows faster than the table.
+func TestAudioCmd_UncreditedAlbumIsNamedFromItsDirectory(t *testing.T) {
+	app, fake, out := newAudioTestApp(t, beds.CarHum, "")
+	fake.onShare = []string{"streambeats-synthwave-lone-wolf"}
+
+	app.audioCmd(context.Background(), newTestUser(adminUser), []string{"lone-wolf"})
+
+	if len(fake.albums) != 1 || fake.albums[0] != "streambeats-synthwave-lone-wolf" {
+		t.Fatalf("expected the uncredited album to be selected, got %v", fake.albums)
+	}
+	got := out()
+	if !strings.Contains(got, "Streambeats Synthwave Lone Wolf") {
+		t.Errorf("expected the directory read aloud, got %q", got)
+	}
+	if strings.Contains(got, "streambeats-synthwave-lone-wolf") {
+		t.Errorf("expected no raw slug in chat, got %q", got)
+	}
+}
+
+func TestAlbumName(t *testing.T) {
+	for _, tc := range []struct{ album, want string }{
+		{"fifty-horizons", "Fifty Horizons, by wooderCZ"}, // credited
+		{"streambeats-synthwave-rose", "Streambeats Synthwave Rose"},
+		{"lofi-certain-shade-of-blue", "Lofi Certain Shade Of Blue"},
+		{"lofi-in-4k", "Lofi In 4k"},
+		{"diamonds", "Diamonds"}, // no prefix
+		{"", ""},
+	} {
+		if got := albumName(tc.album); got != tc.want {
+			t.Errorf("albumName(%q): want %q, got %q", tc.album, tc.want, got)
+		}
+	}
+}
+
 func TestAudioCmd_UnknownBedListsOptionsWithoutSwitching(t *testing.T) {
 	app, fake, out := newAudioTestApp(t, beds.CarHum, "")
+	fake.onShare = []string{
+		"fifty-horizons", "streambeats-lofi-gold", "streambeats-lofi-secluded",
+	}
 
 	app.audioCmd(context.Background(), newTestUser(adminUser), []string{"spaceship"})
 
 	if len(fake.sets) != 0 {
 		t.Fatalf("an unknown bed must not switch, got %v", fake.sets)
 	}
+	if len(fake.albums) != 0 {
+		t.Fatalf("an unknown name must not select an album, got %v", fake.albums)
+	}
 	got := out()
 	for _, b := range beds.All {
 		if !strings.Contains(got, string(b)) {
 			t.Errorf("expected %q in the options list, got %q", b, got)
 		}
+	}
+	// Groups are named outright — "streambeats-lofi" says more than either album
+	// under it would, and there are too many albums to list.
+	for _, g := range []string{"streambeats", "streambeats-lofi"} {
+		if !strings.Contains(got, g) {
+			t.Errorf("expected group %q in the options list, got %q", g, got)
+		}
+	}
+	if !strings.Contains(got, "any album on the share") {
+		t.Errorf("expected the albums described rather than listed, got %q", got)
 	}
 }
 
@@ -201,5 +408,44 @@ func TestAudio_AvailableOnEveryPlatform(t *testing.T) {
 		if cmd, _ := app.findCommand("!audio"); cmd == nil {
 			t.Errorf("!audio must be available on %s", platform)
 		}
+	}
+}
+
+// A group is the fourth thing the one argument covers, and the whole point of the
+// naming convention: "streambeats" is 29 albums.
+func TestAudioCmd_AdminPicksAGroup(t *testing.T) {
+	app, fake, out := newAudioTestApp(t, beds.CarHum, "")
+	fake.onShare = []string{
+		"fifty-horizons", "streambeats-lofi-gold", "streambeats-synthwave-rose",
+	}
+
+	app.audioCmd(context.Background(), newTestUser(adminUser), []string{"streambeats"})
+
+	if len(fake.albums) != 1 || fake.albums[0] != "streambeats" {
+		t.Fatalf("expected one selection of the streambeats group, got %v", fake.albums)
+	}
+	// The announcement names the album on air, not the group — "Streambeats" alone
+	// would answer "what's playing?" with the name of 29 albums.
+	if got := out(); !strings.Contains(got, "Streambeats Lofi Gold") {
+		t.Errorf("expected the album on air to be named, got %q", got)
+	}
+}
+
+// Dana's veto workflow: playing everything, he needs chat and the console to say
+// which album a track came from so he can drop that album from the rotation.
+func TestSongCmd_NamesTheAlbumOnAirUnderAGroupSelection(t *testing.T) {
+	app, fake, out := newAudioTestApp(t, beds.Album, "")
+	fake.onShare = []string{"streambeats-lofi-gold", "streambeats-synthwave-rose"}
+	fake.album = "streambeats" // the group is selected...
+	fake.track = "/opt/tripbot/assets/music/streambeats-synthwave-rose/07 Petals.mp3"
+
+	app.songCmd(context.Background(), newTestUser("viewer1"), nil)
+
+	got := out()
+	if !strings.Contains(got, "Streambeats Synthwave Rose") {
+		t.Errorf("expected the album the track sits in, got %q", got)
+	}
+	if !strings.Contains(got, "Petals") {
+		t.Errorf("expected the track title, got %q", got)
 	}
 }

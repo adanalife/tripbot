@@ -15,9 +15,17 @@ import (
 type BedStore interface {
 	Current() (beds.Bed, string)
 	Station() string
+	Album() string
+	PlayingAlbum() string
+	Albums() []string
+	Groups() []string
+	ValidAlbum(album string) bool
+	Shuffle() bool
+	SetShuffle(ctx context.Context, on bool) error
 	SomaFMTrack(ctx context.Context) (artist, title string, err error)
 	Set(ctx context.Context, bed beds.Bed) error
 	SetStation(ctx context.Context, station string) error
+	SetAlbum(ctx context.Context, album string) error
 }
 
 // audioHandler reports the live background-audio bed and the options the
@@ -40,6 +48,21 @@ func (s *Server) audioHandler(w http.ResponseWriter, r *http.Request) {
 		body["bed"] = string(bed)
 		body["track"] = s.track(r.Context(), bed, track)
 		body["station"] = s.beds.Station()
+		// The album list ships for the same reason the stations do, but it's read
+		// off the share per request rather than from a constant: new music appears
+		// there without a deploy, so a picker built from a compiled-in list would
+		// be wrong the first time Dana drops an album on the NAS.
+		body["album"] = s.beds.Album()
+		body["albums"] = s.beds.Albums()
+		// Groups are prefixes covering several albums ("streambeats-lofi"). They
+		// travel beside the albums because the picker offers both, and both are
+		// derived from the share rather than declared anywhere.
+		body["groups"] = s.beds.Groups()
+		// On a group selection the chosen name isn't what's on air, so the album
+		// the current track sits in ships too — that's the one the console shows
+		// and the one you'd act on to drop something from the rotation.
+		body["playing_album"] = s.beds.PlayingAlbum()
+		body["shuffle"] = s.beds.Shuffle()
 	}
 	_ = json.NewEncoder(w).Encode(body)
 }
@@ -69,9 +92,11 @@ func (s *Server) track(ctx context.Context, bed beds.Bed, albumTrack string) str
 }
 
 // audioSetHandler switches the background-audio bed. The console POSTs
-// {"bed": "album"} to /api/audio, or {"station": "dronezone"} to tune the
-// SomaFM bed to another channel (which selects that bed too — tuning a station
-// you can't hear isn't a thing anyone means). A name we don't know is a 400; a
+// {"bed": "album"} to /api/audio, {"station": "dronezone"} to tune the SomaFM
+// bed to another channel, or {"album": "lofi-secluded"} to narrow the album
+// bed to one album — the latter two select their bed too, since tuning a station
+// or picking an album you can't hear isn't a thing anyone means. {"album": ""}
+// widens that bed back to the whole share. A name we don't know is a 400; a
 // switch OBS rejects (unreachable, or an album with no share mounted) is a 502
 // — either way the previous bed keeps playing and the re-read reports it, so a
 // failed switch is visible in the UI rather than silently ignored.
@@ -83,6 +108,13 @@ func (s *Server) audioSetHandler(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Bed     string `json:"bed"`
 		Station string `json:"station"`
+		// A pointer because "" is a meaningful album: it widens the bed back to
+		// the whole share. Absent and empty have to be different requests, which a
+		// plain string can't express.
+		Album *string `json:"album"`
+		// Also a pointer: false is a real instruction (play in order), which a
+		// plain bool can't tell from "the caller said nothing about shuffle".
+		Shuffle *bool `json:"shuffle"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, "bad request body", http.StatusBadRequest)
@@ -97,6 +129,18 @@ func (s *Server) audioSetHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		err = s.beds.SetStation(r.Context(), body.Station)
+	case body.Album != nil:
+		// Asked of the store rather than a list this handler re-derives: the store
+		// owns the share, so its answer is the one that will load tracks. Checking
+		// here anyway is what separates "no such album" (400, the console sent a
+		// stale name) from "the share went away" (502).
+		if *body.Album != "" && !s.beds.ValidAlbum(*body.Album) {
+			http.Error(w, "unknown album", http.StatusBadRequest)
+			return
+		}
+		err = s.beds.SetAlbum(r.Context(), *body.Album)
+	case body.Shuffle != nil:
+		err = s.beds.SetShuffle(r.Context(), *body.Shuffle)
 	case beds.Valid(beds.Bed(body.Bed)):
 		err = s.beds.Set(r.Context(), beds.Bed(body.Bed))
 	default:
@@ -112,12 +156,15 @@ func (s *Server) audioSetHandler(w http.ResponseWriter, r *http.Request) {
 
 	current, track := s.beds.Current()
 	slog.InfoContext(r.Context(), "background audio switched via console",
-		"bed", current, "station", s.beds.Station())
+		"bed", current, "station", s.beds.Station(), "album", s.beds.Album())
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{
-		"ok":      true,
-		"bed":     string(current),
-		"track":   s.track(r.Context(), current, track),
-		"station": s.beds.Station(),
+		"ok":            true,
+		"bed":           string(current),
+		"track":         s.track(r.Context(), current, track),
+		"station":       s.beds.Station(),
+		"album":         s.beds.Album(),
+		"playing_album": s.beds.PlayingAlbum(),
+		"shuffle":       s.beds.Shuffle(),
 	})
 }
