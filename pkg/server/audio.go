@@ -82,8 +82,8 @@ func (s *Server) track(ctx context.Context, bed beds.Bed, albumTrack string) str
 // {"bed": "album"} to /api/audio, {"station": "dronezone"} to tune the SomaFM
 // bed to another channel, or {"album": "streambeats-lofi"} to narrow the album
 // bed to one album — the latter two select their bed too, since tuning a station
-// or picking an album you can't hear isn't a thing anyone means. A name we don't
-// know is a 400; a
+// or picking an album you can't hear isn't a thing anyone means. {"album": ""}
+// widens that bed back to the whole share. A name we don't know is a 400; a
 // switch OBS rejects (unreachable, or an album with no share mounted) is a 502
 // — either way the previous bed keeps playing and the re-read reports it, so a
 // failed switch is visible in the UI rather than silently ignored.
@@ -95,7 +95,10 @@ func (s *Server) audioSetHandler(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Bed     string `json:"bed"`
 		Station string `json:"station"`
-		Album   string `json:"album"`
+		// A pointer because "" is a meaningful album: it widens the bed back to
+		// the whole share. Absent and empty have to be different requests, which a
+		// plain string can't express.
+		Album *string `json:"album"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, "bad request body", http.StatusBadRequest)
@@ -110,16 +113,16 @@ func (s *Server) audioSetHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		err = s.beds.SetStation(r.Context(), body.Station)
-	case body.Album != "":
+	case body.Album != nil:
 		// Asked of the store rather than a list this handler re-derives: the store
 		// owns the share, so its answer is the one that will load tracks. Checking
 		// here anyway is what separates "no such album" (400, the console sent a
 		// stale name) from "the share went away" (502).
-		if !s.beds.ValidAlbum(body.Album) {
+		if *body.Album != "" && !s.beds.ValidAlbum(*body.Album) {
 			http.Error(w, "unknown album", http.StatusBadRequest)
 			return
 		}
-		err = s.beds.SetAlbum(r.Context(), body.Album)
+		err = s.beds.SetAlbum(r.Context(), *body.Album)
 	case beds.Valid(beds.Bed(body.Bed)):
 		err = s.beds.Set(r.Context(), beds.Bed(body.Bed))
 	default:

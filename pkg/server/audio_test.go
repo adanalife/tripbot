@@ -190,6 +190,36 @@ func TestAudioSetHandler_UnknownAlbumIs400(t *testing.T) {
 	}
 }
 
+// "" is a real album selection — the whole share, shuffled together — so it has
+// to reach the store rather than falling through to the bed branch and 400ing.
+// It's what the console's blank option posts.
+func TestAudioSetHandler_EmptyAlbumWidensToTheWholeShare(t *testing.T) {
+	f := &fakeBeds{bed: beds.Album, album: "streambeats-lofi"}
+	w := postAudio(t, &Server{beds: f}, `{"album":""}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status: want 200, got %d (%q)", w.Code, w.Body.String())
+	}
+	if len(f.albums) != 1 || f.albums[0] != "" {
+		t.Fatalf("expected one widening selection, got %v", f.albums)
+	}
+}
+
+// Omitting the field entirely is a bed switch, not a widening — otherwise every
+// {"bed": ...} POST would silently reset the selected album.
+func TestAudioSetHandler_AbsentAlbumIsNotAWidening(t *testing.T) {
+	f := &fakeBeds{bed: beds.Album, album: "streambeats-lofi"}
+	w := postAudio(t, &Server{beds: f}, `{"bed":"carhum"}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status: %d (%q)", w.Code, w.Body.String())
+	}
+	if len(f.albums) != 0 {
+		t.Fatalf("a bed switch must not touch the album, got %v", f.albums)
+	}
+	if len(f.sets) != 1 || f.sets[0] != beds.CarHum {
+		t.Fatalf("expected one bed switch to carhum, got %v", f.sets)
+	}
+}
+
 // A share that goes away mid-switch is a 502: the name was real, applying it
 // wasn't possible, and the previous bed keeps playing.
 func TestAudioSetHandler_AlbumSwitchFailureIs502(t *testing.T) {
