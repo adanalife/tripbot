@@ -19,12 +19,12 @@ func TestPickLeaderboard(t *testing.T) {
 		{0.0, totalMilesLeaderboard},
 		{0.0499, totalMilesLeaderboard},
 		{0.05, guessLeaderboard},
-		{0.3666, guessLeaderboard},
-		{0.3667, monthlyMilesLeaderboard},
-		{0.6833, monthlyMilesLeaderboard},
-		{0.6834, guessrDailyLeaderboard},
-		{0.8416, guessrDailyLeaderboard},
-		{0.8417, guessrMonthlyLeaderboard},
+		{0.3954, guessLeaderboard},
+		{0.3955, monthlyMilesLeaderboard},
+		{0.7408, monthlyMilesLeaderboard},
+		{0.7410, guessrDailyLeaderboard},
+		{0.8272, guessrDailyLeaderboard},
+		{0.8273, guessrMonthlyLeaderboard},
 		{0.9999, guessrMonthlyLeaderboard},
 	}
 	for _, tt := range tests {
@@ -148,22 +148,31 @@ func TestShowRotatingLeaderboard_AllEmpty_SkipsOverlay(t *testing.T) {
 }
 
 // The odds Dana asked for, stated as the property rather than as thresholds:
-// each guessing-game board comes up about half as often as a miles or chat-guess
-// board. Sampling the roll space beats re-deriving the boundaries, because it
-// still holds if the shares are ever expressed some other way.
-func TestPickLeaderboard_GuessrBoardsGetHalfShare(t *testing.T) {
+// the monthly guessing-game board comes up about half as often as a miles or
+// chat-guess board, and the daily one half as often again. Sampling the roll
+// space beats re-deriving the boundaries, because it still holds if the shares
+// are ever expressed some other way.
+func TestPickLeaderboard_GuessrBoardShares(t *testing.T) {
 	const samples = 100000
 	counts := map[leaderboardKind]int{}
 	for i := 0; i < samples; i++ {
 		counts[pickLeaderboard(float64(i)/samples, true)]++
 	}
-	for _, guessr := range []leaderboardKind{guessrDailyLeaderboard, guessrMonthlyLeaderboard} {
+	wantRatio := map[leaderboardKind]float64{
+		guessrMonthlyLeaderboard: 2,
+		guessrDailyLeaderboard:   4,
+	}
+	for guessr, want := range wantRatio {
 		for _, full := range []leaderboardKind{guessLeaderboard, monthlyMilesLeaderboard} {
 			ratio := float64(counts[full]) / float64(counts[guessr])
-			if ratio < 1.95 || ratio > 2.05 {
-				t.Errorf("board %v should come up ~2x as often as %v, got %.2fx", full, guessr, ratio)
+			if ratio < want*0.975 || ratio > want*1.025 {
+				t.Errorf("board %v should come up ~%.0fx as often as %v, got %.2fx", full, want, guessr, ratio)
 			}
 		}
+	}
+	// The ask that motivated the split: the daily board is the rarer of the two.
+	if ratio := float64(counts[guessrMonthlyLeaderboard]) / float64(counts[guessrDailyLeaderboard]); ratio < 1.95 || ratio > 2.05 {
+		t.Errorf("monthly guessr should come up ~2x as often as daily, got %.2fx", ratio)
 	}
 }
 
@@ -182,7 +191,7 @@ func TestShowRotatingLeaderboard_GuessrDaily(t *testing.T) {
 	app.Onscreens = rec
 	app.Flags = &recordingFlags{Set: map[string]bool{guessrBoardFlagKey: true}}
 
-	app.showRotatingLeaderboard(context.Background(), 0.7) // guessr daily
+	app.showRotatingLeaderboard(context.Background(), 0.78) // guessr daily
 
 	want := `ShowLeaderboard("August 1 Guessr", 2 rows)`
 	if len(rec.Calls) != 1 || !strings.Contains(rec.Calls[0], want) {
@@ -233,7 +242,7 @@ func TestShowRotatingLeaderboard_GuessrMonthlyKeepsMoreRows(t *testing.T) {
 		roll float64
 		want string
 	}{
-		{"daily", 0.7, `ShowLeaderboard("August 1 Guessr", 5 rows)`},
+		{"daily", 0.78, `ShowLeaderboard("August 1 Guessr", 5 rows)`},
 		{"monthly", 0.9, `ShowLeaderboard("August Guessr", 10 rows)`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -288,7 +297,7 @@ func TestShowRotatingLeaderboard_GuessrServesHTML_FallsBack(t *testing.T) {
 		Miles: [][]string{{"viewer1", "12.5"}},
 	}
 
-	app.showRotatingLeaderboard(context.Background(), 0.7) // guessr daily → unreachable → miles
+	app.showRotatingLeaderboard(context.Background(), 0.78) // guessr daily → unreachable → miles
 
 	want := `ShowLeaderboard("August Miles", 1 rows)`
 	if len(rec.Calls) != 1 || !strings.Contains(rec.Calls[0], want) {
@@ -314,7 +323,7 @@ func TestShowRotatingLeaderboard_GuessrEmpty_FallsBack(t *testing.T) {
 		Miles: [][]string{{"viewer1", "12.5"}},
 	}
 
-	app.showRotatingLeaderboard(context.Background(), 0.7)
+	app.showRotatingLeaderboard(context.Background(), 0.78)
 
 	if len(rec.Calls) != 1 || !strings.Contains(rec.Calls[0], `ShowLeaderboard("August Miles", 1 rows)`) {
 		t.Errorf("expected fallback to August Miles, got %v", rec.Calls)
@@ -452,7 +461,7 @@ func TestShowRotatingLeaderboard_FlagOff_NeverFetches(t *testing.T) {
 	}
 
 	// The rolls that would land on the guessr boards with the flag on.
-	for _, roll := range []float64{0.7, 0.9} {
+	for _, roll := range []float64{0.78, 0.9} {
 		app.showRotatingLeaderboard(context.Background(), roll)
 	}
 	for _, call := range rec.Calls {

@@ -1,0 +1,1 @@
+The daily Guessr board comes up half as often in the onscreen rotation. It shows the last finished day, so it's the board that ages fastest between appearances — the monthly board and the miles boards keep their share.
