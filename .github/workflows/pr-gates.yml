@@ -91,7 +91,17 @@ jobs:
       #
       # The gateway repo is private, so read it with an org-scoped automation
       # app token (least privilege: platform-gateway only), not GITHUB_TOKEN.
+      #
+      # Skipped on Dependabot PRs, which cannot answer the question this asks. A
+      # Dependabot `pull_request` event is granted Actions variables but not
+      # Actions secrets, so the private key arrives empty and the mint fails with
+      # "The 'private-key' input must be set to a non-empty string" — a red
+      # required check on every bump. Nothing is lost by not asking: platforms.json
+      # only ever moves by `task platforms:sync`, which no dependency bump runs,
+      # and gateway-side drift is caught daily by platforms-contract.yml regardless
+      # of what any PR does.
       - name: Mint automation app token
+        if: github.event.pull_request.user.login != 'dependabot[bot]'
         id: app-token
         uses: actions/create-github-app-token@v3
         with:
@@ -101,6 +111,7 @@ jobs:
           repositories: platform-gateway
 
       - name: Assert platforms.json matches platform-gateway/main
+        if: github.event.pull_request.user.login != 'dependabot[bot]'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
