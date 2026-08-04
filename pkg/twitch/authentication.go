@@ -3,108 +3,19 @@ package twitch
 import (
 	"errors"
 	"log/slog"
-	"net/http"
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"github.com/adanalife/tripbot/pkg/oauthtokens"
-	"github.com/nicklaw5/helix/v2"
-	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
-
-// helixHTTPClient is the otelhttp-instrumented HTTP client passed to every
-// helix.NewClient call. Without this, outbound Twitch Helix requests leave
-// no trail in Tempo; with it, each helix call shows up as a span. Pairs with
-// the otelhttp transports already used by pkg/playout-client and pkg/onscreens-client.
-//
-// The rateLimitRecorder wraps the otelhttp transport so every Helix
-// response also updates the twitch_helix_rate_limit_* gauges.
-var helixHTTPClient = &http.Client{Transport: rateLimitRecorder{next: otelhttp.NewTransport(http.DefaultTransport)}}
-
-// BotScopes is the OAuth scope set the App Access Token requests for the bot
-// account (BOT_USERNAME — `tripbot4000` in prod). chat:read + chat:edit
-// are required for IRC; moderator:read:chatters lets the bot read the viewer
-// list on a channel where it is a moderator. (Interactive consent + the
-// broadcaster scopes now live on the platform-gateway; these remain for the
-// app-access-token request in Client.)
-var BotScopes = []string{
-	"chat:read",
-	"chat:edit",
-	"moderator:read:chatters",
-}
-
-// BroadcasterScopes is the OAuth scope set for the broadcaster account
-// (CHANNEL_NAME — `adanalife_` in prod): channel:read:subscriptions,
-// moderator:read:followers, user:edit:broadcast, user:write:chat. The gateway
-// owns broadcaster consent now; these remain for the app-access-token request.
-var BroadcasterScopes = []string{
-	"channel:read:subscriptions",
-	"moderator:read:followers",
-	"user:edit:broadcast",
-	"user:write:chat",
-}
 
 // ErrNoToken signals "no oauth_tokens row for the bot account". Re-exported from
 // oauthtokens for caller convenience.
 var ErrNoToken = oauthtokens.ErrNoToken
 
-// ErrNoCredentials means SetCredentials was never called, so there's nothing to
-// build a helix client from. Only a twitch instance calls it — every other
-// platform reaches its chat through a platform-gateway and never touches this
-// path, which is why missing credentials are an error here rather than a
-// process-wide requirement.
-var ErrNoCredentials = errors.New("twitch: no client credentials set")
-
-// SetCredentials installs the static Twitch app credentials. cmd/tripbot calls
-// it from the twitch-only bring-up with the values off its config; TWITCH_AUTH_TOKEN
-// is deliberately not among them — the IRC token lives in the oauth_tokens table
-// and arrives via LoadFromDB.
-func (cl *API) SetCredentials(clientID, clientSecret string) {
-	cl.clientID = clientID
-	cl.clientSecret = clientSecret
-}
-
-// Client returns the shared helix client, lazy-initializing on first call.
-// First-call side effect: requests an App Access Token (Client Credentials).
-// The command-time Helix query surface belongs to the platform-gateway; this
-// client is only the chatbot's boot-time Twitch-reachability probe.
-func (cl *API) Client() (*helix.Client, error) {
-	if cl.currentTwitchClient != nil {
-		return cl.currentTwitchClient, nil
-	}
-	if cl.clientID == "" || cl.clientSecret == "" {
-		return nil, ErrNoCredentials
-	}
-	client, err := helix.NewClient(&helix.Options{
-		ClientID:     cl.clientID,
-		ClientSecret: cl.clientSecret,
-		HTTPClient:   helixHTTPClient,
-	})
-	if err != nil {
-		slog.Error("error creating twitch API client", "err", err)
-		return nil, err
-	}
-
-	resp, err := client.RequestAppAccessToken(append(append([]string{}, BotScopes...), BroadcasterScopes...))
-	if err != nil {
-		// Twitch unreachable: RequestAppAccessToken returns a nil resp, so
-		// don't touch resp.Data here (it would panic). Leave currentTwitchClient
-		// uncached so the next call retries once Twitch is back — caching a
-		// tokenless client would pin an empty App Access Token forever.
-		slog.Error("error getting app access token from twitch", "err", err)
-		return nil, err
-	}
-	cl.appAccessToken = resp.Data.AccessToken
-	client.SetAppAccessToken(cl.appAccessToken)
-
-	cl.currentTwitchClient = client
-	return client, nil
-}
-
 // LoadFromDB loads both the bot row and the broadcaster row from oauth_tokens
-// (which the platform-gateway keeps fresh). The bot row is required (no IRC
-// without it). The broadcaster row is optional — when missing, EventSub skips
-// until it's seeded.
+// (which the platform-gateway keeps fresh). The bot row is required. The
+// broadcaster row is optional — when missing, EventSub skips until it's seeded.
 //
 // Returns ErrNoToken only when the bot row is missing.
 func (cl *API) LoadFromDB(botUser, broadcasterUser string) error {
@@ -115,9 +26,6 @@ func (cl *API) LoadFromDB(botUser, broadcasterUser string) error {
 	cl.tokenMu.Lock()
 	cl.currentUserToken = t
 	cl.tokenMu.Unlock()
-	if cl.currentTwitchClient != nil {
-		cl.currentTwitchClient.SetUserAccessToken(t.AccessToken)
-	}
 	instrumentation.TwitchTokenExpiry.SetExpiresAt("bot", t.ExpiresAt)
 
 	if broadcasterUser == "" || broadcasterUser == botUser {
@@ -141,17 +49,6 @@ func (cl *API) LoadFromDB(botUser, broadcasterUser string) error {
 	cl.tokenMu.Unlock()
 	instrumentation.TwitchTokenExpiry.SetExpiresAt("broadcaster", bt.ExpiresAt)
 	return nil
-}
-
-// IRCAuthToken returns the bot's IRC oauth: token, ready for twitch.NewClient.
-// Returns "" if no token has been loaded.
-func (cl *API) IRCAuthToken() string {
-	cl.tokenMu.RLock()
-	defer cl.tokenMu.RUnlock()
-	if cl.currentUserToken.AccessToken == "" {
-		return ""
-	}
-	return "oauth:" + cl.currentUserToken.AccessToken
 }
 
 // BroadcasterUserAccessToken returns the broadcaster's raw access token
@@ -216,7 +113,7 @@ func (cl *API) TokenStatuses(botUser, broadcasterUser string) []AccountTokenStat
 	return out
 }
 
-// Token consent + refresh are owned by the platform-gateway now (gateway-twitch
-// runs the OAuth consent flow and the refresh loop, and is the sole writer of
+// Token consent + refresh are owned by the platform-gateway (gateway-twitch runs
+// the OAuth consent flow and the refresh loop, and is the sole writer of
 // oauth_tokens). tripbot is a token *reader*: LoadFromDB pulls the rows the
-// gateway keeps fresh into the IRC PASS line + the EventSub WS handshake.
+// gateway keeps fresh into the EventSub WS handshake.

@@ -57,13 +57,12 @@ type TripbotConfig struct {
 	// for the "restart obs" button. Optional — blank skips the OBS row.
 	ObsServerHost string `envconfig:"OBS_SERVER_HOST"`
 
-	// TwitchClientID and TwitchClientSecret are the static Twitch app
-	// credentials pkg/twitch builds its helix client from. Required on a
-	// twitch instance and unused everywhere else, so they're validated in the
-	// Twitch bring-up rather than here — a tiktok instance has no business
-	// holding Twitch app credentials.
-	TwitchClientID     string `envconfig:"TWITCH_CLIENT_ID"`
-	TwitchClientSecret string `envconfig:"TWITCH_CLIENT_SECRET"`
+	// TwitchClientID is the static Twitch app client ID, sent in the EventSub
+	// websocket handshake. Required on a twitch instance and unused everywhere
+	// else, so it's validated in the Twitch bring-up rather than here — a tiktok
+	// instance has no business holding Twitch app credentials. The client secret
+	// lives only on the platform-gateway, which owns OAuth consent and refresh.
+	TwitchClientID string `envconfig:"TWITCH_CLIENT_ID"`
 
 	// TwitchAPIURL points the chatbot's command-time Twitch Helix calls at
 	// the platform-gateway gateway-twitch instance over HTTP, instead of the

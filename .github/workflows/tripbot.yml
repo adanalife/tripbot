@@ -66,7 +66,6 @@ jobs:
           BOT_USERNAME: ${{ secrets.BOT_USERNAME }}
           TWITCH_AUTH_TOKEN: ${{ secrets.TWITCH_AUTH_TOKEN }}
           TWITCH_CLIENT_ID: ${{ secrets.TWITCH_CLIENT_ID }}
-          TWITCH_CLIENT_SECRET: ${{ secrets.TWITCH_CLIENT_SECRET }}
         run: |
           docker compose \
             --project-directory . \
@@ -111,7 +110,6 @@ jobs:
           BOT_USERNAME: ${{ secrets.BOT_USERNAME }}
           TWITCH_AUTH_TOKEN: ${{ secrets.TWITCH_AUTH_TOKEN }}
           TWITCH_CLIENT_ID: ${{ secrets.TWITCH_CLIENT_ID }}
-          TWITCH_CLIENT_SECRET: ${{ secrets.TWITCH_CLIENT_SECRET }}
         run: |
           docker compose \
             --project-directory . \
