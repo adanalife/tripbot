@@ -10,10 +10,22 @@ updates:
   # without a workflow edit). Note: setting `labels` replaces Dependabot's
   # defaults, so the otherwise-automatic dependencies/ecosystem labels are
   # restated here.
+  #
+  # Every ecosystem here batches its minor and patch bumps into one PR per run.
+  # A major is deliberately left out of every group so it arrives on its own,
+  # where a breaking change is attributable to a single dependency instead of
+  # hiding among a dozen safe ones.
   - package-ecosystem: gomod
     directory: /
     schedule:
       interval: daily
+    groups:
+      go-deps:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
     labels:
       - dependencies
       - go
@@ -22,6 +34,13 @@ updates:
     directory: /
     schedule:
       interval: daily
+    groups:
+      actions:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
     labels:
       - dependencies
       - github_actions
@@ -42,6 +61,13 @@ updates:
     directory: cdk8s
     schedule:
       interval: daily
+    groups:
+      cdk8s:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
     labels:
       - dependencies
       - javascript
