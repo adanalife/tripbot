@@ -73,3 +73,21 @@ updates:
       - dependencies
       - javascript
       - skip-changelog
+  # The cdk8s Python layer: the libraries the authoring code imports. The npm
+  # entry above covers the CLI half of the same toolchain; without this one the
+  # Python half takes no updates at all, security included.
+  - package-ecosystem: uv
+    directory: cdk8s
+    schedule:
+      interval: daily
+    groups:
+      python:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+    labels:
+      - dependencies
+      - python
+      - skip-changelog
