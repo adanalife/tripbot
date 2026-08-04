@@ -140,8 +140,8 @@ def _env_from_secrets(stem: str) -> set[str]:
 
 
 def test_only_twitch_mounts_the_twitch_creds_secret():
-    """The Twitch app credentials are read only by a twitch instance, which
-    builds a helix client from them; every other platform reaches its chat
+    """The Twitch app credentials are read only by a twitch instance, which sends
+    the client ID in its EventSub handshake; every other platform reaches its chat
     through a platform-gateway that owns its own credential. The ExternalSecret
     stays identity-level, so what's guarded here is the per-platform *mount*.
 
