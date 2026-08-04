@@ -21,7 +21,8 @@ import (
 //
 // No-op when NATS is unconfigured (the singleton conn is nil) — the same
 // fire-and-forget posture as the rest of the NATS surface. Must run after
-// startNATS (conn) and setUpTwitchClient (which wires t.app.Chat via ConnectIRC).
+// startNATS (conn) and the chat bring-up that wires t.app.Chat
+// (ConnectTwitchViaGateway).
 func (t *Tripbot) startChatSendSubscriber(ctx context.Context) {
 	conn := natsclient.Conn()
 	if conn == nil {

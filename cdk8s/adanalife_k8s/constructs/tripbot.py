@@ -244,8 +244,8 @@ class Tripbot(Construct):
         ]
 
         # The Twitch app credentials are read only by a twitch instance, which
-        # builds a helix client from them; every other platform reaches its chat
-        # through a platform-gateway that owns its own credential. The
+        # sends the client ID in its EventSub handshake; every other platform
+        # reaches its chat through a platform-gateway that owns its own credential. The
         # ExternalSecret stays identity-level (one Twitch dev app for the bot,
         # like google-maps) — it's the *mount* that's per-platform.
         if platform == "twitch":

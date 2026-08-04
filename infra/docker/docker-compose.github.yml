@@ -9,7 +9,6 @@ services:
       - BOT_USERNAME
       - TWITCH_AUTH_TOKEN
       - TWITCH_CLIENT_ID
-      - TWITCH_CLIENT_SECRET
     build:
       # pull down cache layers from repo
       cache_from:

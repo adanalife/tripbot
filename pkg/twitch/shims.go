@@ -1,28 +1,18 @@
 package twitch
 
-import (
-	"github.com/nicklaw5/helix/v2"
-)
-
 // This file preserves the package-level free-function API that callers used
-// before pkg/twitch held a *Client. Each shim delegates to defaultClient so
-// existing call sites (pkg/users, pkg/server, cmd/tripbot, pkg/eventsub,
-// pkg/chatbot) keep working unchanged while the package-level mutable globals
-// are gone.
+// before pkg/twitch held an *API. Each shim delegates to defaultClient so
+// existing call sites (pkg/users, pkg/server, cmd/tripbot) keep working
+// unchanged while the package-level mutable globals are gone.
 //
-// These shims are transitional. Once a constructed *Client is threaded through
+// These shims are transitional. Once a constructed *API is threaded through
 // those callers, this whole file (and defaultClient) is deleted.
 
 // --- auth / token ---
 
-func Client() (*helix.Client, error) { return defaultClient.Client() }
-func SetCredentials(clientID, clientSecret string) {
-	defaultClient.SetCredentials(clientID, clientSecret)
-}
 func LoadFromDB(botUser, broadcasterUser string) error {
 	return defaultClient.LoadFromDB(botUser, broadcasterUser)
 }
-func IRCAuthToken() string               { return defaultClient.IRCAuthToken() }
 func BroadcasterUserAccessToken() string { return defaultClient.BroadcasterUserAccessToken() }
 func TokenStatuses(botUser, broadcasterUser string) []AccountTokenStatus {
 	return defaultClient.TokenStatuses(botUser, broadcasterUser)
