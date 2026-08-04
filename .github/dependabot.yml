@@ -12,9 +12,9 @@ updates:
   # restated here.
   #
   # Every ecosystem here batches its minor and patch bumps into one PR per run.
-  # A major is deliberately left out of every group so it arrives on its own,
-  # where a breaking change is attributable to a single dependency instead of
-  # hiding among a dozen safe ones.
+  # A major is deliberately left out of every non-Actions group so it arrives on
+  # its own, where a breaking change is attributable to a single dependency
+  # instead of hiding among a dozen safe ones.
   - package-ecosystem: gomod
     directory: /
     schedule:
@@ -30,6 +30,10 @@ updates:
       - dependencies
       - go
       - skip-changelog
+  # The Actions group takes majors too, unlike the others. An action major is
+  # normally a runner or Node version bump rather than an API break, so the
+  # attributability that keeps majors solo elsewhere buys little here — and
+  # holding them out produced a standing queue of one-line PRs nobody merged.
   - package-ecosystem: github-actions
     directory: /
     schedule:
@@ -38,9 +42,6 @@ updates:
       actions:
         patterns:
           - "*"
-        update-types:
-          - minor
-          - patch
     labels:
       - dependencies
       - github_actions
