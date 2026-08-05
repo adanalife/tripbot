@@ -323,7 +323,7 @@ func (a *App) HandleMessage(ctx context.Context, msg IncomingMessage) {
 
 	// resolve the sender, then run any command. The original casing goes
 	// through: runCommand folds only the trigger token for matching.
-	a.runCommand(ctx, a.chatUser(ctx, msg.User), msg.Text)
+	a.runCommand(ctx, a.chatUser(ctx, msg.User, msg.UserID), msg.Text)
 }
 
 // chatUser resolves a sender to the user the command path runs as.
@@ -333,9 +333,15 @@ func (a *App) HandleMessage(ctx context.Context, msg IncomingMessage) {
 // follower/subscriber access checks all have something to read. Everywhere else
 // it is a transient user carrying just the display name, which is all the v1
 // allowlist needs.
-func (a *App) chatUser(ctx context.Context, username string) *users.User {
+//
+// platformUserID is stamped onto the row when the platform reported one. This is
+// the only path that has it — the session tick logs chatters in from a name list
+// with no ids — so the column fills in as people talk rather than all at once.
+func (a *App) chatUser(ctx context.Context, username, platformUserID string) *users.User {
 	if platformPersistsUsers[a.platform()] {
-		return a.UserSessions.LoginIfNecessary(ctx, username)
+		user := a.UserSessions.LoginIfNecessary(ctx, username)
+		users.RecordPlatformUserID(ctx, user, platformUserID)
+		return user
 	}
 	return &users.User{Username: strings.ToLower(username)}
 }
