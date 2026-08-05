@@ -1,0 +1,1 @@
+New `task test:db:reset` recreates the test postgres from scratch. The container outlives a test run and golang-migrate only applies a migration once, so editing one that has already run left the old schema in place and the next run tested against it — passing, or failing, for reasons the files on disk no longer explained.
