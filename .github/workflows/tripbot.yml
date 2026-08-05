@@ -19,8 +19,7 @@ on:
       - main
 
 # Supersede an in-flight run when new commits land on the same PR/branch —
-# a superseded build's image is immediately stale, and this keeps concurrent
-# Docker Hub traffic down (rate-limit avoidance).
+# a superseded build's image is immediately stale.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -29,9 +28,19 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # This job reads no secrets, so it runs identically on a Dependabot PR
+    # (which is issued none) as on a push to main. Every image it needs is
+    # either built here or mirrored to ghcr, and the smoke test only boots
+    # far enough to read /version — so a fixed placeholder identity serves as
+    # well as the real account. The Twitch calls these three feed can't
+    # succeed regardless: the seeded oauth_tokens row is a placeholder too.
     env:
       COMPOSE_DOCKER_CLI_BUILD: 1
       DOCKER_BUILDKIT: 1
+      CHANNEL_NAME: ci_channel
+      BOT_USERNAME: ci_bot
+      # Boot is fatal on an empty value (cmd/tripbot setUpTwitchCredentials).
+      TWITCH_CLIENT_ID: ci-placeholder-client-id
 
     steps:
       - name: Checkout
@@ -39,15 +48,6 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
-
-      # Authenticate base-image pulls so they count against our Docker Hub
-      # account limit rather than the shared GitHub-runner-IP anonymous
-      # limit (the usual toomanyrequests source). Push stays false.
-      - name: Login to DockerHub
-        uses: docker/login-action@v4
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build tripbot image
         uses: docker/build-push-action@v7
@@ -61,11 +61,6 @@ jobs:
           cache-to: type=gha,mode=max,scope=tripbot
 
       - name: Bring up db + migrate
-        env:
-          CHANNEL_NAME: ${{ secrets.CHANNEL_NAME }}
-          BOT_USERNAME: ${{ secrets.BOT_USERNAME }}
-          TWITCH_AUTH_TOKEN: ${{ secrets.TWITCH_AUTH_TOKEN }}
-          TWITCH_CLIENT_ID: ${{ secrets.TWITCH_CLIENT_ID }}
         run: |
           docker compose \
             --project-directory . \
@@ -80,13 +75,11 @@ jobs:
       - name: Check logs (migrate)
         run: docker logs tripbot-migrate-1
 
-      # tripbot's LoadFromDB at boot refuses to start without an oauth_tokens
-      # row (cluster contract: bootstrap-or-fatal). CI has no real Twitch
-      # creds to bootstrap with, so seed a syntactically-valid placeholder row
-      # so cmd/tripbot can boot far enough to verify version files + /version.
+      # A missing oauth_tokens row leaves tripbot warning and polling for one,
+      # so seed a syntactically-valid placeholder to keep the boot path the
+      # same shape it has in a cluster. The token itself is never redeemed —
+      # the smoke test only reads version files + /version.
       - name: Seed placeholder oauth_tokens row for build-stack tripbot
-        env:
-          BOT_USERNAME: ${{ secrets.BOT_USERNAME }}
         run: |
           docker exec -i tripbot-db-1 \
             psql -U tripbot_docker -d tripbot_docker \
@@ -105,11 +98,6 @@ jobs:
           SQL
 
       - name: Bring up tripbot
-        env:
-          CHANNEL_NAME: ${{ secrets.CHANNEL_NAME }}
-          BOT_USERNAME: ${{ secrets.BOT_USERNAME }}
-          TWITCH_AUTH_TOKEN: ${{ secrets.TWITCH_AUTH_TOKEN }}
-          TWITCH_CLIENT_ID: ${{ secrets.TWITCH_CLIENT_ID }}
         run: |
           docker compose \
             --project-directory . \
