@@ -9,6 +9,34 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v4.21.0] — 2026-08-05
+
+### Chatbot
+
+- `tripbot.<env>.chat.message` now carries the sender's platform user id, the message's own id, and their moderator / subscriber / broadcaster role, alongside the username and text it always had. The console can render badges and address a message for moderation, and a consumer subscribing to the subject can tell who is speaking without a database or a platform credential of its own. All the new fields are optional, so an existing consumer is unaffected. ([#1268](https://github.com/adanalife/tripbot/pull/1268))
+
+### Onscreens
+
+- Every overlay's state is now guarded by a lock. Each onscreen runs a background loop that hides it once its display window closes, while the HTTP and NATS handlers set its content from their own goroutines — all of them were touching the same fields unsynchronised, so a `!timewarp` landing as the sweeper ran could leave an overlay showing stale content, showing empty, or stuck visible. The state endpoint the OBS browser sources poll now serves a consistent snapshot rather than a struct being written underneath it. ([#1340](https://github.com/adanalife/tripbot/pull/1340))
+
+### Console / API
+
+- `GET /api/user/{username}` takes an optional `?user_id=` carrying the platform's own user id, and resolves the chatter by it before falling back to the name. A viewer who renames themselves used to strand their row under the old login — the popover would open on nobody, or on whoever took the name — and the id survives that. The response's `username` reports whichever row actually answered, and the session/first-seen reads follow it rather than the name that was asked for. Chatters' rows get stamped with their id as they talk, so the id path starts answering for anyone active and the name fallback covers the rest. ([#1342](https://github.com/adanalife/tripbot/pull/1342))
+
+### Deploy / Infra
+
+- `frame_embeddings` now carries `source_ts_sec`, the offset into the original recording, alongside the existing offset into the airing clip. Re-cutting one of the 122 trimmed clips becomes arithmetic on `ts_sec` instead of a multi-day re-embed, and the dedupe key moves to the clock nothing re-cuts. Existing rows are backfilled from the trim offset each clip's `video_coords` track already implies. ([#1344](https://github.com/adanalife/tripbot/pull/1344))
+- tripbot mounts the album library from the node-local `obs-music-local` claim instead of the NAS share, so a storage outage can't block the goroutine that enumerates and advances tracks. Same library, same mount path — infra provisions the volume and `task k8s:<env>:music-localize` fills it. ([#1345](https://github.com/adanalife/tripbot/pull/1345))
+
+### CI / Tooling
+
+- The testing workflow reports a failing suite as a failure. The test step piped `task test:cover` into `tee`, and the default shell doesn't set `pipefail`, so the step took `tee`'s exit status and a red suite reported green — it only ever went red when the coverage upload itself failed. ([#1340](https://github.com/adanalife/tripbot/pull/1340))
+- New `task test:db:reset` recreates the test postgres from scratch. The container outlives a test run and golang-migrate only applies a migration once, so editing one that has already run left the old schema in place and the next run tested against it — passing, or failing, for reasons the files on disk no longer explained. ([#1343](https://github.com/adanalife/tripbot/pull/1343))
+
+### Cleanup
+
+- **Deleted the dead in-process Twitch Helix client.** `pkg/twitch`'s `Client()` had no callers once the platform-gateway became the single Helix caller, so everything downstream of it was unreachable: the lazy `helix.Client` + App Access Token, `SetCredentials`, `BotScopes`/`BroadcasterScopes`, `ErrNoCredentials`, the `helixHTTPClient` transport, and `IRCAuthToken()`. With `helix.ChatChatter` reduced to the `[]string` of logins it always held, **`github.com/nicklaw5/helix/v2` drops out of `go.mod` entirely** — tripbot no longer depends on a Twitch API client library. `TWITCH_CLIENT_SECRET` is no longer read (the gateway owns OAuth consent and refresh); `TWITCH_CLIENT_ID` stays, since the EventSub handshake sends it. The `twitch_helix_rate_limit_remaining` / `_total` gauges and the `twitch_helix_errors_total` counter are removed too — nothing could record them anymore; `platform_gateway_helix_ratelimit_*` and `platform_gateway_helix_errors_total` are the live equivalents. ([#1330](https://github.com/adanalife/tripbot/pull/1330))
+
 ## [v4.20.0] — 2026-08-03 🚭
 
 ### Chatbot
