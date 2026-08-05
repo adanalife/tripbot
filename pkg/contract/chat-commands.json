@@ -51,7 +51,8 @@
       "trigger": "!commands",
       "aliases": [
         "!command",
-        "!controls"
+        "!controls",
+        "!hello"
       ],
       "platforms": [
         "facebook",
@@ -175,7 +176,9 @@
       "trigger": "!guess",
       "aliases": [
         "guess",
-        "!guis"
+        "!guis",
+        "!guesss",
+        "!guesr"
       ],
       "requires_follow": true,
       "platforms": [
@@ -187,6 +190,17 @@
       "aliases": [
         "!glb",
         "!guesslb"
+      ],
+      "requires_follow": true,
+      "platforms": [
+        "twitch"
+      ]
+    },
+    {
+      "trigger": "!guessr",
+      "aliases": [
+        "!guessrleaderboard",
+        "!grlb"
       ],
       "requires_follow": true,
       "platforms": [

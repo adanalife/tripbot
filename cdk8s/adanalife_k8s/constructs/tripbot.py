@@ -170,9 +170,11 @@ def config_data(env: EnvConfig, platform: str) -> dict[str, str]:
     data.update(_ENV_CONFIG[env.name])
     if env.nats_url:
         data["NATS_URL"] = env.nats_url
-    # Route the twitch instance's command-time Helix calls through the
-    # platform-gateway gateway-twitch where the env wires it. Only the
-    # twitch platform talks Helix, so the youtube instance never carries it.
+    # Route the twitch instance's chat (both directions) and its command-time
+    # Helix calls through the platform-gateway gateway-twitch where the env
+    # wires it — required for chat to come up at all (the binary boots
+    # chat-less without it). Only the twitch platform talks Helix, so the
+    # youtube instance never carries it.
     if platform == "twitch" and env.twitch_api_url:
         data["TWITCH_API_URL"] = env.twitch_api_url
     # Route the youtube instance's outbound chat sends through gateway-youtube
@@ -242,8 +244,8 @@ class Tripbot(Construct):
         ]
 
         # The Twitch app credentials are read only by a twitch instance, which
-        # builds a helix client from them; every other platform reaches its chat
-        # through a platform-gateway that owns its own credential. The
+        # sends the client ID in its EventSub handshake; every other platform
+        # reaches its chat through a platform-gateway that owns its own credential. The
         # ExternalSecret stays identity-level (one Twitch dev app for the bot,
         # like google-maps) — it's the *mount* that's per-platform.
         if platform == "twitch":

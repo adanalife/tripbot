@@ -9,6 +9,72 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v4.20.0] — 2026-08-03 🚭
+
+### Chatbot
+
+- `!song` names the track from its own filename tags, so a StreamBeats song announces as `"Holosmith" — Breaker, StreamBeats by Harris Heller` rather than repeating the label and the album twice with a track number on the end. The console's now-playing line drops the track number too. An `!audio` switch now names only what it switched to (`Switched to Breaker, StreamBeats by Harris Heller`) and leaves the song to `!song`. ([#1322](https://github.com/adanalife/tripbot/pull/1322))
+- A background-audio switch now waits 5 seconds before it reaches OBS, so a mis-click on the console — or a fumbled `!audio` — can be corrected before the stream's audio changes. A second switch inside the window replaces the first rather than queueing behind it. `!audio` announces the wait (`Switching to Breaker, StreamBeats by Harris Heller in 5s`), and `/api/audio` ships the waiting switch as `pending` so the console can show it. ([#1324](https://github.com/adanalife/tripbot/pull/1324))
+- Tied leaderboard scores now share a place. Two viewers level on miles are both first and the next one down is third, wherever a place number is printed — the chat commands and the Discord embeds. Tied names also hold a fixed order instead of swapping around between refreshes. ([#1325](https://github.com/adanalife/tripbot/pull/1325))
+- `!hello` now lists the commands you can try, the same as `!commands`. It previously matched nothing at all. Saying plain `hello` (or `hi`, or `hey`) in chat still gets a greeting back. ([#1328](https://github.com/adanalife/tripbot/pull/1328))
+
+### Onscreens
+
+- Onscreen leaderboards are back to five rows. The monthly Guessr board keeps ten — it's a whole month's running total, so the names below fifth place are still worth reading. Chat still lists ten, where a longer list costs nothing. ([#1321](https://github.com/adanalife/tripbot/pull/1321))
+- The daily Guessr board comes up half as often in the onscreen rotation. It shows the last finished day, so it's the board that ages fastest between appearances — the monthly board and the miles boards keep their share. ([#1323](https://github.com/adanalife/tripbot/pull/1323))
+
+### Fixes
+
+- The album bed advances the moment a track ends rather than on the audio watchdog's next 7-second tick, so the gap between two songs is no longer up to seven seconds of silence. ([#1317](https://github.com/adanalife/tripbot/pull/1317))
+- Outbound chat no longer reports an offline platform as a failure. The rotating chatter and the timed jobs Say on a schedule regardless of whether anything is live, so on Facebook — where a comment can only be posted to a live video — every offline hour was logging an error per tick and forwarding it to Sentry. The gateway's two state replies (409 nothing live, 503 platform refused the call) now carry sentinels, and `Say` logs those at warn; a genuine upstream failure keeps its error level. ([#1327](https://github.com/adanalife/tripbot/pull/1327))
+
+### Misc
+
+- Added the `video_coords` table, which records where the van was at each moment of a clip rather than once per clip. ([#1319](https://github.com/adanalife/tripbot/pull/1319))
+- Coordinates in `video_coords` are now keyed to the recording they were read from rather than to the clip cut out of it, so correcting a trim point re-places them instead of silently invalidating them. ([#1320](https://github.com/adanalife/tripbot/pull/1320))
+
+## [v4.19.0] — 2026-08-03
+
+### Chatbot
+
+- `!audio` now takes an album name as well as a bed or a SomaFM channel, so the album bed can be narrowed to one album on the music share instead of shuffling everything on it together — `!audio rose` reaches `synthwave-rose` without typing the genre prefix. Albums are the share's subdirectories, read live, so music dropped on the NAS is selectable without a deploy; the selection sticks the way a tuned SomaFM channel does, and the console's Album picker has an "everything on the share" option to widen it again. The console's `/api/audio` gained the matching `album` field and album list. ([#1314](https://github.com/adanalife/tripbot/pull/1314))
+
+### CI / Tooling
+
+- `bin/stage-streambeats` — stages bought StreamBeats albums onto the music share the album bed plays from, taking the Bandcamp .zip files as downloaded and naming each directory `streambeats-<genre>-<album>` so the bed can select all of them, one genre, or one album. It carries the album→genre table, which is the part the archives can't tell you: Bandcamp tags every album "Electronic, lofi", including the synthwave ones. Dry run by default, never deletes, and safe to re-run after each batch. ([#1315](https://github.com/adanalife/tripbot/pull/1315))
+
+## [v4.18.0] — 2026-08-03
+
+### Chatbot
+
+- `!guessr` puts the guessing game's board in chat and on the overlay on demand — daily by default, `!guessr monthly` for the running total. Gated by the same `chatbot.guessr_leaderboard` flag as the rotation. ([#1309](https://github.com/adanalife/tripbot/pull/1309))
+
+### Onscreens
+
+- The overlay leaderboard shows ten rows instead of five, matching the number the chatbot sends — the bottom half of every board was being dropped between chat and screen. ([#1310](https://github.com/adanalife/tripbot/pull/1310))
+
+### Fixes
+
+- The audio watchdog's SomaFM reachability probe now runs only while a bot is actually stranded on the local fallback bed, rather than on every tick of every platform. It was opening a fresh connection to SomaFM's edge every 7s from all five platform bots — four of them on the album bed, where the answer can't be acted on — which is enough sustained traffic from one IP for SomaFM to firewall it. Also drops ~60k warn lines/day of probe-failure logging. ([#1312](https://github.com/adanalife/tripbot/pull/1312))
+
+## [v4.17.0] — 2026-08-02
+
+### Chatbot
+
+- The onscreen leaderboard rotation can now include the two [guessr](https://guessr.dana.lol) boards — the last closed daily one and the running monthly one — read from the game rather than stored here. Each comes up about half as often as a miles board. Gated behind the `chatbot.guessr_leaderboard` feature flag, which ships off; with it off the rotation is the three boards it was before. ([#1306](https://github.com/adanalife/tripbot/pull/1306))
+
+## [v4.16.2] — 2026-08-02
+
+### Fixes
+
+- A tripbot restart during a SomaFM outage no longer strands the stream on the car-hum drone: the audio watchdog's fallback now uses its own file, so the bed read back from OBS at startup still says SomaFM. ([#1305](https://github.com/adanalife/tripbot/pull/1305))
+
+## [v4.16.1] — 2026-08-01
+
+### Fixes
+
+- The audio watchdog reads the live background-audio source from OBS instead of remembering its last swap, so reselecting SomaFM in the console during an outage no longer leaves the stream silent. ([#1303](https://github.com/adanalife/tripbot/pull/1303))
+
 ## [v4.16.0] — 2026-08-01
 
 ### Chatbot

@@ -1,0 +1,318 @@
+#!/usr/bin/env python3
+"""Stage bought StreamBeats albums onto the music share the album bed plays from.
+
+Runs on the machine that has the share mounted, not in the container — tripbot
+and the OBS pods both mount `obs-music` read-only, so nothing in either image
+can write to it.
+
+Bandcamp gives one archive per album, named "<artist> - <Album>.zip". The album
+bed (`pkg/obs/beds`) wants one directory per album at the share root, named
+`streambeats-<genre>-<album>`. That single naming rule gives three levels of
+selection, because the bed treats any prefix as a group: `streambeats` is all of
+them, `streambeats-lofi` is the lofi ones, and a unique trailing segment reaches
+one album (`!audio rose`). The genre is the part the archive can't tell you, which
+is why this script exists — see GENRES below.
+
+The naming rule is the contract with `beds.resolveAlbum` / `beds.scanTracks`;
+change one and this has to follow.
+
+Takes the .zip files as downloaded, or folders already unzipped. Dry run by
+default; pass --apply to do it. Never deletes: a zip is extracted and left where
+it is, an album already on the share is skipped, and anything it can't identify is
+reported rather than guessed at. Safe to re-run after each batch of downloads.
+
+    bin/stage-streambeats ~/Downloads/streambeats
+    bin/stage-streambeats ~/Downloads/streambeats --apply
+    bin/stage-streambeats ~/Downloads/streambeats --genres ambient,hifi,synthwave,lofi --apply
+"""
+
+from __future__ import annotations
+
+import argparse
+import re
+import shutil
+import sys
+import zipfile
+from pathlib import Path
+
+# The music share as mounted on a Mac over SMB. The same directory the cluster
+# serves over NFS as the obs-music PV, so what lands here is what the pods see.
+# Override with --share on any other machine.
+SHARE = Path("/Volumes/ADanaLife/audio")
+
+# Album -> genre, from streambeats.com/genre/<slug> (read 2026-08-03). The site
+# is the only place this mapping exists: Bandcamp tags every album "Electronic,
+# lofi", including the synthwave ones.
+GENRES: dict[str, list[str]] = {
+    "ambient": ["Diamonds"],
+    "hifi": ["Groove"],
+    "synthwave": [
+        "Groovy",
+        "Midnight",
+        "Rose",
+        "Breaker",
+        "Sunset",
+        "Ego",
+        "Lone Wolf",
+        "Renegade",
+    ],
+    "lofi": [
+        "Electric",
+        "Prime",
+        "Slaps",
+        "Neon",
+        "Quest",
+        "Reflection",
+        "Secluded",
+        "Cherry Soda",
+        "Rain",
+        "Inu",
+        "Neko",
+        "White",
+        "Gold",
+        "Certain Shade of Blue",
+        "Ocularium",
+        "In 4k",
+        "Sakura Dreams",
+        "Fantasy Arcade",
+        "High at the Planetarium",
+    ],
+    "edm": [
+        "Moonwalk",
+        "Nocturnal",
+        "Pulse",
+        "Low-key",
+        "Pastel",
+        "Insomnia",
+        "Drop",
+        "Lights",
+        "Trouble",
+        "Sus",
+        "Stage",
+        "DANSU",
+        "Royal",
+        "SHINGU",
+        "Better When I'm High",
+        "Better When I'm High (Remix)",
+    ],
+    "hiphop": [
+        "Bounce",
+        "Ignition",
+        "Supreme",
+        "Cracked",
+        "Legend",
+        "Recon",
+        "Upside",
+        "Assassin",
+        "Logic",
+        "Ghost",
+        "Lifestyle",
+    ],
+    "chiptune": ["Arcade", "Pixel"],
+    "christmas": [
+        "Candy Shop",
+        "Evergreen",
+        "A Very Lo-Fi Christmas",
+        "If I Mess Up This Christmas",
+        "If I Mess Up This Christmas (Instrumental)",
+        "If I Fuck Up This Christmas (Naughty Version)",
+        "A StreamBeats and Friends Christmas",
+        "A StreamBeats and Friends Christmas (Instrumental)",
+    ],
+    "indy-pop": [
+        "101",
+        "Something Else",
+        "I Need A Break",
+        "Out Of Here",
+        "Run!",
+        "All My Faces (Instrumental)",
+    ],
+    "rock": ["Demon", "Demon (Instrumental)", "Kill It Anyway"],
+    "collabs": [
+        "hyacinth",
+        "hyacinth (Instrumental)",
+        "Already Missing You",
+        "The Dawn",
+        "Do This On My Own",
+        "Fly Me Away",
+        "What If (Piano Version)",
+    ],
+}
+
+# There are TWO different albums called "Midnight" — one synthwave, one hip-hop —
+# and Bandcamp names both downloads "<artist> - Midnight.zip", so the filename
+# can't say which is which. Staged as synthwave because that's the more likely
+# one to want under the footage; rename the other by hand, and both can live on
+# the share at once since they're separate directories.
+SAME_NAME = {"Midnight": ("synthwave", "hiphop")}
+
+AUDIO_EXTS = {".mp3", ".flac", ".m4a", ".ogg"}
+
+
+def slug(name: str) -> str:
+    """Directory-safe form of an album name: lowercase, punctuation dropped,
+    spaces to hyphens. "Certain Shade of Blue" -> "certain-shade-of-blue"."""
+    s = name.lower().replace("&", "and")
+    s = re.sub(r"[^a-z0-9]+", "-", s)
+    return s.strip("-")
+
+
+def album_index() -> dict[str, tuple[str, str]]:
+    """slug(album) -> (genre, album). Built once so lookup tolerates whatever
+    punctuation Bandcamp put in the folder name."""
+    out: dict[str, tuple[str, str]] = {}
+    for genre, albums in GENRES.items():
+        for album in albums:
+            out.setdefault(slug(album), (genre, album))
+    return out
+
+
+def album_from_dirname(name: str) -> str:
+    """The album name inside a Bandcamp folder name. Bandcamp uses
+    "<artist> - <Album>", so the last " - " segment is the album — but a bare
+    album name (already renamed, or a hand-made folder) passes through."""
+    if " - " in name:
+        return name.rsplit(" - ", 1)[1].strip()
+    return name.strip()
+
+
+def track_count(d: Path) -> int:
+    return sum(1 for p in d.rglob("*") if p.suffix.lower() in AUDIO_EXTS)
+
+
+def zip_tracks(z: Path) -> int:
+    """Audio files inside an archive, without extracting it."""
+    try:
+        with zipfile.ZipFile(z) as zf:
+            return sum(
+                1
+                for n in zf.namelist()
+                if Path(n).suffix.lower() in AUDIO_EXTS and not n.endswith("/")
+            )
+    except (zipfile.BadZipFile, OSError):
+        return 0
+
+
+def safe_extract(z: Path, dest: Path) -> None:
+    """Extract z into dest, refusing members that would escape it.
+
+    Bandcamp archives are trusted, but this is still an archive from the internet
+    writing to a network share — a member named "../../etc/x" costs one check to
+    refuse and is unrecoverable if it lands.
+    """
+    with zipfile.ZipFile(z) as zf:
+        for member in zf.namelist():
+            target = (dest / member).resolve()
+            if not target.is_relative_to(dest.resolve()):
+                raise ValueError(f"member escapes the target dir: {member!r}")
+        dest.mkdir(parents=True, exist_ok=True)
+        zf.extractall(dest)
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument(
+        "source", type=Path, help="directory holding the album .zip files or folders"
+    )
+    ap.add_argument(
+        "--share", type=Path, default=SHARE, help=f"target share (default {SHARE})"
+    )
+    ap.add_argument(
+        "--genres", default="", help="comma-separated allowlist; default all"
+    )
+    ap.add_argument(
+        "--apply", action="store_true", help="actually move (default: dry run)"
+    )
+    args = ap.parse_args()
+
+    if not args.source.is_dir():
+        print(f"source not a directory: {args.source}", file=sys.stderr)
+        return 1
+    if not args.share.is_dir():
+        print(f"share not mounted: {args.share}", file=sys.stderr)
+        return 1
+
+    wanted = {g.strip() for g in args.genres.split(",") if g.strip()}
+    index = album_index()
+    planned: list[tuple[Path, Path, int]] = []
+    skipped: list[str] = []
+    unknown: list[str] = []
+    failed: list[str] = []
+
+    # Directories (already unzipped) and .zip archives straight from Bandcamp are
+    # both accepted, so downloading 29 albums doesn't mean unzipping 29 albums.
+    candidates = sorted(
+        p for p in args.source.iterdir() if p.is_dir() or p.suffix.lower() == ".zip"
+    )
+    if not candidates:
+        print(f"nothing to stage in {args.source} — no album folders or .zip files")
+        return 0
+
+    for p in candidates:
+        is_zip = p.is_file()
+        album = album_from_dirname(p.stem if is_zip else p.name)
+        hit = index.get(slug(album))
+        if hit is None:
+            unknown.append(p.name)
+            continue
+        genre, canonical = hit
+        if wanted and genre not in wanted:
+            skipped.append(f"{canonical} ({genre}, not in --genres)")
+            continue
+        target = args.share / f"streambeats-{genre}-{slug(canonical)}"
+        if target.exists():
+            skipped.append(f"{canonical} -> {target.name} (already staged)")
+            continue
+        n = zip_tracks(p) if is_zip else track_count(p)
+        if n == 0:
+            skipped.append(f"{canonical} (no audio files found)")
+            continue
+        planned.append((p, target, n))
+        if canonical in SAME_NAME:
+            a, b = SAME_NAME[canonical]
+            print(
+                f"note: there are two different albums called {canonical!r} "
+                f"({a} and {b}) and the zip name can't tell them apart; staging "
+                f"as streambeats-{a}-{slug(canonical)}. Rename the {b} one to "
+                f"streambeats-{b}-{slug(canonical)} if "
+                f"it's the other one."
+            )
+
+    for src, target, n in planned:
+        verb = "unzip" if src.is_file() else "move"
+        print(
+            f"{verb if args.apply else 'would ' + verb}: {src.name!r} -> {target.name}  ({n} tracks)"
+        )
+        if not args.apply:
+            continue
+        try:
+            if src.is_file():
+                # Extract into the final name directly — Bandcamp puts tracks at
+                # the archive root, so there's no wrapper directory to flatten.
+                # The download is left in place; this only ever adds to the share.
+                safe_extract(src, target)
+            else:
+                shutil.move(str(src), str(target))
+        except (ValueError, zipfile.BadZipFile, OSError) as e:
+            # One bad archive shouldn't cost the other 28 their run.
+            failed.append(f"{src.name}: {e}")
+
+    for s in skipped:
+        print(f"skip: {s}")
+    for u in unknown:
+        print(f"UNKNOWN (left alone, rename by hand): {u!r}")
+    for f in failed:
+        print(f"FAILED: {f}", file=sys.stderr)
+
+    staged = len(planned) - len(failed)
+    print(
+        f"\n{staged} album(s) {'staged' if args.apply else 'to stage'}, "
+        f"{len(skipped)} skipped, {len(unknown)} unidentified, {len(failed)} failed"
+    )
+    if not args.apply and planned:
+        print("dry run — re-run with --apply to do it")
+    return 1 if failed else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

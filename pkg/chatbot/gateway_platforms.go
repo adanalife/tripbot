@@ -2,6 +2,7 @@ package chatbot
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"strings"
 	"time"
@@ -49,7 +50,19 @@ func (g gatewayChat) Say(msg string) {
 	if !g.keepActions {
 		msg = strings.TrimPrefix(msg, "/me ")
 	}
-	if err := g.client.SendChat(context.Background(), g.identity, msg); err != nil {
+	err := g.client.SendChat(context.Background(), g.identity, msg)
+	switch {
+	case err == nil:
+	case errors.Is(err, gateway.ErrNoBroadcast), errors.Is(err, gateway.ErrUpstreamUnavailable):
+		// The platform had nowhere to post or declined to answer — a state of
+		// the channel, not a defect here. The rotating chatter and the timed
+		// jobs Say on a schedule regardless of whether anything is live, so on
+		// a platform whose chat only exists on a live broadcast (Facebook, where
+		// a comment belongs to the video) every offline hour lands here. Warn,
+		// not error: error forwards each one to Sentry, and there is nothing to
+		// fix in response.
+		slog.Warn(g.platform+" gateway chat send skipped", "err", err, "text", msg)
+	default:
 		slog.Error(g.platform+" gateway chat send failed", "err", err, "text", msg)
 	}
 }

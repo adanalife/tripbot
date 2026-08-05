@@ -3,6 +3,7 @@ package gateway
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -297,6 +298,45 @@ func TestSendChat_ErrorsOnNon2xx(t *testing.T) {
 
 	if err := New(srv.URL).SendChat(context.Background(), "broadcaster", "hi"); err == nil {
 		t.Error("expected an error on non-2xx")
+	}
+}
+
+// The two statuses that report a platform state rather than a fault carry a
+// sentinel, so a caller can decline to treat them as defects. Everything else
+// stays unclassified — a 502 is a real failure and must not match either.
+func TestSendChat_ClassifiesToleratedStatuses(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		status int
+		want   error
+	}{
+		{"nothing live", http.StatusConflict, ErrNoBroadcast},
+		{"platform refused", http.StatusServiceUnavailable, ErrUpstreamUnavailable},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(tt.status)
+			}))
+			defer srv.Close()
+
+			err := New(srv.URL).SendChat(context.Background(), "broadcaster", "hi")
+			if !errors.Is(err, tt.want) {
+				t.Fatalf("err = %v, want %v", err, tt.want)
+			}
+		})
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+	}))
+	defer srv.Close()
+
+	err := New(srv.URL).SendChat(context.Background(), "broadcaster", "hi")
+	if err == nil {
+		t.Fatal("expected an error on 502")
+	}
+	if errors.Is(err, ErrNoBroadcast) || errors.Is(err, ErrUpstreamUnavailable) {
+		t.Errorf("502 matched a tolerated sentinel: %v", err)
 	}
 }
 

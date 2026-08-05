@@ -1125,6 +1125,54 @@ func TestMonthlyMilesLeaderboardCmd_RendersTopUsers(t *testing.T) {
 	}
 }
 
+// Chat and the overlay get different lengths of the same board: the message
+// still names everyone the command fetched, the overlay only the top few.
+func TestMonthlyMilesLeaderboardCmd_OverlayShorterThanChat(t *testing.T) {
+	app := newTestApp(video.Video{})
+	rec := &recordingOnscreens{}
+	app.Onscreens = rec
+
+	var miles [][]string
+	for i := 0; i < 10; i++ {
+		miles = append(miles, []string{fmt.Sprintf("viewer%d", i), "10.0"})
+	}
+	app.Scoreboards = &recordingScoreboards{Month: "July", Miles: miles}
+
+	out := captureSay(t, app)
+
+	app.monthlyMilesLeaderboardCmd(context.Background(), newTestUser("caller"), nil)
+
+	// Counted out rather than written as the constants: the split is the
+	// point, and an assertion phrased in the constants holds however they move.
+	if msg := out(); !strings.HasPrefix(msg, "Top 10 miles this month:") {
+		t.Errorf("expected chat to keep all ten names, got %q", msg)
+	}
+	want := `ShowLeaderboard("July Miles", 5 rows)`
+	if len(rec.Calls) != 1 || !strings.Contains(rec.Calls[0], want) {
+		t.Errorf("expected %s, got %v", want, rec.Calls)
+	}
+}
+
+// Two viewers level on miles are both first, and the viewer behind them is
+// third — nobody is put ahead of an equal by an accident of row order.
+func TestMonthlyMilesLeaderboardCmd_TiesShareAPlace(t *testing.T) {
+	app := newTestApp(video.Video{})
+	app.Onscreens = &recordingOnscreens{}
+	app.Scoreboards = &recordingScoreboards{
+		Month: "July",
+		Miles: [][]string{{"alice", "12.0"}, {"bob", "12.0"}, {"carol", "9.0"}},
+	}
+
+	out := captureSay(t, app)
+
+	app.monthlyMilesLeaderboardCmd(context.Background(), newTestUser("caller"), nil)
+
+	want := "1. alice (12.0mi), 1. bob (12.0mi), 3. carol (9.0mi)"
+	if msg := out(); !strings.Contains(msg, want) {
+		t.Errorf("expected %q, got %q", want, msg)
+	}
+}
+
 // --- monthlyGuessLeaderboardCmd ---
 
 // An empty board is also what an all-zero board looks like by the time the

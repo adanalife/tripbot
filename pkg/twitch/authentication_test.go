@@ -1,7 +1,6 @@
 package twitch
 
 import (
-	"errors"
 	"testing"
 	"time"
 
@@ -18,127 +17,32 @@ func clientWithTokens(bot, bcast oauthtokens.Token) *API {
 	return cl
 }
 
-func TestIRCAuthToken_PrefixesOauth(t *testing.T) {
-	cl := clientWithTokens(oauthtokens.Token{AccessToken: "abc123"}, oauthtokens.Token{})
-	if got := cl.IRCAuthToken(); got != "oauth:abc123" {
-		t.Errorf("IRCAuthToken() = %q, want %q", got, "oauth:abc123")
+func TestBroadcasterUserAccessToken_RawNoPrefix(t *testing.T) {
+	cl := clientWithTokens(oauthtokens.Token{}, oauthtokens.Token{AccessToken: "abc123"})
+	// pkg/eventsub passes this straight into the WS handshake, which wants the
+	// bare token — an "oauth:" prefix would be rejected.
+	if got := cl.BroadcasterUserAccessToken(); got != "abc123" {
+		t.Errorf("BroadcasterUserAccessToken() = %q, want %q", got, "abc123")
 	}
 }
 
-func TestIRCAuthToken_EmptyWhenUnloaded(t *testing.T) {
+func TestBroadcasterUserAccessToken_EmptyWhenUnloaded(t *testing.T) {
 	cl := clientWithTokens(oauthtokens.Token{}, oauthtokens.Token{})
-	if got := cl.IRCAuthToken(); got != "" {
-		t.Errorf("IRCAuthToken() with empty token = %q, want \"\"", got)
+	if got := cl.BroadcasterUserAccessToken(); got != "" {
+		t.Errorf("BroadcasterUserAccessToken() with empty token = %q, want \"\"", got)
 	}
 }
 
 // TestNew_IsolatedState confirms two constructed clients don't share token
 // state — each *API carries its own.
 func TestNew_IsolatedState(t *testing.T) {
-	a := clientWithTokens(oauthtokens.Token{AccessToken: "a-tok"}, oauthtokens.Token{})
+	a := clientWithTokens(oauthtokens.Token{}, oauthtokens.Token{AccessToken: "a-tok"})
 	b := New()
-	if a.IRCAuthToken() == "" {
+	if a.BroadcasterUserAccessToken() == "" {
 		t.Fatal("client a should carry its seeded token")
 	}
-	if b.IRCAuthToken() != "" {
-		t.Errorf("client b should be empty; got %q — state leaked between instances", b.IRCAuthToken())
-	}
-}
-
-// Client() has to refuse rather than hand back a helix client built on empty
-// credentials — the credentials arrive via SetCredentials now, and only a
-// twitch instance calls it, so "unset" is a reachable state for any other
-// platform that stumbles into this path.
-func TestClient_ErrorsWithoutCredentials(t *testing.T) {
-	for _, tt := range []struct {
-		name       string
-		id, secret string
-	}{
-		{"neither set", "", ""},
-		{"id only", "id", ""},
-		{"secret only", "", "secret"},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			cl := New()
-			cl.SetCredentials(tt.id, tt.secret)
-			client, err := cl.Client()
-			if !errors.Is(err, ErrNoCredentials) {
-				t.Errorf("err = %v, want ErrNoCredentials", err)
-			}
-			if client != nil {
-				t.Error("client is non-nil despite missing credentials")
-			}
-		})
-	}
-}
-
-// SetCredentials is per-instance, like the tokens — no package global to leak
-// one instance's credentials into another.
-func TestSetCredentials_IsolatedPerInstance(t *testing.T) {
-	a, b := New(), New()
-	a.SetCredentials("a-id", "a-secret")
-	if b.clientID != "" || b.clientSecret != "" {
-		t.Errorf("credentials leaked to another instance: id=%q secret=%q", b.clientID, b.clientSecret)
-	}
-}
-
-func TestBotScopes_IncludesIRCBotScopes(t *testing.T) {
-	required := []string{"chat:read", "chat:edit"}
-	have := map[string]bool{}
-	for _, s := range BotScopes {
-		have[s] = true
-	}
-	for _, r := range required {
-		if !have[r] {
-			t.Errorf("BotScopes missing required IRC scope %q (have %v)", r, BotScopes)
-		}
-	}
-}
-
-func TestBotScopes_NoDuplicates(t *testing.T) {
-	seen := map[string]bool{}
-	for _, s := range BotScopes {
-		if seen[s] {
-			t.Errorf("duplicate scope %q in BotScopes", s)
-		}
-		seen[s] = true
-	}
-}
-
-func TestBotScopes_DropsOpenID(t *testing.T) {
-	// openid was in the previous scope set but the bot doesn't read ID
-	// claims; dropping it shrinks the consent screen and reduces surface.
-	for _, s := range BotScopes {
-		if s == "openid" {
-			t.Errorf("BotScopes still includes openid; expected drop")
-		}
-	}
-}
-
-func TestBroadcasterScopes_IncludesSubscriptionsAndFollowers(t *testing.T) {
-	required := []string{"channel:read:subscriptions", "moderator:read:followers"}
-	have := map[string]bool{}
-	for _, s := range BroadcasterScopes {
-		have[s] = true
-	}
-	for _, r := range required {
-		if !have[r] {
-			t.Errorf("BroadcasterScopes missing required scope %q (have %v)", r, BroadcasterScopes)
-		}
-	}
-}
-
-func TestBroadcasterScopes_DisjointFromBotScopes(t *testing.T) {
-	// The two scope sets serve different identities; if a scope appears in
-	// both it suggests confusion about which token authorizes which call.
-	bot := map[string]bool{}
-	for _, s := range BotScopes {
-		bot[s] = true
-	}
-	for _, s := range BroadcasterScopes {
-		if bot[s] {
-			t.Errorf("scope %q appears in both BotScopes and BroadcasterScopes", s)
-		}
+	if b.BroadcasterUserAccessToken() != "" {
+		t.Errorf("client b should be empty; got %q — state leaked between instances", b.BroadcasterUserAccessToken())
 	}
 }
 
@@ -148,16 +52,16 @@ func TestErrNoToken_AliasesOAuthTokens(t *testing.T) {
 	}
 }
 
-// TestIRCAuthToken_ConcurrentReads is a smoke check that the RWMutex doesn't
-// deadlock under parallel reads while a writer takes the lock.
-func TestIRCAuthToken_ConcurrentReads(t *testing.T) {
-	cl := clientWithTokens(oauthtokens.Token{AccessToken: "race-check"}, oauthtokens.Token{})
+// TestTokenReads_Concurrent is a smoke check that the RWMutex doesn't deadlock
+// under parallel reads.
+func TestTokenReads_Concurrent(t *testing.T) {
+	cl := clientWithTokens(oauthtokens.Token{}, oauthtokens.Token{AccessToken: "race-check"})
 
 	done := make(chan struct{})
 	for i := 0; i < 8; i++ {
 		go func() {
 			for j := 0; j < 100; j++ {
-				_ = cl.IRCAuthToken()
+				_ = cl.BroadcasterUserAccessToken()
 			}
 			done <- struct{}{}
 		}()
@@ -167,7 +71,7 @@ func TestIRCAuthToken_ConcurrentReads(t *testing.T) {
 		select {
 		case <-done:
 		case <-deadline:
-			t.Fatal("concurrent IRCAuthToken readers timed out (deadlock?)")
+			t.Fatal("concurrent token readers timed out (deadlock?)")
 		}
 	}
 }

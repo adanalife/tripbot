@@ -691,12 +691,17 @@ func (t *Tripbot) startBackgroundAudio(ctx context.Context) {
 // drops (swapping onto the local Car Hum bed and back once SomaFM recovers —
 // first needed in prod on 2026-06-23, when a full SomaFM edge outage left the
 // stream silent with no self-heal), and it advances the album to its next track
-// when OBS reports the current one ended.
+// when OBS reports the current one ended. The meter's subscription carries that
+// report, so a track boundary is a WebSocket event rather than the watchdog's
+// next tick — the difference between a hard cut and seconds of dead air. The
+// tick still advances as a backstop for an ending missed while the subscription
+// was reconnecting.
 //
 // Runs on every platform: any platform can select any bed, so neither job
 // is Twitch-specific. On the car-hum bed it only records the audio gauges.
 func (t *Tripbot) startBackgroundAudioWatchdog(ctx context.Context) {
-	meter := audiowatchdog.NewVolumeMeter(audiowatchdog.BackgroundAudioInputName, 30*time.Second)
+	meter := audiowatchdog.NewVolumeMeter(
+		audiowatchdog.BackgroundAudioInputName, 30*time.Second, t.beds.Advance)
 	go meter.Run(ctx)
 	go audiowatchdog.Watch(ctx, audiowatchdog.DefaultDeps(meter, t.beds), audiowatchdog.DefaultConfig())
 }
@@ -890,35 +895,18 @@ func (t *Tripbot) pollForTwitchToken(ctx context.Context) {
 	}
 }
 
-// setUpTwitchCredentials installs the static Twitch app credentials, which
-// pkg/twitch needs for the token refresh EventSub's credential depends on.
+// setUpTwitchCredentials checks that TWITCH_CLIENT_ID is set — the EventSub
+// websocket handshake sends it, so a twitch instance without it announces no
+// follows or subs.
 //
-// The credentials are required, and fatal when absent: unlike a missing gateway
-// URL — where the instance stays up serving everything but that platform's chat
-// — there is no useful Twitch instance without them. Nothing outside this
-// twitch-only path needs them, which is why the check lives here rather than in
-// config.Load or a package init.
-// missingTwitchCredentials names the static Twitch app credentials that aren't
-// set, in a stable order. TWITCH_AUTH_TOKEN is deliberately absent: the IRC
-// token lives in the oauth_tokens table and is loaded via LoadFromDB.
-func missingTwitchCredentials(cfg *c.TripbotConfig) []string {
-	var missing []string
-	for _, cred := range []struct{ name, value string }{
-		{"TWITCH_CLIENT_ID", cfg.TwitchClientID},
-		{"TWITCH_CLIENT_SECRET", cfg.TwitchClientSecret},
-	} {
-		if cred.value == "" {
-			missing = append(missing, cred.name)
-		}
-	}
-	return missing
-}
-
+// Fatal when absent: unlike a missing gateway URL — where the instance stays up
+// serving everything but that platform's chat — there is no useful Twitch
+// instance without it. Nothing outside this twitch-only path needs it, which is
+// why the check lives here rather than in config.Load or a package init.
 func (t *Tripbot) setUpTwitchCredentials() {
-	for _, name := range missingTwitchCredentials(t.cfg) {
-		log.Fatalf("You must set %s", name)
+	if t.cfg.TwitchClientID == "" {
+		log.Fatal("You must set TWITCH_CLIENT_ID")
 	}
-	mytwitch.SetCredentials(t.cfg.TwitchClientID, t.cfg.TwitchClientSecret)
 }
 
 // updateSubscribers gets the list of current subscribers (gateway-or-in-process

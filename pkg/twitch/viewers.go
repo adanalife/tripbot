@@ -27,9 +27,9 @@ func (cl *API) ChatterCount() int {
 func (cl *API) Chatters() map[string]struct{} {
 	cl.audienceMu.RLock()
 	defer cl.audienceMu.RUnlock()
-	chatters := make(map[string]struct{})
-	for _, chatter := range cl.currentChatters {
-		chatters[chatter.UserLogin] = struct{}{}
+	chatters := make(map[string]struct{}, len(cl.currentChatters))
+	for _, login := range cl.currentChatters {
+		chatters[login] = struct{}{}
 	}
 	return chatters
 }

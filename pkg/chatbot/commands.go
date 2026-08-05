@@ -18,6 +18,7 @@ import (
 
 	"github.com/adanalife/tripbot/pkg/database"
 	"github.com/adanalife/tripbot/pkg/helpers"
+	"github.com/adanalife/tripbot/pkg/scoreboards"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/adanalife/tripbot/pkg/video"
 	"github.com/getsentry/sentry-go"
@@ -25,8 +26,39 @@ import (
 	"gorm.io/gorm"
 )
 
-// leaderboardSize is how many rows the leaderboard commands show.
+// leaderboardSize is how many rows the leaderboard commands list in chat.
 const leaderboardSize = 10
+
+// onscreenRows is how many of those rows go on the overlay. Chat and the
+// overlay are read differently — a chat message scrolls past and can be
+// scanned, while the overlay sits on the broadcast — so the onscreen copy is
+// the short one.
+const onscreenRows = 5
+
+// guessrMonthlyRows is the one board that keeps a full ten onscreen: it is a
+// month's running total, so the names below fifth place are still worth
+// reading. Bounded by maxLeaderboardRows in pkg/onscreens-server, which is what
+// actually fits on the overlay.
+const guessrMonthlyRows = 10
+
+// overlayRows trims a board to what goes onscreen, leaving the caller's slice
+// intact for the chat message it also builds.
+func overlayRows(rows [][]string, size int) [][]string {
+	return rows[:min(len(rows), size)]
+}
+
+// rankedList renders a board as the numbered run of names a leaderboard
+// command says in chat: "1. alice (12.0mi), 1. bob (12.0mi), 3. carol (9.0mi)".
+// Tied rows share the better place, so two viewers level on miles are both
+// first and nobody is arbitrarily ahead. unit is appended to each score.
+func rankedList(rows [][]string, unit string) string {
+	ranks := scoreboards.Ranks(rows)
+	parts := make([]string, 0, len(rows))
+	for i, row := range rows {
+		parts = append(parts, fmt.Sprintf("%d. %s (%s%s)", ranks[i], row[0], row[1], unit))
+	}
+	return strings.Join(parts, ", ")
+}
 
 // targetUsername turns a chat-mention param ("@DanaMerrick") into the canonical
 // username used everywhere else: @-less and lowercase. Params reach handlers
@@ -62,7 +94,7 @@ func (a *App) helpCmd(ctx context.Context, user *users.User, _ []string) {
 func (a *App) commandsCmd(_ context.Context, _ *users.User, _ []string) {
 	featured := []string{
 		"!location", "!guess", "!date", "!state",
-		"!sunset", "!timewarp", "!miles", "!leaderboard", "!song",
+		"!sunset", "!timewarp", "!miles", "!leaderboard", "!guessr", "!song",
 	}
 	avail := make([]string, 0, len(featured))
 	for _, t := range featured {
@@ -368,16 +400,10 @@ func (a *App) monthlyMilesLeaderboardCmd(ctx context.Context, user *users.User, 
 	leaderboard := a.Scoreboards.TopMiles(ctx, leaderboardSize)
 
 	// display leaderboard on screen
-	a.Onscreens.ShowLeaderboard(ctx, a.Scoreboards.MilesMonth()+" Miles", leaderboard)
+	a.Onscreens.ShowLeaderboard(ctx, a.Scoreboards.MilesMonth()+" Miles", overlayRows(leaderboard, onscreenRows))
 
 	// build a message to send to chat
-	msg := fmt.Sprintf("Top %d miles this month: ", len(leaderboard))
-	for i, leaderPair := range leaderboard {
-		msg += fmt.Sprintf("%d. %s (%smi)", i+1, leaderPair[0], leaderPair[1])
-		if i+1 != len(leaderboard) {
-			msg += ", "
-		}
-	}
+	msg := fmt.Sprintf("Top %d miles this month: ", len(leaderboard)) + rankedList(leaderboard, "mi")
 	a.Chat.Say(msg)
 }
 
@@ -393,16 +419,10 @@ func (a *App) lifetimeMilesLeaderboardCmd(ctx context.Context, user *users.User,
 	leaderboard := lifetime[:size]
 
 	// display leaderboard on screen
-	a.Onscreens.ShowLeaderboard(ctx, "Total Miles", leaderboard)
+	a.Onscreens.ShowLeaderboard(ctx, "Total Miles", overlayRows(leaderboard, onscreenRows))
 
 	// build a message to send to chat
-	msg := fmt.Sprintf("Top %d lifetime miles: ", size)
-	for i, leaderPair := range leaderboard {
-		msg += fmt.Sprintf("%d. %s (%smi)", i+1, leaderPair[0], leaderPair[1])
-		if i+1 != len(leaderboard) {
-			msg += ", "
-		}
-	}
+	msg := fmt.Sprintf("Top %d lifetime miles: ", size) + rankedList(leaderboard, "mi")
 	a.Chat.Say(msg)
 }
 
@@ -419,16 +439,10 @@ func (a *App) monthlyGuessLeaderboardCmd(ctx context.Context, user *users.User, 
 	}
 
 	// display leaderboard on screen
-	a.Onscreens.ShowLeaderboard(ctx, "Correct Guesses This Month", intLeaderboard)
+	a.Onscreens.ShowLeaderboard(ctx, "Correct Guesses This Month", overlayRows(intLeaderboard, onscreenRows))
 
 	// build a message to send to chat
-	msg := fmt.Sprintf("Top %d correct guesses this month: ", len(intLeaderboard))
-	for i, leaderPair := range intLeaderboard {
-		msg += fmt.Sprintf("%d. %s (%s)", i+1, leaderPair[0], leaderPair[1])
-		if i+1 != len(intLeaderboard) {
-			msg += ", "
-		}
-	}
+	msg := fmt.Sprintf("Top %d correct guesses this month: ", len(intLeaderboard)) + rankedList(intLeaderboard, "")
 	a.Chat.Say(msg)
 }
 
