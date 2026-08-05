@@ -275,13 +275,23 @@ func (g Gift) Value() int { return g.Diamonds * g.Count }
 //
 // Author is the human-facing name (a mutable display name on some platforms);
 // AuthorID is the platform-native stable user ID — the key viewer persistence
-// and identity linking must use.
+// and identity linking must use. MessageID is the platform's own id for the
+// message, the handle a moderation action needs.
+//
+// Moderator/Subscriber/Broadcaster are the sender's role as the platform
+// reported it on this message — a snapshot, not a lookup. They are all false on
+// a platform that reports no roles, which is indistinguishable from a viewer
+// holding none, so a gate that must fail closed can't read them alone.
 type InboundChatMessage struct {
-	Author   string      `json:"author"`
-	AuthorID string      `json:"author_id"`
-	Text     string      `json:"text"`
-	Kind     InboundKind `json:"kind,omitempty"`
-	Gift     *Gift       `json:"gift,omitempty"`
+	Author      string      `json:"author"`
+	AuthorID    string      `json:"author_id"`
+	Text        string      `json:"text"`
+	Kind        InboundKind `json:"kind,omitempty"`
+	Gift        *Gift       `json:"gift,omitempty"`
+	MessageID   string      `json:"message_id,omitempty"`
+	Moderator   bool        `json:"moderator,omitempty"`
+	Subscriber  bool        `json:"subscriber,omitempty"`
+	Broadcaster bool        `json:"broadcaster,omitempty"`
 }
 
 // InboundChatPage is one page from GET /v1/chat/inbound. Cursor is opaque: pass

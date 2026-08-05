@@ -126,7 +126,12 @@ var (
 	chatMessageFields = []field{
 		{"platform", strType(), false},
 		{"username", strType(), true},
+		{"user_id", strType(), false},
 		{"text", strType(), true},
+		{"message_id", strType(), false},
+		{"moderator", boolType(), false},
+		{"subscriber", boolType(), false},
+		{"broadcaster", boolType(), false},
 		{"emitted_at", dateType(), true},
 	}
 	subscriberEventFields = []field{
