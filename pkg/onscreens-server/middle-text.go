@@ -12,11 +12,11 @@ import (
 // restore runs, so a brand-new server (empty cache) still shows-but-empty.
 func newMiddleText() *Onscreen {
 	slog.Info("creating onscreen", "kind", "middle-text")
-	osc := newOnscreen()
-	// this is a permanent onscreen
-	osc.DontExpire = true
-	// default to showing; RestoreMiddleText overrides content + visibility
-	// from the persisted state when there is any
-	osc.IsShowing = true
+	osc := newOnscreen(defaultSleepInterval)
+	// Show is the permanent-and-visible state this overlay wants: it sets
+	// dontExpire so the background loop never sweeps it, and starts it showing
+	// with empty content. RestoreMiddleText overrides content + visibility from
+	// the persisted state when there is any.
+	osc.Show("")
 	return osc
 }

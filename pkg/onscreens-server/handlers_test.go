@@ -85,7 +85,7 @@ func TestStateHandlerRendersMarkdown(t *testing.T) {
 		t.Fatalf("middle-text wire content = %q, want %q", got[SlugMiddleText].Content, want)
 	}
 	// Stored Content stays untouched raw markdown.
-	if c := s.MiddleText.Content; c != "use `!find` to search" {
+	if c := s.MiddleText.Content(); c != "use `!find` to search" {
 		t.Fatalf("stored Content was mutated: %q", c)
 	}
 }

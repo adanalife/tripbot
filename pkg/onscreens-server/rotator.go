@@ -156,7 +156,7 @@ func (s *Server) applyRotatorConfig(cfg rot.Config) {
 // goroutine schedules), and kicks off the background rotation loop.
 func (r *rotator) start() {
 	slog.Info("creating onscreen", "kind", r.kind)
-	r.osc = newOnscreen()
+	r.osc = newOnscreen(defaultSleepInterval)
 	r.osc.Show(r.content())
 	go r.loop()
 }
@@ -206,7 +206,7 @@ func (r *rotator) siblingCommands() map[string]bool {
 	if r.sibling == nil || r.sibling.osc == nil {
 		return nil
 	}
-	return rot.CommandsIn(r.sibling.osc.Content)
+	return rot.CommandsIn(r.sibling.osc.Content())
 }
 
 // promoMode reports whether this corner draws from the promo pool instead of

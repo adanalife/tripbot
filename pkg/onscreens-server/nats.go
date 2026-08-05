@@ -80,7 +80,7 @@ func (s *Server) handleMiddleShow(m *nats.Msg) {
 // it hidden, matching the live state rather than blanking it.
 func (s *Server) handleMiddleHide(_ *nats.Msg) {
 	s.MiddleText.Hide()
-	publishMiddleState(context.Background(), s.cfg.Environment, s.cfg.Platform, s.MiddleText.Content, false)
+	publishMiddleState(context.Background(), s.cfg.Environment, s.cfg.Platform, s.MiddleText.Content(), false)
 }
 
 // handleLeaderboardShow renders the {title, rows} payload server-side and
