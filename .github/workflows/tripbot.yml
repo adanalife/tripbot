@@ -31,13 +31,16 @@ jobs:
     # This job reads no secrets, so it runs identically on a Dependabot PR
     # (which is issued none) as on a push to main. Every image it needs is
     # either built here or mirrored to ghcr, and the smoke test only boots
-    # far enough to read /version — so the channel/bot identity is a fixed
-    # placeholder rather than the real account.
+    # far enough to read /version — so a fixed placeholder identity serves as
+    # well as the real account. The Twitch calls these three feed can't
+    # succeed regardless: the seeded oauth_tokens row is a placeholder too.
     env:
       COMPOSE_DOCKER_CLI_BUILD: 1
       DOCKER_BUILDKIT: 1
       CHANNEL_NAME: ci_channel
       BOT_USERNAME: ci_bot
+      # Boot is fatal on an empty value (cmd/tripbot setUpTwitchCredentials).
+      TWITCH_CLIENT_ID: ci-placeholder-client-id
 
     steps:
       - name: Checkout
@@ -72,10 +75,10 @@ jobs:
       - name: Check logs (migrate)
         run: docker logs tripbot-migrate-1
 
-      # tripbot's LoadFromDB at boot refuses to start without an oauth_tokens
-      # row (cluster contract: bootstrap-or-fatal). CI has no real Twitch
-      # creds to bootstrap with, so seed a syntactically-valid placeholder row
-      # so cmd/tripbot can boot far enough to verify version files + /version.
+      # A missing oauth_tokens row leaves tripbot warning and polling for one,
+      # so seed a syntactically-valid placeholder to keep the boot path the
+      # same shape it has in a cluster. The token itself is never redeemed —
+      # the smoke test only reads version files + /version.
       - name: Seed placeholder oauth_tokens row for build-stack tripbot
         run: |
           docker exec -i tripbot-db-1 \
