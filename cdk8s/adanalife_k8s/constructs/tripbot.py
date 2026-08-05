@@ -50,9 +50,12 @@ LOCAL_DB_SECRET = "tripbot-secret"  # secret.env-built DB creds (laptop)
 # bot identity, not any one platform stack.
 NAME_IDENTITY = "tripbot"
 
-# Where the read-only `obs-music` album share is mounted. Cross-repo contract:
-# the obs repo mounts the same claim at the same path, and pkg/obs/beds hands
-# OBS the track paths it reads here — so the two must agree exactly.
+# The read-only album library claim and where it's mounted. Cross-repo contract:
+# infra provisions the claim, the obs repo mounts it at the same path, and
+# pkg/obs/beds hands OBS the track paths it reads here — so all three must agree
+# exactly. Node-local rather than the NAS share so a storage outage can't reach
+# the stream (see infra's cdk8s/adanalife_k8s/constructs/music.py).
+MUSIC_CLAIM = "obs-music-local"
 MUSIC_MOUNT_PATH = "/opt/tripbot/assets/music"
 
 # Small but explicit requests for the helper containers (migrate init, one-shot
@@ -375,7 +378,7 @@ class Tripbot(Construct):
                 k8s.Volume(
                     name="music",
                     persistent_volume_claim=k8s.PersistentVolumeClaimVolumeSource(
-                        claim_name="obs-music", read_only=True
+                        claim_name=MUSIC_CLAIM, read_only=True
                     ),
                 )
             ]

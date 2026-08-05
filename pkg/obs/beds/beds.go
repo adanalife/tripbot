@@ -64,7 +64,7 @@ func Valid(b Bed) bool {
 
 // Cross-repo contracts with the adanalife/obs repo. InputName must match the
 // source "name" in config/Tripbot.json.tmpl; the paths must match what the
-// image bakes in (carhum) and where cdk8s mounts the obs-music PVC. tripbot
+// image bakes in (carhum) and where cdk8s mounts the obs-music-local PVC. tripbot
 // mounts that same claim at the same path, so a path chosen here resolves
 // identically inside the OBS container.
 const (
