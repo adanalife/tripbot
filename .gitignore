@@ -47,3 +47,9 @@ tmp
 vendor
 
 *.exe
+
+# coverage artifacts from `task test:cover` / `test:cover:html`
+coverage.out
+coverage.txt
+coverage.lcov
+coverage.html
