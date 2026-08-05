@@ -107,8 +107,8 @@ class EnvConfig:
     # regardless, since prod pods carry no toleration).
     prefer_rpi5: bool = False
 
-    # Mount the read-only `obs-music` claim (the NFS-backed album share the
-    # infra repo provisions). tripbot needs it for the same reason OBS does —
+    # Mount the read-only `obs-music-local` claim (the node-local album library
+    # the infra repo provisions). tripbot needs it for the same reason OBS does —
     # it enumerates the tracks to shuffle and advance them — and mounts it at
     # the same path, so a track path it picks resolves inside the OBS container
     # too.
@@ -261,7 +261,7 @@ ENVS: dict[str, EnvConfig] = {
         # co-tenants (stage, dashcam-cv) under node pressure. The playback
         # decode/encode CPU requests live in the playout and obs repos.
         priority_class="prod-stream",
-        # Requires the obs-music PV.
+        # Requires the obs-music-local claim, filled by `task k8s:prod:music-localize`.
         music_share=True,
     ),
     "stage-1": EnvConfig(
@@ -280,7 +280,7 @@ ENVS: dict[str, EnvConfig] = {
         # (tripbot/onscreens); they recover onto the MS-01 if the Pi is
         # unplugged. See prefer_rpi5 on EnvConfig + scheduling.py.
         prefer_rpi5=True,
-        # On since 2026-07-29, after the obs-music PV was provisioned.
+        # Requires the obs-music-local claim, filled by `task k8s:stage:music-localize`.
         music_share=True,
         otel=False,
         postgres_size="10Gi",
