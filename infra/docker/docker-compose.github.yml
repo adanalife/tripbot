@@ -2,13 +2,12 @@ version: '3.7'
 
 services:
   tripbot:
-    # these are set at the github level:
-    # https://github.com/adanalife/tripbot/settings/secrets/new
+    # Placeholder identity set by the tripbot workflow's job env. Both keys
+    # are required:"true" in pkg/config/tripbot, and the seeded oauth_tokens
+    # row is keyed on BOT_USERNAME.
     environment:
       - CHANNEL_NAME
       - BOT_USERNAME
-      - TWITCH_AUTH_TOKEN
-      - TWITCH_CLIENT_ID
     build:
       # pull down cache layers from repo
       cache_from:
