@@ -112,7 +112,7 @@ func TestContentAvoidsSiblingCommandEndToEnd(t *testing.T) {
 	r := rightRotator(cfg)
 	l.sibling, r.sibling = r, l
 	// Pin the left corner to a line advertising !location.
-	l.osc = newOnscreen()
+	l.osc = newOnscreen(defaultSleepInterval)
 	l.osc.Show("Where are we? (`!location`)")
 
 	for i := 0; i < 4000; i++ {

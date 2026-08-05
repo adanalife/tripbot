@@ -115,7 +115,6 @@ func (s *Server) RestoreMiddleText(ctx context.Context) {
 	if !ok {
 		return
 	}
-	s.MiddleText.Content = msg
-	s.MiddleText.IsShowing = showing
+	s.MiddleText.SetState(msg, showing)
 	slog.InfoContext(ctx, "restored middle-text overlay from jetstream", "showing", showing)
 }
