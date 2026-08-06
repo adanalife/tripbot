@@ -320,7 +320,7 @@ func (a *App) sunsetCmd(ctx context.Context, user *users.User, _ []string) {
 	if !ok {
 		return
 	}
-	a.Chat.Say(helpers.SunsetStr(s.vid.DateFilmed, s.lat, s.lng))
+	a.Chat.Say(helpers.SunsetStr(s.vid.DateFilmed, s.at.Lat, s.at.Lng))
 }
 
 func (a *App) weatherCmd(ctx context.Context, user *users.User, _ []string) {
@@ -329,7 +329,7 @@ func (a *App) weatherCmd(ctx context.Context, user *users.User, _ []string) {
 	if !ok {
 		return
 	}
-	desc, err := a.Weather.Historical(ctx, s.vid.DateFilmed, s.lat, s.lng)
+	desc, err := a.Weather.Historical(ctx, s.vid.DateFilmed, s.at.Lat, s.at.Lng)
 	if err != nil {
 		slog.ErrorContext(ctx, "weather lookup failed", "err", err)
 		a.Chat.Say("I couldn't fetch the weather for this spot, sorry!")
@@ -344,18 +344,14 @@ func (a *App) locationCmd(ctx context.Context, user *users.User, _ []string) {
 	if !ok {
 		return
 	}
-	// geocode the location
-	address, err := a.Geocoder.City(s.lat, s.lng)
-	if err != nil {
-		slog.ErrorContext(ctx, "geocoding error", "err", err)
-	}
+	address := a.place(ctx, s)
 	// generate a google maps url — but only when we actually have coords.
 	// A 0,0 fallback (the fallback video also had no usable GPS) would
 	// otherwise emit a bogus maps.google.com/?q=0.00000,0.00000 link to chat.
 	var msg string
 	switch {
-	case s.lat != 0 || s.lng != 0:
-		msg = fmt.Sprintf("%s %s", address, helpers.GoogleMapsURL(s.lat, s.lng))
+	case s.at.Lat != 0 || s.at.Lng != 0:
+		msg = fmt.Sprintf("%s %s", address, helpers.GoogleMapsURL(s.at.Lat, s.at.Lng))
 	case address != "":
 		msg = address
 	default:
