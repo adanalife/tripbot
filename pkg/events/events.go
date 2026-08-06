@@ -3,6 +3,7 @@ package events
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"log/slog"
 	"time"
 
@@ -30,6 +31,16 @@ type Event struct {
 	// every non-logout event and on zero-extra logouts; SUM treats NULL and 0
 	// identically, so a future rollup can add it to the events-derived base.
 	ExtraMilesEarned *float64 `gorm:"column:extra_miles_earned"`
+	// VideoID and VideoTsSec record what was airing when the event happened:
+	// the clip's videos.id and, for writers that know the playhead, seconds
+	// into the aired clip. Pointers so kinds with no airing context write
+	// NULL.
+	VideoID    *int     `gorm:"column:video_id"`
+	VideoTsSec *float64 `gorm:"column:video_ts_sec"`
+	// Meta is the kind-specific payload, one JSONB document per row. A string
+	// rather than []byte because lib/pq encodes a byte slice as bytea, which
+	// Postgres refuses to coerce into jsonb (see pkg/rotatorstore).
+	Meta *string `gorm:"type:jsonb"`
 }
 
 // record writes one event row and counts it. Every event kind goes through
@@ -80,6 +91,33 @@ func Unsubscribe(ctx context.Context, cfg *c.TripbotConfig, user string) error {
 // trail for out-of-band miles changes the login/logout pairing can't see.
 func Correction(ctx context.Context, cfg *c.TripbotConfig, user string, delta float64) error {
 	return record(ctx, cfg, Event{Username: user, Event: "correction", ExtraMilesEarned: &delta})
+}
+
+// stateCrossingMeta is a state_crossing event's meta payload.
+type stateCrossingMeta struct {
+	From string `json:"from"`
+	To   string `json:"to"`
+	// Sequential is true when the new clip follows the previous one in corpus
+	// order (next_vid) — the van genuinely drove across the line — as opposed
+	// to a timewarp/skip landing the playhead in another state.
+	Sequential bool `json:"sequential"`
+}
+
+// StateCrossing records the aired footage entering a new US state. A system
+// event — no viewer did it — so Username is empty. Granularity is clip-level:
+// it fires when a clip switch changes the state, not at the exact frame the
+// line is crossed. Pass videoID 0 when the new clip has no DB row.
+func StateCrossing(ctx context.Context, cfg *c.TripbotConfig, from, to string, videoID int, sequential bool) error {
+	payload, err := json.Marshal(stateCrossingMeta{From: from, To: to, Sequential: sequential})
+	if err != nil {
+		return err
+	}
+	meta := string(payload)
+	var vid *int
+	if videoID != 0 {
+		vid = &videoID
+	}
+	return record(ctx, cfg, Event{Event: "state_crossing", Meta: &meta, VideoID: vid})
 }
 
 // preFixSentinel is safely after the 0001-01-01 zero-time the timestamp bug
