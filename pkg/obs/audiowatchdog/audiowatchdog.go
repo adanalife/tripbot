@@ -300,7 +300,9 @@ func Watch(ctx context.Context, deps Deps, cfg Config) {
 						"since_last_swap", time.Since(lastSwap), "cooldown", cfg.Cooldown)
 					continue
 				}
-				slog.ErrorContext(ctx, "audio watchdog: SomaFM down, swapping to local bed",
+				// Swapping is the watchdog recovering as designed, so it stays
+				// off Sentry; only a swap that fails below is an error.
+				slog.WarnContext(ctx, "audio watchdog: SomaFM down, swapping to local bed",
 					"state", state, "fallback_file", fallbackFile)
 				if err := deps.SwapToFallback(ctx); err != nil {
 					slog.ErrorContext(ctx, "audio watchdog: swap to fallback failed", "err", err)
