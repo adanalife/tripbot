@@ -3,16 +3,29 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
+// withCorpusRoute stages the route the handler reads, and clears the built
+// response either side of the test. Without the reset a second test would be
+// served the first one's cached body — the cache is process-wide by design, so
+// staging a route is only meaningful alongside dropping it.
 func withCorpusRoute(t *testing.T, pts [][2]float64) {
 	t.Helper()
 	saved := corpusRoute
-	t.Cleanup(func() { corpusRoute = saved })
+	t.Cleanup(func() { corpusRoute = saved; resetCorpusCache() })
 	corpusRoute = func(context.Context) [][2]float64 { return pts }
+	resetCorpusCache()
+}
+
+func resetCorpusCache() {
+	corpusCache.Lock()
+	defer corpusCache.Unlock()
+	corpusCache.body, corpusCache.builtAt = nil, time.Time{}
 }
 
 func TestMapCorpusHandler(t *testing.T) {
@@ -81,5 +94,125 @@ func TestDownsample(t *testing.T) {
 	}
 	if out[len(out)-1] != big[len(big)-1] {
 		t.Errorf("last point not preserved: got %v want %v", out[len(out)-1], big[len(big)-1])
+	}
+}
+
+// The route is read once and reused: a click on the toggle shouldn't re-read a
+// few hundred thousand track points from the DB.
+func TestMapCorpusHandler_CachesTheBuiltRoute(t *testing.T) {
+	reads := 0
+	saved := corpusRoute
+	t.Cleanup(func() { corpusRoute = saved; resetCorpusCache() })
+	corpusRoute = func(context.Context) [][2]float64 {
+		reads++
+		return [][2]float64{{41.5, -110.2}, {41.6, -110.3}}
+	}
+	resetCorpusCache()
+
+	for range 3 {
+		mapCorpusHandler(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/admin/map/corpus", nil))
+	}
+	if reads != 1 {
+		t.Errorf("read the route %d times, want 1", reads)
+	}
+}
+
+// A failed read must not be cached, or one DB blip pins an empty overlay for
+// the whole TTL.
+func TestMapCorpusHandler_EmptyRouteIsNotCached(t *testing.T) {
+	reads := 0
+	saved := corpusRoute
+	t.Cleanup(func() { corpusRoute = saved; resetCorpusCache() })
+	corpusRoute = func(context.Context) [][2]float64 { reads++; return nil }
+	resetCorpusCache()
+
+	rec := httptest.NewRecorder()
+	mapCorpusHandler(rec, httptest.NewRequest(http.MethodGet, "/admin/map/corpus", nil))
+	mapCorpusHandler(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/admin/map/corpus", nil))
+
+	if reads != 2 {
+		t.Errorf("read the route %d times, want 2 (a failed read isn't cached)", reads)
+	}
+	if body := rec.Body.String(); body != "[]" {
+		t.Errorf("body = %q, want [] for an unavailable route", body)
+	}
+}
+
+// simplify has to keep the shape and drop the filler: a corner survives, the
+// points along a straight run don't, and the endpoints are never dropped.
+func TestSimplify(t *testing.T) {
+	// An L: east along a parallel, then north. The corner is the only interior
+	// point that carries shape.
+	corner := [][2]float64{{40.0, -105.0}, {40.0, -104.99}, {40.0, -104.98}, {40.01, -104.98}, {40.02, -104.98}}
+	got := simplify(corner, 100)
+	if len(got) != 3 {
+		t.Errorf("simplified an L to %d points, want 3 (both ends + the corner): %v", len(got), got)
+	}
+	if got[0] != corner[0] || got[len(got)-1] != corner[len(corner)-1] {
+		t.Errorf("endpoints changed: %v", got)
+	}
+	if len(got) == 3 && got[1] != corner[2] {
+		t.Errorf("kept %v as the corner, want %v", got[1], corner[2])
+	}
+
+	// A dead-straight run collapses to its endpoints whatever its length.
+	straight := make([][2]float64, 500)
+	for i := range straight {
+		straight[i] = [2]float64{40.0, -105.0 + float64(i)*0.001}
+	}
+	if got := simplify(straight, 100); len(got) != 2 {
+		t.Errorf("simplified a straight line to %d points, want 2", len(got))
+	}
+
+	// A tighter bound keeps more of the same curve — the knob has to work in
+	// the direction the comment claims.
+	curve := make([][2]float64, 200)
+	for i := range curve {
+		f := float64(i) / 199
+		curve[i] = [2]float64{40.0 + 0.05*f*f, -105.0 + 0.2*f}
+	}
+	loose, tight := simplify(curve, 250), simplify(curve, 25)
+	if len(tight) <= len(loose) {
+		t.Errorf("epsilon 25 kept %d points, epsilon 250 kept %d; tighter must keep more", len(tight), len(loose))
+	}
+
+	// Too short to have an interior point comes back untouched.
+	for _, short := range [][][2]float64{nil, {{1, 2}}, {{1, 2}, {3, 4}}} {
+		if got := simplify(short, 100); len(got) != len(short) {
+			t.Errorf("simplify(%v) = %v, want it unchanged", short, got)
+		}
+	}
+}
+
+// Every kept point must be within epsilon of the line the simplified route
+// draws — the guarantee the endpoint's payload budget is chosen against.
+func TestSimplify_HonorsTheErrorBound(t *testing.T) {
+	pts := make([][2]float64, 1000)
+	for i := range pts {
+		f := float64(i) / 999
+		pts[i] = [2]float64{40.0 + 0.3*math.Sin(f*6), -105.0 + 0.5*f}
+	}
+	const eps = 100
+	out := simplify(pts, eps)
+	if len(out) >= len(pts) {
+		t.Fatalf("simplify kept %d of %d points, expected a real reduction", len(out), len(pts))
+	}
+
+	// Walk the original, measuring each point against the simplified span it
+	// falls inside.
+	j, worst := 0, 0.0
+	for _, p := range pts {
+		if j+1 < len(out) && p == out[j+1] {
+			j++
+		}
+		if j+1 >= len(out) {
+			break
+		}
+		if d := perpMeters(p, out[j], out[j+1]); d > worst {
+			worst = d
+		}
+	}
+	if worst > eps {
+		t.Errorf("a dropped point sits %.0f m off the simplified line, want <= %d m", worst, eps)
 	}
 }
