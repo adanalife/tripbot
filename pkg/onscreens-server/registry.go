@@ -10,6 +10,13 @@ const (
 	SlugRightMessage = "right-message"
 	SlugTimewarp     = "timewarp"
 	SlugGPS          = "gps"
+	// SlugUnderConstruction renders a static full-screen slate that sits
+	// *beneath* the dashcam video in the OBS scene stack: it becomes visible
+	// only when the dashcam source has no frames to composite (playout
+	// restart, RTSP drop). It has no *Onscreen state and no show/hide — the
+	// scene layering is the visibility mechanism — so it appears in the
+	// render registry but not in all().
+	SlugUnderConstruction = "under-construction"
 )
 
 // Lookup returns the *Onscreen registered under slug on this *Server, or
