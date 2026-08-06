@@ -316,36 +316,20 @@ func (a *App) kilometresCmd(ctx context.Context, user *users.User, params []stri
 
 func (a *App) sunsetCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !sunset", "username", user.Username)
-	vid := a.Video.Current()
-	if vid.Flagged {
-		a.Chat.Say("I couldn't figure out current GPS coords, using next closest...")
-		next, err := vid.NextUnflagged(ctx)
-		if err != nil {
-			slog.ErrorContext(ctx, "error finding next unflagged video", "err", err)
-			a.Chat.Say("I couldn't figure out current GPS coords, sorry!")
-			return
-		}
-		vid = next
+	s, ok := a.currentSpot(ctx)
+	if !ok {
+		return
 	}
-	lat, lng, _ := vid.Location()
-	a.Chat.Say(helpers.SunsetStr(vid.DateFilmed, lat, lng))
+	a.Chat.Say(helpers.SunsetStr(s.vid.DateFilmed, s.lat, s.lng))
 }
 
 func (a *App) weatherCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !weather", "username", user.Username)
-	vid := a.Video.Current()
-	if vid.Flagged {
-		a.Chat.Say("I couldn't figure out current GPS coords, using next closest...")
-		next, err := vid.NextUnflagged(ctx)
-		if err != nil {
-			slog.ErrorContext(ctx, "error finding next unflagged video", "err", err)
-			a.Chat.Say("I couldn't figure out current GPS coords, sorry!")
-			return
-		}
-		vid = next
+	s, ok := a.currentSpot(ctx)
+	if !ok {
+		return
 	}
-	lat, lng, _ := vid.Location()
-	desc, err := a.Weather.Historical(ctx, vid.DateFilmed, lat, lng)
+	desc, err := a.Weather.Historical(ctx, s.vid.DateFilmed, s.lat, s.lng)
 	if err != nil {
 		slog.ErrorContext(ctx, "weather lookup failed", "err", err)
 		a.Chat.Say("I couldn't fetch the weather for this spot, sorry!")
@@ -356,23 +340,12 @@ func (a *App) weatherCmd(ctx context.Context, user *users.User, _ []string) {
 
 func (a *App) locationCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !location (or similar)", "username", user.Username)
-	vid := a.Video.Current()
-	if vid.Flagged {
-		a.Chat.Say("I couldn't figure out current GPS coords, using next closest...")
-		//TODO: write something like vid.FindClosest() that
-		// chooses whether or not to use Next() vs Prev()
-		next, err := vid.NextUnflagged(ctx)
-		if err != nil {
-			slog.ErrorContext(ctx, "error finding next unflagged video", "err", err)
-			a.Chat.Say("I couldn't figure out current GPS coords, sorry!")
-			return
-		}
-		vid = next
+	s, ok := a.currentSpot(ctx)
+	if !ok {
+		return
 	}
-	// extract the coordinates
-	lat, lng, err := vid.Location()
 	// geocode the location
-	address, _ := a.Geocoder.City(lat, lng)
+	address, err := a.Geocoder.City(s.lat, s.lng)
 	if err != nil {
 		slog.ErrorContext(ctx, "geocoding error", "err", err)
 	}
@@ -381,8 +354,8 @@ func (a *App) locationCmd(ctx context.Context, user *users.User, _ []string) {
 	// otherwise emit a bogus maps.google.com/?q=0.00000,0.00000 link to chat.
 	var msg string
 	switch {
-	case lat != 0 || lng != 0:
-		msg = fmt.Sprintf("%s %s", address, helpers.GoogleMapsURL(lat, lng))
+	case s.lat != 0 || s.lng != 0:
+		msg = fmt.Sprintf("%s %s", address, helpers.GoogleMapsURL(s.lat, s.lng))
 	case address != "":
 		msg = address
 	default:
@@ -530,29 +503,23 @@ func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 		guess = corrected
 	}
 
-	vid := a.Video.Current()
-	if vid.Flagged {
-		a.Chat.Say("I couldn't figure out current GPS coords, using next closest...")
-		next, err := vid.NextUnflagged(ctx)
-		if err != nil {
-			slog.ErrorContext(ctx, "error finding next unflagged video", "err", err)
-			a.Chat.Say("I couldn't figure out current GPS coords, sorry!")
-			return
-		}
-		vid = next
+	s, ok := a.currentSpot(ctx)
+	if !ok {
+		return
 	}
+	state := a.state(ctx, s)
 
 	// A video whose geocode came back empty (no Maps key, or ZERO_RESULTS)
 	// isn't flagged, so it reaches here with no state to guess at. There's no
 	// right answer to credit, and matching against "" would credit anyone
 	// whose guess normalized to empty.
-	if vid.State == "" {
+	if state == "" {
 		a.Chat.Say("I don't know what state this is, sorry!")
 		return
 	}
 
-	if strings.EqualFold(guess, vid.State) {
-		msg = fmt.Sprintf("@%s got it! We're in %s", user.Username, vid.State)
+	if strings.EqualFold(guess, state) {
+		msg = fmt.Sprintf("@%s got it! We're in %s", user.Username, state)
 		// increase their guess score
 		a.Scoreboards.CreditGuess(ctx, user)
 		// do a timewarp, crediting the guesser on the overlay
@@ -565,18 +532,11 @@ func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 
 func (a *App) stateCmd(ctx context.Context, user *users.User, _ []string) {
 	slog.InfoContext(ctx, "ran !state", "username", user.Username)
-	vid := a.Video.Current()
-	if vid.Flagged {
-		a.Chat.Say("I couldn't figure out current GPS coords, using next closest...")
-		next, err := vid.NextUnflagged(ctx)
-		if err != nil {
-			slog.ErrorContext(ctx, "error finding next unflagged video", "err", err)
-			a.Chat.Say("I couldn't figure out current GPS coords, sorry!")
-			return
-		}
-		vid = next
+	s, ok := a.currentSpot(ctx)
+	if !ok {
+		return
 	}
-	msg := fmt.Sprintf("We're in %s", vid.State)
+	msg := fmt.Sprintf("We're in %s", a.state(ctx, s))
 	// record that they know the location now
 	user.SetLastLocationTime()
 	a.Chat.Say(msg)

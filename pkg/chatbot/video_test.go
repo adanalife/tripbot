@@ -13,13 +13,20 @@ import (
 // returned from Current/GetCurrentlyPlaying; RandomVid and RandomErr stage
 // what FindRandomByState returns. Leave fields zero-valued unless a test
 // cares. All call records are appended in order to Calls.
+// PlayheadLat/PlayheadLng are handed back by PlayheadLocation, and only count
+// as a per-moment coordinate when PlayheadTracked is set — leave it false and
+// the command under test takes the clip-level fix off Vid, which is what a
+// clip with no trusted track does in production.
 type recordingVideo struct {
-	Calls      []string
-	Vid        video.Video
-	RandomVid  video.Video
-	RandomErr  error
-	DaytimeVid video.Video
-	DaytimeErr error
+	Calls           []string
+	Vid             video.Video
+	RandomVid       video.Video
+	RandomErr       error
+	DaytimeVid      video.Video
+	DaytimeErr      error
+	PlayheadLat     float64
+	PlayheadLng     float64
+	PlayheadTracked bool
 }
 
 func (r *recordingVideo) Current() video.Video {
@@ -33,6 +40,10 @@ func (r *recordingVideo) GetCurrentlyPlaying(_ context.Context) video.Video {
 func (r *recordingVideo) CurrentProgress() time.Duration {
 	r.Calls = append(r.Calls, "CurrentProgress()")
 	return 0
+}
+func (r *recordingVideo) PlayheadLocation(_ context.Context) (video.Video, float64, float64, bool) {
+	r.Calls = append(r.Calls, "PlayheadLocation()")
+	return r.Vid, r.PlayheadLat, r.PlayheadLng, r.PlayheadTracked
 }
 func (r *recordingVideo) FindRandomByState(_ context.Context, state string) (video.Video, error) {
 	r.Calls = append(r.Calls, fmt.Sprintf("FindRandomByState(%q)", state))
