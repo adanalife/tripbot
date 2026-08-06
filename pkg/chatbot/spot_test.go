@@ -26,7 +26,7 @@ func (g *stubGeocoder) State(lat, lng float64) (string, error) {
 
 // A clip with a trusted per-moment track answers from the moment on screen, not
 // from the clip's single fix — the whole point of the change. The two
-// coordinates here are ~1.3 km apart, the measured median gap between them.
+// coordinates here are ~1 km apart, about the measured gap between the two.
 func TestCurrentSpot_PrefersThePerMomentCoordinate(t *testing.T) {
 	vid := newTestVideo("Colorado", 39.5, -105.0, time.Time{})
 	app := newTestApp(vid)

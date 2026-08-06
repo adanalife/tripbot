@@ -41,8 +41,8 @@ LIMIT 1`
 // CoordAt returns where the van was `at` into vid, from the per-moment track
 // in video_coords. ok is false when the clip has no track worth believing, or
 // none covering that moment, and the caller falls back to vid.Location() — the
-// single clip-level fix, which sits a median 1.3 km from where the van
-// actually was.
+// single clip-level fix, which sits a median 598 m from where the van actually
+// was at a given moment inside the clip (p90 1.9 km, max 4.4 km).
 func CoordAt(ctx context.Context, vid Video, at time.Duration) (lat, lng float64, ok bool) {
 	if vid.ID == 0 || vid.CoordConfidence == nil || *vid.CoordConfidence < minCoordConfidence {
 		return 0, 0, false
