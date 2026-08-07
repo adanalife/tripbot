@@ -108,6 +108,51 @@ func run(t *testing.T, script []step, threshold int, cooldown time.Duration) int
 	return restarts
 }
 
+// The output reports active for several polls before the teardown completes —
+// the span the old fixed pause guessed at and a half-open socket overran.
+func TestAwaitOutputStopped_WaitsOutTheTeardown(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		polls := 0
+		err := awaitOutputStopped(t.Context(), func(context.Context) (bool, error) {
+			polls++
+			return polls < 4, nil
+		})
+		if err != nil {
+			t.Fatalf("awaitOutputStopped: %v", err)
+		}
+		if polls != 4 {
+			t.Fatalf("status polls: want 4 (three active, then stopped), got %d", polls)
+		}
+	})
+}
+
+// An output that never goes down fails the restart rather than issuing a
+// StartStream that OBS would reject with OutputRunning.
+func TestAwaitOutputStopped_TimesOutWhileStillActive(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		err := awaitOutputStopped(t.Context(), func(context.Context) (bool, error) {
+			return true, nil
+		})
+		if err == nil {
+			t.Fatal("awaitOutputStopped: want an error when the output never stops")
+		}
+	})
+}
+
+// An unreachable OBS says nothing about the output, so the restart aborts
+// instead of starting a second output on top of one that may still be up.
+func TestAwaitOutputStopped_StatusErrorAborts(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		want := errors.New("obs websocket unreachable")
+		err := awaitOutputStopped(t.Context(), func(context.Context) (bool, error) {
+			return false, want
+		})
+		if !errors.Is(err, want) {
+			t.Fatalf("awaitOutputStopped: want %v, got %v", want, err)
+		}
+	})
+}
+
 func TestWatchSilentDisconnect_FiresAfterThresholdMisses(t *testing.T) {
 	got := run(t, []step{miss, miss, miss, healthy}, 3, time.Minute)
 	if got != 1 {

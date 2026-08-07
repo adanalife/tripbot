@@ -12,6 +12,7 @@ package watchdog
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -51,8 +52,8 @@ func DefaultWatchdogDeps() WatchdogDeps {
 	}
 }
 
-// RestartOBSOutput stops then starts the OBS stream with a small gap to let
-// the RTMP teardown settle before OBS opens a fresh connection. Matches
+// RestartOBSOutput stops the OBS stream, waits for the output to actually go
+// down, then lets the RTMP teardown settle before starting a fresh one. Matches
 // the manual recovery sequence we ran by hand the first time the silent
 // half-open hit prod (see the 2026-05-27 incident). Exported because a
 // platform whose recovery replaces Restart still needs the push itself
@@ -61,12 +62,59 @@ func RestartOBSOutput(ctx context.Context) error {
 	if err := obs.StopStream(ctx); err != nil {
 		return err
 	}
+	if err := awaitOutputStopped(ctx, obs.GetStreamStatus); err != nil {
+		return err
+	}
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
-	case <-time.After(3 * time.Second):
+	case <-time.After(teardownSettle):
 	}
 	return obs.StartStream(ctx)
+}
+
+// How long to wait for OBS to report the output stopped, how often to ask, and
+// the pause between a confirmed stop and the fresh StartStream.
+const (
+	stopTimeout    = 30 * time.Second
+	stopPoll       = 500 * time.Millisecond
+	teardownSettle = 3 * time.Second
+)
+
+// awaitOutputStopped blocks until OBS reports the output inactive, so the
+// StartStream that follows can't land on a teardown still in flight.
+//
+// obs-websocket answers StopStream as soon as the stop is *initiated* — the
+// output then sits in OUTPUT_STOPPING until the RTMP socket actually closes. On
+// the half-open socket this watchdog exists to catch, that close is exactly the
+// thing that isn't completing promptly, so the teardown routinely outlives a
+// short pause, and a StartStream issued against a still-stopping output is
+// rejected with request status 500, OutputRunning. The stream stays dark and
+// the retry re-stops an output that was already going down.
+//
+// active is obs.GetStreamStatus in production, injected so the poll is
+// testable without an OBS WebSocket. GetStreamActiveSteady is deliberately not
+// used here: it reads false while OBS is reconnecting, which is a still-active
+// output and would let StartStream race the very teardown this waits out.
+func awaitOutputStopped(ctx context.Context, active func(context.Context) (bool, error)) error {
+	deadline := time.Now().Add(stopTimeout)
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(stopPoll):
+		}
+		stillActive, err := active(ctx)
+		if err != nil {
+			return err
+		}
+		if !stillActive {
+			return nil
+		}
+		if !time.Now().Before(deadline) {
+			return fmt.Errorf("obs output still active %s after StopStream", stopTimeout)
+		}
+	}
 }
 
 // WatchSilentDisconnect detects the state where OBS reports outputActive=true
