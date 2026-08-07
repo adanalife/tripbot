@@ -33,6 +33,10 @@ type Player struct {
 	cfg              *c.TripbotConfig
 	onscreens        onscreens
 	playout          *playoutClient.Client
+	// OnChange, when set, is called with the new Video after each clip
+	// transition (including ones where LoadOrCreate failed — handlers check
+	// v.ID). Set once during boot, before the cron starts ticking.
+	OnChange func(ctx context.Context, v Video)
 }
 
 // NewPlayer returns a Player with its own Onscreens + Playout clients. cfg
@@ -97,6 +101,10 @@ func (p *Player) GetCurrentlyPlaying(ctx context.Context) {
 		// true start time wasn't observed.
 		viewstats.RecordPlay(ctx, p.cfg, p.CurrentlyPlaying.ID, p.CurrentlyPlaying.State,
 			p.CurrentlyPlaying.Flagged, p.CurrentlyPlaying.Lat, p.CurrentlyPlaying.Lng)
+
+		if p.OnChange != nil {
+			p.OnChange(ctx, p.CurrentlyPlaying)
+		}
 
 		// Record the switch as a state_crossing event when it changes the
 		// airing state. Best-effort, like the RecordPlay above: a failed
