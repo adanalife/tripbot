@@ -538,19 +538,28 @@ func (s *Store) schedule(ctx context.Context, sw Switch) error {
 // applyPending records sw's station and album and switches to its bed, rolling
 // both back if OBS rejects the switch — a station or album we aren't playing must
 // not be the one we report.
+//
+// The pending flag outlives the station swap and clears only once the bed is
+// actually audible. setNow takes the lock itself, so the switch can't be made
+// under one; the flag is what covers that gap, and clearing it early would let
+// a caller read the new station off a store still playing the old bed.
 func (s *Store) applyPending(ctx context.Context, sw Switch) error {
 	s.mu.Lock()
 	prevStation, prevAlbum := s.station, s.album
 	s.station, s.album = sw.Station, sw.Album
-	s.pending = nil
 	s.mu.Unlock()
 
 	if err := s.setNow(ctx, sw.Bed); err != nil {
 		s.mu.Lock()
 		s.station, s.album = prevStation, prevAlbum
+		s.pending = nil
 		s.mu.Unlock()
 		return err
 	}
+
+	s.mu.Lock()
+	s.pending = nil
+	s.mu.Unlock()
 	slog.InfoContext(ctx, "background audio: switch applied", "bed", sw.Bed,
 		"station", sw.Station, "album", sw.Album)
 	return nil

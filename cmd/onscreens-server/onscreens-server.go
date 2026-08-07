@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log/slog"
+	"os"
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/bootstrap"
@@ -24,7 +25,13 @@ const httpShutdownTimeout = 5 * time.Second
 func main() {
 	slog.Info("onscreens-server starting", "version", version)
 
-	conf := c.Load()
+	// Before bootstrap.Start, so there's no Sentry to report to yet — this is
+	// a plain exit with the reason on stderr.
+	conf, err := c.Load()
+	if err != nil {
+		slog.Error("could not load config", "err", err)
+		os.Exit(1)
+	}
 
 	// ctx is canceled on SIGINT/SIGTERM; srv.Start returns when that
 	// happens, the drain below runs, and the process exits 0. There is no

@@ -52,33 +52,33 @@ var (
 
 // ChatMessages exposes the chat-message counter through a tiny stable API
 // so call sites stay small (Inc()) and don't have to thread context.
-var ChatMessages = chatCounterIface{counter: chatMessages}
+var ChatMessages = chatMessagesCounter{counter: chatMessages}
 
 // ChatCommands exposes the chat-command counter; record by calling
 // ChatCommands.Inc(commandName).
-var ChatCommands = chatCommandCounterIface{counter: chatCommands}
+var ChatCommands = chatCommandsCounter{counter: chatCommands}
 
 // ChatCommandDuration exposes the per-command latency histogram. Record by
 // calling ChatCommandDuration.Observe(commandName, seconds) — typically with
 // time.Since(start).Seconds() right after the handler returns.
-var ChatCommandDuration = chatCommandDurationIface{h: chatCommandDuration}
+var ChatCommandDuration = commandDurationHistogram{h: chatCommandDuration}
 
 // Events exposes the login/logout event counter. Record by calling
 // Events.Inc("login") or Events.Inc("logout") right after the row is
 // persisted.
-var Events = eventsIface{counter: tripbotEvents}
+var Events = eventsCounter{counter: tripbotEvents}
 
 // ScoreboardWrites exposes the scoreboard-write counter. Record by calling
 // ScoreboardWrites.Inc(scoreboardName) right after the row is persisted.
-var ScoreboardWrites = scoreboardWritesIface{counter: scoreboardWrites}
+var ScoreboardWrites = scoreboardWritesCounter{counter: scoreboardWrites}
 
 // BackgroundAudioSelections exposes the bed-switch counter. Recorded inside
 // beds.Store.Set, so every switch counts once no matter which surface — the
 // console or !audio — asked for it.
-var BackgroundAudioSelections = backgroundAudioSelectionsIface{counter: backgroundAudioSelections}
+var BackgroundAudioSelections = backgroundAudioSelectionsCounter{counter: backgroundAudioSelections}
 
 // TwitchAudience exposes subscriber and follower gauge recording.
-var TwitchAudience = twitchAudienceIface{subscribers: twitchSubscribers, followers: twitchFollowers}
+var TwitchAudience = twitchAudienceGauges{subscribers: twitchSubscribers, followers: twitchFollowers}
 
 // TwitchConnection exposes the chat-connection gauge — whether the bot can
 // reach Twitch chat, written by the gateway inbound poll (the gateway holds the
@@ -89,20 +89,20 @@ var TwitchAudience = twitchAudienceIface{subscribers: twitchSubscribers, followe
 //
 // It pairs with the gateway's own platform_gateway_chat_connected: this one 0
 // while that one is 1 localises the fault to the path between them.
-var TwitchConnection = twitchConnectionIface{gauge: twitchConnected}
+var TwitchConnection = twitchConnectionGauge{gauge: twitchConnected}
 
 // TwitchTokenExpiry exposes the per-account token-expiry timestamp gauge.
 // SetExpiresAt(account, t) records t.Unix(), or 0 if t is the zero Time —
 // the latter is how a blanked or never-loaded token shows up. Drives the
 // "tripbot needs reauth" alert (time() past the recorded expiry).
-var TwitchTokenExpiry = twitchTokenExpiryIface{gauge: twitchTokenExpiry}
+var TwitchTokenExpiry = twitchTokenExpiryGauge{gauge: twitchTokenExpiry}
 
 // TwitchChannelLive exposes the per-tick Twitch live-status gauge written
 // by the OBS silent-disconnect watchdog. Set(true) on every successful
 // Helix poll that reports the channel as live, Set(false) when GetStreams
 // returns empty. Paired with OBSStreaming in an alert: divergence
 // (OBS=1 / Twitch=0) is the silent half-open RTMP signal.
-var TwitchChannelLive = twitchChannelLiveIface{gauge: twitchChannelLive}
+var TwitchChannelLive = twitchChannelLiveGauge{gauge: twitchChannelLive}
 
 // ChannelLive exposes the platform-agnostic live-status gauge. Call
 // Set(live, platform) from whatever already learns this instance's live state —
@@ -113,7 +113,7 @@ var TwitchChannelLive = twitchChannelLiveIface{gauge: twitchChannelLive}
 // same series identity and collide onto one, last write winning. Every platform
 // an alert can watch must call this; a platform that never does has no series,
 // which the lost-visibility canary reports rather than reading as offline.
-var ChannelLive = channelLiveIface{gauge: channelLive}
+var ChannelLive = channelLiveGauge{gauge: channelLive}
 
 // CurrentState exposes the dashcam-state gauge. Call Set(abbrev, platform) on
 // every video transition with the active state's 2-letter abbreviation (or
@@ -121,93 +121,89 @@ var ChannelLive = channelLiveIface{gauge: channelLive}
 // instance's streaming platform. It sets the new state's series to 1 and
 // clears the previously-active series to 0, so exactly one series reads 1 at
 // any time and no stale =1 series linger for states the playhead has left.
-var CurrentState = &currentStateIface{gauge: currentState}
+var CurrentState = &currentStateGauge{gauge: currentState}
 
 // GatewayConnection exposes the consumer-side gateway-reachability gauge.
 // Set(true) after any HTTP response from the platform-gateway, Set(false) on a
 // transport failure (connection refused, timeout, DNS). Drives the "tripbot
 // can't reach the gateway" alert — distinct from the gateway's own
 // platform_gateway_up, which only reports that the gateway process is running.
-var GatewayConnection = gatewayConnectionIface{gauge: gatewayUp}
+var GatewayConnection = gatewayConnectionGauge{gauge: gatewayUp}
 
 // OBSSilentDisconnectRestarts exposes the watchdog's forced-recovery counter.
 // Inc() is called after a successful recovery. Any non-zero rate is alertable —
 // the watchdog only fires after a multi-minute debounce, so even one increment
 // means we saw a real silent disconnect in prod.
-var OBSSilentDisconnectRestarts = obsSilentDisconnectRestartsIface{counter: obsSilentDisconnectRestarts}
+var OBSSilentDisconnectRestarts = obsSilentDisconnectRestartsCounter{counter: obsSilentDisconnectRestarts}
 
 // Cron exposes cron job metrics. Observe(job, seconds) is called on every
 // completion (success or recovered panic); Panic(job) is additionally
 // called when a recover() fires. Together they enable "stalled cron" and
 // "panicking cron" alerts.
-var Cron = cronIface{runs: cronRuns, panics: cronPanics, lastRun: cronLastRun, duration: cronDuration}
+var Cron = cronMetrics{runs: cronRuns, panics: cronPanics, lastRun: cronLastRun, duration: cronDuration}
 
 // HTTPPanics exposes the HTTP-handler panic counter. Increment from a
 // recovery middleware that catches panics in the request goroutine.
-var HTTPPanics = httpPanicsIface{counter: httpPanics}
+var HTTPPanics = httpPanicsCounter{counter: httpPanics}
 
-type chatCounterIface struct{ counter metric.Int64Counter }
+type chatMessagesCounter struct{ counter metric.Int64Counter }
 
-func (c chatCounterIface) Inc() {
+func (c chatMessagesCounter) Inc() {
 	c.counter.Add(context.Background(), 1)
 }
 
-type chatCommandCounterIface struct{ counter metric.Int64Counter }
+type chatCommandsCounter struct{ counter metric.Int64Counter }
 
-func (c chatCommandCounterIface) Inc(command string) {
+func (c chatCommandsCounter) Inc(command string) {
 	c.counter.Add(context.Background(), 1, metric.WithAttributes(attribute.String("command", command)))
 }
 
-type chatCommandDurationIface struct{ h metric.Float64Histogram }
+type commandDurationHistogram struct{ h metric.Float64Histogram }
 
-func (d chatCommandDurationIface) Observe(command string, seconds float64) {
+func (d commandDurationHistogram) Observe(command string, seconds float64) {
 	d.h.Record(context.Background(), seconds, metric.WithAttributes(attribute.String("command", command)))
 }
 
-type eventsIface struct{ counter metric.Int64Counter }
+type eventsCounter struct{ counter metric.Int64Counter }
 
-func (e eventsIface) Inc(event string) {
+func (e eventsCounter) Inc(event string) {
 	e.counter.Add(context.Background(), 1, metric.WithAttributes(attribute.String("event", event)))
 }
 
-type scoreboardWritesIface struct{ counter metric.Int64Counter }
+type scoreboardWritesCounter struct{ counter metric.Int64Counter }
 
-func (s scoreboardWritesIface) Inc(scoreboard string) {
+func (s scoreboardWritesCounter) Inc(scoreboard string) {
 	s.counter.Add(context.Background(), 1, metric.WithAttributes(attribute.String("scoreboard", scoreboard)))
 }
 
-type backgroundAudioSelectionsIface struct{ counter metric.Int64Counter }
+type backgroundAudioSelectionsCounter struct{ counter metric.Int64Counter }
 
-func (c backgroundAudioSelectionsIface) Inc(platform, bed string) {
+func (c backgroundAudioSelectionsCounter) Inc(platform, bed string) {
 	c.counter.Add(context.Background(), 1, metric.WithAttributes(attribute.String("bed", bed)), platformAttr(platform))
 }
 
-type twitchAudienceIface struct {
+type twitchAudienceGauges struct {
 	subscribers metric.Int64Gauge
 	followers   metric.Int64Gauge
 }
 
-func (a twitchAudienceIface) SetSubscribers(n int64) {
+func (a twitchAudienceGauges) SetSubscribers(n int64) {
 	a.subscribers.Record(context.Background(), n)
 }
 
-func (a twitchAudienceIface) SetFollowers(n int64) {
+func (a twitchAudienceGauges) SetFollowers(n int64) {
 	a.followers.Record(context.Background(), n)
 }
 
-type twitchConnectionIface struct{ gauge metric.Int64Gauge }
+type twitchConnectionGauge struct{ gauge metric.Int64Gauge }
 
-func (t twitchConnectionIface) Set(connected bool) {
-	var v int64
-	if connected {
-		v = 1
-	}
-	t.gauge.Record(context.Background(), v)
+func (t twitchConnectionGauge) Set(connected bool) {
+	t.gauge.Record(context.Background(), b2i(connected))
 }
 
-type twitchTokenExpiryIface struct{ gauge metric.Int64Gauge }
+type twitchTokenExpiryGauge struct{ gauge metric.Int64Gauge }
 
-func (t twitchTokenExpiryIface) SetExpiresAt(account string, expiresAt time.Time) {
+func (t twitchTokenExpiryGauge) SetExpiresAt(account string, expiresAt time.Time) {
 	var v int64
 	if !expiresAt.IsZero() {
 		v = expiresAt.Unix()
@@ -215,27 +211,19 @@ func (t twitchTokenExpiryIface) SetExpiresAt(account string, expiresAt time.Time
 	t.gauge.Record(context.Background(), v, metric.WithAttributes(attribute.String("account", account)))
 }
 
-type twitchChannelLiveIface struct{ gauge metric.Int64Gauge }
+type twitchChannelLiveGauge struct{ gauge metric.Int64Gauge }
 
-func (t twitchChannelLiveIface) Set(live bool) {
-	var v int64
-	if live {
-		v = 1
-	}
-	t.gauge.Record(context.Background(), v)
+func (t twitchChannelLiveGauge) Set(live bool) {
+	t.gauge.Record(context.Background(), b2i(live))
 }
 
-type channelLiveIface struct{ gauge metric.Int64Gauge }
+type channelLiveGauge struct{ gauge metric.Int64Gauge }
 
-func (c channelLiveIface) Set(live bool, platform string) {
-	var v int64
-	if live {
-		v = 1
-	}
-	c.gauge.Record(context.Background(), v, platformAttr(platform))
+func (c channelLiveGauge) Set(live bool, platform string) {
+	c.gauge.Record(context.Background(), b2i(live), platformAttr(platform))
 }
 
-type currentStateIface struct {
+type currentStateGauge struct {
 	gauge metric.Int64Gauge
 	mu    sync.Mutex
 	prev  string // last state set to 1, so we can clear it back to 0 on change
@@ -249,7 +237,7 @@ type currentStateIface struct {
 // transition it zeroes the previously-active series before setting the new one
 // to 1; a repeated Set of the same state is a cheap no-op (the series already
 // reads 1).
-func (s *currentStateIface) Set(abbrev, platform string) {
+func (s *currentStateGauge) Set(abbrev, platform string) {
 	if abbrev == "" {
 		abbrev = "unknown"
 	}
@@ -266,23 +254,19 @@ func (s *currentStateIface) Set(abbrev, platform string) {
 	s.prev = abbrev
 }
 
-type gatewayConnectionIface struct{ gauge metric.Int64Gauge }
+type gatewayConnectionGauge struct{ gauge metric.Int64Gauge }
 
-func (g gatewayConnectionIface) Set(reachable bool) {
-	var v int64
-	if reachable {
-		v = 1
-	}
-	g.gauge.Record(context.Background(), v)
+func (g gatewayConnectionGauge) Set(reachable bool) {
+	g.gauge.Record(context.Background(), b2i(reachable))
 }
 
-type obsSilentDisconnectRestartsIface struct{ counter metric.Int64Counter }
+type obsSilentDisconnectRestartsCounter struct{ counter metric.Int64Counter }
 
-func (o obsSilentDisconnectRestartsIface) Inc() {
+func (o obsSilentDisconnectRestartsCounter) Inc() {
 	o.counter.Add(context.Background(), 1)
 }
 
-type cronIface struct {
+type cronMetrics struct {
 	runs     metric.Int64Counter
 	panics   metric.Int64Counter
 	lastRun  metric.Int64Gauge
@@ -293,7 +277,7 @@ type cronIface struct {
 // duration, and updates the last-run timestamp. Call on every completion,
 // including when a panic was recovered, so "no successful run in 3× interval"
 // alerts still see activity from a panicking job.
-func (c cronIface) Observe(job string, seconds float64, now int64) {
+func (c cronMetrics) Observe(job string, seconds float64, now int64) {
 	attr := metric.WithAttributes(attribute.String("job", job))
 	c.runs.Add(context.Background(), 1, attr)
 	c.duration.Record(context.Background(), seconds, attr)
@@ -301,16 +285,26 @@ func (c cronIface) Observe(job string, seconds float64, now int64) {
 }
 
 // Panic records a cron panic. Call from a recover() handler before Observe.
-func (c cronIface) Panic(job string) {
+func (c cronMetrics) Panic(job string) {
 	c.panics.Add(context.Background(), 1, metric.WithAttributes(attribute.String("job", job)))
 }
 
-type httpPanicsIface struct{ counter metric.Int64Counter }
+type httpPanicsCounter struct{ counter metric.Int64Counter }
 
 // Inc records one recovered HTTP-handler panic, labeled by service
 // (typically the configured ServerType: "tripbot" / "onscreens_server").
-func (h httpPanicsIface) Inc(service string) {
+func (h httpPanicsCounter) Inc(service string) {
 	h.counter.Add(context.Background(), 1, metric.WithAttributes(attribute.String("service", service)))
+}
+
+// b2i maps a bool onto the 0/1 an OTel gauge records. Every liveness- and
+// state-style gauge in the package is a bool at the call site and an Int64Gauge
+// on the wire.
+func b2i(b bool) int64 {
+	if b {
+		return 1
+	}
+	return 0
 }
 
 func mustCounter(name, desc string) metric.Int64Counter {

@@ -1,0 +1,1 @@
+Rename the metric recorder types in `pkg/instrumentation` from `…Iface` to the instrument they hold (`…Counter` / `…Gauge` / `…Metrics`) — none of them was ever an interface — and reuse the package's existing `b2i` helper instead of hand-rolling the bool-to-0/1 conversion in six places.

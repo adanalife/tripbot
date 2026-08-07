@@ -2,6 +2,7 @@ package chatbot
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"math"
@@ -137,7 +138,7 @@ func (a *App) jumpCmd(ctx context.Context, user *users.User, params []string) {
 	titlecaseState := helpers.TitlecaseState(state)
 	randomVid, err := a.Video.FindRandomByState(ctx, state)
 	// check to see if we even have footage for this state
-	if _, ok := err.(*terrors.NoFootageForStateError); ok {
+	if errors.Is(err, terrors.ErrNoFootageForState) {
 		msg := fmt.Sprintf("No footage for %s... yet! ;)", titlecaseState)
 		a.Chat.Say(msg)
 		return
@@ -185,7 +186,7 @@ func (a *App) daytimeCmd(ctx context.Context, user *users.User, _ []string) {
 	}
 
 	target, err := a.Video.FindNextDaytime(ctx, a.Video.Current())
-	if _, ok := err.(*terrors.NoDaytimeFoundError); ok {
+	if errors.Is(err, terrors.ErrNoDaytimeFound) {
 		a.Chat.Say("I couldn't find any daytime footage ahead — enjoy the night! 🌙")
 		return
 	}

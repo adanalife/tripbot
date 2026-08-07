@@ -49,7 +49,7 @@ type Event struct {
 // the rest write as NULL / zero.
 func record(ctx context.Context, cfg *c.TripbotConfig, e Event) error {
 	if cfg.ReadOnly {
-		return &terrors.ReadOnlyError{Msg: "read-only mode"}
+		return terrors.ErrReadOnly
 	}
 	e.Platform = cfg.Platform
 	if err := database.GormDB().WithContext(ctx).Create(&e).Error; err != nil {

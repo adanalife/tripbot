@@ -14,6 +14,7 @@ import (
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
 	"github.com/adanalife/tripbot/pkg/discord"
+	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/eventbus"
 	"github.com/adanalife/tripbot/pkg/eventsub"
 	"github.com/adanalife/tripbot/pkg/feature"
@@ -807,8 +808,13 @@ func (t *Tripbot) startEventSub(ctx context.Context) {
 func (t *Tripbot) startHttpServer(ctx context.Context) <-chan struct{} {
 	done := make(chan struct{})
 	go func() {
-		t.srv.Start(ctx)
-		close(done)
+		defer close(done)
+		// A listener that never comes up leaves the bot without its auth
+		// pages, console API, and /metrics — nothing downstream can recover
+		// from that, so the binary exits rather than running degraded.
+		if err := t.srv.Start(ctx); err != nil {
+			terrors.FatalContext(ctx, err, "couldn't start server")
+		}
 	}()
 	return done
 }

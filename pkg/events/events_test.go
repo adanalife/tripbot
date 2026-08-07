@@ -69,9 +69,8 @@ func TestWritersRespectReadOnly(t *testing.T) {
 	for _, w := range writers {
 		t.Run(w.name, func(t *testing.T) {
 			err := w.call(context.Background(), &c.TripbotConfig{ReadOnly: true, Platform: "twitch"})
-			var roErr *terrors.ReadOnlyError
-			if !errors.As(err, &roErr) {
-				t.Fatalf("err = %v, want ReadOnlyError", err)
+			if !errors.Is(err, terrors.ErrReadOnly) {
+				t.Fatalf("err = %v, want terrors.ErrReadOnly", err)
 			}
 		})
 	}
