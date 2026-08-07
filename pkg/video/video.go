@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/eventbus"
+	"github.com/adanalife/tripbot/pkg/events"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 	playoutClient "github.com/adanalife/tripbot/pkg/playout-client"
@@ -58,6 +59,9 @@ func (p *Player) GetCurrentlyPlaying(ctx context.Context) {
 
 	// if the currently-playing video has changed
 	if p.curVid != p.preVid {
+		// the outgoing clip, kept for the state-crossing comparison below
+		prev := p.CurrentlyPlaying
+
 		// reset the stopwatch
 		p.timeStarted = time.Now()
 
@@ -94,6 +98,16 @@ func (p *Player) GetCurrentlyPlaying(ctx context.Context) {
 		viewstats.RecordPlay(ctx, p.cfg, p.CurrentlyPlaying.ID, p.CurrentlyPlaying.State,
 			p.CurrentlyPlaying.Flagged, p.CurrentlyPlaying.Lat, p.CurrentlyPlaying.Lng)
 
+		// Record the switch as a state_crossing event when it changes the
+		// airing state. Best-effort, like the RecordPlay above: a failed
+		// insert logs and drops the event rather than disturbing the tick.
+		if crossed, sequential := stateCrossing(prev, p.CurrentlyPlaying); crossed {
+			if err := events.StateCrossing(ctx, p.cfg, prev.State, p.CurrentlyPlaying.State,
+				p.CurrentlyPlaying.ID, sequential); err != nil {
+				slog.ErrorContext(ctx, "error recording state crossing", "err", err)
+			}
+		}
+
 		// show the no-GPS image
 		if p.CurrentlyPlaying.Flagged {
 			// the duration is ignored — the server owns the GPS overlay's duration
@@ -102,6 +116,19 @@ func (p *Player) GetCurrentlyPlaying(ctx context.Context) {
 			p.onscreens.HideGPSImage(ctx)
 		}
 	}
+}
+
+// stateCrossing reports whether switching prev → cur changes the airing US
+// state, and whether the switch was sequential — cur follows prev in corpus
+// order (next_vid), meaning the van drove across the line rather than the
+// playhead jumping there. Never a crossing when either state is unresolvable
+// (""), which includes the first switch after boot: the previous clip was
+// never observed, so there is nothing to cross from.
+func stateCrossing(prev, cur Video) (crossed, sequential bool) {
+	if prev.State == "" || cur.State == "" || prev.State == cur.State {
+		return false, false
+	}
+	return true, prev.NextVid.Valid && int(prev.NextVid.Int64) == cur.ID
 }
 
 // CurrentProgress represents how long the video has been playing

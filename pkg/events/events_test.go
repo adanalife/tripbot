@@ -57,6 +57,9 @@ var writers = []struct {
 	{"Correction", "correction", func(ctx context.Context, cfg *c.TripbotConfig) error {
 		return Correction(ctx, cfg, "someone", -1.5)
 	}},
+	{"StateCrossing", "state_crossing", func(ctx context.Context, cfg *c.TripbotConfig) error {
+		return StateCrossing(ctx, cfg, "Utah", "Colorado", 42, true)
+	}},
 }
 
 // A read-only instance must write no events at all. There's no mock DB
@@ -89,6 +92,9 @@ func TestWritersStampPlatformAndEvent(t *testing.T) {
 					sqlmock.AnyArg(), // session_id
 					sqlmock.AnyArg(), // date_created
 					sqlmock.AnyArg(), // extra_miles_earned
+					sqlmock.AnyArg(), // video_id
+					sqlmock.AnyArg(), // video_ts_sec
+					sqlmock.AnyArg(), // meta
 				).
 				WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
 
@@ -99,5 +105,55 @@ func TestWritersStampPlatformAndEvent(t *testing.T) {
 				t.Error(err)
 			}
 		})
+	}
+}
+
+// A state_crossing row is a system event: empty username, the new clip's id,
+// and a meta document naming the transition. The exact JSON matters — the
+// rollups and any Grafana query address it as meta->>'from' / meta->>'to' /
+// meta->>'sequential'.
+func TestStateCrossingRow(t *testing.T) {
+	mock := installMockDB(t)
+	mock.ExpectQuery(`INSERT INTO "events"`).
+		WithArgs(
+			"",               // username: system event, no actor
+			"twitch",         // platform
+			"state_crossing", // event
+			sqlmock.AnyArg(), // session_id
+			sqlmock.AnyArg(), // date_created
+			nil,              // extra_miles_earned
+			42,               // video_id
+			nil,              // video_ts_sec: clip-level writer
+			`{"from":"Utah","to":"Colorado","sequential":true}`, // meta
+		).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+
+	if err := StateCrossing(context.Background(), &c.TripbotConfig{Platform: "twitch"}, "Utah", "Colorado", 42, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Error(err)
+	}
+}
+
+// A crossing onto a clip with no DB row (LoadOrCreate failed) still records,
+// with a NULL video_id — mirroring viewstats.RecordPlay.
+func TestStateCrossingZeroVideoIDWritesNull(t *testing.T) {
+	mock := installMockDB(t)
+	mock.ExpectQuery(`INSERT INTO "events"`).
+		WithArgs(
+			"", "twitch", "state_crossing",
+			sqlmock.AnyArg(), sqlmock.AnyArg(), nil,
+			nil, // video_id
+			nil,
+			`{"from":"Utah","to":"Colorado","sequential":false}`,
+		).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+
+	if err := StateCrossing(context.Background(), &c.TripbotConfig{Platform: "twitch"}, "Utah", "Colorado", 0, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Error(err)
 	}
 }
