@@ -9,6 +9,18 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v4.23.0] — 2026-08-07
+
+### Chatbot
+
+- **Refused chat commands are now recorded as `command_refused` events, and an unknown `!command` no longer logs as an error.** Every path that declines to run a command — an unknown token, a command not enabled on this platform, the follower and subscriber gates, and the `!guess` cooldown — writes a row to the append-only events table naming the reason, stamped with the clip that was airing and the playhead. That makes "which commands do people reach for" and "what gets refused, and why" queryable instead of something to be read out of the logs. With the durable record in place, the missed-command log drops from `Error` (which pkg/telemetry forwards to Sentry, so each distinct token minted its own issue against the free-tier budget) to `Info`. ([#1354](https://github.com/adanalife/tripbot/pull/1354))
+- `!location` and the onscreen location rotator answer from the clip's own stored place name when the playhead's moment has none, so the clips whose per-moment track isn't trustworthy stop costing a live Google Maps lookup too. ([#1356](https://github.com/adanalife/tripbot/pull/1356))
+
+### Fixes
+
+- **The silent-disconnect watchdog no longer retries a failing stream restart every tick.** The cooldown was stamped only after a restart succeeded, so a recovery that kept failing had no timestamp to measure against and re-fired on every 60s tick — 24 rejected `StartStream` calls in 9 hours on one prod incident, each re-stopping an OBS output that was already mid-teardown. The attempt is stamped when it's made, so the cooldown now governs the case it was written for. ([#1353](https://github.com/adanalife/tripbot/pull/1353))
+- **A forced stream restart now waits for OBS to finish stopping the output instead of guessing at three seconds.** obs-websocket answers `StopStream` as soon as the stop is *initiated*, so on the half-open RTMP socket the watchdog exists to catch — where the socket close is precisely what isn't completing — the output was still in `OUTPUT_STOPPING` when the restart tried to start it, and OBS rejected the `StartStream` outright (status 500, `OutputRunning`). Recovery polls the output state for up to 30s, then keeps the original settle pause before opening the fresh connection. ([#1353](https://github.com/adanalife/tripbot/pull/1353))
+
 ## [v4.22.0] — 2026-08-07
 
 ### Chatbot
