@@ -80,11 +80,7 @@ func NewOBSStats(platform string) OBSStats {
 
 // SetStreaming records whether OBS is actively streaming.
 func (o OBSStats) SetStreaming(active bool) {
-	v := int64(0)
-	if active {
-		v = 1
-	}
-	obsStreamingGauge.Record(context.Background(), v, o.platform)
+	obsStreamingGauge.Record(context.Background(), b2i(active), o.platform)
 }
 
 func (o OBSStats) Update(s OBSStatsSnapshot) {
@@ -104,11 +100,7 @@ func (o OBSStats) UpdateStream(s OBSStreamSnapshot) {
 	obsStreamOutputBytes.Record(ctx, s.OutputBytes, o.platform)
 	obsStreamOutputDurationMS.Record(ctx, s.OutputDurationMS, o.platform)
 	obsStreamCongestion.Record(ctx, s.OutputCongestion, o.platform)
-	v := int64(0)
-	if s.Reconnecting {
-		v = 1
-	}
-	obsStreamReconnecting.Record(ctx, v, o.platform)
+	obsStreamReconnecting.Record(ctx, b2i(s.Reconnecting), o.platform)
 	obsStreamSkippedFrames.Record(ctx, s.SkippedFrames, o.platform)
 	obsStreamTotalFrames.Record(ctx, s.TotalFrames, o.platform)
 }
