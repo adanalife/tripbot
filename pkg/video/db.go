@@ -199,7 +199,7 @@ func FindRandomByState(ctx context.Context, state string) (Video, error) {
 	//TODO: ORDER BY random() will eventually get too slow
 	result := database.GormDB().WithContext(ctx).Where("state = ?", state).Order("random()").Limit(1).First(&vid)
 	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-		return vid, &terrors.NoFootageForStateError{Msg: "no matches found"}
+		return vid, terrors.ErrNoFootageForState
 	}
 	if result.Error != nil {
 		slog.ErrorContext(ctx, "error fetching vid from DB", "err", result.Error)
@@ -220,7 +220,7 @@ const nextDaytimeScanLimit = 5000
 // night clip the next daylight is the following day's first daylight clip; this
 // walks clips in film order and returns it. Clips without a GPS fix are skipped
 // (daytime needs coords to resolve sunrise/sunset). Returns a
-// *NoDaytimeFoundError when no later daytime clip exists in the scanned window.
+// terrors.ErrNoDaytimeFound when no later daytime clip exists in the scanned window.
 func FindNextDaytime(ctx context.Context, after Video) (Video, error) {
 	// Baseline calendar day: the current clip's local day when it has a fix,
 	// else its raw filmed day (a flagged clip has no coords to localize).
@@ -247,7 +247,7 @@ func FindNextDaytime(ctx context.Context, after Video) (Video, error) {
 			return clip, nil
 		}
 	}
-	return Video{}, &terrors.NoDaytimeFoundError{Msg: "no daytime footage found ahead"}
+	return Video{}, terrors.ErrNoDaytimeFound
 }
 
 // CorpusRoute returns the GPS coordinates of every non-flagged dashcam clip,

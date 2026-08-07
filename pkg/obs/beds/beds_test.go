@@ -924,10 +924,19 @@ func TestSchedule_ReportsThePendingTuneWithoutClaimingIt(t *testing.T) {
 		t.Error("the pending station is being reported as the live one")
 	}
 
+	// Wait on the bed, not on the pending flag. applyPending clears pending and
+	// records the station under one lock, then releases it before switching the
+	// bed — so between those two the tune reads as landed while Current() still
+	// reports the old bed, and asserting in that window fails a store that is
+	// working correctly. The bed is the last thing to move, so waiting on it
+	// covers the station and the pending flag too.
 	waitFor(t, "the tune to land", func() bool {
-		_, pending := s.Pending()
-		return !pending
+		bed, _ := s.Current()
+		return bed == SomaFM
 	})
+	if _, pending := s.Pending(); pending {
+		t.Error("still reporting a pending tune after it landed")
+	}
 	if got := s.Station(); got != "dronezone" {
 		t.Errorf("station = %q after the tune landed, want dronezone", got)
 	}

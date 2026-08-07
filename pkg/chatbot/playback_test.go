@@ -313,7 +313,7 @@ func TestJumpCmd_NoFootageForState(t *testing.T) {
 	recOverlay := &recordingOnscreens{}
 	recPlayout := &recordingPlayout{}
 	recVideo := &recordingVideo{
-		RandomErr: &terrors.NoFootageForStateError{Msg: "no matches found"},
+		RandomErr: terrors.ErrNoFootageForState,
 	}
 	recIRC := &recordingChat{}
 	app.Onscreens = recOverlay
@@ -396,7 +396,7 @@ func TestJumpCmd_UnknownMultiWordStateSaysNoFootage(t *testing.T) {
 	app := newTestApp(video.Video{})
 	recPlayout := &recordingPlayout{}
 	recVideo := &recordingVideo{
-		RandomErr: &terrors.NoFootageForStateError{Msg: "no matches found"},
+		RandomErr: terrors.ErrNoFootageForState,
 	}
 	recIRC := &recordingChat{}
 	app.Playout = recPlayout
@@ -486,7 +486,7 @@ func TestDaytimeCmd_NoDaytimeAhead(t *testing.T) {
 	app := newTestApp(video.Video{})
 	recPlayout := &recordingPlayout{}
 	recVideo := &recordingVideo{
-		DaytimeErr: &terrors.NoDaytimeFoundError{Msg: "no daytime footage found ahead"},
+		DaytimeErr: terrors.ErrNoDaytimeFound,
 	}
 	recIRC := &recordingChat{}
 	app.Playout = recPlayout
@@ -555,5 +555,58 @@ func TestParseSeekSpan_UppercaseUnits(t *testing.T) {
 				t.Errorf("parseSeekSpan(%q) = %v, want %v", in, got, want)
 			}
 		})
+	}
+}
+
+// "No footage for that state" is a normal reply, not a failure, so it has to
+// survive wrapping: anything added between pkg/video and here that annotates
+// the error must not reclassify the reply into the internal-error branch, which
+// sends the usage string instead.
+func TestJumpCmd_NoFootageForState_Wrapped(t *testing.T) {
+	skipIfDarwin(t)
+	app := newTestApp(video.Video{})
+	recVideo := &recordingVideo{
+		RandomErr: fmt.Errorf("query state footage: %w", terrors.ErrNoFootageForState),
+	}
+	recPlayout := &recordingPlayout{}
+	recIRC := &recordingChat{}
+	app.Video = recVideo
+	app.Playout = recPlayout
+	app.Chat = recIRC
+
+	runAsAdmin(t, func() {
+		app.jumpCmd(context.Background(), newTestUser(adminUser), []string{"wyoming"})
+	})
+
+	if len(recIRC.Says) != 1 || !strings.Contains(recIRC.Says[0], "No footage for Wyoming") {
+		t.Errorf("expected the no-footage reply through a wrap, got %v", recIRC.Says)
+	}
+	if len(recPlayout.Calls) != 0 {
+		t.Errorf("expected no Playout calls, got %v", recPlayout.Calls)
+	}
+}
+
+// Same wrap-safety check for the !daytime path.
+func TestDaytimeCmd_NoDaytimeAhead_Wrapped(t *testing.T) {
+	skipIfDarwin(t)
+	app := newTestApp(video.Video{})
+	recVideo := &recordingVideo{
+		DaytimeErr: fmt.Errorf("scan window: %w", terrors.ErrNoDaytimeFound),
+	}
+	recPlayout := &recordingPlayout{}
+	recIRC := &recordingChat{}
+	app.Video = recVideo
+	app.Playout = recPlayout
+	app.Chat = recIRC
+
+	runAsAdmin(t, func() {
+		app.daytimeCmd(context.Background(), newTestUser(adminUser), nil)
+	})
+
+	if len(recIRC.Says) != 1 || !strings.Contains(recIRC.Says[0], "enjoy the night") {
+		t.Errorf("expected the no-daytime reply through a wrap, got %v", recIRC.Says)
+	}
+	if len(recPlayout.Calls) != 0 {
+		t.Errorf("expected no Playout calls, got %v", recPlayout.Calls)
 	}
 }
