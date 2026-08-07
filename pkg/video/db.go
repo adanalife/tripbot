@@ -2,6 +2,7 @@ package video
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -250,10 +251,33 @@ func FindNextDaytime(ctx context.Context, after Video) (Video, error) {
 	return Video{}, terrors.ErrNoDaytimeFound
 }
 
-// CorpusRoute returns the GPS coordinates of every non-flagged dashcam clip,
-// ordered by film time — the full route the van drove. The admin map's
-// background-route overlay renders this. Flagged clips and 0/0 are excluded.
+// A clip with a trusted per-moment track contributes that whole track; one
+// without contributes the single fix it has, so a gap in the coords stage's
+// coverage bends the route slightly rather than breaking the line. Ordering is
+// (film time, offset into the clip) — by clip alone the points inside a clip
+// come back in whatever order the scan found them, which draws a scribble.
+const corpusRouteQuery = `
+SELECT lat, lng FROM (
+    SELECT c.lat, c.lng, v.date_filmed, c.ts_sec
+    FROM video_coords c JOIN videos v ON v.id = c.video_id
+    WHERE NOT v.flagged AND v.coord_confidence >= @minConfidence AND c.ts_sec IS NOT NULL
+  UNION ALL
+    SELECT v.lat, v.lng, v.date_filmed, 0
+    FROM videos v
+    WHERE NOT v.flagged AND (v.lat != 0 OR v.lng != 0)
+      AND (v.coord_confidence IS NULL OR v.coord_confidence < @minConfidence)
+) t ORDER BY date_filmed, ts_sec`
+
+// CorpusRoute returns the GPS coordinates of the whole route the van drove,
+// ordered along it — the admin map's background-route overlay.
+//
+// This is the per-moment track, not one point per clip: at clip granularity
+// every curve, switchback and cloverleaf of the trip is drawn as a straight
+// chord between points ~4 miles apart. Flagged clips and 0/0 are excluded.
 // Returns [][2]float64 of {lat, lng}; nil on error.
+//
+// The result is large — a few hundred thousand points — and callers are
+// expected to simplify before serving it. See pkg/server's map handler.
 func CorpusRoute(ctx context.Context) [][2]float64 {
 	type coord struct {
 		Lat float64
@@ -261,10 +285,7 @@ func CorpusRoute(ctx context.Context) [][2]float64 {
 	}
 	var rows []coord
 	err := database.GormDB().WithContext(ctx).
-		Model(&Video{}).
-		Select("lat, lng").
-		Where("NOT flagged AND (lat != 0 OR lng != 0)").
-		Order("date_filmed").
+		Raw(corpusRouteQuery, sql.Named("minConfidence", minCoordConfidence)).
 		Scan(&rows).Error
 	if err != nil {
 		slog.ErrorContext(ctx, "corpus route query failed", "err", err)
