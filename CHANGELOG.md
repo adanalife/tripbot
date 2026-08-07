@@ -9,6 +9,28 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v4.22.0] — 2026-08-07
+
+### Chatbot
+
+- State-line crossings are now recorded as `state_crossing` events when a clip switch changes the airing US state, with the transition (`from`/`to`) and whether the van drove across the line or the playhead jumped there (`sequential`). The events table also gains nullable `video_id`/`video_ts_sec`/`meta` columns so any event can carry what-was-airing context. ([#1346](https://github.com/adanalife/tripbot/pull/1346))
+- `!location` now answers from the per-moment GPS track rather than the clip's single fix, so the Maps link points at the road on screen instead of a median 598 m away. `!guess` and `!state` grade the same moment, so a clip that crosses a state line answers for the half you're watching. ([#1347](https://github.com/adanalife/tripbot/pull/1347))
+- The admin map's "show full route" overlay now draws the real GPS trace from `video_coords` instead of one point per clip, so curves, switchbacks and interstate cloverleafs read as roads rather than straight chords. The route is simplified to a 100 m error bound and cached, so it serves faster than the coarser version did. ([#1348](https://github.com/adanalife/tripbot/pull/1348))
+- `video_coords` gains `state`/`city`/`city_m`, so `!location`, `!state` and `!guess` can answer from the row instead of a live Google Maps call. The pipeline fills them offline from Census 2018 boundaries — the same vintage as the footage. Until it has, the live geocoder stays as the fallback. ([#1349](https://github.com/adanalife/tripbot/pull/1349))
+
+### Fixes
+
+- Guard the shared `*gorm.DB` handle with a mutex. `GormDB()` did an unsynchronized check-then-set on a package global, so two goroutines reaching it before the handle existed both dialed postgres — a data race that also orphaned one of the two connection pools. ([#1294](https://github.com/adanalife/tripbot/pull/1294))
+- A scheduled background-audio switch no longer reports its new station while the old bed is still playing — the pending flag now clears once the bed is audible, not when the station is recorded. ([#1350](https://github.com/adanalife/tripbot/pull/1350))
+- Fixed a race in the background-audio scheduler test that failed unrelated pull requests. No change to the scheduler itself. ([#1351](https://github.com/adanalife/tripbot/pull/1351))
+
+### Cleanup
+
+- Replace the three constant-message error structs in `pkg/errors` with `errors.New` sentinels matched via `errors.Is`. The consumers used raw type assertions, which stop matching the moment an error is wrapped with `%w` — a `!jump` for a state with no footage would have started replying with the usage string instead. ([#1295](https://github.com/adanalife/tripbot/pull/1295))
+- Rename the metric recorder types in `pkg/instrumentation` from `…Iface` to the instrument they hold (`…Counter` / `…Gauge` / `…Metrics`) — none of them was ever an interface — and reuse the package's existing `b2i` helper instead of hand-rolling the bool-to-0/1 conversion in six places. ([#1296](https://github.com/adanalife/tripbot/pull/1296))
+- `server.Server.Start` returns its listener error instead of exiting the process from inside the library. Deciding whether a failed listen is fatal belongs to the binary, which is what the sibling onscreens-server already does. ([#1297](https://github.com/adanalife/tripbot/pull/1297))
+- `config.Load` for onscreens-server returns an error instead of calling `log.Fatalf` from inside the package, so main owns the exit and the function is unit-testable. Its first two tests come with it. ([#1299](https://github.com/adanalife/tripbot/pull/1299))
+
 ## [v4.21.0] — 2026-08-05
 
 ### Chatbot
