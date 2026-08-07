@@ -167,12 +167,19 @@ func WatchSilentDisconnect(ctx context.Context, deps WatchdogDeps, interval time
 			}
 			slog.ErrorContext(ctx, "watchdog: forcing stream restart",
 				"consecutive_misses", misses)
+			// Stamped on the attempt rather than on success, so the cooldown
+			// governs a recovery that keeps failing — the case it exists for.
+			// Stamping it after the error check left a failing Restart with no
+			// timestamp to measure against, so it re-fired every tick: OBS took
+			// longer to tear the output down than the restart waited, and the
+			// resulting StartStream rejection retried 24 times in 9 hours,
+			// each attempt re-stopping an output already mid-teardown.
+			lastRestart = time.Now()
 			if err := deps.Restart(ctx); err != nil {
 				slog.ErrorContext(ctx, "watchdog: restart failed", "err", err)
 				continue
 			}
 			instrumentation.OBSSilentDisconnectRestarts.Inc()
-			lastRestart = time.Now()
 			misses = 0
 		}
 	}

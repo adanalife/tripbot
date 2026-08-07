@@ -15,26 +15,31 @@ import (
 // exact interval boundary instead of racing the real scheduler.
 const watchInterval = time.Second
 
-// step is one tick's worth of scripted answers from OBS and the platform.
+// step is one tick's worth of scripted answers from OBS and the platform,
+// including how a restart fired on this tick resolves.
 type step struct {
-	obsActive bool
-	live      bool
-	obsErr    error
-	liveErr   error
+	obsActive  bool
+	live       bool
+	obsErr     error
+	liveErr    error
+	restartErr error
 }
 
 // The scripted answers the tests compose runs out of. A miss is the case the
 // watchdog exists for: OBS happily pushing at a channel nobody can watch.
 var (
-	miss    = step{obsActive: true}
-	healthy = step{obsActive: true, live: true}
-	obsIdle = step{}
-	unknown = step{obsActive: true, liveErr: errors.New("live-check transient")}
-	obsDown = step{obsErr: errors.New("obs websocket unreachable")}
+	miss      = step{obsActive: true}
+	healthy   = step{obsActive: true, live: true}
+	obsIdle   = step{}
+	unknown   = step{obsActive: true, liveErr: errors.New("live-check transient")}
+	obsDown   = step{obsErr: errors.New("obs websocket unreachable")}
+	missNoFix = step{obsActive: true, restartErr: errors.New("StartStream: OutputRunning (500)")}
 )
 
 // fixture answers the watchdog's hooks from the currently-staged step and
-// counts restarts. The mutex is load-bearing even inside a synctest bubble:
+// counts restart attempts — a restart the staged step fails still counts, which
+// is what the cooldown tests below measure. The mutex is load-bearing even
+// inside a synctest bubble:
 // the watchdog still runs on its own goroutine, so -race wants the shared
 // state guarded.
 type fixture struct {
@@ -71,7 +76,7 @@ func (f *fixture) deps() WatchdogDeps {
 			f.mu.Lock()
 			defer f.mu.Unlock()
 			f.restarts++
-			return nil
+			return f.cur.restartErr
 		},
 	}
 }
@@ -141,6 +146,37 @@ func TestWatchSilentDisconnect_HeldRecoveryRetiresCooldown(t *testing.T) {
 	}
 	if got := run(t, script, 3, time.Hour); got != 2 {
 		t.Fatalf("restart count: want 2 (held recovery retires the cooldown), got %d", got)
+	}
+}
+
+// A restart that fails arms the cooldown just like one that succeeds. Stamping
+// the attempt only past the error check left a failing recovery with no
+// timestamp to measure the cooldown against, so it re-fired on every single
+// tick — which is how one OBS teardown that outlived the restart's settle pause
+// became 24 rejected StartStreams in 9 hours, each one re-stopping an output
+// already mid-teardown.
+func TestWatchSilentDisconnect_FailedRestartArmsCooldown(t *testing.T) {
+	script := []step{
+		missNoFix, missNoFix, missNoFix, // → attempt 1, fails
+		missNoFix, missNoFix, missNoFix, // cooldown blocks the retry
+		missNoFix, missNoFix, missNoFix,
+	}
+	if got := run(t, script, 3, time.Hour); got != 1 {
+		t.Fatalf("restart attempts: want 1 (a failed restart arms the cooldown), got %d", got)
+	}
+}
+
+// The cooldown rate-limits a failing recovery rather than abandoning it: the
+// channel is still dark, so once the timer elapses it gets another attempt.
+func TestWatchSilentDisconnect_FailedRestartRetriesAfterCooldown(t *testing.T) {
+	script := make([]step, 0, 8)
+	for range 8 {
+		script = append(script, missNoFix)
+	}
+	// Threshold 3 puts the first attempt on tick 3; a 3-tick cooldown puts the
+	// second on tick 6, leaving ticks 7-8 suppressed again.
+	if got := run(t, script, 3, 3*watchInterval); got != 2 {
+		t.Fatalf("restart attempts: want 2 (cooldown rate-limits, it doesn't abandon), got %d", got)
 	}
 }
 
