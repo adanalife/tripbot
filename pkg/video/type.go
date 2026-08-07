@@ -29,7 +29,12 @@ type Video struct {
 	Flagged     bool
 	State       string
 	CoordSource string
-	DateFilmed  time.Time
+	// CoordConfidence is how much this clip's per-moment video_coords track is
+	// worth believing, 0..1. NULL — a nil pointer here — means the coords stage
+	// hasn't looked at the clip yet, which is not the same as looking and
+	// finding nothing, so it can't be flattened to 0. See CoordAt.
+	CoordConfidence *float64
+	DateFilmed      time.Time
 	// autoCreateTime stamps date_created on insert. A runtime-created clip (one
 	// not already in the DB) is built without setting it, so without the tag
 	// GORM writes the 0001-01-01 zero value over the column's DEFAULT

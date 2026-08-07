@@ -2,6 +2,7 @@ package video
 
 import (
 	"context"
+	"database/sql"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"testing"
 	"time"
@@ -20,6 +21,30 @@ import (
 // testConf is the config test Players carry — env + platform for event tags,
 // ReadOnly false so the video_plays writes aren't skipped.
 var testConf = &c.TripbotConfig{Environment: "testing", Platform: "twitch"}
+
+func TestStateCrossing(t *testing.T) {
+	next := func(id int) sql.NullInt64 { return sql.NullInt64{Int64: int64(id), Valid: true} }
+	cases := []struct {
+		name                      string
+		prev, cur                 Video
+		wantCross, wantSequential bool
+	}{
+		{"sequential clips across a line", Video{State: "Utah", NextVid: next(42)}, Video{ID: 42, State: "Colorado"}, true, true},
+		{"jump lands in another state", Video{State: "Utah", NextVid: next(42)}, Video{ID: 7, State: "Colorado"}, true, false},
+		{"prev has no next_vid", Video{State: "Utah"}, Video{ID: 7, State: "Colorado"}, true, false},
+		{"same state", Video{State: "Utah", NextVid: next(42)}, Video{ID: 42, State: "Utah"}, false, false},
+		{"first switch after boot", Video{}, Video{ID: 42, State: "Colorado"}, false, false},
+		{"new state unresolvable", Video{State: "Utah", NextVid: next(42)}, Video{ID: 42}, false, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			crossed, sequential := stateCrossing(tc.prev, tc.cur)
+			if crossed != tc.wantCross || sequential != tc.wantSequential {
+				t.Errorf("stateCrossing() = (%v, %v), want (%v, %v)", crossed, sequential, tc.wantCross, tc.wantSequential)
+			}
+		})
+	}
+}
 
 func TestPlayer_Current_ZeroBeforeAnyCall(t *testing.T) {
 	rec := &recordingOnscreens{}

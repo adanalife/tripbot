@@ -1,0 +1,1 @@
+State-line crossings are now recorded as `state_crossing` events when a clip switch changes the airing US state, with the transition (`from`/`to`) and whether the van drove across the line or the playhead jumped there (`sequential`). The events table also gains nullable `video_id`/`video_ts_sec`/`meta` columns so any event can carry what-was-airing context.

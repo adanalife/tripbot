@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/eventbus"
+	"github.com/adanalife/tripbot/pkg/events"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 	playoutClient "github.com/adanalife/tripbot/pkg/playout-client"
@@ -62,6 +63,9 @@ func (p *Player) GetCurrentlyPlaying(ctx context.Context) {
 
 	// if the currently-playing video has changed
 	if p.curVid != p.preVid {
+		// the outgoing clip, kept for the state-crossing comparison below
+		prev := p.CurrentlyPlaying
+
 		// reset the stopwatch
 		p.timeStarted = time.Now()
 
@@ -102,6 +106,16 @@ func (p *Player) GetCurrentlyPlaying(ctx context.Context) {
 			p.OnChange(ctx, p.CurrentlyPlaying)
 		}
 
+		// Record the switch as a state_crossing event when it changes the
+		// airing state. Best-effort, like the RecordPlay above: a failed
+		// insert logs and drops the event rather than disturbing the tick.
+		if crossed, sequential := stateCrossing(prev, p.CurrentlyPlaying); crossed {
+			if err := events.StateCrossing(ctx, p.cfg, prev.State, p.CurrentlyPlaying.State,
+				p.CurrentlyPlaying.ID, sequential); err != nil {
+				slog.ErrorContext(ctx, "error recording state crossing", "err", err)
+			}
+		}
+
 		// show the no-GPS image
 		if p.CurrentlyPlaying.Flagged {
 			// the duration is ignored — the server owns the GPS overlay's duration
@@ -112,10 +126,50 @@ func (p *Player) GetCurrentlyPlaying(ctx context.Context) {
 	}
 }
 
+// stateCrossing reports whether switching prev → cur changes the airing US
+// state, and whether the switch was sequential — cur follows prev in corpus
+// order (next_vid), meaning the van drove across the line rather than the
+// playhead jumping there. Never a crossing when either state is unresolvable
+// (""), which includes the first switch after boot: the previous clip was
+// never observed, so there is nothing to cross from.
+func stateCrossing(prev, cur Video) (crossed, sequential bool) {
+	if prev.State == "" || cur.State == "" || prev.State == cur.State {
+		return false, false
+	}
+	return true, prev.NextVid.Valid && int(prev.NextVid.Int64) == cur.ID
+}
+
 // CurrentProgress represents how long the video has been playing
 // it will be useful eventually for choosing the exact right screenshot
 func (p *Player) CurrentProgress() time.Duration {
 	return time.Since(p.timeStarted)
+}
+
+// Playhead returns the clip on screen and how far into it the stream is.
+//
+// The stopwatch behind CurrentProgress starts when the cron *notices* a clip
+// change, and it only looks once a minute, so both the clip and the offset can
+// be that far behind — a kilometre and a half of driving at highway speed,
+// which is more than enough to undo the precision a per-moment coordinate
+// buys. playout reports its real file and position every five seconds, so that
+// is the answer whenever it's readable; the Player's own state is the fallback
+// for when it isn't.
+func (p *Player) Playhead(ctx context.Context) (Video, time.Duration) {
+	file, pos, ok := p.playout.Playhead(ctx)
+	if !ok {
+		return p.CurrentlyPlaying, p.CurrentProgress()
+	}
+	if slug(file) == p.CurrentlyPlaying.Slug {
+		return p.CurrentlyPlaying, pos
+	}
+	// playout has moved on and the cron hasn't caught up yet. Answer for the
+	// clip actually on screen rather than the one that stopped playing.
+	vid, err := LoadOrCreate(ctx, file)
+	if err != nil {
+		slog.DebugContext(ctx, "playhead clip lookup failed", "err", err, "file", file)
+		return p.CurrentlyPlaying, p.CurrentProgress()
+	}
+	return vid, pos
 }
 
 // Current returns the currently-playing video.

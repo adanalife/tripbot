@@ -20,6 +20,11 @@ type Video interface {
 	GetCurrentlyPlaying(ctx context.Context) video.Video
 	// CurrentProgress reports how long the current clip has been playing.
 	CurrentProgress() time.Duration
+	// PlayheadLocation returns the clip on screen and the moment showing —
+	// where the van was, and the place the pipeline resolved for it. ok is
+	// false when that clip has no per-moment track worth believing, and the
+	// caller falls back to the clip's single fix.
+	PlayheadLocation(ctx context.Context) (vid video.Video, at video.Moment, ok bool)
 	// FindRandomByState returns a random video filmed in the given US state.
 	// Returns terrors.ErrNoFootageForState when no rows match.
 	FindRandomByState(ctx context.Context, state string) (video.Video, error)
@@ -63,6 +68,15 @@ func (r realVideo) CurrentProgress() time.Duration {
 		return 0
 	}
 	return r.player.CurrentProgress()
+}
+
+func (r realVideo) PlayheadLocation(ctx context.Context) (video.Video, video.Moment, bool) {
+	if r.player == nil {
+		return video.Video{}, video.Moment{}, false
+	}
+	vid, elapsed := r.player.Playhead(ctx)
+	at, ok := video.CoordAt(ctx, vid, elapsed)
+	return vid, at, ok
 }
 
 func (r realVideo) FindRandomByState(ctx context.Context, state string) (video.Video, error) {

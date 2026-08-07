@@ -5,4 +5,5 @@ package chatbot
 // doesn't assert on use this.
 type noopGeocoder struct{}
 
-func (noopGeocoder) City(_, _ float64) (string, error) { return "", nil }
+func (noopGeocoder) City(_, _ float64) (string, error)  { return "", nil }
+func (noopGeocoder) State(_, _ float64) (string, error) { return "", nil }
