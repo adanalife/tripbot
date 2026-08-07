@@ -112,7 +112,7 @@ func (e *Emitter) Emit(ctx context.Context, vid video.Video) {
 
 	e.mu.Lock()
 	e.invalidateOnJump(local, vid.State)
-	place, conditions := e.place(vid.State, lat, lng), e.conditionsFor(ctx, local, lat, lng)
+	place, conditions := e.place(vid, lat, lng), e.conditionsFor(ctx, local, lat, lng)
 	e.mu.Unlock()
 
 	_ = e.onscreens.UpdateLocation(ctx, oe.LocationData{
@@ -156,13 +156,24 @@ func (e *Emitter) invalidateOnJump(local time.Time, state string) {
 	}
 }
 
-// place returns the display location, re-geocoding at most once per
-// lookupThrottle once the clip has left the cell the cached city was fetched for.
-// Falls back to the clip's state when geocoding is unavailable or hasn't
-// succeeded yet.
+// place returns the display location.
+//
+// A clip the pipeline has named answers from its own row, which is the whole
+// corpus once the geocode pass has run — and it matters more here than anywhere
+// else, because this feed drives an ambient rotator on a 24/7 stream rather
+// than a command someone types.
+//
+// The lookup below is what remains for a clip the pass hasn't reached: it
+// re-geocodes at most once per lookupThrottle, once the clip has left the cell
+// the cached city was fetched for, and falls back to the clip's state when
+// geocoding is unavailable or hasn't succeeded yet.
 //
 // Caller holds e.mu.
-func (e *Emitter) place(state string, lat, lng float64) string {
+func (e *Emitter) place(vid video.Video, lat, lng float64) string {
+	if vid.City != "" {
+		return vid.Place()
+	}
+	state := vid.State
 	cell := cellOf(lat, lng)
 	if (e.city == "" || cell != e.cityCell) && time.Since(e.cityAt) > lookupThrottle {
 		e.cityAt = time.Now()

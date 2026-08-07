@@ -53,13 +53,20 @@ func (a *App) currentSpot(ctx context.Context) (spot, bool) {
 // place is the human-readable location of the spot — "Bishop, California",
 // "near Mammoth, Wyoming", or "Somewhere in Wyoming".
 //
-// The pipeline resolves this offline at ingest and stores it on the row, so the
-// common path costs no API call at all. The live geocoder is the fallback for a
-// moment the geocode pass hasn't reached, and for clips answering from their
-// clip-level fix.
+// The pipeline resolves this offline and stores it on the row, so no API call is
+// involved: the playhead's moment answers first, then the clip's own coordinate
+// for a clip whose track isn't trustworthy enough to read from. The live
+// geocoder is left as the answer for a row the pass hasn't reached.
 func (a *App) place(ctx context.Context, s spot) string {
 	if p := s.at.Place(); p != "" {
 		return p
+	}
+	// Only once the pass has named the clip. Every clip carries an ingest-time
+	// state, so testing Place() alone would answer "Somewhere in Colorado" for a
+	// moment the live geocoder can still place to the town — and would do it
+	// from the day this ships, before the pass has run anywhere.
+	if s.vid.City != "" {
+		return s.vid.Place()
 	}
 	address, err := a.Geocoder.City(s.at.Lat, s.at.Lng)
 	if err != nil {
