@@ -15,26 +15,31 @@ import (
 // exact interval boundary instead of racing the real scheduler.
 const watchInterval = time.Second
 
-// step is one tick's worth of scripted answers from OBS and the platform.
+// step is one tick's worth of scripted answers from OBS and the platform,
+// including how a restart fired on this tick resolves.
 type step struct {
-	obsActive bool
-	live      bool
-	obsErr    error
-	liveErr   error
+	obsActive  bool
+	live       bool
+	obsErr     error
+	liveErr    error
+	restartErr error
 }
 
 // The scripted answers the tests compose runs out of. A miss is the case the
 // watchdog exists for: OBS happily pushing at a channel nobody can watch.
 var (
-	miss    = step{obsActive: true}
-	healthy = step{obsActive: true, live: true}
-	obsIdle = step{}
-	unknown = step{obsActive: true, liveErr: errors.New("live-check transient")}
-	obsDown = step{obsErr: errors.New("obs websocket unreachable")}
+	miss      = step{obsActive: true}
+	healthy   = step{obsActive: true, live: true}
+	obsIdle   = step{}
+	unknown   = step{obsActive: true, liveErr: errors.New("live-check transient")}
+	obsDown   = step{obsErr: errors.New("obs websocket unreachable")}
+	missNoFix = step{obsActive: true, restartErr: errors.New("StartStream: OutputRunning (500)")}
 )
 
 // fixture answers the watchdog's hooks from the currently-staged step and
-// counts restarts. The mutex is load-bearing even inside a synctest bubble:
+// counts restart attempts — a restart the staged step fails still counts, which
+// is what the cooldown tests below measure. The mutex is load-bearing even
+// inside a synctest bubble:
 // the watchdog still runs on its own goroutine, so -race wants the shared
 // state guarded.
 type fixture struct {
@@ -71,7 +76,7 @@ func (f *fixture) deps() WatchdogDeps {
 			f.mu.Lock()
 			defer f.mu.Unlock()
 			f.restarts++
-			return nil
+			return f.cur.restartErr
 		},
 	}
 }
@@ -101,6 +106,51 @@ func run(t *testing.T, script []step, threshold int, cooldown time.Duration) int
 		restarts = f.restartCount()
 	})
 	return restarts
+}
+
+// The output reports active for several polls before the teardown completes —
+// the span the old fixed pause guessed at and a half-open socket overran.
+func TestAwaitOutputStopped_WaitsOutTheTeardown(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		polls := 0
+		err := awaitOutputStopped(t.Context(), func(context.Context) (bool, error) {
+			polls++
+			return polls < 4, nil
+		})
+		if err != nil {
+			t.Fatalf("awaitOutputStopped: %v", err)
+		}
+		if polls != 4 {
+			t.Fatalf("status polls: want 4 (three active, then stopped), got %d", polls)
+		}
+	})
+}
+
+// An output that never goes down fails the restart rather than issuing a
+// StartStream that OBS would reject with OutputRunning.
+func TestAwaitOutputStopped_TimesOutWhileStillActive(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		err := awaitOutputStopped(t.Context(), func(context.Context) (bool, error) {
+			return true, nil
+		})
+		if err == nil {
+			t.Fatal("awaitOutputStopped: want an error when the output never stops")
+		}
+	})
+}
+
+// An unreachable OBS says nothing about the output, so the restart aborts
+// instead of starting a second output on top of one that may still be up.
+func TestAwaitOutputStopped_StatusErrorAborts(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		want := errors.New("obs websocket unreachable")
+		err := awaitOutputStopped(t.Context(), func(context.Context) (bool, error) {
+			return false, want
+		})
+		if !errors.Is(err, want) {
+			t.Fatalf("awaitOutputStopped: want %v, got %v", want, err)
+		}
+	})
 }
 
 func TestWatchSilentDisconnect_FiresAfterThresholdMisses(t *testing.T) {
@@ -141,6 +191,37 @@ func TestWatchSilentDisconnect_HeldRecoveryRetiresCooldown(t *testing.T) {
 	}
 	if got := run(t, script, 3, time.Hour); got != 2 {
 		t.Fatalf("restart count: want 2 (held recovery retires the cooldown), got %d", got)
+	}
+}
+
+// A restart that fails arms the cooldown just like one that succeeds. Stamping
+// the attempt only past the error check left a failing recovery with no
+// timestamp to measure the cooldown against, so it re-fired on every single
+// tick — which is how one OBS teardown that outlived the restart's settle pause
+// became 24 rejected StartStreams in 9 hours, each one re-stopping an output
+// already mid-teardown.
+func TestWatchSilentDisconnect_FailedRestartArmsCooldown(t *testing.T) {
+	script := []step{
+		missNoFix, missNoFix, missNoFix, // → attempt 1, fails
+		missNoFix, missNoFix, missNoFix, // cooldown blocks the retry
+		missNoFix, missNoFix, missNoFix,
+	}
+	if got := run(t, script, 3, time.Hour); got != 1 {
+		t.Fatalf("restart attempts: want 1 (a failed restart arms the cooldown), got %d", got)
+	}
+}
+
+// The cooldown rate-limits a failing recovery rather than abandoning it: the
+// channel is still dark, so once the timer elapses it gets another attempt.
+func TestWatchSilentDisconnect_FailedRestartRetriesAfterCooldown(t *testing.T) {
+	script := make([]step, 0, 8)
+	for range 8 {
+		script = append(script, missNoFix)
+	}
+	// Threshold 3 puts the first attempt on tick 3; a 3-tick cooldown puts the
+	// second on tick 6, leaving ticks 7-8 suppressed again.
+	if got := run(t, script, 3, 3*watchInterval); got != 2 {
+		t.Fatalf("restart attempts: want 2 (cooldown rate-limits, it doesn't abandon), got %d", got)
 	}
 }
 
