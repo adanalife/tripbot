@@ -1,7 +1,10 @@
 package chatbot
 
 import (
+	"bytes"
 	"context"
+	"log/slog"
+	"strings"
 	"testing"
 
 	"github.com/adanalife/tripbot/pkg/video"
@@ -333,6 +336,28 @@ func TestRunCommand_MiddleHideStillHides(t *testing.T) {
 
 	if len(rec.Calls) != 1 || rec.Calls[0] != "HideMiddleText()" {
 		t.Errorf("overlay calls = %v, want [HideMiddleText()]", rec.Calls)
+	}
+}
+
+// A command this bot doesn't have is viewer traffic, not a fault, so it must
+// stay under Error — the level pkg/telemetry converts into a Sentry event.
+// !watchtime (a trigger from some other channel's bot) reached prod as an error
+// and minted its own Sentry issue.
+func TestRunCommand_UnknownCommandStaysBelowError(t *testing.T) {
+	app := newTestApp(video.Video{})
+
+	var buf bytes.Buffer
+	restore := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	defer slog.SetDefault(restore)
+
+	app.runCommand(context.Background(), newTestUser(adminUser), "!watchtime")
+
+	if strings.Contains(buf.String(), "level=ERROR") {
+		t.Errorf("unknown command logged at ERROR (reaches Sentry); log = %q", buf.String())
+	}
+	if !strings.Contains(buf.String(), "!watchtime") {
+		t.Errorf("unknown command not logged at all; log = %q", buf.String())
 	}
 }
 

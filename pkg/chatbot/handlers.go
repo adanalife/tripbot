@@ -2,7 +2,6 @@ package chatbot
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"strings"
 	"time"
@@ -259,8 +258,15 @@ func (a *App) runCommand(ctx context.Context, user *users.User, message string) 
 	}
 
 	if strings.HasPrefix(command, "!") {
-		err := fmt.Errorf("command %s not found", command)
-		slog.ErrorContext(ctx, "error running command", "err", err)
+		// A viewer reaching for a command this bot doesn't have is chat traffic,
+		// not an application fault: a typo, or a trigger they know from another
+		// channel's bot (!watchtime showed up in prod this way). The same branch
+		// also catches a command that exists but isn't indexed on this platform,
+		// which commandEnabled makes a deliberate outcome. At Error level every
+		// distinct token became its own Sentry issue and drew down the free-tier
+		// budget. Info keeps it in the logs and Loki, and attaches it to real
+		// events as a breadcrumb, at no quota cost.
+		slog.InfoContext(ctx, "unknown chat command", "command", command)
 	}
 }
 
