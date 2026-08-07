@@ -2,6 +2,7 @@ package video
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/adanalife/tripbot/pkg/database/testdb"
@@ -198,8 +199,8 @@ func TestFindNextDaytime_NoDaytimeAhead(t *testing.T) {
 	backdate(onlyNight, "2099-06-15T09:00:00Z") // 03:00 MDT June 15 — night
 
 	_, err := FindNextDaytime(ctx, reload(t, current.ID))
-	if _, ok := err.(*terrors.NoDaytimeFoundError); !ok {
-		t.Fatalf("FindNextDaytime err = %v, want *NoDaytimeFoundError", err)
+	if !errors.Is(err, terrors.ErrNoDaytimeFound) {
+		t.Fatalf("FindNextDaytime err = %v, want terrors.ErrNoDaytimeFound", err)
 	}
 }
 
