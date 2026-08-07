@@ -1,0 +1,1 @@
+The admin map's full-route overlay now draws the stretches it inferred differently from the ones it read. Clips whose coordinates were bridged from their neighbours contribute their whole track instead of a single point, so the route follows the road through them rather than cutting a straight line across.

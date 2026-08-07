@@ -8,6 +8,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/adanalife/tripbot/pkg/video"
 )
 
 // withCorpusRoute stages the route the handler reads, and clears the built
@@ -16,10 +18,27 @@ import (
 // staging a route is only meaningful alongside dropping it.
 func withCorpusRoute(t *testing.T, pts [][2]float64) {
 	t.Helper()
+	withRoutePoints(t, trusted(pts))
+}
+
+// withRoutePoints is the banded form; withCorpusRoute is the shorthand for the
+// common case where every point is a read one.
+func withRoutePoints(t *testing.T, pts []video.RoutePoint) {
+	t.Helper()
 	saved := corpusRoute
 	t.Cleanup(func() { corpusRoute = saved; resetCorpusCache() })
-	corpusRoute = func(context.Context) [][2]float64 { return pts }
+	corpusRoute = func(context.Context) []video.RoutePoint { return pts }
 	resetCorpusCache()
+}
+
+// trusted tags plain coordinates as read ones, so a test that doesn't care
+// about banding doesn't have to say so at every point.
+func trusted(pts [][2]float64) []video.RoutePoint {
+	out := make([]video.RoutePoint, len(pts))
+	for i, p := range pts {
+		out[i] = video.RoutePoint{Lat: p[0], Lng: p[1], Band: video.BandTrusted}
+	}
+	return out
 }
 
 func resetCorpusCache() {
@@ -37,14 +56,50 @@ func TestMapCorpusHandler(t *testing.T) {
 	if ct := rec.Header().Get("Content-Type"); ct != "application/json" {
 		t.Errorf("Content-Type = %q, want application/json", ct)
 	}
-	var got [][][2]float64
+	var got []routeSegment
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 		t.Fatalf("body not valid JSON: %v\n%s", err, rec.Body.String())
 	}
-	// The two seeded points are ~9 miles apart (< the gap threshold), so they
-	// stay in a single segment.
-	if len(got) != 1 || len(got[0]) != 2 || got[0][0][0] != 41.5 || got[0][1][1] != -110.3 {
+	// The two seeded points are ~9 miles apart (< the gap threshold) and share
+	// a band, so they stay in a single segment.
+	if len(got) != 1 || len(got[0].Points) != 2 ||
+		got[0].Points[0][0] != 41.5 || got[0].Points[1][1] != -110.3 {
 		t.Errorf("route = %v, want one segment of the two seeded points", got)
+	}
+	if got[0].Band != video.BandTrusted {
+		t.Errorf("band = %q, want %q", got[0].Band, video.BandTrusted)
+	}
+}
+
+// A bridged stretch has to arrive as its own segment, or the map cannot colour
+// it: a Leaflet polyline is one colour, so the split is what carries the band.
+// The boundary point belongs to both, so the two colours meet rather than
+// leaving a hole in a line the van never stopped driving.
+func TestSplitOnGaps_SplitsWhereTheBandChanges(t *testing.T) {
+	pts := []video.RoutePoint{
+		{Lat: 41.50, Lng: -110.20, Band: video.BandTrusted},
+		{Lat: 41.51, Lng: -110.21, Band: video.BandTrusted},
+		{Lat: 41.52, Lng: -110.22, Band: video.BandSynthetic},
+		{Lat: 41.53, Lng: -110.23, Band: video.BandTrusted},
+	}
+	segs := splitOnGaps(pts, maxRouteGapMiles)
+
+	if len(segs) != 3 {
+		t.Fatalf("got %d segments, want 3: %v", len(segs), segs)
+	}
+	bands := []string{segs[0].Band, segs[1].Band, segs[2].Band}
+	want := []string{video.BandTrusted, video.BandSynthetic, video.BandTrusted}
+	for i := range want {
+		if bands[i] != want[i] {
+			t.Errorf("segment %d band = %q, want %q", i, bands[i], want[i])
+		}
+	}
+	// Each boundary point is repeated, so consecutive segments share an end.
+	if segs[0].Points[len(segs[0].Points)-1] != segs[1].Points[0] {
+		t.Errorf("segments 0 and 1 do not meet: %v vs %v", segs[0].Points, segs[1].Points)
+	}
+	if segs[1].Points[len(segs[1].Points)-1] != segs[2].Points[0] {
+		t.Errorf("segments 1 and 2 do not meet: %v vs %v", segs[1].Points, segs[2].Points)
 	}
 }
 
@@ -55,17 +110,17 @@ func TestSplitOnGaps(t *testing.T) {
 		{41.50, -110.20}, {41.51, -110.21}, // Wyoming
 		{34.05, -118.24}, {34.06, -118.25}, // Los Angeles — ~700mi away
 	}
-	segs := splitOnGaps(pts, maxRouteGapMiles)
+	segs := splitOnGaps(trusted(pts), maxRouteGapMiles)
 	if len(segs) != 2 {
 		t.Fatalf("got %d segments, want 2: %v", len(segs), segs)
 	}
-	if len(segs[0]) != 2 || len(segs[1]) != 2 {
-		t.Errorf("segment sizes = %d,%d, want 2,2", len(segs[0]), len(segs[1]))
+	if len(segs[0].Points) != 2 || len(segs[1].Points) != 2 {
+		t.Errorf("segment sizes = %d,%d, want 2,2", len(segs[0].Points), len(segs[1].Points))
 	}
 
 	// A contiguous run under the threshold stays a single segment.
 	near := [][2]float64{{41.50, -110.20}, {41.55, -110.25}, {41.60, -110.30}}
-	if segs := splitOnGaps(near, maxRouteGapMiles); len(segs) != 1 {
+	if segs := splitOnGaps(trusted(near), maxRouteGapMiles); len(segs) != 1 {
 		t.Errorf("contiguous run split into %d segments, want 1", len(segs))
 	}
 
@@ -103,9 +158,9 @@ func TestMapCorpusHandler_CachesTheBuiltRoute(t *testing.T) {
 	reads := 0
 	saved := corpusRoute
 	t.Cleanup(func() { corpusRoute = saved; resetCorpusCache() })
-	corpusRoute = func(context.Context) [][2]float64 {
+	corpusRoute = func(context.Context) []video.RoutePoint {
 		reads++
-		return [][2]float64{{41.5, -110.2}, {41.6, -110.3}}
+		return trusted([][2]float64{{41.5, -110.2}, {41.6, -110.3}})
 	}
 	resetCorpusCache()
 
@@ -123,7 +178,7 @@ func TestMapCorpusHandler_EmptyRouteIsNotCached(t *testing.T) {
 	reads := 0
 	saved := corpusRoute
 	t.Cleanup(func() { corpusRoute = saved; resetCorpusCache() })
-	corpusRoute = func(context.Context) [][2]float64 { reads++; return nil }
+	corpusRoute = func(context.Context) []video.RoutePoint { reads++; return nil }
 	resetCorpusCache()
 
 	rec := httptest.NewRecorder()

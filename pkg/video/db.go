@@ -251,18 +251,22 @@ func FindNextDaytime(ctx context.Context, after Video) (Video, error) {
 	return Video{}, terrors.ErrNoDaytimeFound
 }
 
-// A clip with a trusted per-moment track contributes that whole track; one
-// without contributes the single fix it has, so a gap in the coords stage's
+// A clip with a per-moment track worth drawing contributes that whole track;
+// one without contributes the single fix it has, so a gap in the coords stage's
 // coverage bends the route slightly rather than breaking the line. Ordering is
 // (film time, offset into the clip) — by clip alone the points inside a clip
 // come back in whatever order the scan found them, which draws a scribble.
+//
+// The confidence rides along so the map can band the line by where each stretch
+// came from. It is the clip's, repeated on every one of that clip's points,
+// which is what makes a band a contiguous run rather than a per-point property.
 const corpusRouteQuery = `
-SELECT lat, lng FROM (
-    SELECT c.lat, c.lng, v.date_filmed, c.ts_sec
+SELECT lat, lng, coord_confidence FROM (
+    SELECT c.lat, c.lng, v.coord_confidence, v.date_filmed, c.ts_sec
     FROM video_coords c JOIN videos v ON v.id = c.video_id
     WHERE NOT v.flagged AND v.coord_confidence >= @minConfidence AND c.ts_sec IS NOT NULL
   UNION ALL
-    SELECT v.lat, v.lng, v.date_filmed, 0
+    SELECT v.lat, v.lng, v.coord_confidence, v.date_filmed, 0
     FROM videos v
     WHERE NOT v.flagged AND (v.lat != 0 OR v.lng != 0)
       AND (v.coord_confidence IS NULL OR v.coord_confidence < @minConfidence)
@@ -274,26 +278,32 @@ SELECT lat, lng FROM (
 // This is the per-moment track, not one point per clip: at clip granularity
 // every curve, switchback and cloverleaf of the trip is drawn as a straight
 // chord between points ~4 miles apart. Flagged clips and 0/0 are excluded.
-// Returns [][2]float64 of {lat, lng}; nil on error.
+// Returns nil on error.
+//
+// Each point carries the band its clip falls in, so the caller can draw the
+// bridged stretches differently from the read ones. A synthetic track is drawn
+// because the map wants the road's shape, which it has; it is still far too
+// coarse to answer a question with, which is why CoordAt keeps the higher bar.
 //
 // The result is large — a few hundred thousand points — and callers are
 // expected to simplify before serving it. See pkg/server's map handler.
-func CorpusRoute(ctx context.Context) [][2]float64 {
+func CorpusRoute(ctx context.Context) []RoutePoint {
 	type coord struct {
-		Lat float64
-		Lng float64
+		Lat             float64
+		Lng             float64
+		CoordConfidence *float64
 	}
 	var rows []coord
 	err := database.GormDB().WithContext(ctx).
-		Raw(corpusRouteQuery, sql.Named("minConfidence", minCoordConfidence)).
+		Raw(corpusRouteQuery, sql.Named("minConfidence", minRouteConfidence)).
 		Scan(&rows).Error
 	if err != nil {
 		slog.ErrorContext(ctx, "corpus route query failed", "err", err)
 		return nil
 	}
-	out := make([][2]float64, len(rows))
+	out := make([]RoutePoint, len(rows))
 	for i, r := range rows {
-		out[i] = [2]float64{r.Lat, r.Lng}
+		out[i] = RoutePoint{Lat: r.Lat, Lng: r.Lng, Band: RouteBand(r.CoordConfidence)}
 	}
 	return out
 }
