@@ -71,7 +71,7 @@ func corpusBody(ctx context.Context) []byte {
 	}
 	segs := splitOnGaps(pts, maxRouteGapMiles)
 	for i, seg := range segs {
-		segs[i] = downsample(simplify(seg, corpusEpsilonMeters), maxCorpusPoints)
+		segs[i].Points = downsample(simplify(seg.Points, corpusEpsilonMeters), maxCorpusPoints)
 	}
 	body, err := json.Marshal(segs)
 	if err != nil {
@@ -85,9 +85,10 @@ func corpusBody(ctx context.Context) []byte {
 }
 
 // mapCorpusHandler serves GET /admin/map/corpus: the full dashcam route as JSON
-// [[[lat,lng],…],…] — a list of segments, broken wherever consecutive points
-// jump more than maxRouteGapMiles (trip boundaries). Leaflet renders a nested
-// array as a multi-polyline, so each segment draws as a disconnected line.
+// [{"band":…,"points":[[lat,lng],…]},…] — a list of segments, broken wherever
+// consecutive points jump more than maxRouteGapMiles (trip boundaries) or the
+// band changes. One band per segment is what lets Leaflet colour it: a polyline
+// is a single colour, so the split does the work a gradient would otherwise.
 // Loaded lazily by the map's "show full route" toggle, cached an hour (the
 // corpus rarely changes).
 func mapCorpusHandler(w http.ResponseWriter, r *http.Request) {
@@ -102,24 +103,42 @@ func mapCorpusHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// routeSegment is one drawable run of the route: points that are contiguous in
+// space and share a band, so the whole thing renders as one coloured polyline.
+type routeSegment struct {
+	Band   string       `json:"band"`
+	Points [][2]float64 `json:"points"`
+}
+
 // splitOnGaps breaks an ordered point list into contiguous segments, starting a
 // new segment whenever the great-circle distance between consecutive points
-// exceeds maxMiles. Returns an empty (non-nil) slice for empty input so the JSON
-// is [] rather than null.
-func splitOnGaps(pts [][2]float64, maxMiles float64) [][][2]float64 {
-	segs := make([][][2]float64, 0)
+// exceeds maxMiles, or the band changes. Returns an empty (non-nil) slice for
+// empty input so the JSON is [] rather than null.
+//
+// A band change repeats the boundary point in both segments. Without it the
+// line has a hole at every transition — and with 139 bridged clips scattered
+// through the corpus that is 139 visible breaks in a line that never stopped.
+func splitOnGaps(pts []video.RoutePoint, maxMiles float64) []routeSegment {
+	segs := make([]routeSegment, 0)
 	if len(pts) == 0 {
 		return segs
 	}
-	cur := [][2]float64{pts[0]}
+	cur := routeSegment{Band: pts[0].Band, Points: [][2]float64{{pts[0].Lat, pts[0].Lng}}}
 	for i := 1; i < len(pts); i++ {
 		prev, p := pts[i-1], pts[i]
-		if milesBetween(prev[0], prev[1], p[0], p[1]) > maxMiles {
+		xy := [2]float64{p.Lat, p.Lng}
+		switch {
+		case milesBetween(prev.Lat, prev.Lng, p.Lat, p.Lng) > maxMiles:
 			segs = append(segs, cur)
-			cur = [][2]float64{p}
-			continue
+			cur = routeSegment{Band: p.Band, Points: [][2]float64{xy}}
+		case p.Band != cur.Band:
+			// Carry the shared point across so the two colours meet.
+			cur.Points = append(cur.Points, xy)
+			segs = append(segs, cur)
+			cur = routeSegment{Band: p.Band, Points: [][2]float64{xy}}
+		default:
+			cur.Points = append(cur.Points, xy)
 		}
-		cur = append(cur, p)
 	}
 	return append(segs, cur)
 }

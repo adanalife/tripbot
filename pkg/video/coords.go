@@ -30,6 +30,49 @@ const coordWindow = 10.0
 // more; outside it, proximity wins.
 const ocrWindow = 1.5
 
+// Route bands name where a stretch of the drawn route got its coordinates, so
+// the map can say which parts are read and which are inferred. They come from
+// the two thresholds the pipeline already writes against, not from a new scale:
+// 0.8 is the trusted gate every consumer applies, and 0.5 is exactly what the
+// synth pass stamps on a clip it bridged from its neighbours.
+const (
+	BandTrusted   = "trusted"   // the clip's own OCR track, believed
+	BandSynthetic = "synthetic" // interpolated across the clip from trusted neighbours
+	BandUntrusted = "untrusted" // no track worth drawing; one point for the whole clip
+)
+
+// minRouteConfidence is how believable a track has to be to be drawn per-moment
+// rather than as a single point. Lower than minCoordConfidence on purpose: a
+// bridged track is far too coarse to answer "where are we" with, but it is
+// still the real shape of the road, and the alternative on the map is a
+// straight chord between clips ~4 miles apart.
+const minRouteConfidence = SynthConfidence
+
+// SynthConfidence is what video-pipeline's synth pass writes on a clip whose
+// track it bridged. Named here because the map keys a band off it; the value
+// is owned by the pipeline, not by tripbot.
+const SynthConfidence = 0.5
+
+// RoutePoint is one point of the drawn route, tagged with where its clip's
+// coordinates came from.
+type RoutePoint struct {
+	Lat, Lng float64
+	Band     string
+}
+
+// RouteBand names the confidence tier a clip's coordinates come from.
+func RouteBand(confidence *float64) string {
+	switch {
+	case confidence == nil:
+		return BandUntrusted
+	case *confidence >= minCoordConfidence:
+		return BandTrusted
+	case *confidence >= minRouteConfidence:
+		return BandSynthetic
+	}
+	return BandUntrusted
+}
+
 // nearPlaceLimit is how far from a named place a moment can be and still be
 // worth naming it. Past this "near X" stops meaning anything and the state is
 // the more honest answer. The corpus is mostly interstate — 57% of moments sit

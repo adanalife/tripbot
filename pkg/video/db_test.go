@@ -229,9 +229,9 @@ func TestCorpusRoute_OrdersByFilmTimeAndExcludesFlaggedAndZeroes(t *testing.T) {
 	backdate(earlier, "2018-05-14T00:00:00Z")
 	backdate(later, "2018-05-15T00:00:00Z")
 
-	indexOf := func(route [][2]float64, want [2]float64) int {
+	indexOf := func(route []RoutePoint, want [2]float64) int {
 		for i, c := range route {
-			if c == want {
+			if [2]float64{c.Lat, c.Lng} == want {
 				return i
 			}
 		}
