@@ -11,7 +11,7 @@ import (
 // lands on the MiddleText overlay the same way the HTTP handler would
 // (s.MiddleText.Show is the shared path).
 func TestHandleMiddleShow_DecodesAndShows(t *testing.T) {
-	s := &Server{MiddleText: newMiddleText()}
+	s := &Server{cfg: testConf, MiddleText: newMiddleText()}
 
 	msg := &nats.Msg{
 		Subject: "tripbot.test.onscreens.middle.show",
@@ -19,11 +19,11 @@ func TestHandleMiddleShow_DecodesAndShows(t *testing.T) {
 	}
 	s.handleMiddleShow(msg)
 
-	if !s.MiddleText.IsShowing {
+	if !s.MiddleText.IsShowing() {
 		t.Errorf("MiddleText.IsShowing = false, want true")
 	}
-	if s.MiddleText.Content != "hello from nats" {
-		t.Errorf("MiddleText.Content = %q, want %q", s.MiddleText.Content, "hello from nats")
+	if s.MiddleText.Content() != "hello from nats" {
+		t.Errorf("MiddleText.Content = %q, want %q", s.MiddleText.Content(), "hello from nats")
 	}
 }
 
@@ -32,8 +32,8 @@ func TestHandleMiddleShow_DecodesAndShows(t *testing.T) {
 // Content must not change. (MiddleText starts IsShowing=true by design — it
 // carries pre-restart text — so this asserts on Content.)
 func TestHandleMiddleShow_RejectsEmptyMsg(t *testing.T) {
-	s := &Server{MiddleText: newMiddleText()}
-	s.MiddleText.Content = "pre-existing"
+	s := &Server{cfg: testConf, MiddleText: newMiddleText()}
+	s.MiddleText.SetContent("pre-existing")
 
 	msg := &nats.Msg{
 		Subject: "tripbot.test.onscreens.middle.show",
@@ -41,15 +41,15 @@ func TestHandleMiddleShow_RejectsEmptyMsg(t *testing.T) {
 	}
 	s.handleMiddleShow(msg)
 
-	if s.MiddleText.Content != "pre-existing" {
-		t.Errorf("MiddleText.Content = %q, want pre-existing (empty msg should be a no-op)", s.MiddleText.Content)
+	if s.MiddleText.Content() != "pre-existing" {
+		t.Errorf("MiddleText.Content = %q, want pre-existing (empty msg should be a no-op)", s.MiddleText.Content())
 	}
 }
 
 // TestHandleMiddleShow_RejectsBadJSON covers a non-JSON payload.
 func TestHandleMiddleShow_RejectsBadJSON(t *testing.T) {
-	s := &Server{MiddleText: newMiddleText()}
-	s.MiddleText.Content = "pre-existing"
+	s := &Server{cfg: testConf, MiddleText: newMiddleText()}
+	s.MiddleText.SetContent("pre-existing")
 
 	msg := &nats.Msg{
 		Subject: "tripbot.test.onscreens.middle.show",
@@ -57,8 +57,8 @@ func TestHandleMiddleShow_RejectsBadJSON(t *testing.T) {
 	}
 	s.handleMiddleShow(msg)
 
-	if s.MiddleText.Content != "pre-existing" {
-		t.Errorf("MiddleText.Content = %q, want pre-existing (bad JSON should be a no-op)", s.MiddleText.Content)
+	if s.MiddleText.Content() != "pre-existing" {
+		t.Errorf("MiddleText.Content = %q, want pre-existing (bad JSON should be a no-op)", s.MiddleText.Content())
 	}
 }
 
@@ -69,10 +69,10 @@ func emptyMsg(subject string) *nats.Msg {
 }
 
 func TestHandleMiddleHide(t *testing.T) {
-	s := &Server{MiddleText: newMiddleText()}
+	s := &Server{cfg: testConf, MiddleText: newMiddleText()}
 	s.MiddleText.Show("something")
 	s.handleMiddleHide(emptyMsg("tripbot.test.onscreens.middle.hide"))
-	if s.MiddleText.IsShowing {
+	if s.MiddleText.IsShowing() {
 		t.Error("MiddleText.IsShowing = true, want false after hide")
 	}
 }
@@ -86,29 +86,29 @@ func TestHandleLeaderboardShow(t *testing.T) {
 	}
 	s.handleLeaderboardShow(msg)
 
-	if !s.Leaderboard.IsShowing {
+	if !s.Leaderboard.IsShowing() {
 		t.Error("Leaderboard.IsShowing = false, want true")
 	}
 	// Server renders the HTML from {title, rows}.
-	if !strings.Contains(s.Leaderboard.Content, `<div class="lb-title">Monthly Miles</div>`) {
-		t.Errorf("Leaderboard.Content missing rendered title, got %q", s.Leaderboard.Content)
+	if !strings.Contains(s.Leaderboard.Content(), `<div class="lb-title">Monthly Miles</div>`) {
+		t.Errorf("Leaderboard.Content missing rendered title, got %q", s.Leaderboard.Content())
 	}
-	if !strings.Contains(s.Leaderboard.Content, "(alice)") {
-		t.Errorf("Leaderboard.Content missing user, got %q", s.Leaderboard.Content)
+	if !strings.Contains(s.Leaderboard.Content(), "(alice)") {
+		t.Errorf("Leaderboard.Content missing user, got %q", s.Leaderboard.Content())
 	}
 }
 
 func TestHandleLeaderboardShow_RejectsBadJSON(t *testing.T) {
 	s := &Server{Leaderboard: newLeaderboardOnscreen()}
-	s.Leaderboard.Content = "pre-existing"
+	s.Leaderboard.SetContent("pre-existing")
 
 	s.handleLeaderboardShow(&nats.Msg{
 		Subject: "tripbot.test.onscreens.leaderboard.show",
 		Data:    []byte(`not json`),
 	})
 
-	if s.Leaderboard.Content != "pre-existing" {
-		t.Errorf("Leaderboard.Content = %q, want pre-existing (bad JSON should be a no-op)", s.Leaderboard.Content)
+	if s.Leaderboard.Content() != "pre-existing" {
+		t.Errorf("Leaderboard.Content = %q, want pre-existing (bad JSON should be a no-op)", s.Leaderboard.Content())
 	}
 }
 
@@ -116,7 +116,7 @@ func TestHandleLeaderboardHide(t *testing.T) {
 	s := &Server{Leaderboard: newLeaderboardOnscreen()}
 	s.Leaderboard.ShowFor("x", leaderboardDuration)
 	s.handleLeaderboardHide(emptyMsg("tripbot.test.onscreens.leaderboard.hide"))
-	if s.Leaderboard.IsShowing {
+	if s.Leaderboard.IsShowing() {
 		t.Error("Leaderboard.IsShowing = true, want false after hide")
 	}
 }
@@ -128,25 +128,25 @@ func TestHandleTimewarpShow(t *testing.T) {
 		Data:    []byte(`{"username":"viewer1","emitted_at":"2026-06-18T16:00:00Z"}`),
 	}
 	s.handleTimewarpShow(msg)
-	if !s.Timewarp.IsShowing {
+	if !s.Timewarp.IsShowing() {
 		t.Error("Timewarp.IsShowing = false, want true")
 	}
 	// The triggering chatter's username rides on Content for the credit line.
-	if s.Timewarp.Content != "viewer1" {
-		t.Errorf("Timewarp.Content = %q, want viewer1", s.Timewarp.Content)
+	if s.Timewarp.Content() != "viewer1" {
+		t.Errorf("Timewarp.Content = %q, want viewer1", s.Timewarp.Content())
 	}
 }
 
-// A timewarp.show with no username (the empty-envelope shape the old wire
-// used) still triggers the warp — just with no credit line.
+// A timewarp.show with no username still triggers the warp — just with no
+// credit line.
 func TestHandleTimewarpShow_NoUsername(t *testing.T) {
 	s := &Server{Timewarp: newTimewarp()}
 	s.handleTimewarpShow(emptyMsg("tripbot.test.onscreens.timewarp.show"))
-	if !s.Timewarp.IsShowing {
+	if !s.Timewarp.IsShowing() {
 		t.Error("Timewarp.IsShowing = false, want true")
 	}
-	if s.Timewarp.Content != "" {
-		t.Errorf("Timewarp.Content = %q, want empty", s.Timewarp.Content)
+	if s.Timewarp.Content() != "" {
+		t.Errorf("Timewarp.Content = %q, want empty", s.Timewarp.Content())
 	}
 }
 
@@ -154,7 +154,7 @@ func TestHandleTimewarpHide(t *testing.T) {
 	s := &Server{Timewarp: newTimewarp()}
 	s.Timewarp.ShowFor("Timewarp!", timewarpDuration)
 	s.handleTimewarpHide(emptyMsg("tripbot.test.onscreens.timewarp.hide"))
-	if s.Timewarp.IsShowing {
+	if s.Timewarp.IsShowing() {
 		t.Error("Timewarp.IsShowing = true, want false after hide")
 	}
 }
@@ -162,11 +162,11 @@ func TestHandleTimewarpHide(t *testing.T) {
 func TestHandleGPSShowHide(t *testing.T) {
 	s := &Server{GPS: newGPSOnscreen()}
 	s.handleGPSShow(emptyMsg("tripbot.test.onscreens.gps.show"))
-	if !s.GPS.IsShowing {
+	if !s.GPS.IsShowing() {
 		t.Error("GPS.IsShowing = false, want true after show")
 	}
 	s.handleGPSHide(emptyMsg("tripbot.test.onscreens.gps.hide"))
-	if s.GPS.IsShowing {
+	if s.GPS.IsShowing() {
 		t.Error("GPS.IsShowing = true, want false after hide")
 	}
 }
@@ -174,10 +174,10 @@ func TestHandleGPSShowHide(t *testing.T) {
 // TestHideLenientOnEmptyBody asserts a hide with a nil/garbage body still
 // hides — the subject is the whole intent.
 func TestHideLenientOnEmptyBody(t *testing.T) {
-	s := &Server{MiddleText: newMiddleText()}
+	s := &Server{cfg: testConf, MiddleText: newMiddleText()}
 	s.MiddleText.Show("x")
 	s.handleMiddleHide(&nats.Msg{Subject: "tripbot.test.onscreens.middle.hide", Data: nil})
-	if s.MiddleText.IsShowing {
+	if s.MiddleText.IsShowing() {
 		t.Error("hide should act regardless of body")
 	}
 }

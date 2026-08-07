@@ -17,10 +17,10 @@ var sentryEventsDropped = mustCounter(
 
 // SentryEventsDropped exposes the drop counter; call SentryEventsDropped.Inc(reason)
 // from inside BeforeSend when an event is being suppressed.
-var SentryEventsDropped = sentryDroppedIface{counter: sentryEventsDropped}
+var SentryEventsDropped = sentryDroppedCounter{counter: sentryEventsDropped}
 
-type sentryDroppedIface struct{ counter metric.Int64Counter }
+type sentryDroppedCounter struct{ counter metric.Int64Counter }
 
-func (s sentryDroppedIface) Inc(reason string) {
+func (s sentryDroppedCounter) Inc(reason string) {
 	s.counter.Add(context.Background(), 1, metric.WithAttributes(attribute.String("reason", reason)))
 }

@@ -12,7 +12,6 @@ data:
   DATABASE_HOST: postgres.stage-1-data.svc.cluster.local
   DISCORD_GUILD_ID: "607964164220125258"
   ENV: staging
-  EXTERNAL_URL: https://tripbot-twitch.stage.whereisdana.today
   GOOGLE_APPS_PROJECT_ID: tripbot-stage
   MAPS_OUTPUT_DIR: /opt/data/maps
   NATS_URL: nats://nats.stage-1-platform.svc.cluster.local:4222
@@ -38,13 +37,14 @@ metadata:
   name: tripbot-twitch
   namespace: stage-1
 spec:
+  replicas: 0
   selector:
     matchLabels:
       app: tripbot-twitch
   template:
     metadata:
       annotations:
-        adanalife.dev/config-hash: faa3963d69
+        adanalife.dev/config-hash: 63087c99a7
       labels:
         app: tripbot-twitch
     spec:
@@ -113,6 +113,10 @@ spec:
             capabilities:
               drop:
                 - ALL
+          volumeMounts:
+            - mountPath: /opt/tripbot/assets/music
+              name: music
+              readOnly: true
       initContainers:
         - args:
             - -path
@@ -149,6 +153,11 @@ spec:
         - effect: NoSchedule
           key: dana.lol/rpi5
           operator: Exists
+      volumes:
+        - name: music
+          persistentVolumeClaim:
+            claimName: obs-music-local
+            readOnly: true
 ---
 apiVersion: v1
 kind: Service
@@ -195,19 +204,3 @@ spec:
     - hosts:
         - tripbot-twitch.stage.whereisdana.today
       secretName: tripbot-twitch-tls
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: tripbot-twitch-ts
-  namespace: stage-1
-spec:
-  defaultBackend:
-    service:
-      name: tripbot-twitch
-      port:
-        number: 8080
-  ingressClassName: tailscale
-  tls:
-    - hosts:
-        - tripbot-twitch-stage

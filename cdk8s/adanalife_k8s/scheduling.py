@@ -33,7 +33,7 @@ encode off the MS-01. So ObsInstance calls these helpers gated on
 claim hard-gates the pod back to the MS-01 and the affinity drops out together.
 
 OBS is the streaming pipeline's *anchor*: it owns the rpi5 node-preference, and
-its two feeders — vlc (RTSP) and onscreens (browser-source overlays) — must reach
+its feeders — e.g. onscreens (browser-source overlays) — must reach
 it on localhost, not across the LAN. So the feeders do NOT take the rpi5
 node-affinity themselves; they take `colocate_with_obs_affinity(platform)`
 instead, which follows OBS to whichever node it landed on (keeping the rpi5
@@ -88,11 +88,11 @@ def prefer_rpi5_affinity() -> k8s.Affinity:
 
 
 def colocate_with_obs_affinity(platform: str) -> k8s.Affinity:
-    """PREFERRED pod affinity co-locating a stream feeder (vlc / onscreens) onto
+    """PREFERRED pod affinity co-locating a stream feeder (onscreens) onto
     the same node as its platform's OBS pod.
 
-    OBS is the anchor of the streaming pipeline: the RTSP feed (vlc→obs) and the
-    browser-source overlays (onscreens→obs) reach OBS continuously, and must do so
+    OBS is the anchor of the streaming pipeline: the browser-source overlays
+    (onscreens→obs) reach OBS continuously, and must do so
     on localhost rather than across the LAN. OBS is the pod that owns the rpi5
     node-preference (when it's a software encoder); the feeders don't pick a node
     independently — they follow wherever OBS landed.

@@ -4,45 +4,24 @@ import (
 	"sync"
 
 	"github.com/adanalife/tripbot/pkg/oauthtokens"
-	"github.com/nicklaw5/helix/v2"
 )
 
-// API owns the mutable Twitch state that used to live in package-level
-// globals: the two helix clients, the App Access Token, the per-identity
-// user-access-tokens, and the cached channel/viewer/audience data. It is the
-// in-process implementation of "talk to Twitch"; construct one with New().
+// API owns the mutable Twitch state: the per-identity user-access-tokens and
+// the cached channel/viewer/audience data. The platform-gateway is the single
+// Helix caller, so nothing here talks to Twitch — the tokens are read from
+// oauth_tokens (which the gateway keeps fresh) and the audience data is pushed
+// in by the gateway refresh crons. Construct one with New().
 //
-// (Named API rather than Client because the package already exposes a
-// Client() helix-getter that callers depend on — the type can be renamed once
-// the shims in shims.go are deleted.)
-//
-// Fields are grouped into two clusters on purpose. The **auth core** (helix
-// clients + tokens) is the cohesive unit that may eventually move into its
-// own auth service — keeping it visually distinct here marks that future
-// seam. The **query/viewer** cluster is cached read-state derived from Helix.
-//
-// Methods are still fronted by package-level free-function shims (see
-// shims.go) delegating to defaultClient, so existing callers are unchanged
-// while the globals are eliminated; threading a constructed *API through
-// callers and deleting the shims is a later step.
+// Methods are fronted by package-level free-function shims (see shims.go) that
+// delegate to defaultClient; threading a constructed *API through callers and
+// deleting the shims is a later step.
 type API struct {
-	// --- auth core (future auth-service boundary) ---
-
-	// currentTwitchClient is the lazy-initialized bot helix client, built by
-	// Client() for the OAuth bootstrap's identity check (GetUsers) and the IRC
-	// readiness probe. The Helix query surface now lives in the platform-gateway.
-	currentTwitchClient *helix.Client
-	// appAccessToken is set in Client() (Client Credentials grant).
-	appAccessToken string
-
 	// tokenMu guards currentUserToken (bot) and currentBroadcasterToken.
-	// RWMutex because reads (IRCAuthToken, BroadcasterUserAccessToken,
-	// TokenStatuses) outnumber writes (LoadFromDB).
+	// RWMutex because reads (BroadcasterUserAccessToken, TokenStatuses)
+	// outnumber writes (LoadFromDB).
 	tokenMu                 sync.RWMutex
 	currentUserToken        oauthtokens.Token
 	currentBroadcasterToken oauthtokens.Token
-
-	// --- query / viewer state (cached Helix reads) ---
 
 	// channelID is the twitch-internal user ID for the channel.
 	channelID string
@@ -52,24 +31,24 @@ type API struct {
 	// and the session-update cron. RWMutex because reads (UserIsSubscriber,
 	// Chatters, ChatterCount) outnumber writes.
 	audienceMu sync.RWMutex
-	// subscribers is the usernames of the current subscribers.
-	subscribers []string
-	// currentChatters holds the most recent chatter list, cached from the gateway.
-	currentChatters []helix.ChatChatter
+	// subscribers maps each current subscriber's username to their
+	// subscription tier (1–3).
+	subscribers map[string]int
+	// currentChatters holds the most recent chatter logins, cached from the gateway.
+	currentChatters []string
 	// chatterCount is the total reported by the API (may exceed
 	// len(currentChatters) when the channel has more than one page of chatters).
 	chatterCount int
 }
 
-// New constructs an API with zero mutable state. The helix client and App
-// Access Token are built lazily on first use (Client()); the static
-// ClientID/ClientSecret credentials are read from env in init().
+// New constructs an API with zero mutable state. Tokens arrive via LoadFromDB
+// and the audience caches via SetSubscribers / SetChatters.
 func New() *API {
 	return &API{}
 }
 
 // defaultClient backs the package-level free-function shims in shims.go. It
 // preserves the previous "call twitch.Foo() from anywhere" surface while the
-// globals are gone. Constructed at package-init; New() touches no env, so it
-// is safe before init() populates ClientID/ClientSecret.
+// globals are gone. Constructed at package-init, which reads no env and touches
+// no network — importing this package has no side effects.
 var defaultClient = New()

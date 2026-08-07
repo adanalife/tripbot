@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log/slog"
+	"os"
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/bootstrap"
@@ -24,21 +25,29 @@ const httpShutdownTimeout = 5 * time.Second
 func main() {
 	slog.Info("onscreens-server starting", "version", version)
 
+	// Before bootstrap.Start, so there's no Sentry to report to yet — this is
+	// a plain exit with the reason on stderr.
+	conf, err := c.Load()
+	if err != nil {
+		slog.Error("could not load config", "err", err)
+		os.Exit(1)
+	}
+
 	// ctx is canceled on SIGINT/SIGTERM; srv.Start returns when that
 	// happens, the drain below runs, and the process exits 0. There is no
 	// separate signal-handler goroutine — this is the only shutdown path.
-	ctx, flush := bootstrap.Start("onscreens-server", version, c.Conf)
+	ctx, flush := bootstrap.Start("onscreens-server", version, conf)
 	defer flush()
 
 	// Connect to NATS so Server.Start can attach subscribers. Optional —
 	// when NATS_URL is empty the conn is nil and the subscriber registration
 	// is skipped; HTTP remains the sole transport.
-	natsclient.Connect(c.Conf.NatsURL, "onscreens-server")
+	natsclient.Connect(conf.NatsURL, "onscreens-server")
 
 	// construct the server — runs all per-onscreen init (singletons +
 	// background loops) up front so the HTTP routes have everything to
 	// read by the time the listener accepts.
-	srv := onscreensServer.New(onscreensServer.Config{Version: version})
+	srv := onscreensServer.New(onscreensServer.Config{Version: version, Conf: conf})
 
 	// start the webserver — blocks until ListenAndServe fails or the
 	// signal context cancels

@@ -6,11 +6,10 @@ import (
 	"log"
 	"log/slog"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/XSAM/otelsql"
-	c "github.com/adanalife/tripbot/pkg/config/tripbot"
-	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 	"github.com/uptrace/opentelemetry-go-extra/otelgorm"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
@@ -18,21 +17,19 @@ import (
 	"gorm.io/gorm"
 )
 
-// this is how we will share the DB connection
-var gormConn *gorm.DB
+// gormConn is the process-wide DB handle, guarded by gormMu. A mutex rather
+// than a sync.Once because SetGormDB resets the handle to nil in test teardown,
+// which a fired Once can't express — the next GormDB call has to be able to
+// build a fresh handle.
+var (
+	gormMu   sync.Mutex
+	gormConn *gorm.DB
+)
 
-func init() {
-	var err error
-
-	err = godotenv.Load(".env." + c.Conf.Environment)
-	// In cluster contexts (staging/production) the .env file is not shipped —
-	// env values come from envconfig instead — so the missing-file error is
-	// expected and noise. Only surface it for local-dev workflows.
-	if err != nil && (c.Conf.Environment == "development" || c.Conf.Environment == "testing") {
-		slog.Warn("error loading .env file, continuing anyway", "err", err)
-	}
-
-	// first we have to check we have all of the right ENV vars
+func connectToDB() *sql.DB {
+	// config.SetEnvironment has already loaded the env-specific dotenv file
+	// (repo-root-resolved), so the DATABASE_* values are either in the process
+	// env or genuinely missing — fail loudly rather than dialing garbage.
 	requiredVars := []string{
 		"DATABASE_USER",
 		"DATABASE_DB",
@@ -44,9 +41,6 @@ func init() {
 			log.Fatalf("You must set %s", v)
 		}
 	}
-}
-
-func connectToDB() *sql.DB {
 	// otelsql.Open instruments the postgres driver so every query becomes a span.
 	db, err := otelsql.Open("postgres", connStr(),
 		otelsql.WithAttributes(semconv.DBSystemPostgreSQL),
@@ -83,13 +77,27 @@ func connection() *sql.DB {
 }
 
 // GormDB returns a singleton *gorm.DB wrapping an otelsql-instrumented
-// *sql.DB, with GORM-level span metadata added via otelgorm.
+// *sql.DB, with GORM-level span metadata added via otelgorm. Safe to call from
+// any goroutine: concurrent first callers queue on gormMu rather than each
+// building their own handle, and the lock is held across the connect so the
+// boot-time retry happens once.
+//
+// ponytail: still returns a bare *gorm.DB, so a caller can't handle a connect
+// failure — connectGorm and the required-env check below Fatal instead. Giving
+// this an error return means touching every database.GormDB() call site; do
+// that when a caller actually needs to recover rather than exit.
 func GormDB() *gorm.DB {
+	gormMu.Lock()
+	defer gormMu.Unlock()
 	if gormConn == nil {
-		gormConn = connectGorm()
+		gormConn = connectGormFn()
 	}
 	return gormConn
 }
+
+// connectGormFn is the connect path, indirected so tests can exercise the
+// lazy-init locking without a live postgres.
+var connectGormFn = connectGorm
 
 // SetGormDB swaps the singleton *gorm.DB for tests. Pair it with a sqlmock-
 // backed gorm.DB to assert on the SQL emitted by package-level callers (e.g.
@@ -99,11 +107,15 @@ func GormDB() *gorm.DB {
 // Not safe for parallel tests in the same package — run with t.Setenv-style
 // per-test setup and avoid t.Parallel() when using this.
 func SetGormDB(db *gorm.DB) {
+	gormMu.Lock()
+	defer gormMu.Unlock()
 	gormConn = db
 }
 
 // Close shuts down the shared DB connection pool.
 func Close() error {
+	gormMu.Lock()
+	defer gormMu.Unlock()
 	if gormConn == nil {
 		return nil
 	}

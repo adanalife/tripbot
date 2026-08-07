@@ -10,10 +10,10 @@ import (
 )
 
 // chatters is the data seam the chatters endpoint reads through. It returns the
-// set of logins currently in chat, refreshed ~60s by the UpdateSession cron via
-// the Helix chat/chatters call (moderator:read:chatters). Overridable in tests
-// so the handler renders without a live Twitch connection. In-memory read — no
-// network call at request time.
+// set of logins currently in chat, refreshed ~60s by the UpdateSession cron from
+// the platform-gateway (the single Helix caller). Overridable in tests so the
+// handler renders without a live gateway. In-memory read — no network call at
+// request time.
 var chatters = mytwitch.Chatters
 
 // chattersResponse is the JSON payload the standalone tripbot-console reads to

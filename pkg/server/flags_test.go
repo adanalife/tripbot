@@ -52,7 +52,7 @@ func TestFlagsHandler_Snapshot(t *testing.T) {
 		},
 		{Key: "ascii_video", Enabled: false},
 	}}
-	s := New()
+	s := New(testConf)
 	s.SetFlags(fc)
 
 	rec := httptest.NewRecorder()
@@ -80,7 +80,7 @@ func TestFlagsHandler_Snapshot(t *testing.T) {
 }
 
 func TestFlagsHandler_NoClientReportsNotOK(t *testing.T) {
-	s := New() // no SetFlags
+	s := New(testConf) // no SetFlags
 	rec := httptest.NewRecorder()
 	flagsRouter(s).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/flags", nil))
 
@@ -98,7 +98,7 @@ func TestFlagsHandler_NoClientReportsNotOK(t *testing.T) {
 
 func TestFlagToggleHandler_TogglesViaToggler(t *testing.T) {
 	fc := &fakeFlags{}
-	s := New()
+	s := New(testConf)
 	s.SetFlags(fc)
 
 	rec := httptest.NewRecorder()
@@ -116,7 +116,7 @@ func TestFlagToggleHandler_TogglesViaToggler(t *testing.T) {
 
 func TestFlagToggleHandler_UnknownKeyIs404(t *testing.T) {
 	fc := &fakeFlags{setErr: errors.New("feature flag \"nope\" not found")}
-	s := New()
+	s := New(testConf)
 	s.SetFlags(fc)
 
 	rec := httptest.NewRecorder()
@@ -132,7 +132,7 @@ func TestFlagToggleHandler_UnknownKeyIs404(t *testing.T) {
 func TestFlagToggleHandler_NonTogglerIs503(t *testing.T) {
 	// A client that satisfies FlagClient but not FlagToggler (the in-memory
 	// fallback before the Postgres client loads) can't be toggled.
-	s := New()
+	s := New(testConf)
 	s.SetFlags(feature.NewInMemoryClient(nil))
 
 	rec := httptest.NewRecorder()

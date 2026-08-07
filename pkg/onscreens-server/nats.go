@@ -6,9 +6,9 @@ import (
 	"log/slog"
 	"time"
 
-	c "github.com/adanalife/tripbot/pkg/config/onscreens-server"
 	"github.com/adanalife/tripbot/pkg/natsclient"
 	oe "github.com/adanalife/tripbot/pkg/onscreens-events"
+	rot "github.com/adanalife/tripbot/pkg/rotator"
 	"github.com/nats-io/nats.go"
 )
 
@@ -31,8 +31,8 @@ func (s *Server) StartNATSSubscribers(ctx context.Context) {
 	// This server serves exactly one platform; subscribe only to that
 	// platform's leaf so a Twitch-triggered overlay never renders here on the
 	// YouTube stream (and vice versa).
-	env := c.Conf.Environment
-	platform := c.Conf.Platform
+	env := s.cfg.Environment
+	platform := s.cfg.Platform
 	subs := []struct {
 		subject string
 		handler nats.MsgHandler
@@ -46,6 +46,7 @@ func (s *Server) StartNATSSubscribers(ctx context.Context) {
 		{oe.GPSShowSubject(env, platform), s.handleGPSShow},
 		{oe.GPSHideSubject(env, platform), s.handleGPSHide},
 		{oe.LocationUpdateSubject(env, platform), s.handleLocationUpdate},
+		{oe.RotatorConfigSubject(env, platform), s.handleRotatorConfig},
 	}
 	for _, sb := range subs {
 		// Best-effort: one bad subject shouldn't stop the rest from binding.
@@ -71,7 +72,7 @@ func (s *Server) handleMiddleShow(m *nats.Msg) {
 	}
 	s.MiddleText.Show(ev.Msg)
 	// Persist the new state so the overlay survives a server restart.
-	publishMiddleState(context.Background(), c.Conf.Environment, c.Conf.Platform, ev.Msg, true)
+	publishMiddleState(context.Background(), s.cfg.Environment, s.cfg.Platform, ev.Msg, true)
 }
 
 // handleMiddleHide hides the middle text. Hide retains the overlay's Content,
@@ -79,7 +80,7 @@ func (s *Server) handleMiddleShow(m *nats.Msg) {
 // it hidden, matching the live state rather than blanking it.
 func (s *Server) handleMiddleHide(_ *nats.Msg) {
 	s.MiddleText.Hide()
-	publishMiddleState(context.Background(), c.Conf.Environment, c.Conf.Platform, s.MiddleText.Content, false)
+	publishMiddleState(context.Background(), s.cfg.Environment, s.cfg.Platform, s.MiddleText.Content(), false)
 }
 
 // handleLeaderboardShow renders the {title, rows} payload server-side and
@@ -101,16 +102,23 @@ func (s *Server) handleTimewarpHide(_ *nats.Msg)    { s.Timewarp.Hide() }
 func (s *Server) handleGPSShow(_ *nats.Msg)         { s.GPS.Show("") }
 func (s *Server) handleGPSHide(_ *nats.Msg)         { s.GPS.Hide() }
 
-// handleLocationUpdate caches the currently-playing clip's location + date so
-// the bot-less rotators can surface it. Lenient: a malformed body is dropped;
-// empty fields are allowed (the rotator skips whichever line is empty).
+// handleLocationUpdate caches the currently-playing clip's data as the values the
+// rotators' $variables resolve to. Lenient: a malformed body is dropped; empty
+// fields are allowed, and a line referencing an empty one is simply passed over
+// until its data arrives.
 func (s *Server) handleLocationUpdate(m *nats.Msg) {
 	var ev oe.LocationData
 	if err := json.Unmarshal(m.Data, &ev); err != nil {
 		slog.Error("nats: decode location.update", "err", err, "subject", m.Subject)
 		return
 	}
-	liveLocation.set(ev.Location, ev.Date, time.Now())
+	liveLocation.set(rot.Vars{
+		"location": ev.Location,
+		"state":    ev.State,
+		"date":     ev.Date,
+		"weather":  ev.Weather,
+		"sunset":   ev.Sunset,
+	}, time.Now())
 }
 
 // handleTimewarpShow triggers the full-screen warp. The overlay's Content

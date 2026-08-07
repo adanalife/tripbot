@@ -8,7 +8,6 @@ import (
 
 	chatEvents "github.com/adanalife/tripbot/pkg/chat-events"
 	"github.com/adanalife/tripbot/pkg/chatsend"
-	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/gateway"
 	"github.com/adanalife/tripbot/pkg/natsclient"
 	"github.com/nats-io/nats.go"
@@ -16,21 +15,21 @@ import (
 
 // startChatSendSubscriber wires the "send a chat message" command. A publisher
 // emits chatEvents.Send on tripbot.<env>.chat.send.<platform>; tripbot owns the
-// Twitch identities, so it's the thing that actually sends. The in-tripbot admin
-// panel that used to publish this was retired with the tripbot-console split;
-// this subscriber stays as the receive side, ready for the standalone console to
-// publish to over the same wire format when its chat-send feature lands.
+// Twitch identities, so it's the thing that actually sends. This subscriber is
+// the receive side; the standalone tripbot-console publishes to it over the
+// same wire format once its chat-send feature lands.
 //
 // No-op when NATS is unconfigured (the singleton conn is nil) — the same
 // fire-and-forget posture as the rest of the NATS surface. Must run after
-// startNATS (conn) and setUpTwitchClient (which wires t.app.Chat via ConnectIRC).
+// startNATS (conn) and the chat bring-up that wires t.app.Chat
+// (ConnectTwitchViaGateway).
 func (t *Tripbot) startChatSendSubscriber(ctx context.Context) {
 	conn := natsclient.Conn()
 	if conn == nil {
 		slog.InfoContext(ctx, "chat.send subscriber skipped (NATS_URL unset)")
 		return
 	}
-	subject := chatEvents.SendSubject(c.Conf.Environment, chatEvents.PlatformTwitch)
+	subject := chatEvents.SendSubject(t.cfg.Environment, chatEvents.PlatformTwitch)
 	if _, err := conn.Subscribe(subject, func(m *nats.Msg) {
 		var ev chatEvents.Send
 		if err := json.Unmarshal(m.Data, &ev); err != nil {

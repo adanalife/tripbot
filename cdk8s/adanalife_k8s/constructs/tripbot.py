@@ -14,7 +14,7 @@ Reproduces k8s/apps/tripbot/base + overlays:
   * Service (ClusterIP :8080) + traefik Ingress everywhere (the web UI / OAuth
     round-trip is reachable on-LAN in every env). The *bot* is outbound-only
     (EventSub via WebSocket), but the dashboard Ingress is published per env;
-    minipc envs add TLS + a Tailscale Ingress. local is HTTP-only at
+    minipc envs add TLS. local is HTTP-only at
     tripbot.localhost.
 The construct envFroms its DB + app Secrets by name but does NOT emit them —
 they're identity-level (one bot, one DB, shared by every platform stack), so
@@ -49,6 +49,14 @@ LOCAL_DB_SECRET = "tripbot-secret"  # secret.env-built DB creds (laptop)
 # Identity label for the shared (non-per-platform) Secrets — they belong to the
 # bot identity, not any one platform stack.
 NAME_IDENTITY = "tripbot"
+
+# The read-only album library claim and where it's mounted. Cross-repo contract:
+# infra provisions the claim, the obs repo mounts it at the same path, and
+# pkg/obs/beds hands OBS the track paths it reads here — so all three must agree
+# exactly. Node-local rather than the NAS share so a storage outage can't reach
+# the stream (see infra's cdk8s/adanalife_k8s/constructs/music.py).
+MUSIC_CLAIM = "obs-music-local"
+MUSIC_MOUNT_PATH = "/opt/tripbot/assets/music"
 
 # Small but explicit requests for the helper containers (migrate init, one-shot
 # Job containers). Namespaces under a ResourceQuota that enforces requests.*
@@ -128,27 +136,15 @@ _ENV_CONFIG: dict[str, dict[str, str]] = {
 def public_host(env: EnvConfig, platform: str) -> str:
     """The instance's public host: per-name everywhere (tripbot-twitch.<dns>,
     tripbot-youtube.<dns>); the .localhost TLD when the env publishes no DNS.
-    Single source for the Ingress rule, external-dns annotation, TLS secret
-    host, and EXTERNAL_URL — they can't drift apart."""
+    Single source for the Ingress rule, external-dns annotation, and TLS secret
+    host — they can't drift apart."""
     name = app_name("tripbot", platform)
     return f"{name}.localhost" if not env.dns_base else f"{name}.{env.dns_base}"
 
 
-def external_url(env: EnvConfig, platform: str) -> str:
-    """EXTERNAL_URL for an instance: scheme + public_host (+ the env's
-    non-standard port, e.g. dev's :9443). Both OAuth flows build their redirect
-    as EXTERNAL_URL + /auth/callback, so this must match the host the instance
-    actually serves on — and each value needs a matching authorized redirect
-    URI registered on the platform's OAuth app (Twitch dev console / GCP
-    console)."""
-    scheme = "https" if env.dns_base else "http"
-    port = f":{env.external_port}" if env.external_port else ""
-    return f"{scheme}://{public_host(env, platform)}{port}"
-
-
 def config_data(env: EnvConfig, platform: str) -> dict[str, str]:
     """The assembled tripbot-config data for an env+platform: base literals + the
-    per-platform sibling-service hosts (this platform's vlc/onscreens/obs) +
+    per-platform sibling-service hosts (this platform's playout/onscreens/obs) +
     telemetry + the per-env identity/extra block. Shared with the Jobs so a Job
     applied on its own carries the same config the Deployment runs with. NATS_URL
     is only present where the env defines one (absent on local)."""
@@ -175,12 +171,13 @@ def config_data(env: EnvConfig, platform: str) -> dict[str, str]:
         data["STREAM_PLATFORM"] = platform
     data.update(appconfig.telemetry_config(env, platform))
     data.update(_ENV_CONFIG[env.name])
-    data["EXTERNAL_URL"] = external_url(env, platform)
     if env.nats_url:
         data["NATS_URL"] = env.nats_url
-    # Route the twitch instance's command-time Helix calls through the
-    # platform-gateway gateway-twitch where the env wires it. Only the
-    # twitch platform talks Helix, so the youtube instance never carries it.
+    # Route the twitch instance's chat (both directions) and its command-time
+    # Helix calls through the platform-gateway gateway-twitch where the env
+    # wires it — required for chat to come up at all (the binary boots
+    # chat-less without it). Only the twitch platform talks Helix, so the
+    # youtube instance never carries it.
     if platform == "twitch" and env.twitch_api_url:
         data["TWITCH_API_URL"] = env.twitch_api_url
     # Route the youtube instance's outbound chat sends through gateway-youtube
@@ -188,6 +185,16 @@ def config_data(env: EnvConfig, platform: str) -> dict[str, str]:
     # twitch instance never carries it. Routed unconditionally when wired (no flag).
     if platform == "youtube" and env.youtube_api_url:
         data["YOUTUBE_API_URL"] = env.youtube_api_url
+    # The gateway-transport platforms reach both chat directions through
+    # their per-platform gateway instance where the env wires it — required
+    # for chat to come up at all (the binary boots chat-less without it).
+    gateway_api_urls = {
+        "facebook": env.facebook_api_url,
+        "instagram": env.instagram_api_url,
+        "tiktok": env.tiktok_api_url,
+    }
+    if gateway_api_urls.get(platform):
+        data[f"{platform.upper()}_API_URL"] = gateway_api_urls[platform]
     # Bot-less YouTube: gate off the inbound chat poll. Only stamped when
     # disabled (the binary defaults to enabled) so a live, inbound-enabled
     # youtube instance keeps a minimal ConfigMap and no needless config-hash
@@ -222,12 +229,12 @@ class Tripbot(Construct):
         # just envFroms them by name below.
 
         # --- envFrom: config, DB creds, shared OTLP/Sentry, then app Secrets ---
-        # Order matches the legacy render exactly (later entries win on key
-        # collision). The discord and observability (Sentry/OTLP) Secrets are
+        # Order is load-bearing: later entries win on key collision.
+        # The discord and observability (Sentry/OTLP) Secrets are
         # optional so the bot boots without them — observability gates itself
         # off when the env vars are absent, and the pod isn't hostage to
-        # ExternalSecret sync order. Boot-required Secrets (DB creds, twitch,
-        # maps) stay required: a missing one fails loud.
+        # ExternalSecret sync order. Boot-required Secrets (DB creds, maps, and
+        # twitch on a twitch instance) stay required: a missing one fails loud.
         env_from = [
             k8s.EnvFromSource(config_map_ref=k8s.ConfigMapEnvSource(name=cm_name)),
             k8s.EnvFromSource(secret_ref=k8s.SecretEnvSource(name=db_secret)),
@@ -237,9 +244,21 @@ class Tripbot(Construct):
             k8s.EnvFromSource(
                 secret_ref=k8s.SecretEnvSource(name="sentry-tripbot", optional=True)
             ),
-            k8s.EnvFromSource(
-                secret_ref=k8s.SecretEnvSource(name="tripbot-twitch-creds")
-            ),
+        ]
+
+        # The Twitch app credentials are read only by a twitch instance, which
+        # sends the client ID in its EventSub handshake; every other platform
+        # reaches its chat through a platform-gateway that owns its own credential. The
+        # ExternalSecret stays identity-level (one Twitch dev app for the bot,
+        # like google-maps) — it's the *mount* that's per-platform.
+        if platform == "twitch":
+            env_from.append(
+                k8s.EnvFromSource(
+                    secret_ref=k8s.SecretEnvSource(name="tripbot-twitch-creds")
+                )
+            )
+
+        env_from += [
             k8s.EnvFromSource(
                 secret_ref=k8s.SecretEnvSource(name="tripbot-google-maps-api-key")
             ),
@@ -338,6 +357,33 @@ class Tripbot(Construct):
                 },
                 limits={"memory": k8s.Quantity.from_string("1Gi")},
             ),
+            # The album background-audio bed: tripbot lists the share to shuffle
+            # and advance tracks, and OBS mounts the same claim at the same path,
+            # so a path picked here is valid over there. Read-only on both sides.
+            volume_mounts=(
+                [
+                    k8s.VolumeMount(
+                        name="music",
+                        mount_path=MUSIC_MOUNT_PATH,
+                        read_only=True,
+                    )
+                ]
+                if env.music_share
+                else None
+            ),
+        )
+
+        music_volumes = (
+            [
+                k8s.Volume(
+                    name="music",
+                    persistent_volume_claim=k8s.PersistentVolumeClaimVolumeSource(
+                        claim_name=MUSIC_CLAIM, read_only=True
+                    ),
+                )
+            ]
+            if env.music_share
+            else None
         )
 
         k8s.KubeDeployment(
@@ -345,7 +391,10 @@ class Tripbot(Construct):
             "deployment",
             metadata=k8s.ObjectMeta(name=name, namespace=ns, labels=labels),
             spec=k8s.DeploymentSpec(
-                replicas=env.replicas_for(platform),
+                # Births parked; a console scale-up brings the platform live and
+                # Argo ignores .spec.replicas so the scale sticks (infra argocd
+                # ignore_replicas). Replica count is runtime-owned, not git-owned.
+                replicas=0,
                 selector=k8s.LabelSelector(match_labels=sel),
                 template=k8s.PodTemplateSpec(
                     metadata=k8s.ObjectMeta(
@@ -373,6 +422,7 @@ class Tripbot(Construct):
                         ),
                         init_containers=[migrate],
                         containers=[container],
+                        volumes=music_volumes,
                     ),
                 ),
             ),
@@ -398,15 +448,13 @@ class Tripbot(Construct):
 
         # --- Ingress (dashboard / OAuth) — published in every env ---
         self._ingress(name, platform, env, ns, labels)
-        if env.tailscale:
-            self._tailscale_ingress(name, env, ns, labels)
 
     # ---- Ingress helpers ----
     def _ingress(self, name, platform, env: EnvConfig, ns, labels):
-        # Per-name host shared with EXTERNAL_URL via public_host() — symmetric
-        # with the other per-platform components. local uses the .localhost TLD
-        # (no DNS/TLS); every other env publishes a real host with external-dns
-        # + cert-manager TLS (DNS-01 Route53).
+        # Per-name host via public_host() — symmetric with the other
+        # per-platform components. local uses the .localhost TLD (no DNS/TLS);
+        # every other env publishes a real host with external-dns + cert-manager
+        # TLS (DNS-01 Route53).
         host = public_host(env, platform)
         ann = (
             {}
@@ -445,23 +493,6 @@ class Tripbot(Construct):
                         ),
                     )
                 ],
-            ),
-        )
-
-    def _tailscale_ingress(self, name, env: EnvConfig, ns, labels):
-        short = env.dns_base.split(".")[0]  # prod / stage
-        k8s.KubeIngress(
-            self,
-            "ts-ingress",
-            metadata=k8s.ObjectMeta(name=f"{name}-ts", namespace=ns),
-            spec=k8s.IngressSpec(
-                ingress_class_name="tailscale",
-                default_backend=k8s.IngressBackend(
-                    service=k8s.IngressServiceBackend(
-                        name=name, port=k8s.ServiceBackendPort(number=8080)
-                    )
-                ),
-                tls=[k8s.IngressTls(hosts=[f"{name}-{short}"])],
             ),
         )
 
@@ -612,8 +643,8 @@ def _emit_app_external_secrets(scope, ns, labels):
 # They are deliberately separate so a routine app apply never fires a one-shot;
 # the deploy tasks emit + apply them on demand. `envFrom` the PRIMARY platform's
 # tripbot ConfigMap by name (config_map_name(env.platforms[0])) — identity-level
-# (one DB), not per-platform. Only the DB seed Job remains: Twitch OAuth
-# bootstrap moved to the platform-gateway, so the auth-bootstrap Jobs are gone.
+# (one DB), not per-platform. The DB seed is the only one: Twitch OAuth
+# bootstrap belongs to the platform-gateway.
 # ---------------------------------------------------------------------------
 
 

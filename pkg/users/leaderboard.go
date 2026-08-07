@@ -5,9 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sort"
-	"strings"
 
-	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
 )
 
@@ -15,12 +13,16 @@ var initLeaderboardSize = 25
 var maxLeaderboardSize = 50
 
 // fetchLeaderboard reads the top users by stored lifetime miles, scoped to
-// this instance's platform, excluding bots and the channel owner.
-func fetchLeaderboard(ctx context.Context, limit int) ([]User, error) {
+// this instance's platform, excluding bots, opted-out accounts, and the
+// channel owner.
+func (s *Sessions) fetchLeaderboard(ctx context.Context, limit int) ([]User, error) {
 	var users []User
 	result := database.GormDB().WithContext(ctx).
-		Where("platform = ? AND miles != 0 AND is_bot = false AND username != ?", c.Conf.Platform, strings.ToLower(c.Conf.ChannelName)).
-		Order("miles DESC").
+		Where("platform = ? AND miles != 0 AND is_bot = false AND exclude_from_leaderboard = false AND username != ?", s.cfg.Platform, s.cfg.ChannelName).
+		// username breaks the tie, so equal mileages hold a fixed order across
+		// rebuilds instead of shuffling on screen. UpdateLeaderboard's re-sort
+		// below is stable, so it carries this through.
+		Order("miles DESC, username ASC").
 		Limit(limit).
 		Find(&users)
 	return users, result.Error
@@ -28,11 +30,11 @@ func fetchLeaderboard(ctx context.Context, limit int) ([]User, error) {
 
 // InitLeaderboard creates the initial leaderboard
 func (s *Sessions) InitLeaderboard(ctx context.Context) {
-	users, err := fetchLeaderboard(ctx, initLeaderboardSize)
+	users, err := s.fetchLeaderboard(ctx, initLeaderboardSize)
 	if err != nil {
 		slog.ErrorContext(ctx, "error fetching leaderboard", "err", err)
 	}
-	pairs := toPairs(users)
+	pairs := s.toPairs(users)
 	s.mu.Lock()
 	s.lifetimeLeaderboard = pairs
 	s.mu.Unlock()
@@ -44,7 +46,7 @@ func (s *Sessions) InitLeaderboard(ctx context.Context) {
 // wholesale; before this it was rebuilt in-memory from logged-in users only,
 // which drifted from the DB after boot.
 func (s *Sessions) UpdateLeaderboard(ctx context.Context) {
-	users, err := fetchLeaderboard(ctx, maxLeaderboardSize)
+	users, err := s.fetchLeaderboard(ctx, maxLeaderboardSize)
 	if err != nil {
 		slog.ErrorContext(ctx, "error fetching leaderboard", "err", err)
 		return
@@ -67,7 +69,7 @@ func (s *Sessions) UpdateLeaderboard(ctx context.Context) {
 	// cutoff won't appear until logout — same class of miss as the old
 	// in-memory rebuild.
 	sort.SliceStable(users, func(i, j int) bool { return users[i].Miles > users[j].Miles })
-	pairs := toPairs(users)
+	pairs := s.toPairs(users)
 	s.mu.Lock()
 	s.lifetimeLeaderboard = pairs
 	s.mu.Unlock()
@@ -75,11 +77,11 @@ func (s *Sessions) UpdateLeaderboard(ctx context.Context) {
 
 // toPairs formats users as the [username, miles] string pairs the leaderboard
 // consumers render, skipping admin accounts (the DB query already excludes
-// bots and the channel owner).
-func toPairs(users []User) [][]string {
+// bots, opted-out accounts, and the channel owner).
+func (s *Sessions) toPairs(users []User) [][]string {
 	pairs := make([][]string, 0, len(users))
 	for _, user := range users {
-		if c.UserIsAdmin(user.Username) {
+		if s.cfg.UserIsAdmin(user.Username) {
 			continue
 		}
 		pairs = append(pairs, []string{user.Username, fmt.Sprintf("%.1f", user.Miles)})

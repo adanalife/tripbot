@@ -2,15 +2,17 @@ package chatbot
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"strconv"
 	"strings"
 	"time"
 
 	terrors "github.com/adanalife/tripbot/pkg/errors"
+	"github.com/hako/durafmt"
 
-	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/feature"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/users"
@@ -46,8 +48,8 @@ func (a *App) showTimewarpOverlay(ctx context.Context, username string) {
 	credit := username
 	if credit != "" && !a.Flags.Bool(ctx, timewarpCreditFlagKey, feature.EvalContext{
 		Username: username,
-		Channel:  c.Conf.ChannelName,
-		Env:      c.Conf.Environment,
+		Channel:  a.Cfg.ChannelName,
+		Env:      a.Cfg.Environment,
 	}) {
 		credit = ""
 	}
@@ -65,9 +67,9 @@ func (a *App) timewarp(ctx context.Context, username string) {
 	a.showTimewarpOverlay(ctx, username)
 
 	// shuffle to a new video
-	err := a.VLC.PlayRandom(ctx)
+	err := a.Playout.PlayRandom(ctx)
 	if err != nil {
-		slog.ErrorContext(ctx, "error from VLC client", "err", err)
+		slog.ErrorContext(ctx, "error from Playout client", "err", err)
 	}
 	// update the currently-playing video
 	a.Video.GetCurrentlyPlaying(ctx)
@@ -85,15 +87,15 @@ func (a *App) timewarpCmd(ctx context.Context, user *users.User, _ []string) {
 	}
 
 	// rate-limit the number of times this can run
-	if !c.UserIsAdmin(user.Username) {
-		if time.Now().Sub(lastTimewarpTime) < 20*time.Second {
+	if !a.Cfg.UserIsAdmin(user.Username) {
+		if time.Since(lastTimewarpTime) < 20*time.Second {
 			a.Chat.Say("Not yet; enjoy the moment!")
 			return
 		}
 	}
 
 	// only say this if the caller is not me
-	if !c.UserIsAdmin(user.Username) {
+	if !a.Cfg.UserIsAdmin(user.Username) {
 		a.Chat.Say("Here we go...!")
 	}
 
@@ -112,27 +114,31 @@ func (a *App) jumpCmd(ctx context.Context, user *users.User, params []string) {
 	}
 
 	// rate-limit the number of times this can run
-	if !c.UserIsAdmin(user.Username) {
-		if time.Now().Sub(lastTimewarpTime) < 20*time.Second {
+	if !a.Cfg.UserIsAdmin(user.Username) {
+		if time.Since(lastTimewarpTime) < 20*time.Second {
 			a.Chat.Say("Not yet; enjoy the moment!")
 			return
 		}
 	}
 
-	// exit if the user gave no args or too many
-	if len(params) == 0 || len(params) > 2 {
+	// exit if the user gave no args
+	if len(params) == 0 {
 		a.Chat.Say("Usage: !jump [state]")
 		return
 	}
 
-	// skip to a video from the given state
-	state := strings.Join(params, " ")
-	// sanitize the input
-	state = helpers.RemoveNonLetters(state)
+	// skip to a video from the given state, sanitizing the input first
+	state := helpers.NormalizeStateInput(strings.Join(params, " "))
+	// the longest state and territory names run four words
+	// ("Federated States of Micronesia")
+	if state == "" || len(strings.Fields(state)) > 4 {
+		a.Chat.Say("Usage: !jump [state]")
+		return
+	}
 	titlecaseState := helpers.TitlecaseState(state)
 	randomVid, err := a.Video.FindRandomByState(ctx, state)
 	// check to see if we even have footage for this state
-	if _, ok := err.(*terrors.NoFootageForStateError); ok {
+	if errors.Is(err, terrors.ErrNoFootageForState) {
 		msg := fmt.Sprintf("No footage for %s... yet! ;)", titlecaseState)
 		a.Chat.Say(msg)
 		return
@@ -143,10 +149,10 @@ func (a *App) jumpCmd(ctx context.Context, user *users.User, params []string) {
 		a.Chat.Say("Usage: !jump [state]")
 		return
 	}
-	// tell VLC to play it
-	err = a.VLC.PlayFileInPlaylist(ctx, randomVid.File())
+	// tell Playout to play it
+	err = a.Playout.PlayFileInPlaylist(ctx, randomVid.File())
 	if err != nil {
-		slog.ErrorContext(ctx, "error from VLC client", "err", err)
+		slog.ErrorContext(ctx, "error from Playout client", "err", err)
 		a.Chat.Say("Usage: !jump [state]")
 		return
 	}
@@ -157,90 +163,133 @@ func (a *App) jumpCmd(ctx context.Context, user *users.User, params []string) {
 	lastTimewarpTime = time.Now()
 }
 
-func (a *App) skipCmd(ctx context.Context, user *users.User, params []string) {
-	var err error
-	var n int
-	slog.InfoContext(ctx, "ran !skip", "username", user.Username)
+// daytimeCmd skips the stream ahead to the next morning's daylight footage —
+// the fix for a dusk/night stretch that isn't fun to watch and whose length
+// isn't obvious. It finds the first daytime clip filmed on a later day than
+// what's playing (FindNextDaytime) and jumps the playlist there, the same
+// handoff as !jump. Shares the playback rate-limiter with the other jumps.
+func (a *App) daytimeCmd(ctx context.Context, user *users.User, _ []string) {
+	slog.InfoContext(ctx, "ran !daytime", "username", user.Username)
 
 	// exit early if we're on OS X
 	if helpers.RunningOnDarwin() {
-		a.Chat.Say("Sorry, skip isn't available right now")
+		a.Chat.Say("Sorry, daytime isn't available right now")
 		return
 	}
 
 	// rate-limit the number of times this can run
-	if !c.UserIsAdmin(user.Username) {
-		if time.Now().Sub(lastTimewarpTime) < 20*time.Second {
+	if !a.Cfg.UserIsAdmin(user.Username) {
+		if time.Since(lastTimewarpTime) < 20*time.Second {
 			a.Chat.Say("Not yet; enjoy the moment!")
 			return
 		}
 	}
 
-	// first we count the given params
-	if len(params) == 0 {
-		// just skip once if no params
-		n = 1
-	} else {
-		// we were given args
-		// try and convert their input to a number
-		n, err = strconv.Atoi(params[0])
-		// if conversion fails or they give too many args
-		if err != nil || len(params) > 1 {
-			a.Chat.Say("Usage: !skip [num]")
-			return
-		}
+	target, err := a.Video.FindNextDaytime(ctx, a.Video.Current())
+	if errors.Is(err, terrors.ErrNoDaytimeFound) {
+		a.Chat.Say("I couldn't find any daytime footage ahead — enjoy the night! 🌙")
+		return
+	}
+	if err != nil {
+		slog.ErrorContext(ctx, "error finding next daytime video", "err", err)
+		a.Chat.Say("Sorry, I couldn't skip to daytime right now")
+		return
 	}
 
-	// skip to a new video
-	err = a.VLC.Skip(ctx, n)
-	if err != nil {
-		slog.ErrorContext(ctx, "error from VLC client", "err", err)
+	// tell Playout to play it
+	if err := a.Playout.PlayFileInPlaylist(ctx, target.File()); err != nil {
+		slog.ErrorContext(ctx, "error from Playout client", "err", err)
+		a.Chat.Say("Sorry, I couldn't skip to daytime right now")
+		return
 	}
+	a.Chat.Say("☀️ Fast-forwarding to the next morning...")
 	// update the currently-playing video
 	a.Video.GetCurrentlyPlaying(ctx)
 	// update our record of last time it ran
 	lastTimewarpTime = time.Now()
 }
 
+// parseSeekSpan turns a !skip/!back argument into a footage duration.
+// Accepts Go duration forms ("10m", "1h30m", "90s") and bare numbers, which
+// mean minutes ("!skip 10" moves ten minutes). The sign comes back as given —
+// "!skip -10m" is a rewind. Any timescale is fine — the player wraps moves
+// longer than the corpus modulo its total length; only spans that overflow
+// a time.Duration are rejected.
+func parseSeekSpan(arg string) (time.Duration, error) {
+	// time.ParseDuration only accepts lowercase unit suffixes, so "1H30M" has
+	// to be folded before it parses.
+	arg = strings.ToLower(arg)
+	if n, err := strconv.Atoi(arg); err == nil {
+		const maxMinutes = math.MaxInt64 / int64(time.Minute)
+		if int64(n) > maxMinutes || int64(n) < -maxMinutes {
+			return 0, fmt.Errorf("span overflows: %d minutes", n)
+		}
+		return time.Duration(n) * time.Minute, nil
+	}
+	return time.ParseDuration(arg)
+}
+
+func (a *App) skipCmd(ctx context.Context, user *users.User, params []string) {
+	a.seekCmd(ctx, user, params, "!skip", 1)
+}
+
 func (a *App) backCmd(ctx context.Context, user *users.User, params []string) {
-	var err error
-	var n int
-	slog.InfoContext(ctx, "ran !back", "username", user.Username)
+	a.seekCmd(ctx, user, params, "!back", -1)
+}
+
+// seekCmd is the shared !skip/!back handler; dir is +1 for !skip, -1 for
+// !back. Without an argument it hops one whole clip in dir's direction. With
+// one it moves the playhead by that span of footage ("!skip 10m",
+// "!back 1h30m", bare numbers meaning minutes), crossing clip boundaries as
+// needed and wrapping moves longer than the corpus modulo its total length.
+// A negative span flips direction, so "!skip -10m" rewinds.
+func (a *App) seekCmd(ctx context.Context, user *users.User, params []string, name string, dir int) {
+	slog.InfoContext(ctx, "ran "+name, "username", user.Username)
 
 	// exit early if we're on OS X
 	if helpers.RunningOnDarwin() {
-		a.Chat.Say("Sorry, back isn't available right now")
+		a.Chat.Say(fmt.Sprintf("Sorry, %s isn't available right now", strings.TrimPrefix(name, "!")))
 		return
 	}
 
 	// rate-limit the number of times this can run
-	if !c.UserIsAdmin(user.Username) {
-		if time.Now().Sub(lastTimewarpTime) < 20*time.Second {
+	if !a.Cfg.UserIsAdmin(user.Username) {
+		if time.Since(lastTimewarpTime) < 20*time.Second {
 			a.Chat.Say("Not yet; enjoy the moment!")
 			return
 		}
 	}
 
-	// first we count the given params
 	if len(params) == 0 {
-		// just back once if no params
-		n = 1
+		// no argument: hop a single clip
+		var err error
+		if dir >= 0 {
+			err = a.Playout.Skip(ctx, 1)
+		} else {
+			err = a.Playout.Back(ctx, 1)
+		}
+		if err != nil {
+			slog.ErrorContext(ctx, "error from Playout client", "err", err)
+		}
 	} else {
-		// we were given args
-		// try and convert their input to a number
-		n, err = strconv.Atoi(params[0])
-		// if conversion fails or they give too many args
-		if err != nil || len(params) > 1 {
-			a.Chat.Say("Usage: !back [num]")
+		// joining params lets "!skip 1h 30m" read as one span
+		span, err := parseSeekSpan(strings.Join(params, ""))
+		if err != nil || span == 0 {
+			a.Chat.Say(fmt.Sprintf("Usage: %s [time, like 10m or 1h30m]", name))
 			return
+		}
+		span *= time.Duration(dir)
+		if err := a.Playout.Seek(ctx, span); err != nil {
+			slog.ErrorContext(ctx, "error from Playout client", "err", err)
+		}
+		// same reply formatting as !followage: two largest units
+		if span > 0 {
+			a.Chat.Say(fmt.Sprintf("⏩ Skipping ahead %s", durafmt.Parse(span).LimitFirstN(2)))
+		} else {
+			a.Chat.Say(fmt.Sprintf("⏪ Going back %s", durafmt.Parse(-span).LimitFirstN(2)))
 		}
 	}
 
-	// back to an old video
-	err = a.VLC.Back(ctx, n)
-	if err != nil {
-		slog.ErrorContext(ctx, "error from VLC client", "err", err)
-	}
 	// update the currently-playing video
 	a.Video.GetCurrentlyPlaying(ctx)
 	// update our record of last time it ran

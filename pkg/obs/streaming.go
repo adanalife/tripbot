@@ -45,7 +45,10 @@ func PollStreamingActive(ctx context.Context, platform string, interval time.Dur
 func poll(ctx context.Context, obsStats instrumentation.OBSStats, addr, passwd string, interval time.Duration) {
 	client, err := goobs.New(addr, goobs.WithPassword(passwd))
 	if err != nil {
-		slog.ErrorContext(ctx, "obs websocket connect failed", "addr", addr, "err", err)
+		// A platform whose OBS deployment is scaled to zero fails here every
+		// retry, forever. obs_streaming_active is the alertable signal — keep
+		// this off Sentry, same as the in-loop failures below.
+		slog.WarnContext(ctx, "obs websocket connect failed", "addr", addr, "err", err)
 		obsStats.SetStreaming(false)
 		return
 	}

@@ -5,11 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"path"
-	"path/filepath"
 	"strconv"
 	"time"
-
-	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 )
 
 // Provenance values for Video.CoordSource (videos.coord_source). See
@@ -23,16 +20,27 @@ const (
 
 // Videos represent a video file containing dashcam footage
 type Video struct {
-	ID          int `gorm:"primaryKey"`
-	Slug        string
-	Lat         float64
-	Lng         float64
-	NextVid     sql.NullInt64
-	PrevVid     sql.NullInt64
-	Flagged     bool
-	State       string
+	ID      int `gorm:"primaryKey"`
+	Slug    string
+	Lat     float64
+	Lng     float64
+	NextVid sql.NullInt64
+	PrevVid sql.NullInt64
+	Flagged bool
+	State   string
+	// City and CityM are the clip's own coordinate named offline by the pipeline,
+	// the same way a Moment is. They are what answers a clip whose per-moment
+	// track isn't trustworthy enough to read from; empty until the geocode pass
+	// has reached the row. CityM is metres from City, 0 meaning inside it.
+	City        string
+	CityM       *float64
 	CoordSource string
-	DateFilmed  time.Time
+	// CoordConfidence is how much this clip's per-moment video_coords track is
+	// worth believing, 0..1. NULL — a nil pointer here — means the coords stage
+	// hasn't looked at the clip yet, which is not the same as looking and
+	// finding nothing, so it can't be flattened to 0. See CoordAt.
+	CoordConfidence *float64
+	DateFilmed      time.Time
 	// autoCreateTime stamps date_created on insert. A runtime-created clip (one
 	// not already in the DB) is built without setting it, so without the tag
 	// GORM writes the 0001-01-01 zero value over the column's DEFAULT
@@ -50,8 +58,8 @@ func (v Video) Location() (float64, float64, error) {
 	return v.Lat, v.Lng, err
 }
 
-// String returns the slug, which callers (e.g. make-map's image filenames)
-// rely on as a stable identity — don't enrich it with display fields.
+// String returns the slug, which callers rely on as a stable identity — don't
+// enrich it with display fields.
 // ex: 2018_0514_224801_013_a_opt
 func (v Video) String() string {
 	return v.Slug
@@ -73,11 +81,6 @@ func (v Video) DashStr() string {
 // ex: 2018_0514_224801_013.MP4
 func (v Video) File() string {
 	return fmt.Sprintf("%s.MP4", v.Slug)
-}
-
-// ex: /Volumes/.../2018_0514_224801_013.MP4
-func (v Video) Path() string {
-	return filepath.Join(c.Conf.VideoDir, v.File())
 }
 
 // toDate parses the vidStr and returns a time.Time object for the video

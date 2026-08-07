@@ -20,8 +20,6 @@ type TripbotConfig struct {
 	// subscriber-only commands without an actual sub (comped friends/VIPs).
 	// Comma-separated, case-insensitive. Empty by default.
 	CompedSubscribers []string `envconfig:"COMPED_SUBSCRIBERS"`
-	// ExternalURL is the where the bot's HTTP server can be reached
-	ExternalURL string `required:"true" envconfig:"EXTERNAL_URL"`
 	// GoogleMapsAPIKey is the API key with which we access Google Maps.
 	// Optional — when unset, geocoder + static-map calls are skipped and
 	// callers fall back gracefully (no city/state lookups, no generated
@@ -54,10 +52,17 @@ type TripbotConfig struct {
 	// ObsServerHost is the host:port of obs-server — the Flask process
 	// baked into the OBS image that exposes /health/ready, /version,
 	// and POST /admin/shutdown on the same shape the Go services use.
-	// Named for symmetry with vlc-server / onscreens-server. The admin
+	// Named for symmetry with onscreens-server. The admin
 	// panel probes it for the OBS row + posts to its /admin/shutdown
 	// for the "restart obs" button. Optional — blank skips the OBS row.
 	ObsServerHost string `envconfig:"OBS_SERVER_HOST"`
+
+	// TwitchClientID is the static Twitch app client ID, sent in the EventSub
+	// websocket handshake. Required on a twitch instance and unused everywhere
+	// else, so it's validated in the Twitch bring-up rather than here — a tiktok
+	// instance has no business holding Twitch app credentials. The client secret
+	// lives only on the platform-gateway, which owns OAuth consent and refresh.
+	TwitchClientID string `envconfig:"TWITCH_CLIENT_ID"`
 
 	// TwitchAPIURL points the chatbot's command-time Twitch Helix calls at
 	// the platform-gateway gateway-twitch instance over HTTP, instead of the

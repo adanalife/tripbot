@@ -25,6 +25,7 @@ metadata:
   name: onscreens-twitch
   namespace: stage-1
 spec:
+  replicas: 0
   selector:
     matchLabels:
       app: onscreens-twitch

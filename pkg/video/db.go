@@ -2,6 +2,7 @@ package video
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -106,7 +107,7 @@ func (v Video) save(ctx context.Context) error {
 	}
 
 	if lat == 0 || lng == 0 {
-		// No OCR runs anymore, so a runtime-created clip has no GPS fix.
+		// Nothing runs OCR at runtime, so a clip created here has no GPS fix.
 		flagged = true
 		coordSource = CoordSourceMissing
 	}
@@ -136,11 +137,10 @@ func (v Video) save(ctx context.Context) error {
 	return database.GormDB().WithContext(ctx).Create(&insert).Error
 }
 
-// Next() finds the next unflagged video by walking the next_vid chain.
+// NextUnflagged() finds the next unflagged video by walking the next_vid chain.
 // The walk is bounded by the playlist length, so a broken chain or a
 // cycle of flagged videos returns an error instead of spinning forever.
-// TODO: should this be NextUnflagged?
-func (v Video) Next(ctx context.Context) (Video, error) {
+func (v Video) NextUnflagged(ctx context.Context) (Video, error) {
 	var count int64
 	if err := database.GormDB().WithContext(ctx).Model(&Video{}).Count(&count).Error; err != nil {
 		return Video{}, err
@@ -200,7 +200,7 @@ func FindRandomByState(ctx context.Context, state string) (Video, error) {
 	//TODO: ORDER BY random() will eventually get too slow
 	result := database.GormDB().WithContext(ctx).Where("state = ?", state).Order("random()").Limit(1).First(&vid)
 	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-		return vid, &terrors.NoFootageForStateError{Msg: "no matches found"}
+		return vid, terrors.ErrNoFootageForState
 	}
 	if result.Error != nil {
 		slog.ErrorContext(ctx, "error fetching vid from DB", "err", result.Error)
@@ -209,29 +209,101 @@ func FindRandomByState(ctx context.Context, state string) (Video, error) {
 	return vid, nil
 }
 
-// CorpusRoute returns the GPS coordinates of every non-flagged dashcam clip,
-// ordered by film time — the full route the van drove. The admin map's
-// background-route overlay renders this. Flagged clips and 0/0 are excluded.
-// Returns [][2]float64 of {lat, lng}; nil on error.
-func CorpusRoute(ctx context.Context) [][2]float64 {
+// nextDaytimeScanLimit caps how many upcoming clips FindNextDaytime pulls in
+// one query. A day of driving is a few hundred one-minute clips, so this is far
+// more than enough to reach the following morning even across multi-day gaps in
+// the trip, while bounding the scan for a chat command.
+const nextDaytimeScanLimit = 5000
+
+// FindNextDaytime returns the first daytime clip filmed on a later local
+// calendar day than `after` — the "skip to the next morning" target behind
+// !daytime. The dashcam corpus is daytime driving footage, so from a dusk or
+// night clip the next daylight is the following day's first daylight clip; this
+// walks clips in film order and returns it. Clips without a GPS fix are skipped
+// (daytime needs coords to resolve sunrise/sunset). Returns a
+// terrors.ErrNoDaytimeFound when no later daytime clip exists in the scanned window.
+func FindNextDaytime(ctx context.Context, after Video) (Video, error) {
+	// Baseline calendar day: the current clip's local day when it has a fix,
+	// else its raw filmed day (a flagged clip has no coords to localize).
+	afterDay := time.Date(after.DateFilmed.Year(), after.DateFilmed.Month(), after.DateFilmed.Day(), 0, 0, 0, 0, time.UTC)
+	if after.Lat != 0 || after.Lng != 0 {
+		afterDay = helpers.LocalDate(after.DateFilmed, after.Lat, after.Lng)
+	}
+
+	var clips []Video
+	err := database.GormDB().WithContext(ctx).
+		Where("date_filmed > ? AND NOT flagged AND (lat != 0 OR lng != 0)", after.DateFilmed).
+		Order("date_filmed").
+		Limit(nextDaytimeScanLimit).
+		Find(&clips).Error
+	if err != nil {
+		return Video{}, err
+	}
+
+	for _, clip := range clips {
+		if !helpers.LocalDate(clip.DateFilmed, clip.Lat, clip.Lng).After(afterDay) {
+			continue // same (or earlier) local day as the current clip
+		}
+		if helpers.IsDaytime(clip.DateFilmed, clip.Lat, clip.Lng) {
+			return clip, nil
+		}
+	}
+	return Video{}, terrors.ErrNoDaytimeFound
+}
+
+// A clip with a per-moment track worth drawing contributes that whole track;
+// one without contributes the single fix it has, so a gap in the coords stage's
+// coverage bends the route slightly rather than breaking the line. Ordering is
+// (film time, offset into the clip) — by clip alone the points inside a clip
+// come back in whatever order the scan found them, which draws a scribble.
+//
+// The confidence rides along so the map can band the line by where each stretch
+// came from. It is the clip's, repeated on every one of that clip's points,
+// which is what makes a band a contiguous run rather than a per-point property.
+const corpusRouteQuery = `
+SELECT lat, lng, coord_confidence FROM (
+    SELECT c.lat, c.lng, v.coord_confidence, v.date_filmed, c.ts_sec
+    FROM video_coords c JOIN videos v ON v.id = c.video_id
+    WHERE NOT v.flagged AND v.coord_confidence >= @minConfidence AND c.ts_sec IS NOT NULL
+  UNION ALL
+    SELECT v.lat, v.lng, v.coord_confidence, v.date_filmed, 0
+    FROM videos v
+    WHERE NOT v.flagged AND (v.lat != 0 OR v.lng != 0)
+      AND (v.coord_confidence IS NULL OR v.coord_confidence < @minConfidence)
+) t ORDER BY date_filmed, ts_sec`
+
+// CorpusRoute returns the GPS coordinates of the whole route the van drove,
+// ordered along it — the admin map's background-route overlay.
+//
+// This is the per-moment track, not one point per clip: at clip granularity
+// every curve, switchback and cloverleaf of the trip is drawn as a straight
+// chord between points ~4 miles apart. Flagged clips and 0/0 are excluded.
+// Returns nil on error.
+//
+// Each point carries the band its clip falls in, so the caller can draw the
+// bridged stretches differently from the read ones. A synthetic track is drawn
+// because the map wants the road's shape, which it has; it is still far too
+// coarse to answer a question with, which is why CoordAt keeps the higher bar.
+//
+// The result is large — a few hundred thousand points — and callers are
+// expected to simplify before serving it. See pkg/server's map handler.
+func CorpusRoute(ctx context.Context) []RoutePoint {
 	type coord struct {
-		Lat float64
-		Lng float64
+		Lat             float64
+		Lng             float64
+		CoordConfidence *float64
 	}
 	var rows []coord
 	err := database.GormDB().WithContext(ctx).
-		Model(&Video{}).
-		Select("lat, lng").
-		Where("NOT flagged AND (lat != 0 OR lng != 0)").
-		Order("date_filmed").
+		Raw(corpusRouteQuery, sql.Named("minConfidence", minRouteConfidence)).
 		Scan(&rows).Error
 	if err != nil {
 		slog.ErrorContext(ctx, "corpus route query failed", "err", err)
 		return nil
 	}
-	out := make([][2]float64, len(rows))
+	out := make([]RoutePoint, len(rows))
 	for i, r := range rows {
-		out[i] = [2]float64{r.Lat, r.Lng}
+		out[i] = RoutePoint{Lat: r.Lat, Lng: r.Lng, Band: RouteBand(r.CoordConfidence)}
 	}
 	return out
 }

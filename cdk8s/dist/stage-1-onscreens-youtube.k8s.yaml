@@ -25,6 +25,7 @@ metadata:
   name: onscreens-youtube
   namespace: stage-1
 spec:
+  replicas: 0
   selector:
     matchLabels:
       app: onscreens-youtube

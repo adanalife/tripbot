@@ -48,6 +48,7 @@ func ShouldStart(cfg *c.TripbotConfig) (bool, string) {
 // commands against. Construct with New, then call Start; call Stop on
 // process shutdown.
 type Session struct {
+	cfg            *c.TripbotConfig
 	s              *discordgo.Session
 	guildID        string
 	registeredCmds []*discordgo.ApplicationCommand
@@ -58,8 +59,8 @@ type Session struct {
 
 // New constructs the underlying discordgo session. Does not open the
 // gateway — call Start for that.
-func New(token, guildID string, sessions *users.Sessions) (*Session, error) {
-	s, err := discordgo.New("Bot " + token)
+func New(cfg *c.TripbotConfig, sessions *users.Sessions) (*Session, error) {
+	s, err := discordgo.New("Bot " + cfg.DiscordBotToken)
 	if err != nil {
 		return nil, fmt.Errorf("discordgo.New: %w", err)
 	}
@@ -70,7 +71,7 @@ func New(token, guildID string, sessions *users.Sessions) (*Session, error) {
 	// INTERACTION_CREATE is reaching us. Bump to LogDebug if even
 	// informational chatter doesn't surface the interaction dispatch.
 	s.LogLevel = discordgo.LogInformational
-	return &Session{s: s, guildID: guildID, sessions: sessions}, nil
+	return &Session{cfg: cfg, s: s, guildID: cfg.DiscordGuildID, sessions: sessions}, nil
 }
 
 // Start opens the gateway, registers the slash commands against the

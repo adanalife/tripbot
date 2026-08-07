@@ -99,7 +99,8 @@ ON CONFLICT (platform, username) DO UPDATE SET
 // snapshotSQL freezes a finished monthly scoreboard into scoreboard_snapshots,
 // top 50 per platform. Single idempotent statement: inserts nothing if the
 // board doesn't exist yet, and the NOT EXISTS guard makes the write once-only
-// per board. Bots excluded, matching the live leaderboard reads.
+// per board. Bots and opted-out accounts excluded, matching the live
+// leaderboard reads.
 const snapshotSQL = `
 INSERT INTO scoreboard_snapshots (scoreboard_name, platform, rank, username, value)
 SELECT ?, ranked.platform, ranked.rank, ranked.username, ranked.value
@@ -109,7 +110,7 @@ FROM (
     FROM scores s
     JOIN scoreboards b ON b.id = s.scoreboard_id
     JOIN users u ON u.id = s.user_id
-    WHERE b.name = ? AND u.is_bot = false
+    WHERE b.name = ? AND u.is_bot = false AND u.exclude_from_leaderboard = false
 ) ranked
 WHERE ranked.rank <= 50
   AND NOT EXISTS (SELECT 1 FROM scoreboard_snapshots ss WHERE ss.scoreboard_name = ?)
@@ -121,8 +122,8 @@ WHERE ranked.rank <= 50
 // boards, then recompute aggregates for users with events past the watermark
 // and advance it. The watermark keys on events.id — never date_created, which
 // is zero-valued on historical rows.
-func Reconcile(ctx context.Context) {
-	if c.Conf.ReadOnly {
+func Reconcile(ctx context.Context, cfg *c.TripbotConfig) {
+	if cfg.ReadOnly {
 		return
 	}
 

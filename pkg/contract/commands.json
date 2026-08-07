@@ -174,14 +174,164 @@
           "location": {
             "type": "string"
           },
+          "state": {
+            "type": "string"
+          },
           "date": {
+            "type": "string"
+          },
+          "weather": {
+            "type": "string"
+          },
+          "sunset": {
             "type": "string"
           }
         },
         "required": [
           "emitted_at",
           "location",
-          "date"
+          "state",
+          "date",
+          "weather",
+          "sunset"
+        ]
+      }
+    },
+    "rotator_config": {
+      "subject": "tripbot.{env}.onscreens.rotator.config.{platform}",
+      "transport": "core",
+      "schema": {
+        "type": "object",
+        "title": "RotatorConfig",
+        "properties": {
+          "emitted_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "left": {
+            "type": "object",
+            "title": "RotatorCorner",
+            "properties": {
+              "messages": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "title": "RotatorMessage",
+                  "properties": {
+                    "text": {
+                      "type": "string"
+                    },
+                    "platforms": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "weight": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "text"
+                  ]
+                }
+              },
+              "promo_messages": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "title": "RotatorMessage",
+                  "properties": {
+                    "text": {
+                      "type": "string"
+                    },
+                    "platforms": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "weight": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "text"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "messages",
+              "promo_messages"
+            ]
+          },
+          "right": {
+            "type": "object",
+            "title": "RotatorCorner",
+            "properties": {
+              "messages": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "title": "RotatorMessage",
+                  "properties": {
+                    "text": {
+                      "type": "string"
+                    },
+                    "platforms": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "weight": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "text"
+                  ]
+                }
+              },
+              "promo_messages": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "title": "RotatorMessage",
+                  "properties": {
+                    "text": {
+                      "type": "string"
+                    },
+                    "platforms": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "weight": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "text"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "messages",
+              "promo_messages"
+            ]
+          },
+          "rare_message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "emitted_at",
+          "left",
+          "right"
         ]
       }
     }

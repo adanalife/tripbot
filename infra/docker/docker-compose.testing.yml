@@ -5,10 +5,6 @@ services:
     environment:
       ENV: testing
 
-  vlc:
-    environment:
-      ENV: testing
-
   # DB-backed tests (pkg/database/testdb) run against the real postgres
   # from the base compose file; the healthcheck + depends_on chain below
   # makes `docker compose run test` boot db, run migrations, and only
@@ -26,8 +22,8 @@ services:
         condition: service_healthy
 
   # `test` is a one-shot Go toolchain container for running `go test`
-  # outside the running stack. Invoked via `ENV=testing bin/devenv
-  # run --rm test ...` (see Taskfile.yml).
+  # outside the running stack. Invoked via `task test`, which wraps
+  # `docker compose run --rm test ...` (see Taskfile.yml).
   test:
     image: adanalife/tripbot-test
     build:
@@ -38,9 +34,9 @@ services:
       migrate:
         condition: service_completed_successfully
     environment:
-      # DB tests skip when postgres is unreachable (`task test:macos` has
-      # no docker); inside this stack the DB is always there, so a skip
-      # would mask a wiring bug — fail instead.
+      # DB tests skip when postgres is unreachable (bare `go test` on the
+      # host); inside this stack the DB is always there, so a skip would
+      # mask a wiring bug — fail instead.
       TESTDB_REQUIRED: "1"
     env_file:
       - ./.env.testing
@@ -48,8 +44,8 @@ services:
       - .:/src
       - tripbot-gomod-cache:/go/pkg/mod
       - tripbot-gobuild-cache:/root/.cache/go-build
-    # Overridable via `ENV=testing bin/devenv run --rm test <cmd>` —
-    # the Taskfile uses that to swap in -coverprofile / -race variants.
+    # Overridable via `docker compose run --rm test <cmd>` — the Taskfile
+    # uses that to swap in -coverprofile / -race variants.
     command: go test ./...
 
 volumes:

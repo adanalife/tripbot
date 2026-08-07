@@ -10,7 +10,7 @@ import (
 // depend on at command-time (user lookups, lifetime-leaderboard reads,
 // miles computations, graceful shutdown of in-memory session state). Tests
 // inject a fake; production uses the realSessions adapter built by
-// NewSessionsAdapter. Mirrors the Onscreens/VLC/Video/IRC injection pattern.
+// NewSessionsAdapter. Mirrors the Onscreens/Playout/Video/IRC injection pattern.
 //
 // The IRC-side session lifecycle (LoginIfNecessary / LogoutIfNecessary) and the
 // follower/subscriber + login-count reads are intentionally NOT on this
@@ -52,14 +52,20 @@ type Sessions interface {
 // until cmd assigns App.Sessions, so the nil guards below cover that brief
 // startup window. Tests inject their own Sessions fake rather than realSessions,
 // so the guards only ever fire pre-install.
-type realSessions struct{ s *users.Sessions }
+type realSessions struct {
+	platform string
+	s        *users.Sessions
+}
 
-// NewSessionsAdapter builds the production Sessions adapter around s. cmd/tripbot
-// assigns the result onto App.Sessions once Sessions is constructed.
-func NewSessionsAdapter(s *users.Sessions) Sessions { return realSessions{s: s} }
+// NewSessionsAdapter builds the production Sessions adapter around s, scoped
+// to the platform whose users it looks up. cmd/tripbot assigns the result onto
+// App.Sessions once Sessions is constructed.
+func NewSessionsAdapter(platform string, s *users.Sessions) Sessions {
+	return realSessions{platform: platform, s: s}
+}
 
 func (r realSessions) Find(ctx context.Context, username string) (users.User, error) {
-	return users.Find(ctx, username)
+	return users.Find(ctx, r.platform, username)
 }
 
 func (r realSessions) LifetimeLeaderboard() [][]string {

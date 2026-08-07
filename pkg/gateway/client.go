@@ -6,8 +6,8 @@
 //
 // The client is a thin, stateless request/response wrapper over the gateway's
 // v1 JSON endpoints. It holds no platform-specific knowledge and triggers no
-// init-time side effects, so any binary or package may import it (see the
-// package-boundary-init-discipline ADR). Callers decide their own
+// init-time side effects, so any binary or package may import it without
+// inheriting config/DB startup. Callers decide their own
 // fail-open/fail-closed posture from the returned error.
 package gateway
 
@@ -15,6 +15,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -26,9 +27,13 @@ import (
 )
 
 // defaultTimeout bounds every gateway call. The gateway is an in-cluster
-// neighbour, so a few seconds is generous; a hung gateway must not wedge a
-// caller (a chat command, the watchdog tick, the chat-send path).
-const defaultTimeout = 5 * time.Second
+// neighbour, but it proxies the platform call synchronously and some platform
+// writes are genuinely slow — facebook comment creation regularly takes
+// 3.5–5s+, which a 5s bound turned into spurious context-canceled 502s for
+// sends Graph had already accepted (a double-post hazard should sends ever
+// retry). 15s covers the slow-write tail while still unwedging callers (a
+// chat command, the watchdog tick, the chat-send path) from a hung gateway.
+const defaultTimeout = 15 * time.Second
 
 // Chat identities accepted by SendChat, matching the gateway's
 // provider.Identity values. The empty string lets the gateway pick its default.
@@ -36,6 +41,37 @@ const (
 	IdentityBot         = "bot"
 	IdentityBroadcaster = "broadcaster"
 )
+
+// ErrNoBroadcast and ErrUpstreamUnavailable are the two gateway replies that
+// report a platform state rather than a fault, so a caller can decline to treat
+// them as defects. Both are ordinary conditions on a channel that isn't live or
+// a platform that is throttling; the gateway itself keeps them off Sentry, and a
+// caller that logs them at error level puts them straight back on.
+//
+//   - ErrNoBroadcast (409) — the call needed a live broadcast and there is
+//     none. A definite negative answer: there is nowhere to post right now.
+//   - ErrUpstreamUnavailable (503) — the platform refused the call rather than
+//     answering it. The answer is unknown, not negative, so it must not be read
+//     as "no"; retrying is the recovery.
+//
+// Any other non-2xx stays an unclassified error, which is what a genuine
+// gateway or platform failure (502) should look like.
+var (
+	ErrNoBroadcast         = errors.New("no active broadcast")
+	ErrUpstreamUnavailable = errors.New("upstream platform unavailable")
+)
+
+// statusErr classifies a non-2xx gateway response for op, wrapping the sentinel
+// for the states callers are expected to tolerate.
+func statusErr(op string, status int) error {
+	switch status {
+	case http.StatusConflict:
+		return fmt.Errorf("gateway %s: %w", op, ErrNoBroadcast)
+	case http.StatusServiceUnavailable:
+		return fmt.Errorf("gateway %s: %w", op, ErrUpstreamUnavailable)
+	}
+	return fmt.Errorf("gateway %s: unexpected status %d", op, status)
+}
 
 // Client talks to one platform-gateway instance over its v1 JSON API.
 type Client struct {
@@ -150,7 +186,7 @@ func (c *Client) SendChat(ctx context.Context, identity, text string) error {
 	instrumentation.GatewayConnection.Set(true)
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("gateway send-chat: unexpected status %d", resp.StatusCode)
+		return statusErr("send-chat", resp.StatusCode)
 	}
 	return nil
 }
@@ -169,16 +205,26 @@ func (c *Client) Chatters(ctx context.Context) (count int, logins []string, err 
 	return body.Count, body.Chatters, nil
 }
 
-// Subscribers returns the channel's current subscriber logins
-// (GET /v1/subscribers).
-func (c *Client) Subscribers(ctx context.Context) ([]string, error) {
+// Subscribers returns the channel's current subscribers as a login → tier map
+// (GET /v1/subscribers). A login the gateway reports without a tier (an older
+// gateway without the tiers field) defaults to tier 1.
+func (c *Client) Subscribers(ctx context.Context) (map[string]int, error) {
 	var body struct {
-		Subscribers []string `json:"subscribers"`
+		Subscribers []string       `json:"subscribers"`
+		Tiers       map[string]int `json:"tiers"`
 	}
 	if err := c.getJSON(ctx, "/v1/subscribers", &body); err != nil {
 		return nil, err
 	}
-	return body.Subscribers, nil
+	subs := make(map[string]int, len(body.Subscribers))
+	for _, login := range body.Subscribers {
+		tier := body.Tiers[login]
+		if tier < 1 {
+			tier = 1
+		}
+		subs[login] = tier
+	}
+	return subs, nil
 }
 
 // Followers returns the channel's total follower count (GET /v1/followers).
@@ -192,15 +238,60 @@ func (c *Client) Followers(ctx context.Context) (int, error) {
 	return body.Total, nil
 }
 
-// InboundChatMessage is one inbound live-chat line — viewer messages only (the
-// gateway filters the channel's own echoed sends). Author is the human-facing
-// name (a mutable display name on some platforms); AuthorID is the
-// platform-native stable user ID — the key viewer persistence and identity
-// linking must use.
+// InboundKind says what a viewer did. It mirrors the gateway's provider.InboundKind
+// — duplicated by hand across the two repos, same convention as the eventbus
+// envelopes; keep in sync.
+type InboundKind string
+
+const (
+	// KindChat is a viewer comment. The zero value, so a page from a gateway
+	// that predates the field decodes as comments.
+	KindChat InboundKind = ""
+	// KindGift is a viewer gift/donation: Text is empty and Gift is set.
+	KindGift InboundKind = "gift"
+)
+
+// Gift is a viewer gift in platform-neutral shape.
+//
+// Diamonds is the per-gift value in the platform's creator-side unit (TikTok
+// diamonds, roughly half the coin price the viewer paid) and Count is how many
+// were sent in one action, so the gift's worth is Value(). Name is display
+// text, not an identifier — platforms rename and retire gifts, so route on
+// Value.
+type Gift struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Count    int    `json:"count"`
+	Diamonds int    `json:"diamonds"`
+}
+
+// Value is the gift's total worth in the platform's creator-side unit.
+func (g Gift) Value() int { return g.Diamonds * g.Count }
+
+// InboundChatMessage is one inbound live event — viewer activity only (the
+// gateway filters the channel's own echoed sends). Kind says whether it's a
+// comment or a gift; a consumer must switch on it rather than assume, because
+// a gift's Text is empty and would parse as a blank command.
+//
+// Author is the human-facing name (a mutable display name on some platforms);
+// AuthorID is the platform-native stable user ID — the key viewer persistence
+// and identity linking must use. MessageID is the platform's own id for the
+// message, the handle a moderation action needs.
+//
+// Moderator/Subscriber/Broadcaster are the sender's role as the platform
+// reported it on this message — a snapshot, not a lookup. They are all false on
+// a platform that reports no roles, which is indistinguishable from a viewer
+// holding none, so a gate that must fail closed can't read them alone.
 type InboundChatMessage struct {
-	Author   string `json:"author"`
-	AuthorID string `json:"author_id"`
-	Text     string `json:"text"`
+	Author      string      `json:"author"`
+	AuthorID    string      `json:"author_id"`
+	Text        string      `json:"text"`
+	Kind        InboundKind `json:"kind,omitempty"`
+	Gift        *Gift       `json:"gift,omitempty"`
+	MessageID   string      `json:"message_id,omitempty"`
+	Moderator   bool        `json:"moderator,omitempty"`
+	Subscriber  bool        `json:"subscriber,omitempty"`
+	Broadcaster bool        `json:"broadcaster,omitempty"`
 }
 
 // InboundChatPage is one page from GET /v1/chat/inbound. Cursor is opaque: pass
@@ -235,10 +326,16 @@ func (c *Client) InboundChat(ctx context.Context, cursor string) (InboundChatPag
 // Broadcast is the channel's current live broadcast (GET /v1/broadcast). VideoID
 // is the watchable id (youtube.com/watch?v=<id>); Privacy is the visibility
 // ("public"/"unlisted"/"private"). Live is false when no broadcast is active.
+// BroadcastID and PermalinkURL are set by platforms whose broadcast object is
+// distinct from the watchable video (facebook: the live-video id + the
+// site-relative watch path, the only link that resolves an unpublished
+// broadcast); empty elsewhere.
 type Broadcast struct {
-	VideoID string `json:"video_id"`
-	Live    bool   `json:"live"`
-	Privacy string `json:"privacy"`
+	VideoID      string `json:"video_id"`
+	Live         bool   `json:"live"`
+	Privacy      string `json:"privacy"`
+	BroadcastID  string `json:"broadcast_id"`
+	PermalinkURL string `json:"permalink_url"`
 }
 
 // ActiveBroadcast returns the channel's current live broadcast (GET
@@ -250,6 +347,39 @@ func (c *Client) ActiveBroadcast(ctx context.Context) (Broadcast, error) {
 		return Broadcast{}, err
 	}
 	return b, nil
+}
+
+// StopEgress ends the platform's outbound broadcast (POST /v1/egress/stop).
+// Only a gateway whose adapter manages the broadcast lifecycle (TikTok via
+// Streamlabs) mounts the egress routes; anywhere else this 404s.
+func (c *Client) StopEgress(ctx context.Context) error {
+	return c.postEmpty(ctx, "/v1/egress/stop")
+}
+
+// StartEgress mints a fresh outbound broadcast (POST /v1/egress/start). No body
+// is sent, which tells the gateway to resolve the title from its own metadata
+// store rather than take one from the caller.
+func (c *Client) StartEgress(ctx context.Context) error {
+	return c.postEmpty(ctx, "/v1/egress/start")
+}
+
+// postEmpty POSTs to path with no body and discards a 2xx response.
+func (c *Client) postEmpty(ctx context.Context, path string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+path, nil)
+	if err != nil {
+		return fmt.Errorf("gateway %s request: %w", path, err)
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		instrumentation.GatewayConnection.Set(false)
+		return fmt.Errorf("gateway %s: %w", path, err)
+	}
+	instrumentation.GatewayConnection.Set(true)
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("gateway %s: unexpected status %d", path, resp.StatusCode)
+	}
+	return nil
 }
 
 // getJSON issues a GET and decodes a 200 JSON body into dest; any non-200 or

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"strings"
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
@@ -18,8 +17,8 @@ type Scoreboard struct {
 	ID       uint16 `gorm:"primaryKey"`
 	Name     string
 	Platform string
-	// autoCreateTime stamps date_created on insert; createScoreboard() doesn't
-	// set it, so without the tag GORM writes the 0001-01-01 zero value over the
+	// autoCreateTime stamps date_created on insert; the insert path doesn't set
+	// it, so without the tag GORM writes the 0001-01-01 zero value over the
 	// column's DEFAULT CURRENT_TIMESTAMP. See pkg/events for the full story.
 	DateCreated time.Time `gorm:"autoCreateTime"`
 }
@@ -29,7 +28,7 @@ type topUserResult struct {
 	Value    float32
 }
 
-func TopUsers(ctx context.Context, scoreboardName string, size int) [][]string {
+func TopUsers(ctx context.Context, cfg *c.TripbotConfig, scoreboardName string, size int) [][]string {
 	var leaderboard [][]string
 
 	var results []topUserResult
@@ -38,11 +37,14 @@ func TopUsers(ctx context.Context, scoreboardName string, size int) [][]string {
 		Select("users.username, scores.value").
 		Joins("JOIN scoreboards ON scores.scoreboard_id = scoreboards.id").
 		Joins("JOIN users ON scores.user_id = users.id").
-		Where("scoreboards.name = ? AND scoreboards.platform = ?", scoreboardName, c.Conf.Platform).
+		Where("scoreboards.name = ? AND scoreboards.platform = ?", scoreboardName, cfg.Platform).
 		// users.platform too: scores written before boards were per-platform
 		// may hang off the other platform's same-named board.
-		Where("users.is_bot = false AND users.platform = ? AND users.username != ?", c.Conf.Platform, strings.ToLower(c.Conf.ChannelName)).
-		Order("scores.value DESC").
+		Where("users.is_bot = false AND users.exclude_from_leaderboard = false AND users.platform = ? AND users.username != ?", cfg.Platform, cfg.ChannelName).
+		// username breaks the tie: without it Postgres is free to return equal
+		// scores in any order, so a board that re-renders every rotation tick
+		// shuffles its tied rows on screen for no reason a viewer can see.
+		Order("scores.value DESC, users.username ASC").
 		Limit(size).
 		Scan(&results)
 	if result.Error != nil {
@@ -57,15 +59,8 @@ func TopUsers(ctx context.Context, scoreboardName string, size int) [][]string {
 }
 
 // findOrCreateScoreboard will find a Scoreboard in the DB or create one
-func findOrCreateScoreboard(ctx context.Context, name string) (Scoreboard, error) {
+func findOrCreateScoreboard(ctx context.Context, platform, name string) (Scoreboard, error) {
 	var scoreboard Scoreboard
-	result := database.GormDB().WithContext(ctx).Where(Scoreboard{Name: name, Platform: c.Conf.Platform}).FirstOrCreate(&scoreboard)
-	return scoreboard, result.Error
-}
-
-// createScoreboard() will actually create the DB record
-func createScoreboard(ctx context.Context, name string) (Scoreboard, error) {
-	scoreboard := Scoreboard{Name: name, Platform: c.Conf.Platform}
-	result := database.GormDB().WithContext(ctx).Create(&scoreboard)
+	result := database.GormDB().WithContext(ctx).Where(Scoreboard{Name: name, Platform: platform}).FirstOrCreate(&scoreboard)
 	return scoreboard, result.Error
 }

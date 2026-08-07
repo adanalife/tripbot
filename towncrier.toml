@@ -45,8 +45,8 @@ name = "Onscreens"
 showcontent = true
 
 [[tool.towncrier.type]]
-directory = "vlc"
-name = "VLC"
+directory = "playout"
+name = "Playout"
 showcontent = true
 
 [[tool.towncrier.type]]

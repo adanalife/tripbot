@@ -18,15 +18,15 @@ func (c TripbotConfig) IsDevelopment() bool {
 
 // UserIsAdmin returns true if a given user runs the channel
 // it's used to restrict admin features
-func UserIsAdmin(username string) bool {
-	return strings.EqualFold(username, Conf.ChannelName)
+func (c TripbotConfig) UserIsAdmin(username string) bool {
+	return strings.EqualFold(username, c.ChannelName)
 }
 
 // UserIsCompedSubscriber reports whether username is on the comped-subscriber
 // allowlist — treated as a subscriber for subscriber-only commands without an
 // actual sub.
-func UserIsCompedSubscriber(username string) bool {
-	for _, u := range Conf.CompedSubscribers {
+func (c TripbotConfig) UserIsCompedSubscriber(username string) bool {
+	for _, u := range c.CompedSubscribers {
 		if strings.EqualFold(u, username) {
 			return true
 		}
@@ -39,6 +39,7 @@ var HelpMessages = []string{
 	"!commands: List more commands you can use",
 	"!commands: List more commands you can use",
 	"!commands: List more commands you can use",
+	"!daytime: Skip a night stretch ahead to the next morning",
 	"!guess: Guess which state we are in",
 	"!leaderboard: See who has the most miles",
 	"!location: Get the current location",

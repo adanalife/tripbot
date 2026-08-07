@@ -29,6 +29,7 @@ import (
 // mu guards loggedIn and lifetimeLeaderboard; it is held only for map/slice
 // access, never across DB or chatter-source calls.
 type Sessions struct {
+	cfg    *c.TripbotConfig
 	source ChatterSource
 	mu     sync.Mutex
 	// loggedIn maps username -> User for everyone currently in chat.
@@ -40,8 +41,9 @@ type Sessions struct {
 
 // New constructs a Sessions backed by the given ChatterSource. cmd/tripbot
 // wires the production gatewayChatterSource; tests build their own.
-func New(source ChatterSource) *Sessions {
+func New(cfg *c.TripbotConfig, source ChatterSource) *Sessions {
 	return &Sessions{
+		cfg:      cfg,
 		source:   source,
 		loggedIn: make(map[string]*User),
 	}
@@ -56,11 +58,11 @@ func (s *Sessions) UpdateSession(ctx context.Context) {
 
 	// Publish the authoritative chatter total so the admin panel's live console
 	// updates the "in chat" number (and flashes it on a change) without a reload.
-	eventbus.EmitViewerCount(ctx, c.Conf.Environment, c.Conf.Platform, s.source.ChatterCount())
+	eventbus.EmitViewerCount(ctx, s.cfg.Environment, s.cfg.Platform, s.source.ChatterCount())
 
 	// Persist the same total as a viewer_samples row — the durable half of the
 	// emission above, tagged with the clip currently on screen.
-	viewstats.RecordSample(ctx, s.source.ChatterCount())
+	viewstats.RecordSample(ctx, s.cfg, s.source.ChatterCount())
 
 	// log out the people who aren't present, working from a snapshot so the
 	// lock isn't held across the DB work logout does
@@ -121,7 +123,10 @@ func (s *Sessions) sessionSnapshot() map[string]*User {
 func (s *Sessions) login(ctx context.Context, username string) *User {
 	now := time.Now()
 
-	user := FindOrCreate(ctx, username)
+	user, err := FindOrCreate(ctx, s.cfg.Platform, username)
+	if err != nil {
+		slog.ErrorContext(ctx, "error finding or creating user", "err", err, "username", username)
+	}
 	// A zero ID means FindOrCreate couldn't get a DB row (transient Find error
 	// or a failed create). Don't cache an un-saveable user in the session, or
 	// every later logout tick would fail save(). Return without logging them in;
@@ -154,7 +159,7 @@ func (s *Sessions) login(ctx context.Context, username string) *User {
 	s.loggedIn[username] = &user
 	s.mu.Unlock()
 
-	if err := events.Login(ctx, username, user.sessionID); err != nil {
+	if err := events.Login(ctx, s.cfg, username, user.sessionID); err != nil {
 		slog.ErrorContext(ctx, "error creating login event", "err", err)
 	}
 
@@ -168,7 +173,7 @@ func (s *Sessions) logout(ctx context.Context, u *User) {
 
 	// print logout message if they're human
 	if !u.IsBot {
-		loggedInDur := time.Now().Sub(u.LoggedIn)
+		loggedInDur := time.Since(u.LoggedIn)
 		slog.InfoContext(ctx, "logging out user",
 			"user", u.String(),
 			"duration", durafmt.ParseShort(loggedInDur).String(),
@@ -200,7 +205,7 @@ func (s *Sessions) logout(ctx context.Context, u *User) {
 	if extra > 0 {
 		extraMiles = &extra
 	}
-	if err := events.Logout(ctx, u.Username, u.sessionID, extraMiles); err != nil {
+	if err := events.Logout(ctx, s.cfg, u.Username, u.sessionID, extraMiles); err != nil {
 		slog.ErrorContext(ctx, "error creating logout event", "err", err)
 	}
 
@@ -254,7 +259,12 @@ func (s *Sessions) CorrectMiles(ctx context.Context, username string, delta floa
 		updated.save(ctx)
 		return updated.Miles
 	}
-	u := FindOrCreate(ctx, username)
+	u, err := FindOrCreate(ctx, s.cfg.Platform, username)
+	if err != nil {
+		// save() refuses an ID-less user, so the correction is dropped rather
+		// than half-applied; the returned total reflects only the delta.
+		slog.ErrorContext(ctx, "error finding or creating user", "err", err, "username", username)
+	}
 	u.Miles += delta
 	u.save(ctx)
 	return u.Miles

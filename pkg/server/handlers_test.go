@@ -8,7 +8,7 @@ import (
 )
 
 func TestVersionHandlerReturnsInjectedTag(t *testing.T) {
-	srv := New()
+	srv := New(testConf)
 	srv.SetVersion("v9.9.9-test")
 
 	req := httptest.NewRequest(http.MethodGet, "/version", nil)

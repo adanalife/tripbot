@@ -3,7 +3,6 @@ package scoreboards
 import (
 	"context"
 	"reflect"
-	"strings"
 	"testing"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
@@ -13,6 +12,9 @@ import (
 
 // createUser inserts a viewer row and returns its ID. Usernames are unique per
 // (platform, username), so tests can reuse a name across platforms.
+// testConf is the config the scoreboard queries under test are scoped to.
+var testConf = &c.TripbotConfig{Environment: "testing", Platform: "twitch", ChannelName: "test"}
+
 func createUser(t *testing.T, db *gorm.DB, username, platform string, isBot bool) uint16 {
 	t.Helper()
 	var id uint16
@@ -26,8 +28,24 @@ func createUser(t *testing.T, db *gorm.DB, username, platform string, isBot bool
 	return id
 }
 
-// createScoreboardOn inserts a scoreboard for an arbitrary platform, which
-// createScoreboard() can't do (it always stamps this instance's platform).
+// createOptedOutUser inserts a viewer who is not a bot but has asked to stay
+// off the leaderboards, and returns its ID.
+func createOptedOutUser(t *testing.T, db *gorm.DB, username, platform string) uint16 {
+	t.Helper()
+	var id uint16
+	row := db.Raw(
+		`INSERT INTO users (username, platform, exclude_from_leaderboard) VALUES (?, ?, TRUE) RETURNING id`,
+		username, platform,
+	).Row()
+	if err := row.Scan(&id); err != nil {
+		t.Fatalf("insert opted-out user %q: %v", username, err)
+	}
+	return id
+}
+
+// createScoreboardOn inserts a scoreboard for an arbitrary platform, which the
+// package's own lookups can't do (they always scope to this instance's
+// platform).
 func createScoreboardOn(t *testing.T, db *gorm.DB, name, platform string) uint16 {
 	t.Helper()
 	var id uint16
@@ -53,46 +71,73 @@ func insertScore(t *testing.T, db *gorm.DB, userID, scoreboardID uint16, value f
 }
 
 // TestTopUsers covers the whole read contract in one board: descending order,
-// float formatting, and the three exclusions (bots, the channel owner, and
-// users belonging to another platform).
+// float formatting, and the four exclusions (bots, opted-out accounts, the
+// channel owner, and users belonging to another platform).
 func TestTopUsers(t *testing.T) {
 	db := testdb.New(t)
 	ctx := context.Background()
 
-	sb, err := findOrCreateScoreboard(ctx, "miles_2026_07")
+	sb, err := findOrCreateScoreboard(ctx, testConf.Platform, "miles_2026_07")
 	if err != nil {
 		t.Fatalf("findOrCreateScoreboard: %v", err)
 	}
 
 	// The real write path for viewers on this platform.
-	createUser(t, db, "alice", c.Conf.Platform, false)
-	createUser(t, db, "bob", c.Conf.Platform, false)
+	createUser(t, db, "alice", testConf.Platform, false)
+	createUser(t, db, "bob", testConf.Platform, false)
 	for _, w := range []struct {
 		username string
 		value    float32
 	}{{"alice", 10.5}, {"bob", 42.5}} {
-		if err := AddToScoreByName(ctx, w.username, "miles_2026_07", w.value); err != nil {
+		if err := AddToScoreByName(ctx, testConf.Platform, w.username, "miles_2026_07", w.value); err != nil {
 			t.Fatalf("AddToScoreByName(%s): %v", w.username, err)
 		}
 	}
 
-	// Rows that must not surface: a bot, the channel owner, and a viewer from
-	// another platform whose score hangs off this platform's board.
-	botID := createUser(t, db, "tripbot4000", c.Conf.Platform, true)
-	ownerID := createUser(t, db, strings.ToLower(c.Conf.ChannelName), c.Conf.Platform, false)
+	// Rows that must not surface: a bot, an opted-out human, the channel owner,
+	// and a viewer from another platform whose score hangs off this platform's
+	// board.
+	botID := createUser(t, db, "tripbot4000", testConf.Platform, true)
+	optedOutID := createOptedOutUser(t, db, "optedout", testConf.Platform)
+	ownerID := createUser(t, db, testConf.ChannelName, testConf.Platform, false)
 	otherPlatformID := createUser(t, db, "carol", "youtube", false)
-	for _, id := range []uint16{botID, ownerID, otherPlatformID} {
+	for _, id := range []uint16{botID, optedOutID, ownerID, otherPlatformID} {
 		insertScore(t, db, id, sb.ID, 999)
 	}
 
-	got := TopUsers(ctx, "miles_2026_07", 10)
+	got := TopUsers(ctx, testConf, "miles_2026_07", 10)
 	want := [][]string{{"bob", "42.5"}, {"alice", "10.5"}}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("TopUsers = %v, want %v", got, want)
 	}
 
-	if got := TopUsers(ctx, "miles_2026_07", 1); !reflect.DeepEqual(got, [][]string{{"bob", "42.5"}}) {
+	if got := TopUsers(ctx, testConf, "miles_2026_07", 1); !reflect.DeepEqual(got, [][]string{{"bob", "42.5"}}) {
 		t.Errorf("TopUsers with size=1 = %v, want just the top row", got)
+	}
+}
+
+// Tied scores come back in a fixed order. Without the username tiebreaker
+// Postgres may return equal values in any order, and the overlay re-renders
+// the board every rotation tick — so tied viewers would visibly swap places
+// on a live broadcast. Inserted worst-name-first so a query that only sorted
+// by value would have to reorder them to pass.
+func TestTopUsers_TiesOrderByUsername(t *testing.T) {
+	db := testdb.New(t)
+	ctx := context.Background()
+
+	sb, err := findOrCreateScoreboard(ctx, testConf.Platform, "miles_2026_07")
+	if err != nil {
+		t.Fatalf("findOrCreateScoreboard: %v", err)
+	}
+	for _, name := range []string{"carol", "bob", "alice"} {
+		insertScore(t, db, createUser(t, db, name, testConf.Platform, false), sb.ID, 12.5)
+	}
+
+	want := [][]string{{"alice", "12.5"}, {"bob", "12.5"}, {"carol", "12.5"}}
+	for i := 0; i < 3; i++ {
+		if got := TopUsers(ctx, testConf, "miles_2026_07", 10); !reflect.DeepEqual(got, want) {
+			t.Fatalf("TopUsers call %d = %v, want %v", i+1, got, want)
+		}
 	}
 }
 
@@ -103,17 +148,17 @@ func TestTopUsers_OtherPlatformBoardExcluded(t *testing.T) {
 	ctx := context.Background()
 
 	otherBoard := createScoreboardOn(t, db, "miles_2026_07", "youtube")
-	userID := createUser(t, db, "alice", c.Conf.Platform, false)
+	userID := createUser(t, db, "alice", testConf.Platform, false)
 	insertScore(t, db, userID, otherBoard, 42.5)
 
-	if got := TopUsers(ctx, "miles_2026_07", 10); len(got) != 0 {
+	if got := TopUsers(ctx, testConf, "miles_2026_07", 10); len(got) != 0 {
 		t.Fatalf("expected no rows from the other platform's board, got %v", got)
 	}
 }
 
 func TestTopUsers_UnknownScoreboard(t *testing.T) {
 	testdb.New(t)
-	if got := TopUsers(context.Background(), "no_such_board_2026_07", 10); len(got) != 0 {
+	if got := TopUsers(context.Background(), testConf, "no_such_board_2026_07", 10); len(got) != 0 {
 		t.Fatalf("expected no rows, got %v", got)
 	}
 }
@@ -122,18 +167,18 @@ func TestFindOrCreateScoreboard_CreatesThenFinds(t *testing.T) {
 	testdb.New(t)
 	ctx := context.Background()
 
-	created, err := findOrCreateScoreboard(ctx, "miles_2026_07")
+	created, err := findOrCreateScoreboard(ctx, testConf.Platform, "miles_2026_07")
 	if err != nil {
 		t.Fatalf("findOrCreateScoreboard (create): %v", err)
 	}
-	if created.ID == 0 || created.Name != "miles_2026_07" || created.Platform != c.Conf.Platform {
+	if created.ID == 0 || created.Name != "miles_2026_07" || created.Platform != testConf.Platform {
 		t.Fatalf("unexpected scoreboard: %+v", created)
 	}
 	if created.DateCreated.IsZero() {
 		t.Errorf("expected date_created stamped on insert, got %+v", created)
 	}
 
-	found, err := findOrCreateScoreboard(ctx, "miles_2026_07")
+	found, err := findOrCreateScoreboard(ctx, testConf.Platform, "miles_2026_07")
 	if err != nil {
 		t.Fatalf("findOrCreateScoreboard (find): %v", err)
 	}
@@ -150,15 +195,15 @@ func TestFindOrCreateScoreboard_PlatformScoped(t *testing.T) {
 
 	otherID := createScoreboardOn(t, db, "miles_2026_07", "youtube")
 
-	sb, err := findOrCreateScoreboard(context.Background(), "miles_2026_07")
+	sb, err := findOrCreateScoreboard(context.Background(), testConf.Platform, "miles_2026_07")
 	if err != nil {
 		t.Fatalf("findOrCreateScoreboard: %v", err)
 	}
 	if sb.ID == otherID {
 		t.Fatalf("adopted the other platform's board (id %d)", otherID)
 	}
-	if sb.Platform != c.Conf.Platform {
-		t.Fatalf("expected platform %q, got %+v", c.Conf.Platform, sb)
+	if sb.Platform != testConf.Platform {
+		t.Fatalf("expected platform %q, got %+v", testConf.Platform, sb)
 	}
 }
 
@@ -168,18 +213,18 @@ func TestAddToScoreByName_Accumulates(t *testing.T) {
 	db := testdb.New(t)
 	ctx := context.Background()
 
-	userID := createUser(t, db, "alice", c.Conf.Platform, false)
+	userID := createUser(t, db, "alice", testConf.Platform, false)
 
-	if got, err := GetScoreByName(ctx, "alice", "miles_2026_07"); err != nil || got != 0 {
+	if got, err := GetScoreByName(ctx, testConf.Platform, "alice", "miles_2026_07"); err != nil || got != 0 {
 		t.Fatalf("GetScoreByName on a fresh board = %v, %v; want 0, nil", got, err)
 	}
 	for _, v := range []float32{1.5, 2} {
-		if err := AddToScoreByName(ctx, "alice", "miles_2026_07", v); err != nil {
+		if err := AddToScoreByName(ctx, testConf.Platform, "alice", "miles_2026_07", v); err != nil {
 			t.Fatalf("AddToScoreByName: %v", err)
 		}
 	}
 
-	got, err := GetScoreByName(ctx, "alice", "miles_2026_07")
+	got, err := GetScoreByName(ctx, testConf.Platform, "alice", "miles_2026_07")
 	if err != nil {
 		t.Fatalf("GetScoreByName: %v", err)
 	}
