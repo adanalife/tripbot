@@ -110,6 +110,33 @@ func (p *Player) CurrentProgress() time.Duration {
 	return time.Since(p.timeStarted)
 }
 
+// Playhead returns the clip on screen and how far into it the stream is.
+//
+// The stopwatch behind CurrentProgress starts when the cron *notices* a clip
+// change, and it only looks once a minute, so both the clip and the offset can
+// be that far behind — a kilometre and a half of driving at highway speed,
+// which is more than enough to undo the precision a per-moment coordinate
+// buys. playout reports its real file and position every five seconds, so that
+// is the answer whenever it's readable; the Player's own state is the fallback
+// for when it isn't.
+func (p *Player) Playhead(ctx context.Context) (Video, time.Duration) {
+	file, pos, ok := p.playout.Playhead(ctx)
+	if !ok {
+		return p.CurrentlyPlaying, p.CurrentProgress()
+	}
+	if slug(file) == p.CurrentlyPlaying.Slug {
+		return p.CurrentlyPlaying, pos
+	}
+	// playout has moved on and the cron hasn't caught up yet. Answer for the
+	// clip actually on screen rather than the one that stopped playing.
+	vid, err := LoadOrCreate(ctx, file)
+	if err != nil {
+		slog.DebugContext(ctx, "playhead clip lookup failed", "err", err, "file", file)
+		return p.CurrentlyPlaying, p.CurrentProgress()
+	}
+	return vid, pos
+}
+
 // Current returns the currently-playing video.
 func (p *Player) Current() Video { return p.CurrentlyPlaying }
 

@@ -243,9 +243,10 @@ func TestGuessCmd_CorrectGuess_RefreshesVideoAfterTimewarp(t *testing.T) {
 
 	app.guessCmd(context.Background(), newTestUser("viewer1"), []string{"Colorado"})
 
-	// guessCmd first reads the current vid (Current), then the correct-guess
-	// path runs a.timewarp() which refreshes via GetCurrentlyPlaying.
-	wantCalls := []string{"Current()", "GetCurrentlyPlaying()"}
+	// guessCmd first resolves where the stream is (PlayheadLocation), then the
+	// correct-guess path runs a.timewarp() which refreshes via
+	// GetCurrentlyPlaying.
+	wantCalls := []string{"PlayheadLocation()", "GetCurrentlyPlaying()"}
 	if len(recVideo.Calls) != len(wantCalls) ||
 		recVideo.Calls[0] != wantCalls[0] || recVideo.Calls[1] != wantCalls[1] {
 		t.Errorf("expected calls %v, got %v", wantCalls, recVideo.Calls)
