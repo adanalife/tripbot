@@ -9,7 +9,6 @@ import (
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
-	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/feature"
 	"github.com/adanalife/tripbot/pkg/httpmw"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
@@ -52,11 +51,14 @@ func New(cfg *c.TripbotConfig) *Server {
 // handler doesn't block process exit indefinitely.
 const shutdownTimeout = 15 * time.Second
 
-// Start starts the web server. When ctx is canceled (e.g. SIGINT/SIGTERM
-// via signal.NotifyContext) the server stops accepting new connections and
-// waits up to shutdownTimeout for in-flight requests to complete before
-// returning.
-func (s *Server) Start(ctx context.Context) {
+// Start starts the web server, returning the listener error if it fails to
+// come up. When ctx is canceled (e.g. SIGINT/SIGTERM via
+// signal.NotifyContext) the server stops accepting new connections, waits up
+// to shutdownTimeout for in-flight requests to complete, and returns nil.
+// Whether a listener failure should end the process is the binary's call, not
+// this package's — cmd/onscreens-server makes the same choice with its own
+// server.
+func (s *Server) Start(ctx context.Context) error {
 	slog.InfoContext(ctx, "starting web server", "port", s.cfg.TripbotServerPort)
 
 	r := mux.NewRouter()
@@ -170,9 +172,7 @@ func (s *Server) Start(ctx context.Context) {
 
 	select {
 	case err := <-serverErr:
-		if err != nil {
-			terrors.FatalContext(ctx, err, "couldn't start server")
-		}
+		return err
 	case <-ctx.Done():
 		slog.InfoContext(ctx, "shutting down web server")
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
@@ -180,6 +180,7 @@ func (s *Server) Start(ctx context.Context) {
 		if err := srv.Shutdown(shutdownCtx); err != nil {
 			slog.ErrorContext(shutdownCtx, "error during web server shutdown", "err", err)
 		}
+		return nil
 	}
 }
 
