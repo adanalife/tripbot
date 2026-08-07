@@ -60,6 +60,11 @@ var writers = []struct {
 	{"StateCrossing", "state_crossing", func(ctx context.Context, cfg *c.TripbotConfig) error {
 		return StateCrossing(ctx, cfg, "Utah", "Colorado", 42, true)
 	}},
+	{"CommandRefused", "command_refused", func(ctx context.Context, cfg *c.TripbotConfig) error {
+		return CommandRefused(ctx, cfg, CommandRefusal{
+			Username: "someone", Command: "!watchtime", Reason: RefusedUnknown,
+		})
+	}},
 }
 
 // A read-only instance must write no events at all. There's no mock DB

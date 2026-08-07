@@ -10,6 +10,7 @@ import (
 	mylog "github.com/adanalife/tripbot/pkg/chatbot/log"
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/eventbus"
+	"github.com/adanalife/tripbot/pkg/events"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"github.com/adanalife/tripbot/pkg/users"
@@ -54,20 +55,24 @@ type chatUser interface {
 // checkAccess returns true when the user is allowed to run cmd on platform.
 // It calls say with the appropriate denial message when access is denied.
 //
+// On a denial it also returns the events refusal reason that names the gate, so
+// dispatch can log the refusal without re-deriving which check failed. refused
+// is empty when access is granted.
+//
 // The subscriber gate only applies where the platform has subscribers to check
 // (platformHasSubscribers). Elsewhere it would reject every viewer forever, so
 // a RequiresSubscriber command runs ungated — bounded there by the v1 allowlist
 // instead.
-func (cmd *Command) checkAccess(ctx context.Context, platform string, user chatUser, say func(string)) bool {
+func (cmd *Command) checkAccess(ctx context.Context, platform string, user chatUser, say func(string)) (ok bool, refused string) {
 	if followerGatingEnabled && cmd.RequiresFollow && !user.HasCommandAvailable(ctx) {
 		say(followerMsg)
-		return false
+		return false, events.RefusedFollowGate
 	}
 	if cmd.RequiresSubscriber && platformHasSubscribers[platform] && !user.IsSubscriber() {
 		say(subscriberMsg)
-		return false
+		return false, events.RefusedSubGate
 	}
-	return true
+	return true, ""
 }
 
 // sessionUser adapts a *users.User plus the installed *Sessions to the
@@ -88,7 +93,13 @@ func (su sessionUser) IsSubscriber() bool {
 
 func (a *App) dispatch(ctx context.Context, cmd *Command, user *users.User, params []string) {
 	incChatCommandCounter(cmd.Trigger)
-	if !cmd.checkAccess(ctx, a.platform(), sessionUser{a.Cfg, a.UserSessions, user}, a.Chat.Say) {
+	if ok, refused := cmd.checkAccess(ctx, a.platform(), sessionUser{a.Cfg, a.UserSessions, user}, a.Chat.Say); !ok {
+		a.recordRefusal(ctx, events.CommandRefusal{
+			Username: user.Username,
+			Command:  cmd.Trigger,
+			Args:     strings.Join(params, " "),
+			Reason:   refused,
+		})
 		return
 	}
 	// Start a child span under the chatbot.handle_message span from
@@ -102,6 +113,30 @@ func (a *App) dispatch(ctx context.Context, cmd *Command, user *users.User, para
 	start := time.Now()
 	cmd.Handler(ctx, user, params)
 	instrumentation.ChatCommandDuration.Observe(cmd.Trigger, time.Since(start).Seconds())
+}
+
+// recordRefusal writes a command_refused event, stamping whatever clip is
+// airing so a refusal can be read back against what was on screen. Best-effort:
+// the viewer already got their answer in chat, so a failed insert is logged and
+// dropped rather than surfaced.
+//
+// The caller supplies the identifying fields; the airing context is filled in
+// here so no emit site can forget it.
+func (a *App) recordRefusal(ctx context.Context, r events.CommandRefusal) {
+	if a.Events == nil {
+		return
+	}
+	// Current() is the cached notion of what's playing — no I/O, because a
+	// refusal must not cost a round-trip to playout.
+	if a.Video != nil {
+		r.VideoID = a.Video.Current().ID
+		secs := a.Video.CurrentProgress().Seconds()
+		r.TsSec = &secs
+	}
+	if err := a.Events.CommandRefused(ctx, r); err != nil {
+		slog.ErrorContext(ctx, "error recording command refusal", "err", err,
+			"command", r.Command, "reason", r.Reason)
+	}
 }
 
 // findCommand parses message and returns the matching Command and params.
@@ -260,14 +295,49 @@ func (a *App) runCommand(ctx context.Context, user *users.User, message string) 
 	if strings.HasPrefix(command, "!") {
 		// A viewer reaching for a command this bot doesn't have is chat traffic,
 		// not an application fault: a typo, or a trigger they know from another
-		// channel's bot (!watchtime showed up in prod this way). The same branch
-		// also catches a command that exists but isn't indexed on this platform,
-		// which commandEnabled makes a deliberate outcome. At Error level every
-		// distinct token became its own Sentry issue and drew down the free-tier
-		// budget. Info keeps it in the logs and Loki, and attaches it to real
-		// events as a breadcrumb, at no quota cost.
-		slog.InfoContext(ctx, "unknown chat command", "command", command)
+		// channel's bot (!watchtime showed up in prod this way). At Error level
+		// every distinct token became its own Sentry issue and drew down the
+		// free-tier budget; the command_refused event below is now the durable
+		// record of what people try, so Info is enough here.
+		reason := events.RefusedUnknown
+		if a.unindexedCommand(command) != nil {
+			// The command exists, it just isn't dispatchable here — a deliberate
+			// commandEnabled outcome, and a different question from a typo. Worth
+			// separating: a viewer repeatedly reaching for a command their
+			// platform can't run is an argument for enabling it there.
+			reason = events.RefusedWrongPlatform
+		}
+		slog.InfoContext(ctx, "unknown chat command", "command", command, "reason", reason)
+		a.recordRefusal(ctx, events.CommandRefusal{
+			Username: user.Username,
+			Command:  command,
+			Args:     strings.Join(split[1:], " "),
+			Reason:   reason,
+		})
 	}
+}
+
+// unindexedCommand returns the registered Command that token names but which
+// isn't dispatchable on this platform, or nil when the token names no command at
+// all. indexCommands only indexes commands commandEnabled accepts, so a
+// platform-gated command misses the lookup exactly like a typo does — this is
+// what tells those two apart.
+func (a *App) unindexedCommand(token string) *Command {
+	for i := range a.commands {
+		cmd := &a.commands[i]
+		if a.commandEnabled(cmd) {
+			continue // indexed; findCommand would have matched it
+		}
+		if strings.EqualFold(cmd.Trigger, token) {
+			return cmd
+		}
+		for _, alias := range cmd.Aliases {
+			if strings.EqualFold(alias, token) {
+				return cmd
+			}
+		}
+	}
+	return nil
 }
 
 // IncomingMessage is a platform-neutral inbound chat message. Platform

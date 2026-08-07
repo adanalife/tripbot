@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/database"
+	"github.com/adanalife/tripbot/pkg/events"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/scoreboards"
 	"github.com/adanalife/tripbot/pkg/users"
@@ -477,6 +478,16 @@ func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 		msg = "I recently told you the answer! Try again in %s."
 		msg = fmt.Sprintf(msg, prettyDur)
 		a.Chat.Say(msg)
+		// The cooldown is per-command state rather than a dispatcher gate, so
+		// this refusal has to be recorded from inside the handler. It's the one
+		// refusal a rollup can compare against a *successful* guess by the same
+		// viewer, which is what makes the guess history readable.
+		a.recordRefusal(ctx, events.CommandRefusal{
+			Username: user.Username,
+			Command:  "!guess",
+			Args:     strings.Join(params, " "),
+			Reason:   events.RefusedCooldown,
+		})
 		return
 	}
 
