@@ -70,6 +70,22 @@ func (m Moment) Place() string {
 	return ""
 }
 
+// Place renders the clip's own location the way Moment.Place renders a
+// playhead one, so a clip answering from its representative coordinate reads
+// identically to one answering from the track. Empty until the geocode pass has
+// named the row, which is the caller's signal to fall back further.
+//
+// A city without a distance can't be rendered honestly — "Bishop, California"
+// and "Somewhere in California" are 100 km apart — so a half-filled row degrades
+// to the state rather than claiming the nearest town is the current one.
+func (v Video) Place() string {
+	m := Moment{State: v.State}
+	if v.City != "" && v.CityM != nil {
+		m.City, m.CityM = v.City, *v.CityM
+	}
+	return m.Place()
+}
+
 // The two ORDER BY booleans do the preference in one pass: Postgres sorts
 // false before true, so rows within ocrWindow come first, then within those
 // the ones read off the frame, then nearest wins.
