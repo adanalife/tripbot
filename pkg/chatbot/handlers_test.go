@@ -1,9 +1,14 @@
 package chatbot
 
 import (
+	"bytes"
 	"context"
+	"log/slog"
+	"strings"
 	"testing"
 
+	"github.com/adanalife/tripbot/pkg/events"
+	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/adanalife/tripbot/pkg/video"
 )
 
@@ -336,6 +341,127 @@ func TestRunCommand_MiddleHideStillHides(t *testing.T) {
 	}
 }
 
+// A command this bot doesn't have is viewer traffic, not a fault, so it must
+// stay under Error — the level pkg/telemetry converts into a Sentry event.
+// !watchtime (a trigger from some other channel's bot) reached prod as an error
+// and minted its own Sentry issue. The command_refused event is what carries the
+// "what are people reaching for" signal the error level used to stand in for.
+func TestRunCommand_UnknownCommandStaysBelowError(t *testing.T) {
+	app := newTestApp(video.Video{})
+	rec := &recordingEvents{}
+	app.Events = rec
+
+	var buf bytes.Buffer
+	restore := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	defer slog.SetDefault(restore)
+
+	app.runCommand(context.Background(), newTestUser(adminUser), "!watchtime")
+
+	if strings.Contains(buf.String(), "level=ERROR") {
+		t.Errorf("unknown command logged at ERROR (reaches Sentry); log = %q", buf.String())
+	}
+	if !strings.Contains(buf.String(), "!watchtime") {
+		t.Errorf("unknown command not logged at all; log = %q", buf.String())
+	}
+	if len(rec.Refusals) != 1 {
+		t.Fatalf("refusals = %d, want 1", len(rec.Refusals))
+	}
+	if got := rec.Refusals[0]; got.Reason != events.RefusedUnknown || got.Command != "!watchtime" {
+		t.Errorf("refusal = %+v, want command !watchtime reason %q", got, events.RefusedUnknown)
+	}
+}
+
+// A command that exists but isn't indexed here misses findCommand exactly like a
+// typo does. They're different questions — a typo may seed a new command, while
+// an unreachable one argues for enabling it on this platform — so the reason has
+// to separate them rather than lumping both under "unknown".
+func TestRunCommand_PlatformGatedCommandRefusesAsWrongPlatform(t *testing.T) {
+	app := newTestApp(video.Video{})
+	app.Platform = platformFacebook
+	app.indexCommands()
+	rec := &recordingEvents{}
+	app.Events = rec
+
+	// !somafm is in the registry but outside the v1 allowlist Facebook runs.
+	app.runCommand(context.Background(), newTestUser(adminUser), "!somafm")
+
+	if len(rec.Refusals) != 1 {
+		t.Fatalf("refusals = %d, want 1", len(rec.Refusals))
+	}
+	if got := rec.Refusals[0].Reason; got != events.RefusedWrongPlatform {
+		t.Errorf("reason = %q, want %q", got, events.RefusedWrongPlatform)
+	}
+}
+
+// A refusal stamps the airing clip, which is the whole point of recording it in
+// events rather than a counter: "which commands do people reach for during which
+// footage" is a join, and it's only possible if the clip is on the row.
+func TestRunCommand_RefusalStampsAiringClip(t *testing.T) {
+	app := newTestApp(video.Video{ID: 77})
+	rec := &recordingEvents{}
+	app.Events = rec
+
+	app.runCommand(context.Background(), newTestUser(adminUser), "!watchtime extra args")
+
+	if len(rec.Refusals) != 1 {
+		t.Fatalf("refusals = %d, want 1", len(rec.Refusals))
+	}
+	got := rec.Refusals[0]
+	if got.VideoID != 77 {
+		t.Errorf("video id = %d, want 77", got.VideoID)
+	}
+	if got.TsSec == nil {
+		t.Error("ts_sec = nil, want the playhead stamped")
+	}
+	if got.Args != "extra args" {
+		t.Errorf("args = %q, want %q", got.Args, "extra args")
+	}
+}
+
+// stubChatterSource is the minimum ChatterSource that lets a test build a real
+// users.Sessions: nobody is in chat, follows, or subscribes. Enough to drive
+// dispatch's access gates, which read a Sessions rather than the injectable
+// chatUser the checkAccess unit tests use.
+type stubChatterSource struct{}
+
+func (stubChatterSource) UpdateChatters()               {}
+func (stubChatterSource) Chatters() map[string]struct{} { return map[string]struct{}{} }
+func (stubChatterSource) ChatterCount() int             { return 0 }
+func (stubChatterSource) IsSubscriber(_ string) bool    { return false }
+func (stubChatterSource) SubscriberTier(_ string) int   { return 0 }
+func (stubChatterSource) IsFollower(_ string) bool      { return false }
+
+// A gate refusal is a refusal too — the command existed and was reachable, and
+// still didn't run. Leaving the gates unrecorded would make any refusal rate
+// computed from the log quietly wrong, so this covers the dispatch emit site
+// (the subscriber gate is the one a fresh test user can actually fail; the
+// follow gate always passes for a user with no command history).
+func TestDispatch_SubscriberGateRecordsRefusal(t *testing.T) {
+	app := newTestApp(video.Video{})
+	app.UserSessions = users.New(testConf, stubChatterSource{})
+	rec := &recordingEvents{}
+	app.Events = rec
+
+	var ran bool
+	cmd := &Command{
+		Trigger:            "!test",
+		RequiresSubscriber: true,
+		Handler:            func(context.Context, *users.User, []string) { ran = true },
+	}
+	app.dispatch(context.Background(), cmd, newTestUser("somenonsubscriber"), []string{"arg"})
+
+	if ran {
+		t.Error("handler ran despite the subscriber gate")
+	}
+	if len(rec.Refusals) != 1 {
+		t.Fatalf("refusals = %d, want 1", len(rec.Refusals))
+	}
+	if got := rec.Refusals[0]; got.Reason != events.RefusedSubGate || got.Command != "!test" {
+		t.Errorf("refusal = %+v, want command !test reason %q", got, events.RefusedSubGate)
+	}
+}
+
 func TestTargetUsername(t *testing.T) {
 	for in, want := range map[string]string{
 		"@DanaMerrick": "danamerrick",
@@ -366,7 +492,7 @@ var _ chatUser = sessionUser{}
 func TestCheckAccess_NoRestrictions(t *testing.T) {
 	cmd := &Command{Trigger: "!test"}
 	var said string
-	if !cmd.checkAccess(context.Background(), platformTwitch, &fakeUser{}, func(msg string) { said = msg }) {
+	if ok, _ := cmd.checkAccess(context.Background(), platformTwitch, &fakeUser{}, func(msg string) { said = msg }); !ok {
 		t.Error("expected true for unrestricted command")
 	}
 	if said != "" {
@@ -381,8 +507,14 @@ func TestCheckAccess_RequiresFollow_NonFollower(t *testing.T) {
 
 	cmd := &Command{Trigger: "!test", RequiresFollow: true}
 	var said string
-	if cmd.checkAccess(context.Background(), platformTwitch, &fakeUser{follower: false}, func(msg string) { said = msg }) {
+	ok, refused := cmd.checkAccess(context.Background(), platformTwitch, &fakeUser{follower: false}, func(msg string) { said = msg })
+	if ok {
 		t.Error("expected false for non-follower")
+	}
+	// The reason names the gate for the command_refused event, so a rollup can
+	// tell a follow-gated refusal from a typo.
+	if refused != events.RefusedFollowGate {
+		t.Errorf("refused = %q, want %q", refused, events.RefusedFollowGate)
 	}
 	if said != followerMsg {
 		t.Errorf("got %q, want followerMsg", said)
@@ -396,7 +528,7 @@ func TestCheckAccess_RequiresFollow_Follower(t *testing.T) {
 
 	cmd := &Command{Trigger: "!test", RequiresFollow: true}
 	var said string
-	if !cmd.checkAccess(context.Background(), platformTwitch, &fakeUser{follower: true}, func(msg string) { said = msg }) {
+	if ok, _ := cmd.checkAccess(context.Background(), platformTwitch, &fakeUser{follower: true}, func(msg string) { said = msg }); !ok {
 		t.Error("expected true for follower")
 	}
 	if said != "" {
@@ -411,7 +543,7 @@ func TestCheckAccess_RequiresFollow_GatingDisabled(t *testing.T) {
 
 	cmd := &Command{Trigger: "!test", RequiresFollow: true}
 	var said string
-	if !cmd.checkAccess(context.Background(), platformTwitch, &fakeUser{follower: false}, func(msg string) { said = msg }) {
+	if ok, _ := cmd.checkAccess(context.Background(), platformTwitch, &fakeUser{follower: false}, func(msg string) { said = msg }); !ok {
 		t.Error("expected true for non-follower when gating disabled")
 	}
 	if said != "" {
@@ -422,8 +554,12 @@ func TestCheckAccess_RequiresFollow_GatingDisabled(t *testing.T) {
 func TestCheckAccess_RequiresSubscriber_NonSubscriber(t *testing.T) {
 	cmd := &Command{Trigger: "!test", RequiresSubscriber: true}
 	var said string
-	if cmd.checkAccess(context.Background(), platformTwitch, &fakeUser{subscriber: false}, func(msg string) { said = msg }) {
+	ok, refused := cmd.checkAccess(context.Background(), platformTwitch, &fakeUser{subscriber: false}, func(msg string) { said = msg })
+	if ok {
 		t.Error("expected false for non-subscriber")
+	}
+	if refused != events.RefusedSubGate {
+		t.Errorf("refused = %q, want %q", refused, events.RefusedSubGate)
 	}
 	if said != subscriberMsg {
 		t.Errorf("got %q, want subscriberMsg", said)
@@ -433,7 +569,7 @@ func TestCheckAccess_RequiresSubscriber_NonSubscriber(t *testing.T) {
 func TestCheckAccess_RequiresSubscriber_Subscriber(t *testing.T) {
 	cmd := &Command{Trigger: "!test", RequiresSubscriber: true}
 	var said string
-	if !cmd.checkAccess(context.Background(), platformTwitch, &fakeUser{subscriber: true}, func(msg string) { said = msg }) {
+	if ok, _ := cmd.checkAccess(context.Background(), platformTwitch, &fakeUser{subscriber: true}, func(msg string) { said = msg }); !ok {
 		t.Error("expected true for subscriber")
 	}
 	if said != "" {
@@ -447,7 +583,7 @@ func TestCheckAccess_RequiresSubscriber_PlatformWithoutSubscribers(t *testing.T)
 	cmd := &Command{Trigger: "!test", RequiresSubscriber: true}
 	for _, platform := range []string{platformTikTok, platformInstagram, platformYouTube, "kick"} {
 		var said string
-		if !cmd.checkAccess(context.Background(), platform, &fakeUser{subscriber: false}, func(msg string) { said = msg }) {
+		if ok, _ := cmd.checkAccess(context.Background(), platform, &fakeUser{subscriber: false}, func(msg string) { said = msg }); !ok {
 			t.Errorf("%s: expected the subscriber gate to be skipped", platform)
 		}
 		if said != "" {
