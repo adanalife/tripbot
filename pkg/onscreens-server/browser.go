@@ -136,9 +136,9 @@ func (s *Server) onscreensStateHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	snap := s.Snapshot()
-	out := make(map[string]Onscreen, len(snap))
+	out := make(map[string]onscreenView, len(snap))
 	for slug, osc := range snap {
-		view := *osc
+		view := osc.view()
 		if onscreenRegistry[slug].Markdown {
 			view.Content = renderInlineMarkdown(view.Content)
 		}

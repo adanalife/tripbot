@@ -7,5 +7,5 @@ import (
 // newGPSOnscreen constructs the GPS *Onscreen.
 func newGPSOnscreen() *Onscreen {
 	slog.Info("creating onscreen", "kind", "gps")
-	return newOnscreen()
+	return newOnscreen(defaultSleepInterval)
 }

@@ -53,6 +53,10 @@ lifecycle targets.
 For DB-backed tests you only need postgres, which `task test` spins up on demand
 via the docker-compose testing stack ([`infra/docker/docker-compose.testing.yml`](infra/docker/docker-compose.testing.yml)) — no manual setup required.
 
+That postgres container outlives a test run, and migrations are only applied
+once. **After editing a migration that has already run, `task test:db:reset`** —
+otherwise the next run silently tests against the old schema.
+
 ### Changelog
 
 Changelog entries are managed with [towncrier](https://towncrier.readthedocs.io). **Every PR into `main` adds a fragment** describing its user-facing change — a `changelog` CI check enforces this (label a PR `skip-changelog` for dependabot bumps, CI-only tweaks, or pure refactors that warrant no entry).

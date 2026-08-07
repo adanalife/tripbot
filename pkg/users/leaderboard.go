@@ -19,7 +19,10 @@ func (s *Sessions) fetchLeaderboard(ctx context.Context, limit int) ([]User, err
 	var users []User
 	result := database.GormDB().WithContext(ctx).
 		Where("platform = ? AND miles != 0 AND is_bot = false AND exclude_from_leaderboard = false AND username != ?", s.cfg.Platform, s.cfg.ChannelName).
-		Order("miles DESC").
+		// username breaks the tie, so equal mileages hold a fixed order across
+		// rebuilds instead of shuffling on screen. UpdateLeaderboard's re-sort
+		// below is stable, so it carries this through.
+		Order("miles DESC, username ASC").
 		Limit(limit).
 		Find(&users)
 	return users, result.Error

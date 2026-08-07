@@ -40,9 +40,16 @@ jobs:
     timeout-minutes: 15
     # Skip forks (their GITHUB_TOKEN/app token can't push to the head branch)
     # and release-please's own branch (it carries no fragments to number).
+    #
+    # Dependabot for the same reason, plus one that would fail loudly rather
+    # than idle: a Dependabot pull_request event receives no Actions secrets,
+    # so `secrets.AUTOMATION_APP_PRIVATE_KEY` arrives empty and the mint step
+    # below dies on it -- leaving every bump PR with a red required check for
+    # work it never had to do.
     if: >-
       github.event.pull_request.head.repo.full_name == github.repository &&
-      github.head_ref != 'release-please--branches--main'
+      github.head_ref != 'release-please--branches--main' &&
+      github.event.pull_request.user.login != 'dependabot[bot]'
     steps:
       - name: Mint automation app token
         id: app-token

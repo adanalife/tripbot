@@ -28,9 +28,8 @@ var (
 	scoreboardWrites          = mustCounter("tripbot_scoreboard_writes_total", "Total successful scoreboard score writes, labeled by scoreboard")
 	twitchSubscribers         = mustGauge("twitch_subscribers_total", "Current number of Twitch channel subscribers")
 	twitchFollowers           = mustGauge("twitch_followers_total", "Current number of Twitch channel followers")
-	twitchConnected           = mustGauge("tripbot_twitch_connected", "1 when the bot is connected to Twitch chat (IRC), 0 otherwise")
+	twitchConnected           = mustGauge("tripbot_twitch_connected", "1 when the bot is receiving Twitch chat, 0 otherwise")
 	twitchTokenExpiry         = mustGauge("tripbot_twitch_token_expires_at_seconds", "Unix timestamp of the in-memory Twitch user-access-token's ExpiresAt, labeled by account (bot|broadcaster). 0 when the account has no loaded token.")
-	twitchHelixErrors         = mustCounter("twitch_helix_errors_total", "Total non-2xx responses from the Twitch Helix API, labeled by endpoint and status_code")
 	twitchChannelLive         = mustGauge("tripbot_twitch_channel_live", "1 when Helix GetStreams reports the configured channel as live, 0 when offline. Driven by the OBS silent-disconnect watchdog's Helix poll.")
 	channelLive               = mustGauge("tripbot_channel_live", "1 when the platform reports this instance's channel as live, 0 when offline, labeled by service_platform. Paired with obs_streaming_active in the silent-disconnect alert: OBS=1 while the platform says 0 means we are streaming into the void.")
 	currentState              = mustGauge("tripbot_current_state", "1 for the US state the dashcam playhead is currently in, 0 for the previously-active state, labeled by state (2-letter abbrev, or \"unknown\"). Only one series reads 1 at a time. Drives the states-visited heatmap and the 'stuck on unknown' alert.")
@@ -38,9 +37,6 @@ var (
 	gatewayUp = mustGauge("tripbot_gateway_up", "1 when tripbot's last platform-gateway call got an HTTP response (gateway reachable), 0 when it failed at the transport layer (connection refused, timeout, DNS). Consumer-side reachability — paired with the gateway's own platform_gateway_up (process liveness).")
 
 	obsSilentDisconnectRestarts = mustCounter("tripbot_obs_silent_disconnect_restarts_total", "Total times the silent-disconnect watchdog forced a recovery because OBS reported outputActive=true while the platform reported the channel offline. The recovery is a StopStream+StartStream on Twitch and an egress re-mint on TikTok; the datapoints carry no platform attribute, so instance (the pod name) is what tells the platforms apart")
-
-	twitchHelixRateRemaining = mustGauge("twitch_helix_rate_limit_remaining", "Last-seen Ratelimit-Remaining header from Twitch Helix responses (per app-access bearer)")
-	twitchHelixRateLimit     = mustGauge("twitch_helix_rate_limit_total", "Last-seen Ratelimit-Limit header from Twitch Helix responses (per app-access bearer)")
 
 	cronRuns     = mustCounter("tripbot_cron_runs_total", "Total cron job invocations, labeled by job")
 	cronPanics   = mustCounter("tripbot_cron_panics_total", "Cron job panics recovered, labeled by job")
@@ -84,11 +80,15 @@ var BackgroundAudioSelections = backgroundAudioSelectionsCounter{counter: backgr
 // TwitchAudience exposes subscriber and follower gauge recording.
 var TwitchAudience = twitchAudienceGauges{subscribers: twitchSubscribers, followers: twitchFollowers}
 
-// TwitchConnection exposes the chat-connection gauge. Set(true) on IRC
-// connect, Set(false) on disconnect. Readiness doesn't gate on the Twitch
-// connection (the pod stays in the Service so the re-auth page is reachable),
-// so this gauge — alongside the admin-panel status row — is what surfaces
-// "up but not in chat" to dashboards and alerts.
+// TwitchConnection exposes the chat-connection gauge — whether the bot can
+// reach Twitch chat, written by the gateway inbound poll (the gateway holds the
+// chat transport itself). Readiness doesn't gate on the Twitch connection (the
+// pod stays in the Service so the re-auth page is reachable), so this gauge —
+// alongside the admin-panel status row — is what surfaces "up but not in chat"
+// to dashboards and alerts.
+//
+// It pairs with the gateway's own platform_gateway_chat_connected: this one 0
+// while that one is 1 localises the fault to the path between them.
 var TwitchConnection = twitchConnectionGauge{gauge: twitchConnected}
 
 // TwitchTokenExpiry exposes the per-account token-expiry timestamp gauge.
@@ -96,11 +96,6 @@ var TwitchConnection = twitchConnectionGauge{gauge: twitchConnected}
 // the latter is how a blanked or never-loaded token shows up. Drives the
 // "tripbot needs reauth" alert (time() past the recorded expiry).
 var TwitchTokenExpiry = twitchTokenExpiryGauge{gauge: twitchTokenExpiry}
-
-// TwitchHelixErrors exposes the helix-error counter; record by calling
-// TwitchHelixErrors.Inc(endpoint, statusCode). Endpoint is a short label
-// like "GetUsers"; statusCode is the HTTP status reported by Twitch.
-var TwitchHelixErrors = twitchHelixErrorsCounter{counter: twitchHelixErrors}
 
 // TwitchChannelLive exposes the per-tick Twitch live-status gauge written
 // by the OBS silent-disconnect watchdog. Set(true) on every successful
@@ -140,12 +135,6 @@ var GatewayConnection = gatewayConnectionGauge{gauge: gatewayUp}
 // the watchdog only fires after a multi-minute debounce, so even one increment
 // means we saw a real silent disconnect in prod.
 var OBSSilentDisconnectRestarts = obsSilentDisconnectRestartsCounter{counter: obsSilentDisconnectRestarts}
-
-// TwitchHelixRateLimit exposes the per-bearer Helix rate-budget gauges.
-// SetRemaining + SetLimit are called by the response-recording transport
-// on every Helix call so dashboards / alerts can see headroom without
-// waiting for a 429.
-var TwitchHelixRateLimit = twitchHelixRateLimitGauges{remaining: twitchHelixRateRemaining, limit: twitchHelixRateLimit}
 
 // Cron exposes cron job metrics. Observe(job, seconds) is called on every
 // completion (success or recovered panic); Panic(job) is additionally
@@ -222,15 +211,6 @@ func (t twitchTokenExpiryGauge) SetExpiresAt(account string, expiresAt time.Time
 	t.gauge.Record(context.Background(), v, metric.WithAttributes(attribute.String("account", account)))
 }
 
-type twitchHelixErrorsCounter struct{ counter metric.Int64Counter }
-
-func (h twitchHelixErrorsCounter) Inc(endpoint string, statusCode int) {
-	h.counter.Add(context.Background(), 1, metric.WithAttributes(
-		attribute.String("endpoint", endpoint),
-		attribute.Int("status_code", statusCode),
-	))
-}
-
 type twitchChannelLiveGauge struct{ gauge metric.Int64Gauge }
 
 func (t twitchChannelLiveGauge) Set(live bool) {
@@ -284,19 +264,6 @@ type obsSilentDisconnectRestartsCounter struct{ counter metric.Int64Counter }
 
 func (o obsSilentDisconnectRestartsCounter) Inc() {
 	o.counter.Add(context.Background(), 1)
-}
-
-type twitchHelixRateLimitGauges struct {
-	remaining metric.Int64Gauge
-	limit     metric.Int64Gauge
-}
-
-func (r twitchHelixRateLimitGauges) SetRemaining(n int64) {
-	r.remaining.Record(context.Background(), n)
-}
-
-func (r twitchHelixRateLimitGauges) SetLimit(n int64) {
-	r.limit.Record(context.Background(), n)
 }
 
 type cronMetrics struct {

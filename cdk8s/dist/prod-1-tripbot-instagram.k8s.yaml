@@ -72,7 +72,7 @@ spec:
             - secretRef:
                 name: tripbot-discord-bot-token
                 optional: true
-          image: adanalife/tripbot:4.15.1
+          image: adanalife/tripbot:4.21.0
           imagePullPolicy: IfNotPresent
           livenessProbe:
             httpGet:
@@ -120,7 +120,7 @@ spec:
                 name: tripbot-instagram-config
             - secretRef:
                 name: tripbot-database-creds
-          image: adanalife/tripbot:4.15.1
+          image: adanalife/tripbot:4.21.0
           imagePullPolicy: IfNotPresent
           name: migrate
           resources:
@@ -142,7 +142,7 @@ spec:
       volumes:
         - name: music
           persistentVolumeClaim:
-            claimName: obs-music
+            claimName: obs-music-local
             readOnly: true
 ---
 apiVersion: v1

@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	"github.com/adanalife/tripbot/pkg/instrumentation"
-	"github.com/nicklaw5/helix/v2"
 )
 
 // SetSubscribers replaces the cached login → tier map with values sourced from
@@ -30,12 +29,8 @@ func (cl *API) SetSubscribers(tiers map[string]int) {
 // len(logins) when the channel has more chatters than one page); Chatters()
 // reads the logins, ChatterCount() reads the total.
 func (cl *API) SetChatters(logins []string, count int) {
-	chatters := make([]helix.ChatChatter, len(logins))
-	for i, login := range logins {
-		chatters[i] = helix.ChatChatter{UserLogin: login}
-	}
 	cl.audienceMu.Lock()
-	cl.currentChatters = chatters
+	cl.currentChatters = append([]string(nil), logins...)
 	cl.chatterCount = count
 	cl.audienceMu.Unlock()
 }

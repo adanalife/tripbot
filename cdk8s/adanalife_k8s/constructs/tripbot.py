@@ -50,9 +50,12 @@ LOCAL_DB_SECRET = "tripbot-secret"  # secret.env-built DB creds (laptop)
 # bot identity, not any one platform stack.
 NAME_IDENTITY = "tripbot"
 
-# Where the read-only `obs-music` album share is mounted. Cross-repo contract:
-# the obs repo mounts the same claim at the same path, and pkg/obs/beds hands
-# OBS the track paths it reads here — so the two must agree exactly.
+# The read-only album library claim and where it's mounted. Cross-repo contract:
+# infra provisions the claim, the obs repo mounts it at the same path, and
+# pkg/obs/beds hands OBS the track paths it reads here — so all three must agree
+# exactly. Node-local rather than the NAS share so a storage outage can't reach
+# the stream (see infra's cdk8s/adanalife_k8s/constructs/music.py).
+MUSIC_CLAIM = "obs-music-local"
 MUSIC_MOUNT_PATH = "/opt/tripbot/assets/music"
 
 # Small but explicit requests for the helper containers (migrate init, one-shot
@@ -170,9 +173,11 @@ def config_data(env: EnvConfig, platform: str) -> dict[str, str]:
     data.update(_ENV_CONFIG[env.name])
     if env.nats_url:
         data["NATS_URL"] = env.nats_url
-    # Route the twitch instance's command-time Helix calls through the
-    # platform-gateway gateway-twitch where the env wires it. Only the
-    # twitch platform talks Helix, so the youtube instance never carries it.
+    # Route the twitch instance's chat (both directions) and its command-time
+    # Helix calls through the platform-gateway gateway-twitch where the env
+    # wires it — required for chat to come up at all (the binary boots
+    # chat-less without it). Only the twitch platform talks Helix, so the
+    # youtube instance never carries it.
     if platform == "twitch" and env.twitch_api_url:
         data["TWITCH_API_URL"] = env.twitch_api_url
     # Route the youtube instance's outbound chat sends through gateway-youtube
@@ -242,8 +247,8 @@ class Tripbot(Construct):
         ]
 
         # The Twitch app credentials are read only by a twitch instance, which
-        # builds a helix client from them; every other platform reaches its chat
-        # through a platform-gateway that owns its own credential. The
+        # sends the client ID in its EventSub handshake; every other platform
+        # reaches its chat through a platform-gateway that owns its own credential. The
         # ExternalSecret stays identity-level (one Twitch dev app for the bot,
         # like google-maps) — it's the *mount* that's per-platform.
         if platform == "twitch":
@@ -373,7 +378,7 @@ class Tripbot(Construct):
                 k8s.Volume(
                     name="music",
                     persistent_volume_claim=k8s.PersistentVolumeClaimVolumeSource(
-                        claim_name="obs-music", read_only=True
+                        claim_name=MUSIC_CLAIM, read_only=True
                     ),
                 )
             ]

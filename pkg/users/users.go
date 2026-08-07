@@ -17,13 +17,19 @@ import (
 )
 
 type User struct {
-	ID         uint16 `gorm:"primaryKey"`
-	Username   string
-	Platform   string
-	Miles      float32
-	NumVisits  uint16
-	HasDonated bool
-	IsBot      bool
+	ID       uint16 `gorm:"primaryKey"`
+	Username string
+	Platform string
+	// PlatformUserID is the chatter's platform-native user id — the stable half
+	// of their identity, where Username is a display login they can change.
+	// Empty for any row not seen since the column shipped: it fills in from the
+	// inbound chat envelope on a chatter's next message, so an empty value means
+	// "not stamped yet", never "this user has no id".
+	PlatformUserID string
+	Miles          float32
+	NumVisits      uint16
+	HasDonated     bool
+	IsBot          bool
 	// ExcludeFromLeaderboard hides the account from every leaderboard read
 	// while leaving it a normal chatter everywhere else. Independent of
 	// IsBot, which carries behavioral meaning beyond ranking.
@@ -208,6 +214,53 @@ func Find(ctx context.Context, platform, username string) (User, error) {
 		return User{}, result.Error
 	}
 	return user, nil
+}
+
+// FindByPlatformUserID looks up a chatter by the platform's own user id, which
+// survives a rename where Find's username does not. An empty id is never a
+// match — it's the "not stamped yet" state of every row predating the column,
+// and treating it as a key would return an arbitrary one of them. A missing
+// user surfaces as gorm.ErrRecordNotFound.
+func FindByPlatformUserID(ctx context.Context, platform, platformUserID string) (User, error) {
+	if platformUserID == "" {
+		return User{}, gorm.ErrRecordNotFound
+	}
+	var user User
+	result := database.GormDB().WithContext(ctx).
+		Where("platform = ? AND platform_user_id = ?", platform, platformUserID).First(&user)
+	if result.Error != nil {
+		return User{}, result.Error
+	}
+	return user, nil
+}
+
+// RecordPlatformUserID stamps the platform's user id onto a chatter's row the
+// first time it's seen, and re-stamps it if the platform reports a different
+// one. A no-op when the id is empty (a platform that doesn't report one, or the
+// bot's own mirrored output) or already matches, so the common case of a chatter
+// talking repeatedly costs no writes.
+//
+// Writes the single column rather than going through save(), whose update map
+// would push the whole in-memory user back — including a stale copy of this
+// column on the session-tick path, which has no id to offer.
+func RecordPlatformUserID(ctx context.Context, u *User, platformUserID string) {
+	if platformUserID == "" || u == nil || u.PlatformUserID == platformUserID {
+		return
+	}
+	if u.ID == 0 {
+		// No DB row (transient Find error, or a transient user on a platform
+		// that doesn't persist). Updates() without a primary key would build an
+		// UPDATE with no WHERE, which GORM refuses — same guard as save().
+		return
+	}
+	err := database.GormDB().WithContext(ctx).Model(u).
+		Update("platform_user_id", platformUserID).Error
+	if err != nil {
+		slog.ErrorContext(ctx, "couldn't record platform user id", "err", err,
+			"username", u.Username, "platform", u.Platform)
+		return
+	}
+	u.PlatformUserID = platformUserID
 }
 
 // HasCommandAvailable lets users run a command once a day,

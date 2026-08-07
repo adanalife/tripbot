@@ -39,8 +39,13 @@ jobs:
     # `task test:cover` runs the test service from
     # infra/docker/docker-compose.testing.yml — same path used locally,
     # so CI doesn't need its own Go toolchain.
+    # pipefail, or the pipe hands the step tee's exit status and a failing test
+    # suite reports success. The default shell is `bash -e`, which doesn't set it.
     - name: Run tests with coverage
-      run: task test:cover | tee coverage.txt
+      shell: bash
+      run: |
+        set -o pipefail
+        task test:cover | tee coverage.txt
     - name: Coverage summary
       run: |
         echo "## Coverage" >> "$GITHUB_STEP_SUMMARY"
@@ -52,7 +57,7 @@ jobs:
         infile: coverage.out
         outfile: coverage.lcov
     - name: Upload coverage to Coveralls
-      uses: coverallsapp/github-action@v2.3.6
+      uses: coverallsapp/github-action@v2.3.8
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         path-to-lcov: coverage.lcov

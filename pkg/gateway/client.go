@@ -15,6 +15,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -40,6 +41,37 @@ const (
 	IdentityBot         = "bot"
 	IdentityBroadcaster = "broadcaster"
 )
+
+// ErrNoBroadcast and ErrUpstreamUnavailable are the two gateway replies that
+// report a platform state rather than a fault, so a caller can decline to treat
+// them as defects. Both are ordinary conditions on a channel that isn't live or
+// a platform that is throttling; the gateway itself keeps them off Sentry, and a
+// caller that logs them at error level puts them straight back on.
+//
+//   - ErrNoBroadcast (409) — the call needed a live broadcast and there is
+//     none. A definite negative answer: there is nowhere to post right now.
+//   - ErrUpstreamUnavailable (503) — the platform refused the call rather than
+//     answering it. The answer is unknown, not negative, so it must not be read
+//     as "no"; retrying is the recovery.
+//
+// Any other non-2xx stays an unclassified error, which is what a genuine
+// gateway or platform failure (502) should look like.
+var (
+	ErrNoBroadcast         = errors.New("no active broadcast")
+	ErrUpstreamUnavailable = errors.New("upstream platform unavailable")
+)
+
+// statusErr classifies a non-2xx gateway response for op, wrapping the sentinel
+// for the states callers are expected to tolerate.
+func statusErr(op string, status int) error {
+	switch status {
+	case http.StatusConflict:
+		return fmt.Errorf("gateway %s: %w", op, ErrNoBroadcast)
+	case http.StatusServiceUnavailable:
+		return fmt.Errorf("gateway %s: %w", op, ErrUpstreamUnavailable)
+	}
+	return fmt.Errorf("gateway %s: unexpected status %d", op, status)
+}
 
 // Client talks to one platform-gateway instance over its v1 JSON API.
 type Client struct {
@@ -154,7 +186,7 @@ func (c *Client) SendChat(ctx context.Context, identity, text string) error {
 	instrumentation.GatewayConnection.Set(true)
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("gateway send-chat: unexpected status %d", resp.StatusCode)
+		return statusErr("send-chat", resp.StatusCode)
 	}
 	return nil
 }
@@ -243,13 +275,23 @@ func (g Gift) Value() int { return g.Diamonds * g.Count }
 //
 // Author is the human-facing name (a mutable display name on some platforms);
 // AuthorID is the platform-native stable user ID — the key viewer persistence
-// and identity linking must use.
+// and identity linking must use. MessageID is the platform's own id for the
+// message, the handle a moderation action needs.
+//
+// Moderator/Subscriber/Broadcaster are the sender's role as the platform
+// reported it on this message — a snapshot, not a lookup. They are all false on
+// a platform that reports no roles, which is indistinguishable from a viewer
+// holding none, so a gate that must fail closed can't read them alone.
 type InboundChatMessage struct {
-	Author   string      `json:"author"`
-	AuthorID string      `json:"author_id"`
-	Text     string      `json:"text"`
-	Kind     InboundKind `json:"kind,omitempty"`
-	Gift     *Gift       `json:"gift,omitempty"`
+	Author      string      `json:"author"`
+	AuthorID    string      `json:"author_id"`
+	Text        string      `json:"text"`
+	Kind        InboundKind `json:"kind,omitempty"`
+	Gift        *Gift       `json:"gift,omitempty"`
+	MessageID   string      `json:"message_id,omitempty"`
+	Moderator   bool        `json:"moderator,omitempty"`
+	Subscriber  bool        `json:"subscriber,omitempty"`
+	Broadcaster bool        `json:"broadcaster,omitempty"`
 }
 
 // InboundChatPage is one page from GET /v1/chat/inbound. Cursor is opaque: pass

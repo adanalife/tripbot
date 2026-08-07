@@ -17,7 +17,5 @@ var timewarpDuration = time.Duration(4600 * time.Millisecond)
 // the next run.
 func newTimewarp() *Onscreen {
 	slog.Info("creating onscreen", "kind", "timewarp")
-	osc := newOnscreen()
-	osc.SleepInterval = time.Second
-	return osc
+	return newOnscreen(time.Second)
 }

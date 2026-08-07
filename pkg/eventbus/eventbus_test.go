@@ -1,6 +1,7 @@
 package eventbus
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"sync"
@@ -55,7 +56,10 @@ func TestEmitChatMessage(t *testing.T) {
 	nowFn = func() time.Time { return fixed }
 	t.Cleanup(func() { nowFn = func() time.Time { return time.Now().UTC() } })
 
-	EmitChatMessage(context.Background(), "development", "twitch", "DanaLol", "Hello, World!")
+	EmitChatMessage(context.Background(), "development", ChatMessage{
+		Platform: "twitch", Username: "DanaLol", UserID: "42",
+		Text: "Hello, World!", MessageID: "msg-1", Subscriber: true,
+	})
 
 	if len(rec.Publishes) != 1 {
 		t.Fatalf("expected 1 publish, got %d", len(rec.Publishes))
@@ -74,6 +78,16 @@ func TestEmitChatMessage(t *testing.T) {
 	}
 	if ev.Text != "Hello, World!" {
 		t.Errorf("text = %q, want %q", ev.Text, "Hello, World!")
+	}
+	if ev.UserID != "42" || ev.MessageID != "msg-1" || !ev.Subscriber {
+		t.Errorf("identity fields = {user_id:%q message_id:%q subscriber:%v}, want {42 msg-1 true}",
+			ev.UserID, ev.MessageID, ev.Subscriber)
+	}
+	// Unset roles are omitted rather than published as false, so a consumer
+	// can't read "not a moderator" as an answer from a platform that never
+	// reports one.
+	if bytes.Contains(pub.Payload, []byte("moderator")) {
+		t.Errorf("payload carries an unset role: %s", pub.Payload)
 	}
 	if ev.EmittedAt != fixed.Format(time.RFC3339Nano) {
 		t.Errorf("emitted_at = %q, want %q", ev.EmittedAt, fixed.Format(time.RFC3339Nano))
@@ -170,7 +184,7 @@ func TestEmit_NoNATS_NoPanic(t *testing.T) {
 	SetPublisher(realPublisher{})
 	t.Cleanup(func() { SetPublisher(realPublisher{}) })
 	// natsclient.Conn() is nil here (Connect never called) — must not panic.
-	EmitChatMessage(context.Background(), "test", "twitch", "u", "x")
+	EmitChatMessage(context.Background(), "test", ChatMessage{Platform: "twitch", Username: "u", Text: "x"})
 }
 
 func TestAuthStatusSubject(t *testing.T) {

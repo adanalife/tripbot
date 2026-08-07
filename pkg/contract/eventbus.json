@@ -16,8 +16,23 @@
           "username": {
             "type": "string"
           },
+          "user_id": {
+            "type": "string"
+          },
           "text": {
             "type": "string"
+          },
+          "message_id": {
+            "type": "string"
+          },
+          "moderator": {
+            "type": "boolean"
+          },
+          "subscriber": {
+            "type": "boolean"
+          },
+          "broadcaster": {
+            "type": "boolean"
           },
           "emitted_at": {
             "type": "string",

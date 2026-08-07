@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"math"
+	"strings"
 	"testing"
 	"time"
 )
@@ -157,5 +159,61 @@ func TestAnalyze_ConsecutiveMissingRun(t *testing.T) {
 	// b is 1/3 of the way from a to d in time → 1/3 in space
 	if math.Abs(ds[1].newLat-40.0001) > 1e-9 {
 		t.Fatalf("b lat = %.6f, want ~40.0001", ds[1].newLat)
+	}
+}
+
+// The generated SQL is piped into psql, so a username or state carrying an
+// apostrophe ("Coeur d'Alene") has to arrive as a doubled quote rather than
+// closing the literal early. cmd/backfill-miles quotes the same way.
+func TestSQLQuote(t *testing.T) {
+	tests := []struct {
+		in   string
+		want string
+	}{
+		{"Oregon", "Oregon"},
+		{"Coeur d'Alene", "Coeur d''Alene"},
+		{"''", "''''"},
+		{"", ""},
+		{"'; DROP TABLE videos; --", "''; DROP TABLE videos; --"},
+	}
+	for _, tt := range tests {
+		if got := sqlQuote(tt.in); got != tt.want {
+			t.Errorf("sqlQuote(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+}
+
+// writeSQL and writeReport take an io.Writer so their output is assertable
+// without a temp file. Rows the pass decided to keep produce no statements.
+func TestWriteSQL_OnlyEmitsChangedRows(t *testing.T) {
+	var buf bytes.Buffer
+	writeSQL(&buf, []decision{
+		{clip: clip{slug: "2018_0512_200000_001"}, action: actionKeep},
+		{
+			clip:     clip{slug: "d'oh"},
+			action:   actionInterpolate,
+			newLat:   45.5,
+			newLng:   -122.6,
+			newState: "Coeur d'Alene",
+		},
+	})
+
+	out := buf.String()
+	if strings.Count(out, "UPDATE") != 1 {
+		t.Errorf("expected one UPDATE for one changed row, got:\n%s", out)
+	}
+	if !strings.Contains(out, "d''oh") || !strings.Contains(out, "Coeur d''Alene") {
+		t.Errorf("expected both quoted values escaped, got:\n%s", out)
+	}
+}
+
+// The header rule has to line up with the column widths the format string
+// uses, separators included.
+func TestDashes(t *testing.T) {
+	if got, want := dashes(3, 2), "---  --"; got != want {
+		t.Errorf("dashes(3, 2) = %q, want %q", got, want)
+	}
+	if got := dashes(); got != "" {
+		t.Errorf("dashes() = %q, want empty", got)
 	}
 }

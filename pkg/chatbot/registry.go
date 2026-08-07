@@ -138,7 +138,11 @@ func (a *App) buildRegistry() []Command {
 		},
 		{
 			Trigger: "!commands",
-			Aliases: []string{"!command", "!controls"},
+			// "!hello" lists commands rather than greeting: a viewer who types
+			// the bang is addressing the bot, and what they want next is the
+			// command surface. The bare "hello" trigger above still greets, so
+			// an ordinary greeting in chat is unaffected.
+			Aliases: []string{"!command", "!controls", "!hello"},
 			Handler: a.commandsCmd,
 		},
 		{
@@ -171,8 +175,11 @@ func (a *App) buildRegistry() []Command {
 		{
 			Trigger: "!guess",
 			// "!guis" stays: it's 2 edits from !guess, beyond fuzzyLookup's
-			// reach at that length (max 1 edit for inputs of 4-6 runes)
-			Aliases:        []string{"guess", "!guis"},
+			// reach at that length (max 1 edit for inputs of 4-6 runes).
+			// "!guesss"/"!guesr" are equidistant from !guess and !guessr, so
+			// fuzzyLookup calls them ambiguous and answers nothing; the state
+			// guess is the far more likely intent at that spelling.
+			Aliases:        []string{"guess", "!guis", "!guesss", "!guesr"},
 			Handler:        a.guessCmd,
 			RequiresFollow: true,
 		},
@@ -245,6 +252,12 @@ func (a *App) buildRegistry() []Command {
 			Trigger:        "!guessleaderboard",
 			Aliases:        []string{"!glb", "!guesslb"},
 			Handler:        a.monthlyGuessLeaderboardCmd,
+			RequiresFollow: true,
+		},
+		{
+			Trigger:        "!guessr",
+			Aliases:        []string{"!guessrleaderboard", "!grlb"},
+			Handler:        a.guessrLeaderboardCmd,
 			RequiresFollow: true,
 		},
 		{
@@ -343,6 +356,23 @@ var platformCommandScope = map[string]commandScope{
 	platformFacebook:  scopeV1,
 	platformInstagram: scopeV1,
 	platformTikTok:    scopeV1,
+}
+
+// platformPersistsUsers declares which platforms give a chatter a persisted
+// identity — a users row, a session, miles, a login/logout lifecycle. Twitch
+// does; the gateway platforms punt identity for v1, so their chatters reach the
+// command path as a transient user carrying only a display name.
+//
+// It is what decides whether an inbound message logs its sender in, so the two
+// halves stay consistent by construction: a platform that persists users runs
+// the identity commands (scopeFull) and can answer a subscriber check, and one
+// that doesn't is bounded by the v1 allowlist, which reads nothing user-specific
+// beyond the name. Graduating a platform means flipping it here and in
+// platformCommandScope together — flipping only the scope would hand
+// identity-reading commands a user with no rows behind it, which answers 0
+// miles rather than failing.
+var platformPersistsUsers = map[string]bool{
+	platformTwitch: true,
 }
 
 // platformHasSubscribers declares which platforms expose a subscriber signal

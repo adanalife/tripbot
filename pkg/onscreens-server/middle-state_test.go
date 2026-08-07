@@ -77,10 +77,10 @@ func TestRestoreMiddleText(t *testing.T) {
 	s := &Server{cfg: testConf, MiddleText: newMiddleText()}
 	s.RestoreMiddleText(ctx)
 
-	if s.MiddleText.Content != "restored text" {
-		t.Errorf("MiddleText.Content = %q, want %q", s.MiddleText.Content, "restored text")
+	if s.MiddleText.Content() != "restored text" {
+		t.Errorf("MiddleText.Content = %q, want %q", s.MiddleText.Content(), "restored text")
 	}
-	if !s.MiddleText.IsShowing {
+	if !s.MiddleText.IsShowing() {
 		t.Errorf("MiddleText.IsShowing = false, want true")
 	}
 }

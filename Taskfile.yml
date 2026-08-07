@@ -39,6 +39,21 @@ tasks:
     cmds:
       - "{{.COMPOSE}} run --rm test go test -race ./..."
 
+  # The postgres container outlives a `task test` run, and golang-migrate records
+  # what it has applied — so editing a migration that already ran leaves the old
+  # schema in place and the next run tests against it, passing or failing for
+  # reasons the files on disk no longer explain. Recreating the container is what
+  # re-applies the whole chain from scratch; the down migration isn't involved,
+  # so this also works on a migration whose `down` is itself broken.
+  #
+  # Only db + migrate go: the module and build caches live in their own named
+  # volumes, and dropping those would turn every reset into a full recompile.
+  test:db:reset:
+    desc: Recreate the test postgres from scratch — run after editing an already-applied migration
+    cmds:
+      - "{{.COMPOSE}} rm -sf db migrate"
+      - 'echo "test database removed; the next task test / test:cover re-migrates from scratch"'
+
   shell:
     desc: Open an interactive Go-toolchain shell inside the test container
     interactive: true

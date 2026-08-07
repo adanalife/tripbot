@@ -4,49 +4,24 @@ import (
 	"sync"
 
 	"github.com/adanalife/tripbot/pkg/oauthtokens"
-	"github.com/nicklaw5/helix/v2"
 )
 
-// API owns the mutable Twitch state: the two helix clients, the App Access
-// Token, the per-identity user-access-tokens, and the cached
-// channel/viewer/audience data. It is the in-process implementation of
-// "talk to Twitch"; construct one with New().
-//
-// (Named API rather than Client because the package already exposes a
-// Client() helix-getter that callers depend on — the type can be renamed once
-// the shims in shims.go are deleted.)
-//
-// Fields are grouped into two clusters on purpose. The **auth core** (helix
-// clients + tokens) is the cohesive unit that may eventually move into its
-// own auth service — keeping it visually distinct here marks that future
-// seam. The **query/viewer** cluster is cached read-state derived from Helix.
+// API owns the mutable Twitch state: the per-identity user-access-tokens and
+// the cached channel/viewer/audience data. The platform-gateway is the single
+// Helix caller, so nothing here talks to Twitch — the tokens are read from
+// oauth_tokens (which the gateway keeps fresh) and the audience data is pushed
+// in by the gateway refresh crons. Construct one with New().
 //
 // Methods are fronted by package-level free-function shims (see shims.go) that
 // delegate to defaultClient; threading a constructed *API through callers and
 // deleting the shims is a later step.
 type API struct {
-	// --- auth core (future auth-service boundary) ---
-
-	// clientID and clientSecret are the static Twitch app credentials, installed
-	// by SetCredentials at boot. Only Client() reads them.
-	clientID     string
-	clientSecret string
-
-	// currentTwitchClient is the lazy-initialized bot helix client, built by
-	// Client() for the OAuth bootstrap's identity check (GetUsers) and the IRC
-	// readiness probe. The Helix query surface lives in the platform-gateway.
-	currentTwitchClient *helix.Client
-	// appAccessToken is set in Client() (Client Credentials grant).
-	appAccessToken string
-
 	// tokenMu guards currentUserToken (bot) and currentBroadcasterToken.
-	// RWMutex because reads (IRCAuthToken, BroadcasterUserAccessToken,
-	// TokenStatuses) outnumber writes (LoadFromDB).
+	// RWMutex because reads (BroadcasterUserAccessToken, TokenStatuses)
+	// outnumber writes (LoadFromDB).
 	tokenMu                 sync.RWMutex
 	currentUserToken        oauthtokens.Token
 	currentBroadcasterToken oauthtokens.Token
-
-	// --- query / viewer state (cached Helix reads) ---
 
 	// channelID is the twitch-internal user ID for the channel.
 	channelID string
@@ -59,16 +34,15 @@ type API struct {
 	// subscribers maps each current subscriber's username to their
 	// subscription tier (1–3).
 	subscribers map[string]int
-	// currentChatters holds the most recent chatter list, cached from the gateway.
-	currentChatters []helix.ChatChatter
+	// currentChatters holds the most recent chatter logins, cached from the gateway.
+	currentChatters []string
 	// chatterCount is the total reported by the API (may exceed
 	// len(currentChatters) when the channel has more than one page of chatters).
 	chatterCount int
 }
 
-// New constructs an API with zero mutable state. The helix client and App
-// Access Token are built lazily on first use (Client()); the static app
-// credentials arrive via SetCredentials.
+// New constructs an API with zero mutable state. Tokens arrive via LoadFromDB
+// and the audience caches via SetSubscribers / SetChatters.
 func New() *API {
 	return &API{}
 }

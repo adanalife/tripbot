@@ -66,7 +66,7 @@ jobs:
     steps:
       - name: Discord notification
         # A rotated or deleted webhook returns 404 and must not fail a release
-        # whose image already shipped; the notification is best-effort.
+        # that already shipped; the notification is best-effort.
         continue-on-error: true
         uses: Ilshidur/action-discord@0.4.0
         env:
@@ -75,4 +75,33 @@ jobs:
         with:
           # Link the tagged CHANGELOG.md, not a payload `compare` URL: releases
           # dispatch via workflow_dispatch, whose event payload has no `compare`.
-          args: 'New Docker images released for [{{ EVENT_PAYLOAD.repository.full_name }}]({{ EVENT_PAYLOAD.repository.html_url }}): [{{ VERSION_TAG }}]({{ EVENT_PAYLOAD.repository.html_url }}/blob/{{ VERSION_TAG }}/CHANGELOG.md)'
+          args: 'New release for [{{ EVENT_PAYLOAD.repository.full_name }}]({{ EVENT_PAYLOAD.repository.html_url }}): [{{ VERSION_TAG }}]({{ EVENT_PAYLOAD.repository.html_url }}/blob/{{ VERSION_TAG }}/CHANGELOG.md)'
+
+  # Nothing else says a release went red. The release PR merged green long
+  # before the tag ran, so the only record is this run's own entry in a run
+  # list nobody is watching.
+  #
+  # `if: failure()` is what makes this the catch-all: it runs when any job
+  # above failed, including when a later one was skipped as a result. `notify`
+  # cannot trip it, since continue-on-error keeps a dead webhook out of that
+  # job's status.
+  #
+  # Best-effort like the announcement -- a failure to report a failure should
+  # not become a second failure.
+  alert:
+    needs: [version, tripbot, onscreens-server, notify]
+    if: failure()
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Alert Discord on failure
+        continue-on-error: true
+        uses: Ilshidur/action-discord@0.4.0
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_ALERTS }}
+          VERSION_TAG: ${{ github.ref_name }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        with:
+          # Points at the log rather than naming what failed: any job above can
+          # be the one, and naming it would go stale as the jobs change.
+          args: 'Release failed for [{{ EVENT_PAYLOAD.repository.full_name }}]({{ EVENT_PAYLOAD.repository.html_url }}) at {{ VERSION_TAG }}: [run log]({{ RUN_URL }})'

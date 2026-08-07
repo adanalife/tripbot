@@ -50,15 +50,17 @@ func (r *recordingOnscreens) HideGPSImage(_ context.Context) error {
 	return nil
 }
 
-// fakePlayoutServer stands up an httptest.Server that responds to /playout/current
+// fakePlayoutServer stands up an httptest.Server that responds to /vlc/current
+// — the route playout actually serves, and the one playout-client asks for —
 // with the value pointed to by current. Tests mutate *current to change what
-// the next Player.GetCurrentlyPlaying call observes.
+// the next Player.GetCurrentlyPlaying call observes. A path that doesn't match
+// answers 404, whose body would otherwise read as a clip slug.
 //
 // Returns a *playout-client.Client configured to talk to the fake.
 func fakePlayoutServer(t *testing.T, current *string) *playoutClient.Client {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/playout/current" {
+		if r.URL.Path == "/vlc/current" {
 			_, _ = w.Write([]byte(*current))
 			return
 		}
