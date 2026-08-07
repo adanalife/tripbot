@@ -9,7 +9,7 @@ import "testing"
 // the prev bookkeeping is the load-bearing "clear the old =1 series" logic, so
 // that's what we assert.
 func TestCurrentStateSet_TracksActiveState(t *testing.T) {
-	s := &currentStateIface{gauge: currentState}
+	s := &currentStateGauge{gauge: currentState}
 
 	tests := []struct {
 		name     string
@@ -25,7 +25,7 @@ func TestCurrentStateSet_TracksActiveState(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s.Set(tt.in)
+			s.Set(tt.in, "twitch")
 			if s.prev != tt.wantPrev {
 				t.Errorf("after Set(%q), prev = %q, want %q", tt.in, s.prev, tt.wantPrev)
 			}
@@ -34,9 +34,9 @@ func TestCurrentStateSet_TracksActiveState(t *testing.T) {
 }
 
 // The package-level CurrentState must be usable as a no-config no-op (the
-// default OTel meter swallows records), matching how every other iface in
+// default OTel meter swallows records), matching how every other recorder in
 // this package behaves when no exporter is configured.
 func TestCurrentStateSet_DefaultIsSafe(t *testing.T) {
-	CurrentState.Set("WY")
-	CurrentState.Set("")
+	CurrentState.Set("WY", "twitch")
+	CurrentState.Set("", "")
 }

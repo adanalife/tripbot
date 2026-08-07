@@ -1,20 +1,17 @@
 #!/usr/bin/env bash
-# Smoke-check tripbot + vlc-server health endpoints via kubectl
-# port-forward against the currently-active kube context. Used by
+# Smoke-check tripbot health endpoints via kubectl port-forward
+# against the currently-active kube context. Used by
 # `task release:smoke:local`.
 set -euo pipefail
 
 TRIPBOT_PORT=18080
-VLC_PORT=18081
 
-kubectl port-forward svc/tripbot     "${TRIPBOT_PORT}:8080" >/dev/null 2>&1 &
+kubectl port-forward svc/tripbot "${TRIPBOT_PORT}:8080" >/dev/null 2>&1 &
 TRIPBOT_PF=$!
-kubectl port-forward svc/vlc-server  "${VLC_PORT}:8080"     >/dev/null 2>&1 &
-VLC_PF=$!
 
 cleanup() {
-  kill "${TRIPBOT_PF}" "${VLC_PF}" 2>/dev/null || true
-  wait "${TRIPBOT_PF}" "${VLC_PF}" 2>/dev/null || true
+  kill "${TRIPBOT_PF}" 2>/dev/null || true
+  wait "${TRIPBOT_PF}" 2>/dev/null || true
 }
 trap cleanup EXIT
 
@@ -30,5 +27,3 @@ curl -sfS --max-time 5 "http://localhost:${TRIPBOT_PORT}/health/live"  >/dev/nul
 echo "✓ tripbot/health/live"
 curl -sfS --max-time 5 "http://localhost:${TRIPBOT_PORT}/health/ready" >/dev/null
 echo "✓ tripbot/health/ready"
-curl -sfS --max-time 5 "http://localhost:${VLC_PORT}/health/live"      >/dev/null
-echo "✓ vlc-server/health/live"

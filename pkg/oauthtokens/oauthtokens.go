@@ -59,7 +59,7 @@ func Get(provider, username string) (Token, error) {
 
 // GetByProvider returns the provider's single row, or ErrNoToken if none
 // exists. Providers with one identity (YouTube: the channel owner) don't
-// know a username ahead of time the way Twitch does (c.Conf.BotUsername) —
+// know a username ahead of time the way Twitch does (the configured BotUsername) —
 // the identity is discovered at consent time — so boot-time loading keys on
 // the provider alone. If stray extra rows exist, the most recently updated
 // one wins; clean strays up by hand.

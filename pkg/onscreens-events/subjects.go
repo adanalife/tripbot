@@ -40,6 +40,24 @@ func MiddleStateSubject(env, platform string) string {
 // and writes only its own leaf.
 func MiddleStateWildcard(env string) string { return subject(env, "*", "middle", "state") }
 
+// RotatorConfigSubject carries the admin console's edited corner-rotator copy
+// from tripbot (which owns the Postgres record of truth) to the platform's
+// onscreens-server, which swaps it into the live pools
+// (tripbot.<env>.onscreens.rotator.config.<platform>). Backed by a
+// MaxMsgsPerSubject=1 stream so a restarted onscreens-server reads its copy
+// straight back instead of rendering the copy compiled into the binary until the
+// next publish. The platform leaf is what makes per-platform copy work at all —
+// each server applies only its own.
+func RotatorConfigSubject(env, platform string) string {
+	return subject(env, platform, "rotator", "config")
+}
+
+// RotatorConfigWildcard covers every platform's rotator.config leaf in env — the
+// subject filter the TRIPBOT_ONSCREENS_ROTATOR stream is declared with, so either
+// side can idempotently ensure the one stream while each per-platform server
+// reads only its own leaf.
+func RotatorConfigWildcard(env string) string { return subject(env, "*", "rotator", "config") }
+
 func LeaderboardShowSubject(env, platform string) string {
 	return subject(env, platform, "leaderboard", "show")
 }

@@ -23,10 +23,9 @@ func (a *App) buildRegistry() []Command {
 			Handler: a.helloCmd,
 		},
 		{
-			Trigger:   "!carsound",
-			Aliases:   []string{"!carhum"},
-			Handler:   a.carSoundCmd,
-			Platforms: []string{platformYouTube}, // repoints the YouTube-only "Car Hum" OBS source
+			Trigger: "!audio",
+			Aliases: []string{"!bed", "!carsound", "!carhum"},
+			Handler: a.audioCmd,
 		},
 		{
 			Trigger: "!version",
@@ -70,6 +69,12 @@ func (a *App) buildRegistry() []Command {
 			RequiresFollow: true,
 		},
 		{
+			Trigger:        "!daytime",
+			Aliases:        []string{"!daylight", "!morning"},
+			Handler:        a.daytimeCmd,
+			RequiresFollow: true,
+		},
+		{
 			Trigger: "!shutdown",
 			Handler: a.shutdownCmd,
 		},
@@ -108,7 +113,7 @@ func (a *App) buildRegistry() []Command {
 			Trigger: "!facebook",
 			Aliases: []string{"!fb"},
 			Handler: func(_ context.Context, _ *users.User, _ []string) {
-				a.Chat.Say("Follow on Facebook: https://www.facebook.com/adanalifeblog")
+				a.Chat.Say("Follow on Facebook: https://www.facebook.com/adanalifeunderscore")
 			},
 		},
 		{
@@ -133,7 +138,11 @@ func (a *App) buildRegistry() []Command {
 		},
 		{
 			Trigger: "!commands",
-			Aliases: []string{"!command", "!controls"},
+			// "!hello" lists commands rather than greeting: a viewer who types
+			// the bang is addressing the bot, and what they want next is the
+			// command surface. The bare "hello" trigger above still greets, so
+			// an ordinary greeting in chat is unaffected.
+			Aliases: []string{"!command", "!controls", "!hello"},
 			Handler: a.commandsCmd,
 		},
 		{
@@ -166,8 +175,11 @@ func (a *App) buildRegistry() []Command {
 		{
 			Trigger: "!guess",
 			// "!guis" stays: it's 2 edits from !guess, beyond fuzzyLookup's
-			// reach at that length (max 1 edit for inputs of 4-6 runes)
-			Aliases:        []string{"guess", "!guis"},
+			// reach at that length (max 1 edit for inputs of 4-6 runes).
+			// "!guesss"/"!guesr" are equidistant from !guess and !guessr, so
+			// fuzzyLookup calls them ambiguous and answers nothing; the state
+			// guess is the far more likely intent at that spelling.
+			Aliases:        []string{"guess", "!guis", "!guesss", "!guesr"},
 			Handler:        a.guessCmd,
 			RequiresFollow: true,
 		},
@@ -249,6 +261,12 @@ func (a *App) buildRegistry() []Command {
 			RequiresFollow: true,
 		},
 		{
+			Trigger:        "!guessr",
+			Aliases:        []string{"!guessrleaderboard", "!grlb"},
+			Handler:        a.guessrLeaderboardCmd,
+			RequiresFollow: true,
+		},
+		{
 			Trigger:        "!report",
 			Aliases:        []string{"no audio", "no sound", "no music", "frozen"},
 			Handler:        a.reportCmd,
@@ -272,9 +290,11 @@ func (a *App) buildRegistry() []Command {
 // platform (Kick, TikTok, …) comes online; platform-specific commands then
 // reference it via Command.Platforms.
 const (
-	platformTwitch   = "twitch"
-	platformYouTube  = "youtube"
-	platformFacebook = "facebook"
+	platformTwitch    = "twitch"
+	platformYouTube   = "youtube"
+	platformFacebook  = "facebook"
+	platformInstagram = "instagram"
+	platformTikTok    = "tiktok"
 )
 
 // platform returns this App's platform, normalizing the empty/unset value to
@@ -290,26 +310,90 @@ func (a *App) platform() string {
 }
 
 // v1Commands is the allowlist of triggers a v1-rollout platform instance
-// (YouTube, Facebook) runs — the "info + playback control" subset, plus the
+// (YouTube, Facebook, Instagram, TikTok) runs — the "info + playback control" subset, plus the
 // !state/!location info commands.
 // Identity/miles commands (!miles, !leaderboard, !guess, …), the Twitch-only
 // !followage, and the admin commands (!middle, !secretinfo, !shutdown, !makebot,
-// !unbot) are excluded: those are per-user identity/score state. The now-playing /
-// SomaFM commands (!song, !music, !somafm) are also deferred for now — the
-// background-audio source is Twitch-stream-specific. Aliases come along with
-// their trigger, so only triggers are listed. See the YouTube provider plan.
+// !unbot) are excluded: those are per-user identity/score state. !somafm is
+// excluded too — it credits a bed that only Twitch defaults to. Aliases come
+// along with their trigger, so only triggers are listed. See the YouTube
+// provider plan.
 var v1Commands = map[string]bool{
 	"!help": true, "!version": true, "!uptime": true, "!commands": true,
 	"!gas": true, "!report": true,
+	// background audio (every platform's scene ships the one bed source)
+	"!song": true, "!audio": true,
 	// info (read current-video state only)
 	"!weather": true, "!time": true, "!date": true, "!sunset": true,
 	"!state": true, "!location": true,
-	// playback control (drives this platform's vlc pipeline)
-	// !find is Twitch-only for now — subscriber-gated + still slow, revisit for YouTube later
-	"!timewarp": true, "!goto": true, "!skip": true, "!back": true,
+	// playback control (drives this platform's playout pipeline)
+	"!timewarp": true, "!goto": true, "!skip": true, "!back": true, "!daytime": true,
+	"!find": true,
 	// socials / static links
 	"!socialmedia": true, "!discord": true, "!twitter": true, "!instagram": true,
 	"!facebook": true, "!youtube": true, "!tiktok": true, "!bluesky": true,
+}
+
+// commandScope is how much of the cross-platform command surface a platform
+// runs — the per-platform capability the command gate keys off, a declared
+// property of the platform rather than a hardcoded name check.
+type commandScope int
+
+const (
+	// scopeV1 runs only the vetted v1Commands allowlist. It is the zero value,
+	// so any platform absent from platformCommandScope defaults to it: a newly
+	// added platform (Kick, …) proves itself through the allowlist rather than
+	// silently inheriting the full command surface.
+	scopeV1 commandScope = iota
+	// scopeFull runs every cross-platform command — a mature, fully-rolled-out
+	// platform.
+	scopeFull
+)
+
+// platformCommandScope declares each known platform's command-surface scope.
+// A platform absent from the map gets the zero value (scopeV1), so the gate is
+// driven by this capability declaration and an unrecognized STREAM_PLATFORM can
+// never fall through to the full surface. Graduating a platform is a one-line
+// change here (scopeV1 → scopeFull), symmetric across platforms — none is
+// special-cased by name.
+var platformCommandScope = map[string]commandScope{
+	platformTwitch:    scopeFull,
+	platformYouTube:   scopeV1,
+	platformFacebook:  scopeV1,
+	platformInstagram: scopeV1,
+	platformTikTok:    scopeV1,
+}
+
+// platformPersistsUsers declares which platforms give a chatter a persisted
+// identity — a users row, a session, miles, a login/logout lifecycle. Twitch
+// does; the gateway platforms punt identity for v1, so their chatters reach the
+// command path as a transient user carrying only a display name.
+//
+// It is what decides whether an inbound message logs its sender in, so the two
+// halves stay consistent by construction: a platform that persists users runs
+// the identity commands (scopeFull) and can answer a subscriber check, and one
+// that doesn't is bounded by the v1 allowlist, which reads nothing user-specific
+// beyond the name. Graduating a platform means flipping it here and in
+// platformCommandScope together — flipping only the scope would hand
+// identity-reading commands a user with no rows behind it, which answers 0
+// miles rather than failing.
+var platformPersistsUsers = map[string]bool{
+	platformTwitch: true,
+}
+
+// platformHasSubscribers declares which platforms expose a subscriber signal
+// tripbot can actually check. Twitch does; the gateway platforms give viewers
+// no persisted identity at all (v1 hands the command path a transient user), so
+// there is nothing there for RequiresSubscriber to read.
+//
+// A RequiresSubscriber command is therefore ungated on a platform with no
+// subscriber signal — see (*Command).checkAccess. The alternative is a gate
+// nobody can ever pass, which to a viewer is indistinguishable from a broken
+// command. The zero value (absent → no subscriber signal) is the right default
+// for a newly added platform: it starts out with no identity plumbing, and the
+// v1 allowlist is what bounds its command surface.
+var platformHasSubscribers = map[string]bool{
+	platformTwitch: true,
 }
 
 // commandEnabled reports whether cmd should be indexed for dispatch on this
@@ -319,20 +403,19 @@ var v1Commands = map[string]bool{
 //     command with a non-nil Platforms is governed solely by it — indexed on
 //     exactly the listed platforms, on every platform. This is symmetric: no
 //     platform is special, and a new Kick/TikTok-only command just lists itself.
-//  2. Cross-platform commands (Platforms == nil): YouTube and Facebook are
-//     still v1 rollouts, so they run only the vetted v1Commands allowlist;
-//     mature platforms (Twitch, and any future fully-rolled-out platform) run
-//     them all. As more platforms graduate from v1 this allowlist gate may
-//     invert, but that's a future call.
+//  2. Cross-platform commands (Platforms == nil) are gated by the platform's
+//     declared commandScope: a scopeFull platform (Twitch today) runs them all;
+//     every other platform runs only the vetted v1Commands allowlist. The
+//     conservative default (scopeV1 for any undeclared platform) means a new
+//     platform is restricted to the allowlist, never handed the full surface.
 func (a *App) commandEnabled(cmd *Command) bool {
 	if len(cmd.Platforms) > 0 {
 		return slices.Contains(cmd.Platforms, a.platform())
 	}
-	switch a.platform() {
-	case platformYouTube, platformFacebook:
-		return v1Commands[cmd.Trigger]
+	if platformCommandScope[a.platform()] == scopeFull {
+		return true
 	}
-	return true
+	return v1Commands[cmd.Trigger]
 }
 
 // indexCommands builds a.commands from a.buildRegistry() and indexes it into

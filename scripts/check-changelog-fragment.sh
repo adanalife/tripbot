@@ -28,7 +28,7 @@ fi
 cat >&2 <<'MSG'
 
 No changelog fragment found for this branch.
-  Add one:  task changelog:add PR=<n> TYPE=<type>
+  Add one:  task changelog:add TYPE=<type>   (no PR number needed — CI fills it in)
   Or, if no entry is warranted (CI-only / refactor / dep bump):
     SKIP_CHANGELOG=1 git push   — and add the skip-changelog label on the PR.
 MSG

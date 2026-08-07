@@ -25,12 +25,8 @@ func TestCommandsSchemaMatchesStructs(t *testing.T) {
 		"TimewarpShow":    reflect.TypeOf(oe.TimewarpShow{}),
 		"LeaderboardShow": reflect.TypeOf(oe.LeaderboardShow{}),
 		"LocationData":    reflect.TypeOf(oe.LocationData{}),
+		"RotatorConfig":   reflect.TypeOf(oe.RotatorConfig{}),
 		"Command":         reflect.TypeOf(oe.Command{}),
-	}
-
-	type nameReq struct {
-		name     string
-		required bool
 	}
 
 	for title, typ := range structs {

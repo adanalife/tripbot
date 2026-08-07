@@ -18,6 +18,9 @@ type ChatterSource interface {
 	ChatterCount() int
 	// IsSubscriber reports whether the user is a paid subscriber/member.
 	IsSubscriber(username string) bool
+	// SubscriberTier reports the user's paid subscription tier (1–3 on
+	// Twitch), or 0 for a non-subscriber.
+	SubscriberTier(username string) int
 	// IsFollower reports whether the user follows the channel.
 	IsFollower(username string) bool
 }

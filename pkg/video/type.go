@@ -5,11 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"path"
-	"path/filepath"
 	"strconv"
 	"time"
-
-	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 )
 
 // Provenance values for Video.CoordSource (videos.coord_source). See
@@ -50,8 +47,8 @@ func (v Video) Location() (float64, float64, error) {
 	return v.Lat, v.Lng, err
 }
 
-// String returns the slug, which callers (e.g. make-map's image filenames)
-// rely on as a stable identity — don't enrich it with display fields.
+// String returns the slug, which callers rely on as a stable identity — don't
+// enrich it with display fields.
 // ex: 2018_0514_224801_013_a_opt
 func (v Video) String() string {
 	return v.Slug
@@ -73,11 +70,6 @@ func (v Video) DashStr() string {
 // ex: 2018_0514_224801_013.MP4
 func (v Video) File() string {
 	return fmt.Sprintf("%s.MP4", v.Slug)
-}
-
-// ex: /Volumes/.../2018_0514_224801_013.MP4
-func (v Video) Path() string {
-	return filepath.Join(c.Conf.VideoDir, v.File())
 }
 
 // toDate parses the vidStr and returns a time.Time object for the video

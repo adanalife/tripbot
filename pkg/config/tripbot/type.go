@@ -20,27 +20,26 @@ type TripbotConfig struct {
 	// subscriber-only commands without an actual sub (comped friends/VIPs).
 	// Comma-separated, case-insensitive. Empty by default.
 	CompedSubscribers []string `envconfig:"COMPED_SUBSCRIBERS"`
-	// ExternalURL is the where the bot's HTTP server can be reached
-	ExternalURL string `required:"true" envconfig:"EXTERNAL_URL"`
 	// GoogleMapsAPIKey is the API key with which we access Google Maps.
 	// Optional — when unset, geocoder + static-map calls are skipped and
 	// callers fall back gracefully (no city/state lookups, no generated
 	// maps). The bot continues to run.
 	GoogleMapsAPIKey string `envconfig:"GOOGLE_MAPS_API_KEY"`
 
-	// ReadOnly is used to prevent writing some things to the DB
+	// ReadOnly suppresses the recurring per-tick DB writes so the bot can run
+	// against a live stream without mutating data. It is a PARTIAL guard, not a
+	// global one: it stops event rows (pkg/events), viewer_plays/viewer_samples
+	// (pkg/viewstats), and the rollup reconciler (pkg/rollups). It does NOT stop
+	// user saves (pkg/users), scoreboard/score writes (pkg/scoreboards),
+	// video-play-order updates (pkg/video), or oauth-token writes
+	// (pkg/oauthtokens) — those still write. Off in every deployed env.
 	ReadOnly bool `default:"false" envconfig:"READ_ONLY"`
-	// Verbose determines output verbosity
-	Verbose bool `default:"false" envconfig:"VERBOSE"`
 
 	// VideoDir is where the videos live
 	VideoDir string `default:"/opt/data/Dashcam/_all" envconfig:"VIDEO_DIR"`
 
 	// MapsOutputDir is where generated maps will be stored
 	MapsOutputDir string `default:"/opt/data/maps" envconfig:"MAPS_OUTPUT_DIR"`
-
-	// TripbotPidFile is where the tripbot PID is written
-	TripbotPidFile string `default:"/opt/data/run/tripbot.pid" envconfig:"TRIPBOT_PIDFILE"`
 
 	// TripbotServerPort is used to specify the port on which the webserver runs
 	TripbotServerPort string `default:"8080" envconfig:"TRIPBOT_SERVER_PORT"`
@@ -53,10 +52,17 @@ type TripbotConfig struct {
 	// ObsServerHost is the host:port of obs-server — the Flask process
 	// baked into the OBS image that exposes /health/ready, /version,
 	// and POST /admin/shutdown on the same shape the Go services use.
-	// Named for symmetry with vlc-server / onscreens-server. The admin
+	// Named for symmetry with onscreens-server. The admin
 	// panel probes it for the OBS row + posts to its /admin/shutdown
 	// for the "restart obs" button. Optional — blank skips the OBS row.
 	ObsServerHost string `envconfig:"OBS_SERVER_HOST"`
+
+	// TwitchClientID is the static Twitch app client ID, sent in the EventSub
+	// websocket handshake. Required on a twitch instance and unused everywhere
+	// else, so it's validated in the Twitch bring-up rather than here — a tiktok
+	// instance has no business holding Twitch app credentials. The client secret
+	// lives only on the platform-gateway, which owns OAuth consent and refresh.
+	TwitchClientID string `envconfig:"TWITCH_CLIENT_ID"`
 
 	// TwitchAPIURL points the chatbot's command-time Twitch Helix calls at
 	// the platform-gateway gateway-twitch instance over HTTP, instead of the
@@ -95,6 +101,24 @@ type TripbotConfig struct {
 	// runtime. Required on a facebook instance — with this empty the instance
 	// comes up without Facebook chat.
 	FacebookAPIURL string `envconfig:"FACEBOOK_API_URL"`
+
+	// InstagramAPIURL points a PLATFORM=instagram instance at the
+	// platform-gateway gateway-instagram instance over HTTP — e.g.
+	// http://gateway-instagram.<env>.svc.cluster.local:8080. Inbound-only: the
+	// gateway polls live-broadcast comments off the Graph API; the Graph API
+	// cannot create IG comments, so outbound Say is dropped (viewers get
+	// responses via onscreens / playback effects). Required on an instagram
+	// instance — with this empty the instance comes up without Instagram chat.
+	InstagramAPIURL string `envconfig:"INSTAGRAM_API_URL"`
+
+	// TikTokAPIURL points a PLATFORM=tiktok instance at the platform-gateway
+	// gateway-tiktok instance over HTTP — e.g.
+	// http://gateway-tiktok.<env>.svc.cluster.local:8080. Inbound-only: the
+	// gateway reads LIVE chat off TikTok's webcast; TikTok has no chat-post
+	// API, so outbound Say is dropped (viewers get responses via onscreens /
+	// playback effects). Required on a tiktok instance — with this empty the
+	// instance comes up without TikTok chat.
+	TikTokAPIURL string `envconfig:"TIKTOK_API_URL"`
 
 	// NatsURL is the in-cluster NATS endpoint used for fire-and-forget
 	// inter-component events. Format:

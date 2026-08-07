@@ -38,12 +38,17 @@ jobs:
       # ghcr blob uploads for large layers (hit on golang:1.26-bookworm).
       # The weekly Hub pulls here are a handful of requests — far under any
       # limit. crane reads the docker-config auth the login step wrote.
+      # The action downloads the release binary rather than compiling crane
+      # from source on every run.
+      - uses: imjasonh/setup-crane@v0.7
+        with:
+          version: v0.21.7
       - name: Copy images Hub -> GHCR
         run: |
           set -euo pipefail
           while read -r src dst; do
             echo "::group::${src} -> ${dst}"
-            go run github.com/google/go-containerregistry/cmd/crane@latest copy "${src}" "${dst}"
+            crane copy "${src}" "${dst}"
             echo "::endgroup::"
           done <<'EOF'
           docker.io/golang:1.26-bookworm ghcr.io/adanalife/mirror/golang:1.26-bookworm

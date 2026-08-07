@@ -2,9 +2,11 @@ package video
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/adanalife/tripbot/pkg/database/testdb"
+	terrors "github.com/adanalife/tripbot/pkg/errors"
 )
 
 // link writes from.next_vid = to.ID through the production helper, so the
@@ -28,7 +30,7 @@ func reload(t *testing.T, id int) Video {
 	return vid
 }
 
-func TestVideoNext_ReturnsFirstUnflagged(t *testing.T) {
+func TestVideoNextUnflagged_ReturnsFirstUnflagged(t *testing.T) {
 	db := testdb.New(t)
 
 	start := insertVideo(t, db, Video{Slug: "2018_0514_224801_001"})
@@ -39,23 +41,23 @@ func TestVideoNext_ReturnsFirstUnflagged(t *testing.T) {
 	link(t, start, flagged)
 	link(t, flagged, want)
 
-	got, err := reload(t, start.ID).Next(context.Background())
+	got, err := reload(t, start.ID).NextUnflagged(context.Background())
 	if err != nil {
-		t.Fatalf("Next() error = %v, want nil", err)
+		t.Fatalf("NextUnflagged() error = %v, want nil", err)
 	}
 	if got.ID != want.ID {
-		t.Errorf("Next() = id %d (slug %q), want id %d (slug %q)", got.ID, got.Slug, want.ID, want.Slug)
+		t.Errorf("NextUnflagged() = id %d (slug %q), want id %d (slug %q)", got.ID, got.Slug, want.ID, want.Slug)
 	}
 	if got.Flagged {
-		t.Error("Next() returned a flagged video")
+		t.Error("NextUnflagged() returned a flagged video")
 	}
 	// The whole row round-trips, so a drifted column tag fails here.
 	if got.Slug != want.Slug || got.State != "Oregon" || got.Lat != 45.5 || got.Lng != -122.6 {
-		t.Errorf("Next() row = %+v, want the persisted %+v", got, want)
+		t.Errorf("NextUnflagged() row = %+v, want the persisted %+v", got, want)
 	}
 }
 
-func TestVideoNext_BrokenChainReturnsError(t *testing.T) {
+func TestVideoNextUnflagged_BrokenChainReturnsError(t *testing.T) {
 	db := testdb.New(t)
 
 	start := insertVideo(t, db, Video{Slug: "2018_0514_224801_010"})
@@ -66,12 +68,12 @@ func TestVideoNext_BrokenChainReturnsError(t *testing.T) {
 		t.Fatalf("dangle next_vid: %v", err)
 	}
 
-	if _, err := reload(t, start.ID).Next(context.Background()); err == nil {
-		t.Fatal("Next() over a dangling next_vid returned nil error, want error")
+	if _, err := reload(t, start.ID).NextUnflagged(context.Background()); err == nil {
+		t.Fatal("NextUnflagged() over a dangling next_vid returned nil error, want error")
 	}
 }
 
-func TestVideoNext_AllFlaggedCycleReturnsError(t *testing.T) {
+func TestVideoNextUnflagged_AllFlaggedCycleReturnsError(t *testing.T) {
 	db := testdb.New(t)
 
 	// Two flagged videos pointing at each other: a walk that isn't bounded by
@@ -81,8 +83,8 @@ func TestVideoNext_AllFlaggedCycleReturnsError(t *testing.T) {
 	link(t, a, b)
 	link(t, b, a)
 
-	if _, err := reload(t, a.ID).Next(context.Background()); err == nil {
-		t.Fatal("Next() over an all-flagged cycle returned nil error, want error")
+	if _, err := reload(t, a.ID).NextUnflagged(context.Background()); err == nil {
+		t.Fatal("NextUnflagged() over an all-flagged cycle returned nil error, want error")
 	}
 }
 
@@ -139,6 +141,66 @@ func TestFindRandomByState(t *testing.T) {
 		if got.ID != want.ID {
 			t.Errorf("FindRandomByState(%q) = id %d (state %q), want id %d", state, got.ID, got.State, want.ID)
 		}
+	}
+}
+
+func TestFindNextDaytime(t *testing.T) {
+	db := testdb.New(t)
+	ctx := context.Background()
+
+	// Denver (UTC-6 in May); date_filmed drives the walk. Use far-future dates
+	// so no seed/2018 rows fall after the current clip and skew the query.
+	// backdate sets an exact UTC instant per clip.
+	lat, lng := 39.7392, -104.9903
+	backdate := func(v Video, iso string) {
+		if err := db.Exec(`UPDATE videos SET date_filmed = ?::timestamptz WHERE id = ?`, iso, v.ID).Error; err != nil {
+			t.Fatalf("backdate %d: %v", v.ID, err)
+		}
+	}
+
+	// current: 22:00 MDT May 14 (night). next-day night, then the first daytime
+	// clip of the following morning (noon), then a later daytime clip.
+	current := insertVideo(t, db, Video{Slug: "2099_0514_220000_001", Lat: lat, Lng: lng})
+	nextNight := insertVideo(t, db, Video{Slug: "2099_0515_030000_002", Lat: lat, Lng: lng})
+	lateDay := insertVideo(t, db, Video{Slug: "2099_0515_150000_004", Lat: lat, Lng: lng})
+	morning := insertVideo(t, db, Video{Slug: "2099_0515_120000_003", Lat: lat, Lng: lng})
+
+	backdate(current, "2099-05-15T04:00:00Z")   // 22:00 MDT May 14 — night, day May 14
+	backdate(nextNight, "2099-05-15T09:00:00Z") // 03:00 MDT May 15 — night, day May 15
+	backdate(morning, "2099-05-15T18:00:00Z")   // 12:00 MDT May 15 — daytime, day May 15
+	backdate(lateDay, "2099-05-15T21:00:00Z")   // 15:00 MDT May 15 — daytime, day May 15
+
+	got, err := FindNextDaytime(ctx, reload(t, current.ID))
+	if err != nil {
+		t.Fatalf("FindNextDaytime: %v", err)
+	}
+	// Skips the current day and the next day's pre-dawn night clip, landing on
+	// the following morning's first daytime clip — not the later afternoon one.
+	if got.ID != morning.ID {
+		t.Errorf("FindNextDaytime = id %d (slug %q), want the next morning id %d (slug %q)",
+			got.ID, got.Slug, morning.ID, morning.Slug)
+	}
+}
+
+func TestFindNextDaytime_NoDaytimeAhead(t *testing.T) {
+	db := testdb.New(t)
+	ctx := context.Background()
+
+	lat, lng := 39.7392, -104.9903
+	backdate := func(v Video, iso string) {
+		if err := db.Exec(`UPDATE videos SET date_filmed = ?::timestamptz WHERE id = ?`, iso, v.ID).Error; err != nil {
+			t.Fatalf("backdate %d: %v", v.ID, err)
+		}
+	}
+
+	current := insertVideo(t, db, Video{Slug: "2099_0614_220000_001", Lat: lat, Lng: lng})
+	onlyNight := insertVideo(t, db, Video{Slug: "2099_0615_030000_002", Lat: lat, Lng: lng})
+	backdate(current, "2099-06-15T04:00:00Z")   // 22:00 MDT June 14 — night
+	backdate(onlyNight, "2099-06-15T09:00:00Z") // 03:00 MDT June 15 — night
+
+	_, err := FindNextDaytime(ctx, reload(t, current.ID))
+	if !errors.Is(err, terrors.ErrNoDaytimeFound) {
+		t.Fatalf("FindNextDaytime err = %v, want terrors.ErrNoDaytimeFound", err)
 	}
 }
 

@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 
+	"github.com/adanalife/tripbot/pkg/chatbot"
 	"github.com/adanalife/tripbot/pkg/contract"
 )
 
@@ -59,4 +60,24 @@ func main() {
 		log.Fatalf("write %s: %v", cmdOut, err)
 	}
 	log.Printf("wrote %s", cmdOut)
+
+	// The chat command registry (every !command tripbot answers, with its
+	// access gate and resolved platforms) is emitted alongside — a sibling
+	// chat-commands.json the console syncs to render the live command list.
+	//
+	// Unlike the three above, its source is pkg/chatbot rather than a
+	// declaration in pkg/contract: it's registry data, not a wire schema, and a
+	// hand-kept second copy of 45 commands would drift the first time someone
+	// adds one. The import is safe here and only here — this generator is a
+	// main nothing links, so pkg/contract stays free of it and no binary
+	// inherits the chatbot's dependency tree.
+	chatData, err := chatbot.MarshalChatCommands()
+	if err != nil {
+		log.Fatalf("marshal chat commands: %v", err)
+	}
+	chatOut := filepath.Join(filepath.Dir(self), "..", "..", "chat-commands.json")
+	if err := os.WriteFile(chatOut, chatData, 0o644); err != nil {
+		log.Fatalf("write %s: %v", chatOut, err)
+	}
+	log.Printf("wrote %s", chatOut)
 }

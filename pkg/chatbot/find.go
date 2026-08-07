@@ -11,9 +11,7 @@ import (
 	"strings"
 	"time"
 
-	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
-	"github.com/adanalife/tripbot/pkg/feature"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/natsclient"
 	"github.com/adanalife/tripbot/pkg/users"
@@ -50,20 +48,16 @@ const (
 	// frame, so the moment is still upcoming when playback resumes (we don't
 	// want to land right on it and have it slip past on stream) and so it plays
 	// out in view after the warp overlay clears rather than being hidden by it.
-	// The vlc client clamps a resulting negative timestamp to start-of-clip.
+	// The playout client clamps a resulting negative timestamp to start-of-clip.
 	findJumpLeadInSec = 12.0
 )
 
-// findFlagKey gates !find. Off until the flag exists + is enabled in the
-// backing store (unknown keys evaluate false), so the command stays dormant
-// until the embed responder is deployed and we flip it on.
-const findFlagKey = "chatbot.find"
-
 // findEmbedRequest / findEmbedResponse are the NATS request/reply wire format
-// on tripbot.<env>.find.embed. The video-pipeline embed responder (deployment
-// deferred) parses the natural-language query, embeds the visual residual with
-// SigLIP2, and replies with the query vector plus the structured place/time
-// facets it stripped out; tripbot applies those as SQL filters against
+// on tripbot.<env>.find.embed. The video-pipeline embed responder (cv-responder;
+// one replica in prod, scaled to zero on stage) parses the natural-language
+// query, embeds the visual residual with SigLIP2, and replies with the query
+// vector plus the structured place/time facets it stripped out; tripbot applies
+// those as SQL filters against
 // frame_embeddings here in Go. Duplicated by hand in the two repos — keep in
 // sync (same convention as the eventbus envelopes across tripbot/console).
 type findEmbedRequest struct {
@@ -111,16 +105,20 @@ type Search interface {
 }
 
 // errSearchUnavailable is returned when NATS isn't connected, so the embed
-// request can't be made — the expected state until the responder is deployed.
+// request can't be made. Surfaces to chat as "Search isn't available right
+// now" — also what an env with no responder replica gets.
 var errSearchUnavailable = errors.New("search unavailable: NATS not connected")
 
-// realSearch is the production Search adapter. It holds no state: the embed
-// request goes through the pkg/natsclient singleton (like realNATS) and the
-// pgvector query through the process-wide DB (like realSessions).
-type realSearch struct{}
+// realSearch is the production Search adapter. Beyond the env its NATS
+// subjects are namespaced by, it holds no state: the embed request goes
+// through the pkg/natsclient singleton (like realNATS) and the pgvector
+// query through the process-wide DB (like realSessions).
+type realSearch struct {
+	env string
+}
 
-func (realSearch) Find(ctx context.Context, query string) ([]SearchHit, error) {
-	resp, err := requestEmbedding(ctx, c.Conf.Environment, query)
+func (s realSearch) Find(ctx context.Context, query string) ([]SearchHit, error) {
+	resp, err := requestEmbedding(ctx, s.env, query)
 	if err != nil {
 		return nil, err
 	}
@@ -254,24 +252,14 @@ func pickFindHit(hits []SearchHit) SearchHit {
 func (a *App) findCmd(ctx context.Context, user *users.User, params []string) {
 	slog.InfoContext(ctx, "ran !find", "username", user.Username)
 
-	// Feature-flagged: stays fully silent (no usage hint, no jump) until enabled.
-	if !a.Flags.Bool(ctx, findFlagKey, feature.EvalContext{
-		Username: user.Username,
-		Channel:  c.Conf.ChannelName,
-		Env:      c.Conf.Environment,
-	}) {
-		slog.InfoContext(ctx, "!find disabled by feature flag", "flag", findFlagKey, "username", user.Username)
-		return
-	}
-
-	// VLC playback isn't wired up on the dev Mac (same guard as !goto).
+	// Playout playback isn't wired up on the dev Mac (same guard as !goto).
 	if helpers.RunningOnDarwin() {
 		a.Chat.Say("Sorry, find isn't available right now")
 		return
 	}
 
 	// rate-limit non-admins, shared with the other playback jumps.
-	if !c.UserIsAdmin(user.Username) {
+	if !a.Cfg.UserIsAdmin(user.Username) {
 		if time.Since(lastTimewarpTime) < 20*time.Second {
 			a.Chat.Say("Not yet; enjoy the moment!")
 			return
@@ -309,7 +297,7 @@ func (a *App) findCmd(ctx context.Context, user *users.User, params []string) {
 	a.showTimewarpOverlay(ctx, user.Username)
 
 	// Land ahead of the matched frame so the moment doesn't slip past on stream.
-	if err := a.VLC.PlayFileAtTimestamp(ctx, hit.Slug+".MP4", hit.TsSec-findJumpLeadInSec); err != nil {
+	if err := a.Playout.PlayFileAtTimestamp(ctx, hit.Slug+".MP4", hit.TsSec-findJumpLeadInSec); err != nil {
 		slog.ErrorContext(ctx, "find jump failed", "err", err, "slug", hit.Slug)
 		a.Chat.Say("Found it, but couldn't jump there — sorry!")
 		return

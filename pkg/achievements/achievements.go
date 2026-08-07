@@ -49,10 +49,10 @@ var landmarks = []struct {
 
 // award inserts one achievement row, idempotently. Returns true when the row
 // is new (i.e. this is the moment to announce it).
-func award(tx *gorm.DB, username, name, title string) (bool, error) {
+func award(tx *gorm.DB, cfg *c.TripbotConfig, username, name, title string) (bool, error) {
 	res := tx.Exec(`INSERT INTO achievements (platform, username, name, title)
 		VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING`,
-		c.Conf.Platform, username, name, title)
+		cfg.Platform, username, name, title)
 	return res.RowsAffected > 0, res.Error
 }
 
@@ -75,8 +75,8 @@ RETURNING username
 // everyone currently in chat (bots already excluded). It returns the chat
 // announcements for any achievements unlocked by this clip; the caller owns
 // actually saying them.
-func HandleVideoChange(ctx context.Context, v video.Video, viewers []string) []string {
-	if c.Conf.ReadOnly || v.ID == 0 {
+func HandleVideoChange(ctx context.Context, cfg *c.TripbotConfig, v video.Video, viewers []string) []string {
+	if cfg.ReadOnly || v.ID == 0 {
 		return nil
 	}
 
@@ -88,7 +88,7 @@ func HandleVideoChange(ctx context.Context, v video.Video, viewers []string) []s
 			for _, viewer := range viewers {
 				if err := tx.Exec(`INSERT INTO user_state_days (platform, username, state, day)
 					VALUES (?, ?, ?, CURRENT_DATE) ON CONFLICT DO NOTHING`,
-					c.Conf.Platform, viewer, v.State).Error; err != nil {
+					cfg.Platform, viewer, v.State).Error; err != nil {
 					return err
 				}
 			}
@@ -96,7 +96,7 @@ func HandleVideoChange(ctx context.Context, v video.Video, viewers []string) []s
 				name := fmt.Sprintf("state-%s-%d", slugify(v.State), tier.Days)
 				title := fmt.Sprintf(tier.Title, v.State)
 				var rows []struct{ Username string }
-				if err := tx.Raw(stateVisitSQL, name, title, c.Conf.Platform, v.State, tier.Days).
+				if err := tx.Raw(stateVisitSQL, name, title, cfg.Platform, v.State, tier.Days).
 					Scan(&rows).Error; err != nil {
 					return err
 				}
@@ -113,7 +113,7 @@ func HandleVideoChange(ctx context.Context, v video.Video, viewers []string) []s
 					continue
 				}
 				for _, viewer := range viewers {
-					isNew, err := award(tx, viewer, "landmark-"+lm.Key, lm.Title)
+					isNew, err := award(tx, cfg, viewer, "landmark-"+lm.Key, lm.Title)
 					if err != nil {
 						return err
 					}

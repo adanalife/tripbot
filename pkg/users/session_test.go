@@ -21,7 +21,7 @@ func TestSessions_ConcurrentAccess(t *testing.T) {
 	db := testdb.New(t)
 	seedUsers(t, db, User{Username: "alice", Miles: 100})
 
-	s := New(noopChatterSource{})
+	s := New(testConf, noopChatterSource{})
 	s.loggedIn["alice"] = &User{Username: "alice", Miles: 100, LoggedIn: time.Now()}
 
 	ctx := context.Background()
@@ -51,13 +51,13 @@ func TestLoginIfNecessary_PersistsVisitAndEvent(t *testing.T) {
 	db := testdb.New(t)
 	ctx := context.Background()
 
-	s := New(noopChatterSource{})
+	s := New(testConf, noopChatterSource{})
 	user := s.LoginIfNecessary(ctx, "arrival")
 	if user.ID == 0 {
 		t.Fatal("expected a persisted user")
 	}
 
-	stored, err := Find(ctx, "arrival")
+	stored, err := Find(ctx, testConf.Platform, "arrival")
 	if err != nil {
 		t.Fatalf("Find: %v", err)
 	}
@@ -87,13 +87,55 @@ func TestLoginIfNecessary_PersistsVisitAndEvent(t *testing.T) {
 	}
 }
 
+// A FindOrCreate failure degrades to "not logged in this tick" rather than
+// breaking the interaction: login still hands back a User, leaves the session
+// map untouched so nothing un-saveable gets cached, and lets the next tick
+// succeed once the DB is reachable again.
+func TestLogin_SelfHealsAfterFindOrCreateFailure(t *testing.T) {
+	db := testdb.New(t)
+	seedUsers(t, db, User{Username: "flaky", Miles: 3})
+
+	s := New(testConf, noopChatterSource{})
+
+	// A cancelled context stands in for a transient DB outage.
+	failing, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	user := s.LoginIfNecessary(failing, "flaky")
+	if user == nil {
+		t.Fatal("login must still return a User when the lookup fails")
+	}
+	if user.ID != 0 {
+		t.Errorf("expected a zero User for an unreachable DB, got %+v", user)
+	}
+	if _, ok := s.get("flaky"); ok {
+		t.Error("an un-saveable user must not be cached in the session")
+	}
+	if s.LoggedInCount() != 0 {
+		t.Errorf("expected nobody logged in, got %d", s.LoggedInCount())
+	}
+
+	// The next tick retries and recovers.
+	ctx := context.Background()
+	recovered := s.LoginIfNecessary(ctx, "flaky")
+	if recovered.ID == 0 {
+		t.Fatal("expected the retry to find the existing row")
+	}
+	if recovered.Miles != 3 {
+		t.Errorf("expected the seeded miles, got %v", recovered.Miles)
+	}
+	if _, ok := s.get("flaky"); !ok {
+		t.Error("expected the recovered user to be logged in")
+	}
+}
+
 // Logging out banks the session's miles to the users row, drops the user from
 // the session, and closes the pairing with a logout event.
 func TestLogoutIfNecessary_BanksMilesAndClosesSession(t *testing.T) {
 	db := testdb.New(t)
 	ctx := context.Background()
 
-	s := New(noopChatterSource{})
+	s := New(testConf, noopChatterSource{})
 	user := s.LoginIfNecessary(ctx, "departure")
 	// Backdate the login so the session banks a non-zero mileage:
 	// 0.1mi/3min means ~20 miles for ten hours in chat.
@@ -106,7 +148,7 @@ func TestLogoutIfNecessary_BanksMilesAndClosesSession(t *testing.T) {
 	if s.LoggedInCount() != 0 {
 		t.Errorf("expected an empty session after logout, got %d", s.LoggedInCount())
 	}
-	stored, err := Find(ctx, "departure")
+	stored, err := Find(ctx, testConf.Platform, "departure")
 	if err != nil {
 		t.Fatalf("Find: %v", err)
 	}
@@ -136,7 +178,7 @@ func TestLogout_RecordsGiftedMilesAsExtra(t *testing.T) {
 	db := testdb.New(t)
 	ctx := context.Background()
 
-	s := New(noopChatterSource{})
+	s := New(testConf, noopChatterSource{})
 	s.LoginIfNecessary(ctx, "gifted")
 	s.GiveEveryoneMiles(5)
 	s.LogoutIfNecessary(ctx, "gifted")
@@ -161,12 +203,12 @@ func TestCorrectMiles(t *testing.T) {
 		ctx := context.Background()
 		seedUsers(t, db, User{Username: "offline", Miles: 10})
 
-		s := New(noopChatterSource{})
+		s := New(testConf, noopChatterSource{})
 		if got := s.CorrectMiles(ctx, "offline", -4); got != 6 {
 			t.Errorf("expected 6 miles returned, got %v", got)
 		}
 
-		stored, err := Find(ctx, "offline")
+		stored, err := Find(ctx, testConf.Platform, "offline")
 		if err != nil {
 			t.Fatalf("Find: %v", err)
 		}
@@ -179,7 +221,7 @@ func TestCorrectMiles(t *testing.T) {
 		testdb.New(t)
 		ctx := context.Background()
 
-		s := New(noopChatterSource{})
+		s := New(testConf, noopChatterSource{})
 		s.LoginIfNecessary(ctx, "online")
 		s.CorrectMiles(ctx, "online", 12)
 
@@ -190,7 +232,7 @@ func TestCorrectMiles(t *testing.T) {
 		if live.Miles != 12 {
 			t.Errorf("expected the live copy corrected, got %v", live.Miles)
 		}
-		stored, err := Find(ctx, "online")
+		stored, err := Find(ctx, testConf.Platform, "online")
 		if err != nil {
 			t.Fatalf("Find: %v", err)
 		}

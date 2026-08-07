@@ -1,6 +1,7 @@
 package eventbus
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"sync"
@@ -55,7 +56,10 @@ func TestEmitChatMessage(t *testing.T) {
 	nowFn = func() time.Time { return fixed }
 	t.Cleanup(func() { nowFn = func() time.Time { return time.Now().UTC() } })
 
-	EmitChatMessage(context.Background(), "development", "twitch", "DanaLol", "Hello, World!")
+	EmitChatMessage(context.Background(), "development", ChatMessage{
+		Platform: "twitch", Username: "DanaLol", UserID: "42",
+		Text: "Hello, World!", MessageID: "msg-1", Subscriber: true,
+	})
 
 	if len(rec.Publishes) != 1 {
 		t.Fatalf("expected 1 publish, got %d", len(rec.Publishes))
@@ -74,6 +78,16 @@ func TestEmitChatMessage(t *testing.T) {
 	}
 	if ev.Text != "Hello, World!" {
 		t.Errorf("text = %q, want %q", ev.Text, "Hello, World!")
+	}
+	if ev.UserID != "42" || ev.MessageID != "msg-1" || !ev.Subscriber {
+		t.Errorf("identity fields = {user_id:%q message_id:%q subscriber:%v}, want {42 msg-1 true}",
+			ev.UserID, ev.MessageID, ev.Subscriber)
+	}
+	// Unset roles are omitted rather than published as false, so a consumer
+	// can't read "not a moderator" as an answer from a platform that never
+	// reports one.
+	if bytes.Contains(pub.Payload, []byte("moderator")) {
+		t.Errorf("payload carries an unset role: %s", pub.Payload)
 	}
 	if ev.EmittedAt != fixed.Format(time.RFC3339Nano) {
 		t.Errorf("emitted_at = %q, want %q", ev.EmittedAt, fixed.Format(time.RFC3339Nano))
@@ -170,7 +184,7 @@ func TestEmit_NoNATS_NoPanic(t *testing.T) {
 	SetPublisher(realPublisher{})
 	t.Cleanup(func() { SetPublisher(realPublisher{}) })
 	// natsclient.Conn() is nil here (Connect never called) — must not panic.
-	EmitChatMessage(context.Background(), "test", "twitch", "u", "x")
+	EmitChatMessage(context.Background(), "test", ChatMessage{Platform: "twitch", Username: "u", Text: "x"})
 }
 
 func TestAuthStatusSubject(t *testing.T) {
@@ -267,5 +281,42 @@ func TestEmitYoutubeBroadcast(t *testing.T) {
 	}
 	if ev.EmittedAt != fixed.Format(time.RFC3339Nano) {
 		t.Errorf("emitted_at = %q, want %q", ev.EmittedAt, fixed.Format(time.RFC3339Nano))
+	}
+}
+
+func TestFacebookBroadcastSubject(t *testing.T) {
+	for _, env := range []string{"prod", "stage", "development"} {
+		if got, want := FacebookBroadcastSubject(env), "tripbot."+env+".facebook.broadcast"; got != want {
+			t.Errorf("FacebookBroadcastSubject(%q) = %q, want %q", env, got, want)
+		}
+	}
+}
+
+func TestEmitFacebookBroadcast(t *testing.T) {
+	rec := withRecorder(t)
+
+	fixed := time.Date(2026, 7, 17, 12, 0, 0, 0, time.UTC)
+	nowFn = func() time.Time { return fixed }
+	t.Cleanup(func() { nowFn = func() time.Time { return time.Now().UTC() } })
+
+	EmitFacebookBroadcast(context.Background(), "staging", "10102938475", "1719603579", "/page/videos/10102938475", "unpublished", true)
+
+	if len(rec.Publishes) != 1 {
+		t.Fatalf("expected 1 publish, got %d", len(rec.Publishes))
+	}
+	pub := rec.Publishes[0]
+	if pub.Subject != "tripbot.staging.facebook.broadcast" {
+		t.Errorf("subject = %q, want tripbot.staging.facebook.broadcast", pub.Subject)
+	}
+
+	var ev FacebookBroadcast
+	if err := json.Unmarshal(pub.Payload, &ev); err != nil {
+		t.Fatalf("payload not valid JSON: %v", err)
+	}
+	if ev.VideoID != "10102938475" || !ev.Live || ev.Privacy != "unpublished" {
+		t.Errorf("envelope = %+v, want video_id=10102938475 live=true privacy=unpublished", ev)
+	}
+	if ev.BroadcastID != "1719603579" || ev.PermalinkURL != "/page/videos/10102938475" {
+		t.Errorf("envelope = %+v, want broadcast_id=1719603579 permalink_url=/page/videos/10102938475", ev)
 	}
 }

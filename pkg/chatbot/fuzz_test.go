@@ -35,6 +35,9 @@ func FuzzFindCommand(f *testing.F) {
 		"frozen since yesterday",
 		"!help \U000e0000",
 		"!help\t",
+		" !MILES",
+		"!MIDDLE Hello World",
+		"No Audio Since Yesterday",
 		"\x00",
 	}
 	for _, s := range seeds {
@@ -49,10 +52,16 @@ func FuzzFindCommand(f *testing.F) {
 // to a sentinel string no realistic chat input can match, so fuzz stays on
 // the wrong-guess path (no DB writes). The handful of inputs that happen to
 // match are skipped to avoid the AddToScore path's sqlmock requirement.
+//
+// The sentinel has to be non-empty for that to hold, and deliberately so: a
+// stateless video is a real production case and any input the parser reduces
+// to "" would match it. TestGuessCmd_StatelessVideo_CreditsNobody covers that
+// side, where the assertion is that nothing gets credited rather than that
+// nothing matches.
 func FuzzGuessCmd(f *testing.F) {
 	const unguessableState = "\x00ZZ_FUZZ_SENTINEL_ZZ\x00"
 
-	seeds := []string{"", " ", "CA", "ca", "California", "@CA", "CA ZZ", "\x00", "  CA  "}
+	seeds := []string{"", " ", "CA", "ca", "California", "@CA", "CA ZZ", "\x00", "  CA  ", "zz", "  x"}
 	for _, s := range seeds {
 		f.Add(s)
 	}
@@ -63,7 +72,7 @@ func FuzzGuessCmd(f *testing.F) {
 		// 2-letter form gets expanded via helpers.StateAbbrevToState; bail
 		// if either form matches the sentinel (essentially impossible).
 		guess := strings.Join(params, " ")
-		if strings.ToLower(guess) == strings.ToLower(unguessableState) {
+		if strings.EqualFold(guess, unguessableState) {
 			t.Skip("fuzz hit the sentinel state")
 		}
 		app.guessCmd(context.Background(), newTestUser("viewer1"), params)
@@ -71,7 +80,7 @@ func FuzzGuessCmd(f *testing.F) {
 }
 
 // FuzzMilesCmd exercises the other-user lookup path, which calls
-// helpers.StripAtSign(params[0]). The noopSessions fake returns a zero-value
+// targetUsername(params[0]). The noopSessions fake returns a zero-value
 // user so milesCmd short-circuits before any DB-backed mileage lookup.
 func FuzzMilesCmd(f *testing.F) {
 	seeds := []string{"@dana", "dana", "", "@", " ", "@dana extra", "\x00", "@@dana"}
@@ -88,7 +97,7 @@ func FuzzMilesCmd(f *testing.F) {
 	})
 }
 
-// FuzzFollowageCmd covers the StripAtSign-on-params[0] path for !followage.
+// FuzzFollowageCmd covers the targetUsername-on-params[0] path for !followage.
 // mytwitch.FollowedAt short-circuits when the broadcaster token isn't loaded
 // (the test-env default), so no HTTP fires.
 func FuzzFollowageCmd(f *testing.F) {
@@ -118,8 +127,8 @@ func FuzzMiddleCmd(f *testing.F) {
 	})
 }
 
-// FuzzSetBotFlag covers the !makebot / !unbot argument handling: lowercase
-// + TrimPrefix("@") on params[0], then the noopSessions.SetBot call.
+// FuzzSetBotFlag covers the !makebot / !unbot argument handling:
+// targetUsername(params[0]), then the noopSessions.SetBot call.
 func FuzzSetBotFlag(f *testing.F) {
 	seeds := []string{"@dana", "dana", "DANA", "@", "", " ", "@@dana", "@dana extra", "\x00"}
 	for _, s := range seeds {

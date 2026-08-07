@@ -2,18 +2,15 @@ package video
 
 import (
 	"context"
+	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"log/slog"
-	"os/exec"
-	"path/filepath"
-	"strings"
 	"time"
 
-	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/eventbus"
 	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
+	playoutClient "github.com/adanalife/tripbot/pkg/playout-client"
 	"github.com/adanalife/tripbot/pkg/viewstats"
-	vlcClient "github.com/adanalife/tripbot/pkg/vlc-client"
 )
 
 // onscreens is the subset of the onscreens-client surface the Player drives
@@ -26,30 +23,33 @@ type onscreens interface {
 }
 
 // Player owns the state of "what's currently playing" and the clients that
-// drive the VLC playback + onscreens overlays. Construct via NewPlayer; the
+// drive the Playout playback + onscreens overlays. Construct via NewPlayer; the
 // single process-wide instance lives on cmd/tripbot's Tripbot struct.
 type Player struct {
 	CurrentlyPlaying Video // exported because external callers read the current video off it
 	curVid, preVid   string
 	timeStarted      time.Time
+	cfg              *c.TripbotConfig
 	onscreens        onscreens
-	vlc              *vlcClient.Client
+	playout          *playoutClient.Client
 	// OnChange, when set, is called with the new Video after each clip
 	// transition (including ones where LoadOrCreate failed — handlers check
 	// v.ID). Set once during boot, before the cron starts ticking.
 	OnChange func(ctx context.Context, v Video)
 }
 
-// NewPlayer returns a Player with its own Onscreens + VLC clients.
-func NewPlayer(onscreens onscreens, vlc *vlcClient.Client) *Player {
-	return &Player{onscreens: onscreens, vlc: vlc}
+// NewPlayer returns a Player with its own Onscreens + Playout clients. cfg
+// supplies the env + platform its video.changed events are tagged with and
+// the read-only gate its video_plays writes honor.
+func NewPlayer(cfg *c.TripbotConfig, onscreens onscreens, playout *playoutClient.Client) *Player {
+	return &Player{cfg: cfg, onscreens: onscreens, playout: playout}
 }
 
-// GetCurrentlyPlaying will use lsof to figure out
-// which dashcam video is currently playing (seriously).
+// GetCurrentlyPlaying asks Playout which dashcam video is on screen and
+// advances the Player's state if it changed.
 // ctx carries the cron tick's trace span; it isn't propagated into the
-// vlc-client / onscreens-client HTTP calls (those clients don't take a ctx,
-// so the underlying VLC poll and GPS-image toggles don't nest as children).
+// playout-client / onscreens-client HTTP calls (those clients don't take a ctx,
+// so the underlying Playout poll and GPS-image toggles don't nest as children).
 // TODO: consider making this return a video struct
 func (p *Player) GetCurrentlyPlaying(ctx context.Context) {
 	var err error
@@ -58,11 +58,7 @@ func (p *Player) GetCurrentlyPlaying(ctx context.Context) {
 	p.preVid = p.curVid
 
 	// figure out what's currently playing
-	if helpers.RunningOnDarwin() {
-		p.curVid = p.figureOutCurrentVideo(ctx)
-	} else {
-		p.curVid = p.vlc.CurrentlyPlaying(ctx)
-	}
+	p.curVid = p.playout.CurrentlyPlaying(ctx)
 
 	// if the currently-playing video has changed
 	if p.curVid != p.preVid {
@@ -72,7 +68,7 @@ func (p *Player) GetCurrentlyPlaying(ctx context.Context) {
 		// share the Video with the system
 		p.CurrentlyPlaying, err = LoadOrCreate(ctx, p.curVid)
 		if err != nil {
-			// Downstream of vlc.CurrentlyPlaying; the wrapper there already
+			// Downstream of playout.CurrentlyPlaying; the wrapper there already
 			// logged the root cause at Error. Debug-level keeps the breadcrumb
 			// without double-counting in Sentry.
 			slog.DebugContext(ctx, "unable to create Video", "err", err, "file", p.curVid)
@@ -86,12 +82,12 @@ func (p *Player) GetCurrentlyPlaying(ctx context.Context) {
 		// Update the current-state gauge: set the new state's series to 1 and
 		// clear the prior one. A blank abbrev (unresolvable state) records as
 		// "unknown" so a stuck playhead is alertable.
-		instrumentation.CurrentState.Set(helpers.StateToStateAbbrev(p.CurrentlyPlaying.State))
+		instrumentation.CurrentState.Set(helpers.StateToStateAbbrev(p.CurrentlyPlaying.State), p.cfg.Platform)
 
 		// Announce the switch so the admin panel's "now playing" card updates
 		// live (no-op when NATS is unconfigured). emitted_at doubles as the
 		// clip start time for the panel's elapsed ticker.
-		eventbus.EmitVideoChanged(ctx, c.Conf.Environment, c.Conf.Platform,
+		eventbus.EmitVideoChanged(ctx, p.cfg.Environment, p.cfg.Platform,
 			p.CurrentlyPlaying.File(), p.CurrentlyPlaying.State, p.CurrentlyPlaying.Flagged,
 			p.CurrentlyPlaying.Lat, p.CurrentlyPlaying.Lng)
 
@@ -99,7 +95,7 @@ func (p *Player) GetCurrentlyPlaying(ctx context.Context) {
 		// emission above (NATS core is fire-and-forget). The first tick after a
 		// restart records a fresh play for the clip already on screen, since its
 		// true start time wasn't observed.
-		viewstats.RecordPlay(ctx, p.CurrentlyPlaying.ID, p.CurrentlyPlaying.State,
+		viewstats.RecordPlay(ctx, p.cfg, p.CurrentlyPlaying.ID, p.CurrentlyPlaying.State,
 			p.CurrentlyPlaying.Flagged, p.CurrentlyPlaying.Lat, p.CurrentlyPlaying.Lng)
 
 		if p.OnChange != nil {
@@ -135,23 +131,7 @@ func (p *Player) EmitCurrentVideo(ctx context.Context) {
 	if p.CurrentlyPlaying.Slug == "" {
 		return
 	}
-	eventbus.EmitVideoChanged(ctx, c.Conf.Environment, c.Conf.Platform,
+	eventbus.EmitVideoChanged(ctx, p.cfg.Environment, p.cfg.Platform,
 		p.CurrentlyPlaying.File(), p.CurrentlyPlaying.State, p.CurrentlyPlaying.Flagged,
 		p.CurrentlyPlaying.Lat, p.CurrentlyPlaying.Lng)
-}
-
-func (p *Player) figureOutCurrentVideo(ctx context.Context) string {
-	if helpers.RunningOnWindows() {
-		slog.ErrorContext(ctx, "can't run script on windows")
-		return ""
-	}
-	// run the shell script to get currently-playing video
-	scriptPath := filepath.Join(helpers.ProjectRoot(), "bin", "current-file.sh")
-	out, err := exec.Command(scriptPath).Output()
-	outString := strings.TrimSpace(string(out))
-	if err != nil {
-		slog.ErrorContext(ctx, "figureOutCurrentVideo script failed", "err", err, "output", outString)
-		return ""
-	}
-	return outString
 }

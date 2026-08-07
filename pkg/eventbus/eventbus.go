@@ -85,15 +85,37 @@ func emit(ctx context.Context, subj string, ev any) {
 
 // ChatMessage is the wire format for tripbot.<env>.chat.message — one incoming
 // chat line from whichever platform this instance serves.
+//
+// It carries enough to act on a message, not just display it: the sender's
+// platform id, the message's own id, and the roles the platform reported. A
+// subscriber can therefore be identified from the subject alone, without a
+// consumer holding a database connection or a platform credential.
 type ChatMessage struct {
 	// Platform is the streaming platform the line came from ("twitch" /
 	// "youtube"). Both per-platform instances publish into the same env's
 	// subject, so this is what lets the admin console disambiguate. Empty on
 	// events emitted before the tag existed.
-	Platform  string `json:"platform,omitempty"`
-	Username  string `json:"username"`
-	Text      string `json:"text"`
-	EmittedAt string `json:"emitted_at"`
+	Platform string `json:"platform,omitempty"`
+	Username string `json:"username"`
+	// UserID is the sender's platform-native stable id. Username is a mutable
+	// display name on some platforms, so this is what a consumer keys identity
+	// on. Empty for the bot's own mirrored sends, and on any platform that
+	// withholds it.
+	UserID string `json:"user_id,omitempty"`
+	Text   string `json:"text"`
+	// MessageID is the platform's own id for this message — what a moderation
+	// action addresses. Empty for the bot's own mirrored sends (the platform
+	// hasn't assigned one yet at mirror time) and on platforms that surface no
+	// id.
+	MessageID string `json:"message_id,omitempty"`
+	// Moderator, Subscriber, and Broadcaster are the sender's role in the
+	// channel as the platform reported it on this message. All three are false
+	// both for a viewer with no roles and on a platform that reports none, so a
+	// consumer gating on them must know which platforms answer.
+	Moderator   bool   `json:"moderator,omitempty"`
+	Subscriber  bool   `json:"subscriber,omitempty"`
+	Broadcaster bool   `json:"broadcaster,omitempty"`
+	EmittedAt   string `json:"emitted_at"`
 }
 
 // ChatMessageSubject returns the subscribe/publish subject for chat messages in
@@ -101,14 +123,11 @@ type ChatMessage struct {
 func ChatMessageSubject(env string) string { return subject(env, "chat", "message") }
 
 // EmitChatMessage publishes an incoming chat line. Pass the original-case
-// username + text (not the lowercased command-parse copy).
-func EmitChatMessage(ctx context.Context, env, platform, username, text string) {
-	emit(ctx, ChatMessageSubject(env), ChatMessage{
-		Platform:  platform,
-		Username:  username,
-		Text:      text,
-		EmittedAt: emittedAt(),
-	})
+// username + text (not the lowercased command-parse copy); EmittedAt is
+// stamped here, so callers leave it zero.
+func EmitChatMessage(ctx context.Context, env string, msg ChatMessage) {
+	msg.EmittedAt = emittedAt()
+	emit(ctx, ChatMessageSubject(env), msg)
 }
 
 // --- viewers.count --------------------------------------------------------
@@ -145,12 +164,12 @@ func EmitViewerCount(ctx context.Context, env, platform string, count int) {
 // --- video.changed --------------------------------------------------------
 
 // VideoChanged is the wire format for tripbot.<env>.video.changed — published
-// when VLC switches to a new clip. State is the full state name (e.g.
+// when playout switches to a new clip. State is the full state name (e.g.
 // "Wyoming"); Flagged marks a no-GPS clip. The console's "now playing" card
 // updates from this without a reload.
 type VideoChanged struct {
-	// Platform is the streaming platform whose VLC switched clips ("twitch" /
-	// "youtube"). Each platform runs its own VLC at an independent corpus
+	// Platform is the streaming platform whose playout switched clips ("twitch" /
+	// "youtube"). Each platform runs its own playout at an independent corpus
 	// position, so both per-platform instances publish into the same env's
 	// subject; this is what lets the console keep a separate now-playing card
 	// and map trail per platform. Empty on events emitted before the tag
@@ -188,7 +207,7 @@ func EmitVideoChanged(ctx context.Context, env, platform, file, state string, fl
 // AuthAccount is one identity's token state inside an AuthStatus snapshot.
 // Field semantics mirror mytwitch.AccountTokenStatus, but the type is defined
 // here so the eventbus stays free of pkg/twitch (and its DB-reaching imports)
-// per the package-boundary ADR — cmd/tripbot converts at the call site.
+// — cmd/tripbot converts at the call site.
 type AuthAccount struct {
 	Account   string `json:"account"`              // "bot" | "broadcaster" | "youtube" — the consent account selector
 	LoginAs   string `json:"login_as,omitempty"`   // the exact platform username/channel to sign in as
@@ -250,6 +269,46 @@ type YoutubeBroadcast struct {
 // YouTube broadcast in env. Only the youtube instance publishes it.
 func YoutubeBroadcastSubject(env string) string { return subject(env, "youtube", "broadcast") }
 
+// --- facebook.broadcast ------------------------------------------------------
+
+// FacebookBroadcast is the wire format for tripbot.<env>.facebook.broadcast —
+// the Page's current live video discovered via the gateway, emitted on a slow
+// ticker by the facebook instance. VideoID is the watchable video object id
+// (facebook.com/video.php?v=<id>); BroadcastID is the live-video object id
+// (facebook.com/live/producer/<id>); PermalinkURL is the site-relative watch
+// path — the only link that resolves an unpublished broadcast (admin-only).
+// Privacy is "public"/"unpublished" — "unpublished" is the timeline-hidden
+// (admin-only) dry-run state, facebook's analog of a youtube unlisted
+// broadcast. Live is false when no broadcast is active. The console needs
+// this to badge and link an unpublished rehearsal, which the Page timeline
+// never shows.
+type FacebookBroadcast struct {
+	VideoID      string `json:"video_id"`
+	Live         bool   `json:"live"`
+	Privacy      string `json:"privacy"`
+	BroadcastID  string `json:"broadcast_id"`
+	PermalinkURL string `json:"permalink_url"`
+	EmittedAt    string `json:"emitted_at"`
+}
+
+// FacebookBroadcastSubject returns the subscribe/publish subject for the
+// current Facebook broadcast in env. Only the facebook instance publishes it.
+func FacebookBroadcastSubject(env string) string { return subject(env, "facebook", "broadcast") }
+
+// EmitFacebookBroadcast publishes the current Facebook broadcast snapshot. A
+// last-value cache (TRIPBOT_FACEBOOK, MaxMsgsPerSubject=1) retains the latest
+// so a fresh console renders the badge on connect.
+func EmitFacebookBroadcast(ctx context.Context, env, videoID, broadcastID, permalinkURL, privacy string, live bool) {
+	emit(ctx, FacebookBroadcastSubject(env), FacebookBroadcast{
+		VideoID:      videoID,
+		Live:         live,
+		Privacy:      privacy,
+		BroadcastID:  broadcastID,
+		PermalinkURL: permalinkURL,
+		EmittedAt:    emittedAt(),
+	})
+}
+
 // EmitYoutubeBroadcast publishes the current YouTube broadcast snapshot. A
 // last-value cache (TRIPBOT_YOUTUBE, MaxMsgsPerSubject=1) retains the latest so a
 // fresh console renders the link on connect.
@@ -260,6 +319,49 @@ func EmitYoutubeBroadcast(ctx context.Context, env, videoID, privacy string, liv
 		Privacy:   privacy,
 		EmittedAt: emittedAt(),
 	})
+}
+
+// --- chat.subscriber --------------------------------------------------------
+
+// SubscriberEvent is the wire format for tripbot.<env>.chat.subscriber — a
+// notable community event (new follow, new sub, gifted subs, or a resub with a
+// message) the console surfaces in its chat panel: a distinctly-styled inline
+// line for every kind, plus a large celebratory banner for the sub kinds. Kind
+// selects the treatment and which of the optional fields carry meaning:
+//
+//	follow → username
+//	sub    → username, tier
+//	gift   → username (the gifter, or "" when is_anonymous), tier, gift_count
+//	resub  → username, tier, months (cumulative), streak, message
+//
+// Emitted core (not streamed): these are live-only "don't miss it" moments —
+// there's nothing to replay for a viewer who wasn't watching, and the console
+// deliberately never re-animates a past event on reload.
+type SubscriberEvent struct {
+	// Platform is the streaming platform the event came from ("twitch"); empty
+	// on events emitted before the tag existed. Only Twitch has an EventSub
+	// source today, but the tag keeps the console's per-platform filter honest.
+	Platform    string `json:"platform,omitempty"`
+	Kind        string `json:"kind"`     // "follow" | "sub" | "gift" | "resub"
+	Username    string `json:"username"` // the actor; "" for an anonymous gifter
+	Tier        string `json:"tier,omitempty"`
+	Months      int    `json:"months,omitempty"`       // cumulative months (resub)
+	Streak      int    `json:"streak,omitempty"`       // consecutive months (resub); 0 when the subscriber hides it
+	GiftCount   int    `json:"gift_count,omitempty"`   // subs gifted in this event (gift)
+	IsAnonymous bool   `json:"is_anonymous,omitempty"` // anonymous gifter (gift)
+	Message     string `json:"message,omitempty"`      // resub message text (resub)
+	EmittedAt   string `json:"emitted_at"`
+}
+
+// SubscriberEventSubject returns the subscribe/publish subject for subscriber
+// events in env. The console builds the same string to subscribe.
+func SubscriberEventSubject(env string) string { return subject(env, "chat", "subscriber") }
+
+// EmitSubscriberEvent publishes one subscriber event. Callers build the struct
+// (Kind + the fields that kind carries); EmittedAt is stamped here.
+func EmitSubscriberEvent(ctx context.Context, env string, ev SubscriberEvent) {
+	ev.EmittedAt = emittedAt()
+	emit(ctx, SubscriberEventSubject(env), ev)
 }
 
 // --- JetStream streams (durable history) ----------------------------------
@@ -273,19 +375,23 @@ func EmitYoutubeBroadcast(ctx context.Context, env, videoID, privacy string, liv
 // streamed — it's a momentary value with nothing to replay.
 
 const (
-	chatStreamName    = "TRIPBOT_CHAT"
-	videoStreamName   = "TRIPBOT_VIDEO"
-	authStreamName    = "TRIPBOT_AUTH"
-	youtubeStreamName = "TRIPBOT_YOUTUBE"
+	chatStreamName     = "TRIPBOT_CHAT"
+	videoStreamName    = "TRIPBOT_VIDEO"
+	authStreamName     = "TRIPBOT_AUTH"
+	youtubeStreamName  = "TRIPBOT_YOUTUBE"
+	facebookStreamName = "TRIPBOT_FACEBOOK"
 )
 
-// Retention caps match the admin hub's in-memory buffer sizes (pkg/server:
-// chatRingSize=500, mapTrailSize=100) so a startup backfill exactly refills
-// them. Video keeps headroom over the 100-point trail since each video.changed
-// is one clip, not one breadcrumb (flagged/no-fix clips drop no breadcrumb).
+// Retention caps sized so a console restart's backfill refills its in-memory
+// buffers (tripbot-console/src/console/hub.py: CHAT_RING_SIZE=100,
+// MAP_TRAIL_SIZE=1000 breadcrumbs *per platform*). Every platform's tripbot
+// publishes video.changed to the one shared subject, so the video cap is the
+// per-platform trail length times the supported-platform count — otherwise a
+// fresh console seeds each map trail with only cap/platforms points and the
+// trail looks stubby until it grows back live.
 const (
 	chatStreamMaxMsgs  = 500
-	videoStreamMaxMsgs = 200
+	videoStreamMaxMsgs = 5000 // 1000-point trail × 5 platforms
 )
 
 // EnsureStreams idempotently declares the JetStream streams backing the admin
@@ -344,20 +450,32 @@ func EnsureStreams(ctx context.Context, js jetstream.JetStream, env string) erro
 			// watch/embed link on connect, then live updates follow.
 			MaxMsgsPerSubject: 1,
 		},
+		{
+			Name:        facebookStreamName,
+			Description: "Last-known Facebook broadcast snapshot (last-value cache).",
+			Subjects:    []string{FacebookBroadcastSubject(env)},
+			Storage:     jetstream.FileStorage,
+			Retention:   jetstream.LimitsPolicy,
+			Discard:     jetstream.DiscardOld,
+			// One retained message: a fresh console renders the current
+			// badge/link on connect, then live updates follow.
+			MaxMsgsPerSubject: 1,
+		},
 	}
 	for _, cfg := range configs {
 		if _, err := js.CreateOrUpdateStream(ctx, cfg); err != nil {
 			return fmt.Errorf("ensure stream %s: %w", cfg.Name, err)
 		}
 	}
-	slog.InfoContext(ctx, "jetstream streams ensured", "streams", chatStreamName+","+videoStreamName+","+authStreamName+","+youtubeStreamName, "env", env)
+	slog.InfoContext(ctx, "jetstream streams ensured", "streams", chatStreamName+","+videoStreamName+","+authStreamName+","+youtubeStreamName+","+facebookStreamName, "env", env)
 	return nil
 }
 
-// ChatStreamName, VideoStreamName, AuthStreamName, and YoutubeBroadcastStreamName
-// expose the stream names so consumers (the admin hub, the standalone console)
-// can bind ordered consumers to them without re-deriving the constants.
-func ChatStreamName() string             { return chatStreamName }
-func VideoStreamName() string            { return videoStreamName }
-func AuthStreamName() string             { return authStreamName }
-func YoutubeBroadcastStreamName() string { return youtubeStreamName }
+// The *StreamName functions expose the stream names so consumers (the admin
+// hub, the standalone console) can bind ordered consumers to them without
+// re-deriving the constants.
+func ChatStreamName() string              { return chatStreamName }
+func VideoStreamName() string             { return videoStreamName }
+func AuthStreamName() string              { return authStreamName }
+func YoutubeBroadcastStreamName() string  { return youtubeStreamName }
+func FacebookBroadcastStreamName() string { return facebookStreamName }

@@ -1,7 +1,7 @@
 """OnscreensServer — the standalone onscreens HTTP API + NATS middle-text subscriber.
 
-Reproduces k8s/apps/onscreens-server/base + overlays. Formerly a second port on
-the vlc-server pod (:8081); now its own stateless Deployment on :8080 that
+Reproduces k8s/apps/onscreens-server/base + overlays. A stateless Deployment
+on :8080 that
 
   * serves the onscreens feeds OBS browser sources poll (ONSCREENS_URL_BASE) and
     the HTTP API tripbot calls (ONSCREENS_SERVER_HOST),
@@ -75,15 +75,18 @@ class OnscreensServer(Construct):
                 k8s.EnvFromSource(
                     config_map_ref=k8s.ConfigMapEnvSource(name=f"{name}-config")
                 ),
-                # onscreens-server reports to its own Sentry project.
+                # onscreens-server reports to its own Sentry project. The
+                # observability Secrets are optional so the pod can start
+                # before the ExternalSecrets sync; Sentry/OTLP just gate off
+                # when the env vars are absent.
                 k8s.EnvFromSource(
                     secret_ref=k8s.SecretEnvSource(
-                        name="sentry-onscreens-server", optional=False
+                        name="sentry-onscreens-server", optional=True
                     )
                 ),
                 k8s.EnvFromSource(
                     secret_ref=k8s.SecretEnvSource(
-                        name="grafana-cloud-otlp", optional=False
+                        name="grafana-cloud-otlp", optional=True
                     )
                 ),
             ],
@@ -109,7 +112,7 @@ class OnscreensServer(Construct):
                 },
                 limits={"memory": k8s.Quantity.from_string("128Mi")},
             ),
-            # Writable tmpfs scratch for the RUN_DIR pidfile — nothing durable.
+            # Writable tmpfs scratch for RUN_DIR — nothing durable.
             volume_mounts=[k8s.VolumeMount(name="run", mount_path=RUN_DIR)],
         )
 
@@ -118,7 +121,10 @@ class OnscreensServer(Construct):
             "deployment",
             metadata=k8s.ObjectMeta(name=name, namespace=ns, labels=labels),
             spec=k8s.DeploymentSpec(
-                replicas=env.replicas_for(platform),
+                # Births parked; a console scale-up brings the platform live and
+                # Argo ignores .spec.replicas so the scale sticks (infra argocd
+                # ignore_replicas). Replica count is runtime-owned, not git-owned.
+                replicas=0,
                 strategy=k8s.DeploymentStrategy(
                     type="RollingUpdate",
                     rolling_update=k8s.RollingUpdateDeployment(

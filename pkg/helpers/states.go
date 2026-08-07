@@ -1,6 +1,21 @@
 package helpers
 
-import "strings"
+import (
+	"regexp"
+	"strings"
+)
+
+// characters that can't appear in a state or territory name
+var nonStateNameChars = regexp.MustCompile(`[^a-zA-Z\s]+`)
+
+// NormalizeStateInput cleans up a user-supplied state name so it can be looked
+// up: characters a state name can't contain (digits, punctuation, emoji) are
+// dropped, runs of whitespace collapse to a single space, and the ends are
+// trimmed. Interior spaces survive, so multi-word names like "new york" stay
+// intact. Case is left alone — TitlecaseState resolves that.
+func NormalizeStateInput(input string) string {
+	return strings.Join(strings.Fields(nonStateNameChars.ReplaceAllString(input, "")), " ")
+}
 
 func StateAbbrevToState(abbrev string) string {
 	val, ok := stateAbbrevs[strings.ToUpper(abbrev)]
@@ -33,11 +48,29 @@ func StateNames() []string {
 	return names
 }
 
-// TODO: this doesn't handle the case where the state is invalid
+// TitlecaseState renders a US state or territory in the canonical display form
+// used throughout the app (and stored in the videos table). It accepts either a
+// two-letter abbreviation ("ca", "DC") or a full name ("california"), ignoring
+// case and surrounding whitespace, and returns the table's spelling — so "DC"
+// becomes "District of Columbia" rather than "District Of Columbia".
+//
+// Input that names no known state is echoed back title-cased instead of being
+// swallowed, so callers that render the result (chat replies, onscreens) show
+// what was asked for rather than an empty string.
 func TitlecaseState(state string) string {
-	if len(state) == 2 {
-		state = StateAbbrevToState(state)
+	state = strings.TrimSpace(state)
+	if name := StateAbbrevToState(state); name != "" {
+		return name
 	}
+	if abbrev := StateToStateAbbrev(state); abbrev != "" {
+		return stateAbbrevs[abbrev]
+	}
+	// strings.Title is deprecated in favour of x/text's cases.Title, which is
+	// the wrong trade here: this path echoes back whatever a viewer typed, and
+	// cases.Title treats a digit as a word boundary ("3rd street" becomes "3Rd
+	// Street"). strings.Title's word rule is the one that reads correctly for
+	// arbitrary input, and Go 1 compatibility keeps it from being removed.
+	//nolint:staticcheck // SA1019: see above
 	return strings.Title(strings.ToLower(state))
 }
 

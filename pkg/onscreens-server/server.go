@@ -26,21 +26,21 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-// Config bundles the runtime knobs cmd/onscreens-server passes into New.
-// Build-time configuration (bind address, server type, etc.) still flows
-// through the package-level config.Conf var imported as `c` — Config is
-// only for the handful of values that vary per process invocation.
+// Config bundles what cmd/onscreens-server passes into New.
 type Config struct {
 	// Version is the build-time tag returned by /version. Typically set
 	// from cmd/onscreens-server's `main.version` var, which is overridden
 	// via `-ldflags "-X main.version=..."`.
 	Version string
+	// Conf is the process config, loaded once in main via config.Load().
+	Conf *c.OnscreensServerConfig
 }
 
 // Server owns the onscreen singletons and the HTTP listener that serves
 // them. Construct via New; call Start to block on the HTTP listener.
 type Server struct {
 	Version string
+	cfg     *c.OnscreensServerConfig
 
 	GPS          *Onscreen
 	Leaderboard  *Onscreen
@@ -48,6 +48,12 @@ type Server struct {
 	MiddleText   *Onscreen
 	RightRotator *Onscreen
 	Timewarp     *Onscreen
+
+	// The corner rotators behind LeftRotator / RightRotator. Kept so copy
+	// edited in the admin console, arriving over NATS, can be swapped into the
+	// live pools.
+	left  *rotator
+	right *rotator
 
 	http *http.Server
 }
@@ -60,15 +66,18 @@ func New(cfg Config) *Server {
 	if version == "" {
 		version = "dev"
 	}
-	leftRotator, rightRotator := startRotators()
+	left, right := startRotators(cfg.Conf)
 	return &Server{
 		Version:      version,
+		cfg:          cfg.Conf,
 		GPS:          newGPSOnscreen(),
 		Leaderboard:  newLeaderboardOnscreen(),
-		LeftRotator:  leftRotator,
+		LeftRotator:  left.osc,
 		MiddleText:   newMiddleText(),
-		RightRotator: rightRotator,
+		RightRotator: right.osc,
 		Timewarp:     newTimewarp(),
+		left:         left,
+		right:        right,
 	}
 }
 
@@ -84,7 +93,7 @@ func New(cfg Config) *Server {
 // (listener-error vs. clean-stop) and lets the signal handler control
 // the shutdown deadline.
 func (s *Server) Start(ctx context.Context) error {
-	slog.InfoContext(ctx, "starting onscreens-server web server", "bind", c.Conf.OnscreensServerBindAddress)
+	slog.InfoContext(ctx, "starting onscreens-server web server", "bind", s.cfg.OnscreensServerBindAddress)
 
 	// Attach NATS subscribers. No-op when the natsclient singleton is
 	// nil (NATS_URL unset); HTTP remains the sole transport in that case.
@@ -94,6 +103,11 @@ func (s *Server) Start(ctx context.Context) error {
 	// cache so a server restart doesn't blank whatever text was on screen.
 	// Best-effort: a no-op without NATS / JetStream.
 	s.RestoreMiddleText(ctx)
+
+	// Restore console-edited rotator copy from its JetStream last-value cache so
+	// a restart doesn't drop the corners back to the copy compiled into the
+	// binary. Best-effort: a no-op without NATS / JetStream.
+	s.RestoreRotatorCopy(ctx)
 
 	r := mux.NewRouter()
 
@@ -127,7 +141,7 @@ func (s *Server) Start(ctx context.Context) error {
 	// catch everything else
 	r.Handle("/", tagged("/", catchAllHandler))
 
-	if c.Conf.Verbose {
+	if s.cfg.Verbose {
 		helpers.PrintAllRoutes(r)
 	}
 
@@ -135,19 +149,19 @@ func (s *Server) Start(ctx context.Context) error {
 	// logger for an slog-based one — see pkg/httpmw.SlogLogger. The static
 	// middleware from negroni.Classic is dropped (no public/ directory).
 	app := negroni.New(
-		httpmw.NewRecovery(func(any) { instrumentation.HTTPPanics.Inc(c.Conf.ServerType) }),
+		httpmw.NewRecovery(func(any) { instrumentation.HTTPPanics.Inc(s.cfg.ServerType) }),
 		httpmw.NewSlogLogger(),
 	)
 
 	metricsMw := middleware.New(middleware.Config{
 		Recorder: metrics.NewRecorder(metrics.Config{}),
-		Service:  c.Conf.ServerType,
+		Service:  s.cfg.ServerType,
 	})
 	app.Use(negronimiddleware.Handler("", metricsMw))
 
 	secureMw := secure.New(secure.Options{
 		FrameDeny:     true,
-		IsDevelopment: c.Conf.IsDevelopment(),
+		IsDevelopment: s.cfg.IsDevelopment(),
 	})
 	app.Use(negroni.HandlerFunc(secureMw.HandlerFuncWithNext))
 
@@ -156,12 +170,12 @@ func (s *Server) Start(ctx context.Context) error {
 	app.UseHandler(r)
 
 	s.http = &http.Server{
-		Addr:           c.Conf.OnscreensServerBindAddress,
+		Addr:           s.cfg.OnscreensServerBindAddress,
 		WriteTimeout:   time.Second * 15,
 		ReadTimeout:    time.Second * 15,
 		IdleTimeout:    time.Second * 60,
 		MaxHeaderBytes: 1 << 20, // 1 MB
-		Handler:        otelhttp.NewHandler(app, c.Conf.ServerType),
+		Handler:        otelhttp.NewHandler(app, s.cfg.ServerType),
 	}
 
 	// Run ListenAndServe in a goroutine so Start can block on ctx.Done()

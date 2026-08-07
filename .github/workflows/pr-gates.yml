@@ -1,0 +1,176 @@
+# The fast per-PR gates, in one job.
+#
+# GitHub bills Actions per job, rounded up to the whole minute, so a handful of
+# 10-second checks in separate workflows cost a minute each. Running them as
+# steps of one `gates` job collapses that to a single billed minute while
+# keeping every check's failure message intact.
+#
+# `gates` always reports, even when an individual step is inapplicable, so it is
+# safe to mark required in branch protection — a path-filtered *workflow* would
+# hang as "Expected" and block merges instead. Expensive steps stay cheap by
+# checking the PR's changed paths first.
+#
+# Deliberately NOT folded in: changelog-number.yml, which needs `contents:
+# write` to push the fragment rename (job-level permissions apply to every step,
+# so merging it would put a write token in scope for all the read-only gates);
+# and contract.yml, which is tripbot-only and would drag a Go toolchain into a
+# job every other repo runs without one.
+name: pr-gates
+
+on:
+  pull_request:
+    branches: [main]
+    # Union of the triggers the individual gates needed: `edited` for the title
+    # check, `labeled`/`unlabeled` for the skip-changelog escape hatch.
+    types: [opened, edited, reopened, synchronize, labeled, unlabeled]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: pr-gates-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      # Conventional Commits enforcement for the SQUASH SUBJECT. The commit-msg
+      # pre-commit hook only guards local commits; because PRs squash-merge, the
+      # PR *title* becomes the commit subject written to history.
+      #
+      # release-please's standing release PR is titled `chore(main): release
+      # X.Y.Z`, itself a conventional subject, so it passes with no exemption.
+      - name: Conventional PR title
+        uses: amannn/action-semantic-pull-request@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed paths
+        id: changed
+        env:
+          BASE: ${{ github.base_ref }}
+        run: |
+          git fetch origin "$BASE" -q
+          changed=$(git diff --name-only "origin/$BASE...HEAD")
+          if printf '%s\n' "$changed" | grep -qE '^(cdk8s/|pkg/contract/contract\.json$)'; then
+            echo "cdk8s=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "cdk8s=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: astral-sh/setup-uv@v9.0.0 # no floating major tag published
+
+      # Require every PR into main to add a towncrier changelog fragment under
+      # changelog.d/ (see README "Changelog"). This is what keeps the release
+      # changelog complete by construction, instead of reconstructing missing
+      # entries from PR bodies at release time.
+      #
+      # Escape hatch: the `skip-changelog` label, for PRs that genuinely warrant
+      # no entry (dependabot bumps, CI-only tweaks, pure refactors).
+      # release-please's own release PR is exempt by head branch — it collates
+      # the fragments, it doesn't add one.
+      - name: Require a changelog fragment
+        if: ${{ !contains(github.event.pull_request.labels.*.name, 'skip-changelog') && github.head_ref != 'release-please--branches--main' }}
+        env:
+          BASE: ${{ github.base_ref }}
+        run: uvx towncrier check --config towncrier.toml --compare-with "origin/$BASE"
+
+      # Guards the fleet-wide platform-set contract: platform-gateway owns
+      # platforms.json (its Go adapter registry is the source of truth) and
+      # every repo syncs a copy via `task platforms:sync`. Unguarded by changed
+      # paths on purpose — it catches the gateway adding or removing a platform
+      # we haven't re-synced, which touches nothing in this repo. The daily
+      # drift sweep lives in platforms-contract.yml.
+      #
+      # The gateway repo is private, so read it with an org-scoped automation
+      # app token (least privilege: platform-gateway only), not GITHUB_TOKEN.
+      #
+      # Skipped on Dependabot PRs, which cannot answer the question this asks. A
+      # Dependabot `pull_request` event is granted Actions variables but not
+      # Actions secrets, so the private key arrives empty and the mint fails with
+      # "The 'private-key' input must be set to a non-empty string" — a red
+      # required check on every bump. Nothing is lost by not asking: platforms.json
+      # only ever moves by `task platforms:sync`, which no dependency bump runs,
+      # and gateway-side drift is caught daily by platforms-contract.yml regardless
+      # of what any PR does.
+      - name: Mint automation app token
+        if: github.event.pull_request.user.login != 'dependabot[bot]'
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.AUTOMATION_APP_ID }}
+          private-key: ${{ secrets.AUTOMATION_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: platform-gateway
+
+      - name: Assert platforms.json matches platform-gateway/main
+        if: github.event.pull_request.user.login != 'dependabot[bot]'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          gh api "repos/${{ github.repository_owner }}/platform-gateway/contents/platforms.json?ref=main" \
+            -H "Accept: application/vnd.github.raw" > gateway-platforms.json
+          if ! diff -u gateway-platforms.json platforms.json; then
+            echo "::error::platforms.json is out of sync with platform-gateway/main — run 'task platforms:sync' and commit."
+            exit 1
+          fi
+          rm -f gateway-platforms.json
+
+      # Verify the committed cdk8s/dist/ deploy units are in sync with the
+      # authoring code. The post-merge sweep on main lives in cdk8s-synth.yml.
+
+      # Toolchain via mise (cdk8s/.mise.toml pins python / node).
+      - uses: jdx/mise-action@v4
+        if: steps.changed.outputs.cdk8s == 'true'
+        with:
+          working_directory: cdk8s
+
+      - name: Install Python deps
+        if: steps.changed.outputs.cdk8s == 'true'
+        working-directory: cdk8s
+        run: uv sync
+
+      - name: Install the cdk8s CLI
+        if: steps.changed.outputs.cdk8s == 'true'
+        working-directory: cdk8s
+        run: mise exec -- npm ci
+
+      - name: Generate typed k8s constructs (cdk8s import)
+        if: steps.changed.outputs.cdk8s == 'true'
+        working-directory: cdk8s
+        run: mise exec -- uv run npx cdk8s import
+
+      - name: Run synth-time checks
+        if: steps.changed.outputs.cdk8s == 'true'
+        working-directory: cdk8s
+        run: mise exec -- uv run pytest -q
+
+      - name: Synth
+        if: steps.changed.outputs.cdk8s == 'true'
+        working-directory: cdk8s
+        run: mise exec -- uv run npx cdk8s synth
+
+      - name: Freeze version-pinned prod-1 manifests
+        if: steps.changed.outputs.cdk8s == 'true'
+        working-directory: cdk8s
+        # prod-1 app manifests are pinned to their release version and regenerated
+        # only on release-please's release PR, so a chart change on main doesn't
+        # reach prod's committed dist until the next release (that's what couples
+        # the config delta to the version bump). Discard this HEAD re-synth of the
+        # pinned app files before the sync check; identity + one-shot jobs stay
+        # live. Mirrors the freeze in `task cdk8s:synth`.
+        run: |
+          git ls-files -- 'dist/prod-1-*.k8s.yaml' \
+            | grep -vE 'prod-1-(tripbot-identity|job-)' \
+            | xargs -r git checkout --
+
+      - name: Verify dist/ is committed in sync
+        if: steps.changed.outputs.cdk8s == 'true'
+        run: git diff --exit-code -- cdk8s/dist/

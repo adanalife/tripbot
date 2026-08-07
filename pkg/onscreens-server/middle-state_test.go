@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	c "github.com/adanalife/tripbot/pkg/config/onscreens-server"
 	"github.com/adanalife/tripbot/pkg/natsclient"
 	natsserver "github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
@@ -61,11 +60,11 @@ func TestRestoreMiddleText(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	t.Cleanup(cancel)
 
-	// RestoreMiddleText reads under c.Conf.Environment ("testing" in tests);
-	// ensure + publish under the same env so the restore finds the state.
+	// RestoreMiddleText reads under the server's configured env; ensure +
+	// publish under the same env so the restore finds the state.
 	js := natsclient.JetStream()
-	env := c.Conf.Environment
-	platform := c.Conf.Platform
+	env := testConf.Environment
+	platform := testConf.Platform
 	if err := EnsureMiddleStateStream(ctx, js, env); err != nil {
 		t.Fatalf("ensure stream: %v", err)
 	}
@@ -75,13 +74,13 @@ func TestRestoreMiddleText(t *testing.T) {
 	}
 	waitMiddleState(t, ctx, js, env, platform, "restored text", true)
 
-	s := &Server{MiddleText: newMiddleText()}
+	s := &Server{cfg: testConf, MiddleText: newMiddleText()}
 	s.RestoreMiddleText(ctx)
 
-	if s.MiddleText.Content != "restored text" {
-		t.Errorf("MiddleText.Content = %q, want %q", s.MiddleText.Content, "restored text")
+	if s.MiddleText.Content() != "restored text" {
+		t.Errorf("MiddleText.Content = %q, want %q", s.MiddleText.Content(), "restored text")
 	}
-	if !s.MiddleText.IsShowing {
+	if !s.MiddleText.IsShowing() {
 		t.Errorf("MiddleText.IsShowing = false, want true")
 	}
 }
@@ -115,7 +114,7 @@ func waitMiddleState(t *testing.T, ctx context.Context, js jetstream.JetStream, 
 
 // connectEmbeddedJetStream starts an in-process JetStream-enabled nats-server
 // on a random port with a temp store dir and returns a client connection.
-// (Same fixture shape as pkg/vlc-server's lastplayed_test.)
+// (Same fixture shape as the lastplayed resume tests playout ported.)
 func connectEmbeddedJetStream(t *testing.T) *nats.Conn {
 	t.Helper()
 	ns, err := natsserver.NewServer(&natsserver.Options{

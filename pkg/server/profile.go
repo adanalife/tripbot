@@ -22,6 +22,7 @@ import (
 // monthly-score query is fine.
 var (
 	findUser      = users.Find
+	findUserByID  = users.FindByPlatformUserID
 	sessionCount  = events.SessionCount
 	earliestEvent = events.EarliestRealEventDate
 	monthlyMiles  = func(ctx context.Context, u users.User) float32 {
@@ -49,7 +50,7 @@ func bestEffortFirstSeen(times ...time.Time) time.Time {
 }
 
 // userProfile is the chat-console popover payload — a small at-a-glance view of
-// a chatter, events-derived per the tripbot-events-table-design ADR. The JSON
+// a chatter, derived from the append-only events table. The JSON
 // tags are the wire format the standalone tripbot-console reads via
 // GET /api/user/{username} (it has no DB access of its own and proxies here).
 type userProfile struct {
@@ -63,16 +64,45 @@ type userProfile struct {
 	LastSeen     time.Time `json:"last_seen"`
 }
 
-// gatherUserProfile reads a chatter's at-a-glance stats through the DB seams.
-// Operator-triggered (one click), not a hot path, so the extra monthly-score
-// query is fine. An empty username or no matching row returns Found=false.
-func gatherUserProfile(ctx context.Context, username string) userProfile {
-	username = strings.ToLower(strings.TrimSpace(username))
-	prof := userProfile{Username: username}
+// resolveUser finds the chatter's row, preferring the platform's user id over
+// the display name: the id survives a rename, where the name it was requested
+// under may since have moved to nobody (or to somebody else).
+//
+// The id falls back to the username rather than being authoritative on its own,
+// because a row is only stamped with an id once its owner has spoken since the
+// column shipped — so an id miss is the expected case for a while yet, and it
+// means "not stamped", not "no such user".
+func resolveUser(ctx context.Context, platform, platformUserID, username string) (users.User, error) {
+	if platformUserID != "" {
+		u, err := findUserByID(ctx, platform, platformUserID)
+		if err == nil {
+			return u, nil
+		}
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			slog.ErrorContext(ctx, "error finding user by platform id", "err", err,
+				"platform_user_id", platformUserID)
+		}
+	}
 	if username == "" {
+		return users.User{}, gorm.ErrRecordNotFound
+	}
+	return findUser(ctx, platform, username)
+}
+
+// gatherUserProfile reads a chatter's at-a-glance stats through the DB seams,
+// scoped to this instance's platform. Operator-triggered (one click), not a
+// hot path, so the extra monthly-score query is fine. No matching row — or
+// neither identifier given — returns Found=false.
+//
+// platformUserID may be empty; see resolveUser for how the two identifiers rank.
+func gatherUserProfile(ctx context.Context, platform, platformUserID, username string) userProfile {
+	username = strings.ToLower(strings.TrimSpace(username))
+	platformUserID = strings.TrimSpace(platformUserID)
+	prof := userProfile{Username: username}
+	if username == "" && platformUserID == "" {
 		return prof
 	}
-	u, err := findUser(ctx, username)
+	u, err := resolveUser(ctx, platform, platformUserID, username)
 	if err != nil {
 		// not-found renders as Found=false; a real DB error does too, but
 		// gets logged so it's visible as a failure rather than a ghost user.
@@ -81,21 +111,31 @@ func gatherUserProfile(ctx context.Context, username string) userProfile {
 		}
 		return prof
 	}
+	// The stored name wins over the requested one: resolving by id after a
+	// rename is exactly the case where they differ, and the events below are
+	// keyed by the name they were written under.
+	prof.Username = u.Username
 	prof.Found = true
 	prof.IsBot = u.IsBot
 	prof.Miles = u.Miles
 	prof.MonthlyMiles = monthlyMiles(ctx, u)
-	prof.FirstSeen = bestEffortFirstSeen(u.FirstSeen, u.DateCreated, earliestEvent(ctx, u.Platform, username))
+	prof.FirstSeen = bestEffortFirstSeen(u.FirstSeen, u.DateCreated, earliestEvent(ctx, u.Platform, u.Username))
 	prof.LastSeen = u.LastSeen
-	prof.Sessions = sessionCount(ctx, username)
+	prof.Sessions = sessionCount(ctx, platform, u.Username)
 	return prof
 }
 
 // userProfileAPIHandler serves GET /api/user/{username}: a chatter's
 // at-a-glance stats as JSON, for the standalone tripbot-console to render its
 // own popover (the console holds no DB access — it proxies here).
-func userProfileAPIHandler(w http.ResponseWriter, r *http.Request) {
-	prof := gatherUserProfile(r.Context(), mux.Vars(r)["username"])
+//
+// An optional ?user_id= carries the platform's own user id, which resolves the
+// chatter across a rename. It's a query parameter rather than a second route so
+// a caller can send both and get the id's accuracy with the name's coverage;
+// the response's username field says which row actually answered.
+func (s *Server) userProfileAPIHandler(w http.ResponseWriter, r *http.Request) {
+	prof := gatherUserProfile(r.Context(), s.cfg.Platform,
+		r.URL.Query().Get("user_id"), mux.Vars(r)["username"])
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	if err := json.NewEncoder(w).Encode(prof); err != nil {

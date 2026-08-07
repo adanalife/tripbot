@@ -106,7 +106,7 @@ func (v Video) save(ctx context.Context) error {
 	}
 
 	if lat == 0 || lng == 0 {
-		// No OCR runs anymore, so a runtime-created clip has no GPS fix.
+		// Nothing runs OCR at runtime, so a clip created here has no GPS fix.
 		flagged = true
 		coordSource = CoordSourceMissing
 	}
@@ -136,11 +136,10 @@ func (v Video) save(ctx context.Context) error {
 	return database.GormDB().WithContext(ctx).Create(&insert).Error
 }
 
-// Next() finds the next unflagged video by walking the next_vid chain.
+// NextUnflagged() finds the next unflagged video by walking the next_vid chain.
 // The walk is bounded by the playlist length, so a broken chain or a
 // cycle of flagged videos returns an error instead of spinning forever.
-// TODO: should this be NextUnflagged?
-func (v Video) Next(ctx context.Context) (Video, error) {
+func (v Video) NextUnflagged(ctx context.Context) (Video, error) {
 	var count int64
 	if err := database.GormDB().WithContext(ctx).Model(&Video{}).Count(&count).Error; err != nil {
 		return Video{}, err
@@ -200,13 +199,55 @@ func FindRandomByState(ctx context.Context, state string) (Video, error) {
 	//TODO: ORDER BY random() will eventually get too slow
 	result := database.GormDB().WithContext(ctx).Where("state = ?", state).Order("random()").Limit(1).First(&vid)
 	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-		return vid, &terrors.NoFootageForStateError{Msg: "no matches found"}
+		return vid, terrors.ErrNoFootageForState
 	}
 	if result.Error != nil {
 		slog.ErrorContext(ctx, "error fetching vid from DB", "err", result.Error)
 		return vid, result.Error
 	}
 	return vid, nil
+}
+
+// nextDaytimeScanLimit caps how many upcoming clips FindNextDaytime pulls in
+// one query. A day of driving is a few hundred one-minute clips, so this is far
+// more than enough to reach the following morning even across multi-day gaps in
+// the trip, while bounding the scan for a chat command.
+const nextDaytimeScanLimit = 5000
+
+// FindNextDaytime returns the first daytime clip filmed on a later local
+// calendar day than `after` — the "skip to the next morning" target behind
+// !daytime. The dashcam corpus is daytime driving footage, so from a dusk or
+// night clip the next daylight is the following day's first daylight clip; this
+// walks clips in film order and returns it. Clips without a GPS fix are skipped
+// (daytime needs coords to resolve sunrise/sunset). Returns a
+// terrors.ErrNoDaytimeFound when no later daytime clip exists in the scanned window.
+func FindNextDaytime(ctx context.Context, after Video) (Video, error) {
+	// Baseline calendar day: the current clip's local day when it has a fix,
+	// else its raw filmed day (a flagged clip has no coords to localize).
+	afterDay := time.Date(after.DateFilmed.Year(), after.DateFilmed.Month(), after.DateFilmed.Day(), 0, 0, 0, 0, time.UTC)
+	if after.Lat != 0 || after.Lng != 0 {
+		afterDay = helpers.LocalDate(after.DateFilmed, after.Lat, after.Lng)
+	}
+
+	var clips []Video
+	err := database.GormDB().WithContext(ctx).
+		Where("date_filmed > ? AND NOT flagged AND (lat != 0 OR lng != 0)", after.DateFilmed).
+		Order("date_filmed").
+		Limit(nextDaytimeScanLimit).
+		Find(&clips).Error
+	if err != nil {
+		return Video{}, err
+	}
+
+	for _, clip := range clips {
+		if !helpers.LocalDate(clip.DateFilmed, clip.Lat, clip.Lng).After(afterDay) {
+			continue // same (or earlier) local day as the current clip
+		}
+		if helpers.IsDaytime(clip.DateFilmed, clip.Lat, clip.Lng) {
+			return clip, nil
+		}
+	}
+	return Video{}, terrors.ErrNoDaytimeFound
 }
 
 // CorpusRoute returns the GPS coordinates of every non-flagged dashcam clip,

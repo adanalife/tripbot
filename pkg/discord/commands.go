@@ -97,7 +97,7 @@ func (s *Session) runLeaderboard(
 		slog.ErrorContext(ctx, "discord defer reply failed", "err", err, "command", title)
 		return
 	}
-	entries := scoreboards.TopUsers(ctx, scoreboardFn(), leaderboardSize)
+	entries := scoreboards.TopUsers(ctx, s.cfg, scoreboardFn(), leaderboardSize)
 	if filterZeros {
 		entries = filterNonZeroInts(entries)
 	}

@@ -1,8 +1,16 @@
 version: '3'
 
-# All targets shell into the `test` service defined in
-# infra/docker/docker-compose.testing.yml via bin/devenv. Env vars
+# The test targets run in the one-shot `test` service defined in
+# infra/docker/docker-compose.testing.yml (layered on the base compose):
+# it boots postgres, applies migrations, then runs `go test`. Env vars
 # come from .env.testing; module/build caches live in named volumes.
+
+vars:
+  # The compose stack the test targets run against — the same base +
+  # testing overlay CI uses (infra/docker/docker-compose.testing.yml).
+  COMPOSE: >-
+    docker compose --project-directory . --env-file infra/docker/env.docker
+    -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.testing.yml
 
 tasks:
   default:
@@ -13,46 +21,44 @@ tasks:
   test:
     desc: Run all unit tests
     cmds:
-      - ENV=testing bin/devenv run --rm test go test ./...
+      - "{{.COMPOSE}} run --rm test go test ./..."
 
   test:cover:
     desc: Run tests with coverage + race detector; prints per-function and total coverage
     cmds:
-      - ENV=testing bin/devenv run --rm test bash -c 'go test -v -race -covermode=atomic -coverprofile=coverage.out ./... && go tool cover -func=coverage.out'
+      - "{{.COMPOSE}} run --rm test bash -c 'go test -v -race -covermode=atomic -coverprofile=coverage.out ./... && go tool cover -func=coverage.out'"
 
   test:cover:html:
     desc: Generate HTML coverage report at coverage.html
     cmds:
-      - ENV=testing bin/devenv run --rm test bash -c 'go test -coverprofile=coverage.out ./... && go tool cover -html=coverage.out -o coverage.html'
+      - "{{.COMPOSE}} run --rm test bash -c 'go test -coverprofile=coverage.out ./... && go tool cover -html=coverage.out -o coverage.html'"
       - 'echo "Open coverage.html in your browser"'
 
   test:race:
     desc: Run tests with the race detector (slower; surfaces data races)
     cmds:
-      - ENV=testing bin/devenv run --rm test go test -race ./...
+      - "{{.COMPOSE}} run --rm test go test -race ./..."
 
-  # Native macOS test runner — host mise + VLC.app's bundled libvlc, no
-  # docker. Mirrors vlc-server:build:macos's CGO incantation (rpath is
-  # required for `go test` too).
-  # `dotenv` injects .env.testing's keys as real env vars so the config
-  # loader resolves them from the environment — `go test` runs each package
-  # from its own dir, so the .env.testing file itself isn't on the path.
-  test:macos:
-    desc: Run all unit tests natively on macOS (host mise, no docker)
-    platforms: [darwin]
-    dotenv: ['.env.testing']
-    env:
-      ENV: testing
-      CGO_CFLAGS: -I/Applications/VLC.app/Contents/MacOS/include
-      CGO_LDFLAGS: -L/Applications/VLC.app/Contents/MacOS/lib -Wl,-rpath,/Applications/VLC.app/Contents/MacOS/lib -Wno-error=incompatible-function-pointer-types
+  # The postgres container outlives a `task test` run, and golang-migrate records
+  # what it has applied — so editing a migration that already ran leaves the old
+  # schema in place and the next run tests against it, passing or failing for
+  # reasons the files on disk no longer explain. Recreating the container is what
+  # re-applies the whole chain from scratch; the down migration isn't involved,
+  # so this also works on a migration whose `down` is itself broken.
+  #
+  # Only db + migrate go: the module and build caches live in their own named
+  # volumes, and dropping those would turn every reset into a full recompile.
+  test:db:reset:
+    desc: Recreate the test postgres from scratch — run after editing an already-applied migration
     cmds:
-      - mise exec -- go test ./...
+      - "{{.COMPOSE}} rm -sf db migrate"
+      - 'echo "test database removed; the next task test / test:cover re-migrates from scratch"'
 
   shell:
     desc: Open an interactive Go-toolchain shell inside the test container
     interactive: true
     cmds:
-      - ENV=testing bin/devenv run --rm test bash
+      - "{{.COMPOSE}} run --rm test bash"
 
   # Twitch OAuth consent + token bootstrap is owned by the platform-gateway now
   # (gateway-twitch's /auth/* flow writes the oauth_tokens rows). The old
@@ -62,13 +68,14 @@ tasks:
   # Changelog (towncrier). Fragments live in changelog.d/; assembled into
   # CHANGELOG.md at release time. Run on the host via uvx — no project dep.
   changelog:add:
-    desc: 'Scaffold a changelog fragment (PR=123 TYPE=fix). Types: gateway chatbot onscreens vlc console fix deploy ci cleanup misc summary'
-    requires:
-      vars: [PR]
+    desc: 'Scaffold a changelog fragment (TYPE=fix, optional SLUG=my-thing; CI numbers it on push). Pass PR=123 to name it directly. Types: gateway chatbot onscreens playout console fix deploy ci cleanup misc summary'
     vars:
       TYPE: '{{.TYPE | default "misc"}}'
+      # No PR yet? Drop a "+" placeholder (towncrier's issue-less convention) —
+      # changelog-number.yml renames it to <PR#>.<type>.md once the PR is open.
+      NAME: '{{if .PR}}{{.PR}}{{else}}+{{.SLUG | default .TYPE}}{{end}}'
     cmds:
-      - uvx towncrier create --config towncrier.toml --edit {{.PR}}.{{.TYPE}}.md
+      - uvx towncrier create --config towncrier.toml {{.NAME}}.{{.TYPE}}.md
 
   changelog:preview:
     desc: Preview the pending changelog from the current fragments (towncrier draft)
@@ -96,7 +103,7 @@ tasks:
       TAG: '{{trimPrefix "v" .VERSION}}'
     cmds:
       - docker buildx imagetools inspect adanalife/tripbot:{{.TAG}}
-      - docker buildx imagetools inspect adanalife/vlc:{{.TAG}}
+      - docker buildx imagetools inspect adanalife/onscreens-server:{{.TAG}}
 
   release:smoke:whalecore:
     desc: Smoke-check tripbot.whalecore.com (requires allowlisted IP). Blocks on failure.
@@ -105,7 +112,7 @@ tasks:
       - 'echo "✓ tripbot.whalecore.com/health/live"'
 
   release:smoke:local:
-    desc: Smoke-check in-cluster tripbot+vlc-server health via kubectl port-forward.
+    desc: Smoke-check in-cluster tripbot health via kubectl port-forward.
     cmds:
       - bin/release-smoke-local
 
@@ -114,7 +121,6 @@ tasks:
     cmds:
       - task -d {{.HOME}}/adanalife/infra k8s-apply-stage-1
       - kubectl rollout status deploy/tripbot     --timeout=120s
-      - kubectl rollout status deploy/vlc-server  --timeout=120s
       - kubectl rollout status deploy/cloudflared --timeout=60s
       - task: release:smoke:local
       - task: release:smoke:whalecore
@@ -124,57 +130,53 @@ tasks:
     cmds:
       - task: release:smoke:stage-1
 
-  # vlc-server native macOS build — links against the libvlc bundled
-  # inside VLC.app. Saves recreating the CGO incantation from memory.
-  # Key bits:
-  #   * rpath is required for `go test` / `go run`, not just `go build` —
-  #     otherwise `dyld: Library not loaded: @rpath/libvlc.dylib`.
-  #   * Do NOT add `-lvlc` to LDFLAGS — libvlc-go's own #cgo LDFLAGS
-  #     directive already does it; duplicating triggers a linker warning.
-  #   * `-Wno-error=incompatible-function-pointer-types` mutes a
-  #     libvlc-go/v3 vs Apple-clang fatal that's harmless at runtime.
 
-  vlc-server:vet:macos:
-    desc: Run `go vet` on vlc-server against VLC.app's libvlc headers (no link)
-    platforms: [darwin]
-    env:
-      CGO_CFLAGS: -I/Applications/VLC.app/Contents/MacOS/include
+  # platforms.json is the fleet-wide supported-platform set, owned by
+  # platform-gateway (its Go adapter registry is the source of truth) and synced
+  # into every repo — the same sibling-checkout convention the eventbus/contract
+  # bridges use. cdk8s reads it into SUPPORTED_PLATFORMS; never hand-edit it here.
+  platforms:sync:
+    desc: Re-sync platforms.json from the sibling platform-gateway checkout (the source of truth)
     cmds:
-      - mise exec -- go vet ./pkg/vlc-server/...
-
-  vlc-server:build:macos:
-    desc: Build vlc-server natively on macOS against VLC.app's libvlc
-    platforms: [darwin]
-    env:
-      CGO_CFLAGS: -I/Applications/VLC.app/Contents/MacOS/include
-      CGO_LDFLAGS: -L/Applications/VLC.app/Contents/MacOS/lib -Wl,-rpath,/Applications/VLC.app/Contents/MacOS/lib -Wno-error=incompatible-function-pointer-types
-    cmds:
-      - mise exec -- go build -o bin/vlc-server ./cmd/vlc-server
+      - cp ../platform-gateway/platforms.json platforms.json
 
   # cdk8s — the Python authoring layer for tripbot's app workload manifests
   # (cdk8s/). Synthesizes dist/<env>-<component>-<platform>.k8s.yaml (+ the
   # per-env identity unit + the one-shot Job files), which Argo delivers
   # cross-repo. The stateful + shared-platform units stay in infra/cdk8s.
+  cdk8s:cli:
+    desc: Install the pinned cdk8s CLI into cdk8s/node_modules from the committed package-lock.json
+    dir: cdk8s
+    cmds:
+      - mise exec -- npm ci
+    # npm ci stamps node_modules/.package-lock.json; skip the reinstall while it
+    # is newer than the lockfile it was built from.
+    status:
+      - test node_modules/.package-lock.json -nt package-lock.json
+
   cdk8s:imports:
     desc: Generate the typed k8s + ESO constructs (cdk8s import) into cdk8s/imports/ — gitignored, needed before synth/test on a fresh checkout
     dir: cdk8s
+    deps: [cdk8s:cli]
     cmds:
-      - mise exec -- uv run cdk8s import
+      - mise exec -- uv run npx cdk8s import
 
   cdk8s:synth:
     desc: Synthesize the manifests (offline) -> cdk8s/dist/<env>-<component>-<platform>.k8s.yaml (+ identity / jobs)
     dir: cdk8s
     deps: [cdk8s:imports]
     cmds:
-      - mise exec -- uv run cdk8s synth
+      - mise exec -- uv run npx cdk8s synth
       # prod-1 app manifests are pinned to their release version: frozen here and
       # regenerated only on release-please's release PR, so a chart change on
       # main doesn't reach prod's committed dist until the next release — which
       # is what puts the config delta in the same diff as the version bump.
-      # Discard this HEAD re-synth of the pinned app files; identity + one-shot
-      # jobs (no -twitch/-youtube suffix) stay live and re-synth normally.
+      # Discard this HEAD re-synth of the pinned app files. Match every prod-1
+      # app manifest (all components × all platforms) so a newly-supported
+      # platform is frozen like the rest without editing this list; identity +
+      # one-shot Jobs carry no per-platform suffix and re-synth normally.
       - |
-        pinned=$(git ls-files -- 'dist/prod-1-*-twitch.k8s.yaml' 'dist/prod-1-*-youtube.k8s.yaml')
+        pinned=$(git ls-files -- 'dist/prod-1-*.k8s.yaml' | grep -vE 'prod-1-(tripbot-identity|job-)')
         [ -n "$pinned" ] && git checkout -- $pinned || true
 
   cdk8s:test:
@@ -223,7 +225,7 @@ tasks:
             sh: ls dist/prod-1-*.k8s.yaml | grep -v -- '-job-'
 
   cdk8s:prod:bump:
-    desc: 'Regenerate one prod-1 component''s pinned manifests after a hand pin edit in versions.yaml (COMPONENT=vlc|tripbot|onscreens-server), e.g. a rollback'
+    desc: 'Regenerate one prod-1 component''s pinned manifests after a hand pin edit in versions.yaml (COMPONENT=tripbot|onscreens-server), e.g. a rollback'
     dir: cdk8s
     deps: [cdk8s:imports]
     requires:
@@ -232,10 +234,10 @@ tasks:
       # Full synth regenerates ALL prod app files from HEAD; freeze every OTHER
       # component back to its own pinned release so only COMPONENT's manifests
       # change (its tag + any config delta this release introduced). DISTNAME
-      # strips the -server suffix (onscreens-server -> onscreens); tripbot/vlc
-      # are unchanged.
+      # strips the -server suffix (onscreens-server -> onscreens); tripbot is
+      # unchanged.
       - mise exec -- uv run cdk8s synth
       - |
         distname="{{.COMPONENT}}"; distname="${distname%-server}"
-        others=$(git ls-files -- 'dist/prod-1-*-twitch.k8s.yaml' 'dist/prod-1-*-youtube.k8s.yaml' | grep -v "prod-1-${distname}-" || true)
+        others=$(git ls-files -- 'dist/prod-1-*.k8s.yaml' | grep -vE 'prod-1-(tripbot-identity|job-)' | grep -v "prod-1-${distname}-" || true)
         [ -n "$others" ] && git checkout -- $others || true

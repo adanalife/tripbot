@@ -3,6 +3,26 @@
 
 version: 2
 updates:
+  # Three settings are repeated on every entry below, since Dependabot has no
+  # place to state a default once:
+  #
+  #   cooldown        holds a new release for 7 days before it becomes a PR, so
+  #                   a release that gets yanked or immediately patched never
+  #                   costs a review. A major waits 14 -- but only where the
+  #                   ecosystem has a SemVer model: Dependabot rejects the
+  #                   semver-* keys for github-actions and docker, so those
+  #                   carry the flat 7. The asymmetry is required, not an
+  #                   oversight.
+  #                   Dependabot already applies 3 days by default; this widens
+  #                   it. Security updates ignore cooldown entirely, so nothing
+  #                   urgent waits.
+  #   rebase-strategy is disabled. The default rebases every open bump PR
+  #                   whenever main moves and re-runs all of their checks, which
+  #                   costs far more CI than it saves; no ruleset here needs
+  #                   a branch to be up to date before merging.
+  #   schedule        is weekly on Monday 13:00 UTC, so a week's bumps arrive as
+  #                   one batch to review rather than trickling in daily.
+  #
   # Bumps carry no user-facing change, so they never need a towncrier
   # changelog fragment. Self-apply skip-changelog so the changelog
   # workflow's existing label escape hatch exempts them — this keeps the
@@ -10,27 +30,117 @@ updates:
   # without a workflow edit). Note: setting `labels` replaces Dependabot's
   # defaults, so the otherwise-automatic dependencies/ecosystem labels are
   # restated here.
+  #
+  # Every ecosystem here batches its minor and patch bumps into one PR per run.
+  # A major is deliberately left out of every non-Actions group so it arrives on
+  # its own, where a breaking change is attributable to a single dependency
+  # instead of hiding among a dozen safe ones.
   - package-ecosystem: gomod
     directory: /
     schedule:
-      interval: daily
+      interval: weekly
+      day: monday
+      time: "13:00"
+    groups:
+      go-deps:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
     labels:
       - dependencies
       - go
       - skip-changelog
+  # The Actions group takes majors too, unlike the others. An action major is
+  # normally a runner or Node version bump rather than an API break, so the
+  # attributability that keeps majors solo elsewhere buys little here — and
+  # holding them out produced a standing queue of one-line PRs nobody merged.
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+    rebase-strategy: disabled
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: daily
+      interval: weekly
+      day: monday
+      time: "13:00"
+    groups:
+      actions:
+        patterns:
+          - "*"
     labels:
       - dependencies
       - github_actions
       - skip-changelog
+    cooldown:
+      default-days: 7
+    rebase-strategy: disabled
   - package-ecosystem: docker
     directory: infra/docker/tripbot
     schedule:
-      interval: daily
+      interval: weekly
+      day: monday
+      time: "13:00"
     labels:
       - dependencies
       - docker
       - skip-changelog
+  # The cdk8s CLI and its jsii toolchain. Dependabot has no mise backend, so
+  # this is only reachable because the CLI is pinned in package-lock.json
+  # rather than cdk8s/.mise.toml. The cdk8s gate re-synths on the bump PR, so a
+  # codegen change that would move dist/ fails the PR instead of main.
+    cooldown:
+      default-days: 7
+    rebase-strategy: disabled
+  # Direct dependencies only: the point of the lockfile is that cdk8s-cli's
+  # transitive tree moves when the CLI moves, so a lone transitive bump is
+  # churn against a pin that is deliberate.
+  - package-ecosystem: npm
+    directory: cdk8s
+    schedule:
+      interval: weekly
+      day: monday
+      time: "13:00"
+    groups:
+      cdk8s:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+    labels:
+      - dependencies
+      - javascript
+      - skip-changelog
+  # The cdk8s Python layer: the libraries the authoring code imports. The npm
+  # entry above covers the CLI half of the same toolchain; without this one the
+  # Python half takes no updates at all, security included.
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+    rebase-strategy: disabled
+    allow:
+      - dependency-type: direct
+  - package-ecosystem: uv
+    directory: cdk8s
+    schedule:
+      interval: weekly
+      day: monday
+      time: "13:00"
+    groups:
+      python:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+    labels:
+      - dependencies
+      - python
+      - skip-changelog
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+    rebase-strategy: disabled

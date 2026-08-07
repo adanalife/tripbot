@@ -8,6 +8,8 @@ import (
 
 	"github.com/adanalife/tripbot/pkg/natsclient"
 	oe "github.com/adanalife/tripbot/pkg/onscreens-events"
+	rot "github.com/adanalife/tripbot/pkg/rotator"
+	"github.com/nats-io/nats.go/jetstream"
 )
 
 // Client publishes onscreens overlay commands onto NATS. Construct via
@@ -81,21 +83,53 @@ func (c *Client) ShowTimewarp(ctx context.Context, username string) error {
 	return nil
 }
 
-// UpdateLocation publishes the currently-playing clip's location + date for the
-// rotators to surface on a bot-less YouTube stream (see oe.LocationData).
-// Fire-and-forget; tripbot republishes on a timer.
-func (c *Client) UpdateLocation(ctx context.Context, location, date string) error {
-	c.publish(ctx, oe.LocationUpdateSubject(c.env, c.platform), oe.LocationData{
-		Envelope: oe.NewEnvelope(),
-		Location: location,
-		Date:     date,
+// UpdateLocation publishes what's known about the currently-playing clip —
+// location, state, date, conditions, sunset — for the rotators to resolve their
+// $variables from (see oe.LocationData). The envelope is stamped here so callers
+// only supply the data. Fire-and-forget; tripbot republishes on a timer.
+func (c *Client) UpdateLocation(ctx context.Context, data oe.LocationData) error {
+	data.Envelope = oe.NewEnvelope()
+	c.publish(ctx, oe.LocationUpdateSubject(c.env, c.platform), data)
+	return nil
+}
+
+// PublishRotatorConfig pushes edited corner-rotator copy to a platform's
+// onscreens-server, which swaps it into its live pools.
+//
+// The platform is a parameter here rather than the client's own, unlike every
+// command above. The admin console edits all platforms' copy through whichever
+// single tripbot instance it's pointed at, and the subject's platform leaf is
+// what routes each document to the right onscreens-server — so tripbot-twitch
+// legitimately publishes YouTube's copy. Every instance in an env shares the
+// same NATS.
+//
+// EnsureRotatorConfigStream must have run first, or the publish is captured by
+// no stream and won't survive an onscreens-server restart.
+func (c *Client) PublishRotatorConfig(ctx context.Context, platform string, cfg rot.Config) error {
+	c.publish(ctx, oe.RotatorConfigSubject(c.env, platform), oe.RotatorConfig{
+		Envelope:    oe.NewEnvelope(),
+		Left:        cfg.Left,
+		Right:       cfg.Right,
+		RareMessage: cfg.RareMessage,
 	})
 	return nil
 }
 
+// EnsureRotatorConfigStream declares the last-value stream that retains the most
+// recent rotator copy per platform. Idempotent, and a no-op without JetStream;
+// onscreens-server ensures the same stream at boot, since whichever side starts
+// first has to declare it (a core publish to an uncovered subject is dropped).
+func EnsureRotatorConfigStream(ctx context.Context, js jetstream.JetStream, env string) error {
+	return natsclient.EnsureLastValueStream(ctx, js,
+		oe.RotatorConfigStreamName,
+		"Last admin-console rotator copy per platform, for restore-on-restart.",
+		[]string{oe.RotatorConfigWildcard(env)})
+}
+
 func (c *Client) ShowGPSImage(ctx context.Context, dur time.Duration) error {
-	// dur isn't transported — the server owns the GPS overlay's duration
-	// (gpsDuration).
+	// dur isn't transported: the GPS overlay has no auto-expiry, so it stays up
+	// until HideGPSImage. The parameter is kept for symmetry with the other
+	// timed overlays.
 	c.publish(ctx, oe.GPSShowSubject(c.env, c.platform), oe.Command{Envelope: oe.NewEnvelope()})
 	return nil
 }

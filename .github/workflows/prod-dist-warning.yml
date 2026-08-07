@@ -3,8 +3,7 @@ name: prod-dist-warning
 # Warn on PRs into main that change a prod (prod-1) app deploy unit. prod-1
 # apps autosync from main (AUTOSYNC_ENVS in infra's argocd.py), so MERGING
 # such a PR deploys the change to prod — no separate gesture. That's expected
-# on release-please's release PR (its re-synthed dist IS the deploy: vlc's
-# restart briefly drops the playing video, so merge at a quiet moment), but
+# on release-please's release PR (its re-synthed dist IS the deploy), but
 # easy to miss on a hand-edited pin rollback or any other PR that touches a
 # prod dist/ file. This posts a sticky comment so the merge isn't done unaware.
 on:
@@ -57,7 +56,7 @@ jobs:
           message: |
             ⚠️ **This PR changes prod (`prod-1`) app deploy units.**
 
-            prod-1 apps **autosync from `main`**, so **merging this PR deploys the change to prod** — no separate step. A change to the `vlc` unit means a brief stream impact when the pod restarts.
+            prod-1 apps **autosync from `main`**, so **merging this PR deploys the change to prod** — no separate step.
 
             Changed:
             ${{ steps.detect.outputs.list }}

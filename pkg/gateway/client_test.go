@@ -3,6 +3,7 @@ package gateway
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -235,7 +236,7 @@ func TestSubscribers(t *testing.T) {
 	var gotPath string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotPath = r.URL.Path
-		_, _ = w.Write([]byte(`{"subscribers":["sub1","sub2"]}`))
+		_, _ = w.Write([]byte(`{"subscribers":["sub1","sub2"],"tiers":{"sub1":3}}`))
 	}))
 	defer srv.Close()
 
@@ -246,8 +247,9 @@ func TestSubscribers(t *testing.T) {
 	if gotPath != "/v1/subscribers" {
 		t.Errorf("path = %q, want /v1/subscribers", gotPath)
 	}
-	if len(subs) != 2 || subs[0] != "sub1" {
-		t.Errorf("subscribers = %v, want [sub1 sub2]", subs)
+	// sub2 is missing from the tiers map and defaults to tier 1
+	if len(subs) != 2 || subs["sub1"] != 3 || subs["sub2"] != 1 {
+		t.Errorf("subscribers = %v, want map[sub1:3 sub2:1]", subs)
 	}
 }
 
@@ -299,6 +301,45 @@ func TestSendChat_ErrorsOnNon2xx(t *testing.T) {
 	}
 }
 
+// The two statuses that report a platform state rather than a fault carry a
+// sentinel, so a caller can decline to treat them as defects. Everything else
+// stays unclassified — a 502 is a real failure and must not match either.
+func TestSendChat_ClassifiesToleratedStatuses(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		status int
+		want   error
+	}{
+		{"nothing live", http.StatusConflict, ErrNoBroadcast},
+		{"platform refused", http.StatusServiceUnavailable, ErrUpstreamUnavailable},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(tt.status)
+			}))
+			defer srv.Close()
+
+			err := New(srv.URL).SendChat(context.Background(), "broadcaster", "hi")
+			if !errors.Is(err, tt.want) {
+				t.Fatalf("err = %v, want %v", err, tt.want)
+			}
+		})
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+	}))
+	defer srv.Close()
+
+	err := New(srv.URL).SendChat(context.Background(), "broadcaster", "hi")
+	if err == nil {
+		t.Fatal("expected an error on 502")
+	}
+	if errors.Is(err, ErrNoBroadcast) || errors.Is(err, ErrUpstreamUnavailable) {
+		t.Errorf("502 matched a tolerated sentinel: %v", err)
+	}
+}
+
 func TestInboundChat_DecodesPageAndSendsCursor(t *testing.T) {
 	var gotPath, gotQuery string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -341,5 +382,45 @@ func TestInboundChat_OmitsCursorParamWhenEmpty(t *testing.T) {
 	}
 	if hadCursorParam {
 		t.Error("empty cursor should omit the ?cursor param entirely")
+	}
+}
+
+func TestEgressStopStart(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		call func(*Client) error
+		want string
+	}{
+		{"stop", func(c *Client) error { return c.StopEgress(context.Background()) }, "/v1/egress/stop"},
+		{"start", func(c *Client) error { return c.StartEgress(context.Background()) }, "/v1/egress/start"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var gotMethod, gotPath string
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				gotMethod, gotPath = r.Method, r.URL.Path
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer srv.Close()
+
+			if err := tc.call(New(srv.URL)); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if gotMethod != http.MethodPost || gotPath != tc.want {
+				t.Errorf("request = %s %s, want POST %s", gotMethod, gotPath, tc.want)
+			}
+		})
+	}
+}
+
+// A gateway with no egress routes mounted (a platform with a static ingest key)
+// 404s — the caller must see that as an error, not a silent success.
+func TestStartEgress_ErrorsOnNon2xx(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	if err := New(srv.URL).StartEgress(context.Background()); err == nil {
+		t.Error("expected an error on non-2xx")
 	}
 }

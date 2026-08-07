@@ -54,7 +54,30 @@ var (
 	locationUpdateFields = []field{
 		{"emitted_at", dateType(), true},
 		{"location", strType(), true},
+		{"state", strType(), true},
 		{"date", strType(), true},
+		{"weather", strType(), true},
+		{"sunset", strType(), true},
+	}
+	// One rotator line: the text plus its optional platform scoping and
+	// selection weight. Mirrors pkg/rotator.Message.
+	rotatorMessageFields = []field{
+		{"text", strType(), true},
+		{"platforms", arrayType(strType()), false},
+		{"weight", intType(), false},
+	}
+	// One corner's two pools: the full command-hint set, and the promo set used
+	// where a hinted !command couldn't produce a visible result. Mirrors
+	// pkg/rotator.Corner.
+	rotatorCornerFields = []field{
+		{"messages", arrayType(objectSchema("RotatorMessage", rotatorMessageFields)), true},
+		{"promo_messages", arrayType(objectSchema("RotatorMessage", rotatorMessageFields)), true},
+	}
+	rotatorConfigFields = []field{
+		{"emitted_at", dateType(), true},
+		{"left", objectSchema("RotatorCorner", rotatorCornerFields), true},
+		{"right", objectSchema("RotatorCorner", rotatorCornerFields), true},
+		{"rare_message", strType(), false},
 	}
 	// commandFields is the bare envelope shared by every hide plus gps.show —
 	// the pkg/onscreens-events Command type (no data beyond the envelope).
@@ -70,6 +93,7 @@ var commandEnvelopeFields = map[string][]field{
 	"TimewarpShow":    timewarpShowFields,
 	"LeaderboardShow": leaderboardShowFields,
 	"LocationData":    locationUpdateFields,
+	"RotatorConfig":   rotatorConfigFields,
 	"Command":         commandFields,
 }
 
@@ -100,6 +124,7 @@ func commandsContract() orderedObject {
 			{"gps_show", commandSubject("gps", "show", "Command", commandFields)},
 			{"gps_hide", commandSubject("gps", "hide", "Command", commandFields)},
 			{"location_update", commandSubject("location", "update", "LocationData", locationUpdateFields)},
+			{"rotator_config", commandSubject("rotator", "config", "RotatorConfig", rotatorConfigFields)},
 		}},
 	}
 }

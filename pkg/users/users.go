@@ -3,6 +3,7 @@ package users
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -12,18 +13,27 @@ import (
 	"github.com/logrusorgru/aurora/v3"
 	"gorm.io/gorm"
 
-	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
 )
 
 type User struct {
-	ID         uint16 `gorm:"primaryKey"`
-	Username   string
-	Platform   string
-	Miles      float32
-	NumVisits  uint16
-	HasDonated bool
-	IsBot      bool
+	ID       uint16 `gorm:"primaryKey"`
+	Username string
+	Platform string
+	// PlatformUserID is the chatter's platform-native user id — the stable half
+	// of their identity, where Username is a display login they can change.
+	// Empty for any row not seen since the column shipped: it fills in from the
+	// inbound chat envelope on a chatter's next message, so an empty value means
+	// "not stamped yet", never "this user has no id".
+	PlatformUserID string
+	Miles          float32
+	NumVisits      uint16
+	HasDonated     bool
+	IsBot          bool
+	// ExcludeFromLeaderboard hides the account from every leaderboard read
+	// while leaving it a normal chatter everywhere else. Independent of
+	// IsBot, which carries behavioral meaning beyond ranking.
+	ExcludeFromLeaderboard bool
 	// autoCreateTime stamps these with the current time on insert. create()
 	// builds a User without setting them, so without the tag GORM writes the
 	// zero value (0001-01-01) into columns whose DEFAULT is CURRENT_TIMESTAMP —
@@ -58,7 +68,7 @@ func (s *Sessions) loggedInDur(u User) time.Duration {
 	if !ok {
 		return 0 * time.Second
 	}
-	return time.Now().Sub(live.LoggedIn)
+	return time.Since(live.LoggedIn)
 }
 
 func (s *Sessions) sessionMiles(ctx context.Context, u User) float32 {
@@ -70,11 +80,7 @@ func (s *Sessions) sessionMiles(ctx context.Context, u User) float32 {
 	sessionMiles := helpers.DurationToMiles(loggedInDur)
 	// give subscribers a miles bonus
 	if s.IsSubscriber(u) {
-		bonusMiles := s.BonusMiles(u)
-		if c.Conf.Verbose {
-			slog.InfoContext(ctx, "subscriber will get bonus miles", "username", u.Username, "bonus_miles", bonusMiles)
-		}
-		sessionMiles += bonusMiles
+		sessionMiles += s.BonusMiles(u)
 	}
 	return sessionMiles
 }
@@ -83,11 +89,19 @@ func (s *Sessions) CurrentMiles(ctx context.Context, u User) float32 {
 	return u.Miles + s.sessionMiles(ctx, u)
 }
 
+// BonusMiles is the subscriber miles bonus accrued this session: 5% of session
+// miles per subscription tier (tier 1 = 5%, tier 2 = 10%, tier 3 = 15%).
+// Non-subscribers get the tier-1 rate — !bonusmiles reports the would-be bonus
+// for anyone, and only sessionMiles' IsSubscriber gate decides who is awarded.
 func (s *Sessions) BonusMiles(u User) float32 {
 	if s.isLoggedIn(u.Username) {
 		loggedInDur := s.loggedInDur(u)
 		sessionMiles := helpers.DurationToMiles(loggedInDur)
-		return sessionMiles * 0.05
+		tier := s.source.SubscriberTier(u.Username)
+		if tier < 1 {
+			tier = 1
+		}
+		return sessionMiles * 0.05 * float32(tier)
 	}
 	return 0.0
 }
@@ -106,9 +120,9 @@ func (u User) save(ctx context.Context) {
 		slog.WarnContext(ctx, "refusing to save user with no ID", "username", u.Username)
 		return
 	}
-	if c.Conf.Verbose {
-		slog.InfoContext(ctx, "saving user", "username", u.Username)
-	}
+	// exclude_from_leaderboard is deliberately absent: nothing in the app sets
+	// it, so writing the session's copy back would let a stale in-memory false
+	// revert a flag set directly against the DB while the user was logged in.
 	err := database.GormDB().WithContext(ctx).Model(&u).Updates(map[string]any{
 		"last_seen":  u.LastSeen,
 		"num_visits": u.NumVisits,
@@ -123,7 +137,7 @@ func (u User) save(ctx context.Context) {
 // SetBot flips users.is_bot for a username. Returns gorm.ErrRecordNotFound
 // if the user doesn't exist in the DB.
 func (s *Sessions) SetBot(ctx context.Context, username string, isBot bool) error {
-	user, err := Find(ctx, username)
+	user, err := Find(ctx, s.cfg.Platform, username)
 	if err != nil {
 		return err
 	}
@@ -147,45 +161,106 @@ func (s *Sessions) IsSubscriber(u User) bool {
 	return s.source.IsSubscriber(u.Username)
 }
 
+// SubscriberTier returns the user's subscription tier (1–3), or 0 for a
+// non-subscriber.
+func (s *Sessions) SubscriberTier(u User) int {
+	return s.source.SubscriberTier(u.Username)
+}
+
 // User.String prints a colored version of the user
 func (u User) String() string {
 	if u.IsBot {
 		return aurora.Gray(15, u.Username).String()
 	}
-	if c.UserIsAdmin(u.Username) {
-		return aurora.Gray(11, u.Username).String()
-	}
 	return aurora.Magenta(u.Username).String()
 }
 
-// FindOrCreate will try to find the user in the DB, otherwise it will create a new user
-func FindOrCreate(ctx context.Context, username string) User {
-	if c.Conf.Verbose {
-		slog.InfoContext(ctx, "FindOrCreate", "username", username)
-	}
-	user, err := Find(ctx, username)
+// ErrLookupFailed and ErrCreateFailed mark which half of FindOrCreate gave up:
+// an existing row that couldn't be read, versus a new row that couldn't be
+// written. Both wrap the underlying DB error, so errors.Is still reaches it.
+var (
+	ErrLookupFailed = errors.New("users: lookup failed")
+	ErrCreateFailed = errors.New("users: create failed")
+)
+
+// FindOrCreate will try to find the user in the DB, otherwise it will create a
+// new user. Either failure comes back as a zero User alongside an error tagged
+// with ErrLookupFailed or ErrCreateFailed; callers key off the zero ID to treat
+// it as "no DB row" and retry on a later tick.
+func FindOrCreate(ctx context.Context, platform, username string) (User, error) {
+	user, err := Find(ctx, platform, username)
 	if err == nil {
-		return user
+		return user, nil
 	}
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
 		// A real DB error must not look like a new user — creating here could
-		// duplicate an existing row. Callers treat a zero ID as "no DB row".
-		slog.ErrorContext(ctx, "error finding user", "err", err, "username", username)
-		return User{}
+		// duplicate an existing row.
+		return User{}, fmt.Errorf("%w for %s: %w", ErrLookupFailed, username, err)
 	}
 	// create the user in the DB
-	return create(ctx, username)
+	user, err = create(ctx, platform, username)
+	if err != nil {
+		return User{}, fmt.Errorf("%w: %w", ErrCreateFailed, err)
+	}
+	return user, nil
 }
 
 // Find looks up the username in the DB. A missing user surfaces as
 // gorm.ErrRecordNotFound; any other error is a real DB failure.
-func Find(ctx context.Context, username string) (User, error) {
+func Find(ctx context.Context, platform, username string) (User, error) {
 	var user User
-	result := database.GormDB().WithContext(ctx).Where("platform = ? AND username = ?", c.Conf.Platform, username).First(&user)
+	result := database.GormDB().WithContext(ctx).Where("platform = ? AND username = ?", platform, username).First(&user)
 	if result.Error != nil {
 		return User{}, result.Error
 	}
 	return user, nil
+}
+
+// FindByPlatformUserID looks up a chatter by the platform's own user id, which
+// survives a rename where Find's username does not. An empty id is never a
+// match — it's the "not stamped yet" state of every row predating the column,
+// and treating it as a key would return an arbitrary one of them. A missing
+// user surfaces as gorm.ErrRecordNotFound.
+func FindByPlatformUserID(ctx context.Context, platform, platformUserID string) (User, error) {
+	if platformUserID == "" {
+		return User{}, gorm.ErrRecordNotFound
+	}
+	var user User
+	result := database.GormDB().WithContext(ctx).
+		Where("platform = ? AND platform_user_id = ?", platform, platformUserID).First(&user)
+	if result.Error != nil {
+		return User{}, result.Error
+	}
+	return user, nil
+}
+
+// RecordPlatformUserID stamps the platform's user id onto a chatter's row the
+// first time it's seen, and re-stamps it if the platform reports a different
+// one. A no-op when the id is empty (a platform that doesn't report one, or the
+// bot's own mirrored output) or already matches, so the common case of a chatter
+// talking repeatedly costs no writes.
+//
+// Writes the single column rather than going through save(), whose update map
+// would push the whole in-memory user back — including a stale copy of this
+// column on the session-tick path, which has no id to offer.
+func RecordPlatformUserID(ctx context.Context, u *User, platformUserID string) {
+	if platformUserID == "" || u == nil || u.PlatformUserID == platformUserID {
+		return
+	}
+	if u.ID == 0 {
+		// No DB row (transient Find error, or a transient user on a platform
+		// that doesn't persist). Updates() without a primary key would build an
+		// UPDATE with no WHERE, which GORM refuses — same guard as save().
+		return
+	}
+	err := database.GormDB().WithContext(ctx).Model(u).
+		Update("platform_user_id", platformUserID).Error
+	if err != nil {
+		slog.ErrorContext(ctx, "couldn't record platform user id", "err", err,
+			"username", u.Username, "platform", u.Platform)
+		return
+	}
+	u.PlatformUserID = platformUserID
 }
 
 // HasCommandAvailable lets users run a command once a day,
@@ -238,18 +313,19 @@ func (u *User) SetLastLocationTime() {
 	u.lastLocation = time.Now()
 }
 
-// TODO: maybe return an err here?
-// create() will actually create the DB record
-func create(ctx context.Context, username string) User {
+// create() inserts the DB record and reads it back, so the returned User
+// carries the assigned ID and the DB-defaulted columns. Any failure is
+// returned rather than folded into a zero User.
+func create(ctx context.Context, platform, username string) (User, error) {
 	slog.InfoContext(ctx, "creating user", "username", username)
 	// create a new row, using default vals and creating a single visit
-	newUser := User{Username: username, Platform: c.Conf.Platform, NumVisits: 1}
+	newUser := User{Username: username, Platform: platform, NumVisits: 1}
 	if err := database.GormDB().WithContext(ctx).Create(&newUser).Error; err != nil {
-		slog.ErrorContext(ctx, "error creating user", "err", err)
+		return User{}, fmt.Errorf("create user %s: %w", username, err)
 	}
-	user, err := Find(ctx, username)
+	user, err := Find(ctx, platform, username)
 	if err != nil {
-		slog.ErrorContext(ctx, "error finding user after create", "err", err, "username", username)
+		return User{}, fmt.Errorf("find user %s after create: %w", username, err)
 	}
-	return user
+	return user, nil
 }

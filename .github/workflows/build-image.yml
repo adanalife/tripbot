@@ -1,7 +1,7 @@
 # Reusable multi-arch image build: the matrix-on-native-runners + manifest-list
 # pattern shared by release.yml (versioned tags) and dev-image.yml (floating
 # :main). Each arch builds natively (amd64 on ubuntu-latest, arm64 on
-# ubuntu-24.04-arm — no QEMU for the cgo/libvlc compiles), pushes per-arch tags
+# ubuntu-24.04-arm — faster than QEMU emulation), pushes per-arch tags
 # like `:3.1.0-amd64` (bare version, no `v`), then the manifest job assembles
 # the un-suffixed multi-arch list `:3.1.0` per tag. Per-arch tags stay published
 # as the debugging escape hatch (pinnable when isolating arch-specific

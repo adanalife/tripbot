@@ -25,7 +25,7 @@ metadata:
   name: onscreens-twitch
   namespace: prod-1
 spec:
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: onscreens-twitch
@@ -47,11 +47,11 @@ spec:
                 name: onscreens-twitch-config
             - secretRef:
                 name: sentry-onscreens-server
-                optional: false
+                optional: true
             - secretRef:
                 name: grafana-cloud-otlp
-                optional: false
-          image: adanalife/onscreens-server:3.16.0
+                optional: true
+          image: adanalife/onscreens-server:4.21.0
           imagePullPolicy: IfNotPresent
           livenessProbe:
             httpGet:

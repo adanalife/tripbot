@@ -34,9 +34,11 @@ func installMockDB(t *testing.T) sqlmock.Sqlmock {
 	return mock
 }
 
+var testConf = &c.TripbotConfig{Environment: "testing", Platform: "twitch"}
+
 func TestHandleVideoChange_ZeroIDIsANoOp(t *testing.T) {
 	mock := installMockDB(t)
-	if msgs := HandleVideoChange(context.Background(), video.Video{}, []string{"alice"}); msgs != nil {
+	if msgs := HandleVideoChange(context.Background(), testConf, video.Video{}, []string{"alice"}); msgs != nil {
 		t.Errorf("expected no messages, got %v", msgs)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
@@ -46,11 +48,9 @@ func TestHandleVideoChange_ZeroIDIsANoOp(t *testing.T) {
 
 func TestHandleVideoChange_ReadOnlySkipsEverything(t *testing.T) {
 	mock := installMockDB(t)
-	orig := c.Conf.ReadOnly
-	c.Conf.ReadOnly = true
-	t.Cleanup(func() { c.Conf.ReadOnly = orig })
+	readOnlyConf := &c.TripbotConfig{Environment: "testing", Platform: "twitch", ReadOnly: true}
 
-	HandleVideoChange(context.Background(), video.Video{ID: 7}, []string{"alice"})
+	HandleVideoChange(context.Background(), readOnlyConf, video.Video{ID: 7}, []string{"alice"})
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Errorf("ReadOnly HandleVideoChange touched the DB: %v", err)
 	}
@@ -78,7 +78,7 @@ func TestHandleVideoChange_AwardsStateVisit(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"username"}))
 	mock.ExpectCommit()
 
-	msgs := HandleVideoChange(context.Background(), v, []string{"alice", "bob"})
+	msgs := HandleVideoChange(context.Background(), testConf, v, []string{"alice", "bob"})
 
 	want := "🏆 Achievement unlocked — First visit to California: @alice"
 	if len(msgs) != 1 || msgs[0] != want {
@@ -100,7 +100,7 @@ func TestHandleVideoChange_AwardsLandmark(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectCommit()
 
-	msgs := HandleVideoChange(context.Background(), v, []string{"alice"})
+	msgs := HandleVideoChange(context.Background(), testConf, v, []string{"alice"})
 
 	want := "🏆 Achievement unlocked — Saw the Golden Gate Bridge: @alice"
 	if len(msgs) != 1 || msgs[0] != want {

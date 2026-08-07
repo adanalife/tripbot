@@ -4,14 +4,14 @@ version = "0.1.0"
 description = "cdk8s (Python) authoring layer for the tripbot app workloads"
 requires-python = ">=3.12"
 dependencies = [
-    "cdk8s>=2.69",
-    "constructs>=10.3",
+    "cdk8s>=2.70.86",
+    "constructs>=10.7.1",
     "pyyaml>=6.0.3",
 ]
 
 [dependency-groups]
 dev = [
-    "pytest>=8",
+    "pytest>=9.1.1",
     "pyyaml>=6.0.3",
 ]
 

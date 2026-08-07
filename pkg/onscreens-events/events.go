@@ -4,12 +4,16 @@
 //
 // It is imported by both the publisher (cmd/tripbot, via
 // pkg/onscreens-client) and the subscriber (cmd/onscreens-server). To stay
-// safe as a shared package it is stdlib-only and side-effect-free: no
-// init(), no pkg/config import, env is always a parameter rather than read
-// from config here.
+// safe as a shared package it is side-effect-free: no init(), no pkg/config
+// import, env is always a parameter rather than read from config here. Its
+// only non-stdlib import is pkg/rotator, which holds to the same rules.
 package onscreensEvents
 
-import "time"
+import (
+	"time"
+
+	"github.com/adanalife/tripbot/pkg/rotator"
+)
 
 // Envelope is embedded in every onscreens command event. EmittedAt is an
 // RFC3339Nano UTC timestamp, useful for latency/debugging. Snake_case JSON
@@ -33,7 +37,7 @@ type MiddleShow struct {
 // middle-text overlay so the text (and its shown/hidden status) survives a
 // server restart. Unlike MiddleShow — a *command* from tripbot — this is
 // *state* the server emits about itself, read back from the
-// MaxMsgsPerSubject=1 stream on startup. Mirrors the vlc lastplayed cache.
+// MaxMsgsPerSubject=1 stream on startup. Mirrors the playout lastplayed cache.
 type MiddleState struct {
 	Envelope
 	Msg     string `json:"msg"`
@@ -59,17 +63,47 @@ type TimewarpShow struct {
 	Username string `json:"username"`
 }
 
-// LocationData is the payload for the location.update subject — the
-// currently-playing clip's pre-formatted location ("City, State", or a bare
-// state when geocoding is unavailable) and date ("Monday January 2, 2006").
-// onscreens-server caches it and surfaces it through the bot-less rotators.
-// Either field may be empty (e.g. no geocode yet); the rotator skips an empty
-// line.
+// LocationData is the payload for the location.update subject — everything
+// onscreens-server knows about the currently-playing clip, pre-formatted for
+// display: the location ("City, State", or a bare state when geocoding is
+// unavailable), the state on its own, the date ("Monday January 2, 2006"), the
+// conditions when it was filmed ("Partly cloudy, 71°F"), and that day's sunset
+// at that spot ("8:42 PM").
+//
+// onscreens-server caches it and resolves the rotators' $variables from it. Any
+// field may be empty (no geocode yet, an archive lookup that failed), and a
+// rotator line referencing an empty one simply isn't eligible to render — so
+// the wire carries "unknown" as an absent value rather than a placeholder.
 type LocationData struct {
 	Envelope
 	Location string `json:"location"`
+	State    string `json:"state"`
 	Date     string `json:"date"`
+	Weather  string `json:"weather"`
+	Sunset   string `json:"sunset"`
 }
+
+// RotatorConfig is the payload for the rotator.config subject: the full
+// corner-rotator copy for one platform, as edited in the admin console and
+// stored in Postgres. It replaces the receiving server's pools wholesale rather
+// than describing a delta — the console edits a whole list at a time, and a
+// whole-document swap can't half-apply.
+//
+// Left and Right each carry a full command-hint pool and a promoMode promo pool;
+// RareMessage is the left corner's easter egg ("" disables it). The live
+// location/date lines aren't here — onscreens-server generates those from the
+// playing clip and mixes them in at render time.
+type RotatorConfig struct {
+	Envelope
+	Left        rotator.Corner `json:"left"`
+	Right       rotator.Corner `json:"right"`
+	RareMessage string         `json:"rare_message,omitempty"`
+}
+
+// RotatorConfigStreamName is the JetStream stream holding the last rotator copy
+// published per platform — a last-value cache so a restarted onscreens-server
+// reads its copy straight back instead of falling to the compiled-in defaults.
+const RotatorConfigStreamName = "TRIPBOT_ONSCREENS_ROTATOR"
 
 // Command is the payload for events that carry no data beyond the
 // envelope: every hide, plus gps.show (the server supplies its content and

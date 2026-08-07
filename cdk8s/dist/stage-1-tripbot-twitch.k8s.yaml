@@ -12,7 +12,6 @@ data:
   DATABASE_HOST: postgres.stage-1-data.svc.cluster.local
   DISCORD_GUILD_ID: "607964164220125258"
   ENV: staging
-  EXTERNAL_URL: https://tripbot-twitch.stage.whereisdana.today
   GOOGLE_APPS_PROJECT_ID: tripbot-stage
   MAPS_OUTPUT_DIR: /opt/data/maps
   NATS_URL: nats://nats.stage-1-platform.svc.cluster.local:4222
@@ -27,8 +26,7 @@ data:
   SENTRY_ENVIRONMENT: stage-1
   TRIPBOT_SERVER_PORT: "8080"
   TWITCH_API_URL: http://gateway-twitch.stage-1.svc.cluster.local:8080
-  VERBOSE: "false"
-  VLC_SERVER_HOST: vlc-twitch:8080
+  VLC_SERVER_HOST: playout-twitch:8080
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -39,13 +37,14 @@ metadata:
   name: tripbot-twitch
   namespace: stage-1
 spec:
+  replicas: 0
   selector:
     matchLabels:
       app: tripbot-twitch
   template:
     metadata:
       annotations:
-        adanalife.dev/config-hash: c009764bbb
+        adanalife.dev/config-hash: 63087c99a7
       labels:
         app: tripbot-twitch
     spec:
@@ -70,8 +69,10 @@ spec:
                 name: tripbot-database-creds
             - secretRef:
                 name: grafana-cloud-otlp
+                optional: true
             - secretRef:
                 name: sentry-tripbot
+                optional: true
             - secretRef:
                 name: tripbot-twitch-creds
             - secretRef:
@@ -112,6 +113,10 @@ spec:
             capabilities:
               drop:
                 - ALL
+          volumeMounts:
+            - mountPath: /opt/tripbot/assets/music
+              name: music
+              readOnly: true
       initContainers:
         - args:
             - -path
@@ -148,6 +153,11 @@ spec:
         - effect: NoSchedule
           key: dana.lol/rpi5
           operator: Exists
+      volumes:
+        - name: music
+          persistentVolumeClaim:
+            claimName: obs-music-local
+            readOnly: true
 ---
 apiVersion: v1
 kind: Service
@@ -194,19 +204,3 @@ spec:
     - hosts:
         - tripbot-twitch.stage.whereisdana.today
       secretName: tripbot-twitch-tls
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: tripbot-twitch-ts
-  namespace: stage-1
-spec:
-  defaultBackend:
-    service:
-      name: tripbot-twitch
-      port:
-        number: 8080
-  ingressClassName: tailscale
-  tls:
-    - hosts:
-        - tripbot-twitch-stage

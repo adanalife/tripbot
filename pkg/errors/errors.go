@@ -3,8 +3,9 @@
 // Error capture flows through slog: log emitters call slog.Error /
 // slog.ErrorContext; pkg/telemetry installs samber/slog-sentry as a
 // handler so every slog Error becomes a Sentry event automatically.
-// The BeforeSend hook below throttles Sentry traffic to stay within
-// the free-tier 5k events/month budget.
+// The BeforeSend hook below keeps that inside the free-tier 5k
+// events/month budget: only prod reports at all, and its traffic is
+// deduplicated and capped.
 package errors
 
 import (
@@ -17,6 +18,7 @@ import (
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/config"
+	"github.com/adanalife/tripbot/pkg/contract"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"github.com/getsentry/sentry-go"
 	sentryotel "github.com/getsentry/sentry-go/otel"
@@ -34,7 +36,7 @@ const (
 // Initialize takes a Config interface and brings up Sentry.
 //
 // version is the build-time version string (typically set via -ldflags
-// "-X main.version=..." in cmd/tripbot and cmd/vlc-server). It's passed
+// "-X main.version=..." in cmd/tripbot). It's passed
 // to sentry as the Release tag so Sentry can group issues by release
 // and surface "this regression started in vX.Y.Z."
 func Initialize(c config.Config, version string) {
@@ -56,16 +58,35 @@ func Initialize(c config.Config, version string) {
 	if err != nil {
 		fmt.Println(err)
 	}
+
+	// Tag the scope with which streaming platform this instance serves so
+	// twitch vs youtube errors are filterable within the one shared Sentry
+	// project. tripbot carries it as STREAM_PLATFORM; onscreens-server
+	// as PLATFORM. Skip the tag when neither is set rather than tag an empty.
+	platform := os.Getenv(contract.EnvKeyStreamPlatform)
+	if platform == "" {
+		platform = os.Getenv("PLATFORM")
+	}
+	if platform != "" {
+		sentry.ConfigureScope(func(s *sentry.Scope) {
+			s.SetTag("platform", platform)
+		})
+	}
 }
 
-// throttle returns a BeforeSend hook. In dev / testing it drops every
-// event so local runs never reach the prod Sentry project. In prod /
-// staging it enforces per-fingerprint cooldown + absolute hourly cap.
+// throttle returns a BeforeSend hook. Only prod reports: every other env
+// drops each event, so neither a local run nor stage reaches the shared
+// Sentry project. Stage exists to be broken — it runs against parked
+// platforms, absent upstreams and a bot that isn't a channel moderator — so
+// its errors describe the environment rather than a defect. In prod the hook
+// enforces a per-fingerprint cooldown plus an absolute hourly cap.
 //
 // Events dropped here still reach Loki via the OTel slog handler — Loki
-// has the complete record; Sentry receives a deduplicated sample.
+// has the complete record; Sentry receives a deduplicated sample. Drops are
+// counted in SentryEventsDropped, so a silenced env is visible rather than
+// merely quiet.
 func throttle(c config.Config) func(event *sentry.Event, hint *sentry.EventHint) *sentry.Event {
-	if c == nil || (!c.IsProduction() && !c.IsStaging()) {
+	if c == nil || !c.IsProduction() {
 		return func(*sentry.Event, *sentry.EventHint) *sentry.Event {
 			instrumentation.SentryEventsDropped.Inc("disabled")
 			return nil

@@ -1,0 +1,118 @@
+name: changelog-number
+
+# Fill in the PR number on placeholder changelog fragments so contributors never
+# need to know it up front. Write a fragment on the branch using towncrier's
+# issue-less "+" convention — changelog.d/+<slug>.<type>.md — and this workflow
+# renames it to <PR#>.<type>.md and commits it back, giving the release
+# changelog a PR link per entry.
+#
+# The changelog gate already accepts "+" fragments natively, so nothing is
+# blocked before this runs — this only upgrades the fragment's name.
+#
+# Only fragments the head branch adds on top of its own base get numbered. A
+# stacked PR carries its parent's still-unnumbered placeholder, and that one
+# belongs to the parent's number, not this PR's.
+#
+# Several fragments of one type in a single PR are fine: the second and later
+# ones take towncrier's counter suffix (<PR>.<type>.1.md), which towncrier reads
+# as a distinct entry under the same PR link.
+#
+# Pushed with the automation app token (not GITHUB_TOKEN) so the rename commit
+# re-fires the PR's checks against the numbered state; a GITHUB_TOKEN push
+# wouldn't, and branch protection would then wait forever on checks for the new
+# SHA. That re-fire re-runs this workflow too, but by then no "+" fragment
+# remains, so it's a no-op — no commit loop.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: changelog-number-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  number:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Skip forks (their GITHUB_TOKEN/app token can't push to the head branch)
+    # and release-please's own branch (it carries no fragments to number).
+    #
+    # Dependabot for the same reason, plus one that would fail loudly rather
+    # than idle: a Dependabot pull_request event receives no Actions secrets,
+    # so `secrets.AUTOMATION_APP_PRIVATE_KEY` arrives empty and the mint step
+    # below dies on it -- leaving every bump PR with a red required check for
+    # work it never had to do.
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.head_ref != 'release-please--branches--main' &&
+      github.event.pull_request.user.login != 'dependabot[bot]'
+    steps:
+      - name: Mint automation app token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.AUTOMATION_APP_ID }}
+          private-key: ${{ secrets.AUTOMATION_APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Number placeholder changelog fragments
+        env:
+          PR: ${{ github.event.pull_request.number }}
+          BRANCH: ${{ github.head_ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          # Placeholders this branch introduces, not ones inherited from an
+          # ancestor branch in a stack.
+          mine=()
+          while IFS= read -r f; do
+            [ -n "$f" ] && mine+=("$f")
+          done < <(git diff --name-only --diff-filter=A "${BASE_SHA}...HEAD" -- 'changelog.d/+*.md')
+
+          # Anything else still carrying a "+" came from a parent PR; naming it
+          # after this PR would misattribute the entry and collide with the
+          # parent's rename.
+          for f in changelog.d/+*.md; do
+            case " ${mine[*]} " in
+              *" $f "*) continue ;;
+            esac
+            echo "::notice title=Inherited changelog fragment::${f} was added by an ancestor branch, not this PR — leaving it for that PR to number."
+          done
+
+          if [ ${#mine[@]} -eq 0 ]; then
+            echo "No placeholder fragments to number."
+            exit 0
+          fi
+
+          for f in "${mine[@]}"; do
+            base="$(basename "$f" .md)"   # +slug.fix
+            type="${base##*.}"            # fix
+            # towncrier reads <issue>.<type>.<counter>.md, so repeat types in one
+            # PR get a counter rather than clobbering the first fragment.
+            target="changelog.d/${PR}.${type}.md"
+            n=0
+            while [ -e "$target" ]; do
+              n=$((n + 1))
+              target="changelog.d/${PR}.${type}.${n}.md"
+            done
+            if [ "$n" -gt 0 ]; then
+              echo "::notice title=Repeat changelog type::${f} is fragment $((n + 1)) of type '${type}' in this PR — numbering it ${target} (towncrier counter suffix)."
+            fi
+            git mv "$f" "$target"
+          done
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "ci: number changelog fragment(s) for #${PR}"
+          git push origin "HEAD:${BRANCH}"

@@ -9,9 +9,7 @@ import (
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
-	terrors "github.com/adanalife/tripbot/pkg/errors"
 	"github.com/adanalife/tripbot/pkg/feature"
-	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/httpmw"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 	sentrynegroni "github.com/getsentry/sentry-go/negroni"
@@ -27,19 +25,24 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-// Server holds the web server's runtime state: the build version tag the
-// /version endpoint reports, and the feature-flag client the console's
-// /api/flags endpoints read/toggle. cmd/tripbot constructs one via New and
-// installs both (SetVersion, SetFlags) before Start runs.
+// Server holds the web server's runtime state: its config, the build version
+// tag the /version endpoint reports, the feature-flag client the console's
+// /api/flags endpoints read/toggle, and the store + publisher behind
+// /api/rotators. cmd/tripbot constructs one via New and installs them
+// (SetVersion, SetFlags, SetRotators) before Start runs.
 type Server struct {
+	cfg        *c.TripbotConfig
 	versionTag string
 	flags      feature.FlagClient
+	beds       BedStore
+	rotators   RotatorStore
+	rotatorPub RotatorPublisher
 }
 
 // New constructs a Server with the default "dev" version tag (overridden by
 // SetVersion at startup).
-func New() *Server {
-	return &Server{versionTag: "dev"}
+func New(cfg *c.TripbotConfig) *Server {
+	return &Server{cfg: cfg, versionTag: "dev"}
 }
 
 // shutdownTimeout is how long Shutdown waits for in-flight requests to
@@ -48,12 +51,15 @@ func New() *Server {
 // handler doesn't block process exit indefinitely.
 const shutdownTimeout = 15 * time.Second
 
-// Start starts the web server. When ctx is canceled (e.g. SIGINT/SIGTERM
-// via signal.NotifyContext) the server stops accepting new connections and
-// waits up to shutdownTimeout for in-flight requests to complete before
-// returning.
-func (s *Server) Start(ctx context.Context) {
-	slog.InfoContext(ctx, "starting web server", "port", c.Conf.TripbotServerPort)
+// Start starts the web server, returning the listener error if it fails to
+// come up. When ctx is canceled (e.g. SIGINT/SIGTERM via
+// signal.NotifyContext) the server stops accepting new connections, waits up
+// to shutdownTimeout for in-flight requests to complete, and returns nil.
+// Whether a listener failure should end the process is the binary's call, not
+// this package's — cmd/onscreens-server makes the same choice with its own
+// server.
+func (s *Server) Start(ctx context.Context) error {
+	slog.InfoContext(ctx, "starting web server", "port", s.cfg.TripbotServerPort)
 
 	r := mux.NewRouter()
 
@@ -80,7 +86,7 @@ func (s *Server) Start(ctx context.Context) {
 	// Service.
 	//
 	// read-only JSON profile for the console's user popover.
-	r.Handle("/api/user/{username}", tagged("/api/user/{username}", userProfileAPIHandler)).Methods("GET")
+	r.Handle("/api/user/{username}", tagged("/api/user/{username}", s.userProfileAPIHandler)).Methods("GET")
 	// read-only JSON list of the logins currently in chat, for the console's
 	// currently-active-chatters panel.
 	r.Handle("/api/chatters", tagged("/api/chatters", chattersHandler)).Methods("GET")
@@ -95,32 +101,41 @@ func (s *Server) Start(ctx context.Context) {
 	r.Handle("/api/flags", tagged("/api/flags", s.flagsHandler)).Methods("GET")
 	r.Handle("/api/flags/{key}", tagged("/api/flags/{key}", s.flagToggleHandler)).Methods("POST")
 
+	// Background audio: which bed this platform's OBS is playing, and the
+	// switch between them.
+	r.Handle("/api/audio", tagged("/api/audio", s.audioHandler)).Methods("GET")
+	r.Handle("/api/audio", tagged("/api/audio", s.audioSetHandler)).Methods("POST")
+
+	// Corner-rotator copy for the console's editor: read one platform's copy,
+	// save it (which pushes it live over NATS), or reset it to the defaults
+	// compiled into onscreens-server.
+	rotatorRoute := "/api/rotators/{platform}"
+	r.Handle(rotatorRoute, tagged(rotatorRoute, s.rotatorsGetHandler)).Methods("GET")
+	r.Handle(rotatorRoute, tagged(rotatorRoute, s.rotatorsPutHandler)).Methods("PUT")
+	r.Handle(rotatorRoute, tagged(rotatorRoute, s.rotatorsResetHandler)).Methods("DELETE")
+
 	// catch everything else
 	r.NotFoundHandler = tagged("/", catchAllHandler)
-
-	if c.Conf.Verbose {
-		helpers.PrintAllRoutes(r)
-	}
 
 	// negroni.New + explicit middleware so we can swap negroni's stdlib
 	// logger for an slog-based one — see pkg/httpmw.SlogLogger. The static
 	// middleware from negroni.Classic is dropped (no public/ directory).
 	app := negroni.New(
-		httpmw.NewRecovery(func(any) { instrumentation.HTTPPanics.Inc(c.Conf.ServerType) }),
+		httpmw.NewRecovery(func(any) { instrumentation.HTTPPanics.Inc(s.cfg.ServerType) }),
 		httpmw.NewSlogLogger(),
 	)
 
 	// attach http-metrics (prometheus) middleware
 	metricsMw := middleware.New(middleware.Config{
 		Recorder: metrics.NewRecorder(metrics.Config{}),
-		Service:  c.Conf.ServerType,
+		Service:  s.cfg.ServerType,
 	})
 	app.Use(negronimiddleware.Handler("", metricsMw))
 
 	// attach security middleware
 	secureMw := secure.New(secure.Options{
 		FrameDeny:     true,
-		IsDevelopment: c.Conf.IsDevelopment(),
+		IsDevelopment: s.cfg.IsDevelopment(),
 	})
 	app.Use(negroni.HandlerFunc(secureMw.HandlerFuncWithNext))
 
@@ -131,7 +146,7 @@ func (s *Server) Start(ctx context.Context) {
 	app.UseHandler(r)
 
 	srv := &http.Server{
-		Addr: fmt.Sprintf("0.0.0.0:%s", c.Conf.TripbotServerPort),
+		Addr: fmt.Sprintf("0.0.0.0:%s", s.cfg.TripbotServerPort),
 		// All remaining responses are short (auth redirects, small JSON for the
 		// console, the metrics scrape). The live-console SSE stream that forced
 		// WriteTimeout=0 is gone with the admin panel, so a normal write deadline
@@ -141,7 +156,7 @@ func (s *Server) Start(ctx context.Context) {
 		WriteTimeout:      time.Second * 15,
 		IdleTimeout:       time.Second * 60,
 		MaxHeaderBytes:    1 << 20, // 1 MB
-		Handler:           otelhttp.NewHandler(app, c.Conf.ServerType),
+		Handler:           otelhttp.NewHandler(app, s.cfg.ServerType),
 	}
 
 	// Run ListenAndServe in a goroutine so we can block on ctx.Done() and
@@ -157,9 +172,7 @@ func (s *Server) Start(ctx context.Context) {
 
 	select {
 	case err := <-serverErr:
-		if err != nil {
-			terrors.FatalContext(ctx, err, "couldn't start server")
-		}
+		return err
 	case <-ctx.Done():
 		slog.InfoContext(ctx, "shutting down web server")
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
@@ -167,6 +180,7 @@ func (s *Server) Start(ctx context.Context) {
 		if err := srv.Shutdown(shutdownCtx); err != nil {
 			slog.ErrorContext(shutdownCtx, "error during web server shutdown", "err", err)
 		}
+		return nil
 	}
 }
 

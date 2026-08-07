@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log/slog"
 
-	c "github.com/adanalife/tripbot/pkg/config/onscreens-server"
 	"github.com/adanalife/tripbot/pkg/natsclient"
 	oe "github.com/adanalife/tripbot/pkg/onscreens-events"
 	"github.com/nats-io/nats.go/jetstream"
@@ -17,7 +16,7 @@ import (
 // overlay's last-published state — a last-value cache (MaxMsgsPerSubject=1)
 // over the single MiddleStateSubject. A restarted onscreens-server reads it
 // back to restore whatever text was on screen before the restart, so the
-// permanent middle overlay survives a reboot. Same shape as the vlc
+// permanent middle overlay survives a reboot. Same shape as the playout
 // TRIPBOT_VLC_LASTPLAYED cache.
 const middleStateStreamName = "TRIPBOT_ONSCREENS_MIDDLE"
 
@@ -108,15 +107,14 @@ func readMiddleState(ctx context.Context, js jetstream.JetStream, env, platform 
 // overlay at its constructed default (empty content, showing).
 func (s *Server) RestoreMiddleText(ctx context.Context) {
 	js := natsclient.JetStream()
-	if err := EnsureMiddleStateStream(ctx, js, c.Conf.Environment); err != nil {
+	if err := EnsureMiddleStateStream(ctx, js, s.cfg.Environment); err != nil {
 		slog.ErrorContext(ctx, "couldn't ensure middle state stream", "err", err)
 		return
 	}
-	msg, showing, ok := readMiddleState(ctx, js, c.Conf.Environment, c.Conf.Platform)
+	msg, showing, ok := readMiddleState(ctx, js, s.cfg.Environment, s.cfg.Platform)
 	if !ok {
 		return
 	}
-	s.MiddleText.Content = msg
-	s.MiddleText.IsShowing = showing
+	s.MiddleText.SetState(msg, showing)
 	slog.InfoContext(ctx, "restored middle-text overlay from jetstream", "showing", showing)
 }

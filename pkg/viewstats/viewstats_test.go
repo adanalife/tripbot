@@ -10,20 +10,19 @@ import (
 	"gorm.io/gorm"
 )
 
-// setup installs a transaction-scoped DB, pins the config the writers read, and
-// clears the package-global current-video tag so each test starts from a known
-// state. The transaction rolls back in cleanup, so rows never leak.
+// testConf is the config the writers under test read: a fixed platform and
+// ReadOnly false so writes aren't skipped. The read-only tests pass their own.
+var testConf = &c.TripbotConfig{Environment: "testing", Platform: "twitch"}
+
+// setup installs a transaction-scoped DB and clears the package-global
+// current-video tag so each test starts from a known state. The transaction
+// rolls back in cleanup, so rows never leak.
 func setup(t *testing.T) *gorm.DB {
 	t.Helper()
 	db := testdb.New(t)
 
-	platform, readOnly := c.Conf.Platform, c.Conf.ReadOnly
-	c.Conf.Platform, c.Conf.ReadOnly = "twitch", false
 	currentVideoID.Store(0)
-	t.Cleanup(func() {
-		c.Conf.Platform, c.Conf.ReadOnly = platform, readOnly
-		currentVideoID.Store(0)
-	})
+	t.Cleanup(func() { currentVideoID.Store(0) })
 	return db
 }
 
@@ -48,7 +47,7 @@ func allSamples(t *testing.T, db *gorm.DB) []ViewerSample {
 func TestRecordPlay_PersistsDenormalizedColumns(t *testing.T) {
 	db := setup(t)
 
-	RecordPlay(context.Background(), 42, "Utah", true, 38.5, -109.5)
+	RecordPlay(context.Background(), testConf, 42, "Utah", true, 38.5, -109.5)
 
 	plays := allPlays(t, db)
 	if len(plays) != 1 {
@@ -79,7 +78,7 @@ func TestRecordPlay_PersistsDenormalizedColumns(t *testing.T) {
 func TestRecordPlay_ZeroVideoIDWritesNull(t *testing.T) {
 	db := setup(t)
 
-	RecordPlay(context.Background(), 0, "", false, 0, 0)
+	RecordPlay(context.Background(), testConf, 0, "", false, 0, 0)
 
 	plays := allPlays(t, db)
 	if len(plays) != 1 {
@@ -95,13 +94,13 @@ func TestRecordSample_TagsCurrentVideo(t *testing.T) {
 	ctx := context.Background()
 
 	// Before any play, the sample carries a NULL video_id.
-	RecordSample(ctx, 3)
+	RecordSample(ctx, testConf, 3)
 	// A play tags every sample that follows it.
-	RecordPlay(ctx, 42, "Utah", false, 38.5, -109.5)
-	RecordSample(ctx, 5)
+	RecordPlay(ctx, testConf, 42, "Utah", false, 38.5, -109.5)
+	RecordSample(ctx, testConf, 5)
 	// A play with no DB row resets the tag back to NULL.
-	RecordPlay(ctx, 0, "", true, 0, 0)
-	RecordSample(ctx, 7)
+	RecordPlay(ctx, testConf, 0, "", true, 0, 0)
+	RecordSample(ctx, testConf, 7)
 
 	samples := allSamples(t, db)
 	if len(samples) != 3 {
@@ -131,11 +130,11 @@ func TestRecordSample_TagsCurrentVideo(t *testing.T) {
 
 func TestReadOnly_SkipsWritesButStillTracksVideo(t *testing.T) {
 	db := setup(t)
-	c.Conf.ReadOnly = true
+	readOnlyConf := &c.TripbotConfig{Environment: "testing", Platform: "twitch", ReadOnly: true}
 	ctx := context.Background()
 
-	RecordPlay(ctx, 42, "Utah", false, 38.5, -109.5)
-	RecordSample(ctx, 5)
+	RecordPlay(ctx, readOnlyConf, 42, "Utah", false, 38.5, -109.5)
+	RecordSample(ctx, readOnlyConf, 5)
 
 	if plays := allPlays(t, db); len(plays) != 0 {
 		t.Errorf("expected no video_plays rows in read-only mode, got %d", len(plays))
@@ -144,9 +143,8 @@ func TestReadOnly_SkipsWritesButStillTracksVideo(t *testing.T) {
 		t.Errorf("expected no viewer_samples rows in read-only mode, got %d", len(samples))
 	}
 	// The tag is stored before the read-only bail, so writes resume correctly
-	// tagged the moment read-only is lifted.
-	c.Conf.ReadOnly = false
-	RecordSample(ctx, 5)
+	// tagged the moment a non-read-only config is used.
+	RecordSample(ctx, testConf, 5)
 	samples := allSamples(t, db)
 	if len(samples) != 1 {
 		t.Fatalf("expected 1 viewer_samples row, got %d", len(samples))
