@@ -3,6 +3,7 @@ package video
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -29,11 +30,51 @@ const coordWindow = 10.0
 // more; outside it, proximity wins.
 const ocrWindow = 1.5
 
+// nearPlaceLimit is how far from a named place a moment can be and still be
+// worth naming it. Past this "near X" stops meaning anything and the state is
+// the more honest answer. The corpus is mostly interstate — 57% of moments sit
+// outside every incorporated place, at a median 5 km from the nearest — so this
+// threshold decides the wording for a large share of what !location says: at
+// 10 km it names a place for about 81% of moments overall.
+const nearPlaceLimit = 10000
+
+// Moment is where the van was at one point inside a clip: the coordinate, plus
+// the place the pipeline resolved for it offline. The place fields are empty
+// until the geocode pass has reached the row.
+type Moment struct {
+	Lat, Lng float64
+
+	State string
+	City  string
+	// CityM is how far the coordinate is from City, in metres; 0 means inside
+	// its limits. Meaningless when City is empty.
+	CityM float64
+}
+
+// Place renders the moment the way chat should hear it: inside a place, near
+// one, or — when the nearest is too far to be a landmark — the state alone.
+// Empty when the geocode pass hasn't reached this moment, which is the caller's
+// signal to fall back to the live geocoder.
+//
+// The wording matches what pkg/geo's City returned, so replacing that lookup
+// doesn't change how !location reads.
+func (m Moment) Place() string {
+	switch {
+	case m.City != "" && m.CityM == 0:
+		return fmt.Sprintf("%s, %s", m.City, m.State)
+	case m.City != "" && m.CityM <= nearPlaceLimit:
+		return fmt.Sprintf("near %s, %s", m.City, m.State)
+	case m.State != "":
+		return fmt.Sprintf("Somewhere in %s", m.State)
+	}
+	return ""
+}
+
 // The two ORDER BY booleans do the preference in one pass: Postgres sorts
 // false before true, so rows within ocrWindow come first, then within those
 // the ones read off the frame, then nearest wins.
 const coordAtQuery = `
-SELECT lat, lng FROM video_coords
+SELECT lat, lng, state, city, city_m FROM video_coords
 WHERE video_id = @vid AND ts_sec IS NOT NULL AND abs(ts_sec - @ts) <= @window
 ORDER BY abs(ts_sec - @ts) > @ocr, source <> 'ocr', abs(ts_sec - @ts)
 LIMIT 1`
@@ -43,16 +84,23 @@ LIMIT 1`
 // none covering that moment, and the caller falls back to vid.Location() — the
 // single clip-level fix, which sits a median 598 m from where the van actually
 // was at a given moment inside the clip (p90 1.9 km, max 4.4 km).
-func CoordAt(ctx context.Context, vid Video, at time.Duration) (lat, lng float64, ok bool) {
+func CoordAt(ctx context.Context, vid Video, at time.Duration) (Moment, bool) {
 	if vid.ID == 0 || vid.CoordConfidence == nil || *vid.CoordConfidence < minCoordConfidence {
-		return 0, 0, false
+		return Moment{}, false
 	}
 	// A negative offset means the caller's clock disagrees with playout's
 	// about which clip is on screen; the top of this one is the closest thing
 	// to an answer.
 	tsSec := max(at.Seconds(), 0)
 
-	var row struct{ Lat, Lng float64 }
+	// The place columns are null until the geocode pass fills them, so they
+	// scan through sql.Null* rather than straight into Moment.
+	var row struct {
+		Lat, Lng float64
+		State    sql.NullString
+		City     sql.NullString
+		CityM    sql.NullFloat64
+	}
 	res := database.GormDB().WithContext(ctx).Raw(coordAtQuery,
 		sql.Named("vid", vid.ID),
 		sql.Named("ts", tsSec),
@@ -61,10 +109,13 @@ func CoordAt(ctx context.Context, vid Video, at time.Duration) (lat, lng float64
 	).Scan(&row)
 	if res.Error != nil {
 		slog.ErrorContext(ctx, "video_coords lookup failed", "err", res.Error, "slug", vid.Slug)
-		return 0, 0, false
+		return Moment{}, false
 	}
 	if res.RowsAffected == 0 {
-		return 0, 0, false
+		return Moment{}, false
 	}
-	return row.Lat, row.Lng, true
+	return Moment{
+		Lat: row.Lat, Lng: row.Lng,
+		State: row.State.String, City: row.City.String, CityM: row.CityM.Float64,
+	}, true
 }

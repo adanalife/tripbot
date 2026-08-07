@@ -7,14 +7,14 @@ import (
 	"github.com/adanalife/tripbot/pkg/video"
 )
 
-// spot is where the stream is: the clip on screen and the coordinate showing
-// at this moment. atPlayhead says that coordinate came from the clip's
-// per-moment track rather than its single clip-level fix — which is what makes
-// it precise enough to be worth reverse-geocoding instead of reading the state
+// spot is where the stream is: the clip on screen and the moment showing at
+// this instant. atPlayhead says the coordinate came from the clip's per-moment
+// track rather than its single clip-level fix — which is what makes it precise
+// enough to be worth naming in its own right instead of reading the state
 // already recorded for the clip.
 type spot struct {
-	vid      video.Video
-	lat, lng float64
+	vid video.Video
+	at  video.Moment
 
 	atPlayhead bool
 }
@@ -27,7 +27,7 @@ type spot struct {
 // that does; when even that fails it tells chat and reports ok=false, leaving
 // the caller nothing to do but return.
 func (a *App) currentSpot(ctx context.Context) (spot, bool) {
-	vid, lat, lng, atPlayhead := a.Video.PlayheadLocation(ctx)
+	vid, at, atPlayhead := a.Video.PlayheadLocation(ctx)
 
 	if vid.Flagged {
 		a.Chat.Say("I couldn't figure out current GPS coords, using next closest...")
@@ -41,31 +41,53 @@ func (a *App) currentSpot(ctx context.Context) (spot, bool) {
 		}
 		// The playhead is inside the flagged clip, so its offset says nothing
 		// about where we are in this substitute one.
-		vid, atPlayhead = next, false
+		vid, at, atPlayhead = next, video.Moment{}, false
 	}
 
 	if !atPlayhead {
-		lat, lng, _ = vid.Location()
+		at.Lat, at.Lng, _ = vid.Location()
 	}
-	return spot{vid: vid, lat: lat, lng: lng, atPlayhead: atPlayhead}, true
+	return spot{vid: vid, at: at, atPlayhead: atPlayhead}, true
+}
+
+// place is the human-readable location of the spot — "Bishop, California",
+// "near Mammoth, Wyoming", or "Somewhere in Wyoming".
+//
+// The pipeline resolves this offline at ingest and stores it on the row, so the
+// common path costs no API call at all. The live geocoder is the fallback for a
+// moment the geocode pass hasn't reached, and for clips answering from their
+// clip-level fix.
+func (a *App) place(ctx context.Context, s spot) string {
+	if p := s.at.Place(); p != "" {
+		return p
+	}
+	address, err := a.Geocoder.City(s.at.Lat, s.at.Lng)
+	if err != nil {
+		slog.ErrorContext(ctx, "geocoding error", "err", err)
+	}
+	return address
 }
 
 // state is the US state the spot is in.
 //
-// A per-moment coordinate is reverse-geocoded, so a clip that crosses a state
-// line answers for the half on screen rather than for wherever its single fix
-// happened to land. Anything less precise reads videos.state, which is that
-// single fix geocoded once at ingest — reverse-geocoding it again would spend a
+// Same story as place: the pipeline resolved it from the same Census boundaries
+// the footage is contemporary with, so a clip that crosses a state line answers
+// for the half on screen without asking anyone. Falling back needs care — a
+// per-moment coordinate is worth reverse-geocoding, but a clip-level one is
+// already what videos.state was geocoded from, so asking again would spend a
 // Maps call to get the same answer back.
 //
-// Falls back to the clip's state whenever the lookup can't answer (no Maps key,
-// ZERO_RESULTS). Both !guess and !state route through here, so the grading and
-// the reveal can't disagree about which answer they used.
+// Never returns empty when the clip has a state: an empty answer makes guessCmd
+// refuse every guess, so a Maps outage would take !guess down with it. Both
+// !guess and !state route through here, so grading and reveal can't disagree.
 func (a *App) state(ctx context.Context, s spot) string {
+	if s.at.State != "" {
+		return s.at.State
+	}
 	if !s.atPlayhead {
 		return s.vid.State
 	}
-	state, err := a.Geocoder.State(s.lat, s.lng)
+	state, err := a.Geocoder.State(s.at.Lat, s.at.Lng)
 	if err != nil {
 		slog.WarnContext(ctx, "playhead state lookup failed, using the clip's",
 			"err", err, "slug", s.vid.Slug)
