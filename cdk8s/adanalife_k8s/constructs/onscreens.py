@@ -138,8 +138,15 @@ class OnscreensServer(Construct):
                         labels=sel, annotations=configmap.pod_annotations(cfg_hash)
                     ),
                     spec=k8s.PodSpec(
+                        # The `restricted` PodSecurity profile requires
+                        # runAsNonRoot as a spec field, whatever USER the image
+                        # declares — and this one declares none. Same uid as
+                        # tripbot: a static Go binary on :8080 (unprivileged)
+                        # whose only writes go to the RUN_DIR emptyDir.
                         security_context=k8s.PodSecurityContext(
-                            seccomp_profile=k8s.SeccompProfile(type="RuntimeDefault")
+                            run_as_non_root=True,
+                            run_as_user=65532,
+                            seccomp_profile=k8s.SeccompProfile(type="RuntimeDefault"),
                         ),
                         priority_class_name=env.priority_class or None,
                         # Co-locate with this platform's OBS pod so the overlay

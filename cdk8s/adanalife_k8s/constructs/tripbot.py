@@ -5,8 +5,8 @@ Reproduces k8s/apps/tripbot/base + overlays:
 
   * Deployment: a `migrate` initContainer (migrate-to-head before boot) + the
     `tripbot` container, both PodSecurity-restricted (runAsNonRoot 65532,
-    seccomp RuntimeDefault, drop-ALL). USER=tripbot so OTel's process resource
-    detector doesn't crash the SDK on a no-/etc/passwd static binary.
+    seccomp RuntimeDefault, drop-ALL). The image declares no USER — the uid
+    comes entirely from this pod spec.
   * envFrom order is load-bearing — config first, then DB creds, then the
     shared OTLP/Sentry Secrets, then twitch/maps (required) and the two
     optional discord Secrets. On the laptop the DB Secret is the on-disk

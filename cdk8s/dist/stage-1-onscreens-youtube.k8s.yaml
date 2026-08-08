@@ -94,6 +94,8 @@ spec:
             - mountPath: /opt/data/run
               name: run
       securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
         seccompProfile:
           type: RuntimeDefault
       tolerations:
