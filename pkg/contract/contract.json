@@ -30,6 +30,7 @@
     "mediamtx_tiktok": "mediamtx-tiktok",
     "mediamtx_facebook": "mediamtx-facebook",
     "mediamtx_instagram": "mediamtx-instagram",
+    "nats": "nats",
     "postgres": "postgres"
   },
   "ports": {
@@ -41,6 +42,7 @@
     "onscreens_http": 8080,
     "tripbot_http": 8080,
     "mediamtx_rtsp": 8554,
+    "nats": 4222,
     "postgres": 5432
   },
   "env_keys": {
