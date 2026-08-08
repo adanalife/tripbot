@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/video"
 )
 
@@ -128,7 +129,7 @@ func splitOnGaps(pts []video.RoutePoint, maxMiles float64) []routeSegment {
 		prev, p := pts[i-1], pts[i]
 		xy := [2]float64{p.Lat, p.Lng}
 		switch {
-		case milesBetween(prev.Lat, prev.Lng, p.Lat, p.Lng) > maxMiles:
+		case helpers.MilesBetween(prev.Lat, prev.Lng, p.Lat, p.Lng) > maxMiles:
 			segs = append(segs, cur)
 			cur = routeSegment{Band: p.Band, Points: [][2]float64{xy}}
 		case p.Band != cur.Band:
@@ -141,18 +142,6 @@ func splitOnGaps(pts []video.RoutePoint, maxMiles float64) []routeSegment {
 		}
 	}
 	return append(segs, cur)
-}
-
-// milesBetween returns the great-circle (haversine) distance in miles between
-// two lat/lng points.
-func milesBetween(lat1, lng1, lat2, lng2 float64) float64 {
-	const earthRadiusMiles = 3958.8
-	rad := math.Pi / 180
-	dLat := (lat2 - lat1) * rad
-	dLng := (lng2 - lng1) * rad
-	a := math.Sin(dLat/2)*math.Sin(dLat/2) +
-		math.Cos(lat1*rad)*math.Cos(lat2*rad)*math.Sin(dLng/2)*math.Sin(dLng/2)
-	return earthRadiusMiles * 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
 }
 
 // simplify drops the points that don't change the shape of the line:
