@@ -13,6 +13,7 @@ from functools import lru_cache
 from pathlib import Path
 
 import yaml
+from adanalife_k8s.contract import load_contract
 
 # Per-component image pins (cdk8s/versions.yaml). Envs present in the file
 # deploy pinned release tags; the rest float on EnvConfig.image_tag.
@@ -41,6 +42,18 @@ def _load_supported_platforms() -> tuple[str, ...]:
 
 
 SUPPORTED_PLATFORMS = _load_supported_platforms()
+
+
+def nats_url(env_name: str) -> str:
+    """The NATS endpoint for an env. NATS runs in the sibling <env>-platform
+    namespace (infra's Helm release), so this is cross-namespace and needs the
+    FQDN. The Service name and port are contract vocabulary — playout and the
+    console dial the same two values from their own synced copies — while the
+    namespace pattern is env topology and belongs here."""
+    c = load_contract()
+    return (
+        f"nats://{c.svc('nats')}.{env_name}-platform.svc.cluster.local:{c.port('nats')}"
+    )
 
 
 @dataclass(frozen=True)
@@ -210,7 +223,7 @@ ENVS: dict[str, EnvConfig] = {
         aws_account="adanalife-prod",
         image_tag="latest",
         dns_base="prod.whereisdana.today",
-        nats_url="nats://nats.prod-1-platform.svc.cluster.local:4222",
+        nats_url=nats_url("prod-1"),
         sentry_env="prod-1",
         binary_env="production",
         deployment_env="prod-1",
@@ -271,7 +284,7 @@ ENVS: dict[str, EnvConfig] = {
         aws_account="adanalife-stage",
         image_tag="main",
         dns_base="stage.whereisdana.today",
-        nats_url="nats://nats.stage-1-platform.svc.cluster.local:4222",
+        nats_url=nats_url("stage-1"),
         sentry_env="stage-1",
         binary_env="staging",
         deployment_env="stage-1",
@@ -335,7 +348,7 @@ ENVS: dict[str, EnvConfig] = {
         aws_account="adanalife-stage",
         image_tag="main",
         dns_base="dev.whereisdana.today",
-        nats_url="nats://nats.development-platform.svc.cluster.local:4222",
+        nats_url=nats_url("development"),
         sentry_env="development",
         binary_env="staging",
         deployment_env="development",

@@ -53,6 +53,11 @@ const (
 	ServiceOBSTikTok    = "obs-tiktok"
 	ServiceOBSFacebook  = "obs-facebook"
 	ServiceOBSInstagram = "obs-instagram"
+	// ServiceNATS is the NATS service every component dials for the event bus
+	// and the command subjects. It lives in the <env>-platform namespace rather
+	// than the app namespace, so callers build an FQDN around this name; the
+	// namespace pattern is env topology and stays with each cdk8s layer.
+	ServiceNATS = "nats"
 	// ServicePostgres is the Postgres service (DATABASE_HOST in cluster).
 	ServicePostgres = "postgres"
 )
@@ -125,6 +130,8 @@ const (
 	// PortMediaMTXRTSP is the RTSP port on the MediaMTX relay pods — the port
 	// playout publishes to and OBS reads from.
 	PortMediaMTXRTSP = 8554
+	// PortNATS is the NATS client port.
+	PortNATS = 4222
 	// PortPostgres is the Postgres port.
 	PortPostgres = 5432
 )
@@ -204,6 +211,7 @@ func Current() Contract {
 			{"mediamtx_tiktok", ServiceMediaMTXTikTok},
 			{"mediamtx_facebook", ServiceMediaMTXFacebook},
 			{"mediamtx_instagram", ServiceMediaMTXInstagram},
+			{"nats", ServiceNATS},
 			{"postgres", ServicePostgres},
 		},
 		Ports: []pair{
@@ -215,6 +223,7 @@ func Current() Contract {
 			{"onscreens_http", PortOnscreensHTTP},
 			{"tripbot_http", PortTripbotHTTP},
 			{"mediamtx_rtsp", PortMediaMTXRTSP},
+			{"nats", PortNATS},
 			{"postgres", PortPostgres},
 		},
 		EnvKeys: []pair{
