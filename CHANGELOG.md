@@ -9,6 +9,16 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v4.26.0] — 2026-08-08
+
+### Chatbot
+
+- `!guess` now hints warmer/colder: from a chatter's second miss of a round, the wrong-guess reply swaps the EarthDay emote for 🔥 (closer than your last guess) or ❄️ (farther) ([#1366](https://github.com/adanalife/tripbot/pull/1366))
+
+### Cleanup
+
+- The contract carries the NATS Service name and client port, so the endpoint every component dials is generated vocabulary rather than a literal repeated across tripbot, playout and the console. ([#1367](https://github.com/adanalife/tripbot/pull/1367))
+
 ## [v4.25.0] — 2026-08-08
 
 ### Chatbot
