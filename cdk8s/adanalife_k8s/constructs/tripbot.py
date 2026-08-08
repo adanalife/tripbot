@@ -233,7 +233,7 @@ class Tripbot(Construct):
         # The discord and observability (Sentry/OTLP) Secrets are
         # optional so the bot boots without them — observability gates itself
         # off when the env vars are absent, and the pod isn't hostage to
-        # ExternalSecret sync order. Boot-required Secrets (DB creds, maps, and
+        # ExternalSecret sync order. Boot-required Secrets (DB creds, and
         # twitch on a twitch instance) stay required: a missing one fails loud.
         env_from = [
             k8s.EnvFromSource(config_map_ref=k8s.ConfigMapEnvSource(name=cm_name)),
@@ -258,10 +258,14 @@ class Tripbot(Construct):
                 )
             )
 
+        if env.maps:
+            env_from.append(
+                k8s.EnvFromSource(
+                    secret_ref=k8s.SecretEnvSource(name="tripbot-google-maps-api-key")
+                )
+            )
+
         env_from += [
-            k8s.EnvFromSource(
-                secret_ref=k8s.SecretEnvSource(name="tripbot-google-maps-api-key")
-            ),
             k8s.EnvFromSource(
                 secret_ref=k8s.SecretEnvSource(
                     name="tripbot-discord-alerts-webhook", optional=True
@@ -520,7 +524,7 @@ def emit_identity_secrets(scope: Construct, env: EnvConfig) -> None:
         )
     else:
         _emit_db_external_secret(scope, ns, labels)
-    _emit_app_external_secrets(scope, ns, labels)
+    _emit_app_external_secrets(scope, ns, labels, maps=env.maps)
 
 
 def _emit_db_external_secret(scope, ns, labels):
@@ -588,20 +592,24 @@ def _emit_db_external_secret(scope, ns, labels):
     )
 
 
-def _emit_app_external_secrets(scope, ns, labels):
+def _emit_app_external_secrets(scope, ns, labels, *, maps: bool):
     # twitch + google-maps: extract every top-level key of the SM JSON blob.
-    for id_, name, sm in [
+    extracts = [
         (
             "twitch-external-secret",
             "tripbot-twitch-creds",
             "/k8s/tripbot/twitch-creds",
         ),
-        (
-            "google-maps-external-secret",
-            "tripbot-google-maps-api-key",
-            "/k8s/tripbot/google-maps-api-key",
-        ),
-    ]:
+    ]
+    if maps:
+        extracts.append(
+            (
+                "google-maps-external-secret",
+                "tripbot-google-maps-api-key",
+                "/k8s/tripbot/google-maps-api-key",
+            )
+        )
+    for id_, name, sm in extracts:
         eso.external_secret(
             scope,
             id_,

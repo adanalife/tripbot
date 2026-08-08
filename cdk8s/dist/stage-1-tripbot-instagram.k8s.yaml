@@ -75,8 +75,6 @@ spec:
                 name: sentry-tripbot
                 optional: true
             - secretRef:
-                name: tripbot-google-maps-api-key
-            - secretRef:
                 name: tripbot-discord-alerts-webhook
                 optional: true
             - secretRef:

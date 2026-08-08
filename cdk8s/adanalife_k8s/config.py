@@ -78,6 +78,14 @@ class EnvConfig:
     secret_source: str = "eso"  # eso | local
     gpu: bool = False  # request gpu.intel.com/i915
     otel: bool = False  # OTEL_SDK_DISABLED=false when True
+    # Emit the Google Maps ExternalSecret + envFrom it. Off by default: every
+    # runtime geocode caller reads the clip's stored row, so the key is only
+    # wanted in an env that still runs a live-geocode path. GOOGLE_MAPS_API_KEY
+    # is optional to the binary (geo.ErrDisabled), so leaving it off is a warn,
+    # not a boot failure. Turning it on requires the env's AWS account to have
+    # /k8s/tripbot/google-maps-api-key seeded — an unseeded parameter still
+    # holds terraform's placeholder, which ESO cannot unmarshal.
+    maps: bool = False
     postgres_size: str = "5Gi"
     postgres_storage_class: str = ""  # "" = cluster default; local-path-retain on prod
     postgres_backup: bool = False
@@ -229,6 +237,10 @@ ENVS: dict[str, EnvConfig] = {
         deployment_env="prod-1",
         gpu=True,
         otel=True,
+        # Prod's key is seeded and syncing; keep it mounted. Nothing on the
+        # runtime path reads it since the offline geocode pass, so this is a
+        # standing capability rather than a dependency.
+        maps=True,
         postgres_size="50Gi",
         postgres_storage_class="local-path-retain",
         postgres_backup=True,
