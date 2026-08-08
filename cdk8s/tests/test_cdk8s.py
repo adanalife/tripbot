@@ -104,8 +104,9 @@ def test_identity_unit_emits_app_secrets(env):
     objs = _objects(f"{env}-tripbot-identity")
     es_names = {o["metadata"]["name"] for o in objs if o["kind"] == "ExternalSecret"}
     secret_names = {o["metadata"]["name"] for o in objs if o["kind"] == "Secret"}
-    # twitch + maps are required app creds in every env.
-    assert {"tripbot-twitch-creds", "tripbot-google-maps-api-key"} <= es_names
+    # twitch is a required app cred in every env; maps follows env.maps.
+    assert "tripbot-twitch-creds" in es_names
+    assert ("tripbot-google-maps-api-key" in es_names) == ENVS[env].maps
     if env == "local":
         # laptop carries on-disk DB creds, not an ESO ExternalSecret.
         assert "tripbot-secret" in secret_names
@@ -158,13 +159,24 @@ def test_only_twitch_mounts_the_twitch_creds_secret():
 
 def test_every_platform_still_mounts_shared_app_secrets():
     """Guards the blast radius of the twitch-creds scoping: the genuinely
-    identity-level Secrets stay on every platform. Maps in particular is
-    boot-required — geo warms on every Connect path, not just twitch."""
+    identity-level Secrets stay on every platform."""
     for platform in ENV_PLATFORMS["stage-1"]:
         mounted = _env_from_secrets(f"stage-1-tripbot-{platform}")
-        assert {"tripbot-database-creds", "tripbot-google-maps-api-key"} <= mounted, (
+        assert "tripbot-database-creds" in mounted, (
             f"stage-1-tripbot-{platform} lost a shared app Secret: {mounted}"
         )
+
+
+@pytest.mark.parametrize("env", ["prod-1", "stage-1"])
+def test_maps_secret_mount_follows_the_env_flag(env):
+    """The Maps key is mounted only where env.maps says so — an env whose AWS
+    account has no seeded key would otherwise carry an ExternalSecret that can
+    never sync, which reads as a permanently Degraded Argo app. The binary
+    treats the key as optional (geo.ErrDisabled), so an env without it warns
+    and runs."""
+    for platform in ENV_PLATFORMS[env]:
+        mounted = _env_from_secrets(f"{env}-tripbot-{platform}")
+        assert ("tripbot-google-maps-api-key" in mounted) == ENVS[env].maps
 
 
 def test_youtube_tripbot_emits_youtube_creds():
