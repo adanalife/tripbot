@@ -113,6 +113,12 @@ type Store struct {
 	tracks    []string // the play order; rebuilt each time a selection starts
 	idx       int
 	lastStart time.Time // when a track was last pointed at OBS; see Advance
+	// fallbackAlbum says the audio watchdog has the album playing while SomaFM
+	// is still the selected bed. The bed itself can't say so — the watchdog's
+	// outage machinery only runs while the store reads SomaFM — so this is what
+	// keeps Advance walking the fallback album instead of letting one track end
+	// in the silence the fallback exists to prevent.
+	fallbackAlbum bool
 
 	// The switch waiting out switchDelay, and the timer that will apply it. gen
 	// rises with every request so a timer that fires after being superseded can
@@ -456,6 +462,9 @@ func (s *Store) setNow(ctx context.Context, bed Bed) error {
 	s.mu.Lock()
 	s.bed = bed
 	s.lastStart = time.Now()
+	// A chosen bed ends any outage fallback: what's audible is now what was
+	// asked for, whichever bed the watchdog had put there.
+	s.fallbackAlbum = false
 	s.mu.Unlock()
 	s.record()
 	// Counted here rather than at the callers so a console switch and a chat
@@ -577,8 +586,9 @@ func (s *Store) Pending() (Switch, bool) {
 }
 
 // Advance moves to the next album track (wrapping at the end) and plays it.
-// A no-op unless the album is the live bed — the callers report the media
-// ending, which also happens on the other beds.
+// A no-op unless the album is what's audible — either as the selected bed or as
+// the watchdog's fallback for a SomaFM outage — since the callers report the
+// media ending, which also happens on the other beds.
 //
 // Two of them report the same ending: the playback-ended subscription, which
 // arrives in milliseconds, and the watchdog tick that backs it up. So an
@@ -588,7 +598,7 @@ func (s *Store) Pending() (Switch, bool) {
 // and would otherwise be stepped over by the outgoing track's own ending.
 func (s *Store) Advance(ctx context.Context) error {
 	s.mu.Lock()
-	if s.bed != Album || len(s.tracks) == 0 || time.Since(s.lastStart) < advanceDebounce {
+	if (s.bed != Album && !s.fallbackAlbum) || len(s.tracks) == 0 || time.Since(s.lastStart) < advanceDebounce {
 		s.mu.Unlock()
 		return nil
 	}
@@ -609,6 +619,64 @@ func (s *Store) Advance(ctx context.Context) error {
 		return fmt.Errorf("advance album track: %w", err)
 	}
 	slog.InfoContext(ctx, "background audio: next track", "track", filepath.Base(track))
+	return nil
+}
+
+// SwapToFallback points the source at the bed the audio watchdog rides out a
+// SomaFM outage on: the album when the share has tracks, the car-hum drone when
+// it doesn't. The album is licence-clean (it was made for this stream) and is
+// actual music, so it's the better degraded state; the drone covers an empty or
+// unmounted share, where it's the only bed left.
+//
+// The selected bed is deliberately left alone. The watchdog runs its outage
+// machinery only while the store reads SomaFM, so recording the fallback here
+// would switch the watchdog off and strand the stream on the fallback for good.
+// That is also why the album's play order is (re)built here: nothing else on
+// this path builds one, and without it the album plays a single track and falls
+// silent — the album=1 / tracks=0 state record() exists to expose.
+func (s *Store) SwapToFallback(ctx context.Context) error {
+	s.mu.Lock()
+	track := ""
+	loadErr := s.loadAlbumLocked("")
+	if loadErr == nil {
+		track = s.trackLocked(Album)
+	}
+	s.mu.Unlock()
+	if loadErr != nil {
+		slog.WarnContext(ctx, "background audio: no album to fall back to, using the car hum",
+			"err", loadErr)
+	}
+
+	// The album plays unlooped, so OBS reports the media ending and Advance
+	// queues the next track. The drone loops: nothing advances it.
+	file, loop := track, false
+	if file == "" {
+		file, loop = FallbackFile, true
+	}
+	if err := s.obs.SetLocalFile(ctx, InputName, file, loop); err != nil {
+		return fmt.Errorf("swap to fallback bed: %w", err)
+	}
+
+	s.mu.Lock()
+	s.fallbackAlbum = track != ""
+	s.lastStart = time.Now()
+	s.mu.Unlock()
+	s.record()
+	slog.InfoContext(ctx, "background audio: swapped to the fallback bed", "file", file)
+	return nil
+}
+
+// SwapToSomaFM points the source back at the tuned station once the edge is
+// serving again, ending any album fallback — the album stops advancing because
+// it has stopped playing. The counterpart of SwapToFallback; the selected bed is
+// untouched here too, since on this path it never stopped being SomaFM.
+func (s *Store) SwapToSomaFM(ctx context.Context) error {
+	if err := s.obs.SetNetwork(ctx, InputName, StreamURL(s.Station())); err != nil {
+		return fmt.Errorf("swap back to somafm: %w", err)
+	}
+	s.mu.Lock()
+	s.fallbackAlbum = false
+	s.mu.Unlock()
 	return nil
 }
 

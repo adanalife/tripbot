@@ -6,10 +6,11 @@
 // edge tier goes down. None of these recover without a manual nudge.
 //
 // The watchdog watches the source's media state + output level and, when audio
-// is down past a debounce, swaps the source onto a local license-clean bed
-// (the Car Hum FLAC already baked into the OBS image) so the stream isn't
-// silent. It probes SomaFM in the background and swaps back once an edge is
-// serving bytes again. All of it is the OBS-side analogue of the silent-
+// is down past a debounce, swaps the source onto a local license-clean bed so
+// the stream isn't silent: the album on the mounted share, or the Car Hum FLAC
+// baked into the OBS image when the share has no tracks. An outage lasts hours,
+// and a music stream degraded to music beats one degraded to a drone. It probes
+// SomaFM in the background and swaps back once an edge is serving bytes again. All of it is the OBS-side analogue of the silent-
 // disconnect stream watchdog in pkg/obs/watchdog — same injectable-deps shape
 // so the decision loop unit-tests without a real OBS WebSocket. cmd/tripbot
 // (Twitch only) is the sole consumer.
@@ -35,14 +36,6 @@ const (
 	// one source, so the watchdog reads the same input whichever is selected.
 	BackgroundAudioInputName = beds.InputName
 
-	// fallbackFile is the local, license-clean bed the source is pointed at
-	// when SomaFM is unreachable. Baked into every OBS image by the carhum
-	// build stage (COPY target in the obs repo's Dockerfile{,.arm64}); the
-	// path is resolved by OBS, not tripbot. The same drone as the selectable
-	// car-hum bed under its own name, so a restart can still tell an outage
-	// from an operator's choice — see beds.FallbackFile.
-	fallbackFile = beds.FallbackFile
-
 	// somaFMProbeUserAgent overrides Go's default User-Agent on the probe.
 	// SomaFM's ICEcast edges reject "Go-http-client/1.1" outright — the
 	// connection is closed before any response (the probe saw a bare EOF), so
@@ -64,7 +57,8 @@ type Deps struct {
 	Level func() (db float64, fresh bool)
 	// SomaFMReachable reports whether the SomaFM edge served bytes just now.
 	SomaFMReachable func(context.Context) bool
-	// SwapToFallback points the source at the local Car Hum bed.
+	// SwapToFallback points the source at a local bed for the outage: the album
+	// when the share has tracks, the car-hum drone when it doesn't.
 	SwapToFallback func(context.Context) error
 	// SwapToSomaFM points the source back at its SomaFM network stream.
 	SwapToSomaFM func(context.Context) error
@@ -132,12 +126,12 @@ func DefaultDeps(meter *VolumeMeter, store *beds.Store) Deps {
 		SomaFMReachable: func(ctx context.Context) bool {
 			return defaultSomaFMReachable(ctx, beds.StreamURL(store.Station()))
 		},
-		SwapToFallback: func(ctx context.Context) error {
-			return obs.SetInputLocalFileMode(ctx, BackgroundAudioInputName, fallbackFile, true)
-		},
-		SwapToSomaFM: func(ctx context.Context) error {
-			return obs.SetInputNetworkMode(ctx, BackgroundAudioInputName, beds.StreamURL(store.Station()))
-		},
+		// Both swaps go through the Store: picking the fallback bed means
+		// scanning the share and building a play order, and the Store is what
+		// owns both. Neither touches the selected bed, so the outage machinery
+		// keeps running and the stream comes back to SomaFM.
+		SwapToFallback: store.SwapToFallback,
+		SwapToSomaFM:   store.SwapToSomaFM,
 	}
 }
 
@@ -301,7 +295,7 @@ func Watch(ctx context.Context, deps Deps, cfg Config) {
 					continue
 				}
 				slog.ErrorContext(ctx, "audio watchdog: SomaFM down, swapping to local bed",
-					"state", state, "fallback_file", fallbackFile)
+					"state", state)
 				if err := deps.SwapToFallback(ctx); err != nil {
 					slog.ErrorContext(ctx, "audio watchdog: swap to fallback failed", "err", err)
 					continue
@@ -312,6 +306,18 @@ func Watch(ctx context.Context, deps Deps, cfg Config) {
 				instrumentation.OBSBackgroundAudio.SetOnFallback(true)
 				instrumentation.OBSBackgroundAudio.IncSwap("to_fallback")
 				continue
+			}
+
+			// The fallback album plays unlooped like the selected one, so OBS
+			// ends the media between tracks and each ending is the cue to queue
+			// the next. Same backstop as the selected album bed gets above, for
+			// the same reason — and it matters more here, since the subscription
+			// that normally advances first is down exactly when OBS is unwell.
+			// A no-op on the drone, which loops, and off the album entirely.
+			if obs.MediaStateDown(state) {
+				if err := deps.AdvanceAlbum(ctx); err != nil {
+					slog.ErrorContext(ctx, "audio watchdog: fallback album advance failed", "err", err)
+				}
 			}
 
 			// On the local fallback bed: wait for SomaFM to come back. This is the

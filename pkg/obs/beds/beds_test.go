@@ -705,6 +705,121 @@ func TestAdvance_NoopOnOtherBeds(t *testing.T) {
 	}
 }
 
+// The bed the audio watchdog rides a SomaFM outage out on. An outage lasts
+// hours, so the album — licence-clean, and actual music — is a better degraded
+// state than the drone whenever the share can supply it.
+func TestSwapToFallback_PrefersTheAlbumOverTheDrone(t *testing.T) {
+	dir := shareDir(t, 3)
+	o := &fakeOBS{}
+	s := NewStore(o, SomaFM, dir, "twitch")
+	if err := s.SwapToFallback(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if filepath.Dir(o.file) != filepath.Join(dir, "fifty-horizons") {
+		t.Fatalf("fallback played %q, want a track from the album under %q", o.file, dir)
+	}
+	// Looping would mean OBS never reports media-ended, so the album would
+	// never advance off its first track.
+	if o.loop {
+		t.Fatal("the fallback album must not loop")
+	}
+	// The swap back to SomaFM keys off the *selected* bed, so recording the
+	// fallback as the bed would switch the watchdog off and strand the stream
+	// on the album once SomaFM returns.
+	if bed, _ := s.Current(); bed != SomaFM {
+		t.Fatalf("selected bed after falling back: want %s, got %s", SomaFM, bed)
+	}
+}
+
+func TestSwapToFallback_UsesTheDroneWhenTheAlbumCantPlay(t *testing.T) {
+	for _, tc := range []struct{ name, dir string }{
+		{"empty share", t.TempDir()},
+		{"share not mounted", filepath.Join(t.TempDir(), "absent")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			o := &fakeOBS{}
+			s := NewStore(o, SomaFM, tc.dir, "twitch")
+			if err := s.SwapToFallback(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			if o.file != FallbackFile {
+				t.Fatalf("fallback file: want %s, got %s", FallbackFile, o.file)
+			}
+			// Nothing advances the drone, so it has to loop or it leaves dead air.
+			if !o.loop {
+				t.Fatal("the car-hum fallback must loop")
+			}
+		})
+	}
+}
+
+// The fallback leaves the selected bed on SomaFM, so Advance has to know the
+// album by more than the bed. Without that the outage plays one track and falls
+// silent — the album=1 / tracks=0 state, which is the thing the fallback exists
+// to prevent rather than to cause.
+func TestSwapToFallback_AlbumKeepsAdvancing(t *testing.T) {
+	const n = 3
+	o := &fakeOBS{}
+	s := NewStore(o, SomaFM, shareDir(t, n), "twitch")
+	ctx := context.Background()
+	if err := s.SwapToFallback(ctx); err != nil {
+		t.Fatal(err)
+	}
+	seen := map[string]bool{o.file: true}
+	for range n - 1 {
+		if err := s.Advance(ctx); err != nil {
+			t.Fatal(err)
+		}
+		seen[o.file] = true
+	}
+	if len(seen) != n {
+		t.Fatalf("fallback album played %d of %d tracks: a stalled order falls silent", len(seen), n)
+	}
+}
+
+func TestSwapToSomaFM_EndsTheAlbumFallback(t *testing.T) {
+	o := &fakeOBS{}
+	s := NewStore(o, SomaFM, shareDir(t, 3), "twitch")
+	ctx := context.Background()
+	if err := s.SwapToFallback(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SwapToSomaFM(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if !o.network {
+		t.Fatalf("swap back left the source on the local file %q", o.file)
+	}
+	// A late report of the last fallback track ending must not repoint the
+	// source at a track and undo the recovery.
+	if err := s.Advance(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if !o.network {
+		t.Fatalf("advance after the swap back put %q back on air", o.file)
+	}
+}
+
+// Choosing a bed mid-outage ends the fallback: what's audible is what was
+// asked for, so a track ending must not walk an album nobody selected.
+func TestSet_ClearsTheAlbumFallback(t *testing.T) {
+	o := &fakeOBS{}
+	s := NewStore(o, SomaFM, shareDir(t, 3), "twitch")
+	ctx := context.Background()
+	if err := s.SwapToFallback(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Set(ctx, CarHum); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Advance(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if o.file != CarHumFile {
+		t.Fatalf("advance walked the album after the drone was chosen: %s", o.file)
+	}
+}
+
 func TestDetect_ReadsTheLiveBedFromOBS(t *testing.T) {
 	dir := shareDir(t, 1)
 	for _, tc := range []struct {
