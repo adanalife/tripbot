@@ -1,0 +1,1 @@
+`contract.json` now carries the per-platform MediaMTX relay Service names (`mediamtx-<platform>`) and the RTSP port (8554), so the playout → OBS RTSP endpoint is covered by the anti-drift contract instead of being hand-declared per consumer.
