@@ -52,7 +52,7 @@ spec:
             - secretRef:
                 name: grafana-cloud-otlp
                 optional: true
-          image: adanalife/onscreens-server:4.24.0
+          image: adanalife/onscreens-server:4.25.0
           imagePullPolicy: IfNotPresent
           livenessProbe:
             httpGet:
@@ -87,6 +87,8 @@ spec:
               name: run
       priorityClassName: prod-stream
       securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
         seccompProfile:
           type: RuntimeDefault
       volumes:

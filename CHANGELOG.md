@@ -9,6 +9,20 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v4.25.0] — 2026-08-08
+
+### Chatbot
+
+- The audio watchdog rides out a SomaFM outage on the album bed when the music share has tracks, rather than on the car-hum drone. The drone stays the fallback for an empty or unmounted share. ([#1360](https://github.com/adanalife/tripbot/pull/1360))
+
+### Fixes
+
+- Set `runAsNonRoot` on the onscreens-server pod, so it conforms to the `restricted` PodSecurity profile — matching tripbot's own pod. ([#1365](https://github.com/adanalife/tripbot/pull/1365))
+
+### Deploy / Infra
+
+- `contract.json` now carries the per-platform MediaMTX relay Service names (`mediamtx-<platform>`) and the RTSP port (8554), so the playout → OBS RTSP endpoint is covered by the anti-drift contract instead of being hand-declared per consumer. ([#1364](https://github.com/adanalife/tripbot/pull/1364))
+
 ## [v4.24.0] — 2026-08-07
 
 ### Console / API
