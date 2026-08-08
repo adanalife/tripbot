@@ -532,9 +532,60 @@ func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 		// do a timewarp, crediting the guesser on the overlay
 		a.timewarp(ctx, user.Username)
 	} else {
-		msg = "Try again! EarthDay"
+		msg = "Try again! " + a.guessHint(user.Username, guess, s)
 	}
 	a.Chat.Say(msg)
+}
+
+// guessMiss is one chatter's last wrong !guess: how far its state's centroid
+// was from the van, and when it happened (see App.guessMisses).
+type guessMiss struct {
+	miles float64
+	at    time.Time
+}
+
+// guessHint picks the emote that closes a wrong-guess reply. A chatter's first
+// miss of a round gets the usual EarthDay; each later miss compares this
+// guess's centroid-to-van distance against their previous one and answers 🔥
+// (warmer) or ❄️ (colder) instead — a hint subtle enough that only someone
+// watching their own replies notices it. Restricting hints to the second miss
+// on, and to one bit each, is what keeps !guess from turning into binary
+// search over the state list.
+//
+// A guess with no centroid (a territory, a typo the fuzzy pass let through) or
+// a spot with no usable coordinate can't be measured, so it neither hints nor
+// disturbs the trail.
+func (a *App) guessHint(username, guess string, s spot) string {
+	const noHint = "EarthDay"
+	if s.at.Lat == 0 && s.at.Lng == 0 {
+		return noHint
+	}
+	lat, lng, ok := helpers.StateCentroid(guess)
+	if !ok {
+		return noHint
+	}
+	miles := helpers.MilesBetween(lat, lng, s.at.Lat, s.at.Lng)
+
+	a.guessMissesMu.Lock()
+	prev, hadPrev := a.guessMisses[username]
+	if a.guessMisses == nil {
+		a.guessMisses = make(map[string]guessMiss)
+	}
+	a.guessMisses[username] = guessMiss{miles: miles, at: time.Now()}
+	a.guessMissesMu.Unlock()
+
+	if !hadPrev || !prev.at.After(lastTimewarpTime) {
+		return noHint
+	}
+	switch {
+	case miles < prev.miles:
+		return "🔥"
+	case miles > prev.miles:
+		return "❄️"
+	default:
+		// Same state twice — same distance, nothing to compare.
+		return noHint
+	}
 }
 
 func (a *App) stateCmd(ctx context.Context, user *users.User, _ []string) {

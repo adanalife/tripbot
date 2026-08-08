@@ -2,6 +2,7 @@ package chatbot
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
@@ -126,6 +127,13 @@ type App struct {
 	// on a different line.
 	helpMessages []string
 	helpIndex    int
+
+	// guessMisses remembers each chatter's most recent wrong !guess this round,
+	// so the next miss can hint warmer or colder. Entries stamped before
+	// lastTimewarpTime belong to a previous round and are ignored rather than
+	// cleaned up — a timewarp resets every hint trail for free.
+	guessMissesMu sync.Mutex
+	guessMisses   map[string]guessMiss
 }
 
 // New constructs an App wired with the production (realX) dependency adapters,

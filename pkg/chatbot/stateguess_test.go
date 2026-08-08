@@ -179,3 +179,62 @@ func TestGuessCmd_TwoLetterNonState_IsNotBlanked(t *testing.T) {
 		t.Errorf("credited = %v, want nobody", recScores.Credited)
 	}
 }
+
+// Wrong guesses after the first carry a warmer/colder hint: the EarthDay emote
+// is swapped for 🔥 when this guess's state is closer to the van than the
+// chatter's previous one, ❄️ when it's farther.
+func TestGuessCmd_WrongGuess_WarmerColderHints(t *testing.T) {
+	// Pin the round start in the past and restore it after: entries stamped
+	// before lastTimewarpTime belong to a previous round.
+	saved := lastTimewarpTime
+	lastTimewarpTime = time.Now().Add(-time.Hour)
+	t.Cleanup(func() { lastTimewarpTime = saved })
+
+	app := newTestApp(newTestVideo("Colorado", 39.5, -105.0, time.Now()))
+	out := captureSay(t, app)
+	user := newTestUser("viewer1")
+
+	// First miss: no previous distance, no hint.
+	app.guessCmd(context.Background(), user, []string{"Florida"})
+	if got := out(); !strings.Contains(got, "EarthDay") {
+		t.Errorf("first miss should show EarthDay, got %q", got)
+	}
+
+	// A guess with no centroid can't be measured: no hint, and it doesn't
+	// disturb the trail — the next miss still compares against Florida.
+	app.guessCmd(context.Background(), user, []string{"Guam"})
+	if got := out(); !strings.Contains(got, "EarthDay") {
+		t.Errorf("centroid-less miss should show EarthDay, got %q", got)
+	}
+
+	// Wyoming is closer to Colorado than Florida: warmer.
+	app.guessCmd(context.Background(), user, []string{"Wyoming"})
+	if got := out(); !strings.Contains(got, "🔥") {
+		t.Errorf("closer miss should show fire, got %q", got)
+	}
+
+	// Another chatter's first miss gets no hint — trails are per-user.
+	app.guessCmd(context.Background(), newTestUser("viewer2"), []string{"Utah"})
+	if got := out(); !strings.Contains(got, "EarthDay") {
+		t.Errorf("another chatter's first miss should show EarthDay, got %q", got)
+	}
+
+	// Florida again is farther than Wyoming: colder.
+	app.guessCmd(context.Background(), user, []string{"Florida"})
+	if got := out(); !strings.Contains(got, "❄️") {
+		t.Errorf("farther miss should show snowflake, got %q", got)
+	}
+
+	// The same state twice is the same distance: nothing to compare.
+	app.guessCmd(context.Background(), user, []string{"Florida"})
+	if got := out(); !strings.Contains(got, "EarthDay") {
+		t.Errorf("equal-distance miss should show EarthDay, got %q", got)
+	}
+
+	// A timewarp starts a new round: the trail is stale, so no hint.
+	lastTimewarpTime = time.Now()
+	app.guessCmd(context.Background(), user, []string{"Nevada"})
+	if got := out(); !strings.Contains(got, "EarthDay") {
+		t.Errorf("first miss after a timewarp should show EarthDay, got %q", got)
+	}
+}
