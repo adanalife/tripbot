@@ -10,10 +10,11 @@
 // the stream isn't silent: the album on the mounted share, or the Car Hum FLAC
 // baked into the OBS image when the share has no tracks. An outage lasts hours,
 // and a music stream degraded to music beats one degraded to a drone. It probes
-// SomaFM in the background and swaps back once an edge is serving bytes again. All of it is the OBS-side analogue of the silent-
-// disconnect stream watchdog in pkg/obs/watchdog — same injectable-deps shape
-// so the decision loop unit-tests without a real OBS WebSocket. cmd/tripbot
-// (Twitch only) is the sole consumer.
+// SomaFM in the background and swaps back once an edge is serving bytes again.
+// All of it is the OBS-side analogue of the silent-disconnect stream watchdog
+// in pkg/obs/watchdog — same injectable-deps shape so the decision loop
+// unit-tests without a real OBS WebSocket. cmd/tripbot (Twitch only) is the
+// sole consumer.
 package audiowatchdog
 
 import (
