@@ -19,7 +19,11 @@ name: pr-gates
 
 on:
   pull_request:
-    branches: [main]
+    # Every PR, whatever it targets. Filtering to `branches: [main]` would leave a
+    # PR stacked on another feature branch running no tests at all — the review
+    # that most wants them, since its diff is against a branch nobody has looked
+    # at rather than against main.
+    #
     # Union of the triggers the individual gates needed: `edited` for the title
     # check, `labeled`/`unlabeled` for the skip-changelog escape hatch.
     types: [opened, edited, reopened, synchronize, labeled, unlabeled]
