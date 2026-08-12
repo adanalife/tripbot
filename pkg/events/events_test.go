@@ -43,10 +43,10 @@ var writers = []struct {
 	call      func(context.Context, *c.TripbotConfig) error
 }{
 	{"Login", "login", func(ctx context.Context, cfg *c.TripbotConfig) error {
-		return Login(ctx, cfg, "someone", uuid.New())
+		return Login(ctx, cfg, "someone", uuid.New(), Airing{})
 	}},
 	{"Logout", "logout", func(ctx context.Context, cfg *c.TripbotConfig) error {
-		return Logout(ctx, cfg, "someone", uuid.New(), nil)
+		return Logout(ctx, cfg, "someone", uuid.New(), nil, Airing{})
 	}},
 	{"Subscribe", "subscribe", func(ctx context.Context, cfg *c.TripbotConfig) error {
 		return Subscribe(ctx, cfg, "someone")
@@ -110,6 +110,73 @@ func TestWritersStampPlatformAndEvent(t *testing.T) {
 				t.Error(err)
 			}
 		})
+	}
+}
+
+// A session event records the footage the viewer arrived on or left on. This
+// pairing is what per-clip churn is computed from, so both columns have to
+// reach the row — a login that drops them is indistinguishable from one on an
+// idle stream.
+func TestSessionWritersRecordAiring(t *testing.T) {
+	ts := 12.5
+	for _, tc := range []struct {
+		name      string
+		wantEvent string
+		call      func(context.Context, *c.TripbotConfig) error
+	}{
+		{"Login", "login", func(ctx context.Context, cfg *c.TripbotConfig) error {
+			return Login(ctx, cfg, "someone", uuid.New(), Airing{VideoID: 42, TsSec: &ts})
+		}},
+		{"Logout", "logout", func(ctx context.Context, cfg *c.TripbotConfig) error {
+			return Logout(ctx, cfg, "someone", uuid.New(), nil, Airing{VideoID: 42, TsSec: &ts})
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			mock := installMockDB(t)
+			mock.ExpectQuery(`INSERT INTO "events"`).
+				WithArgs(
+					"someone",        // username
+					"twitch",         // platform
+					tc.wantEvent,     // event
+					sqlmock.AnyArg(), // session_id
+					sqlmock.AnyArg(), // date_created
+					nil,              // extra_miles_earned
+					42,               // video_id
+					12.5,             // video_ts_sec
+					nil,              // meta
+				).
+				WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+
+			if err := tc.call(context.Background(), &c.TripbotConfig{Platform: "twitch"}); err != nil {
+				t.Fatal(err)
+			}
+			if err := mock.ExpectationsWereMet(); err != nil {
+				t.Error(err)
+			}
+		})
+	}
+}
+
+// The zero Airing — an instance with no player, or nothing on screen — writes
+// NULL into both columns rather than a 0 that would read as "clip 0, first
+// second" to every query downstream.
+func TestSessionWritersZeroAiringWritesNull(t *testing.T) {
+	mock := installMockDB(t)
+	mock.ExpectQuery(`INSERT INTO "events"`).
+		WithArgs(
+			"someone", "twitch", "login",
+			sqlmock.AnyArg(), sqlmock.AnyArg(), nil,
+			nil, // video_id
+			nil, // video_ts_sec
+			nil,
+		).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+
+	if err := Login(context.Background(), &c.TripbotConfig{Platform: "twitch"}, "someone", uuid.New(), Airing{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Error(err)
 	}
 }
 
