@@ -115,29 +115,22 @@ func TestRecordSample_TagsTheGivenVideo(t *testing.T) {
 	}
 }
 
-func TestReadOnly_SkipsWritesButStillTracksVideo(t *testing.T) {
+// A read-only instance writes neither table. It still shares the DB with the
+// writing instance, so a stray insert here would be indistinguishable from
+// real playback in the footage-performance data.
+func TestReadOnly_SkipsWrites(t *testing.T) {
 	db := setup(t)
 	readOnlyConf := &c.TripbotConfig{Environment: "testing", Platform: "twitch", ReadOnly: true}
 	ctx := context.Background()
 
 	RecordPlay(ctx, readOnlyConf, 42, "Utah", false, 38.5, -109.5)
-	RecordSample(ctx, readOnlyConf, 5, Audience{}, 0)
+	RecordSample(ctx, readOnlyConf, 5, Audience{}, 42)
 
 	if plays := allPlays(t, db); len(plays) != 0 {
 		t.Errorf("expected no video_plays rows in read-only mode, got %d", len(plays))
 	}
 	if samples := allSamples(t, db); len(samples) != 0 {
 		t.Errorf("expected no viewer_samples rows in read-only mode, got %d", len(samples))
-	}
-	// The tag is stored before the read-only bail, so writes resume correctly
-	// tagged the moment a non-read-only config is used.
-	RecordSample(ctx, testConf, 5, Audience{}, 0)
-	samples := allSamples(t, db)
-	if len(samples) != 1 {
-		t.Fatalf("expected 1 viewer_samples row, got %d", len(samples))
-	}
-	if samples[0].VideoID == nil || *samples[0].VideoID != 42 {
-		t.Errorf("video_id: want 42, got %v", samples[0].VideoID)
 	}
 }
 
