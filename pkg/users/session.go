@@ -60,9 +60,15 @@ func (s *Sessions) UpdateSession(ctx context.Context) {
 	// updates the "in chat" number (and flashes it on a change) without a reload.
 	eventbus.EmitViewerCount(ctx, s.cfg.Environment, s.cfg.Platform, s.source.ChatterCount())
 
-	// Persist the same total as a viewer_samples row — the durable half of the
+	// Refresh how many people are watching. Distinct from the chatter total
+	// above: chatters are who has spoken, a self-selecting slice, so sizing
+	// the audience from it understates it and biases toward whatever provokes
+	// typing.
+	s.source.UpdateAudience()
+
+	// Persist both totals as a viewer_samples row — the durable half of the
 	// emission above, tagged with the clip currently on screen.
-	viewstats.RecordSample(ctx, s.cfg, s.source.ChatterCount())
+	viewstats.RecordSample(ctx, s.cfg, s.source.ChatterCount(), s.source.Audience())
 
 	// log out the people who aren't present, working from a snapshot so the
 	// lock isn't held across the DB work logout does

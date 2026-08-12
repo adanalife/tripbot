@@ -7,6 +7,7 @@ import (
 	"log"
 	"log/slog"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/bootstrap"
@@ -34,6 +35,7 @@ import (
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/adanalife/tripbot/pkg/video"
+	"github.com/adanalife/tripbot/pkg/viewstats"
 	"github.com/go-co-op/gocron/v2"
 	"github.com/nats-io/nats.go"
 	"go.opentelemetry.io/otel"
@@ -125,6 +127,11 @@ type Tripbot struct {
 	// UserSessions) and into discord so they read the same state. One *Sessions
 	// per chat provider is the multi-provider seam.
 	sessions *users.Sessions
+
+	// audienceMu guards lastAudience, the concurrent-viewer reading the
+	// session cron refreshes and reads back within the same tick.
+	audienceMu   sync.Mutex
+	lastAudience viewstats.Audience
 
 	// discordSession is set by startDiscord when the Discord bot is enabled
 	// for this env; shutdown calls Stop on it to deregister the per-guild

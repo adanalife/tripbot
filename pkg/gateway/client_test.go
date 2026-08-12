@@ -424,3 +424,52 @@ func TestStartEgress_ErrorsOnNon2xx(t *testing.T) {
 		t.Error("expected an error on non-2xx")
 	}
 }
+
+func TestViewers(t *testing.T) {
+	var gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		_, _ = w.Write([]byte(`{"count":137,"live":true}`))
+	}))
+	defer srv.Close()
+
+	got, err := New(srv.URL).Viewers(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotPath != "/v1/viewers" {
+		t.Errorf("path = %q, want /v1/viewers", gotPath)
+	}
+	if got.Count != 137 || !got.Live || !got.Reported {
+		t.Errorf("audience = %+v, want {137 true true}", got)
+	}
+}
+
+// A 404 is the gateway saying this platform publishes no viewer number — an
+// expected answer, not a failure. Reported stays false so the caller records
+// NULL instead of a zero that would read as "nobody watched".
+func TestViewersUnsupportedPlatform(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	got, err := New(srv.URL).Viewers(context.Background())
+	if err != nil {
+		t.Fatalf("404 returned an error: %v", err)
+	}
+	if got.Reported || got.Count != 0 {
+		t.Errorf("audience = %+v, want an unreported zero", got)
+	}
+}
+
+func TestViewersErrorsOnUnexpectedStatus(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	if _, err := New(srv.URL).Viewers(context.Background()); err == nil {
+		t.Error("expected an error on a 500")
+	}
+}

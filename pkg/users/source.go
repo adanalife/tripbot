@@ -1,5 +1,7 @@
 package users
 
+import "github.com/adanalife/tripbot/pkg/viewstats"
+
 // ChatterSource supplies the platform-specific view of who is currently in
 // chat and each viewer's relationship to the channel. It is the seam between
 // session tracking (platform-agnostic) and the chat transport (per-platform).
@@ -23,4 +25,13 @@ type ChatterSource interface {
 	SubscriberTier(username string) int
 	// IsFollower reports whether the user follows the channel.
 	IsFollower(username string) bool
+	// UpdateAudience refreshes the source's notion of how many people are
+	// watching. Separate from UpdateChatters because it's a different
+	// question and a different upstream call — a platform can answer one and
+	// not the other.
+	UpdateAudience()
+	// Audience is the concurrent-viewer reading cached by UpdateAudience.
+	// Reported is false where the platform publishes no such number, which
+	// callers must not flatten to a count of zero.
+	Audience() viewstats.Audience
 }

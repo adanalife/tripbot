@@ -43,8 +43,15 @@ type VideoPlay struct {
 type ViewerSample struct {
 	ID       int `gorm:"primaryKey"`
 	Platform string
-	Count    int
-	VideoID  *int
+	// Count is the chatter total — who has spoken, not who is watching. Kept
+	// for continuity with the series collected before Viewers existed.
+	Count   int
+	VideoID *int
+	// Viewers is the platform's concurrent-viewer count, and Live whether
+	// anything was broadcasting. Both nil when no number was reported, so a
+	// rollup can tell "nobody counted" from "nobody watching".
+	Viewers *int
+	Live    *bool
 	// autoCreateTime: see VideoPlay.StartedAt.
 	SampledAt time.Time `gorm:"autoCreateTime"`
 }
@@ -78,9 +85,21 @@ func RecordPlay(ctx context.Context, cfg *c.TripbotConfig, videoID int, state st
 	}
 }
 
+// Audience is the platform's concurrent-viewer reading for one tick. Reported
+// is false when no number was available, which writes NULL rather than a zero
+// that would read as "a live broadcast nobody watched".
+type Audience struct {
+	Count    int
+	Live     bool
+	Reported bool
+}
+
 // RecordSample writes a viewer_samples row for one viewer-count tick, tagged
-// with the currently-playing clip as of the last RecordPlay.
-func RecordSample(ctx context.Context, cfg *c.TripbotConfig, count int) {
+// with the currently-playing clip as of the last RecordPlay. chatters is the
+// in-chat total; audience is the watching total, which the two columns keep
+// apart because they answer different questions and only one of them sizes
+// the audience.
+func RecordSample(ctx context.Context, cfg *c.TripbotConfig, chatters int, audience Audience) {
 	if cfg.ReadOnly {
 		return
 	}
@@ -90,10 +109,14 @@ func RecordSample(ctx context.Context, cfg *c.TripbotConfig, count int) {
 	}
 	sample := ViewerSample{
 		Platform: cfg.Platform,
-		Count:    count,
+		Count:    chatters,
 		VideoID:  vid,
 	}
+	if audience.Reported {
+		sample.Viewers = &audience.Count
+		sample.Live = &audience.Live
+	}
 	if err := database.GormDB().WithContext(ctx).Create(&sample).Error; err != nil {
-		slog.ErrorContext(ctx, "error recording viewer sample", "err", err, "count", count)
+		slog.ErrorContext(ctx, "error recording viewer sample", "err", err, "chatters", chatters)
 	}
 }

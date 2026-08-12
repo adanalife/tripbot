@@ -10,6 +10,7 @@ import (
 	"github.com/adanalife/tripbot/pkg/events"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/adanalife/tripbot/pkg/video"
+	"github.com/adanalife/tripbot/pkg/viewstats"
 )
 
 func TestNormalizeCommandPrefix(t *testing.T) {
@@ -431,6 +432,8 @@ func (stubChatterSource) ChatterCount() int             { return 0 }
 func (stubChatterSource) IsSubscriber(_ string) bool    { return false }
 func (stubChatterSource) SubscriberTier(_ string) int   { return 0 }
 func (stubChatterSource) IsFollower(_ string) bool      { return false }
+func (stubChatterSource) UpdateAudience()               {}
+func (stubChatterSource) Audience() viewstats.Audience  { return viewstats.Audience{} }
 
 // A gate refusal is a refusal too — the command existed and was reachable, and
 // still didn't run. Leaving the gates unrecorded would make any refusal rate
