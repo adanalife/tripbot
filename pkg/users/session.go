@@ -58,6 +58,14 @@ func New(cfg *c.TripbotConfig, source ChatterSource) *Sessions {
 // records no airing context.
 func (s *Sessions) SetVideoSource(v VideoSource) { s.video = v }
 
+// currentVideoID is the clip on screen now, or 0 with no video source wired.
+func (s *Sessions) currentVideoID() int {
+	if s.video == nil {
+		return 0
+	}
+	return s.video.CurrentVideoID()
+}
+
 // airing reports the footage on screen now, for stamping onto a session event.
 // The zero Airing — no clip, no playhead — is what an instance with no video
 // source records.
@@ -88,7 +96,7 @@ func (s *Sessions) UpdateSession(ctx context.Context) {
 
 	// Persist both totals as a viewer_samples row — the durable half of the
 	// emission above, tagged with the clip currently on screen.
-	viewstats.RecordSample(ctx, s.cfg, s.source.ChatterCount(), s.source.Audience())
+	viewstats.RecordSample(ctx, s.cfg, s.source.ChatterCount(), s.source.Audience(), s.currentVideoID())
 
 	// log out the people who aren't present, working from a snapshot so the
 	// lock isn't held across the DB work logout does
