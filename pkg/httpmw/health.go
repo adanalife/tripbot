@@ -39,10 +39,11 @@ func LivenessHandler() http.HandlerFunc {
 // status so a failing probe is debuggable from `kubectl describe pod`'s
 // probe output. With no checks, the handler always reports 200 —
 // equivalent to LivenessHandler but distinguishable on the URL. tripbot
-// registers it with no checks on purpose: its HTTP surface (admin panel,
-// /auth/init, /auth/callback, /metrics) doesn't depend on the Twitch
-// connection, so the pod must stay in the Service even when the bot is
-// offline — otherwise the very page used to re-auth would 503.
+// registers it with no checks on purpose: its HTTP surface (the /api/*
+// endpoints the console proxies, /metrics, /version) doesn't depend on the
+// Twitch connection, so the pod must stay in the Service even when the bot is
+// offline — otherwise the console loses the instance exactly when it's needed
+// to diagnose why.
 func ReadinessHandler(checks ...ReadyCheck) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), readyCheckTimeout)

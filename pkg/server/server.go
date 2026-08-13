@@ -147,10 +147,9 @@ func (s *Server) Start(ctx context.Context) error {
 
 	srv := &http.Server{
 		Addr: fmt.Sprintf("0.0.0.0:%s", s.cfg.TripbotServerPort),
-		// All remaining responses are short (auth redirects, small JSON for the
-		// console, the metrics scrape). The live-console SSE stream that forced
-		// WriteTimeout=0 is gone with the admin panel, so a normal write deadline
-		// is back in place.
+		// Every response here is short (small JSON for the console, the metrics
+		// scrape), so a normal write deadline is safe. A long-lived stream on
+		// this server — an SSE endpoint, say — would need WriteTimeout=0.
 		ReadTimeout:       time.Second * 15,
 		ReadHeaderTimeout: time.Second * 15,
 		WriteTimeout:      time.Second * 15,

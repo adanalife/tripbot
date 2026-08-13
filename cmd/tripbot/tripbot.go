@@ -103,11 +103,11 @@ type Tripbot struct {
 	// stop it.
 	scheduler gocron.Scheduler
 
-	// srv is the auth-links / console-API / metrics HTTP server, constructed in
-	// NewTripbot. cmd installs the build version through it (SetVersion) and
-	// starts it (Start). The rich admin panel lives in the standalone
-	// tripbot-console; this server holds the OAuth bootstrap pages, the read-only
-	// /api/* endpoints the console proxies, and /health + /metrics.
+	// srv is the console-API / metrics HTTP server, constructed in NewTripbot.
+	// cmd installs the build version through it (SetVersion) and starts it
+	// (Start). The rich admin panel lives in the standalone tripbot-console;
+	// this server holds the /api/* endpoints the console proxies, plus /health,
+	// /metrics, and /version.
 	srv *server.Server
 
 	// player owns "what's currently playing" — the single process-wide
@@ -187,10 +187,10 @@ func NewTripbot(version string, cfg *c.TripbotConfig) *Tripbot {
 		flagClient: feature.NewInMemoryClient(nil),
 		gateway:    newGatewayClient(cfg),
 	}
-	// The audience source dispatches chatter refresh + the follower check to the
-	// gateway (when the flag is on) or in-process; with no gateway wired it's the
-	// plain in-process source. Reads t.gateway/t.flagClient lazily, so wiring it
-	// here against the partially-built t is fine.
+	// The audience source routes chatter refresh + the follower check through
+	// the gateway; with none wired the refreshes no-op and the follower check
+	// fails closed. It reads t.gateway lazily, so wiring it here against the
+	// partially-built t is fine.
 	t.sessions = users.New(t.cfg, gatewayChatterSource{t: t})
 	// Feed the rotators what's playing, so their $variables resolve. Reuses the
 	// chatbot's Geocoder and Weather adapters (the pkg/geo default is installed by
@@ -915,8 +915,8 @@ func (t *Tripbot) setUpTwitchCredentials() {
 	}
 }
 
-// updateSubscribers gets the list of current subscribers (gateway-or-in-process
-// per the runtime flag — see refreshSubscribers).
+// updateSubscribers gets the list of current subscribers from the gateway —
+// see refreshSubscribers.
 func (t *Tripbot) updateSubscribers() {
 	t.refreshSubscribers(context.Background())
 }
