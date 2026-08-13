@@ -528,7 +528,7 @@ def emit_identity_secrets(scope: Construct, env: EnvConfig) -> None:
 
 
 def _emit_db_external_secret(scope, ns, labels):
-    # database creds: reads the shared postgres SM JSON ({user,password,db})
+    # database creds: reads the shared postgres parameter JSON ({user,password,db})
     # and remaps it onto DATABASE_* keys via target.template — a shape the
     # eso.external_secret helper doesn't cover, so emit it as a raw ApiObject
     # (same idiom as obs.py / postgres.py).
@@ -593,7 +593,7 @@ def _emit_db_external_secret(scope, ns, labels):
 
 
 def _emit_app_external_secrets(scope, ns, labels, *, maps: bool):
-    # twitch + google-maps: extract every top-level key of the SM JSON blob.
+    # twitch + google-maps: extract every top-level key of the parameter's JSON.
     extracts = [
         (
             "twitch-external-secret",
@@ -619,7 +619,7 @@ def _emit_app_external_secrets(scope, ns, labels, *, maps: bool):
             creation_policy="Owner",
             extract=sm,
         )
-    # discord alerts + bot-token: one SM container → one materialized key.
+    # discord alerts + bot-token: one parameter → one materialized key.
     for id_, name, sm, key in [
         (
             "discord-alerts-external-secret",

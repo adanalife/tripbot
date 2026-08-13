@@ -26,7 +26,7 @@ const FlagKey = "discord.bot_enabled"
 // ShouldStart inspects the loaded config and returns whether to bring up
 // the Discord session. Returns (false, reason) for the three
 // intentionally-disabled cases (missing token, missing guild id,
-// unfilled SM placeholder) so the caller can log a single INFO line
+// unfilled placeholder) so the caller can log a single INFO line
 // rather than the gateway thrashing on auth errors.
 func ShouldStart(cfg *c.TripbotConfig) (bool, string) {
 	if cfg.DiscordBotToken == "" {
@@ -35,9 +35,9 @@ func ShouldStart(cfg *c.TripbotConfig) (bool, string) {
 	if cfg.DiscordGuildID == "" {
 		return false, "guild_id unset"
 	}
-	// The SM container created by terraform writes this literal string
-	// until aws secretsmanager put-secret-value is run. ESO syncs it
-	// faithfully, so we'd otherwise try to auth with garbage.
+	// Terraform seeds the parameter with a placeholder until the real token is
+	// put. ESO syncs whatever is there faithfully, so without this an unseeded
+	// env would try to auth with the placeholder text.
 	if strings.HasPrefix(cfg.DiscordBotToken, "placeholder") {
 		return false, "token is SM placeholder"
 	}

@@ -134,8 +134,8 @@ type TripbotConfig struct {
 
 	// DiscordBotToken authenticates the live Discord bot session that
 	// serves slash commands. Optional — when unset, missing, or still at
-	// the AWS Secrets Manager placeholder value, pkg/discord skips
-	// session init entirely and the rest of the bot runs normally.
+	// terraform's placeholder value, pkg/discord skips session init
+	// entirely and the rest of the bot runs normally.
 	DiscordBotToken string `envconfig:"DISCORD_BOT_TOKEN"`
 	// DiscordGuildID is the Discord server snowflake the bot registers
 	// its slash commands against. Optional — leaving it empty in an
