@@ -106,6 +106,11 @@ func (s *Server) Start(ctx context.Context) error {
 	r.Handle("/api/insights/commands", tagged("/api/insights/commands", commandInsightsHandler)).Methods("GET")
 	r.Handle("/api/insights/guesses", tagged("/api/insights/guesses", guessInsightsHandler)).Methods("GET")
 	r.Handle("/api/insights/footage", tagged("/api/insights/footage", footageInsightsHandler)).Methods("GET")
+	// read-only JSON stats for the console's stats page: lifetime totals over
+	// the whole log, a recent playback window, and community numbers.
+	r.Handle("/api/stats/lifetime", tagged("/api/stats/lifetime", lifetimeStatsHandler)).Methods("GET")
+	r.Handle("/api/stats/playback", tagged("/api/stats/playback", playbackStatsHandler)).Methods("GET")
+	r.Handle("/api/stats/community", tagged("/api/stats/community", communityStatsHandler)).Methods("GET")
 
 	// Background audio: which bed this platform's OBS is playing, and the
 	// switch between them.
