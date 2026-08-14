@@ -6,6 +6,7 @@ import (
 	"log/slog"
 
 	"github.com/adanalife/tripbot/pkg/eventbus"
+	"github.com/adanalife/tripbot/pkg/events"
 )
 
 // AnnounceNewFollower says a thank-you to a new follower in chat and publishes
@@ -101,5 +102,24 @@ func (a *App) RecordUnsubscribe(username string, isGift bool, tier string) {
 	_ = tier
 	if err := a.Events.Unsubscribe(context.Background(), username); err != nil {
 		slog.ErrorContext(context.Background(), "error creating unsubscribe event", "err", err)
+	}
+}
+
+// RecordRaid logs a raid event stamped with the airing clip and playhead, so
+// audience rollups can separate a raid's viewer spike from footage that
+// genuinely draws viewers. No chat shout — Twitch announces the raid in chat
+// natively. Wired from pkg/eventsub on channel.raid events.
+func (a *App) RecordRaid(from string, viewers int) {
+	ctx := context.Background()
+	r := events.Raid{From: from, Viewers: viewers}
+	// Current() is the cached notion of what's playing — no I/O, because
+	// recording a raid must not cost a round-trip to playout.
+	if a.Video != nil {
+		r.VideoID = a.Video.Current().ID
+		secs := a.Video.CurrentProgress().Seconds()
+		r.TsSec = &secs
+	}
+	if err := a.Events.Raided(ctx, r); err != nil {
+		slog.ErrorContext(ctx, "error creating raid event", "err", err, "from", from)
 	}
 }

@@ -65,6 +65,9 @@ var writers = []struct {
 			Username: "someone", Command: "!watchtime", Reason: RefusedUnknown,
 		})
 	}},
+	{"Raided", "raid", func(ctx context.Context, cfg *c.TripbotConfig) error {
+		return Raided(ctx, cfg, Raid{From: "somechannel", Viewers: 25})
+	}},
 }
 
 // A read-only instance must write no events at all. There's no mock DB
@@ -156,6 +159,64 @@ func TestStateCrossingZeroVideoIDWritesNull(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
 
 	if err := StateCrossing(context.Background(), &c.TripbotConfig{Platform: "twitch"}, "Utah", "Colorado", 0, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Error(err)
+	}
+}
+
+// A raid row carries the raiding channel as its username and a meta document
+// naming the party size, stamped with the clip the raid landed on. The exact
+// JSON matters — rollups address it as meta->>'from' / meta->>'viewers' when
+// controlling per-clip audience metrics for raid spikes.
+func TestRaidRow(t *testing.T) {
+	ts := 12.5
+	mock := installMockDB(t)
+	mock.ExpectQuery(`INSERT INTO "events"`).
+		WithArgs(
+			"somechannel",                         // username: the raiding channel
+			"twitch",                              // platform
+			"raid",                                // event
+			sqlmock.AnyArg(),                      // session_id
+			sqlmock.AnyArg(),                      // date_created
+			nil,                                   // extra_miles_earned
+			42,                                    // video_id
+			12.5,                                  // video_ts_sec
+			`{"from":"somechannel","viewers":25}`, // meta
+		).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+
+	err := Raided(context.Background(), &c.TripbotConfig{Platform: "twitch"}, Raid{
+		From: "somechannel", Viewers: 25, VideoID: 42, TsSec: &ts,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Error(err)
+	}
+}
+
+// A raid arriving with no airing context (no player row for the clip) still
+// records, with NULL airing columns rather than a 0 that would read as "clip
+// 0, first second".
+func TestRaidZeroAiringWritesNull(t *testing.T) {
+	mock := installMockDB(t)
+	mock.ExpectQuery(`INSERT INTO "events"`).
+		WithArgs(
+			"somechannel", "twitch", "raid",
+			sqlmock.AnyArg(), sqlmock.AnyArg(), nil,
+			nil,                                   // video_id
+			nil,                                   // video_ts_sec
+			`{"from":"somechannel","viewers":25}`, // meta
+		).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+
+	err := Raided(context.Background(), &c.TripbotConfig{Platform: "twitch"}, Raid{
+		From: "somechannel", Viewers: 25,
+	})
+	if err != nil {
 		t.Fatal(err)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {

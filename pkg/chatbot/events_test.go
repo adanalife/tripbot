@@ -12,6 +12,7 @@ type noopEvents struct{}
 
 func (noopEvents) Subscribe(_ context.Context, _ string) error             { return nil }
 func (noopEvents) Unsubscribe(_ context.Context, _ string) error           { return nil }
+func (noopEvents) Raided(_ context.Context, _ events.Raid) error           { return nil }
 func (noopEvents) Correction(_ context.Context, _ string, _ float64) error { return nil }
 func (noopEvents) CommandRefused(_ context.Context, _ events.CommandRefusal) error {
 	return nil
@@ -22,9 +23,15 @@ func (noopEvents) CommandRefused(_ context.Context, _ events.CommandRefusal) err
 type recordingEvents struct {
 	noopEvents
 	Refusals []events.CommandRefusal
+	Raids    []events.Raid
 }
 
 func (r *recordingEvents) CommandRefused(_ context.Context, ref events.CommandRefusal) error {
 	r.Refusals = append(r.Refusals, ref)
+	return nil
+}
+
+func (r *recordingEvents) Raided(_ context.Context, raid events.Raid) error {
+	r.Raids = append(r.Raids, raid)
 	return nil
 }

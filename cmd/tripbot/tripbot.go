@@ -773,6 +773,7 @@ func (t *Tripbot) startEventSub(ctx context.Context) {
 				OnUnsubscribe: t.app.RecordUnsubscribe,
 				OnGift:        t.app.AnnounceGiftSub,
 				OnResub:       t.app.AnnounceResub,
+				OnRaid:        t.app.RecordRaid,
 			})
 			if err == nil || errors.Is(err, context.Canceled) {
 				return
