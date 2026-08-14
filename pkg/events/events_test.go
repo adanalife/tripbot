@@ -54,6 +54,9 @@ var writers = []struct {
 	{"Unsubscribe", "unsubscribe", func(ctx context.Context, cfg *c.TripbotConfig) error {
 		return Unsubscribe(ctx, cfg, "someone")
 	}},
+	{"Follow", "follow", func(ctx context.Context, cfg *c.TripbotConfig) error {
+		return Follow(ctx, cfg, "someone")
+	}},
 	{"Correction", "correction", func(ctx context.Context, cfg *c.TripbotConfig) error {
 		return Correction(ctx, cfg, "someone", -1.5)
 	}},
