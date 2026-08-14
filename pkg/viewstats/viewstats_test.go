@@ -94,13 +94,13 @@ func TestRecordSample_TagsCurrentVideo(t *testing.T) {
 	ctx := context.Background()
 
 	// Before any play, the sample carries a NULL video_id.
-	RecordSample(ctx, testConf, 3)
+	RecordSample(ctx, testConf, 3, nil)
 	// A play tags every sample that follows it.
 	RecordPlay(ctx, testConf, 42, "Utah", false, 38.5, -109.5)
-	RecordSample(ctx, testConf, 5)
+	RecordSample(ctx, testConf, 5, nil)
 	// A play with no DB row resets the tag back to NULL.
 	RecordPlay(ctx, testConf, 0, "", true, 0, 0)
-	RecordSample(ctx, testConf, 7)
+	RecordSample(ctx, testConf, 7, nil)
 
 	samples := allSamples(t, db)
 	if len(samples) != 3 {
@@ -128,13 +128,62 @@ func TestRecordSample_TagsCurrentVideo(t *testing.T) {
 	}
 }
 
+// A sample's chat_messages column keeps "no counter wired" (NULL) apart from
+// "wired and silent" (0) — the difference between a tick that couldn't count
+// and a tick that counted nothing.
+func TestRecordSample_ChatMessages(t *testing.T) {
+	db := setup(t)
+	ctx := context.Background()
+
+	RecordSample(ctx, testConf, 3, nil)
+	RecordSample(ctx, testConf, 3, intPtr(17))
+	RecordSample(ctx, testConf, 3, intPtr(0))
+
+	samples := allSamples(t, db)
+	if len(samples) != 3 {
+		t.Fatalf("expected 3 viewer_samples rows, got %d", len(samples))
+	}
+	if samples[0].ChatMessages != nil {
+		t.Errorf("unwired sample chat_messages: want NULL, got %d", *samples[0].ChatMessages)
+	}
+	if samples[1].ChatMessages == nil || *samples[1].ChatMessages != 17 {
+		t.Errorf("wired sample chat_messages: want 17, got %v", samples[1].ChatMessages)
+	}
+	if samples[2].ChatMessages == nil || *samples[2].ChatMessages != 0 {
+		t.Errorf("silent sample chat_messages: want 0, got %v", samples[2].ChatMessages)
+	}
+}
+
+// MessageCounter accumulates between drains and starts over after each one,
+// so every message lands in exactly one sampling window.
+func TestMessageCounter_DrainResets(t *testing.T) {
+	var m MessageCounter
+
+	if got := m.Drain(); got != 0 {
+		t.Errorf("fresh counter drained %d, want 0", got)
+	}
+	m.Add()
+	m.Add()
+	m.Add()
+	if got := m.Drain(); got != 3 {
+		t.Errorf("drained %d, want 3", got)
+	}
+	if got := m.Drain(); got != 0 {
+		t.Errorf("second drain got %d, want 0", got)
+	}
+	m.Add()
+	if got := m.Drain(); got != 1 {
+		t.Errorf("post-reset drain got %d, want 1", got)
+	}
+}
+
 func TestReadOnly_SkipsWritesButStillTracksVideo(t *testing.T) {
 	db := setup(t)
 	readOnlyConf := &c.TripbotConfig{Environment: "testing", Platform: "twitch", ReadOnly: true}
 	ctx := context.Background()
 
 	RecordPlay(ctx, readOnlyConf, 42, "Utah", false, 38.5, -109.5)
-	RecordSample(ctx, readOnlyConf, 5)
+	RecordSample(ctx, readOnlyConf, 5, nil)
 
 	if plays := allPlays(t, db); len(plays) != 0 {
 		t.Errorf("expected no video_plays rows in read-only mode, got %d", len(plays))
@@ -144,7 +193,7 @@ func TestReadOnly_SkipsWritesButStillTracksVideo(t *testing.T) {
 	}
 	// The tag is stored before the read-only bail, so writes resume correctly
 	// tagged the moment a non-read-only config is used.
-	RecordSample(ctx, testConf, 5)
+	RecordSample(ctx, testConf, 5, nil)
 	samples := allSamples(t, db)
 	if len(samples) != 1 {
 		t.Fatalf("expected 1 viewer_samples row, got %d", len(samples))

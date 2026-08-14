@@ -45,6 +45,11 @@ type ViewerSample struct {
 	Platform string
 	Count    int
 	VideoID  *int
+	// ChatMessages is how many chat messages arrived in the sampling window
+	// ending at this row. nil means no counter was wired that tick; 0 means
+	// wired and silent. Commands and bots' messages count — the total is an
+	// aggregate no reader can attribute to senders.
+	ChatMessages *int
 	// autoCreateTime: see VideoPlay.StartedAt.
 	SampledAt time.Time `gorm:"autoCreateTime"`
 }
@@ -79,8 +84,10 @@ func RecordPlay(ctx context.Context, cfg *c.TripbotConfig, videoID int, state st
 }
 
 // RecordSample writes a viewer_samples row for one viewer-count tick, tagged
-// with the currently-playing clip as of the last RecordPlay.
-func RecordSample(ctx context.Context, cfg *c.TripbotConfig, count int) {
+// with the currently-playing clip as of the last RecordPlay. chatMessages is
+// the tick's chat-message tally; nil (no counter wired) records NULL, which
+// is distinct from a wired-and-silent 0.
+func RecordSample(ctx context.Context, cfg *c.TripbotConfig, count int, chatMessages *int) {
 	if cfg.ReadOnly {
 		return
 	}
@@ -89,11 +96,25 @@ func RecordSample(ctx context.Context, cfg *c.TripbotConfig, count int) {
 		vid = &id
 	}
 	sample := ViewerSample{
-		Platform: cfg.Platform,
-		Count:    count,
-		VideoID:  vid,
+		Platform:     cfg.Platform,
+		Count:        count,
+		VideoID:      vid,
+		ChatMessages: chatMessages,
 	}
 	if err := database.GormDB().WithContext(ctx).Create(&sample).Error; err != nil {
 		slog.ErrorContext(ctx, "error recording viewer sample", "err", err, "count", count)
 	}
 }
+
+// MessageCounter tallies inbound chat messages between sample ticks: the chat
+// handler increments it once per message and the session tick drains it, so
+// each viewer_samples row carries the messages that arrived in its window.
+// cmd/tripbot constructs one and hands it to both sides (it satisfies both
+// chatbot.ChatCounter and users.ChatCounter). Safe for concurrent use.
+type MessageCounter struct{ n atomic.Int64 }
+
+// Add counts one inbound chat message.
+func (m *MessageCounter) Add() { m.n.Add(1) }
+
+// Drain returns the count accumulated since the last Drain and resets it.
+func (m *MessageCounter) Drain() int { return int(m.n.Swap(0)) }

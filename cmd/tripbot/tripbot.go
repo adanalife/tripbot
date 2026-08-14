@@ -34,6 +34,7 @@ import (
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/adanalife/tripbot/pkg/video"
+	"github.com/adanalife/tripbot/pkg/viewstats"
 	"github.com/go-co-op/gocron/v2"
 	"github.com/nats-io/nats.go"
 	"go.opentelemetry.io/otel"
@@ -192,6 +193,12 @@ func NewTripbot(version string, cfg *c.TripbotConfig) *Tripbot {
 	// plain in-process source. Reads t.gateway/t.flagClient lazily, so wiring it
 	// here against the partially-built t is fine.
 	t.sessions = users.New(t.cfg, gatewayChatterSource{t: t})
+	// One tally shared by both halves of the chat-rate sample: the chatbot
+	// increments it per inbound message, the session tick drains it into each
+	// viewer_samples row.
+	chatCounter := &viewstats.MessageCounter{}
+	t.app.ChatCounter = chatCounter
+	t.sessions.SetChatCounter(chatCounter)
 	// Feed the rotators what's playing, so their $variables resolve. Reuses the
 	// chatbot's Geocoder and Weather adapters (the pkg/geo default is installed by
 	// whichever Connect* path this platform takes).
