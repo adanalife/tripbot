@@ -13,6 +13,7 @@ import (
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
+	"github.com/adanalife/tripbot/pkg/events"
 	"github.com/adanalife/tripbot/pkg/users"
 	"github.com/adanalife/tripbot/pkg/video"
 	"gorm.io/gorm"
@@ -907,6 +908,89 @@ func TestGuessCmd_CorrectGuess_TwoLetterCode(t *testing.T) {
 	}
 	if !slices.Equal(recScores.Credited, []string{"viewer1"}) {
 		t.Errorf("credited = %v, want the guesser once", recScores.Credited)
+	}
+}
+
+// A miss records a guess_submitted row with the normalized guess against the
+// actual state — the raw material for guess accuracy — stamped with the clip
+// being guessed at. A wrong guess warps nothing, so no timewarp row.
+func TestGuessCmd_MissRecordsGuessSubmitted(t *testing.T) {
+	vid := newTestVideo("Colorado", 39.5, -105.0, time.Now())
+	vid.ID = 77
+	app := newTestApp(vid)
+	rec := &recordingEvents{}
+	app.Events = rec
+
+	app.guessCmd(context.Background(), newTestUser("viewer1"), []string{"WY"})
+
+	if len(rec.Guesses) != 1 {
+		t.Fatalf("guesses = %d, want 1", len(rec.Guesses))
+	}
+	got := rec.Guesses[0]
+	if got.Username != "viewer1" || got.Guessed != "Wyoming" || got.Actual != "Colorado" || got.Correct {
+		t.Errorf("guess = %+v, want viewer1 guessing Wyoming (expanded from WY) against Colorado, wrong", got)
+	}
+	if got.VideoID != 77 {
+		t.Errorf("video id = %d, want 77", got.VideoID)
+	}
+	if got.TsSec == nil {
+		t.Error("ts_sec = nil, want the playhead stamped")
+	}
+	if len(rec.Timewarps) != 0 {
+		t.Errorf("timewarps = %+v, want none for a miss", rec.Timewarps)
+	}
+}
+
+// A correct guess records both events: the guess itself, stamped with the
+// clip it was about, and the timewarp it triggers, from that clip onto
+// wherever the warp lands.
+func TestGuessCmd_CorrectGuess_RecordsGuessAndTimewarp(t *testing.T) {
+	vid := newTestVideo("Colorado", 39.5, -105.0, time.Now())
+	vid.ID = 77
+	app := newTestApp(vid)
+	rec := &recordingEvents{}
+	app.Events = rec
+	app.Video = &recordingVideo{Vid: vid, RefreshedVid: &video.Video{ID: 88}}
+
+	app.guessCmd(context.Background(), newTestUser("viewer1"), []string{"Colorado"})
+
+	if len(rec.Guesses) != 1 {
+		t.Fatalf("guesses = %d, want 1", len(rec.Guesses))
+	}
+	guess := rec.Guesses[0]
+	if guess.Guessed != "Colorado" || guess.Actual != "Colorado" || !guess.Correct {
+		t.Errorf("guess = %+v, want a correct Colorado guess", guess)
+	}
+	// The guess is stamped with the clip it was about — recorded before the
+	// warp moved the playhead.
+	if guess.VideoID != 77 {
+		t.Errorf("guess video id = %d, want 77 (the clip guessed at, not the warp target)", guess.VideoID)
+	}
+
+	if len(rec.Timewarps) != 1 {
+		t.Fatalf("timewarps = %d, want 1", len(rec.Timewarps))
+	}
+	warp := rec.Timewarps[0]
+	if warp.Username != "viewer1" || warp.Source != events.WarpSourceGuess {
+		t.Errorf("warp = %+v, want viewer1 via %q", warp, events.WarpSourceGuess)
+	}
+	if warp.VideoID != 77 || warp.ToVideoID != 88 {
+		t.Errorf("warp clips = %d -> %d, want 77 -> 88", warp.VideoID, warp.ToVideoID)
+	}
+}
+
+// Footage with no known state has no right answer, so the guess is not
+// recorded — an unanswerable row would only skew accuracy computed from the
+// log. The chat reply already tells the viewer nothing was at stake.
+func TestGuessCmd_StatelessVideo_RecordsNoGuess(t *testing.T) {
+	app := newTestApp(newTestVideo("", 39.5, -105.0, time.Now()))
+	rec := &recordingEvents{}
+	app.Events = rec
+
+	app.guessCmd(context.Background(), newTestUser("viewer1"), []string{"Colorado"})
+
+	if len(rec.Guesses) != 0 {
+		t.Errorf("guesses = %+v, want none against a stateless video", rec.Guesses)
 	}
 }
 

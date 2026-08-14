@@ -2,6 +2,7 @@ package events
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 
@@ -9,6 +10,7 @@ import (
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
+	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/google/uuid"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -59,6 +61,16 @@ var writers = []struct {
 	}},
 	{"StateCrossing", "state_crossing", func(ctx context.Context, cfg *c.TripbotConfig) error {
 		return StateCrossing(ctx, cfg, "Utah", "Colorado", 42, true)
+	}},
+	{"GuessSubmitted", "guess_submitted", func(ctx context.Context, cfg *c.TripbotConfig) error {
+		return GuessSubmitted(ctx, cfg, GuessSubmission{
+			Username: "someone", Guessed: "Wyoming", Actual: "Colorado",
+		})
+	}},
+	{"Timewarp", "timewarp", func(ctx context.Context, cfg *c.TripbotConfig) error {
+		return Timewarp(ctx, cfg, Warp{
+			Username: "someone", Source: WarpSourceCommand,
+		})
 	}},
 	{"CommandRefused", "command_refused", func(ctx context.Context, cfg *c.TripbotConfig) error {
 		return CommandRefused(ctx, cfg, CommandRefusal{
@@ -134,6 +146,159 @@ func TestStateCrossingRow(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
 
 	if err := StateCrossing(context.Background(), &c.TripbotConfig{Platform: "twitch"}, "Utah", "Colorado", 42, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Error(err)
+	}
+}
+
+// A guess_submitted row pairs the normalized guess with the state actually on
+// screen, right or wrong, stamped with the clip being guessed at. The exact
+// JSON matters — rollups address it as meta->>'guessed' / meta->>'actual' /
+// meta->>'correct' / meta->>'distance_mi'. A correct guess is 0 miles off by
+// definition, and the 0 stays in the meta so "measured perfect" never reads
+// like "couldn't measure".
+func TestGuessSubmittedRow(t *testing.T) {
+	ts := 12.5
+	mock := installMockDB(t)
+	mock.ExpectQuery(`INSERT INTO "events"`).
+		WithArgs(
+			"someone",         // username
+			"twitch",          // platform
+			"guess_submitted", // event
+			sqlmock.AnyArg(),  // session_id
+			sqlmock.AnyArg(),  // date_created
+			nil,               // extra_miles_earned
+			42,                // video_id
+			12.5,              // video_ts_sec
+			`{"guessed":"Colorado","actual":"Colorado","correct":true,"distance_mi":0}`, // meta
+		).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+
+	err := GuessSubmitted(context.Background(), &c.TripbotConfig{Platform: "twitch"}, GuessSubmission{
+		Username: "someone", Guessed: "Colorado", Actual: "Colorado", Correct: true,
+		VideoID: 42, TsSec: &ts,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Error(err)
+	}
+}
+
+// A miss records correct:false explicitly — the key never drops out of the
+// meta, or a rollup computing accuracy would read absence as anything it
+// likes — and carries the miss distance in centroid-to-centroid miles. Zero
+// airing context writes NULL, not clip 0.
+func TestGuessSubmittedMissAndZeroAiringWritesNull(t *testing.T) {
+	// The expected distance comes from the same pure helpers the writer uses;
+	// this pins the meta's key name, placement, and centroid pairing rather
+	// than the haversine arithmetic (helpers' own tests cover that).
+	glat, glng, _ := helpers.StateCentroid("Wyoming")
+	alat, alng, _ := helpers.StateCentroid("Colorado")
+	dist, err := json.Marshal(helpers.MilesBetween(glat, glng, alat, alng))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	mock := installMockDB(t)
+	mock.ExpectQuery(`INSERT INTO "events"`).
+		WithArgs(
+			"someone", "twitch", "guess_submitted",
+			sqlmock.AnyArg(), sqlmock.AnyArg(), nil,
+			nil, // video_id
+			nil, // video_ts_sec
+			`{"guessed":"Wyoming","actual":"Colorado","correct":false,"distance_mi":`+string(dist)+`}`, // meta
+		).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+
+	if err := GuessSubmitted(context.Background(), &c.TripbotConfig{Platform: "twitch"}, GuessSubmission{
+		Username: "someone", Guessed: "Wyoming", Actual: "Colorado",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Error(err)
+	}
+}
+
+// A guessed territory has no centroid to measure from, so the distance key is
+// omitted rather than written as a fake value — a wrong guess that can't be
+// measured must stay distinguishable from both a perfect one and a far one.
+func TestGuessSubmittedUnmeasurableGuessOmitsDistance(t *testing.T) {
+	mock := installMockDB(t)
+	mock.ExpectQuery(`INSERT INTO "events"`).
+		WithArgs(
+			"someone", "twitch", "guess_submitted",
+			sqlmock.AnyArg(), sqlmock.AnyArg(), nil,
+			nil, // video_id
+			nil, // video_ts_sec
+			`{"guessed":"Puerto Rico","actual":"Colorado","correct":false}`, // meta
+		).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+
+	if err := GuessSubmitted(context.Background(), &c.TripbotConfig{Platform: "twitch"}, GuessSubmission{
+		Username: "someone", Guessed: "Puerto Rico", Actual: "Colorado",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Error(err)
+	}
+}
+
+// A timewarp row carries the departing clip in video_id and the landing clip
+// in the meta, so "warped away from X onto Y" is one row. Rollups address the
+// meta as meta->>'source' / meta->>'to'.
+func TestTimewarpRow(t *testing.T) {
+	ts := 47.5
+	mock := installMockDB(t)
+	mock.ExpectQuery(`INSERT INTO "events"`).
+		WithArgs(
+			"someone",                    // username
+			"twitch",                     // platform
+			"timewarp",                   // event
+			sqlmock.AnyArg(),             // session_id
+			sqlmock.AnyArg(),             // date_created
+			nil,                          // extra_miles_earned
+			42,                           // video_id: the clip the warp left
+			47.5,                         // video_ts_sec
+			`{"source":"guess","to":88}`, // meta
+		).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+
+	err := Timewarp(context.Background(), &c.TripbotConfig{Platform: "twitch"}, Warp{
+		Username: "someone", Source: WarpSourceGuess,
+		VideoID: 42, TsSec: &ts, ToVideoID: 88,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Error(err)
+	}
+}
+
+// A warp with no known clips (an instance whose player has no rows staged)
+// still records the trigger: NULL video_id, and no bogus to:0 in the meta.
+func TestTimewarpZeroClipsWriteNull(t *testing.T) {
+	mock := installMockDB(t)
+	mock.ExpectQuery(`INSERT INTO "events"`).
+		WithArgs(
+			"someone", "twitch", "timewarp",
+			sqlmock.AnyArg(), sqlmock.AnyArg(), nil,
+			nil,                    // video_id
+			nil,                    // video_ts_sec
+			`{"source":"command"}`, // meta
+		).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+
+	err := Timewarp(context.Background(), &c.TripbotConfig{Platform: "twitch"}, Warp{
+		Username: "someone", Source: WarpSourceCommand,
+	})
+	if err != nil {
 		t.Fatal(err)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {

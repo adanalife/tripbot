@@ -525,16 +525,50 @@ func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 		return
 	}
 
-	if strings.EqualFold(guess, state) {
+	correct := strings.EqualFold(guess, state)
+
+	// Record the guess before a correct one warps the playhead, so the airing
+	// context is the footage the guess was about, not wherever the warp lands.
+	a.recordGuess(ctx, events.GuessSubmission{
+		Username: user.Username,
+		Guessed:  guess,
+		Actual:   state,
+		Correct:  correct,
+	})
+
+	if correct {
 		msg = fmt.Sprintf("@%s got it! We're in %s", user.Username, state)
 		// increase their guess score
 		a.Scoreboards.CreditGuess(ctx, user)
 		// do a timewarp, crediting the guesser on the overlay
-		a.timewarp(ctx, user.Username)
+		a.timewarp(ctx, user.Username, events.WarpSourceGuess)
 	} else {
 		msg = "Try again! " + a.guessHint(user.Username, guess, s)
 	}
 	a.Chat.Say(msg)
+}
+
+// recordGuess writes a guess_submitted event, stamping the clip being guessed
+// at. Best-effort: the guesser gets their answer in chat either way, so a
+// failed insert is logged and dropped rather than surfaced.
+//
+// The caller supplies the guess and the answer; the airing context is filled
+// in here so no emit site can forget it.
+func (a *App) recordGuess(ctx context.Context, g events.GuessSubmission) {
+	if a.Events == nil {
+		return
+	}
+	// Current() is the cached notion of what's playing — no I/O, because
+	// recording a guess must not cost a round-trip to playout.
+	if a.Video != nil {
+		g.VideoID = a.Video.Current().ID
+		secs := a.Video.CurrentProgress().Seconds()
+		g.TsSec = &secs
+	}
+	if err := a.Events.GuessSubmitted(ctx, g); err != nil {
+		slog.ErrorContext(ctx, "error recording guess", "err", err,
+			"username", g.Username)
+	}
 }
 
 // guessMiss is one chatter's last wrong !guess: how far its state's centroid
