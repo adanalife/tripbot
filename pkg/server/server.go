@@ -101,6 +101,12 @@ func (s *Server) Start(ctx context.Context) error {
 	r.Handle("/api/flags", tagged("/api/flags", s.flagsHandler)).Methods("GET")
 	r.Handle("/api/flags/{key}", tagged("/api/flags/{key}", s.flagToggleHandler)).Methods("POST")
 
+	// read-only JSON aggregates over the append-only analytics tables (events,
+	// video_plays, viewer_samples), for the console's insights panels.
+	r.Handle("/api/insights/commands", tagged("/api/insights/commands", commandInsightsHandler)).Methods("GET")
+	r.Handle("/api/insights/guesses", tagged("/api/insights/guesses", guessInsightsHandler)).Methods("GET")
+	r.Handle("/api/insights/footage", tagged("/api/insights/footage", footageInsightsHandler)).Methods("GET")
+
 	// Background audio: which bed this platform's OBS is playing, and the
 	// switch between them.
 	r.Handle("/api/audio", tagged("/api/audio", s.audioHandler)).Methods("GET")
