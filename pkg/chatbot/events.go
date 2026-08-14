@@ -26,6 +26,10 @@ type Events interface {
 	// attempt happened at all — nothing else in the system remembers a command
 	// that didn't run.
 	CommandRefused(ctx context.Context, r events.CommandRefusal) error
+	// CommandRan records a command that dispatched and ran. Paired with
+	// CommandRefused, every command attempt lands in exactly one of the two
+	// kinds — the split any refusal rate or usage rollup is computed over.
+	CommandRan(ctx context.Context, r events.CommandRun) error
 }
 
 // realEvents is the production Events adapter, holding only the config
@@ -48,4 +52,8 @@ func (r realEvents) Correction(ctx context.Context, username string, delta float
 
 func (r realEvents) CommandRefused(ctx context.Context, ref events.CommandRefusal) error {
 	return events.CommandRefused(ctx, r.cfg, ref)
+}
+
+func (r realEvents) CommandRan(ctx context.Context, run events.CommandRun) error {
+	return events.CommandRan(ctx, r.cfg, run)
 }

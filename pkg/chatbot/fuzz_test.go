@@ -44,7 +44,7 @@ func FuzzFindCommand(f *testing.F) {
 		f.Add(s)
 	}
 	f.Fuzz(func(t *testing.T, s string) {
-		_, _ = builtTestApp.findCommand(s)
+		_, _, _ = builtTestApp.findCommand(s)
 	})
 }
 
