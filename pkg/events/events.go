@@ -239,3 +239,24 @@ func SessionCount(ctx context.Context, platform, username string) int64 {
 	}
 	return n
 }
+
+// consoleActionMeta is a console_action event's meta payload.
+type consoleActionMeta struct {
+	Action string `json:"action"`
+	Target string `json:"target"`
+	Detail string `json:"detail,omitempty"`
+}
+
+// ConsoleAction records one successful admin mutation performed through the
+// standalone console — the audit trail for "what changed from the console,
+// and when". A system event (empty username): the console holds no
+// per-operator identity to attribute. No airing context — console actions are
+// about the platform's controls, not the footage on screen.
+func ConsoleAction(ctx context.Context, cfg *c.TripbotConfig, action, target, detail string) error {
+	payload, err := json.Marshal(consoleActionMeta{Action: action, Target: target, Detail: detail})
+	if err != nil {
+		return err
+	}
+	meta := string(payload)
+	return record(ctx, cfg, Event{Event: "console_action", Meta: &meta})
+}
