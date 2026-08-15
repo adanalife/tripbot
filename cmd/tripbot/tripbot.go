@@ -192,6 +192,9 @@ func NewTripbot(version string, cfg *c.TripbotConfig) *Tripbot {
 	// fails closed. It reads t.gateway lazily, so wiring it here against the
 	// partially-built t is fine.
 	t.sessions = users.New(t.cfg, gatewayChatterSource{t: t})
+	// Stamp login/logout events with what's airing, so joins and leaves can be
+	// attributed to the footage that earned them.
+	t.sessions.SetVideoSource(playerVideoSource{t: t})
 	// Feed the rotators what's playing, so their $variables resolve. Reuses the
 	// chatbot's Geocoder and Weather adapters (the pkg/geo default is installed by
 	// whichever Connect* path this platform takes).

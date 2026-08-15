@@ -31,7 +31,11 @@ import (
 type Sessions struct {
 	cfg    *c.TripbotConfig
 	source ChatterSource
-	mu     sync.Mutex
+	// video is the optional airing-footage source stamped onto login/logout
+	// events. nil means those events record no airing context. Set once at
+	// wiring time, before the crons start, so it needs no lock.
+	video VideoSource
+	mu    sync.Mutex
 	// loggedIn maps username -> User for everyone currently in chat.
 	loggedIn map[string]*User
 	// lifetimeLeaderboard is the cached [username, miles] leaderboard,
@@ -47,6 +51,22 @@ func New(cfg *c.TripbotConfig, source ChatterSource) *Sessions {
 		source:   source,
 		loggedIn: make(map[string]*User),
 	}
+}
+
+// SetVideoSource installs the airing-footage source for login/logout events.
+// Called once during wiring, before the session crons start; leaving it unset
+// records no airing context.
+func (s *Sessions) SetVideoSource(v VideoSource) { s.video = v }
+
+// airing reports the footage on screen now, for stamping onto a session event.
+// The zero Airing — no clip, no playhead — is what an instance with no video
+// source records.
+func (s *Sessions) airing() events.Airing {
+	if s.video == nil {
+		return events.Airing{}
+	}
+	secs := s.video.CurrentProgressSec()
+	return events.Airing{VideoID: s.video.CurrentVideoID(), TsSec: &secs}
 }
 
 // UpdateSession uses the chatter source to maintain the list of
@@ -159,7 +179,7 @@ func (s *Sessions) login(ctx context.Context, username string) *User {
 	s.loggedIn[username] = &user
 	s.mu.Unlock()
 
-	if err := events.Login(ctx, s.cfg, username, user.sessionID); err != nil {
+	if err := events.Login(ctx, s.cfg, username, user.sessionID, s.airing()); err != nil {
 		slog.ErrorContext(ctx, "error creating login event", "err", err)
 	}
 
@@ -205,7 +225,7 @@ func (s *Sessions) logout(ctx context.Context, u *User) {
 	if extra > 0 {
 		extraMiles = &extra
 	}
-	if err := events.Logout(ctx, s.cfg, u.Username, u.sessionID, extraMiles); err != nil {
+	if err := events.Logout(ctx, s.cfg, u.Username, u.sessionID, extraMiles, s.airing()); err != nil {
 		slog.ErrorContext(ctx, "error creating logout event", "err", err)
 	}
 

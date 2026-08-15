@@ -118,3 +118,39 @@ func TestSessionsHoldIndependentState(t *testing.T) {
 			b.lifetimeLeaderboard, b.loggedIn)
 	}
 }
+
+// stubVideoSource reports a fixed clip and playhead.
+type stubVideoSource struct {
+	id   int
+	secs float64
+}
+
+func (s stubVideoSource) CurrentVideoID() int         { return s.id }
+func (s stubVideoSource) CurrentProgressSec() float64 { return s.secs }
+
+// With no video source wired, session events carry no airing context. An
+// instance that isn't driving playback must record NULL rather than clip 0,
+// which would otherwise pollute the per-clip churn rollup.
+func TestAiringWithoutVideoSource(t *testing.T) {
+	got := New(testConf, noopChatterSource{}).airing()
+
+	if got.VideoID != 0 || got.TsSec != nil {
+		t.Errorf("airing() = %+v, want zero Airing", got)
+	}
+}
+
+// A wired source puts the clip on screen and the playhead onto the event, so a
+// join or leave can be attributed to the footage that earned it.
+func TestAiringWithVideoSource(t *testing.T) {
+	s := New(testConf, noopChatterSource{})
+	s.SetVideoSource(stubVideoSource{id: 42, secs: 12.5})
+
+	got := s.airing()
+
+	if got.VideoID != 42 {
+		t.Errorf("VideoID = %d, want 42", got.VideoID)
+	}
+	if got.TsSec == nil || *got.TsSec != 12.5 {
+		t.Errorf("TsSec = %v, want 12.5", got.TsSec)
+	}
+}
