@@ -94,13 +94,13 @@ func TestRecordSample_TagsCurrentVideo(t *testing.T) {
 	ctx := context.Background()
 
 	// Before any play, the sample carries a NULL video_id.
-	RecordSample(ctx, testConf, 3)
+	RecordSample(ctx, testConf, 3, Audience{})
 	// A play tags every sample that follows it.
 	RecordPlay(ctx, testConf, 42, "Utah", false, 38.5, -109.5)
-	RecordSample(ctx, testConf, 5)
+	RecordSample(ctx, testConf, 5, Audience{})
 	// A play with no DB row resets the tag back to NULL.
 	RecordPlay(ctx, testConf, 0, "", true, 0, 0)
-	RecordSample(ctx, testConf, 7)
+	RecordSample(ctx, testConf, 7, Audience{})
 
 	samples := allSamples(t, db)
 	if len(samples) != 3 {
@@ -134,7 +134,7 @@ func TestReadOnly_SkipsWritesButStillTracksVideo(t *testing.T) {
 	ctx := context.Background()
 
 	RecordPlay(ctx, readOnlyConf, 42, "Utah", false, 38.5, -109.5)
-	RecordSample(ctx, readOnlyConf, 5)
+	RecordSample(ctx, readOnlyConf, 5, Audience{})
 
 	if plays := allPlays(t, db); len(plays) != 0 {
 		t.Errorf("expected no video_plays rows in read-only mode, got %d", len(plays))
@@ -144,7 +144,7 @@ func TestReadOnly_SkipsWritesButStillTracksVideo(t *testing.T) {
 	}
 	// The tag is stored before the read-only bail, so writes resume correctly
 	// tagged the moment a non-read-only config is used.
-	RecordSample(ctx, testConf, 5)
+	RecordSample(ctx, testConf, 5, Audience{})
 	samples := allSamples(t, db)
 	if len(samples) != 1 {
 		t.Fatalf("expected 1 viewer_samples row, got %d", len(samples))
@@ -155,3 +155,44 @@ func TestReadOnly_SkipsWritesButStillTracksVideo(t *testing.T) {
 }
 
 func intPtr(i int) *int { return &i }
+
+// A reported audience lands in its own columns, beside the chatter count
+// rather than on top of it — the two answer different questions, and the
+// chatter series collected before viewers existed has to stay readable.
+func TestRecordSample_RecordsAudience(t *testing.T) {
+	db := setup(t)
+
+	RecordSample(context.Background(), testConf, 5, Audience{Count: 137, Live: true, Reported: true})
+
+	samples := allSamples(t, db)
+	if len(samples) != 1 {
+		t.Fatalf("expected 1 viewer_samples row, got %d", len(samples))
+	}
+	got := samples[0]
+	if got.Count != 5 {
+		t.Errorf("count = %d, want the chatter total 5", got.Count)
+	}
+	if got.Viewers == nil || *got.Viewers != 137 {
+		t.Errorf("viewers = %v, want 137", got.Viewers)
+	}
+	if got.Live == nil || !*got.Live {
+		t.Errorf("live = %v, want true", got.Live)
+	}
+}
+
+// An unreported audience writes NULL, not 0. A platform that publishes no
+// viewer count and one broadcasting to an empty room are different facts, and
+// a rollup averaging them together reads the former as the latter.
+func TestRecordSample_UnreportedAudienceWritesNull(t *testing.T) {
+	db := setup(t)
+
+	RecordSample(context.Background(), testConf, 5, Audience{})
+
+	samples := allSamples(t, db)
+	if len(samples) != 1 {
+		t.Fatalf("expected 1 viewer_samples row, got %d", len(samples))
+	}
+	if samples[0].Viewers != nil || samples[0].Live != nil {
+		t.Errorf("viewers = %v live = %v, want both NULL", samples[0].Viewers, samples[0].Live)
+	}
+}

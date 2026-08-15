@@ -5,6 +5,7 @@ import (
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
+	"github.com/adanalife/tripbot/pkg/viewstats"
 )
 
 // testConf is the config test Sessions carry — the same values .env.testing
@@ -26,6 +27,8 @@ func (noopChatterSource) ChatterCount() int             { return 0 }
 func (noopChatterSource) IsSubscriber(_ string) bool    { return false }
 func (noopChatterSource) SubscriberTier(_ string) int   { return 0 }
 func (noopChatterSource) IsFollower(_ string) bool      { return false }
+func (noopChatterSource) UpdateAudience()               {}
+func (noopChatterSource) Audience() viewstats.Audience  { return viewstats.Audience{} }
 
 // recordingChatterSource answers from canned maps and counts calls, so tests
 // can assert the seam actually routes through the injected source.
@@ -51,6 +54,8 @@ func (r *recordingChatterSource) IsFollower(username string) bool {
 	r.followCalls++
 	return r.followers[username]
 }
+func (r *recordingChatterSource) UpdateAudience()              {}
+func (r *recordingChatterSource) Audience() viewstats.Audience { return viewstats.Audience{} }
 
 // Sessions.IsSubscriber routes through the injected ChatterSource — the seam a
 // future YouTube/TikTok adapter swaps into (each provider gets its own
