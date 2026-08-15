@@ -37,9 +37,8 @@ type noTwitch struct{}
 func (noTwitch) FollowedAt(string) (time.Time, bool) { return time.Time{}, false }
 
 // gatewayTwitch is the HTTP adapter — it reaches the platform-gateway
-// gateway-twitch instance (via the shared pkg/gateway client) instead of
-// calling Helix in-process. It satisfies the same Twitch interface, so command
-// code is untouched (the payoff of the #738/#739 injection seam).
+// gateway-twitch instance via the shared pkg/gateway client. It satisfies the
+// Twitch interface, so command code never names a transport.
 type gatewayTwitch struct {
 	client *gateway.Client
 }

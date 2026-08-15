@@ -344,8 +344,8 @@ func TestRunCommand_MiddleHideStillHides(t *testing.T) {
 // A command this bot doesn't have is viewer traffic, not a fault, so it must
 // stay under Error — the level pkg/telemetry converts into a Sentry event.
 // !watchtime (a trigger from some other channel's bot) reached prod as an error
-// and minted its own Sentry issue. The command_refused event is what carries the
-// "what are people reaching for" signal the error level used to stand in for.
+// and minted its own Sentry issue. The command_refused event carries the "what
+// are people reaching for" signal instead.
 func TestRunCommand_UnknownCommandStaysBelowError(t *testing.T) {
 	app := newTestApp(video.Video{})
 	rec := &recordingEvents{}
