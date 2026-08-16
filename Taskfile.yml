@@ -60,10 +60,10 @@ tasks:
     cmds:
       - "{{.COMPOSE}} run --rm test bash"
 
-  # Twitch OAuth consent + token bootstrap is owned by the platform-gateway now
-  # (gateway-twitch's /auth/* flow writes the oauth_tokens rows). The old
-  # `auth:bootstrap*` tasks + cmd/auth-bootstrap were removed with that cutover;
-  # re-auth is a browser click at the gateway consent page (surfaced in tripbot-console).
+  # Twitch OAuth consent + token bootstrap is owned by the platform-gateway
+  # (gateway-twitch's /auth/* flow writes the oauth_tokens rows), so there's no
+  # auth-bootstrap task here: re-auth is a browser click at the gateway consent
+  # page (surfaced in tripbot-console).
 
   # Changelog (towncrier). Fragments live in changelog.d/; assembled into
   # CHANGELOG.md at release time. Run on the host via uvx — no project dep.

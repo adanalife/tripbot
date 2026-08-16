@@ -24,11 +24,21 @@ type Events interface {
 	// Correction records a manual miles adjustment (delta may be negative),
 	// which is what makes a hand-corrected total auditable afterwards.
 	Correction(ctx context.Context, username string, delta float64) error
+	// GuessSubmitted records an answerable !guess, right or wrong — the raw
+	// material for guess accuracy and per-footage difficulty.
+	GuessSubmitted(ctx context.Context, g events.GuessSubmission) error
+	// Timewarp records a playhead warp to a random clip: who triggered it,
+	// how, and the clips it left and landed on.
+	Timewarp(ctx context.Context, w events.Warp) error
 	// CommandRefused records a command the bot declined to run. Unlike the
 	// viewer-lifecycle writers above, a refusal is the only record that the
 	// attempt happened at all — nothing else in the system remembers a command
 	// that didn't run.
 	CommandRefused(ctx context.Context, r events.CommandRefusal) error
+	// CommandRan records a command that dispatched and ran. Paired with
+	// CommandRefused, every command attempt lands in exactly one of the two
+	// kinds — the split any refusal rate or usage rollup is computed over.
+	CommandRan(ctx context.Context, r events.CommandRun) error
 }
 
 // realEvents is the production Events adapter, holding only the config
@@ -53,6 +63,18 @@ func (r realEvents) Correction(ctx context.Context, username string, delta float
 	return events.Correction(ctx, r.cfg, username, delta)
 }
 
+func (r realEvents) GuessSubmitted(ctx context.Context, g events.GuessSubmission) error {
+	return events.GuessSubmitted(ctx, r.cfg, g)
+}
+
+func (r realEvents) Timewarp(ctx context.Context, w events.Warp) error {
+	return events.Timewarp(ctx, r.cfg, w)
+}
+
 func (r realEvents) CommandRefused(ctx context.Context, ref events.CommandRefusal) error {
 	return events.CommandRefused(ctx, r.cfg, ref)
+}
+
+func (r realEvents) CommandRan(ctx context.Context, run events.CommandRun) error {
+	return events.CommandRan(ctx, r.cfg, run)
 }

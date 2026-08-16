@@ -25,8 +25,9 @@ COMPONENTS = ("tripbot", "onscreens")
 
 # Every platform except twitch reaches chat through its own platform-gateway
 # instance and carries a <PLATFORM>_API_URL to find it (the EnvConfig
-# <platform>_api_url fields). twitch is the exception: its gateway is optional,
-# with the in-process path as the fallback.
+# <platform>_api_url fields). twitch is excluded because it's the one instance
+# that also holds a Twitch credential of its own (the EventSub client ID), so
+# its secret mount and its URL are asserted separately below.
 GATEWAY_PLATFORMS = tuple(p for p in SUPPORTED_PLATFORMS if p != "twitch")
 
 # The (env, platform) pairs of every synthed app unit — for assertions that

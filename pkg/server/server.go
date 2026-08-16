@@ -100,6 +100,21 @@ func (s *Server) Start(ctx context.Context) error {
 	// rest of /api (no Ingress; reached over the in-namespace Service).
 	r.Handle("/api/flags", tagged("/api/flags", s.flagsHandler)).Methods("GET")
 	r.Handle("/api/flags/{key}", tagged("/api/flags/{key}", s.flagToggleHandler)).Methods("POST")
+	// audit trail for the standalone console: it reports each successful admin
+	// mutation here, and the report lands in the permanent events log as a
+	// console_action event.
+	r.Handle("/api/events/console-action", tagged("/api/events/console-action", s.consoleActionHandler)).Methods("POST")
+
+	// read-only JSON aggregates over the append-only analytics tables (events,
+	// video_plays, viewer_samples), for the console's insights panels.
+	r.Handle("/api/insights/commands", tagged("/api/insights/commands", commandInsightsHandler)).Methods("GET")
+	r.Handle("/api/insights/guesses", tagged("/api/insights/guesses", guessInsightsHandler)).Methods("GET")
+	r.Handle("/api/insights/footage", tagged("/api/insights/footage", footageInsightsHandler)).Methods("GET")
+	// read-only JSON stats for the console's stats page: lifetime totals over
+	// the whole log, a recent playback window, and community numbers.
+	r.Handle("/api/stats/lifetime", tagged("/api/stats/lifetime", lifetimeStatsHandler)).Methods("GET")
+	r.Handle("/api/stats/playback", tagged("/api/stats/playback", playbackStatsHandler)).Methods("GET")
+	r.Handle("/api/stats/community", tagged("/api/stats/community", communityStatsHandler)).Methods("GET")
 
 	// Background audio: which bed this platform's OBS is playing, and the
 	// switch between them.
@@ -147,10 +162,9 @@ func (s *Server) Start(ctx context.Context) error {
 
 	srv := &http.Server{
 		Addr: fmt.Sprintf("0.0.0.0:%s", s.cfg.TripbotServerPort),
-		// All remaining responses are short (auth redirects, small JSON for the
-		// console, the metrics scrape). The live-console SSE stream that forced
-		// WriteTimeout=0 is gone with the admin panel, so a normal write deadline
-		// is back in place.
+		// Every response here is short (small JSON for the console, the metrics
+		// scrape), so a normal write deadline is safe. A long-lived stream on
+		// this server — an SSE endpoint, say — would need WriteTimeout=0.
 		ReadTimeout:       time.Second * 15,
 		ReadHeaderTimeout: time.Second * 15,
 		WriteTimeout:      time.Second * 15,

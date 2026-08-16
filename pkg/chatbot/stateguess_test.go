@@ -8,7 +8,7 @@ import (
 )
 
 func TestFindCommand_StateNameRoutesToGuess(t *testing.T) {
-	cmd, params := builtTestApp.findCommand("!florida")
+	cmd, _, params := builtTestApp.findCommand("!florida")
 	if cmd == nil {
 		t.Fatal("expected a command, got nil")
 	}
@@ -21,7 +21,7 @@ func TestFindCommand_StateNameRoutesToGuess(t *testing.T) {
 }
 
 func TestFindCommand_MultiWordStateRoutesToGuess(t *testing.T) {
-	cmd, params := builtTestApp.findCommand("!new york")
+	cmd, _, params := builtTestApp.findCommand("!new york")
 	if cmd == nil {
 		t.Fatal("expected a command, got nil")
 	}
@@ -35,7 +35,7 @@ func TestFindCommand_MultiWordStateRoutesToGuess(t *testing.T) {
 
 func TestFindCommand_StateWithTrailingTextRoutesToGuess(t *testing.T) {
 	// trailing chatter after a state name is dropped from the guess
-	cmd, params := builtTestApp.findCommand("!florida woo")
+	cmd, _, params := builtTestApp.findCommand("!florida woo")
 	if cmd == nil {
 		t.Fatal("expected a command, got nil")
 	}
@@ -51,7 +51,7 @@ func TestFindCommand_StateAbbrevDoesNotRoute(t *testing.T) {
 	// two-letter abbreviations are deliberately excluded ("!hi", "!ok",
 	// "!me" would fire accidental guesses)
 	for _, token := range []string{"!fl", "!hi", "!ok"} {
-		if cmd, _ := builtTestApp.findCommand(token); cmd != nil {
+		if cmd, _, _ := builtTestApp.findCommand(token); cmd != nil {
 			t.Errorf("findCommand(%q) = %s, want nil", token, cmd.Trigger)
 		}
 	}
@@ -61,7 +61,7 @@ func TestFindCommand_StateShortcutDisabledOnYouTube(t *testing.T) {
 	// !guess isn't in the YouTube allowlist, so the shortcut must not fire
 	yt := &App{Platform: platformYouTube}
 	yt.indexCommands()
-	if cmd, _ := yt.findCommand("!florida"); cmd != nil {
+	if cmd, _, _ := yt.findCommand("!florida"); cmd != nil {
 		t.Errorf("findCommand(!florida) on YouTube = %s, want nil", cmd.Trigger)
 	}
 }
@@ -134,9 +134,9 @@ func TestGuessCmd_WrongGuess_MisspelledStaysWrong(t *testing.T) {
 // ErrDisabled when no Maps key is set) leaves State empty without flagging.
 // Nobody can guess an answer that doesn't exist, so nobody gets credited.
 func TestGuessCmd_StatelessVideo_CreditsNobody(t *testing.T) {
-	// The two-letter miss is the input that used to reach here as "": a
-	// non-abbreviation was blanked before the comparison, so "" == "" matched
-	// and handed out a guess point plus a timewarp on demand.
+	// "zz" is the two-letter case: it must not be blanked before the comparison,
+	// or "" == "" matches the stateless video and hands out a guess point plus a
+	// timewarp on demand.
 	for _, guess := range []string{"zz", "Colorado", ""} {
 		t.Run("guess="+guess, func(t *testing.T) {
 			app := newTestApp(newTestVideo("", 39.5, -105.0, time.Now()))

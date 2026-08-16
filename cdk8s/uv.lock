@@ -20,8 +20,8 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "cdk8s", specifier = ">=2.70.86" },
-    { name = "constructs", specifier = ">=10.7.1" },
+    { name = "cdk8s", specifier = ">=2.70.89" },
+    { name = "constructs", specifier = ">=10.8.0" },
     { name = "pyyaml", specifier = ">=6.0.3" },
 ]
 
@@ -55,16 +55,16 @@ wheels = [
 
 [[package]]
 name = "cdk8s"
-version = "2.70.86"
+version = "2.70.89"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "constructs" },
     { name = "jsii" },
     { name = "publication" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/22/72/e9a0ead66a0c3db44620f0f0f6ce8bbe8af26620d99de3b8b6d40091d799/cdk8s-2.70.86.tar.gz", hash = "sha256:7cd37474b6ff2c786461403bf378a5e52caaa68e3de3326cf3471c71d4bf190c", size = 387836, upload-time = "2026-07-28T18:16:23.461Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/cf/0a/4d0336942f3650ffc6765d256267632a1b81acc100cca2098a0892c2a01e/cdk8s-2.70.89.tar.gz", hash = "sha256:5765b74a60bc8799fe12e11e1b53d66961959729db7e6af51f080df2c6e278b8", size = 387911, upload-time = "2026-08-03T13:10:29.232Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/7c/2b/2fdcc80413efec71b52724954556e6e76062727cbcdc28b74cdebb9433e0/cdk8s-2.70.86-py3-none-any.whl", hash = "sha256:d48457a0a90be041f6bdb0274d2b1dd6bdfccfd908f6c5d73b9c2aec2684ea75", size = 385808, upload-time = "2026-07-28T18:16:20.886Z" },
+    { url = "https://files.pythonhosted.org/packages/07/7f/22139808cbd378328a54f39816993ff5b7d45f296653561ce2b11c8af5b4/cdk8s-2.70.89-py3-none-any.whl", hash = "sha256:2a6428bd129165afacd686938f8b71c64ccf0ee2e719c4641ce47df8bedd2b96", size = 385832, upload-time = "2026-08-03T13:10:27.614Z" },
 ]
 
 [[package]]
@@ -78,15 +78,15 @@ wheels = [
 
 [[package]]
 name = "constructs"
-version = "10.7.1"
+version = "10.8.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "jsii" },
     { name = "publication" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/07/1e/f8616b97256cad2a2ec27a6bbb74ae478182ddd782ba10fd97924970a75d/constructs-10.7.1.tar.gz", hash = "sha256:7b33d60851fc8c6d4c4a111dc342088e467c344b22d9a562a5e0b6fbbbaf4b2a", size = 71079, upload-time = "2026-07-20T08:01:34.724Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/90/1f/04dd01e3eb3639f6de531f916767f61384a1dbf1580a557931117f39a609/constructs-10.8.0.tar.gz", hash = "sha256:8b6feb3f3b5169cd5074d119254c6b55ecf5d14014288ea262949d4365f707b8", size = 786614, upload-time = "2026-07-30T11:39:43.46Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ab/e7/f014792cb9e76d407e552aead634e048134c22e59a2f892b1cb7324afc71/constructs-10.7.1-py3-none-any.whl", hash = "sha256:f212c66b37249c45eca4638c6b33c68efddae50599d27062d71d0bf81c11431e", size = 69144, upload-time = "2026-07-20T08:01:32.43Z" },
+    { url = "https://files.pythonhosted.org/packages/bc/6e/127ee47999e658228779bdaf652ee524236ae0248722e3137f41695f97bf/constructs-10.8.0-py3-none-any.whl", hash = "sha256:ad9ec081040f86207104528ee72e63618024755984924cf29e02609c41e37913", size = 784885, upload-time = "2026-07-30T11:39:41.546Z" },
 ]
 
 [[package]]
