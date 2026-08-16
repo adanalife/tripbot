@@ -9,7 +9,7 @@ metadata:
 data:
   BOT_USERNAME: tripbot4000
   CHANNEL_NAME: adanalife_
-  COMPED_SUBSCRIBERS: reapermoss
+  COMPED_SUBSCRIBERS: reapermoss,ferretmunchers
   DATABASE_HOST: postgres.prod-1-data.svc.cluster.local
   ENV: production
   FACEBOOK_API_URL: http://gateway-facebook.prod-1.svc.cluster.local:8080
@@ -45,7 +45,7 @@ spec:
   template:
     metadata:
       annotations:
-        adanalife.dev/config-hash: 6441c2e0c4
+        adanalife.dev/config-hash: 19f93b8635
       labels:
         app: tripbot-facebook
     spec:
@@ -72,7 +72,7 @@ spec:
             - secretRef:
                 name: tripbot-discord-bot-token
                 optional: true
-          image: adanalife/tripbot:5.0.0
+          image: adanalife/tripbot:5.1.0
           imagePullPolicy: IfNotPresent
           livenessProbe:
             httpGet:
@@ -120,7 +120,7 @@ spec:
                 name: tripbot-facebook-config
             - secretRef:
                 name: tripbot-database-creds
-          image: adanalife/tripbot:5.0.0
+          image: adanalife/tripbot:5.1.0
           imagePullPolicy: IfNotPresent
           name: migrate
           resources:
