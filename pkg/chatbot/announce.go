@@ -9,11 +9,15 @@ import (
 	"github.com/adanalife/tripbot/pkg/events"
 )
 
-// AnnounceNewFollower says a thank-you to a new follower in chat and publishes
-// a follow event to the console. Wired from pkg/eventsub on channel.follow v2
+// AnnounceNewFollower says a thank-you to a new follower in chat, logs a
+// follow event (the durable rows behind "followers gained"), and publishes a
+// follow event to the console. Wired from pkg/eventsub on channel.follow v2
 // events.
 func (a *App) AnnounceNewFollower(username string) {
 	a.Chat.Say(fmt.Sprintf("Thank you for the follow, @%s; type !commands in chat to see what you can do", username))
+	if err := a.Events.Follow(context.Background(), username); err != nil {
+		slog.ErrorContext(context.Background(), "error creating follow event", "err", err)
+	}
 	eventbus.EmitSubscriberEvent(context.Background(), a.Cfg.Environment, eventbus.SubscriberEvent{
 		Platform: a.Platform,
 		Kind:     "follow",

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/adanalife/tripbot/pkg/events"
 	"github.com/adanalife/tripbot/pkg/users"
@@ -108,7 +109,7 @@ func TestNormalizeCommandPrefix_DispatchEquivalence(t *testing.T) {
 // --- findCommand routing tests ---
 
 func TestFindCommand_SingleWordTrigger(t *testing.T) {
-	cmd, params := builtTestApp.findCommand("!help")
+	cmd, _, params := builtTestApp.findCommand("!help")
 	if cmd == nil {
 		t.Fatal("expected a command, got nil")
 	}
@@ -122,7 +123,7 @@ func TestFindCommand_SingleWordTrigger(t *testing.T) {
 
 func TestFindCommand_SingleWordAlias(t *testing.T) {
 	// "hi" is an alias of "hello"
-	cmd, _ := builtTestApp.findCommand("hi")
+	cmd, _, _ := builtTestApp.findCommand("hi")
 	if cmd == nil {
 		t.Fatal("expected a command, got nil")
 	}
@@ -137,7 +138,7 @@ func TestFindCommand_SingleWordAlias(t *testing.T) {
 // so "!hello" reached no command at all before it was registered as an alias.
 // Pinned as a pair because the split is surprising enough to look like a bug.
 func TestFindCommand_BangHelloListsCommands(t *testing.T) {
-	cmd, _ := builtTestApp.findCommand("!hello")
+	cmd, _, _ := builtTestApp.findCommand("!hello")
 	if cmd == nil {
 		t.Fatal("expected a command, got nil")
 	}
@@ -145,7 +146,7 @@ func TestFindCommand_BangHelloListsCommands(t *testing.T) {
 		t.Errorf("!hello routed to %q, want !commands", cmd.Trigger)
 	}
 
-	bare, _ := builtTestApp.findCommand("hello")
+	bare, _, _ := builtTestApp.findCommand("hello")
 	if bare == nil {
 		t.Fatal("expected a command for bare hello, got nil")
 	}
@@ -156,7 +157,7 @@ func TestFindCommand_BangHelloListsCommands(t *testing.T) {
 
 func TestFindCommand_MultiWordAlias(t *testing.T) {
 	// "no audio" is an alias of !report
-	cmd, params := builtTestApp.findCommand("no audio")
+	cmd, _, params := builtTestApp.findCommand("no audio")
 	if cmd == nil {
 		t.Fatal("expected a command, got nil")
 	}
@@ -170,7 +171,7 @@ func TestFindCommand_MultiWordAlias(t *testing.T) {
 
 func TestFindCommand_MultiWordAliasWithTrailingText(t *testing.T) {
 	// "frozen since yesterday" — starts with the "frozen" alias
-	cmd, params := builtTestApp.findCommand("frozen since yesterday")
+	cmd, _, params := builtTestApp.findCommand("frozen since yesterday")
 	if cmd == nil {
 		t.Fatal("expected a command, got nil")
 	}
@@ -184,7 +185,7 @@ func TestFindCommand_MultiWordAliasWithTrailingText(t *testing.T) {
 
 func TestFindCommand_InvertedBangRoutes(t *testing.T) {
 	// ¡miles should route to the same command as !miles
-	cmd, _ := builtTestApp.findCommand("¡miles")
+	cmd, _, _ := builtTestApp.findCommand("¡miles")
 	if cmd == nil {
 		t.Fatal("expected a command, got nil")
 	}
@@ -195,7 +196,7 @@ func TestFindCommand_InvertedBangRoutes(t *testing.T) {
 
 func TestFindCommand_DigitOnePrefixRoutes(t *testing.T) {
 	// 1location should route to the same command as !location
-	cmd, _ := builtTestApp.findCommand("1location")
+	cmd, _, _ := builtTestApp.findCommand("1location")
 	if cmd == nil {
 		t.Fatal("expected a command, got nil")
 	}
@@ -206,14 +207,14 @@ func TestFindCommand_DigitOnePrefixRoutes(t *testing.T) {
 
 func TestFindCommand_NumberLeadingMessageDoesNotRoute(t *testing.T) {
 	// a message that genuinely starts with a number must not become a command
-	if cmd, _ := builtTestApp.findCommand("100 miles"); cmd != nil {
+	if cmd, _, _ := builtTestApp.findCommand("100 miles"); cmd != nil {
 		t.Errorf("findCommand(\"100 miles\") = %s, want nil", cmd.Trigger)
 	}
 }
 
 func TestFindCommand_SpaceSeparatedBang(t *testing.T) {
 	// "! location" (with a space) should route to !location
-	cmd, _ := builtTestApp.findCommand("! location")
+	cmd, _, _ := builtTestApp.findCommand("! location")
 	if cmd == nil {
 		t.Fatal("expected a command, got nil")
 	}
@@ -223,7 +224,7 @@ func TestFindCommand_SpaceSeparatedBang(t *testing.T) {
 }
 
 func TestFindCommand_WithParams(t *testing.T) {
-	cmd, params := builtTestApp.findCommand("!goto 42")
+	cmd, _, params := builtTestApp.findCommand("!goto 42")
 	if cmd == nil {
 		t.Fatal("expected a command, got nil")
 	}
@@ -236,14 +237,14 @@ func TestFindCommand_WithParams(t *testing.T) {
 }
 
 func TestFindCommand_UnknownCommand(t *testing.T) {
-	cmd, _ := builtTestApp.findCommand("!doesnotexist99")
+	cmd, _, _ := builtTestApp.findCommand("!doesnotexist99")
 	if cmd != nil {
 		t.Errorf("expected nil for unknown command, got %q", cmd.Trigger)
 	}
 }
 
 func TestFindCommand_EmptyMessage(t *testing.T) {
-	cmd, _ := builtTestApp.findCommand("")
+	cmd, _, _ := builtTestApp.findCommand("")
 	if cmd != nil {
 		t.Errorf("expected nil for empty message, got %q", cmd.Trigger)
 	}
@@ -256,7 +257,7 @@ func TestFindCommand_EmptyMessage(t *testing.T) {
 func TestFindCommand_TriggerCaseInsensitive(t *testing.T) {
 	for _, in := range []string{"!MILES", "!Miles", "!mIlEs", "HI", "! LOCATION"} {
 		t.Run(in, func(t *testing.T) {
-			cmd, _ := builtTestApp.findCommand(in)
+			cmd, _, _ := builtTestApp.findCommand(in)
 			if cmd == nil {
 				t.Fatalf("findCommand(%q) = nil, want a command", in)
 			}
@@ -269,7 +270,7 @@ func TestFindCommand_TriggerCaseInsensitive(t *testing.T) {
 func TestFindCommand_LeadingWhitespace(t *testing.T) {
 	for _, in := range []string{" !miles", "\t!miles", "  !MILES  "} {
 		t.Run(in, func(t *testing.T) {
-			cmd, _ := builtTestApp.findCommand(in)
+			cmd, _, _ := builtTestApp.findCommand(in)
 			if cmd == nil {
 				t.Fatalf("findCommand(%q) = nil, want !miles", in)
 			}
@@ -284,7 +285,7 @@ func TestFindCommand_LeadingWhitespace(t *testing.T) {
 // text handed to a command survives verbatim, so !middle can set capitalized
 // on-screen text.
 func TestFindCommand_ParamsKeepOriginalCase(t *testing.T) {
-	cmd, params := builtTestApp.findCommand("!MIDDLE Hello World")
+	cmd, _, params := builtTestApp.findCommand("!MIDDLE Hello World")
 	if cmd == nil {
 		t.Fatal("expected a command, got nil")
 	}
@@ -299,7 +300,7 @@ func TestFindCommand_ParamsKeepOriginalCase(t *testing.T) {
 // TestFindCommand_MultiWordAliasKeepsParamCase covers the same for the
 // multi-word alias path, which matches the alias across whole words.
 func TestFindCommand_MultiWordAliasKeepsParamCase(t *testing.T) {
-	cmd, params := builtTestApp.findCommand("No Audio Since Yesterday")
+	cmd, _, params := builtTestApp.findCommand("No Audio Since Yesterday")
 	if cmd == nil {
 		t.Fatal("expected a command, got nil")
 	}
@@ -452,7 +453,7 @@ func TestDispatch_SubscriberGateRecordsRefusal(t *testing.T) {
 		RequiresSubscriber: true,
 		Handler:            func(context.Context, *users.User, []string) { ran = true },
 	}
-	app.dispatch(context.Background(), cmd, newTestUser("somenonsubscriber"), []string{"arg"})
+	app.dispatch(context.Background(), cmd, "!test", newTestUser("somenonsubscriber"), []string{"arg"})
 
 	if ran {
 		t.Error("handler ran despite the subscriber gate")
@@ -462,6 +463,130 @@ func TestDispatch_SubscriberGateRecordsRefusal(t *testing.T) {
 	}
 	if got := rec.Refusals[0]; got.Reason != events.RefusedSubGate || got.Command != "!test" {
 		t.Errorf("refusal = %+v, want command !test reason %q", got, events.RefusedSubGate)
+	}
+	// A refused command must not also count as a run — each attempt lands in
+	// exactly one of the two kinds.
+	if len(rec.Runs) != 0 {
+		t.Errorf("runs = %+v, want none for a refused command", rec.Runs)
+	}
+}
+
+// --- command_run emit site ---
+
+// A dispatched command records exactly one command_run row, stamped with the
+// airing clip and playhead. The canonical trigger typed as-is carries no typed
+// field — that key only appears when the viewer reached for something else.
+func TestRunCommand_RecordsCommandRun(t *testing.T) {
+	app := newTestApp(video.Video{ID: 77})
+	rec := &recordingEvents{}
+	app.Events = rec
+
+	app.runCommand(context.Background(), newTestUser("viewer1"), "!help")
+
+	if len(rec.Runs) != 1 {
+		t.Fatalf("runs = %d, want 1", len(rec.Runs))
+	}
+	got := rec.Runs[0]
+	if got.Command != "!help" || got.Username != "viewer1" {
+		t.Errorf("run = %+v, want command !help by viewer1", got)
+	}
+	if got.Typed != "" {
+		t.Errorf("typed = %q, want empty when the canonical trigger was typed", got.Typed)
+	}
+	if got.VideoID != 77 {
+		t.Errorf("video id = %d, want 77", got.VideoID)
+	}
+	if got.TsSec == nil {
+		t.Error("ts_sec = nil, want the playhead stamped")
+	}
+	if len(rec.Refusals) != 0 {
+		t.Errorf("refusals = %+v, want none for a successful run", rec.Refusals)
+	}
+}
+
+// An alias run keeps the token the viewer actually reached for — the signal
+// that says which aliases are worth promoting.
+func TestRunCommand_AliasRunKeepsTypedToken(t *testing.T) {
+	app := newTestApp(video.Video{})
+	rec := &recordingEvents{}
+	app.Events = rec
+
+	// "hi" is an alias of the "hello" trigger.
+	app.runCommand(context.Background(), newTestUser("viewer1"), "hi")
+
+	if len(rec.Runs) != 1 {
+		t.Fatalf("runs = %d, want 1", len(rec.Runs))
+	}
+	got := rec.Runs[0]
+	if got.Command != "hello" || got.Typed != "hi" {
+		t.Errorf("run = %+v, want command hello typed hi", got)
+	}
+}
+
+// A state shortcut runs !guess, and the run keeps the shortcut as typed with
+// the state as args — so "!florida" traffic is attributable to the shortcut
+// rather than blending into plain !guess usage.
+func TestRunCommand_StateShortcutRunKeepsTypedToken(t *testing.T) {
+	app := newTestApp(video.Video{})
+	rec := &recordingEvents{}
+	app.Events = rec
+
+	app.runCommand(context.Background(), newTestUser("viewer1"), "!florida")
+
+	if len(rec.Runs) != 1 {
+		t.Fatalf("runs = %d, want 1", len(rec.Runs))
+	}
+	got := rec.Runs[0]
+	if got.Command != "!guess" || got.Typed != "!florida" || got.Args != "florida" {
+		t.Errorf("run = %+v, want command !guess typed !florida args florida", got)
+	}
+}
+
+// An unknown token records its refusal and nothing else — no command ran, so
+// no command_run row.
+func TestRunCommand_UnknownCommandRecordsNoRun(t *testing.T) {
+	app := newTestApp(video.Video{})
+	rec := &recordingEvents{}
+	app.Events = rec
+
+	app.runCommand(context.Background(), newTestUser("viewer1"), "!watchtime")
+
+	if len(rec.Refusals) != 1 {
+		t.Fatalf("refusals = %d, want 1", len(rec.Refusals))
+	}
+	if len(rec.Runs) != 0 {
+		t.Errorf("runs = %+v, want none for an unknown command", rec.Runs)
+	}
+}
+
+// The !guess cooldown refuses from inside the handler, after dispatch has
+// already committed to running it. The refusal mark is what keeps the one-row
+// invariant there: the attempt records the cooldown refusal and no run.
+func TestRunCommand_CooldownRefusalRecordsNoRun(t *testing.T) {
+	app := newTestApp(video.Video{})
+	rec := &recordingEvents{}
+	app.Events = rec
+
+	// The cooldown is live when the user's last answer is newer than the last
+	// timewarp; pin the warp clock into the past so this test doesn't depend
+	// on package state left by other tests.
+	prevWarp := lastTimewarpTime
+	lastTimewarpTime = time.Now().Add(-time.Hour)
+	t.Cleanup(func() { lastTimewarpTime = prevWarp })
+
+	user := newTestUser("viewer1")
+	user.SetLastLocationTime()
+
+	app.runCommand(context.Background(), user, "!guess CO")
+
+	if len(rec.Refusals) != 1 {
+		t.Fatalf("refusals = %d, want 1", len(rec.Refusals))
+	}
+	if got := rec.Refusals[0]; got.Reason != events.RefusedCooldown {
+		t.Errorf("reason = %q, want %q", got.Reason, events.RefusedCooldown)
+	}
+	if len(rec.Runs) != 0 {
+		t.Errorf("runs = %+v, want none for a cooldown-refused guess", rec.Runs)
 	}
 }
 

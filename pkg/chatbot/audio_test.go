@@ -419,7 +419,7 @@ func TestAudio_AvailableOnEveryPlatform(t *testing.T) {
 		app := newTestApp(video.Video{})
 		app.Platform = platform
 		app.indexCommands()
-		if cmd, _ := app.findCommand("!audio"); cmd == nil {
+		if cmd, _, _ := app.findCommand("!audio"); cmd == nil {
 			t.Errorf("!audio must be available on %s", platform)
 		}
 	}

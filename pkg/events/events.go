@@ -114,6 +114,14 @@ func Unsubscribe(ctx context.Context, cfg *c.TripbotConfig, user string) error {
 	return record(ctx, cfg, Event{Username: user, Event: "unsubscribe"})
 }
 
+// Follow records that a viewer followed the channel (Twitch channel.follow).
+// The durable record behind "followers gained": the EventSub notice otherwise
+// only produces a chat shout, so an unwritten follow is unrecoverable. Count
+// with DISTINCT username — refollow churn fires the notice again.
+func Follow(ctx context.Context, cfg *c.TripbotConfig, user string) error {
+	return record(ctx, cfg, Event{Username: user, Event: "follow"})
+}
+
 // Correction records a manual miles adjustment (delta, may be negative) as an
 // event carrying the amount in extra_miles_earned, so the rollup folds it into
 // user_rollups.extra_miles alongside the session bonuses. This is the audit
@@ -305,9 +313,9 @@ const (
 	RefusedCooldown = "cooldown"
 )
 
-// commandMeta is a command_refused event's meta payload. Shaped for command_run
-// to share once it ships: that kind wants the same command/typed/args fields
-// and no reason.
+// commandMeta is the meta payload shared by command_run and command_refused
+// events: the same command/typed/args fields describe both outcomes, and only
+// a refusal carries a reason.
 type commandMeta struct {
 	// Command is the canonical trigger (`!location`), or the raw token when
 	// nothing matched and there is no canonical form to report.
@@ -357,6 +365,50 @@ func CommandRefused(ctx context.Context, cfg *c.TripbotConfig, r CommandRefusal)
 	return record(ctx, cfg, Event{
 		Username:   r.Username,
 		Event:      "command_refused",
+		Meta:       &meta,
+		VideoID:    vid,
+		VideoTsSec: r.TsSec,
+	})
+}
+
+// CommandRun describes one dispatched command for CommandRan.
+type CommandRun struct {
+	Username string
+	// Command is the canonical trigger (`!location`).
+	Command string
+	// Typed is the token the viewer actually wrote when it differs from
+	// Command — the alias, state shortcut, or misspelling they reached for.
+	Typed string
+	// Args is the remainder of the message, kept because a command's arguments
+	// are often the point (which state they guessed, what they searched for).
+	Args string
+	// VideoID is the clip airing when the command ran; 0 writes NULL.
+	VideoID int
+	// TsSec is seconds into that clip; nil writes NULL.
+	TsSec *float64
+}
+
+// CommandRan records a command the bot dispatched and ran. Paired with
+// command_refused it makes the command surface fully accountable: every
+// attempt lands in exactly one of the two kinds, so usage, distinct users,
+// and refusal rates are all queries over the log.
+func CommandRan(ctx context.Context, cfg *c.TripbotConfig, r CommandRun) error {
+	payload, err := json.Marshal(commandMeta{
+		Command: r.Command,
+		Typed:   r.Typed,
+		Args:    r.Args,
+	})
+	if err != nil {
+		return err
+	}
+	meta := string(payload)
+	var vid *int
+	if r.VideoID != 0 {
+		vid = &r.VideoID
+	}
+	return record(ctx, cfg, Event{
+		Username:   r.Username,
+		Event:      "command_run",
 		Meta:       &meta,
 		VideoID:    vid,
 		VideoTsSec: r.TsSec,

@@ -1,0 +1,1 @@
+New follows now land in the permanent events log as `follow` events naming the follower. The EventSub notice previously only produced a chat shout and a console banner, so follower history began and ended there — persisting it is what makes a "followers gained" recap computable.

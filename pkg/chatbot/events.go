@@ -16,6 +16,9 @@ import (
 // its error rather than logging: a lost event is a hole in that history, and
 // the caller is the one that knows whether it can say so in chat.
 type Events interface {
+	// Follow records that a viewer followed the channel — the rows behind
+	// any "followers gained" count.
+	Follow(ctx context.Context, username string) error
 	Subscribe(ctx context.Context, username string) error
 	Unsubscribe(ctx context.Context, username string) error
 	// Raided records an incoming raid landing on the airing clip — the
@@ -36,12 +39,20 @@ type Events interface {
 	// attempt happened at all — nothing else in the system remembers a command
 	// that didn't run.
 	CommandRefused(ctx context.Context, r events.CommandRefusal) error
+	// CommandRan records a command that dispatched and ran. Paired with
+	// CommandRefused, every command attempt lands in exactly one of the two
+	// kinds — the split any refusal rate or usage rollup is computed over.
+	CommandRan(ctx context.Context, r events.CommandRun) error
 }
 
 // realEvents is the production Events adapter, holding only the config
 // pkg/events needs; the DB handle is its.
 type realEvents struct {
 	cfg *c.TripbotConfig
+}
+
+func (r realEvents) Follow(ctx context.Context, username string) error {
+	return events.Follow(ctx, r.cfg, username)
 }
 
 func (r realEvents) Subscribe(ctx context.Context, username string) error {
@@ -70,4 +81,8 @@ func (r realEvents) Timewarp(ctx context.Context, w events.Warp) error {
 
 func (r realEvents) CommandRefused(ctx context.Context, ref events.CommandRefusal) error {
 	return events.CommandRefused(ctx, r.cfg, ref)
+}
+
+func (r realEvents) CommandRan(ctx context.Context, run events.CommandRun) error {
+	return events.CommandRan(ctx, r.cfg, run)
 }
