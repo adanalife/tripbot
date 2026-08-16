@@ -14,16 +14,11 @@ import (
 // ReadOnly false so writes aren't skipped. The read-only tests pass their own.
 var testConf = &c.TripbotConfig{Environment: "testing", Platform: "twitch"}
 
-// setup installs a transaction-scoped DB and clears the package-global
-// current-video tag so each test starts from a known state. The transaction
-// rolls back in cleanup, so rows never leak.
+// setup installs a transaction-scoped DB, which rolls back in cleanup so rows
+// never leak between tests.
 func setup(t *testing.T) *gorm.DB {
 	t.Helper()
-	db := testdb.New(t)
-
-	currentVideoID.Store(0)
-	t.Cleanup(func() { currentVideoID.Store(0) })
-	return db
+	return testdb.New(t)
 }
 
 func allPlays(t *testing.T, db *gorm.DB) []VideoPlay {
@@ -89,38 +84,30 @@ func TestRecordPlay_ZeroVideoIDWritesNull(t *testing.T) {
 	}
 }
 
-func TestRecordSample_TagsCurrentVideo(t *testing.T) {
+// A sample is tagged with the clip the caller says is on screen. It comes from
+// the player, not from a remembered prior RecordPlay — so the very first sample
+// after a restart, with no clip switch yet observed, still names its footage.
+func TestRecordSample_TagsTheGivenVideo(t *testing.T) {
 	db := setup(t)
 	ctx := context.Background()
 
-	// Before any play, the sample carries a NULL video_id.
-	RecordSample(ctx, testConf, 3, Audience{})
-	// A play tags every sample that follows it.
-	RecordPlay(ctx, testConf, 42, "Utah", false, 38.5, -109.5)
-	RecordSample(ctx, testConf, 5, Audience{})
-	// A play with no DB row resets the tag back to NULL.
-	RecordPlay(ctx, testConf, 0, "", true, 0, 0)
-	RecordSample(ctx, testConf, 7, Audience{})
+	RecordSample(ctx, testConf, 5, Audience{}, 42)
+	// 0 means nothing playing, or a clip with no DB row: a NULL, not clip 0.
+	RecordSample(ctx, testConf, 7, Audience{}, 0)
 
 	samples := allSamples(t, db)
-	if len(samples) != 3 {
-		t.Fatalf("expected 3 viewer_samples rows, got %d", len(samples))
+	if len(samples) != 2 {
+		t.Fatalf("expected 2 viewer_samples rows, got %d", len(samples))
 	}
-
-	wantCounts := []int{3, 5, 7}
-	wantVideo := []*int{nil, intPtr(42), nil}
+	if samples[0].VideoID == nil || *samples[0].VideoID != 42 {
+		t.Errorf("first sample video_id = %v, want 42", samples[0].VideoID)
+	}
+	if samples[1].VideoID != nil {
+		t.Errorf("second sample video_id = %d, want NULL", *samples[1].VideoID)
+	}
 	for i, got := range samples {
 		if got.Platform != "twitch" {
 			t.Errorf("sample %d platform: want twitch, got %q", i, got.Platform)
-		}
-		if got.Count != wantCounts[i] {
-			t.Errorf("sample %d count: want %d, got %d", i, wantCounts[i], got.Count)
-		}
-		switch {
-		case wantVideo[i] == nil && got.VideoID != nil:
-			t.Errorf("sample %d video_id: want NULL, got %d", i, *got.VideoID)
-		case wantVideo[i] != nil && (got.VideoID == nil || *got.VideoID != *wantVideo[i]):
-			t.Errorf("sample %d video_id: want %d, got %v", i, *wantVideo[i], got.VideoID)
 		}
 		if time.Since(got.SampledAt) > time.Minute {
 			t.Errorf("sample %d sampled_at not stamped at insert: %v", i, got.SampledAt)
@@ -128,13 +115,16 @@ func TestRecordSample_TagsCurrentVideo(t *testing.T) {
 	}
 }
 
-func TestReadOnly_SkipsWritesButStillTracksVideo(t *testing.T) {
+// A read-only instance writes neither table. It still shares the DB with the
+// writing instance, so a stray insert here would be indistinguishable from
+// real playback in the footage-performance data.
+func TestReadOnly_SkipsWrites(t *testing.T) {
 	db := setup(t)
 	readOnlyConf := &c.TripbotConfig{Environment: "testing", Platform: "twitch", ReadOnly: true}
 	ctx := context.Background()
 
 	RecordPlay(ctx, readOnlyConf, 42, "Utah", false, 38.5, -109.5)
-	RecordSample(ctx, readOnlyConf, 5, Audience{})
+	RecordSample(ctx, readOnlyConf, 5, Audience{}, 42)
 
 	if plays := allPlays(t, db); len(plays) != 0 {
 		t.Errorf("expected no video_plays rows in read-only mode, got %d", len(plays))
@@ -142,19 +132,7 @@ func TestReadOnly_SkipsWritesButStillTracksVideo(t *testing.T) {
 	if samples := allSamples(t, db); len(samples) != 0 {
 		t.Errorf("expected no viewer_samples rows in read-only mode, got %d", len(samples))
 	}
-	// The tag is stored before the read-only bail, so writes resume correctly
-	// tagged the moment a non-read-only config is used.
-	RecordSample(ctx, testConf, 5, Audience{})
-	samples := allSamples(t, db)
-	if len(samples) != 1 {
-		t.Fatalf("expected 1 viewer_samples row, got %d", len(samples))
-	}
-	if samples[0].VideoID == nil || *samples[0].VideoID != 42 {
-		t.Errorf("video_id: want 42, got %v", samples[0].VideoID)
-	}
 }
-
-func intPtr(i int) *int { return &i }
 
 // A reported audience lands in its own columns, beside the chatter count
 // rather than on top of it — the two answer different questions, and the
@@ -162,7 +140,7 @@ func intPtr(i int) *int { return &i }
 func TestRecordSample_RecordsAudience(t *testing.T) {
 	db := setup(t)
 
-	RecordSample(context.Background(), testConf, 5, Audience{Count: 137, Live: true, Reported: true})
+	RecordSample(context.Background(), testConf, 5, Audience{Count: 137, Live: true, Reported: true}, 0)
 
 	samples := allSamples(t, db)
 	if len(samples) != 1 {
@@ -186,7 +164,7 @@ func TestRecordSample_RecordsAudience(t *testing.T) {
 func TestRecordSample_UnreportedAudienceWritesNull(t *testing.T) {
 	db := setup(t)
 
-	RecordSample(context.Background(), testConf, 5, Audience{})
+	RecordSample(context.Background(), testConf, 5, Audience{}, 0)
 
 	samples := allSamples(t, db)
 	if len(samples) != 1 {
