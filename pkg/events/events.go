@@ -390,6 +390,105 @@ func EarliestRealEventDate(ctx context.Context, platform, username string) time.
 	return earliest.Time
 }
 
+// deployMeta is a deploy event's meta payload.
+type deployMeta struct {
+	Component string `json:"component"`
+	Version   string `json:"version"`
+}
+
+// lastDeployVersion returns the version carried by the platform's most recent
+// deploy event for component, or "" when it has none.
+func lastDeployVersion(ctx context.Context, platform, component string) (string, error) {
+	var last sql.NullString
+	err := database.GormDB().WithContext(ctx).
+		Model(&Event{}).
+		Where("platform = ? AND event = ? AND meta->>'component' = ?", platform, "deploy", component).
+		Order("date_created DESC").
+		Limit(1).
+		Select("meta->>'version'").
+		Scan(&last).Error
+	if err != nil {
+		return "", err
+	}
+	return last.String, nil
+}
+
+// Deploy records that component is now running version — a system event (no
+// actor), written at startup. A version already carried by the platform's most
+// recent deploy event for that component is skipped, so a pod restart on the
+// same build doesn't re-record a deploy that already happened; only a version
+// change is a deploy. Returns whether a row was written.
+//
+// The dedup read is best-effort: when it fails, the row is recorded anyway. A
+// duplicate deploy row is a nuisance; a missing one is a hole in the ops
+// timeline that nothing else remembers once metrics retention expires.
+func Deploy(ctx context.Context, cfg *c.TripbotConfig, component, version string) (bool, error) {
+	if cfg.ReadOnly {
+		return false, terrors.ErrReadOnly
+	}
+	last, err := lastDeployVersion(ctx, cfg.Platform, component)
+	if err != nil {
+		slog.WarnContext(ctx, "deploy dedup read failed; recording anyway", "err", err)
+	} else if last == version {
+		return false, nil
+	}
+	payload, err := json.Marshal(deployMeta{Component: component, Version: version})
+	if err != nil {
+		return false, err
+	}
+	meta := string(payload)
+	if err := record(ctx, cfg, Event{Event: "deploy", Meta: &meta}); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// Watchdog restart outcomes carried in a watchdog_restart event's meta.
+const (
+	// WatchdogOutcomeOK — the recovery action completed (the OBS output
+	// restarted / the room re-minted). Whether the recovery *held* is what a
+	// later watchdog_recovered event records.
+	WatchdogOutcomeOK = "ok"
+	// WatchdogOutcomeFailed — the recovery action itself errored.
+	WatchdogOutcomeFailed = "failed"
+)
+
+// watchdogMeta is a watchdog_restart / watchdog_recovered event's meta payload.
+type watchdogMeta struct {
+	// Watchdog names which watchdog fired — the platform whose stream it
+	// guards.
+	Watchdog string `json:"watchdog"`
+	// Outcome is WatchdogOutcomeOK / WatchdogOutcomeFailed on a
+	// watchdog_restart; a watchdog_recovered carries none.
+	Outcome string `json:"outcome,omitempty"`
+}
+
+// WatchdogRestart records the stream watchdog forcing a recovery: a silent
+// disconnect was declared and the restart action ran, with the given outcome.
+// A system event — the ops transition that otherwise only exists in logs,
+// which is how the 2026-08-05 outage timeline had to be reconstructed.
+func WatchdogRestart(ctx context.Context, cfg *c.TripbotConfig, watchdog, outcome string) error {
+	payload, err := json.Marshal(watchdogMeta{Watchdog: watchdog, Outcome: outcome})
+	if err != nil {
+		return err
+	}
+	meta := string(payload)
+	return record(ctx, cfg, Event{Event: "watchdog_restart", Meta: &meta})
+}
+
+// WatchdogRecovered records a watchdog-forced recovery observed to hold: the
+// channel stayed live long enough that the watchdog retired its restart
+// cooldown. Paired with the watchdog_restart rows before it, the gap is the
+// outage's queryable duration.
+func WatchdogRecovered(ctx context.Context, cfg *c.TripbotConfig, watchdog string) error {
+	payload, err := json.Marshal(watchdogMeta{Watchdog: watchdog})
+	if err != nil {
+		return err
+	}
+	meta := string(payload)
+	return record(ctx, cfg, Event{Event: "watchdog_recovered", Meta: &meta})
+}
+
 // SessionCount returns how many sessions the user has started — i.e. their
 // count of "login" events. Cheap via the events_username_date index
 // (migration 011). Returns 0 on error. Bots are not special-cased here; callers

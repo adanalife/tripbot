@@ -34,6 +34,16 @@ type WatchdogDeps struct {
 	// Restart returns the stream to a viewable state. Defaults to restarting the
 	// OBS output; a caller whose platform needs a heavier recovery replaces it.
 	Restart func(context.Context) error
+
+	// OnRestart, when non-nil, is told about each forced restart right after
+	// Restart returns — restartErr is Restart's error, nil on success. cmd/tripbot
+	// wires it to the permanent events log; the hook lives here as a callback so
+	// this package takes no events/database dependency
+	// (package-boundary-init-discipline).
+	OnRestart func(ctx context.Context, restartErr error)
+	// OnRecovered, when non-nil, is told when a watchdog-forced recovery is seen
+	// to hold — the same transition that retires the restart cooldown.
+	OnRecovered func(ctx context.Context)
 }
 
 // DefaultWatchdogDeps wires WatchSilentDisconnect's OBS + restart hooks. The
@@ -198,6 +208,9 @@ func WatchSilentDisconnect(ctx context.Context, deps WatchdogDeps, interval time
 					slog.InfoContext(ctx, "watchdog: recovery held, cooldown retired",
 						"live_ticks", liveStreak)
 					lastRestart = time.Time{}
+					if deps.OnRecovered != nil {
+						deps.OnRecovered(ctx)
+					}
 				}
 				continue
 			}
@@ -223,8 +236,12 @@ func WatchSilentDisconnect(ctx context.Context, deps WatchdogDeps, interval time
 			// resulting StartStream rejection retried 24 times in 9 hours,
 			// each attempt re-stopping an output already mid-teardown.
 			lastRestart = time.Now()
-			if err := deps.Restart(ctx); err != nil {
-				slog.ErrorContext(ctx, "watchdog: restart failed", "err", err)
+			restartErr := deps.Restart(ctx)
+			if deps.OnRestart != nil {
+				deps.OnRestart(ctx, restartErr)
+			}
+			if restartErr != nil {
+				slog.ErrorContext(ctx, "watchdog: restart failed", "err", restartErr)
 				continue
 			}
 			instrumentation.OBSSilentDisconnectRestarts.Inc()

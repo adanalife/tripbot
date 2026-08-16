@@ -258,6 +258,8 @@ func (t *Tripbot) Run() {
 	t.srv.SetVersion(t.version)
 	httpDone := t.startHttpServer(ctx)
 	t.findInitialVideo()
+	// after findInitialVideo: its DB round-trip proves the DB is reachable
+	t.recordDeploy(ctx)
 	t.app.Video = chatbot.NewVideoAdapter(t.player)                         // commands read the same Player the cron refreshes
 	t.app.Sessions = chatbot.NewSessionsAdapter(t.cfg.Platform, t.sessions) // command-time queries
 	t.app.UserSessions = t.sessions                                         // inbound handlers + access checks read the same session state
@@ -624,6 +626,8 @@ func (t *Tripbot) startTwitchWatchdog(ctx context.Context) {
 		}
 		return live, err
 	}
+	deps.OnRestart = t.watchdogRestartHook("twitch")
+	deps.OnRecovered = t.watchdogRecoveredHook("twitch")
 	go watchdog.WatchSilentDisconnect(ctx, deps, 60*time.Second, 3, 10*time.Minute)
 }
 
@@ -654,6 +658,8 @@ func (t *Tripbot) startTikTokWatchdog(ctx context.Context) {
 	deps.Restart = func(ctx context.Context) error {
 		return remintTikTokEgress(ctx, gw, tiktokRemintGap, watchdog.RestartOBSOutput)
 	}
+	deps.OnRestart = t.watchdogRestartHook("tiktok")
+	deps.OnRecovered = t.watchdogRecoveredHook("tiktok")
 	go watchdog.WatchSilentDisconnect(ctx, deps, 60*time.Second, 5, 30*time.Minute)
 }
 

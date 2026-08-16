@@ -59,6 +59,12 @@ var writers = []struct {
 	{"Correction", "correction", func(ctx context.Context, cfg *c.TripbotConfig) error {
 		return Correction(ctx, cfg, "someone", -1.5)
 	}},
+	{"WatchdogRestart", "watchdog_restart", func(ctx context.Context, cfg *c.TripbotConfig) error {
+		return WatchdogRestart(ctx, cfg, "tiktok", WatchdogOutcomeOK)
+	}},
+	{"WatchdogRecovered", "watchdog_recovered", func(ctx context.Context, cfg *c.TripbotConfig) error {
+		return WatchdogRecovered(ctx, cfg, "tiktok")
+	}},
 	{"StateCrossing", "state_crossing", func(ctx context.Context, cfg *c.TripbotConfig) error {
 		return StateCrossing(ctx, cfg, "Utah", "Colorado", 42, true)
 	}},
