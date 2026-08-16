@@ -199,6 +199,12 @@ func NewTripbot(version string, cfg *c.TripbotConfig) *Tripbot {
 	// fails closed. It reads t.gateway lazily, so wiring it here against the
 	// partially-built t is fine.
 	t.sessions = users.New(t.cfg, gatewayChatterSource{t: t})
+	// One tally shared by both halves of the chat-rate sample: the chatbot
+	// increments it per inbound message, the session tick drains it into each
+	// viewer_samples row.
+	chatCounter := &viewstats.MessageCounter{}
+	t.app.ChatCounter = chatCounter
+	t.sessions.SetChatCounter(chatCounter)
 	// Stamp login/logout events with what's airing, so joins and leaves can be
 	// attributed to the footage that earned them.
 	t.sessions.SetVideoSource(playerVideoSource{t: t})

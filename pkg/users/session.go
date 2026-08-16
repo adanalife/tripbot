@@ -31,6 +31,10 @@ import (
 type Sessions struct {
 	cfg    *c.TripbotConfig
 	source ChatterSource
+	// chat is the optional per-tick chat-message tally drained into each
+	// viewer sample. nil means samples record NULL chat_messages. Set once at
+	// wiring time, before the crons start, so it needs no lock.
+	chat ChatCounter
 	// video is the optional airing-footage source stamped onto login/logout
 	// events. nil means those events record no airing context. Set once at
 	// wiring time, before the crons start, so it needs no lock.
@@ -51,6 +55,21 @@ func New(cfg *c.TripbotConfig, source ChatterSource) *Sessions {
 		source:   source,
 		loggedIn: make(map[string]*User),
 	}
+}
+
+// SetChatCounter installs the chat-message tally drained into each viewer
+// sample. Called once during wiring, before the session crons start; leaving
+// it unset records NULL chat_messages.
+func (s *Sessions) SetChatCounter(counter ChatCounter) { s.chat = counter }
+
+// chatMessages drains the wired counter for one sample tick, or reports nil
+// when none is wired — NULL in the row, distinct from a silent tick's 0.
+func (s *Sessions) chatMessages() *int {
+	if s.chat == nil {
+		return nil
+	}
+	n := s.chat.Drain()
+	return &n
 }
 
 // SetVideoSource installs the airing-footage source for login/logout events.
@@ -95,8 +114,9 @@ func (s *Sessions) UpdateSession(ctx context.Context) {
 	s.source.UpdateAudience()
 
 	// Persist both totals as a viewer_samples row — the durable half of the
-	// emission above, tagged with the clip currently on screen.
-	viewstats.RecordSample(ctx, s.cfg, s.source.ChatterCount(), s.source.Audience(), s.currentVideoID())
+	// emission above, tagged with the clip currently on screen and carrying the
+	// tick's chat-message tally.
+	viewstats.RecordSample(ctx, s.cfg, s.source.ChatterCount(), s.source.Audience(), s.currentVideoID(), s.chatMessages())
 
 	// log out the people who aren't present, working from a snapshot so the
 	// lock isn't held across the DB work logout does

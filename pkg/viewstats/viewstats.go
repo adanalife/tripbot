@@ -11,6 +11,7 @@ import (
 	"context"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
@@ -57,6 +58,11 @@ type ViewerSample struct {
 	// rollup can tell "nobody counted" from "nobody watching".
 	Viewers *int
 	Live    *bool
+	// ChatMessages is how many chat messages arrived in the sampling window
+	// ending at this row. nil means no counter was wired that tick; 0 means
+	// wired and silent. Commands and bots' messages count — the total is an
+	// aggregate no reader can attribute to senders.
+	ChatMessages *int
 	// autoCreateTime: see VideoPlay.StartedAt.
 	SampledAt time.Time `gorm:"autoCreateTime"`
 }
@@ -134,11 +140,13 @@ type Audience struct {
 // columns keep apart because they answer different questions and only one of
 // them sizes the audience. videoID is the clip on screen — pass 0 when nothing
 // is playing or the clip has no DB row, and the row records a NULL.
+// chatMessages is the tick's chat-message tally; nil (no counter wired) records
+// NULL, which is distinct from a wired-and-silent 0.
 //
 // The caller reads videoID from the player rather than this package
 // remembering the last RecordPlay, so a restart doesn't blind the samples
 // taken before the next clip switch.
-func RecordSample(ctx context.Context, cfg *c.TripbotConfig, chatters int, audience Audience, videoID int) {
+func RecordSample(ctx context.Context, cfg *c.TripbotConfig, chatters int, audience Audience, videoID int, chatMessages *int) {
 	if cfg.ReadOnly {
 		return
 	}
@@ -147,9 +155,10 @@ func RecordSample(ctx context.Context, cfg *c.TripbotConfig, chatters int, audie
 		vid = &videoID
 	}
 	sample := ViewerSample{
-		Platform: cfg.Platform,
-		Count:    chatters,
-		VideoID:  vid,
+		Platform:     cfg.Platform,
+		Count:        chatters,
+		VideoID:      vid,
+		ChatMessages: chatMessages,
 	}
 	if audience.Reported {
 		sample.Viewers = &audience.Count
@@ -159,3 +168,16 @@ func RecordSample(ctx context.Context, cfg *c.TripbotConfig, chatters int, audie
 		slog.ErrorContext(ctx, "error recording viewer sample", "err", err, "chatters", chatters)
 	}
 }
+
+// MessageCounter tallies inbound chat messages between sample ticks: the chat
+// handler increments it once per message and the session tick drains it, so
+// each viewer_samples row carries the messages that arrived in its window.
+// cmd/tripbot constructs one and hands it to both sides (it satisfies both
+// chatbot.ChatCounter and users.ChatCounter). Safe for concurrent use.
+type MessageCounter struct{ n atomic.Int64 }
+
+// Add counts one inbound chat message.
+func (m *MessageCounter) Add() { m.n.Add(1) }
+
+// Drain returns the count accumulated since the last Drain and resets it.
+func (m *MessageCounter) Drain() int { return int(m.n.Swap(0)) }

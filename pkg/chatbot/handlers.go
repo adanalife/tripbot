@@ -380,6 +380,13 @@ func (a *App) HandleMessage(ctx context.Context, msg IncomingMessage) {
 	// increment the Prometheus counter
 	instrumentation.ChatMessages.Inc()
 
+	// Tally for the chat-rate sample. Every inbound message counts — commands
+	// and bots' messages included, since the per-tick total is an aggregate
+	// readers can't attribute to senders.
+	if a.ChatCounter != nil {
+		a.ChatCounter.Add()
+	}
+
 	// emit chat line to Loki via OTel
 	mylog.ChatMsg(msg.User, a.Cfg.ChannelName, msg.Text)
 

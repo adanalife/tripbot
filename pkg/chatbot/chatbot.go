@@ -110,6 +110,11 @@ type App struct {
 	// correction) to the append-only events table. Tests inject a noopEvents;
 	// production uses realEvents.
 	Events Events
+	// ChatCounter tallies inbound chat messages for the chat-rate half of the
+	// viewer-sample tick. cmd/tripbot wires the viewstats.MessageCounter it
+	// shares with the session cron; nil (tests, an instance with no sampling)
+	// leaves messages uncounted.
+	ChatCounter ChatCounter
 
 	// commands is this App's command registry (built by buildRegistry);
 	// singleWordLookup / multiWordLookup index it by trigger + alias for

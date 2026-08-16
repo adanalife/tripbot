@@ -176,9 +176,9 @@ func TestRecordSample_TagsTheGivenVideo(t *testing.T) {
 	db := setup(t)
 	ctx := context.Background()
 
-	RecordSample(ctx, testConf, 5, Audience{}, 42)
+	RecordSample(ctx, testConf, 5, Audience{}, 42, nil)
 	// 0 means nothing playing, or a clip with no DB row: a NULL, not clip 0.
-	RecordSample(ctx, testConf, 7, Audience{}, 0)
+	RecordSample(ctx, testConf, 7, Audience{}, 0, nil)
 
 	samples := allSamples(t, db)
 	if len(samples) != 2 {
@@ -200,6 +200,57 @@ func TestRecordSample_TagsTheGivenVideo(t *testing.T) {
 	}
 }
 
+func intPtr(i int) *int { return &i }
+
+// A sample's chat_messages column keeps "no counter wired" (NULL) apart from
+// "wired and silent" (0) — the difference between a tick that couldn't count
+// and a tick that counted nothing.
+func TestRecordSample_ChatMessages(t *testing.T) {
+	db := setup(t)
+	ctx := context.Background()
+
+	RecordSample(ctx, testConf, 3, Audience{}, 0, nil)
+	RecordSample(ctx, testConf, 3, Audience{}, 0, intPtr(17))
+	RecordSample(ctx, testConf, 3, Audience{}, 0, intPtr(0))
+
+	samples := allSamples(t, db)
+	if len(samples) != 3 {
+		t.Fatalf("expected 3 viewer_samples rows, got %d", len(samples))
+	}
+	if samples[0].ChatMessages != nil {
+		t.Errorf("unwired sample chat_messages: want NULL, got %d", *samples[0].ChatMessages)
+	}
+	if samples[1].ChatMessages == nil || *samples[1].ChatMessages != 17 {
+		t.Errorf("wired sample chat_messages: want 17, got %v", samples[1].ChatMessages)
+	}
+	if samples[2].ChatMessages == nil || *samples[2].ChatMessages != 0 {
+		t.Errorf("silent sample chat_messages: want 0, got %v", samples[2].ChatMessages)
+	}
+}
+
+// MessageCounter accumulates between drains and starts over after each one,
+// so every message lands in exactly one sampling window.
+func TestMessageCounter_DrainResets(t *testing.T) {
+	var m MessageCounter
+
+	if got := m.Drain(); got != 0 {
+		t.Errorf("fresh counter drained %d, want 0", got)
+	}
+	m.Add()
+	m.Add()
+	m.Add()
+	if got := m.Drain(); got != 3 {
+		t.Errorf("drained %d, want 3", got)
+	}
+	if got := m.Drain(); got != 0 {
+		t.Errorf("second drain got %d, want 0", got)
+	}
+	m.Add()
+	if got := m.Drain(); got != 1 {
+		t.Errorf("post-reset drain got %d, want 1", got)
+	}
+}
+
 // A read-only instance writes neither table. It still shares the DB with the
 // writing instance, so a stray insert here would be indistinguishable from
 // real playback in the footage-performance data.
@@ -209,7 +260,7 @@ func TestReadOnly_SkipsWrites(t *testing.T) {
 	ctx := context.Background()
 
 	RecordPlay(ctx, readOnlyConf, 42, "Utah", false, 38.5, -109.5)
-	RecordSample(ctx, readOnlyConf, 5, Audience{}, 42)
+	RecordSample(ctx, readOnlyConf, 5, Audience{}, 42, nil)
 
 	if plays := allPlays(t, db); len(plays) != 0 {
 		t.Errorf("expected no video_plays rows in read-only mode, got %d", len(plays))
@@ -225,7 +276,7 @@ func TestReadOnly_SkipsWrites(t *testing.T) {
 func TestRecordSample_RecordsAudience(t *testing.T) {
 	db := setup(t)
 
-	RecordSample(context.Background(), testConf, 5, Audience{Count: 137, Live: true, Reported: true}, 0)
+	RecordSample(context.Background(), testConf, 5, Audience{Count: 137, Live: true, Reported: true}, 0, nil)
 
 	samples := allSamples(t, db)
 	if len(samples) != 1 {
@@ -249,7 +300,7 @@ func TestRecordSample_RecordsAudience(t *testing.T) {
 func TestRecordSample_UnreportedAudienceWritesNull(t *testing.T) {
 	db := setup(t)
 
-	RecordSample(context.Background(), testConf, 5, Audience{}, 0)
+	RecordSample(context.Background(), testConf, 5, Audience{}, 0, nil)
 
 	samples := allSamples(t, db)
 	if len(samples) != 1 {
