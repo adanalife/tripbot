@@ -9,6 +9,13 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v5.1.0] — 2026-08-16
+
+### Chatbot
+
+- `chat.message` now carries the sender's chat decorations: `badges` (badge name → version, so a subscriber's months survive where the `subscriber` bool loses them) and `emotes` (one entry per occurrence, with the emote id and its code-point span in the text). Both come from the platform gateway and are Twitch-only today; an empty set means the platform reports none, not that the viewer has none. ([#1388](https://github.com/adanalife/tripbot/pull/1388))
+- Comped `ferretmunchers` as a prod subscriber, so subscriber-only commands like `!find` work without an actual sub. ([#1389](https://github.com/adanalife/tripbot/pull/1389))
+
 ## [v5.0.0] — 2026-08-16
 
 ### Chatbot
