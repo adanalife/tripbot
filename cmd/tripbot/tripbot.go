@@ -7,6 +7,7 @@ import (
 	"log"
 	"log/slog"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/bootstrap"
@@ -104,11 +105,11 @@ type Tripbot struct {
 	// stop it.
 	scheduler gocron.Scheduler
 
-	// srv is the auth-links / console-API / metrics HTTP server, constructed in
-	// NewTripbot. cmd installs the build version through it (SetVersion) and
-	// starts it (Start). The rich admin panel lives in the standalone
-	// tripbot-console; this server holds the OAuth bootstrap pages, the read-only
-	// /api/* endpoints the console proxies, and /health + /metrics.
+	// srv is the console-API / metrics HTTP server, constructed in NewTripbot.
+	// cmd installs the build version through it (SetVersion) and starts it
+	// (Start). The rich admin panel lives in the standalone tripbot-console;
+	// this server holds the /api/* endpoints the console proxies, plus /health,
+	// /metrics, and /version.
 	srv *server.Server
 
 	// player owns "what's currently playing" — the single process-wide
@@ -126,6 +127,11 @@ type Tripbot struct {
 	// UserSessions) and into discord so they read the same state. One *Sessions
 	// per chat provider is the multi-provider seam.
 	sessions *users.Sessions
+
+	// audienceMu guards lastAudience, the concurrent-viewer reading the
+	// session cron refreshes and reads back within the same tick.
+	audienceMu   sync.Mutex
+	lastAudience viewstats.Audience
 
 	// discordSession is set by startDiscord when the Discord bot is enabled
 	// for this env; shutdown calls Stop on it to deregister the per-guild
@@ -188,10 +194,10 @@ func NewTripbot(version string, cfg *c.TripbotConfig) *Tripbot {
 		flagClient: feature.NewInMemoryClient(nil),
 		gateway:    newGatewayClient(cfg),
 	}
-	// The audience source dispatches chatter refresh + the follower check to the
-	// gateway (when the flag is on) or in-process; with no gateway wired it's the
-	// plain in-process source. Reads t.gateway/t.flagClient lazily, so wiring it
-	// here against the partially-built t is fine.
+	// The audience source routes chatter refresh + the follower check through
+	// the gateway; with none wired the refreshes no-op and the follower check
+	// fails closed. It reads t.gateway lazily, so wiring it here against the
+	// partially-built t is fine.
 	t.sessions = users.New(t.cfg, gatewayChatterSource{t: t})
 	// One tally shared by both halves of the chat-rate sample: the chatbot
 	// increments it per inbound message, the session tick drains it into each
@@ -199,6 +205,9 @@ func NewTripbot(version string, cfg *c.TripbotConfig) *Tripbot {
 	chatCounter := &viewstats.MessageCounter{}
 	t.app.ChatCounter = chatCounter
 	t.sessions.SetChatCounter(chatCounter)
+	// Stamp login/logout events with what's airing, so joins and leaves can be
+	// attributed to the footage that earned them.
+	t.sessions.SetVideoSource(playerVideoSource{t: t})
 	// Feed the rotators what's playing, so their $variables resolve. Reuses the
 	// chatbot's Geocoder and Weather adapters (the pkg/geo default is installed by
 	// whichever Connect* path this platform takes).
@@ -854,14 +863,14 @@ func (t *Tripbot) startCron() {
 }
 
 // loadTwitchToken pulls the bot's OAuth row from the oauth_tokens table.
-// Non-fatal: when the row is missing (e.g. auth-bootstrap hasn't run yet
-// against a freshly-restored DB) or the DB is briefly unreachable, the bot
-// comes up with limited functionality and polls in the background until the
-// token lands — rather than crashlooping (a crashlooping pod can also race a
-// concurrent DB restore's migrate init). The pod stays Ready throughout
-// (readiness doesn't gate on Twitch) so the auth-links landing page + /auth/init are
-// reachable to re-auth; "not in chat" is surfaced via the
-// tripbot_twitch_connected gauge instead.
+// Non-fatal: when the row is missing (nobody has completed the gateway's
+// consent flow yet, or the DB was freshly restored) or the DB is briefly
+// unreachable, the bot comes up with limited functionality and polls in the
+// background until the token lands — rather than crashlooping (a crashlooping
+// pod can also race a concurrent DB restore's migrate init). The pod stays
+// Ready throughout (readiness doesn't gate on Twitch), so the console can still
+// reach this instance to show what's wrong; "not in chat" is surfaced via the
+// tripbot_twitch_connected gauge.
 func (t *Tripbot) loadTwitchToken(ctx context.Context) {
 	if err := mytwitch.LoadFromDB(t.cfg.BotUsername, t.cfg.ChannelName); err != nil {
 		slog.WarnContext(ctx, "no usable Twitch token at boot; starting without a chat connection and polling",
@@ -922,8 +931,8 @@ func (t *Tripbot) setUpTwitchCredentials() {
 	}
 }
 
-// updateSubscribers gets the list of current subscribers (gateway-or-in-process
-// per the runtime flag — see refreshSubscribers).
+// updateSubscribers gets the list of current subscribers from the gateway —
+// see refreshSubscribers.
 func (t *Tripbot) updateSubscribers() {
 	t.refreshSubscribers(context.Background())
 }

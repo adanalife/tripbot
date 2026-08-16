@@ -35,7 +35,11 @@ type Sessions struct {
 	// viewer sample. nil means samples record NULL chat_messages. Set once at
 	// wiring time, before the crons start, so it needs no lock.
 	chat ChatCounter
-	mu   sync.Mutex
+	// video is the optional airing-footage source stamped onto login/logout
+	// events. nil means those events record no airing context. Set once at
+	// wiring time, before the crons start, so it needs no lock.
+	video VideoSource
+	mu    sync.Mutex
 	// loggedIn maps username -> User for everyone currently in chat.
 	loggedIn map[string]*User
 	// lifetimeLeaderboard is the cached [username, miles] leaderboard,
@@ -68,6 +72,30 @@ func (s *Sessions) chatMessages() *int {
 	return &n
 }
 
+// SetVideoSource installs the airing-footage source for login/logout events.
+// Called once during wiring, before the session crons start; leaving it unset
+// records no airing context.
+func (s *Sessions) SetVideoSource(v VideoSource) { s.video = v }
+
+// currentVideoID is the clip on screen now, or 0 with no video source wired.
+func (s *Sessions) currentVideoID() int {
+	if s.video == nil {
+		return 0
+	}
+	return s.video.CurrentVideoID()
+}
+
+// airing reports the footage on screen now, for stamping onto a session event.
+// The zero Airing — no clip, no playhead — is what an instance with no video
+// source records.
+func (s *Sessions) airing() events.Airing {
+	if s.video == nil {
+		return events.Airing{}
+	}
+	secs := s.video.CurrentProgressSec()
+	return events.Airing{VideoID: s.video.CurrentVideoID(), TsSec: &secs}
+}
+
 // UpdateSession uses the chatter source to maintain the list of
 // currently-logged-in users.
 func (s *Sessions) UpdateSession(ctx context.Context) {
@@ -79,10 +107,16 @@ func (s *Sessions) UpdateSession(ctx context.Context) {
 	// updates the "in chat" number (and flashes it on a change) without a reload.
 	eventbus.EmitViewerCount(ctx, s.cfg.Environment, s.cfg.Platform, s.source.ChatterCount())
 
-	// Persist the same total as a viewer_samples row — the durable half of the
-	// emission above, tagged with the clip currently on screen and carrying
-	// the tick's chat-message tally.
-	viewstats.RecordSample(ctx, s.cfg, s.source.ChatterCount(), s.chatMessages())
+	// Refresh how many people are watching. Distinct from the chatter total
+	// above: chatters are who has spoken, a self-selecting slice, so sizing
+	// the audience from it understates it and biases toward whatever provokes
+	// typing.
+	s.source.UpdateAudience()
+
+	// Persist both totals as a viewer_samples row — the durable half of the
+	// emission above, tagged with the clip currently on screen and carrying the
+	// tick's chat-message tally.
+	viewstats.RecordSample(ctx, s.cfg, s.source.ChatterCount(), s.source.Audience(), s.currentVideoID(), s.chatMessages())
 
 	// log out the people who aren't present, working from a snapshot so the
 	// lock isn't held across the DB work logout does
@@ -179,7 +213,7 @@ func (s *Sessions) login(ctx context.Context, username string) *User {
 	s.loggedIn[username] = &user
 	s.mu.Unlock()
 
-	if err := events.Login(ctx, s.cfg, username, user.sessionID); err != nil {
+	if err := events.Login(ctx, s.cfg, username, user.sessionID, s.airing()); err != nil {
 		slog.ErrorContext(ctx, "error creating login event", "err", err)
 	}
 
@@ -225,7 +259,7 @@ func (s *Sessions) logout(ctx context.Context, u *User) {
 	if extra > 0 {
 		extraMiles = &extra
 	}
-	if err := events.Logout(ctx, s.cfg, u.Username, u.sessionID, extraMiles); err != nil {
+	if err := events.Logout(ctx, s.cfg, u.Username, u.sessionID, extraMiles, s.airing()); err != nil {
 		slog.ErrorContext(ctx, "error creating logout event", "err", err)
 	}
 

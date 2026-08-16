@@ -43,6 +43,27 @@ type Event struct {
 	Meta *string `gorm:"type:jsonb"`
 }
 
+// Airing is what was on screen when an event happened. The zero value carries
+// no airing context and writes NULL into both columns — what an instance with
+// no player records, and what a viewer joining an idle stream gets.
+type Airing struct {
+	// VideoID is the clip's videos.id. 0 writes NULL, covering both "nothing
+	// playing" and "the clip has no DB row".
+	VideoID int
+	// TsSec is seconds into that clip. nil writes NULL, for a writer that
+	// knows the clip but not the playhead.
+	TsSec *float64
+}
+
+// apply stamps the airing columns onto an event being built.
+func (a Airing) apply(e *Event) {
+	if a.VideoID != 0 {
+		vid := a.VideoID
+		e.VideoID = &vid
+	}
+	e.VideoTsSec = a.TsSec
+}
+
 // record writes one event row and counts it. Every event kind goes through
 // here, so the read-only guard, the platform stamp and the metric can't be
 // forgotten by a new kind. The caller supplies only the fields its kind uses;
@@ -59,15 +80,22 @@ func record(ctx context.Context, cfg *c.TripbotConfig, e Event) error {
 	return nil
 }
 
-func Login(ctx context.Context, cfg *c.TripbotConfig, user string, sessionID uuid.UUID) error {
-	return record(ctx, cfg, Event{Username: user, Event: "login", SessionID: sessionID})
+// Login records a session-start event. airing is the footage the viewer
+// arrived on, which is what pairs a join against the clip that earned it.
+func Login(ctx context.Context, cfg *c.TripbotConfig, user string, sessionID uuid.UUID, airing Airing) error {
+	e := Event{Username: user, Event: "login", SessionID: sessionID}
+	airing.apply(&e)
+	return record(ctx, cfg, e)
 }
 
 // Logout records a session-end event. extraMiles is the session's
 // unreconstructable bonus (sub-grants + 5% bonus); pass nil to write NULL
-// when it's zero.
-func Logout(ctx context.Context, cfg *c.TripbotConfig, user string, sessionID uuid.UUID, extraMiles *float64) error {
-	return record(ctx, cfg, Event{Username: user, Event: "logout", SessionID: sessionID, ExtraMilesEarned: extraMiles})
+// when it's zero. airing is the footage the viewer left on — the other half
+// of the per-clip join/leave churn the login row opens.
+func Logout(ctx context.Context, cfg *c.TripbotConfig, user string, sessionID uuid.UUID, extraMiles *float64, airing Airing) error {
+	e := Event{Username: user, Event: "logout", SessionID: sessionID, ExtraMilesEarned: extraMiles}
+	airing.apply(&e)
+	return record(ctx, cfg, e)
 }
 
 // Subscribe records that a viewer's subscription began (Twitch
