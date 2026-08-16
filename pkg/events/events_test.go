@@ -86,6 +86,9 @@ var writers = []struct {
 			Username: "someone", Command: "!watchtime", Reason: RefusedUnknown,
 		})
 	}},
+	{"Raided", "raid", func(ctx context.Context, cfg *c.TripbotConfig) error {
+		return Raided(ctx, cfg, Raid{From: "somechannel", Viewers: 25})
+	}},
 	{"CommandRan", "command_run", func(ctx context.Context, cfg *c.TripbotConfig) error {
 		return CommandRan(ctx, cfg, CommandRun{
 			Username: "someone", Command: "!location",
@@ -412,6 +415,38 @@ func TestStateCrossingZeroVideoIDWritesNull(t *testing.T) {
 	}
 }
 
+// A raid row carries the raiding channel as its username and a meta document
+// naming the party size, stamped with the clip the raid landed on. The exact
+// JSON matters — rollups address it as meta->>'from' / meta->>'viewers' when
+// controlling per-clip audience metrics for raid spikes.
+func TestRaidRow(t *testing.T) {
+	ts := 12.5
+	mock := installMockDB(t)
+	mock.ExpectQuery(`INSERT INTO "events"`).
+		WithArgs(
+			"somechannel",                         // username: the raiding channel
+			"twitch",                              // platform
+			"raid",                                // event
+			sqlmock.AnyArg(),                      // session_id
+			sqlmock.AnyArg(),                      // date_created
+			nil,                                   // extra_miles_earned
+			42,                                    // video_id
+			12.5,                                  // video_ts_sec
+			`{"from":"somechannel","viewers":25}`, // meta
+		).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+
+	err := Raided(context.Background(), &c.TripbotConfig{Platform: "twitch"}, Raid{
+		From: "somechannel", Viewers: 25, VideoID: 42, TsSec: &ts,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Error(err)
+	}
+}
+
 // A command_run row pairs the canonical trigger with what the viewer actually
 // typed and the args they passed, stamped with the airing clip and playhead.
 // The exact JSON matters — rollups address it as meta->>'command' /
@@ -437,6 +472,32 @@ func TestCommandRunRow(t *testing.T) {
 	err := CommandRan(context.Background(), &c.TripbotConfig{Platform: "twitch"}, CommandRun{
 		Username: "someone", Command: "!guess", Typed: "!florida", Args: "florida",
 		VideoID: 42, TsSec: &ts,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Error(err)
+	}
+}
+
+// A raid arriving with no airing context (no player row for the clip) still
+// records, with NULL airing columns rather than a 0 that would read as "clip
+// 0, first second".
+func TestRaidZeroAiringWritesNull(t *testing.T) {
+	mock := installMockDB(t)
+	mock.ExpectQuery(`INSERT INTO "events"`).
+		WithArgs(
+			"somechannel", "twitch", "raid",
+			sqlmock.AnyArg(), sqlmock.AnyArg(), nil,
+			nil,                                   // video_id
+			nil,                                   // video_ts_sec
+			`{"from":"somechannel","viewers":25}`, // meta
+		).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+
+	err := Raided(context.Background(), &c.TripbotConfig{Platform: "twitch"}, Raid{
+		From: "somechannel", Viewers: 25,
 	})
 	if err != nil {
 		t.Fatal(err)

@@ -21,6 +21,10 @@ type Events interface {
 	Follow(ctx context.Context, username string) error
 	Subscribe(ctx context.Context, username string) error
 	Unsubscribe(ctx context.Context, username string) error
+	// Raided records an incoming raid landing on the airing clip — the
+	// confounder any per-clip audience metric has to control for, since the
+	// raiders arrive on whatever happens to be on screen.
+	Raided(ctx context.Context, r events.Raid) error
 	// Correction records a manual miles adjustment (delta may be negative),
 	// which is what makes a hand-corrected total auditable afterwards.
 	Correction(ctx context.Context, username string, delta float64) error
@@ -57,6 +61,10 @@ func (r realEvents) Subscribe(ctx context.Context, username string) error {
 
 func (r realEvents) Unsubscribe(ctx context.Context, username string) error {
 	return events.Unsubscribe(ctx, r.cfg, username)
+}
+
+func (r realEvents) Raided(ctx context.Context, raid events.Raid) error {
+	return events.Raided(ctx, r.cfg, raid)
 }
 
 func (r realEvents) Correction(ctx context.Context, username string, delta float64) error {

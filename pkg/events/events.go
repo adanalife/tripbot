@@ -557,6 +557,50 @@ func SessionCount(ctx context.Context, platform, username string) int64 {
 	return n
 }
 
+// raidMeta is a raid event's meta payload.
+type raidMeta struct {
+	// From is the raiding channel's name, duplicated from the row's username
+	// so the payload stays self-contained when queried by kind.
+	From string `json:"from"`
+	// Viewers is the raiding party size Twitch reported.
+	Viewers int `json:"viewers"`
+}
+
+// Raid describes one incoming raid for Raided.
+type Raid struct {
+	// From is the raiding channel's name.
+	From string
+	// Viewers is how many viewers arrived with the raid.
+	Viewers int
+	// VideoID is the clip airing when the raid landed; 0 writes NULL.
+	VideoID int
+	// TsSec is seconds into that clip; nil writes NULL.
+	TsSec *float64
+}
+
+// Raided records an incoming raid, stamped with the clip it landed on. A raid
+// dumps its viewers onto whatever footage happens to be airing, which inflates
+// any per-clip audience metric computed from the log — recording the raid is
+// what lets a rollup control for the spike instead of crediting the footage.
+func Raided(ctx context.Context, cfg *c.TripbotConfig, r Raid) error {
+	payload, err := json.Marshal(raidMeta{From: r.From, Viewers: r.Viewers})
+	if err != nil {
+		return err
+	}
+	meta := string(payload)
+	var vid *int
+	if r.VideoID != 0 {
+		vid = &r.VideoID
+	}
+	return record(ctx, cfg, Event{
+		Username:   r.From,
+		Event:      "raid",
+		Meta:       &meta,
+		VideoID:    vid,
+		VideoTsSec: r.TsSec,
+	})
+}
+
 // consoleActionMeta is a console_action event's meta payload.
 type consoleActionMeta struct {
 	Action string `json:"action"`

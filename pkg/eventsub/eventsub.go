@@ -63,6 +63,9 @@ type Handlers struct {
 	// and the message they typed. channel.subscribe does not fire for resubs,
 	// so this is the only signal for a continued subscription.
 	OnResub func(username string, cumulativeMonths, streakMonths int, tier, message string)
+	// OnRaid fires on channel.raid — another channel raiding this one,
+	// carrying the raiding broadcaster's name and the party size.
+	OnRaid func(from string, viewers int)
 }
 
 // Config is the static input Run needs to subscribe. ClientID matches
@@ -135,6 +138,11 @@ func Run(ctx context.Context, cfg Config, h Handlers) error {
 			h.OnResub(e.UserName, e.CumulativeMonths, e.StreakMonths, e.Tier, e.Message.Text)
 		})
 	}
+	if h.OnRaid != nil {
+		client.OnEventChannelRaid(func(e twitch.EventChannelRaid) {
+			h.OnRaid(e.FromBroadcasterUserName, e.Viewers)
+		})
+	}
 
 	// Written from the OnWelcome callback, which the library runs on its own read
 	// goroutine, and read after ConnectWithContext returns — hence atomic.
@@ -178,6 +186,15 @@ func Run(ctx context.Context, cfg Config, h Handlers) error {
 		if h.OnResub != nil {
 			sub(twitch.SubChannelSubscriptionMessage, map[string]string{
 				"broadcaster_user_id": cfg.BroadcasterUserID,
+			})
+		}
+		if h.OnRaid != nil {
+			sub(twitch.SubChannelRaid, map[string]string{
+				// channel.raid conditions on the raid's direction rather than
+				// a broadcaster: to_ scopes it to raids landing on this
+				// channel. It's the one subscription here that needs no auth
+				// scope beyond a valid token.
+				"to_broadcaster_user_id": cfg.BroadcasterUserID,
 			})
 		}
 	})

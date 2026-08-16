@@ -13,6 +13,7 @@ type noopEvents struct{}
 func (noopEvents) Follow(_ context.Context, _ string) error                { return nil }
 func (noopEvents) Subscribe(_ context.Context, _ string) error             { return nil }
 func (noopEvents) Unsubscribe(_ context.Context, _ string) error           { return nil }
+func (noopEvents) Raided(_ context.Context, _ events.Raid) error           { return nil }
 func (noopEvents) Correction(_ context.Context, _ string, _ float64) error { return nil }
 func (noopEvents) GuessSubmitted(_ context.Context, _ events.GuessSubmission) error {
 	return nil
@@ -34,6 +35,7 @@ type recordingEvents struct {
 	Timewarps []events.Warp
 
 	Refusals []events.CommandRefusal
+	Raids    []events.Raid
 	Runs     []events.CommandRun
 }
 
@@ -54,6 +56,11 @@ func (r *recordingEvents) Follow(_ context.Context, username string) error {
 
 func (r *recordingEvents) CommandRefused(_ context.Context, ref events.CommandRefusal) error {
 	r.Refusals = append(r.Refusals, ref)
+	return nil
+}
+
+func (r *recordingEvents) Raided(_ context.Context, raid events.Raid) error {
+	r.Raids = append(r.Raids, raid)
 	return nil
 }
 
