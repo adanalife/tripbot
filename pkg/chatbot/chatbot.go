@@ -110,6 +110,11 @@ type App struct {
 	// correction) to the append-only events table. Tests inject a noopEvents;
 	// production uses realEvents.
 	Events Events
+	// ChatCounter tallies inbound chat messages for the chat-rate half of the
+	// viewer-sample tick. cmd/tripbot wires the viewstats.MessageCounter it
+	// shares with the session cron; nil (tests, an instance with no sampling)
+	// leaves messages uncounted.
+	ChatCounter ChatCounter
 
 	// commands is this App's command registry (built by buildRegistry);
 	// singleWordLookup / multiWordLookup index it by trigger + alias for
@@ -160,9 +165,7 @@ func New(cfg *c.TripbotConfig) *App {
 		Scoreboards: realScoreboards{cfg: cfg},
 		Events:      realEvents{cfg: cfg},
 	}
-	// Twitch is wired after the literal so the gateway/in-process selector can
-	// hold the App and read its (later-reassigned) Flags client at call time —
-	// cmd/tripbot swaps in the Postgres-backed flag client after New().
+	// Wired after the literal because the adapter selector takes the App itself.
 	a.Twitch = newTwitch(a)
 	a.indexCommands()
 	return a

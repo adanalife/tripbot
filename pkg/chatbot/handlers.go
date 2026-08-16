@@ -363,8 +363,8 @@ func (a *App) runCommand(ctx context.Context, user *users.User, message string) 
 		// A viewer reaching for a command this bot doesn't have is chat traffic,
 		// not an application fault: a typo, or a trigger they know from another
 		// channel's bot (!watchtime showed up in prod this way). At Error level
-		// every distinct token became its own Sentry issue and drew down the
-		// free-tier budget; the command_refused event below is now the durable
+		// every distinct token becomes its own Sentry issue and draws down the
+		// free-tier budget; the command_refused event below is the durable
 		// record of what people try, so Info is enough here.
 		reason := events.RefusedUnknown
 		if a.unindexedCommand(command) != nil {
@@ -446,6 +446,13 @@ func (a *App) HandleMessage(ctx context.Context, msg IncomingMessage) {
 
 	// increment the Prometheus counter
 	instrumentation.ChatMessages.Inc()
+
+	// Tally for the chat-rate sample. Every inbound message counts — commands
+	// and bots' messages included, since the per-tick total is an aggregate
+	// readers can't attribute to senders.
+	if a.ChatCounter != nil {
+		a.ChatCounter.Add()
+	}
 
 	// emit chat line to Loki via OTel
 	mylog.ChatMsg(msg.User, a.Cfg.ChannelName, msg.Text)

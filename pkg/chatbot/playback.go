@@ -11,6 +11,7 @@ import (
 	"time"
 
 	terrors "github.com/adanalife/tripbot/pkg/errors"
+	"github.com/adanalife/tripbot/pkg/events"
 	"github.com/hako/durafmt"
 
 	"github.com/adanalife/tripbot/pkg/feature"
@@ -62,9 +63,15 @@ func (a *App) showTimewarpOverlay(ctx context.Context, username string) {
 
 // timewarp jumps the playhead to a random video in the loop. username is the
 // chatter who triggered it — surfaced as a credit line on the warp overlay
-// (empty for callers with no attributable user).
-func (a *App) timewarp(ctx context.Context, username string) {
+// (empty for callers with no attributable user). source names the trigger for
+// the timewarp event (the events.WarpSource* constants).
+func (a *App) timewarp(ctx context.Context, username, source string) {
 	a.showTimewarpOverlay(ctx, username)
+
+	// capture the departing clip and playhead before the jump; the timewarp
+	// event pairs them with wherever the warp lands.
+	from := a.Video.Current()
+	fromSecs := a.Video.CurrentProgress().Seconds()
 
 	// shuffle to a new video
 	err := a.Playout.PlayRandom(ctx)
@@ -72,9 +79,29 @@ func (a *App) timewarp(ctx context.Context, username string) {
 		slog.ErrorContext(ctx, "error from Playout client", "err", err)
 	}
 	// update the currently-playing video
-	a.Video.GetCurrentlyPlaying(ctx)
+	to := a.Video.GetCurrentlyPlaying(ctx)
 	// update our record of last time it ran
 	lastTimewarpTime = time.Now()
+
+	a.recordTimewarp(ctx, events.Warp{
+		Username:  username,
+		Source:    source,
+		VideoID:   from.ID,
+		TsSec:     &fromSecs,
+		ToVideoID: to.ID,
+	})
+}
+
+// recordTimewarp writes a timewarp event. Best-effort: the warp already
+// happened, so a failed insert is logged and dropped rather than surfaced.
+func (a *App) recordTimewarp(ctx context.Context, w events.Warp) {
+	if a.Events == nil {
+		return
+	}
+	if err := a.Events.Timewarp(ctx, w); err != nil {
+		slog.ErrorContext(ctx, "error recording timewarp", "err", err,
+			"source", w.Source)
+	}
 }
 
 func (a *App) timewarpCmd(ctx context.Context, user *users.User, _ []string) {
@@ -100,7 +127,7 @@ func (a *App) timewarpCmd(ctx context.Context, user *users.User, _ []string) {
 	}
 
 	// do the timewarp, crediting the caller on the overlay
-	a.timewarp(ctx, user.Username)
+	a.timewarp(ctx, user.Username, events.WarpSourceCommand)
 }
 
 func (a *App) jumpCmd(ctx context.Context, user *users.User, params []string) {
