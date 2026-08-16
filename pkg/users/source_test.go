@@ -5,6 +5,7 @@ import (
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
+	"github.com/adanalife/tripbot/pkg/viewstats"
 )
 
 // testConf is the config test Sessions carry — the same values .env.testing
@@ -26,6 +27,8 @@ func (noopChatterSource) ChatterCount() int             { return 0 }
 func (noopChatterSource) IsSubscriber(_ string) bool    { return false }
 func (noopChatterSource) SubscriberTier(_ string) int   { return 0 }
 func (noopChatterSource) IsFollower(_ string) bool      { return false }
+func (noopChatterSource) UpdateAudience()               {}
+func (noopChatterSource) Audience() viewstats.Audience  { return viewstats.Audience{} }
 
 // recordingChatterSource answers from canned maps and counts calls, so tests
 // can assert the seam actually routes through the injected source.
@@ -51,6 +54,8 @@ func (r *recordingChatterSource) IsFollower(username string) bool {
 	r.followCalls++
 	return r.followers[username]
 }
+func (r *recordingChatterSource) UpdateAudience()              {}
+func (r *recordingChatterSource) Audience() viewstats.Audience { return viewstats.Audience{} }
 
 // Sessions.IsSubscriber routes through the injected ChatterSource — the seam a
 // future YouTube/TikTok adapter swaps into (each provider gets its own
@@ -116,5 +121,41 @@ func TestSessionsHoldIndependentState(t *testing.T) {
 	if len(b.lifetimeLeaderboard) != 0 || len(b.loggedIn) != 0 {
 		t.Fatalf("expected independent *Sessions, but b saw a's state: lb=%v loggedIn=%v",
 			b.lifetimeLeaderboard, b.loggedIn)
+	}
+}
+
+// stubVideoSource reports a fixed clip and playhead.
+type stubVideoSource struct {
+	id   int
+	secs float64
+}
+
+func (s stubVideoSource) CurrentVideoID() int         { return s.id }
+func (s stubVideoSource) CurrentProgressSec() float64 { return s.secs }
+
+// With no video source wired, session events carry no airing context. An
+// instance that isn't driving playback must record NULL rather than clip 0,
+// which would otherwise pollute the per-clip churn rollup.
+func TestAiringWithoutVideoSource(t *testing.T) {
+	got := New(testConf, noopChatterSource{}).airing()
+
+	if got.VideoID != 0 || got.TsSec != nil {
+		t.Errorf("airing() = %+v, want zero Airing", got)
+	}
+}
+
+// A wired source puts the clip on screen and the playhead onto the event, so a
+// join or leave can be attributed to the footage that earned it.
+func TestAiringWithVideoSource(t *testing.T) {
+	s := New(testConf, noopChatterSource{})
+	s.SetVideoSource(stubVideoSource{id: 42, secs: 12.5})
+
+	got := s.airing()
+
+	if got.VideoID != 42 {
+		t.Errorf("VideoID = %d, want 42", got.VideoID)
+	}
+	if got.TsSec == nil || *got.TsSec != 12.5 {
+		t.Errorf("TsSec = %v, want 12.5", got.TsSec)
 	}
 }

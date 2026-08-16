@@ -134,9 +134,9 @@ func TestGuessCmd_WrongGuess_MisspelledStaysWrong(t *testing.T) {
 // ErrDisabled when no Maps key is set) leaves State empty without flagging.
 // Nobody can guess an answer that doesn't exist, so nobody gets credited.
 func TestGuessCmd_StatelessVideo_CreditsNobody(t *testing.T) {
-	// The two-letter miss is the input that used to reach here as "": a
-	// non-abbreviation was blanked before the comparison, so "" == "" matched
-	// and handed out a guess point plus a timewarp on demand.
+	// "zz" is the two-letter case: it must not be blanked before the comparison,
+	// or "" == "" matches the stateless video and hands out a guess point plus a
+	// timewarp on demand.
 	for _, guess := range []string{"zz", "Colorado", ""} {
 		t.Run("guess="+guess, func(t *testing.T) {
 			app := newTestApp(newTestVideo("", 39.5, -105.0, time.Now()))

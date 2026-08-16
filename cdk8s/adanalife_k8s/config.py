@@ -103,8 +103,8 @@ class EnvConfig:
     )
     # Streaming platforms present in this env. twitch everywhere; youtube
     # currently stage-only while the bot side is built out. Drives the per-platform
-    # fan-out of tripbot/onscreens (OBS itself is deployed by the obs repo now,
-    # which carries its own obs_streaming for the stream-key + --startstreaming).
+    # fan-out of tripbot/onscreens (OBS itself is deployed by the obs repo, which
+    # carries its own obs_streaming for the stream-key + --startstreaming).
     platforms: tuple[str, ...] = ("twitch",)
     # --- prod-stream protection (2026-06-11 stage-starves-prod incident) ---
     # PriorityClassName stamped on the env's app Deployment pods; when set,
@@ -148,11 +148,10 @@ class EnvConfig:
     # leaves the gateway unwired (local/CI only): the Twitch audience/follower/
     # broadcaster-send features are disabled.
     twitch_api_url: str = ""
-    # Like twitch_api_url, but for a youtube instance's outbound chat sends:
-    # gateway-youtube's URL routes them through the platform-gateway
-    # unconditionally (no runtime flag — unlike Twitch). Empty keeps the
-    # in-process pkg/youtube send. The inbound chat poll stays in-process
-    # regardless (no gateway streaming endpoint).
+    # Like twitch_api_url, but for a youtube instance: both chat directions
+    # reach gateway-youtube, so tripbot holds no YouTube credential. Required on
+    # a youtube instance — with the URL empty the pod boots without chat. The
+    # inbound half is separately gated by youtube_inbound_enabled below.
     youtube_api_url: str = ""
     # The gateway-transport platforms: a PLATFORM=facebook/instagram/tiktok
     # instance reaches BOTH chat directions through its per-platform gateway
@@ -328,9 +327,8 @@ ENVS: dict[str, EnvConfig] = {
         # Route stage tripbot-twitch's Helix calls through the in-namespace
         # gateway-twitch.
         twitch_api_url="http://gateway-twitch.stage-1.svc.cluster.local:8080",
-        # Route stage tripbot-youtube's outbound chat sends through the
-        # in-namespace gateway-youtube (unconditionally — no flag). The inbound
-        # poll stays in-process.
+        # Route both of stage tripbot-youtube's chat directions through the
+        # in-namespace gateway-youtube.
         youtube_api_url="http://gateway-youtube.stage-1.svc.cluster.local:8080",
         # The parked platform instances point at their in-namespace gateway
         # the same way, so a hand scale-up is a working bring-up rather than

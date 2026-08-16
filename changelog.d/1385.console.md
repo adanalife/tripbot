@@ -1,0 +1,1 @@
+The internal API accepts a console-action audit report: `POST /api/events/console-action` lands each successful console admin mutation in the permanent events log as a `console_action` event (`action`/`target`/`detail` in meta), so "what changed from the console, and when" is a query instead of a memory.

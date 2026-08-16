@@ -25,6 +25,12 @@ type Events interface {
 	// Correction records a manual miles adjustment (delta may be negative),
 	// which is what makes a hand-corrected total auditable afterwards.
 	Correction(ctx context.Context, username string, delta float64) error
+	// GuessSubmitted records an answerable !guess, right or wrong — the raw
+	// material for guess accuracy and per-footage difficulty.
+	GuessSubmitted(ctx context.Context, g events.GuessSubmission) error
+	// Timewarp records a playhead warp to a random clip: who triggered it,
+	// how, and the clips it left and landed on.
+	Timewarp(ctx context.Context, w events.Warp) error
 	// CommandRefused records a command the bot declined to run. Unlike the
 	// viewer-lifecycle writers above, a refusal is the only record that the
 	// attempt happened at all — nothing else in the system remembers a command
@@ -52,6 +58,14 @@ func (r realEvents) Raided(ctx context.Context, raid events.Raid) error {
 
 func (r realEvents) Correction(ctx context.Context, username string, delta float64) error {
 	return events.Correction(ctx, r.cfg, username, delta)
+}
+
+func (r realEvents) GuessSubmitted(ctx context.Context, g events.GuessSubmission) error {
+	return events.GuessSubmitted(ctx, r.cfg, g)
+}
+
+func (r realEvents) Timewarp(ctx context.Context, w events.Warp) error {
+	return events.Timewarp(ctx, r.cfg, w)
 }
 
 func (r realEvents) CommandRefused(ctx context.Context, ref events.CommandRefusal) error {
