@@ -16,6 +16,9 @@ import (
 // its error rather than logging: a lost event is a hole in that history, and
 // the caller is the one that knows whether it can say so in chat.
 type Events interface {
+	// Follow records that a viewer followed the channel — the rows behind
+	// any "followers gained" count.
+	Follow(ctx context.Context, username string) error
 	Subscribe(ctx context.Context, username string) error
 	Unsubscribe(ctx context.Context, username string) error
 	// Correction records a manual miles adjustment (delta may be negative),
@@ -42,6 +45,10 @@ type Events interface {
 // pkg/events needs; the DB handle is its.
 type realEvents struct {
 	cfg *c.TripbotConfig
+}
+
+func (r realEvents) Follow(ctx context.Context, username string) error {
+	return events.Follow(ctx, r.cfg, username)
 }
 
 func (r realEvents) Subscribe(ctx context.Context, username string) error {

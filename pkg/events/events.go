@@ -114,6 +114,14 @@ func Unsubscribe(ctx context.Context, cfg *c.TripbotConfig, user string) error {
 	return record(ctx, cfg, Event{Username: user, Event: "unsubscribe"})
 }
 
+// Follow records that a viewer followed the channel (Twitch channel.follow).
+// The durable record behind "followers gained": the EventSub notice otherwise
+// only produces a chat shout, so an unwritten follow is unrecoverable. Count
+// with DISTINCT username — refollow churn fires the notice again.
+func Follow(ctx context.Context, cfg *c.TripbotConfig, user string) error {
+	return record(ctx, cfg, Event{Username: user, Event: "follow"})
+}
+
 // Correction records a manual miles adjustment (delta, may be negative) as an
 // event carrying the amount in extra_miles_earned, so the rollup folds it into
 // user_rollups.extra_miles alongside the session bonuses. This is the audit
