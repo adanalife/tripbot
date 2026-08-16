@@ -10,6 +10,7 @@ package viewstats
 import (
 	"context"
 	"log/slog"
+	"sync"
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
@@ -33,6 +34,11 @@ type VideoPlay struct {
 	// the zero value over its DEFAULT CURRENT_TIMESTAMP. See pkg/events for
 	// the full story.
 	StartedAt time.Time `gorm:"autoCreateTime"`
+	// EndedAt is when the clip stopped airing, stamped by the play that
+	// supersedes this row. nil means the end was never observed — the process
+	// crashed or restarted while the clip was up, or the row predates the
+	// column. Duration is derived (EndedAt - StartedAt), never stored.
+	EndedAt *time.Time
 }
 
 // ViewerSample is one viewer_samples row: Count chatters were in this
@@ -55,12 +61,44 @@ type ViewerSample struct {
 	SampledAt time.Time `gorm:"autoCreateTime"`
 }
 
-// RecordPlay writes a video_plays row for a clip switch. Pass videoID 0 when
-// the clip has no DB row; the row is written with a NULL video_id.
+// openPlayIDs remembers, per platform, the id of the video_plays row this
+// process opened most recently and hasn't closed, so the next RecordPlay can
+// stamp its ended_at. Deliberately process-local rather than looked up from
+// the table: a row left open by a previous process stays open forever, because
+// a crash or restart means the clip's end was genuinely never observed — a
+// NULL ended_at there is honest, and back-dating one would be a guess.
+var (
+	openPlayMu  sync.Mutex
+	openPlayIDs = map[string]int{}
+)
+
+// closePreviousPlay stamps ended_at on the platform's still-open play row, if
+// this process opened one. Best-effort like the writes around it: a failed
+// update logs and leaves the row open.
+func closePreviousPlay(ctx context.Context, platform string) {
+	openPlayMu.Lock()
+	id, ok := openPlayIDs[platform]
+	delete(openPlayIDs, platform)
+	openPlayMu.Unlock()
+	if !ok {
+		return
+	}
+	err := database.GormDB().WithContext(ctx).Model(&VideoPlay{}).
+		Where("id = ?", id).Update("ended_at", time.Now()).Error
+	if err != nil {
+		slog.ErrorContext(ctx, "error closing previous video play", "err", err, "play_id", id)
+	}
+}
+
+// RecordPlay writes a video_plays row for a clip switch, closing the
+// platform's previous row (its clip stopped airing the moment this one
+// started). Pass videoID 0 when the clip has no DB row; the row is written
+// with a NULL video_id.
 func RecordPlay(ctx context.Context, cfg *c.TripbotConfig, videoID int, state string, flagged bool, lat, lng float64) {
 	if cfg.ReadOnly {
 		return
 	}
+	closePreviousPlay(ctx, cfg.Platform)
 	var vid *int
 	if videoID != 0 {
 		vid = &videoID
@@ -75,7 +113,11 @@ func RecordPlay(ctx context.Context, cfg *c.TripbotConfig, videoID int, state st
 	}
 	if err := database.GormDB().WithContext(ctx).Create(&play).Error; err != nil {
 		slog.ErrorContext(ctx, "error recording video play", "err", err, "video_id", videoID)
+		return
 	}
+	openPlayMu.Lock()
+	openPlayIDs[cfg.Platform] = play.ID
+	openPlayMu.Unlock()
 }
 
 // Audience is the platform's concurrent-viewer reading for one tick. Reported

@@ -14,11 +14,22 @@ import (
 // ReadOnly false so writes aren't skipped. The read-only tests pass their own.
 var testConf = &c.TripbotConfig{Environment: "testing", Platform: "twitch"}
 
-// setup installs a transaction-scoped DB, which rolls back in cleanup so rows
-// never leak between tests.
+// setup installs a transaction-scoped DB and clears the open-play tracking so
+// each test starts from a known state. The transaction rolls back in cleanup,
+// so rows never leak.
 func setup(t *testing.T) *gorm.DB {
 	t.Helper()
-	return testdb.New(t)
+	db := testdb.New(t)
+
+	resetOpenPlays()
+	t.Cleanup(resetOpenPlays)
+	return db
+}
+
+func resetOpenPlays() {
+	openPlayMu.Lock()
+	openPlayIDs = map[string]int{}
+	openPlayMu.Unlock()
 }
 
 func allPlays(t *testing.T, db *gorm.DB) []VideoPlay {
@@ -81,6 +92,80 @@ func TestRecordPlay_ZeroVideoIDWritesNull(t *testing.T) {
 	}
 	if plays[0].VideoID != nil {
 		t.Errorf("video_id: want NULL, got %v", *plays[0].VideoID)
+	}
+}
+
+// A new play closes the previous one: the old clip stopped airing the moment
+// the new one started, so its row gets an ended_at while the new row stays
+// open. The first play of a process closes nothing.
+func TestRecordPlay_ClosesPreviousPlay(t *testing.T) {
+	db := setup(t)
+	ctx := context.Background()
+
+	RecordPlay(ctx, testConf, 42, "Utah", false, 38.5, -109.5)
+	RecordPlay(ctx, testConf, 43, "Colorado", false, 39.1, -108.5)
+
+	plays := allPlays(t, db)
+	if len(plays) != 2 {
+		t.Fatalf("expected 2 video_plays rows, got %d", len(plays))
+	}
+	first, second := plays[0], plays[1]
+	if first.EndedAt == nil {
+		t.Fatal("first play not closed by the second")
+	}
+	if first.EndedAt.Before(first.StartedAt) {
+		t.Errorf("ended_at %v precedes started_at %v", first.EndedAt, first.StartedAt)
+	}
+	if second.EndedAt != nil {
+		t.Errorf("second (current) play should stay open, got ended_at %v", *second.EndedAt)
+	}
+}
+
+// A row left open by a previous process stays open: its clip's end was never
+// observed, so the first play after a restart must not back-date an ended_at
+// onto it.
+func TestRecordPlay_LeavesPriorProcessRowOpen(t *testing.T) {
+	db := setup(t)
+	ctx := context.Background()
+
+	// A row from a previous process: present in the table, absent from this
+	// process's open-play tracking.
+	orphanID := 42
+	orphan := VideoPlay{Platform: "twitch", VideoID: &orphanID, State: "Utah"}
+	if err := db.Create(&orphan).Error; err != nil {
+		t.Fatalf("seed orphan play: %v", err)
+	}
+	resetOpenPlays()
+
+	RecordPlay(ctx, testConf, 43, "Colorado", false, 39.1, -108.5)
+
+	plays := allPlays(t, db)
+	if len(plays) != 2 {
+		t.Fatalf("expected 2 video_plays rows, got %d", len(plays))
+	}
+	if plays[0].EndedAt != nil {
+		t.Errorf("prior process's row must stay open, got ended_at %v", *plays[0].EndedAt)
+	}
+}
+
+// Closing is per-platform: platform A's clip switch says nothing about what B
+// is airing, so B's open row must survive A's new play.
+func TestRecordPlay_ClosesOnlyOwnPlatform(t *testing.T) {
+	db := setup(t)
+	ctx := context.Background()
+	youtubeConf := &c.TripbotConfig{Environment: "testing", Platform: "youtube"}
+
+	RecordPlay(ctx, testConf, 42, "Utah", false, 38.5, -109.5)
+	RecordPlay(ctx, youtubeConf, 43, "Colorado", false, 39.1, -108.5)
+
+	plays := allPlays(t, db)
+	if len(plays) != 2 {
+		t.Fatalf("expected 2 video_plays rows, got %d", len(plays))
+	}
+	for i, p := range plays {
+		if p.EndedAt != nil {
+			t.Errorf("play %d (%s) should stay open, got ended_at %v", i, p.Platform, *p.EndedAt)
+		}
 	}
 }
 
