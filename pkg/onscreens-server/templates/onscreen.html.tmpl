@@ -60,6 +60,47 @@
     91%  { opacity: 0; transform: translate(-50%, -50%) scale(1.4); filter: blur(4px); }
     100% { opacity: 0; }
   }
+{{else if eq .Name "under-construction"}}
+  /* Under-construction is a full-screen, opaque, fully static slate. It sits
+     *beneath* the dashcam video in the OBS scene stack, so the compositor
+     reveals it exactly while the dashcam source has no frames (playout
+     restart, RTSP drop) and covers it again the instant video returns.
+     Deliberately no animation and no state polling: this page renders 24/7
+     in an occluded browser source, so every frame it paints beyond the
+     heartbeat is wasted CPU on the streaming host. */
+  #uc {
+    position: fixed; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: radial-gradient(circle at 50% 42%, #24242c 0%, #141418 55%, #0a0a0d 100%);
+    font-family: "Trebuchet MS", sans-serif;
+  }
+  /* MUTCD-style roadwork diamond: rotated square, orange face, dark border
+     inset from the edge like the real sign's rim. */
+  #uc .sign {
+    width: 280px; height: 280px;
+    transform: rotate(45deg);
+    border-radius: 22px;
+    background: #e8891d;
+    box-shadow: inset 0 0 0 10px #e8891d, inset 0 0 0 16px #16161a,
+                0 10px 50px rgba(0, 0, 0, 0.65);
+    display: flex; align-items: center; justify-content: center;
+  }
+  #uc .sign span {
+    transform: rotate(-45deg);
+    font-family: "Arial Narrow", Impact, sans-serif;
+    font-weight: 800; font-size: 40px; line-height: 1.1;
+    letter-spacing: 0.03em; text-align: center; color: #16161a;
+  }
+  #uc .msg {
+    margin-top: 72px; font-size: 34px; color: #eef0f4;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.6);
+  }
+  #uc .hint { margin-top: 14px; font-size: 21px; color: rgba(238, 240, 244, 0.55); }
+  #uc .hint code {
+    font-family: "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+    font-size: 0.9em; padding: 0.02em 0.32em; border-radius: 0.25em;
+    background: rgba(255, 255, 255, 0.12);
+  }
 {{else}}
   body {
     font-family: {{.FontCSS}};
@@ -212,6 +253,12 @@
   setInterval(tick, 250);
 })();
 </script>
+{{else if eq .Name "under-construction"}}
+<div id="uc">
+  <div class="sign"><span>ROAD<br>WORK<br>AHEAD</span></div>
+  <div class="msg">hang tight &mdash; we&rsquo;ll be back on the road in a moment</div>
+  <div class="hint">been more than a minute? type <code>!report</code> in chat</div>
+</div>
 {{else}}
 {{if .IsImage}}
 <div id="root" class="image hidden" data-name="{{.Name}}" data-image="true"><img src="/onscreens/asset/{{.Name}}" alt=""></div>
