@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/adanalife/tripbot/pkg/events"
 	"github.com/adanalife/tripbot/pkg/feature"
 	"github.com/adanalife/tripbot/pkg/helpers"
 )
@@ -121,7 +122,7 @@ func (a *App) HandleGatewayGift(ctx context.Context, gift IncomingGift) {
 
 	switch effect {
 	case effectTimewarp:
-		a.timewarp(ctx, gift.User)
+		a.timewarp(ctx, gift.User, events.WarpSourceGift)
 	}
 
 	lastGiftEffectTime = time.Now()

@@ -10,6 +10,7 @@ import (
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
 	"github.com/adanalife/tripbot/pkg/database"
 	terrors "github.com/adanalife/tripbot/pkg/errors"
+	"github.com/adanalife/tripbot/pkg/helpers"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 	"github.com/google/uuid"
 )
@@ -146,6 +147,143 @@ func StateCrossing(ctx context.Context, cfg *c.TripbotConfig, from, to string, v
 		vid = &videoID
 	}
 	return record(ctx, cfg, Event{Event: "state_crossing", Meta: &meta, VideoID: vid})
+}
+
+// guessMeta is a guess_submitted event's meta payload. Guessed and Actual are
+// post-normalization (two-letter code expanded, close misspelling corrected),
+// so rows that differ only in spelling still group together in a rollup.
+type guessMeta struct {
+	Guessed string `json:"guessed"`
+	Actual  string `json:"actual"`
+	Correct bool   `json:"correct"`
+	// DistanceMi is how far off the guess was: miles between the guessed
+	// state's centroid and the actual state's centroid, 0 for a correct
+	// guess. Omitted when a centroid doesn't resolve (a territory), since a
+	// missing measurement and a perfect one must not read alike.
+	DistanceMi *float64 `json:"distance_mi,omitempty"`
+}
+
+// guessDistanceMi measures a guess's miss distance in centroid-to-centroid
+// miles. A correct guess is definitionally 0 — even for a territory with no
+// centroid to measure from. nil when either centroid doesn't resolve. Pure
+// arithmetic over the built-in centroid table; no I/O.
+func guessDistanceMi(g GuessSubmission) *float64 {
+	if g.Correct {
+		zero := 0.0
+		return &zero
+	}
+	glat, glng, ok := helpers.StateCentroid(g.Guessed)
+	if !ok {
+		return nil
+	}
+	alat, alng, ok := helpers.StateCentroid(g.Actual)
+	if !ok {
+		return nil
+	}
+	d := helpers.MilesBetween(glat, glng, alat, alng)
+	return &d
+}
+
+// GuessSubmission describes one answerable !guess for GuessSubmitted.
+type GuessSubmission struct {
+	Username string
+	// Guessed is the state the viewer guessed, normalized.
+	Guessed string
+	// Actual is the state the aired footage is in.
+	Actual string
+	// Correct is whether Guessed matched Actual.
+	Correct bool
+	// VideoID is the clip being guessed at; 0 writes NULL.
+	VideoID int
+	// TsSec is seconds into that clip; nil writes NULL.
+	TsSec *float64
+}
+
+// GuessSubmitted records one answerable !guess — right or wrong — pairing what
+// the viewer guessed with what was actually on screen, plus how far off it was
+// in centroid miles. Guesses at footage with no known state are deliberately
+// not recorded: there is no right answer to compare against, so a row would
+// only skew any accuracy computed from the log. The distance is derived here,
+// at the single write point, so no emit site can forget it.
+func GuessSubmitted(ctx context.Context, cfg *c.TripbotConfig, g GuessSubmission) error {
+	payload, err := json.Marshal(guessMeta{
+		Guessed:    g.Guessed,
+		Actual:     g.Actual,
+		Correct:    g.Correct,
+		DistanceMi: guessDistanceMi(g),
+	})
+	if err != nil {
+		return err
+	}
+	meta := string(payload)
+	var vid *int
+	if g.VideoID != 0 {
+		vid = &g.VideoID
+	}
+	return record(ctx, cfg, Event{
+		Username:   g.Username,
+		Event:      "guess_submitted",
+		Meta:       &meta,
+		VideoID:    vid,
+		VideoTsSec: g.TsSec,
+	})
+}
+
+// Warp sources carried in a timewarp event's meta. Every path that jumps the
+// playhead to a random clip names itself here, so per-source warp counts can't
+// silently lump triggers together.
+const (
+	// WarpSourceCommand — a viewer ran !timewarp.
+	WarpSourceCommand = "command"
+	// WarpSourceGuess — a correct !guess triggered the warp as its reward.
+	WarpSourceGuess = "guess"
+	// WarpSourceGift — a platform gift's effect triggered the warp.
+	WarpSourceGift = "gift"
+)
+
+// timewarpMeta is a timewarp event's meta payload: how the warp was triggered
+// and where it landed. The row's video_id carries the clip the warp left.
+type timewarpMeta struct {
+	Source string `json:"source"`
+	// To is the videos.id of the clip the warp landed on, omitted when the
+	// new clip has no DB row.
+	To int `json:"to,omitempty"`
+}
+
+// Warp describes one playhead warp for Timewarp.
+type Warp struct {
+	// Username is the viewer whose action triggered the warp.
+	Username string
+	// Source names the trigger (the WarpSource* constants).
+	Source string
+	// VideoID is the clip airing before the warp; 0 writes NULL.
+	VideoID int
+	// TsSec is seconds into that clip when the warp fired; nil writes NULL.
+	TsSec *float64
+	// ToVideoID is the clip the warp landed on; 0 omits the meta key.
+	ToVideoID int
+}
+
+// Timewarp records a playhead warp to a random clip: who triggered it, how,
+// and the from/to clips. Paired with video_plays this answers where warps pull
+// viewers from — which footage people warp away from, and what they land on.
+func Timewarp(ctx context.Context, cfg *c.TripbotConfig, w Warp) error {
+	payload, err := json.Marshal(timewarpMeta{Source: w.Source, To: w.ToVideoID})
+	if err != nil {
+		return err
+	}
+	meta := string(payload)
+	var vid *int
+	if w.VideoID != 0 {
+		vid = &w.VideoID
+	}
+	return record(ctx, cfg, Event{
+		Username:   w.Username,
+		Event:      "timewarp",
+		Meta:       &meta,
+		VideoID:    vid,
+		VideoTsSec: w.TsSec,
+	})
 }
 
 // Refusal reasons carried in a command_refused event's meta. Every path that
