@@ -43,8 +43,8 @@ func (s *Sessions) InitLeaderboard(ctx context.Context) {
 // UpdateLeaderboard rebuilds the lifetime-miles leaderboard from the users
 // table, overlaying in-progress session miles for anyone currently logged in
 // so lurkers' numbers keep ticking between logouts. Replaces the cached slice
-// wholesale; before this it was rebuilt in-memory from logged-in users only,
-// which drifted from the DB after boot.
+// wholesale, so the cache tracks the users table rather than drifting from it
+// as the process stays up.
 func (s *Sessions) UpdateLeaderboard(ctx context.Context) {
 	users, err := s.fetchLeaderboard(ctx, maxLeaderboardSize)
 	if err != nil {

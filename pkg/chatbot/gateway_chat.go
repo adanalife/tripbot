@@ -77,7 +77,7 @@ func (p *gatewayChatPoller) LongPolls() *gatewayChatPoller {
 // it chains onto the constructor.
 //
 // Enable it where the gateway terminates a streaming chat transport (Twitch
-// IRC), so "the bot is not in chat" stays observable now that the connection
+// IRC), so "the bot is not in chat" stays observable even though the connection
 // itself lives in the gateway. It reads the same page.Live flag as
 // ReportsLiveness but answers a different question, so the two can both be on
 // without fighting: for a platform whose chat exists only while it streams they

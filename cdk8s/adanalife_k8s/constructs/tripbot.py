@@ -11,11 +11,11 @@ Reproduces k8s/apps/tripbot/base + overlays:
     shared OTLP/Sentry Secrets, then twitch/maps (required) and the two
     optional discord Secrets. On the laptop the DB Secret is the on-disk
     `tripbot-secret`; on eso envs it's the ESO `tripbot-database-creds`.
-  * Service (ClusterIP :8080) + traefik Ingress everywhere (the web UI / OAuth
-    round-trip is reachable on-LAN in every env). The *bot* is outbound-only
-    (EventSub via WebSocket), but the dashboard Ingress is published per env;
-    minipc envs add TLS. local is HTTP-only at
-    tripbot.localhost.
+  * Service (ClusterIP :8080) + traefik Ingress everywhere. The *bot* itself is
+    outbound-only (EventSub via WebSocket); what the Ingress publishes is the
+    HTTP surface — the /api/* endpoints the console proxies, plus /health,
+    /metrics and /version. minipc envs add TLS; local is HTTP-only at
+    tripbot-<platform>.localhost.
 The construct envFroms its DB + app Secrets by name but does NOT emit them —
 they're identity-level (one bot, one DB, shared by every platform stack), so
 `emit_identity_secrets` emits them once into the per-env supporting unit
@@ -450,7 +450,7 @@ class Tripbot(Construct):
             ),
         )
 
-        # --- Ingress (dashboard / OAuth) — published in every env ---
+        # --- Ingress (the :8080 HTTP surface) — published in every env ---
         self._ingress(name, platform, env, ns, labels)
 
     # ---- Ingress helpers ----
@@ -528,7 +528,7 @@ def emit_identity_secrets(scope: Construct, env: EnvConfig) -> None:
 
 
 def _emit_db_external_secret(scope, ns, labels):
-    # database creds: reads the shared postgres SM JSON ({user,password,db})
+    # database creds: reads the shared postgres parameter JSON ({user,password,db})
     # and remaps it onto DATABASE_* keys via target.template — a shape the
     # eso.external_secret helper doesn't cover, so emit it as a raw ApiObject
     # (same idiom as obs.py / postgres.py).
@@ -593,7 +593,7 @@ def _emit_db_external_secret(scope, ns, labels):
 
 
 def _emit_app_external_secrets(scope, ns, labels, *, maps: bool):
-    # twitch + google-maps: extract every top-level key of the SM JSON blob.
+    # twitch + google-maps: extract every top-level key of the parameter's JSON.
     extracts = [
         (
             "twitch-external-secret",
@@ -619,7 +619,7 @@ def _emit_app_external_secrets(scope, ns, labels, *, maps: bool):
             creation_policy="Owner",
             extract=sm,
         )
-    # discord alerts + bot-token: one SM container → one materialized key.
+    # discord alerts + bot-token: one parameter → one materialized key.
     for id_, name, sm, key in [
         (
             "discord-alerts-external-secret",

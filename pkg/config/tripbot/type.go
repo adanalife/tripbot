@@ -64,12 +64,12 @@ type TripbotConfig struct {
 	// lives only on the platform-gateway, which owns OAuth consent and refresh.
 	TwitchClientID string `envconfig:"TWITCH_CLIENT_ID"`
 
-	// TwitchAPIURL points the chatbot's command-time Twitch Helix calls at
-	// the platform-gateway gateway-twitch instance over HTTP, instead of the
-	// in-process pkg/twitch path. Empty (the default) keeps the in-process
-	// adapter, so existing envs are unaffected. When set — e.g.
-	// http://gateway-twitch.<env>.svc.cluster.local:8080 — App.Twitch becomes an
-	// HTTP client behind the same interface, with no command code changes.
+	// TwitchAPIURL points the chatbot's command-time Twitch Helix calls at the
+	// platform-gateway gateway-twitch instance over HTTP — e.g.
+	// http://gateway-twitch.<env>.svc.cluster.local:8080. The gateway is the
+	// only Helix caller, so this is required on a twitch instance. Empty leaves
+	// App.Twitch a fail-closed no-op adapter: every Helix lookup answers
+	// "unknown" rather than the instance failing to boot.
 	TwitchAPIURL string `envconfig:"TWITCH_API_URL"`
 
 	// YouTubeAPIURL points a PLATFORM=youtube instance at the platform-gateway
@@ -78,8 +78,8 @@ type TripbotConfig struct {
 	// flow through the gateway: outbound via its SendChat (which resolves the
 	// active live chat itself), inbound via its GET /v1/chat/inbound poll. The
 	// gateway also owns the YouTube OAuth token, so tripbot holds none at
-	// runtime. Required on a youtube instance — the in-process YouTube client is
-	// gone, so with this empty the instance comes up without YouTube chat.
+	// runtime. Required on a youtube instance — tripbot has no in-process
+	// YouTube client, so with this empty the instance comes up without chat.
 	YouTubeAPIURL string `envconfig:"YOUTUBE_API_URL"`
 
 	// YouTubeInboundEnabled gates the gateway-youtube inbound chat poll on a
@@ -134,8 +134,8 @@ type TripbotConfig struct {
 
 	// DiscordBotToken authenticates the live Discord bot session that
 	// serves slash commands. Optional — when unset, missing, or still at
-	// the AWS Secrets Manager placeholder value, pkg/discord skips
-	// session init entirely and the rest of the bot runs normally.
+	// terraform's placeholder value, pkg/discord skips session init
+	// entirely and the rest of the bot runs normally.
 	DiscordBotToken string `envconfig:"DISCORD_BOT_TOKEN"`
 	// DiscordGuildID is the Discord server snowflake the bot registers
 	// its slash commands against. Optional — leaving it empty in an

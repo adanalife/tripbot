@@ -1,0 +1,1 @@
+`viewer_samples.video_id` is now read from the player at sample time instead of from a package-global remembering the last clip switch. That global reset to 0 on every restart, so every sample taken between a restart and the next clip switch recorded a NULL clip — silently thinning the per-clip data the footage-performance rollup is built on.

@@ -83,8 +83,7 @@ func newTestApp(vid video.Video) *App {
 
 // builtTestApp is a fake-wired App with the command registry indexed, shared by
 // the registry-inspection and findCommand-routing tests (read-only — they
-// inspect command definitions / routing, never dispatch). It replaces the
-// production defaultApp singleton those tests used to read.
+// inspect command definitions / routing, never dispatch).
 var builtTestApp = newTestApp(video.Video{})
 
 // --- App.Chat seam ---

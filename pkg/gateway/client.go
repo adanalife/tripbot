@@ -205,6 +205,46 @@ func (c *Client) Chatters(ctx context.Context) (count int, logins []string, err 
 	return body.Count, body.Chatters, nil
 }
 
+// Audience is the channel's live-audience snapshot: how many people are
+// watching, and whether anything is broadcasting at all. Reported is false
+// when no number was available — a platform that publishes none, a gateway
+// too old to serve /v1/viewers, or a failed call — which callers must not
+// flatten to a count of zero.
+type Audience struct {
+	Count    int
+	Live     bool
+	Reported bool
+}
+
+// Viewers returns the channel's concurrent-viewer count (GET /v1/viewers).
+// A 404 is the gateway saying this platform publishes no viewer number — an
+// expected answer, not a failure — and returns a zero Audience with a nil
+// error. This is deliberately not Chatters: chatters are who has spoken,
+// viewers are who is watching.
+func (c *Client) Viewers(ctx context.Context) (Audience, error) {
+	resp, err := c.get(ctx, "/v1/viewers")
+	if err != nil {
+		return Audience{}, err
+	}
+	defer resp.Body.Close()
+
+	switch resp.StatusCode {
+	case http.StatusOK:
+		var body struct {
+			Count int  `json:"count"`
+			Live  bool `json:"live"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+			return Audience{}, fmt.Errorf("gateway viewers decode: %w", err)
+		}
+		return Audience{Count: body.Count, Live: body.Live, Reported: true}, nil
+	case http.StatusNotFound:
+		return Audience{}, nil // platform reports no viewer count — expected
+	default:
+		return Audience{}, fmt.Errorf("gateway viewers: unexpected status %d", resp.StatusCode)
+	}
+}
+
 // Subscribers returns the channel's current subscribers as a login → tier map
 // (GET /v1/subscribers). A login the gateway reports without a tier (an older
 // gateway without the tiers field) defaults to tier 1.

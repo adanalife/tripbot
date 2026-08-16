@@ -11,7 +11,6 @@ import (
 	"context"
 	"log/slog"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
@@ -44,21 +43,23 @@ type VideoPlay struct {
 
 // ViewerSample is one viewer_samples row: Count chatters were in this
 // platform's chat at SampledAt. VideoID is the clip on screen at sample time,
-// denormalized so per-clip queries don't need interval pairing; nil before the
-// first play of the process or when that play had no DB row.
+// denormalized so per-clip queries don't need interval pairing; nil when
+// nothing was playing or the clip had no DB row.
 type ViewerSample struct {
 	ID       int `gorm:"primaryKey"`
 	Platform string
-	Count    int
-	VideoID  *int
+	// Count is the chatter total — who has spoken, not who is watching. Kept
+	// for continuity with the series collected before Viewers existed.
+	Count   int
+	VideoID *int
+	// Viewers is the platform's concurrent-viewer count, and Live whether
+	// anything was broadcasting. Both nil when no number was reported, so a
+	// rollup can tell "nobody counted" from "nobody watching".
+	Viewers *int
+	Live    *bool
 	// autoCreateTime: see VideoPlay.StartedAt.
 	SampledAt time.Time `gorm:"autoCreateTime"`
 }
-
-// currentVideoID remembers the most recent play's video id so RecordSample can
-// denormalize it without the sessions package knowing the player. 0 means no
-// play recorded yet this process.
-var currentVideoID atomic.Int64
 
 // openPlayIDs remembers, per platform, the id of the video_plays row this
 // process opened most recently and hasn't closed, so the next RecordPlay can
@@ -94,7 +95,6 @@ func closePreviousPlay(ctx context.Context, platform string) {
 // started). Pass videoID 0 when the clip has no DB row; the row is written
 // with a NULL video_id.
 func RecordPlay(ctx context.Context, cfg *c.TripbotConfig, videoID int, state string, flagged bool, lat, lng float64) {
-	currentVideoID.Store(int64(videoID))
 	if cfg.ReadOnly {
 		return
 	}
@@ -120,22 +120,42 @@ func RecordPlay(ctx context.Context, cfg *c.TripbotConfig, videoID int, state st
 	openPlayMu.Unlock()
 }
 
-// RecordSample writes a viewer_samples row for one viewer-count tick, tagged
-// with the currently-playing clip as of the last RecordPlay.
-func RecordSample(ctx context.Context, cfg *c.TripbotConfig, count int) {
+// Audience is the platform's concurrent-viewer reading for one tick. Reported
+// is false when no number was available, which writes NULL rather than a zero
+// that would read as "a live broadcast nobody watched".
+type Audience struct {
+	Count    int
+	Live     bool
+	Reported bool
+}
+
+// RecordSample writes a viewer_samples row for one viewer-count tick.
+// chatters is the in-chat total; audience is the watching total, which the two
+// columns keep apart because they answer different questions and only one of
+// them sizes the audience. videoID is the clip on screen — pass 0 when nothing
+// is playing or the clip has no DB row, and the row records a NULL.
+//
+// The caller reads videoID from the player rather than this package
+// remembering the last RecordPlay, so a restart doesn't blind the samples
+// taken before the next clip switch.
+func RecordSample(ctx context.Context, cfg *c.TripbotConfig, chatters int, audience Audience, videoID int) {
 	if cfg.ReadOnly {
 		return
 	}
 	var vid *int
-	if id := int(currentVideoID.Load()); id != 0 {
-		vid = &id
+	if videoID != 0 {
+		vid = &videoID
 	}
 	sample := ViewerSample{
 		Platform: cfg.Platform,
-		Count:    count,
+		Count:    chatters,
 		VideoID:  vid,
 	}
+	if audience.Reported {
+		sample.Viewers = &audience.Count
+		sample.Live = &audience.Live
+	}
 	if err := database.GormDB().WithContext(ctx).Create(&sample).Error; err != nil {
-		slog.ErrorContext(ctx, "error recording viewer sample", "err", err, "count", count)
+		slog.ErrorContext(ctx, "error recording viewer sample", "err", err, "chatters", chatters)
 	}
 }
