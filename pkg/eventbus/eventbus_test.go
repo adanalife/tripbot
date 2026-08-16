@@ -59,6 +59,8 @@ func TestEmitChatMessage(t *testing.T) {
 	EmitChatMessage(context.Background(), "development", ChatMessage{
 		Platform: "twitch", Username: "DanaLol", UserID: "42",
 		Text: "Hello, World!", MessageID: "msg-1", Subscriber: true,
+		Badges: map[string]int{"subscriber": 12},
+		Emotes: []Emote{{ID: "25", Start: 0, End: 4}},
 	})
 
 	if len(rec.Publishes) != 1 {
@@ -82,6 +84,15 @@ func TestEmitChatMessage(t *testing.T) {
 	if ev.UserID != "42" || ev.MessageID != "msg-1" || !ev.Subscriber {
 		t.Errorf("identity fields = {user_id:%q message_id:%q subscriber:%v}, want {42 msg-1 true}",
 			ev.UserID, ev.MessageID, ev.Subscriber)
+	}
+	// The decorations survive the round trip with their versions and spans
+	// intact — the months a role bool can't carry, and where in the text to
+	// draw the emote.
+	if ev.Badges["subscriber"] != 12 {
+		t.Errorf("badges = %v, want the subscriber badge at version 12", ev.Badges)
+	}
+	if len(ev.Emotes) != 1 || ev.Emotes[0] != (Emote{ID: "25", Start: 0, End: 4}) {
+		t.Errorf("emotes = %+v, want one occurrence of 25 at 0-4", ev.Emotes)
 	}
 	// Unset roles are omitted rather than published as false, so a consumer
 	// can't read "not a moderator" as an answer from a platform that never

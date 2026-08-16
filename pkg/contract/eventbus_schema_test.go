@@ -28,6 +28,7 @@ func TestEventbusSchemaMatchesStructs(t *testing.T) {
 		"VideoChanged":      reflect.TypeOf(eventbus.VideoChanged{}),
 		"AuthStatus":        reflect.TypeOf(eventbus.AuthStatus{}),
 		"AuthAccount":       reflect.TypeOf(eventbus.AuthAccount{}),
+		"Emote":             reflect.TypeOf(eventbus.Emote{}),
 		"YoutubeBroadcast":  reflect.TypeOf(eventbus.YoutubeBroadcast{}),
 		"FacebookBroadcast": reflect.TypeOf(eventbus.FacebookBroadcast{}),
 	}

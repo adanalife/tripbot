@@ -431,6 +431,13 @@ type IncomingMessage struct {
 	Moderator   bool
 	Subscriber  bool
 	Broadcaster bool
+	// Badges and Emotes are the sender's chat decorations, carried straight
+	// onto the event bus for the console to render — the command path never
+	// reads them. Badges maps a badge name to its version (for "subscriber",
+	// the months a bool can't carry); Emotes locates each emote occurrence in
+	// Text. Only Twitch reports either.
+	Badges map[string]int
+	Emotes []eventbus.Emote
 }
 
 // HandleMessage processes one inbound chat message: records it (Loki + the
@@ -469,6 +476,8 @@ func (a *App) HandleMessage(ctx context.Context, msg IncomingMessage) {
 		Moderator:   msg.Moderator,
 		Subscriber:  msg.Subscriber,
 		Broadcaster: msg.Broadcaster,
+		Badges:      msg.Badges,
+		Emotes:      msg.Emotes,
 	})
 
 	// resolve the sender, then run any command. The original casing goes

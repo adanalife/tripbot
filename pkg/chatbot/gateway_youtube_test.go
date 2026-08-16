@@ -6,10 +6,12 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/adanalife/tripbot/pkg/eventbus"
 	"github.com/adanalife/tripbot/pkg/gateway"
 )
 
@@ -87,7 +89,9 @@ func TestGatewayChatPollerRoutesByKind(t *testing.T) {
 
 	page := gateway.InboundChatPage{
 		Messages: []gateway.InboundChatMessage{
-			{Author: "A", AuthorID: "1", Text: "!timewarp", MessageID: "m1", Moderator: true, Subscriber: true},
+			{Author: "A", AuthorID: "1", Text: "!timewarp", MessageID: "m1", Moderator: true, Subscriber: true,
+				Badges: map[string]int{"subscriber": 12},
+				Emotes: []gateway.Emote{{ID: "25", Start: 0, End: 4}}},
 			{Author: "B", AuthorID: "2", Kind: gateway.KindGift,
 				Gift: &gateway.Gift{ID: "5655", Name: "Rose", Count: 3, Diamonds: 1}},
 			{Author: "C", AuthorID: "3", Kind: gateway.KindGift}, // malformed: no payload
@@ -126,8 +130,10 @@ func TestGatewayChatPollerRoutesByKind(t *testing.T) {
 	wantMsg := IncomingMessage{
 		User: "A", UserID: "1", Text: "!timewarp", MessageID: "m1",
 		Moderator: true, Subscriber: true,
+		Badges: map[string]int{"subscriber": 12},
+		Emotes: []eventbus.Emote{{ID: "25", Start: 0, End: 4}},
 	}
-	if msgs[0] != wantMsg {
+	if !reflect.DeepEqual(msgs[0], wantMsg) {
 		t.Errorf("chat handled = %+v, want %+v", msgs[0], wantMsg)
 	}
 	if len(gifts) != 1 {

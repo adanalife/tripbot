@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/adanalife/tripbot/pkg/eventbus"
 	"github.com/adanalife/tripbot/pkg/gateway"
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 )
@@ -173,6 +174,8 @@ func (p *gatewayChatPoller) route(ctx context.Context, m gateway.InboundChatMess
 			Moderator:   m.Moderator,
 			Subscriber:  m.Subscriber,
 			Broadcaster: m.Broadcaster,
+			Badges:      m.Badges,
+			Emotes:      emotes(m.Emotes),
 		})
 	case gateway.KindGift:
 		if m.Gift == nil {
@@ -190,6 +193,21 @@ func (p *gatewayChatPoller) route(ctx context.Context, m gateway.InboundChatMess
 		slog.WarnContext(ctx, "unhandled gateway inbound kind; ignoring",
 			"kind", string(m.Kind), "author", m.Author)
 	}
+}
+
+// emotes retypes the gateway's emote occurrences as the event-bus shape. The
+// two structs are identical field-for-field and deliberately separate: the
+// event bus is a published contract the console generates types from, so it
+// can't be pinned to whatever the gateway client happens to return.
+func emotes(in []gateway.Emote) []eventbus.Emote {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]eventbus.Emote, len(in))
+	for i, e := range in {
+		out[i] = eventbus.Emote{ID: e.ID, Start: e.Start, End: e.End}
+	}
+	return out
 }
 
 // sleepCtx waits d or until ctx is done; false means ctx ended first.
