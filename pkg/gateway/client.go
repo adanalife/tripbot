@@ -322,16 +322,42 @@ func (g Gift) Value() int { return g.Diamonds * g.Count }
 // reported it on this message — a snapshot, not a lookup. They are all false on
 // a platform that reports no roles, which is indistinguishable from a viewer
 // holding none, so a gate that must fail closed can't read them alone.
+//
+// Badges and Emotes are the sender's decorations — what a renderer needs to
+// draw the line the way the platform's own client draws it, where the role
+// booleans exist to be acted on. Both are empty on every platform but Twitch,
+// and empty means "this platform reports none", not "this viewer has none".
 type InboundChatMessage struct {
-	Author      string      `json:"author"`
-	AuthorID    string      `json:"author_id"`
-	Text        string      `json:"text"`
-	Kind        InboundKind `json:"kind,omitempty"`
-	Gift        *Gift       `json:"gift,omitempty"`
-	MessageID   string      `json:"message_id,omitempty"`
-	Moderator   bool        `json:"moderator,omitempty"`
-	Subscriber  bool        `json:"subscriber,omitempty"`
-	Broadcaster bool        `json:"broadcaster,omitempty"`
+	Author      string         `json:"author"`
+	AuthorID    string         `json:"author_id"`
+	Text        string         `json:"text"`
+	Kind        InboundKind    `json:"kind,omitempty"`
+	Gift        *Gift          `json:"gift,omitempty"`
+	MessageID   string         `json:"message_id,omitempty"`
+	Moderator   bool           `json:"moderator,omitempty"`
+	Subscriber  bool           `json:"subscriber,omitempty"`
+	Broadcaster bool           `json:"broadcaster,omitempty"`
+	Badges      map[string]int `json:"badges,omitempty"`
+	Emotes      []Emote        `json:"emotes,omitempty"`
+}
+
+// Emote is one occurrence of a platform emote inside a message's Text — the
+// same emote used twice arrives as two entries.
+//
+// Start and End index Text in code points, not bytes, and End is inclusive, so
+// the emote's literal text is the substring Start through End. That is Twitch's
+// own convention, which the gateway passes through untranslated because the
+// renderers downstream (Python, JavaScript) index strings by code point; Go
+// code must convert to []rune first.
+//
+// ID builds the image URL —
+// static-cdn.jtvnw.net/emoticons/v2/<id>/default/<theme>/<scale> for Twitch.
+// Third-party emotes (BTTV, FFZ) never appear here: nothing in the platform
+// payload marks them, so resolving them needs a per-channel emote fetch.
+type Emote struct {
+	ID    string `json:"id"`
+	Start int    `json:"start"`
+	End   int    `json:"end"`
 }
 
 // InboundChatPage is one page from GET /v1/chat/inbound. Cursor is opaque: pass

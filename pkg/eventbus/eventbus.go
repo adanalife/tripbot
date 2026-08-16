@@ -112,10 +112,37 @@ type ChatMessage struct {
 	// channel as the platform reported it on this message. All three are false
 	// both for a viewer with no roles and on a platform that reports none, so a
 	// consumer gating on them must know which platforms answer.
-	Moderator   bool   `json:"moderator,omitempty"`
-	Subscriber  bool   `json:"subscriber,omitempty"`
-	Broadcaster bool   `json:"broadcaster,omitempty"`
-	EmittedAt   string `json:"emitted_at"`
+	Moderator   bool `json:"moderator,omitempty"`
+	Subscriber  bool `json:"subscriber,omitempty"`
+	Broadcaster bool `json:"broadcaster,omitempty"`
+	// Badges and Emotes are the sender's chat decorations — what a renderer
+	// needs to draw the line the way the platform's own client draws it, where
+	// the roles above are what a consumer acts on. Badges maps a badge name to
+	// its version, which is the part a role bool loses: for "subscriber" the
+	// version is the months. Only Twitch reports either, so empty means "this
+	// platform reports none", not "this viewer has none".
+	Badges    map[string]int `json:"badges,omitempty"`
+	Emotes    []Emote        `json:"emotes,omitempty"`
+	EmittedAt string         `json:"emitted_at"`
+}
+
+// Emote is one occurrence of a platform emote inside a chat message's Text —
+// the same emote used twice arrives as two entries.
+//
+// Start and End index Text in code points, not bytes, and End is inclusive, so
+// the emote's literal text is the substring Start through End. That is Twitch's
+// convention, carried through untranslated because the console indexes strings
+// by code point anyway; Go code must convert to []rune first.
+//
+// ID builds the image URL —
+// static-cdn.jtvnw.net/emoticons/v2/<id>/default/<theme>/<scale> for Twitch.
+// Third-party emotes (BTTV, FFZ) never appear here: nothing in the platform
+// payload marks them, so resolving them needs a per-channel emote fetch and
+// belongs wherever the render happens.
+type Emote struct {
+	ID    string `json:"id"`
+	Start int    `json:"start"`
+	End   int    `json:"end"`
 }
 
 // ChatMessageSubject returns the subscribe/publish subject for chat messages in
