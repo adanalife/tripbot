@@ -100,6 +100,10 @@ func (s *Server) Start(ctx context.Context) error {
 	// rest of /api (no Ingress; reached over the in-namespace Service).
 	r.Handle("/api/flags", tagged("/api/flags", s.flagsHandler)).Methods("GET")
 	r.Handle("/api/flags/{key}", tagged("/api/flags/{key}", s.flagToggleHandler)).Methods("POST")
+	// audit trail for the standalone console: it reports each successful admin
+	// mutation here, and the report lands in the permanent events log as a
+	// console_action event.
+	r.Handle("/api/events/console-action", tagged("/api/events/console-action", s.consoleActionHandler)).Methods("POST")
 
 	// read-only JSON aggregates over the append-only analytics tables (events,
 	// video_plays, viewer_samples), for the console's insights panels.

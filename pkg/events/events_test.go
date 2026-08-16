@@ -65,6 +65,9 @@ var writers = []struct {
 			Username: "someone", Command: "!watchtime", Reason: RefusedUnknown,
 		})
 	}},
+	{"ConsoleAction", "console_action", func(ctx context.Context, cfg *c.TripbotConfig) error {
+		return ConsoleAction(ctx, cfg, "scale", "obs-tiktok", "replicas 0→1")
+	}},
 }
 
 // A read-only instance must write no events at all. There's no mock DB
