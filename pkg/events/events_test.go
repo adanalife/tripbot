@@ -83,6 +83,11 @@ var writers = []struct {
 			Username: "someone", Command: "!watchtime", Reason: RefusedUnknown,
 		})
 	}},
+	{"CommandRan", "command_run", func(ctx context.Context, cfg *c.TripbotConfig) error {
+		return CommandRan(ctx, cfg, CommandRun{
+			Username: "someone", Command: "!location",
+		})
+	}},
 	{"ConsoleAction", "console_action", func(ctx context.Context, cfg *c.TripbotConfig) error {
 		return ConsoleAction(ctx, cfg, "scale", "obs-tiktok", "replicas 0→1")
 	}},
@@ -397,6 +402,66 @@ func TestStateCrossingZeroVideoIDWritesNull(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
 
 	if err := StateCrossing(context.Background(), &c.TripbotConfig{Platform: "twitch"}, "Utah", "Colorado", 0, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Error(err)
+	}
+}
+
+// A command_run row pairs the canonical trigger with what the viewer actually
+// typed and the args they passed, stamped with the airing clip and playhead.
+// The exact JSON matters — rollups address it as meta->>'command' /
+// meta->>'typed' / meta->>'args', and no reason key ever appears: a run has
+// nothing to explain, so runs and refusals stay distinguishable by kind alone.
+func TestCommandRunRow(t *testing.T) {
+	ts := 33.25
+	mock := installMockDB(t)
+	mock.ExpectQuery(`INSERT INTO "events"`).
+		WithArgs(
+			"someone",        // username
+			"twitch",         // platform
+			"command_run",    // event
+			sqlmock.AnyArg(), // session_id
+			sqlmock.AnyArg(), // date_created
+			nil,              // extra_miles_earned
+			42,               // video_id
+			33.25,            // video_ts_sec
+			`{"command":"!guess","typed":"!florida","args":"florida"}`, // meta
+		).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+
+	err := CommandRan(context.Background(), &c.TripbotConfig{Platform: "twitch"}, CommandRun{
+		Username: "someone", Command: "!guess", Typed: "!florida", Args: "florida",
+		VideoID: 42, TsSec: &ts,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Error(err)
+	}
+}
+
+// A run with no airing context writes NULL rather than a 0 that would read as
+// "clip 0, first second", and empty typed/args drop out of the meta rather
+// than writing empty keys.
+func TestCommandRunZeroAiringWritesNull(t *testing.T) {
+	mock := installMockDB(t)
+	mock.ExpectQuery(`INSERT INTO "events"`).
+		WithArgs(
+			"someone", "twitch", "command_run",
+			sqlmock.AnyArg(), sqlmock.AnyArg(), nil,
+			nil,                     // video_id
+			nil,                     // video_ts_sec
+			`{"command":"!uptime"}`, // meta
+		).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+
+	err := CommandRan(context.Background(), &c.TripbotConfig{Platform: "twitch"}, CommandRun{
+		Username: "someone", Command: "!uptime",
+	})
+	if err != nil {
 		t.Fatal(err)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {

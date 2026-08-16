@@ -66,7 +66,7 @@ func TestFuzzyLookup_ShortInputNeverFuzzes(t *testing.T) {
 }
 
 func TestFindCommand_FuzzyRoutesWithParams(t *testing.T) {
-	cmd, params := builtTestApp.findCommand("!gotoo 42")
+	cmd, _, params := builtTestApp.findCommand("!gotoo 42")
 	if cmd == nil {
 		t.Fatal("expected a command, got nil")
 	}
@@ -80,7 +80,7 @@ func TestFindCommand_FuzzyRoutesWithParams(t *testing.T) {
 
 func TestFindCommand_BareWordNotFuzzyRouted(t *testing.T) {
 	// bare-word triggers ("hello") are only reachable by exact match
-	if cmd, _ := builtTestApp.findCommand("helo"); cmd != nil {
+	if cmd, _, _ := builtTestApp.findCommand("helo"); cmd != nil {
 		t.Errorf("findCommand(helo) = %s, want nil", cmd.Trigger)
 	}
 }
