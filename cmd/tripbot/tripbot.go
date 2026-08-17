@@ -294,7 +294,7 @@ func (t *Tripbot) Run() {
 	go obs.PollStreamingActive(ctx, t.cfg.Platform, 30*time.Second)
 	t.startBackgroundAudio(ctx)         // every platform: owns its own OBS's bed
 	t.startBackgroundAudioWatchdog(ctx) // recovers SomaFM outages; advances album tracks
-	t.startStreamWatchdog(ctx)          // twitch + tiktok: recovers a stream the platform stopped showing
+	t.startStreamWatchdog(ctx)          // twitch, tiktok, youtube: recovers a stream the platform stopped showing
 	if t.platformIsTwitch() {
 		// chat.send subjects are per-env, not per-platform — both platform
 		// instances would receive every admin send, so only the Twitch instance
@@ -596,14 +596,19 @@ func (t *Tripbot) twitchAuthAccounts() []eventbus.AuthAccount {
 // in cmd rather than in pkg/obs/watchdog, so the shared package takes no
 // binary-specific dependency.
 //
-// Platforms whose broadcast is a set-and-forget ingest key have nothing to
-// recover from outside OBS and get no watchdog.
+// Each platform diverges its own way — Twitch's ingest half-closes, TikTok's
+// room is reaped, YouTube's broadcast never leaves pending — so the live-check
+// and the recovery are per-leg even though the loop is shared. Platforms whose
+// broadcast is a set-and-forget ingest key have nothing to recover from outside
+// OBS and get no watchdog.
 func (t *Tripbot) startStreamWatchdog(ctx context.Context) {
 	switch {
 	case t.platformIsTwitch():
 		t.startTwitchWatchdog(ctx)
 	case t.cfg.Platform == "tiktok":
 		t.startTikTokWatchdog(ctx)
+	case t.cfg.Platform == "youtube":
+		t.startYouTubeWatchdog(ctx)
 	}
 }
 
@@ -661,6 +666,57 @@ func (t *Tripbot) startTikTokWatchdog(ctx context.Context) {
 	deps.OnRestart = t.watchdogRestartHook("tiktok")
 	deps.OnRecovered = t.watchdogRecoveredHook("tiktok")
 	go watchdog.WatchSilentDisconnect(ctx, deps, 60*time.Second, 5, 30*time.Minute)
+}
+
+// startYouTubeWatchdog recovers a broadcast YouTube never took live. The
+// failure is one OBS restart deep, like Twitch's, but it presents from the
+// other side: the RTMP push is healthy and it is YouTube that hasn't moved —
+// the broadcast sits in Studio waiting on an encoder it didn't recognise, so
+// liveBroadcasts reports nothing active while OBS reports outputActive. A plain
+// stop/start of the output makes YouTube see the encoder, which is why this leg
+// keeps DefaultWatchdogDeps' Restart instead of replacing it.
+//
+// Ticks at BroadcastDiscovery's 2m cadence rather than the Twitch leg's 60s.
+// Both ask the gateway the same question, and each answer spends a YouTube
+// Data API quota unit — the same budget that already keeps this platform's chat
+// bot-less — so the tick trades detection latency for quota deliberately. Three
+// misses is six minutes, against an outage this exists to stop measuring in
+// hours.
+//
+// It cannot fix the other shape of this failure, where no broadcast exists at
+// all: restarting the output has nothing to bind to, and recovery has to mint
+// one through the gateway. Discriminating the two needs a finer egress status
+// than /v1/broadcast reports today.
+func (t *Tripbot) startYouTubeWatchdog(ctx context.Context) {
+	if t.cfg.YouTubeAPIURL == "" {
+		slog.WarnContext(ctx, "no YOUTUBE_API_URL: silent-disconnect watchdog disabled (gateway not wired)")
+		return
+	}
+	deps := watchdog.DefaultWatchdogDeps()
+	// No gauge write here: the BroadcastDiscovery job already owns
+	// tripbot_channel_live for YouTube, and two writers on one gauge would fight.
+	deps.ChannelLive = youtubeChannelLive(gateway.New(t.cfg.YouTubeAPIURL))
+	deps.OnRestart = t.watchdogRestartHook("youtube")
+	deps.OnRecovered = t.watchdogRecoveredHook("youtube")
+	go watchdog.WatchSilentDisconnect(ctx, deps, youtubeWatchdogInterval, 3, 10*time.Minute)
+}
+
+// youtubeWatchdogInterval matches the BroadcastDiscovery job's ticker so the
+// watchdog costs the same quota per hour as the liveness source it shares.
+const youtubeWatchdogInterval = 2 * time.Minute
+
+// youtubeChannelLive reads liveness off the active-broadcast lookup, the source
+// BroadcastDiscovery reports the gauge from. A broadcast that exists but is
+// still pending answers false — which is the point, since that pending state is
+// precisely the one an output restart clears.
+func youtubeChannelLive(gw *gateway.Client) func(context.Context) (bool, error) {
+	return func(ctx context.Context) (bool, error) {
+		b, err := gw.ActiveBroadcast(ctx)
+		if err != nil {
+			return false, err
+		}
+		return b.Live, nil
+	}
 }
 
 // tiktokRemintGap lets the old relay target unbind before the new room binds
