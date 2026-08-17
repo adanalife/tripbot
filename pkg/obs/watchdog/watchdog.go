@@ -237,6 +237,11 @@ func WatchSilentDisconnect(ctx context.Context, deps WatchdogDeps, interval time
 			// each attempt re-stopping an output already mid-teardown.
 			lastRestart = time.Now()
 			restartErr := deps.Restart(ctx)
+			// Recorded before the error check, so a recovery that keeps failing
+			// is visible. Counting only successes made the worse outage the
+			// quieter one: on 2026-08-05 every attempt failed for 9h41m and the
+			// counter never moved, so the panel over it read zero throughout.
+			instrumentation.OBSSilentDisconnectRestarts.Attempt(restartErr)
 			if deps.OnRestart != nil {
 				deps.OnRestart(ctx, restartErr)
 			}
@@ -244,7 +249,6 @@ func WatchSilentDisconnect(ctx context.Context, deps WatchdogDeps, interval time
 				slog.ErrorContext(ctx, "watchdog: restart failed", "err", restartErr)
 				continue
 			}
-			instrumentation.OBSSilentDisconnectRestarts.Inc()
 			misses = 0
 		}
 	}
