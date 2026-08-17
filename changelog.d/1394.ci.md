@@ -1,0 +1,1 @@
+Fixed the weekly super-linter sweep: codespell findings resolved (typos corrected, intentional misspellings allowlisted, `package-lock.json` excluded alongside `go.sum`) and per-linter commit statuses disabled, since scheduled runs have no PR to attach them to.

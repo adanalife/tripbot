@@ -15,7 +15,7 @@ func TestEffectForResolvesEveryValue(t *testing.T) {
 
 // effectFor takes the highest rung a gift reaches. Asserted against a local
 // ladder rather than the production one so the property still holds after
-// giftTiers is retuned (every rung is a timewarp today, which would make an
+// giftTiers is rebalanced (every rung is a timewarp today, which would make an
 // assertion against the real table vacuous).
 func TestEffectForTakesHighestRungReached(t *testing.T) {
 	prev := giftTiers

@@ -47,7 +47,13 @@ jobs:
           #   - towncrier-template.md: a Jinja template that *produces* markdown;
           #     towncrier requires the .md extension (it picks markup from it),
           #     but its `{% %}`/`[...]` syntax isn't valid markdown.
-          FILTER_REGEX_EXCLUDE: '.*(^|/)go\.sum$|.*pkg/server/static/.*|.*cdk8s/crds/.*|.*(^|/)towncrier-template\.md$'
+          #   - package-lock.json: same reason as go.sum — integrity hashes
+          #     contain random base64 substrings that codespell mistakes for
+          #     typos, and the file is npm's to write, not ours.
+          FILTER_REGEX_EXCLUDE: '.*(^|/)go\.sum$|.*(^|/)package-lock\.json$|.*pkg/server/static/.*|.*cdk8s/crds/.*|.*(^|/)towncrier-template\.md$'
+          # Scheduled main runs have no PR to attach per-linter commit statuses
+          # to, and the read-only token can't create them anyway.
+          MULTI_STATUS: false
           # disabled because it's not working with C libs
           VALIDATE_GO: false
           # disabled — none of the in-tree Dockerfiles have been
