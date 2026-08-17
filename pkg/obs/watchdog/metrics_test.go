@@ -24,9 +24,9 @@ func TestWatchSilentDisconnect_CountsFailedRestarts(t *testing.T) {
 	// Three misses fire a restart; the staged step fails it. A cooldown longer
 	// than the run keeps the count at exactly one attempt.
 	got := restartsDuring(t, func() {
-		runFixture(t, []step{missNoFix, missNoFix, missNoFix}, 3, longCooldown)
+		runFixtureOn(t, "tiktok", []step{missNoFix, missNoFix, missNoFix}, 3, longCooldown)
 	})
-	if want := map[string]int64{"failed": 1}; !maps.Equal(got, want) {
+	if want := map[string]int64{"tiktok/failed": 1}; !maps.Equal(got, want) {
 		t.Errorf("restart datapoints = %v, want %v", got, want)
 	}
 }
@@ -35,9 +35,9 @@ func TestWatchSilentDisconnect_CountsFailedRestarts(t *testing.T) {
 // result attribute buys nothing over the bare count it replaced.
 func TestWatchSilentDisconnect_CountsSuccessfulRestarts(t *testing.T) {
 	got := restartsDuring(t, func() {
-		runFixture(t, []step{miss, miss, miss}, 3, longCooldown)
+		runFixtureOn(t, "youtube", []step{miss, miss, miss}, 3, longCooldown)
 	})
-	if want := map[string]int64{"ok": 1}; !maps.Equal(got, want) {
+	if want := map[string]int64{"youtube/ok": 1}; !maps.Equal(got, want) {
 		t.Errorf("restart datapoints = %v, want %v", got, want)
 	}
 }
@@ -47,7 +47,7 @@ func TestWatchSilentDisconnect_CountsSuccessfulRestarts(t *testing.T) {
 const longCooldown = watchInterval * 1000
 
 // restartsDuring reports the restart datapoints the counter gained while body
-// ran, keyed by result attribute.
+// ran, keyed by "<service.platform>/<result>".
 //
 // A delta rather than an absolute: the counter is process-wide and every test
 // in this package feeds the same one.
@@ -80,7 +80,7 @@ var meterReader = sync.OnceValue(func() *metric.ManualReader {
 })
 
 // restartsByResult collects the restart counter's current datapoints, keyed by
-// their result attribute.
+// "<service.platform>/<result>".
 func restartsByResult(t *testing.T, reader *metric.ManualReader) map[string]int64 {
 	t.Helper()
 	var rm metricdata.ResourceMetrics
@@ -99,7 +99,11 @@ func restartsByResult(t *testing.T, reader *metric.ManualReader) map[string]int6
 			}
 			for _, dp := range sum.DataPoints {
 				result, _ := dp.Attributes.Value("result")
-				got[result.AsString()] += dp.Value
+				platform, ok := dp.Attributes.Value("service.platform")
+				if !ok {
+					t.Errorf("datapoint %v has no service.platform; the per-platform legs would share one series", dp.Attributes)
+				}
+				got[platform.AsString()+"/"+result.AsString()] += dp.Value
 			}
 		}
 	}

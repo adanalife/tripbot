@@ -617,6 +617,7 @@ func (t *Tripbot) startStreamWatchdog(ctx context.Context) {
 // StartStream opens a fresh connection.
 func (t *Tripbot) startTwitchWatchdog(ctx context.Context) {
 	deps := watchdog.DefaultWatchdogDeps()
+	deps.Platform = "twitch"
 	// A nil gateway is a misconfigured Twitch instance (TWITCH_API_URL unset) —
 	// report the check as errored rather than force-restarting on a false
 	// negative.
@@ -654,6 +655,7 @@ func (t *Tripbot) startTikTokWatchdog(ctx context.Context) {
 	}
 	gw := gateway.New(t.cfg.TikTokAPIURL)
 	deps := watchdog.DefaultWatchdogDeps()
+	deps.Platform = "tiktok"
 	// No gauge write here: the inbound chat poll already owns
 	// tripbot_channel_live for TikTok (gatewayPlatform.reportsLiveness), and two
 	// writers on one gauge would fight.
@@ -693,6 +695,7 @@ func (t *Tripbot) startYouTubeWatchdog(ctx context.Context) {
 		return
 	}
 	deps := watchdog.DefaultWatchdogDeps()
+	deps.Platform = "youtube"
 	// No gauge write here: the BroadcastDiscovery job already owns
 	// tripbot_channel_live for YouTube, and two writers on one gauge would fight.
 	deps.ChannelLive = youtubeChannelLive(gateway.New(t.cfg.YouTubeAPIURL))

@@ -36,7 +36,7 @@ var (
 
 	gatewayUp = mustGauge("tripbot_gateway_up", "1 when tripbot's last platform-gateway call got an HTTP response (gateway reachable), 0 when it failed at the transport layer (connection refused, timeout, DNS). Consumer-side reachability — paired with the gateway's own platform_gateway_up (process liveness).")
 
-	obsSilentDisconnectRestarts = mustCounter("tripbot_obs_silent_disconnect_restarts_total", "Total recoveries the silent-disconnect watchdog attempted because OBS reported outputActive=true while the platform reported the channel offline, labeled by result (ok, failed). The recovery is a StopStream+StartStream on Twitch and YouTube and an egress re-mint on TikTok; the datapoints carry no platform attribute, so instance (the pod name) is what tells the platforms apart")
+	obsSilentDisconnectRestarts = mustCounter("tripbot_obs_silent_disconnect_restarts_total", "Total recoveries the silent-disconnect watchdog attempted because OBS reported outputActive=true while the platform reported the channel offline, labeled by service_platform and by result (ok, failed). The recovery is a StopStream+StartStream on Twitch and YouTube and an egress re-mint on TikTok")
 
 	cronRuns     = mustCounter("tripbot_cron_runs_total", "Total cron job invocations, labeled by job")
 	cronPanics   = mustCounter("tripbot_cron_panics_total", "Cron job panics recovered, labeled by job")
@@ -269,15 +269,18 @@ func (g gatewayConnectionGauge) Set(reachable bool) {
 
 type obsSilentDisconnectRestartsCounter struct{ counter metric.Int64Counter }
 
-// Attempt records one forced recovery, labeled by whether it landed. Takes the
-// restart error rather than a bool so the call site can't record success on a
-// path that errored — the ordering bug this replaced.
-func (o obsSilentDisconnectRestartsCounter) Attempt(restartErr error) {
+// Attempt records one forced recovery, labeled by platform and by whether it
+// landed. Takes the restart error rather than a bool so the call site can't
+// record success on a path that errored — the ordering bug this replaced.
+func (o obsSilentDisconnectRestartsCounter) Attempt(platform string, restartErr error) {
 	result := "ok"
 	if restartErr != nil {
 		result = "failed"
 	}
-	o.counter.Add(context.Background(), 1, metric.WithAttributes(attribute.String("result", result)))
+	o.counter.Add(context.Background(), 1,
+		platformAttr(platform),
+		metric.WithAttributes(attribute.String("result", result)),
+	)
 }
 
 type cronMetrics struct {

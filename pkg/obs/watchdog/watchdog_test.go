@@ -119,12 +119,21 @@ func run(t *testing.T, script []step, threshold int, cooldown time.Duration) int
 // after the bubble closes: the loop has exited and nothing else holds it.
 func runFixture(t *testing.T, script []step, threshold int, cooldown time.Duration) *fixture {
 	t.Helper()
+	return runFixtureOn(t, "", script, threshold, cooldown)
+}
+
+// runFixtureOn is runFixture with the deps' Platform set, for the tests that
+// assert on the per-platform metric label.
+func runFixtureOn(t *testing.T, platform string, script []step, threshold int, cooldown time.Duration) *fixture {
+	t.Helper()
 	f := &fixture{}
 	synctest.Test(t, func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel() // lets the loop exit before the bubble closes
 
-		go WatchSilentDisconnect(ctx, f.deps(), watchInterval, threshold, cooldown)
+		deps := f.deps()
+		deps.Platform = platform
+		go WatchSilentDisconnect(ctx, deps, watchInterval, threshold, cooldown)
 		synctest.Wait() // wait out the loop's startup, up to its first ticker receive
 
 		for _, s := range script {
