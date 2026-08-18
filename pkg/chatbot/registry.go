@@ -14,10 +14,6 @@ import (
 func (a *App) buildRegistry() []Command {
 	return []Command{
 		{
-			Trigger: "!help",
-			Handler: a.helpCmd,
-		},
-		{
 			Trigger: "hello",
 			Aliases: []string{"hi", "hey", "hallo", "!bot"},
 			Handler: a.helloCmd,
@@ -142,7 +138,12 @@ func (a *App) buildRegistry() []Command {
 			// the bang is addressing the bot, and what they want next is the
 			// command surface. The bare "hello" trigger above still greets, so
 			// an ordinary greeting in chat is unaffected.
-			Aliases: []string{"!command", "!controls", "!hello"},
+			//
+			// "!help" is here rather than on its own handler because a viewer
+			// asking for help wants the command surface, not one rotating tip
+			// out of a set they cannot page through. The rotation still runs on
+			// the Chatter timer, where being one line at a time is the point.
+			Aliases: []string{"!command", "!controls", "!hello", "!help"},
 			Handler: a.commandsCmd,
 		},
 		{
@@ -313,7 +314,7 @@ func (a *App) platform() string {
 // along with their trigger, so only triggers are listed. See the YouTube
 // provider plan.
 var v1Commands = map[string]bool{
-	"!help": true, "!version": true, "!uptime": true, "!commands": true,
+	"!version": true, "!uptime": true, "!commands": true,
 	"!gas": true, "!report": true,
 	// background audio (every platform's scene ships the one bed source)
 	"!song": true, "!audio": true,
