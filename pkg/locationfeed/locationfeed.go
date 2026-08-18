@@ -100,12 +100,19 @@ func New(onscreens Publisher, geo CityLookup, weather WeatherLookup) *Emitter {
 	return &Emitter{onscreens: onscreens, geo: geo, weather: weather}
 }
 
-// Emit publishes the display data for vid. A flagged clip (no GPS fix) is
+// Emit publishes the display data for vid. A clip that can't be described is
 // skipped — onscreens-server holds the last value (and expires it after its own
 // TTL), so a single bad clip doesn't blank the rotator lines.
+//
+// Two shapes get skipped. A flagged clip has no GPS fix. A clip with a zero
+// DateFilmed is not a clip at all: either the player returned an empty Video, or
+// the row exists but nothing has stamped its date yet — video.Create writes the
+// zero value on insert, unflagged and at 0,0. Neither trips the flagged check,
+// and publishing either paints "Monday January 1, 0001" and a sunset derived
+// from it onto an ambient rotator that nobody has to ask for.
 func (e *Emitter) Emit(ctx context.Context, vid video.Video) {
 	lat, lng, err := vid.Location()
-	if vid.Flagged || err != nil {
+	if vid.Flagged || err != nil || vid.DateFilmed.IsZero() {
 		return
 	}
 	local := helpers.ActualDate(vid.DateFilmed, lat, lng)
