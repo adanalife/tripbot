@@ -36,7 +36,7 @@ var (
 
 	gatewayUp = mustGauge("tripbot_gateway_up", "1 when tripbot's last platform-gateway call got an HTTP response (gateway reachable), 0 when it failed at the transport layer (connection refused, timeout, DNS). Consumer-side reachability — paired with the gateway's own platform_gateway_up (process liveness).")
 
-	obsSilentDisconnectRestarts = mustCounter("tripbot_obs_silent_disconnect_restarts_total", "Total times the silent-disconnect watchdog forced a recovery because OBS reported outputActive=true while the platform reported the channel offline. The recovery is a StopStream+StartStream on Twitch and an egress re-mint on TikTok; the datapoints carry no platform attribute, so instance (the pod name) is what tells the platforms apart")
+	obsSilentDisconnectRestarts = mustCounter("tripbot_obs_silent_disconnect_restarts_total", "Total recoveries the silent-disconnect watchdog attempted because OBS reported outputActive=true while the platform reported the channel offline, labeled by service_platform and by result (ok, failed). The recovery is a StopStream+StartStream on Twitch and YouTube and an egress re-mint on TikTok")
 
 	cronRuns     = mustCounter("tripbot_cron_runs_total", "Total cron job invocations, labeled by job")
 	cronPanics   = mustCounter("tripbot_cron_panics_total", "Cron job panics recovered, labeled by job")
@@ -131,9 +131,16 @@ var CurrentState = &currentStateGauge{gauge: currentState}
 var GatewayConnection = gatewayConnectionGauge{gauge: gatewayUp}
 
 // OBSSilentDisconnectRestarts exposes the watchdog's forced-recovery counter.
-// Inc() is called after a successful recovery. Any non-zero rate is alertable —
-// the watchdog only fires after a multi-minute debounce, so even one increment
-// means we saw a real silent disconnect in prod.
+// Attempt is called once per recovery the watchdog forces, whether or not it
+// worked. Any non-zero rate is alertable — the watchdog only fires after a
+// multi-minute debounce, so even one increment means we saw a real silent
+// disconnect in prod.
+//
+// Counting attempts rather than successes is the load-bearing part. Recovery
+// that keeps failing is the worse outage and the one that used to be invisible:
+// through a 9h41m outage on 2026-08-05 the watchdog attempted a restart every
+// 60s and failed every time, and this counter never moved, so the panel built
+// on it read a flat zero for the whole incident.
 var OBSSilentDisconnectRestarts = obsSilentDisconnectRestartsCounter{counter: obsSilentDisconnectRestarts}
 
 // Cron exposes cron job metrics. Observe(job, seconds) is called on every
@@ -262,8 +269,18 @@ func (g gatewayConnectionGauge) Set(reachable bool) {
 
 type obsSilentDisconnectRestartsCounter struct{ counter metric.Int64Counter }
 
-func (o obsSilentDisconnectRestartsCounter) Inc() {
-	o.counter.Add(context.Background(), 1)
+// Attempt records one forced recovery, labeled by platform and by whether it
+// landed. Takes the restart error rather than a bool so the call site can't
+// record success on a path that errored — the ordering bug this replaced.
+func (o obsSilentDisconnectRestartsCounter) Attempt(platform string, restartErr error) {
+	result := "ok"
+	if restartErr != nil {
+		result = "failed"
+	}
+	o.counter.Add(context.Background(), 1,
+		platformAttr(platform),
+		metric.WithAttributes(attribute.String("result", result)),
+	)
 }
 
 type cronMetrics struct {
