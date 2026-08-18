@@ -9,6 +9,28 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v5.1.2] — 2026-08-18
+
+### Onscreens
+
+- The corner rotators no longer show a year-0001 date when the player answers with no clip — a clip with no filmed date is skipped, and the previous line is held. ([#1404](https://github.com/adanalife/tripbot/pull/1404))
+
+### Fixes
+
+- EventSub now reads the broadcaster token on every redial instead of once at startup, so it survives the platform-gateway's token rotations. A wholly rejected subscribe round backs off and retries rather than disabling EventSub until the pod restarts. ([#1402](https://github.com/adanalife/tripbot/pull/1402))
+
+### Deploy / Infra
+
+- Tripbot no longer publishes a traefik Ingress. Its HTTP surface is in-namespace only — the console already reaches it at `http://tripbot-<platform>:8080`, and several `/api/*` routes are unauthenticated writes that change the live stream. ([#1398](https://github.com/adanalife/tripbot/pull/1398))
+
+### CI / Tooling
+
+- CI installs a pinned go-task while upstream has tags with no releases behind them. ([#1405](https://github.com/adanalife/tripbot/pull/1405))
+
+### Cleanup
+
+- Retire the `tripbot_twitch_channel_live` gauge. `tripbot_channel_live` — labeled by `service_platform` — has been reporting Twitch from the same watchdog live-check since 4.12.0, so the twitch series was written twice. Confirmed in prod-1 on 5.1.1 before removing: the platform-agnostic gauge carries both `twitch` and `youtube`. The `or label_replace(...)` fallback that supplied twitch from the legacy metric comes out of the silent-disconnect alert in a paired infra change. ([#1400](https://github.com/adanalife/tripbot/pull/1400))
+
 ## [v5.1.1] — 2026-08-18
 
 ### Fixes
