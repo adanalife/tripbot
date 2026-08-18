@@ -30,7 +30,6 @@ var (
 	twitchFollowers           = mustGauge("twitch_followers_total", "Current number of Twitch channel followers")
 	twitchConnected           = mustGauge("tripbot_twitch_connected", "1 when the bot is receiving Twitch chat, 0 otherwise")
 	twitchTokenExpiry         = mustGauge("tripbot_twitch_token_expires_at_seconds", "Unix timestamp of the in-memory Twitch user-access-token's ExpiresAt, labeled by account (bot|broadcaster). 0 when the account has no loaded token.")
-	twitchChannelLive         = mustGauge("tripbot_twitch_channel_live", "1 when Helix GetStreams reports the configured channel as live, 0 when offline. Driven by the OBS silent-disconnect watchdog's Helix poll.")
 	channelLive               = mustGauge("tripbot_channel_live", "1 when the platform reports this instance's channel as live, 0 when offline, labeled by service_platform. Paired with obs_streaming_active in the silent-disconnect alert: OBS=1 while the platform says 0 means we are streaming into the void.")
 	currentState              = mustGauge("tripbot_current_state", "1 for the US state the dashcam playhead is currently in, 0 for the previously-active state, labeled by state (2-letter abbrev, or \"unknown\"). Only one series reads 1 at a time. Drives the states-visited heatmap and the 'stuck on unknown' alert.")
 
@@ -96,13 +95,6 @@ var TwitchConnection = twitchConnectionGauge{gauge: twitchConnected}
 // the latter is how a blanked or never-loaded token shows up. Drives the
 // "tripbot needs reauth" alert (time() past the recorded expiry).
 var TwitchTokenExpiry = twitchTokenExpiryGauge{gauge: twitchTokenExpiry}
-
-// TwitchChannelLive exposes the per-tick Twitch live-status gauge written
-// by the OBS silent-disconnect watchdog. Set(true) on every successful
-// Helix poll that reports the channel as live, Set(false) when GetStreams
-// returns empty. Paired with OBSStreaming in an alert: divergence
-// (OBS=1 / Twitch=0) is the silent half-open RTMP signal.
-var TwitchChannelLive = twitchChannelLiveGauge{gauge: twitchChannelLive}
 
 // ChannelLive exposes the platform-agnostic live-status gauge. Call
 // Set(live, platform) from whatever already learns this instance's live state —
@@ -216,12 +208,6 @@ func (t twitchTokenExpiryGauge) SetExpiresAt(account string, expiresAt time.Time
 		v = expiresAt.Unix()
 	}
 	t.gauge.Record(context.Background(), v, metric.WithAttributes(attribute.String("account", account)))
-}
-
-type twitchChannelLiveGauge struct{ gauge metric.Int64Gauge }
-
-func (t twitchChannelLiveGauge) Set(live bool) {
-	t.gauge.Record(context.Background(), b2i(live))
 }
 
 type channelLiveGauge struct{ gauge metric.Int64Gauge }

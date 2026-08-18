@@ -627,7 +627,6 @@ func (t *Tripbot) startTwitchWatchdog(ctx context.Context) {
 		}
 		live, err := t.gateway.IsLive(ctx, t.cfg.ChannelName)
 		if err == nil {
-			instrumentation.TwitchChannelLive.Set(live)
 			instrumentation.ChannelLive.Set(live, t.cfg.Platform)
 		}
 		return live, err
