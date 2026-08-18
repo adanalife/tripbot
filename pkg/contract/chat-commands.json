@@ -52,7 +52,8 @@
       "aliases": [
         "!command",
         "!controls",
-        "!hello"
+        "!hello",
+        "!help"
       ],
       "platforms": [
         "facebook",
@@ -205,16 +206,6 @@
       "requires_follow": true,
       "platforms": [
         "twitch"
-      ]
-    },
-    {
-      "trigger": "!help",
-      "platforms": [
-        "facebook",
-        "instagram",
-        "tiktok",
-        "twitch",
-        "youtube"
       ]
     },
     {

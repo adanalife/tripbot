@@ -80,15 +80,6 @@ var currentVersion string
 // "dev". Overridable in tests.
 var versionFilePath = "/etc/tripbot/version"
 
-func (a *App) helpCmd(ctx context.Context, user *users.User, _ []string) {
-	slog.InfoContext(ctx, "ran !help", "username", user.Username)
-	n := len(a.helpMessages)
-	// a.help() advances the index, so capture the displayed line's number first.
-	pos := a.helpIndex + 1
-	msg := fmt.Sprintf("%s (%d of %d)", a.help(), pos, n)
-	a.Chat.Say(msg)
-}
-
 // commandsCmd lists a curated set of featured commands — filtered to the ones
 // actually dispatchable on this App's platform, so a YouTube instance doesn't
 // suggest commands that would silently no-op.

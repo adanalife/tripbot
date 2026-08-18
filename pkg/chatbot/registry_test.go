@@ -226,7 +226,7 @@ func TestCommandsCmdFiltersByPlatform(t *testing.T) {
 
 // TestEnabledHelpMessagesFiltersByPlatform verifies the rotating help lines drop
 // any whose command isn't dispatchable on the platform — so a YouTube instance
-// never advertises !miles / !guess / !leaderboard via !help or the Chatter cron.
+// never advertises !miles / !guess / !leaderboard via the Chatter cron.
 func TestEnabledHelpMessagesFiltersByPlatform(t *testing.T) {
 	twitch := &App{}
 	twitch.indexCommands()
