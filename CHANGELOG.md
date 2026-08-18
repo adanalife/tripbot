@@ -9,6 +9,18 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v5.1.1] — 2026-08-18
+
+### Fixes
+
+- The silent-disconnect watchdog now counts recovery *attempts*, not just the ones that worked, and labels them per platform. `tripbot_obs_silent_disconnect_restarts_total` gains `result` (`ok`, `failed`) and the `service_platform` label every other OBS metric already carries, and is recorded before the error check — so a recovery loop that is running and failing is visible, and the twitch, tiktok and youtube legs no longer share one series. Through the 9h41m outage on 2026-08-05 the watchdog attempted a restart every 60s, failed every time, and the counter read zero throughout. ([#1397](https://github.com/adanalife/tripbot/pull/1397))
+- YouTube gets a stream watchdog leg. The silent-disconnect loop dispatched to Twitch and TikTok only, so a YouTube broadcast that never left "pending" was detected by the liveness gauge and then recovered by nothing — on 2026-08-05 that was 9h41m dark with zero attempts, while Twitch got ~45. The new leg restarts the OBS output, which is what cleared it by hand. ([#1397](https://github.com/adanalife/tripbot/pull/1397))
+
+### CI / Tooling
+
+- Fixed the weekly super-linter sweep: codespell findings resolved (typos corrected, intentional misspellings allowlisted, `package-lock.json` excluded alongside `go.sum`) and per-linter commit statuses disabled, since scheduled runs have no PR to attach them to. ([#1394](https://github.com/adanalife/tripbot/pull/1394))
+- The weekly super-linter sweep reports each validator as its own commit status again, instead of 403ing on every one. ([#1396](https://github.com/adanalife/tripbot/pull/1396))
+
 ## [v5.1.0] — 2026-08-16
 
 ### Chatbot
