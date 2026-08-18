@@ -221,6 +221,33 @@ func TestFlaggedClipSkips(t *testing.T) {
 	}
 }
 
+// A zero DateFilmed reaches Emit two ways — an empty Video from a player that
+// answered with nothing, and a freshly-inserted row the import pass hasn't
+// stamped — and neither is flagged, so the GPS check alone lets them through.
+// Publishing one puts "Monday January 1, 0001" on a rotator that runs
+// unprompted, which is worse than holding the previous clip's line.
+func TestZeroDateFilmedSkips(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		vid  video.Video
+	}{
+		{"empty video from a dead poll", video.Video{}},
+		{"real GPS fix, date never stamped", func() video.Video {
+			v := moabClip()
+			v.DateFilmed = time.Time{}
+			return v
+		}()},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			e, pub, _, _ := newEmitter()
+			e.Emit(context.Background(), tc.vid)
+			if len(pub.sent) != 0 {
+				t.Errorf("published %+v; a zero DateFilmed must not reach the rotator", pub.sent)
+			}
+		})
+	}
+}
+
 func TestFallsBackToStateWhenGeocodeFails(t *testing.T) {
 	pub := &recordingPublisher{}
 	e := New(pub, &fakeCity{err: errors.New("maps disabled")}, &fakeWeather{result: "Clear sky, 88°F"})
