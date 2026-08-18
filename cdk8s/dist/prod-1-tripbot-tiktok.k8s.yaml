@@ -72,7 +72,7 @@ spec:
             - secretRef:
                 name: tripbot-discord-bot-token
                 optional: true
-          image: adanalife/tripbot:5.1.1
+          image: adanalife/tripbot:5.1.2
           imagePullPolicy: IfNotPresent
           livenessProbe:
             httpGet:
@@ -120,7 +120,7 @@ spec:
                 name: tripbot-tiktok-config
             - secretRef:
                 name: tripbot-database-creds
-          image: adanalife/tripbot:5.1.1
+          image: adanalife/tripbot:5.1.2
           imagePullPolicy: IfNotPresent
           name: migrate
           resources:
@@ -161,32 +161,3 @@ spec:
   selector:
     app: tripbot-tiktok
   type: ClusterIP
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  annotations:
-    cert-manager.io/issuer: letsencrypt-route53
-    external-dns.alpha.kubernetes.io/hostname: tripbot-tiktok.prod.whereisdana.today
-  labels:
-    app.kubernetes.io/name: tripbot-tiktok
-    app.kubernetes.io/part-of: tripbot
-  name: tripbot-tiktok
-  namespace: prod-1
-spec:
-  ingressClassName: traefik
-  rules:
-    - host: tripbot-tiktok.prod.whereisdana.today
-      http:
-        paths:
-          - backend:
-              service:
-                name: tripbot-tiktok
-                port:
-                  name: http
-            path: /
-            pathType: Prefix
-  tls:
-    - hosts:
-        - tripbot-tiktok.prod.whereisdana.today
-      secretName: tripbot-tiktok-tls
