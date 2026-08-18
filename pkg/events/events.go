@@ -77,7 +77,7 @@ func record(ctx context.Context, cfg *c.TripbotConfig, e Event) error {
 	if err := database.GormDB().WithContext(ctx).Create(&e).Error; err != nil {
 		return err
 	}
-	instrumentation.Events.Inc(e.Event)
+	instrumentation.Events.Inc(e.Event, e.Platform)
 	return nil
 }
 
