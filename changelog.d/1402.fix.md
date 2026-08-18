@@ -1,0 +1,1 @@
+EventSub now reads the broadcaster token on every redial instead of once at startup, so it survives the platform-gateway's token rotations. A wholly rejected subscribe round backs off and retries rather than disabling EventSub until the pod restarts.

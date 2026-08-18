@@ -813,13 +813,22 @@ func (t *Tripbot) startDiscord(ctx context.Context) {
 	t.discordSession = session
 }
 
+// eventsubRedialDelay paces redials after Twitch closes the EventSub socket for
+// any reason other than a wholly rejected token.
+const eventsubRedialDelay = 10 * time.Second
+
+// tokenReloadInterval is how often the in-memory oauth_tokens copies are
+// re-read from the rows the platform-gateway keeps fresh. It doubles as the
+// EventSub redial delay after a token rejection: retrying sooner than one
+// reload cannot pick up a different credential than the one just refused.
+const tokenReloadInterval = 5 * time.Minute
+
 // startEventSub kicks off the EventSub WebSocket listener in a goroutine
 // so real-time follow/subscribe events fire chat shouts without a 5min
 // polling delay. Skipped (logged, not fatal) when the broadcaster row
 // isn't loaded — the bot still runs without real-time alerts.
 func (t *Tripbot) startEventSub(ctx context.Context) {
-	token := mytwitch.BroadcasterUserAccessToken()
-	if token == "" {
+	if mytwitch.BroadcasterUserAccessToken() == "" {
 		slog.WarnContext(ctx, "skipping eventsub: no broadcaster oauth_tokens row; re-auth via the platform-gateway consent flow (surfaced in tripbot-console)",
 			"login_as", t.cfg.ChannelName)
 		return
@@ -838,46 +847,65 @@ func (t *Tripbot) startEventSub(ctx context.Context) {
 		slog.WarnContext(ctx, "skipping eventsub: ChannelID not yet resolved")
 		return
 	}
-	go func() {
-		for {
-			if ctx.Err() != nil {
-				return
-			}
-			err := eventsub.Run(ctx, eventsub.Config{
-				ClientID:          t.cfg.TwitchClientID,
-				BroadcasterToken:  token,
-				BroadcasterUserID: mytwitch.ChannelID(),
-			}, eventsub.Handlers{
-				OnFollow:      t.app.AnnounceNewFollower,
-				OnSubscribe:   t.app.AnnounceSubscriber,
-				OnUnsubscribe: t.app.RecordUnsubscribe,
-				OnGift:        t.app.AnnounceGiftSub,
-				OnResub:       t.app.AnnounceResub,
-				OnRaid:        t.app.RecordRaid,
-			})
-			if err == nil || errors.Is(err, context.Canceled) {
-				return
-			}
-			if errors.Is(err, eventsub.ErrUnauthorized) {
-				// The token is loaded once above, so every redial would repeat
-				// this rejection — roughly three a minute, since Twitch drops a
-				// subscription-less session after ~10s. Stop and say so; the
-				// recovery is a broadcaster re-consent and a restart.
-				slog.ErrorContext(ctx, "eventsub disabled: broadcaster token rejected — re-consent via the platform-gateway flow (surfaced in tripbot-console), then restart", "err", err)
-				return
-			}
-			// Twitch closing the socket outright surfaces here instead of as a
-			// session_reconnect frame the library handles itself, so Run has to
-			// be redialed or follower/sub announcements stay dead until the pod
-			// restarts. Run resubscribes on the new session's welcome.
-			slog.WarnContext(ctx, "eventsub run terminated; reconnecting", "err", err)
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(10 * time.Second):
-			}
+	run := func(ctx context.Context, token string) error {
+		return eventsub.Run(ctx, eventsub.Config{
+			ClientID:          t.cfg.TwitchClientID,
+			BroadcasterToken:  token,
+			BroadcasterUserID: mytwitch.ChannelID(),
+		}, eventsub.Handlers{
+			OnFollow:      t.app.AnnounceNewFollower,
+			OnSubscribe:   t.app.AnnounceSubscriber,
+			OnUnsubscribe: t.app.RecordUnsubscribe,
+			OnGift:        t.app.AnnounceGiftSub,
+			OnResub:       t.app.AnnounceResub,
+			OnRaid:        t.app.RecordRaid,
+		})
+	}
+	go runEventSubLoop(ctx, mytwitch.BroadcasterUserAccessToken, run, eventsubRedialDelay, tokenReloadInterval)
+}
+
+// runEventSubLoop redials run until ctx ends or it returns cleanly, reading a
+// broadcaster token from token for every attempt and waiting redialDelay between
+// them — rejectedDelay instead when the token itself was refused.
+//
+// The per-attempt read is the point: the platform-gateway rotates the
+// broadcaster grant every few hours and twitch.ReloadTokens pulls the new value
+// into memory, so a loop that captured one string would keep presenting a
+// credential Twitch has already retired, and every resubscribe after the first
+// rotation would be refused.
+func runEventSubLoop(ctx context.Context, token func() string, run func(context.Context, string) error, redialDelay, rejectedDelay time.Duration) {
+	for {
+		if ctx.Err() != nil {
+			return
 		}
-	}()
+		err := run(ctx, token())
+		if err == nil || errors.Is(err, context.Canceled) {
+			return
+		}
+		delay := redialDelay
+		if errors.Is(err, eventsub.ErrUnauthorized) {
+			// Every subscription was refused, which a rotation produces as
+			// readily as a revocation — and the two are indistinguishable from
+			// here. So keep redialing rather than shutting EventSub down for the
+			// life of the pod, but wait out a token-reload interval first:
+			// without a fresh row to read, an immediate retry just repeats the
+			// rejection at the ~10s period Twitch drops a subscription-less
+			// session on.
+			slog.ErrorContext(ctx, "eventsub: broadcaster token rejected; waiting for a token reload before redialing — if this repeats, re-consent via the platform-gateway flow (surfaced in tripbot-console)", "err", err, "retry_in", rejectedDelay)
+			delay = rejectedDelay
+		} else {
+			// Twitch closing the socket outright surfaces here instead of as a
+			// session_reconnect frame the library handles itself, so run has to
+			// be redialed or follower/sub announcements stay dead until the pod
+			// restarts. It resubscribes on the new session's welcome.
+			slog.WarnContext(ctx, "eventsub run terminated; reconnecting", "err", err)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(delay):
+		}
+	}
 }
 
 // startHttpServer starts a webserver, which is used for admin tools and
@@ -1123,7 +1151,7 @@ func (t *Tripbot) scheduleBackgroundJobs() {
 	// it keeps fresh. Re-read on a timer so the in-memory tokens track the
 	// gateway's rotations — the IRC PASS line on reconnect and the token-expiry
 	// gauge (both fed by LoadFromDB) — without tripbot ever refreshing itself.
-	t.addJob(5*time.Minute, "twitch.ReloadTokens", func(ctx context.Context) {
+	t.addJob(tokenReloadInterval, "twitch.ReloadTokens", func(ctx context.Context) {
 		if err := mytwitch.LoadFromDB(t.cfg.BotUsername, t.cfg.ChannelName); err != nil {
 			slog.WarnContext(ctx, "periodic oauth_tokens reload failed", "err", err)
 		}
