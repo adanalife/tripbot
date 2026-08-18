@@ -1,0 +1,1 @@
+Tripbot no longer publishes a traefik Ingress. Its HTTP surface is in-namespace only — the console already reaches it at `http://tripbot-<platform>:8080`, and several `/api/*` routes are unauthenticated writes that change the live stream.

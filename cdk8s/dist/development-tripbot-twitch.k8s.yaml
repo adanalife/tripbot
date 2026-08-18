@@ -148,32 +148,3 @@ spec:
   selector:
     app: tripbot-twitch
   type: ClusterIP
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  annotations:
-    cert-manager.io/issuer: letsencrypt-route53
-    external-dns.alpha.kubernetes.io/hostname: tripbot-twitch.dev.whereisdana.today
-  labels:
-    app.kubernetes.io/name: tripbot-twitch
-    app.kubernetes.io/part-of: tripbot
-  name: tripbot-twitch
-  namespace: development
-spec:
-  ingressClassName: traefik
-  rules:
-    - host: tripbot-twitch.dev.whereisdana.today
-      http:
-        paths:
-          - backend:
-              service:
-                name: tripbot-twitch
-                port:
-                  name: http
-            path: /
-            pathType: Prefix
-  tls:
-    - hosts:
-        - tripbot-twitch.dev.whereisdana.today
-      secretName: tripbot-twitch-tls
