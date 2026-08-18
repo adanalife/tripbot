@@ -94,3 +94,62 @@ func TestEventsInc_StampsEventAndPlatform(t *testing.T) {
 		t.Errorf("events datapoints = %v, want %v", got, want)
 	}
 }
+
+// The EventSub gauge is the only positive liveness signal for real-time
+// follow/sub/raid delivery, so both legs have to arrive as their own series and
+// both have to carry service.platform — a gauge whose result attribute went
+// missing would collapse held and denied onto one series with last-write-wins,
+// and the "no subscriptions" alert would read whichever was recorded last.
+//
+// Built on its own provider rather than the package-level global: the global
+// instruments delegate to the first provider set, so a test that shares them
+// depends on which test ran first.
+func TestEventSubSubscriptionsSet_SplitsHeldFromDenied(t *testing.T) {
+	reader := metricsdk.NewManualReader()
+	gauge, err := metricsdk.NewMeterProvider(metricsdk.WithReader(reader)).
+		Meter("test").Int64Gauge("tripbot_eventsub_subscriptions")
+	if err != nil {
+		t.Fatalf("gauge: %v", err)
+	}
+	e := eventsubSubscriptionsGauge{gauge: gauge}
+
+	// A partial grant: five of six subscriptions took, one was refused for a
+	// scope the token doesn't carry.
+	e.Set(5, 1)
+	// Then the socket drops. Nothing is arriving now, but the token's verdict
+	// stands — zeroing denied here would blink a standing shortfall out of view
+	// every time Twitch hangs up.
+	e.Set(0, 1)
+
+	var rm metricdata.ResourceMetrics
+	if err := reader.Collect(context.Background(), &rm); err != nil {
+		t.Fatalf("collect: %v", err)
+	}
+
+	got := map[string]int64{}
+	for _, sm := range rm.ScopeMetrics {
+		for _, m := range sm.Metrics {
+			g, ok := m.Data.(metricdata.Gauge[int64])
+			if !ok {
+				t.Fatalf("%s is %T, want an int64 Gauge", m.Name, m.Data)
+			}
+			for _, dp := range g.DataPoints {
+				result, ok := dp.Attributes.Value("result")
+				if !ok {
+					t.Errorf("datapoint %v has no result", dp.Attributes)
+				}
+				if platform, ok := dp.Attributes.Value("service.platform"); !ok {
+					t.Errorf("datapoint %v has no service.platform", dp.Attributes)
+				} else if platform.AsString() != "twitch" {
+					t.Errorf("service.platform = %q, want twitch — EventSub is Twitch-only", platform.AsString())
+				}
+				got[result.AsString()] = dp.Value
+			}
+		}
+	}
+
+	want := map[string]int64{"ok": 0, "denied": 1}
+	if !maps.Equal(got, want) {
+		t.Errorf("eventsub gauge datapoints = %v, want %v", got, want)
+	}
+}

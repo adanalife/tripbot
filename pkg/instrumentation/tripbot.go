@@ -33,6 +33,8 @@ var (
 	channelLive               = mustGauge("tripbot_channel_live", "1 when the platform reports this instance's channel as live, 0 when offline, labeled by service_platform. Paired with obs_streaming_active in the silent-disconnect alert: OBS=1 while the platform says 0 means we are streaming into the void.")
 	currentState              = mustGauge("tripbot_current_state", "1 for the US state the dashcam playhead is currently in, 0 for the previously-active state, labeled by state (2-letter abbrev, or \"unknown\"). Only one series reads 1 at a time. Drives the states-visited heatmap and the 'stuck on unknown' alert.")
 
+	eventsubSubscriptions = mustGauge("tripbot_eventsub_subscriptions", "Twitch EventSub subscriptions the current session holds (result=ok) and the ones Twitch refused on the last subscribe round (result=denied), labeled by service_platform. result=ok at 0 means no real-time follow/subscribe/raid events are arriving at all; result=denied above 0 with result=ok also above 0 is a partial grant, where only the event types needing the missing scope are dead.")
+
 	gatewayUp = mustGauge("tripbot_gateway_up", "1 when tripbot's last platform-gateway call got an HTTP response (gateway reachable), 0 when it failed at the transport layer (connection refused, timeout, DNS). Consumer-side reachability — paired with the gateway's own platform_gateway_up (process liveness).")
 
 	obsSilentDisconnectRestarts = mustCounter("tripbot_obs_silent_disconnect_restarts_total", "Total recoveries the silent-disconnect watchdog attempted because OBS reported outputActive=true while the platform reported the channel offline, labeled by service_platform and by result (ok, failed). The recovery is a StopStream+StartStream on Twitch and YouTube and an egress re-mint on TikTok")
@@ -116,6 +118,21 @@ var ChannelLive = channelLiveGauge{gauge: channelLive}
 // clears the previously-active series to 0, so exactly one series reads 1 at
 // any time and no stale =1 series linger for states the playhead has left.
 var CurrentState = &currentStateGauge{gauge: currentState}
+
+// EventSubSubscriptions exposes the EventSub session's subscription count.
+// Set(held, denied) is called after every subscribe round and again when the
+// session ends with held=0, so the gauge always answers "are real-time events
+// arriving right now?" rather than "did they ever arrive".
+//
+// A positive liveness signal is the point. The events themselves — follows,
+// subs, raids — are far too sparse to alert on: a flat zero for hours is the
+// normal reading, so their absence cannot distinguish a quiet channel from a
+// dead subscription. On 2026-08-18 EventSub was down on prod for 7½ hours with
+// the pod Ready, tripbot_channel_live at 1 and no rule firing.
+//
+// The twitch instance is the only caller (EventSub is Twitch-only), so the
+// platform attribute is stamped here rather than threaded through pkg/eventsub.
+var EventSubSubscriptions = eventsubSubscriptionsGauge{gauge: eventsubSubscriptions}
 
 // GatewayConnection exposes the consumer-side gateway-reachability gauge.
 // Set(true) after any HTTP response from the platform-gateway, Set(false) on a
@@ -248,6 +265,24 @@ func (s *currentStateGauge) Set(abbrev, platform string) {
 	}
 	s.gauge.Record(context.Background(), 1, metric.WithAttributes(attribute.String("state", abbrev)), plat)
 	s.prev = abbrev
+}
+
+type eventsubSubscriptionsGauge struct{ gauge metric.Int64Gauge }
+
+// Set records both legs of one subscribe round. denied is carried through the
+// session-ended call rather than zeroed with held, because it describes the last
+// round's verdict on the token: zeroing it on every socket drop would blink a
+// standing scope shortfall out of the series once an hour.
+func (e eventsubSubscriptionsGauge) Set(held, denied int) {
+	e.record("ok", held)
+	e.record("denied", denied)
+}
+
+func (e eventsubSubscriptionsGauge) record(result string, n int) {
+	e.gauge.Record(context.Background(), int64(n),
+		platformAttr("twitch"),
+		metric.WithAttributes(attribute.String("result", result)),
+	)
 }
 
 type gatewayConnectionGauge struct{ gauge metric.Int64Gauge }

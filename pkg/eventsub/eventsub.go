@@ -32,6 +32,7 @@ import (
 	"strings"
 	"sync/atomic"
 
+	"github.com/adanalife/tripbot/pkg/instrumentation"
 	twitch "github.com/joeyak/go-twitch-eventsub/v3"
 )
 
@@ -150,6 +151,14 @@ func Run(ctx context.Context, cfg Config, h Handlers) error {
 	var attempted, denied atomic.Int32
 
 	client.OnWelcome(func(msg twitch.WelcomeMessage) {
+		// The library reconnects transparently on a session_reconnect frame, so
+		// OnWelcome can fire more than once per Run and each firing is a fresh
+		// subscribe round. Counting across rounds would let one good round mask a
+		// later wholly-refused one, and would report a subscription count that
+		// only grows.
+		attempted.Store(0)
+		denied.Store(0)
+
 		sid := msg.Payload.Session.ID
 		slog.InfoContext(ctx, "eventsub welcome received; subscribing", "session_id", sid)
 
@@ -198,9 +207,16 @@ func Run(ctx context.Context, cfg Config, h Handlers) error {
 				"to_broadcaster_user_id": cfg.BroadcasterUserID,
 			})
 		}
+
+		held := attempted.Load() - denied.Load()
+		slog.InfoContext(ctx, "eventsub subscribe round complete", "held", held, "denied", denied.Load())
+		instrumentation.EventSubSubscriptions.Set(int(held), int(denied.Load()))
 	})
 
 	err := client.ConnectWithContext(ctx)
+	// The session is gone whatever ended it, so nothing is arriving until the
+	// caller redials. denied stays as the round recorded it — see the gauge's doc.
+	instrumentation.EventSubSubscriptions.Set(0, int(denied.Load()))
 	// A wholly rejected token outranks whatever closed the socket: Twitch hangs
 	// up on a subscription-less session (close code 4003), so the connection
 	// error here is a symptom and redialing would just repeat it.
