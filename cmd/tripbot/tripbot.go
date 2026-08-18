@@ -828,6 +828,12 @@ const tokenReloadInterval = 5 * time.Minute
 // polling delay. Skipped (logged, not fatal) when the broadcaster row
 // isn't loaded — the bot still runs without real-time alerts.
 func (t *Tripbot) startEventSub(ctx context.Context) {
+	// Publish the gauge before anything can return, so the series exists from
+	// boot on the one instance that owns it. An alert on a metric that is merely
+	// absent doesn't fire, which would let the skip paths below — no broadcaster
+	// row, unresolved channel ID — stay as quiet as the outage this measures.
+	instrumentation.EventSubSubscriptions.Set(0, 0)
+
 	if mytwitch.BroadcasterUserAccessToken() == "" {
 		slog.WarnContext(ctx, "skipping eventsub: no broadcaster oauth_tokens row; re-auth via the platform-gateway consent flow (surfaced in tripbot-console)",
 			"login_as", t.cfg.ChannelName)
