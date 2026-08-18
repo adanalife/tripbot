@@ -13,8 +13,8 @@
 // (cmd/tripbot runs it in a goroutine that loops with a delay).
 //
 // ErrUnauthorized is the exception the caller must honor: it means Twitch
-// rejected the broadcaster token for every subscription, which no amount of
-// redialing fixes, so the loop stops instead of spinning.
+// refused every subscription, so the session is worthless and the caller should
+// pause for a fresh token before redialing.
 //
 // Subscriptions are created in the OnWelcome callback (per Twitch's
 // protocol — you can't subscribe until you have a session ID). If a
@@ -36,10 +36,11 @@ import (
 )
 
 // ErrUnauthorized reports that Twitch rejected the broadcaster token when
-// creating subscriptions. Callers must not redial on it: the token is read once
-// at startup, so retrying re-runs the same rejection forever (Twitch drops a
-// subscription-less session with close code 4003 after ~10s, so a retry loop
-// spins at that period). Recovery is a re-consent plus a restart.
+// creating subscriptions — a rotated credential and a revoked one look
+// identical from here. Callers must redial more slowly than usual on it rather
+// than at the socket-drop cadence: Twitch hangs up on a subscription-less
+// session after ~10s, so redialing at that period buys nothing but request
+// volume until a newer token is available to read.
 var ErrUnauthorized = errors.New("eventsub: broadcaster token unauthorized")
 
 // The status line Twitch returns for a rejected token, as the library renders it
