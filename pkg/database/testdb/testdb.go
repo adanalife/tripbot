@@ -73,9 +73,9 @@ func connect(t *testing.T) *gorm.DB {
 		dsn := fmt.Sprintf("postgres://%s:%s@%s/%s?sslmode=disable&connect_timeout=3",
 			os.Getenv("DATABASE_USER"), os.Getenv("DATABASE_PASS"),
 			os.Getenv("DATABASE_HOST"), os.Getenv("DATABASE_DB"))
-		// database/sql, not otelsql — tests don't need spans. The postgres
-		// driver is registered by pkg/database's lib/pq import.
-		sqlDB, err := sql.Open("postgres", dsn)
+		// database/sql, not otelsql — tests don't need spans. The pgx driver is
+		// registered by pkg/database's stdlib import.
+		sqlDB, err := sql.Open("pgx", dsn)
 		if err == nil {
 			err = sqlDB.Ping()
 		}

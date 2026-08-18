@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/adanalife/tripbot/pkg/database/testdb"
-	"github.com/lib/pq"
 	"gorm.io/gorm"
 )
 
@@ -19,13 +18,13 @@ func insertFlag(t *testing.T, db *gorm.DB, row flagRow) {
 	if row.TargetRemovalDate.IsZero() {
 		row.TargetRemovalDate = time.Now().Add(30 * 24 * time.Hour)
 	}
-	// The allowlist columns are NOT NULL DEFAULT '{}'; a nil pq.StringArray
+	// The allowlist columns are NOT NULL DEFAULT '{}'; a nil stringArray
 	// writes NULL, not an empty array.
 	if row.EnabledForUsernames == nil {
-		row.EnabledForUsernames = pq.StringArray{}
+		row.EnabledForUsernames = stringArray{}
 	}
 	if row.EnabledForRoles == nil {
-		row.EnabledForRoles = pq.StringArray{}
+		row.EnabledForRoles = stringArray{}
 	}
 	if err := db.Create(&row).Error; err != nil {
 		t.Fatalf("insert flag %q/%q: %v", row.Key, row.Platform, err)

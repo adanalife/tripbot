@@ -38,7 +38,7 @@ import (
 	"os"
 	"strings"
 
-	_ "github.com/lib/pq"
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 // Only considers non-bot users. Bots are in channel 24/7 and accumulate
@@ -115,7 +115,7 @@ func main() {
 		log.Fatal("--apply and --output-sql are mutually exclusive")
 	}
 
-	db, err := sql.Open("postgres", connStr())
+	db, err := sql.Open("pgx", connStr())
 	if err != nil {
 		log.Fatalf("open db: %v", err)
 	}

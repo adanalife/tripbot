@@ -39,7 +39,7 @@ type Event struct {
 	VideoID    *int     `gorm:"column:video_id"`
 	VideoTsSec *float64 `gorm:"column:video_ts_sec"`
 	// Meta is the kind-specific payload, one JSONB document per row. A string
-	// rather than []byte because lib/pq encodes a byte slice as bytea, which
+	// rather than []byte because the driver encodes a byte slice as bytea, which
 	// Postgres refuses to coerce into jsonb (see pkg/rotatorstore).
 	Meta *string `gorm:"type:jsonb"`
 }

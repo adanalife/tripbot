@@ -28,9 +28,9 @@ import (
 // as a JSONB document keyed by platform — see the migration for why it isn't a
 // row per message.
 //
-// Config is a string, not []byte / json.RawMessage: lib/pq encodes a byte slice
-// as bytea, which Postgres then refuses to coerce into jsonb ("invalid input
-// syntax for type json"). A string is sent as text and casts cleanly.
+// Config is a string, not []byte / json.RawMessage: the driver encodes a byte
+// slice as bytea, which Postgres then refuses to coerce into jsonb ("invalid
+// input syntax for type json"). A string is sent as text and casts cleanly.
 type rotatorRow struct {
 	Platform  string    `gorm:"primaryKey;column:platform"`
 	Config    string    `gorm:"type:jsonb;column:config"`

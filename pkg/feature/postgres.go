@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lib/pq"
 	"gorm.io/gorm"
 )
 
@@ -16,13 +15,13 @@ import (
 // target_removal_date, timestamps) are loaded for the admin-panel surface
 // even though Bool() only reads the targeting fields.
 type flagRow struct {
-	Key                 string         `gorm:"primaryKey;column:key"`
-	Platform            string         `gorm:"primaryKey;column:platform"`
-	Description         string         `gorm:"column:description"`
-	Enabled             bool           `gorm:"column:enabled"`
-	EnabledForUsernames pq.StringArray `gorm:"type:text[];column:enabled_for_usernames"`
-	EnabledForRoles     pq.StringArray `gorm:"type:text[];column:enabled_for_roles"`
-	TargetRemovalDate   time.Time      `gorm:"column:target_removal_date"`
+	Key                 string      `gorm:"primaryKey;column:key"`
+	Platform            string      `gorm:"primaryKey;column:platform"`
+	Description         string      `gorm:"column:description"`
+	Enabled             bool        `gorm:"column:enabled"`
+	EnabledForUsernames stringArray `gorm:"type:text[];column:enabled_for_usernames"`
+	EnabledForRoles     stringArray `gorm:"type:text[];column:enabled_for_roles"`
+	TargetRemovalDate   time.Time   `gorm:"column:target_removal_date"`
 	CreatedAt           time.Time
 	UpdatedAt           time.Time
 }

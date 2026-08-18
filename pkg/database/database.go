@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/XSAM/otelsql"
-	_ "github.com/lib/pq"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/uptrace/opentelemetry-go-extra/otelgorm"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 	"gorm.io/driver/postgres"
@@ -42,7 +42,7 @@ func connectToDB() *sql.DB {
 		}
 	}
 	// otelsql.Open instruments the postgres driver so every query becomes a span.
-	db, err := otelsql.Open("postgres", connStr(),
+	db, err := otelsql.Open("pgx", connStr(),
 		otelsql.WithAttributes(semconv.DBSystemPostgreSQL),
 	)
 	if err != nil {

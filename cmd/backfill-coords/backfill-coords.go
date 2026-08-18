@@ -56,7 +56,7 @@ import (
 	"strings"
 	"time"
 
-	_ "github.com/lib/pq"
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 // Provenance values. Kept in sync with pkg/video's CoordSource* constants;
@@ -166,7 +166,7 @@ func openDB() (*sql.DB, error) {
 		os.Getenv("DATABASE_PASS"),
 		os.Getenv("DATABASE_DB"),
 	)
-	return sql.Open("postgres", dsn)
+	return sql.Open("pgx", dsn)
 }
 
 func loadClips(db *sql.DB) ([]clip, error) {
