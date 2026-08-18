@@ -23,7 +23,7 @@ var (
 		// the 4-query GetScore chain).
 		0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10,
 	)
-	tripbotEvents             = mustCounter("tripbot_events_total", "Total login/logout events written to the events table, labeled by event")
+	tripbotEvents             = mustCounter("tripbot_events_total", "Total rows written to the events table, labeled by event and by service_platform. Every kind in the event taxonomy counts here — logins, logouts, follows, command runs, deploys, watchdog transitions, state crossings.")
 	backgroundAudioSelections = mustCounter("tripbot_background_audio_selections_total", "Total background-audio bed switches, labeled by bed (somafm|carhum|album) and platform — answers what the stream has been playing and how often it changes")
 	scoreboardWrites          = mustCounter("tripbot_scoreboard_writes_total", "Total successful scoreboard score writes, labeled by scoreboard")
 	twitchSubscribers         = mustGauge("twitch_subscribers_total", "Current number of Twitch channel subscribers")
@@ -62,9 +62,11 @@ var ChatCommands = chatCommandsCounter{counter: chatCommands}
 // time.Since(start).Seconds() right after the handler returns.
 var ChatCommandDuration = commandDurationHistogram{h: chatCommandDuration}
 
-// Events exposes the login/logout event counter. Record by calling
-// Events.Inc("login") or Events.Inc("logout") right after the row is
-// persisted.
+// Events exposes the events-table counter. Record by calling
+// Events.Inc(event, platform) right after the row is persisted — the platform
+// is stamped as a datapoint attribute because service.platform lives only on
+// the OTel resource, so without it a dashboard cannot break the rate down by
+// encoder and a per-platform selector silently matches nothing.
 var Events = eventsCounter{counter: tripbotEvents}
 
 // ScoreboardWrites exposes the scoreboard-write counter. Record by calling
@@ -165,8 +167,9 @@ func (d commandDurationHistogram) Observe(command string, seconds float64) {
 
 type eventsCounter struct{ counter metric.Int64Counter }
 
-func (e eventsCounter) Inc(event string) {
-	e.counter.Add(context.Background(), 1, metric.WithAttributes(attribute.String("event", event)))
+func (e eventsCounter) Inc(event, platform string) {
+	e.counter.Add(context.Background(), 1,
+		metric.WithAttributes(attribute.String("event", event)), platformAttr(platform))
 }
 
 type scoreboardWritesCounter struct{ counter metric.Int64Counter }
