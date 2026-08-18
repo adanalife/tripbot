@@ -1,4 +1,4 @@
-"""Tripbot — the chatbot Deployment + Service + Ingress + its ExternalSecrets,
+"""Tripbot — the chatbot Deployment + Service + its ExternalSecrets,
 plus the one-shot bootstrap/seed Jobs as module-level emitters.
 
 Reproduces k8s/apps/tripbot/base + overlays:
@@ -11,11 +11,12 @@ Reproduces k8s/apps/tripbot/base + overlays:
     shared OTLP/Sentry Secrets, then twitch/maps (required) and the two
     optional discord Secrets. On the laptop the DB Secret is the on-disk
     `tripbot-secret`; on eso envs it's the ESO `tripbot-database-creds`.
-  * Service (ClusterIP :8080) + traefik Ingress everywhere. The *bot* itself is
-    outbound-only (EventSub via WebSocket); what the Ingress publishes is the
-    HTTP surface — the /api/* endpoints the console proxies, plus /health,
-    /metrics and /version. minipc envs add TLS; local is HTTP-only at
-    tripbot-<platform>.localhost.
+  * Service (ClusterIP :8080) only — no Ingress. The *bot* is outbound-only
+    (EventSub via WebSocket), and its HTTP surface (the /api/* endpoints, plus
+    /health, /metrics and /version) is in-namespace: the console reaches it at
+    http://tripbot-<platform>:8080. Several /api/* routes are unauthenticated
+    writes that change what is on the live stream, so publishing them is not a
+    convenience to restore casually.
 The construct envFroms its DB + app Secrets by name but does NOT emit them —
 they're identity-level (one bot, one DB, shared by every platform stack), so
 `emit_identity_secrets` emits them once into the per-env supporting unit
@@ -131,15 +132,6 @@ _ENV_CONFIG: dict[str, dict[str, str]] = {
         "GOOGLE_APPS_PROJECT_ID": "tripbot-stage",
     },
 }
-
-
-def public_host(env: EnvConfig, platform: str) -> str:
-    """The instance's public host: per-name everywhere (tripbot-twitch.<dns>,
-    tripbot-youtube.<dns>); the .localhost TLD when the env publishes no DNS.
-    Single source for the Ingress rule, external-dns annotation, and TLS secret
-    host — they can't drift apart."""
-    name = app_name("tripbot", platform)
-    return f"{name}.localhost" if not env.dns_base else f"{name}.{env.dns_base}"
 
 
 def config_data(env: EnvConfig, platform: str) -> dict[str, str]:
@@ -445,56 +437,6 @@ class Tripbot(Construct):
                         name="http",
                         port=8080,
                         target_port=k8s.IntOrString.from_string("http"),
-                    )
-                ],
-            ),
-        )
-
-        # --- Ingress (the :8080 HTTP surface) — published in every env ---
-        self._ingress(name, platform, env, ns, labels)
-
-    # ---- Ingress helpers ----
-    def _ingress(self, name, platform, env: EnvConfig, ns, labels):
-        # Per-name host via public_host() — symmetric with the other
-        # per-platform components. local uses the .localhost TLD (no DNS/TLS);
-        # every other env publishes a real host with external-dns + cert-manager
-        # TLS (DNS-01 Route53).
-        host = public_host(env, platform)
-        ann = (
-            {}
-            if not env.dns_base
-            else {
-                "external-dns.alpha.kubernetes.io/hostname": host,
-                "cert-manager.io/issuer": "letsencrypt-route53",
-            }
-        )
-        tls = bool(env.dns_base)  # every DNS-publishing env issues a cert
-        backend = k8s.IngressBackend(
-            service=k8s.IngressServiceBackend(
-                name=name, port=k8s.ServiceBackendPort(name="http")
-            )
-        )
-        k8s.KubeIngress(
-            self,
-            "ingress",
-            metadata=k8s.ObjectMeta(
-                name=name, namespace=ns, labels=labels, annotations=ann or None
-            ),
-            spec=k8s.IngressSpec(
-                ingress_class_name="traefik",
-                tls=[k8s.IngressTls(hosts=[host], secret_name=f"{name}-tls")]
-                if tls
-                else None,
-                rules=[
-                    k8s.IngressRule(
-                        host=host,
-                        http=k8s.HttpIngressRuleValue(
-                            paths=[
-                                k8s.HttpIngressPath(
-                                    path="/", path_type="Prefix", backend=backend
-                                )
-                            ]
-                        ),
                     )
                 ],
             ),
