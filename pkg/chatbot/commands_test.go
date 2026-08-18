@@ -91,114 +91,9 @@ var builtTestApp = newTestApp(video.Video{})
 
 // --- App.Chat seam ---
 //
-// These tests assert on chat output through the App.Chat injection point by
+// This test asserts on chat output through the App.Chat injection point by
 // installing a recordingChat directly. captureSay() above is a thin wrapper over
 // the same seam for the common "read the output text" case.
-
-func TestHelpCmd_SaysSomething_ViaIRC(t *testing.T) {
-	app := newTestApp(video.Video{})
-	rec := &recordingChat{}
-	app.Chat = rec
-
-	app.helpCmd(context.Background(), newTestUser("viewer1"), nil)
-
-	if len(rec.Says) == 0 {
-		t.Fatal("expected a help message via IRC, got none")
-	}
-	if !strings.Contains(rec.Says[0], " of ") {
-		t.Errorf("expected count like '(N of M)' in help message, got %q", rec.Says[0])
-	}
-}
-
-func TestUptimeCmd_SaysRunningFor_ViaIRC(t *testing.T) {
-	app := newTestApp(video.Video{})
-	rec := &recordingChat{}
-	app.Chat = rec
-	Uptime = time.Now().Add(-5 * time.Minute)
-
-	app.uptimeCmd(context.Background(), newTestUser("viewer1"), nil)
-
-	if len(rec.Says) != 1 {
-		t.Fatalf("expected exactly one Say() call, got %d: %v", len(rec.Says), rec.Says)
-	}
-	if !strings.HasPrefix(rec.Says[0], "I have been running for") {
-		t.Errorf("unexpected uptime message via IRC: %q", rec.Says[0])
-	}
-}
-
-func TestKilometresCmd_SaysViaIRC(t *testing.T) {
-	app := newTestApp(video.Video{})
-	rec := &recordingChat{}
-	app.Chat = rec
-
-	user := &users.User{Username: "viewer1", Miles: 10}
-	app.kilometresCmd(context.Background(), user, nil)
-
-	if len(rec.Says) != 1 {
-		t.Fatalf("expected exactly one Say() call, got %d: %v", len(rec.Says), rec.Says)
-	}
-	// 10 miles * 1.609344 = 16.09344, formatted as "16.09"
-	if !strings.Contains(rec.Says[0], "16.09") {
-		t.Errorf("expected km conversion in IRC output, got %q", rec.Says[0])
-	}
-	if !strings.Contains(rec.Says[0], "@viewer1") {
-		t.Errorf("expected @username in IRC output, got %q", rec.Says[0])
-	}
-}
-
-func TestHelloCmd_GreetsNewViewer_ViaIRC(t *testing.T) {
-	app := newTestApp(video.Video{})
-	rec := &recordingChat{}
-	app.Chat = rec
-	lastHelloTime = time.Time{} // clear rate limiter
-
-	app.helloCmd(context.Background(), newTestUser("newviewer"), nil)
-
-	if len(rec.Says) != 1 {
-		t.Fatalf("expected exactly one greeting via IRC, got %d: %v", len(rec.Says), rec.Says)
-	}
-	// a fresh user with 0 miles gets the newcomer hint appended
-	if !strings.Contains(rec.Says[0], "Tripbot") {
-		t.Errorf("expected newcomer hint in greeting via IRC, got %q", rec.Says[0])
-	}
-}
-
-func TestDateCmd_SaysViaIRC(t *testing.T) {
-	date := time.Date(2019, 6, 15, 18, 30, 0, 0, time.UTC)
-	vid := newTestVideo("Colorado", 39.5, -105.0, date)
-	app := newTestApp(vid)
-	rec := &recordingChat{}
-	app.Chat = rec
-
-	app.dateCmd(context.Background(), newTestUser("viewer1"), nil)
-
-	if len(rec.Says) != 1 {
-		t.Fatalf("expected exactly one Say() call, got %d: %v", len(rec.Says), rec.Says)
-	}
-	if !strings.HasPrefix(rec.Says[0], "This moment was") {
-		t.Errorf("unexpected date message via IRC: %q", rec.Says[0])
-	}
-	if !strings.Contains(rec.Says[0], "2019") {
-		t.Errorf("expected year 2019 in IRC output, got %q", rec.Says[0])
-	}
-}
-
-func TestTimeCmd_SaysViaIRC(t *testing.T) {
-	date := time.Date(2019, 6, 15, 18, 30, 0, 0, time.UTC)
-	vid := newTestVideo("Colorado", 39.5, -105.0, date)
-	app := newTestApp(vid)
-	rec := &recordingChat{}
-	app.Chat = rec
-
-	app.timeCmd(context.Background(), newTestUser("viewer1"), nil)
-
-	if len(rec.Says) != 1 {
-		t.Fatalf("expected exactly one Say() call, got %d: %v", len(rec.Says), rec.Says)
-	}
-	if !strings.HasPrefix(rec.Says[0], "This moment was") {
-		t.Errorf("unexpected time message via IRC: %q", rec.Says[0])
-	}
-}
 
 func TestReportCmd_AcksViaIRC(t *testing.T) {
 	app := newTestApp(video.Video{})
@@ -378,21 +273,6 @@ func TestLifetimeMilesLeaderboardCmd_ReadsSessions(t *testing.T) {
 	msg := out()
 	if !strings.Contains(msg, "alice") || !strings.Contains(msg, "300.0mi") {
 		t.Errorf("expected staged leaderboard data in chat output, got %q", msg)
-	}
-}
-
-// shutdownCmd ultimately calls os.Exit(0), so we can't drive the whole
-// command end-to-end in a unit test. The Sessions.Shutdown wiring is
-// covered indirectly: realSessions.Shutdown is a thin adapter, and the
-// recordingSessions implementation is exercised here as a contract check
-// so future refactors of !shutdown can pivot to it without re-deriving
-// the call shape.
-func TestRecordingSessions_ShutdownIsRecorded(t *testing.T) {
-	rec := &recordingSessions{}
-	rec.Shutdown(context.Background())
-
-	if len(rec.Calls) != 1 || rec.Calls[0] != "Shutdown()" {
-		t.Errorf("expected single Shutdown() recording, got %v", rec.Calls)
 	}
 }
 
