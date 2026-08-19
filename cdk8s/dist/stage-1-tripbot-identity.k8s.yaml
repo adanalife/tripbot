@@ -102,7 +102,23 @@ metadata:
   namespace: stage-1
 spec:
   hard:
+    limits.memory: 20Gi
+    local-path.storageclass.storage.k8s.io/requests.storage: 40Gi
     pods: "30"
     requests.cpu: "6"
     requests.gpu.intel.com/i915: "3"
     requests.memory: 16Gi
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: app-limits
+  namespace: stage-1
+spec:
+  limits:
+    - default:
+        memory: 512Mi
+      defaultRequest:
+        cpu: 50m
+        memory: 64Mi
+      type: Container

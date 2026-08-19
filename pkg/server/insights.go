@@ -250,6 +250,12 @@ type clipInsight struct {
 type footageInsightsResponse struct {
 	Days  int           `json:"days"`
 	Clips []clipInsight `json:"clips"`
+	// Platforms are the platforms whose chat actually fed the window's samples,
+	// in name order. It exists because the chatter figures read as fleet-wide
+	// and are not: a platform running bot-less has no chatters to sample, so it
+	// contributes nothing and says nothing about it. Reported rather than
+	// asserted so a platform that starts sampling joins the list on its own.
+	Platforms []string `json:"platforms"`
 }
 
 // footageMinSamples drops clips seen fewer than this many sample ticks in the
@@ -293,6 +299,17 @@ LEFT JOIN videos v ON v.id = s.video_id
 ORDER BY s.avg_chatters DESC, s.video_id
 LIMIT 15`
 
+// footagePlatformsSQL names the platforms that contributed samples to the
+// window. Deliberately not filtered by min_samples or joined to the clip list:
+// the question is which chats were being sampled at all, and a platform whose
+// every clip fell under the threshold was still being sampled.
+const footagePlatformsSQL = `
+SELECT DISTINCT platform
+FROM viewer_samples
+WHERE video_id IS NOT NULL
+  AND sampled_at >= now() - make_interval(days => @days)
+ORDER BY platform`
+
 // clipLabelNearLimitM matches pkg/video's nearPlaceLimit: beyond 10 km the
 // nearest town isn't an honest name for where the clip is.
 const clipLabelNearLimitM = 10000
@@ -314,7 +331,7 @@ func clipLabel(state, city string, cityM *float64) string {
 }
 
 func gatherFootageInsights(ctx context.Context, days int) (footageInsightsResponse, error) {
-	out := footageInsightsResponse{Days: days, Clips: []clipInsight{}}
+	out := footageInsightsResponse{Days: days, Clips: []clipInsight{}, Platforms: []string{}}
 	var rows []struct {
 		VideoID     int
 		Plays       int64
@@ -340,6 +357,11 @@ func gatherFootageInsights(ctx context.Context, days int) (footageInsightsRespon
 			MaxChatters: r.MaxChatters,
 			Samples:     r.Samples,
 		})
+	}
+	if err := database.GormDB().WithContext(ctx).
+		Raw(footagePlatformsSQL, sql.Named("days", days)).
+		Scan(&out.Platforms).Error; err != nil {
+		return out, fmt.Errorf("footage platforms: %w", err)
 	}
 	return out, nil
 }
