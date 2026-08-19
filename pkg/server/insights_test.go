@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -114,7 +115,7 @@ func TestFootageInsightsHandler_EmptyDataShape(t *testing.T) {
 		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
 	}
 	body := rec.Body.String()
-	for _, want := range []string{`"days":7`, `"clips":[]`} {
+	for _, want := range []string{`"days":7`, `"clips":[]`, `"platforms":[]`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body missing %s: %s", want, body)
 		}
@@ -280,10 +281,15 @@ func seedVideo(t *testing.T, db *gorm.DB, slug, state, city string, cityM *float
 
 func seedSample(t *testing.T, db *gorm.DB, videoID, count int, at time.Time) {
 	t.Helper()
+	seedSampleOn(t, db, "twitch", videoID, count, at)
+}
+
+func seedSampleOn(t *testing.T, db *gorm.DB, platform string, videoID, count int, at time.Time) {
+	t.Helper()
 	err := db.Exec(`INSERT INTO viewer_samples (platform, count, video_id, sampled_at)
-	                VALUES ('twitch', ?, ?, ?)`, count, videoID, at).Error
+	                VALUES (?, ?, ?, ?)`, platform, count, videoID, at).Error
 	if err != nil {
-		t.Fatalf("insert sample for video %d: %v", videoID, err)
+		t.Fatalf("insert %s sample for video %d: %v", platform, videoID, err)
 	}
 }
 
@@ -351,4 +357,48 @@ func TestFootageInsightsHandler_Aggregates(t *testing.T) {
 			t.Errorf("clips[%d] = %+v, want %+v", i, got.Clips[i], want[i])
 		}
 	}
+}
+
+// TestFootageInsightsHandler_PlatformsAreObserved is the honesty check on the
+// chatter figures. They read as fleet-wide and are not: a platform running
+// bot-less samples no chatters, so it contributes nothing to the average and
+// nothing says so. The list is derived from the rows rather than declared, so
+// it cannot go stale the way a hardcoded "twitch-only" note would.
+func TestFootageInsightsHandler_PlatformsAreObserved(t *testing.T) {
+	db := testdb.New(t)
+	in := time.Now().Add(-1 * time.Hour)
+	stale := time.Now().Add(-10 * 24 * time.Hour)
+	clip := seedVideo(t, db, "insights_clip_platforms", "Utah", "", nil)
+
+	for i, n := range []int{1, 2, 3} {
+		seedSample(t, db, clip, n, in.Add(time.Duration(i)*time.Minute))
+	}
+	// Out of the window: a platform that used to sample must not still be
+	// claimed as feeding these numbers.
+	seedSampleOn(t, db, "youtube", clip, 4, stale)
+
+	if got := footagePlatforms(t); !slices.Equal(got, []string{"twitch"}) {
+		t.Fatalf("platforms = %v, want [twitch] — only twitch sampled in-window", got)
+	}
+
+	// One in-window youtube sample, and the list has to grow on its own. It is
+	// deliberately below footageMinSamples: the question this answers is which
+	// chats were being sampled at all, not which clips cleared the bar.
+	seedSampleOn(t, db, "youtube", clip, 4, in)
+	if got := footagePlatforms(t); !slices.Equal(got, []string{"twitch", "youtube"}) {
+		t.Fatalf("platforms = %v, want [twitch youtube]", got)
+	}
+}
+
+func footagePlatforms(t *testing.T) []string {
+	t.Helper()
+	rec := insightsGET(t, "/api/insights/footage", footageInsightsHandler)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", rec.Code, rec.Body.String())
+	}
+	var got footageInsightsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v\n%s", err, rec.Body.String())
+	}
+	return got.Platforms
 }
