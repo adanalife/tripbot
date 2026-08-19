@@ -103,7 +103,7 @@ func TestGuessCmd_CorrectGuess_Misspelled(t *testing.T) {
 	recScores := &recordingScoreboards{}
 	app.Scoreboards = recScores
 
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	app.guessCmd(context.Background(), newTestUser("viewer1"), []string{"massachusets"})
 
@@ -120,7 +120,7 @@ func TestGuessCmd_WrongGuess_MisspelledStaysWrong(t *testing.T) {
 	// a misspelling of the WRONG state corrects to that state and stays wrong
 	vid := newTestVideo("Colorado", 39.5, -105.0, time.Now())
 	app := newTestApp(vid)
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	app.guessCmd(context.Background(), newTestUser("viewer1"), []string{"wyomig"})
 
@@ -144,7 +144,7 @@ func TestGuessCmd_StatelessVideo_CreditsNobody(t *testing.T) {
 			recPlayout := &recordingPlayout{}
 			app.Scoreboards = recScores
 			app.Playout = recPlayout
-			out := captureSay(t, app)
+			out, _ := captureSay(t, app)
 
 			app.guessCmd(context.Background(), newTestUser("viewer1"), []string{guess})
 
@@ -168,7 +168,7 @@ func TestGuessCmd_TwoLetterNonState_IsNotBlanked(t *testing.T) {
 	app := newTestApp(newTestVideo("Colorado", 39.5, -105.0, time.Now()))
 	recScores := &recordingScoreboards{}
 	app.Scoreboards = recScores
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	app.guessCmd(context.Background(), newTestUser("viewer1"), []string{"zz"})
 
@@ -191,7 +191,7 @@ func TestGuessCmd_WrongGuess_WarmerColderHints(t *testing.T) {
 	t.Cleanup(func() { lastTimewarpTime = saved })
 
 	app := newTestApp(newTestVideo("Colorado", 39.5, -105.0, time.Now()))
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 	user := newTestUser("viewer1")
 
 	// First miss: no previous distance, no hint.

@@ -347,7 +347,7 @@ func TestGuessrLeaderboardCmd_Daily(t *testing.T) {
 	rec := &recordingOnscreens{}
 	app.Onscreens = rec
 	app.Flags = &recordingFlags{Set: map[string]bool{guessrBoardFlagKey: true}}
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	app.guessrLeaderboardCmd(context.Background(), newTestUser("viewer1"), nil)
 
@@ -372,7 +372,7 @@ func TestGuessrLeaderboardCmd_MonthlyParam(t *testing.T) {
 
 	app := newTestApp(video.Video{})
 	app.Flags = &recordingFlags{Set: map[string]bool{guessrBoardFlagKey: true}}
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	app.guessrLeaderboardCmd(context.Background(), newTestUser("viewer1"), []string{"Monthly"})
 
@@ -395,7 +395,7 @@ func TestGuessrLeaderboardCmd_NoRows_PointsAtTheGame(t *testing.T) {
 	rec := &recordingOnscreens{}
 	app.Onscreens = rec
 	app.Flags = &recordingFlags{Set: map[string]bool{guessrBoardFlagKey: true}}
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	app.guessrLeaderboardCmd(context.Background(), newTestUser("viewer1"), nil)
 
@@ -420,7 +420,7 @@ func TestGuessrLeaderboardCmd_FlagOff_NeverFetches(t *testing.T) {
 	rec := &recordingOnscreens{}
 	app.Onscreens = rec
 	app.Flags = &recordingFlags{} // every key false
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	app.guessrLeaderboardCmd(context.Background(), newTestUser("viewer1"), nil)
 
