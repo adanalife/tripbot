@@ -9,6 +9,38 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v5.2.0] — 2026-08-19
+
+### Chatbot
+
+- `!top` now works as an alias for `!leaderboard`, and `!radio` for `!audio`. ([#1409](https://github.com/adanalife/tripbot/pull/1409))
+- The OBS poller now subscribes to obs-websocket's `Outputs` events and updates `obs_streaming_active` the moment OBS pushes a `StreamStateChanged`, instead of waiting up to a full 30s tick to notice. The tick stays exactly as it was — it reconciles state missed while the connection was down, and `GetStreamStatus` is still the only source for the stream-output gauges (bytes, congestion, dropped frames), which OBS pushes no event for. Same single WebSocket connection, so there's no extra connection to OBS. ([#1419](https://github.com/adanalife/tripbot/pull/1419))
+
+### Console / API
+
+- **The footage panel's chatter figures now say which chats they came from.** `GET /api/insights/footage` reports a `platforms` list — the platforms whose chat actually fed the window's samples. The figures read as fleet-wide and are not: `viewer_samples` has never held a youtube row (56,843 twitch, 0 youtube, all-time), because youtube runs bot-less and so has no chatters to sample. The list is observed from the rows rather than declared, so a platform that starts sampling joins it without anyone remembering to update a note. ([#1416](https://github.com/adanalife/tripbot/pull/1416))
+
+### Fixes
+
+- `tripbot_events_total` now carries `service_platform`. It only ever had the `event` label, so an events rate could be broken down by pod instance but not by encoder — and the two panels on the Twitch chat-activity dashboard that filter on `service_platform` matched nothing the moment a single platform was selected. The platform was already in hand: `events.record` stamps it on the row before it counts the metric. The description was stale too — it still said "login/logout events" when the counter now covers the whole event taxonomy (follows, command runs, deploys, watchdog transitions, state crossings). ([#1401](https://github.com/adanalife/tripbot/pull/1401))
+- Report EventSub liveness as a metric (`tripbot_eventsub_subscriptions`), so a dead subscription stops being invisible. On 2026-08-18 real-time follow/subscribe/raid delivery was down on prod for 7½ hours with the pod Ready and no alert firing. ([#1407](https://github.com/adanalife/tripbot/pull/1407))
+- `BOT_USERNAME` is lowercased at config load, like `CHANNEL_NAME` already was. It keys the `oauth_tokens` lookup, and those rows are written by the platform-gateway from Twitch's `login` field — always lowercase — so a mixed-case value would match no row and the bot would start with no token and no chat. Every deployed value is already lowercase, so this closes a latent trap rather than fixing live behaviour. ([#1408](https://github.com/adanalife/tripbot/pull/1408))
+- The shutdown sequence no longer names a phantom file when nothing ever played. It logged `last played video` unconditionally, and since a filename is the clip's slug plus `.MP4`, a run that died before the player resolved a clip reported `file=.MP4` as if that were the last thing on screen. Shutdown logs are exactly what gets read after a crashloop, so that case now logs `no video played this run` instead; the existing line and its `file` attribute are unchanged whenever a clip did play. ([#1411](https://github.com/adanalife/tripbot/pull/1411))
+
+### Deploy / Infra
+
+- Harden the stage-1 co-tenant quota: cap total memory usage (`limits.memory`) and local-path PVC storage alongside the existing request/GPU/pod caps, and add a LimitRange defaulting requests/limits for pods that omit them. ([#1417](https://github.com/adanalife/tripbot/pull/1417))
+
+### CI / Tooling
+
+- The changelog-fragment numbering workflow now fails loudly when it cannot diff against the base commit, instead of reporting success having numbered nothing. ([#1403](https://github.com/adanalife/tripbot/pull/1403))
+- Schema-validate the committed cdk8s `dist/*.k8s.yaml` against the k8s API with kubeconform, in both `task cdk8s:validate` and the `cdk8s-synth` CI gate — mirrors [infra#1007](https://github.com/adanalife/infra/pull/1007). ([#1418](https://github.com/adanalife/tripbot/pull/1418))
+
+### Cleanup
+
+- Compile the dash-string validation regex once at package level instead of on every call. ([#1410](https://github.com/adanalife/tripbot/pull/1410))
+- Drop the duplicated `_ViaIRC` chat-output tests in `pkg/chatbot`, folding their unique "exactly one Say() call" assertion into the `captureSay` helper. ([#1415](https://github.com/adanalife/tripbot/pull/1415))
+
 ## [v5.1.2] — 2026-08-18
 
 ### Onscreens
