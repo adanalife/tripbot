@@ -126,6 +126,33 @@ def test_priority_classes_owned_by_infra_not_tripbot():
     assert "ResourceQuota" in {o["kind"] for o in _objects("stage-1-tripbot-identity")}
 
 
+def test_stage_quota_caps_and_limit_defaults():
+    objs = _objects("stage-1-tripbot-identity")
+    quota = _by_kind(objs, "ResourceQuota")[0]
+    # every axis a runaway stage workload could starve prod on: scheduling
+    # (requests), usage (limits.memory), GPU slots, pod count, and the shared
+    # physical disk (scoped to local-path so NFS claims don't count)
+    assert set(quota["spec"]["hard"]) == {
+        "requests.cpu",
+        "requests.memory",
+        "limits.memory",
+        "requests.gpu.intel.com/i915",
+        "pods",
+        "local-path.storageclass.storage.k8s.io/requests.storage",
+    }
+    # the LimitRange backfills the quota'd fields for pods that omit them —
+    # without it a quota'd namespace rejects such pods outright
+    lr = _by_kind(objs, "LimitRange")[0]
+    item = lr["spec"]["limits"][0]
+    assert item["type"] == "Container"
+    assert set(item["defaultRequest"]) == {"cpu", "memory"}
+    # memory-only default limit: cpu stays uncapped by design
+    assert set(item["default"]) == {"memory"}
+    # prod is the protected party — no quota or defaults on its namespace
+    prod = {o["kind"] for o in _objects("prod-1-tripbot-identity")}
+    assert "ResourceQuota" not in prod and "LimitRange" not in prod
+
+
 def _env_from_secrets(stem: str) -> set[str]:
     """The Secret names a stem's tripbot container pulls env from."""
     dep = _by_kind(_objects(stem), "Deployment")[0]
