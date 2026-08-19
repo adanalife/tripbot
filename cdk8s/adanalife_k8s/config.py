@@ -347,8 +347,15 @@ ENVS: dict[str, EnvConfig] = {
         app_quota={
             "requests.cpu": "6",
             "requests.memory": "16Gi",
+            # Usage cap, not just scheduling: without it a stage pod fleet can
+            # burst-OOM the shared node even while its requests fit the quota.
+            "limits.memory": "20Gi",
             "requests.gpu.intel.com/i915": "3",
             "pods": "30",
+            # Scoped to local-path — the class that carves the shared physical
+            # disk — so the NAS-backed NFS claims (the 1Ti dashcam corpus)
+            # don't count against it.
+            "local-path.storageclass.storage.k8s.io/requests.storage": "40Gi",
         },
     ),
     "development": EnvConfig(
