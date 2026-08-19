@@ -1043,14 +1043,25 @@ func (t *Tripbot) getCurrentUsers() {
 	t.sessions.PrintCurrentSession(context.Background())
 }
 
+// logLastPlayed records the clip that was on screen when the bot stopped. An
+// empty Slug means the player never resolved a clip, so there is no filename
+// to report — a run that died during boot says so rather than naming a file.
+func (t *Tripbot) logLastPlayed() {
+	cur := t.player.Current()
+	if cur.Slug == "" {
+		slog.Info("no video played this run")
+		return
+	}
+	slog.Info("last played video", "file", cur.File())
+}
+
 // shutdown runs the cleanup sequence once the blocking chat loop returns:
 // stop the cron scheduler (no new ticks), stop Discord, flush session
 // state to the still-open DB, wait for the HTTP drain, then close the DB.
 // Sentry and telemetry flush afterwards, in bootstrap's deferred flush.
 func (t *Tripbot) shutdown(httpDone <-chan struct{}) {
 	slog.Warn("shutting down")
-	//TODO: print different message if CurrentlyPlaying is ""
-	slog.Info("last played video", "file", t.player.Current().File())
+	t.logLastPlayed()
 	// Shutdown cancels in-flight job contexts, so any ctx-aware work in those
 	// jobs unwinds rather than running to completion. Cron jobs here are short
 	// idempotent ticks that retry on the next interval, so losing an in-flight
