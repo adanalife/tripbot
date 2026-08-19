@@ -1,0 +1,1 @@
+Harden the stage-1 co-tenant quota: cap total memory usage (`limits.memory`) and local-path PVC storage alongside the existing request/GPU/pod caps, and add a LimitRange defaulting requests/limits for pods that omit them.
