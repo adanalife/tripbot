@@ -7,6 +7,7 @@ import (
 
 	"github.com/adanalife/tripbot/pkg/eventbus"
 	"github.com/adanalife/tripbot/pkg/events"
+	"github.com/adanalife/tripbot/pkg/instrumentation"
 )
 
 // AnnounceNewFollower says a thank-you to a new follower in chat, logs a
@@ -15,6 +16,7 @@ import (
 // events.
 func (a *App) AnnounceNewFollower(username string) {
 	a.Chat.Say(fmt.Sprintf("Thank you for the follow, @%s; type !commands in chat to see what you can do", username))
+	instrumentation.Announcements.Inc(a.Platform, "follow")
 	if err := a.Events.Follow(context.Background(), username); err != nil {
 		slog.ErrorContext(context.Background(), "error creating follow event", "err", err)
 	}
@@ -39,6 +41,10 @@ func (a *App) AnnounceSubscriber(username string, isGift bool, tier string) {
 	a.Chat.Say(fmt.Sprintf("Thank you for the sub, @%s; enjoy your !bonusmiles bleedPurple", username))
 	a.UserSessions.GiveEveryoneMiles(1.0)
 	a.Chat.Say(fmt.Sprintf("The %d current viewers have been given a bonus mile, too HolidayPresent", a.UserSessions.LoggedInCount()))
+	// Counted for gift recipients too, matching channel.subscribe, which fires
+	// for them as well — the shout goes out either way, so skipping them would
+	// show a shortfall against tripbot_events_total that isn't one.
+	instrumentation.Announcements.Inc(a.Platform, "sub")
 	if err := a.Events.Subscribe(context.Background(), username); err != nil {
 		slog.ErrorContext(context.Background(), "error creating subscribe event", "err", err)
 	}
@@ -63,6 +69,9 @@ func (a *App) AnnounceGiftSub(gifter string, count int, tier string, isAnonymous
 	} else {
 		a.Chat.Say(fmt.Sprintf("Thank you @%s for gifting %d sub(s)! bleedPurple", gifter, count))
 	}
+	// One per gift event, not per sub gifted: this counts shouts, and a
+	// mass-gift gets a single one.
+	instrumentation.Announcements.Inc(a.Platform, "gift")
 	eventbus.EmitSubscriberEvent(context.Background(), a.Cfg.Environment, eventbus.SubscriberEvent{
 		Platform:    a.Platform,
 		Kind:        "gift",
@@ -86,6 +95,7 @@ func (a *App) AnnounceResub(username string, cumulativeMonths, streakMonths int,
 	} else {
 		a.Chat.Say(fmt.Sprintf("Thank you for the resub, @%s bleedPurple", username))
 	}
+	instrumentation.Announcements.Inc(a.Platform, "resub")
 	eventbus.EmitSubscriberEvent(context.Background(), a.Cfg.Environment, eventbus.SubscriberEvent{
 		Platform: a.Platform,
 		Kind:     "resub",
