@@ -24,6 +24,7 @@ var (
 		0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10,
 	)
 	tripbotEvents             = mustCounter("tripbot_events_total", "Total rows written to the events table, labeled by event and by service_platform. Every kind in the event taxonomy counts here — logins, logouts, follows, command runs, deploys, watchdog transitions, state crossings.")
+	announcements             = mustCounter("tripbot_announcements_total", "Total viewer-milestone shouts posted to chat, labeled by kind (follow|sub|gift|resub) and by service_platform. Pairs with tripbot_events_total to cover the one leg of the EventSub path nothing else watches: a notice that persists its row but never lands a shout means outbound chat is wedged. A shout's only other trace is ordinary bot chat text, which no query can tell apart from any other line the bot says without matching on its wording.")
 	backgroundAudioSelections = mustCounter("tripbot_background_audio_selections_total", "Total background-audio bed switches, labeled by bed (somafm|carhum|album) and platform — answers what the stream has been playing and how often it changes")
 	scoreboardWrites          = mustCounter("tripbot_scoreboard_writes_total", "Total successful scoreboard score writes, labeled by scoreboard")
 	twitchSubscribers         = mustGauge("twitch_subscribers_total", "Current number of Twitch channel subscribers")
@@ -70,6 +71,12 @@ var ChatCommandDuration = commandDurationHistogram{h: chatCommandDuration}
 // the OTel resource, so without it a dashboard cannot break the rate down by
 // encoder and a per-platform selector silently matches nothing.
 var Events = eventsCounter{counter: tripbotEvents}
+
+// Announcements exposes the chat-shout counter. Record by calling
+// Announcements.Inc(platform, kind) right after the Say, so the count reflects
+// what was actually handed to the outbound client rather than what an EventSub
+// notice asked for.
+var Announcements = announcementsCounter{counter: announcements}
 
 // ScoreboardWrites exposes the scoreboard-write counter. Record by calling
 // ScoreboardWrites.Inc(scoreboardName) right after the row is persisted.
@@ -187,6 +194,13 @@ type eventsCounter struct{ counter metric.Int64Counter }
 func (e eventsCounter) Inc(event, platform string) {
 	e.counter.Add(context.Background(), 1,
 		metric.WithAttributes(attribute.String("event", event)), platformAttr(platform))
+}
+
+type announcementsCounter struct{ counter metric.Int64Counter }
+
+func (a announcementsCounter) Inc(platform, kind string) {
+	a.counter.Add(context.Background(), 1,
+		metric.WithAttributes(attribute.String("kind", kind)), platformAttr(platform))
 }
 
 type scoreboardWritesCounter struct{ counter metric.Int64Counter }

@@ -153,3 +153,63 @@ func TestEventSubSubscriptionsSet_SplitsHeldFromDenied(t *testing.T) {
 		t.Errorf("eventsub gauge datapoints = %v, want %v", got, want)
 	}
 }
+
+// The announcement counter is the only signal that a viewer-milestone shout
+// actually reached the outbound chat client, so both of its attributes have to
+// survive: kind is what makes it comparable to tripbot_events_total per event
+// type, and service.platform is what keeps a wedged encoder from hiding behind
+// a healthy one. Reads the datapoints back through an SDK reader so dropping
+// either attribute fails here rather than in a dashboard.
+//
+// Built on its own provider, not the package-level global: the global
+// instruments delegate to the first provider set, so sharing them would make
+// this depend on test order.
+func TestAnnouncementsInc_StampsKindAndPlatform(t *testing.T) {
+	reader := metricsdk.NewManualReader()
+	counter, err := metricsdk.NewMeterProvider(metricsdk.WithReader(reader)).
+		Meter("test").Int64Counter("tripbot_announcements_total")
+	if err != nil {
+		t.Fatalf("counter: %v", err)
+	}
+	a := announcementsCounter{counter: counter}
+
+	a.Inc("twitch", "sub")
+	a.Inc("twitch", "resub")
+	// Same kind on a second encoder must land as its own series, not fold into
+	// the first — otherwise one platform's shouts mask another's silence.
+	a.Inc("youtube", "sub")
+
+	var rm metricdata.ResourceMetrics
+	if err := reader.Collect(context.Background(), &rm); err != nil {
+		t.Fatalf("collect: %v", err)
+	}
+
+	got := map[string]int64{}
+	for _, sm := range rm.ScopeMetrics {
+		for _, m := range sm.Metrics {
+			if m.Name != "tripbot_announcements_total" {
+				continue
+			}
+			sum, ok := m.Data.(metricdata.Sum[int64])
+			if !ok {
+				t.Fatalf("%s is %T, want an int64 Sum", m.Name, m.Data)
+			}
+			for _, dp := range sum.DataPoints {
+				kind, ok := dp.Attributes.Value("kind")
+				if !ok {
+					t.Errorf("datapoint %v has no kind", dp.Attributes)
+				}
+				platform, ok := dp.Attributes.Value("service.platform")
+				if !ok {
+					t.Errorf("datapoint %v has no service.platform", dp.Attributes)
+				}
+				got[kind.AsString()+"/"+platform.AsString()] += dp.Value
+			}
+		}
+	}
+
+	want := map[string]int64{"sub/twitch": 1, "resub/twitch": 1, "sub/youtube": 1}
+	if !maps.Equal(got, want) {
+		t.Errorf("announcement datapoints = %v, want %v", got, want)
+	}
+}
