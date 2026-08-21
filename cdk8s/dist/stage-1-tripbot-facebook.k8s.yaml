@@ -172,32 +172,3 @@ spec:
   selector:
     app: tripbot-facebook
   type: ClusterIP
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  annotations:
-    cert-manager.io/issuer: letsencrypt-route53
-    external-dns.alpha.kubernetes.io/hostname: tripbot-facebook.stage.whereisdana.today
-  labels:
-    app.kubernetes.io/name: tripbot-facebook
-    app.kubernetes.io/part-of: tripbot
-  name: tripbot-facebook
-  namespace: stage-1
-spec:
-  ingressClassName: traefik
-  rules:
-    - host: tripbot-facebook.stage.whereisdana.today
-      http:
-        paths:
-          - backend:
-              service:
-                name: tripbot-facebook
-                port:
-                  name: http
-            path: /
-            pathType: Prefix
-  tls:
-    - hosts:
-        - tripbot-facebook.stage.whereisdana.today
-      secretName: tripbot-facebook-tls

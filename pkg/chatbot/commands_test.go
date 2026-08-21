@@ -30,18 +30,20 @@ var testConf = &c.TripbotConfig{
 
 // captureSay installs a recordingChat on app and returns an output() accessor
 // with "messages since the last call, then reset" semantics, so multiple
-// output() calls within one test don't accumulate across rounds. It replaces
-// app.Chat, so construct the App first.
-func captureSay(t *testing.T, app *App) func() string {
+// output() calls within one test don't accumulate across rounds, plus a count()
+// accessor for the total number of Say() calls recorded. It replaces app.Chat,
+// so construct the App first.
+func captureSay(t *testing.T, app *App) (func() string, func() int) {
 	t.Helper()
 	rec := &recordingChat{}
 	app.Chat = rec
 	last := 0
-	return func() string {
+	output := func() string {
 		msgs := rec.Says[last:]
 		last = len(rec.Says)
 		return strings.Join(msgs, "\n")
 	}
+	return output, func() int { return len(rec.Says) }
 }
 
 func newTestUser(name string) *users.User {
@@ -89,114 +91,9 @@ var builtTestApp = newTestApp(video.Video{})
 
 // --- App.Chat seam ---
 //
-// These tests assert on chat output through the App.Chat injection point by
+// This test asserts on chat output through the App.Chat injection point by
 // installing a recordingChat directly. captureSay() above is a thin wrapper over
 // the same seam for the common "read the output text" case.
-
-func TestHelpCmd_SaysSomething_ViaIRC(t *testing.T) {
-	app := newTestApp(video.Video{})
-	rec := &recordingChat{}
-	app.Chat = rec
-
-	app.helpCmd(context.Background(), newTestUser("viewer1"), nil)
-
-	if len(rec.Says) == 0 {
-		t.Fatal("expected a help message via IRC, got none")
-	}
-	if !strings.Contains(rec.Says[0], " of ") {
-		t.Errorf("expected count like '(N of M)' in help message, got %q", rec.Says[0])
-	}
-}
-
-func TestUptimeCmd_SaysRunningFor_ViaIRC(t *testing.T) {
-	app := newTestApp(video.Video{})
-	rec := &recordingChat{}
-	app.Chat = rec
-	Uptime = time.Now().Add(-5 * time.Minute)
-
-	app.uptimeCmd(context.Background(), newTestUser("viewer1"), nil)
-
-	if len(rec.Says) != 1 {
-		t.Fatalf("expected exactly one Say() call, got %d: %v", len(rec.Says), rec.Says)
-	}
-	if !strings.HasPrefix(rec.Says[0], "I have been running for") {
-		t.Errorf("unexpected uptime message via IRC: %q", rec.Says[0])
-	}
-}
-
-func TestKilometresCmd_SaysViaIRC(t *testing.T) {
-	app := newTestApp(video.Video{})
-	rec := &recordingChat{}
-	app.Chat = rec
-
-	user := &users.User{Username: "viewer1", Miles: 10}
-	app.kilometresCmd(context.Background(), user, nil)
-
-	if len(rec.Says) != 1 {
-		t.Fatalf("expected exactly one Say() call, got %d: %v", len(rec.Says), rec.Says)
-	}
-	// 10 miles * 1.609344 = 16.09344, formatted as "16.09"
-	if !strings.Contains(rec.Says[0], "16.09") {
-		t.Errorf("expected km conversion in IRC output, got %q", rec.Says[0])
-	}
-	if !strings.Contains(rec.Says[0], "@viewer1") {
-		t.Errorf("expected @username in IRC output, got %q", rec.Says[0])
-	}
-}
-
-func TestHelloCmd_GreetsNewViewer_ViaIRC(t *testing.T) {
-	app := newTestApp(video.Video{})
-	rec := &recordingChat{}
-	app.Chat = rec
-	lastHelloTime = time.Time{} // clear rate limiter
-
-	app.helloCmd(context.Background(), newTestUser("newviewer"), nil)
-
-	if len(rec.Says) != 1 {
-		t.Fatalf("expected exactly one greeting via IRC, got %d: %v", len(rec.Says), rec.Says)
-	}
-	// a fresh user with 0 miles gets the newcomer hint appended
-	if !strings.Contains(rec.Says[0], "Tripbot") {
-		t.Errorf("expected newcomer hint in greeting via IRC, got %q", rec.Says[0])
-	}
-}
-
-func TestDateCmd_SaysViaIRC(t *testing.T) {
-	date := time.Date(2019, 6, 15, 18, 30, 0, 0, time.UTC)
-	vid := newTestVideo("Colorado", 39.5, -105.0, date)
-	app := newTestApp(vid)
-	rec := &recordingChat{}
-	app.Chat = rec
-
-	app.dateCmd(context.Background(), newTestUser("viewer1"), nil)
-
-	if len(rec.Says) != 1 {
-		t.Fatalf("expected exactly one Say() call, got %d: %v", len(rec.Says), rec.Says)
-	}
-	if !strings.HasPrefix(rec.Says[0], "This moment was") {
-		t.Errorf("unexpected date message via IRC: %q", rec.Says[0])
-	}
-	if !strings.Contains(rec.Says[0], "2019") {
-		t.Errorf("expected year 2019 in IRC output, got %q", rec.Says[0])
-	}
-}
-
-func TestTimeCmd_SaysViaIRC(t *testing.T) {
-	date := time.Date(2019, 6, 15, 18, 30, 0, 0, time.UTC)
-	vid := newTestVideo("Colorado", 39.5, -105.0, date)
-	app := newTestApp(vid)
-	rec := &recordingChat{}
-	app.Chat = rec
-
-	app.timeCmd(context.Background(), newTestUser("viewer1"), nil)
-
-	if len(rec.Says) != 1 {
-		t.Fatalf("expected exactly one Say() call, got %d: %v", len(rec.Says), rec.Says)
-	}
-	if !strings.HasPrefix(rec.Says[0], "This moment was") {
-		t.Errorf("unexpected time message via IRC: %q", rec.Says[0])
-	}
-}
 
 func TestReportCmd_AcksViaIRC(t *testing.T) {
 	app := newTestApp(video.Video{})
@@ -366,7 +263,7 @@ func TestLifetimeMilesLeaderboardCmd_ReadsSessions(t *testing.T) {
 	}
 	app.Sessions = rec
 
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	app.lifetimeMilesLeaderboardCmd(context.Background(), newTestUser("caller"), nil)
 
@@ -379,37 +276,25 @@ func TestLifetimeMilesLeaderboardCmd_ReadsSessions(t *testing.T) {
 	}
 }
 
-// shutdownCmd ultimately calls os.Exit(0), so we can't drive the whole
-// command end-to-end in a unit test. The Sessions.Shutdown wiring is
-// covered indirectly: realSessions.Shutdown is a thin adapter, and the
-// recordingSessions implementation is exercised here as a contract check
-// so future refactors of !shutdown can pivot to it without re-deriving
-// the call shape.
-func TestRecordingSessions_ShutdownIsRecorded(t *testing.T) {
-	rec := &recordingSessions{}
-	rec.Shutdown(context.Background())
-
-	if len(rec.Calls) != 1 || rec.Calls[0] != "Shutdown()" {
-		t.Errorf("expected single Shutdown() recording, got %v", rec.Calls)
-	}
-}
-
 // --- helpCmd ---
 
 func TestHelpCmd_SaysSomething(t *testing.T) {
 	app := newTestApp(video.Video{})
-	out := captureSay(t, app)
+	out, says := captureSay(t, app)
 
 	app.helpCmd(context.Background(), newTestUser("viewer1"), nil)
 
 	if out() == "" {
 		t.Fatal("expected a help message, got empty output")
 	}
+	if says() != 1 {
+		t.Errorf("expected exactly one Say() call, got %d", says())
+	}
 }
 
 func TestHelpCmd_MessageContainsCount(t *testing.T) {
 	app := newTestApp(video.Video{})
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	app.helpCmd(context.Background(), newTestUser("viewer1"), nil)
 
@@ -421,7 +306,7 @@ func TestHelpCmd_MessageContainsCount(t *testing.T) {
 
 func TestHelpCmd_AdvancesIndex(t *testing.T) {
 	app := newTestApp(video.Video{})
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	app.helpCmd(context.Background(), newTestUser("viewer1"), nil)
 	first := out()
@@ -439,12 +324,15 @@ func TestHelpCmd_AdvancesIndex(t *testing.T) {
 func TestUptimeCmd_SaysRunningFor(t *testing.T) {
 	app := newTestApp(video.Video{})
 	Uptime = time.Now().Add(-5 * time.Minute)
-	out := captureSay(t, app)
+	out, says := captureSay(t, app)
 
 	app.uptimeCmd(context.Background(), newTestUser("viewer1"), nil)
 
 	if !strings.HasPrefix(out(), "I have been running for") {
 		t.Errorf("unexpected uptime message: %q", out())
+	}
+	if says() != 1 {
+		t.Errorf("expected exactly one Say() call, got %d", says())
 	}
 }
 
@@ -453,7 +341,7 @@ func TestUptimeCmd_SaysRunningFor(t *testing.T) {
 func TestHelloCmd_GreetsNewViewer(t *testing.T) {
 	app := newTestApp(video.Video{})
 	lastHelloTime = time.Time{} // clear rate limiter
-	out := captureSay(t, app)
+	out, says := captureSay(t, app)
 
 	// a fresh user with 0 miles gets the newcomer hint appended
 	app.helloCmd(context.Background(), newTestUser("newviewer"), nil)
@@ -465,12 +353,15 @@ func TestHelloCmd_GreetsNewViewer(t *testing.T) {
 	if !strings.Contains(msg, "Tripbot") {
 		t.Errorf("expected newcomer hint in greeting, got %q", msg)
 	}
+	if says() != 1 {
+		t.Errorf("expected exactly one Say() call, got %d", says())
+	}
 }
 
 func TestHelloCmd_RateLimitSilencesSecondCall(t *testing.T) {
 	app := newTestApp(video.Video{})
 	lastHelloTime = time.Now() // simulate a very recent greeting
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	app.helloCmd(context.Background(), newTestUser("viewer1"), nil)
 
@@ -482,7 +373,7 @@ func TestHelloCmd_RateLimitSilencesSecondCall(t *testing.T) {
 func TestHelloCmd_IgnoresMessageWithParams(t *testing.T) {
 	app := newTestApp(video.Video{})
 	lastHelloTime = time.Time{} // not rate limited
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	// "hello world" — has params so the bot stays quiet
 	app.helloCmd(context.Background(), newTestUser("viewer1"), []string{"world"})
@@ -496,7 +387,7 @@ func TestHelloCmd_IgnoresMessageWithParams(t *testing.T) {
 
 func TestKilometresCmd_ConvertsCorrectly(t *testing.T) {
 	app := newTestApp(video.Video{})
-	out := captureSay(t, app)
+	out, says := captureSay(t, app)
 
 	user := &users.User{Username: "viewer1", Miles: 10}
 	app.kilometresCmd(context.Background(), user, nil)
@@ -505,11 +396,14 @@ func TestKilometresCmd_ConvertsCorrectly(t *testing.T) {
 	if !strings.Contains(out(), "16.09") {
 		t.Errorf("expected km conversion in output, got %q", out())
 	}
+	if says() != 1 {
+		t.Errorf("expected exactly one Say() call, got %d", says())
+	}
 }
 
 func TestKilometresCmd_IncludesUsername(t *testing.T) {
 	app := newTestApp(video.Video{})
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	user := &users.User{Username: "testviewer", Miles: 5}
 	app.kilometresCmd(context.Background(), user, nil)
@@ -521,7 +415,7 @@ func TestKilometresCmd_IncludesUsername(t *testing.T) {
 
 func TestKilometresCmd_ZeroMiles(t *testing.T) {
 	app := newTestApp(video.Video{})
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	user := &users.User{Username: "newbie", Miles: 0}
 	app.kilometresCmd(context.Background(), user, nil)
@@ -542,7 +436,7 @@ func TestKilometresCmd_OtherUser_Found(t *testing.T) {
 	}
 	app.Sessions = rec
 
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	app.kilometresCmd(context.Background(), newTestUser("caller"), []string{"viewer1"})
 
@@ -566,7 +460,7 @@ func TestKilometresCmd_OtherUser_NotInDB(t *testing.T) {
 	rec := &recordingSessions{}
 	app.Sessions = rec
 
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	app.kilometresCmd(context.Background(), newTestUser("caller"), []string{"ghost"})
 
@@ -586,7 +480,7 @@ func TestKilometresCmd_OtherUser_StripsAtSign(t *testing.T) {
 	rec := &recordingSessions{}
 	app.Sessions = rec
 
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	app.kilometresCmd(context.Background(), newTestUser("caller"), []string{"@ghost"})
 
@@ -605,7 +499,7 @@ func TestVersionCmd_UsesCachedVersion(t *testing.T) {
 	currentVersion = "v1.2.3-test"
 	defer func() { currentVersion = "" }()
 
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	app.versionCmd(context.Background(), newTestUser("viewer1"), nil)
 
@@ -619,7 +513,7 @@ func TestVersionCmd_MessageFormat(t *testing.T) {
 	currentVersion = "v1.2.3-test"
 	defer func() { currentVersion = "" }()
 
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	app.versionCmd(context.Background(), newTestUser("viewer1"), nil)
 
@@ -645,7 +539,7 @@ func TestVersionCmd_ReadsFromVersionFile(t *testing.T) {
 		currentVersion = ""
 	}()
 
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	app.versionCmd(context.Background(), newTestUser("viewer1"), nil)
 
@@ -665,7 +559,7 @@ func TestVersionCmd_FallsBackToDevWhenFileMissing(t *testing.T) {
 		currentVersion = ""
 	}()
 
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	app.versionCmd(context.Background(), newTestUser("viewer1"), nil)
 
@@ -691,7 +585,7 @@ func TestVersionCmd_FallsBackToDevWhenFileEmpty(t *testing.T) {
 		currentVersion = ""
 	}()
 
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	app.versionCmd(context.Background(), newTestUser("viewer1"), nil)
 
@@ -705,7 +599,7 @@ func TestVersionCmd_FallsBackToDevWhenFileEmpty(t *testing.T) {
 func TestStateCmd_SaysCurrentState(t *testing.T) {
 	vid := newTestVideo("Colorado", 39.5, -105.0, time.Now())
 	app := newTestApp(vid)
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	app.stateCmd(context.Background(), newTestUser("viewer1"), nil)
 
@@ -717,7 +611,7 @@ func TestStateCmd_SaysCurrentState(t *testing.T) {
 func TestStateCmd_MessageFormat(t *testing.T) {
 	vid := newTestVideo("Utah", 40.0, -111.0, time.Now())
 	app := newTestApp(vid)
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	app.stateCmd(context.Background(), newTestUser("viewer1"), nil)
 
@@ -732,7 +626,7 @@ func TestDateCmd_SaysThisMomentWas(t *testing.T) {
 	date := time.Date(2019, 6, 15, 18, 30, 0, 0, time.UTC)
 	vid := newTestVideo("Colorado", 39.5, -105.0, date)
 	app := newTestApp(vid)
-	out := captureSay(t, app)
+	out, says := captureSay(t, app)
 
 	app.dateCmd(context.Background(), newTestUser("viewer1"), nil)
 
@@ -740,13 +634,16 @@ func TestDateCmd_SaysThisMomentWas(t *testing.T) {
 	if !strings.HasPrefix(msg, "This moment was") {
 		t.Errorf("unexpected date message: %q", msg)
 	}
+	if says() != 1 {
+		t.Errorf("expected exactly one Say() call, got %d", says())
+	}
 }
 
 func TestDateCmd_IncludesYear(t *testing.T) {
 	date := time.Date(2019, 6, 15, 18, 30, 0, 0, time.UTC)
 	vid := newTestVideo("Colorado", 39.5, -105.0, date)
 	app := newTestApp(vid)
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	app.dateCmd(context.Background(), newTestUser("viewer1"), nil)
 
@@ -761,12 +658,15 @@ func TestTimeCmd_SaysThisMomentWas(t *testing.T) {
 	date := time.Date(2019, 6, 15, 18, 30, 0, 0, time.UTC)
 	vid := newTestVideo("Colorado", 39.5, -105.0, date)
 	app := newTestApp(vid)
-	out := captureSay(t, app)
+	out, says := captureSay(t, app)
 
 	app.timeCmd(context.Background(), newTestUser("viewer1"), nil)
 
 	if !strings.HasPrefix(out(), "This moment was") {
 		t.Errorf("unexpected time message: %q", out())
+	}
+	if says() != 1 {
+		t.Errorf("expected exactly one Say() call, got %d", says())
 	}
 }
 
@@ -774,7 +674,7 @@ func TestTimeCmd_IncludesAMPM(t *testing.T) {
 	date := time.Date(2019, 6, 15, 18, 30, 0, 0, time.UTC)
 	vid := newTestVideo("Colorado", 39.5, -105.0, date)
 	app := newTestApp(vid)
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	app.timeCmd(context.Background(), newTestUser("viewer1"), nil)
 
@@ -791,7 +691,7 @@ func TestSunsetCmd_SaysSunset(t *testing.T) {
 	date := time.Date(2019, 6, 15, 20, 0, 0, 0, time.UTC)
 	vid := newTestVideo("Colorado", 39.5, -105.0, date)
 	app := newTestApp(vid)
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	app.sunsetCmd(context.Background(), newTestUser("viewer1"), nil)
 
@@ -805,7 +705,7 @@ func TestSunsetCmd_SaysSunset(t *testing.T) {
 func TestGuessCmd_NoParams_PromptsGuess(t *testing.T) {
 	vid := newTestVideo("Colorado", 39.5, -105.0, time.Now())
 	app := newTestApp(vid)
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	app.guessCmd(context.Background(), newTestUser("viewer1"), nil)
 
@@ -817,7 +717,7 @@ func TestGuessCmd_NoParams_PromptsGuess(t *testing.T) {
 func TestGuessCmd_WrongGuess_SaysTryAgain(t *testing.T) {
 	vid := newTestVideo("Colorado", 39.5, -105.0, time.Now())
 	app := newTestApp(vid)
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	// Wyoming != Colorado
 	app.guessCmd(context.Background(), newTestUser("viewer1"), []string{"Wyoming"})
@@ -839,7 +739,7 @@ func TestGuessCmd_CorrectGuess_DrivesOverlayAndPlayback(t *testing.T) {
 	// Credit flag on → the guesser's username rides the timewarp overlay call.
 	app.Flags = &recordingFlags{Set: map[string]bool{timewarpCreditFlagKey: true}}
 
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	app.guessCmd(context.Background(), newTestUser("viewer1"), []string{"Colorado"})
 
@@ -879,7 +779,7 @@ func TestGuessCmd_CorrectGuess_FullStateName(t *testing.T) {
 	recScores := &recordingScoreboards{}
 	app.Scoreboards = recScores
 
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	app.guessCmd(context.Background(), newTestUser("viewer1"), []string{"Massachusetts"})
 
@@ -898,7 +798,7 @@ func TestGuessCmd_CorrectGuess_TwoLetterCode(t *testing.T) {
 	recScores := &recordingScoreboards{}
 	app.Scoreboards = recScores
 
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	app.guessCmd(context.Background(), newTestUser("viewer1"), []string{"CA"})
 
@@ -1000,7 +900,7 @@ const adminUser = "test"
 
 func TestMiddleCmd_NonAdminIsSilent(t *testing.T) {
 	app := newTestApp(video.Video{})
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	app.middleCmd(context.Background(), newTestUser("viewer1"), []string{"hello"})
 
@@ -1015,7 +915,7 @@ func TestRefreshOverlaysCmd_NonAdminIsSilent(t *testing.T) {
 	app := newTestApp(video.Video{})
 	obs := &recordingOBS{Refreshed: 5}
 	app.OBS = obs
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	app.refreshOverlaysCmd(context.Background(), newTestUser("viewer1"), nil)
 
@@ -1027,7 +927,7 @@ func TestRefreshOverlaysCmd_NonAdminIsSilent(t *testing.T) {
 func TestRefreshOverlaysCmd_AdminReportsCount(t *testing.T) {
 	app := newTestApp(video.Video{})
 	app.OBS = &recordingOBS{Refreshed: 3}
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	app.refreshOverlaysCmd(context.Background(), newTestUser(adminUser), nil)
 
@@ -1039,7 +939,7 @@ func TestRefreshOverlaysCmd_AdminReportsCount(t *testing.T) {
 func TestRefreshOverlaysCmd_ErrorIsReported(t *testing.T) {
 	app := newTestApp(video.Video{})
 	app.OBS = &recordingOBS{refreshErr: errors.New("obs unreachable")}
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	app.refreshOverlaysCmd(context.Background(), newTestUser(adminUser), nil)
 
@@ -1050,7 +950,7 @@ func TestRefreshOverlaysCmd_ErrorIsReported(t *testing.T) {
 
 func TestMiddleCmd_NoParams_PromptsForText(t *testing.T) {
 	app := newTestApp(video.Video{})
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	app.middleCmd(context.Background(), newTestUser(adminUser), nil)
 
@@ -1064,7 +964,7 @@ func TestMiddleCmd_Hide_DrivesHideOverlay(t *testing.T) {
 	rec := &recordingOnscreens{}
 	app.Onscreens = rec
 
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	app.middleCmd(context.Background(), newTestUser(adminUser), []string{"hide"})
 
@@ -1129,7 +1029,7 @@ func TestLifetimeMilesLeaderboardCmd_Empty(t *testing.T) {
 	// noopSessions's LifetimeLeaderboard returns nil — the test asserts
 	// the empty-leaderboard header still renders cleanly.
 
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	app.lifetimeMilesLeaderboardCmd(context.Background(), newTestUser("viewer1"), nil)
 
@@ -1152,7 +1052,7 @@ func TestLifetimeMilesLeaderboardCmd_WithUsers(t *testing.T) {
 	}
 	app.Sessions = recSessions
 
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	app.lifetimeMilesLeaderboardCmd(context.Background(), newTestUser("caller"), nil)
 
@@ -1191,7 +1091,7 @@ func TestMonthlyMilesLeaderboardCmd_RendersTopUsers(t *testing.T) {
 		Miles: [][]string{{"viewer1", "42.5"}, {"viewer2", "12.0"}},
 	}
 
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	app.monthlyMilesLeaderboardCmd(context.Background(), newTestUser("caller"), nil)
 
@@ -1221,7 +1121,7 @@ func TestMonthlyMilesLeaderboardCmd_OverlayShorterThanChat(t *testing.T) {
 	}
 	app.Scoreboards = &recordingScoreboards{Month: "July", Miles: miles}
 
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	app.monthlyMilesLeaderboardCmd(context.Background(), newTestUser("caller"), nil)
 
@@ -1246,7 +1146,7 @@ func TestMonthlyMilesLeaderboardCmd_TiesShareAPlace(t *testing.T) {
 		Miles: [][]string{{"alice", "12.0"}, {"bob", "12.0"}, {"carol", "9.0"}},
 	}
 
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	app.monthlyMilesLeaderboardCmd(context.Background(), newTestUser("caller"), nil)
 
@@ -1267,7 +1167,7 @@ func TestMonthlyGuessLeaderboardCmd_Empty_SaysNoneYet(t *testing.T) {
 	app.Onscreens = rec
 	app.Scoreboards = &recordingScoreboards{} // no rows
 
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	app.monthlyGuessLeaderboardCmd(context.Background(), newTestUser("caller"), nil)
 
@@ -1287,7 +1187,7 @@ func TestMonthlyGuessLeaderboardCmd_RendersRankedRows(t *testing.T) {
 		Guesses: [][]string{{"viewer1", "7"}, {"viewer2", "3"}},
 	}
 
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	app.monthlyGuessLeaderboardCmd(context.Background(), newTestUser("caller"), nil)
 
@@ -1311,7 +1211,7 @@ func TestMonthlyGuessLeaderboardCmd_CountMatchesRowsRendered(t *testing.T) {
 		Guesses: [][]string{{"viewer1", "5"}, {"viewer3", "2"}},
 	}
 
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	app.monthlyGuessLeaderboardCmd(context.Background(), newTestUser("caller"), nil)
 
@@ -1342,7 +1242,7 @@ func TestMilesCmd_OtherUser_NotInDB(t *testing.T) {
 	rec := &recordingSessions{}
 	app.Sessions = rec
 
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	app.milesCmd(context.Background(), newTestUser("caller"), []string{"ghost"})
 
@@ -1360,7 +1260,7 @@ func TestMilesCmd_Self_WithMiles(t *testing.T) {
 	// CurrentMonthlyMiles is covered in pkg/users / pkg/scoreboards.
 	app.Sessions = &recordingSessions{Miles: 50.0, MonthlyMiles: 8.0}
 
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	user := &users.User{Username: "viewer1", Miles: 50.0}
 	app.milesCmd(context.Background(), user, nil)
@@ -1379,7 +1279,7 @@ func TestMilesCmd_Self_NewcomerHint(t *testing.T) {
 	// Brand-new user: monthly = 0, lifetime = 0 → triggers both newcomer hints.
 	app.Sessions = &recordingSessions{Miles: 0.0, MonthlyMiles: 0.0}
 
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	user := &users.User{Username: "newbie", Miles: 0.0}
 	app.milesCmd(context.Background(), user, nil)
@@ -1405,7 +1305,7 @@ func TestMilesCmd_OtherUser_Found(t *testing.T) {
 	}
 	app.Sessions = rec
 
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	app.milesCmd(context.Background(), newTestUser("caller"), []string{"viewer1"})
 
@@ -1433,7 +1333,7 @@ func TestMilesCmd_OtherUser_StripsAtSign(t *testing.T) {
 	rec := &recordingSessions{}
 	app.Sessions = rec
 
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	app.milesCmd(context.Background(), newTestUser("caller"), []string{"@ghost"})
 

@@ -21,10 +21,14 @@ func Load() *TripbotConfig {
 		log.Fatalf("could not load config: %v", err)
 	}
 
-	// Platform logins are case-insensitive, so the channel name is normalized
-	// once here — callers compare it against lowercased usernames from the DB
-	// and never have to lowercase it themselves.
+	// Platform logins are case-insensitive, so both are normalized once here —
+	// callers compare them against lowercased usernames from the DB and never
+	// have to lowercase them themselves. BotUsername in particular keys the
+	// oauth_tokens lookup, whose rows the platform-gateway writes from Twitch's
+	// `login` field, which is always lowercase: a mixed-case BOT_USERNAME would
+	// match no row and the bot would come up with no token.
 	cfg.ChannelName = strings.ToLower(cfg.ChannelName)
+	cfg.BotUsername = strings.ToLower(cfg.BotUsername)
 
 	// give helpful reminders when things are disabled
 	if cfg.GoogleMapsAPIKey == "" {

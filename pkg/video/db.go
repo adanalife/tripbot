@@ -17,6 +17,10 @@ import (
 	"gorm.io/gorm"
 )
 
+// validDashStr matches the 20-character underscore-and-digit timestamp that
+// opens every dashcam clip filename.
+var validDashStr = regexp.MustCompile(`^[_0-9]{20}$`)
+
 // LoadOrCreate() will look up the video in the DB,
 // or add it to the DB if it's not there yet
 func LoadOrCreate(ctx context.Context, path string) (Video, error) {
@@ -176,8 +180,6 @@ func validate(dashStr string) error {
 		return errors.New("dash string can't be a hidden file")
 	}
 
-	//TODO: this should probably live in an init()
-	var validDashStr = regexp.MustCompile(`^[_0-9]{20}$`)
 	if !validDashStr.MatchString(shortened) {
 		return errors.New("dash string did not match regex")
 	}

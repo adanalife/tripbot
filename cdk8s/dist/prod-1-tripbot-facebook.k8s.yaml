@@ -72,7 +72,7 @@ spec:
             - secretRef:
                 name: tripbot-discord-bot-token
                 optional: true
-          image: adanalife/tripbot:5.1.0
+          image: adanalife/tripbot:5.2.0
           imagePullPolicy: IfNotPresent
           livenessProbe:
             httpGet:
@@ -120,7 +120,7 @@ spec:
                 name: tripbot-facebook-config
             - secretRef:
                 name: tripbot-database-creds
-          image: adanalife/tripbot:5.1.0
+          image: adanalife/tripbot:5.2.0
           imagePullPolicy: IfNotPresent
           name: migrate
           resources:
@@ -161,32 +161,3 @@ spec:
   selector:
     app: tripbot-facebook
   type: ClusterIP
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  annotations:
-    cert-manager.io/issuer: letsencrypt-route53
-    external-dns.alpha.kubernetes.io/hostname: tripbot-facebook.prod.whereisdana.today
-  labels:
-    app.kubernetes.io/name: tripbot-facebook
-    app.kubernetes.io/part-of: tripbot
-  name: tripbot-facebook
-  namespace: prod-1
-spec:
-  ingressClassName: traefik
-  rules:
-    - host: tripbot-facebook.prod.whereisdana.today
-      http:
-        paths:
-          - backend:
-              service:
-                name: tripbot-facebook
-                port:
-                  name: http
-            path: /
-            pathType: Prefix
-  tls:
-    - hosts:
-        - tripbot-facebook.prod.whereisdana.today
-      secretName: tripbot-facebook-tls

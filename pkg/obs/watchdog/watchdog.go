@@ -25,6 +25,12 @@ import (
 // OBS WebSocket or live platform client. DefaultWatchdogDeps wires the OBS +
 // restart hooks; ChannelLive is injected by the caller.
 type WatchdogDeps struct {
+	// Platform labels this leg's metrics (twitch, tiktok, youtube). Every
+	// per-platform instance shares one counter, and service.platform lives only
+	// on the OTel resource, so without it the legs collide onto a single series
+	// — the same reason every OBS metric stamps it. Empty defaults to twitch.
+	Platform string
+
 	OBSActive func(context.Context) (bool, error)
 	// ChannelLive reports whether the channel is live. Injected by cmd/tripbot,
 	// which routes it through the platform-gateway — this package must not reach
@@ -237,6 +243,11 @@ func WatchSilentDisconnect(ctx context.Context, deps WatchdogDeps, interval time
 			// each attempt re-stopping an output already mid-teardown.
 			lastRestart = time.Now()
 			restartErr := deps.Restart(ctx)
+			// Recorded before the error check, so a recovery that keeps failing
+			// is visible. Counting only successes made the worse outage the
+			// quieter one: on 2026-08-05 every attempt failed for 9h41m and the
+			// counter never moved, so the panel over it read zero throughout.
+			instrumentation.OBSSilentDisconnectRestarts.Attempt(deps.Platform, restartErr)
 			if deps.OnRestart != nil {
 				deps.OnRestart(ctx, restartErr)
 			}
@@ -244,7 +255,6 @@ func WatchSilentDisconnect(ctx context.Context, deps WatchdogDeps, interval time
 				slog.ErrorContext(ctx, "watchdog: restart failed", "err", restartErr)
 				continue
 			}
-			instrumentation.OBSSilentDisconnectRestarts.Inc()
 			misses = 0
 		}
 	}

@@ -12,13 +12,9 @@ type OnscreensServerConfig struct {
 	RunDir string `default:"/opt/data/run" envconfig:"RUN_DIR"`
 
 	// OnscreensServerBindAddress is the address (host:port or :port) the
-	// onscreens-server HTTP listener binds to. The default stays :8081 — the
-	// value from when onscreens-server was co-located with another server's
-	// :8080 in one container. The standalone onscreens-server image overrides
-	// this to :8080 (the project-wide HTTP convention) via
-	// ONSCREENS_SERVER_BIND_ADDRESS, since on its own pod/IP there's nothing
-	// to collide with.
-	OnscreensServerBindAddress string `default:":8081" envconfig:"ONSCREENS_SERVER_BIND_ADDRESS"`
+	// onscreens-server HTTP listener binds to. :8080 is the project-wide
+	// convention for a service's HTTP port.
+	OnscreensServerBindAddress string `default:":8080" envconfig:"ONSCREENS_SERVER_BIND_ADDRESS"`
 
 	// NatsURL is the in-cluster NATS endpoint the subscriber connects to.
 	// Format: nats://nats.<env-platform-ns>.svc.cluster.local:4222.

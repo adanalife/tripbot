@@ -95,7 +95,7 @@ spec:
                 optional: true
             - secretRef:
                 name: tripbot-youtube-creds
-          image: adanalife/tripbot:5.1.0
+          image: adanalife/tripbot:5.2.0
           imagePullPolicy: IfNotPresent
           livenessProbe:
             httpGet:
@@ -143,7 +143,7 @@ spec:
                 name: tripbot-youtube-config
             - secretRef:
                 name: tripbot-database-creds
-          image: adanalife/tripbot:5.1.0
+          image: adanalife/tripbot:5.2.0
           imagePullPolicy: IfNotPresent
           name: migrate
           resources:
@@ -184,32 +184,3 @@ spec:
   selector:
     app: tripbot-youtube
   type: ClusterIP
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  annotations:
-    cert-manager.io/issuer: letsencrypt-route53
-    external-dns.alpha.kubernetes.io/hostname: tripbot-youtube.prod.whereisdana.today
-  labels:
-    app.kubernetes.io/name: tripbot-youtube
-    app.kubernetes.io/part-of: tripbot
-  name: tripbot-youtube
-  namespace: prod-1
-spec:
-  ingressClassName: traefik
-  rules:
-    - host: tripbot-youtube.prod.whereisdana.today
-      http:
-        paths:
-          - backend:
-              service:
-                name: tripbot-youtube
-                port:
-                  name: http
-            path: /
-            pathType: Prefix
-  tls:
-    - hosts:
-        - tripbot-youtube.prod.whereisdana.today
-      secretName: tripbot-youtube-tls

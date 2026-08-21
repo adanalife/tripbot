@@ -1,6 +1,14 @@
 package instrumentation
 
-import "testing"
+import (
+	"context"
+	"maps"
+	"testing"
+
+	"go.opentelemetry.io/otel"
+	metricsdk "go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/metric/metricdata"
+)
 
 // CurrentState.Set must track exactly one active state at a time: a blank
 // abbrev normalizes to "unknown", a transition advances prev to the new
@@ -39,4 +47,169 @@ func TestCurrentStateSet_TracksActiveState(t *testing.T) {
 func TestCurrentStateSet_DefaultIsSafe(t *testing.T) {
 	CurrentState.Set("WY", "twitch")
 	CurrentState.Set("", "")
+}
+
+// The events counter has to carry service.platform, not just event. Without it
+// a dashboard can only break the rate down by pod instance, and the
+// twitch-chat-activity panels' service_platform selector matches nothing —
+// which reads as "no events" rather than as a missing label.
+//
+// Reads the real datapoints through an SDK reader rather than trusting the call
+// site by inspection, so dropping the attribute fails here.
+func TestEventsInc_StampsEventAndPlatform(t *testing.T) {
+	reader := metricsdk.NewManualReader()
+	otel.SetMeterProvider(metricsdk.NewMeterProvider(metricsdk.WithReader(reader)))
+
+	Events.Inc("state_crossing", "youtube")
+	Events.Inc("login", "twitch")
+
+	var rm metricdata.ResourceMetrics
+	if err := reader.Collect(context.Background(), &rm); err != nil {
+		t.Fatalf("collect: %v", err)
+	}
+
+	got := map[string]int64{}
+	for _, sm := range rm.ScopeMetrics {
+		for _, m := range sm.Metrics {
+			if m.Name != "tripbot_events_total" {
+				continue
+			}
+			sum, ok := m.Data.(metricdata.Sum[int64])
+			if !ok {
+				t.Fatalf("%s is %T, want an int64 Sum", m.Name, m.Data)
+			}
+			for _, dp := range sum.DataPoints {
+				event, _ := dp.Attributes.Value("event")
+				platform, ok := dp.Attributes.Value("service.platform")
+				if !ok {
+					t.Errorf("datapoint %v has no service.platform", dp.Attributes)
+				}
+				got[event.AsString()+"/"+platform.AsString()] += dp.Value
+			}
+		}
+	}
+
+	want := map[string]int64{"state_crossing/youtube": 1, "login/twitch": 1}
+	if !maps.Equal(got, want) {
+		t.Errorf("events datapoints = %v, want %v", got, want)
+	}
+}
+
+// The EventSub gauge is the only positive liveness signal for real-time
+// follow/sub/raid delivery, so both legs have to arrive as their own series and
+// both have to carry service.platform — a gauge whose result attribute went
+// missing would collapse held and denied onto one series with last-write-wins,
+// and the "no subscriptions" alert would read whichever was recorded last.
+//
+// Built on its own provider rather than the package-level global: the global
+// instruments delegate to the first provider set, so a test that shares them
+// depends on which test ran first.
+func TestEventSubSubscriptionsSet_SplitsHeldFromDenied(t *testing.T) {
+	reader := metricsdk.NewManualReader()
+	gauge, err := metricsdk.NewMeterProvider(metricsdk.WithReader(reader)).
+		Meter("test").Int64Gauge("tripbot_eventsub_subscriptions")
+	if err != nil {
+		t.Fatalf("gauge: %v", err)
+	}
+	e := eventsubSubscriptionsGauge{gauge: gauge}
+
+	// A partial grant: five of six subscriptions took, one was refused for a
+	// scope the token doesn't carry.
+	e.Set(5, 1)
+	// Then the socket drops. Nothing is arriving now, but the token's verdict
+	// stands — zeroing denied here would blink a standing shortfall out of view
+	// every time Twitch hangs up.
+	e.Set(0, 1)
+
+	var rm metricdata.ResourceMetrics
+	if err := reader.Collect(context.Background(), &rm); err != nil {
+		t.Fatalf("collect: %v", err)
+	}
+
+	got := map[string]int64{}
+	for _, sm := range rm.ScopeMetrics {
+		for _, m := range sm.Metrics {
+			g, ok := m.Data.(metricdata.Gauge[int64])
+			if !ok {
+				t.Fatalf("%s is %T, want an int64 Gauge", m.Name, m.Data)
+			}
+			for _, dp := range g.DataPoints {
+				result, ok := dp.Attributes.Value("result")
+				if !ok {
+					t.Errorf("datapoint %v has no result", dp.Attributes)
+				}
+				if platform, ok := dp.Attributes.Value("service.platform"); !ok {
+					t.Errorf("datapoint %v has no service.platform", dp.Attributes)
+				} else if platform.AsString() != "twitch" {
+					t.Errorf("service.platform = %q, want twitch — EventSub is Twitch-only", platform.AsString())
+				}
+				got[result.AsString()] = dp.Value
+			}
+		}
+	}
+
+	want := map[string]int64{"ok": 0, "denied": 1}
+	if !maps.Equal(got, want) {
+		t.Errorf("eventsub gauge datapoints = %v, want %v", got, want)
+	}
+}
+
+// The announcement counter is the only signal that a viewer-milestone shout
+// actually reached the outbound chat client, so both of its attributes have to
+// survive: kind is what makes it comparable to tripbot_events_total per event
+// type, and service.platform is what keeps a wedged encoder from hiding behind
+// a healthy one. Reads the datapoints back through an SDK reader so dropping
+// either attribute fails here rather than in a dashboard.
+//
+// Built on its own provider, not the package-level global: the global
+// instruments delegate to the first provider set, so sharing them would make
+// this depend on test order.
+func TestAnnouncementsInc_StampsKindAndPlatform(t *testing.T) {
+	reader := metricsdk.NewManualReader()
+	counter, err := metricsdk.NewMeterProvider(metricsdk.WithReader(reader)).
+		Meter("test").Int64Counter("tripbot_announcements_total")
+	if err != nil {
+		t.Fatalf("counter: %v", err)
+	}
+	a := announcementsCounter{counter: counter}
+
+	a.Inc("twitch", "sub")
+	a.Inc("twitch", "resub")
+	// Same kind on a second encoder must land as its own series, not fold into
+	// the first — otherwise one platform's shouts mask another's silence.
+	a.Inc("youtube", "sub")
+
+	var rm metricdata.ResourceMetrics
+	if err := reader.Collect(context.Background(), &rm); err != nil {
+		t.Fatalf("collect: %v", err)
+	}
+
+	got := map[string]int64{}
+	for _, sm := range rm.ScopeMetrics {
+		for _, m := range sm.Metrics {
+			if m.Name != "tripbot_announcements_total" {
+				continue
+			}
+			sum, ok := m.Data.(metricdata.Sum[int64])
+			if !ok {
+				t.Fatalf("%s is %T, want an int64 Sum", m.Name, m.Data)
+			}
+			for _, dp := range sum.DataPoints {
+				kind, ok := dp.Attributes.Value("kind")
+				if !ok {
+					t.Errorf("datapoint %v has no kind", dp.Attributes)
+				}
+				platform, ok := dp.Attributes.Value("service.platform")
+				if !ok {
+					t.Errorf("datapoint %v has no service.platform", dp.Attributes)
+				}
+				got[kind.AsString()+"/"+platform.AsString()] += dp.Value
+			}
+		}
+	}
+
+	want := map[string]int64{"sub/twitch": 1, "resub/twitch": 1, "sub/youtube": 1}
+	if !maps.Equal(got, want) {
+		t.Errorf("announcement datapoints = %v, want %v", got, want)
+	}
 }

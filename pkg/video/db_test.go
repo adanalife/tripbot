@@ -253,3 +253,28 @@ func TestCorpusRoute_OrdersByFilmTimeAndExcludesFlaggedAndZeroes(t *testing.T) {
 		t.Errorf("CorpusRoute() included a 0/0 clip at %d", i)
 	}
 }
+
+// TestValidate pins the dash-string rules the package-level regex enforces:
+// the first 20 characters must be digits and underscores only.
+func TestValidate(t *testing.T) {
+	cases := []struct {
+		name    string
+		dashStr string
+		wantErr bool
+	}{
+		{"canonical slug", "2018_0514_224801_001", false},
+		{"trailing extension ignored", "2018_0514_224801_001.mp4", false},
+		{"too short", "2018_0514_2248", true},
+		{"letters in timestamp", "2018_0514_2248a1_001", true},
+		{"dash separators", "2018-0514-224801-001", true},
+		{"hidden file", ".018_0514_224801_001", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validate(tc.dashStr)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("validate(%q) = %v, wantErr %v", tc.dashStr, err, tc.wantErr)
+			}
+		})
+	}
+}

@@ -75,10 +75,19 @@ jobs:
 
           # Placeholders this branch introduces, not ones inherited from an
           # ancestor branch in a stack.
+          # Capture the diff before reading it. Piped straight into the loop,
+          # a git failure would be indistinguishable from a branch that added
+          # no fragments: the loop reads nothing, `mine` stays empty, and the
+          # step reports success having numbered nothing.
+          if ! added="$(git diff --name-only --diff-filter=A "${BASE_SHA}...HEAD" -- 'changelog.d/+*.md')"; then
+            echo "::error title=Base commit unreachable::Cannot diff ${BASE_SHA}...HEAD, so the fragments this PR adds cannot be told apart from ones it inherited from a parent branch. Failing rather than leaving them unnumbered and green."
+            exit 1
+          fi
+
           mine=()
           while IFS= read -r f; do
             [ -n "$f" ] && mine+=("$f")
-          done < <(git diff --name-only --diff-filter=A "${BASE_SHA}...HEAD" -- 'changelog.d/+*.md')
+          done <<< "$added"
 
           # Anything else still carrying a "+" came from a parent PR; naming it
           # after this PR would misattribute the entry and collide with the
