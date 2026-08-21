@@ -9,6 +9,16 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v5.3.0] — 2026-08-21
+
+### Chatbot
+
+- Added `tripbot_announcements_total`, counting follow/sub/gift/resub chat shouts by kind and platform. Paired with `tripbot_events_total` it covers the one leg of the EventSub path nothing watched: a notice that persists its row but never lands a shout means outbound chat is wedged. ([#1420](https://github.com/adanalife/tripbot/pull/1420))
+
+### Cleanup
+
+- `onscreens-server`'s `OnscreensServerBindAddress` now defaults to `:8080`, matching the project-wide HTTP port convention and the port its Service, probes and `contract.json` already use; the standalone image's `ONSCREENS_SERVER_BIND_ADDRESS=:8080` override is dropped as redundant. No behaviour change — the shipped image already listened on `:8080`. ([#1414](https://github.com/adanalife/tripbot/pull/1414))
+
 ## [v5.2.0] — 2026-08-19
 
 ### Chatbot
