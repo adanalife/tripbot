@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -9,61 +10,66 @@ import (
 	"github.com/adanalife/tripbot/pkg/gateway"
 )
 
-// The live-check has to answer false for a broadcast that exists but hasn't
-// gone live, because that pending state is the whole failure the YouTube leg
-// recovers: OBS pushes, Studio waits on an encoder it never recognised, and
-// nothing else in the loop can tell the two apart. Reading "a broadcast is
-// there, so we're up" would make the watchdog blind to the one outage it was
-// added for (2026-08-05, dark 9h41m with zero recovery attempts).
-func TestYouTubeChannelLive(t *testing.T) {
-	tests := []struct {
-		name string
-		body string
-		want bool
-	}{
-		{"active broadcast", `{"video_id":"vid123","live":true,"privacy":"unlisted"}`, true},
-		{"pending broadcast", `{"video_id":"vid123","live":false,"privacy":"unlisted"}`, false},
-		{"no broadcast at all", `{"live":false}`, false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var gotPath string
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				gotPath = r.URL.Path
-				_, _ = w.Write([]byte(tt.body))
-			}))
-			defer srv.Close()
-
-			live, err := youtubeChannelLive(gateway.New(srv.URL))(context.Background())
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if live != tt.want {
-				t.Errorf("live = %v, want %v", live, tt.want)
-			}
-			if gotPath != "/v1/broadcast" {
-				t.Errorf("request path = %q, want /v1/broadcast", gotPath)
-			}
-		})
-	}
-}
-
-// A gateway that can't answer must report the error rather than a bare false.
-// WatchSilentDisconnect holds its collected misses on an errored check and
-// clears them on a definite "live", so collapsing an outage into false would
-// count unreachability as evidence the channel is dark and eventually restart
-// a stream that was fine.
-func TestYouTubeChannelLiveReportsGatewayFailure(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusServiceUnavailable)
+// The mint has to precede the bounce: a broadcast that isn't bound yet has no
+// ingest for the fresh RTMP session to auto-start from, so a push re-opened
+// first lands on nothing listening.
+func TestRecoverYouTubeEgress_MintsBeforeBouncingOBS(t *testing.T) {
+	var calls []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls = append(calls, r.Method+" "+r.URL.Path)
+		w.WriteHeader(http.StatusOK)
 	}))
 	defer srv.Close()
 
-	live, err := youtubeChannelLive(gateway.New(srv.URL))(context.Background())
-	if err == nil {
-		t.Fatal("expected an error when the gateway is unreachable")
+	restartOBS := func(context.Context) error {
+		calls = append(calls, "restart obs output")
+		return nil
 	}
-	if live {
-		t.Error("live = true alongside an error; the caller reads the error first")
+	if err := recoverYouTubeEgress(context.Background(), gateway.New(srv.URL), restartOBS); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"POST /v1/egress/start", "restart obs output"}
+	if len(calls) != len(want) {
+		t.Fatalf("calls = %v, want %v", calls, want)
+	}
+	for i := range want {
+		if calls[i] != want[i] {
+			t.Errorf("call %d = %q, want %q", i, calls[i], want[i])
+		}
+	}
+}
+
+// A failed mint must still bounce the output. The fault that hit prod twice —
+// a broadcast waiting on an encoder it hasn't recognised — is fixed by the
+// bounce alone, so skipping it on a gateway error would give up the recovery
+// that actually works. The error is still reported, because a permanently
+// broken egress path is worth surfacing.
+func TestRecoverYouTubeEgress_BouncesEvenWhenMintFails(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable) // e.g. no reusable liveStream to bind
+	}))
+	defer srv.Close()
+
+	bounced := false
+	restartOBS := func(context.Context) error { bounced = true; return nil }
+	if err := recoverYouTubeEgress(context.Background(), gateway.New(srv.URL), restartOBS); err == nil {
+		t.Error("expected the mint failure to be reported")
+	}
+	if !bounced {
+		t.Error("output not bounced: the pending-broadcast recovery was skipped")
+	}
+}
+
+// A bounce that fails leaves the broadcast minted but unfed, so the recovery has
+// to report failure — the watchdog's retry is the only thing that reaches it.
+func TestRecoverYouTubeEgress_ReportsBounceFailure(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	restartOBS := func(context.Context) error { return errors.New("obs unreachable") }
+	if err := recoverYouTubeEgress(context.Background(), gateway.New(srv.URL), restartOBS); err == nil {
+		t.Fatal("expected an error when the OBS bounce fails")
 	}
 }
