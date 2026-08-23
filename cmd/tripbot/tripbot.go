@@ -669,13 +669,14 @@ func (t *Tripbot) startTikTokWatchdog(ctx context.Context) {
 	go watchdog.WatchSilentDisconnect(ctx, deps, 60*time.Second, 5, 30*time.Minute)
 }
 
-// startYouTubeWatchdog recovers a broadcast YouTube never took live. The
-// failure is one OBS restart deep, like Twitch's, but it presents from the
-// other side: the RTMP push is healthy and it is YouTube that hasn't moved —
-// the broadcast sits in Studio waiting on an encoder it didn't recognise, so
-// liveBroadcasts reports nothing active while OBS reports outputActive. A plain
-// stop/start of the output makes YouTube see the encoder, which is why this leg
-// keeps DefaultWatchdogDeps' Restart instead of replacing it.
+// startYouTubeWatchdog recovers a broadcast YouTube isn't serving. The failure
+// presents from the other side to Twitch's: the RTMP push is healthy and it is
+// YouTube that hasn't moved, so liveBroadcasts reports nothing active while OBS
+// reports outputActive.
+//
+// Two distinct faults land here — the broadcast sits waiting on an encoder it
+// didn't recognise, or no broadcast exists at all — and recoverYouTubeEgress
+// covers both without having to tell them apart.
 //
 // Ticks at BroadcastDiscovery's 2m cadence rather than the Twitch leg's 60s.
 // Both ask the gateway the same question, and each answer spends a YouTube
@@ -683,21 +684,20 @@ func (t *Tripbot) startTikTokWatchdog(ctx context.Context) {
 // bot-less — so the tick trades detection latency for quota deliberately. Three
 // misses is six minutes, against an outage this exists to stop measuring in
 // hours.
-//
-// It cannot fix the other shape of this failure, where no broadcast exists at
-// all: restarting the output has nothing to bind to, and recovery has to mint
-// one through the gateway. Discriminating the two needs a finer egress status
-// than /v1/broadcast reports today.
 func (t *Tripbot) startYouTubeWatchdog(ctx context.Context) {
 	if t.cfg.YouTubeAPIURL == "" {
 		slog.WarnContext(ctx, "no YOUTUBE_API_URL: silent-disconnect watchdog disabled (gateway not wired)")
 		return
 	}
+	gw := gateway.New(t.cfg.YouTubeAPIURL)
 	deps := watchdog.DefaultWatchdogDeps()
 	deps.Platform = "youtube"
 	// No gauge write here: the BroadcastDiscovery job already owns
 	// tripbot_channel_live for YouTube, and two writers on one gauge would fight.
-	deps.ChannelLive = youtubeChannelLive(gateway.New(t.cfg.YouTubeAPIURL))
+	deps.ChannelLive = youtubeChannelLive(gw)
+	deps.Restart = func(ctx context.Context) error {
+		return recoverYouTubeEgress(ctx, gw, watchdog.RestartOBSOutput)
+	}
 	deps.OnRestart = t.watchdogRestartHook("youtube")
 	deps.OnRecovered = t.watchdogRecoveredHook("youtube")
 	go watchdog.WatchSilentDisconnect(ctx, deps, youtubeWatchdogInterval, 3, 10*time.Minute)
@@ -719,6 +719,42 @@ func youtubeChannelLive(gw *gateway.Client) func(context.Context) (bool, error) 
 		}
 		return b.Live, nil
 	}
+}
+
+// recoverYouTubeEgress mints a broadcast if the channel has none, then restarts
+// the OBS output so YouTube sees the encoder.
+//
+// The two faults this leg meets want opposite fixes — a broadcast waiting on an
+// unrecognised encoder needs the push re-opened, and a channel with no broadcast
+// needs one created and bound — and telling them apart from outside would mean
+// reading a lifecycle the gateway reports only as a human status line. It does
+// not need telling apart: the gateway's egress start is idempotent, returning
+// the existing broadcast untouched rather than minting a second one that would
+// take the channel's /live redirect away from the encoder still feeding the
+// first. So one sequence serves both, and the step that isn't needed is a no-op.
+//
+// Order matters the same way TikTok's does: the broadcast has to exist and be
+// bound before a fresh RTMP session arrives, or the push has nothing listening.
+// A mint leans on enableAutoStart rather than a transition, so an encoder
+// already pushing is picked up with nothing to race against — the bounce is
+// what covers the case where it isn't.
+//
+// Costs 2 quota units per attempt on the no-op path (the broadcast lookup) and
+// ~150 when it actually mints, against the 10k/day this platform's cadence is
+// budgeted around. Recovery fires after three misses at youtubeWatchdogInterval,
+// so the floor is six minutes between attempts.
+func recoverYouTubeEgress(ctx context.Context, gw *gateway.Client, restartOBS func(context.Context) error) error {
+	// A failed mint doesn't skip the bounce, unlike TikTok's re-mint: there is no
+	// half-torn-down state to make worse, and the bounce alone is the recovery
+	// that worked by hand for the fault seen twice in prod. Both errors are
+	// reported so a permanently broken egress path stays visible in
+	// tripbot_obs_silent_disconnect_restarts' result attribute.
+	startErr := gw.StartEgress(ctx)
+	if startErr != nil {
+		slog.ErrorContext(ctx, "watchdog: youtube egress start failed, restarting the output anyway",
+			"err", startErr)
+	}
+	return errors.Join(startErr, restartOBS(ctx))
 }
 
 // tiktokRemintGap lets the old relay target unbind before the new room binds
