@@ -1,0 +1,1 @@
+EventSub now retries its startup preconditions instead of skipping for the life of the pod. A tripbot that came up before the platform-gateway was ready failed to resolve its channel ID, logged a skip, and never tried again — leaving follow, subscribe, gift, resub and raid announcements silently dead until someone restarted it by hand.
