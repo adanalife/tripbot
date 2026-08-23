@@ -9,6 +9,21 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v5.3.0] — 2026-08-23
+
+### Chatbot
+
+- Added `tripbot_announcements_total`, counting follow/sub/gift/resub chat shouts by kind and platform. Paired with `tripbot_events_total` it covers the one leg of the EventSub path nothing watched: a notice that persists its row but never lands a shout means outbound chat is wedged. ([#1420](https://github.com/adanalife/tripbot/pull/1420))
+
+### Fixes
+
+- The YouTube stream watchdog now mints a broadcast when the channel has none, instead of only restarting the OBS output. A dark YouTube where no broadcast exists could not be recovered by an output restart — there was nothing for the push to bind to — so it needed hands. ([#1422](https://github.com/adanalife/tripbot/pull/1422))
+- EventSub now retries its startup preconditions instead of skipping for the life of the pod. A tripbot that came up before the platform-gateway was ready failed to resolve its channel ID, logged a skip, and never tried again — leaving follow, subscribe, gift, resub and raid announcements silently dead until someone restarted it by hand. ([#1423](https://github.com/adanalife/tripbot/pull/1423))
+
+### Cleanup
+
+- `onscreens-server`'s `OnscreensServerBindAddress` now defaults to `:8080`, matching the project-wide HTTP port convention and the port its Service, probes and `contract.json` already use; the standalone image's `ONSCREENS_SERVER_BIND_ADDRESS=:8080` override is dropped as redundant. No behaviour change — the shipped image already listened on `:8080`. ([#1414](https://github.com/adanalife/tripbot/pull/1414))
+
 ## [v5.2.0] — 2026-08-19
 
 ### Chatbot
