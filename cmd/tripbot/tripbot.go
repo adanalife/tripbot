@@ -859,56 +859,87 @@ const eventsubRedialDelay = 10 * time.Second
 // reload cannot pick up a different credential than the one just refused.
 const tokenReloadInterval = 5 * time.Minute
 
-// startEventSub kicks off the EventSub WebSocket listener in a goroutine
-// so real-time follow/subscribe events fire chat shouts without a 5min
-// polling delay. Skipped (logged, not fatal) when the broadcaster row
-// isn't loaded — the bot still runs without real-time alerts.
+// errBroadcasterTokenUnloaded means there is no broadcaster row in memory to
+// present. loadTwitchToken runs to completion before EventSub starts, so this is
+// an unseeded or unconsented install rather than a startup race, and only the
+// twitch.ReloadTokens job can change it — which is why the redial loop paces it
+// with a token reload instead of the much shorter socket-redial delay.
+var errBroadcasterTokenUnloaded = errors.New("eventsub: no broadcaster token loaded")
+
+// startEventSub kicks off the EventSub WebSocket listener in a goroutine so
+// real-time follow/subscribe events fire chat shouts without a 5min polling
+// delay.
+//
+// Every precondition lives inside the dialed function rather than in front of
+// it, so an unmet one costs a redial instead of the pod's whole run. The
+// channel ID is the one that bites: it is resolved through the gateway, and a
+// tripbot that wins the race against the gateway's readiness gate — which a
+// simultaneous restart of both makes likely — would otherwise skip EventSub
+// until someone restarted it by hand.
 func (t *Tripbot) startEventSub(ctx context.Context) {
 	// Publish the gauge before anything can return, so the series exists from
 	// boot on the one instance that owns it. An alert on a metric that is merely
-	// absent doesn't fire, which would let the skip paths below — no broadcaster
-	// row, unresolved channel ID — stay as quiet as the outage this measures.
+	// absent doesn't fire, which would let the failure paths below — no
+	// broadcaster row, unresolved channel ID — stay as quiet as the outage this
+	// measures.
 	instrumentation.EventSubSubscriptions.Set(0, 0)
 
-	if mytwitch.BroadcasterUserAccessToken() == "" {
-		slog.WarnContext(ctx, "skipping eventsub: no broadcaster oauth_tokens row; re-auth via the platform-gateway consent flow (surfaced in tripbot-console)",
-			"login_as", t.cfg.ChannelName)
-		return
+	go runEventSubLoop(ctx, mytwitch.BroadcasterUserAccessToken, t.eventSubAttempt, eventsubRedialDelay, tokenReloadInterval)
+}
+
+// eventSubAttempt runs one dial: it re-checks the preconditions and, when they
+// hold, keeps the session open until it ends. Everything it needs is resolved
+// here rather than by the caller, so runEventSubLoop's backoff covers a
+// precondition that is merely late as readily as a socket that dropped.
+func (t *Tripbot) eventSubAttempt(ctx context.Context, token string) error {
+	if err := t.eventSubPreflight(ctx, token); err != nil {
+		return err
 	}
-	if mytwitch.ChannelID() == "" && t.gateway != nil {
-		// The gateway owns Helix, so nothing populates channelID in-process.
-		// Resolve it via the gateway's /v1/users/{login} so EventSub gets a
-		// BroadcasterUserID. Non-fatal — falls through to the skip below on error.
-		if id, err := t.gateway.UserID(ctx, t.cfg.ChannelName); err != nil {
-			slog.ErrorContext(ctx, "eventsub: resolving channel id via gateway failed", "err", err)
-		} else {
-			mytwitch.SetChannelID(id)
-		}
+	return eventsub.Run(ctx, eventsub.Config{
+		ClientID:          t.cfg.TwitchClientID,
+		BroadcasterToken:  token,
+		BroadcasterUserID: mytwitch.ChannelID(),
+	}, eventsub.Handlers{
+		OnFollow:      t.app.AnnounceNewFollower,
+		OnSubscribe:   t.app.AnnounceSubscriber,
+		OnUnsubscribe: t.app.RecordUnsubscribe,
+		OnGift:        t.app.AnnounceGiftSub,
+		OnResub:       t.app.AnnounceResub,
+		OnRaid:        t.app.RecordRaid,
+	})
+}
+
+// eventSubPreflight reports whether a dial can be attempted, resolving the
+// channel ID through the gateway the first time it is needed.
+//
+// It returns an error rather than reporting "skip" so that no failure here is
+// terminal: each one is a condition that clears on its own — the gateway
+// finishing its readiness gate, the token-reload job writing a row — and the
+// caller's loop is what waits for it.
+func (t *Tripbot) eventSubPreflight(ctx context.Context, token string) error {
+	if token == "" {
+		return errBroadcasterTokenUnloaded
 	}
 	if mytwitch.ChannelID() == "" {
-		slog.WarnContext(ctx, "skipping eventsub: ChannelID not yet resolved")
-		return
+		// The gateway owns Helix, so nothing populates channelID in-process.
+		// Resolve it via the gateway's /v1/users/{login} so EventSub gets a
+		// BroadcasterUserID.
+		if t.gateway == nil {
+			return errors.New("eventsub: no gateway wired to resolve the channel id")
+		}
+		id, err := t.gateway.UserID(ctx, t.cfg.ChannelName)
+		if err != nil {
+			return fmt.Errorf("eventsub: resolving channel id via gateway: %w", err)
+		}
+		mytwitch.SetChannelID(id)
 	}
-	run := func(ctx context.Context, token string) error {
-		return eventsub.Run(ctx, eventsub.Config{
-			ClientID:          t.cfg.TwitchClientID,
-			BroadcasterToken:  token,
-			BroadcasterUserID: mytwitch.ChannelID(),
-		}, eventsub.Handlers{
-			OnFollow:      t.app.AnnounceNewFollower,
-			OnSubscribe:   t.app.AnnounceSubscriber,
-			OnUnsubscribe: t.app.RecordUnsubscribe,
-			OnGift:        t.app.AnnounceGiftSub,
-			OnResub:       t.app.AnnounceResub,
-			OnRaid:        t.app.RecordRaid,
-		})
-	}
-	go runEventSubLoop(ctx, mytwitch.BroadcasterUserAccessToken, run, eventsubRedialDelay, tokenReloadInterval)
+	return nil
 }
 
 // runEventSubLoop redials run until ctx ends or it returns cleanly, reading a
 // broadcaster token from token for every attempt and waiting redialDelay between
-// them — rejectedDelay instead when the token itself was refused.
+// them — rejectedDelay instead when the attempt failed on the credential itself,
+// which no redial can outpace and only a token reload can clear.
 //
 // The per-attempt read is the point: the platform-gateway rotates the
 // broadcaster grant every few hours and twitch.ReloadTokens pulls the new value
@@ -925,7 +956,14 @@ func runEventSubLoop(ctx context.Context, token func() string, run func(context.
 			return
 		}
 		delay := redialDelay
-		if errors.Is(err, eventsub.ErrUnauthorized) {
+		switch {
+		case errors.Is(err, errBroadcasterTokenUnloaded):
+			// Nothing here can present a token the reload job hasn't written
+			// yet, so pace with that job rather than the redial delay — an
+			// unseeded install would otherwise log this 8640 times a day.
+			slog.ErrorContext(ctx, "eventsub: no broadcaster oauth_tokens row; waiting for a token reload before redialing — if this repeats, re-auth via the platform-gateway consent flow (surfaced in tripbot-console)", "retry_in", rejectedDelay)
+			delay = rejectedDelay
+		case errors.Is(err, eventsub.ErrUnauthorized):
 			// Every subscription was refused, which a rotation produces as
 			// readily as a revocation — and the two are indistinguishable from
 			// here. So keep redialing rather than shutting EventSub down for the
@@ -935,12 +973,15 @@ func runEventSubLoop(ctx context.Context, token func() string, run func(context.
 			// session on.
 			slog.ErrorContext(ctx, "eventsub: broadcaster token rejected; waiting for a token reload before redialing — if this repeats, re-consent via the platform-gateway flow (surfaced in tripbot-console)", "err", err, "retry_in", rejectedDelay)
 			delay = rejectedDelay
-		} else {
-			// Twitch closing the socket outright surfaces here instead of as a
-			// session_reconnect frame the library handles itself, so run has to
+		default:
+			// Either a precondition the attempt re-checks was not ready (the
+			// gateway that resolves the channel ID is the usual one, and clears
+			// within seconds of a co-restart) or Twitch closed the socket
+			// outright — the latter surfaces here instead of as a
+			// session_reconnect frame the library handles itself. Both have to
 			// be redialed or follower/sub announcements stay dead until the pod
-			// restarts. It resubscribes on the new session's welcome.
-			slog.WarnContext(ctx, "eventsub run terminated; reconnecting", "err", err)
+			// restarts. A dial resubscribes on the new session's welcome.
+			slog.WarnContext(ctx, "eventsub attempt failed; retrying", "err", err, "retry_in", delay)
 		}
 		select {
 		case <-ctx.Done():

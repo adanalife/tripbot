@@ -96,3 +96,31 @@ func TestRunEventSubLoop_StopsOnContextCancel(t *testing.T) {
 		t.Errorf("attempts = %d, want 0 — an already-cancelled context must not dial", attempts)
 	}
 }
+
+// An unseeded install has no row to present and no redial can conjure one, so
+// that case alone waits out a token reload rather than spinning at the redial
+// delay.
+func TestRunEventSubLoop_UnloadedTokenWaitsForReload(t *testing.T) {
+	const rejectedDelay = 30 * time.Millisecond
+	var attempts int
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	run := func(context.Context, string) error {
+		attempts++
+		if attempts == 2 {
+			cancel()
+		}
+		return errBroadcasterTokenUnloaded
+	}
+
+	start := time.Now()
+	runEventSubLoop(ctx, func() string { return "" }, run, 0, rejectedDelay)
+
+	if attempts < 2 {
+		t.Fatalf("attempts = %d, want at least 2 — a missing broadcaster row must not disable eventsub permanently", attempts)
+	}
+	if elapsed := time.Since(start); elapsed < rejectedDelay {
+		t.Errorf("loop redialed after %v, want at least the %v reload backoff — retrying sooner just repeats the same empty read", elapsed, rejectedDelay)
+	}
+}
