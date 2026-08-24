@@ -1227,6 +1227,10 @@ func (t *Tripbot) scheduleBackgroundJobs() {
 		return
 	}
 	t.addJob(61*time.Second, "users.UpdateSession", t.sessions.UpdateSession)
+	// Session miles are otherwise only written at logout, so anything that
+	// kills the process mid-session loses them all. Banking on a timer bounds
+	// that loss to one interval.
+	t.addJob(5*time.Minute, "users.CheckpointMiles", t.sessions.CheckpointMiles)
 	t.addJob(62*time.Second, "users.UpdateLeaderboard", t.sessions.UpdateLeaderboard)
 	// Derived-state reconciler over the events table (all platforms' events,
 	// but only one instance should run it — the twitch gate above covers that).

@@ -34,6 +34,7 @@ var neutralJobs = []string{
 // an auth status for (gateway-youtube owns the youtube oauth_tokens row).
 var twitchOnlyJobs = []string{
 	"users.UpdateSession",
+	"users.CheckpointMiles",
 	"users.UpdateLeaderboard",
 	"rollups.Reconcile",
 	"chatbot.ShowRotatingLeaderboard",
