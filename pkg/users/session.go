@@ -269,6 +269,55 @@ func (s *Sessions) logout(ctx context.Context, u *User) {
 	s.mu.Unlock()
 }
 
+// CheckpointMiles banks every logged-in user's in-flight session miles — into
+// users.miles and the monthly scoreboard, the same two writes logout does —
+// and records what it banked so logout only counts the remainder. Without it a
+// session's accrual lives only in memory until logout, so an ungraceful exit
+// discards all of it and the !miles reply reads backwards. Runs on a cron, so
+// a crash costs one interval instead of the whole session.
+func (s *Sessions) CheckpointMiles(ctx context.Context) {
+	for username := range s.sessionSnapshot() {
+		user, ok := s.get(username)
+		if !ok {
+			continue
+		}
+		miles := s.sessionMiles(ctx, *user)
+		if miles <= 0 {
+			continue
+		}
+		// Bank the miles first, then credit them: a failed write leaves them
+		// in flight for the next tick rather than dropping them on the floor.
+		// The DB work stays outside mu.
+		var updated User
+		s.mu.Lock()
+		live, stillHere := s.loggedIn[username]
+		if stillHere {
+			live.Miles += miles
+			live.milesCheckpointed += miles
+			updated = *live
+		}
+		s.mu.Unlock()
+		if !stillHere {
+			// logged out mid-checkpoint, which banked the miles itself
+			continue
+		}
+		updated.save(ctx)
+		updated.AddToScore(ctx, scoreboards.CurrentMilesScoreboard(), miles)
+	}
+}
+
+// milesCheckpointed reports how much of username's session accrual is already
+// banked in the DB, or 0 for anyone not in the session. Takes mu; callers must
+// not already hold it.
+func (s *Sessions) milesCheckpointed(username string) float32 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if live, ok := s.loggedIn[username]; ok {
+		return live.milesCheckpointed
+	}
+	return 0.0
+}
+
 // isLoggedIn checks if the user is currently logged in
 func (s *Sessions) isLoggedIn(username string) bool {
 	_, ok := s.get(username)
