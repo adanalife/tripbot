@@ -345,10 +345,17 @@ func (s *Sessions) GiveEveryoneMiles(gift float32) {
 }
 
 // CorrectMiles applies a manual miles delta (may be negative) to a user and
-// persists it immediately. If they're logged in, the live session copy is
-// adjusted so logout doesn't clobber the correction. Returns the new total.
-// The delta is deliberately NOT added to sessionExtraMiles — the caller logs a
-// separate correction event carrying it, and doing both would double-count.
+// persists it immediately, to both places a viewer sees their miles: the
+// lifetime total and the current monthly scoreboard. If they're logged in, the
+// live session copy is adjusted so logout doesn't clobber the correction.
+// Returns the new lifetime total. The delta is deliberately NOT added to
+// sessionExtraMiles — the caller logs a separate correction event carrying it,
+// and doing both would double-count.
+//
+// Both stores move because a correction restores (or removes) miles the viewer
+// should have earned by watching, and the monthly board is what !miles leads
+// with and the overlay rotates. Gifted miles are the other case and stay
+// lifetime-only — see GiveEveryoneMiles.
 func (s *Sessions) CorrectMiles(ctx context.Context, username string, delta float32) float32 {
 	s.mu.Lock()
 	live, ok := s.loggedIn[username]
@@ -360,6 +367,7 @@ func (s *Sessions) CorrectMiles(ctx context.Context, username string, delta floa
 	s.mu.Unlock()
 	if ok {
 		updated.save(ctx)
+		s.correctMonthly(ctx, updated, delta)
 		return updated.Miles
 	}
 	u, err := FindOrCreate(ctx, s.cfg.Platform, username)
@@ -370,7 +378,35 @@ func (s *Sessions) CorrectMiles(ctx context.Context, username string, delta floa
 	}
 	u.Miles += delta
 	u.save(ctx)
+	s.correctMonthly(ctx, u, delta)
 	return u.Miles
+}
+
+// correctMonthly applies a correction's delta to the current monthly
+// scoreboard. A negative delta is clamped to the score on the board: miles
+// clawed back may have been earned in an earlier month, and a monthly score
+// below zero would render that way on the leaderboard overlay.
+func (s *Sessions) correctMonthly(ctx context.Context, u User, delta float32) {
+	if u.ID == 0 {
+		// no DB row, so the lifetime half was dropped too — see above
+		return
+	}
+	board := scoreboards.CurrentMilesScoreboard()
+	if delta < 0 {
+		owed := u.GetScore(ctx, board)
+		if owed < 0 {
+			// GetScore's error sentinel. Skip rather than clamp against it —
+			// treating -1 as a real score would turn a clawback into a credit.
+			return
+		}
+		if owed+delta < 0 {
+			delta = -owed
+		}
+	}
+	if delta == 0 {
+		return
+	}
+	u.AddToScore(ctx, board, delta)
 }
 
 // The snapshot helpers below (sortedUsernameList, colorizeUsernames, humans,

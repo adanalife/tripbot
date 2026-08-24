@@ -242,6 +242,49 @@ func TestCorrectMiles(t *testing.T) {
 			t.Errorf("expected 12 miles persisted, got %v", stored.Miles)
 		}
 	})
+
+	t.Run("the monthly scoreboard moves with the lifetime total", func(t *testing.T) {
+		db := testdb.New(t)
+		ctx := context.Background()
+		seedUsers(t, db, User{Username: "restored", Miles: 100})
+
+		s := New(testConf, noopChatterSource{})
+		s.CorrectMiles(ctx, "restored", 20)
+
+		stored, err := Find(ctx, testConf.Platform, "restored")
+		if err != nil {
+			t.Fatalf("Find: %v", err)
+		}
+		if stored.Miles != 120 {
+			t.Errorf("expected 120 lifetime miles, got %v", stored.Miles)
+		}
+		if got := stored.GetScore(ctx, scoreboards.CurrentMilesScoreboard()); got != 20 {
+			t.Errorf("expected 20 miles on the monthly board, got %v", got)
+		}
+	})
+
+	t.Run("a clawback larger than the month is clamped at zero", func(t *testing.T) {
+		db := testdb.New(t)
+		ctx := context.Background()
+		seedUsers(t, db, User{Username: "clawback", Miles: 500})
+
+		s := New(testConf, noopChatterSource{})
+		// 5 of this month's miles against a 500-mile lifetime: the rest was
+		// earned in earlier months, so the month can only give back what it has.
+		s.CorrectMiles(ctx, "clawback", 5)
+		s.CorrectMiles(ctx, "clawback", -50)
+
+		stored, err := Find(ctx, testConf.Platform, "clawback")
+		if err != nil {
+			t.Fatalf("Find: %v", err)
+		}
+		if stored.Miles != 455 {
+			t.Errorf("expected the full -50 off the lifetime total, got %v", stored.Miles)
+		}
+		if got := stored.GetScore(ctx, scoreboards.CurrentMilesScoreboard()); got != 0 {
+			t.Errorf("expected the monthly board floored at 0, got %v", got)
+		}
+	})
 }
 
 // CheckpointMiles banks the session's accrual mid-session so a crash can't take

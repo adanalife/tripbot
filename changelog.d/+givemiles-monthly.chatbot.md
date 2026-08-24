@@ -1,0 +1,1 @@
+`!givemiles` now applies its correction to the current monthly scoreboard as well as the lifetime total, since a correction restores miles the viewer should have earned by watching. A clawback larger than the month's score is clamped at zero rather than pushing the leaderboard negative. Gifted miles (the per-sub bonus) stay lifetime-only.
