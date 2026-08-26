@@ -1018,7 +1018,10 @@ func (t *Tripbot) findInitialVideo() {
 	v := t.player.Current()
 	_, err := video.LoadOrCreate(context.Background(), v.String())
 	if err != nil {
-		slog.Error("error loading initial video, is there a video playing?", "err", err)
+		// Warn rather than error: playout having nothing to report is an
+		// ordinary state at boot, and the video is filled in by the first cron
+		// run regardless.
+		slog.Warn("no initial video, is there a video playing?", "err", err)
 	}
 }
 
