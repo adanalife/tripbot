@@ -24,7 +24,7 @@ func (a *App) buildRegistry() []Command {
 		},
 		{
 			Trigger: "!audio",
-			Aliases: []string{"!bed", "!carsound", "!carhum"},
+			Aliases: []string{"!bed", "!carsound", "!carhum", "!radio"},
 			Handler: a.audioCmd,
 		},
 		{
@@ -238,7 +238,7 @@ func (a *App) buildRegistry() []Command {
 		},
 		{
 			Trigger:        "!leaderboard",
-			Aliases:        []string{"!monthlyleaderboard", "!lb", "!mlb", "!ldb", "!ldbd"},
+			Aliases:        []string{"!monthlyleaderboard", "!lb", "!mlb", "!ldb", "!ldbd", "!top"},
 			Handler:        a.monthlyMilesLeaderboardCmd,
 			RequiresFollow: true,
 		},

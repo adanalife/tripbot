@@ -1,4 +1,4 @@
-// Package obs provides polling integration with the OBS WebSocket API.
+// Package obs provides integration with the OBS WebSocket API.
 package obs
 
 import (
@@ -9,10 +9,13 @@ import (
 
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 	goobs "github.com/andreykaipov/goobs"
+	"github.com/andreykaipov/goobs/api/events"
+	"github.com/andreykaipov/goobs/api/events/subscriptions"
 )
 
 // PollStreamingActive connects to the OBS WebSocket and updates the
-// obs_streaming_active gauge every interval, stamping the series with the
+// obs_streaming_active gauge — immediately when OBS pushes a stream-state
+// change, and every interval as a reconcile — stamping the series with the
 // given streaming platform. Intended to be run as a long-lived goroutine.
 // Reconnects automatically on connection loss.
 func PollStreamingActive(ctx context.Context, platform string, interval time.Duration) {
@@ -40,10 +43,25 @@ func PollStreamingActive(ctx context.Context, platform string, interval time.Dur
 	}
 }
 
+// streamStateFromEvent reports the streaming-active flag carried by ev, and
+// whether ev is a stream-state event at all. OutputActive is the same field
+// GetStreamStatus returns — including staying true across an OBS-detected
+// reconnect — so the pushed value and the polled value never disagree.
+func streamStateFromEvent(ev any) (active, isStreamState bool) {
+	e, ok := ev.(*events.StreamStateChanged)
+	if !ok {
+		return false, false
+	}
+	return e.OutputActive, true
+}
+
 // poll connects once and loops until the context is cancelled or the
-// connection drops.
+// connection drops, publishing gauges off both the Outputs event stream and
+// the interval tick.
 func poll(ctx context.Context, obsStats instrumentation.OBSStats, addr, passwd string, interval time.Duration) {
-	client, err := goobs.New(addr, goobs.WithPassword(passwd))
+	client, err := goobs.New(addr,
+		goobs.WithPassword(passwd),
+		goobs.WithEventSubscriptions(subscriptions.Outputs))
 	if err != nil {
 		// A platform whose OBS deployment is scaled to zero fails here every
 		// retry, forever. obs_streaming_active is the alertable signal — keep
@@ -60,6 +78,10 @@ func poll(ctx context.Context, obsStats instrumentation.OBSStats, addr, passwd s
 
 	slog.InfoContext(ctx, "obs websocket connected", "addr", addr)
 
+	// The tick stays load-bearing alongside the event stream: a state change
+	// that lands while the connection is down is never replayed, and
+	// GetStreamStatus is also the only source for the stream-output gauges
+	// (bytes, congestion, dropped frames), which OBS pushes no event for.
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
@@ -67,6 +89,21 @@ func poll(ctx context.Context, obsStats instrumentation.OBSStats, addr, passwd s
 		select {
 		case <-ctx.Done():
 			return
+		case ev, ok := <-client.IncomingEvents:
+			if !ok {
+				// Channel closed — the connection dropped. The gauge going
+				// stale is what alerts, so publish the known-bad value and
+				// let the outer loop reconnect.
+				slog.WarnContext(ctx, "obs event stream closed")
+				obsStats.SetStreaming(false)
+				return
+			}
+			active, isStreamState := streamStateFromEvent(ev)
+			if !isStreamState {
+				continue
+			}
+			slog.InfoContext(ctx, "obs stream state changed", "active", active)
+			obsStats.SetStreaming(active)
 		case <-ticker.C:
 			resp, err := client.Stream.GetStreamStatus()
 			if err != nil {

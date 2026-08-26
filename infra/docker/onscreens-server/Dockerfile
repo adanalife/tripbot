@@ -36,10 +36,6 @@ RUN mkdir -p /etc/tripbot \
   && echo "${VERSION}" > /etc/tripbot/version \
   && echo "${SHA}" > /etc/tripbot/sha
 
-# This image always runs onscreens-server standalone (its own pod/IP), so it
-# binds the project-standard :8080 rather than the co-located :8081 default.
-ENV ONSCREENS_SERVER_BIND_ADDRESS=:8080
-
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD curl -fsS http://localhost:8080/health/live

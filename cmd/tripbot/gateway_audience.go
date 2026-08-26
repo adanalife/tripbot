@@ -6,6 +6,7 @@ import (
 
 	"github.com/adanalife/tripbot/pkg/instrumentation"
 	mytwitch "github.com/adanalife/tripbot/pkg/twitch"
+	"github.com/adanalife/tripbot/pkg/viewstats"
 )
 
 // gatewayChatterSource is the cmd-wired users.ChatterSource. Chatter refresh and
@@ -46,6 +47,29 @@ func (s gatewayChatterSource) UpdateChatters() {
 	}
 	mytwitch.SetChatters(logins, count)
 }
+
+// UpdateAudience refreshes the cached concurrent-viewer reading from the
+// gateway. Unlike the chatter refresh this discards the prior value on error
+// rather than keeping it: each reading is stamped onto its own timestamped
+// sample row, so a stale count would be recorded as a fresh observation of a
+// minute it never saw. An unreported audience writes NULL, which is true.
+func (s gatewayChatterSource) UpdateAudience() {
+	if s.t.gateway == nil {
+		s.t.setAudience(viewstats.Audience{})
+		return
+	}
+	ctx := context.Background()
+	a, err := s.t.gateway.Viewers(ctx)
+	if err != nil {
+		slog.WarnContext(ctx, "gateway viewers refresh failed; recording no audience", "err", err)
+		s.t.setAudience(viewstats.Audience{})
+		return
+	}
+	s.t.setAudience(viewstats.Audience{Count: a.Count, Live: a.Live, Reported: a.Reported})
+}
+
+// Audience returns the reading cached by the last UpdateAudience.
+func (s gatewayChatterSource) Audience() viewstats.Audience { return s.t.audience() }
 
 // IsFollower reports whether username follows the channel, via the gateway. The
 // broadcaster can't follow themselves, so admins short-circuit to true; no
@@ -93,4 +117,19 @@ func (t *Tripbot) refreshFollowerCount(ctx context.Context) {
 		return
 	}
 	instrumentation.TwitchAudience.SetFollowers(int64(total))
+}
+
+// setAudience / audience hold the last concurrent-viewer reading. They live on
+// Tripbot rather than the source because gatewayChatterSource is a value type
+// with no room for mutable state.
+func (t *Tripbot) setAudience(a viewstats.Audience) {
+	t.audienceMu.Lock()
+	t.lastAudience = a
+	t.audienceMu.Unlock()
+}
+
+func (t *Tripbot) audience() viewstats.Audience {
+	t.audienceMu.Lock()
+	defer t.audienceMu.Unlock()
+	return t.lastAudience
 }

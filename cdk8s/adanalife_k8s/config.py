@@ -13,6 +13,7 @@ from functools import lru_cache
 from pathlib import Path
 
 import yaml
+from adanalife_k8s.contract import load_contract
 
 # Per-component image pins (cdk8s/versions.yaml). Envs present in the file
 # deploy pinned release tags; the rest float on EnvConfig.image_tag.
@@ -43,6 +44,18 @@ def _load_supported_platforms() -> tuple[str, ...]:
 SUPPORTED_PLATFORMS = _load_supported_platforms()
 
 
+def nats_url(env_name: str) -> str:
+    """The NATS endpoint for an env. NATS runs in the sibling <env>-platform
+    namespace (infra's Helm release), so this is cross-namespace and needs the
+    FQDN. The Service name and port are contract vocabulary — playout and the
+    console dial the same two values from their own synced copies — while the
+    namespace pattern is env topology and belongs here."""
+    c = load_contract()
+    return (
+        f"nats://{c.svc('nats')}.{env_name}-platform.svc.cluster.local:{c.port('nats')}"
+    )
+
+
 @dataclass(frozen=True)
 class EnvConfig:
     name: str  # prod-1 | stage-1 | development | local
@@ -65,6 +78,14 @@ class EnvConfig:
     secret_source: str = "eso"  # eso | local
     gpu: bool = False  # request gpu.intel.com/i915
     otel: bool = False  # OTEL_SDK_DISABLED=false when True
+    # Emit the Google Maps ExternalSecret + envFrom it. Off by default: every
+    # runtime geocode caller reads the clip's stored row, so the key is only
+    # wanted in an env that still runs a live-geocode path. GOOGLE_MAPS_API_KEY
+    # is optional to the binary (geo.ErrDisabled), so leaving it off is a warn,
+    # not a boot failure. Turning it on requires the env's AWS account to have
+    # /k8s/tripbot/google-maps-api-key seeded — an unseeded parameter still
+    # holds terraform's placeholder, which ESO cannot unmarshal.
+    maps: bool = False
     postgres_size: str = "5Gi"
     postgres_storage_class: str = ""  # "" = cluster default; local-path-retain on prod
     postgres_backup: bool = False
@@ -82,8 +103,8 @@ class EnvConfig:
     )
     # Streaming platforms present in this env. twitch everywhere; youtube
     # currently stage-only while the bot side is built out. Drives the per-platform
-    # fan-out of tripbot/onscreens (OBS itself is deployed by the obs repo now,
-    # which carries its own obs_streaming for the stream-key + --startstreaming).
+    # fan-out of tripbot/onscreens (OBS itself is deployed by the obs repo, which
+    # carries its own obs_streaming for the stream-key + --startstreaming).
     platforms: tuple[str, ...] = ("twitch",)
     # --- prod-stream protection (2026-06-11 stage-starves-prod incident) ---
     # PriorityClassName stamped on the env's app Deployment pods; when set,
@@ -127,11 +148,10 @@ class EnvConfig:
     # leaves the gateway unwired (local/CI only): the Twitch audience/follower/
     # broadcaster-send features are disabled.
     twitch_api_url: str = ""
-    # Like twitch_api_url, but for a youtube instance's outbound chat sends:
-    # gateway-youtube's URL routes them through the platform-gateway
-    # unconditionally (no runtime flag — unlike Twitch). Empty keeps the
-    # in-process pkg/youtube send. The inbound chat poll stays in-process
-    # regardless (no gateway streaming endpoint).
+    # Like twitch_api_url, but for a youtube instance: both chat directions
+    # reach gateway-youtube, so tripbot holds no YouTube credential. Required on
+    # a youtube instance — with the URL empty the pod boots without chat. The
+    # inbound half is separately gated by youtube_inbound_enabled below.
     youtube_api_url: str = ""
     # The gateway-transport platforms: a PLATFORM=facebook/instagram/tiktok
     # instance reaches BOTH chat directions through its per-platform gateway
@@ -210,12 +230,16 @@ ENVS: dict[str, EnvConfig] = {
         aws_account="adanalife-prod",
         image_tag="latest",
         dns_base="prod.whereisdana.today",
-        nats_url="nats://nats.prod-1-platform.svc.cluster.local:4222",
+        nats_url=nats_url("prod-1"),
         sentry_env="prod-1",
         binary_env="production",
         deployment_env="prod-1",
         gpu=True,
         otel=True,
+        # Prod's key is seeded and syncing; keep it mounted. Nothing on the
+        # runtime path reads it since the offline geocode pass, so this is a
+        # standing capability rather than a dependency.
+        maps=True,
         postgres_size="50Gi",
         postgres_storage_class="local-path-retain",
         postgres_backup=True,
@@ -271,7 +295,7 @@ ENVS: dict[str, EnvConfig] = {
         aws_account="adanalife-stage",
         image_tag="main",
         dns_base="stage.whereisdana.today",
-        nats_url="nats://nats.stage-1-platform.svc.cluster.local:4222",
+        nats_url=nats_url("stage-1"),
         sentry_env="stage-1",
         binary_env="staging",
         deployment_env="stage-1",
@@ -303,9 +327,8 @@ ENVS: dict[str, EnvConfig] = {
         # Route stage tripbot-twitch's Helix calls through the in-namespace
         # gateway-twitch.
         twitch_api_url="http://gateway-twitch.stage-1.svc.cluster.local:8080",
-        # Route stage tripbot-youtube's outbound chat sends through the
-        # in-namespace gateway-youtube (unconditionally — no flag). The inbound
-        # poll stays in-process.
+        # Route both of stage tripbot-youtube's chat directions through the
+        # in-namespace gateway-youtube.
         youtube_api_url="http://gateway-youtube.stage-1.svc.cluster.local:8080",
         # The parked platform instances point at their in-namespace gateway
         # the same way, so a hand scale-up is a working bring-up rather than
@@ -324,8 +347,15 @@ ENVS: dict[str, EnvConfig] = {
         app_quota={
             "requests.cpu": "6",
             "requests.memory": "16Gi",
+            # Usage cap, not just scheduling: without it a stage pod fleet can
+            # burst-OOM the shared node even while its requests fit the quota.
+            "limits.memory": "20Gi",
             "requests.gpu.intel.com/i915": "3",
             "pods": "30",
+            # Scoped to local-path — the class that carves the shared physical
+            # disk — so the NAS-backed NFS claims (the 1Ti dashcam corpus)
+            # don't count against it.
+            "local-path.storageclass.storage.k8s.io/requests.storage": "40Gi",
         },
     ),
     "development": EnvConfig(
@@ -335,7 +365,7 @@ ENVS: dict[str, EnvConfig] = {
         aws_account="adanalife-stage",
         image_tag="main",
         dns_base="dev.whereisdana.today",
-        nats_url="nats://nats.development-platform.svc.cluster.local:4222",
+        nats_url=nats_url("development"),
         sentry_env="development",
         binary_env="staging",
         deployment_env="development",

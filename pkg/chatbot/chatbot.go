@@ -2,6 +2,7 @@ package chatbot
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	c "github.com/adanalife/tripbot/pkg/config/tripbot"
@@ -109,6 +110,11 @@ type App struct {
 	// correction) to the append-only events table. Tests inject a noopEvents;
 	// production uses realEvents.
 	Events Events
+	// ChatCounter tallies inbound chat messages for the chat-rate half of the
+	// viewer-sample tick. cmd/tripbot wires the viewstats.MessageCounter it
+	// shares with the session cron; nil (tests, an instance with no sampling)
+	// leaves messages uncounted.
+	ChatCounter ChatCounter
 
 	// commands is this App's command registry (built by buildRegistry);
 	// singleWordLookup / multiWordLookup index it by trigger + alias for
@@ -126,6 +132,13 @@ type App struct {
 	// on a different line.
 	helpMessages []string
 	helpIndex    int
+
+	// guessMisses remembers each chatter's most recent wrong !guess this round,
+	// so the next miss can hint warmer or colder. Entries stamped before
+	// lastTimewarpTime belong to a previous round and are ignored rather than
+	// cleaned up — a timewarp resets every hint trail for free.
+	guessMissesMu sync.Mutex
+	guessMisses   map[string]guessMiss
 }
 
 // New constructs an App wired with the production (realX) dependency adapters,
@@ -152,9 +165,7 @@ func New(cfg *c.TripbotConfig) *App {
 		Scoreboards: realScoreboards{cfg: cfg},
 		Events:      realEvents{cfg: cfg},
 	}
-	// Twitch is wired after the literal so the gateway/in-process selector can
-	// hold the App and read its (later-reassigned) Flags client at call time —
-	// cmd/tripbot swaps in the Postgres-backed flag client after New().
+	// Wired after the literal because the adapter selector takes the App itself.
 	a.Twitch = newTwitch(a)
 	a.indexCommands()
 	return a

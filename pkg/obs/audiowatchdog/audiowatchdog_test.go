@@ -293,6 +293,23 @@ func TestWatch_ProbesOnlyWhileStrandedOnFallback(t *testing.T) {
 	})
 }
 
+func TestWatch_AdvancesTheFallbackAlbumWhileStranded(t *testing.T) {
+	// Stranded on the fallback, the album plays unlooped just as the selected
+	// bed does, so ENDED ticks are track boundaries. The meter's playback-ended
+	// subscription normally advances first; this is the backstop for when it is
+	// down, which is likeliest exactly when OBS is unwell enough to strand us
+	// here. Without it the outage ends in the silence the fallback exists to
+	// prevent. The long cooldown keeps the run on the fallback bed.
+	deps := newFakeDeps([]tick{ended, ended, ended, ended, ended})
+	runUntilExhausted(t, deps, cfg(3, 4, time.Hour))
+	if got := deps.toFallback.Load(); got != 1 {
+		t.Fatalf("to_fallback swaps: want 1, got %d", got)
+	}
+	if deps.advances.Load() == 0 {
+		t.Fatal("no advance while stranded on the fallback album: it plays one track and falls silent")
+	}
+}
+
 func TestWatch_CarHumBedDoesNotAdvanceAlbum(t *testing.T) {
 	// The car-hum drone loops forever; an ENDED tick there is a wedge, not a
 	// track boundary, and must not walk an album playlist that isn't playing.

@@ -202,7 +202,8 @@ func newAudioTestApp(t *testing.T, bed beds.Bed, track string) (*App, *fakeBeds,
 	app := newTestApp(video.Video{})
 	fake := &fakeBeds{bed: bed, track: track}
 	app.Beds = fake
-	return app, fake, captureSay(t, app)
+	out, _ := captureSay(t, app)
+	return app, fake, out
 }
 
 func TestAudioCmd_ViewerGetsReportWithoutSwitching(t *testing.T) {
@@ -403,7 +404,7 @@ func TestAudioCmd_FailedSwitchDoesNotClaimSuccess(t *testing.T) {
 func TestAudioCmd_NoBedStoreReportsUnavailable(t *testing.T) {
 	app := newTestApp(video.Video{})
 	app.Beds = nil
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	app.audioCmd(context.Background(), newTestUser(adminUser), []string{"album"})
 
@@ -419,7 +420,7 @@ func TestAudio_AvailableOnEveryPlatform(t *testing.T) {
 		app := newTestApp(video.Video{})
 		app.Platform = platform
 		app.indexCommands()
-		if cmd, _ := app.findCommand("!audio"); cmd == nil {
+		if cmd, _, _ := app.findCommand("!audio"); cmd == nil {
 			t.Errorf("!audio must be available on %s", platform)
 		}
 	}

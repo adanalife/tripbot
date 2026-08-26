@@ -46,6 +46,12 @@ type fixture struct {
 	mu       sync.Mutex
 	cur      step
 	restarts int
+	// outcomes collects one entry per OnRestart call (the restart's error, nil
+	// on success); recoveries counts OnRecovered calls. Both hooks are always
+	// wired here, so every scripted run also exercises the transition
+	// callbacks.
+	outcomes   []error
+	recoveries int
 }
 
 func (f *fixture) stage(s step) {
@@ -58,6 +64,12 @@ func (f *fixture) restartCount() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.restarts
+}
+
+func (f *fixture) hookCalls() ([]error, int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]error(nil), f.outcomes...), f.recoveries
 }
 
 func (f *fixture) deps() WatchdogDeps {
@@ -78,6 +90,16 @@ func (f *fixture) deps() WatchdogDeps {
 			f.restarts++
 			return f.cur.restartErr
 		},
+		OnRestart: func(_ context.Context, restartErr error) {
+			f.mu.Lock()
+			defer f.mu.Unlock()
+			f.outcomes = append(f.outcomes, restartErr)
+		},
+		OnRecovered: func(context.Context) {
+			f.mu.Lock()
+			defer f.mu.Unlock()
+			f.recoveries++
+		},
 	}
 }
 
@@ -89,13 +111,29 @@ func (f *fixture) deps() WatchdogDeps {
 // timeout, and no drain window for a late restart to slip through.
 func run(t *testing.T, script []step, threshold int, cooldown time.Duration) int {
 	t.Helper()
-	var restarts int
+	return runFixture(t, script, threshold, cooldown).restartCount()
+}
+
+// runFixture is run, returning the whole fixture so tests can also assert on
+// the OnRestart / OnRecovered hook calls the script produced. Safe to read
+// after the bubble closes: the loop has exited and nothing else holds it.
+func runFixture(t *testing.T, script []step, threshold int, cooldown time.Duration) *fixture {
+	t.Helper()
+	return runFixtureOn(t, "", script, threshold, cooldown)
+}
+
+// runFixtureOn is runFixture with the deps' Platform set, for the tests that
+// assert on the per-platform metric label.
+func runFixtureOn(t *testing.T, platform string, script []step, threshold int, cooldown time.Duration) *fixture {
+	t.Helper()
+	f := &fixture{}
 	synctest.Test(t, func(t *testing.T) {
-		f := &fixture{}
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel() // lets the loop exit before the bubble closes
 
-		go WatchSilentDisconnect(ctx, f.deps(), watchInterval, threshold, cooldown)
+		deps := f.deps()
+		deps.Platform = platform
+		go WatchSilentDisconnect(ctx, deps, watchInterval, threshold, cooldown)
 		synctest.Wait() // wait out the loop's startup, up to its first ticker receive
 
 		for _, s := range script {
@@ -103,9 +141,8 @@ func run(t *testing.T, script []step, threshold int, cooldown time.Duration) int
 			time.Sleep(watchInterval)
 			synctest.Wait()
 		}
-		restarts = f.restartCount()
 	})
-	return restarts
+	return f
 }
 
 // The output reports active for several polls before the teardown completes —
@@ -280,4 +317,72 @@ func TestWatchSilentDisconnect_HeldMissesGoStale(t *testing.T) {
 	if got := run(t, script, 3, time.Minute); got != 0 {
 		t.Fatalf("restart count: want 0 (stale misses discarded), got %d", got)
 	}
+}
+
+// Each forced restart reports its outcome through OnRestart — nil for a
+// restart that completed, the Restart error for one that didn't. This is the
+// seam cmd/tripbot records watchdog_restart events through.
+func TestWatchSilentDisconnect_OnRestartReportsOutcome(t *testing.T) {
+	f := runFixture(t, []step{miss, miss, miss, healthy}, 3, time.Minute)
+	outcomes, _ := f.hookCalls()
+	if len(outcomes) != 1 || outcomes[0] != nil {
+		t.Fatalf("outcomes = %v, want one nil (successful restart)", outcomes)
+	}
+
+	f = runFixture(t, []step{missNoFix, missNoFix, missNoFix}, 3, time.Hour)
+	outcomes, _ = f.hookCalls()
+	if len(outcomes) != 1 || outcomes[0] == nil {
+		t.Fatalf("outcomes = %v, want one non-nil (failed restart)", outcomes)
+	}
+}
+
+// OnRecovered fires exactly when the cooldown retires: a restart happened and
+// the channel then held live for threshold ticks.
+func TestWatchSilentDisconnect_OnRecoveredFiresWhenRecoveryHolds(t *testing.T) {
+	f := runFixture(t, []step{miss, miss, miss, healthy, healthy, healthy}, 3, time.Hour)
+	if _, recoveries := f.hookCalls(); recoveries != 1 {
+		t.Fatalf("recoveries = %d, want 1 (held recovery)", recoveries)
+	}
+}
+
+// A live streak with no preceding restart is ordinary health, not a recovery.
+func TestWatchSilentDisconnect_OnRecoveredNeedsARestart(t *testing.T) {
+	f := runFixture(t, []step{healthy, healthy, healthy, healthy}, 3, time.Minute)
+	if _, recoveries := f.hookCalls(); recoveries != 0 {
+		t.Fatalf("recoveries = %d, want 0 (nothing was recovered from)", recoveries)
+	}
+}
+
+// A recovery too brief to prove itself reports nothing.
+func TestWatchSilentDisconnect_OnRecoveredSkipsBriefRecovery(t *testing.T) {
+	f := runFixture(t, []step{miss, miss, miss, healthy, miss, miss}, 3, time.Hour)
+	if _, recoveries := f.hookCalls(); recoveries != 0 {
+		t.Fatalf("recoveries = %d, want 0 (recovery never held)", recoveries)
+	}
+}
+
+// The hooks are optional: a deps with neither set (the pre-wiring shape every
+// caller outside cmd/tripbot has) must run the full detect-and-restart path
+// without panicking.
+func TestWatchSilentDisconnect_NilHooks(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		f := &fixture{}
+		deps := f.deps()
+		deps.OnRestart = nil
+		deps.OnRecovered = nil
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		go WatchSilentDisconnect(ctx, deps, watchInterval, 3, time.Hour)
+		synctest.Wait()
+
+		for _, s := range []step{miss, miss, miss, healthy, healthy, healthy} {
+			f.stage(s)
+			time.Sleep(watchInterval)
+			synctest.Wait()
+		}
+		if f.restartCount() != 1 {
+			t.Fatalf("restart count: want 1, got %d", f.restartCount())
+		}
+	})
 }

@@ -31,7 +31,15 @@ import (
 type Sessions struct {
 	cfg    *c.TripbotConfig
 	source ChatterSource
-	mu     sync.Mutex
+	// chat is the optional per-tick chat-message tally drained into each
+	// viewer sample. nil means samples record NULL chat_messages. Set once at
+	// wiring time, before the crons start, so it needs no lock.
+	chat ChatCounter
+	// video is the optional airing-footage source stamped onto login/logout
+	// events. nil means those events record no airing context. Set once at
+	// wiring time, before the crons start, so it needs no lock.
+	video VideoSource
+	mu    sync.Mutex
 	// loggedIn maps username -> User for everyone currently in chat.
 	loggedIn map[string]*User
 	// lifetimeLeaderboard is the cached [username, miles] leaderboard,
@@ -49,6 +57,45 @@ func New(cfg *c.TripbotConfig, source ChatterSource) *Sessions {
 	}
 }
 
+// SetChatCounter installs the chat-message tally drained into each viewer
+// sample. Called once during wiring, before the session crons start; leaving
+// it unset records NULL chat_messages.
+func (s *Sessions) SetChatCounter(counter ChatCounter) { s.chat = counter }
+
+// chatMessages drains the wired counter for one sample tick, or reports nil
+// when none is wired — NULL in the row, distinct from a silent tick's 0.
+func (s *Sessions) chatMessages() *int {
+	if s.chat == nil {
+		return nil
+	}
+	n := s.chat.Drain()
+	return &n
+}
+
+// SetVideoSource installs the airing-footage source for login/logout events.
+// Called once during wiring, before the session crons start; leaving it unset
+// records no airing context.
+func (s *Sessions) SetVideoSource(v VideoSource) { s.video = v }
+
+// currentVideoID is the clip on screen now, or 0 with no video source wired.
+func (s *Sessions) currentVideoID() int {
+	if s.video == nil {
+		return 0
+	}
+	return s.video.CurrentVideoID()
+}
+
+// airing reports the footage on screen now, for stamping onto a session event.
+// The zero Airing — no clip, no playhead — is what an instance with no video
+// source records.
+func (s *Sessions) airing() events.Airing {
+	if s.video == nil {
+		return events.Airing{}
+	}
+	secs := s.video.CurrentProgressSec()
+	return events.Airing{VideoID: s.video.CurrentVideoID(), TsSec: &secs}
+}
+
 // UpdateSession uses the chatter source to maintain the list of
 // currently-logged-in users.
 func (s *Sessions) UpdateSession(ctx context.Context) {
@@ -60,9 +107,16 @@ func (s *Sessions) UpdateSession(ctx context.Context) {
 	// updates the "in chat" number (and flashes it on a change) without a reload.
 	eventbus.EmitViewerCount(ctx, s.cfg.Environment, s.cfg.Platform, s.source.ChatterCount())
 
-	// Persist the same total as a viewer_samples row — the durable half of the
-	// emission above, tagged with the clip currently on screen.
-	viewstats.RecordSample(ctx, s.cfg, s.source.ChatterCount())
+	// Refresh how many people are watching. Distinct from the chatter total
+	// above: chatters are who has spoken, a self-selecting slice, so sizing
+	// the audience from it understates it and biases toward whatever provokes
+	// typing.
+	s.source.UpdateAudience()
+
+	// Persist both totals as a viewer_samples row — the durable half of the
+	// emission above, tagged with the clip currently on screen and carrying the
+	// tick's chat-message tally.
+	viewstats.RecordSample(ctx, s.cfg, s.source.ChatterCount(), s.source.Audience(), s.currentVideoID(), s.chatMessages())
 
 	// log out the people who aren't present, working from a snapshot so the
 	// lock isn't held across the DB work logout does
@@ -159,7 +213,7 @@ func (s *Sessions) login(ctx context.Context, username string) *User {
 	s.loggedIn[username] = &user
 	s.mu.Unlock()
 
-	if err := events.Login(ctx, s.cfg, username, user.sessionID); err != nil {
+	if err := events.Login(ctx, s.cfg, username, user.sessionID, s.airing()); err != nil {
 		slog.ErrorContext(ctx, "error creating login event", "err", err)
 	}
 
@@ -205,7 +259,7 @@ func (s *Sessions) logout(ctx context.Context, u *User) {
 	if extra > 0 {
 		extraMiles = &extra
 	}
-	if err := events.Logout(ctx, s.cfg, u.Username, u.sessionID, extraMiles); err != nil {
+	if err := events.Logout(ctx, s.cfg, u.Username, u.sessionID, extraMiles, s.airing()); err != nil {
 		slog.ErrorContext(ctx, "error creating logout event", "err", err)
 	}
 
@@ -213,6 +267,55 @@ func (s *Sessions) logout(ctx context.Context, u *User) {
 	s.mu.Lock()
 	delete(s.loggedIn, u.Username)
 	s.mu.Unlock()
+}
+
+// CheckpointMiles banks every logged-in user's in-flight session miles — into
+// users.miles and the monthly scoreboard, the same two writes logout does —
+// and records what it banked so logout only counts the remainder. Without it a
+// session's accrual lives only in memory until logout, so an ungraceful exit
+// discards all of it and the !miles reply reads backwards. Runs on a cron, so
+// a crash costs one interval instead of the whole session.
+func (s *Sessions) CheckpointMiles(ctx context.Context) {
+	for username := range s.sessionSnapshot() {
+		user, ok := s.get(username)
+		if !ok {
+			continue
+		}
+		miles := s.sessionMiles(ctx, *user)
+		if miles <= 0 {
+			continue
+		}
+		// Bank the miles first, then credit them: a failed write leaves them
+		// in flight for the next tick rather than dropping them on the floor.
+		// The DB work stays outside mu.
+		var updated User
+		s.mu.Lock()
+		live, stillHere := s.loggedIn[username]
+		if stillHere {
+			live.Miles += miles
+			live.milesCheckpointed += miles
+			updated = *live
+		}
+		s.mu.Unlock()
+		if !stillHere {
+			// logged out mid-checkpoint, which banked the miles itself
+			continue
+		}
+		updated.save(ctx)
+		updated.AddToScore(ctx, scoreboards.CurrentMilesScoreboard(), miles)
+	}
+}
+
+// milesCheckpointed reports how much of username's session accrual is already
+// banked in the DB, or 0 for anyone not in the session. Takes mu; callers must
+// not already hold it.
+func (s *Sessions) milesCheckpointed(username string) float32 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if live, ok := s.loggedIn[username]; ok {
+		return live.milesCheckpointed
+	}
+	return 0.0
 }
 
 // isLoggedIn checks if the user is currently logged in
@@ -242,10 +345,17 @@ func (s *Sessions) GiveEveryoneMiles(gift float32) {
 }
 
 // CorrectMiles applies a manual miles delta (may be negative) to a user and
-// persists it immediately. If they're logged in, the live session copy is
-// adjusted so logout doesn't clobber the correction. Returns the new total.
-// The delta is deliberately NOT added to sessionExtraMiles — the caller logs a
-// separate correction event carrying it, and doing both would double-count.
+// persists it immediately, to both places a viewer sees their miles: the
+// lifetime total and the current monthly scoreboard. If they're logged in, the
+// live session copy is adjusted so logout doesn't clobber the correction.
+// Returns the new lifetime total. The delta is deliberately NOT added to
+// sessionExtraMiles — the caller logs a separate correction event carrying it,
+// and doing both would double-count.
+//
+// Both stores move because a correction restores (or removes) miles the viewer
+// should have earned by watching, and the monthly board is what !miles leads
+// with and the overlay rotates. Gifted miles are the other case and stay
+// lifetime-only — see GiveEveryoneMiles.
 func (s *Sessions) CorrectMiles(ctx context.Context, username string, delta float32) float32 {
 	s.mu.Lock()
 	live, ok := s.loggedIn[username]
@@ -257,6 +367,7 @@ func (s *Sessions) CorrectMiles(ctx context.Context, username string, delta floa
 	s.mu.Unlock()
 	if ok {
 		updated.save(ctx)
+		s.correctMonthly(ctx, updated, delta)
 		return updated.Miles
 	}
 	u, err := FindOrCreate(ctx, s.cfg.Platform, username)
@@ -267,7 +378,35 @@ func (s *Sessions) CorrectMiles(ctx context.Context, username string, delta floa
 	}
 	u.Miles += delta
 	u.save(ctx)
+	s.correctMonthly(ctx, u, delta)
 	return u.Miles
+}
+
+// correctMonthly applies a correction's delta to the current monthly
+// scoreboard. A negative delta is clamped to the score on the board: miles
+// clawed back may have been earned in an earlier month, and a monthly score
+// below zero would render that way on the leaderboard overlay.
+func (s *Sessions) correctMonthly(ctx context.Context, u User, delta float32) {
+	if u.ID == 0 {
+		// no DB row, so the lifetime half was dropped too — see above
+		return
+	}
+	board := scoreboards.CurrentMilesScoreboard()
+	if delta < 0 {
+		owed := u.GetScore(ctx, board)
+		if owed < 0 {
+			// GetScore's error sentinel. Skip rather than clamp against it —
+			// treating -1 as a real score would turn a clawback into a credit.
+			return
+		}
+		if owed+delta < 0 {
+			delta = -owed
+		}
+	}
+	if delta == 0 {
+		return
+	}
+	u.AddToScore(ctx, board, delta)
 }
 
 // The snapshot helpers below (sortedUsernameList, colorizeUsernames, humans,

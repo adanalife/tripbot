@@ -9,7 +9,7 @@ metadata:
 data:
   BOT_USERNAME: tripbot4000
   CHANNEL_NAME: adanalife_
-  COMPED_SUBSCRIBERS: reapermoss
+  COMPED_SUBSCRIBERS: reapermoss,ferretmunchers
   DATABASE_HOST: postgres.prod-1-data.svc.cluster.local
   ENV: production
   GOOGLE_APPS_PROJECT_ID: tripbot-prod
@@ -45,7 +45,7 @@ spec:
   template:
     metadata:
       annotations:
-        adanalife.dev/config-hash: 575d91de0b
+        adanalife.dev/config-hash: 53d9c13675
       labels:
         app: tripbot-instagram
     spec:
@@ -72,7 +72,7 @@ spec:
             - secretRef:
                 name: tripbot-discord-bot-token
                 optional: true
-          image: adanalife/tripbot:4.24.0
+          image: adanalife/tripbot:5.3.1
           imagePullPolicy: IfNotPresent
           livenessProbe:
             httpGet:
@@ -120,7 +120,7 @@ spec:
                 name: tripbot-instagram-config
             - secretRef:
                 name: tripbot-database-creds
-          image: adanalife/tripbot:4.24.0
+          image: adanalife/tripbot:5.3.1
           imagePullPolicy: IfNotPresent
           name: migrate
           resources:
@@ -161,32 +161,3 @@ spec:
   selector:
     app: tripbot-instagram
   type: ClusterIP
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  annotations:
-    cert-manager.io/issuer: letsencrypt-route53
-    external-dns.alpha.kubernetes.io/hostname: tripbot-instagram.prod.whereisdana.today
-  labels:
-    app.kubernetes.io/name: tripbot-instagram
-    app.kubernetes.io/part-of: tripbot
-  name: tripbot-instagram
-  namespace: prod-1
-spec:
-  ingressClassName: traefik
-  rules:
-    - host: tripbot-instagram.prod.whereisdana.today
-      http:
-        paths:
-          - backend:
-              service:
-                name: tripbot-instagram
-                port:
-                  name: http
-            path: /
-            pathType: Prefix
-  tls:
-    - hosts:
-        - tripbot-instagram.prod.whereisdana.today
-      secretName: tripbot-instagram-tls

@@ -525,16 +525,101 @@ func (a *App) guessCmd(ctx context.Context, user *users.User, params []string) {
 		return
 	}
 
-	if strings.EqualFold(guess, state) {
+	correct := strings.EqualFold(guess, state)
+
+	// Record the guess before a correct one warps the playhead, so the airing
+	// context is the footage the guess was about, not wherever the warp lands.
+	a.recordGuess(ctx, events.GuessSubmission{
+		Username: user.Username,
+		Guessed:  guess,
+		Actual:   state,
+		Correct:  correct,
+	})
+
+	if correct {
 		msg = fmt.Sprintf("@%s got it! We're in %s", user.Username, state)
 		// increase their guess score
 		a.Scoreboards.CreditGuess(ctx, user)
 		// do a timewarp, crediting the guesser on the overlay
-		a.timewarp(ctx, user.Username)
+		a.timewarp(ctx, user.Username, events.WarpSourceGuess)
 	} else {
-		msg = "Try again! EarthDay"
+		msg = "Try again! " + a.guessHint(user.Username, guess, s)
 	}
 	a.Chat.Say(msg)
+}
+
+// recordGuess writes a guess_submitted event, stamping the clip being guessed
+// at. Best-effort: the guesser gets their answer in chat either way, so a
+// failed insert is logged and dropped rather than surfaced.
+//
+// The caller supplies the guess and the answer; the airing context is filled
+// in here so no emit site can forget it.
+func (a *App) recordGuess(ctx context.Context, g events.GuessSubmission) {
+	if a.Events == nil {
+		return
+	}
+	// Current() is the cached notion of what's playing — no I/O, because
+	// recording a guess must not cost a round-trip to playout.
+	if a.Video != nil {
+		g.VideoID = a.Video.Current().ID
+		secs := a.Video.CurrentProgress().Seconds()
+		g.TsSec = &secs
+	}
+	if err := a.Events.GuessSubmitted(ctx, g); err != nil {
+		slog.ErrorContext(ctx, "error recording guess", "err", err,
+			"username", g.Username)
+	}
+}
+
+// guessMiss is one chatter's last wrong !guess: how far its state's centroid
+// was from the van, and when it happened (see App.guessMisses).
+type guessMiss struct {
+	miles float64
+	at    time.Time
+}
+
+// guessHint picks the emote that closes a wrong-guess reply. A chatter's first
+// miss of a round gets the usual EarthDay; each later miss compares this
+// guess's centroid-to-van distance against their previous one and answers 🔥
+// (warmer) or ❄️ (colder) instead — a hint subtle enough that only someone
+// watching their own replies notices it. Restricting hints to the second miss
+// on, and to one bit each, is what keeps !guess from turning into binary
+// search over the state list.
+//
+// A guess with no centroid (a territory, a typo the fuzzy pass let through) or
+// a spot with no usable coordinate can't be measured, so it neither hints nor
+// disturbs the trail.
+func (a *App) guessHint(username, guess string, s spot) string {
+	const noHint = "EarthDay"
+	if s.at.Lat == 0 && s.at.Lng == 0 {
+		return noHint
+	}
+	lat, lng, ok := helpers.StateCentroid(guess)
+	if !ok {
+		return noHint
+	}
+	miles := helpers.MilesBetween(lat, lng, s.at.Lat, s.at.Lng)
+
+	a.guessMissesMu.Lock()
+	prev, hadPrev := a.guessMisses[username]
+	if a.guessMisses == nil {
+		a.guessMisses = make(map[string]guessMiss)
+	}
+	a.guessMisses[username] = guessMiss{miles: miles, at: time.Now()}
+	a.guessMissesMu.Unlock()
+
+	if !hadPrev || !prev.at.After(lastTimewarpTime) {
+		return noHint
+	}
+	switch {
+	case miles < prev.miles:
+		return "🔥"
+	case miles > prev.miles:
+		return "❄️"
+	default:
+		// Same state twice — same distance, nothing to compare.
+		return noHint
+	}
 }
 
 func (a *App) stateCmd(ctx context.Context, user *users.User, _ []string) {
@@ -667,9 +752,10 @@ func (a *App) secretInfoCmd(ctx context.Context, user *users.User, _ []string) {
 }
 
 // giveMilesCmd is the admin !givemiles <user> <amount> command: it applies a
-// manual miles correction (amount may be negative) and logs a correction event
-// so the rollup folds it into user_rollups.extra_miles. Admin-only for now
-// (broadcaster); widen the gate to mods once a mod-status source exists.
+// manual miles correction (amount may be negative) to both the lifetime total
+// and the current monthly scoreboard, and logs a correction event so the rollup
+// folds it into user_rollups.extra_miles. Admin-only for now (broadcaster);
+// widen the gate to mods once a mod-status source exists.
 func (a *App) giveMilesCmd(ctx context.Context, user *users.User, params []string) {
 	slog.InfoContext(ctx, "ran !givemiles", "username", user.Username)
 	if !a.Cfg.UserIsAdmin(user.Username) {

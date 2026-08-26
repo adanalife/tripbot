@@ -63,8 +63,6 @@ spec:
             - secretRef:
                 name: tripbot-twitch-creds
             - secretRef:
-                name: tripbot-google-maps-api-key
-            - secretRef:
                 name: tripbot-discord-alerts-webhook
                 optional: true
             - secretRef:
@@ -149,25 +147,3 @@ spec:
   selector:
     app: tripbot-twitch
   type: ClusterIP
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  labels:
-    app.kubernetes.io/name: tripbot-twitch
-    app.kubernetes.io/part-of: tripbot
-  name: tripbot-twitch
-  namespace: default
-spec:
-  ingressClassName: traefik
-  rules:
-    - host: tripbot-twitch.localhost
-      http:
-        paths:
-          - backend:
-              service:
-                name: tripbot-twitch
-                port:
-                  name: http
-            path: /
-            pathType: Prefix

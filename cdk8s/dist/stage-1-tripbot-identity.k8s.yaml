@@ -59,26 +59,6 @@ metadata:
   labels:
     app.kubernetes.io/name: tripbot
     app.kubernetes.io/part-of: tripbot
-  name: tripbot-google-maps-api-key
-  namespace: stage-1
-spec:
-  dataFrom:
-    - extract:
-        key: /k8s/tripbot/google-maps-api-key
-  refreshInterval: 1h
-  secretStoreRef:
-    kind: SecretStore
-    name: aws-parameterstore
-  target:
-    creationPolicy: Owner
-    name: tripbot-google-maps-api-key
----
-apiVersion: external-secrets.io/v1
-kind: ExternalSecret
-metadata:
-  labels:
-    app.kubernetes.io/name: tripbot
-    app.kubernetes.io/part-of: tripbot
   name: tripbot-discord-alerts-webhook
   namespace: stage-1
 spec:
@@ -122,7 +102,23 @@ metadata:
   namespace: stage-1
 spec:
   hard:
+    limits.memory: 20Gi
+    local-path.storageclass.storage.k8s.io/requests.storage: 40Gi
     pods: "30"
     requests.cpu: "6"
     requests.gpu.intel.com/i915: "3"
     requests.memory: 16Gi
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: app-limits
+  namespace: stage-1
+spec:
+  limits:
+    - default:
+        memory: 512Mi
+      defaultRequest:
+        cpu: 50m
+        memory: 64Mi
+      type: Container

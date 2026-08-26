@@ -6,13 +6,20 @@ import (
 	"log/slog"
 
 	"github.com/adanalife/tripbot/pkg/eventbus"
+	"github.com/adanalife/tripbot/pkg/events"
+	"github.com/adanalife/tripbot/pkg/instrumentation"
 )
 
-// AnnounceNewFollower says a thank-you to a new follower in chat and publishes
-// a follow event to the console. Wired from pkg/eventsub on channel.follow v2
+// AnnounceNewFollower says a thank-you to a new follower in chat, logs a
+// follow event (the durable rows behind "followers gained"), and publishes a
+// follow event to the console. Wired from pkg/eventsub on channel.follow v2
 // events.
 func (a *App) AnnounceNewFollower(username string) {
 	a.Chat.Say(fmt.Sprintf("Thank you for the follow, @%s; type !commands in chat to see what you can do", username))
+	instrumentation.Announcements.Inc(a.Platform, "follow")
+	if err := a.Events.Follow(context.Background(), username); err != nil {
+		slog.ErrorContext(context.Background(), "error creating follow event", "err", err)
+	}
 	eventbus.EmitSubscriberEvent(context.Background(), a.Cfg.Environment, eventbus.SubscriberEvent{
 		Platform: a.Platform,
 		Kind:     "follow",
@@ -34,6 +41,10 @@ func (a *App) AnnounceSubscriber(username string, isGift bool, tier string) {
 	a.Chat.Say(fmt.Sprintf("Thank you for the sub, @%s; enjoy your !bonusmiles bleedPurple", username))
 	a.UserSessions.GiveEveryoneMiles(1.0)
 	a.Chat.Say(fmt.Sprintf("The %d current viewers have been given a bonus mile, too HolidayPresent", a.UserSessions.LoggedInCount()))
+	// Counted for gift recipients too, matching channel.subscribe, which fires
+	// for them as well — the shout goes out either way, so skipping them would
+	// show a shortfall against tripbot_events_total that isn't one.
+	instrumentation.Announcements.Inc(a.Platform, "sub")
 	if err := a.Events.Subscribe(context.Background(), username); err != nil {
 		slog.ErrorContext(context.Background(), "error creating subscribe event", "err", err)
 	}
@@ -58,6 +69,9 @@ func (a *App) AnnounceGiftSub(gifter string, count int, tier string, isAnonymous
 	} else {
 		a.Chat.Say(fmt.Sprintf("Thank you @%s for gifting %d sub(s)! bleedPurple", gifter, count))
 	}
+	// One per gift event, not per sub gifted: this counts shouts, and a
+	// mass-gift gets a single one.
+	instrumentation.Announcements.Inc(a.Platform, "gift")
 	eventbus.EmitSubscriberEvent(context.Background(), a.Cfg.Environment, eventbus.SubscriberEvent{
 		Platform:    a.Platform,
 		Kind:        "gift",
@@ -81,6 +95,7 @@ func (a *App) AnnounceResub(username string, cumulativeMonths, streakMonths int,
 	} else {
 		a.Chat.Say(fmt.Sprintf("Thank you for the resub, @%s bleedPurple", username))
 	}
+	instrumentation.Announcements.Inc(a.Platform, "resub")
 	eventbus.EmitSubscriberEvent(context.Background(), a.Cfg.Environment, eventbus.SubscriberEvent{
 		Platform: a.Platform,
 		Kind:     "resub",
@@ -101,5 +116,24 @@ func (a *App) RecordUnsubscribe(username string, isGift bool, tier string) {
 	_ = tier
 	if err := a.Events.Unsubscribe(context.Background(), username); err != nil {
 		slog.ErrorContext(context.Background(), "error creating unsubscribe event", "err", err)
+	}
+}
+
+// RecordRaid logs a raid event stamped with the airing clip and playhead, so
+// audience rollups can separate a raid's viewer spike from footage that
+// genuinely draws viewers. No chat shout — Twitch announces the raid in chat
+// natively. Wired from pkg/eventsub on channel.raid events.
+func (a *App) RecordRaid(from string, viewers int) {
+	ctx := context.Background()
+	r := events.Raid{From: from, Viewers: viewers}
+	// Current() is the cached notion of what's playing — no I/O, because
+	// recording a raid must not cost a round-trip to playout.
+	if a.Video != nil {
+		r.VideoID = a.Video.Current().ID
+		secs := a.Video.CurrentProgress().Seconds()
+		r.TsSec = &secs
+	}
+	if err := a.Events.Raided(ctx, r); err != nil {
+		slog.ErrorContext(ctx, "error creating raid event", "err", err, "from", from)
 	}
 }

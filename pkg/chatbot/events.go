@@ -16,22 +16,43 @@ import (
 // its error rather than logging: a lost event is a hole in that history, and
 // the caller is the one that knows whether it can say so in chat.
 type Events interface {
+	// Follow records that a viewer followed the channel — the rows behind
+	// any "followers gained" count.
+	Follow(ctx context.Context, username string) error
 	Subscribe(ctx context.Context, username string) error
 	Unsubscribe(ctx context.Context, username string) error
+	// Raided records an incoming raid landing on the airing clip — the
+	// confounder any per-clip audience metric has to control for, since the
+	// raiders arrive on whatever happens to be on screen.
+	Raided(ctx context.Context, r events.Raid) error
 	// Correction records a manual miles adjustment (delta may be negative),
 	// which is what makes a hand-corrected total auditable afterwards.
 	Correction(ctx context.Context, username string, delta float64) error
+	// GuessSubmitted records an answerable !guess, right or wrong — the raw
+	// material for guess accuracy and per-footage difficulty.
+	GuessSubmitted(ctx context.Context, g events.GuessSubmission) error
+	// Timewarp records a playhead warp to a random clip: who triggered it,
+	// how, and the clips it left and landed on.
+	Timewarp(ctx context.Context, w events.Warp) error
 	// CommandRefused records a command the bot declined to run. Unlike the
 	// viewer-lifecycle writers above, a refusal is the only record that the
 	// attempt happened at all — nothing else in the system remembers a command
 	// that didn't run.
 	CommandRefused(ctx context.Context, r events.CommandRefusal) error
+	// CommandRan records a command that dispatched and ran. Paired with
+	// CommandRefused, every command attempt lands in exactly one of the two
+	// kinds — the split any refusal rate or usage rollup is computed over.
+	CommandRan(ctx context.Context, r events.CommandRun) error
 }
 
 // realEvents is the production Events adapter, holding only the config
 // pkg/events needs; the DB handle is its.
 type realEvents struct {
 	cfg *c.TripbotConfig
+}
+
+func (r realEvents) Follow(ctx context.Context, username string) error {
+	return events.Follow(ctx, r.cfg, username)
 }
 
 func (r realEvents) Subscribe(ctx context.Context, username string) error {
@@ -42,10 +63,26 @@ func (r realEvents) Unsubscribe(ctx context.Context, username string) error {
 	return events.Unsubscribe(ctx, r.cfg, username)
 }
 
+func (r realEvents) Raided(ctx context.Context, raid events.Raid) error {
+	return events.Raided(ctx, r.cfg, raid)
+}
+
 func (r realEvents) Correction(ctx context.Context, username string, delta float64) error {
 	return events.Correction(ctx, r.cfg, username, delta)
 }
 
+func (r realEvents) GuessSubmitted(ctx context.Context, g events.GuessSubmission) error {
+	return events.GuessSubmitted(ctx, r.cfg, g)
+}
+
+func (r realEvents) Timewarp(ctx context.Context, w events.Warp) error {
+	return events.Timewarp(ctx, r.cfg, w)
+}
+
 func (r realEvents) CommandRefused(ctx context.Context, ref events.CommandRefusal) error {
 	return events.CommandRefused(ctx, r.cfg, ref)
+}
+
+func (r realEvents) CommandRan(ctx context.Context, run events.CommandRun) error {
+	return events.CommandRan(ctx, r.cfg, run)
 }

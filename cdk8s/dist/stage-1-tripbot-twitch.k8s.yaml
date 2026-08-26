@@ -76,8 +76,6 @@ spec:
             - secretRef:
                 name: tripbot-twitch-creds
             - secretRef:
-                name: tripbot-google-maps-api-key
-            - secretRef:
                 name: tripbot-discord-alerts-webhook
                 optional: true
             - secretRef:
@@ -175,32 +173,3 @@ spec:
   selector:
     app: tripbot-twitch
   type: ClusterIP
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  annotations:
-    cert-manager.io/issuer: letsencrypt-route53
-    external-dns.alpha.kubernetes.io/hostname: tripbot-twitch.stage.whereisdana.today
-  labels:
-    app.kubernetes.io/name: tripbot-twitch
-    app.kubernetes.io/part-of: tripbot
-  name: tripbot-twitch
-  namespace: stage-1
-spec:
-  ingressClassName: traefik
-  rules:
-    - host: tripbot-twitch.stage.whereisdana.today
-      http:
-        paths:
-          - backend:
-              service:
-                name: tripbot-twitch
-                port:
-                  name: http
-            path: /
-            pathType: Prefix
-  tls:
-    - hosts:
-        - tripbot-twitch.stage.whereisdana.today
-      secretName: tripbot-twitch-tls

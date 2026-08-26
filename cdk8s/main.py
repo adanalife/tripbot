@@ -52,7 +52,7 @@ app.synth()
 
 # Discovery index for infra's tripbot-apps ApplicationSet: one tiny JSON per app
 # unit at dist/apps/<env>-<app>.json. The appset's git files generator globs
-# these instead of infra re-declaring the (env × component × platform) matrix,
+# these instead of infra redeclaring the (env × component × platform) matrix,
 # so the deploy units the appset delivers can never drift from the ones synthed
 # here. Written after synth (plain files, not cdk8s objects). Deterministic
 # bytes so the golden gate is stable.

@@ -42,7 +42,7 @@ func TestSongCmd_OffSomaFM_ReportsTheLiveBedNotTheFeed(t *testing.T) {
 			app := newTestApp(video.Video{})
 			fake := &fakeBeds{bed: tc.bed, track: tc.track, artist: "Steve Cobby", title: "Big Wow"}
 			app.Beds = fake
-			out := captureSay(t, app)
+			out, _ := captureSay(t, app)
 
 			app.songCmd(context.Background(), newTestUser("viewer1"), nil)
 
@@ -70,7 +70,7 @@ func TestSongCmd_OnSomaFM_NamesTheTunedChannel(t *testing.T) {
 		artist:  "Steve Cobby",
 		title:   "Big Wow",
 	}
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	app.songCmd(context.Background(), newTestUser("viewer1"), nil)
 
@@ -104,7 +104,7 @@ func TestSongCmd_FetchError_FallsBackToApology(t *testing.T) {
 func TestSongCmd_NoBedStoreSaysSo(t *testing.T) {
 	app := newTestApp(video.Video{})
 	app.Beds = nil
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	app.songCmd(context.Background(), newTestUser("viewer1"), nil)
 

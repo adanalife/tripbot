@@ -9,6 +9,7 @@ import (
 	"time"
 
 	terrors "github.com/adanalife/tripbot/pkg/errors"
+	"github.com/adanalife/tripbot/pkg/events"
 	"github.com/adanalife/tripbot/pkg/video"
 )
 
@@ -65,9 +66,16 @@ func TestTimewarpCmd_AdminDrivesPlaybackChain(t *testing.T) {
 	if len(recPlayout.Calls) != 1 || recPlayout.Calls[0] != "PlayRandom()" {
 		t.Errorf("expected one PlayRandom Playout call, got %v", recPlayout.Calls)
 	}
-	// Video: GetCurrentlyPlaying refreshes pkg/video state after the shuffle.
-	if len(recVideo.Calls) != 1 || recVideo.Calls[0] != "GetCurrentlyPlaying()" {
-		t.Errorf("expected one GetCurrentlyPlaying call on Video, got %v", recVideo.Calls)
+	// Video: the departing clip and playhead are read for the timewarp event,
+	// then GetCurrentlyPlaying refreshes pkg/video state after the shuffle.
+	wantVideo := []string{"Current()", "CurrentProgress()", "GetCurrentlyPlaying()"}
+	if len(recVideo.Calls) != len(wantVideo) {
+		t.Fatalf("expected %d Video calls, got %d: %v", len(wantVideo), len(recVideo.Calls), recVideo.Calls)
+	}
+	for i, want := range wantVideo {
+		if recVideo.Calls[i] != want {
+			t.Errorf("Video call %d: want %q, got %q", i, want, recVideo.Calls[i])
+		}
 	}
 }
 
@@ -243,13 +251,59 @@ func TestGuessCmd_CorrectGuess_RefreshesVideoAfterTimewarp(t *testing.T) {
 
 	app.guessCmd(context.Background(), newTestUser("viewer1"), []string{"Colorado"})
 
-	// guessCmd first resolves where the stream is (PlayheadLocation), then the
-	// correct-guess path runs a.timewarp() which refreshes via
-	// GetCurrentlyPlaying.
-	wantCalls := []string{"PlayheadLocation()", "GetCurrentlyPlaying()"}
-	if len(recVideo.Calls) != len(wantCalls) ||
-		recVideo.Calls[0] != wantCalls[0] || recVideo.Calls[1] != wantCalls[1] {
-		t.Errorf("expected calls %v, got %v", wantCalls, recVideo.Calls)
+	// guessCmd first resolves where the stream is (PlayheadLocation), reads
+	// the airing clip for the guess_submitted event, then the correct-guess
+	// path runs a.timewarp(), which reads the departing clip for the timewarp
+	// event and refreshes via GetCurrentlyPlaying.
+	wantCalls := []string{
+		"PlayheadLocation()",
+		"Current()", "CurrentProgress()", // guess_submitted airing stamp
+		"Current()", "CurrentProgress()", // timewarp departing clip
+		"GetCurrentlyPlaying()",
+	}
+	if len(recVideo.Calls) != len(wantCalls) {
+		t.Fatalf("expected %d Video calls, got %d: %v", len(wantCalls), len(recVideo.Calls), recVideo.Calls)
+	}
+	for i, want := range wantCalls {
+		if recVideo.Calls[i] != want {
+			t.Errorf("Video call %d: want %q, got %q", i, want, recVideo.Calls[i])
+		}
+	}
+}
+
+// --- timewarp event emit ---
+
+// The timewarp funnel records one event naming who triggered it, how, the
+// clip (and playhead) it left, and the clip it landed on. Every warp path —
+// !timewarp, a correct !guess, a gift effect — flows through a.timewarp, so
+// covering the funnel covers them all.
+func TestTimewarp_RecordsWarpEvent(t *testing.T) {
+	app := newTestApp(video.Video{ID: 42})
+	rec := &recordingEvents{}
+	app.Events = rec
+	app.Video = &recordingVideo{
+		Vid:          video.Video{ID: 42},
+		RefreshedVid: &video.Video{ID: 88},
+	}
+	app.Playout = &recordingPlayout{}
+
+	app.timewarp(context.Background(), "viewer1", events.WarpSourceCommand)
+
+	if len(rec.Timewarps) != 1 {
+		t.Fatalf("timewarps = %d, want 1", len(rec.Timewarps))
+	}
+	got := rec.Timewarps[0]
+	if got.Username != "viewer1" || got.Source != events.WarpSourceCommand {
+		t.Errorf("warp = %+v, want viewer1 via %q", got, events.WarpSourceCommand)
+	}
+	if got.VideoID != 42 {
+		t.Errorf("from clip = %d, want 42 (the clip airing before the warp)", got.VideoID)
+	}
+	if got.ToVideoID != 88 {
+		t.Errorf("to clip = %d, want 88 (the clip the warp landed on)", got.ToVideoID)
+	}
+	if got.TsSec == nil {
+		t.Error("ts_sec = nil, want the departing playhead stamped")
 	}
 }
 

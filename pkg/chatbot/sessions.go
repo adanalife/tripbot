@@ -34,8 +34,9 @@ type Sessions interface {
 	CurrentMiles(ctx context.Context, u users.User) float32
 	CurrentMonthlyMiles(ctx context.Context, u users.User) float32
 	BonusMiles(u users.User) float32
-	// CorrectMiles applies a manual miles delta (may be negative) to a user,
-	// persisting immediately, and returns the new total. Backs !givemiles.
+	// CorrectMiles applies a manual miles delta (may be negative) to a user's
+	// lifetime total and current monthly scoreboard, persisting immediately,
+	// and returns the new lifetime total. Backs !givemiles.
 	CorrectMiles(ctx context.Context, username string, delta float32) float32
 	// Shutdown logs out every in-memory session, flushing each user's
 	// state to the DB. Called by !shutdown before the process exits.

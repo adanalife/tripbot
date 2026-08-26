@@ -53,6 +53,11 @@ const (
 	ServiceOBSTikTok    = "obs-tiktok"
 	ServiceOBSFacebook  = "obs-facebook"
 	ServiceOBSInstagram = "obs-instagram"
+	// ServiceNATS is the NATS service every component dials for the event bus
+	// and the command subjects. It lives in the <env>-platform namespace rather
+	// than the app namespace, so callers build an FQDN around this name; the
+	// namespace pattern is env topology and stays with each cdk8s layer.
+	ServiceNATS = "nats"
 	// ServicePostgres is the Postgres service (DATABASE_HOST in cluster).
 	ServicePostgres = "postgres"
 )
@@ -92,6 +97,15 @@ const (
 	ServicePlayoutTikTok    = "playout-tiktok"
 	ServicePlayoutFacebook  = "playout-facebook"
 	ServicePlayoutInstagram = "playout-instagram"
+	// ServiceMediaMTX* name the per-platform RTSP relay between playout and
+	// OBS: playout publishes rtsp://mediamtx-<platform>:8554/dashcam and that
+	// platform's OBS pulls it. The infra repo's cdk8s authors the Services;
+	// the names live here so a rename can't silently break the OBS pull.
+	ServiceMediaMTXTwitch    = "mediamtx-twitch"
+	ServiceMediaMTXYouTube   = "mediamtx-youtube"
+	ServiceMediaMTXTikTok    = "mediamtx-tiktok"
+	ServiceMediaMTXFacebook  = "mediamtx-facebook"
+	ServiceMediaMTXInstagram = "mediamtx-instagram"
 )
 
 // Pod ports. Several services co-locate on 8080 for their HTTP API but expose
@@ -113,6 +127,11 @@ const (
 	PortOnscreensHTTP = 8080
 	// PortTripbotHTTP is the tripbot chatbot/admin HTTP port.
 	PortTripbotHTTP = 8080
+	// PortMediaMTXRTSP is the RTSP port on the MediaMTX relay pods — the port
+	// playout publishes to and OBS reads from.
+	PortMediaMTXRTSP = 8554
+	// PortNATS is the NATS client port.
+	PortNATS = 4222
 	// PortPostgres is the Postgres port.
 	PortPostgres = 5432
 )
@@ -187,6 +206,12 @@ func Current() Contract {
 			{"onscreens_tiktok", ServiceOnscreensTikTok},
 			{"onscreens_facebook", ServiceOnscreensFacebook},
 			{"onscreens_instagram", ServiceOnscreensInstagram},
+			{"mediamtx_twitch", ServiceMediaMTXTwitch},
+			{"mediamtx_youtube", ServiceMediaMTXYouTube},
+			{"mediamtx_tiktok", ServiceMediaMTXTikTok},
+			{"mediamtx_facebook", ServiceMediaMTXFacebook},
+			{"mediamtx_instagram", ServiceMediaMTXInstagram},
+			{"nats", ServiceNATS},
 			{"postgres", ServicePostgres},
 		},
 		Ports: []pair{
@@ -197,6 +222,8 @@ func Current() Contract {
 			{"vlc_http", PortVLCHTTP},
 			{"onscreens_http", PortOnscreensHTTP},
 			{"tripbot_http", PortTripbotHTTP},
+			{"mediamtx_rtsp", PortMediaMTXRTSP},
+			{"nats", PortNATS},
 			{"postgres", PortPostgres},
 		},
 		EnvKeys: []pair{

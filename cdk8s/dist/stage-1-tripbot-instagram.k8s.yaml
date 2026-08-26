@@ -75,8 +75,6 @@ spec:
                 name: sentry-tripbot
                 optional: true
             - secretRef:
-                name: tripbot-google-maps-api-key
-            - secretRef:
                 name: tripbot-discord-alerts-webhook
                 optional: true
             - secretRef:
@@ -174,32 +172,3 @@ spec:
   selector:
     app: tripbot-instagram
   type: ClusterIP
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  annotations:
-    cert-manager.io/issuer: letsencrypt-route53
-    external-dns.alpha.kubernetes.io/hostname: tripbot-instagram.stage.whereisdana.today
-  labels:
-    app.kubernetes.io/name: tripbot-instagram
-    app.kubernetes.io/part-of: tripbot
-  name: tripbot-instagram
-  namespace: stage-1
-spec:
-  ingressClassName: traefik
-  rules:
-    - host: tripbot-instagram.stage.whereisdana.today
-      http:
-        paths:
-          - backend:
-              service:
-                name: tripbot-instagram
-                port:
-                  name: http
-            path: /
-            pathType: Prefix
-  tls:
-    - hosts:
-        - tripbot-instagram.stage.whereisdana.today
-      secretName: tripbot-instagram-tls

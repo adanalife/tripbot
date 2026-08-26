@@ -8,7 +8,7 @@ import (
 )
 
 func TestFindCommand_StateNameRoutesToGuess(t *testing.T) {
-	cmd, params := builtTestApp.findCommand("!florida")
+	cmd, _, params := builtTestApp.findCommand("!florida")
 	if cmd == nil {
 		t.Fatal("expected a command, got nil")
 	}
@@ -21,7 +21,7 @@ func TestFindCommand_StateNameRoutesToGuess(t *testing.T) {
 }
 
 func TestFindCommand_MultiWordStateRoutesToGuess(t *testing.T) {
-	cmd, params := builtTestApp.findCommand("!new york")
+	cmd, _, params := builtTestApp.findCommand("!new york")
 	if cmd == nil {
 		t.Fatal("expected a command, got nil")
 	}
@@ -35,7 +35,7 @@ func TestFindCommand_MultiWordStateRoutesToGuess(t *testing.T) {
 
 func TestFindCommand_StateWithTrailingTextRoutesToGuess(t *testing.T) {
 	// trailing chatter after a state name is dropped from the guess
-	cmd, params := builtTestApp.findCommand("!florida woo")
+	cmd, _, params := builtTestApp.findCommand("!florida woo")
 	if cmd == nil {
 		t.Fatal("expected a command, got nil")
 	}
@@ -51,7 +51,7 @@ func TestFindCommand_StateAbbrevDoesNotRoute(t *testing.T) {
 	// two-letter abbreviations are deliberately excluded ("!hi", "!ok",
 	// "!me" would fire accidental guesses)
 	for _, token := range []string{"!fl", "!hi", "!ok"} {
-		if cmd, _ := builtTestApp.findCommand(token); cmd != nil {
+		if cmd, _, _ := builtTestApp.findCommand(token); cmd != nil {
 			t.Errorf("findCommand(%q) = %s, want nil", token, cmd.Trigger)
 		}
 	}
@@ -61,7 +61,7 @@ func TestFindCommand_StateShortcutDisabledOnYouTube(t *testing.T) {
 	// !guess isn't in the YouTube allowlist, so the shortcut must not fire
 	yt := &App{Platform: platformYouTube}
 	yt.indexCommands()
-	if cmd, _ := yt.findCommand("!florida"); cmd != nil {
+	if cmd, _, _ := yt.findCommand("!florida"); cmd != nil {
 		t.Errorf("findCommand(!florida) on YouTube = %s, want nil", cmd.Trigger)
 	}
 }
@@ -103,7 +103,7 @@ func TestGuessCmd_CorrectGuess_Misspelled(t *testing.T) {
 	recScores := &recordingScoreboards{}
 	app.Scoreboards = recScores
 
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	app.guessCmd(context.Background(), newTestUser("viewer1"), []string{"massachusets"})
 
@@ -120,7 +120,7 @@ func TestGuessCmd_WrongGuess_MisspelledStaysWrong(t *testing.T) {
 	// a misspelling of the WRONG state corrects to that state and stays wrong
 	vid := newTestVideo("Colorado", 39.5, -105.0, time.Now())
 	app := newTestApp(vid)
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	app.guessCmd(context.Background(), newTestUser("viewer1"), []string{"wyomig"})
 
@@ -134,9 +134,9 @@ func TestGuessCmd_WrongGuess_MisspelledStaysWrong(t *testing.T) {
 // ErrDisabled when no Maps key is set) leaves State empty without flagging.
 // Nobody can guess an answer that doesn't exist, so nobody gets credited.
 func TestGuessCmd_StatelessVideo_CreditsNobody(t *testing.T) {
-	// The two-letter miss is the input that used to reach here as "": a
-	// non-abbreviation was blanked before the comparison, so "" == "" matched
-	// and handed out a guess point plus a timewarp on demand.
+	// "zz" is the two-letter case: it must not be blanked before the comparison,
+	// or "" == "" matches the stateless video and hands out a guess point plus a
+	// timewarp on demand.
 	for _, guess := range []string{"zz", "Colorado", ""} {
 		t.Run("guess="+guess, func(t *testing.T) {
 			app := newTestApp(newTestVideo("", 39.5, -105.0, time.Now()))
@@ -144,7 +144,7 @@ func TestGuessCmd_StatelessVideo_CreditsNobody(t *testing.T) {
 			recPlayout := &recordingPlayout{}
 			app.Scoreboards = recScores
 			app.Playout = recPlayout
-			out := captureSay(t, app)
+			out, _ := captureSay(t, app)
 
 			app.guessCmd(context.Background(), newTestUser("viewer1"), []string{guess})
 
@@ -168,7 +168,7 @@ func TestGuessCmd_TwoLetterNonState_IsNotBlanked(t *testing.T) {
 	app := newTestApp(newTestVideo("Colorado", 39.5, -105.0, time.Now()))
 	recScores := &recordingScoreboards{}
 	app.Scoreboards = recScores
-	out := captureSay(t, app)
+	out, _ := captureSay(t, app)
 
 	app.guessCmd(context.Background(), newTestUser("viewer1"), []string{"zz"})
 
@@ -177,5 +177,64 @@ func TestGuessCmd_TwoLetterNonState_IsNotBlanked(t *testing.T) {
 	}
 	if len(recScores.Credited) != 0 {
 		t.Errorf("credited = %v, want nobody", recScores.Credited)
+	}
+}
+
+// Wrong guesses after the first carry a warmer/colder hint: the EarthDay emote
+// is swapped for 🔥 when this guess's state is closer to the van than the
+// chatter's previous one, ❄️ when it's farther.
+func TestGuessCmd_WrongGuess_WarmerColderHints(t *testing.T) {
+	// Pin the round start in the past and restore it after: entries stamped
+	// before lastTimewarpTime belong to a previous round.
+	saved := lastTimewarpTime
+	lastTimewarpTime = time.Now().Add(-time.Hour)
+	t.Cleanup(func() { lastTimewarpTime = saved })
+
+	app := newTestApp(newTestVideo("Colorado", 39.5, -105.0, time.Now()))
+	out, _ := captureSay(t, app)
+	user := newTestUser("viewer1")
+
+	// First miss: no previous distance, no hint.
+	app.guessCmd(context.Background(), user, []string{"Florida"})
+	if got := out(); !strings.Contains(got, "EarthDay") {
+		t.Errorf("first miss should show EarthDay, got %q", got)
+	}
+
+	// A guess with no centroid can't be measured: no hint, and it doesn't
+	// disturb the trail — the next miss still compares against Florida.
+	app.guessCmd(context.Background(), user, []string{"Guam"})
+	if got := out(); !strings.Contains(got, "EarthDay") {
+		t.Errorf("centroid-less miss should show EarthDay, got %q", got)
+	}
+
+	// Wyoming is closer to Colorado than Florida: warmer.
+	app.guessCmd(context.Background(), user, []string{"Wyoming"})
+	if got := out(); !strings.Contains(got, "🔥") {
+		t.Errorf("closer miss should show fire, got %q", got)
+	}
+
+	// Another chatter's first miss gets no hint — trails are per-user.
+	app.guessCmd(context.Background(), newTestUser("viewer2"), []string{"Utah"})
+	if got := out(); !strings.Contains(got, "EarthDay") {
+		t.Errorf("another chatter's first miss should show EarthDay, got %q", got)
+	}
+
+	// Florida again is farther than Wyoming: colder.
+	app.guessCmd(context.Background(), user, []string{"Florida"})
+	if got := out(); !strings.Contains(got, "❄️") {
+		t.Errorf("farther miss should show snowflake, got %q", got)
+	}
+
+	// The same state twice is the same distance: nothing to compare.
+	app.guessCmd(context.Background(), user, []string{"Florida"})
+	if got := out(); !strings.Contains(got, "EarthDay") {
+		t.Errorf("equal-distance miss should show EarthDay, got %q", got)
+	}
+
+	// A timewarp starts a new round: the trail is stale, so no hint.
+	lastTimewarpTime = time.Now()
+	app.guessCmd(context.Background(), user, []string{"Nevada"})
+	if got := out(); !strings.Contains(got, "EarthDay") {
+		t.Errorf("first miss after a timewarp should show EarthDay, got %q", got)
 	}
 }

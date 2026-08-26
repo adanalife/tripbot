@@ -205,6 +205,46 @@ func (c *Client) Chatters(ctx context.Context) (count int, logins []string, err 
 	return body.Count, body.Chatters, nil
 }
 
+// Audience is the channel's live-audience snapshot: how many people are
+// watching, and whether anything is broadcasting at all. Reported is false
+// when no number was available — a platform that publishes none, a gateway
+// too old to serve /v1/viewers, or a failed call — which callers must not
+// flatten to a count of zero.
+type Audience struct {
+	Count    int
+	Live     bool
+	Reported bool
+}
+
+// Viewers returns the channel's concurrent-viewer count (GET /v1/viewers).
+// A 404 is the gateway saying this platform publishes no viewer number — an
+// expected answer, not a failure — and returns a zero Audience with a nil
+// error. This is deliberately not Chatters: chatters are who has spoken,
+// viewers are who is watching.
+func (c *Client) Viewers(ctx context.Context) (Audience, error) {
+	resp, err := c.get(ctx, "/v1/viewers")
+	if err != nil {
+		return Audience{}, err
+	}
+	defer resp.Body.Close()
+
+	switch resp.StatusCode {
+	case http.StatusOK:
+		var body struct {
+			Count int  `json:"count"`
+			Live  bool `json:"live"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+			return Audience{}, fmt.Errorf("gateway viewers decode: %w", err)
+		}
+		return Audience{Count: body.Count, Live: body.Live, Reported: true}, nil
+	case http.StatusNotFound:
+		return Audience{}, nil // platform reports no viewer count — expected
+	default:
+		return Audience{}, fmt.Errorf("gateway viewers: unexpected status %d", resp.StatusCode)
+	}
+}
+
 // Subscribers returns the channel's current subscribers as a login → tier map
 // (GET /v1/subscribers). A login the gateway reports without a tier (an older
 // gateway without the tiers field) defaults to tier 1.
@@ -282,16 +322,42 @@ func (g Gift) Value() int { return g.Diamonds * g.Count }
 // reported it on this message — a snapshot, not a lookup. They are all false on
 // a platform that reports no roles, which is indistinguishable from a viewer
 // holding none, so a gate that must fail closed can't read them alone.
+//
+// Badges and Emotes are the sender's decorations — what a renderer needs to
+// draw the line the way the platform's own client draws it, where the role
+// booleans exist to be acted on. Both are empty on every platform but Twitch,
+// and empty means "this platform reports none", not "this viewer has none".
 type InboundChatMessage struct {
-	Author      string      `json:"author"`
-	AuthorID    string      `json:"author_id"`
-	Text        string      `json:"text"`
-	Kind        InboundKind `json:"kind,omitempty"`
-	Gift        *Gift       `json:"gift,omitempty"`
-	MessageID   string      `json:"message_id,omitempty"`
-	Moderator   bool        `json:"moderator,omitempty"`
-	Subscriber  bool        `json:"subscriber,omitempty"`
-	Broadcaster bool        `json:"broadcaster,omitempty"`
+	Author      string         `json:"author"`
+	AuthorID    string         `json:"author_id"`
+	Text        string         `json:"text"`
+	Kind        InboundKind    `json:"kind,omitempty"`
+	Gift        *Gift          `json:"gift,omitempty"`
+	MessageID   string         `json:"message_id,omitempty"`
+	Moderator   bool           `json:"moderator,omitempty"`
+	Subscriber  bool           `json:"subscriber,omitempty"`
+	Broadcaster bool           `json:"broadcaster,omitempty"`
+	Badges      map[string]int `json:"badges,omitempty"`
+	Emotes      []Emote        `json:"emotes,omitempty"`
+}
+
+// Emote is one occurrence of a platform emote inside a message's Text — the
+// same emote used twice arrives as two entries.
+//
+// Start and End index Text in code points, not bytes, and End is inclusive, so
+// the emote's literal text is the substring Start through End. That is Twitch's
+// own convention, which the gateway passes through untranslated because the
+// renderers downstream (Python, JavaScript) index strings by code point; Go
+// code must convert to []rune first.
+//
+// ID builds the image URL —
+// static-cdn.jtvnw.net/emoticons/v2/<id>/default/<theme>/<scale> for Twitch.
+// Third-party emotes (BTTV, FFZ) never appear here: nothing in the platform
+// payload marks them, so resolving them needs a per-channel emote fetch.
+type Emote struct {
+	ID    string `json:"id"`
+	Start int    `json:"start"`
+	End   int    `json:"end"`
 }
 
 // InboundChatPage is one page from GET /v1/chat/inbound. Cursor is opaque: pass

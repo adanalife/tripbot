@@ -91,7 +91,10 @@ func (su sessionUser) IsSubscriber() bool {
 	return su.cfg.UserIsCompedSubscriber(su.u.Username) || su.s.IsSubscriber(*su.u)
 }
 
-func (a *App) dispatch(ctx context.Context, cmd *Command, user *users.User, params []string) {
+// dispatch runs cmd for user. typed is the token that matched the command —
+// the alias, state shortcut, or misspelling as the viewer wrote it — which the
+// command_run event keeps when it differs from the canonical trigger.
+func (a *App) dispatch(ctx context.Context, cmd *Command, typed string, user *users.User, params []string) {
 	incChatCommandCounter(cmd.Trigger)
 	if ok, refused := cmd.checkAccess(ctx, a.platform(), sessionUser{a.Cfg, a.UserSessions, user}, a.Chat.Say); !ok {
 		a.recordRefusal(ctx, events.CommandRefusal{
@@ -110,9 +113,37 @@ func (a *App) dispatch(ctx context.Context, cmd *Command, user *users.User, para
 		trace.WithAttributes(attribute.String("command", cmd.Trigger)))
 	defer span.End()
 
+	// A handler can still refuse from inside its own body (the !guess
+	// cooldown); the mark lets dispatch see that and skip the command_run row,
+	// so each attempt lands in exactly one event kind — a run or a refusal.
+	ctx, refused := withRefusalMark(ctx)
+
 	start := time.Now()
 	cmd.Handler(ctx, user, params)
 	instrumentation.ChatCommandDuration.Observe(cmd.Trigger, time.Since(start).Seconds())
+
+	if *refused {
+		return
+	}
+	if typed == cmd.Trigger {
+		typed = ""
+	}
+	a.recordRun(ctx, events.CommandRun{
+		Username: user.Username,
+		Command:  cmd.Trigger,
+		Typed:    typed,
+		Args:     strings.Join(params, " "),
+	})
+}
+
+// refusalMarkKey carries the per-dispatch flag recordRefusal flips when a
+// refusal happens during a handler's own run.
+type refusalMarkKey struct{}
+
+// withRefusalMark returns ctx carrying a fresh refusal flag, and the flag.
+func withRefusalMark(ctx context.Context) (context.Context, *bool) {
+	refused := new(bool)
+	return context.WithValue(ctx, refusalMarkKey{}, refused), refused
 }
 
 // recordRefusal writes a command_refused event, stamping whatever clip is
@@ -123,6 +154,12 @@ func (a *App) dispatch(ctx context.Context, cmd *Command, user *users.User, para
 // The caller supplies the identifying fields; the airing context is filled in
 // here so no emit site can forget it.
 func (a *App) recordRefusal(ctx context.Context, r events.CommandRefusal) {
+	// Flip the dispatch's refusal mark (when one is present) even if the row
+	// can't be written: the attempt was refused either way, and a command_run
+	// row for it would misreport the outcome.
+	if refused, ok := ctx.Value(refusalMarkKey{}).(*bool); ok {
+		*refused = true
+	}
 	if a.Events == nil {
 		return
 	}
@@ -139,14 +176,41 @@ func (a *App) recordRefusal(ctx context.Context, r events.CommandRefusal) {
 	}
 }
 
-// findCommand parses message and returns the matching Command and params.
-// Returns nil if no command matches.
+// recordRun writes a command_run event, stamping whatever clip is airing so a
+// run can be read back against what was on screen. Best-effort: the command
+// already did its work, so a failed insert is logged and dropped rather than
+// surfaced.
+//
+// The caller supplies the identifying fields; the airing context is filled in
+// here so no emit site can forget it.
+func (a *App) recordRun(ctx context.Context, r events.CommandRun) {
+	if a.Events == nil {
+		return
+	}
+	// Current() is the cached notion of what's playing — no I/O, because
+	// recording a run must not cost a round-trip to playout.
+	if a.Video != nil {
+		r.VideoID = a.Video.Current().ID
+		secs := a.Video.CurrentProgress().Seconds()
+		r.TsSec = &secs
+	}
+	if err := a.Events.CommandRan(ctx, r); err != nil {
+		slog.ErrorContext(ctx, "error recording command run", "err", err,
+			"command", r.Command)
+	}
+}
+
+// findCommand parses message and returns the matching Command, the typed
+// token that matched it, and the params. Returns a nil Command if no command
+// matches. typed is the case-folded form the viewer reached for — the alias,
+// state shortcut ("!florida"), or misspelling — which may differ from the
+// command's canonical trigger.
 //
 // Triggers match case-insensitively ("!MILES" runs !miles) while params reach
 // the handler with their original casing, so free-text commands like
 // "!middle Hello World" can carry capital letters. Handlers that need a
 // normalized param (a username, an enum-ish keyword) fold the case themselves.
-func (a *App) findCommand(message string) (*Command, []string) {
+func (a *App) findCommand(message string) (*Command, string, []string) {
 	msg := normalizeCommandPrefix(strings.TrimSpace(message))
 	split := strings.Split(msg, " ")
 
@@ -181,12 +245,12 @@ func (a *App) findCommand(message string) (*Command, []string) {
 		if len(split) > aliasWords {
 			mwParams = split[aliasWords:]
 		}
-		return cmd, mwParams
+		return cmd, alias, mwParams
 	}
 
 	// single-word lookup
 	if cmd, ok := a.singleWordLookup[command]; ok {
-		return cmd, params
+		return cmd, command, params
 	}
 
 	if strings.HasPrefix(command, "!") {
@@ -195,7 +259,10 @@ func (a *App) findCommand(message string) (*Command, []string) {
 		// platform — on others the lookup misses and the token falls through.
 		if guess, ok := a.singleWordLookup["!guess"]; ok {
 			if stateParams := stateGuessParams(command, params); stateParams != nil {
-				return guess, stateParams
+				// stateParams is the state name's words, so rejoining them
+				// reconstructs the shortcut as typed ("!new york"), which the
+				// bare command token truncates to its first word ("!new").
+				return guess, "!" + strings.ToLower(strings.Join(stateParams, " ")), stateParams
 			}
 		}
 
@@ -203,10 +270,10 @@ func (a *App) findCommand(message string) (*Command, []string) {
 		// their nearest registered trigger (e.g. "!locaiton" -> !location)
 		if cmd := a.fuzzyLookup(command); cmd != nil {
 			slog.Info("fuzzy-routed misspelled command", "text", command, "command", cmd.Trigger)
-			return cmd, params
+			return cmd, command, params
 		}
 	}
-	return nil, nil
+	return nil, "", nil
 }
 
 // stateGuessParams returns the params to pass to !guess when command (a
@@ -286,9 +353,9 @@ func (a *App) runCommand(ctx context.Context, user *users.User, message string) 
 		trace.SpanFromContext(ctx).SetAttributes(attribute.String("twitch.command", command))
 	}
 
-	cmd, params := a.findCommand(message)
+	cmd, typed, params := a.findCommand(message)
 	if cmd != nil {
-		a.dispatch(ctx, cmd, user, params)
+		a.dispatch(ctx, cmd, typed, user, params)
 		return
 	}
 
@@ -296,8 +363,8 @@ func (a *App) runCommand(ctx context.Context, user *users.User, message string) 
 		// A viewer reaching for a command this bot doesn't have is chat traffic,
 		// not an application fault: a typo, or a trigger they know from another
 		// channel's bot (!watchtime showed up in prod this way). At Error level
-		// every distinct token became its own Sentry issue and drew down the
-		// free-tier budget; the command_refused event below is now the durable
+		// every distinct token becomes its own Sentry issue and draws down the
+		// free-tier budget; the command_refused event below is the durable
 		// record of what people try, so Info is enough here.
 		reason := events.RefusedUnknown
 		if a.unindexedCommand(command) != nil {
@@ -364,6 +431,13 @@ type IncomingMessage struct {
 	Moderator   bool
 	Subscriber  bool
 	Broadcaster bool
+	// Badges and Emotes are the sender's chat decorations, carried straight
+	// onto the event bus for the console to render — the command path never
+	// reads them. Badges maps a badge name to its version (for "subscriber",
+	// the months a bool can't carry); Emotes locates each emote occurrence in
+	// Text. Only Twitch reports either.
+	Badges map[string]int
+	Emotes []eventbus.Emote
 }
 
 // HandleMessage processes one inbound chat message: records it (Loki + the
@@ -380,6 +454,13 @@ func (a *App) HandleMessage(ctx context.Context, msg IncomingMessage) {
 	// increment the Prometheus counter
 	instrumentation.ChatMessages.Inc()
 
+	// Tally for the chat-rate sample. Every inbound message counts — commands
+	// and bots' messages included, since the per-tick total is an aggregate
+	// readers can't attribute to senders.
+	if a.ChatCounter != nil {
+		a.ChatCounter.Add()
+	}
+
 	// emit chat line to Loki via OTel
 	mylog.ChatMsg(msg.User, a.Cfg.ChannelName, msg.Text)
 
@@ -395,6 +476,8 @@ func (a *App) HandleMessage(ctx context.Context, msg IncomingMessage) {
 		Moderator:   msg.Moderator,
 		Subscriber:  msg.Subscriber,
 		Broadcaster: msg.Broadcaster,
+		Badges:      msg.Badges,
+		Emotes:      msg.Emotes,
 	})
 
 	// resolve the sender, then run any command. The original casing goes

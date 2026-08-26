@@ -9,6 +9,152 @@ Unreleased changes live as fragment files in [`changelog.d/`](changelog.d/) and 
 
 <!-- towncrier release notes start -->
 
+## [v5.3.1] — 2026-08-24
+
+### Fixes
+
+- Bank in-flight session miles to the database every 5 minutes, so a crash no longer discards a whole session's accrual and sends `!miles` totals backwards. ([#1428](https://github.com/adanalife/tripbot/pull/1428))
+
+## [v5.3.0] — 2026-08-23
+
+### Chatbot
+
+- Added `tripbot_announcements_total`, counting follow/sub/gift/resub chat shouts by kind and platform. Paired with `tripbot_events_total` it covers the one leg of the EventSub path nothing watched: a notice that persists its row but never lands a shout means outbound chat is wedged. ([#1420](https://github.com/adanalife/tripbot/pull/1420))
+
+### Fixes
+
+- The YouTube stream watchdog now mints a broadcast when the channel has none, instead of only restarting the OBS output. A dark YouTube where no broadcast exists could not be recovered by an output restart — there was nothing for the push to bind to — so it needed hands. ([#1422](https://github.com/adanalife/tripbot/pull/1422))
+- EventSub now retries its startup preconditions instead of skipping for the life of the pod. A tripbot that came up before the platform-gateway was ready failed to resolve its channel ID, logged a skip, and never tried again — leaving follow, subscribe, gift, resub and raid announcements silently dead until someone restarted it by hand. ([#1423](https://github.com/adanalife/tripbot/pull/1423))
+
+### Cleanup
+
+- `onscreens-server`'s `OnscreensServerBindAddress` now defaults to `:8080`, matching the project-wide HTTP port convention and the port its Service, probes and `contract.json` already use; the standalone image's `ONSCREENS_SERVER_BIND_ADDRESS=:8080` override is dropped as redundant. No behaviour change — the shipped image already listened on `:8080`. ([#1414](https://github.com/adanalife/tripbot/pull/1414))
+
+## [v5.2.0] — 2026-08-19
+
+### Chatbot
+
+- `!top` now works as an alias for `!leaderboard`, and `!radio` for `!audio`. ([#1409](https://github.com/adanalife/tripbot/pull/1409))
+- The OBS poller now subscribes to obs-websocket's `Outputs` events and updates `obs_streaming_active` the moment OBS pushes a `StreamStateChanged`, instead of waiting up to a full 30s tick to notice. The tick stays exactly as it was — it reconciles state missed while the connection was down, and `GetStreamStatus` is still the only source for the stream-output gauges (bytes, congestion, dropped frames), which OBS pushes no event for. Same single WebSocket connection, so there's no extra connection to OBS. ([#1419](https://github.com/adanalife/tripbot/pull/1419))
+
+### Console / API
+
+- **The footage panel's chatter figures now say which chats they came from.** `GET /api/insights/footage` reports a `platforms` list — the platforms whose chat actually fed the window's samples. The figures read as fleet-wide and are not: `viewer_samples` has never held a youtube row (56,843 twitch, 0 youtube, all-time), because youtube runs bot-less and so has no chatters to sample. The list is observed from the rows rather than declared, so a platform that starts sampling joins it without anyone remembering to update a note. ([#1416](https://github.com/adanalife/tripbot/pull/1416))
+
+### Fixes
+
+- `tripbot_events_total` now carries `service_platform`. It only ever had the `event` label, so an events rate could be broken down by pod instance but not by encoder — and the two panels on the Twitch chat-activity dashboard that filter on `service_platform` matched nothing the moment a single platform was selected. The platform was already in hand: `events.record` stamps it on the row before it counts the metric. The description was stale too — it still said "login/logout events" when the counter now covers the whole event taxonomy (follows, command runs, deploys, watchdog transitions, state crossings). ([#1401](https://github.com/adanalife/tripbot/pull/1401))
+- Report EventSub liveness as a metric (`tripbot_eventsub_subscriptions`), so a dead subscription stops being invisible. On 2026-08-18 real-time follow/subscribe/raid delivery was down on prod for 7½ hours with the pod Ready and no alert firing. ([#1407](https://github.com/adanalife/tripbot/pull/1407))
+- `BOT_USERNAME` is lowercased at config load, like `CHANNEL_NAME` already was. It keys the `oauth_tokens` lookup, and those rows are written by the platform-gateway from Twitch's `login` field — always lowercase — so a mixed-case value would match no row and the bot would start with no token and no chat. Every deployed value is already lowercase, so this closes a latent trap rather than fixing live behaviour. ([#1408](https://github.com/adanalife/tripbot/pull/1408))
+- The shutdown sequence no longer names a phantom file when nothing ever played. It logged `last played video` unconditionally, and since a filename is the clip's slug plus `.MP4`, a run that died before the player resolved a clip reported `file=.MP4` as if that were the last thing on screen. Shutdown logs are exactly what gets read after a crashloop, so that case now logs `no video played this run` instead; the existing line and its `file` attribute are unchanged whenever a clip did play. ([#1411](https://github.com/adanalife/tripbot/pull/1411))
+
+### Deploy / Infra
+
+- Harden the stage-1 co-tenant quota: cap total memory usage (`limits.memory`) and local-path PVC storage alongside the existing request/GPU/pod caps, and add a LimitRange defaulting requests/limits for pods that omit them. ([#1417](https://github.com/adanalife/tripbot/pull/1417))
+
+### CI / Tooling
+
+- The changelog-fragment numbering workflow now fails loudly when it cannot diff against the base commit, instead of reporting success having numbered nothing. ([#1403](https://github.com/adanalife/tripbot/pull/1403))
+- Schema-validate the committed cdk8s `dist/*.k8s.yaml` against the k8s API with kubeconform, in both `task cdk8s:validate` and the `cdk8s-synth` CI gate — mirrors [infra#1007](https://github.com/adanalife/infra/pull/1007). ([#1418](https://github.com/adanalife/tripbot/pull/1418))
+
+### Cleanup
+
+- Compile the dash-string validation regex once at package level instead of on every call. ([#1410](https://github.com/adanalife/tripbot/pull/1410))
+- Drop the duplicated `_ViaIRC` chat-output tests in `pkg/chatbot`, folding their unique "exactly one Say() call" assertion into the `captureSay` helper. ([#1415](https://github.com/adanalife/tripbot/pull/1415))
+
+## [v5.1.2] — 2026-08-18
+
+### Onscreens
+
+- The corner rotators no longer show a year-0001 date when the player answers with no clip — a clip with no filmed date is skipped, and the previous line is held. ([#1404](https://github.com/adanalife/tripbot/pull/1404))
+
+### Fixes
+
+- EventSub now reads the broadcaster token on every redial instead of once at startup, so it survives the platform-gateway's token rotations. A wholly rejected subscribe round backs off and retries rather than disabling EventSub until the pod restarts. ([#1402](https://github.com/adanalife/tripbot/pull/1402))
+
+### Deploy / Infra
+
+- Tripbot no longer publishes a traefik Ingress. Its HTTP surface is in-namespace only — the console already reaches it at `http://tripbot-<platform>:8080`, and several `/api/*` routes are unauthenticated writes that change the live stream. ([#1398](https://github.com/adanalife/tripbot/pull/1398))
+
+### CI / Tooling
+
+- CI installs a pinned go-task while upstream has tags with no releases behind them. ([#1405](https://github.com/adanalife/tripbot/pull/1405))
+
+### Cleanup
+
+- Retire the `tripbot_twitch_channel_live` gauge. `tripbot_channel_live` — labeled by `service_platform` — has been reporting Twitch from the same watchdog live-check since 4.12.0, so the twitch series was written twice. Confirmed in prod-1 on 5.1.1 before removing: the platform-agnostic gauge carries both `twitch` and `youtube`. The `or label_replace(...)` fallback that supplied twitch from the legacy metric comes out of the silent-disconnect alert in a paired infra change. ([#1400](https://github.com/adanalife/tripbot/pull/1400))
+
+## [v5.1.1] — 2026-08-18
+
+### Fixes
+
+- The silent-disconnect watchdog now counts recovery *attempts*, not just the ones that worked, and labels them per platform. `tripbot_obs_silent_disconnect_restarts_total` gains `result` (`ok`, `failed`) and the `service_platform` label every other OBS metric already carries, and is recorded before the error check — so a recovery loop that is running and failing is visible, and the twitch, tiktok and youtube legs no longer share one series. Through the 9h41m outage on 2026-08-05 the watchdog attempted a restart every 60s, failed every time, and the counter read zero throughout. ([#1397](https://github.com/adanalife/tripbot/pull/1397))
+- YouTube gets a stream watchdog leg. The silent-disconnect loop dispatched to Twitch and TikTok only, so a YouTube broadcast that never left "pending" was detected by the liveness gauge and then recovered by nothing — on 2026-08-05 that was 9h41m dark with zero attempts, while Twitch got ~45. The new leg restarts the OBS output, which is what cleared it by hand. ([#1397](https://github.com/adanalife/tripbot/pull/1397))
+
+### CI / Tooling
+
+- Fixed the weekly super-linter sweep: codespell findings resolved (typos corrected, intentional misspellings allowlisted, `package-lock.json` excluded alongside `go.sum`) and per-linter commit statuses disabled, since scheduled runs have no PR to attach them to. ([#1394](https://github.com/adanalife/tripbot/pull/1394))
+- The weekly super-linter sweep reports each validator as its own commit status again, instead of 403ing on every one. ([#1396](https://github.com/adanalife/tripbot/pull/1396))
+
+## [v5.1.0] — 2026-08-16
+
+### Chatbot
+
+- `chat.message` now carries the sender's chat decorations: `badges` (badge name → version, so a subscriber's months survive where the `subscriber` bool loses them) and `emotes` (one entry per occurrence, with the emote id and its code-point span in the text). Both come from the platform gateway and are Twitch-only today; an empty set means the platform reports none, not that the viewer has none. ([#1388](https://github.com/adanalife/tripbot/pull/1388))
+- Comped `ferretmunchers` as a prod subscriber, so subscriber-only commands like `!find` work without an actual sub. ([#1389](https://github.com/adanalife/tripbot/pull/1389))
+
+## [v5.0.0] — 2026-08-16
+
+### Chatbot
+
+- Login and logout events now record the footage that was airing when they happened, filling the `video_id` / `video_ts_sec` columns migration 044 added. Per-clip join/leave churn — which footage holds an audience and which sheds it — becomes a `GROUP BY` over `events` instead of an interval-pairing join against `video_plays`. `Sessions` takes an optional `VideoSource`, wired in `cmd/tripbot` from the process-wide player; an instance that isn't driving playback writes NULL rather than clip 0. ([#1373](https://github.com/adanalife/tripbot/pull/1373))
+- `viewer_samples` now records the platform's concurrent-viewer count and whether anything was broadcasting, read from the gateway's new `GET /v1/viewers` (migration 047). The existing `count` column keeps its meaning — the chatter total, who has spoken — because redefining it in place would make the series collected since 2026-07-06 unreadable. A platform that publishes no viewer number writes NULL rather than 0, so a rollup can tell "nobody counted" from "nobody watching". ([#1374](https://github.com/adanalife/tripbot/pull/1374))
+- Every dispatched chat command now writes a `command_run` event carrying the canonical trigger, the token the viewer actually typed when it differs (alias, state shortcut, misspelling), the args, and the airing clip + playhead. Paired with `command_refused`, every command attempt lands in exactly one event kind, so usage, distinct users, and refusal rates are all queries over the events log. ([#1378](https://github.com/adanalife/tripbot/pull/1378))
+- `!guess` and timewarps now land in the permanent events log. Every answerable guess writes a `guess_submitted` event pairing the normalized guess with the state actually on screen (right or wrong) and how far off it was in centroid miles, stamped with the clip being guessed at; guesses at footage with no known state are skipped so accuracy rollups stay honest. Every playhead warp — `!timewarp`, a correct guess, a gift effect — writes a `timewarp` event naming who triggered it, the source, and the clips it left and landed on. ([#1379](https://github.com/adanalife/tripbot/pull/1379))
+- `video_plays` now records when each clip stops airing: a new play stamps `ended_at` on the platform's previous row (migration 050), so a clip that played out is distinguishable from one skipped seconds in. NULL means the end was never observed — a crash or restart, or a row predating the column — which stays NULL rather than getting a back-dated guess. Duration is derived (`ended_at - started_at`), never stored. ([#1381](https://github.com/adanalife/tripbot/pull/1381))
+- Incoming Twitch raids now land in the permanent events log: a `raid` event carrying the raiding channel and party size, stamped with the clip and playhead the raid landed on. A raid dumps its viewers onto whatever footage is airing, so this is the row that lets per-clip audience rollups discount the spike instead of crediting the footage. ([#1382](https://github.com/adanalife/tripbot/pull/1382))
+- New follows now land in the permanent events log as `follow` events naming the follower. The EventSub notice previously only produced a chat shout and a console banner, so follower history began and ended there — persisting it is what makes a "followers gained" recap computable. ([#1383](https://github.com/adanalife/tripbot/pull/1383))
+- Deploys and stream-watchdog transitions now land in the permanent events log. Startup records a `deploy` event naming the component and build version — only when the version changed, so pod restarts don't spam rows — and the silent-disconnect watchdog records a `watchdog_restart` event (with an `ok`/`failed` outcome) for every forced recovery plus a `watchdog_recovered` event once a recovery holds. The next outage timeline is a query over `events` instead of an archaeology dig through expired logs. ([#1384](https://github.com/adanalife/tripbot/pull/1384))
+- `viewer_samples` now records the chat rate: a `chat_messages` column (migration 051) carries how many chat messages arrived in each ~61s sampling window, counted per inbound message and drained at the sample tick. NULL means no counter was wired that tick; 0 means wired and silent. A third independent audience signal alongside chatters and (once accruing) concurrent viewers — do people react, not just show up. ([#1386](https://github.com/adanalife/tripbot/pull/1386))
+
+### Console / API
+
+- The internal API serves event-log insights for the console: `GET /api/insights/commands` (per-command runs, distinct users, refusals, refusal reasons, and the top unknown tokens viewers try), `GET /api/insights/guesses` (!guess volume, accuracy, players, per-state breakdown), and `GET /api/insights/footage` (per-clip plays plus avg/max chatter samples, labeled by the clip's geocoded place). All take `?days=N` clamped to 1..90, exclude bots, and are backed by new kind+date / date indexes on `events`, `viewer_samples`, and `video_plays` (migrations 048/049). ([#1377](https://github.com/adanalife/tripbot/pull/1377))
+- The internal API serves the console's stats page: `GET /api/stats/lifetime` (whole-log event census, user population from the rollups, footage corpus, all-time chatter peak), `GET /api/stats/playback` (windowed plays, distinct clips, state crossings, timewarp/guess/command counts), and `GET /api/stats/community` (windowed subscribe/unsubscribe/correction counts, the lifetime miles top 10, and the latest month's frozen scoreboards). Windows clamp to 1..90 days; bots are excluded wherever usernames are counted or shown. ([#1380](https://github.com/adanalife/tripbot/pull/1380))
+- The internal API accepts a console-action audit report: `POST /api/events/console-action` lands each successful console admin mutation in the permanent events log as a `console_action` event (`action`/`target`/`detail` in meta), so "what changed from the console, and when" is a query instead of a memory. ([#1385](https://github.com/adanalife/tripbot/pull/1385))
+
+### Fixes
+
+- `viewer_samples.video_id` is now read from the player at sample time instead of from a package-global remembering the last clip switch. That global reset to 0 on every restart, so every sample taken between a restart and the next clip switch recorded a NULL clip — silently thinning the per-clip data the footage-performance rollup is built on. ([#1375](https://github.com/adanalife/tripbot/pull/1375))
+
+### Deploy / Infra
+
+- The Google Maps key is now opt-in per environment via `EnvConfig.maps`. Only `prod-1` sets it, so stage/development/local stop emitting the `tripbot-google-maps-api-key` ExternalSecret and stop mounting it. `stage-1`'s AWS account never had `/k8s/tripbot/google-maps-api-key` seeded, so its ExternalSecret had been failing to unmarshal terraform's placeholder since it was introduced — which held `stage-1-tripbot-identity` Degraded in Argo. `GOOGLE_MAPS_API_KEY` is optional to the binary (`geo.ErrDisabled`), and every runtime geocode caller reads the clip's stored row, so an env without the key warns at boot and runs. To turn it on for an env: seed the parameter in that env's AWS account, then set `maps=True`. ([#1369](https://github.com/adanalife/tripbot/pull/1369))
+
+## [v4.26.0] — 2026-08-08
+
+### Chatbot
+
+- `!guess` now hints warmer/colder: from a chatter's second miss of a round, the wrong-guess reply swaps the EarthDay emote for 🔥 (closer than your last guess) or ❄️ (farther) ([#1366](https://github.com/adanalife/tripbot/pull/1366))
+
+### Cleanup
+
+- The contract carries the NATS Service name and client port, so the endpoint every component dials is generated vocabulary rather than a literal repeated across tripbot, playout and the console. ([#1367](https://github.com/adanalife/tripbot/pull/1367))
+
+## [v4.25.0] — 2026-08-08
+
+### Chatbot
+
+- The audio watchdog rides out a SomaFM outage on the album bed when the music share has tracks, rather than on the car-hum drone. The drone stays the fallback for an empty or unmounted share. ([#1360](https://github.com/adanalife/tripbot/pull/1360))
+
+### Fixes
+
+- Set `runAsNonRoot` on the onscreens-server pod, so it conforms to the `restricted` PodSecurity profile — matching tripbot's own pod. ([#1365](https://github.com/adanalife/tripbot/pull/1365))
+
+### Deploy / Infra
+
+- `contract.json` now carries the per-platform MediaMTX relay Service names (`mediamtx-<platform>`) and the RTSP port (8554), so the playout → OBS RTSP endpoint is covered by the anti-drift contract instead of being hand-declared per consumer. ([#1364](https://github.com/adanalife/tripbot/pull/1364))
+
 ## [v4.24.0] — 2026-08-07
 
 ### Console / API

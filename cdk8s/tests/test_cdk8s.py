@@ -25,8 +25,9 @@ COMPONENTS = ("tripbot", "onscreens")
 
 # Every platform except twitch reaches chat through its own platform-gateway
 # instance and carries a <PLATFORM>_API_URL to find it (the EnvConfig
-# <platform>_api_url fields). twitch is the exception: its gateway is optional,
-# with the in-process path as the fallback.
+# <platform>_api_url fields). twitch is excluded because it's the one instance
+# that also holds a Twitch credential of its own (the EventSub client ID), so
+# its secret mount and its URL are asserted separately below.
 GATEWAY_PLATFORMS = tuple(p for p in SUPPORTED_PLATFORMS if p != "twitch")
 
 # The (env, platform) pairs of every synthed app unit — for assertions that
@@ -104,8 +105,9 @@ def test_identity_unit_emits_app_secrets(env):
     objs = _objects(f"{env}-tripbot-identity")
     es_names = {o["metadata"]["name"] for o in objs if o["kind"] == "ExternalSecret"}
     secret_names = {o["metadata"]["name"] for o in objs if o["kind"] == "Secret"}
-    # twitch + maps are required app creds in every env.
-    assert {"tripbot-twitch-creds", "tripbot-google-maps-api-key"} <= es_names
+    # twitch is a required app cred in every env; maps follows env.maps.
+    assert "tripbot-twitch-creds" in es_names
+    assert ("tripbot-google-maps-api-key" in es_names) == ENVS[env].maps
     if env == "local":
         # laptop carries on-disk DB creds, not an ESO ExternalSecret.
         assert "tripbot-secret" in secret_names
@@ -122,6 +124,33 @@ def test_priority_classes_owned_by_infra_not_tripbot():
         assert "PriorityClass" not in {o["kind"] for o in _objects(stem)}
     # The co-tenant ResourceQuota still lives here.
     assert "ResourceQuota" in {o["kind"] for o in _objects("stage-1-tripbot-identity")}
+
+
+def test_stage_quota_caps_and_limit_defaults():
+    objs = _objects("stage-1-tripbot-identity")
+    quota = _by_kind(objs, "ResourceQuota")[0]
+    # every axis a runaway stage workload could starve prod on: scheduling
+    # (requests), usage (limits.memory), GPU slots, pod count, and the shared
+    # physical disk (scoped to local-path so NFS claims don't count)
+    assert set(quota["spec"]["hard"]) == {
+        "requests.cpu",
+        "requests.memory",
+        "limits.memory",
+        "requests.gpu.intel.com/i915",
+        "pods",
+        "local-path.storageclass.storage.k8s.io/requests.storage",
+    }
+    # the LimitRange backfills the quota'd fields for pods that omit them —
+    # without it a quota'd namespace rejects such pods outright
+    lr = _by_kind(objs, "LimitRange")[0]
+    item = lr["spec"]["limits"][0]
+    assert item["type"] == "Container"
+    assert set(item["defaultRequest"]) == {"cpu", "memory"}
+    # memory-only default limit: cpu stays uncapped by design
+    assert set(item["default"]) == {"memory"}
+    # prod is the protected party — no quota or defaults on its namespace
+    prod = {o["kind"] for o in _objects("prod-1-tripbot-identity")}
+    assert "ResourceQuota" not in prod and "LimitRange" not in prod
 
 
 def _env_from_secrets(stem: str) -> set[str]:
@@ -158,13 +187,24 @@ def test_only_twitch_mounts_the_twitch_creds_secret():
 
 def test_every_platform_still_mounts_shared_app_secrets():
     """Guards the blast radius of the twitch-creds scoping: the genuinely
-    identity-level Secrets stay on every platform. Maps in particular is
-    boot-required — geo warms on every Connect path, not just twitch."""
+    identity-level Secrets stay on every platform."""
     for platform in ENV_PLATFORMS["stage-1"]:
         mounted = _env_from_secrets(f"stage-1-tripbot-{platform}")
-        assert {"tripbot-database-creds", "tripbot-google-maps-api-key"} <= mounted, (
+        assert "tripbot-database-creds" in mounted, (
             f"stage-1-tripbot-{platform} lost a shared app Secret: {mounted}"
         )
+
+
+@pytest.mark.parametrize("env", ["prod-1", "stage-1"])
+def test_maps_secret_mount_follows_the_env_flag(env):
+    """The Maps key is mounted only where env.maps says so — an env whose AWS
+    account has no seeded key would otherwise carry an ExternalSecret that can
+    never sync, which reads as a permanently Degraded Argo app. The binary
+    treats the key as optional (geo.ErrDisabled), so an env without it warns
+    and runs."""
+    for platform in ENV_PLATFORMS[env]:
+        mounted = _env_from_secrets(f"{env}-tripbot-{platform}")
+        assert ("tripbot-google-maps-api-key" in mounted) == ENVS[env].maps
 
 
 def test_youtube_tripbot_emits_youtube_creds():

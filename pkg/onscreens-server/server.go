@@ -128,8 +128,9 @@ func (s *Server) Start(ctx context.Context) error {
 	osc.Handle("/render/{name}", tagged("/onscreens/render/{name}", s.onscreensRenderHandler))
 	osc.Handle("/asset/{name}", tagged("/onscreens/asset/{name}", s.onscreensAssetHandler))
 
-	// admin actions — tailnet-only by virtue of where the Ingress is exposed;
-	// no app-layer auth gate. /admin/shutdown is the admin panel's "restart
+	// admin actions — no app-layer auth gate. onscreens-server publishes no
+	// Ingress, so this is reachable only in-cluster (Service DNS) or through a
+	// port-forward. /admin/shutdown is the admin panel's "restart
 	// onscreens-server" surface; the shared handler SIGTERMs the process and
 	// k8s restartPolicy: Always brings the pod back.
 	admin := r.PathPrefix("/admin").Methods("POST").Subrouter()

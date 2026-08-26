@@ -134,3 +134,38 @@ func TestStateAbbrevRoundTrip(t *testing.T) {
 		}
 	}
 }
+
+func TestStateCentroid(t *testing.T) {
+	lat, lng, ok := StateCentroid("colorado")
+	if !ok {
+		t.Fatal("expected a centroid for a full state name, case-insensitive")
+	}
+	if lat < 36 || lat > 42 || lng < -110 || lng > -102 {
+		t.Errorf("Colorado centroid (%f, %f) is not in Colorado", lat, lng)
+	}
+	if _, _, ok := StateCentroid("CO"); !ok {
+		t.Error("expected a centroid for a two-letter abbreviation")
+	}
+	if _, _, ok := StateCentroid("Guam"); ok {
+		t.Error("territories have no centroid")
+	}
+	if _, _, ok := StateCentroid("not a state"); ok {
+		t.Error("unknown names have no centroid")
+	}
+}
+
+func TestStateCentroids_TableHygiene(t *testing.T) {
+	if len(stateCentroids) != 51 {
+		t.Errorf("want the 50 states + DC, got %d entries", len(stateCentroids))
+	}
+	for abbrev, c := range stateCentroids {
+		if _, ok := stateAbbrevs[abbrev]; !ok {
+			t.Errorf("centroid %q is not a known state abbreviation", abbrev)
+		}
+		// Every centroid sits inside a box around the 50 states (Hawaii sets
+		// the south and west edges, Alaska the north).
+		if c[0] < 20 || c[0] > 62 || c[1] < -158 || c[1] > -66 {
+			t.Errorf("centroid %q (%f, %f) is outside the US", abbrev, c[0], c[1])
+		}
+	}
+}

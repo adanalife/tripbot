@@ -6,7 +6,8 @@
       "aliases": [
         "!bed",
         "!carsound",
-        "!carhum"
+        "!carhum",
+        "!radio"
       ],
       "platforms": [
         "facebook",
@@ -249,7 +250,8 @@
         "!lb",
         "!mlb",
         "!ldb",
-        "!ldbd"
+        "!ldbd",
+        "!top"
       ],
       "requires_follow": true,
       "platforms": [
