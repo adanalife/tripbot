@@ -2,6 +2,7 @@ package audiowatchdog
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -21,6 +22,8 @@ type tick struct {
 	// console, if set, runs before this tick is evaluated: an operator action
 	// that repoints the source without telling the watchdog.
 	console func(*fakeDeps)
+	// obsDown makes MediaState fail, as it does while OBS is restarting.
+	obsDown bool
 }
 
 // fakeDeps drives Watch with a scripted sequence of ticks and counts the swaps
@@ -41,6 +44,7 @@ type fakeDeps struct {
 	toSomaFM   atomic.Int32
 	advances   atomic.Int32
 	probes     atomic.Int32
+	resyncs    atomic.Int32
 
 	// bed is the selected background-audio bed; the SomaFM outage machinery
 	// only runs while it's SomaFM.
@@ -93,8 +97,12 @@ func (f *fakeDeps) deps() Deps {
 		MediaState: func(context.Context) (string, error) {
 			f.mu.Lock()
 			defer f.mu.Unlock()
+			if f.current.obsDown {
+				return "", errors.New("obs websocket unreachable")
+			}
 			return f.current.state, nil
 		},
+		Resync: func(context.Context) { f.resyncs.Add(1) },
 		SwapToFallback: func(context.Context) error {
 			f.mu.Lock()
 			defer f.mu.Unlock()
@@ -254,6 +262,18 @@ func TestWatch_LocalBedNeverSwapsToFallback(t *testing.T) {
 				t.Fatalf("to_somafm swaps on %s: want 0, got %d", bed, got)
 			}
 		})
+	}
+}
+
+func TestWatch_ResyncsBedWhenOBSComesBack(t *testing.T) {
+	// OBS restarts mid-stream and boots onto its own default bed. The Store's
+	// remembered bed is now wrong, so the watchdog re-reads it once OBS answers
+	// again — once at start, once after the outage, not on every tick.
+	down := tick{obsDown: true}
+	deps := newFakeDeps([]tick{playing, playing, down, down, playing, playing})
+	runUntilExhausted(t, deps, cfg(3, 4, time.Minute))
+	if got := deps.resyncs.Load(); got != 2 {
+		t.Fatalf("bed resyncs: want 2, got %d", got)
 	}
 }
 
