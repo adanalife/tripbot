@@ -101,11 +101,6 @@ func RunningOnDarwin() bool {
 	return runtime.GOOS == "darwin"
 }
 
-// RunningOnLinux returns true if we're on linux
-func RunningOnLinux() bool {
-	return runtime.GOOS == "linux"
-}
-
 func StripAtSign(username string) string {
 	return strings.TrimPrefix(username, "@")
 }

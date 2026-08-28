@@ -75,7 +75,6 @@ SMALL_RESOURCES = k8s.ResourceRequirements(
 # they're assembled in config_data() from app_name rather than held as literals.
 _BASE_CONFIG = {
     "READ_ONLY": "false",
-    "MAPS_OUTPUT_DIR": "/opt/data/maps",
     "DATABASE_HOST": "postgres",
     "TRIPBOT_SERVER_PORT": "8080",
 }

@@ -12,13 +12,6 @@ const (
 	SlugGPS          = "gps"
 )
 
-// Lookup returns the *Onscreen registered under slug on this *Server, or
-// nil if unknown. The returned pointer is the live singleton — Show/Hide
-// on it mutates in place.
-func (s *Server) Lookup(slug string) *Onscreen {
-	return s.all()[slug]
-}
-
 // Snapshot returns a fresh map of every registered onscreen keyed by slug.
 // The *Onscreen pointers are live; mutating one is visible everywhere.
 // Used by callers that need the full set at once (e.g. /onscreens/state.json).

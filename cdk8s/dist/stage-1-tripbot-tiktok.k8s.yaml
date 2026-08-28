@@ -13,7 +13,6 @@ data:
   DISCORD_GUILD_ID: "607964164220125258"
   ENV: staging
   GOOGLE_APPS_PROJECT_ID: tripbot-stage
-  MAPS_OUTPUT_DIR: /opt/data/maps
   NATS_URL: nats://nats.stage-1-platform.svc.cluster.local:4222
   OBS_SERVER_HOST: obs-tiktok:8080
   OBS_WEBSOCKET_ADDR: obs-tiktok:4455
@@ -45,7 +44,7 @@ spec:
   template:
     metadata:
       annotations:
-        adanalife.dev/config-hash: 6aab13000a
+        adanalife.dev/config-hash: 4a250f4191
       labels:
         app: tripbot-tiktok
     spec:
