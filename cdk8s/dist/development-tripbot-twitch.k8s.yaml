@@ -12,7 +12,6 @@ data:
   DATABASE_HOST: postgres
   ENV: staging
   GOOGLE_APPS_PROJECT_ID: tripbot-stage
-  MAPS_OUTPUT_DIR: /opt/data/maps
   NATS_URL: nats://nats.development-platform.svc.cluster.local:4222
   OBS_SERVER_HOST: obs-twitch:8080
   OBS_WEBSOCKET_ADDR: obs-twitch:4455
@@ -42,7 +41,7 @@ spec:
   template:
     metadata:
       annotations:
-        adanalife.dev/config-hash: 1db4defba1
+        adanalife.dev/config-hash: abd63876f8
       labels:
         app: tripbot-twitch
     spec:
