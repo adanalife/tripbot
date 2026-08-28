@@ -92,6 +92,18 @@ type Config struct {
 	Cooldown         time.Duration // minimum time between swaps (anti-flap)
 }
 
+// maxProbeSkip caps the recovery probe's backoff at 31 sat-out ticks — a probe
+// every ~3.7 minutes at the default interval, reached after six failures. The
+// ceiling is a recovery latency: a returning edge waits up to that long to be
+// noticed, which against outages measured in hours (and a fallback that is
+// audible music) is worth trading for two orders of magnitude fewer requests.
+// A day stuck on the fallback is ~12k connections at every tick and ~400 here.
+//
+// It is also self-defence. SomaFM's edge has firewalled us before, and the
+// state that gets us blocked is the state that probes hardest: blocked means
+// stranded on the fallback, and stranded means probing forever.
+const maxProbeSkip = 31
+
 // DefaultConfig is tuned for the failure we saw: ~20s of confirmed-down audio
 // before falling back (3 × 7s ≈ a clear signal, not a momentary reconnect),
 // ~30s of SomaFM-healthy before swapping back, and a 2-minute cooldown so a
@@ -200,8 +212,8 @@ func defaultSomaFMReachable(ctx context.Context, url string) bool {
 // consecutive down ticks and swaps back after cfg.RecoverThreshold consecutive
 // ticks of SomaFM being reachable, with cfg.Cooldown between any two swaps.
 // Records the playing / level / on-fallback gauges every tick; somafm_reachable
-// only on the ticks that probe, so it reads NoData rather than a stale 1 while
-// nothing is waiting on the edge. Runs until ctx is cancelled.
+// only on the ticks that probe — which back off as an outage wears on, so it
+// reads NoData rather than a stale value while nothing is waiting on the edge. Runs until ctx is cancelled.
 func Watch(ctx context.Context, deps Deps, cfg Config) {
 	ticker := time.NewTicker(cfg.Interval)
 	defer ticker.Stop()
@@ -215,6 +227,10 @@ func Watch(ctx context.Context, deps Deps, cfg Config) {
 		recoverHits int
 		lastSwap    time.Time
 		synced      bool // the Store has read the bed off this OBS process
+		// probeSkip is how many ticks the recovery probe sits out between
+		// attempts, and skipped how many of them have passed. See maxProbeSkip.
+		probeSkip int
+		skipped   int
 	)
 
 	for {
@@ -290,6 +306,10 @@ func Watch(ctx context.Context, deps Deps, cfg Config) {
 			cooling := time.Since(lastSwap) < cfg.Cooldown
 
 			if !onFallback {
+				// Back on the real source, so the next outage starts probing at
+				// full rate rather than inheriting the last one's backoff.
+				probeSkip, skipped = 0, 0
+
 				// On the real SomaFM source: watch for the audio going down.
 				silent := fresh && db <= cfg.SilenceDB
 				if !obs.MediaStateDown(state) && !silent {
@@ -339,12 +359,28 @@ func Watch(ctx context.Context, deps Deps, cfg Config) {
 			// only state that probes: a connection opened on a tick that could
 			// not act on the answer is load on SomaFM's edge for nothing, and
 			// enough of them across the fleet reads as abuse from one IP.
+			//
+			// Even here it backs off. An outage lasts hours and the fallback is
+			// music, not silence, so there is nothing to gain from asking every
+			// 7s — and everything to lose, since a fallback that never ends
+			// means a probe that never stops.
+			if skipped < probeSkip {
+				skipped++
+				continue
+			}
+			skipped = 0
 			reachable := deps.SomaFMReachable(ctx)
 			instrumentation.OBSBackgroundAudio.SetSomaFMReachable(reachable)
 			if !reachable {
 				recoverHits = 0
+				probeSkip = min(2*probeSkip+1, maxProbeSkip)
 				continue
 			}
+			// One answer is enough to go back to probing every tick: the
+			// remaining RecoverThreshold-1 confirmations are what the swap waits
+			// on, and making those wait out a backoff would hold the stream on
+			// the fallback for minutes after the edge came back.
+			probeSkip = 0
 			recoverHits++
 			slog.InfoContext(ctx, "audio watchdog: SomaFM reachable again",
 				"hits", recoverHits, "threshold", cfg.RecoverThreshold)
